@@ -1750,8 +1750,9 @@ function renderDynamicRiverweed(
 }
 
 /**
- * Flow-Aligned Shallow Sunlight Caustic Shimmer & Solar Specular Glints.
- * Strictly advected along the downstream river tangent `(pt.tx, pt.ty)` with zero snake-like lateral wiggle.
+ * Curvilinear Downstream Channel Flow Streamlines, Shallow Sunlight Caustics & Solar Specular Glints.
+ * Strictly advected along the downstream river spline `(pt.tx, pt.ty)` with a parabolic cross-channel
+ * velocity profile (faster in the deep thalweg, slower near the banks) and zero snake-like lateral wiggle.
  */
 function renderFluidCurrentStreamlinesAndCaustics(
   ctx: CanvasRenderingContext2D,
@@ -1765,16 +1766,87 @@ function renderFluidCurrentStreamlinesAndCaustics(
 ) {
   const dayFactor = Math.max(0, 1 - nightAlpha * 1.2);
   const sunState = getCurrentSunShadowState();
+  const maxSplineIdx = RIVER_SPLINE_POINTS.length - 2;
 
-  // 1. Subtle Benthic Sunlight Caustic Shimmer on Shallow Shoals (strictly downstream-advected, no snake lines)
+  // 1. Curvilinear Longitudinal River Current Streamlines (Течение воды строго вдоль изгибов русла)
+  // Uses continuous spline interpolation (k + frac) so every current filament curves smoothly along
+  // the riverbed at constant lateral channel fraction `latNorm`, moving faster in the mid-channel thalweg.
+  const streamPasses = [
+    { speedMult: 0.95, width: 1.5, alpha: nightAlpha > 0.6 ? 0.12 : 0.22, isDarkTrough: false, seedOff: 0.0 },
+    { speedMult: 0.95, width: 2.2, alpha: nightAlpha > 0.6 ? 0.14 : 0.18, isDarkTrough: true,  seedOff: 0.0 },
+    { speedMult: 1.22, width: 1.1, alpha: nightAlpha > 0.6 ? 0.09 : 0.16, isDarkTrough: false, seedOff: 19.7 }
+  ];
+
+  const firstStreamK = Math.ceil(kStart / 2) * 2;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const pass of streamPasses) {
+    ctx.lineWidth = pass.width;
+    ctx.strokeStyle = pass.isDarkTrough
+      ? `rgba(6, 28, 38, ${pass.alpha.toFixed(3)})`
+      : `rgba(198, 236, 250, ${pass.alpha.toFixed(3)})`;
+    ctx.beginPath();
+
+    for (let k = firstStreamK; k < kEnd; k += 2) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const streamCount = pt.isFord ? 4 : 3;
+
+      for (let s = 0; s < streamCount; s++) {
+        const sSeed = k * 13.37 + s * 9.41 + pass.seedOff;
+        const latNorm = (riverHash(sSeed) * 2 - 1) * 0.80;
+        // Parabolic + helicoidal thalweg velocity profile across the channel
+        const distFromThalweg = latNorm - pt.thalwegBias * 0.45;
+        const speedProfile = Math.max(0.36, 1.0 - 0.50 * distFromThalweg * distFromThalweg);
+
+        // Travel cycle in spline-index units (each spline step is ~62px)
+        const cycleSteps = 1.8 + riverHash(sSeed * 1.9) * 1.1;
+        const stepRate = (pt.currentSpeed * pass.speedMult * speedProfile) / 62.0;
+        const phaseSteps = (animTime * stepRate + riverHash(sSeed * 3.1) * cycleSteps) % cycleSteps;
+        const normPhase = phaseSteps / cycleSteps;
+        // Smooth fade envelope at start/end of cycle so filaments never pop
+        if (normPhase < 0.10 || normPhase > 0.90) continue;
+
+        const baseSplinePos = k - cycleSteps * 0.5 + phaseSteps;
+        const streakLenSteps = (0.38 + riverHash(sSeed * 4.7) * 0.28) * speedProfile;
+        const tailPos = Math.max(0, Math.min(maxSplineIdx, baseSplinePos - streakLenSteps * 0.5));
+        const midPos  = Math.max(0, Math.min(maxSplineIdx, baseSplinePos));
+        const headPos = Math.max(0, Math.min(maxSplineIdx, baseSplinePos + streakLenSteps * 0.5));
+
+        const sampleAtSplinePos = (sPos: number) => {
+          const idx = Math.min(maxSplineIdx, Math.max(0, Math.floor(sPos)));
+          const frac = sPos - idx;
+          const p0 = RIVER_SPLINE_POINTS[idx];
+          const p1 = RIVER_SPLINE_POINTS[idx + 1];
+          const cx = p0.x + (p1.x - p0.x) * frac;
+          const cy = p0.y + (p1.y - p0.y) * frac;
+          const nx = p0.nx + (p1.nx - p0.nx) * frac;
+          const ny = p0.ny + (p1.ny - p0.ny) * frac;
+          const hw = p0.halfWidth + (p1.halfWidth - p0.halfWidth) * frac;
+          const latOff = latNorm * hw + (pass.isDarkTrough ? 1.4 : 0.0);
+          return { x: cx + nx * latOff, y: cy + ny * latOff };
+        };
+
+        const pTail = sampleAtSplinePos(tailPos);
+        const pMid  = sampleAtSplinePos(midPos);
+        const pHead = sampleAtSplinePos(headPos);
+
+        ctx.moveTo(pTail.x, pTail.y);
+        ctx.quadraticCurveTo(pMid.x, pMid.y, pHead.x, pHead.y);
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 2. Subtle Benthic Sunlight Caustic Shimmer on Shallow Shoals (strictly downstream-advected, no snake lines)
   if (dayFactor > 0.14 && weather !== 'storm' && weather !== 'fog') {
-    const causticBaseAlpha = 0.08 * dayFactor * Math.min(1.0, sunState.sunElevation * 1.4);
+    const causticBaseAlpha = 0.09 * dayFactor * Math.min(1.0, sunState.sunElevation * 1.4);
     ctx.fillStyle = `rgba(186, 236, 252, ${causticBaseAlpha.toFixed(3)})`;
 
     const firstCausticK = Math.ceil(kStart / 3) * 3;
     for (let k = firstCausticK; k < kEnd; k += 3) {
       const pt = RIVER_SPLINE_POINTS[k];
-      if (pt.depth > 1.85) continue;
+      if (pt.depth > 1.95) continue;
 
       const flowAngle = Math.atan2(pt.ty, pt.tx);
       const cellCount = 2 + (k % 2);
@@ -1793,13 +1865,13 @@ function renderFluidCurrentStreamlinesAndCaustics(
         const ry = (1.6 + riverHash(cSeed * 8.3) * 1.4) * fade;
 
         ctx.beginPath();
-        ctx.ellipse(cx + sunDirX * 1.2, cy + sunDirY * 1.2, rx, ry, flowAngle + (riverHash(cSeed * 5.9) - 0.5) * 0.35, 0, Math.PI * 2);
+        ctx.ellipse(cx + sunDirX * 1.2, cy + sunDirY * 1.2, rx, ry, flowAngle + (riverHash(cSeed * 5.9) - 0.5) * 0.25, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  // 2. Direct Solar / Lunar Specular Micro-Glints on Downstream Wave Facets
+  // 3. Direct Solar / Lunar Specular Micro-Glints on Downstream Wave Facets
   const firstWaveK = Math.ceil(kStart / 2) * 2;
   const glintAlpha = nightAlpha > 0.6 ? 0.16 : (0.28 * dayFactor);
   ctx.fillStyle = nightAlpha > 0.6

@@ -248,63 +248,227 @@ vec2 worldDirToScreenUv(vec2 worldDir) {
   return vec2(worldDir.x * ca - worldDir.y * sa, -(worldDir.x * sa + worldDir.y * ca));
 }
 
-// Physically grounded directional short-crested capillary-gravity wave spectrum + direct GPU hydrodynamic wake solver.
-// Eliminates recursive domain-warping "snake/worm" artifacts and strictly aligns wave propagation with actual
-// river current (uRiverFlow) and wind vector (uWind), while computing real-time analytical wave slopes and
-// porous cellular whitewater foam for up to 32 active vehicle/tire/human/obstacle wakes.
+// Exact 37-waypoint Catmull-Rom spline of River "Быстрица" (vec4(x, y, width, currentSpeed))
+// Matches RIVER_WAYPOINTS in src/riverSystem.ts so every river pixel on screen knows its exact
+// riverbed tangent (tx, ty), lateral bank fraction (-1..+1), and parabolic channel flow speed.
+const vec4 RIVER_WP[37] = vec4[37](
+  vec4(-3000.0, -3900.0, 150.0, 28.0),
+  vec4(-2000.0, -3850.0, 150.0, 28.0),
+  vec4(-1000.0, -3900.0, 155.0, 30.0),
+  vec4(    0.0, -3820.0, 160.0, 30.0),
+  vec4( 1000.0, -3860.0, 160.0, 31.0),
+  vec4( 2000.0, -3750.0, 165.0, 32.0),
+  vec4( 3000.0, -3800.0, 165.0, 32.0),
+  vec4( 4000.0, -3680.0, 170.0, 33.0),
+  vec4( 5000.0, -3720.0, 170.0, 34.0),
+  vec4( 6000.0, -3600.0, 175.0, 34.0),
+  vec4( 7000.0, -3550.0, 175.0, 35.0),
+  vec4( 8000.0, -3480.0, 180.0, 35.0),
+  vec4( 8800.0, -3380.0, 180.0, 36.0),
+  vec4( 9400.0, -3300.0, 160.0, 38.0),
+  vec4(10200.0, -3220.0, 180.0, 35.0),
+  vec4(11000.0, -3160.0, 190.0, 32.0),
+  vec4(11800.0, -3120.0, 210.0, 30.0),
+  vec4(12400.0, -3080.0, 240.0, 42.0),
+  vec4(13200.0, -3020.0, 200.0, 34.0),
+  vec4(14200.0, -2950.0, 260.0, 20.0),
+  vec4(15400.0, -2880.0, 190.0, 32.0),
+  vec4(16800.0, -2820.0, 180.0, 34.0),
+  vec4(18200.0, -2750.0, 185.0, 35.0),
+  vec4(19600.0, -2700.0, 175.0, 35.0),
+  vec4(21000.0, -2640.0, 180.0, 33.0),
+  vec4(22400.0, -2580.0, 190.0, 32.0),
+  vec4(24000.0, -2520.0, 170.0, 36.0),
+  vec4(25500.0, -2480.0, 180.0, 34.0),
+  vec4(27000.0, -2420.0, 200.0, 30.0),
+  vec4(29000.0, -2380.0, 220.0, 28.0),
+  vec4(31200.0, -2350.0, 230.0, 26.0),
+  vec4(33800.0, -2320.0, 210.0, 30.0),
+  vec4(36500.0, -2300.0, 220.0, 32.0),
+  vec4(39500.0, -2280.0, 230.0, 28.0),
+  vec4(42800.0, -2260.0, 250.0, 25.0),
+  vec4(46000.0, -2240.0, 270.0, 22.0),
+  vec4(49500.0, -2200.0, 300.0, 20.0)
+);
+
+float crSpline(float p0, float p1, float p2, float p3, float t) {
+  float t2 = t * t;
+  float t3 = t2 * t;
+  return 0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
+}
+
+float crSplineDeriv(float p0, float p1, float p2, float p3, float t) {
+  float t2 = t * t;
+  return 0.5 * ((-p0 + p2) + 2.0 * (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t + 3.0 * (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t2);
+}
+
+// Evaluates exact river channel geometry & curvilinear flow coordinates at worldPos
+void sampleRiverChannel(
+  vec2 worldPos,
+  out vec2 outT,
+  out vec2 outN,
+  out float outAlong,
+  out float outCross,
+  out float outLatFrac,
+  out float outSpeed,
+  out float outRiverMask
+) {
+  outT = vec2(1.0, 0.0);
+  outN = vec2(0.0, 1.0);
+  outAlong = worldPos.x;
+  outCross = 0.0;
+  outLatFrac = 0.0;
+  outSpeed = 0.0;
+  outRiverMask = 0.0;
+
+  if (worldPos.x < -3100.0 || worldPos.x > 49600.0 || worldPos.y < -4220.0 || worldPos.y > -1820.0) {
+    return;
+  }
+
+  // 5-step binary search over monotonic X waypoints
+  int lo = 0;
+  int hi = 35;
+  for (int b = 0; b < 6; b++) {
+    int mid = (lo + hi) >> 1;
+    if (worldPos.x < RIVER_WP[mid + 1].x) {
+      hi = mid;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  int idx = clamp(lo, 0, 35);
+  vec4 w0 = RIVER_WP[max(0, idx - 1)];
+  vec4 w1 = RIVER_WP[idx];
+  vec4 w2 = RIVER_WP[idx + 1];
+  vec4 w3 = RIVER_WP[min(36, idx + 2)];
+
+  float segDx = max(1.0, w2.x - w1.x);
+  float t = clamp((worldPos.x - w1.x) / segDx, 0.0, 1.0);
+  float cx = crSpline(w0.x, w1.x, w2.x, w3.x, t);
+  float cy = crSpline(w0.y, w1.y, w2.y, w3.y, t);
+  float dx = crSplineDeriv(w0.x, w1.x, w2.x, w3.x, t);
+  float dy = crSplineDeriv(w0.y, w1.y, w2.y, w3.y, t);
+
+  outT = normalize(vec2(dx, dy));
+  outN = vec2(-outT.y, outT.x);
+
+  float smoothT = t * t * (3.0 - 2.0 * t);
+  float halfWidth = mix(w1.z, w2.z, smoothT) * 0.5;
+  outSpeed = mix(w1.w, w2.w, smoothT);
+
+  vec2 relToCenter = worldPos - vec2(cx, cy);
+  outCross = dot(relToCenter, outN);
+  outAlong = worldPos.x + dot(relToCenter, outT) * 0.35;
+  outLatFrac = outCross / max(halfWidth, 1.0);
+  outRiverMask = 1.0 - smoothstep(0.96, 1.18, abs(outLatFrac));
+}
+
+// Physically grounded two-layer river channel flow + surface wind capillary wave solver + direct GPU hydrodynamic wake solver.
+// 1. Inside the river channel: primary water mass flows strictly downstream along the curving riverbed tangent T(x)
+//    with a parabolic cross-channel velocity profile (faster in the mid-channel thalweg, slower near banks),
+//    while wind (uWind) creates a realistic secondary layer of capillary wind ripples riding on top of the moving current.
+// 2. On standing water (ponds, puddles, salt lakes): water has zero channel flow and reacts directly to wind (uWind) and wakes.
 vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out float outWakeFoam) {
   outWakeFoam = 0.0;
 
-  // 1. Determine physical ambient advection velocity (combines river current in river corridor + wind vector)
   float windSpeed = length(uWind);
   vec2 windDir = windSpeed > 0.2 ? (uWind / windSpeed) : vec2(0.94, 0.34);
+  vec2 windPerp = vec2(-windDir.y, windDir.x);
+  // Wind ripple strength scales physically with actual wind speed (calm glass at 0 wind -> lively chop in strong gusts)
+  float windStrength = clamp(windSpeed / 30.0, 0.06, 1.45);
 
-  vec2 flowVel = uWind * 0.42;
+  vec2 rT, rN;
+  float rAlong, rCross, rLatFrac, rSpeed, riverMask;
   if (inRiverCorridor) {
-    // Analytical tangent of River Bystritsa (flows East-Northeast) blended with exact camera-local uRiverFlow
-    vec2 defaultRiverVel = normalize(vec2(1.0, 0.055 + 0.025 * sin(worldPos.x * 0.0007))) * 32.0;
-    vec2 riverVel = length(uRiverFlow) > 1.0 ? uRiverFlow : defaultRiverVel;
-    flowVel = riverVel + uWind * 0.22;
+    sampleRiverChannel(worldPos, rT, rN, rAlong, rCross, rLatFrac, rSpeed, riverMask);
+  } else {
+    rT = windDir;
+    rN = windPerp;
+    rAlong = 0.0;
+    rCross = 0.0;
+    rLatFrac = 0.0;
+    rSpeed = 0.0;
+    riverMask = 0.0;
   }
 
-  float flowSpeed = length(flowVel);
-  vec2 dir0 = flowSpeed > 0.2 ? (flowVel / flowSpeed) : windDir;
-  vec2 perp0 = vec2(-dir0.y, dir0.x);
+  vec2 dir0 = riverMask > 0.01 ? rT : windDir;
+  vec2 worldGrad = vec2(0.0);
 
-  // Normalized advection speed for wave phase progression (smooth, physical downstream/downwind drift)
-  float advSpeed = clamp(flowSpeed * 0.038, 0.35, 2.20);
-  float windFactor = clamp(0.55 + windSpeed * 0.022, 0.45, 1.65);
+  if (riverMask > 0.01) {
+    // --- A. RIVER CHANNEL HYDRODYNAMIC FLOW (Вода течёт строго по изгибам русла) ---
+    // Parabolic velocity profile across channel width: faster in deep mid-channel fairway, slower near shallow shores
+    float latClamped = clamp(rLatFrac, -1.0, 1.0);
+    float speedProfile = clamp(1.0 - 0.50 * latClamped * latClamped, 0.35, 1.05);
+    float localFlowSpeed = rSpeed * speedProfile;
+    float flowAdv = time * (localFlowSpeed * 0.048);
 
-  // 2. Multi-component directional short-crested wave spectrum (zero recursive domain-warp snakes!)
-  // Wave Train 1: Primary swell aligned with physical flow/wind direction, elongated across-crest
-  vec2 p1 = vec2(dot(worldPos, dir0) * 0.048 - time * advSpeed * 1.15, dot(worldPos, perp0) * 0.022);
-  vec3 n1 = noise2DAndGrad(p1);
-  vec2 g1 = (dir0 * n1.y * 0.048 + perp0 * n1.z * 0.022) * 18.0;
+    // 1. Longitudinal current streamlines & shear eddies elongated along the riverbed tangent rT
+    // Notice: spatial frequency along rT (0.024) is much lower than across rN (0.082), forming genuine
+    // longitudinal flowing current ribbons & boils that travel downstream along every bend of the channel!
+    vec2 pStream = vec2(rAlong * 0.024 - flowAdv * 1.15, rCross * 0.082);
+    vec3 nStream = noise2DAndGrad(pStream);
+    vec2 gStream = (rT * nStream.y * 0.024 + rN * nStream.z * 0.082) * 14.5;
 
-  // Wave Train 2 & 3: Symmetric bimodal short-crested crossing waves at +21 deg and -21 deg to flow/wind
-  // In real hydrodynamics, wind/current waves propagate in a directional spreading cone (+/- 18..25 deg),
-  // forming natural diamond/rhomboid short-crested wave facets that move coherently downstream/downwind.
-  const float ca1 = 0.93358; // cos(21 deg)
-  const float sa1 = 0.35837; // sin(21 deg)
-  vec2 dirA = vec2(dir0.x * ca1 - dir0.y * sa1, dir0.x * sa1 + dir0.y * ca1);
-  vec2 perpA = vec2(-dirA.y, dirA.x);
-  vec2 p2 = vec2(dot(worldPos, dirA) * 0.082 - time * advSpeed * 1.48, dot(worldPos, perpA) * 0.036 + 13.7);
-  vec3 n2 = noise2DAndGrad(p2);
-  vec2 g2 = (dirA * n2.y * 0.082 + perpA * n2.z * 0.036) * 11.5;
+    // 2. Downstream hydraulic V-chevrons / turbulent boil facets (+/- 18 deg to river tangent rT)
+    const float ca = 0.95106; // cos(18 deg)
+    const float sa = 0.30902; // sin(18 deg)
+    vec2 dA = vec2(rT.x * ca - rT.y * sa, rT.x * sa + rT.y * ca);
+    vec2 pA = vec2(-dA.y, dA.x);
+    vec2 uvA = vec2((rAlong * ca - rCross * sa) * 0.052 - flowAdv * 1.38, (rAlong * sa + rCross * ca) * 0.058 + 13.7);
+    vec3 nA = noise2DAndGrad(uvA);
+    vec2 gA = (dA * nA.y * 0.052 + pA * nA.z * 0.058) * 10.5;
 
-  vec2 dirB = vec2(dir0.x * ca1 + dir0.y * sa1, -dir0.x * sa1 + dir0.y * ca1);
-  vec2 perpB = vec2(-dirB.y, dirB.x);
-  vec2 p3 = vec2(dot(worldPos, dirB) * 0.086 - time * advSpeed * 1.54, dot(worldPos, perpB) * 0.038 + 29.3);
-  vec3 n3 = noise2DAndGrad(p3);
-  vec2 g3 = (dirB * n3.y * 0.086 + perpB * n3.z * 0.038) * 11.0;
+    vec2 dB = vec2(rT.x * ca + rT.y * sa, -rT.x * sa + rT.y * ca);
+    vec2 pB = vec2(-dB.y, dB.x);
+    vec2 uvB = vec2((rAlong * ca + rCross * sa) * 0.054 - flowAdv * 1.42, (-rAlong * sa + rCross * ca) * 0.060 + 29.3);
+    vec3 nB = noise2DAndGrad(uvB);
+    vec2 gB = (dB * nB.y * 0.054 + pB * nB.z * 0.060) * 10.2;
 
-  // Wave Train 4: High-frequency capillary wind ripples aligned with ambient wind vector uWind
-  vec2 windPerp = vec2(-windDir.y, windDir.x);
-  vec2 p4 = vec2(dot(worldPos, windDir) * 0.19 - time * (1.35 + windSpeed * 0.035), dot(worldPos, windPerp) * 0.085 + 53.1);
-  vec3 n4 = noise2DAndGrad(p4);
-  vec2 g4 = (windDir * n4.y * 0.19 + windPerp * n4.z * 0.085) * (4.2 * windFactor);
+    vec2 riverFlowGrad = gStream * 0.50 + (gA + gB) * 0.38;
 
-  vec2 worldGrad = (g1 * 0.42 + (g2 + g3) * 0.34 + g4 * 0.24) * windFactor;
+    // --- B. SURFACE WIND RIPPLES RIDING ON TOP OF THE MOVING RIVER CURRENT ---
+    // Water surface is carried downstream by rT * localFlowSpeed while wind blows across it in windDir.
+    // When wind opposes or crosses the current, wave-current interaction steepens the fine capillary chop.
+    vec2 advectedPos = worldPos - rT * (time * localFlowSpeed * 0.42);
+    float windPhaseAdv = time * (0.45 + windSpeed * 0.045);
+    float opposingSteepen = 1.0 + 0.45 * max(0.0, -dot(windDir, rT));
+
+    vec2 wUv1 = vec2(dot(advectedPos, windDir) * 0.14 - windPhaseAdv, dot(advectedPos, windPerp) * 0.052 + 41.2);
+    vec3 wn1 = noise2DAndGrad(wUv1);
+    vec2 wg1 = (windDir * wn1.y * 0.14 + windPerp * wn1.z * 0.052) * 5.8;
+
+    vec2 wUv2 = vec2(dot(advectedPos, windDir) * 0.24 - windPhaseAdv * 1.35, dot(advectedPos, windPerp) * 0.095 + 73.9);
+    vec3 wn2 = noise2DAndGrad(wUv2);
+    vec2 wg2 = (windDir * wn2.y * 0.24 + windPerp * wn2.z * 0.095) * 3.2;
+
+    vec2 windRippleGrad = (wg1 + wg2) * (windStrength * opposingSteepen * 0.48);
+    worldGrad = riverFlowGrad + windRippleGrad;
+  } else {
+    // --- C. STANDING WATER (Ponds, Puddles, Salt Lakes): Driven Purely by Wind Vector uWind ---
+    float windAdv = time * (0.40 + windSpeed * 0.048);
+    const float ca = 0.93358; // cos(21 deg)
+    const float sa = 0.35837; // sin(21 deg)
+    vec2 wDirA = vec2(windDir.x * ca - windDir.y * sa, windDir.x * sa + windDir.y * ca);
+    vec2 wPerpA = vec2(-wDirA.y, wDirA.x);
+    vec2 wDirB = vec2(windDir.x * ca + windDir.y * sa, -windDir.x * sa + windDir.y * ca);
+    vec2 wPerpB = vec2(-wDirB.y, wDirB.x);
+
+    vec2 p1 = vec2(dot(worldPos, windDir) * 0.068 - windAdv, dot(worldPos, windPerp) * 0.028);
+    vec3 n1 = noise2DAndGrad(p1);
+    vec2 g1 = (windDir * n1.y * 0.068 + windPerp * n1.z * 0.028) * 14.0;
+
+    vec2 p2 = vec2(dot(worldPos, wDirA) * 0.11 - windAdv * 1.28, dot(worldPos, wPerpA) * 0.045 + 17.3);
+    vec3 n2 = noise2DAndGrad(p2);
+    vec2 g2 = (wDirA * n2.y * 0.11 + wPerpA * n2.z * 0.045) * 9.5;
+
+    vec2 p3 = vec2(dot(worldPos, wDirB) * 0.12 - windAdv * 1.34, dot(worldPos, wPerpB) * 0.048 + 31.9);
+    vec3 n3 = noise2DAndGrad(p3);
+    vec2 g3 = (wDirB * n3.y * 0.12 + wPerpB * n3.z * 0.048) * 9.0;
+
+    worldGrad = (g1 * 0.45 + (g2 + g3) * 0.35) * windStrength;
+  }
+
+  float advSpeed = riverMask > 0.01 ? clamp(rSpeed * 0.042, 0.6, 2.2) : clamp(windSpeed * 0.038, 0.3, 1.8);
 
   // 3. Direct GPU Hydrodynamic Wake & Dispersive Ripple Solver (Vehicles, Tires, Swimmers, Bridge Piers)
   if (uWakeCount > 0) {
