@@ -64,6 +64,7 @@ out vec2 vLocalPos;
 out vec4 vCenterSize;
 out vec4 vParams;
 out vec3 vWindBurn;
+out vec2 vZenithDir;
 
 void main() {
   // Quad corner in [-1, 1] from gl_VertexID (0..5)
@@ -79,41 +80,42 @@ void main() {
   float intensity = aAngleIntKindSeed.y;
   float kind = aAngleIntKindSeed.z;
 
-  // Screen-upward unit vector in world space (for thermal convective rise)
-  float camRot = -uCamAngle - 1.57079632679;
-  vec2 upWorld = vec2(-sin(camRot), -cos(camRot));
+  // True Top-Down 2.5D zenith perspective vector:
+  // In a bird's-eye view, vertical height (+Z toward camera) projects radially outward from camera center
+  // by a subtle zenith parallax, while horizontal drift is driven strictly by world wind & slipstream.
+  vec2 camToEmitter = center - uCamPos;
+  float camDist = length(camToEmitter);
+  vec2 zenithParallax = camDist > 1.0 ? (camToEmitter / camDist) * min(14.0, camDist * 0.035) : vec2(0.0);
 
-  // Total draft vector in world space (buoyancy + wind/slipstream)
-  vec2 draftWorld = upWorld * 28.0 + aWindAndBurn.xy * 0.85;
+  vec2 draftWorld = aWindAndBurn.xy * 0.95 + zenithParallax;
   float draftMag = length(draftWorld);
-  vec2 draftDir = draftMag > 0.001 ? (draftWorld / draftMag) : upWorld;
+  vec2 draftDir = draftMag > 0.001 ? (draftWorld / draftMag) : vec2(cos(angle), sin(angle));
 
-  // Expand bounding quad generously so licking flame tongues and downwind plumes never clip
-  float padScale = (kind > 1.5 && kind < 4.5) ? 2.65 : 2.35;
-  float windStretch = min(radii.x + radii.y, draftMag * 0.36) * clamp(intensity, 0.35, 1.35);
+  // Generous quad bounds to encompass 360-degree top-down flame tongues AND the rising/downwind smoke crown
+  float padScale = (kind > 1.5 && kind < 4.5) ? 3.25 : 2.95;
+  float windStretch = min((radii.x + radii.y) * 1.55, draftMag * 0.58) * clamp(intensity, 0.40, 1.40);
 
   float ca = cos(angle);
   float sa = sin(angle);
   vec2 axisX = vec2(ca, sa);
   vec2 axisY = vec2(-sa, ca);
 
-  // Shift quad center slightly along draft direction to accommodate rising/trailing flame tips
-  vec2 quadCenter = center + draftDir * (windStretch * 0.42);
-  vec2 halfSpan = radii * padScale + vec2(windStretch * 0.68);
+  // Shift quad center slightly along horizontal wind/plume drift so downwind smoke never clips
+  vec2 quadCenter = center + draftDir * (windStretch * 0.48);
+  vec2 halfSpan = radii * padScale + vec2(windStretch * 0.78);
 
   vec2 worldPos = quadCenter + axisX * (corner.x * halfSpan.x) + axisY * (corner.y * halfSpan.y);
   vec2 relWorld = worldPos - center;
   vec2 localPos = vec2(dot(relWorld, axisX) / radii.x, dot(relWorld, axisY) / radii.y);
 
   // Transform worldPos to screen space matching GameRenderer:
-  // translate(w/2, h/2) -> scale(zoom) -> rotate(-camAngle - PI/2) -> translate(-cam.x, -cam.y)
+  float camRot = -uCamAngle - 1.57079632679;
   vec2 camRel = worldPos - uCamPos;
   float cCam = cos(camRot);
   float sCam = sin(camRot);
   vec2 rotPx = vec2(camRel.x * cCam - camRel.y * sCam, camRel.x * sCam + camRel.y * cCam) * uCamZoom;
   vec2 screenPx = rotPx + uViewSize * 0.5;
 
-  // Map screen pixels (top-left origin) to WebGL clip space [-1, 1] (bottom-left origin)
   vec2 clip = vec2(
     (screenPx.x / uViewSize.x) * 2.0 - 1.0,
     1.0 - (screenPx.y / uViewSize.y) * 2.0
@@ -125,6 +127,7 @@ void main() {
   vCenterSize = vec4(center, radii);
   vParams = aAngleIntKindSeed;
   vWindBurn = aWindAndBurn;
+  vZenithDir = zenithParallax;
 }`;
 
 const FS_FIRE = `#version 300 es
@@ -135,6 +138,7 @@ in vec2 vLocalPos;
 in vec4 vCenterSize;
 in vec4 vParams;
 in vec3 vWindBurn;
+in vec2 vZenithDir;
 
 uniform float uTime;
 uniform float uCamAngle;
@@ -169,7 +173,7 @@ vec3 noise2DGrad(vec2 p) {
   return vec3(val, grad);
 }
 
-// Fast cellular Voronoi boil pattern for liquid fuel pools & combustion pockets
+// Fast cellular Voronoi boil pattern for top-down convection cells & billowing smoke cauliflower lobes
 float cellularBoil(vec2 p, float timeOffset) {
   vec2 n = floor(p);
   vec2 f = fract(p);
@@ -187,21 +191,20 @@ float cellularBoil(vec2 p, float timeOffset) {
   return sqrt(minDist);
 }
 
-// Planckian blackbody color ramp with pyrolysis carbon soot transition
+// Planckian blackbody color ramp for top-down combustion zones
 vec3 blackbodyColor(float temp) {
-  // temp in [0.0 .. 1.45]
-  vec3 soot     = vec3(0.035, 0.025, 0.025);
-  vec3 ember    = vec3(0.52,  0.04,  0.008);
-  vec3 crimson  = vec3(0.92,  0.14,  0.015);
-  vec3 orange   = vec3(1.00,  0.48,  0.04);
-  vec3 gold     = vec3(1.00,  0.84,  0.24);
-  vec3 whiteHot = vec3(1.00,  0.98,  0.88);
+  vec3 soot     = vec3(0.04,  0.025, 0.02);
+  vec3 ember    = vec3(0.55,  0.045, 0.008);
+  vec3 crimson  = vec3(0.94,  0.16,  0.015);
+  vec3 orange   = vec3(1.00,  0.50,  0.045);
+  vec3 gold     = vec3(1.00,  0.85,  0.26);
+  vec3 whiteHot = vec3(1.00,  0.98,  0.90);
 
   vec3 col = mix(soot, ember, smoothstep(0.04, 0.22, temp));
   col = mix(col, crimson,  smoothstep(0.20, 0.44, temp));
   col = mix(col, orange,   smoothstep(0.40, 0.72, temp));
-  col = mix(col, gold,     smoothstep(0.68, 0.98, temp));
-  col = mix(col, whiteHot, smoothstep(0.95, 1.32, temp));
+  col = mix(col, gold,     smoothstep(0.68, 0.96, temp));
+  col = mix(col, whiteHot, smoothstep(0.94, 1.30, temp));
   return col;
 }
 
@@ -214,12 +217,8 @@ void main() {
   float burnRatio = clamp(vWindBurn.z, 0.0, 1.0);
   vec2 radii = vCenterSize.zw;
 
-  // Screen-upward direction in world space (convective buoyancy rise)
-  float camRot = -uCamAngle - 1.57079632679;
-  vec2 upWorld = vec2(-sin(camRot), -cos(camRot));
-
-  // Rotate world draft (buoyancy + wind/slipstream) into emitter-local coordinates
-  vec2 draftWorld = upWorld * 26.0 + windWorld * 0.85;
+  // Rotate horizontal world wind + subtle 2.5D camera zenith parallax into emitter-local space
+  vec2 draftWorld = windWorld * 0.95 + vZenithDir;
   float ca = cos(angle);
   float sa = sin(angle);
   vec2 draftLocal = vec2(
@@ -228,155 +227,216 @@ void main() {
   ) / max(radii, vec2(4.0));
 
   float draftLen = length(draftLocal);
-  vec2 draftDir = draftLen > 0.001 ? (draftLocal / draftLen) : vec2(0.0, -1.0);
-  vec2 perpDir = vec2(-draftDir.y, draftDir.x);
+  vec2 draftDir = draftLen > 0.001 ? (draftLocal / draftLen) : vec2(1.0, 0.0);
 
-  // Decompose position along and across the thermal draft plume
-  float alongDraft = dot(vLocalPos, draftDir);
-  float acrossDraft = dot(vLocalPos, perpDir);
+  // Decompose position along horizontal wind drift (no fake screen-upward side-scroller gravity!)
+  float alongWind = dot(vLocalPos, draftDir);
+  float windShear = min(0.85, draftLen * 0.16);
+  float flameStretch = 1.0 + windShear * smoothstep(-0.4, 1.5, alongWind);
+  vec2 pFlame = vLocalPos - draftDir * (max(0.0, alongWind) * (1.0 - 1.0 / flameStretch));
 
-  // Shear coordinates so rising/downwind flames taper and curl along the draft trajectory
-  float plumeStretch = 1.0 + min(1.35, draftLen * 0.22) * smoothstep(-0.2, 1.4, alongDraft);
-  vec2 pShifted = vLocalPos - draftDir * (max(0.0, alongDraft) * (1.0 - 1.0 / plumeStretch));
-
-  // --- 1. Emitter-specific physical fuel bed SDF & reaction rate profile ---
+  // --- 1. Top-Down Emitter Footprint SDF & 360-Degree Combustion Bed ---
   float bedDist = 1.0;
   float rimBoost = 0.0;
   float jetBoost = 0.0;
-  float sootWeight = 0.42;
+  float smokeDensityBase = 0.72;
 
   if (kind == 0 || kind == 1) {
-    // Fuel (0) or Heavy Oil (1) ground pool: organic multi-harmonic liquid puddle contour
-    float ang = atan(pShifted.y, pShifted.x);
+    // Fuel (0) or Heavy Oil (1) ground pool viewed from above: irregular multi-harmonic puddle contour
+    float ang = atan(pFlame.y, pFlame.x);
     float harmonic = 1.0
       + 0.14 * sin(ang * 2.0 + seed * 1.73)
       + 0.10 * cos(ang * 3.0 - seed * 2.31)
       + 0.07 * sin(ang * 5.0 + seed * 4.17)
       + 0.05 * cos(ang * 7.0 - seed * 3.09);
-    bedDist = length(pShifted) / max(0.35, harmonic);
+    bedDist = length(pFlame) / max(0.35, harmonic);
 
-    // Volatile gasoline has a bright vapor-oxygen meniscus ring around the puddle rim
+    // In top-down view, vapor-oxygen mixing creates a bright turbulent combustion ring around the puddle perimeter
+    // plus boiling convection cells across the interior surface
     if (kind == 0) {
-      rimBoost = smoothstep(0.35, 0.78, bedDist) * (1.0 - smoothstep(0.82, 1.18, bedDist)) * 0.34;
-      sootWeight = 0.32 + burnRatio * 0.22;
+      rimBoost = smoothstep(0.30, 0.76, bedDist) * (1.0 - smoothstep(0.80, 1.16, bedDist)) * 0.36;
+      smokeDensityBase = 0.68 + burnRatio * 0.18;
     } else {
-      // Heavy motor oil burns thicker with denser black pyrolysis soot
-      rimBoost = smoothstep(0.25, 0.68, bedDist) * (1.0 - smoothstep(0.72, 1.12, bedDist)) * 0.22;
-      sootWeight = 0.62;
+      rimBoost = smoothstep(0.24, 0.68, bedDist) * (1.0 - smoothstep(0.72, 1.12, bedDist)) * 0.24;
+      smokeDensityBase = 0.88; // Heavy motor oil produces thick black carbon smoke
     }
   } else if (kind == 2) {
-    // Vehicle Engine Bay Fire: escaping from hood side gaps, front radiator grille, and cowl seam
-    vec2 q = abs(pShifted) - vec2(0.58, 0.62);
+    // Vehicle Engine Bay Fire (Top-Down): flames erupting from hood side seams, radiator grille, and cowl
+    vec2 q = abs(pFlame) - vec2(0.56, 0.60);
     float boxDist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
     bedDist = boxDist + 0.72;
 
-    // Pressurized flame jets along hood side seams (|y| ~ 0.68), front grille (x ~ 0.65), and cowl (x ~ -0.55)
-    float sideSeam = exp(-pow((abs(pShifted.y) - 0.66) * 4.2, 2.0)) * smoothstep(0.85, 0.2, abs(pShifted.x));
-    float grilleJet = exp(-pow((pShifted.x - 0.62) * 3.8, 2.0)) * smoothstep(0.85, 0.2, abs(pShifted.y));
-    float hoodCore = smoothstep(0.85, 0.1, length(pShifted * vec2(0.9, 1.1))) * (0.45 + 0.55 * burnRatio);
-    jetBoost = (sideSeam * 0.52 + grilleJet * 0.58 + hoodCore * 0.45);
-    sootWeight = 0.52;
+    float sideSeam = exp(-pow((abs(pFlame.y) - 0.64) * 4.2, 2.0)) * smoothstep(0.85, 0.15, abs(pFlame.x));
+    float grilleJet = exp(-pow((pFlame.x - 0.60) * 3.8, 2.0)) * smoothstep(0.85, 0.15, abs(pFlame.y));
+    float hoodCore = smoothstep(0.85, 0.08, length(pFlame * vec2(0.9, 1.05))) * (0.50 + 0.50 * burnRatio);
+    jetBoost = (sideSeam * 0.55 + grilleJet * 0.58 + hoodCore * 0.48);
+    smokeDensityBase = 0.82;
   } else if (kind == 3) {
-    // Vehicle Cabin Fire: roaring compartment fire venting out of side windows, windshield, and rear glass
-    vec2 q = abs(pShifted) - vec2(0.68, 0.66);
+    // Vehicle Cabin Fire (Top-Down): flames venting out of side windows, windshield, and rear glass around roof
+    vec2 q = abs(pFlame) - vec2(0.66, 0.64);
     float boxDist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
     bedDist = boxDist + 0.70;
 
-    float windowVents = exp(-pow((abs(pShifted.y) - 0.68) * 4.0, 2.0)) * smoothstep(0.9, 0.15, abs(pShifted.x));
-    float glassVents = exp(-pow((abs(pShifted.x) - 0.64) * 3.8, 2.0)) * smoothstep(0.85, 0.2, abs(pShifted.y));
-    jetBoost = (windowVents * 0.58 + glassVents * 0.48 + 0.35);
-    sootWeight = 0.56;
+    float windowVents = exp(-pow((abs(pFlame.y) - 0.66) * 4.0, 2.0)) * smoothstep(0.90, 0.12, abs(pFlame.x));
+    float glassVents = exp(-pow((abs(pFlame.x) - 0.62) * 3.8, 2.0)) * smoothstep(0.85, 0.15, abs(pFlame.y));
+    jetBoost = (windowVents * 0.60 + glassVents * 0.50 + 0.38);
+    smokeDensityBase = 0.86;
   } else if (kind == 4) {
-    // Vehicle Fuel Tank / Rear Underbody Fire: volatile gasoline jet + dripping pool
-    float ang = atan(pShifted.y, pShifted.x);
+    // Vehicle Fuel Tank / Rear Underbody Fire (Top-Down)
+    float ang = atan(pFlame.y, pFlame.x);
     float asym = 1.0 + 0.18 * cos(ang - 3.14159) + 0.12 * sin(ang * 3.0 + seed);
-    bedDist = length(pShifted * vec2(0.92, 1.08)) / asym;
-    jetBoost = smoothstep(0.95, 0.2, bedDist) * 0.48;
-    sootWeight = 0.46;
+    bedDist = length(pFlame * vec2(0.92, 1.06)) / asym;
+    jetBoost = smoothstep(0.95, 0.18, bedDist) * 0.50;
+    smokeDensityBase = 0.80;
   } else {
-    // Transient Flash / Explosion Fireball
-    bedDist = length(pShifted);
-    rimBoost = smoothstep(0.2, 0.75, bedDist) * (1.0 - smoothstep(0.75, 1.15, bedDist)) * 0.45;
-    sootWeight = 0.38 * burnRatio;
+    // Transient Flash / Deflagration Fireball (Top-Down expanding blast wave)
+    bedDist = length(pFlame);
+    rimBoost = smoothstep(0.20, 0.75, bedDist) * (1.0 - smoothstep(0.75, 1.15, bedDist)) * 0.48;
+    smokeDensityBase = 0.58 * burnRatio;
   }
 
-  if (bedDist > 2.15) {
-    discard;
-  }
+  // --- 2. Top-Down Radial + Swirling Vortex Flame Advection ---
+  // In a top-down view, flames boil radially outward from the combustion center/bed in 360 degrees
+  // while swirling in counter-rotating turbulent eddies and drifting with horizontal wind!
+  float rLen = length(pFlame);
+  vec2 radialDir = rLen > 0.001 ? (pFlame / rLen) : vec2(1.0, 0.0);
+  vec2 tangentDir = vec2(-radialDir.y, radialDir.x);
 
-  // --- 2. Multi-Octave Domain-Warped Turbulent Advection & Ridged Flame Tongues ---
-  float speedScale = (kind == 1) ? 2.6 : 3.9;
-  vec2 flowUv = vLocalPos * 1.95 - draftDir * (uTime * speedScale) + vec2(seed * 5.17, seed * 2.93);
+  float speedScale = (kind == 1) ? 2.4 : 3.4;
+  // Radial outward boil + gentle wind drift (creates authentic bird's-eye 360° roaring fire instead of side-view rising stripes)
+  vec2 radialAdvect = radialDir * (rLen * 1.65 - uTime * speedScale * 0.62)
+                    + tangentDir * (atan(pFlame.y, pFlame.x) * 0.95)
+                    - draftDir * (uTime * speedScale * min(0.55, draftLen * 0.12));
+
+  vec2 flowUv = pFlame * 1.90 - radialDir * (uTime * speedScale * 0.58) - draftDir * (uTime * speedScale * min(0.65, 0.12 + draftLen * 0.14)) + vec2(seed * 5.17, seed * 2.93);
 
   // Octave 1: Macro Kelvin-Helmholtz vortex curl
   vec3 n1 = noise2DGrad(flowUv);
   vec2 curl1 = vec2(-n1.z, n1.y);
 
-  // Octave 2: Domain-warped secondary shear eddies
+  // Octave 2: Domain-warped secondary radial/swirling eddies
   const mat2 rot2 = mat2(0.80, -0.60, 0.60, 0.80);
-  vec2 uv2 = rot2 * (flowUv * 2.15 + curl1 * 0.48) - draftDir * (uTime * speedScale * 1.35);
+  vec2 uv2 = rot2 * (flowUv * 2.15 + curl1 * 0.52 + radialAdvect * 0.22) - radialDir * (uTime * speedScale * 0.75);
   vec3 n2 = noise2DGrad(uv2);
   vec2 curl2 = vec2(-n2.z, n2.y);
 
-  // Octave 3: High-frequency licking flame tongues & filaments
+  // Octave 3: Crisp 360-degree radial flame filaments & cellular convection ridges
   const mat2 rot3 = mat2(0.60, 0.80, -0.80, 0.60);
-  vec2 uv3 = rot3 * (flowUv * 4.25 + (curl1 + curl2) * 0.36) - draftDir * (uTime * speedScale * 1.85);
+  vec2 uv3 = rot3 * (flowUv * 4.10 + (curl1 + curl2) * 0.38) - radialDir * (uTime * speedScale * 1.15);
   vec3 n3 = noise2DGrad(uv3);
 
-  // Sharp diffusion-flame reaction ridges (1 - |2n - 1|) produce crisp, pointed flame tongues instead of blurry clouds
   float ridge1 = 1.0 - abs(2.0 * n1.x - 1.0);
   float ridge2 = 1.0 - abs(2.0 * n2.x - 1.0);
   float ridge3 = 1.0 - abs(2.0 * n3.x - 1.0);
+  float flameRidges = pow(ridge1, 1.25) * 0.45 + pow(ridge2, 1.55) * 0.36 + pow(ridge3, 1.85) * 0.19;
 
-  float flameRidges = pow(ridge1, 1.25) * 0.46 + pow(ridge2, 1.55) * 0.36 + pow(ridge3, 1.85) * 0.18;
+  // Top-down Bénard-style boiling convection cells across the horizontal flame sheet
+  float boil = 1.0 - cellularBoil(pFlame * 2.35 - radialDir * (uTime * 1.35) + curl1 * 0.28, uTime * 3.1 + seed);
+  float boilCells = smoothstep(0.12, 0.84, boil);
 
-  // Cellular boiling pockets inside liquid fuel / engine core
-  float boil = 1.0 - cellularBoil(vLocalPos * 2.4 - draftDir * (uTime * 1.8) + curl1 * 0.25, uTime * 3.2 + seed);
-  float boilCells = smoothstep(0.15, 0.82, boil);
+  // 360-degree radial flame tongue reach, slightly elongated on the downwind side when wind/slipstream is strong
+  float downwindFactor = smoothstep(-0.7, 1.0, alongWind) * min(1.0, draftLen * 0.22);
+  float tongueReach = (0.36 + 0.28 * downwindFactor) * (n1.x * 0.42 + flameRidges * 0.78);
+  float warpedDist = bedDist - tongueReach - jetBoost * 0.30;
 
-  // Dynamic boundary perturbation: flame tongues lick outward far more in the downwind/draft direction
-  float downwindFactor = smoothstep(-0.6, 1.0, alongDraft);
-  float tongueReach = (0.34 + 0.42 * downwindFactor) * (n1.x * 0.45 + flameRidges * 0.75);
-  float warpedDist = bedDist - tongueReach - jetBoost * 0.28;
+  float coreMask = 1.0 - smoothstep(0.10, 1.16, warpedDist);
+  float outerEnvelope = 1.0 - smoothstep(0.52, 1.44, warpedDist);
 
-  // Smooth core-to-tip envelope with detached flame tips at the outer shear margin
-  float coreMask = 1.0 - smoothstep(0.12, 1.18, warpedDist);
-  float outerEnvelope = 1.0 - smoothstep(0.55, 1.48, warpedDist);
-  if (outerEnvelope <= 0.002) {
-    discard;
+  float temp = 0.0;
+  if (outerEnvelope > 0.001) {
+    // Top-down thermal profile: intense cellular boiling pockets & bright vortex ridges across the planform
+    temp = coreMask * (0.64 + 0.56 * flameRidges + 0.32 * boilCells)
+         + outerEnvelope * (flameRidges * 0.58 + rimBoost + jetBoost * 0.68);
+    temp *= clamp(intensity * (0.90 + 0.10 * sin(uTime * 13.7 + seed * 3.1 + n1.x * 4.0)), 0.15, 1.45);
   }
 
-  // Temperature field T combines core proximity, sharp flame ridges, boiling cells, and rim/seam jets
-  float temp = coreMask * (0.68 + 0.52 * flameRidges + 0.26 * boilCells)
-             + outerEnvelope * (flameRidges * 0.58 + rimBoost + jetBoost * 0.65);
-  temp *= clamp(intensity * (0.88 + 0.12 * sin(uTime * 13.7 + seed * 3.1 + n1.x * 4.0)), 0.15, 1.45);
-
-  if (temp <= 0.03) {
-    discard;
-  }
-
-  // --- 3. Planckian Blackbody Radiance & Pyrolysis Soot Rim ---
   vec3 fireRgb = blackbodyColor(temp);
+  float flameAlpha = smoothstep(0.05, 0.48, temp) * outerEnvelope * clamp(intensity * 0.95, 0.20, 0.96);
+  float emissiveBoost = smoothstep(0.26, 1.15, temp) * 0.42 * outerEnvelope;
+  vec3 firePremul = fireRgb * (flameAlpha + emissiveBoost);
 
-  // Outer cooling zone forms dark absorptive carbon soot wisps around the crimson flame tips
-  float sootBand = smoothstep(0.04, 0.20, temp) * (1.0 - smoothstep(0.22, 0.48, temp));
-  float sootAlpha = sootBand * sootWeight * outerEnvelope * clamp(intensity, 0.3, 1.0);
+  // Subtle ambient ground thermal glow under the fire bed
+  float baseHalo = (1.0 - smoothstep(0.0, 1.35, bedDist)) * 0.13 * clamp(intensity, 0.0, 1.0);
+  firePremul += vec3(0.95, 0.32, 0.04) * baseHalo;
 
-  // Flame opacity & additive luminance weight
-  float flameAlpha = smoothstep(0.06, 0.52, temp) * outerEnvelope * clamp(intensity * 0.95, 0.2, 0.96);
+  // --- 3. Volumetric Top-Down Pyrolysis Smoke Crown (Rising in +Z toward Camera & Drifting Downwind) ---
+  // In a top-down view, rising smoke sits ABOVE the flame bed (partially veiling the center & ring from above)
+  // and trails downwind in billowing, rotating cauliflower clouds!
+  float smokeAlpha = 0.0;
+  vec3 smokePremul = vec3(0.0);
 
-  // Premultiplied output for (ONE, ONE_MINUS_SRC_ALPHA):
-  // - In the soot rim, premulRgb is near-black while alpha = sootAlpha -> darkens underlying surface naturally
-  // - In the hot flame zone, premulRgb has boosted HDR emission while alpha transitions smoothly
-  float totalAlpha = clamp(max(flameAlpha * 0.78, sootAlpha), 0.0, 0.94);
-  float emissiveBoost = smoothstep(0.28, 1.15, temp) * 0.42;
-  vec3 premulRgb = fireRgb * (flameAlpha + emissiveBoost);
+  if (kind != 5) {
+    // Center of the elevated smoke crown is shifted downwind + along camera zenith parallax
+    float driftShift = min(1.35, 0.24 + draftLen * 0.26);
+    vec2 pSmoke = vLocalPos - draftDir * driftShift;
 
-  // Subtle ambient thermal halo around base of fire so flames sit organically in the scene
-  float baseHalo = (1.0 - smoothstep(0.0, 1.38, bedDist)) * 0.14 * clamp(intensity, 0.0, 1.0);
-  premulRgb += vec3(0.95, 0.32, 0.04) * baseHalo;
+    // Plume widens as it rises toward the camera and drifts downwind
+    float alongPlume = dot(vLocalPos, draftDir);
+    float plumeSpread = 1.0 + clamp(alongPlume, -0.3, 2.2) * (0.28 + min(0.45, draftLen * 0.08));
+    vec2 pSmokeScaled = pSmoke / plumeSpread;
 
-  oColor = vec4(clamp(premulRgb, 0.0, 1.0), totalAlpha);
+    // Multi-lobed turbulent smoke advection (slower, heavier rolling billows than the underlying flames)
+    vec2 smokeUv = pSmokeScaled * 1.45
+                 - draftDir * (uTime * 1.35 * min(1.4, 0.45 + draftLen * 0.22))
+                 - radialDir * (uTime * 0.65)
+                 + vec2(seed * 9.13, seed * 4.71);
+
+    vec3 sn1 = noise2DGrad(smokeUv);
+    vec2 sCurl = vec2(-sn1.z, sn1.y);
+    vec3 sn2 = noise2DGrad(rot2 * (smokeUv * 2.15 + sCurl * 0.55) - radialDir * (uTime * 0.95));
+
+    // Cauliflower spherical billow cells (1 - cellular Voronoi distance)
+    float sBoil1 = 1.0 - cellularBoil(pSmokeScaled * 1.65 - draftDir * (uTime * 0.95) + sCurl * 0.35, uTime * 1.7 + seed * 2.3);
+    float sBoil2 = 1.0 - cellularBoil(pSmokeScaled * 2.85 + sCurl * 0.45, uTime * 2.3 + seed * 5.1);
+    float billowShape = smoothstep(0.18, 0.85, sBoil1) * 0.65 + smoothstep(0.20, 0.82, sBoil2) * 0.35;
+
+    // Smoke footprint covers the outer flame ring, broken patches over the hot core (top-down occlusion),
+    // and the downwind billowing plume
+    float smokeDist = length(pSmokeScaled) - (sn1.x * 0.38 + billowShape * 0.46);
+    float smokeEnvelope = 1.0 - smoothstep(0.32, 1.32, smokeDist);
+
+    // Over the very center of the fire, leave dynamic gaps so bright flames punch through the rising smoke column
+    float coreWindow = 1.0 - 0.52 * smoothstep(0.65, 0.05, bedDist) * (1.0 - billowShape * 0.75);
+    float rawSmoke = smokeEnvelope * coreWindow * smoothstep(0.22, 0.78, billowShape * 0.70 + sn2.x * 0.45);
+
+    smokeAlpha = clamp(rawSmoke * smokeDensityBase * clamp(intensity * 0.95, 0.35, 0.92), 0.0, 0.86);
+
+    if (smokeAlpha > 0.005) {
+      // 3D Top-Down Normal of each spherical smoke billow lobe from spatial noise gradients
+      vec2 lobeNormal = normalize(sn1.yz * 0.6 + sn2.yz * 0.4 + pSmokeScaled * 0.5 + vec2(1e-4));
+
+      // Top-down ambient/sun highlight on upper-left (NW) of each cauliflower puff vs deep carbon self-shadow on SE
+      float sunFacing = clamp(dot(lobeNormal, vec2(-0.707, -0.707)) * 0.5 + 0.5, 0.0, 1.0);
+      vec3 darkSoot = (kind == 1) ? vec3(0.025, 0.028, 0.035) : vec3(0.045, 0.050, 0.062);
+      vec3 litSlate = (kind == 1) ? vec3(0.11,  0.12,  0.15)  : vec3(0.20,  0.22,  0.26);
+      vec3 smokeCol = mix(darkSoot, litSlate, sunFacing * (0.45 + 0.55 * billowShape));
+
+      // Subsurface & rim firelight illumination from the flames directly beneath the smoke column!
+      float fireProximity = exp(-bedDist * 1.15) * clamp(intensity, 0.2, 1.3);
+      float inwardFacing = clamp(-dot(lobeNormal, radialDir) * 0.5 + 0.5, 0.0, 1.0);
+      float underGlow = fireProximity * (0.35 + 0.65 * inwardFacing) * (1.0 - rawSmoke * 0.42);
+      vec3 fireBacklight = mix(vec3(0.88, 0.18, 0.02), vec3(1.0, 0.56, 0.10), clamp(temp * 0.85, 0.0, 1.0));
+      smokeCol += fireBacklight * underGlow * 0.78;
+
+      smokePremul = smokeCol * smokeAlpha;
+    }
+  }
+
+  // --- 4. Top-Down Z-Ordered Composite: Elevated Smoke Crown OVER Ground/Vehicle Flame Bed ---
+  // Since the camera looks down from above (+Z), the rising smoke column partially occludes the flames beneath it,
+  // while intense turbulent flame tongues still pierce through the gaps.
+  float bleedThrough = smoothstep(0.72, 1.28, temp) * 0.42;
+  float effSmokeAlpha = smokeAlpha * (1.0 - bleedThrough);
+  vec3 effSmokePremul = smokePremul * (1.0 - bleedThrough);
+
+  vec3 totalPremul = effSmokePremul + firePremul * (1.0 - effSmokeAlpha);
+  float totalAlpha = clamp(effSmokeAlpha + clamp(flameAlpha * 0.82, 0.0, 0.94) * (1.0 - effSmokeAlpha), 0.0, 0.95);
+
+  if (totalAlpha <= 0.003 && length(totalPremul) <= 0.003) {
+    discard;
+  }
+
+  oColor = vec4(clamp(totalPremul, 0.0, 1.0), totalAlpha);
 }`;
 
 export class GpuFireRenderer {
@@ -550,7 +610,7 @@ export class GpuFireRenderer {
 
       const maxR = Math.max(em.radiusX, em.radiusY, 4);
       const windMag = Math.hypot(em.windVx, em.windVy);
-      const boundR = (maxR * 3.1 + Math.min(maxR * 2.0, windMag * 0.45) + 18) * camera.zoom;
+      const boundR = (maxR * 4.2 + Math.min(maxR * 3.0, windMag * 0.85) + 24) * camera.zoom;
 
       if (sx + boundR < 0 || sx - boundR > viewWidth || sy + boundR < 0 || sy - boundR > viewHeight) {
         continue;

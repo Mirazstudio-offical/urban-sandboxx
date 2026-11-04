@@ -10753,15 +10753,48 @@ export function updateVehiclePhysics(
         } else {
           vehicle.isReversing = vehicle.speed * PX_S_TO_SPEED_KMH < -0.7;
           if (vehicle.idmAcceleration !== undefined) {
+            const isWetRoad = world.weather === 'rain' || world.weather === 'storm';
+            const maxPhysicalTireDecel = isWetRoad ? -465 : -620;
+            const effectiveIdmAccel = Math.max(maxPhysicalTireDecel, vehicle.idmAcceleration);
+
             // IDM Controlled speed and brake lights
-            vehicle.speed = Math.max(0, vehicle.speed + vehicle.idmAcceleration * dt);
+            vehicle.speed = Math.max(0, vehicle.speed + effectiveIdmAccel * dt);
             // AI на целевой нулевой скорости не должен «кролиться» от
             // микроскопического плюса IDM: иначе стоящая машина дрожит и едет.
             if ((vehicle.targetSpeed || 0) <= 0.25 && vehicle.speed < 0.6) {
               vehicle.speed = 0;
               vehicle.idmAcceleration = 0;
             }
-            vehicle.brakeLightsOn = vehicle.idmAcceleration < -20 * speedScaleFactor || vehicle.speed * PX_S_TO_SPEED_KMH < 1.4;
+            vehicle.brakeLightsOn = effectiveIdmAccel < -20 * speedScaleFactor || vehicle.speed * PX_S_TO_SPEED_KMH < 1.4;
+
+            // Deposit physical tire brake skidmarks during emergency panic braking or evasive swerves
+            if (effectiveIdmAccel < -360 && vehicle.speed > 42 && world.skidMarks && Math.random() < 0.55) {
+              const bCos = Math.cos(vehicle.angle);
+              const bSin = Math.sin(vehicle.angle);
+              const bRearX = vehicle.x - bCos * (vehicle.length * 0.32);
+              const bRearY = vehicle.y - bSin * (vehicle.length * 0.32);
+              const bHalfTrack = (vehicle.width || 18) * 0.40;
+              const stepDx = bCos * vehicle.speed * dt * 1.35;
+              const stepDy = bSin * vehicle.speed * dt * 1.35;
+              const skidAlpha = Math.min(0.48, Math.abs(effectiveIdmAccel) / 1150);
+              for (const side of [-1, 1]) {
+                const wx = bRearX + bSin * bHalfTrack * side;
+                const wy = bRearY - bCos * bHalfTrack * side;
+                world.skidMarks.push({
+                  x1: wx,
+                  y1: wy,
+                  x2: wx + stepDx,
+                  y2: wy + stepDy,
+                  alpha: skidAlpha,
+                  color: '#111827',
+                  width: 4.8,
+                  depth: 0,
+                  surfaceType: 'asphalt',
+                  isWet: isWetRoad,
+                  slipRatio: 0.78,
+                });
+              }
+            }
           } else {
             if (vehicle.speed < vehicle.targetSpeed) {
               vehicle.speed = Math.min(vehicle.targetSpeed, vehicle.speed + accelRate * dt);
@@ -12019,41 +12052,49 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         st.fireIntensity = 0;
       }
 
-      // Flames are rendered via GpuFireRenderer WebGL2 volumetric shader (zero flame particle spam).
-      // Emit only sparse, slow-billowing pyrolysis soot plumes and occasional incandescent micro-embers.
+      // Flames and near-field smoke crown are rendered via GpuFireRenderer WebGL2 volumetric shader.
+      // Emit billowing overhead top-down pyrolysis smoke clouds and sparse embers that drift with horizontal wind.
       if (isStainNear) {
-        const stainSmokeChance = (st.type === 'fuel' ? 3.2 : 2.6) * dt * (0.4 + 0.6 * (st.fireIntensity || 0.5));
+        const stainSmokeChance = (st.type === 'fuel' ? 6.2 : 7.4) * dt * (0.45 + 0.55 * (st.fireIntensity || 0.5));
         if (Math.random() < stainSmokeChance) {
+          const eddyAng = Math.random() * Math.PI * 2;
+          const eddySpd = 4 + Math.random() * 10;
           world.particles.push({
-            x: st.x + (Math.random() * st.radius * 0.9 - st.radius * 0.45),
-            y: st.y + (Math.random() * st.radius * 0.9 - st.radius * 0.45),
-            vx: (Math.random() * 12 - 6) + wind.vx * 0.42,
-            vy: -28 - Math.random() * 22 + wind.vy * 0.42,
-            radius: 6.0 + st.radius * 0.55 + Math.random() * 5.5,
-            color: st.type === 'oil' ? '#090d16' : '#182232',
-            alpha: 0.78,
-            initialAlpha: 0.78,
+            x: st.x + (Math.random() * st.radius * 0.85 - st.radius * 0.425),
+            y: st.y + (Math.random() * st.radius * 0.85 - st.radius * 0.425),
+            vx: Math.cos(eddyAng) * eddySpd + wind.vx * 0.52,
+            vy: Math.sin(eddyAng) * eddySpd + wind.vy * 0.52,
+            z: 2.0,
+            radius: 7.5 + st.radius * 0.65 + Math.random() * 5.5,
+            color: st.type === 'oil' ? '#0b0f17' : '#18202c',
+            secondaryColor: '#f97316',
+            alpha: 0.86,
+            initialAlpha: 0.86,
             life: 0,
-            maxLife: 1.05 + Math.random() * 0.55,
+            maxLife: 1.85 + Math.random() * 0.95,
             type: 'engine_smoke',
-            tempC: 340,
-            buoyancy: 30,
-            expansionRate: 13
+            tempC: 360,
+            buoyancy: 26,
+            expansionRate: 14.5
           });
         }
 
-        // Occasional rising incandescent carbon embers
-        if (Math.random() < 1.6 * dt * (st.fireIntensity || 0.5)) {
+        // Occasional 360-degree radially ejecting incandescent carbon embers
+        if (Math.random() < 1.8 * dt * (st.fireIntensity || 0.5)) {
+          const spAng = Math.random() * Math.PI * 2;
+          const spSpd = 14 + Math.random() * 34;
           world.particles.push({
             x: st.x + (Math.random() * st.radius - st.radius * 0.5),
             y: st.y + (Math.random() * st.radius - st.radius * 0.5),
-            vx: (Math.random() * 65 - 32.5) + wind.vx * 0.55,
-            vy: -18 - Math.random() * 24 + wind.vy * 0.55,
+            vx: Math.cos(spAng) * spSpd + wind.vx * 0.55,
+            vy: Math.sin(spAng) * spSpd + wind.vy * 0.55,
+            z: 2.0,
+            vz: 28 + Math.random() * 24,
             radius: 0.9 + Math.random() * 1.4,
             color: '#fef08a',
             alpha: 0.95,
             life: 0,
-            maxLife: 0.18 + Math.random() * 0.22,
+            maxLife: 0.22 + Math.random() * 0.24,
             type: 'spark'});
         }
       }
@@ -12204,8 +12245,8 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
 
     if (car.damage && (car.damage.engineSmoking || car.damage.underHoodSmolder || car.damage.engineFire || car.damage.fuelTankFire || car.damage.cabinFire)) {
       const hasActiveFlame = car.damage.engineFire || car.damage.cabinFire || car.damage.fuelTankFire;
-      // Low-frequency billowing smoke plume rate (88% fewer particles than legacy sprite fire)
-      const spawnChance = (hasActiveFlame ? 9.5 : 14.0) * dt;
+      // Billowing top-down smoke plume rate
+      const spawnChance = (hasActiveFlame ? 16.5 : 14.0) * dt;
       if (Math.random() < spawnChance) {
         const cosA = Math.cos(car.angle);
         const sinA = Math.sin(car.angle);
@@ -12237,40 +12278,48 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
           const fireX = car.x + cosA * offL - sinA * offW;
           const fireY = car.y + sinA * offL + cosA * offW;
 
-          // 1. Dense billowing black pyrolysis soot smoke column rising above the shader flames
+          // 1. Dense billowing pyrolysis soot smoke column rising toward camera (+Z) and drifting with horizontal wind
+          const eddyAng = Math.random() * Math.PI * 2;
+          const eddySpd = 5 + Math.random() * 11;
           world.particles.push({
             x: fireX,
             y: fireY,
-            vx: -cosA * 6 + (Math.random() * 14 - 7) + wind.vx * 0.42,
-            vy: -sinA * 6 - 26 + (Math.random() * 14 - 7) + wind.vy * 0.42,
-            radius: 9 + fireProgress * 13 + Math.random() * 7,
-            color: '#0b111e',
-            alpha: 0.80,
-            initialAlpha: 0.80,
+            vx: -cosA * (car.speed * 0.25) + Math.cos(eddyAng) * eddySpd + wind.vx * 0.52,
+            vy: -sinA * (car.speed * 0.25) + Math.sin(eddyAng) * eddySpd + wind.vy * 0.52,
+            z: 3.0,
+            radius: 10 + fireProgress * 14 + Math.random() * 7.5,
+            color: '#0d1320',
+            secondaryColor: '#f97316',
+            alpha: 0.88,
+            initialAlpha: 0.88,
             life: 0,
-            maxLife: 1.15 + Math.random() * 0.65,
+            maxLife: 2.05 + Math.random() * 1.15,
             type: 'engine_smoke',
-            tempC: 380,
-            buoyancy: 32,
-            expansionRate: 13
+            tempC: 400,
+            buoyancy: 30,
+            expansionRate: 15
           });
 
-          // 2. Sparse incandescent carbon-steel sparks / rising embers
-          if (Math.random() < 0.38) {
+          // 2. Sparse 360-degree incandescent carbon-steel sparks / embers
+          if (Math.random() < 0.36) {
+            const spAng = Math.random() * Math.PI * 2;
+            const spSpd = 18 + Math.random() * 42;
             world.particles.push({
               x: fireX,
               y: fireY,
-              vx: (Math.random() * 75 - 37.5) + wind.vx * 0.55,
-              vy: (Math.random() * 75 - 37.5) - 18 + wind.vy * 0.55,
+              vx: Math.cos(spAng) * spSpd + wind.vx * 0.55,
+              vy: Math.sin(spAng) * spSpd + wind.vy * 0.55,
+              z: 3.0,
+              vz: 30 + Math.random() * 25,
               radius: 1.0 + Math.random() * 1.6,
               color: '#fef08a',
               alpha: 0.95,
               life: 0,
-              maxLife: 0.22 + Math.random() * 0.28,
+              maxLife: 0.24 + Math.random() * 0.28,
               type: 'spark'});
           }
         } else {
-          // Detailed under-hood steam and smoke rendering
+          // Detailed under-hood steam and smoke rendering (top-down radial + wind drift)
           const steamType = car.damage.underHoodSteam || 'none';
           const smokeType = car.damage.underHoodSmolder ? 'oil_gray_wiring_black': (car.damage.underHoodSmoke || 'none');
 
@@ -12284,14 +12333,15 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
               world.particles.push({
                 x: hoodX + (Math.random() * 3 - 1.5),
                 y: hoodY + (Math.random() * 3 - 1.5),
-                vx: -cosA * 4 + (Math.random() * 6 - 3) + wind.vx * 0.22,
-                vy: -sinA * 4 - 22 + (Math.random() * 6 - 3) + wind.vy * 0.22, // rising stream
+                vx: -cosA * 6 + (Math.random() * 10 - 5) + wind.vx * 0.35,
+                vy: -sinA * 6 + (Math.random() * 10 - 5) + wind.vy * 0.35,
+                z: 1.5,
                 radius: (2.4 + Math.random() * 1.8) * (1.0 + condFactor * 0.65),
                 color: outsideTemp < 5 ? '#ffffff' : '#f8fafc',
                 alpha: 0.65 + condFactor * 0.25,
                 initialAlpha: 0.65 + condFactor * 0.25,
                 life: 0,
-                maxLife: (0.65 + Math.random() * 0.35) * (atmo.isCold ? 1.5 : 0.9),
+                maxLife: (0.75 + Math.random() * 0.45) * (atmo.isCold ? 1.5 : 0.9),
                 type: 'engine_smoke',
                 isSteam: true,
                 tempC: 102,
@@ -12305,14 +12355,15 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
               world.particles.push({
                 x: hoodX + (Math.random() * 8 - 4),
                 y: hoodY + (Math.random() * 8 - 4),
-                vx: -cosA * 6 + (Math.random() * 12 - 6) + wind.vx * 0.25,
-                vy: -sinA * 6 - 20 + (Math.random() * 10 - 5) + wind.vy * 0.25,
+                vx: -cosA * 8 + (Math.random() * 14 - 7) + wind.vx * 0.38,
+                vy: -sinA * 8 + (Math.random() * 14 - 7) + wind.vy * 0.38,
+                z: 2.0,
                 radius: (5.5 + Math.random() * 4.0) * (1.0 + condFactor * 0.8),
-                color: outsideTemp < 5 ? '#ffffff' : '#f8fafc', // dense bright white steam
+                color: outsideTemp < 5 ? '#ffffff' : '#f8fafc',
                 alpha: 0.85 + condFactor * 0.12,
                 initialAlpha: 0.85 + condFactor * 0.12,
                 life: 0,
-                maxLife: (1.05 + Math.random() * 0.55) * (atmo.isCold ? 1.55 : 0.85),
+                maxLife: (1.15 + Math.random() * 0.60) * (atmo.isCold ? 1.55 : 0.85),
                 type: 'engine_smoke',
                 isSteam: true,
                 tempC: 108,
@@ -12327,19 +12378,20 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
               world.particles.push({
                 x: hoodX + (Math.random() * 5 - 2.5),
                 y: hoodY + (Math.random() * 5 - 2.5),
-                vx: -cosA * 12 + (Math.random() * 10 - 5) + wind.vx * 0.30,
-                vy: -sinA * 12 - 45 - Math.random() * 25 + wind.vy * 0.30, // powerful geyser upwards blast
-                radius: (5.0 + Math.random() * 4.5) * (1.0 + condFactor * 0.85),
+                vx: -cosA * 14 + (Math.random() * 24 - 12) + wind.vx * 0.42,
+                vy: -sinA * 14 + (Math.random() * 24 - 12) + wind.vy * 0.42,
+                z: 2.5,
+                radius: (5.5 + Math.random() * 4.5) * (1.0 + condFactor * 0.85),
                 color: outsideTemp < 5 ? '#ffffff' : '#f8fafc',
                 alpha: 0.92,
                 initialAlpha: 0.92,
                 life: 0,
-                maxLife: (0.55 + Math.random() * 0.35) * (atmo.isCold ? 1.5 : 0.9),
+                maxLife: (0.75 + Math.random() * 0.45) * (atmo.isCold ? 1.5 : 0.9),
                 type: 'engine_smoke',
                 isSteam: true,
                 tempC: 115,
                 buoyancy: 32,
-                expansionRate: 15
+                expansionRate: 16
               });
             }
           }
@@ -12351,58 +12403,59 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
               world.particles.push({
                 x: hoodX + (Math.random() * 7 - 3.5),
                 y: hoodY + (Math.random() * 7 - 3.5),
-                vx: -cosA * 5 + (Math.random() * 14 - 7) + wind.vx * 0.32,
-                vy: -sinA * 5 - 18 + (Math.random() * 12 - 6) + wind.vy * 0.32,
+                vx: -cosA * 6 + (Math.random() * 14 - 7) + wind.vx * 0.42,
+                vy: -sinA * 6 + (Math.random() * 14 - 7) + wind.vy * 0.42,
+                z: 1.5,
                 radius: 4.5 + Math.random() * 3.5,
-                color: '#64748b', // distinct blue-gray oil smoke color
-                alpha: 0.75,
-                initialAlpha: 0.75,
+                color: '#64748b',
+                alpha: 0.78,
+                initialAlpha: 0.78,
                 life: 0,
-                maxLife: 0.95 + Math.random() * 0.45,
+                maxLife: 1.15 + Math.random() * 0.55,
                 type: 'engine_smoke',
                 tempC: 160,
                 buoyancy: 18,
-                expansionRate: 9
+                expansionRate: 10
               });
             }
           } else if (smokeType === 'oil_gray_wiring_black') {
             hasRenderedSmoke = true;
             if (Math.random() < 0.60) {
-              // Thick gray oil smoke
               world.particles.push({
                 x: hoodX + (Math.random() * 9 - 4.5),
                 y: hoodY + (Math.random() * 9 - 4.5),
-                vx: -cosA * 6 + (Math.random() * 18 - 9) + wind.vx * 0.35,
-                vy: -sinA * 6 - 25 + (Math.random() * 16 - 8) + wind.vy * 0.35,
-                radius: 5.5 + Math.random() * 4.5,
-                color: '#334155', // thick slate-gray oil smoke
-                alpha: 0.85,
-                initialAlpha: 0.85,
+                vx: -cosA * 7 + (Math.random() * 16 - 8) + wind.vx * 0.45,
+                vy: -sinA * 7 + (Math.random() * 16 - 8) + wind.vy * 0.45,
+                z: 2.0,
+                radius: 6.0 + Math.random() * 4.5,
+                color: '#334155',
+                alpha: 0.86,
+                initialAlpha: 0.86,
                 life: 0,
-                maxLife: 1.2 + Math.random() * 0.55,
+                maxLife: 1.45 + Math.random() * 0.65,
                 type: 'engine_smoke',
                 tempC: 220,
                 buoyancy: 22,
-                expansionRate: 10
+                expansionRate: 11.5
               });
             }
             if (Math.random() < 0.45) {
-              // Acrid black wiring smoke
               world.particles.push({
                 x: hoodX + (Math.random() * 7 - 3.5),
                 y: hoodY + (Math.random() * 7 - 3.5),
-                vx: -cosA * 4 + (Math.random() * 14 - 7) + wind.vx * 0.35,
-                vy: -sinA * 4 - 32 + (Math.random() * 14 - 7) + wind.vy * 0.35,
-                radius: 4.0 + Math.random() * 3.5,
-                color: '#090d16', // dense pitch black wiring smoke
+                vx: -cosA * 5 + (Math.random() * 14 - 7) + wind.vx * 0.45,
+                vy: -sinA * 5 + (Math.random() * 14 - 7) + wind.vy * 0.45,
+                z: 2.5,
+                radius: 5.0 + Math.random() * 4.0,
+                color: '#090d16',
                 alpha: 0.92,
                 initialAlpha: 0.92,
                 life: 0,
-                maxLife: 1.05 + Math.random() * 0.45,
+                maxLife: 1.35 + Math.random() * 0.55,
                 type: 'engine_smoke',
                 tempC: 260,
                 buoyancy: 26,
-                expansionRate: 9.5
+                expansionRate: 11
               });
             }
           }
@@ -12631,11 +12684,11 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       p.vx += (wind.vx - p.vx) * Math.min(1.0, 3.2 * dt);
       p.vy += (wind.vy - p.vy) * Math.min(1.0, 3.2 * dt);
 
-      // 2. Thermal buoyancy in cold air: hot exhaust/steam gas rises faster in denser cold air
+      // 2. Top-down thermal buoyancy: hot gas rises vertically along +Z toward camera and expands radially
       const gasTemp = p.tempC ?? (p.isSteam ? 85 : 75);
       const deltaT = Math.max(0, gasTemp - outsideTemp);
       const buoyancy = (p.buoyancy ?? 8.0) * (1.0 + Math.min(1.5, deltaT / 40.0));
-      p.vy -= buoyancy * dt;
+      p.z = (p.z ?? 0) + buoyancy * dt;
 
       // 3. Volumetric gas expansion: in cold air, condensation causes clouds to bloom dramatically!
       const isCondensing = p.isSteam || condFactor > 0.25;
@@ -12651,10 +12704,10 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
 
       // 5. Vortex eddy rotation & dissipation speed
       p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0.4) * dt;
-      const windShearDispersal = 1.0 + (windSpeed / 75.0) * 0.85;
+      const windShearDispersal = 1.0 + (windSpeed / 95.0) * 0.65;
       const tempEvap = isCondensing
-        ? Math.max(0.35, Math.min(2.4, (outsideTemp + 8.0) / 18.0))
-        : Math.max(0.65, Math.min(1.8, (outsideTemp + 15.0) / 30.0));
+        ? Math.max(0.35, Math.min(2.0, (outsideTemp + 8.0) / 22.0))
+        : Math.max(0.65, Math.min(1.4, (outsideTemp + 15.0) / 34.0));
       const dissipationRate = windShearDispersal * tempEvap;
       p.life += dt * dissipationRate;
 
@@ -12664,35 +12717,36 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       const falloffPower = (isCondensing && windSpeed < 50) ? 0.75 : (windSpeed > 100 ? 1.35 : 0.95);
       p.alpha = baseAlpha * Math.pow(Math.max(0, 1.0 - progress), falloffPower);
     } else if (p.type === 'tire_smoke'|| p.type === 'engine_smoke') {
-      // Wind advection
-      p.vx += (wind.vx - p.vx) * Math.min(1.0, 2.8 * dt);
-      p.vy += (wind.vy - p.vy) * Math.min(1.0, 2.8 * dt);
+      // Wind advection in the horizontal X-Y plane
+      p.vx += (wind.vx - p.vx) * Math.min(1.0, 2.4 * dt);
+      p.vy += (wind.vy - p.vy) * Math.min(1.0, 2.4 * dt);
 
+      // Top-down vertical buoyancy lifts smoke along +Z toward camera instead of pushing it North (-Y)
       const isRadiatorSteam = p.isSteam || (p.color && (p.color === '#ffffff' || p.color.startsWith('#f')));
       const gasTemp = p.tempC ?? (p.isSteam ? 110 : 250);
       const deltaT = Math.max(0, gasTemp - outsideTemp);
       const buoyancy = (p.buoyancy ?? (p.type === 'engine_smoke' ? 18.0 : 8.0)) * (1.0 + Math.min(1.6, deltaT / 60.0));
-      p.vy -= buoyancy * dt;
+      p.z = (p.z ?? 0) + buoyancy * dt;
 
       const expMult = isRadiatorSteam ? (1.0 + condFactor * 0.90) : (1.0 + condFactor * 0.35);
-      p.radius += dt * ((p.expansionRate ?? 8.5) * expMult + p.radius * 0.32);
+      p.radius += dt * ((p.expansionRate ?? 8.5) * expMult + p.radius * 0.28);
 
-      const perpX = -Math.sin(wind.angle);
-      const perpY = Math.cos(wind.angle);
-      p.x += perpX * (Math.sin(p.life * 5.0 + p.y * 0.04) * (4.0 * dt));
-      p.y += perpY * (Math.sin(p.life * 5.0 + p.y * 0.04) * (4.0 * dt));
+      // Isotropic 360-degree turbulent curl swirl as the smoke cloud rises
+      const swirlAng = (p.shapeSeed ?? 0) * 0.17 + p.life * 3.8;
+      p.x += Math.cos(swirlAng) * (5.5 * dt);
+      p.y += Math.sin(swirlAng) * (5.5 * dt);
       p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0.5) * dt;
 
-      // Dissipation speed: wind shear + temperature evaporation
-      const windShearDispersal = 1.0 + (windSpeed / 70.0) * 0.85;
+      // Dissipation speed: gentle wind shear + temperature evaporation so smoke plumes linger realistically
+      const windShearDispersal = 1.0 + (windSpeed / 110.0) * 0.55;
       const tempEvap = isRadiatorSteam
-        ? Math.max(0.35, Math.min(2.4, (outsideTemp + 8.0) / 18.0))
-        : Math.max(0.65, Math.min(1.8, (outsideTemp + 15.0) / 30.0));
+        ? Math.max(0.35, Math.min(2.0, (outsideTemp + 8.0) / 20.0))
+        : Math.max(0.55, Math.min(1.15, (outsideTemp + 15.0) / 36.0));
       p.life += dt * (windShearDispersal * tempEvap);
 
       const baseAlpha = p.initialAlpha !== undefined ? p.initialAlpha : (p.type === 'engine_smoke' ? 0.85 : 0.65);
       const progress = Math.min(1.0, Math.max(0, p.life / p.maxLife));
-      const falloffPower = (isRadiatorSteam && condFactor > 0.4 && windSpeed < 50) ? 0.75 : 0.90;
+      const falloffPower = (isRadiatorSteam && condFactor > 0.4 && windSpeed < 50) ? 0.75 : 0.85;
       p.alpha = baseAlpha * Math.pow(Math.max(0, 1.0 - progress), falloffPower);
     } else if (p.type === 'dust') {
       // Atmospheric dust carried by wind
@@ -12709,9 +12763,9 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       const progress = Math.min(1.0, Math.max(0, p.life / p.maxLife));
       p.alpha = baseAlpha * Math.pow(Math.max(0, 1.0 - progress), 1.1);
     } else if (p.type === 'flame') {
-      // Flame tongues tilt downwind under wind force and stretch/narrow as they rise
+      // Top-down deflagration / ignition flash lobe drifts with horizontal wind
       p.vx += wind.vx * (0.35 * dt);
-      p.vy += wind.vy * (0.35 * dt) - 18 * dt;
+      p.vy += wind.vy * (0.35 * dt);
       p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0.6) * dt;
       p.life += dt * (1.0 + (windSpeed / 100.0) * 0.4);
       p.alpha = Math.max(0, 1 - (p.life / p.maxLife));

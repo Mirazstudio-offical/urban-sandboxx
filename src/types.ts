@@ -853,18 +853,36 @@ export interface Vehicle {
   reverseTimer?: number;
   recoverySteer?: number;
   recoveryTargetAngle?: number;
+  driverProfile?: DriverProfile;
   // Intelligent Obstacle Avoidance, Lane Changing & Evasion
   avoidanceOffset?: number;             // Current lateral shift from lane centerline in pixels (+ left, - right)
+  avoidanceVel?: number;                // Current lateral velocity of avoidance maneuver (px/s)
   targetAvoidanceOffset?: number;       // Target lateral shift to reach (+ left, - right)
-  avoidancePhase?: 'none' | 'swerving' | 'passing' | 'returning' | 'emergency_evading';
+  avoidanceHeadingBias?: number;        // Tangent angle bias (rad) from quintic S-curve derivative dd/ds
+  avoidancePhase?: 'none' | 'signaling' | 'swerving' | 'passing' | 'returning' | 'emergency_evading';
   avoidanceObstacleId?: string | null;  // ID of vehicle or prop being bypassed
   avoidanceWaitTimer?: number;          // Time waited behind obstacle before committing to maneuver
   avoidanceCooldown?: number;           // Cooldown before initiating another bypass
+  avoidanceSpline?: {
+    startOffset: number;
+    targetOffset: number;
+    traveledDist: number;
+    totalDist: number;
+  } | null;
+  evasionDecision?: {
+    threatId: string;
+    willEvade: boolean;
+    chosenOffset: number;
+    decidedAt: number;
+  } | null;
   laneChangeState?: {
     targetLaneId: string;
     direction: 'left' | 'right';
     progress: number;
     initialOffset: number;
+    traveledDist?: number;
+    totalDist?: number;
+    signalWarmup?: number;
   } | null;
   laneChangeCooldown?: number;
   inIntersection: boolean;
@@ -969,6 +987,30 @@ export interface VehicleDiffLockState {
   center: boolean; // Межосевая блокировка (МОБ - 50:50 раздаточная коробка)
   rear: boolean;   // Межколесная блокировка задней оси (МКБ-З)
   front: boolean;  // Межколесная блокировка передней оси (МКБ-П)
+}
+
+export type DriverArchetype =
+  | 'cautious'
+  | 'normal'
+  | 'confident'
+  | 'hurried'
+  | 'aggressive'
+  | 'elderly'
+  | 'professional';
+
+export interface DriverProfile {
+  archetype: DriverArchetype;
+  speedFactor: number;          // Multiplier on road speed limit (0.80 .. 1.28)
+  desiredTimeHeadway: number;   // Desired time gap T in seconds (0.85 .. 2.25)
+  minGapFactor: number;         // Multiplier on static standstill gap s0 (0.80 .. 1.45)
+  accelFactor: number;          // Multiplier on comfortable acceleration (0.72 .. 1.35)
+  comfortBrakeFactor: number;   // Multiplier on comfortable deceleration (0.75 .. 1.32)
+  politeness: number;           // MOBIL politeness factor p (0.05 .. 0.90)
+  laneChangeThreshold: number;  // MOBIL incentive threshold (px/s^2)
+  reactionTime: number;         // Psychomotor perception-reaction time in seconds (0.18 .. 0.78)
+  attentiveness: number;        // 0.55 .. 0.98: multi-car lookahead & ability to execute emergency evasive steering
+  corneringFactor: number;      // Turn speed multiplier (0.84 .. 1.24)
+  preferredLaneBias: number;    // -1 = prefers right lane, +1 = prefers left fast lane
 }
 
 export interface Pedestrian {

@@ -12304,12 +12304,13 @@ export class GameRenderer {
       if (cctx) {
         const half = size * 0.5;
         const [r, g, b] = GameRenderer.parseRgbColor(color);
-        const lightR = Math.min(255, Math.round(r * 1.18 + 20));
-        const lightG = Math.min(255, Math.round(g * 1.18 + 20));
-        const lightB = Math.min(255, Math.round(b * 1.18 + 22));
-        const darkR = Math.max(0, Math.round(r * 0.68));
-        const darkG = Math.max(0, Math.round(g * 0.68));
-        const darkB = Math.max(0, Math.round(b * 0.72));
+        const isDarkSoot = (r + g + b) < 110;
+        const lightR = Math.min(255, Math.round(r * (isDarkSoot ? 1.55 : 1.18) + (isDarkSoot ? 38 : 20)));
+        const lightG = Math.min(255, Math.round(g * (isDarkSoot ? 1.55 : 1.18) + (isDarkSoot ? 40 : 20)));
+        const lightB = Math.min(255, Math.round(b * (isDarkSoot ? 1.55 : 1.18) + (isDarkSoot ? 44 : 22)));
+        const darkR = Math.max(0, Math.round(r * (isDarkSoot ? 0.45 : 0.68)));
+        const darkG = Math.max(0, Math.round(g * (isDarkSoot ? 0.45 : 0.68)));
+        const darkB = Math.max(0, Math.round(b * (isDarkSoot ? 0.48 : 0.72)));
 
         // 1. Multi-lobed billowy turbulent eddy geometry (4 distinct organic variants)
         const lobeCount = 9;
@@ -12319,7 +12320,7 @@ export class GameRenderer {
           const dist = (i === 0 ? 0 : 0.16 + ((hash >> 4) & 15) / 15 * 0.25) * size;
           const lx = half + Math.cos(baseAng) * dist;
           const ly = half + Math.sin(baseAng) * dist * (0.82 + (v & 1) * 0.14);
-          const lobeR = (i === 0 ? 0.34 : 0.19 + ((hash >> 8) & 15) / 15 * 0.15) * size;
+          const lobeR = (i === 0 ? 0.36 : 0.21 + ((hash >> 8) & 15) / 15 * 0.15) * size;
 
           // Directional lighting within the turbulent cloud: NW lobes brighter, SE lobes self-shadowed
           const isLit = (lx - half) + (ly - half) < 0;
@@ -12328,18 +12329,18 @@ export class GameRenderer {
           const cb = i === 0 ? b : (isLit ? lightB : darkB);
 
           const grad = cctx.createRadialGradient(
-            lx - lobeR * 0.14,
-            ly - lobeR * 0.14,
+            lx - lobeR * 0.16,
+            ly - lobeR * 0.16,
             lobeR * 0.05,
             lx,
             ly,
             lobeR
           );
-          const coreAlpha = i === 0 ? 0.68 : 0.42;
+          const coreAlpha = isDarkSoot ? (i === 0 ? 0.86 : 0.62) : (i === 0 ? 0.68 : 0.42);
           grad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, ${coreAlpha})`);
-          grad.addColorStop(0.48, `rgba(${cr}, ${cg}, ${cb}, ${coreAlpha * 0.68})`);
-          grad.addColorStop(0.80, `rgba(${r}, ${g}, ${b}, ${coreAlpha * 0.26})`);
-          grad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0.0)`);
+          grad.addColorStop(0.52, `rgba(${cr}, ${cg}, ${cb}, ${coreAlpha * 0.74})`);
+          grad.addColorStop(0.82, `rgba(${darkR}, ${darkG}, ${darkB}, ${coreAlpha * 0.34})`);
+          grad.addColorStop(1.0, `rgba(${darkR}, ${darkG}, ${darkB}, 0.0)`);
 
           cctx.fillStyle = grad;
           cctx.beginPath();
@@ -12581,18 +12582,34 @@ export class GameRenderer {
     const seed = p.shapeSeed ?? 0;
     const sprite = GameRenderer.getGasPuffSprite(p.color, seed & 3);
     const ctx = this.ctx;
-    ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
-    const r = p.radius;
+    const a = Math.max(0, Math.min(1.0, p.alpha));
+    if (a < 0.01) return;
+
+    // Top-down altitude scale: as hot smoke rises along +Z toward the camera, its apparent footprint expands
+    const zScale = 1.0 + Math.min(0.32, Math.max(0, (p.z ?? 0) * 0.0055));
+    const r = p.radius * zScale;
     const rot = p.angle ?? ((seed & 31) * 0.2 + p.life * 0.8);
-    const aspect = p.aspect ?? (1.08 + (seed & 3) * 0.07);
+    const aspect = p.aspect ?? (1.06 + (seed & 3) * 0.06);
     const spdSq = p.vx * p.vx + p.vy * p.vy;
-    const stretch = spdSq > 160 ? Math.min(1.45, 1.0 + Math.sqrt(spdSq) * 0.0028) : aspect;
+    const stretch = spdSq > 160 ? Math.min(1.38, 1.0 + Math.sqrt(spdSq) * 0.0025) : aspect;
 
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(rot);
     const rx = r * stretch;
     const ry = r * (1.92 - stretch * 0.45);
+
+    // Subsurface warm orange firelight glow on young pyrolysis smoke billows rising directly above flames
+    if (p.secondaryColor && p.life < 0.85) {
+      const fireGlowFactor = (1.0 - p.life / 0.85) * 0.42 * a;
+      if (fireGlowFactor > 0.02) {
+        const glowSprite = GameRenderer.getGasPuffSprite(p.secondaryColor, (seed + 1) & 3);
+        ctx.globalAlpha = fireGlowFactor;
+        ctx.drawImage(glowSprite, -rx * 0.82, -ry * 0.82, rx * 1.64, ry * 1.64);
+      }
+    }
+
+    ctx.globalAlpha = a;
     ctx.drawImage(sprite, -rx, -ry, rx * 2, ry * 2);
     ctx.restore();
   }

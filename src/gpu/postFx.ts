@@ -344,44 +344,44 @@ void main() {
   vec2 texel = 1.0 / uSrcSize;
   vec2 worldPos = screenUvToWorld(uv);
 
-  // --- Thermal Heat Shimmer (Refractive Index Gradient Distortion around Active Fires) ----------------------
+  // --- Thermal Heat Shimmer (Top-Down Refractive Index Gradient Distortion around Active Fires) -------------
   if (uFireCount > 0) {
-    float camRot = -uCamAngle - 1.57079632679;
-    vec2 upWorld = vec2(-sin(camRot), -cos(camRot));
     float totalHeat = 0.0;
-    vec2 netDraftWorld = upWorld * 24.0;
+    vec2 netWindWorld = vec2(1e-4, 0.0);
+    vec2 radialAccum = vec2(0.0);
 
     for (int i = 0; i < 16; i++) {
       if (i >= uFireCount) break;
       vec4 fp = uFirePosRad[i];
       vec2 fw = uFireWind[i];
-      vec2 draftW = upWorld * 24.0 + fw * 0.85;
-      float draftLen = length(draftW);
-      vec2 draftDir = draftLen > 0.001 ? (draftW / draftLen) : upWorld;
+      float windLen = length(fw);
+      vec2 windDir = windLen > 0.001 ? (fw / windLen) : vec2(1.0, 0.0);
       vec2 rel = worldPos - fp.xy;
-      float along = dot(rel, draftDir);
-      vec2 perp = rel - draftDir * along;
-      // Elongate thermal shimmer zone along the rising/downwind plume
-      float effAlong = along > 0.0 ? along / (1.45 + min(1.2, draftLen * 0.015)) : along * 1.15;
-      float dist = length(perp + draftDir * effAlong);
-      float heatRad = max(18.0, fp.z * 2.85);
+      float along = dot(rel, windDir);
+      vec2 perp = rel - windDir * along;
+      // Top-down radial heat sheath slightly elongated along the horizontal wind/slipstream vector
+      float effAlong = along > 0.0 ? along / (1.0 + min(0.85, windLen * 0.015)) : along * 1.08;
+      float dist = length(perp + windDir * effAlong);
+      float heatRad = max(20.0, fp.z * 2.85);
       if (dist < heatRad) {
-        // Shimmer is strongest in the warm air sheath around and downwind of the flame core
-        float coreSuppress = smoothstep(fp.z * 0.25, fp.z * 0.85, dist);
-        float falloff = 1.0 - smoothstep(fp.z * 0.45, heatRad, dist);
+        float coreSuppress = smoothstep(fp.z * 0.20, fp.z * 0.80, dist);
+        float falloff = 1.0 - smoothstep(fp.z * 0.40, heatRad, dist);
         float w = falloff * (0.45 + 0.55 * coreSuppress) * clamp(fp.w, 0.0, 1.2);
         totalHeat += w;
-        netDraftWorld += fw * w;
+        netWindWorld += fw * w;
+        if (dist > 0.5) {
+          radialAccum += (rel / dist) * w;
+        }
       }
     }
 
     if (totalHeat > 0.01) {
       float heatAmt = min(1.0, totalHeat);
-      vec2 advect = normalize(netDraftWorld) * (uTime * 8.5);
+      vec2 advect = (radialAccum * 0.55 + normalize(netWindWorld) * 0.45) * (uTime * 6.5);
       vec3 hNoise1 = noise2DAndGrad(worldPos * 0.14 - advect);
-      vec3 hNoise2 = noise2DAndGrad(worldPos * 0.29 - advect * 1.45 + hNoise1.yz * 0.35);
+      vec3 hNoise2 = noise2DAndGrad(worldPos * 0.29 - advect * 1.35 + hNoise1.yz * 0.35);
       vec2 shimmerGrad = worldDirToScreenUv(hNoise1.yz * 0.6 + hNoise2.yz * 0.4);
-      uv = clamp(uv + shimmerGrad * texel * (2.15 * heatAmt), vec2(0.001), vec2(0.999));
+      uv = clamp(uv + shimmerGrad * texel * (2.05 * heatAmt), vec2(0.001), vec2(0.999));
     }
   }
 
