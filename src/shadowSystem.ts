@@ -162,11 +162,17 @@ export function computeSunShadowState(
   // At solar noon in summer (sunElevation ~ 0.92), lengthFactor is ~0.36 (compact for cars/cottages, while tall 12-16 story towers still cast ~115-155px shadows).
   // In spring/autumn noon (sunElevation ~ 0.78), lengthFactor is ~0.50.
   // Near sunrise/sunset (sunElevation -> 0.08), lengthFactor stretches up to ~2.55.
-  const lengthFactor = isNight
+  const rawLengthFactor = isNight
     ? 0.48 + (1.0 - sunElevation) * 0.85
     : Math.min(2.55, 0.32 + Math.pow(1.0 - sunElevation, 1.75) * 2.45);
+  const lengthScaleMult = Math.max(0.25, Math.min(2.5, (performanceConfig.shadowLengthScale ?? 100) / 100));
+  const lengthFactor = rawLengthFactor * lengthScaleMult;
 
-  const penumbraFactor = 0.85 + cloudCover * 1.4 + (1.0 - sunElevation) * 0.45;
+  const softnessRatio = Math.max(0, Math.min(2.0, (performanceConfig.shadowSoftness ?? 60) / 60));
+  const penumbraFactor = (0.85 + cloudCover * 1.4 + (1.0 - sunElevation) * 0.45) * softnessRatio;
+
+  const intensityMult = Math.max(0.1, Math.min(2.0, (performanceConfig.shadowIntensity ?? 100) / 100));
+  const finalShadowOpacity = Math.max(0.03, Math.min(0.88, baseShadowOpacity * intensityMult));
 
   currentSunShadowState = {
     sunDirX,
@@ -177,7 +183,7 @@ export function computeSunShadowState(
     castY: shadowDirY * lengthFactor,
     sunElevation,
     lengthFactor,
-    shadowOpacity: Math.max(0.06, Math.min(0.68, baseShadowOpacity)),
+    shadowOpacity: finalShadowOpacity,
     penumbraFactor,
     isNight,
     ambientNightAlpha: 0,
@@ -1689,8 +1695,10 @@ function renderVehicleShadow(
     clipOutsidePolygon(sCtx, maskPoly, bounds);
   }
 
+  const detailShadows = performanceConfig.enableVehicleDetailShadows !== false;
+
   // 1a. 4 Wheel Shadows touching the road (z = alt .. alt + 7.5px)
-  if (!vType.startsWith('moto_')) {
+  if (detailShadows && !vType.startsWith('moto_')) {
     const wOffX = halfL * 0.62;
     const wOffY = halfW * 0.94;
     const wheelPositions = [
@@ -1710,7 +1718,7 @@ function renderVehicleShadow(
   extrudePolygonShadow(sCtx, worldPoly, baseOff.dx, baseOff.dy, chassisOff.dx, chassisOff.dy);
 
   // 1c. Side Mirrors (z = chassisH * 0.78 .. chassisH * 1.08)
-  if (!vType.startsWith('trailer_') && !vType.startsWith('moto_')) {
+  if (detailShadows && !vType.startsWith('trailer_') && !vType.startsWith('moto_')) {
     const mirX = halfL * 0.22;
     for (const side of [-1, 1]) {
       const mirY = side * (halfW + 1.8);
@@ -1731,7 +1739,7 @@ function renderVehicleShadow(
   }
 
   // 1d. Trailer Drawbar / A-Frame Tongue Shadow
-  if (vType.startsWith('trailer_') || car.isTrailer) {
+  if (detailShadows && (vType.startsWith('trailer_') || car.isTrailer)) {
     const tongueStart = halfL * 0.85;
     const tongueEnd = halfL + 14;
     const tPoly: Point[] = [
@@ -1754,7 +1762,7 @@ function renderVehicleShadow(
   }
 
   // 2. Raised Cabin / Greenhouse / Superstructure Extrusion (z = chassisH .. cabinH)
-  if (hasCabin) {
+  if (hasCabin && detailShadows) {
     const cabHalfW = halfW * cabinWidthRatio;
     const cabinPoly: Point[] = [
       {
@@ -2528,20 +2536,23 @@ export function renderUnifiedWorldShadows(
   remotePlayers?: RemotePlayerState[],
   cloudShadows?: CloudShadowCluster[]
 ) {
+  const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 1.0));
   sCtx.save();
   sCtx.setTransform(1, 0, 0, 1, 0, 0);
-  sCtx.clearRect(0, 0, width, height);
+  sCtx.clearRect(0, 0, Math.ceil(width * shadowScale), Math.ceil(height * shadowScale));
 
-  // Match camera world-to-screen transform (stripping backingScale because shadowCanvas is CSS-sized)
+  // Match camera world-to-screen transform (scaled by shadowResolutionScale / backingScale)
   const t = mainCtx.getTransform();
-  const ik = 1 / backingScale;
+  const ik = shadowScale / backingScale;
   sCtx.setTransform(t.a * ik, t.b * ik, t.c * ik, t.d * ik, t.e * ik, t.f * ik);
 
   // Deep midnight-navy shadow color matching the night darkness shroud.
   // Drawn opaque onto shadowCanvas so overlapping shadows never double-darken;
   // overall shadow opacity is applied once when compositing shadowCanvas onto lightmapCanvas.
   const shadowColor = 'rgb(4, 8, 22)';
-  const penumbraStrokeColor = 'rgba(4, 8, 22, 0.36)';
+  const softness = performanceConfig.shadowSoftness ?? 60;
+  const penumbraStrokeColor = 'rgba(4, 8, 22, 0.34)';
+  const outerPenumbraStrokeColor = 'rgba(4, 8, 22, 0.16)';
   sCtx.fillStyle = shadowColor;
   sCtx.strokeStyle = shadowColor;
   sCtx.lineCap = 'round';
@@ -2552,246 +2563,270 @@ export function renderUnifiedWorldShadows(
   // ============================================================================
 
   // 1A. Ground Items, Litter & Sand Mounds (z = 1.5 .. 4.5px)
-  if (world.groundItems) {
-    const itemOff = getShadowOffset(2.8, sunState);
-    for (const gi of world.groundItems) {
-      if (gi.x < minX - 20 || gi.x > maxX + 20 || gi.y < minY - 20 || gi.y > maxY + 20) continue;
-      sCtx.beginPath();
-      sCtx.arc(gi.x + itemOff.dx, gi.y + itemOff.dy, 2.8, 0, Math.PI * 2);
-      sCtx.fill();
+  if (performanceConfig.enableMicroShadows !== false) {
+    if (world.groundItems) {
+      const itemOff = getShadowOffset(2.8, sunState);
+      for (const gi of world.groundItems) {
+        if (gi.x < minX - 20 || gi.x > maxX + 20 || gi.y < minY - 20 || gi.y > maxY + 20) continue;
+        sCtx.beginPath();
+        sCtx.arc(gi.x + itemOff.dx, gi.y + itemOff.dy, 2.8, 0, Math.PI * 2);
+        sCtx.fill();
+      }
+    }
+    if (world.litter) {
+      for (const lit of world.litter) {
+        if (lit.x < minX - 20 || lit.x > maxX + 20 || lit.y < minY - 20 || lit.y > maxY + 20) continue;
+        const z = 1.6 + (lit.altitude || 0);
+        const lOff = getShadowOffset(z, sunState);
+        sCtx.beginPath();
+        sCtx.arc(lit.x + lOff.dx, lit.y + lOff.dy, Math.max(1.2, lit.size * 0.55), 0, Math.PI * 2);
+        sCtx.fill();
+      }
+    }
+    if (world.stains) {
+      for (const st of world.stains) {
+        if (st.type !== 'sand') continue;
+        if (st.x < minX - 40 || st.x > maxX + 40 || st.y < minY - 40 || st.y > maxY + 40) continue;
+        const sandOff = getShadowOffset(4.5, sunState);
+        sCtx.save();
+        clipOutsideCircle(sCtx, st.x, st.y, st.radius * 0.85, sandOff.dx, sandOff.dy);
+        extrudeCylinderShadow(sCtx, st.x, st.y, st.radius, 0, 4.5, sunState);
+        sCtx.restore();
+      }
     }
   }
-  if (world.litter) {
-    for (const lit of world.litter) {
-      if (lit.x < minX - 20 || lit.x > maxX + 20 || lit.y < minY - 20 || lit.y > maxY + 20) continue;
-      const z = 1.6 + (lit.altitude || 0);
-      const lOff = getShadowOffset(z, sunState);
-      sCtx.beginPath();
-      sCtx.arc(lit.x + lOff.dx, lit.y + lOff.dy, Math.max(1.2, lit.size * 0.55), 0, Math.PI * 2);
-      sCtx.fill();
-    }
+
+  if (performanceConfig.enablePropShadows !== false) {
+    // 1B. Road Guardrails (posts + W-beam rail, z = 0 .. 9.5px)
+    renderGuardrailShadows(sCtx, world, sunState, minX, minY, maxX, maxY);
+
+    // 1C. Low Street Furniture, Signs & Park Fountain Tiers
+    renderStreetPropShadows(sCtx, props, sunState, minX, minY, maxX, maxY, 'low');
+    renderIntersectionSignsAndFountainsShadows(
+      sCtx,
+      world,
+      visibleBuildings,
+      sunState,
+      minX,
+      minY,
+      maxX,
+      maxY
+    );
+
+    // 1D. Gas Station Low Casters (Islands & Fuel Pumps)
+    renderGasStationShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'low');
+
+    // 1E. Railway Low/Mid Casters (Platforms & Rolling Stock Trains)
+    renderRailwayShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'low');
   }
-  if (world.stains) {
-    for (const st of world.stains) {
-      if (st.type !== 'sand') continue;
-      if (st.x < minX - 40 || st.x > maxX + 40 || st.y < minY - 40 || st.y > maxY + 40) continue;
-      const sandOff = getShadowOffset(4.5, sunState);
-      sCtx.save();
-      clipOutsideCircle(sCtx, st.x, st.y, st.radius * 0.85, sandOff.dx, sandOff.dy);
-      extrudeCylinderShadow(sCtx, st.x, st.y, st.radius, 0, 4.5, sunState);
-      sCtx.restore();
-    }
-  }
-
-  // 1B. Road Guardrails (posts + W-beam rail, z = 0 .. 9.5px)
-  renderGuardrailShadows(sCtx, world, sunState, minX, minY, maxX, maxY);
-
-  // 1C. Low Street Furniture, Signs & Park Fountain Tiers
-  renderStreetPropShadows(sCtx, props, sunState, minX, minY, maxX, maxY, 'low');
-  renderIntersectionSignsAndFountainsShadows(
-    sCtx,
-    world,
-    visibleBuildings,
-    sunState,
-    minX,
-    minY,
-    maxX,
-    maxY
-  );
-
-  // 1D. Gas Station Low Casters (Islands & Fuel Pumps)
-  renderGasStationShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'low');
-
-  // 1E. Railway Low/Mid Casters (Platforms & Rolling Stock Trains)
-  renderRailwayShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'low');
 
   // 1F. Pedestrians & Dogs (z = 0 .. 22px)
-  for (const ped of visiblePedestrians) {
-    if (ped.isInsideBuilding) continue;
-    const pedScale = ped.isChild || ped.ageGroup === 'child' ? 0.74 : 1.0;
-    renderHumanShadow(
-      sCtx,
-      ped.x,
-      ped.y,
-      ped.angle,
-      ped.walkCycle || 0,
-      false,
-      false,
-      pedScale,
-      sunState,
-      ped.handheldProp,
-      ped.hasBroom
-    );
+  if (performanceConfig.enablePedestrianShadows !== false) {
+    for (const ped of visiblePedestrians) {
+      if (ped.isInsideBuilding) continue;
+      const pedScale = ped.isChild || ped.ageGroup === 'child' ? 0.74 : 1.0;
+      renderHumanShadow(
+        sCtx,
+        ped.x,
+        ped.y,
+        ped.angle,
+        ped.walkCycle || 0,
+        false,
+        false,
+        pedScale,
+        sunState,
+        ped.handheldProp,
+        ped.hasBroom
+      );
 
-    // Pedestrian's Dog Companion Shadow (z = 0 .. 9.5px)
-    if (ped.hasDog) {
-      const cosP = Math.cos(ped.angle);
-      const sinP = Math.sin(ped.angle);
-      const dogX = ped.x + cosP * 11 - sinP * 8.5;
-      const dogY = ped.y + sinP * 11 + cosP * 8.5;
-      const dOff = getShadowOffset(9.5, sunState);
-      sCtx.save();
-      clipOutsideRotatedRect(sCtx, dogX, dogY, 8.5, 4.0, ped.angle, dOff.dx, dOff.dy);
-      extrudeRotatedRectShadow(sCtx, dogX, dogY, 9.0, 4.2, ped.angle, 1.5, 9.5, sunState);
-      sCtx.restore();
+      // Pedestrian's Dog Companion Shadow (z = 0 .. 9.5px)
+      if (ped.hasDog) {
+        const cosP = Math.cos(ped.angle);
+        const sinP = Math.sin(ped.angle);
+        const dogX = ped.x + cosP * 11 - sinP * 8.5;
+        const dogY = ped.y + sinP * 11 + cosP * 8.5;
+        const dOff = getShadowOffset(9.5, sunState);
+        sCtx.save();
+        clipOutsideRotatedRect(sCtx, dogX, dogY, 8.5, 4.0, ped.angle, dOff.dx, dOff.dy);
+        extrudeRotatedRectShadow(sCtx, dogX, dogY, 9.0, 4.2, ped.angle, 1.5, 9.5, sunState);
+        sCtx.restore();
+      }
     }
-  }
 
-  // 1G. Player & Remote Players (when on foot)
-  if (player && !player.isInVehicle && !player.isInsideBuilding && !player.insideBusId) {
-    const pAny = player as any;
-    const isLying =
-      !!pAny.body?.isUnconscious ||
-      pAny.sleepState === 'asleep' ||
-      pAny.sleepState === 'falling_asleep';
-    const isMoving = Math.hypot(player.vx || 0, player.vy || 0) > 2;
-    const walkPhase = isMoving ? Date.now() * 0.012 : 0;
-    renderHumanShadow(
-      sCtx,
-      player.x,
-      player.y,
-      player.angle,
-      walkPhase,
-      isLying,
-      false,
-      1.0,
-      sunState
-    );
-  }
-  if (remotePlayers) {
-    for (const rp of remotePlayers) {
-      if (rp.isInVehicle) continue;
-      if (rp.x < minX - 80 || rp.x > maxX + 80 || rp.y < minY - 80 || rp.y > maxY + 80) continue;
-      const walkPhase = (rp as any).isMoving ? Date.now() * 0.012 : 0;
-      renderHumanShadow(sCtx, rp.x, rp.y, rp.angle, walkPhase, false, false, 1.0, sunState);
+    // 1G. Player & Remote Players (when on foot)
+    if (player && !player.isInVehicle && !player.isInsideBuilding && !player.insideBusId) {
+      const pAny = player as any;
+      const isLying =
+        !!pAny.body?.isUnconscious ||
+        pAny.sleepState === 'asleep' ||
+        pAny.sleepState === 'falling_asleep';
+      const isMoving = Math.hypot(player.vx || 0, player.vy || 0) > 2;
+      const walkPhase = isMoving ? Date.now() * 0.012 : 0;
+      renderHumanShadow(
+        sCtx,
+        player.x,
+        player.y,
+        player.angle,
+        walkPhase,
+        isLying,
+        false,
+        1.0,
+        sunState
+      );
+    }
+    if (remotePlayers) {
+      for (const rp of remotePlayers) {
+        if (rp.isInVehicle) continue;
+        if (rp.x < minX - 80 || rp.x > maxX + 80 || rp.y < minY - 80 || rp.y > maxY + 80) continue;
+        const walkPhase = (rp as any).isMoving ? Date.now() * 0.012 : 0;
+        renderHumanShadow(sCtx, rp.x, rp.y, rp.angle, walkPhase, false, false, 1.0, sunState);
+      }
     }
   }
 
   // 1H. All Vehicles & Trailers (z = 2 .. 34px + altitude)
-  for (const car of nearbyVehicles) {
-    renderVehicleShadow(sCtx, car, sunState);
+  if (performanceConfig.enableVehicleShadows !== false) {
+    for (const car of nearbyVehicles) {
+      renderVehicleShadow(sCtx, car, sunState);
+    }
   }
 
   // ============================================================================
   // TIER 2: TALL OVERHEAD CASTERS (z > 36px — Cast Shadows OVER Cars, Peds & Roads!)
   // ============================================================================
 
-  // 2A. Tall Streetlights, Highway Masts, Utility Poles, Traffic Lights, Bus Stops & Kiosks
-  renderStreetPropShadows(sCtx, props, sunState, minX, minY, maxX, maxY, 'high');
+  if (performanceConfig.enablePropShadows !== false) {
+    // 2A. Tall Streetlights, Highway Masts, Utility Poles, Traffic Lights, Bus Stops & Kiosks
+    renderStreetPropShadows(sCtx, props, sunState, minX, minY, maxX, maxY, 'high');
 
-  // 2B. Gas Station Canopy, Support Columns, Price Totem & Floodlight Towers
-  renderGasStationShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'high');
+    // 2B. Gas Station Canopy, Support Columns, Price Totem & Floodlight Towers
+    renderGasStationShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'high');
 
-  // 2C. Railway Platform Canopies & Signals
-  renderRailwayShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'high');
+    // 2C. Railway Platform Canopies & Signals
+    renderRailwayShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'high');
+  }
 
   // 2D. All City, Village, Garage & Railway Buildings + Balconies/Fire Escapes + Rooftop Superstructures
-  for (const bld of visibleBuildings) {
-    if (
-      bld.type === 'park_monument' ||
-      bld.type === 'gas_station_island' ||
-      bld.type === 'railway_platform'
-    ) {
-      continue;
-    }
-    const bldH = getBuildingHeightPx(bld);
-    const bOff = getShadowOffset(bldH, sunState);
+  if (performanceConfig.enableBuildingShadows !== false) {
+    const drawRooftops = performanceConfig.enableRooftopShadows !== false;
+    for (const bld of visibleBuildings) {
+      if (
+        bld.type === 'park_monument' ||
+        bld.type === 'gas_station_island' ||
+        bld.type === 'railway_platform'
+      ) {
+        continue;
+      }
+      const bldH = getBuildingHeightPx(bld);
+      const bOff = getShadowOffset(bldH, sunState);
 
-    // 1. Main Building 3D Wall Shadow (clipped to the exterior of the building's own roof footprint
-    // so its walls don't darken its own roof, while preserving shadows from taller casters!)
-    sCtx.save();
-    clipOutsideRect(sCtx, bld.x, bld.y, bld.width, bld.height, bOff.dx, bOff.dy);
-    if (bld.type === 'gas_station_canopy') {
-      extrudeRectShadow(sCtx, bld.x, bld.y, bld.width, bld.height, 44, bldH, sunState);
-    } else if (bld.type === 'garage_ramp') {
-      extrudeRectShadow(sCtx, bld.x, bld.y, bld.width, bld.height, 6, bldH, sunState);
-    } else {
-      extrudeRectShadow(sCtx, bld.x, bld.y, bld.width, bld.height, 0, bldH, sunState);
-    }
+      // 1. Main Building 3D Wall Shadow (clipped to the exterior of the building's own roof footprint
+      // so its walls don't darken its own roof, while preserving shadows from taller casters!)
+      sCtx.save();
+      clipOutsideRect(sCtx, bld.x, bld.y, bld.width, bld.height, bOff.dx, bOff.dy);
+      if (bld.type === 'gas_station_canopy') {
+        extrudeRectShadow(sCtx, bld.x, bld.y, bld.width, bld.height, 44, bldH, sunState);
+      } else if (bld.type === 'garage_ramp') {
+        extrudeRectShadow(sCtx, bld.x, bld.y, bld.width, bld.height, 6, bldH, sunState);
+      } else {
+        extrudeRectShadow(sCtx, bld.x, bld.y, bld.width, bld.height, 0, bldH, sunState);
+      }
 
-    // Exterior balconies & fire escapes on residential/industrial facades
-    if (bld.balconies && bld.balconies.length > 0) {
-      for (const bal of bld.balconies) {
-        let bx = bld.x;
-        let by = bld.y;
-        let bw = bal.length;
-        let bh = bal.depth;
-        if (bal.side === 'north') {
-          bx = bld.x + bal.offset * bld.width - bal.length * 0.5;
-          by = bld.y - bal.depth;
-        } else if (bal.side === 'south') {
-          bx = bld.x + bal.offset * bld.width - bal.length * 0.5;
-          by = bld.y + bld.height;
-        } else if (bal.side === 'west') {
-          bx = bld.x - bal.depth;
-          by = bld.y + bal.offset * bld.height - bal.length * 0.5;
-          bw = bal.depth;
-          bh = bal.length;
-        } else {
-          bx = bld.x + bld.width;
-          by = bld.y + bal.offset * bld.height - bal.length * 0.5;
-          bw = bal.depth;
-          bh = bal.length;
+      // Exterior balconies & fire escapes on residential/industrial facades
+      if (drawRooftops && bld.balconies && bld.balconies.length > 0) {
+        for (const bal of bld.balconies) {
+          let bx = bld.x;
+          let by = bld.y;
+          let bw = bal.length;
+          let bh = bal.depth;
+          if (bal.side === 'north') {
+            bx = bld.x + bal.offset * bld.width - bal.length * 0.5;
+            by = bld.y - bal.depth;
+          } else if (bal.side === 'south') {
+            bx = bld.x + bal.offset * bld.width - bal.length * 0.5;
+            by = bld.y + bld.height;
+          } else if (bal.side === 'west') {
+            bx = bld.x - bal.depth;
+            by = bld.y + bal.offset * bld.height - bal.length * 0.5;
+            bw = bal.depth;
+            bh = bal.length;
+          } else {
+            bx = bld.x + bld.width;
+            by = bld.y + bal.offset * bld.height - bal.length * 0.5;
+            bw = bal.depth;
+            bh = bal.length;
+          }
+          extrudeRectShadow(sCtx, bx, by, bw, bh, bldH * 0.25, bldH * 0.88, sunState);
         }
-        extrudeRectShadow(sCtx, bx, by, bw, bh, bldH * 0.25, bldH * 0.88, sunState);
+      }
+      if (drawRooftops && bld.fireEscapes && bld.fireEscapes.length > 0) {
+        for (const fe of bld.fireEscapes) {
+          let fx = bld.x;
+          let fy = bld.y;
+          let fw = fe.length;
+          let fh = fe.depth;
+          if (fe.side === 'north') {
+            fx = bld.x + fe.offset * bld.width - fe.length * 0.5;
+            fy = bld.y - fe.depth;
+          } else if (fe.side === 'south') {
+            fx = bld.x + fe.offset * bld.width - fe.length * 0.5;
+            fy = bld.y + bld.height;
+          } else if (fe.side === 'west') {
+            fx = bld.x - fe.depth;
+            fy = bld.y + fe.offset * bld.height - fe.length * 0.5;
+            fw = fe.depth;
+            fh = fe.length;
+          } else {
+            fx = bld.x + bld.width;
+            fy = bld.y + fe.offset * bld.height - fe.length * 0.5;
+            fw = fe.depth;
+            fh = fe.length;
+          }
+          extrudeRectShadow(sCtx, fx, fy, fw, fh, bldH * 0.15, bldH * 0.92, sunState);
+        }
+      }
+      sCtx.restore();
+
+      // 2. Rooftop Structures (parapets, elevator penthouses, HVAC, skylights, chimneys, smokestacks)
+      // Drawn AFTER restoring the roof clip so they cast crisp 3D shadows right across the building's roof!
+      if (drawRooftops) {
+        renderBuildingRooftopShadows(sCtx, bld, sunState);
+      }
+
+      // 3. Soft Penumbra Outline along the projected building shadow boundary
+      if (softness > 0 && sunState.penumbraFactor > 0.05) {
+        sCtx.save();
+        clipOutsideRect(sCtx, bld.x, bld.y, bld.width, bld.height, bOff.dx, bOff.dy);
+        sCtx.strokeStyle = penumbraStrokeColor;
+        sCtx.lineWidth = Math.max(1.0, 3.2 * sunState.penumbraFactor);
+        sCtx.strokeRect(bld.x + bOff.dx, bld.y + bOff.dy, bld.width, bld.height);
+        if (softness >= 50) {
+          sCtx.strokeStyle = outerPenumbraStrokeColor;
+          sCtx.lineWidth = Math.max(2.0, 6.8 * sunState.penumbraFactor);
+          sCtx.strokeRect(bld.x + bOff.dx, bld.y + bOff.dy, bld.width, bld.height);
+        }
+        sCtx.restore();
+        sCtx.fillStyle = shadowColor;
+        sCtx.strokeStyle = shadowColor;
       }
     }
-    if (bld.fireEscapes && bld.fireEscapes.length > 0) {
-      for (const fe of bld.fireEscapes) {
-        let fx = bld.x;
-        let fy = bld.y;
-        let fw = fe.length;
-        let fh = fe.depth;
-        if (fe.side === 'north') {
-          fx = bld.x + fe.offset * bld.width - fe.length * 0.5;
-          fy = bld.y - fe.depth;
-        } else if (fe.side === 'south') {
-          fx = bld.x + fe.offset * bld.width - fe.length * 0.5;
-          fy = bld.y + bld.height;
-        } else if (fe.side === 'west') {
-          fx = bld.x - fe.depth;
-          fy = bld.y + fe.offset * bld.height - fe.length * 0.5;
-          fw = fe.depth;
-          fh = fe.length;
-        } else {
-          fx = bld.x + bld.width;
-          fy = bld.y + fe.offset * bld.height - fe.length * 0.5;
-          fw = fe.depth;
-          fh = fe.length;
-        }
-        extrudeRectShadow(sCtx, fx, fy, fw, fh, bldH * 0.15, bldH * 0.92, sunState);
-      }
-    }
-    sCtx.restore();
-
-    // 2. Rooftop Structures (parapets, elevator penthouses, HVAC, skylights, chimneys, smokestacks)
-    // Drawn AFTER restoring the roof clip so they cast crisp 3D shadows right across the building's roof!
-    renderBuildingRooftopShadows(sCtx, bld, sunState);
-
-    // 3. Soft Penumbra Outline along the projected building shadow boundary
-    sCtx.save();
-    sCtx.strokeStyle = penumbraStrokeColor;
-    sCtx.lineWidth = 3.5 * sunState.penumbraFactor;
-    clipOutsideRect(sCtx, bld.x, bld.y, bld.width, bld.height, bOff.dx, bOff.dy);
-    sCtx.strokeRect(bld.x + bOff.dx, bld.y + bOff.dy, bld.width, bld.height);
-    sCtx.restore();
-    sCtx.fillStyle = shadowColor;
-    sCtx.strokeStyle = shadowColor;
   }
 
   // 2E. Trees (z = 55 .. 95px — cast full canopy + trunk shadows over roads, cars, pedestrians, and low roofs!)
-  const currentSeason = world.calendar?.season ?? world.season ?? 'summer';
-  const treePad = 140;
-  for (const tree of visibleTrees) {
-    if (
-      tree.x < minX - treePad ||
-      tree.x > maxX + treePad ||
-      tree.y < minY - treePad ||
-      tree.y > maxY + treePad
-    ) {
-      continue;
+  if (performanceConfig.enableTreeShadows !== false) {
+    const currentSeason = world.calendar?.season ?? world.season ?? 'summer';
+    const treePad = 140;
+    for (const tree of visibleTrees) {
+      if (
+        tree.x < minX - treePad ||
+        tree.x > maxX + treePad ||
+        tree.y < minY - treePad ||
+        tree.y > maxY + treePad
+      ) {
+        continue;
+      }
+      renderTreeShadow(sCtx, tree, sunState, currentSeason);
     }
-    renderTreeShadow(sCtx, tree, sunState, currentSeason);
   }
 
   // 2F. Flying Birds (high-altitude soaring silhouettes cast far along the solar vector)

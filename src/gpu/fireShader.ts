@@ -142,6 +142,7 @@ in vec2 vZenithDir;
 
 uniform float uTime;
 uniform float uCamAngle;
+uniform float uSmokeCrown;
 
 out vec4 oColor;
 
@@ -399,7 +400,7 @@ void main() {
     float coreWindow = 1.0 - 0.52 * smoothstep(0.65, 0.05, bedDist) * (1.0 - billowShape * 0.75);
     float rawSmoke = smokeEnvelope * coreWindow * smoothstep(0.22, 0.78, billowShape * 0.70 + sn2.x * 0.45);
 
-    smokeAlpha = clamp(rawSmoke * smokeDensityBase * clamp(intensity * 0.95, 0.35, 0.92), 0.0, 0.86);
+    smokeAlpha = clamp(rawSmoke * smokeDensityBase * uSmokeCrown * clamp(intensity * 0.95, 0.35, 0.92), 0.0, 0.92);
 
     if (smokeAlpha > 0.005) {
       // 3D Top-Down Normal of each spherical smoke billow lobe from spatial noise gradients
@@ -452,6 +453,7 @@ export class GpuFireRenderer {
   private uCamAngle: WebGLUniformLocation | null = null;
   private uViewSize: WebGLUniformLocation | null = null;
   private uTime: WebGLUniformLocation | null = null;
+  private uSmokeCrown: WebGLUniformLocation | null = null;
 
   private available = false;
   private lost = false;
@@ -514,6 +516,7 @@ export class GpuFireRenderer {
     this.uCamAngle = gl.getUniformLocation(prog, 'uCamAngle');
     this.uViewSize = gl.getUniformLocation(prog, 'uViewSize');
     this.uTime = gl.getUniformLocation(prog, 'uTime');
+    this.uSmokeCrown = gl.getUniformLocation(prog, 'uSmokeCrown');
 
     const vao = gl.createVertexArray()!;
     const buf = gl.createBuffer()!;
@@ -566,16 +569,20 @@ export class GpuFireRenderer {
     viewWidth: number,
     viewHeight: number,
     backingScale: number,
-    timeSec: number
+    timeSec: number,
+    enableGpu: boolean = true,
+    scaleOverride: number = 0.75,
+    smokeCrownMult: number = 0.9
   ) {
     const count = Math.min(emitters.length, MAX_INSTANCES);
     if (count === 0 || viewWidth < 2 || viewHeight < 2) return;
 
-    if (!this.available || this.lost || !this.gl || !this.prog || !this.vao || !this.instanceBuf) {
+    if (!enableGpu || !this.available || this.lost || !this.gl || !this.prog || !this.vao || !this.instanceBuf) {
       this.renderFallback2D(ctx, emitters, count, timeSec);
       return;
     }
 
+    this.scale = Math.max(0.5, Math.min(1.0, scaleOverride || 0.75));
     const gl = this.gl;
     const targetW = Math.max(2, Math.round(viewWidth * this.scale));
     const targetH = Math.max(2, Math.round(viewHeight * this.scale));
@@ -668,6 +675,7 @@ export class GpuFireRenderer {
     gl.uniform1f(this.uCamAngle, camera.angle);
     gl.uniform2f(this.uViewSize, viewWidth, viewHeight);
     gl.uniform1f(this.uTime, timeSec);
+    gl.uniform1f(this.uSmokeCrown, Math.max(0.0, Math.min(2.0, smokeCrownMult)));
 
     gl.bindVertexArray(this.vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuf);

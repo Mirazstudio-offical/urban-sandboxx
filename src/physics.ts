@@ -5729,16 +5729,20 @@ export function updatePlayerPedestrianPhysics(
         targetSpeed *= wadeResistance;
       }
 
-      // Emit dispersive capillary-gravity wave rings into the water solver
-      if (!isWorldFreezing(world) && Math.random() < (len > 0.01 ? 0.35 : 0.08)) {
+      // Emit dispersive capillary-gravity wave rings ONLY when physically moving or pulling a swim stroke
+      const groundMoveSpeed = Math.hypot(player.vx || 0, player.vy || 0);
+      const isSwimStrokePeak = Boolean(player.isSwimming) && Math.sin(player.swimStrokePhase || 0) > 0.72;
+      if (!isWorldFreezing(world) && (groundMoveSpeed > 5.0 || (len > 0.05 && isSwimStrokePeak))) {
         emitWaterDisturbance(
           player.x,
           player.y,
-          player.vx,
-          player.vy,
-          10,
-          Math.min(1, 0.32 + pWaterDepth * 0.45 + (len > 0.01 ? 0.25 : 0)),
-          Boolean(player.isSwimming)
+          player.vx || 0,
+          player.vy || 0,
+          player.isSwimming ? 8.5 : 5.5,
+          Math.min(0.95, 0.24 + pWaterDepth * 0.35 + groundMoveSpeed * 0.006),
+          groundMoveSpeed > 22,
+          'phys_player_step',
+          player.isSwimming ? 160 : 120
         );
       }
 

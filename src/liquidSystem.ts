@@ -2563,7 +2563,11 @@ export function handlePourNonDrinkableFluid(
       const angle = player.aimAngle !== undefined ? player.aimAngle : (player.angle || 0);
       const stainX = player.x + Math.cos(angle) * 22;
       const stainY = player.y + Math.sin(angle) * 22;
-      const stainType = liquid.stainType === 'oil' ? 'oil' : (liquid.stainType === 'fuel' ? 'fuel' : 'water');
+      const stainType = liquid.stainType === 'oil'
+        ? 'oil'
+        : (liquid.stainType === 'fuel'
+          ? 'fuel'
+          : (liquid.stainType === 'antifreeze' ? 'coolant' : 'water'));
 
       if (!world.stains) world.stains = [];
 

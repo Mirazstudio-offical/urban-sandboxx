@@ -82,7 +82,7 @@ export interface PostFxWaterWake {
   vx: number;
   vy: number;
   progress: number;
-  typeAndFoam: number; // < 1.0: concentric ripple (fractional part = foam), >= 1.0: 1.0 + foamIntensity for directional Kelvin/bow wake
+  typeAndFoam: number; // < 1.0: concentric ripple (fractional part = foam), [1.0..1.99]: moving Kelvin wake (1.0 + foam), >= 2.0: obstacle flow-around wake & collar (2.0 + foam)
 }
 
 // Organic centerline waypoints of River "Быстрица" winding gracefully across the northern wilderness
@@ -256,11 +256,36 @@ const RIVER_BUCKETS: number[][] = Array.from({ length: BUCKET_COUNT }, () => [])
   }
 })();
 
-// --- PERSISTENT WATER WAVE RING & KELVIN WAKE SOLVER ---
+// --- PERSISTENT WATER WAVE RING, KELVIN WAKE & OBSTACLE FLOW-AROUND SOLVER ---
 const MAX_WATER_DISTURBANCES = 192;
 const waterDisturbances: WaterDisturbance[] = [];
 let lastDisturbanceEmitMap = new Map<string, number>();
 const postFxWakesScratch: PostFxWaterWake[] = [];
+
+// Instantaneous frame-accurate obstacle wakes (submerged vehicles, boulders, bridge piers, wading humans in current)
+const frameObstacleWakes: PostFxWaterWake[] = [];
+
+export function emitObstacleFlowWake(
+  x: number,
+  y: number,
+  relVx: number,
+  relVy: number,
+  obstacleRadius: number,
+  intensity: number,
+  foamIntensity: number
+) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  frameObstacleWakes.push({
+    x,
+    y,
+    radius: Math.max(3.5, obstacleRadius),
+    intensity: Math.max(0.08, Math.min(1.35, intensity)),
+    vx: relVx,
+    vy: relVy,
+    progress: 0.25,
+    typeAndFoam: 2.0 + Math.max(0.0, Math.min(0.98, foamIntensity))
+  });
+}
 
 export function emitWaterDisturbance(
   x: number,
@@ -314,7 +339,7 @@ export function emitWaterDisturbance(
     maxAge,
     angle,
     isDirectionalWake,
-    foamIntensity: Math.min(0.98, (effSpeed / 85) * intensity)
+    foamIntensity: Math.min(0.98, Math.max(0.08, (effSpeed / 70) * intensity))
   });
 }
 
@@ -342,9 +367,9 @@ function updateWaterDisturbances(dt: number) {
 }
 
 /**
- * Exports active world-space water disturbances (up to maxCount = 32) near the camera
+ * Exports active world-space water disturbances and obstacle flow-around wakes (up to maxCount = 32) near the camera
  * for direct WebGL2 water shader evaluation (real-time wave normal perturbation, refraction,
- * dispersive capillary-gravity wave packets, Kelvin V-wakes, and porous cellular whitewater foam).
+ * dispersive capillary-gravity wave packets, Kelvin V-wakes, bow stagnation collars, and porous cellular whitewater foam).
  */
 export function getActivePostFxWaterWakes(
   cameraX: number,
@@ -354,6 +379,83 @@ export function getActivePostFxWaterWakes(
   postFxWakesScratch.length = 0;
   const cullRadiusSq = 980 * 980;
 
+  // 1. Add instantaneous obstacle flow-around wakes emitted this frame (vehicles, wading players, boulders)
+  for (let i = 0; i < frameObstacleWakes.length; i++) {
+    const ow = frameObstacleWakes[i];
+    const dx = ow.x - cameraX;
+    const dy = ow.y - cameraY;
+    if (dx * dx + dy * dy <= cullRadiusSq) {
+      postFxWakesScratch.push(ow);
+    }
+  }
+
+  // 2. Include stationary bridge pier & fishing pier hydraulic wakes when camera is near them
+  if (Math.abs(cameraX - 9400) < 850 && Math.abs(cameraY - (-3300)) < 750) {
+    const bX = 9400;
+    const bY = -3300;
+    const pileYPositions = [bY - 60, bY - 20, bY + 20, bY + 60];
+    for (let p = 0; p < pileYPositions.length; p++) {
+      const py = pileYPositions[p];
+      const pileWater = getRiverWaterAt(bX, py);
+      if (!pileWater.inWater) continue;
+      // Stationary pier in flowing current acts like an obstacle moving upstream at -currentV
+      postFxWakesScratch.push({
+        x: bX,
+        y: py,
+        radius: 13.5,
+        intensity: 0.92,
+        vx: -(pileWater.currentVx || 38),
+        vy: -(pileWater.currentVy || 0),
+        progress: 0.22,
+        typeAndFoam: 2.78
+      });
+    }
+  }
+
+  // Include emergent river boulders near camera as real GPU hydraulic obstacles
+  if (cameraY >= RIVER_MIN_Y - 500 && cameraY <= RIVER_MAX_Y + 500 && cameraX >= RIVER_MIN_X - 500 && cameraX <= RIVER_MAX_X + 500) {
+    const bIdx = Math.floor((cameraX - RIVER_MIN_X) / BUCKET_SIZE);
+    const indices = (bIdx >= 0 && bIdx < BUCKET_COUNT) ? RIVER_BUCKETS[bIdx] : [];
+    for (let idx = 0; idx < indices.length; idx++) {
+      const k = indices[idx];
+      if (k % 2 !== 0) continue;
+      const pt = RIVER_SPLINE_POINTS[k];
+      if (Math.abs(pt.x - cameraX) > 540 || Math.abs(pt.y - cameraY) > 540) continue;
+      const seed = k * 17.83;
+      const isFordZone = pt.isFord || Math.abs(pt.x - 12400) < 280;
+      const stoneDensity = isFordZone ? 6 : (pt.depth < 1.35 ? 3 : (riverHash(seed) < 0.45 ? 2 : 0));
+      for (let s = 0; s < stoneDensity; s++) {
+        const sSeed = seed + s * 9.41;
+        const latFraction = (riverHash(sSeed) * 2 - 1) * 0.86;
+        const stoneRadX = (isFordZone ? 3.2 : 2.2) + riverHash(sSeed * 3.1) * (isFordZone ? 5.2 : 3.4);
+        const localDepth = pt.depth * Math.max(0.14, 1 - latFraction * latFraction * 0.88);
+        const isEmergentBoulder = (localDepth < 0.44 && stoneRadX > 4.2) || (isFordZone && stoneRadX > 4.8 && riverHash(sSeed * 6.3) > 0.35);
+        if (!isEmergentBoulder) continue;
+
+        const alongOff = (riverHash(sSeed * 1.7) - 0.5) * 16;
+        const crossOff = (riverHash(sSeed * 2.3) - 0.5) * 10;
+        const rx = pt.x + pt.nx * (pt.halfWidth * latFraction + crossOff) + pt.tx * alongOff;
+        const ry = pt.y + pt.ny * (pt.halfWidth * latFraction + crossOff) + pt.ty * alongOff;
+        const dx = rx - cameraX;
+        const dy = ry - cameraY;
+        if (dx * dx + dy * dy > 480 * 480) continue;
+
+        const flowSpeed = pt.currentSpeed * Math.max(0.45, 1.0 - 0.45 * latFraction * latFraction);
+        postFxWakesScratch.push({
+          x: rx,
+          y: ry,
+          radius: stoneRadX * 1.65,
+          intensity: 0.78,
+          vx: -pt.tx * flowSpeed,
+          vy: -pt.ty * flowSpeed,
+          progress: 0.25,
+          typeAndFoam: 2.68
+        });
+      }
+    }
+  }
+
+  // 3. Add persistent propagating dispersive wave packets & moving Kelvin wakes
   for (let i = waterDisturbances.length - 1; i >= 0; i--) {
     const w = waterDisturbances[i];
     const dx = w.x - cameraX;
@@ -364,7 +466,7 @@ export function getActivePostFxWaterWakes(
     const fade = (1.0 - progress) * (1.0 - progress * 0.65) * w.intensity;
     if (fade < 0.025) continue;
 
-    const foam = Math.min(0.95, Math.max(0.0, w.foamIntensity * (1.0 - progress * 0.75)));
+    const foam = Math.min(0.95, Math.max(0.0, w.foamIntensity * (1.0 - progress * 0.72)));
     postFxWakesScratch.push({
       x: w.x,
       y: w.y,
@@ -377,31 +479,13 @@ export function getActivePostFxWaterWakes(
     });
   }
 
-  // Include stationary bridge pier hydraulic wakes when camera is near the logging bridge
-  if (Math.abs(cameraX - 9400) < 850 && Math.abs(cameraY - (-3300)) < 750) {
-    const bX = 9400;
-    const bY = -3300;
-    const pileYPositions = [bY - 60, bY - 20, bY + 20, bY + 60];
-    for (let p = 0; p < pileYPositions.length; p++) {
-      const py = pileYPositions[p];
-      const pileWater = getRiverWaterAt(bX, py);
-      if (!pileWater.inWater) continue;
-      // Stationary pier in flowing current acts like an object moving upstream at -currentV
-      postFxWakesScratch.push({
-        x: bX,
-        y: py,
-        radius: 36,
-        intensity: 0.72,
-        vx: -(pileWater.currentVx || 38),
-        vy: -(pileWater.currentVy || 0),
-        progress: 0.25,
-        typeAndFoam: 1.65
-      });
-    }
-  }
-
   if (postFxWakesScratch.length > maxCount) {
-    postFxWakesScratch.sort((a, b) => (b.intensity * b.radius) - (a.intensity * a.radius));
+    postFxWakesScratch.sort((a, b) => {
+      // Prioritize active obstacle wakes slightly so nearby submerged cars/rocks always get crisp bow waves
+      const prioA = (a.typeAndFoam >= 2.0 ? 2.2 : 1.0) * a.intensity * a.radius;
+      const prioB = (b.typeAndFoam >= 2.0 ? 2.2 : 1.0) * b.intensity * b.radius;
+      return prioB - prioA;
+    });
     postFxWakesScratch.length = maxCount;
   }
 
@@ -1104,11 +1188,8 @@ export function renderWaterSurfaceOpticsAndWakes(
   const sunState = getCurrentSunShadowState();
   const dayFactor = Math.max(0, 1 - nightAlpha * 1.15);
 
-  // Note: Dispersive capillary-gravity wave rings, Kelvin V-wakes, bow stagnation crests,
-  // refraction, and cellular whitewater foam are evaluated directly per-pixel in the WebGL2
-  // water shader (`src/gpu/postFx.ts`) via `getActivePostFxWaterWakes`.
-  // Here we only emit hydrodynamic disturbances from vehicles, tires, and wading characters,
-  // and render the contour-accurate submerged hull Beer-Lambert water absorption and subsurface light scattering.
+  // Reset instantaneous frame-accurate obstacle wakes for this render frame
+  frameObstacleWakes.length = 0;
 
   // 1. Render Contour-Accurate Vehicle Submersion & Underwater Light Scattering + Emit Hydrodynamic Wakes
   for (let i = 0; i < visibleVehicles.length; i++) {
@@ -1133,22 +1214,39 @@ export function renderWaterSurfaceOpticsAndWakes(
     const river = getRiverWaterAt(h.x, h.y);
     const curVx = river.inWater ? river.currentVx : 0;
     const curVy = river.inWater ? river.currentVy : 0;
-    const relVx = (h.vx || 0) - curVx;
-    const relVy = (h.vy || 0) - curVy;
+    const groundVx = h.vx || 0;
+    const groundVy = h.vy || 0;
+    const groundSpeed = Math.hypot(groundVx, groundVy);
+    const relVx = groundVx - curVx;
+    const relVy = groundVy - curVy;
     const relSpeed = Math.hypot(relVx, relVy);
     const flowAngle = relSpeed > 3 ? Math.atan2(relVy, relVx) : h.angle;
 
-    if (relSpeed > 4.5) {
+    // Expanding concentric wave rings are emitted ONLY when the person is physically moving over the riverbed/ground!
+    // When standing still in a river current, the person does NOT emit expanding circular rings; instead, the river
+    // current parts around their legs/body via an obstacle flow-around wake (`emitObstacleFlowWake`).
+    if (groundSpeed > 5.0) {
       emitWaterDisturbance(
         h.x,
         h.y,
-        h.vx || 0,
-        h.vy || 0,
-        d > 0.85 ? 8.5 : 5.5,
-        Math.min(0.95, 0.28 + d * 0.38 + relSpeed * 0.006),
-        relSpeed > 18,
+        groundVx,
+        groundVy,
+        d > 0.85 ? 8.0 : 5.2,
+        Math.min(0.92, 0.22 + d * 0.34 + groundSpeed * 0.006),
+        groundSpeed > 22,
         `hum_${idKey}`,
-        d > 0.85 ? 75 : 95
+        d > 0.85 ? 95 : 115
+      );
+    } else if (river.inWater && relSpeed > 8.0 && d > 0.12) {
+      // Stationary or slow-wading person in flowing river water: current parts around their body with a gentle downstream V-trail
+      emitObstacleFlowWake(
+        h.x,
+        h.y,
+        relVx,
+        relVy,
+        d > 0.85 ? 7.8 : 6.0,
+        Math.min(0.85, 0.25 + d * 0.35 + (relSpeed / 55) * 0.25),
+        Math.min(0.65, (relSpeed / 50) * (0.25 + d * 0.35))
       );
     }
 
@@ -1194,7 +1292,7 @@ export function renderWaterSurfaceOpticsAndWakes(
  * 2. Computes a 2D sloped water depth plane from (frontWaterDepth, rearWaterDepth, leftWaterDepth, rightWaterDepth)
  *    so a car nosing down a bank or wading with one side in deep water is submerged only where water actually touches.
  * 3. Renders underwater Beer-Lambert optical absorption and underwater headlight/taillight volumetric scattering,
- *    while emitting bow, stern, and 4-wheel hydrodynamic wakes into the GPU water shader.
+ *    while emitting instantaneous obstacle flow-around wakes + persistent Kelvin bow, stern, and 4-wheel wakes.
  */
 function renderVehicleHydrodynamicSubmersion(
   ctx: CanvasRenderingContext2D,
@@ -1223,21 +1321,53 @@ function renderVehicleHydrodynamicSubmersion(
   const river = getRiverWaterAt(car.x, car.y);
   const curVx = river.inWater ? river.currentVx : 0;
   const curVy = river.inWater ? river.currentVy : 0;
-  const relVx = (car.vx || 0) - curVx;
-  const relVy = (car.vy || 0) - curVy;
+  const groundVx = car.vx || 0;
+  const groundVy = car.vy || 0;
+  const groundSpeed = Math.hypot(groundVx, groundVy);
+  const relVx = groundVx - curVx;
+  const relVy = groundVy - curVy;
   const relSpeed = Math.hypot(relVx, relVy);
-  const carSpeedAbs = Math.abs(car.speed || 0);
+  const carSpeedAbs = Math.max(groundSpeed, Math.abs(car.speed || 0));
 
-  // Emit persistent hydrodynamic disturbances from bow, stern, and submerged wheels for the GPU water shader
-  if (relSpeed > 5 || carSpeedAbs > 5) {
+  // A. Instantaneous Obstacle Flow-Around & Foaming Waterline Collar (works both when driving and when parked in river current!)
+  if (relSpeed > 4.0 && maxD > 0.06) {
+    const foamFactor = Math.min(0.98, Math.max(0.18, (relSpeed / 42) * (0.35 + maxD * 0.65)));
+    const wakeInt = Math.min(1.25, 0.45 + maxD * 0.48 + (relSpeed / 65) * 0.35);
+
+    if (dFront > 0.06) {
+      emitObstacleFlowWake(
+        car.x + cosA * (halfL * 0.52),
+        car.y + sinA * (halfL * 0.52),
+        relVx,
+        relVy,
+        halfW * 1.18,
+        wakeInt,
+        foamFactor
+      );
+    }
+    if (dRear > 0.06) {
+      emitObstacleFlowWake(
+        car.x - cosA * (halfL * 0.52),
+        car.y - sinA * (halfL * 0.52),
+        relVx,
+        relVy,
+        halfW * 1.14,
+        wakeInt * 0.92,
+        foamFactor * 0.90
+      );
+    }
+  }
+
+  // B. Emit persistent propagating hydrodynamic disturbances from bow, stern, and wheels when vehicle is moving
+  if (carSpeedAbs > 5.0) {
     const bowWorldX = car.x + cosA * (halfL * 0.86);
     const bowWorldY = car.y + sinA * (halfL * 0.86);
     if (dFront > 0.05) {
       emitWaterDisturbance(
         bowWorldX,
         bowWorldY,
-        car.vx || 0,
-        car.vy || 0,
+        groundVx,
+        groundVy,
         halfW * 1.05,
         Math.min(1.15, 0.38 + dFront * 0.45 + relSpeed * 0.007),
         true,
@@ -1252,8 +1382,8 @@ function renderVehicleHydrodynamicSubmersion(
       emitWaterDisturbance(
         sternWorldX,
         sternWorldY,
-        car.vx || 0,
-        car.vy || 0,
+        groundVx,
+        groundVy,
         halfW * 0.90,
         Math.min(0.95, 0.30 + dRear * 0.38 + relSpeed * 0.005),
         relSpeed > 18,
@@ -1279,8 +1409,8 @@ function renderVehicleHydrodynamicSubmersion(
         emitWaterDisturbance(
           wx,
           wy,
-          car.vx || 0,
-          car.vy || 0,
+          groundVx,
+          groundVy,
           Math.max(5.5, halfW * 0.42),
           Math.min(0.90, 0.24 + wc.d * 0.35 + relSpeed * 0.006),
           relSpeed > 14,
@@ -2534,3 +2664,127 @@ function renderExitWarningSignPlate(ctx: CanvasRenderingContext2D, x: number, y:
 
   ctx.restore();
 }
+
+/**
+ * Stamps exact river material IDs into the GPU Material G-Buffer (materialCanvas):
+ * - Riverbanks & wet sand/mud margin: R = 64 (MAT_DIRT), G = 220 (high moisture)
+ * - River water channel: R = 160 (MAT_WATER_BODY), G = depth/thalweg factor
+ * - Emergent boulders, logging bridge deck & fishing piers: R = 0 (MAT_OCCLUDER)
+ */
+export function renderRiverMaterialMask(
+  ctx: CanvasRenderingContext2D,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number
+) {
+  if (maxY < -4300 || minY > -1750 || maxX < -3400 || minX > 50000) {
+    return;
+  }
+
+  let kStart = -1;
+  let kEnd = -1;
+  for (let k = 0; k < RIVER_SPLINE_POINTS.length; k++) {
+    const pt = RIVER_SPLINE_POINTS[k];
+    if (pt.x >= minX - 360 && pt.x <= maxX + 360 && pt.y >= minY - 360 && pt.y <= maxY + 360) {
+      if (kStart === -1) kStart = k;
+      kEnd = k;
+    }
+  }
+
+  if (kStart === -1 || kEnd === -1 || kEnd - kStart < 2) {
+    return;
+  }
+
+  kStart = Math.max(0, kStart - 3);
+  kEnd = Math.min(RIVER_SPLINE_POINTS.length - 1, kEnd + 3);
+
+  // 1. Wet silt/mud/sand riverbank belt -> MAT_DIRT (R=64, G=220, B=128)
+  ctx.beginPath();
+  for (let k = kStart; k <= kEnd; k++) {
+    const pt = RIVER_SPLINE_POINTS[k];
+    const bankExtra = 95 + pt.innerSandLeft * 0.45;
+    const bx = pt.x + pt.nx * (pt.halfWidth + bankExtra);
+    const by = pt.y + pt.ny * (pt.halfWidth + bankExtra);
+    if (k === kStart) ctx.moveTo(bx, by);
+    else ctx.lineTo(bx, by);
+  }
+  for (let k = kEnd; k >= kStart; k--) {
+    const pt = RIVER_SPLINE_POINTS[k];
+    const bankExtra = 95 + pt.innerSandRight * 0.45;
+    const bx = pt.x - pt.nx * (pt.halfWidth + bankExtra);
+    const by = pt.y - pt.ny * (pt.halfWidth + bankExtra);
+    ctx.lineTo(bx, by);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgb(64, 220, 128)';
+  ctx.fill();
+
+  // 2. River water channel -> MAT_WATER_BODY (R=160, G=220, B=255)
+  ctx.beginPath();
+  for (let k = kStart; k <= kEnd; k++) {
+    const pt = RIVER_SPLINE_POINTS[k];
+    const wx = pt.x + pt.nx * pt.halfWidth;
+    const wy = pt.y + pt.ny * pt.halfWidth;
+    if (k === kStart) ctx.moveTo(wx, wy);
+    else ctx.lineTo(wx, wy);
+  }
+  for (let k = kEnd; k >= kStart; k--) {
+    const pt = RIVER_SPLINE_POINTS[k];
+    const wx = pt.x - pt.nx * pt.halfWidth;
+    const wy = pt.y - pt.ny * pt.halfWidth;
+    ctx.lineTo(wx, wy);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgb(160, 220, 255)';
+  ctx.fill();
+
+  // 3. Emergent dry boulder tops -> MAT_OCCLUDER (R=0, G=0, B=0)
+  ctx.fillStyle = 'rgb(0, 0, 0)';
+  for (let k = kStart; k <= kEnd; k++) {
+    const pt = RIVER_SPLINE_POINTS[k];
+    const seed = k * 43.17;
+    const isFordZone = pt.isFord || Math.abs(pt.x - 12400) < 280;
+    const stoneDensity = isFordZone ? 6 : (pt.depth < 1.35 ? 3 : (riverHash(seed) < 0.45 ? 2 : 0));
+    for (let s = 0; s < stoneDensity; s++) {
+      const sSeed = seed + s * 9.41;
+      const latFraction = (riverHash(sSeed) * 2 - 1) * 0.86;
+      const stoneRadX = (isFordZone ? 3.2 : 2.2) + riverHash(sSeed * 3.1) * (isFordZone ? 5.2 : 3.4);
+      const localDepth = pt.depth * Math.max(0.14, 1 - latFraction * latFraction * 0.88);
+      const isEmergentBoulder = (localDepth < 0.44 && stoneRadX > 4.2) || (isFordZone && stoneRadX > 4.8 && riverHash(sSeed * 6.3) > 0.35);
+      if (!isEmergentBoulder) continue;
+
+      const alongOff = (riverHash(sSeed * 1.7) - 0.5) * 16;
+      const crossOff = (riverHash(sSeed * 2.3) - 0.5) * 10;
+      const rx = pt.x + pt.nx * (pt.halfWidth * latFraction + crossOff) + pt.tx * alongOff;
+      const ry = pt.y + pt.ny * (pt.halfWidth * latFraction + crossOff) + pt.ty * alongOff;
+      const stoneRadY = stoneRadX * (0.62 + riverHash(sSeed * 4.7) * 0.32);
+      const stoneRot = Math.atan2(pt.ty, pt.tx) + (riverHash(sSeed * 5.3) - 0.5) * 0.55;
+
+      ctx.beginPath();
+      ctx.ellipse(rx, ry, stoneRadX * 0.92, stoneRadY * 0.92, stoneRot, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 4. Logging Bridge Deck -> MAT_OCCLUDER (R=0, G=0, B=0)
+  if (minX <= 9500 && maxX >= 9300 && minY <= -3200 && maxY >= -3400) {
+    ctx.fillRect(9400 - 34, -3300 - 88, 68, 176);
+  }
+
+  // 5. Fishing Piers -> MAT_OCCLUDER (R=0, G=0, B=0)
+  if (minX <= 14350 && maxX >= 14100 && minY <= -2750 && maxY >= -3150) {
+    const pierPositions = [
+      { x: 14160, y: -3020, angle: 0.15, length: 75, width: 20 },
+      { x: 14240, y: -2880, angle: -0.10, length: 80, width: 22 }
+    ];
+    for (const pier of pierPositions) {
+      ctx.save();
+      ctx.translate(pier.x, pier.y);
+      ctx.rotate(pier.angle);
+      ctx.fillRect(0, 0, pier.width, pier.length);
+      ctx.restore();
+    }
+  }
+}
+

@@ -149,6 +149,7 @@ const Seg: React.FC<{ options: { v: any; label: string }[]; value: any; onChange
 const EscWhileMounted: React.FC<{ onEscape: () => void }> = ({ onEscape }) => { useTopmostEscape(onEscape); return null; };
 
 type Row =
+  | { t: 'hdr'; l: string }
   | { t: 'tg'; l: string; v: boolean; set: (v: boolean) => void }
   | { t: 'seg'; l: string; v: any; o: { v: any; label: string }[]; set: (v: any) => void }
   | { t: 'sld'; l: string; v: number; min: number; max: number; step: number; fmt: (v: number) => string; set: (v: number) => void }
@@ -261,7 +262,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
     if (id === 'gfx') return [
       { t: 'seg', l: 'Быстрая настройка (пресет)', v: detectGraphicsPreset(perf), o: GFX_PRESET_OPTIONS,
         set: v => { applyGfxPreset(v as GraphicsPresetId); setPerf({ ...performanceConfig }); } },
-      ...GFX_GROUPS.flatMap(g => g.items.map(gfxRow)),
+      ...GFX_GROUPS.flatMap(g => [{ t: 'hdr' as const, l: g.title }, ...g.items.map(gfxRow)]),
       { t: 'btn', l: 'Параметры графики', label: 'Сбросить', act: resetPerf }
     ];
     if (id === 'sound') return [
@@ -527,7 +528,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                 ))}
               </div>
               <div className="panel scroll" id="rows" style={{ padding: '8px 0' }}>
-                {rows.map((r, i) => (
+                {rows.map((r, i) => r.t === 'hdr' ? (
+                  <div key={tab + i} className="cn" style={{ padding: '14px 22px 6px', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#e0ab45', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none', marginTop: i > 0 ? 6 : 0 }}>
+                    {r.l}
+                  </div>
+                ) : (
                   <div className="set" key={tab + i}>
                     <span>{r.l}</span>
                     {r.t === 'tg' && <button className={'tg' + (r.v ? ' on' : '')} role="switch" aria-checked={r.v} aria-label={r.l} onClick={() => r.set(!r.v)} />}

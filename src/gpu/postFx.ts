@@ -18,17 +18,27 @@
 import { getCurrentSunShadowState } from '../shadowSystem';
 
 export interface PostFxSettings {
-  bloom: number;      // 0..100
-  grading: number;    // 0..100 colour grading + tone curve strength
-  clarity: number;    // 0..100 local contrast / depth in dark gaps
-  relief: number;     // 0..100 sun-driven micro relief shading
-  sharpness: number;  // 0..100 CAS sharpening
-  vignette: number;   // 0..100
-  grain: number;      // 0..100
-  chromatic: number;  // 0..100 lens colour fringing at the screen edges
-  antiAlias: boolean; // FXAA
-  gi: number;         // 0..100 bounce light + glow of lights in fog
-  wet: number;        // 0..100 wet asphalt sheen in rain
+  bloom: number;           // 0..100
+  bloomRadius?: number;    // 50..150 (%)
+  grading: number;         // 0..100 colour grading + tone curve strength
+  clarity: number;         // 0..100 local contrast / depth in dark gaps
+  relief: number;          // 0..100 sun-driven micro relief shading
+  sharpness: number;       // 0..100 CAS sharpening
+  vignette: number;        // 0..100
+  grain: number;           // 0..100
+  chromatic: number;       // 0..100 lens colour fringing at the screen edges
+  antiAlias: boolean;      // FXAA
+  bicubicUpscale?: boolean;// 5-tap Catmull-Rom bicubic upscale
+  gi: number;              // 0..100 bounce light + glow of lights in fog
+  wet: number;             // 0..100 wet asphalt sheen in rain
+  waterShader?: number;    // 0..100 GPU water optical shader strength
+  waterWakes?: number;     // 0..100 GPU hydrodynamic wakes & whitewater foam
+  heatShimmer?: number;    // 0..150 Thermal refractive heat haze above fires
+  fireLighting?: number;   // 0..150 3D normal relief & warm bounce from fires
+  fogScattering?: number;  // 0..150 Atmospheric Mie scattering in fog/rain
+  exposure?: number;       // 50..150 (%)
+  contrast?: number;       // 50..150 (%)
+  saturation?: number;     // 0..150 (%)
 }
 
 import type { PostFxWaterWake } from '../riverSystem';
@@ -58,7 +68,10 @@ export interface PostFxFrame {
   dt: number;               // frame delta in seconds, for parameter smoothing
   sunrise?: number;
   sunset?: number;
+  season?: string;
+  hasResidualWetness?: boolean;
   lightmap?: HTMLCanvasElement | null; // darkness layer (alpha = dark), null when the frame had none
+  materialMap?: HTMLCanvasElement | null; // exact G-buffer material ID & fluid thickness map
   fires?: PostFxFireSource[];          // active world-space fire sources for heat haze & normal relief lighting
   wakes?: PostFxWaterWake[];           // active world-space water wakes & ripples for direct GPU wave/foam simulation
 }
@@ -126,8 +139,12 @@ uniform sampler2D uBloomWide;
 uniform sampler2D uLight;
 uniform float uLightOn;
 uniform vec2 uLightSize;
+uniform sampler2D uMat;
+uniform float uMatOn;
 uniform float uGi;
 uniform float uWet;
+uniform float uSnow;
+uniform float uRain;
 uniform float uFogGlow;
 uniform vec2 uSrcSize;
 uniform vec2 uOutSize;
@@ -156,11 +173,20 @@ uniform float uDay;         // 0 night .. 1 day
 uniform int uFireCount;
 uniform vec4 uFirePosRad[16]; // xy = world pos, z = radius, w = intensity
 uniform vec2 uFireWind[16];   // xy = world wind + slipstream
-uniform vec2 uWind;           // xy = ambient world wind velocity (px/s)
+uniform vec2 uWind;           // xy = smoothed prevailing wind velocity (px/s)
+uniform float uWindPhase;     // monotonically accumulated wind wave phase (never reverses on gusts)
+uniform float uWindGust;      // instantaneous wind gust factor (drives localized cat's-paw ripple patches)
 uniform vec2 uRiverFlow;      // xy = river current velocity near camera (px/s)
 uniform int uWakeCount;
 uniform vec4 uWakePosRad[32];   // xy = world pos, z = current radius, w = intensity
 uniform vec4 uWakeVelParam[32]; // xy = source velocity (vx, vy), z = progress (0..1), w = typeAndFoam
+uniform float uWaterShader;     // 0..1 GPU water shader strength
+uniform float uWaterWakes;      // 0..1 GPU hydrodynamic wakes & foam strength
+uniform float uHeatShimmer;     // 0..1.5 thermal heat haze strength
+uniform float uFireLighting;    // 0..1.5 fire normal relief & bounce strength
+uniform float uUserExposure;    // 0.5..1.5 user exposure multiplier
+uniform float uUserContrast;    // 0.5..1.5 user contrast multiplier
+uniform float uUserSat;         // 0..1.5 user saturation multiplier
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
@@ -363,19 +389,28 @@ void sampleRiverChannel(
   outRiverMask = 1.0 - smoothstep(0.96, 1.18, abs(outLatFrac));
 }
 
-// Physically grounded two-layer river channel flow + surface wind capillary wave solver + direct GPU hydrodynamic wake solver.
+// Physically grounded two-layer river channel flow + surface wind capillary wave solver + direct GPU hydrodynamic wake & obstacle solver.
 // 1. Inside the river channel: primary water mass flows strictly downstream along the curving riverbed tangent T(x)
 //    with a parabolic cross-channel velocity profile (faster in the mid-channel thalweg, slower near banks),
-//    while wind (uWind) creates a realistic secondary layer of capillary wind ripples riding on top of the moving current.
-// 2. On standing water (ponds, puddles, salt lakes): water has zero channel flow and reacts directly to wind (uWind) and wakes.
-vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out float outWakeFoam) {
+//    while wind (uWind) creates a realistic secondary layer of capillary wind ripples and travelling cat's-paw gust patches.
+//    Crucially, wind wave phase uses monotonically integrated uWindPhase so wind gusts NEVER push waves backward!
+// 2. On standing water (ponds, puddles, salt lakes): water has zero channel flow and reacts directly to wind and wakes.
+// 3. Around submerged obstacles (vehicles, bridge piers, boulders, wading humans): flow deflects laterally around the obstacle,
+//    piling up a foaming bow stagnation collar upstream and shedding a Kelvin V-wake and turbulent vortex street downstream.
+vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out float outWakeFoam, out float outCrestHighlight) {
   outWakeFoam = 0.0;
+  outCrestHighlight = 0.0;
 
   float windSpeed = length(uWind);
   vec2 windDir = windSpeed > 0.2 ? (uWind / windSpeed) : vec2(0.94, 0.34);
   vec2 windPerp = vec2(-windDir.y, windDir.x);
-  // Wind ripple strength scales physically with actual wind speed (calm glass at 0 wind -> lively chop in strong gusts)
-  float windStrength = clamp(windSpeed / 30.0, 0.06, 1.45);
+
+  // Spatially localized travelling wind gust patches ("рябь от порывов ветра" / cat's paws):
+  // Instead of the whole water body jumping forward/backward together, gusts travel across the water surface as organic patches
+  vec2 gustPatchUv = vec2(dot(worldPos, windDir) * 0.0045 - uWindPhase * 0.28, dot(worldPos, windPerp) * 0.0085 + 19.7);
+  float gustPatchNoise = noise2DAndGrad(gustPatchUv).x;
+  float localGustBoost = smoothstep(0.32, 0.78, gustPatchNoise) * clamp((uWindGust - 0.85) * 1.15, 0.0, 1.25);
+  float windStrength = clamp(windSpeed / 32.0, 0.06, 1.35) * (0.78 + 0.55 * localGustBoost);
 
   vec2 rT, rN;
   float rAlong, rCross, rLatFrac, rSpeed, riverMask;
@@ -403,8 +438,6 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
     float flowAdv = time * (localFlowSpeed * 0.048);
 
     // 1. Longitudinal current streamlines & shear eddies elongated along the riverbed tangent rT
-    // Notice: spatial frequency along rT (0.024) is much lower than across rN (0.082), forming genuine
-    // longitudinal flowing current ribbons & boils that travel downstream along every bend of the channel!
     vec2 pStream = vec2(rAlong * 0.024 - flowAdv * 1.15, rCross * 0.082);
     vec3 nStream = noise2DAndGrad(pStream);
     vec2 gStream = (rT * nStream.y * 0.024 + rN * nStream.z * 0.082) * 14.5;
@@ -424,28 +457,33 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
     vec3 nB = noise2DAndGrad(uvB);
     vec2 gB = (dB * nB.y * 0.054 + pB * nB.z * 0.060) * 10.2;
 
-    vec2 riverFlowGrad = gStream * 0.50 + (gA + gB) * 0.38;
+    // 3. Fine micro-capillary surface shimmer riding along the current
+    vec2 uvMicro = vec2(rAlong * 0.11 - flowAdv * 1.75 + nStream.x * 0.65, rCross * 0.13 - 11.4);
+    vec3 nMicro = noise2DAndGrad(uvMicro);
+    vec2 gMicro = (rT * nMicro.y * 0.11 + rN * nMicro.z * 0.13) * 5.2;
+
+    vec2 riverFlowGrad = gStream * 0.48 + (gA + gB) * 0.36 + gMicro * 0.28;
+    outCrestHighlight += smoothstep(0.58, 0.85, (nA.x + nB.x) * 0.5) * 0.35;
 
     // --- B. SURFACE WIND RIPPLES RIDING ON TOP OF THE MOVING RIVER CURRENT ---
-    // Water surface is carried downstream by rT * localFlowSpeed while wind blows across it in windDir.
-    // When wind opposes or crosses the current, wave-current interaction steepens the fine capillary chop.
-    vec2 advectedPos = worldPos - rT * (time * localFlowSpeed * 0.42);
-    float windPhaseAdv = time * (0.45 + windSpeed * 0.045);
+    // Advected along the river spline coordinate (rAlong, rCross) + monotonic uWindPhase so wind gusts
+    // never shift the whole river forward/backward!
+    float windAlong = rAlong * dot(rT, windDir) + rCross * dot(rN, windDir);
+    float windCross = rAlong * dot(rT, windPerp) + rCross * dot(rN, windPerp);
     float opposingSteepen = 1.0 + 0.45 * max(0.0, -dot(windDir, rT));
 
-    vec2 wUv1 = vec2(dot(advectedPos, windDir) * 0.14 - windPhaseAdv, dot(advectedPos, windPerp) * 0.052 + 41.2);
+    vec2 wUv1 = vec2(windAlong * 0.14 - uWindPhase * 1.15 - flowAdv * 0.45, windCross * 0.052 + 41.2);
     vec3 wn1 = noise2DAndGrad(wUv1);
     vec2 wg1 = (windDir * wn1.y * 0.14 + windPerp * wn1.z * 0.052) * 5.8;
 
-    vec2 wUv2 = vec2(dot(advectedPos, windDir) * 0.24 - windPhaseAdv * 1.35, dot(advectedPos, windPerp) * 0.095 + 73.9);
+    vec2 wUv2 = vec2(windAlong * 0.25 - uWindPhase * 1.55 - flowAdv * 0.55, windCross * 0.095 + 73.9);
     vec3 wn2 = noise2DAndGrad(wUv2);
-    vec2 wg2 = (windDir * wn2.y * 0.24 + windPerp * wn2.z * 0.095) * 3.2;
+    vec2 wg2 = (windDir * wn2.y * 0.25 + windPerp * wn2.z * 0.095) * 3.4;
 
-    vec2 windRippleGrad = (wg1 + wg2) * (windStrength * opposingSteepen * 0.48);
+    vec2 windRippleGrad = (wg1 + wg2) * (windStrength * opposingSteepen * 0.46);
     worldGrad = riverFlowGrad + windRippleGrad;
   } else {
-    // --- C. STANDING WATER (Ponds, Puddles, Salt Lakes): Driven Purely by Wind Vector uWind ---
-    float windAdv = time * (0.40 + windSpeed * 0.048);
+    // --- C. STANDING WATER (Ponds, Puddles, Salt Lakes): Driven by Monotonic Wind Phase uWindPhase ---
     const float ca = 0.93358; // cos(21 deg)
     const float sa = 0.35837; // sin(21 deg)
     vec2 wDirA = vec2(windDir.x * ca - windDir.y * sa, windDir.x * sa + windDir.y * ca);
@@ -453,25 +491,26 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
     vec2 wDirB = vec2(windDir.x * ca + windDir.y * sa, -windDir.x * sa + windDir.y * ca);
     vec2 wPerpB = vec2(-wDirB.y, wDirB.x);
 
-    vec2 p1 = vec2(dot(worldPos, windDir) * 0.068 - windAdv, dot(worldPos, windPerp) * 0.028);
+    vec2 p1 = vec2(dot(worldPos, windDir) * 0.068 - uWindPhase, dot(worldPos, windPerp) * 0.028);
     vec3 n1 = noise2DAndGrad(p1);
     vec2 g1 = (windDir * n1.y * 0.068 + windPerp * n1.z * 0.028) * 14.0;
 
-    vec2 p2 = vec2(dot(worldPos, wDirA) * 0.11 - windAdv * 1.28, dot(worldPos, wPerpA) * 0.045 + 17.3);
+    vec2 p2 = vec2(dot(worldPos, wDirA) * 0.11 - uWindPhase * 1.28, dot(worldPos, wPerpA) * 0.045 + 17.3);
     vec3 n2 = noise2DAndGrad(p2);
     vec2 g2 = (wDirA * n2.y * 0.11 + wPerpA * n2.z * 0.045) * 9.5;
 
-    vec2 p3 = vec2(dot(worldPos, wDirB) * 0.12 - windAdv * 1.34, dot(worldPos, wPerpB) * 0.048 + 31.9);
+    vec2 p3 = vec2(dot(worldPos, wDirB) * 0.12 - uWindPhase * 1.34, dot(worldPos, wPerpB) * 0.048 + 31.9);
     vec3 n3 = noise2DAndGrad(p3);
     vec2 g3 = (wDirB * n3.y * 0.12 + wPerpB * n3.z * 0.048) * 9.0;
 
     worldGrad = (g1 * 0.45 + (g2 + g3) * 0.35) * windStrength;
+    outCrestHighlight += smoothstep(0.60, 0.86, (n2.x + n3.x) * 0.5) * 0.25 * windStrength;
   }
 
   float advSpeed = riverMask > 0.01 ? clamp(rSpeed * 0.042, 0.6, 2.2) : clamp(windSpeed * 0.038, 0.3, 1.8);
 
-  // 3. Direct GPU Hydrodynamic Wake & Dispersive Ripple Solver (Vehicles, Tires, Swimmers, Bridge Piers)
-  if (uWakeCount > 0) {
+  // 3. Direct GPU Hydrodynamic Obstacle Deflection, Kelvin Wake & Dispersive Ripple Solver
+  if (uWakeCount > 0 && uWaterWakes > 0.001) {
     vec2 wakeGradAccum = vec2(0.0);
     float foamAccum = 0.0;
 
@@ -481,7 +520,7 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
       vec4 wv = uWakeVelParam[i]; // xy = source vel, z = progress, w = typeAndFoam
 
       vec2 rel = worldPos - wp.xy;
-      float maxReach = wp.z * 2.15 + 24.0;
+      float maxReach = wp.z * (wv.w >= 2.0 ? 3.2 : 2.15) + 28.0;
       if (abs(rel.x) > maxReach || abs(rel.y) > maxReach) continue;
 
       float dist = length(rel);
@@ -490,7 +529,68 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
       float intensity = wp.w;
       float progress = wv.z;
 
-      if (wv.w >= 1.0) {
+      if (wv.w >= 2.0) {
+        // --- OBSTACLE FLOW-AROUND DEFLECTION, STAGNATION BOW COLLAR & TURBULENT FOAM WAKE ---
+        // (Submerged vehicles, emergent boulders, bridge piers, wading humans in flowing water)
+        float foamStr = wv.w - 2.0;
+        float vLen = length(wv.xy);
+        vec2 vDir = vLen > 0.5 ? (wv.xy / vLen) : -dir0; // Points upstream into the oncoming relative flow
+        vec2 vPerp = vec2(-vDir.y, vDir.x);
+
+        float xPar = dot(rel, vDir);   // > 0 upstream (bow), < 0 downstream (wake tail)
+        float yPerp = dot(rel, vPerp);
+        float absY = abs(yPerp);
+        float R = max(4.5, wp.z);
+
+        // 1. Potential-flow dipole deflection around the obstacle contour: bends ambient river waves around the hull/rock!
+        float rNorm = dist / R;
+        if (rNorm > 0.35 && rNorm < 2.6) {
+          float collarEnv = exp(-pow(rNorm - 1.02, 2.0) / 0.16);
+          float upstreamBias = clamp(xPar / max(dist, 0.1) * 0.55 + 0.45, 0.0, 1.0);
+          vec2 radOut = rel / max(dist, 0.1);
+          // Steep standing bow wave & lateral parting ridge right along the object's waterline perimeter
+          float collarWave = sin((rNorm - 0.95) * 6.28318 - time * 5.2);
+          wakeGradAccum += radOut * ((1.25 + 0.85 * collarWave) * collarEnv * (0.45 + 0.75 * upstreamBias) * intensity * 2.6);
+          // Aerated whitewater foam necklace wrapping around the upstream bow & flanks of the obstacle
+          foamAccum += collarEnv * (0.42 + 0.78 * upstreamBias) * intensity * (0.45 + 0.85 * foamStr);
+          outCrestHighlight += collarEnv * upstreamBias * intensity * 0.55;
+        }
+
+        // 2. Curved parabolic bow wave & diverging Kelvin V-arms wrapping around the obstacle into a downstream wake
+        float bodyScale = R * 0.78;
+        float wakeLen = R * 2.85 + 18.0;
+        if (xPar < bodyScale * 1.15 && xPar > -wakeLen) {
+          float behind = max(0.0, -xPar + bodyScale * 0.55);
+          float armHalfWidth = bodyScale * 0.72 + sqrt(behind * bodyScale * 0.65) + behind * 0.24;
+          float distFromArm = absY - armHalfWidth;
+
+          float lonEnv = smoothstep(-wakeLen, -wakeLen * 0.12, xPar) * (1.0 - smoothstep(bodyScale * 0.55, bodyScale * 1.15, xPar));
+          float armWidth = max(3.5, R * 0.36);
+          float armEnv = exp(-(distFromArm * distFromArm) / (armWidth * armWidth)) * lonEnv;
+
+          // Multi-harmonic standing feather waves along the parted V-wake arms
+          float kArm = 0.58;
+          float armPhase = distFromArm * kArm - time * 7.8 + behind * 0.12;
+          float dArm = (cos(armPhase) + 0.4 * cos(armPhase * 1.8 + 0.9)) * kArm;
+          float sideSign = yPerp >= 0.0 ? 1.0 : -1.0;
+          vec2 armNormal = normalize(vPerp * sideSign * 0.90 + vDir * 0.44);
+          wakeGradAccum += armNormal * (dArm * armEnv * intensity * 2.45);
+
+          // Turbulent von Karman vortex street & aerated whitewater boil in the lee shadow behind the obstacle
+          float leeShadow = exp(-(yPerp * yPerp) / max(10.0, R * R * 0.62))
+                          * smoothstep(R * 0.2, -R * 0.45, xPar)
+                          * smoothstep(-wakeLen, -R * 0.6, xPar);
+          if (leeShadow > 0.01) {
+            float vortexSway = sin(xPar * 0.22 + time * 9.5) * R * 0.25;
+            vec2 boilUv = (worldPos + vPerp * vortexSway) * 0.18 + vDir * (time * 3.8);
+            vec3 nBoil = noise2DAndGrad(boilUv);
+            wakeGradAccum += (vDir * nBoil.y + vPerp * nBoil.z) * (leeShadow * intensity * 2.1);
+          }
+
+          float armCrest = max(0.0, sin(armPhase)) * armEnv;
+          foamAccum += (armCrest * 0.92 + leeShadow * 0.88) * intensity * (0.40 + 0.85 * foamStr);
+        }
+      } else if (wv.w >= 1.0) {
         // --- DIRECTIONAL HYDRODYNAMIC KELVIN V-WAKE + PARABOLIC BOW WAVE + TURBULENT SLIPSTREAM ---
         float foamStr = wv.w - 1.0;
         float vLen = length(wv.xy);
@@ -503,7 +603,6 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
         float absY = abs(yPerp);
 
         // Parabolic bow & Kelvin Mach-like V-cone coordinate:
-        // Ahead of or beside the hull/wheel, forms a curved parabolic bow wave wrapping backward at the flanks
         float bodyScale = max(6.0, wp.z * 0.34);
         float bowCurve = xPar + 0.36 * (yPerp * yPerp) / bodyScale;
         float wakeLen = wp.z * 1.95 + 14.0;
@@ -562,80 +661,167 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
       }
     }
 
-    worldGrad += wakeGradAccum;
+    worldGrad += wakeGradAccum * uWaterWakes;
 
     // Modulate accumulated wake foam with multi-scale cellular bubble texture advected by water flow
     if (foamAccum > 0.01) {
-      vec2 foamUv = worldPos * 0.24 - dir0 * (time * advSpeed * 0.85);
+      vec2 foamUv = worldPos * 0.22 - dir0 * (time * advSpeed * 0.85) + worldGrad * 0.18;
       float cell1 = noise2DAndGrad(foamUv).x;
-      float cell2 = noise2DAndGrad(foamUv * 2.35 + vec2(17.1, -9.3) + worldGrad * 0.6).x;
-      float bubbleNet = smoothstep(0.22, 0.72, cell1 * 0.6 + cell2 * 0.55);
-      outWakeFoam = clamp(foamAccum * (0.45 + 0.75 * bubbleNet), 0.0, 0.92);
+      float cell2 = noise2DAndGrad(foamUv * 2.45 + vec2(17.1, -9.3) + worldGrad * 0.45).x;
+      float cell3 = noise2DAndGrad(foamUv * 5.2 - vec2(7.4, 21.8)).x;
+      // Rich lacy whitewater foam structure: dense solid core on strong bow crests, porous bubble lace at trailing edges
+      float bubbleLace = smoothstep(0.18, 0.68, cell1 * 0.50 + cell2 * 0.35 + cell3 * 0.25);
+      float denseCore = smoothstep(0.55, 1.15, foamAccum);
+      outWakeFoam = clamp(foamAccum * uWaterWakes * mix(0.35 + 0.85 * bubbleLace, 0.96, denseCore), 0.0, 0.94);
     }
   }
 
   return worldDirToScreenUv(worldGrad);
 }
 
-// Reconstruct approximate unshadowed surface color by undoing the midnight-navy shadow overlay (rgb(4,8,22))
-// from uLight so that shadowed grass/trees/roads are never misclassified as cyan water.
-vec3 recoverUnshadowedColor(vec3 col, vec2 uv) {
-  if (uLightOn < 0.5) return col;
-  vec4 lm = texture(uLight, uv);
-  float lmLum = luma(lm.rgb);
-  // Shadow regions in lightmap have dark navy RGB (rgb(4,8,22) -> luma ~0.03) and alpha 0.25..0.75
-  float shadowMask = smoothstep(0.18, 0.04, lmLum) * smoothstep(0.08, 0.35, lm.a);
-  float shadowAlpha = clamp(lm.a * shadowMask, 0.0, 0.78);
-  if (shadowAlpha < 0.02) return col;
-  return clamp((col - lm.rgb * shadowAlpha) / max(1.0 - shadowAlpha, 0.20), 0.0, 1.0);
+// ============================================================================
+// MATERIAL G-BUFFER DECODER (100% Material-Driven, Zero Color Guessing)
+// ============================================================================
+// Material IDs encoded in uMat.r (0..255):
+//   0 = MAT_OCCLUDER     (R=0:   Cars, Roofs, Buildings, Balconies, Bridges, Trees, Props, Humans, Sand)
+//   1 = MAT_EARTH        (R=32:  Natural ground, grass, fields, snow-covered earth)
+//   2 = MAT_DIRT         (R=64:  Dirt/gravel roads, unpaved tracks, muddy riverbanks)
+//   3 = MAT_CONCRETE     (R=96:  Sidewalks, concrete slabs, industrial/garage aprons)
+//   4 = MAT_ASPHALT      (R=128: Paved asphalt roads, intersections, parkings, gas station apron)
+//   5 = MAT_WATER_BODY   (R=160: River "Быстрица", Salt Lakes, Park Fountain basin)
+//   6 = MAT_PUDDLE_WATER (R=192: Road/ground water puddles & spilled water stains)
+//   7 = MAT_FUEL         (R=224: Gasoline / diesel spills)
+//   8 = MAT_OIL          (R=240: Motor oil / lubricant spills)
+//   9 = MAT_COOLANT      (R=255: Antifreeze / coolant spills)
+int classifyMatCode(float r255) {
+  if (r255 < 16.0) return 0;
+  if (r255 < 48.0) return 1;
+  if (r255 < 80.0) return 2;
+  if (r255 < 112.0) return 3;
+  if (r255 < 144.0) return 4;
+  if (r255 < 176.0) return 5;
+  if (r255 < 208.0) return 6;
+  if (r255 < 232.0) return 7;
+  if (r255 < 248.0) return 8;
+  return 9;
 }
 
-// Optical classifier for liquid water pixels (river, salt lakes, ponds, puddles)
-// Strictly excludes shadowed grass/foliage (where unshadowed G >= B) and navy shadows / slate asphalt / roofs.
-float detectWaterMask(vec3 col, vec3 unshadowedCol, vec2 worldPos) {
-  if (uFreezing > 0.5) return 0.0;
-  float lum = luma(col);
+void sampleMaterial(
+  vec2 uv,
+  vec2 texel,
+  out int matId,
+  out float paramG,
+  out float alphaB,
+  out vec2 meniscusN
+) {
+  matId = 0;
+  paramG = 0.0;
+  alphaB = 0.0;
+  meniscusN = vec2(0.0);
+  if (uMatOn < 0.5) return;
 
-  // 1. Reject green grass, moss, and pine foliage on both raw AND unshadowed color!
-  // When midnight-navy shadow rgb(4,8,22) is blended over green grass, raw B can slightly exceed raw G,
-  // but unshadowedCol still has G > B, and even in raw color B barely exceeds G.
-  float notGreenRaw = 1.0 - smoothstep(-0.006, 0.012, col.g - col.b);
-  float notGreenUnshadowed = 1.0 - smoothstep(-0.008, 0.010, unshadowedCol.g - unshadowedCol.b);
-  float notGreenGrass = notGreenRaw * notGreenUnshadowed;
-  if (notGreenGrass <= 0.001) return 0.0;
+  vec4 mC = texture(uMat, uv);
+  vec4 mL = texture(uMat, clamp(uv - vec2(texel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
+  vec4 mR = texture(uMat, clamp(uv + vec2(texel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
+  vec4 mD = texture(uMat, clamp(uv - vec2(0.0, texel.y * 1.5), vec2(0.001), vec2(0.999)));
+  vec4 mU = texture(uMat, clamp(uv + vec2(0.0, texel.y * 1.5), vec2(0.001), vec2(0.999)));
 
-  // 2. Reject midnight-navy shadows (rgb(4,8,22)), slate-grey asphalt (#1e293b), roofs (#334155), and wet mud.
-  // In genuine teal-cyan water, BOTH G and B are strongly elevated above R, with B distinctly above G,
-  // and G positioned in the upper-middle of the [R, B] interval: (G - R) / (B - R) in [0.60, 0.90].
-  // In navy shadows and slate greys, G sits in the lower half of [R, B] ((G - R) / (B - R) < 0.50).
-  // In shadowed grass, B and G are nearly equal so (G - R) / (B - R) > 0.92.
-  float blueOverRed = unshadowedCol.b - unshadowedCol.r;
-  float greenOverRed = unshadowedCol.g - unshadowedCol.r;
-  float blueOverGreen = unshadowedCol.b - unshadowedCol.g;
-  float greenPosInRB = greenOverRed / max(blueOverRed, 0.004);
-  float greenOverRedRatio = unshadowedCol.g / max(unshadowedCol.r, 0.008);
+  float rC = mC.r * 255.0;
+  float rL = mL.r * 255.0;
+  float rR = mR.r * 255.0;
+  float rD = mD.r * 255.0;
+  float rU = mU.r * 255.0;
 
-  bool inRiverCorridor = (worldPos.y >= -4250.0 && worldPos.y <= -1750.0 && worldPos.x >= -3500.0 && worldPos.x <= 50500.0);
-  bool inSaltLakeZone = (worldPos.y >= 7250.0 && worldPos.y <= 8250.0 && worldPos.x >= 16950.0 && worldPos.x <= 35050.0);
+  float rMin = min(rC, min(min(rL, rR), min(rD, rU)));
+  float rMax = max(rC, max(max(rL, rR), max(rD, rU)));
 
-  // Teal spectral window: G must be well above R+0.54*(B-R) (excludes navy shadows/asphalt)
-  // AND B must be distinctly above G (excludes shadowed grass/olive foliage)
-  float minGreenPos = (inRiverCorridor || inSaltLakeZone) ? 0.56 : 0.62;
-  float tealBand = smoothstep(minGreenPos, minGreenPos + 0.10, greenPosInRB)
-                 * (1.0 - smoothstep(0.89, 0.96, greenPosInRB));
+  // Strict Occluder Guard: if this pixel or its anti-aliased edge touches MAT_OCCLUDER (0),
+  // immediately classify as MAT_OCCLUDER (0) so cars/roofs never get water/road shaders!
+  if (rC < 16.0 || (rMin < 8.0 && (rMax - rMin) > 12.0 && abs(rC - rMax) > 4.0)) {
+    matId = 0;
+    return;
+  }
 
-  float minRatio = (inRiverCorridor || inSaltLakeZone) ? 1.62 : 1.85;
-  float minBlueRed = (inRiverCorridor || inSaltLakeZone) ? 0.048 : 0.068;
+  // Snap 1-pixel Canvas 2D anti-aliased seams between two materials to the nearest valid material code
+  if ((rMax - rMin) > 10.0 && abs(rC - rMin) > 4.0 && abs(rC - rMax) > 4.0) {
+    rC = (abs(rC - rMax) <= abs(rC - rMin)) ? rMax : rMin;
+  }
 
-  float cyanGate = tealBand
-                 * smoothstep(minRatio, minRatio + 0.45, greenOverRedRatio)
-                 * smoothstep(minBlueRed, minBlueRed + 0.055, blueOverRed)
-                 * smoothstep(0.008, 0.026, blueOverGreen);
+  matId = classifyMatCode(rC);
+  paramG = mC.g;
+  alphaB = mC.b;
 
-  float minLum = inRiverCorridor ? 0.026 : 0.038;
-  float lumGate = smoothstep(minLum, minLum + 0.035, lum) * (1.0 - smoothstep(0.68, 0.88, lum));
+  // For liquid puddles & stains (matId >= 6), compute the outward 3D meniscus contact-rim normal
+  if (matId >= 6) {
+    float hL = (classifyMatCode(rL) == matId) ? mL.g : 0.0;
+    float hR = (classifyMatCode(rR) == matId) ? mR.g : 0.0;
+    float hD = (classifyMatCode(rD) == matId) ? mD.g : 0.0;
+    float hU = (classifyMatCode(rU) == matId) ? mU.g : 0.0;
+    meniscusN = vec2(hL - hR, hD - hU);
+  }
+}
 
-  return clamp(notGreenGrass * cyanGate * lumGate, 0.0, 1.0);
+// Procedural concentric raindrop splash ripples on puddles and water surfaces during active rainfall
+vec2 computeRaindropRipples(vec2 worldPos, float time, float rainAmt) {
+  if (rainAmt <= 0.01) return vec2(0.0);
+  vec2 accum = vec2(0.0);
+  for (int layer = 0; layer < 2; layer++) {
+    float scale = layer == 0 ? 0.11 : 0.17;
+    vec2 p = worldPos * scale + float(layer) * vec2(13.7, 29.3);
+    vec2 cell = floor(p);
+    vec2 f = fract(p) - 0.5;
+    float h = hash(cell);
+    float period = 0.85;
+    float t = fract(time / period + h);
+    vec2 dropCenter = (vec2(hash(cell + vec2(3.1, 7.2)), hash(cell + vec2(9.4, 1.8))) - 0.5) * 0.45;
+    vec2 dVec = f - dropCenter;
+    float r = length(dVec);
+    float ringR = t * 0.48;
+    float env = exp(-pow((r - ringR) * 14.0, 2.0)) * (1.0 - t) * smoothstep(0.02, 0.08, r);
+    float wave = cos((r - ringR) * 58.0);
+    if (r > 1e-4) {
+      accum += (dVec / r) * (wave * env);
+    }
+  }
+  return worldDirToScreenUv(accum * (1.35 * rainAmt));
+}
+
+// Puddle & thin-liquid local capillary wave + wake interaction solver
+vec2 computePuddleWaveNormal(vec2 worldPos, float time, float depthFactor) {
+  float windSpeed = length(uWind);
+  vec2 windDir = windSpeed > 0.2 ? (uWind / windSpeed) : vec2(0.94, 0.34);
+  vec2 windPerp = vec2(-windDir.y, windDir.x);
+
+  // Shallow puddles damp long gravity waves and exhibit fine wind capillary ripples
+  float capStrength = clamp(windSpeed / 30.0, 0.08, 1.15) * smoothstep(0.10, 0.55, depthFactor);
+  vec2 uv1 = vec2(dot(worldPos, windDir) * 0.24 - uWindPhase * 1.45, dot(worldPos, windPerp) * 0.14);
+  vec2 uv2 = vec2(dot(worldPos, windDir) * 0.46 - uWindPhase * 2.15 + 11.3, dot(worldPos, windPerp) * 0.32 - 7.1);
+  vec3 n1 = noise2DAndGrad(uv1);
+  vec3 n2 = noise2DAndGrad(uv2);
+
+  vec2 worldGrad = (windDir * (n1.y * 0.24) + windPerp * (n1.z * 0.14)) * (0.45 * capStrength)
+                 + (windDir * (n2.y * 0.46) + windPerp * (n2.z * 0.32)) * (0.28 * capStrength);
+
+  // Interactive wake rings when stepping or driving through a puddle
+  if (uWakeCount > 0 && uWaterWakes > 0.001) {
+    for (int i = 0; i < 32; i++) {
+      if (i >= uWakeCount) break;
+      vec4 wp = uWakePosRad[i];
+      vec4 wv = uWakeVelParam[i];
+      vec2 rel = worldPos - wp.xy;
+      float maxReach = wp.z * 1.65 + 14.0;
+      if (abs(rel.x) > maxReach || abs(rel.y) > maxReach) continue;
+      float dist = length(rel);
+      if (dist > maxReach || dist < 0.2) continue;
+      float bandHalf = max(3.5, wp.z * 0.28);
+      float dR = dist - wp.z;
+      float env = exp(-(dR * dR) / (bandHalf * bandHalf)) * (1.0 - wv.z * 0.65);
+      float phase = dR * 0.65 - time * 8.5;
+      worldGrad += (rel / dist) * (cos(phase) * env * wp.w * 1.35 * uWaterWakes);
+    }
+  }
+
+  return worldDirToScreenUv(worldGrad);
 }
 
 void main() {
@@ -644,7 +830,7 @@ void main() {
   vec2 worldPos = screenUvToWorld(uv);
 
   // --- Thermal Heat Shimmer (Top-Down Refractive Index Gradient Distortion around Active Fires) -------------
-  if (uFireCount > 0) {
+  if (uFireCount > 0 && uHeatShimmer > 0.001) {
     float totalHeat = 0.0;
     vec2 netWindWorld = vec2(1e-4, 0.0);
     vec2 radialAccum = vec2(0.0);
@@ -658,7 +844,6 @@ void main() {
       vec2 rel = worldPos - fp.xy;
       float along = dot(rel, windDir);
       vec2 perp = rel - windDir * along;
-      // Top-down radial heat sheath slightly elongated along the horizontal wind/slipstream vector
       float effAlong = along > 0.0 ? along / (1.0 + min(0.85, windLen * 0.015)) : along * 1.08;
       float dist = length(perp + windDir * effAlong);
       float heatRad = max(20.0, fp.z * 2.85);
@@ -675,7 +860,7 @@ void main() {
     }
 
     if (totalHeat > 0.01) {
-      float heatAmt = min(1.0, totalHeat);
+      float heatAmt = min(1.0, totalHeat) * uHeatShimmer;
       vec2 advect = (radialAccum * 0.55 + normalize(netWindWorld) * 0.45) * (uTime * 6.5);
       vec3 hNoise1 = noise2DAndGrad(worldPos * 0.14 - advect);
       vec3 hNoise2 = noise2DAndGrad(worldPos * 0.29 - advect * 1.35 + hNoise1.yz * 0.35);
@@ -684,22 +869,61 @@ void main() {
     }
   }
 
-  // --- Initial sample & water optical wave normal / UV refraction -------------------------------------------
+  // --- Exact Material G-Buffer Lookup -----------------------------------------------------------------------
+  int matId = 0;
+  float matParam = 0.0;
+  float matAlpha = 0.0;
+  vec2 meniscusN = vec2(0.0);
+  sampleMaterial(uv, texel, matId, matParam, matAlpha, meniscusN);
+
+  bool isWaterBody = (matId == 5);
+  bool isPuddleWater = (matId == 6);
+  bool isFuel = (matId == 7);
+  bool isOil = (matId == 8);
+  bool isCoolant = (matId == 9);
+  bool isRoad = (matId == 4 || matId == 3);
+  bool isEarthOrDirt = (matId == 1 || matId == 2);
+
+  // --- Initial sample & Material-Driven UV Refraction (Water Bodies, Puddles, Coolant) ----------------------
   vec3 cRaw = fetchSrc(uv);
-  vec3 cUnshadowed = recoverUnshadowedColor(cRaw, uv);
-  float waterMask = detectWaterMask(cRaw, cUnshadowed, worldPos);
+  float waterMask = (isWaterBody && uFreezing < 0.5 && uWaterShader > 0.001) ? uWaterShader : 0.0;
+  float puddleBasinMask = (isPuddleWater && uFreezing < 0.5 && uWaterShader > 0.001)
+    ? smoothstep(0.16, 0.36, matParam) * clamp(matAlpha * 1.15, 0.0, 1.0) * uWaterShader
+    : 0.0;
+
   vec2 waveN = vec2(0.0);
   float wakeFoam = 0.0;
+  float crestHighlight = 0.0;
 
   if (waterMask > 0.01) {
     bool inRiver = (worldPos.y >= -4250.0 && worldPos.y <= -1750.0 && worldPos.x >= -3500.0 && worldPos.x <= 50500.0);
-    waveN = computeWaterWaveNormal(worldPos, uTime, inRiver, wakeFoam);
-    // Real-time UV refraction of submerged bed, stones, weeds, and submerged vehicle hulls (amplified across steep wake waves)
-    vec2 refrUv = clamp(uv + waveN * texel * 2.45 * waterMask, vec2(0.001), vec2(0.999));
-    vec3 cRefr = fetchSrc(refrUv);
-    vec3 cRefrUnshadowed = recoverUnshadowedColor(cRefr, refrUv);
-    float refrMask = detectWaterMask(cRefr, cRefrUnshadowed, worldPos);
-    cRaw = mix(cRaw, cRefr, waterMask * refrMask * 0.82);
+    waveN = computeWaterWaveNormal(worldPos, uTime, inRiver, wakeFoam, crestHighlight)
+          + computeRaindropRipples(worldPos, uTime, uRain) * 0.65;
+    // Real-time UV refraction strictly guarded by uMat so dry cars/bridges/banks never bleed into water!
+    vec2 refrUv = clamp(uv + waveN * texel * 2.65 * waterMask, vec2(0.001), vec2(0.999));
+    float rRefr = texture(uMat, refrUv).r * 255.0;
+    if (classifyMatCode(rRefr) == 5) {
+      vec3 cRefr = fetchSrc(refrUv);
+      cRaw = mix(cRaw, cRefr, waterMask * 0.85);
+    }
+  } else if (puddleBasinMask > 0.01) {
+    waveN = computePuddleWaveNormal(worldPos, uTime, matParam)
+          + computeRaindropRipples(worldPos, uTime, uRain)
+          + meniscusN * 0.42;
+    vec2 refrUv = clamp(uv + waveN * texel * 1.55 * puddleBasinMask, vec2(0.001), vec2(0.999));
+    float rRefr = texture(uMat, refrUv).r * 255.0;
+    if (classifyMatCode(rRefr) == 6) {
+      vec3 cRefr = fetchSrc(refrUv);
+      cRaw = mix(cRaw, cRefr, puddleBasinMask * 0.72);
+    }
+  } else if (isCoolant) {
+    vec2 coolCapN = computePuddleWaveNormal(worldPos, uTime * 0.45, matParam) * 0.35 + meniscusN * 1.15;
+    waveN = coolCapN;
+    vec2 refrUv = clamp(uv + coolCapN * texel * 1.15 * matAlpha, vec2(0.001), vec2(0.999));
+    float rRefr = texture(uMat, refrUv).r * 255.0;
+    if (classifyMatCode(rRefr) == 9) {
+      cRaw = mix(cRaw, fetchSrc(refrUv), matAlpha * 0.55);
+    }
   }
 
   // --- colour fetch with optional lens fringing -------------------------------------------------------------
@@ -728,17 +952,48 @@ void main() {
 
   float l0 = luma(c);
 
-  // --- micro relief: luminance read as height, lit by the sun, lamps, and real-time flickering fires --------
+  // --- Procedural Material Micro-Normals (Asphalt Aggregate, Concrete Grain, Soil Clods, Snowdrifts) --------
+  vec2 matMicroN = vec2(0.0);
+  if (isRoad) {
+    vec3 ag1 = noise2DAndGrad(worldPos * 0.85);
+    vec3 ag2 = noise2DAndGrad(worldPos * 2.35 + vec2(17.3, -9.1));
+    float granScale = (matId == 4) ? 0.048 : 0.032; // Coarser aggregate on asphalt, finer on concrete
+    matMicroN = worldDirToScreenUv(ag1.yz * 0.55 + ag2.yz * 0.45) * granScale;
+    if (uSnow > 0.01) {
+      float rutMask = smoothstep(0.60, 0.88, matParam);
+      vec3 snN = noise2DAndGrad(worldPos * 0.16 + vec2(5.2, 11.8));
+      matMicroN = mix(matMicroN, worldDirToScreenUv(snN.yz) * 0.065, uSnow * (1.0 - rutMask * 0.75));
+    }
+  } else if (isEarthOrDirt) {
+    vec3 er1 = noise2DAndGrad(worldPos * 0.34);
+    vec3 er2 = noise2DAndGrad(worldPos * 1.15 + vec2(-13.4, 7.9));
+    float earthScale = (matId == 2) ? 0.062 : 0.045;
+    matMicroN = worldDirToScreenUv(er1.yz * 0.65 + er2.yz * 0.35) * earthScale;
+    if (uSnow > 0.01) {
+      vec3 drift1 = noise2DAndGrad(worldPos * 0.055);
+      vec3 drift2 = noise2DAndGrad(worldPos * 0.22 + vec2(19.1, -6.4));
+      matMicroN = mix(matMicroN, worldDirToScreenUv(drift1.yz * 0.65 + drift2.yz * 0.35) * 0.085, uSnow);
+    }
+  } else if (isOil) {
+    // Viscous oil damps underlying asphalt grain in its core and forms a steep 3D meniscus rim
+    waveN = meniscusN * 1.65 + computePuddleWaveNormal(worldPos, uTime * 0.25, matParam) * 0.12;
+  } else if (isFuel) {
+    waveN = meniscusN * 0.75 + computePuddleWaveNormal(worldPos, uTime * 0.80, matParam) * 0.32;
+  }
+
+  // --- micro relief: luminance read as height + material micro-normals, lit by sun, lamps, and fires --------
+  vec2 g = vec2(0.0);
   if (uRelief > 0.001 || uFireCount > 0) {
     float hl = luma(texture(uSrc, uv + vec2(-texel.x * 1.5, 0.0)).rgb);
     float hr = luma(texture(uSrc, uv + vec2( texel.x * 1.5, 0.0)).rgb);
     float hd = luma(texture(uSrc, uv + vec2(0.0, -texel.y * 1.5)).rgb);
     float hu = luma(texture(uSrc, uv + vec2(0.0,  texel.y * 1.5)).rgb);
-    vec2 g = vec2(hr - hl, hu - hd) + waveN * waterMask * 0.14;
+    // Viscous oil smooths out underlying substrate roughness
+    float subRoughSuppress = isOil ? (1.0 - smoothstep(0.15, 0.65, matParam) * matAlpha * 0.85) : 1.0;
+    g = (vec2(hr - hl, hu - hd) + matMicroN) * subRoughSuppress + waveN * max(waterMask, puddleBasinMask) * 0.14;
     float shade = 1.0 - l0 * 0.55;
 
     if (uRelief > 0.001) {
-      // slopes that rise towards the light face away from it: n.L = -g.L
       float sunLit = clamp(-dot(g, uSun) * 3.2, -0.35, 0.35);
       c *= 1.0 + sunLit * uRelief * mix(0.5, 1.0, uDay) * shade;
       if (uLightOn > 0.5) {
@@ -757,9 +1012,10 @@ void main() {
     }
 
     // Dynamic per-fire normal-mapped surface relief & warm blackbody ground bounce
-    if (uFireCount > 0) {
+    if (uFireCount > 0 && uFireLighting > 0.001) {
       vec3 fireBounceAccum = vec3(0.0);
       float effRelief = max(uRelief, 0.35);
+      float fluidSpecMask = max(max(waterMask, puddleBasinMask), (isOil || isFuel || isCoolant) ? matAlpha : 0.0);
       for (int i = 0; i < 16; i++) {
         if (i >= uFireCount) break;
         vec4 fp = uFirePosRad[i];
@@ -778,64 +1034,317 @@ void main() {
           float slopeLit = clamp(-dot(g, toFireUv) * 5.2, -0.25, 0.75);
           vec3 fireTint = mix(vec3(0.96, 0.32, 0.05), vec3(1.0, 0.76, 0.32), smoothstep(0.55, 0.08, normDist));
 
-          // Micro-slope rim highlights on nearby cars, curbs, walls, and road grain
           float rimBoost = max(0.0, slopeLit) * effRelief * 1.35;
-          // Subtle warm diffuse radiance on surrounding surfaces (stronger at dusk/night)
           float diffuseWarm = (0.10 + 0.22 * (1.0 - uDay)) * (0.65 + 0.35 * slopeLit);
-          // Wet road / water specular reflection of dancing flames
           float wetSpec = 0.0;
-          if (uWet > 0.01 || waterMask > 0.01) {
+          if ((uWet > 0.01 && (isRoad || isEarthOrDirt)) || fluidSpecMask > 0.01) {
             float waveFacet = 0.5 + 0.5 * clamp(dot(waveN + g * 2.0, toFireUv), -1.0, 1.0);
-            wetSpec = max(uWet * 0.45, waterMask * 0.85) * waveFacet * 0.42;
+            wetSpec = max(uWet * 0.45 * float(isRoad || isEarthOrDirt), fluidSpecMask * 0.88) * waveFacet * 0.44;
           }
           fireBounceAccum += fireTint * atten * ((rimBoost + diffuseWarm) * shade + wetSpec);
         }
       }
-      c += fireBounceAccum * (c * 0.65 + 0.35);
+      c += fireBounceAccum * uFireLighting * (c * 0.65 + 0.35);
     }
   }
 
-  // --- Water Surface Shader: Solar/Lunar Glints, Fresnel Sky, Dynamic Reflections & Porous Wake Foam --------
-  if (waterMask > 0.01) {
-    // 1. Fresnel sky dome reflection modulated by directional wave & wake facets
-    float facetTilt = clamp(dot(waveN, uSun) * 0.65 + 0.35, 0.0, 1.0);
-    vec3 daySkyCol = mix(vec3(0.45, 0.68, 0.88), vec3(0.95, 0.78, 0.58), clamp(1.0 - uDay * 1.15, 0.0, 1.0));
-    vec3 nightSkyCol = vec3(0.05, 0.09, 0.16);
-    vec3 skyCol = mix(nightSkyCol, daySkyCol, uDay);
-    c = mix(c, skyCol, waterMask * (0.05 + 0.08 * facetTilt));
+  // Shared sky reflection palette & local artificial lighting helper
+  vec3 daySkyCol = mix(vec3(0.45, 0.68, 0.88), vec3(0.95, 0.78, 0.58), clamp(1.0 - uDay * 1.15, 0.0, 1.0));
+  vec3 nightSkyCol = vec3(0.05, 0.09, 0.16);
+  vec3 skyCol = mix(nightSkyCol, daySkyCol, uDay);
+  vec3 sunGlintCol = mix(vec3(0.55, 0.72, 0.96) * 0.38, vec3(1.0, 0.96, 0.84), uDay);
+  float lampHere = (uLightOn > 0.5) ? (1.0 - texture(uLight, uv).a) : 0.0;
 
-    // 2. Solar / Lunar micro-facet specular glints on ambient waves and steep Kelvin wake slopes
-    float waveSlopeMag = length(waveN);
-    float sunAlign = dot(normalize(waveN + uSun * 0.45), uSun);
-    float glintSharp = pow(clamp(sunAlign, 0.0, 1.0), 18.0) * smoothstep(0.08, 0.42, waveSlopeMag);
-    vec3 sunGlintCol = mix(vec3(0.55, 0.70, 0.95) * 0.35, vec3(1.0, 0.95, 0.82), uDay);
-    c += sunGlintCol * waterMask * glintSharp * 0.46;
+  // ============================================================================
+  // SHADER 1: DEEP / FLOWING WATER BODIES (River "Быстрица", Salt Lakes, Fountain)
+  // ============================================================================
+  if (isWaterBody) {
+    if (uFreezing > 0.5) {
+      // Frozen River / Lake Crystalline Ice Shader
+      vec3 iceN1 = noise2DAndGrad(worldPos * 0.15);
+      vec3 iceN2 = noise2DAndGrad(worldPos * 0.65 + vec2(31.2, -14.8));
+      vec2 iceGrad = worldDirToScreenUv(iceN1.yz * 0.6 + iceN2.yz * 0.4);
+      float iceSun = dot(normalize(iceGrad + uSun * 0.35), uSun);
+      float iceGlaze = pow(clamp(iceSun, 0.0, 1.0), 18.0) * 0.32;
+      float frostSparkle = step(0.965, hash(floor(worldPos * 2.4) + floor(uCamPos * 0.02))) * (0.35 * uDay + 0.65 * lampHere);
+      vec3 reflBloom = texture(uBloomWide, clamp(uv + iceGrad * 0.008, vec2(0.001), vec2(0.999))).rgb;
+      c = mix(c, skyCol * 1.08, 0.12);
+      c += sunGlintCol * iceGlaze + vec3(0.88, 0.95, 1.0) * frostSparkle * 0.55 + reflBloom * 0.65;
+    } else if (waterMask > 0.01) {
+      float waveSlopeMag = length(waveN);
+      float sunDot = dot(waveN, uSun);
 
-    // 3. Porous Cellular Aerated Whitewater Foam (from vehicle/wheel Kelvin wakes, bow waves, and turbulent slipstreams)
-    if (wakeFoam > 0.005) {
-      float localLit = uDay * (0.72 + 0.28 * clamp(dot(waveN, uSun), -0.5, 1.0));
-      if (uLightOn > 0.5) {
-        float lampHere = 1.0 - texture(uLight, uv).a;
-        localLit = max(localLit, lampHere * 0.85 + 0.12);
-      } else {
-        localLit = max(localLit, 0.16);
+      // 1. Subsurface scattering (SSS) in translucent emerald-cyan wave crests + dark optical troughs
+      float sssCrest = clamp(sunDot * 0.75 + crestHighlight * 0.65, -0.45, 1.0);
+      vec3 sssTint = mix(vec3(0.02, 0.14, 0.22), vec3(0.10, 0.56, 0.64), uDay);
+      c += sssTint * waterMask * max(0.0, sssCrest) * 0.20;
+      c *= 1.0 + clamp(sunDot * 0.18, -0.14, 0.16) * waterMask;
+
+      // 2. Fresnel sky dome reflection modulated by directional wave & wake facets
+      float facetTilt = clamp(sunDot * 0.60 + 0.40, 0.0, 1.0);
+      float fresnelRim = clamp(0.04 + 0.11 * smoothstep(0.05, 0.65, waveSlopeMag) + 0.06 * facetTilt, 0.0, 0.22);
+      c = mix(c, skyCol, waterMask * fresnelRim);
+
+      // 3. Dual-lobe Solar / Lunar micro-facet specular glints (broad shimmer + crisp diamond sun sparkles)
+      float sunAlign = dot(normalize(waveN + uSun * 0.42), uSun);
+      float glintBroad = pow(clamp(sunAlign, 0.0, 1.0), 10.0) * smoothstep(0.05, 0.35, waveSlopeMag) * 0.18;
+      float glintSharp = pow(clamp(sunAlign, 0.0, 1.0), 26.0) * smoothstep(0.10, 0.48, waveSlopeMag) * 0.52;
+      c += sunGlintCol * waterMask * (glintBroad + glintSharp);
+
+      // 4. Porous Cellular Aerated Whitewater Foam
+      if (wakeFoam > 0.005) {
+        float localLit = max(uDay * (0.76 + 0.24 * clamp(sunDot, -0.4, 1.0)), (uLightOn > 0.5) ? (lampHere * 0.88 + 0.14) : 0.18);
+        vec3 foamCol = mix(vec3(0.74, 0.87, 0.95), vec3(0.97, 0.99, 1.0), uDay) * localLit;
+        c = mix(c, foamCol, clamp(waterMask * wakeFoam, 0.0, 0.92));
       }
-      vec3 foamCol = mix(vec3(0.72, 0.85, 0.94), vec3(0.96, 0.99, 1.0), uDay) * localLit;
-      c = mix(c, foamCol, clamp(waterMask * wakeFoam, 0.0, 0.88));
+
+      // 5. Dynamic lightmap & bloom reflections on water
+      vec2 reflUv = clamp(uv + waveN * 0.015, vec2(0.001), vec2(0.999));
+      vec3 reflBloom = texture(uBloom, reflUv).rgb + texture(uBloomWide, reflUv).rgb * 0.85;
+      float waveFacetHighlight = 0.65 + 0.75 * clamp(dot(waveN, vec2(0.707, -0.707)), -0.6, 1.0);
+      c += reflBloom * waterMask * waveFacetHighlight * mix(1.55, 0.65, uDay);
+
+      if (uLightOn > 0.5) {
+        float litPerturbed = 1.0 - texture(uLight, clamp(uv + waveN * 0.018, vec2(0.001), vec2(0.999))).a;
+        float specRipple = max(0.0, litPerturbed - lampHere * 0.65) + litPerturbed * pow(max(0.0, waveSlopeMag * 0.75), 2.0);
+        vec3 artificialSpecCol = mix(vec3(1.0, 0.93, 0.78), reflBloom * 1.6 + vec3(0.45, 0.55, 0.70), 0.55);
+        c += artificialSpecCol * waterMask * specRipple * (0.28 + 0.55 * (1.0 - uDay));
+      }
+    }
+  }
+
+  // ============================================================================
+  // SHADER 2: WATER PUDDLES & SPILLED WATER (MAT_PUDDLE_WATER)
+  // ============================================================================
+  else if (isPuddleWater) {
+    float pAlpha = clamp(matAlpha * 1.15, 0.0, 1.0);
+    // Outer porous wet darkening meniscus ring (water soaked into asphalt/soil pores around the puddle)
+    float soakRing = smoothstep(0.02, 0.22, matParam) * (1.0 - smoothstep(0.24, 0.48, matParam));
+    c *= 1.0 - 0.28 * soakRing * pAlpha;
+
+    if (uFreezing > 0.5) {
+      // Frozen road puddle (Наледь / Тонкий лёд на асфальте)
+      vec3 iceG = noise2DAndGrad(worldPos * 0.45);
+      vec2 iceN = worldDirToScreenUv(iceG.yz) * 0.35 + meniscusN * 0.85;
+      float iceSpec = pow(clamp(dot(normalize(iceN + uSun * 0.45), uSun), 0.0, 1.0), 20.0) * 0.42;
+      vec3 reflB = texture(uBloomWide, clamp(uv + iceN * 0.008, vec2(0.001), vec2(0.999))).rgb;
+      c = mix(c, skyCol * 1.12, 0.22 * pAlpha * smoothstep(0.12, 0.35, matParam));
+      c += (sunGlintCol * iceSpec + reflB * 0.95) * pAlpha;
+    } else if (puddleBasinMask > 0.01) {
+      // Standing puddle water basin: planar sky mirror + capillary/rain ripples + headlight/lamp reflections
+      float slopeMag = length(waveN);
+      float sunDot = dot(waveN, uSun);
+      // Darker wet substrate beneath shallow puddle water
+      c *= 1.0 - 0.18 * puddleBasinMask;
+
+      // Planar Fresnel sky reflection (stronger on flat puddle mirror, perturbed by ripples)
+      float puddleFresnel = clamp(0.18 + 0.14 * smoothstep(0.25, 0.85, matParam) + 0.08 * sunDot, 0.0, 0.38);
+      c = mix(c, skyCol, puddleBasinMask * puddleFresnel);
+
+      // Sharp solar / lunar glint on puddle ripples & meniscus rim
+      float sunAlign = dot(normalize(waveN + uSun * 0.38), uSun);
+      float pGlint = pow(clamp(sunAlign, 0.0, 1.0), 22.0) * smoothstep(0.04, 0.32, slopeMag) * 0.48;
+      c += sunGlintCol * puddleBasinMask * pGlint;
+
+      // Mirror reflection of headlights, taillights, neon, and streetlamps in the puddle
+      vec2 pReflUv = clamp(uv + waveN * 0.012, vec2(0.001), vec2(0.999));
+      vec3 pBloom = texture(uBloom, pReflUv).rgb + texture(uBloomWide, pReflUv).rgb * 1.15;
+      c += pBloom * puddleBasinMask * mix(1.85, 0.80, uDay);
+
+      if (uLightOn > 0.5) {
+        float litP = 1.0 - texture(uLight, clamp(uv + waveN * 0.014, vec2(0.001), vec2(0.999))).a;
+        float rippleSpec = max(0.0, litP - lampHere * 0.55) + litP * smoothstep(0.05, 0.45, slopeMag) * 0.45;
+        c += mix(vec3(1.0, 0.94, 0.80), pBloom * 1.5 + vec3(0.55, 0.68, 0.85), 0.5) * puddleBasinMask * rippleSpec * (0.35 + 0.65 * (1.0 - uDay));
+      }
+    }
+  }
+
+  // ============================================================================
+  // SHADER 3: GASOLINE & DIESEL SPILLS (MAT_FUEL — Thin-Film Rainbow Interference)
+  // ============================================================================
+  else if (isFuel) {
+    float fAlpha = clamp(matAlpha * 1.25, 0.0, 1.0);
+    // 1. Hydrocarbon wetting of porous asphalt/soil substrate
+    c *= 1.0 - 0.26 * fAlpha;
+
+    // 2. Swirling multi-octave sub-micron film thickness map d(x,y,t)
+    float windSpd = length(uWind);
+    vec2 wDir = windSpd > 0.2 ? (uWind / windSpd) : vec2(0.94, 0.34);
+    vec3 filmN1 = noise2DAndGrad(worldPos * 0.13 - wDir * (uWindPhase * 0.22));
+    vec3 filmN2 = noise2DAndGrad(worldPos * 0.31 + vec2(14.2, -8.7) + filmN1.yz * 0.45);
+    float opticalThickness = matParam * 2.35 + filmN1.x * 0.85 + filmN2.x * 0.45;
+
+    // 3. Exact Newton Thin-Film Interference for R (650nm), G (532nm), B (460nm) with n_fuel = 1.44
+    // Phase = 4 * pi * n * d / lambda
+    vec3 phase = opticalThickness * vec3(6.28318 * 1.00, 6.28318 * 1.22, 6.28318 * 1.42) + vec3(0.0, 0.55, 1.15);
+    vec3 iridescence = 0.5 + 0.5 * cos(phase);
+    // Interference fringes are most vivid in the sub-micron mid/outer film and slightly desaturated at the thick core
+    float fringeEnvelope = smoothstep(0.04, 0.22, matParam) * (1.0 - 0.38 * smoothstep(0.72, 0.98, matParam));
+    float lightMod = max(0.28 + 0.72 * uDay, lampHere * 0.95);
+
+    // Blend physical rainbow interference sheen over the dark wetted substrate
+    vec3 fuelSheen = mix(vec3(luma(iridescence)), iridescence, 0.82) * lightMod;
+    c = mix(c, c * 0.65 + fuelSheen * 0.42, fAlpha * fringeEnvelope * 0.78);
+
+    // 4. High-IOR dielectric specular reflection (n = 1.44) & volatile meniscus highlight
+    vec2 fuelNormal = meniscusN * 0.95 + worldDirToScreenUv(filmN1.yz * 0.25 + filmN2.yz * 0.20) + waveN * 0.5;
+    float sunAlign = dot(normalize(fuelNormal + uSun * 0.35), uSun);
+    float fuelGlint = pow(clamp(sunAlign, 0.0, 1.0), 18.0) * 0.46;
+    vec2 fReflUv = clamp(uv + fuelNormal * 0.010, vec2(0.001), vec2(0.999));
+    vec3 fBloom = texture(uBloom, fReflUv).rgb + texture(uBloomWide, fReflUv).rgb;
+    c = mix(c, skyCol * (0.75 + 0.45 * iridescence), fAlpha * 0.18);
+    c += (sunGlintCol * iridescence * fuelGlint + fBloom * (0.7 + 0.6 * iridescence) * mix(1.6, 0.7, uDay)) * fAlpha;
+  }
+
+  // ============================================================================
+  // SHADER 4: MOTOR OIL & LUBRICANT SPILLS (MAT_OIL — Viscous Dark Mirror & 3D Meniscus)
+  // ============================================================================
+  else if (isOil) {
+    float oAlpha = clamp(matAlpha * 1.25, 0.0, 1.0);
+    // 1. Beer-Lambert optical absorption in dense petroleum hydrocarbon (transmits warm bronze-amber only at thin rim)
+    vec3 oilTrans = exp(-vec3(3.6, 4.9, 6.8) * (matParam * 1.45));
+    vec3 darkOilCore = vec3(0.016, 0.018, 0.024) * max(0.25, uDay * 0.85 + lampHere * 0.65);
+    vec3 bronzeEdge = vec3(0.22, 0.14, 0.06) * max(0.25, uDay + lampHere * 0.8);
+    float coreWeight = smoothstep(0.08, 0.45, matParam);
+    vec3 oilBody = mix(c * oilTrans + bronzeEdge * (1.0 - coreWeight) * 0.35, darkOilCore, coreWeight * 0.90);
+    c = mix(c, oilBody, oAlpha);
+
+    // 2. Steep 3D surface-tension contact meniscus & glass-smooth interior reflection (n = 1.48, F0 = 0.038)
+    float menMag = length(meniscusN);
+    vec2 oilN = meniscusN * 1.75 + waveN * 0.25;
+    float sunDot = dot(normalize(oilN + uSun * 0.28), uSun);
+    float oilFresnel = clamp(0.16 + 0.26 * smoothstep(0.02, 0.35, menMag) + 0.10 * clamp(sunDot, 0.0, 1.0), 0.0, 0.48);
+    c = mix(c, skyCol * 0.92, oAlpha * oilFresnel * smoothstep(0.06, 0.25, matParam));
+
+    // 3. Razor-sharp liquid mirror rim highlight on the 3D oil meniscus + headlight/lamp reflection
+    float rimSpec = pow(clamp(sunDot, 0.0, 1.0), 28.0) * (0.25 + 1.35 * smoothstep(0.02, 0.28, menMag));
+    vec2 oReflUv = clamp(uv + oilN * 0.012, vec2(0.001), vec2(0.999));
+    vec3 oBloom = texture(uBloom, oReflUv).rgb + texture(uBloomWide, oReflUv).rgb * 1.2;
+    float lampRim = (uLightOn > 0.5) ? lampHere * smoothstep(0.03, 0.28, menMag) * 0.55 : 0.0;
+    c += (sunGlintCol * rimSpec * 0.72 + vec3(1.0, 0.92, 0.76) * lampRim + oBloom * mix(2.1, 0.95, uDay)) * oAlpha;
+  }
+
+  // ============================================================================
+  // SHADER 5: ANTIFREEZE / COOLANT SPILLS (MAT_COOLANT — Syrupy Fluorescent Glycol)
+  // ============================================================================
+  else if (isCoolant) {
+    float cAlpha = clamp(matAlpha * 1.20, 0.0, 1.0);
+    // 1. Wet substrate darkening around perimeter
+    c *= 1.0 - 0.20 * cAlpha;
+
+    // 2. Internal fluorescent ethylene-glycol dye subsurface scattering & luminescence
+    // Glows with rich emerald-chartreuse radiance when illuminated by sunlight, streetlamps, or vehicle headlights
+    vec3 cBloomHere = texture(uBloomWide, uv).rgb;
+    float incidentLight = clamp(uDay * 0.92 + lampHere * 0.85 + luma(cBloomHere) * 1.65, 0.18, 1.45);
+    float poolDepth = smoothstep(0.06, 0.68, matParam);
+    vec3 glycolDeep = vec3(0.04, 0.52, 0.28);
+    vec3 glycolFluoro = vec3(0.14, 0.94, 0.46);
+    vec3 coolantVol = mix(glycolDeep, glycolFluoro, 0.45 + 0.55 * poolDepth) * incidentLight;
+    c = mix(c, mix(c * vec3(0.45, 0.95, 0.65), coolantVol, 0.62), cAlpha * smoothstep(0.04, 0.35, matParam));
+
+    // 3. Syrupy 3D meniscus rim & wet dielectric mirror gloss (n = 1.43)
+    float menMag = length(meniscusN);
+    vec2 coolN = meniscusN * 1.35 + waveN;
+    float sunAlign = dot(normalize(coolN + uSun * 0.32), uSun);
+    float coolSpec = pow(clamp(sunAlign, 0.0, 1.0), 24.0) * (0.30 + 1.10 * smoothstep(0.02, 0.26, menMag));
+    vec2 cReflUv = clamp(uv + coolN * 0.011, vec2(0.001), vec2(0.999));
+    vec3 cReflBloom = texture(uBloom, cReflUv).rgb + texture(uBloomWide, cReflUv).rgb;
+    c = mix(c, skyCol, cAlpha * 0.16 * smoothstep(0.12, 0.40, matParam));
+    c += (sunGlintCol * coolSpec * 0.65 + cReflBloom * mix(1.65, 0.75, uDay)) * cAlpha;
+  }
+
+  // ============================================================================
+  // SHADER 6: WET & SNOWY ROADS (MAT_ASPHALT & MAT_CONCRETE)
+  // ============================================================================
+  else if (isRoad) {
+    float rutMask = smoothstep(0.60, 0.88, matParam); // 1.0 in tire-polished wheel tracks, 0.0 on road crown/shoulders
+
+    // A. WET ROAD SHADER (Angstrom porous darkening, wheel-rut water film, anisotropic headlight/sky mirror)
+    if (uWet > 0.005 && uFreezing < 0.5) {
+      vec3 wPatch1 = noise2DAndGrad(worldPos * 0.035);
+      vec3 wPatch2 = noise2DAndGrad(worldPos * 0.11 + vec2(23.4, -11.7));
+      float puddleFilm = clamp((wPatch1.x * 0.6 + wPatch2.x * 0.4 - 0.32) * 1.45 + rutMask * 0.42, 0.0, 1.0);
+      float localWet = uWet * (0.55 + 0.45 * puddleFilm);
+
+      // Porous wet asphalt darkening (water fills micro-cavities, causing internal light trapping)
+      c *= 1.0 - 0.25 * localWet;
+
+      // Anisotropic specular reflection perturbed by bitumen aggregate micro-normals
+      vec2 wetReflUv = clamp(uv + matMicroN * 0.22, vec2(0.001), vec2(0.999));
+      vec3 wetBloom = texture(uBloom, wetReflUv).rgb * 0.65 + texture(uBloomWide, wetReflUv).rgb * 1.35;
+      float sunSpec = pow(clamp(dot(normalize(matMicroN * 8.0 + uSun * 0.35), uSun), 0.0, 1.0), 14.0) * 0.22;
+
+      float skySheen = localWet * (0.06 + 0.12 * puddleFilm * (0.5 + 0.5 * rutMask));
+      c = mix(c, skyCol, skySheen * uDay);
+      c += wetBloom * localWet * (1.25 + 0.85 * rutMask) * mix(1.55, 0.55, uDay);
+      c += sunGlintCol * sunSpec * localWet * (0.6 + 0.6 * rutMask);
+
+      if (uLightOn > 0.5) {
+        float litPert = 1.0 - texture(uLight, clamp(uv + matMicroN * 0.25, vec2(0.001), vec2(0.999))).a;
+        float roadLampSpec = max(0.0, litPert - lampHere * 0.72) + lampHere * 0.18 * puddleFilm;
+        c += vec3(1.0, 0.93, 0.78) * roadLampSpec * localWet * (0.35 + 0.65 * rutMask) * (0.35 + 0.65 * (1.0 - uDay));
+      }
     }
 
-    // 4. Dynamic lightmap & bloom reflections on water (headlights, taillights, sirens, streetlamps, flashlights)
-    vec2 reflUv = clamp(uv + waveN * 0.014, vec2(0.001), vec2(0.999));
-    vec3 reflBloom = texture(uBloom, reflUv).rgb + texture(uBloomWide, reflUv).rgb * 0.85;
-    float waveFacetHighlight = 0.65 + 0.75 * clamp(dot(waveN, vec2(0.707, -0.707)), -0.6, 1.0);
-    c += reflBloom * waterMask * waveFacetHighlight * mix(1.55, 0.65, uDay);
+    // B. SNOWY & ICY ROAD SHADER (Compacted snow shoulders, dark slush/glaze-ice wheel ruts, crystal sparkle)
+    if (uSnow > 0.01 || uFreezing > 0.5) {
+      vec3 snNoise = noise2DAndGrad(worldPos * 0.08 + vec2(7.1, -19.3));
+      float snowCoverMask = clamp(uSnow * (1.0 - rutMask * 0.72 + (snNoise.x - 0.45) * 0.45), 0.0, 1.0);
+      float glazeIceMask = clamp((uFreezing * 0.65 + uSnow * 0.55) * (0.35 + 0.65 * rutMask), 0.0, 1.0);
 
-    if (uLightOn > 0.5) {
-      float litPerturbed = 1.0 - texture(uLight, clamp(uv + waveN * 0.018, vec2(0.001), vec2(0.999))).a;
-      float litBase = 1.0 - texture(uLight, uv).a;
-      float specRipple = max(0.0, litPerturbed - litBase * 0.65) + litPerturbed * pow(max(0.0, waveSlopeMag * 0.75), 2.0);
-      vec3 artificialSpecCol = mix(vec3(1.0, 0.93, 0.78), reflBloom * 1.6 + vec3(0.45, 0.55, 0.70), 0.55);
-      c += artificialSpecCol * waterMask * specRipple * (0.28 + 0.55 * (1.0 - uDay));
+      // Glaze ice (гололёд / накатанная ледяная колея) specular sheen in wheel tracks
+      vec2 iceReflUv = clamp(uv + matMicroN * 0.18, vec2(0.001), vec2(0.999));
+      vec3 iceBloom = texture(uBloomWide, iceReflUv).rgb;
+      float iceSunGlint = pow(clamp(dot(normalize(matMicroN * 6.0 + uSun * 0.4), uSun), 0.0, 1.0), 16.0) * 0.24;
+      c += (iceBloom * 0.95 + sunGlintCol * iceSunGlint) * glazeIceMask;
+
+      // Micro-crystalline diamond snow glints on snow-covered road shoulders & lanes
+      if (snowCoverMask > 0.05) {
+        vec2 crystalCell = floor(worldPos * 2.8);
+        float cHash = hash(crystalCell + floor((uCamPos + uSun * 120.0) * 0.04));
+        float sparkle = smoothstep(0.968, 0.996, cHash) * snowCoverMask * (0.55 * uDay + 0.75 * lampHere + luma(iceBloom) * 1.4);
+        c += vec3(0.92, 0.97, 1.0) * sparkle * 0.65;
+      }
+    }
+  }
+
+  // ============================================================================
+  // SHADER 7: WET & SNOWY EARTH, MUD, RIVERBANKS & FIELDS (MAT_EARTH & MAT_DIRT)
+  // ============================================================================
+  else if (isEarthOrDirt) {
+    float isDirtTrackOrBank = (matId == 2) ? 1.0 : 0.0;
+    float bankMoisture = (matId == 2) ? clamp((matParam - 0.5) * 2.0, 0.0, 1.0) : 0.0;
+
+    // A. WET EARTH & SLICK MUD SHADER
+    float effMudWet = max(uWet, bankMoisture * 0.65);
+    if (effMudWet > 0.01 && uFreezing < 0.5) {
+      vec3 mudNoise = noise2DAndGrad(worldPos * 0.09 + vec2(-15.2, 9.4));
+      float mudPatch = clamp(effMudWet * (0.45 + 0.55 * isDirtTrackOrBank + 0.40 * (mudNoise.x - 0.4)), 0.0, 1.0);
+
+      // Waterlogged chernozem / loam darkening
+      c *= 1.0 - 0.22 * mudPatch;
+
+      // Glossy wet mud clod highlights & sky/headlight sheen
+      float mudSun = pow(clamp(dot(normalize(matMicroN * 9.0 + uSun * 0.35), uSun), 0.0, 1.0), 12.0) * 0.26;
+      vec3 mudBloom = texture(uBloomWide, clamp(uv + matMicroN * 0.20, vec2(0.001), vec2(0.999))).rgb;
+      c = mix(c, skyCol * 0.85, mudPatch * 0.09 * (0.4 + 0.6 * isDirtTrackOrBank) * uDay);
+      c += (sunGlintCol * mudSun + mudBloom * 1.10 * mix(1.4, 0.5, uDay)) * mudPatch * (0.45 + 0.55 * isDirtTrackOrBank);
+    }
+
+    // B. SNOWY EARTH & WINTER SNOWDRIFT SHADER (Искрящийся снег и сугробы)
+    if (uSnow > 0.01) {
+      // Cold azure-blue ambient scattering in snowdrift shadow troughs + warm sunlit crests
+      float driftSlope = clamp(-dot(matMicroN * 10.0, uSun), -0.5, 0.5);
+      vec3 snowShadowTint = vec3(-0.03, 0.00, 0.05) * max(0.0, -driftSlope) * uSnow * uDay;
+      vec3 snowCrestTint = sunGlintCol * 0.06 * max(0.0, driftSlope) * uSnow * uDay;
+      c += snowShadowTint + snowCrestTint;
+
+      // Crystalline snow-crust scintillation (тысячи искрящихся снежинок на солнце и в свете фар)
+      vec3 snowBloom = texture(uBloomWide, uv).rgb;
+      vec2 snowCell = floor(worldPos * 3.1);
+      float sHash = hash(snowCell + floor((uCamPos + uSun * 150.0) * 0.035));
+      float snowSparkle = smoothstep(0.964, 0.995, sHash) * uSnow * (0.65 * uDay + 0.85 * lampHere + luma(snowBloom) * 1.8);
+      c += vec3(0.94, 0.98, 1.0) * snowSparkle * 0.72;
     }
   }
 
@@ -851,18 +1360,6 @@ void main() {
   vec3 wide = texture(uBloomWide, uv).rgb;
   if (uGi > 0.001) {
     c += wide * (c * 0.85 + 0.08) * uGi * mix(1.4, 0.45, uDay);
-  }
-
-  // --- wet asphalt, mud, soil & water sheen: mirror nearby lights --------------------------------------------
-  if (uWet > 0.001) {
-    float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
-    float neutralMask = 1.0 - smoothstep(0.08, 0.22, sat);
-    float earthHue = step(c.g, c.r) * step(c.b, c.g) * (1.0 - smoothstep(0.18, 0.42, sat));
-    float surfaceMask = max(max(neutralMask, earthHue * 0.85), waterMask * 0.9);
-    float mask = surfaceMask * smoothstep(0.015, 0.09, l0) * (1.0 - smoothstep(0.32, 0.58, l0));
-    vec2 wetReflUv = clamp(uv + waveN * 0.01 * waterMask, vec2(0.001), vec2(0.999));
-    vec3 wetWide = texture(uBloomWide, wetReflUv).rgb;
-    c = c * (1.0 - 0.14 * uWet * mask * (1.0 - waterMask * 0.7)) + wetWide * mask * uWet * 1.85 + vec3(0.70, 0.82, 1.0) * mask * uWet * uDay * 0.045;
   }
 
   // --- lights glowing in fog / rain / snow ------------------------------------------------------------------
@@ -881,7 +1378,7 @@ void main() {
   vec3 bloom = texture(uBloom, uv).rgb;
   c += bloom * uBloomStr * mix(1.0, 1.35, 1.0 - uDay);
 
-  // --- tone curve + grading ---------------------------------------------------------------------------------
+  // --- tone curve + grading + user color calibration --------------------------------------------------------
   vec3 graded = c * uExposure;
   float lg = luma(graded);
   float sw = 1.0 - smoothstep(0.0, 0.55, lg);
@@ -893,6 +1390,12 @@ void main() {
   graded = mix(graded, uHaze.rgb, uHaze.a);
   vec3 toned = sCurve(shoulder(max(graded, 0.0)));
   c = mix(shoulder(max(c, 0.0)), toned, uTone);
+
+  // Apply explicit user Exposure / Contrast / Saturation adjustments
+  c *= uUserExposure;
+  c = (c - 0.45) * uUserContrast + 0.45;
+  float lUser = luma(max(c, 0.0));
+  c = clamp(mix(vec3(lUser), c, uUserSat), 0.0, 1.0);
 
   // --- vignette ---------------------------------------------------------------------------------------------
   float v = smoothstep(0.95, 0.30, sqrt(r2));
@@ -986,6 +1489,7 @@ export class GpuPostFx {
 
   private srcTex: WebGLTexture | null = null;
   private lightTex: WebGLTexture | null = null;
+  private matTex: WebGLTexture | null = null;
   private srcW = 0;
   private srcH = 0;
   private scene: Target | null = null;
@@ -1005,6 +1509,11 @@ export class GpuPostFx {
   private fireWindBuf = new Float32Array(16 * 2);
   private wakePosRadBuf = new Float32Array(32 * 4);
   private wakeVelParamBuf = new Float32Array(32 * 4);
+  private smoothWindVx = 14;
+  private smoothWindVy = 4;
+  private windPhaseAccum = 0;
+  private smoothSnow = 0;
+  private smoothRain = 0;
 
   constructor(source: HTMLCanvasElement, target: HTMLCanvasElement) {
     this.source = source;
@@ -1042,12 +1551,16 @@ export class GpuPostFx {
     this.pDown = this.makeProgram(VS, FS_DOWN, ['uTex', 'uTexel', 'uThreshold', 'uKnee']);
     this.pUp = this.makeProgram(VS, FS_UP, ['uTex', 'uTexel', 'uScale']);
     this.pComposite = this.makeProgram(VS, FS_COMPOSITE, [
-      'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize', 'uGi', 'uWet', 'uFogGlow', 'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun',
+      'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize',
+      'uMat', 'uMatOn', 'uGi', 'uWet', 'uSnow', 'uRain', 'uFogGlow',
+      'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun',
       'uCamPos', 'uCamZoom', 'uCamAngle', 'uFreezing',
       'uRelief', 'uClarity', 'uBloomStr',
       'uSharp', 'uTone', 'uExposure', 'uContrast', 'uSat', 'uShadowTint', 'uHighTint', 'uHaze', 'uVig', 'uGrain', 'uChroma', 'uDay',
       'uFireCount', 'uFirePosRad[0]', 'uFireWind[0]',
-      'uWind', 'uRiverFlow', 'uWakeCount', 'uWakePosRad[0]', 'uWakeVelParam[0]',
+      'uWind', 'uWindPhase', 'uWindGust', 'uRiverFlow', 'uWakeCount', 'uWakePosRad[0]', 'uWakeVelParam[0]',
+      'uWaterShader', 'uWaterWakes', 'uHeatShimmer', 'uFireLighting',
+      'uUserExposure', 'uUserContrast', 'uUserSat',
     ]);
     this.pFinal = this.makeProgram(VS, FS_FINAL, ['uTex', 'uTexel', 'uFxaa']);
 
@@ -1059,6 +1572,10 @@ export class GpuPostFx {
     gl.bindTexture(gl.TEXTURE_2D, this.lightTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
     this.setTexParams(true);
+    this.matTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.matTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    this.setTexParams(false); // gl.NEAREST so discrete material IDs in R are never blurred across edges!
 
     this.scene = null;
     this.bloomChain = [];
@@ -1268,8 +1785,17 @@ export class GpuPostFx {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, lm);
     }
 
+    // --- material G-buffer (material IDs + fluid thickness) --------------------------------------------------
+    const mm = frame.materialMap && frame.materialMap.width > 1 && frame.materialMap.height > 1 ? frame.materialMap : null;
+    if (mm && this.matTex) {
+      this.bindTex(5, this.matTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, mm);
+    }
+
     // --- bloom chain -----------------------------------------------------------------------------------------
-    const bloomOn = s.bloom > 0 || s.gi > 0 || s.wet > 0;
+    const bloomOn = s.bloom > 0 || s.gi > 0 || s.wet > 0 || (s.waterShader ?? 85) > 0;
+    const bloomRadMult = Math.max(0.5, Math.min(1.6, (s.bloomRadius ?? 100) / 100));
     if (bloomOn) {
       gl.useProgram(this.pDown.prog);
       let prevTex: WebGLTexture = this.srcTex;
@@ -1279,7 +1805,7 @@ export class GpuPostFx {
         const t = this.bloomChain[i];
         this.bindTex(0, prevTex);
         gl.uniform1i(this.pDown.u.uTex, 0);
-        gl.uniform2f(this.pDown.u.uTexel, 1 / prevW, 1 / prevH);
+        gl.uniform2f(this.pDown.u.uTexel, bloomRadMult / prevW, bloomRadMult / prevH);
         gl.uniform1f(this.pDown.u.uThreshold, i === 0 ? 0.72 : -1);
         gl.uniform1f(this.pDown.u.uKnee, 0.28);
         this.pass(t, t.w, t.h);
@@ -1295,7 +1821,7 @@ export class GpuPostFx {
         const big = this.bloomChain[i - 1];
         this.bindTex(0, small.tex);
         gl.uniform1i(this.pUp.u.uTex, 0);
-        gl.uniform2f(this.pUp.u.uTexel, 1 / small.w, 1 / small.h);
+        gl.uniform2f(this.pUp.u.uTexel, bloomRadMult / small.w, bloomRadMult / small.h);
         gl.uniform1f(this.pUp.u.uScale, 0.62);
         this.pass(big, big.w, big.h);
       }
@@ -1324,25 +1850,51 @@ export class GpuPostFx {
     this.bindTex(2, clarityOn ? this.blurB!.tex : this.srcTex);
     this.bindTex(3, this.lightTex);
     this.bindTex(4, bloomOn ? this.bloomChain[2].tex : this.srcTex);
+    this.bindTex(5, this.matTex);
     gl.uniform1i(c.u.uSrc, 0);
     gl.uniform1i(c.u.uBloom, 1);
     gl.uniform1i(c.u.uBlur, 2);
     gl.uniform1i(c.u.uLight, 3);
     gl.uniform1i(c.u.uBloomWide, 4);
+    gl.uniform1i(c.u.uMat, 5);
     gl.uniform1f(c.u.uLightOn, lm ? 1 : 0);
     gl.uniform2f(c.u.uLightSize, lm ? lm.width : 1, lm ? lm.height : 1);
+    gl.uniform1f(c.u.uMatOn, mm ? 1 : 0);
     gl.uniform1f(c.u.uGi, bloomOn ? (s.gi / 100) * 0.55 : 0);
-    gl.uniform1f(c.u.uWet, bloomOn ? (s.wet / 100) * g.wet : 0);
-    gl.uniform1f(c.u.uFogGlow, (s.gi / 100) * g.fogGlow);
+
+    const effWetWeather = Math.max(g.wet, frame.hasResidualWetness ? 0.35 : 0);
+    gl.uniform1f(c.u.uWet, bloomOn ? (s.wet / 100) * effWetWeather : 0);
+
+    const targetSnow = (frame.season === 'winter' ? 0.90 : 0.0)
+      + (frame.weather === 'blizzard' ? 1.0 : frame.weather === 'snow' ? 0.75 : 0.0);
+    const targetRain = (!frame.isFreezing)
+      ? (frame.weather === 'storm' ? 1.0 : frame.weather === 'rain' ? 0.75 : frame.weather === 'drizzle' ? 0.40 : 0.0)
+      : 0.0;
+    const wLerp = 1 - Math.exp(-Math.max(0.001, Math.min(0.25, frame.dt || 0.016)) * 2.0);
+    this.smoothSnow = lerp(this.smoothSnow, Math.min(1.0, targetSnow), wLerp);
+    this.smoothRain = lerp(this.smoothRain, Math.min(1.0, targetRain), wLerp);
+    gl.uniform1f(c.u.uSnow, this.smoothSnow);
+    gl.uniform1f(c.u.uRain, this.smoothRain);
+
+    const fogScatMult = (s.fogScattering ?? 85) / 100;
+    gl.uniform1f(c.u.uFogGlow, fogScatMult * g.fogGlow);
     gl.uniform2f(c.u.uSrcSize, sw, sh);
     gl.uniform2f(c.u.uOutSize, this.outW, this.outH);
-    gl.uniform1f(c.u.uUpscale, sw < this.outW * 0.98 || sh < this.outH * 0.98 ? 1 : 0);
+    const needUpscale = (s.bicubicUpscale !== false) && (sw < this.outW * 0.98 || sh < this.outH * 0.98);
+    gl.uniform1f(c.u.uUpscale, needUpscale ? 1 : 0);
     gl.uniform1f(c.u.uTime, frame.timeSec);
     const dprScale = this.target.clientWidth > 0 ? this.outW / this.target.clientWidth : 1;
     gl.uniform2f(c.u.uCamPos, frame.cameraX ?? 0, frame.cameraY ?? 0);
     gl.uniform1f(c.u.uCamZoom, (frame.cameraZoom ?? 1) * dprScale);
     gl.uniform1f(c.u.uCamAngle, frame.cameraAngle);
     gl.uniform1f(c.u.uFreezing, frame.isFreezing ? 1 : 0);
+    gl.uniform1f(c.u.uWaterShader, Math.max(0, Math.min(1, (s.waterShader ?? 85) / 100)));
+    gl.uniform1f(c.u.uWaterWakes, Math.max(0, Math.min(1, (s.waterWakes ?? 85) / 100)));
+    gl.uniform1f(c.u.uHeatShimmer, Math.max(0, Math.min(1.8, (s.heatShimmer ?? 85) / 100)));
+    gl.uniform1f(c.u.uFireLighting, Math.max(0, Math.min(1.8, (s.fireLighting ?? 90) / 100)));
+    gl.uniform1f(c.u.uUserExposure, Math.max(0.4, Math.min(1.8, (s.exposure ?? 100) / 100)));
+    gl.uniform1f(c.u.uUserContrast, Math.max(0.4, Math.min(1.8, (s.contrast ?? 100) / 100)));
+    gl.uniform1f(c.u.uUserSat, Math.max(0.0, Math.min(1.8, (s.saturation ?? 100) / 100)));
 
     // Upload active world-space fire sources (max 16) for thermal heat shimmer & normal-mapped relief lighting
     const fires = frame.fires;
@@ -1364,8 +1916,23 @@ export class GpuPostFx {
       gl.uniform2fv(c.u['uFireWind[0]'], this.fireWindBuf, 0, fireCount * 2);
     }
 
-    // Upload physical wind & river flow vectors and active water wakes (max 32) for direct GPU water wave & foam simulation
-    gl.uniform2f(c.u.uWind, frame.windVx ?? 14, frame.windVy ?? 4);
+    // Upload physical wind & river flow vectors and active water wakes (max 32) for direct GPU water wave & foam simulation.
+    // Smooth the wind vector with a slow low-pass filter so gusts never rotate or slosh the entire wave coordinate grid,
+    // and monotonically integrate windPhaseAccum so waves always propagate forward!
+    const rawWindVx = frame.windVx ?? 14;
+    const rawWindVy = frame.windVy ?? 4;
+    const rawWindSpeed = Math.hypot(rawWindVx, rawWindVy);
+    const dtClamped = Math.max(0.001, Math.min(0.1, frame.dt || 0.016));
+    const windSmoothAlpha = 1 - Math.exp(-dtClamped * 0.45);
+    this.smoothWindVx += (rawWindVx - this.smoothWindVx) * windSmoothAlpha;
+    this.smoothWindVy += (rawWindVy - this.smoothWindVy) * windSmoothAlpha;
+    const smoothSpeed = Math.max(1.0, Math.hypot(this.smoothWindVx, this.smoothWindVy));
+    const gustRatio = Math.max(0.6, Math.min(2.2, rawWindSpeed / smoothSpeed));
+    this.windPhaseAccum = (this.windPhaseAccum + dtClamped * (0.42 + rawWindSpeed * 0.032)) % 10000.0;
+
+    gl.uniform2f(c.u.uWind, this.smoothWindVx, this.smoothWindVy);
+    gl.uniform1f(c.u.uWindPhase, this.windPhaseAccum);
+    gl.uniform1f(c.u.uWindGust, gustRatio);
     gl.uniform2f(c.u.uRiverFlow, frame.riverFlowVx ?? 0, frame.riverFlowVy ?? 0);
     const wakes = frame.wakes;
     const wakeCount = wakes ? Math.min(32, wakes.length) : 0;
@@ -1431,6 +1998,7 @@ export class GpuPostFx {
     if (gl) {
       if (this.srcTex) gl.deleteTexture(this.srcTex);
       if (this.lightTex) gl.deleteTexture(this.lightTex);
+      if (this.matTex) gl.deleteTexture(this.matTex);
       if (this.vao) gl.deleteVertexArray(this.vao);
       [this.pDown, this.pUp, this.pComposite, this.pFinal].forEach((p) => p && gl.deleteProgram(p.prog));
     }

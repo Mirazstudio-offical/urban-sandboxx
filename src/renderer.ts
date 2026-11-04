@@ -61,7 +61,7 @@ import { TowRopeRenderer } from './towRopeRenderer';
 import { GuardrailRenderer } from './guardrailRenderer';
 import { TerrainRenderer } from './terrainRenderer';
 import { RoofRenderer } from './roofRenderer';
-import { renderRiverSystem, renderWaterSurfaceOpticsAndWakes } from './riverSystem';
+import { renderRiverSystem, renderWaterSurfaceOpticsAndWakes, renderRiverMaterialMask } from './riverSystem';
 import { isWorldFreezing } from './calendarSystem';
 import { GpuFireRenderer, FireEmitter, FireEmitterKind } from './gpu/fireShader';
 import type { PostFxFireSource } from './gpu/postFx';
@@ -355,7 +355,9 @@ export class GameRenderer {
   // Offscreen buffer for the Lightmap (prevents punching holes in the world)
   private lightmapCanvas: HTMLCanvasElement;
   private shadowCanvas: HTMLCanvasElement;
+  private materialCanvas: HTMLCanvasElement;
   private lightmapUsedThisFrame = false;
+  private materialUsedThisFrame = false;
   private backingScale: number = 1;
   private fireRenderer: GpuFireRenderer = new GpuFireRenderer();
   private fireEmittersScratch: FireEmitter[] = [];
@@ -378,6 +380,7 @@ export class GameRenderer {
   }
   private lightmapCtx: CanvasRenderingContext2D;
   private shadowCtx: CanvasRenderingContext2D;
+  private materialCtx: CanvasRenderingContext2D;
 
   // Offscreen Chunk Cache for static world geometry (Ground, Sidewalks, Roads, Parkings)
   private chunkCache = new Map<string, HTMLCanvasElement>();
@@ -773,6 +776,8 @@ export class GameRenderer {
     this.lightmapCtx = this.lightmapCanvas.getContext('2d')!;
     this.shadowCanvas = document.createElement('canvas');
     this.shadowCtx = this.shadowCanvas.getContext('2d')!;
+    this.materialCanvas = document.createElement('canvas');
+    this.materialCtx = this.materialCanvas.getContext('2d', { alpha: false })!;
     this.resize(this.width, this.height);
     
     this.cloudShadows = [];
@@ -937,6 +942,10 @@ export class GameRenderer {
     return this.lightmapUsedThisFrame ? this.lightmapCanvas : null;
   }
 
+  public getFxMaterialMap(): HTMLCanvasElement | null {
+    return this.materialUsedThisFrame ? this.materialCanvas : null;
+  }
+
   public getActivePostFxFires(): PostFxFireSource[] {
     return this.activePostFxFires;
   }
@@ -947,8 +956,11 @@ export class GameRenderer {
     this.backingScale = backingScale > 0 ? backingScale : 1;
     this.lightmapCanvas.width = width;
     this.lightmapCanvas.height = height;
-    this.shadowCanvas.width = width;
-    this.shadowCanvas.height = height;
+    this.materialCanvas.width = Math.max(1, Math.ceil(width));
+    this.materialCanvas.height = Math.max(1, Math.ceil(height));
+    const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 1.0));
+    this.shadowCanvas.width = Math.max(1, Math.ceil(width * shadowScale));
+    this.shadowCanvas.height = Math.max(1, Math.ceil(height * shadowScale));
   }
 
   public render(
@@ -1005,6 +1017,7 @@ export class GameRenderer {
       : null;
 
     if (insideBld && player) {
+      this.materialUsedThisFrame = false;
       // 1. Clear Screen to Pitch Black
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, this.width, this.height);
@@ -1207,9 +1220,11 @@ export class GameRenderer {
     ctx.translate(-camera.x, -camera.y);
 
     // Apply Camera Shake if any
+    let shakeX = 0;
+    let shakeY = 0;
     if (camera.shakeTimer > 0 && performanceConfig.enableScreenShake) {
-      let shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
-      let shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
+      shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
+      shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
       if (camera.shakeVx) shakeX += camera.shakeVx;
       if (camera.shakeVy) shakeY += camera.shakeVy;
       ctx.translate(shakeX, shakeY);
@@ -1398,6 +1413,31 @@ export class GameRenderer {
       vpTrees,
       remotePlayers
     );
+
+    // 16e-mat. GPU Material G-Buffer Pass (Stamps exact material IDs & occluders so blue cars/roofs are NEVER treated as water)
+    if (performanceConfig.enableGpuPostFx) {
+      this.renderMaterialBuffer(
+        world,
+        player,
+        camera,
+        shakeX,
+        shakeY,
+        visibleBuildings,
+        visibleVehicles,
+        visiblePedestrians,
+        vpTrees,
+        vpProps,
+        vpSidewalks,
+        remotePlayers,
+        minX,
+        minY,
+        maxX,
+        maxY
+      );
+      this.materialUsedThisFrame = true;
+    } else {
+      this.materialUsedThisFrame = false;
+    }
 
     // 16f. Procedural WebGL2 Volumetric Blackbody Fires (Ground fuel/oil pools, Engine Bay, Cabin, Fuel Tank & Flash lobes)
     this.renderActiveWorldFires(
@@ -3396,59 +3436,42 @@ export class GameRenderer {
       const seed = hashString(stain.id);
 
       if (stain.type === 'oil') {
-        // Realistic dark oil stain with metallic gloss & amber rim
-        const grad = safeRadialGradient(ctx, -rx * 0.15, -ry * 0.15, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(15, 18, 24, ${stainAlpha * 0.9})`); // Thick dark oil core
-        grad.addColorStop(0.5, `rgba(28, 30, 36, ${stainAlpha * 0.7})`);
-        grad.addColorStop(0.85, `rgba(70, 62, 50, ${stainAlpha * 0.4})`); // brownish thinning edge
-        grad.addColorStop(1, `rgba(70, 62, 50, 0)`);
+        // Viscous dark petroleum hydrocarbon pool with warm bronze-amber outer meniscus rim
+        const grad = safeRadialGradient(ctx, -rx * 0.12, -ry * 0.12, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(8, 10, 14, ${Math.min(0.96, stainAlpha * 0.94)})`); // Dense pitch-black core
+        grad.addColorStop(0.58, `rgba(16, 18, 22, ${stainAlpha * 0.85})`);
+        grad.addColorStop(0.84, `rgba(48, 34, 18, ${stainAlpha * 0.62})`); // Warm espresso-amber meniscus
+        grad.addColorStop(0.95, `rgba(78, 56, 30, ${stainAlpha * 0.30})`);
+        grad.addColorStop(1, `rgba(78, 56, 30, 0)`);
 
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, rx, ry, seed, rough);
-        ctx.fill();
-
-        // High gloss wet specular highlight
-        ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.45})`;
-        ctx.beginPath();
-        safeEllipse(ctx, -rx * 0.22, -ry * 0.22, rx * 0.25, ry * 0.12, -0.12, 0, Math.PI * 2);
         ctx.fill();
 
       } else if (stain.type === 'coolant') {
-        // Bright fluorescent neon antifreeze puddle
-        const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(74, 140, 96, ${stainAlpha * 0.75})`); // Muted green-grey core (wet, not neon)
-        grad.addColorStop(0.6, `rgba(92, 128, 84, ${stainAlpha * 0.5})`);
-        grad.addColorStop(0.9, `rgba(120, 113, 70, ${stainAlpha * 0.25})`); // dull tan edge
-        grad.addColorStop(1, `rgba(120, 113, 70, 0)`);
+        // Ethylene glycol coolant / antifreeze pool with translucent emerald-chartreuse dye depth
+        const grad = safeRadialGradient(ctx, -rx * 0.10, -ry * 0.10, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(16, 142, 78, ${stainAlpha * 0.78})`);
+        grad.addColorStop(0.55, `rgba(28, 168, 92, ${stainAlpha * 0.64})`);
+        grad.addColorStop(0.86, `rgba(74, 194, 112, ${stainAlpha * 0.38})`);
+        grad.addColorStop(0.96, `rgba(40, 88, 56, ${stainAlpha * 0.18})`);
+        grad.addColorStop(1, `rgba(40, 88, 56, 0)`);
 
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, rx, ry, seed, rough);
-        ctx.fill();
-
-        // Wet specular shine
-        ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.4})`;
-        ctx.beginPath();
-        safeEllipse(ctx, -rx * 0.25, -ry * 0.2, rx * 0.2, ry * 0.1, -0.15, 0, Math.PI * 2);
         ctx.fill();
 
       } else if (stain.type === 'fuel') {
-        // Highly realistic gasoline spill: amber iridescent thin-film interference rainbow pattern
-        const grad = safeRadialGradient(ctx, -rx * 0.15, -ry * 0.15, 0, 0, 0, rx);
-        // Dark wet film with a faint, desaturated thin-film interference tint toward the edge
-        grad.addColorStop(0, `rgba(15, 23, 42, ${stainAlpha * 0.55})`); // centre: dark, slightly oily
-        grad.addColorStop(0.6, `rgba(30, 41, 59, ${stainAlpha * 0.45})`);
-        grad.addColorStop(0.85, `rgba(120, 113, 108, ${stainAlpha * 0.3})`); // muted grey-brown edge
-        grad.addColorStop(0.95, `rgba(148, 163, 184, ${stainAlpha * 0.2})`); // faint sheen rim
-        grad.addColorStop(1, `rgba(148, 163, 184, 0)`);
+        // Volatile hydrocarbon fuel film (gasoline / diesel): dark wetted substrate + subtle iridescent rim
+        const grad = safeRadialGradient(ctx, -rx * 0.12, -ry * 0.12, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(14, 20, 32, ${stainAlpha * 0.62})`);
+        grad.addColorStop(0.52, `rgba(24, 34, 48, ${stainAlpha * 0.52})`);
+        grad.addColorStop(0.78, `rgba(68, 54, 72, ${stainAlpha * 0.38})`);
+        grad.addColorStop(0.92, `rgba(62, 84, 96, ${stainAlpha * 0.24})`);
+        grad.addColorStop(1, `rgba(62, 84, 96, 0)`);
 
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, rx, ry, seed, rough);
-        ctx.fill();
-
-        // Soft sky sheen reflection on gasoline surface
-        ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.35})`;
-        ctx.beginPath();
-        safeEllipse(ctx, -rx * 0.25, -ry * 0.22, rx * 0.3, ry * 0.15, -0.2, 0, Math.PI * 2);
         ctx.fill();
 
       } else if (stain.type === 'sand') {
@@ -3556,26 +3579,17 @@ export class GameRenderer {
           safeEllipse(ctx, -rx * 0.2, -ry * 0.18, rx * 0.3, ry * 0.1, -0.2, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Realistic clear water puddle: glassy sky reflection, gentle blue-slate refraction, bright specular highlights
-          const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
-          grad.addColorStop(0, `rgba(14, 116, 144, ${stainAlpha * 0.55})`); // Deep water refraction tint
-          grad.addColorStop(0.35, `rgba(56, 189, 248, ${stainAlpha * 0.4})`); // Clear translucent water
-          grad.addColorStop(0.75, `rgba(186, 230, 253, ${stainAlpha * 0.22})`); // Thin meniscus boundary film
-          grad.addColorStop(1, `rgba(224, 242, 254, 0)`);
+          // Physically grounded clear water puddle: porous wet substrate darkening + subtle sky reflection basin
+          const sunState = getCurrentSunShadowState();
+          const dayVis = Math.max(0.20, 1 - (sunState.isNight ? 0.85 : 0) * 0.78);
+          const grad = safeRadialGradient(ctx, -rx * 0.08, -ry * 0.08, 0, 0, 0, rx);
+          grad.addColorStop(0, `rgba(${Math.round(18 * dayVis)}, ${Math.round(78 * dayVis)}, ${Math.round(108 * dayVis)}, ${stainAlpha * 0.52})`);
+          grad.addColorStop(0.58, `rgba(${Math.round(14 * dayVis)}, ${Math.round(58 * dayVis)}, ${Math.round(82 * dayVis)}, ${stainAlpha * 0.46})`);
+          grad.addColorStop(0.86, `rgba(12, 18, 28, ${stainAlpha * 0.44})`); // Wet porous asphalt meniscus ring
+          grad.addColorStop(1, `rgba(12, 18, 28, 0)`);
 
           ctx.fillStyle = grad;
           this.drawOrganicBlob(ctx, rx, ry, seed, rough);
-          ctx.fill();
-
-          // Wet glossy specular reflection on puddle surface
-          ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.55})`;
-          ctx.beginPath();
-          safeEllipse(ctx, -rx * 0.28, -ry * 0.22, rx * 0.28, ry * 0.12, -0.15, 0, Math.PI * 2);
-          ctx.fill();
-          // Secondary soft sky gleam
-          ctx.fillStyle = `rgba(224, 242, 254, ${stainAlpha * 0.3})`;
-          ctx.beginPath();
-          safeEllipse(ctx, rx * 0.2, ry * 0.18, rx * 0.15, ry * 0.08, 0.2, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -7915,32 +7929,435 @@ export class GameRenderer {
         this.drawOrganicBlob(ctx, rX * 0.96, rY * 0.96, seed);
         ctx.stroke();
       } else {
-        // Deep sky reflection body with wet border transition (optical cyan-slate for WebGL2 water shader)
+        // Deep sky reflection body with porous wet asphalt meniscus transition (driven by GPU MAT_PUDDLE_WATER shader)
         const sunState = getCurrentSunShadowState();
         const dayVis = Math.max(0.18, 1 - (sunState.isNight ? 0.85 : 0) * 0.78);
-        const grad = safeRadialGradient(ctx, -rX * 0.12 * sunState.sunDirX, -rY * 0.12 * sunState.sunDirY, 0, 0, 0, rX);
-        grad.addColorStop(0, `rgba(${Math.round(24 * dayVis)}, ${Math.round(128 * dayVis)}, ${Math.round(168 * dayVis)}, 0.48)`);
-        grad.addColorStop(0.58, `rgba(${Math.round(16 * dayVis)}, ${Math.round(82 * dayVis)}, ${Math.round(112 * dayVis)}, 0.52)`);
-        grad.addColorStop(0.92, 'rgba(15, 23, 42, 0.52)');
-        grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+        const grad = safeRadialGradient(ctx, -rX * 0.10 * sunState.sunDirX, -rY * 0.10 * sunState.sunDirY, 0, 0, 0, rX);
+        grad.addColorStop(0, `rgba(${Math.round(20 * dayVis)}, ${Math.round(84 * dayVis)}, ${Math.round(116 * dayVis)}, 0.48)`);
+        grad.addColorStop(0.62, `rgba(${Math.round(15 * dayVis)}, ${Math.round(62 * dayVis)}, ${Math.round(88 * dayVis)}, 0.50)`);
+        grad.addColorStop(0.88, 'rgba(12, 18, 28, 0.52)');
+        grad.addColorStop(1, 'rgba(12, 18, 28, 0)');
 
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, rX, rY, seed);
         ctx.fill();
-
-        // Sky reflection of dynamic cloud outline
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-        ctx.save();
-        ctx.translate(-rX * 0.25, -rY * 0.2);
-        this.drawOrganicBlob(ctx, rX * 0.45, rY * 0.32, seed + 1);
-        ctx.fill();
-        ctx.restore();
 
         this.drawLiquidSurfaceFx(ctx, rX, rY, seed, 1, { x: p.x, y: p.y, angle: p.angle });
       }
 
       ctx.restore();
     }
+  }
+
+  /**
+   * Renders the exact GPU Material G-Buffer (`this.materialCanvas`) in world space:
+   * - R channel encodes discrete Material ID:
+   *     0   = MAT_OCCLUDER (Vehicles, Roofs, Buildings, Bridges, Piers, Boulders, Trees, Props, Humans, Sand)
+   *     32  = MAT_EARTH (Natural ground, grass, fields, snow-covered soil)
+   *     64  = MAT_DIRT (Dirt/gravel roads, unpaved tracks, muddy riverbanks)
+   *     96  = MAT_CONCRETE (Sidewalks, concrete slabs, industrial/garage aprons)
+   *     128 = MAT_ASPHALT (Paved asphalt roads, intersections, parkings, gas station apron)
+   *     160 = MAT_WATER_BODY (River "Быстрица", Salt Lakes, Park Fountain basin)
+   *     192 = MAT_PUDDLE_WATER (Road/ground water puddles & spilled water stains)
+   *     224 = MAT_FUEL (Gasoline / diesel spills)
+   *     240 = MAT_OIL (Motor oil / lubricant spills)
+   *     255 = MAT_COOLANT (Antifreeze / coolant spills)
+   * - G channel encodes continuous surface parameter:
+   *     For fluids (192..255): radial film/pool thickness (1.0 at center -> 0.04 at outer meniscus rim)
+   *     For asphalt/dirt roads (64, 128): tire-polished wheel track weight (0.55 on crown -> 0.92 in wheel ruts)
+   * - B channel encodes fluid alpha/opacity (0..255)
+   */
+  private renderMaterialBuffer(
+    world: GameWorld,
+    player: Player,
+    camera: Camera,
+    shakeX: number,
+    shakeY: number,
+    visibleBuildings: Building[],
+    visibleVehicles: Vehicle[],
+    visiblePedestrians: Pedestrian[],
+    vpTrees: Tree[],
+    vpProps: StreetProp[],
+    vpSidewalks: SidewalkBlock[],
+    remotePlayers: RemotePlayerState[],
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ) {
+    const ctx = this.materialCtx;
+    const w = this.materialCanvas.width;
+    const h = this.materialCanvas.height;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+
+    // 1. Base Terrain: Natural Earth / Grass / Soil / Snow (MAT_EARTH = 32)
+    ctx.fillStyle = 'rgb(32, 128, 128)';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.rotate(-camera.angle - Math.PI / 2);
+    ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
+
+    // 2. Salt Lake Water Bodies (MAT_WATER_BODY = 160)
+    if (maxY >= 7300 && minY <= 8200) {
+      ctx.fillStyle = 'rgb(160, 210, 255)';
+      if (maxX >= 17000 && minX <= 23000) {
+        ctx.fillRect(17000, 7300, 6000, 900);
+      }
+      if (maxX >= 27000 && minX <= 35000) {
+        ctx.fillRect(27000, 7300, 8000, 900);
+      }
+    }
+
+    // 3. Industrial Concrete Yard & Garage Cooperative Grounds
+    if (maxX >= 5600 && minX <= 8000 && maxY >= 0 && minY <= 3300) {
+      ctx.fillStyle = 'rgb(96, 150, 128)';
+      ctx.fillRect(5600, 0, 2400, 3300);
+    }
+    const gskZones = [
+      { x1: 70, y1: 870, x2: 730, y2: 1545 },
+      { x1: 70, y1: 1655, x2: 730, y2: 2330 },
+      { x1: 865, y1: 870, x2: 1535, y2: 1545 }
+    ];
+    for (const z of gskZones) {
+      if (z.x2 >= minX && z.x1 <= maxX && z.y2 >= minY && z.y1 <= maxY) {
+        ctx.fillStyle = 'rgb(64, 185, 128)';
+        ctx.fillRect(z.x1, z.y1, z.x2 - z.x1, z.y2 - z.y1);
+      }
+    }
+
+    // 4. Sidewalks (MAT_CONCRETE = 96)
+    ctx.fillStyle = 'rgb(96, 150, 128)';
+    for (let i = 0; i < vpSidewalks.length; i++) {
+      const sw = vpSidewalks[i];
+      if (sw.x + sw.width < minX || sw.x > maxX || sw.y + sw.height < minY || sw.y > maxY) continue;
+      ctx.fillRect(sw.x, sw.y, sw.width, sw.height);
+    }
+
+    // 5. Gas Station Asphalt Lot (MAT_ASPHALT = 128)
+    if (maxX >= 4848 && minX <= 5504 && maxY >= 4848 && minY <= 5504) {
+      ctx.fillStyle = 'rgb(128, 175, 128)';
+      ctx.fillRect(4940, 4900, 520, 580);
+    }
+
+    // 6. Roads (MAT_ASPHALT = 128 or MAT_DIRT = 64) & Tire-Polished Wheel Tracks (G = 235)
+    ctx.lineCap = 'butt';
+    const roads = world.roads || [];
+    for (let i = 0; i < roads.length; i++) {
+      const road = roads[i];
+      const rw = road.width || 60;
+      const margin = rw * 0.5 + 20;
+      const rMinX = (road._minX ?? Math.min(road.x1, road.x2)) - margin;
+      const rMaxX = (road._maxX ?? Math.max(road.x1, road.x2)) + margin;
+      const rMinY = (road._minY ?? Math.min(road.y1, road.y2)) - margin;
+      const rMaxY = (road._maxY ?? Math.max(road.y1, road.y2)) + margin;
+      if (rMaxX < minX || rMinX > maxX || rMaxY < minY || rMinY > maxY) continue;
+
+      const isDirtRoad = (road as any).surfaceType === 'dirt' || (road as any).surfaceType === 'gravel' || rw <= 28;
+      if (isDirtRoad) {
+        ctx.strokeStyle = 'rgb(64, 195, 128)';
+        ctx.lineWidth = rw + 4;
+        ctx.beginPath();
+        ctx.moveTo(road.x1, road.y1);
+        ctx.lineTo(road.x2, road.y2);
+        ctx.stroke();
+      } else {
+        // Unpaved gravel shoulder berm (MAT_DIRT = 64)
+        ctx.strokeStyle = 'rgb(64, 150, 128)';
+        ctx.lineWidth = rw + 12;
+        ctx.beginPath();
+        ctx.moveTo(road.x1, road.y1);
+        ctx.lineTo(road.x2, road.y2);
+        ctx.stroke();
+
+        // Main asphalt road deck (MAT_ASPHALT = 128, G = 135 crown)
+        ctx.strokeStyle = 'rgb(128, 135, 128)';
+        ctx.lineWidth = rw;
+        ctx.beginPath();
+        ctx.moveTo(road.x1, road.y1);
+        ctx.lineTo(road.x2, road.y2);
+        ctx.stroke();
+
+        // Tire-polished wheel ruts along lanes (MAT_ASPHALT = 128, G = 235 wheel tracks)
+        const dx = road.x2 - road.x1;
+        const dy = road.y2 - road.y1;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const laneOff = rw * 0.24;
+        ctx.strokeStyle = 'rgb(128, 235, 128)';
+        ctx.lineWidth = Math.max(8, rw * 0.22);
+        ctx.beginPath();
+        ctx.moveTo(road.x1 + nx * laneOff, road.y1 + ny * laneOff);
+        ctx.lineTo(road.x2 + nx * laneOff, road.y2 + ny * laneOff);
+        ctx.moveTo(road.x1 - nx * laneOff, road.y1 - ny * laneOff);
+        ctx.lineTo(road.x2 - nx * laneOff, road.y2 - ny * laneOff);
+        ctx.stroke();
+      }
+    }
+
+    // 7. Intersections & Parking Lots (MAT_ASPHALT = 128)
+    ctx.fillStyle = 'rgb(128, 180, 128)';
+    if (world.intersections) {
+      for (let i = 0; i < world.intersections.length; i++) {
+        const inter = world.intersections[i];
+        if (inter.x + inter.width < minX || inter.x - inter.width > maxX || inter.y + inter.height < minY || inter.y - inter.height > maxY) continue;
+        ctx.fillRect(inter.x - inter.width * 0.5, inter.y - inter.height * 0.5, inter.width, inter.height);
+      }
+    }
+    if (world.parkings) {
+      for (let i = 0; i < world.parkings.length; i++) {
+        const pk = world.parkings[i];
+        if (pk.x + pk.width < minX || pk.x > maxX || pk.y + pk.height < minY || pk.y > maxY) continue;
+        ctx.fillRect(pk.x, pk.y, pk.width, pk.height);
+      }
+    }
+
+    // 8. River "Быстрица" Channel, Banks, Boulders, Bridge & Piers
+    renderRiverMaterialMask(ctx, minX, minY, maxX, maxY);
+
+    // 9. Road & Ground Puddles (MAT_PUDDLE_WATER = 192, G = radial depth/meniscus 255->10, B = alpha)
+    if (world.puddles && world.puddles.length > 0) {
+      const puddleStart = Math.max(0, world.puddles.length - performanceConfig.puddlesLimit);
+      for (let pi = puddleStart; pi < world.puddles.length; pi++) {
+        const p = world.puddles[pi];
+        if (p.x < minX - 80 || p.x > maxX + 80 || p.y < minY - 80 || p.y > maxY + 80) continue;
+        const rX = Math.max(0.5, p.radiusX);
+        const rY = Math.max(0.5, p.radiusY);
+        const seed = hashString(p.id);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        const grad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, rX);
+        grad.addColorStop(0.0, 'rgb(192, 255, 235)');
+        grad.addColorStop(0.62, 'rgb(192, 170, 235)');
+        grad.addColorStop(0.86, 'rgb(192, 38, 235)');
+        grad.addColorStop(1.0, 'rgb(192, 10, 235)');
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rX, rY, seed);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 10. Fluid Stains: Water (192), Fuel (224), Oil (240), Coolant (255), Sand (0 = Occluder)
+    if (world.stains && world.stains.length > 0) {
+      const stainStart = Math.max(0, world.stains.length - performanceConfig.stainsLimit);
+      for (let si = stainStart; si < world.stains.length; si++) {
+        const stain = world.stains[si];
+        const grow = stain.filmCap ? Math.min(1, stain.radius / stain.filmCap) : 0;
+        const stretch = 1 + (stain.spreadElong ?? 0.6) * 0.8 * grow;
+        const pad = 30 + stain.radius * 0.8 * grow;
+        if (stain.x < minX - pad || stain.x > maxX + pad || stain.y < minY - pad || stain.y > maxY + pad) continue;
+        const thin = stain.radius > 3 ? Math.max(0.5, Math.sqrt(3 / stain.radius)) : 1;
+        const baseAlpha = typeof stain.alpha === 'number' && isFinite(stain.alpha) ? Math.max(0, Math.min(1, stain.alpha)) : 0.85;
+        const stainAlpha = baseAlpha * thin;
+        if (stainAlpha <= 0.01) continue;
+
+        const rough = grow * 0.9;
+        const rOut = Math.max(0.5, stain.radius);
+        const rx = rOut * Math.sqrt(stretch);
+        const ry = rOut * 0.85 / Math.sqrt(stretch);
+        const seed = hashString(stain.id);
+
+        ctx.save();
+        ctx.translate(stain.x, stain.y);
+        const filmAngle = grow > 0.02 ? (stain.spreadAngle ?? 0) : 0;
+        if (filmAngle !== 0) ctx.rotate(filmAngle);
+
+        if (stain.type === 'sand') {
+          ctx.fillStyle = 'rgb(0, 0, 0)';
+          this.drawOrganicBlob(ctx, rx, ry, seed, rough);
+          ctx.fill();
+        } else {
+          const matR = stain.type === 'water'
+            ? 192
+            : stain.type === 'fuel'
+              ? 224
+              : stain.type === 'oil'
+                ? 240
+                : 255; // 'coolant'
+          const alphaB = Math.max(16, Math.min(255, Math.round(stainAlpha * 255)));
+          const grad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, rx);
+          grad.addColorStop(0.0, `rgb(${matR}, 255, ${alphaB})`);
+          grad.addColorStop(0.55, `rgb(${matR}, 180, ${alphaB})`);
+          grad.addColorStop(0.84, `rgb(${matR}, 75, ${alphaB})`);
+          grad.addColorStop(1.0, `rgb(${matR}, 14, ${alphaB})`);
+          ctx.fillStyle = grad;
+          this.drawOrganicBlob(ctx, rx, ry, seed, rough);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    // =========================================================================
+    // 11. SOLID OCCLUDERS (MAT_OCCLUDER = 0 -> rgb(0, 0, 0))
+    // Strictly masks out buildings, roofs, balconies, canopies, vehicles, trains,
+    // props, pedestrians, players, and trees so they NEVER receive water or road shaders!
+    // =========================================================================
+    ctx.fillStyle = 'rgb(0, 0, 0)';
+
+    // 11a. Buildings, Roofs, Balconies & Park Fountain
+    for (let i = 0; i < visibleBuildings.length; i++) {
+      const bld = visibleBuildings[i];
+      if (bld.type === 'park_monument') {
+        const cx = bld.x + bld.width * 0.5;
+        const cy = bld.y + bld.height * 0.5;
+        const outerR = bld.width * 0.5;
+        // Stone fountain rim
+        ctx.fillStyle = 'rgb(0, 0, 0)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerR + 3, 0, Math.PI * 2);
+        ctx.fill();
+        // Inner fountain water basin (MAT_WATER_BODY = 160)
+        ctx.fillStyle = 'rgb(160, 220, 255)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(2, outerR - 5), 0, Math.PI * 2);
+        ctx.fill();
+        // Central bronze/granite fountain pedestal
+        ctx.fillStyle = 'rgb(0, 0, 0)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
+
+      ctx.fillStyle = 'rgb(0, 0, 0)';
+      ctx.fillRect(bld.x - 2, bld.y - 2, bld.width + 4, bld.height + 4);
+
+      if (bld.balconies) {
+        for (let bi = 0; bi < bld.balconies.length; bi++) {
+          const bal = bld.balconies[bi];
+          let bx = 0, by = 0, bw = 0, bh = 0;
+          if (bal.side === 'north') {
+            bx = bld.x + bld.width * bal.offset - bal.length / 2;
+            by = bld.y - bal.depth;
+            bw = bal.length;
+            bh = bal.depth;
+          } else if (bal.side === 'south') {
+            bx = bld.x + bld.width * bal.offset - bal.length / 2;
+            by = bld.y + bld.height;
+            bw = bal.length;
+            bh = bal.depth;
+          } else if (bal.side === 'west') {
+            bx = bld.x - bal.depth;
+            by = bld.y + bld.height * bal.offset - bal.length / 2;
+            bw = bal.depth;
+            bh = bal.length;
+          } else if (bal.side === 'east') {
+            bx = bld.x + bld.width;
+            by = bld.y + bld.height * bal.offset - bal.length / 2;
+            bw = bal.depth;
+            bh = bal.length;
+          }
+          ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+        }
+      }
+    }
+
+    // 11b. Gas Station Pump Islands
+    if (world.gasPumps) {
+      for (let i = 0; i < world.gasPumps.length; i++) {
+        const gp = world.gasPumps[i];
+        ctx.fillRect(gp.x - 16, gp.y - 10, 32, 20);
+      }
+    }
+
+    // 11c. Street Props (Kiosks, Benches, Dumpsters, Containers, Signs)
+    for (let i = 0; i < vpProps.length; i++) {
+      const p = vpProps[i];
+      const r = p.type === 'kiosk' || p.type === 'bus_stop' ? 18 : 6;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 11d. Pedestrians, Player & Remote Players
+    for (let i = 0; i < visiblePedestrians.length; i++) {
+      const ped = visiblePedestrians[i];
+      if ((ped.waterDepth || 0) > 0.35) continue;
+      ctx.beginPath();
+      ctx.arc(ped.x, ped.y, (ped.radius || 7) + 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (!player.isInVehicle && !player.insideCarId && !player.insideBusId) {
+      const pDepth = player.waterDepth || 0;
+      if (pDepth < 0.55) {
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, (player.radius || 8) + (pDepth > 0.12 ? -1 : 2), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (remotePlayers && remotePlayers.length > 0) {
+      for (let i = 0; i < remotePlayers.length; i++) {
+        const rp = remotePlayers[i];
+        if (!rp.isInVehicle && !(rp as any).insideCarId && !(rp as any).insideBusId) {
+          ctx.beginPath();
+          ctx.arc(rp.x, rp.y, 9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // 11e. Vehicles (Cars, Trucks, Trailers, Buses)
+    // Dry vehicles stamp their full hull as MAT_OCCLUDER (0) so blue/cyan cars NEVER turn into water!
+    // Partially submerged vehicles in the river leave their underwater hood/fenders in MAT_WATER_BODY (160)
+    // while stamping the dry cabin/roof above the waterline as MAT_OCCLUDER (0).
+    for (let i = 0; i < visibleVehicles.length; i++) {
+      const car = visibleVehicles[i];
+      const maxWDepth = Math.max(
+        car.waterDepth || 0,
+        car.frontWaterDepth || 0,
+        car.rearWaterDepth || 0,
+        car.cabinWaterDepth || 0
+      );
+      ctx.save();
+      ctx.translate(car.x, car.y);
+      ctx.rotate(car.angle);
+      if (maxWDepth < 0.16) {
+        // Completely dry or wheel-splash only: mask entire vehicle body + mirrors
+        ctx.fillRect(-car.length * 0.52 - 2, -car.width * 0.52 - 2, car.length * 1.04 + 4, car.width * 1.04 + 4);
+      } else if (maxWDepth < 0.78) {
+        // Wading in river: lower hull is submerged under water surface, dry roof/cabin stays MAT_OCCLUDER
+        ctx.fillRect(-car.length * 0.28, -car.width * 0.44, car.length * 0.52, car.width * 0.88);
+      }
+      ctx.restore();
+    }
+
+    // 11f. Railway Rolling Stock (Locomotives & Carriages)
+    if (world.trains) {
+      for (let ti = 0; ti < world.trains.length; ti++) {
+        const train = world.trains[ti];
+        if (!train.carriages) continue;
+        for (let ci = 0; ci < train.carriages.length; ci++) {
+          const c = train.carriages[ci];
+          if (c.x < minX - 150 || c.x > maxX + 150 || c.y < minY - 150 || c.y > maxY + 150) continue;
+          ctx.save();
+          ctx.translate(c.x, c.y);
+          ctx.rotate(c.angle);
+          const cLen = (c as any).length || 140;
+          const cWid = (c as any).width || 34;
+          ctx.fillRect(-cLen * 0.5 - 2, -cWid * 0.5 - 2, cLen + 4, cWid + 4);
+          ctx.restore();
+        }
+      }
+    }
+
+    // 11g. Tree Canopies
+    for (let i = 0; i < vpTrees.length; i++) {
+      const t = vpTrees[i];
+      if (t.isStump) continue;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, Math.max(6, t.radius * 0.88), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   // --- BIRDS FAUNA ---
@@ -13330,7 +13747,10 @@ export class GameRenderer {
         this.width,
         this.height,
         this.backingScale,
-        nowSec
+        nowSec,
+        performanceConfig.enableGpuFireShader !== false,
+        performanceConfig.gpuFireScale ?? 0.75,
+        (performanceConfig.gpuFireSmoke ?? 90) / 100
       );
     }
   }
@@ -13698,6 +14118,13 @@ export class GameRenderer {
       // BEFORE destination-out light cutouts so every light source (headlights, flashlights,
       // streetlamps, fires, signals) physically illuminates and pierces through shadows!
       if (hasActiveShadows) {
+        const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 1.0));
+        const targetSW = Math.max(1, Math.ceil(this.width * shadowScale));
+        const targetSH = Math.max(1, Math.ceil(this.height * shadowScale));
+        if (this.shadowCanvas.width !== targetSW || this.shadowCanvas.height !== targetSH) {
+          this.shadowCanvas.width = targetSW;
+          this.shadowCanvas.height = targetSH;
+        }
         renderUnifiedWorldShadows(
           this.shadowCtx,
           ctx,
@@ -13719,13 +14146,19 @@ export class GameRenderer {
 
         lCtx.save();
         lCtx.setTransform(1, 0, 0, 1, 0, 0);
+        lCtx.imageSmoothingEnabled = true;
         // Scale shadow opacity inversely with existing ambient night shroud so shadows merge seamlessly into night
-        const shadowCompositeAlpha = Math.max(0.04, sunState.shadowOpacity * (1.0 - effectiveAlpha * 0.80));
+        const shadowCompositeAlpha = Math.max(0.03, Math.min(0.92, sunState.shadowOpacity * (1.0 - effectiveAlpha * 0.80)));
         lCtx.globalAlpha = shadowCompositeAlpha;
-        lCtx.drawImage(this.shadowCanvas, 0, 0);
+        lCtx.drawImage(
+          this.shadowCanvas,
+          0, 0, this.shadowCanvas.width, this.shadowCanvas.height,
+          0, 0, this.width, this.height
+        );
         lCtx.restore();
       }
 
+      if (performanceConfig.enableDynamicLighting !== false) {
       lCtx.save();
       // Synchronize offscreen transform with main camera
       {
@@ -13974,38 +14407,40 @@ export class GameRenderer {
               lCtx.fill();
 
               // Concentrated high-candela optical hot-spot core (projector lens focus)
-              const hotReach = beamReach * 0.55;
-              const hotSpread = rightSpread * 0.42;
-              lCtx.beginPath();
-              lCtx.moveTo(startLX, startLY);
-              lCtx.quadraticCurveTo(
-                lx + cosA * (hotReach * 0.45) - sinA * (-leftSpread * 0.25),
-                ly + sinA * (hotReach * 0.45) + cosA * (-leftSpread * 0.25),
-                lx + cosA * hotReach - sinA * (-leftSpread * 0.3),
-                ly + sinA * hotReach + cosA * (-leftSpread * 0.3)
-              );
-              lCtx.lineTo(
-                lx + cosA * (hotReach * 1.08) - sinA * hotSpread,
-                ly + sinA * (hotReach * 1.08) + cosA * hotSpread
-              );
-              lCtx.quadraticCurveTo(
-                lx + cosA * (hotReach * 0.5) - sinA * (hotSpread * 0.6),
-                ly + sinA * (hotReach * 0.5) + cosA * (hotSpread * 0.6),
-                startRX, startRY
-              );
-              lCtx.closePath();
+              if ((performanceConfig.headlightQuality ?? 2) >= 2) {
+                const hotReach = beamReach * 0.55;
+                const hotSpread = rightSpread * 0.42;
+                lCtx.beginPath();
+                lCtx.moveTo(startLX, startLY);
+                lCtx.quadraticCurveTo(
+                  lx + cosA * (hotReach * 0.45) - sinA * (-leftSpread * 0.25),
+                  ly + sinA * (hotReach * 0.45) + cosA * (-leftSpread * 0.25),
+                  lx + cosA * hotReach - sinA * (-leftSpread * 0.3),
+                  ly + sinA * hotReach + cosA * (-leftSpread * 0.3)
+                );
+                lCtx.lineTo(
+                  lx + cosA * (hotReach * 1.08) - sinA * hotSpread,
+                  ly + sinA * (hotReach * 1.08) + cosA * hotSpread
+                );
+                lCtx.quadraticCurveTo(
+                  lx + cosA * (hotReach * 0.5) - sinA * (hotSpread * 0.6),
+                  ly + sinA * (hotReach * 0.5) + cosA * (hotSpread * 0.6),
+                  startRX, startRY
+                );
+                lCtx.closePath();
 
-              const hotGrad = lCtx.createRadialGradient(
-                lx, ly, 1,
-                lx + cosA * (hotReach * 0.4) - sinA * 4,
-                ly + sinA * (hotReach * 0.4) + cosA * 4,
-                hotReach * 1.1
-              );
-              hotGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.85)');
-              hotGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.45)');
-              hotGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
-              lCtx.fillStyle = hotGrad;
-              lCtx.fill();
+                const hotGrad = lCtx.createRadialGradient(
+                  lx, ly, 1,
+                  lx + cosA * (hotReach * 0.4) - sinA * 4,
+                  ly + sinA * (hotReach * 0.4) + cosA * 4,
+                  hotReach * 1.1
+                );
+                hotGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.85)');
+                hotGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.45)');
+                hotGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
+                lCtx.fillStyle = hotGrad;
+                lCtx.fill();
+              }
               lCtx.restore();
             } else {
               // High Beam: Symmetrical, high-power penetrating field
@@ -14540,12 +14975,17 @@ export class GameRenderer {
     }
 
     lCtx.restore();
+    } // end enableDynamicLighting
 
     // --- Apply Lightmap to Main Canvas ---
     ctx.save();
     ctx.setTransform(this.backingScale, 0, 0, this.backingScale, 0, 0); // Screen space (CSS px) mapped to backing store
     ctx.drawImage(this.lightmapCanvas, 0, 0);
     ctx.restore();
+    }
+
+    if (performanceConfig.enableAdditiveGlow === false) {
+      return;
     }
 
     // --- PASS 2: Additive Glow / Optics (lighter) ---
@@ -15030,7 +15470,7 @@ export class GameRenderer {
         }
 
         // Diegetic Glare / Blinding Effect on Player (When looking directly at oncoming vehicle headlights)
-        if (player && (leftActive || rightActive)) {
+        if (performanceConfig.enableHeadlightGlare !== false && player && (leftActive || rightActive)) {
           const toPlayerX = player.x - car.x;
           const toPlayerY = player.y - car.y;
           const distToPlayer = Math.hypot(toPlayerX, toPlayerY);
