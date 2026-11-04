@@ -62,6 +62,8 @@ export interface WaterDisturbance {
   y: number;
   vx: number;
   vy: number;
+  sourceVx: number;
+  sourceVy: number;
   radius: number;
   maxRadius: number;
   intensity: number; // 0..1 initial wave energy
@@ -70,6 +72,17 @@ export interface WaterDisturbance {
   angle: number;
   isDirectionalWake: boolean;
   foamIntensity: number;
+}
+
+export interface PostFxWaterWake {
+  x: number;
+  y: number;
+  radius: number;
+  intensity: number;
+  vx: number;
+  vy: number;
+  progress: number;
+  typeAndFoam: number; // < 1.0: concentric ripple (fractional part = foam), >= 1.0: 1.0 + foamIntensity for directional Kelvin/bow wake
 }
 
 // Organic centerline waypoints of River "Быстрица" winding gracefully across the northern wilderness
@@ -244,9 +257,10 @@ const RIVER_BUCKETS: number[][] = Array.from({ length: BUCKET_COUNT }, () => [])
 })();
 
 // --- PERSISTENT WATER WAVE RING & KELVIN WAKE SOLVER ---
-const MAX_WATER_DISTURBANCES = 180;
+const MAX_WATER_DISTURBANCES = 192;
 const waterDisturbances: WaterDisturbance[] = [];
 let lastDisturbanceEmitMap = new Map<string, number>();
+const postFxWakesScratch: PostFxWaterWake[] = [];
 
 export function emitWaterDisturbance(
   x: number,
@@ -265,15 +279,22 @@ export function emitWaterDisturbance(
     const prev = lastDisturbanceEmitMap.get(key) || 0;
     if (now - prev < minIntervalMs) return;
     lastDisturbanceEmitMap.set(key, now);
-    if (lastDisturbanceEmitMap.size > 256) {
+    if (lastDisturbanceEmitMap.size > 320) {
       lastDisturbanceEmitMap.clear();
     }
   }
 
+  const river = getRiverWaterAt(x, y);
+  const relVx = vx - (river.inWater ? river.currentVx : 0);
+  const relVy = vy - (river.inWater ? river.currentVy : 0);
+  const relSpeed = Math.hypot(relVx, relVy);
   const speed = Math.hypot(vx, vy);
-  const angle = speed > 1 ? Math.atan2(vy, vx) : 0;
-  const maxR = Math.min(95, radius * (isDirectionalWake ? 3.8 : 4.6) + speed * 0.16);
-  const maxAge = isDirectionalWake ? (1.1 + Math.min(1.0, intensity * 0.9)) : (1.5 + Math.min(1.2, intensity));
+  const effSpeed = Math.max(speed, relSpeed);
+  const angle = relSpeed > 1.5 ? Math.atan2(relVy, relVx) : (speed > 1.0 ? Math.atan2(vy, vx) : 0);
+  const maxR = Math.min(115, radius * (isDirectionalWake ? 4.2 : 4.8) + effSpeed * 0.20);
+  const maxAge = isDirectionalWake
+    ? (1.25 + Math.min(1.15, intensity * 0.95))
+    : (1.65 + Math.min(1.35, intensity * 1.05));
 
   if (waterDisturbances.length >= MAX_WATER_DISTURBANCES) {
     waterDisturbances.shift();
@@ -282,16 +303,18 @@ export function emitWaterDisturbance(
   waterDisturbances.push({
     x,
     y,
-    vx: vx * 0.12,
-    vy: vy * 0.12,
-    radius: Math.max(2.0, radius * 0.65),
+    vx: vx * 0.14,
+    vy: vy * 0.14,
+    sourceVx: relSpeed > 1.5 ? relVx : vx,
+    sourceVy: relSpeed > 1.5 ? relVy : vy,
+    radius: Math.max(2.5, radius * 0.72),
     maxRadius: maxR,
-    intensity: Math.max(0.08, Math.min(1.0, intensity)),
+    intensity: Math.max(0.08, Math.min(1.2, intensity)),
     age: 0,
     maxAge,
     angle,
     isDirectionalWake,
-    foamIntensity: Math.min(1.0, (speed / 95) * intensity)
+    foamIntensity: Math.min(0.98, (effSpeed / 85) * intensity)
   });
 }
 
@@ -304,18 +327,85 @@ function updateWaterDisturbances(dt: number) {
       continue;
     }
     const river = getRiverWaterAt(w.x, w.y);
-    const curVx = river.inWater ? river.currentVx * 0.75 : 0;
-    const curVy = river.inWater ? river.currentVy * 0.75 : 0;
+    const curVx = river.inWater ? river.currentVx * 0.85 : 0;
+    const curVy = river.inWater ? river.currentVy * 0.85 : 0;
     w.x += (w.vx + curVx) * dt;
     w.y += (w.vy + curVy) * dt;
-    w.vx *= Math.pow(0.25, dt);
-    w.vy *= Math.pow(0.25, dt);
+    w.vx *= Math.pow(0.22, dt);
+    w.vy *= Math.pow(0.22, dt);
 
     // Capillary-gravity dispersion: fast initial phase velocity, decelerating as wavelength stretches
     const progress = w.age / w.maxAge;
-    const expandRate = (w.maxRadius - w.radius) / Math.max(0.15, w.maxAge - w.age * 0.7);
-    w.radius += expandRate * dt * (1.15 - progress * 0.45);
+    const expandRate = (w.maxRadius - w.radius) / Math.max(0.15, w.maxAge - w.age * 0.68);
+    w.radius += expandRate * dt * (1.18 - progress * 0.45);
   }
+}
+
+/**
+ * Exports active world-space water disturbances (up to maxCount = 32) near the camera
+ * for direct WebGL2 water shader evaluation (real-time wave normal perturbation, refraction,
+ * dispersive capillary-gravity wave packets, Kelvin V-wakes, and porous cellular whitewater foam).
+ */
+export function getActivePostFxWaterWakes(
+  cameraX: number,
+  cameraY: number,
+  maxCount: number = 32
+): PostFxWaterWake[] {
+  postFxWakesScratch.length = 0;
+  const cullRadiusSq = 980 * 980;
+
+  for (let i = waterDisturbances.length - 1; i >= 0; i--) {
+    const w = waterDisturbances[i];
+    const dx = w.x - cameraX;
+    const dy = w.y - cameraY;
+    if (dx * dx + dy * dy > cullRadiusSq) continue;
+
+    const progress = Math.min(1.0, Math.max(0.0, w.age / Math.max(0.05, w.maxAge)));
+    const fade = (1.0 - progress) * (1.0 - progress * 0.65) * w.intensity;
+    if (fade < 0.025) continue;
+
+    const foam = Math.min(0.95, Math.max(0.0, w.foamIntensity * (1.0 - progress * 0.75)));
+    postFxWakesScratch.push({
+      x: w.x,
+      y: w.y,
+      radius: Math.max(3.0, w.radius),
+      intensity: fade,
+      vx: w.sourceVx,
+      vy: w.sourceVy,
+      progress,
+      typeAndFoam: w.isDirectionalWake ? (1.0 + foam) : foam
+    });
+  }
+
+  // Include stationary bridge pier hydraulic wakes when camera is near the logging bridge
+  if (Math.abs(cameraX - 9400) < 850 && Math.abs(cameraY - (-3300)) < 750) {
+    const bX = 9400;
+    const bY = -3300;
+    const pileYPositions = [bY - 60, bY - 20, bY + 20, bY + 60];
+    for (let p = 0; p < pileYPositions.length; p++) {
+      const py = pileYPositions[p];
+      const pileWater = getRiverWaterAt(bX, py);
+      if (!pileWater.inWater) continue;
+      // Stationary pier in flowing current acts like an object moving upstream at -currentV
+      postFxWakesScratch.push({
+        x: bX,
+        y: py,
+        radius: 36,
+        intensity: 0.72,
+        vx: -(pileWater.currentVx || 38),
+        vy: -(pileWater.currentVy || 0),
+        progress: 0.25,
+        typeAndFoam: 1.65
+      });
+    }
+  }
+
+  if (postFxWakesScratch.length > maxCount) {
+    postFxWakesScratch.sort((a, b) => (b.intensity * b.radius) - (a.intensity * a.radius));
+    postFxWakesScratch.length = maxCount;
+  }
+
+  return postFxWakesScratch;
 }
 
 // --- DYNAMIC RIVER FLOATING DEBRIS SIMULATION ---
@@ -1014,90 +1104,13 @@ export function renderWaterSurfaceOpticsAndWakes(
   const sunState = getCurrentSunShadowState();
   const dayFactor = Math.max(0, 1 - nightAlpha * 1.15);
 
-  // 1. Render all active dispersive capillary-gravity wave rings & Kelvin wakes in world space
-  if (waterDisturbances.length > 0) {
-    ctx.save();
-    for (let i = 0; i < waterDisturbances.length; i++) {
-      const w = waterDisturbances[i];
-      if (w.x + w.maxRadius < minX || w.x - w.maxRadius > maxX || w.y + w.maxRadius < minY || w.y - w.maxRadius > maxY) {
-        continue;
-      }
-      const progress = Math.min(1.0, w.age / w.maxAge);
-      const fade = (1.0 - progress) * (1.0 - progress) * w.intensity;
-      if (fade < 0.02) continue;
+  // Note: Dispersive capillary-gravity wave rings, Kelvin V-wakes, bow stagnation crests,
+  // refraction, and cellular whitewater foam are evaluated directly per-pixel in the WebGL2
+  // water shader (`src/gpu/postFx.ts`) via `getActivePostFxWaterWakes`.
+  // Here we only emit hydrodynamic disturbances from vehicles, tires, and wading characters,
+  // and render the contour-accurate submerged hull Beer-Lambert water absorption and subsurface light scattering.
 
-      if (w.isDirectionalWake) {
-        // Kelvin V-Wake arms (19.47 deg half-angle) + aerated turbulent centerline foam
-        const armLen = w.radius * 1.35;
-        const spread = 0.36; // ~20 degrees
-        const backAngle = w.angle + Math.PI;
-
-        const lx = w.x + Math.cos(backAngle - spread) * armLen;
-        const ly = w.y + Math.sin(backAngle - spread) * armLen;
-        const rx = w.x + Math.cos(backAngle + spread) * armLen;
-        const ry = w.y + Math.sin(backAngle + spread) * armLen;
-
-        // Shadow trough of wake crest
-        ctx.strokeStyle = `rgba(6, 24, 36, ${(fade * 0.42).toFixed(3)})`;
-        ctx.lineWidth = 2.2;
-        ctx.beginPath();
-        ctx.moveTo(lx, ly);
-        ctx.quadraticCurveTo(w.x, w.y, rx, ry);
-        ctx.stroke();
-
-        // Sunlit specular wake crest
-        ctx.strokeStyle = `rgba(224, 242, 254, ${(fade * (0.48 + 0.35 * dayFactor)).toFixed(3)})`;
-        ctx.lineWidth = 1.3;
-        ctx.beginPath();
-        ctx.moveTo(lx - sunState.sunDirX * 1.0, ly - sunState.sunDirY * 1.0);
-        ctx.quadraticCurveTo(w.x - sunState.sunDirX * 1.2, w.y - sunState.sunDirY * 1.2, rx - sunState.sunDirX * 1.0, ry - sunState.sunDirY * 1.0);
-        ctx.stroke();
-
-        // Aerated micro-bubble foam cluster in wake core
-        if (w.foamIntensity > 0.15) {
-          ctx.fillStyle = `rgba(240, 249, 255, ${(fade * w.foamIntensity * 0.55).toFixed(3)})`;
-          for (let b = 0; b < 3; b++) {
-            const bDist = (b + 1) * armLen * 0.24;
-            const bJit = Math.sin(w.age * 9 + b * 2.1) * (2.2 + b);
-            const bx = w.x + Math.cos(backAngle) * bDist - Math.sin(backAngle) * bJit;
-            const by = w.y + Math.sin(backAngle) * bDist + Math.cos(backAngle) * bJit;
-            ctx.beginPath();
-            ctx.arc(bx, by, Math.max(0.8, 2.2 - b * 0.4), 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      } else {
-        // Dispersive concentric capillary-gravity wave packet (outer primary crest + inner secondary harmonic ring)
-        const r1 = w.radius;
-        const r2 = w.radius * 0.62;
-
-        // Dark refractive wave trough
-        ctx.strokeStyle = `rgba(7, 28, 40, ${(fade * 0.36).toFixed(3)})`;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.arc(w.x + sunState.shadowDirX * 0.8, w.y + sunState.shadowDirY * 0.8, r1, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Bright specular wave crest facing the sun/sky
-        ctx.strokeStyle = `rgba(224, 242, 254, ${(fade * (0.45 + 0.35 * dayFactor)).toFixed(3)})`;
-        ctx.lineWidth = 1.1;
-        ctx.beginPath();
-        ctx.arc(w.x, w.y, r1, 0, Math.PI * 2);
-        ctx.stroke();
-
-        if (r2 > 2.5) {
-          ctx.strokeStyle = `rgba(186, 230, 253, ${(fade * 0.28).toFixed(3)})`;
-          ctx.lineWidth = 0.8;
-          ctx.beginPath();
-          ctx.arc(w.x, w.y, r2, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      }
-    }
-    ctx.restore();
-  }
-
-  // 2. Render Contour-Accurate Vehicle Submersion, Sloped Waterline Meniscus & Underwater Light Scattering
+  // 1. Render Contour-Accurate Vehicle Submersion & Underwater Light Scattering + Emit Hydrodynamic Wakes
   for (let i = 0; i < visibleVehicles.length; i++) {
     const car = visibleVehicles[i];
     const maxCarWater = Math.max(
@@ -1112,59 +1125,48 @@ export function renderWaterSurfaceOpticsAndWakes(
     renderVehicleHydrodynamicSubmersion(ctx, car, animTime, nightAlpha, dayFactor, sunState);
   }
 
-  // 3. Render Player & Pedestrian Waterline Meniscus & Wading/Swimming Surface Wake
+  // 2. Emit Wading/Swimming Disturbances & Render Subtle Subsurface Contact Meniscus for Humans
   const renderHumanWaterline = (h: { x: number; y: number; vx?: number; vy?: number; angle: number; waterDepth?: number; isSwimming?: boolean }, idKey: string) => {
     const d = h.waterDepth ?? getUniversalWaterDepthAt(world, h.x, h.y);
     if (d <= 0.05) return;
 
     const river = getRiverWaterAt(h.x, h.y);
-    const relVx = (h.vx || 0) - (river.inWater ? river.currentVx : 0);
-    const relVy = (h.vy || 0) - (river.inWater ? river.currentVy : 0);
+    const curVx = river.inWater ? river.currentVx : 0;
+    const curVy = river.inWater ? river.currentVy : 0;
+    const relVx = (h.vx || 0) - curVx;
+    const relVy = (h.vy || 0) - curVy;
     const relSpeed = Math.hypot(relVx, relVy);
     const flowAngle = relSpeed > 3 ? Math.atan2(relVy, relVx) : h.angle;
 
-    if (relSpeed > 6) {
+    if (relSpeed > 4.5) {
       emitWaterDisturbance(
         h.x,
         h.y,
         h.vx || 0,
         h.vy || 0,
-        d > 0.85 ? 7.5 : 4.8,
-        Math.min(0.85, 0.25 + d * 0.35 + relSpeed * 0.005),
-        relSpeed > 28,
+        d > 0.85 ? 8.5 : 5.5,
+        Math.min(0.95, 0.28 + d * 0.38 + relSpeed * 0.006),
+        relSpeed > 18,
         `hum_${idKey}`,
-        d > 0.85 ? 90 : 120
+        d > 0.85 ? 75 : 95
       );
     }
 
+    // Soft subsurface optical absorption shadow around submerged lower body (no hard circles)
     ctx.save();
     ctx.translate(h.x, h.y);
     ctx.rotate(flowAngle);
 
-    // Organic animated foam & refraction meniscus collar wrapping around submerged legs/waist/shoulders
-    const collarR = d > 0.85 ? 6.8 : (d > 0.45 ? 5.8 : 4.2);
-    const subAlpha = Math.min(0.78, 0.28 + d * 0.38);
-
-    // Subtle localized water shadow & meniscus refraction ring
-    ctx.strokeStyle = `rgba(8, 36, 48, ${(subAlpha * 0.65).toFixed(3)})`;
-    ctx.lineWidth = 2.4;
+    const collarR = d > 0.85 ? 8.5 : (d > 0.45 ? 7.0 : 5.2);
+    const subAlpha = Math.min(0.55, 0.18 + d * 0.28);
+    const meniscusGrad = ctx.createRadialGradient(0, 0, collarR * 0.2, 0, 0, collarR * 1.45);
+    meniscusGrad.addColorStop(0, `rgba(6, 28, 38, ${subAlpha.toFixed(3)})`);
+    meniscusGrad.addColorStop(0.65, `rgba(10, 44, 56, ${(subAlpha * 0.45).toFixed(3)})`);
+    meniscusGrad.addColorStop(1, 'rgba(10, 44, 56, 0)');
+    ctx.fillStyle = meniscusGrad;
     ctx.beginPath();
-    ctx.arc(0, 0, collarR + 0.8, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Upstream bow-ripple crescent around wading/swimming body
-    ctx.strokeStyle = `rgba(240, 249, 255, ${(subAlpha * (0.55 + 0.3 * dayFactor)).toFixed(3)})`;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    for (let a = -1.35; a <= 1.35; a += 0.3) {
-      const ripple = Math.sin(animTime * 6.5 + a * 4.0 + h.x * 0.05) * 0.7;
-      const r = collarR + ripple;
-      const px = Math.cos(a) * r;
-      const py = Math.sin(a) * r;
-      if (a === -1.35) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
+    ctx.arc(0, 0, collarR * 1.45, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
   };
@@ -1187,12 +1189,12 @@ export function renderWaterSurfaceOpticsAndWakes(
 }
 
 /**
- * Renders physically grounded vehicle submersion:
- * 1. Clips strictly to the vehicle's actual deformed softbody contour (never a rectangular box!).
+ * Renders physically grounded vehicle submersion & feeds multi-point hull/wheel wakes to the GPU water shader:
+ * 1. Clips strictly to the vehicle's actual deformed softbody contour (never a rectangular box).
  * 2. Computes a 2D sloped water depth plane from (frontWaterDepth, rearWaterDepth, leftWaterDepth, rightWaterDepth)
- *    so a car nosing down a bank or wading with one side in deep water is submerged only where water actually touches!
- * 3. Renders underwater Beer-Lambert optical absorption, cellular caustic shimmer on submerged paintwork,
- *    organic waterline foam meniscus, 4-wheel hydrodynamic wakes, and underwater headlight/taillight scattering.
+ *    so a car nosing down a bank or wading with one side in deep water is submerged only where water actually touches.
+ * 3. Renders underwater Beer-Lambert optical absorption and underwater headlight/taillight volumetric scattering,
+ *    while emitting bow, stern, and 4-wheel hydrodynamic wakes into the GPU water shader.
  */
 function renderVehicleHydrodynamicSubmersion(
   ctx: CanvasRenderingContext2D,
@@ -1200,12 +1202,14 @@ function renderVehicleHydrodynamicSubmersion(
   animTime: number,
   nightAlpha: number,
   dayFactor: number,
-  sunState: { sunDirX: number; sunDirY: number; shadowDirX: number; shadowDirY: number; sunElevation: number }
+  _sunState: { sunDirX: number; sunDirY: number; shadowDirX: number; shadowDirY: number; sunElevation: number }
 ) {
   const halfL = car.length * 0.5;
   const halfW = car.width * 0.5;
   const cosA = Math.cos(car.angle);
   const sinA = Math.sin(car.angle);
+  const perpX = -sinA;
+  const perpY = cosA;
 
   const dCenter = car.waterDepth ?? 0;
   const dFront = car.frontWaterDepth ?? dCenter;
@@ -1222,43 +1226,72 @@ function renderVehicleHydrodynamicSubmersion(
   const relVx = (car.vx || 0) - curVx;
   const relVy = (car.vy || 0) - curVy;
   const relSpeed = Math.hypot(relVx, relVy);
+  const carSpeedAbs = Math.abs(car.speed || 0);
 
-  // Emit persistent hydrodynamic disturbances from bow, stern, and wheels when moving or in current
-  if (relSpeed > 8 || Math.abs(car.speed) > 8) {
-    const bowWorldX = car.x + cosA * (halfL * 0.85);
-    const bowWorldY = car.y + sinA * (halfL * 0.85);
-    if (dFront > 0.06) {
+  // Emit persistent hydrodynamic disturbances from bow, stern, and submerged wheels for the GPU water shader
+  if (relSpeed > 5 || carSpeedAbs > 5) {
+    const bowWorldX = car.x + cosA * (halfL * 0.86);
+    const bowWorldY = car.y + sinA * (halfL * 0.86);
+    if (dFront > 0.05) {
       emitWaterDisturbance(
         bowWorldX,
         bowWorldY,
-        car.vx || curVx,
-        car.vy || curVy,
-        halfW * 0.9,
-        Math.min(1.0, 0.35 + dFront * 0.4 + relSpeed * 0.006),
+        car.vx || 0,
+        car.vy || 0,
+        halfW * 1.05,
+        Math.min(1.15, 0.38 + dFront * 0.45 + relSpeed * 0.007),
         true,
         `veh_bow_${car.id}`,
-        65
+        50
       );
     }
-    const sternWorldX = car.x - cosA * (halfL * 0.85);
-    const sternWorldY = car.y - sinA * (halfL * 0.85);
-    if (dRear > 0.06) {
+
+    const sternWorldX = car.x - cosA * (halfL * 0.86);
+    const sternWorldY = car.y - sinA * (halfL * 0.86);
+    if (dRear > 0.05) {
       emitWaterDisturbance(
         sternWorldX,
         sternWorldY,
-        -(car.vx || -curVx) * 0.5,
-        -(car.vy || -curVy) * 0.5,
-        halfW * 0.75,
-        Math.min(0.85, 0.25 + dRear * 0.35 + relSpeed * 0.004),
-        false,
+        car.vx || 0,
+        car.vy || 0,
+        halfW * 0.90,
+        Math.min(0.95, 0.30 + dRear * 0.38 + relSpeed * 0.005),
+        relSpeed > 18,
         `veh_stern_${car.id}`,
-        95
+        70
       );
+    }
+
+    // Individual wheel wakes when wading through shallow/medium water
+    const wheelLon = halfL * 0.64;
+    const wheelLat = halfW * 0.86;
+    const wheelConfigs = [
+      { id: 'fl', lx: wheelLon, ly: -wheelLat, d: (dFront + dLeft) * 0.5 },
+      { id: 'fr', lx: wheelLon, ly: wheelLat, d: (dFront + dRight) * 0.5 },
+      { id: 'rl', lx: -wheelLon, ly: -wheelLat, d: (dRear + dLeft) * 0.5 },
+      { id: 'rr', lx: -wheelLon, ly: wheelLat, d: (dRear + dRight) * 0.5 }
+    ];
+    for (let w = 0; w < 4; w++) {
+      const wc = wheelConfigs[w];
+      if (wc.d > 0.04) {
+        const wx = car.x + cosA * wc.lx + perpX * wc.ly;
+        const wy = car.y + sinA * wc.lx + perpY * wc.ly;
+        emitWaterDisturbance(
+          wx,
+          wy,
+          car.vx || 0,
+          car.vy || 0,
+          Math.max(5.5, halfW * 0.42),
+          Math.min(0.90, 0.24 + wc.d * 0.35 + relSpeed * 0.006),
+          relSpeed > 14,
+          `veh_w_${car.id}_${wc.id}`,
+          65
+        );
+      }
     }
   }
 
   // 1. UNDERWATER HEADLIGHT & TAILLIGHT SUBSURFACE VOLUMETRIC SCATTERING
-  // When lamps are submerged (water depth > 0.38m at front/rear), light scatters through the turbid water
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
@@ -1302,8 +1335,22 @@ function renderVehicleHydrodynamicSubmersion(
     }
   }
 
-  // 2. CONTOUR-CLIPPED SUBMERGED HULL ABSORPTION & CAUSTIC REFRACTION
-  // Trace the vehicle's actual deformed softbody perimeter polygon
+  // 2. SOFT SUBSURFACE HULL AMBIENT OCCLUSION IN WATER
+  if (maxD > 0.08) {
+    const aoAlpha = Math.min(0.42, maxD * 0.26);
+    const aoGrad = ctx.createRadialGradient(0, 0, Math.min(halfL, halfW) * 0.5, 0, 0, Math.max(halfL, halfW) * 1.28);
+    aoGrad.addColorStop(0, `rgba(5, 24, 34, ${aoAlpha.toFixed(3)})`);
+    aoGrad.addColorStop(0.75, `rgba(8, 36, 48, ${(aoAlpha * 0.45).toFixed(3)})`);
+    aoGrad.addColorStop(1, 'rgba(8, 36, 48, 0)');
+    ctx.fillStyle = aoGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, halfL * 1.22, halfW * 1.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 3. CONTOUR-CLIPPED SUBMERGED HULL BEER-LAMBERT ABSORPTION
+  // Trace the vehicle's actual deformed softbody perimeter polygon so submerged paintwork
+  // acquires genuine cyan-teal water depth coloration (which is then refracted by the GPU water shader!)
   const dmg = car.damage;
   const hullPoly = getVehicleBasePolygon(
     car,
@@ -1332,13 +1379,14 @@ function renderVehicleHydrodynamicSubmersion(
   ctx.clip();
 
   // Compute directional linear gradient across the hull matching actual front/rear/left/right water depth!
-  const waterR = nightAlpha > 0.6 ? 7 : 13;
-  const waterG = nightAlpha > 0.6 ? 22 : 56;
-  const waterB = nightAlpha > 0.6 ? 34 : 64;
+  // Using authentic teal water chromaticity so detectWaterMask in the GPU shader recognizes submerged hull surfaces
+  const waterR = nightAlpha > 0.6 ? 7 : 14;
+  const waterG = nightAlpha > 0.6 ? 28 : 66;
+  const waterB = nightAlpha > 0.6 ? 40 : 78;
 
-  const alphaFront = Math.min(0.86, Math.max(0, (dFront - 0.10) / 1.35) * 0.82);
-  const alphaCenter = Math.min(0.86, Math.max(0, (dCenter - 0.10) / 1.35) * 0.82);
-  const alphaRear = Math.min(0.86, Math.max(0, (dRear - 0.10) / 1.35) * 0.82);
+  const alphaFront = Math.min(0.88, Math.max(0, (dFront - 0.12) / 1.30) * 0.84);
+  const alphaCenter = Math.min(0.88, Math.max(0, (dCenter - 0.12) / 1.30) * 0.84);
+  const alphaRear = Math.min(0.88, Math.max(0, (dRear - 0.12) / 1.30) * 0.84);
 
   const hullGrad = ctx.createLinearGradient(halfL, (dRight - dLeft) * 18, -halfL, (dLeft - dRight) * 18);
   hullGrad.addColorStop(0, `rgba(${waterR}, ${waterG}, ${waterB}, ${alphaFront.toFixed(3)})`);
@@ -1347,89 +1395,7 @@ function renderVehicleHydrodynamicSubmersion(
 
   ctx.fillStyle = hullGrad;
   ctx.fillRect(-halfL - 6, -halfW - 6, car.length + 12, car.width + 12);
-
-  // Animated underwater caustic light lattice shimmering across the submerged portion of the vehicle body
-  if (dayFactor > 0.15 && maxD > 0.18) {
-    const causticAlpha = Math.min(0.28, maxD * 0.18) * dayFactor;
-    ctx.strokeStyle = `rgba(186, 230, 253, ${causticAlpha.toFixed(3)})`;
-    ctx.lineWidth = 0.9;
-    ctx.beginPath();
-    const step = 9;
-    for (let lx = -halfL; lx <= halfL; lx += step) {
-      const localFrac = (lx + halfL) / Math.max(1, car.length); // 0 rear .. 1 front
-      const localD = dRear + localFrac * (dFront - dRear);
-      if (localD < 0.16) continue;
-      const waveY1 = Math.sin(animTime * 3.4 + (car.x + lx) * 0.12) * (halfW * 0.55);
-      const waveY2 = Math.cos(animTime * 2.7 - (car.y + lx) * 0.14) * (halfW * 0.55);
-      ctx.moveTo(lx, waveY1);
-      ctx.lineTo(lx + step * 0.8, waveY2);
-    }
-    ctx.stroke();
-  }
-
   ctx.restore(); // end hull clip
-
-  // 3. ORGANIC CONTOUR-WRAPPED WATERLINE FOAM MENISCUS & BOW WAVE PILE-UP
-  // Instead of a rectangle, we walk the actual hull polygon vertices and draw the foam meniscus ONLY along vertices where localWaterDepth > 0.08m!
-  const getLocalDepthAt = (lx: number, ly: number): number => {
-    const uX = Math.max(-1, Math.min(1, lx / Math.max(1, halfL))); // -1 rear .. +1 front
-    const uY = Math.max(-1, Math.min(1, ly / Math.max(1, halfW))); // -1 left .. +1 right
-    const lonD = uX >= 0 ? (dCenter + uX * (dFront - dCenter)) : (dCenter + (-uX) * (dRear - dCenter));
-    const latDelta = uY * (dRight - dLeft) * 0.5;
-    return Math.max(0, lonD + latDelta);
-  };
-
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  // Draw organic undulating foam line along the submerged hull perimeter
-  const N = hullPoly.length;
-  for (let idx = 0; idx < N; idx++) {
-    const p0 = hullPoly[idx];
-    const p1 = hullPoly[(idx + 1) % N];
-    const d0 = getLocalDepthAt(p0.x, p0.y);
-    const d1 = getLocalDepthAt(p1.x, p1.y);
-    if (d0 < 0.06 && d1 < 0.06) continue;
-
-    const segDepth = (d0 + d1) * 0.5;
-    const isBowSeg = p0.x > halfL * 0.35 && p1.x > halfL * 0.35;
-    const waveOsc = Math.sin(animTime * 5.2 + idx * 1.7 + car.x * 0.04) * (isBowSeg ? 1.6 : 0.9);
-    const outScale = 1.0 + (waveOsc + (isBowSeg && relSpeed > 15 ? Math.min(3.2, relSpeed * 0.025) : 0.6)) / Math.max(8, halfW);
-
-    const x0 = p0.x * outScale;
-    const y0 = p0.y * outScale;
-    const x1 = p1.x * outScale;
-    const y1 = p1.y * outScale;
-
-    const foamAlpha = Math.min(0.88, (0.28 + segDepth * 0.38 + (isBowSeg ? relSpeed * 0.004 : 0)) * (0.55 + 0.45 * dayFactor));
-    ctx.strokeStyle = `rgba(240, 249, 255, ${foamAlpha.toFixed(3)})`;
-    ctx.lineWidth = isBowSeg ? Math.min(3.2, 1.4 + relSpeed * 0.015) : 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-  }
-
-  // 4. RISING AIR & EXHAUST BUBBLES FROM SUBMERGED ENGINE / CABIN / TAILPIPE
-  if (maxD > 0.35) {
-    const bubbleCount = (car.engineState?.engineRunning ? 4 : 2);
-    for (let b = 0; b < bubbleCount; b++) {
-      const bPhase = (animTime * 2.4 + b * 0.73 + (car.x * 0.01)) % 1.0;
-      const bx = (b === 0 && car.engineState?.engineRunning)
-        ? -halfL * 0.92 - bPhase * 4
-        : Math.sin(b * 4.1 + car.y * 0.02) * (halfL * 0.5);
-      const by = Math.cos(b * 7.3 + car.x * 0.02) * (halfW * 0.55);
-      if (getLocalDepthAt(bx, by) > 0.25) {
-        const bRad = 0.9 + bPhase * 2.2;
-        const bAlpha = (1.0 - bPhase) * 0.65 * (0.5 + 0.5 * dayFactor);
-        ctx.strokeStyle = `rgba(224, 242, 254, ${bAlpha.toFixed(3)})`;
-        ctx.lineWidth = 0.9;
-        ctx.beginPath();
-        ctx.arc(bx, by, bRad, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-  }
 
   ctx.restore();
 }
@@ -1784,8 +1750,8 @@ function renderDynamicRiverweed(
 }
 
 /**
- * Organic Non-Repeating Sunlight Caustic Network & Multi-Directional Wavelet Ripples.
- * All loops are stride-aligned to global spline index `k` so nothing teleports on camera move/zoom.
+ * Flow-Aligned Shallow Sunlight Caustic Shimmer & Solar Specular Glints.
+ * Strictly advected along the downstream river tangent `(pt.tx, pt.ty)` with zero snake-like lateral wiggle.
  */
 function renderFluidCurrentStreamlinesAndCaustics(
   ctx: CanvasRenderingContext2D,
@@ -1800,143 +1766,73 @@ function renderFluidCurrentStreamlinesAndCaustics(
   const dayFactor = Math.max(0, 1 - nightAlpha * 1.2);
   const sunState = getCurrentSunShadowState();
 
-  // 1. Organic Warped Sunlight Caustics on Shallow-to-Mid Riverbed (during daylight)
-  if (dayFactor > 0.12 && weather !== 'storm' && weather !== 'fog') {
-    const causticBaseAlpha = 0.13 * dayFactor * Math.min(1.0, sunState.sunElevation * 1.4);
-    ctx.strokeStyle = `rgba(165, 232, 248, ${causticBaseAlpha.toFixed(3)})`;
-    ctx.lineWidth = 0.95;
-    ctx.beginPath();
+  // 1. Subtle Benthic Sunlight Caustic Shimmer on Shallow Shoals (strictly downstream-advected, no snake lines)
+  if (dayFactor > 0.14 && weather !== 'storm' && weather !== 'fog') {
+    const causticBaseAlpha = 0.08 * dayFactor * Math.min(1.0, sunState.sunElevation * 1.4);
+    ctx.fillStyle = `rgba(186, 236, 252, ${causticBaseAlpha.toFixed(3)})`;
 
     const firstCausticK = Math.ceil(kStart / 3) * 3;
     for (let k = firstCausticK; k < kEnd; k += 3) {
       const pt = RIVER_SPLINE_POINTS[k];
-      if (pt.depth > 2.1) continue;
+      if (pt.depth > 1.85) continue;
 
-      const cellCount = 3 + (k % 2);
+      const flowAngle = Math.atan2(pt.ty, pt.tx);
+      const cellCount = 2 + (k % 2);
       for (let c = 0; c < cellCount; c++) {
         const cSeed = k * 19.7 + c * 31.3;
-        // Irregular organic distribution across channel instead of a rigid -2..2 grid
-        const latNorm = (riverHash(cSeed) * 2 - 1) * 0.78;
-        const lonBase = (riverHash(cSeed * 2.3) - 0.5) * 48;
+        const latNorm = (riverHash(cSeed) * 2 - 1) * 0.76;
+        const speedProfile = Math.max(0.45, 1.0 - 0.42 * latNorm * latNorm);
+        const cycleLen = 68;
+        const advect = ((animTime * pt.currentSpeed * speedProfile * 0.65 + riverHash(cSeed * 2.3) * cycleLen) % cycleLen) - cycleLen * 0.5;
+        const fade = Math.sin(((advect + cycleLen * 0.5) / cycleLen) * Math.PI);
+        if (fade < 0.25) continue;
 
-        // Multi-directional orbital drift so caustic cells morph & travel along curving trajectories
-        const driftA = animTime * (1.3 + riverHash(cSeed * 3.1) * 0.9) + cSeed;
-        const driftB = animTime * (1.7 + riverHash(cSeed * 4.7) * 0.8) - cSeed * 0.7;
-        const warpCross = Math.sin(driftA) * 9.5 + Math.cos(driftB * 0.8) * 5.5;
-        const warpAlong = Math.cos(driftB) * 11.0 + Math.sin(driftA * 0.9) * 6.5;
+        const cx = pt.x + pt.nx * (latNorm * pt.halfWidth) + pt.tx * advect;
+        const cy = pt.y + pt.ny * (latNorm * pt.halfWidth) + pt.ty * advect;
+        const rx = (4.5 + riverHash(cSeed * 7.1) * 4.0) * fade;
+        const ry = (1.6 + riverHash(cSeed * 8.3) * 1.4) * fade;
 
-        const cx = pt.x + pt.nx * (latNorm * pt.halfWidth + warpCross) + pt.tx * (lonBase + warpAlong);
-        const cy = pt.y + pt.ny * (latNorm * pt.halfWidth + warpCross) + pt.ty * (lonBase + warpAlong);
-
-        // Organic curved caustic cusp arc with varied orientation and aspect ratio
-        const baseAngle = riverHash(cSeed * 5.9) * Math.PI * 2 + Math.sin(driftA * 0.6) * 0.85;
-        const r1 = 6.5 + riverHash(cSeed * 7.1) * 6.5 + Math.sin(driftB) * 2.5;
-        const r2 = r1 * (0.55 + riverHash(cSeed * 8.3) * 0.45);
-
-        const x0 = cx + Math.cos(baseAngle) * r1 + sunDirX * 1.5;
-        const y0 = cy + Math.sin(baseAngle) * r1 + sunDirY * 1.5;
-        const xMid = cx + Math.cos(baseAngle + 1.15) * r2 * 0.65 + sunDirX * 1.5;
-        const yMid = cy + Math.sin(baseAngle + 1.15) * r2 * 0.65 + sunDirY * 1.5;
-        const x1 = cx + Math.cos(baseAngle + 2.3) * r1 * 0.9 + sunDirX * 1.5;
-        const y1 = cy + Math.sin(baseAngle + 2.3) * r1 * 0.9 + sunDirY * 1.5;
-
-        ctx.moveTo(x0, y0);
-        ctx.quadraticCurveTo(xMid, yMid, x1, y1);
+        ctx.beginPath();
+        ctx.ellipse(cx + sunDirX * 1.2, cy + sunDirY * 1.2, rx, ry, flowAngle + (riverHash(cSeed * 5.9) - 0.5) * 0.35, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
-    ctx.stroke();
   }
 
-  // 2. Multi-directional curved wave crests & shear ripples (no uniform dashed lines)
-  const passes = [
-    { speedMult: 0.92, width: 1.3, alpha: nightAlpha > 0.6 ? 0.10 : 0.18, seedOff: 0.0 },
-    { speedMult: 1.28, width: 0.95, alpha: nightAlpha > 0.6 ? 0.08 : 0.14, seedOff: 17.3 },
-    { speedMult: 0.68, width: 1.7, alpha: nightAlpha > 0.6 ? 0.06 : 0.11, seedOff: 41.9 }
-  ];
-
+  // 2. Direct Solar / Lunar Specular Micro-Glints on Downstream Wave Facets
   const firstWaveK = Math.ceil(kStart / 2) * 2;
-  for (const pass of passes) {
-    ctx.lineWidth = pass.width;
-    ctx.strokeStyle = `rgba(216, 240, 252, ${pass.alpha.toFixed(3)})`;
-    ctx.beginPath();
-
-    for (let k = firstWaveK; k < kEnd; k += 2) {
-      const pt = RIVER_SPLINE_POINTS[k];
-      const kSeed = k * 11.19 + pass.seedOff;
-      const filamentCount = pt.isFord ? 4 : 2;
-
-      for (let f = 0; f < filamentCount; f++) {
-        const fSeed = kSeed + f * 7.83;
-        const latNorm = (riverHash(fSeed) * 2 - 1) * 0.82;
-        const speedProfile = Math.max(0.42, 1.0 - 0.45 * latNorm * latNorm);
-        const localCycle = 95 + riverHash(fSeed * 1.9) * 75;
-        const phase = (animTime * pt.currentSpeed * pass.speedMult * speedProfile + riverHash(fSeed * 3.1) * localCycle) % localCycle;
-        const normPhase = phase / localCycle; // 0..1
-        // Smooth fade envelope so wavelets appear and dissolve smoothly instead of popping at cycle boundaries
-        if (normPhase < 0.12 || normPhase > 0.88) continue;
-
-        const alongPos = (normPhase - 0.5) * localCycle;
-        // Varied oblique wave angle: combines downstream flow, cross-channel bank reflection, and local bend eddy
-        const obliqueAngle = Math.atan2(pt.ty, pt.tx)
-          + (riverHash(fSeed * 4.7) - 0.5) * 1.15
-          + Math.sin(animTime * 1.6 + fSeed) * 0.38
-          - latNorm * 0.35;
-
-        const dirX = Math.cos(obliqueAngle);
-        const dirY = Math.sin(obliqueAngle);
-        const perpX = -dirY;
-        const perpY = dirX;
-
-        const waveWiggle = Math.sin(animTime * 2.3 + fSeed * 1.7) * 4.5;
-        const curX = pt.x + pt.tx * alongPos + pt.nx * (pt.halfWidth * latNorm + waveWiggle);
-        const curY = pt.y + pt.ty * alongPos + pt.ny * (pt.halfWidth * latNorm + waveWiggle);
-
-        const crestSpan = 10 + riverHash(fSeed * 2.7) * 16;
-        const archCam = (riverHash(fSeed * 6.1) - 0.3) * 4.2;
-
-        ctx.moveTo(curX - perpX * crestSpan * 0.5, curY - perpY * crestSpan * 0.5);
-        ctx.quadraticCurveTo(
-          curX + dirX * archCam,
-          curY + dirY * archCam,
-          curX + perpX * crestSpan * 0.5,
-          curY + perpY * crestSpan * 0.5
-        );
-      }
-    }
-    ctx.stroke();
-  }
-
-  // 3. Direct Solar / Lunar Specular Glitter Track across Multi-Directional Wave Facets
-  const glintAlpha = nightAlpha > 0.6 ? 0.20 : (0.34 * dayFactor);
+  const glintAlpha = nightAlpha > 0.6 ? 0.16 : (0.28 * dayFactor);
   ctx.fillStyle = nightAlpha > 0.6
     ? `rgba(186, 230, 253, ${glintAlpha.toFixed(3)})`
     : `rgba(255, 252, 235, ${glintAlpha.toFixed(3)})`;
 
   for (let k = firstWaveK; k < kEnd; k += 2) {
     const pt = RIVER_SPLINE_POINTS[k];
-    const sunLatBias = (pt.nx * sunDirX + pt.ny * sunDirY) * 0.32;
-    for (let g = 0; g < 3; g++) {
+    const sunLatBias = (pt.nx * sunDirX + pt.ny * sunDirY) * 0.30;
+    const flowAngle = Math.atan2(pt.ty, pt.tx);
+    for (let g = 0; g < 2; g++) {
       const gSeed = k * 7.1 + g * 13.9;
-      const gPhase = animTime * (3.2 + riverHash(gSeed) * 2.1) + gSeed;
-      const sparkle = Math.sin(gPhase) * Math.cos(gPhase * 1.29 + riverHash(gSeed * 2.3) * 3.0);
-      if (sparkle < 0.48) continue;
+      const gPhase = animTime * (2.8 + riverHash(gSeed) * 1.6) + gSeed;
+      const sparkle = Math.sin(gPhase) * Math.cos(gPhase * 1.23 + riverHash(gSeed * 2.3) * 3.0);
+      if (sparkle < 0.54) continue;
 
-      const lat = (sunLatBias + (riverHash(gSeed * 1.7) - 0.5) * 0.82) * pt.halfWidth;
-      const lon = (riverHash(gSeed * 3.7) - 0.5) * 44 + Math.sin(gPhase * 0.5) * 6;
+      const lat = (sunLatBias + (riverHash(gSeed * 1.7) - 0.5) * 0.80) * pt.halfWidth;
+      const cycle = 52;
+      const lon = ((animTime * pt.currentSpeed * 0.75 + riverHash(gSeed * 3.7) * cycle) % cycle) - cycle * 0.5;
       const gx = pt.x + pt.nx * lat + pt.tx * lon;
       const gy = pt.y + pt.ny * lat + pt.ty * lon;
-      const gw = 1.8 + (sparkle - 0.48) * 5.2;
-      const facetAngle = Math.atan2(pt.ty, pt.tx) + (riverHash(gSeed * 5.3) - 0.5) * 1.4 + Math.sin(gPhase * 0.7) * 0.4;
+      const gw = 1.6 + (sparkle - 0.54) * 4.2;
 
       ctx.beginPath();
-      ctx.ellipse(gx, gy, gw, 0.85 + (sparkle - 0.48) * 1.2, facetAngle, 0, Math.PI * 2);
+      ctx.ellipse(gx, gy, gw, 0.75 + (sparkle - 0.54) * 0.9, flowAngle + Math.PI * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 }
 
 /**
- * Shoreline Lapping Wavelets & Receding Wet Foam Meniscus along Left & Right Riverbanks
+ * Shoreline Wet Littoral Meniscus & Subtle Riffle Foam Flecks along Left & Right Riverbanks
+ * (No continuous sine-wave snake lines).
  */
 function renderShorelineLappingWaves(
   ctx: CanvasRenderingContext2D,
@@ -1947,37 +1843,26 @@ function renderShorelineLappingWaves(
 ) {
   const lightScale = Math.max(0.35, 1 - nightAlpha * 0.65);
 
-  for (const side of [-1, 1]) {
-    const lapWave = Math.sin(animTime * 2.2 + (side > 0 ? 0 : Math.PI)) * 2.2;
+  // Subtle broken capillary foam flecks only along high-energy outer cut-banks and riffles
+  ctx.fillStyle = `rgba(226, 242, 252, ${(0.22 * lightScale).toFixed(3)})`;
+  const firstK = Math.ceil(kStart / 2) * 2;
+  for (let k = firstK; k < kEnd; k += 2) {
+    const pt = RIVER_SPLINE_POINTS[k];
+    if (pt.currentSpeed < 29 && !pt.isFord) continue;
+    const flowAngle = Math.atan2(pt.ty, pt.tx);
 
-    ctx.strokeStyle = `rgba(224, 242, 254, ${(0.26 * lightScale).toFixed(3)})`;
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    for (let k = kStart; k <= kEnd; k++) {
-      const pt = RIVER_SPLINE_POINTS[k];
-      const localOsc = Math.sin(animTime * 2.4 + k * 0.48 + side * 1.7) * 1.6 + lapWave;
-      const dist = pt.halfWidth - 2.5 + localOsc;
+    for (const side of [-1, 1]) {
+      const seed = k * 13.7 + (side > 0 ? 3.1 : 9.7);
+      if (riverHash(seed) > 0.55) continue;
+      const pulse = 0.5 + 0.5 * Math.sin(animTime * 1.9 + seed);
+      const dist = pt.halfWidth - 2.2 - riverHash(seed * 2.1) * 2.5;
       const sx = pt.x + pt.nx * (dist * side);
       const sy = pt.y + pt.ny * (dist * side);
-      if (k === kStart) ctx.moveTo(sx, sy);
-      else ctx.lineTo(sx, sy);
-    }
-    ctx.stroke();
 
-    // Secondary inner capillary ripple parallel to bank
-    ctx.strokeStyle = `rgba(186, 230, 253, ${(0.14 * lightScale).toFixed(3)})`;
-    ctx.lineWidth = 0.85;
-    ctx.beginPath();
-    for (let k = kStart; k <= kEnd; k++) {
-      const pt = RIVER_SPLINE_POINTS[k];
-      const localOsc = Math.cos(animTime * 2.4 + k * 0.48 + side * 1.7) * 1.4 - lapWave * 0.6;
-      const dist = pt.halfWidth - 8.5 + localOsc;
-      const sx = pt.x + pt.nx * (dist * side);
-      const sy = pt.y + pt.ny * (dist * side);
-      if (k === kStart) ctx.moveTo(sx, sy);
-      else ctx.lineTo(sx, sy);
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, 2.2 + pulse * 1.8, 0.65, flowAngle, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.stroke();
   }
 }
 
@@ -2157,13 +2042,14 @@ function renderFloatingRiverDebris(
 }
 
 /**
- * Bridge Pile Stagnation Bow Waves & Karman Vortex Streets
+ * Bridge Pile Subsurface Shadow & Hydraulic Turbulence Cushion
+ * (Actual Kelvin V-wakes and turbulent foam tails are computed directly in the GPU water shader).
  */
 function renderObstacleWakes(
   ctx: CanvasRenderingContext2D,
-  kStart: number,
-  kEnd: number,
-  animTime: number
+  _kStart: number,
+  _kEnd: number,
+  _animTime: number
 ) {
   const bX = 9400;
   const bY = -3300;
@@ -2173,44 +2059,14 @@ function renderObstacleWakes(
     const pileWater = getRiverWaterAt(bX, py);
     if (!pileWater.inWater) continue;
 
-    const flowVx = pileWater.currentVx || 38;
-    const flowVy = pileWater.currentVy || 0;
-    const flowLen = Math.hypot(flowVx, flowVy) || 1;
-    const dirX = flowVx / flowLen;
-    const dirY = flowVy / flowLen;
-    const normX = -dirY;
-    const normY = dirX;
-
-    const pileRadius = 8;
-    const wakePulse = Math.sin(animTime * 5.0 + py) * 0.2 + 0.8;
-
-    ctx.strokeStyle = `rgba(255, 255, 255, ${(0.75 * wakePulse).toFixed(2)})`;
-    ctx.lineWidth = 2.2;
+    const pileRadius = 9;
+    const grad = ctx.createRadialGradient(bX, py, pileRadius * 0.3, bX, py, pileRadius * 2.2);
+    grad.addColorStop(0, 'rgba(6, 24, 34, 0.55)');
+    grad.addColorStop(0.6, 'rgba(8, 36, 48, 0.22)');
+    grad.addColorStop(1, 'rgba(8, 36, 48, 0)');
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(
-      bX - dirX * (pileRadius * 0.9),
-      py - dirY * (pileRadius * 0.9),
-      pileRadius * 1.3,
-      Math.atan2(-dirY, -dirX) - 0.95,
-      Math.atan2(-dirY, -dirX) + 0.95
-    );
-    ctx.stroke();
-
-    const wakeLen = 42;
-    ctx.strokeStyle = `rgba(224, 242, 254, ${(0.55 * wakePulse).toFixed(2)})`;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(bX + normX * pileRadius, py + normY * pileRadius);
-    ctx.lineTo(bX + dirX * wakeLen + normX * (pileRadius * 2.2), py + dirY * wakeLen + normY * (pileRadius * 2.2));
-    ctx.moveTo(bX - normX * pileRadius, py - normY * pileRadius);
-    ctx.lineTo(bX + dirX * wakeLen - normX * (pileRadius * 2.2), py + dirY * wakeLen - normY * (pileRadius * 2.2));
-    ctx.stroke();
-
-    const eddyOffset1 = Math.sin(animTime * 6.0 + py * 0.1) * (pileRadius * 0.8);
-    ctx.fillStyle = `rgba(255, 255, 255, ${(0.60 * wakePulse).toFixed(2)})`;
-    ctx.beginPath();
-    ctx.arc(bX + dirX * 16 + normX * eddyOffset1, py + dirY * 16 + normY * eddyOffset1, 1.8, 0, Math.PI * 2);
-    ctx.arc(bX + dirX * 28 - normX * eddyOffset1, py + dirY * 28 - normY * eddyOffset1, 1.4, 0, Math.PI * 2);
+    ctx.arc(bX, py, pileRadius * 2.2, 0, Math.PI * 2);
     ctx.fill();
   }
 }

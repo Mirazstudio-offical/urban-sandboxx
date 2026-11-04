@@ -7937,18 +7937,6 @@ export class GameRenderer {
         ctx.restore();
 
         this.drawLiquidSurfaceFx(ctx, rX, rY, seed, 1, { x: p.x, y: p.y, angle: p.angle });
-
-        // Animated realistic organic water ripples
-        if (performanceConfig.enableRainDroplets) {
-          const rippleR = Math.abs((p.rippleTimer * 12) % rX);
-          const rippleRY = Math.abs(rippleR * (rY / rX));
-          const alpha = Math.max(0, 0.35 * (1 - rippleR / rX));
-          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          this.drawOrganicBlob(ctx, rippleR, rippleRY, seed + p.rippleTimer);
-          ctx.stroke();
-        }
       }
 
       ctx.restore();
@@ -12255,6 +12243,7 @@ export class GameRenderer {
   private static dustPuffCache = new Map<string, HTMLCanvasElement>();
   private static flameSpriteCache = new Map<number, HTMLCanvasElement>();
   private static snowCrystalCache: HTMLCanvasElement[] = [];
+  private static waterMistCache: HTMLCanvasElement[] = [];
 
   private static parseRgbColor(color: string): [number, number, number] {
     let r = 71, g = 85, b = 105;
@@ -12635,7 +12624,7 @@ export class GameRenderer {
     this.ctx.globalAlpha = 1.0;
   }
 
-  // 14e. Mid-Layer Wheel Ground Particles: Flying mud clods, Atmospheric dust clouds, Tire smoke, Tire water spray
+  // 14e. Mid-Layer Wheel Ground Particles: Flying mud clods, Atmospheric dust clouds, Tire smoke, Tire & Hull water spray/splash
   // Rendered immediately AFTER vehicle chassis, but BEFORE vehicle cabins, building roofs, and trees!
   private renderWheelGroundParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     if (cleanMode || !particles || particles.length === 0) return;
@@ -12649,7 +12638,7 @@ export class GameRenderer {
         this.drawMudClodParticle(p);
       } else if (p.type === 'tire_smoke' && !p.underVehicle) {
         this.drawGasSmokeParticle(p);
-      } else if (p.type === 'water_spray') {
+      } else if (p.type === 'water_spray' || (p.type === 'water_splash' && (p.z === undefined || p.z <= 4))) {
         this.drawWaterParticle(p);
       }
     }
@@ -12676,78 +12665,104 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  // Aerodynamic sheared liquid ligament, atomized V-mist fan, and frothy splash crest (zero circles)
+  private static getWaterMistSprite(variant: number = 0): HTMLCanvasElement {
+    const v = variant & 3;
+    let cached = GameRenderer.waterMistCache[v];
+    if (!cached) {
+      cached = document.createElement('canvas');
+      const size = 64;
+      cached.width = size;
+      cached.height = size;
+      const cctx = cached.getContext('2d');
+      if (cctx) {
+        const half = size * 0.5;
+        // 1. Multi-lobed translucent aerodynamic water mist fan (denser forward core, feathered trailing vapor)
+        const lobeCount = 7;
+        for (let i = 0; i < lobeCount; i++) {
+          const hash = ((v * 31 + i * 53 + 13) * 1103515245 + 12345) >>> 16;
+          const ang = (i === 0) ? 0 : ((i / (lobeCount - 1)) * Math.PI * 2 + v * 0.6);
+          const dist = (i === 0 ? 0.04 : 0.12 + ((hash & 15) / 15) * 0.18) * size;
+          const lx = half + Math.cos(ang) * dist * 1.15;
+          const ly = half + Math.sin(ang) * dist * 0.78;
+          const lobeR = (i === 0 ? 0.34 : 0.18 + (((hash >> 4) & 15) / 15) * 0.14) * size;
+
+          const grad = cctx.createRadialGradient(lx + lobeR * 0.12, ly, lobeR * 0.05, lx, ly, lobeR);
+          const coreA = i === 0 ? 0.52 : 0.32;
+          grad.addColorStop(0.0, `rgba(244, 251, 255, ${coreA})`);
+          grad.addColorStop(0.45, `rgba(214, 238, 252, ${coreA * 0.65})`);
+          grad.addColorStop(0.80, `rgba(176, 218, 244, ${coreA * 0.25})`);
+          grad.addColorStop(1.0, 'rgba(176, 218, 244, 0.0)');
+
+          cctx.fillStyle = grad;
+          cctx.beginPath();
+          cctx.ellipse(lx, ly, lobeR * 1.12, lobeR * 0.82, (hash & 7) * 0.15, 0, Math.PI * 2);
+          cctx.fill();
+        }
+
+        // 2. Atomized high-speed liquid droplets & sheared filament streaks embedded in the mist
+        for (let d = 0; d < 18; d++) {
+          const dh = ((v * 67 + d * 89 + 23) * 1103515245 + 12345) >>> 16;
+          const dAng = (d / 18) * Math.PI * 2 + (dh & 7) * 0.14;
+          const dDist = (0.06 + ((dh >> 4) & 31) / 31 * 0.34) * size;
+          const dx = half + Math.cos(dAng) * dDist * 1.18;
+          const dy = half + Math.sin(dAng) * dDist * 0.80;
+          const rw = 1.3 + ((dh >> 9) & 3) * 0.65;
+          const rh = 0.55 + ((dh >> 11) & 3) * 0.22;
+          cctx.fillStyle = (d % 3 === 0)
+            ? 'rgba(255, 255, 255, 0.72)'
+            : 'rgba(224, 244, 254, 0.48)';
+          cctx.beginPath();
+          cctx.ellipse(dx, dy, rw, rh, (dh & 3) * 0.18 - 0.25, 0, Math.PI * 2);
+          cctx.fill();
+        }
+      }
+      GameRenderer.waterMistCache[v] = cached;
+    }
+    return cached;
+  }
+
+  // Physically grounded atomized aerosol mist fan & sheared hydrodynamic liquid filaments
   private drawWaterParticle(p: Particle) {
     const ctx = this.ctx;
     const a = Math.max(0, Math.min(1.0, p.alpha));
     if (a < 0.01) return;
-    ctx.globalAlpha = a;
 
     const vSq = p.vx * p.vx + p.vy * p.vy;
-    const r = Math.max(0.9, p.radius);
-    const seed = p.shapeSeed ?? 0;
+    const vLen = vSq > 1 ? Math.sqrt(vSq) : 0;
+    const seed = p.shapeSeed ?? ((Math.abs(p.x * 13 + p.y * 31) | 0) & 1023);
+    const sprite = GameRenderer.getWaterMistSprite(seed & 3);
 
-    if (vSq > 180) {
-      // High-velocity aerodynamic water ligament / sheared spray sheet
-      const vLen = Math.sqrt(vSq);
-      const nx = p.vx / vLen;
-      const ny = p.vy / vLen;
-      const px = -ny;
-      const py = nx;
-      const tailLen = Math.min(16, Math.max(r * 2.1, vLen * 0.036));
-      const headW = Math.max(0.75, r * 0.58);
-      const tailW = Math.max(0.25, r * 0.16);
+    const prog = p.maxLife > 0.01 ? Math.min(1.0, Math.max(0.0, p.life / p.maxLife)) : 0.5;
+    // As liquid spray shears through the air, it atomizes and expands into a fine aerosol mist plume
+    const r = Math.max(1.4, p.radius) * (0.95 + prog * 0.85);
+    const rot = vLen > 4 ? Math.atan2(p.vy, p.vx) : (p.angle ?? ((seed & 31) * 0.2));
+    const stretch = Math.min(2.35, (p.aspect ?? 1.25) + vLen * 0.0065 * (1.0 - prog * 0.4));
 
-      // Tapered aerodynamic liquid ligament
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.moveTo(p.x + nx * headW, p.y + ny * headW);
-      ctx.lineTo(p.x + px * headW, p.y + py * headW);
-      ctx.lineTo(p.x - nx * tailLen + px * tailW, p.y - ny * tailLen + py * tailW);
-      ctx.lineTo(p.x - nx * (tailLen * 1.12), p.y - ny * (tailLen * 1.12));
-      ctx.lineTo(p.x - nx * tailLen - px * tailW, p.y - ny * tailLen - py * tailW);
-      ctx.lineTo(p.x - px * headW, p.y - py * headW);
-      ctx.closePath();
-      ctx.fill();
+    const rx = r * stretch * 1.45;
+    const ry = r * (0.95 + prog * 0.35);
 
-      // Refractive white foam spine along leading edge
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.78)';
-      ctx.lineWidth = Math.max(0.55, r * 0.28);
-      ctx.beginPath();
-      ctx.moveTo(p.x + nx * (headW * 0.6), p.y + ny * (headW * 0.6));
-      ctx.lineTo(p.x - nx * (tailLen * 0.52), p.y - ny * (tailLen * 0.52));
-      ctx.stroke();
-    } else {
-      // Atomized splash crown / irregular liquid sheet on impact or low-speed drift
-      const rot = p.angle ?? ((seed & 31) * 0.2);
-      const cosR = Math.cos(rot);
-      const sinR = Math.sin(rot);
-      const rx = r * (p.aspect ?? 1.25);
-      const ry = r * 0.78;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(rot);
 
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      for (let v = 0; v < 7; v++) {
-        const ang = (v / 7) * Math.PI * 2;
-        const jag = 0.74 + (((seed + v * 11) & 7) / 7) * 0.44;
-        const lx = Math.cos(ang) * rx * jag;
-        const ly = Math.sin(ang) * ry * jag;
-        const wx = p.x + lx * cosR - ly * sinR;
-        const wy = p.y + lx * sinR + ly * cosR;
-        if (v === 0) ctx.moveTo(wx, wy);
-        else ctx.lineTo(wx, wy);
+    ctx.globalAlpha = a * (1.0 - prog * 0.25);
+    ctx.drawImage(sprite, -rx * 1.15, -ry, rx * 2.1, ry * 2.0);
+
+    // Leading-edge sheared liquid ligament on fast newly-ejected spray sheets
+    if (vLen > 24 && prog < 0.65) {
+      const streakAlpha = a * (1.0 - prog / 0.65) * 0.58;
+      if (streakAlpha > 0.02) {
+        ctx.globalAlpha = streakAlpha;
+        ctx.fillStyle = 'rgba(248, 253, 255, 0.92)';
+        const sLen = Math.min(10.0, r * stretch * 0.72);
+        const sWid = Math.max(0.55, r * 0.22);
+        ctx.beginPath();
+        ctx.ellipse(rx * 0.18, 0, sLen, sWid, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
-      ctx.closePath();
-      ctx.fill();
-
-      // Specular liquid crescent highlight on NW rim
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.68)';
-      ctx.lineWidth = Math.max(0.5, r * 0.24);
-      ctx.beginPath();
-      ctx.moveTo(p.x - rx * 0.45 * cosR, p.y - ry * 0.45 * sinR);
-      ctx.lineTo(p.x + rx * 0.25 * sinR, p.y - ry * 0.25 * cosR);
-      ctx.stroke();
     }
+
+    ctx.restore();
   }
 
   // Realistic 3D irregular mud/soil clod with faceted polygon relief, wet specular glint, and angular soil crumbs
@@ -13363,7 +13378,14 @@ export class GameRenderer {
 
     for (let i = 0; i < len; i++) {
       const p = particles[i];
-      if (p.underVehicle || p.type === 'dust' || p.type === 'mud_clod' || p.type === 'water_spray' || p.type === 'flame') {
+      if (
+        p.underVehicle ||
+        p.type === 'dust' ||
+        p.type === 'mud_clod' ||
+        p.type === 'water_spray' ||
+        (p.type === 'water_splash' && (p.z === undefined || p.z <= 4)) ||
+        p.type === 'flame'
+      ) {
         continue;
       }
 

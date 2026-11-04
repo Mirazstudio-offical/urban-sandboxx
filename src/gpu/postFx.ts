@@ -31,6 +31,8 @@ export interface PostFxSettings {
   wet: number;        // 0..100 wet asphalt sheen in rain
 }
 
+import type { PostFxWaterWake } from '../riverSystem';
+
 export interface PostFxFireSource {
   x: number;         // World X (px)
   y: number;         // World Y (px)
@@ -48,12 +50,17 @@ export interface PostFxFrame {
   cameraY?: number;         // world Y of camera center
   cameraZoom?: number;      // camera zoom factor
   isFreezing?: boolean;     // true when water is frozen into ice
+  windVx?: number;          // ambient wind X velocity (px/s)
+  windVy?: number;          // ambient wind Y velocity (px/s)
+  riverFlowVx?: number;     // local river flow X velocity near camera (px/s)
+  riverFlowVy?: number;     // local river flow Y velocity near camera (px/s)
   timeSec: number;          // wall-clock seconds, drives grain & water waves
   dt: number;               // frame delta in seconds, for parameter smoothing
   sunrise?: number;
   sunset?: number;
   lightmap?: HTMLCanvasElement | null; // darkness layer (alpha = dark), null when the frame had none
   fires?: PostFxFireSource[];          // active world-space fire sources for heat haze & normal relief lighting
+  wakes?: PostFxWaterWake[];           // active world-space water wakes & ripples for direct GPU wave/foam simulation
 }
 
 const VS = `#version 300 es
@@ -149,6 +156,11 @@ uniform float uDay;         // 0 night .. 1 day
 uniform int uFireCount;
 uniform vec4 uFirePosRad[16]; // xy = world pos, z = radius, w = intensity
 uniform vec2 uFireWind[16];   // xy = world wind + slipstream
+uniform vec2 uWind;           // xy = ambient world wind velocity (px/s)
+uniform vec2 uRiverFlow;      // xy = river current velocity near camera (px/s)
+uniform int uWakeCount;
+uniform vec4 uWakePosRad[32];   // xy = world pos, z = current radius, w = intensity
+uniform vec4 uWakeVelParam[32]; // xy = source velocity (vx, vy), z = progress (0..1), w = typeAndFoam
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
@@ -236,45 +248,168 @@ vec2 worldDirToScreenUv(vec2 worldDir) {
   return vec2(worldDir.x * ca - worldDir.y * sa, -(worldDir.x * sa + worldDir.y * ca));
 }
 
-// Domain-warped, multi-directional capillary-gravity wave slope normal in world space
-vec2 computeWaterWaveNormal(vec2 worldPos, float time) {
-  // Large-scale spatial flow & eddy curl field so wave directions vary organically across bends and pools
-  vec3 macroField = noise2DAndGrad(worldPos * 0.0028);
-  vec3 mesoField  = noise2DAndGrad(worldPos * 0.0095 + vec2(time * 0.08, -time * 0.06));
+// Physically grounded directional short-crested capillary-gravity wave spectrum + direct GPU hydrodynamic wake solver.
+// Eliminates recursive domain-warping "snake/worm" artifacts and strictly aligns wave propagation with actual
+// river current (uRiverFlow) and wind vector (uWind), while computing real-time analytical wave slopes and
+// porous cellular whitewater foam for up to 32 active vehicle/tire/human/obstacle wakes.
+vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out float outWakeFoam) {
+  outWakeFoam = 0.0;
 
-  // Local flow angle bends smoothly around meanders and eddies instead of pointing in a single global direction
-  float flowAngle = (macroField.x - 0.5) * 2.4 + (mesoField.x - 0.5) * 1.15;
-  vec2 flowDir = vec2(cos(flowAngle), sin(flowAngle));
-  vec2 crossDir = vec2(-flowDir.y, flowDir.x);
+  // 1. Determine physical ambient advection velocity (combines river current in river corridor + wind vector)
+  float windSpeed = length(uWind);
+  vec2 windDir = windSpeed > 0.2 ? (uWind / windSpeed) : vec2(0.94, 0.34);
 
-  // Domain warp coordinates so waves never form straight parallel stripes or repeating grids
-  vec2 warp = vec2(macroField.y - mesoField.z, macroField.z + mesoField.y) * 18.0;
-  vec2 p = (worldPos + warp) * 0.042;
+  vec2 flowVel = uWind * 0.42;
+  if (inRiverCorridor) {
+    // Analytical tangent of River Bystritsa (flows East-Northeast) blended with exact camera-local uRiverFlow
+    vec2 defaultRiverVel = normalize(vec2(1.0, 0.055 + 0.025 * sin(worldPos.x * 0.0007))) * 32.0;
+    vec2 riverVel = length(uRiverFlow) > 1.0 ? uRiverFlow : defaultRiverVel;
+    flowVel = riverVel + uWind * 0.22;
+  }
 
-  // Octave 1: Primary curving swell advected along local flow trajectory
-  vec2 uv1 = vec2(dot(p, flowDir), dot(p, crossDir) * 0.72) - vec2(time * 0.95, time * 0.22);
-  vec3 n1 = noise2DAndGrad(uv1);
-  vec2 g1 = (flowDir * n1.y + crossDir * n1.z * 0.72);
+  float flowSpeed = length(flowVel);
+  vec2 dir0 = flowSpeed > 0.2 ? (flowVel / flowSpeed) : windDir;
+  vec2 perp0 = vec2(-dir0.y, dir0.x);
 
-  // Octave 2: Oblique bank-reflected cross-chop at rotated non-orthogonal angle
-  const mat2 rot2 = mat2(0.58, -0.814, 0.814, 0.58);
-  vec2 uv2 = rot2 * (p * 1.85 + n1.yz * 0.35) + vec2(-time * 1.28, time * 0.84);
-  vec3 n2 = noise2DAndGrad(uv2);
-  vec2 g2 = (vec2(0.58 * n2.y + 0.814 * n2.z, -0.814 * n2.y + 0.58 * n2.z)) * 0.65;
+  // Normalized advection speed for wave phase progression (smooth, physical downstream/downwind drift)
+  float advSpeed = clamp(flowSpeed * 0.038, 0.35, 2.20);
+  float windFactor = clamp(0.55 + windSpeed * 0.022, 0.45, 1.65);
 
-  // Octave 3: Counter-propagating turbulent eddy ripples
-  const mat2 rot3 = mat2(-0.42, 0.907, -0.907, -0.42);
-  vec2 uv3 = rot3 * (p * 3.4 - n2.yz * 0.28) + vec2(time * 1.75, -time * 1.42);
-  vec3 n3 = noise2DAndGrad(uv3);
-  vec2 g3 = (vec2(-0.42 * n3.y - 0.907 * n3.z, 0.907 * n3.y - 0.42 * n3.z)) * 0.42;
+  // 2. Multi-component directional short-crested wave spectrum (zero recursive domain-warp snakes!)
+  // Wave Train 1: Primary swell aligned with physical flow/wind direction, elongated across-crest
+  vec2 p1 = vec2(dot(worldPos, dir0) * 0.048 - time * advSpeed * 1.15, dot(worldPos, perp0) * 0.022);
+  vec3 n1 = noise2DAndGrad(p1);
+  vec2 g1 = (dir0 * n1.y * 0.048 + perp0 * n1.z * 0.022) * 18.0;
 
-  // Octave 4: Fine isotropic wind capillary wavelets
-  const mat2 rot4 = mat2(0.866, 0.5, -0.5, 0.866);
-  vec2 uv4 = rot4 * (worldPos * 0.22 + warp * 0.4) - vec2(time * 2.4, -time * 2.1);
-  vec3 n4 = noise2DAndGrad(uv4);
-  vec2 g4 = (vec2(0.866 * n4.y - 0.5 * n4.z, 0.5 * n4.y + 0.866 * n4.z)) * 0.24;
+  // Wave Train 2 & 3: Symmetric bimodal short-crested crossing waves at +21 deg and -21 deg to flow/wind
+  // In real hydrodynamics, wind/current waves propagate in a directional spreading cone (+/- 18..25 deg),
+  // forming natural diamond/rhomboid short-crested wave facets that move coherently downstream/downwind.
+  const float ca1 = 0.93358; // cos(21 deg)
+  const float sa1 = 0.35837; // sin(21 deg)
+  vec2 dirA = vec2(dir0.x * ca1 - dir0.y * sa1, dir0.x * sa1 + dir0.y * ca1);
+  vec2 perpA = vec2(-dirA.y, dirA.x);
+  vec2 p2 = vec2(dot(worldPos, dirA) * 0.082 - time * advSpeed * 1.48, dot(worldPos, perpA) * 0.036 + 13.7);
+  vec3 n2 = noise2DAndGrad(p2);
+  vec2 g2 = (dirA * n2.y * 0.082 + perpA * n2.z * 0.036) * 11.5;
 
-  vec2 worldGrad = (g1 + g2 + g3 + g4) * 0.85;
+  vec2 dirB = vec2(dir0.x * ca1 + dir0.y * sa1, -dir0.x * sa1 + dir0.y * ca1);
+  vec2 perpB = vec2(-dirB.y, dirB.x);
+  vec2 p3 = vec2(dot(worldPos, dirB) * 0.086 - time * advSpeed * 1.54, dot(worldPos, perpB) * 0.038 + 29.3);
+  vec3 n3 = noise2DAndGrad(p3);
+  vec2 g3 = (dirB * n3.y * 0.086 + perpB * n3.z * 0.038) * 11.0;
+
+  // Wave Train 4: High-frequency capillary wind ripples aligned with ambient wind vector uWind
+  vec2 windPerp = vec2(-windDir.y, windDir.x);
+  vec2 p4 = vec2(dot(worldPos, windDir) * 0.19 - time * (1.35 + windSpeed * 0.035), dot(worldPos, windPerp) * 0.085 + 53.1);
+  vec3 n4 = noise2DAndGrad(p4);
+  vec2 g4 = (windDir * n4.y * 0.19 + windPerp * n4.z * 0.085) * (4.2 * windFactor);
+
+  vec2 worldGrad = (g1 * 0.42 + (g2 + g3) * 0.34 + g4 * 0.24) * windFactor;
+
+  // 3. Direct GPU Hydrodynamic Wake & Dispersive Ripple Solver (Vehicles, Tires, Swimmers, Bridge Piers)
+  if (uWakeCount > 0) {
+    vec2 wakeGradAccum = vec2(0.0);
+    float foamAccum = 0.0;
+
+    for (int i = 0; i < 32; i++) {
+      if (i >= uWakeCount) break;
+      vec4 wp = uWakePosRad[i];   // xy = pos, z = radius, w = intensity
+      vec4 wv = uWakeVelParam[i]; // xy = source vel, z = progress, w = typeAndFoam
+
+      vec2 rel = worldPos - wp.xy;
+      float maxReach = wp.z * 2.15 + 24.0;
+      if (abs(rel.x) > maxReach || abs(rel.y) > maxReach) continue;
+
+      float dist = length(rel);
+      if (dist > maxReach) continue;
+
+      float intensity = wp.w;
+      float progress = wv.z;
+
+      if (wv.w >= 1.0) {
+        // --- DIRECTIONAL HYDRODYNAMIC KELVIN V-WAKE + PARABOLIC BOW WAVE + TURBULENT SLIPSTREAM ---
+        float foamStr = wv.w - 1.0;
+        float vLen = length(wv.xy);
+        vec2 vDir = vLen > 0.5 ? (wv.xy / vLen) : dir0;
+        vec2 vPerp = vec2(-vDir.y, vDir.x);
+
+        // Local coordinates relative to disturbance center: xPar > 0 ahead, xPar < 0 behind in wake
+        float xPar = dot(rel, vDir);
+        float yPerp = dot(rel, vPerp);
+        float absY = abs(yPerp);
+
+        // Parabolic bow & Kelvin Mach-like V-cone coordinate:
+        // Ahead of or beside the hull/wheel, forms a curved parabolic bow wave wrapping backward at the flanks
+        float bodyScale = max(6.0, wp.z * 0.34);
+        float bowCurve = xPar + 0.36 * (yPerp * yPerp) / bodyScale;
+        float wakeLen = wp.z * 1.95 + 14.0;
+
+        if (xPar < bodyScale * 0.95 && xPar > -wakeLen) {
+          float behind = max(0.0, -xPar + bodyScale * 0.35);
+          // Kelvin half-angle tan(19.47 deg) ~ 0.3535, widening slightly with source radius
+          float armHalfWidth = bodyScale * 0.42 + behind * 0.38;
+          float distFromArm = absY - armHalfWidth;
+
+          // Longitudinal & lateral envelope decay
+          float lonEnv = smoothstep(-wakeLen, -wakeLen * 0.15, xPar) * (1.0 - smoothstep(bodyScale * 0.25, bodyScale * 0.95, xPar));
+          float armEnv = exp(-(distFromArm * distFromArm) / max(12.0, bodyScale * bodyScale * 0.55)) * lonEnv;
+
+          // Diverging feather wave phase along the V-arms + transverse wave phase in the interior cone
+          float kArm = 0.52;
+          float armPhase = distFromArm * kArm - time * 8.5 + progress * 4.0;
+          float dArm = cos(armPhase) * kArm;
+
+          // Outward + backward normal of the Kelvin V-arm
+          float sideSign = yPerp >= 0.0 ? 1.0 : -1.0;
+          vec2 armNormal = normalize(vPerp * sideSign * 0.92 + vDir * 0.39);
+          wakeGradAccum += armNormal * (dArm * armEnv * intensity * 2.35);
+
+          // Transverse waves inside the V-wake cone (between the two arms)
+          float insideCone = smoothstep(armHalfWidth * 1.15, armHalfWidth * 0.25, absY) * lonEnv * step(xPar, bodyScale * 0.2);
+          if (insideCone > 0.01) {
+            float kTrans = 0.34;
+            float transPhase = bowCurve * kTrans + time * 6.2;
+            wakeGradAccum += vDir * (cos(transPhase) * kTrans * insideCone * intensity * 1.25);
+          }
+
+          // Aerated whitewater foam on breaking bow crest, V-arm rollers, and turbulent centerline slipstream
+          float armCrest = max(0.0, sin(armPhase)) * armEnv;
+          float slipstreamEnv = exp(-(yPerp * yPerp) / max(8.0, bodyScale * bodyScale * 0.32)) * lonEnv * smoothstep(bodyScale * 0.3, -bodyScale * 0.4, xPar);
+          foamAccum += (armCrest * 0.85 + slipstreamEnv * 0.95) * intensity * (0.35 + 0.85 * foamStr);
+        }
+      } else {
+        // --- DISPERSIVE CONCENTRIC CAPILLARY-GRAVITY WAVE PACKET (Footsteps, Wading, Splashes, Raindrops) ---
+        float foamStr = wv.w;
+        float dr = dist - wp.z;
+        float packetWidth = max(4.5, wp.z * 0.32 + 3.5);
+        float env = exp(-(dr * dr) / (packetWidth * packetWidth)) * smoothstep(1.5, 5.5, dist);
+        if (env > 0.005) {
+          // Dispersive wave train: shorter capillary wavelengths at the leading edge, longer gravity waves trailing
+          float kRad = 0.68 / (1.0 + progress * 0.55);
+          float phase = dr * kRad - progress * 8.5;
+          // Primary + secondary harmonic ring
+          float dWave = (cos(phase) + 0.45 * cos(phase * 1.65 + 0.8)) * kRad;
+          vec2 radDir = rel / max(dist, 0.001);
+          wakeGradAccum += radDir * (dWave * env * intensity * 2.15);
+
+          float crestFoam = max(0.0, sin(phase)) * env * intensity * foamStr * (1.0 - progress * 0.7);
+          foamAccum += crestFoam * 0.65;
+        }
+      }
+    }
+
+    worldGrad += wakeGradAccum;
+
+    // Modulate accumulated wake foam with multi-scale cellular bubble texture advected by water flow
+    if (foamAccum > 0.01) {
+      vec2 foamUv = worldPos * 0.24 - dir0 * (time * advSpeed * 0.85);
+      float cell1 = noise2DAndGrad(foamUv).x;
+      float cell2 = noise2DAndGrad(foamUv * 2.35 + vec2(17.1, -9.3) + worldGrad * 0.6).x;
+      float bubbleNet = smoothstep(0.22, 0.72, cell1 * 0.6 + cell2 * 0.55);
+      outWakeFoam = clamp(foamAccum * (0.45 + 0.75 * bubbleNet), 0.0, 0.92);
+    }
+  }
+
   return worldDirToScreenUv(worldGrad);
 }
 
@@ -390,15 +525,17 @@ void main() {
   vec3 cUnshadowed = recoverUnshadowedColor(cRaw, uv);
   float waterMask = detectWaterMask(cRaw, cUnshadowed, worldPos);
   vec2 waveN = vec2(0.0);
+  float wakeFoam = 0.0;
 
   if (waterMask > 0.01) {
-    waveN = computeWaterWaveNormal(worldPos, uTime);
-    // Subtle real-time UV refraction of submerged bed, stones, weeds, and submerged vehicle hulls
-    vec2 refrUv = clamp(uv + waveN * texel * 2.25 * waterMask, vec2(0.001), vec2(0.999));
+    bool inRiver = (worldPos.y >= -4250.0 && worldPos.y <= -1750.0 && worldPos.x >= -3500.0 && worldPos.x <= 50500.0);
+    waveN = computeWaterWaveNormal(worldPos, uTime, inRiver, wakeFoam);
+    // Real-time UV refraction of submerged bed, stones, weeds, and submerged vehicle hulls (amplified across steep wake waves)
+    vec2 refrUv = clamp(uv + waveN * texel * 2.45 * waterMask, vec2(0.001), vec2(0.999));
     vec3 cRefr = fetchSrc(refrUv);
     vec3 cRefrUnshadowed = recoverUnshadowedColor(cRefr, refrUv);
     float refrMask = detectWaterMask(cRefr, cRefrUnshadowed, worldPos);
-    cRaw = mix(cRaw, cRefr, waterMask * refrMask * 0.78);
+    cRaw = mix(cRaw, cRefr, waterMask * refrMask * 0.82);
   }
 
   // --- colour fetch with optional lens fringing -------------------------------------------------------------
@@ -494,25 +631,36 @@ void main() {
     }
   }
 
-  // --- Water Surface Shader: Solar/Lunar Glints, Fresnel Sky & Dynamic Light Reflections --------------------
+  // --- Water Surface Shader: Solar/Lunar Glints, Fresnel Sky, Dynamic Reflections & Porous Wake Foam --------
   if (waterMask > 0.01) {
-    // 1. Fresnel sky dome reflection modulated by organic wave facets
+    // 1. Fresnel sky dome reflection modulated by directional wave & wake facets
     float facetTilt = clamp(dot(waveN, uSun) * 0.65 + 0.35, 0.0, 1.0);
     vec3 daySkyCol = mix(vec3(0.45, 0.68, 0.88), vec3(0.95, 0.78, 0.58), clamp(1.0 - uDay * 1.15, 0.0, 1.0));
     vec3 nightSkyCol = vec3(0.05, 0.09, 0.16);
     vec3 skyCol = mix(nightSkyCol, daySkyCol, uDay);
     c = mix(c, skyCol, waterMask * (0.05 + 0.08 * facetTilt));
 
-    // 2. Solar / Lunar micro-facet specular glints (non-repeating warped Cox-Munk slope distribution)
-    float sunAlign = dot(normalize(waveN + uSun * 0.48), uSun);
-    float glintSharp = pow(clamp(sunAlign, 0.0, 1.0), 20.0);
-    float sparkleNoise1 = noise2DAndGrad(worldPos * 0.14 + waveN * 3.2 + vec2(uTime * 1.9, -uTime * 1.5)).x;
-    float sparkleNoise2 = noise2DAndGrad(worldPos * 0.23 - waveN * 2.4 + vec2(-uTime * 2.3, uTime * 1.8)).x;
-    float sparkle = smoothstep(0.52, 0.82, sparkleNoise1 * sparkleNoise2 * 2.2);
+    // 2. Solar / Lunar micro-facet specular glints on ambient waves and steep Kelvin wake slopes
+    float waveSlopeMag = length(waveN);
+    float sunAlign = dot(normalize(waveN + uSun * 0.45), uSun);
+    float glintSharp = pow(clamp(sunAlign, 0.0, 1.0), 18.0) * smoothstep(0.08, 0.42, waveSlopeMag);
     vec3 sunGlintCol = mix(vec3(0.55, 0.70, 0.95) * 0.35, vec3(1.0, 0.95, 0.82), uDay);
-    c += sunGlintCol * waterMask * (glintSharp * 0.22 + glintSharp * sparkle * 0.42);
+    c += sunGlintCol * waterMask * glintSharp * 0.46;
 
-    // 3. Dynamic lightmap & bloom reflections on water (headlights, taillights, sirens, streetlamps, flashlights)
+    // 3. Porous Cellular Aerated Whitewater Foam (from vehicle/wheel Kelvin wakes, bow waves, and turbulent slipstreams)
+    if (wakeFoam > 0.005) {
+      float localLit = uDay * (0.72 + 0.28 * clamp(dot(waveN, uSun), -0.5, 1.0));
+      if (uLightOn > 0.5) {
+        float lampHere = 1.0 - texture(uLight, uv).a;
+        localLit = max(localLit, lampHere * 0.85 + 0.12);
+      } else {
+        localLit = max(localLit, 0.16);
+      }
+      vec3 foamCol = mix(vec3(0.72, 0.85, 0.94), vec3(0.96, 0.99, 1.0), uDay) * localLit;
+      c = mix(c, foamCol, clamp(waterMask * wakeFoam, 0.0, 0.88));
+    }
+
+    // 4. Dynamic lightmap & bloom reflections on water (headlights, taillights, sirens, streetlamps, flashlights)
     vec2 reflUv = clamp(uv + waveN * 0.014, vec2(0.001), vec2(0.999));
     vec3 reflBloom = texture(uBloom, reflUv).rgb + texture(uBloomWide, reflUv).rgb * 0.85;
     float waveFacetHighlight = 0.65 + 0.75 * clamp(dot(waveN, vec2(0.707, -0.707)), -0.6, 1.0);
@@ -521,7 +669,7 @@ void main() {
     if (uLightOn > 0.5) {
       float litPerturbed = 1.0 - texture(uLight, clamp(uv + waveN * 0.018, vec2(0.001), vec2(0.999))).a;
       float litBase = 1.0 - texture(uLight, uv).a;
-      float specRipple = max(0.0, litPerturbed - litBase * 0.65) + litPerturbed * pow(max(0.0, length(waveN) * 0.75), 2.0);
+      float specRipple = max(0.0, litPerturbed - litBase * 0.65) + litPerturbed * pow(max(0.0, waveSlopeMag * 0.75), 2.0);
       vec3 artificialSpecCol = mix(vec3(1.0, 0.93, 0.78), reflBloom * 1.6 + vec3(0.45, 0.55, 0.70), 0.55);
       c += artificialSpecCol * waterMask * specRipple * (0.28 + 0.55 * (1.0 - uDay));
     }
@@ -691,6 +839,8 @@ export class GpuPostFx {
   private lost = false;
   private firePosRadBuf = new Float32Array(16 * 4);
   private fireWindBuf = new Float32Array(16 * 2);
+  private wakePosRadBuf = new Float32Array(32 * 4);
+  private wakeVelParamBuf = new Float32Array(32 * 4);
 
   constructor(source: HTMLCanvasElement, target: HTMLCanvasElement) {
     this.source = source;
@@ -733,6 +883,7 @@ export class GpuPostFx {
       'uRelief', 'uClarity', 'uBloomStr',
       'uSharp', 'uTone', 'uExposure', 'uContrast', 'uSat', 'uShadowTint', 'uHighTint', 'uHaze', 'uVig', 'uGrain', 'uChroma', 'uDay',
       'uFireCount', 'uFirePosRad[0]', 'uFireWind[0]',
+      'uWind', 'uRiverFlow', 'uWakeCount', 'uWakePosRad[0]', 'uWakeVelParam[0]',
     ]);
     this.pFinal = this.makeProgram(VS, FS_FINAL, ['uTex', 'uTexel', 'uFxaa']);
 
@@ -1047,6 +1198,29 @@ export class GpuPostFx {
       }
       gl.uniform4fv(c.u['uFirePosRad[0]'], this.firePosRadBuf, 0, fireCount * 4);
       gl.uniform2fv(c.u['uFireWind[0]'], this.fireWindBuf, 0, fireCount * 2);
+    }
+
+    // Upload physical wind & river flow vectors and active water wakes (max 32) for direct GPU water wave & foam simulation
+    gl.uniform2f(c.u.uWind, frame.windVx ?? 14, frame.windVy ?? 4);
+    gl.uniform2f(c.u.uRiverFlow, frame.riverFlowVx ?? 0, frame.riverFlowVy ?? 0);
+    const wakes = frame.wakes;
+    const wakeCount = wakes ? Math.min(32, wakes.length) : 0;
+    gl.uniform1i(c.u.uWakeCount, wakeCount);
+    if (wakeCount > 0 && wakes) {
+      for (let i = 0; i < wakeCount; i++) {
+        const wSrc = wakes[i];
+        const b4 = i * 4;
+        this.wakePosRadBuf[b4] = wSrc.x;
+        this.wakePosRadBuf[b4 + 1] = wSrc.y;
+        this.wakePosRadBuf[b4 + 2] = wSrc.radius;
+        this.wakePosRadBuf[b4 + 3] = wSrc.intensity;
+        this.wakeVelParamBuf[b4] = wSrc.vx;
+        this.wakeVelParamBuf[b4 + 1] = wSrc.vy;
+        this.wakeVelParamBuf[b4 + 2] = wSrc.progress;
+        this.wakeVelParamBuf[b4 + 3] = wSrc.typeAndFoam;
+      }
+      gl.uniform4fv(c.u['uWakePosRad[0]'], this.wakePosRadBuf, 0, wakeCount * 4);
+      gl.uniform4fv(c.u['uWakeVelParam[0]'], this.wakeVelParamBuf, 0, wakeCount * 4);
     }
 
     // light comes from the opposite side of the game's shadow direction, rotated into screen space

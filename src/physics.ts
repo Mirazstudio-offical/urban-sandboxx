@@ -10270,49 +10270,72 @@ export function updateVehiclePhysics(
       const isHardPavement = surf.type === 'asphalt' || surf.type === 'concrete' || surf.type === 'rock';
       const isWetOrMud = isWetSurface || surf.type === 'mud';
 
-      // --- SITUATION WATER: RIVER, FORDS & DEEP PUDDLES (STRICTLY WATER SPLASHES, ZERO DUST!) ---
-      const tireRiver = getRiverWaterAt(tireX, tireY);
-      const tireWaterDepth = (tireRiver.inWater && !tireRiver.isBridge) ? tireRiver.depth : (surf.type === 'water' ? (vehicle.waterDepth || 0.15) : 0);
-      const isTireInWater = tireWaterDepth > 0.03 || surf.type === 'water';
+      // --- SITUATION WATER: RIVER, FORDS, PONDS & PUDDLES (HYDRODYNAMIC WHEEL ARCH SPRAY & GPU WAKES) ---
+      const univTireWater = getUniversalWaterDepthAt(world, tireX, tireY);
+      const tireWaterDepth = univTireWater > 0.01 ? univTireWater : (surf.type === 'water' ? (vehicle.waterDepth || 0.12) : 0);
+      const isTireInWater = tireWaterDepth > 0.02 || surf.type === 'water';
 
       if (isTireInWater) {
         vehicle.wetCoatTimer = Math.max(vehicle.wetCoatTimer || 0, 12.0);
-        const waterIntensity = Math.min(1.0, ((isPowerWheelspin ? 0.75 : 0) + vSpeedKmh * 0.03));
-        if (waterIntensity > 0.08 && Math.random() < 0.32 && !isWorldFreezing(world)) {
-          emitWaterDisturbance(tireX, tireY, vehicle.vx, vehicle.vy, 9, waterIntensity * 0.75, true);
+        const depthBoost = Math.min(1.35, 0.55 + tireWaterDepth * 1.4);
+        const waterIntensity = Math.min(1.0, ((isPowerWheelspin ? 0.72 : 0) + vSpeedKmh * 0.028) * depthBoost);
+        if (waterIntensity > 0.06 && !isWorldFreezing(world)) {
+          emitWaterDisturbance(
+            tireX,
+            tireY,
+            vehicle.vx + kickCos * (isPowerWheelspin ? 45 : 0),
+            vehicle.vy + kickSin * (isPowerWheelspin ? 45 : 0),
+            7.5 + Math.min(6.0, tireWaterDepth * 10),
+            waterIntensity * 0.85,
+            vSpeedKmh > 12 || isPowerWheelspin
+          );
         }
-        if (waterIntensity > 0.06 && Math.random() < 0.65) {
-          const flingSpeed = (35 + (isPowerWheelspin ? 80 * drivePedal : 0) + vSpeedKmh * 0.75) * (0.8 + Math.random() * 0.4);
-          
-          // Ejected water spray plume
+        if (waterIntensity > 0.06 && Math.random() < 0.72) {
+          const flingSpeed = (32 + (isPowerWheelspin ? 75 * drivePedal : 0) + vSpeedKmh * 0.72) * (0.82 + Math.random() * 0.36);
+          const sideSign = isLeftWheel ? -1 : 1;
+          const outLatX = latCos * sideSign;
+          const outLatY = latSin * sideSign;
+
+          // 1. Tangential wheel-arch rooster-tail aerosol mist plume
+          const sprayVx = vehicle.vx * 0.32 + kickCos * flingSpeed + outLatX * (14 + Math.random() * 24);
+          const sprayVy = vehicle.vy * 0.32 + kickSin * flingSpeed + outLatY * (14 + Math.random() * 24);
           world.particles.push({
-            x: tireX + (Math.random() * 6 - 3),
-            y: tireY + (Math.random() * 6 - 3),
-            vx: vehicle.vx * 0.3 + kickCos * flingSpeed + latCos * (Math.random() - 0.5) * 32,
-            vy: vehicle.vy * 0.3 + kickSin * flingSpeed + latSin * (Math.random() - 0.5) * 32,
-            radius: 1.8 + Math.random() * 2.4,
-            color: Math.random() > 0.35 ? '#bae6fd' : '#e0f2fe',
-            alpha: 0.80,
-            initialAlpha: 0.80,
+            x: tireX + kickCos * 3 + (Math.random() * 4 - 2),
+            y: tireY + kickSin * 3 + (Math.random() * 4 - 2),
+            vx: sprayVx,
+            vy: sprayVy,
+            radius: (2.2 + Math.random() * 2.8) * Math.min(1.3, 0.75 + tireWaterDepth),
+            color: Math.random() > 0.4 ? '#e0f2fe' : '#bae6fd',
+            alpha: Math.min(0.72, 0.38 + waterIntensity * 0.34),
+            initialAlpha: Math.min(0.72, 0.38 + waterIntensity * 0.34),
             life: 0,
-            maxLife: 0.32 + Math.random() * 0.20,
+            maxLife: 0.28 + Math.random() * 0.22,
             type: 'water_spray',
+            shapeSeed: (Math.random() * 1024) | 0,
+            angle: Math.atan2(sprayVy, sprayVx),
+            aspect: 1.35 + Math.random() * 0.45,
             underVehicle: false
           });
 
-          // Sidewall water splash crest
+          // 2. Outward hydrodynamic chine sheet / V-fan splash from tire sidewall
+          const chineSpeed = (28 + vSpeedKmh * 0.65) * (0.8 + Math.random() * 0.4);
+          const chineVx = vehicle.vx * 0.45 + outLatX * chineSpeed + kickCos * (flingSpeed * 0.35);
+          const chineVy = vehicle.vy * 0.45 + outLatY * chineSpeed + kickSin * (flingSpeed * 0.35);
           world.particles.push({
-            x: tireX + latCos * (Math.random() * 8 - 4),
-            y: tireY + latSin * (Math.random() * 8 - 4),
-            vx: latCos * (Math.random() - 0.5) * (45 + vSpeedKmh * 0.7),
-            vy: latSin * (Math.random() - 0.5) * (45 + vSpeedKmh * 0.7),
-            radius: 2.2 + Math.random() * 2.8,
+            x: tireX + outLatX * 3.5 + (Math.random() * 4 - 2),
+            y: tireY + outLatY * 3.5 + (Math.random() * 4 - 2),
+            vx: chineVx,
+            vy: chineVy,
+            radius: (1.8 + Math.random() * 2.2) * Math.min(1.25, 0.75 + tireWaterDepth),
             color: '#f0f9ff',
-            alpha: 0.75,
-            initialAlpha: 0.75,
+            alpha: Math.min(0.68, 0.34 + waterIntensity * 0.32),
+            initialAlpha: Math.min(0.68, 0.34 + waterIntensity * 0.32),
             life: 0,
-            maxLife: 0.28 + Math.random() * 0.18,
+            maxLife: 0.24 + Math.random() * 0.18,
             type: 'water_splash',
+            shapeSeed: (Math.random() * 1024) | 0,
+            angle: Math.atan2(chineVy, chineVx),
+            aspect: 1.45 + Math.random() * 0.4,
             underVehicle: false
           });
         }
@@ -11324,32 +11347,36 @@ export function updateVehiclePhysics(
       }
     }
 
-    // 5. Hull Water Splash & Bow Wave Particles
-    if (speedAbs > 12 && world && world.particles && Math.random() < 0.50) {
-      world.particles.push({
-        x: vehicle.x + perpX * halfW + (Math.random() * 8 - 4),
-        y: vehicle.y + perpY * halfW + (Math.random() * 8 - 4),
-        vx: perpX * (22 + Math.random() * 25) - vCos * (vehicle.speed * 0.18),
-        vy: perpY * (22 + Math.random() * 25) - vSin * (vehicle.speed * 0.18),
-        radius: 2.0 + Math.random() * 2.5,
-        color: '#bae6fd',
-        alpha: 0.75,
-        life: 0,
-        maxLife: 0.32 + Math.random() * 0.20,
-        type: 'water_spray'
-      });
-      world.particles.push({
-        x: vehicle.x - perpX * halfW + (Math.random() * 8 - 4),
-        y: vehicle.y - perpY * halfW + (Math.random() * 8 - 4),
-        vx: -perpX * (22 + Math.random() * 25) - vCos * (vehicle.speed * 0.18),
-        vy: -perpY * (22 + Math.random() * 25) - vSin * (vehicle.speed * 0.18),
-        radius: 2.0 + Math.random() * 2.5,
-        color: '#bae6fd',
-        alpha: 0.75,
-        life: 0,
-        maxLife: 0.32 + Math.random() * 0.20,
-        type: 'water_spray'
-      });
+    // 5. Hull Bow Corner Hydrodynamic Spray Sheets (when plowing through water)
+    if (speedAbs > 14 && world && world.particles && Math.random() < 0.55) {
+      const dirSign = vehicle.speed >= 0 ? 1 : -1;
+      const bowLon = halfL * 0.76 * dirSign;
+      for (const side of [-1, 1]) {
+        const sideDepth = side < 0 ? leftWaterDepth : rightWaterDepth;
+        if (sideDepth < 0.06) continue;
+        const bx = vehicle.x + vCos * bowLon + perpX * (halfW * 0.92 * side) + (Math.random() * 5 - 2.5);
+        const by = vehicle.y + vSin * bowLon + perpY * (halfW * 0.92 * side) + (Math.random() * 5 - 2.5);
+        const outSpeed = (20 + Math.min(45, speedAbs * 0.35)) * (0.8 + Math.random() * 0.4);
+        const svx = vehicle.vx * 0.35 + perpX * side * outSpeed - vCos * dirSign * (speedAbs * 0.16);
+        const svy = vehicle.vy * 0.35 + perpY * side * outSpeed - vSin * dirSign * (speedAbs * 0.16);
+        world.particles.push({
+          x: bx,
+          y: by,
+          vx: svx,
+          vy: svy,
+          radius: 2.2 + Math.random() * 2.6,
+          color: Math.random() > 0.45 ? '#e0f2fe' : '#bae6fd',
+          alpha: Math.min(0.68, 0.32 + sideDepth * 0.45),
+          initialAlpha: Math.min(0.68, 0.32 + sideDepth * 0.45),
+          life: 0,
+          maxLife: 0.28 + Math.random() * 0.18,
+          type: 'water_spray',
+          shapeSeed: (Math.random() * 1024) | 0,
+          angle: Math.atan2(svy, svx),
+          aspect: 1.4 + Math.random() * 0.4,
+          underVehicle: false
+        });
+      }
     }
   } else {
     vehicle.isFloating = false;
@@ -13778,20 +13805,18 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               });
             }
           } else {
-            if (Math.random() < 0.3) {
-              world.particles.push({
-                x: veh.x + (Math.random() * 12 - 6),
-                y: veh.y + (Math.random() * 12 - 6),
-                vx: (Math.random() * 60 - 30),
-                vy: (Math.random() * 60 - 30),
-                radius: 3 + Math.random() * 3,
-                color: '#93c5fd',
-                alpha: 0.75,
-                life: 0,
-                maxLife: 0.35,
-                type: 'water_splash'
-              });
-            }
+            // Emit real-time GPU water wake disturbance on the puddle surface (wheel spray is handled per-tire in emitDriveWheelParticles)
+            emitWaterDisturbance(
+              veh.x,
+              veh.y,
+              veh.vx,
+              veh.vy,
+              10,
+              Math.min(0.85, 0.25 + Math.abs(veh.speed) * 0.006),
+              true,
+              `pud_${veh.id}`,
+              65
+            );
           }
         }
       }

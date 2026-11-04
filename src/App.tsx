@@ -182,6 +182,7 @@ import {
   stowWaterHose, 
   updateWaterHosePhysics 
 } from './waterHoseSystem';
+import { getActivePostFxWaterWakes, getRiverWaterAt } from './riverSystem';
 import { 
   Activity,
   AlertTriangle,
@@ -3839,6 +3840,9 @@ export default function App() {
           if (fx && gpuCanvas) {
             if (performanceConfig.enableGpuPostFx && !isFullMapOpenRef.current) {
               const cal = calendarRef.current;
+              const worldWind = worldRef.current.wind;
+              const windGust = worldWind?.gust ?? 1.0;
+              const camRiver = getRiverWaterAt(camera.x, camera.y);
               const ok = fx.render(
                 {
                   hour: displayTimeHourRef.current,
@@ -3848,12 +3852,17 @@ export default function App() {
                   cameraY: camera.y,
                   cameraZoom: camera.zoom,
                   isFreezing: ((calendarRef.current as any).ambientTempC ?? 15) <= -1.0,
+                  windVx: worldWind ? worldWind.vx * windGust : 14,
+                  windVy: worldWind ? worldWind.vy * windGust : 4,
+                  riverFlowVx: camRiver.currentVx,
+                  riverFlowVy: camRiver.currentVy,
                   timeSec: now / 1000,
                   dt: rawDt,
                   sunrise: cal.sunriseHour,
                   sunset: cal.sunsetHour,
                   lightmap: rendererRef.current.getFxLightmap(),
                   fires: rendererRef.current.getActivePostFxFires(),
+                  wakes: getActivePostFxWaterWakes(camera.x, camera.y, 32),
                 },
                 {
                   bloom: performanceConfig.gpuBloom,
