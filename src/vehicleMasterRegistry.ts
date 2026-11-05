@@ -6841,18 +6841,18 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
   "truck_zil_dump": {
     "id": "cat_truck_zil_dump",
     "type": "truck_zil_dump",
-    "name": "Titan Quarry V8",
-    "nameRu": "Titan Quarry V8",
-    "brand": "Авто",
-    "category": "passenger",
-    "classType": "Транспорт",
-    "year": 2020,
-    "descriptionRu": "Надежный транспорт для любых дорог.",
+    "name": "ЗИЛ-130",
+    "nameRu": "ЗИЛ-130",
+    "brand": "ЗИЛ",
+    "category": "commercial",
+    "classType": "Грузовое шасси (4x2 / 6x4)",
+    "year": 1977,
+    "descriptionRu": "Легендарное среднетоннажное грузовое шасси ЗИЛ-130 с клёпаной лонжеронной рамой, карбюраторным двигателем V8 6.0 л и сменными рамами и надстройками.",
     "width": 25,
-    "length": 58,
-    "wheelBase": 35,
-    "mass": 4800,
-    "maxSpeed": 110,
+    "length": 70,
+    "wheelBase": 45,
+    "mass": 4300,
+    "maxSpeed": 115,
     "reverseMaxSpeed": 28,
     "acceleration": 18,
     "brakingForce": 195,
@@ -6862,9 +6862,9 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "minSteerAngle": 0.09,
     "grip": 0.965,
     "driftGrip": 0.25,
-    "topSpeedKmh": 25,
-    "powerHp": 100,
-    "engineSpec": "ДВС",
+    "topSpeedKmh": 90,
+    "powerHp": 150,
+    "engineSpec": "ЗИЛ-130 6.0L V8 (150 л.с.)",
     "driveType": "RWD",
     "transmission": "MANUAL",
     "gearRatios": [
@@ -6878,10 +6878,10 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "finalDriveRatio": 3.9,
     "hasTransferCase": false,
-    "powertrainCategory": "retro",
-    "fuelType": "ai95",
-    "fuelTypeLabel": "АИ-95",
-    "tankCapacity": 55,
+    "powertrainCategory": "truck",
+    "fuelType": "ai92",
+    "fuelTypeLabel": "АИ-92",
+    "tankCapacity": 170,
     "lpgCapacity": 200,
     "fuelCapOffset": {
       "localFFrac": 0.05,
@@ -6927,6 +6927,33 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "color": "#0284c7",
     "roofColor": "#f8fafc",
     "dumpColor": "#d97706",
+    "availableColors": [
+      {
+        "name": "Небесно-голубой ЗИЛ (белая крыша)",
+        "hex": "#0284c7",
+        "roofHex": "#f8fafc"
+      },
+      {
+        "name": "Заводской синий",
+        "hex": "#1d4ed8",
+        "roofHex": "#f8fafc"
+      },
+      {
+        "name": "Армейский хаки",
+        "hex": "#3f6212",
+        "roofHex": "#3f6212"
+      },
+      {
+        "name": "Пожарный красный",
+        "hex": "#dc2626",
+        "roofHex": "#f8fafc"
+      },
+      {
+        "name": "Коммунальный оранжевый",
+        "hex": "#ea580c",
+        "roofHex": "#f8fafc"
+      }
+    ],
     "chassisAnatomy": {
       "xNose": 0.5,
       "xCowl": 0.24,
@@ -6979,17 +7006,17 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
   "truck_semi": {
     "id": "cat_truck_semi",
     "type": "truck_semi",
-    "name": "Titan Atlas 6x4 Prime Mover",
-    "nameRu": "Titan Atlas 6x4 Prime Mover",
-    "brand": "Titan Heavy",
+    "name": "КАМАЗ",
+    "nameRu": "КАМАЗ",
+    "brand": "КАМАЗ",
     "category": "commercial",
-    "classType": "Heavy Semi-Tractor",
-    "year": 2004,
-    "descriptionRu": "Triple-axle semi-tractor equipped with sleeper cab for long-haul semi-trailer operations.",
+    "classType": "Тяжёлое шасси (4x2 / 6x4 / 6x6 / 8x4)",
+    "year": 1989,
+    "descriptionRu": "Тяжёлое бескапотное грузовое шасси КАМАЗ с дизелем V8 10.85 л, откидной кабиной, балансирной тележкой мостов и сменными рамами и кузовами.",
     "width": 26,
-    "length": 64,
-    "wheelBase": 38,
-    "mass": 7500,
+    "length": 74,
+    "wheelBase": 47,
+    "mass": 6650,
     "maxSpeed": 125,
     "reverseMaxSpeed": 30,
     "acceleration": 18,
@@ -7000,9 +7027,9 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "minSteerAngle": 0.08,
     "grip": 0.96,
     "driftGrip": 0.25,
-    "topSpeedKmh": 110,
-    "powerHp": 240,
-    "engineSpec": "10.85L V8 Turbo Diesel Heavy",
+    "topSpeedKmh": 100,
+    "powerHp": 210,
+    "engineSpec": "КАМАЗ-740 10.85L V8 Дизель",
     "driveType": "RWD",
     "transmission": "MANUAL",
     "gearRatios": [
@@ -7019,8 +7046,8 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "hasTransferCase": true,
     "powertrainCategory": "truck",
     "fuelType": "diesel",
-    "fuelTypeLabel": "Diesel",
-    "tankCapacity": 350,
+    "fuelTypeLabel": "ДТ",
+    "tankCapacity": 250,
     "lpgCapacity": 200,
     "fuelCapOffset": {
       "localFFrac": 0.05,
@@ -7064,19 +7091,31 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "keyTier": "flip",
     "requiredKeyType": "iron",
     "hitchOffset": -12,
-    "color": "#d94e16",
+    "color": "#ea580c",
     "availableColors": [
       {
-        "name": "Atlas Orange",
+        "name": "Оранжевый КАМАЗ",
         "hex": "#ea580c"
       },
       {
-        "name": "Atlas Blue",
+        "name": "Синий Совтрансавто",
         "hex": "#1e40af"
       },
       {
-        "name": "Arctic White",
-        "hex": "#f8fafc"
+        "name": "Голубой Камский",
+        "hex": "#0284c7"
+      },
+      {
+        "name": "Песочно-жёлтый",
+        "hex": "#d97706"
+      },
+      {
+        "name": "Армейский хаки",
+        "hex": "#3f6212"
+      },
+      {
+        "name": "Пожарный красный",
+        "hex": "#dc2626"
       }
     ],
     "chassisAnatomy": {
@@ -7924,30 +7963,30 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
   "truck_water": {
     "id": "cat_truck_water",
     "type": "truck_water",
-    "name": "Titan Aqua Sprinkler",
-    "nameRu": "Titan Aqua Sprinkler",
-    "brand": "Titan Heavy",
+    "name": "ЗИЛ-4331",
+    "nameRu": "ЗИЛ-4331",
+    "brand": "ЗИЛ",
     "category": "commercial",
-    "classType": "Municipal Water Tanker",
-    "year": 1991,
-    "descriptionRu": "Municipal utility water tanker with rear spray nozzles for street cleaning and dust control.",
+    "classType": "Грузовое шасси (4x2 / 6x4)",
+    "year": 1988,
+    "descriptionRu": "Среднетоннажное дизельное грузовое шасси ЗИЛ-4331 с угловатым оперением капота, мотором ЗИЛ-645 V8 (185 л.с.), усиленной рамой и сменными надстройками.",
     "width": 25,
-    "length": 70,
-    "wheelBase": 43,
-    "mass": 8000,
+    "length": 72,
+    "wheelBase": 46,
+    "mass": 4650,
     "maxSpeed": 118,
     "reverseMaxSpeed": 30,
-    "acceleration": 13,
-    "brakingForce": 180,
+    "acceleration": 15,
+    "brakingForce": 190,
     "friction": 0.98,
     "turnSpeed": 3.2,
     "maxSteerAngle": 0.6,
     "minSteerAngle": 0.08,
     "grip": 0.955,
     "driftGrip": 0.23,
-    "topSpeedKmh": 118,
-    "powerHp": 150,
-    "engineSpec": "6.0L V8 Municipal Spec",
+    "topSpeedKmh": 95,
+    "powerHp": 185,
+    "engineSpec": "ЗИЛ-645 8.7L V8 Дизель",
     "driveType": "RWD",
     "transmission": "MANUAL",
     "gearRatios": [
@@ -7963,8 +8002,8 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "finalDriveRatio": 4.8,
     "hasTransferCase": true,
     "powertrainCategory": "truck",
-    "fuelType": "ai92",
-    "fuelTypeLabel": "AI-92",
+    "fuelType": "diesel",
+    "fuelTypeLabel": "ДТ",
     "tankCapacity": 170,
     "lpgCapacity": 200,
     "fuelCapOffset": {
@@ -8008,27 +8047,29 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "keyTier": "flip",
     "requiredKeyType": "iron",
+    "color": "#0284c7",
     "availableColors": [
       {
-        "name": "Municipal Orange",
+        "name": "Синий ЗИЛ-4331",
+        "hex": "#0284c7",
+        "roofHex": "#0284c7"
+      },
+      {
+        "name": "Коммунальный оранжевый",
         "hex": "#ea580c",
         "roofHex": "#0284c7"
+      },
+      {
+        "name": "Белый заводской",
+        "hex": "#f8fafc",
+        "roofHex": "#f8fafc"
+      },
+      {
+        "name": "Таёжный зелёный",
+        "hex": "#15803d",
+        "roofHex": "#15803d"
       }
     ],
-    "fluidTank": {
-      "capacity": 3000,
-      "currentVolume": 3000,
-      "currentAmount": 3000,
-      "liquidType": "water",
-      "isHermetic": false,
-      "leakProbabilityPerSec": 0.2,
-      "dripRatePerSec": 0.1,
-      "isPunctured": false,
-      "punctureRatePerSec": 16,
-      "drainValveOpen": false,
-      "hasWaterHose": true,
-      "isWaterHoseDeployed": false
-    },
     "chassisAnatomy": {
       "xNose": 0.5,
       "xCowl": 0.46,
@@ -8081,30 +8122,30 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
   "truck_flatbed": {
     "id": "cat_truck_flatbed",
     "type": "truck_flatbed",
-    "name": "Titan Flatbed Cargo",
-    "nameRu": "Titan Flatbed Cargo",
-    "brand": "Авто",
-    "category": "passenger",
-    "classType": "Транспорт",
-    "year": 2020,
-    "descriptionRu": "Надежный транспорт для любых дорог.",
+    "name": "ГАЗ-53",
+    "nameRu": "ГАЗ-53",
+    "brand": "ГАЗ",
+    "category": "commercial",
+    "classType": "Грузовое шасси (4x2 / 4x4)",
+    "year": 1983,
+    "descriptionRu": "Классическое среднетоннажное грузовое шасси ГАЗ-53-12 с карбюраторным двигателем ЗМЗ-53 V8, штампованной клепаной рамой и сменными кузовами.",
     "width": 25,
-    "length": 74,
-    "wheelBase": 45,
-    "mass": 7000,
+    "length": 66,
+    "wheelBase": 43,
+    "mass": 3250,
     "maxSpeed": 120,
     "reverseMaxSpeed": 32,
-    "acceleration": 14,
+    "acceleration": 15,
     "brakingForce": 185,
     "friction": 0.981,
-    "turnSpeed": 3.2,
+    "turnSpeed": 3.4,
     "maxSteerAngle": 0.6,
     "minSteerAngle": 0.08,
     "grip": 0.958,
     "driftGrip": 0.24,
-    "topSpeedKmh": 27,
-    "powerHp": 100,
-    "engineSpec": "ДВС",
+    "topSpeedKmh": 90,
+    "powerHp": 120,
+    "engineSpec": "ЗМЗ-53-11 4.25L V8 (120 л.с.)",
     "driveType": "RWD",
     "transmission": "MANUAL",
     "gearRatios": [
@@ -8119,9 +8160,9 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "finalDriveRatio": 3.9,
     "hasTransferCase": false,
     "powertrainCategory": "truck",
-    "fuelType": "ai95",
-    "fuelTypeLabel": "АИ-95",
-    "tankCapacity": 55,
+    "fuelType": "ai92",
+    "fuelTypeLabel": "АИ-92",
+    "tankCapacity": 90,
     "lpgCapacity": 200,
     "fuelCapOffset": {
       "localFFrac": 0.05,
@@ -8165,6 +8206,28 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "keyTier": "flip",
     "requiredKeyType": "iron",
     "color": "#0284c7",
+    "availableColors": [
+      {
+        "name": "Голубая адриатика ГАЗ",
+        "hex": "#0284c7"
+      },
+      {
+        "name": "Морская волна",
+        "hex": "#0d9488"
+      },
+      {
+        "name": "Светло-бежевый",
+        "hex": "#d6d3d1"
+      },
+      {
+        "name": "Защитный хаки",
+        "hex": "#4d7c0f"
+      },
+      {
+        "name": "Охра золотистая",
+        "hex": "#ca8a04"
+      }
+    ],
     "chassisAnatomy": {
       "xNose": 0.5,
       "xCowl": 0.24,

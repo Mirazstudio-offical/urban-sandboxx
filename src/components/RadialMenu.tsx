@@ -52,7 +52,13 @@ import {
   TUNE_VARIANTS,
   TIRE_SETS,
   TURBO_KITS,
-  getVehiclePowertrainCategory
+  getVehiclePowertrainCategory,
+  isConfigurableTruckType,
+  getCompatibleFramesForTruck,
+  getDefaultFrameForTruck,
+  getCompatibleBodiesForFrame,
+  resolveVehicleTruckFrameAndBody,
+  MOUNT_TYPE_LABELS_RU
 } from '../powertrainVariants';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
@@ -66,6 +72,8 @@ interface VehicleConfigSelection {
     tuneId?: string;
     tireSetId?: string;
     turboKitId?: string;
+    frameId?: string;
+    bodyId?: string;
   };
 }
 
@@ -453,7 +461,9 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   else if (dlk?.center) diffLockDesc = 'МОБ (межосевая)';
   else if (dlk?.rear) diffLockDesc = 'МКБ-З (задняя)';
   else if (dlk?.front) diffLockDesc = 'МКБ-П (передняя)';
-  const isEmergency = veh ? ['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(veh.type) : false;
+  const resolvedVehTruck = veh ? resolveVehicleTruckFrameAndBody(veh) : null;
+  const effVehType = resolvedVehTruck ? (resolvedVehTruck.body.attachmentCarType || veh!.type) : (veh?.type || '');
+  const isEmergency = veh ? ['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(effVehType) : false;
   const sfx = (v: boolean) => (v ? 'ВКЛ' : 'ВЫКЛ');
   const click = (fn: () => void) => () => { sound.playButtonPress(); fn(); setTick((t) => t + 1); };
 
@@ -605,7 +615,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                 </>
               )}
 
-              {(veh.type === 'truck_water' || veh.type === 'fire_engine') && (
+              {(effVehType === 'truck_water' || effVehType === 'fire_engine') && (
                 <>
                   <Sl>КОМ / водонасос</Sl>
                   <Tile Icon={Gauge} cls="row" label="Насос" st={sfx(!!veh.isPtoActive)} on={!!veh.isPtoActive} onClick={click(() => { veh.isPtoActive = !veh.isPtoActive; })} />
@@ -729,7 +739,7 @@ const Configurator: React.FC<{
   onClose: () => void;
   onApply: (cfg: VehicleConfigSelection) => void;
 }> = ({ veh, onClose, onApply }) => {
-  const [openIds, setOpenIds] = useState<Record<string, boolean>>({ paint: true, pt: false, eng: false, trn: false, turbo: false, tune: false, tir: false });
+  const [openIds, setOpenIds] = useState<Record<string, boolean>>({ chassis: true, frame: true, body: true, paint: true, pt: false, eng: false, trn: false, turbo: false, tune: false, tir: false });
   const toggle = (id: string) => setOpenIds((o) => ({ ...o, [id]: !o[id] }));
 
   const entry = VEHICLE_CATALOG.find((c) => c.type === veh.type);
@@ -746,6 +756,29 @@ const Configurator: React.FC<{
   const [tuneId, setTuneId] = useState<string>(es?.tuneId ?? '');
   const [tirId, setTirId] = useState<string>(es?.tireSetId ?? '');
   const [tboId, setTboId] = useState<string>(es?.turboKitId ?? 'trb_none');
+  const [frameId, setFrameId] = useState<string>(veh.frameId || es?.frameId || '');
+  const [bodyId, setBodyId] = useState<string>(veh.bodyId || es?.bodyId || 'body_none');
+
+  const isTruck = isConfigurableTruckType(veh.type);
+  const framePool = useMemo(() => getCompatibleFramesForTruck(veh.type), [veh.type]);
+  const pickedFrame = useMemo(
+    () => (isTruck ? (framePool.find((f) => f.id === frameId) || getDefaultFrameForTruck(veh.type)) : null),
+    [isTruck, framePool, frameId, veh.type]
+  );
+  const bodyPool = useMemo(
+    () => (pickedFrame ? getCompatibleBodiesForFrame(pickedFrame) : []),
+    [pickedFrame]
+  );
+  const pickedBody = useMemo(
+    () => (isTruck ? (bodyPool.find((b) => b.id === bodyId) || bodyPool[0] || null) : null),
+    [isTruck, bodyPool, bodyId]
+  );
+
+  useEffect(() => {
+    if (pickedFrame && bodyId && !bodyPool.some((b) => b.id === bodyId)) {
+      setBodyId('body_none');
+    }
+  }, [pickedFrame, bodyId, bodyPool]);
 
   const pwCat = getVehiclePowertrainCategory(veh.type);
   const engPool = useMemo(() => ENGINE_VARIANTS.filter((e) => e.cats.includes(pwCat)), [pwCat]);
@@ -771,10 +804,11 @@ const Configurator: React.FC<{
   const selColor = colorIdx >= 0 && colorIdx < colorList.length ? colorList[colorIdx] : null;
   const previewColor = selColor ? selColor.hex : (veh.color || '#c68a35');
 
-  const initial = useRef({ colorIdx, engId, trnId, tuneId, tirId, tboId });
+  const initial = useRef({ colorIdx, engId, trnId, tuneId, tirId, tboId, frameId, bodyId });
   const reset = () => {
     const i = initial.current;
     setColorIdx(i.colorIdx); setEngId(i.engId); setTrnId(i.trnId); setTuneId(i.tuneId); setTirId(i.tirId); setTboId(i.tboId);
+    setFrameId(i.frameId); setBodyId(i.bodyId);
   };
 
   const apply = () => {
@@ -785,7 +819,9 @@ const Configurator: React.FC<{
         transmissionId: trnId || undefined,
         tuneId: tuneId || undefined,
         tireSetId: tirId || undefined,
-        turboKitId: factoryTurbo ? factoryTurbo.id : (pickedTbo && pickedTbo.id !== 'trb_none' ? pickedTbo.id : 'trb_none')
+        turboKitId: factoryTurbo ? factoryTurbo.id : (pickedTbo && pickedTbo.id !== 'trb_none' ? pickedTbo.id : 'trb_none'),
+        frameId: pickedFrame?.id,
+        bodyId: pickedBody?.id
       }
     });
   };
@@ -810,17 +846,60 @@ const Configurator: React.FC<{
       ) : (
         <>
           <div className="cth" style={{ height: 118, borderRadius: 9, flex: 'none', marginTop: 12 }}>
-            <VehiclePreviewCanvas carType={veh.type} color={previewColor} roofColor={selColor?.roofHex || undefined} width={220} height={118} showPedestal={false} />
+            <VehiclePreviewCanvas
+              carType={veh.type}
+              color={previewColor}
+              roofColor={selColor?.roofHex || undefined}
+              frameId={pickedFrame?.id}
+              bodyId={pickedBody?.id}
+              width={220}
+              height={118}
+              showPedestal={false}
+            />
           </div>
           <div style={{ padding: '12px 4px 0' }}>
             <div className="cn" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>{name}</div>
             <div className="mut" style={{ fontSize: 13, marginTop: 3 }}>
-              {selColor ? selColor.name : 'Текущая окраска'} · {pickedEng ? FUEL_LABEL[pickedEng.fuel] || pickedEng.fuel : 'заводской мотор'} · {pickedTrn ? pickedTrn.nameRu.split(' ')[0] : 'заводская КПП'}
+              {selColor ? selColor.name : 'Текущая окраска'}
+              {pickedFrame ? ` · ${pickedFrame.wheelFormula}` : ''}
+              {pickedBody ? ` · ${pickedBody.id === 'body_none' ? 'Голая рама' : pickedBody.nameRu}` : ''}
               {entry ? ` · ${entry.powerHp} л.с.` : ''}
             </div>
           </div>
 
           <div className="tree">
+            {isTruck && pickedFrame && (
+              <Node
+                id="chassis"
+                n="Рама и кузов"
+                v={`${pickedFrame.wheelFormula} · ${pickedBody?.id === 'body_none' ? 'Голая рама' : (pickedBody?.nameRu || 'Голая рама')}`}
+                openIds={openIds}
+                toggle={toggle}
+              >
+                <Node id="frame" n="Рама шасси" v={`${pickedFrame.modelCode} (${pickedFrame.wheelFormula})`} openIds={openIds} toggle={toggle}>
+                  {framePool.map((f) => (
+                    <Opt
+                      key={f.id}
+                      on={f.id === pickedFrame.id}
+                      onClick={() => setFrameId(f.id)}
+                      title={f.nameRu}
+                      sub={`${f.wheelFormula} · ${f.frameLengthMm} мм · г/п ${(f.payloadCapacityKg / 1000).toFixed(1)} т · ${f.massKg} кг`}
+                    />
+                  ))}
+                </Node>
+                <Node id="body" n="Кузов (модификатор рамы)" v={pickedBody ? (pickedBody.id === 'body_none' ? 'Голая рама' : pickedBody.nameRu) : 'Голая рама'} openIds={openIds} toggle={toggle}>
+                  {bodyPool.map((b) => (
+                    <Opt
+                      key={b.id}
+                      on={pickedBody?.id === b.id}
+                      onClick={() => setBodyId(b.id)}
+                      title={b.nameRu}
+                      sub={b.id === 'body_none' ? 'Без надстройки' : `${b.requiredMounts.map(m => MOUNT_TYPE_LABELS_RU[m]).join(' / ')} · +${b.massKg} кг`}
+                    />
+                  ))}
+                </Node>
+              </Node>
+            )}
             <Node id="paint" n="Окраска" v={selColor ? selColor.name : 'Текущая'} openIds={openIds} toggle={toggle}>
               {colorList.length > 0 ? (
                 <div className="lf">

@@ -37,8 +37,10 @@ import {
   renderSpecializedVehicleAttachments,
   getVehicleBasePolygon,
   getVehicleCabinDimensions,
-  renderVehicleGreenhouseAndBodyPanels
+  renderVehicleGreenhouseAndBodyPanels,
+  getTruckFrameAxlePositions
 } from './vehicleVisuals';
+import { resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
 import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
@@ -10695,6 +10697,84 @@ export class GameRenderer {
         // 3. Sidecar Wheel
         renderUralSpokeWheel(-halfL * 0.20, halfW * 0.76, false);
 
+      } else if (resolveVehicleTruckFrameAndBody(car)) {
+        // Configurable truck chassis (ГАЗ-53, ЗИЛ-130, ЗИЛ-4331, КАМАЗ): dynamic axle formula & tire type
+        const resolvedTruck = resolveVehicleTruckFrameAndBody(car)!;
+        const { frontAxlesX: frontAxles, rearAxlesX: rearAxles } = getTruckFrameAxlePositions(resolvedTruck.frame, halfL, resolvedTruck.platform);
+        const tireType = resolvedTruck.frame.rearTireType;
+        const isOffroadTire = tireType === 'offroad_single';
+
+        const renderTruckRearWheel = (wx: number, wy: number, w: number) => {
+          const [dwx, dwy] = deform(wx, wy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-wheelL / 2, -w / 2, wheelL, w);
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(-wheelL / 2 + 2.2, -w / 2 + 0.8, wheelL - 4.4, w - 1.6);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-1.4, -w / 2 + 1.1, 2.8, w - 2.2);
+          if (isOffroadTire) {
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 0.85;
+            for (let tx = -wheelL / 2 + 1.6; tx <= wheelL / 2 - 1.6; tx += 2.3) {
+              ctx.beginPath();
+              ctx.moveTo(tx - 0.6, -w / 2);
+              ctx.lineTo(tx + 0.6, 0);
+              ctx.lineTo(tx - 0.6, w / 2);
+              ctx.stroke();
+            }
+          }
+          ctx.restore();
+        };
+
+        for (const rx of rearAxles) {
+          if (tireType === 'dual') {
+            const dualW = 4.2;
+            renderTruckRearWheel(rx, -trackY + dualW * 0.5, dualW);
+            renderTruckRearWheel(rx, -trackY + dualW * 1.5 + 0.5, dualW);
+            renderTruckRearWheel(rx, trackY - dualW * 0.5, dualW);
+            renderTruckRearWheel(rx, trackY - dualW * 1.5 - 0.5, dualW);
+          } else {
+            const singleW = isOffroadTire ? 6.0 : 5.4;
+            renderTruckRearWheel(rx, -trackY + singleW * 0.5, singleW);
+            renderTruckRearWheel(rx, trackY - singleW * 0.5, singleW);
+          }
+        }
+
+        const fWheelW = isOffroadTire ? 5.6 : 4.8;
+        const renderSteeredTruckWheel = (wx: number, wy: number, steerRad: number) => {
+          const [dwx, dwy] = deform(wx, wy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          ctx.rotate(steerRad);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-wheelL / 2, -fWheelW / 2, wheelL, fWheelW);
+          ctx.fillStyle = '#64748b';
+          ctx.fillRect(-wheelL / 2 + 2.0, -fWheelW / 2 + 0.8, wheelL - 4.0, fWheelW - 1.6);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-1.4, -fWheelW / 2 + 1.1, 2.8, fWheelW - 2.2);
+          if (isOffroadTire) {
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 0.85;
+            for (let tx = -wheelL / 2 + 1.6; tx <= wheelL / 2 - 1.6; tx += 2.3) {
+              ctx.beginPath();
+              ctx.moveTo(tx - 0.6, -fWheelW / 2);
+              ctx.lineTo(tx + 0.6, 0);
+              ctx.lineTo(tx - 0.6, fWheelW / 2);
+              ctx.stroke();
+            }
+          }
+          ctx.restore();
+        };
+
+        for (let fi = 0; fi < frontAxles.length; fi++) {
+          const fx = frontAxles[fi];
+          const steer = fi === 0 ? car.steerAngle : car.steerAngle * 0.72;
+          renderSteeredTruckWheel(fx, -trackY + fWheelW * 0.5, steer);
+          renderSteeredTruckWheel(fx, trackY - fWheelW * 0.5, steer);
+        }
+
       } else if (isThreeAxle) {
         // Dual tandem rear axles (6x4 / 6x6)
         const rearAxle1X = -halfL * 0.36;
@@ -10922,26 +11002,33 @@ export class GameRenderer {
       }
 
       // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
+      const resolvedTruckBody = resolveVehicleTruckFrameAndBody(car);
       if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
-        if (car.type === 'truck_zil_dump') {
-          const dumpCol = car.dumpColor || '#d97706';
+        if (resolvedTruckBody) {
+          const { cabinL: cL, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+          const cabRearX = cX - cL * 0.5 - 0.6;
+          const isBareOrTractor = resolvedTruckBody.body.id === 'body_none' || resolvedTruckBody.body.id === 'body_fifth_wheel';
+          const isZilDump = resolvedTruckBody.body.attachmentCarType === 'truck_zil_dump';
+
           ctx.save();
           ctx.beginPath();
           traceSoftbodyPath(ctx, bodyPoly, polyDvs);
           ctx.closePath();
           ctx.clip();
 
-          // Dark chassis frame underbody
-          ctx.fillStyle = '#1e293b';
+          // Dark chassis frame steel underbody
+          ctx.fillStyle = '#141820';
           ctx.fillRect(-halfL - 2, -halfW - 2, halfL * 2 + 4, halfW * 2 + 4);
 
-          // Rear dump body base (Authentic Soviet MMZ-555 Ochre-Orange)
-          ctx.fillStyle = dumpCol;
-          ctx.fillRect(-halfL - 2, -halfW - 2, halfL * 1.1 + 4, halfW * 2 + 4);
+          if (!isBareOrTractor) {
+            // Superstructure base fill behind cab
+            ctx.fillStyle = isZilDump ? (car.dumpColor || '#d97706') : car.color;
+            ctx.fillRect(-halfL - 2, -halfW - 2, (cabRearX + halfL) + 4, halfW * 2 + 4);
+          }
 
-          // Front cabin & hood base (Soviet Sky-Blue)
+          // Front cabin & hood painted shell
           ctx.fillStyle = car.color;
-          ctx.fillRect(halfL * 0.08, -halfW - 2, halfL, halfW * 2 + 4);
+          ctx.fillRect(cabRearX, -halfW - 2, (halfL - cabRearX) + 4, halfW * 2 + 4);
 
           ctx.restore();
         } else {
@@ -11011,8 +11098,11 @@ export class GameRenderer {
         renderSoftbodyStressLines(ctx, bodyPoly, polyDvs);
       }
 
-      // Render specialized trailer attachments and truck_semi chassis & fifth-wheel saddle (on chassis layer under trailers)
-      if (isTrailer || car.type === 'truck_semi' || isRoadMachinery(car.type)) {
+      // Render specialized trailer attachments and bare-frame / fifth-wheel tractor chassis (on chassis layer under trailers & cab overhang)
+      const isLowerLayerTruck = resolvedTruckBody
+        ? (resolvedTruckBody.body.id === 'body_none' || resolvedTruckBody.body.id === 'body_fifth_wheel')
+        : (car.type === 'truck_semi');
+      if (isTrailer || isLowerLayerTruck || isRoadMachinery(car.type)) {
         const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
         renderSpecializedVehicleAttachments({
           ctx,
@@ -12614,8 +12704,12 @@ export class GameRenderer {
       }
 
       // Specialized vehicle attachments, emergency sirens, cabins & equipment
-      // (skip truck_semi and trailers whose chassis and attachments are rendered on the lower chassis/body layer)
-      if (car.type !== 'truck_semi' && !car.type.startsWith('trailer_') && !car.isTrailer) {
+      // (skip bare-frame / fifth-wheel trucks and trailers whose chassis and attachments are rendered on the lower chassis/body layer)
+      const resolvedTruckCab = resolveVehicleTruckFrameAndBody(car);
+      const isLowerLayerTruckCab = resolvedTruckCab
+        ? (resolvedTruckCab.body.id === 'body_none' || resolvedTruckCab.body.id === 'body_fifth_wheel')
+        : (car.type === 'truck_semi');
+      if (!isLowerLayerTruckCab && !car.type.startsWith('trailer_') && !car.isTrailer) {
         renderSpecializedVehicleAttachments(vCtx);
       }
 

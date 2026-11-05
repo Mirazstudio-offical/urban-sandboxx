@@ -5,7 +5,19 @@ import { useTopmostEscape } from './gameUi';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { VEHICLE_CATALOG, type VehicleCatalogEntry, type VehicleCategory } from '../vehicleCatalog';
 import { CAR_CONFIGS, getVehicleDriveType } from '../vehicleHelpers';
-import { ENGINE_VARIANTS, TRANSMISSION_VARIANTS, TUNE_VARIANTS, TIRE_SETS, TURBO_KITS, getVehiclePowertrainCategory } from '../powertrainVariants';
+import {
+  ENGINE_VARIANTS,
+  TRANSMISSION_VARIANTS,
+  TUNE_VARIANTS,
+  TIRE_SETS,
+  TURBO_KITS,
+  getVehiclePowertrainCategory,
+  isConfigurableTruckType,
+  getCompatibleFramesForTruck,
+  getDefaultFrameForTruck,
+  getCompatibleBodiesForFrame,
+  MOUNT_TYPE_LABELS_RU
+} from '../powertrainVariants';
 import { SPAWN_LOCATIONS } from '../spawnLocations';
 
 export interface PowertrainSelection {
@@ -14,6 +26,8 @@ export interface PowertrainSelection {
   tuneId?: string;
   tireSetId?: string;
   turboKitId?: string;
+  frameId?: string;
+  bodyId?: string;
 }
 
 export interface VehicleSelectResult {
@@ -57,8 +71,8 @@ const chev = (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a29e93" strokeWidth="2.6"><path d="M9 5l7 7-7 7" /></svg>
 );
 
-const Car: React.FC<{ c: VehicleCatalogEntry; color: string; roof?: string; w: number; h: number }> = ({ c, color, roof, w, h }) => (
-  <VehiclePreviewCanvas carType={c.type} color={color} roofColor={roof || color} width={w} height={h} showPedestal={false} />
+const Car: React.FC<{ c: VehicleCatalogEntry; color: string; roof?: string; frameId?: string; bodyId?: string; w: number; h: number }> = ({ c, color, roof, frameId, bodyId, w, h }) => (
+  <VehiclePreviewCanvas carType={c.type} color={color} roofColor={roof || color} frameId={frameId} bodyId={bodyId} width={w} height={h} showPedestal={false} />
 );
 
 /* tree pieces live at module level so their DOM survives re-renders (keeps the expand animation) */
@@ -93,14 +107,16 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
     }
     return 0;
   });
-  const [open, setOpen] = useState<Record<string, boolean>>({ look: true, paint: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({ chassis: true, frame: true, body: true, look: true, paint: true });
   const [animate, setAnimate] = useState(true);
-  // --- Powertrain configurator selections (null = случайный вариант из каталога) ---
+  // --- Powertrain & Chassis configurator selections ---
   const [pwEng, setPwEng] = useState<string | null>(null);
   const [pwTrn, setPwTrn] = useState<string | null>(null);
   const [pwTune, setPwTune] = useState<string | null>(null);
   const [pwTire, setPwTire] = useState<string | null>(null);
   const [pwTurbo, setPwTurbo] = useState<string | null>(null);
+  const [pwFrame, setPwFrame] = useState<string | null>(null);
+  const [pwBody, setPwBody] = useState<string | null>(null);
   const gmRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -127,7 +143,32 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
   const colRoof = col.roofHex || col.hex;
   const loc = SPAWN_LOCATIONS[spawn] || SPAWN_LOCATIONS[0];
   const trans = transmissionOf(car);
-  const drive = driveOf(car);
+
+  /* ---------- configurable truck frame & body options ---------- */
+  const isTruck = isConfigurableTruckType(car.type);
+  const framePool = useMemo(() => getCompatibleFramesForTruck(car.type), [car.type]);
+  const pickedFrame = useMemo(
+    () => (isTruck ? (framePool.find(f => f.id === pwFrame) || getDefaultFrameForTruck(car.type)) : null),
+    [isTruck, framePool, pwFrame, car.type]
+  );
+  const bodyPool = useMemo(
+    () => (pickedFrame ? getCompatibleBodiesForFrame(pickedFrame) : []),
+    [pickedFrame]
+  );
+  const pickedBody = useMemo(
+    () => (isTruck ? (bodyPool.find(b => b.id === pwBody) || bodyPool[0] || null) : null),
+    [isTruck, bodyPool, pwBody]
+  );
+
+  const drive = pickedFrame ? pickedFrame.wheelFormula : driveOf(car);
+  const totalWeightKg = pickedFrame ? (pickedFrame.massKg + (pickedBody ? pickedBody.massKg : 0)) : car.weightKg;
+
+  // Reset incompatible body if the user switches to a frame that doesn't support it
+  useEffect(() => {
+    if (pickedFrame && pwBody && !bodyPool.some(b => b.id === pwBody)) {
+      setPwBody('body_none');
+    }
+  }, [pickedFrame, pwBody, bodyPool]);
 
   /* ---------- cascading powertrain options ---------- */
   const pwCat = getVehiclePowertrainCategory(car.type);
@@ -151,11 +192,11 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
   const pickedTire = tirePool.find(t => t.id === pwTire) || null;
   const factoryTurbo = pickedEng?.turbo || null;
   const pickedTurbo = TURBO_KITS.find(k => k.id === pwTurbo) || null;
-  const turboAllowed = !factoryTurbo;
 
   // выбор сбрасывается при смене автомобиля (каскад несовместим)
   useEffect(() => {
     setPwEng(null); setPwTrn(null); setPwTune(null); setPwTire(null); setPwTurbo(null);
+    setPwFrame(null); setPwBody(null);
   }, [car.type]);
   // если у двигателя штатный наддув — ручной выбор турбо недоступен
   useEffect(() => {
@@ -167,7 +208,9 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
     transmissionId: pickedTrn?.id,
     tuneId: pickedTune?.id,
     tireSetId: pickedTire?.id,
-    turboKitId: factoryTurbo ? factoryTurbo.id : (pickedTurbo && pickedTurbo.id !== 'trb_none' ? pickedTurbo.id : undefined)
+    turboKitId: factoryTurbo ? factoryTurbo.id : (pickedTurbo && pickedTurbo.id !== 'trb_none' ? pickedTurbo.id : undefined),
+    frameId: pickedFrame?.id,
+    bodyId: pickedBody?.id
   });
 
   const setCar = (i: number) => { setCi(i); setColor(0); };
@@ -176,7 +219,11 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
     if (view === 'cfgs') { setAnimate(true); setView('cars'); }
     else onBack();
   };
-  const reset = () => { setColor(0); setPwEng(null); setPwTrn(null); setPwTune(null); setPwTire(null); setPwTurbo(null); };
+  const reset = () => {
+    setColor(0);
+    setPwEng(null); setPwTrn(null); setPwTune(null); setPwTire(null); setPwTurbo(null);
+    setPwFrame(null); setPwBody(null);
+  };
   const pick = () => onStart({
     spawnId: loc.id, saveName: 'Freeroam: ' + car.nameRu, vehicleType: car.type, vehicleColor: colHex,
     powertrain: powertrainSelection()
@@ -285,7 +332,7 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
                 ))
               ) : colors.map((cl, i) => (
                 <button key={cl.hex + i} className={'card' + rz + (i === color ? ' card-on' : '')} data-cfg={i} onClick={() => setColor(i)} style={{ animationDelay: Math.min(i, 12) * 40 + 'ms' }} title={cl.name}>
-                  <div className={'cth g' + (ci % 8)} style={{ height: 170 }}><div style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={cl.hex} roof={cl.roofHex} w={170} h={150} /></div></div>
+                  <div className={'cth g' + (ci % 8)} style={{ height: 170 }}><div style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={cl.hex} roof={cl.roofHex} frameId={pickedFrame?.id} bodyId={pickedBody?.id} w={170} h={150} /></div></div>
                   <div style={{ padding: '12px 14px' }}>
                     <div className="cn nm2" style={{ fontSize: 18, fontWeight: 700 }}>{cl.name}</div>
                     <div className="mut nm" style={{ fontSize: 13, marginTop: 4 }}>{car.powerHp} л.с. · {trans} · {drive}</div>
@@ -297,12 +344,15 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
 
           <aside className="panel a mc-side" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
             <div className={'cth g' + (ci % 8)} id="pvbox" style={{ height: 150, borderRadius: 9, flex: 'none' }}>
-              <div id="pv" style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={colHex} roof={colRoof} w={340} h={200} /></div>
+              <div id="pv" style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={colHex} roof={colRoof} frameId={pickedFrame?.id} bodyId={pickedBody?.id} w={340} h={200} /></div>
             </div>
             <div style={{ padding: '14px 10px 0' }}>
               <div className="cn mut" style={{ fontSize: 12 }}>Выбранный автомобиль</div>
               <div className="cn mc-name" id="cName" style={{ fontSize: 28, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{car.nameRu}</div>
-              <div className="mut" id="cSub" style={{ fontSize: 13, marginTop: 4 }}>{col.name} · {car.powerHp} л.с. · {trans} · {drive}</div>
+              <div className="mut" id="cSub" style={{ fontSize: 13, marginTop: 4 }}>
+                {col.name} · {car.powerHp} л.с. · {trans} · {drive}
+                {pickedFrame && pickedBody ? ` · ${pickedBody.id === 'body_none' ? 'Голая рама' : pickedBody.nameRu}` : ''}
+              </div>
             </div>
             <div className="tree" id="tree">
               <Node id="cfg" n="Комплектация" v={col.name}>
@@ -314,6 +364,68 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
                   ))}
                 </div>
               </Node>
+              {isTruck && pickedFrame && (
+                <Node
+                  id="chassis"
+                  n="Рама и кузов"
+                  v={`${pickedFrame.wheelFormula} · ${pickedBody?.id === 'body_none' ? 'Голая рама' : (pickedBody?.nameRu || 'Голая рама')}`}
+                >
+                  <Node id="frame" n="Рама шасси" v={`${pickedFrame.modelCode} (${pickedFrame.wheelFormula})`}>
+                    <div className="lf" id="frameOpts">
+                      {framePool.map(f => (
+                        <button
+                          key={f.id}
+                          className={'opt' + (f.id === pickedFrame.id ? ' on' : '')}
+                          onClick={() => setPwFrame(f.id)}
+                          title={f.notes}
+                          style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 3, padding: '8px 10px' }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontWeight: 600, textAlign: 'left' }}>{f.nameRu}</span>
+                            <span className="mut" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                              {f.wheelFormula} · {f.totalWheels} кол. · г/п {(f.payloadCapacityKg / 1000).toFixed(1)} т
+                            </span>
+                          </div>
+                          <div className="mut" style={{ fontSize: 11, textAlign: 'left', lineHeight: 1.25 }}>
+                            Длина {f.frameLengthMm} мм · база {f.wheelbaseMm} · {f.tireSpecRu} · {f.massKg} кг
+                          </div>
+                          <div style={{ fontSize: 10.5, color: '#e0ab45', textAlign: 'left' }}>
+                            Крепления: {f.mountTypes.map(m => MOUNT_TYPE_LABELS_RU[m]).join(' · ')}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </Node>
+                  <Node id="body" n="Кузов (модификатор рамы)" v={pickedBody ? (pickedBody.id === 'body_none' ? 'Голая рама' : pickedBody.nameRu) : 'Голая рама'}>
+                    <div className="lf" id="bodyOpts">
+                      <div className="mut" style={{ fontSize: 11.5, padding: '2px 4px 6px' }}>
+                        Доступно на раму {pickedFrame.modelCode} ({pickedFrame.wheelFormula}, г/п {(pickedFrame.payloadCapacityKg / 1000).toFixed(1)} т): {bodyPool.length} вар.
+                      </div>
+                      {bodyPool.map(b => (
+                        <button
+                          key={b.id}
+                          className={'opt' + (pickedBody?.id === b.id ? ' on' : '')}
+                          onClick={() => setPwBody(b.id)}
+                          title={b.notes}
+                          style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '7px 10px' }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontWeight: 600, textAlign: 'left' }}>{b.nameRu}</span>
+                            <span className="mut" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                              {b.massKg > 0 ? `+${b.massKg} кг` : '0 кг'}
+                            </span>
+                          </div>
+                          <div className="mut" style={{ fontSize: 11, textAlign: 'left', lineHeight: 1.25 }}>
+                            {b.id === 'body_none'
+                              ? 'Открытая детализированная лонжеронная рама с мостами и карданом'
+                              : `Крепление: ${b.requiredMounts.map(m => MOUNT_TYPE_LABELS_RU[m]).join(' / ')} · мин. г/п ${(b.minPayloadKg / 1000).toFixed(1)} т`}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </Node>
+                </Node>
+              )}
               <Node id="pt" n="Силовая часть" v={pickedEng ? pickedEng.nameRu : 'Авто (случайно)'}>
                 <Node id="eng" n="Двигатель" v={pickedEng ? pickedEng.nameRu : 'Авто'}>
                   <div className="lf" id="engOpts">
@@ -408,9 +520,19 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
                 </Node>
               </Node>
               <Node id="spec" n="Характеристики" v={car.topSpeedKmh + ' км/ч'}>
-                <div className="spec">{car.descriptionRu}</div>
+                <div className="spec">{pickedFrame ? pickedFrame.notes : car.descriptionRu}</div>
                 <Fact l="Макс. скорость" v={car.topSpeedKmh + ' км/ч'} />
-                <Fact l="Масса" v={car.weightKg + ' кг'} />
+                <Fact l="Снаряжённая масса" v={totalWeightKg + ' кг'} />
+                {pickedFrame && (
+                  <>
+                    <Fact l="Модель рамы" v={pickedFrame.modelCode} />
+                    <Fact l="Колёсная формула" v={`${pickedFrame.wheelFormula} (${pickedFrame.totalWheels} кол.)`} />
+                    <Fact l="Ошиновка" v={pickedFrame.tireSpecRu} />
+                    <Fact l="Длина рамы / База" v={`${pickedFrame.frameLengthMm} мм / ${pickedFrame.wheelbaseMm}`} />
+                    <Fact l="Грузоподъёмность рамы" v={`${pickedFrame.payloadCapacityKg} кг`} />
+                    <Fact l="Крепления рамы" v={pickedFrame.mountTypes.map(m => MOUNT_TYPE_LABELS_RU[m]).join(', ')} />
+                  </>
+                )}
                 <Fact l="Двигатель" v={car.engineSpec || '—'} />
                 <Fact l="Топливо" v={car.fuelTypeLabel} />
               </Node>

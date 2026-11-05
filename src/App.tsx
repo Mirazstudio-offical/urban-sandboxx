@@ -574,7 +574,7 @@ export default function App() {
   // Live vehicle configurator (color + powertrain) from the radial menu tree
   const handleApplyVehicleConfig = (cfg: {
     color?: { name: string; hex: string; roofHex?: string };
-    powertrain?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string };
+    powertrain?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string; frameId?: string; bodyId?: string };
   }) => {
     const w = worldRef.current;
     const p = playerRef.current;
@@ -587,14 +587,20 @@ export default function App() {
     }
     if (cfg.powertrain) {
       const es = veh.engineState;
+      const prevLength = veh.length;
       const sel = {
         engineId: cfg.powertrain.engineId ?? es?.engineId,
         transmissionId: cfg.powertrain.transmissionId ?? es?.transmissionId,
         tuneId: cfg.powertrain.tuneId ?? es?.tuneId,
         tireSetId: cfg.powertrain.tireSetId ?? es?.tireSetId,
-        turboKitId: cfg.powertrain.turboKitId ?? es?.turboKitId ?? 'trb_none'
+        turboKitId: cfg.powertrain.turboKitId ?? es?.turboKitId ?? 'trb_none',
+        frameId: cfg.powertrain.frameId ?? veh.frameId ?? es?.frameId,
+        bodyId: cfg.powertrain.bodyId ?? veh.bodyId ?? es?.bodyId
       };
       applyPowertrain(veh, buildPowertrainPick(veh.type, sel));
+      if (veh.length !== prevLength) {
+        veh.damage = createDefaultVehicleDamage(veh.length, veh.width);
+      }
     }
   };
   const [treatmentModalItem, setTreatmentModalItem] = useState<{ index: number; item: InventoryItem } | null>(null);
@@ -1606,7 +1612,11 @@ export default function App() {
         };
         (newVehicle as any).isSpawnedByPlayer = true;
         (newVehicle as any).playerOwned = true;
+        const prevSpawnLen = newVehicle.length;
         applyPowertrain(newVehicle, buildPowertrainPick(carType, opts.powertrain));
+        if (newVehicle.length !== prevSpawnLen) {
+          newVehicle.damage = createDefaultVehicleDamage(newVehicle.length, newVehicle.width);
+        }
         world.vehicles.push(newVehicle);
         spatialGridVehiclesRef.current.insert(newVehicle);
 

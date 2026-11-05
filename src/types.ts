@@ -432,6 +432,8 @@ export interface EngineState {
   tuneId?: string;                   // ECU firmware/ECU map id
   tireSetId?: string;                // Tire set id
   turboKitId?: string;               // Turbo kit id ('trb_none' = naturally aspirated)
+  frameId?: string;                  // Truck chassis frame variant id (truckChassisVariants.ts)
+  bodyId?: string;                   // Truck cargo body / superstructure variant id (truckChassisVariants.ts)
   transmissionKind?: 'MT' | 'AT' | 'DSG' | 'AMT' | 'CVT' | 'HYDRO' | 'RANGE';
   transmissionEfficiency?: number;   // 0.85 - 0.98 drivetrain mechanical efficiency
   powerMult?: number;                // engine * tune torque/power factor
@@ -745,6 +747,8 @@ export interface Vehicle {
   width: number;
   length: number;
   wheelBase: number;
+  frameId?: string;
+  bodyId?: string;
   color: string;
   roofColor: string;
   dumpColor?: string;

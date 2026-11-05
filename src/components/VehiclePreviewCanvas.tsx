@@ -6,14 +6,18 @@ import {
   getVehicleCabinDimensions, 
   renderVehicleGreenhouseAndBodyPanels, 
   renderSpecializedVehicleAttachments, 
+  getTruckFrameAxlePositions,
   VehicleRenderContext 
 } from '../vehicleVisuals';
+import { resolveVehicleTruckFrameAndBody } from '../truckChassisVariants';
 import { traceSoftbodyPath, renderSoftbodyStressLines } from '../softbodyVisuals';
 
 export interface VehiclePreviewCanvasProps {
   carType: CarType | string;
   color: string;
   roofColor?: string;
+  frameId?: string;
+  bodyId?: string;
   width?: number;
   height?: number;
   className?: string;
@@ -25,6 +29,8 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
   carType,
   color,
   roofColor,
+  frameId,
+  bodyId,
   width = 220,
   height = 140,
   className = '',
@@ -49,11 +55,19 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       mass: 1400
     };
 
-    const halfL = config.length / 2;
-    const halfW = config.width / 2;
+    const resolvedTruck = resolveVehicleTruckFrameAndBody({
+      type: carType,
+      frameId,
+      bodyId
+    });
 
-    const scaleX = (canvas.width * 0.76) / (config.length + 10);
-    const scaleY = (canvas.height * 0.74) / (config.width * 2 + 10);
+    const effLength = resolvedTruck ? resolvedTruck.frame.lengthPx : config.length;
+    const effWidth = config.width;
+    const halfL = effLength / 2;
+    const halfW = effWidth / 2;
+
+    const scaleX = (canvas.width * 0.78) / (effLength + 10);
+    const scaleY = (canvas.height * 0.74) / (effWidth * 2 + 10);
     const scale = Math.min(scaleX, scaleY, 2.9);
 
     ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -79,6 +93,8 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     const dummyCar = {
       id: 'preview',
       type: carType,
+      frameId,
+      bodyId,
       x: 0,
       y: 0,
       vx: 0,
@@ -89,10 +105,11 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       speed: 0,
       lateralVelocity: 0,
       angularVelocity: 0,
-      mass: config.mass,
-      length: config.length,
-      width: config.width,
-      wheelBase: config.wheelBase,
+      mass: resolvedTruck ? resolvedTruck.frame.massKg + resolvedTruck.body.massKg : config.mass,
+      length: effLength,
+      width: effWidth,
+      wheelBase: resolvedTruck ? resolvedTruck.frame.wheelBasePx : config.wheelBase,
+      hitchOffset: resolvedTruck && resolvedTruck.body.id === 'body_fifth_wheel' ? resolvedTruck.frame.fifthWheelOffsetPx : (config as { hitchOffset?: number }).hitchOffset,
       color: color || '#38bdf8',
       roofColor: roofColor || color || '#38bdf8',
       headlightsOn: true,
@@ -111,7 +128,7 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       routeWaypoints: [],
       aiState: 'parked',
       requiredFuel: 'ai95',
-      damage: createDefaultVehicleDamage(config.length, config.width)
+      damage: createDefaultVehicleDamage(effLength, effWidth)
     } as unknown as Vehicle;
 
     // Drop Shadow under vehicle
@@ -125,95 +142,30 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     const isMicro = dummyCar.type === 'micro_car' || dummyCar.type === 'retro_bubble';
     const isOffroadHeavy = dummyCar.type === 'offroad_hardcore' || dummyCar.type === 'suv_classic_box';
 
-    const wheelL = isSport ? 10.5 : (isMicro ? 7.6 : 9.5);
-    const wheelW = isSport ? 5.8 : (isMicro ? 3.4 : (isOffroadHeavy ? 4.8 : 4.2));
+    const wheelL = resolvedTruck ? 11.5 : (isSport ? 10.5 : (isMicro ? 7.6 : 9.5));
+    const wheelW = resolvedTruck ? 5.0 : (isSport ? 5.8 : (isMicro ? 3.4 : (isOffroadHeavy ? 4.8 : 4.2)));
     const frontAxleX = dummyCar.type === 'supercar' ? halfL * 0.68 : halfL * 0.65;
     const rearAxleX = -halfL * 0.65;
     const trackY = halfW - 0.8;
 
-    const renderFixedWheel = (wx: number, wy: number) => {
+    const renderFixedWheel = (wx: number, wy: number, w = wheelW, offroad = false) => {
       ctx.fillStyle = '#0f172a';
-      ctx.fillRect(wx - wheelL / 2, wy, wheelL, wheelW);
+      ctx.fillRect(wx - wheelL / 2, wy, wheelL, w);
       ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
-      ctx.fillRect(wx - wheelL / 2 + 2, wy + 0.8, wheelL - 4, wheelW - 1.6);
+      ctx.fillRect(wx - wheelL / 2 + 2, wy + 0.8, wheelL - 4, w - 1.6);
+      if (offroad) {
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 0.8;
+        for (let tx = wx - wheelL / 2 + 1.5; tx <= wx + wheelL / 2 - 1.5; tx += 2.2) {
+          ctx.beginPath();
+          ctx.moveTo(tx - 0.5, wy);
+          ctx.lineTo(tx + 0.5, wy + w / 2);
+          ctx.lineTo(tx - 0.5, wy + w);
+          ctx.stroke();
+        }
+      }
     };
 
-    if (!isMachinery) {
-      renderFixedWheel(rearAxleX, -trackY);
-      renderFixedWheel(rearAxleX, trackY - wheelW);
-
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(frontAxleX - wheelL / 2, -trackY, wheelL, wheelW);
-      ctx.fillRect(frontAxleX - wheelL / 2, trackY - wheelW, wheelL, wheelW);
-      ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
-      ctx.fillRect(frontAxleX - wheelL / 2 + 2, -trackY + 0.8, wheelL - 4, wheelW - 1.6);
-      ctx.fillRect(frontAxleX - wheelL / 2 + 2, trackY - wheelW + 0.8, wheelL - 4, wheelW - 1.6);
-
-      // Body Shell
-      const basePoly = getVehicleBasePolygon(dummyCar, halfL, halfW, 0, 0, 0, 0, 0, 0, 0, 0);
-      ctx.fillStyle = dummyCar.color;
-      ctx.beginPath();
-      traceSoftbodyPath(ctx, basePoly);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      renderSoftbodyStressLines(ctx, basePoly);
-
-      const hasCustomGrille = dummyCar.type === 'sedan_classic' || dummyCar.type === 'sedan_luxury' || 
-                              dummyCar.type === 'classic_compact' || dummyCar.type === 'retro_bubble' || 
-                              dummyCar.type === 'suv_classic_box' || dummyCar.type === 'van' || 
-                              dummyCar.type === 'van_cargo_old' || dummyCar.type === 'delivery_truck' ||
-                              dummyCar.type === 'van_camper' || dummyCar.type === 'hatch_hot' ||
-                              dummyCar.type === 'police' || dummyCar.type === 'sports' || dummyCar.type === 'supercar' ||
-                              dummyCar.type === 'bus_minibus' || dummyCar.type === 'wagon_allroad' || dummyCar.type === 'wagon_classic';
-      if (!hasCustomGrille) {
-        const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL - 2, -grilleW / 2, 1.5, grilleW);
-      }
-
-      // Headlights
-      const leftLampX = halfL - 3.2;
-      const leftLampY = -halfW + 3.2;
-      const rightLampX = halfL - 3.2;
-      const rightLampY = halfW - 3.2;
-
-      const drawHeadlight = (lx: number, ly: number) => {
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(lx, ly, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      };
-
-      drawHeadlight(leftLampX, leftLampY);
-      drawHeadlight(rightLampX, rightLampY);
-
-      // Taillights
-      const rearLeftX = -halfL + 2.5;
-      const rearLeftY = -halfW + 3.2;
-      const rearRightX = -halfL + 2.5;
-      const rearRightY = halfW - 3.2;
-
-      const drawTaillight = (rx: number, ry: number) => {
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(rx - 1, ry - 1, 2, 2);
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(rx - 1, ry - 1, 2, 2);
-      };
-
-      drawTaillight(rearLeftX, rearLeftY);
-      drawTaillight(rearRightX, rearRightY);
-    }
-
-    // Cabin, Greenhouse, Roof & Accessories
     const cabinDim = getVehicleCabinDimensions(dummyCar, halfL, halfW, 0, 0);
     const deformFunc = (x: number, y: number): [number, number] => [x, y];
     
@@ -222,9 +174,9 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       ctx.fillRect(x, y, w, h);
     };
     
-    const drawDeformedLine = (x1: number, y1: number, x2: number, y2: number, stroke: string, width = 1) => {
+    const drawDeformedLine = (x1: number, y1: number, x2: number, y2: number, stroke: string, lineWidth = 1) => {
       ctx.strokeStyle = stroke;
-      ctx.lineWidth = width;
+      ctx.lineWidth = lineWidth;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
@@ -261,12 +213,143 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     };
 
     if (!isMachinery) {
+      if (resolvedTruck) {
+        const { frontAxlesX: frontAxles, rearAxlesX: rearAxles } = getTruckFrameAxlePositions(resolvedTruck.frame, halfL, resolvedTruck.platform);
+        const tireType = resolvedTruck.frame.rearTireType;
+        const isOffroad = tireType === 'offroad_single';
+
+        for (const rx of rearAxles) {
+          if (tireType === 'dual') {
+            const dw = 4.2;
+            renderFixedWheel(rx, -trackY, dw, false);
+            renderFixedWheel(rx, -trackY + dw + 0.5, dw, false);
+            renderFixedWheel(rx, trackY - dw, dw, false);
+            renderFixedWheel(rx, trackY - dw * 2 - 0.5, dw, false);
+          } else {
+            const sw = isOffroad ? 6.0 : 5.4;
+            renderFixedWheel(rx, -trackY, sw, isOffroad);
+            renderFixedWheel(rx, trackY - sw, sw, isOffroad);
+          }
+        }
+        const fw = isOffroad ? 5.6 : 4.8;
+        for (const fx of frontAxles) {
+          renderFixedWheel(fx, -trackY, fw, isOffroad);
+          renderFixedWheel(fx, trackY - fw, fw, isOffroad);
+        }
+      } else {
+        renderFixedWheel(rearAxleX, -trackY);
+        renderFixedWheel(rearAxleX, trackY - wheelW);
+        renderFixedWheel(frontAxleX, -trackY);
+        renderFixedWheel(frontAxleX, trackY - wheelW);
+      }
+
+      // Body Shell
+      const basePoly = getVehicleBasePolygon(dummyCar, halfL, halfW, 0, 0, 0, 0, 0, 0, 0, 0);
+      if (resolvedTruck) {
+        const cabRearX = cabinDim.cabinX - cabinDim.cabinL * 0.5 - 0.6;
+        const isBareOrTractor = resolvedTruck.body.id === 'body_none' || resolvedTruck.body.id === 'body_fifth_wheel';
+        const isZilDump = resolvedTruck.body.attachmentCarType === 'truck_zil_dump';
+
+        ctx.save();
+        ctx.beginPath();
+        traceSoftbodyPath(ctx, basePoly);
+        ctx.closePath();
+        ctx.clip();
+
+        ctx.fillStyle = '#141820';
+        ctx.fillRect(-halfL - 2, -halfW - 2, halfL * 2 + 4, halfW * 2 + 4);
+
+        if (!isBareOrTractor) {
+          ctx.fillStyle = isZilDump ? '#d97706' : dummyCar.color;
+          ctx.fillRect(-halfL - 2, -halfW - 2, (cabRearX + halfL) + 4, halfW * 2 + 4);
+        }
+
+        ctx.fillStyle = dummyCar.color;
+        ctx.fillRect(cabRearX, -halfW - 2, (halfL - cabRearX) + 4, halfW * 2 + 4);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = dummyCar.color;
+        ctx.beginPath();
+        traceSoftbodyPath(ctx, basePoly);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      renderSoftbodyStressLines(ctx, basePoly);
+
+      const hasCustomGrille = dummyCar.type === 'sedan_classic' || dummyCar.type === 'sedan_luxury' || 
+                              dummyCar.type === 'classic_compact' || dummyCar.type === 'retro_bubble' || 
+                              dummyCar.type === 'suv_classic_box' || dummyCar.type === 'van' || 
+                              dummyCar.type === 'van_cargo_old' || dummyCar.type === 'delivery_truck' ||
+                              dummyCar.type === 'van_camper' || dummyCar.type === 'hatch_hot' ||
+                              dummyCar.type === 'police' || dummyCar.type === 'sports' || dummyCar.type === 'supercar' ||
+                              dummyCar.type === 'bus_minibus' || dummyCar.type === 'wagon_allroad' || dummyCar.type === 'wagon_classic' ||
+                              !!resolvedTruck;
+      if (!hasCustomGrille) {
+        const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(halfL - 2, -grilleW / 2, 1.5, grilleW);
+      }
+
+      // Headlights
+      const leftLampX = halfL - 3.2;
+      const leftLampY = -halfW + 3.2;
+      const rightLampX = halfL - 3.2;
+      const rightLampY = halfW - 3.2;
+
+      const drawHeadlight = (lx: number, ly: number) => {
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(lx, ly, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      };
+
+      drawHeadlight(leftLampX, leftLampY);
+      drawHeadlight(rightLampX, rightLampY);
+
+      if (!resolvedTruck) {
+        // Taillights (for configurable trucks, taillights are rendered on the rear frame crossmember)
+        const rearLeftX = -halfL + 2.5;
+        const rearLeftY = -halfW + 3.2;
+        const rearRightX = -halfL + 2.5;
+        const rearRightY = halfW - 3.2;
+
+        const drawTaillight = (rx: number, ry: number) => {
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(rx - 1, ry - 1, 2, 2);
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(rx - 1, ry - 1, 2, 2);
+        };
+
+        drawTaillight(rearLeftX, rearLeftY);
+        drawTaillight(rearRightX, rearRightY);
+      }
+    }
+
+    const isLowerLayerTruck = resolvedTruck
+      ? (resolvedTruck.body.id === 'body_none' || resolvedTruck.body.id === 'body_fifth_wheel')
+      : (dummyCar.type === 'truck_semi');
+
+    if (isLowerLayerTruck) {
+      renderSpecializedVehicleAttachments(vCtx);
+    }
+    if (!isMachinery) {
       renderVehicleGreenhouseAndBodyPanels(vCtx);
     }
-    renderSpecializedVehicleAttachments(vCtx);
+    if (!isLowerLayerTruck) {
+      renderSpecializedVehicleAttachments(vCtx);
+    }
 
     ctx.restore();
-  }, [carType, color, roofColor, width, height, showPedestal, angle]);
+  }, [carType, color, roofColor, frameId, bodyId, width, height, showPedestal, angle]);
 
   return (
     <canvas

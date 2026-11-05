@@ -7,6 +7,7 @@ import {
   renderMotoChopper,
   renderMopedSoviet
 } from './motorcycleVisuals';
+import { resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
 
 export interface VehicleRenderContext {
   ctx: CanvasRenderingContext2D;
@@ -167,93 +168,66 @@ function getVehicleBasePolygonRaw(
     ];
   }
 
-  // 5h. SEMI-TRUCK TRACTOR (Седельный тягач КАМАЗ-5410: бескапотная кабина со спальником и открытая рама шасси сзади)
-  if (type === 'truck_semi') {
-    const cabFrontX = halfL - fc;
-    const cabinL = halfL * 0.56; // 0.28 * length = 0.56 * halfL
-    const cabRearX = halfL - cabinL - 2; // Real cabin rear wall (~12.0)
-    const cabW = halfW * 0.94;
-    const frameRearX = -halfL + rc + 0.5;
-    const frameW = halfW * 0.38; // Narrow heavy ladder chassis rails
+  // 5h. CONFIGURABLE TRUCKS (ГАЗ-53, ЗИЛ-130, ЗИЛ-4331, КАМАЗ with modular chassis frames & superstructures)
+  const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+  if (resolvedTruck) {
+    const { platform, body } = resolvedTruck;
+    const isBareRear = body.id === 'body_none' || body.id === 'body_fifth_wheel';
+    const cabDims = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+    const cabRearX = cabDims.cabinX - cabDims.cabinL / 2 - 0.6;
+    const rearX = -halfL + rc + 0.4;
+    const frameW = halfW * 0.36; // Realistic narrow ladder frame rail width
 
-    return [
-      { x: cabFrontX, y: 0 },
-      { x: cabFrontX - 0.1, y: cabW },
-      { x: halfL * 0.65, y: cabW - frd * 0.35 },
-      { x: cabRearX, y: cabW - rd * 0.35 },
-      { x: cabRearX, y: frameW },
-      { x: 0, y: frameW },
-      { x: -halfL * 0.45, y: frameW },
-      { x: frameRearX, y: frameW },
-      { x: frameRearX, y: 0 },
-      { x: frameRearX, y: -frameW },
-      { x: -halfL * 0.45, y: -frameW },
-      { x: 0, y: -frameW },
-      { x: cabRearX, y: -frameW },
-      { x: cabRearX, y: -cabW + ld * 0.35 },
-      { x: halfL * 0.65, y: -cabW + fld * 0.35 },
-      { x: cabFrontX - 0.1, y: -cabW }
-    ];
-  }
+    if (platform === 'kamaz') {
+      const cabFrontX = halfL - fc;
+      const cabW = halfW * 0.94;
+      const rearW = isBareRear ? frameW : halfW * 0.96;
+      return [
+        { x: cabFrontX, y: 0 },
+        { x: cabFrontX - 0.1, y: cabW },
+        { x: halfL - 5.0, y: cabW - frd * 0.35 },
+        { x: cabRearX, y: cabW - rd * 0.35 },
+        { x: cabRearX - 0.5, y: rearW },
+        { x: 0, y: rearW - (isBareRear ? 0 : rd * 0.35) },
+        { x: -halfL * 0.45, y: rearW - (isBareRear ? 0 : rd * 0.35) },
+        { x: rearX, y: rearW - (isBareRear ? 0 : rrd * 0.35) },
+        { x: rearX, y: 0 },
+        { x: rearX, y: -rearW + (isBareRear ? 0 : rld * 0.35) },
+        { x: -halfL * 0.45, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
+        { x: 0, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
+        { x: cabRearX - 0.5, y: -rearW },
+        { x: cabRearX, y: -cabW + ld * 0.35 },
+        { x: halfL - 5.0, y: -cabW + fld * 0.35 },
+        { x: cabFrontX - 0.1, y: -cabW }
+      ];
+    } else {
+      // Hooded Soviet/Russian Trucks: GAZ-53, ZIL-130, ZIL-4331
+      const hoodFrontX = halfL - fc;
+      const hoodW = platform === 'zil4331' ? halfW * 0.80 : halfW * 0.72;
+      const fenderW = halfW * 0.90;
+      const cabW = halfW * 0.86;
+      const rearW = isBareRear ? frameW : halfW * 0.97;
+      const fenderMidX = halfL - 6.8;
 
-  // 5i. GAZ-53 HOODED FLATBED & COVERED TRUCK (ГАЗ-53: скругленный капот, выраженные крылья и грузовая платформа)
-  if (type === 'truck_flatbed' || type === 'truck_covered') {
-    const hoodFrontX = halfL - fc;
-    const hoodW = halfW * 0.72; // Tapered rounded front nose
-    const fenderW = halfW * 0.88; // Rounded front fender wings
-    const cabW = halfW * 0.86;
-    const bedW = halfW * 0.98; // Wide wooden flatbed
-    const bedFrontX = halfL * 0.18;
-    const bedRearX = -halfL + rc + 0.2;
-
-    return [
-      { x: hoodFrontX, y: 0 },
-      { x: hoodFrontX - 0.5, y: hoodW * 0.85 },
-      { x: halfL * 0.65, y: fenderW - frd * 0.35 },
-      { x: halfL * 0.32, y: cabW - rd * 0.35 },
-      { x: bedFrontX, y: bedW },
-      { x: 0, y: bedW - rd },
-      { x: -halfL * 0.45, y: bedW - rd * 0.35 },
-      { x: bedRearX, y: bedW - rrd * 0.35 },
-      { x: bedRearX, y: 0 },
-      { x: bedRearX, y: -bedW + rld * 0.35 },
-      { x: -halfL * 0.45, y: -bedW + ld * 0.35 },
-      { x: 0, y: -bedW + ld },
-      { x: bedFrontX, y: -bedW },
-      { x: halfL * 0.32, y: -cabW + ld * 0.35 },
-      { x: halfL * 0.65, y: -fenderW + fld * 0.35 },
-      { x: hoodFrontX - 0.5, y: -hoodW * 0.85 }
-    ];
-  }
-
-  // 5j. ZIL-130 SHORT TIPPER / DUMP TRUCK (ЗИЛ-130 / ЗИЛ-ММЗ-555 Короткобазный Самосвал)
-  if (type === 'truck_zil_dump') {
-    const hoodFrontX = halfL - fc;
-    const hoodW = halfW * 0.70; // Rounded hood front
-    const fenderW = halfW * 0.90; // Iconic bulging front fenders over front wheels
-    const cabW = halfW * 0.86;
-    const bedW = halfW * 0.96; // Wide rounded trough tipper body
-    const bedFrontX = halfL * 0.08;
-    const bedRearX = -halfL + rc + 0.3;
-
-    return [
-      { x: hoodFrontX, y: 0 },
-      { x: hoodFrontX - 0.6, y: hoodW * 0.82 },
-      { x: halfL * 0.62, y: fenderW - frd * 0.35 },
-      { x: halfL * 0.28, y: cabW - rd * 0.35 },
-      { x: bedFrontX, y: bedW },
-      { x: -halfL * 0.25, y: bedW - rd * 0.35 },
-      { x: bedRearX + 1.5, y: bedW * 0.95 - rrd * 0.35 },
-      { x: bedRearX, y: bedW * 0.45 },
-      { x: bedRearX, y: 0 },
-      { x: bedRearX, y: -bedW * 0.45 },
-      { x: bedRearX + 1.5, y: -bedW * 0.95 + rld * 0.35 },
-      { x: -halfL * 0.25, y: -bedW + ld * 0.35 },
-      { x: bedFrontX, y: -bedW },
-      { x: halfL * 0.28, y: -cabW + ld * 0.35 },
-      { x: halfL * 0.62, y: -fenderW + fld * 0.35 },
-      { x: hoodFrontX - 0.6, y: -hoodW * 0.82 }
-    ];
+      return [
+        { x: hoodFrontX, y: 0 },
+        { x: hoodFrontX - 0.5, y: hoodW * 0.85 },
+        { x: fenderMidX, y: fenderW - frd * 0.35 },
+        { x: cabRearX, y: cabW - rd * 0.35 },
+        { x: cabRearX - 0.6, y: rearW },
+        { x: 0, y: rearW - (isBareRear ? 0 : rd * 0.35) },
+        { x: -halfL * 0.45, y: rearW - (isBareRear ? 0 : rd * 0.35) },
+        { x: rearX, y: rearW - (isBareRear ? 0 : rrd * 0.35) },
+        { x: rearX, y: 0 },
+        { x: rearX, y: -rearW + (isBareRear ? 0 : rld * 0.35) },
+        { x: -halfL * 0.45, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
+        { x: 0, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
+        { x: cabRearX - 0.6, y: -rearW },
+        { x: cabRearX, y: -cabW + ld * 0.35 },
+        { x: fenderMidX, y: -fenderW + fld * 0.35 },
+        { x: hoodFrontX - 0.5, y: -hoodW * 0.85 }
+      ];
+    }
   }
 
   // 6. BOXY 4X4 & HEAVY COMMERCIAL RIGS (Strictly sharp rectangular perimeter, flat square front & flat square rear)
@@ -588,6 +562,35 @@ export function getVehicleCabinDimensions(
   let cabinL = car.length * 0.52;
   let cabinW = Math.max(8, car.width * 0.80 - (ld + rd) * 0.3);
   let cabinX = -car.length * 0.05;
+
+  const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+  if (resolvedTruck) {
+    const { platform, frame, body } = resolvedTruck;
+    if (body.id === 'body_fire_pumper' || body.id === 'body_fire_rescue') {
+      cabinL = 18.0;
+      cabinW = car.width * 0.90;
+      cabinX = halfL - cabinL / 2 - 2.0;
+    } else if (platform === 'kamaz') {
+      const hasSleeper = frame.id === 'frame_kamaz5410_tractor_6x4' || body.id === 'body_fifth_wheel';
+      cabinL = hasSleeper ? 15.2 : 12.6;
+      cabinW = car.width * 0.90;
+      cabinX = halfL - cabinL / 2 - 2.0;
+    } else if (platform === 'gaz53') {
+      cabinL = 12.8;
+      cabinW = car.width * 0.86;
+      cabinX = halfL - cabinL * 1.35;
+    } else if (platform === 'zil130') {
+      cabinL = 13.0;
+      cabinW = car.width * 0.86;
+      cabinX = halfL - cabinL * 1.35;
+    } else {
+      // zil4331
+      cabinL = 13.4;
+      cabinW = car.width * 0.86;
+      cabinX = halfL - cabinL * 1.35;
+    }
+    return { cabinL, cabinW, cabinX };
+  }
 
   const isCabOverTruck = type === 'truck_box' || type === 'truck_dump' || type === 'truck_semi' || 
                          type === 'cement_mixer' || type === 'garbage_truck' ||
@@ -1584,8 +1587,12 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
       }
     });
 
-    // 4. Municipal Orange Flashing Beacon (Оранжевый проблесковый маячок) on roof for truck_water!
-    if (type === 'truck_water') {
+    // 4. Municipal Orange Flashing Beacon (Оранжевый проблесковый маячок) on roof when utility superstructure is fitted
+    const resolvedZil4331 = resolveVehicleTruckFrameAndBody(car);
+    const showBeacon = resolvedZil4331
+      ? (resolvedZil4331.body.id === 'body_tanker_water' || resolvedZil4331.body.id === 'body_garbage_ko440' || resolvedZil4331.body.id === 'body_tow_platform')
+      : (type === 'truck_water');
+    if (showBeacon) {
       const beaconX = roofX - 1.0;
       drawDeformedCircle(beaconX, 0, 2.2, '#0f172a'); // Black rubber base
       drawDeformedCircle(beaconX, 0, 1.6, '#f97316'); // Glowing orange lens
@@ -1775,16 +1782,21 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedRect(rWsX1 + 0.4, -cabinW * 0.22, 0.8, cabinW * 0.44, 'rgba(56, 189, 248, 0.16)');
     drawDeformedLine(rWsX1 + 0.4, -cabinW * 0.22, rWsX1 + 0.4, cabinW * 0.22, '#0f172a', 0.8);
 
-    // 5. Behind-the-Cab Equipment (Гидроподъемник самосвала, масляный бак и запаска)
-    const gapX = cabinX - cabinL / 2 - 2.2;
-    // Hydraulic telescopic hoist cylinder well
-    drawDeformedRect(gapX - 1.6, -2.4, 3.2, 4.8, '#1e293b');
-    drawDeformedRect(gapX - 1.0, -1.6, 2.0, 3.2, '#cbd5e1'); // Polished chrome hoist piston rod
-    drawDeformedLine(gapX, -2.0, gapX - 1.0, -halfW * 0.42, '#0f172a', 1.0); // High-pressure hydraulic hose
+    // 5. Behind-the-Cab Hydraulic Hoist (only when a dump superstructure is mounted)
+    const resolvedZil130 = resolveVehicleTruckFrameAndBody(car);
+    const hasDumpHoist = resolvedZil130
+      ? (resolvedZil130.body.id === 'body_dump_zil_mmz' || resolvedZil130.body.id === 'body_dump_kamaz_scoop')
+      : true;
+    if (hasDumpHoist) {
+      const gapX = cabinX - cabinL / 2 - 2.2;
+      drawDeformedRect(gapX - 1.6, -2.4, 3.2, 4.8, '#1e293b');
+      drawDeformedRect(gapX - 1.0, -1.6, 2.0, 3.2, '#cbd5e1'); // Polished chrome hoist piston rod
+      drawDeformedLine(gapX, -2.0, gapX - 1.0, -halfW * 0.42, '#0f172a', 1.0); // High-pressure hydraulic hose
 
-    // Hydraulic oil reservoir tank (масляный бак гидросистемы)
-    drawDeformedRect(gapX - 2.0, halfW * 0.32, 2.4, halfW * 0.42, '#334155');
-    drawDeformedCircle(gapX - 0.8, halfW * 0.50, 0.8, '#cbd5e1'); // Tank filler breather cap
+      // Hydraulic oil reservoir tank (масляный бак гидросистемы)
+      drawDeformedRect(gapX - 2.0, halfW * 0.32, 2.4, halfW * 0.42, '#334155');
+      drawDeformedCircle(gapX - 0.8, halfW * 0.50, 0.8, '#cbd5e1'); // Tank filler breather cap
+    }
 
     return;
   }

@@ -14,6 +14,42 @@
 
 import { CarType, EngineState, FuelType, Vehicle } from './types';
 import { MASTER_VEHICLE_CONFIGS } from './vehicleMasterRegistry';
+import {
+  TruckFrameVariant,
+  TruckBodyVariant,
+  TRUCK_FRAME_VARIANTS,
+  TRUCK_BODY_VARIANTS,
+  MOUNT_TYPE_LABELS_RU,
+  getCompatibleFramesForTruck,
+  getCompatibleBodiesForFrame,
+  isBodyCompatibleWithFrame,
+  getDefaultFrameAndBodyForCarType,
+  getDefaultFrameForTruck,
+  resolveVehicleTruckFrameAndBody,
+  isConfigurableTruck,
+  isConfigurableTruckType,
+  getTruckPlatform,
+  getTruckFrameById,
+  getTruckBodyById,
+} from './truckChassisVariants';
+
+export {
+  TRUCK_FRAME_VARIANTS,
+  TRUCK_BODY_VARIANTS,
+  MOUNT_TYPE_LABELS_RU,
+  getCompatibleFramesForTruck,
+  getCompatibleBodiesForFrame,
+  isBodyCompatibleWithFrame,
+  getDefaultFrameAndBodyForCarType,
+  getDefaultFrameForTruck,
+  resolveVehicleTruckFrameAndBody,
+  isConfigurableTruck,
+  isConfigurableTruckType,
+  getTruckPlatform,
+  getTruckFrameById,
+  getTruckBodyById,
+};
+export type { TruckFrameVariant, TruckBodyVariant };
 
 // ============================================================================
 // CATEGORY OF VEHICLE FOR POWERTRAIN POPULATION PICKING
@@ -320,6 +356,8 @@ export interface PowertrainPick {
   tires: TireSetDef;
   turboKit: TurboSpecDef | null;
   turboIsAftermarket: boolean;
+  frame?: TruckFrameVariant | null;
+  body?: TruckBodyVariant | null;
 }
 
 export function pickPowertrain(
@@ -376,17 +414,29 @@ export function pickPowertrain(
     }
   }
 
-  return { engine, transmission, tune, tires, turboKit, turboIsAftermarket };
+  let frame: TruckFrameVariant | null = null;
+  let body: TruckBodyVariant | null = null;
+  if (isConfigurableTruck(tstr)) {
+    const def = getDefaultFrameAndBodyForCarType(tstr);
+    const compatFrames = getCompatibleFramesForTruck(tstr);
+    frame = (def?.frameId && getTruckFrameById(def.frameId)) || compatFrames[0] || null;
+    const rawBody = def?.bodyId ? getTruckBodyById(def.bodyId) : null;
+    body = (frame && rawBody && isBodyCompatibleWithFrame(rawBody, frame, tstr)) ? rawBody : TRUCK_BODY_VARIANTS[0];
+  }
+
+  return { engine, transmission, tune, tires, turboKit, turboIsAftermarket, frame, body };
 }
 
-export function getPowertrainPickByIds(ids: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string }): PowertrainPick | null {
+export function getPowertrainPickByIds(ids: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string; frameId?: string; bodyId?: string }): PowertrainPick | null {
   const engine = ids.engineId ? ENGINE_VARIANTS.find(e => e.id === ids.engineId) : null;
   const transmission = ids.transmissionId ? TRANSMISSION_VARIANTS.find(t => t.id === ids.transmissionId) : null;
   const tune = ids.tuneId ? TUNE_VARIANTS.find(t => t.id === ids.tuneId) : null;
   const tires = ids.tireSetId ? TIRE_SETS.find(t => t.id === ids.tireSetId) : null;
   const turboKit = ids.turboKitId ? TURBO_KITS.find(t => t.id === ids.turboKitId) || null : null;
+  const frame = ids.frameId ? getTruckFrameById(ids.frameId) || null : null;
+  const body = ids.bodyId ? getTruckBodyById(ids.bodyId) || null : null;
   if (!engine || !transmission || !tune || !tires) return null;
-  return { engine, transmission, tune, tires, turboKit, turboIsAftermarket: false };
+  return { engine, transmission, tune, tires, turboKit, turboIsAftermarket: false, frame, body };
 }
 
 /**
@@ -419,7 +469,7 @@ export function makePowertrainRng(seed: string): () => number {
  */
 export function buildPowertrainPick(
   type: CarType | string | undefined,
-  sel?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string }
+  sel?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string; frameId?: string; bodyId?: string }
 ): PowertrainPick {
   const pick = pickPowertrain(type);
   if (!sel) return pick;
@@ -440,6 +490,7 @@ export function buildPowertrainPick(
     turboIsAftermarket = !!turboKit;
   } else {
     turboKit = null;
+    turboIsAftermarket = false;
   }
 
   // Firmware compatibility guard: Stage-requires-turbo map without a physical turbo
@@ -455,7 +506,29 @@ export function buildPowertrainPick(
     tires = TIRE_SETS.find(t => t.id === 'tir_summer_city')!;
   }
 
-  return { engine, transmission, tune, tires, turboKit, turboIsAftermarket };
+  let frame: TruckFrameVariant | null = pick.frame || null;
+  let body: TruckBodyVariant | null = pick.body || null;
+  const tstr = (type || 'sedan') as string;
+  if (isConfigurableTruck(tstr)) {
+    const compatFrames = getCompatibleFramesForTruck(tstr);
+    if (sel.frameId) {
+      const f = compatFrames.find(cf => cf.id === sel.frameId) || getTruckFrameById(sel.frameId);
+      if (f) frame = f;
+    }
+    if (!frame && compatFrames.length > 0) {
+      frame = compatFrames[0];
+    }
+    if (frame) {
+      const candidateBody = sel.bodyId ? getTruckBodyById(sel.bodyId) : body;
+      if (candidateBody && isBodyCompatibleWithFrame(candidateBody, frame, tstr)) {
+        body = candidateBody;
+      } else {
+        body = TRUCK_BODY_VARIANTS[0]; // 'body_none'
+      }
+    }
+  }
+
+  return { engine, transmission, tune, tires, turboKit, turboIsAftermarket, frame, body };
 }
 
 // ============================================================================
@@ -560,12 +633,49 @@ export function applyPowertrain(veh: Vehicle, forcedPick?: PowertrainPick): void
     }
   }
 
-  // --- Mass bonus (engine + transmission + turbo + tires) ---
+  // --- Truck Frame & Body Modifiers ---
+  let frameAndBodyMassBonus = 0;
+  if (pick.frame) {
+    eng.frameId = pick.frame.id;
+    veh.frameId = pick.frame.id;
+    veh.length = pick.frame.lengthPx;
+    veh.wheelBase = pick.frame.wheelBasePx;
+    if (pick.frame.hasFrontDriveAxle) {
+      eng.hasTransferCase = true;
+    }
+    const resolvedBody =
+      pick.body && isBodyCompatibleWithFrame(pick.body, pick.frame, veh.type)
+        ? pick.body
+        : TRUCK_BODY_VARIANTS[0];
+    eng.bodyId = resolvedBody.id;
+    veh.bodyId = resolvedBody.id;
+
+    // Hitch / Fifth-wheel offset
+    if (resolvedBody.id === 'body_fifth_wheel') {
+      veh.hitchOffset = pick.frame.fifthWheelOffsetPx;
+    } else {
+      veh.hitchOffset = -Math.round(pick.frame.lengthPx / 2) - 2;
+    }
+
+    // Fluid tank synchronization with mounted body
+    if (resolvedBody.fluidTankSpec) {
+      if (!veh.fluidTank || veh.fluidTank.liquidType !== resolvedBody.fluidTankSpec.liquidType) {
+        veh.fluidTank = { ...resolvedBody.fluidTankSpec };
+      }
+    } else if (veh.fluidTank && isConfigurableTruck(veh.type)) {
+      veh.fluidTank = undefined;
+    }
+
+    // Frame mass delta relative to default 1600kg frame + body mass
+    frameAndBodyMassBonus = (pick.frame.massKg - 1600) + resolvedBody.massKg;
+  }
+
+  // --- Mass bonus (engine + transmission + turbo + tires + frame + body) ---
   const baseMass = veh.mass - (veh.massBonusKg || 0);
   const turboMass = turboKit ? turboKit.massKg : 0;
-  const massBonus = engine.massKg + transmission.massKg + tires.massKg + turboMass;
+  const massBonus = engine.massKg + transmission.massKg + tires.massKg + turboMass + frameAndBodyMassBonus;
   veh.massBonusKg = Math.round(massBonus);
-  veh.mass = Math.round(baseMass + massBonus);
+  veh.mass = Math.max(1200, Math.round(baseMass + massBonus));
 
   // --- Chip tuning flag for compatibility with existing systems ---
   if (tune.chipLevel >= 2) {
@@ -593,11 +703,19 @@ export function describePowertrain(veh: Vehicle, pick?: PowertrainPick): string 
         transmissionId: eng.transmissionId,
         tuneId: eng.tuneId,
         tireSetId: eng.tireSetId,
-        turboKitId: eng.turboKitId
+        turboKitId: eng.turboKitId,
+        frameId: eng.frameId || veh?.frameId,
+        bodyId: eng.bodyId || veh?.bodyId,
       }
     : {});
   if (!p) return '';
   const parts: string[] = [];
+  if (p.frame) {
+    parts.push(`Рама: ${p.frame.nameRu} (${p.frame.wheelFormula})`);
+  }
+  if (p.body) {
+    parts.push(`Кузов: ${p.body.nameRu}`);
+  }
   parts.push(`Двигатель: ${p.engine.nameRu}`);
   parts.push(`КПП: ${p.transmission.nameRu}`);
   if (p.turboKit && p.turboKit.id !== 'trb_none') {

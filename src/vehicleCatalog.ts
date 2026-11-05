@@ -72,13 +72,32 @@ function toCatalogEntry(cfg: MasterVehicleConfig): VehicleCatalogEntry {
   };
 }
 
-export const VEHICLE_CATALOG: VehicleCatalogEntry[] = Object.values(MASTER_VEHICLE_CONFIGS).map(toCatalogEntry);
+export const REMOVED_COPYPASTE_TRUCK_TYPES = new Set<string>([
+  'truck_box',
+  'truck_dump',
+  'truck_tanker',
+  'truck_covered',
+  'cement_mixer',
+  'garbage_truck',
+  'truck_tow',
+  'truck_armored',
+  'fire_engine',
+  'fire_ladder',
+  'fire_rescue'
+]);
+
+const ALL_CATALOG_ENTRIES: VehicleCatalogEntry[] = Object.values(MASTER_VEHICLE_CONFIGS).map(toCatalogEntry);
+
+export const VEHICLE_CATALOG: VehicleCatalogEntry[] = ALL_CATALOG_ENTRIES.filter(
+  entry => !REMOVED_COPYPASTE_TRUCK_TYPES.has(entry.type)
+);
 
 const catalogCache = new Map<string, VehicleCatalogEntry>();
-for (const entry of VEHICLE_CATALOG) {
+for (const entry of ALL_CATALOG_ENTRIES) {
   catalogCache.set(entry.type, entry);
 }
 
 export function getVehicleCatalogItem(type: string): VehicleCatalogEntry | undefined {
   return catalogCache.get(type);
 }
+

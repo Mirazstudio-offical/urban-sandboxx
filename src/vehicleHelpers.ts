@@ -16,7 +16,7 @@ import {
   VehicleDiffLockState 
 } from './types';
 import { getVehicleNodeBeamDefinition } from './vehicleMeshConfigs';
-import { getPowertrainPickByIds, TRANSMISSION_VARIANTS } from './powertrainVariants';
+import { getPowertrainPickByIds, TRANSMISSION_VARIANTS, resolveVehicleTruckFrameAndBody } from './powertrainVariants';
 import { getVehicleCatalogItem } from './vehicleCatalog';
 import { isTrailerVehicle, isRoadMachinery, isMotorcycle, isTractorVehicle } from './vehicleArchetypes';
 import { createNodeBeamForVehicle, registerNodeBeamBuilder } from './nodeBeamRegistry';
@@ -154,7 +154,9 @@ export function ensureVehicleEngineState(veh: Vehicle): EngineState {
     transmissionId: eng.transmissionId,
     tuneId: eng.tuneId,
     tireSetId: eng.tireSetId,
-    turboKitId: eng.turboKitId
+    turboKitId: eng.turboKitId,
+    frameId: eng.frameId || veh.frameId,
+    bodyId: eng.bodyId || veh.bodyId
   });
   const hasVariant = storedPick !== null;
 
@@ -305,9 +307,28 @@ export function createDefaultFluidTank(type: CarType): FluidStorageTank | undefi
 }
 
 export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefined {
-  if (!car.fluidTank) {
+  const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+  if (resolvedTruck) {
+    if (!resolvedTruck.body.fluidTankSpec) {
+      car.fluidTank = undefined;
+      return undefined;
+    }
+    if (!car.fluidTank) {
+      const cap = resolvedTruck.body.fluidTankSpec.capacity;
+      const amt = Math.round(cap * 0.75);
+      car.fluidTank = {
+        liquidType: resolvedTruck.body.fluidTankSpec.liquidType,
+        capacity: cap,
+        currentVolume: amt,
+        currentAmount: amt,
+        isHermetic: resolvedTruck.body.fluidTankSpec.isHermetic,
+        hasWaterHose: resolvedTruck.body.fluidTankSpec.hasWaterHose
+      };
+    }
+  } else if (!car.fluidTank) {
     car.fluidTank = createDefaultFluidTank(car.type);
-  } else {
+  }
+  if (car.fluidTank) {
     // Keep aliases synced to prevent NaN
     if (car.fluidTank.currentAmount === undefined) {
       car.fluidTank.currentAmount = car.fluidTank.currentVolume;
@@ -315,7 +336,8 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
     if (car.fluidTank.currentVolume === undefined) {
       car.fluidTank.currentVolume = car.fluidTank.currentAmount ?? 0;
     }
-    if (car.type === 'truck_water' || car.type === 'trailer_barrel' || car.type === 'trailer_vacuum') {
+    const isWaterTruck = resolvedTruck ? resolvedTruck.body.id === 'body_tanker_water' : car.type === 'truck_water';
+    if (isWaterTruck || car.type === 'trailer_barrel' || car.type === 'trailer_vacuum') {
       if (car.fluidTank.hasWaterHose === undefined) {
         car.fluidTank.hasWaterHose = true;
       }
@@ -334,9 +356,9 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
   const halfL = car.length / 2;
   const halfW = car.width / 2;
 
-  if (car.type === 'truck_water') {
+  const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+  if (car.type === 'truck_water' || resolvedTruck?.body.id === 'body_tanker_water') {
     // Space between cabin and tank on the right equipment platform
-    // In truck_water, cabin is forward, tank starts at x ~ 2
     const localX = halfL * 0.08;
     const localY = halfW * 0.76;
     return {
@@ -603,16 +625,19 @@ export function getVehicleDriveType(type: string): 'FWD' | 'RWD' | 'AWD' {
   return cfg?.driveType || 'FWD';
 }
 
-export function getVehicleAxleGeometry(car: { type: string; length?: number }) {
+export function getVehicleAxleGeometry(car: { type: string; length?: number; frameId?: string; bodyId?: string; engineState?: { frameId?: string; bodyId?: string } }) {
   const cfg = CAR_CONFIGS[car.type] || CAR_CONFIGS.sedan;
-  const length = car.length || cfg.length || 42;
+  const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+  const length = car.length || resolvedTruck?.frame.lengthPx || cfg.length || 42;
   const halfL = length / 2;
 
   const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
-  const isThreeAxle = car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' || car.type === 'garbage_truck';
+  const isThreeAxle = resolvedTruck
+    ? resolvedTruck.frame.axleCount >= 3
+    : (car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' || car.type === 'garbage_truck');
   const isDually = car.type === 'pickup_heavy';
   const isMoto = car.type.startsWith('moto_') || car.type === 'moped_soviet';
-  const isHeavyTruck = isThreeAxle || car.type === 'truck_box' || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'truck_tow' || car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'bus';
+  const isHeavyTruck = !!resolvedTruck || isThreeAxle || car.type === 'truck_box' || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'truck_tow' || car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'bus';
 
   let rearAxleOffsetRatio = 0.65;
   let frontAxleOffsetRatio = 0.65;
@@ -620,6 +645,9 @@ export function getVehicleAxleGeometry(car: { type: string; length?: number }) {
   if (isTractor) {
     rearAxleOffsetRatio = 0.48;
     frontAxleOffsetRatio = 0.70;
+  } else if (resolvedTruck) {
+    frontAxleOffsetRatio = resolvedTruck.platform === 'kamaz' ? 0.74 : 0.70;
+    rearAxleOffsetRatio = resolvedTruck.frame.axleCount >= 3 ? 0.56 : 0.62;
   } else if (car.type === 'truck_zil_dump') {
     rearAxleOffsetRatio = 0.58; // Short 3300mm wheelbase tipper rear axle
     frontAxleOffsetRatio = 0.70;

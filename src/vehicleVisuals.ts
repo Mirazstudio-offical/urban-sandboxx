@@ -1,5 +1,11 @@
 import { Vehicle } from './types';
 import { getVehicleOpticsMounts } from './vehicleHelpers';
+import {
+  resolveVehicleTruckFrameAndBody,
+  type TruckPlatformId,
+  type TruckFrameVariant,
+  type TruckBodyVariant
+} from './truckChassisVariants';
 export {
   getVehicleBasePolygon,
   getVehicleCabinDimensions,
@@ -35,6 +41,472 @@ export {
 };
 
 /**
+ * Computes the longitudinal X positions (in vehicle local coords) of all axles
+ * for a configurable truck frame. Used by both bare-frame rendering and wheel rendering.
+ */
+export function getTruckFrameAxlePositions(
+  frame: TruckFrameVariant,
+  halfL: number,
+  platform: TruckPlatformId
+): { frontAxlesX: number[]; rearAxlesX: number[] } {
+  const frontSteer1X = platform === 'kamaz' ? (halfL - 6.8) : (halfL - 7.2);
+  const frontAxlesX: number[] = [frontSteer1X];
+  if (frame.axleCount === 4) {
+    // 8x4 heavy chassis: second steered front axle behind the primary front axle
+    frontAxlesX.push(frontSteer1X - 9.4);
+  }
+
+  const rearEnd = -halfL;
+  let rearAxlesX: number[];
+  if (frame.axleCount === 2) {
+    // 2-axle (4x2 / 4x4)
+    const rearX = Math.max(rearEnd + 7.5, -halfL * 0.58);
+    rearAxlesX = [rearX];
+  } else {
+    // 3-axle (6x4 / 6x6) or 4-axle (8x4): tandem rear bogie
+    const rearMostX = Math.max(rearEnd + 6.2, -halfL * 0.74);
+    const bogieSpacing = frame.rearTireType === 'offroad_single' ? 11.2 : 10.6;
+    const midAxleX = rearMostX + bogieSpacing;
+    rearAxlesX = [midAxleX, rearMostX];
+  }
+
+  return { frontAxlesX, rearAxlesX };
+}
+
+/**
+ * Renders a premium, realistic, and anatomically detailed bare truck chassis frame
+ * (лонжероны швеллерного профиля с полками и заклёпками, штампованные поперечины с косынками,
+ * КПП, раздаточная коробка для 4x4/6x6, карданные валы с крестовинами и подвесным подшипником,
+ * чулки ведущих мостов с редукторами и тормозными энергоаккумуляторами, листовые рессоры со
+ * стремянками и балансирной тележкой, топливные баки, ресиверы пневмосистемы, ящик АКБ,
+ * выхлопная система, держатель запаски, крылья с брызговиками, задний буксирный крюк-фаркоп,
+ * пневмовыводы «Палм» и задние фонари ФП-130).
+ */
+export function renderTruckBareFrame(
+  vCtx: VehicleRenderContext,
+  resolved?: { platform: TruckPlatformId; frame: TruckFrameVariant; body: TruckBodyVariant } | null
+): void {
+  const {
+    car, halfL, halfW, rc,
+    cabinX, cabinL,
+    drawDeformedRect, drawDeformedLine, drawDeformedCircle
+  } = vCtx;
+
+  const info = resolved ?? resolveVehicleTruckFrameAndBody(car);
+  if (!info) return;
+
+  const { platform, frame, body } = info;
+  const frameX1 = -halfL + rc + 0.6; // Rear closing crossmember
+  const frameX2 = cabinX - cabinL / 2 + 1.4; // Front of visible rear frame under cab rear wall
+  const frameLen = Math.max(12, frameX2 - frameX1);
+
+  const railOuterY = platform === 'gaz53' ? 4.4 : 4.8;
+  const railFlangeW = platform === 'gaz53' ? 1.65 : 1.85;
+  const railInnerY = railOuterY - railFlangeW;
+
+  const { frontAxlesX, rearAxlesX } = getTruckFrameAxlePositions(frame, halfL, platform);
+  const isAllWheelDrive = frame.wheelFormula === '4x4' || frame.wheelFormula === '6x6';
+  const isTandemRear = rearAxlesX.length >= 2;
+  const hasHeavySubframe =
+    frame.payloadCapacityKg >= 10000 ||
+    frame.mountTypes.includes('heavy_tandem') ||
+    frame.mountTypes.includes('short_tipper');
+
+  // =========================================================================
+  // 1. UNDER-CAB DRIVETRAIN & FRONT DRIVE AXLE (FOR 4x4 / 6x6)
+  // =========================================================================
+  if (isAllWheelDrive && frontAxlesX.length > 0) {
+    const fAxX = frontAxlesX[0];
+    // Front live axle cast beam & differential pumpkin visible under front suspension
+    drawDeformedRect(fAxX - 1.0, -halfW + 1.5, 2.0, halfW * 2 - 3.0, '#0f172a');
+    drawDeformedRect(fAxX - 1.8, -2.6, 3.6, 5.2, '#1e293b');
+    drawDeformedCircle(fAxX, -0.6, 1.4, '#334155');
+  }
+
+  // =========================================================================
+  // 2. LEAF SPRING SUSPENSION, SHACKLES, U-BOLTS & BALANCING BOGIE TRUNNIONS
+  // =========================================================================
+  const springYOut = railOuterY + 1.65;
+  const springW = 1.25;
+
+  if (isTandemRear) {
+    const midX = rearAxlesX[0];
+    const rearX = rearAxlesX[1];
+    const bogieCenterX = (midX + rearX) * 0.5;
+    const springSpan = (midX - rearX) + 3.2;
+
+    // Massive bogie trunnion cross-shaft (ось балансирной подвески)
+    drawDeformedRect(bogieCenterX - 1.1, -springYOut - 0.6, 2.2, (springYOut + 0.6) * 2, '#0f172a');
+    drawDeformedLine(bogieCenterX, -springYOut - 0.4, bogieCenterX, springYOut + 0.4, '#475569', 0.9);
+
+    // Left & right inverted semi-elliptic multi-leaf spring packs
+    [-1, 1].forEach(side => {
+      const sy = side < 0 ? -springYOut : (springYOut - springW);
+      // Leaf spring steel pack
+      drawDeformedRect(rearX - 1.6, sy, springSpan, springW, '#334155');
+      drawDeformedLine(rearX - 1.2, sy + springW * 0.5, rearX - 1.2 + springSpan - 0.8, sy + springW * 0.5, '#64748b', 0.6);
+      // Cast trunnion pivot hub & oil cap (ступица балансира)
+      drawDeformedRect(bogieCenterX - 1.6, sy - 0.35, 3.2, springW + 0.7, '#0f172a');
+      drawDeformedCircle(bogieCenterX, sy + springW * 0.5, 0.75, '#94a3b8');
+      // Chrome U-bolts (стремянки рессор)
+      drawDeformedRect(bogieCenterX - 2.1, sy - 0.4, 0.7, springW + 0.8, '#cbd5e1');
+      drawDeformedRect(bogieCenterX + 1.4, sy - 0.4, 0.7, springW + 0.8, '#cbd5e1');
+    });
+  } else {
+    // Single rear axle semi-elliptic leaf springs with helper springs & shackles
+    const rAxX = rearAxlesX[0];
+    const springLen = 11.6;
+    [-1, 1].forEach(side => {
+      const sy = side < 0 ? -springYOut : (springYOut - springW);
+      // Front & rear spring hanger brackets riveted to frame rail
+      drawDeformedRect(rAxX + springLen * 0.46, sy - 0.2, 1.5, springW + 0.4, '#0f172a');
+      drawDeformedRect(rAxX - springLen * 0.54, sy - 0.2, 1.5, springW + 0.4, '#0f172a');
+      // Main leaf spring pack
+      drawDeformedRect(rAxX - springLen * 0.5, sy, springLen, springW, '#334155');
+      drawDeformedLine(rAxX - springLen * 0.45, sy + springW * 0.5, rAxX + springLen * 0.45, sy + springW * 0.5, '#64748b', 0.6);
+      // Twin U-bolt clamps over axle seat
+      drawDeformedRect(rAxX - 1.4, sy - 0.35, 0.7, springW + 0.7, '#cbd5e1');
+      drawDeformedRect(rAxX + 0.7, sy - 0.35, 0.7, springW + 0.7, '#cbd5e1');
+    });
+  }
+
+  // =========================================================================
+  // 3. LIVE DRIVE AXLES, DIFFERENTIAL PUMPKINS & BRAKE CHAMBERS
+  // =========================================================================
+  rearAxlesX.forEach((axX, idx) => {
+    const isPassThrough = isTandemRear && idx === 0;
+    // Heavy cast steel axle housing beam ("чулок моста") spanning between wheel hubs
+    drawDeformedRect(axX - 1.25, -halfW + 1.2, 2.5, halfW * 2 - 2.4, '#0f172a');
+    drawDeformedLine(axX - 0.3, -halfW + 1.8, axX - 0.3, halfW - 1.8, '#334155', 0.9); // Cylindrical top highlight
+
+    // Central cast-iron differential carrier housing ("редуктор / картер главной передачи")
+    const diffL = isPassThrough ? 4.6 : 4.2;
+    const diffW = isPassThrough ? 5.6 : 5.2;
+    drawDeformedRect(axX - diffL * 0.5, -diffW * 0.5, diffL, diffW, '#1e293b');
+    drawDeformedCircle(axX, 0, diffW * 0.38, '#334155', '#0f172a', 0.6);
+    // Bolted differential cover ring & inspection/filler plug
+    drawDeformedCircle(axX, 0, 0.75, '#cbd5e1');
+    [-1.4, 1.4].forEach(by => {
+      drawDeformedCircle(axX - 1.1, by, 0.35, '#94a3b8');
+      drawDeformedCircle(axX + 1.1, by, 0.35, '#94a3b8');
+    });
+
+    // Pneumatic spring-brake chambers (энергоаккумуляторы тормозов) mounted on axle housing
+    [-railOuterY - 2.2, railOuterY + 1.0].forEach(chamY => {
+      drawDeformedRect(axX + 0.9, chamY, 1.8, 1.3, '#1e293b');
+      drawDeformedCircle(axX + 2.1, chamY + 0.65, 0.55, '#475569');
+    });
+
+    // Upper reactive torque rods (реактивные штанги) for tandem bogie
+    if (isTandemRear) {
+      const bogieCenterX = (rearAxlesX[0] + rearAxlesX[1]) * 0.5;
+      drawDeformedLine(bogieCenterX, -2.0, axX, -1.2, '#334155', 1.1);
+      drawDeformedLine(bogieCenterX, 2.0, axX, 1.2, '#334155', 1.1);
+    }
+  });
+
+  // =========================================================================
+  // 4. GEARBOX, TRANSFER CASE & TUBULAR CARDAN DRIVESHAFTS WITH U-JOINTS
+  // =========================================================================
+  // Gearbox rear housing & PTO cover emerging behind cab
+  const gbX = frameX2 - 3.2;
+  drawDeformedRect(gbX, -2.1, 3.6, 4.2, '#1e293b');
+  drawDeformedRect(gbX + 0.4, -1.5, 2.6, 3.0, '#334155'); // Ribbed aluminum top cover
+  drawDeformedLine(gbX + 1.2, -1.4, gbX + 1.2, 1.4, '#1e293b', 0.6);
+  drawDeformedLine(gbX + 2.0, -1.4, gbX + 2.0, 1.4, '#1e293b', 0.6);
+  // Gearbox output companion flange
+  drawDeformedRect(gbX - 0.9, -1.2, 0.9, 2.4, '#475569');
+
+  const firstRearAxleX = rearAxlesX[0];
+  let mainShaftStartX = gbX - 0.9;
+
+  // If 4x4 or 6x6: Transfer Case (Раздаточная коробка РК) mounted mid-chassis
+  if (isAllWheelDrive) {
+    const tcX = gbX - 7.5;
+    // Intermediate shaft from gearbox to transfer case
+    drawDeformedLine(mainShaftStartX, 0, tcX + 2.2, 0, '#475569', 1.9);
+    drawDeformedLine(mainShaftStartX, 0, tcX + 2.2, 0, '#94a3b8', 0.7);
+    // Transfer case cast housing (смещенный картер раздаточной коробки)
+    drawDeformedRect(tcX - 2.2, -2.8, 4.4, 5.2, '#1e293b');
+    drawDeformedRect(tcX - 1.6, -2.2, 3.2, 4.0, '#334155');
+    drawDeformedCircle(tcX, -0.5, 0.9, '#cbd5e1');
+    // Front cardan shaft running forward to front drive axle
+    drawDeformedLine(tcX + 2.0, -1.4, frameX2 + 4.0, -1.2, '#475569', 1.5);
+    mainShaftStartX = tcX - 2.2;
+  }
+
+  // Check if long wheelbase requires an intermediate carrier bearing (подвесной подшипник)
+  const shaftSpan = mainShaftStartX - (firstRearAxleX + 1.8);
+  if (shaftSpan > 18 && !isAllWheelDrive) {
+    const carrierX = mainShaftStartX - shaftSpan * 0.46;
+    // Front cardan section
+    drawDeformedRect(mainShaftStartX - 1.1, -1.3, 1.1, 2.6, '#0f172a'); // Front U-joint yoke
+    drawDeformedLine(mainShaftStartX - 1.1, 0, carrierX + 0.8, 0, '#475569', 1.9);
+    drawDeformedLine(mainShaftStartX - 1.1, 0, carrierX + 0.8, 0, '#94a3b8', 0.7);
+    // Carrier bearing bracket (кронштейн подвесного подшипника)
+    drawDeformedRect(carrierX - 1.0, -2.2, 2.0, 4.4, '#0f172a');
+    drawDeformedCircle(carrierX, 0, 1.2, '#334155', '#cbd5e1', 0.5);
+    // Rear cardan section to first drive axle
+    drawDeformedLine(carrierX - 0.8, 0, firstRearAxleX + 2.0, 0, '#475569', 2.0);
+    drawDeformedLine(carrierX - 0.8, 0, firstRearAxleX + 2.0, 0, '#94a3b8', 0.75);
+  } else {
+    // Single-piece heavy tubular cardan shaft
+    drawDeformedRect(mainShaftStartX - 1.1, -1.3, 1.1, 2.6, '#0f172a'); // Front U-joint
+    drawDeformedLine(mainShaftStartX - 1.1, 0, firstRearAxleX + 2.0, 0, '#475569', 2.0);
+    drawDeformedLine(mainShaftStartX - 1.1, 0, firstRearAxleX + 2.0, 0, '#94a3b8', 0.75);
+  }
+  // Rear U-joint at first drive axle pinion input
+  drawDeformedRect(firstRearAxleX + 1.6, -1.35, 1.2, 2.7, '#0f172a');
+  drawDeformedLine(firstRearAxleX + 1.6, 0, firstRearAxleX + 2.8, 0, '#cbd5e1', 0.8);
+
+  // Inter-axle cardan shaft (межосевой карданный вал) for 6x4 / 6x6 / 8x4 tandem bogies
+  if (isTandemRear) {
+    const midX = rearAxlesX[0];
+    const rearX = rearAxlesX[1];
+    drawDeformedLine(midX - 2.0, 0, rearX + 1.8, 0, '#475569', 1.85);
+    drawDeformedLine(midX - 2.0, 0, rearX + 1.8, 0, '#94a3b8', 0.65);
+    drawDeformedRect(midX - 2.8, -1.2, 1.0, 2.4, '#0f172a'); // Output U-joint
+    drawDeformedRect(rearX + 1.4, -1.2, 1.0, 2.4, '#0f172a'); // Input U-joint
+  }
+
+  // =========================================================================
+  // 5. SIDE FRAME EQUIPMENT: FUEL TANKS, AIR RESERVOIRS, BATTERY BOX, MUFFLER & SPARE WHEEL
+  // =========================================================================
+  if (platform === 'kamaz') {
+    // Right side: Large 250L/350L/500L Fuel Tank with tension straps & locking filler cap
+    const tankL = Math.min(17.5, Math.max(11.0, frameLen * 0.36));
+    const tankX = frameX2 - tankL - 2.0;
+    const tankW = 4.8;
+    const tankY = railOuterY + 0.2;
+    drawDeformedRect(tankX, tankY, tankL, tankW, '#475569');
+    drawDeformedRect(tankX + 0.3, tankY + 0.5, tankL - 0.6, 1.2, '#64748b'); // Metallic sheen
+    drawDeformedRect(tankX, tankY + tankW - 0.9, tankL, 0.9, '#1e293b');
+    // 3 black steel tension straps with T-bolts
+    [0.18, 0.5, 0.82].forEach(frac => {
+      const sx = tankX + tankL * frac;
+      drawDeformedRect(sx - 0.45, tankY - 0.2, 0.9, tankW + 0.4, '#0f172a');
+      drawDeformedCircle(sx, tankY + 0.5, 0.55, '#cbd5e1');
+    });
+    // Brass/chrome fuel filler neck
+    drawDeformedCircle(tankX + tankL - 2.4, tankY + 2.1, 1.15, '#cbd5e1');
+    drawDeformedCircle(tankX + tankL - 2.4, tankY + 2.1, 0.6, '#f59e0b');
+
+    // Left side: Heavy Battery Box (2x 6СТ-190), Air Reservoirs & Muffler
+    const batX = frameX2 - 9.2;
+    const batY = -railOuterY - 4.2;
+    drawDeformedRect(batX, batY, 7.6, 4.0, '#1e293b');
+    drawDeformedRect(batX + 0.5, batY + 0.5, 6.6, 3.0, '#334155');
+    drawDeformedLine(batX + 0.5, batY + 2.0, batX + 7.1, batY + 2.0, '#0f172a', 0.7);
+    drawDeformedCircle(batX + 1.4, batY + 1.0, 0.45, '#cbd5e1');
+    drawDeformedCircle(batX + 6.2, batY + 1.0, 0.45, '#cbd5e1');
+
+    // Dual compressed air brake reservoirs
+    const resX = batX - 9.2;
+    if (resX > rearAxlesX[0] + 5.5) {
+      drawDeformedRect(resX, -railOuterY - 4.0, 8.0, 1.8, '#334155');
+      drawDeformedRect(resX + 0.6, -railOuterY - 3.7, 6.8, 0.5, '#64748b');
+      drawDeformedCircle(resX + 0.5, -railOuterY - 3.1, 0.45, '#d97706');
+      drawDeformedRect(resX, -railOuterY - 1.9, 8.0, 1.8, '#334155');
+      drawDeformedRect(resX + 0.6, -railOuterY - 1.6, 6.8, 0.5, '#64748b');
+      drawDeformedCircle(resX + 0.5, -railOuterY - 1.0, 0.45, '#d97706');
+    }
+
+    // Cylindrical steel muffler & side exhaust outlet behind cab left side
+    const muffX = frameX2 - 4.0;
+    const muffY = -railOuterY - 3.4;
+    drawDeformedRect(muffX - 3.6, muffY, 3.4, 3.2, '#1e293b');
+    drawDeformedLine(muffX - 2.0, muffY, muffX - 3.2, -halfW - 0.3, '#64748b', 2.0);
+    drawDeformedCircle(muffX - 3.2, -halfW - 0.3, 0.9, '#0f172a');
+  } else {
+    // GAZ-53, ZIL-130, ZIL-4331 Hooded Trucks:
+    // Left side: 170L (ZIL) or 90L (GAZ) Steel Fuel Tank mounted on brackets outside left rail
+    const tankL = platform === 'gaz53' ? 11.5 : 13.0;
+    const tankW = platform === 'gaz53' ? 3.8 : 4.2;
+    const tankX = Math.max(rearAxlesX[0] + 6.2, frameX2 - tankL - 3.2);
+    const tankY = -railOuterY - tankW - 0.1;
+    drawDeformedRect(tankX, tankY, tankL, tankW, '#1e293b');
+    drawDeformedRect(tankX + 0.5, tankY + 0.6, tankL - 1.0, tankW - 1.2, '#334155');
+    drawDeformedLine(tankX + 0.6, tankY + 1.1, tankX + tankL - 0.6, tankY + 1.1, '#64748b', 0.8);
+    // Steel clamping straps with silver bolts
+    drawDeformedRect(tankX + 2.4, tankY - 0.2, 0.8, tankW + 0.4, '#0f172a');
+    drawDeformedRect(tankX + tankL - 3.2, tankY - 0.2, 0.8, tankW + 0.4, '#0f172a');
+    drawDeformedCircle(tankX + 2.8, tankY + 0.4, 0.45, '#cbd5e1');
+    drawDeformedCircle(tankX + tankL - 2.8, tankY + 0.4, 0.45, '#cbd5e1');
+    // Fuel filler neck & brass cap
+    drawDeformedCircle(tankX + 2.8, tankY + 1.4, 1.05, '#cbd5e1');
+    drawDeformedCircle(tankX + 2.8, tankY + 1.4, 0.55, '#d97706');
+
+    // Right side: Twin Pneumatic Brake Air Receivers + Battery Box + Exhaust Muffler
+    const batX = frameX2 - 5.2;
+    const batY = railOuterY + 0.2;
+    drawDeformedRect(batX, batY, 4.4, 3.6, '#0f172a');
+    drawDeformedRect(batX + 0.4, batY + 0.4, 3.6, 2.8, '#1e293b');
+    drawDeformedCircle(batX + 1.1, batY + 1.8, 0.4, '#cbd5e1');
+    drawDeformedCircle(batX + 3.3, batY + 1.8, 0.4, '#cbd5e1');
+
+    const recL = 8.8;
+    const recX = Math.max(rearAxlesX[0] + 6.0, batX - recL - 1.2);
+    drawDeformedRect(recX, railOuterY + 0.3, recL, 1.65, '#334155');
+    drawDeformedLine(recX + 0.5, railOuterY + 0.8, recX + recL - 0.5, railOuterY + 0.8, '#64748b', 0.6);
+    drawDeformedCircle(recX + 0.6, railOuterY + 1.1, 0.4, '#d97706');
+    drawDeformedRect(recX, railOuterY + 2.2, recL, 1.65, '#334155');
+    drawDeformedLine(recX + 0.5, railOuterY + 2.7, recX + recL - 0.5, railOuterY + 2.7, '#64748b', 0.6);
+    drawDeformedCircle(recX + 0.6, railOuterY + 3.0, 0.4, '#d97706');
+
+    // Cylindrical exhaust muffler & tailpipe along inner right rail
+    const mufX = recX + 1.0;
+    drawDeformedRect(mufX, 1.4, 7.2, 2.2, '#334155');
+    drawDeformedLine(frameX2, 2.4, mufX + 7.2, 2.4, '#475569', 1.1);
+    drawDeformedLine(mufX, 2.5, mufX - 3.5, railOuterY + 4.2, '#475569', 1.3);
+  }
+
+  // Spare Wheel Carrier (Держатель запасного колеса):
+  // On bare frames or fifth-wheel tractors, clearly visible either behind cab or under rear overhang
+  if (body.id === 'body_none' || body.id === 'body_fifth_wheel') {
+    if (platform === 'kamaz' || frame.mountTypes.includes('fifth_wheel') || frame.lengthPx <= 58) {
+      // Vertical spare tire carrier behind cab
+      const spX = frameX2 - 3.6;
+      const spY = platform === 'kamaz' ? (railOuterY + 0.4) : (-railOuterY - 3.6);
+      drawDeformedRect(spX, spY, 3.1, 6.8, '#0f172a');
+      drawDeformedRect(spX + 0.5, spY + 0.6, 2.1, 5.6, '#475569');
+      drawDeformedCircle(spX + 1.55, spY + 3.4, 0.7, '#cbd5e1');
+    } else {
+      // Under-frame spare wheel basket on rear overhang or right mid-frame
+      const spX = frameX1 + 6.8;
+      const spY = -1.2;
+      drawDeformedCircle(spX, spY, 4.4, '#0f172a');
+      drawDeformedCircle(spX, spY, 2.6, '#334155', '#1e293b', 0.7);
+      drawDeformedCircle(spX, spY, 0.7, '#cbd5e1');
+    }
+  }
+
+  // =========================================================================
+  // 6. C-CHANNEL LONGITUDINAL FRAME RAILS, SUBFRAME & STAMPED CROSSMEMBERS
+  // =========================================================================
+  // Main Left & Right Longitudinal C-Channel Steel Frame Rails (Лонжероны рамы)
+  // Left rail (-railOuterY to -railInnerY)
+  drawDeformedRect(frameX1, -railOuterY, frameLen, railFlangeW, '#141923');
+  drawDeformedLine(frameX1, -railOuterY, frameX2, -railOuterY, '#475569', 0.9); // Outer top bevel highlight
+  drawDeformedLine(frameX1, -railInnerY, frameX2, -railInnerY, '#090d14', 0.8); // Inner channel web lip
+
+  // Right rail (+railInnerY to +railOuterY)
+  drawDeformedRect(frameX1, railInnerY, frameLen, railFlangeW, '#141923');
+  drawDeformedLine(frameX1, railOuterY, frameX2, railOuterY, '#475569', 0.9); // Outer top bevel highlight
+  drawDeformedLine(frameX1, railInnerY, frameX2, railInnerY, '#090d14', 0.8); // Inner channel web lip
+
+  // Reinforced Subframe (Надрамник с крепежными пластинами) for heavy/tipper frames
+  if (hasHeavySubframe) {
+    drawDeformedLine(frameX1 + 2.0, -railOuterY + 0.55, frameX2 - 1.5, -railOuterY + 0.55, '#334155', 0.85);
+    drawDeformedLine(frameX1 + 2.0, railOuterY - 0.55, frameX2 - 1.5, railOuterY - 0.55, '#334155', 0.85);
+  }
+
+  // Pneumatic & electrical harness lines routed inside left frame channel web
+  drawDeformedLine(frameX1 + 2.0, -railInnerY + 0.35, frameX2 - 1.0, -railInnerY + 0.35, '#b45309', 0.55); // Copper/brass air line
+  drawDeformedLine(frameX1 + 2.0, railInnerY - 0.35, frameX2 - 1.0, railInnerY - 0.35, '#0f172a', 0.65);
+
+  // Stamped Transverse Crossmembers with Corner Gussets & Cold Rivets (Поперечины рамы с косынками и заклепками)
+  const cmCount = Math.max(5, frame.crossmemberCount || 6);
+  for (let i = 0; i < cmCount; i++) {
+    const t = i / (cmCount - 1);
+    const cmX = frameX1 + 1.1 + t * (frameLen - 2.6);
+    const isEndCm = i === 0 || i === cmCount - 1;
+    const cmThick = isEndCm ? 2.1 : 1.7;
+
+    // Crossmember web spanning between rails
+    drawDeformedRect(cmX - cmThick * 0.5, -railOuterY, cmThick, railOuterY * 2, '#0f172a');
+    drawDeformedLine(cmX - cmThick * 0.5, -railInnerY, cmX - cmThick * 0.5, railInnerY, '#334155', 0.65);
+
+    // Corner gusset plates (угловые косынки жесткости)
+    drawDeformedRect(cmX - cmThick * 0.85, -railOuterY, cmThick * 1.7, railFlangeW + 0.5, '#1e293b');
+    drawDeformedRect(cmX - cmThick * 0.85, railInnerY - 0.5, cmThick * 1.7, railFlangeW + 0.5, '#1e293b');
+
+    // Stamped lightening hole in central crossmember web
+    if (!isEndCm) {
+      drawDeformedCircle(cmX, 0, 0.75, '#1e293b', '#475569', 0.45);
+    }
+
+    // 4 Cold-riveted fastener heads per crossmember (заклёпки крепления поперечины к полкам лонжеронов)
+    const rY = railOuterY - railFlangeW * 0.5;
+    drawDeformedCircle(cmX - 0.45, -rY, 0.38, '#cbd5e1');
+    drawDeformedCircle(cmX + 0.45, -rY, 0.38, '#cbd5e1');
+    drawDeformedCircle(cmX - 0.45, rY, 0.38, '#cbd5e1');
+    drawDeformedCircle(cmX + 0.45, rY, 0.38, '#cbd5e1');
+  }
+
+  // Body mounting outrigger brackets along the outer faces of the frame rails (кронштейны крепления кузова)
+  const bracketCount = Math.max(3, Math.floor(frameLen / 11));
+  for (let b = 0; b < bracketCount; b++) {
+    const bx = frameX1 + 4.5 + b * ((frameLen - 9.0) / Math.max(1, bracketCount - 1));
+    drawDeformedRect(bx - 0.7, -railOuterY - 1.1, 1.4, 1.1, '#1e293b');
+    drawDeformedCircle(bx, -railOuterY - 0.55, 0.35, '#94a3b8');
+    drawDeformedRect(bx - 0.7, railOuterY, 1.4, 1.1, '#1e293b');
+    drawDeformedCircle(bx, railOuterY + 0.55, 0.35, '#94a3b8');
+  }
+
+  // =========================================================================
+  // 7. REAR WHEEL ARCH MUDGUARDS (FENDERS), REAR PINTLE HITCH & TAIL LIGHTS
+  // =========================================================================
+  // On bare frame or fifth-wheel tractor, draw factory chassis mudguards over rear wheels
+  if (body.id === 'body_none' || body.id === 'body_fifth_wheel') {
+    const fenderFrontX = rearAxlesX[0] + 5.2;
+    const fenderRearX = rearAxlesX[rearAxlesX.length - 1] - 5.2;
+    const fenderL = fenderFrontX - fenderRearX;
+    const fenderW = frame.rearTireType === 'single' ? 3.2 : 4.2;
+
+    // Tubular fender mounting stays bolted to frame rails
+    [fenderRearX + 1.5, (fenderFrontX + fenderRearX) * 0.5, fenderFrontX - 1.5].forEach(stayX => {
+      drawDeformedLine(stayX, -railOuterY, stayX, -halfW + 0.5, '#334155', 1.1);
+      drawDeformedLine(stayX, railOuterY, stayX, halfW - 0.5, '#334155', 1.1);
+    });
+
+    // Left & Right ribbed steel/polymer wheel arch fenders
+    drawDeformedRect(fenderRearX, -halfW + 0.2, fenderL, fenderW, '#1e293b');
+    drawDeformedLine(fenderRearX, -halfW + 0.2, fenderFrontX, -halfW + 0.2, '#475569', 0.9);
+    drawDeformedRect(fenderRearX, halfW - fenderW - 0.2, fenderL, fenderW, '#1e293b');
+    drawDeformedLine(fenderRearX, halfW - 0.2, fenderFrontX, halfW - 0.2, '#475569', 0.9);
+
+    // Rear rubber mudflaps with white reflector strips
+    drawDeformedRect(fenderRearX - 1.2, -halfW + 0.3, 1.4, fenderW, '#090d14');
+    drawDeformedLine(fenderRearX - 0.6, -halfW + 0.8, fenderRearX - 0.6, -halfW + fenderW - 0.4, '#f8fafc', 0.7);
+    drawDeformedRect(fenderRearX - 1.2, halfW - fenderW - 0.3, 1.4, fenderW, '#090d14');
+    drawDeformedLine(fenderRearX - 0.6, halfW - fenderW + 0.4, fenderRearX - 0.6, halfW - 0.8, '#f8fafc', 0.7);
+  }
+
+  // Rear Closing Crossmember Towing Assembly: Forged Pintle Hook (Фаркоп), Air Gladhands & Tail Lights
+  // Diagonal rear frame gussets (задние раскосы рамы к буксирной поперечине)
+  drawDeformedLine(frameX1 + 4.2, -railInnerY, frameX1 + 0.4, -1.6, '#1e293b', 1.4);
+  drawDeformedLine(frameX1 + 4.2, railInnerY, frameX1 + 0.4, 1.6, '#1e293b', 1.4);
+
+  // Heavy forged pintle hook (буксирный прибор / фаркоп)
+  drawDeformedRect(frameX1 - 1.8, -1.5, 2.0, 3.0, '#334155');
+  drawDeformedCircle(frameX1 - 1.1, 0, 0.95, '#0f172a', '#94a3b8', 0.6);
+
+  // Pneumatic trailer brake gladhand couplers (красная и синяя соединительные головки «Палм»)
+  drawDeformedCircle(frameX1 - 0.4, -2.4, 0.55, '#ef4444');
+  drawDeformedCircle(frameX1 - 0.4, 2.4, 0.55, '#3b82f6');
+
+  // Outrigger tail light brackets & FP-130 / FP-209 lamps at rear of frame
+  const isTailOn = car.headlightsOn || car.positionLightsOn;
+  const isBraking = car.brakeLightsOn;
+  const redLight = isBraking ? '#ef4444' : isTailOn ? '#dc2626' : '#7f1d1d';
+  const amberLight = '#f59e0b';
+  const lightOutY = railOuterY + 2.4;
+
+  // Transverse light bracket bar
+  drawDeformedLine(frameX1 + 0.3, -lightOutY - 1.8, frameX1 + 0.3, lightOutY + 1.8, '#1e293b', 1.2);
+  // Left tail light unit
+  drawDeformedRect(frameX1 - 0.5, -lightOutY - 1.8, 1.0, 3.2, '#0f172a');
+  drawDeformedCircle(frameX1 - 0.1, -lightOutY - 0.9, 0.75, redLight);
+  drawDeformedCircle(frameX1 - 0.1, -lightOutY + 0.6, 0.7, amberLight);
+  // Right tail light unit
+  drawDeformedRect(frameX1 - 0.5, lightOutY - 1.4, 1.0, 3.2, '#0f172a');
+  drawDeformedCircle(frameX1 - 0.1, lightOutY + 0.9, 0.75, redLight);
+  drawDeformedCircle(frameX1 - 0.1, lightOutY - 0.6, 0.7, amberLight);
+  // License plate on left bracket
+  drawDeformedRect(frameX1 - 0.4, -railOuterY - 0.2, 0.7, 3.6, '#f8fafc');
+}
+
+/**
  * High-fidelity rendering for specialized vehicle accessories, cabins, and equipment
  */
 export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext): void {
@@ -44,19 +516,34 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedRect, drawDeformedLine, drawDeformedCircle, nightAlpha
   } = vCtx;
 
+  const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+  if (resolvedTruck) {
+    // Always draw the ultra-detailed realistic bare truck chassis frame first
+    renderTruckBareFrame(vCtx, resolvedTruck);
+    if (!resolvedTruck.body.attachmentCarType) {
+      // Bare chassis frame ('body_none') — no superstructure on top
+      return;
+    }
+  }
+  const effectiveType: string = resolvedTruck
+    ? (resolvedTruck.body.attachmentCarType || car.type)
+    : car.type;
+
   // --- FIRE ENGINE (STANDARD PUMPER) ---
-  if (car.type === 'fire_engine') {
+  if (effectiveType === 'fire_engine') {
     const bumpX = halfL - fc;
     drawDeformedRect(bumpX - 1, -halfW - 0.5, 3.5, halfW * 2 + 1, '#cbd5e1');
     drawDeformedRect(bumpX - 0.5, -halfW * 0.6, 2, 3, '#0f172a');
     drawDeformedRect(bumpX - 0.5, halfW * 0.6 - 3, 2, 3, '#0f172a');
 
     const cabBackX = cabinX - cabinL / 2;
-    drawDeformedRect(cabBackX, -halfW + 0.5, cabinL, halfW * 2 - 1, '#b91c1c');
-    drawDeformedRect(cabinX - cabinL * 0.25, -halfW + 1, 4, 1.8, '#0f172a');
-    drawDeformedRect(cabinX - cabinL * 0.25, halfW - 2.8, 4, 1.8, '#0f172a');
-    drawDeformedRect(cabinX + cabinL * 0.3, -halfW - 3, 2, 3.5, '#334155');
-    drawDeformedRect(cabinX + cabinL * 0.3, halfW - 0.5, 2, 3.5, '#334155');
+    if (!resolvedTruck) {
+      drawDeformedRect(cabBackX, -halfW + 0.5, cabinL, halfW * 2 - 1, '#b91c1c');
+      drawDeformedRect(cabinX - cabinL * 0.25, -halfW + 1, 4, 1.8, '#0f172a');
+      drawDeformedRect(cabinX - cabinL * 0.25, halfW - 2.8, 4, 1.8, '#0f172a');
+      drawDeformedRect(cabinX + cabinL * 0.3, -halfW - 3, 2, 3.5, '#334155');
+      drawDeformedRect(cabinX + cabinL * 0.3, halfW - 0.5, 2, 3.5, '#334155');
+    }
 
     const bodyX1 = -halfL + rc + 2;
     const bodyX2 = cabBackX - 1;
@@ -101,15 +588,17 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- FIRE LADDER (HEAVY TURNTABLE AERIAL LADDER TRUCK) ---
-  else if (car.type === 'fire_ladder') {
+  else if (effectiveType === 'fire_ladder') {
     const bumpX = halfL - fc;
     drawDeformedRect(bumpX - 1, -halfW - 0.5, 3.5, halfW * 2 + 1, '#cbd5e1');
     drawDeformedRect(bumpX, -3, 2.5, 6, '#0f172a'); // Heavy winch
 
     const cabBackX = cabinX - cabinL / 2;
-    drawDeformedRect(cabBackX, -halfW + 0.5, cabinL, halfW * 2 - 1, '#b91c1c');
-    drawDeformedRect(cabinX + cabinL * 0.3, -halfW - 3, 2, 3.5, '#334155');
-    drawDeformedRect(cabinX + cabinL * 0.3, halfW - 0.5, 2, 3.5, '#334155');
+    if (!resolvedTruck) {
+      drawDeformedRect(cabBackX, -halfW + 0.5, cabinL, halfW * 2 - 1, '#b91c1c');
+      drawDeformedRect(cabinX + cabinL * 0.3, -halfW - 3, 2, 3.5, '#334155');
+      drawDeformedRect(cabinX + cabinL * 0.3, halfW - 0.5, 2, 3.5, '#334155');
+    }
 
     const bodyX1 = -halfL + rc + 2;
     const bodyX2 = cabBackX - 1;
@@ -182,7 +671,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- FIRE RESCUE (SQUAD RESCUE TENDER WITH PNEUMATIC LIGHT MAST) ---
-  else if (car.type === 'fire_rescue') {
+  else if (effectiveType === 'fire_rescue') {
     const bumpX = halfL - fc;
     drawDeformedRect(bumpX - 1, -halfW - 0.5, 3.5, halfW * 2 + 1, '#cbd5e1');
     drawDeformedRect(bumpX + 0.5, -4, 2, 8, '#0f172a'); // Winch & bull-bar
@@ -612,12 +1101,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- TRUCK BOX ---
-  else if (car.type === 'truck_box') {
-
-
-
-
-
+  else if (effectiveType === 'truck_box') {
     const boxX1 = -halfL + rc + 3;
     const boxX2 = cabinX - cabinL / 2 - 1;
     const boxW = halfW * 2 - 1.2;
@@ -632,173 +1116,23 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     }
   }
 
-  // --- TRUCK SEMI (СЕДЕЛЬНЫЙ ТЯГАЧ КАМАЗ-5410 С КАРДАНОМ, МОСТАМИ И СЕДЛОМ) ---
-  else if (car.type === 'truck_semi') {
+  // --- TRUCK SEMI (СЕДЕЛЬНО-СЦЕПНОЕ УСТРОЙСТВО ССУ И ПЕРЕХОДНОЙ МОСТИК ПОВЕРХ РАМЫ) ---
+  else if (effectiveType === 'truck_semi') {
     const fifthWheelX = car.hitchOffset !== undefined ? car.hitchOffset : -12;
-    const frameX1 = -halfL + rc + 0.5; // ~ -31.5 rear end of tractor frame
-    const frameX2 = cabinX - cabinL / 2 + 1.0; // ~ 6.0 front of frame under sleeper cab
-    const frameW = frameX2 - frameX1;
+    const frameX2 = cabinX - cabinL / 2 + 1.0;
 
-    // 1. Heavy C-Channel Steel Frame Rails (Лонжероны рамы КАМАЗ)
-    // Left longitudinal frame rail (C-channel steel, driver side)
-    drawDeformedRect(frameX1, -4.8, frameW, 1.8, '#1e293b');
-    drawDeformedLine(frameX1, -4.8, frameX2, -4.8, '#334155', 0.8); // Top flange highlight
-    // Right longitudinal frame rail (C-channel steel, passenger side)
-    drawDeformedRect(frameX1, 3.0, frameW, 1.8, '#1e293b');
-    drawDeformedLine(frameX1, 4.8, frameX2, 4.8, '#334155', 0.8);
-
-    // Structural Transverse Crossmembers (Поперечины рамы КАМАЗ с заклепками)
-    // Front crossmember behind cab
-    drawDeformedRect(frameX2 - 2.5, -4.8, 2.0, 9.6, '#0f172a');
-    drawDeformedCircle(frameX2 - 1.5, -3.2, 0.5, '#cbd5e1'); // Rivets
-    drawDeformedCircle(frameX2 - 1.5, 3.2, 0.5, '#cbd5e1');
-
-    // Central crossmember (over transmission output)
-    drawDeformedRect(-1.5, -4.8, 2.2, 9.6, '#0f172a');
-    drawDeformedCircle(-0.4, 0, 1.2, '#1e293b'); // Lightening hole
-
-    // Bogie trunnion suspension crossmember (мощная поперечина балансира)
-    drawDeformedRect(-17.8, -4.8, 2.5, 9.6, '#0f172a');
-
-    // Rear closing towing crossmember (задняя буксирная поперечина со скосами)
-    drawDeformedRect(frameX1, -4.8, 2.2, 9.6, '#0f172a');
-    drawDeformedLine(frameX1, -4.8, frameX1 + 2.0, -4.8, '#475569', 0.8);
-    drawDeformedLine(frameX1, 4.8, frameX1 + 2.0, 4.8, '#475569', 0.8);
-
-    // 2. Drivetrain: Gearbox, Cardan Shafts & Tandem Drive Axles (КПП, Карданы и Мосты)
-    // Gearbox rear output casing & flange behind engine
-    drawDeformedRect(frameX2 - 3.5, -1.8, 3.0, 3.6, '#1e293b');
-    drawDeformedRect(frameX2 - 4.5, -1.2, 1.0, 2.4, '#334155'); // Output companion flange
-
-    // Main Cardan Driveshaft (Основной карданный вал от КПП к среднему мосту)
-    // Front universal joint (крестовина кардана)
-    drawDeformedRect(frameX2 - 5.5, -1.4, 1.2, 2.8, '#0f172a');
-    drawDeformedLine(frameX2 - 5.5, 0, frameX2 - 4.3, 0, '#cbd5e1', 0.9);
-    // Tubular driveshaft body
-    drawDeformedLine(frameX2 - 5.5, 0, -9.5, 0, '#475569', 2.0);
-    drawDeformedLine(frameX2 - 5.5, 0, -9.5, 0, '#94a3b8', 0.8); // Steel sheen highlight
-    // Rear universal joint at intermediate axle input
-    drawDeformedRect(-10.5, -1.4, 1.2, 2.8, '#0f172a');
-
-    // Intermediate Tandem Drive Axle (Проходной ведущий средний мост) at x = -12.0
-    // Cast axle casing beam running full width across hubs
-    drawDeformedRect(-13.2, -halfW + 1.2, 2.4, halfW * 2 - 2.4, '#0f172a');
-    // Central differential carrier pumpkin housing (картер главной передачи с межосевым дифференциалом)
-    drawDeformedRect(-14.2, -2.8, 4.4, 5.6, '#1e293b');
-    drawDeformedCircle(-12.0, 0, 2.0, '#334155');
-    drawDeformedCircle(-12.0, 0, 0.8, '#cbd5e1'); // Inspection plug
-
-    // Inter-Axle Cardan Shaft (Межосевой кардан между средним и задним мостами)
-    drawDeformedLine(-14.2, 0, -21.5, 0, '#475569', 1.8);
-    drawDeformedLine(-14.2, 0, -21.5, 0, '#94a3b8', 0.6);
-    drawDeformedRect(-15.2, -1.2, 1.0, 2.4, '#0f172a'); // Universal joint
-    drawDeformedRect(-22.5, -1.2, 1.0, 2.4, '#0f172a');
-
-    // Rear Tandem Drive Axle (Задний ведущий мост) at x = -23.7
-    // Cast axle casing beam
-    drawDeformedRect(-24.9, -halfW + 1.2, 2.4, halfW * 2 - 2.4, '#0f172a');
-    // Central differential carrier pumpkin housing
-    drawDeformedRect(-25.8, -2.6, 4.2, 5.2, '#1e293b');
-    drawDeformedCircle(-23.7, 0, 1.8, '#334155');
-
-    // 3. Balancing Leaf Springs & Trunnions (Балансирная подвеска КАМАЗ)
-    // Left trunnion and spring pack
-    drawDeformedRect(-18.6, -6.6, 1.8, 1.6, '#0f172a'); // Trunnion hub
-    drawDeformedRect(-24.0, -6.4, 12.0, 1.2, '#334155'); // Multi-leaf spring steel pack
-    drawDeformedLine(-24.0, -6.4, -12.0, -6.4, '#64748b', 0.6);
-    drawDeformedRect(-19.2, -6.7, 3.0, 1.8, '#cbd5e1'); // U-bolts (стремянки)
-    // Right trunnion and spring pack
-    drawDeformedRect(-18.6, 5.0, 1.8, 1.6, '#0f172a');
-    drawDeformedRect(-24.0, 5.2, 12.0, 1.2, '#334155');
-    drawDeformedLine(-24.0, 5.2, -12.0, 5.2, '#64748b', 0.6);
-    drawDeformedRect(-19.2, 4.9, 3.0, 1.8, '#cbd5e1');
-
-    // 4. Catwalk Diamond-Plate Deck behind Sleeper Cab (Переходной рифленый мостик)
+    // 1. Catwalk Diamond-Plate Deck behind Cab (Переходной рифленый мостик и стойка пневмокабелей)
     const catwalkX1 = frameX2 - 6.5;
     const catwalkX2 = frameX2;
     drawDeformedRect(catwalkX1, -5.5, catwalkX2 - catwalkX1, 11.0, '#334155');
     for (let cwx = catwalkX1 + 1.2; cwx < catwalkX2 - 0.5; cwx += 1.6) {
       drawDeformedLine(cwx, -5.0, cwx, 5.0, '#475569', 0.8);
     }
+    // Coiled pneumatic suzie hoses (красный и жёлтый спиральные шланги перекидки к полуприцепу)
+    drawDeformedLine(catwalkX2 - 0.6, -1.6, fifthWheelX + 4.5, -1.2, '#ef4444', 0.9);
+    drawDeformedLine(catwalkX2 - 0.6, 1.6, fifthWheelX + 4.5, 1.2, '#eab308', 0.9);
 
-    // 5. Right Side Equipment: Massive 500L Fuel Tank (Топливный бак 500л)
-    const tankX = frameX2 - 17.5;
-    const tankL = 16.5;
-    const tankW = 5.0;
-    const tankY = halfW - tankW - 0.4;
-    drawDeformedRect(tankX, tankY, tankL, tankW, '#475569'); // Main aluminum tank body
-    drawDeformedRect(tankX, tankY + 0.6, tankL, 1.2, '#64748b'); // Top reflection highlight
-    drawDeformedRect(tankX, tankY + tankW - 1.0, tankL, 1.0, '#1e293b'); // Bottom depth shadow
-    // Tank steel mounting tension straps (хомуты крепления бака)
-    drawDeformedRect(tankX + 2.5, tankY - 0.2, 1.0, tankW + 0.4, '#0f172a');
-    drawDeformedRect(tankX + 8.2, tankY - 0.2, 1.0, tankW + 0.4, '#0f172a');
-    drawDeformedRect(tankX + 14.0, tankY - 0.2, 1.0, tankW + 0.4, '#0f172a');
-    // Tightening T-bolts
-    drawDeformedCircle(tankX + 2.5, tankY + 0.5, 0.6, '#cbd5e1');
-    drawDeformedCircle(tankX + 8.2, tankY + 0.5, 0.6, '#cbd5e1');
-    drawDeformedCircle(tankX + 14.0, tankY + 0.5, 0.6, '#cbd5e1');
-    // Chrome fuel filler neck and locking cap
-    drawDeformedCircle(tankX + tankL - 2.8, tankY + 2.2, 1.2, '#cbd5e1');
-    drawDeformedCircle(tankX + tankL - 2.8, tankY + 2.2, 0.6, '#f59e0b');
-
-    // 6. Left Side Equipment: Heavy Steel Muffler, Battery Box & Air Brake Reservoirs (Глушитель КАМАЗ, АКБ и Ресиверы)
-    // Authentic heavy steel cylindrical muffler box & side exhaust pipe outlet (exact anchor x = -3.2, y = -12.48)
-    const muffX = -3.2;
-    const muffY = -halfW + 1.2;
-    drawDeformedRect(muffX - 4.2, muffY, 8.4, 3.4, '#1e293b'); // Main steel muffler body casing
-    drawDeformedRect(muffX - 3.8, muffY + 0.4, 7.6, 0.8, '#475569'); // Cylindrical highlight
-    drawDeformedRect(muffX - 4.4, muffY - 0.2, 0.8, 3.8, '#334155'); // End cap flange left
-    drawDeformedRect(muffX + 3.6, muffY - 0.2, 0.8, 3.8, '#334155'); // End cap flange right
-    // Angled exhaust pipe tailtip extending out to left sill (выхлопной патрубок влево под порог)
-    drawDeformedLine(muffX - 2.0, muffY, muffX - 3.5, -halfW - 0.5, '#64748b', 2.2);
-    drawDeformedCircle(muffX - 3.5, -halfW - 0.5, 1.2, '#0f172a'); // Pipe tip opening
-    drawDeformedCircle(muffX - 3.5, -halfW - 0.5, 0.7, '#cbd5e1');
-
-    // Heavy steel battery box with latched cover
-    const batX = frameX2 - 9.0;
-    const batY = -halfW + 0.6;
-    drawDeformedRect(batX, batY, 8.2, 4.2, '#1e293b');
-    drawDeformedRect(batX + 0.5, batY + 0.5, 7.2, 3.2, '#334155');
-    drawDeformedLine(batX + 0.5, batY + 2.1, batX + 7.7, batY + 2.1, '#1e293b', 0.8);
-    drawDeformedCircle(batX + 1.5, batY + 1.0, 0.5, '#cbd5e1'); // Latches
-    drawDeformedCircle(batX + 6.7, batY + 1.0, 0.5, '#cbd5e1');
-
-    // Dual cylindrical compressed air reservoirs (ресиверы тормозной системы)
-    const resX = frameX2 - 18.5;
-    drawDeformedRect(resX, -halfW + 0.8, 8.5, 2.0, '#334155'); // Outer air tank
-    drawDeformedRect(resX + 0.8, -halfW + 1.1, 6.9, 0.6, '#64748b'); // Cylindrical highlight
-    drawDeformedCircle(resX + 0.4, -halfW + 1.8, 0.5, '#d97706'); // Brass drain cock
-    drawDeformedRect(resX, -halfW + 3.2, 8.5, 2.0, '#334155'); // Inner air tank
-    drawDeformedRect(resX + 0.8, -halfW + 3.5, 6.9, 0.6, '#64748b');
-    drawDeformedCircle(resX + 0.4, -halfW + 4.2, 0.5, '#d97706');
-
-    // 7. Spare Tire on Vertical Winch Carrier behind Cab (Запасное колесо КАМАЗ)
-    const spareX = frameX2 - 3.8;
-    const spareY = halfW - 10.2;
-    drawDeformedRect(spareX, spareY, 3.4, 7.8, '#0f172a'); // Black rubber tire tread
-    drawDeformedRect(spareX + 0.6, spareY + 0.6, 2.2, 6.6, '#475569'); // Steel wheel rim
-    drawDeformedRect(spareX + 1.0, spareY + 2.0, 1.4, 3.8, '#1e293b'); // Wheel dish
-    drawDeformedCircle(spareX + 1.7, spareY + 3.9, 0.8, '#cbd5e1'); // Central retaining clamp
-
-    // 8. Tandem Rear Fenders & Mudguards (Крылья и брызговики задней тележки)
-    // Left composite curved fender arch covering both rear axles
-    drawDeformedRect(-27.0, -halfW + 0.2, 18.5, 3.8, '#1e293b');
-    drawDeformedLine(-27.0, -halfW + 0.2, -8.5, -halfW + 0.2, '#334155', 1.0);
-    // Amber side clearance marker light
-    drawDeformedCircle(-17.8, -halfW + 0.4, 0.8, '#f59e0b');
-
-    // Right composite curved fender arch covering both rear axles
-    drawDeformedRect(-27.0, halfW - 4.0, 18.5, 3.8, '#1e293b');
-    drawDeformedLine(-27.0, halfW - 0.2, -8.5, halfW - 0.2, '#334155', 1.0);
-    drawDeformedCircle(-17.8, halfW - 0.4, 0.8, '#f59e0b');
-
-    // Heavy black rubber rear mudflaps with white reflector bands
-    drawDeformedRect(frameX1 - 1.4, -halfW + 0.3, 1.8, 4.0, '#020617');
-    drawDeformedLine(frameX1 - 1.4, -halfW + 2.3, frameX1 + 0.4, -halfW + 2.3, '#f8fafc', 0.8);
-    drawDeformedRect(frameX1 - 1.4, halfW - 4.3, 1.8, 4.0, '#020617');
-    drawDeformedLine(frameX1 - 1.4, halfW - 2.3, frameX1 + 0.4, halfW - 2.3, '#f8fafc', 0.8);
-
-    // 9. Authentic Fifth Wheel Coupling Assembly (Седельно-сцепное устройство - ССУ "Седло")
+    // 2. Authentic Fifth Wheel Coupling Assembly (Седельно-сцепное устройство - ССУ «Седло»)
     // Heavy mounting subframe baseplate bolted across frame rails
     drawDeformedRect(fifthWheelX - 4.8, -5.2, 9.6, 10.4, '#0f172a');
     // Heavy cast pivot trunnions (опоры седла)
@@ -824,7 +1158,6 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedCircle(fifthWheelX - 0.2, 0, 0.7, '#0f172a');
 
     // Manual Release Safety Pull Handle (Рукоятка замка седла с предохранителем)
-    // Extending towards driver side (y < 0)
     drawDeformedLine(fifthWheelX - 0.5, -4.5, fifthWheelX - 0.5, -8.2, '#cbd5e1', 1.2);
     drawDeformedLine(fifthWheelX - 0.5, -8.2, fifthWheelX - 2.0, -8.2, '#cbd5e1', 1.2); // Hook handle
     drawDeformedCircle(fifthWheelX - 0.5, -4.8, 0.7, '#ef4444'); // Safety latch pin
@@ -1178,7 +1511,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedCircle(boxX2 - 0.6, 0, 0.7, '#020617');    // 7-pin electrical socket
   }
   // --- TRUCK DUMP (КАМАЗ-5511 САМОСВАЛ - PREMIUM TOP-DOWN TEXTURE) ---
-  else if (car.type === 'truck_dump') {
+  else if (effectiveType === 'truck_dump') {
     const dumpColor = car.color || '#d97706';
     
     // Hydraulic lifting cylinder between cab and tipper body
@@ -1243,7 +1576,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- TRUCK ZIL-130 DUMP (ЗИЛ-130 / ЗИЛ-ММЗ-555 КОРОТКОБАЗНЫЙ САМОСВАЛ - PREMIUM TOP-DOWN TEXTURE) ---
-  else if (car.type === 'truck_zil_dump') {
+  else if (effectiveType === 'truck_zil_dump') {
     // Authentic Soviet two-tone look: cab is sky-blue (#0284c7) with white roof (#f8fafc), dump bucket is iconic industrial ochre-orange (#d97706 / #b45309)
     const dumpColor = car.dumpColor || '#d97706';
 
@@ -1397,7 +1730,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- TRUCK WATER (ПОЛИВОМОЕЧНЫЙ ВОДОВОЗ КО-829А НА ШАССИ ЗИЛ-4331) ---
-  else if (car.type === 'truck_water') {
+  else if (effectiveType === 'truck_water') {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc;
 
@@ -1705,7 +2038,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- TRUCK TANKER (FUEL TANKER) ---
-  else if (car.type === 'truck_tanker') {
+  else if (effectiveType === 'truck_tanker') {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc;
     drawDeformedRect(hoodX1, -halfW + 3, hoodX2 - hoodX1, halfW * 2 - 6, car.color);
@@ -1734,7 +2067,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- TRUCK FLATBED (ГАЗ-53 БОРТОВОЙ ДЕРЕВЯННЫЙ ГРУЗОВИК) ---
-  else if (car.type === 'truck_flatbed') {
+  else if (effectiveType === 'truck_flatbed') {
     const bedX1 = -halfL + rc + 1.2;
     const bedX2 = cabinX - cabinL / 2 - 2.2;
     const bedL = bedX2 - bedX1;
@@ -1915,7 +2248,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- TRUCK COVERED WITH SLATE ROOF (ГАЗ-53 КРЫТЫЙ, КРЫША КУЗОВА ИЗ ШИФЕРА) ---
-  else if (car.type === 'truck_covered') {
+  else if (effectiveType === 'truck_covered') {
     const bedX1 = -halfL + rc + 1.2;
     const bedX2 = cabinX - cabinL / 2 - 2.2;
     const bedL = bedX2 - bedX1;
@@ -2091,11 +2424,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- CEMENT MIXER ---
-  else if (car.type === 'cement_mixer') {
-
-
-
-
+  else if (effectiveType === 'cement_mixer') {
     drawDeformedRect(cabinX - cabinL / 2 - 3, -halfW + 2, 3, halfW * 2 - 4, '#38bdf8');
 
     const drumX1 = -halfL + rc + 8;
@@ -2122,7 +2451,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- GARBAGE TRUCK ---
-  else if (car.type === 'garbage_truck') {
+  else if (effectiveType === 'garbage_truck') {
     drawDeformedCircle(cabinX, -cabinW * 0.35, 2.2, '#f59e0b');
     drawDeformedCircle(cabinX, cabinW * 0.35, 2.2, '#f59e0b');
 
@@ -2911,7 +3240,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     for (let rx = rackX1 + 5; rx < rackX2; rx += 6) {
       drawDeformedLine(rx, -rackW / 2, rx, rackW / 2, '#475569', 1.2);
     }
-  } else if (car.type === 'truck_tow') {
+  } else if (effectiveType === 'truck_tow') {
     // Utility Wrecker Tow Truck (Эвакуатор)
     // Rear open deck with diamond steel texture
     const deckX1 = -halfL + rc + 3;
@@ -2935,7 +3264,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     // Toolboxes on sides
     drawDeformedRect(deckX1 + 4, -halfW + 0.2, deckX2 - deckX1 - 8, 1.8, '#cbd5e1');
     drawDeformedRect(deckX1 + 4, halfW - 2.0, deckX2 - deckX1 - 8, 1.8, '#cbd5e1');
-  } else if (car.type === 'truck_armored') {
+  } else if (effectiveType === 'truck_armored') {
     // =========================================================================
     // HEAVILY ARMORED CASH-IN-TRANSIT VEHICLE (ИНКАССАЦИЯ ГОСТ Р 50574) - STRICT TOP-DOWN
     // =========================================================================
@@ -3058,15 +3387,15 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   }
 
   // --- EMERGENCY & UTILITY ROOF SIRENS & DYNAMIC LIGHTBARS ---
-  const isEmergency = car.type === 'police' || car.type === 'fire_engine' || 
-                      car.type === 'fire_ladder' || car.type === 'fire_rescue' ||
-                      car.type === 'ambulance' || car.type === 'ambulance_van' || 
-                      car.type === 'ambulance_suv' || car.type === 'truck_tow' || 
-                      car.type === 'truck_armored';
+  const isEmergency = effectiveType === 'police' || effectiveType === 'fire_engine' || 
+                      effectiveType === 'fire_ladder' || effectiveType === 'fire_rescue' ||
+                      effectiveType === 'ambulance' || effectiveType === 'ambulance_van' || 
+                      effectiveType === 'ambulance_suv' || effectiveType === 'truck_tow' || 
+                      effectiveType === 'truck_armored';
 
   if (isEmergency) {
-    const isTow = car.type === 'truck_tow';
-    const isArmored = car.type === 'truck_armored';
+    const isTow = effectiveType === 'truck_tow';
+    const isArmored = effectiveType === 'truck_armored';
     // Tow trucks flash amber beacon when moving or working; emergency cars when siren active
     const isSirenActive = isTow ? (car.speed > 5 || car.isHonking) : (isArmored ? car.speed > 30 : car.sirenOn === true);
     const strobe = isSirenActive ? (Math.floor(Date.now() / 90) % 4) : -1;
@@ -3076,7 +3405,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     const sirenX = isTow ? (cabinX + cabinL * 0.1) : cabinX;
     drawDeformedRect(sirenX - 1.5, -barW / 2, 3, barW, '#0f172a');
 
-    const isFire = car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'fire_rescue';
+    const isFire = effectiveType === 'fire_engine' || effectiveType === 'fire_ladder' || effectiveType === 'fire_rescue';
     const primaryColor = isTow ? '#f59e0b' : (isArmored ? '#3b82f6' : (isFire ? '#ef4444' : '#3b82f6'));
     const secondaryColor = isTow ? '#f59e0b' : (isArmored ? '#f59e0b' : (isFire ? '#3b82f6' : '#ef4444'));
 
@@ -3095,7 +3424,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedRect(sirenX - 1.2, -1, 2.4, 2, '#ffffff');
 
     // Auxiliary rear strobes on ambulance van & fire rescue
-    if (car.type === 'ambulance_van' || car.type === 'fire_rescue' || car.type === 'fire_ladder') {
+    if (effectiveType === 'ambulance_van' || effectiveType === 'fire_rescue' || effectiveType === 'fire_ladder') {
       const rearStrobeX = -halfL + rc + 3;
       drawDeformedRect(rearStrobeX, -halfW + 1.5, 2, 2.5, (strobe === 0 || strobe === 2) ? '#3b82f6' : '#1e293b');
       drawDeformedRect(rearStrobeX, halfW - 4, 2, 2.5, (strobe === 1 || strobe === 3) ? '#ef4444' : '#1e293b');
