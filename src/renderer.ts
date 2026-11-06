@@ -8282,16 +8282,16 @@ export class GameRenderer {
     // 11d. Pedestrians, Player & Remote Players
     for (let i = 0; i < visiblePedestrians.length; i++) {
       const ped = visiblePedestrians[i];
-      if ((ped.waterDepth || 0) > 0.35) continue;
+      if (((ped as any).waterDepth || 0) > 0.35) continue;
       ctx.beginPath();
-      ctx.arc(ped.x, ped.y, (ped.radius || 7) + 2, 0, Math.PI * 2);
+      ctx.arc(ped.x, ped.y, ((ped as any).radius || 7) + 2, 0, Math.PI * 2);
       ctx.fill();
     }
     if (!player.isInVehicle && !player.insideCarId && !player.insideBusId) {
       const pDepth = player.waterDepth || 0;
       if (pDepth < 0.55) {
         ctx.beginPath();
-        ctx.arc(player.x, player.y, (player.radius || 8) + (pDepth > 0.12 ? -1 : 2), 0, Math.PI * 2);
+        ctx.arc(player.x, player.y, ((player as any).radius || 8) + (pDepth > 0.12 ? -1 : 2), 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -8316,7 +8316,7 @@ export class GameRenderer {
         car.waterDepth || 0,
         car.frontWaterDepth || 0,
         car.rearWaterDepth || 0,
-        car.cabinWaterDepth || 0
+        car.cabinWaterLevel || 0
       );
       ctx.save();
       ctx.translate(car.x, car.y);
@@ -8332,9 +8332,10 @@ export class GameRenderer {
     }
 
     // 11f. Railway Rolling Stock (Locomotives & Carriages)
-    if (world.trains) {
-      for (let ti = 0; ti < world.trains.length; ti++) {
-        const train = world.trains[ti];
+    const trains = (world as any).trains;
+    if (trains) {
+      for (let ti = 0; ti < trains.length; ti++) {
+        const train = trains[ti];
         if (!train.carriages) continue;
         for (let ci = 0; ci < train.carriages.length; ci++) {
           const c = train.carriages[ci];
@@ -8353,7 +8354,7 @@ export class GameRenderer {
     // 11g. Tree Canopies
     for (let i = 0; i < vpTrees.length; i++) {
       const t = vpTrees[i];
-      if (t.isStump) continue;
+      if ((t as any).isStump) continue;
       ctx.beginPath();
       ctx.arc(t.x, t.y, Math.max(6, t.radius * 0.88), 0, Math.PI * 2);
       ctx.fill();
@@ -8517,8 +8518,9 @@ export class GameRenderer {
         ctx.fillRect(4.5, -3, 0.8, 6);
       }
 
-      const legSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.sin(ped.walkCycle) * 2.8 : 0;
-      const armSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.cos(ped.walkCycle) * 2.2 : 0;
+      const pedWalkCycle = ped.walkCycle || 0;
+      const legSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.sin(pedWalkCycle) * 2.8 : 0;
+      const armSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.cos(pedWalkCycle) * 2.2 : 0;
 
       // 1. Legs / Pants / Shoes
       if (isFirefighter) {
@@ -9397,14 +9399,15 @@ export class GameRenderer {
     }
 
     const isSeated = !!(player as any).sittingState;
-    const legSwing = isSeated ? 0 : Math.sin(player.walkCycle) * 3.2;
-    const armSwing = isSeated ? 0 : Math.sin(player.walkCycle) * 2.8;
+    const playerWalkCycle = player.walkCycle || 0;
+    const legSwing = isSeated ? 0 : Math.sin(playerWalkCycle) * 3.2;
+    const armSwing = isSeated ? 0 : Math.sin(playerWalkCycle) * 2.8;
 
     if (isSwimming) {
       // =====================================================================
       // HORIZONTAL PRONE SWIMMING POSTURE (First-Principles Breaststroke / Crawl)
       // =====================================================================
-      const strokePhase = (player as Player).swimStrokePhase ?? (player.walkCycle * 0.75);
+      const strokePhase = (player as Player).swimStrokePhase ?? (playerWalkCycle * 0.75);
       const timeSec = performance.now() * 0.001;
       const refrShift = Math.sin(timeSec * 3.8 + player.x * 0.06) * 0.85;
       const kickL = Math.sin(strokePhase * 2.0) * 2.2;

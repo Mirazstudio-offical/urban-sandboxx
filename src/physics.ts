@@ -2774,6 +2774,7 @@ export function applyVehicleDamageAndDeformation(
       world,
       strikerMass,
       effContactWidth,
+      effContactWidth,
       crush.depthPx
     );
   }
@@ -10253,7 +10254,7 @@ export function updateVehiclePhysics(
     const drivePedal = Math.abs(throttle);
     const isNeutral = !isInGear;
 
-    const emitDriveWheelParticles = (tireX: number, tireY: number, isFrontAxle: boolean, wheel: WheelState) => {
+    const emitDriveWheelParticles = (tireX: number, tireY: number, isFrontAxle: boolean, isLeftWheel: boolean, wheel: WheelState) => {
       if (vSpeedKmh < 2.0 && !isBurnoutHolding) {
         return;
       }
@@ -10588,13 +10589,13 @@ export function updateVehiclePhysics(
     };
 
     // Emit wheel particles per individual wheel state
-    emitDriveWheelParticles(leftRearX, leftRearY, false, wheelRL);
+    emitDriveWheelParticles(leftRearX, leftRearY, false, true, wheelRL);
     if (!isSoloMoto) {
-      emitDriveWheelParticles(rightRearX, rightRearY, false, wheelRR);
+      emitDriveWheelParticles(rightRearX, rightRearY, false, false, wheelRR);
     }
-    emitDriveWheelParticles(leftFrontX, leftFrontY, true, wheelFL);
+    emitDriveWheelParticles(leftFrontX, leftFrontY, true, true, wheelFL);
     if (!isSoloMoto) {
-      emitDriveWheelParticles(rightFrontX, rightFrontY, true, wheelFR);
+      emitDriveWheelParticles(rightFrontX, rightFrontY, true, false, wheelFR);
     }
 
     if (eng && eng.engineRunning) {

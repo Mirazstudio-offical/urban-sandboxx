@@ -2067,7 +2067,7 @@ export function isLaneClearForMerge(
   vehGrid?: SpatialGrid<Vehicle>,
   propGrid?: SpatialGrid<StreetProp>
 ): boolean {
-  if (!targetLane || targetLane.waypoints.length < 2) return false;
+  if (!targetLane || !targetLane.waypoints || targetLane.waypoints.length < 2) return false;
 
   // Check if target road segment is blocked by accident/traffic jam
   const wpFirst = targetLane.waypoints[0];
@@ -2385,6 +2385,7 @@ export interface DetectedTrafficObstacle {
   isSlow: boolean;
   isHeadOnThreat: boolean;
   isForwardCrashThreat?: boolean;
+  ttc?: number;
   isParked: boolean;
   isCrashed: boolean;
 }
@@ -2463,6 +2464,7 @@ export function scanTrafficObstacles(
           isStationary: false,
           isSlow: false,
           isHeadOnThreat: true,
+          ttc,
           isParked: false,
           isCrashed: false
         };
@@ -2527,6 +2529,7 @@ export function scanTrafficObstacles(
               isSlow,
               isHeadOnThreat: false,
               isForwardCrashThreat: true,
+              ttc,
               isParked: other.isParked,
               isCrashed
             };
@@ -2689,14 +2692,16 @@ export function isBypassCorridorClear(
     const px = car.x + carCos * forwardDist + normX * lateralOffset;
     const py = car.y + carSin * forwardDist + normY * lateralOffset;
 
-    for (const bld of world.buildings) {
-      if (px >= bld.x - 8 && px <= bld.x + bld.width + 8 &&
-          py >= bld.y - 8 && py <= bld.y + bld.height + 8) {
-        return false;
+    if (world && world.buildings) {
+      for (const bld of world.buildings) {
+        if (px >= bld.x - 8 && px <= bld.x + bld.width + 8 &&
+            py >= bld.y - 8 && py <= bld.y + bld.height + 8) {
+          return false;
+        }
       }
     }
 
-    const propsNear = propGrid ? propGrid.queryRadius(px, py, 28) : world.props;
+    const propsNear = propGrid ? propGrid.queryRadius(px, py, 28) : (world?.props || []);
     for (const prop of propsNear) {
       if (prop.id === ignoreObstacleId) continue;
       const hitbox = getPropHitbox(prop);
@@ -3924,15 +3929,15 @@ export function updateAITraffic(
         // Driver successfully initiates evasive steering if:
         // 1. Roll is within driver's attentiveness probability, AND
         // 2. Time-to-collision allows physical steering reaction (or driver is a high-reflex archetype)
-        const hasReactionWindow = emergencyThreat.ttc >= profile.reactionTime * 0.65 || profile.attentiveness >= 0.88;
+        const threatTtc = emergencyThreat.ttc ?? 99;
+        const hasReactionWindow = threatTtc >= profile.reactionTime * 0.65 || profile.attentiveness >= 0.88;
         const willAttemptEvasion = roll < profile.attentiveness && hasReactionWindow;
 
         let chosenOffset = 0;
         if (willAttemptEvasion) {
           const corridorOff = findBestEscapeCorridor(
             car,
-            emergencyThreat.signedLat,
-            emergencyThreat.width,
+            emergencyThreat,
             world,
             vehGrid,
             propGrid
@@ -3940,12 +3945,11 @@ export function updateAITraffic(
           if (corridorOff !== null) {
             chosenOffset = corridorOff;
           }
-        } else if (emergencyThreat.ttc < 0.65 && roll < profile.attentiveness + 0.18) {
+        } else if (threatTtc < 0.65 && roll < profile.attentiveness + 0.18) {
           // Last-moment partial panic swerve by a driver who noticed late
           const corridorOff = findBestEscapeCorridor(
             car,
-            emergencyThreat.signedLat,
-            emergencyThreat.width,
+            emergencyThreat,
             world,
             vehGrid,
             propGrid
@@ -3987,10 +3991,34 @@ export function updateAITraffic(
       car.avoidancePhase === 'none' &&
       (!car.laneChangeCooldown || car.laneChangeCooldown <= 0)
     ) {
-      const mobilDecision = evaluateMobilLaneChange(car, leadObstacle, world, vehGrid);
-      if (mobilDecision.targetLane && mobilDecision.dir) {
-        executeLaneChange(car, mobilDecision.targetLane, mobilDecision.dir);
-        car.aiState = mobilDecision.reason === 'overtake' ? 'overtaking' : 'lane_changing';
+      const { leftLane, rightLane } = getAdjacentSameDirectionLanes(world, car.currentLaneId);
+      let bestLane: RoadSegment['lanePaths'][0] | null = null;
+      let bestDir: 'left' | 'right' | null = null;
+      let bestUtility = -Infinity;
+      let bestReason: 'overtake' | 'keep_right' | 'turn_align' | 'bypass' = 'overtake';
+
+      if (leftLane) {
+        const leftEval = evaluateMobilLaneChange(car, leftLane, 'left', leadObstacle, world, vehGrid, propGrid);
+        if (leftEval.shouldChange && leftEval.utility > bestUtility) {
+          bestUtility = leftEval.utility;
+          bestLane = leftLane;
+          bestDir = 'left';
+          bestReason = leftEval.reason;
+        }
+      }
+      if (rightLane) {
+        const rightEval = evaluateMobilLaneChange(car, rightLane, 'right', leadObstacle, world, vehGrid, propGrid);
+        if (rightEval.shouldChange && rightEval.utility > bestUtility) {
+          bestUtility = rightEval.utility;
+          bestLane = rightLane;
+          bestDir = 'right';
+          bestReason = rightEval.reason;
+        }
+      }
+
+      if (bestLane && bestDir) {
+        executeLaneChange(car, bestLane, bestDir);
+        car.aiState = bestReason === 'overtake' ? 'overtaking' : 'lane_changing';
       }
     }
 
