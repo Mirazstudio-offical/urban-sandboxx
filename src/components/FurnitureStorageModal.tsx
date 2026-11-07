@@ -250,159 +250,122 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
         </div>
       )}
 
-      <div className="gu-grid gu-g2" style={{ alignItems: 'start' }}>
-        {/* LEFT PANEL: Furniture Storage Contents */}
-        <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div className="gu-sec" style={{ marginTop: 0 }}>
-            <span>{isRadiator ? 'Поверхность радиатора' : 'Содержимое хранилища'}</span>
-            <span className="gu-sec-sub">{storage.items.length} предм.</span>
+      <div className="gu-st-split">
+        {/* LEFT PANEL: what is inside the furniture */}
+        <div className="gu-panel gu-pad">
+          <div className="gu-st-head">
+            <span className="gu-st-title">{isRadiator ? 'Поверхность радиатора' : 'Содержимое хранилища'}</span>
+            <span className="gu-st-sub">{storage.items.length} предм.</span>
           </div>
 
-          <div className="gu-card-sm" style={{ marginBottom: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 4 }}>
-                <span className="gu-mute" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <Package className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent-hi)' }} />
-                  {isRadiator ? 'Площадь' : 'Объём'}
-                </span>
-                <span className="gu-mono" style={{ fontWeight: 600 }}>
-                  {storageTotalVol.toFixed(1)}/{cfg.capacityL.toFixed(1)} л
-                </span>
+          <div className="gu-meters">
+            <div className="gu-meter">
+              <div className="gu-meter-h">
+                <span>{isRadiator ? 'Площадь' : 'Объём'}</span>
+                <b>{storageTotalVol.toFixed(1)} / {cfg.capacityL.toFixed(1)} л</b>
               </div>
-              <div className={`gu-bar ${volPercent > 90 ? 'bad' : ''}`}>
-                <span style={{ width: `${volPercent}%` }} />
-              </div>
+              <div className={`gu-bar ${volPercent > 90 ? 'bad' : ''}`}><span style={{ width: `${Math.max(1, volPercent)}%` }} /></div>
             </div>
-
-            <div>
-              <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 4 }}>
-                <span className="gu-mute" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <Weight className="w-3.5 h-3.5" style={{ color: '#9ac985' }} />
-                  Нагрузка
-                </span>
-                <span className="gu-mono" style={{ fontWeight: 600 }}>
-                  {storageTotalWt.toFixed(1)}/{cfg.maxWeightKg.toFixed(1)} кг
-                </span>
+            <div className="gu-meter">
+              <div className="gu-meter-h">
+                <span>Нагрузка</span>
+                <b>{storageTotalWt.toFixed(1)} / {cfg.maxWeightKg.toFixed(1)} кг</b>
               </div>
-              <div className={`gu-bar ${wtPercent > 90 ? 'bad' : 'good'}`}>
-                <span style={{ width: `${wtPercent}%` }} />
-              </div>
+              <div className={`gu-bar ${wtPercent > 90 ? 'bad' : 'good'}`}><span style={{ width: `${Math.max(1, wtPercent)}%` }} /></div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {storage.items.length === 0 ? (
-              <div className="gu-empty" style={{ margin: 'auto 0' }}>
-                {isRadiator ? (
-                  <>
-                    <div className="gu-empty-t">На батарее ничего не сушится</div>
-                    <div>Положите сюда сырую одежду, мокрые носки, обувь или напитки для согревания и сушки.</div>
-                  </>
-                ) : (
-                  <>
-                    <div className="gu-empty-t">Хранилище пусто</div>
-                    <div>Выберите предметы из инвентаря справа, чтобы сложить их сюда.</div>
-                  </>
-                )}
-              </div>
-            ) : (
-              storage.items.map((it, idx) => {
-                const isSelected = selectedStorageIdx === idx;
-                const itVol = getItemTotalVolume(it);
-                const itWt = getItemTotalWeight(it);
-                const isWet = (it.wetness ?? 0) > 0;
-                const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
-
-                return (
-                  <div
-                    key={it.id || idx}
-                    onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); }}
-                    className={`gu-item ${isSelected ? 'on' : ''}`}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div style={{ width: 38, height: 38, borderRadius: 6, background: 'rgba(10,10,12,0.75)', border: '1px solid var(--gu-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <ItemIconCanvas itemId={it.itemId} item={it} size={30} />
-                    </div>
-                    <div className="gu-item-main">
-                      <div className="gu-item-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.nameRu}</span>
-                        {it.count > 1 && <span className="gu-tag amber">x{it.count}</span>}
-                        {itemTemp >= 40 && (
-                          <span className="gu-tag amber">+{Math.round(itemTemp)}°C</span>
-                        )}
-                      </div>
-                      <div className="gu-item-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span>{itWt.toFixed(2)} кг</span>
-                        <span>•</span>
-                        <span>{itVol.toFixed(1)} л</span>
-                        {isWet && (
-                          <span style={{ color: '#7dd3fc', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            <CloudRain className="w-3 h-3" /> {Math.round(it.wetness!)}%
-                          </span>
-                        )}
-                        {isHotSurface && isWet && (
-                          <span style={{ color: 'var(--gu-accent-bright)', fontWeight: 600 }}>Сушится...</span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleTakeItem(idx, 1); }}
-                      className="gu-btn gu-btn-xs"
-                      title="Забрать предмет в карманы"
+          <div className="gu-st-scroll">
+            <div className="gu-li-list">
+              {storage.items.length === 0 ? (
+                <div className="gu-empty">
+                  <Package width={40} height={40} />
+                  {isRadiator ? (
+                    <>
+                      <div className="gu-empty-t">На батарее ничего не сушится</div>
+                      <div>Положите сюда сырую одежду, мокрые носки, обувь или напитки для согревания и сушки.</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="gu-empty-t">Хранилище пусто</div>
+                      <div>Выберите предметы в инвентаре справа, чтобы сложить их сюда.</div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                storage.items.map((it, idx) => {
+                  const isSelected = selectedStorageIdx === idx;
+                  const isWet = (it.wetness ?? 0) > 0;
+                  const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
+                  return (
+                    <div
+                      key={it.id || idx}
+                      onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); }}
+                      className={'gu-li' + (isSelected ? ' on' : '')}
                     >
-                      {isRadiator ? 'Снять' : 'Забрать'}
-                    </button>
-                  </div>
-                );
-              })
-            )}
+                      <div className="gu-ic">
+                        <ItemIconCanvas itemId={it.itemId} item={it} size={38} />
+                        {it.count > 1 && <span className="gu-ic-n">{it.count}</span>}
+                      </div>
+                      <div className="gu-li-main">
+                        <div className="gu-li-name">{it.nameRu}</div>
+                        <div className="gu-li-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span>{getItemTotalWeight(it).toFixed(2)} кг · {getItemTotalVolume(it).toFixed(1)} л</span>
+                          {isWet && (
+                            <span style={{ color: '#7dd3fc', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                              <CloudRain width={12} height={12} /> {Math.round(it.wetness!)}%
+                            </span>
+                          )}
+                          {isHotSurface && isWet && <span style={{ color: 'var(--gu-amber-hi)', fontWeight: 600 }}>Сушится…</span>}
+                        </div>
+                      </div>
+                      {itemTemp >= 40 && <span className="gu-tag amber">+{Math.round(itemTemp)}°C</span>}
+                      {itemTemp <= 4 && <span className="gu-tag cold">{Math.round(itemTemp)}°C</span>}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleTakeItem(idx, 1); }}
+                        className="gu-btn gu-btn-s gu-btn-sm"
+                        title="Забрать предмет в карманы"
+                      >
+                        {isRadiator ? 'Снять' : 'Забрать'}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {selectedStorageIdx !== null && storage.items[selectedStorageIdx] && (
-            <div className="gu-card-sm" style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div className="gu-st-pick">
+              <span style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                 {storage.items[selectedStorageIdx].nameRu}
               </span>
               <div className="gu-row" style={{ gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => handleTakeToHand(selectedStorageIdx, 'left')}
-                  className="gu-btn gu-btn-xs"
-                  title="Взять в левую руку"
-                >
-                  <Hand className="w-3 h-3" /> Л. рука
+                <button type="button" onClick={() => handleTakeToHand(selectedStorageIdx, 'left')} className="gu-btn gu-btn-s gu-btn-xs" title="Взять в левую руку">
+                  <Hand width={13} height={13} /> Левая рука
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleTakeToHand(selectedStorageIdx, 'right')}
-                  className="gu-btn gu-btn-xs"
-                  title="Взять в правую руку"
-                >
-                  <Hand className="w-3 h-3" /> П. рука
+                <button type="button" onClick={() => handleTakeToHand(selectedStorageIdx, 'right')} className="gu-btn gu-btn-s gu-btn-xs" title="Взять в правую руку">
+                  <Hand width={13} height={13} /> Правая рука
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleTakeItem(selectedStorageIdx)}
-                  className="gu-btn gu-btn-p gu-btn-xs"
-                >
-                  <ArrowRight className="w-3 h-3" /> В карманы
+                <button type="button" onClick={() => handleTakeItem(selectedStorageIdx)} className="gu-btn gu-btn-p gu-btn-xs">
+                  <ArrowRight width={13} height={13} /> В карманы
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* RIGHT PANEL: Player Inventory */}
-        <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div className="gu-sec" style={{ marginTop: 0 }}>
-            <span>Инвентарь и карманы игрока</span>
-            <span className="gu-sec-sub">
-              {playerCarriedWt.toFixed(1)} кг • {playerPocketCap.totalCapacityL.toFixed(1)} л
+        {/* RIGHT PANEL: the player's pockets */}
+        <div className="gu-panel gu-pad">
+          <div className="gu-st-head">
+            <span className="gu-st-title">Инвентарь и карманы</span>
+            <span className="gu-st-sub">
+              {playerCarriedWt.toFixed(1)} кг · {playerPocketCap.usedVolumeL} / {playerPocketCap.totalCapacityL} л
             </span>
           </div>
 
-          <div className="gu-pills" style={{ marginBottom: 10 }}>
+          <div className="gu-pills" style={{ marginBottom: 14 }}>
             {(['all', 'clothing', 'food', 'drink', 'tool', 'valuable', 'misc'] as const).map(cat => (
               <button
                 key={cat}
@@ -415,77 +378,56 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             ))}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {filteredInventory.length === 0 ? (
-              <div className="gu-empty" style={{ margin: 'auto 0' }}>
-                <div className="gu-empty-t">Нет подходящих предметов</div>
-                <div>В выбранной категории инвентаря пусто.</div>
-              </div>
-            ) : (
-              filteredInventory.map(({ item, originalIndex }) => {
-                const isSelected = selectedInventoryIdx === originalIndex;
-                const itVol = getItemTotalVolume(item);
-                const itWt = getItemTotalWeight(item);
-                const isWet = (item.wetness ?? 0) > 0;
-                const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
-
-                return (
-                  <div
-                    key={item.id || originalIndex}
-                    onClick={() => { setSelectedInventoryIdx(originalIndex); setSelectedStorageIdx(null); }}
-                    className={`gu-item ${isSelected ? 'on' : ''}`}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div style={{ width: 38, height: 38, borderRadius: 6, background: 'rgba(10,10,12,0.75)', border: '1px solid var(--gu-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <ItemIconCanvas itemId={item.itemId} item={item} size={30} />
-                    </div>
-                    <div className="gu-item-main">
-                      <div className="gu-item-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nameRu}</span>
-                        {item.count > 1 && <span className="gu-tag amber">x{item.count}</span>}
-                        {itemTemp >= 40 && (
-                          <span className="gu-tag amber">+{Math.round(itemTemp)}°C</span>
-                        )}
-                      </div>
-                      <div className="gu-item-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span>{itWt.toFixed(2)} кг</span>
-                        <span>•</span>
-                        <span>{itVol.toFixed(1)} л</span>
-                        {isWet && (
-                          <span style={{ color: '#7dd3fc', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            <CloudRain className="w-3 h-3" /> {Math.round(item.wetness!)}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleStoreItem(originalIndex, 1); }}
-                      className="gu-btn gu-btn-p gu-btn-xs"
-                      title={isRadiator ? 'Положить на батарею' : 'Положить в хранилище'}
+          <div className="gu-st-scroll">
+            <div className="gu-li-list">
+              {filteredInventory.length === 0 ? (
+                <div className="gu-empty">
+                  <Package width={40} height={40} />
+                  <div className="gu-empty-t">Нет подходящих предметов</div>
+                  <div>В выбранной категории инвентаря пусто.</div>
+                </div>
+              ) : (
+                filteredInventory.map(({ item, originalIndex }) => {
+                  const isSelected = selectedInventoryIdx === originalIndex;
+                  const isWet = (item.wetness ?? 0) > 0;
+                  const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
+                  return (
+                    <div
+                      key={item.id || originalIndex}
+                      onClick={() => { setSelectedInventoryIdx(originalIndex); setSelectedStorageIdx(null); }}
+                      className={'gu-li' + (isSelected ? ' on' : '')}
                     >
-                      <ArrowLeft className="w-3 h-3" /> {isRadiator ? 'На батарею' : 'В шкаф'}
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {selectedInventoryIdx !== null && player.inventory[selectedInventoryIdx] && (
-            <div className="gu-card-sm" style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {player.inventory[selectedInventoryIdx].nameRu}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleStoreItem(selectedInventoryIdx, 1)}
-                className="gu-btn gu-btn-p gu-btn-xs"
-              >
-                <ArrowLeft className="w-3 h-3" /> {isRadiator ? 'Положить на батарею' : 'Положить в шкаф'}
-              </button>
+                      <div className="gu-ic">
+                        <ItemIconCanvas itemId={item.itemId} item={item} size={38} />
+                        {item.count > 1 && <span className="gu-ic-n">{item.count}</span>}
+                      </div>
+                      <div className="gu-li-main">
+                        <div className="gu-li-name">{item.nameRu}</div>
+                        <div className="gu-li-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span>{getItemTotalWeight(item).toFixed(2)} кг · {getItemTotalVolume(item).toFixed(1)} л</span>
+                          {isWet && (
+                            <span style={{ color: '#7dd3fc', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                              <CloudRain width={12} height={12} /> {Math.round(item.wetness!)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {itemTemp >= 40 && <span className="gu-tag amber">+{Math.round(itemTemp)}°C</span>}
+                      {itemTemp <= 4 && <span className="gu-tag cold">{Math.round(itemTemp)}°C</span>}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleStoreItem(originalIndex, 1); }}
+                        className="gu-btn gu-btn-p gu-btn-sm"
+                        title={isRadiator ? 'Положить на батарею' : 'Положить в хранилище'}
+                      >
+                        <ArrowLeft width={14} height={14} /> {isRadiator ? 'На батарею' : 'В шкаф'}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </ModalShell>
