@@ -26,7 +26,6 @@ import { ModalShell } from './gameUi';
 import { sound } from '../audio';
 import { 
   Snowflake, 
-  Utensils, 
   Weight, 
   ArrowRight, 
   ArrowLeft, 
@@ -51,7 +50,6 @@ interface FurnitureStorageModalProps {
   furnitureType?: string;
   aptId?: string;
   customTitle?: string;
-  onOpenKitchenStation?: () => void;
 }
 
 export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (props) => {
@@ -217,17 +215,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             <span className="gu-tag amber">
               <Flame className="w-3 h-3" /> Нагрев (+{cfg.heatingTemp || 65}°C)
             </span>
-          )}
-          {props.onOpenKitchenStation && (cfg.type === 'kitchen_counter' || cfg.type === 'stove' || cfg.type === 'table') && (
-            <button
-              type="button"
-              onClick={() => props.onOpenKitchenStation?.()}
-              className="gu-btn gu-btn-p gu-btn-sm"
-              title="Перейти к рабочей поверхности гарнитура для нарезки и готовки"
-            >
-              <Utensils className="w-3.5 h-3.5" />
-              <span>Готовка и нарезка</span>
-            </button>
           )}
         </div>
       }
