@@ -250,23 +250,23 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
         </div>
       )}
 
-      <div className="gu-grid gu-g2" style={{ alignItems: 'stretch' }}>
+      <div className="gu-grid gu-g2" style={{ alignItems: 'start' }}>
         {/* LEFT PANEL: Furniture Storage Contents */}
-        <div className="gu-card" style={{ display: 'flex', flexDirection: 'column', minHeight: 430 }}>
+        <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="gu-sec" style={{ marginTop: 0 }}>
             <span>{isRadiator ? 'Поверхность радиатора' : 'Содержимое хранилища'}</span>
             <span className="gu-sec-sub">{storage.items.length} предм.</span>
           </div>
 
-          <div className="gu-card-sm" style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="gu-card-sm" style={{ marginBottom: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 4 }}>
-                <span className="gu-mute" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span className="gu-mute" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <Package className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent-hi)' }} />
-                  {isRadiator ? 'Площадь сушки' : 'Объём хранилища'}
+                  {isRadiator ? 'Площадь' : 'Объём'}
                 </span>
                 <span className="gu-mono" style={{ fontWeight: 600 }}>
-                  {storageTotalVol.toFixed(1)} / {cfg.capacityL.toFixed(1)} л ({volPercent}%)
+                  {storageTotalVol.toFixed(1)}/{cfg.capacityL.toFixed(1)} л
                 </span>
               </div>
               <div className={`gu-bar ${volPercent > 90 ? 'bad' : ''}`}>
@@ -276,12 +276,12 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
 
             <div>
               <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 4 }}>
-                <span className="gu-mute" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span className="gu-mute" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <Weight className="w-3.5 h-3.5" style={{ color: '#9ac985' }} />
-                  Весовая нагрузка
+                  Нагрузка
                 </span>
                 <span className="gu-mono" style={{ fontWeight: 600 }}>
-                  {storageTotalWt.toFixed(1)} / {cfg.maxWeightKg.toFixed(1)} кг ({wtPercent}%)
+                  {storageTotalWt.toFixed(1)}/{cfg.maxWeightKg.toFixed(1)} кг
                 </span>
               </div>
               <div className={`gu-bar ${wtPercent > 90 ? 'bad' : 'good'}`}>
@@ -290,7 +290,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             </div>
           </div>
 
-          <div style={{ flex: 1, maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {storage.items.length === 0 ? (
               <div className="gu-empty" style={{ margin: 'auto 0' }}>
                 {isRadiator ? (
@@ -394,7 +394,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
         </div>
 
         {/* RIGHT PANEL: Player Inventory */}
-        <div className="gu-card" style={{ display: 'flex', flexDirection: 'column', minHeight: 430 }}>
+        <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="gu-sec" style={{ marginTop: 0 }}>
             <span>Инвентарь и карманы игрока</span>
             <span className="gu-sec-sub">
@@ -415,7 +415,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             ))}
           </div>
 
-          <div style={{ flex: 1, maxHeight: 330, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {filteredInventory.length === 0 ? (
               <div className="gu-empty" style={{ margin: 'auto 0' }}>
                 <div className="gu-empty-t">Нет подходящих предметов</div>

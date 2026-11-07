@@ -104,7 +104,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const carriedOil = safeInventory.find(i => isOilOrFatItem(i.itemId));
   const carriedPlates = safeInventory.filter(i => isPlateOrBowlItem(i.itemId));
   const carriedCookwareList = safeInventory.filter(i => isCookwareItem(i.itemId));
-  const foodItems = safeInventory.filter(i => i.category === 'food' || i.category === 'drink' || i.itemId === 'prep_workpiece' || i.itemId === 'food_mix');
+  const foodItems = safeInventory.filter(i => (i.category === 'food' || i.category === 'drink' || i.itemId === 'prep_workpiece' || i.itemId === 'food_mix') && !i.itemId.startsWith('paper_packaging'));
 
   const availablePans = carriedCookwareList.filter(c => c.itemId.startsWith('kitchen_pan_'));
   const availablePots = carriedCookwareList.filter(c => c.itemId.startsWith('kitchen_pot_') || c.itemId === 'pot_clay_medium');
@@ -646,7 +646,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
       title={isStove ? 'Кухонная плита' : 'Столешница гарнитура'}
       subtitle={vessel.nameRu}
       width={1160}
-      tall
       onClose={onClose}
       headRight={
         <div className="gu-row" style={{ gap: 8 }}>
@@ -669,7 +668,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         </div>
       }
       tabs={
-        <div className="lg:hidden">
+        <div className="gu-kitchen-tabs">
           <Tabs
             value={mobileTab}
             onChange={setMobileTab}
@@ -737,13 +736,13 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
       {/* 3-Column Workstation Grid */}
       <div className="gu-kitchen-grid">
         {/* LEFT COLUMN: Player Inventory Ingredients */}
-        <div className={`gu-card ${mobileTab === 'products' ? 'flex' : 'hidden lg:flex'}`} style={{ flexDirection: 'column', minHeight: 460 }}>
+        <div className={`gu-panel gu-pad ${mobileTab === 'products' ? '' : 'gu-kitchen-col-hide'}`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div className="gu-sec" style={{ marginTop: 0 }}>
             <span>Продукты и заготовки</span>
             <span className="gu-sec-sub">{foodItems.length} предм.</span>
           </div>
 
-          <div style={{ flex: 1, maxHeight: 440, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {foodItems.length === 0 ? (
               <div className="gu-empty" style={{ margin: 'auto 0' }}>
                 <div className="gu-empty-t">Нет продуктов</div>
@@ -757,10 +756,10 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                     key={item.id || idx}
                     onClick={() => handlePlaceFoodItem(item)}
                     className={`gu-item ${isWp ? 'on' : ''}`}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', padding: '7px 10px', gap: 8 }}
                   >
-                    <div style={{ width: 38, height: 38, borderRadius: 6, background: 'rgba(10,10,12,0.75)', border: '1px solid var(--gu-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <ItemIconCanvas itemId={item.itemId} item={item} size={30} />
+                    <div style={{ width: 34, height: 34, borderRadius: 6, background: 'rgba(10,10,12,0.75)', border: '1px solid var(--gu-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <ItemIconCanvas itemId={item.itemId} item={item} size={26} />
                     </div>
                     <div className="gu-item-main">
                       <div className="gu-item-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -778,9 +777,10 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                         handlePlaceFoodItem(item);
                       }}
                       className="gu-btn gu-btn-p gu-btn-xs"
+                      style={{ padding: '0 8px', flexShrink: 0 }}
+                      title="Выложить на рабочую поверхность"
                     >
-                      <Plus className="w-3 h-3" />
-                      <span>Выложить</span>
+                      <Plus className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 );
@@ -790,7 +790,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         </div>
 
         {/* CENTER COLUMN: Culinary Viewport & Physical Controls */}
-        <div className={`gu-card ${mobileTab === 'station' ? 'flex' : 'hidden lg:flex'}`} style={{ flexDirection: 'column', minHeight: 460 }}>
+        <div className={`gu-panel gu-pad ${mobileTab === 'station' ? '' : 'gu-kitchen-col-hide'}`} style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="gu-row-between" style={{ marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1047,7 +1047,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         </div>
 
         {/* RIGHT COLUMN: Sensory & Tool Status */}
-        <div className={`gu-card ${mobileTab === 'sensory' ? 'flex' : 'hidden lg:flex'}`} style={{ flexDirection: 'column', gap: 10, minHeight: 460 }}>
+        <div className={`gu-panel gu-pad ${mobileTab === 'sensory' ? '' : 'gu-kitchen-col-hide'}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div className="gu-sec" style={{ marginTop: 0 }}>
             <span>Органолептика и утварь</span>
           </div>
@@ -1085,27 +1085,27 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
             </div>
             <div className="gu-row-between" style={{ fontSize: 12 }}>
               <span className="gu-mute">Нож:</span>
-              <span className={carriedKnife ? 'gu-tag good' : 'gu-tag'}>{carriedKnife ? carriedKnife.nameRu : 'Нет ножа'}</span>
+              <span style={{ color: carriedKnife ? '#9ac985' : 'var(--gu-dim)', fontWeight: 600 }}>{carriedKnife ? carriedKnife.nameRu : 'Нет ножа'}</span>
             </div>
             <div className="gu-row-between" style={{ fontSize: 12 }}>
               <span className="gu-mute">Сковорода:</span>
-              <span className={availablePans.length > 0 ? 'gu-tag good' : 'gu-tag'}>{availablePans.length > 0 ? availablePans[0].nameRu : 'Нет'}</span>
+              <span style={{ color: availablePans.length > 0 ? '#9ac985' : 'var(--gu-dim)', fontWeight: 600 }}>{availablePans.length > 0 ? availablePans[0].nameRu : 'Нет'}</span>
             </div>
             <div className="gu-row-between" style={{ fontSize: 12 }}>
               <span className="gu-mute">Кастрюля:</span>
-              <span className={availablePots.length > 0 ? 'gu-tag good' : 'gu-tag'}>{availablePots.length > 0 ? availablePots[0].nameRu : 'Нет'}</span>
+              <span style={{ color: availablePots.length > 0 ? '#9ac985' : 'var(--gu-dim)', fontWeight: 600 }}>{availablePots.length > 0 ? availablePots[0].nameRu : 'Нет'}</span>
             </div>
             <div className="gu-row-between" style={{ fontSize: 12 }}>
               <span className="gu-mute">Соль:</span>
-              <span className={carriedSalt ? 'gu-tag good' : 'gu-tag'}>{carriedSalt ? carriedSalt.nameRu : 'Нет солонки'}</span>
+              <span style={{ color: carriedSalt ? '#9ac985' : 'var(--gu-dim)', fontWeight: 600 }}>{carriedSalt ? carriedSalt.nameRu : 'Нет солонки'}</span>
             </div>
             <div className="gu-row-between" style={{ fontSize: 12 }}>
               <span className="gu-mute">Масло:</span>
-              <span className={carriedOil ? 'gu-tag good' : 'gu-tag'}>{carriedOil ? carriedOil.nameRu : 'Нет масла'}</span>
+              <span style={{ color: carriedOil ? '#9ac985' : 'var(--gu-dim)', fontWeight: 600 }}>{carriedOil ? carriedOil.nameRu : 'Нет масла'}</span>
             </div>
             <div className="gu-row-between" style={{ fontSize: 12 }}>
               <span className="gu-mute">Тарелка:</span>
-              <span className={carriedPlates.length > 0 ? 'gu-tag good' : 'gu-tag'}>{carriedPlates.length > 0 ? carriedPlates[0].nameRu : 'Нет посуды'}</span>
+              <span style={{ color: carriedPlates.length > 0 ? '#9ac985' : 'var(--gu-dim)', fontWeight: 600 }}>{carriedPlates.length > 0 ? carriedPlates[0].nameRu : 'Нет посуды'}</span>
             </div>
           </div>
 

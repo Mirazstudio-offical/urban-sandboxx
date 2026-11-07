@@ -40,3 +40,10 @@ When adding or modifying usable items in this codebase, you **must** implement t
 - **`public/editor.html` ДОЛЖЕН ОСТАВАТЬСЯ 100% АВТОНОМНЫМ ОДНИМ HTML-ФАЙЛОМ**:
   - **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО** выносить JS, CSS или логику редактора в отдельные внешней файлы (например `railwayScheduleStudio.js` и т.п.).
   - Весь HTML, CSS, встроенные SVG/иконки и JavaScript-код редактора карт, студии расписаний ЖД и инструментов картографии должны находиться **строго внутри одного файла `public/editor.html`**. Это обеспечивает 100% портативность редактора карт.
+
+---
+
+## Unslop UI Skill (`/skills/unslop/SKILL.md`)
+- В проект установлен локальный скилл **unslop** (доступен в `/skills/unslop/SKILL.md`, а также в `/.claude/skills/unslop/SKILL.md` и `/.agents/skills/unslop/SKILL.md`).
+- **ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ДЛЯ АГЕНТОВ:** При любом запросе на редизайн, полировку, чистку интерфейса («unslop», улучшение UI/UX, модальных окон, меню, HUD) или перед созданием новых экранов агент **ОБЯЗАН** сначала прочитать `/skills/unslop/SKILL.md` (и при необходимости справочники из `/skills/unslop/references/`: `signs.md`, `tokens.md`, `visuals.md`, `refs.md`, `effects.md`) через `view_file` и строго следовать его процессу.
+

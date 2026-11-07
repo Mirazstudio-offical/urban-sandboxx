@@ -30,18 +30,18 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
   const getPartColor = (partKey: keyof BodyPartsMap) => {
     const part = bs.bodyParts[partKey];
     const injuries = Array.isArray(part) ? part : ((part as any)?.injuries || []);
-    if (!injuries || injuries.length === 0) return { fill: '#059669', stroke: '#10b981', pulse: false };
-    if (injuries.some(i => i.type === 'fracture' && !i.treated)) return { fill: '#7f1d1d', stroke: '#ef4444', pulse: true };
+    if (!injuries || injuries.length === 0) return { fill: 'rgba(154, 201, 133, 0.22)', stroke: '#9ac985', pulse: false };
+    if (injuries.some(i => i.type === 'fracture' && !i.treated)) return { fill: 'rgba(217, 116, 90, 0.42)', stroke: '#e5484d', pulse: true };
     if (injuries.some(i => i.type === 'burn' && !i.treated)) {
       const maxDeg = Math.max(...injuries.filter(i => i.type === 'burn' && !i.treated).map(b => b.burnDegree || 1));
-      return maxDeg >= 2 ? { fill: '#991b1b', stroke: '#ef4444', pulse: true } : { fill: '#c2410c', stroke: '#fb923c', pulse: true };
+      return maxDeg >= 2 ? { fill: 'rgba(217, 116, 90, 0.42)', stroke: '#e5484d', pulse: true } : { fill: 'rgba(224, 171, 69, 0.35)', stroke: '#e0ab45', pulse: true };
     }
-    if (injuries.some(i => i.type === 'bleeding' && !i.treated)) return { fill: '#dc2626', stroke: '#ef4444', pulse: true };
-    if (injuries.some(i => i.type === 'sprain' && !i.treated)) return { fill: '#ea580c', stroke: '#f97316', pulse: false };
-    if (injuries.some(i => i.type === 'fracture' && i.treated)) return { fill: '#9f1239', stroke: '#fb7185', pulse: false };
-    if (injuries.some(i => i.type === 'burn' && i.treated)) return { fill: '#b45309', stroke: '#f59e0b', pulse: false };
-    if (injuries.some(i => (i.type === 'bruise' || i.type === 'abrasion') && !i.treated)) return { fill: '#d97706', stroke: '#f59e0b', pulse: false };
-    return { fill: '#059669', stroke: '#10b981', pulse: false };
+    if (injuries.some(i => i.type === 'bleeding' && !i.treated)) return { fill: 'rgba(229, 72, 77, 0.4)', stroke: '#e5484d', pulse: true };
+    if (injuries.some(i => i.type === 'sprain' && !i.treated)) return { fill: 'rgba(224, 171, 69, 0.32)', stroke: '#e0ab45', pulse: false };
+    if (injuries.some(i => i.type === 'fracture' && i.treated)) return { fill: 'rgba(201, 146, 43, 0.28)', stroke: '#c9922b', pulse: false };
+    if (injuries.some(i => i.type === 'burn' && i.treated)) return { fill: 'rgba(201, 146, 43, 0.28)', stroke: '#c9922b', pulse: false };
+    if (injuries.some(i => (i.type === 'bruise' || i.type === 'abrasion') && !i.treated)) return { fill: 'rgba(224, 171, 69, 0.28)', stroke: '#e0ab45', pulse: false };
+    return { fill: 'rgba(154, 201, 133, 0.22)', stroke: '#9ac985', pulse: false };
   };
 
   const getPartBadgeClass = (injuries: Injury[]) => {
@@ -130,7 +130,6 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
       title="Клинический самоосмотр"
       subtitle="Анатомическая карта травм, болевой порог и мониторинг медикаментов"
       width={1060}
-      tall
       onClose={onClose}
       headRight={
         <span className="gu-tag amber">Клавиша C</span>
@@ -150,14 +149,14 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
             <span className="gu-sec-sub">клик по зоне</span>
           </div>
 
-          <div className="relative w-44 h-64 flex items-center justify-center my-2">
-            <svg viewBox="0 0 100 160" className="w-full h-full drop-shadow-md">
+          <div className="relative w-40 h-56 flex items-center justify-center my-1">
+            <svg viewBox="0 0 100 160" className="w-full h-full">
               <circle
                 cx="50" cy="18" r="12"
                 fill={getPartColor('head').fill}
                 stroke={selectedPart === "head" ? "#e0ab45" : getPartColor('head').stroke}
                 strokeWidth={selectedPart === "head" ? "2.5" : "1.5"}
-                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('head').pulse ? 'animate-pulse' : ''}`}
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => selectPart('head')}
               />
               <rect
@@ -165,7 +164,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
                 fill={getPartColor('torso').fill}
                 stroke={selectedPart === "torso" ? "#e0ab45" : getPartColor('torso').stroke}
                 strokeWidth={selectedPart === "torso" ? "2.5" : "1.5"}
-                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('torso').pulse ? 'animate-pulse' : ''}`}
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => selectPart('torso')}
               />
               <rect
@@ -173,7 +172,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
                 fill={getPartColor('leftArm').fill}
                 stroke={selectedPart === "leftArm" ? "#e0ab45" : getPartColor('leftArm').stroke}
                 strokeWidth={selectedPart === "leftArm" ? "2.5" : "1.5"}
-                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('leftArm').pulse ? 'animate-pulse' : ''}`}
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => selectPart('leftArm')}
               />
               <rect
@@ -181,7 +180,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
                 fill={getPartColor('rightArm').fill}
                 stroke={selectedPart === "rightArm" ? "#e0ab45" : getPartColor('rightArm').stroke}
                 strokeWidth={selectedPart === "rightArm" ? "2.5" : "1.5"}
-                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('rightArm').pulse ? 'animate-pulse' : ''}`}
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => selectPart('rightArm')}
               />
               <rect
@@ -189,7 +188,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
                 fill={getPartColor('leftLeg').fill}
                 stroke={selectedPart === "leftLeg" ? "#e0ab45" : getPartColor('leftLeg').stroke}
                 strokeWidth={selectedPart === "leftLeg" ? "2.5" : "1.5"}
-                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('leftLeg').pulse ? 'animate-pulse' : ''}`}
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => selectPart('leftLeg')}
               />
               <rect
@@ -197,13 +196,13 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
                 fill={getPartColor('rightLeg').fill}
                 stroke={selectedPart === "rightLeg" ? "#e0ab45" : getPartColor('rightLeg').stroke}
                 strokeWidth={selectedPart === "rightLeg" ? "2.5" : "1.5"}
-                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('rightLeg').pulse ? 'animate-pulse' : ''}`}
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => selectPart('rightLeg')}
               />
             </svg>
           </div>
 
-          <div className="gu-grid gu-g3" style={{ width: '100%', gap: 6 }}>
+          <div className="gu-grid gu-g2 gu-keep" style={{ width: '100%', gap: 6 }}>
             {(['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'] as const).map(p => (
               <button
                 key={p}

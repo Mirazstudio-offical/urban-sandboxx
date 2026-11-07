@@ -93,7 +93,7 @@ export function Tabs<T extends string>({ items, value, onChange }: { items: TabI
   return (
     <div className="gu-tabs" role="tablist">
       {items.map(t => (
-        <button type="button" key={t.id} role="tab" aria-selected={t.id === value} className={'gu-tab' + (t.id === value ? ' on' : '')} onClick={() => onChange(t.id)}>
+        <button id={`gu-tab-${t.id}`} type="button" key={t.id} role="tab" aria-selected={t.id === value} className={'gu-tab' + (t.id === value ? ' on' : '')} onClick={() => onChange(t.id)}>
           {t.icon}
           <span>{t.label}</span>
           {!!t.badge && <span className="gu-badge-n">{t.badge}</span>}

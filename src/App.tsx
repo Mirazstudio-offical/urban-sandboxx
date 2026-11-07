@@ -4045,12 +4045,37 @@ export default function App() {
       }
     };
 
+    const handleOpenLimbTreatment = (e: CustomEvent) => {
+      const { index = 0, item } = e.detail || {};
+      if (item) {
+        setTreatmentModalItem({ index, item });
+      }
+    };
+
+    const handleOpenFurnitureStorage = (e: CustomEvent) => {
+      const data = e.detail || { buildingId: 'b_test', floor: 0, furnitureIndex: 0, furnitureType: 'fridge', customTitle: 'Двухкамерный холодильник' };
+      setFurnitureStorageData(data);
+      setIsFurnitureStorageOpen(true);
+    };
+
+    const handleOpenKitchenStation = (e: CustomEvent) => {
+      const data = e.detail || { stationName: 'Кухонная плита и духовка', furnitureType: 'stove', buildingId: 'b_test', floor: 0, furnitureIndex: 1 };
+      setKitchenStationData(data);
+      setIsKitchenStationOpen(true);
+    };
+
     window.addEventListener('apartment_key_activated' as any, handleKeyActivated as any);
     window.addEventListener('open_property_document_modal' as any, handleOpenPropDoc as any);
+    window.addEventListener('open_limb_treatment_modal' as any, handleOpenLimbTreatment as any);
+    window.addEventListener('open_furniture_storage_modal' as any, handleOpenFurnitureStorage as any);
+    window.addEventListener('open_kitchen_station_modal' as any, handleOpenKitchenStation as any);
 
     return () => {
       window.removeEventListener('apartment_key_activated' as any, handleKeyActivated as any);
       window.removeEventListener('open_property_document_modal' as any, handleOpenPropDoc as any);
+      window.removeEventListener('open_limb_treatment_modal' as any, handleOpenLimbTreatment as any);
+      window.removeEventListener('open_furniture_storage_modal' as any, handleOpenFurnitureStorage as any);
+      window.removeEventListener('open_kitchen_station_modal' as any, handleOpenKitchenStation as any);
     };
   }, []);
 

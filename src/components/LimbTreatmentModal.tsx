@@ -83,10 +83,10 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
   const getPartColor = (partKey: keyof BodyPartsMap) => {
     const part = bs.bodyParts[partKey];
     const injuries = Array.isArray(part) ? part : ((part as any)?.injuries || []);
-    if (!injuries || injuries.length === 0) return { fill: '#059669', stroke: '#10b981' };
-    if (injuries.some(i => isInjuryCompatible(i))) return { fill: '#dc2626', stroke: '#ef4444' };
-    if (injuries.some(i => !i.treated)) return { fill: '#d97706', stroke: '#f59e0b' };
-    return { fill: '#059669', stroke: '#10b981' };
+    if (!injuries || injuries.length === 0) return { fill: 'rgba(154, 201, 133, 0.22)', stroke: '#9ac985' };
+    if (injuries.some(i => isInjuryCompatible(i))) return { fill: 'rgba(217, 116, 90, 0.42)', stroke: '#e5484d' };
+    if (injuries.some(i => !i.treated)) return { fill: 'rgba(224, 171, 69, 0.32)', stroke: '#e0ab45' };
+    return { fill: 'rgba(154, 201, 133, 0.22)', stroke: '#9ac985' };
   };
 
   const currentPartRaw = bs.bodyParts[selectedPart];
@@ -142,20 +142,20 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
     >
       <div className="gu-limb-split">
         {/* LEFT: Body Silhouette */}
-        <div className="gu-card" style={{ alignItems: 'center' }}>
+        <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div className="gu-sec" style={{ width: '100%', marginTop: 0 }}>
-            <span>Карта конечностей</span>
+            <span>Карта тела</span>
             <span className="gu-sec-sub">клик по зоне</span>
           </div>
 
-          <div className="relative w-40 h-60 flex items-center justify-center my-1">
-            <svg viewBox="0 0 100 160" className="w-full h-full drop-shadow-md">
+          <div className="relative w-40 h-56 flex items-center justify-center my-1">
+            <svg viewBox="0 0 100 160" className="w-full h-full">
               <circle
                 cx="50" cy="18" r="12"
                 fill={getPartColor('head').fill}
                 stroke={selectedPart === "head" ? "#e0ab45" : getPartColor('head').stroke}
                 strokeWidth={selectedPart === "head" ? "2.5" : "1.5"}
-                className="cursor-pointer transition-all hover:opacity-80"
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => { setSelectedPart('head'); setSelectedInjuryId(null); }}
               />
               <rect
@@ -163,7 +163,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
                 fill={getPartColor('torso').fill}
                 stroke={selectedPart === "torso" ? "#e0ab45" : getPartColor('torso').stroke}
                 strokeWidth={selectedPart === "torso" ? "2.5" : "1.5"}
-                className="cursor-pointer transition-all hover:opacity-80"
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => { setSelectedPart('torso'); setSelectedInjuryId(null); }}
               />
               <rect
@@ -171,7 +171,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
                 fill={getPartColor('leftArm').fill}
                 stroke={selectedPart === "leftArm" ? "#e0ab45" : getPartColor('leftArm').stroke}
                 strokeWidth={selectedPart === "leftArm" ? "2.5" : "1.5"}
-                className="cursor-pointer transition-all hover:opacity-80"
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => { setSelectedPart('leftArm'); setSelectedInjuryId(null); }}
               />
               <rect
@@ -179,7 +179,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
                 fill={getPartColor('rightArm').fill}
                 stroke={selectedPart === "rightArm" ? "#e0ab45" : getPartColor('rightArm').stroke}
                 strokeWidth={selectedPart === "rightArm" ? "2.5" : "1.5"}
-                className="cursor-pointer transition-all hover:opacity-80"
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => { setSelectedPart('rightArm'); setSelectedInjuryId(null); }}
               />
               <rect
@@ -187,7 +187,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
                 fill={getPartColor('leftLeg').fill}
                 stroke={selectedPart === "leftLeg" ? "#e0ab45" : getPartColor('leftLeg').stroke}
                 strokeWidth={selectedPart === "leftLeg" ? "2.5" : "1.5"}
-                className="cursor-pointer transition-all hover:opacity-80"
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => { setSelectedPart('leftLeg'); setSelectedInjuryId(null); }}
               />
               <rect
@@ -195,13 +195,13 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
                 fill={getPartColor('rightLeg').fill}
                 stroke={selectedPart === "rightLeg" ? "#e0ab45" : getPartColor('rightLeg').stroke}
                 strokeWidth={selectedPart === "rightLeg" ? "2.5" : "1.5"}
-                className="cursor-pointer transition-all hover:opacity-80"
+                className="cursor-pointer transition-opacity hover:opacity-85"
                 onClick={() => { setSelectedPart('rightLeg'); setSelectedInjuryId(null); }}
               />
             </svg>
           </div>
 
-          <div className="gu-grid gu-g3" style={{ width: '100%', gap: 6 }}>
+          <div className="gu-grid gu-g2 gu-keep" style={{ width: '100%', gap: 6, marginTop: 8 }}>
             {(['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'] as const).map(p => (
               <button
                 key={p}
@@ -216,7 +216,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
         </div>
 
         {/* RIGHT: Injury Selection */}
-        <div className="gu-card" style={{ minHeight: 340, justifyContent: 'flex-start' }}>
+        <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div className="gu-sec" style={{ marginTop: 0 }}>
             <span>{getBodyPartLabel(selectedPart)}</span>
             <span className="gu-sec-sub">{currentInjuries.length} травм в области</span>
