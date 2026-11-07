@@ -392,35 +392,31 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const renderHandCard = (hand: 'left' | 'right', label: string, handItem: InventoryItem | null | undefined) => (
-    <div id={`inv-${hand}-hand-card`} className="gu-card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px' }}>
-      <div className="gu-row2" style={{ minWidth: 0, gap: 10 }}>
-        <div className={'gu-ico' + (handItem ? '' : ' gu-off')} style={{ width: 36, height: 36 }}>
-          {handItem ? (
-            <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={24} />
-          ) : (
-            <Hand width={16} height={16} />
-          )}
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div className="gu-mut" style={{ fontSize: 11 }}>{label}</div>
-          <div style={{ fontWeight: 600, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {handItem ? handItem.nameRu : 'Свободна'}
+    <div id={`inv-${hand}-hand-card`} className={'gu-hand' + (handItem ? ' full' : '')}>
+      <div className="gu-ic">
+        {handItem ? (
+          <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={38} />
+        ) : (
+          <Hand width={22} height={22} />
+        )}
+      </div>
+      <div className="gu-li-main">
+        <div className="gu-li-sub" style={{ marginTop: 0 }}>{label}</div>
+        <div className="gu-li-name">{handItem ? handItem.nameRu : 'Свободна'}</div>
+        {handItem && (
+          <div className="gu-li-sub">
+            {getItemTotalWeight(handItem)} кг · {getItemTotalVolume(handItem)} л
+            {handItem.surfaceTemperature !== undefined && (
+              <span style={{ marginLeft: 8, color: handItem.surfaceTemperature >= 52 ? '#efa690' : handItem.surfaceTemperature <= 4 ? '#7dd3fc' : 'var(--gu-amber-soft)' }}>
+                {handItem.surfaceTemperature > 0 ? '+' : ''}{handItem.surfaceTemperature.toFixed(1)}°C
+              </span>
+            )}
           </div>
-          {handItem && (
-            <div className="gu-row2 gu-wrap gu-mono" style={{ gap: 6, fontSize: 11, color: 'var(--gu-mut)' }}>
-              <span>{getItemTotalWeight(handItem)} кг · {getItemTotalVolume(handItem)} л</span>
-              {handItem.surfaceTemperature !== undefined && (
-                <span style={{ color: handItem.surfaceTemperature >= 52 ? '#efa690' : handItem.surfaceTemperature <= 4 ? '#7dd3fc' : 'var(--gu-amber-soft)' }}>
-                  {handItem.surfaceTemperature > 0 ? '+' : ''}{handItem.surfaceTemperature.toFixed(1)}°C
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {handItem && (
-        <div className="gu-row2 gu-wrap" style={{ gap: 4, justifyContent: 'flex-end', flexShrink: 0 }}>
+        <div className="gu-hand-acts">
           {handItem.clothingStats && (
             <button type="button" className="gu-btn gu-btn-p gu-btn-xs" onClick={() => handleEquipFromHand(hand)}>
               Надеть
@@ -436,7 +432,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             </button>
           )}
           <button type="button" className="gu-btn gu-btn-s gu-btn-xs" onClick={() => handleStowHand(hand)}>
-            В карман
+            В карманы
           </button>
           <button type="button" className="gu-btn gu-btn-d gu-btn-xs" onClick={() => handleDropFromHand(hand)}>
             Бросить
@@ -588,147 +584,146 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </div>
               </div>
 
-              {/* Clothing Compartments */}
-              {compartments.map(comp => {
-                const getCompIcon = (type: string, size = 15) => {
-                  if (type === 'user') return <User width={size} height={size} />;
-                  if (type === 'shirt') return <Shirt width={size} height={size} />;
-                  if (type === 'pants')
+              {/* Pockets / backpack: one list, grouped by compartment */}
+              <div className="gu-panel gu-pad">
+                {(() => {
+                  const getCompIcon = (type: string, size = 16) => {
+                    if (type === 'user') return <User width={size} height={size} />;
+                    if (type === 'shirt') return <Shirt width={size} height={size} />;
+                    if (type === 'pants')
+                      return (
+                        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
+                        </svg>
+                      );
+                    return <Luggage width={size} height={size} />;
+                  };
+
+                  const groups = compartments.map(comp => {
+                    const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
+                    const shown = slots.filter(i => inventory[i] && matchesFilter(inventory[i]));
+                    const freeIdx = slots.find(i => !inventory[i]);
+                    return { comp, slots, shown, freeIdx };
+                  });
+                  const visible = groups.filter(g => selectedCategory === 'all' || g.shown.length > 0);
+
+                  if (visible.length === 0) {
+                    return <div className="gu-mut" style={{ padding: '20px 0' }}>Ничего не найдено</div>;
+                  }
+
+                  return visible.map(({ comp, slots, shown, freeIdx }) => {
+                    const compVolumePct = Math.min(100, Math.round((comp.usedVolumeL / comp.capacityL) * 100));
+                    const compWeightPct = Math.min(100, Math.round((comp.usedWeightKg / comp.maxWeightKg) * 100));
+                    const freeSlots = slots.filter(i => !inventory[i]).length;
+
                     return (
-                      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
-                      </svg>
-                    );
-                  return <Luggage width={size} height={size} />;
-                };
+                      <div
+                        key={comp.id}
+                        className="gu-group"
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => {
+                          e.preventDefault();
+                          const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                          if (!isNaN(from) && freeIdx !== undefined && !slots.includes(from)) {
+                            moveInventoryItem(player, from, freeIdx);
+                            forceRender(n => n + 1);
+                          }
+                        }}
+                      >
+                        <div className="gu-group-h">
+                          <span className="gu-group-t">
+                            {getCompIcon(comp.iconType)}
+                            {comp.nameRu}
+                            {comp.sourceItemNameRu && comp.id !== 'base' && (
+                              <span className="gu-mut" style={{ textTransform: 'none', letterSpacing: 0, fontFamily: 'inherit', fontWeight: 500, fontSize: 13 }}>
+                                · {comp.sourceItemNameRu}
+                              </span>
+                            )}
+                          </span>
+                          <span className="gu-group-m">
+                            <span style={{ color: compVolumePct > 95 ? '#efa690' : undefined }}>{comp.usedVolumeL}/{comp.capacityL} л</span>
+                            {' · '}
+                            <span style={{ color: compWeightPct > 95 ? '#efa690' : undefined }}>{comp.usedWeightKg}/{comp.maxWeightKg} кг</span>
+                            {' · '}
+                            <span style={{ color: 'var(--gu-amber-hi)' }}>{freeSlots} своб. из {comp.slotCount}</span>
+                          </span>
+                        </div>
 
-                const compVolumePct = Math.min(100, Math.round((comp.usedVolumeL / comp.capacityL) * 100));
-                const compWeightPct = Math.min(100, Math.round((comp.usedWeightKg / comp.maxWeightKg) * 100));
+                        <div className="gu-li-list">
+                          {shown.map(slotIdx => {
+                            const item = inventory[slotIdx]!;
+                            const isSelected = selectedIndex === slotIdx;
+                            const isHotbar = slotIdx < 6;
+                            const temp = item.surfaceTemperature;
+                            const fillPct = item.fluidStorage
+                              ? Math.max(0, Math.min(100, (item.fluidStorage.currentMl / (item.fluidStorage.maxMl || 1)) * 100))
+                              : item.maxPortions && item.maxPortions > 1
+                              ? Math.max(0, Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100))
+                              : null;
 
-                return (
-                  <div key={comp.id} className="gu-panel gu-pad" style={{ padding: '10px 12px' }}>
-                    <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-                      <div className="gu-row2" style={{ gap: 8, minWidth: 0 }}>
-                        <span style={{ color: 'var(--gu-amber-hi)', display: 'inline-flex', alignItems: 'center' }}>
-                          {getCompIcon(comp.iconType, 16)}
-                        </span>
-                        <span className="gu-cn" style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
-                          {comp.nameRu}
-                        </span>
-                        {comp.sourceItemNameRu && comp.id !== 'base' && (
-                          <span className="gu-mut" style={{ fontSize: 12 }}>· {comp.sourceItemNameRu}</span>
-                        )}
-                      </div>
-
-                      <div className="gu-row2 gu-mono" style={{ gap: 8, fontSize: 12, color: 'var(--gu-mut)' }}>
-                        <span style={{ color: compVolumePct > 95 ? '#efa690' : 'var(--gu-ink-dim)' }}>
-                          {comp.usedVolumeL}/{comp.capacityL} л
-                        </span>
-                        <span>·</span>
-                        <span style={{ color: compWeightPct > 95 ? '#efa690' : 'var(--gu-ink-dim)' }}>
-                          {comp.usedWeightKg}/{comp.maxWeightKg} кг
-                        </span>
-                        <span>·</span>
-                        <span style={{ color: 'var(--gu-amber-hi)' }}>{comp.slotCount} сл.</span>
-                      </div>
-                    </div>
-
-                    <div className="gu-slot-grid">
-                      {Array.from({ length: comp.slotCount }).map((_, localIdx) => {
-                        const slotIdx = comp.startIndex + localIdx;
-                        const item = inventory[slotIdx];
-                        const isSelected = selectedIndex === slotIdx;
-                        const isHotbar = slotIdx < 6;
-                        const isMatch = matchesFilter(item);
-                        const isDimmed = selectedCategory !== 'all' && item && !isMatch;
-
-                        const cls =
-                          'gu-slot' +
-                          (!item ? ' empty' : '') +
-                          (isSelected && item ? ' on' : '') +
-                          (isDimmed ? ' dim' : '');
-
-                        return (
-                          <div
-                            key={slotIdx}
-                            id={`inventory-slot-${slotIdx}`}
-                            draggable={!!item}
-                            onDragStart={e => {
-                              if (item) e.dataTransfer.setData('text/plain', slotIdx.toString());
-                            }}
-                            onDragOver={e => e.preventDefault()}
-                            onDrop={e => {
-                              e.preventDefault();
-                              const fromIdxStr = e.dataTransfer.getData('text/plain');
-                              const fromIdx = parseInt(fromIdxStr, 10);
-                              if (!isNaN(fromIdx) && fromIdx !== slotIdx) {
-                                moveInventoryItem(player, fromIdx, slotIdx);
-                                forceRender(n => n + 1);
-                              }
-                            }}
-                            onClick={() => {
-                              if (item) setSelectedIndex(slotIdx);
-                            }}
-                            onDoubleClick={() => {
-                              if (item) {
-                                if (item.isContainer) {
-                                  setOpenContainer(item);
-                                  setSelectedContainerItemIdx(0);
-                                } else {
-                                  handleUseItem(slotIdx);
-                                }
-                              }
-                            }}
-                            className={cls}
-                            title={item ? `${item.nameRu} (${getItemTotalWeight(item)} кг · ${getItemTotalVolume(item)} л)` : `${comp.nameRu} · Слот #${slotIdx + 1}`}
-                          >
-                            {isHotbar && <span className="gu-slot-num">{slotIdx + 1}</span>}
-
-                            {item && (
-                              <>
-                                <ItemIconCanvas itemId={item.itemId} item={item} size={34} />
-                                {item.surfaceTemperature !== undefined && item.surfaceTemperature >= 52 && (
-                                  <span
-                                    style={{ position: 'absolute', top: 4, right: 5, color: '#f0c264' }}
-                                    title={`Горячо! Снаружи: ${item.surfaceTemperature}°C`}
-                                  >
-                                    <Flame width={11} height={11} />
+                            return (
+                              <div
+                                key={slotIdx}
+                                id={`inventory-slot-${slotIdx}`}
+                                draggable
+                                onDragStart={e => e.dataTransfer.setData('text/plain', slotIdx.toString())}
+                                onDragOver={e => e.preventDefault()}
+                                onDrop={e => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                                  if (!isNaN(from) && from !== slotIdx) {
+                                    moveInventoryItem(player, from, slotIdx);
+                                    forceRender(n => n + 1);
+                                  }
+                                }}
+                                onClick={() => setSelectedIndex(slotIdx)}
+                                onDoubleClick={() => {
+                                  if (item.isContainer) {
+                                    setOpenContainer(item);
+                                    setSelectedContainerItemIdx(0);
+                                  } else {
+                                    handleUseItem(slotIdx);
+                                  }
+                                }}
+                                className={'gu-li' + (isSelected ? ' on' : '')}
+                                title={`${item.nameRu} (${getItemTotalWeight(item)} кг · ${getItemTotalVolume(item)} л)`}
+                              >
+                                <div className="gu-ic">
+                                  {isHotbar && <span className="gu-ic-hk">{slotIdx + 1}</span>}
+                                  <ItemIconCanvas itemId={item.itemId} item={item} size={38} />
+                                  {item.count > 1 ? (
+                                    <span className="gu-ic-n">{item.count}</span>
+                                  ) : item.isContainer ? (
+                                    <span className="gu-ic-n">{item.contents?.length || 0}</span>
+                                  ) : null}
+                                  {fillPct !== null && (
+                                    <div className="gu-ic-fill"><i style={{ width: `${fillPct}%` }} /></div>
+                                  )}
+                                </div>
+                                <div className="gu-li-main">
+                                  <div className="gu-li-name">{item.nameRu}</div>
+                                  <div className="gu-li-sub">{getItemTotalWeight(item)} кг · {getItemTotalVolume(item)} л</div>
+                                </div>
+                                {temp !== undefined && temp >= 40 && (
+                                  <span className="gu-tag amber" title={`Снаружи: ${temp}°C`}>
+                                    {temp >= 52 && <Flame width={11} height={11} style={{ marginRight: 4, verticalAlign: '-1px' }} />}
+                                    +{Math.round(temp)}°C
                                   </span>
                                 )}
-                                {item.count > 1 && <span className="gu-slot-cnt">{item.count}</span>}
-                                {item.isContainer && <span className="gu-slot-sub">{item.contents?.length || 0}</span>}
-                                {item.fluidStorage ? (
-                                  <div className="gu-slot-fill">
-                                    <i
-                                      style={{
-                                        width: `${Math.max(
-                                          0,
-                                          Math.min(100, (item.fluidStorage.currentMl / (item.fluidStorage.maxMl || 1)) * 100)
-                                        )}%`
-                                      }}
-                                    />
-                                  </div>
-                                ) : item.maxPortions && item.maxPortions > 1 ? (
-                                  <div className="gu-slot-fill">
-                                    <i
-                                      style={{
-                                        width: `${Math.max(
-                                          0,
-                                          Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100)
-                                        )}%`
-                                      }}
-                                    />
-                                  </div>
-                                ) : null}
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                                {temp !== undefined && temp <= 4 && <span className="gu-tag cold">{Math.round(temp)}°C</span>}
+                              </div>
+                            );
+                          })}
+                          {shown.length === 0 && (
+                            <div className="gu-group-free">Пусто · перетащите предмет сюда ({comp.slotCount} сл.)</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
 
               {/* Standalone Carried Containers */}
               {(() => {
@@ -760,8 +755,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         return (
                           <div key={cIdx} className="gu-card-sm gu-row2" style={{ justifyContent: 'space-between', padding: '8px 10px' }}>
                             <div className="gu-row2" style={{ minWidth: 0, gap: 10 }}>
-                              <div className="gu-ico" style={{ width: 34, height: 34 }}>
-                                <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={22} />
+                              <div className="gu-ic">
+                                <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={38} />
                               </div>
                               <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: 600, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -797,8 +792,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 <>
                   {/* Item Header */}
                   <div className="gu-row2" style={{ alignItems: 'flex-start', gap: 12 }}>
-                    <div className="gu-ico" style={{ width: 50, height: 50, borderRadius: 10 }}>
-                      <ItemIconCanvas itemId={selectedEntry.item.itemId} item={selectedEntry.item} size={38} />
+                    <div className="gu-ic gu-md">
+                      <ItemIconCanvas itemId={selectedEntry.item.itemId} item={selectedEntry.item} size={50} />
                     </div>
                     <div className="gu-grow">
                       <div className="gu-row2 gu-wrap" style={{ gap: 6, marginBottom: 3 }}>
@@ -1240,8 +1235,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   <ChevronLeft width={16} height={16} color="#c9922b" />
                   <span>Назад в карманы</span>
                 </button>
-                <div className="gu-ico" style={{ width: 40, height: 40 }}>
-                  <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={28} />
+                <div className="gu-ic">
+                  <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={38} />
                 </div>
                 <div>
                   <div className="gu-row2" style={{ gap: 8 }}>
@@ -1270,8 +1265,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 {openContainer.contents!.map((contItem, cIdx) => (
                   <div key={cIdx} className="gu-item" style={{ justifyContent: 'space-between', padding: '8px 12px' }}>
                     <div className="gu-row2" style={{ minWidth: 0, gap: 10 }}>
-                      <div className="gu-ico" style={{ width: 36, height: 36 }}>
-                        <ItemIconCanvas itemId={contItem.itemId} item={contItem} size={24} />
+                      <div className="gu-ic">
+                        <ItemIconCanvas itemId={contItem.itemId} item={contItem} size={38} />
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div className="gu-item-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1377,8 +1372,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             }
                           }}
                         >
-                          <div className="gu-ico" style={{ width: 34, height: 34 }}>
-                            <ItemIconCanvas itemId={cand.item.itemId} item={cand.item} size={22} />
+                          <div className="gu-ic">
+                            <ItemIconCanvas itemId={cand.item.itemId} item={cand.item} size={38} />
                           </div>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1410,8 +1405,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               <div className="gu-list">
                 {nearbyGroundItems.map(gi => (
                   <div key={gi.id} className="gu-rw">
-                    <div className="gu-ico" style={{ width: 44, height: 44 }}>
-                      <ItemIconCanvas itemId={gi.item.itemId} item={gi.item} size={30} />
+                    <div className="gu-ic">
+                      <ItemIconCanvas itemId={gi.item.itemId} item={gi.item} size={38} />
                     </div>
                     <div className="gu-grow">
                       <div className="gu-rw-t">{gi.item.nameRu}</div>
@@ -1472,8 +1467,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     {Object.entries(layers).map(([layer, item]) => (
                       <div key={layer} className="gu-card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                         <div className="gu-row2" style={{ gap: 10, minWidth: 0 }}>
-                          <div className="gu-ico" style={{ width: 40, height: 40 }}>
-                            <ItemIconCanvas itemId={item.itemId} item={item} size={28} />
+                          <div className="gu-ic">
+                            <ItemIconCanvas itemId={item.itemId} item={item} size={38} />
                           </div>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 15, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

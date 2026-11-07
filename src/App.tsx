@@ -618,6 +618,9 @@ export default function App() {
     customTitle?: string;
   } | null>(null);
   const [isFurnitureStorageOpen, setIsFurnitureStorageOpen] = useState<boolean>(false);
+  // The player inventory screen must never open on top of a furniture storage (no switching between them).
+  const isFurnitureStorageOpenRef = useRef<boolean>(false);
+  isFurnitureStorageOpenRef.current = isFurnitureStorageOpen;
 
   // Kitchen Workstation & Cooking Simulation Modal State
   const [isKitchenStationOpen, setIsKitchenStationOpen] = useState<boolean>(false);
@@ -2238,6 +2241,7 @@ export default function App() {
 
       // Inventory Modal Toggle (I or Tab)
       if (code === 'KeyI'|| code === 'Tab') {
+        if (isFurnitureStorageOpenRef.current) { e.preventDefault(); return; }
         setIsInventoryOpen((prev) => !prev);
         e.preventDefault();
         return;
