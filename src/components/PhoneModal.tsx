@@ -18,53 +18,45 @@ import {
   Flashlight,
   ChevronLeft,
   Send,
-  Sparkles,
   Smartphone,
   ShieldCheck,
-  Eye,
   MapPin,
   Navigation,
-  CloudSun,
   CloudRain,
   CloudLightning,
   CloudFog,
   Sun,
-  Truck,
   Wrench,
   Ambulance,
   Car,
-  AlertTriangle,
-  Download,
   Image as ImageIcon,
-  CheckCircle2,
   Wind,
   Cloud,
   CloudDrizzle,
   Snowflake,
-  Calendar
+  Trash2
 } from 'lucide-react';
 import { InventoryItem, Player, PhoneSpecs, GameWorld } from '../types';
 import { sound } from '../audio';
-import { getOutsideTemperature } from '../physics';
-import { 
-  formatGameDate, 
-  formatGameTime, 
-  getRussianSeasonName, 
-  getRussianWeatherDescription, 
-  calculateClimateAtmosphere, 
-  createInitialCalendarState 
+import {
+  formatGameDate,
+  formatGameTime,
+  getRussianSeasonName,
+  getRussianWeatherDescription,
+  calculateClimateAtmosphere,
+  createInitialCalendarState
 } from '../calendarSystem';
 import {
   PHONE_WALLPAPERS,
   PHONE_CONTACTS,
-  INITIAL_PHONE_MESSAGES,
   PhoneContact,
-  PhoneSmsMessage,
   getPhoneSpecsForItemId
 } from '../phoneData';
 import { addPlayerNotification } from '../items';
 import { PhoneTaxiApp } from './PhoneTaxiApp';
 import { TaxiFleetSystem } from '../taxiSystem';
+import { useTopmostEscape } from './gameUi';
+import './phoneMenu.css';
 
 interface PhoneModalProps {
   item: InventoryItem | null;
@@ -92,19 +84,41 @@ interface CapturedPhoto {
   locationName: string;
 }
 
+const APP_POS: Record<ActiveApp, number> = {
+  home: 0,
+  messages: 1,
+  taxi: 2,
+  gps: 3,
+  camera: 4,
+  notes: 5,
+  specs: 6,
+  settings: 7
+};
+
 export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onSetGpsTarget, onClose }) => {
   if (!item) return null;
 
-  // Resolve specs from item or fallback
   const specs: PhoneSpecs = item.phoneSpecs || getPhoneSpecsForItemId(item.itemId);
 
   const [activeApp, setActiveApp] = useState<ActiveApp>('home');
+  const [isBackNav, setIsBackNav] = useState<boolean>(false);
   const [selectedWallpaper, setSelectedWallpaper] = useState<string>(PHONE_WALLPAPERS[0].cssBackground);
+  const [soundFeedbackOn, setSoundFeedbackOn] = useState<boolean>(true);
   const [flashlightOn, setFlashlightOn] = useState<boolean>(() => {
     return !!(player?.phoneFlashlightOn || specs.flashlightOn);
   });
   const [islandExpanded, setIslandExpanded] = useState<boolean>(false);
   const [batteryLevel, setBatteryLevel] = useState<number>(() => specs.batteryLevelPct ?? 88);
+
+  const wipeRef = useRef<HTMLDivElement>(null);
+
+  const triggerWipe = () => {
+    const w = wipeRef.current;
+    if (!w) return;
+    w.classList.remove('on');
+    void w.offsetWidth;
+    w.classList.add('on');
+  };
 
   // Messages App state
   const [contacts] = useState<PhoneContact[]>(PHONE_CONTACTS);
@@ -135,7 +149,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   const [notes, setNotes] = useState<string>(() => {
     try {
       return localStorage.getItem('player_phone_notes') ||
-        'Мои заметки:\n• Проверить масло в двигателе\n• Купить канистру бензина АИ-95\n• Заехать в автосервис к Санычу\n• Проверить свечи зажигания';
+        'Мои заметки:\n· Проверить масло в двигателе\n· Купить канистру бензина АИ-95\n· Заехать в автосервис к Санычу\n· Проверить свечи зажигания';
     } catch {
       return 'Заметки';
     }
@@ -152,17 +166,12 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   const calendar = world?.calendar || createInitialCalendarState(2026, 10, 8, typeof world?.timeHour === 'number' ? world.timeHour : 12);
   const atmo = calculateClimateAtmosphere(calendar, world?.weather || 'clear');
 
-  const getGameTimeStr = () => {
-    return formatGameTime(calendar.timeHour);
-  };
-
+  const getGameTimeStr = () => formatGameTime(calendar.timeHour);
   const [currentTimeStr, setCurrentTimeStr] = useState<string>(getGameTimeStr());
 
   // Clock sync
   useEffect(() => {
-    const updateTime = () => {
-      setCurrentTimeStr(getGameTimeStr());
-    };
+    const updateTime = () => setCurrentTimeStr(getGameTimeStr());
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
@@ -172,14 +181,12 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   useEffect(() => {
     const batteryInterval = setInterval(() => {
       if (player?.isInVehicle) {
-        // Charging inside car
         setBatteryLevel(prev => {
           const next = Math.min(100, prev + 1);
           if (item.phoneSpecs) item.phoneSpecs.batteryLevelPct = next;
           return next;
         });
       } else if (flashlightOn) {
-        // Flashlight active drain
         setBatteryLevel(prev => {
           const next = Math.max(1, prev - 1);
           if (item.phoneSpecs) item.phoneSpecs.batteryLevelPct = next;
@@ -205,25 +212,43 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
     }
   }, [activeApp]);
 
+  const playUiClick = () => {
+    if (soundFeedbackOn) sound.click();
+  };
+
   const handleAppOpen = (app: ActiveApp) => {
-    sound.click();
+    playUiClick();
+    setIsBackNav(false);
+    triggerWipe();
     setActiveApp(app);
   };
 
   const handleBack = () => {
-    sound.click();
+    playUiClick();
+    setIsBackNav(true);
+    triggerWipe();
     if (viewingPhoto) {
       setViewingPhoto(null);
     } else if (selectedContact) {
       setSelectedContact(null);
-    } else {
+    } else if (activeApp !== 'home') {
       setActiveApp('home');
+    } else {
+      onClose();
     }
   };
 
+  useTopmostEscape(() => {
+    if (activeApp !== 'home' || selectedContact || viewingPhoto) {
+      handleBack();
+    } else {
+      onClose();
+    }
+  });
+
   // Real flashlight toggle linked directly to game renderer
   const toggleTorch = () => {
-    sound.click();
+    playUiClick();
     const newState = !flashlightOn;
     setFlashlightOn(newState);
 
@@ -237,7 +262,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
     if (player) {
       addPlayerNotification(
         player,
-        newState ? 'Фонарик телефона включен' : 'Фонарик телефона выключен',
+        newState ? 'Фонарик телефона включён' : 'Фонарик телефона выключен',
         'info'
       );
     }
@@ -245,7 +270,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
 
   const handleSendMessage = () => {
     if (!replyInput.trim() || !selectedContact) return;
-    sound.playPhoneKeypad(750);
+    if (soundFeedbackOn) sound.playPhoneKeypad(750);
     const sentText = replyInput.trim();
     const newMsg: PhoneChatMessage = {
       id: `msg_${Date.now()}`,
@@ -260,7 +285,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
 
     // Real game world dispatcher integration
     setTimeout(() => {
-      sound.playNotificationPing();
+      if (soundFeedbackOn) sound.playNotificationPing();
       let responseText = 'Сообщение принято диспетчером службы.';
 
       if (selectedContact.id === 'contact_hospital') {
@@ -303,9 +328,9 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
 
   // Real Camera Photo Capture from Game Canvas
   const handleCapturePhoto = () => {
-    sound.playCameraShutter();
+    if (soundFeedbackOn) sound.playCameraShutter();
     setCameraShutterEffect(true);
-    setTimeout(() => setCameraShutterEffect(false), 200);
+    setTimeout(() => setCameraShutterEffect(false), 180);
 
     try {
       const gameCanvas = document.querySelector('canvas') as HTMLCanvasElement;
@@ -315,7 +340,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
           id: `photo_${Date.now()}`,
           dataUrl: photoData,
           timestamp: currentTimeStr,
-          locationName: player ? `X: ${Math.round(player.x)} Y: ${Math.round(player.y)}` : 'Степной Край'
+          locationName: player ? `X: ${Math.round(player.x)} · Y: ${Math.round(player.y)}` : 'Flatbody'
         };
         setCapturedPhotos(prev => [newPhoto, ...prev]);
         setLiveCanvasSnapshot(photoData);
@@ -339,10 +364,10 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   const getPOIDistances = () => {
     if (!player) return [];
     const pois = [
-      { name: 'Автосервис PIT-STOP', x: 2500, y: 3500, desc: 'Ремонт, шиномонтаж, запчасти', icon: Wrench, color: 'text-cyan-400' },
-      { name: 'АЗС «Транзит-Степь»', x: 5160, y: 5160, desc: 'Бензин АИ-92/95/ДТ, подкачка шин', icon: Zap, color: 'text-amber-400' },
-      { name: 'Автосалон «Степь Моторс»', x: 252, y: 5916, desc: 'Продажа и тест-драйв автомобилей', icon: Car, color: 'text-emerald-400' },
-      { name: 'Городская Больница №1', x: 1800, y: 2200, desc: 'Медицинская помощь и аптека', icon: Ambulance, color: 'text-rose-400' }
+      { name: 'Автосервис PIT-STOP', x: 2500, y: 3500, desc: 'Ремонт, шиномонтаж, запчасти', icon: Wrench },
+      { name: 'АЗС «Транзит-Степь»', x: 5160, y: 5160, desc: 'Бензин АИ-92/95/ДТ, магазин', icon: Zap },
+      { name: 'Автосалон «Степь Моторс»', x: 252, y: 5916, desc: 'Продажа и тест-драйв автомобилей', icon: Car },
+      { name: 'Городская Больница №1', x: 1800, y: 2200, desc: 'Медицинская помощь и аптека', icon: Ambulance }
     ];
 
     return pois.map(poi => {
@@ -353,7 +378,6 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
     }).sort((a, b) => a.distance - b.distance);
   };
 
-  // Real Weather Icon & Name & Atmospheric Wind
   const getWeatherInfo = () => {
     const w = world?.weather || 'clear';
     const tempVal = Math.round(atmo.temperature);
@@ -365,851 +389,1186 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
 
     switch (w) {
       case 'blizzard':
-        return { icon: Snowflake, label: desc, temp: tempStr, windStr, color: 'text-cyan-300', seasonStr };
       case 'snow':
-        return { icon: Snowflake, label: desc, temp: tempStr, windStr, color: 'text-sky-200', seasonStr };
+        return { icon: Snowflake, label: desc, temp: tempStr, windStr, seasonStr };
       case 'storm':
-        return { icon: CloudLightning, label: desc, temp: tempStr, windStr, color: 'text-amber-400', seasonStr };
+        return { icon: CloudLightning, label: desc, temp: tempStr, windStr, seasonStr };
       case 'rain':
-        return { icon: CloudRain, label: desc, temp: tempStr, windStr, color: 'text-blue-400', seasonStr };
+        return { icon: CloudRain, label: desc, temp: tempStr, windStr, seasonStr };
       case 'drizzle':
-        return { icon: CloudDrizzle, label: desc, temp: tempStr, windStr, color: 'text-blue-300', seasonStr };
+        return { icon: CloudDrizzle, label: desc, temp: tempStr, windStr, seasonStr };
       case 'fog':
-        return { icon: CloudFog, label: desc, temp: tempStr, windStr, color: 'text-slate-300', seasonStr };
+        return { icon: CloudFog, label: desc, temp: tempStr, windStr, seasonStr };
       case 'overcast':
-        return { icon: Cloud, label: desc, temp: tempStr, windStr, color: 'text-slate-200', seasonStr };
+        return { icon: Cloud, label: desc, temp: tempStr, windStr, seasonStr };
       default:
-        return { icon: Sun, label: desc, temp: tempStr, windStr, color: 'text-amber-300', seasonStr };
+        return { icon: Sun, label: desc, temp: tempStr, windStr, seasonStr };
     }
   };
 
   const weather = getWeatherInfo();
   const WeatherIcon = weather.icon;
   const poiList = getPOIDistances();
+  const posIdx = APP_POS[activeApp] || 0;
+  const taxiSys = TaxiFleetSystem.getInstance();
+  const taxiStatusText = taxiSys.activeOrder
+    ? 'Активный заказ'
+    : taxiSys.pendingOffer
+    ? 'Новый вызов!'
+    : taxiSys.profile.isShiftActive
+    ? 'На линии'
+    : 'Смена и заказы';
 
   return (
     <div
       id="phone-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 select-none animate-in fade-in duration-200"
-      onClick={(e) => {
+      className="ph-backdrop"
+      onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Phone Body Container */}
-      <div
-        id="phone-chassis"
-        className="relative flex flex-col items-center justify-between rounded-[48px] shadow-2xl p-3 sm:p-4 transition-transform duration-300"
-        style={{
-          width: '380px',
-          maxWidth: '96vw',
-          height: '740px',
-          maxHeight: '92vh',
-          backgroundColor: specs.colorHex || '#1e2022',
-          border: `4px solid ${specs.accentHex || '#64748b'}`,
-          boxShadow: `0 25px 60px -15px rgba(0,0,0,0.8), 0 0 30px ${specs.accentHex}33`
-        }}
-      >
-        {/* Hardware side button accents (Power & Volume) */}
+      <div className="ph-stage">
+        {/* Physical Smartphone Chassis */}
         <div
-          className="absolute -right-1.5 top-28 w-1 h-14 rounded-r-sm"
-          style={{ backgroundColor: specs.accentHex }}
-        />
-        <div
-          className="absolute -left-1.5 top-24 w-1 h-10 rounded-l-sm"
-          style={{ backgroundColor: specs.accentHex }}
-        />
-        <div
-          className="absolute -left-1.5 top-36 w-1 h-10 rounded-l-sm"
-          style={{ backgroundColor: specs.accentHex }}
-        />
+          id="phone-chassis"
+          className="ph-chassis"
+          style={{
+            ['--ph-chassis-accent' as any]: specs.accentHex || '#c9922b',
+            background: `linear-gradient(145deg, ${specs.colorHex || '#24221f'}, #121110)`
+          }}
+        >
+          {/* Side Hardware Buttons */}
+          <div className="ph-hw-btn ph-hw-pwr" />
+          <div className="ph-hw-btn ph-hw-vol1" />
+          <div className="ph-hw-btn ph-hw-vol2" />
 
-        {/* Outer Bezel Rim */}
-        <div className="relative w-full h-full rounded-[38px] bg-black p-2 flex flex-col overflow-hidden shadow-inner border border-white/10">
-          {/* AMOLED Screen Canvas */}
-          <div
-            id="phone-screen"
-            className="relative w-full h-full rounded-[30px] flex flex-col overflow-hidden text-white transition-all duration-300"
-            style={{
-              background: activeApp === 'home' || activeApp === 'settings' ? selectedWallpaper : '#090a0f'
-            }}
+          {/* Floating Lock / Close Button */}
+          <button
+            id="phone-power-off-btn"
+            type="button"
+            onClick={onClose}
+            className="ph-close-btn"
+            title="Убрать телефон (Esc)"
+            aria-label="Убрать телефон"
           >
-            {/* Top Status Bar with Dynamic Island / Punch Hole */}
-            <div className="relative z-30 flex items-center justify-between px-6 pt-3 pb-1.5 text-xs font-semibold tracking-tight text-white/90">
-              {/* Clock */}
-              <span className="text-[13px] font-medium tracking-wide">{currentTimeStr}</span>
+            <X width={18} height={18} color="#e0ab45" />
+          </button>
 
-              {/* Dynamic Island / Camera Notch */}
-              <div
-                id="phone-dynamic-island"
-                onClick={() => {
-                  sound.click();
-                  setIslandExpanded(!islandExpanded);
-                }}
-                className={`flex items-center justify-center transition-all duration-300 cursor-pointer bg-black text-white ${
-                  islandExpanded
-                    ? 'w-48 h-8 rounded-full px-3 shadow-lg border border-white/20 gap-2'
-                    : specs.modelName.includes('Cyber')
-                    ? 'w-24 h-5 rounded-md px-2 border-t-2 border-cyan-400 gap-1'
-                    : 'w-24 h-5 rounded-full px-2 gap-1.5'
-                }`}
-              >
-                {islandExpanded ? (
-                  <div className="flex items-center justify-between w-full text-[10px]">
-                    <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                      <Sparkles className="w-3 h-3 animate-spin" /> {specs.modelName}
-                    </span>
-                    <span className="text-white/70 text-[9px]">{specs.cpuModel.split(' ')[0]}</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="w-2 h-2 rounded-full bg-blue-900 ring-1 ring-blue-500/50 flex items-center justify-center">
-                      <div className="w-0.5 h-0.5 rounded-full bg-blue-400" />
-                    </div>
-                    {specs.modelName.includes('Aura') && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
-                    )}
-                  </>
-                )}
+          {/* Inner Bezel */}
+          <div className="ph-bezel">
+            {/* AMOLED Screen */}
+            <div id="phone-screen" className="ph-screen" style={{ background: selectedWallpaper }}>
+              {/* MainMenu Layered Mountain Silhouette Scene */}
+              <div className="ph-bg-scene">
+                <div
+                  className="ph-bg-glow"
+                  style={{ transform: `translateX(${(3 - posIdx) * 14}px)` }}
+                />
+                <svg
+                  className="ph-bg-mtn1"
+                  viewBox="0 0 800 360"
+                  preserveAspectRatio="none"
+                  style={{ transform: `translateX(${-posIdx * 6}px)` }}
+                >
+                  <path
+                    d="M0 220 L110 140 L210 195 L340 95 L460 185 L590 120 L710 190 L800 145 L800 360 L0 360 Z"
+                    fill="#2a1f14"
+                    opacity="0.72"
+                  />
+                </svg>
+                <svg
+                  className="ph-bg-mtn2"
+                  viewBox="0 0 800 360"
+                  preserveAspectRatio="none"
+                  style={{ transform: `translateX(${-posIdx * 12}px)` }}
+                >
+                  <path
+                    d="M0 265 L140 195 L270 250 L410 180 L550 255 L680 205 L800 245 L800 360 L0 360 Z"
+                    fill="#1a140e"
+                  />
+                </svg>
+                <svg
+                  className="ph-bg-mtn3"
+                  viewBox="0 0 800 360"
+                  preserveAspectRatio="none"
+                  style={{ transform: `translateX(${-posIdx * 18}px)` }}
+                >
+                  <path
+                    d="M0 310 L190 278 L390 312 L610 284 L800 315 L800 360 L0 360 Z"
+                    fill="#0f0c09"
+                  />
+                </svg>
+                <div className={'ph-bg-scrim' + (activeApp !== 'home' ? ' app-open' : '')} />
               </div>
 
-              {/* Status Icons */}
-              <div className="flex items-center gap-1.5 text-white/80">
-                <span className="text-[9px] font-bold text-emerald-400">5G</span>
-                <Signal className="w-3.5 h-3.5" />
-                <Wifi className="w-3.5 h-3.5" />
-                <div className="flex items-center gap-0.5">
-                  <span className="text-[11px] font-medium">{batteryLevel}%</span>
-                  {player?.isInVehicle ? (
-                    <BatteryCharging className="w-4 h-4 text-emerald-400 fill-emerald-400/30" />
+              {/* Amber Wipe Line */}
+              <div className="ph-wipe" ref={wipeRef} />
+
+              {/* Top Status Bar */}
+              <div className="ph-statusbar">
+                <span className="ph-clock">{currentTimeStr}</span>
+
+                {/* Dynamic Camera Island */}
+                <button
+                  id="phone-dynamic-island"
+                  type="button"
+                  onClick={() => {
+                    playUiClick();
+                    setIslandExpanded(!islandExpanded);
+                  }}
+                  className={'ph-island' + (islandExpanded ? ' expanded' : '')}
+                  title="Информация об устройстве"
+                >
+                  {islandExpanded ? (
+                    <span style={{ fontSize: 10, fontWeight: 600, color: '#f0c264', whiteSpace: 'nowrap' }}>
+                      {specs.seriesName} · {specs.osName}
+                    </span>
                   ) : (
-                    <Battery className={`w-4 h-4 ${batteryLevel < 20 ? 'text-rose-500' : 'text-emerald-400'}`} />
+                    <>
+                      <span className="ph-lens" />
+                      <span className="ph-led" />
+                    </>
+                  )}
+                </button>
+
+                {/* Signal & Battery */}
+                <div className="ph-status-r">
+                  <span className="ph-net-tag">{specs.networkType || '5G'}</span>
+                  <Signal width={12} height={12} color="#e9e6df" />
+                  <Wifi width={12} height={12} color="#e9e6df" />
+                  <span style={{ fontWeight: 700, color: batteryLevel < 20 ? '#d9745a' : '#e9e6df' }}>
+                    {batteryLevel}%
+                  </span>
+                  {player?.isInVehicle ? (
+                    <BatteryCharging width={14} height={14} color="#9ac985" />
+                  ) : (
+                    <Battery width={14} height={14} color={batteryLevel < 20 ? '#d9745a' : '#e0ab45'} />
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* Main Application Area */}
-            <div className="relative flex-1 flex flex-col overflow-hidden">
-              {/* HOME SCREEN */}
-              {activeApp === 'home' && (
-                <div className="flex-1 flex flex-col justify-between p-4 pb-2 animate-in fade-in duration-200">
-                  {/* Weather & Clock Widget */}
-                  <div className="mt-4 bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 shadow-lg">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="text-3xl font-light tracking-tight">{currentTimeStr}</div>
-                        <div className="text-[11px] text-amber-300 font-medium mt-0.5">
-                          {formatGameDate(calendar, 'full')}
+              {/* Main Application Viewport */}
+              <div className="ph-viewport">
+                {/* ====================== HOME SCREEN ====================== */}
+                {activeApp === 'home' && (
+                  <div className={'ph-view' + (isBackNav ? ' back' : '')} key="home">
+                    <div className="ph-home">
+                      {/* Top Brand & Device Header */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <svg width="22" height="22" viewBox="0 0 36 36" aria-hidden="true">
+                            <path d="M18 2 32 10v16L18 34 4 26V10z" fill="none" stroke="#c9922b" strokeWidth="2.8" />
+                            <path d="M11 22 18 11l7 11z" fill="#c9922b" />
+                          </svg>
+                          <span className="ph-cn" style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
+                            {specs.seriesName}
+                          </span>
                         </div>
-                        <div className="text-[11px] text-white/80 font-medium mt-1 flex items-center gap-1">
-                          <WeatherIcon className={`w-3.5 h-3.5 ${weather.color}`} />
-                          <span>{weather.label}</span>
-                          <span className="text-white/40">•</span>
-                          <span className="text-emerald-300 font-semibold">{weather.seasonStr}</span>
-                        </div>
+                        <span className="ph-mut" style={{ fontSize: 11 }}>
+                          {specs.osName} {specs.osVersion}
+                        </span>
                       </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-semibold text-amber-300">{weather.temp}</div>
-                        <div className="text-[10px] text-white/70 flex items-center justify-end gap-1 mt-0.5">
-                          <Wind className="w-3 h-3 text-cyan-300" />
-                          <span>{weather.windStr}</span>
-                        </div>
-                        <div className="text-[9px] text-white/60 font-mono mt-0.5">
-                          {atmo.pressureMmHg} мм • {atmo.humidity}%
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Astronomical Ephemeris Bar */}
-                    <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-white/75 font-mono">
-                      <span>Восход: {formatGameTime(calendar.sunriseHour)}</span>
-                      <span>•</span>
-                      <span>Закат: {formatGameTime(calendar.sunsetHour)}</span>
-                      <span>•</span>
-                      <span>Свет: {calendar.daylightHours.toFixed(1)}ч</span>
-                    </div>
-
-                    {/* Quick Specs Pill */}
-                    <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-white/80">
-                      <span className="font-medium text-cyan-300">{specs.modelName}</span>
-                      <span className="text-white/60">{specs.storageGb} ГБ • {specs.ramGb} ГБ RAM</span>
-                    </div>
-                  </div>
-
-                  {/* App Grid */}
-                  <div className="grid grid-cols-4 gap-y-5 gap-x-2 my-auto px-1">
-                    {/* Характеристики */}
-                    <button
-                      id="app-specs"
-                      onClick={() => handleAppOpen('specs')}
-                      className="flex flex-col items-center gap-1.5 group"
-                    >
-                      <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-500 p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center">
-                        <Cpu className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="text-[11px] font-medium text-white/90 drop-shadow">Система</span>
-                    </button>
-
-                    {/* Сообщения */}
-                    <button
-                      id="app-messages"
-                      onClick={() => handleAppOpen('messages')}
-                      className="flex flex-col items-center gap-1.5 group relative"
-                    >
-                      <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center">
-                        <MessageSquare className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="text-[11px] font-medium text-white/90 drop-shadow">Службы</span>
-                      <span className="absolute top-0 right-3 w-4 h-4 bg-emerald-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center ring-2 ring-black">
-                        {contacts.length}
-                      </span>
-                    </button>
-
-                    {/* Таксопарк */}
-                    <button
-                      id="app-taxi"
-                      onClick={() => handleAppOpen('taxi')}
-                      className="flex flex-col items-center gap-1.5 group relative"
-                    >
-                      <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-400 p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center text-black">
-                        <Car className="w-6 h-6 text-black" />
-                      </div>
-                      <span className="text-[11px] font-medium text-white/90 drop-shadow">Таксопарк</span>
-                      {(TaxiFleetSystem.getInstance().profile.isShiftActive || TaxiFleetSystem.getInstance().pendingOffer) && (
-                        <span className="absolute top-0 right-3 w-3.5 h-3.5 bg-emerald-400 rounded-full ring-2 ring-black animate-pulse" />
-                      )}
-                    </button>
-
-                    {/* GPS Навигатор */}
-                    <button
-                      id="app-gps"
-                      onClick={() => handleAppOpen('gps')}
-                      className="flex flex-col items-center gap-1.5 group"
-                    >
-                      <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-rose-600 to-pink-500 p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center">
-                        <Compass className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="text-[11px] font-medium text-white/90 drop-shadow">Навигатор</span>
-                    </button>
-
-                    {/* Камера */}
-                    <button
-                      id="app-camera"
-                      onClick={() => handleAppOpen('camera')}
-                      className="flex flex-col items-center gap-1.5 group"
-                    >
-                      <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center">
-                        <Camera className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="text-[11px] font-medium text-white/90 drop-shadow">Камера</span>
-                    </button>
-
-                    {/* Заметки */}
-                    <button
-                      id="app-notes"
-                      onClick={() => handleAppOpen('notes')}
-                      className="flex flex-col items-center gap-1.5 group"
-                    >
-                      <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="text-[11px] font-medium text-white/90 drop-shadow">Блокнот</span>
-                    </button>
-
-                    {/* Фонарик (Реальный игровой источник света) */}
-                    <button
-                      id="app-flashlight"
-                      onClick={toggleTorch}
-                      className="flex flex-col items-center gap-1.5 group"
-                    >
-                      <div
-                        className={`w-13 h-13 rounded-2xl p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center ${
-                          flashlightOn
-                            ? 'bg-amber-400 text-black shadow-amber-400/50 shadow-lg ring-2 ring-amber-300'
-                            : 'bg-white/20 text-white backdrop-blur-md'
-                        }`}
-                      >
-                        <Flashlight className="w-6 h-6" />
-                      </div>
-                      <span className="text-[11px] font-medium text-white/90 drop-shadow">
-                        {flashlightOn ? 'Фонарь: ВКЛ' : 'Фонарик'}
-                      </span>
-                    </button>
-
-                    {/* Настройки */}
-                    <button
-                      id="app-settings"
-                      onClick={() => handleAppOpen('settings')}
-                      className="flex flex-col items-center gap-1.5 group"
-                    >
-                      <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-slate-600 to-zinc-500 p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center">
-                        <Settings className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="text-[11px] font-medium text-white/90 drop-shadow">Опции</span>
-                    </button>
-                  </div>
-
-                  {/* Dock / Fixed Bottom Bar */}
-                  <div className="bg-white/15 backdrop-blur-xl rounded-3xl p-2.5 flex justify-around items-center border border-white/15 shadow-xl mb-1">
-                    <button
-                      onClick={() => handleAppOpen('messages')}
-                      className="p-2.5 rounded-2xl bg-emerald-500 text-white shadow-md active:scale-95"
-                      title="Экстренные службы"
-                    >
-                      <PhoneIcon className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleAppOpen('gps')}
-                      className="p-2.5 rounded-2xl bg-rose-500 text-white shadow-md active:scale-95"
-                      title="GPS Навигатор"
-                    >
-                      <Compass className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleAppOpen('camera')}
-                      className="p-2.5 rounded-2xl bg-zinc-700 text-white shadow-md active:scale-95"
-                      title="Камера"
-                    >
-                      <Camera className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleAppOpen('settings')}
-                      className="p-2.5 rounded-2xl bg-slate-700 text-white shadow-md active:scale-95"
-                      title="Настройки"
-                    >
-                      <Settings className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* HARDWARE SPECS APP */}
-              {activeApp === 'specs' && (
-                <div className="flex-1 flex flex-col bg-zinc-950 p-4 overflow-y-auto animate-in fade-in duration-150">
-                  {/* Header */}
-                  <div className="flex items-center gap-2 mb-4 pb-2 border-b border-zinc-800">
-                    <button onClick={handleBack} className="p-1 text-cyan-400 hover:text-cyan-300">
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-                    <div className="flex-1">
-                      <h2 className="text-base font-bold text-white flex items-center gap-1.5">
-                        <Smartphone className="w-4 h-4 text-cyan-400" />
-                        {specs.modelName}
-                      </h2>
-                      <p className="text-[11px] text-zinc-400">Характеристики устройства</p>
-                    </div>
-                  </div>
-
-                  {/* Color Finish Card */}
-                  <div className="bg-zinc-900 rounded-2xl p-3.5 mb-3 border border-zinc-800 flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl shadow-inner border border-white/20 flex-shrink-0"
-                      style={{ backgroundColor: specs.colorHex }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-zinc-400">Цвет и исполнение корпуса</div>
-                      <div className="text-sm font-semibold text-white truncate">{specs.colorNameRu}</div>
-                      <div className="text-[10px] text-zinc-500">{specs.brand} • {specs.seriesName}</div>
-                    </div>
-                  </div>
-
-                  {/* Core Hardware Metrics Grid */}
-                  <div className="grid grid-cols-2 gap-2.5 mb-3">
-                    {/* CPU */}
-                    <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800 flex flex-col justify-between">
-                      <div className="flex items-center gap-1.5 text-cyan-400 text-xs font-semibold mb-1">
-                        <Cpu className="w-4 h-4" /> Процессор
-                      </div>
-                      <div className="text-sm font-bold text-white leading-tight">{specs.cpuModel}</div>
-                      <div className="text-[10px] text-zinc-400 mt-1">
-                        {specs.cpuCores} ядер • {specs.cpuFrequencyGhz} ГГц
-                      </div>
-                    </div>
-
-                    {/* RAM */}
-                    <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800 flex flex-col justify-between">
-                      <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-semibold mb-1">
-                        <Layers className="w-4 h-4" /> Оперативная память
-                      </div>
-                      <div className="text-sm font-bold text-white">{specs.ramGb} ГБ LPDDR5X</div>
-                      <div className="w-full bg-zinc-800 rounded-full h-1.5 mt-2 overflow-hidden">
-                        <div className="bg-emerald-500 h-full rounded-full w-2/5" />
-                      </div>
-                      <div className="text-[10px] text-zinc-400 mt-1">Занято: 3.8 / {specs.ramGb} ГБ</div>
-                    </div>
-
-                    {/* Storage */}
-                    <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800 flex flex-col justify-between">
-                      <div className="flex items-center gap-1.5 text-amber-400 text-xs font-semibold mb-1">
-                        <HardDrive className="w-4 h-4" /> Накопитель
-                      </div>
-                      <div className="text-sm font-bold text-white">{specs.storageGb} ГБ UFS 4.0</div>
-                      <div className="w-full bg-zinc-800 rounded-full h-1.5 mt-2 overflow-hidden">
-                        <div className="bg-amber-500 h-full rounded-full w-1/4" />
-                      </div>
-                      <div className="text-[10px] text-zinc-400 mt-1">Свободно: {Math.round(specs.storageGb * 0.75)} ГБ</div>
-                    </div>
-
-                    {/* Battery */}
-                    <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800 flex flex-col justify-between">
-                      <div className="flex items-center gap-1.5 text-rose-400 text-xs font-semibold mb-1">
-                        <Zap className="w-4 h-4" /> Аккумулятор
-                      </div>
-                      <div className="text-sm font-bold text-white">{specs.batteryCapacityMah} мА·ч</div>
-                      <div className="text-[10px] text-zinc-400 mt-1">
-                        {player?.isInVehicle ? 'Заряжается в машине' : `Уровень: ${batteryLevel}%`}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Display & Camera Details */}
-                  <div className="bg-zinc-900 rounded-2xl p-3.5 mb-3 border border-zinc-800 space-y-2 text-xs">
-                    <div className="flex justify-between py-1 border-b border-zinc-800/60">
-                      <span className="text-zinc-400">Экран</span>
-                      <span className="text-white font-medium">{specs.screenSizeInches || 6.7}" AMOLED HDR</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-zinc-800/60">
-                      <span className="text-zinc-400">Камера</span>
-                      <span className="text-white font-medium">{specs.cameraSpecs || '48 MP Fusion'}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-zinc-800/60">
-                      <span className="text-zinc-400">Операционная система</span>
-                      <span className="text-cyan-400 font-medium">{specs.osName || 'AuraOS'}</span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-zinc-400">Защита корпуса</span>
-                      <span className="text-emerald-400 font-medium flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5" /> IP68 Водонепроницаемый
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* MESSAGES & SERVICES APP */}
-              {activeApp === 'messages' && (
-                <div className="flex-1 flex flex-col bg-zinc-950 animate-in fade-in duration-150 overflow-hidden">
-                  {/* Chat Header */}
-                  <div className="flex items-center gap-2 p-3 bg-zinc-900 border-b border-zinc-800">
-                    <button onClick={handleBack} className="p-1 text-emerald-400 hover:text-emerald-300">
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-                    {selectedContact ? (
-                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white border border-white/20"
-                          style={{ backgroundColor: selectedContact.avatarColor }}
-                        >
-                          {selectedContact.nameRu[0]}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-bold text-white truncate">{selectedContact.nameRu}</div>
-                          <div className="text-[10px] text-emerald-400 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            {selectedContact.role}
+                      {/* Weather & Astronomical Telemetry Panel */}
+                      <div className="ph-hero">
+                        <div className="ph-hero-banner">
+                          <div className="ph-hero-top">
+                            <div>
+                              <div className="ph-hero-time">{currentTimeStr}</div>
+                              <div className="ph-hero-date">{formatGameDate(calendar, 'full')}</div>
+                              <div className="ph-hero-wx">
+                                <WeatherIcon width={14} height={14} color="#e0ab45" />
+                                <span>{weather.label}</span>
+                                <span>·</span>
+                                <span style={{ color: '#f0c264', fontWeight: 600 }}>{weather.seasonStr}</span>
+                              </div>
+                            </div>
+                            <div>
+                              <div className="ph-hero-temp">{weather.temp}</div>
+                              <div className="ph-hero-meta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                                <Wind width={11} height={11} color="#e0ab45" />
+                                <span>{weather.windStr}</span>
+                              </div>
+                              <div className="ph-hero-meta">
+                                {atmo.pressureMmHg} мм · {atmo.humidity}%
+                              </div>
+                            </div>
                           </div>
+                        </div>
+                        <div className="ph-hero-bar">
+                          <span>Восход {formatGameTime(calendar.sunriseHour)}</span>
+                          <span>·</span>
+                          <span>Закат {formatGameTime(calendar.sunsetHour)}</span>
+                          <span>·</span>
+                          <span>День {calendar.daylightHours.toFixed(1)} ч</span>
+                        </div>
+                      </div>
+
+                      {/* 2-Column MainMenu-styled App Tiles */}
+                      <div className="ph-app-grid">
+                        {/* Экстренные службы */}
+                        <button
+                          id="app-messages"
+                          type="button"
+                          onClick={() => handleAppOpen('messages')}
+                          className="ph-app-tile"
+                        >
+                          <span className="ph-tile-ico">
+                            <MessageSquare width={18} height={18} />
+                          </span>
+                          <div className="ph-tile-txt">
+                            <div className="ph-tile-ttl">Службы</div>
+                            <div className="ph-tile-sub">Диспетчеры · {contacts.length}</div>
+                          </div>
+                        </button>
+
+                        {/* Таксопарк */}
+                        <button
+                          id="app-taxi"
+                          type="button"
+                          onClick={() => handleAppOpen('taxi')}
+                          className={'ph-app-tile' + (taxiSys.profile.isShiftActive || taxiSys.pendingOffer ? ' active-tile' : '')}
+                        >
+                          <span className="ph-tile-ico">
+                            <Car width={18} height={18} />
+                          </span>
+                          <div className="ph-tile-txt">
+                            <div className="ph-tile-ttl">Таксопарк</div>
+                            <div className="ph-tile-sub">{taxiStatusText}</div>
+                          </div>
+                        </button>
+
+                        {/* Навигатор */}
+                        <button
+                          id="app-gps"
+                          type="button"
+                          onClick={() => handleAppOpen('gps')}
+                          className="ph-app-tile"
+                        >
+                          <span className="ph-tile-ico">
+                            <Compass width={18} height={18} />
+                          </span>
+                          <div className="ph-tile-txt">
+                            <div className="ph-tile-ttl">Навигатор</div>
+                            <div className="ph-tile-sub">
+                              {player ? `X:${Math.round(player.x)} Y:${Math.round(player.y)}` : 'Точки карты'}
+                            </div>
+                          </div>
+                        </button>
+
+                        {/* Камера */}
+                        <button
+                          id="app-camera"
+                          type="button"
+                          onClick={() => handleAppOpen('camera')}
+                          className="ph-app-tile"
+                        >
+                          <span className="ph-tile-ico">
+                            <Camera width={18} height={18} />
+                          </span>
+                          <div className="ph-tile-txt">
+                            <div className="ph-tile-ttl">Камера</div>
+                            <div className="ph-tile-sub">Снимки · {capturedPhotos.length}</div>
+                          </div>
+                        </button>
+
+                        {/* Блокнот */}
+                        <button
+                          id="app-notes"
+                          type="button"
+                          onClick={() => handleAppOpen('notes')}
+                          className="ph-app-tile"
+                        >
+                          <span className="ph-tile-ico">
+                            <FileText width={18} height={18} />
+                          </span>
+                          <div className="ph-tile-txt">
+                            <div className="ph-tile-ttl">Блокнот</div>
+                            <div className="ph-tile-sub">Заметки и план</div>
+                          </div>
+                        </button>
+
+                        {/* Система / Характеристики */}
+                        <button
+                          id="app-specs"
+                          type="button"
+                          onClick={() => handleAppOpen('specs')}
+                          className="ph-app-tile"
+                        >
+                          <span className="ph-tile-ico">
+                            <Cpu width={18} height={18} />
+                          </span>
+                          <div className="ph-tile-txt">
+                            <div className="ph-tile-ttl">Система</div>
+                            <div className="ph-tile-sub">{specs.ramGb} ГБ · {specs.storageGb} ГБ</div>
+                          </div>
+                        </button>
+
+                        {/* Фонарик */}
+                        <button
+                          id="app-flashlight"
+                          type="button"
+                          onClick={toggleTorch}
+                          className={'ph-app-tile' + (flashlightOn ? ' active-tile' : '')}
+                        >
+                          <span className="ph-tile-ico">
+                            <Flashlight width={18} height={18} />
+                          </span>
+                          <div className="ph-tile-txt">
+                            <div className="ph-tile-ttl">Фонарик</div>
+                            <div className="ph-tile-sub">{flashlightOn ? 'Включён · Луч' : 'Выключен'}</div>
+                          </div>
+                        </button>
+
+                        {/* Опции */}
+                        <button
+                          id="app-settings"
+                          type="button"
+                          onClick={() => handleAppOpen('settings')}
+                          className="ph-app-tile"
+                        >
+                          <span className="ph-tile-ico">
+                            <Settings width={18} height={18} />
+                          </span>
+                          <div className="ph-tile-txt">
+                            <div className="ph-tile-ttl">Опции</div>
+                            <div className="ph-tile-sub">Обои и звук</div>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Quick Access Dock */}
+                      <div className="ph-dock">
+                        <button
+                          type="button"
+                          onClick={() => handleAppOpen('messages')}
+                          className="ph-dock-btn"
+                          title="Службы и связь"
+                        >
+                          <PhoneIcon width={17} height={17} color="#e0ab45" />
+                          <span>Связь</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAppOpen('taxi')}
+                          className="ph-dock-btn"
+                          title="Таксопарк"
+                        >
+                          <Car width={17} height={17} color="#e0ab45" />
+                          <span>Такси</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAppOpen('gps')}
+                          className="ph-dock-btn"
+                          title="Навигатор"
+                        >
+                          <Compass width={17} height={17} color="#e0ab45" />
+                          <span>Карта</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAppOpen('camera')}
+                          className="ph-dock-btn"
+                          title="Камера"
+                        >
+                          <Camera width={17} height={17} color="#e0ab45" />
+                          <span>Камера</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ====================== HARDWARE SPECS APP ====================== */}
+                {activeApp === 'specs' && (
+                  <div className={'ph-view' + (isBackNav ? ' back' : '')} key="specs">
+                    <div className="ph-app-top">
+                      <div className="ph-app-top-l">
+                        <button type="button" onClick={handleBack} className="ph-back" aria-label="Назад">
+                          <ChevronLeft width={18} height={18} />
+                        </button>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="ph-app-ttl">Система</div>
+                          <div className="ph-app-sub">{specs.modelName}</div>
+                        </div>
+                      </div>
+                      <Smartphone width={18} height={18} color="#e0ab45" />
+                    </div>
+
+                    <div className="ph-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {/* Finish & Chassis Card */}
+                      <div className="ph-panel" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 10,
+                            backgroundColor: specs.colorHex,
+                            border: `2px solid ${specs.accentHex || '#c9922b'}`,
+                            flex: 'none'
+                          }}
+                        />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="ph-cn ph-mut" style={{ fontSize: 11 }}>{specs.brand} · {specs.seriesName}</div>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 1 }}>{specs.colorNameRu}</div>
+                          <div className="ph-mut" style={{ fontSize: 11, marginTop: 1 }}>{specs.osName} {specs.osVersion}</div>
+                        </div>
+                      </div>
+
+                      {/* 2x2 Key Metrics */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div className="ph-panel">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e0ab45', fontSize: 11, fontWeight: 600 }}>
+                            <Cpu width={13} height={13} />
+                            <span className="ph-cn">Процессор</span>
+                          </div>
+                          <div className="ph-num" style={{ fontSize: 24, marginTop: 6, color: '#fff' }}>
+                            {specs.cpuFrequencyGhz} ГГц
+                          </div>
+                          <div className="ph-mut" style={{ fontSize: 11, marginTop: 4, lineHeight: 1.3 }}>
+                            {specs.cpuCores} ядер · {specs.cpuModel.split('(')[0].trim()}
+                          </div>
+                        </div>
+
+                        <div className="ph-panel">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e0ab45', fontSize: 11, fontWeight: 600 }}>
+                            <Layers width={13} height={13} />
+                            <span className="ph-cn">Память ОЗУ</span>
+                          </div>
+                          <div className="ph-num" style={{ fontSize: 24, marginTop: 6, color: '#fff' }}>
+                            {specs.ramGb} ГБ
+                          </div>
+                          <div className="ph-bar" style={{ marginTop: 6 }}>
+                            <i style={{ width: '38%' }} />
+                          </div>
+                          <div className="ph-mut" style={{ fontSize: 10, marginTop: 4 }}>
+                            Активно: {specs.ramUsedGb || 3.8} / {specs.ramGb} ГБ
+                          </div>
+                        </div>
+
+                        <div className="ph-panel">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e0ab45', fontSize: 11, fontWeight: 600 }}>
+                            <HardDrive width={13} height={13} />
+                            <span className="ph-cn">Накопитель</span>
+                          </div>
+                          <div className="ph-num" style={{ fontSize: 24, marginTop: 6, color: '#fff' }}>
+                            {specs.storageGb} ГБ
+                          </div>
+                          <div className="ph-bar" style={{ marginTop: 6 }}>
+                            <i style={{ width: '24%' }} />
+                          </div>
+                          <div className="ph-mut" style={{ fontSize: 10, marginTop: 4 }}>
+                            Свободно: {Math.round(specs.storageGb * 0.76)} ГБ
+                          </div>
+                        </div>
+
+                        <div className="ph-panel">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e0ab45', fontSize: 11, fontWeight: 600 }}>
+                            <Zap width={13} height={13} />
+                            <span className="ph-cn">Батарея</span>
+                          </div>
+                          <div className="ph-num" style={{ fontSize: 24, marginTop: 6 }}>
+                            {batteryLevel}%
+                          </div>
+                          <div className="ph-bar" style={{ marginTop: 6 }}>
+                            <i style={{ width: `${batteryLevel}%`, background: batteryLevel < 20 ? '#d9745a' : '#9ac985' }} />
+                          </div>
+                          <div className="ph-mut" style={{ fontSize: 10, marginTop: 4 }}>
+                            {specs.batteryCapacityMah} мА·ч · {player?.isInVehicle ? 'Зарядка' : 'От сети'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Spec Table */}
+                      <div className="ph-grp">Спецификация оборудования</div>
+                      <div className="ph-list">
+                        <div className="ph-row">
+                          <span className="ph-mut" style={{ fontSize: 12 }}>Дисплей</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{specs.screenSizeInches || 6.7}" AMOLED 120 Гц</span>
+                        </div>
+                        <div className="ph-row">
+                          <span className="ph-mut" style={{ fontSize: 12 }}>Оптика</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', textAlign: 'right' }}>{(specs.cameraSpecs || '48 MP Fusion').split('+')[0].trim()}</span>
+                        </div>
+                        <div className="ph-row">
+                          <span className="ph-mut" style={{ fontSize: 12 }}>Платформа</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#f0c264' }}>{specs.osName} {specs.osVersion}</span>
+                        </div>
+                        <div className="ph-row">
+                          <span className="ph-mut" style={{ fontSize: 12 }}>Защита корпуса</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#9ac985' }}>
+                            <ShieldCheck width={14} height={14} /> IP68 Титан
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ====================== MESSAGES & SERVICES APP ====================== */}
+                {activeApp === 'messages' && (
+                  <div className={'ph-view' + (isBackNav ? ' back' : '')} key="messages">
+                    <div className="ph-app-top">
+                      <div className="ph-app-top-l">
+                        <button type="button" onClick={handleBack} className="ph-back" aria-label="Назад">
+                          <ChevronLeft width={18} height={18} />
+                        </button>
+                        {selectedContact ? (
+                          <div style={{ minWidth: 0 }}>
+                            <div className="ph-app-ttl">{selectedContact.nameRu}</div>
+                            <div className="ph-app-sub">{selectedContact.role} · {selectedContact.number}</div>
+                          </div>
+                        ) : (
+                          <div style={{ minWidth: 0 }}>
+                            <div className="ph-app-ttl">Службы и связь</div>
+                            <div className="ph-app-sub">Экстренные каналы и диспетчеры</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {selectedContact ? (
+                      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                        {/* Chat Thread */}
+                        <div className="ph-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {messages
+                            .filter(m => m.contactId === selectedContact.id)
+                            .map((m) => {
+                              const isPlayer = m.sender === 'player';
+                              return (
+                                <div
+                                  key={m.id}
+                                  style={{
+                                    alignSelf: isPlayer ? 'flex-end' : 'flex-start',
+                                    maxWidth: '86%',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: isPlayer ? 'flex-end' : 'flex-start'
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      padding: '8px 11px',
+                                      borderRadius: 10,
+                                      fontSize: 12,
+                                      lineHeight: 1.45,
+                                      background: isPlayer ? '#c9922b' : 'rgba(24, 24, 27, 0.95)',
+                                      color: isPlayer ? '#1a1409' : '#e9e6df',
+                                      fontWeight: isPlayer ? 600 : 400,
+                                      border: isPlayer ? 'none' : '1px solid rgba(255,255,255,0.09)'
+                                    }}
+                                  >
+                                    {m.text}
+                                  </div>
+                                  <span className="ph-mut" style={{ fontSize: 10, marginTop: 3, padding: '0 3px' }}>
+                                    {m.timestamp}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+
+                        {/* Quick Dispatch Presets */}
+                        <div style={{ display: 'flex', gap: 6, padding: '6px 12px', overflowX: 'auto', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(16,16,18,0.9)' }}>
+                          {[
+                            'Нужна помощь по координатам',
+                            'Запрос статуса и погоды',
+                            'Вызвать экипаж'
+                          ].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setReplyInput(preset)}
+                              style={{
+                                padding: '4px 9px',
+                                borderRadius: 6,
+                                background: 'rgba(255,255,255,0.06)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                fontSize: 11,
+                                color: '#cfcbc1',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Input Bar */}
+                        <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: 'rgba(18,18,20,0.96)', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                          <input
+                            id="chat-reply-input"
+                            type="text"
+                            value={replyInput}
+                            onChange={(e) => setReplyInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              if (e.key === 'Enter') handleSendMessage();
+                            }}
+                            placeholder="Сообщение диспетчеру..."
+                            className="ph-inp"
+                            style={{ flex: 1, height: 38 }}
+                          />
+                          <button
+                            id="chat-reply-send-btn"
+                            type="button"
+                            onClick={handleSendMessage}
+                            disabled={!replyInput.trim()}
+                            className="ph-btn ph-btn-p"
+                            style={{ width: 40, height: 38, padding: 0 }}
+                            aria-label="Отправить"
+                          >
+                            <Send width={15} height={15} />
+                          </button>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex-1">
-                        <h2 className="text-sm font-bold text-white">Экстренные службы и чат</h2>
-                        <p className="text-[10px] text-zinc-400">Диспетчеры и горячие линии</p>
+                      <div className="ph-scroll">
+                        <div className="ph-grp">Оперативные каналы связи</div>
+                        <div className="ph-list">
+                          {contacts.map((c) => {
+                            const lastMsg = [...messages].reverse().find(m => m.contactId === c.id);
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  playUiClick();
+                                  triggerWipe();
+                                  setSelectedContact(c);
+                                }}
+                                className="ph-row clickable"
+                                style={{ width: '100%', padding: '10px 12px' }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0, flex: 1 }}>
+                                  <div
+                                    style={{
+                                      width: 38,
+                                      height: 38,
+                                      borderRadius: 9,
+                                      background: 'rgba(201, 146, 43, 0.14)',
+                                      border: '1px solid rgba(201, 146, 43, 0.45)',
+                                      color: '#f0c264',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontFamily: "'Barlow Condensed', sans-serif",
+                                      fontSize: 18,
+                                      fontWeight: 700,
+                                      flex: 'none'
+                                    }}
+                                  >
+                                    {c.nameRu.charAt(0)}
+                                  </div>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+                                      <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {c.nameRu}
+                                      </span>
+                                      <span className="ph-cn" style={{ fontSize: 11, color: '#e0ab45', flex: 'none' }}>
+                                        {c.number}
+                                      </span>
+                                    </div>
+                                    <div className="ph-mut" style={{ fontSize: 11, marginTop: 1 }}>
+                                      {c.role}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#cfcbc1', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {lastMsg ? lastMsg.text : c.description}
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* Chat Content */}
-                  {selectedContact ? (
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                      {/* Message History */}
-                      <div className="flex-1 p-3 overflow-y-auto space-y-2.5">
-                        {messages
-                          .filter(m => m.contactId === selectedContact.id)
-                          .map((m) => (
-                            <div
-                              key={m.id}
-                              className={`flex flex-col max-w-[85%] ${
-                                m.sender === 'player' ? 'ml-auto items-end' : 'mr-auto items-start'
-                              }`}
+                {/* ====================== CAMERA APP ====================== */}
+                {activeApp === 'camera' && (
+                  <div className={'ph-view' + (isBackNav ? ' back' : '')} key="camera">
+                    <div className="ph-app-top">
+                      <div className="ph-app-top-l">
+                        <button type="button" onClick={handleBack} className="ph-back" aria-label="Назад">
+                          <ChevronLeft width={18} height={18} />
+                        </button>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="ph-app-ttl">{viewingPhoto ? 'Галерея снимков' : 'Камера'}</div>
+                          <div className="ph-app-sub">
+                            {viewingPhoto ? viewingPhoto.locationName : (specs.cameraSpecs || '48 MP Fusion').split('+')[0].trim()}
+                          </div>
+                        </div>
+                      </div>
+                      {viewingPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playUiClick();
+                            setCapturedPhotos(prev => prev.filter(p => p.id !== viewingPhoto.id));
+                            setViewingPhoto(null);
+                          }}
+                          className="ph-btn ph-btn-d ph-btn-sm"
+                          title="Удалить снимок"
+                        >
+                          <Trash2 width={13} height={13} />
+                        </button>
+                      )}
+                    </div>
+
+                    {viewingPhoto ? (
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#09090a', padding: 12, gap: 10 }}>
+                        <div style={{ flex: 1, position: 'relative', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)', background: '#000' }}>
+                          <img
+                            src={viewingPhoto.dataUrl}
+                            alt="Снимок экрана"
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                          />
+                        </div>
+                        <div className="ph-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                          <span>Время: <strong>{viewingPhoto.timestamp}</strong></span>
+                          <span className="ph-mut">{viewingPhoto.locationName}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setViewingPhoto(null)}
+                          className="ph-btn ph-btn-s ph-btn-block"
+                        >
+                          Вернуться к видоискателю
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#08080a' }}>
+                        {/* Viewfinder */}
+                        <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {liveCanvasSnapshot ? (
+                            <img
+                              src={liveCanvasSnapshot}
+                              alt="Видоискатель"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                transform: `scale(${zoomLevel})`,
+                                transition: 'transform 0.25s ease'
+                              }}
+                            />
+                          ) : (
+                            <div className="ph-mut" style={{ fontSize: 12 }}>Видоискатель активен</div>
+                          )}
+
+                          {/* Rule of thirds grid */}
+                          <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 1fr)', pointerEvents: 'none', opacity: 0.22 }}>
+                            <div style={{ borderRight: '1px solid #fff', borderBottom: '1px solid #fff' }} />
+                            <div style={{ borderRight: '1px solid #fff', borderBottom: '1px solid #fff' }} />
+                            <div style={{ borderBottom: '1px solid #fff' }} />
+                            <div style={{ borderRight: '1px solid #fff', borderBottom: '1px solid #fff' }} />
+                            <div style={{ borderRight: '1px solid #fff', borderBottom: '1px solid #fff' }} />
+                            <div style={{ borderBottom: '1px solid #fff' }} />
+                            <div style={{ borderRight: '1px solid #fff' }} />
+                            <div style={{ borderRight: '1px solid #fff' }} />
+                            <div />
+                          </div>
+
+                          {/* Center Amber Target Frame */}
+                          <div style={{ width: 64, height: 64, border: '1.5px solid rgba(224, 171, 69, 0.85)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5 }}>
+                            <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#e0ab45' }} />
+                          </div>
+
+                          {/* Shutter Flash */}
+                          {cameraShutterEffect && (
+                            <div style={{ position: 'absolute', inset: 0, background: '#fff', zIndex: 20 }} />
+                          )}
+
+                          {/* Telemetry Overlay */}
+                          <div style={{ position: 'absolute', bottom: 10, left: 12, right: 12, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#e9e6df', background: 'rgba(12,12,14,0.72)', padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <span className="ph-cn">HDR · {zoomLevel}x</span>
+                            <span>X: {player ? Math.round(player.x) : 0} · Y: {player ? Math.round(player.y) : 0}</span>
+                          </div>
+                        </div>
+
+                        {/* Zoom Selector */}
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: '8px 0', background: '#0e0e10', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          {[0.5, 1, 2, 5].map((z) => (
+                            <button
+                              key={z}
+                              type="button"
+                              onClick={() => {
+                                playUiClick();
+                                setZoomLevel(z);
+                              }}
+                              style={{
+                                minWidth: 36,
+                                height: 26,
+                                padding: '0 8px',
+                                borderRadius: 6,
+                                fontFamily: "'Barlow Condensed', sans-serif",
+                                fontSize: 13,
+                                fontWeight: 700,
+                                background: zoomLevel === z ? '#c9922b' : 'rgba(255,255,255,0.07)',
+                                color: zoomLevel === z ? '#1a1409' : '#cfcbc1',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
                             >
-                              <div
-                                className={`rounded-2xl px-3 py-2 text-xs leading-relaxed ${
-                                  m.sender === 'player'
-                                    ? 'bg-emerald-600 text-white rounded-tr-xs'
-                                    : 'bg-zinc-800 text-zinc-200 rounded-tl-xs border border-zinc-700/50'
-                                }`}
-                              >
-                                {m.text}
-                              </div>
-                              <span className="text-[9px] text-zinc-500 mt-0.5 px-1">{m.timestamp}</span>
-                            </div>
+                              {z}x
+                            </button>
                           ))}
-                      </div>
+                        </div>
 
-                      {/* Reply Input Bar */}
-                      <div className="p-2.5 bg-zinc-900 border-t border-zinc-800 flex items-center gap-2">
-                        <input
-                          id="chat-reply-input"
-                          type="text"
-                          value={replyInput}
-                          onChange={(e) => setReplyInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                          placeholder="Написать диспетчеру..."
-                          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-full px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
-                        />
-                        <button
-                          id="chat-reply-send-btn"
-                          onClick={handleSendMessage}
-                          className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-400 active:scale-95 transition-transform"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Contact List */
-                    <div className="flex-1 p-2 overflow-y-auto divide-y divide-zinc-900">
-                      {contacts.map((c) => (
-                        <div
-                          key={c.id}
-                          onClick={() => {
-                            sound.click();
-                            setSelectedContact(c);
-                          }}
-                          className="flex items-center gap-3 p-3 rounded-2xl hover:bg-zinc-900 cursor-pointer transition-colors"
-                        >
-                          <div
-                            className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center font-bold text-sm text-white shrink-0"
-                            style={{ backgroundColor: c.avatarColor }}
+                        {/* Shutter Bar */}
+                        <div style={{ height: 74, background: '#121214', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 24px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (capturedPhotos.length > 0) {
+                                playUiClick();
+                                setViewingPhoto(capturedPhotos[0]);
+                              }
+                            }}
+                            style={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: 9,
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid rgba(255,255,255,0.14)',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="Открыть последний снимок"
                           >
-                            {c.nameRu[0]}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-bold text-white truncate">{c.nameRu}</span>
-                              <span className="text-[10px] text-zinc-500">{currentTimeStr}</span>
-                            </div>
-                            <div className="text-[11px] text-zinc-400 truncate">{c.role}</div>
-                            <div className="text-[10px] text-emerald-400/80 truncate mt-0.5">{c.description}</div>
+                            {capturedPhotos.length > 0 ? (
+                              <img src={capturedPhotos[0].dataUrl} alt="Превью" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <ImageIcon width={18} height={18} color="#a29e93" />
+                            )}
+                          </button>
+
+                          <button
+                            id="camera-shutter-button"
+                            type="button"
+                            onClick={handleCapturePhoto}
+                            style={{
+                              width: 56,
+                              height: 56,
+                              borderRadius: '50%',
+                              border: '3px solid #e0ab45',
+                              padding: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            aria-label="Сделать снимок"
+                          >
+                            <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#c9922b' }} />
+                          </button>
+
+                          <div style={{ width: 44, textAlign: 'center' }}>
+                            <div className="ph-num" style={{ fontSize: 18 }}>{capturedPhotos.length}</div>
+                            <div className="ph-mut" style={{ fontSize: 10 }}>кадров</div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* CAMERA APPARATUS APP */}
-              {activeApp === 'camera' && (
-                <div className="flex-1 flex flex-col bg-black relative animate-in fade-in duration-150 select-none">
-                  {/* Viewfinder Header */}
-                  <div className="absolute top-2 left-0 right-0 z-10 flex justify-between items-center px-4 text-xs text-white/80">
-                    <button onClick={handleBack} className="p-1 bg-black/40 rounded-full backdrop-blur-md">
-                      <ChevronLeft className="w-5 h-5 text-white" />
-                    </button>
-                    <div className="px-2 py-0.5 bg-black/40 rounded-full text-[10px] font-mono backdrop-blur-md">
-                      4K 60FPS • LIVE
-                    </div>
-                    <div className="text-[10px] font-medium text-amber-300">RAW</div>
+                      </div>
+                    )}
                   </div>
+                )}
 
-                  {/* Real Viewfinder Scene */}
-                  {viewingPhoto ? (
-                    <div className="flex-1 relative flex flex-col items-center justify-center bg-black p-2">
-                      <img
-                        src={viewingPhoto.dataUrl}
-                        alt="Photo"
-                        className="max-h-[75%] max-w-full rounded-lg object-contain shadow-lg"
-                      />
-                      <div className="mt-2 text-xs text-zinc-300 text-center">
-                        <div>{viewingPhoto.timestamp}</div>
-                        <div className="text-[10px] text-zinc-500">{viewingPhoto.locationName}</div>
-                      </div>
-                      <button
-                        onClick={() => setViewingPhoto(null)}
-                        className="mt-3 px-4 py-1 bg-zinc-800 rounded-full text-xs text-white hover:bg-zinc-700"
-                      >
-                        Вернуться к камере
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-zinc-950">
-                      {liveCanvasSnapshot ? (
-                        <img
-                          src={liveCanvasSnapshot}
-                          alt="Game Viewfinder"
-                          className="absolute inset-0 w-full h-full object-cover opacity-85"
-                        />
-                      ) : (
-                        <div className="text-zinc-500 text-xs">Инициализация видоискателя...</div>
-                      )}
-
-                      {/* Viewfinder Grid Lines */}
-                      <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-25">
-                        <div className="border-r border-b border-white" />
-                        <div className="border-r border-b border-white" />
-                        <div className="border-b border-white" />
-                        <div className="border-r border-b border-white" />
-                        <div className="border-r border-b border-white" />
-                        <div className="border-b border-white" />
-                        <div className="border-r border-b border-white" />
-                        <div className="border-r border-b border-white" />
-                        <div />
-                      </div>
-
-                      {/* Shutter White Flash */}
-                      {cameraShutterEffect && (
-                        <div className="absolute inset-0 bg-white z-20 animate-out fade-out duration-150" />
-                      )}
-
-                      {/* Central Focus Reticle */}
-                      <div className="w-16 h-16 border border-amber-300/80 rounded-lg flex items-center justify-center animate-pulse z-10">
-                        <div className="w-1 h-1 bg-amber-300 rounded-full" />
-                      </div>
-
-                      <div className="absolute bottom-4 text-center text-[10px] text-white/80 bg-black/50 px-2.5 py-1 rounded-full backdrop-blur-sm z-10">
-                        {specs.cameraSpecs || '48 MP Fusion'} • X: {player ? Math.round(player.x) : 0} Y: {player ? Math.round(player.y) : 0}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Zoom Controls */}
-                  {!viewingPhoto && (
-                    <div className="flex justify-center gap-4 py-1.5 bg-black text-xs">
-                      {[0.5, 1, 2, 5].map((z) => (
-                        <button
-                          key={z}
-                          onClick={() => {
-                            sound.click();
-                            setZoomLevel(z);
-                          }}
-                          className={`w-7 h-7 rounded-full text-[10px] font-bold flex items-center justify-center transition-all ${
-                            zoomLevel === z ? 'bg-amber-400 text-black scale-110' : 'bg-zinc-800 text-white/80'
-                          }`}
-                        >
-                          {z}x
+                {/* ====================== NOTES APP ====================== */}
+                {activeApp === 'notes' && (
+                  <div className={'ph-view' + (isBackNav ? ' back' : '')} key="notes">
+                    <div className="ph-app-top">
+                      <div className="ph-app-top-l">
+                        <button type="button" onClick={handleBack} className="ph-back" aria-label="Назад">
+                          <ChevronLeft width={18} height={18} />
                         </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Shutter & Gallery Bar */}
-                  <div className="h-20 bg-black flex items-center justify-around px-8 pb-3">
-                    {/* Gallery Thumbnail Preview */}
-                    <button
-                      onClick={() => {
-                        if (capturedPhotos.length > 0) {
-                          setViewingPhoto(capturedPhotos[0]);
-                        }
-                      }}
-                      className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center active:scale-95 transition-transform"
-                    >
-                      {capturedPhotos.length > 0 ? (
-                        <img
-                          src={capturedPhotos[0].dataUrl}
-                          alt="Thumbnail"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <ImageIcon className="w-5 h-5 text-white/40" />
-                      )}
-                    </button>
-
-                    {/* Big Shutter Trigger */}
-                    <button
-                      id="camera-shutter-button"
-                      onClick={handleCapturePhoto}
-                      className="w-15 h-15 rounded-full border-4 border-white p-1 flex items-center justify-center active:scale-95 transition-transform"
-                    >
-                      <div className="w-full h-full rounded-full bg-white active:bg-zinc-300" />
-                    </button>
-
-                    <div className="w-11 h-11" />
-                  </div>
-                </div>
-              )}
-
-              {/* NOTES / SCRATCHPAD APP */}
-              {activeApp === 'notes' && (
-                <div className="flex-1 flex flex-col bg-zinc-950 p-4 animate-in fade-in duration-150">
-                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
-                    <button onClick={handleBack} className="p-1 text-orange-400 hover:text-orange-300">
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-                    <div>
-                      <h2 className="text-sm font-bold text-white">Заметки и План</h2>
-                      <p className="text-[10px] text-zinc-400">Автономная память телефона</p>
-                    </div>
-                  </div>
-
-                  <textarea
-                    id="phone-notes-area"
-                    value={notes}
-                    onChange={(e) => handleSaveNotes(e.target.value)}
-                    placeholder="Напишите здесь важные заметки по выживанию и авто..."
-                    className="flex-1 w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-orange-500 resize-none font-mono leading-relaxed"
-                  />
-                  <div className="text-[10px] text-zinc-500 mt-2 text-right">
-                    Символов: {notes.length} • Сохранено локально
-                  </div>
-                </div>
-              )}
-
-              {/* GPS NAVIGATOR APP */}
-              {activeApp === 'gps' && (
-                <div className="flex-1 flex flex-col bg-zinc-950 p-4 overflow-y-auto animate-in fade-in duration-150">
-                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
-                    <button onClick={handleBack} className="p-1 text-rose-400 hover:text-rose-300">
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-                    <div>
-                      <h2 className="text-sm font-bold text-white">Спутниковая Навигация</h2>
-                      <p className="text-[10px] text-zinc-400">GPS / ГЛОНАСС • Реальное положение</p>
-                    </div>
-                  </div>
-
-                  {/* Real Coordinates & Zone Card */}
-                  <div className="bg-zinc-900 rounded-2xl p-3.5 mb-3 border border-zinc-800">
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className="text-zinc-400 flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-400" /> Координаты игрока
-                      </span>
-                      <span className="text-emerald-400 font-mono font-bold">
-                        X: {player ? Math.round(player.x) : 0} • Y: {player ? Math.round(player.y) : 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-zinc-400 flex items-center gap-1">
-                        <Navigation className="w-3.5 h-3.5 text-rose-400" /> Азимут движения
-                      </span>
-                      <span className="text-rose-400 font-semibold font-mono">
-                        {player ? `${Math.round(((player.angle * 180) / Math.PI + 360) % 360)}°` : '0°'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Real Dynamic POI List calculated from world */}
-                  <div className="bg-zinc-900 rounded-2xl p-3.5 border border-zinc-800 text-xs space-y-2.5">
-                    <div className="font-semibold text-white flex items-center justify-between">
-                      <span>Ключевые точки карты</span>
-                      <span className="text-[10px] text-zinc-500 font-normal">По удалению</span>
-                    </div>
-                    {poiList.map((poi, idx) => {
-                      const Icon = poi.icon;
-                      return (
-                        <div key={idx} className="flex items-center justify-between py-1.5 border-b border-zinc-800/60 last:border-0">
-                          <div className="flex items-center gap-2">
-                            <Icon className={`w-4 h-4 ${poi.color}`} />
-                            <div>
-                              <div className="text-white font-medium">{poi.name}</div>
-                              <div className="text-[10px] text-zinc-400">{poi.desc}</div>
-                            </div>
-                          </div>
-                          <span className="text-cyan-400 font-mono font-bold text-[11px] shrink-0 ml-2">
-                            {poi.distance > 1000 ? `${(poi.distance / 1000).toFixed(1)} км` : `${poi.distance} м`}
-                          </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="ph-app-ttl">Блокнот</div>
+                          <div className="ph-app-sub">Личные записи · Автосохранение</div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                      </div>
+                      <FileText width={17} height={17} color="#e0ab45" />
+                    </div>
 
-              {/* TAXI FLEET APP */}
-              {activeApp === 'taxi' && (
-                <PhoneTaxiApp
-                  player={player}
-                  world={world}
-                  onSetGpsTarget={onSetGpsTarget}
-                  onBack={handleBack}
-                />
-              )}
-
-              {/* SETTINGS APP */}
-              {activeApp === 'settings' && (
-                <div className="flex-1 flex flex-col bg-zinc-950 p-4 overflow-y-auto animate-in fade-in duration-150">
-                  <div className="flex items-center gap-2 mb-4 pb-2 border-b border-zinc-800">
-                    <button onClick={handleBack} className="p-1 text-slate-400 hover:text-slate-300">
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-                    <div>
-                      <h2 className="text-sm font-bold text-white">Настройки телефона</h2>
-                      <p className="text-[10px] text-zinc-400">Персонализация и система</p>
+                    <div className="ph-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <textarea
+                        id="phone-notes-area"
+                        value={notes}
+                        onChange={(e) => handleSaveNotes(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        placeholder="Запишите важные задачи, координаты или список запчастей..."
+                        className="ph-inp"
+                        style={{
+                          flex: 1,
+                          minHeight: 380,
+                          padding: '12px 14px',
+                          resize: 'none',
+                          lineHeight: 1.55,
+                          fontSize: 13
+                        }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }} className="ph-mut">
+                        <span>Символов: {notes.length}</span>
+                        <span>Сохранено в памяти устройства</span>
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Wallpaper Picker */}
-                  <div className="bg-zinc-900 rounded-2xl p-3.5 mb-3 border border-zinc-800">
-                    <div className="text-xs font-semibold text-white mb-2">Обои рабочего стола</div>
-                    <div className="grid grid-cols-5 gap-2">
-                      {PHONE_WALLPAPERS.map((wp) => (
+                {/* ====================== GPS NAVIGATOR APP ====================== */}
+                {activeApp === 'gps' && (
+                  <div className={'ph-view' + (isBackNav ? ' back' : '')} key="gps">
+                    <div className="ph-app-top">
+                      <div className="ph-app-top-l">
+                        <button type="button" onClick={handleBack} className="ph-back" aria-label="Назад">
+                          <ChevronLeft width={18} height={18} />
+                        </button>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="ph-app-ttl">Навигатор</div>
+                          <div className="ph-app-sub">Спутниковое позиционирование</div>
+                        </div>
+                      </div>
+                      {onSetGpsTarget && (
                         <button
-                          key={wp.id}
+                          type="button"
                           onClick={() => {
-                            sound.click();
-                            setSelectedWallpaper(wp.cssBackground);
+                            playUiClick();
+                            onSetGpsTarget(null);
+                            if (player) addPlayerNotification(player, 'Маршрут GPS сброшен', 'info');
                           }}
-                          className={`h-14 rounded-xl border-2 transition-transform ${
-                            selectedWallpaper === wp.cssBackground
-                              ? 'border-cyan-400 scale-105 shadow-md'
-                              : 'border-transparent'
-                          }`}
-                          style={{ background: wp.cssBackground }}
-                          title={wp.nameRu}
-                        />
-                      ))}
+                          className="ph-btn ph-btn-s ph-btn-sm"
+                        >
+                          Сброс
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="ph-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {/* Current Telemetry Panel */}
+                      <div className="ph-panel" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div>
+                          <div className="ph-cn ph-mut" style={{ fontSize: 11 }}>Координаты</div>
+                          <div className="ph-num" style={{ fontSize: 22, marginTop: 3, color: '#fff' }}>
+                            {player ? `${Math.round(player.x)} · ${Math.round(player.y)}` : '0 · 0'}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div className="ph-cn ph-mut" style={{ fontSize: 11 }}>Азимут курса</div>
+                          <div className="ph-num" style={{ fontSize: 22, marginTop: 3 }}>
+                            {player ? `${Math.round(((player.angle * 180) / Math.PI + 360) % 360)}°` : '0°'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="ph-grp">Ключевые объекты инфраструктуры</div>
+                      <div className="ph-list">
+                        {poiList.map((poi, idx) => {
+                          const Icon = poi.icon;
+                          const distLabel = poi.distance > 1000
+                            ? `${(poi.distance / 1000).toFixed(1)} км`
+                            : `${poi.distance} м`;
+                          return (
+                            <div key={idx} className="ph-row" style={{ padding: '10px 12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                                <div
+                                  style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 8,
+                                    background: 'rgba(201,146,43,0.12)',
+                                    border: '1px solid rgba(201,146,43,0.4)',
+                                    color: '#e0ab45',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flex: 'none'
+                                  }}
+                                >
+                                  <Icon width={16} height={16} />
+                                </div>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {poi.name}
+                                  </div>
+                                  <div className="ph-mut" style={{ fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
+                                    <span style={{ color: '#f0c264', fontWeight: 700 }}>{distLabel}</span>
+                                    <span> · {poi.desc}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playUiClick();
+                                  if (onSetGpsTarget) {
+                                    onSetGpsTarget({ x: poi.x, y: poi.y, name: poi.name });
+                                  }
+                                  if (player) {
+                                    addPlayerNotification(player, `Маршрут построен: ${poi.name}`, 'info');
+                                  }
+                                }}
+                                className="ph-btn ph-btn-p ph-btn-sm"
+                              >
+                                <Navigation width={12} height={12} /> Курс
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Quick Toggles */}
-                  <div className="bg-zinc-900 rounded-2xl p-3.5 border border-zinc-800 text-xs space-y-3">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="text-white font-medium">Звуки и вибрация</div>
-                        <div className="text-[10px] text-zinc-400">Акустический отклик кнопок</div>
+                {/* ====================== TAXI FLEET APP ====================== */}
+                {activeApp === 'taxi' && (
+                  <PhoneTaxiApp
+                    player={player}
+                    world={world}
+                    onSetGpsTarget={onSetGpsTarget}
+                    onBack={handleBack}
+                  />
+                )}
+
+                {/* ====================== SETTINGS APP ====================== */}
+                {activeApp === 'settings' && (
+                  <div className={'ph-view' + (isBackNav ? ' back' : '')} key="settings">
+                    <div className="ph-app-top">
+                      <div className="ph-app-top-l">
+                        <button type="button" onClick={handleBack} className="ph-back" aria-label="Назад">
+                          <ChevronLeft width={18} height={18} />
+                        </button>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="ph-app-ttl">Опции телефона</div>
+                          <div className="ph-app-sub">Оформление и параметры</div>
+                        </div>
                       </div>
-                      <div className="w-10 h-6 bg-emerald-500 rounded-full p-0.5 flex justify-end">
-                        <div className="w-5 h-5 bg-white rounded-full shadow" />
-                      </div>
+                      <Settings width={17} height={17} color="#e0ab45" />
                     </div>
-                    <div className="flex justify-between items-center pt-2 border-t border-zinc-800">
-                      <div>
-                        <div className="text-white font-medium">Частота обновления</div>
-                        <div className="text-[10px] text-zinc-400">Плавность 120 Гц ProMotion</div>
+
+                    <div className="ph-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div className="ph-grp">Фоновая тема экрана</div>
+                      <div className="ph-list">
+                        {PHONE_WALLPAPERS.map((wp) => {
+                          const isSelected = selectedWallpaper === wp.cssBackground;
+                          return (
+                            <button
+                              key={wp.id}
+                              type="button"
+                              onClick={() => {
+                                playUiClick();
+                                setSelectedWallpaper(wp.cssBackground);
+                              }}
+                              className={'ph-row clickable' + (isSelected ? ' on' : '')}
+                              style={{ width: '100%' }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span
+                                  style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 7,
+                                    background: wp.cssBackground,
+                                    border: isSelected ? '2px solid #f0c264' : '1px solid rgba(255,255,255,0.2)',
+                                     display: 'inline-block'
+                                  }}
+                                />
+                                <span style={{ fontSize: 13, fontWeight: isSelected ? 700 : 500, color: isSelected ? '#fff' : '#cfcbc1' }}>
+                                  {wp.nameRu}
+                                </span>
+                              </div>
+                              {isSelected && (
+                                <span className="ph-cn" style={{ fontSize: 12, fontWeight: 700, color: '#f0c264' }}>Активна</span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <span className="text-cyan-400 font-bold">120 Hz</span>
+
+                      <div className="ph-grp">Системные переключатели</div>
+                      <div className="ph-list">
+                        <div className="ph-row">
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Светодиодный фонарик</div>
+                            <div className="ph-mut" style={{ fontSize: 11 }}>Освещение пространства перед игроком</div>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={flashlightOn}
+                            onClick={toggleTorch}
+                            className={'ph-tg' + (flashlightOn ? ' on' : '')}
+                          />
+                        </div>
+
+                        <div className="ph-row">
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Звуковой отклик</div>
+                            <div className="ph-mut" style={{ fontSize: 11 }}>Щелчки клавиш и уведомления</div>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={soundFeedbackOn}
+                            onClick={() => {
+                              const next = !soundFeedbackOn;
+                              setSoundFeedbackOn(next);
+                              if (next) sound.click();
+                            }}
+                            className={'ph-tg' + (soundFeedbackOn ? ' on' : '')}
+                          />
+                        </div>
+
+                        <div className="ph-row">
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Частота обновления</div>
+                            <div className="ph-mut" style={{ fontSize: 11 }}>Адаптивная развёртка матрицы</div>
+                          </div>
+                          <span className="ph-cn" style={{ fontSize: 14, fontWeight: 700, color: '#e0ab45' }}>120 Гц</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            {/* Bottom Home Indicator Gesture Bar */}
-            <div className="relative z-30 h-6 flex items-center justify-center">
-              <button
-                id="phone-home-gesture-bar"
-                onClick={() => {
-                  sound.click();
-                  setActiveApp('home');
-                  setSelectedContact(null);
-                  setViewingPhoto(null);
-                }}
-                className="w-32 h-1 bg-white/70 hover:bg-white rounded-full active:scale-95 transition-all"
-                title="На главный экран"
-              />
+              {/* Bottom Home Gesture Indicator */}
+              <div className="ph-home-bar-wrap">
+                <button
+                  id="phone-home-gesture-bar"
+                  type="button"
+                  onClick={() => {
+                    playUiClick();
+                    setIsBackNav(true);
+                    triggerWipe();
+                    setActiveApp('home');
+                    setSelectedContact(null);
+                    setViewingPhoto(null);
+                  }}
+                  className="ph-home-bar"
+                  title="На главный экран"
+                  aria-label="На главный экран"
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Outer Top Power / Close Button */}
-        <button
-          id="phone-power-off-btn"
-          onClick={onClose}
-          className="absolute -top-3.5 right-6 bg-zinc-800 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg border border-zinc-600 transition-colors"
-          title="Заблокировать и спрятать телефон"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        {/* MainMenu-styled Keyboard Hints Strip below Phone */}
+        <div className="ph-hint-strip">
+          <span>
+            <span className="ph-key">Esc</span>
+            {activeApp === 'home' ? 'Убрать телефон' : 'Назад'}
+          </span>
+          <span>
+            <span className="ph-key">Клик</span>
+            Выбрать раздел
+          </span>
+        </div>
       </div>
     </div>
   );

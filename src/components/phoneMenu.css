@@ -1,0 +1,891 @@
+/* ==========================================================================
+   Phone UI stylesheet (inside ShadowHost or scoped to .ph-stage).
+   Matches the visual DNA of MainMenu (mainMenu.css) & gameUi.css:
+   - Fonts: Barlow & Barlow Condensed
+   - Colors: #c9922b (amber), #e0ab45 (amber-hi), #f0c264 (amber-soft),
+     #e9e6df (ink), #a29e93 (mut), #121315 / #141416 (surfaces)
+   ========================================================================== */
+
+:root {
+  --ph-amber: #c9922b;
+  --ph-amber-hi: #e0ab45;
+  --ph-amber-soft: #f0c264;
+  --ph-ink: #e9e6df;
+  --ph-ink-dim: #cfcbc1;
+  --ph-mut: #a29e93;
+  --ph-mut-2: #8f8b81;
+  --ph-line: rgba(255, 255, 255, 0.09);
+  --ph-line-2: rgba(255, 255, 255, 0.14);
+  --ph-panel: rgba(20, 20, 22, 0.88);
+  --ph-panel-solid: #141416;
+  --ph-good: #9ac985;
+  --ph-bad: #d9745a;
+  --ph-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ph-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  background:
+    radial-gradient(900px 520px at 50% 85%, rgba(201, 146, 43, 0.26), transparent 65%),
+    rgba(9, 9, 10, 0.82);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  font-family: 'Barlow', system-ui, sans-serif;
+  color: var(--ph-ink);
+  user-select: none;
+  -webkit-user-select: none;
+  animation: ph-fade 0.22s ease both;
+}
+
+.ph-backdrop *,
+.ph-backdrop *::before,
+.ph-backdrop *::after {
+  box-sizing: border-box;
+}
+
+.ph-backdrop button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.ph-backdrop button:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.ph-backdrop input,
+.ph-backdrop textarea {
+  font: inherit;
+  color: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.ph-backdrop input::placeholder,
+.ph-backdrop textarea::placeholder {
+  color: var(--ph-mut-2);
+}
+
+@keyframes ph-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ph-rise {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ph-in-f {
+  from { opacity: 0; transform: translateX(32px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ph-in-b {
+  from { opacity: 0; transform: translateX(-32px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ph-sweep {
+  0% { opacity: 1; transform: translateX(-100%); }
+  100% { opacity: 1; transform: translateX(100%); }
+}
+@keyframes ph-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ---------- outer wrapper with side hints ---------- */
+.ph-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-height: 100%;
+  animation: ph-rise 0.38s var(--ph-ease) both;
+}
+
+/* ---------- physical phone chassis ---------- */
+.ph-chassis {
+  position: relative;
+  width: 404px;
+  max-width: 95vw;
+  height: min(780px, 87vh);
+  border-radius: 44px;
+  padding: 10px;
+  background: linear-gradient(145deg, #282623, #151412);
+  border: 2px solid var(--ph-chassis-accent, rgba(201, 146, 43, 0.55));
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(0, 0, 0, 0.9),
+    inset 0 1px 1px rgba(255, 255, 255, 0.14);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Hardware buttons on sides */
+.ph-hw-btn {
+  position: absolute;
+  width: 3px;
+  background: var(--ph-chassis-accent, #c9922b);
+  opacity: 0.75;
+}
+.ph-hw-pwr {
+  right: -4px;
+  top: 128px;
+  height: 54px;
+  border-radius: 0 3px 3px 0;
+}
+.ph-hw-vol1 {
+  left: -4px;
+  top: 108px;
+  height: 38px;
+  border-radius: 3px 0 0 3px;
+}
+.ph-hw-vol2 {
+  left: -4px;
+  top: 156px;
+  height: 38px;
+  border-radius: 3px 0 0 3px;
+}
+
+/* Power / lock button floating top-right */
+.ph-backdrop .ph-close-btn {
+  position: absolute;
+  top: 14px;
+  right: -52px;
+  z-index: 40;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  background: rgba(20, 20, 22, 0.92);
+  border: 1px solid rgba(201, 146, 43, 0.55);
+  color: var(--ph-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+.ph-backdrop .ph-close-btn:hover {
+  background: rgba(201, 146, 43, 0.2);
+  border-color: var(--ph-amber-hi);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* ---------- inner bezel & AMOLED screen ---------- */
+.ph-bezel {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 34px;
+  background: #09090a;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.ph-screen {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 30px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #12100d;
+  color: var(--ph-ink);
+}
+
+/* Main Menu style layered scene inside phone screen */
+.ph-bg-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.ph-bg-glow {
+  position: absolute;
+  inset: -40px;
+  background: radial-gradient(360px 280px at 72% 78%, rgba(201, 146, 43, 0.36), transparent 65%);
+  transition: transform 0.6s var(--ph-ease);
+}
+.ph-bg-mtn1,
+.ph-bg-mtn2,
+.ph-bg-mtn3 {
+  position: absolute;
+  left: -20px;
+  right: -20px;
+  bottom: 0;
+  width: calc(100% + 40px);
+  height: 360px;
+  transition: transform 0.6s var(--ph-ease);
+}
+.ph-bg-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(9, 9, 10, 0.45) 0%, rgba(9, 9, 10, 0.35) 50%, rgba(9, 9, 10, 0.78) 100%);
+}
+.ph-bg-scrim.app-open {
+  background: rgba(13, 13, 15, 0.92);
+}
+
+/* Top amber wipe bar on screen change */
+.ph-wipe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 2.5px;
+  z-index: 35;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--ph-amber-hi) 50%, transparent);
+}
+.ph-wipe.on {
+  animation: ph-sweep 0.28s linear;
+}
+
+/* ---------- status bar & dynamic island ---------- */
+.ph-statusbar {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px 6px;
+  min-height: 38px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ph-ink);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(12, 12, 14, 0.55);
+}
+
+.ph-clock {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.ph-backdrop .ph-island {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 11px;
+  background: #070708;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: all 0.22s var(--ph-ease);
+}
+.ph-backdrop .ph-island:hover {
+  border-color: rgba(201, 146, 43, 0.6);
+}
+.ph-backdrop .ph-island.expanded {
+  height: 28px;
+  padding: 0 12px;
+  border-color: var(--ph-amber);
+  background: #12100d;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
+}
+.ph-lens {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: 1.5px solid rgba(201, 146, 43, 0.7);
+}
+.ph-led {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ph-good);
+}
+
+.ph-status-r {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ph-net-tag {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--ph-amber-hi);
+}
+
+/* ---------- main content viewport ---------- */
+.ph-viewport {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ph-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: ph-in-f 0.26s var(--ph-ease) both;
+}
+.ph-view.back {
+  animation-name: ph-in-b;
+}
+
+.ph-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: #3a352b transparent;
+}
+.ph-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.ph-scroll::-webkit-scrollbar-thumb {
+  background: #3a352b;
+  border-radius: 2px;
+}
+
+/* ---------- Typography helpers ---------- */
+.ph-cn {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.ph-mut {
+  color: var(--ph-mut);
+}
+.ph-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  color: var(--ph-amber-hi);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ph-grp {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ph-amber-hi);
+  margin: 12px 0 6px;
+}
+.ph-grp:first-child {
+  margin-top: 0;
+}
+
+/* ---------- App Sub-Header (like MainMenu .top) ---------- */
+.ph-app-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(18, 18, 20, 0.92);
+  border-bottom: 1px solid var(--ph-line);
+  flex: none;
+}
+.ph-app-top-l {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ph-backdrop .ph-back {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--ph-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ph-ink);
+  flex: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ph-backdrop .ph-back:hover {
+  border-color: rgba(201, 146, 43, 0.6);
+  background: rgba(201, 146, 43, 0.12);
+}
+.ph-app-ttl {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-app-sub {
+  font-size: 11px;
+  color: var(--ph-mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Panels & Cards ---------- */
+.ph-panel {
+  background: rgba(20, 20, 22, 0.86);
+  border: 1px solid var(--ph-line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+/* ---------- Home Screen ---------- */
+.ph-home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+/* Weather & Telemetry Hero Panel */
+.ph-hero {
+  position: relative;
+  border-radius: 13px;
+  background: rgba(18, 18, 20, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.ph-hero-banner {
+  position: relative;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.ph-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ph-hero-time {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: 0.03em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.ph-hero-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ph-amber-soft);
+  margin-top: 4px;
+}
+.ph-hero-wx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ph-ink-dim);
+  margin-top: 4px;
+}
+.ph-hero-temp {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ph-amber-hi);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ph-hero-meta {
+  font-size: 11px;
+  color: var(--ph-mut);
+  text-align: right;
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.ph-hero-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  color: var(--ph-mut);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Home App Grid (Bento / Menu style tiles) */
+.ph-app-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ph-backdrop .ph-app-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 58px;
+  padding: 0 10px;
+  border-radius: 11px;
+  background: rgba(20, 20, 22, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 3px solid transparent;
+  transition: background 0.16s, border-color 0.16s, transform 0.16s;
+}
+.ph-backdrop .ph-app-tile:hover {
+  background: rgba(30, 28, 24, 0.94);
+  border-color: rgba(201, 146, 43, 0.45);
+  border-left-color: var(--ph-amber);
+  transform: translateY(-1px);
+}
+.ph-backdrop .ph-app-tile.active-tile {
+  background: rgba(201, 146, 43, 0.16);
+  border-color: rgba(201, 146, 43, 0.6);
+  border-left-color: var(--ph-amber);
+}
+.ph-tile-ico {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(201, 146, 43, 0.12);
+  border: 1px solid rgba(201, 146, 43, 0.4);
+  color: var(--ph-amber-hi);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.ph-backdrop .ph-app-tile.active-tile .ph-tile-ico {
+  background: var(--ph-amber);
+  color: #1a1409;
+  border-color: var(--ph-amber-soft);
+}
+.ph-tile-txt {
+  min-width: 0;
+  flex: 1;
+}
+.ph-tile-ttl {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.ph-tile-sub {
+  font-size: 11px;
+  color: var(--ph-mut);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-tile-cnt {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ph-amber-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bottom Dock */
+.ph-dock {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 8px;
+  border-radius: 13px;
+  background: rgba(16, 16, 18, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ph-backdrop .ph-dock-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 50px;
+  padding: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  color: var(--ph-ink-dim);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.ph-backdrop .ph-dock-btn:hover {
+  background: rgba(201, 146, 43, 0.14);
+  border-color: rgba(201, 146, 43, 0.45);
+  color: #fff;
+}
+.ph-dock-btn span {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ---------- Tabs inside apps (like MainMenu .tabs / .tab) ---------- */
+.ph-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(16, 16, 18, 0.85);
+  padding: 0 8px;
+  flex: none;
+}
+.ph-backdrop .ph-tab {
+  flex: 1;
+  height: 40px;
+  padding: 0 6px;
+  background: none;
+  border: 0;
+  border-bottom: 2.5px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ph-mut);
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ph-backdrop .ph-tab:hover {
+  color: #fff;
+}
+.ph-backdrop .ph-tab.on {
+  color: #fff;
+  border-bottom-color: var(--ph-amber);
+}
+
+/* ---------- Rows & Settings (.set / .row style) ---------- */
+.ph-list {
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(20, 20, 22, 0.86);
+  border: 1px solid var(--ph-line);
+}
+.ph-backdrop .ph-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
+  background: none;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.15s, border-color 0.15s;
+}
+.ph-backdrop .ph-row:last-child {
+  border-bottom: 0;
+}
+.ph-backdrop .ph-row.clickable:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-left-color: var(--ph-amber);
+}
+.ph-backdrop .ph-row.on {
+  background: rgba(201, 146, 43, 0.15);
+  border-left-color: var(--ph-amber);
+}
+
+/* ---------- Buttons ---------- */
+.ph-backdrop .ph-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: none;
+  transition: filter 0.15s, transform 0.15s, background 0.15s;
+}
+.ph-backdrop .ph-btn:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+.ph-backdrop .ph-btn:active {
+  transform: none;
+}
+.ph-backdrop .ph-btn-p {
+  background: var(--ph-amber);
+  border: 1px solid var(--ph-amber-hi);
+  color: #1a1409;
+}
+.ph-backdrop .ph-btn-s {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--ph-line-2);
+  color: var(--ph-ink);
+}
+.ph-backdrop .ph-btn-d {
+  background: rgba(217, 116, 90, 0.15);
+  border: 1px solid rgba(217, 116, 90, 0.5);
+  color: #efa690;
+}
+.ph-backdrop .ph-btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 7px;
+}
+.ph-backdrop .ph-btn-block {
+  width: 100%;
+}
+
+/* ---------- Toggle switch (same as MainMenu .tg) ---------- */
+.ph-backdrop .ph-tg {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.25s;
+  flex: none;
+}
+.ph-backdrop .ph-tg::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ph-ink-dim);
+  transition: left 0.25s cubic-bezier(0.3, 0.7, 0.2, 1), background 0.25s;
+}
+.ph-backdrop .ph-tg.on {
+  background: var(--ph-amber);
+}
+.ph-backdrop .ph-tg.on::after {
+  left: 23px;
+  background: #1a1409;
+}
+
+/* ---------- Progress bar (same as MainMenu .bar) ---------- */
+.ph-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.ph-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--ph-amber);
+  transition: width 0.35s var(--ph-ease);
+}
+
+/* ---------- Inputs ---------- */
+.ph-inp {
+  display: block;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1.5px solid rgba(201, 146, 43, 0.45);
+  font-size: 14px;
+  color: var(--ph-ink);
+  outline: 0;
+  transition: border-color 0.2s;
+}
+.ph-inp:focus {
+  border-color: var(--ph-amber);
+}
+
+/* ---------- Bottom Gesture Bar ---------- */
+.ph-home-bar-wrap {
+  position: relative;
+  z-index: 30;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 12, 0.75);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  flex: none;
+}
+.ph-backdrop .ph-home-bar {
+  width: 116px;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(233, 230, 223, 0.45);
+  transition: background 0.15s, width 0.15s;
+}
+.ph-backdrop .ph-home-bar:hover {
+  background: var(--ph-amber-hi);
+  width: 132px;
+}
+
+/* ---------- Key Hints below phone ---------- */
+.ph-hint-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ph-mut);
+}
+.ph-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  margin-right: 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ph-ink);
+}

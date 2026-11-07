@@ -424,6 +424,12 @@ export interface PhoneWallpaper {
 
 export const PHONE_WALLPAPERS: PhoneWallpaper[] = [
   {
+    id: 'wallpaper_flatbody',
+    nameRu: 'Янтарный Горизонт (Flatbody)',
+    previewGradient: 'from-amber-950 via-stone-900 to-neutral-950',
+    cssBackground: 'linear-gradient(180deg, #17140f 0%, #2b2218 58%, #120f0b 100%)'
+  },
+  {
     id: 'wallpaper_aurora',
     nameRu: 'Северное Сияние (OLED)',
     previewGradient: 'from-emerald-950 via-slate-900 to-indigo-950',
