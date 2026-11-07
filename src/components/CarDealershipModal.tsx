@@ -7,8 +7,12 @@ import {
   getVehicleCabinDimensions, 
   renderVehicleGreenhouseAndBodyPanels, 
   renderSpecializedVehicleAttachments, 
+  renderConfigurableTruckWheels,
+  renderTruckBareFrame,
+  renderTruckFifthWheelCoupling,
   VehicleRenderContext 
 } from '../vehicleVisuals';
+import { resolveVehicleTruckFrameAndBody } from '../truckChassisVariants';
 import { traceSoftbodyPath, renderSoftbodyStressLines } from '../softbodyVisuals';
 import { getPlayerCash, deductPlayerCash, createItem, addItemToPlayer, getCarKeyTier, getCarKeyFeatures, getVehicleRequiredKeyType, addPlayerNotification } from '../items';
 import { sound } from '../audio';
@@ -1284,6 +1288,7 @@ export const CarDealershipModal: React.FC<Props> = ({
     const isSport = dummyCar.type === 'sports'|| dummyCar.type === 'supercar'|| dummyCar.type === 'coupe_gt'|| dummyCar.type === 'hatch_hot';
     const isMicro = dummyCar.type === 'micro_car'|| dummyCar.type === 'retro_bubble';
     const isOffroadHeavy = dummyCar.type === 'offroad_hardcore'|| dummyCar.type === 'suv_classic_box';
+    const resolvedTruck = resolveVehicleTruckFrameAndBody(dummyCar);
 
     const wheelL = isSport ? 10.5 : (isMicro ? 7.6 : 9.5);
     const wheelW = isSport ? 5.8 : (isMicro ? 3.4 : (isOffroadHeavy ? 4.8 : 4.2));
@@ -1298,85 +1303,6 @@ export const CarDealershipModal: React.FC<Props> = ({
       ctx.fillRect(wx - wheelL / 2 + 2, wy + 0.8, wheelL - 4, wheelW - 1.6);
     };
 
-    if (!isMachinery) {
-      // Standard 4-wheel passenger car layout (wheels under body/fenders)
-      renderFixedWheel(rearAxleX, -trackY);
-      renderFixedWheel(rearAxleX, trackY - wheelW);
-
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(frontAxleX - wheelL / 2, -trackY, wheelL, wheelW);
-      ctx.fillRect(frontAxleX - wheelL / 2, trackY - wheelW, wheelL, wheelW);
-      ctx.fillStyle = isSport ? '#cbd5e1': '#64748b';
-      ctx.fillRect(frontAxleX - wheelL / 2 + 2, -trackY + 0.8, wheelL - 4, wheelW - 1.6);
-      ctx.fillRect(frontAxleX - wheelL / 2 + 2, trackY - wheelW + 0.8, wheelL - 4, wheelW - 1.6);
-
-      // 3. Body Shell (Rendered ON TOP of wheels with smooth softbody spline)
-      const basePoly = getVehicleBasePolygon(dummyCar, halfL, halfW, 0, 0, 0, 0, 0, 0, 0, 0);
-      ctx.fillStyle = dummyCar.color;
-      ctx.beginPath();
-      traceSoftbodyPath(ctx, basePoly);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      // Softbody metallic stress highlights and ambient crease shadow lines
-      renderSoftbodyStressLines(ctx, basePoly);
-
-      // Front bumper grille (only for standard production models without bespoke fascias)
-      const hasCustomGrille = dummyCar.type === 'sedan_classic'|| dummyCar.type === 'sedan_luxury'|| 
-                              dummyCar.type === 'classic_compact'|| dummyCar.type === 'retro_bubble'|| 
-                              dummyCar.type === 'suv_classic_box'|| dummyCar.type === 'van'|| 
-                              dummyCar.type === 'van_cargo_old'|| dummyCar.type === 'delivery_truck'||
-                              dummyCar.type === 'van_camper'|| dummyCar.type === 'hatch_hot'||
-                              dummyCar.type === 'police'|| dummyCar.type === 'sports'|| dummyCar.type === 'supercar'||
-                              dummyCar.type === 'bus_minibus'|| dummyCar.type === 'wagon_allroad'|| dummyCar.type === 'wagon_classic';
-      if (!hasCustomGrille) {
-        const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL - 2, -grilleW / 2, 1.5, grilleW);
-      }
-
-      // 4. In-Game Headlights (Accurate size & placement with subtle chrome bezels)
-      const leftLampX = halfL - 3.2;
-      const leftLampY = -halfW + 3.2;
-      const rightLampX = halfL - 3.2;
-      const rightLampY = halfW - 3.2;
-
-      const drawHeadlight = (lx: number, ly: number) => {
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(lx, ly, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      };
-
-      drawHeadlight(leftLampX, leftLampY);
-      drawHeadlight(rightLampX, rightLampY);
-
-      // 5. In-Game Taillights (Rectangular lenses matching in-game renderer)
-      const rearLeftX = -halfL + 2.5;
-      const rearLeftY = -halfW + 3.2;
-      const rearRightX = -halfL + 2.5;
-      const rearRightY = halfW - 3.2;
-
-      const drawTaillight = (rx: number, ry: number) => {
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(rx - 1, ry - 1, 2, 2);
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(rx - 1, ry - 1, 2, 2);
-      };
-
-      drawTaillight(rearLeftX, rearLeftY);
-      drawTaillight(rearRightX, rearRightY);
-    }
-
-    // 6. Cabin, Greenhouse, Roof, Window Pillars & Specialized Attachments
     const cabinDim = getVehicleCabinDimensions(dummyCar, halfL, halfW, 0, 0);
     const deformFunc = (x: number, y: number): [number, number] => [x, y];
     
@@ -1422,6 +1348,118 @@ export const CarDealershipModal: React.FC<Props> = ({
       drawDeformedCircle,
       nightAlpha: 0.1
     };
+
+    if (!isMachinery) {
+      if (resolvedTruck) {
+        renderConfigurableTruckWheels(vCtx, resolvedTruck);
+      } else {
+        // Standard 4-wheel passenger car layout (wheels under body/fenders)
+        renderFixedWheel(rearAxleX, -trackY);
+        renderFixedWheel(rearAxleX, trackY - wheelW);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(frontAxleX - wheelL / 2, -trackY, wheelL, wheelW);
+        ctx.fillRect(frontAxleX - wheelL / 2, trackY - wheelW, wheelL, wheelW);
+        ctx.fillStyle = isSport ? '#cbd5e1': '#64748b';
+        ctx.fillRect(frontAxleX - wheelL / 2 + 2, -trackY + 0.8, wheelL - 4, wheelW - 1.6);
+        ctx.fillRect(frontAxleX - wheelL / 2 + 2, trackY - wheelW + 0.8, wheelL - 4, wheelW - 1.6);
+      }
+
+      // 3. Body Shell (Rendered ON TOP of wheels with smooth softbody spline)
+      const basePoly = getVehicleBasePolygon(dummyCar, halfL, halfW, 0, 0, 0, 0, 0, 0, 0, 0);
+      if (resolvedTruck) {
+        renderTruckBareFrame(vCtx, resolvedTruck);
+        if (resolvedTruck.body.id === 'body_fifth_wheel') {
+          renderTruckFifthWheelCoupling(vCtx, resolvedTruck);
+        }
+        const cabRearX = cabinDim.cabinX - cabinDim.cabinL * 0.5 - 0.4;
+        const bId = resolvedTruck.body.id;
+        const isFireBody = bId === 'body_fire_pumper' || bId === 'body_fire_ladder' || bId === 'body_fire_rescue';
+        const cabShellColor = isFireBody ? '#dc2626' : dummyCar.color;
+
+        ctx.save();
+        ctx.beginPath();
+        traceSoftbodyPath(ctx, basePoly);
+        ctx.closePath();
+        ctx.clip();
+
+        ctx.fillStyle = cabShellColor;
+        ctx.fillRect(cabRearX, -halfW - 2, (halfL - cabRearX) + 4, halfW * 2 + 4);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
+        ctx.lineWidth = 1.1;
+        ctx.strokeRect(cabRearX, -halfW + 0.4, halfL - cabRearX, halfW * 2 - 0.8);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = dummyCar.color;
+        ctx.beginPath();
+        traceSoftbodyPath(ctx, basePoly);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Softbody metallic stress highlights and ambient crease shadow lines
+        renderSoftbodyStressLines(ctx, basePoly);
+      }
+
+      // Front bumper grille (only for standard production models without bespoke fascias)
+      const hasCustomGrille = dummyCar.type === 'sedan_classic'|| dummyCar.type === 'sedan_luxury'|| 
+                              dummyCar.type === 'classic_compact'|| dummyCar.type === 'retro_bubble'|| 
+                              dummyCar.type === 'suv_classic_box'|| dummyCar.type === 'van'|| 
+                              dummyCar.type === 'van_cargo_old'|| dummyCar.type === 'delivery_truck'||
+                              dummyCar.type === 'van_camper'|| dummyCar.type === 'hatch_hot'||
+                              dummyCar.type === 'police'|| dummyCar.type === 'sports'|| dummyCar.type === 'supercar'||
+                              dummyCar.type === 'bus_minibus'|| dummyCar.type === 'wagon_allroad'|| dummyCar.type === 'wagon_classic' ||
+                              !!resolvedTruck;
+      if (!hasCustomGrille) {
+        const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(halfL - 2, -grilleW / 2, 1.5, grilleW);
+      }
+
+      // 4. In-Game Headlights (Accurate size & placement with subtle chrome bezels)
+      const leftLampX = halfL - 3.2;
+      const leftLampY = -halfW + 3.2;
+      const rightLampX = halfL - 3.2;
+      const rightLampY = halfW - 3.2;
+
+      const drawHeadlight = (lx: number, ly: number) => {
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(lx, ly, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      };
+
+      drawHeadlight(leftLampX, leftLampY);
+      drawHeadlight(rightLampX, rightLampY);
+
+      if (!resolvedTruck) {
+        // 5. In-Game Taillights (Rectangular lenses matching in-game renderer)
+        const rearLeftX = -halfL + 2.5;
+        const rearLeftY = -halfW + 3.2;
+        const rearRightX = -halfL + 2.5;
+        const rearRightY = halfW - 3.2;
+
+        const drawTaillight = (rx: number, ry: number) => {
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(rx - 1, ry - 1, 2, 2);
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(rx - 1, ry - 1, 2, 2);
+        };
+
+        drawTaillight(rearLeftX, rearLeftY);
+        drawTaillight(rearRightX, rearRightY);
+      }
+    }
+
+    (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).bareFrameAlreadyDrawn = true;
+    (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).fifthWheelAlreadyDrawn = true;
 
     if (!isMachinery) {
       renderVehicleGreenhouseAndBodyPanels(vCtx);

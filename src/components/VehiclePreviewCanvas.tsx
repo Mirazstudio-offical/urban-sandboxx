@@ -6,7 +6,9 @@ import {
   getVehicleCabinDimensions, 
   renderVehicleGreenhouseAndBodyPanels, 
   renderSpecializedVehicleAttachments, 
-  getTruckFrameAxlePositions,
+  renderConfigurableTruckWheels,
+  renderTruckBareFrame,
+  renderTruckFifthWheelCoupling,
   VehicleRenderContext 
 } from '../vehicleVisuals';
 import { resolveVehicleTruckFrameAndBody } from '../truckChassisVariants';
@@ -148,22 +150,11 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     const rearAxleX = -halfL * 0.65;
     const trackY = halfW - 0.8;
 
-    const renderFixedWheel = (wx: number, wy: number, w = wheelW, offroad = false) => {
+    const renderFixedWheel = (wx: number, wy: number, w = wheelW) => {
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(wx - wheelL / 2, wy, wheelL, w);
       ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
       ctx.fillRect(wx - wheelL / 2 + 2, wy + 0.8, wheelL - 4, w - 1.6);
-      if (offroad) {
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 0.8;
-        for (let tx = wx - wheelL / 2 + 1.5; tx <= wx + wheelL / 2 - 1.5; tx += 2.2) {
-          ctx.beginPath();
-          ctx.moveTo(tx - 0.5, wy);
-          ctx.lineTo(tx + 0.5, wy + w / 2);
-          ctx.lineTo(tx - 0.5, wy + w);
-          ctx.stroke();
-        }
-      }
     };
 
     const cabinDim = getVehicleCabinDimensions(dummyCar, halfL, halfW, 0, 0);
@@ -214,28 +205,7 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
 
     if (!isMachinery) {
       if (resolvedTruck) {
-        const { frontAxlesX: frontAxles, rearAxlesX: rearAxles } = getTruckFrameAxlePositions(resolvedTruck.frame, halfL, resolvedTruck.platform);
-        const tireType = resolvedTruck.frame.rearTireType;
-        const isOffroad = tireType === 'offroad_single';
-
-        for (const rx of rearAxles) {
-          if (tireType === 'dual') {
-            const dw = 4.2;
-            renderFixedWheel(rx, -trackY, dw, false);
-            renderFixedWheel(rx, -trackY + dw + 0.5, dw, false);
-            renderFixedWheel(rx, trackY - dw, dw, false);
-            renderFixedWheel(rx, trackY - dw * 2 - 0.5, dw, false);
-          } else {
-            const sw = isOffroad ? 6.0 : 5.4;
-            renderFixedWheel(rx, -trackY, sw, isOffroad);
-            renderFixedWheel(rx, trackY - sw, sw, isOffroad);
-          }
-        }
-        const fw = isOffroad ? 5.6 : 4.8;
-        for (const fx of frontAxles) {
-          renderFixedWheel(fx, -trackY, fw, isOffroad);
-          renderFixedWheel(fx, trackY - fw, fw, isOffroad);
-        }
+        renderConfigurableTruckWheels(vCtx, resolvedTruck);
       } else {
         renderFixedWheel(rearAxleX, -trackY);
         renderFixedWheel(rearAxleX, trackY - wheelW);
@@ -246,9 +216,15 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       // Body Shell
       const basePoly = getVehicleBasePolygon(dummyCar, halfL, halfW, 0, 0, 0, 0, 0, 0, 0, 0);
       if (resolvedTruck) {
-        const cabRearX = cabinDim.cabinX - cabinDim.cabinL * 0.5 - 0.6;
-        const isBareOrTractor = resolvedTruck.body.id === 'body_none' || resolvedTruck.body.id === 'body_fifth_wheel';
-        const isZilDump = resolvedTruck.body.attachmentCarType === 'truck_zil_dump';
+        renderTruckBareFrame(vCtx, resolvedTruck);
+        if (resolvedTruck.body.id === 'body_fifth_wheel') {
+          renderTruckFifthWheelCoupling(vCtx, resolvedTruck);
+        }
+
+        const cabRearX = cabinDim.cabinX - cabinDim.cabinL * 0.5 - 0.4;
+        const bId = resolvedTruck.body.id;
+        const isFireBody = bId === 'body_fire_pumper' || bId === 'body_fire_ladder' || bId === 'body_fire_rescue';
+        const cabShellColor = isFireBody ? '#dc2626' : dummyCar.color;
 
         ctx.save();
         ctx.beginPath();
@@ -256,16 +232,11 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
         ctx.closePath();
         ctx.clip();
 
-        ctx.fillStyle = '#141820';
-        ctx.fillRect(-halfL - 2, -halfW - 2, halfL * 2 + 4, halfW * 2 + 4);
-
-        if (!isBareOrTractor) {
-          ctx.fillStyle = isZilDump ? '#d97706' : dummyCar.color;
-          ctx.fillRect(-halfL - 2, -halfW - 2, (cabRearX + halfL) + 4, halfW * 2 + 4);
-        }
-
-        ctx.fillStyle = dummyCar.color;
+        ctx.fillStyle = cabShellColor;
         ctx.fillRect(cabRearX, -halfW - 2, (halfL - cabRearX) + 4, halfW * 2 + 4);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
+        ctx.lineWidth = 1.1;
+        ctx.strokeRect(cabRearX, -halfW + 0.4, halfL - cabRearX, halfW * 2 - 0.8);
         ctx.restore();
       } else {
         ctx.fillStyle = dummyCar.color;
@@ -273,13 +244,13 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
         traceSoftbodyPath(ctx, basePoly);
         ctx.closePath();
         ctx.fill();
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        renderSoftbodyStressLines(ctx, basePoly);
       }
-
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      renderSoftbodyStressLines(ctx, basePoly);
 
       const hasCustomGrille = dummyCar.type === 'sedan_classic' || dummyCar.type === 'sedan_luxury' || 
                               dummyCar.type === 'classic_compact' || dummyCar.type === 'retro_bubble' || 
@@ -334,19 +305,13 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       }
     }
 
-    const isLowerLayerTruck = resolvedTruck
-      ? (resolvedTruck.body.id === 'body_none' || resolvedTruck.body.id === 'body_fifth_wheel')
-      : (dummyCar.type === 'truck_semi');
+    (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).bareFrameAlreadyDrawn = true;
+    (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).fifthWheelAlreadyDrawn = true;
 
-    if (isLowerLayerTruck) {
-      renderSpecializedVehicleAttachments(vCtx);
-    }
     if (!isMachinery) {
       renderVehicleGreenhouseAndBodyPanels(vCtx);
     }
-    if (!isLowerLayerTruck) {
-      renderSpecializedVehicleAttachments(vCtx);
-    }
+    renderSpecializedVehicleAttachments(vCtx);
 
     ctx.restore();
   }, [carType, color, roofColor, frameId, bodyId, width, height, showPedestal, angle]);

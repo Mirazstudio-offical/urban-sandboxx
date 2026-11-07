@@ -174,20 +174,20 @@ function getVehicleBasePolygonRaw(
     const { platform, body } = resolvedTruck;
     const isBareRear = body.id === 'body_none' || body.id === 'body_fifth_wheel';
     const cabDims = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
-    const cabRearX = cabDims.cabinX - cabDims.cabinL / 2 - 0.6;
+    const cabRearX = cabDims.cabinX - cabDims.cabinL / 2 - 0.4;
     const rearX = -halfL + rc + 0.4;
     const frameW = halfW * 0.36; // Realistic narrow ladder frame rail width
 
     if (platform === 'kamaz') {
       const cabFrontX = halfL - fc;
       const cabW = halfW * 0.94;
-      const rearW = isBareRear ? frameW : halfW * 0.96;
+      const rearW = isBareRear ? frameW : halfW * 0.94;
       return [
         { x: cabFrontX, y: 0 },
         { x: cabFrontX - 0.1, y: cabW },
         { x: halfL - 5.0, y: cabW - frd * 0.35 },
         { x: cabRearX, y: cabW - rd * 0.35 },
-        { x: cabRearX - 0.5, y: rearW },
+        { x: cabRearX - 0.3, y: rearW },
         { x: 0, y: rearW - (isBareRear ? 0 : rd * 0.35) },
         { x: -halfL * 0.45, y: rearW - (isBareRear ? 0 : rd * 0.35) },
         { x: rearX, y: rearW - (isBareRear ? 0 : rrd * 0.35) },
@@ -195,7 +195,7 @@ function getVehicleBasePolygonRaw(
         { x: rearX, y: -rearW + (isBareRear ? 0 : rld * 0.35) },
         { x: -halfL * 0.45, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
         { x: 0, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
-        { x: cabRearX - 0.5, y: -rearW },
+        { x: cabRearX - 0.3, y: -rearW },
         { x: cabRearX, y: -cabW + ld * 0.35 },
         { x: halfL - 5.0, y: -cabW + fld * 0.35 },
         { x: cabFrontX - 0.1, y: -cabW }
@@ -204,9 +204,9 @@ function getVehicleBasePolygonRaw(
       // Hooded Soviet/Russian Trucks: GAZ-53, ZIL-130, ZIL-4331
       const hoodFrontX = halfL - fc;
       const hoodW = platform === 'zil4331' ? halfW * 0.80 : halfW * 0.72;
-      const fenderW = halfW * 0.90;
-      const cabW = halfW * 0.86;
-      const rearW = isBareRear ? frameW : halfW * 0.97;
+      const fenderW = halfW * 0.92;
+      const cabW = halfW * 0.88;
+      const rearW = isBareRear ? frameW : halfW * 0.94;
       const fenderMidX = halfL - 6.8;
 
       return [
@@ -214,7 +214,7 @@ function getVehicleBasePolygonRaw(
         { x: hoodFrontX - 0.5, y: hoodW * 0.85 },
         { x: fenderMidX, y: fenderW - frd * 0.35 },
         { x: cabRearX, y: cabW - rd * 0.35 },
-        { x: cabRearX - 0.6, y: rearW },
+        { x: cabRearX - 0.3, y: rearW },
         { x: 0, y: rearW - (isBareRear ? 0 : rd * 0.35) },
         { x: -halfL * 0.45, y: rearW - (isBareRear ? 0 : rd * 0.35) },
         { x: rearX, y: rearW - (isBareRear ? 0 : rrd * 0.35) },
@@ -222,7 +222,7 @@ function getVehicleBasePolygonRaw(
         { x: rearX, y: -rearW + (isBareRear ? 0 : rld * 0.35) },
         { x: -halfL * 0.45, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
         { x: 0, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
-        { x: cabRearX - 0.6, y: -rearW },
+        { x: cabRearX - 0.3, y: -rearW },
         { x: cabRearX, y: -cabW + ld * 0.35 },
         { x: fenderMidX, y: -fenderW + fld * 0.35 },
         { x: hoodFrontX - 0.5, y: -hoodW * 0.85 }
@@ -566,12 +566,8 @@ export function getVehicleCabinDimensions(
   const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
   if (resolvedTruck) {
     const { platform, frame, body } = resolvedTruck;
-    if (body.id === 'body_fire_pumper' || body.id === 'body_fire_rescue') {
-      cabinL = 18.0;
-      cabinW = car.width * 0.90;
-      cabinX = halfL - cabinL / 2 - 2.0;
-    } else if (platform === 'kamaz') {
-      const hasSleeper = frame.id === 'frame_kamaz5410_tractor_6x4' || body.id === 'body_fifth_wheel';
+    if (platform === 'kamaz') {
+      const hasSleeper = frame.id === 'frm_kamaz_5410_semi' || body.id === 'body_fifth_wheel';
       cabinL = hasSleeper ? 15.2 : 12.6;
       cabinW = car.width * 0.90;
       cabinX = halfL - cabinL / 2 - 2.0;
@@ -1247,7 +1243,8 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   // =========================================================================
   // 5D. VANS, DELIVERY, ARMORED & COMMERCIAL TRANSPORTERS
   // =========================================================================
-  const isVanType = type === 'van' || type === 'bus_minibus' || type === 'delivery_truck' || type === 'van_cargo_old' || type === 'truck_armored';
+  const resolvedTruckForCab = resolveVehicleTruckFrameAndBody(car);
+  const isVanType = !resolvedTruckForCab && (type === 'van' || type === 'bus_minibus' || type === 'delivery_truck' || type === 'van_cargo_old' || type === 'truck_armored');
   if (isVanType) {
     const isRetro = type === 'van_cargo_old';
     const isDelivery = type === 'delivery_truck';
@@ -1427,60 +1424,71 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   }
 
   // =========================================================================
-  // 5F-1. GAZ-53 HOODED TRUCK CABIN (ГАЗ-53 «Газон» Бортовой / Крытый с шифером)
+  // 5F-1. GAZ-53 HOODED TRUCK CABIN (ГАЗ-53 «Газон»)
   // =========================================================================
-  if (type === 'truck_flatbed' || type === 'truck_covered') {
-    // 1. GAZ-53 Tapered Rounded Hood & Front Fender Wings (Вид строго сверху)
+  const isGaz53TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'gaz53' : (type === 'truck_flatbed' || type === 'truck_covered');
+  if (isGaz53TruckCab) {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc - 0.5;
-    const hoodW = halfW * 1.32; // Tapered central hood width
-    const fenderW = halfW * 2 - 1.0; // Outer width across front fender wings
-    const cabColor = car.color || '#0284c7';
+    const hoodW = halfW * 1.32;
+    const fenderW = halfW * 2 - 1.0;
+    const isEmergency = resolvedTruckForCab && (resolvedTruckForCab.body.id === 'body_fire_pumper' || resolvedTruckForCab.body.id === 'body_fire_ladder' || resolvedTruckForCab.body.id === 'body_fire_rescue');
+    const cabColor = isEmergency ? '#dc2626' : (car.color || '#0284c7');
 
-    // Front Fender Wings (Скругленные крылья над передними колесами)
-    drawDeformedRect(hoodX1 - 1, -fenderW / 2, hoodX2 - hoodX1 + 1, fenderW, cabColor);
-    // Dark wheel arch inner gap
-    drawDeformedLine(hoodX1 + 2, -fenderW / 2 + 0.5, hoodX2 - 4, -fenderW / 2 + 0.5, 'rgba(0,0,0,0.4)', 1.0);
-    drawDeformedLine(hoodX1 + 2, fenderW / 2 - 0.5, hoodX2 - 4, fenderW / 2 - 0.5, 'rgba(0,0,0,0.4)', 1.0);
+    // Front Fender Wings (Скругленные крылья над передними колесами ГАЗ-53)
+    drawDeformedRect(hoodX1 - 0.8, -fenderW / 2, hoodX2 - hoodX1 + 0.8, fenderW, cabColor);
+    // Dark inner wheel well shadow & mudguard lip
+    drawDeformedLine(hoodX1 + 1.8, -fenderW / 2 + 0.5, hoodX2 - 3.2, -fenderW / 2 + 0.5, 'rgba(0,0,0,0.45)', 1.0);
+    drawDeformedLine(hoodX1 + 1.8, fenderW / 2 - 0.5, hoodX2 - 3.2, fenderW / 2 - 0.5, 'rgba(0,0,0,0.45)', 1.0);
+    // Fender-to-hood valley seams
+    drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.8, -hoodW / 2, 'rgba(0,0,0,0.4)', 0.9);
+    drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.8, hoodW / 2, 'rgba(0,0,0,0.4)', 0.9);
 
     // Central Raised Hood Stamping (Капот ГАЗ-53 со скруглением к передней кромке)
     drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
-    // Central hood longitudinal crease ridge (Центральное ребро выштамповки капота)
-    drawDeformedLine(hoodX1, 0, hoodX2 - 0.5, 0, 'rgba(255,255,255,0.3)', 1.2);
-    drawDeformedLine(hoodX1, 0.6, hoodX2 - 0.5, 0.6, 'rgba(0,0,0,0.25)', 0.8);
+    // Central hood longitudinal crease ridge
+    drawDeformedLine(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.34)', 1.2);
+    drawDeformedLine(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.28)', 0.8);
+    // Cowl shutline at base of windshield
+    drawDeformedLine(hoodX1, -hoodW / 2 + 0.5, hoodX1, hoodW / 2 - 0.5, 'rgba(0,0,0,0.55)', 1.0);
 
-    // Side Hood Air Vents / Louvers (Боковые продольные жалюзи капота ГАЗ-53, видны сверху)
-    const louverX1 = hoodX1 + 2.5;
-    const louverX2 = hoodX2 - 3.5;
+    // Side Hood Air Vents / Louvers (Боковые продольные жалюзи капота ГАЗ-53)
+    const louverX1 = hoodX1 + 2.4;
+    const louverX2 = hoodX2 - 3.2;
     [-hoodW / 2 + 1.2, hoodW / 2 - 1.2].forEach(ly => {
-      drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.35)', 0.9);
-      drawDeformedLine(louverX1, ly + 0.8, louverX2, ly + 0.8, 'rgba(0,0,0,0.35)', 0.9);
+      drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
+      drawDeformedLine(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.2)', 0.6);
     });
 
-    // 2. Strict 2D Top-Down Hood Nose Leading Edge & Steel Bumper (Вид строго сверху: без 2.5D решетки и плоских фар в небо)
-    drawDeformedLine(hoodX2 - 0.4, -hoodW / 2 + 0.6, hoodX2 - 0.4, hoodW / 2 - 0.6, 'rgba(255,255,255,0.25)', 0.8);
-    drawDeformedLine(hoodX2, -fenderW / 2 + 0.6, hoodX2, fenderW / 2 - 0.6, 'rgba(0,0,0,0.35)', 0.8);
+    // Top-of-fender turn signal pods (Указатели поворота УП-101 на крыльях ГАЗ-53)
+    const pfX = (hoodX1 + hoodX2) * 0.54;
+    [-fenderW / 2 + 1.7, fenderW / 2 - 1.7].forEach(pfY => {
+      drawDeformedCircle(pfX, pfY, 1.1, '#0f172a');
+      drawDeformedCircle(pfX, pfY, 0.75, '#f59e0b');
+    });
 
-    // Front Metal Bumper with Tow Hooks (Массивный стальной швеллерный бампер ГАЗ-53, вид сверху)
+    // Strict 2D Top-Down Hood Nose Leading Edge & Steel Bumper
+    drawDeformedLine(hoodX2 - 0.4, -hoodW / 2 + 0.6, hoodX2 - 0.4, hoodW / 2 - 0.6, 'rgba(255,255,255,0.28)', 0.8);
+    drawDeformedLine(hoodX2, -fenderW / 2 + 0.6, hoodX2, fenderW / 2 - 0.6, 'rgba(0,0,0,0.4)', 0.9);
+
     const bumperX = hoodX2 - 0.2;
-    drawDeformedRect(bumperX, -halfW + 0.4, 1.6, halfW * 2 - 0.8, '#1e293b');
-    drawDeformedLine(bumperX + 0.2, -halfW + 0.8, bumperX + 0.2, halfW - 0.8, '#475569', 0.6); // Top edge steel bevel
-    // Dual front towing hooks (Буксирные крючья ГАЗ-53)
+    drawDeformedRect(bumperX, -halfW + 0.4, 1.7, halfW * 2 - 0.8, '#1e293b');
+    drawDeformedLine(bumperX + 0.2, -halfW + 0.8, bumperX + 0.2, halfW - 0.8, '#475569', 0.7);
     drawDeformedRect(bumperX + 1.2, -halfW * 0.38, 1.2, 1.4, '#cbd5e1');
     drawDeformedRect(bumperX + 1.2, halfW * 0.38 - 1.4, 1.2, 1.4, '#cbd5e1');
 
-    // 3. Rounded Cabin Shell & Curved Roof (Кабина ГАЗ-53)
+    // Rounded Cabin Shell & Curved Roof (Кабина ГАЗ-53)
     drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
 
-    const roofL = cabinL * 0.64;
+    const roofL = cabinL * 0.66;
     const roofW = cabinW * 0.88;
-    const roofX = cabinX + cabinL * 0.03;
-    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || cabColor);
+    const roofX = cabinX + cabinL * 0.02;
+    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, isEmergency ? '#dc2626' : (car.roofColor || cabColor));
 
-    // Roof stamping ribs & circular ventilation dome hatch (Лючок вентиляции крыши)
-    drawDeformedLine(roofX - roofL / 2 + 1.5, -roofW * 0.26, roofX + roofL / 2 - 1.5, -roofW * 0.26, 'rgba(0,0,0,0.22)', 0.8);
-    drawDeformedLine(roofX - roofL / 2 + 1.5, roofW * 0.26, roofX + roofL / 2 - 1.5, roofW * 0.26, 'rgba(0,0,0,0.22)', 0.8);
-    drawDeformedCircle(roofX - 1.0, 0, 1.4, 'rgba(0,0,0,0.18)', 'rgba(255,255,255,0.25)', 0.6);
+    // Roof stamping ribs & circular ventilation dome hatch
+    drawDeformedLine(roofX - roofL / 2 + 1.4, -roofW * 0.26, roofX + roofL / 2 - 1.4, -roofW * 0.26, 'rgba(0,0,0,0.22)', 0.8);
+    drawDeformedLine(roofX - roofL / 2 + 1.4, roofW * 0.26, roofX + roofL / 2 - 1.4, roofW * 0.26, 'rgba(0,0,0,0.22)', 0.8);
+    drawDeformedCircle(roofX - 0.8, 0, 1.4, 'rgba(0,0,0,0.18)', 'rgba(255,255,255,0.25)', 0.6);
 
     // 3 Amber "Road Train" Marker Lights (3 фонаря автопоезда)
     const markerX = roofX + roofL / 2 - 1.0;
@@ -1495,86 +1503,117 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
       }
     });
 
-    // 4. Curved Panoramic Front Windshield with Wipers (Панорамное лобовое стекло)
+    // Optional Emergency / Utility Beacons on Cab Roof
+    const bodyId = resolvedTruckForCab?.body.id;
+    if (isEmergency) {
+      const lbX = roofX + 0.6;
+      drawDeformedRect(lbX - 1.3, -roofW * 0.36, 2.6, roofW * 0.72, '#0f172a');
+      drawDeformedRect(lbX - 1.0, -roofW * 0.33, 2.0, roofW * 0.24, '#2563eb');
+      drawDeformedRect(lbX - 1.0, -roofW * 0.08, 2.0, roofW * 0.16, '#f8fafc');
+      drawDeformedRect(lbX - 1.0, roofW * 0.09, 2.0, roofW * 0.24, '#2563eb');
+    } else if (bodyId === 'body_tanker_water' || bodyId === 'body_garbage_compactor' || bodyId === 'body_tow_platform') {
+      const beaconX = roofX - 1.0;
+      drawDeformedCircle(beaconX, 0, 2.0, '#0f172a');
+      drawDeformedCircle(beaconX, 0, 1.4, '#f97316');
+      drawDeformedCircle(beaconX, 0, 0.7, '#fef08a');
+    }
+
+    // Curved Panoramic Front Windshield with Wipers
     const fWsX1 = roofX + roofL / 2;
     const fWsX2 = cabinX + cabinL / 2;
-    drawDeformedRect(fWsX1, -cabinW / 2 + 0.8, fWsX2 - fWsX1, cabinW - 1.6, 'rgba(56, 189, 248, 0.22)');
-    drawDeformedLine(fWsX1 + 1, -cabinW / 2 + 1.4, fWsX2 - 1, cabinW / 2 - 1.4, 'rgba(255, 255, 255, 0.3)', 1.2);
-    // Vintage dual wipers
+    drawDeformedRect(fWsX1, -cabinW / 2 + 0.8, fWsX2 - fWsX1, cabinW - 1.6, 'rgba(56, 189, 248, 0.24)');
+    drawDeformedLine(fWsX1 + 0.8, -cabinW / 2 + 1.4, fWsX2 - 0.8, cabinW / 2 - 1.4, 'rgba(255, 255, 255, 0.32)', 1.1);
     drawDeformedLine(fWsX1 + 0.8, -cabinW * 0.25, fWsX2 - 0.8, -cabinW * 0.06, '#0f172a', 1.0);
     drawDeformedLine(fWsX1 + 0.8, cabinW * 0.06, fWsX2 - 0.8, cabinW * 0.25, '#0f172a', 1.0);
 
-    // 5. Side Windows with Triangular Vent Quarter-Lights & Tubular Bracket Mirrors
+    // Side Windows with Quarter-Lights & Tubular Bracket Mirrors
     const sideWinH = (cabinW - roofW) / 2 - 0.4;
-    drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
-    drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
-    // Quarter-light dividing pillars (Стойки форточек)
+    drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.14)');
+    drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.14)');
     drawDeformedLine(roofX + roofL * 0.18, -cabinW / 2 + 0.4, roofX + roofL * 0.18, -cabinW / 2 + 0.4 + sideWinH, '#0f172a', 0.8);
     drawDeformedLine(roofX + roofL * 0.18, roofW / 2, roofX + roofL * 0.18, roofW / 2 + sideWinH, '#0f172a', 0.8);
 
-    // Tubular bracket side mirrors (Зеркала заднего вида на изогнутых металлических кронштейнах)
     const mirrorX = roofX + roofL * 0.25;
-    // Left mirror
-    drawDeformedLine(mirrorX, -cabinW / 2, mirrorX - 1.2, -halfW - 2.8, '#1e293b', 1.0);
-    drawDeformedRect(mirrorX - 2.4, -halfW - 3.4, 2.4, 1.4, '#0f172a');
-    // Right mirror
-    drawDeformedLine(mirrorX, cabinW / 2, mirrorX - 1.2, halfW + 2.8, '#1e293b', 1.0);
-    drawDeformedRect(mirrorX - 2.4, halfW + 2.0, 2.4, 1.4, '#0f172a');
+    drawDeformedLine(mirrorX, -cabinW / 2, mirrorX - 1.2, -halfW - 2.6, '#1e293b', 1.0);
+    drawDeformedRect(mirrorX - 2.4, -halfW - 3.3, 2.4, 1.4, '#0f172a');
+    drawDeformedLine(mirrorX, cabinW / 2, mirrorX - 1.2, halfW + 2.6, '#1e293b', 1.0);
+    drawDeformedRect(mirrorX - 2.4, halfW + 1.9, 2.4, 1.4, '#0f172a');
 
-    // Cab Entry Side Footsteps (Подножки кабины)
+    // Cab Entry Side Footsteps
     drawDeformedRect(cabinX - cabinL * 0.25, -halfW + 0.2, cabinL * 0.5, 1.4, '#334155');
     drawDeformedRect(cabinX - cabinL * 0.25, halfW - 1.6, cabinL * 0.5, 1.4, '#334155');
 
     // Rear cab wall with small rectangular back window
     const rWsX1 = cabinX - cabinL / 2;
-    drawDeformedLine(rWsX1, -cabinW / 2 + 1, rWsX1, cabinW / 2 - 1, '#0f172a', 1.4);
+    drawDeformedLine(rWsX1, -cabinW / 2 + 0.8, rWsX1, cabinW / 2 - 0.8, '#0f172a', 1.5);
     drawDeformedRect(rWsX1 + 0.4, -cabinW * 0.22, 0.8, cabinW * 0.44, 'rgba(56, 189, 248, 0.16)');
 
     return;
   }
 
   // =========================================================================
-  // 5F-2. HEAVY TRUCK CABIN (ЗИЛ-4331 - Водовоз КО-829А, Бензовоз)
+  // 5F-2. ZIL-4331 ANGULAR HOODED TRUCK CABIN (ЗИЛ-4331 / ЗИЛ-433360 / ЗИЛ-133ГЯ)
   // =========================================================================
-  const isZilHoodedTruckCab = type === 'truck_water' || type === 'truck_tanker';
-  if (isZilHoodedTruckCab) {
-    // 1. ZIL-4331 Angular Hood & Iconic White Front Grille Mask («Намордник» ЗИЛ-4331)
+  const isZil4331TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'zil4331' : (type === 'truck_water' || type === 'truck_tanker' || type === 'truck_armored' || type === 'truck_tow');
+  if (isZil4331TruckCab) {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc - 0.5;
-    const hoodW = halfW * 2 - 4.5;
+    const hoodW = halfW * 1.48;
+    const fenderW = halfW * 2 - 1.0;
+    const bodyId = resolvedTruckForCab?.body.id;
+    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue';
+    const isArmored = bodyId === 'body_armored_vault' || (!resolvedTruckForCab && type === 'truck_armored');
+    const cabColor = isEmergency ? '#dc2626' : (isArmored ? '#cbd5e1' : (car.color || '#0284c7'));
 
-    // Metal Hood Body
-    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, car.color || '#0284c7');
-    // Central cowl shutline
-    drawDeformedLine(hoodX1, 0, hoodX2 - 2, 0, 'rgba(0,0,0,0.35)', 1.0);
+    // Angular ZIL-4331 Front Fender Wings
+    drawDeformedRect(hoodX1 - 0.8, -fenderW / 2, hoodX2 - hoodX1 + 0.8, fenderW, cabColor);
+    drawDeformedLine(hoodX1 + 1.5, -fenderW / 2 + 0.6, hoodX2 - 2.5, -fenderW / 2 + 0.6, 'rgba(0,0,0,0.45)', 1.0);
+    drawDeformedLine(hoodX1 + 1.5, fenderW / 2 - 0.6, hoodX2 - 2.5, fenderW / 2 - 0.6, 'rgba(0,0,0,0.45)', 1.0);
+    // Sharp angular fender-to-hood step seams
+    drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.5, -hoodW / 2, 'rgba(0,0,0,0.45)', 1.0);
+    drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.5, hoodW / 2, 'rgba(0,0,0,0.45)', 1.0);
 
-    // Strict 2D Top-Down Hood Nose Leading Edge (Вид строго сверху без плоской 2.5D маски)
-    drawDeformedLine(hoodX2 - 0.4, -hoodW / 2 + 0.6, hoodX2 - 0.4, hoodW / 2 - 0.6, 'rgba(255,255,255,0.25)', 0.8);
-    drawDeformedLine(hoodX2, -hoodW / 2 + 0.4, hoodX2, hoodW / 2 - 0.4, 'rgba(0,0,0,0.35)', 0.8);
+    // Angular Boxy Hood Body (ЗИЛ-4331)
+    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
+    // Central cowl shutline & asymmetric air intake louver grille on right hood side
+    drawDeformedLine(hoodX1, 0, hoodX2 - 1.2, 0, 'rgba(0,0,0,0.35)', 1.0);
+    drawDeformedLine(hoodX1, 0.5, hoodX2 - 1.2, 0.5, 'rgba(255,255,255,0.22)', 0.7);
+    drawDeformedRect(hoodX1 + 2.0, hoodW * 0.16, 3.4, 2.2, '#1e293b');
+    // Cowl shutline at windshield base
+    drawDeformedLine(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.1);
 
-    // Heavy Front Bumper with integrated steps and tow hooks
-    drawDeformedRect(hoodX2 - 0.5, -halfW + 0.2, 2.2, halfW * 2 - 0.4, '#0f172a');
-    // Bumper rubber pads / step plates
-    drawDeformedRect(hoodX2, -halfW * 0.70, 1.4, halfW * 0.35, '#334155');
-    drawDeformedRect(hoodX2, halfW * 0.35, 1.4, halfW * 0.35, '#334155');
-    // Dual front tow hooks / eyes (буксирные проушины)
+    //Collector green stripe on hood & doors if armored vault body is mounted
+    if (isArmored) {
+      drawDeformedLine(hoodX1 + 0.5, -fenderW / 2 + 1.2, hoodX2 - 1.0, -fenderW / 2 + 1.2, '#15803d', 1.2);
+      drawDeformedLine(hoodX1 + 0.5, fenderW / 2 - 1.2, hoodX2 - 1.0, fenderW / 2 - 1.2, '#15803d', 1.2);
+    }
+
+    // White Front Grille Mask top edge («Намордник» ЗИЛ-4331)
+    drawDeformedRect(hoodX2 - 0.9, -hoodW / 2 + 0.6, 0.9, hoodW - 1.2, '#f8fafc');
+    drawDeformedLine(hoodX2, -fenderW / 2 + 0.4, hoodX2, fenderW / 2 - 0.4, 'rgba(0,0,0,0.4)', 0.9);
+
+    // Heavy Front Channel Bumper with integrated steps and tow hooks
+    drawDeformedRect(hoodX2 - 0.3, -halfW + 0.2, 2.1, halfW * 2 - 0.4, '#0f172a');
+    drawDeformedRect(hoodX2 + 0.1, -halfW * 0.72, 1.3, halfW * 0.34, '#334155');
+    drawDeformedRect(hoodX2 + 0.1, halfW * 0.38, 1.3, halfW * 0.34, '#334155');
     drawDeformedRect(hoodX2 + 1.2, -halfW * 0.40, 1.2, 1.8, '#cbd5e1');
     drawDeformedRect(hoodX2 + 1.2, halfW * 0.40 - 1.8, 1.2, 1.8, '#cbd5e1');
 
-    // 2. Enclosed Cab Base & Roof
+    // Enclosed Cab Base & Roof
     drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
 
-    const roofL = cabinL * 0.65;
+    const roofL = cabinL * 0.66;
     const roofW = cabinW * 0.86;
-    const roofX = cabinX + cabinL * 0.04;
-    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || car.color || '#0284c7');
+    const roofX = cabinX + cabinL * 0.03;
+    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, isEmergency ? '#dc2626' : (isArmored ? '#cbd5e1' : (car.roofColor || cabColor)));
 
-    // Roof stiffener channels
+    // Roof stiffener channels & roof hatch
     drawDeformedLine(roofX - roofL / 2 + 1, -roofW * 0.28, roofX + roofL / 2 - 1, -roofW * 0.28, 'rgba(0,0,0,0.22)', 0.8);
     drawDeformedLine(roofX - roofL / 2 + 1, roofW * 0.28, roofX + roofL / 2 - 1, roofW * 0.28, 'rgba(0,0,0,0.22)', 0.8);
+    drawDeformedRect(roofX - 2.2, -2.2, 3.2, 4.4, 'rgba(0,0,0,0.12)');
 
-    // 3. Road Train Marker Lights (3 оранжевых фонарика «автопоезд») on cab roof front
-    const markerX = roofX + roofL / 2 - 1.2;
+    // Road Train Marker Lights (3 оранжевых фонарика «автопоезд») on cab roof front
+    const markerX = roofX + roofL / 2 - 1.1;
     const isTrainOn = car.roadTrainLightsOn !== false;
     const mBody = '#1c1917';
     const mLens = isTrainOn ? '#f59e0b' : '#78350f';
@@ -1587,71 +1626,79 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
       }
     });
 
-    // 4. Municipal Orange Flashing Beacon (Оранжевый проблесковый маячок) on roof when utility superstructure is fitted
-    const resolvedZil4331 = resolveVehicleTruckFrameAndBody(car);
-    const showBeacon = resolvedZil4331
-      ? (resolvedZil4331.body.id === 'body_tanker_water' || resolvedZil4331.body.id === 'body_garbage_ko440' || resolvedZil4331.body.id === 'body_tow_platform')
-      : (type === 'truck_water');
-    if (showBeacon) {
+    // Beacons on roof when emergency or utility superstructure is fitted
+    const showAmberBeacon = bodyId === 'body_tanker_water' || bodyId === 'body_tanker_fuel' || bodyId === 'body_garbage_compactor' || bodyId === 'body_tow_platform' || (!resolvedTruckForCab && type === 'truck_water');
+    if (isEmergency) {
+      const lbX = roofX + 0.6;
+      drawDeformedRect(lbX - 1.3, -roofW * 0.36, 2.6, roofW * 0.72, '#0f172a');
+      drawDeformedRect(lbX - 1.0, -roofW * 0.33, 2.0, roofW * 0.24, '#2563eb');
+      drawDeformedRect(lbX - 1.0, -roofW * 0.08, 2.0, roofW * 0.16, '#f8fafc');
+      drawDeformedRect(lbX - 1.0, roofW * 0.09, 2.0, roofW * 0.24, '#2563eb');
+    } else if (showAmberBeacon) {
       const beaconX = roofX - 1.0;
-      drawDeformedCircle(beaconX, 0, 2.2, '#0f172a'); // Black rubber base
-      drawDeformedCircle(beaconX, 0, 1.6, '#f97316'); // Glowing orange lens
-      drawDeformedCircle(beaconX, 0, 0.8, '#fef08a'); // Bright incandescent bulb center
+      drawDeformedCircle(beaconX, 0, 2.1, '#0f172a');
+      drawDeformedCircle(beaconX, 0, 1.5, '#f97316');
+      drawDeformedCircle(beaconX, 0, 0.75, '#fef08a');
     }
 
-    // 5. Wide Panoramic Front Windshield with dual wipers
+    // Wide Panoramic Front Windshield with dual wipers
     const fWsX1 = roofX + roofL / 2;
     const fWsX2 = cabinX + cabinL / 2;
     drawDeformedRect(fWsX1, -cabinW / 2 + 0.8, fWsX2 - fWsX1, cabinW - 1.6, 'rgba(56, 189, 248, 0.22)');
-    drawDeformedLine(fWsX1 + 1, -cabinW / 2 + 1.5, fWsX2 - 1, cabinW / 2 - 1.5, 'rgba(255, 255, 255, 0.3)', 1.2);
-    // Heavy dual wipers
-    drawDeformedLine(fWsX1 + 1, -cabinW * 0.25, fWsX2 - 1, -cabinW * 0.05, '#0f172a', 1.0);
-    drawDeformedLine(fWsX1 + 1, cabinW * 0.05, fWsX2 - 1, cabinW * 0.25, '#0f172a', 1.0);
+    drawDeformedLine(fWsX1 + 0.8, -cabinW / 2 + 1.5, fWsX2 - 0.8, cabinW / 2 - 1.5, 'rgba(255, 255, 255, 0.3)', 1.2);
+    drawDeformedLine(fWsX1 + 0.8, -cabinW * 0.25, fWsX2 - 0.8, -cabinW * 0.05, '#0f172a', 1.0);
+    drawDeformedLine(fWsX1 + 0.8, cabinW * 0.05, fWsX2 - 0.8, cabinW * 0.25, '#0f172a', 1.0);
 
-    // 6. Side Door Windows & Extended Bracket Side Mirrors
+    // Side Door Windows & Extended Bracket Side Mirrors
     const sideWinH = (cabinW - roofW) / 2 - 0.4;
-    drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
-    drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
+    drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.14)');
+    drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.14)');
 
-    // Extended tubular bracket side mirrors (зеркала заднего вида на кронштейнах)
     const mirrorX = roofX + roofL * 0.25;
-    // Left mirror
     drawDeformedLine(mirrorX, -cabinW / 2, mirrorX - 1.0, -halfW - 2.5, '#0f172a', 1.0);
     drawDeformedRect(mirrorX - 2.2, -halfW - 3.2, 2.4, 1.4, '#1e293b');
-    // Right mirror
     drawDeformedLine(mirrorX, cabinW / 2, mirrorX - 1.0, halfW + 2.5, '#0f172a', 1.0);
     drawDeformedRect(mirrorX - 2.2, halfW + 1.8, 2.4, 1.4, '#1e293b');
 
+    // Cab Entry Footsteps
+    drawDeformedRect(cabinX - cabinL * 0.24, -halfW + 0.2, cabinL * 0.50, 1.5, '#334155');
+    drawDeformedRect(cabinX - cabinL * 0.24, halfW - 1.7, cabinL * 0.50, 1.5, '#334155');
+
     // Rear cab wall
     const rWsX1 = cabinX - cabinL / 2;
-    drawDeformedLine(rWsX1, -cabinW / 2 + 1, rWsX1, cabinW / 2 - 1, '#0f172a', 1.2);
+    drawDeformedLine(rWsX1, -cabinW / 2 + 0.8, rWsX1, cabinW / 2 - 0.8, '#0f172a', 1.5);
+    drawDeformedRect(rWsX1 + 0.4, -cabinW * 0.22, 0.8, cabinW * 0.44, 'rgba(56, 189, 248, 0.16)');
 
     return;
   }
 
   // =========================================================================
-  // 5F-3. ZIL-130 HOODED TRUCK CABIN (ЗИЛ-130 / ЗИЛ-ММЗ-555 Короткобазный Самосвал)
+  // 5F-3. ZIL-130 HOODED TRUCK CABIN (ЗИЛ-130 / ЗИЛ-131 / ЗИЛ-133Г2)
   // =========================================================================
-  if (type === 'truck_zil_dump') {
-    // 1. ZIL-130 Rounded Aerodynamic Hood & Bulbous Front Fenders (Вид строго сверху)
+  const isZil130TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'zil130' : (type === 'truck_zil_dump' || type === 'fire_engine' || type === 'fire_rescue');
+  if (isZil130TruckCab) {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc - 0.4;
-    const hoodW = halfW * 1.34; // Tapered central rounded hood
-    const fenderW = halfW * 2 - 1.2; // Bulging rounded front fenders over wheels
-    const cabColor = car.color || '#0284c7'; // Iconic Soviet sky-blue / sea-blue
-    const roofColor = car.roofColor || '#f8fafc'; // Iconic signature white roof
+    const hoodW = halfW * 1.34;
+    const fenderW = halfW * 2 - 1.2;
+    const bodyId = resolvedTruckForCab?.body.id;
+    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue' || (!resolvedTruckForCab && (type === 'fire_engine' || type === 'fire_rescue'));
+    const cabColor = isEmergency ? '#dc2626' : (car.color || '#0284c7');
+    const roofColor = isEmergency ? '#dc2626' : (car.roofColor || '#f8fafc');
 
     // Front Fender Wings (Скругленные раздутые крылья ЗИЛ-130 над передними колесами)
-    drawDeformedRect(hoodX1 - 1, -fenderW / 2, hoodX2 - hoodX1 + 1, fenderW, cabColor);
-    // Dark wheel arch inner gap shadows
+    drawDeformedRect(hoodX1 - 0.8, -fenderW / 2, hoodX2 - hoodX1 + 0.8, fenderW, cabColor);
     drawDeformedLine(hoodX1 + 1.5, -fenderW / 2 + 0.6, hoodX2 - 3, -fenderW / 2 + 0.6, 'rgba(0,0,0,0.45)', 1.0);
     drawDeformedLine(hoodX1 + 1.5, fenderW / 2 - 0.6, hoodX2 - 3, fenderW / 2 - 0.6, 'rgba(0,0,0,0.45)', 1.0);
+    // Fender-to-hood valley seams
+    drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.8, -hoodW / 2, 'rgba(0,0,0,0.42)', 0.9);
+    drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.8, hoodW / 2, 'rgba(0,0,0,0.42)', 0.9);
 
     // Central Raised Hood Stamping (Капот со скругленным носом и ребрами выштамповки)
     drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
-    // Central longitudinal hood crease ridge with highlight and shadow
-    drawDeformedLine(hoodX1, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.4)', 1.2);
-    drawDeformedLine(hoodX1, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.25)', 0.8);
+    drawDeformedLine(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.4)', 1.2);
+    drawDeformedLine(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.25)', 0.8);
+    drawDeformedLine(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.0);
 
     // Lateral side hood air louver slots / embossings (боковые выштамповки жалюзи капота ЗИЛ-130)
     const louverX1 = hoodX1 + 2.2;
@@ -1661,42 +1708,37 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
       drawDeformedLine(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.22)', 0.7);
     });
 
-    // Vintage amber teardrop/round clearance/indicator lamps (ПФ-101) mounted directly ON TOP of the front fenders
+    // Vintage amber teardrop/round clearance/indicator lamps (ПФ-101) mounted ON TOP of the front fenders
     const pfX = (hoodX1 + hoodX2) * 0.52;
-    const pfOffsetsY = [-fenderW / 2 + 1.8, fenderW / 2 - 1.8];
-    pfOffsetsY.forEach(pfY => {
-      drawDeformedCircle(pfX, pfY, 1.4, '#0f172a'); // Black rubber mounting gasket
-      drawDeformedCircle(pfX, pfY, 1.1, '#cbd5e1'); // Polished chrome bezel
-      drawDeformedCircle(pfX, pfY, 0.8, '#f59e0b'); // Glowing amber lens
-      drawDeformedCircle(pfX, pfY, 0.35, '#fef08a'); // Filament core
+    [-fenderW / 2 + 1.8, fenderW / 2 - 1.8].forEach(pfY => {
+      drawDeformedCircle(pfX, pfY, 1.3, '#0f172a');
+      drawDeformedCircle(pfX, pfY, 1.0, '#cbd5e1');
+      drawDeformedCircle(pfX, pfY, 0.75, '#f59e0b');
+      drawDeformedCircle(pfX, pfY, 0.3, '#fef08a');
     });
 
     // Chrome hood hold-down latches (хромированные замки капота ЗИЛ)
     drawDeformedRect(hoodX1 + 1.2, -hoodW / 2 - 0.4, 1.2, 0.8, '#e2e8f0');
     drawDeformedRect(hoodX1 + 1.2, hoodW / 2 - 0.4, 1.2, 0.8, '#e2e8f0');
 
-    // Strict 2D Top-Down Hood Nose Leading Edge (Вид строго сверху: без 2.5D решетки и плоских фар в небо)
-    drawDeformedLine(hoodX2 - 0.5, -hoodW / 2 + 0.8, hoodX2 - 0.5, hoodW / 2 - 0.8, 'rgba(255,255,255,0.35)', 0.8);
-    drawDeformedLine(hoodX2, -fenderW / 2 + 0.8, hoodX2, fenderW / 2 - 0.8, 'rgba(0,0,0,0.35)', 0.8);
+    // White radiator grille top edge & Hood Nose Leading Edge
+    drawDeformedRect(hoodX2 - 0.8, -hoodW / 2 + 0.8, 0.8, hoodW - 1.6, '#f8fafc');
+    drawDeformedLine(hoodX2, -fenderW / 2 + 0.8, hoodX2, fenderW / 2 - 0.8, 'rgba(0,0,0,0.38)', 0.8);
 
     // Stamped Heavy Channel Steel Front Bumper with curved wrap-around ends
     const bumperX = hoodX2 - 0.2;
-    drawDeformedRect(bumperX, -halfW + 0.4, 1.8, halfW * 2 - 0.8, '#1e293b');
-    drawDeformedLine(bumperX + 0.2, -halfW + 0.8, bumperX + 0.2, halfW - 0.8, '#475569', 0.8); // Steel top bevel highlight
-    // Bumper curved back corners
-    drawDeformedLine(bumperX, -halfW + 0.4, bumperX - 1.2, -halfW + 0.8, '#1e293b', 1.8);
-    drawDeformedLine(bumperX, halfW - 0.4, bumperX - 1.2, halfW - 0.8, '#1e293b', 1.8);
-    // Anti-slip diamond plate bumper steps
+    drawDeformedRect(bumperX, -halfW + 0.4, 1.8, halfW * 2 - 0.8, isEmergency ? '#dc2626' : '#1e293b');
+    drawDeformedLine(bumperX + 0.2, -halfW + 0.8, bumperX + 0.2, halfW - 0.8, isEmergency ? '#fca5a5' : '#475569', 0.8);
+    drawDeformedLine(bumperX, -halfW + 0.4, bumperX - 1.2, -halfW + 0.8, '#1e293b', 1.6);
+    drawDeformedLine(bumperX, halfW - 0.4, bumperX - 1.2, halfW - 0.8, '#1e293b', 1.6);
     drawDeformedRect(bumperX + 0.2, -halfW * 0.72, 1.2, halfW * 0.36, '#334155');
     drawDeformedRect(bumperX + 0.2, halfW * 0.36, 1.2, halfW * 0.36, '#334155');
-    // Dual front cast towing hooks / shackles (буксирные крючья ЗИЛ-130)
     drawDeformedRect(bumperX + 1.3, -halfW * 0.38, 1.3, 1.5, '#cbd5e1');
     drawDeformedRect(bumperX + 1.3, halfW * 0.38 - 1.5, 1.3, 1.5, '#cbd5e1');
-    // Center starting crank hole socket & license plate bracket
     drawDeformedRect(bumperX + 0.6, -1.5, 0.8, 3.0, '#0f172a');
-    drawDeformedRect(bumperX + 1.2, -2.5, 0.5, 5.0, '#f8fafc'); // White license plate bracket
+    drawDeformedRect(bumperX + 1.2, -2.5, 0.5, 5.0, '#f8fafc');
 
-    // 2. Rounded Cabin Base & Iconic White Roof (Двухцветная кабина ЗИЛ-130)
+    // Rounded Cabin Base & Iconic White Roof (Двухцветная кабина ЗИЛ-130)
     drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
 
     const roofL = cabinL * 0.66;
@@ -1704,65 +1746,80 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     const roofX = cabinX + cabinL * 0.03;
     drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, roofColor);
 
-    // Three stamped transverse roof stiffener ribs (поперечные ребра жесткости крыши ЗИЛ-130)
+    if (isEmergency) {
+      // GOST White horizontal stripe accents along cab roof sides for fire service ZIL-130
+      drawDeformedRect(roofX - roofL / 2 + 0.6, -roofW / 2 + 0.3, roofL - 1.2, 1.0, '#f8fafc');
+      drawDeformedRect(roofX - roofL / 2 + 0.6, roofW / 2 - 1.3, roofL - 1.2, 1.0, '#f8fafc');
+    }
+
+    // Three stamped transverse roof stiffener ribs
     [-roofW * 0.28, 0, roofW * 0.28].forEach(ry => {
       drawDeformedLine(roofX - roofL / 2 + 1.2, ry, roofX + roofL / 2 - 1.2, ry, 'rgba(0,0,0,0.18)', 0.8);
       drawDeformedLine(roofX - roofL / 2 + 1.2, ry + 0.5, roofX + roofL / 2 - 1.2, ry + 0.5, 'rgba(255,255,255,0.4)', 0.6);
     });
 
-    // Rectangular roof ventilation hatch (лючок вентиляции крыши)
+    // Rectangular roof ventilation hatch
     const hatchX = roofX - roofL * 0.08;
     drawDeformedRect(hatchX - 1.8, -2.4, 3.6, 4.8, 'rgba(0,0,0,0.12)');
     drawDeformedLine(hatchX - 1.8, -2.4, hatchX + 1.8, -2.4, 'rgba(0,0,0,0.25)', 0.8);
     drawDeformedLine(hatchX - 1.8, 2.4, hatchX + 1.8, 2.4, 'rgba(0,0,0,0.25)', 0.8);
     drawDeformedLine(hatchX + 1.8, -2.4, hatchX + 1.8, 2.4, 'rgba(0,0,0,0.25)', 0.8);
 
-    // 3 Amber "Road Train" Roof Marker Lights (3 фонаря автопоезда ЗИЛ-130 на передней кромке крыши)
+    // 3 Amber "Road Train" Roof Marker Lights
     const markerX = roofX + roofL / 2 - 0.9;
     const isTrainOn = car.roadTrainLightsOn !== false;
     const mLens = isTrainOn ? '#f59e0b' : '#78350f';
     const mCore = isTrainOn ? '#fef08a' : '#451a03';
     [-2.6, 0, 2.6].forEach(my => {
-      drawDeformedCircle(markerX, my, 0.9, '#0f172a'); // Rubber pad
-      drawDeformedCircle(markerX, my, 0.7, '#cbd5e1'); // Chrome ring
-      drawDeformedCircle(markerX, my, 0.55, mLens);   // Amber lens
+      drawDeformedCircle(markerX, my, 0.9, '#0f172a');
+      drawDeformedCircle(markerX, my, 0.7, '#cbd5e1');
+      drawDeformedCircle(markerX, my, 0.55, mLens);
       if (isTrainOn) {
         drawDeformedCircle(markerX, my, 0.25, mCore);
       }
     });
 
-    // 3. Panoramic Curved Wrap-Around Front Windshield (Знаменитое панорамное гнутое лобовое стекло ЗИЛ-130)
+    // Emergency SGU lightbar or utility beacon on ZIL-130 roof
+    if (isEmergency) {
+      const lbX = roofX + 0.8;
+      drawDeformedRect(lbX - 1.4, -roofW * 0.38, 2.8, roofW * 0.76, '#0f172a');
+      drawDeformedRect(lbX - 1.1, -roofW * 0.35, 2.2, roofW * 0.25, '#2563eb');
+      drawDeformedRect(lbX - 1.1, -roofW * 0.08, 2.2, roofW * 0.16, '#f8fafc');
+      drawDeformedRect(lbX - 1.1, roofW * 0.10, 2.2, roofW * 0.25, '#2563eb');
+      drawDeformedCircle(lbX, -roofW * 0.22, 0.65, '#93c5fd');
+      drawDeformedCircle(lbX, roofW * 0.22, 0.65, '#93c5fd');
+    } else if (bodyId === 'body_tanker_water' || bodyId === 'body_garbage_compactor' || bodyId === 'body_tow_platform') {
+      const beaconX = roofX - 1.2;
+      drawDeformedCircle(beaconX, 0, 2.0, '#0f172a');
+      drawDeformedCircle(beaconX, 0, 1.4, '#f97316');
+      drawDeformedCircle(beaconX, 0, 0.7, '#fef08a');
+    }
+
+    // Panoramic Curved Wrap-Around Front Windshield
     const fWsX1 = roofX + roofL / 2;
     const fWsX2 = cabinX + cabinL / 2;
     drawDeformedRect(fWsX1, -cabinW / 2 + 0.6, fWsX2 - fWsX1, cabinW - 1.2, 'rgba(56, 189, 248, 0.24)');
-    // Rubber perimeter gasket and chrome locking spline
     drawDeformedLine(fWsX1, -cabinW / 2 + 0.6, fWsX1, cabinW / 2 - 0.6, '#0f172a', 1.0);
     drawDeformedLine(fWsX2, -cabinW / 2 + 0.6, fWsX2, cabinW / 2 - 0.6, '#0f172a', 1.0);
     drawDeformedLine(fWsX1 + 0.8, -cabinW / 2 + 1.2, fWsX2 - 0.8, cabinW / 2 - 1.2, 'rgba(255, 255, 255, 0.35)', 1.2);
-    // Dual bottom-pivot wipers (чёрные стеклоочистители ЗИЛ)
     drawDeformedLine(fWsX1 + 0.8, -cabinW * 0.26, fWsX2 - 0.6, -cabinW * 0.06, '#0f172a', 1.0);
     drawDeformedLine(fWsX1 + 0.8, cabinW * 0.06, fWsX2 - 0.6, cabinW * 0.26, '#0f172a', 1.0);
 
-    // 4. Side Door Windows, Triangular Vent Quarter-Lights & Tubular Bracket Mirrors
+    // Side Door Windows, Quarter-Lights & Tubular Bracket Mirrors
     const sideWinH = (cabinW - roofW) / 2 - 0.4;
     drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.14)');
     drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.14)');
-    // Triangular quarter-light dividing pillars (Стойки поворотных форточек ЗИЛ-130)
     drawDeformedLine(roofX + roofL * 0.18, -cabinW / 2 + 0.4, roofX + roofL * 0.18, -cabinW / 2 + 0.4 + sideWinH, '#0f172a', 0.8);
     drawDeformedLine(roofX + roofL * 0.18, roofW / 2, roofX + roofL * 0.18, roofW / 2 + sideWinH, '#0f172a', 0.8);
 
-    // Exterior chrome door handles
     drawDeformedRect(roofX - roofL * 0.22, -cabinW / 2 - 0.4, 2.0, 0.6, '#cbd5e1');
     drawDeformedRect(roofX - roofL * 0.22, cabinW / 2 - 0.2, 2.0, 0.6, '#cbd5e1');
 
-    // Dual tubular curved bracket side mirrors (боковые зеркала на изогнутых кронштейнах)
     const mirrorX = roofX + roofL * 0.24;
-    // Left mirror
     drawDeformedLine(mirrorX, -cabinW / 2, mirrorX - 1.2, -halfW - 2.6, '#1e293b', 1.1);
     drawDeformedLine(mirrorX - 1.8, -cabinW / 2, mirrorX - 1.2, -halfW - 2.6, '#1e293b', 0.8);
     drawDeformedRect(mirrorX - 2.5, -halfW - 3.4, 2.6, 1.5, '#0f172a');
     drawDeformedRect(mirrorX - 2.3, -halfW - 3.2, 2.2, 1.1, 'rgba(56, 189, 248, 0.2)');
-    // Right mirror
     drawDeformedLine(mirrorX, cabinW / 2, mirrorX - 1.2, halfW + 2.6, '#1e293b', 1.1);
     drawDeformedLine(mirrorX - 1.8, cabinW / 2, mirrorX - 1.2, halfW + 2.6, '#1e293b', 0.8);
     drawDeformedRect(mirrorX - 2.5, halfW + 1.9, 2.6, 1.5, '#0f172a');
@@ -1778,114 +1835,118 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
 
     // Rear cab wall with small rectangular rear window
     const rWsX1 = cabinX - cabinL / 2;
-    drawDeformedLine(rWsX1, -cabinW / 2 + 1, rWsX1, cabinW / 2 - 1, '#0f172a', 1.4);
+    drawDeformedLine(rWsX1, -cabinW / 2 + 0.8, rWsX1, cabinW / 2 - 0.8, '#0f172a', 1.5);
     drawDeformedRect(rWsX1 + 0.4, -cabinW * 0.22, 0.8, cabinW * 0.44, 'rgba(56, 189, 248, 0.16)');
     drawDeformedLine(rWsX1 + 0.4, -cabinW * 0.22, rWsX1 + 0.4, cabinW * 0.22, '#0f172a', 0.8);
-
-    // 5. Behind-the-Cab Hydraulic Hoist (only when a dump superstructure is mounted)
-    const resolvedZil130 = resolveVehicleTruckFrameAndBody(car);
-    const hasDumpHoist = resolvedZil130
-      ? (resolvedZil130.body.id === 'body_dump_zil_mmz' || resolvedZil130.body.id === 'body_dump_kamaz_scoop')
-      : true;
-    if (hasDumpHoist) {
-      const gapX = cabinX - cabinL / 2 - 2.2;
-      drawDeformedRect(gapX - 1.6, -2.4, 3.2, 4.8, '#1e293b');
-      drawDeformedRect(gapX - 1.0, -1.6, 2.0, 3.2, '#cbd5e1'); // Polished chrome hoist piston rod
-      drawDeformedLine(gapX, -2.0, gapX - 1.0, -halfW * 0.42, '#0f172a', 1.0); // High-pressure hydraulic hose
-
-      // Hydraulic oil reservoir tank (масляный бак гидросистемы)
-      drawDeformedRect(gapX - 2.0, halfW * 0.32, 2.4, halfW * 0.42, '#334155');
-      drawDeformedCircle(gapX - 0.8, halfW * 0.50, 0.8, '#cbd5e1'); // Tank filler breather cap
-    }
 
     return;
   }
 
   // =========================================================================
-  // 5G. KAMAZ CAB-OVER TRUCK CABIN (КАМАЗ-5511 / КАМАЗ-5320 / Мусоровоз / Бетономешалка)
+  // 5G. KAMAZ CAB-OVER TRUCK CABIN (КАМАЗ-5320 / 5511 / 5410 / 4310 / 6520)
   // =========================================================================
-  const isKamazCabOver = type === 'truck_dump' || type === 'truck_box' || type === 'truck_semi' || type === 'cement_mixer' || type === 'garbage_truck' || type === 'fire_ladder';
+  const isKamazCabOver = resolvedTruckForCab ? resolvedTruckForCab.platform === 'kamaz' : (type === 'truck_dump' || type === 'truck_box' || type === 'truck_semi' || type === 'cement_mixer' || type === 'garbage_truck' || type === 'fire_ladder');
   if (isKamazCabOver) {
-    // Authentic Soviet & Russian Kamaz factory cab color: iconic terracotta orange (#d94e16) if unassigned or dull slate
+    const bodyId = resolvedTruckForCab?.body.id;
+    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue' || (!resolvedTruckForCab && type === 'fire_ladder');
     const isDullSlate = !car.color || car.color === '#334155' || car.color === '#0f172a';
-    const cabColor = isDullSlate ? '#d94e16' : car.color;
-    
-    // 1. Cab Base (Rectangular, cab-over-engine)
-    drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
-    
-    // 2. Roof Panel (Classic Kamaz ribbed roof)
-    const roofL = cabinL * 0.70;
-    const roofW = cabinW * 0.90;
-    const roofX = cabinX + cabinL * 0.10;
-    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || cabColor);
-    
-    // 3. Kamaz distinctive triple ribbed roof stamps
-    drawDeformedLine(roofX - roofL / 2 + 1, -roofW * 0.35, roofX + roofL / 2 - 1, -roofW * 0.35, 'rgba(0,0,0,0.25)', 1.2);
-    drawDeformedLine(roofX - roofL / 2 + 1, 0, roofX + roofL / 2 - 1, 0, 'rgba(0,0,0,0.25)', 1.2);
-    drawDeformedLine(roofX - roofL / 2 + 1, roofW * 0.35, roofX + roofL / 2 - 1, roofW * 0.35, 'rgba(0,0,0,0.25)', 1.2);
-    
-    // 4. Roof air intake/vent hatch
-    drawDeformedRect(roofX + 0.5, -3, 3, 6, 'rgba(0,0,0,0.15)');
+    const cabColor = isEmergency ? '#dc2626' : (isDullSlate ? '#d94e16' : car.color);
+    const hasSleeper = resolvedTruckForCab
+      ? (resolvedTruckForCab.frame.id === 'frm_kamaz_5410_semi' || bodyId === 'body_fifth_wheel')
+      : (type === 'truck_semi');
 
-    // 5. Flat steep windshield
+    // 1. Cab Base (Rectangular cab-over-engine shell)
+    drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
+
+    // 2. Roof Panel (Classic Kamaz ribbed roof, extended if sleeper cab)
+    const roofL = cabinL * (hasSleeper ? 0.74 : 0.70);
+    const roofW = cabinW * 0.90;
+    const roofX = cabinX + cabinL * (hasSleeper ? 0.04 : 0.08);
+    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, isEmergency ? '#dc2626' : (car.roofColor || cabColor));
+
+    // Sleeper berth seam if sleeper cab is fitted
+    if (hasSleeper) {
+      const sleeperSeamX = roofX - roofL * 0.16;
+      drawDeformedLine(sleeperSeamX, -roofW / 2 + 0.4, sleeperSeamX, roofW / 2 - 0.4, 'rgba(0,0,0,0.4)', 0.9);
+      drawDeformedLine(sleeperSeamX + 0.5, -roofW / 2 + 0.4, sleeperSeamX + 0.5, roofW / 2 - 0.4, 'rgba(255,255,255,0.2)', 0.6);
+    }
+
+    // 3. Kamaz distinctive longitudinal ribbed roof stamps
+    [-roofW * 0.35, -roofW * 0.12, roofW * 0.12, roofW * 0.35].forEach(ry => {
+      drawDeformedLine(roofX - roofL / 2 + 1, ry, roofX + roofL / 2 - 1, ry, 'rgba(0,0,0,0.26)', 1.0);
+      drawDeformedLine(roofX - roofL / 2 + 1, ry + 0.45, roofX + roofL / 2 - 1, ry + 0.45, 'rgba(255,255,255,0.2)', 0.6);
+    });
+
+    // 4. Dual square roof ventilation hatches (Лючки вентиляции крыши КАМАЗ)
+    const ventX = roofX + roofL * 0.12;
+    drawDeformedRect(ventX - 1.4, -roofW * 0.30, 2.6, 2.8, 'rgba(0,0,0,0.16)');
+    drawDeformedRect(ventX - 1.4, roofW * 0.30 - 2.8, 2.6, 2.8, 'rgba(0,0,0,0.16)');
+
+    // Emergency lightbar or amber utility beacon on KAMAZ cab roof
+    if (isEmergency) {
+      const lbX = roofX + roofL * 0.22;
+      drawDeformedRect(lbX - 1.4, -roofW * 0.38, 2.8, roofW * 0.76, '#0f172a');
+      drawDeformedRect(lbX - 1.1, -roofW * 0.35, 2.2, roofW * 0.25, '#2563eb');
+      drawDeformedRect(lbX - 1.1, -roofW * 0.08, 2.2, roofW * 0.16, '#f8fafc');
+      drawDeformedRect(lbX - 1.1, roofW * 0.10, 2.2, roofW * 0.25, '#2563eb');
+    } else if (bodyId === 'body_tanker_water' || bodyId === 'body_garbage_compactor' || bodyId === 'body_tow_platform') {
+      const beaconX = roofX - 1.2;
+      drawDeformedCircle(beaconX, 0, 2.0, '#0f172a');
+      drawDeformedCircle(beaconX, 0, 1.4, '#f97316');
+      drawDeformedCircle(beaconX, 0, 0.7, '#fef08a');
+    }
+
+    // 5. Flat steep 2-piece windshield with center divider bar
     const fWsX1 = roofX + roofL / 2;
     const fWsX2 = cabinX + cabinL / 2;
     drawDeformedRect(fWsX1, -cabinW / 2 + 0.8, fWsX2 - fWsX1, cabinW - 1.6, 'rgba(56, 189, 248, 0.22)');
-    // Classic split two-piece windshield center rubber gasket (вертикальная перемычка)
-    drawDeformedLine(fWsX1, 0, fWsX2, 0, '#0f172a', 1.2);
-    // Wipers
-    drawDeformedLine(fWsX1 + 1.2, -cabinW * 0.30, fWsX2 - 0.5, -cabinW * 0.05, '#0f172a', 1.2);
-    drawDeformedLine(fWsX1 + 1.2, cabinW * 0.30, fWsX2 - 0.5, cabinW * 0.05, '#0f172a', 1.2);
-    
-    // 6. External Front Sun Visor (Солнцезащитный козырек - often black or cab color)
-    drawDeformedRect(fWsX1 - 1, -cabinW / 2, 1.2, cabinW, '#1e293b');
+    drawDeformedLine(fWsX1, 0, fWsX2, 0, '#0f172a', 1.3);
+    drawDeformedLine(fWsX1 + 1.0, -cabinW * 0.30, fWsX2 - 0.4, -cabinW * 0.05, '#0f172a', 1.1);
+    drawDeformedLine(fWsX1 + 1.0, cabinW * 0.30, fWsX2 - 0.4, cabinW * 0.05, '#0f172a', 1.1);
+
+    // 6. External Front Sun Visor & Cab Front Grab Handles
+    drawDeformedRect(fWsX1 - 0.9, -cabinW / 2 + 0.4, 1.1, cabinW - 0.8, '#1e293b');
 
     // 7. Side Windows
     const sideWinH = (cabinW - roofW) / 2 - 0.4;
-    drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
-    drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
-    
-    // 8. Extended Kamaz Bracket Mirrors (Very prominent, spanning far out)
-    const mirrorX = fWsX1 - 1.5;
-    // Left mirror
-    drawDeformedLine(mirrorX, -cabinW / 2, mirrorX, -halfW - 3.5, '#0f172a', 1.2);
-    drawDeformedRect(mirrorX - 1.5, -halfW - 4.5, 3, 2.0, '#1e293b');
-    // Right mirror
-    drawDeformedLine(mirrorX, cabinW / 2, mirrorX, halfW + 3.5, '#0f172a', 1.2);
-    drawDeformedRect(mirrorX - 1.5, halfW + 2.5, 3, 2.0, '#1e293b');
+    const winLen = hasSleeper ? roofL * 0.68 : roofL;
+    const winStartX = roofX + roofL / 2 - winLen;
+    drawDeformedRect(winStartX, -cabinW / 2 + 0.4, winLen, sideWinH, 'rgba(56, 189, 248, 0.14)');
+    drawDeformedRect(winStartX, roofW / 2, winLen, sideWinH, 'rgba(56, 189, 248, 0.14)');
 
-    // 9. Authentic Kamaz Front Nose & Radiator Grille
-    // White stamped central grille panel («морда КАМАЗ» белого цвета)
+    // 8. Extended Kamaz Bracket Mirrors
+    const mirrorX = fWsX1 - 1.2;
+    drawDeformedLine(mirrorX, -cabinW / 2, mirrorX, -halfW - 3.2, '#0f172a', 1.2);
+    drawDeformedRect(mirrorX - 1.4, -halfW - 4.2, 2.8, 1.8, '#1e293b');
+    drawDeformedLine(mirrorX, cabinW / 2, mirrorX, halfW + 3.2, '#0f172a', 1.2);
+    drawDeformedRect(mirrorX - 1.4, halfW + 2.4, 2.8, 1.8, '#1e293b');
+
+    // 9. Authentic Kamaz Front Nose, Radiator Grille & Corner Wind Deflectors
     const grilleX = fWsX2 - 0.2;
-    const grilleW = cabinW * 0.65;
-    drawDeformedRect(grilleX - 1.2, -grilleW / 2, 1.4, grilleW, '#f8fafc');
-    // Horizontal matte black ventilation slats
+    const grilleW = cabinW * 0.64;
+    drawDeformedRect(grilleX - 1.1, -grilleW / 2, 1.3, grilleW, isEmergency ? '#f8fafc' : '#f1f5f9');
     drawDeformedLine(grilleX - 0.7, -grilleW * 0.42, grilleX - 0.7, grilleW * 0.42, '#0f172a', 0.8);
     drawDeformedLine(grilleX - 0.2, -grilleW * 0.38, grilleX - 0.2, grilleW * 0.38, '#0f172a', 0.8);
-    // Dark Kamaz badge emblem in the center
     drawDeformedRect(grilleX - 0.8, -1.8, 0.9, 3.6, '#0f172a');
 
     // Aerodynamic corner wind deflectors (боковые щитки-дефлекторы КАМАЗ)
-    drawDeformedRect(grilleX - 1.6, -cabinW / 2 + 0.4, 1.6, 2.0, cabColor);
-    drawDeformedLine(grilleX - 1.6, -cabinW / 2 + 0.4, grilleX, -cabinW / 2 + 0.4, '#0f172a', 0.8);
-    drawDeformedRect(grilleX - 1.6, cabinW / 2 - 2.4, 1.6, 2.0, cabColor);
-    drawDeformedLine(grilleX - 1.6, cabinW / 2 - 0.4, grilleX, cabinW / 2 - 0.4, '#0f172a', 0.8);
+    drawDeformedRect(grilleX - 1.5, -cabinW / 2 + 0.4, 1.5, 2.0, cabColor);
+    drawDeformedLine(grilleX - 1.5, -cabinW / 2 + 0.4, grilleX, -cabinW / 2 + 0.4, '#0f172a', 0.8);
+    drawDeformedRect(grilleX - 1.5, cabinW / 2 - 2.4, 1.5, 2.0, cabColor);
+    drawDeformedLine(grilleX - 1.5, cabinW / 2 - 0.4, grilleX, cabinW / 2 - 0.4, '#0f172a', 0.8);
 
-    // 10. Heavy stamped steel front bumper with headlights & fog lights
-    const bumperX = fWsX2 + 1.0;
-    drawDeformedRect(bumperX - 0.8, -halfW * 0.92, 2.0, halfW * 1.84, '#1e293b');
-    // Main rectangular halogen headlights
-    drawDeformedRect(bumperX + 0.4, -halfW * 0.78, 0.8, 3.2, '#fef08a');
-    drawDeformedRect(bumperX + 0.4, halfW * 0.78 - 3.2, 0.8, 3.2, '#fef08a');
-    // Amber corner turn signals
-    drawDeformedRect(bumperX + 0.4, -halfW * 0.90, 0.8, 1.8, '#f59e0b');
-    drawDeformedRect(bumperX + 0.4, halfW * 0.90 - 1.8, 0.8, 1.8, '#f59e0b');
-    // Towing shackles / hooks
-    drawDeformedRect(bumperX + 0.4, -4.0, 0.9, 1.6, '#475569');
-    drawDeformedRect(bumperX + 0.4, 2.4, 0.9, 1.6, '#475569');
-    
+    // 10. Heavy stamped steel front bumper with headlights & towing shackles
+    const bumperX = fWsX2 + 0.8;
+    drawDeformedRect(bumperX - 0.8, -halfW * 0.92, 1.9, halfW * 1.84, isEmergency ? '#dc2626' : '#1e293b');
+    drawDeformedRect(bumperX + 0.3, -halfW * 0.78, 0.8, 3.0, '#fef08a');
+    drawDeformedRect(bumperX + 0.3, halfW * 0.78 - 3.0, 0.8, 3.0, '#fef08a');
+    drawDeformedRect(bumperX + 0.3, -halfW * 0.90, 0.8, 1.6, '#f59e0b');
+    drawDeformedRect(bumperX + 0.3, halfW * 0.90 - 1.6, 0.8, 1.6, '#f59e0b');
+    drawDeformedRect(bumperX + 0.4, -3.8, 0.9, 1.5, '#cbd5e1');
+    drawDeformedRect(bumperX + 0.4, 2.3, 0.9, 1.5, '#cbd5e1');
+
     // 11. Road Train Marker Lights (3 оранжевых фонарика «автопоезд» на крыше)
-    const markerX = roofX + roofL / 2 - 1.2;
+    const markerX = roofX + roofL / 2 - 1.1;
     const isTrainOn = car.roadTrainLightsOn !== false;
     const mBody = '#1c1917';
     const mLens = isTrainOn ? '#f59e0b' : '#78350f';
@@ -1898,25 +1959,16 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
       }
     });
 
-    // 12. Equipment behind the cab (dump truck spare tire / semi-truck air intake snorkel)
-    if (type === 'truck_dump') {
-      const spareX = cabinX - cabinL / 2 - 3.5;
-      drawDeformedRect(spareX, -halfW + 4, 3, 7, '#0f172a'); // The black rubber tire
-      drawDeformedLine(spareX + 1.5, -halfW + 4.5, spareX + 1.5, -halfW + 10.5, '#475569', 1.2); // Steel wheel rim edge
-      
-      // Air intake stack on the right side behind the cab
-      drawDeformedCircle(spareX + 1.5, halfW - 4, 1.8, '#1e293b');
-      drawDeformedCircle(spareX + 1.5, halfW - 4, 1.0, '#0f172a');
-    } else if (type === 'truck_semi') {
-      // Tall air cleaner snorkel pipe with mushroom cap behind right side of cab
-      const snorkelX = cabinX - cabinL / 2 - 1.8;
-      const snorkelY = halfW - 3.8;
-      drawDeformedCircle(snorkelX, snorkelY, 1.8, '#1e293b');
-      drawDeformedCircle(snorkelX, snorkelY, 1.2, '#0f172a');
-      drawDeformedCircle(snorkelX, snorkelY, 0.6, '#475569');
-      // Snorkel vertical bracket clamp
-      drawDeformedLine(snorkelX, snorkelY - 1.8, snorkelX, halfW - 1.0, '#334155', 1.0);
-    }
+    // 12. Right-side behind-cab air intake snorkel stack (воздухозаборник КАМАЗ за кабиной)
+    const snorkelX = cabinX - cabinL / 2 - 1.0;
+    const snorkelY = cabinW / 2 - 2.2;
+    drawDeformedRect(snorkelX - 0.9, snorkelY - 1.4, 1.8, 2.8, '#1e293b');
+    drawDeformedCircle(snorkelX, snorkelY, 1.1, '#0f172a');
+    drawDeformedCircle(snorkelX, snorkelY, 0.5, '#475569');
+
+    // Rear cab wall shutline
+    const rWsX1 = cabinX - cabinL / 2;
+    drawDeformedLine(rWsX1, -cabinW / 2 + 0.6, rWsX1, cabinW / 2 - 0.6, '#0f172a', 1.4);
 
     return;
   }
