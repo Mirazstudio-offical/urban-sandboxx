@@ -29,15 +29,14 @@ import {
   addPlayerNotification 
 } from '../items';
 import { ItemIconCanvas } from './ItemIconCanvas';
+import { ModalShell, Tabs } from './gameUi';
 import { sound } from '../audio';
 import { getBuildingLayout } from '../buildingInteriors';
 import { 
-  X, 
   Flame, 
   Droplets, 
   Utensils, 
   RotateCw, 
-  ChefHat, 
   Plus, 
   Trash2, 
   Check, 
@@ -46,9 +45,7 @@ import {
   Sparkles,
   Disc,
   Volume2,
-  Package,
-  ArrowRight,
-  Eye
+  Package
 } from 'lucide-react';
 
 interface KitchenStationModalProps {
@@ -70,7 +67,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   world,
   onInventoryUpdated,
   onVitalsChange,
-  stationName = 'Кухонный гарнитур',
   furnitureType = 'kitchen_counter',
   onOpenStorage
 }) => {
@@ -78,13 +74,10 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
   const isStove = furnitureType === 'stove';
 
-  // Mobile navigation tabs state ('station' | 'products' | 'actions' | 'sensory')
-  const [mobileTab, setMobileTab] = useState<'station' | 'products' | 'actions' | 'sensory'>('station');
+  const [mobileTab, setMobileTab] = useState<'station' | 'products' | 'sensory'>('station');
 
-  // Safe inventory array filtering out empty/null slots
   const safeInventory: InventoryItem[] = (player.inventory || []).filter((i): i is InventoryItem => Boolean(i && i.itemId));
 
-  // Active Cookware / Surface State
   const [vessel, setVessel] = useState<CookwareVessel>(() => {
     if (isStove) {
       return createStoveCookwareVessel(undefined);
@@ -103,7 +96,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const lastSoundTickRef = useRef<number>(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Check physical tools and resources in player inventory with robust null checks
   const carriedKnife = safeInventory.find(i => isKnifeItem(i.itemId)) || 
     (player.leftHandItem && player.leftHandItem.itemId && isKnifeItem(player.leftHandItem.itemId) ? player.leftHandItem : null) ||
     (player.rightHandItem && player.rightHandItem.itemId && isKnifeItem(player.rightHandItem.itemId) ? player.rightHandItem : null);
@@ -112,14 +104,12 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const carriedOil = safeInventory.find(i => isOilOrFatItem(i.itemId));
   const carriedPlates = safeInventory.filter(i => isPlateOrBowlItem(i.itemId));
   const carriedCookwareList = safeInventory.filter(i => isCookwareItem(i.itemId));
-  const foodItems = safeInventory.filter(i => i.category === 'food' || i.category === 'drink' || i.itemId === 'prep_workpiece');
+  const foodItems = safeInventory.filter(i => i.category === 'food' || i.category === 'drink' || i.itemId === 'prep_workpiece' || i.itemId === 'food_mix');
 
-  // Check available cookware categories
   const availablePans = carriedCookwareList.filter(c => c.itemId.startsWith('kitchen_pan_'));
   const availablePots = carriedCookwareList.filter(c => c.itemId.startsWith('kitchen_pot_') || c.itemId === 'pot_clay_medium');
   const availableBowls = carriedPlates.filter(c => c.itemId.startsWith('kitchen_bowl_') || c.itemId === 'soup_bowl_empty');
 
-  // Check if a kitchen sink is physically near the player
   let hasNearbySink = false;
   if (player.insideBuildingId && world?.buildings) {
     const bld = world.buildings.find(b => b.id === player.insideBuildingId);
@@ -135,7 +125,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   useEffect(() => {
     const timer = setInterval(() => {
       setVessel(prev => {
-        // If it's a stove with NO cookware placed, do not run pan heating
         if (prev.hasBurner && prev.vesselType === 'surface') {
           return prev;
         }
@@ -152,7 +141,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
         simulateCookwareTick(next, 1.0, 22.0);
 
-        // Diegetic Sound cues:
         const now = Date.now();
         if (now - lastSoundTickRef.current > 3000) {
           const hasOilLiquid = next.liquids.some(l => l.isFatOrOil);
@@ -167,7 +155,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
           }
         }
 
-        // Physical smoke alerts
         const highestChar = next.ingredients.reduce((m, i) => Math.max(m, i.bioState.charring), 0);
         if (highestChar > 0.4 && next.heatSourcePower >= 3) {
           setLastSensoryLog('Внимание: Едкий сизый дым! Ингредиенты пригорают ко дну — снимите с огня или переверните!');
@@ -206,7 +193,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     ctx.restore();
   }, [vessel, selectedIngredientIdx, tickCounter, isStove]);
 
-  // Place physical cookware on stove burner
   const handlePlaceCookwareOnBurner = (cookwareItem: InventoryItem) => {
     if (vessel.ingredients.length > 0 || vessel.liquids.length > 0) {
       addPlayerNotification(player, 'Сначала снимите текущую посуду или освободите ее содержимое.', 'warning');
@@ -228,12 +214,10 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
-  // Take cookware off stove back into player inventory (with contents or empty)
   const handleRemoveCookwareFromBurner = () => {
     if (!vessel.sourceItem) return;
 
     if (vessel.ingredients.length > 0 || vessel.liquids.length > 0) {
-      // Cookware contains water, broth or food: pick up the actual pot or pan with its contents!
       const loadedCookware = finishCookwareToInventoryItem(vessel);
       if (loadedCookware) {
         const added = addItemToPlayer(player, loadedCookware);
@@ -258,7 +242,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
-  // Add food item or unpack prep workpiece / dry mix from inventory into cookware/counter
   const handlePlaceFoodItem = (invItem: InventoryItem) => {
     if (isStove && vessel.vesselType === 'surface') {
       addPlayerNotification(player, 'Нельзя класть продукты на открытую конфорку! Сначала поставьте сковороду или кастрюлю.', 'warning');
@@ -274,7 +257,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     const invIdx = player.inventory.findIndex(i => Boolean(i && i.id === invItem.id));
     if (invIdx < 0) return;
 
-    // Check if this is a composite workpiece or dry mix (полуфабрикат/заготовка/сухая смесь)
     if (invItem.itemId === 'prep_workpiece' || invItem.itemId === 'food_mix' || invItem.culinaryData?.isWorkpiece || invItem.culinaryData?.isMix) {
       const res = unpackWorkpieceIntoVessel(vessel, invItem);
       removeItemFromPlayer(player, invIdx, 1);
@@ -297,7 +279,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     setMobileTab('station');
   };
 
-  // Tactile Cutting Action (Requires Knife in inventory or hand)
   const handleCutIngredient = (idx: number) => {
     const ing = vessel.ingredients[idx];
     if (!ing) return;
@@ -314,7 +295,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     setVessel({ ...vessel });
   };
 
-  // Cut All Ingredients on Board Action
   const handleCutAllOnBoard = () => {
     if (vessel.ingredients.length === 0) return;
     if (!carriedKnife) {
@@ -340,7 +320,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     }
   };
 
-  // Tactile Stirring Action (Flips bottom layer, redistributes heat)
   const handleStirVessel = () => {
     const msg = stirVesselAction(vessel);
     sound.playUseItem();
@@ -348,7 +327,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     setVessel({ ...vessel });
   };
 
-  // Seasoning Action (Requires real Salt Shaker or Spice item)
   const handleAddSaltFromShaker = () => {
     if (!carriedSalt) {
       addPlayerNotification(player, 'У вас нет солонки или соли в инвентаре!', 'warning');
@@ -362,7 +340,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     setVessel({ ...vessel });
   };
 
-  // Pour Oil (Requires real oil item in inventory)
   const handlePourRealOil = () => {
     if (!carriedOil) {
       addPlayerNotification(player, 'У вас нет растительного масла или кулинарного жира в инвентаре!', 'warning');
@@ -376,7 +353,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     setVessel({ ...vessel });
   };
 
-  // Pour Water (From real water container or nearby sink)
   const handlePourWater = () => {
     if (!hasNearbySink) {
       const waterBottle = safeInventory.find(i => i.itemId && i.itemId.includes('water'));
@@ -393,7 +369,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     setVessel({ ...vessel });
   };
 
-  // Regulate Burner Power (Only available if Stove with Cookware!)
   const handleSetBurnerPower = (power: number) => {
     if (!vessel.hasBurner || vessel.vesselType === 'surface') {
       addPlayerNotification(player, 'Конфорка не может работать без установленной посуды!', 'warning');
@@ -415,7 +390,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     setVessel({ ...vessel });
   };
 
-  // Toggle Lid
   const handleToggleLid = () => {
     vessel.hasLid = !vessel.hasLid;
     sound.playUseItem();
@@ -423,7 +397,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     setVessel({ ...vessel });
   };
 
-  // Take raw ingredient back to inventory
   const handleTakeBackIngredient = (idx: number) => {
     const ing = vessel.ingredients[idx];
     if (!ing) return;
@@ -458,7 +431,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
-  // PACK WORKPIECE ACTION (Собрать заготовку / полуфабрикат в инвентарь)
   const handleCollectWorkpiece = () => {
     if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
       addPlayerNotification(player, 'Рабочая поверхность пуста — нечего собирать.', 'warning');
@@ -485,7 +457,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     }
   };
 
-  // CREATE DRY MIX ACTION (Смешать сухие ингредиенты в смесь)
   const handleCreateDryMix = () => {
     if (vessel.ingredients.length === 0) {
       addPlayerNotification(player, 'На рабочей поверхности нет ингредиентов для смешивания.', 'warning');
@@ -504,7 +475,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
       vessel.saltGrams = 0;
       vessel.seasoningNotes = [];
       setSelectedIngredientIdx(null);
-      setLastSensoryLog(`Ингредиенты тщательно смешаны в единую смесь «${mix.nameRu}». Текстура сформирована из её состава.`);
+      setLastSensoryLog(`Ингредиенты тщательно смешаны в единую смесь «${mix.nameRu}».`);
       setVessel({ ...vessel });
       onInventoryUpdated?.();
     } else {
@@ -512,7 +483,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     }
   };
 
-  // TRANSFER INTO FRYING PAN (В сковороду)
   const handleTransferToPan = () => {
     if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
       addPlayerNotification(player, 'На столе пусто — нечего перекладывать в сковороду.', 'warning');
@@ -549,7 +519,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
-  // TRANSFER INTO POT (В кастрюлю)
   const handleTransferToPot = () => {
     if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
       addPlayerNotification(player, 'На столе пусто — нечего перекладывать в кастрюлю.', 'warning');
@@ -586,7 +555,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
-  // TRANSFER INTO BOWL (В миску)
   const handleTransferToBowl = () => {
     if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
       addPlayerNotification(player, 'На столе пусто — нечего перекладывать в миску.', 'warning');
@@ -623,7 +591,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
-  // Finish and Plate Dish into Real Plate/Bowl or Take Away
   const handleFinishAndPlateDish = () => {
     if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
       addPlayerNotification(player, 'На столе и в посуде пусто: нечего сервировать.', 'warning');
@@ -674,727 +641,486 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const observations = getSensoryObservations(vessel);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-0 sm:p-2 md:p-4 select-none animate-fadeIn">
-      <div className="my-auto w-full max-w-5xl h-full sm:h-auto sm:max-h-[94vh] flex flex-col bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl shadow-2xl shadow-black/95 overflow-hidden text-slate-100 font-sans">
-        
-        {/* Header Bar */}
-        <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 bg-slate-900 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-              <ChefHat className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-100 truncate">
-                  {isStove ? 'Кухонная плита' : 'Столешница гарнитура'}
-                </h2>
-                <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 truncate max-w-[150px] sm:max-w-none">
-                  {vessel.nameRu}
-                </span>
-              </div>
-              <p className="text-[10px] sm:text-xs text-slate-400 truncate hidden xs:block">
-                {isStove 
-                  ? 'Конфорка плиты • Поставьте сковороду или кастрюлю'
-                  : 'Холодная зона • Разделочная доска, нарезка ножом, миска'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {onOpenStorage && (
-              <button
-                onClick={onOpenStorage}
-                className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 transition-colors flex items-center gap-1.5 min-h-[36px]"
-                title="Открыть шкафы кухонного гарнитура"
-              >
-                <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span className="hidden sm:inline">Шкафы</span>
-              </button>
-            )}
-
+    <ModalShell
+      id="kitchen-station-modal"
+      title={isStove ? 'Кухонная плита' : 'Столешница гарнитура'}
+      subtitle={vessel.nameRu}
+      width={1160}
+      tall
+      onClose={onClose}
+      headRight={
+        <div className="gu-row" style={{ gap: 8 }}>
+          {vessel.temperature > 40 && (
+            <span className="gu-tag amber">
+              <Flame className="w-3 h-3" /> +{Math.round(vessel.temperature)}°C
+            </span>
+          )}
+          {onOpenStorage && (
             <button
-              onClick={onClose}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-800 hover:bg-rose-950 hover:text-rose-300 border border-slate-700 flex items-center justify-center text-slate-400 transition-colors min-w-[36px] min-h-[36px]"
-              title="Закрыть"
+              type="button"
+              onClick={onOpenStorage}
+              className="gu-btn gu-btn-s gu-btn-sm"
+              title="Открыть шкафы кухонного гарнитура"
             >
-              <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              <Layers className="w-3.5 h-3.5" />
+              <span>Шкафы</span>
             </button>
-          </div>
+          )}
         </div>
-
-        {/* Mobile Navigation Tabs (< lg screens) */}
-        <div className="flex lg:hidden items-center bg-slate-900 border-b border-slate-800 text-xs shrink-0 select-none">
-          <button
-            onClick={() => setMobileTab('station')}
-            className={`flex-1 py-2.5 px-1 flex items-center justify-center gap-1 font-bold transition-colors border-b-2 min-h-[44px] ${
-              mobileTab === 'station'
-                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {isStove ? <Flame className="w-4 h-4 text-amber-400 shrink-0" /> : <Utensils className="w-4 h-4 text-amber-400 shrink-0" />}
-            <span className="truncate">{isStove ? 'Плита' : 'Стол'}</span>
-            {vessel.ingredients.length > 0 && (
-              <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-amber-500 text-[10px] text-slate-950 font-black">
-                {vessel.ingredients.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setMobileTab('products')}
-            className={`flex-1 py-2.5 px-1 flex items-center justify-center gap-1 font-bold transition-colors border-b-2 min-h-[44px] ${
-              mobileTab === 'products'
-                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Package className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="truncate">Продукты ({foodItems.length})</span>
-          </button>
-
-          <button
-            onClick={() => setMobileTab('actions')}
-            className={`flex-1 py-2.5 px-1 flex items-center justify-center gap-1 font-bold transition-colors border-b-2 min-h-[44px] ${
-              mobileTab === 'actions'
-                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="truncate">Посуда</span>
-          </button>
-
-          <button
-            onClick={() => setMobileTab('sensory')}
-            className={`flex-1 py-2.5 px-1 flex items-center justify-center gap-1 font-bold transition-colors border-b-2 min-h-[44px] ${
-              mobileTab === 'sensory'
-                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Activity className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="truncate">Чувства</span>
-          </button>
+      }
+      tabs={
+        <div className="lg:hidden">
+          <Tabs
+            value={mobileTab}
+            onChange={setMobileTab}
+            items={[
+              { id: 'station', label: isStove ? 'Плита' : 'Столешница', badge: vessel.ingredients.length || undefined },
+              { id: 'products', label: 'Продукты', badge: foodItems.length || undefined },
+              { id: 'sensory', label: 'Органолептика' }
+            ]}
+          />
         </div>
-
-        {/* Cookware Placement Bar on Stove (Shown only if Stove!) */}
-        {isStove && (
-          <div className="px-3 sm:px-5 py-2 sm:py-2.5 bg-slate-900/60 border-b border-slate-800 flex flex-wrap items-center justify-between text-xs gap-2 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400 font-medium">Посуда на конфорке:</span>
-              <span className="font-semibold text-amber-300">
-                {vessel.sourceItem ? vessel.sourceItem.nameRu : 'Конфорка свободна (спираль)'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {vessel.sourceItem ? (
-                <button
-                  onClick={handleRemoveCookwareFromBurner}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-medium transition-colors flex items-center gap-1 min-h-[34px]"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Снять посуду в карман</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-slate-500 text-[11px]">Поставить:</span>
-                  {carriedCookwareList.length === 0 ? (
-                    <span className="text-amber-500/90 text-[11px] italic">
-                      Нет сковороды/кастрюли в карманах
-                    </span>
-                  ) : (
-                    carriedCookwareList.map((cw, cwIdx) => (
-                      <button
-                        key={cw.id || cwIdx}
-                        onClick={() => handlePlaceCookwareOnBurner(cw)}
-                        className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-medium transition-colors flex items-center gap-1 min-h-[34px]"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>{cw.nameRu}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Main Workstation Layout */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-          
-          {/* Left Column: Player Inventory Ingredients (4 cols desktop; shown on mobile if mobileTab === 'products') */}
-          <div className={`${mobileTab === 'products' ? 'flex' : 'hidden'} lg:flex lg:col-span-4 border-r border-slate-800 flex-col min-h-0 bg-slate-950/50`}>
-            <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-900/40 border-b border-slate-800 flex items-center justify-between shrink-0">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Ваши продукты и заготовки
-              </span>
-              <span className="text-[11px] text-slate-500">
-                {foodItems.length} предм.
-              </span>
-            </div>
-
-            <div className="flex-1 p-2.5 sm:p-3 overflow-y-auto space-y-2">
-              {foodItems.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">
-                  В карманах нет еды, заготовок и кулинарных ингредиентов.
-                </div>
-              ) : (
-                foodItems.map((item, idx) => {
-                  const isWp = item.itemId === 'prep_workpiece';
-                  return (
-                    <div
-                      key={item.id || idx}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer ${
-                        isWp 
-                          ? 'border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/20'
-                          : 'border-slate-800 bg-slate-900/70 hover:border-amber-500/50 hover:bg-slate-800/80'
-                      }`}
-                      onClick={() => handlePlaceFoodItem(item)}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-700 flex items-center justify-center shrink-0">
-                          <ItemIconCanvas itemId={item.itemId} item={item} size={32} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-200 truncate flex items-center gap-1.5">
-                            <span className="truncate">{item.nameRu || item.name}</span>
-                            {isWp && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 font-bold uppercase shrink-0">
-                                Полуфабрикат
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-400 truncate">
-                            {item.descriptionRu?.split('.')[0] || 'Ингредиент'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/35 text-xs font-semibold text-amber-300 shrink-0 flex items-center gap-1 transition-colors min-h-[36px]"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePlaceFoodItem(item);
-                        }}
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>{isWp ? 'Выложить' : 'Нарезать/положить'}</span>
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+      }
+      footerHints={[['Клик', 'Выложить / Нарезать'], ['Esc', 'Закрыть']]}
+      footerRight={
+        <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
+          Завершить работу
+        </button>
+      }
+    >
+      {/* Cookware Placement Bar on Stove */}
+      {isStove && (
+        <div className="gu-card-sm" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div className="gu-row" style={{ gap: 8 }}>
+            <span className="gu-mute" style={{ fontSize: 12 }}>Посуда на конфорке:</span>
+            <span className="gu-tag amber">
+              {vessel.sourceItem ? vessel.sourceItem.nameRu : 'Конфорка свободна (открытая спираль)'}
+            </span>
           </div>
 
-          {/* Center Column: The Cooking Surface / Pan / Board (5 cols desktop; shown on mobile if mobileTab === 'station') */}
-          <div className={`${mobileTab === 'station' ? 'flex' : 'hidden'} lg:flex lg:col-span-5 flex-col min-h-0 bg-slate-900/20 border-r border-slate-800`}>
-            
-            {/* Surface Header */}
-            <div className="p-2.5 sm:p-3 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between shrink-0">
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5 truncate">
-                  {isStove ? (
-                    <Flame className={`w-3.5 h-3.5 shrink-0 ${vessel.heatSourcePower > 0 ? 'text-amber-500 animate-pulse' : 'text-slate-500'}`} />
-                  ) : (
-                    <Utensils className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  )}
-                  <span className="truncate">
-                    {vessel.nameRu}
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-400 truncate">
-                  {isStove 
-                    ? (vessel.heatSourcePower > 0 ? `Нагрев: положение ${vessel.heatSourcePower}` : 'Конфорка выключена (0)')
-                    : 'Холодная столешница • Разделочная доска'}
-                </div>
-              </div>
-
-              {/* Lid toggle if pot or pan */}
-              {isStove && vessel.sourceItem && (
-                <button
-                  onClick={handleToggleLid}
-                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors shrink-0 min-h-[34px] ${
-                    vessel.hasLid
-                      ? 'bg-emerald-950/70 border-emerald-700 text-emerald-300'
-                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {vessel.hasLid ? 'С крышкой' : 'Без крышки'}
-                </button>
-              )}
-            </div>
-
-            {/* Quick Add Product Button for Mobile (Opens Products Tab) */}
-            <div className="lg:hidden px-3 pt-2 shrink-0">
+          <div className="gu-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {vessel.sourceItem ? (
               <button
-                onClick={() => setMobileTab('products')}
-                className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-850 border border-amber-600/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 min-h-[38px] active:scale-[0.99]"
+                type="button"
+                onClick={handleRemoveCookwareFromBurner}
+                className="gu-btn gu-btn-xs"
               >
-                <Plus className="w-4 h-4 text-amber-400" />
-                <span>Выложить продукты из карманов ({foodItems.length})</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Снять посуду в карман</span>
               </button>
-            </div>
-
-            {/* HIGH-FIDELITY LIVE PROCEDURAL CULINARY VIEWPORT (Interactive Visual Texture) */}
-            <div className="px-2.5 sm:px-3 pt-2 shrink-0">
-              <div className="relative w-full aspect-[16/10] max-h-[220px] sm:max-h-[250px] bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center overflow-hidden shadow-inner shadow-black/80">
-                <canvas
-                  ref={canvasRef}
-                  className="w-full h-full object-contain"
-                />
-                
-                {/* Visual Status Badges */}
-                <div className="absolute top-2 left-2 flex items-center gap-1.5 pointer-events-none">
-                  <span className="px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10 text-[10px] font-medium text-slate-300">
-                    {vessel.vesselType === 'pan' ? 'Сковорода' : vessel.vesselType === 'pot' ? 'Кастрюля' : vessel.vesselType === 'bowl' ? 'Миска' : isStove ? 'Спираль' : 'Доска'}
+            ) : (
+              <>
+                <span className="gu-mute" style={{ fontSize: 11 }}>Поставить:</span>
+                {carriedCookwareList.length === 0 ? (
+                  <span className="gu-mute" style={{ fontSize: 11, fontStyle: 'italic' }}>
+                    Нет сковороды или кастрюли в карманах
                   </span>
-                  {vessel.temperature > 40 && (
-                    <span className="px-2 py-0.5 rounded-md bg-rose-950/80 backdrop-blur-sm border border-rose-800/40 text-[10px] font-bold text-rose-300 flex items-center gap-1">
-                      <Flame className="w-3 h-3 text-rose-400" />
-                      <span>{Math.round(vessel.temperature)}°C</span>
-                    </span>
-                  )}
-                </div>
-
-                {vessel.ingredients.length > 0 && !isStove && carriedKnife && (
-                  <div className="absolute bottom-2 right-2">
+                ) : (
+                  carriedCookwareList.map((cw, cwIdx) => (
                     <button
-                      onClick={handleCutAllOnBoard}
-                      className="px-2.5 py-1 rounded-lg bg-slate-900/85 hover:bg-slate-850 border border-amber-500/40 text-amber-300 text-[11px] font-semibold shadow-md flex items-center gap-1 min-h-[30px]"
-                      title="Нарезать все ингредиенты на доске ножом"
+                      key={cw.id || cwIdx}
+                      type="button"
+                      onClick={() => handlePlaceCookwareOnBurner(cw)}
+                      className="gu-btn gu-btn-p gu-btn-xs"
                     >
-                      <Utensils className="w-3 h-3" />
-                      <span>Нарезать всё</span>
+                      <Plus className="w-3 h-3" />
+                      <span>{cw.nameRu}</span>
                     </button>
-                  </div>
+                  ))
                 )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3-Column Workstation Grid */}
+      <div className="gu-kitchen-grid">
+        {/* LEFT COLUMN: Player Inventory Ingredients */}
+        <div className={`gu-card ${mobileTab === 'products' ? 'flex' : 'hidden lg:flex'}`} style={{ flexDirection: 'column', minHeight: 460 }}>
+          <div className="gu-sec" style={{ marginTop: 0 }}>
+            <span>Продукты и заготовки</span>
+            <span className="gu-sec-sub">{foodItems.length} предм.</span>
+          </div>
+
+          <div style={{ flex: 1, maxHeight: 440, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 2 }}>
+            {foodItems.length === 0 ? (
+              <div className="gu-empty" style={{ margin: 'auto 0' }}>
+                <div className="gu-empty-t">Нет продуктов</div>
+                <div>В карманах нет еды, заготовок и кулинарных ингредиентов.</div>
               </div>
-            </div>
-
-            {/* In-Vessel Contents View */}
-            <div className="flex-1 p-2.5 sm:p-3 overflow-y-auto space-y-2 min-h-[100px]">
-              
-              {/* Bare Stove Warning */}
-              {isStove && !vessel.sourceItem && (
-                <div className="py-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-xl text-center px-4 text-slate-500">
-                  <Disc className="w-7 h-7 text-slate-600 mb-1" />
-                  <p className="text-xs font-medium text-slate-400">Спираль конфорки пуста</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5 max-w-xs">
-                    На открытую спираль нельзя класть продукты. Установите сковороду или кастрюлю.
-                  </p>
-                </div>
-              )}
-
-              {/* Liquids Layer */}
-              {vessel.liquids.length > 0 && (
-                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-                  <div className="text-[11px] font-semibold text-slate-400 mb-1 flex items-center gap-1">
-                    <Droplets className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Среда на дне:</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {vessel.liquids.map((liq, lIdx) => (
-                      <span key={lIdx} className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px]">
-                        {liq.nameRu} ({liq.isFatOrOil ? 'жир/масло' : 'жидкость'})
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Empty Surface Helper */}
-              {(!isStove || vessel.sourceItem) && vessel.ingredients.length === 0 && (
-                <div className="py-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-xl text-center px-4 text-slate-500">
-                  <Utensils className="w-7 h-7 text-slate-600 mb-1" />
-                  <p className="text-xs font-medium text-slate-400">Поверхность пуста</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Выберите продукты слева и нажмите «Выложить».
-                  </p>
-                </div>
-              )}
-
-              {/* Ingredients List */}
-              {vessel.ingredients.map((ing, idx) => {
-                const isSelected = selectedIngredientIdx === idx;
-                const appearance = getVisualAppearanceDescription(ing);
-
+            ) : (
+              foodItems.map((item, idx) => {
+                const isWp = item.itemId === 'prep_workpiece' || item.itemId === 'food_mix';
                 return (
                   <div
-                    key={ing.id}
-                    onClick={() => setSelectedIngredientIdx(idx)}
-                    className={`p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-slate-900 border-amber-500/70 shadow-lg'
-                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                    }`}
+                    key={item.id || idx}
+                    onClick={() => handlePlaceFoodItem(item)}
+                    className={`gu-item ${isWp ? 'on' : ''}`}
+                    style={{ cursor: 'pointer' }}
                   >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div 
-                          className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/40"
-                          style={{
-                            backgroundColor: ing.bioState.charring > 0.35 
-                              ? '#18181b'
-                              : ing.bioState.maillard > 0.35
-                              ? '#b45309'
-                              : ing.bioState.denaturation > 0.6
-                              ? '#a8a29e'
-                              : '#f43f5e'
-                          }}
-                        />
-                        <span className="text-xs font-bold text-slate-200 truncate">
-                          {ing.nameRu}
-                        </span>
+                    <div style={{ width: 38, height: 38, borderRadius: 6, background: 'rgba(10,10,12,0.75)', border: '1px solid var(--gu-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <ItemIconCanvas itemId={item.itemId} item={item} size={30} />
+                    </div>
+                    <div className="gu-item-main">
+                      <div className="gu-item-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nameRu || item.name}</span>
+                        {isWp && <span className="gu-tag amber">Заготовка</span>}
                       </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Physical Cut Action Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCutIngredient(idx);
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors min-h-[34px] min-w-[70px] active:scale-95 flex items-center justify-center ${
-                            carriedKnife
-                              ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                              : 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
-                          }`}
-                          title={carriedKnife ? 'Нарезать кухонным ножом' : 'Требуется нож в инвентаре'}
-                        >
-                          {ing.bioState.cutLevel === 0 ? 'Нарезать' : ing.bioState.cutLevel === 1 ? 'Измельчить' : 'Фарш'}
-                        </button>
-
-                        {/* Take back if raw */}
-                        {ing.bioState.denaturation < 0.3 && ing.bioState.charring < 0.1 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTakeBackIngredient(idx);
-                            }}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 transition-colors min-h-[34px] min-w-[34px] flex items-center justify-center active:scale-95"
-                            title="Убрать обратно в инвентарь"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                      <div className="gu-item-sub" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.descriptionRu?.split('.')[0] || 'Ингредиент'}
                       </div>
                     </div>
-
-                    <div className="text-[11px] text-slate-300 italic">
-                      {appearance}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlaceFoodItem(item);
+                      }}
+                      className="gu-btn gu-btn-p gu-btn-xs"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Выложить</span>
+                    </button>
                   </div>
                 );
-              })}
-            </div>
+              })
+            )}
+          </div>
+        </div>
 
-            {/* Direct Physical Actions & Transfer Bar */}
-            <div className="p-2.5 sm:p-3 bg-slate-950/80 border-t border-slate-800 space-y-2 shrink-0">
-              
-              {/* Burner Dial (ONLY on Stove with Cookware!) */}
-              {isStove && vessel.sourceItem && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs pb-1.5 border-b border-slate-800/80 gap-1.5">
-                  <span className="text-slate-400 font-medium flex items-center gap-1">
-                    <Flame className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>Ручка конфорки:</span>
-                  </span>
-                  
-                  <div className="flex items-center gap-1 sm:gap-1.5 w-full sm:w-auto">
-                    {[0, 1, 2, 3, 4, 5, 6].map(p => (
-                      <button
-                        key={p}
-                        onClick={() => handleSetBurnerPower(p)}
-                        className={`flex-1 sm:w-8 sm:h-8 py-2 sm:py-0 min-h-[40px] sm:min-h-0 rounded-lg font-bold text-xs sm:text-sm font-mono transition-all active:scale-95 flex items-center justify-center ${
-                          vessel.heatSourcePower === p
-                            ? p === 0
-                              ? 'bg-slate-700 text-white shadow-inner'
-                              : p <= 3
-                              ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
-                              : 'bg-rose-600 text-white font-black shadow-md shadow-rose-600/40'
-                            : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800'
-                        }`}
-                        title={p === 0 ? 'Выкл' : `Положение ${p}`}
-                      >
-                        {p === 0 ? '0' : p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Physical Interactions Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2 text-xs">
-                {/* Stir / Flip */}
-                <button
-                  onClick={handleStirVessel}
-                  className="px-2 py-2 min-h-[42px] rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95"
-                  title="Перевернуть куски лопаткой"
-                >
-                  <RotateCw className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Перемешать</span>
-                </button>
-
-                {/* Salt (Requires real salt shaker) */}
-                <button
-                  onClick={handleAddSaltFromShaker}
-                  className={`px-2 py-2 min-h-[42px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
-                    carriedSalt
-                      ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title={carriedSalt ? 'Посолить из солонки' : 'Нужна солонка в инвентаре'}
-                >
-                  <Sparkles className="w-4 h-4 text-slate-300 shrink-0" />
-                  <span>Посолить</span>
-                </button>
-
-                {/* Oil (Requires real oil) */}
-                <button
-                  onClick={handlePourRealOil}
-                  className={`px-2 py-2 min-h-[42px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
-                    carriedOil
-                      ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title={carriedOil ? 'Добавить масло из бутылки' : 'Нужно растительное масло в кармане'}
-                >
-                  <Droplets className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Масло</span>
-                </button>
-
-                {/* Water (Requires sink or water container) */}
-                <button
-                  onClick={handlePourWater}
-                  className={`px-2 py-2 min-h-[42px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
-                    hasNearbySink || safeInventory.some(i => i.itemId && i.itemId.includes('water'))
-                      ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title="Налить воду из мойки или бутылки"
-                >
-                  <Droplets className="w-4 h-4 text-cyan-400 shrink-0" />
-                  <span>Вода</span>
-                </button>
-              </div>
-
-              {/* Cookware Transfer & Workpiece Packaging Buttons (How to put into pan, pot, plate, bowl) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px] pt-1">
-                {/* Into Pan */}
-                <button
-                  onClick={handleTransferToPan}
-                  disabled={vessel.vesselType === 'pan' || availablePans.length === 0}
-                  className={`py-2 px-1.5 rounded-lg border flex items-center justify-center gap-1 min-h-[38px] transition-colors ${
-                    vessel.vesselType !== 'pan' && availablePans.length > 0
-                      ? 'bg-slate-800 hover:bg-slate-700 border-amber-500/40 text-amber-300 font-semibold'
-                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title={availablePans.length > 0 ? 'Переложить ингредиенты со стола в сковороду' : 'Нет сковороды в карманах'}
-                >
-                  <Utensils className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">В сковороду</span>
-                </button>
-
-                {/* Into Pot */}
-                <button
-                  onClick={handleTransferToPot}
-                  disabled={vessel.vesselType === 'pot' || availablePots.length === 0}
-                  className={`py-2 px-1.5 rounded-lg border flex items-center justify-center gap-1 min-h-[38px] transition-colors ${
-                    vessel.vesselType !== 'pot' && availablePots.length > 0
-                      ? 'bg-slate-800 hover:bg-slate-700 border-amber-500/40 text-amber-300 font-semibold'
-                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title={availablePots.length > 0 ? 'Переложить ингредиенты в кастрюлю' : 'Нет кастрюли в карманах'}
-                >
-                  <Utensils className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">В кастрюлю</span>
-                </button>
-
-                {/* Into Bowl */}
-                <button
-                  onClick={handleTransferToBowl}
-                  disabled={vessel.vesselType === 'bowl' || availableBowls.length === 0}
-                  className={`py-2 px-1.5 rounded-lg border flex items-center justify-center gap-1 min-h-[38px] transition-colors ${
-                    vessel.vesselType !== 'bowl' && availableBowls.length > 0
-                      ? 'bg-slate-800 hover:bg-slate-700 border-amber-500/40 text-amber-300 font-semibold'
-                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title={availableBowls.length > 0 ? 'Переложить ингредиенты в глубокую миску' : 'Нет миски в карманах'}
-                >
-                  <Disc className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">В миску</span>
-                </button>
-
-                {/* Collect Workpiece (Заготовка) */}
-                <button
-                  onClick={handleCollectWorkpiece}
-                  disabled={vessel.ingredients.length === 0 && vessel.liquids.length === 0}
-                  className={`py-2 px-1.5 rounded-lg border flex items-center justify-center gap-1 min-h-[38px] transition-colors ${
-                    vessel.ingredients.length > 0 || vessel.liquids.length > 0
-                      ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/50 text-amber-200 font-bold'
-                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title="Собрать нарезанный полуфабрикат в карман как предмет-заготовку"
-                >
-                  <Package className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Заготовка</span>
-                </button>
-              </div>
-
-              {/* Second Action Bar: Dry Mix & Cookware Pick up */}
-              <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-1">
-                {/* Create Dry Mix Button */}
-                <button
-                  onClick={handleCreateDryMix}
-                  disabled={vessel.ingredients.length === 0}
-                  className={`py-2 px-2 rounded-lg border flex items-center justify-center gap-1.5 min-h-[38px] transition-colors ${
-                    vessel.ingredients.length > 0
-                      ? 'bg-slate-800 hover:bg-slate-750 border-emerald-500/40 text-emerald-300 font-semibold'
-                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title="Смешать сухие ингредиенты в предмет-смесь с динамической текстурой"
-                >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                  <span className="truncate">Смешать сухую смесь</span>
-                </button>
-
-                {/* Take Loaded Cookware Off Burner / Workstation */}
-                {isStove && vessel.sourceItem ? (
-                  <button
-                    onClick={handleRemoveCookwareFromBurner}
-                    className="py-2 px-2 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 font-semibold flex items-center justify-center gap-1.5 min-h-[38px] transition-colors"
-                    title="Снять посуду с плиты (вместе с водой/бульоном и продуктами)"
-                  >
-                    <Utensils className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                    <span className="truncate">Снять {vessel.vesselType === 'pot' ? 'кастрюлю' : 'сковороду'}</span>
-                  </button>
+        {/* CENTER COLUMN: Culinary Viewport & Physical Controls */}
+        <div className={`gu-card ${mobileTab === 'station' ? 'flex' : 'hidden lg:flex'}`} style={{ flexDirection: 'column', minHeight: 460 }}>
+          <div className="gu-row-between" style={{ marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {isStove ? (
+                  <Flame className="w-4 h-4" style={{ color: vessel.heatSourcePower > 0 ? 'var(--gu-accent-bright)' : 'var(--gu-dim)' }} />
                 ) : (
-                  <div className="flex items-center justify-center text-[10px] text-slate-500 px-2">
-                    {vessel.ingredients.length > 0 ? `${vessel.ingredients.length} ингред.` : 'Готово к работе'}
-                  </div>
+                  <Utensils className="w-4 h-4" style={{ color: 'var(--gu-accent-hi)' }} />
                 )}
+                <span>{vessel.nameRu}</span>
               </div>
-
-              {/* Service & Plate Food */}
-              <button
-                onClick={handleFinishAndPlateDish}
-                className="w-full py-2.5 min-h-[44px] rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm uppercase tracking-wider shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-              >
-                <Check className="w-4 h-4 stroke-[3] shrink-0" />
-                <span className="truncate">
-                  {carriedPlates.length > 0 
-                    ? `Выложить на ${carriedPlates[0].nameRu.toLowerCase()}` 
-                    : (vessel.sourceItem ? `Забрать ${vessel.sourceItem.nameRu.toLowerCase()} с содержимым` : 'Снять готовое блюдо в карман')}
-                </span>
-              </button>
+              <div className="gu-mute" style={{ fontSize: 11 }}>
+                {isStove
+                  ? (vessel.heatSourcePower > 0 ? `Мощность конфорки: уровень ${vessel.heatSourcePower}` : 'Конфорка выключена (0)')
+                  : 'Холодная столешница • Разделочная доска'}
+              </div>
             </div>
+
+            {isStove && vessel.sourceItem && (
+              <button
+                type="button"
+                onClick={handleToggleLid}
+                className={`gu-btn gu-btn-xs ${vessel.hasLid ? 'gu-btn-p' : ''}`}
+              >
+                {vessel.hasLid ? 'С крышкой' : 'Без крышки'}
+              </button>
+            )}
           </div>
 
-          {/* Right Column: Sensory & Tool Inspection (3 cols desktop; shown on mobile if mobileTab === 'sensory' or 'actions') */}
-          <div className={`${mobileTab === 'sensory' || mobileTab === 'actions' ? 'flex' : 'hidden'} lg:flex lg:col-span-3 flex-col min-h-0 bg-slate-950/70 p-3 sm:p-4 space-y-3 overflow-y-auto`}>
-            
-            {/* Real-time Diegetic Sensory Observation */}
-            <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs shrink-0">
-              <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-1.5 uppercase tracking-wider text-[11px]">
-                <Activity className="w-3.5 h-3.5" />
-                <span>Органолептика и чувства</span>
-              </div>
-              <p className="text-slate-300 leading-relaxed italic text-xs">
-                «{lastSensoryLog}»
-              </p>
+          {/* Live Culinary Viewport */}
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', maxHeight: 220, background: 'rgba(8, 8, 10, 0.9)', borderRadius: 8, border: '1px solid var(--gu-line-hi)', overflow: 'hidden', marginBottom: 10 }}>
+            <canvas ref={canvasRef} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+
+            <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 6, pointerEvents: 'none' }}>
+              <span className="gu-tag">
+                {vessel.vesselType === 'pan' ? 'Сковорода' : vessel.vesselType === 'pot' ? 'Кастрюля' : vessel.vesselType === 'bowl' ? 'Миска' : isStove ? 'Спираль' : 'Доска'}
+              </span>
+              {vessel.temperature > 40 && (
+                <span className="gu-tag amber">
+                  <Flame className="w-3 h-3" /> {Math.round(vessel.temperature)}°C
+                </span>
+              )}
             </div>
 
-            {/* Diegetic Sound & Vapor Inspection */}
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-2 shrink-0">
-              <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Volume2 className="w-3.5 h-3.5 text-amber-400" />
-                <span>Сенсорный фон</span>
+            {vessel.ingredients.length > 0 && !isStove && carriedKnife && (
+              <div style={{ position: 'absolute', bottom: 8, right: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleCutAllOnBoard}
+                  className="gu-btn gu-btn-p gu-btn-xs"
+                  title="Нарезать все ингредиенты на доске ножом"
+                >
+                  <Utensils className="w-3 h-3" />
+                  <span>Нарезать всё</span>
+                </button>
               </div>
+            )}
+          </div>
 
-              <div>
-                <div className="text-[10px] text-slate-500 uppercase">Звук:</div>
-                <div className="text-slate-200 text-xs font-medium">{observations.soundText}</div>
+          {/* In-Vessel Ingredients List */}
+          <div style={{ flex: 1, maxHeight: 165, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, paddingRight: 2 }}>
+            {isStove && !vessel.sourceItem && (
+              <div className="gu-empty" style={{ padding: 14 }}>
+                <Disc className="w-5 h-5" style={{ margin: '0 auto 4px', opacity: 0.5 }} />
+                <div className="gu-empty-t">Спираль конфорки пуста</div>
+                <div>Установите сковороду или кастрюлю сверху.</div>
               </div>
+            )}
 
-              <div>
-                <div className="text-[10px] text-slate-500 uppercase">Поведение среды:</div>
-                <div className="text-slate-200 text-xs font-medium">{observations.panSurfaceText}</div>
-              </div>
-
-              <div>
-                <div className="text-[10px] text-slate-500 uppercase">Воздух и пар:</div>
-                <div className="text-slate-200 text-xs font-medium">{observations.smokeText}</div>
-              </div>
-            </div>
-
-            {/* Inventory Real Tool Presence Status */}
-            <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800 text-xs space-y-2 shrink-0">
-              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Предметы в руках и карманах
-              </div>
-              
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Нож:</span>
-                <span className={carriedKnife ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
-                  {carriedKnife ? carriedKnife.nameRu : 'Нет ножа'}
+            {vessel.liquids.length > 0 && (
+              <div className="gu-card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                <span className="gu-mute" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Droplets className="w-3.5 h-3.5" style={{ color: '#7dd3fc' }} /> Среда на дне:
                 </span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Сковорода:</span>
-                <span className={availablePans.length > 0 ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
-                  {availablePans.length > 0 ? availablePans[0].nameRu : 'Нет сковороды'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Кастрюля:</span>
-                <span className={availablePots.length > 0 ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
-                  {availablePots.length > 0 ? availablePots[0].nameRu : 'Нет кастрюли'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Соль:</span>
-                <span className={carriedSalt ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
-                  {carriedSalt ? carriedSalt.nameRu : 'Нет солонки'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Масло / Жир:</span>
-                <span className={carriedOil ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
-                  {carriedOil ? carriedOil.nameRu : 'Нет масла'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Тарелка / Посуда:</span>
-                <span className={carriedPlates.length > 0 ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
-                  {carriedPlates.length > 0 ? carriedPlates[0].nameRu : 'Нет тарелки'}
-                </span>
-              </div>
-            </div>
-
-            {/* Added Seasonings */}
-            {vessel.seasoningNotes.length > 0 && (
-              <div className="p-3 rounded-xl bg-slate-900/30 border border-slate-800 text-xs shrink-0">
-                <div className="text-slate-400 font-semibold mb-1">Добавлено в блюдо:</div>
-                <div className="text-slate-300 space-y-0.5">
-                  {vessel.seasoningNotes.map((sn, sIdx) => (
-                    <div key={sIdx}>• {sn}</div>
+                <div className="gu-row" style={{ gap: 4, flexWrap: 'wrap' }}>
+                  {vessel.liquids.map((liq, lIdx) => (
+                    <span key={lIdx} className="gu-tag cold">
+                      {liq.nameRu}
+                    </span>
                   ))}
                 </div>
               </div>
             )}
+
+            {(!isStove || vessel.sourceItem) && vessel.ingredients.length === 0 && (
+              <div className="gu-empty" style={{ padding: 14 }}>
+                <div className="gu-empty-t">Поверхность пуста</div>
+                <div>Выберите продукты слева и нажмите «Выложить».</div>
+              </div>
+            )}
+
+            {vessel.ingredients.map((ing, idx) => {
+              const isSelected = selectedIngredientIdx === idx;
+              const appearance = getVisualAppearanceDescription(ing);
+
+              return (
+                <div
+                  key={ing.id}
+                  onClick={() => setSelectedIngredientIdx(idx)}
+                  className={`gu-item ${isSelected ? 'on' : ''}`}
+                  style={{ cursor: 'pointer', padding: '8px 10px' }}
+                >
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      flexShrink: 0,
+                      background:
+                        ing.bioState.charring > 0.35
+                          ? '#18181b'
+                          : ing.bioState.maillard > 0.35
+                          ? '#b45309'
+                          : ing.bioState.denaturation > 0.6
+                          ? '#a8a29e'
+                          : '#f43f5e'
+                    }}
+                  />
+                  <div className="gu-item-main">
+                    <div className="gu-item-title">{ing.nameRu}</div>
+                    <div className="gu-item-sub" style={{ fontStyle: 'italic' }}>{appearance}</div>
+                  </div>
+                  <div className="gu-row" style={{ gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCutIngredient(idx);
+                      }}
+                      disabled={!carriedKnife}
+                      className="gu-btn gu-btn-xs"
+                      title={carriedKnife ? 'Нарезать кухонным ножом' : 'Требуется нож в инвентаре'}
+                    >
+                      {ing.bioState.cutLevel === 0 ? 'Нарезать' : ing.bioState.cutLevel === 1 ? 'Измельчить' : 'Фарш'}
+                    </button>
+                    {ing.bioState.denaturation < 0.3 && ing.bioState.charring < 0.1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTakeBackIngredient(idx);
+                        }}
+                        className="gu-btn gu-btn-danger gu-btn-xs"
+                        title="Убрать обратно в инвентарь"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
+          {/* Burner Dial & Tactile Actions */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
+            {isStove && vessel.sourceItem && (
+              <div className="gu-card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                <span className="gu-mute" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Flame className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent-hi)' }} /> Мощность конфорки:
+                </span>
+                <div className="gu-seg">
+                  {[0, 1, 2, 3, 4, 5, 6].map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleSetBurnerPower(p)}
+                      className={vessel.heatSourcePower === p ? 'on' : ''}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="gu-grid gu-g4" style={{ gap: 6 }}>
+              <button type="button" onClick={handleStirVessel} className="gu-btn gu-btn-xs">
+                <RotateCw className="w-3.5 h-3.5" /> Перемешать
+              </button>
+              <button type="button" onClick={handleAddSaltFromShaker} disabled={!carriedSalt} className="gu-btn gu-btn-xs">
+                <Sparkles className="w-3.5 h-3.5" /> Посолить
+              </button>
+              <button type="button" onClick={handlePourRealOil} disabled={!carriedOil} className="gu-btn gu-btn-xs">
+                <Droplets className="w-3.5 h-3.5" /> Масло
+              </button>
+              <button
+                type="button"
+                onClick={handlePourWater}
+                disabled={!hasNearbySink && !safeInventory.some(i => i.itemId && i.itemId.includes('water'))}
+                className="gu-btn gu-btn-xs"
+              >
+                <Droplets className="w-3.5 h-3.5" /> Вода
+              </button>
+            </div>
+
+            <div className="gu-grid gu-g4" style={{ gap: 6 }}>
+              <button
+                type="button"
+                onClick={handleTransferToPan}
+                disabled={vessel.vesselType === 'pan' || availablePans.length === 0}
+                className="gu-btn gu-btn-xs"
+              >
+                <Utensils className="w-3 h-3" /> В сковороду
+              </button>
+              <button
+                type="button"
+                onClick={handleTransferToPot}
+                disabled={vessel.vesselType === 'pot' || availablePots.length === 0}
+                className="gu-btn gu-btn-xs"
+              >
+                <Utensils className="w-3 h-3" /> В кастрюлю
+              </button>
+              <button
+                type="button"
+                onClick={handleTransferToBowl}
+                disabled={vessel.vesselType === 'bowl' || availableBowls.length === 0}
+                className="gu-btn gu-btn-xs"
+              >
+                <Disc className="w-3 h-3" /> В миску
+              </button>
+              <button
+                type="button"
+                onClick={handleCollectWorkpiece}
+                disabled={vessel.ingredients.length === 0 && vessel.liquids.length === 0}
+                className="gu-btn gu-btn-xs"
+              >
+                <Package className="w-3 h-3" /> Заготовка
+              </button>
+            </div>
+
+            <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+              <button
+                type="button"
+                onClick={handleCreateDryMix}
+                disabled={vessel.ingredients.length === 0}
+                className="gu-btn gu-btn-xs"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Смешать сухую смесь
+              </button>
+              <button
+                type="button"
+                onClick={handleFinishAndPlateDish}
+                className="gu-btn gu-btn-p gu-btn-xs"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>
+                  {carriedPlates.length > 0
+                    ? `На ${carriedPlates[0].nameRu.toLowerCase()}`
+                    : 'Готовое блюдо в карман'}
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
 
+        {/* RIGHT COLUMN: Sensory & Tool Status */}
+        <div className={`gu-card ${mobileTab === 'sensory' ? 'flex' : 'hidden lg:flex'}`} style={{ flexDirection: 'column', gap: 10, minHeight: 460 }}>
+          <div className="gu-sec" style={{ marginTop: 0 }}>
+            <span>Органолептика и утварь</span>
+          </div>
+
+          <div className="gu-card-sm">
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--gu-accent-hi)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Activity className="w-3.5 h-3.5" /> Ощущения повара
+            </div>
+            <div style={{ fontSize: 12, fontStyle: 'italic', color: 'var(--gu-ink)', lineHeight: 1.45 }}>
+              «{lastSensoryLog}»
+            </div>
+          </div>
+
+          <div className="gu-card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--gu-mute)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Volume2 className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent-hi)' }} /> Сенсорный фон
+            </div>
+            <div>
+              <div className="gu-mute" style={{ fontSize: 10, textTransform: 'uppercase' }}>Звук:</div>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>{observations.soundText}</div>
+            </div>
+            <div>
+              <div className="gu-mute" style={{ fontSize: 10, textTransform: 'uppercase' }}>Поведение среды:</div>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>{observations.panSurfaceText}</div>
+            </div>
+            <div>
+              <div className="gu-mute" style={{ fontSize: 10, textTransform: 'uppercase' }}>Воздух и пар:</div>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>{observations.smokeText}</div>
+            </div>
+          </div>
+
+          <div className="gu-card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--gu-mute)', marginBottom: 2 }}>
+              Инструменты под рукой
+            </div>
+            <div className="gu-row-between" style={{ fontSize: 12 }}>
+              <span className="gu-mute">Нож:</span>
+              <span className={carriedKnife ? 'gu-tag good' : 'gu-tag'}>{carriedKnife ? carriedKnife.nameRu : 'Нет ножа'}</span>
+            </div>
+            <div className="gu-row-between" style={{ fontSize: 12 }}>
+              <span className="gu-mute">Сковорода:</span>
+              <span className={availablePans.length > 0 ? 'gu-tag good' : 'gu-tag'}>{availablePans.length > 0 ? availablePans[0].nameRu : 'Нет'}</span>
+            </div>
+            <div className="gu-row-between" style={{ fontSize: 12 }}>
+              <span className="gu-mute">Кастрюля:</span>
+              <span className={availablePots.length > 0 ? 'gu-tag good' : 'gu-tag'}>{availablePots.length > 0 ? availablePots[0].nameRu : 'Нет'}</span>
+            </div>
+            <div className="gu-row-between" style={{ fontSize: 12 }}>
+              <span className="gu-mute">Соль:</span>
+              <span className={carriedSalt ? 'gu-tag good' : 'gu-tag'}>{carriedSalt ? carriedSalt.nameRu : 'Нет солонки'}</span>
+            </div>
+            <div className="gu-row-between" style={{ fontSize: 12 }}>
+              <span className="gu-mute">Масло:</span>
+              <span className={carriedOil ? 'gu-tag good' : 'gu-tag'}>{carriedOil ? carriedOil.nameRu : 'Нет масла'}</span>
+            </div>
+            <div className="gu-row-between" style={{ fontSize: 12 }}>
+              <span className="gu-mute">Тарелка:</span>
+              <span className={carriedPlates.length > 0 ? 'gu-tag good' : 'gu-tag'}>{carriedPlates.length > 0 ? carriedPlates[0].nameRu : 'Нет посуды'}</span>
+            </div>
+          </div>
+
+          {vessel.seasoningNotes.length > 0 && (
+            <div className="gu-card-sm">
+              <div className="gu-mute" style={{ fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>Добавлено в блюдо:</div>
+              <div style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {vessel.seasoningNotes.map((sn, sIdx) => (
+                  <div key={sIdx}>• {sn}</div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };

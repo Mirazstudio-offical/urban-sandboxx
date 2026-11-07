@@ -3,6 +3,7 @@ import { Player, InventoryItem, GameWorld } from '../types';
 import { stowItemFromHandToPockets, swapPlayerHands } from '../items';
 import { getDetailedBodySensations } from '../sensations';
 import { ItemIconCanvas } from './ItemIconCanvas';
+import './gameUi.css';
 import { 
   Package, 
   Heart, 
@@ -15,7 +16,6 @@ import {
   Zap, 
   BatteryLow, 
   Volume2, 
-  Trash2,
   Hand,
   ArrowLeftRight,
   ArrowDownToLine,
@@ -40,7 +40,6 @@ interface PlayerNeedsHUDProps {
 
 export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
   player,
-  world,
   onOpenInventory,
   onOpenSelfInspection,
   onToggleActiveHand,
@@ -53,7 +52,6 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
   const activeHand = player.activeHand || 'right';
   const leftItem = player.leftHandItem;
   const rightItem = player.rightHandItem;
-  const activeHandItem = activeHand === 'left' ? leftItem : rightItem;
 
   const handleHandClick = (hand: 'left' | 'right') => {
     if (onSelectActiveHand) {
@@ -83,58 +81,23 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
   const isConsuming = !!player.consumption?.isConsuming;
   const tinnitusActive = (bs?.tinnitusTimer || 0) > 0;
 
-  // Determine prompt label for key [E]
-  const getPromptLabel = () => {
-    if (activeHandItem) {
-      if (activeHandItem.isContainer) {
-        return `Открыть: ${activeHandItem.nameRu}`;
-      }
-      if (activeHandItem.category === 'food') {
-        const hasPortions = activeHandItem.maxPortions && activeHandItem.maxPortions > 1;
-        return hasPortions
-          ? `Сделать укус (${activeHandItem.portions ?? activeHandItem.maxPortions}/${activeHandItem.maxPortions}): ${activeHandItem.nameRu}`
-          : `Съесть: ${activeHandItem.nameRu}`;
-      }
-      if (activeHandItem.category === 'drink') {
-        const hasPortions = activeHandItem.maxPortions && activeHandItem.maxPortions > 1;
-        return hasPortions
-          ? `Сделать глоток (${activeHandItem.portions ?? activeHandItem.maxPortions}/${activeHandItem.maxPortions}): ${activeHandItem.nameRu}`
-          : `Выпить: ${activeHandItem.nameRu}`;
-      }
-      if (activeHandItem.category === 'med') {
-        const hasPortions = activeHandItem.maxPortions && activeHandItem.maxPortions > 1;
-        return hasPortions
-          ? `Принять дозу (${activeHandItem.portions ?? activeHandItem.maxPortions}/${activeHandItem.maxPortions}): ${activeHandItem.nameRu}`
-          : `Применить: ${activeHandItem.nameRu}`;
-      }
-      if (activeHandItem.usable) {
-        return `Использовать: ${activeHandItem.nameRu}`;
-      }
-      return `В руке: ${activeHandItem.nameRu}`;
-    }
-
-    return null;
-  };
-
-  const actionPrompt = getPromptLabel();
-
   return (
     <>
       {/* 1. SENSORY ALERTS & TINNITUS */}
       {tinnitusActive && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 pointer-events-none z-50 px-4 py-1.5 rounded-[2px] bg-[#c68a35]/20 border border-[#c68a35]/50 backdrop-blur-md text-[#d99a41] text-xs font-bold flex items-center gap-2 animate-bounce font-mono">
-          <Volume2 className="w-4 h-4 animate-spin" />
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 pointer-events-none z-50 gu-hud-card px-4 py-1.5 flex items-center gap-2 text-xs font-bold text-[#f0c264]">
+          <Volume2 className="w-4 h-4 animate-spin text-[#e0ab45]" />
           <span>Звон в ушах... (Контузия)</span>
         </div>
       )}
 
-      {/* 2. BODY SENSATIONS & INSPECTION HUD PANEL (Bento Grid Widget) */}
+      {/* 2. BODY SENSATIONS & INSPECTION HUD PANEL (Main Menu Glass Style) */}
       <div 
         id="bottom-right-symptoms-bar"
-        className={`fixed z-30 flex flex-col items-end gap-2.5 pointer-events-auto transition-all duration-200 ${
+        className={`fixed z-30 flex flex-col items-end gap-2 pointer-events-auto transition-all duration-200 ${
           isMobileTouch 
-            ? 'top-[92px] sm:top-[140px] right-3 max-w-[200px]' 
-            : 'bottom-4 right-4 max-w-[320px]'
+            ? 'top-[92px] sm:top-[140px] right-3 max-w-[210px]' 
+            : 'bottom-4 right-4 max-w-[310px]'
         }`}
       >
         {isMobileTouch ? (
@@ -147,126 +110,107 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
               e.stopPropagation();
               onOpenSelfInspection();
             }}
-            className="flex items-center gap-2 px-2.5 py-1.5 bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] shadow-2xl text-[#f0f3f6] transition font-mono active:scale-98 cursor-pointer"
+            className="gu-hud-card flex items-center gap-2 px-3 py-1.5 cursor-pointer active:scale-98"
             title="Открыть самоосмотр организма (Клавиша C)"
           >
-            <div className={`p-1 rounded-[2px] bg-[#0b0c0e] ${isCritical ? 'text-red-400 animate-pulse' : 'text-[#c68a35]'}`}>
-              <Activity className="w-3.5 h-3.5" />
-            </div>
-            <div className="text-left text-[10px] font-bold uppercase tracking-wider text-[#cbd5e1]">
+            <Activity className={`w-3.5 h-3.5 ${isCritical ? 'text-[#efa690] animate-pulse' : 'text-[#e0ab45]'}`} />
+            <span className="text-[11px] font-bold uppercase tracking-wider">
               СОСТОЯНИЕ: {Math.round(player.needs.health)}% HP
-            </div>
+            </span>
           </button>
         ) : (
-          /* Premium Bento Diagnostics & Vitals Widget */
-          <div className="p-3.5 bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] shadow-2xl flex flex-col gap-2.5 w-[280px] sm:w-[320px] backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
-            {/* Title / Header */}
-            <div className="flex items-center justify-between text-[#9ba3af] text-[9px] font-mono font-bold uppercase tracking-wider border-b border-[#2a2e38] pb-2">
-              <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-[#c68a35]" /> ДИАГНОСТИКА</span>
-              <span className="font-mono text-[#5a6272]">VITALS</span>
+          /* Main Menu Styled Diagnostics & Vitals Widget */
+          <div className="gu-hud-card p-3.5 flex flex-col gap-2.5 w-[280px] sm:w-[300px]">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#e0ab45] gu-cn">
+                <Activity className="w-3.5 h-3.5" /> ДИАГНОСТИКА
+              </span>
+              <span className="text-[10px] font-mono tracking-widest text-white/45">VITALS</span>
             </div>
-            
-            {/* Vitals Grid (2 Columns, 2 Rows) */}
+
             <div className="grid grid-cols-2 gap-2">
-              {/* Health Cell */}
-              <div className="bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-extrabold text-[#9ba3af] flex items-center gap-1">
-                    <Heart className={`w-3 h-3 ${player.needs.health < 30 ? 'text-red-500 animate-pulse' : 'text-red-400'}`} /> HP
+              {/* Health */}
+              <div className="gu-card-sm !p-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-bold uppercase tracking-wider text-white/70 flex items-center gap-1">
+                    <Heart className="w-3 h-3 text-[#efa690]" /> HP
                   </span>
-                  <span className={`text-[10px] font-mono font-bold ${player.needs.health < 30 ? 'text-red-400' : 'text-[#f0f3f6]'}`}>
+                  <span className="font-mono font-bold text-white">
                     {Math.round(player.needs.health)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
-                  <div 
-                    className={`h-full rounded-none transition-all duration-300 ${player.needs.health < 30 ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-red-700'}`}
-                    style={{ width: `${player.needs.health}%` }}
-                  />
+                <div className={`gu-bar ${player.needs.health < 30 ? 'bad' : 'good'}`}>
+                  <span style={{ width: `${player.needs.health}%` }} />
                 </div>
               </div>
 
-              {/* Energy Cell */}
-              <div className="bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-extrabold text-[#9ba3af] flex items-center gap-1">
-                    <Zap className={`w-3 h-3 ${player.needs.energy < 25 ? 'text-[#c68a35] animate-pulse' : 'text-[#c68a35]'}`} /> ЭНЕРГИЯ
+              {/* Energy */}
+              <div className="gu-card-sm !p-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-bold uppercase tracking-wider text-white/70 flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-[#e0ab45]" /> ЭНЕРГИЯ
                   </span>
-                  <span className={`text-[10px] font-mono font-bold ${player.needs.energy < 25 ? 'text-[#d99a41]' : 'text-[#f0f3f6]'}`}>
+                  <span className="font-mono font-bold text-white">
                     {Math.round(player.needs.energy)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
-                  <div 
-                    className={`h-full rounded-none transition-all duration-300 ${player.needs.energy < 25 ? 'bg-[#c68a35] shadow-[0_0_8px_rgba(198,138,53,0.5)]' : 'bg-[#c68a35]'}`}
-                    style={{ width: `${player.needs.energy}%` }}
-                  />
+                <div className="gu-bar">
+                  <span style={{ width: `${player.needs.energy}%` }} />
                 </div>
               </div>
 
-              {/* Hunger Cell */}
-              <div className="bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-extrabold text-[#9ba3af] flex items-center gap-1">
-                    <Utensils className={`w-3 h-3 ${player.needs.hunger < 25 ? 'text-[#d99a41] animate-pulse' : 'text-[#c68a35]'}`} /> СЫТОСТЬ
+              {/* Hunger */}
+              <div className="gu-card-sm !p-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-bold uppercase tracking-wider text-white/70 flex items-center gap-1">
+                    <Utensils className="w-3 h-3 text-[#e0ab45]" /> СЫТОСТЬ
                   </span>
-                  <span className={`text-[10px] font-mono font-bold ${player.needs.hunger < 25 ? 'text-[#d99a41]' : 'text-[#f0f3f6]'}`}>
+                  <span className="font-mono font-bold text-white">
                     {Math.round(player.needs.hunger)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
-                  <div 
-                    className={`h-full rounded-none transition-all duration-300 ${player.needs.hunger < 25 ? 'bg-[#c68a35] shadow-[0_0_8px_rgba(198,138,53,0.5)]' : 'bg-[#9a6a24]'}`}
-                    style={{ width: `${player.needs.hunger}%` }}
-                  />
+                <div className={`gu-bar ${player.needs.hunger < 25 ? 'bad' : ''}`}>
+                  <span style={{ width: `${player.needs.hunger}%` }} />
                 </div>
               </div>
 
-              {/* Thirst Cell */}
-              <div className="bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-extrabold text-[#9ba3af] flex items-center gap-1">
-                    <Droplet className={`w-3 h-3 ${player.needs.thirst < 25 ? 'text-[#cbd5e1] animate-pulse' : 'text-[#9ba3af]'}`} /> ВОДА
+              {/* Thirst */}
+              <div className="gu-card-sm !p-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-bold uppercase tracking-wider text-white/70 flex items-center gap-1">
+                    <Droplet className="w-3 h-3 text-[#7dd3fc]" /> ВОДА
                   </span>
-                  <span className={`text-[10px] font-mono font-bold ${player.needs.thirst < 25 ? 'text-amber-400' : 'text-[#f0f3f6]'}`}>
+                  <span className="font-mono font-bold text-white">
                     {Math.round(player.needs.thirst)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
-                  <div 
-                    className={`h-full rounded-none transition-all duration-300 ${player.needs.thirst < 25 ? 'bg-[#c68a35] shadow-[0_0_8px_rgba(198,138,53,0.5)]' : 'bg-slate-500'}`}
-                    style={{ width: `${player.needs.thirst}%` }}
-                  />
+                <div className={`gu-bar ${player.needs.thirst < 25 ? 'bad' : 'cold'}`}>
+                  <span style={{ width: `${player.needs.thirst}%` }} />
                 </div>
               </div>
             </div>
 
-            {/* Self-Inspection Button & Text */}
             <button
+              id="hud-self-inspection-btn"
               onClick={onOpenSelfInspection}
               onTouchEnd={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 onOpenSelfInspection();
               }}
-              className="w-full py-2 bg-[#0b0c0e] hover:bg-[#1c1f26] active:scale-98 border border-[#2a2e38] hover:border-[#c68a35]/40 rounded-[2px] flex items-center justify-between px-3 transition font-mono group cursor-pointer"
+              className="gu-btn gu-btn-s gu-btn-sm gu-btn-block !justify-between"
             >
-              <span className="text-[9px] font-extrabold uppercase text-[#cbd5e1] tracking-wider flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-none opacity-75 ${isCritical ? 'bg-red-500' : 'bg-[#c68a35]'}`} />
-                  <span className={`relative inline-flex rounded-none h-2 w-2 ${isCritical ? 'bg-red-500' : 'bg-[#c68a35]'}`} />
-                </span>
-                {detailed.healthText}
+              <span className="flex items-center gap-2 text-[11px]">
+                <span className={`w-2 h-2 rounded-full ${isCritical ? 'bg-[#efa690] animate-ping' : 'bg-[#e0ab45]'}`} />
+                <span>{detailed.healthText}</span>
               </span>
-              <span className="px-1.5 py-0.5 bg-[#14161a] group-hover:bg-[#1c1f26] text-[9px] font-mono text-[#c68a35] rounded-[2px] border border-[#2a2e38]">
-                C
-              </span>
+              <span className="gu-kbd">C</span>
             </button>
           </div>
         )}
 
         {/* Dynamic Symptom Badges */}
-        <div className="flex flex-wrap justify-end gap-1 max-w-[220px] sm:max-w-[320px]">
+        <div className="flex flex-wrap justify-end gap-1.5 max-w-[220px] sm:max-w-[310px]">
           {detailed.activeSymptoms.map((symptom) => {
             const isDanger = symptom.severity === 'danger';
             return (
@@ -278,23 +222,19 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                   e.stopPropagation();
                   onOpenSelfInspection();
                 }}
-                className={`flex items-center gap-1.5 px-2 py-0.5 sm:py-1 border rounded-[2px] text-[10px] sm:text-[11px] font-mono shadow backdrop-blur-sm transition active:scale-98 cursor-pointer ${
-                  isDanger 
-                    ? 'bg-red-950/90 border-red-700 text-red-200 animate-pulse' 
-                    : 'bg-[#14161a]/95 border-[#2a2e38] text-[#cbd5e1] hover:border-[#c68a35]/60 hover:text-white'
-                }`}
+                className={`gu-tag cursor-pointer transition active:scale-98 ${isDanger ? 'bad' : 'amber'}`}
                 title={`${symptom.label}: ${symptom.description}`}
               >
-                {symptom.iconType === 'leg' && <AlertCircle className="w-3.5 h-3.5 text-red-400" />}
-                {symptom.iconType === 'drop' && <Droplet className="w-3.5 h-3.5 text-[#c68a35]" />}
-                {symptom.iconType === 'cold' && <Thermometer className="w-3.5 h-3.5 text-slate-300" />}
-                {symptom.iconType === 'wet' && <CloudRain className="w-3.5 h-3.5 text-slate-300" />}
-                {symptom.iconType === 'pain' && <Zap className="w-3.5 h-3.5 text-[#c68a35]" />}
-                {symptom.iconType === 'energy' && <BatteryLow className="w-3.5 h-3.5 text-[#c68a35]" />}
-                {symptom.iconType === 'heart' && <Heart className="w-3.5 h-3.5 text-red-400" />}
-                {symptom.iconType === 'pill' && <Sparkles className="w-3.5 h-3.5 text-[#c68a35]" />}
-                {symptom.iconType === 'cough' && <AlertCircle className="w-3.5 h-3.5 text-[#d99a41]" />}
-                <span className="font-semibold uppercase">{symptom.label}</span>
+                {symptom.iconType === 'leg' && <AlertCircle className="w-3 h-3" />}
+                {symptom.iconType === 'drop' && <Droplet className="w-3 h-3" />}
+                {symptom.iconType === 'cold' && <Thermometer className="w-3 h-3" />}
+                {symptom.iconType === 'wet' && <CloudRain className="w-3 h-3" />}
+                {symptom.iconType === 'pain' && <Zap className="w-3 h-3" />}
+                {symptom.iconType === 'energy' && <BatteryLow className="w-3 h-3" />}
+                {symptom.iconType === 'heart' && <Heart className="w-3 h-3" />}
+                {symptom.iconType === 'pill' && <Sparkles className="w-3 h-3" />}
+                {symptom.iconType === 'cough' && <AlertCircle className="w-3 h-3" />}
+                <span>{symptom.label}</span>
               </button>
             );
           })}
@@ -303,21 +243,22 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
 
       {/* 3. CONSUMPTION PROGRESS BAR */}
       {isConsuming && player.consumption && (
-        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1">
-          <div className="px-3.5 py-1.5 bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] text-xs font-mono text-[#f0f3f6] shadow-xl flex items-center gap-2">
-            <Package className="w-4 h-4 text-[#c68a35]" />
-            <span className="font-bold">{player.consumption.itemNameRu}</span>
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none gu-hud-card px-4 py-2.5 flex flex-col items-center gap-1.5 min-w-[230px]">
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <Package className="w-3.5 h-3.5 text-[#e0ab45]" />
+            <span>{player.consumption.itemNameRu}</span>
             {player.consumption.tasteMessage && (
-              <span className="text-[#9ba3af] italic">— {player.consumption.tasteMessage}</span>
+              <span className="text-white/60 italic">— {player.consumption.tasteMessage}</span>
             )}
           </div>
-          <div className="w-52 h-2 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
-            <div 
-              className="h-full bg-[#c68a35] rounded-none transition-all duration-200"
-              style={{ width: `${((player.consumption.totalBites - player.consumption.bitesRemaining) / player.consumption.totalBites) * 100}%` }}
+          <div className="gu-bar w-full">
+            <span
+              style={{
+                width: `${((player.consumption.totalBites - player.consumption.bitesRemaining) / player.consumption.totalBites) * 100}%`
+              }}
             />
           </div>
-          <div className="text-[10px] text-[#9ba3af] font-mono uppercase tracking-wider">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-white/55">
             ПРОЦЕСС: {player.consumption.totalBites - player.consumption.bitesRemaining}/{player.consumption.totalBites}
           </div>
         </div>

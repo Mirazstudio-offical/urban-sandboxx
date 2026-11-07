@@ -22,29 +22,16 @@ import {
   addPlayerNotification
 } from '../items';
 import { ItemIconCanvas } from './ItemIconCanvas';
+import { ModalShell } from './gameUi';
 import { sound } from '../audio';
 import { 
-  X, 
-  Shirt, 
   Snowflake, 
   Utensils, 
-  Archive, 
-  BookOpen, 
-  Folder, 
-  Box, 
-  PenTool, 
-  Table, 
-  Lock, 
-  Layers, 
   Weight, 
   ArrowRight, 
   ArrowLeft, 
   Hand, 
   Package, 
-  Droplets, 
-  Zap, 
-  Coins, 
-  Sparkles,
   Info,
   Flame,
   CloudRain
@@ -117,22 +104,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
   const playerCarriedWt = getPlayerTotalCarriedWeight(player);
   const playerPocketCap = getPlayerPocketCapacity(player);
 
-  const renderIcon = () => {
-    switch (cfg.iconName) {
-      case 'Flame': return <Flame className="w-5 h-5 text-orange-400 animate-pulse" />;
-      case 'Shirt': return <Shirt className="w-5 h-5 text-indigo-400" />;
-      case 'Snowflake': return <Snowflake className="w-5 h-5 text-cyan-400" />;
-      case 'Utensils': return <Utensils className="w-5 h-5 text-amber-400" />;
-      case 'Archive': return <Archive className="w-5 h-5 text-blue-400" />;
-      case 'BookOpen': return <BookOpen className="w-5 h-5 text-emerald-400" />;
-      case 'Folder': return <Folder className="w-5 h-5 text-orange-400" />;
-      case 'Box': return <Box className="w-5 h-5 text-yellow-400" />;
-      case 'PenTool': return <PenTool className="w-5 h-5 text-purple-400" />;
-      case 'Lock': return <Lock className="w-5 h-5 text-rose-400" />;
-      default: return <Layers className="w-5 h-5 text-slate-300" />;
-    }
-  };
-
   const notifyChange = () => {
     forceRender(n => n + 1);
     if (onVitalsChange) onVitalsChange();
@@ -177,7 +148,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
 
     const added = addItemToPlayer(player, removed);
     if (!added) {
-      // Revert if inventory cannot take
       storage.items.push(removed);
       setErrorMessage('В карманах игрока недостаточно места!');
       sound.playUseItem();
@@ -225,367 +195,299 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
   });
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-150">
-      <div className="my-auto relative bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-4xl max-h-[94vh] sm:max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between px-3.5 sm:px-5 py-2.5 sm:py-3.5 border-b border-slate-800 bg-slate-950/70 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className={`p-1.5 sm:p-2 rounded-lg border shrink-0 ${isHotSurface ? 'bg-orange-950/80 border-orange-700' : 'bg-slate-800/90 border-slate-700'}`}>
-              {renderIcon()}
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold tracking-wide flex items-center gap-2 text-white truncate">
-                <span className="truncate">{storage.customTitle || cfg.nameRu}</span>
-                {cfg.isCold && (
-                  <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 shrink-0">
-                    Охлаждение (+4°C)
-                  </span>
-                )}
-                {isHotSurface && (
-                  <span className="text-[10px] sm:text-xs px-2 sm:px-2.5 py-0.5 rounded-full bg-orange-950 text-orange-300 border border-orange-600 flex items-center gap-1 font-semibold shrink-0">
-                    <Flame className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
-                    Нагрев (+{cfg.heatingTemp || 65}°C)
-                  </span>
-                )}
-              </h2>
-              <p className="text-xs text-slate-400">
-                {isRadiator 
-                  ? `Поверхность радиатора • ${storage.items.length} предметов сушится` 
-                  : `Физическое хранилище квартиры • ${storage.items.length} предметов внутри`}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {props.onOpenKitchenStation && (cfg.type === 'kitchen_counter' || cfg.type === 'stove' || cfg.type === 'table') && (
-              <button
-                onClick={() => {
-                  props.onOpenKitchenStation?.();
-                }}
-                className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 shrink-0"
-                title="Перейти к рабочей поверхности гарнитура для нарезки и готовки"
-              >
-                <Utensils className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">Готовка и нарезка</span>
-                <span className="sm:hidden">Готовка</span>
-              </button>
-            )}
+    <ModalShell
+      id="furniture-storage-modal"
+      title={storage.customTitle || cfg.nameRu}
+      subtitle={
+        isRadiator
+          ? `Поверхность радиатора • ${storage.items.length} предм. сушится`
+          : `Физическое хранилище • ${storage.items.length} предм. внутри`
+      }
+      width={1020}
+      tall
+      onClose={onClose}
+      headRight={
+        <div className="gu-row" style={{ gap: 8 }}>
+          {cfg.isCold && (
+            <span className="gu-tag cold">
+              <Snowflake className="w-3 h-3" /> Охлаждение (+4°C)
+            </span>
+          )}
+          {isHotSurface && (
+            <span className="gu-tag amber">
+              <Flame className="w-3 h-3" /> Нагрев (+{cfg.heatingTemp || 65}°C)
+            </span>
+          )}
+          {props.onOpenKitchenStation && (cfg.type === 'kitchen_counter' || cfg.type === 'stove' || cfg.type === 'table') && (
             <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-              title="Закрыть (Esc)"
+              type="button"
+              onClick={() => props.onOpenKitchenStation?.()}
+              className="gu-btn gu-btn-p gu-btn-sm"
+              title="Перейти к рабочей поверхности гарнитура для нарезки и готовки"
             >
-              <X className="w-5 h-5" />
+              <Utensils className="w-3.5 h-3.5" />
+              <span>Готовка и нарезка</span>
             </button>
-          </div>
+          )}
         </div>
-
-        {/* Error banner if any */}
-        {errorMessage && (
-          <div className="px-5 py-2 bg-rose-950/80 border-b border-rose-800/80 text-rose-200 text-xs flex items-center justify-between animate-in slide-in-from-top-1">
-            <div className="flex items-center gap-2">
-              <Info className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-            <button onClick={() => setErrorMessage(null)} className="text-rose-400 hover:text-white text-xs underline">
-              Скрыть
-            </button>
-          </div>
-        )}
-
-        {/* Dual Panel Body */}
-        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-800 flex-1 overflow-hidden min-h-[440px]">
-          
-          {/* LEFT PANEL: Furniture Storage Contents */}
-          <div className="flex flex-col p-4 bg-slate-900/60 overflow-hidden">
-            {/* Capacity Gauges */}
-            <div className="space-y-2 mb-3 bg-slate-950/60 p-3 rounded-lg border border-slate-800">
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <Package className="w-3.5 h-3.5 text-indigo-400" /> {isRadiator ? 'Площадь сушки' : 'Вместимость'}
-                  </span>
-                  <span className="font-mono text-slate-200">
-                    {storageTotalVol.toFixed(1)} / {cfg.capacityL.toFixed(1)} л ({volPercent}%)
-                  </span>
-                </div>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-300 ${volPercent > 90 ? 'bg-rose-500' : volPercent > 70 ? 'bg-amber-500' : isHotSurface ? 'bg-orange-500' : 'bg-indigo-500'}`}
-                    style={{ width: `${volPercent}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <Weight className="w-3.5 h-3.5 text-emerald-400" /> Весовая нагрузка
-                  </span>
-                  <span className="font-mono text-slate-200">
-                    {storageTotalWt.toFixed(1)} / {cfg.maxWeightKg.toFixed(1)} кг ({wtPercent}%)
-                  </span>
-                </div>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-300 ${wtPercent > 90 ? 'bg-rose-500' : wtPercent > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                    style={{ width: `${wtPercent}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Storage Item Grid */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-1.5">
-              {storage.items.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
-                  {isRadiator ? (
-                    <>
-                      <Flame className="w-12 h-12 stroke-[1.2] mb-2 opacity-40 text-orange-400" />
-                      <p className="text-sm font-medium text-slate-300">На батарее ничего не сушится</p>
-                      <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                        Положите сюда сырую одежду, мокрые носки, обувь или напитки для быстрого согревания и сушки.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <Package className="w-12 h-12 stroke-[1.2] mb-2 opacity-40" />
-                      <p className="text-sm font-medium">Хранилище пусто</p>
-                      <p className="text-xs text-slate-500 mt-1">Выберите предметы из инвентаря справа, чтобы сложить их в шкаф.</p>
-                    </>
-                  )}
-                </div>
-              ) : (
-                storage.items.map((it, idx) => {
-                  const isSelected = selectedStorageIdx === idx;
-                  const itVol = getItemTotalVolume(it);
-                  const itWt = getItemTotalWeight(it);
-                  const isWet = (it.wetness ?? 0) > 0;
-                  const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
-
-                  return (
-                    <div
-                      key={it.id || idx}
-                      onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); }}
-                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer border transition-all ${
-                        isSelected 
-                          ? isRadiator ? 'bg-orange-950/60 border-orange-500/80 shadow-md ring-1 ring-orange-500/50' : 'bg-indigo-950/60 border-indigo-500/80 shadow-md ring-1 ring-indigo-500/50' 
-                          : 'bg-slate-800/50 border-slate-700/60 hover:bg-slate-800 hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-10 h-10 rounded-md bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
-                          <ItemIconCanvas itemId={it.itemId} item={it} size={32} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-100 truncate flex items-center gap-1.5">
-                            <span>{it.nameRu}</span>
-                            {it.count > 1 && <span className="text-amber-400 font-mono">x{it.count}</span>}
-                            {itemTemp >= 40 && (
-                              <span className="text-[10px] px-1 py-0.2 bg-orange-950 text-orange-300 rounded border border-orange-800 font-mono font-bold">
-                                +{Math.round(itemTemp)}°C
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                            <span>{itWt.toFixed(2)} кг</span>
-                            <span>•</span>
-                            <span>{itVol.toFixed(1)} л</span>
-                            {isWet && (
-                              <span className="text-sky-300 font-medium flex items-center gap-0.5">
-                                <CloudRain className="w-3 h-3 text-sky-400" />
-                                Влажность: {Math.round(it.wetness!)}%
-                              </span>
-                            )}
-                            {isHotSurface && isWet && (
-                              <span className="text-amber-300 text-[10px] animate-pulse">
-                                [Сушится...]
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Quick action buttons on item */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleTakeItem(idx, 1); }}
-                          className="px-2.5 py-1 bg-slate-700 hover:bg-indigo-600 text-white rounded text-[11px] font-medium transition-colors"
-                          title="Забрать предмет"
-                        >
-                          {isRadiator ? 'Снять' : 'Забрать'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Storage Selected Item Action Bar */}
-            {selectedStorageIdx !== null && storage.items[selectedStorageIdx] && (
-              <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between gap-2 bg-slate-950/40 p-2 rounded-lg">
-                <span className="text-xs text-slate-300 truncate font-medium">
-                  {storage.items[selectedStorageIdx].nameRu}
-                </span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => handleTakeToHand(selectedStorageIdx, 'left')}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs rounded transition-colors"
-                    title="Взять в левую руку"
-                  >
-                    <Hand className="w-3.5 h-3.5" /> Л. рука
-                  </button>
-                  <button
-                    onClick={() => handleTakeToHand(selectedStorageIdx, 'right')}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs rounded transition-colors"
-                    title="Взять в правую руку"
-                  >
-                    <Hand className="w-3.5 h-3.5" /> П. рука
-                  </button>
-                  <button
-                    onClick={() => handleTakeItem(selectedStorageIdx)}
-                    className="flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded transition-colors"
-                  >
-                    <ArrowRight className="w-3.5 h-3.5" /> В карманы
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT PANEL: Player Inventory */}
-          <div className="flex flex-col p-4 bg-slate-900/60 overflow-hidden">
-            {/* Player Metrics */}
-            <div className="flex items-center justify-between text-xs bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 mb-2.5">
-              <span className="text-slate-400 flex items-center gap-1.5">
-                <Weight className="w-3.5 h-3.5 text-blue-400" /> Вес вещей: <strong className="text-slate-200 font-mono">{playerCarriedWt.toFixed(1)} кг</strong>
-              </span>
-              <span className="text-slate-400">
-                Карманы: <strong className="text-slate-200 font-mono">{playerPocketCap.totalCapacityL.toFixed(1)} л</strong>
-              </span>
-            </div>
-
-            {/* Category Filter Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-2 mb-2 no-scrollbar text-xs">
-              {(['all', 'clothing', 'food', 'drink', 'tool', 'valuable', 'misc'] as const).map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-2.5 py-1 rounded-md text-xs whitespace-nowrap transition-colors ${
-                    selectedCategory === cat 
-                      ? 'bg-slate-700 text-white font-medium shadow' 
-                      : 'bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  {cat === 'all' ? 'Все' : cat === 'clothing' ? 'Одежда' : cat === 'food' ? 'Еда' : cat === 'drink' ? 'Напитки' : cat === 'tool' ? 'Инструменты' : cat === 'valuable' ? 'Ценности' : 'Разное'}
-                </button>
-              ))}
-            </div>
-
-            {/* Inventory List */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-1.5">
-              {filteredInventory.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
-                  <Package className="w-12 h-12 stroke-[1.2] mb-2 opacity-40" />
-                  <p className="text-sm font-medium">Нет подходящих предметов</p>
-                </div>
-              ) : (
-                filteredInventory.map(({ item, originalIndex }) => {
-                  const isSelected = selectedInventoryIdx === originalIndex;
-                  const itVol = getItemTotalVolume(item);
-                  const itWt = getItemTotalWeight(item);
-                  const isWet = (item.wetness ?? 0) > 0;
-                  const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
-
-                  return (
-                    <div
-                      key={item.id || originalIndex}
-                      onClick={() => { setSelectedInventoryIdx(originalIndex); setSelectedStorageIdx(null); }}
-                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer border transition-all ${
-                        isSelected 
-                          ? 'bg-blue-950/60 border-blue-500/80 shadow-md ring-1 ring-blue-500/50' 
-                          : 'bg-slate-800/50 border-slate-700/60 hover:bg-slate-800 hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-10 h-10 rounded-md bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
-                          <ItemIconCanvas itemId={item.itemId} item={item} size={32} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-100 truncate flex items-center gap-1.5">
-                            <span>{item.nameRu}</span>
-                            {itemTemp >= 40 && (
-                              <span className="text-[10px] px-1 py-0.2 bg-orange-950 text-orange-300 rounded border border-orange-800 font-mono font-bold">
-                                +{Math.round(itemTemp)}°C
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                            <span>{itWt.toFixed(2)} кг</span>
-                            <span>•</span>
-                            <span>{itVol.toFixed(1)} л</span>
-                            {isWet && (
-                              <span className="text-sky-300 font-medium flex items-center gap-0.5">
-                                <CloudRain className="w-3 h-3 text-sky-400" />
-                                {Math.round(item.wetness!)}%
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Quick store button */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleStoreItem(originalIndex, 1); }}
-                          className={`px-2.5 py-1 text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1 ${isRadiator ? 'bg-orange-700 hover:bg-orange-600' : 'bg-slate-700 hover:bg-blue-600'}`}
-                          title={isRadiator ? 'Положить на батарею' : 'Положить в хранилище'}
-                        >
-                          <ArrowLeft className="w-3 h-3" /> {isRadiator ? 'На батарею' : 'В шкаф'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Inventory Selected Item Action Bar */}
-            {selectedInventoryIdx !== null && player.inventory[selectedInventoryIdx] && (
-              <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between gap-2 bg-slate-950/40 p-2 rounded-lg">
-                <span className="text-xs text-slate-300 truncate font-medium">
-                  {player.inventory[selectedInventoryIdx].nameRu}
-                </span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => handleStoreItem(selectedInventoryIdx, 1)}
-                    className={`flex items-center gap-1 px-3 py-1 text-white text-xs font-medium rounded transition-colors ${isRadiator ? 'bg-orange-600 hover:bg-orange-500' : 'bg-blue-600 hover:bg-blue-500'}`}
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" /> {isRadiator ? 'Положить на батарею' : 'Положить в шкаф'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-2.5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-400">
-          <div className="flex items-center gap-4">
-            <span>[E / Клик]: Взаимодействие</span>
-            <span>[Esc]: Закрыть</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors"
-          >
-            Готово
+      }
+      footerHints={[['Клик', 'Выбрать предмет'], ['Esc', 'Закрыть']]}
+      footerRight={
+        <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
+          Готово
+        </button>
+      }
+    >
+      {errorMessage && (
+        <div className="gu-note gu-err" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Info className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </span>
+          <button type="button" onClick={() => setErrorMessage(null)} className="gu-btn gu-btn-ghost gu-btn-xs">
+            Скрыть
           </button>
         </div>
+      )}
 
+      <div className="gu-grid gu-g2" style={{ alignItems: 'stretch' }}>
+        {/* LEFT PANEL: Furniture Storage Contents */}
+        <div className="gu-card" style={{ display: 'flex', flexDirection: 'column', minHeight: 430 }}>
+          <div className="gu-sec" style={{ marginTop: 0 }}>
+            <span>{isRadiator ? 'Поверхность радиатора' : 'Содержимое хранилища'}</span>
+            <span className="gu-sec-sub">{storage.items.length} предм.</span>
+          </div>
+
+          <div className="gu-card-sm" style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 4 }}>
+                <span className="gu-mute" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Package className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent-hi)' }} />
+                  {isRadiator ? 'Площадь сушки' : 'Объём хранилища'}
+                </span>
+                <span className="gu-mono" style={{ fontWeight: 600 }}>
+                  {storageTotalVol.toFixed(1)} / {cfg.capacityL.toFixed(1)} л ({volPercent}%)
+                </span>
+              </div>
+              <div className={`gu-bar ${volPercent > 90 ? 'bad' : ''}`}>
+                <span style={{ width: `${volPercent}%` }} />
+              </div>
+            </div>
+
+            <div>
+              <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 4 }}>
+                <span className="gu-mute" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Weight className="w-3.5 h-3.5" style={{ color: '#9ac985' }} />
+                  Весовая нагрузка
+                </span>
+                <span className="gu-mono" style={{ fontWeight: 600 }}>
+                  {storageTotalWt.toFixed(1)} / {cfg.maxWeightKg.toFixed(1)} кг ({wtPercent}%)
+                </span>
+              </div>
+              <div className={`gu-bar ${wtPercent > 90 ? 'bad' : 'good'}`}>
+                <span style={{ width: `${wtPercent}%` }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 2 }}>
+            {storage.items.length === 0 ? (
+              <div className="gu-empty" style={{ margin: 'auto 0' }}>
+                {isRadiator ? (
+                  <>
+                    <div className="gu-empty-t">На батарее ничего не сушится</div>
+                    <div>Положите сюда сырую одежду, мокрые носки, обувь или напитки для согревания и сушки.</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="gu-empty-t">Хранилище пусто</div>
+                    <div>Выберите предметы из инвентаря справа, чтобы сложить их сюда.</div>
+                  </>
+                )}
+              </div>
+            ) : (
+              storage.items.map((it, idx) => {
+                const isSelected = selectedStorageIdx === idx;
+                const itVol = getItemTotalVolume(it);
+                const itWt = getItemTotalWeight(it);
+                const isWet = (it.wetness ?? 0) > 0;
+                const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
+
+                return (
+                  <div
+                    key={it.id || idx}
+                    onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); }}
+                    className={`gu-item ${isSelected ? 'on' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div style={{ width: 38, height: 38, borderRadius: 6, background: 'rgba(10,10,12,0.75)', border: '1px solid var(--gu-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <ItemIconCanvas itemId={it.itemId} item={it} size={30} />
+                    </div>
+                    <div className="gu-item-main">
+                      <div className="gu-item-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.nameRu}</span>
+                        {it.count > 1 && <span className="gu-tag amber">x{it.count}</span>}
+                        {itemTemp >= 40 && (
+                          <span className="gu-tag amber">+{Math.round(itemTemp)}°C</span>
+                        )}
+                      </div>
+                      <div className="gu-item-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span>{itWt.toFixed(2)} кг</span>
+                        <span>•</span>
+                        <span>{itVol.toFixed(1)} л</span>
+                        {isWet && (
+                          <span style={{ color: '#7dd3fc', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <CloudRain className="w-3 h-3" /> {Math.round(it.wetness!)}%
+                          </span>
+                        )}
+                        {isHotSurface && isWet && (
+                          <span style={{ color: 'var(--gu-accent-bright)', fontWeight: 600 }}>Сушится...</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleTakeItem(idx, 1); }}
+                      className="gu-btn gu-btn-xs"
+                      title="Забрать предмет в карманы"
+                    >
+                      {isRadiator ? 'Снять' : 'Забрать'}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {selectedStorageIdx !== null && storage.items[selectedStorageIdx] && (
+            <div className="gu-card-sm" style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {storage.items[selectedStorageIdx].nameRu}
+              </span>
+              <div className="gu-row" style={{ gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => handleTakeToHand(selectedStorageIdx, 'left')}
+                  className="gu-btn gu-btn-xs"
+                  title="Взять в левую руку"
+                >
+                  <Hand className="w-3 h-3" /> Л. рука
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTakeToHand(selectedStorageIdx, 'right')}
+                  className="gu-btn gu-btn-xs"
+                  title="Взять в правую руку"
+                >
+                  <Hand className="w-3 h-3" /> П. рука
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTakeItem(selectedStorageIdx)}
+                  className="gu-btn gu-btn-p gu-btn-xs"
+                >
+                  <ArrowRight className="w-3 h-3" /> В карманы
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT PANEL: Player Inventory */}
+        <div className="gu-card" style={{ display: 'flex', flexDirection: 'column', minHeight: 430 }}>
+          <div className="gu-sec" style={{ marginTop: 0 }}>
+            <span>Инвентарь и карманы игрока</span>
+            <span className="gu-sec-sub">
+              {playerCarriedWt.toFixed(1)} кг • {playerPocketCap.totalCapacityL.toFixed(1)} л
+            </span>
+          </div>
+
+          <div className="gu-pills" style={{ marginBottom: 10 }}>
+            {(['all', 'clothing', 'food', 'drink', 'tool', 'valuable', 'misc'] as const).map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`gu-pill ${selectedCategory === cat ? 'on' : ''}`}
+              >
+                {cat === 'all' ? 'Все' : cat === 'clothing' ? 'Одежда' : cat === 'food' ? 'Еда' : cat === 'drink' ? 'Напитки' : cat === 'tool' ? 'Инструменты' : cat === 'valuable' ? 'Ценности' : 'Разное'}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, maxHeight: 330, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 2 }}>
+            {filteredInventory.length === 0 ? (
+              <div className="gu-empty" style={{ margin: 'auto 0' }}>
+                <div className="gu-empty-t">Нет подходящих предметов</div>
+                <div>В выбранной категории инвентаря пусто.</div>
+              </div>
+            ) : (
+              filteredInventory.map(({ item, originalIndex }) => {
+                const isSelected = selectedInventoryIdx === originalIndex;
+                const itVol = getItemTotalVolume(item);
+                const itWt = getItemTotalWeight(item);
+                const isWet = (item.wetness ?? 0) > 0;
+                const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
+
+                return (
+                  <div
+                    key={item.id || originalIndex}
+                    onClick={() => { setSelectedInventoryIdx(originalIndex); setSelectedStorageIdx(null); }}
+                    className={`gu-item ${isSelected ? 'on' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div style={{ width: 38, height: 38, borderRadius: 6, background: 'rgba(10,10,12,0.75)', border: '1px solid var(--gu-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <ItemIconCanvas itemId={item.itemId} item={item} size={30} />
+                    </div>
+                    <div className="gu-item-main">
+                      <div className="gu-item-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nameRu}</span>
+                        {item.count > 1 && <span className="gu-tag amber">x{item.count}</span>}
+                        {itemTemp >= 40 && (
+                          <span className="gu-tag amber">+{Math.round(itemTemp)}°C</span>
+                        )}
+                      </div>
+                      <div className="gu-item-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span>{itWt.toFixed(2)} кг</span>
+                        <span>•</span>
+                        <span>{itVol.toFixed(1)} л</span>
+                        {isWet && (
+                          <span style={{ color: '#7dd3fc', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <CloudRain className="w-3 h-3" /> {Math.round(item.wetness!)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleStoreItem(originalIndex, 1); }}
+                      className="gu-btn gu-btn-p gu-btn-xs"
+                      title={isRadiator ? 'Положить на батарею' : 'Положить в хранилище'}
+                    >
+                      <ArrowLeft className="w-3 h-3" /> {isRadiator ? 'На батарею' : 'В шкаф'}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {selectedInventoryIdx !== null && player.inventory[selectedInventoryIdx] && (
+            <div className="gu-card-sm" style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {player.inventory[selectedInventoryIdx].nameRu}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleStoreItem(selectedInventoryIdx, 1)}
+                className="gu-btn gu-btn-p gu-btn-xs"
+              >
+                <ArrowLeft className="w-3 h-3" /> {isRadiator ? 'Положить на батарею' : 'Положить в шкаф'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };

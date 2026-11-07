@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, FileText, ShieldCheck, Award, MapPin, Car, Stamp, CheckCircle2, QrCode, Building2, FileCheck } from 'lucide-react';
+import { ShieldCheck, Car, QrCode, FileCheck } from 'lucide-react';
 import { InventoryItem } from '../types';
+import { ModalShell } from './gameUi';
 
 interface PropertyDocumentModalProps {
   isOpen: boolean;
@@ -65,45 +66,25 @@ export const PropertyDocumentModal: React.FC<PropertyDocumentModalProps> = ({
   const issuingAuthority = documentItem.issuingAuthority || 'Регистрационный Отдел Автоинспекции Сектора 77';
 
   return (
-    <div
-      id="property-document-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in font-sans"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <ModalShell
+      id="property-document-container"
+      title={documentItem.nameRu || documentItem.name}
+      subtitle={isSts || isPts || isCarDkp ? 'Официальный автодокумент Автоинспекции' : 'Официальный документооборот Единого Реестра'}
+      width={760}
+      onClose={onClose}
+      headRight={
+        <span className="gu-tag amber">
+          <Car className="w-3.5 h-3.5" /> Серия {documentSeries}
+        </span>
+      }
+      footerHints={[['Esc', 'Закрыть документ']]}
+      footerRight={
+        <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
+          Закрыть документ
+        </button>
+      }
     >
-      <div
-        id="property-document-container"
-        className="w-full max-w-2xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden text-zinc-100 flex flex-col max-h-[92vh]"
-      >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl border ${
-              isEgrn ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-              isSts ? 'bg-pink-500/10 text-pink-400 border-pink-500/30' :
-              isPts ? 'bg-sky-500/10 text-sky-400 border-sky-500/30' :
-              'bg-amber-500/10 text-amber-400 border-amber-500/30'
-            }`}>
-              {isSts || isPts || isCarDkp ? <Car className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
-            </div>
-            <div>
-              <h3 className="font-bold text-sm sm:text-base text-zinc-100">{documentItem.nameRu || documentItem.name}</h3>
-              <p className="text-[11px] text-zinc-400">
-                {isSts || isPts || isCarDkp ? 'Официальный автодокумент Автоинспекции' : 'Официальный документооборот Единого Реестра'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Scrollable Document Container */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 select-text relative max-h-[80vh] bg-stone-200">
+      <div className="p-3 sm:p-5 rounded-xl space-y-4 select-text relative bg-stone-200">
           
           {/* ==================== 1. СТС (СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ ТС) ==================== */}
           {isSts && (
@@ -482,18 +463,7 @@ export const PropertyDocumentModal: React.FC<PropertyDocumentModalProps> = ({
             </div>
           )}
 
-        </div>
-
-        {/* Modal Footer */}
-        <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold text-xs rounded-xl transition-colors shadow-md"
-          >
-            Закрыть документ
-          </button>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };

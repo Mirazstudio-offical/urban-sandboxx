@@ -3,8 +3,9 @@ import { Player, BodyPartsMap, Injury } from '../types';
 import { getDetailedBodySensations, getBodyPartLabel, getBodyPartStatusText } from '../sensations';
 import { getMedicationRemainingSeconds } from '../medicineSystem';
 import { useItemOnPlayer } from '../items';
+import { ModalShell } from './gameUi';
 import { sound } from '../audio';
-import { Activity, Heart, ShieldCheck, Pill, Stethoscope, X } from 'lucide-react';
+import { Activity, Heart, ShieldCheck, Pill } from 'lucide-react';
 
 interface SelfInspectionModalProps {
   isOpen: boolean;
@@ -124,344 +125,254 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn pointer-events-auto select-none">
-      <div className="my-auto relative w-full max-w-5xl bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-950/90 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 shrink-0">
-              <Stethoscope className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-base font-bold text-slate-100 truncate">
-                  Клинический самоосмотр и фармакотерапия
-                </h2>
-                <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono text-xs border border-slate-700 shrink-0">
-                  Клавиша C
-                </span>
-              </div>
-              <p className="text-[11px] sm:text-xs text-slate-400 truncate hidden sm:block">Анатомическая карта травм, волновой порог боли и мониторинг действия медикаментов</p>
-            </div>
+    <ModalShell
+      id="self-inspection-modal"
+      title="Клинический самоосмотр"
+      subtitle="Анатомическая карта травм, болевой порог и мониторинг медикаментов"
+      width={1060}
+      tall
+      onClose={onClose}
+      headRight={
+        <span className="gu-tag amber">Клавиша C</span>
+      }
+      footerHints={[['Клик', 'Осмотреть конечность'], ['Esc', 'Закрыть']]}
+      footerRight={
+        <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
+          Закрыть
+        </button>
+      }
+    >
+      <div className="gu-inspect-grid">
+        {/* COLUMN 1: Interactive Anatomy Silhouette */}
+        <div className="gu-card" style={{ alignItems: 'center' }}>
+          <div className="gu-sec" style={{ width: '100%', marginTop: 0 }}>
+            <span>Карта тела</span>
+            <span className="gu-sec-sub">клик по зоне</span>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer shrink-0"
-            title="Закрыть (Esc)"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="relative w-44 h-64 flex items-center justify-center my-2">
+            <svg viewBox="0 0 100 160" className="w-full h-full drop-shadow-md">
+              <circle
+                cx="50" cy="18" r="12"
+                fill={getPartColor('head').fill}
+                stroke={selectedPart === "head" ? "#e0ab45" : getPartColor('head').stroke}
+                strokeWidth={selectedPart === "head" ? "2.5" : "1.5"}
+                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('head').pulse ? 'animate-pulse' : ''}`}
+                onClick={() => selectPart('head')}
+              />
+              <rect
+                x="36" y="34" width="28" height="46" rx="6"
+                fill={getPartColor('torso').fill}
+                stroke={selectedPart === "torso" ? "#e0ab45" : getPartColor('torso').stroke}
+                strokeWidth={selectedPart === "torso" ? "2.5" : "1.5"}
+                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('torso').pulse ? 'animate-pulse' : ''}`}
+                onClick={() => selectPart('torso')}
+              />
+              <rect
+                x="18" y="36" width="14" height="44" rx="5"
+                fill={getPartColor('leftArm').fill}
+                stroke={selectedPart === "leftArm" ? "#e0ab45" : getPartColor('leftArm').stroke}
+                strokeWidth={selectedPart === "leftArm" ? "2.5" : "1.5"}
+                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('leftArm').pulse ? 'animate-pulse' : ''}`}
+                onClick={() => selectPart('leftArm')}
+              />
+              <rect
+                x="68" y="36" width="14" height="44" rx="5"
+                fill={getPartColor('rightArm').fill}
+                stroke={selectedPart === "rightArm" ? "#e0ab45" : getPartColor('rightArm').stroke}
+                strokeWidth={selectedPart === "rightArm" ? "2.5" : "1.5"}
+                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('rightArm').pulse ? 'animate-pulse' : ''}`}
+                onClick={() => selectPart('rightArm')}
+              />
+              <rect
+                x="36" y="84" width="12" height="58" rx="5"
+                fill={getPartColor('leftLeg').fill}
+                stroke={selectedPart === "leftLeg" ? "#e0ab45" : getPartColor('leftLeg').stroke}
+                strokeWidth={selectedPart === "leftLeg" ? "2.5" : "1.5"}
+                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('leftLeg').pulse ? 'animate-pulse' : ''}`}
+                onClick={() => selectPart('leftLeg')}
+              />
+              <rect
+                x="52" y="84" width="12" height="58" rx="5"
+                fill={getPartColor('rightLeg').fill}
+                stroke={selectedPart === "rightLeg" ? "#e0ab45" : getPartColor('rightLeg').stroke}
+                strokeWidth={selectedPart === "rightLeg" ? "2.5" : "1.5"}
+                className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('rightLeg').pulse ? 'animate-pulse' : ''}`}
+                onClick={() => selectPart('rightLeg')}
+              />
+            </svg>
+          </div>
+
+          <div className="gu-grid gu-g3" style={{ width: '100%', gap: 6 }}>
+            {(['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'] as const).map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => selectPart(p)}
+                className={`gu-btn gu-btn-xs ${selectedPart === p ? 'gu-btn-p' : ''}`}
+              >
+                {getBodyPartLabel(p)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Content Body (Bento Grid) */}
-        <div className="p-5 md:p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-12 md:grid-rows-2 gap-4 flex-1">
-          
-          {/* BENTO CARD 1: Interactive Anatomy Silhouette (Col span 4, Row span 2) */}
-          <div className="md:col-span-4 md:row-span-2 bg-slate-950/80 rounded-2xl p-5 border border-slate-800 flex flex-col items-center justify-between min-h-[380px] md:min-h-0">
-            <div className="w-full flex items-center justify-between text-xs font-semibold text-slate-400 tracking-wider uppercase mb-1">
-              <span>Карта тела</span>
-              <span className="text-[10px] text-sky-400 lowercase font-bold">кликните конечность</span>
+        {/* COLUMN 2: Selected Part Injuries & Pharmacokinetics */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="gu-card">
+            <div className="gu-row-between">
+              <span className="gu-card-t">{getBodyPartLabel(selectedPart)}</span>
+              <span className={`gu-tag ${currentInjuries.length === 0 ? 'good' : 'bad'}`}>
+                {getBodyPartStatusText(currentInjuries)}
+              </span>
             </div>
 
-            {/* Vector Human Silhouette SVG */}
-            <div className="relative w-48 h-64 md:h-72 flex items-center justify-center my-2">
-              <svg viewBox="0 0 100 160" className="w-full h-full drop-shadow-md">
-                {/* Head */}
-                <circle
-                  cx="50"
-                  cy="18"
-                  r="12"
-                  fill={getPartColor('head').fill}
-                  stroke={selectedPart === "head" ? "#38bdf8" : getPartColor('head').stroke}
-                  strokeWidth={selectedPart === "head" ? "2.5" : "1.5"}
-                  className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('head').pulse ? 'animate-pulse' : ''}`}
-                  onClick={() => selectPart('head')}
-                />
-                
-                {/* Torso */}
-                <rect
-                  x="36"
-                  y="34"
-                  width="28"
-                  height="46"
-                  rx="6"
-                  fill={getPartColor('torso').fill}
-                  stroke={selectedPart === "torso" ? "#38bdf8" : getPartColor('torso').stroke}
-                  strokeWidth={selectedPart === "torso" ? "2.5" : "1.5"}
-                  className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('torso').pulse ? 'animate-pulse' : ''}`}
-                  onClick={() => selectPart('torso')}
-                />
-
-                {/* Left Arm */}
-                <rect
-                  x="18"
-                  y="36"
-                  width="14"
-                  height="44"
-                  rx="5"
-                  fill={getPartColor('leftArm').fill}
-                  stroke={selectedPart === "leftArm" ? "#38bdf8" : getPartColor('leftArm').stroke}
-                  strokeWidth={selectedPart === "leftArm" ? "2.5" : "1.5"}
-                  className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('leftArm').pulse ? 'animate-pulse' : ''}`}
-                  onClick={() => selectPart('leftArm')}
-                />
-
-                {/* Right Arm */}
-                <rect
-                  x="68"
-                  y="36"
-                  width="14"
-                  height="44"
-                  rx="5"
-                  fill={getPartColor('rightArm').fill}
-                  stroke={selectedPart === "rightArm" ? "#38bdf8" : getPartColor('rightArm').stroke}
-                  strokeWidth={selectedPart === "rightArm" ? "2.5" : "1.5"}
-                  className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('rightArm').pulse ? 'animate-pulse' : ''}`}
-                  onClick={() => selectPart('rightArm')}
-                />
-
-                {/* Left Leg */}
-                <rect
-                  x="36"
-                  y="84"
-                  width="12"
-                  height="58"
-                  rx="5"
-                  fill={getPartColor('leftLeg').fill}
-                  stroke={selectedPart === "leftLeg" ? "#38bdf8" : getPartColor('leftLeg').stroke}
-                  strokeWidth={selectedPart === "leftLeg" ? "2.5" : "1.5"}
-                  className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('leftLeg').pulse ? 'animate-pulse' : ''}`}
-                  onClick={() => selectPart('leftLeg')}
-                />
-
-                {/* Right Leg */}
-                <rect
-                  x="52"
-                  y="84"
-                  width="12"
-                  height="58"
-                  rx="5"
-                  fill={getPartColor('rightLeg').fill}
-                  stroke={selectedPart === "rightLeg" ? "#38bdf8" : getPartColor('rightLeg').stroke}
-                  strokeWidth={selectedPart === "rightLeg" ? "2.5" : "1.5"}
-                  className={`cursor-pointer transition-all hover:opacity-80 ${getPartColor('rightLeg').pulse ? 'animate-pulse' : ''}`}
-                  onClick={() => selectPart('rightLeg')}
-                />
-              </svg>
-            </div>
-
-            {/* Quick Limb Selector Buttons */}
-            <div className="grid grid-cols-3 gap-1.5 w-full mt-2">
-              {(['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'] as const).map(p => (
-                <button
-                  key={p}
-                  onClick={() => selectPart(p)}
-                  className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition duration-200 cursor-pointer ${
-                    selectedPart === p
-                      ? 'bg-sky-500/20 text-sky-300 border-sky-500'
-                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  {getBodyPartLabel(p)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* BENTO CARD 2: Selected Part Details & Injuries (Col span 5, Row span 1) */}
-          <div className="md:col-span-5 bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 min-h-[220px] md:min-h-0">
-            <div>
-              <div className="flex items-center justify-between font-bold text-slate-200 mb-2">
-                <span className="text-base">{getBodyPartLabel(selectedPart)}</span>
-                <span className={`px-2 py-0.5 rounded border text-[10px] font-semibold ${getPartBadgeClass(currentInjuries)}`}>
-                  {getBodyPartStatusText(currentInjuries)}
-                </span>
+            {currentPartPain > 0 && (
+              <div className="gu-card-sm" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                <span className="gu-mute">Локальная боль:</span>
+                <span className="gu-mono" style={{ color: '#efa690', fontWeight: 700 }}>{Math.round(currentPartPain)}%</span>
               </div>
-              
-              {currentPartPain > 0 && (
-                <div className="flex items-center justify-between text-xs text-rose-400/90 font-mono bg-rose-950/30 px-2.5 py-1 rounded-lg border border-rose-900/40 mb-2">
-                  <span>Локальная боль:</span>
-                  <span className="font-bold">{Math.round(currentPartPain)}%</span>
-                </div>
-              )}
+            )}
 
-              <div className="text-xs text-slate-400 font-medium flex items-center justify-between mb-2">
-                <span>Список диагностированных травм:</span>
-                <span className="text-[10px] text-slate-500">{currentInjuries.length} травм</span>
+            <div className="gu-sec" style={{ marginTop: 4 }}>
+              <span>Диагностированные травмы</span>
+              <span className="gu-sec-sub">{currentInjuries.length} шт.</span>
+            </div>
+
+            {currentInjuries.length === 0 ? (
+              <div className="gu-note gu-ok" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>Ткани и кости в норме. Повреждений нет.</span>
               </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+                {currentInjuries.map(injury => (
+                  <div
+                    key={injury.id}
+                    onClick={() => setSelectedInjuryId(injury.id)}
+                    className={`gu-item ${selectedInjuryId === injury.id ? 'on' : ''}`}
+                    style={{ flexDirection: 'column', alignItems: 'stretch', cursor: 'pointer' }}
+                  >
+                    <div className="gu-row-between">
+                      <span className="gu-item-title">{getInjuryTypeName(injury)}</span>
+                      <span className={`gu-tag ${injury.treated ? 'good' : 'bad'}`}>
+                        {injury.treated ? 'Обработано' : 'Острая фаза'}
+                      </span>
+                    </div>
+                    <div className="gu-item-sub">
+                      {!injury.treated
+                        ? (injury.type === 'fracture' ? 'Требуется наложение шины' : injury.type === 'bleeding' ? 'Требуется тугая повязка / бинт' : injury.type === 'burn' ? 'Требуется Пантенол / Спасатель' : 'Рекомендуется обработка')
+                        : 'Повязка/мазь нанесена. Идёт постепенное заживление'}
+                    </div>
 
-              <div className="flex flex-col gap-2 max-h-[120px] md:max-h-[140px] overflow-y-auto pr-1">
-                {currentInjuries.length === 0 ? (
-                  <div className="text-xs text-emerald-400 italic p-3 text-center border border-emerald-900/50 bg-emerald-950/20 rounded-xl flex items-center justify-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>Ткани и кости в норме. Повреждений нет.</span>
-                  </div>
-                ) : (
-                  currentInjuries.map(injury => (
-                    <div 
-                      key={injury.id}
-                      onClick={() => setSelectedInjuryId(injury.id)}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                        selectedInjuryId === injury.id 
-                          ? 'bg-sky-900/40 border-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.25)]' 
-                          : 'bg-slate-900/80 border-slate-700/80 hover:border-slate-500'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className={`text-xs font-bold ${injury.treated ? 'text-emerald-400' : (injury.type === 'fracture' || injury.type === 'bleeding' ? 'text-red-300' : injury.type === 'burn' ? 'text-orange-300' : 'text-amber-200')}`}>
-                          {getInjuryTypeName(injury)}
-                        </div>
-                        {injury.treated ? (
-                          <div className="text-[9px] px-1.5 py-0.5 bg-emerald-950 border border-emerald-700 text-emerald-300 rounded font-semibold">
-                            Обработано
-                          </div>
+                    {!injury.treated && (
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--gu-line)' }} onClick={e => e.stopPropagation()}>
+                        <div className="gu-mute" style={{ fontSize: 11, marginBottom: 6 }}>Доступные средства в инвентаре:</div>
+                        {getCompatibleInventoryItems(injury).length === 0 ? (
+                          <span className="gu-mute" style={{ fontSize: 11, fontStyle: 'italic' }}>Нет подходящих медикаментов в рюкзаке</span>
                         ) : (
-                          <div className="text-[9px] px-1.5 py-0.5 bg-rose-950 border border-rose-700 text-rose-300 rounded font-semibold animate-pulse">
-                            Острая фаза
+                          <div className="gu-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                            {getCompatibleInventoryItems(injury).map(({ item, idx }) => (
+                              <button
+                                key={`${item.itemId}_${idx}`}
+                                type="button"
+                                onClick={() => handleApplyToInjury(idx, injury.id)}
+                                className="gu-btn gu-btn-p gu-btn-xs"
+                              >
+                                {item.nameRu}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
-                        <span>
-                          {!injury.treated 
-                            ? (injury.type === 'fracture' ? '[!] Требуется наложение шины' : (injury.type === 'bleeding' ? '[!] Требуется тугая повязка / бинт' : (injury.type === 'burn' ? '[!] Требуется Пантенол / Бальзам Спасатель' : '[!] Рекомендуется обработка')))
-                            : '[+] Повязка/мазь нанесена. Идёт постепенное заживление'
-                          }
-                        </span>
-                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                      {/* Compatible Inventory Items for Quick Treatment */}
-                      {!injury.treated && (
-                        <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex flex-col gap-1.5" onClick={e => e.stopPropagation()}>
-                          <span className="text-[10px] text-slate-400 font-medium">Доступные средства в вашем инвентаре:</span>
-                          {getCompatibleInventoryItems(injury).length === 0 ? (
-                            <span className="text-[10px] text-amber-400/80 italic">Нет подходящих медикаментов в рюкзаке</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {getCompatibleInventoryItems(injury).map(({ item, idx }) => (
-                                <button
-                                  key={`${item.itemId}_${idx}`}
-                                  onClick={() => handleApplyToInjury(idx, injury.id)}
-                                  className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/80 hover:border-emerald-400 text-emerald-200 hover:text-white rounded text-[10px] font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
-                                >
-                                  <span>{item.nameRu}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
+          {/* Active Pharmacokinetics */}
+          <div className="gu-card">
+            <div className="gu-sec" style={{ marginTop: 0 }}>
+              <span className="gu-row" style={{ gap: 6 }}>
+                <Pill className="w-3.5 h-3.5" /> Активные медикаменты
+              </span>
+              <span className="gu-sec-sub">{activeMeds.length} в крови</span>
+            </div>
+
+            {activeMeds.length === 0 ? (
+              <div className="gu-card-sm gu-mute" style={{ fontSize: 12, textAlign: 'center' }}>
+                Медикаменты не принимались. Всасывание отсутствует.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 150, overflowY: 'auto' }}>
+                {activeMeds.map(med => (
+                  <div key={med.id} className="gu-card-sm">
+                    <div className="gu-row-between" style={{ fontSize: 12, fontWeight: 700 }}>
+                      <span>{med.nameRu || (med as any).name || 'Медикамент'}</span>
+                      <span className="gu-tag amber">
+                        {med.phase === 'absorption' ? 'Всасывание' : med.phase === 'peak' ? 'Пик' : med.phase === 'action' ? 'Терапия' : 'Выведение'}
+                      </span>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* BENTO CARD 3: Vitals & Shock Gauge (Col span 3, Row span 1) */}
-          <div className="md:col-span-3 bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 min-h-[160px] md:min-h-0">
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold mb-2">
-                <span className="flex items-center gap-1.5 text-rose-400">
-                  <Activity className="w-4 h-4" />
-                  <span>Порог боли</span>
-                </span>
-                <span className="text-xs font-mono text-rose-300 font-bold">{Math.round(bs.effectivePain || bs.painLevel)} / 100</span>
-              </div>
-              <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden mb-4">
-                <div 
-                  className="h-full bg-rose-500 transition-all duration-200"
-                  style={{ width: `${Math.min(100, Math.max(0, bs.effectivePain || bs.painLevel))}%` }}
-                />
-              </div>
-
-              {/* Traumatic Shock */}
-              <div className="flex items-center justify-between text-xs text-slate-400 pt-2.5 border-t border-slate-800/80 mb-2">
-                <span>Травматический шок:</span>
-                <span className={`font-bold font-mono ${(bs.shockLevel || 0) > 30 ? 'text-amber-400 animate-pulse' : 'text-slate-300'}`}>
-                  {Math.round(bs.shockLevel || 0)}%
-                </span>
-              </div>
-
-              {/* Panic Level */}
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Уровень паники и страха:</span>
-                <span className={`font-bold font-mono ${(bs.panicLevel || 0) > 30 ? 'text-amber-400' : 'text-slate-300'}`}>
-                  {Math.round(bs.panicLevel || 0)}%
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* BENTO CARD 4: Active Pharmacokinetics (Col span 5, Row span 1) */}
-          <div className="md:col-span-5 bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 min-h-[160px] md:min-h-0">
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
-                <span className="flex items-center gap-1.5">
-                  <Pill className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Активные медикаменты</span>
-                </span>
-                <span className="text-[10px] font-mono text-sky-400 font-bold">{activeMeds.length} в сыворотке</span>
-              </div>
-
-              {activeMeds.length === 0 ? (
-                <div className="text-xs text-slate-500 italic p-4 text-center bg-slate-900/30 rounded-xl border border-slate-800/60 leading-relaxed">
-                  Медикаменты не принимались. Всасывание отсутствует.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 max-h-[120px] md:max-h-[140px] overflow-y-auto pr-1">
-                  {activeMeds.map(med => (
-                    <div key={med.id} className="p-2.5 bg-slate-900/90 rounded-xl border border-slate-700/60 text-xs">
-                      <div className="flex items-center justify-between font-bold text-sky-300">
-                        <span>{med.nameRu || (med as any).name || 'Медикамент'}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 bg-sky-950 text-sky-400 rounded border border-sky-800 font-mono font-bold">
-                          {med.phase === 'absorption' && '[Всасывание]'}
-                          {med.phase === 'peak' && '[Пик]'}
-                          {med.phase === 'action' && '[Терапия]'}
-                          {med.phase === 'decay' && '[Выведение]'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
-                        <span>Действие: {Math.round(med.currentEffectiveness * 100)}%</span>
-                        <span className="font-mono text-sky-300 font-semibold">{getMedicationRemainingSeconds(med)} сек</span>
-                      </div>
-                      <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-1">
-                        <div 
-                          className="h-full bg-sky-400 transition-all duration-300"
-                          style={{ width: `${Math.round(med.currentEffectiveness * 100)}%` }}
-                        />
-                      </div>
+                    <div className="gu-row-between gu-mute" style={{ fontSize: 11, marginTop: 4, marginBottom: 4 }}>
+                      <span>Эффективность: {Math.round(med.currentEffectiveness * 100)}%</span>
+                      <span className="gu-mono">{getMedicationRemainingSeconds(med)} сек</span>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="gu-bar">
+                      <span style={{ width: `${Math.round(med.currentEffectiveness * 100)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* COLUMN 3: Vitals, Shock & Clinical Verdict */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="gu-card">
+            <div className="gu-sec" style={{ marginTop: 0 }}>
+              <span className="gu-row" style={{ gap: 6 }}>
+                <Activity className="w-3.5 h-3.5" /> Порог боли и шок
+              </span>
+              <span className="gu-mono" style={{ fontSize: 12 }}>
+                {Math.round(bs.effectivePain || bs.painLevel)} / 100
+              </span>
+            </div>
+
+            <div className="gu-bar bad">
+              <span style={{ width: `${Math.min(100, Math.max(0, bs.effectivePain || bs.painLevel))}%` }} />
+            </div>
+
+            <div className="gu-kv-grid" style={{ marginTop: 8 }}>
+              <div className="gu-kv">
+                <div className="gu-kv-k">Травм. шок</div>
+                <div className="gu-kv-v gu-mono">{Math.round(bs.shockLevel || 0)}%</div>
+              </div>
+              <div className="gu-kv">
+                <div className="gu-kv-k">Паника</div>
+                <div className="gu-kv-v gu-mono">{Math.round(bs.panicLevel || 0)}%</div>
+              </div>
             </div>
           </div>
 
-          {/* BENTO CARD 5: Clinical Summary (Col span 3, Row span 1) */}
-          <div className="md:col-span-3 bg-slate-950/80 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 min-h-[180px] md:min-h-0">
-            <div className="flex flex-col gap-2 flex-1">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Heart className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Клинический вердикт</span>
-                </span>
-              </div>
-              
-              <div className="text-xs text-slate-300 leading-relaxed p-3 bg-slate-900/60 rounded-xl border border-slate-800 overflow-y-auto max-h-[110px] md:max-h-[120px] flex-1">
-                {detailed.overallSensorySummary || detailed.healthText}
-              </div>
+          <div className="gu-card">
+            <div className="gu-sec" style={{ marginTop: 0 }}>
+              <span className="gu-row" style={{ gap: 6 }}>
+                <Heart className="w-3.5 h-3.5" /> Клинический вердикт
+              </span>
             </div>
-
-            <div className="text-[10px] text-slate-500 font-medium leading-relaxed pt-2 border-t border-slate-800/60">
-              <span className="text-slate-400 font-bold">Помощь:</span> примените средства напрямую из рюкзака.
+            <div className="gu-card-sm" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              {detailed.overallSensorySummary || detailed.healthText}
+            </div>
+            <div className="gu-mute" style={{ fontSize: 11 }}>
+              Применяйте бинты, шины и мази напрямую из списка травм или из инвентаря.
             </div>
           </div>
-
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };
 
