@@ -42,6 +42,15 @@ export interface PostFxSettings {
 }
 
 import type { PostFxWaterWake } from '../riverSystem';
+import { RIVER_WAYPOINTS } from '../riverSystem';
+
+// The river channel used by the GPU water shader is generated from RIVER_WAYPOINTS (single source of truth),
+// so the shader flow field can never drift out of sync with the Canvas river geometry and gameplay physics.
+// The GLSL binary search below does 6 steps, which covers up to 64 waypoints.
+const RIVER_WP_COUNT = RIVER_WAYPOINTS.length;
+const RIVER_WP_GLSL = RIVER_WAYPOINTS
+  .map(w => `  vec4(${w.x.toFixed(1)}, ${w.y.toFixed(1)}, ${w.width.toFixed(1)}, ${w.currentSpeed.toFixed(1)})`)
+  .join(',\n');
 
 export interface PostFxFireSource {
   x: number;         // World X (px)
@@ -151,6 +160,7 @@ uniform vec2 uOutSize;
 uniform float uUpscale;     // 1 when the source is smaller than the output
 uniform float uTime;
 uniform vec2 uSun;          // light direction in screen UV space
+uniform float uSunElev;     // sun / moon elevation, 0 (horizon) .. 1 (zenith)
 uniform vec2 uCamPos;       // camera world position (px)
 uniform float uCamZoom;     // camera zoom
 uniform float uCamAngle;    // camera angle (rad)
@@ -274,47 +284,11 @@ vec2 worldDirToScreenUv(vec2 worldDir) {
   return vec2(worldDir.x * ca - worldDir.y * sa, -(worldDir.x * sa + worldDir.y * ca));
 }
 
-// Exact 37-waypoint Catmull-Rom spline of River "Быстрица" (vec4(x, y, width, currentSpeed))
-// Matches RIVER_WAYPOINTS in src/riverSystem.ts so every river pixel on screen knows its exact
+// Catmull-Rom spline of River "Быстрица" (vec4(x, y, width, currentSpeed))
+// Generated from RIVER_WAYPOINTS in src/riverSystem.ts so every river pixel on screen knows its exact
 // riverbed tangent (tx, ty), lateral bank fraction (-1..+1), and parabolic channel flow speed.
-const vec4 RIVER_WP[37] = vec4[37](
-  vec4(-3000.0, -3900.0, 150.0, 28.0),
-  vec4(-2000.0, -3850.0, 150.0, 28.0),
-  vec4(-1000.0, -3900.0, 155.0, 30.0),
-  vec4(    0.0, -3820.0, 160.0, 30.0),
-  vec4( 1000.0, -3860.0, 160.0, 31.0),
-  vec4( 2000.0, -3750.0, 165.0, 32.0),
-  vec4( 3000.0, -3800.0, 165.0, 32.0),
-  vec4( 4000.0, -3680.0, 170.0, 33.0),
-  vec4( 5000.0, -3720.0, 170.0, 34.0),
-  vec4( 6000.0, -3600.0, 175.0, 34.0),
-  vec4( 7000.0, -3550.0, 175.0, 35.0),
-  vec4( 8000.0, -3480.0, 180.0, 35.0),
-  vec4( 8800.0, -3380.0, 180.0, 36.0),
-  vec4( 9400.0, -3300.0, 160.0, 38.0),
-  vec4(10200.0, -3220.0, 180.0, 35.0),
-  vec4(11000.0, -3160.0, 190.0, 32.0),
-  vec4(11800.0, -3120.0, 210.0, 30.0),
-  vec4(12400.0, -3080.0, 240.0, 42.0),
-  vec4(13200.0, -3020.0, 200.0, 34.0),
-  vec4(14200.0, -2950.0, 260.0, 20.0),
-  vec4(15400.0, -2880.0, 190.0, 32.0),
-  vec4(16800.0, -2820.0, 180.0, 34.0),
-  vec4(18200.0, -2750.0, 185.0, 35.0),
-  vec4(19600.0, -2700.0, 175.0, 35.0),
-  vec4(21000.0, -2640.0, 180.0, 33.0),
-  vec4(22400.0, -2580.0, 190.0, 32.0),
-  vec4(24000.0, -2520.0, 170.0, 36.0),
-  vec4(25500.0, -2480.0, 180.0, 34.0),
-  vec4(27000.0, -2420.0, 200.0, 30.0),
-  vec4(29000.0, -2380.0, 220.0, 28.0),
-  vec4(31200.0, -2350.0, 230.0, 26.0),
-  vec4(33800.0, -2320.0, 210.0, 30.0),
-  vec4(36500.0, -2300.0, 220.0, 32.0),
-  vec4(39500.0, -2280.0, 230.0, 28.0),
-  vec4(42800.0, -2260.0, 250.0, 25.0),
-  vec4(46000.0, -2240.0, 270.0, 22.0),
-  vec4(49500.0, -2200.0, 300.0, 20.0)
+const vec4 RIVER_WP[${RIVER_WP_COUNT}] = vec4[${RIVER_WP_COUNT}](
+${RIVER_WP_GLSL}
 );
 
 float crSpline(float p0, float p1, float p2, float p3, float t) {
@@ -353,7 +327,7 @@ void sampleRiverChannel(
 
   // 5-step binary search over monotonic X waypoints
   int lo = 0;
-  int hi = 35;
+  int hi = ${RIVER_WP_COUNT - 2};
   for (int b = 0; b < 6; b++) {
     int mid = (lo + hi) >> 1;
     if (worldPos.x < RIVER_WP[mid + 1].x) {
@@ -362,11 +336,11 @@ void sampleRiverChannel(
       lo = mid + 1;
     }
   }
-  int idx = clamp(lo, 0, 35);
+  int idx = clamp(lo, 0, ${RIVER_WP_COUNT - 2});
   vec4 w0 = RIVER_WP[max(0, idx - 1)];
   vec4 w1 = RIVER_WP[idx];
   vec4 w2 = RIVER_WP[idx + 1];
-  vec4 w3 = RIVER_WP[min(36, idx + 2)];
+  vec4 w3 = RIVER_WP[min(${RIVER_WP_COUNT - 1}, idx + 2)];
 
   float segDx = max(1.0, w2.x - w1.x);
   float t = clamp((worldPos.x - w1.x) / segDx, 0.0, 1.0);
@@ -387,6 +361,55 @@ void sampleRiverChannel(
   outAlong = worldPos.x + dot(relToCenter, outT) * 0.35;
   outLatFrac = outCross / max(halfWidth, 1.0);
   outRiverMask = 1.0 - smoothstep(0.96, 1.18, abs(outLatFrac));
+}
+
+// Relative water depth (0 = shoreline, 1 = mid-channel) of the pixel being shaded. Set by computeWaterWaveNormal:
+// derived from the lateral position in the river channel (parabolic cross-section), 0.75 for standing water.
+// Drives depth-proportional refraction: the apparent shift of the bed is ~ depth * slope, so shallow edges stay crisp.
+float gWaterDepth01 = 0.75;
+
+// Deep-water gravity wave swell for standing water (lakes, ponds, fountain basin). Three directional sine trains with
+// the true dispersion relation w = sqrt(g * k) (g ~ 98 px/s^2 at ~10 px per metre), so long waves outrun short ones.
+// Returns the height gradient in WORLD space; amplitudes are slopes, scaled by local wind strength.
+vec2 waterSwellGrad(vec2 worldPos, vec2 windDir, float windStrength, float time) {
+  vec2 acc = vec2(0.0);
+  const float G_PX = 98.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float ang = (fi - 1.0) * 0.42;                       // spread around the wind direction
+    float ca = cos(ang);
+    float sa = sin(ang);
+    vec2 d = vec2(windDir.x * ca - windDir.y * sa, windDir.x * sa + windDir.y * ca);
+    float lambda = 62.0 - 17.0 * fi;                     // 62, 45, 28 px wavelength
+    float k = 6.28318 / lambda;
+    float w = sqrt(G_PX * k);
+    float phase = k * dot(worldPos, d) - w * time + fi * 2.7;
+    float slopeAmp = (0.11 - 0.028 * fi) * windStrength; // steeper = shorter = weaker
+    acc += d * (slopeAmp * cos(phase));
+  }
+  return acc;
+}
+
+// Procedural sky radiance seen in the water: horizon-to-zenith gradient (warm at low sun, dark at night) plus a layer of
+// clouds that drifts with the wind and is distorted by the wave normal through the reflection vector, so reflections
+// move and ripple instead of being a flat tint. Rain thickens the cloud deck and greys it out.
+vec3 waterSkyRadiance(vec3 R, vec2 worldPos, float sunE) {
+  float elev = clamp(R.z, 0.0, 1.0);
+  vec3 zenithCol = mix(vec3(0.030, 0.060, 0.130), vec3(0.26, 0.50, 0.85), uDay);
+  vec3 warmHorizon = vec3(0.95, 0.74, 0.52);
+  vec3 coolHorizon = vec3(0.74, 0.86, 0.96);
+  vec3 horizonCol = mix(vec3(0.07, 0.11, 0.19), mix(warmHorizon, coolHorizon, smoothstep(0.30, 0.80, sunE)), uDay);
+  vec3 sky = mix(horizonCol, zenithCol, pow(elev, 0.55));
+
+  float windLen = length(uWind);
+  vec2 windDir = windLen > 0.2 ? (uWind / windLen) : vec2(0.94, 0.34);
+  vec2 cuv = worldPos * 0.0016 + R.xy / max(R.z, 0.3) * 0.25 - windDir * (uWindPhase * 0.018);
+  float cloud = noise2DAndGrad(cuv).x * 0.65 + noise2DAndGrad(cuv * 2.3 + vec2(7.1, 3.7)).x * 0.35;
+  float cover = mix(0.50, 0.10, uRain);
+  float cMask = smoothstep(cover, cover + 0.28, cloud);
+  vec3 cloudCol = mix(vec3(0.10, 0.13, 0.20), mix(vec3(0.96, 0.97, 0.98), vec3(0.55, 0.58, 0.64), uRain), uDay);
+  sky = mix(sky, cloudCol, cMask * 0.85);
+  return sky;
 }
 
 // Physically grounded two-layer river channel flow + surface wind capillary wave solver + direct GPU hydrodynamic wake & obstacle solver.
@@ -433,6 +456,7 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
     // --- A. RIVER CHANNEL HYDRODYNAMIC FLOW (Вода течёт строго по изгибам русла) ---
     // Parabolic velocity profile across channel width: faster in deep mid-channel fairway, slower near shallow shores
     float latClamped = clamp(rLatFrac, -1.0, 1.0);
+    gWaterDepth01 = clamp(1.0 - latClamped * latClamped, 0.06, 1.0);
     float speedProfile = clamp(1.0 - 0.50 * latClamped * latClamped, 0.35, 1.05);
     float localFlowSpeed = rSpeed * speedProfile;
     float flowAdv = time * (localFlowSpeed * 0.048);
@@ -504,6 +528,8 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time, bool inRiverCorridor, out
     vec2 g3 = (wDirB * n3.y * 0.12 + wPerpB * n3.z * 0.048) * 9.0;
 
     worldGrad = (g1 * 0.45 + (g2 + g3) * 0.35) * windStrength;
+    // Coherent dispersive swell on top of the wind-ripple noise: gives lakes real wave crests instead of blotchy noise only
+    worldGrad += waterSwellGrad(worldPos, windDir, windStrength, time);
     outCrestHighlight += smoothstep(0.60, 0.86, (n2.x + n3.x) * 0.5) * 0.25 * windStrength;
   }
 
@@ -900,7 +926,7 @@ void main() {
     waveN = computeWaterWaveNormal(worldPos, uTime, inRiver, wakeFoam, crestHighlight)
           + computeRaindropRipples(worldPos, uTime, uRain) * 0.65;
     // Real-time UV refraction strictly guarded by uMat so dry cars/bridges/banks never bleed into water!
-    vec2 refrUv = clamp(uv + waveN * texel * 2.65 * waterMask, vec2(0.001), vec2(0.999));
+    vec2 refrUv = clamp(uv + waveN * texel * (0.7 + 2.6 * gWaterDepth01) * waterMask, vec2(0.001), vec2(0.999));
     float rRefr = texture(uMat, refrUv).r * 255.0;
     if (classifyMatCode(rRefr) == 5) {
       vec3 cRefr = fetchSrc(refrUv);
@@ -1080,16 +1106,33 @@ void main() {
       c += sssTint * waterMask * max(0.0, sssCrest) * 0.20;
       c *= 1.0 + clamp(sunDot * 0.18, -0.14, 0.16) * waterMask;
 
-      // 2. Fresnel sky dome reflection modulated by directional wave & wake facets
-      float facetTilt = clamp(sunDot * 0.60 + 0.40, 0.0, 1.0);
-      float fresnelRim = clamp(0.04 + 0.11 * smoothstep(0.05, 0.65, waveSlopeMag) + 0.06 * facetTilt, 0.0, 0.22);
-      c = mix(c, skyCol, waterMask * fresnelRim);
+      // 2. Schlick Fresnel on the real wave normal + procedural sky / cloud reflection.
+      //    N is the surface normal rebuilt from the height gradient. The reflection term uses a mildly oblique eye vector:
+      //    from a true nadir view water reflects only ~2%, which would hide the sky entirely, so the game camera is treated
+      //    as pitched ~50 deg for this term only. Reflectance then depends on how each facet is tilted, not on a constant.
+      vec3 waterN = normalize(vec3(-waveN, 1.0));
+      float sunE = clamp(uSunElev, 0.05, 1.0);
+      const vec3 VIEW_REFL = vec3(0.0, -0.77, 0.64);
+      float cosV = clamp(dot(waterN, VIEW_REFL), 0.0, 1.0);
+      float fresnel = 0.02 + 0.98 * pow(1.0 - cosV, 5.0);
+      vec3 skyRefl = waterSkyRadiance(reflect(-VIEW_REFL, waterN), worldPos, sunE);
+      float skyAmt = clamp(fresnel * 1.7, 0.0, 0.30);
+      c = mix(c, skyRefl, waterMask * skyAmt);
 
-      // 3. Dual-lobe Solar / Lunar micro-facet specular glints (broad shimmer + crisp diamond sun sparkles)
-      float sunAlign = dot(normalize(waveN + uSun * 0.42), uSun);
-      float glintBroad = pow(clamp(sunAlign, 0.0, 1.0), 10.0) * smoothstep(0.05, 0.35, waveSlopeMag) * 0.18;
-      float glintSharp = pow(clamp(sunAlign, 0.0, 1.0), 26.0) * smoothstep(0.10, 0.48, waveSlopeMag) * 0.52;
-      c += sunGlintCol * waterMask * (glintBroad + glintSharp);
+      // 3. Sun / moon glitter: Blinn-Phong around the half vector between the 3D light direction and the eye vector.
+      //    A facet sparkles only when its tilt matches the half vector, so glints follow sun height (rough lobe at dawn/dusk,
+      //    tight at noon) and vanish under rain / overcast instead of shimmering at a fixed strength. The eye is tilted
+      //    slightly away from the sun (like a real perspective view across the glitter path); a strict nadir eye would
+      //    hide almost all glints when the sun is low.
+      vec2 sunXY = length(uSun) > 1e-3 ? normalize(uSun) : vec2(0.0, 1.0);
+      vec3 lightDir = normalize(vec3(sunXY * sqrt(max(0.0, 1.0 - sunE * sunE)), sunE));
+      vec3 eyeGlint = normalize(vec3(-sunXY * 0.42, 1.0));
+      vec3 halfV = normalize(lightDir + eyeGlint);
+      float nDotH = max(dot(waterN, halfV), 0.0);
+      float glintBroad = pow(nDotH, mix(16.0, 42.0, sunE)) * 0.14;
+      float glintSharp = pow(nDotH, mix(90.0, 260.0, sunE)) * 0.60;
+      float clearSky = 1.0 - 0.85 * uRain;
+      c += sunGlintCol * waterMask * (glintBroad + glintSharp) * clearSky;
 
       // 4. Porous Cellular Aerated Whitewater Foam
       if (wakeFoam > 0.005) {
@@ -1553,7 +1596,7 @@ export class GpuPostFx {
     this.pComposite = this.makeProgram(VS, FS_COMPOSITE, [
       'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize',
       'uMat', 'uMatOn', 'uGi', 'uWet', 'uSnow', 'uRain', 'uFogGlow',
-      'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun',
+      'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun', 'uSunElev',
       'uCamPos', 'uCamZoom', 'uCamAngle', 'uFreezing',
       'uRelief', 'uClarity', 'uBloomStr',
       'uSharp', 'uTone', 'uExposure', 'uContrast', 'uSat', 'uShadowTint', 'uHighTint', 'uHaze', 'uVig', 'uGrain', 'uChroma', 'uDay',
@@ -1962,6 +2005,7 @@ export class GpuPostFx {
     const sx = wx * Math.cos(a) - wy * Math.sin(a);
     const sy = wx * Math.sin(a) + wy * Math.cos(a);
     gl.uniform2f(c.u.uSun, sx, -sy); // UV space has Y pointing up
+    gl.uniform1f(c.u.uSunElev, Math.max(0.05, Math.min(1, sunState.sunElevation)));
 
     const grading = s.grading / 100;
     gl.uniform1f(c.u.uRelief, (s.relief / 100) * 0.8);
