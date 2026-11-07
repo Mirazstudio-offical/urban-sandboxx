@@ -371,59 +371,55 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     ...(player.equippedClothing?.back?.outerwear?.isContainer ? [player.equippedClothing.back.outerwear] : [])
   ];
 
-  const pocketUsedPct = Math.min(100, (pocketCap.usedVolumeL / Math.max(0.1, pocketCap.totalCapacityL)) * 100);
-
   const renderHandCard = (hand: 'left' | 'right', label: string, handItem: InventoryItem | null | undefined) => (
-    <div className="gu-panel" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-        <div className="gu-row2" style={{ minWidth: 0, gap: 12 }}>
-          <div className={'gu-ico' + (handItem ? '' : ' gu-off')} style={{ width: 46, height: 46 }}>
-            {handItem ? (
-              <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={32} />
-            ) : (
-              <Hand width={20} height={20} />
-            )}
+    <div id={`inv-${hand}-hand-card`} className="gu-card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <div className="gu-row2" style={{ minWidth: 0, gap: 10 }}>
+        <div className={'gu-ico' + (handItem ? '' : ' gu-off')} style={{ width: 38, height: 38 }}>
+          {handItem ? (
+            <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={26} />
+          ) : (
+            <Hand width={17} height={17} />
+          )}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className="gu-cn gu-mut" style={{ fontSize: 11 }}>{label}</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {handItem ? handItem.nameRu : 'Свободна'}
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div className="gu-cn gu-mut" style={{ fontSize: 12 }}>{label}</div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {handItem ? handItem.nameRu : 'Свободна'}
+          {handItem && (
+            <div className="gu-row2 gu-wrap" style={{ gap: 6, fontSize: 11, color: 'var(--gu-mut)' }}>
+              <span>{getItemTotalWeight(handItem)} кг · {getItemTotalVolume(handItem)} л</span>
+              {handItem.surfaceTemperature !== undefined && (
+                <span className={'gu-tag ' + (handItem.surfaceTemperature >= 52 ? 'bad' : handItem.surfaceTemperature <= 4 ? 'cold' : 'amber')}>
+                  {handItem.surfaceTemperature >= 52 ? <Flame width={10} height={10} /> : <Thermometer width={10} height={10} />}
+                  {handItem.surfaceTemperature > 0 ? '+' : ''}{handItem.surfaceTemperature.toFixed(1)}°C
+                </span>
+              )}
             </div>
-            {handItem && (
-              <div className="gu-row2 gu-wrap" style={{ gap: 8, marginTop: 2, fontSize: 12, color: 'var(--gu-mut)' }}>
-                <span>{getItemTotalWeight(handItem)} кг · {getItemTotalVolume(handItem)} л</span>
-                {handItem.surfaceTemperature !== undefined && (
-                  <span className={'gu-tag ' + (handItem.surfaceTemperature >= 52 ? 'bad' : handItem.surfaceTemperature <= 4 ? 'cold' : 'amber')}>
-                    {handItem.surfaceTemperature >= 52 ? <Flame width={11} height={11} /> : <Thermometer width={11} height={11} />}
-                    {handItem.surfaceTemperature > 0 ? '+' : ''}{handItem.surfaceTemperature.toFixed(1)}°C
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
       {handItem && (
-        <div className="gu-row2 gu-wrap" style={{ gap: 6, paddingTop: 8, borderTop: '1px solid var(--gu-line)' }}>
+        <div className="gu-row2 gu-wrap" style={{ gap: 4, justifyContent: 'flex-end', flexShrink: 0 }}>
           {handItem.clothingStats && (
-            <button type="button" className="gu-btn gu-btn-p gu-btn-sm" onClick={() => handleEquipFromHand(hand)}>
+            <button type="button" className="gu-btn gu-btn-p gu-btn-xs" onClick={() => handleEquipFromHand(hand)}>
               Надеть
             </button>
           )}
           {handItem.isContainer && (
             <button
               type="button"
-              className="gu-btn gu-btn-p gu-btn-sm"
+              className="gu-btn gu-btn-p gu-btn-xs"
               onClick={() => { setOpenContainer(handItem); setSelectedContainerItemIdx(0); }}
             >
               Открыть
             </button>
           )}
-          <button type="button" className="gu-btn gu-btn-s gu-btn-sm" onClick={() => handleStowHand(hand)}>
+          <button type="button" className="gu-btn gu-btn-s gu-btn-xs" onClick={() => handleStowHand(hand)}>
             В карман
           </button>
-          <button type="button" className="gu-btn gu-btn-d gu-btn-sm" onClick={() => handleDropFromHand(hand)}>
+          <button type="button" className="gu-btn gu-btn-d gu-btn-xs" onClick={() => handleDropFromHand(hand)}>
             Бросить
           </button>
         </div>
@@ -441,70 +437,55 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       onClose={onClose}
       wipeKey={activeTab + '-' + (openContainer?.id || 'root')}
       headRight={
-        <div className="gu-row2 gu-hide-s" style={{ gap: 8 }}>
-          <div className="gu-chip" style={{ height: 38, padding: '0 12px', fontSize: 13 }}>
-            <Weight width={15} height={15} color="#c9922b" />
+        <div className="gu-row2 gu-hide-s" style={{ gap: 6 }}>
+          <div className="gu-chip">
+            <Weight width={14} height={14} color="#c9922b" />
             <span className="gu-mut">Вес:</span>
             <strong style={{ color: '#fff' }}>{carriedWeight} кг</strong>
           </div>
-          <div className="gu-chip" style={{ height: 38, padding: '0 12px', fontSize: 13 }}>
+          <div className="gu-chip">
             <span className="gu-mut">Скорость:</span>
             <strong style={{ color: weightSpeedPct >= 95 ? '#9ac985' : weightSpeedPct >= 70 ? '#f0c264' : '#efa690' }}>
               {weightSpeedPct}%{isBulkyHand ? ' (Груз)' : ''}
             </strong>
           </div>
-          <div className="gu-chip" style={{ height: 38, padding: '0 12px', fontSize: 13 }}>
+          <div className="gu-chip">
             <span className="gu-mut">Карманы:</span>
             <strong style={{ color: '#e0ab45' }}>{pocketCap.usedVolumeL} / {pocketCap.totalCapacityL} л</strong>
           </div>
         </div>
       }
       tabs={
-        <Tabs
-          value={activeTab}
-          onChange={t => {
-            sound.playButtonPress();
-            setActiveTab(t);
-            setOpenContainer(null);
-          }}
-          items={[
-            {
-              id: 'inventory',
-              label: 'Карманы',
-              icon: <Package width={17} height={17} />,
-              badge: inventory.filter(Boolean).length
-            },
-            {
-              id: 'surroundings',
-              label: 'Рядом',
-              icon: <Sparkles width={17} height={17} />,
-              badge: nearbyGroundItems.length
-            },
-            {
-              id: 'clothing',
-              label: 'Одежда',
-              icon: <Shirt width={17} height={17} />
-            }
-          ]}
-        />
-      }
-      footerHints={[
-        ['Esc / I', 'Закрыть'],
-        ['2× Клик', 'Использовать / Открыть'],
-        ['Перетаскивание', 'Смена слота']
-      ]}
-      footerRight={
-        <span className="gu-mut" style={{ fontSize: 13 }}>
-          Лев: <strong style={{ color: '#e9e6df' }}>{player.leftHandItem ? player.leftHandItem.nameRu : 'Свободна'}</strong>
-          {' · '}
-          Прав: <strong style={{ color: '#e9e6df' }}>{player.rightHandItem ? player.rightHandItem.nameRu : 'Свободна'}</strong>
-        </span>
-      }
-    >
-      <div className="gu-stagger">
-        {/* Top capacity bar + category filter pills when in pockets tab */}
-        {activeTab === 'inventory' && !openContainer && (
-          <div className="gu-panel gu-pad" style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+        <div className="gu-tabs-bar">
+          <Tabs
+            value={activeTab}
+            onChange={t => {
+              sound.playButtonPress();
+              setActiveTab(t);
+              setOpenContainer(null);
+            }}
+            items={[
+              {
+                id: 'inventory',
+                label: 'Карманы',
+                icon: <Package width={16} height={16} />,
+                badge: inventory.filter(Boolean).length
+              },
+              {
+                id: 'surroundings',
+                label: 'Рядом',
+                icon: <Sparkles width={16} height={16} />,
+                badge: nearbyGroundItems.length
+              },
+              {
+                id: 'clothing',
+                label: 'Одежда',
+                icon: <Shirt width={16} height={16} />
+              }
+            ]}
+          />
+
+          {activeTab === 'inventory' && !openContainer && (
             <div className="gu-pills">
               {[
                 { id: 'all', label: 'Все', icon: Package },
@@ -524,34 +505,38 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     onClick={() => setSelectedCategory(cat.id as any)}
                     className={'gu-pill' + (on ? ' on' : '')}
                   >
-                    <IconComp width={14} height={14} />
+                    <IconComp width={13} height={13} />
                     <span>{cat.label}</span>
                   </button>
                 );
               })}
             </div>
-
-            <div className="gu-row2" style={{ minWidth: 210, gap: 10 }}>
-              <span className="gu-mut" style={{ fontSize: 13 }}>Заполнение:</span>
-              <div className={'gu-bar' + (pocketUsedPct > 85 ? ' gu-bar-bad' : '')} style={{ flex: 1, width: 110 }}>
-                <i style={{ width: `${pocketUsedPct}%` }} />
-              </div>
-              <span className="gu-cn" style={{ fontWeight: 700, fontSize: 15, color: '#e0ab45' }}>
-                {Math.round(pocketUsedPct)}%
-              </span>
-            </div>
-          </div>
-        )}
-
+          )}
+        </div>
+      }
+      footerHints={[
+        ['Esc / I', 'Закрыть'],
+        ['2× Клик', 'Использовать'],
+        ['Перетаскивание', 'Слот']
+      ]}
+      footerRight={
+        <span className="gu-mut" style={{ fontSize: 12 }}>
+          Лев: <strong style={{ color: '#e9e6df' }}>{player.leftHandItem ? player.leftHandItem.nameRu : 'Свободна'}</strong>
+          {' · '}
+          Прав: <strong style={{ color: '#e9e6df' }}>{player.rightHandItem ? player.rightHandItem.nameRu : 'Свободна'}</strong>
+        </span>
+      }
+    >
+      <div className="gu-stagger">
         {/* ==================== TAB 1: INVENTORY & POCKETS ==================== */}
         {activeTab === 'inventory' && !openContainer && (
           <div className="gu-inv-split">
             {/* LEFT: HANDS + COMPARTMENTS + CONTAINERS */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {(!hasWallet || !hasBag) && (
-                <div className="gu-note gu-warn gu-row2" style={{ justifyContent: 'space-between' }}>
+                <div className="gu-note gu-warn gu-row2" style={{ justifyContent: 'space-between', padding: '8px 12px' }}>
                   <div className="gu-row2">
-                    <Sparkles width={16} height={16} />
+                    <Sparkles width={15} height={15} />
                     <span>
                       {!hasWallet && !hasBag
                         ? 'Кошелёк и пакет не найдены в инвентаре'
@@ -563,7 +548,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   <button
                     type="button"
                     id="btn-restore-containers"
-                    className="gu-btn gu-btn-p gu-btn-sm"
+                    className="gu-btn gu-btn-p gu-btn-xs"
                     onClick={() => {
                       restoreStarterContainers(player);
                       forceRender(n => n + 1);
@@ -575,10 +560,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               )}
 
               {/* Active Hands */}
-              <div className="gu-panel gu-pad" style={{ padding: '14px 16px' }}>
-                <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+              <div className="gu-panel gu-pad" style={{ padding: '10px 12px' }}>
+                <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
                   <span className="gu-grp">Активные руки</span>
-                  <span className="gu-mut" style={{ fontSize: 12 }}>Отображаются на персонаже · Клавиша E для действия</span>
+                  <span className="gu-mut gu-hide-s" style={{ fontSize: 11 }}>Отображаются на персонаже · Клавиша E для действия</span>
                 </div>
                 <div className="gu-grid gu-g2">
                   {renderHandCard('left', 'Левая рука', player.leftHandItem)}
@@ -798,16 +783,16 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             </div>
 
             {/* RIGHT: ITEM DETAILS & ACTIONS */}
-            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {selectedEntry && selectedEntry.item ? (
                 <>
                   {/* Item Header */}
-                  <div className="gu-row2" style={{ alignItems: 'flex-start', gap: 14 }}>
-                    <div className="gu-ico" style={{ width: 64, height: 64, borderRadius: 12 }}>
-                      <ItemIconCanvas itemId={selectedEntry.item.itemId} item={selectedEntry.item} size={50} />
+                  <div className="gu-row2" style={{ alignItems: 'flex-start', gap: 12 }}>
+                    <div className="gu-ico" style={{ width: 54, height: 54, borderRadius: 10 }}>
+                      <ItemIconCanvas itemId={selectedEntry.item.itemId} item={selectedEntry.item} size={42} />
                     </div>
                     <div className="gu-grow">
-                      <div className="gu-row2 gu-wrap" style={{ gap: 6, marginBottom: 4 }}>
+                      <div className="gu-row2 gu-wrap" style={{ gap: 6, marginBottom: 3 }}>
                         <span className="gu-tag amber">
                           {selectedEntry.item.category === 'food'
                             ? 'Еда'
@@ -820,57 +805,318 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             : 'Ценность'}
                         </span>
                         <span className="gu-mut" style={{ fontSize: 12 }}>
-                          ×{selectedEntry.item.count} в пачке
+                          ×{selectedEntry.item.count} шт. · {getItemTotalWeight(selectedEntry.item)} кг ·{' '}
+                          <strong style={{ color: 'var(--gu-amber-hi)' }}>{getItemTotalVolume(selectedEntry.item)} л</strong>
                         </span>
                       </div>
-                      <div className="gu-cn" style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
+                      <div className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
                         {selectedEntry.item.nameRu}
                       </div>
-                      <div className="gu-mut" style={{ fontSize: 12, marginTop: 2 }}>
-                        {selectedEntry.item.name}
-                      </div>
+                      {(() => {
+                        const slotComp = getSlotCompartment(player, selectedEntry.originalIndex);
+                        if (!slotComp) return null;
+                        return (
+                          <div className="gu-mut" style={{ fontSize: 11, marginTop: 2 }}>
+                            <span style={{ color: 'var(--gu-amber-hi)' }}>{slotComp.compartment.nameRu}</span>
+                            {slotComp.compartment.sourceItemNameRu && slotComp.compartment.id !== 'base' && (
+                              <span> ({slotComp.compartment.sourceItemNameRu})</span>
+                            )}
+                            <span> · Слот #{selectedEntry.originalIndex + 1}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
-                  {/* Compartment Origin */}
-                  {(() => {
-                    const slotComp = getSlotCompartment(player, selectedEntry.originalIndex);
-                    if (!slotComp) return null;
-                    return (
-                      <div className="gu-kv">
-                        <span className="gu-kv-k">Отделение</span>
-                        <span className="gu-kv-v">
-                          <span style={{ color: 'var(--gu-amber-hi)' }}>{slotComp.compartment.nameRu}</span>
-                          {slotComp.compartment.sourceItemNameRu && slotComp.compartment.id !== 'base' && (
-                            <span className="gu-mut"> ({slotComp.compartment.sourceItemNameRu})</span>
+                  {/* Primary Actions — immediately accessible at the top */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
+                    {selectedEntry.item.clothingStats ? (
+                      <button
+                        type="button"
+                        id="btn-equip-selected-item"
+                        className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                        onClick={() => handleEquipItem(selectedEntry.originalIndex)}
+                      >
+                        <Shirt width={15} height={15} />
+                        <span>Надеть / Экипировать</span>
+                      </button>
+                    ) : selectedEntry.item.isContainer ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <button
+                          type="button"
+                          id="btn-open-selected-container"
+                          className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                          onClick={() => {
+                            setOpenContainer(selectedEntry.item);
+                            setSelectedContainerItemIdx(0);
+                          }}
+                        >
+                          <Package width={15} height={15} />
+                          <span>Открыть контейнер ({selectedEntry.item.contents?.length || 0} предм.)</span>
+                        </button>
+                        {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
+                          selectedEntry.item.contents &&
+                          selectedEntry.item.contents.length > 0 && (
+                            <button
+                              type="button"
+                              className="gu-btn gu-btn-s gu-btn-sm gu-btn-block"
+                              onClick={() => {
+                                unpackSingleUseContainer(player, selectedEntry.item, world);
+                                setSelectedIndex(0);
+                                forceRender(n => n + 1);
+                              }}
+                            >
+                              <Scissors width={15} height={15} />
+                              <span>Вскрыть упаковку ({selectedEntry.item.contents.length} предм.)</span>
+                            </button>
                           )}
-                          <span className="gu-mut"> · Слот #{selectedEntry.originalIndex + 1}</span>
-                        </span>
                       </div>
-                    );
-                  })()}
+                    ) : selectedEntry.item.phoneSpecs ||
+                      selectedEntry.item.itemId.startsWith('phone_') ||
+                      selectedEntry.item.itemId === 'smartphone' ? (
+                      <button
+                        type="button"
+                        id="btn-use-selected-phone"
+                        className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                        onClick={() => handleUseItem(selectedEntry.originalIndex)}
+                      >
+                        <Smartphone width={15} height={15} />
+                        <span>Включить экран телефона</span>
+                      </button>
+                    ) : selectedEntry.item.itemId.startsWith('car_key') ? (
+                      <div className="gu-note" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 10px' }}>
+                        {(() => {
+                          const targetVeh = world ? getTargetVehicleForKey(player, selectedEntry.item, world) : null;
+                          const distM = targetVeh ? Math.round(Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y) / 10) : null;
+                          const isSmartOrDisplay = selectedEntry.item.keyTier === 'smart' || selectedEntry.item.keyTier === 'display';
 
-                  {/* Weight & Volume */}
-                  <div className="gu-kv-grid">
-                    <div className="gu-kv">
-                      <span className="gu-kv-k">Вес</span>
-                      <span className="gu-kv-v">{getItemTotalWeight(selectedEntry.item)} кг</span>
+                          return (
+                            <>
+                              <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                                <span className="gu-grp" style={{ fontSize: 12 }}>
+                                  {selectedEntry.item.keyTier === 'display'
+                                    ? 'Smart Display Key'
+                                    : selectedEntry.item.keyTier === 'smart'
+                                    ? 'Smart Keyless-Go'
+                                    : selectedEntry.item.keyTier === 'flip'
+                                    ? 'Выкидной брелок'
+                                    : 'Ключ зажигания'}
+                                </span>
+                                {distM !== null ? (
+                                  <span className="gu-tag amber">{distM} м до авто</span>
+                                ) : (
+                                  <span className="gu-tag">Вне зоны</span>
+                                )}
+                              </div>
+
+                              {targetVeh && (
+                                <div className="gu-grid gu-g3" style={{ gap: 6 }}>
+                                  <div className="gu-kv" style={{ padding: '5px 8px' }}>
+                                    <span className="gu-kv-k">Замок</span>
+                                    <span className="gu-kv-v" style={{ color: targetVeh.isLocked ? '#f0c264' : '#9ac985' }}>
+                                      {targetVeh.isLocked ? 'Закрыт' : 'Открыт'}
+                                    </span>
+                                  </div>
+                                  <div className="gu-kv" style={{ padding: '5px 8px' }}>
+                                    <span className="gu-kv-k">ДВС</span>
+                                    <span className="gu-kv-v" style={{ color: targetVeh.engineState?.engineRunning ? '#9ac985' : 'var(--gu-mut)' }}>
+                                      {targetVeh.engineState?.engineRunning ? 'Вкл' : 'Выкл'}
+                                    </span>
+                                  </div>
+                                  <div className="gu-kv" style={{ padding: '5px 8px' }}>
+                                    <span className="gu-kv-k">Фары</span>
+                                    <span className="gu-kv-v" style={{ color: targetVeh.headlightsOn ? '#f0c264' : 'var(--gu-mut)' }}>
+                                      {targetVeh.headlightsOn ? 'Вкл' : 'Выкл'}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                                <button
+                                  type="button"
+                                  className="gu-btn gu-btn-s gu-btn-xs"
+                                  onClick={() => {
+                                    handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_lock');
+                                    forceRender(n => n + 1);
+                                  }}
+                                >
+                                  {targetVeh?.isLocked ? <Unlock width={13} height={13} color="#c9922b" /> : <Lock width={13} height={13} color="#c9922b" />}
+                                  <span>{targetVeh?.isLocked ? 'Открыть ЦЗ' : 'Закрыть ЦЗ'}</span>
+                                </button>
+
+                                {isSmartOrDisplay ? (
+                                  <button
+                                    type="button"
+                                    className="gu-btn gu-btn-p gu-btn-xs"
+                                    onClick={() => {
+                                      handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_engine');
+                                      forceRender(n => n + 1);
+                                    }}
+                                  >
+                                    <Zap width={13} height={13} />
+                                    <span>{targetVeh?.engineState?.engineRunning ? 'Заглушить' : 'Автозапуск'}</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="gu-btn gu-btn-s gu-btn-xs"
+                                    onClick={() => {
+                                      handleCarKeyActivation(player, selectedEntry.item, world, 'horn');
+                                      forceRender(n => n + 1);
+                                    }}
+                                  >
+                                    <Volume2 width={13} height={13} color="#c9922b" />
+                                    <span>Поиск авто</span>
+                                  </button>
+                                )}
+
+                                {isSmartOrDisplay && (
+                                  <button
+                                    type="button"
+                                    className="gu-btn gu-btn-s gu-btn-xs"
+                                    onClick={() => {
+                                      handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_headlights');
+                                      forceRender(n => n + 1);
+                                    }}
+                                  >
+                                    <Lightbulb width={13} height={13} color="#c9922b" />
+                                    <span>{targetVeh?.headlightsOn ? 'Выкл фары' : 'Вкл фары'}</span>
+                                  </button>
+                                )}
+
+                                {isSmartOrDisplay && (
+                                  <button
+                                    type="button"
+                                    className="gu-btn gu-btn-s gu-btn-xs"
+                                    onClick={() => {
+                                      handleCarKeyActivation(player, selectedEntry.item, world, 'horn');
+                                      forceRender(n => n + 1);
+                                    }}
+                                  >
+                                    <Volume2 width={13} height={13} color="#c9922b" />
+                                    <span>Поиск (Сигнал)</span>
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    ) : selectedEntry.item.itemId.startsWith('property_') ||
+                      selectedEntry.item.itemId === 'car_pts' ||
+                      selectedEntry.item.itemId === 'car_tech_passport' ||
+                      selectedEntry.item.itemId === 'car_contract_dkp' ? (
+                      <button
+                        type="button"
+                        id="btn-inspect-selected-document"
+                        className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                        onClick={() => onInspectDocument?.(selectedEntry.item)}
+                      >
+                        <FileText width={15} height={15} />
+                        <span>Изучить / Просмотреть документ</span>
+                      </button>
+                    ) : selectedEntry.item.usable ? (
+                      <button
+                        type="button"
+                        id="btn-use-selected-item"
+                        className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                        onClick={() => handleUseItem(selectedEntry.originalIndex)}
+                      >
+                        <Utensils width={15} height={15} />
+                        <span>Использовать</span>
+                      </button>
+                    ) : null}
+
+                    <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        className="gu-btn gu-btn-s gu-btn-xs"
+                        onClick={() => handleTakeToHand('left', selectedEntry.originalIndex)}
+                        disabled={!!player.leftHandItem}
+                      >
+                        <Hand width={13} height={13} />
+                        <span>В левую руку</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="gu-btn gu-btn-s gu-btn-xs"
+                        onClick={() => handleTakeToHand('right', selectedEntry.originalIndex)}
+                        disabled={!!player.rightHandItem}
+                      >
+                        <Hand width={13} height={13} />
+                        <span>В правую руку</span>
+                      </button>
                     </div>
-                    <div className="gu-kv">
-                      <span className="gu-kv-k">Объём</span>
-                      <span className="gu-kv-v" style={{ color: 'var(--gu-amber-hi)' }}>
-                        {getItemTotalVolume(selectedEntry.item)} л
-                      </span>
+
+                    {/* Stash into other container */}
+                    {availableContainers.filter(cont => cont.id !== selectedEntry.item.id).length > 0 && (
+                      <div className="gu-row2 gu-wrap" style={{ gap: 5 }}>
+                        {availableContainers
+                          .filter(cont => cont.id !== selectedEntry.item.id)
+                          .map(cont => {
+                            const check = canItemFitInContainer(cont, selectedEntry.item);
+                            return (
+                              <button
+                                type="button"
+                                key={cont.id}
+                                onClick={() => handlePutIntoContainer(cont, selectedEntry.originalIndex)}
+                                disabled={!check.fits}
+                                className="gu-btn gu-btn-s gu-btn-xs"
+                                title={check.fits ? `Положить ${selectedEntry.item.nameRu} в ${cont.nameRu}` : check.reason}
+                              >
+                                <ArrowDownToLine width={13} height={13} color="#c9922b" />
+                                <span>В {cont.nameRu}</span>
+                                {cont.contents && cont.contents.length > 0 && (
+                                  <span style={{ color: 'var(--gu-amber-hi)' }}>({cont.contents.length})</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
+
+                    <div className="gu-row2" style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        id="btn-drop-selected-item"
+                        className="gu-btn gu-btn-d gu-btn-xs gu-btn-block"
+                        onClick={() => handleDropItem(selectedEntry.originalIndex)}
+                      >
+                        <Trash2 width={13} height={13} />
+                        <span>Выбросить 1 шт.</span>
+                      </button>
+
+                      {world && isPlayerNearTrashBin(player, world) && (
+                        <button
+                          type="button"
+                          id="btn-dispose-in-trash-bin"
+                          className="gu-btn gu-btn-s gu-btn-xs gu-btn-block"
+                          style={{ borderColor: 'rgba(201,146,43,0.55)', color: '#f0c264' }}
+                          onClick={() => {
+                            disposeTrashInBin(player, world, selectedEntry.originalIndex);
+                            forceRender(n => n + 1);
+                          }}
+                        >
+                          <Trash2 width={13} height={13} />
+                          <span>В урну (+Деньги)</span>
+                        </button>
+                      )}
                     </div>
+                  </div>
+
+                  {/* Description */}
+                  <div className="gu-note" style={{ lineHeight: 1.45, padding: '8px 12px', fontSize: 12, color: 'var(--gu-ink-dim)' }}>
+                    {selectedEntry.item.descriptionRu}
                   </div>
 
                   {/* Thermodynamics */}
                   {(() => {
                     const thermalInfo = getItemThermalDisplayInfo(selectedEntry.item);
                     return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                          <span className="gu-grp" style={{ fontSize: 13 }}>Термодинамика</span>
+                          <span className="gu-grp" style={{ fontSize: 12 }}>Термодинамика</span>
                           {thermalInfo.hazardBadge && (
                             <span className="gu-tag bad">
                               <Flame width={11} height={11} />
@@ -900,16 +1146,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     );
                   })()}
 
-                  {/* Description */}
-                  <div className="gu-note" style={{ lineHeight: 1.5, color: 'var(--gu-ink-dim)' }}>
-                    {selectedEntry.item.descriptionRu}
-                  </div>
-
                   {/* Nutritional Profile */}
                   {selectedEntry.item.nutrients && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                        <span className="gu-grp" style={{ fontSize: 13 }}>Пищевая ценность (БЖУ)</span>
+                        <span className="gu-grp" style={{ fontSize: 12 }}>Пищевая ценность (БЖУ)</span>
                         <span className="gu-tag amber">{selectedEntry.item.nutrients.calories} ккал</span>
                       </div>
                       <div className="gu-kv-grid">
@@ -941,9 +1182,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
                   {/* Smartphone Specs */}
                   {selectedEntry.item.phoneSpecs && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                        <span className="gu-grp" style={{ fontSize: 13 }}>{selectedEntry.item.phoneSpecs.modelName}</span>
+                        <span className="gu-grp" style={{ fontSize: 12 }}>{selectedEntry.item.phoneSpecs.modelName}</span>
                         <span className="gu-tag">{selectedEntry.item.phoneSpecs.osName}</span>
                       </div>
                       <div className="gu-kv-grid">
@@ -966,308 +1207,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       </div>
                     </div>
                   )}
-
-                  {/* Container Specs */}
-                  {selectedEntry.item.isContainer && (
-                    <div className="gu-note" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                        <span className="gu-grp" style={{ fontSize: 13 }}>Вместимость контейнера</span>
-                        <span style={{ fontWeight: 700, color: '#fff' }}>
-                          {selectedEntry.item.containerCapacityL} л / {selectedEntry.item.maxContainedWeightKg} кг
-                        </span>
-                      </div>
-                      <div className="gu-mut" style={{ fontSize: 13 }}>
-                        Внутри: {selectedEntry.item.contents?.length || 0} предметов.
-                      </div>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-p gu-btn-block"
-                        onClick={() => {
-                          setOpenContainer(selectedEntry.item);
-                          setSelectedContainerItemIdx(0);
-                        }}
-                      >
-                        <Package width={17} height={17} />
-                        <span>Просмотреть содержимое ({selectedEntry.item.contents?.length || 0})</span>
-                      </button>
-                      {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
-                        selectedEntry.item.contents &&
-                        selectedEntry.item.contents.length > 0 && (
-                          <button
-                            type="button"
-                            className="gu-btn gu-btn-s gu-btn-block"
-                            onClick={() => {
-                              unpackSingleUseContainer(player, selectedEntry.item, world);
-                              setSelectedIndex(0);
-                              forceRender(n => n + 1);
-                            }}
-                          >
-                            <Scissors width={17} height={17} />
-                            <span>Вскрыть упаковку ({selectedEntry.item.contents.length} предм.)</span>
-                          </button>
-                        )}
-                    </div>
-                  )}
-
-                  {/* Stash into other container */}
-                  {availableContainers.filter(cont => cont.id !== selectedEntry.item.id).length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <span className="gu-grp" style={{ fontSize: 13 }}>Спрятать в контейнер</span>
-                      <div className="gu-row2 gu-wrap" style={{ gap: 6 }}>
-                        {availableContainers
-                          .filter(cont => cont.id !== selectedEntry.item.id)
-                          .map(cont => {
-                            const check = canItemFitInContainer(cont, selectedEntry.item);
-                            return (
-                              <button
-                                type="button"
-                                key={cont.id}
-                                onClick={() => handlePutIntoContainer(cont, selectedEntry.originalIndex)}
-                                disabled={!check.fits}
-                                className="gu-btn gu-btn-s gu-btn-sm"
-                                title={check.fits ? `Положить ${selectedEntry.item.nameRu} в ${cont.nameRu}` : check.reason}
-                              >
-                                <ArrowDownToLine width={14} height={14} color="#c9922b" />
-                                <span>В {cont.nameRu}</span>
-                                {cont.contents && cont.contents.length > 0 && (
-                                  <span style={{ color: 'var(--gu-amber-hi)' }}>({cont.contents.length})</span>
-                                )}
-                              </button>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 6, borderTop: '1px solid var(--gu-line)' }}>
-                    <div className="gu-grid gu-g2">
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-s gu-btn-sm"
-                        onClick={() => handleTakeToHand('left', selectedEntry.originalIndex)}
-                        disabled={!!player.leftHandItem}
-                      >
-                        <Hand width={15} height={15} />
-                        <span>В левую руку</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-s gu-btn-sm"
-                        onClick={() => handleTakeToHand('right', selectedEntry.originalIndex)}
-                        disabled={!!player.rightHandItem}
-                      >
-                        <Hand width={15} height={15} />
-                        <span>В правую руку</span>
-                      </button>
-                    </div>
-
-                    {selectedEntry.item.clothingStats ? (
-                      <button
-                        type="button"
-                        id="btn-equip-selected-item"
-                        className="gu-btn gu-btn-p gu-btn-block"
-                        onClick={() => handleEquipItem(selectedEntry.originalIndex)}
-                      >
-                        <Shirt width={17} height={17} />
-                        <span>Надеть / Экипировать</span>
-                      </button>
-                    ) : selectedEntry.item.isContainer ? (
-                      <button
-                        type="button"
-                        id="btn-open-selected-container"
-                        className="gu-btn gu-btn-p gu-btn-block"
-                        onClick={() => {
-                          setOpenContainer(selectedEntry.item);
-                          setSelectedContainerItemIdx(0);
-                        }}
-                      >
-                        <Package width={17} height={17} />
-                        <span>Открыть контейнер ({selectedEntry.item.contents?.length || 0} предм.)</span>
-                      </button>
-                    ) : selectedEntry.item.phoneSpecs ||
-                      selectedEntry.item.itemId.startsWith('phone_') ||
-                      selectedEntry.item.itemId === 'smartphone' ? (
-                      <button
-                        type="button"
-                        id="btn-use-selected-phone"
-                        className="gu-btn gu-btn-p gu-btn-block"
-                        onClick={() => handleUseItem(selectedEntry.originalIndex)}
-                      >
-                        <Smartphone width={17} height={17} />
-                        <span>Включить экран телефона</span>
-                      </button>
-                    ) : selectedEntry.item.itemId.startsWith('car_key') ? (
-                      <div className="gu-note" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {(() => {
-                          const targetVeh = world ? getTargetVehicleForKey(player, selectedEntry.item, world) : null;
-                          const distM = targetVeh ? Math.round(Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y) / 10) : null;
-                          const isSmartOrDisplay = selectedEntry.item.keyTier === 'smart' || selectedEntry.item.keyTier === 'display';
-
-                          return (
-                            <>
-                              <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                                <span className="gu-grp" style={{ fontSize: 13 }}>
-                                  {selectedEntry.item.keyTier === 'display'
-                                    ? 'Smart Display Key'
-                                    : selectedEntry.item.keyTier === 'smart'
-                                    ? 'Smart Keyless-Go'
-                                    : selectedEntry.item.keyTier === 'flip'
-                                    ? 'Выкидной брелок'
-                                    : 'Ключ зажигания'}
-                                </span>
-                                {distM !== null ? (
-                                  <span className="gu-tag amber">{distM} м до авто</span>
-                                ) : (
-                                  <span className="gu-tag">Вне зоны</span>
-                                )}
-                              </div>
-
-                              {targetVeh && (
-                                <div className="gu-grid gu-g3" style={{ gap: 6 }}>
-                                  <div className="gu-kv" style={{ padding: '6px 8px' }}>
-                                    <span className="gu-kv-k">Замок</span>
-                                    <span className="gu-kv-v" style={{ color: targetVeh.isLocked ? '#f0c264' : '#9ac985' }}>
-                                      {targetVeh.isLocked ? 'Закрыт' : 'Открыт'}
-                                    </span>
-                                  </div>
-                                  <div className="gu-kv" style={{ padding: '6px 8px' }}>
-                                    <span className="gu-kv-k">ДВС</span>
-                                    <span className="gu-kv-v" style={{ color: targetVeh.engineState?.engineRunning ? '#9ac985' : 'var(--gu-mut)' }}>
-                                      {targetVeh.engineState?.engineRunning ? 'Вкл' : 'Выкл'}
-                                    </span>
-                                  </div>
-                                  <div className="gu-kv" style={{ padding: '6px 8px' }}>
-                                    <span className="gu-kv-k">Фары</span>
-                                    <span className="gu-kv-v" style={{ color: targetVeh.headlightsOn ? '#f0c264' : 'var(--gu-mut)' }}>
-                                      {targetVeh.headlightsOn ? 'Вкл' : 'Выкл'}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="gu-grid gu-g2" style={{ gap: 8 }}>
-                                <button
-                                  type="button"
-                                  className="gu-btn gu-btn-s gu-btn-sm"
-                                  onClick={() => {
-                                    handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_lock');
-                                    forceRender(n => n + 1);
-                                  }}
-                                >
-                                  {targetVeh?.isLocked ? <Unlock width={14} height={14} color="#c9922b" /> : <Lock width={14} height={14} color="#c9922b" />}
-                                  <span>{targetVeh?.isLocked ? 'Открыть ЦЗ' : 'Закрыть ЦЗ'}</span>
-                                </button>
-
-                                {isSmartOrDisplay ? (
-                                  <button
-                                    type="button"
-                                    className="gu-btn gu-btn-p gu-btn-sm"
-                                    onClick={() => {
-                                      handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_engine');
-                                      forceRender(n => n + 1);
-                                    }}
-                                  >
-                                    <Zap width={14} height={14} />
-                                    <span>{targetVeh?.engineState?.engineRunning ? 'Заглушить' : 'Автозапуск'}</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="gu-btn gu-btn-s gu-btn-sm"
-                                    onClick={() => {
-                                      handleCarKeyActivation(player, selectedEntry.item, world, 'horn');
-                                      forceRender(n => n + 1);
-                                    }}
-                                  >
-                                    <Volume2 width={14} height={14} color="#c9922b" />
-                                    <span>Поиск авто</span>
-                                  </button>
-                                )}
-
-                                {isSmartOrDisplay && (
-                                  <button
-                                    type="button"
-                                    className="gu-btn gu-btn-s gu-btn-sm"
-                                    onClick={() => {
-                                      handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_headlights');
-                                      forceRender(n => n + 1);
-                                    }}
-                                  >
-                                    <Lightbulb width={14} height={14} color="#c9922b" />
-                                    <span>{targetVeh?.headlightsOn ? 'Выкл фары' : 'Вкл фары'}</span>
-                                  </button>
-                                )}
-
-                                {isSmartOrDisplay && (
-                                  <button
-                                    type="button"
-                                    className="gu-btn gu-btn-s gu-btn-sm"
-                                    onClick={() => {
-                                      handleCarKeyActivation(player, selectedEntry.item, world, 'horn');
-                                      forceRender(n => n + 1);
-                                    }}
-                                  >
-                                    <Volume2 width={14} height={14} color="#c9922b" />
-                                    <span>Поиск (Сигнал)</span>
-                                  </button>
-                                )}
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    ) : selectedEntry.item.itemId.startsWith('property_') ||
-                      selectedEntry.item.itemId === 'car_pts' ||
-                      selectedEntry.item.itemId === 'car_tech_passport' ||
-                      selectedEntry.item.itemId === 'car_contract_dkp' ? (
-                      <button
-                        type="button"
-                        id="btn-inspect-selected-document"
-                        className="gu-btn gu-btn-p gu-btn-block"
-                        onClick={() => onInspectDocument?.(selectedEntry.item)}
-                      >
-                        <FileText width={17} height={17} />
-                        <span>Изучить / Просмотреть документ</span>
-                      </button>
-                    ) : selectedEntry.item.usable ? (
-                      <button
-                        type="button"
-                        id="btn-use-selected-item"
-                        className="gu-btn gu-btn-p gu-btn-block"
-                        onClick={() => handleUseItem(selectedEntry.originalIndex)}
-                      >
-                        <Utensils width={17} height={17} />
-                        <span>Использовать</span>
-                      </button>
-                    ) : null}
-
-                    <button
-                      type="button"
-                      id="btn-drop-selected-item"
-                      className="gu-btn gu-btn-d gu-btn-sm gu-btn-block"
-                      onClick={() => handleDropItem(selectedEntry.originalIndex)}
-                    >
-                      <Trash2 width={15} height={15} />
-                      <span>Выбросить 1 шт. на землю</span>
-                    </button>
-
-                    {world && isPlayerNearTrashBin(player, world) && (
-                      <button
-                        type="button"
-                        id="btn-dispose-in-trash-bin"
-                        className="gu-btn gu-btn-s gu-btn-sm gu-btn-block"
-                        style={{ borderColor: 'rgba(201,146,43,0.55)', color: '#f0c264' }}
-                        onClick={() => {
-                          disposeTrashInBin(player, world, selectedEntry.originalIndex);
-                          forceRender(n => n + 1);
-                        }}
-                      >
-                        <Trash2 width={15} height={15} />
-                        <span>Выбросить в урну (+Деньги)</span>
-                      </button>
-                    )}
-                  </div>
                 </>
               ) : (
                 <div className="gu-empty" style={{ minHeight: 320 }}>
