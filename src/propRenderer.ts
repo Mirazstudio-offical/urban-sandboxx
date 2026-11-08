@@ -1540,6 +1540,18 @@ export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp
     case 'railway_picket_post':
       renderPropRailwayPicketPost(ctx, prop);
       break;
+    case 'fallen_log':
+      renderPropFallenLog(ctx, prop);
+      break;
+    case 'tree_stump':
+      renderPropTreeStump(ctx, prop);
+      break;
+    case 'moss_boulder':
+      renderPropMossBoulder(ctx, prop);
+      break;
+    case 'anthill':
+      renderPropAnthill(ctx, prop);
+      break;
   }
 }
 
@@ -5754,6 +5766,289 @@ export function renderPropRailwayPicketPost(ctx: CanvasRenderingContext2D, prop:
   ctx.textAlign = 'center';
   ctx.fillText('4', 0, 2);
 }
+
+/**
+ * 9. FALLEN FOREST LOG (Поваленное замшелое бревно с трутовиками и корой)
+ */
+export function renderPropFallenLog(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  const isBirch = ((prop.variant ?? 0) % 3) === 1;
+  const halfL = 17;
+  const halfW = 3.8;
+
+  // Soft forest-floor ambient shadow
+  ctx.fillStyle = 'rgba(6, 20, 10, 0.42)';
+  ctx.beginPath();
+  ctx.ellipse(0.8, 1.5, halfL + 1.8, halfW + 1.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Broken side branch stubs
+  ctx.fillStyle = isBirch ? '#cbd5e1' : '#3e2723';
+  ctx.beginPath();
+  ctx.moveTo(-6, -halfW + 0.5);
+  ctx.lineTo(-9, -halfW - 3.5);
+  ctx.lineTo(-7, -halfW - 3.8);
+  ctx.lineTo(-4, -halfW + 0.5);
+  ctx.moveTo(7, halfW - 0.5);
+  ctx.lineTo(10, halfW + 3.2);
+  ctx.lineTo(8.2, halfW + 3.6);
+  ctx.lineTo(5.2, halfW - 0.5);
+  ctx.fill();
+
+  // Main cylindrical log body
+  ctx.fillStyle = isBirch ? '#e2e8f0' : '#4a2c1d';
+  ctx.beginPath();
+  ctx.roundRect(-halfL, -halfW, halfL * 2, halfW * 2, 2.2);
+  ctx.fill();
+
+  // Shaded underside of log
+  ctx.fillStyle = isBirch ? 'rgba(30, 41, 59, 0.35)' : 'rgba(24, 13, 8, 0.48)';
+  ctx.fillRect(-halfL + 1, 0.4, halfL * 2 - 2, halfW - 0.6);
+
+  // Sunlit top ridge / bark texture
+  ctx.fillStyle = isBirch ? '#f8fafc' : '#6d412a';
+  ctx.fillRect(-halfL + 1.5, -halfW + 0.6, halfL * 2 - 3, halfW * 0.72);
+
+  if (isBirch) {
+    // Dark birch lenticel stripes
+    ctx.fillStyle = '#1e293b';
+    for (let x = -13; x <= 13; x += 4.5) {
+      ctx.fillRect(x, -2.2 + ((x * 7) % 3), 1.4, 2.8);
+    }
+  } else {
+    // Deep longitudinal pine bark fissures
+    ctx.strokeStyle = '#27150c';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(-halfL + 2, -1.2);
+    ctx.lineTo(halfL - 2, -0.8);
+    ctx.moveTo(-halfL + 3, 1.1);
+    ctx.lineTo(halfL - 3, 1.4);
+    ctx.stroke();
+  }
+
+  // Splintered amber heartwood at both ends
+  ctx.fillStyle = '#d97706';
+  ctx.beginPath();
+  ctx.ellipse(-halfL + 0.8, 0, 1.5, halfW * 0.82, 0, 0, Math.PI * 2);
+  ctx.ellipse(halfL - 0.8, 0, 1.5, halfW * 0.82, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fde68a';
+  ctx.beginPath();
+  ctx.ellipse(-halfL + 0.8, 0, 0.8, halfW * 0.45, 0, 0, Math.PI * 2);
+  ctx.ellipse(halfL - 0.8, 0, 0.8, halfW * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Plush emerald moss cushions growing along the log
+  ctx.fillStyle = '#15803d';
+  ctx.beginPath();
+  ctx.ellipse(-5, -1.0, 5.5, 2.3, 0.08, 0, Math.PI * 2);
+  ctx.ellipse(6, -0.6, 4.2, 2.0, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#4ade80';
+  ctx.beginPath();
+  ctx.ellipse(-5.5, -1.3, 3.4, 1.2, 0.08, 0, Math.PI * 2);
+  ctx.ellipse(5.6, -0.9, 2.5, 1.0, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Shelf bracket fungi (трутовики) on the side of the log
+  ctx.fillStyle = '#b45309';
+  ctx.beginPath();
+  ctx.arc(1.5, halfW - 0.2, 2.1, 0, Math.PI);
+  ctx.arc(-2.5, -halfW + 0.2, 1.7, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fef3c7';
+  ctx.beginPath();
+  ctx.arc(1.5, halfW - 0.2, 1.3, 0, Math.PI);
+  ctx.fill();
+}
+
+/**
+ * 10. OLD FOREST TREE STUMP (Старый лесной пень с корнями, годовыми кольцами и опятами)
+ */
+export function renderPropTreeStump(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  const r = 6.2;
+
+  // Ground shadow
+  ctx.fillStyle = 'rgba(6, 20, 10, 0.42)';
+  ctx.beginPath();
+  ctx.ellipse(1.0, 1.2, r * 1.35, r * 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Flared root buttresses (корневые лапы)
+  ctx.fillStyle = '#3e2723';
+  for (let i = 0; i < 5; i++) {
+    const ang = (i * Math.PI * 2) / 5 + 0.3;
+    ctx.beginPath();
+    ctx.ellipse(
+      Math.cos(ang) * (r * 0.78),
+      Math.sin(ang) * (r * 0.78),
+      r * 0.58,
+      r * 0.28,
+      ang,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+  }
+
+  // Outer bark collar
+  ctx.fillStyle = '#27150c';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cut heartwood top surface with annual rings
+  ctx.fillStyle = '#b45309';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#fde68a';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.68, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#92400e';
+  ctx.lineWidth = 0.55;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.46, 0, Math.PI * 2);
+  ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+  // Radial age crack
+  ctx.moveTo(0, 0);
+  ctx.lineTo(r * 0.68, 1.2);
+  ctx.stroke();
+
+  // Moss cushion on north side of stump
+  ctx.fillStyle = '#16a34a';
+  ctx.beginPath();
+  ctx.ellipse(-2.4, -3.2, 3.2, 1.8, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cluster of honey agaric mushrooms (семейка опят на пне)
+  const caps = [
+    [3.8, 2.6, 1.35],
+    [2.6, 4.1, 1.15],
+    [4.6, 1.1, 1.05],
+  ];
+  for (let i = 0; i < caps.length; i++) {
+    const [cx, cy, cr] = caps[i];
+    ctx.fillStyle = '#d97706';
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#78350f';
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * 11. MOSSY FOREST BOULDER (Лесной гранитный валун со мхом и лишайником)
+ */
+export function renderPropMossBoulder(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  const rx = 9.5;
+  const ry = 7.2;
+
+  // Deep ground shadow
+  ctx.fillStyle = 'rgba(6, 18, 10, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(1.4, 1.8, rx + 1.5, ry + 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Base dark granite body
+  ctx.fillStyle = '#475569';
+  ctx.beginPath();
+  ctx.moveTo(-rx, -1.5);
+  ctx.lineTo(-rx * 0.65, -ry);
+  ctx.lineTo(rx * 0.45, -ry * 0.92);
+  ctx.lineTo(rx, -1.2);
+  ctx.lineTo(rx * 0.72, ry * 0.88);
+  ctx.lineTo(-rx * 0.55, ry);
+  ctx.closePath();
+  ctx.fill();
+
+  // Sunlit upper granite facet
+  ctx.fillStyle = '#64748b';
+  ctx.beginPath();
+  ctx.moveTo(-rx * 0.75, -1.2);
+  ctx.lineTo(-rx * 0.55, -ry * 0.85);
+  ctx.lineTo(rx * 0.35, -ry * 0.78);
+  ctx.lineTo(rx * 0.65, -0.5);
+  ctx.lineTo(-0.5, 2.2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Highlight ridge
+  ctx.fillStyle = '#94a3b8';
+  ctx.beginPath();
+  ctx.moveTo(-rx * 0.45, -ry * 0.65);
+  ctx.lineTo(rx * 0.25, -ry * 0.60);
+  ctx.lineTo(1.5, -1.0);
+  ctx.lineTo(-2.5, -0.8);
+  ctx.closePath();
+  ctx.fill();
+
+  // Velvety northern moss blanket covering half the boulder
+  ctx.fillStyle = '#15803d';
+  ctx.beginPath();
+  ctx.ellipse(-2.2, -1.8, 5.2, 3.6, -0.25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#22c55e';
+  ctx.beginPath();
+  ctx.ellipse(-2.6, -2.2, 3.4, 2.1, -0.25, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pale-green crustose lichen spots (лишайник на камне)
+  ctx.fillStyle = '#bbf7d0';
+  ctx.beginPath();
+  ctx.arc(3.8, 1.5, 1.3, 0, Math.PI * 2);
+  ctx.arc(2.1, 3.1, 0.9, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 12. TAIGA ANTHILL MOUND (Лесной муравейник из хвои с копошащимися рыжими муравьями)
+ */
+export function renderPropAnthill(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  const r = 8.2;
+
+  // Basal needle apron shadow
+  ctx.fillStyle = 'rgba(18, 10, 4, 0.42)';
+  ctx.beginPath();
+  ctx.ellipse(0.8, 1.2, r * 1.18, r * 1.08, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Outer pine-needle cone skirt
+  ctx.fillStyle = '#5c3418';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mid needle dome
+  ctx.fillStyle = '#784421';
+  ctx.beginPath();
+  ctx.arc(-0.4, -0.5, r * 0.76, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Sunlit apex of the anthill cone
+  ctx.fillStyle = '#9a5b2d';
+  ctx.beginPath();
+  ctx.arc(-0.8, -1.0, r * 0.46, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tiny entrance tunnels & scurrying red wood ants
+  const nowSec = typeof performance !== 'undefined' ? performance.now() * 0.001 : 0;
+  ctx.fillStyle = '#1c1917';
+  for (let i = 0; i < 6; i++) {
+    const ang = i * 1.04 + Math.sin(nowSec * 4.5 + i * 1.7) * 0.35;
+    const dist = 2.0 + ((i * 3 + Math.sin(nowSec * 3.2 + i) * 1.5) % 4.5);
+    const ax = Math.cos(ang) * dist;
+    const ay = Math.sin(ang) * dist;
+    ctx.fillRect(ax - 0.45, ay - 0.45, 0.9, 0.9);
+  }
+}
+
 
 
 

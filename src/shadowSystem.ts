@@ -1455,6 +1455,31 @@ function renderStreetPropShadows(
         sCtx.restore();
         break;
       }
+      case 'fallen_log': {
+        const off = getShadowOffset(6.5, sunState);
+        sCtx.save();
+        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 32, 7.5, angle, off.dx, off.dy);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 32, 7.5, angle, 0, 6.5, sunState);
+        sCtx.restore();
+        break;
+      }
+      case 'tree_stump':
+      case 'anthill': {
+        const off = getShadowOffset(7.5, sunState);
+        sCtx.save();
+        clipOutsideCircle(sCtx, prop.x, prop.y, 5.8, off.dx, off.dy);
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 6.0, 0, 7.5, sunState);
+        sCtx.restore();
+        break;
+      }
+      case 'moss_boulder': {
+        const off = getShadowOffset(9.5, sunState);
+        sCtx.save();
+        clipOutsideCircle(sCtx, prop.x, prop.y, 8.0, off.dx, off.dy);
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 8.2, 0, 9.5, sunState);
+        sCtx.restore();
+        break;
+      }
       case 'manhole':
       case 'drain_grate':
       case 'garden_path_tile':

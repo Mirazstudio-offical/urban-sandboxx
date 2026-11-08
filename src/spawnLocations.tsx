@@ -164,12 +164,22 @@ export const SPAWN_LOCATIONS: SpawnLocation[] = [
   },
   {
     id: 'pine_forest',
-    name: 'Pine Ridge Outpost',
-    nameRu: 'Лесной Заповедник & Магазин «Охота»',
-    x: 1200,
-    y: 1600,
-    description: 'Извилистые лесные тропы, сосновый бор, пруды и магазин снаряжения',
-    icon: <Map className="w-7 h-7 text-emerald-500" />,
+    name: 'Pine Ridge Forest Reserve',
+    nameRu: 'Лесной Заповедник & Поляна «Охота»',
+    x: 1600,
+    y: 1950,
+    description: 'Живой сосново-берёзовый бор: белки, зайцы, косули, грибные поляны, муравейники и магазин снаряжения',
+    icon: <TreePine className="w-7 h-7 text-emerald-500" />,
+    category: 'nature'
+  },
+  {
+    id: 'taiga_deep_forest',
+    name: 'Northern Taiga Wilderness',
+    nameRu: 'Северная Тайга & Берег Быстрицы',
+    x: 9250,
+    y: 1450,
+    description: 'Вековая сибирская тайга у изгиба реки: бурелом, замшелые валуны, дикие звери, черничники и белые грибы',
+    icon: <Map className="w-7 h-7 text-emerald-400" />,
     category: 'nature'
   },
   {

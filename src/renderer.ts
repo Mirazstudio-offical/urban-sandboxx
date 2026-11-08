@@ -33,6 +33,7 @@ import {
   getVehicleOpticsMounts
 } from './vehicleHelpers';
 import { trafficDiagnostics } from './aiTraffic';
+import { ForestSystem } from './forestSystem';
 import {
   renderSpecializedVehicleAttachments,
   getVehicleBasePolygon,
@@ -1286,6 +1287,23 @@ export class GameRenderer {
       camera.zoom
     );
 
+    // 7c-forest. Under-Canopy Forest Atmosphere & Woodland Fauna (Dappled sunbeams, mist, squirrels, hares, roe deer, butterflies)
+    ForestSystem.renderUnderCanopyAtmosphereAndFauna(
+      this.ctx,
+      world,
+      player,
+      visibleVehicles,
+      vpTrees,
+      minX,
+      minY,
+      maxX,
+      maxY,
+      timeHour,
+      nightAlpha,
+      camera.zoom
+    );
+    ForestSystem.updateForestAudioForPlayer(world, player, vpTrees, camera.x, camera.y, timeHour, 0.016);
+
     // 8. Buildings Base Structure & Entrances
     this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour);
 
@@ -1417,6 +1435,19 @@ export class GameRenderer {
       visiblePedestrians,
       vpTrees,
       remotePlayers
+    );
+
+    // 16e-forest. Over-Canopy Forest Effects (Falling pine needles, autumn leaves, birch catkins, canopy bird flocks, and night fireflies)
+    ForestSystem.renderOverCanopyEffects(
+      this.ctx,
+      world,
+      vpTrees,
+      minX,
+      minY,
+      maxX,
+      maxY,
+      timeHour,
+      nightAlpha
     );
 
     // 16e-mat. GPU Material G-Buffer Pass (Stamps exact material IDs & occluders so blue cars/roofs are NEVER treated as water)
@@ -6441,6 +6472,7 @@ export class GameRenderer {
     const sunKeyY = Math.round(sunY * 16);
 
     // Trees
+    const nowSec = performance.now() * 0.001;
     for (const tree of trees) {
       const r = Math.max(8, tree.radius || 16);
       if (tree.x + r * 1.25 < minX || tree.x - r * 1.25 > maxX ||
@@ -6448,6 +6480,17 @@ export class GameRenderer {
 
       const species = classifyTreeSpecies(tree);
       const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
+      const sway = this.lastWorld
+        ? ForestSystem.getTreeWindSway(tree, this.lastWorld, nowSec)
+        : { swayX: 0, swayY: 0 };
+
+      // Stationary root collar shadow so the trunk base stays anchored in soil while the crown sways
+      if (Math.abs(sway.swayX) > 0.3 || Math.abs(sway.swayY) > 0.3) {
+        ctx.fillStyle = 'rgba(20, 15, 10, 0.28)';
+        ctx.beginPath();
+        ctx.arc(tree.x, tree.y, Math.max(2.2, r * 0.16), 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       if (canUseOffscreenCache) {
         const qSeed = seed & 63;
@@ -6470,12 +6513,12 @@ export class GameRenderer {
           }
         }
         if (cached) {
-          ctx.drawImage(cached.canvas, tree.x - cached.half, tree.y - cached.half);
+          ctx.drawImage(cached.canvas, tree.x - cached.half + sway.swayX, tree.y - cached.half + sway.swayY);
           continue;
         }
       }
 
-      this.renderSingleTreeGeometry(ctx, tree, tree.x, tree.y, r, species, seed, sunState, sunX, sunY, season);
+      this.renderSingleTreeGeometry(ctx, tree, tree.x + sway.swayX, tree.y + sway.swayY, r, species, seed, sunState, sunX, sunY, season);
     }
 
     // Tall Intact Lampposts & Power Poles
@@ -8383,25 +8426,33 @@ export class GameRenderer {
       }
       ctx.rotate(b.angle);
 
-      // Bird body with night tint
-      const baseBirdColor = b.type === 'pigeon' ? '#64748b' : '#b45309';
+      // Bird body with species palette & night tint
+      const baseBirdColor =
+        b.type === 'pigeon' ? '#64748b' :
+        b.type === 'jay' ? '#9a7b69' :
+        b.type === 'woodpecker' ? '#1e293b' :
+        b.type === 'crow' ? '#18181b' : '#b45309';
       if (nightAlpha > 0.1) {
         ctx.fillStyle = '#0f172a';
       } else {
         ctx.fillStyle = baseBirdColor;
       }
       ctx.beginPath();
-      ctx.ellipse(0, 0, 2.8, 1.8, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, b.type === 'crow' ? 3.3 : 2.8, b.type === 'crow' ? 2.1 : 1.8, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Head
-      ctx.fillStyle = b.type === 'pigeon' ? '#475569' : '#78350f';
+      ctx.fillStyle =
+        b.type === 'pigeon' ? '#475569' :
+        b.type === 'woodpecker' ? '#dc2626' :
+        b.type === 'crow' ? '#09090b' :
+        b.type === 'jay' ? '#7c5e4d' : '#78350f';
       ctx.beginPath();
       ctx.arc(2.2, 0, 1.4, 0, Math.PI * 2);
       ctx.fill();
 
       // Beak
-      ctx.fillStyle = '#f59e0b';
+      ctx.fillStyle = b.type === 'crow' || b.type === 'woodpecker' ? '#52525b' : '#f59e0b';
       ctx.beginPath();
       ctx.moveTo(3.4, -0.6);
       ctx.lineTo(4.6, 0);
@@ -8409,10 +8460,15 @@ export class GameRenderer {
       ctx.fill();
 
       // Wings
+      const wingColor =
+        b.type === 'pigeon' ? '#334155' :
+        b.type === 'jay' ? '#38bdf8' :
+        b.type === 'woodpecker' ? '#f8fafc' :
+        b.type === 'crow' ? '#27272a' : '#451a03';
       const isWalking = b.state === 'ground' && (Math.abs(b.flyVX) > 0.5 || Math.abs(b.flyVY) > 0.5);
       if (b.state === 'flying' || isWalking) {
         const wingSpan = b.state === 'flying' ? 4.4 + Math.sin(b.wingCycle) * 2.6 : 3.0 + Math.sin(b.wingCycle) * 1.0;
-        ctx.strokeStyle = b.type === 'pigeon' ? '#334155' : '#451a03';
+        ctx.strokeStyle = wingColor;
         ctx.lineWidth = 1.6;
         ctx.beginPath();
         ctx.moveTo(0, -wingSpan);
@@ -8420,7 +8476,7 @@ export class GameRenderer {
         ctx.stroke();
       } else {
         // Folded wings
-        ctx.strokeStyle = b.type === 'pigeon' ? '#334155' : '#451a03';
+        ctx.strokeStyle = wingColor;
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.moveTo(-1, -1.2);

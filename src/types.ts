@@ -1454,7 +1454,11 @@ export interface StreetProp {
     | 'railway_platform_sign'
     | 'railway_clock'
     | 'railway_catenary_mast'
-    | 'railway_picket_post';
+    | 'railway_picket_post'
+    | 'fallen_log'
+    | 'tree_stump'
+    | 'moss_boulder'
+    | 'anthill';
   angle: number;
   intersectionId?: string;
   direction?: 'north' | 'south' | 'east' | 'west';
@@ -1509,7 +1513,7 @@ export interface Bird {
   id: string;
   x: number;
   y: number;
-  type: 'pigeon' | 'sparrow';
+  type: 'pigeon' | 'sparrow' | 'jay' | 'woodpecker' | 'crow';
   angle: number;
   state: 'ground' | 'flying';
   altitude: number; // 0 on ground, up to 100 in sky
@@ -1518,6 +1522,7 @@ export interface Bird {
   wingCycle: number;
   walkTimer?: number;
   groupId?: string; // Birds sit in groups
+  perchTreeId?: string;
 }
 
 export interface Puddle {

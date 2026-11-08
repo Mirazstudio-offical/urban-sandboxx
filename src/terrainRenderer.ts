@@ -23,6 +23,7 @@ import {
 import { getBiomeSampleAt } from './biomeSystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
 import { getRiverWaterAt } from './riverSystem';
+import { ForestSystem } from './forestSystem';
 
 interface TrampledGrassCell {
   crush: number;      // 0.0 (upright) to 1.0 (completely flattened to the soil)
@@ -57,9 +58,20 @@ export class TerrainRenderer {
   }
 
   /**
-   * Progressively compresses grass stems under rolling tires or walking feet.
-   * Never snaps instantaneously in 1 frame and only affects the exact tire/foot contact width.
+   * Progressively compresses grass stems under rolling tires, walking feet, or fleeing forest fauna.
+   * Never snaps instantaneously in 1 frame and only affects the exact contact width.
    */
+  public static stampTrampleFromFauna(
+    worldX: number,
+    worldY: number,
+    radius: number,
+    dirX: number,
+    dirY: number,
+    nowSec: number
+  ): void {
+    this.stampTrampleDisc(worldX, worldY, radius, dirX, dirY, 0.28, 0.68, false, nowSec);
+  }
+
   private static stampTrampleDisc(
     worldX: number,
     worldY: number,
@@ -1755,11 +1767,29 @@ export class TerrainRenderer {
     const redPoppyPath = new Path2D();         // Wild scarlet poppy petals (полевой мак)
     const darkEyePath = new Path2D();          // Dark velvet poppy eyes, cornflower centers & sunflower seed discs
 
+    // Batched Path2D layers for Deep Taiga & Mixed Forest Undergrowth
+    const pineNeedleLitterPath = new Path2D(); // Fallen russet pine needles & birch twigs on forest floor
+    const pineConePath = new Path2D();         // Fallen woody pine & spruce cones
+    const berryShrubLeafPath = new Path2D();   // Leathery dark-green bilberry (черника) & lingonberry (брусника) bushes
+    const blueberryFruitPath = new Path2D();   // Ripe indigo-blue forest blueberries
+    const lingonberryFruitPath = new Path2D(); // Ripe ruby-red forest lingonberries & wild strawberries
+    const mushroomStemPath = new Path2D();     // Creamy-white wild mushroom stalks
+    const boletusCapPath = new Path2D();       // Rich chestnut-brown porcini / boletus mushroom caps (боровики)
+    const chanterelleCapPath = new Path2D();   // Golden-orange trumpet chanterelle clusters (лисички)
+    const flyAgaricCapPath = new Path2D();     // Bright scarlet fly-agaric toadstool caps (мухоморы)
+    const flyAgaricSpotPath = new Path2D();    // White velum spots on fly-agaric caps & wood sorrel flowers
+
     let hasWheatOrSpikelets = false;
     let hasSilverFlora = false;
     let hasCloverOrRosettes = false;
     let hasFlowers = false;
     let hasSunflowers = false;
+    let hasForestUndergrowth = false;
+    let hasForestMushrooms = false;
+
+    ForestSystem.registerTrampleCallback((wx, wy, r, dx, dy, tSec) => {
+      this.stampTrampleFromFauna(wx, wy, r, dx, dy, tSec);
+    });
 
     // Fast inline helper: adds a curved, tapered botanical grass blade into a Path2D
     const addTaperedBlade = (
@@ -1917,9 +1947,12 @@ export class TerrainRenderer {
           swayY = swayY * (1 - crush) + trample.dirY * crush * 4.5;
         }
 
-        // Regional ecological biome traits (Forest North/West vs Lush Meadow vs Dry Steppe South/East)
-        const isForestZone = py < 2800 || (px < 3800 && py < 4600);
-        const isSteppeZone = py > 8200 || px > 11000;
+        // Regional ecological biome traits (Forest North/West/Logging vs Lush Meadow vs Dry Steppe South/East)
+        const isForestZone =
+          py < 2800 ||
+          (px < 3800 && py < 4600) ||
+          (px >= 8000 && px <= 18000 && py < 3880);
+        const isSteppeZone = !isForestZone && (py > 8200 || px > 11000);
         const isLawn = surf === 'lawn';
         const speciesRng = this.prng(gx, gy, 3209);
 
@@ -2089,6 +2122,92 @@ export class TerrainRenderer {
                   cloverVeinPath.arc(mx + perpX, my + perpY, 0.95, 0, Math.PI * 2);
                   cloverVeinPath.moveTo(mx - perpX + 0.9, my - perpY);
                   cloverVeinPath.arc(mx - perpX, my - perpY, 0.95, 0, Math.PI * 2);
+                }
+              }
+            } else if (isForestZone && !isLawn && speciesRng >= 0.72) {
+              // TYPE 4B: Authentic Taiga & Woodland Undergrowth (Хвойный опад, шишки, черничник, брусника и грибы)
+              hasForestUndergrowth = true;
+              const subRng = this.prng(gx, gy, 3719);
+
+              // 1) Fallen pine needle pairs & dry woodland twigs
+              for (let n = 0; n < 2; n++) {
+                const nx = px + (this.prng(gx + n * 7, gy, 3721) - 0.5) * 10;
+                const ny = py + (this.prng(gx, gy + n * 11, 3722) - 0.5) * 10;
+                const nang = this.prng(gx + n, gy - n, 3723) * Math.PI * 2;
+                pineNeedleLitterPath.moveTo(nx, ny);
+                pineNeedleLitterPath.lineTo(nx + Math.cos(nang) * 3.2, ny + Math.sin(nang) * 3.2);
+                pineNeedleLitterPath.moveTo(nx, ny);
+                pineNeedleLitterPath.lineTo(nx + Math.cos(nang + 0.42) * 3.0, ny + Math.sin(nang + 0.42) * 3.0);
+              }
+
+              if (subRng < 0.38) {
+                // 2) Fallen Pine / Spruce Cones (Лесные сосновые и еловые шишки)
+                const cx = px + (subRng - 0.19) * 12;
+                const cy = py + (this.prng(gx, gy, 3727) - 0.5) * 10;
+                const cAng = subRng * Math.PI * 4;
+                pineConePath.moveTo(cx + 2.2 * Math.cos(cAng), cy + 2.2 * Math.sin(cAng));
+                pineConePath.ellipse(cx, cy, 2.3, 1.35, cAng, 0, Math.PI * 2);
+              } else if (subRng < 0.78) {
+                // 3) Bilberry & Lingonberry Shrubs (Кустики лесной черники и брусники с ягодами)
+                const bx = px + swayX * 0.25;
+                const by = py + swayY * 0.25;
+                const isLingonberry = subRng > 0.58;
+                for (let l = 0; l < 4; l++) {
+                  const lang = l * 1.57 + subRng * 3.1;
+                  const lx = bx + Math.cos(lang) * 2.2;
+                  const ly = by + Math.sin(lang) * 2.2;
+                  berryShrubLeafPath.moveTo(lx + 1.8 * Math.cos(lang), ly + 1.8 * Math.sin(lang));
+                  berryShrubLeafPath.ellipse(lx, ly, 1.9, 1.15, lang, 0, Math.PI * 2);
+                }
+                if (!isSpring) {
+                  for (let b = 0; b < 3; b++) {
+                    const bang = b * 2.1 + subRng * 5.0;
+                    const fx = bx + Math.cos(bang) * 1.5;
+                    const fy = by + Math.sin(bang) * 1.5;
+                    if (isLingonberry) {
+                      lingonberryFruitPath.moveTo(fx + 0.9, fy);
+                      lingonberryFruitPath.arc(fx, fy, 0.9, 0, Math.PI * 2);
+                    } else {
+                      blueberryFruitPath.moveTo(fx + 0.95, fy);
+                      blueberryFruitPath.arc(fx, fy, 0.95, 0, Math.PI * 2);
+                    }
+                  }
+                }
+              } else if (cameraZoom > 0.40) {
+                // 4) Wild Forest Mushrooms (Белые грибы, золотистые лисички и мухоморы во мху)
+                hasForestMushrooms = true;
+                const mType = Math.floor(this.prng(gx, gy, 3739) * 3); // 0: boletus/cep, 1: chanterelles, 2: fly-agaric
+                const mx = px + swayX * 0.12;
+                const my = py + swayY * 0.12;
+
+                if (mType === 0) {
+                  // Porcini / Boletus (Боровик / Подберёзовик с толстой белой ножкой)
+                  mushroomStemPath.moveTo(mx + 1.2, my + 1.1);
+                  mushroomStemPath.ellipse(mx, my + 1.1, 1.25, 1.55, 0, 0, Math.PI * 2);
+                  boletusCapPath.moveTo(mx + 2.3, my - 0.3);
+                  boletusCapPath.ellipse(mx, my - 0.3, 2.35, 1.65, 0, 0, Math.PI * 2);
+                } else if (mType === 1) {
+                  // Golden Chanterelle Family (Семейка рыжих лисичек)
+                  for (let c = 0; c < 3; c++) {
+                    const cx = mx + (c - 1) * 2.4;
+                    const cy = my + ((c % 2) - 0.5) * 1.8;
+                    const cr = 1.45 - c * 0.18;
+                    chanterelleCapPath.moveTo(cx + cr, cy);
+                    chanterelleCapPath.ellipse(cx, cy, cr * 1.2, cr * 0.85, c * 0.4, 0, Math.PI * 2);
+                  }
+                } else {
+                  // Red Fly-Agaric Toadstool with white velum dots (Красный мухомор с белыми точками)
+                  mushroomStemPath.moveTo(mx + 0.95, my + 1.2);
+                  mushroomStemPath.ellipse(mx, my + 1.2, 0.95, 1.6, 0, 0, Math.PI * 2);
+                  flyAgaricCapPath.moveTo(mx + 2.2, my - 0.4);
+                  flyAgaricCapPath.ellipse(mx, my - 0.4, 2.25, 1.5, 0, 0, Math.PI * 2);
+                  // White spots on cap
+                  flyAgaricSpotPath.moveTo(mx - 0.8 + 0.4, my - 0.6);
+                  flyAgaricSpotPath.arc(mx - 0.8, my - 0.6, 0.42, 0, Math.PI * 2);
+                  flyAgaricSpotPath.moveTo(mx + 0.7 + 0.4, my - 0.5);
+                  flyAgaricSpotPath.arc(mx + 0.7, my - 0.5, 0.42, 0, Math.PI * 2);
+                  flyAgaricSpotPath.moveTo(mx + 0.4, my - 1.1);
+                  flyAgaricSpotPath.arc(mx, my - 1.1, 0.38, 0, Math.PI * 2);
                 }
               }
             } else if (isSteppeZone && speciesRng >= 0.56 && speciesRng < 0.74) {
@@ -2467,6 +2586,51 @@ export class TerrainRenderer {
       // Dark velvet centers (poppies, cornflowers, sunflower seed discs)
       ctx.fillStyle = 'rgba(24, 16, 12, 0.90)';
       ctx.fill(darkEyePath);
+    }
+
+    // 4.11 Batched Deep Taiga & Mixed Forest Undergrowth (Хвойный опад, шишки, черничник, брусника, грибы)
+    if (hasForestUndergrowth) {
+      // Fallen russet-brown pine needles & twigs
+      ctx.strokeStyle = isWet ? 'rgba(67, 36, 17, 0.48)' : 'rgba(92, 52, 24, 0.44)';
+      ctx.lineWidth = 0.85;
+      ctx.lineCap = 'round';
+      ctx.stroke(pineNeedleLitterPath);
+
+      // Fallen woody pine & spruce cones
+      ctx.fillStyle = isWet ? '#451a03' : '#5c2d16';
+      ctx.fill(pineConePath);
+
+      // Leathery dark-emerald berry shrub leaves
+      ctx.fillStyle = isAutumn ? '#3f6212' : '#14532d';
+      ctx.fill(berryShrubLeafPath);
+
+      // Ripe indigo-blue blueberries (черника)
+      ctx.fillStyle = '#1e3a8a';
+      ctx.fill(blueberryFruitPath);
+
+      // Ripe ruby-red lingonberries & wild strawberries (брусника и земляника)
+      ctx.fillStyle = '#dc2626';
+      ctx.fill(lingonberryFruitPath);
+    }
+
+    if (hasForestMushrooms) {
+      // Creamy-white mushroom stalks
+      ctx.fillStyle = '#f5f5f4';
+      ctx.fill(mushroomStemPath);
+
+      // Rich chestnut-brown porcini / boletus caps (белые грибы и подберёзовики)
+      ctx.fillStyle = '#78350f';
+      ctx.fill(boletusCapPath);
+
+      // Golden-amber chanterelles (лисички)
+      ctx.fillStyle = '#f59e0b';
+      ctx.fill(chanterelleCapPath);
+
+      // Scarlet fly-agaric caps with white velum dots (мухоморы)
+      ctx.fillStyle = '#dc2626';
+      ctx.fill(flyAgaricCapPath);
+      ctx.fillStyle = '#fafaf9';
+      ctx.fill(flyAgaricSpotPath);
     }
 
     ctx.restore();

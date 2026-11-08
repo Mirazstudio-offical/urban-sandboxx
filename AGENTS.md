@@ -43,7 +43,8 @@ When adding or modifying usable items in this codebase, you **must** implement t
 
 ---
 
-## Unslop UI Skill (`/skills/unslop/SKILL.md`)
-- В проект установлен локальный скилл **unslop** (доступен в `/skills/unslop/SKILL.md`, а также в `/.claude/skills/unslop/SKILL.md` и `/.agents/skills/unslop/SKILL.md`).
-- **ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ДЛЯ АГЕНТОВ:** При любом запросе на редизайн, полировку, чистку интерфейса («unslop», улучшение UI/UX, модальных окон, меню, HUD) или перед созданием новых экранов агент **ОБЯЗАН** сначала прочитать `/skills/unslop/SKILL.md` (и при необходимости справочники из `/skills/unslop/references/`: `signs.md`, `tokens.md`, `visuals.md`, `refs.md`, `effects.md`) через `view_file` и строго следовать его процессу.
+## Installed Project Skills (`/skills/*`)
+В проект установлены следующие скиллы (продублированы в `/skills/`, `/.claude/skills/` и `/.agents/skills/`). **Агент ОБЯЗАН прочитать соответствующий `SKILL.md` через `view_file` перед выполнением профильной задачи:**
 
+- **`/skills/unslop/SKILL.md`** (плюс справочники в `/skills/unslop/references/`):
+  - **Когда читать:** При любом запросе на редизайн, полировку, чистку интерфейса («unslop», улучшение UI/UX, модальных окон, меню, HUD) или перед созданием новых экранов.

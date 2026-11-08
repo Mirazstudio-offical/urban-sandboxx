@@ -2028,6 +2028,40 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
         yieldEnergy: 1.0e6, breakEnergy: 1.4e7,
         isWalkableWhenBroken: false
       };
+    case 'fallen_log':
+      return {
+        shape: 'box', halfWidth: 16, halfHeight: 4, resistance: 0.45, displayNameRu: 'поваленное бревно',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 420, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 2.5e6, breakEnergy: 2.0e7,
+        isWalkableWhenBroken: false
+      };
+    case 'tree_stump':
+      return {
+        shape: 'circle', radius: 6, resistance: 0.85, isIndestructible: true, displayNameRu: 'лесной пень',
+        anchorType: 'foundation_fixed',
+        postBreakMode: 'remain_solid',
+        massKg: 800, frictionStatic: 1.0, frictionKinetic: 1.0,
+        yieldEnergy: 1e9, breakEnergy: 1e9
+      };
+    case 'moss_boulder':
+      return {
+        shape: 'circle', radius: 8.5, resistance: 10.0, isIndestructible: true, displayNameRu: 'лесной валун',
+        anchorType: 'foundation_fixed',
+        postBreakMode: 'remain_solid',
+        massKg: 2500, frictionStatic: 1.0, frictionKinetic: 1.0,
+        yieldEnergy: 1e9, breakEnergy: 1e9
+      };
+    case 'anthill':
+      return {
+        shape: 'circle', radius: 7.5, resistance: 0.18, displayNameRu: 'лесной муравейник',
+        anchorType: 'granular_mound',
+        postBreakMode: 'remain_solid',
+        massKg: 180, frictionStatic: 0.92, frictionKinetic: 0.88,
+        yieldEnergy: 0.5e6, breakEnergy: 8.0e6,
+        isWalkableWhenBroken: false
+      };
     default:
       return {
         shape: 'circle', radius: 3.0, resistance: 0.15, displayNameRu: 'уличный объект',
@@ -13621,6 +13655,8 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       else if (prop.type === 'bollard') { debrisColor = '#334155'; debrisCount = 5; debrisSubtype = 'metal_flake'; }
       else if (prop.type === 'traffic_light') { debrisColor = '#eab308'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
       else if (prop.type === 'lamp_highway' || prop.type === 'lamp') { debrisColor = '#94a3b8'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'fallen_log') { debrisColor = '#78350f'; debrisCount = 9; debrisSubtype = 'wood_splinter'; }
+      else if (prop.type === 'anthill') { debrisColor = '#5c4028'; debrisCount = 10; debrisSubtype = 'wood_splinter'; }
 
       for (let d = 0; d < debrisCount; d++) {
         const dAngle = Math.random() * Math.PI * 2;

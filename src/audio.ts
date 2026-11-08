@@ -104,6 +104,7 @@ class SoundEngine {
       this.updateOverheatingSteam(false, 0);
       this.updateWheelRubScrape(0, 0);
       this.updateEngineFireSound(false, 0);
+      this.stopForestAmbiance();
     }
   }
 
@@ -143,6 +144,7 @@ class SoundEngine {
     this.updateOverheatingSteam(false, 0);
     this.updateWheelRubScrape(0, 0);
     this.updateEngineFireSound(false, 0);
+    this.stopForestAmbiance();
   }
 
   private getDistortionCurve(): Float32Array {
@@ -2522,6 +2524,381 @@ class SoundEngine {
       highFilter.connect(gain);
       gain.connect(this.ctx.destination);
       noiseSource.start(now);
+    } catch {}
+  }
+
+  // =========================================================================
+  // PROCEDURAL 3D FOREST SOUNDSCAPE SYNTHESIZER
+  // =========================================================================
+  private forestWindSource: AudioBufferSourceNode | null = null;
+  private forestWindFilter: BiquadFilterNode | null = null;
+  private forestWindGain: GainNode | null = null;
+  private forestLeafSource: AudioBufferSourceNode | null = null;
+  private forestLeafFilter: BiquadFilterNode | null = null;
+  private forestLeafGain: GainNode | null = null;
+  private isForestAmbiancePlaying: boolean = false;
+  private forestBirdTimer: number = 1.8;
+  private forestCuckooTimer: number = 9.5;
+  private forestWoodpeckerTimer: number = 6.2;
+  private forestOwlTimer: number = 8.0;
+  private forestCricketTimer: number = 0.45;
+  private forestStepTwigTimer: number = 0.35;
+
+  public stopForestAmbiance() {
+    if (!this.isForestAmbiancePlaying) return;
+    try {
+      if (this.forestWindGain && this.ctx) {
+        this.forestWindGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+      }
+      if (this.forestLeafGain && this.ctx) {
+        this.forestLeafGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+      }
+      if (this.forestWindSource) {
+        try { this.forestWindSource.stop(); this.forestWindSource.disconnect(); } catch {}
+        this.forestWindSource = null;
+      }
+      if (this.forestLeafSource) {
+        try { this.forestLeafSource.stop(); this.forestLeafSource.disconnect(); } catch {}
+        this.forestLeafSource = null;
+      }
+    } catch {}
+    this.isForestAmbiancePlaying = false;
+  }
+
+  /**
+   * Updates continuous 3D woodland acoustic ambiance based on local tree density,
+   * atmospheric wind speed, time of day, season, and underfoot player movement.
+   */
+  public updateForestAmbiance(
+    forestDensity: number,
+    windSpeed: number,
+    timeHour: number,
+    season: string,
+    isWet: boolean,
+    isPlayerWalkingInForest: boolean,
+    dt: number
+  ) {
+    if (!this.ctx || this.isMuted) {
+      if (this.isForestAmbiancePlaying) this.stopForestAmbiance();
+      return;
+    }
+
+    const clampedDensity = Math.max(0, Math.min(1, forestDensity));
+    const safeDt = Math.min(0.1, Math.max(0.001, dt || 0.016));
+
+    if (clampedDensity > 0.06) {
+      const now = this.ctx.currentTime;
+      const windNorm = Math.max(0.15, Math.min(2.2, windSpeed / 40));
+      // Pine crown low-mid sighing (bandpass ~380-680 Hz)
+      const pineTargetFreq = 340 + windNorm * 210 + Math.sin(now * 0.7) * 55;
+      const pineTargetGain = Math.min(0.16, clampedDensity * (0.045 + windNorm * 0.045)) * this.masterVolume;
+
+      // Birch/broadleaf high-frequency rustle (bandpass ~1800-3200 Hz, softer in winter)
+      const leafSeasonMult = season === 'winter' ? 0.25 : 1.0;
+      const leafTargetFreq = 1950 + windNorm * 650 + Math.cos(now * 1.1) * 180;
+      const leafTargetGain = Math.min(0.11, clampedDensity * (0.028 + windNorm * 0.036) * leafSeasonMult) * this.masterVolume;
+
+      if (!this.isForestAmbiancePlaying) {
+        try {
+          const bufferSize = this.ctx.sampleRate * 3;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          let b0 = 0, b1 = 0, b2 = 0;
+          for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            b0 = 0.997 * b0 + white * 0.029;
+            b1 = 0.985 * b1 + white * 0.032;
+            b2 = 0.950 * b2 + white * 0.048;
+            data[i] = (b0 + b1 + b2 + white * 0.08) * 0.35;
+          }
+
+          const outNode = this.getOutNode();
+
+          this.forestWindSource = this.ctx.createBufferSource();
+          this.forestWindSource.buffer = buffer;
+          this.forestWindSource.loop = true;
+
+          this.forestWindFilter = this.ctx.createBiquadFilter();
+          this.forestWindFilter.type = 'bandpass';
+          this.forestWindFilter.frequency.setValueAtTime(pineTargetFreq, now);
+          this.forestWindFilter.Q.setValueAtTime(1.8, now);
+
+          this.forestWindGain = this.ctx.createGain();
+          this.forestWindGain.gain.setValueAtTime(0.001, now);
+          this.forestWindGain.gain.setTargetAtTime(pineTargetGain, now, 0.35);
+
+          this.forestWindSource.connect(this.forestWindFilter);
+          this.forestWindFilter.connect(this.forestWindGain);
+          this.forestWindGain.connect(outNode);
+          this.forestWindSource.start(now);
+
+          // Leaf rustle layer
+          this.forestLeafSource = this.ctx.createBufferSource();
+          this.forestLeafSource.buffer = buffer;
+          this.forestLeafSource.loop = true;
+
+          this.forestLeafFilter = this.ctx.createBiquadFilter();
+          this.forestLeafFilter.type = 'bandpass';
+          this.forestLeafFilter.frequency.setValueAtTime(leafTargetFreq, now);
+          this.forestLeafFilter.Q.setValueAtTime(1.2, now);
+
+          this.forestLeafGain = this.ctx.createGain();
+          this.forestLeafGain.gain.setValueAtTime(0.001, now);
+          this.forestLeafGain.gain.setTargetAtTime(leafTargetGain, now, 0.35);
+
+          this.forestLeafSource.connect(this.forestLeafFilter);
+          this.forestLeafFilter.connect(this.forestLeafGain);
+          this.forestLeafGain.connect(outNode);
+          this.forestLeafSource.start(now);
+
+          this.isForestAmbiancePlaying = true;
+        } catch {}
+      } else {
+        if (this.forestWindFilter && this.forestWindGain) {
+          this.forestWindFilter.frequency.setTargetAtTime(pineTargetFreq, now, 0.2);
+          this.forestWindGain.gain.setTargetAtTime(pineTargetGain, now, 0.25);
+        }
+        if (this.forestLeafFilter && this.forestLeafGain) {
+          this.forestLeafFilter.frequency.setTargetAtTime(leafTargetFreq, now, 0.2);
+          this.forestLeafGain.gain.setTargetAtTime(leafTargetGain, now, 0.25);
+        }
+      }
+
+      // --- PROCEDURAL WOODLAND BIO-ACOUSTICS ---
+      const isDaytime = timeHour >= 5.0 && timeHour <= 20.5;
+      const isDawnChorus = timeHour >= 5.0 && timeHour <= 9.5;
+
+      if (isDaytime && !isWet) {
+        // 1. Songbird melodic warbles (chaffinch, titmouse, thrush)
+        this.forestBirdTimer -= safeDt * (isDawnChorus ? 1.5 : 1.0) * (0.6 + clampedDensity * 0.8);
+        if (this.forestBirdTimer <= 0) {
+          this.forestBirdTimer = (season === 'winter' ? 5.5 : 2.2) + Math.random() * 3.8;
+          this.playForestBirdsongWarble(clampedDensity * (0.45 + Math.random() * 0.55));
+        }
+
+        // 2. Distant woodland cuckoo ("ку-ку") in spring & summer
+        if (season === 'spring' || season === 'summer') {
+          this.forestCuckooTimer -= safeDt * clampedDensity;
+          if (this.forestCuckooTimer <= 0) {
+            this.forestCuckooTimer = 14.0 + Math.random() * 18.0;
+            this.playCuckooCall(clampedDensity * (0.35 + Math.random() * 0.45));
+          }
+        }
+
+        // 3. Woodpecker hollow trunk drumming ("д-д-д-д-д")
+        if (clampedDensity > 0.22) {
+          this.forestWoodpeckerTimer -= safeDt * clampedDensity;
+          if (this.forestWoodpeckerTimer <= 0) {
+            this.forestWoodpeckerTimer = 11.0 + Math.random() * 16.0;
+            this.playWoodpeckerDrumming(clampedDensity * (0.4 + Math.random() * 0.5));
+          }
+        }
+      } else if (!isDaytime) {
+        // 4. Nighttime Eurasian Eagle-Owl / Tawny Owl hollow hoot ("у-хуу")
+        this.forestOwlTimer -= safeDt * clampedDensity;
+        if (this.forestOwlTimer <= 0) {
+          this.forestOwlTimer = 12.0 + Math.random() * 18.0;
+          this.playOwlHoot(clampedDensity * (0.45 + Math.random() * 0.45));
+        }
+
+        // 5. Warm-season forest glade crickets
+        if ((season === 'summer' || season === 'autumn') && !isWet) {
+          this.forestCricketTimer -= safeDt;
+          if (this.forestCricketTimer <= 0) {
+            this.forestCricketTimer = 0.8 + Math.random() * 1.4;
+            this.playCricketChirp(clampedDensity * 0.35);
+          }
+        }
+      }
+
+      // 6. Crisp dry twig snaps & fern rustle under player boots when walking in forest
+      if (isPlayerWalkingInForest) {
+        this.forestStepTwigTimer -= safeDt;
+        if (this.forestStepTwigTimer <= 0) {
+          this.forestStepTwigTimer = 0.42 + Math.random() * 0.55;
+          this.playForestTwigSnap(Math.min(1.0, 0.45 + clampedDensity * 0.55));
+        }
+      }
+    } else if (this.isForestAmbiancePlaying) {
+      this.stopForestAmbiance();
+    }
+  }
+
+  private playForestBirdsongWarble(intensity: number = 0.6) {
+    if (!this.ctx || this.isMuted || intensity <= 0.05) return;
+    try {
+      const now = this.ctx.currentTime;
+      const vol = Math.min(0.12, 0.08 * intensity * this.masterVolume);
+      const outNode = this.getOutNode();
+      const noteCount = 3 + Math.floor(Math.random() * 4);
+      const baseFreq = 2100 + Math.random() * 1100;
+
+      for (let i = 0; i < noteCount; i++) {
+        const t0 = now + i * (0.095 + Math.random() * 0.035);
+        const dur = 0.065 + Math.random() * 0.035;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        const fStart = baseFreq * (0.92 + (i % 2) * 0.18 + Math.random() * 0.08);
+        const fEnd = fStart * (i === noteCount - 1 ? 0.84 : 1.14);
+        osc.frequency.setValueAtTime(fStart, t0);
+        osc.frequency.exponentialRampToValueAtTime(fEnd, t0 + dur);
+
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.linearRampToValueAtTime(vol, t0 + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+        osc.connect(gain);
+        gain.connect(outNode);
+        osc.start(t0);
+        osc.stop(t0 + dur + 0.01);
+      }
+    } catch {}
+  }
+
+  private playCuckooCall(intensity: number = 0.5) {
+    if (!this.ctx || this.isMuted || intensity <= 0.05) return;
+    try {
+      const now = this.ctx.currentTime;
+      const vol = Math.min(0.09, 0.065 * intensity * this.masterVolume);
+      const outNode = this.getOutNode();
+      // Classic minor/major third descending two-note call: ~660 Hz ("ку-") -> ~528 Hz ("-ку")
+      const notes = [
+        { freq: 659.25, offset: 0, dur: 0.16 },
+        { freq: 523.25, offset: 0.28, dur: 0.24 }
+      ];
+      for (const n of notes) {
+        const t0 = now + n.offset;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(n.freq, t0);
+        osc.frequency.exponentialRampToValueAtTime(n.freq * 0.985, t0 + n.dur);
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.linearRampToValueAtTime(vol, t0 + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + n.dur);
+        osc.connect(gain);
+        gain.connect(outNode);
+        osc.start(t0);
+        osc.stop(t0 + n.dur + 0.01);
+      }
+    } catch {}
+  }
+
+  private playWoodpeckerDrumming(intensity: number = 0.5) {
+    if (!this.ctx || this.isMuted || intensity <= 0.05) return;
+    try {
+      const now = this.ctx.currentTime;
+      const vol = Math.min(0.11, 0.08 * intensity * this.masterVolume);
+      const outNode = this.getOutNode();
+      const taps = 7 + Math.floor(Math.random() * 5);
+      const tapInterval = 0.052; // ~19 Hz rapid hollow trunk resonance
+      const trunkPitch = 460 + Math.random() * 140;
+
+      for (let i = 0; i < taps; i++) {
+        const t0 = now + i * tapInterval;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(trunkPitch * (1.05 - i * 0.006), t0);
+        osc.frequency.exponentialRampToValueAtTime(160, t0 + 0.028);
+
+        const tapEnv = vol * (1 - (i / taps) * 0.35);
+        gain.gain.setValueAtTime(tapEnv, t0);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.032);
+
+        osc.connect(gain);
+        gain.connect(outNode);
+        osc.start(t0);
+        osc.stop(t0 + 0.035);
+      }
+    } catch {}
+  }
+
+  private playOwlHoot(intensity: number = 0.5) {
+    if (!this.ctx || this.isMuted || intensity <= 0.05) return;
+    try {
+      const now = this.ctx.currentTime;
+      const vol = Math.min(0.10, 0.075 * intensity * this.masterVolume);
+      const outNode = this.getOutNode();
+      // Deep resonant hollow hoot: short "у-" followed by drawn-out vibrato "хууу"
+      const phrases = [
+        { f0: 360, f1: 340, offset: 0, dur: 0.22 },
+        { f0: 345, f1: 295, offset: 0.42, dur: 0.65 }
+      ];
+      for (const p of phrases) {
+        const t0 = now + p.offset;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(p.f0, t0);
+        osc.frequency.exponentialRampToValueAtTime(p.f1, t0 + p.dur);
+
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.linearRampToValueAtTime(vol, t0 + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + p.dur);
+
+        osc.connect(gain);
+        gain.connect(outNode);
+        osc.start(t0);
+        osc.stop(t0 + p.dur + 0.02);
+      }
+    } catch {}
+  }
+
+  private playCricketChirp(intensity: number = 0.35) {
+    if (!this.ctx || this.isMuted || intensity <= 0.03) return;
+    try {
+      const now = this.ctx.currentTime;
+      const vol = Math.min(0.05, 0.035 * intensity * this.masterVolume);
+      const outNode = this.getOutNode();
+      for (let pulse = 0; pulse < 3; pulse++) {
+        const t0 = now + pulse * 0.045;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(4150 + (pulse % 2) * 120, t0);
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.linearRampToValueAtTime(vol, t0 + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.032);
+        osc.connect(gain);
+        gain.connect(outNode);
+        osc.start(t0);
+        osc.stop(t0 + 0.036);
+      }
+    } catch {}
+  }
+
+  private playForestTwigSnap(intensity: number = 0.6) {
+    if (!this.ctx || this.isMuted || intensity <= 0.05) return;
+    try {
+      const now = this.ctx.currentTime;
+      const vol = Math.min(0.11, 0.075 * intensity * this.masterVolume);
+      const outNode = this.getOutNode();
+
+      // Short crisp dry pine needle / twig crackle under boot
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.055);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.012));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(2200 + Math.random() * 900, now);
+      filter.Q.setValueAtTime(2.4, now);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(outNode);
+      noise.start(now);
     } catch {}
   }
 }
