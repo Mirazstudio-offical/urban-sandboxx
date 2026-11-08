@@ -18,6 +18,7 @@ import {
   getPlayerTotalCarriedWeight, 
   getItemTotalWeight, 
   getItemTotalVolume,
+  getPlayerCompartments,
   putItemInHand,
   addPlayerNotification
 } from '../items';
@@ -33,7 +34,10 @@ import {
   Package, 
   Info,
   Flame,
-  CloudRain
+  CloudRain,
+  User,
+  Shirt,
+  Luggage
 } from 'lucide-react';
 
 interface FurnitureStorageModalProps {
@@ -186,6 +190,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     notifyChange();
   };
 
+  const compartments = getPlayerCompartments(player);
   const filteredInventory = (player.inventory || []).map((it, idx) => ({ item: it, originalIndex: idx })).filter(({ item }) => {
     if (!item) return false;
     if (selectedCategory === 'all') return true;
@@ -263,63 +268,38 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
           </div>
 
           <div className="gu-st-scroll">
-            <div className="gu-li-list">
-              {storage.items.length === 0 ? (
-                <div className="gu-empty">
-                  <Package width={40} height={40} />
-                  {isRadiator ? (
-                    <>
-                      <div className="gu-empty-t">На батарее ничего не сушится</div>
-                      <div>Положите сюда сырую одежду, мокрые носки, обувь или напитки для согревания и сушки.</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="gu-empty-t">Хранилище пусто</div>
-                      <div>Выберите предметы в инвентаре справа, чтобы сложить их сюда.</div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                storage.items.map((it, idx) => {
-                  const isSelected = selectedStorageIdx === idx;
-                  const isWet = (it.wetness ?? 0) > 0;
-                  const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
-                  return (
-                    <div
-                      key={it.id || idx}
-                      onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); }}
-                      className={'gu-li' + (isSelected ? ' on' : '')}
-                    >
-                      <div className="gu-ic">
-                        <ItemIconCanvas itemId={it.itemId} item={it} size={38} />
-                        {it.count > 1 && <span className="gu-ic-n">{it.count}</span>}
-                      </div>
-                      <div className="gu-li-main">
-                        <div className="gu-li-name">{it.nameRu}</div>
-                        <div className="gu-li-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span>{getItemTotalWeight(it).toFixed(2)} кг · {getItemTotalVolume(it).toFixed(1)} л</span>
-                          {isWet && (
-                            <span style={{ color: '#7dd3fc', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                              <CloudRain width={12} height={12} /> {Math.round(it.wetness!)}%
-                            </span>
-                          )}
-                          {isHotSurface && isWet && <span style={{ color: 'var(--gu-amber-hi)', fontWeight: 600 }}>Сушится…</span>}
-                        </div>
-                      </div>
-                      {itemTemp >= 40 && <span className="gu-tag amber">+{Math.round(itemTemp)}°C</span>}
-                      {itemTemp <= 4 && <span className="gu-tag cold">{Math.round(itemTemp)}°C</span>}
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleTakeItem(idx, 1); }}
-                        className="gu-btn gu-btn-s gu-btn-sm"
-                        title="Забрать предмет в карманы"
-                      >
-                        {isRadiator ? 'Снять' : 'Забрать'}
-                      </button>
-                    </div>
-                  );
-                })
-              )}
+            {storage.items.length === 0 && (
+              <div className="gu-empty" style={{ padding: '14px 0 18px' }}>
+                {isRadiator ? (
+                  <div>На батарее ничего не сушится. Положите сюда мокрую одежду, обувь или напитки.</div>
+                ) : (
+                  <div>Хранилище пусто. Выберите предмет в инвентаре справа.</div>
+                )}
+              </div>
+            )}
+            <div className="gu-slots">
+              {Array.from({ length: Math.max(24, storage.items.length + 6) }, (_, idx) => {
+                const it = storage.items[idx];
+                if (!it) return <div key={'e' + idx} className="gu-slot empty" />;
+                const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
+                const isHot = itemTemp >= 40;
+                const isCold = itemTemp <= 4;
+                return (
+                  <div
+                    key={it.id || idx}
+                    onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); }}
+                    onDoubleClick={() => handleTakeItem(idx, 1)}
+                    className={'gu-slot' + (selectedStorageIdx === idx ? ' on' : '') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
+                    title={`${it.nameRu}\n${getItemTotalWeight(it).toFixed(2)} кг · ${getItemTotalVolume(it).toFixed(1)} л`}
+                  >
+                    <ItemIconCanvas itemId={it.itemId} item={it} size={44} />
+                    {it.count > 1 && <span className="gu-ic-n">{it.count}</span>}
+                    {isHot && <span className="gu-slot-t">+{Math.round(itemTemp)}°</span>}
+                    {isCold && <span className="gu-slot-t cold">{Math.round(itemTemp)}°</span>}
+                    {(it.wetness ?? 0) > 0 && <span className="gu-slot-wet"><CloudRain width={11} height={11} /></span>}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -366,55 +346,55 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
           </div>
 
           <div className="gu-st-scroll">
-            <div className="gu-li-list">
-              {filteredInventory.length === 0 ? (
-                <div className="gu-empty">
-                  <Package width={40} height={40} />
-                  <div className="gu-empty-t">Нет подходящих предметов</div>
-                  <div>В выбранной категории инвентаря пусто.</div>
-                </div>
-              ) : (
-                filteredInventory.map(({ item, originalIndex }) => {
-                  const isSelected = selectedInventoryIdx === originalIndex;
-                  const isWet = (item.wetness ?? 0) > 0;
-                  const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
-                  return (
-                    <div
-                      key={item.id || originalIndex}
-                      onClick={() => { setSelectedInventoryIdx(originalIndex); setSelectedStorageIdx(null); }}
-                      className={'gu-li' + (isSelected ? ' on' : '')}
-                    >
-                      <div className="gu-ic">
-                        <ItemIconCanvas itemId={item.itemId} item={item} size={38} />
-                        {item.count > 1 && <span className="gu-ic-n">{item.count}</span>}
-                      </div>
-                      <div className="gu-li-main">
-                        <div className="gu-li-name">{item.nameRu}</div>
-                        <div className="gu-li-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span>{getItemTotalWeight(item).toFixed(2)} кг · {getItemTotalVolume(item).toFixed(1)} л</span>
-                          {isWet && (
-                            <span style={{ color: '#7dd3fc', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                              <CloudRain width={12} height={12} /> {Math.round(item.wetness!)}%
-                            </span>
-                          )}
+            {compartments.map(comp => {
+              const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
+              const CompIcon = comp.iconType === 'user' ? User : comp.iconType === 'shirt' ? Shirt : Luggage;
+              return (
+                <div key={comp.id} className="gu-group">
+                  <div className="gu-group-h">
+                    <span className="gu-group-t"><CompIcon width={16} height={16} />{comp.nameRu}</span>
+                    <span className="gu-grp-meta">{comp.usedVolumeL}/{comp.capacityL} л · {comp.usedWeightKg}/{comp.maxWeightKg} кг</span>
+                  </div>
+                  <div className="gu-slots">
+                    {slots.map(slotIdx => {
+                      const item = (player.inventory || [])[slotIdx];
+                      if (!item) return <div key={slotIdx} className="gu-slot empty" />;
+                      const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
+                      const isHot = itemTemp >= 40;
+                      const isCold = itemTemp <= 4;
+                      const matches = selectedCategory === 'all' || item.category === selectedCategory;
+                      return (
+                        <div
+                          key={slotIdx}
+                          onClick={() => { setSelectedInventoryIdx(slotIdx); setSelectedStorageIdx(null); }}
+                          onDoubleClick={() => handleStoreItem(slotIdx, 1)}
+                          className={'gu-slot' + (selectedInventoryIdx === slotIdx ? ' on' : '') + (matches ? '' : ' dim') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
+                          title={`${item.nameRu}\n${getItemTotalWeight(item).toFixed(2)} кг · ${getItemTotalVolume(item).toFixed(1)} л`}
+                        >
+                          <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
+                          {item.count > 1 && <span className="gu-ic-n">{item.count}</span>}
+                          {isHot && <span className="gu-slot-t">+{Math.round(itemTemp)}°</span>}
+                          {isCold && <span className="gu-slot-t cold">{Math.round(itemTemp)}°</span>}
+                          {(item.wetness ?? 0) > 0 && <span className="gu-slot-wet"><CloudRain width={11} height={11} /></span>}
                         </div>
-                      </div>
-                      {itemTemp >= 40 && <span className="gu-tag amber">+{Math.round(itemTemp)}°C</span>}
-                      {itemTemp <= 4 && <span className="gu-tag cold">{Math.round(itemTemp)}°C</span>}
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleStoreItem(originalIndex, 1); }}
-                        className="gu-btn gu-btn-p gu-btn-sm"
-                        title={isRadiator ? 'Положить на батарею' : 'Положить в хранилище'}
-                      >
-                        <ArrowLeft width={14} height={14} /> {isRadiator ? 'На батарею' : 'В шкаф'}
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
+
+          {selectedInventoryIdx !== null && (player.inventory || [])[selectedInventoryIdx] && (
+            <div className="gu-st-pick">
+              <span style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                {(player.inventory || [])[selectedInventoryIdx]!.nameRu}
+              </span>
+              <button type="button" onClick={() => handleStoreItem(selectedInventoryIdx)} className="gu-btn gu-btn-p gu-btn-xs">
+                <ArrowLeft width={13} height={13} /> {isRadiator ? 'На батарею' : 'В шкаф'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </ModalShell>
