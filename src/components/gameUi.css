@@ -896,14 +896,14 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
 .gu-hand {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 76px;
-  padding: 10px 14px;
+  gap: 12px;
+  min-height: 0;
+  padding: 8px 12px;
   border-radius: 12px;
   border: 1px dashed rgba(255, 255, 255, 0.18);
 }
 .gu-hand.full { border-style: solid; background: rgba(255, 255, 255, 0.04); }
-.gu-hand-acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; flex: none; max-width: 52%; }
+.gu-hand-acts { display: flex; gap: 4px; flex: none; }
 
 .gu-meters { display: flex; gap: 16px; margin-bottom: 14px; }
 .gu-meter { flex: 1; min-width: 0; }
@@ -943,4 +943,85 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Compact rows for short landscape screens (phones, with or without the browser bar) */
+@media (max-height: 600px) {
+  .gu-ic { width: 36px; height: 36px; border-radius: 8px; }
+  .gu-ic canvas { width: 28px !important; height: 28px !important; }
+  .gu-ic.gu-md { width: 44px; height: 44px; }
+  .gu-ic.gu-md canvas { width: 36px !important; height: 36px !important; }
+  .gu-ic-n { font-size: 11px; right: 3px; bottom: 1px; }
+  .gu-li { padding: 5px 10px; gap: 10px; border-radius: 10px; }
+  .gu-li-name { font-size: 14px; }
+  .gu-li-sub { font-size: 12px; margin-top: 0; }
+  .gu-li-list { gap: 5px; }
+  .gu-group-h { margin-bottom: 6px; }
+  .gu-group + .gu-group { margin-top: 10px; }
+  .gu-group-t { font-size: 15px; }
+  .gu-group-m { font-size: 12px; }
+  .gu-hand { min-height: 0; padding: 6px 10px; gap: 10px; }
+
+  .gu-meters { margin-bottom: 8px; }
+  .gu-st-head { margin-bottom: 8px; }
+  .gu-st-title { font-size: 16px; }
+}
+
+/* ==========================================================================
+   Slot grid: compact square slots grouped by whose they are (pockets, shirt,
+   jeans, backpack). Names live in the tooltip and the detail panel.
+   ========================================================================== */
+.gu-slots { display: grid; grid-template-columns: repeat(auto-fill, 56px); gap: 6px; }
+.gu-slot {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 9px;
+  background: #0d0e10;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, transform 0.12s;
+}
+.gu-slot.empty { background: rgba(255, 255, 255, 0.025); border-style: dashed; border-color: rgba(255, 255, 255, 0.1); cursor: default; }
+.gu-slot:not(.empty):hover { border-color: rgba(255, 255, 255, 0.35); background: #15161a; }
+.gu-slot.on { border-color: var(--gu-amber); background: rgba(201, 146, 43, 0.16); box-shadow: 0 0 0 1px var(--gu-amber) inset; }
+.gu-slot.dim { opacity: 0.28; }
+.gu-slot.hot { border-color: rgba(239, 166, 144, 0.55); }
+.gu-slot.cold { border-color: rgba(125, 211, 252, 0.5); }
+.gu-slot .gu-ic-n { right: 4px; bottom: 3px; }
+.gu-slot-t {
+  position: absolute; right: 3px; top: 2px; font-size: 10px; font-weight: 700; line-height: 1; color: #efa690;
+  font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000;
+}
+.gu-slot-t.cold { color: #7dd3fc; }
+.gu-slot-wet { position: absolute; left: 4px; bottom: 3px; color: #7dd3fc; display: flex; }
+.gu-grp-meta { font-size: 12px; color: var(--gu-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gu-grp-meta .bad { color: #efa690; }
+@media (max-height: 600px) {
+  .gu-slots { grid-template-columns: repeat(auto-fill, 44px); gap: 4px; }
+  .gu-slot { width: 44px; height: 44px; border-radius: 8px; }
+  .gu-slot canvas { width: 34px !important; height: 34px !important; }
+  .gu-slot .gu-ic-n { font-size: 10px; right: 3px; bottom: 2px; }
+}
+
+/* Short landscape screens: panels fill the modal and only the slot area scrolls */
+@media (max-height: 600px) {
+  .gu-st-split { height: 100%; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .gu-st-split > .gu-panel { height: 100%; min-height: 0; padding: 8px 10px; overflow: hidden; }
+  .gu-st-split .gu-st-scroll { max-height: none; flex: 1 1 0; min-height: 0; }
+  .gu-st-split .gu-pills { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 8px !important; scrollbar-width: none; }
+  .gu-st-split .gu-pill { flex: none; height: 28px; padding: 0 10px; font-size: 12px; }
+  .gu-st-split .gu-meters { margin-bottom: 8px; gap: 10px; }
+  .gu-st-split .gu-meter-h { font-size: 12px; margin-bottom: 4px; }
+  .gu-st-pick { margin-top: 6px; padding: 6px 8px; gap: 6px; flex: none; }
+  .gu-st-pick .gu-btn { height: 28px; padding: 0 8px; font-size: 12px; }
+  .gu-hand .gu-li-main > .gu-li-name + .gu-li-sub { display: none; }
+  .gu-hand .gu-li-sub { font-size: 11px; }
+  .gu-hand .gu-li-name { font-size: 14px; }
+}
+@media (max-width: 720px) and (min-height: 601px) {
+  .gu-st-split { grid-template-columns: minmax(0, 1fr); }
 }
