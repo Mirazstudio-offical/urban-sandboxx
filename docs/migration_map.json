@@ -1,0 +1,772 @@
+{
+ "mapped": {
+  "tray_plastic_empty": {
+   "target": "tray",
+   "attrs": {}
+  },
+  "vacuum_pack_torn": {
+   "target": "vacuum_pack",
+   "attrs": {
+    "opened": true
+   }
+  },
+  "vacuum_pack_small": {
+   "target": "vacuum_pack",
+   "attrs": {
+    "size": "small"
+   }
+  },
+  "vacuum_pack_small_torn": {
+   "target": "vacuum_pack",
+   "attrs": {
+    "opened": true,
+    "size": "small"
+   }
+  },
+  "vacuum_pack_medium": {
+   "target": "vacuum_pack",
+   "attrs": {
+    "size": "medium"
+   }
+  },
+  "vacuum_pack_medium_torn": {
+   "target": "vacuum_pack",
+   "attrs": {
+    "opened": true,
+    "size": "medium"
+   }
+  },
+  "vacuum_pack_large": {
+   "target": "vacuum_pack",
+   "attrs": {
+    "size": "large"
+   }
+  },
+  "vacuum_pack_large_torn": {
+   "target": "vacuum_pack",
+   "attrs": {
+    "opened": true,
+    "size": "large"
+   }
+  },
+  "tray_sealed_food": {
+   "target": "tray",
+   "attrs": {
+    "opened": false
+   }
+  },
+  "tray_sealed_food_torn": {
+   "target": "tray",
+   "attrs": {
+    "opened": true
+   }
+  },
+  "pouch_sealed_snack": {
+   "target": "pouch",
+   "attrs": {
+    "opened": false
+   }
+  },
+  "pouch_sealed_snack_torn": {
+   "target": "pouch",
+   "attrs": {
+    "opened": true
+   }
+  },
+  "paper_packaging_mini": {
+   "target": "paper_packaging",
+   "attrs": {
+    "size": "mini"
+   }
+  },
+  "paper_packaging_mini_open": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "size": "mini"
+   }
+  },
+  "paper_packaging_small": {
+   "target": "paper_packaging",
+   "attrs": {
+    "size": "small"
+   }
+  },
+  "paper_packaging_small_open": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "size": "small"
+   }
+  },
+  "paper_packaging_open": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true
+   }
+  },
+  "paper_packaging_large": {
+   "target": "paper_packaging",
+   "attrs": {
+    "size": "large"
+   }
+  },
+  "paper_packaging_large_open": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "size": "large"
+   }
+  },
+  "paper_packaging_red": {
+   "target": "paper_packaging",
+   "attrs": {
+    "labelColor": "red"
+   }
+  },
+  "paper_packaging_open_red": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "labelColor": "red"
+   }
+  },
+  "paper_packaging_green": {
+   "target": "paper_packaging",
+   "attrs": {
+    "labelColor": "green"
+   }
+  },
+  "paper_packaging_open_green": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "labelColor": "green"
+   }
+  },
+  "paper_packaging_blue": {
+   "target": "paper_packaging",
+   "attrs": {
+    "labelColor": "blue"
+   }
+  },
+  "paper_packaging_open_blue": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "labelColor": "blue"
+   }
+  },
+  "paper_packaging_amber": {
+   "target": "paper_packaging",
+   "attrs": {
+    "labelColor": "amber"
+   }
+  },
+  "paper_packaging_open_amber": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "labelColor": "amber"
+   }
+  },
+  "paper_packaging_purple": {
+   "target": "paper_packaging",
+   "attrs": {
+    "labelColor": "purple"
+   }
+  },
+  "paper_packaging_open_purple": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "labelColor": "purple"
+   }
+  },
+  "paper_packaging_black": {
+   "target": "paper_packaging",
+   "attrs": {
+    "labelColor": "black"
+   }
+  },
+  "paper_packaging_open_black": {
+   "target": "paper_packaging",
+   "attrs": {
+    "opened": true,
+    "labelColor": "black"
+   }
+  },
+  "sandwich": {
+   "target": "sandwich_food",
+   "attrs": {}
+  },
+  "burger": {
+   "target": "burger",
+   "attrs": {}
+  },
+  "pizza_slice": {
+   "target": "pizza",
+   "attrs": {}
+  },
+  "apple": {
+   "target": "apple",
+   "attrs": {}
+  },
+  "banana": {
+   "target": "banana",
+   "attrs": {}
+  },
+  "chocolate": {
+   "target": "chocolate_bar",
+   "attrs": {}
+  },
+  "chips": {
+   "target": "chips",
+   "attrs": {
+    "container": "bag"
+   }
+  },
+  "nuggets": {
+   "target": "chicken_nuggets",
+   "attrs": {}
+  },
+  "nugget_single": {
+   "target": "chicken_nuggets",
+   "attrs": {
+    "count": 1
+   }
+  },
+  "cookie_pack": {
+   "target": "cookies",
+   "attrs": {}
+  },
+  "cookie_single": {
+   "target": "cookies",
+   "attrs": {
+    "count": 1
+   }
+  },
+  "sushi_set": {
+   "target": "sushi_rolls",
+   "attrs": {}
+  },
+  "sushi_roll_piece": {
+   "target": "sushi_rolls",
+   "attrs": {
+    "count": 1
+   }
+  },
+  "wok_box": {
+   "target": "wok_noodles_chicken_teriyaki",
+   "attrs": {
+    "container": "box"
+   }
+  },
+  "military_ration": {
+   "target": "military_ration",
+   "attrs": {
+    "container": "box"
+   }
+  },
+  "popcorn_caramel": {
+   "target": "popcorn_caramel",
+   "attrs": {
+    "container": "bucket"
+   }
+  },
+  "nachos": {
+   "target": "nachos",
+   "attrs": {
+    "container": "tray"
+   }
+  },
+  "french_fries": {
+   "target": "french_fries",
+   "attrs": {
+    "container": "box"
+   }
+  },
+  "hot_dog": {
+   "target": "hot_dog",
+   "attrs": {}
+  },
+  "donut": {
+   "target": "donut",
+   "attrs": {}
+  },
+  "croissant": {
+   "target": "croissant",
+   "attrs": {}
+  },
+  "soup": {
+   "target": "soup",
+   "attrs": {
+    "container": "bowl"
+   }
+  },
+  "bread_loaf": {
+   "target": "bread",
+   "attrs": {
+    "container": "bag"
+   }
+  },
+  "milkshake": {
+   "target": "milkshake",
+   "attrs": {
+    "container": "cup"
+   }
+  },
+  "canned_meat": {
+   "target": "meat_stew",
+   "attrs": {
+    "container": "can"
+   }
+  },
+  "canned_fish": {
+   "target": "fish_in_oil",
+   "attrs": {
+    "container": "can"
+   }
+  },
+  "condensed_milk": {
+   "target": "condensed_milk",
+   "attrs": {
+    "container": "can"
+   }
+  },
+  "jar_pickles": {
+   "target": "pickles",
+   "attrs": {
+    "container": "jar"
+   }
+  },
+  "jam_raspberry": {
+   "target": "jam_raspberry",
+   "attrs": {
+    "container": "jar"
+   }
+  },
+  "jam_strawberry": {
+   "target": "jam_strawberry",
+   "attrs": {
+    "container": "jar"
+   }
+  },
+  "jar_honey": {
+   "target": "honey",
+   "attrs": {
+    "container": "jar"
+   }
+  },
+  "caviar_squash_jar": {
+   "target": "squash_caviar",
+   "attrs": {
+    "container": "jar"
+   }
+  },
+  "caviar_eggplant_jar": {
+   "target": "eggplant_caviar",
+   "attrs": {
+    "container": "jar"
+   }
+  },
+  "berries_mixed_frozen": {
+   "target": "berries_mixed",
+   "attrs": {
+    "frozen": true
+   }
+  },
+  "vegetable_mix_frozen": {
+   "target": "vegetables_mixed",
+   "attrs": {
+    "frozen": true
+   }
+  },
+  "ice_cream": {
+   "target": "ice_cream",
+   "attrs": {}
+  },
+  "carrot_fresh": {
+   "target": "carrot",
+   "attrs": {
+    "fresh": true
+   }
+  },
+  "beet_fresh": {
+   "target": "beet",
+   "attrs": {
+    "fresh": true
+   }
+  },
+  "beef_minced": {
+   "target": "beef",
+   "attrs": {
+    "minced": true,
+    "weight_kg": 1
+   }
+  },
+  "pork_minced": {
+   "target": "pork",
+   "attrs": {
+    "minced": true,
+    "weight_kg": 1
+   }
+  },
+  "chicken_minced": {
+   "target": "chicken",
+   "attrs": {
+    "minced": true,
+    "weight_kg": 1
+   }
+  },
+  "turkey_minced": {
+   "target": "turkey",
+   "attrs": {
+    "minced": true,
+    "weight_kg": 1
+   }
+  },
+  "minced_meat_mixed": {
+   "target": "mixed_meat",
+   "attrs": {
+    "minced": true,
+    "weight_kg": 1
+   }
+  },
+  "beef_rump_large": {
+   "target": "beef",
+   "attrs": {
+    "cut": "rump"
+   }
+  },
+  "chicken_breast_large": {
+   "target": "chicken",
+   "attrs": {
+    "cut": "breast"
+   }
+  },
+  "chicken_thighs_medium": {
+   "target": "chicken",
+   "attrs": {
+    "cut": "thighs"
+   }
+  },
+  "pork_ribs_medium": {
+   "target": "pork",
+   "attrs": {
+    "cut": "ribs"
+   }
+  },
+  "salmon_steak": {
+   "target": "salmon",
+   "attrs": {
+    "cut": "steak"
+   }
+  },
+  "cod_fillet": {
+   "target": "cod",
+   "attrs": {
+    "cut": "fillet"
+   }
+  },
+  "sugar": {
+   "target": "sugar",
+   "attrs": {
+    "container": "bag"
+   }
+  },
+  "kvas": {
+   "target": "kvas",
+   "attrs": {}
+  },
+  "cola": {
+   "target": "cola",
+   "attrs": {}
+  },
+  "cola_zero": {
+   "target": "cola_zero",
+   "attrs": {}
+  },
+  "soda_can": {
+   "target": "cola",
+   "attrs": {}
+  },
+  "water_bottle": {
+   "target": "water_mineral",
+   "attrs": {}
+  },
+  "beer": {
+   "target": "beer",
+   "attrs": {}
+  },
+  "carton_milk": {
+   "target": "milk",
+   "attrs": {}
+  },
+  "fresh_juice": {
+   "target": "orange_juice",
+   "attrs": {}
+  },
+  "energy_drink": {
+   "target": "energy_drink",
+   "attrs": {}
+  },
+  "hot_coffee": {
+   "target": "coffee_espresso",
+   "attrs": {}
+  },
+  "cappuccino": {
+   "target": "cappuccino",
+   "attrs": {}
+  },
+  "tea_green": {
+   "target": "tea_sencha",
+   "attrs": {}
+  },
+  "chips_bag": {
+   "target": "bag",
+   "attrs": {}
+  },
+  "sandwich_bag": {
+   "target": "bag",
+   "attrs": {}
+  },
+  "chocolate_wrapper": {
+   "target": "wrapper",
+   "attrs": {}
+  },
+  "burger_wrapper": {
+   "target": "wrapper",
+   "attrs": {}
+  },
+  "hot_dog_wrapper": {
+   "target": "wrapper",
+   "attrs": {}
+  },
+  "pizza_plate": {
+   "target": "plate",
+   "attrs": {}
+  },
+  "fries_box": {
+   "target": "box",
+   "attrs": {}
+  },
+  "shake_cup": {
+   "target": "cup",
+   "attrs": {}
+  },
+  "popcorn_bucket": {
+   "target": "bucket",
+   "attrs": {}
+  },
+  "wok_box_empty": {
+   "target": "box",
+   "attrs": {}
+  },
+  "ration_box": {
+   "target": "box",
+   "attrs": {}
+  },
+  "sushi_tray_empty": {
+   "target": "tray",
+   "attrs": {}
+  },
+  "nachos_tray_empty": {
+   "target": "tray",
+   "attrs": {}
+  },
+  "soup_bowl_empty": {
+   "target": "bowl",
+   "attrs": {}
+  },
+  "juice_box": {
+   "target": "carton",
+   "attrs": {}
+  },
+  "cup_disposable": {
+   "target": "cup",
+   "attrs": {}
+  },
+  "can_empty": {
+   "target": "can",
+   "attrs": {}
+  },
+  "bottle_empty": {
+   "target": "bottle",
+   "attrs": {}
+  },
+  "tin_can_empty": {
+   "target": "can",
+   "attrs": {}
+  },
+  "cola_zero_empty": {
+   "target": "can",
+   "attrs": {}
+  },
+  "energy_can_empty": {
+   "target": "can",
+   "attrs": {}
+  },
+  "camp_flask_empty": {
+   "target": "flask",
+   "attrs": {}
+  },
+  "apple_core": {
+   "target": "apple",
+   "attrs": {}
+  },
+  "banana_peel": {
+   "target": "banana",
+   "attrs": {}
+  },
+  "plastic_bag": {
+   "target": "bag",
+   "attrs": {}
+  },
+  "package_bag": {
+   "target": "bag",
+   "attrs": {}
+  },
+  "fuel_canister": {
+   "target": "canister",
+   "attrs": {}
+  },
+  "camp_flask": {
+   "target": "flask",
+   "attrs": {}
+  },
+  "soup_bowl": {
+   "target": "bowl",
+   "attrs": {}
+  },
+  "paper_cup": {
+   "target": "cup",
+   "attrs": {}
+  },
+  "glass_mug": {
+   "target": "mug",
+   "attrs": {}
+  },
+  "thermos": {
+   "target": "thermos",
+   "attrs": {}
+  },
+  "tetra_pack_1000": {
+   "target": "carton",
+   "attrs": {}
+  },
+  "can_alu_330": {
+   "target": "can",
+   "attrs": {}
+  },
+  "can_metal_small": {
+   "target": "can",
+   "attrs": {}
+  },
+  "can_metal_medium": {
+   "target": "can",
+   "attrs": {}
+  },
+  "can_metal_large": {
+   "target": "can",
+   "attrs": {}
+  },
+  "bottle_plastic_500": {
+   "target": "bottle",
+   "attrs": {}
+  },
+  "bottle_plastic_1500": {
+   "target": "bottle",
+   "attrs": {}
+  },
+  "glass_bottle_500": {
+   "target": "bottle",
+   "attrs": {}
+  },
+  "bottle_glass_medium": {
+   "target": "bottle",
+   "attrs": {}
+  },
+  "bottle_glass_large": {
+   "target": "bottle",
+   "attrs": {}
+  },
+  "jar_glass_small": {
+   "target": "jar",
+   "attrs": {}
+  },
+  "jar_glass_medium": {
+   "target": "jar",
+   "attrs": {}
+  },
+  "jar_glass_large": {
+   "target": "jar",
+   "attrs": {}
+  },
+  "paper_packaging": {
+   "target": "paper_packaging",
+   "attrs": {}
+  },
+  "kitchen_plate_ceramic": {
+   "target": "plate",
+   "attrs": {}
+  },
+  "kitchen_plate_porcelain": {
+   "target": "plate",
+   "attrs": {}
+  },
+  "kitchen_plate_enamel": {
+   "target": "bowl",
+   "attrs": {}
+  },
+  "kitchen_bowl_wooden": {
+   "target": "bowl",
+   "attrs": {}
+  },
+  "kitchen_mug_ceramic": {
+   "target": "mug",
+   "attrs": {}
+  },
+  "kitchen_mug_enamel": {
+   "target": "mug",
+   "attrs": {}
+  },
+  "kitchen_mug_glass": {
+   "target": "mug",
+   "attrs": {}
+  },
+  "kitchen_cup_porcelain": {
+   "target": "cup",
+   "attrs": {}
+  }
+ },
+ "out_of_scope": [
+  "ammonia_bottle_empty",
+  "antifreeze_empty",
+  "antiseptic_empty",
+  "canister_metal_20l",
+  "canister_plastic_10l",
+  "canister_plastic_5l",
+  "diclofenac_tube_empty",
+  "iodine_bottle_empty",
+  "kitchen_plate_enamel",
+  "kitchen_pot_aluminum",
+  "kitchen_pot_cast_iron",
+  "kitchen_pot_enamel",
+  "kitchen_pot_steel",
+  "lukoshko",
+  "medkit_empty",
+  "motor_oil_empty",
+  "ointment_tube_empty",
+  "panthenol_empty",
+  "peroxide_bottle_empty",
+  "pill_bottle_empty",
+  "sack_cloth_large",
+  "sack_cloth_medium",
+  "sack_cloth_small",
+  "sleeping_bag",
+  "star_tin_empty",
+  "valerian_bottle_empty",
+  "zelenka_bottle_empty"
+ ]
+}
