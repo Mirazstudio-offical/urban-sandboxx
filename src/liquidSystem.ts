@@ -114,7 +114,44 @@ export type LiquidId =
   | 'chickpeas'
   | 'sugar'
   | 'flour'
-  | 'salt';
+  | 'salt'
+  | 'marinade'
+  | 'canned_preserve'
+  | 'vegetable_caviar'
+  | 'puree'
+  | 'rendered_fat'
+  | 'oil_culinary'
+  | 'vinegar'
+  | 'sauce'
+  | 'syrup_sweet'
+  | 'dairy_fermented'
+  | 'dry_mix'
+  | 'grain'
+  | 'spice_dry'
+  | 'medical_solution';
+
+export interface FluidSubstanceAttributes {
+  varietyRu: string;
+  varietyEn?: string;
+  sourceIngredients: string | string[];
+  preparationMethod: string;
+  purpose: string;
+  reasonAndOrigin: string;
+  customColor?: string;
+  secondaryColor?: string;
+  isOpened?: boolean;
+  culinaryEquivalentId?: string;
+  medicalEffectId?: string;
+  customEffects?: {
+    hunger?: number;
+    thirst?: number;
+    health?: number;
+    energy?: number;
+    sleepiness?: number;
+    soothePanic?: number;
+  };
+  customTasteMessages?: string[];
+}
 
 export interface LiquidDef {
   id: LiquidId;
@@ -1571,6 +1608,184 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     color: '#e2e8f0',
     toxicWarning: 'Пищевая поваренная соль для блюд и консервации.',
     stainType: 'sand'
+  },
+  marinade: {
+    id: 'marinade',
+    name: 'Marinated Preserve',
+    nameRu: 'Маринованная заготовка',
+    category: 'food',
+    densityKgPerL: 1.05,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#ca8a04',
+    effects: { hunger: 22, thirst: 12, energy: 6, soothePanic: 20 },
+    tasteMessages: ['Пикантный кисло-пряный вкус маринованной заготовки', 'Ароматный пряный маринад с уксусной кислинкой'],
+    stainType: 'water'
+  },
+  canned_preserve: {
+    id: 'canned_preserve',
+    name: 'Sterilized Canned Preserve',
+    nameRu: 'Консервы стерилизованные',
+    category: 'food',
+    densityKgPerL: 1.12,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#9a3412',
+    effects: { hunger: 45, thirst: 8, energy: 12, soothePanic: 25 },
+    tasteMessages: ['Сытные автоклавированные консервы в собственном соку', 'Густое томлёное содержимое консервной банки'],
+    stainType: 'oil'
+  },
+  vegetable_caviar: {
+    id: 'vegetable_caviar',
+    name: 'Braised Vegetable Caviar',
+    nameRu: 'Икра овощная томлёная',
+    category: 'food',
+    densityKgPerL: 1.08,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#ea580c',
+    effects: { hunger: 32, thirst: 10, health: 4, soothePanic: 20 },
+    tasteMessages: ['Нежная томлёная овощная икра с маслом и кореньями', 'Густая протёртая овощная масса домашнего увара'],
+    stainType: 'oil'
+  },
+  puree: {
+    id: 'puree',
+    name: 'Concentrated Puree / Paste',
+    nameRu: 'Пюре / Паста густая',
+    category: 'food',
+    densityKgPerL: 1.15,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#b91c1c',
+    effects: { hunger: 25, thirst: 6, energy: 8, soothePanic: 15 },
+    tasteMessages: ['Густое однородное концентрированное пюре', 'Насыщенная уваренная паста мелкого протирания'],
+    stainType: 'water'
+  },
+  rendered_fat: {
+    id: 'rendered_fat',
+    name: 'Rendered Culinary Fat',
+    nameRu: 'Топлёный жир / Смалец',
+    category: 'food',
+    densityKgPerL: 0.92,
+    isDrinkable: false,
+    isFlammable: true,
+    color: '#fef08a',
+    toxicWarning: 'Чистый вытопленный кулинарный жир для жарки, томления и смазки сковороды.',
+    stainType: 'oil'
+  },
+  oil_culinary: {
+    id: 'oil_culinary',
+    name: 'Pressed Culinary Oil',
+    nameRu: 'Масло кулинарное отжимное',
+    category: 'food',
+    densityKgPerL: 0.92,
+    isDrinkable: false,
+    isFlammable: true,
+    color: '#eab308',
+    toxicWarning: 'Кулинарное масло прямого отжима для жарки и заправки блюд.',
+    stainType: 'oil'
+  },
+  vinegar: {
+    id: 'vinegar',
+    name: 'Fermented / Table Vinegar',
+    nameRu: 'Уксус кулинарный',
+    category: 'food',
+    densityKgPerL: 1.01,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#fef3c7',
+    toxicWarning: 'Кислотный уксус для маринадов, консервации и заправки. Пить в чистом виде нельзя!',
+    stainType: 'water'
+  },
+  sauce: {
+    id: 'sauce',
+    name: 'Culinary Sauce',
+    nameRu: 'Соус кулинарный',
+    category: 'food',
+    densityKgPerL: 1.12,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#7f1d1d',
+    effects: { hunger: 12, thirst: -4, energy: 5, soothePanic: 15 },
+    tasteMessages: ['Пряный концентрированный кулинарный соус', 'Насыщенный вкус выдержанного соуса'],
+    stainType: 'water'
+  },
+  syrup_sweet: {
+    id: 'syrup_sweet',
+    name: 'Sweet Syrup / Condensed Sweet',
+    nameRu: 'Сироп / Сгущённая сладость',
+    category: 'food',
+    densityKgPerL: 1.30,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#fde68a',
+    effects: { hunger: 38, energy: 25, soothePanic: 35 },
+    tasteMessages: ['Густая тягучая карамельно-сливочная сладость', 'Приторно-сладкий густой сироп'],
+    stainType: 'water'
+  },
+  dairy_fermented: {
+    id: 'dairy_fermented',
+    name: 'Fermented Dairy Product',
+    nameRu: 'Кисломолочный продукт',
+    category: 'food',
+    densityKgPerL: 1.03,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#f8fafc',
+    effects: { hunger: 26, thirst: 18, health: 6, soothePanic: 25 },
+    tasteMessages: ['Нежный освежающий кисломолочный вкус на живой закваске', 'Густой ферментированный молочный продукт'],
+    stainType: 'water'
+  },
+  dry_mix: {
+    id: 'dry_mix',
+    name: 'Dry Culinary Mix / Powder',
+    nameRu: 'Сухая смесь',
+    category: 'granular',
+    densityKgPerL: 0.55,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#d6d3d1',
+    toxicWarning: 'Сухая кулинарная смесь или концентрат. Требует заваривания, разведения или термической готовки.',
+    stainType: 'sand'
+  },
+  grain: {
+    id: 'grain',
+    name: 'Dry Grain / Groats',
+    nameRu: 'Крупа / Зерно сухое',
+    category: 'granular',
+    densityKgPerL: 0.78,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fde047',
+    toxicWarning: 'Сухая крупа или зерно. Требует варки в воде или бульоне.',
+    stainType: 'sand'
+  },
+  spice_dry: {
+    id: 'spice_dry',
+    name: 'Dry Spice / Seasoning',
+    nameRu: 'Пряность / Специя сухая',
+    category: 'granular',
+    densityKgPerL: 0.50,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#b45309',
+    toxicWarning: 'Концентрированная сухая пряность для приправления блюд при готовке.',
+    stainType: 'sand'
+  },
+  medical_solution: {
+    id: 'medical_solution',
+    name: 'Medical Solution / Liniment',
+    nameRu: 'Медицинский состав',
+    category: 'medical',
+    densityKgPerL: 0.98,
+    isDrinkable: false,
+    isFlammable: true,
+    color: '#0284c7',
+    toxicWarning: 'Фармацевтический препарат для медицинского применения.',
+    stainType: 'water'
   }
 };
 
@@ -1581,6 +1796,7 @@ export interface FluidContainerState {
   emptyWeightKg: number;
   baseItemNameRu: string;
   baseItemNameEn?: string;
+  attributes?: FluidSubstanceAttributes;
 }
 
 export interface ContainerDefConfig {
@@ -1596,6 +1812,8 @@ export interface ContainerDefConfig {
   descriptionEn: string;
   defaultLiquidId?: LiquidId | null;
   defaultAmountMl?: number;
+  openedVariantId?: string;
+  isSealedByDefault?: boolean;
 }
 
 export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
@@ -1608,7 +1826,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.55,
     category: 'drink',
     icon: 'Bottle',
-    descriptionRu: 'Универсальная пластиковая ПЭТ-бутылка объемом 0.5 литра. Можно наполнять любой жидкостью или песком.',
+    descriptionRu: 'Универсальная пластиковая ПЭТ-бутылка объемом 0.5 литра. Можно наполнять любой жидкостью или сыпучим веществом.',
     descriptionEn: 'Universal 0.5L PET plastic bottle. Can hold any liquid or sand.'
   },
   bottle_plastic_1500: {
@@ -1620,8 +1838,20 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 1.6,
     category: 'drink',
     icon: 'Bottle',
-    descriptionRu: 'Большая пластиковая ПЭТ-бутылка на 1.5 литра. Подходит для воды, кваса, молока, топлива и песка.',
+    descriptionRu: 'Большая пластиковая ПЭТ-бутылка на 1.5 литра. Подходит для воды, кваса, молока, топлива и сыпучих продуктов.',
     descriptionEn: 'Large 1.5L PET bottle for fluids and granular materials.'
+  },
+  bottle_sauce_squeeze: {
+    itemId: 'bottle_sauce_squeeze',
+    name: 'Squeeze Dispenser Bottle (0.35L)',
+    nameRu: 'Бутылка с дозатором 0.35л',
+    maxMl: 350,
+    emptyWeightKg: 0.03,
+    emptyVolumeL: 0.38,
+    category: 'food',
+    icon: 'Bottle',
+    descriptionRu: 'Мягкая полимерная бутылочка с узким носиком-дозатором для соусов, горчицы, кетчупа и топпингов (0.35л).',
+    descriptionEn: 'Squeeze plastic dispenser bottle for sauces and condiments (0.35L).'
   },
   canister_metal_20l: {
     itemId: 'canister_metal_20l',
@@ -1710,14 +1940,27 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
   can_alu_330: {
     itemId: 'can_alu_330',
     name: 'Aluminum Can (0.33L)',
-    nameRu: 'Банка 0.33л',
+    nameRu: 'Алюминиевая банка 0.33л',
     maxMl: 330,
     emptyWeightKg: 0.015,
     emptyVolumeL: 0.35,
     category: 'drink',
     icon: 'CupSoda',
-    descriptionRu: 'Алюминиевая банка для газировки или энергетика.',
-    descriptionEn: 'Aluminum can for beverages (330 ml).'
+    descriptionRu: 'Алюминиевая банка с ключом-кольцом (0.33 л).',
+    descriptionEn: 'Aluminum beverage can (330 ml).',
+    openedVariantId: 'can_alu_330_open'
+  },
+  can_alu_330_open: {
+    itemId: 'can_alu_330_open',
+    name: 'Opened Aluminum Can (0.33L)',
+    nameRu: 'Алюминиевая банка 0.33л (вскрытая)',
+    maxMl: 330,
+    emptyWeightKg: 0.015,
+    emptyVolumeL: 0.35,
+    category: 'drink',
+    icon: 'CupSoda',
+    descriptionRu: 'Вскрытая алюминиевая банка на 0.33 литра с продавленным клапаном.',
+    descriptionEn: 'Opened 330ml aluminum beverage can.'
   },
   glass_bottle_500: {
     itemId: 'glass_bottle_500',
@@ -1743,6 +1986,32 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     descriptionRu: 'Картонная упаковка тетрапак с пластиковым клапаном объемом 1 литр.',
     descriptionEn: '1-liter carton Tetra Pak packaging.'
   },
+  // === UNIFIED GLASS JARS (Various sizes + Opened states) ===
+  jar_glass_3l: {
+    itemId: 'jar_glass_3l',
+    name: 'Large Glass Jar (3.0L)',
+    nameRu: 'Стеклянная банка 3.0л',
+    maxMl: 3000,
+    emptyWeightKg: 0.85,
+    emptyVolumeL: 3.3,
+    category: 'gear',
+    icon: 'GlassWater',
+    descriptionRu: 'Большая трёхлитровая стеклянная банка под закатку для солений, маринадов и компотов.',
+    descriptionEn: 'Large 3.0L glass canning jar.',
+    openedVariantId: 'jar_glass_3l_open'
+  },
+  jar_glass_3l_open: {
+    itemId: 'jar_glass_3l_open',
+    name: 'Opened Large Glass Jar (3.0L)',
+    nameRu: 'Стеклянная банка 3.0л (открытая)',
+    maxMl: 3000,
+    emptyWeightKg: 0.82,
+    emptyVolumeL: 3.3,
+    category: 'gear',
+    icon: 'GlassWater',
+    descriptionRu: 'Открытая трёхлитровая стеклянная банка со снятой крышкой.',
+    descriptionEn: 'Opened 3.0L glass canning jar without lid.'
+  },
   jar_glass_large: {
     itemId: 'jar_glass_large',
     name: 'Glass Jar (1.0L)',
@@ -1752,8 +2021,21 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 1.1,
     category: 'gear',
     icon: 'GlassWater',
-    descriptionRu: 'Унифицированная стеклянная банка объемом 1 литр.',
-    descriptionEn: 'Unified 1.0L glass jar.'
+    descriptionRu: 'Унифицированная стеклянная банка объемом 1 литр с винтовой крышкой.',
+    descriptionEn: 'Unified 1.0L glass jar.',
+    openedVariantId: 'jar_glass_large_open'
+  },
+  jar_glass_large_open: {
+    itemId: 'jar_glass_large_open',
+    name: 'Opened Glass Jar (1.0L)',
+    nameRu: 'Стеклянная банка 1.0л (открытая)',
+    maxMl: 1000,
+    emptyWeightKg: 0.38,
+    emptyVolumeL: 1.1,
+    category: 'gear',
+    icon: 'GlassWater',
+    descriptionRu: 'Открытая стеклянная банка объемом 1 литр со снятой крышкой.',
+    descriptionEn: 'Opened 1.0L glass jar.'
   },
   jar_glass_medium: {
     itemId: 'jar_glass_medium',
@@ -1764,8 +2046,21 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.55,
     category: 'gear',
     icon: 'GlassWater',
-    descriptionRu: 'Унифицированная стеклянная банка объемом 0.5 литра.',
-    descriptionEn: 'Unified 0.5L glass jar.'
+    descriptionRu: 'Унифицированная стеклянная банка объемом 0.5 литра с винтовой крышкой.',
+    descriptionEn: 'Unified 0.5L glass jar.',
+    openedVariantId: 'jar_glass_medium_open'
+  },
+  jar_glass_medium_open: {
+    itemId: 'jar_glass_medium_open',
+    name: 'Opened Glass Jar (0.5L)',
+    nameRu: 'Стеклянная банка 0.5л (открытая)',
+    maxMl: 500,
+    emptyWeightKg: 0.23,
+    emptyVolumeL: 0.55,
+    category: 'gear',
+    icon: 'GlassWater',
+    descriptionRu: 'Открытая стеклянная банка объемом 0.5 литра без крышки.',
+    descriptionEn: 'Opened 0.5L glass jar.'
   },
   jar_glass_small: {
     itemId: 'jar_glass_small',
@@ -1776,44 +2071,368 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.22,
     category: 'gear',
     icon: 'GlassWater',
-    descriptionRu: 'Унифицированная стеклянная банка объемом 0.2 литра.',
-    descriptionEn: 'Unified 0.2L glass jar.'
+    descriptionRu: 'Малая стеклянная баночка объемом 0.2 литра с крышкой твист-офф.',
+    descriptionEn: 'Unified 0.2L small glass jar.',
+    openedVariantId: 'jar_glass_small_open'
   },
+  jar_glass_small_open: {
+    itemId: 'jar_glass_small_open',
+    name: 'Opened Glass Jar (0.2L)',
+    nameRu: 'Стеклянная банка 0.2л (открытая)',
+    maxMl: 200,
+    emptyWeightKg: 0.11,
+    emptyVolumeL: 0.22,
+    category: 'gear',
+    icon: 'GlassWater',
+    descriptionRu: 'Открытая малая стеклянная баночка объемом 0.2 литра.',
+    descriptionEn: 'Opened 0.2L small glass jar.'
+  },
+  jar_spice_small: {
+    itemId: 'jar_spice_small',
+    name: 'Spice Shaker Jar (0.1L)',
+    nameRu: 'Баночка для специй 0.1л',
+    maxMl: 100,
+    emptyWeightKg: 0.08,
+    emptyVolumeL: 0.12,
+    category: 'gear',
+    icon: 'GlassWater',
+    descriptionRu: 'Узкая стеклянная баночка с крышкой-мельницей/дозатором для соли, перца и сухих специй (100 мл).',
+    descriptionEn: 'Small glass spice shaker/grinder jar (100 ml).',
+    openedVariantId: 'jar_spice_small_open'
+  },
+  jar_spice_small_open: {
+    itemId: 'jar_spice_small_open',
+    name: 'Opened Spice Jar (0.1L)',
+    nameRu: 'Баночка для специй 0.1л (открытая)',
+    maxMl: 100,
+    emptyWeightKg: 0.07,
+    emptyVolumeL: 0.12,
+    category: 'gear',
+    icon: 'GlassWater',
+    descriptionRu: 'Открытая стеклянная баночка для специй со снятым дозатором.',
+    descriptionEn: 'Opened small glass spice jar.'
+  },
+  // === UNIFIED METAL TIN CANS (Different sizes, shapes, and opened states) ===
   can_metal_large: {
     itemId: 'can_metal_large',
-    name: 'Tin Can (0.8L)',
-    nameRu: 'Жестяная банка 0.8л',
+    name: 'Large Tin Can (0.8L)',
+    nameRu: 'Консервная банка большая 0.8л',
     maxMl: 800,
     emptyWeightKg: 0.10,
     emptyVolumeL: 0.85,
     category: 'gear',
     icon: 'CupSoda',
-    descriptionRu: 'Унифицированная жестяная банка объемом 0.8 литра.',
-    descriptionEn: 'Unified 0.8L tin can.'
+    descriptionRu: 'Большая цилиндрическая жестяная консервная банка объемом 0.8 литра (запаянная).',
+    descriptionEn: 'Large sealed 0.8L cylindrical tin can.',
+    openedVariantId: 'can_metal_large_open',
+    isSealedByDefault: true
+  },
+  can_metal_large_open: {
+    itemId: 'can_metal_large_open',
+    name: 'Opened Large Tin Can (0.8L)',
+    nameRu: 'Консервная банка большая 0.8л (вскрытая)',
+    maxMl: 800,
+    emptyWeightKg: 0.10,
+    emptyVolumeL: 0.85,
+    category: 'gear',
+    icon: 'CupSoda',
+    descriptionRu: 'Вскрытая большая жестяная консервная банка на 0.8 литра с отогнутой крышкой.',
+    descriptionEn: 'Opened 0.8L tin can with peeled lid.'
   },
   can_metal_medium: {
     itemId: 'can_metal_medium',
-    name: 'Tin Can (0.4L)',
-    nameRu: 'Жестяная банка 0.4л',
+    name: 'Standard Tin Can (0.4L)',
+    nameRu: 'Консервная банка средняя 0.4л',
     maxMl: 400,
     emptyWeightKg: 0.06,
     emptyVolumeL: 0.45,
     category: 'gear',
     icon: 'CupSoda',
-    descriptionRu: 'Унифицированная жестяная банка объемом 0.4 литра.',
-    descriptionEn: 'Unified 0.4L tin can.'
+    descriptionRu: 'Стандартная высокая жестяная консервная банка объемом 0.4 литра (запаянная).',
+    descriptionEn: 'Standard 0.4L sealed tin can.',
+    openedVariantId: 'can_metal_medium_open',
+    isSealedByDefault: true
+  },
+  can_metal_medium_open: {
+    itemId: 'can_metal_medium_open',
+    name: 'Opened Standard Tin Can (0.4L)',
+    nameRu: 'Консервная банка средняя 0.4л (вскрытая)',
+    maxMl: 400,
+    emptyWeightKg: 0.06,
+    emptyVolumeL: 0.45,
+    category: 'gear',
+    icon: 'CupSoda',
+    descriptionRu: 'Вскрытая стандартная консервная банка на 0.4 литра с отогнутой жестяной крышкой.',
+    descriptionEn: 'Opened 0.4L tin can with peeled metal lid.'
   },
   can_metal_small: {
     itemId: 'can_metal_small',
-    name: 'Tin Can (0.15L)',
-    nameRu: 'Жестяная банка 0.15л',
-    maxMl: 150,
-    emptyWeightKg: 0.03,
-    emptyVolumeL: 0.18,
+    name: 'Small Tin Can (0.25L)',
+    nameRu: 'Консервная банка малая 0.25л',
+    maxMl: 250,
+    emptyWeightKg: 0.04,
+    emptyVolumeL: 0.28,
     category: 'gear',
     icon: 'CupSoda',
-    descriptionRu: 'Унифицированная жестяная банка объемом 0.15 литра.',
-    descriptionEn: 'Unified 0.15L tin can.'
+    descriptionRu: 'Малая цилиндрическая консервная банка объемом 0.25 литра (запаянная).',
+    descriptionEn: 'Small 0.25L sealed cylindrical tin can.',
+    openedVariantId: 'can_metal_small_open',
+    isSealedByDefault: true
+  },
+  can_metal_small_open: {
+    itemId: 'can_metal_small_open',
+    name: 'Opened Small Tin Can (0.25L)',
+    nameRu: 'Консервная банка малая 0.25л (вскрытая)',
+    maxMl: 250,
+    emptyWeightKg: 0.04,
+    emptyVolumeL: 0.28,
+    category: 'gear',
+    icon: 'CupSoda',
+    descriptionRu: 'Вскрытая малая цилиндрическая консервная банка на 0.25 литра.',
+    descriptionEn: 'Opened 0.25L small tin can.'
+  },
+  can_metal_flat: {
+    itemId: 'can_metal_flat',
+    name: 'Flat Round Tin Can (0.18L)',
+    nameRu: 'Консервная банка плоская 0.18л',
+    maxMl: 180,
+    emptyWeightKg: 0.03,
+    emptyVolumeL: 0.20,
+    category: 'gear',
+    icon: 'Disc',
+    descriptionRu: 'Низкая широкая круглая консервная банка-шайба с ключом-кольцом под рыбу, паштеты или икру (0.18 л).',
+    descriptionEn: 'Flat round fish/caviar tin can (0.18L).',
+    openedVariantId: 'can_metal_flat_open',
+    isSealedByDefault: true
+  },
+  can_metal_flat_open: {
+    itemId: 'can_metal_flat_open',
+    name: 'Opened Flat Round Tin Can (0.18L)',
+    nameRu: 'Консервная банка плоская 0.18л (вскрытая)',
+    maxMl: 180,
+    emptyWeightKg: 0.03,
+    emptyVolumeL: 0.20,
+    category: 'gear',
+    icon: 'Disc',
+    descriptionRu: 'Вскрытая плоская круглая консервная банка-шайба со свёрнутой крышкой.',
+    descriptionEn: 'Opened flat round tin can (0.18L).'
+  },
+  can_metal_oval: {
+    itemId: 'can_metal_oval',
+    name: 'Oval Sprat Tin Can (0.20L)',
+    nameRu: 'Консервная банка овальная 0.20л',
+    maxMl: 200,
+    emptyWeightKg: 0.035,
+    emptyVolumeL: 0.22,
+    category: 'gear',
+    icon: 'Disc',
+    descriptionRu: 'Продолговатая овальная жестяная банка («шпротная») с ключом-кольцом (0.20 л).',
+    descriptionEn: 'Oval sprat-style tin can with pull tab (0.20L).',
+    openedVariantId: 'can_metal_oval_open',
+    isSealedByDefault: true
+  },
+  can_metal_oval_open: {
+    itemId: 'can_metal_oval_open',
+    name: 'Opened Oval Tin Can (0.20L)',
+    nameRu: 'Консервная банка овальная 0.20л (вскрытая)',
+    maxMl: 200,
+    emptyWeightKg: 0.035,
+    emptyVolumeL: 0.22,
+    category: 'gear',
+    icon: 'Disc',
+    descriptionRu: 'Вскрытая овальная жестяная консервная банка на 0.20 литра.',
+    descriptionEn: 'Opened oval tin can (0.20L).'
+  },
+  tin_round_mini: {
+    itemId: 'tin_round_mini',
+    name: 'Mini Metal Balm Tin (30ml)',
+    nameRu: 'Жестяная шайба-футляр 30мл',
+    maxMl: 30,
+    emptyWeightKg: 0.01,
+    emptyVolumeL: 0.04,
+    category: 'gear',
+    icon: 'Disc',
+    descriptionRu: 'Миниатюрная круглая жестяная баночка с плотной крышкой для бальзамов, воска и густых мазей (30 мл).',
+    descriptionEn: 'Mini round metal tin box for balms and wax (30 ml).',
+    openedVariantId: 'tin_round_mini_open'
+  },
+  tin_round_mini_open: {
+    itemId: 'tin_round_mini_open',
+    name: 'Opened Mini Metal Tin (30ml)',
+    nameRu: 'Жестяная шайба-футляр 30мл (открытая)',
+    maxMl: 30,
+    emptyWeightKg: 0.01,
+    emptyVolumeL: 0.04,
+    category: 'gear',
+    icon: 'Disc',
+    descriptionRu: 'Открытая миниатюрная жестяная баночка-шайба.',
+    descriptionEn: 'Opened mini round metal tin.'
+  },
+  // === UNIFIED CLAY POTS (Small, Medium, Large + Opened states) ===
+  pot_clay_small: {
+    itemId: 'pot_clay_small',
+    name: 'Small Clay Pot (0.25L)',
+    nameRu: 'Глиняный горшочек малый 0.25л',
+    maxMl: 250,
+    emptyWeightKg: 0.20,
+    emptyVolumeL: 0.32,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Малый обожжённый глиняный горшочек с вощаной обвязкой (0.25 л).',
+    descriptionEn: 'Small earthenware clay pot (250 ml).',
+    openedVariantId: 'pot_clay_small_open'
+  },
+  pot_clay_small_open: {
+    itemId: 'pot_clay_small_open',
+    name: 'Opened Small Clay Pot (0.25L)',
+    nameRu: 'Глиняный горшочек малый 0.25л (открытый)',
+    maxMl: 250,
+    emptyWeightKg: 0.20,
+    emptyVolumeL: 0.32,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Открытый малый глиняный горшочек на 0.25 литра.',
+    descriptionEn: 'Opened small earthenware clay pot (250 ml).'
+  },
+  pot_clay_medium: {
+    itemId: 'pot_clay_medium',
+    name: 'Clay Pot (0.5L)',
+    nameRu: 'Глиняный горшок средний 0.5л',
+    maxMl: 500,
+    emptyWeightKg: 0.35,
+    emptyVolumeL: 0.6,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Обожжённый глиняный горшок на 0.5 литра для смальца, топлёного масла, мёда или жаркого.',
+    descriptionEn: 'Medium earthenware clay pot for lard, ghee, or stews (500 ml).',
+    openedVariantId: 'pot_clay_medium_open'
+  },
+  pot_clay_medium_open: {
+    itemId: 'pot_clay_medium_open',
+    name: 'Opened Clay Pot (0.5L)',
+    nameRu: 'Глиняный горшок средний 0.5л (открытый)',
+    maxMl: 500,
+    emptyWeightKg: 0.35,
+    emptyVolumeL: 0.6,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Открытый средний глиняный горшок на 0.5 литра со снятой обвязкой.',
+    descriptionEn: 'Opened medium earthenware clay pot (500 ml).'
+  },
+  pot_clay_large: {
+    itemId: 'pot_clay_large',
+    name: 'Large Clay Pot (1.0L)',
+    nameRu: 'Глиняный горшок большой 1.0л',
+    maxMl: 1000,
+    emptyWeightKg: 0.65,
+    emptyVolumeL: 1.15,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Большой толстостенный глиняный корчага-горшок на 1.0 литр для заготовок, топлёного жира и томления в печи.',
+    descriptionEn: 'Large thick-walled earthenware clay pot (1.0L).',
+    openedVariantId: 'pot_clay_large_open'
+  },
+  pot_clay_large_open: {
+    itemId: 'pot_clay_large_open',
+    name: 'Opened Large Clay Pot (1.0L)',
+    nameRu: 'Глиняный горшок большой 1.0л (открытый)',
+    maxMl: 1000,
+    emptyWeightKg: 0.65,
+    emptyVolumeL: 1.15,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Открытый большой глиняный горшок объемом 1.0 литр.',
+    descriptionEn: 'Opened large earthenware clay pot (1.0L).'
+  },
+  // === UNIFIED PLASTIC DAIRY CUPS / TUBS ===
+  cup_plastic_dairy_small: {
+    itemId: 'cup_plastic_dairy_small',
+    name: 'Foil-Sealed Plastic Dairy Cup (0.20L)',
+    nameRu: 'Пластиковый стаканчик с фольгой 0.2л',
+    maxMl: 200,
+    emptyWeightKg: 0.01,
+    emptyVolumeL: 0.22,
+    category: 'food',
+    icon: 'CupSoda',
+    descriptionRu: 'Пластиковый стаканчик на 200 мл, запаянный сверху алюминиевой мембраной (под йогурт, сметану или десерт).',
+    descriptionEn: 'Foil-sealed 200ml plastic dairy cup.',
+    openedVariantId: 'cup_plastic_dairy_small_open',
+    isSealedByDefault: true
+  },
+  cup_plastic_dairy_small_open: {
+    itemId: 'cup_plastic_dairy_small_open',
+    name: 'Opened Plastic Dairy Cup (0.20L)',
+    nameRu: 'Пластиковый стаканчик 0.2л (вскрытый)',
+    maxMl: 200,
+    emptyWeightKg: 0.01,
+    emptyVolumeL: 0.22,
+    category: 'food',
+    icon: 'CupSoda',
+    descriptionRu: 'Вскрытый пластиковый стаканчик на 200 мл с отогнутой фольгированной крышкой.',
+    descriptionEn: 'Opened 200ml plastic dairy cup.'
+  },
+  cup_plastic_dairy_medium: {
+    itemId: 'cup_plastic_dairy_medium',
+    name: 'Plastic Dairy Tub (0.40L)',
+    nameRu: 'Пластиковая ванночка-стакан 0.4л',
+    maxMl: 400,
+    emptyWeightKg: 0.018,
+    emptyVolumeL: 0.45,
+    category: 'food',
+    icon: 'CupSoda',
+    descriptionRu: 'Широкий пластиковый стакан-ванночка на 400 мл с крышкой и защитной фольгой.',
+    descriptionEn: '400ml plastic dairy tub with lid.',
+    openedVariantId: 'cup_plastic_dairy_medium_open',
+    isSealedByDefault: true
+  },
+  cup_plastic_dairy_medium_open: {
+    itemId: 'cup_plastic_dairy_medium_open',
+    name: 'Opened Plastic Dairy Tub (0.40L)',
+    nameRu: 'Пластиковая ванночка-стакан 0.4л (вскрытая)',
+    maxMl: 400,
+    emptyWeightKg: 0.018,
+    emptyVolumeL: 0.45,
+    category: 'food',
+    icon: 'CupSoda',
+    descriptionRu: 'Вскрытая пластиковая ванночка-стакан на 400 мл.',
+    descriptionEn: 'Opened 400ml plastic dairy tub.'
+  },
+  // === UNIFIED MEDICAL / CULINARY TUBES, AMPOULES & AEROSOLS ===
+  tube_ointment_small: {
+    itemId: 'tube_ointment_small',
+    name: 'Ointment / Paste Tube (50ml)',
+    nameRu: 'Тюбик металлический 50мл',
+    maxMl: 50,
+    emptyWeightKg: 0.012,
+    emptyVolumeL: 0.06,
+    category: 'gear',
+    icon: 'FlaskConical',
+    descriptionRu: 'Мягкая алюминиевая туба с винтовым колпачком для мазей, гелей, бальзамов или густых паст (50 мл).',
+    descriptionEn: 'Collapsible aluminum tube with screw cap (50 ml).'
+  },
+  ampoule_glass_small: {
+    itemId: 'ampoule_glass_small',
+    name: 'Glass Medical Ampoule (10ml)',
+    nameRu: 'Стеклянная ампула 10мл',
+    maxMl: 10,
+    emptyWeightKg: 0.005,
+    emptyVolumeL: 0.015,
+    category: 'gear',
+    icon: 'FlaskConical',
+    descriptionRu: 'Герметичная тонкостенная стеклянная ампула для инъекционных и стерильных растворов (10 мл).',
+    descriptionEn: 'Hermetic glass medical ampoule (10 ml).'
+  },
+  aerosol_can_small: {
+    itemId: 'aerosol_can_small',
+    name: 'Aerosol Spray Can (150ml)',
+    nameRu: 'Аэрозольный баллончик 150мл',
+    maxMl: 150,
+    emptyWeightKg: 0.04,
+    emptyVolumeL: 0.18,
+    category: 'gear',
+    icon: 'FlaskConical',
+    descriptionRu: 'Металлический аэрозольный баллончик под давлением с клапаном-распылителем (150 мл).',
+    descriptionEn: 'Pressurized metal aerosol spray can (150 ml).'
   },
   bottle_glass_large: {
     itemId: 'bottle_glass_large',
@@ -2002,20 +2621,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.1,
     category: 'gear',
     icon: 'ShoppingBag',
-    descriptionRu: 'Герметичный фольгированный пакетик-саше для молотых пряностей, специй и сухих дрожжей.',
-    descriptionEn: 'Airtight foil sachet pack for spices, seasonings, and yeast.'
-  },
-  pot_clay_medium: {
-    itemId: 'pot_clay_medium',
-    name: 'Clay Pot (0.5L)',
-    nameRu: 'Глиняный горшочек 0.5л',
-    maxMl: 500,
-    emptyWeightKg: 0.35,
-    emptyVolumeL: 0.6,
-    category: 'food',
-    icon: 'Utensils',
-    descriptionRu: 'Обожженный глиняный горшочек для смальца, топленого масла или тушеных блюд.',
-    descriptionEn: 'Earthenware clay pot for lard, ghee, or stews (500 ml).'
+    descriptionRu: 'Герметичный фольгированный пакетик-саше для молотых пряностей, специй и сухих смесей.',
+    descriptionEn: 'Airtight foil sachet pack for spices, seasonings, and dry mixes.'
   },
   box_cardboard_large: {
     itemId: 'box_cardboard_large',
@@ -2081,7 +2688,7 @@ export function getFluidContainerWeight(item: InventoryItem): number {
   if (!storage.liquidId || storage.currentMl <= 0) {
     return Math.round(emptyWeight * 100) / 100;
   }
-  const liquid = LIQUID_REGISTRY[storage.liquidId] || LIQUID_REGISTRY.water;
+  const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
   const liquidWeight = (storage.currentMl / 1000) * (liquid.densityKgPerL || 1.0);
   return Math.round((emptyWeight + liquidWeight) * 100) / 100;
 }
@@ -2089,29 +2696,26 @@ export function getFluidContainerWeight(item: InventoryItem): number {
 export function getFluidContainerVolume(item: InventoryItem): number {
   if (item.volume !== undefined) return item.volume;
   if (!item.fluidStorage) return 0.5;
-  return Math.max(0.2, Math.round((item.fluidStorage.maxMl / 1000) * 1.15 * 10) / 10);
+  return Math.max(0.05, Math.round((item.fluidStorage.maxMl / 1000) * 1.15 * 100) / 100);
 }
 
 export function getFluidContainerDisplayName(item: InventoryItem): string {
   if (!item.fluidStorage) return item.nameRu;
   const storage = item.fluidStorage;
-  const baseName = storage.baseItemNameRu || item.nameRu;
+  const cfg = CONTAINER_CONFIGS[item.itemId];
+  const baseName = cfg?.nameRu || storage.baseItemNameRu || item.nameRu;
 
-  // Clean baseName if it already ends with static volume in parentheses e.g. "(1.5L)", "(0.5L)", "(1.5л)", "(20л)"
   const cleanBaseName = baseName.replace(/\s*\([\d\.\,\s]+(?:L|л|ml|мл)\)\s*$/i, '').trim();
 
   if (!storage.liquidId || storage.currentMl <= 0) {
     return `${cleanBaseName} (Пусто)`;
   }
 
-  const liquid = LIQUID_REGISTRY[storage.liquidId] || LIQUID_REGISTRY.water;
-  const liquidName = liquid.nameRu;
-
-  const baseLower = cleanBaseName.toLowerCase();
-  const liquidLower = liquidName.toLowerCase();
-  const alreadyMentionsLiquid = baseLower.includes(liquidLower) || liquidLower.includes(baseLower);
-
-  const displayPrefix = alreadyMentionsLiquid ? '' : `${liquidName} `;
+  const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
+  const attrs = storage.attributes;
+  const substanceLabel = attrs?.varietyRu
+    ? `${liquid.nameRu}: ${attrs.varietyRu}`
+    : liquid.nameRu;
 
   function formatLiters(ml: number): string {
     const liters = ml / 1000;
@@ -2119,26 +2723,89 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
     return parseFloat(liters.toFixed(2)).toString();
   }
 
-  if (storage.maxMl >= 1000) {
-    const curL = formatLiters(storage.currentMl);
-    const maxL = formatLiters(storage.maxMl);
-    return `${cleanBaseName} (${displayPrefix}${curL}/${maxL} л)`;
-  } else {
-    return `${cleanBaseName} (${displayPrefix}${Math.round(storage.currentMl)}/${Math.round(storage.maxMl)} мл)`;
-  }
+  const volLabel = storage.maxMl >= 1000
+    ? `${formatLiters(storage.currentMl)}/${formatLiters(storage.maxMl)} л`
+    : `${Math.round(storage.currentMl)}/${Math.round(storage.maxMl)} мл`;
+
+  return `${cleanBaseName} [${substanceLabel}, ${volLabel}]`;
 }
 
 export function syncItemContainerProperties(item: InventoryItem): void {
   if (!item.fluidStorage) return;
+  const storage = item.fluidStorage;
+  const cfg = CONTAINER_CONFIGS[item.itemId];
+  if (cfg) {
+    storage.baseItemNameRu = cfg.nameRu;
+    storage.baseItemNameEn = cfg.name;
+  }
   item.weight = getFluidContainerWeight(item);
   item.volume = getFluidContainerVolume(item);
   item.nameRu = getFluidContainerDisplayName(item);
-  if (item.fluidStorage.currentMl > 0 && item.fluidStorage.liquidId) {
-    const liquid = LIQUID_REGISTRY[item.fluidStorage.liquidId];
-    if (liquid?.isDrinkable) {
+
+  if (storage.currentMl > 0 && storage.liquidId) {
+    const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId];
+    if (liquid?.isDrinkable || storage.attributes?.medicalEffectId || cfg?.openedVariantId) {
       item.usable = true;
     }
+    if (storage.attributes) {
+      const a = storage.attributes;
+      const openBadge = item.itemId.endsWith('_open')
+        ? ' (Тара вскрыта)'
+        : (cfg?.isSealedByDefault && a.isOpened === false ? ' (Герметично запаяно — нажмите [E] или Использовать, чтобы вскрыть)' : '');
+      const volText = storage.maxMl >= 1000
+        ? `${(storage.currentMl / 1000).toFixed(2)} л`
+        : `${Math.round(storage.currentMl)} мл`;
+      const ingredientsText = Array.isArray(a.sourceIngredients)
+        ? a.sourceIngredients.join(', ')
+        : (a.sourceIngredients || 'Не указаны');
+      item.descriptionRu =
+        `Унифицированная тара: ${cfg?.nameRu || storage.baseItemNameRu}${openBadge}. ` +
+        `Внутри: ${liquid?.nameRu || storage.liquidId} — «${a.varietyRu}» (${volText}). ` +
+        `Из чего: ${ingredientsText}. ` +
+        `Способ готовки: ${a.preparationMethod}. ` +
+        `Зачем: ${a.purpose}. ` +
+        `Почему: ${a.reasonAndOrigin}`;
+    }
+  } else {
+    const baseDesc = cfg?.descriptionRu || 'Пустая унифицированная ёмкость.';
+    item.descriptionRu = `${baseDesc} Сейчас пуста (0 мл).`;
   }
+}
+
+export function openFluidContainerIfNeeded(
+  player: Player,
+  container: InventoryItem
+): { justOpened: boolean; message: string } {
+  const storage = container.fluidStorage;
+  const cfg = CONTAINER_CONFIGS[container.itemId];
+  if (!storage || !cfg?.openedVariantId) {
+    if (storage?.attributes && storage.attributes.isOpened === false) {
+      storage.attributes.isOpened = true;
+      syncItemContainerProperties(container);
+    }
+    return { justOpened: false, message: '' };
+  }
+
+  const openCfg = CONTAINER_CONFIGS[cfg.openedVariantId];
+  if (!openCfg) return { justOpened: false, message: '' };
+
+  const wasSealed = cfg.isSealedByDefault || storage.attributes?.isOpened === false;
+  container.itemId = openCfg.itemId;
+  container.name = openCfg.name;
+  storage.baseItemNameRu = openCfg.nameRu;
+  storage.baseItemNameEn = openCfg.name;
+  if (storage.attributes) {
+    storage.attributes.isOpened = true;
+  }
+  syncItemContainerProperties(container);
+
+  if (wasSealed) {
+    sound.playUseItem();
+    const msg = `Тара вскрыта: ${openCfg.nameRu}. Теперь содержимое можно употреблять или переливать!`;
+    addPlayerNotification(player, msg, 'info');
+    return { justOpened: true, message: msg };
+  }
+  return { justOpened: false, message: '' };
 }
 
 export function pourLiquidBetweenContainers(
@@ -2157,12 +2824,18 @@ export function pourLiquidBetweenContainers(
     return { success: false, message: `${srcStorage.baseItemNameRu} пуста`, transferredMl: 0 };
   }
 
-  if (tgtStorage.currentMl > 0 && tgtStorage.liquidId && tgtStorage.liquidId !== srcStorage.liquidId) {
-    const srcLiquid = LIQUID_REGISTRY[srcStorage.liquidId]?.nameRu || srcStorage.liquidId;
-    const tgtLiquid = LIQUID_REGISTRY[tgtStorage.liquidId]?.nameRu || tgtStorage.liquidId;
+  const sameSubstance =
+    tgtStorage.liquidId === srcStorage.liquidId &&
+    (!tgtStorage.attributes?.varietyRu ||
+      !srcStorage.attributes?.varietyRu ||
+      tgtStorage.attributes.varietyRu === srcStorage.attributes.varietyRu);
+
+  if (tgtStorage.currentMl > 0 && tgtStorage.liquidId && !sameSubstance) {
+    const srcLiquid = srcStorage.attributes?.varietyRu || LIQUID_REGISTRY[srcStorage.liquidId as LiquidId]?.nameRu || srcStorage.liquidId;
+    const tgtLiquid = tgtStorage.attributes?.varietyRu || LIQUID_REGISTRY[tgtStorage.liquidId as LiquidId]?.nameRu || tgtStorage.liquidId;
     return {
       success: false,
-      message: `Нельзя смешивать разные жидкости: в емкости уже есть ${tgtLiquid}, а переливается ${srcLiquid}`,
+      message: `Нельзя смешивать разные вещества: в емкости уже есть «${tgtLiquid}», а переливается «${srcLiquid}»`,
       transferredMl: 0
     };
   }
@@ -2177,24 +2850,38 @@ export function pourLiquidBetweenContainers(
     return { success: false, message: 'Не удалось перелить жидкость', transferredMl: 0 };
   }
 
+  // Auto-open sealed source or target containers when pouring
+  const srcCfg = CONTAINER_CONFIGS[source.itemId];
+  if (srcCfg?.openedVariantId && CONTAINER_CONFIGS[srcCfg.openedVariantId]) {
+    source.itemId = srcCfg.openedVariantId;
+  }
+  const tgtCfg = CONTAINER_CONFIGS[target.itemId];
+  if (tgtCfg?.openedVariantId && CONTAINER_CONFIGS[tgtCfg.openedVariantId]) {
+    target.itemId = tgtCfg.openedVariantId;
+  }
+
   // Realistic spillage waste: ~1.5% to 4% is spilled on walls or drips down the neck
   const spillRate = 0.015 + Math.random() * 0.025;
   const wasteMl = Math.max(1, Math.round(transfer * spillRate));
   const actualReceived = Math.max(0, transfer - wasteMl);
 
   tgtStorage.liquidId = srcStorage.liquidId;
+  if (srcStorage.attributes) {
+    tgtStorage.attributes = { ...srcStorage.attributes, isOpened: true };
+  }
   tgtStorage.currentMl += actualReceived;
   srcStorage.currentMl -= transfer;
 
   if (srcStorage.currentMl <= 0) {
     srcStorage.currentMl = 0;
     srcStorage.liquidId = null;
+    srcStorage.attributes = undefined;
   }
 
   syncItemContainerProperties(source);
   syncItemContainerProperties(target);
 
-  const liquidName = LIQUID_REGISTRY[tgtStorage.liquidId]?.nameRu || 'Жидкость';
+  const liquidName = tgtStorage.attributes?.varietyRu || LIQUID_REGISTRY[tgtStorage.liquidId as LiquidId]?.nameRu || 'Жидкость';
   const spillInfo = wasteMl > 0 ? ` (пролилось мимо: ${wasteMl} мл)` : '';
   return {
     success: true,
@@ -2214,7 +2901,7 @@ export function fillContainerWithLiquid(
 
   const storage = container.fluidStorage;
   if (storage.currentMl > 0 && storage.liquidId && storage.liquidId !== liquidId) {
-    const existing = LIQUID_REGISTRY[storage.liquidId]?.nameRu || storage.liquidId;
+    const existing = storage.attributes?.varietyRu || LIQUID_REGISTRY[storage.liquidId as LiquidId]?.nameRu || storage.liquidId;
     const incoming = LIQUID_REGISTRY[liquidId]?.nameRu || liquidId;
     return {
       success: false,
@@ -2253,105 +2940,117 @@ export function handleConsumeFluid(
 
   const storage = container.fluidStorage;
   if (storage.currentMl <= 0 || !storage.liquidId) {
-    addPlayerNotification(player, `${storage.baseItemNameRu} пуста! Наберите жидкость или песок.`, 'info');
+    addPlayerNotification(player, `${storage.baseItemNameRu} пуста! Наберите жидкость или сыпучее вещество.`, 'info');
     return { success: false, message: 'Емкость пуста' };
   }
 
-  const liquid = LIQUID_REGISTRY[storage.liquidId] || LIQUID_REGISTRY.water;
+  // If this is a sealed metal tin can or sealed dairy cup, first action opens the lid into its _open form!
+  const openResult = openFluidContainerIfNeeded(player, container);
+  if (openResult.justOpened) {
+    return { success: true, message: openResult.message };
+  }
+
+  const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
+  const attrs = storage.attributes;
 
   // 1. Sand substance -> Pour out onto ground / extinguish fires
   if (storage.liquidId === 'sand') {
     return handlePourSandFromContainer(player, container, world);
   }
 
-  // 2. Toxic or Flammable substances or raw dry cooking ingredients (Gasoline, Diesel, Oil, Antifreeze, Sugar, Flour, Salt)
-  if (!liquid.isDrinkable) {
+  // 2. Toxic or Flammable substances or raw dry cooking ingredients (Gasoline, Diesel, Oil, Antifreeze, Sugar, Flour, Salt, Dry Mix, Grain, Spice)
+  if (!liquid.isDrinkable && !attrs?.customEffects) {
     if (liquid.toxicWarning) {
-      addPlayerNotification(player, liquid.toxicWarning, 'warning');
-      return { success: false, message: liquid.toxicWarning };
+      const warnMsg = attrs
+        ? `${attrs.varietyRu}: ${attrs.purpose} (${attrs.preparationMethod}). Употреблять в сухом/сыром виде напрямую нельзя!`
+        : liquid.toxicWarning;
+      addPlayerNotification(player, warnMsg, 'warning');
+      return { success: false, message: warnMsg };
     }
-    // If holding near a vehicle or ground, try vehicle refuel / ground spill
     return handlePourNonDrinkableFluid(player, container, world);
   }
 
-  // 3. Drinkable liquid (Water, Coffee, Tea, Cola, Juice, Milk, Beer, Vodka, etc.)
+  // 3. Drinkable / Edible substance in container
   if ((player.needs.fullness || 0) >= 98) {
     addPlayerNotification(player, 'Желудок полон! Больше не лезет...', 'warning');
     return { success: false, message: 'Слишком сытно' };
   }
 
   if ((player.needs.nausea || 0) > 65) {
-    addPlayerNotification(player, 'Вас тошнит! Нельзя пить.', 'warning');
+    addPlayerNotification(player, 'Вас тошнит! Нельзя есть или пить.', 'warning');
     return { success: false, message: 'Тошнит' };
   }
 
-  // Human swallow size has biomechanical variation and is not a uniform robotic metric.
-  const baseSip = storage.maxMl <= 500 ? 120 : 200;
-  
-  // High thirst -> drinking larger gulps; panic or shivering -> smaller, irregular sips
+  const baseSip = storage.maxMl <= 250 ? 60 : (storage.maxMl <= 500 ? 120 : 200);
   const thirstFactor = player.needs.thirst < 45 ? 1.3 : 1.0;
   const panicFactor = player.bodyState?.panicLevel && player.bodyState.panicLevel > 50 ? 0.75 : 1.0;
-  
-  // Normal human swallowing variance (e.g. +/- 20%)
   const bioVariance = 0.8 + Math.random() * 0.4;
-  
+
   const targetSipMl = baseSip * thirstFactor * panicFactor * bioVariance;
-  const sipMl = Math.min(storage.currentMl, Math.max(25, Math.round(targetSipMl)));
+  const sipMl = Math.min(storage.currentMl, Math.max(20, Math.round(targetSipMl)));
   const ratio = sipMl / (storage.maxMl || 500);
 
-  // Apply biological effects based on actual liquid chemistry
-  if (liquid.effects) {
-    if (liquid.effects.thirst) {
-      const tGain = Math.round(liquid.effects.thirst * ratio * 2 * 10) / 10;
+  const fx = attrs?.customEffects || liquid.effects;
+  if (fx) {
+    if (fx.thirst) {
+      const tGain = Math.round(fx.thirst * ratio * 2 * 10) / 10;
       player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + tGain));
       if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + tGain);
     }
-    if (liquid.effects.hunger) {
-      const hGain = Math.round(liquid.effects.hunger * ratio * 2 * 10) / 10;
+    if (fx.hunger) {
+      const hGain = Math.round(fx.hunger * ratio * 2 * 10) / 10;
       player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hGain));
     }
-    if (liquid.effects.energy) {
-      const eGain = Math.round(liquid.effects.energy * ratio * 2 * 10) / 10;
+    if (fx.energy) {
+      const eGain = Math.round(fx.energy * ratio * 2 * 10) / 10;
       player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + eGain));
     }
-    if (liquid.effects.sleepiness) {
-      const sGain = Math.round(liquid.effects.sleepiness * ratio * 2 * 10) / 10;
+    if (fx.sleepiness) {
+      const sGain = Math.round(fx.sleepiness * ratio * 2 * 10) / 10;
       player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sGain));
     }
-    if (liquid.effects.health) {
-      player.needs.health = Math.min(100, Math.max(0, player.needs.health + liquid.effects.health * ratio));
+    if (fx.health) {
+      player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health * ratio));
     }
-    if (liquid.effects.soothePanic) {
-      soothePanic(player, liquid.effects.soothePanic * ratio);
+    if (fx.soothePanic) {
+      soothePanic(player, fx.soothePanic * ratio);
     }
   }
 
   const fGain = Math.round(15 * ratio);
   player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
 
+  const consumedDisplayName = attrs?.varietyRu ? `${liquid.nameRu} (${attrs.varietyRu})` : liquid.nameRu;
+  const tasteList = attrs?.customTasteMessages || liquid.tasteMessages;
+  let taste = '';
+  if (tasteList && tasteList.length > 0) {
+    taste = tasteList[Math.floor(Math.random() * tasteList.length)];
+  }
+
   storage.currentMl -= sipMl;
   if (storage.currentMl <= 0) {
     storage.currentMl = 0;
     storage.liquidId = null;
+    storage.attributes = undefined;
   }
 
   syncItemContainerProperties(container);
 
-  // Apply oral & internal temperature thermodynamics for beverages/liquids
   const liquidTemp = container.temperature ?? 20.0;
-  applyConsumptionThermodynamics(player, liquidTemp, liquid.nameRu, true);
+  applyConsumptionThermodynamics(player, liquidTemp, consumedDisplayName, liquid.category !== 'food');
 
-  sound.playDrink();
-
-  let taste = '';
-  if (liquid.tasteMessages && liquid.tasteMessages.length > 0) {
-    taste = liquid.tasteMessages[Math.floor(Math.random() * liquid.tasteMessages.length)];
+  if (liquid.category === 'food') {
+    sound.playEat();
+  } else {
+    sound.playDrink();
   }
 
-  const remainingInfo = storage.currentMl > 0 ? `(Осталось: ${Math.round(storage.currentMl)} мл)` : '(Емкость опустела)';
-  addPlayerNotification(player, `${taste || liquid.nameRu} ${remainingInfo}`, 'drink');
+  const remainingInfo = storage.currentMl > 0
+    ? `(Осталось: ${Math.round(storage.currentMl)} мл)`
+    : `(Тара опустела: ${container.nameRu})`;
+  addPlayerNotification(player, `${taste || consumedDisplayName} ${remainingInfo}`, liquid.category === 'food' ? 'food' : 'drink');
 
-  return { success: true, message: `Вы выпили ${liquid.nameRu}` };
+  return { success: true, message: `Употреблено: ${consumedDisplayName}` };
 }
 
 export function handlePourSandFromContainer(

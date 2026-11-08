@@ -33,7 +33,12 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
   const isInjuryCompatible = (injury: Injury) => {
     if (injury.treated) return false;
 
-    const itemId = targetItem.itemId;
+    const itemId =
+      targetItem.fluidStorage?.attributes?.medicalEffectId ||
+      targetItem.originalCatalogId ||
+      (targetItem.contents && targetItem.contents[0]?.itemId) ||
+      targetItem.itemId;
+
     if (itemId === 'splint') {
       return injury.type === 'fracture';
     }
@@ -58,7 +63,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
     if (itemId === 'bandage') {
       return injury.type === 'bleeding' || injury.type === 'abrasion' || injury.type === 'bruise' || injury.type === 'burn' || injury.type === 'sprain';
     }
-    if (itemId === 'medical_patch') {
+    if (itemId === 'medical_patch' || itemId === 'patch_bactericidal_single') {
       return injury.type === 'abrasion' || injury.type === 'bruise' || injury.type === 'burn';
     }
     if (itemId === 'antiseptic') {

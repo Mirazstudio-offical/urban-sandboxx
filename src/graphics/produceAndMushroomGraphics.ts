@@ -2355,6 +2355,73 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'berry_forest_single':
+    case 'berry_blueberry_single':
+    case 'berry_lingonberry_single':
+    case 'berry_cranberry_single':
+    case 'berry_raspberry_single':
+    case 'berry_strawberry_single':
+    case 'berry_blackcurrant_single':
+    case 'berry_redcurrant_single':
+    case 'berry_cherry_single': {
+      drawShadow(ctx, 5.5, 2.2, 6.2, 0.2);
+      let c1 = '#dc2626';
+      let c2 = '#fca5a5';
+      if (itemId === 'berry_blueberry_single') { c1 = '#1e3a8a'; c2 = '#60a5fa'; }
+      else if (itemId === 'berry_blackcurrant_single') { c1 = '#1e1b4b'; c2 = '#818cf8'; }
+      else if (itemId === 'berry_raspberry_single' || itemId === 'berry_strawberry_single') { c1 = '#e11d48'; c2 = '#fda4af'; }
+      else if (itemId === 'berry_cherry_single') { c1 = '#881337'; c2 = '#fb7185'; }
+      else if (itemId === 'berry_forest_single') { c1 = '#4338ca'; c2 = '#dc2626'; }
+
+      // Tiny green leaf at top
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.ellipse(-1.5, -3.5, 2.2, 1.1, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      const pts = [
+        { x: -1.8, y: 0.5, r: 2.2, col: c1 },
+        { x: 1.8, y: 0.8, r: 2.1, col: itemId === 'berry_forest_single' ? c2 : c1 },
+        { x: 0, y: -1.2, r: 2.3, col: c1 }
+      ];
+      pts.forEach(p => {
+        ctx.fillStyle = p.col;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.beginPath();
+        ctx.arc(p.x - 0.6, p.y - 0.6, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      return true;
+    }
+
+    case 'mushroom_chanterelle_single':
+    case 'mushroom_honey_agaric_single': {
+      drawShadow(ctx, 5.0, 2.0, 6.8, 0.22);
+      const isChant = itemId === 'mushroom_chanterelle_single';
+      // Stem
+      ctx.fillStyle = isChant ? '#fcd34d' : '#fef3c7';
+      ctx.beginPath();
+      ctx.roundRect(-1.4, -0.5, 2.8, 6.0, 0.8);
+      ctx.fill();
+      // Cap
+      ctx.fillStyle = isChant ? '#f59e0b' : '#b45309';
+      ctx.beginPath();
+      if (isChant) {
+        ctx.moveTo(-4.8, -1.5);
+        ctx.quadraticCurveTo(0, -3.8, 4.8, -1.5);
+        ctx.lineTo(1.6, 1.2);
+        ctx.lineTo(-1.6, 1.2);
+        ctx.closePath();
+      } else {
+        ctx.ellipse(0, -1.0, 4.4, 2.6, 0, Math.PI, 0);
+      }
+      ctx.fill();
+      return true;
+    }
+
     default:
       return false;
   }

@@ -29,6 +29,7 @@ import {
   CONTAINER_CONFIGS,
   LiquidId,
   FluidContainerState,
+  FluidSubstanceAttributes,
   isFluidContainer,
   getFluidContainerWeight,
   getFluidContainerVolume,
@@ -39,6 +40,7 @@ import {
   pourLiquidBetweenContainers,
   fillContainerWithLiquid
 } from './liquidSystem';
+import { EXTENDED_LEGACY_CONTAINER_MAP, EXTENDED_ITEM_PACKAGING_MAP } from './unifiedSubstanceCatalog';
 import { initItemThermalProperties, applyConsumptionThermodynamics, calculateSurfaceTemperature } from './itemThermalSystem';
 
 export interface ItemDefinition {
@@ -2820,23 +2822,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     fullnessPerBite: 1,
     tasteMessages: ['Хрустящий сладкий укус печенья с шоколадом!']
   },
-  sushi_roll_piece: {
-    itemId: 'sushi_roll_piece',
-    name: 'Philadelphia Sushi Roll Piece',
-    nameRu: 'Ролл Филадельфия (1 шт)',
-    category: 'food',
-    maxStack: 12,
-    icon: '',
-    description: 'Single piece of fresh Philadelphia roll.',
-    descriptionRu: 'Сочный ролл со свежим лососем и сливочным сыром.',
-    effects: { hunger: 8, health: 2, energy: 3 },
-    weight: 0.04,
-    usable: true,
-    biteCount: 2,
-    biteDuration: 0.5,
-    fullnessPerBite: 1,
-    tasteMessages: ['Нежный лосось и сливочный сыр!']
-  },
 
   pocket_knife: {
     itemId: 'pocket_knife',
@@ -5465,6 +5450,998 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxContainedItemVolumeL: 1.0,
     maxContainedWeightKg: 1.5
   },
+
+  // === UNIFIED CONTAINERS: CLAY POTS, GLASS JARS, TIN CANS, DAIRY CUPS & MEDICAL PACKAGING ===
+  pot_clay_small: {
+    itemId: 'pot_clay_small',
+    name: 'Small Clay Pot (0.25L)',
+    nameRu: 'Малый глиняный горшочек (0.25л)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Small glazed ceramic pot (0.25L) for butter, honey, or sour cream.',
+    descriptionRu: 'Малый глазурованный керамический горшочек (0.25л) для топлёного масла, сметаны или мёда.',
+    effects: {},
+    weight: 0.25,
+    volume: 0.30,
+    usable: true
+  },
+  pot_clay_small_open: {
+    itemId: 'pot_clay_small_open',
+    name: 'Opened Small Clay Pot (0.25L)',
+    nameRu: 'Малый глиняный горшочек (открытый, 0.25л)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened small glazed ceramic pot (0.25L).',
+    descriptionRu: 'Открытый малый керамический горшочек со снятой крышкой (0.25л).',
+    effects: {},
+    weight: 0.22,
+    volume: 0.30,
+    usable: true
+  },
+  pot_clay_medium_open: {
+    itemId: 'pot_clay_medium_open',
+    name: 'Opened Clay Pot (0.5L)',
+    nameRu: 'Глиняный горшочек (открытый, 0.5л)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened glazed ceramic pot (0.5L).',
+    descriptionRu: 'Открытый керамический горшочек (0.5л) со снятой крышкой.',
+    effects: {},
+    weight: 0.35,
+    volume: 0.55,
+    usable: true
+  },
+  pot_clay_large: {
+    itemId: 'pot_clay_large',
+    name: 'Large Clay Pot (1L)',
+    nameRu: 'Большой глиняный горшок (1л)',
+    category: 'misc',
+    maxStack: 3,
+    icon: '',
+    description: 'Large traditional earthenware pot (1.0L) for stews, lard, or fermented dairy.',
+    descriptionRu: 'Большой традиционный глиняный чугунок/горшок (1л) для смальца, жаркого или закваски.',
+    effects: {},
+    weight: 0.65,
+    volume: 1.15,
+    usable: true
+  },
+  pot_clay_large_open: {
+    itemId: 'pot_clay_large_open',
+    name: 'Opened Large Clay Pot (1L)',
+    nameRu: 'Большой глиняный горшок (открытый, 1л)',
+    category: 'misc',
+    maxStack: 3,
+    icon: '',
+    description: 'Opened large earthenware pot (1.0L).',
+    descriptionRu: 'Открытый большой глиняный горшок (1л).',
+    effects: {},
+    weight: 0.60,
+    volume: 1.15,
+    usable: true
+  },
+  jar_spice_small: {
+    itemId: 'jar_spice_small',
+    name: 'Spice Glass Jar (0.1L)',
+    nameRu: 'Баночка для специй (0.1л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Compact glass spice jar with shaker/grinder cap (0.1L).',
+    descriptionRu: 'Маленькая стеклянная баночка с крышкой-дозатором (0.1л) для пряностей, соли и молотых специй.',
+    effects: {},
+    weight: 0.09,
+    volume: 0.12,
+    usable: true
+  },
+  jar_spice_small_open: {
+    itemId: 'jar_spice_small_open',
+    name: 'Opened Spice Glass Jar (0.1L)',
+    nameRu: 'Баночка для специй (открытая, 0.1л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened compact glass spice jar (0.1L).',
+    descriptionRu: 'Открытая стеклянная баночка для специй (0.1л).',
+    effects: {},
+    weight: 0.08,
+    volume: 0.12,
+    usable: true
+  },
+  jar_glass_small_open: {
+    itemId: 'jar_glass_small_open',
+    name: 'Opened Small Glass Jar (0.2L)',
+    nameRu: 'Малая стеклянная банка (открытая, 0.2л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened small glass jar (0.2L) without lid.',
+    descriptionRu: 'Вскрытая малая стеклянная баночка (0.2л) со снятой крышкой.',
+    effects: {},
+    weight: 0.13,
+    volume: 0.22,
+    usable: true
+  },
+  jar_glass_medium_open: {
+    itemId: 'jar_glass_medium_open',
+    name: 'Opened Medium Glass Jar (0.5L)',
+    nameRu: 'Стеклянная банка (открытая, 0.5л)',
+    category: 'misc',
+    maxStack: 8,
+    icon: '',
+    description: 'Opened medium glass jar (0.5L).',
+    descriptionRu: 'Открытая полулитровая стеклянная банка (0.5л).',
+    effects: {},
+    weight: 0.23,
+    volume: 0.55,
+    usable: true
+  },
+  jar_glass_large_open: {
+    itemId: 'jar_glass_large_open',
+    name: 'Opened Large Glass Jar (1L)',
+    nameRu: 'Большая стеклянная банка (открытая, 1л)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened 1L glass jar.',
+    descriptionRu: 'Открытая литровая стеклянная банка (1л).',
+    effects: {},
+    weight: 0.38,
+    volume: 1.1,
+    usable: true
+  },
+  jar_glass_3l: {
+    itemId: 'jar_glass_3l',
+    name: '3-Liter Glass Jar (3L)',
+    nameRu: 'Трёхлитровая стеклянная банка (3л)',
+    category: 'misc',
+    maxStack: 2,
+    icon: '',
+    description: 'Classic Soviet/Russian 3-liter glass jar for pickles, compote, or milk.',
+    descriptionRu: 'Классическая трёхлитровая стеклянная банка (3л) под закатку или пластиковую крышку для солений, маринадов и компота.',
+    effects: {},
+    weight: 0.95,
+    volume: 3.3,
+    usable: true
+  },
+  jar_glass_3l_open: {
+    itemId: 'jar_glass_3l_open',
+    name: 'Opened 3-Liter Glass Jar (3L)',
+    nameRu: 'Трёхлитровая стеклянная банка (открытая, 3л)',
+    category: 'misc',
+    maxStack: 2,
+    icon: '',
+    description: 'Opened 3-liter glass jar.',
+    descriptionRu: 'Открытая трёхлитровая стеклянная банка (3л) со снятой крышкой.',
+    effects: {},
+    weight: 0.92,
+    volume: 3.3,
+    usable: true
+  },
+  can_metal_flat: {
+    itemId: 'can_metal_flat',
+    name: 'Flat Tin Can (0.18L)',
+    nameRu: 'Плоская консервная шайба (0.18л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Low cylindrical flat tin can for caviar, pate, or tuna.',
+    descriptionRu: 'Низкая широкая жестяная банка-шайба (0.18л) с ключом-кольцом для икры, паштетов и рыбного филе.',
+    effects: {},
+    weight: 0.05,
+    volume: 0.20,
+    usable: true
+  },
+  can_metal_flat_open: {
+    itemId: 'can_metal_flat_open',
+    name: 'Opened Flat Tin Can (0.18L)',
+    nameRu: 'Вскрытая плоская консервная банка (0.18л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened flat round tin can with peeled metal lid.',
+    descriptionRu: 'Вскрытая плоская жестяная банка-шайба с отогнутой жестяной крышкой.',
+    effects: {},
+    weight: 0.05,
+    volume: 0.20,
+    usable: true
+  },
+  can_metal_oval: {
+    itemId: 'can_metal_oval',
+    name: 'Oval Fish Tin Can (0.20L)',
+    nameRu: 'Овальная консервная банка (0.20л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Elongated oval golden tin can for sprats, sardines, or herring in oil.',
+    descriptionRu: 'Продолговатая овальная жестяная банка (0.20л) для шпрот, сардин и сельди в масле.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.22,
+    usable: true
+  },
+  can_metal_oval_open: {
+    itemId: 'can_metal_oval_open',
+    name: 'Opened Oval Fish Tin Can (0.20L)',
+    nameRu: 'Вскрытая овальная консервная банка (0.20л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened oval tin can with curled metal lid.',
+    descriptionRu: 'Вскрытая овальная жестяная банка с отогнутой крышкой.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.22,
+    usable: true
+  },
+  can_metal_small_open: {
+    itemId: 'can_metal_small_open',
+    name: 'Opened Small Tin Can (0.25L)',
+    nameRu: 'Вскрытая малая консервная банка (0.25л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened small tin can (0.25L) with jagged/bent lid.',
+    descriptionRu: 'Вскрытая малая жестяная консервная банка (0.25л) с отогнутой крышкой.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.27,
+    usable: true
+  },
+  can_metal_medium_open: {
+    itemId: 'can_metal_medium_open',
+    name: 'Opened Tin Can (0.4L)',
+    nameRu: 'Вскрытая консервная банка (0.4л)',
+    category: 'misc',
+    maxStack: 8,
+    icon: '',
+    description: 'Opened standard cylindrical tin can (0.4L) with bent metal lid.',
+    descriptionRu: 'Вскрытая стандартная жестяная консервная банка (0.4л) с отогнутой крышкой.',
+    effects: {},
+    weight: 0.09,
+    volume: 0.44,
+    usable: true
+  },
+  can_metal_large_open: {
+    itemId: 'can_metal_large_open',
+    name: 'Opened Large Tin Can (0.8L)',
+    nameRu: 'Вскрытая большая консервная банка (0.8л)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened large tin can (0.8L) with bent metal lid.',
+    descriptionRu: 'Вскрытая большая жестяная консервная банка (0.8л) с отогнутой крышкой.',
+    effects: {},
+    weight: 0.14,
+    volume: 0.85,
+    usable: true
+  },
+  tin_round_mini: {
+    itemId: 'tin_round_mini',
+    name: 'Mini Round Metal Tin (30ml)',
+    nameRu: 'Круглая жестяная баночка-шайба (30мл)',
+    category: 'misc',
+    maxStack: 15,
+    icon: '',
+    description: 'Pocket-sized flat metal tin for aromatic balm, wax, or salve.',
+    descriptionRu: 'Миниатюрная круглая жестяная баночка (30мл) с плотной крышкой для бальзама или мази.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.04,
+    usable: true
+  },
+  tin_round_mini_open: {
+    itemId: 'tin_round_mini_open',
+    name: 'Opened Mini Metal Tin (30ml)',
+    nameRu: 'Открытая жестяная баночка-шайба (30мл)',
+    category: 'misc',
+    maxStack: 15,
+    icon: '',
+    description: 'Opened pocket-sized metal tin (30ml).',
+    descriptionRu: 'Открытая миниатюрная жестяная баночка (30мл).',
+    effects: {},
+    weight: 0.02,
+    volume: 0.04,
+    usable: true
+  },
+  can_alu_330_open: {
+    itemId: 'can_alu_330_open',
+    name: 'Opened Aluminum Can (0.33L)',
+    nameRu: 'Вскрытая алюминиевая банка (0.33л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened 330ml aluminum beverage can with popped tab.',
+    descriptionRu: 'Вскрытая алюминиевая банка (0.33л) с продавленным язычком-ключом.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.35,
+    usable: true
+  },
+  cup_plastic_dairy_small: {
+    itemId: 'cup_plastic_dairy_small',
+    name: 'Plastic Dairy Cup (0.2L)',
+    nameRu: 'Пластиковый стаканчик с фольгой (0.2л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Small polypropylene dairy cup sealed with aluminum foil (0.2L).',
+    descriptionRu: 'Малый пластиковый стаканчик (0.2л), запаянный фольгированной мембраной, для йогурта, сметаны или мусса.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.22,
+    usable: true
+  },
+  cup_plastic_dairy_small_open: {
+    itemId: 'cup_plastic_dairy_small_open',
+    name: 'Opened Plastic Dairy Cup (0.2L)',
+    nameRu: 'Вскрытый пластиковый стаканчик (0.2л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened small plastic dairy cup with peeled foil lid.',
+    descriptionRu: 'Вскрытый пластиковый стаканчик (0.2л) с отогнутой фольгированной крышкой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.22,
+    usable: true
+  },
+  cup_plastic_dairy_medium: {
+    itemId: 'cup_plastic_dairy_medium',
+    name: 'Plastic Dairy Tub (0.4L)',
+    nameRu: 'Пластиковый контейнер-ванночка (0.4л)',
+    category: 'misc',
+    maxStack: 8,
+    icon: '',
+    description: 'Medium plastic tub container (0.4L) for sour cream, cream cheese, or paste.',
+    descriptionRu: 'Средний пластиковый стакан-ванночка (0.4л) с крышкой для сметаны, творожного сыра, хумуса или пасты.',
+    effects: {},
+    weight: 0.04,
+    volume: 0.44,
+    usable: true
+  },
+  cup_plastic_dairy_medium_open: {
+    itemId: 'cup_plastic_dairy_medium_open',
+    name: 'Opened Plastic Dairy Tub (0.4L)',
+    nameRu: 'Открытый пластиковый контейнер-ванночка (0.4л)',
+    category: 'misc',
+    maxStack: 8,
+    icon: '',
+    description: 'Opened medium plastic tub container (0.4L).',
+    descriptionRu: 'Открытый пластиковый контейнер-ванночка (0.4л) со снятой крышкой.',
+    effects: {},
+    weight: 0.04,
+    volume: 0.44,
+    usable: true
+  },
+  bottle_sauce_squeeze: {
+    itemId: 'bottle_sauce_squeeze',
+    name: 'Squeeze Sauce Bottle (0.4L)',
+    nameRu: 'Пластиковая бутылка-дозатор (0.4л)',
+    category: 'misc',
+    maxStack: 8,
+    icon: '',
+    description: 'Flexible plastic squeeze bottle with nozzle cap for sauces, ketchup, or mayonnaise.',
+    descriptionRu: 'Мягкая пластиковая бутылка с носиком-дозатором (0.4л) для кетчупа, майонеза, горчицы и соусов.',
+    effects: {},
+    weight: 0.04,
+    volume: 0.42,
+    usable: true
+  },
+  tube_ointment_small: {
+    itemId: 'tube_ointment_small',
+    name: 'Aluminum Ointment Tube (50ml)',
+    nameRu: 'Металлический тюбик (50мл)',
+    category: 'med',
+    maxStack: 10,
+    icon: '',
+    description: 'Collapsible aluminum medical/culinary tube with screw cap (50ml).',
+    descriptionRu: 'Унифицированный алюминиевый тюбик с завинчивающимся колпачком (50мл) для мазей, гелей или паст.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.06,
+    usable: true
+  },
+  ampoule_glass_small: {
+    itemId: 'ampoule_glass_small',
+    name: 'Medical Glass Ampoule (10ml)',
+    nameRu: 'Стеклянная медицинская ампула (10мл)',
+    category: 'med',
+    maxStack: 15,
+    icon: '',
+    description: 'Hermetic sterile glass ampoule/vial for injectable or concentrated solutions (10ml).',
+    descriptionRu: 'Герметичная стерильная стеклянная ампула (10мл) для инъекционных и концентрированных препаратов.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.02,
+    usable: true
+  },
+  aerosol_can_small: {
+    itemId: 'aerosol_can_small',
+    name: 'Aerosol Spray Can (150ml)',
+    nameRu: 'Аэрозольный баллончик с распылителем (150мл)',
+    category: 'med',
+    maxStack: 8,
+    icon: '',
+    description: 'Pressurized aluminum aerosol spray can with nozzle (150ml).',
+    descriptionRu: 'Алюминиевый аэрозольный баллончик под давлением с клапаном-распылителем (150мл).',
+    effects: {},
+    weight: 0.05,
+    volume: 0.18,
+    usable: true
+  },
+  blister_pack_10: {
+    itemId: 'blister_pack_10',
+    name: 'Foil Pill Blister Pack',
+    nameRu: 'Фольгированный блистер для таблеток',
+    category: 'med',
+    maxStack: 10,
+    icon: '',
+    description: 'Unified PVC/aluminum foil blister pack holding individual tablets or patches.',
+    descriptionRu: 'Унифицированный пластиково-фольгированный блистер с ячейками для таблеток, капсул или пластырей.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.05,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'blister_pack_empty',
+    isTransparentPackaging: true,
+    containerCapacityL: 0.15,
+    maxContainedItemVolumeL: 0.05,
+    maxContainedWeightKg: 0.2
+  },
+  blister_pack_empty: {
+    itemId: 'blister_pack_empty',
+    name: 'Empty Popped Blister Pack',
+    nameRu: 'Пустой выдавленный блистер',
+    category: 'misc',
+    maxStack: 20,
+    icon: '',
+    description: 'Empty popped foil pill blister pack.',
+    descriptionRu: 'Пустой блистер с прорванной фольгой из-под таблеток.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.03,
+    usable: false
+  },
+  egg_carton_10: {
+    itemId: 'egg_carton_10',
+    name: 'Molded Pulp Egg Carton (10 cells)',
+    nameRu: 'Картонная кассета для яиц (10 ячеек)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Unified molded pulp cardboard egg carton for 10 chicken eggs.',
+    descriptionRu: 'Формованная картонная ячейковая кассета на 10 куриных яиц с откидной крышкой.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.85,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'egg_carton_10_open',
+    containerCapacityL: 1.0,
+    maxContainedItemVolumeL: 0.15,
+    maxContainedWeightKg: 1.2
+  },
+  egg_carton_10_open: {
+    itemId: 'egg_carton_10_open',
+    name: 'Opened Egg Carton (10 cells)',
+    nameRu: 'Открытая кассета для яиц (10 ячеек)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened cardboard egg carton that can hold small items or eggs.',
+    descriptionRu: 'Открытая картонная кассета из-под яиц: можно складывать яйца или мелкие предметы.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.85,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 1.0,
+    maxContainedItemVolumeL: 0.15,
+    maxContainedWeightKg: 1.2
+  },
+  egg_carton_quail_18: {
+    itemId: 'egg_carton_quail_18',
+    name: 'Quail Egg Plastic Clamshell (18 cells)',
+    nameRu: 'Пластиковый коррекc для перепелиных яиц',
+    category: 'misc',
+    maxStack: 8,
+    icon: '',
+    description: 'Clear thermoformed plastic tray for small quail eggs.',
+    descriptionRu: 'Прозрачный ячеистый пластиковый блистер-коррекс для перепелиных яиц.',
+    effects: {},
+    weight: 0.03,
+    volume: 0.45,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'tray_plastic_empty',
+    isTransparentPackaging: true,
+    containerCapacityL: 0.5,
+    maxContainedItemVolumeL: 0.08,
+    maxContainedWeightKg: 0.6
+  },
+  takeout_box_wok: {
+    itemId: 'takeout_box_wok',
+    name: 'Folded Cardboard Wok Box',
+    nameRu: 'Картонная коробочка WOK',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Tall folded cardboard takeout box with flaps.',
+    descriptionRu: 'Унифицированная высокая картонная коробочка с клапанами для лапши, гарниров или попкорна.',
+    effects: {},
+    weight: 0.03,
+    volume: 0.5,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'box_cardboard_small',
+    containerCapacityL: 0.6,
+    maxContainedItemVolumeL: 0.5,
+    maxContainedWeightKg: 0.8
+  },
+  takeout_pocket_fries: {
+    itemId: 'takeout_pocket_fries',
+    name: 'Cardboard Takeout Pocket',
+    nameRu: 'Картонный кармашек для фритюра',
+    category: 'misc',
+    maxStack: 15,
+    icon: '',
+    description: 'Open-top red/kraft cardboard pocket for french fries or strips.',
+    descriptionRu: 'Картонный фастфуд-кармашек для картофеля фри или снеков.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.3,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_small_open',
+    containerCapacityL: 0.35,
+    maxContainedItemVolumeL: 0.2,
+    maxContainedWeightKg: 0.5
+  },
+  takeout_box_nuggets: {
+    itemId: 'takeout_box_nuggets',
+    name: 'Clamshell Takeout Box',
+    nameRu: 'Картонный бокс с откидной крышкой',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Corrugated cardboard clamshell box for nuggets, wings, or rolls.',
+    descriptionRu: 'Картонная коробочка с откидной крышкой для наггетсов, крылышек или роллов.',
+    effects: {},
+    weight: 0.04,
+    volume: 0.55,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'box_cardboard_small',
+    containerCapacityL: 0.6,
+    maxContainedItemVolumeL: 0.4,
+    maxContainedWeightKg: 0.8
+  },
+
+  // === STANDALONE SINGLE DISCRETE ITEMS (ЯГОДЫ, ГРИБЫ, ЯЙЦА, СНЕКИ, ТАБЛЕТКИ ПОШТУЧНО) ===
+  berry_forest_single: {
+    itemId: 'berry_forest_single',
+    name: 'Wild Forest Berry',
+    nameRu: 'Лесная ягода',
+    category: 'food',
+    maxStack: 30,
+    icon: '',
+    description: 'Single ripe wild forest berry picked from bushes.',
+    descriptionRu: 'Спелая сочная лесная ягода с кислинкой и хвойным ароматом.',
+    effects: { hunger: 3, thirst: 3, health: 1, energy: 1 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  berry_blueberry_single: {
+    itemId: 'berry_blueberry_single',
+    name: 'Wild Blueberry',
+    nameRu: 'Ягода черники',
+    category: 'food',
+    maxStack: 30,
+    icon: '',
+    description: 'Single dark-blue wild forest blueberry with velvety bloom.',
+    descriptionRu: 'Крупная тёмно-синяя ягода лесной черники с сизым восковым налётом.',
+    effects: { hunger: 3, thirst: 3, health: 2, energy: 1 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  berry_lingonberry_single: {
+    itemId: 'berry_lingonberry_single',
+    name: 'Wild Lingonberry',
+    nameRu: 'Ягода брусники',
+    category: 'food',
+    maxStack: 30,
+    icon: '',
+    description: 'Single glossy ruby-red wild lingonberry.',
+    descriptionRu: 'Глянцевая ярко-красная ягода таёжной брусники с бодрящей горчинкой.',
+    effects: { hunger: 3, thirst: 4, health: 2 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  berry_cranberry_single: {
+    itemId: 'berry_cranberry_single',
+    name: 'Bog Cranberry',
+    nameRu: 'Ягода клюквы',
+    category: 'food',
+    maxStack: 30,
+    icon: '',
+    description: 'Single tart crimson bog cranberry rich in vitamin C.',
+    descriptionRu: 'Крупная алая ягода болотной клюквы, лопающаяся кислым витаминным соком.',
+    effects: { hunger: 2, thirst: 5, health: 3 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  berry_raspberry_single: {
+    itemId: 'berry_raspberry_single',
+    name: 'Ripe Raspberry',
+    nameRu: 'Ягода малины',
+    category: 'food',
+    maxStack: 30,
+    icon: '',
+    description: 'Single fragrant crimson raspberry drupelet cluster.',
+    descriptionRu: 'Душистая бархатистая ягода спелой малины, тающая во рту.',
+    effects: { hunger: 3, thirst: 3, health: 2, energy: 2 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  berry_strawberry_single: {
+    itemId: 'berry_strawberry_single',
+    name: 'Ripe Strawberry',
+    nameRu: 'Ягода клубники',
+    category: 'food',
+    maxStack: 25,
+    icon: '',
+    description: 'Single sweet juicy red strawberry with green calyx.',
+    descriptionRu: 'Крупная сладкая ягода садовой клубники с зелёным хвостиком.',
+    effects: { hunger: 4, thirst: 4, health: 2, energy: 2 },
+    weight: 0.02,
+    volume: 0.025,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  berry_blackcurrant_single: {
+    itemId: 'berry_blackcurrant_single',
+    name: 'Blackcurrant Berry',
+    nameRu: 'Ягода чёрной смородины',
+    category: 'food',
+    maxStack: 30,
+    icon: '',
+    description: 'Single glossy blackcurrant berry bursting with aroma.',
+    descriptionRu: 'Чёрная глянцевая ягода смородины с насыщенным терпким ароматом.',
+    effects: { hunger: 3, thirst: 3, health: 3 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  berry_redcurrant_single: {
+    itemId: 'berry_redcurrant_single',
+    name: 'Redcurrant Sprig',
+    nameRu: 'Гроздь красной смородины',
+    category: 'food',
+    maxStack: 30,
+    icon: '',
+    description: 'Translucent ruby redcurrant sprig.',
+    descriptionRu: 'Прозрачно-рубиновая веточка красной смородины с освежающей кислинкой.',
+    effects: { hunger: 3, thirst: 4, health: 2 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  berry_cherry_single: {
+    itemId: 'berry_cherry_single',
+    name: 'Sweet Cherry',
+    nameRu: 'Ягода спелой вишни',
+    category: 'food',
+    maxStack: 30,
+    icon: '',
+    description: 'Single dark crimson cherry on a green stem.',
+    descriptionRu: 'Спелая тёмно-бордовая вишня на тонкой зелёной плодоножке.',
+    effects: { hunger: 3, thirst: 4, health: 2 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  mushroom_chanterelle_single: {
+    itemId: 'mushroom_chanterelle_single',
+    name: 'Golden Chanterelle Mushroom',
+    nameRu: 'Гриб лисичка',
+    category: 'food',
+    maxStack: 20,
+    icon: '',
+    description: 'Single golden-orange wavy cap chanterelle mushroom.',
+    descriptionRu: 'Крепкий рыже-золотистый лесной гриб лисичка с волнистой шляпкой.',
+    effects: { hunger: 6, health: 2 },
+    weight: 0.03,
+    volume: 0.04,
+    usable: true,
+    biteCount: 2,
+    fullnessPerBite: 2
+  },
+  mushroom_honey_agaric_single: {
+    itemId: 'mushroom_honey_agaric_single',
+    name: 'Forest Honey Agaric Mushroom',
+    nameRu: 'Гриб опёнок',
+    category: 'food',
+    maxStack: 25,
+    icon: '',
+    description: 'Single autumn honey agaric mushroom on a slender stem.',
+    descriptionRu: 'Осенний лесной опёнок на тонкой ножке с колечком и медово-коричневой шляпкой.',
+    effects: { hunger: 5, health: 2 },
+    weight: 0.025,
+    volume: 0.035,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 2
+  },
+  egg_chicken_single: {
+    itemId: 'egg_chicken_single',
+    name: 'Raw Chicken Egg',
+    nameRu: 'Куриное яйцо (1 шт.)',
+    category: 'food',
+    maxStack: 10,
+    icon: '',
+    description: 'Single fresh farm chicken egg in shell.',
+    descriptionRu: 'Свежее домашнее куриное яйцо в прочной скорлупе. Можно выпить сырым или пожарить/сварить на кухне.',
+    effects: { hunger: 8, thirst: 3, energy: 3 },
+    weight: 0.06,
+    volume: 0.06,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 3
+  },
+  egg_quail_single: {
+    itemId: 'egg_quail_single',
+    name: 'Raw Quail Egg',
+    nameRu: 'Перепелиное яйцо (1 шт.)',
+    category: 'food',
+    maxStack: 18,
+    icon: '',
+    description: 'Single speckled quail egg.',
+    descriptionRu: 'Маленькое пятнистое перепелиное яйцо, богатое белком и микроэлементами.',
+    effects: { hunger: 4, thirst: 2, health: 2, energy: 2 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  chip_potato_single: {
+    itemId: 'chip_potato_single',
+    name: 'Crispy Potato Chip',
+    nameRu: 'Хрустящий картофельный чипс',
+    category: 'food',
+    maxStack: 20,
+    icon: '',
+    description: 'Single golden wavy salted potato chip.',
+    descriptionRu: 'Тонкий золотистый ломтик хрустящего картофельного чипса с солью и паприкой.',
+    effects: { hunger: 4, thirst: -2, energy: 1 },
+    weight: 0.01,
+    volume: 0.015,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  cookie_choco_single: {
+    itemId: 'cookie_choco_single',
+    name: 'Chocolate Chip Cookie',
+    nameRu: 'Овсяное печенье с шоколадом (1 шт.)',
+    category: 'food',
+    maxStack: 15,
+    icon: '',
+    description: 'Single baked cookie studded with dark chocolate chips.',
+    descriptionRu: 'Ароматное рассыпчатое печенье с кусочками тёмного шоколада.',
+    effects: { hunger: 8, energy: 4 },
+    weight: 0.03,
+    volume: 0.04,
+    usable: true,
+    biteCount: 2,
+    fullnessPerBite: 2
+  },
+  fries_strip_single: {
+    itemId: 'fries_strip_single',
+    name: 'Golden French Fry Strip',
+    nameRu: 'Ломтик картофеля фри',
+    category: 'food',
+    maxStack: 25,
+    icon: '',
+    description: 'Single hot crispy golden french fry strip.',
+    descriptionRu: 'Обжаренный во фритюре золотистый брусочек картофеля фри с крупинками морской соли.',
+    effects: { hunger: 5, thirst: -1, energy: 2 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1,
+    temperature: 55
+  },
+  nugget_chicken_single: {
+    itemId: 'nugget_chicken_single',
+    name: 'Crispy Chicken Nugget',
+    nameRu: 'Куриный наггетс в панировке (1 шт.)',
+    category: 'food',
+    maxStack: 15,
+    icon: '',
+    description: 'Single tender chicken breast nugget in golden tempura breading.',
+    descriptionRu: 'Нежное куриное филе в хрустящей золотистой панировке.',
+    effects: { hunger: 8, energy: 3, health: 1 },
+    weight: 0.025,
+    volume: 0.03,
+    usable: true,
+    biteCount: 2,
+    fullnessPerBite: 2,
+    temperature: 58
+  },
+  chicken_wing_crispy_single: {
+    itemId: 'chicken_wing_crispy_single',
+    name: 'Spicy Fried Chicken Wing',
+    nameRu: 'Острое куриное крылышко в панировке (1 шт.)',
+    category: 'food',
+    maxStack: 12,
+    icon: '',
+    description: 'Single hot crispy breaded chicken wing.',
+    descriptionRu: 'Сочное обжаренное куриное крылышко в острой хрустящей панировке.',
+    effects: { hunger: 10, energy: 4, health: 2 },
+    weight: 0.04,
+    volume: 0.05,
+    usable: true,
+    biteCount: 2,
+    fullnessPerBite: 3,
+    temperature: 60
+  },
+  sushi_roll_piece: {
+    itemId: 'sushi_roll_piece',
+    name: 'Philadelphia Roll Piece',
+    nameRu: 'Ролл «Филадельфия» с лососем (1 шт.)',
+    category: 'food',
+    maxStack: 12,
+    icon: '',
+    description: 'Single sushi roll piece with salmon, cream cheese, nori, and rice.',
+    descriptionRu: 'Аккуратный кусочек ролла из риса, нори, сливочного сыра и ломтика свежего лосося.',
+    effects: { hunger: 8, health: 2, energy: 2 },
+    weight: 0.03,
+    volume: 0.035,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 2
+  },
+  nacho_chip_single: {
+    itemId: 'nacho_chip_single',
+    name: 'Corn Tortilla Nacho Chip',
+    nameRu: 'Кукурузный чипс начос',
+    category: 'food',
+    maxStack: 20,
+    icon: '',
+    description: 'Single triangular toasted corn tortilla chip.',
+    descriptionRu: 'Хрустящий треугольный чипс из кукурузной тортильи с пряностями.',
+    effects: { hunger: 4, thirst: -1, energy: 1 },
+    weight: 0.015,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  popcorn_handful: {
+    itemId: 'popcorn_handful',
+    name: 'Caramel Popcorn Handful',
+    nameRu: 'Горсть воздушного попкорна',
+    category: 'food',
+    maxStack: 20,
+    icon: '',
+    description: 'Handful of puffed golden corn kernels.',
+    descriptionRu: 'Воздушные хлопья жареной кукурузы в карамельно-масляной глазури.',
+    effects: { hunger: 5, energy: 2 },
+    weight: 0.015,
+    volume: 0.03,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  pill_painkiller_single: {
+    itemId: 'pill_painkiller_single',
+    name: 'Analgesic Tablet (1 pc)',
+    nameRu: 'Таблетка анальгетика (1 шт.)',
+    category: 'med',
+    maxStack: 20,
+    icon: '',
+    description: 'Single analgesic pain-relief tablet.',
+    descriptionRu: 'Одна таблетка сильнодействующего нестероидного анальгетика для купирования болевого синдрома.',
+    effects: { health: 8 },
+    weight: 0.002,
+    volume: 0.005,
+    usable: true,
+    biteCount: 1
+  },
+  pill_antipyretic_single: {
+    itemId: 'pill_antipyretic_single',
+    name: 'Antipyretic Paracetamol Tablet (1 pc)',
+    nameRu: 'Таблетка жаропонижающего (1 шт.)',
+    category: 'med',
+    maxStack: 20,
+    icon: '',
+    description: 'Single fever-reducing paracetamol tablet.',
+    descriptionRu: 'Одна таблетка парацетамола для снижения жара, озноба и ломоты.',
+    effects: { health: 6, energy: 3 },
+    weight: 0.002,
+    volume: 0.005,
+    usable: true,
+    biteCount: 1
+  },
+  pill_charcoal_single: {
+    itemId: 'pill_charcoal_single',
+    name: 'Activated Charcoal Tablet (1 pc)',
+    nameRu: 'Таблетка активированного угля (1 шт.)',
+    category: 'med',
+    maxStack: 20,
+    icon: '',
+    description: 'Single porous black activated carbon tablet for toxin absorption.',
+    descriptionRu: 'Пористая чёрная таблетка активированного угля для связывания токсинов и снятия тошноты.',
+    effects: { health: 4 },
+    weight: 0.002,
+    volume: 0.005,
+    usable: true,
+    biteCount: 1
+  },
+  pill_vitamin_single: {
+    itemId: 'pill_vitamin_single',
+    name: 'Multivitamin Dragee (1 pc)',
+    nameRu: 'Драже поливитаминов (1 шт.)',
+    category: 'med',
+    maxStack: 20,
+    icon: '',
+    description: 'Single yellow citrus-flavored multivitamin dragee.',
+    descriptionRu: 'Круглое жёлтое драже витаминного комплекса (C, B1, B6, D3) для укрепления тонуса.',
+    effects: { health: 5, energy: 6 },
+    weight: 0.002,
+    volume: 0.005,
+    usable: true,
+    biteCount: 1
+  },
+  patch_bactericidal_single: {
+    itemId: 'patch_bactericidal_single',
+    name: 'Bactericidal Adhesive Strip (1 pc)',
+    nameRu: 'Бактерицидный лейкопластырь (1 полоска)',
+    category: 'med',
+    maxStack: 20,
+    icon: '',
+    description: 'Single sterile adhesive bandage strip with antiseptic gauze pad.',
+    descriptionRu: 'Индивидуальная полоска бактерицидного пластыря с пропитанной антисептиком подушечкой для заклеивания ссадин и порезов.',
+    effects: { health: 6 },
+    weight: 0.002,
+    volume: 0.005,
+    usable: true,
+    biteCount: 1
+  },
   ...COOKING_INGREDIENTS_CATALOG
 };
 
@@ -5510,7 +6487,7 @@ export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
   thermal_coat: { slot: 'torso', layer: 'jacket', insulation: 85, windResistance: 85, waterResistance: 75, breathability: 25, mobilityPenalty: 12, color: '#2d3748', pocketCapacityL: 4.0, maxPocketItemVolumeL: 1.0, maxPocketWeightKg: 4.5 },
 };
 
-export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidId: LiquidId | null; amountMl: number }> = {
+export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidId: LiquidId | null; amountMl: number; attributes?: FluidSubstanceAttributes }> = {
   // Plastic Bottles
   bottle_plastic_500: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
   bottle_plastic_1500: { containerId: 'bottle_plastic_1500', liquidId: null, amountMl: 0 },
@@ -5565,16 +6542,13 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   brake_fluid_can: { containerId: 'bottle_plastic_500', liquidId: 'brake_fluid', amountMl: 500 },
   canister_brake_fluid: { containerId: 'bottle_plastic_500', liquidId: 'brake_fluid', amountMl: 500 },
 
-  // Pharmacy & Medical Liquids
+  // Pharmacy & Medical Empty Containers
   bottle_plastic_100: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0 },
-  antiseptic: { containerId: 'bottle_plastic_100', liquidId: 'antiseptic', amountMl: 100 },
-  antiseptic_bottle: { containerId: 'bottle_plastic_100', liquidId: 'antiseptic', amountMl: 100 },
-  zelenka: { containerId: 'bottle_plastic_100', liquidId: 'zelenka', amountMl: 50 },
-  iodine: { containerId: 'bottle_plastic_100', liquidId: 'iodine', amountMl: 50 },
-  hydrogen_peroxide: { containerId: 'bottle_plastic_100', liquidId: 'peroxide', amountMl: 100 },
-  valerian_drops: { containerId: 'bottle_plastic_100', liquidId: 'valerian_tincture', amountMl: 50 },
-  ammonia_spirit: { containerId: 'bottle_plastic_100', liquidId: 'ammonia_solution', amountMl: 50 },
-  eye_drops: { containerId: 'bottle_plastic_100', liquidId: 'saline_solution', amountMl: 40 },
+  tube_ointment_small: { containerId: 'tube_ointment_small', liquidId: null, amountMl: 0 },
+  ampoule_glass_small: { containerId: 'ampoule_glass_small', liquidId: null, amountMl: 0 },
+  aerosol_can_small: { containerId: 'aerosol_can_small', liquidId: null, amountMl: 0 },
+  tin_round_mini: { containerId: 'tin_round_mini', liquidId: null, amountMl: 0 },
+  tin_round_mini_open: { containerId: 'tin_round_mini_open', liquidId: null, amountMl: 0 },
 
   // Cups & Mugs
   paper_cup: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
@@ -5594,6 +6568,7 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
 
   // Aluminum Cans
   can_alu_330: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
+  can_alu_330_open: { containerId: 'can_alu_330_open', liquidId: null, amountMl: 0 },
   energy_drink: { containerId: 'can_alu_330', liquidId: 'energy_drink', amountMl: 330 },
   cola_can: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
   soda_can: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
@@ -5602,9 +6577,9 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   can_beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
   beer_can: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
   beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
-  can_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
-  cola_zero_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
-  energy_can_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
+  can_empty: { containerId: 'can_alu_330_open', liquidId: null, amountMl: 0 },
+  cola_zero_empty: { containerId: 'can_alu_330_open', liquidId: null, amountMl: 0 },
+  energy_can_empty: { containerId: 'can_alu_330_open', liquidId: null, amountMl: 0 },
 
   // Flasks & Thermoses
   camp_flask: { containerId: 'camp_flask', liquidId: 'water', amountMl: 800 },
@@ -5622,95 +6597,39 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   juice: { containerId: 'tetra_pack_1000', liquidId: 'juice', amountMl: 1000 },
   milk_pasteurized_carton: { containerId: 'tetra_pack_1000', liquidId: 'milk', amountMl: 1000 },
 
-  // Glass Jars & Culinary Preserves
+  // Empty Glass Jars, Clay Pots, Tin Cans & Dairy Cups
+  jar_glass_3l: { containerId: 'jar_glass_3l', liquidId: null, amountMl: 0 },
+  jar_glass_3l_open: { containerId: 'jar_glass_3l_open', liquidId: null, amountMl: 0 },
   jar_glass_large: { containerId: 'jar_glass_large', liquidId: null, amountMl: 0 },
+  jar_glass_large_open: { containerId: 'jar_glass_large_open', liquidId: null, amountMl: 0 },
   jar_glass_medium: { containerId: 'jar_glass_medium', liquidId: null, amountMl: 0 },
+  jar_glass_medium_open: { containerId: 'jar_glass_medium_open', liquidId: null, amountMl: 0 },
   jar_glass_small: { containerId: 'jar_glass_small', liquidId: null, amountMl: 0 },
-  jar_pickles: { containerId: 'jar_glass_medium', liquidId: 'pickles', amountMl: 500 },
-  pickles: { containerId: 'jar_glass_medium', liquidId: 'pickles', amountMl: 500 },
-  milk_mushroom_salted: { containerId: 'jar_glass_medium', liquidId: 'pickles_salted_mushrooms', amountMl: 500 },
-  jar_jam: { containerId: 'jar_glass_small', liquidId: 'jam', amountMl: 200 },
-  jam: { containerId: 'jar_glass_small', liquidId: 'jam', amountMl: 200 },
-  jam_raspberry: { containerId: 'jar_glass_small', liquidId: 'jam_raspberry', amountMl: 200 },
-  jam_strawberry: { containerId: 'jar_glass_small', liquidId: 'jam_strawberry', amountMl: 200 },
-  jam_blueberry: { containerId: 'jar_glass_small', liquidId: 'jam_blueberry', amountMl: 200 },
-  honey: { containerId: 'jar_glass_small', liquidId: 'honey', amountMl: 200 },
-  jar_honey: { containerId: 'jar_glass_small', liquidId: 'honey', amountMl: 200 },
-  honey_wild_jar: { containerId: 'jar_glass_medium', liquidId: 'honey_wild', amountMl: 500 },
-  honey_wild: { containerId: 'jar_glass_medium', liquidId: 'honey_wild', amountMl: 500 },
-  honey_buckwheat: { containerId: 'jar_glass_medium', liquidId: 'honey_buckwheat', amountMl: 500 },
-  maple_syrup_bottle: { containerId: 'bottle_glass_small', liquidId: 'maple_syrup', amountMl: 250 },
-  maple_syrup: { containerId: 'bottle_glass_small', liquidId: 'maple_syrup', amountMl: 250 },
-  mustard_dijon_jar: { containerId: 'jar_glass_small', liquidId: 'mustard_dijon', amountMl: 200 },
-  mustard_dijon: { containerId: 'jar_glass_small', liquidId: 'mustard_dijon', amountMl: 200 },
-
-  // Dairy & Fats in Jars, Pots & Bottles
-  milk_bottle_raw: { containerId: 'bottle_glass_large', liquidId: 'milk_raw', amountMl: 1000 },
-  cream_heavy_jar: { containerId: 'jar_glass_medium', liquidId: 'cream_heavy', amountMl: 500 },
-  sour_cream_pot: { containerId: 'jar_glass_medium', liquidId: 'sour_cream', amountMl: 500 },
-  kefir_fermented_bottle: { containerId: 'bottle_glass_large', liquidId: 'kefir', amountMl: 1000 },
-  buttermilk_fermented_jar: { containerId: 'jar_glass_medium', liquidId: 'kefir', amountMl: 500 },
-  cottage_cheese_pack: { containerId: 'jar_glass_medium', liquidId: 'cottage_cheese', amountMl: 500 },
-  yogurt_natural_cup: { containerId: 'jar_glass_small', liquidId: 'yogurt', amountMl: 200 },
-  liquid_yeast_mixture: { containerId: 'jar_glass_small', liquidId: 'yeast_liquid', amountMl: 200 },
-  lard_pork_pot: { containerId: 'pot_clay_medium', liquidId: 'lard_pork', amountMl: 500 },
-  fat_beef_pot: { containerId: 'pot_clay_medium', liquidId: 'beef_tallow', amountMl: 500 },
-  ghee_butter_pot: { containerId: 'pot_clay_medium', liquidId: 'ghee', amountMl: 500 },
-
-  // Culinary Oils, Vinegars & Sauces
-  oil_sunflower_bottle: { containerId: 'bottle_glass_large', liquidId: 'oil_sunflower', amountMl: 1000 },
-  oil_sunflower: { containerId: 'bottle_glass_large', liquidId: 'oil_sunflower', amountMl: 1000 },
-  oil_olive_extra_virgin: { containerId: 'bottle_glass_medium', liquidId: 'oil_olive', amountMl: 500 },
-  oil_olive: { containerId: 'bottle_glass_medium', liquidId: 'oil_olive', amountMl: 500 },
-  oil_linseed_bottle: { containerId: 'bottle_glass_medium', liquidId: 'oil_linseed', amountMl: 500 },
-  oil_linseed: { containerId: 'bottle_glass_medium', liquidId: 'oil_linseed', amountMl: 500 },
-  oil_sesame_bottle: { containerId: 'bottle_glass_small', liquidId: 'oil_sesame', amountMl: 250 },
-  oil_sesame: { containerId: 'bottle_glass_small', liquidId: 'oil_sesame', amountMl: 250 },
-  vinegar_table_bottle: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_table', amountMl: 500 },
-  vinegar_table: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_table', amountMl: 500 },
-  vinegar_apple_cider: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_apple', amountMl: 500 },
-  vinegar_apple: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_apple', amountMl: 500 },
-  vinegar_balsamic_premium: { containerId: 'bottle_glass_small', liquidId: 'vinegar_balsamic', amountMl: 250 },
-  vinegar_balsamic: { containerId: 'bottle_glass_small', liquidId: 'vinegar_balsamic', amountMl: 250 },
-  soy_sauce_classic: { containerId: 'bottle_glass_small', liquidId: 'sauce_soy', amountMl: 250 },
-  sauce_soy: { containerId: 'bottle_glass_small', liquidId: 'sauce_soy', amountMl: 250 },
-  sauce_fish_premium: { containerId: 'bottle_glass_small', liquidId: 'sauce_fish', amountMl: 250 },
-  sauce_fish: { containerId: 'bottle_glass_small', liquidId: 'sauce_fish', amountMl: 250 },
-  sauce_worcestershire: { containerId: 'bottle_glass_small', liquidId: 'sauce_worcestershire', amountMl: 250 },
-  sauce_pomegranate_narsharab: { containerId: 'bottle_glass_small', liquidId: 'sauce_narsharab', amountMl: 250 },
-  sauce_narsharab: { containerId: 'bottle_glass_small', liquidId: 'sauce_narsharab', amountMl: 250 },
-  sauce_teriyaki_bottle: { containerId: 'bottle_glass_small', liquidId: 'sauce_teriyaki', amountMl: 250 },
-  sauce_teriyaki: { containerId: 'bottle_glass_small', liquidId: 'sauce_teriyaki', amountMl: 250 },
-
-  // Tin Cans & Preserves
+  jar_glass_small_open: { containerId: 'jar_glass_small_open', liquidId: null, amountMl: 0 },
+  jar_spice_small: { containerId: 'jar_spice_small', liquidId: null, amountMl: 0 },
+  jar_spice_small_open: { containerId: 'jar_spice_small_open', liquidId: null, amountMl: 0 },
+  pot_clay_small: { containerId: 'pot_clay_small', liquidId: null, amountMl: 0 },
+  pot_clay_small_open: { containerId: 'pot_clay_small_open', liquidId: null, amountMl: 0 },
+  pot_clay_medium: { containerId: 'pot_clay_medium', liquidId: null, amountMl: 0 },
+  pot_clay_medium_open: { containerId: 'pot_clay_medium_open', liquidId: null, amountMl: 0 },
+  pot_clay_large: { containerId: 'pot_clay_large', liquidId: null, amountMl: 0 },
+  pot_clay_large_open: { containerId: 'pot_clay_large_open', liquidId: null, amountMl: 0 },
   can_metal_large: { containerId: 'can_metal_large', liquidId: null, amountMl: 0 },
+  can_metal_large_open: { containerId: 'can_metal_large_open', liquidId: null, amountMl: 0 },
   can_metal_medium: { containerId: 'can_metal_medium', liquidId: null, amountMl: 0 },
+  can_metal_medium_open: { containerId: 'can_metal_medium_open', liquidId: null, amountMl: 0 },
   can_metal_small: { containerId: 'can_metal_small', liquidId: null, amountMl: 0 },
-  tin_can_empty: { containerId: 'can_metal_medium', liquidId: null, amountMl: 0 },
-  canned_meat: { containerId: 'can_metal_medium', liquidId: 'stew_meat', amountMl: 400 },
-  canned_stew: { containerId: 'can_metal_medium', liquidId: 'stew_meat', amountMl: 400 },
-  stew_meat: { containerId: 'can_metal_medium', liquidId: 'stew_meat', amountMl: 400 },
-  canned_fish: { containerId: 'can_metal_small', liquidId: 'fish_preserves', amountMl: 150 },
-  fish_preserves: { containerId: 'can_metal_small', liquidId: 'fish_preserves', amountMl: 150 },
-  canned_condensed_milk: { containerId: 'can_metal_medium', liquidId: 'condensed_milk', amountMl: 400 },
-  condensed_milk: { containerId: 'can_metal_medium', liquidId: 'condensed_milk', amountMl: 400 },
-  caviar: { containerId: 'can_metal_small', liquidId: 'caviar_red', amountMl: 150 },
-  canned_caviar: { containerId: 'can_metal_small', liquidId: 'caviar_red', amountMl: 150 },
-  salmon_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_red', amountMl: 140 },
-  salmon_caviar: { containerId: 'jar_glass_small', liquidId: 'caviar_red', amountMl: 140 },
-  pike_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_pike', amountMl: 140 },
-  pike_caviar: { containerId: 'jar_glass_small', liquidId: 'caviar_pike', amountMl: 140 },
-  cod_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_cod', amountMl: 140 },
-  cod_caviar: { containerId: 'jar_glass_small', liquidId: 'caviar_cod', amountMl: 140 },
-  perch_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_pike', amountMl: 140 },
-  herring_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_cod', amountMl: 140 },
-  tuna_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_red', amountMl: 140 },
-  eel_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_black', amountMl: 140 },
-  catfish_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_black', amountMl: 140 },
-  caviar_squash_jar: { containerId: 'jar_glass_medium', liquidId: 'caviar_squash', amountMl: 500 },
-  caviar_squash: { containerId: 'jar_glass_medium', liquidId: 'caviar_squash', amountMl: 500 },
-  caviar_eggplant_jar: { containerId: 'jar_glass_medium', liquidId: 'caviar_eggplant', amountMl: 500 },
-  caviar_eggplant: { containerId: 'jar_glass_medium', liquidId: 'caviar_eggplant', amountMl: 500 },
+  can_metal_small_open: { containerId: 'can_metal_small_open', liquidId: null, amountMl: 0 },
+  can_metal_flat: { containerId: 'can_metal_flat', liquidId: null, amountMl: 0 },
+  can_metal_flat_open: { containerId: 'can_metal_flat_open', liquidId: null, amountMl: 0 },
+  can_metal_oval: { containerId: 'can_metal_oval', liquidId: null, amountMl: 0 },
+  can_metal_oval_open: { containerId: 'can_metal_oval_open', liquidId: null, amountMl: 0 },
+  tin_can_empty: { containerId: 'can_metal_medium_open', liquidId: null, amountMl: 0 },
+  cup_plastic_dairy_small: { containerId: 'cup_plastic_dairy_small', liquidId: null, amountMl: 0 },
+  cup_plastic_dairy_small_open: { containerId: 'cup_plastic_dairy_small_open', liquidId: null, amountMl: 0 },
+  cup_plastic_dairy_medium: { containerId: 'cup_plastic_dairy_medium', liquidId: null, amountMl: 0 },
+  cup_plastic_dairy_medium_open: { containerId: 'cup_plastic_dairy_medium_open', liquidId: null, amountMl: 0 },
+  bottle_sauce_squeeze: { containerId: 'bottle_sauce_squeeze', liquidId: null, amountMl: 0 },
 
   // Bowls & Broths
   soup_bowl: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
@@ -5718,34 +6637,13 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   hot_soup: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
   soup: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
   broth: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500 },
-  broth_beef_jar: { containerId: 'jar_glass_medium', liquidId: 'broth_beef', amountMl: 450 },
   broth_beef: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
-  broth_chicken_jar: { containerId: 'jar_glass_medium', liquidId: 'broth_chicken', amountMl: 450 },
   broth_chicken: { containerId: 'soup_bowl', liquidId: 'broth_chicken', amountMl: 500 },
-  broth_fish_jar: { containerId: 'jar_glass_medium', liquidId: 'broth_fish', amountMl: 450 },
   broth_fish: { containerId: 'soup_bowl', liquidId: 'broth_fish', amountMl: 500 },
-  broth_vegetable_jar: { containerId: 'jar_glass_medium', liquidId: 'broth_vegetable', amountMl: 450 },
   broth_vegetable: { containerId: 'soup_bowl', liquidId: 'broth_vegetable', amountMl: 500 },
   broth_mushroom: { containerId: 'soup_bowl', liquidId: 'broth_mushroom', amountMl: 500 },
 
-  // Wicker Basket & Forest Produce
-  lukoshko: { containerId: 'lukoshko', liquidId: null, amountMl: 0 },
-  basket_wicker: { containerId: 'lukoshko', liquidId: null, amountMl: 0 },
-  berries: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
-  berries_basket: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
-  forest_berries: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
-  blueberry_basket: { containerId: 'lukoshko', liquidId: 'berries_blueberry', amountMl: 1500 },
-  lingonberry_basket: { containerId: 'lukoshko', liquidId: 'berries_lingonberry', amountMl: 1500 },
-  cranberry_basket: { containerId: 'lukoshko', liquidId: 'berries_cranberry', amountMl: 1500 },
-  raspberry_basket: { containerId: 'lukoshko', liquidId: 'berries_raspberry', amountMl: 1500 },
-  strawberry_basket: { containerId: 'lukoshko', liquidId: 'berries_strawberry', amountMl: 1500 },
-  blackcurrant_basket: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
-  redcurrant_basket: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
-  cherry_basket: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
-  chanterelle_basket: { containerId: 'lukoshko', liquidId: 'mushrooms_chanterelle', amountMl: 1500 },
-  honey_agaric_basket: { containerId: 'lukoshko', liquidId: 'mushrooms_honey_agaric', amountMl: 1500 },
-
-  // Plastic Bags & Dry Culinary Goods
+  // Plastic Bags & Sacks
   package_bag: { containerId: 'package_bag', liquidId: null, amountMl: 0 },
   package_sachet: { containerId: 'package_sachet', liquidId: null, amountMl: 0 },
   plastic_bag: { containerId: 'plastic_bag', liquidId: null, amountMl: 0 },
@@ -5754,53 +6652,38 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   salt: { containerId: 'package_bag', liquidId: 'salt', amountMl: 500 },
   salt_pack: { containerId: 'package_bag', liquidId: 'salt', amountMl: 500 },
   salt_bag_coarse: { containerId: 'sack_cloth_small', liquidId: 'salt', amountMl: 1000 },
-  salt_sea_premium: { containerId: 'jar_glass_small', liquidId: 'salt', amountMl: 200 },
-  black_pepper_grinder: { containerId: 'jar_glass_small', liquidId: 'black_pepper_ground', amountMl: 120 },
-  black_pepper_powder_sachet: { containerId: 'package_sachet', liquidId: 'black_pepper_ground', amountMl: 50 },
-  chili_powder_sachet: { containerId: 'package_sachet', liquidId: 'chili_powder', amountMl: 50 },
-  paprika_sweet_sachet: { containerId: 'package_sachet', liquidId: 'paprika', amountMl: 50 },
-  bay_leaves_dried_sachet: { containerId: 'package_sachet', liquidId: 'tea', amountMl: 50 },
-  cinnamon_powder_sachet: { containerId: 'package_sachet', liquidId: 'cinnamon', amountMl: 50 },
-  cloves_buds_dried: { containerId: 'package_sachet', liquidId: 'cinnamon', amountMl: 50 },
-  turmeric_powder_sachet: { containerId: 'package_sachet', liquidId: 'turmeric', amountMl: 50 },
-  cardamom_pods_dried: { containerId: 'package_sachet', liquidId: 'cinnamon', amountMl: 50 },
-  coriander_seeds_sachet: { containerId: 'package_sachet', liquidId: 'cinnamon', amountMl: 50 },
-  allspice_berries_sachet: { containerId: 'package_sachet', liquidId: 'black_pepper_ground', amountMl: 50 },
-  yeast_dry_sachet: { containerId: 'package_sachet', liquidId: 'flour', amountMl: 30 },
-  shiitake_dried_bag: { containerId: 'package_bag', liquidId: 'mushrooms_chanterelle', amountMl: 250 },
-  wood_ear_mushroom_dried: { containerId: 'package_bag', liquidId: 'mushrooms_honey_agaric', amountMl: 200 },
-
-  // Sacks & Bulk Goods
   sack_cloth_large: { containerId: 'sack_cloth_large', liquidId: null, amountMl: 0 },
   sack_cloth_medium: { containerId: 'sack_cloth_medium', liquidId: null, amountMl: 0 },
   sack_cloth_small: { containerId: 'sack_cloth_small', liquidId: null, amountMl: 0 },
-  flour: { containerId: 'sack_cloth_medium', liquidId: 'flour', amountMl: 3000 },
-  flour_bag: { containerId: 'sack_cloth_medium', liquidId: 'flour', amountMl: 3000 },
-  flour_wheat_bag_1k: { containerId: 'sack_cloth_small', liquidId: 'flour', amountMl: 1000 },
-  flour_rye_bag_1k: { containerId: 'sack_cloth_small', liquidId: 'flour', amountMl: 1000 },
-  flour_corn_bag_500g: { containerId: 'package_bag', liquidId: 'flour', amountMl: 500 },
-  flour_rice_bag_500g: { containerId: 'package_bag', liquidId: 'flour', amountMl: 500 },
-  grain_wheat_raw_bag: { containerId: 'sack_cloth_small', liquidId: 'grain_wheat', amountMl: 1000 },
-  grain_rye_raw_bag: { containerId: 'sack_cloth_small', liquidId: 'grain_rye', amountMl: 1000 },
-  grain_oats_bag: { containerId: 'package_bag', liquidId: 'grain_oats', amountMl: 500 },
-  rice_basmati_bag: { containerId: 'sack_cloth_small', liquidId: 'rice', amountMl: 1000 },
-  rice_arborio_bag: { containerId: 'package_bag', liquidId: 'rice', amountMl: 500 },
-  buckwheat_roasted_bag: { containerId: 'sack_cloth_small', liquidId: 'buckwheat', amountMl: 1000 },
-  barley_pearl_bag: { containerId: 'sack_cloth_small', liquidId: 'barley', amountMl: 1000 },
-  millet_yellow_bag: { containerId: 'package_bag', liquidId: 'millet', amountMl: 800 },
-  semolina_wheat_bag: { containerId: 'package_bag', liquidId: 'semolina', amountMl: 500 },
-  peas_split_yellow: { containerId: 'package_bag', liquidId: 'peas', amountMl: 800 },
-  beans_red_kidney: { containerId: 'package_bag', liquidId: 'beans', amountMl: 800 },
-  beans_white_lima: { containerId: 'package_bag', liquidId: 'beans', amountMl: 800 },
-  lentils_red_dry: { containerId: 'package_bag', liquidId: 'lentils', amountMl: 500 },
-  lentils_green_dry: { containerId: 'package_bag', liquidId: 'lentils', amountMl: 500 },
-  chickpeas_garbanzo_dry: { containerId: 'package_bag', liquidId: 'chickpeas', amountMl: 800 },
   sandbag: { containerId: 'sandbag', liquidId: 'sand', amountMl: 1000 },
-  sack_empty: { containerId: 'sack_empty', liquidId: null, amountMl: 0 }
+  sack_empty: { containerId: 'sack_empty', liquidId: null, amountMl: 0 },
+
+  // Generalized Preparation-Method Liquids & Bulk Substances with Full Attributes
+  ...EXTENDED_LEGACY_CONTAINER_MAP
 };
 
-export function createItem(itemId: string, count: number = 1, initialPortions?: number): InventoryItem {
-  const def = ITEM_CATALOG[itemId] || ITEM_CATALOG.water_bottle;
+export function createItem(itemId: string, count: number = 1, initialPortions?: number, rawCatalogOnly?: boolean): InventoryItem {
+  // If this item is a packaged discrete item container (lukoshko with berries/mushrooms, egg carton, blister pack, tray, pouch, box),
+  // instantiate the unified container holding the standalone inner items unless rawCatalogOnly is requested.
+  if (!rawCatalogOnly && ITEM_PACKAGING_MAP[itemId]) {
+    return createPackagedItem(itemId, count);
+  }
+
+  const legacyMap = LEGACY_CONTAINER_MAP[itemId] || (
+    CONTAINER_CONFIGS[itemId] 
+      ? { 
+          containerId: itemId, 
+          liquidId: CONTAINER_CONFIGS[itemId].defaultLiquidId || null, 
+          amountMl: CONTAINER_CONFIGS[itemId].defaultAmountMl || 0,
+          attributes: undefined
+        } 
+      : null
+  );
+
+  // Use the unified container's catalog definition when mapped via LEGACY_CONTAINER_MAP
+  const effectiveContainerId = legacyMap ? legacyMap.containerId : itemId;
+  const originalDef = ITEM_CATALOG[itemId];
+  const def = ITEM_CATALOG[effectiveContainerId] || originalDef || ITEM_CATALOG.water_bottle;
   itemCounter++;
   const maxPortions = def.biteCount || 1;
   const portions = initialPortions !== undefined ? initialPortions : maxPortions;
@@ -5833,17 +6716,6 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   const isPhone = def.itemId.startsWith('phone_') || def.itemId === 'smartphone';
   const phoneSpecs = isPhone ? getPhoneSpecsForItemId(def.itemId) : undefined;
 
-  // Unified Fluid & Bulk substance storage detection
-  const legacyMap = LEGACY_CONTAINER_MAP[itemId] || (
-    CONTAINER_CONFIGS[itemId] 
-      ? { 
-          containerId: itemId, 
-          liquidId: CONTAINER_CONFIGS[itemId].defaultLiquidId || null, 
-          amountMl: CONTAINER_CONFIGS[itemId].defaultAmountMl || 0 
-        } 
-      : null
-  );
-
   let fluidStorage: FluidContainerState | undefined;
   // If item is a physical item container (bag, sack, box, basket, medkit) and not a pre-filled fluid/bulk package, don't attach fluidStorage
   if (legacyMap && (!isContainer || (legacyMap.liquidId && legacyMap.amountMl > 0))) {
@@ -5854,37 +6726,42 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
         currentMl: legacyMap.amountMl,
         maxMl: cfg.maxMl,
         emptyWeightKg: cfg.emptyWeightKg,
-        baseItemNameRu: def.nameRu || cfg.nameRu,
-        baseItemNameEn: def.name || cfg.name
+        baseItemNameRu: cfg.nameRu || def.nameRu,
+        baseItemNameEn: cfg.name || def.name,
+        attributes: legacyMap.attributes ? { ...legacyMap.attributes } : undefined
       };
     }
   }
 
+  // Keep sandbag itemId as 'sandbag' so sand pouring mechanics work directly
+  const resolvedItemId = itemId === 'sandbag' ? 'sandbag' : (ITEM_CATALOG[effectiveContainerId] ? effectiveContainerId : (ITEM_CATALOG[itemId] ? def.itemId : itemId));
+
   const createdItem: InventoryItem = {
     id: `item_${itemId}_${Date.now()}_${itemCounter}`,
-    itemId: ITEM_CATALOG[itemId] ? def.itemId : itemId,
-    name: ITEM_CATALOG[itemId] ? def.name : itemId,
-    nameRu: ITEM_CATALOG[itemId] ? def.nameRu : itemId,
-    category: def.category,
-    count: 1,
-    maxStack: 1,
+    itemId: resolvedItemId,
+    originalCatalogId: itemId !== resolvedItemId ? itemId : undefined,
+    name: ITEM_CATALOG[resolvedItemId] ? ITEM_CATALOG[resolvedItemId].name : def.name,
+    nameRu: ITEM_CATALOG[resolvedItemId] ? ITEM_CATALOG[resolvedItemId].nameRu : def.nameRu,
+    category: fluidStorage?.attributes?.medicalEffectId ? 'med' : (originalDef?.category || def.category),
+    count: Math.max(1, count),
+    maxStack: fluidStorage ? 1 : (def.maxStack || 1),
     icon: def.icon,
-    description: def.description,
-    descriptionRu: def.descriptionRu,
-    effects: { ...def.effects },
+    description: originalDef?.description || def.description,
+    descriptionRu: originalDef?.descriptionRu || def.descriptionRu,
+    effects: { ...(originalDef?.effects || def.effects) },
     weight: def.weight,
     volume: baseVolume,
     clothingStats: stats,
-    usable: def.singleUseContainer ? true : (isContainer ? false : (fluidStorage ? true : def.usable)),
+    usable: def.singleUseContainer ? true : (isContainer && !fluidStorage ? false : (fluidStorage ? true : def.usable)),
     portions: fluidStorage ? undefined : portions,
     maxPortions: fluidStorage ? undefined : maxPortions,
-    isContainer,
+    isContainer: fluidStorage && legacyMap?.liquidId ? false : isContainer,
     singleUseContainer: def.singleUseContainer,
     tornItemId: def.tornItemId,
     isTransparentPackaging: def.isTransparentPackaging,
     labelColor: def.labelColor,
     packagingSize: def.packagingSize,
-    contents: isContainer ? [] : undefined,
+    contents: (isContainer && !(fluidStorage && legacyMap?.liquidId)) ? [] : undefined,
     containerCapacityL: containerCap,
     maxContainedItemVolumeL: maxContainedVol,
     maxContainedWeightKg: maxContainedWt,
@@ -5906,17 +6783,18 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   }
 
   // Initialize thermal properties & surface temperature
-  if (def.temperature !== undefined) {
-    createdItem.temperature = def.temperature;
+  const tempSource = originalDef || def;
+  if (tempSource.temperature !== undefined) {
+    createdItem.temperature = tempSource.temperature;
   }
-  if (def.heatLossRate !== undefined) {
-    createdItem.heatLossRate = def.heatLossRate;
+  if (tempSource.heatLossRate !== undefined) {
+    createdItem.heatLossRate = tempSource.heatLossRate;
   }
-  if (def.heatRetention !== undefined) {
-    createdItem.heatRetention = def.heatRetention;
+  if (tempSource.heatRetention !== undefined) {
+    createdItem.heatRetention = tempSource.heatRetention;
   }
-  if (def.surfaceTemperature !== undefined) {
-    createdItem.surfaceTemperature = def.surfaceTemperature;
+  if (tempSource.surfaceTemperature !== undefined) {
+    createdItem.surfaceTemperature = tempSource.surfaceTemperature;
   }
   initItemThermalProperties(createdItem, 20.0);
 
@@ -5949,14 +6827,7 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   enoki_mushroom_bunch: { containerId: 'tray_sealed_food', countInside: 2 },
   portobello_mushroom: { containerId: 'tray_sealed_food', countInside: 2 },
 
-  // 3. Fresh Berries in Unified Food Trays (Лоток с несколькими ягодами)
-  berries_tray_fresh: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'strawberry_fresh' },
-  strawberry_fresh: { containerId: 'tray_sealed_food', countInside: 8 },
-  raspberry_fresh: { containerId: 'tray_sealed_food', countInside: 12 },
-  blueberry_fresh: { containerId: 'tray_sealed_food', countInside: 15 },
-  cherry_fresh: { containerId: 'tray_sealed_food', countInside: 10 },
-
-  // 4. Fresh Fruit Slices and Cups in Trays
+  // 3. Fresh Fruit Slices and Cups in Trays
   apple_slices: { containerId: 'tray_sealed_food' },
   pear_slices: { containerId: 'tray_sealed_food' },
   orange_slices: { containerId: 'tray_sealed_food' },
@@ -5964,6 +6835,10 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   watermelon_cubes: { containerId: 'tray_sealed_food' },
   melon_slices: { containerId: 'tray_sealed_food' },
   grape_cup: { containerId: 'tray_sealed_food' },
+  melon_diced: { containerId: 'tray_sealed_food', innerItemId: 'melon_slice', countInside: 4 },
+  watermelon_diced: { containerId: 'tray_sealed_food', innerItemId: 'watermelon_slice', countInside: 4 },
+  pomegranate_seeds_cup: { containerId: 'tray_sealed_food', innerItemId: 'pomegranate_whole', countInside: 2 },
+  grapes_berries_cup: { containerId: 'tray_sealed_food', innerItemId: 'grapes_green_bunch', countInside: 2 },
 
   // 4. Fresh Raw Meats & Poultry in Trays / Vacuum
   beef_steak: { containerId: 'tray_sealed_food' },
@@ -6020,21 +6895,24 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   sunflower_seeds: { containerId: 'pouch_sealed_snack' },
 
   // 7. Butter & Cheeses in Premium Paper Packaging with Dedicated Label Colors
-  butter_brick_salted: { containerId: 'paper_packaging_small', labelColor: '#facc15' }, // Sweet Cream Butter 82.5% (Golden Yellow Label)
-  ghee_butter_pot: { containerId: 'paper_packaging', labelColor: '#eab308' }, // Ghee Butter (Amber Gold Label)
-  cheese_cheddar_block: { containerId: 'paper_packaging', labelColor: '#f59e0b' }, // Cheddar Cheese (Deep Orange Label)
-  cheese_gouda_wheel: { containerId: 'paper_packaging_large', labelColor: '#eab308' }, // Gouda Wheel (Rich Yellow Label)
-  cheese_parmesan_wedge: { containerId: 'paper_packaging', labelColor: '#d97706' }, // Parmesan Wedge (Aged Amber Label)
-  cheese_mozzarella_ball: { containerId: 'paper_packaging_small', labelColor: '#0284c7' }, // Mozzarella (Sky Blue Label)
-  cheese_suluguni_braid: { containerId: 'paper_packaging', labelColor: '#b45309' }, // Smoked Suluguni (Bronze Smoke Label)
-  cheese_feta_block: { containerId: 'paper_packaging_small', labelColor: '#059669' }, // Greek Feta (Emerald Green Label)
-  cottage_cheese_pack: { containerId: 'paper_packaging', labelColor: '#2563eb' } // Cottage Cheese (Royal Blue Dairy Label)
+  butter_brick_salted: { containerId: 'paper_packaging_small', labelColor: '#facc15' },
+  cheese_cheddar_block: { containerId: 'paper_packaging', labelColor: '#f59e0b' },
+  cheese_gouda_wheel: { containerId: 'paper_packaging_large', labelColor: '#eab308' },
+  cheese_parmesan_wedge: { containerId: 'paper_packaging', labelColor: '#d97706' },
+  cheese_mozzarella_ball: { containerId: 'paper_packaging_small', labelColor: '#0284c7' },
+  cheese_suluguni_braid: { containerId: 'paper_packaging', labelColor: '#b45309' },
+  cheese_feta_block: { containerId: 'paper_packaging_small', labelColor: '#059669' },
+  cottage_cheese_pack: { containerId: 'paper_packaging', labelColor: '#2563eb' },
+
+  // 8. Extended Discrete Packaging (Lukoshko Baskets, Egg Cartons, Blister Packs, Takeout Boxes)
+  ...EXTENDED_ITEM_PACKAGING_MAP
 };
 
 export function createPackagedItem(itemId: string, count: number = 1): InventoryItem {
   const packInfo = ITEM_PACKAGING_MAP[itemId];
   if (packInfo) {
-    const container = createItem(packInfo.containerId, 1);
+    const container = createItem(packInfo.containerId, 1, undefined, true);
+    container.originalCatalogId = itemId;
     if (packInfo.labelColor) {
       container.labelColor = packInfo.labelColor;
     }
@@ -6042,14 +6920,17 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
     const numInside = packInfo.countInside !== undefined ? packInfo.countInside : count;
     container.contents = [];
     for (let i = 0; i < numInside; i++) {
-      container.contents.push(createItem(innerId, 1));
+      container.contents.push(createItem(innerId, 1, undefined, true));
     }
     const singleInner = ITEM_CATALOG[innerId];
     if (singleInner) {
       container.nameRu = `${container.nameRu} (${singleInner.nameRu}${numInside > 1 ? ` x${numInside}` : ''})`;
-      container.descriptionRu = `${container.descriptionRu} Внутри: ${singleInner.nameRu} (${numInside} шт.). Нажмите [E] в руках или используйте в инвентаре, чтобы вскрыть герметичную упаковку.`;
-      container.weight = Number(((container.weight || 0.04) + (singleInner.weight || 0.05) * numInside).toFixed(2));
-      container.volume = Number(((container.volume || 0.08) + (singleInner.volume || 0.05) * numInside).toFixed(2));
+      const actionHint = container.singleUseContainer
+        ? 'Нажмите [E] в руках или используйте в инвентаре, чтобы вскрыть упаковку и достать содержимое.'
+        : 'Откройте контейнер в инвентаре или используйте [E], чтобы достать содержимое поштучно.';
+      container.descriptionRu = `${container.descriptionRu} Внутри: ${singleInner.nameRu} (${numInside} шт.). ${actionHint}`;
+      container.weight = Number(((container.weight || 0.04) + (singleInner.weight || 0.02) * numInside).toFixed(2));
+      container.volume = Number(((container.volume || 0.08) + (singleInner.volume || 0.02) * numInside).toFixed(2));
     }
     if (container.contents && container.contents.length > 0) {
       const firstInner = container.contents[0];
@@ -6061,16 +6942,207 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
     }
     return container;
   }
-  return createItem(itemId, count);
+  return createItem(itemId, count, undefined, true);
+}
+
+export function applyMedicalEffectById(
+  player: Player,
+  medId: string,
+  targetInjuryId?: string
+): { applied: boolean; errorMsg?: string } {
+  if (!player.bodyState) return { applied: false };
+  if (medId === 'bandage') {
+    const res = applyBandage(player, targetInjuryId);
+    if (!res && targetInjuryId) return { applied: false, errorMsg: 'Этот бинт нельзя применить к этой травме' };
+    return { applied: res };
+  }
+  if (medId === 'splint') {
+    const res = applySplint(player, targetInjuryId);
+    if (!res && targetInjuryId) return { applied: false, errorMsg: 'Шину можно наложить только на свежий перелом' };
+    return { applied: res };
+  }
+  if (medId === 'medical_patch' || medId === 'patch_bactericidal_single') {
+    const res = applyMedicalPatch(player, targetInjuryId);
+    if (!res && targetInjuryId) return { applied: false, errorMsg: 'Пластырь не подходит для этой травмы' };
+    return { applied: res };
+  }
+  if (medId === 'antiseptic') {
+    const res = applyAntiseptic(player, targetInjuryId);
+    if (!res && targetInjuryId) return { applied: false, errorMsg: 'Антисептик не подходит для этой травмы' };
+    return { applied: res };
+  }
+  if (medId === 'panthenol_spray') {
+    applyPanthenolSpray(player, targetInjuryId);
+    return { applied: true };
+  }
+  if (medId === 'spasatel_ointment') {
+    applySpasatelOintment(player, targetInjuryId);
+    return { applied: true };
+  }
+  if (medId === 'zelenka') {
+    applyZelenka(player, targetInjuryId);
+    return { applied: true };
+  }
+  if (medId === 'iodine') {
+    applyIodine(player, targetInjuryId);
+    return { applied: true };
+  }
+  if (medId === 'diclofenac_gel') {
+    applyDiclofenacGel(player, targetInjuryId);
+    return { applied: true };
+  }
+  if (medId === 'hydrogen_peroxide') {
+    applyHydrogenPeroxide(player, targetInjuryId);
+    return { applied: true };
+  }
+  if (medId === 'ammonia_spirit') {
+    applyAmmoniaSpirit(player);
+    return { applied: true };
+  }
+  if (medId === 'balm_star') {
+    applyBalmStar(player);
+    return { applied: true };
+  }
+  if (medId === 'activated_charcoal' || medId === 'pill_charcoal_single') {
+    applyActivatedCharcoal(player);
+    return { applied: true };
+  }
+  if (medId === 'valerian_drops') {
+    applyValerianDrops(player);
+    return { applied: true };
+  }
+  if (medId === 'medkit') {
+    applyMedkit(player);
+    return { applied: true };
+  }
+  if (medId === 'painkillers' || medId === 'pill_painkiller_single' || medId === 'pill_antipyretic_single') {
+    administerMedication(player, 'painkillers');
+    return { applied: true };
+  }
+  if (medId === 'morphine') {
+    administerMedication(player, 'morphine');
+    return { applied: true };
+  }
+  if (medId === 'vitamins' || medId === 'pill_vitamin_single') {
+    player.needs.energy = Math.min(100, player.needs.energy + 4);
+    administerMedication(player, 'vitamins');
+    return { applied: true };
+  }
+  return { applied: false };
 }
 
 export function unpackSingleUseContainer(
   player: Player,
   container: InventoryItem,
   world?: GameWorld,
-  onContainerConsumed?: () => void
+  onContainerConsumed?: () => void,
+  targetInjuryId?: string
 ): { success: boolean; message: string } {
   const def = ITEM_CATALOG[container.itemId];
+
+  // Piece-by-piece consumption/extraction for multi-piece blisters, snack bags, takeout boxes, and egg cartons
+  if (container.contents && container.contents.length > 0) {
+    const sample = container.contents[container.contents.length - 1];
+    if (sample) {
+      // 1. Egg carton: open lid to egg_carton_10_open and extract 1 egg into inventory/hands
+      if (sample.itemId === 'egg_chicken_single' || sample.itemId === 'egg_quail_single') {
+        const eggItem = container.contents.pop()!;
+        if (container.itemId === 'egg_carton_10' && ITEM_CATALOG.egg_carton_10_open) {
+          const openDef = ITEM_CATALOG.egg_carton_10_open;
+          container.itemId = openDef.itemId;
+          container.name = openDef.name;
+          container.singleUseContainer = false;
+          container.isContainer = true;
+          container.usable = true;
+        }
+        const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Ячейка для яиц';
+        if (container.contents.length > 0) {
+          container.nameRu = `${baseName} (${eggItem.nameRu}: ${container.contents.length} шт)`;
+        } else {
+          container.nameRu = baseName;
+        }
+        const added = addItemToPlayer(player, eggItem);
+        if (!added && world) {
+          if (!world.groundItems) world.groundItems = [];
+          const angle = player.angle || 0;
+          world.groundItems.push({
+            id: `ground_${eggItem.id}_${Date.now()}`,
+            x: player.x + Math.cos(angle) * 20,
+            y: player.y + Math.sin(angle) * 20,
+            item: eggItem,
+            spawnTime: Date.now()
+          });
+        }
+        sound.playPickup();
+        const msg = `Достали из ячейки: ${eggItem.nameRu} (осталось ${container.contents.length} шт)`;
+        addPlayerNotification(player, msg, 'pickup');
+        return { success: true, message: msg };
+      }
+
+      // 2. Pill blisters & medical patch packs, or ready-to-eat snack bags & takeout boxes: pop 1 unit and consume/apply
+      const isDirectPiece =
+        sample.itemId.startsWith('pill_') ||
+        sample.itemId === 'patch_bactericidal_single' ||
+        sample.itemId === 'chip_potato_single' ||
+        sample.itemId === 'cookie_choco_single' ||
+        sample.itemId === 'fries_strip_single' ||
+        sample.itemId === 'nugget_chicken_single' ||
+        sample.itemId === 'chicken_wing_crispy_single' ||
+        sample.itemId === 'sushi_roll_piece' ||
+        sample.itemId === 'nacho_chip_single' ||
+        sample.itemId === 'popcorn_handful';
+
+      if (isDirectPiece) {
+        if (sample.category === 'food' && (player.needs.fullness || 0) >= 98) {
+          addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
+          return { success: false, message: 'Слишком сытно' };
+        }
+        if (sample.category === 'med' && player.bodyState) {
+          const medRes = applyMedicalEffectById(player, sample.itemId, targetInjuryId);
+          if (!medRes.applied && medRes.errorMsg) {
+            return { success: false, message: medRes.errorMsg };
+          }
+        }
+        const inner = removeItemFromContainer(container, container.contents.length - 1, 1);
+        if (inner) {
+          const fx = inner.effects || {};
+          if (fx.health) player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health));
+          if (fx.hunger) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
+          if (fx.thirst) {
+            player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
+            if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
+          }
+          if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
+          if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
+          if (inner.category === 'food') {
+            const innerDef = ITEM_CATALOG[inner.itemId];
+            const fGain = innerDef?.fullnessPerBite ?? 3;
+            player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
+            soothePanic(player, 15);
+            applyConsumptionThermodynamics(player, inner.temperature ?? container.temperature ?? 20.0, inner.nameRu, false);
+            sound.playEat();
+          } else {
+            soothePanic(player, 25);
+            sound.playUseItem();
+          }
+
+          const remCount = container.contents ? container.contents.length : 0;
+          if (remCount > 0) {
+            const baseContainerName = ITEM_CATALOG[container.itemId]?.nameRu || 'Упаковка';
+            container.nameRu = `${baseContainerName} (${inner.nameRu}: ${remCount} шт)`;
+            const notif = `${inner.nameRu} (осталось в упаковке: ${remCount} шт)`;
+            addPlayerNotification(player, notif, inner.category === 'food' ? 'food' : 'heal');
+            return { success: true, message: notif };
+          } else {
+            const notif = `Использовано последнее: ${inner.nameRu}. Осталась пустая упаковка: ${container.nameRu}.`;
+            addPlayerNotification(player, notif, 'info');
+            return { success: true, message: notif };
+          }
+        }
+      }
+    }
+  }
+
   let extractedItems: InventoryItem[] = [];
 
   if (container.contents && container.contents.length > 0) {
@@ -6161,6 +7233,80 @@ export function unpackSingleUseContainer(
   addPlayerNotification(player, notifMsg, 'pickup');
 
   return { success: true, message: notifMsg };
+}
+
+function handleReusableFilledContainerAction(
+  player: Player,
+  container: InventoryItem,
+  world?: GameWorld
+): { success: boolean; message: string } | null {
+  if (!container.isContainer || !container.contents || container.contents.length === 0) {
+    return null;
+  }
+  if (
+    container.itemId !== 'lukoshko' &&
+    container.itemId !== 'egg_carton_10_open' &&
+    container.itemId !== 'egg_carton_quail_18'
+  ) {
+    return null;
+  }
+
+  const inner = container.contents[container.contents.length - 1];
+  if (!inner) return null;
+
+  // If berry inside lukoshko: eat 1 handful of berries directly from the basket
+  if (inner.itemId.startsWith('berry_')) {
+    if ((player.needs.fullness || 0) >= 98) {
+      addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
+      return { success: false, message: 'Слишком сытно' };
+    }
+    const popped = container.contents.pop()!;
+    const fx = popped.effects || {};
+    if (fx.health) player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health));
+    if (fx.hunger) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
+    if (fx.thirst) {
+      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
+      if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
+    }
+    if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
+    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + 2);
+    soothePanic(player, 15);
+    sound.playEat();
+    const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Лукошко';
+    if (container.contents.length > 0) {
+      container.nameRu = `${baseName} (${popped.nameRu}: ${container.contents.length} шт)`;
+    } else {
+      container.nameRu = baseName;
+    }
+    const msg = `Вы съели из лукошка: ${popped.nameRu} (осталось ${container.contents.length} шт)`;
+    addPlayerNotification(player, msg, 'food');
+    return { success: true, message: msg };
+  }
+
+  // Otherwise (mushrooms or eggs): extract 1 item into inventory/hands
+  const popped = container.contents.pop()!;
+  const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Контейнер';
+  if (container.contents.length > 0) {
+    container.nameRu = `${baseName} (${popped.nameRu}: ${container.contents.length} шт)`;
+  } else {
+    container.nameRu = baseName;
+  }
+  const added = addItemToPlayer(player, popped);
+  if (!added && world) {
+    if (!world.groundItems) world.groundItems = [];
+    const angle = player.angle || 0;
+    world.groundItems.push({
+      id: `ground_${popped.id}_${Date.now()}`,
+      x: player.x + Math.cos(angle) * 20,
+      y: player.y + Math.sin(angle) * 20,
+      item: popped,
+      spawnTime: Date.now()
+    });
+  }
+  sound.playPickup();
+  const msg = `Достали: ${popped.nameRu} (осталось ${container.contents.length} шт)`;
+  addPlayerNotification(player, msg, 'pickup');
+  return { success: true, message: msg };
 }
 
 export function createPaperPackaging(options?: {
@@ -8188,13 +9334,19 @@ export function useItemOnPlayer(
 
   // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open
   if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer || item.itemId.startsWith('paper_packaging')) {
-    return unpackSingleUseContainer(player, item, world);
+    return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
   // Open paper packaging container safety check
   if (item.itemId.startsWith('paper_packaging_open')) {
     addPlayerNotification(player, 'Это открытая бумажная упаковка: перетаскивайте в неё предметы для хранения.', 'info');
     return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
+  }
+
+  // Reusable filled containers (e.g. lukoshko with berries/mushrooms, open egg carton with eggs)
+  const reusableRes = handleReusableFilledContainerAction(player, item, world);
+  if (reusableRes) {
+    return reusableRes;
   }
 
   // Safety: Containers must NEVER be consumed or deleted on use
@@ -8325,8 +9477,15 @@ export function useItemOnPlayer(
     return handleCarKeyActivation(player, item, world);
   }
 
-  // Unified Fluid / Beverage / Fuel / Sand Container usage
+  // Unified Fluid / Beverage / Fuel / Sand / Medical Solution Container usage
   if (item.fluidStorage) {
+    const medId = item.fluidStorage.attributes?.medicalEffectId;
+    if (medId && item.fluidStorage.currentMl > 0 && player.bodyState) {
+      const medRes = applyMedicalEffectById(player, medId, targetInjuryId);
+      if (!medRes.applied && medRes.errorMsg) {
+        return { success: false, message: medRes.errorMsg };
+      }
+    }
     return tryFillOrUseFluidContainer(player, item, world);
   }
 
@@ -9121,50 +10280,10 @@ export function useItemOnPlayer(
 
   // Body State medical treatment
   if (player.bodyState && item.category === 'med') {
-    if (item.itemId === 'bandage') {
-      const res = applyBandage(player, targetInjuryId);
-      if (!res && targetInjuryId) {
-        return { success: false, message: 'Этот бинт нельзя применить к этой травме'};
-      }
-    } else if (item.itemId === 'splint') {
-      const res = applySplint(player, targetInjuryId);
-      if (!res && targetInjuryId) {
-        return { success: false, message: 'Шину можно наложить только на свежий перелом'};
-      }
-    } else if (item.itemId === 'medical_patch') {
-      const res = applyMedicalPatch(player, targetInjuryId);
-      if (!res && targetInjuryId) {
-        return { success: false, message: 'Пластырь не подходит для этой травмы'};
-      }
-    } else if (item.itemId === 'antiseptic') {
-      const res = applyAntiseptic(player, targetInjuryId);
-      if (!res && targetInjuryId) {
-        return { success: false, message: 'Антисептик не подходит для этой травмы'};
-      }
-    } else if (item.itemId === 'panthenol_spray') {
-      applyPanthenolSpray(player, targetInjuryId);
-    } else if (item.itemId === 'spasatel_ointment') {
-      applySpasatelOintment(player, targetInjuryId);
-    } else if (item.itemId === 'zelenka') {
-      applyZelenka(player, targetInjuryId);
-    } else if (item.itemId === 'iodine') {
-      applyIodine(player, targetInjuryId);
-    } else if (item.itemId === 'diclofenac_gel') {
-      applyDiclofenacGel(player, targetInjuryId);
-    } else if (item.itemId === 'hydrogen_peroxide') {
-      applyHydrogenPeroxide(player, targetInjuryId);
-    } else if (item.itemId === 'ammonia_spirit') {
-      applyAmmoniaSpirit(player);
-    } else if (item.itemId === 'balm_star') {
-      applyBalmStar(player);
-    } else if (item.itemId === 'activated_charcoal') {
-      applyActivatedCharcoal(player);
-    } else if (item.itemId === 'valerian_drops') {
-      applyValerianDrops(player);
-    } else if (item.itemId === 'medkit') {
-      applyMedkit(player);
-    } else if (item.itemId === 'painkillers'|| item.itemId === 'morphine') {
-      administerMedication(player, item.itemId);
+    const medId = item.originalCatalogId || item.itemId;
+    const medRes = applyMedicalEffectById(player, medId, targetInjuryId);
+    if (!medRes.applied && medRes.errorMsg) {
+      return { success: false, message: medRes.errorMsg };
     }
   }
 
@@ -9226,13 +10345,19 @@ export function useHandItemOnPlayer(
 
   // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open from hand
   if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer || item.itemId.startsWith('paper_packaging')) {
-    return unpackSingleUseContainer(player, item, world);
+    return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
   // Open paper packaging container in hand
   if (item.itemId.startsWith('paper_packaging_open')) {
     addPlayerNotification(player, 'Это открытая бумажная упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
     return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
+  }
+
+  // Reusable filled containers held in hand (e.g. lukoshko with berries/mushrooms, open egg carton with eggs)
+  const reusableHandRes = handleReusableFilledContainerAction(player, item, world);
+  if (reusableHandRes) {
+    return reusableHandRes;
   }
 
   if (item.isContainer) {
@@ -9505,8 +10630,15 @@ export function useHandItemOnPlayer(
     return { success: true, message: 'Фонарик переключен'};
   }
 
-  // Unified Fluid / Beverage / Fuel / Sand Container usage
+  // Unified Fluid / Beverage / Fuel / Sand / Medical Solution Container usage
   if (item.fluidStorage) {
+    const medId = item.fluidStorage.attributes?.medicalEffectId;
+    if (medId && item.fluidStorage.currentMl > 0 && player.bodyState) {
+      const medRes = applyMedicalEffectById(player, medId, targetInjuryId);
+      if (!medRes.applied && medRes.errorMsg) {
+        return { success: false, message: medRes.errorMsg };
+      }
+    }
     return tryFillOrUseFluidContainer(player, item, world);
   }
 
@@ -10245,22 +11377,11 @@ export function useHandItemOnPlayer(
 
   // Medical treatments
   if (player.bodyState && item.category === 'med') {
-    if (item.itemId === 'bandage') applyBandage(player, targetInjuryId);
-    else if (item.itemId === 'splint') applySplint(player, targetInjuryId);
-    else if (item.itemId === 'medical_patch') applyMedicalPatch(player, targetInjuryId);
-    else if (item.itemId === 'antiseptic') applyAntiseptic(player, targetInjuryId);
-    else if (item.itemId === 'panthenol_spray') applyPanthenolSpray(player, targetInjuryId);
-    else if (item.itemId === 'spasatel_ointment') applySpasatelOintment(player, targetInjuryId);
-    else if (item.itemId === 'zelenka') applyZelenka(player, targetInjuryId);
-    else if (item.itemId === 'iodine') applyIodine(player, targetInjuryId);
-    else if (item.itemId === 'diclofenac_gel') applyDiclofenacGel(player, targetInjuryId);
-    else if (item.itemId === 'hydrogen_peroxide') applyHydrogenPeroxide(player, targetInjuryId);
-    else if (item.itemId === 'ammonia_spirit') applyAmmoniaSpirit(player);
-    else if (item.itemId === 'balm_star') applyBalmStar(player);
-    else if (item.itemId === 'activated_charcoal') applyActivatedCharcoal(player);
-    else if (item.itemId === 'valerian_drops') applyValerianDrops(player);
-    else if (item.itemId === 'medkit') applyMedkit(player);
-    else if (item.itemId === 'painkillers'|| item.itemId === 'morphine') administerMedication(player, item.itemId);
+    const medId = item.originalCatalogId || item.itemId;
+    const medRes = applyMedicalEffectById(player, medId, targetInjuryId);
+    if (!medRes.applied && medRes.errorMsg) {
+      return { success: false, message: medRes.errorMsg };
+    }
   }
 
   if (item.category === 'food') soothePanic(player, 30);

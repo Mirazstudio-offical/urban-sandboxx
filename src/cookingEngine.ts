@@ -82,7 +82,7 @@ export function isCookwareItem(itemId?: string | null): boolean {
     itemId.startsWith('kitchen_pan_') ||
     itemId.startsWith('kitchen_pot_') ||
     itemId.startsWith('kitchen_kettle_') ||
-    itemId === 'pot_clay_medium' ||
+    itemId.startsWith('pot_clay_') ||
     itemId === 'kitchen_plate_enamel' ||
     itemId === 'kitchen_bowl_wooden' ||
     itemId === 'soup_bowl_empty'
@@ -96,12 +96,14 @@ export function isKnifeItem(itemId?: string | null): boolean {
 
 export function isSaltItem(itemId?: string | null): boolean {
   if (!itemId) return false;
-  return itemId === 'salt_shaker' || itemId === 'salt';
+  return itemId === 'salt_shaker' || itemId === 'salt' || itemId === 'spice_dry';
 }
 
 export function isOilOrFatItem(itemId?: string | null): boolean {
   if (!itemId) return false;
   return (
+    itemId === 'oil_culinary' ||
+    itemId === 'rendered_fat' ||
     itemId.includes('oil') ||
     itemId.includes('butter') ||
     itemId.includes('tallow') ||
@@ -116,7 +118,7 @@ export function isPlateOrBowlItem(itemId?: string | null): boolean {
     itemId.startsWith('kitchen_plate_') ||
     itemId.startsWith('kitchen_bowl_') ||
     itemId === 'soup_bowl_empty' ||
-    itemId === 'pot_clay_medium'
+    itemId.startsWith('pot_clay_')
   );
 }
 

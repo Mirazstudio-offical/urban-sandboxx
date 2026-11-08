@@ -1561,6 +1561,129 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boo
       return true;
     }
 
+    case 'egg_chicken_single':
+    case 'egg_quail_single': {
+      const isQuail = itemId === 'egg_quail_single';
+      drawShadow(ctx, isQuail ? 3.5 : 4.5, 1.8, 6.2, 0.2);
+      ctx.fillStyle = isQuail ? '#e7e5e4' : '#fed7aa';
+      ctx.beginPath();
+      ctx.ellipse(0, 0.5, isQuail ? 3.0 : 4.0, isQuail ? 4.0 : 5.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (isQuail) {
+        ctx.fillStyle = '#57534e';
+        ctx.beginPath();
+        ctx.arc(-1.0, -0.5, 0.6, 0, Math.PI * 2);
+        ctx.arc(1.2, 1.0, 0.7, 0, Math.PI * 2);
+        ctx.arc(-0.4, 2.0, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    case 'chip_potato_single':
+    case 'nacho_chip_single': {
+      drawShadow(ctx, 4.5, 1.8, 5.5, 0.18);
+      ctx.fillStyle = itemId === 'nacho_chip_single' ? '#f59e0b' : '#fde047';
+      ctx.strokeStyle = '#ca8a04';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      if (itemId === 'nacho_chip_single') {
+        ctx.moveTo(0, -4.5);
+        ctx.lineTo(4.5, 3.8);
+        ctx.lineTo(-4.5, 3.8);
+        ctx.closePath();
+      } else {
+        ctx.ellipse(0, 0, 4.4, 3.2, -0.25, 0, Math.PI * 2);
+      }
+      ctx.fill();
+      ctx.stroke();
+      return true;
+    }
+
+    case 'cookie_choco_single': {
+      drawShadow(ctx, 5.0, 2.0, 5.8, 0.22);
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#451a03';
+      for (const [cx, cy] of [[-1.6, -1.2], [1.5, -1.0], [0, 1.4], [-1.5, 1.6], [1.8, 1.2]]) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    case 'fries_strip_single': {
+      drawShadow(ctx, 3.0, 1.4, 6.0, 0.16);
+      ctx.fillStyle = '#facc15';
+      ctx.strokeStyle = '#ca8a04';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.roundRect(-1.3, -5.5, 2.6, 11.0, 0.6);
+      ctx.fill();
+      ctx.stroke();
+      return true;
+    }
+
+    case 'nugget_chicken_single':
+    case 'chicken_wing_crispy_single': {
+      drawShadow(ctx, 5.0, 2.0, 5.8, 0.22);
+      ctx.fillStyle = itemId === 'chicken_wing_crispy_single' ? '#b45309' : '#d97706';
+      ctx.beginPath();
+      ctx.ellipse(0, 0.5, 4.6, 3.2, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'popcorn_handful': {
+      drawShadow(ctx, 5.0, 2.0, 5.8, 0.18);
+      ctx.fillStyle = '#fef9c3';
+      for (const [px, py] of [[-1.8, 0.5], [1.8, 0.5], [0, -1.5], [0, 1.5]]) {
+        ctx.beginPath();
+        ctx.arc(px, py, 2.0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    case 'pill_painkiller_single':
+    case 'pill_antipyretic_single':
+    case 'pill_charcoal_single':
+    case 'pill_vitamin_single':
+    case 'patch_bactericidal_single': {
+      drawShadow(ctx, 3.8, 1.5, 5.0, 0.18);
+      if (itemId === 'patch_bactericidal_single') {
+        ctx.fillStyle = '#fed7aa';
+        ctx.beginPath();
+        ctx.roundRect(-5.0, -2.0, 10.0, 4.0, 1.2);
+        ctx.fill();
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-1.8, -1.4, 3.6, 2.8);
+        return true;
+      }
+      ctx.fillStyle =
+        itemId === 'pill_charcoal_single'
+          ? '#18181b'
+          : itemId === 'pill_vitamin_single'
+          ? '#f59e0b'
+          : itemId === 'pill_antipyretic_single'
+          ? '#38bdf8'
+          : '#f8fafc';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-2.2, 0);
+      ctx.lineTo(2.2, 0);
+      ctx.stroke();
+      return true;
+    }
+
     default:
       return false;
   }

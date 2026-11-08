@@ -3148,17 +3148,42 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.lineWidth = 0.7;
       ctx.stroke();
 
-      // Contents peek inside if item has berries or contents
-      if (item?.fluidStorage?.liquidId === 'berries' || itemId === 'berries_basket') {
-        // Juicy forest blueberries and cranberries inside
+      // Contents peek inside if item has contents or berries
+      const firstInnerId = item?.contents && item.contents.length > 0 ? item.contents[0].itemId : '';
+      if (firstInnerId.startsWith('mushroom_') || firstInnerId.includes('boletus') || firstInnerId.includes('chanterelle')) {
+        const capColor = firstInnerId.includes('chanterelle') ? '#f59e0b' : (firstInnerId.includes('honey') ? '#b45309' : '#78350f');
+        const caps = [
+          { x: -3.2, y: -3.4, r: 1.7 },
+          { x: 0, y: -3.8, r: 1.9 },
+          { x: 3.0, y: -3.2, r: 1.6 },
+          { x: -1.4, y: -2.5, r: 1.5 },
+          { x: 1.6, y: -2.6, r: 1.5 }
+        ];
+        caps.forEach(m => {
+          ctx.fillStyle = '#fef3c7';
+          ctx.fillRect(m.x - 0.5, m.y, 1.0, 1.4);
+          ctx.fillStyle = capColor;
+          ctx.beginPath();
+          ctx.ellipse(m.x, m.y, m.r, m.r * 0.65, 0, Math.PI, 0);
+          ctx.fill();
+        });
+      } else if (firstInnerId.startsWith('berry_') || item?.fluidStorage?.liquidId === 'berries' || itemId === 'berries_basket') {
+        let primaryC = '#4338ca';
+        let secondaryC = '#dc2626';
+        if (firstInnerId.includes('blueberry')) { primaryC = '#1e1b4b'; secondaryC = '#312e81'; }
+        else if (firstInnerId.includes('lingonberry') || firstInnerId.includes('cranberry') || firstInnerId.includes('redcurrant')) { primaryC = '#dc2626'; secondaryC = '#991b1b'; }
+        else if (firstInnerId.includes('raspberry') || firstInnerId.includes('strawberry')) { primaryC = '#e11d48'; secondaryC = '#be123c'; }
+        else if (firstInnerId.includes('blackcurrant')) { primaryC = '#1e1b4b'; secondaryC = '#4c1d95'; }
+        else if (firstInnerId.includes('cherry')) { primaryC = '#881337'; secondaryC = '#9f1239'; }
+
         const berries = [
-          { x: -3.5, y: -3.2, c: '#4338ca', r: 1.2 },
-          { x: -1.5, y: -3.8, c: '#dc2626', r: 1.1 },
-          { x: 1.2, y: -3.5, c: '#6d28d9', r: 1.3 },
-          { x: 3.5, y: -3.0, c: '#e11d48', r: 1.1 },
-          { x: -0.2, y: -2.8, c: '#3730a3', r: 1.2 },
-          { x: 2.2, y: -2.7, c: '#9333ea', r: 1.0 },
-          { x: -2.2, y: -2.4, c: '#be123c', r: 1.1 }
+          { x: -3.5, y: -3.2, c: primaryC, r: 1.2 },
+          { x: -1.5, y: -3.8, c: secondaryC, r: 1.1 },
+          { x: 1.2, y: -3.5, c: primaryC, r: 1.3 },
+          { x: 3.5, y: -3.0, c: secondaryC, r: 1.1 },
+          { x: -0.2, y: -2.8, c: primaryC, r: 1.2 },
+          { x: 2.2, y: -2.7, c: secondaryC, r: 1.0 },
+          { x: -2.2, y: -2.4, c: primaryC, r: 1.1 }
         ];
         berries.forEach(b => {
           ctx.fillStyle = b.c;
@@ -3269,7 +3294,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       // Hot broth if filled
       if (item?.fluidStorage?.currentMl > 0 || itemId === 'soup_bowl') {
-        const soupColor = item?.fluidStorage?.liquidId === 'broth' ? '#b45309' : '#d97706';
+        const soupColor = item?.fluidStorage?.attributes?.customColor || (item?.fluidStorage?.liquidId === 'broth' ? '#b45309' : '#d97706');
         ctx.fillStyle = soupColor;
         ctx.beginPath();
         ctx.ellipse(0, -2.2, 6.2, 2.1, 0, 0, Math.PI * 2);
@@ -3300,14 +3325,24 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     // ==============================================================
     // === UNIFIED GLASS PRESERVATION JARS (Стеклянные банки) ===
     // ==============================================================
+    case 'jar_glass_3l':
+    case 'jar_glass_3l_open':
     case 'jar_glass_large':
+    case 'jar_glass_large_open':
     case 'jar_glass_medium':
-    case 'jar_glass_small': {
-      const isLg = itemId === 'jar_glass_large';
-      const isSm = itemId === 'jar_glass_small';
+    case 'jar_glass_medium_open':
+    case 'jar_glass_small':
+    case 'jar_glass_small_open':
+    case 'jar_spice_small':
+    case 'jar_spice_small_open': {
+      const is3L = itemId.startsWith('jar_glass_3l');
+      const isLg = itemId.startsWith('jar_glass_large');
+      const isSm = itemId.startsWith('jar_glass_small');
+      const isSpice = itemId.startsWith('jar_spice_small');
+      const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
 
-      const w = isLg ? 13 : (isSm ? 9 : 11);
-      const h = isLg ? 14 : (isSm ? 8.5 : 11.5);
+      const w = is3L ? 14.5 : isLg ? 13 : isSpice ? 7.4 : isSm ? 9 : 11;
+      const h = is3L ? 15.5 : isLg ? 14 : isSpice ? 8.0 : isSm ? 8.5 : 11.5;
       const hw = w / 2;
       const topY = 7.0 - h;
       const botY = 7.0;
@@ -3326,22 +3361,37 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.roundRect(-hw, topY + 2.0, w, h - 2.0, 1.8);
       ctx.fill();
 
-      // Fluid filling if present
-      if (item?.fluidStorage?.currentMl > 0) {
-        const fillFrac = Math.min(1, item.fluidStorage.currentMl / (item.fluidStorage.capacityMl || 1000));
-        const fluidH = (h - 3.5) * fillFrac;
+      // Fluid / preserve / spice filling if present
+      if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
+        const fillFrac = Math.min(1, item.fluidStorage.currentMl / (item.fluidStorage.capacityMl || 500));
+        const fluidH = (h - 3.2) * fillFrac;
         const fluidTop = botY - fluidH - 0.5;
 
-        let fluidColor = 'rgba(56, 189, 248, 0.85)';
-        if (item.fluidStorage.liquidId === 'milk') fluidColor = 'rgba(248, 250, 252, 0.95)';
-        else if (item.fluidStorage.liquidId === 'oil') fluidColor = 'rgba(234, 179, 8, 0.9)';
-        else if (item.fluidStorage.liquidId === 'tea' || item.fluidStorage.liquidId === 'broth') fluidColor = 'rgba(180, 83, 9, 0.88)';
-        else if (item.fluidStorage.liquidId === 'gasoline') fluidColor = 'rgba(245, 158, 11, 0.85)';
+        let fluidColor = item.fluidStorage.attributes?.customColor || 'rgba(56, 189, 248, 0.85)';
+        if (!item.fluidStorage.attributes?.customColor) {
+          if (item.fluidStorage.liquidId === 'milk' || item.fluidStorage.liquidId === 'dairy_fermented') fluidColor = '#f8fafc';
+          else if (item.fluidStorage.liquidId === 'honey') fluidColor = '#f59e0b';
+          else if (item.fluidStorage.liquidId === 'jam') fluidColor = '#be123c';
+          else if (item.fluidStorage.liquidId === 'pickles' || item.fluidStorage.liquidId === 'marinade') fluidColor = '#65a30d';
+          else if (item.fluidStorage.liquidId === 'caviar') fluidColor = '#ea580c';
+          else if (item.fluidStorage.liquidId === 'vegetable_caviar' || item.fluidStorage.liquidId === 'puree') fluidColor = '#d97706';
+          else if (item.fluidStorage.liquidId === 'spice_dry') fluidColor = '#b45309';
+          else if (item.fluidStorage.liquidId === 'tea' || item.fluidStorage.liquidId === 'broth') fluidColor = '#b45309';
+        }
 
         ctx.fillStyle = fluidColor;
         ctx.beginPath();
         ctx.roundRect(-hw + 0.8, fluidTop, w - 1.6, fluidH, [0, 0, 1.2, 1.2]);
         ctx.fill();
+
+        const secColor = item.fluidStorage.attributes?.secondaryColor;
+        if (secColor && fluidH > 3) {
+          ctx.fillStyle = secColor;
+          ctx.beginPath();
+          ctx.arc(-hw * 0.35, fluidTop + fluidH * 0.45, Math.min(1.6, hw * 0.25), 0, Math.PI * 2);
+          ctx.arc(hw * 0.3, fluidTop + fluidH * 0.65, Math.min(1.5, hw * 0.22), 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       // Heavy glass bottom punt
@@ -3351,43 +3401,48 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.fill();
 
       // Embossed volume marking
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.font = `bold ${isSm ? 2.0 : 2.6}px sans-serif`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+      ctx.font = `bold ${isSpice || isSm ? 1.9 : 2.5}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(isLg ? '1.0 L' : (isSm ? '0.2 L' : '0.5 L'), 0, topY + h * 0.55);
+      const volText = is3L ? '3.0 L' : isLg ? '1.0 L' : isSpice ? '0.1 L' : isSm ? '0.2 L' : '0.5 L';
+      ctx.fillText(volText, 0, topY + h * 0.56);
 
       // Glass refraction streaks & vertical highlights
       drawGlossBand(ctx, -hw + 1.2, topY + 2.5, 1.2, h - 3.5, 0.45);
       drawGlossBand(ctx, hw - 2.0, topY + 2.5, 0.7, h - 3.5, 0.3);
 
       // Threaded glass neck
+      const neckW = is3L ? w * 0.62 : w - 1.6;
       ctx.fillStyle = 'rgba(207, 250, 254, 0.9)';
-      ctx.fillRect(-hw + 0.8, topY + 0.6, w - 1.6, 1.6);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillRect(-neckW / 2, topY + 0.4, neckW, 1.8);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
       ctx.lineWidth = 0.5;
-      ctx.strokeRect(-hw + 0.8, topY + 0.6, w - 1.6, 1.6);
+      ctx.strokeRect(-neckW / 2, topY + 0.4, neckW, 1.8);
 
-      // Gold lacquered tin screw-on twist-off lid
-      const lidGrad = ctx.createLinearGradient(-hw - 0.5, topY - 1.5, hw + 0.5, topY + 1.2);
-      lidGrad.addColorStop(0, '#fef08a');
-      lidGrad.addColorStop(0.35, '#eab308');
-      lidGrad.addColorStop(0.75, '#ca8a04');
-      lidGrad.addColorStop(1, '#854d0e');
+      if (!isOpen) {
+        // Gold or red lacquered screw-on / shaker lid
+        const lidGrad = ctx.createLinearGradient(-neckW / 2 - 0.5, topY - 1.5, neckW / 2 + 0.5, topY + 1.2);
+        if (isSpice) {
+          lidGrad.addColorStop(0, '#ef4444');
+          lidGrad.addColorStop(1, '#991b1b');
+        } else {
+          lidGrad.addColorStop(0, '#fef08a');
+          lidGrad.addColorStop(0.35, '#eab308');
+          lidGrad.addColorStop(0.75, '#ca8a04');
+          lidGrad.addColorStop(1, '#854d0e');
+        }
 
-      ctx.fillStyle = lidGrad;
-      ctx.beginPath();
-      ctx.roundRect(-hw - 0.5, topY - 1.2, w + 1.0, 2.4, 0.8);
-      ctx.fill();
-
-      // Lid knurling / stamped grip ridges
-      ctx.strokeStyle = '#a16207';
-      ctx.lineWidth = 0.5;
-      for (let x = -hw + 0.5; x <= hw - 0.5; x += 1.8) {
+        ctx.fillStyle = lidGrad;
         ctx.beginPath();
-        ctx.moveTo(x, topY - 1.0);
-        ctx.lineTo(x, topY + 1.0);
-        ctx.stroke();
+        ctx.roundRect(-neckW / 2 - 0.5, topY - 1.2, neckW + 1.0, 2.2, 0.7);
+        ctx.fill();
+      } else {
+        // Open glass rim ellipse
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+        ctx.beginPath();
+        ctx.ellipse(0, topY + 0.5, neckW / 2 - 0.3, 0.9, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       return true;
@@ -3397,13 +3452,50 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     // === UNIFIED METAL TIN CANS (Жестяные консервные банки) ===
     // ==============================================================
     case 'can_metal_large':
+    case 'can_metal_large_open':
     case 'can_metal_medium':
-    case 'can_metal_small': {
-      const isLg = itemId === 'can_metal_large';
-      const isSm = itemId === 'can_metal_small';
+    case 'can_metal_medium_open':
+    case 'can_metal_small':
+    case 'can_metal_small_open':
+    case 'can_metal_flat':
+    case 'can_metal_flat_open':
+    case 'can_metal_oval':
+    case 'can_metal_oval_open':
+    case 'tin_round_mini':
+    case 'tin_round_mini_open':
+    case 'can_alu_330_open': {
+      const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
+      const isMini = itemId.startsWith('tin_round_mini');
+      const isOval = itemId.startsWith('can_metal_oval');
+      const isFlat = itemId.startsWith('can_metal_flat');
+      const isLg = itemId.startsWith('can_metal_large');
+      const isSm = itemId.startsWith('can_metal_small');
 
-      const w = isLg ? 12 : (isSm ? 11 : 10);
-      const h = isLg ? 14 : (isSm ? 6.5 : 11.5);
+      if (isMini) {
+        drawShadow(ctx, 4.5, 2.2, 5.5, 0.24);
+        ctx.fillStyle = item?.fluidStorage?.attributes?.customColor || '#dc2626';
+        ctx.beginPath();
+        ctx.arc(0, 1.0, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        if (!isOpen) {
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.arc(0, 1.0, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath();
+          ctx.arc(0, 1.0, 3.0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        return true;
+      }
+
+      const w = isOval ? 14 : isFlat ? 12.5 : isLg ? 12 : isSm ? 10.5 : 10;
+      const h = isOval ? 6.0 : isFlat ? 5.8 : isLg ? 14 : isSm ? 7.2 : 11.5;
       const hw = w / 2;
       const topY = 7.0 - h;
       const botY = 7.0;
@@ -3420,35 +3512,32 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       ctx.fillStyle = metalGrad;
       ctx.beginPath();
-      ctx.roundRect(-hw, topY + 1.0, w, h - 2.0, 0.5);
+      ctx.roundRect(-hw, topY + 1.0, w, h - 2.0, isOval ? 2.2 : 0.6);
       ctx.fill();
 
-      // Stamped corrugated reinforcement ribs (выдавленные желобки)
+      // Colored band if fluid/preserve inside
+      if (item?.fluidStorage?.attributes?.customColor) {
+        ctx.fillStyle = item.fluidStorage.attributes.customColor;
+        ctx.fillRect(-hw + 0.3, topY + h * 0.35, w - 0.6, h * 0.32);
+      }
+
+      // Stamped corrugated reinforcement ribs
       ctx.strokeStyle = '#475569';
       ctx.lineWidth = 0.6;
-      const ribCount = isSm ? 1 : (isLg ? 4 : 3);
-      const ribSpacing = (h - 5.0) / (ribCount + 1);
+      const ribCount = isFlat || isOval || isSm ? 1 : isLg ? 4 : 3;
+      const ribSpacing = (h - 4.0) / (ribCount + 1);
       for (let i = 1; i <= ribCount; i++) {
-        const ry = topY + 2.0 + i * ribSpacing;
+        const ry = topY + 1.8 + i * ribSpacing;
         ctx.beginPath();
         ctx.moveTo(-hw, ry);
         ctx.lineTo(hw, ry);
         ctx.stroke();
-
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 0.4;
-        ctx.beginPath();
-        ctx.moveTo(-hw, ry + 0.5);
-        ctx.lineTo(hw, ry + 0.5);
-        ctx.stroke();
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 0.6;
       }
 
       // Vertical metallic sheen highlight
-      drawGlossBand(ctx, -hw + 2.0, topY + 1.0, 1.6, h - 2.0, 0.4);
+      drawGlossBand(ctx, -hw + 2.0, topY + 1.0, 1.5, h - 2.0, 0.4);
 
-      // Crimped bottom seam rim (закатной нижний шов)
+      // Crimped bottom seam rim
       ctx.fillStyle = '#64748b';
       ctx.beginPath();
       ctx.ellipse(0, botY - 0.4, hw + 0.4, 1.2, 0, 0, Math.PI * 2);
@@ -3457,31 +3546,40 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       // Crimped top seam rim
       ctx.fillStyle = '#94a3b8';
       ctx.beginPath();
-      ctx.ellipse(0, topY + 1.0, hw + 0.5, 1.4, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, topY + 1.0, hw + 0.5, 1.5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Recessed lid with stamped scorelines
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.0, 0, 0, Math.PI * 2);
-      ctx.fill();
+      if (!isOpen) {
+        // Closed recessed tin lid with pull tab
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Ring pull tab with rivet
-      ctx.fillStyle = '#64748b';
-      ctx.beginPath();
-      ctx.roundRect(-1.2, topY - 0.2, 2.4, 2.0, 0.4);
-      ctx.fill();
-      ctx.fillStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.arc(0, topY + 0.6, 0.45, 0, Math.PI * 2);
-      ctx.fill();
+        ctx.fillStyle = '#64748b';
+        ctx.beginPath();
+        ctx.roundRect(-1.2, topY - 0.2, 2.4, 2.0, 0.4);
+        ctx.fill();
+      } else {
+        // Opened interior cavity + bent-up tin lid on right edge
+        const innerColor =
+          item?.fluidStorage && item.fluidStorage.currentMl > 0
+            ? item.fluidStorage.attributes?.customColor || '#9a3412'
+            : '#1e293b';
+        ctx.fillStyle = innerColor;
+        ctx.beginPath();
+        ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Stamped capacity badge
-      ctx.fillStyle = '#334155';
-      ctx.font = `bold ${isSm ? 2.0 : 2.4}px monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(isLg ? '0.8L' : (isSm ? '0.15L' : '0.4L'), 0, topY + h * 0.7);
+        // Bent-up sharp tin lid flap
+        ctx.fillStyle = '#cbd5e1';
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.ellipse(hw - 1.2, topY - 1.6, 2.2, 2.6, 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
 
       return true;
     }
@@ -3501,7 +3599,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       drawShadow(ctx, hw + 1.0, 3.5, botY + 0.5, 0.25);
 
-      // Heavy linen / ecru canvas sack body
       const sackGrad = ctx.createLinearGradient(-hw, topY, hw, botY);
       sackGrad.addColorStop(0, '#e5d5b5');
       sackGrad.addColorStop(0.35, '#cbb48b');
@@ -3520,21 +3617,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
-      // Fabric weave texture cross-hatching
-      ctx.strokeStyle = 'rgba(74, 44, 18, 0.22)';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      for (let x = -hw + 1.5; x <= hw - 1.5; x += 2.2) {
-        ctx.moveTo(x, topY + 2.5);
-        ctx.quadraticCurveTo(x * 1.1, 0, x * 0.9, botY - 0.5);
-      }
-      for (let y = topY + 3.0; y <= botY - 1.0; y += 2.2) {
-        ctx.moveTo(-hw + 1.0, y);
-        ctx.quadraticCurveTo(0, y + 0.8, hw - 1.0, y);
-      }
-      ctx.stroke();
-
-      // Flared ruffled cloth collar top
       ctx.fillStyle = '#dec79f';
       ctx.beginPath();
       ctx.moveTo(-hw * 0.4, topY);
@@ -3544,7 +3626,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
-      // Tied jute twine rope & knot at neck
       ctx.fillStyle = '#fef08a';
       ctx.strokeStyle = '#78350f';
       ctx.lineWidth = 0.7;
@@ -3553,12 +3634,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#ca8a04';
-      ctx.beginPath();
-      ctx.arc(0, topY + 0.3, 0.9, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Stenciled capacity stamp ("10L", "5L", "1L")
       ctx.fillStyle = 'rgba(69, 26, 3, 0.8)';
       ctx.font = `bold ${isSm ? 2.2 : (isLg ? 3.4 : 2.8)}px sans-serif`;
       ctx.textAlign = 'center';
@@ -3585,8 +3660,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       drawShadow(ctx, hw + 1.2, 3.2, botY + 0.8, 0.28);
 
-      // Isometric / 3D Kraft cardboard box body
-      // Front face
       const frontGrad = ctx.createLinearGradient(-hw, topY + 2.5, hw, botY);
       frontGrad.addColorStop(0, '#d97706');
       frontGrad.addColorStop(0.5, '#b45309');
@@ -3597,7 +3670,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.roundRect(-hw, topY + 2.5, w, h - 2.5, 0.8);
       ctx.fill();
 
-      // Top flaps perspective face
       const topGrad = ctx.createLinearGradient(-hw, topY, hw, topY + 2.5);
       topGrad.addColorStop(0, '#f59e0b');
       topGrad.addColorStop(1, '#d97706');
@@ -3611,47 +3683,11 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
-      // Corrugated flap seam line
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(0, topY);
-      ctx.lineTo(0, topY + 2.5);
-      ctx.stroke();
-
-      // Transparent packing tape strip along top and over front face
-      ctx.fillStyle = 'rgba(254, 240, 138, 0.45)';
-      ctx.fillRect(-1.6, topY, 3.2, h);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(-1.6, topY, 3.2, h);
-
-      // Shipping barcode & address label on front
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(-hw + 1.5, topY + 4.5, isSm ? 4.5 : 5.8, isSm ? 3.0 : 4.0, 0.4);
-      ctx.fill();
-
-      // Barcode lines
-      ctx.fillStyle = '#0f172a';
-      const barCount = isSm ? 4 : 6;
-      for (let i = 0; i < barCount; i++) {
-        ctx.fillRect(-hw + 2.0 + i * (isSm ? 0.8 : 0.8), topY + 5.0, 0.4, isSm ? 1.4 : 2.0);
+      if (item?.fluidStorage?.attributes?.customColor) {
+        ctx.fillStyle = item.fluidStorage.attributes.customColor;
+        ctx.fillRect(-hw + 1.5, topY + 4.2, w - 3.0, h * 0.35);
       }
 
-      // Fragile / Upward arrows stamp on box
-      ctx.fillStyle = 'rgba(69, 26, 3, 0.85)';
-      ctx.beginPath();
-      // Upward arrow 1
-      const ax = hw - 3.5;
-      const ay = topY + 5.5;
-      ctx.moveTo(ax, ay); ctx.lineTo(ax - 1.2, ay + 1.2); ctx.lineTo(ax - 0.4, ay + 1.2);
-      ctx.lineTo(ax - 0.4, ay + 2.5); ctx.lineTo(ax + 0.4, ay + 2.5); ctx.lineTo(ax + 0.4, ay + 1.2);
-      ctx.lineTo(ax + 1.2, ay + 1.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Box volume marking ("15L", "5L", "1L")
       ctx.fillStyle = 'rgba(69, 26, 3, 0.85)';
       ctx.font = `bold ${isSm ? 2.0 : 2.6}px monospace`;
       ctx.textAlign = 'right';
@@ -3661,34 +3697,46 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    // Small Glass Bottle (Стеклянная бутылочка 0.25л)
-    case 'bottle_glass_small': {
+    // Small Glass Bottle & Squeeze Sauce Bottle & Medical Brown Vial
+    case 'bottle_glass_small':
+    case 'bottle_sauce_squeeze':
+    case 'bottle_med_glass_brown': {
       drawShadow(ctx, 4.5, 2.0, 7.5, 0.22);
 
-      // Slender glass bottle
-      const glassGrad = ctx.createLinearGradient(-4, -6, 4, 7);
-      glassGrad.addColorStop(0, 'rgba(241, 245, 249, 0.85)');
-      glassGrad.addColorStop(0.5, 'rgba(203, 213, 225, 0.65)');
-      glassGrad.addColorStop(1, 'rgba(148, 163, 184, 0.8)');
+      const isMedBrown = itemId === 'bottle_med_glass_brown';
+      const isSqueeze = itemId === 'bottle_sauce_squeeze';
+      const customC = item?.fluidStorage?.attributes?.customColor;
 
-      ctx.fillStyle = glassGrad;
+      if (isSqueeze) {
+        ctx.fillStyle = customC || '#dc2626';
+        ctx.beginPath();
+        ctx.roundRect(-4.2, -3.5, 8.4, 10.5, 1.8);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(-1.8, -3.5);
+        ctx.lineTo(0, -7.8);
+        ctx.lineTo(1.8, -3.5);
+        ctx.closePath();
+        ctx.fill();
+        drawGlossBand(ctx, -2.8, -2.5, 1.0, 8.5, 0.3);
+        return true;
+      }
+
+      ctx.fillStyle = isMedBrown ? 'rgba(120, 53, 15, 0.88)' : 'rgba(226, 232, 240, 0.78)';
       ctx.beginPath();
       ctx.roundRect(-3.8, -3.5, 7.6, 10.5, 1.2);
       ctx.fill();
-
-      // Slender bottle neck
       ctx.fillRect(-1.6, -7.5, 3.2, 4.2);
 
-      // Fluid if present
-      if (item?.fluidStorage?.currentMl > 0) {
-        ctx.fillStyle = item.fluidStorage.liquidId?.includes('soy') ? '#1c1917' : '#78350f';
+      if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
+        ctx.fillStyle = customC || (item.fluidStorage.liquidId?.includes('soy') ? '#1c1917' : '#78350f');
         ctx.beginPath();
         ctx.roundRect(-3.2, -1, 6.4, 7.5, 0.8);
         ctx.fill();
       }
 
-      // Red/gold bottle screw cap with pour spout
-      ctx.fillStyle = '#dc2626';
+      ctx.fillStyle = isMedBrown ? '#f8fafc' : '#dc2626';
       ctx.beginPath();
       ctx.roundRect(-2.0, -9.0, 4.0, 2.0, 0.6);
       ctx.fill();
@@ -3697,116 +3745,179 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    // Small Plastic Dropper Bottle (Пластиковый медицинский флакон 100мл)
-    case 'bottle_plastic_100': {
+    // Small Plastic Dropper Bottle / Medical Tube / Ampoule / Aerosol Can
+    case 'bottle_plastic_100':
+    case 'tube_ointment_small':
+    case 'ampoule_glass_small':
+    case 'aerosol_can_small': {
       drawShadow(ctx, 4.0, 1.8, 7.5, 0.2);
+      const customC = item?.fluidStorage?.attributes?.customColor;
 
-      // Translucent HDPE medical vial body
+      if (itemId === 'tube_ointment_small') {
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.moveTo(-4.2, 6.5);
+        ctx.lineTo(-2.6, -4.5);
+        ctx.lineTo(2.6, -4.5);
+        ctx.lineTo(4.2, 6.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = customC || '#16a34a';
+        ctx.fillRect(-3.4, 0, 6.8, 3.2);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-4.2, 5.5, 8.4, 1.2);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(-1.5, -7.0, 3.0, 2.5);
+        return true;
+      }
+
+      if (itemId === 'ampoule_glass_small') {
+        ctx.fillStyle = 'rgba(224, 242, 254, 0.82)';
+        ctx.beginPath();
+        ctx.roundRect(-2.4, -1.5, 4.8, 8.0, 1.4);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-1.2, -1.5);
+        ctx.lineTo(0, -7.5);
+        ctx.lineTo(1.2, -1.5);
+        ctx.closePath();
+        ctx.fill();
+        if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
+          ctx.fillStyle = customC || '#38bdf8';
+          ctx.fillRect(-1.9, 1.0, 3.8, 5.0);
+        }
+        return true;
+      }
+
+      if (itemId === 'aerosol_can_small') {
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.roundRect(-3.8, -3.5, 7.6, 10.5, 1.0);
+        ctx.fill();
+        ctx.fillStyle = customC || '#ea580c';
+        ctx.fillRect(-3.8, -0.5, 7.6, 4.0);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(-2.0, -6.5, 4.0, 3.0);
+        return true;
+      }
+
       ctx.fillStyle = '#f1f5f9';
       ctx.beginPath();
       ctx.roundRect(-3.5, -3.0, 7.0, 10.0, 1.2);
       ctx.fill();
 
-      // Liquid tint inside
-      if (item?.fluidStorage?.currentMl > 0) {
-        const lId = item.fluidStorage.liquidId;
-        const tint = lId === 'zelenka' ? '#15803d' : (lId === 'iodine' ? '#78350f' : '#38bdf8');
-        ctx.fillStyle = tint;
+      if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
+        ctx.fillStyle = customC || '#38bdf8';
         ctx.beginPath();
         ctx.roundRect(-2.8, -1.0, 5.6, 7.5, 0.8);
         ctx.fill();
       }
 
-      // Dropper neck & cap
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-1.4, -6.5, 2.8, 3.8);
-
-      // White ribbed dropper cap
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.roundRect(-2.2, -8.5, 4.4, 2.4, 0.8);
       ctx.fill();
+      return true;
+    }
 
-      drawGlossBand(ctx, -2.5, -2.5, 0.8, 8.5, 0.3);
+    // Plastic Dairy Cups (Пластиковые стаканчики 0.2л и 0.4л + вскрытые)
+    case 'cup_plastic_dairy_small':
+    case 'cup_plastic_dairy_small_open':
+    case 'cup_plastic_dairy_medium':
+    case 'cup_plastic_dairy_medium_open': {
+      const isMd = itemId.includes('medium');
+      const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
+      const topW = isMd ? 11.0 : 9.0;
+      const botW = isMd ? 8.4 : 6.8;
+      const h = isMd ? 11.5 : 8.5;
+      const topY = 7.0 - h;
+      const botY = 7.0;
+
+      drawShadow(ctx, topW * 0.55, 2.4, botY + 0.6, 0.22);
+
+      // White polypropylene tapered cup body
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-topW / 2, topY + 1.2);
+      ctx.lineTo(topW / 2, topY + 1.2);
+      ctx.lineTo(botW / 2, botY);
+      ctx.lineTo(-botW / 2, botY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Colored stripe on cup body
+      const stripeC = item?.fluidStorage?.attributes?.customColor || '#38bdf8';
+      ctx.fillStyle = stripeC;
+      ctx.fillRect(-botW / 2, topY + h * 0.42, botW, 2.2);
+
+      // Top foil lid or open creamy interior
+      ctx.fillStyle = isOpen ? (item?.fluidStorage?.currentMl ? '#fffbeb' : '#cbd5e1') : '#e2e8f0';
+      ctx.beginPath();
+      ctx.ellipse(0, topY + 1.2, topW / 2 + 0.4, 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#94a3b8';
+      ctx.stroke();
+
+      if (isOpen) {
+        // Peeled back foil lid flap
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.ellipse(topW * 0.38, topY - 0.5, 2.2, 1.2, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
       return true;
     }
 
     // Small Tetra Pak (Тетрапак 0.25л)
     case 'tetra_pack_250': {
       drawShadow(ctx, 4.5, 2.0, 7.5, 0.22);
-
-      // Mini carton
-      ctx.fillStyle = '#ea580c';
+      ctx.fillStyle = item?.fluidStorage?.attributes?.customColor || '#ea580c';
       ctx.beginPath();
       ctx.roundRect(-3.8, -4.5, 7.6, 11.5, 1.0);
       ctx.fill();
-
-      // Straw on back
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(-2.5, -3.5);
-      ctx.lineTo(-2.5, 6.0);
-      ctx.stroke();
-
-      // Mini juice logo
       ctx.fillStyle = '#fef08a';
       ctx.beginPath();
       ctx.arc(0.5, 0.5, 1.8, 0, Math.PI * 2);
       ctx.fill();
-
       return true;
     }
 
     // Seasoning Sachet (Пакетик-саше 100мл)
     case 'package_sachet': {
       drawShadow(ctx, 4.5, 2.2, 7.5, 0.18);
-
-      // Foil pouch with crimped edges
-      const sachetGrad = ctx.createLinearGradient(-4, -5, 4, 6);
-      sachetGrad.addColorStop(0, '#f8fafc');
-      sachetGrad.addColorStop(0.5, '#e2e8f0');
-      sachetGrad.addColorStop(1, '#cbd5e1');
-
-      ctx.fillStyle = sachetGrad;
+      ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
       ctx.roundRect(-4.0, -5.5, 8.0, 12.0, 1.0);
       ctx.fill();
-
-      // Crimped heat-sealed borders top and bottom
       ctx.fillStyle = '#94a3b8';
       ctx.fillRect(-4.0, -5.5, 8.0, 1.4);
       ctx.fillRect(-4.0, 5.1, 8.0, 1.4);
-
-      // Tear notch on side
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.moveTo(-4.0, -3.5);
-      ctx.lineTo(-3.0, -3.0);
-      ctx.lineTo(-4.0, -2.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Spice label stamp
-      ctx.fillStyle = '#dc2626';
+      ctx.fillStyle = item?.fluidStorage?.attributes?.customColor || '#dc2626';
       ctx.beginPath();
       ctx.roundRect(-2.8, -1.5, 5.6, 4.2, 0.6);
       ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('SPICE', 0, 0.6);
-
       return true;
     }
 
-    // Clay Pot (Глиняный горшочек 0.5л)
-    case 'pot_clay_medium': {
+    // Clay Pots (Глиняные горшочки 0.25л, 0.5л, 1.0л + открытые)
+    case 'pot_clay_small':
+    case 'pot_clay_small_open':
+    case 'pot_clay_medium':
+    case 'pot_clay_medium_open':
+    case 'pot_clay_large':
+    case 'pot_clay_large_open': {
+      const isSm = itemId.includes('small');
+      const isLg = itemId.includes('large');
+      const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
+      const scale = isLg ? 1.18 : isSm ? 0.82 : 1.0;
+
+      ctx.save();
+      ctx.scale(scale, scale);
       drawShadow(ctx, 6.5, 2.8, 7.8, 0.28);
 
-      // Terracotta bulbous earthenware body
       const clayGrad = ctx.createLinearGradient(-6, -4, 6, 7);
       clayGrad.addColorStop(0, '#ea580c');
       clayGrad.addColorStop(0.4, '#c2410c');
@@ -3827,144 +3938,201 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.ellipse(0, -3.8, 5.5, 1.8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Tied parchment cloth cover on top
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.roundRect(-4.8, -5.8, 9.6, 2.4, 0.8);
-      ctx.fill();
-
-      // Twine tie
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-4.8, -3.8);
-      ctx.lineTo(4.8, -3.8);
-      ctx.stroke();
+      if (!isOpen) {
+        // Tied parchment cloth / ceramic cover on top
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath();
+        ctx.roundRect(-4.8, -5.8, 9.6, 2.4, 0.8);
+        ctx.fill();
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-4.8, -3.8);
+        ctx.lineTo(4.8, -3.8);
+        ctx.stroke();
+      } else {
+        // Open pot showing honey / fat / broth / empty dark interior
+        const innerC =
+          item?.fluidStorage && item.fluidStorage.currentMl > 0
+            ? item.fluidStorage.attributes?.customColor || '#f59e0b'
+            : '#27272a';
+        ctx.fillStyle = innerC;
+        ctx.beginPath();
+        ctx.ellipse(0, -3.8, 4.4, 1.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       drawGlossBand(ctx, -4.5, -1.0, 1.2, 6.5, 0.3);
+      ctx.restore();
       return true;
     }
 
-    // Single-use Vacuum Sealed Pouches (Вакуумные пакеты 0.5L, 1.2L, 2.5L)
+    // Pill Blister Pack (Блистер для таблеток 10 ячеек и пустой)
+    case 'blister_pack_10':
+    case 'blister_pack_empty': {
+      drawShadow(ctx, 7.0, 3.5, 7.5, 0.2);
+      const isEmpty = itemId === 'blister_pack_empty' || (item?.contents && item.contents.length === 0);
+
+      // Silver aluminum blister sheet
+      ctx.fillStyle = '#cbd5e1';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -7.5, 11.0, 15.0, 1.2);
+      ctx.fill();
+      ctx.stroke();
+
+      const firstPill = item?.contents?.[0]?.itemId || '';
+      const pillColor = firstPill.includes('charcoal')
+        ? '#18181b'
+        : firstPill.includes('vitamin')
+        ? '#f59e0b'
+        : firstPill.includes('antipyretic')
+        ? '#38bdf8'
+        : '#f8fafc';
+
+      const remCount = isEmpty ? 0 : item?.contents ? item.contents.length : 10;
+      let idx = 0;
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 2; c++) {
+          const px = c === 0 ? -2.4 : 2.4;
+          const py = -5.2 + r * 2.6;
+          if (idx < remCount) {
+            ctx.fillStyle = pillColor;
+            ctx.beginPath();
+            ctx.ellipse(px, py, 1.5, 1.0, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillStyle = '#64748b';
+            ctx.beginPath();
+            ctx.ellipse(px, py, 1.4, 0.9, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          idx++;
+        }
+      }
+      return true;
+    }
+
+    // Egg Cartons (Картонная ячейка для 10 яиц, открытая ячейка, перепелиный блистер)
+    case 'egg_carton_10':
+    case 'egg_carton_10_open':
+    case 'egg_carton_quail_18': {
+      drawShadow(ctx, 9.5, 4.0, 7.5, 0.25);
+      const isQuail = itemId === 'egg_carton_quail_18';
+      const isOpen = itemId === 'egg_carton_10_open' || isQuail;
+
+      // Molded pulp carton base
+      ctx.fillStyle = isQuail ? 'rgba(226, 232, 240, 0.65)' : '#d6d3d1';
+      ctx.strokeStyle = '#a8a29e';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.roundRect(-8.5, -5.0, 17.0, 10.0, 1.5);
+      ctx.fill();
+      ctx.stroke();
+
+      if (!isOpen) {
+        // Closed carton lid label
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(-5.5, -2.2, 11.0, 4.4);
+      } else {
+        // Draw eggs inside cells
+        const count = item?.contents ? Math.min(10, item.contents.length) : 10;
+        for (let i = 0; i < count; i++) {
+          const c = i % 5;
+          const r = Math.floor(i / 5);
+          const ex = -6.0 + c * 3.0;
+          const ey = r === 0 ? -2.2 : 2.2;
+          ctx.fillStyle = isQuail ? '#e7e5e4' : '#fed7aa';
+          ctx.beginPath();
+          ctx.ellipse(ex, ey, 1.3, 1.6, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      return true;
+    }
+
+    // Takeout Fast-Food Boxes (Коробочка WOK, Конвертик для фри, Бокс для наггетсов)
+    case 'takeout_box_wok':
+    case 'takeout_pocket_fries':
+    case 'takeout_box_nuggets': {
+      drawShadow(ctx, 7.0, 3.5, 7.5, 0.25);
+      if (itemId === 'takeout_pocket_fries') {
+        // Red cardboard fry pocket
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.moveTo(-5.5, -4.5);
+        ctx.lineTo(5.5, -4.5);
+        ctx.lineTo(4.2, 7.0);
+        ctx.lineTo(-4.2, 7.0);
+        ctx.closePath();
+        ctx.fill();
+        if (item?.contents && item.contents.length > 0) {
+          ctx.fillStyle = '#facc15';
+          for (let i = -3; i <= 3; i += 1.5) {
+            ctx.fillRect(i - 0.5, -7.5, 1.1, 4.0);
+          }
+        }
+        return true;
+      }
+
+      // Wok box or Nugget box
+      ctx.fillStyle = itemId === 'takeout_box_wok' ? '#b91c1c' : '#f59e0b';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -5.5, 13.0, 12.0, 1.4);
+      ctx.fill();
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(-4.5, -2.0, 9.0, 4.0);
+      return true;
+    }
+
+    // Single-use Vacuum Sealed Pouches & Produce Mesh Bags
+    case 'pouch_vacuum_sealed':
     case 'vacuum_pack_small':
     case 'vacuum_pack_medium':
-    case 'vacuum_pack_large': {
+    case 'vacuum_pack_large':
+    case 'mesh_bag_produce': {
       const isLg = itemId === 'vacuum_pack_large';
-      const isMd = itemId === 'vacuum_pack_medium';
+      const isMd = itemId === 'vacuum_pack_medium' || itemId === 'pouch_vacuum_sealed';
       const w = isLg ? 11.0 : (isMd ? 9.0 : 7.5);
       const h = isLg ? 15.0 : (isMd ? 12.5 : 10.5);
 
       drawShadow(ctx, w, h * 0.35, 8.0, 0.22);
 
-      // 1. Draw inner contents first if present (underneath vacuum film)
       if (item?.contents && item.contents.length > 0) {
         ctx.save();
         ctx.translate(0, 0.4);
-        if (item.contents.length === 1) {
-          const innerItem = item.contents[0];
-          const innerSize = isLg ? 20 : (isMd ? 17 : 14);
-          drawItemModel2D(ctx, innerItem.itemId, 0, 0, innerSize, innerItem);
-        } else {
-          // Multiple items (e.g. 2 peeled beets, 2 carrots, 3 potatoes)
-          const count = Math.min(item.contents.length, 3);
-          const innerSize = isLg ? 13 : (isMd ? 11 : 9.5);
-          const spacing = isLg ? 5.2 : 3.8;
-          for (let i = 0; i < count; i++) {
-            const innerItem = item.contents[i];
-            const oy = (i - (count - 1) / 2) * spacing;
-            const ox = (i % 2 === 0 ? -1.2 : 1.2) * (count > 2 ? 0.8 : 0.4);
-            ctx.save();
-            ctx.translate(ox, oy);
-            drawItemModel2D(ctx, innerItem.itemId, 0, 0, innerSize, innerItem);
-            ctx.restore();
-          }
-        }
+        const innerItem = item.contents[0];
+        drawItemModel2D(ctx, innerItem.itemId, 0, 0, 16, innerItem);
         ctx.restore();
       } else {
-        // Representative vacuum-sealed food portion under film
-        ctx.save();
-        ctx.fillStyle = '#b91c1c'; // Meat red portion
+        ctx.fillStyle = '#b91c1c';
         ctx.beginPath();
         ctx.ellipse(0, 0.5, w * 0.62, h * 0.35, -0.15, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#fca5a5';
-        ctx.beginPath();
-        ctx.ellipse(-w * 0.2, -0.2, w * 0.35, h * 0.18, -0.1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
       }
 
-      // 2. Translucent barrier plastic film overlay
-      const vacuumGrad = ctx.createLinearGradient(-w, -h / 2, w, h / 2);
-      vacuumGrad.addColorStop(0, 'rgba(255, 255, 255, 0.42)');
-      vacuumGrad.addColorStop(0.4, 'rgba(241, 245, 249, 0.22)');
-      vacuumGrad.addColorStop(0.8, 'rgba(203, 213, 225, 0.35)');
-      vacuumGrad.addColorStop(1, 'rgba(255, 255, 255, 0.48)');
-
-      ctx.fillStyle = vacuumGrad;
+      ctx.fillStyle = itemId === 'mesh_bag_produce' ? 'rgba(234, 88, 12, 0.28)' : 'rgba(241, 245, 249, 0.35)';
       ctx.beginPath();
       ctx.roundRect(-w, -h / 2, w * 2, h, 1.2);
       ctx.fill();
 
-      // 3. Heat-sealed crimped borders (top, bottom, and side seams with tear notch)
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
-      ctx.fillRect(-w, -h / 2, w * 2, 1.5);   // Top seal
-      ctx.fillRect(-w, h / 2 - 1.5, w * 2, 1.5); // Bottom seal
-      ctx.fillRect(-w, -h / 2, 1.2, h);      // Left seal
-      ctx.fillRect(w - 1.2, -h / 2, 1.2, h); // Right seal
-
-      // Heat seal rib texture on borders
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 0.5;
-      for (let x = -w + 0.5; x < w - 0.5; x += 1.2) {
-        ctx.beginPath();
-        ctx.moveTo(x, -h / 2); ctx.lineTo(x, -h / 2 + 1.5);
-        ctx.moveTo(x, h / 2 - 1.5); ctx.lineTo(x, h / 2);
-        ctx.stroke();
-      }
-
-      // Tear notch on left seam
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.moveTo(-w, -h / 2 + 3.0);
-      ctx.lineTo(-w + 1.4, -h / 2 + 3.5);
-      ctx.lineTo(-w, -h / 2 + 4.0);
-      ctx.closePath();
-      ctx.fill();
-
-      // 4. Vacuum shrink-wrap crease lines hugging item
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.strokeStyle = itemId === 'mesh_bag_produce' ? 'rgba(234, 88, 12, 0.65)' : 'rgba(148, 163, 184, 0.65)';
       ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-w + 2.0, -h / 2 + 2.5);
-      ctx.quadraticCurveTo(0, -h / 4, w - 2.0, -h / 2 + 2.5);
-      ctx.moveTo(-w + 2.0, h / 2 - 2.5);
-      ctx.quadraticCurveTo(0, h / 4, w - 2.0, h / 2 - 2.5);
-      ctx.stroke();
-
-      // White barcode & weight sticker in bottom right corner
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.fillRect(w - 4.5, h / 2 - 4.0, 3.8, 2.6);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(w - 4.1, h / 2 - 3.6, 0.4, 1.8);
-      ctx.fillRect(w - 3.5, h / 2 - 3.6, 0.6, 1.8);
-      ctx.fillRect(w - 2.6, h / 2 - 3.6, 0.4, 1.8);
-      ctx.fillRect(w - 1.9, h / 2 - 3.6, 0.8, 1.8);
-
+      ctx.strokeRect(-w, -h / 2, w * 2, h);
       return true;
     }
 
-    // Torn Empty Vacuum Pouches (Вскрытые разорванные вакуумные пакеты)
+    // Torn Empty Vacuum Pouches & Mesh Bags
+    case 'pouch_torn_meat':
+    case 'mesh_bag_torn':
     case 'vacuum_pack_small_torn':
     case 'vacuum_pack_medium_torn':
     case 'vacuum_pack_large_torn': {
-      const isLg = itemId === 'vacuum_pack_large_torn';
-      const w = isLg ? 10.0 : 8.0;
-      const h = isLg ? 13.0 : 10.0;
-
+      const w = 8.0;
+      const h = 10.0;
       drawShadow(ctx, w, h * 0.25, 5.0, 0.15);
 
-      // Crinkled, torn empty film shell
       ctx.fillStyle = 'rgba(226, 232, 240, 0.35)';
       ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
       ctx.lineWidth = 0.8;
@@ -3972,137 +4140,62 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.beginPath();
       ctx.moveTo(-w, h / 2);
       ctx.lineTo(-w + 1.0, -h / 2 + 3.0);
-      // Jagged torn open top edge
       ctx.lineTo(-w + 2.5, -h / 2 + 1.0);
-      ctx.lineTo(-w + 4.0, -h / 2 + 4.0);
       ctx.lineTo(0, -h / 2 + 1.5);
-      ctx.lineTo(w - 3.5, -h / 2 + 5.0);
       ctx.lineTo(w - 1.5, -h / 2 + 2.0);
       ctx.lineTo(w, h / 2);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-
-      // Fold lines / crinkles
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.beginPath();
-      ctx.moveTo(-w + 2, 0); ctx.lineTo(w - 3, h / 4);
-      ctx.moveTo(-w + 4, h / 3); ctx.lineTo(0, -h / 4);
-      ctx.stroke();
-
       return true;
     }
 
     // Sealed Food Tray (Пищевой подложка-лоток под запайку)
+    case 'tray_plastic_sealed':
     case 'tray_sealed_food': {
       drawShadow(ctx, 10.0, 5.0, 8.0, 0.28);
 
-      // Black / dark rigid polystyrene tray base
       ctx.fillStyle = '#18181b';
       ctx.beginPath();
       ctx.roundRect(-9.5, -6.5, 19.0, 13.0, 1.8);
       ctx.fill();
 
-      // Molded tray inner cavity
       ctx.fillStyle = '#09090b';
       ctx.beginPath();
       ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
       ctx.fill();
 
-      // 1. Inner Contents Rendering (under barrier film)
       if (item?.contents && item.contents.length > 0) {
         ctx.save();
-        if (item.contents.length === 1) {
-          const inner = item.contents[0];
-          drawItemModel2D(ctx, inner.itemId, 0, 0, 16, inner);
-        } else {
-          // Multiple items in tray (e.g. 6 button mushrooms, 3 oyster clusters, 5 shiitake)
-          const count = Math.min(item.contents.length, 6);
-          const cols = count >= 4 ? 3 : count;
-          const rows = Math.ceil(count / cols);
-          const innerSize = count >= 4 ? 8.5 : 11;
-          const colSpacing = 4.8;
-          const rowSpacing = 4.2;
-          for (let i = 0; i < count; i++) {
-            const inner = item.contents[i];
-            const c = i % cols;
-            const r = Math.floor(i / cols);
-            const ox = (c - (cols - 1) / 2) * colSpacing;
-            const oy = (r - (rows - 1) / 2) * rowSpacing;
-            ctx.save();
-            ctx.translate(ox, oy);
-            drawItemModel2D(ctx, inner.itemId, 0, 0, innerSize, inner);
-            ctx.restore();
-          }
-        }
+        const inner = item.contents[0];
+        drawItemModel2D(ctx, inner.itemId, 0, 0, 15, inner);
         ctx.restore();
       } else {
-        // Representative fresh produce/meat portion inside tray
-        ctx.save();
-        ctx.fillStyle = '#991b1b'; // Fresh steak/cutlet red
+        ctx.fillStyle = '#991b1b';
         ctx.beginPath();
         ctx.roundRect(-6.5, -3.8, 13.0, 7.6, 2.0);
         ctx.fill();
-        ctx.fillStyle = '#fca5a5';
-        ctx.beginPath();
-        ctx.ellipse(-2.0, -1.0, 3.8, 1.8, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
       }
 
-      // 2. Clear stretched barrier cling film overlay
-      const trayGrad = ctx.createLinearGradient(-9, -6, 9, 6);
-      trayGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
-      trayGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)');
-      trayGrad.addColorStop(1, 'rgba(255, 255, 255, 0.40)');
-
-      ctx.fillStyle = trayGrad;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.beginPath();
       ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
       ctx.fill();
-
-      // Tray sealed rim flange border
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 0.8;
-      ctx.strokeRect(-9.0, -6.0, 18.0, 12.0);
-
-      // White product / price sticker label
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(2.5, 1.5, 5.5, 3.8);
-      ctx.fillStyle = '#16a34a';
-      ctx.fillRect(2.8, 1.8, 2.0, 1.0); // Eco green mark
-
       return true;
     }
 
-    // Opened / Torn Food Tray (Вскрытый пищевой лоток)
+    // Opened / Torn Food Tray
+    case 'tray_plastic_empty':
     case 'tray_sealed_food_torn': {
       drawShadow(ctx, 10.0, 4.5, 7.0, 0.22);
-
-      // Empty black tray base
       ctx.fillStyle = '#18181b';
       ctx.beginPath();
       ctx.roundRect(-9.5, -6.5, 19.0, 13.0, 1.8);
       ctx.fill();
-
       ctx.fillStyle = '#09090b';
       ctx.beginPath();
       ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
       ctx.fill();
-
-      // Peeled-back, crumpled torn plastic film on edge
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 0.8;
-
-      ctx.beginPath();
-      ctx.moveTo(-8.2, -5.2);
-      ctx.quadraticCurveTo(-4.0, -2.0, -3.0, -5.2);
-      ctx.quadraticCurveTo(-1.0, -3.0, -8.2, -1.0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
       return true;
     }
 
@@ -4110,7 +4203,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'pouch_sealed_snack': {
       drawShadow(ctx, 8.0, 3.5, 7.5, 0.22);
 
-      // Metallic foil pouch body
       const pouchGrad = ctx.createLinearGradient(-6, -7, 6, 8);
       pouchGrad.addColorStop(0, '#f1f5f9');
       pouchGrad.addColorStop(0.5, '#cbd5e1');
@@ -4121,13 +4213,11 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.roundRect(-6.0, -7.5, 12.0, 15.0, 1.5);
       ctx.fill();
 
-      // Clear window in middle
       ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
       ctx.beginPath();
       ctx.ellipse(0, 0.5, 4.2, 3.2, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 1. Inner Contents inside clear window
       if (item?.contents && item.contents.length > 0) {
         ctx.save();
         ctx.beginPath();
@@ -4137,36 +4227,20 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         drawItemModel2D(ctx, inner.itemId, 0, 0.5, 14, inner);
         ctx.restore();
       } else {
-        // Representative dried fruit / nut / snack morsels inside window
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(0, 0.5, 4.0, 3.0, 0, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.fillStyle = '#d97706'; // Amber snack color
+        ctx.fillStyle = '#d97706';
         ctx.beginPath();
         ctx.arc(-1.5, 0, 1.4, 0, Math.PI * 2);
         ctx.arc(1.5, 0.5, 1.2, 0, Math.PI * 2);
-        ctx.arc(0, -1.0, 1.0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       }
 
-      // Window gloss highlight
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(-1.2, -0.8, 2.0, 1.0, -0.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Sealed top strip & tear notch
       ctx.fillStyle = '#64748b';
       ctx.fillRect(-6.0, -7.5, 12.0, 1.8);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-6.0, -5.5, 0.8, 1.0); // Left tear notch
-
       return true;
     }
 
     // Torn Snack Doypack (Вскрытый дойпак)
+    case 'pouch_torn_snack':
     case 'pouch_sealed_snack_torn': {
       drawShadow(ctx, 7.5, 3.0, 6.0, 0.18);
 
@@ -4174,7 +4248,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.beginPath();
       ctx.moveTo(-5.5, 7.0);
       ctx.lineTo(-5.5, -5.0);
-      // Torn top edge
       ctx.lineTo(-3.0, -3.5);
       ctx.lineTo(0, -5.5);
       ctx.lineTo(3.0, -3.0);
@@ -4183,7 +4256,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
-      // Empty inner cavity shadow
       ctx.fillStyle = '#334155';
       ctx.beginPath();
       ctx.ellipse(0, -3.5, 3.8, 1.2, 0, 0, Math.PI * 2);

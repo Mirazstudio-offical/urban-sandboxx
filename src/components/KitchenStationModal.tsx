@@ -671,7 +671,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         <div className="gu-kitchen-tabs">
           <Tabs
             value={mobileTab}
-            onChange={setMobileTab}
+            onChange={(id: string) => setMobileTab(id as 'station' | 'products' | 'sensory')}
             items={[
               { id: 'station', label: isStove ? 'Плита' : 'Столешница', badge: vessel.ingredients.length || undefined },
               { id: 'products', label: 'Продукты', badge: foodItems.length || undefined },

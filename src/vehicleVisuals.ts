@@ -811,7 +811,15 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedRect, drawDeformedLine, drawDeformedCircle, nightAlpha
   } = vCtx;
 
-  const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+  const resolvedTruckBase = resolveVehicleTruckFrameAndBody(car);
+  const resolvedTruck = resolvedTruckBase
+    ? {
+        ...resolvedTruckBase,
+        cabRearX: cabinX - cabinL * 0.5 - 0.4,
+        rearBodyX: -halfL + rc + 1.5,
+        cabinX,
+      }
+    : null;
   if (resolvedTruck) {
     // Draw the bare chassis frame if the caller hasn't already drawn it on the lower chassis layer
     if (!(vCtx as any).bareFrameAlreadyDrawn) {

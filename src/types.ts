@@ -1688,6 +1688,36 @@ export interface PhoneSpecs {
   unreadSmsCount?: number;
 }
 
+export interface CookingAttributes {
+  boiled: number;
+  fried: number;
+  baked: number;
+  doneness: number;
+  charring: number;
+  cutLevel: number;
+}
+
+export interface CulinaryItemData {
+  isPreparedDish?: boolean;
+  isWorkpiece?: boolean;
+  isMix?: boolean;
+  dishType?: string;
+  sourceCookwareItemId?: string;
+  containerType?: string;
+  denaturation?: number;
+  maillard?: number;
+  charring?: number;
+  hydrolysis?: number;
+  cutPieces?: number;
+  ingredientsCount?: number;
+  ingredientsList?: string[];
+  ingredients?: any[];
+  liquids?: any[];
+  tasteNotes?: string[];
+  cookingAttributes?: CookingAttributes;
+  platingItem?: InventoryItem;
+}
+
 export interface InventoryItem {
   id: string;
   itemId: string;
@@ -1727,6 +1757,7 @@ export interface InventoryItem {
   fluidLiters?: number;     // Remaining fluid volume in liters (L)
   maxFluidLiters?: number;  // Maximum fluid capacity in liters (L)
   fluidType?: 'coolant' | 'oil' | 'fuel';
+  originalCatalogId?: string; // Original item definition ID before unified container wrapping
   fluidStorage?: {
     liquidId: string | null;
     currentMl: number;
@@ -1734,7 +1765,30 @@ export interface InventoryItem {
     emptyWeightKg: number;
     baseItemNameRu: string;
     baseItemNameEn?: string;
+    attributes?: {
+      varietyRu: string;
+      varietyEn?: string;
+      sourceIngredients: string | string[];
+      preparationMethod: string;
+      purpose: string;
+      reasonAndOrigin: string;
+      customColor?: string;
+      secondaryColor?: string;
+      isOpened?: boolean;
+      culinaryEquivalentId?: string;
+      medicalEffectId?: string;
+      customEffects?: {
+        hunger?: number;
+        thirst?: number;
+        health?: number;
+        energy?: number;
+        sleepiness?: number;
+        soothePanic?: number;
+      };
+      customTasteMessages?: string[];
+    };
   };
+  culinaryData?: CulinaryItemData;
   // Nutrition & Biochemical Culinary Simulation
   nutrients?: {
     calories: number; // kcal

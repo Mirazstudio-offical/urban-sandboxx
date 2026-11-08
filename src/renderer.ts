@@ -1166,7 +1166,7 @@ export class GameRenderer {
           this.renderPedestrians(visiblePedestrians, world);
           this.renderUnderVehicleParticles(this.capParticles(world.particles), world.cleanMode);
           this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
-          this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha, world.calendar?.season);
+          this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha, world.calendar?.season, world);
           this.renderActiveWorldFires(
             world,
             visibleVehicles,
@@ -1405,7 +1405,7 @@ export class GameRenderer {
     this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
 
     // 16b. Tall Intact Props (Intact trees, and intact lampposts!)
-    this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha, world.calendar?.season);
+    this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha, world.calendar?.season, world);
 
     // 16b2. Overhead Sagging Electrical Wires (СИП between poles and garage roofs)
     GarageCooperativeRenderer.renderOverheadWires(this.ctx, world, minX, minY, maxX, maxY);
@@ -6461,7 +6461,8 @@ export class GameRenderer {
     props: StreetProp[],
     minX: number, minY: number, maxX: number, maxY: number,
     nightAlpha: number = 0,
-    season?: Season
+    season?: Season,
+    world?: GameWorld
   ) {
     const ctx = this.ctx;
     const sunState = getCurrentSunShadowState();
@@ -6480,8 +6481,8 @@ export class GameRenderer {
 
       const species = classifyTreeSpecies(tree);
       const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
-      const sway = this.lastWorld
-        ? ForestSystem.getTreeWindSway(tree, this.lastWorld, nowSec)
+      const sway = world
+        ? ForestSystem.getTreeWindSway(tree, world, nowSec)
         : { swayX: 0, swayY: 0 };
 
       // Stationary root collar shadow so the trunk base stays anchored in soil while the crown sways

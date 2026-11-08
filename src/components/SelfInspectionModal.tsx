@@ -72,9 +72,31 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
   const currentInjuries: Injury[] = Array.isArray(currentPartRaw) ? currentPartRaw : ((currentPartRaw as any)?.injuries || []);
   const currentPartPain = !Array.isArray(currentPartRaw) ? ((currentPartRaw as any)?.pain ?? 0) : 0;
 
+  const getEffectiveMedId = (item: any): string | null => {
+    if (!item) return null;
+    if (item.fluidStorage) {
+      if ((item.fluidStorage.currentMl ?? 0) <= 0) return null;
+      return item.fluidStorage.attributes?.medicalEffectId || item.originalCatalogId || item.itemId;
+    }
+    if (item.isContainer && item.contents) {
+      if (item.contents.length === 0) return null;
+      return item.originalCatalogId || item.contents[0]?.itemId || item.itemId;
+    }
+    return item.originalCatalogId || item.itemId;
+  };
+
   // Find med items in inventory
   const findItemIndex = (itemId: string) => {
-    return player.inventory?.findIndex(i => i && i.itemId === itemId) ?? -1;
+    return (
+      player.inventory?.findIndex(i => {
+        const effId = getEffectiveMedId(i);
+        if (!effId) return false;
+        if (itemId === 'painkillers') {
+          return effId === 'painkillers' || effId === 'pill_painkiller_single' || effId === 'pill_antipyretic_single';
+        }
+        return effId === itemId;
+      }) ?? -1
+    );
   };
 
   const bandageIdx = findItemIndex('bandage');
@@ -98,12 +120,12 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
 
   const getCompatibleInventoryItems = (injury: Injury) => {
     if (!player.inventory || injury.treated) return [];
-    
+
     return player.inventory
       .map((item, idx) => ({ item, idx }))
       .filter(({ item }) => {
-        if (!item) return false;
-        const id = item.itemId;
+        const id = getEffectiveMedId(item);
+        if (!id) return false;
         if (id === 'splint') return injury.type === 'fracture';
         if (id === 'panthenol_spray') return injury.type === 'burn' || injury.type === 'abrasion';
         if (id === 'spasatel_ointment') return injury.type === 'burn' || injury.type === 'abrasion' || injury.type === 'bruise';
@@ -112,7 +134,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
         if (id === 'diclofenac_gel') return injury.type === 'sprain' || injury.type === 'bruise' || injury.type === 'fracture';
         if (id === 'hydrogen_peroxide') return injury.type === 'bleeding' || injury.type === 'abrasion';
         if (id === 'bandage') return injury.type === 'bleeding' || injury.type === 'abrasion' || injury.type === 'bruise' || injury.type === 'burn' || injury.type === 'sprain';
-        if (id === 'medical_patch') return injury.type === 'abrasion' || injury.type === 'bruise' || injury.type === 'burn';
+        if (id === 'medical_patch' || id === 'patch_bactericidal_single') return injury.type === 'abrasion' || injury.type === 'bruise' || injury.type === 'burn';
         if (id === 'antiseptic') return injury.type === 'abrasion' || injury.type === 'bleeding' || injury.type === 'bruise' || injury.type === 'burn';
         return false;
       });
