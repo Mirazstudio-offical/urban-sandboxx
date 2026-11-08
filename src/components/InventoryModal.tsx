@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Player, InventoryItem, ItemCategory, GameWorld, GroundItem } from '../types';
 import {
   useItemOnPlayer,
+  useHandItemOnPlayer,
   dropItemFromPlayer,
   addItemToPlayer,
   moveInventoryItem,
@@ -84,9 +85,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const [selectedHand, setSelectedHand] = useState<'left' | 'right' | null>(null);
   const [activeTab, setActiveTab] = useState<'inventory' | 'surroundings' | 'clothing'>('inventory');
   const [openContainer, setOpenContainer] = useState<InventoryItem | null>(null);
-  const [, setSelectedContainerItemIdx] = useState<number>(0);
+  const [selectedContainerItemIdx, setSelectedContainerItemIdx] = useState<number>(0);
   const [, forceRender] = useState(0);
 
   useEffect(() => {
@@ -143,8 +145,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     return item.category === selectedCategory;
   };
 
-  const selectedEntry = inventory[selectedIndex]
-    ? { item: inventory[selectedIndex], originalIndex: selectedIndex }
+  const selHandItem = selectedHand === 'left' ? player.leftHandItem : selectedHand === 'right' ? player.rightHandItem : null;
+  const selectedEntry: { item: InventoryItem; originalIndex: number; hand: 'left' | 'right' | null } | null = selectedHand
+    ? (selHandItem ? { item: selHandItem, originalIndex: -1, hand: selectedHand } : null)
+    : inventory[selectedIndex]
+    ? { item: inventory[selectedIndex], originalIndex: selectedIndex, hand: null }
     : null;
 
   const handleEquipItem = (idx: number) => {
@@ -392,57 +397,189 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     accessory: 'Аксессуар'
   };
 
-  const renderHandCard = (hand: 'left' | 'right', label: string, handItem: InventoryItem | null | undefined) => (
-    <div id={`inv-${hand}-hand-card`} className={'gu-hand' + (handItem ? ' full' : '')}>
-      <div className="gu-slot" style={{ cursor: 'default' }}>
-        {handItem ? (
-          <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={44} />
-        ) : (
-          <Hand width={22} height={22} />
-        )}
-      </div>
-      <div className="gu-li-main">
-        <div className="gu-li-sub" style={{ marginTop: 0 }}>{label}</div>
-        <div className="gu-li-name">{handItem ? handItem.nameRu : 'Свободна'}</div>
-        {handItem && (
-          <div className="gu-li-sub">
-            {getItemTotalWeight(handItem)} кг · {getItemTotalVolume(handItem)} л
-            {handItem.surfaceTemperature !== undefined && (
-              <span style={{ marginLeft: 8, color: handItem.surfaceTemperature >= 52 ? '#efa690' : handItem.surfaceTemperature <= 4 ? '#7dd3fc' : 'var(--gu-amber-soft)' }}>
-                {handItem.surfaceTemperature > 0 ? '+' : ''}{handItem.surfaceTemperature.toFixed(1)}°C
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+  const selectInvSlot = (idx: number) => { setSelectedHand(null); setSelectedIndex(idx); };
 
-      {handItem && (
-        <div className="gu-hand-acts">
-          {handItem.clothingStats && (
-            <button type="button" className="gu-btn gu-btn-p gu-btn-xs" title="Надеть" onClick={() => handleEquipFromHand(hand)}>
-              <Shirt width={14} height={14} />
-            </button>
-          )}
-          {handItem.isContainer && (
-            <button
-              type="button"
-              className="gu-btn gu-btn-p gu-btn-xs"
-              title="Открыть"
-              onClick={() => { setOpenContainer(handItem); setSelectedContainerItemIdx(0); }}
+  const handleUseHandItem = (hand: 'left' | 'right') => {
+    if (!player) return;
+    const res = useHandItemOnPlayer(player, hand, world || undefined);
+    if (!res.success && res.message) addPlayerNotification(player, res.message, 'warning');
+    sound.resume();
+    forceRender(n => n + 1);
+  };
+
+  const handlePutHandIntoContainer = (container: InventoryItem, hand: 'left' | 'right') => {
+    if (!player) return;
+    const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+    if (!handItem || handItem.id === container.id) return;
+    const check = canItemFitInContainer(container, handItem);
+    if (!check.fits) {
+      addPlayerNotification(player, check.reason || 'Не помещается', 'warning');
+      return;
+    }
+    const taken = takeItemFromHand(player, hand);
+    if (!taken) return;
+    const res = addItemToContainer(container, taken);
+    if (res.success) {
+      sound.playPickup();
+      addPlayerNotification(player, res.message, 'pickup');
+    } else {
+      putItemInHand(player, hand, taken, world);
+      addPlayerNotification(player, res.message, 'warning');
+    }
+    forceRender(n => n + 1);
+  };
+
+  const handlePutSelectedIntoContainer = (container: InventoryItem) => {
+    if (!selectedEntry || selectedEntry.item.id === container.id) return;
+    if (selectedEntry.hand) handlePutHandIntoContainer(container, selectedEntry.hand);
+    else handlePutIntoContainer(container, selectedEntry.originalIndex);
+  };
+
+  const renderSlotInner = (item: InventoryItem, hotkey?: number | string) => {
+    const temp = item.surfaceTemperature;
+    const isHot = temp !== undefined && temp >= 40;
+    const isCold = temp !== undefined && temp <= 4;
+    const fillPct = item.fluidStorage
+      ? Math.max(0, Math.min(100, (item.fluidStorage.currentMl / (item.fluidStorage.maxMl || 1)) * 100))
+      : item.maxPortions && item.maxPortions > 1
+      ? Math.max(0, Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100))
+      : null;
+    return (
+      <>
+        {hotkey !== undefined && <span className="gu-ic-hk">{hotkey}</span>}
+        <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
+        {item.count > 1 ? (
+          <span className="gu-ic-n">{item.count}</span>
+        ) : item.isContainer ? (
+          <span className="gu-ic-n">{item.contents?.length || 0}</span>
+        ) : null}
+        {isHot && <span className="gu-slot-t">+{Math.round(temp!)}°</span>}
+        {isCold && <span className="gu-slot-t cold">{Math.round(temp!)}°</span>}
+        {(item.wetness ?? 0) > 0 && <span className="gu-slot-wet"><CloudRain width={11} height={11} /></span>}
+        {fillPct !== null && <div className="gu-ic-fill"><i style={{ width: `${fillPct}%` }} /></div>}
+      </>
+    );
+  };
+  const slotTemp = (item: InventoryItem) => {
+    const t = item.surfaceTemperature;
+    return (t !== undefined && t >= 40 ? ' hot' : '') + (t !== undefined && t <= 4 ? ' cold' : '');
+  };
+  const slotTitle = (item: InventoryItem) => `${item.nameRu}\n${getItemTotalWeight(item)} кг · ${getItemTotalVolume(item)} л`;
+
+  /** Both hands as ordinary slots. mode 'inv': drag and drop; mode 'put': items go into the opened container. */
+  const renderHands = (mode: 'inv' | 'put') => (
+    <div className="gu-group">
+      <div className="gu-group-h">
+        <span className="gu-group-t"><Hand width={16} height={16} />Руки</span>
+        <span className="gu-grp-meta">Л — левая · П — правая</span>
+      </div>
+      <div className="gu-slots">
+        {(['left', 'right'] as const).map(hand => {
+          const hi = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+          const letter = hand === 'left' ? 'Л' : 'П';
+          const dropProps = mode === 'inv' ? {
+            onDragOver: (e: React.DragEvent) => e.preventDefault(),
+            onDrop: (e: React.DragEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const d = e.dataTransfer.getData('text/plain');
+              if (d.startsWith('hand:')) return;
+              const from = parseInt(d, 10);
+              if (!isNaN(from)) handleTakeToHand(hand, from);
+            }
+          } : {};
+          if (!hi) {
+            return (
+              <div key={hand} className="gu-slot empty" title={hand === 'left' ? 'Левая рука свободна' : 'Правая рука свободна'} {...dropProps}>
+                <span className="gu-ic-hk">{letter}</span>
+                <Hand width={18} height={18} style={{ opacity: 0.3 }} />
+              </div>
+            );
+          }
+          const dim = mode === 'put' && (hi.id === openContainer?.id || (openContainer ? !canItemFitInContainer(openContainer, hi).fits : false));
+          return (
+            <div
+              key={hand}
+              draggable={mode === 'inv'}
+              onDragStart={e => e.dataTransfer.setData('text/plain', 'hand:' + hand)}
+              onClick={() => { setSelectedHand(hand); }}
+              onDoubleClick={() => {
+                if (mode === 'put') { if (openContainer) handlePutHandIntoContainer(openContainer, hand); return; }
+                if (hi.isContainer) { setOpenContainer(hi); setSelectedContainerItemIdx(0); }
+                else if (hi.usable) handleUseHandItem(hand);
+              }}
+              className={'gu-slot' + (selectedHand === hand ? ' on' : '') + (dim ? ' dim' : '') + slotTemp(hi)}
+              title={slotTitle(hi)}
             >
-              <Luggage width={14} height={14} />
-            </button>
-          )}
-          <button type="button" className="gu-btn gu-btn-s gu-btn-xs" title="Убрать в карманы" onClick={() => handleStowHand(hand)}>
-            <ArrowDownToLine width={14} height={14} />
-          </button>
-          <button type="button" className="gu-btn gu-btn-d gu-btn-xs" title="Бросить" onClick={() => handleDropFromHand(hand)}>
-            <Trash2 width={14} height={14} />
-          </button>
-        </div>
-      )}
+              {renderSlotInner(hi, letter)}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
+
+  /** Pockets / clothing / backpack slots grouped by whose they are. */
+  const renderCompartments = (mode: 'inv' | 'put') => compartments.map(comp => {
+    const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
+    const compVolumePct = Math.round((comp.usedVolumeL / comp.capacityL) * 100);
+    const compWeightPct = Math.round((comp.usedWeightKg / comp.maxWeightKg) * 100);
+    const CompIcon = comp.iconType === 'user' ? User : comp.iconType === 'shirt' ? Shirt : Luggage;
+    return (
+      <div key={comp.id} className="gu-group">
+        <div className="gu-group-h">
+          <span className="gu-group-t"><CompIcon width={16} height={16} />{comp.nameRu}</span>
+          <span className="gu-grp-meta">
+            <span className={compVolumePct > 95 ? 'bad' : ''}>{comp.usedVolumeL}/{comp.capacityL} л</span>
+            {' · '}
+            <span className={compWeightPct > 95 ? 'bad' : ''}>{comp.usedWeightKg}/{comp.maxWeightKg} кг</span>
+          </span>
+        </div>
+        <div className="gu-slots">
+          {slots.map(slotIdx => {
+            const item = inventory[slotIdx];
+            const dropProps = mode === 'inv' ? {
+              onDragOver: (e: React.DragEvent) => e.preventDefault(),
+              onDrop: (e: React.DragEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const d = e.dataTransfer.getData('text/plain');
+                if (d.startsWith('hand:')) { handleStowHand(d.slice(5) as 'left' | 'right'); return; }
+                const from = parseInt(d, 10);
+                if (!isNaN(from) && from !== slotIdx) {
+                  moveInventoryItem(player, from, slotIdx);
+                  forceRender(n => n + 1);
+                }
+              }
+            } : {};
+            if (!item) return <div key={slotIdx} id={`inventory-slot-${slotIdx}`} className="gu-slot empty" {...dropProps} />;
+            const dim = mode === 'inv'
+              ? !matchesFilter(item)
+              : item.id === openContainer?.id || (openContainer ? !canItemFitInContainer(openContainer, item).fits : false);
+            return (
+              <div
+                key={slotIdx}
+                id={`inventory-slot-${slotIdx}`}
+                draggable={mode === 'inv'}
+                onDragStart={e => e.dataTransfer.setData('text/plain', slotIdx.toString())}
+                {...dropProps}
+                onClick={() => selectInvSlot(slotIdx)}
+                onDoubleClick={() => {
+                  if (mode === 'put') { if (openContainer) handlePutIntoContainer(openContainer, slotIdx); return; }
+                  if (item.isContainer) { setOpenContainer(item); setSelectedContainerItemIdx(0); }
+                  else handleUseItem(slotIdx);
+                }}
+                className={'gu-slot' + (selectedIndex === slotIdx && !selectedHand ? ' on' : '') + (dim ? ' dim' : '') + slotTemp(item)}
+                title={slotTitle(item)}
+              >
+                {renderSlotInner(item, mode === 'inv' && slotIdx < 6 ? slotIdx + 1 : undefined)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  });
 
   return (
     <ModalShell
@@ -574,180 +711,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </div>
               )}
 
-              {/* Active Hands */}
-              <div className="gu-panel gu-pad" style={{ padding: '10px 12px' }}>
-                <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span className="gu-grp">Активные руки</span>
-                  <span className="gu-mut gu-hide-s" style={{ fontSize: 11 }}>Клавиша E — действие с предметом</span>
-                </div>
-                <div className="gu-grid gu-g2" style={{ gap: 8 }}>
-                  {renderHandCard('left', 'Левая рука', player.leftHandItem)}
-                  {renderHandCard('right', 'Правая рука', player.rightHandItem)}
-                </div>
-              </div>
-
-              {/* Pockets / backpack: slot grid grouped by whose slots they are */}
+              {/* Hands + pockets / clothing / backpack: one slot list */}
               <div className="gu-panel gu-pad">
-                {(() => {
-                  const getCompIcon = (type: string, size = 16) => {
-                    if (type === 'user') return <User width={size} height={size} />;
-                    if (type === 'shirt') return <Shirt width={size} height={size} />;
-                    if (type === 'pants')
-                      return (
-                        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
-                        </svg>
-                      );
-                    return <Luggage width={size} height={size} />;
-                  };
-
-                  return compartments.map(comp => {
-                    const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
-                    const compVolumePct = Math.round((comp.usedVolumeL / comp.capacityL) * 100);
-                    const compWeightPct = Math.round((comp.usedWeightKg / comp.maxWeightKg) * 100);
-
-                    return (
-                      <div key={comp.id} className="gu-group">
-                        <div className="gu-group-h">
-                          <span className="gu-group-t">
-                            {getCompIcon(comp.iconType)}
-                            {comp.nameRu}
-                          </span>
-                          <span className="gu-grp-meta">
-                            <span className={compVolumePct > 95 ? 'bad' : ''}>{comp.usedVolumeL}/{comp.capacityL} л</span>
-                            {' · '}
-                            <span className={compWeightPct > 95 ? 'bad' : ''}>{comp.usedWeightKg}/{comp.maxWeightKg} кг</span>
-                          </span>
-                        </div>
-
-                        <div className="gu-slots">
-                          {slots.map(slotIdx => {
-                            const item = inventory[slotIdx];
-                            const dropProps = {
-                              onDragOver: (e: React.DragEvent) => e.preventDefault(),
-                              onDrop: (e: React.DragEvent) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                                if (!isNaN(from) && from !== slotIdx) {
-                                  moveInventoryItem(player, from, slotIdx);
-                                  forceRender(n => n + 1);
-                                }
-                              }
-                            };
-
-                            if (!item) {
-                              return <div key={slotIdx} id={`inventory-slot-${slotIdx}`} className="gu-slot empty" {...dropProps} />;
-                            }
-
-                            const temp = item.surfaceTemperature;
-                            const isHot = temp !== undefined && temp >= 40;
-                            const isCold = temp !== undefined && temp <= 4;
-                            const fillPct = item.fluidStorage
-                              ? Math.max(0, Math.min(100, (item.fluidStorage.currentMl / (item.fluidStorage.maxMl || 1)) * 100))
-                              : item.maxPortions && item.maxPortions > 1
-                              ? Math.max(0, Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100))
-                              : null;
-
-                            return (
-                              <div
-                                key={slotIdx}
-                                id={`inventory-slot-${slotIdx}`}
-                                draggable
-                                onDragStart={e => e.dataTransfer.setData('text/plain', slotIdx.toString())}
-                                {...dropProps}
-                                onClick={() => setSelectedIndex(slotIdx)}
-                                onDoubleClick={() => {
-                                  if (item.isContainer) {
-                                    setOpenContainer(item);
-                                    setSelectedContainerItemIdx(0);
-                                  } else {
-                                    handleUseItem(slotIdx);
-                                  }
-                                }}
-                                className={'gu-slot' + (selectedIndex === slotIdx ? ' on' : '') + (matchesFilter(item) ? '' : ' dim') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
-                                title={`${item.nameRu}\n${getItemTotalWeight(item)} кг · ${getItemTotalVolume(item)} л`}
-                              >
-                                {slotIdx < 6 && <span className="gu-ic-hk">{slotIdx + 1}</span>}
-                                <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
-                                {item.count > 1 ? (
-                                  <span className="gu-ic-n">{item.count}</span>
-                                ) : item.isContainer ? (
-                                  <span className="gu-ic-n">{item.contents?.length || 0}</span>
-                                ) : null}
-                                {isHot && <span className="gu-slot-t">+{Math.round(temp!)}°</span>}
-                                {isCold && <span className="gu-slot-t cold">{Math.round(temp!)}°</span>}
-                                {(item.wetness ?? 0) > 0 && <span className="gu-slot-wet"><CloudRain width={11} height={11} /></span>}
-                                {fillPct !== null && <div className="gu-ic-fill"><i style={{ width: `${fillPct}%` }} /></div>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
+                {renderHands('inv')}
+                {renderCompartments('inv')}
               </div>
-
-              {/* Standalone Carried Containers */}
-              {(() => {
-                const pocketContainers = (player.inventory || []).filter(i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId);
-                const handContainers = [player.leftHandItem, player.rightHandItem].filter(
-                  i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId
-                ) as InventoryItem[];
-                const allContainers: { item: InventoryItem; source: string }[] = [];
-
-                pocketContainers.forEach(c => allContainers.push({ item: c, source: 'В карманах' }));
-                handContainers.forEach(c => allContainers.push({ item: c, source: 'В руке' }));
-
-                if (allContainers.length === 0) return null;
-
-                return (
-                  <div className="gu-panel gu-pad" style={{ padding: '10px 12px' }}>
-                    <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span className="gu-grp">Контейнеры и кошельки ({allContainers.length})</span>
-                      <span className="gu-mut gu-hide-s" style={{ fontSize: 11 }}>Быстрый доступ</span>
-                    </div>
-
-                    <div className="gu-grid gu-g2" style={{ gap: 8 }}>
-                      {allContainers.map((entry, cIdx) => {
-                        const cItem = entry.item;
-                        const count = cItem.contents?.length || 0;
-                        const maxVol = cItem.containerCapacityL || 20;
-                        const curVol = (cItem.contents || []).reduce((acc, it) => acc + getItemTotalVolume(it), 0);
-
-                        return (
-                          <div key={cIdx} className="gu-card-sm gu-row2" style={{ justifyContent: 'space-between', padding: '8px 10px' }}>
-                            <div className="gu-row2" style={{ minWidth: 0, gap: 10 }}>
-                              <div className="gu-ic">
-                                <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={38} />
-                              </div>
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {cItem.nameRu}
-                                </div>
-                                <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
-                                  {count} предм. · {curVol.toFixed(1)}/{maxVol} л
-                                </div>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="gu-btn gu-btn-p gu-btn-xs"
-                              onClick={() => {
-                                setOpenContainer(cItem);
-                                setSelectedContainerItemIdx(0);
-                              }}
-                            >
-                              Открыть
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
 
             {/* RIGHT: ITEM DETAILS & ACTIONS */}
@@ -781,6 +749,13 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         {selectedEntry.item.nameRu}
                       </div>
                       {(() => {
+                        if (selectedEntry.hand) {
+                          return (
+                            <div className="gu-mut" style={{ fontSize: 11, marginTop: 2 }}>
+                              <span style={{ color: 'var(--gu-amber-hi)' }}>{selectedEntry.hand === 'left' ? 'Левая рука' : 'Правая рука'}</span>
+                            </div>
+                          );
+                        }
                         const slotComp = getSlotCompartment(player, selectedEntry.originalIndex);
                         if (!slotComp) return null;
                         return (
@@ -803,7 +778,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         type="button"
                         id="btn-equip-selected-item"
                         className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                        onClick={() => handleEquipItem(selectedEntry.originalIndex)}
+                        onClick={() => (selectedEntry.hand ? handleEquipFromHand(selectedEntry.hand) : handleEquipItem(selectedEntry.originalIndex))}
                       >
                         <Shirt width={15} height={15} />
                         <span>Надеть / Экипировать</span>
@@ -820,7 +795,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           }}
                         >
                           <Package width={15} height={15} />
-                          <span>Открыть контейнер ({selectedEntry.item.contents?.length || 0} предм.)</span>
+                          <span>Открыть</span>
                         </button>
                         {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
                           selectedEntry.item.contents &&
@@ -846,7 +821,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         type="button"
                         id="btn-use-selected-phone"
                         className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                        onClick={() => handleUseItem(selectedEntry.originalIndex)}
+                        onClick={() => (selectedEntry.hand ? handleUseHandItem(selectedEntry.hand) : handleUseItem(selectedEntry.originalIndex))}
                       >
                         <Smartphone width={15} height={15} />
                         <span>Включить экран телефона</span>
@@ -989,57 +964,38 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         type="button"
                         id="btn-use-selected-item"
                         className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                        onClick={() => handleUseItem(selectedEntry.originalIndex)}
+                        onClick={() => (selectedEntry.hand ? handleUseHandItem(selectedEntry.hand) : handleUseItem(selectedEntry.originalIndex))}
                       >
                         <Utensils width={15} height={15} />
                         <span>Использовать</span>
                       </button>
                     ) : null}
 
-                    <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-s gu-btn-xs"
-                        onClick={() => handleTakeToHand('left', selectedEntry.originalIndex)}
-                        disabled={!!player.leftHandItem}
-                      >
-                        <Hand width={13} height={13} />
-                        <span>В левую руку</span>
+                    {selectedEntry.hand ? (
+                      <button type="button" className="gu-btn gu-btn-s gu-btn-xs gu-btn-block" onClick={() => handleStowHand(selectedEntry.hand!)}>
+                        <ArrowDownToLine width={13} height={13} />
+                        <span>Убрать в карманы</span>
                       </button>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-s gu-btn-xs"
-                        onClick={() => handleTakeToHand('right', selectedEntry.originalIndex)}
-                        disabled={!!player.rightHandItem}
-                      >
-                        <Hand width={13} height={13} />
-                        <span>В правую руку</span>
-                      </button>
-                    </div>
-
-                    {/* Stash into reusable containers */}
-                    {availableContainers.filter(cont => cont.id !== selectedEntry.item.id).length > 0 && (
-                      <div className="gu-row2 gu-wrap" style={{ gap: 4 }}>
-                        <span className="gu-mut" style={{ fontSize: 11, marginRight: 2 }}>Убрать в:</span>
-                        {availableContainers
-                          .filter(cont => cont.id !== selectedEntry.item.id)
-                          .map(cont => {
-                            const check = canItemFitInContainer(cont, selectedEntry.item);
-                            return (
-                              <button
-                                type="button"
-                                key={cont.id}
-                                onClick={() => handlePutIntoContainer(cont, selectedEntry.originalIndex)}
-                                disabled={!check.fits}
-                                className="gu-btn gu-btn-s gu-btn-xs"
-                                style={{ height: 26, padding: '0 8px', fontSize: 11 }}
-                                title={check.fits ? `Положить ${selectedEntry.item.nameRu} в ${cont.nameRu}` : check.reason}
-                              >
-                                <ArrowDownToLine width={11} height={11} color="#c9922b" />
-                                <span>{cont.nameRu}</span>
-                              </button>
-                            );
-                          })}
+                    ) : (
+                      <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                        <button
+                          type="button"
+                          className="gu-btn gu-btn-s gu-btn-xs"
+                          onClick={() => handleTakeToHand('left', selectedEntry.originalIndex)}
+                          disabled={!!player.leftHandItem}
+                        >
+                          <Hand width={13} height={13} />
+                          <span>В левую руку</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="gu-btn gu-btn-s gu-btn-xs"
+                          onClick={() => handleTakeToHand('right', selectedEntry.originalIndex)}
+                          disabled={!!player.rightHandItem}
+                        >
+                          <Hand width={13} height={13} />
+                          <span>В правую руку</span>
+                        </button>
                       </div>
                     )}
 
@@ -1048,13 +1004,13 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         type="button"
                         id="btn-drop-selected-item"
                         className="gu-btn gu-btn-d gu-btn-xs gu-btn-block"
-                        onClick={() => handleDropItem(selectedEntry.originalIndex)}
+                        onClick={() => (selectedEntry.hand ? handleDropFromHand(selectedEntry.hand) : handleDropItem(selectedEntry.originalIndex))}
                       >
                         <Trash2 width={13} height={13} />
                         <span>Выбросить 1 шт.</span>
                       </button>
 
-                      {world && isPlayerNearTrashBin(player, world) && (
+                      {world && !selectedEntry.hand && isPlayerNearTrashBin(player, world) && (
                         <button
                           type="button"
                           id="btn-dispose-in-trash-bin"
@@ -1190,172 +1146,91 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           </div>
         )}
 
-        {/* ==================== SUB-INVENTORY: CONTAINER VIEW ==================== */}
-        {activeTab === 'inventory' && openContainer && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="gu-panel gu-pad gu-row2 gu-wrap" style={{ justifyContent: 'space-between' }}>
-              <div className="gu-row2" style={{ gap: 12 }}>
-                <button id="btn-close-container-view" type="button" className="gu-btn gu-btn-s gu-btn-sm" onClick={() => setOpenContainer(null)}>
-                  <ChevronLeft width={16} height={16} color="#c9922b" />
-                  <span>Назад в карманы</span>
-                </button>
-                <div className="gu-ic">
-                  <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={38} />
+        {/* ==================== SUB-INVENTORY: CONTAINER VIEW (one screen: take / put) ==================== */}
+        {activeTab === 'inventory' && openContainer && (() => {
+          const contents = openContainer.contents || [];
+          const curIdx = contents[selectedContainerItemIdx] ? selectedContainerItemIdx : -1;
+          const cur = curIdx >= 0 ? contents[curIdx] : null;
+          const freeHand: 'leftHand' | 'rightHand' | null = !player.leftHandItem ? 'leftHand' : !player.rightHandItem ? 'rightHand' : null;
+          const canPutSel = !!selectedEntry && selectedEntry.item.id !== openContainer.id && canItemFitInContainer(openContainer, selectedEntry.item).fits;
+          return (
+            <div className="gu-st-split">
+              <div className="gu-panel gu-pad">
+                <div className="gu-st-head">
+                  <span className="gu-row2" style={{ gap: 10, minWidth: 0 }}>
+                    <button id="btn-close-container-view" type="button" className="gu-btn gu-btn-s gu-btn-xs" onClick={() => setOpenContainer(null)} title="Назад">
+                      <ChevronLeft width={14} height={14} color="#c9922b" />
+                    </button>
+                    <span className="gu-st-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{openContainer.nameRu}</span>
+                  </span>
+                  <span className="gu-st-sub">{contents.length} предм.</span>
                 </div>
-                <div>
-                  <div className="gu-row2" style={{ gap: 8 }}>
-                    <span className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>
-                      {openContainer.nameRu}
-                    </span>
-                    <span className="gu-tag amber">Контейнер</span>
+                <div className="gu-meters">
+                  <div className="gu-meter">
+                    <div className="gu-meter-h"><span>Объём</span><b>{getItemTotalVolume(openContainer)} / {openContainer.containerCapacityL} л</b></div>
                   </div>
-                  <div className="gu-mut gu-mono" style={{ fontSize: 12 }}>
-                    Вместимость: {openContainer.containerCapacityL} л · Макс. вес: {openContainer.maxContainedWeightKg} кг
+                  <div className="gu-meter">
+                    <div className="gu-meter-h"><span>Вес</span><b>{getItemTotalWeight(openContainer)} / {openContainer.maxContainedWeightKg} кг</b></div>
                   </div>
                 </div>
-              </div>
-
-              <div className="gu-row2 gu-mono" style={{ gap: 10, fontSize: 13, color: 'var(--gu-mut)' }}>
-                <span>Предметов: <strong style={{ color: '#fff' }}>{openContainer.contents?.length || 0}</strong></span>
-                <span>·</span>
-                <span>Объём: <strong style={{ color: 'var(--gu-amber-hi)' }}>{getItemTotalVolume(openContainer)} л</strong></span>
-                <span>·</span>
-                <span>Вес: <strong style={{ color: '#fff' }}>{getItemTotalWeight(openContainer)} кг</strong></span>
-              </div>
-            </div>
-
-            {(openContainer.contents || []).length > 0 ? (
-              <div className="gu-grid gu-g2" style={{ gap: 8 }}>
-                {openContainer.contents!.map((contItem, cIdx) => (
-                  <div key={cIdx} className="gu-item" style={{ justifyContent: 'space-between', padding: '8px 12px' }}>
-                    <div className="gu-row2" style={{ minWidth: 0, gap: 10 }}>
-                      <div className="gu-ic">
-                        <ItemIconCanvas itemId={contItem.itemId} item={contItem} size={38} />
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div className="gu-item-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {contItem.nameRu}
-                        </div>
-                        <div className="gu-item-sub gu-mono">
-                          {contItem.count} шт. · {getItemTotalWeight(contItem)} кг · {getItemTotalVolume(contItem)} л
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="gu-row2" style={{ gap: 6, flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-p gu-btn-xs"
-                        onClick={() => handleExtractFromContainer(openContainer, cIdx, 'pockets')}
-                      >
-                        <ArrowUpFromLine width={13} height={13} />
-                        <span>В карман</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-s gu-btn-xs"
-                        disabled={!!player.rightHandItem}
-                        onClick={() => handleExtractFromContainer(openContainer, cIdx, 'rightHand')}
-                      >
-                        <Hand width={13} height={13} />
-                        <span>В руку</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-d gu-btn-xs"
-                        onClick={() => handleDropFromContainer(openContainer, cIdx)}
-                        title="Выбросить на землю"
-                      >
-                        <Trash2 width={13} height={13} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="gu-panel gu-empty">
-                <Package width={38} height={38} color="#8f8b81" />
-                <div className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>Контейнер пуст</div>
-                <div className="gu-mut" style={{ fontSize: 13 }}>
-                  Выберите предметы ниже, чтобы быстро сложить их внутрь «{openContainer.nameRu}».
-                </div>
-              </div>
-            )}
-
-            {/* Quick Deposit Section */}
-            {(() => {
-              const depositCandidates: { item: InventoryItem; source: 'inventory' | 'leftHand' | 'rightHand'; index?: number }[] = [];
-              (player.inventory || []).forEach((invItem, idx) => {
-                if (invItem && invItem.id !== openContainer.id) {
-                  depositCandidates.push({ item: invItem, source: 'inventory', index: idx });
-                }
-              });
-              if (player.leftHandItem && player.leftHandItem.id !== openContainer.id) {
-                depositCandidates.push({ item: player.leftHandItem, source: 'leftHand' });
-              }
-              if (player.rightHandItem && player.rightHandItem.id !== openContainer.id) {
-                depositCandidates.push({ item: player.rightHandItem, source: 'rightHand' });
-              }
-
-              if (depositCandidates.length === 0) return null;
-
-              return (
-                <div className="gu-panel gu-pad">
-                  <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
-                    <span className="gu-grp">Положить предмет в {openContainer.nameRu}</span>
-                    <span className="gu-mut" style={{ fontSize: 12 }}>Нажмите на предмет для перемещения</span>
-                  </div>
-                  <div className="gu-grid gu-g4" style={{ gap: 8 }}>
-                    {depositCandidates.map((cand, cIdx) => {
-                      const check = canItemFitInContainer(openContainer, cand.item);
+                <div className="gu-st-scroll">
+                  <div className="gu-slots">
+                    {Array.from({ length: Math.max(12, contents.length + 4) }, (_, i) => {
+                      const ci = contents[i];
+                      if (!ci) return <div key={'e' + i} className="gu-slot empty" />;
                       return (
-                        <button
-                          type="button"
-                          key={cIdx}
-                          disabled={!check.fits}
-                          className="gu-card"
-                          style={{ padding: '8px 10px', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 10 }}
-                          title={check.fits ? `Положить ${cand.item.nameRu} в ${openContainer.nameRu}` : check.reason}
-                          onClick={() => {
-                            if (cand.source === 'inventory' && cand.index !== undefined) {
-                              handlePutIntoContainer(openContainer, cand.index);
-                            } else if (cand.source === 'leftHand' || cand.source === 'rightHand') {
-                              const hand = cand.source === 'leftHand' ? 'left' : 'right';
-                              const itemFromHand = takeItemFromHand(player, hand);
-                              if (itemFromHand) {
-                                const res = addItemToContainer(openContainer, itemFromHand);
-                                if (res.success) {
-                                  sound.playPickup();
-                                  addPlayerNotification(player, res.message, 'pickup');
-                                  forceRender(n => n + 1);
-                                } else {
-                                  putItemInHand(player, hand, itemFromHand, world);
-                                  addPlayerNotification(player, res.message, 'warning');
-                                }
-                              }
-                            }
-                          }}
+                        <div
+                          key={i}
+                          onClick={() => setSelectedContainerItemIdx(i)}
+                          onDoubleClick={() => handleExtractFromContainer(openContainer, i, 'pockets')}
+                          className={'gu-slot' + (curIdx === i ? ' on' : '') + slotTemp(ci)}
+                          title={slotTitle(ci)}
                         >
-                          <div className="gu-ic">
-                            <ItemIconCanvas itemId={cand.item.itemId} item={cand.item} size={38} />
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {cand.item.nameRu}
-                            </div>
-                            <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
-                              {getItemTotalVolume(cand.item)} л · {getItemTotalWeight(cand.item)} кг
-                            </div>
-                          </div>
-                        </button>
+                          {renderSlotInner(ci)}
+                        </div>
                       );
                     })}
                   </div>
                 </div>
-              );
-            })()}
-          </div>
-        )}
+                {cur && (
+                  <div className="gu-st-pick">
+                    <span style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{cur.nameRu}</span>
+                    <div className="gu-row" style={{ gap: 6 }}>
+                      <button type="button" className="gu-btn gu-btn-p gu-btn-xs" onClick={() => handleExtractFromContainer(openContainer, curIdx, 'pockets')}>
+                        <ArrowUpFromLine width={13} height={13} /> В карманы
+                      </button>
+                      <button type="button" className="gu-btn gu-btn-s gu-btn-xs" disabled={!freeHand} onClick={() => freeHand && handleExtractFromContainer(openContainer, curIdx, freeHand)}>
+                        <Hand width={13} height={13} /> В руку
+                      </button>
+                      <button type="button" className="gu-btn gu-btn-d gu-btn-xs" onClick={() => handleDropFromContainer(openContainer, curIdx)} title="Выбросить на землю">
+                        <Trash2 width={13} height={13} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="gu-panel gu-pad">
+                <div className="gu-st-head">
+                  <span className="gu-st-title">Инвентарь</span>
+                  <span className="gu-st-sub">выберите предмет, чтобы положить</span>
+                </div>
+                <div className="gu-st-scroll">
+                  {renderHands('put')}
+                  {renderCompartments('put')}
+                </div>
+                {selectedEntry && selectedEntry.item.id !== openContainer.id && (
+                  <div className="gu-st-pick">
+                    <span style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{selectedEntry.item.nameRu}</span>
+                    <button type="button" className="gu-btn gu-btn-p gu-btn-xs" disabled={!canPutSel} onClick={() => handlePutSelectedIntoContainer(openContainer)}>
+                      <ArrowDownToLine width={13} height={13} /> Положить
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ==================== TAB 2: SURROUNDINGS ==================== */}
         {activeTab === 'surroundings' && (

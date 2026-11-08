@@ -19,6 +19,7 @@ import {
   getItemTotalWeight, 
   getItemTotalVolume,
   getPlayerCompartments,
+  takeItemFromHand,
   putItemInHand,
   addPlayerNotification
 } from '../items';
@@ -78,6 +79,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
 
   const [selectedStorageIdx, setSelectedStorageIdx] = useState<number | null>(0);
   const [selectedInventoryIdx, setSelectedInventoryIdx] = useState<number | null>(null);
+  const [selectedHandSlot, setSelectedHandSlot] = useState<'left' | 'right' | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [, forceRender] = useState(0);
@@ -134,6 +136,25 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     addItemToFurnitureStorage(storage, removed, count);
     sound.playPickup();
     addPlayerNotification(player, `Помещено ${isRadiator ? 'на батарею' : `в ${cfg.nameRu}`}: ${removed.nameRu} (x${removed.count})`, 'pickup');
+    notifyChange();
+  };
+
+  const handleStoreHandItem = (hand: 'left' | 'right') => {
+    setErrorMessage(null);
+    const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+    if (!handItem) return;
+    const check = canItemFitInFurniture(storage, handItem);
+    if (!check.fits) {
+      setErrorMessage(check.reason || 'Предмет не помещается в хранилище');
+      sound.playUseItem();
+      return;
+    }
+    const taken = takeItemFromHand(player, hand);
+    if (!taken) return;
+    addItemToFurnitureStorage(storage, taken, taken.count);
+    sound.playPickup();
+    addPlayerNotification(player, `Помещено ${isRadiator ? 'на батарею' : `в ${cfg.nameRu}`}: ${taken.nameRu} (x${taken.count})`, 'pickup');
+    setSelectedHandSlot(null);
     notifyChange();
   };
 
@@ -287,7 +308,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                 return (
                   <div
                     key={it.id || idx}
-                    onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); }}
+                    onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); setSelectedHandSlot(null); }}
                     onDoubleClick={() => handleTakeItem(idx, 1)}
                     className={'gu-slot' + (selectedStorageIdx === idx ? ' on' : '') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
                     title={`${it.nameRu}\n${getItemTotalWeight(it).toFixed(2)} кг · ${getItemTotalVolume(it).toFixed(1)} л`}
@@ -346,6 +367,38 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
           </div>
 
           <div className="gu-st-scroll">
+            <div className="gu-group">
+              <div className="gu-group-h">
+                <span className="gu-group-t"><Hand width={16} height={16} />Руки</span>
+              </div>
+              <div className="gu-slots">
+                {(['left', 'right'] as const).map(hand => {
+                  const hi = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+                  const letter = hand === 'left' ? 'Л' : 'П';
+                  if (!hi) {
+                    return (
+                      <div key={hand} className="gu-slot empty" title={hand === 'left' ? 'Левая рука свободна' : 'Правая рука свободна'}>
+                        <span className="gu-ic-hk">{letter}</span>
+                        <Hand width={18} height={18} style={{ opacity: 0.3 }} />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div
+                      key={hand}
+                      onClick={() => { setSelectedHandSlot(hand); setSelectedInventoryIdx(null); setSelectedStorageIdx(null); }}
+                      onDoubleClick={() => handleStoreHandItem(hand)}
+                      className={'gu-slot' + (selectedHandSlot === hand ? ' on' : '')}
+                      title={`${hi.nameRu}\n${getItemTotalWeight(hi).toFixed(2)} кг · ${getItemTotalVolume(hi).toFixed(1)} л`}
+                    >
+                      <span className="gu-ic-hk">{letter}</span>
+                      <ItemIconCanvas itemId={hi.itemId} item={hi} size={44} />
+                      {hi.count > 1 && <span className="gu-ic-n">{hi.count}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             {compartments.map(comp => {
               const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
               const CompIcon = comp.iconType === 'user' ? User : comp.iconType === 'shirt' ? Shirt : Luggage;
@@ -366,7 +419,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                       return (
                         <div
                           key={slotIdx}
-                          onClick={() => { setSelectedInventoryIdx(slotIdx); setSelectedStorageIdx(null); }}
+                          onClick={() => { setSelectedInventoryIdx(slotIdx); setSelectedHandSlot(null); setSelectedStorageIdx(null); }}
                           onDoubleClick={() => handleStoreItem(slotIdx, 1)}
                           className={'gu-slot' + (selectedInventoryIdx === slotIdx ? ' on' : '') + (matches ? '' : ' dim') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
                           title={`${item.nameRu}\n${getItemTotalWeight(item).toFixed(2)} кг · ${getItemTotalVolume(item).toFixed(1)} л`}
@@ -384,6 +437,17 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
               );
             })}
           </div>
+
+          {selectedHandSlot && (selectedHandSlot === 'left' ? player.leftHandItem : player.rightHandItem) && (
+            <div className="gu-st-pick">
+              <span style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                {(selectedHandSlot === 'left' ? player.leftHandItem : player.rightHandItem)!.nameRu}
+              </span>
+              <button type="button" onClick={() => handleStoreHandItem(selectedHandSlot)} className="gu-btn gu-btn-p gu-btn-xs">
+                <ArrowLeft width={13} height={13} /> {isRadiator ? 'На батарею' : 'В шкаф'}
+              </button>
+            </div>
+          )}
 
           {selectedInventoryIdx !== null && (player.inventory || [])[selectedInventoryIdx] && (
             <div className="gu-st-pick">
