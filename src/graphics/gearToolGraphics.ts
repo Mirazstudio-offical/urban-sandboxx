@@ -4270,7 +4270,8 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     }
 
     // Small Tetra Pak (Тетрапак 0.25л)
-    case 'tetra_pack_250': {
+    case 'tetra_pack_250':
+    case 'tetra_pack_250_open': {
       drawShadow(ctx, 4.5, 2.0, 7.5, 0.22);
       ctx.fillStyle = item?.fluidStorage?.attributes?.customColor || '#ea580c';
       ctx.beginPath();
@@ -4280,19 +4281,34 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.beginPath();
       ctx.arc(0.5, 0.5, 1.8, 0, Math.PI * 2);
       ctx.fill();
+      if (itemId === 'tetra_pack_250_open') {
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.ellipse(1.8, -4.2, 1.2, 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       return true;
     }
 
     // Seasoning Sachet (Пакетик-саше 100мл)
-    case 'package_sachet': {
+    case 'package_sachet':
+    case 'package_sachet_open': {
       drawShadow(ctx, 4.5, 2.2, 7.5, 0.18);
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
       ctx.roundRect(-4.0, -5.5, 8.0, 12.0, 1.0);
       ctx.fill();
       ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-4.0, -5.5, 8.0, 1.4);
-      ctx.fillRect(-4.0, 5.1, 8.0, 1.4);
+      if (itemId === 'package_sachet_open') {
+        ctx.fillRect(-4.0, 5.1, 8.0, 1.4);
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.ellipse(0, -4.8, 2.8, 0.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(-4.0, -5.5, 8.0, 1.4);
+        ctx.fillRect(-4.0, 5.1, 8.0, 1.4);
+      }
       ctx.fillStyle = item?.fluidStorage?.attributes?.customColor || '#dc2626';
       ctx.beginPath();
       ctx.roundRect(-2.8, -1.5, 5.6, 4.2, 0.6);
@@ -4642,7 +4658,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'pouch_sealed_snack_torn': {
       drawShadow(ctx, 7.5, 3.0, 6.0, 0.18);
 
-      ctx.fillStyle = '#cbd5e1';
+      ctx.fillStyle = item?.containerTintColor || '#cbd5e1';
       ctx.beginPath();
       ctx.moveTo(-5.5, 7.0);
       ctx.lineTo(-5.5, -5.0);
@@ -4658,6 +4674,16 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.beginPath();
       ctx.ellipse(0, -3.5, 3.8, 1.2, 0, 0, Math.PI * 2);
       ctx.fill();
+
+      if (item?.contents && item.contents.length > 0) {
+        const inner = item.contents[0];
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(-4.0, -2.0, 8.0, 7.5, 1.0);
+        ctx.clip();
+        drawItemModel2D(ctx, inner.itemId, 0, 1.5, 11, inner);
+        ctx.restore();
+      }
 
       return true;
     }

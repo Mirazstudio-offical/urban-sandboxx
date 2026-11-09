@@ -496,6 +496,7 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
 
     case 'fresh_juice':
     case 'tetra_pack_1000':
+    case 'tetra_pack_1000_open':
     case 'juice_pack':
     case 'juice':
     case 'juice_box': {

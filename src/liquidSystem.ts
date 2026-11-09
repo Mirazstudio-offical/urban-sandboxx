@@ -1988,7 +1988,21 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Box',
     descriptionRu: 'Картонная упаковка тетрапак с пластиковым клапаном объемом 1 литр.',
-    descriptionEn: '1-liter carton Tetra Pak packaging.'
+    descriptionEn: '1-liter carton Tetra Pak packaging.',
+    openedVariantId: 'tetra_pack_1000_open',
+    isSealedByDefault: true
+  },
+  tetra_pack_1000_open: {
+    itemId: 'tetra_pack_1000_open',
+    name: 'Opened Tetra Pak (1.0L)',
+    nameRu: 'Тетрапак 1.0л (вскрытый)',
+    maxMl: 1000,
+    emptyWeightKg: 0.04,
+    emptyVolumeL: 1.05,
+    category: 'drink',
+    icon: 'Box',
+    descriptionRu: 'Вскрытый картонный пакет тетрапак на 1 литр с открученным клапаном.',
+    descriptionEn: 'Opened 1-liter Tetra Pak carton.'
   },
   // === UNIFIED GLASS JARS (Various sizes + Opened states) ===
   jar_glass_3l: {
@@ -2614,7 +2628,21 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Box',
     descriptionRu: 'Компактный картонный тетрапак на 250 мл с трубочкой для сока или молока.',
-    descriptionEn: 'Compact 250ml Tetra Pak carton with straw.'
+    descriptionEn: 'Compact 250ml Tetra Pak carton with straw.',
+    openedVariantId: 'tetra_pack_250_open',
+    isSealedByDefault: true
+  },
+  tetra_pack_250_open: {
+    itemId: 'tetra_pack_250_open',
+    name: 'Opened Small Tetra Pak (0.25L)',
+    nameRu: 'Тетрапак 0.25л (вскрытый)',
+    maxMl: 250,
+    emptyWeightKg: 0.012,
+    emptyVolumeL: 0.28,
+    category: 'drink',
+    icon: 'Box',
+    descriptionRu: 'Вскрытый компактный картонный тетрапак на 250 мл с проткнутой фольгой.',
+    descriptionEn: 'Opened 250ml Tetra Pak carton.'
   },
   package_sachet: {
     itemId: 'package_sachet',
@@ -2626,7 +2654,21 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'ShoppingBag',
     descriptionRu: 'Герметичный фольгированный пакетик-саше для молотых пряностей, специй и сухих смесей.',
-    descriptionEn: 'Airtight foil sachet pack for spices, seasonings, and dry mixes.'
+    descriptionEn: 'Airtight foil sachet pack for spices, seasonings, and dry mixes.',
+    openedVariantId: 'package_sachet_open',
+    isSealedByDefault: true
+  },
+  package_sachet_open: {
+    itemId: 'package_sachet_open',
+    name: 'Opened Seasoning Sachet (100ml)',
+    nameRu: 'Пакетик-саше (вскрытый)',
+    maxMl: 100,
+    emptyWeightKg: 0.002,
+    emptyVolumeL: 0.1,
+    category: 'gear',
+    icon: 'ShoppingBag',
+    descriptionRu: 'Надорванный фольгированный пакетик-саше с оторванным верхним уголком.',
+    descriptionEn: 'Opened foil sachet pack with torn top corner.'
   },
   box_cardboard_large: {
     itemId: 'box_cardboard_large',
@@ -3199,6 +3241,10 @@ export function syncItemContainerProperties(item: InventoryItem): void {
     ? ` Параметры модели тары: форма — ${vis.shapeNameRu || vis.shape}, материал — ${vis.materialNameRu || 'Стандарт'} (RGB: ${vis.materialRgb.join(', ')}), этикетка — ${vis.labelRgb ? `RGB(${vis.labelRgb.join(', ')})` : 'нет'}.`
     : '';
 
+  if (cfg?.openedVariantId && !item.itemId.endsWith('_open')) {
+    item.usable = true;
+  }
+
   if (storage.currentMl > 0 && storage.liquidId) {
     const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId];
     if (liquid?.isDrinkable || storage.attributes?.medicalEffectId || cfg?.openedVariantId) {
@@ -3208,7 +3254,7 @@ export function syncItemContainerProperties(item: InventoryItem): void {
       const a = storage.attributes;
       const openBadge = item.itemId.endsWith('_open')
         ? ' (Тара вскрыта)'
-        : (cfg?.isSealedByDefault && a.isOpened === false ? ' (Герметично запаяно — нажмите [E] или Использовать, чтобы вскрыть)' : '');
+        : (cfg?.openedVariantId && a.isOpened !== true ? ' (Закрыто — нажмите [E] или Вскрыть, чтобы открыть тару)' : '');
       const volText = storage.maxMl >= 1000
         ? `${(storage.currentMl / 1000).toFixed(2)} л`
         : `${Math.round(storage.currentMl)} мл`;
@@ -3232,13 +3278,19 @@ export function syncItemContainerProperties(item: InventoryItem): void {
   }
 }
 
+export function isFluidContainerClosed(item: InventoryItem | null | undefined): boolean {
+  if (!item || !item.fluidStorage) return false;
+  const cfg = CONTAINER_CONFIGS[item.itemId];
+  return Boolean(cfg?.openedVariantId && !item.itemId.endsWith('_open'));
+}
+
 export function openFluidContainerIfNeeded(
   player: Player,
   container: InventoryItem
 ): { justOpened: boolean; message: string } {
   const storage = container.fluidStorage;
   const cfg = CONTAINER_CONFIGS[container.itemId];
-  if (!storage || !cfg?.openedVariantId) {
+  if (!storage || !cfg?.openedVariantId || container.itemId.endsWith('_open')) {
     if (storage?.attributes && storage.attributes.isOpened === false) {
       storage.attributes.isOpened = true;
       syncItemContainerProperties(container);
@@ -3249,7 +3301,6 @@ export function openFluidContainerIfNeeded(
   const openCfg = CONTAINER_CONFIGS[cfg.openedVariantId];
   if (!openCfg) return { justOpened: false, message: '' };
 
-  const wasSealed = cfg.isSealedByDefault || storage.attributes?.isOpened === false;
   container.itemId = openCfg.itemId;
   container.name = openCfg.name;
   storage.baseItemNameRu = openCfg.nameRu;
@@ -3259,13 +3310,10 @@ export function openFluidContainerIfNeeded(
   }
   syncItemContainerProperties(container);
 
-  if (wasSealed) {
-    sound.playUseItem();
-    const msg = `Тара вскрыта: ${openCfg.nameRu}. Теперь содержимое можно употреблять или переливать!`;
-    addPlayerNotification(player, msg, 'info');
-    return { justOpened: true, message: msg };
-  }
-  return { justOpened: false, message: '' };
+  sound.playUseItem();
+  const msg = `Тара вскрыта: ${openCfg.nameRu}. Теперь содержимое можно употреблять или переливать!`;
+  addPlayerNotification(player, msg, 'info');
+  return { justOpened: true, message: msg };
 }
 
 export function pourLiquidBetweenContainers(
@@ -3878,6 +3926,14 @@ export function tryFillOrUseFluidContainer(
   }
 
   const storage = container.fluidStorage;
+
+  // If container is sealed/closed and has an openedVariantId, opening it works even if empty!
+  if (isFluidContainerClosed(container)) {
+    const openResult = openFluidContainerIfNeeded(player, container);
+    if (openResult.justOpened) {
+      return { success: true, message: openResult.message };
+    }
+  }
 
   // If container is not empty -> handle consumption / pouring / refueling
   if (storage.currentMl > 0 && storage.liquidId) {

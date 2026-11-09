@@ -5831,6 +5831,48 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.44,
     usable: true
   },
+  tetra_pack_1000_open: {
+    itemId: 'tetra_pack_1000_open',
+    name: 'Opened Tetra Pak (1.0L)',
+    nameRu: 'Вскрытый тетрапак (1.0л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened 1.0L carton Tetra Pak.',
+    descriptionRu: 'Вскрытый картонный пакет тетрапак (1.0л) с открученной крышкой.',
+    effects: {},
+    weight: 0.04,
+    volume: 1.05,
+    usable: true
+  },
+  tetra_pack_250_open: {
+    itemId: 'tetra_pack_250_open',
+    name: 'Opened Small Tetra Pak (0.25L)',
+    nameRu: 'Вскрытый малый тетрапак (0.25л)',
+    category: 'misc',
+    maxStack: 15,
+    icon: '',
+    description: 'Opened 250ml small Tetra Pak carton.',
+    descriptionRu: 'Вскрытый компактный картонный тетрапак (0.25л).',
+    effects: {},
+    weight: 0.012,
+    volume: 0.28,
+    usable: true
+  },
+  package_sachet_open: {
+    itemId: 'package_sachet_open',
+    name: 'Opened Seasoning Sachet (100ml)',
+    nameRu: 'Вскрытый пакетик-саше',
+    category: 'misc',
+    maxStack: 20,
+    icon: '',
+    description: 'Opened foil seasoning sachet with torn corner.',
+    descriptionRu: 'Надорванный фольгированный пакетик-саше.',
+    effects: {},
+    weight: 0.002,
+    volume: 0.1,
+    usable: true
+  },
   bottle_sauce_squeeze: {
     itemId: 'bottle_sauce_squeeze',
     name: 'Squeeze Sauce Bottle (0.4L)',
@@ -6506,7 +6548,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.85,
     usable: true,
     containerVisuals: {
-      shape: 'tall_slender',
+      shape: 'bordeaux',
       materialRgb: [22, 101, 52],
       labelRgb: [254, 243, 199],
       labelAccentRgb: [153, 27, 27],
@@ -6548,7 +6590,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.12,
     usable: true,
     containerVisuals: {
-      shape: 'tall_slender',
+      shape: 'sleek',
       materialRgb: [241, 245, 249],
       labelRgb: [255, 255, 255],
       labelAccentRgb: [16, 185, 129],
@@ -6864,6 +6906,9 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   // Plastic Bags & Sacks
   package_bag: { containerId: 'package_bag', liquidId: null, amountMl: 0 },
   package_sachet: { containerId: 'package_sachet', liquidId: null, amountMl: 0 },
+  package_sachet_open: { containerId: 'package_sachet_open', liquidId: null, amountMl: 0 },
+  tetra_pack_1000_open: { containerId: 'tetra_pack_1000_open', liquidId: null, amountMl: 0 },
+  tetra_pack_250_open: { containerId: 'tetra_pack_250_open', liquidId: null, amountMl: 0 },
   plastic_bag: { containerId: 'plastic_bag', liquidId: null, amountMl: 0 },
   sugar: { containerId: 'package_bag', liquidId: 'sugar', amountMl: 1000 },
   sugar_bag: { containerId: 'package_bag', liquidId: 'sugar', amountMl: 1000 },
@@ -7265,47 +7310,13 @@ export function unpackSingleUseContainer(
   targetInjuryId?: string
 ): { success: boolean; message: string } {
   const def = ITEM_CATALOG[container.itemId];
+  const isCurrentlySealed = Boolean((container.singleUseContainer || def?.singleUseContainer) && !container.isOpen);
 
   // Piece-by-piece consumption/extraction for multi-piece blisters, snack bags, takeout boxes, and egg cartons
   if (container.contents && container.contents.length > 0) {
     const sample = container.contents[container.contents.length - 1];
     if (sample) {
-      // 1. Egg carton: open lid to egg_carton_10_open and extract 1 egg into inventory/hands
-      if (sample.itemId === 'egg_chicken_single' || sample.itemId === 'egg_quail_single') {
-        const eggItem = container.contents.pop()!;
-        if (container.itemId === 'egg_carton_10' && ITEM_CATALOG.egg_carton_10_open) {
-          const openDef = ITEM_CATALOG.egg_carton_10_open;
-          container.itemId = openDef.itemId;
-          container.name = openDef.name;
-          container.singleUseContainer = false;
-          container.isContainer = true;
-          container.usable = true;
-        }
-        const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Ячейка для яиц';
-        if (container.contents.length > 0) {
-          container.nameRu = `${baseName} (${eggItem.nameRu}: ${container.contents.length} шт)`;
-        } else {
-          container.nameRu = baseName;
-        }
-        const added = addItemToPlayer(player, eggItem);
-        if (!added && world) {
-          if (!world.groundItems) world.groundItems = [];
-          const angle = player.angle || 0;
-          world.groundItems.push({
-            id: `ground_${eggItem.id}_${Date.now()}`,
-            x: player.x + Math.cos(angle) * 20,
-            y: player.y + Math.sin(angle) * 20,
-            item: eggItem,
-            spawnTime: Date.now()
-          });
-        }
-        sound.playPickup();
-        const msg = `Достали из ячейки: ${eggItem.nameRu} (осталось ${container.contents.length} шт)`;
-        addPlayerNotification(player, msg, 'pickup');
-        return { success: true, message: msg };
-      }
-
-      // 2. Pill blisters & medical patch packs, or ready-to-eat snack bags & takeout boxes: pop 1 unit and consume/apply
+      const isEggPiece = sample.itemId === 'egg_chicken_single' || sample.itemId === 'egg_quail_single';
       const isDirectPiece =
         sample.itemId.startsWith('pill_') ||
         sample.itemId === 'patch_bactericidal_single' ||
@@ -7322,53 +7333,124 @@ export function unpackSingleUseContainer(
         sample.itemId === 'apricot_dried_single' ||
         sample.itemId === 'raisins_handful_single' ||
         sample.itemId === 'cranberry_dried_single' ||
-        sample.itemId === 'banana_chip_single';
+        sample.itemId === 'banana_chip_single' ||
+        sample.itemId === 'nutmeg_whole_seeds';
 
-      if (isDirectPiece) {
-        if (sample.category === 'food' && (player.needs.fullness || 0) >= 98) {
-          addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
-          return { success: false, message: 'Слишком сытно' };
-        }
-        if (sample.category === 'med' && player.bodyState) {
-          const medRes = applyMedicalEffectById(player, sample.itemId, targetInjuryId);
-          if (!medRes.applied && medRes.errorMsg) {
-            return { success: false, message: medRes.errorMsg };
+      if (isEggPiece || isDirectPiece) {
+        // STEP 1: If the multi-piece package is still sealed, tearing it open converts it to the opened state first!
+        if (isCurrentlySealed) {
+          if (container.itemId === 'pouch_sealed_snack' && ITEM_CATALOG.pouch_sealed_snack_torn) {
+            container.itemId = 'pouch_sealed_snack_torn';
+            container.name = ITEM_CATALOG.pouch_sealed_snack_torn.name;
+          } else if (container.itemId === 'egg_carton_10' && ITEM_CATALOG.egg_carton_10_open) {
+            container.itemId = 'egg_carton_10_open';
+            container.name = ITEM_CATALOG.egg_carton_10_open.name;
           }
-        }
-        const inner = removeItemFromContainer(container, container.contents.length - 1, 1);
-        if (inner) {
-          const fx = inner.effects || {};
-          if (fx.health) player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health));
-          if (fx.hunger) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
-          if (fx.thirst) {
-            player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
-            if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
-          }
-          if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
-          if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
-          if (inner.category === 'food') {
-            const innerDef = ITEM_CATALOG[inner.itemId];
-            const fGain = innerDef?.fullnessPerBite ?? 3;
-            player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
-            soothePanic(player, 15);
-            applyConsumptionThermodynamics(player, inner.temperature ?? container.temperature ?? 20.0, inner.nameRu, false);
-            sound.playEat();
-          } else {
-            soothePanic(player, 25);
-            sound.playUseItem();
-          }
+          container.isOpen = true;
+          container.singleUseContainer = false;
+          container.isContainer = true;
+          container.usable = true;
 
-          const remCount = container.contents ? container.contents.length : 0;
-          if (remCount > 0) {
-            const baseContainerName = ITEM_CATALOG[container.itemId]?.nameRu || 'Упаковка';
-            container.nameRu = `${baseContainerName} (${inner.nameRu}: ${remCount} шт)`;
-            const notif = `${inner.nameRu} (осталось в упаковке: ${remCount} шт)`;
-            addPlayerNotification(player, notif, inner.category === 'food' ? 'food' : 'heal');
-            return { success: true, message: notif };
+          let baseOpenName = ITEM_CATALOG[container.itemId]?.nameRu || 'Упаковка';
+          if (!baseOpenName.toLowerCase().includes('вскрыт') && !baseOpenName.toLowerCase().includes('открыт')) {
+            baseOpenName = `Открытая упаковка: ${baseOpenName}`;
+          }
+          container.nameRu = `${baseOpenName} (${sample.nameRu}: ${container.contents.length} шт)`;
+          sound.playUseItem();
+          const openMsg = `Упаковка вскрыта: ${container.nameRu}. Теперь содержимое можно доставать или употреблять!`;
+          addPlayerNotification(player, openMsg, 'pickup');
+          return { success: true, message: openMsg };
+        }
+
+        // STEP 2: Package is already open -> extract 1 egg or consume/apply 1 piece
+        if (isEggPiece) {
+          const eggItem = container.contents.pop()!;
+          const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Ячейка для яиц';
+          if (container.contents.length > 0) {
+            container.nameRu = `${baseName} (${eggItem.nameRu}: ${container.contents.length} шт)`;
           } else {
-            const notif = `Использовано последнее: ${inner.nameRu}. Осталась пустая упаковка: ${container.nameRu}.`;
-            addPlayerNotification(player, notif, 'info');
-            return { success: true, message: notif };
+            container.nameRu = baseName;
+            container.usable = false;
+          }
+          const added = addItemToPlayer(player, eggItem);
+          if (!added && world) {
+            if (!world.groundItems) world.groundItems = [];
+            const angle = player.angle || 0;
+            world.groundItems.push({
+              id: `ground_${eggItem.id}_${Date.now()}`,
+              x: player.x + Math.cos(angle) * 20,
+              y: player.y + Math.sin(angle) * 20,
+              item: eggItem,
+              spawnTime: Date.now()
+            });
+          }
+          sound.playPickup();
+          const msg = `Достали из ячейки: ${eggItem.nameRu} (осталось ${container.contents.length} шт)`;
+          addPlayerNotification(player, msg, 'pickup');
+          return { success: true, message: msg };
+        }
+
+        if (isDirectPiece) {
+          if (sample.category === 'food' && (player.needs.fullness || 0) >= 98) {
+            addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
+            return { success: false, message: 'Слишком сытно' };
+          }
+          if (sample.category === 'med' && player.bodyState) {
+            const medRes = applyMedicalEffectById(player, sample.itemId, targetInjuryId);
+            if (!medRes.applied && medRes.errorMsg) {
+              return { success: false, message: medRes.errorMsg };
+            }
+          }
+          const inner = removeItemFromContainer(container, container.contents.length - 1, 1);
+          if (inner) {
+            const fx = inner.effects || {};
+            if (fx.health) player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health));
+            if (fx.hunger) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
+            if (fx.thirst) {
+              player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
+              if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
+            }
+            if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
+            if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
+            if (inner.category === 'food') {
+              const innerDef = ITEM_CATALOG[inner.itemId];
+              const fGain = innerDef?.fullnessPerBite ?? 3;
+              player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
+              soothePanic(player, 15);
+              applyConsumptionThermodynamics(player, inner.temperature ?? container.temperature ?? 20.0, inner.nameRu, false);
+              sound.playEat();
+            } else {
+              soothePanic(player, 25);
+              sound.playUseItem();
+            }
+
+            const remCount = container.contents ? container.contents.length : 0;
+            if (remCount > 0) {
+              let baseContainerName = ITEM_CATALOG[container.itemId]?.nameRu || 'Упаковка';
+              if (!baseContainerName.toLowerCase().includes('вскрыт') && !baseContainerName.toLowerCase().includes('открыт')) {
+                baseContainerName = `Открытая упаковка: ${baseContainerName}`;
+              }
+              container.nameRu = `${baseContainerName} (${inner.nameRu}: ${remCount} шт)`;
+              const notif = `${inner.nameRu} (осталось в упаковке: ${remCount} шт)`;
+              addPlayerNotification(player, notif, inner.category === 'food' ? 'food' : 'heal');
+              return { success: true, message: notif };
+            } else {
+              const emptyTornId = container.tornItemId || def?.tornItemId || container.itemId;
+              const emptyTornDef = ITEM_CATALOG[emptyTornId];
+              if (emptyTornDef) {
+                container.itemId = emptyTornDef.itemId;
+                container.name = emptyTornDef.name;
+                container.nameRu = emptyTornDef.nameRu;
+                container.category = emptyTornDef.category || 'misc';
+                container.isContainer = emptyTornDef.isContainer ?? false;
+                container.usable = false;
+                container.singleUseContainer = false;
+                container.contents = emptyTornDef.isContainer ? [] : undefined;
+              }
+              const notif = `Использовано последнее: ${inner.nameRu}. Осталась пустая упаковка: ${container.nameRu}.`;
+              addPlayerNotification(player, notif, 'info');
+              return { success: true, message: notif };
+            }
           }
         }
       }
@@ -7387,36 +7469,9 @@ export function unpackSingleUseContainer(
     }
   }
 
-  const isPaperPack = container.itemId.startsWith('paper_packaging') || container.tornItemId?.startsWith('paper_packaging_open');
   const existingLabelColor = container.labelColor || def?.labelColor;
 
-  if (extractedItems.length === 0) {
-    if (isPaperPack) {
-      const tornId = container.tornItemId || def?.tornItemId || 'paper_packaging_open';
-      const tornDef = ITEM_CATALOG[tornId] || ITEM_CATALOG.paper_packaging_open;
-      container.itemId = tornDef.itemId;
-      container.name = tornDef.name;
-      container.nameRu = tornDef.nameRu;
-      container.category = tornDef.category || 'misc';
-      container.isContainer = true;
-      container.usable = false;
-      container.singleUseContainer = false;
-      container.contents = [];
-      container.description = tornDef.description;
-      container.descriptionRu = tornDef.descriptionRu;
-      if (existingLabelColor) {
-        container.labelColor = existingLabelColor;
-      }
-      sound.playUseItem();
-      if (onContainerConsumed) onContainerConsumed();
-      const notifMsg = `Упаковка вскрыта: теперь это ${tornDef.nameRu}.`;
-      addPlayerNotification(player, notifMsg, 'pickup');
-      return { success: true, message: notifMsg };
-    }
-    return { success: false, message: 'Упаковка пуста.' };
-  }
-
-  // Convert container to its torn leftover counterpart in-place
+  // Convert container to its torn/opened counterpart in-place (works for both empty and filled packages!)
   const tornId = container.tornItemId || def?.tornItemId || def?.leftoverId || 'tray_plastic_empty';
   const tornDef = ITEM_CATALOG[tornId] || ITEM_CATALOG.tray_plastic_empty;
 
@@ -7427,11 +7482,20 @@ export function unpackSingleUseContainer(
   container.isContainer = tornDef.isContainer ?? false;
   container.usable = tornDef.usable ?? false;
   container.singleUseContainer = false;
+  container.isOpen = true;
   container.contents = tornDef.isContainer ? [] : undefined;
   container.description = tornDef.description;
   container.descriptionRu = tornDef.descriptionRu;
   if (existingLabelColor) {
     container.labelColor = existingLabelColor;
+  }
+
+  if (extractedItems.length === 0) {
+    sound.playUseItem();
+    if (onContainerConsumed) onContainerConsumed();
+    const notifMsg = `Упаковка вскрыта: теперь это ${tornDef.nameRu}.`;
+    addPlayerNotification(player, notifMsg, 'pickup');
+    return { success: true, message: notifMsg };
   }
 
   // Distribute extracted items into player's inventory or hands or drop to ground
@@ -9564,8 +9628,15 @@ export function useItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
-  // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open
-  if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer || item.itemId.startsWith('paper_packaging')) {
+  // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open or consume piece
+  if (
+    item.singleUseContainer ||
+    ITEM_CATALOG[item.itemId]?.singleUseContainer ||
+    (item.itemId.startsWith('paper_packaging') && !item.itemId.includes('_open')) ||
+    ((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
+      item.contents &&
+      item.contents.length > 0)
+  ) {
     return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
@@ -10576,7 +10647,14 @@ export function useHandItemOnPlayer(
   }
 
   // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open from hand
-  if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer || item.itemId.startsWith('paper_packaging')) {
+  if (
+    item.singleUseContainer ||
+    ITEM_CATALOG[item.itemId]?.singleUseContainer ||
+    (item.itemId.startsWith('paper_packaging') && !item.itemId.includes('_open')) ||
+    ((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
+      item.contents &&
+      item.contents.length > 0)
+  ) {
     return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 

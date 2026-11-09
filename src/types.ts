@@ -1842,11 +1842,13 @@ export interface InventoryItem {
 
   // Container properties (recursive containers: backpack, wallet, plastic bag, pockets, etc.)
   isContainer?: boolean;
+  isOpen?: boolean;                 // Whether a single-use or multi-piece package has been opened/unsealed
   singleUseContainer?: boolean;     // Single-use disposable packaging (tears open upon extracting)
   containerItems?: string[];        // Specific item IDs contained inside single-use packaged goods
   tornItemId?: string;              // Item ID of torn leftover packaging (e.g. vacuum_pack_small_torn)
   isTransparentPackaging?: boolean; // Whether the inner contents are visible through transparent packaging
   labelColor?: string;              // Brand seal label / sticker color (hex or CSS color) for paper packaging
+  containerTintColor?: string;      // Package body tint color (hex or CSS color)
   packagingSize?: 'mini' | 'small' | 'medium' | 'large'; // Physical form factor size of packaging
   containerCapacityL?: number;      // Total internal volume capacity in Liters
   maxContainedItemVolumeL?: number; // Max single item volume that fits in this container

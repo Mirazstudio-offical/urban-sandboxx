@@ -30,6 +30,7 @@ import {
   getSlotCompartment
 } from '../items';
 import { getItemThermalDisplayInfo } from '../itemThermalSystem';
+import { isFluidContainerClosed, openFluidContainerIfNeeded } from '../liquidSystem';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ModalShell, Tabs } from './gameUi';
 import { sound } from '../audio';
@@ -164,7 +165,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     const item = player.inventory?.[idx];
     if (!item) return;
 
-    if (item.isContainer) {
+    if (item.isContainer && !item.singleUseContainer) {
       setOpenContainer(item);
       setSelectedContainerItemIdx(0);
       return;
@@ -658,7 +659,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                 {...dropProps}
                                 onClick={() => setSelectedIndex(slotIdx)}
                                 onDoubleClick={() => {
-                                  if (item.isContainer) {
+                                  if (item.isContainer && !item.singleUseContainer && !((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open' || item.itemId === 'lukoshko') && item.contents && item.contents.length > 0)) {
                                     setOpenContainer(item);
                                     setSelectedContainerItemIdx(0);
                                   } else {
@@ -810,10 +811,62 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       </button>
                     ) : selectedEntry.item.isContainer ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
+                          !selectedEntry.item.isOpen && (
+                            <button
+                              type="button"
+                              id="btn-unpack-selected-container"
+                              className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                              onClick={() => {
+                                unpackSingleUseContainer(player, selectedEntry.item, world);
+                                sound.resume();
+                                forceRender(n => n + 1);
+                              }}
+                            >
+                              <Scissors width={15} height={15} />
+                              <span>
+                                Вскрыть упаковку
+                                {selectedEntry.item.contents && selectedEntry.item.contents.length > 0
+                                  ? ` (${selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)} шт.)`
+                                  : ''}
+                              </span>
+                            </button>
+                          )}
+                        {(selectedEntry.item.isOpen ||
+                          selectedEntry.item.itemId === 'pouch_sealed_snack_torn' ||
+                          selectedEntry.item.itemId === 'egg_carton_10_open' ||
+                          selectedEntry.item.itemId === 'lukoshko') &&
+                          selectedEntry.item.contents &&
+                          selectedEntry.item.contents.length > 0 && (
+                            <button
+                              type="button"
+                              id="btn-consume-from-opened-package"
+                              className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                              onClick={() => {
+                                useItemOnPlayer(player, selectedEntry.originalIndex, world || undefined);
+                                sound.resume();
+                                forceRender(n => n + 1);
+                              }}
+                            >
+                              <Utensils width={15} height={15} />
+                              <span>
+                                {selectedEntry.item.itemId.startsWith('egg_carton')
+                                  ? 'Достать 1 шт.'
+                                  : selectedEntry.item.contents[0]?.category === 'med'
+                                  ? 'Применить 1 шт.'
+                                  : 'Съесть 1 шт.'}{' '}
+                                (осталось {selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)} шт.)
+                              </span>
+                            </button>
+                          )}
                         <button
                           type="button"
                           id="btn-open-selected-container"
-                          className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                          className={`gu-btn ${
+                            (selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) && !selectedEntry.item.isOpen
+                              ? 'gu-btn-s'
+                              : 'gu-btn-p'
+                          } gu-btn-sm gu-btn-block`}
                           onClick={() => {
                             setOpenContainer(selectedEntry.item);
                             setSelectedContainerItemIdx(0);
@@ -822,22 +875,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           <Package width={15} height={15} />
                           <span>Открыть контейнер ({selectedEntry.item.contents?.length || 0} предм.)</span>
                         </button>
-                        {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
-                          selectedEntry.item.contents &&
-                          selectedEntry.item.contents.length > 0 && (
-                            <button
-                              type="button"
-                              className="gu-btn gu-btn-s gu-btn-sm gu-btn-block"
-                              onClick={() => {
-                                unpackSingleUseContainer(player, selectedEntry.item, world);
-                                setSelectedIndex(0);
-                                forceRender(n => n + 1);
-                              }}
-                            >
-                              <Scissors width={15} height={15} />
-                              <span>Вскрыть упаковку ({selectedEntry.item.contents.length} предм.)</span>
-                            </button>
-                          )}
                       </div>
                     ) : selectedEntry.item.phoneSpecs ||
                       selectedEntry.item.itemId.startsWith('phone_') ||
@@ -983,6 +1020,30 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       >
                         <FileText width={15} height={15} />
                         <span>Изучить / Просмотреть документ</span>
+                      </button>
+                    ) : isFluidContainerClosed(selectedEntry.item) ? (
+                      <button
+                        type="button"
+                        id="btn-open-fluid-container"
+                        className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                        onClick={() => {
+                          openFluidContainerIfNeeded(player, selectedEntry.item);
+                          sound.resume();
+                          forceRender(n => n + 1);
+                        }}
+                      >
+                        <Scissors width={15} height={15} />
+                        <span>
+                          {selectedEntry.item.itemId.startsWith('can_metal_')
+                            ? 'Вскрыть консервную банку'
+                            : selectedEntry.item.itemId === 'can_alu_330'
+                            ? 'Открыть банку (ключ-кольцо)'
+                            : selectedEntry.item.itemId.startsWith('cup_plastic_dairy') ||
+                              selectedEntry.item.itemId.startsWith('tetra_pack_') ||
+                              selectedEntry.item.itemId === 'package_sachet'
+                            ? 'Вскрыть упаковку'
+                            : 'Открыть крышку'}
+                        </span>
                       </button>
                     ) : selectedEntry.item.usable ? (
                       <button
