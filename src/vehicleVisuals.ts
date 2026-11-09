@@ -3801,27 +3801,27 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     // 8. REAR FENDER COMBINATION LIGHT BLOCKS & MUDFLAPS
     // -------------------------------------------------------------------------
     const rearFenderX = -halfL * 0.48;
-    const fenderL = 20.0;
-    const fenderW = 8.0;
+    const fenderL = 14.5;
+    const fenderW = 5.4;
 
     // Combination Tail Light Blocks mounted on top of rear fenders (Фонари ФП-209 на крыльях)
-    const blockX = cabinX - cabinL / 2 + 2.5;
+    const blockX = cabinX - cabinL / 2 + 2.0;
     // Left fender block (Red brake/tail + Amber turn signal)
-    drawDeformedRect(blockX - 1.2, -halfW * 0.88, 2.4, 3.8, '#0f172a');
-    drawDeformedRect(blockX - 0.9, -halfW * 0.88 + 0.3, 1.8, 1.8, '#ef4444');
-    drawDeformedRect(blockX - 0.9, -halfW * 0.88 + 2.1, 1.8, 1.4, '#f59e0b');
+    drawDeformedRect(blockX - 1.0, -halfW * 0.88, 2.0, 3.2, '#0f172a');
+    drawDeformedRect(blockX - 0.75, -halfW * 0.88 + 0.25, 1.5, 1.5, '#ef4444');
+    drawDeformedRect(blockX - 0.75, -halfW * 0.88 + 1.8, 1.5, 1.15, '#f59e0b');
     // Right fender block (Red brake/tail + Amber turn signal)
-    drawDeformedRect(blockX - 1.2, halfW * 0.88 - 3.8, 2.4, 3.8, '#0f172a');
-    drawDeformedRect(blockX - 0.9, halfW * 0.88 - 3.8 + 0.3, 1.8, 1.8, '#ef4444');
-    drawDeformedRect(blockX - 0.9, halfW * 0.88 - 3.8 + 2.1, 1.8, 1.4, '#f59e0b');
+    drawDeformedRect(blockX - 1.0, halfW * 0.88 - 3.2, 2.0, 3.2, '#0f172a');
+    drawDeformedRect(blockX - 0.75, halfW * 0.88 - 3.2 + 0.25, 1.5, 1.5, '#ef4444');
+    drawDeformedRect(blockX - 0.75, halfW * 0.88 - 3.2 + 1.8, 1.5, 1.15, '#f59e0b');
 
     // Mudflaps with Red Reflectors (Резиновые брызговики с катафотами)
-    const mudflapX = -halfL * 0.76 - 1.2;
-    drawDeformedRect(mudflapX, -halfW * 0.96, 1.6, fenderW, '#0f172a');
-    drawDeformedRect(mudflapX + 0.2, -halfW * 0.85, 1.0, 1.6, '#ef4444');
+    const mudflapX = -halfL * 0.76 - 1.0;
+    drawDeformedRect(mudflapX, -halfW * 0.96, 1.4, fenderW, '#0f172a');
+    drawDeformedRect(mudflapX + 0.2, -halfW * 0.85, 0.8, 1.4, '#ef4444');
 
-    drawDeformedRect(mudflapX, halfW * 0.96 - fenderW, 1.6, fenderW, '#0f172a');
-    drawDeformedRect(mudflapX + 0.2, halfW * 0.85 - 1.6, 1.0, 1.6, '#ef4444');
+    drawDeformedRect(mudflapX, halfW * 0.96 - fenderW, 1.4, fenderW, '#0f172a');
+    drawDeformedRect(mudflapX + 0.2, halfW * 0.85 - 1.4, 0.8, 1.4, '#ef4444');
 
     // -------------------------------------------------------------------------
     // 9. REAR 3-POINT HITCH & PTO (NO SOLID BACKGROUND, OPEN STEEL LINKAGE)
@@ -3908,10 +3908,10 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
  
     // 5. Side Wheel Fenders / Mudguards (Cleanly centered over rearward wheels)
     const wheelAxleX = -halfL * 0.28;
-    const fenderL = 15.5;
+    const fenderL = 11.2;
     const fenderX = wheelAxleX - fenderL / 2;
-    drawDeformedRect(fenderX, -tankW / 2 - 1.8, fenderL, 1.6, '#1e293b');
-    drawDeformedRect(fenderX, tankW / 2 + 0.2, fenderL, 1.6, '#1e293b');
+    drawDeformedRect(fenderX, -tankW / 2 - 1.6, fenderL, 1.4, '#1e293b');
+    drawDeformedRect(fenderX, tankW / 2 + 0.2, fenderL, 1.4, '#1e293b');
  
     // 6. Rear Steel Bumper & Realistic Compact Brass Discharge Tap / Faucet (Аккуратный соразмерный кран сзади)
     const rearBumperX = tankRear - 1.0;
@@ -3949,22 +3949,22 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedCircle(hitchX, 0, 2.5, '#cbd5e1'); // Ring coupler eye
 
     // 2. Technical Tool/Utility Box (Технический ящик) on the drawbar right behind the hitch
-    const boxX = hitchX - 6.5;
-    const boxW = 8.5;
-    const boxL = 4.5;
+    const boxX = hitchX - 5.2;
+    const boxW = 7.4;
+    const boxL = 3.8;
     drawDeformedRect(boxX - boxL / 2, -boxW / 2, boxL, boxW, '#1e293b'); // Outer tech box frame (dark industrial black)
     drawDeformedRect(boxX - boxL / 2 + 0.4, -boxW / 2 + 0.4, boxL - 0.8, boxW - 0.8, '#334155'); // Inner lid panel (grey slate)
-    drawDeformedRect(boxX - 0.6, -0.6, 1.2, 1.2, '#94a3b8'); // Metallic silver toggle latch/lock in center
+    drawDeformedRect(boxX - 0.5, -0.5, 1.0, 1.0, '#94a3b8'); // Metallic silver toggle latch/lock in center
     drawDeformedLine(boxX - boxL / 2, 0, boxX + boxL / 2, 0, '#1e293b', 0.8); // Center divider weld seam
 
     // 3. Vacuum Pump (Компрессор КО-503) mounted behind the tech box
-    const pumpX = halfL + 3.0;
-    drawDeformedRect(pumpX - 3.5, -2.8, 7.0, 5.6, '#1e293b'); // Main pump casing
-    drawDeformedRect(pumpX - 4.5, -1.8, 1.0, 3.6, '#475569'); // Drive pulley guard
+    const pumpX = halfL + 1.8;
+    drawDeformedRect(pumpX - 2.8, -2.4, 5.6, 4.8, '#1e293b'); // Main pump casing
+    drawDeformedRect(pumpX - 3.6, -1.5, 0.8, 3.0, '#475569'); // Drive pulley guard
     for (let i = -2; i <= 2; i++) {
-      drawDeformedLine(pumpX + i, -2.6, pumpX + i, 2.6, '#475569', 0.6); // Cooling fins
+      drawDeformedLine(pumpX + i * 0.8, -2.2, pumpX + i * 0.8, 2.2, '#475569', 0.6); // Cooling fins
     }
-    drawDeformedCircle(pumpX - 1.5, -3.2, 1.2, '#64748b'); // Oil-water separator dome
+    drawDeformedCircle(pumpX - 1.2, -2.8, 1.0, '#64748b'); // Oil-water separator dome
 
     // 4. Main Tank Body (Rich glossy industrial blue gradient)
     const tankFront = halfL * 0.70;
@@ -4074,46 +4074,46 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
 
     // 10. Heavy Curved Fenders with Realistic 3D Shading & Rear Lighting (Прочные крылья над колесами с интегрированной светотехникой)
     const wheelAxleX = -halfL * 0.28;
-    const fenderL = 17.5;
+    const fenderL = 12.0;
     const fenderX = wheelAxleX - fenderL / 2;
-    const fenderW = 5.2; // Cover the wheel width 4.6 completely
-    const barrelTrackY = halfW * 0.82 + 2.3; // Center wheel axis line
+    const fenderW = 4.0; // Cover the wheel width 3.4 completely
+    const barrelTrackY = halfW * 0.82 + 1.7; // Center wheel axis line
 
     // Left Fender (arched metal wrapping over wheel, colored and shaded blue)
     drawDeformedRect(fenderX, -barrelTrackY - fenderW / 2, fenderL, fenderW, '#1e293b'); // Dark underlying frame/brackets
     // Rear sloped portion (darker shade for 3D curvature)
-    drawDeformedRect(fenderX + 0.2, -barrelTrackY - fenderW / 2 + 0.2, 2.8, fenderW - 0.4, '#1d4ed8');
+    drawDeformedRect(fenderX + 0.2, -barrelTrackY - fenderW / 2 + 0.2, 2.0, fenderW - 0.4, '#1d4ed8');
     // Top flat portion (bright royal blue matching the tank highlights)
-    drawDeformedRect(fenderX + 3.0, -barrelTrackY - fenderW / 2 + 0.2, 11.5, fenderW - 0.4, '#3b82f6');
+    drawDeformedRect(fenderX + 2.2, -barrelTrackY - fenderW / 2 + 0.2, 7.6, fenderW - 0.4, '#3b82f6');
     // Front sloped portion (darker shade for 3D curvature)
-    drawDeformedRect(fenderX + 14.5, -barrelTrackY - fenderW / 2 + 0.2, 2.8, fenderW - 0.4, '#1d4ed8');
+    drawDeformedRect(fenderX + 9.8, -barrelTrackY - fenderW / 2 + 0.2, 2.0, fenderW - 0.4, '#1d4ed8');
     // Shiny outer metal lip highlight
     drawDeformedLine(fenderX, -barrelTrackY - fenderW / 2 + 0.3, fenderX + fenderL, -barrelTrackY - fenderW / 2 + 0.3, '#93c5fd', 0.8);
     // Rear black rubber mudflap (брызговик) attached to the rear end (fenderX)
-    drawDeformedRect(fenderX - 3.2, -barrelTrackY - 1.9, 3.2, 3.8, '#18181b');
-    drawDeformedLine(fenderX - 2.0, -barrelTrackY - 1.5, fenderX - 2.0, -barrelTrackY + 1.5, '#27272a', 0.6);
+    drawDeformedRect(fenderX - 2.4, -barrelTrackY - 1.6, 2.4, 3.2, '#18181b');
+    drawDeformedLine(fenderX - 1.5, -barrelTrackY - 1.2, fenderX - 1.5, -barrelTrackY + 1.2, '#27272a', 0.6);
     // Left integrated rectangular tail light unit on the rear slope face (no upward-facing circles)
-    drawDeformedRect(fenderX + 0.5, -barrelTrackY - 1.8, 1.2, 3.6, '#09090b'); // Housing box
-    drawDeformedRect(fenderX + 0.7, -barrelTrackY - 1.6, 0.8, 1.6, '#f97316'); // Amber indicator segment (outer)
-    drawDeformedRect(fenderX + 0.7, -barrelTrackY + 0.0, 0.8, 1.6, '#ef4444'); // Red brake segment (inner)
+    drawDeformedRect(fenderX + 0.4, -barrelTrackY - 1.5, 1.0, 3.0, '#09090b'); // Housing box
+    drawDeformedRect(fenderX + 0.55, -barrelTrackY - 1.3, 0.7, 1.3, '#f97316'); // Amber indicator segment (outer)
+    drawDeformedRect(fenderX + 0.55, -barrelTrackY + 0.0, 0.7, 1.3, '#ef4444'); // Red brake segment (inner)
 
     // Right Fender (arched metal wrapping over wheel, colored and shaded blue)
     drawDeformedRect(fenderX, barrelTrackY - fenderW / 2, fenderL, fenderW, '#1e293b'); // Dark underlying frame/brackets
     // Rear sloped portion (darker shade for 3D curvature)
-    drawDeformedRect(fenderX + 0.2, barrelTrackY - fenderW / 2 + 0.2, 2.8, fenderW - 0.4, '#1d4ed8');
+    drawDeformedRect(fenderX + 0.2, barrelTrackY - fenderW / 2 + 0.2, 2.0, fenderW - 0.4, '#1d4ed8');
     // Top flat portion (bright royal blue matching the tank highlights)
-    drawDeformedRect(fenderX + 3.0, barrelTrackY - fenderW / 2 + 0.2, 11.5, fenderW - 0.4, '#3b82f6');
+    drawDeformedRect(fenderX + 2.2, barrelTrackY - fenderW / 2 + 0.2, 7.6, fenderW - 0.4, '#3b82f6');
     // Front sloped portion (darker shade for 3D curvature)
-    drawDeformedRect(fenderX + 14.5, barrelTrackY - fenderW / 2 + 0.2, 2.8, fenderW - 0.4, '#1d4ed8');
+    drawDeformedRect(fenderX + 9.8, barrelTrackY - fenderW / 2 + 0.2, 2.0, fenderW - 0.4, '#1d4ed8');
     // Shiny outer metal lip highlight
     drawDeformedLine(fenderX, barrelTrackY + fenderW / 2 - 0.3, fenderX + fenderL, barrelTrackY + fenderW / 2 - 0.3, '#93c5fd', 0.8);
     // Rear black rubber mudflap (брызговик) attached to the rear end (fenderX)
-    drawDeformedRect(fenderX - 3.2, barrelTrackY - 1.9, 3.2, 3.8, '#18181b');
-    drawDeformedLine(fenderX - 2.0, barrelTrackY - 1.5, fenderX - 2.0, barrelTrackY + 1.5, '#27272a', 0.6);
+    drawDeformedRect(fenderX - 2.4, barrelTrackY - 1.6, 2.4, 3.2, '#18181b');
+    drawDeformedLine(fenderX - 1.5, barrelTrackY - 1.2, fenderX - 1.5, barrelTrackY + 1.2, '#27272a', 0.6);
     // Right integrated rectangular tail light unit on the rear slope face (no upward-facing circles)
-    drawDeformedRect(fenderX + 0.5, barrelTrackY - 1.8, 1.2, 3.6, '#09090b'); // Housing box
-    drawDeformedRect(fenderX + 0.7, barrelTrackY - 1.6, 0.8, 1.6, '#ef4444'); // Red brake segment (inner)
-    drawDeformedRect(fenderX + 0.7, barrelTrackY + 0.0, 0.8, 1.6, '#f97316'); // Amber indicator segment (outer)
+    drawDeformedRect(fenderX + 0.4, barrelTrackY - 1.5, 1.0, 3.0, '#09090b'); // Housing box
+    drawDeformedRect(fenderX + 0.55, barrelTrackY - 1.3, 0.7, 1.3, '#ef4444'); // Red brake segment (inner)
+    drawDeformedRect(fenderX + 0.55, barrelTrackY + 0.0, 0.7, 1.3, '#f97316'); // Amber indicator segment (outer)
 
     const isVacuumHoseOut = !!car.fluidTank?.isWaterHoseDeployed;
 
@@ -4215,7 +4215,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     relDollyAngle = ((relDollyAngle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 
     const dollyPivotX = halfL * 0.44;
-    const drawbarLen = car.drawbarLength || 20;
+    const drawbarLen = car.drawbarLength || 16;
     const hitchX = dollyPivotX + Math.cos(relDollyAngle) * drawbarLen;
     const hitchY = Math.sin(relDollyAngle) * drawbarLen;
 

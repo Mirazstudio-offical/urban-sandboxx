@@ -10493,14 +10493,17 @@ export class GameRenderer {
                            car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'pickup_heavy';
 
       const isDually = car.type === 'pickup_heavy';
-      const isSport = car.type === 'sports' || car.type === 'supercar' || car.type === 'coupe_gt' || car.type === 'hatch_hot';
-      const isMicro = car.type === 'micro_car' || car.type === 'retro_bubble';
-      const isOffroadHeavy = car.type === 'offroad_hardcore' || car.type === 'suv_classic_box';
+      const isSport = car.type === 'sports' || car.type === 'supercar' || car.type === 'coupe_gt' || car.type === 'hatch_hot' || car.type === 'muscle' || car.type === 'muscle_classic';
+      const isMicro = car.type === 'micro_car' || car.type === 'compact_matiz' || car.type === 'retro_bubble' || car.type === 'liftback_tavria';
+      const isOffroadOrVan = car.type === 'offroad_hardcore' || car.type === 'suv_classic_box' || car.type === 'suv' || car.type === 'suv_luxury' ||
+                             car.type === 'crossover_compact' || car.type === 'pickup' || car.type === 'van' || car.type === 'van_camper' ||
+                             car.type === 'van_cargo_old' || car.type === 'ambulance' || car.type === 'ambulance_van' || car.type === 'ambulance_suv' ||
+                             car.type === 'bus_minibus';
 
-      const wheelL = isHeavyTruck ? 11.5 : (isSport ? 10.5 : (isMicro ? 7.6 : 9.5));
-      const wheelW = isHeavyTruck ? 5.2 : (isSport ? 5.8 : (isMicro ? 3.4 : (isOffroadHeavy ? 4.8 : 4.2)));
+      const wheelL = isHeavyTruck ? 10.0 : (isOffroadOrVan ? 8.2 : (isSport ? 7.6 : (isMicro ? 6.2 : 7.0)));
+      const wheelW = isHeavyTruck ? 3.6 : (isOffroadOrVan ? 3.2 : (isSport ? 3.2 : (isMicro ? 2.2 : 2.6)));
       const frontAxleX = (isThreeAxle || isHeavyTruck) ? halfL * 0.72 : (car.type === 'supercar' ? halfL * 0.68 : halfL * 0.65);
-      const trackY = halfW - 0.8; // Tucked slightly inside halfW
+      const trackY = halfW - 0.6; // Tucked slightly inside halfW
 
       const renderFixedWheel = (wx: number, wy: number) => {
         const cy = wy + wheelW / 2;
@@ -10508,16 +10511,16 @@ export class GameRenderer {
         ctx.fillStyle = '#0f172a'; // Tire
         ctx.fillRect(dwx - wheelL / 2, dwy - wheelW / 2, wheelL, wheelW);
         ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b'; // Rims
-        ctx.fillRect(dwx - wheelL / 2 + 2, dwy - wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
+        ctx.fillRect(dwx - wheelL / 2 + 1.5, dwy - wheelW / 2 + 0.5, wheelL - 3.0, wheelW - 1.0);
       };
 
       if (isTractor) {
         // TRACTOR AGRICULTURAL WHEELS (PREMIUM DETAILED TIRES & HUBS)
-        // Massive Rear Agricultural Wheels with Chevron Herringbone Tread
+        // Calibrated Rear Agricultural Wheels (15.5R38: ~1.45m diameter, ~0.48m width)
         const rearAxleX = -halfL * 0.48;
-        const rearWheelL = 20.0;
-        const rearWheelW = 8.5;
-        const rearTrackY = halfW - 0.4;
+        const rearWheelL = 14.5;
+        const rearWheelW = 5.2;
+        const rearTrackY = halfW - 0.3;
 
         const renderAgriRearWheel = (side: 1 | -1) => {
           const cy = side * (rearTrackY - rearWheelW / 2);
@@ -10540,37 +10543,37 @@ export class GameRenderer {
             const bx = Math.cos(bAngle) * (rearWheelW * 0.32);
             const by = Math.sin(bAngle) * (rearWheelW * 0.32);
             ctx.beginPath();
-            ctx.arc(bx, by, 0.5, 0, Math.PI * 2);
+            ctx.arc(bx, by, 0.4, 0, Math.PI * 2);
             ctx.fill();
           }
           // Center Cast-Iron Axle Hub & Shaft End
           ctx.fillStyle = '#0f172a';
           ctx.beginPath();
-          ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
+          ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#475569';
           ctx.beginPath();
-          ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+          ctx.arc(0, 0, 0.6, 0, Math.PI * 2);
           ctx.fill();
 
           // High-Fidelity Chevron Herringbone V-Cleats (Рельефная «Ёлочка»)
           ctx.strokeStyle = '#334155';
-          ctx.lineWidth = 1.4;
-          for (let c = -rearWheelL / 2 + 2.0; c <= rearWheelL / 2 - 2.0; c += 3.2) {
+          ctx.lineWidth = 1.1;
+          for (let c = -rearWheelL / 2 + 1.6; c <= rearWheelL / 2 - 1.6; c += 2.6) {
             ctx.beginPath();
-            ctx.moveTo(c - 1.4, -rearWheelW / 2);
-            ctx.lineTo(c + 1.6, 0);
-            ctx.lineTo(c - 1.4, rearWheelW / 2);
+            ctx.moveTo(c - 1.0, -rearWheelW / 2);
+            ctx.lineTo(c + 1.2, 0);
+            ctx.lineTo(c - 1.0, rearWheelW / 2);
             ctx.stroke();
           }
           // Highlight edge on cleats
           ctx.strokeStyle = '#64748b';
-          ctx.lineWidth = 0.7;
-          for (let c = -rearWheelL / 2 + 2.0; c <= rearWheelL / 2 - 2.0; c += 3.2) {
+          ctx.lineWidth = 0.55;
+          for (let c = -rearWheelL / 2 + 1.6; c <= rearWheelL / 2 - 1.6; c += 2.6) {
             ctx.beginPath();
-            ctx.moveTo(c - 1.1, -rearWheelW / 2);
-            ctx.lineTo(c + 1.9, 0);
-            ctx.lineTo(c - 1.1, rearWheelW / 2);
+            ctx.moveTo(c - 0.8, -rearWheelW / 2);
+            ctx.lineTo(c + 1.4, 0);
+            ctx.lineTo(c - 0.8, rearWheelW / 2);
             ctx.stroke();
           }
           ctx.restore();
@@ -10581,8 +10584,8 @@ export class GameRenderer {
         // Front Tractor Wheels (Steered)
         const frontAxleX = halfL * 0.70;
         const is82 = car.type === 'tractor_mtz82';
-        const frontWheelL = is82 ? 13.5 : 11.5;
-        const frontWheelW = is82 ? 5.8 : 4.4;
+        const frontWheelL = is82 ? 9.4 : 8.2;
+        const frontWheelW = is82 ? 3.6 : 2.6;
         const frontTrackY = is82 ? halfW * 0.68 : halfW * 0.64;
 
         const renderTractorFrontWheel = (side: 1 | -1) => {
@@ -10598,48 +10601,48 @@ export class GameRenderer {
           // Front Steel Rim
           const frontRimColor = car.type === 'tractor_mtz80_old' ? '#94a3b8' : (is82 ? '#fef08a' : '#cbd5e1');
           ctx.fillStyle = frontRimColor;
-          ctx.fillRect(-frontWheelL / 2 + 2.0, -frontWheelW / 2 + 0.9, frontWheelL - 4.0, frontWheelW - 1.8);
+          ctx.fillRect(-frontWheelL / 2 + 1.5, -frontWheelW / 2 + 0.6, frontWheelL - 3.0, frontWheelW - 1.2);
 
           // Wheel Center Hub
           ctx.fillStyle = '#0f172a';
           ctx.beginPath();
-          ctx.arc(0, 0, is82 ? 1.6 : 1.1, 0, Math.PI * 2);
+          ctx.arc(0, 0, is82 ? 1.1 : 0.8, 0, Math.PI * 2);
           ctx.fill();
 
           if (is82) {
             // MTZ-82 4WD Front Herringbone Chevron Cleats (Ёлочка переднего ведущего моста)
             ctx.strokeStyle = '#334155';
-            ctx.lineWidth = 1.1;
-            for (let c = -frontWheelL / 2 + 2.0; c <= frontWheelL / 2 - 2.0; c += 2.8) {
+            ctx.lineWidth = 0.9;
+            for (let c = -frontWheelL / 2 + 1.5; c <= frontWheelL / 2 - 1.5; c += 2.2) {
               ctx.beginPath();
-              ctx.moveTo(c - 1.0, -frontWheelW / 2);
-              ctx.lineTo(c + 1.1, 0);
-              ctx.lineTo(c - 1.0, frontWheelW / 2);
+              ctx.moveTo(c - 0.8, -frontWheelW / 2);
+              ctx.lineTo(c + 0.9, 0);
+              ctx.lineTo(c - 0.8, frontWheelW / 2);
               ctx.stroke();
             }
 
             // Front Curved Mudguard attached to steering knuckle (turns with the wheel!)
             const mudguardL = frontWheelL * 0.82;
-            const mudguardW = frontWheelW + 1.2;
+            const mudguardW = frontWheelW + 0.8;
             ctx.fillStyle = '#1e293b';
-            ctx.fillRect(-mudguardL / 2 - 0.8, -mudguardW / 2, mudguardL, mudguardW);
+            ctx.fillRect(-mudguardL / 2 - 0.6, -mudguardW / 2, mudguardL, mudguardW);
             // Stiffener bracket strap
             ctx.fillStyle = '#334155';
-            ctx.fillRect(-1.0, -mudguardW / 2, 2.0, mudguardW);
+            ctx.fillRect(-0.8, -mudguardW / 2, 1.6, mudguardW);
             // Rear rubber mudflap
             ctx.fillStyle = '#0f172a';
-            ctx.fillRect(-mudguardL / 2 - 1.6, -mudguardW / 2, 0.8, mudguardW);
+            ctx.fillRect(-mudguardL / 2 - 1.2, -mudguardW / 2, 0.6, mudguardW);
           } else {
             // MTZ-80 2WD Longitudinal Steering Guide Ribs (3 Продольных ребра направляющего протектора)
             ctx.strokeStyle = '#1e293b';
-            ctx.lineWidth = 0.9;
+            ctx.lineWidth = 0.7;
             ctx.beginPath();
-            ctx.moveTo(-frontWheelL / 2 + 1.2, -frontWheelW * 0.30);
-            ctx.lineTo(frontWheelL / 2 - 1.2, -frontWheelW * 0.30);
-            ctx.moveTo(-frontWheelL / 2 + 1.2, 0);
-            ctx.lineTo(frontWheelL / 2 - 1.2, 0);
-            ctx.moveTo(-frontWheelL / 2 + 1.2, frontWheelW * 0.30);
-            ctx.lineTo(frontWheelL / 2 - 1.2, frontWheelW * 0.30);
+            ctx.moveTo(-frontWheelL / 2 + 1.0, -frontWheelW * 0.30);
+            ctx.lineTo(frontWheelL / 2 - 1.0, -frontWheelW * 0.30);
+            ctx.moveTo(-frontWheelL / 2 + 1.0, 0);
+            ctx.lineTo(frontWheelL / 2 - 1.0, 0);
+            ctx.moveTo(-frontWheelL / 2 + 1.0, frontWheelW * 0.30);
+            ctx.lineTo(frontWheelL / 2 - 1.0, frontWheelW * 0.30);
             ctx.stroke();
           }
           ctx.restore();
@@ -10653,10 +10656,10 @@ export class GameRenderer {
         const isChopper = car.type === 'moto_chopper';
         const isMoped = car.type === 'moped_soviet';
 
-        const frontWheelL = isMoped ? 6.5 : (isChopper ? 9.2 : (isSport ? 7.6 : 8.0));
-        const frontWheelW = isMoped ? 1.6 : (isChopper ? 2.0 : (isSport ? 2.6 : 2.2));
-        const rearWheelL = isMoped ? 6.5 : (isChopper ? 8.2 : (isSport ? 8.4 : 8.0));
-        const rearWheelW = isMoped ? 1.8 : (isChopper ? 3.8 : (isSport ? 3.8 : 2.5));
+        const frontWheelL = isMoped ? 5.6 : (isChopper ? 7.4 : (isSport ? 6.4 : 6.8));
+        const frontWheelW = isMoped ? 1.4 : (isChopper ? 1.8 : (isSport ? 2.2 : 1.8));
+        const rearWheelL = isMoped ? 5.6 : (isChopper ? 6.8 : (isSport ? 6.8 : 6.8));
+        const rearWheelW = isMoped ? 1.5 : (isChopper ? 3.0 : (isSport ? 3.0 : 2.1));
 
         // Rear Wheel (Inline centerline)
         const rearWheelX = -halfL * 0.65;
@@ -10669,23 +10672,23 @@ export class GameRenderer {
         if (isSport) {
           // Lightweight racing alloy mag rim with gold chain on left & brake disc on right
           ctx.fillStyle = '#1e293b';
-          ctx.fillRect(-rearWheelL / 2 + 1.2, -rearWheelW / 2 + 0.6, rearWheelL - 2.4, rearWheelW - 1.2);
+          ctx.fillRect(-rearWheelL / 2 + 1.0, -rearWheelW / 2 + 0.5, rearWheelL - 2.0, rearWheelW - 1.0);
           ctx.fillStyle = '#eab308'; // Gold chain sprocket
-          ctx.fillRect(-rearWheelL / 2 + 1.0, -rearWheelW / 2 + 0.2, rearWheelL - 2.0, 0.6);
+          ctx.fillRect(-rearWheelL / 2 + 0.8, -rearWheelW / 2 + 0.2, rearWheelL - 1.6, 0.5);
           ctx.fillStyle = '#cbd5e1'; // Drilled steel brake disc
-          ctx.fillRect(-rearWheelL / 2 + 1.5, rearWheelW / 2 - 0.8, rearWheelL - 3.0, 0.6);
+          ctx.fillRect(-rearWheelL / 2 + 1.2, rearWheelW / 2 - 0.7, rearWheelL - 2.4, 0.5);
         } else {
           // Chrome/Silver Spoke Wheel Rim with center hub
           ctx.fillStyle = isChopper ? '#f8fafc' : '#cbd5e1';
-          ctx.fillRect(-rearWheelL / 2 + 1.2, -rearWheelW / 2 + 0.4, rearWheelL - 2.4, rearWheelW - 0.8);
+          ctx.fillRect(-rearWheelL / 2 + 1.0, -rearWheelW / 2 + 0.35, rearWheelL - 2.0, rearWheelW - 0.7);
           ctx.fillStyle = '#0f172a'; // Center hub
-          ctx.fillRect(-1.2, -rearWheelW / 2 + 0.6, 2.4, rearWheelW - 1.2);
+          ctx.fillRect(-1.0, -rearWheelW / 2 + 0.5, 2.0, rearWheelW - 1.0);
           // Spoke cross pattern
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 0.5;
+          ctx.lineWidth = 0.45;
           ctx.beginPath();
-          ctx.moveTo(-rearWheelL / 2 + 1.8, 0);
-          ctx.lineTo(rearWheelL / 2 - 1.8, 0);
+          ctx.moveTo(-rearWheelL / 2 + 1.4, 0);
+          ctx.lineTo(rearWheelL / 2 - 1.4, 0);
           ctx.stroke();
         }
         ctx.restore();
@@ -10702,24 +10705,24 @@ export class GameRenderer {
         if (isSport) {
           // Dark alloy racing rim + twin floating drilled brake discs with gold Brembo calipers
           ctx.fillStyle = '#1e293b';
-          ctx.fillRect(-frontWheelL / 2 + 1.2, -frontWheelW / 2 + 0.5, frontWheelL - 2.4, frontWheelW - 1.0);
+          ctx.fillRect(-frontWheelL / 2 + 1.0, -frontWheelW / 2 + 0.4, frontWheelL - 2.0, frontWheelW - 0.8);
           ctx.fillStyle = '#cbd5e1'; // Left & right brake discs
-          ctx.fillRect(-frontWheelL / 2 + 1.5, -frontWheelW / 2 + 0.2, frontWheelL - 3.0, 0.5);
-          ctx.fillRect(-frontWheelL / 2 + 1.5, frontWheelW / 2 - 0.7, frontWheelL - 3.0, 0.5);
+          ctx.fillRect(-frontWheelL / 2 + 1.2, -frontWheelW / 2 + 0.2, frontWheelL - 2.4, 0.45);
+          ctx.fillRect(-frontWheelL / 2 + 1.2, frontWheelW / 2 - 0.65, frontWheelL - 2.4, 0.45);
           ctx.fillStyle = '#eab308'; // Gold Brembo calipers
-          ctx.fillRect(0, -frontWheelW / 2, 1.8, 0.7);
-          ctx.fillRect(0, frontWheelW / 2 - 0.7, 1.8, 0.7);
+          ctx.fillRect(0, -frontWheelW / 2, 1.5, 0.6);
+          ctx.fillRect(0, frontWheelW / 2 - 0.6, 1.5, 0.6);
         } else {
           // Classic Chrome Spoke Rim & Hub
           ctx.fillStyle = isChopper ? '#f8fafc' : '#cbd5e1';
-          ctx.fillRect(-frontWheelL / 2 + 1.2, -frontWheelW / 2 + 0.4, frontWheelL - 2.4, frontWheelW - 0.8);
+          ctx.fillRect(-frontWheelL / 2 + 1.0, -frontWheelW / 2 + 0.35, frontWheelL - 2.0, frontWheelW - 0.7);
           ctx.fillStyle = '#0f172a';
-          ctx.fillRect(-1.0, -frontWheelW / 2 + 0.6, 2.0, frontWheelW - 1.2);
+          ctx.fillRect(-0.8, -frontWheelW / 2 + 0.5, 1.6, frontWheelW - 1.0);
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 0.5;
+          ctx.lineWidth = 0.45;
           ctx.beginPath();
-          ctx.moveTo(-frontWheelL / 2 + 1.6, 0);
-          ctx.lineTo(frontWheelL / 2 - 1.6, 0);
+          ctx.moveTo(-frontWheelL / 2 + 1.3, 0);
+          ctx.lineTo(frontWheelL / 2 - 1.3, 0);
           ctx.stroke();
         }
         ctx.restore();
@@ -10727,8 +10730,8 @@ export class GameRenderer {
       } else if (isUralSidecar) {
         // URAL WITH SIDECAR: 3 Authentic Soviet Spoke Wheels
         const bikeY = -halfW * 0.44;
-        const motoWheelL = 8.0;
-        const motoWheelW = 2.6;
+        const motoWheelL = 6.8;
+        const motoWheelW = 2.1;
 
         const renderUralSpokeWheel = (wx: number, wy: number, isSteered: boolean) => {
           const [dwx, dwy] = deform(wx, wy);
@@ -10740,15 +10743,15 @@ export class GameRenderer {
           ctx.fillRect(-motoWheelL / 2, -motoWheelW / 2, motoWheelL, motoWheelW);
           // Steel/Chrome spoke rim
           ctx.fillStyle = '#cbd5e1';
-          ctx.fillRect(-motoWheelL / 2 + 1.2, -motoWheelW / 2 + 0.4, motoWheelL - 2.4, motoWheelW - 0.8);
+          ctx.fillRect(-motoWheelL / 2 + 1.0, -motoWheelW / 2 + 0.35, motoWheelL - 2.0, motoWheelW - 0.7);
           // Black drum brake center hub
           ctx.fillStyle = '#1e293b';
-          ctx.fillRect(-1.4, -motoWheelW / 2 + 0.6, 2.8, motoWheelW - 1.2);
+          ctx.fillRect(-1.2, -motoWheelW / 2 + 0.5, 2.4, motoWheelW - 1.0);
           ctx.strokeStyle = '#f8fafc';
-          ctx.lineWidth = 0.5;
+          ctx.lineWidth = 0.45;
           ctx.beginPath();
-          ctx.moveTo(-motoWheelL / 2 + 1.8, 0);
-          ctx.lineTo(motoWheelL / 2 - 1.8, 0);
+          ctx.moveTo(-motoWheelL / 2 + 1.4, 0);
+          ctx.lineTo(motoWheelL / 2 - 1.4, 0);
           ctx.stroke();
           ctx.restore();
         };
@@ -10815,7 +10818,7 @@ export class GameRenderer {
           ctx.fillStyle = '#0f172a';
           ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
           ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
-          ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
+          ctx.fillRect(-wheelL / 2 + 1.5, -wheelW / 2 + 0.5, wheelL - 3.0, wheelW - 1.0);
           ctx.restore();
         };
         renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
@@ -10825,9 +10828,9 @@ export class GameRenderer {
         // Dually pickup truck (dual rear tires)
         const rearAxleX = -halfL * 0.62;
         renderFixedWheel(rearAxleX, -trackY);
-        renderFixedWheel(rearAxleX, -trackY + wheelW + 0.6);
+        renderFixedWheel(rearAxleX, -trackY + wheelW + 0.4);
         renderFixedWheel(rearAxleX, trackY - wheelW);
-        renderFixedWheel(rearAxleX, trackY - wheelW * 2 - 0.6);
+        renderFixedWheel(rearAxleX, trackY - wheelW * 2 - 0.4);
 
         // Front wheels (steered)
         const renderSteeredWheel = (wx: number, wy: number) => {
@@ -10838,7 +10841,7 @@ export class GameRenderer {
           ctx.fillStyle = '#0f172a';
           ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
           ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
-          ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
+          ctx.fillRect(-wheelL / 2 + 1.5, -wheelW / 2 + 0.5, wheelL - 3.0, wheelW - 1.0);
           ctx.restore();
         };
         renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
@@ -10847,15 +10850,15 @@ export class GameRenderer {
       } else if (car.type === 'trailer_barrel' || car.type === 'trailer_vacuum') {
         // Single central axle with 2 clean trailer wheels (shifted slightly backward for realistic weight distribution onto tractor drawbar)
         const centerAxleX = -halfL * 0.28;
-        const barrelWheelL = 13.5;
-        const barrelWheelW = 4.6;
+        const barrelWheelL = 9.2;
+        const barrelWheelW = 3.4;
         const barrelTrackY = halfW * 0.82 + barrelWheelW / 2;
 
         // Draw structural axle beam connecting left and right wheels
         const [ax1x, ax1y] = deform(centerAxleX, -barrelTrackY);
         const [ax2x, ax2y] = deform(centerAxleX, barrelTrackY);
         ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 2.0;
         ctx.beginPath();
         ctx.moveTo(ax1x, ax1y);
         ctx.lineTo(ax2x, ax2y);
@@ -10870,22 +10873,22 @@ export class GameRenderer {
           ctx.fillRect(-barrelWheelL / 2, -barrelWheelW / 2, barrelWheelL, barrelWheelW);
           // Silver/grey stamped steel rim
           ctx.fillStyle = '#64748b';
-          ctx.fillRect(-barrelWheelL / 2 + 2, -barrelWheelW / 2 + 0.8, barrelWheelL - 4, barrelWheelW - 1.6);
+          ctx.fillRect(-barrelWheelL / 2 + 1.5, -barrelWheelW / 2 + 0.6, barrelWheelL - 3.0, barrelWheelW - 1.2);
           // Small central metallic hub cap
           ctx.fillStyle = '#cbd5e1';
-          ctx.fillRect(-1.5, -barrelWheelW / 2 + 1.3, 3, barrelWheelW - 2.6);
+          ctx.fillRect(-1.1, -barrelWheelW / 2 + 1.0, 2.2, barrelWheelW - 2.0);
           ctx.restore();
         };
         renderBarrelWheel(centerAxleX, -barrelTrackY);
         renderBarrelWheel(centerAxleX, barrelTrackY);
 
       } else if (car.type === 'trailer_flatbed_2axle') {
-        // 2-Axle Farm Trailer with Steerable Front Turntable Dolly
+        // 2-Axle Farm Trailer with Steerable Front Turntable Dolly (9.00-16 tires: ~0.92m diameter)
         const rearAxleX = -halfL * 0.56;
         const dollyPivotX = halfL * 0.44;
-        const trailerWheelL = 15.5;
-        const trailerWheelW = 5.6;
-        const trailerTrackY = halfW - 0.6;
+        const trailerWheelL = 9.6;
+        const trailerWheelW = 3.5;
+        const trailerTrackY = halfW - 0.5;
 
         // 1. Rear Fixed Wheels (mounted on rear chassis axle)
         const renderTrailerWheel = (wx: number, wy: number) => {
@@ -10896,18 +10899,18 @@ export class GameRenderer {
           ctx.fillStyle = '#1c1f24';
           ctx.fillRect(-trailerWheelL / 2, -trailerWheelW / 2, trailerWheelL, trailerWheelW);
           ctx.fillStyle = '#121519';
-          ctx.fillRect(-trailerWheelL / 2 + 1.2, -trailerWheelW / 2 + 0.6, trailerWheelL - 2.4, trailerWheelW - 1.2);
+          ctx.fillRect(-trailerWheelL / 2 + 0.9, -trailerWheelW / 2 + 0.4, trailerWheelL - 1.8, trailerWheelW - 0.8);
           // Stamped steel rim with aged patina
           ctx.fillStyle = '#475569';
-          ctx.fillRect(-trailerWheelL / 2 + 3.2, -trailerWheelW / 2 + 1.0, trailerWheelL - 6.4, trailerWheelW - 2.0);
+          ctx.fillRect(-trailerWheelL / 2 + 2.0, -trailerWheelW / 2 + 0.7, trailerWheelL - 4.0, trailerWheelW - 1.4);
           // Central hub with axle cap
           ctx.fillStyle = '#1e293b';
           ctx.beginPath();
-          ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+          ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#64748b';
           ctx.beginPath();
-          ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+          ctx.arc(0, 0, 0.55, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         };
@@ -10916,12 +10919,12 @@ export class GameRenderer {
 
         // Rear mudflaps behind rear wheels (брызговики)
         const renderMudflap = (wy: number) => {
-          const mfx = rearAxleX - trailerWheelL / 2 - 1.2;
+          const mfx = rearAxleX - trailerWheelL / 2 - 1.0;
           const [dmx, dmy] = deform(mfx, wy);
           ctx.save();
           ctx.translate(dmx, dmy);
           ctx.fillStyle = '#0f172a';
-          ctx.fillRect(-0.8, -trailerWheelW / 2 - 0.2, 1.2, trailerWheelW + 0.4);
+          ctx.fillRect(-0.6, -trailerWheelW / 2 - 0.2, 1.0, trailerWheelW + 0.4);
           ctx.restore();
         };
         renderMudflap(-trailerTrackY);
@@ -10946,18 +10949,18 @@ export class GameRenderer {
           ctx.fillStyle = '#1c1f24';
           ctx.fillRect(-trailerWheelL / 2, -trailerWheelW / 2, trailerWheelL, trailerWheelW);
           ctx.fillStyle = '#121519';
-          ctx.fillRect(-trailerWheelL / 2 + 1.2, -trailerWheelW / 2 + 0.6, trailerWheelL - 2.4, trailerWheelW - 1.2);
+          ctx.fillRect(-trailerWheelL / 2 + 0.9, -trailerWheelW / 2 + 0.4, trailerWheelL - 1.8, trailerWheelW - 0.8);
           // Stamped steel rim with aged patina
           ctx.fillStyle = '#475569';
-          ctx.fillRect(-trailerWheelL / 2 + 3.2, -trailerWheelW / 2 + 1.0, trailerWheelL - 6.4, trailerWheelW - 2.0);
+          ctx.fillRect(-trailerWheelL / 2 + 2.0, -trailerWheelW / 2 + 0.7, trailerWheelL - 4.0, trailerWheelW - 1.4);
           // Central hub with axle cap
           ctx.fillStyle = '#1e293b';
           ctx.beginPath();
-          ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+          ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#64748b';
           ctx.beginPath();
-          ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+          ctx.arc(0, 0, 0.55, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         };
@@ -10968,8 +10971,8 @@ export class GameRenderer {
         // Semi-Trailer (Бортовой полуприцеп ОдАЗ / МАЗ / НЕФАЗ, рефрижератор, цистерна, контейнеровоз, трал)
         // No front wheels - rests on tractor fifth-wheel saddle or landing gear legs!
         // Dual tandem rear axles with dual tires on each side (8 heavy trailer tires)
-        const trailerWheelL = 13.5;
-        const trailerWheelW = 4.8;
+        const trailerWheelL = 10.0;
+        const trailerWheelW = 3.2;
         const tTrackY = halfW - 0.4;
         const tAxle1X = -halfL * 0.44;
         const tAxle2X = -halfL * 0.72;

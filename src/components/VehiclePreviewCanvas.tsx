@@ -68,8 +68,12 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     const halfL = effLength / 2;
     const halfW = effWidth / 2;
 
-    const scaleX = (canvas.width * 0.78) / (effLength + 10);
-    const scaleY = (canvas.height * 0.74) / (effWidth * 2 + 10);
+    // Use a reference minimum bounding size (44x20 = standard sedan) so small vehicles
+    // (mopeds, motorcycles, microcars) look proportionally smaller than sedans, SUVs, and trucks
+    const refLength = Math.max(effLength, 44);
+    const refWidth = Math.max(effWidth, 20);
+    const scaleX = (canvas.width * 0.78) / (refLength + 10);
+    const scaleY = (canvas.height * 0.74) / (refWidth * 2 + 10);
     const scale = Math.min(scaleX, scaleY, 2.9);
 
     ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -80,15 +84,17 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
 
     // Showroom rotating pedestal platform
     if (showPedestal) {
+      const pedRx = Math.max(halfL, 21) * 1.42;
+      const pedRy = Math.max(halfW, 9.5) * 2.8;
       ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.ellipse(0, 0, halfL * 1.42, halfW * 2.8, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, pedRx, pedRy, 0, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = '#c68a35';
       ctx.lineWidth = 1.6 / scale;
       ctx.beginPath();
-      ctx.ellipse(0, 0, halfL * 1.38, halfW * 2.7, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, pedRx * 0.97, pedRy * 0.96, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -140,21 +146,27 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     ctx.fill();
 
     const isMachinery = isRoadMachinery(dummyCar.type);
-    const isSport = dummyCar.type === 'sports' || dummyCar.type === 'supercar' || dummyCar.type === 'coupe_gt' || dummyCar.type === 'hatch_hot';
-    const isMicro = dummyCar.type === 'micro_car' || dummyCar.type === 'retro_bubble';
-    const isOffroadHeavy = dummyCar.type === 'offroad_hardcore' || dummyCar.type === 'suv_classic_box';
+    const isHeavyTruck = resolvedTruck || dummyCar.type === 'fire_engine' || dummyCar.type === 'fire_ladder' ||
+                         dummyCar.type === 'fire_rescue' || dummyCar.type === 'bus' || dummyCar.type === 'truck_tow' ||
+                         dummyCar.type === 'truck_armored' || dummyCar.type === 'delivery_truck' || dummyCar.type === 'pickup_heavy';
+    const isSport = dummyCar.type === 'sports' || dummyCar.type === 'supercar' || dummyCar.type === 'coupe_gt' || dummyCar.type === 'hatch_hot' || dummyCar.type === 'muscle' || dummyCar.type === 'muscle_classic';
+    const isMicro = dummyCar.type === 'micro_car' || dummyCar.type === 'compact_matiz' || dummyCar.type === 'retro_bubble' || dummyCar.type === 'liftback_tavria';
+    const isOffroadOrVan = dummyCar.type === 'offroad_hardcore' || dummyCar.type === 'suv_classic_box' || dummyCar.type === 'suv' || dummyCar.type === 'suv_luxury' ||
+                           dummyCar.type === 'crossover_compact' || dummyCar.type === 'pickup' || dummyCar.type === 'van' || dummyCar.type === 'van_camper' ||
+                           dummyCar.type === 'van_cargo_old' || dummyCar.type === 'ambulance' || dummyCar.type === 'ambulance_van' || dummyCar.type === 'ambulance_suv' ||
+                           dummyCar.type === 'bus_minibus';
 
-    const wheelL = resolvedTruck ? 11.5 : (isSport ? 10.5 : (isMicro ? 7.6 : 9.5));
-    const wheelW = resolvedTruck ? 5.0 : (isSport ? 5.8 : (isMicro ? 3.4 : (isOffroadHeavy ? 4.8 : 4.2)));
+    const wheelL = isHeavyTruck ? 10.0 : (isOffroadOrVan ? 8.2 : (isSport ? 7.6 : (isMicro ? 6.2 : 7.0)));
+    const wheelW = isHeavyTruck ? 3.6 : (isOffroadOrVan ? 3.2 : (isSport ? 3.2 : (isMicro ? 2.2 : 2.6)));
     const frontAxleX = dummyCar.type === 'supercar' ? halfL * 0.68 : halfL * 0.65;
     const rearAxleX = -halfL * 0.65;
-    const trackY = halfW - 0.8;
+    const trackY = halfW - 0.6;
 
     const renderFixedWheel = (wx: number, wy: number, w = wheelW) => {
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(wx - wheelL / 2, wy, wheelL, w);
       ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
-      ctx.fillRect(wx - wheelL / 2 + 2, wy + 0.8, wheelL - 4, w - 1.6);
+      ctx.fillRect(wx - wheelL / 2 + 1.5, wy + 0.5, wheelL - 3.0, w - 1.0);
     };
 
     const cabinDim = getVehicleCabinDimensions(dummyCar, halfL, halfW, 0, 0);

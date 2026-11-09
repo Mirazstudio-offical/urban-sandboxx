@@ -1,5 +1,6 @@
 import { GameWorld } from './types';
 import { CAR_CONFIGS, ensureVehicleDamage, ensureVehicleEngineState } from './vehicleHelpers';
+import { resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
 import { ensureWorldGasStation } from './gasStationSystem';
 import { ensureWorldGuardrails } from './guardrails';
 import { createRealEstateAgencyLayout } from './buildingInteriors';
@@ -20,10 +21,20 @@ export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
         veh.type = 'bus';
       }
       const cfg = CAR_CONFIGS[veh.type] || CAR_CONFIGS.sedan;
-      veh.length = cfg.length;
+      const resolvedTruck = resolveVehicleTruckFrameAndBody(veh);
+      veh.length = resolvedTruck ? resolvedTruck.frame.lengthPx : cfg.length;
       veh.width = cfg.width;
-      veh.mass = cfg.mass;
-      veh.wheelBase = cfg.wheelBase;
+      veh.mass = resolvedTruck ? resolvedTruck.frame.massKg + resolvedTruck.body.massKg : cfg.mass;
+      veh.wheelBase = resolvedTruck ? resolvedTruck.frame.wheelBasePx : cfg.wheelBase;
+      if (resolvedTruck && resolvedTruck.body.id === 'body_fifth_wheel') {
+        veh.hitchOffset = resolvedTruck.frame.fifthWheelOffsetPx;
+      }
+      if ((cfg as any).couplerOffset !== undefined) {
+        veh.couplerOffset = (cfg as any).couplerOffset;
+      }
+      if ((cfg as any).drawbarLength !== undefined) {
+        veh.drawbarLength = (cfg as any).drawbarLength;
+      }
       veh.damage = ensureVehicleDamage(veh);
       veh.engineState = ensureVehicleEngineState(veh);
 
@@ -246,14 +257,14 @@ export function ensureTrailers(world: GameWorld): void {
       vx: 0,
       vy: 0,
       steerAngle: 0,
-      length: 36,
-      width: 22,
-      mass: 1400,
+      length: 34,
+      width: 19,
+      mass: 1200,
       wheelBase: 16,
       color: '#0284c7',
       isParked: true,
       isTrailer: true,
-      couplerOffset: 26,
+      couplerOffset: 23,
       damage: ensureVehicleDamage({ type: 'trailer_barrel' } as any)
     };
     world.vehicles.push(barrelTrailer);
@@ -271,14 +282,14 @@ export function ensureTrailers(world: GameWorld): void {
       vx: 0,
       vy: 0,
       steerAngle: 0,
-      length: 45,
-      width: 22,
-      mass: 1480,
+      length: 40,
+      width: 20,
+      mass: 1400,
       wheelBase: 18,
       color: '#2563eb', // Rich industrial blue
       isParked: true,
       isTrailer: true,
-      couplerOffset: 34,
+      couplerOffset: 30,
       damage: ensureVehicleDamage({ type: 'trailer_vacuum' } as any)
     };
     world.vehicles.push(vacuumTrailer);
@@ -297,29 +308,29 @@ export function ensureTrailers(world: GameWorld): void {
       vy: 0,
       steerAngle: 0,
       trailerDollyAngle: 0,
-      length: 68,
-      width: 26,
-      mass: 2400,
-      wheelBase: 38,
+      length: 52,
+      width: 22,
+      mass: 1800,
+      wheelBase: 28,
       color: '#3e5443',
       isParked: true,
       isTrailer: true,
-      couplerOffset: 42,
-      drawbarLength: 20,
+      couplerOffset: 28,
+      drawbarLength: 16,
       trailerType: 'turntable_dolly_2axle',
       damage: ensureVehicleDamage({ type: 'trailer_flatbed_2axle' } as any)
     };
     world.vehicles.push(flatbedTrailer);
   } else {
-    // Update existing flatbed trailer instances to the correct proportions and weathered patina color
+    // Update existing flatbed trailer instances to the calibrated proportions and weathered patina color
     world.vehicles.forEach(v => {
       if (v.type === 'trailer_flatbed_2axle') {
-        v.length = 68;
-        v.width = 26;
-        v.wheelBase = 38;
-        v.drawbarLength = 20;
-        v.couplerOffset = 42;
-        v.mass = 2400;
+        v.length = 52;
+        v.width = 22;
+        v.wheelBase = 28;
+        v.drawbarLength = 16;
+        v.couplerOffset = 28;
+        v.mass = 1800;
         if (!v.color || v.color === '#15803d') {
           v.color = '#3e5443';
         }

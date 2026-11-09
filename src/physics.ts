@@ -14580,7 +14580,7 @@ export function updateTrailerTowingPhysics(world: GameWorld, dt: number) {
       const pivotDist = trailerHalfL * 0.44; // Distance from chassis center to front turntable pivot (~15px)
       const rearAxleDist = trailerHalfL * 0.56; // Distance from chassis center to rear fixed axle (~19px)
       const bodyWheelBase = pivotDist + rearAxleDist; // Total wheelbase between turntable pivot and rear axle (~34px)
-      const drawbarL = trailer.drawbarLength || 20; // Length from turntable pivot to hitch ring coupler
+      const drawbarL = trailer.drawbarLength || 16; // Length from turntable pivot to hitch ring coupler
 
       if (trailer.trailerDollyAngle === undefined) {
         trailer.trailerDollyAngle = trailer.angle;
