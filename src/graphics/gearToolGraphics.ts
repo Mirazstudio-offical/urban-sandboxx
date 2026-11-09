@@ -1,6 +1,13 @@
 // Procedural 2D Canvas Models for Tools, Auto, Gear, and Valuables
 import { drawShadow, drawGlossBand } from './itemGraphicShared';
 import { drawItemModel2D } from '../itemGraphic';
+import {
+  resolveContainerVisualAttributes,
+  rgbTupleToCss,
+  shiftRgbTuple,
+  LIQUID_REGISTRY,
+  LiquidId
+} from '../liquidSystem';
 
 export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, item?: any): boolean {
   switch (itemId) {
@@ -3341,48 +3348,97 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       const isSpice = itemId.startsWith('jar_spice_small');
       const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
 
+      const vis = resolveContainerVisualAttributes(
+        itemId,
+        item?.fluidStorage?.liquidId,
+        item?.fluidStorage?.attributes,
+        item?.originalCatalogId,
+        item?.containerVisuals || item?.fluidStorage?.containerVisuals
+      );
+      const { shape, materialRgb, labelRgb, labelAccentRgb, capRgb } = vis;
+
       const w = is3L ? 14.5 : isLg ? 13 : isSpice ? 7.4 : isSm ? 9 : 11;
       const h = is3L ? 15.5 : isLg ? 14 : isSpice ? 8.0 : isSm ? 8.5 : 11.5;
       const hw = w / 2;
       const topY = 7.0 - h;
       const botY = 7.0;
+      const bodyTop = topY + 2.0;
+      const bodyH = h - 2.0;
 
       drawShadow(ctx, hw + 1.2, 2.5, botY + 0.8, 0.24);
 
-      // Translucent soda-lime glass jar body
+      const traceJarBodyPath = () => {
+        ctx.beginPath();
+        if (shape === 'hexagonal') {
+          // 6-sided faceted hexagonal jar silhouette
+          const bev = 1.6;
+          ctx.moveTo(-hw + bev, bodyTop);
+          ctx.lineTo(hw - bev, bodyTop);
+          ctx.lineTo(hw, bodyTop + bev);
+          ctx.lineTo(hw, botY - bev * 0.8);
+          ctx.lineTo(hw - bev * 0.9, botY);
+          ctx.lineTo(-hw + bev * 0.9, botY);
+          ctx.lineTo(-hw, botY - bev * 0.8);
+          ctx.lineTo(-hw, bodyTop + bev);
+          ctx.closePath();
+        } else if (shape === 'barrel') {
+          // Bulging barrel jar silhouette
+          const bulge = hw + (isSpice || isSm ? 1.0 : 1.6);
+          const midY = bodyTop + bodyH * 0.52;
+          ctx.moveTo(-hw + 0.8, bodyTop);
+          ctx.lineTo(hw - 0.8, bodyTop);
+          ctx.quadraticCurveTo(bulge, midY, hw - 0.9, botY);
+          ctx.lineTo(-hw + 0.9, botY);
+          ctx.quadraticCurveTo(-bulge, midY, -hw + 0.8, bodyTop);
+          ctx.closePath();
+        } else if (shape === 'square') {
+          // Crisp straight-sided square jar silhouette
+          ctx.roundRect(-hw, bodyTop, w, bodyH, 0.65);
+        } else if (shape === 'amphora') {
+          // Curvy waisted amphora jar silhouette
+          const waistY = bodyTop + bodyH * 0.34;
+          const bellyY = bodyTop + bodyH * 0.74;
+          ctx.moveTo(-hw + 0.6, bodyTop);
+          ctx.lineTo(hw - 0.6, bodyTop);
+          ctx.bezierCurveTo(hw - 1.5, waistY, hw + 1.5, bellyY, hw - 0.8, botY);
+          ctx.lineTo(-hw + 0.8, botY);
+          ctx.bezierCurveTo(-hw - 1.5, bellyY, -hw + 1.5, waistY, -hw + 0.6, bodyTop);
+          ctx.closePath();
+        } else {
+          // Classic rounded cylindrical jar
+          ctx.roundRect(-hw, bodyTop, w, bodyH, 1.8);
+        }
+      };
+
+      // Translucent glass jar body colored by materialRgb
       const glassGrad = ctx.createLinearGradient(-hw, topY, hw, botY);
-      glassGrad.addColorStop(0, 'rgba(224, 242, 254, 0.8)');
-      glassGrad.addColorStop(0.3, 'rgba(186, 230, 253, 0.55)');
-      glassGrad.addColorStop(0.7, 'rgba(125, 211, 252, 0.65)');
-      glassGrad.addColorStop(1, 'rgba(6, 182, 212, 0.75)');
+      glassGrad.addColorStop(0, rgbTupleToCss(shiftRgbTuple(materialRgb, 25), 0.82));
+      glassGrad.addColorStop(0.35, rgbTupleToCss(materialRgb, 0.54));
+      glassGrad.addColorStop(0.75, rgbTupleToCss(shiftRgbTuple(materialRgb, -28), 0.68));
+      glassGrad.addColorStop(1, rgbTupleToCss(shiftRgbTuple(materialRgb, -65), 0.80));
 
       ctx.fillStyle = glassGrad;
-      ctx.beginPath();
-      ctx.roundRect(-hw, topY + 2.0, w, h - 2.0, 1.8);
+      traceJarBodyPath();
       ctx.fill();
 
-      // Fluid / preserve / spice filling if present
+      // Fluid / preserve / spice filling clipped inside the exact jar shape
+      const maxCap = item?.fluidStorage?.maxMl || item?.fluidStorage?.capacityMl || 500;
       if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
-        const fillFrac = Math.min(1, item.fluidStorage.currentMl / (item.fluidStorage.capacityMl || 500));
-        const fluidH = (h - 3.2) * fillFrac;
-        const fluidTop = botY - fluidH - 0.5;
+        const fillFrac = Math.min(1, item.fluidStorage.currentMl / maxCap);
+        const fluidH = (bodyH - 1.0) * fillFrac;
+        const fluidTop = botY - fluidH - 0.4;
 
-        let fluidColor = item.fluidStorage.attributes?.customColor || 'rgba(56, 189, 248, 0.85)';
-        if (!item.fluidStorage.attributes?.customColor) {
-          if (item.fluidStorage.liquidId === 'milk' || item.fluidStorage.liquidId === 'dairy_fermented') fluidColor = '#f8fafc';
-          else if (item.fluidStorage.liquidId === 'honey') fluidColor = '#f59e0b';
-          else if (item.fluidStorage.liquidId === 'jam') fluidColor = '#be123c';
-          else if (item.fluidStorage.liquidId === 'pickles' || item.fluidStorage.liquidId === 'marinade') fluidColor = '#65a30d';
-          else if (item.fluidStorage.liquidId === 'caviar') fluidColor = '#ea580c';
-          else if (item.fluidStorage.liquidId === 'vegetable_caviar' || item.fluidStorage.liquidId === 'puree') fluidColor = '#d97706';
-          else if (item.fluidStorage.liquidId === 'spice_dry') fluidColor = '#b45309';
-          else if (item.fluidStorage.liquidId === 'tea' || item.fluidStorage.liquidId === 'broth') fluidColor = '#b45309';
-        }
+        const liqDef = item.fluidStorage.liquidId
+          ? LIQUID_REGISTRY[item.fluidStorage.liquidId as LiquidId]
+          : undefined;
+        let fluidColor = item.fluidStorage.attributes?.customColor || liqDef?.color || 'rgba(56, 189, 248, 0.85)';
+
+        ctx.save();
+        traceJarBodyPath();
+        ctx.clip();
 
         ctx.fillStyle = fluidColor;
-        ctx.beginPath();
-        ctx.roundRect(-hw + 0.8, fluidTop, w - 1.6, fluidH, [0, 0, 1.2, 1.2]);
-        ctx.fill();
+        ctx.fillRect(-hw - 2, fluidTop, w + 4, fluidH + 1);
 
         const secColor = item.fluidStorage.attributes?.secondaryColor;
         if (secColor && fluidH > 3) {
@@ -3392,46 +3448,98 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.arc(hw * 0.3, fluidTop + fluidH * 0.65, Math.min(1.5, hw * 0.22), 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.restore();
       }
 
-      // Heavy glass bottom punt
-      ctx.fillStyle = 'rgba(6, 182, 212, 0.5)';
+      // Shape-specific structural glass details (facets, hoops, bevels)
+      if (shape === 'hexagonal') {
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 35), 0.65);
+        ctx.lineWidth = 0.65;
+        ctx.beginPath();
+        ctx.moveTo(-hw * 0.4, bodyTop + 0.4);
+        ctx.lineTo(-hw * 0.4, botY - 0.4);
+        ctx.moveTo(hw * 0.4, bodyTop + 0.4);
+        ctx.lineTo(hw * 0.4, botY - 0.4);
+        ctx.stroke();
+      } else if (shape === 'barrel') {
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 30), 0.6);
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(-hw, bodyTop + bodyH * 0.22);
+        ctx.lineTo(hw, bodyTop + bodyH * 0.22);
+        ctx.moveTo(-hw, bodyTop + bodyH * 0.80);
+        ctx.lineTo(hw, bodyTop + bodyH * 0.80);
+        ctx.stroke();
+      } else if (shape === 'square') {
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -45), 0.45);
+        ctx.lineWidth = 0.6;
+        ctx.strokeRect(-hw + 1.1, bodyTop + 1.0, w - 2.2, bodyH - 2.0);
+      }
+
+      // Heavy glass bottom punt tinted by materialRgb
+      ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55), 0.55);
       ctx.beginPath();
-      ctx.ellipse(0, botY - 0.6, hw - 1.0, 1.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, botY - 0.6, hw - 1.0, 1.1, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Embossed volume marking
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
-      ctx.font = `bold ${isSpice || isSm ? 1.9 : 2.5}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
       const volText = is3L ? '3.0 L' : isLg ? '1.0 L' : isSpice ? '0.1 L' : isSm ? '0.2 L' : '0.5 L';
-      ctx.fillText(volText, 0, topY + h * 0.56);
+
+      // Front paper/foil label colored by labelRgb (if present)
+      if (labelRgb) {
+        const lblW = w - 1.4;
+        const lblH = Math.max(3.2, bodyH * 0.36);
+        const lblY = bodyTop + (bodyH - lblH) * 0.52;
+
+        // Cream paper backing border
+        ctx.fillStyle = '#fefce8';
+        ctx.beginPath();
+        ctx.roundRect(-lblW / 2, lblY, lblW, lblH, 0.6);
+        ctx.fill();
+
+        // Main RGB label color band
+        ctx.fillStyle = rgbTupleToCss(labelRgb);
+        ctx.beginPath();
+        ctx.roundRect(-lblW / 2 + 0.35, lblY + 0.35, lblW - 0.7, lblH - 0.7, 0.4);
+        ctx.fill();
+
+        // Accent stripe
+        if (labelAccentRgb) {
+          ctx.fillStyle = rgbTupleToCss(labelAccentRgb);
+          ctx.fillRect(-lblW / 2 + 0.35, lblY + lblH * 0.22, lblW - 0.7, 0.7);
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${isSpice || isSm ? 1.8 : 2.3}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(volText, 0, lblY + lblH * 0.6);
+      } else {
+        // Embossed glass volume marking when no label is attached
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+        ctx.font = `bold ${isSpice || isSm ? 1.9 : 2.5}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(volText, 0, topY + h * 0.56);
+      }
 
       // Glass refraction streaks & vertical highlights
-      drawGlossBand(ctx, -hw + 1.2, topY + 2.5, 1.2, h - 3.5, 0.45);
-      drawGlossBand(ctx, hw - 2.0, topY + 2.5, 0.7, h - 3.5, 0.3);
+      drawGlossBand(ctx, -hw + 1.2, bodyTop + 0.5, 1.2, bodyH - 1.5, 0.42);
+      drawGlossBand(ctx, hw - 2.0, bodyTop + 0.5, 0.7, bodyH - 1.5, 0.28);
 
       // Threaded glass neck
       const neckW = is3L ? w * 0.62 : w - 1.6;
-      ctx.fillStyle = 'rgba(207, 250, 254, 0.9)';
+      ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 15), 0.9);
       ctx.fillRect(-neckW / 2, topY + 0.4, neckW, 1.8);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
       ctx.lineWidth = 0.5;
       ctx.strokeRect(-neckW / 2, topY + 0.4, neckW, 1.8);
 
       if (!isOpen) {
-        // Gold or red lacquered screw-on / shaker lid
+        const lidRgb: [number, number, number] = capRgb || (isSpice ? [220, 38, 38] : [234, 179, 8]);
         const lidGrad = ctx.createLinearGradient(-neckW / 2 - 0.5, topY - 1.5, neckW / 2 + 0.5, topY + 1.2);
-        if (isSpice) {
-          lidGrad.addColorStop(0, '#ef4444');
-          lidGrad.addColorStop(1, '#991b1b');
-        } else {
-          lidGrad.addColorStop(0, '#fef08a');
-          lidGrad.addColorStop(0.35, '#eab308');
-          lidGrad.addColorStop(0.75, '#ca8a04');
-          lidGrad.addColorStop(1, '#854d0e');
-        }
+        lidGrad.addColorStop(0, rgbTupleToCss(shiftRgbTuple(lidRgb, 40)));
+        lidGrad.addColorStop(0.5, rgbTupleToCss(lidRgb));
+        lidGrad.addColorStop(1, rgbTupleToCss(shiftRgbTuple(lidRgb, -55)));
 
         ctx.fillStyle = lidGrad;
         ctx.beginPath();
@@ -3449,7 +3557,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     }
 
     // ==============================================================
-    // === UNIFIED METAL TIN CANS (Жестяные консервные банки) ===
+    // === UNIFIED METAL TIN & ALUMINUM CANS (Жестяные и алюминиевые банки) ===
     // ==============================================================
     case 'can_metal_large':
     case 'can_metal_large_open':
@@ -3463,25 +3571,36 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'can_metal_oval_open':
     case 'tin_round_mini':
     case 'tin_round_mini_open':
+    case 'can_alu_330':
     case 'can_alu_330_open': {
       const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
       const isMini = itemId.startsWith('tin_round_mini');
-      const isOval = itemId.startsWith('can_metal_oval');
+      const isAlu = itemId.startsWith('can_alu_330');
+      const isOvalBase = itemId.startsWith('can_metal_oval');
       const isFlat = itemId.startsWith('can_metal_flat');
       const isLg = itemId.startsWith('can_metal_large');
       const isSm = itemId.startsWith('can_metal_small');
 
+      const vis = resolveContainerVisualAttributes(
+        itemId,
+        item?.fluidStorage?.liquidId,
+        item?.fluidStorage?.attributes,
+        item?.originalCatalogId,
+        item?.containerVisuals || item?.fluidStorage?.containerVisuals
+      );
+      const { shape, materialRgb, labelRgb, labelAccentRgb } = vis;
+
       if (isMini) {
         drawShadow(ctx, 4.5, 2.2, 5.5, 0.24);
-        ctx.fillStyle = item?.fluidStorage?.attributes?.customColor || '#dc2626';
+        ctx.fillStyle = rgbTupleToCss(materialRgb);
         ctx.beginPath();
         ctx.arc(0, 1.0, 4.2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#fbbf24';
+        ctx.strokeStyle = labelRgb ? rgbTupleToCss(labelRgb) : '#fbbf24';
         ctx.lineWidth = 0.8;
         ctx.stroke();
         if (!isOpen) {
-          ctx.fillStyle = '#fef08a';
+          ctx.fillStyle = labelRgb ? rgbTupleToCss(labelRgb) : '#fef08a';
           ctx.beginPath();
           ctx.arc(0, 1.0, 1.5, 0, Math.PI * 2);
           ctx.fill();
@@ -3494,91 +3613,196 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         return true;
       }
 
-      const w = isOval ? 14 : isFlat ? 12.5 : isLg ? 12 : isSm ? 10.5 : 10;
-      const h = isOval ? 6.0 : isFlat ? 5.8 : isLg ? 14 : isSm ? 7.2 : 11.5;
+      const isSleek = shape === 'sleek';
+      const isOval = isOvalBase || shape === 'oval';
+      const isRect = shape === 'rectangular';
+      const isDrum = shape === 'ribbed_drum';
+      const isOct = shape === 'octagonal';
+
+      const w = isOval ? 14 : isFlat ? 12.5 : isSleek ? 9.2 : isRect ? 11.8 : isLg ? 12 : isSm ? 10.5 : isAlu ? 10.6 : 10;
+      const h = isOval ? 6.0 : isFlat ? 5.8 : isSleek ? 14.5 : isLg ? 14 : isSm ? 7.2 : isAlu ? 13.2 : 11.5;
       const hw = w / 2;
       const topY = 7.0 - h;
       const botY = 7.0;
 
       drawShadow(ctx, hw + 1.0, 2.4, botY + 0.8, 0.25);
 
-      // Cylindrical brushed tinplate metal body
+      // Metallic brushed body gradient derived from materialRgb
       const metalGrad = ctx.createLinearGradient(-hw, topY, hw, topY);
-      metalGrad.addColorStop(0, '#94a3b8');
-      metalGrad.addColorStop(0.25, '#f1f5f9');
-      metalGrad.addColorStop(0.5, '#cbd5e1');
-      metalGrad.addColorStop(0.8, '#64748b');
-      metalGrad.addColorStop(1, '#475569');
+      metalGrad.addColorStop(0, rgbTupleToCss(shiftRgbTuple(materialRgb, -35)));
+      metalGrad.addColorStop(0.25, rgbTupleToCss(shiftRgbTuple(materialRgb, 42)));
+      metalGrad.addColorStop(0.5, rgbTupleToCss(materialRgb));
+      metalGrad.addColorStop(0.8, rgbTupleToCss(shiftRgbTuple(materialRgb, -45)));
+      metalGrad.addColorStop(1, rgbTupleToCss(shiftRgbTuple(materialRgb, -70)));
+
+      const traceCanBody = () => {
+        ctx.beginPath();
+        if (isRect) {
+          // Trapezoidal rectangular tin (meat / ham / sardine style)
+          ctx.moveTo(-hw - 0.3, topY + 1.0);
+          ctx.lineTo(hw + 0.3, topY + 1.0);
+          ctx.lineTo(hw - 0.3, botY - 0.8);
+          ctx.lineTo(-hw + 0.3, botY - 0.8);
+          ctx.closePath();
+        } else if (isDrum || shape === 'barrel') {
+          // Bulging drum / barrel can silhouette
+          const midY = topY + h * 0.5;
+          ctx.moveTo(-hw, topY + 1.0);
+          ctx.lineTo(hw, topY + 1.0);
+          ctx.quadraticCurveTo(hw + 1.2, midY, hw, botY - 1.0);
+          ctx.lineTo(-hw, botY - 1.0);
+          ctx.quadraticCurveTo(-hw - 1.2, midY, -hw, topY + 1.0);
+          ctx.closePath();
+        } else if (isOct) {
+          // Octagonal chamfered tin silhouette
+          ctx.roundRect(-hw, topY + 1.0, w, h - 2.0, 0.3);
+        } else {
+          ctx.roundRect(-hw, topY + 1.0, w, h - 2.0, isOval ? 2.2 : isAlu ? 1.6 : 0.7);
+        }
+      };
 
       ctx.fillStyle = metalGrad;
-      ctx.beginPath();
-      ctx.roundRect(-hw, topY + 1.0, w, h - 2.0, isOval ? 2.2 : 0.6);
+      traceCanBody();
       ctx.fill();
 
-      // Colored band if fluid/preserve inside
-      if (item?.fluidStorage?.attributes?.customColor) {
-        ctx.fillStyle = item.fluidStorage.attributes.customColor;
-        ctx.fillRect(-hw + 0.3, topY + h * 0.35, w - 0.6, h * 0.32);
+      // Lithographed or paper label band colored by labelRgb
+      if (labelRgb) {
+        ctx.save();
+        traceCanBody();
+        ctx.clip();
+
+        const lblTop = isAlu ? topY + 1.8 : topY + h * 0.28;
+        const lblH = isAlu ? h - 3.6 : h * 0.44;
+        ctx.fillStyle = rgbTupleToCss(labelRgb);
+        ctx.fillRect(-hw - 1.5, lblTop, w + 3.0, lblH);
+
+        if (labelAccentRgb) {
+          ctx.fillStyle = rgbTupleToCss(labelAccentRgb);
+          if (isAlu) {
+            ctx.beginPath();
+            ctx.moveTo(-hw - 1, lblTop + lblH * 0.65);
+            ctx.quadraticCurveTo(0, lblTop + lblH * 0.25, hw + 1, lblTop + lblH * 0.45);
+            ctx.lineTo(hw + 1, lblTop + lblH * 0.60);
+            ctx.quadraticCurveTo(0, lblTop + lblH * 0.40, -hw - 1, lblTop + lblH * 0.80);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.fillRect(-hw - 1.5, lblTop, w + 3.0, 0.7);
+            ctx.fillRect(-hw - 1.5, lblTop + lblH - 0.7, w + 3.0, 0.7);
+          }
+        }
+        ctx.restore();
       }
 
-      // Stamped corrugated reinforcement ribs
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 0.6;
-      const ribCount = isFlat || isOval || isSm ? 1 : isLg ? 4 : 3;
-      const ribSpacing = (h - 4.0) / (ribCount + 1);
-      for (let i = 1; i <= ribCount; i++) {
-        const ry = topY + 1.8 + i * ribSpacing;
+      // Shape-specific structural metal details
+      if (isOct) {
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55), 0.75);
+        ctx.lineWidth = 0.65;
         ctx.beginPath();
-        ctx.moveTo(-hw, ry);
-        ctx.lineTo(hw, ry);
+        ctx.moveTo(-hw * 0.44, topY + 1.2);
+        ctx.lineTo(-hw * 0.44, botY - 1.2);
+        ctx.moveTo(hw * 0.44, topY + 1.2);
+        ctx.lineTo(hw * 0.44, botY - 1.2);
         ctx.stroke();
+      } else if (isRect) {
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -50), 0.65);
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-hw + 1.4, topY + 1.4);
+        ctx.lineTo(-hw + 1.2, botY - 1.2);
+        ctx.moveTo(hw - 1.4, topY + 1.4);
+        ctx.lineTo(hw - 1.2, botY - 1.2);
+        ctx.stroke();
+      } else if (!isAlu) {
+        // Stamped corrugated reinforcement ribs
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -60), 0.75);
+        ctx.lineWidth = 0.6;
+        const ribCount = isFlat || isOval || isSm ? 1 : isLg || isDrum ? 4 : 3;
+        const ribSpacing = (h - 4.0) / (ribCount + 1);
+        for (let i = 1; i <= ribCount; i++) {
+          const ry = topY + 1.8 + i * ribSpacing;
+          ctx.beginPath();
+          ctx.moveTo(-hw, ry);
+          ctx.lineTo(hw, ry);
+          ctx.stroke();
+        }
       }
 
       // Vertical metallic sheen highlight
-      drawGlossBand(ctx, -hw + 2.0, topY + 1.0, 1.5, h - 2.0, 0.4);
+      drawGlossBand(ctx, -hw + 1.8, topY + 1.2, 1.5, h - 2.4, 0.38);
 
       // Crimped bottom seam rim
-      ctx.fillStyle = '#64748b';
+      ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -45));
       ctx.beginPath();
-      ctx.ellipse(0, botY - 0.4, hw + 0.4, 1.2, 0, 0, Math.PI * 2);
+      if (isRect) {
+        ctx.roundRect(-hw + 0.1, botY - 1.2, w - 0.2, 1.4, 0.5);
+      } else {
+        ctx.ellipse(0, botY - 0.4, hw + 0.4, 1.2, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
 
       // Crimped top seam rim
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -15));
       ctx.beginPath();
-      ctx.ellipse(0, topY + 1.0, hw + 0.5, 1.5, 0, 0, Math.PI * 2);
+      if (isRect) {
+        ctx.roundRect(-hw - 0.5, topY + 0.2, w + 1.0, 2.0, 0.6);
+      } else {
+        ctx.ellipse(0, topY + 1.0, hw + 0.5, 1.5, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
 
       if (!isOpen) {
         // Closed recessed tin lid with pull tab
-        ctx.fillStyle = '#cbd5e1';
+        ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 20));
         ctx.beginPath();
-        ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+        if (isRect) {
+          ctx.roundRect(-hw + 0.4, topY + 0.5, w - 0.8, 1.4, 0.4);
+        } else {
+          ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+        }
         ctx.fill();
 
-        ctx.fillStyle = '#64748b';
+        ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55));
         ctx.beginPath();
         ctx.roundRect(-1.2, topY - 0.2, 2.4, 2.0, 0.4);
         ctx.fill();
       } else {
-        // Opened interior cavity + bent-up tin lid on right edge
+        // Opened interior cavity + bent-up tin lid on right edge (or Dark Tab hole for Alu Can)
         const innerColor =
           item?.fluidStorage && item.fluidStorage.currentMl > 0
-            ? item.fluidStorage.attributes?.customColor || '#9a3412'
+            ? item.fluidStorage.attributes?.customColor ||
+              (item.fluidStorage.liquidId ? LIQUID_REGISTRY[item.fluidStorage.liquidId as LiquidId]?.color : undefined) ||
+              '#9a3412'
             : '#1e293b';
-        ctx.fillStyle = innerColor;
-        ctx.beginPath();
-        ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
-        ctx.fill();
 
-        // Bent-up sharp tin lid flap
-        ctx.fillStyle = '#cbd5e1';
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.ellipse(hw - 1.2, topY - 1.6, 2.2, 2.6, 0.35, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        if (isAlu) {
+          ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 15));
+          ctx.beginPath();
+          ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#09090b';
+          ctx.beginPath();
+          ctx.ellipse(1.0, topY + 1.0, 1.8, 0.8, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = innerColor;
+          ctx.beginPath();
+          if (isRect) {
+            ctx.roundRect(-hw + 0.4, topY + 0.5, w - 0.8, 1.4, 0.4);
+          } else {
+            ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+          }
+          ctx.fill();
+
+          // Bent-up sharp tin lid flap
+          ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 15));
+          ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55));
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.ellipse(hw - 1.2, topY - 1.6, 2.2, 2.6, 0.35, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
       }
 
       return true;
@@ -3697,56 +3921,250 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    // Small Glass Bottle & Squeeze Sauce Bottle & Medical Brown Vial
-    case 'bottle_glass_small':
+    // ==============================================================
+    // === UNIFIED PLASTIC & GLASS BOTTLES (Бутылки и флаконы) ===
+    // ==============================================================
+    case 'bottle_plastic_500':
+    case 'bottle_plastic_1500':
+    case 'bottle_plastic_100':
     case 'bottle_sauce_squeeze':
+    case 'glass_bottle_500':
+    case 'bottle_glass_medium':
+    case 'bottle_glass_large':
+    case 'bottle_glass_750':
+    case 'bottle_glass_small':
     case 'bottle_med_glass_brown': {
-      drawShadow(ctx, 4.5, 2.0, 7.5, 0.22);
-
-      const isMedBrown = itemId === 'bottle_med_glass_brown';
+      const is1500 = itemId === 'bottle_plastic_1500';
+      const is1000 = itemId === 'bottle_glass_large';
+      const is750 = itemId === 'bottle_glass_750';
+      const isSmall = itemId === 'bottle_glass_small' || itemId === 'bottle_med_glass_brown';
+      const is100 = itemId === 'bottle_plastic_100';
       const isSqueeze = itemId === 'bottle_sauce_squeeze';
-      const customC = item?.fluidStorage?.attributes?.customColor;
+      const isPlastic = itemId.startsWith('bottle_plastic_') || isSqueeze;
 
-      if (isSqueeze) {
-        ctx.fillStyle = customC || '#dc2626';
+      const vis = resolveContainerVisualAttributes(
+        itemId,
+        item?.fluidStorage?.liquidId,
+        item?.fluidStorage?.attributes,
+        item?.originalCatalogId,
+        item?.containerVisuals || item?.fluidStorage?.containerVisuals
+      );
+      const { shape, materialRgb, labelRgb, labelAccentRgb, capRgb } = vis;
+
+      const baseW = is1500 ? 11.0 : is1000 ? 10.4 : is750 ? 9.4 : isSmall ? 7.6 : is100 ? 7.0 : isSqueeze ? 8.4 : 9.0;
+      const w = shape === 'flask' ? baseW + 1.4 : shape === 'bulbous' ? baseW + 1.2 : shape === 'sleek' ? baseW - 1.0 : baseW;
+      const hw = w / 2;
+      const neckW = is1500 || is1000 ? 4.0 : isSmall || is100 ? 3.2 : 3.6;
+      const hnw = neckW / 2;
+
+      const botY = is1500 ? 8.0 : 7.2;
+      const neckTopY = is1500 ? -10.5 : is1000 ? -9.5 : is750 ? -9.2 : isSmall || is100 || isSqueeze ? -7.0 : -8.2;
+      const shoulderTopY = neckTopY + (is750 ? 3.8 : 2.8);
+      const bodyTopY =
+        shape === 'bordeaux' || shape === 'square' || shape === 'flask'
+          ? shoulderTopY + 1.8
+          : shape === 'burgundy'
+            ? shoulderTopY + 4.8
+            : shoulderTopY + 2.8;
+
+      drawShadow(ctx, hw + 1.4, 2.5, botY + 0.6, 0.23);
+
+      const traceBottlePath = () => {
         ctx.beginPath();
-        ctx.roundRect(-4.2, -3.5, 8.4, 10.5, 1.8);
+        if (shape === 'square') {
+          // Angular square "Maraska" bottle (olive oil, vinegar, soy sauce)
+          ctx.moveTo(-hnw, neckTopY);
+          ctx.lineTo(hnw, neckTopY);
+          ctx.lineTo(hnw, shoulderTopY);
+          ctx.lineTo(hw, bodyTopY - 0.5);
+          ctx.lineTo(hw, botY);
+          ctx.lineTo(-hw, botY);
+          ctx.lineTo(-hw, bodyTopY - 0.5);
+          ctx.lineTo(-hnw, shoulderTopY);
+          ctx.closePath();
+        } else if (shape === 'flask') {
+          // Flat wide shtof / pocket flask with chamfered shoulders
+          ctx.moveTo(-hnw, neckTopY);
+          ctx.lineTo(hnw, neckTopY);
+          ctx.lineTo(hnw, shoulderTopY);
+          ctx.lineTo(hw, shoulderTopY + 1.4);
+          ctx.lineTo(hw - 0.3, botY - 0.5);
+          ctx.quadraticCurveTo(0, botY + 0.5, -hw + 0.3, botY - 0.5);
+          ctx.lineTo(-hw, shoulderTopY + 1.4);
+          ctx.lineTo(-hnw, shoulderTopY);
+          ctx.closePath();
+        } else if (shape === 'bulbous') {
+          // Round pot-bellied carafe / jug bottle
+          const bellyY = (shoulderTopY + botY) * 0.58;
+          ctx.moveTo(-hnw, neckTopY);
+          ctx.lineTo(hnw, neckTopY);
+          ctx.lineTo(hnw, shoulderTopY);
+          ctx.bezierCurveTo(hw + 2.2, shoulderTopY + 2.0, hw + 2.4, bellyY + 2.5, hw - 1.0, botY);
+          ctx.quadraticCurveTo(0, botY + 0.7, -hw + 1.0, botY);
+          ctx.bezierCurveTo(-hw - 2.4, bellyY + 2.5, -hw - 2.2, shoulderTopY + 2.0, -hnw, shoulderTopY);
+          ctx.closePath();
+        } else if (shape === 'pinched') {
+          // Ergonomic pinched-waist PET / squeeze bottle
+          const waistY = (bodyTopY + botY) * 0.48;
+          ctx.moveTo(-hnw, neckTopY);
+          ctx.lineTo(hnw, neckTopY);
+          ctx.lineTo(hnw, shoulderTopY);
+          ctx.quadraticCurveTo(hw, shoulderTopY + 1.0, hw, bodyTopY);
+          ctx.quadraticCurveTo(hw - 1.3, waistY, hw - 0.2, botY - 1.0);
+          ctx.quadraticCurveTo(hw - 0.2, botY + 0.4, 0, botY + 0.4);
+          ctx.quadraticCurveTo(-hw + 0.2, botY + 0.4, -hw + 0.2, botY - 1.0);
+          ctx.quadraticCurveTo(-hw + 1.3, waistY, -hw, bodyTopY);
+          ctx.quadraticCurveTo(-hw, shoulderTopY + 1.0, -hnw, shoulderTopY);
+          ctx.closePath();
+        } else if (shape === 'burgundy') {
+          // Long gently sloped conical shoulders (Burgundy wine / beer / milk bottle)
+          ctx.moveTo(-hnw, neckTopY);
+          ctx.lineTo(hnw, neckTopY);
+          ctx.lineTo(hnw, shoulderTopY);
+          ctx.quadraticCurveTo(hw * 0.85, shoulderTopY + 2.2, hw, bodyTopY);
+          ctx.lineTo(hw - 0.2, botY - 0.4);
+          ctx.quadraticCurveTo(0, botY + 0.6, -hw + 0.2, botY - 0.4);
+          ctx.lineTo(-hw, bodyTopY);
+          ctx.quadraticCurveTo(-hw * 0.85, shoulderTopY + 2.2, -hnw, shoulderTopY);
+          ctx.closePath();
+        } else {
+          // Bordeaux / Classic high-shoulder straight-walled bottle
+          ctx.moveTo(-hnw, neckTopY);
+          ctx.lineTo(hnw, neckTopY);
+          ctx.lineTo(hnw, shoulderTopY);
+          ctx.quadraticCurveTo(hw, shoulderTopY + 0.6, hw, bodyTopY);
+          ctx.lineTo(hw - 0.2, botY - 0.4);
+          ctx.quadraticCurveTo(0, botY + 0.6, -hw + 0.2, botY - 0.4);
+          ctx.lineTo(-hw, bodyTopY);
+          ctx.quadraticCurveTo(-hw, shoulderTopY + 0.6, -hnw, shoulderTopY);
+          ctx.closePath();
+        }
+      };
+
+      const isOpaquePlastic = isSqueeze || (isPlastic && materialRgb[0] > 235 && materialRgb[1] > 235 && materialRgb[2] > 235);
+      const baseAlpha = isOpaquePlastic ? 0.96 : isPlastic ? 0.68 : 0.78;
+
+      const matGrad = ctx.createLinearGradient(-hw, neckTopY, hw, botY);
+      matGrad.addColorStop(0, rgbTupleToCss(shiftRgbTuple(materialRgb, 28), Math.min(1, baseAlpha + 0.08)));
+      matGrad.addColorStop(0.35, rgbTupleToCss(materialRgb, baseAlpha * 0.78));
+      matGrad.addColorStop(0.75, rgbTupleToCss(shiftRgbTuple(materialRgb, -25), baseAlpha));
+      matGrad.addColorStop(1, rgbTupleToCss(shiftRgbTuple(materialRgb, -55), Math.min(1, baseAlpha + 0.12)));
+
+      ctx.fillStyle = matGrad;
+      traceBottlePath();
+      ctx.fill();
+
+      // Dynamic liquid level clipped inside the bottle contour
+      const maxCap = item?.fluidStorage?.maxMl || item?.fluidStorage?.capacityMl || (is1500 ? 1500 : is1000 ? 1000 : is750 ? 750 : 500);
+      if (item?.fluidStorage && item.fluidStorage.currentMl > 0 && !isSqueeze) {
+        const fillFrac = Math.min(1, item.fluidStorage.currentMl / maxCap);
+        const totalInternalH = botY - shoulderTopY - 0.8;
+        const fluidH = totalInternalH * fillFrac;
+        const fluidTop = botY - fluidH - 0.3;
+
+        const liqDef = item.fluidStorage.liquidId
+          ? LIQUID_REGISTRY[item.fluidStorage.liquidId as LiquidId]
+          : undefined;
+        const fluidColor = item.fluidStorage.attributes?.customColor || liqDef?.color || '#38bdf8';
+
+        ctx.save();
+        traceBottlePath();
+        ctx.clip();
+
+        ctx.fillStyle = fluidColor;
+        ctx.fillRect(-hw - 3, fluidTop, w + 6, fluidH + 1.5);
+        ctx.restore();
+      }
+
+      // Shape-specific structural lines (Maraska square edges, Flask recessed panel, PET ribs)
+      if (shape === 'square') {
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 35), 0.55);
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-hw + 1.2, bodyTopY - 0.3);
+        ctx.lineTo(-hw + 1.2, botY - 0.4);
+        ctx.moveTo(hw - 1.2, bodyTopY - 0.3);
+        ctx.lineTo(hw - 1.2, botY - 0.4);
+        ctx.stroke();
+      } else if (shape === 'flask') {
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -45), 0.45);
+        ctx.lineWidth = 0.6;
+        ctx.strokeRect(-hw + 1.3, bodyTopY, w - 2.6, botY - bodyTopY - 1.2);
+      } else if (isPlastic && shape === 'pinched' && !isSqueeze) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.lineWidth = 0.65;
+        ctx.beginPath();
+        ctx.moveTo(-hw + 0.6, bodyTopY + 1.0);
+        ctx.lineTo(hw - 0.6, bodyTopY + 1.0);
+        ctx.moveTo(-hw + 0.6, botY - 2.0);
+        ctx.lineTo(hw - 0.6, botY - 2.0);
+        ctx.stroke();
+      }
+
+      // Heavy bottom punt for glass bottles
+      if (!isPlastic) {
+        ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55), 0.55);
+        ctx.beginPath();
+        ctx.ellipse(0, botY - 0.5, hw - 1.0, 1.0, 0, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // Front bottle label colored by labelRgb
+      if (labelRgb) {
+        const lblW = w - 1.2;
+        const availH = botY - bodyTopY;
+        const lblH = Math.max(3.2, availH * 0.46);
+        const lblY = bodyTopY + (availH - lblH) * 0.48;
+
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.moveTo(-1.8, -3.5);
-        ctx.lineTo(0, -7.8);
-        ctx.lineTo(1.8, -3.5);
+        ctx.roundRect(-lblW / 2, lblY, lblW, lblH, 0.5);
+        ctx.fill();
+
+        ctx.fillStyle = rgbTupleToCss(labelRgb);
+        ctx.beginPath();
+        ctx.roundRect(-lblW / 2 + 0.3, lblY + 0.3, lblW - 0.6, lblH - 0.6, 0.35);
+        ctx.fill();
+
+        if (labelAccentRgb) {
+          ctx.fillStyle = rgbTupleToCss(labelAccentRgb);
+          ctx.fillRect(-lblW / 2 + 0.3, lblY + lblH * 0.25, lblW - 0.6, 0.7);
+        }
+
+        const volMark = is1500 ? '1.5L' : is1000 ? '1.0L' : is750 ? '0.75' : is100 ? '100' : isSmall ? '0.25' : '0.5L';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${isSmall || is100 ? 1.7 : 2.1}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(volMark, 0, lblY + lblH * 0.64);
+      }
+
+      // Vertical specular reflection streak
+      drawGlossBand(ctx, -hw + 1.2, bodyTopY, 1.1, botY - bodyTopY - 0.8, 0.4);
+
+      // Cap or Squeeze Dispenser Nozzle
+      const finalCapRgb: [number, number, number] = capRgb || (isPlastic ? [2, 132, 199] : [148, 163, 184]);
+      if (isSqueeze) {
+        ctx.fillStyle = rgbTupleToCss(finalCapRgb);
+        ctx.beginPath();
+        ctx.moveTo(-1.8, neckTopY + 2.8);
+        ctx.lineTo(0, neckTopY - 1.5);
+        ctx.lineTo(1.8, neckTopY + 2.8);
         ctx.closePath();
         ctx.fill();
-        drawGlossBand(ctx, -2.8, -2.5, 1.0, 8.5, 0.3);
-        return true;
-      }
-
-      ctx.fillStyle = isMedBrown ? 'rgba(120, 53, 15, 0.88)' : 'rgba(226, 232, 240, 0.78)';
-      ctx.beginPath();
-      ctx.roundRect(-3.8, -3.5, 7.6, 10.5, 1.2);
-      ctx.fill();
-      ctx.fillRect(-1.6, -7.5, 3.2, 4.2);
-
-      if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
-        ctx.fillStyle = customC || (item.fluidStorage.liquidId?.includes('soy') ? '#1c1917' : '#78350f');
+      } else {
+        ctx.fillStyle = rgbTupleToCss(finalCapRgb);
         ctx.beginPath();
-        ctx.roundRect(-3.2, -1, 6.4, 7.5, 0.8);
+        ctx.roundRect(-hnw - 0.4, neckTopY - 1.2, neckW + 0.8, 2.3, 0.6);
         ctx.fill();
+        ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(finalCapRgb, -40));
+        ctx.fillRect(-hnw - 0.4, neckTopY + 0.5, neckW + 0.8, 0.6);
       }
 
-      ctx.fillStyle = isMedBrown ? '#f8fafc' : '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-2.0, -9.0, 4.0, 2.0, 0.6);
-      ctx.fill();
-
-      drawGlossBand(ctx, -2.8, -3.0, 1.0, 9.5, 0.35);
       return true;
     }
 
-    // Small Plastic Dropper Bottle / Medical Tube / Ampoule / Aerosol Can
-    case 'bottle_plastic_100':
+    // Medical Tube / Ampoule / Aerosol Can
     case 'tube_ointment_small':
     case 'ampoule_glass_small':
     case 'aerosol_can_small': {
@@ -3789,34 +4207,14 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         return true;
       }
 
-      if (itemId === 'aerosol_can_small') {
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.roundRect(-3.8, -3.5, 7.6, 10.5, 1.0);
-        ctx.fill();
-        ctx.fillStyle = customC || '#ea580c';
-        ctx.fillRect(-3.8, -0.5, 7.6, 4.0);
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(-2.0, -6.5, 4.0, 3.0);
-        return true;
-      }
-
-      ctx.fillStyle = '#f1f5f9';
+      ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.roundRect(-3.5, -3.0, 7.0, 10.0, 1.2);
+      ctx.roundRect(-3.8, -3.5, 7.6, 10.5, 1.0);
       ctx.fill();
-
-      if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
-        ctx.fillStyle = customC || '#38bdf8';
-        ctx.beginPath();
-        ctx.roundRect(-2.8, -1.0, 5.6, 7.5, 0.8);
-        ctx.fill();
-      }
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8.5, 4.4, 2.4, 0.8);
-      ctx.fill();
+      ctx.fillStyle = customC || '#ea580c';
+      ctx.fillRect(-3.8, -0.5, 7.6, 4.0);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(-2.0, -6.5, 4.0, 3.0);
       return true;
     }
 

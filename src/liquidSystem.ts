@@ -1,4 +1,5 @@
-import { InventoryItem, Player, GameWorld, Vehicle } from './types';
+import { InventoryItem, Player, GameWorld, Vehicle, ContainerVisualShape, ContainerVisualAttributes } from './types';
+export type { ContainerVisualShape, ContainerVisualAttributes };
 import { sound } from './audio';
 import { addPlayerNotification } from './items';
 import { soothePanic } from './bodySystem';
@@ -142,6 +143,7 @@ export interface FluidSubstanceAttributes {
   isOpened?: boolean;
   culinaryEquivalentId?: string;
   medicalEffectId?: string;
+  containerVisuals?: ContainerVisualAttributes;
   customEffects?: {
     hunger?: number;
     thirst?: number;
@@ -1796,6 +1798,7 @@ export interface FluidContainerState {
   emptyWeightKg: number;
   baseItemNameRu: string;
   baseItemNameEn?: string;
+  containerVisuals?: ContainerVisualAttributes;
   attributes?: FluidSubstanceAttributes;
 }
 
@@ -1814,6 +1817,7 @@ export interface ContainerDefConfig {
   defaultAmountMl?: number;
   openedVariantId?: string;
   isSealedByDefault?: boolean;
+  defaultVisuals?: ContainerVisualAttributes;
 }
 
 export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
@@ -2730,6 +2734,439 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
   return `${cleanBaseName} [${substanceLabel}, ${volLabel}]`;
 }
 
+export const SHAPE_NAMES_RU: Record<ContainerVisualShape, string> = {
+  classic: 'Классическая цилиндрическая',
+  cylinder: 'Цилиндрическая гладкая',
+  hexagonal: 'Шестигранная гранёная',
+  octagonal: 'Восьмигранная фигурная',
+  barrel: 'Пузатая бочкообразная',
+  square: 'Квадратная прямостенная («Мараска»)',
+  amphora: 'Приталенная амфорная',
+  rectangular: 'Прямоугольная трапециевидная',
+  ribbed_drum: 'Гофрированная усиленная',
+  oval: 'Овальная плоская',
+  sleek: 'Высокая узкая',
+  bordeaux: 'Прямостенная с крутым плечом («Бордо»)',
+  burgundy: 'Покатая коническая («Бургундия»)',
+  flask: 'Плоская фляжная (штоф)',
+  bulbous: 'Пузатая графинная',
+  pinched: 'Фигурная с перехватом'
+};
+
+export function hexToRgbTuple(hex: string, fallback: [number, number, number] = [203, 213, 225]): [number, number, number] {
+  if (!hex || typeof hex !== 'string') return fallback;
+  const cleaned = hex.trim().replace(/^#/, '');
+  if (cleaned.length === 3) {
+    const r = parseInt(cleaned[0] + cleaned[0], 16);
+    const g = parseInt(cleaned[1] + cleaned[1], 16);
+    const b = parseInt(cleaned[2] + cleaned[2], 16);
+    if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) return [r, g, b];
+  } else if (cleaned.length >= 6) {
+    const r = parseInt(cleaned.slice(0, 2), 16);
+    const g = parseInt(cleaned.slice(2, 4), 16);
+    const b = parseInt(cleaned.slice(4, 6), 16);
+    if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) return [r, g, b];
+  }
+  return fallback;
+}
+
+export function rgbTupleToCss(rgb: [number, number, number], alpha?: number): string {
+  const r = Math.max(0, Math.min(255, Math.round(rgb[0])));
+  const g = Math.max(0, Math.min(255, Math.round(rgb[1])));
+  const b = Math.max(0, Math.min(255, Math.round(rgb[2])));
+  if (alpha !== undefined) {
+    return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+  }
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+export function shiftRgbTuple(rgb: [number, number, number], delta: number): [number, number, number] {
+  return [
+    Math.max(0, Math.min(255, Math.round(rgb[0] + delta))),
+    Math.max(0, Math.min(255, Math.round(rgb[1] + delta))),
+    Math.max(0, Math.min(255, Math.round(rgb[2] + delta)))
+  ];
+}
+
+export function isJarCanOrBottleContainer(containerId: string): boolean {
+  if (!containerId) return false;
+  return (
+    containerId.startsWith('jar_glass_') ||
+    containerId.startsWith('jar_spice_') ||
+    containerId.startsWith('can_metal_') ||
+    containerId.startsWith('can_alu_') ||
+    containerId.startsWith('tin_round_') ||
+    containerId.startsWith('bottle_plastic_') ||
+    containerId.startsWith('bottle_glass_') ||
+    containerId === 'glass_bottle_500' ||
+    containerId === 'bottle_sauce_squeeze' ||
+    containerId === 'bottle_med_glass_brown'
+  );
+}
+
+function hashStringDeterministic(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+export function resolveContainerVisualAttributes(
+  containerId: string,
+  liquidId?: LiquidId | string | null,
+  attributes?: FluidSubstanceAttributes,
+  originalCatalogId?: string,
+  existingVisuals?: Partial<ContainerVisualAttributes>
+): ContainerVisualAttributes {
+  const seedKey = `${originalCatalogId || ''}_${attributes?.culinaryEquivalentId || ''}_${attributes?.varietyRu || ''}_${liquidId || ''}_${containerId}`;
+  const hash = hashStringDeterministic(seedKey);
+  const eqId = (originalCatalogId || attributes?.culinaryEquivalentId || '').toLowerCase();
+
+  let shape: ContainerVisualShape = 'classic';
+  let materialRgb: [number, number, number] = [224, 242, 254];
+  let materialNameRu = 'Прозрачное стекло';
+  let labelRgb: [number, number, number] | null = attributes?.customColor
+    ? hexToRgbTuple(attributes.customColor, [2, 132, 199])
+    : null;
+  let labelAccentRgb: [number, number, number] | undefined = attributes?.secondaryColor
+    ? hexToRgbTuple(attributes.secondaryColor, [254, 240, 138])
+    : undefined;
+  let capRgb: [number, number, number] | undefined;
+
+  // 1. GLASS JARS (jar_glass_*, jar_spice_*)
+  if (containerId.startsWith('jar_glass_') || containerId.startsWith('jar_spice_')) {
+    const is3L = containerId.startsWith('jar_glass_3l');
+    const isSpice = containerId.startsWith('jar_spice_');
+
+    if (isSpice) {
+      const spiceShapes: ContainerVisualShape[] = ['square', 'hexagonal', 'classic'];
+      shape = spiceShapes[hash % spiceShapes.length];
+      materialRgb = hash % 3 === 0 ? [180, 83, 9] : [224, 242, 254];
+      materialNameRu = hash % 3 === 0 ? 'Янтарное аптечное стекло' : 'Прозрачное силикатное стекло';
+      capRgb = [220, 38, 38];
+    } else if (is3L) {
+      shape = hash % 2 === 0 ? 'barrel' : 'classic';
+      materialRgb = [167, 243, 208];
+      materialNameRu = 'Зеленоватое баночное стекло';
+      capRgb = [234, 179, 8];
+    } else if (liquidId === 'honey') {
+      if (eqId.includes('wild')) {
+        shape = 'barrel';
+        materialRgb = [209, 250, 229];
+        materialNameRu = 'Лесное зеленоватое стекло';
+        labelRgb = [217, 119, 6];
+        labelAccentRgb = [254, 240, 138];
+      } else if (eqId.includes('buckwheat')) {
+        shape = 'amphora';
+        materialRgb = [254, 243, 199];
+        materialNameRu = 'Тёплое медовое стекло';
+        labelRgb = [120, 53, 15];
+        labelAccentRgb = [251, 191, 36];
+      } else {
+        shape = 'hexagonal';
+        materialRgb = [254, 249, 195];
+        materialNameRu = 'Хрустальное золотистое стекло';
+        labelRgb = [245, 158, 11];
+        labelAccentRgb = [120, 53, 15];
+      }
+      capRgb = [234, 179, 8];
+    } else if (liquidId === 'jam') {
+      const jamShapes: ContainerVisualShape[] = ['hexagonal', 'barrel', 'amphora', 'square'];
+      shape = jamShapes[hash % jamShapes.length];
+      materialRgb = [224, 242, 254];
+      materialNameRu = 'Прозрачное бесцветное стекло';
+      if (!labelRgb) labelRgb = [225, 29, 72];
+      labelAccentRgb = [254, 226, 226];
+      capRgb = [225, 29, 72];
+    } else if (liquidId === 'pickles') {
+      const pickleShapes: ContainerVisualShape[] = ['barrel', 'classic', 'amphora'];
+      shape = pickleShapes[hash % pickleShapes.length];
+      materialRgb = [167, 243, 208];
+      materialNameRu = 'Полубелое зеленоватое стекло';
+      if (!labelRgb) labelRgb = [101, 163, 13];
+      labelAccentRgb = [236, 252, 203];
+      capRgb = [234, 179, 8];
+    } else if (liquidId === 'marinade') {
+      const marShapes: ContainerVisualShape[] = ['amphora', 'hexagonal', 'square', 'classic'];
+      shape = marShapes[hash % marShapes.length];
+      materialRgb = [207, 250, 254];
+      materialNameRu = 'Осветлённое тарное стекло';
+      if (!labelRgb) labelRgb = [22, 163, 74];
+      capRgb = [22, 163, 74];
+    } else if (liquidId === 'caviar') {
+      shape = hash % 2 === 0 ? 'hexagonal' : 'amphora';
+      materialRgb = [224, 242, 254];
+      materialNameRu = 'Оптическое хрустальное стекло';
+      labelRgb = eqId.includes('black') ? [29, 78, 216] : [220, 38, 38];
+      labelAccentRgb = [250, 204, 21];
+      capRgb = [234, 179, 8];
+    } else if (liquidId === 'vegetable_caviar' || liquidId === 'puree' || liquidId === 'sauce') {
+      const sqShapes: ContainerVisualShape[] = ['square', 'hexagonal', 'barrel', 'classic'];
+      shape = sqShapes[hash % sqShapes.length];
+      materialRgb = [224, 242, 254];
+      materialNameRu = 'Прозрачное тарное стекло';
+      if (!labelRgb) labelRgb = [217, 119, 6];
+      capRgb = [234, 179, 8];
+    } else {
+      const jarShapes: ContainerVisualShape[] = ['classic', 'hexagonal', 'barrel', 'square', 'amphora'];
+      shape = jarShapes[hash % jarShapes.length];
+      const glassTints: Array<{ rgb: [number, number, number]; name: string }> = [
+        { rgb: [224, 242, 254], name: 'Прозрачное силикатное стекло' },
+        { rgb: [167, 243, 208], name: 'Зеленоватое бутылочное стекло' },
+        { rgb: [186, 230, 253], name: 'Голубоватое кварцевое стекло' }
+      ];
+      const picked = glassTints[hash % glassTints.length];
+      materialRgb = picked.rgb;
+      materialNameRu = picked.name;
+      capRgb = [234, 179, 8];
+    }
+  }
+  // 2. METAL TIN & ALUMINUM CANS (can_metal_*, can_alu_*, tin_round_*)
+  else if (
+    containerId.startsWith('can_metal_') ||
+    containerId.startsWith('can_alu_') ||
+    containerId.startsWith('tin_round_')
+  ) {
+    if (containerId.startsWith('can_alu_')) {
+      if (liquidId === 'energy_drink' || eqId.includes('energy')) {
+        shape = 'sleek';
+        materialRgb = [30, 41, 59];
+        materialNameRu = 'Воронёный анодированный алюминий';
+        labelRgb = [16, 185, 129];
+        labelAccentRgb = [163, 230, 53];
+      } else if (liquidId === 'beer' || eqId.includes('beer')) {
+        shape = 'barrel';
+        materialRgb = [234, 179, 8];
+        materialNameRu = 'Золотистый пищевой алюминий';
+        labelRgb = [21, 128, 61];
+        labelAccentRgb = [250, 204, 21];
+      } else {
+        shape = 'classic';
+        materialRgb = [203, 213, 225];
+        materialNameRu = 'Полированный пищевой алюминий';
+        labelRgb = eqId.includes('zero') ? [24, 24, 27] : [220, 38, 38];
+        labelAccentRgb = [255, 255, 255];
+      }
+    } else if (containerId.startsWith('can_metal_oval')) {
+      shape = 'oval';
+      materialRgb = [234, 179, 8];
+      materialNameRu = 'Золотистая лакированная жесть';
+      if (!labelRgb) labelRgb = [30, 58, 138];
+      labelAccentRgb = [251, 191, 36];
+    } else if (containerId.startsWith('can_metal_flat')) {
+      shape = hash % 2 === 0 ? 'octagonal' : 'cylinder';
+      materialRgb = hash % 2 === 0 ? [234, 179, 8] : [203, 213, 225];
+      materialNameRu = hash % 2 === 0 ? 'Латунно-золочёная жесть' : 'Белая лужёная жесть';
+      if (!labelRgb) labelRgb = [2, 132, 199];
+      labelAccentRgb = [254, 240, 138];
+    } else if (containerId.startsWith('tin_round_')) {
+      shape = 'classic';
+      materialRgb = [220, 38, 38];
+      materialNameRu = 'Эмалированная штампованная жесть';
+      labelRgb = [250, 204, 21];
+    } else {
+      // Large, medium, small metal cans
+      if (eqId.includes('pork') || eqId.includes('ham') || eqId.includes('pate') || eqId.includes('spam')) {
+        shape = 'rectangular';
+        materialRgb = [234, 179, 8];
+        materialNameRu = 'Золотистая консервная жесть';
+        if (!labelRgb) labelRgb = [185, 28, 28];
+      } else if (eqId.includes('beef') || eqId.includes('tushonka') || eqId.includes('army') || eqId.includes('stew')) {
+        shape = 'ribbed_drum';
+        materialRgb = hash % 2 === 0 ? [101, 130, 66] : [203, 213, 225];
+        materialNameRu = hash % 2 === 0 ? 'Армейская защитно-оливковая жесть' : 'Белая лужёная жесть ГОСТ';
+        if (!labelRgb) labelRgb = [153, 27, 27];
+      } else if (eqId.includes('condensed') || eqId.includes('sgush')) {
+        shape = 'classic';
+        materialRgb = [226, 232, 240];
+        materialNameRu = 'Светлая лужёная жесть';
+        labelRgb = [37, 99, 235];
+        labelAccentRgb = [248, 250, 252];
+      } else {
+        const canShapes: ContainerVisualShape[] = ['classic', 'ribbed_drum', 'rectangular', 'octagonal'];
+        shape = canShapes[hash % canShapes.length];
+        const canMetals: Array<{ rgb: [number, number, number]; name: string }> = [
+          { rgb: [203, 213, 225], name: 'Белая лужёная жесть' },
+          { rgb: [234, 179, 8], name: 'Золотистая лакированная жесть' },
+          { rgb: [148, 163, 184], name: 'Матовая хромированная сталь' }
+        ];
+        const picked = canMetals[hash % canMetals.length];
+        materialRgb = picked.rgb;
+        materialNameRu = picked.name;
+        if (!labelRgb && liquidId) labelRgb = [185, 28, 28];
+      }
+    }
+  }
+  // 3. PLASTIC & GLASS BOTTLES
+  else if (
+    containerId.startsWith('bottle_plastic_') ||
+    containerId.startsWith('bottle_glass_') ||
+    containerId === 'glass_bottle_500' ||
+    containerId === 'bottle_sauce_squeeze' ||
+    containerId === 'bottle_med_glass_brown'
+  ) {
+    const isPlastic = containerId.startsWith('bottle_plastic_') || containerId === 'bottle_sauce_squeeze';
+    if (containerId === 'bottle_sauce_squeeze') {
+      shape = 'pinched';
+      materialRgb = labelRgb || [220, 38, 38];
+      materialNameRu = 'Мягкий пищевой полиэтилен';
+      labelRgb = [254, 249, 195];
+      capRgb = [255, 255, 255];
+    } else if (isPlastic) {
+      if (liquidId === 'kvas' || eqId.includes('kvas')) {
+        shape = 'bulbous';
+        materialRgb = [146, 64, 14];
+        materialNameRu = 'Тёмно-коричневый ПЭТ-пластик';
+        labelRgb = [217, 119, 6];
+        labelAccentRgb = [254, 240, 138];
+        capRgb = [120, 53, 15];
+      } else if (liquidId === 'milk' || liquidId === 'kefir' || liquidId === 'dairy_fermented') {
+        shape = 'burgundy';
+        materialRgb = [248, 250, 252];
+        materialNameRu = 'Матовый белый полиэтилен HDPE';
+        labelRgb = [56, 189, 248];
+        labelAccentRgb = [255, 255, 255];
+        capRgb = [2, 132, 199];
+      } else if (liquidId === 'mineral_water' || eqId.includes('mineral')) {
+        shape = 'bordeaux';
+        materialRgb = [74, 222, 128];
+        materialNameRu = 'Изумрудно-зелёный ПЭТ-пластик';
+        labelRgb = [16, 185, 129];
+        labelAccentRgb = [255, 255, 255];
+        capRgb = [5, 150, 105];
+      } else if (liquidId === 'brake_fluid' || liquidId === 'motor_oil' || liquidId === 'antifreeze') {
+        shape = 'flask';
+        materialRgb = [203, 213, 225];
+        materialNameRu = 'Технический химстойкий пластик';
+        labelRgb = [234, 179, 8];
+        labelAccentRgb = [24, 24, 27];
+        capRgb = [220, 38, 38];
+      } else if (liquidId === 'oil_culinary') {
+        shape = 'pinched';
+        materialRgb = [254, 249, 195];
+        materialNameRu = 'Прозрачный пищевой ПЭТ';
+        labelRgb = [234, 179, 8];
+        capRgb = [202, 138, 4];
+      } else if (liquidId === 'water') {
+        shape = 'pinched';
+        materialRgb = [186, 230, 253];
+        materialNameRu = 'Голубоватый прозрачный ПЭТ';
+        labelRgb = [2, 132, 199];
+        labelAccentRgb = [255, 255, 255];
+        capRgb = [2, 132, 199];
+      } else {
+        const petShapes: ContainerVisualShape[] = ['pinched', 'classic', 'bordeaux', 'bulbous', 'flask'];
+        shape = petShapes[hash % petShapes.length];
+        materialRgb = [186, 230, 253];
+        materialNameRu = 'Прозрачный ПЭТ-пластик';
+        if (liquidId && !labelRgb) labelRgb = [2, 132, 199];
+        capRgb = [2, 132, 199];
+      }
+    } else {
+      // Glass bottles
+      if (liquidId === 'beer' || eqId.includes('beer')) {
+        shape = 'burgundy';
+        materialRgb = [120, 53, 15];
+        materialNameRu = 'Тёмно-янтарное пивное стекло';
+        labelRgb = [217, 119, 6];
+        labelAccentRgb = [254, 243, 199];
+        capRgb = [234, 179, 8];
+      } else if (liquidId === 'vodka' || eqId.includes('vodka')) {
+        shape = hash % 2 === 0 ? 'bordeaux' : 'flask';
+        materialRgb = [226, 232, 240];
+        materialNameRu = 'Бесцветное водочное стекло';
+        labelRgb = [220, 38, 38];
+        labelAccentRgb = [255, 255, 255];
+        capRgb = [203, 213, 225];
+      } else if (liquidId === 'wine_red' || eqId.includes('wine_red') || eqId === 'wine_bottle' || eqId === 'bottle_wine') {
+        shape = 'bordeaux';
+        materialRgb = [6, 78, 59];
+        materialNameRu = 'Тёмно-изумрудное винное стекло';
+        labelRgb = [153, 27, 27];
+        labelAccentRgb = [254, 243, 199];
+        capRgb = [127, 29, 29];
+      } else if (liquidId === 'wine_white' || eqId.includes('wine_white')) {
+        shape = 'burgundy';
+        materialRgb = [16, 185, 129];
+        materialNameRu = 'Оливково-зелёное винное стекло';
+        labelRgb = [254, 243, 199];
+        labelAccentRgb = [21, 128, 61];
+        capRgb = [234, 179, 8];
+      } else if (liquidId === 'oil_culinary') {
+        if (eqId.includes('olive') || eqId.includes('sesame') || eqId.includes('truffle') || eqId.includes('flax')) {
+          shape = 'square';
+          materialRgb = eqId.includes('sesame') || eqId.includes('flax') ? [120, 53, 15] : [21, 128, 61];
+          materialNameRu = eqId.includes('sesame') || eqId.includes('flax')
+            ? 'Янтарное светозащитное стекло'
+            : 'Тёмно-оливковое стекло «Мараска»';
+          if (!labelRgb) labelRgb = [101, 163, 13];
+        } else {
+          shape = 'bordeaux';
+          materialRgb = [224, 242, 254];
+          materialNameRu = 'Прозрачное бутылочное стекло';
+          if (!labelRgb) labelRgb = [234, 179, 8];
+        }
+        capRgb = [234, 179, 8];
+      } else if (liquidId === 'vinegar' || liquidId === 'sauce') {
+        const vsShapes: ContainerVisualShape[] = ['square', 'bulbous', 'flask', 'bordeaux'];
+        shape = vsShapes[hash % vsShapes.length];
+        materialRgb = eqId.includes('balsamic') || eqId.includes('soy') ? [68, 64, 60] : [207, 250, 254];
+        materialNameRu = eqId.includes('balsamic') || eqId.includes('soy')
+          ? 'Дымчатое тёмное стекло'
+          : 'Прозрачное бутылочное стекло';
+        if (!labelRgb) labelRgb = [185, 28, 28];
+        capRgb = [220, 38, 38];
+      } else if (liquidId === 'syrup_sweet') {
+        shape = 'bulbous';
+        materialRgb = [254, 243, 199];
+        materialNameRu = 'Тёплое графинное стекло';
+        if (!labelRgb) labelRgb = [217, 119, 6];
+        capRgb = [180, 83, 9];
+      } else if (liquidId === 'medical_solution' || containerId === 'bottle_med_glass_brown') {
+        shape = 'flask';
+        materialRgb = [120, 53, 15];
+        materialNameRu = 'Тёмно-янтарное аптечное стекло';
+        if (!labelRgb) labelRgb = [248, 250, 252];
+        labelAccentRgb = [22, 163, 74];
+        capRgb = [248, 250, 252];
+      } else {
+        const glassBottleShapes: ContainerVisualShape[] = ['classic', 'bordeaux', 'burgundy', 'square', 'flask', 'bulbous'];
+        shape = glassBottleShapes[hash % glassBottleShapes.length];
+        const bottleTints: Array<{ rgb: [number, number, number]; name: string }> = [
+          { rgb: [207, 250, 254], name: 'Прозрачное бутылочное стекло' },
+          { rgb: [16, 185, 129], name: 'Зелёное бутылочное стекло' },
+          { rgb: [120, 53, 15], name: 'Янтарное коричневое стекло' }
+        ];
+        const picked = bottleTints[hash % bottleTints.length];
+        materialRgb = picked.rgb;
+        materialNameRu = picked.name;
+        capRgb = [148, 163, 184];
+      }
+    }
+  }
+
+  const finalShape = existingVisuals?.shape || attributes?.containerVisuals?.shape || shape;
+  const finalMaterialRgb = existingVisuals?.materialRgb || attributes?.containerVisuals?.materialRgb || materialRgb;
+  const finalLabelRgb =
+    existingVisuals?.labelRgb !== undefined
+      ? existingVisuals.labelRgb
+      : attributes?.containerVisuals?.labelRgb !== undefined
+        ? attributes.containerVisuals.labelRgb
+        : labelRgb;
+
+  return {
+    shape: finalShape,
+    shapeNameRu: existingVisuals?.shapeNameRu || SHAPE_NAMES_RU[finalShape] || 'Классическая',
+    materialRgb: finalMaterialRgb,
+    materialNameRu: existingVisuals?.materialNameRu || attributes?.containerVisuals?.materialNameRu || materialNameRu,
+    labelRgb: finalLabelRgb,
+    labelAccentRgb: existingVisuals?.labelAccentRgb || attributes?.containerVisuals?.labelAccentRgb || labelAccentRgb,
+    capRgb: existingVisuals?.capRgb || attributes?.containerVisuals?.capRgb || capRgb
+  };
+}
+
 export function syncItemContainerProperties(item: InventoryItem): void {
   if (!item.fluidStorage) return;
   const storage = item.fluidStorage;
@@ -2738,9 +3175,29 @@ export function syncItemContainerProperties(item: InventoryItem): void {
     storage.baseItemNameRu = cfg.nameRu;
     storage.baseItemNameEn = cfg.name;
   }
+
+  // Ensure visual attributes (shape, materialRgb, labelRgb) are resolved & persisted on the container
+  // Visual attributes NEVER alter physical volume, weight, or capacity
+  if (isJarCanOrBottleContainer(item.itemId)) {
+    const resolvedVis = resolveContainerVisualAttributes(
+      item.itemId,
+      storage.liquidId,
+      storage.attributes,
+      item.originalCatalogId,
+      item.containerVisuals || storage.containerVisuals
+    );
+    item.containerVisuals = resolvedVis;
+    storage.containerVisuals = resolvedVis;
+  }
+
   item.weight = getFluidContainerWeight(item);
   item.volume = getFluidContainerVolume(item);
   item.nameRu = getFluidContainerDisplayName(item);
+
+  const vis = item.containerVisuals || storage.containerVisuals;
+  const visBadge = vis
+    ? ` Параметры модели тары: форма — ${vis.shapeNameRu || vis.shape}, материал — ${vis.materialNameRu || 'Стандарт'} (RGB: ${vis.materialRgb.join(', ')}), этикетка — ${vis.labelRgb ? `RGB(${vis.labelRgb.join(', ')})` : 'нет'}.`
+    : '';
 
   if (storage.currentMl > 0 && storage.liquidId) {
     const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId];
@@ -2759,16 +3216,19 @@ export function syncItemContainerProperties(item: InventoryItem): void {
         ? a.sourceIngredients.join(', ')
         : (a.sourceIngredients || 'Не указаны');
       item.descriptionRu =
-        `Унифицированная тара: ${cfg?.nameRu || storage.baseItemNameRu}${openBadge}. ` +
+        `Унифицированная тара: ${cfg?.nameRu || storage.baseItemNameRu}${openBadge}.${visBadge} ` +
         `Внутри: ${liquid?.nameRu || storage.liquidId} — «${a.varietyRu}» (${volText}). ` +
         `Из чего: ${ingredientsText}. ` +
         `Способ готовки: ${a.preparationMethod}. ` +
         `Зачем: ${a.purpose}. ` +
         `Почему: ${a.reasonAndOrigin}`;
+    } else if (visBadge) {
+      const baseDesc = cfg?.descriptionRu || 'Унифицированная ёмкость.';
+      item.descriptionRu = `${baseDesc}${visBadge}`;
     }
   } else {
     const baseDesc = cfg?.descriptionRu || 'Пустая унифицированная ёмкость.';
-    item.descriptionRu = `${baseDesc} Сейчас пуста (0 мл).`;
+    item.descriptionRu = `${baseDesc}${visBadge} Сейчас пуста (0 мл).`;
   }
 }
 

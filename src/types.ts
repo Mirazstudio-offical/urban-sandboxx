@@ -1697,6 +1697,41 @@ export interface CookingAttributes {
   cutLevel: number;
 }
 
+export type ContainerVisualShape =
+  | 'classic'
+  | 'cylinder'
+  | 'hexagonal'
+  | 'octagonal'
+  | 'barrel'
+  | 'square'
+  | 'amphora'
+  | 'rectangular'
+  | 'ribbed_drum'
+  | 'oval'
+  | 'sleek'
+  | 'bordeaux'
+  | 'burgundy'
+  | 'flask'
+  | 'bulbous'
+  | 'pinched';
+
+export interface ContainerVisualAttributes {
+  /** Визуальная форма корпуса банки или бутылки (не меняет объём, вес и характеристики) */
+  shape: ContainerVisualShape;
+  /** Название формы на русском языке */
+  shapeNameRu?: string;
+  /** Цвет материала тары (стекло, жесть, алюминий, пластик) в формате RGB [R, G, B] */
+  materialRgb: [number, number, number];
+  /** Название материала/оттенка тары на русском языке */
+  materialNameRu?: string;
+  /** Цвет этикетки в формате RGB [R, G, B] (или null, если этикетки нет) */
+  labelRgb: [number, number, number] | null;
+  /** Дополнительный акцентный цвет этикетки в формате RGB [R, G, B] */
+  labelAccentRgb?: [number, number, number];
+  /** Цвет крышки / пробки в формате RGB [R, G, B] */
+  capRgb?: [number, number, number];
+}
+
 export interface CulinaryItemData {
   isPreparedDish?: boolean;
   isWorkpiece?: boolean;
@@ -1758,6 +1793,8 @@ export interface InventoryItem {
   maxFluidLiters?: number;  // Maximum fluid capacity in liters (L)
   fluidType?: 'coolant' | 'oil' | 'fuel';
   originalCatalogId?: string; // Original item definition ID before unified container wrapping
+  /** Чисто визуальные атрибуты тары (банки, бутылки, консервы): форма, RGB цвет материала и RGB цвет этикетки */
+  containerVisuals?: ContainerVisualAttributes;
   fluidStorage?: {
     liquidId: string | null;
     currentMl: number;
@@ -1765,6 +1802,7 @@ export interface InventoryItem {
     emptyWeightKg: number;
     baseItemNameRu: string;
     baseItemNameEn?: string;
+    containerVisuals?: ContainerVisualAttributes;
     attributes?: {
       varietyRu: string;
       varietyEn?: string;
@@ -1777,6 +1815,7 @@ export interface InventoryItem {
       isOpened?: boolean;
       culinaryEquivalentId?: string;
       medicalEffectId?: string;
+      containerVisuals?: ContainerVisualAttributes;
       customEffects?: {
         hunger?: number;
         thirst?: number;

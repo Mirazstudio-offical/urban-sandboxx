@@ -43,8 +43,19 @@ import {
   deductPlayerCash, 
   getPlayerDenominations, 
   calcOptimalTrayPayment,
-  PlayerDenomInfo 
+  PlayerDenomInfo,
+  createPackagedItem
 } from '../items';
+import { InventoryItem } from '../types';
+import { SHAPE_NAMES_RU } from '../liquidSystem';
+
+const shopPreviewCache: Record<string, InventoryItem> = {};
+function getShopPreviewItem(itemId: string): InventoryItem {
+  if (!shopPreviewCache[itemId]) {
+    shopPreviewCache[itemId] = createPackagedItem(itemId, 1);
+  }
+  return shopPreviewCache[itemId];
+}
 import { FUEL_GRADES } from '../gasStationSystem';
 import { createDefaultVehicleDamage, isTrailerVehicle } from '../vehicleHelpers';
 
@@ -404,11 +415,11 @@ export function getLPGConfigForVehicle(carType: string) {
 
 export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
   gas_station_shop: [
-    { id: 'gas_canister_full', itemId: 'canister_metal_20l', nameRu: 'Канистра с бензином АИ-95 (20л)', price: 2360, description: 'Стальная 20-литровая канистра, заправленная бензином АИ-95.', category: 'auto', effectText: 'Заправка авто / 20L' },
+    { id: 'gas_canister_full', itemId: 'fuel_canister', nameRu: 'Канистра с бензином АИ-95 (20л)', price: 2360, description: 'Стальная 20-литровая канистра, заправленная бензином АИ-95.', category: 'auto', effectText: 'Заправка авто / 20L' },
     { id: 'gas_canister_empty', itemId: 'canister_plastic_10l', nameRu: 'Пластиковая канистра (10л)', price: 850, description: 'Ударопрочная канистра для набора топлива или спецжидкостей.', category: 'auto', effectText: 'Емкость 10L' },
-    { id: 'gas_oil', itemId: 'motor_oil', nameRu: 'Моторное масло 5W-40 (4L)', price: 110, description: 'Синтетическое масло высокой вязкости для защиты двигателя.', category: 'auto', effectText: 'Защита двигателя' },
-    { id: 'gas_antifreeze', itemId: 'antifreeze', nameRu: 'Канистра антифриза G12+ (5L)', price: 140, description: 'Охлаждающая жидкость для радиатора.', category: 'auto', effectText: 'Охлаждение двигателя' },
-    { id: 'gas_washer', itemId: 'washer_fluid', nameRu: 'Стеклоомыватель зимний (-25°C)', price: 120, description: 'Канистра незамерзающей жидкости для бачка омывателя.', category: 'auto', effectText: 'Чистота стекол' },
+    { id: 'gas_oil', itemId: 'motor_oil', nameRu: 'Моторное масло 5W-40 (5L)', price: 110, description: 'Канистра 5л синтетического масла высокой вязкости для защиты двигателя.', category: 'auto', effectText: 'Защита двигателя' },
+    { id: 'gas_antifreeze', itemId: 'antifreeze', nameRu: 'Канистра антифриза G12+ (5L)', price: 140, description: 'Канистра 5л охлаждающей жидкости для радиатора.', category: 'auto', effectText: 'Охлаждение двигателя' },
+    { id: 'gas_washer', itemId: 'washer_fluid', nameRu: 'Стеклоомыватель зимний (-25°C)', price: 120, description: 'Канистра 5л незамерзающей жидкости для бачка омывателя.', category: 'auto', effectText: 'Чистота стекол' },
     { id: 'gas_battery', itemId: 'car_battery', nameRu: 'Запасной аккумулятор 12V', price: 180, description: 'Свинцово-кислотная батарея высокой пусковой мощности.', category: 'auto', effectText: 'Питание авто' },
     { id: 'gas_repair_kit', itemId: 'repair_kit', nameRu: 'Набор автоинструментов', price: 220, description: 'Тяжелый кейс: ключи, головки, отвертки.', category: 'auto', effectText: 'Ремонт авто' },
     { id: 'gas_rope', itemId: 'tow_rope', nameRu: 'Буксировочный трос 5т', price: 95, description: 'Прочный капроновый трос для буксировки.', category: 'auto', effectText: 'Буксировка' },
@@ -417,24 +428,24 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'gas_tape', itemId: 'duct_tape', nameRu: 'Армированный скотч', price: 40, description: 'Влагостойкая клейкая лента повышенной прочности.', category: 'auto', effectText: 'Быстрый ремонт' },
     { id: 'gas_hotdog', itemId: 'hot_dog', nameRu: 'Датский хот-дог АЗС', price: 65, description: 'Хрустящая булка, поджаристая сосиска, кетчуп и горчица.', category: 'food', effectText: '+40% Сытость' },
     { id: 'gas_sandwich', itemId: 'sandwich', nameRu: 'Сэндвич с ветчиной и сыром', price: 70, description: 'Треугольный сэндвич в пластиковом боксе.', category: 'food', effectText: '+40% Сытость' },
-    { id: 'gas_cappuccino', itemId: 'cappuccino', nameRu: 'Кофе Капучино АЗС (0.35L)', price: 65, description: 'Свежесваренный зерновой кофе в стакане с крышкой.', category: 'food', effectText: '+20% Гидратация, +20% Бодрость' },
-    { id: 'gas_espresso', itemId: 'hot_coffee', nameRu: 'Горячий Эспрессо', price: 50, description: 'Крепкий бодрящий согревающий напиток.', category: 'food', effectText: '+5°C Тепло, +25% Бодрость' },
-    { id: 'gas_energy', itemId: 'energy_drink', nameRu: 'Энергетик "Вспышка" (0.5L)', price: 65, description: 'Банка ледяного энергетика с таурином и кофеином.', category: 'food', effectText: '+35% Энергия' },
+    { id: 'gas_cappuccino', itemId: 'cappuccino', nameRu: 'Кофе Капучино АЗС (0.25L)', price: 65, description: 'Свежесваренный зерновой кофе в бумажном стаканчике.', category: 'food', effectText: '+20% Гидратация, +20% Бодрость' },
+    { id: 'gas_espresso', itemId: 'hot_coffee', nameRu: 'Горячий Эспрессо (0.25L)', price: 50, description: 'Крепкий бодрящий согревающий кофе в стаканчике.', category: 'food', effectText: '+5°C Тепло, +25% Бодрость' },
+    { id: 'gas_energy', itemId: 'energy_drink', nameRu: 'Энергетик "Вспышка" (0.33L)', price: 65, description: 'Алюминиевая банка ледяного энергетика с таурином и кофеином.', category: 'food', effectText: '+35% Энергия' },
     { id: 'gas_apple', itemId: 'apple', nameRu: 'Яблоко мытое (в дорогу)', price: 25, description: 'Свежее спелое хрустящее яблоко.', category: 'food', effectText: '+15% Сытость, +10% Гидратация' },
     { id: 'gas_banana', itemId: 'banana_single', nameRu: 'Бананы спелые (связка)', price: 50, description: 'Сытный быстрый перекус для водителя.', category: 'food', effectText: '+30% Сытость, +20% Энергия' },
-    { id: 'gas_banana_chips', itemId: 'banana_dried_chips', nameRu: 'Банановые чипсы', price: 45, description: 'Хрустящие сушеные ломтики банана в дорогу.', category: 'food', effectText: '+20% Сытость' },
-    { id: 'gas_cranberry', itemId: 'cranberry_dried_bag', nameRu: 'Сушеная клюква (снек)', price: 60, description: 'Кисло-сладкая сушеная клюква в дорогу.', category: 'food', effectText: '+18% Сытость' },
-    { id: 'gas_water', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в пластиковой бутылке.', category: 'food', effectText: '+40% Гидратация' },
-    { id: 'gas_water_15', itemId: 'bottle_plastic_1500', nameRu: 'Питьевая вода (1.5L)', price: 55, description: 'Большая бутылка чистой питьевой воды.', category: 'food', effectText: '+80% Гидратация' },
-    { id: 'gas_chips', itemId: 'chips', nameRu: 'Картофельные чипсы', price: 40, description: 'Хрустящие чипсы с паприкой.', category: 'food', effectText: '+20% Сытость' },
+    { id: 'gas_banana_chips', itemId: 'banana_dried_chips', nameRu: 'Банановые чипсы (дой-пак)', price: 45, description: 'Герметичный дой-пак хрустящих сушеных ломтиков банана (8 шт.).', category: 'food', effectText: '+32% Сытость' },
+    { id: 'gas_cranberry', itemId: 'cranberry_dried_bag', nameRu: 'Вяленая клюква (дой-пак)', price: 60, description: 'Герметичный дой-пак кисло-сладкой вяленой клюквы (8 порций).', category: 'food', effectText: '+32% Сытость' },
+    { id: 'gas_water', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в пластиковой бутылке 0.5л.', category: 'food', effectText: '+40% Гидратация' },
+    { id: 'gas_water_15', itemId: 'water_bottle_1500', nameRu: 'Питьевая вода (1.5L)', price: 55, description: 'Большая ПЭТ бутылка 1.5л чистой питьевой воды.', category: 'food', effectText: '+80% Гидратация' },
+    { id: 'gas_chips', itemId: 'chips', nameRu: 'Картофельные чипсы (дой-пак)', price: 40, description: 'Герметичный пакет хрустящих чипсов с паприкой (8 шт.).', category: 'food', effectText: '+32% Сытость' },
     { id: 'gas_chocolate', itemId: 'chocolate', nameRu: 'Шоколадный батончик', price: 30, description: 'Батончик с карамелью и арахисом.', category: 'food', effectText: '+20% Энергия' },
-    { id: 'gas_canned', itemId: 'canned_meat', nameRu: 'Армейская тушёнка (0.4L)', price: 110, description: 'Мясные консервы в банке с ключом открытия.', category: 'food', effectText: '+70% Сытость' },
+    { id: 'gas_canned', itemId: 'canned_meat', nameRu: 'Армейская тушёнка в банке (0.4L)', price: 110, description: 'Мясные консервы в жестяной банке 0.4л с ключом открытия.', category: 'food', effectText: '+70% Сытость' },
     { id: 'gas_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка АЗС', price: 5, description: 'Пластиковый пакет с ручками для покупок.', category: 'auto', effectText: 'Пакет 5.0L' }
   ],
   supermarket: [
     // 1. НАПИТКИ И ВОДА В БУТЫЛКАХ И БАНКАХ
     { id: 'sup_water_05', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в ПЭТ бутылке 0.5л.', category: 'food', effectText: '+40% Гидратация' },
-    { id: 'sup_water_15', itemId: 'bottle_plastic_1500', nameRu: 'Минеральная вода (1.5L)', price: 55, description: 'Большая бутылка чистой природной воды 1.5л.', category: 'food', effectText: '+80% Гидратация' },
+    { id: 'sup_water_15', itemId: 'water_bottle_1500', nameRu: 'Минеральная вода (1.5L)', price: 55, description: 'Большая ПЭТ бутылка чистой природной воды 1.5л.', category: 'food', effectText: '+80% Гидратация' },
     { id: 'sup_juice_tetra', itemId: 'fresh_juice', nameRu: 'Сок апельсиновый Тетрапак (1.0L)', price: 95, description: 'Пастеризованный 100% сок с мякотью в литровом тетрапаке.', category: 'food', effectText: '+60% Гидратация, +15% Энергия' },
     { id: 'sup_kvas', itemId: 'kvas', nameRu: 'Хлебный квас "Старорусский" (1.5L)', price: 85, description: 'Освежающий квас живого брожения в пластиковой бутылке 1.5л.', category: 'food', effectText: '+50% Гидратация, +20% Сытость' },
     { id: 'sup_cola_can', itemId: 'cola', nameRu: 'Баночка Колы (0.33L)', price: 45, description: 'Алюминиевая банка сильногазированной колы.', category: 'food', effectText: '+30% Гидратация, +15% Энергия' },
@@ -549,62 +560,63 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
 
     // 7. СНЕКИ, СЛАДОСТИ И ТАРА
     { id: 'sup_chocolate', itemId: 'chocolate', nameRu: 'Шоколад темный 75%', price: 45, description: 'Плитка горького шоколада с кусочками какао.', category: 'food', effectText: '+25% Энергия' },
-    { id: 'sup_cookies', itemId: 'cookie_pack', nameRu: 'Печенье с шоколадными каплями', price: 50, description: 'Пачка рассыпчатого песочного печенья.', category: 'food', effectText: '+25% Сытость' },
-    { id: 'sup_chips', itemId: 'chips', nameRu: 'Картофельные чипсы (пачка 150г)', price: 55, description: 'Хрустящие ломтики картофеля с морской солью.', category: 'food', effectText: '+20% Сытость' },
+    { id: 'sup_cookies', itemId: 'cookie_pack', nameRu: 'Печенье с шоколадными каплями (дой-пак)', price: 50, description: 'Герметичный дой-пак рассыпчатого песочного печенья (6 шт.).', category: 'food', effectText: '+25% Сытость' },
+    { id: 'sup_chips', itemId: 'chips', nameRu: 'Картофельные чипсы (дой-пак 8 шт.)', price: 55, description: 'Герметичный дой-пак хрустящих ломтиков картофеля с морской солью.', category: 'food', effectText: '+20% Сытость' },
     { id: 'sup_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка с ручками', price: 5, description: 'Вместительный прочный полиэтиленовый пакет 5.0L.', category: 'auto', effectText: 'Пакет 5.0L' },
     { id: 'sup_package_bag', itemId: 'package_bag', nameRu: 'Фасовочные пакеты (1.5L)', price: 3, description: 'Тонкий прозрачный полиэтиленовый пакетик.', category: 'auto', effectText: 'Пакет 1.5L' },
     { id: 'sup_jar_empty', itemId: 'jar_glass_medium', nameRu: 'Банка стеклянная с крышкой (0.5L)', price: 35, description: 'Унифицированная чистая банка твист-офф для консервации.', category: 'auto', effectText: 'Емкость 0.5L' },
+    { id: 'sup_paper_pack_small', itemId: 'paper_packaging_small', nameRu: 'Пергаментная упаковка (Малая 0.8L)', price: 25, description: 'Пустая заводская пергаментная обертка-брикет для хранения сыра и масла.', category: 'auto', effectText: 'Тара 0.8L' },
+    { id: 'sup_paper_pack_std', itemId: 'paper_packaging', nameRu: 'Пергаментная упаковка (Стандарт 1.2L)', price: 35, description: 'Плотный пергаментный брикет для упаковки продуктов.', category: 'auto', effectText: 'Тара 1.2L' },
     { id: 'sup_phone_retro', itemId: 'phone_retro', nameRu: 'Телефон Matrix Classic (Кнопочный)', price: 3500, description: 'Неубиваемый кнопочный телефон с фонариком.', category: 'auto', effectText: 'Связь & SMS' },
     { id: 'sup_phone_nord', itemId: 'phone_nord', nameRu: 'Смартфон Nord Lite 5G', price: 38000, description: 'Доступный смартфон с дисплеем 90 Гц.', category: 'auto', effectText: 'Смартфон & GPS' }
   ],
   fast_food: [
     { id: 'ff_burger', itemId: 'burger', nameRu: 'Двойной Чизбургер', price: 95, description: 'Бургер в картонной коробке: кунжутная булка, две котлеты, сыр.', category: 'food', effectText: '+50% Сытость, +25% Энергия' },
-    { id: 'ff_fries', itemId: 'french_fries', nameRu: 'Картофель фри (Крупный)', price: 55, description: 'Картонный кулек горячей соленой картофельной соломки.', category: 'food', effectText: '+30% Сытость, +15% Энергия' },
-    { id: 'ff_nuggets', itemId: 'nuggets', nameRu: 'Куриные наггетсы (6 шт)', price: 70, description: 'Хрустящие куриные кусочки в панировке из фритюра.', category: 'food', effectText: '+35% Сытость, +20% Энергия' },
+    { id: 'ff_fries', itemId: 'french_fries', nameRu: 'Картофель фри (конверт 8 ломтиков)', price: 55, description: 'Картонный кармашек горячей соленой картофельной соломки (8 шт.).', category: 'food', effectText: '+30% Сытость, +15% Энергия' },
+    { id: 'ff_nuggets', itemId: 'nuggets', nameRu: 'Куриные наггетсы в боксе (6 шт)', price: 70, description: 'Картонный бокс с откидной крышкой и хрустящими наггетсами (6 шт.).', category: 'food', effectText: '+35% Сытость, +20% Энергия' },
     { id: 'ff_hotdog', itemId: 'hot_dog', nameRu: 'Датский хот-дог', price: 65, description: 'Длинная булка с поджаристой сосиской, кетчупом и горчицей.', category: 'food', effectText: '+40% Сытость' },
-    { id: 'ff_jalapeno', itemId: 'jalapeno_pickled_jar', nameRu: 'Острый халапеньо (топпинг)', price: 45, description: 'Порция острых маринованных колечек халапеньо.', category: 'food', effectText: '+10% Энергия, капсаицин' },
-    { id: 'ff_apple_slices', itemId: 'apple_sliced', nameRu: 'Яблочные дольки (Снек)', price: 30, description: 'Свежие хрустящие дольки спелого яблока.', category: 'food', effectText: '+15% Сытость, витамины' },
-    { id: 'ff_banana_chips', itemId: 'banana_dried_chips', nameRu: 'Банановые чипсы (Снек)', price: 35, description: 'Хрустящие ломтики сушеного банана.', category: 'food', effectText: '+18% Сытость, сладость' },
-    { id: 'ff_colazero', itemId: 'cola_zero', nameRu: 'Кола Зеро (0.33L)', price: 40, description: 'Жестяная баночка черного газированного напитка, без сахара.', category: 'food', effectText: '+28% Гидратация' },
-    { id: 'ff_milkshake', itemId: 'milkshake', nameRu: 'Ванильный милкшейк', price: 60, description: 'Пластиковый стаканчик густого холодного молочного коктейля.', category: 'food', effectText: '+35% Гидратация, +20% Сытость' }
+    { id: 'ff_jalapeno', itemId: 'jalapeno_pickled_jar', nameRu: 'Маринованный халапеньо в баночке (0.2L)', price: 45, description: 'Стеклянная баночка острых маринованных колечек халапеньо в уксусном маринаде.', category: 'food', effectText: '+10% Энергия, капсаицин' },
+    { id: 'ff_apple_slices', itemId: 'apple_sliced', nameRu: 'Яблочные дольки в лотке (6 шт.)', price: 30, description: 'Пищевой лоток под пленкой со свежими хрустящими дольками яблока.', category: 'food', effectText: '+15% Сытость, витамины' },
+    { id: 'ff_banana_chips', itemId: 'banana_dried_chips', nameRu: 'Банановые чипсы (дой-пак)', price: 35, description: 'Герметичный дой-пак хрустящих ломтиков сушеного банана (8 шт.).', category: 'food', effectText: '+18% Сытость, сладость' },
+    { id: 'ff_colazero', itemId: 'cola_zero', nameRu: 'Кола Зеро (0.33L)', price: 40, description: 'Алюминиевая баночка газированного напитка без сахара.', category: 'food', effectText: '+28% Гидратация' },
+    { id: 'ff_milkshake', itemId: 'milkshake', nameRu: 'Ванильный милкшейк в стакане', price: 60, description: 'Стаканчик густого холодного молочного коктейля.', category: 'food', effectText: '+35% Гидратация, +20% Сытость' }
   ],
   pizzeria: [
     { id: 'piz_pepperoni', itemId: 'pizza_slice', nameRu: 'Кусок пиццы Пепперони', price: 60, description: 'Треугольный кусок горячего теста с пикантной колбасой.', category: 'food', effectText: '+35% Сытость, +10% Энергия' },
     { id: 'piz_croissant', itemId: 'croissant', nameRu: 'Сырный чесночный круассан', price: 45, description: 'Золотистая слоеная выпечка с пикантной начинкой.', category: 'food', effectText: '+25% Сытость' },
-    { id: 'piz_sundried', itemId: 'tomato_sundried_jar', nameRu: 'Вяленые томаты с травами', price: 95, description: 'Итальянские вяленые томаты в оливковом масле.', category: 'food', effectText: '+22% Сытость, умами' },
-    { id: 'piz_cherry', itemId: 'tomato_cherry_bunch', nameRu: 'Томаты черри свежие (порция)', price: 50, description: 'Сладкие маленькие томаты черри.', category: 'food', effectText: '+15% Гидратация' },
-    { id: 'piz_jalapeno', itemId: 'jalapeno_pickled_jar', nameRu: 'Острый халапеньо к пицце', price: 45, description: 'Порция маринованного перца халапеньо.', category: 'food', effectText: '+10% Энергия, острота' },
-    { id: 'piz_grape_cup', itemId: 'grapes_berries_cup', nameRu: 'Виноградный десерт (стаканчик)', price: 50, description: 'Сладкие спелые ягоды винограда.', category: 'food', effectText: '+15% Сытость, сок' },
-    { id: 'piz_juice', itemId: 'fresh_juice', nameRu: 'Фруктовый морс', price: 40, description: 'Стакан кисленького ягодного морса из клюквы и брусники.', category: 'food', effectText: '+30% Гидратация' },
-    { id: 'piz_colazero', itemId: 'cola_zero', nameRu: 'Банка Колы', price: 40, description: 'Баночка сильногазированной колы из холодильника.', category: 'food', effectText: '+28% Гидратация' }
+    { id: 'piz_sundried', itemId: 'tomato_sundried_jar', nameRu: 'Вяленые томаты в баночке (0.2L)', price: 95, description: 'Стеклянная баночка итальянских вяленых томатов в оливковом масле с травами.', category: 'food', effectText: '+22% Сытость, умами' },
+    { id: 'piz_cherry', itemId: 'tomato_cherry_bunch', nameRu: 'Томаты черри свежие (ветка)', price: 50, description: 'Сладкие маленькие томаты черри на ветке.', category: 'food', effectText: '+15% Гидратация' },
+    { id: 'piz_jalapeno', itemId: 'jalapeno_pickled_jar', nameRu: 'Острый халапеньо в баночке (0.2L)', price: 45, description: 'Стеклянная баночка маринованного перца халапеньо колечками.', category: 'food', effectText: '+10% Энергия, острота' },
+    { id: 'piz_grape_cup', itemId: 'grapes_berries_cup', nameRu: 'Виноградный десерт в лотке', price: 50, description: 'Пищевой лоток под пленкой со сладкими гроздьями винограда.', category: 'food', effectText: '+15% Сытость, сок' },
+    { id: 'piz_juice', itemId: 'fresh_juice', nameRu: 'Сок / Фруктовый морс (Тетрапак 1.0L)', price: 40, description: 'Тетрапак освежающего сока и ягодного морса.', category: 'food', effectText: '+30% Гидратация' },
+    { id: 'piz_colazero', itemId: 'cola_zero', nameRu: 'Банка Колы (0.33L)', price: 40, description: 'Алюминиевая баночка сильногазированной колы из холодильника.', category: 'food', effectText: '+28% Гидратация' }
   ],
   sushi_asian: [
-    { id: 'sush_phila', itemId: 'sushi_set', nameRu: 'Сет роллов Филадельфия', price: 160, description: 'Пластиковый контейнер: 8 роллов с лососем, сыром и огурцом.', category: 'food', effectText: '+55% Сытость, +15 HP' },
-    { id: 'sush_wok', itemId: 'wok_box', nameRu: 'WOK-лапша Терияки с курицей', price: 130, description: 'Картонная коробочка горячей пшеничной лапши с соусом.', category: 'food', effectText: '+60% Сытость, +30% Энергия' },
-    { id: 'sush_paper_packaging_mini', itemId: 'paper_packaging_mini', nameRu: 'Бумажная упаковка (Мини 0.4L)', price: 25, description: 'Заводской мини-брикет из пищевого пергамента с конвертными складками и цветной этикеткой.', category: 'food', effectText: 'Брикет 0.4L' },
-    { id: 'sush_paper_packaging_small', itemId: 'paper_packaging_small', nameRu: 'Бумажная упаковка (Малая 0.8L)', price: 35, description: 'Классическая заводская упаковка брикета масла/сыра из подпергамента с мерной шкалой.', category: 'food', effectText: 'Брикет 0.8L' },
-    { id: 'sush_paper_packaging', itemId: 'paper_packaging', nameRu: 'Бумажная упаковка (Стандарт 1.2L)', price: 45, description: 'Плотный заводской пергаментный брикет с фирменной цветной этикеткой-лентой.', category: 'food', effectText: 'Брикет 1.2L' },
-    { id: 'sush_paper_packaging_large', itemId: 'paper_packaging_large', nameRu: 'Бумажная упаковка (Большая 2.4L)', price: 70, description: 'Большой заводской бумажный блок для весового сыра и масла с конвертными швами.', category: 'food', effectText: 'Блок 2.4L' },
-    { id: 'sush_paper_packaging_open', itemId: 'paper_packaging_open', nameRu: 'Открытая бумажная упаковка', price: 30, description: 'Развернутая пергаментная обертка со складками, масляным оттиском и надорванной этикеткой.', category: 'food', effectText: 'Обертка 1.2L' },
-    { id: 'sush_paper_packaging_green', itemId: 'paper_packaging_green', nameRu: 'Бумажная упаковка (зеленая этикетка)', price: 45, description: 'Заводской пергаментный брикет с изумрудной этикеткой-лентой.', category: 'food', effectText: 'Брикет 1.2L' },
-    { id: 'sush_paper_packaging_amber', itemId: 'paper_packaging_amber', nameRu: 'Бумажная упаковка (золотая этикетка)', price: 50, description: 'Премиальный заводской брикет масла с золотисто-янтарной этикеткой ГОСТ.', category: 'food', effectText: 'Брикет 1.2L' },
-    { id: 'sush_ginger', itemId: 'ginger_pickled_box', nameRu: 'Маринованный имбирь Гари (лоток)', price: 35, description: 'Лепестки розового маринованного имбиря.', category: 'food', effectText: '+5% Сытость, очищение вкуса' },
-    { id: 'sush_shiitake', itemId: 'shiitake_fresh', nameRu: 'Грибы Шиитаке свежие', price: 50, description: 'Азиатские грибы шиитаке с пряным ароматом.', category: 'food', effectText: '+10% Сытость' },
-    { id: 'sush_enoki', itemId: 'enoki_mushroom_bunch', nameRu: 'Грибы Эноки (пучок)', price: 60, description: 'Хрустящие нитевидные грибы эноки для супов.', category: 'food', effectText: '+12% Сытость' },
-    { id: 'sush_cucumber_sliced', itemId: 'cucumber_sliced', nameRu: 'Огуречная нарезка (роллы/салат)', price: 25, description: 'Тонкие свежие ломтики огурца.', category: 'food', effectText: '+15% Гидратация' },
-    { id: 'sush_tea', itemId: 'tea_green', nameRu: 'Зеленый чай Сенча', price: 40, description: 'Бумажный стакан заваренного крупнолистового зеленого чая.', category: 'food', effectText: '+35% Гидратация, +5 HP' }
+    { id: 'sush_phila', itemId: 'sushi_set', nameRu: 'Сет роллов Филадельфия в боксе (6 шт.)', price: 160, description: 'Картонный бокс с откидной крышкой: 6 роллов с лососем и сливочным сыром.', category: 'food', effectText: '+55% Сытость, +15 HP' },
+    { id: 'sush_wok', itemId: 'wok_box', nameRu: 'WOK-лапша Терияки с курицей', price: 130, description: 'Высокая картонная коробочка горячей пшеничной лапши с соусом.', category: 'food', effectText: '+60% Сытость, +30% Энергия' },
+    { id: 'sush_soy_sauce', itemId: 'soy_sauce_classic', nameRu: 'Соевый соус в бутылочке (0.25L)', price: 65, description: 'Граненая стеклянная бутылочка классического соевого соуса естественного брожения.', category: 'food', effectText: 'Соус / Умами' },
+    { id: 'sush_teriyaki', itemId: 'sauce_teriyaki_bottle', nameRu: 'Соус Терияки густой в бутылочке (0.25L)', price: 85, description: 'Стеклянная бутылочка густого карамельно-соевого соуса Терияки с имбирем.', category: 'food', effectText: 'Глазировка & WOK' },
+    { id: 'sush_miso_paste', itemId: 'miso_paste_jar', nameRu: 'Мисо-паста ферментированная в банке (0.2L)', price: 110, description: 'Стеклянная баночка густой соевой пасты Ака-мисо для мисо-супа и бульонов.', category: 'food', effectText: 'Основа мисо-супа' },
+    { id: 'sush_rice_vinegar', itemId: 'vinegar_rice', nameRu: 'Рисовый уксус Мицукан в бутылке (0.5L)', price: 90, description: 'Стеклянная бутылка мягкого японского рисового уксуса для заправки риса суши.', category: 'food', effectText: 'Для риса и маринадов' },
+    { id: 'sush_sesame_oil', itemId: 'oil_sesame_bottle', nameRu: 'Кунжутное масло темное (0.25L)', price: 140, description: 'Стеклянная бутылочка ароматного масла из обжаренного кунжута.', category: 'food', effectText: 'Азиатская заправка' },
+    { id: 'sush_rice_bag', itemId: 'rice_white_bag_1k', nameRu: 'Рис круглозерный для суши (мешок 1 кг)', price: 95, description: 'Тканевый мешочек клейкого белого шлифованного риса для роллов.', category: 'food', effectText: 'Крупа / 1 кг' },
+    { id: 'sush_ginger', itemId: 'ginger_pickled_box', nameRu: 'Маринованный имбирь Гари в баночке (0.2L)', price: 35, description: 'Стеклянная баночка розовых лепестков маринованного имбиря в рисовом уксусе.', category: 'food', effectText: '+8% Сытость, свежесть' },
+    { id: 'sush_shiitake', itemId: 'shiitake_fresh', nameRu: 'Грибы Шиитаке свежие (лоток 5 шт.)', price: 50, description: 'Пищевой лоток под пленкой с ароматными грибами шиитаке.', category: 'food', effectText: '+10% Сытость' },
+    { id: 'sush_enoki', itemId: 'enoki_mushroom_bunch', nameRu: 'Грибы Эноки в лотке (2 пучка)', price: 60, description: 'Пищевой лоток под пленкой с пучками хрустящих грибов эноки.', category: 'food', effectText: '+12% Сытость' },
+    { id: 'sush_cucumber_sliced', itemId: 'cucumber_sliced', nameRu: 'Огуречная нарезка в лотке (6 шт.)', price: 25, description: 'Пищевой лоток под пленкой со свежими ломтиками огурца.', category: 'food', effectText: '+15% Гидратация' },
+    { id: 'sush_tea', itemId: 'tea_green', nameRu: 'Зеленый чай Сенча в стаканчике (0.25L)', price: 40, description: 'Бумажный стаканчик горячего заваренного зеленого чая.', category: 'food', effectText: '+35% Гидратация, +5 HP' }
   ],
   cinema_bar: [
-    { id: 'cin_popcorn', itemId: 'popcorn_caramel', nameRu: 'Карамельный попкорн', price: 70, description: 'Бумажное ведро хрустящего попкорна в сладкой карамели.', category: 'food', effectText: '+25% Сытость, +18% Энергия' },
-    { id: 'cin_nachos', itemId: 'nachos', nameRu: 'Начос с сырным соусом', price: 80, description: 'Коробка кукурузных чипсов с пластиковой баночкой соуса чеддер.', category: 'food', effectText: '+32% Сытость, +15% Энергия' },
-    { id: 'cin_watermelon_cup', itemId: 'watermelon_diced', nameRu: 'Кубики арбуза в стаканчике', price: 50, description: 'Освежающие сладкие кусочки арбуза.', category: 'food', effectText: '+45% Гидратация' },
-    { id: 'cin_melon_cup', itemId: 'melon_diced', nameRu: 'Кубики дыни в боксе', price: 60, description: 'Медовые сладкие кубики канталупы.', category: 'food', effectText: '+20% Сытость, +25% Гидратация' },
-    { id: 'cin_grape_cup', itemId: 'grapes_berries_cup', nameRu: 'Виноградный стаканчик снек', price: 50, description: 'Отборные ягоды сладкого винограда.', category: 'food', effectText: '+15% Сытость, +15% Гидратация' },
-    { id: 'cin_pomegranate_cup', itemId: 'pomegranate_seeds_cup', nameRu: 'Зерна граната в стаканчике', price: 65, description: 'Сочные рубиновые зерна спелого граната.', category: 'food', effectText: '+15% Сытость, витамины' },
-    { id: 'cin_banana_chips', itemId: 'banana_dried_chips', nameRu: 'Банановые чипсы снек', price: 40, description: 'Хрустящие сушеные ломтики банана.', category: 'food', effectText: '+20% Сытость' },
-    { id: 'cin_raisins', itemId: 'raisins_dried_bag', nameRu: 'Изюм сладкий (пакетик)', price: 40, description: 'Пакетик сладкого бескосточкового изюма.', category: 'food', effectText: '+22% Сытость' },
-    { id: 'cin_cranberry', itemId: 'cranberry_dried_bag', nameRu: 'Вяленая клюква снек', price: 55, description: 'Кисло-сладкая вяленая клюква.', category: 'food', effectText: '+18% Сытость' },
-    { id: 'cin_colazero', itemId: 'cola_zero', nameRu: 'Большой стакан Колы', price: 45, description: 'Полулитровый картонный стакан ледяного газированного напитка.', category: 'food', effectText: '+28% Гидратация' },
+    { id: 'cin_popcorn', itemId: 'popcorn_caramel', nameRu: 'Карамельный попкорн в боксе (6 горстей)', price: 70, description: 'Высокий картонный бокс хрустящего попкорна в сладкой карамели.', category: 'food', effectText: '+25% Сытость, +18% Энергия' },
+    { id: 'cin_nachos', itemId: 'nachos', nameRu: 'Чипсы Начос в дой-паке (8 шт.)', price: 80, description: 'Герметичный пакет кукурузных треугольных чипсов начос.', category: 'food', effectText: '+32% Сытость, +15% Энергия' },
+    { id: 'cin_watermelon_cup', itemId: 'watermelon_diced', nameRu: 'Ломтики арбуза в лотке (4 шт.)', price: 50, description: 'Пищевой лоток под пленкой со сладкими кусочками арбуза.', category: 'food', effectText: '+45% Гидратация' },
+    { id: 'cin_melon_cup', itemId: 'melon_diced', nameRu: 'Ломтики дыни в лотке (4 шт.)', price: 60, description: 'Пищевой лоток под пленкой с медовыми ломтиками дыни.', category: 'food', effectText: '+20% Сытость, +25% Гидратация' },
+    { id: 'cin_grape_cup', itemId: 'grapes_berries_cup', nameRu: 'Виноград в лотке под пленкой', price: 50, description: 'Пищевой лоток с гроздьями сладкого винограда без косточек.', category: 'food', effectText: '+15% Сытость, +15% Гидратация' },
+    { id: 'cin_pomegranate_cup', itemId: 'pomegranate_seeds_cup', nameRu: 'Спелый гранат в лотке (2 шт.)', price: 65, description: 'Пищевой лоток под пленкой со спелыми рубиновыми гранатами.', category: 'food', effectText: '+15% Сытость, витамины' },
+    { id: 'cin_banana_chips', itemId: 'banana_dried_chips', nameRu: 'Банановые чипсы в дой-паке (8 шт.)', price: 40, description: 'Герметичный дой-пак хрустящих сушеных ломтиков банана.', category: 'food', effectText: '+20% Сытость' },
+    { id: 'cin_raisins', itemId: 'raisins_dried_bag', nameRu: 'Изюм кишмиш в дой-паке (6 горстей)', price: 40, description: 'Герметичный дой-пак сладкого бескосточкового изюма.', category: 'food', effectText: '+22% Сытость' },
+    { id: 'cin_cranberry', itemId: 'cranberry_dried_bag', nameRu: 'Вяленая клюква в дой-паке (8 горстей)', price: 55, description: 'Герметичный дой-пак кисло-сладкой вяленой клюквы.', category: 'food', effectText: '+18% Сытость' },
+    { id: 'cin_colazero', itemId: 'cola_zero', nameRu: 'Баночка Колы (0.33L)', price: 45, description: 'Алюминиевая банка ледяного газированного напитка.', category: 'food', effectText: '+28% Гидратация' },
     { id: 'cin_chocolate', itemId: 'chocolate', nameRu: 'Шоколадный батончик', price: 30, description: 'Шоколадка с карамелью и арахисом.', category: 'food', effectText: '+20% Энергия' }
   ],
   electronics: [
@@ -700,18 +712,18 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'aut_tape', itemId: 'duct_tape', nameRu: 'Армированный скотч', price: 40, description: 'Широкая клейкая лента с тканевым армированием.', category: 'auto', effectText: 'Починка' }
   ],
   cafe: [
-    { id: 'caf_cappuccino', itemId: 'cappuccino', nameRu: 'Сливочный Cappuccino (0.35L)', price: 65, description: 'Бумажный стакан с плотной бархатистой молочной пенкой.', category: 'food', effectText: '+20% Гидратация, +20% Бодрость' },
-    { id: 'caf_espresso', itemId: 'hot_coffee', nameRu: 'Горячий Espresso (Double)', price: 50, description: 'Крепчайший согревающий бодрящий напиток.', category: 'food', effectText: '+5°C Тепло, +25% Бодрость' },
-    { id: 'caf_mint_tea', itemId: 'mint_leaves_fresh', nameRu: 'Чай со свежей мятой и лимоном', price: 45, description: 'Ароматный освежающий настой со свежими листьями мяты.', category: 'food', effectText: '+35% Гидратация, снятие стресса' },
-    { id: 'caf_tea', itemId: 'tea_green', nameRu: 'Зеленый листовой чай Сенча', price: 40, description: 'Стаканчик китайского зеленого чая с жасмином.', category: 'food', effectText: '+35% Гидратация' },
+    { id: 'caf_cappuccino', itemId: 'cappuccino', nameRu: 'Сливочный Cappuccino (0.25L)', price: 65, description: 'Бумажный стакан с плотной бархатистой молочной пенкой.', category: 'food', effectText: '+20% Гидратация, +20% Бодрость' },
+    { id: 'caf_espresso', itemId: 'hot_coffee', nameRu: 'Горячий Espresso (0.25L)', price: 50, description: 'Крепчайший согревающий бодрящий напиток в стаканчике.', category: 'food', effectText: '+5°C Тепло, +25% Бодрость' },
+    { id: 'caf_mint_tea', itemId: 'tea_cup', nameRu: 'Горячий чай с мятой и лимоном (0.25L)', price: 45, description: 'Бумажный стаканчик ароматного горячего чая.', category: 'food', effectText: '+35% Гидратация, снятие стресса' },
+    { id: 'caf_tea', itemId: 'tea_green', nameRu: 'Зеленый листовой чай Сенча (0.25L)', price: 40, description: 'Бумажный стаканчик китайского зеленого чая с жасмином.', category: 'food', effectText: '+35% Гидратация' },
     { id: 'caf_croissant', itemId: 'croissant', nameRu: 'Французский масляный круассан', price: 45, description: 'Хрустящая слоеная выпечка с нежным сливочным маслом.', category: 'food', effectText: '+25% Сытость' },
     { id: 'caf_donut', itemId: 'donut', nameRu: 'Пончик с ягодной глазурью', price: 40, description: 'Дрожжевой пончик в ароматной розовой помадке.', category: 'food', effectText: '+25% Сытость, +20% Энергия' },
-    { id: 'caf_apple_puree', itemId: 'apple_puree_jar', nameRu: 'Яблочный мусс-десерт', price: 55, description: 'Нежнейшее яблочное пюре в стеклянной креманке.', category: 'food', effectText: '+20% Сытость, сладость' },
+    { id: 'caf_apple_puree', itemId: 'apple_puree_jar', nameRu: 'Яблочное пюре «Неженка» в баночке (0.2L)', price: 55, description: 'Нежнейшее натуральное яблочное пюре в стеклянной баночке.', category: 'food', effectText: '+20% Сытость, сладость' },
     { id: 'caf_melon_slice', itemId: 'melon_slice', nameRu: 'Летний ломоть дыни Канталупа', price: 50, description: 'Нарезанный сочный охлажденный ломоть сладкой дыни.', category: 'food', effectText: '+22% Сытость, +25% Гидратация' },
-    { id: 'caf_watermelon_cup', itemId: 'watermelon_diced', nameRu: 'Стаканчик кубиков арбуза', price: 45, description: 'Холодные сочные кубики арбуза с трубочкой/вилкой.', category: 'food', effectText: '+45% Гидратация' },
-    { id: 'caf_berries_tray', itemId: 'berries_tray_fresh', nameRu: 'Ягодный микс (клубника & черника)', price: 120, description: 'Лоток отборных свежих ягод к кофе.', category: 'food', effectText: '+20% Сытость, витамины' },
-    { id: 'caf_kiwi_slice', itemId: 'kiwi_sliced', nameRu: 'Нарезка сочного киви', price: 35, description: 'Изумрудные сочные кружочки спелого киви.', category: 'food', effectText: '+10% Сытость, витамин C' },
-    { id: 'caf_soup', itemId: 'soup', nameRu: 'Горячий куриный бульон с зеленью', price: 110, description: 'Контейнер согревающего куриного бульона с лапшой.', category: 'food', effectText: '+45% Сытость, +8°C Тепло' }
+    { id: 'caf_watermelon_cup', itemId: 'watermelon_diced', nameRu: 'Ломтики арбуза в лотке (4 шт.)', price: 45, description: 'Пищевой лоток под пленкой с сочными ломтиками арбуза.', category: 'food', effectText: '+45% Гидратация' },
+    { id: 'caf_berries_tray', itemId: 'berries_tray_fresh', nameRu: 'Свежая клубника в лотке (8 шт.)', price: 120, description: 'Пищевой лоток под пленкой с отборными ягодами к кофе.', category: 'food', effectText: '+20% Сытость, витамины' },
+    { id: 'caf_kiwi_slice', itemId: 'kiwi_sliced', nameRu: 'Нарезка киви в лотке (6 кружков)', price: 35, description: 'Пищевой лоток под пленкой с изумрудными кружочками спелого киви.', category: 'food', effectText: '+10% Сытость, витамин C' },
+    { id: 'caf_soup', itemId: 'soup', nameRu: 'Горячий бульон в суповой пиале (0.5L)', price: 110, description: 'Глубокая суповая пиала согревающего наваристого бульона.', category: 'food', effectText: '+45% Сытость, +8°C Тепло' }
   ],
   gear_shop: [
     { id: 'gea_ration', itemId: 'military_ration', nameRu: 'Армейский сухпай (ИРП)', price: 220, description: 'Зеленая герметичная коробка с пайком на сутки, спичками и ложками.', category: 'food', effectText: '+85% Сытость, +50% Энергия' },
@@ -1763,6 +1775,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               {catalog.map(item => {
                 const inCart = cart.find(i => i.item.id === item.id);
                 const countInCart = inCart ? inCart.count : 0;
+                const previewItem = getShopPreviewItem(item.itemId);
+                const isUnifiedPackage = previewItem.itemId !== item.itemId || Boolean(previewItem.fluidStorage) || Boolean(previewItem.contents && previewItem.contents.length > 0);
+                const visShapeRu = previewItem.containerVisuals ? SHAPE_NAMES_RU[previewItem.containerVisuals.shape] : null;
 
                 return (
                   <div
@@ -1771,18 +1786,33 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   >
                     <div className="flex gap-3">
                       <div className="w-16 h-16 rounded-[2px] bg-[#14161a] border border-[#2a2e38] flex items-center justify-center shrink-0 p-1">
-                        <ItemIconCanvas itemId={item.itemId} size={52} />
+                        <ItemIconCanvas itemId={previewItem.itemId} item={previewItem} size={52} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-1">
-                          <h3 className="text-sm font-bold text-[#f0f3f6] truncate">{item.nameRu}</h3>
+                          <h3 className="text-sm font-bold text-[#f0f3f6] truncate" title={item.nameRu}>{item.nameRu}</h3>
                         </div>
-                        <p className="text-xs text-[#9ba3af] line-clamp-2 mt-0.5">{item.description}</p>
-                        {item.effectText && (
-                          <div className="inline-block mt-1 px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-[#c68a35] font-mono border border-[#2a2e38]">
-                            {item.effectText}
+                        {isUnifiedPackage && (
+                          <div
+                            className="text-[10px] font-mono text-emerald-400/90 truncate mt-0.5"
+                            title={previewItem.nameRu}
+                          >
+                            {previewItem.nameRu}
                           </div>
                         )}
+                        <p className="text-xs text-[#9ba3af] line-clamp-2 mt-0.5">{item.description}</p>
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          {item.effectText && (
+                            <div className="inline-block px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-[#c68a35] font-mono border border-[#2a2e38]">
+                              {item.effectText}
+                            </div>
+                          )}
+                          {visShapeRu && (
+                            <div className="inline-block px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-sky-300 font-mono border border-[#2a2e38]">
+                              Форма: {visShapeRu}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -2676,17 +2706,20 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {cart.map(entry => (
+                  {cart.map(entry => {
+                    const cartPreview = getShopPreviewItem(entry.item.itemId);
+                    return (
                     <div
                       key={entry.item.id}
                       className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-between gap-3"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0">
-                          <ItemIconCanvas itemId={entry.item.itemId} size={40} />
+                          <ItemIconCanvas itemId={cartPreview.itemId} item={cartPreview} size={40} />
                         </div>
                         <div>
                           <div className="text-sm font-bold text-zinc-100">{entry.item.nameRu}</div>
+                          <div className="text-[11px] font-mono text-zinc-400">{cartPreview.nameRu}</div>
                           <div className="text-xs font-mono text-emerald-400">
                             {entry.item.price.toLocaleString()} ₽ / шт
                           </div>
@@ -2715,7 +2748,8 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
 
                   <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-between mt-4">
                     <div>

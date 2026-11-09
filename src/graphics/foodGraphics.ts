@@ -1684,6 +1684,65 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boo
       return true;
     }
 
+    case 'apple_ring_dried_single': {
+      drawShadow(ctx, 4.4, 1.8, 5.5, 0.18);
+      ctx.fillStyle = '#fde68a';
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.arc(0, 0, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'prune_dried_single':
+    case 'apricot_dried_single': {
+      drawShadow(ctx, 4.4, 1.8, 5.4, 0.2);
+      const isApricot = itemId === 'apricot_dried_single';
+      ctx.fillStyle = isApricot ? '#f59e0b' : '#312e81';
+      ctx.strokeStyle = isApricot ? '#b45309' : '#1e1b4b';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 4.2, 3.0, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      return true;
+    }
+
+    case 'raisins_handful_single':
+    case 'cranberry_dried_single': {
+      drawShadow(ctx, 4.6, 1.8, 5.5, 0.18);
+      const isCran = itemId === 'cranberry_dried_single';
+      ctx.fillStyle = isCran ? '#be123c' : '#78350f';
+      for (const [rx, ry] of [[-1.8, 0.6], [1.6, 0.8], [0, -1.2], [-0.4, 1.6], [1.4, -0.8]]) {
+        ctx.beginPath();
+        ctx.ellipse(rx, ry, 1.6, 1.2, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    case 'banana_chip_single': {
+      drawShadow(ctx, 4.0, 1.6, 5.2, 0.18);
+      ctx.fillStyle = '#fef08a';
+      ctx.strokeStyle = '#ca8a04';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 3.8, 3.2, 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#a16207';
+      ctx.beginPath();
+      ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
     default:
       return false;
   }

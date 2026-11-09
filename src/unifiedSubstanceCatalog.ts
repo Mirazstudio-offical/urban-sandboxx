@@ -876,6 +876,20 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'miso_paste_tub' }
     )
   },
+  miso_paste_jar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'puree',
+    amountMl: 200,
+    attributes: attr(
+      'Паста Мисо ферментированная соевая (Ака-мисо)',
+      'Соевые бобы, рис, морская соль, культура грибка кодзи (Aspergillus oryzae)',
+      'Многомесячная ферментация отварных соевых бобов с солью и солодом кодзи в кедровых бочках',
+      'Приготовление мисо-супа, рамена, маринадов для рыбы и глазировки овощей',
+      'Длительная ферментация расщепляет соевый белок до свободных аминокислот, создавая глубокий вкус умами',
+      '#92400e',
+      { culinaryEquivalentId: 'miso_paste_tub' }
+    )
+  },
 
   // === 9. BROTHS (БУЛЬОНЫ И НАВАРЫ) ===
   broth_beef_jar: {
@@ -1176,6 +1190,20 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Глубокий кисло-сладкий виноградный профиль',
       '#27272a',
       { culinaryEquivalentId: 'vinegar_balsamic' }
+    )
+  },
+  vinegar_rice: {
+    containerId: 'bottle_glass_medium',
+    liquidId: 'vinegar',
+    amountMl: 500,
+    attributes: attr(
+      'Уксус рисовый японский мягкий (Мицукан)',
+      'Ферментированный шлифованный белый рис, родниковая вода, культура кодзи',
+      'Двойное осахаривание рисового крахмала, спиртовое и медленное уксуснокислое брожение',
+      'Заправка риса для суши и роллов, маринование имбиря гари, салатов суномоно и морепродуктов',
+      'Обладает самой низкой кислотностью (4%) и мягким сладковатым вкусом без резкого спиртового запаха',
+      '#fef9c3',
+      { culinaryEquivalentId: 'vinegar_apple' }
     )
   },
 
@@ -1661,6 +1689,20 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Сливочное ризотто, молочная рисовая каша, пудинги и голубцы',
       'Внешний слой зерна отдаёт в бульон бархатистый крахмал, а плотное ядро внутри сохраняет упругость «аль денте»',
       '#f1f5f9',
+      { culinaryEquivalentId: 'rice_arborio_bag' }
+    )
+  },
+  rice_white_bag_1k: {
+    containerId: 'sack_cloth_small',
+    liquidId: 'grain',
+    amountMl: 1000,
+    attributes: attr(
+      'Рис круглозёрный японский шлифованный (для суши)',
+      'Отборное круглое зерно японского риса сорта Косихикари с высоким содержанием амилопектина',
+      'Многоступенчатая бережная полировка зерна для чистого вкуса и идеальной клейкости при варке',
+      'Лепка суши нигири, роллов маки, онигири, поке и молочных каш',
+      'Высокая доля разветвлённого крахмала позволяет зёрнам прочно держаться вместе в ролле, оставаясь упругими и глянцевыми',
+      '#ffffff',
       { culinaryEquivalentId: 'rice_arborio_bag' }
     )
   },
@@ -2171,6 +2213,190 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       '#d97706',
       { medicalEffectId: 'balm_star', customEffects: { health: 5, energy: 12 } }
     )
+  },
+
+  // === 20. ADDITIONAL CATALOG JARS, PICKLES, SPICES & DRINKS ===
+  tomato_sundried_jar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'marinade',
+    amountMl: 200,
+    attributes: attr(
+      'Томаты вяленые итальянские в оливковом масле с травами',
+      'Половинки вяленых на солнце сливовидных томатов, оливковое масло Extra Virgin, орегано, базилик, чеснок, винный уксус',
+      'Медленное вяление спелых томатов и заливка пряным прогретым оливковым маслом в стеклянной баночке',
+      'Изысканная закуска к чиабатте, пицце, пасте, сырной тарелке и салатам',
+      'При вялении в томатах многократно концентрируется ликопин и природный глутамат (вкус умами), а оливковое масло пропитывается ароматом трав',
+      '#b91c1c',
+      { culinaryEquivalentId: 'tomato_sundried_jar', customEffects: { hunger: 25, energy: 8 } }
+    )
+  },
+  tomato_paste_jar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'puree',
+    amountMl: 200,
+    attributes: attr(
+      'Паста томатная густая концентрированная (25% сухих веществ)',
+      'Спелые красные грунтовые томаты, поваренная соль',
+      'Протирание томатной мякоти без кожицы и семян и вакуумное выпаривание до густой пасты',
+      'Основа для борща, солянки, пицца-соуса, гуляша и тушёных овощей',
+      'Термическая концентрация раскрывает яркий кисло-сладкий вкус и рубиновый цвет томатов',
+      '#991b1b',
+      { culinaryEquivalentId: 'tomato_paste_jar', customEffects: { hunger: 20, thirst: 5 } }
+    )
+  },
+  cucumber_pickled_jar: {
+    containerId: 'jar_glass_medium',
+    liquidId: 'pickles',
+    amountMl: 500,
+    attributes: attr(
+      'Огурцы солёные бочковые хрустящие в рассоле',
+      'Грунтовые пупырчатые огурцы, вода, каменная соль, зонтики укропа, лист хрена, чеснок, лист смородины',
+      'Молочнокислое брожение с пряной зеленью и фасовка в полулитровую стеклянную банку',
+      'Традиционная хрустящая закуска, рассольник, винегрет, оливье и восполнение солей',
+      'Лист хрена и дубильные вещества смородины сохраняют плотный хруст огурцов, а рассол богат электролитами',
+      '#4d7c0f',
+      { culinaryEquivalentId: 'cucumber_pickled_jar', customEffects: { hunger: 28, thirst: 25 } }
+    )
+  },
+  eggplant_caviar_jar: {
+    containerId: 'jar_glass_medium',
+    liquidId: 'vegetable_caviar',
+    amountMl: 500,
+    attributes: attr(
+      'Икра баклажанная запечённая по-домашнему',
+      'Запечённые баклажаны, сладкий болгарский перец, спелые томаты, репчатый лук, чеснок, подсолнечное масло, соль',
+      'Запекание баклажанов до дымного аромата, рубка и медленное томление с томатами и маслом',
+      'Питательная овощная намазка на свежий хлеб и гарнир к мясу',
+      'Томление в масле смягчает клетчатку баклажанов и создаёт бархатистую пикантную текстуру',
+      '#78350f',
+      { culinaryEquivalentId: 'eggplant_caviar_jar', customEffects: { hunger: 48, thirst: 10 } }
+    )
+  },
+  zucchini_caviar_jar: {
+    containerId: 'jar_glass_medium',
+    liquidId: 'vegetable_caviar',
+    amountMl: 500,
+    attributes: attr(
+      'Икра кабачковая уваренная нежная (ГОСТ)',
+      'Молодые кабачки, морковь, репчатый лук, томатная паста, подсолнечное масло, соль, душистый перец',
+      'Обжарка овощей, тонкое пюрирование и длительное уваривание со специями',
+      'Лёгкая диетическая закуска, намазка на хлеб и гарнир',
+      'Нежная гомогенизированная текстура легко усваивается и быстро утоляет голод',
+      '#ea580c',
+      { culinaryEquivalentId: 'zucchini_caviar_jar', customEffects: { hunger: 45, thirst: 12 } }
+    )
+  },
+  cabbage_sauerkraut_jar: {
+    containerId: 'jar_glass_medium',
+    liquidId: 'pickles',
+    amountMl: 500,
+    attributes: attr(
+      'Капуста квашеная хрустящая с морковью в рассоле',
+      'Белокочанная капуста, садовая морковь, каменная соль, семена тмина',
+      'Шинковка, перетирание с солью до выделения сока и естественная лактоферментация под гнётом',
+      'Витаминный салат, кислые щи, солянка, тушёный гарнир и источник витамина C',
+      'Молочнокислые бактерии консервируют капусту и обогащают её пробиотиками и аскорбиновой кислотой',
+      '#fef08a',
+      { culinaryEquivalentId: 'cabbage_sauerkraut_jar', customEffects: { hunger: 25, thirst: 18, health: 5 } }
+    )
+  },
+  jalapeno_pickled_jar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'marinade',
+    amountMl: 200,
+    attributes: attr(
+      'Перец халапеньо острый маринованный колечками',
+      'Зелёный и красный перец халапеньо (кольца), винный уксус, вода, тростниковый сахар, морская соль, чеснок',
+      'Нарезка свежего перца кольцами и горячее маринование в кисло-сладком уксусном рассоле',
+      'Острый топпинг к бургерам, пицце, начос, хот-догам и мясным блюдам',
+      'Капсаицин в сочетании с уксусным маринадом мгновенно согревает, бодрит и усиливает аппетит',
+      '#15803d',
+      { culinaryEquivalentId: 'jalapeno_pickled_jar', customEffects: { hunger: 12, energy: 12 } }
+    )
+  },
+  ginger_pickled_box: {
+    containerId: 'jar_glass_small',
+    liquidId: 'marinade',
+    amountMl: 200,
+    attributes: attr(
+      'Имбирь маринованный розовый «Гари» лепестками',
+      'Тонкие лепестки молодого корня имбиря, рисовый уксус, тростниковый сахар, морская соль',
+      'Тончайшая строганая нарезка корня имбиря и выдержка в сладком рисовом маринаде Амазу',
+      'Подача к суши и роллам для очищения вкусовых рецепторов и антибактериальной защиты',
+      'Гингерол и рисовый уксус освежают полость рта, стимулируют пищеварение и обладают природным антисептическим эффектом',
+      '#f43f5e',
+      { culinaryEquivalentId: 'ginger_pickled_box', customEffects: { hunger: 8, health: 4, energy: 6 } }
+    )
+  },
+  garlic_powder_jar: {
+    containerId: 'jar_spice_small',
+    liquidId: 'spice_dry',
+    amountMl: 100,
+    attributes: attr(
+      'Чеснок сушёный гранулированный в баночке',
+      'Отборные зубчики свежего чеснока (Allium sativum) тонкого помола',
+      'Бережная конвекционная сушка чесночных пластинок и дробление в мелкую крупку',
+      'Ароматная приправа к стейкам, курице, супам, соусам и чесночному хлебу',
+      'При контакте с влагой блюда фермент аллииназа вновь активирует пряный чесночный аромат без риска подгорания на сковороде',
+      '#fef3c7',
+      { culinaryEquivalentId: 'garlic_powder_jar', customEffects: { hunger: 4, health: 3 } }
+    )
+  },
+  dill_dried_jar: {
+    containerId: 'jar_spice_small',
+    liquidId: 'spice_dry',
+    amountMl: 100,
+    attributes: attr(
+      'Укроп огородный сушёный душистый',
+      'Молодые пушистые веточки зелёного укропа без грубых стеблей',
+      'Теневая сушка с сохранением эфирных масел и изумрудно-зелёного цвета',
+      'Добавка в горячие супы, уху, отварной картофель, сметанные соусы и соленья',
+      'Эфирное масло укропа (карвон) придаёт блюдам свежий летний аромат',
+      '#15803d',
+      { culinaryEquivalentId: 'dill_dried_jar', customEffects: { hunger: 3, health: 2 } }
+    )
+  },
+  basil_dried_jar: {
+    containerId: 'jar_spice_small',
+    liquidId: 'spice_dry',
+    amountMl: 100,
+    attributes: attr(
+      'Базилик душистый сушёный (орегано-базиликовый букет)',
+      'Листья фиолетового и зелёного сладкого базилика (Ocimum basilicum)',
+      'Бережная сушка листьев до раскрытия пряно-гвоздичного аромата эвгенола',
+      'Томатные соусы для пиццы и пасты, запечённое мясо, овощные рагу и сыры',
+      'Идеально сочетается с томатами, оливковым маслом и чесноком в средиземноморской и кавказской кухне',
+      '#166534',
+      { culinaryEquivalentId: 'basil_dried_jar', customEffects: { hunger: 3, health: 2 } }
+    )
+  },
+  mint_dried_jar: {
+    containerId: 'jar_spice_small',
+    liquidId: 'spice_dry',
+    amountMl: 100,
+    attributes: attr(
+      'Мята перечная сушёная листовая для чая',
+      'Цельные и дроблёные листья перечной мяты с высоким содержанием ментола',
+      'Сбор во время цветения и медленная сушка в тени',
+      'Заваривание успокаивающего мятного чая, приготовление морсов и десертов',
+      'Природный ментол мягко снимает нервное напряжение, спазмы и освежает дыхание',
+      '#047857',
+      { culinaryEquivalentId: 'mint_dried_jar', customEffects: { hunger: 2, health: 4, energy: 4 } }
+    )
+  },
+  salt_shaker: {
+    containerId: 'jar_spice_small',
+    liquidId: 'salt',
+    amountMl: 100,
+    attributes: attr(
+      'Соль поваренная пищевая мелкая «Экстра» в солонке',
+      'Хлорид натрия (NaCl 99.7%) мелкого кристаллического помола',
+      'Вакуум-выпарная очистка и расфасовка в настольную стеклянную солонку с дозатором',
+      'Досаливание готовых блюд, супов, яичницы, салатов и мяса за столом',
+      'Чистые мелкие кристаллы мгновенно растворяются на поверхности горячей и холодной пищи',
+      '#f8fafc',
+      { culinaryEquivalentId: 'salt_shaker' }
+    )
   }
 };
 
@@ -2199,22 +2425,28 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
 
   // === 3. EGG CARTONS -> STANDALONE SINGLE EGGS ===
   egg_chicken_carton: { containerId: 'egg_carton_10', countInside: 10, innerItemId: 'egg_chicken_single' },
-  egg_quail_carton: { containerId: 'egg_carton_quail_18', countInside: 12, innerItemId: 'egg_quail_single' },
+  eggs_chicken_carton: { containerId: 'egg_carton_10', countInside: 10, innerItemId: 'egg_chicken_single' },
+  egg_quail_carton: { containerId: 'egg_carton_quail_18', countInside: 18, innerItemId: 'egg_quail_single' },
+  eggs_quail_pack: { containerId: 'egg_carton_quail_18', countInside: 18, innerItemId: 'egg_quail_single' },
 
   // === 4. SNACK POUCHES & FAST-FOOD BOXES -> STANDALONE SINGLE PIECES ===
   chips: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'chip_potato_single', labelColor: '#eab308' },
   cookies: { containerId: 'pouch_sealed_snack', countInside: 6, innerItemId: 'cookie_choco_single', labelColor: '#78350f' },
+  cookie_pack: { containerId: 'pouch_sealed_snack', countInside: 6, innerItemId: 'cookie_choco_single', labelColor: '#78350f' },
   nachos: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'nacho_chip_single', labelColor: '#ea580c' },
   french_fries: { containerId: 'takeout_pocket_fries', countInside: 8, innerItemId: 'fries_strip_single', labelColor: '#dc2626' },
+  nuggets: { containerId: 'takeout_box_nuggets', countInside: 6, innerItemId: 'nugget_chicken_single', labelColor: '#f59e0b' },
   nuggets_box: { containerId: 'takeout_box_nuggets', countInside: 6, innerItemId: 'nugget_chicken_single', labelColor: '#f59e0b' },
   chicken_wings_box: { containerId: 'takeout_box_nuggets', countInside: 5, innerItemId: 'chicken_wing_crispy_single', labelColor: '#dc2626' },
   sushi_set: { containerId: 'takeout_box_nuggets', countInside: 6, innerItemId: 'sushi_roll_piece', labelColor: '#0f172a' },
   popcorn_bucket: { containerId: 'takeout_box_wok', countInside: 6, innerItemId: 'popcorn_handful', labelColor: '#dc2626' },
-  prune_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 5, innerItemId: 'prunes_dried', labelColor: '#312e81' },
-  apricot_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 5, innerItemId: 'dried_apricots', labelColor: '#f59e0b' },
-  raisins_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 5, innerItemId: 'raisins_dried', labelColor: '#78350f' },
-  cranberry_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 5, innerItemId: 'cranberries_dried', labelColor: '#be123c' },
-  banana_dried_chips: { containerId: 'pouch_sealed_snack', countInside: 5, innerItemId: 'banana_chips', labelColor: '#facc15' },
+  popcorn_caramel: { containerId: 'takeout_box_wok', countInside: 6, innerItemId: 'popcorn_handful', labelColor: '#d97706' },
+  apple_dried_rings: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'apple_ring_dried_single', labelColor: '#eab308' },
+  prune_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'prune_dried_single', labelColor: '#312e81' },
+  apricot_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'apricot_dried_single', labelColor: '#f59e0b' },
+  raisins_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 6, innerItemId: 'raisins_handful_single', labelColor: '#78350f' },
+  cranberry_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'cranberry_dried_single', labelColor: '#be123c' },
+  banana_dried_chips: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'banana_chip_single', labelColor: '#facc15' },
 
   // === 5. MEDICAL BLISTERS -> STANDALONE SINGLE PILLS & PATCHES ===
   painkillers: { containerId: 'blister_pack_10', countInside: 6, innerItemId: 'pill_painkiller_single', labelColor: '#ef4444' },

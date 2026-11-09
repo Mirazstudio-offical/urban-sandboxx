@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes } from './types';
 import { sound } from './audio';
 import { getPhoneSpecsForItemId } from './phoneData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
@@ -76,6 +76,7 @@ export interface ItemDefinition {
   tornItemId?: string;
   isTransparentPackaging?: boolean;
   labelColor?: string;              // Custom brand seal label / sticker color
+  containerVisuals?: ContainerVisualAttributes; // Visual shape, RGB material color, and RGB label color
   packagingSize?: 'mini' | 'small' | 'medium' | 'large';
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
@@ -5480,6 +5481,20 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.30,
     usable: true
   },
+  pot_clay_medium: {
+    itemId: 'pot_clay_medium',
+    name: 'Medium Clay Pot (0.5L)',
+    nameRu: 'Глиняный горшок средний (0.5л)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Traditional glazed ceramic pot (0.5L) with lid for sour cream, lard, or stews.',
+    descriptionRu: 'Глазурованный керамический горшок (0.5л) с крышкой для деревенской сметаны, смальца или топлёного жира.',
+    effects: {},
+    weight: 0.38,
+    volume: 0.55,
+    usable: true
+  },
   pot_clay_medium_open: {
     itemId: 'pot_clay_medium_open',
     name: 'Opened Clay Pot (0.5L)',
@@ -6367,6 +6382,207 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     biteCount: 1,
     fullnessPerBite: 1
   },
+  apple_ring_dried_single: {
+    itemId: 'apple_ring_dried_single',
+    name: 'Dried Apple Ring (1 pc)',
+    nameRu: 'Сушёное яблочное колечко (1 шт.)',
+    category: 'food',
+    maxStack: 25,
+    icon: '',
+    description: 'Single sweet chewy dried apple ring.',
+    descriptionRu: 'Душистое упругое колечко сушёного садового яблока без сердцевины.',
+    effects: { hunger: 4, energy: 3, health: 1 },
+    weight: 0.012,
+    volume: 0.015,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  prune_dried_single: {
+    itemId: 'prune_dried_single',
+    name: 'Pitted Dried Prune (1 pc)',
+    nameRu: 'Чернослив вяленый без косточки (1 шт.)',
+    category: 'food',
+    maxStack: 25,
+    icon: '',
+    description: 'Single dark sweet pitted dried plum.',
+    descriptionRu: 'Крупная мясистая ягода вяленого чернослива без косточки с лёгким копчёно-медовым оттенком.',
+    effects: { hunger: 5, energy: 3, health: 2 },
+    weight: 0.015,
+    volume: 0.018,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  apricot_dried_single: {
+    itemId: 'apricot_dried_single',
+    name: 'Golden Dried Apricot (1 pc)',
+    nameRu: 'Курага сушёная золотистая (1 шт.)',
+    category: 'food',
+    maxStack: 25,
+    icon: '',
+    description: 'Single sun-dried golden apricot half.',
+    descriptionRu: 'Солнечная половинка вяленого южного абрикоса, богатая калием и природными сахарами.',
+    effects: { hunger: 5, energy: 4, health: 2 },
+    weight: 0.015,
+    volume: 0.018,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  raisins_handful_single: {
+    itemId: 'raisins_handful_single',
+    name: 'Handful of Sweet Raisins',
+    nameRu: 'Горсть сушёного изюма кишмиш',
+    category: 'food',
+    maxStack: 20,
+    icon: '',
+    description: 'Handful of sweet seedless dried grapes.',
+    descriptionRu: 'Щепотка янтарного бескосточкового сушёного винограда кишмиш.',
+    effects: { hunger: 5, energy: 4, health: 1 },
+    weight: 0.018,
+    volume: 0.02,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  cranberry_dried_single: {
+    itemId: 'cranberry_dried_single',
+    name: 'Dried Sweetened Cranberries (handful)',
+    nameRu: 'Вяленая клюква (горсть)',
+    category: 'food',
+    maxStack: 25,
+    icon: '',
+    description: 'Handful of ruby-red sweetened dried cranberries.',
+    descriptionRu: 'Горсть кисло-сладких рубиновых ягод вяленой таёжной клюквы.',
+    effects: { hunger: 4, energy: 3, health: 2 },
+    weight: 0.015,
+    volume: 0.018,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  banana_chip_single: {
+    itemId: 'banana_chip_single',
+    name: 'Crispy Banana Chip (1 pc)',
+    nameRu: 'Хрустящий банановый чипс (1 ломтик)',
+    category: 'food',
+    maxStack: 25,
+    icon: '',
+    description: 'Single crunchy caramelized dried banana coin.',
+    descriptionRu: 'Золотистый хрустящий кружочек сушёного спелого банана в кокосовой глазури.',
+    effects: { hunger: 4, energy: 4 },
+    weight: 0.01,
+    volume: 0.015,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1
+  },
+  apple_dried_rings: {
+    itemId: 'apple_dried_rings',
+    name: 'Dried Apple Rings Pouch',
+    nameRu: 'Сушёные яблочные кольца (дой-пак)',
+    category: 'food',
+    maxStack: 5,
+    icon: '',
+    description: 'Sealed snack pouch of sweet dried apple rings.',
+    descriptionRu: 'Герметичный пакетик душистых сушёных яблочных колец.',
+    effects: { hunger: 24, energy: 14, health: 4 },
+    weight: 0.14,
+    volume: 0.25,
+    usable: true
+  },
+  bottle_glass_750: {
+    itemId: 'bottle_glass_750',
+    name: 'Glass Wine Bottle (0.75L)',
+    nameRu: 'Стеклянная винная бутылка (0.75л)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Tall slender dark green glass bottle (0.75L).',
+    descriptionRu: 'Высокая узкая бутылка из тёмного бутылочного стекла (0.75л) для вина, уксуса или масел.',
+    effects: {},
+    weight: 0.42,
+    volume: 0.85,
+    usable: true,
+    containerVisuals: {
+      shape: 'tall_slender',
+      materialRgb: [22, 101, 52],
+      labelRgb: [254, 243, 199],
+      labelAccentRgb: [153, 27, 27],
+      capRgb: [127, 29, 29]
+    }
+  },
+  bottle_glass_small: {
+    itemId: 'bottle_glass_small',
+    name: 'Small Glass Bottle (0.25L)',
+    nameRu: 'Стеклянная бутылочка (0.25л)',
+    category: 'misc',
+    maxStack: 8,
+    icon: '',
+    description: 'Compact square glass bottle (0.25L) for culinary oils, soy sauce, or syrups.',
+    descriptionRu: 'Аккуратная гранёная стеклянная бутылочка (0.25л) с дозатором для соусов, кулинарных масел и сиропов.',
+    effects: {},
+    weight: 0.18,
+    volume: 0.28,
+    usable: true,
+    containerVisuals: {
+      shape: 'square',
+      materialRgb: [120, 53, 15],
+      labelRgb: [254, 243, 199],
+      labelAccentRgb: [180, 83, 9],
+      capRgb: [24, 24, 27]
+    }
+  },
+  bottle_plastic_100: {
+    itemId: 'bottle_plastic_100',
+    name: 'Medical Plastic Dropper Bottle (100ml)',
+    nameRu: 'Пластиковый медицинский флакон (100мл)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Compact 100ml medical bottle with dropper/spray cap.',
+    descriptionRu: 'Малый аптечный флакон (100мл) с крышкой-капельницей для антисептиков и медицинских растворов.',
+    effects: {},
+    weight: 0.025,
+    volume: 0.12,
+    usable: true,
+    containerVisuals: {
+      shape: 'tall_slender',
+      materialRgb: [241, 245, 249],
+      labelRgb: [255, 255, 255],
+      labelAccentRgb: [16, 185, 129],
+      capRgb: [255, 255, 255]
+    }
+  },
+  tetra_pack_250: {
+    itemId: 'tetra_pack_250',
+    name: 'Small Juice Carton (0.25L)',
+    nameRu: 'Малый тетрапак (0.25л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Compact 0.25L aseptic carton box with straw hole.',
+    descriptionRu: 'Порционный картонный тетрапак (0.25л) для соков, нектаров и сливок.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.27,
+    usable: true
+  },
+  package_sachet: {
+    itemId: 'package_sachet',
+    name: 'Paper Spice Sachet (50ml)',
+    nameRu: 'Бумажный пакетик-саше (50мл)',
+    category: 'misc',
+    maxStack: 20,
+    icon: '',
+    description: 'Small laminated paper sachet for dry spices, yeast, or seasoning.',
+    descriptionRu: 'Герметичный бумажно-фольгированный пакетик-саше (50мл) для сухих специй, пряностей и дрожжей.',
+    effects: {},
+    weight: 0.005,
+    volume: 0.05,
+    usable: true
+  },
   pill_painkiller_single: {
     itemId: 'pill_painkiller_single',
     name: 'Analgesic Tablet (1 pc)',
@@ -6494,6 +6710,7 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   bottle_empty: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
   water_bottle_empty: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
   water_bottle: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
+  water_bottle_1500: { containerId: 'bottle_plastic_1500', liquidId: 'water', amountMl: 1500 },
   bottle_water: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
   mineral_water: { containerId: 'bottle_plastic_500', liquidId: 'mineral_water', amountMl: 500 },
   kvas_bottle: { containerId: 'bottle_plastic_1500', liquidId: 'kvas', amountMl: 1500 },
@@ -6502,6 +6719,7 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   
   // Glass Bottles
   glass_bottle_500: { containerId: 'glass_bottle_500', liquidId: null, amountMl: 0 },
+  bottle_glass_750: { containerId: 'bottle_glass_750', liquidId: null, amountMl: 0 },
   bottle_glass_small: { containerId: 'bottle_glass_small', liquidId: null, amountMl: 0 },
   bottle_glass_medium: { containerId: 'bottle_glass_medium', liquidId: null, amountMl: 0 },
   bottle_glass_large: { containerId: 'bottle_glass_large', liquidId: null, amountMl: 0 },
@@ -6760,6 +6978,7 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     tornItemId: def.tornItemId,
     isTransparentPackaging: def.isTransparentPackaging,
     labelColor: def.labelColor,
+    containerVisuals: originalDef?.containerVisuals || def.containerVisuals,
     packagingSize: def.packagingSize,
     contents: (isContainer && !(fluidStorage && legacyMap?.liquidId)) ? [] : undefined,
     containerCapacityL: containerCap,
@@ -6803,15 +7022,18 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
 
 export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInside?: number; innerItemId?: string; labelColor?: string }> = {
   // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
-  carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2 },
-  garlic_peeled: { containerId: 'vacuum_pack_small', countInside: 3 },
-  cabbage_cut: { containerId: 'vacuum_pack_medium', countInside: 1 },
-  pumpkin_cut: { containerId: 'vacuum_pack_medium', countInside: 1 },
-  zucchini_cut: { containerId: 'vacuum_pack_small', countInside: 2 },
-  cucumber_sliced: { containerId: 'tray_sealed_food', countInside: 6 },
-  tomato_sliced: { containerId: 'tray_sealed_food', countInside: 5 },
-  bell_pepper_sliced: { containerId: 'tray_sealed_food', countInside: 6 },
-  cabbage_shredded: { containerId: 'tray_sealed_food', countInside: 1 },
+  carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2, innerItemId: 'carrot_peeled' },
+  garlic_peeled: { containerId: 'vacuum_pack_small', countInside: 5, innerItemId: 'garlic_clove' },
+  cabbage_cut: { containerId: 'vacuum_pack_medium', countInside: 1, innerItemId: 'cabbage_half' },
+  pumpkin_cut: { containerId: 'vacuum_pack_medium', countInside: 1, innerItemId: 'pumpkin_cut' },
+  zucchini_cut: { containerId: 'vacuum_pack_small', countInside: 4, innerItemId: 'zucchini_sliced' },
+  cucumber_sliced: { containerId: 'tray_sealed_food', countInside: 6, innerItemId: 'cucumber_sliced' },
+  tomato_sliced: { containerId: 'tray_sealed_food', countInside: 5, innerItemId: 'tomato_sliced' },
+  bell_pepper_sliced: { containerId: 'tray_sealed_food', countInside: 6, innerItemId: 'bell_pepper_sliced' },
+  cabbage_shredded: { containerId: 'tray_sealed_food', countInside: 1, innerItemId: 'cabbage_shredded' },
+  greens_chopped_mix: { containerId: 'tray_sealed_food', countInside: 2, innerItemId: 'greens_chopped_mix' },
+  vegetable_mix_frozen: { containerId: 'vacuum_pack_medium', countInside: 4, innerItemId: 'broccoli_florets' },
+  berries_mixed_frozen: { containerId: 'vacuum_pack_small', countInside: 12, innerItemId: 'berry_blueberry_single' },
 
   // 2. Cultivated & Forest Mushrooms in Unified Food Trays (Лоток с несколькими грибами)
   champignon_white_whole: { containerId: 'tray_sealed_food', countInside: 6 },
@@ -6828,31 +7050,35 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   portobello_mushroom: { containerId: 'tray_sealed_food', countInside: 2 },
 
   // 3. Fresh Fruit Slices and Cups in Trays
-  apple_slices: { containerId: 'tray_sealed_food' },
-  pear_slices: { containerId: 'tray_sealed_food' },
-  orange_slices: { containerId: 'tray_sealed_food' },
-  lemon_slices: { containerId: 'tray_sealed_food' },
-  watermelon_cubes: { containerId: 'tray_sealed_food' },
-  melon_slices: { containerId: 'tray_sealed_food' },
-  grape_cup: { containerId: 'tray_sealed_food' },
+  apple_slices: { containerId: 'tray_sealed_food', innerItemId: 'apple_sliced', countInside: 6 },
+  apple_sliced: { containerId: 'tray_sealed_food', innerItemId: 'apple_sliced', countInside: 6 },
+  pear_slices: { containerId: 'tray_sealed_food', innerItemId: 'pear_sliced', countInside: 6 },
+  pear_sliced: { containerId: 'tray_sealed_food', innerItemId: 'pear_sliced', countInside: 6 },
+  orange_slices: { containerId: 'tray_sealed_food', innerItemId: 'orange_segments', countInside: 6 },
+  orange_segments: { containerId: 'tray_sealed_food', innerItemId: 'orange_segments', countInside: 6 },
+  lemon_slices: { containerId: 'tray_sealed_food', innerItemId: 'lemon_slice', countInside: 6 },
+  kiwi_sliced: { containerId: 'tray_sealed_food', innerItemId: 'kiwi_sliced', countInside: 6 },
+  watermelon_cubes: { containerId: 'tray_sealed_food', innerItemId: 'watermelon_slice', countInside: 4 },
+  melon_slices: { containerId: 'tray_sealed_food', innerItemId: 'melon_slice', countInside: 4 },
+  grape_cup: { containerId: 'tray_sealed_food', innerItemId: 'grapes_green_bunch', countInside: 2 },
   melon_diced: { containerId: 'tray_sealed_food', innerItemId: 'melon_slice', countInside: 4 },
   watermelon_diced: { containerId: 'tray_sealed_food', innerItemId: 'watermelon_slice', countInside: 4 },
   pomegranate_seeds_cup: { containerId: 'tray_sealed_food', innerItemId: 'pomegranate_whole', countInside: 2 },
   grapes_berries_cup: { containerId: 'tray_sealed_food', innerItemId: 'grapes_green_bunch', countInside: 2 },
 
   // 4. Fresh Raw Meats & Poultry in Trays / Vacuum
-  beef_steak: { containerId: 'tray_sealed_food' },
-  beef_rump_large: { containerId: 'vacuum_pack_medium' },
-  pork_chops: { containerId: 'tray_sealed_food' },
-  pork_belly: { containerId: 'vacuum_pack_medium' },
-  pork_ribs_medium: { containerId: 'vacuum_pack_medium' },
-  chicken_breast: { containerId: 'tray_sealed_food' },
-  chicken_breast_large: { containerId: 'tray_sealed_food' },
-  chicken_thighs: { containerId: 'tray_sealed_food' },
-  chicken_thighs_medium: { containerId: 'tray_sealed_food' },
-  chicken_wings: { containerId: 'tray_sealed_food' },
-  chicken_whole_raw: { containerId: 'vacuum_pack_large' },
-  turkey_fillet: { containerId: 'vacuum_pack_medium' },
+  beef_steak: { containerId: 'tray_sealed_food', innerItemId: 'beef_rump_large' },
+  beef_rump_large: { containerId: 'vacuum_pack_medium', innerItemId: 'beef_rump_large' },
+  pork_chops: { containerId: 'tray_sealed_food', innerItemId: 'pork_rump_large' },
+  pork_belly: { containerId: 'vacuum_pack_medium', innerItemId: 'pork_brisket_large' },
+  pork_ribs_medium: { containerId: 'vacuum_pack_medium', innerItemId: 'pork_ribs_medium' },
+  chicken_breast: { containerId: 'tray_sealed_food', innerItemId: 'chicken_breast_large' },
+  chicken_breast_large: { containerId: 'tray_sealed_food', innerItemId: 'chicken_breast_large' },
+  chicken_thighs: { containerId: 'tray_sealed_food', innerItemId: 'chicken_thighs_medium' },
+  chicken_thighs_medium: { containerId: 'tray_sealed_food', innerItemId: 'chicken_thighs_medium' },
+  chicken_wings: { containerId: 'tray_sealed_food', innerItemId: 'chicken_wings_small' },
+  chicken_whole_raw: { containerId: 'vacuum_pack_large', innerItemId: 'chicken_carcass_dressed' },
+  turkey_fillet: { containerId: 'vacuum_pack_medium', innerItemId: 'turkey_breast_large' },
   beef_minced: { containerId: 'tray_sealed_food' },
   pork_minced: { containerId: 'tray_sealed_food' },
   mutton_minced: { containerId: 'tray_sealed_food' },
@@ -6875,24 +7101,24 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   minced_meat_mixed: { containerId: 'tray_sealed_food' },
 
   // 5. Fish & Seafood in Vacuum / Trays
-  salmon_steak: { containerId: 'tray_sealed_food' },
-  salmon_fillet: { containerId: 'vacuum_pack_medium' },
-  cod_fillet: { containerId: 'vacuum_pack_medium' },
-  tuna_steak: { containerId: 'vacuum_pack_small' },
-  shrimps_raw: { containerId: 'vacuum_pack_medium' },
-  squid_tubes: { containerId: 'vacuum_pack_medium' },
-  mussels_meat: { containerId: 'vacuum_pack_small' },
+  salmon_steak: { containerId: 'tray_sealed_food', innerItemId: 'salmon_steak' },
+  salmon_fillet: { containerId: 'vacuum_pack_medium', innerItemId: 'salmon_fillet' },
+  cod_fillet: { containerId: 'vacuum_pack_medium', innerItemId: 'cod_fillet' },
+  tuna_steak: { containerId: 'vacuum_pack_small', innerItemId: 'tuna_steak' },
+  shrimps_raw: { containerId: 'vacuum_pack_medium', innerItemId: 'shrimp_king', countInside: 8 },
+  squid_tubes: { containerId: 'vacuum_pack_medium', innerItemId: 'squid_tubes' },
+  mussels_meat: { containerId: 'vacuum_pack_small', innerItemId: 'mussels_half_shell', countInside: 8 },
 
   // 6. Dried Fruits & Snack Pouches
-  dried_apricots: { containerId: 'pouch_sealed_snack' },
-  prunes_dried: { containerId: 'pouch_sealed_snack' },
-  raisins_dried: { containerId: 'pouch_sealed_snack' },
-  banana_chips: { containerId: 'pouch_sealed_snack' },
-  cranberries_dried: { containerId: 'pouch_sealed_snack' },
-  dates_dried: { containerId: 'pouch_sealed_snack' },
-  figs_dried: { containerId: 'pouch_sealed_snack' },
-  walnuts: { containerId: 'pouch_sealed_snack' },
-  sunflower_seeds: { containerId: 'pouch_sealed_snack' },
+  dried_apricots: { containerId: 'pouch_sealed_snack', innerItemId: 'apricot_dried_single', countInside: 8, labelColor: '#f59e0b' },
+  prunes_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'prune_dried_single', countInside: 8, labelColor: '#312e81' },
+  raisins_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'raisins_handful_single', countInside: 6, labelColor: '#78350f' },
+  banana_chips: { containerId: 'pouch_sealed_snack', innerItemId: 'banana_chip_single', countInside: 8, labelColor: '#facc15' },
+  cranberries_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'cranberry_dried_single', countInside: 8, labelColor: '#be123c' },
+  dates_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'prune_dried_single', countInside: 8, labelColor: '#78350f' },
+  figs_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'apricot_dried_single', countInside: 8, labelColor: '#a16207' },
+  walnuts: { containerId: 'pouch_sealed_snack', innerItemId: 'nutmeg_whole_seeds', countInside: 8, labelColor: '#92400e' },
+  sunflower_seeds: { containerId: 'pouch_sealed_snack', innerItemId: 'nutmeg_whole_seeds', countInside: 10, labelColor: '#18181b' },
 
   // 7. Butter & Cheeses in Premium Paper Packaging with Dedicated Label Colors
   butter_brick_salted: { containerId: 'paper_packaging_small', labelColor: '#facc15' },
@@ -7090,7 +7316,13 @@ export function unpackSingleUseContainer(
         sample.itemId === 'chicken_wing_crispy_single' ||
         sample.itemId === 'sushi_roll_piece' ||
         sample.itemId === 'nacho_chip_single' ||
-        sample.itemId === 'popcorn_handful';
+        sample.itemId === 'popcorn_handful' ||
+        sample.itemId === 'apple_ring_dried_single' ||
+        sample.itemId === 'prune_dried_single' ||
+        sample.itemId === 'apricot_dried_single' ||
+        sample.itemId === 'raisins_handful_single' ||
+        sample.itemId === 'cranberry_dried_single' ||
+        sample.itemId === 'banana_chip_single';
 
       if (isDirectPiece) {
         if (sample.category === 'food' && (player.needs.fullness || 0) >= 98) {
