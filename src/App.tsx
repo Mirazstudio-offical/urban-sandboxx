@@ -106,6 +106,9 @@ import { Minimap } from './components/Minimap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { TruckSuperstructureHUD } from './components/TruckSuperstructureHUD';
+import { CraneOutriggersModal } from './components/CraneOutriggersModal';
+import { isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
+import { toggleCraneHookAttach } from './physics';
 import { MainMenu } from './components/MainMenu';
 import { VehicleBoardMenu } from './components/VehicleBoardMenu';
 import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
@@ -401,6 +404,8 @@ export default function App() {
   const [isGasStationCashierModalOpen, setIsGasStationCashierModalOpen] = useState<boolean>(false);
   const [isEngineBayOpen, setIsEngineBayOpen] = useState<boolean>(false);
   const [engineBayVehicle, setEngineBayVehicle] = useState<Vehicle | null>(null);
+  const [isCraneOutriggersModalOpen, setIsCraneOutriggersModalOpen] = useState<boolean>(false);
+  const [craneOutriggersVehicle, setCraneOutriggersVehicle] = useState<Vehicle | null>(null);
   const [gasStationPrompt, setGasStationPrompt] = useState<string | null>(null);
   const [activeInteraction, setActiveInteraction] = useState<InteractionTarget | null>(null);
   const activeInteractionRef = useRef<InteractionTarget | null>(null);
@@ -2304,15 +2309,40 @@ export default function App() {
         }
       }
       if (code === 'Space') {
+        const p = playerRef.current;
+        const w = worldRef.current;
+        if (p && p.isInVehicle && p.craneOperatorActive && w && p.currentVehicleId) {
+          const veh = w.vehicles.find(v => v.id === p.currentVehicleId);
+          if (veh && isVehicleCraneTruck(veh)) {
+            toggleCraneHookAttach(veh, w, p);
+            setVitalsRefreshTick((t) => t + 1);
+            e.preventDefault();
+            return;
+          }
+        }
         inputRef.current.handbrake = true;
         e.preventDefault();
       }
       if (code === 'ShiftLeft'|| code === 'ShiftRight') inputRef.current.sprint = true;
-      if (code === 'KeyH') inputRef.current.hornH = true;
+      if (code === 'KeyH') {
+        const p = playerRef.current;
+        if (p && p.isInVehicle && p.craneOperatorActive) {
+          sound.playCraneHorn();
+          e.preventDefault();
+          return;
+        }
+        inputRef.current.hornH = true;
+      }
 
       // Turn Signals & Interaction / Consumption (Q = Left turn signal in car or Swap / Toggle Active Hand on foot, E = Interact / Use in active hand, Z = Hazard)
       if (code === 'KeyQ') {
         const p = playerRef.current;
+        if (p && p.isInVehicle && p.craneOperatorActive) {
+          inputRef.current.craneBoomRetract = true;
+          sound.playHydraulicHiss(0.18);
+          e.preventDefault();
+          return;
+        }
         if (p && p.isInVehicle) {
           toggleTurnSignal('left');
         } else if (p) {
@@ -2322,7 +2352,23 @@ export default function App() {
         }
       }
       if (code === 'KeyE') {
+        const p = playerRef.current;
+        if (p && p.isInVehicle && p.craneOperatorActive) {
+          inputRef.current.craneBoomExtend = true;
+          sound.playHydraulicHiss(0.18);
+          e.preventDefault();
+          return;
+        }
         handleInteractE();
+      }
+      if (code === 'KeyR') {
+        const p = playerRef.current;
+        if (p && p.isInVehicle && p.craneOperatorActive) {
+          inputRef.current.craneHookUp = true;
+          sound.playHydraulicHiss(0.18);
+          e.preventDefault();
+          return;
+        }
       }
       if (code === 'KeyZ') {
         toggleTurnSignal('hazard');
@@ -2496,6 +2542,10 @@ export default function App() {
       if (code === 'Space') inputRef.current.handbrake = false;
       if (code === 'ShiftLeft'|| code === 'ShiftRight') inputRef.current.sprint = false;
       if (code === 'KeyH') inputRef.current.hornH = false;
+      if (code === 'KeyQ') inputRef.current.craneBoomRetract = false;
+      if (code === 'KeyE') inputRef.current.craneBoomExtend = false;
+      if (code === 'KeyR') inputRef.current.craneHookUp = false;
+      if (code === 'KeyF') inputRef.current.craneHookDown = false;
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -3130,53 +3180,74 @@ export default function App() {
           );
 
           if (veh.isPlayerControlled) {
-            player.x = veh.x;
-            player.y = veh.y;
+            if ((player.craneOperatorActive || veh.craneOperatorActive) && isVehicleCraneTruck(veh)) {
+              const cGeom = getVehicleCraneGeometry(veh);
+              // Position player model sitting inside the revolving crane operator cab ("скворечник")
+              const cosT = Math.cos(cGeom.turretAngle);
+              const sinT = Math.sin(cGeom.turretAngle);
+              const cabVehX = cGeom.turretLocalX + 1.1 * cosT - (-7.4) * sinT;
+              const cabVehY = 1.1 * sinT + (-7.4) * cosT;
+              const cosV = Math.cos(veh.angle);
+              const sinV = Math.sin(veh.angle);
+              player.x = veh.x + cabVehX * cosV - cabVehY * sinV;
+              player.y = veh.y + cabVehX * sinV + cabVehY * cosV;
+              player.angle = veh.angle + cGeom.turretAngle;
 
-            const speedAbs = Math.abs(veh.speed);
-            const isReversingCar = veh.speed < -5;
-            const travelAngle = isReversingCar ? veh.angle + Math.PI : veh.angle;
+              // Camera smoothly anchored between turntable and hook work radius, free of driverPeek jitter
+              const camWorkDist = Math.max(16, cGeom.totalBoomReachPx * 0.45);
+              camera.targetX = cGeom.worldTurretX + Math.cos(cGeom.worldBoomAngle) * camWorkDist;
+              camera.targetY = cGeom.worldTurretY + Math.sin(cGeom.worldBoomAngle) * camWorkDist;
+              camera.targetAngle = veh.angle;
+              camera.targetZoom = 1.25 * userZoomFactorRef.current;
+            } else {
+              player.x = veh.x;
+              player.y = veh.y;
 
-            // 1. Balanced Forward Bias: subtle forward lookahead that keeps player vehicle centered and visible
-            // Rest: 0px, 40 km/h (~150 px/s): ~22px, 80 km/h (~300 px/s): ~45px, 140+ km/h (~500 px/s): ~75px max
-            const forwardDist = Math.min(75, speedAbs * 0.15);
+              const speedAbs = Math.abs(veh.speed);
+              const isReversingCar = veh.speed < -5;
+              const travelAngle = isReversingCar ? veh.angle + Math.PI : veh.angle;
 
-            // 2. Subtle Steering Apex Bias: slight hint into turning arc without shifting vehicle off-center
-            const steer = veh.steerAngle || 0;
-            const lateralDist = steer * Math.min(25, 10 + speedAbs * 0.04);
+              // 1. Balanced Forward Bias: subtle forward lookahead that keeps player vehicle centered and visible
+              // Rest: 0px, 40 km/h (~150 px/s): ~22px, 80 km/h (~300 px/s): ~45px, 140+ km/h (~500 px/s): ~75px max
+              const forwardDist = Math.min(75, speedAbs * 0.15);
 
-            // 3. Optional Driver Free Look / Glance: gentle manual peek
-            let lookNormX = 0;
-            let lookNormY = 0;
+              // 2. Subtle Steering Apex Bias: slight hint into turning arc without shifting vehicle off-center
+              const steer = veh.steerAngle || 0;
+              const lateralDist = steer * Math.min(25, 10 + speedAbs * 0.04);
 
-            if (input.lookOffsetX !== undefined && input.lookOffsetY !== undefined && (input.isTouchLookActive || Math.abs(input.lookOffsetX) > 0.001 || Math.abs(input.lookOffsetY) > 0.001)) {
-              lookNormX = Math.max(-1, Math.min(1, input.lookOffsetX));
-              lookNormY = Math.max(-1, Math.min(1, input.lookOffsetY));
-            } else if (input.lastPointerType === 'mouse') {
-              const halfW = (window.innerWidth || 1920) * 0.5;
-              const halfH = (window.innerHeight || 1080) * 0.5;
-              lookNormX = Math.max(-1, Math.min(1, ((input.mouseX ?? halfW) - halfW) / (halfW || 1)));
-              lookNormY = Math.max(-1, Math.min(1, ((input.mouseY ?? halfH) - halfH) / (halfH || 1)));
+              // 3. Optional Driver Free Look / Glance: gentle manual peek
+              let lookNormX = 0;
+              let lookNormY = 0;
+
+              if (input.lookOffsetX !== undefined && input.lookOffsetY !== undefined && (input.isTouchLookActive || Math.abs(input.lookOffsetX) > 0.001 || Math.abs(input.lookOffsetY) > 0.001)) {
+                lookNormX = Math.max(-1, Math.min(1, input.lookOffsetX));
+                lookNormY = Math.max(-1, Math.min(1, input.lookOffsetY));
+              } else if (input.lastPointerType === 'mouse') {
+                const halfW = (window.innerWidth || 1920) * 0.5;
+                const halfH = (window.innerHeight || 1080) * 0.5;
+                lookNormX = Math.max(-1, Math.min(1, ((input.mouseX ?? halfW) - halfW) / (halfW || 1)));
+                lookNormY = Math.max(-1, Math.min(1, ((input.mouseY ?? halfH) - halfH) / (halfH || 1)));
+              }
+
+              const driverPeekForward = -lookNormY * 35;
+              const driverPeekSide = lookNormX * 30;
+
+              const totalForward = forwardDist + driverPeekForward;
+              const totalLateral = lateralDist + driverPeekSide;
+
+              const cosA = Math.cos(travelAngle);
+              const sinA = Math.sin(travelAngle);
+              const latCos = -sinA;
+              const latSin = cosA;
+
+              camera.targetX = veh.x + cosA * totalForward + latCos * totalLateral;
+              camera.targetY = veh.y + sinA * totalForward + latSin * totalLateral;
+              camera.targetAngle = veh.angle;
+
+              // Dynamic camera zoom: smooth wide-angle transition at high speeds to open view naturally
+              const speedRatio = Math.min(1.0, speedAbs / 500);
+              camera.targetZoom = (1.15 - speedRatio * 0.30) * userZoomFactorRef.current;
             }
-
-            const driverPeekForward = -lookNormY * 35;
-            const driverPeekSide = lookNormX * 30;
-
-            const totalForward = forwardDist + driverPeekForward;
-            const totalLateral = lateralDist + driverPeekSide;
-
-            const cosA = Math.cos(travelAngle);
-            const sinA = Math.sin(travelAngle);
-            const latCos = -sinA;
-            const latSin = cosA;
-
-            camera.targetX = veh.x + cosA * totalForward + latCos * totalLateral;
-            camera.targetY = veh.y + sinA * totalForward + latSin * totalLateral;
-            camera.targetAngle = veh.angle;
-
-            // Dynamic camera zoom: smooth wide-angle transition at high speeds to open view naturally
-            const speedRatio = Math.min(1.0, speedAbs / 500);
-            camera.targetZoom = (1.15 - speedRatio * 0.30) * userZoomFactorRef.current;
           }
         }
 
@@ -4516,10 +4587,30 @@ export default function App() {
           veh.vy = 0;
         }
 
-        // Position player to driver-side door
-        const doorAngle = veh.angle - Math.PI / 2;
-        player.x = veh.x + Math.cos(doorAngle) * (veh.width / 2 + 18);
-        player.y = veh.y + Math.sin(doorAngle) * (veh.width / 2 + 18);
+        // If player was in crane operator cab, exit beside turntable ladder
+        if (player.craneOperatorActive) {
+          player.craneOperatorActive = false;
+          veh.craneOperatorActive = false;
+          veh.craneControlMode = false;
+          if (isVehicleCraneTruck(veh)) {
+            const cGeom = getVehicleCraneGeometry(veh);
+            const cosT = Math.cos(cGeom.turretAngle);
+            const sinT = Math.sin(cGeom.turretAngle);
+            const cabLocalX = cGeom.turretLocalX + 1.1 * cosT - (-8.8) * sinT;
+            const cabLocalY = 1.1 * sinT + (-8.8) * cosT;
+            const cosV = Math.cos(veh.angle);
+            const sinV = Math.sin(veh.angle);
+            player.x = veh.x + (cabLocalX - 4) * cosV - (cabLocalY - 12) * sinV;
+            player.y = veh.y + (cabLocalX - 4) * sinV + (cabLocalY - 12) * cosV;
+          }
+          addPlayerNotification(player, 'Вы спустились из кабины крановщика на землю.', 'info');
+        } else {
+          // Position player to driver-side door
+          const doorAngle = veh.angle - Math.PI / 2;
+          player.x = veh.x + Math.cos(doorAngle) * (veh.width / 2 + 18);
+          player.y = veh.y + Math.sin(doorAngle) * (veh.width / 2 + 18);
+        }
+
         player.vx = 0;
         player.vy = 0;
         player.isInVehicle = false;
@@ -4827,6 +4918,37 @@ export default function App() {
       case 'exit_vehicle':
         handleEnterExitVehicle();
         break;
+
+      case 'enter_crane_cab': {
+        const veh = (target.data && target.data.id) ? (world.vehicles.find(v => v.id === target.data.id) || target.data) : null;
+        if (veh) {
+          p.isInVehicle = true;
+          p.currentVehicleId = veh.id;
+          p.craneOperatorActive = true;
+          veh.craneOperatorActive = true;
+          veh.craneControlMode = true;
+          veh.isPlayerControlled = true;
+          setIsInVehicle(true);
+          sound.playCarDoor();
+          addPlayerNotification(p, 'Вы заняли рабочее место крановщика КС-3577 (кабина на поворотной платформе)', 'info');
+          setVitalsRefreshTick(t => t + 1);
+        }
+        break;
+      }
+
+      case 'exit_crane_cab':
+        handleEnterExitVehicle();
+        break;
+
+      case 'crane_outriggers_panel': {
+        const veh = (target.data && target.data.id) ? (world.vehicles.find(v => v.id === target.data.id) || target.data) : null;
+        if (veh) {
+          setCraneOutriggersVehicle(veh);
+          setIsCraneOutriggersModalOpen(true);
+          sound.playUseItem();
+        }
+        break;
+      }
 
       case 'enter_building': {
         const { bld, ent } = target.data;
@@ -6163,6 +6285,41 @@ export default function App() {
         inputRef={inputRef}
         isMobileTouch={isMobileTouch}
         onForceUpdate={() => setVitalsRefreshTick((t) => t + 1)}
+        onOpenOutriggersModal={() => {
+          const world = worldRef.current;
+          const player = playerRef.current;
+          const veh = world && player
+            ? (world.vehicles.find((v) => v.id === player.currentVehicleId) ||
+               world.vehicles.find((v) => isVehicleCraneTruck(v) && Math.hypot(v.x - player.x, v.y - player.y) < 150))
+            : null;
+          if (veh) {
+            setCraneOutriggersVehicle(veh);
+            setIsCraneOutriggersModalOpen(true);
+            sound.playUseItem();
+          }
+        }}
+        onEnterCraneCab={() => {
+          const world = worldRef.current;
+          const player = playerRef.current;
+          if (!world || !player) return;
+          const veh = world.vehicles.find((v) => v.id === player.currentVehicleId) ||
+            world.vehicles.find((v) => isVehicleCraneTruck(v) && Math.hypot(v.x - player.x, v.y - player.y) < 150);
+          if (veh) {
+            player.isInVehicle = true;
+            player.currentVehicleId = veh.id;
+            player.craneOperatorActive = true;
+            veh.craneOperatorActive = true;
+            veh.craneControlMode = true;
+            veh.isPlayerControlled = true;
+            setIsInVehicle(true);
+            sound.playCarDoor();
+            addPlayerNotification(player, 'Вы заняли рабочее место крановщика КС-3577 (кабина на поворотной платформе)', 'info');
+            setVitalsRefreshTick((t) => t + 1);
+          }
+        }}
+        onExitCraneCab={() => {
+          handleEnterExitVehicle();
+        }}
       />
 
       {/* MOBILE ORIENTATION GUARD */}
@@ -6920,6 +7077,18 @@ export default function App() {
               setVitalsRefreshTick((t) => t + 1);
             }
           }}
+        />
+      )}
+
+      {/* TRUCK CRANE OUTRIGGERS GROUND STATION MODAL */}
+      {isCraneOutriggersModalOpen && (
+        <CraneOutriggersModal
+          isOpen={isCraneOutriggersModalOpen}
+          onClose={() => setIsCraneOutriggersModalOpen(false)}
+          vehicle={craneOutriggersVehicle || (worldRef.current && playerRef.current ? (worldRef.current.vehicles.find(v => v.id === playerRef.current?.currentVehicleId) || worldRef.current.vehicles.find(v => isVehicleCraneTruck(v) && Math.hypot(v.x - (playerRef.current?.x || 0), v.y - (playerRef.current?.y || 0)) < 150)) : null) || null}
+          player={playerRef.current}
+          world={worldRef.current}
+          onForceUpdate={() => setVitalsRefreshTick((t) => t + 1)}
         />
       )}
 

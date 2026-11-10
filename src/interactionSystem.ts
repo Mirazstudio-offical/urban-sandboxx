@@ -7,10 +7,14 @@ import { getNearbyWaterVehicle } from './waterHoseSystem';
 import { getCityApartments, getApartmentById, getApartmentForPlot, hasPlayerApartmentKey, PropertyApartment } from './propertySystem';
 import { FURNITURE_STORAGE_CONFIGS } from './furnitureStorageSystem';
 import { getBusSeatPositions, getBusDoors, getTrainCoachSeats } from './busInteriorSystem';
+import { isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
 
 export type InteractionType =
   | 'enter_vehicle'
   | 'exit_vehicle'
+  | 'enter_crane_cab'
+  | 'exit_crane_cab'
+  | 'crane_outriggers_panel'
   | 'open_hood'
   | 'fuel_insert'
   | 'fuel_remove'
@@ -437,6 +441,19 @@ export function findActiveInteraction(
 
   // If inside vehicle, simple in-vehicle prompt
   if (player.isInVehicle) {
+    if (player.craneOperatorActive) {
+      return {
+        type: 'exit_crane_cab',
+        primaryKey: 'F',
+        actionTitle: 'Покинуть кабину крановщика',
+        detail: 'Нажмите [F] чтобы спуститься на землю',
+        x: player.x,
+        y: player.y,
+        dist: 0,
+        angleDiff: 0,
+        score: 0
+      };
+    }
     return {
       type: 'exit_vehicle',
       primaryKey: 'F',
@@ -847,8 +864,12 @@ export function findActiveInteraction(
         candidates.push({
           type: 'enter_vehicle',
           primaryKey: 'F',
-          actionTitle: (veh.type === 'bus' || veh.type === 'bus_minibus') ? `Сесть за руль (${cfg.name})` : `Сесть в автомобиль (${cfg.name})`,
-          detail: `Дверь водителя`,
+          actionTitle: (veh.type === 'bus' || veh.type === 'bus_minibus') 
+            ? `Сесть за руль (${cfg.name})` 
+            : isVehicleCraneTruck(veh)
+            ? `Сесть за руль шасси (${cfg.name})`
+            : `Сесть в автомобиль (${cfg.name})`,
+          detail: isVehicleCraneTruck(veh) ? `Кабина водителя грузовика` : `Дверь водителя`,
           x: doorX,
           y: doorY,
           dist: bestDoorReach.dist,
@@ -856,6 +877,52 @@ export function findActiveInteraction(
           score: bestDoorReach.score - 6,
           data: veh
         });
+      }
+
+      // Special Crane Truck Physical Stations: Ground Outrigger Box & Turntable Crane Cab
+      if (isVehicleCraneTruck(veh)) {
+        // 1. Ground Outrigger Control Box on chassis frame
+        const outriggerSideX = veh.x + cos * (-cfg.length * 0.08) - sin * (cfg.width * 0.52 + 10);
+        const outriggerSideY = veh.y + sin * (-cfg.length * 0.08) + cos * (cfg.width * 0.52 + 10);
+        const outReach = isTargetInPhysicalReach(px, py, facing, outriggerSideX, outriggerSideY, 52, 1.45, mouseWorldPos);
+        if (outReach.inReach) {
+          candidates.push({
+            type: 'crane_outriggers_panel',
+            primaryKey: 'E',
+            actionTitle: 'Пульт выносных опор (Аутригеры)',
+            detail: veh.craneOutriggersDeployed ? 'Опоры выставлены · Проверить горизонт' : 'Выдвинуть балки и выставить опоры',
+            x: outriggerSideX,
+            y: outriggerSideY,
+            dist: outReach.dist,
+            angleDiff: outReach.angleDiff,
+            score: outReach.score - 15,
+            data: veh
+          });
+        }
+
+        // 2. Crane Operator Cab Ladder & Door on Turntable
+        const cGeom = getVehicleCraneGeometry(veh);
+        const cosT = Math.cos(cGeom.turretAngle);
+        const sinT = Math.sin(cGeom.turretAngle);
+        const cabLocalX = cGeom.turretLocalX + 1.1 * cosT - (-8.8) * sinT;
+        const cabLocalY = 1.1 * sinT + (-8.8) * cosT;
+        const craneCabWorldX = veh.x + cos * cabLocalX - sin * cabLocalY;
+        const craneCabWorldY = veh.y + sin * cabLocalX + cos * cabLocalY;
+        const cabReach = isTargetInPhysicalReach(px, py, facing, craneCabWorldX, craneCabWorldY, 50, 1.45, mouseWorldPos);
+        if (cabReach.inReach) {
+          candidates.push({
+            type: 'enter_crane_cab',
+            primaryKey: 'F',
+            actionTitle: 'Кабина крановщика КС-3577',
+            detail: 'Подняться к пульту управления стрелой',
+            x: craneCabWorldX,
+            y: craneCabWorldY,
+            dist: cabReach.dist,
+            angleDiff: cabReach.angleDiff,
+            score: cabReach.score - 14,
+            data: veh
+          });
+        }
       }
     }
   }

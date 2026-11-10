@@ -2502,7 +2502,25 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawTurretCircle(2.6, -5.4, 0.35, '#0f172a');
     // Wiper blade on front glass & work spotlight on cabin front corner
     drawTurretLine(4.6, -6.3, 3.0, -7.3, '#0f172a', 0.55);
-    drawTurretCircle(4.8, -8.2, 0.65, '#fef08a', '#0f172a', 0.5);
+    drawTurretCircle(4.8, -8.2, 0.75, car.craneSpotlightOn ? '#fef08a' : '#94a3b8', '#0f172a', 0.6);
+
+    // Operator seated in crane cab ("скворечник")
+    if (car.craneOperatorActive) {
+      drawTurretCircle(1.1, -7.4, 1.3, '#d97706', '#78350f', 0.7);
+      drawTurretRect(0.0, -8.3, 1.5, 1.8, '#1e293b');
+    }
+
+    // Work spotlight illumination beam
+    if (car.craneSpotlightOn) {
+      drawTurretPoly(
+        [
+          [4.8, -8.2],
+          [26.0, -18.0],
+          [28.0, 2.0],
+        ],
+        'rgba(254, 240, 138, 0.16)'
+      );
+    }
 
     // 7. 3-Section Telescopic Box Boom (Трёхсекционная телескопическая стрела 9.0–21.7 м)
     const ext = Math.max(0, Math.min(1, car.craneBoomExtension ?? 0));

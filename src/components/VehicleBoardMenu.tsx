@@ -1073,71 +1073,69 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
             </div>
           )}
 
-          {/* ================= 17. SPECIAL: KS-3577 BOOM CRANE CONTROLS ================= */}
+          {/* ================= 17. SPECIAL: KS-3577 CHASSIS CAB CRANE CONTROLS ================= */}
           {isVehicleCraneTruck(veh) && (() => {
-            const cGeom = getVehicleCraneGeometry(veh);
+            const isEngineRunning = veh.engineState ? veh.engineState.engineRunning : true;
+            const isPtoActive = veh.isPtoActive !== false;
+            const hasHydraulicPressure = isEngineRunning && isPtoActive;
+
             return (
               <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg col-span-1 sm:col-span-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                    АВТОКРАН КС-3577 «ИВАНОВЕЦ» (16 Т)
+                    АВТОКРАН КС-3577 «ИВАНОВЕЦ» · КАБИНА ШАССИ
                   </span>
-                  <span className="text-[9px] font-mono font-bold text-[#c68a35] tabular-nums">
-                    СТРЕЛА {cGeom.boomLengthMeters.toFixed(1)} М · ПОВОРОТ {Math.round((cGeom.turretAngle * 180) / Math.PI)}° · MAX {cGeom.maxLoadTons.toFixed(1)} Т
+                  <span className={`text-[9px] font-mono font-bold tabular-nums ${hasHydraulicPressure ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    ГИДРАВЛИКА: {hasHydraulicPressure ? '16 МПа (НОРМА)' : '0 МПа (КОМ ВЫКЛ)'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-1.5 mt-2.5">
+                <p className="text-[8.5px] font-mono text-[#9ba3af] mt-1.5 leading-relaxed">
+                  Крановые операции производятся из поворотной кабины крановщика. Из кабины шасси
+                  управляется коробка отбора мощности (КОМ), питающая гидронасос.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 mt-2.5">
                   <button
                     type="button"
                     onClick={() => {
                       sound.playButtonPress();
-                      veh.craneOutriggersDeployed = !veh.craneOutriggersDeployed;
+                      veh.isPtoActive = !veh.isPtoActive;
+                      if (veh.isPtoActive) sound.playHydraulicHiss(0.3);
                     }}
-                    className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1.5 text-[10px] font-mono font-black transition-all cursor-pointer ${
-                      veh.craneOutriggersDeployed
+                    className={`py-2 px-2.5 rounded-[2px] border flex items-center justify-between text-[9.5px] font-mono font-black transition-all cursor-pointer ${
+                      isPtoActive
                         ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
                         : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                     }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Power className="w-3.5 h-3.5" />
+                      <span>КОМ (ПРИВОД НАСОСА)</span>
+                    </span>
+                    <span className="font-bold">{isPtoActive ? 'ВКЛ' : 'ВЫКЛ'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (player) {
+                        player.craneOperatorActive = true;
+                        veh.craneOperatorActive = true;
+                        veh.craneControlMode = true;
+                        sound.playCarDoor();
+                        onClose();
+                      }
+                    }}
+                    className="py-2 px-2.5 rounded-[2px] bg-[#eab308] hover:bg-[#ca8a04] text-black border border-[#ca8a04] text-[9.5px] font-mono font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
                   >
                     <Anchor className="w-3.5 h-3.5" />
-                    <span>{veh.craneOutriggersDeployed ? 'ОПОРЫ: В УПОРЕ' : 'ВЫДВИНУТЬ ОПОРЫ'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sound.playButtonPress();
-                      veh.craneControlMode = !veh.craneControlMode;
-                    }}
-                    className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1.5 text-[10px] font-mono font-black transition-all cursor-pointer ${
-                      veh.craneControlMode
-                        ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
-                        : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                    }`}
-                  >
-                    <Sliders className="w-3.5 h-3.5" />
-                    <span>{veh.craneControlMode ? 'ПУЛЬТ СТРЕЛЫ: ВКЛ' : 'РЕЖИМ СТРЕЛЫ'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      toggleCraneHookAttach(veh, world, player || undefined);
-                    }}
-                    className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1.5 text-[10px] font-mono font-black transition-all cursor-pointer ${
-                      veh.craneHookedVehicleId
-                        ? 'bg-[#10b981] text-[#0b0c0e] border-[#34d399]'
-                        : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                    }`}
-                  >
-                    <Link2 className="w-3.5 h-3.5" />
-                    <span>{veh.craneHookedVehicleId ? 'ОТЦЕПИТЬ СТРОПЫ' : 'ЗАЦЕПИТЬ ГАК'}</span>
+                    <span>В КАБИНУ КРАНОВЩИКА</span>
                   </button>
                 </div>
 
                 <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-                  В режиме стрелы клавиши A/D (руль) вращают башню 360°, W/S (газ/тормоз) выдвигают 3-секционную стрелу
+                  * Выдвижение опор производится снаружи на наружном пульте шасси
                 </span>
               </div>
             );

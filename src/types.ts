@@ -955,6 +955,9 @@ export interface Vehicle {
   craneOutriggerExt?: number;       // Smooth 0.0 .. 1.0 outrigger beam deployment progress
   craneHookedVehicleId?: string | null; // ID of vehicle/trailer currently slung on the crane hook
   craneControlMode?: boolean;       // Operator crane control mode active
+  craneOperatorActive?: boolean;    // Operator is seated in revolving crane operator cab ("скворечник")
+  craneSpotlightOn?: boolean;       // Work spotlight active on crane cab / boom
+  craneOutriggersStationOpen?: boolean; // Ground outrigger station panel active
   _waterSpraySoundTimer?: number;
   _washSweepTimer?: number;
   _washParticleTimer?: number;
@@ -2095,6 +2098,7 @@ export interface Player {
   isInVehicle: boolean;
   currentVehicleId: string | null;
   vehicleId?: string | null;
+  craneOperatorActive?: boolean;    // Operator is inside the crane cab ("скворечник")
   walkCycle: number;
   skinColor: string;
   shirtColor: string;
@@ -2637,6 +2641,10 @@ export interface InputState {
   craneTurretRight?: boolean;
   craneBoomExtend?: boolean;
   craneBoomRetract?: boolean;
+  craneBoomUp?: boolean;
+  craneBoomDown?: boolean;
   craneHookUp?: boolean;
   craneHookDown?: boolean;
+  craneHorn?: boolean;
+  craneSpotlightToggle?: boolean;
 }

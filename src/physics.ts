@@ -8084,13 +8084,21 @@ function updateTruckCraneSuperstructure(
 ) {
   if (!isVehicleCraneTruck(vehicle)) return;
 
+  // 1. Hydraulic pressure from truck engine PTO (КОМ - Коробка отбора мощности)
+  const isEngineRunning = vehicle.engineState ? vehicle.engineState.engineRunning : true;
+  const isPtoActive = vehicle.isPtoActive !== false;
+  const hasHydraulicPressure = isEngineRunning && isPtoActive;
+
   // 1. Outriggers hydraulic deployment animation
   const targetOutrigger = vehicle.craneOutriggersDeployed ? 1.0 : 0.0;
   const curOutrigger = vehicle.craneOutriggerExt ?? 0.0;
   if (Math.abs(targetOutrigger - curOutrigger) > 0.001) {
-    const rate = 0.85; // ~1.2s full stroke
-    const step = Math.sign(targetOutrigger - curOutrigger) * Math.min(Math.abs(targetOutrigger - curOutrigger), rate * dt);
-    vehicle.craneOutriggerExt = Math.max(0, Math.min(1, curOutrigger + step));
+    // Requires hydraulic pressure from PTO to deploy or retract outriggers
+    if (hasHydraulicPressure || curOutrigger > 0) {
+      const rate = 0.85; // ~1.2s full stroke
+      const step = Math.sign(targetOutrigger - curOutrigger) * Math.min(Math.abs(targetOutrigger - curOutrigger), rate * dt);
+      vehicle.craneOutriggerExt = Math.max(0, Math.min(1, curOutrigger + step));
+    }
   } else {
     vehicle.craneOutriggerExt = targetOutrigger;
   }
@@ -8108,36 +8116,45 @@ function updateTruckCraneSuperstructure(
     }
   }
 
-  // 2. Operator turret & boom controls when player is in this crane truck
-  if (vehicle.isPlayerControlled && input) {
-    const inCraneMode = !!vehicle.craneControlMode;
-    const rotLeft = !!input.craneTurretLeft || (inCraneMode && (input.left || (typeof input.steeringAxis === 'number' && input.steeringAxis < -0.15)));
-    const rotRight = !!input.craneTurretRight || (inCraneMode && (input.right || (typeof input.steeringAxis === 'number' && input.steeringAxis > 0.15)));
-    const boomExt = !!input.craneBoomExtend || (inCraneMode && input.forward);
-    const boomRet = !!input.craneBoomRetract || (inCraneMode && input.backward);
+  // 2. Safety Interlock (ОНК-140 / ОГП):
+  // According to crane safety regulations (ГОСТ 27584-88), operating the boom without deployed outriggers
+  // or without hydraulic pressure is strictly interlocked to prevent crane turnover.
+  const outriggersOk = (vehicle.craneOutriggerExt ?? 0) >= 0.70;
+  const canOperateBoom = hasHydraulicPressure && outriggersOk;
+
+  // 3. Operator turret & boom controls when player is actively in the crane operator cab ("скворечник")
+  const isOperatorInCab = !!(vehicle.isPlayerControlled && (vehicle.craneOperatorActive || vehicle.craneControlMode));
+
+  if (isOperatorInCab && input) {
+    const rotLeft = !!input.craneTurretLeft || (input.left || (typeof input.steeringAxis === 'number' && input.steeringAxis < -0.15));
+    const rotRight = !!input.craneTurretRight || (input.right || (typeof input.steeringAxis === 'number' && input.steeringAxis > 0.15));
+    const boomExt = !!input.craneBoomExtend || (input.forward || !!input.craneBoomUp);
+    const boomRet = !!input.craneBoomRetract || (input.backward || !!input.craneBoomDown);
     const hookUp = !!input.craneHookUp;
     const hookDown = !!input.craneHookDown;
 
-    const turretSpeed = 0.72; // rad/s (~41 deg/s smooth hydraulic slewing)
-    let curAngle = vehicle.craneTurretAngle ?? 0;
-    if (rotLeft) curAngle -= turretSpeed * dt;
-    if (rotRight) curAngle += turretSpeed * dt;
-    // Normalize within [-PI, PI]
-    curAngle = ((curAngle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
-    vehicle.craneTurretAngle = curAngle;
+    if (canOperateBoom) {
+      const turretSpeed = 0.72; // rad/s (~41 deg/s smooth hydraulic slewing)
+      let curAngle = vehicle.craneTurretAngle ?? 0;
+      if (rotLeft) curAngle -= turretSpeed * dt;
+      if (rotRight) curAngle += turretSpeed * dt;
+      // Normalize within [-PI, PI]
+      curAngle = ((curAngle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      vehicle.craneTurretAngle = curAngle;
 
-    const extSpeed = 0.32; // full 21.7m telescope in ~3.1s
-    let curExt = vehicle.craneBoomExtension ?? 0;
-    if (boomExt) curExt = Math.min(1.0, curExt + extSpeed * dt);
-    if (boomRet) curExt = Math.max(0.0, curExt - extSpeed * dt);
-    vehicle.craneBoomExtension = curExt;
+      const extSpeed = 0.32; // full 21.7m telescope in ~3.1s
+      let curExt = vehicle.craneBoomExtension ?? 0;
+      if (boomExt) curExt = Math.min(1.0, curExt + extSpeed * dt);
+      if (boomRet) curExt = Math.max(0.0, curExt - extSpeed * dt);
+      vehicle.craneBoomExtension = curExt;
 
-    const hookSpeed = 0.45;
-    let curHook = vehicle.craneHookHeight ?? 0.25;
-    if (hookUp) curHook = Math.min(1.0, curHook + hookSpeed * dt);
-    if (hookDown) curHook = Math.max(0.0, curHook - hookSpeed * dt);
-    vehicle.craneHookHeight = curHook;
-    vehicle.craneBoomElevation = 0.15 + curHook * 0.65;
+      const hookSpeed = 0.45;
+      let curHook = vehicle.craneHookHeight ?? 0.25;
+      if (hookUp) curHook = Math.min(1.0, curHook + hookSpeed * dt);
+      if (hookDown) curHook = Math.max(0.0, curHook - hookSpeed * dt);
+      vehicle.craneHookHeight = curHook;
+      vehicle.craneBoomElevation = 0.15 + curHook * 0.65;
+    }
   }
 
   // 3. Move & suspend hooked vehicle / trailer under the boom head
