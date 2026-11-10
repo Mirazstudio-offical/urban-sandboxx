@@ -908,3 +908,50 @@ export function resolveVehicleTruckFrameAndBody(car: {
 
   return { platform, frame, body };
 }
+
+/**
+ * Computes the longitudinal X positions (in vehicle local coords) of all axles
+ * for a configurable truck frame based on its real engineering specifications (wheelBasePx, front overhang, axle count).
+ * Used by physics axle geometry, bare-frame rendering, and wheel rendering.
+ */
+export function getTruckFrameAxlePositions(
+  frame: TruckFrameVariant,
+  halfL: number,
+  platform: TruckPlatformId
+): { frontAxlesX: number[]; rearAxlesX: number[] } {
+  const safeHalfL = isFinite(halfL) && halfL > 10 ? halfL : 35;
+  const safePlatform = platform || 'kamaz';
+  // Conventional hooded trucks (GAZ-53, ZIL-130, ZIL-4331) have the front axle positioned under the hood fenders,
+  // whereas cab-over trucks (KAMAZ) have the front axle directly under the driver's seat.
+  const frontOverhang =
+    safePlatform === 'kamaz' ? 9.2 :
+    safePlatform === 'gaz53' ? 12.5 : 13.5;
+  const frontSteer1X = safeHalfL - frontOverhang;
+  const frontAxlesX: number[] = [frontSteer1X];
+
+  const axleCount = frame?.axleCount ?? 2;
+  const rearTireType = frame?.rearTireType ?? 'dual';
+  const wheelBase = frame?.wheelBasePx || (safeHalfL * (axleCount >= 3 ? 1.35 : 1.25));
+
+  if (axleCount === 4) {
+    // 8x4 heavy chassis (КАМАЗ-65201): 2nd steered front axle mounted 1.8m behind 1st steered axle, right behind cab
+    frontAxlesX.push(frontSteer1X - 11.2);
+  }
+
+  const bogieSpacing = rearTireType === 'offroad_single' ? 11.2 : 10.4;
+  let rearAxlesX: number[];
+
+  if (axleCount === 2) {
+    // 2-axle (4x2 / 4x4): rear single drive axle positioned exactly at wheelbase distance
+    const rearX = frontSteer1X - wheelBase;
+    rearAxlesX = [rearX];
+  } else {
+    // 3-axle (6x4 / 6x6) or 4-axle (8x4): tandem rear balancing bogie centered at wheelbase distance
+    const bogieCenterX = frontSteer1X - wheelBase;
+    const midAxleX = bogieCenterX + bogieSpacing * 0.5;
+    const rearMostX = bogieCenterX - bogieSpacing * 0.5;
+    rearAxlesX = [midAxleX, rearMostX];
+  }
+
+  return { frontAxlesX, rearAxlesX };
+}

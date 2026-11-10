@@ -2,10 +2,12 @@ import { Vehicle } from './types';
 import { getVehicleOpticsMounts } from './vehicleHelpers';
 import {
   resolveVehicleTruckFrameAndBody,
+  getTruckFrameAxlePositions,
   type TruckPlatformId,
   type TruckFrameVariant,
   type TruckBodyVariant
 } from './truckChassisVariants';
+export { getTruckFrameAxlePositions } from './truckChassisVariants';
 export {
   getVehicleBasePolygon,
   getVehicleCabinDimensions,
@@ -39,39 +41,6 @@ export {
   renderMotoChopper,
   renderMopedSoviet
 };
-
-/**
- * Computes the longitudinal X positions (in vehicle local coords) of all axles
- * for a configurable truck frame. Used by both bare-frame rendering and wheel rendering.
- */
-export function getTruckFrameAxlePositions(
-  frame: TruckFrameVariant,
-  halfL: number,
-  platform: TruckPlatformId
-): { frontAxlesX: number[]; rearAxlesX: number[] } {
-  const frontSteer1X = platform === 'kamaz' ? (halfL - 6.8) : (halfL - 7.2);
-  const frontAxlesX: number[] = [frontSteer1X];
-  if (frame.axleCount === 4) {
-    // 8x4 heavy chassis: second steered front axle behind the primary front axle
-    frontAxlesX.push(frontSteer1X - 9.4);
-  }
-
-  const rearEnd = -halfL;
-  let rearAxlesX: number[];
-  if (frame.axleCount === 2) {
-    // 2-axle (4x2 / 4x4)
-    const rearX = Math.max(rearEnd + 7.5, -halfL * 0.58);
-    rearAxlesX = [rearX];
-  } else {
-    // 3-axle (6x4 / 6x6) or 4-axle (8x4): tandem rear bogie
-    const rearMostX = Math.max(rearEnd + 6.2, -halfL * 0.74);
-    const bogieSpacing = frame.rearTireType === 'offroad_single' ? 11.2 : 10.6;
-    const midAxleX = rearMostX + bogieSpacing;
-    rearAxlesX = [midAxleX, rearMostX];
-  }
-
-  return { frontAxlesX, rearAxlesX };
-}
 
 /**
  * Renders anatomically accurate, high-detail truck wheels and tires for all 18 chassis frames:
@@ -173,7 +142,10 @@ export function renderConfigurableTruckWheels(
   // Render Front Steered Axles (1 axle on 4x2/4x4/6x4/6x6, 2 steered axles on 8x4)
   frontAxlesX.forEach((fx, idx) => {
     const tireW = isOffroad ? 3.5 : 2.9;
-    const yCenter = halfW - tireW * 0.5 + 0.35;
+    const frontTrackIn =
+      platform === 'gaz53' ? 1.4 :
+      (platform === 'zil130' || platform === 'zil4331') ? 1.2 : 0.8;
+    const yCenter = halfW - tireW * 0.5 - frontTrackIn;
     const angle = idx === 0 ? steerAngle : steerAngle * 0.72;
     drawSingleTire(fx, -yCenter, tireW, angle, true, true);
     drawSingleTire(fx, yCenter, tireW, angle, true, false);
@@ -185,7 +157,7 @@ export function renderConfigurableTruckWheels(
       // Authentic twin dual tires (двускатная ошиновка) with distinct dark gap between inner & outer tires
       const singleW = 2.35;
       const dualGap = 0.55;
-      const outerY = halfW - singleW * 0.5 + 0.45;
+      const outerY = halfW - singleW * 0.5 - 0.25;
       const innerY = outerY - singleW - dualGap;
       // Left dual pair
       drawSingleTire(rx, -outerY, singleW, 0, false, true);
@@ -198,13 +170,13 @@ export function renderConfigurableTruckWheels(
       drawDeformedRect(rx - 1.6, outerY + singleW * 0.5 - 0.2, 3.2, 0.4, '#334155');
     } else if (frame.rearTireType === 'super_single') {
       const superW = 4.2;
-      const yCenter = halfW - superW * 0.5 + 0.4;
+      const yCenter = halfW - superW * 0.5 - 0.25;
       drawSingleTire(rx, -yCenter, superW, 0, false, true);
       drawSingleTire(rx, yCenter, superW, 0, false, false);
     } else {
       // offroad_single or single
       const tireW = isOffroad ? 3.7 : 3.0;
-      const yCenter = halfW - tireW * 0.5 + 0.4;
+      const yCenter = halfW - tireW * 0.5 - (isOffroad ? 0.35 : 0.65);
       drawSingleTire(rx, -yCenter, tireW, 0, false, true);
       drawSingleTire(rx, yCenter, tireW, 0, false, false);
     }
@@ -220,9 +192,12 @@ export function renderTruckFifthWheelCoupling(
   resolved?: { platform: TruckPlatformId; frame: TruckFrameVariant; body: TruckBodyVariant } | null
 ): void {
   const {
-    car, halfL, rc, cabinX, cabinL,
+    car, halfL,
     drawDeformedRect, drawDeformedLine, drawDeformedCircle
   } = vCtx;
+  const rc = vCtx.rc ?? 0;
+  const cabinX = vCtx.cabinX ?? 0;
+  const cabinL = vCtx.cabinL ?? (halfL * 0.4);
 
   const info = resolved ?? resolveVehicleTruckFrameAndBody(car);
   const platform = info?.platform ?? 'kamaz';
@@ -233,8 +208,8 @@ export function renderTruckFifthWheelCoupling(
 
   const bogieCenterX = rearAxlesX.length >= 2
     ? (rearAxlesX[0] + rearAxlesX[1]) * 0.5
-    : rearAxlesX[0];
-  const fifthWheelX = car.hitchOffset !== undefined ? car.hitchOffset : (bogieCenterX + 1.0);
+    : (rearAxlesX[0] ?? (-halfL * 0.5));
+  const fifthWheelX = bogieCenterX + 1.0;
   const frameX1 = -halfL + rc + 0.6;
   const frameX2 = cabinX - cabinL / 2 + 0.4;
   const railOuterY = platform === 'gaz53' ? 4.4 : 4.8;
@@ -335,10 +310,13 @@ export function renderTruckBareFrame(
   resolved?: { platform: TruckPlatformId; frame: TruckFrameVariant; body: TruckBodyVariant } | null
 ): void {
   const {
-    car, halfL, halfW, rc,
-    cabinX, cabinL,
+    car, halfL, halfW,
     drawDeformedRect, drawDeformedLine, drawDeformedCircle
   } = vCtx;
+  const fc = vCtx.fc ?? 0;
+  const rc = vCtx.rc ?? 0;
+  const cabinX = vCtx.cabinX ?? 0;
+  const cabinL = vCtx.cabinL ?? (halfL * 0.4);
 
   const info = resolved ?? resolveVehicleTruckFrameAndBody(car);
   if (!info) return;
@@ -487,7 +465,7 @@ export function renderTruckBareFrame(
   // Gearbox output companion flange
   drawDeformedRect(gbX - 0.9, -1.25, 0.9, 2.5, '#475569');
 
-  const firstRearAxleX = rearAxlesX[0];
+  const firstRearAxleX = rearAxlesX[0] ?? (-halfL * 0.5);
   let mainShaftStartX = gbX - 0.9;
 
   // If 4x4 or 6x6: Transfer Case (Раздаточная коробка РК КАМАЗ-4310 / ЗИЛ-131 / ГАЗ-66) mounted mid-chassis
@@ -501,7 +479,8 @@ export function renderTruckBareFrame(
     drawDeformedRect(tcX - 1.7, -2.3, 3.4, 4.2, '#334155');
     drawDeformedCircle(tcX, -0.5, 0.95, '#cbd5e1');
     // Front cardan shaft running forward to front drive axle differential
-    drawDeformedLine(tcX + 2.1, -1.45, frameX2 + 4.0, -1.2, '#475569', 1.55);
+    const frontDiffX = frontAxlesX[0] ?? (frameX2 + 4.0);
+    drawDeformedLine(tcX + 2.1, -1.45, frontDiffX, -1.2, '#475569', 1.55);
     mainShaftStartX = tcX - 2.3;
   }
 
@@ -664,17 +643,45 @@ export function renderTruckBareFrame(
   }
 
   // =========================================================================
-  // 6. C-CHANNEL LONGITUDINAL FRAME RAILS, SUBFRAME & STAMPED CROSSMEMBERS
+  // 6. C-CHANNEL LONGITUDINAL FRAME RAILS, SUBFRAME & FUNCTIONAL CROSSMEMBERS
   // =========================================================================
-  // Left longitudinal C-channel steel rail (-railOuterY to -railInnerY)
-  drawDeformedRect(frameX1, -railOuterY, frameLen, railFlangeW, '#141923');
-  drawDeformedLine(frameX1, -railOuterY, frameX2, -railOuterY, '#64748b', 0.95); // Top outer bevel highlight
-  drawDeformedLine(frameX1, -railInnerY, frameX2, -railInnerY, '#070a0f', 0.85); // Inner channel web lip
+  const frameFrontX = halfL - fc - 0.5;
+  const cabBackX = cabinX - cabinL / 2;
+  const railFrontOuterY = platform === 'gaz53' ? 3.4 : (platform === 'kamaz' ? railOuterY : 3.7);
+  const railFrontInnerY = railFrontOuterY - railFlangeW;
 
-  // Right longitudinal C-channel steel rail (+railInnerY to +railOuterY)
-  drawDeformedRect(frameX1, railInnerY, frameLen, railFlangeW, '#141923');
-  drawDeformedLine(frameX1, railOuterY, frameX2, railOuterY, '#64748b', 0.95); // Top outer bevel highlight
-  drawDeformedLine(frameX1, railInnerY, frameX2, railInnerY, '#070a0f', 0.85); // Inner channel web lip
+  // Rear & Middle C-channel longitudinal steel rails (from rear crossmember to cab front/cowl)
+  const rearRailsLen = (cabBackX + 2.0) - frameX1;
+  // Left rear rail
+  drawDeformedRect(frameX1, -railOuterY, rearRailsLen, railFlangeW, '#141923');
+  drawDeformedLine(frameX1, -railOuterY, cabBackX + 2.0, -railOuterY, '#64748b', 0.95);
+  drawDeformedLine(frameX1, -railInnerY, cabBackX + 2.0, -railInnerY, '#070a0f', 0.85);
+  // Right rear rail
+  drawDeformedRect(frameX1, railInnerY, rearRailsLen, railFlangeW, '#141923');
+  drawDeformedLine(frameX1, railOuterY, cabBackX + 2.0, railOuterY, '#64748b', 0.95);
+  drawDeformedLine(frameX1, railInnerY, cabBackX + 2.0, railInnerY, '#070a0f', 0.85);
+
+  // Front frame rails (under cab, engine bay & radiator up to front bumper)
+  const frontRailsLen = frameFrontX - (cabBackX + 2.0);
+  if (frontRailsLen > 1.0) {
+    // Left front rail (tapered inward for steering wheel clearance on hooded GAZ/ZIL)
+    drawDeformedRect(cabBackX + 2.0, -railFrontOuterY, frontRailsLen, railFlangeW, '#141923');
+    drawDeformedLine(cabBackX + 2.0, -railFrontOuterY, frameFrontX, -railFrontOuterY, '#64748b', 0.9);
+    drawDeformedLine(cabBackX + 2.0, -railFrontInnerY, frameFrontX, -railFrontInnerY, '#070a0f', 0.8);
+    // Right front rail
+    drawDeformedRect(cabBackX + 2.0, railFrontInnerY, frontRailsLen, railFlangeW, '#141923');
+    drawDeformedLine(cabBackX + 2.0, railFrontOuterY, frameFrontX, railFrontOuterY, '#64748b', 0.9);
+    drawDeformedLine(cabBackX + 2.0, railFrontInnerY, frameFrontX, railFrontInnerY, '#070a0f', 0.8);
+
+    // Front closing bumper crossmember with towing eyes / hooks
+    drawDeformedRect(frameFrontX - 1.2, -railFrontOuterY - 0.4, 1.8, (railFrontOuterY + 0.4) * 2, '#0f172a');
+    drawDeformedCircle(frameFrontX + 0.5, -railFrontOuterY + 0.4, 0.7, '#334155', '#cbd5e1', 0.35);
+    drawDeformedCircle(frameFrontX + 0.5, railFrontOuterY - 0.4, 0.7, '#334155', '#cbd5e1', 0.35);
+
+    // Engine support crossmember under front axle
+    const engCrossX = frontAxlesX[0];
+    drawDeformedRect(engCrossX - 1.0, -railFrontInnerY, 2.0, railFrontInnerY * 2, '#1e293b');
+  }
 
   // Reinforced Subframe (Надрамник с крепежными стремянками и упорами) for tipper & heavy tandem frames
   if (hasHeavySubframe || hasTipperSubframe) {
@@ -781,24 +788,73 @@ export function renderTruckBareFrame(
   drawDeformedCircle(frameX1 - 0.4, -2.4, 0.55, '#ef4444');
   drawDeformedCircle(frameX1 - 0.4, 2.4, 0.55, '#3b82f6');
 
-  // Outrigger tail light brackets & FP-130 / FP-209 lamps at rear of frame
+  // Realistic Platform-Specific Rear Tail Lights & Underrun Bars:
   const isTailOn = car.headlightsOn || car.positionLightsOn;
   const isBraking = car.brakeLightsOn;
+  const isReversing = (car as any).isReversing || (car.speed < -0.1 && (car.engineState?.currentGear ?? 1) === -1);
   const redLight = isBraking ? '#ef4444' : isTailOn ? '#dc2626' : '#7f1d1d';
   const amberLight = '#f59e0b';
-  const lightOutY = railOuterY + 2.4;
+  const reverseLight = isReversing ? '#f8fafc' : '#475569';
+  const lightOutY = railOuterY + 2.5;
 
-  drawDeformedLine(frameX1 + 0.3, -lightOutY - 1.8, frameX1 + 0.3, lightOutY + 1.8, '#1e293b', 1.2);
-  // Left tail light unit
-  drawDeformedRect(frameX1 - 0.5, -lightOutY - 1.8, 1.0, 3.2, '#0f172a');
-  drawDeformedCircle(frameX1 - 0.1, -lightOutY - 0.9, 0.75, redLight);
-  drawDeformedCircle(frameX1 - 0.1, -lightOutY + 0.6, 0.7, amberLight);
-  // Right tail light unit
-  drawDeformedRect(frameX1 - 0.5, lightOutY - 1.4, 1.0, 3.2, '#0f172a');
-  drawDeformedCircle(frameX1 - 0.1, lightOutY + 0.9, 0.75, redLight);
-  drawDeformedCircle(frameX1 - 0.1, lightOutY - 0.6, 0.7, amberLight);
-  // License plate on left bracket
-  drawDeformedRect(frameX1 - 0.4, -railOuterY - 0.2, 0.7, 3.6, '#f8fafc');
+  if (platform === 'kamaz') {
+    // KAMAZ: Authentic steel underrun protection bar (задний противоподкатный брус) across rear frame
+    const barW = (lightOutY + 2.4) * 2;
+    drawDeformedRect(frameX1 - 0.8, -barW * 0.5, 1.5, barW, '#1e293b');
+    drawDeformedLine(frameX1 - 0.8, -barW * 0.5, frameX1 - 0.8, barW * 0.5, '#475569', 0.8);
+    // Yellow/black diagonal safety reflector stripes on outer ends of underrun bar
+    drawDeformedRect(frameX1 - 0.7, -barW * 0.5 + 0.2, 1.3, 1.8, '#eab308');
+    drawDeformedRect(frameX1 - 0.7, barW * 0.5 - 2.0, 1.3, 1.8, '#eab308');
+
+    // Horizontal multi-chamber combination lamps (ФП-209 / 13.3716)
+    // Left cluster (Turn / Tail-Stop / Reverse & Retroreflector)
+    drawDeformedRect(frameX1 - 1.1, -lightOutY - 1.8, 1.2, 3.6, '#0b0f17');
+    drawDeformedRect(frameX1 - 1.0, -lightOutY - 1.7, 1.0, 1.1, amberLight); // Outer: turn
+    drawDeformedRect(frameX1 - 1.0, -lightOutY - 0.5, 1.0, 1.1, redLight);   // Center: stop/tail
+    drawDeformedRect(frameX1 - 1.0, -lightOutY + 0.7, 1.0, 1.0, reverseLight); // Inner: reverse/reflector
+
+    // Right cluster
+    drawDeformedRect(frameX1 - 1.1, lightOutY - 1.8, 1.2, 3.6, '#0b0f17');
+    drawDeformedRect(frameX1 - 1.0, lightOutY + 0.6, 1.0, 1.1, amberLight);  // Outer: turn
+    drawDeformedRect(frameX1 - 1.0, lightOutY - 0.6, 1.0, 1.1, redLight);    // Center: stop/tail
+    drawDeformedRect(frameX1 - 1.0, lightOutY - 1.7, 1.0, 1.0, reverseLight); // Inner: reverse/reflector
+
+    // License plate with upper illumination lamp
+    drawDeformedRect(frameX1 - 0.8, -railOuterY - 0.2, 0.8, 3.8, '#f8fafc');
+    drawDeformedCircle(frameX1 - 0.2, -railOuterY + 1.7, 0.45, '#334155');
+  } else if (platform === 'zil4331') {
+    // ZIL-4331: Rectangular multi-chamber lamps on stamped steel protective wings
+    drawDeformedLine(frameX1 + 0.2, -lightOutY - 1.9, frameX1 + 0.2, lightOutY + 1.9, '#1e293b', 1.3);
+    // Left lamp
+    drawDeformedRect(frameX1 - 0.7, -lightOutY - 1.8, 1.1, 3.4, '#090d14');
+    drawDeformedRect(frameX1 - 0.6, -lightOutY - 1.7, 0.9, 1.0, amberLight);
+    drawDeformedRect(frameX1 - 0.6, -lightOutY - 0.6, 0.9, 1.1, redLight);
+    drawDeformedRect(frameX1 - 0.6, -lightOutY + 0.6, 0.9, 0.9, reverseLight);
+    // Right lamp
+    drawDeformedRect(frameX1 - 0.7, lightOutY - 1.6, 1.1, 3.4, '#090d14');
+    drawDeformedRect(frameX1 - 0.6, lightOutY + 0.7, 0.9, 1.0, amberLight);
+    drawDeformedRect(frameX1 - 0.6, lightOutY - 0.5, 0.9, 1.1, redLight);
+    drawDeformedRect(frameX1 - 0.6, lightOutY - 1.5, 0.9, 0.9, reverseLight);
+    // License plate
+    drawDeformedRect(frameX1 - 0.6, -railOuterY - 0.2, 0.7, 3.6, '#f8fafc');
+  } else {
+    // GAZ-53 / ZIL-130: Classic Soviet ФП-130 vertical two-chamber lamps with separate round reverse spotlight
+    drawDeformedLine(frameX1 + 0.3, -lightOutY - 1.8, frameX1 + 0.3, lightOutY + 1.8, '#1e293b', 1.2);
+    // Left ФП-130 unit
+    drawDeformedRect(frameX1 - 0.6, -lightOutY - 1.7, 1.1, 3.0, '#0f172a');
+    drawDeformedCircle(frameX1 - 0.1, -lightOutY - 0.9, 0.75, redLight);
+    drawDeformedCircle(frameX1 - 0.1, -lightOutY + 0.6, 0.7, amberLight);
+    // Right ФП-130 unit
+    drawDeformedRect(frameX1 - 0.6, lightOutY - 1.3, 1.1, 3.0, '#0f172a');
+    drawDeformedCircle(frameX1 - 0.1, lightOutY + 0.9, 0.75, redLight);
+    drawDeformedCircle(frameX1 - 0.1, lightOutY - 0.6, 0.7, amberLight);
+
+    // Left auxiliary round reverse spotlight (фонарь заднего хода ФП-135)
+    drawDeformedCircle(frameX1 - 0.5, -railOuterY - 1.6, 0.85, reverseLight, '#1e293b', 0.5);
+    // License plate with FP-131 plate illuminator
+    drawDeformedRect(frameX1 - 0.5, -railOuterY + 0.3, 0.7, 3.6, '#f8fafc');
+    drawDeformedCircle(frameX1 - 0.2, -railOuterY + 2.1, 0.45, '#334155');
+  }
 }
 
 /**

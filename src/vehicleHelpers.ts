@@ -17,6 +17,7 @@ import {
 } from './types';
 import { getVehicleNodeBeamDefinition } from './vehicleMeshConfigs';
 import { getPowertrainPickByIds, TRANSMISSION_VARIANTS, resolveVehicleTruckFrameAndBody } from './powertrainVariants';
+import { getTruckFrameAxlePositions } from './truckChassisVariants';
 import { getVehicleCatalogItem } from './vehicleCatalog';
 import { isTrailerVehicle, isRoadMachinery, isMotorcycle, isTractorVehicle } from './vehicleArchetypes';
 import { createNodeBeamForVehicle, registerNodeBeamBuilder } from './nodeBeamRegistry';
@@ -631,13 +632,25 @@ export function getVehicleAxleGeometry(car: { type: string; length?: number; fra
   const length = car.length || resolvedTruck?.frame.lengthPx || cfg.length || 42;
   const halfL = length / 2;
 
+  if (resolvedTruck) {
+    const { frontAxlesX, rearAxlesX } = getTruckFrameAxlePositions(
+      resolvedTruck.frame,
+      halfL,
+      resolvedTruck.platform
+    );
+    const frontAxleDist = frontAxlesX[0];
+    const rearAxleDist = rearAxlesX.length >= 2
+      ? -((rearAxlesX[0] + rearAxlesX[1]) * 0.5)
+      : -rearAxlesX[0];
+    const wheelBase = frontAxleDist + rearAxleDist;
+    return { rearAxleDist, frontAxleDist, wheelBase };
+  }
+
   const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
-  const isThreeAxle = resolvedTruck
-    ? resolvedTruck.frame.axleCount >= 3
-    : (car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' || car.type === 'garbage_truck');
+  const isThreeAxle = car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' || car.type === 'garbage_truck';
   const isDually = car.type === 'pickup_heavy';
   const isMoto = car.type.startsWith('moto_') || car.type === 'moped_soviet';
-  const isHeavyTruck = !!resolvedTruck || isThreeAxle || car.type === 'truck_box' || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'truck_tow' || car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'bus';
+  const isHeavyTruck = isThreeAxle || car.type === 'truck_box' || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'truck_tow' || car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'bus';
 
   let rearAxleOffsetRatio = 0.65;
   let frontAxleOffsetRatio = 0.65;

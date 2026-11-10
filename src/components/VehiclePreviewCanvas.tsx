@@ -156,8 +156,8 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
                            dummyCar.type === 'van_cargo_old' || dummyCar.type === 'ambulance' || dummyCar.type === 'ambulance_van' || dummyCar.type === 'ambulance_suv' ||
                            dummyCar.type === 'bus_minibus';
 
-    const wheelL = isHeavyTruck ? 10.0 : (isOffroadOrVan ? 8.2 : (isSport ? 7.6 : (isMicro ? 6.2 : 7.0)));
-    const wheelW = isHeavyTruck ? 3.6 : (isOffroadOrVan ? 3.2 : (isSport ? 3.2 : (isMicro ? 2.2 : 2.6)));
+    const wheelL = isHeavyTruck ? 10.0 : (isOffroadOrVan ? 8.6 : (isSport ? 8.0 : (isMicro ? 6.6 : 7.6)));
+    const wheelW = isHeavyTruck ? 3.8 : (isOffroadOrVan ? 3.5 : (isSport ? 3.4 : (isMicro ? 2.5 : 3.0)));
     const frontAxleX = dummyCar.type === 'supercar' ? halfL * 0.68 : halfL * 0.65;
     const rearAxleX = -halfL * 0.65;
     const trackY = halfW - 0.6;
@@ -173,11 +173,13 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     const deformFunc = (x: number, y: number): [number, number] => [x, y];
     
     const drawDeformedRect = (x: number, y: number, w: number, h: number, fill: string | CanvasGradient) => {
+      if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return;
       ctx.fillStyle = fill;
       ctx.fillRect(x, y, w, h);
     };
     
     const drawDeformedLine = (x1: number, y1: number, x2: number, y2: number, stroke: string, lineWidth = 1) => {
+      if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
       ctx.strokeStyle = stroke;
       ctx.lineWidth = lineWidth;
       ctx.beginPath();
@@ -187,6 +189,7 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     };
     
     const drawDeformedCircle = (cx: number, cy: number, r: number, fill: string, stroke?: string, lineWidth = 1) => {
+      if (!isFinite(cx) || !isFinite(cy) || !isFinite(r) || r <= 0) return;
       ctx.fillStyle = fill;
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);

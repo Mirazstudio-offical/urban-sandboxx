@@ -70,6 +70,7 @@ import { RoofRenderer } from './roofRenderer';
 import { renderRiverSystem, renderWaterSurfaceOpticsAndWakes, renderRiverMaterialMask } from './riverSystem';
 import { isWorldFreezing } from './calendarSystem';
 import { GpuFireRenderer, FireEmitter, FireEmitterKind } from './gpu/fireShader';
+import { GpuParticleShaderRenderer, ParticleCollider } from './gpu/smokeParticleShader';
 import type { PostFxFireSource } from './gpu/postFx';
 import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
@@ -368,6 +369,12 @@ export class GameRenderer {
   private fireRenderer: GpuFireRenderer = new GpuFireRenderer();
   private fireEmittersScratch: FireEmitter[] = [];
   private activePostFxFires: PostFxFireSource[] = [];
+  private particleShaderRenderer: GpuParticleShaderRenderer = new GpuParticleShaderRenderer();
+  private activeParticleColliders: ParticleCollider[] = [];
+  private particleShaderScratch: Particle[] = [];
+  private currentParticleCamera: { x: number; y: number; zoom: number; angle: number } = { x: 0, y: 0, zoom: 1, angle: 0 };
+  private currentWorldWind: { vx: number; vy: number } = { vx: 14, vy: 4 };
+  private currentNightAlpha: number = 0;
 
   /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit`. */
   private capParticles(particles: GameWorld['particles']): GameWorld['particles'] {
@@ -1164,6 +1171,14 @@ export class GameRenderer {
           );
           GuardrailRenderer.renderGuardrails(ctx, world, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
           this.renderPedestrians(visiblePedestrians, world);
+          this.updateParticleShaderFrameContext(
+            world,
+            player,
+            visibleVehicles,
+            visiblePedestrians,
+            { x: camera.x, y: camera.y, zoom: camera.zoom * heightScale, angle: camera.angle },
+            nightAlpha
+          );
           this.renderUnderVehicleParticles(this.capParticles(world.particles), world.cleanMode);
           this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
           this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha, world.calendar?.season, world);
@@ -1235,6 +1250,15 @@ export class GameRenderer {
       if (camera.shakeVy) shakeY += camera.shakeVy;
       ctx.translate(shakeX, shakeY);
     }
+
+    this.updateParticleShaderFrameContext(
+      world,
+      player,
+      visibleVehicles,
+      visiblePedestrians,
+      { x: camera.x - shakeX, y: camera.y - shakeY, zoom: camera.zoom, angle: camera.angle },
+      nightAlpha
+    );
 
     // 3. Render Ground, Sidewalks, Roads, and Parkings via cached chunks
     const startChunkX = Math.floor(minX / this.chunkSize);
@@ -3123,7 +3147,7 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  // --- SKID MARKS & VOLUMETRIC OFFROAD RUTS ---
+  // --- SKID MARKS, CARRIED SUBSTANCE TRACKS & VOLUMETRIC OFFROAD RUTS ---
   private renderSkidMarks(skidMarks: GameWorld['skidMarks'], minX: number, minY: number, maxX: number, maxY: number) {
     const ctx = this.ctx;
     ctx.save();
@@ -3131,6 +3155,10 @@ export class GameRenderer {
     // without overlapping round-cap "bead" blobs at every segment joint.
     ctx.lineCap = 'butt';
     ctx.lineJoin = 'round';
+
+    const sunState = getCurrentSunShadowState();
+    const sunDirX = -sunState.cosAngle;
+    const sunDirY = -sunState.sinAngle;
 
     for (let i = Math.max(0, skidMarks.length - performanceConfig.skidMarksLimit); i < skidMarks.length; i++) {
       const sm = skidMarks[i];
@@ -3153,27 +3181,32 @@ export class GameRenderer {
       const y1 = sm.y1 - ty * 0.45;
       const x2 = sm.x2 + tx * 0.45;
       const y2 = sm.y2 + ty * 0.45;
+      const tread = sm.treadPattern || 'street';
+      const surfType = sm.surfaceType || 'asphalt';
 
       if (sm.depth && sm.depth > 0.04) {
         const depth = Math.max(0.05, Math.min(1.5, sm.depth));
         const w = sm.width;
-        const bermOffset = w * 0.56 + depth * 0.85;
-        const bermWidth = Math.max(1.2, w * (0.24 + depth * 0.18));
+        const isSandRut = surfType === 'sand';
+        const isGravelRut = surfType === 'gravel_road';
+        const isGrassRut = surfType === 'grass';
+        // Granular sand avalanches into wider, softer berms; clay/mud forms steep extruded ridges
+        const bermOffset = w * (isSandRut ? 0.64 : 0.56) + depth * (isSandRut ? 1.05 : 0.85);
+        const bermWidth = Math.max(1.2, w * ((isSandRut ? 0.34 : 0.24) + depth * 0.18));
 
-        // 1. Two distinct lateral extruded soil berms (выдавленные боковые валики грунта по краям колеи)
-        // Outer shadow under the SE-facing berm
-        ctx.strokeStyle = 'rgba(8, 4, 1, 0.52)';
+        // 1. Two distinct lateral extruded soil/sand/turf berms (выдавленные боковые валики грунта по краям колеи)
+        ctx.strokeStyle = isSandRut ? 'rgba(68, 48, 22, 0.38)' : 'rgba(8, 4, 1, 0.52)';
         ctx.globalAlpha = Math.max(0, Math.min(0.85, sm.alpha * (0.45 + depth * 0.35)));
-        ctx.lineWidth = bermWidth * 1.15;
+        ctx.lineWidth = bermWidth * 1.18;
         ctx.beginPath();
-        ctx.moveTo(x1 - nx * bermOffset + 0.5, y1 - ny * bermOffset + 0.5);
-        ctx.lineTo(x2 - nx * bermOffset + 0.5, y2 - ny * bermOffset + 0.5);
-        ctx.moveTo(x1 + nx * bermOffset + 0.5, y1 + ny * bermOffset + 0.5);
-        ctx.lineTo(x2 + nx * bermOffset + 0.5, y2 + ny * bermOffset + 0.5);
+        ctx.moveTo(x1 - nx * bermOffset - sunDirX * 0.65, y1 - ny * bermOffset - sunDirY * 0.65);
+        ctx.lineTo(x2 - nx * bermOffset - sunDirX * 0.65, y2 - ny * bermOffset - sunDirY * 0.65);
+        ctx.moveTo(x1 + nx * bermOffset - sunDirX * 0.65, y1 + ny * bermOffset - sunDirY * 0.65);
+        ctx.lineTo(x2 + nx * bermOffset - sunDirX * 0.65, y2 + ny * bermOffset - sunDirY * 0.65);
         ctx.stroke();
 
         // Main extruded soil berm ridges (left & right)
-        ctx.strokeStyle = sm.bermColor || (sm.isWet ? '#2b1a0e' : '#4a301d');
+        ctx.strokeStyle = sm.bermColor || (isSandRut ? '#c2a36b' : isGrassRut ? '#364221' : (sm.isWet ? '#2b1a0e' : '#4a301d'));
         ctx.globalAlpha = Math.max(0, Math.min(0.92, sm.alpha * (0.62 + depth * 0.25)));
         ctx.lineWidth = bermWidth;
         ctx.beginPath();
@@ -3183,15 +3216,21 @@ export class GameRenderer {
         ctx.lineTo(x2 + nx * bermOffset, y2 + ny * bermOffset);
         ctx.stroke();
 
-        // Sunlit NW crest or wet specular rim on the berm ridges
-        ctx.strokeStyle = sm.isWet ? 'rgba(195, 222, 245, 0.32)' : 'rgba(145, 108, 78, 0.34)';
+        // Sunlit crest or wet specular rim on the berm ridges
+        ctx.strokeStyle = sm.isWet
+          ? 'rgba(195, 222, 245, 0.34)'
+          : isSandRut
+            ? 'rgba(245, 228, 188, 0.45)'
+            : isGravelRut
+              ? 'rgba(195, 198, 206, 0.38)'
+              : 'rgba(145, 108, 78, 0.34)';
         ctx.globalAlpha = Math.max(0, Math.min(0.75, sm.alpha * (0.40 + depth * 0.25)));
         ctx.lineWidth = Math.max(0.7, bermWidth * 0.42);
         ctx.beginPath();
-        ctx.moveTo(x1 - nx * bermOffset - 0.35, y1 - ny * bermOffset - 0.35);
-        ctx.lineTo(x2 - nx * bermOffset - 0.35, y2 - ny * bermOffset - 0.35);
-        ctx.moveTo(x1 + nx * bermOffset - 0.35, y1 + ny * bermOffset - 0.35);
-        ctx.lineTo(x2 + nx * bermOffset - 0.35, y2 + ny * bermOffset - 0.35);
+        ctx.moveTo(x1 - nx * bermOffset + sunDirX * 0.4, y1 - ny * bermOffset + sunDirY * 0.4);
+        ctx.lineTo(x2 - nx * bermOffset + sunDirX * 0.4, y2 - ny * bermOffset + sunDirY * 0.4);
+        ctx.moveTo(x1 + nx * bermOffset + sunDirX * 0.4, y1 + ny * bermOffset + sunDirY * 0.4);
+        ctx.lineTo(x2 + nx * bermOffset + sunDirX * 0.4, y2 + ny * bermOffset + sunDirY * 0.4);
         ctx.stroke();
 
         // 2. Compacted depressed rut trench floor (вдавленное дно колеи)
@@ -3203,46 +3242,62 @@ export class GameRenderer {
         ctx.lineTo(x2, y2);
         ctx.stroke();
 
-        // 3. Directional 3D NW inner trench wall shadow (падающая тень от стенки колеи внутрь желоба)
-        // Gives unmistakable 3D sunken depth instead of looking like a flat painted stripe
+        // 3. Directional 3D inner trench wall shadow (падающая тень от стенки колеи внутрь желоба по солнцу)
         const wallShadowOff = w * 0.26;
-        const nwSign = (nx * -0.707 + ny * -0.707) >= 0 ? 1 : -1;
-        ctx.strokeStyle = '#070402';
+        const sunSideSign = (nx * sunDirX + ny * sunDirY) >= 0 ? 1 : -1;
+        ctx.strokeStyle = isSandRut ? '#3d2912' : '#070402';
         ctx.globalAlpha = Math.max(0, Math.min(0.88, sm.alpha * (0.38 + depth * 0.55)));
         ctx.lineWidth = Math.max(1.1, w * (0.32 + Math.min(0.25, depth * 0.2)));
         ctx.beginPath();
-        ctx.moveTo(x1 + nx * nwSign * wallShadowOff, y1 + ny * nwSign * wallShadowOff);
-        ctx.lineTo(x2 + nx * nwSign * wallShadowOff, y2 + ny * nwSign * wallShadowOff);
+        ctx.moveTo(x1 + nx * sunSideSign * wallShadowOff, y1 + ny * sunSideSign * wallShadowOff);
+        ctx.lineTo(x2 + nx * sunSideSign * wallShadowOff, y2 + ny * sunSideSign * wallShadowOff);
         ctx.stroke();
 
-        // 4. Phase-continuous chevron / lug tire tread imprints inside the rut
-        if (depth > 0.12 && w >= 4.0) {
-          const lugSpacing = 5.5;
+        // 4. Phase-continuous vehicle-class tire tread lug imprints inside the rut
+        if (depth > 0.10 && w >= 3.8 && tread !== 'slick') {
+          const lugSpacing = tread === 'heavy_lug' ? 6.4 : (tread === 'offroad' ? 5.2 : 4.2);
           const baseArc = sm.arcDist !== undefined ? sm.arcDist : (Math.abs(sm.x1 * 0.7 + sm.y1 * 0.7));
           const firstLug = Math.ceil((baseArc - segLen) / lugSpacing) * lugSpacing;
-          ctx.strokeStyle = sm.isWet ? 'rgba(8, 4, 2, 0.65)' : 'rgba(18, 10, 5, 0.52)';
-          ctx.globalAlpha = Math.max(0, Math.min(0.68, sm.alpha * (0.35 + depth * 0.35)));
-          ctx.lineWidth = 1.25;
-          const halfLugW = w * 0.38;
-          const chevBack = tx * 1.1;
-          const chevBackY = ty * 1.1;
+          ctx.strokeStyle = sm.isWet
+            ? 'rgba(8, 4, 2, 0.68)'
+            : isSandRut
+              ? 'rgba(92, 66, 32, 0.50)'
+              : isGrassRut
+                ? 'rgba(22, 34, 12, 0.55)'
+                : 'rgba(18, 10, 5, 0.54)';
+          ctx.globalAlpha = Math.max(0, Math.min(0.72, sm.alpha * (0.36 + depth * 0.36)));
+          ctx.lineWidth = tread === 'heavy_lug' ? 1.55 : (tread === 'offroad' ? 1.25 : 0.95);
+          const halfLugW = w * (tread === 'heavy_lug' ? 0.44 : 0.38);
+          const chevBack = tx * (tread === 'heavy_lug' ? 1.45 : 1.05);
+          const chevBackY = ty * (tread === 'heavy_lug' ? 1.45 : 1.05);
 
           ctx.beginPath();
           for (let dArc = firstLug; dArc <= baseArc; dArc += lugSpacing) {
             const t = Math.max(0, Math.min(1, 1 - (baseArc - dArc) / Math.max(0.5, segLen)));
             const lx = sm.x1 + dx * t;
             const ly = sm.y1 + dy * t;
-            // Angled V-chevron lug impression across tire footprint
-            ctx.moveTo(lx - nx * halfLugW - chevBack, ly - ny * halfLugW - chevBackY);
-            ctx.lineTo(lx + chevBack * 0.3, ly + chevBackY * 0.3);
-            ctx.lineTo(lx + nx * halfLugW - chevBack, ly + ny * halfLugW - chevBackY);
+            if (tread === 'heavy_lug') {
+              // Heavy tractor / truck herringbone V-bar lugs
+              ctx.moveTo(lx - nx * halfLugW - chevBack, ly - ny * halfLugW - chevBackY);
+              ctx.lineTo(lx + chevBack * 0.35, ly + chevBackY * 0.35);
+              ctx.lineTo(lx + nx * halfLugW - chevBack, ly + ny * halfLugW - chevBackY);
+            } else if (tread === 'offroad') {
+              // Alternating mud-terrain block lugs
+              ctx.moveTo(lx - nx * halfLugW, ly - ny * halfLugW);
+              ctx.lineTo(lx - nx * 0.08 + chevBack * 0.4, ly - ny * 0.08 + chevBackY * 0.4);
+              ctx.moveTo(lx + nx * 0.08 - chevBack * 0.4, ly + ny * 0.08 - chevBackY * 0.4);
+              ctx.lineTo(lx + nx * halfLugW, ly + ny * halfLugW);
+            } else {
+              // Street radial transverse sipes + center rib
+              ctx.moveTo(lx - nx * halfLugW, ly - ny * halfLugW);
+              ctx.lineTo(lx + nx * halfLugW, ly + ny * halfLugW);
+            }
           }
           ctx.stroke();
         }
 
         // 5. Standing rainwater & wet mud specular reflection inside wet ruts
         if (sm.isWet && depth > 0.14) {
-          // Dark water-saturated core
           ctx.strokeStyle = 'rgba(10, 6, 3, 0.55)';
           ctx.globalAlpha = Math.max(0, Math.min(0.75, sm.alpha * 0.65));
           ctx.lineWidth = Math.max(1.2, w * 0.52);
@@ -3251,11 +3306,10 @@ export class GameRenderer {
           ctx.lineTo(x2, y2);
           ctx.stroke();
 
-          // Sky-tinted specular water glint along the rut trough (modulated by spatial noise so it shimmers naturally)
           const glintHash = ((Math.floor(sm.x1 * 0.12) * 73856093) ^ (Math.floor(sm.y1 * 0.12) * 19349663)) >>> 0;
           if ((glintHash % 5) !== 0) {
-            ctx.strokeStyle = 'rgba(186, 226, 252, 0.52)';
-            ctx.globalAlpha = Math.max(0, Math.min(0.68, sm.alpha * (0.32 + depth * 0.42)));
+            ctx.strokeStyle = 'rgba(186, 226, 252, 0.54)';
+            ctx.globalAlpha = Math.max(0, Math.min(0.70, sm.alpha * (0.34 + depth * 0.42)));
             ctx.lineWidth = Math.max(0.85, w * 0.22);
             ctx.beginPath();
             ctx.moveTo(x1 - nx * (w * 0.08), y1 - ny * (w * 0.08));
@@ -3264,42 +3318,87 @@ export class GameRenderer {
           }
         }
       } else {
-        // Standard asphalt / concrete / gravel tire mark:
-        // Render realistic dual-shoulder contact patch (two outer tire ribs + softer center band)
-        // instead of a single solid uniform line.
+        // Hard Pavement (Asphalt / Concrete): Vulcanized Rubber Skidmarks OR Carried Substance Tracks (Mud, Oil, Sand, Water)
         const w = sm.width;
-        const shoulderOff = w * 0.33;
-        const ribW = Math.max(1.0, w * 0.28);
+        const kind = sm.trackKind || 'rubber';
+        const shoulderOff = w * 0.34;
+        const ribW = Math.max(0.95, w * 0.26);
 
-        // Soft inner contact patch band
-        ctx.strokeStyle = sm.color;
-        ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * (sm.isWet ? 0.52 : 0.58)));
-        ctx.lineWidth = w * 0.92;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-
-        // Outer left & right high-pressure tire shoulder ribs
-        ctx.strokeStyle = sm.color;
-        ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * 0.95));
-        ctx.lineWidth = ribW;
-        ctx.beginPath();
-        ctx.moveTo(x1 - nx * shoulderOff, y1 - ny * shoulderOff);
-        ctx.lineTo(x2 - nx * shoulderOff, y2 - ny * shoulderOff);
-        ctx.moveTo(x1 + nx * shoulderOff, y1 + ny * shoulderOff);
-        ctx.lineTo(x2 + nx * shoulderOff, y2 + ny * shoulderOff);
-        ctx.stroke();
-
-        // Subtle displaced water-film sheen along edges of wet asphalt tire tracks
-        if (sm.isWet) {
-          ctx.strokeStyle = 'rgba(190, 222, 248, 0.26)';
-          ctx.globalAlpha = Math.max(0, Math.min(0.45, sm.alpha * 0.42));
-          ctx.lineWidth = 0.85;
+        if (kind === 'mud_carry' || kind === 'sand_carry') {
+          // Carried soil/mud or sand lug stamps left on clean asphalt after driving offroad
+          const lugSpacing = tread === 'heavy_lug' ? 5.8 : 4.6;
+          const baseArc = sm.arcDist !== undefined ? sm.arcDist : (Math.abs(sm.x1 * 0.7 + sm.y1 * 0.7));
+          const firstLug = Math.ceil((baseArc - segLen) / lugSpacing) * lugSpacing;
+          ctx.strokeStyle = sm.color;
+          ctx.globalAlpha = Math.max(0, Math.min(0.88, sm.alpha * 0.72));
+          ctx.lineWidth = ribW * 1.1;
           ctx.beginPath();
-          ctx.moveTo(x1 - nx * (w * 0.48), y1 - ny * (w * 0.48));
-          ctx.lineTo(x2 - nx * (w * 0.48), y2 - ny * (w * 0.48));
+          ctx.moveTo(x1 - nx * shoulderOff, y1 - ny * shoulderOff);
+          ctx.lineTo(x2 - nx * shoulderOff, y2 - ny * shoulderOff);
+          ctx.moveTo(x1 + nx * shoulderOff, y1 + ny * shoulderOff);
+          ctx.lineTo(x2 + nx * shoulderOff, y2 + ny * shoulderOff);
+          for (let dArc = firstLug; dArc <= baseArc; dArc += lugSpacing) {
+            const t = Math.max(0, Math.min(1, 1 - (baseArc - dArc) / Math.max(0.5, segLen)));
+            const lx = sm.x1 + dx * t;
+            const ly = sm.y1 + dy * t;
+            ctx.moveTo(lx - nx * (w * 0.42) - tx * 0.9, ly - ny * (w * 0.42) - ty * 0.9);
+            ctx.lineTo(lx, ly + ty * 0.3);
+            ctx.lineTo(lx + nx * (w * 0.42) - tx * 0.9, ly + ny * (w * 0.42) - ty * 0.9);
+          }
           ctx.stroke();
+        } else {
+          // Vulcanized rubber skidmark, oil track, or wet water tire track on asphalt/concrete:
+          // Multi-rib contact patch (outer high-pressure shoulders + twin inner tread ribs + center drainage channel)
+          const slip = sm.slipRatio ?? 0.3;
+          ctx.strokeStyle = sm.color;
+          ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * (kind === 'wet_carry' ? 0.44 : (sm.isWet ? 0.50 : 0.56))));
+          ctx.lineWidth = w * 0.90;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+
+          // Outer left & right high-pressure tire shoulder ribs + inner longitudinal tread ribs
+          ctx.strokeStyle = kind === 'oil_carry' ? '#070a0f' : sm.color;
+          ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * 0.96));
+          ctx.lineWidth = ribW;
+          ctx.beginPath();
+          ctx.moveTo(x1 - nx * shoulderOff, y1 - ny * shoulderOff);
+          ctx.lineTo(x2 - nx * shoulderOff, y2 - ny * shoulderOff);
+          ctx.moveTo(x1 + nx * shoulderOff, y1 + ny * shoulderOff);
+          ctx.lineTo(x2 + nx * shoulderOff, y2 + ny * shoulderOff);
+          if (w >= 4.2 && tread !== 'slick') {
+            const innerOff = w * 0.11;
+            ctx.moveTo(x1 - nx * innerOff, y1 - ny * innerOff);
+            ctx.lineTo(x2 - nx * innerOff, y2 - ny * innerOff);
+            ctx.moveTo(x1 + nx * innerOff, y1 + ny * innerOff);
+            ctx.lineTo(x2 + nx * innerOff, y2 + ny * innerOff);
+          }
+          ctx.stroke();
+
+          // High-slip thermal rubber scorching / molten polymer micro-banding during hard drift or burnout
+          if (kind === 'rubber' && slip > 0.65) {
+            ctx.strokeStyle = 'rgba(8, 10, 15, 0.72)';
+            ctx.globalAlpha = Math.max(0, Math.min(0.65, sm.alpha * (slip - 0.5) * 0.75));
+            ctx.lineWidth = w * 1.04;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+          }
+
+          // Displaced water-film or iridescent oil meniscus sheen along edges of wet/oily tire tracks
+          if (sm.isWet || kind === 'oil_carry' || kind === 'wet_carry') {
+            ctx.strokeStyle = kind === 'oil_carry' ? 'rgba(148, 182, 225, 0.34)' : 'rgba(190, 222, 248, 0.28)';
+            ctx.globalAlpha = Math.max(0, Math.min(0.52, sm.alpha * 0.46));
+            ctx.lineWidth = 0.85;
+            ctx.beginPath();
+            ctx.moveTo(x1 - nx * (w * 0.48), y1 - ny * (w * 0.48));
+            ctx.lineTo(x2 - nx * (w * 0.48), y2 - ny * (w * 0.48));
+            ctx.moveTo(x1 + nx * (w * 0.48), y1 + ny * (w * 0.48));
+            ctx.lineTo(x2 + nx * (w * 0.48), y2 + ny * (w * 0.48));
+            ctx.stroke();
+          }
         }
       }
     }
@@ -6124,10 +6223,13 @@ export class GameRenderer {
     }
   }
 
-  // --- STREET LITTER & FLYING DEBRIS ---
+  // --- STREET LITTER & FLYING DEBRIS (3D Bevel, Wet Capillary Adhesion, Crushing & Airborne Flutter) ---
   private renderLitter(litter: GameWorld['litter'], minX: number, minY: number, maxX: number, maxY: number, nightAlpha: number = 0) {
     if (!litter) return;
     const ctx = this.ctx;
+    const sunState = getCurrentSunShadowState();
+    const sunLx = -sunState.cosAngle;
+    const sunLy = -sunState.sinAngle;
 
     const litterStart = Math.max(0, litter.length - performanceConfig.litterLimit);
     for (let li = litterStart; li < litter.length; li++) {
@@ -6136,119 +6238,271 @@ export class GameRenderer {
 
       const alt = lit.altitude || 0;
       const renderY = lit.y - alt;
+      const wet = lit.wetness ?? 0;
+      const crushed = lit.crushed ?? 0;
 
       ctx.save();
       ctx.translate(lit.x, renderY);
+
+      // 1. Ground contact ambient occlusion & wet capillary water-film ring when resting on pavement
+      if (alt < 1.5) {
+        const aoR = lit.size * (0.58 + crushed * 0.14);
+        ctx.fillStyle = wet > 0.15
+          ? `rgba(8, 15, 26, ${0.28 + wet * 0.22})`
+          : 'rgba(10, 15, 24, 0.24)';
+        ctx.beginPath();
+        safeEllipse(ctx, -sunLx * 0.45, -sunLy * 0.45, aoR, aoR * 0.78, lit.angle, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       ctx.rotate(lit.angle);
 
-      // Airborne & ground litter shadows are projected in world space via unified shadow shroud
+      // 2. 3D airborne flutter / tumble foreshortening or tire-crushed flattening
+      if (alt > 1.0) {
+        const flutterTilt = Math.max(0.38, Math.abs(Math.cos((lit.flutterPhase ?? (alt * 0.25)) + lit.angle * 0.7)));
+        const altScale = 1.0 + Math.min(0.28, alt * 0.006);
+        ctx.scale(altScale, altScale * flutterTilt);
+      } else if (crushed > 0.05) {
+        ctx.scale(1.0 + crushed * 0.22, Math.max(0.68, 1.0 - crushed * 0.18));
+      }
+
+      const cosA = Math.cos(lit.angle);
+      const sinA = Math.sin(lit.angle);
+      const localSunX = sunLx * cosA + sunLy * sinA;
+      const localSunY = -sunLx * sinA + sunLy * cosA;
 
       if (lit.type === 'paper') {
-        ctx.fillStyle = lit.color;
-        ctx.fillRect(-lit.size / 2, -lit.size / 3, lit.size, lit.size * 0.7);
-        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(-lit.size / 2, -lit.size / 3, lit.size, lit.size * 0.7);
-      } else if (lit.type === 'newspaper') {
-        ctx.fillStyle = '#f1f5f9';
-        ctx.fillRect(-lit.size / 2, -lit.size * 0.4, lit.size, lit.size * 0.8);
-        ctx.fillStyle = '#64748b'; // Printed text lines
-        ctx.fillRect(-lit.size / 2 + 1, -lit.size * 0.3, lit.size - 2, 1);
-        ctx.fillRect(-lit.size / 2 + 1, -lit.size * 0.1, lit.size - 2, 1);
-        ctx.fillRect(-lit.size / 2 + 1, lit.size * 0.1, lit.size - 2, 1);
-      } else if (lit.type === 'cup') {
-        // Coffee cup body
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(-lit.size / 2, -lit.size / 2, lit.size, lit.size);
-        // Sleeve
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(-lit.size / 2, -lit.size / 6, lit.size, lit.size / 3);
-        // Lid
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-lit.size / 2 - 0.5, -lit.size / 2 - 1, lit.size + 1, 1.5);
-      } else if (lit.type === 'can') {
-        ctx.fillStyle = lit.color;
-        ctx.fillRect(-lit.size / 2, -lit.size / 2, lit.size, lit.size);
-        ctx.fillStyle = '#cbd5e1'; // Top pull tab
+        const pw = lit.size;
+        const ph = lit.size * 0.72;
+        ctx.fillStyle = wet > 0.2 ? '#cbd5e1' : lit.color;
         ctx.beginPath();
-        ctx.arc(0, -lit.size / 2, lit.size / 3, 0, Math.PI * 2);
+        ctx.moveTo(-pw * 0.5, -ph * 0.48);
+        ctx.lineTo(pw * 0.48, -ph * 0.52);
+        ctx.lineTo(pw * 0.52, ph * 0.46);
+        ctx.lineTo(-pw * 0.46, ph * 0.50);
+        ctx.closePath();
+        ctx.fill();
+        // Crumple crease & sunlit bevel edge
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.22)';
+        ctx.lineWidth = 0.55;
+        ctx.beginPath();
+        ctx.moveTo(-pw * 0.35, -ph * 0.2);
+        ctx.lineTo(pw * 0.1, ph * 0.15);
+        ctx.lineTo(pw * 0.38, -ph * 0.1);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-pw * 0.48, -ph * 0.48);
+        ctx.lineTo(pw * 0.46, -ph * 0.50);
+        ctx.stroke();
+      } else if (lit.type === 'newspaper') {
+        const nw = lit.size * 1.08;
+        const nh = lit.size * 0.84;
+        ctx.fillStyle = wet > 0.2 ? '#cbd5e1' : '#f1f5f9';
+        ctx.fillRect(-nw / 2, -nh / 2, nw, nh);
+        // Center fold shadow & header masthead
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.14)';
+        ctx.fillRect(-0.5, -nh / 2, 1.0, nh);
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(-nw / 2 + 1, -nh * 0.38, nw - 2, 1.3);
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(-nw / 2 + 1, -nh * 0.14, nw * 0.42, 0.9);
+        ctx.fillRect(0.6, -nh * 0.14, nw * 0.40, 0.9);
+        ctx.fillRect(-nw / 2 + 1, nh * 0.12, nw - 2, 0.9);
+      } else if (lit.type === 'cup') {
+        const cw = lit.size;
+        const ch = lit.size * 1.05;
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.moveTo(-cw * 0.38, ch * 0.48);
+        ctx.lineTo(-cw * 0.48, -ch * 0.46);
+        ctx.lineTo(cw * 0.48, -ch * 0.46);
+        ctx.lineTo(cw * 0.38, ch * 0.48);
+        ctx.closePath();
+        ctx.fill();
+        // Corrugated cardboard thermal sleeve
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(-cw * 0.44, -ch * 0.16, cw * 0.88, ch * 0.36);
+        // Sunlit cylindrical highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.fillRect(localSunX * cw * 0.15 - 0.6, -ch * 0.42, 1.2, ch * 0.84);
+        // Molded rim lid
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-cw * 0.52, -ch * 0.52, cw * 1.04, 1.6);
+      } else if (lit.type === 'can') {
+        const cw = lit.size * 0.78;
+        const ch = lit.size * 1.08;
+        ctx.fillStyle = lit.color;
+        safeRoundRect(ctx, -cw / 2, -ch / 2, cw, ch, 1.2);
+        ctx.fill();
+        // Anisotropic brushed aluminum specular streak
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.52)';
+        ctx.fillRect(localSunX * cw * 0.18 - 0.5, -ch * 0.44, 1.1, ch * 0.88);
+        // Silver aluminum top & pull tab
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        safeEllipse(ctx, 0, -ch * 0.46, cw * 0.46, cw * 0.24, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        safeArc(ctx, 0, -ch * 0.46, cw * 0.14, 0, Math.PI * 2);
         ctx.fill();
       } else if (lit.type === 'leaf') {
+        const lr = lit.size * 0.58;
         ctx.fillStyle = lit.color;
         ctx.beginPath();
-        ctx.arc(0, 0, lit.size / 2, 0, Math.PI * 2);
+        ctx.moveTo(-lr * 1.15, 0);
+        ctx.quadraticCurveTo(-lr * 0.15, -lr * 0.82, lr * 1.25, 0);
+        ctx.quadraticCurveTo(-lr * 0.15, lr * 0.82, -lr * 1.15, 0);
+        ctx.closePath();
         ctx.fill();
+        // Botanical central midrib vein & sunlit edge
+        ctx.strokeStyle = 'rgba(20, 45, 18, 0.48)';
+        ctx.lineWidth = 0.55;
+        ctx.beginPath();
+        ctx.moveTo(-lr * 1.25, 0);
+        ctx.lineTo(lr * 1.05, 0);
+        ctx.stroke();
       } else if (lit.type === 'box') {
+        const bs = lit.size;
         ctx.fillStyle = lit.color || '#d97706';
-        ctx.fillRect(-lit.size / 2, -lit.size / 2, lit.size, lit.size);
-        ctx.strokeStyle = '#92400e';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(-lit.size / 2, -lit.size / 2, lit.size, lit.size);
+        ctx.fillRect(-bs / 2, -bs / 2, bs, bs);
+        // 3D top-left sunlit bevel & bottom-right shadow bevel
+        ctx.strokeStyle = 'rgba(254, 243, 199, 0.45)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-bs / 2, bs / 2);
+        ctx.lineTo(-bs / 2, -bs / 2);
+        ctx.lineTo(bs / 2, -bs / 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-bs / 2, 0);
+        ctx.lineTo(bs / 2, 0);
+        ctx.stroke();
       } else if (lit.type === 'bag') {
+        const bw = lit.size * 0.95;
+        const bh = lit.size * 1.18;
         ctx.fillStyle = lit.color || '#e11d48';
-        ctx.fillRect(-lit.size / 2, -lit.size * 0.6, lit.size, lit.size * 1.2);
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(-lit.size / 2, -lit.size * 0.6, lit.size, lit.size * 1.2);
+        ctx.beginPath();
+        ctx.moveTo(-bw * 0.46, -bh * 0.28);
+        ctx.lineTo(-bw * 0.46, -bh * 0.52);
+        ctx.lineTo(-bw * 0.22, -bh * 0.52);
+        ctx.lineTo(-bw * 0.18, -bh * 0.28);
+        ctx.lineTo(bw * 0.18, -bh * 0.28);
+        ctx.lineTo(bw * 0.22, -bh * 0.52);
+        ctx.lineTo(bw * 0.46, -bh * 0.52);
+        ctx.lineTo(bw * 0.46, -bh * 0.28);
+        ctx.lineTo(bw * 0.52, bh * 0.48);
+        ctx.lineTo(-bw * 0.52, bh * 0.48);
+        ctx.closePath();
+        ctx.fill();
+        // Plastic film specular crinkle highlight
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.48)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-bw * 0.25, -bh * 0.1);
+        ctx.lineTo(bw * 0.18, bh * 0.28);
+        ctx.stroke();
       } else if (lit.type === 'coffee') {
         ctx.fillStyle = '#f8fafc';
         ctx.beginPath();
-        ctx.arc(0, 0, lit.size / 2, 0, Math.PI * 2);
+        safeArc(ctx, 0, 0, lit.size / 2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#78350f'; // Coffee lid
+        ctx.fillStyle = '#78350f';
         ctx.beginPath();
-        ctx.arc(0, 0, lit.size / 3, 0, Math.PI * 2);
+        safeArc(ctx, 0, 0, lit.size / 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.beginPath();
+        safeArc(ctx, localSunX * 0.9, localSunY * 0.9, lit.size * 0.14, 0, Math.PI * 2);
         ctx.fill();
       } else if (lit.type === 'phone') {
         ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-lit.size / 2, -lit.size * 0.8, lit.size, lit.size * 1.6);
-        // Screen
+        safeRoundRect(ctx, -lit.size / 2, -lit.size * 0.8, lit.size, lit.size * 1.6, 1.0);
+        ctx.fill();
         ctx.fillStyle = lit.isGlowing ? '#38bdf8' : '#0f172a';
         ctx.fillRect(-lit.size / 2 + 0.5, -lit.size * 0.8 + 0.5, lit.size - 1, lit.size * 1.6 - 1);
-        
-        // Add a glow effect for the phone screen
+        // Gorilla-glass diagonal reflection glint
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+        ctx.lineWidth = 0.55;
+        ctx.beginPath();
+        ctx.moveTo(-lit.size * 0.32, -lit.size * 0.55);
+        ctx.lineTo(lit.size * 0.28, lit.size * 0.45);
+        ctx.stroke();
+
         if (lit.isGlowing && nightAlpha > 0.3) {
           ctx.shadowColor = '#38bdf8';
           ctx.shadowBlur = performanceConfig.enableSoftShadowBlur ? 15 : 0;
           ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
           ctx.fillRect(-lit.size / 2, -lit.size * 0.8, lit.size, lit.size * 1.6);
-          ctx.shadowBlur = 0; // Reset
+          ctx.shadowBlur = 0;
         }
       } else if (lit.type === 'bottle') {
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(-lit.size / 3, -lit.size / 2, lit.size / 1.5, lit.size);
-        ctx.fillStyle = '#64748b'; // Cap
-        ctx.fillRect(-lit.size / 4, -lit.size / 2 - 1, lit.size / 2, 2);
+        const bw = lit.size / 1.5;
+        const bh = lit.size * 1.1;
+        // Translucent PET/glass bottle body
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.78)';
+        safeRoundRect(ctx, -bw / 2, -bh * 0.38, bw, bh * 0.88, 1.1);
+        ctx.fill();
+        // Bottle neck & cap
+        ctx.fillStyle = 'rgba(203, 213, 225, 0.85)';
+        ctx.fillRect(-bw * 0.26, -bh * 0.54, bw * 0.52, bh * 0.18);
+        ctx.fillStyle = '#2563eb';
+        ctx.fillRect(-bw * 0.30, -bh * 0.62, bw * 0.60, 1.6);
+        // Refractive glass highlight streak
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.fillRect(localSunX * bw * 0.18 - 0.45, -bh * 0.32, 0.9, bh * 0.72);
       } else if (lit.type === 'wrapper') {
-        ctx.fillStyle = '#f8fafc';
+        ctx.fillStyle = lit.color || '#f8fafc';
         ctx.beginPath();
         ctx.moveTo(-lit.size / 2, -lit.size / 2);
         ctx.lineTo(lit.size / 2, -lit.size / 4);
         ctx.lineTo(lit.size / 4, lit.size / 2);
         ctx.lineTo(-lit.size / 4, lit.size / 2);
+        ctx.closePath();
+        ctx.fill();
+        // Metallic foil wrapper specular facet
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.62)';
+        ctx.beginPath();
+        ctx.moveTo(-lit.size * 0.2, -lit.size * 0.25);
+        ctx.lineTo(lit.size * 0.28, -lit.size * 0.1);
+        ctx.lineTo(0, lit.size * 0.22);
+        ctx.closePath();
         ctx.fill();
       } else if (lit.type === 'mask') {
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = '#e0f2fe';
         ctx.fillRect(-lit.size / 2, -lit.size / 4, lit.size, lit.size / 2);
         ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 0.55;
         ctx.beginPath();
-        ctx.arc(-lit.size / 2, 0, lit.size / 3, Math.PI / 2, -Math.PI / 2);
+        safeArc(ctx, -lit.size / 2, 0, lit.size / 3, Math.PI / 2, -Math.PI / 2);
         ctx.stroke();
         ctx.beginPath();
-        ctx.arc(lit.size / 2, 0, lit.size / 3, -Math.PI / 2, Math.PI / 2);
+        safeArc(ctx, lit.size / 2, 0, lit.size / 3, -Math.PI / 2, Math.PI / 2);
         ctx.stroke();
       } else if (lit.type === 'butt') {
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = '#f8fafc';
         ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size, lit.size / 4);
-        ctx.fillStyle = '#d6d3d1'; // Filter
-        ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size / 4, lit.size / 4);
+        ctx.fillStyle = '#d97706'; // Cork filter tip
+        ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size * 0.32, lit.size / 4);
+        ctx.fillStyle = '#1e293b'; // Charred ash tip
+        ctx.fillRect(lit.size * 0.38, -lit.size / 8, lit.size * 0.14, lit.size / 4);
+      }
+
+      // 3. Wet rain specular glint on damp street litter
+      if (wet > 0.25) {
+        ctx.fillStyle = `rgba(224, 242, 254, ${wet * 0.38})`;
+        ctx.fillRect(localSunX * lit.size * 0.15 - 0.5, -lit.size * 0.2, 1.1, 1.1);
       }
 
       ctx.restore();
     }
   }
 
-  // --- DROPPED / COLLECTIBLE GROUND ITEMS ---
+  // --- DROPPED / COLLECTIBLE GROUND ITEMS (3D Relief, Contact AO, Wet Meniscus & Specular Glint) ---
   private renderGroundItems(
     groundItems: GroundItem[] | undefined,
     player: Player,
@@ -6259,30 +6513,73 @@ export class GameRenderer {
   ) {
     if (!groundItems || groundItems.length === 0) return;
     const ctx = this.ctx;
-    const now = Date.now();
+    const sunState = getCurrentSunShadowState();
+    const sunLx = -sunState.cosAngle;
+    const sunLy = -sunState.sinAngle;
 
     for (const gi of groundItems) {
       if (gi.x < minX - 30 || gi.x > maxX + 30 || gi.y < minY - 30 || gi.y > maxY + 30) continue;
+      if (!gi.item) continue;
 
-      const distToPlayer = Math.hypot(player.x - gi.x, player.y - gi.y);
-      const isNearby = distToPlayer < 40;
+      const zLift = gi.z ?? 0;
+      const wet = Math.max((gi.wetness ?? 0), (gi.item.wetness ?? 0) * 0.01);
+      const mud = gi.mudCoat ?? 0;
+      const rot = gi.angle ?? (((gi.x * 13 + gi.y * 31) % 628) * 0.01);
 
       ctx.save();
-      ctx.translate(gi.x, gi.y);
+      ctx.translate(gi.x, gi.y - zLift * 0.85);
 
-      // 1. Ground item shadow is projected dynamically in world space via unified shadow shroud
+      // 1. Soft 3D Ground Contact Ambient Occlusion & Wet Puddle Meniscus Ring
+      if (zLift < 2.0) {
+        ctx.fillStyle = wet > 0.18
+          ? `rgba(8, 16, 28, ${0.34 + wet * 0.24})`
+          : 'rgba(10, 15, 25, 0.28)';
+        ctx.beginPath();
+        safeEllipse(ctx, -sunLx * 0.8, -sunLy * 0.8, 6.8, 5.2, rot, 0, Math.PI * 2);
+        ctx.fill();
 
-      if (!gi.item) {
-        ctx.restore();
-        continue;
+        if (wet > 0.22) {
+          ctx.strokeStyle = `rgba(186, 226, 253, ${wet * 0.34})`;
+          ctx.lineWidth = 0.65;
+          ctx.beginPath();
+          safeEllipse(ctx, sunLx * 0.5, sunLy * 0.5, 7.2, 5.5, rot, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else {
+        // Airborne ground shadow when kicked/thrown
+        const shScale = Math.max(0.45, 1.0 - zLift * 0.02);
+        ctx.fillStyle = `rgba(10, 15, 25, ${0.26 * shScale})`;
+        ctx.beginPath();
+        safeEllipse(ctx, -sunLx * zLift * 0.35, zLift * 0.85 - sunLy * zLift * 0.35, 6.2 * shScale, 4.6 * shScale, rot, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      // 2. Item 2D Procedural Model (Size 12 is realistic, sits flat on the ground)
+      const scaleZ = 1.0 + Math.min(0.22, zLift * 0.008);
+      ctx.scale(scaleZ, scaleZ);
+      ctx.rotate(rot);
+
+      // 2. Item 2D Procedural Model
       if (gi.item.itemId) {
         drawItemModel2D(ctx, gi.item.itemId, 0, 0, 12, gi.item);
       }
 
-      // 3. Tooltip pill above item removed per user request
+      // 3. Mud splash coat or wet dielectric solar glint on metallic/glass/packaged items
+      if (mud > 0.1) {
+        ctx.fillStyle = `rgba(58, 38, 22, ${mud * 0.42})`;
+        ctx.beginPath();
+        safeEllipse(ctx, 1.2, 0.8, 3.8, 2.6, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (wet > 0.15 || gi.item.category === 'valuable' || gi.item.category === 'electronics' || gi.item.category === 'tool' || gi.item.category === 'drink') {
+        const cosR = Math.cos(rot);
+        const sinR = Math.sin(rot);
+        const lx = sunLx * cosR + sunLy * sinR;
+        const ly = -sunLx * sinR + sunLy * cosR;
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.28 + wet * 0.32})`;
+        ctx.beginPath();
+        safeEllipse(ctx, lx * 2.2, ly * 2.2, 1.6, 0.85, -rot * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       ctx.restore();
     }
@@ -8041,7 +8338,7 @@ export class GameRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
 
-    // 1. Base Terrain: Natural Earth / Grass / Soil / Snow (MAT_EARTH = 32)
+    // 1. Base Terrain: Natural Meadow / Steppe Grass (MAT_EARTH = 32, G = 128 -> matParam = 0.502)
     ctx.fillStyle = 'rgb(32, 128, 128)';
     ctx.fillRect(0, 0, w, h);
 
@@ -8050,6 +8347,35 @@ export class GameRenderer {
     ctx.scale(camera.zoom, camera.zoom);
     ctx.rotate(-camera.angle - Math.PI / 2);
     ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
+
+    // 1b. Agricultural Field Biomes & Silica Sand / Salt Shores (MAT_EARTH = 32, G encodes sub-biome)
+    // Plowed Chernozem: G = 32 (matParam ~ 0.125)
+    // Silica Sand & Salt Shore: G = 84 (matParam ~ 0.33)
+    // Wheat / Sunflower / Clover / Meadow Crops: G = 160 (matParam ~ 0.627)
+    // Forest Humus Floor: G = 220 (matParam ~ 0.86)
+    const agParcels = [
+      { x: 10300, y: 1200, w: 6100, h: 2500, g: 160 },
+      { x: 10300, y: 4300, w: 6100, h: 2600, g: 32 },
+      { x: 17000, y: 1200, w: 5400, h: 2500, g: 160 },
+      { x: 17000, y: 4300, w: 5400, h: 2600, g: 160 },
+      { x: 23000, y: 1200, w: 4600, h: 2500, g: 32 },
+      { x: 23000, y: 4300, w: 4600, h: 2600, g: 160 },
+      { x: 28200, y: 1200, w: 6200, h: 2500, g: 160 },
+      { x: 28200, y: 4300, w: 6200, h: 2600, g: 160 }
+    ];
+    for (let pi = 0; pi < agParcels.length; pi++) {
+      const fp = agParcels[pi];
+      if (fp.x + fp.w >= minX && fp.x <= maxX && fp.y + fp.h >= minY && fp.y <= maxY) {
+        ctx.fillStyle = `rgb(32, ${fp.g}, 128)`;
+        ctx.fillRect(fp.x, fp.y, fp.w, fp.h);
+      }
+    }
+    // Salt Lake sandy/saline shoreline flats (G = 84 -> Silica Sand & Salt Flats shader)
+    if (maxY >= 7150 && minY <= 8350 && maxX >= 16800 && minX <= 35200) {
+      ctx.fillStyle = 'rgb(32, 84, 128)';
+      ctx.fillRect(16850, 7180, 6300, 1140);
+      ctx.fillRect(26850, 7180, 8300, 1140);
+    }
 
     // 2. Salt Lake Water Bodies (MAT_WATER_BODY = 160)
     if (maxY >= 7300 && minY <= 8200) {
@@ -8074,7 +8400,7 @@ export class GameRenderer {
     ];
     for (const z of gskZones) {
       if (z.x2 >= minX && z.x1 <= maxX && z.y2 >= minY && z.y1 <= maxY) {
-        ctx.fillStyle = 'rgb(64, 185, 128)';
+        ctx.fillStyle = 'rgb(64, 82, 128)'; // Crushed gravel yard (G = 82 -> matParam < 0.42)
         ctx.fillRect(z.x1, z.y1, z.x2 - z.x1, z.y2 - z.y1);
       }
     }
@@ -8106,17 +8432,19 @@ export class GameRenderer {
       const rMaxY = (road._maxY ?? Math.max(road.y1, road.y2)) + margin;
       if (rMaxX < minX || rMinX > maxX || rMaxY < minY || rMinY > maxY) continue;
 
-      const isDirtRoad = (road as any).surfaceType === 'dirt' || (road as any).surfaceType === 'gravel' || rw <= 28;
+      const surfT = (road as any).surfaceType;
+      const isDirtRoad = surfT === 'dirt' || surfT === 'gravel' || rw <= 28;
       if (isDirtRoad) {
-        ctx.strokeStyle = 'rgb(64, 195, 128)';
+        const dirtG = surfT === 'gravel' ? 80 : 145;
+        ctx.strokeStyle = `rgb(64, ${dirtG}, 128)`;
         ctx.lineWidth = rw + 4;
         ctx.beginPath();
         ctx.moveTo(road.x1, road.y1);
         ctx.lineTo(road.x2, road.y2);
         ctx.stroke();
       } else {
-        // Unpaved gravel shoulder berm (MAT_DIRT = 64)
-        ctx.strokeStyle = 'rgb(64, 150, 128)';
+        // Unpaved crushed-gravel shoulder berm (MAT_DIRT = 64, G = 85 -> gravel facet shader)
+        ctx.strokeStyle = 'rgb(64, 85, 128)';
         ctx.lineWidth = rw + 12;
         ctx.beginPath();
         ctx.moveTo(road.x1, road.y1);
@@ -8168,6 +8496,43 @@ export class GameRenderer {
 
     // 8. River "Быстрица" Channel, Banks, Boulders, Bridge & Piers
     renderRiverMaterialMask(ctx, minX, minY, maxX, maxY);
+
+    // 8b. Tire SkidMarks & 3D Offroad Wheel Ruts encoded into uMat.b (> 134 -> 0.525..1.0)
+    // Allows WebGL2 PostFX shader to compute 3D rut wall normal lighting, standing rut water glints,
+    // and vulcanized rubber skidmark specular sheen!
+    if (world.skidMarks && world.skidMarks.length > 0) {
+      const smStart = Math.max(0, world.skidMarks.length - performanceConfig.skidMarksLimit);
+      ctx.lineCap = 'butt';
+      for (let i = smStart; i < world.skidMarks.length; i++) {
+        const sm = world.skidMarks[i];
+        if (Math.max(sm.x1, sm.x2) < minX || Math.min(sm.x1, sm.x2) > maxX ||
+            Math.max(sm.y1, sm.y2) < minY || Math.min(sm.y1, sm.y2) > maxY) continue;
+        if (sm.alpha < 0.08) continue;
+
+        if (sm.depth && sm.depth > 0.04) {
+          // Offroad 3D rut: MAT_DIRT (64) or MAT_EARTH (32), B encodes rut depth + alpha (140..255)
+          const matR = (sm.surfaceType === 'dirt_road' || sm.surfaceType === 'mud' || sm.surfaceType === 'gravel_road') ? 64 : 32;
+          const matG = sm.isWet ? 210 : (sm.surfaceType === 'sand' ? 84 : 135);
+          const rutB = Math.min(255, Math.max(140, Math.round(136 + Math.min(1.0, sm.depth * 0.75 * sm.alpha) * 119)));
+          ctx.strokeStyle = `rgb(${matR}, ${matG}, ${rutB})`;
+          ctx.lineWidth = sm.width;
+          ctx.beginPath();
+          ctx.moveTo(sm.x1, sm.y1);
+          ctx.lineTo(sm.x2, sm.y2);
+          ctx.stroke();
+        } else {
+          // Hard road skidmark / carried track: MAT_ASPHALT (128) or MAT_CONCRETE (96), B encodes rubber sheen intensity
+          const matR = sm.surfaceType === 'concrete' ? 96 : 128;
+          const skidB = Math.min(255, Math.max(138, Math.round(135 + Math.min(1.0, sm.alpha * 1.25) * 118)));
+          ctx.strokeStyle = `rgb(${matR}, 235, ${skidB})`;
+          ctx.lineWidth = sm.width;
+          ctx.beginPath();
+          ctx.moveTo(sm.x1, sm.y1);
+          ctx.lineTo(sm.x2, sm.y2);
+          ctx.stroke();
+        }
+      }
+    }
 
     // 9. Road & Ground Puddles (MAT_PUDDLE_WATER = 192, G = radial depth/meniscus 255->10, B = alpha)
     if (world.puddles && world.puddles.length > 0) {
@@ -8317,13 +8682,22 @@ export class GameRenderer {
       }
     }
 
-    // 11c. Street Props (Kiosks, Benches, Dumpsters, Containers, Signs)
+    // 11c. Street Props & Collectible Ground Items (Kiosks, Benches, Dumpsters, Containers, Signs, Ground Items)
     for (let i = 0; i < vpProps.length; i++) {
       const p = vpProps[i];
       const r = p.type === 'kiosk' || p.type === 'bus_stop' ? 18 : 6;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (world.groundItems) {
+      for (let i = 0; i < world.groundItems.length; i++) {
+        const gi = world.groundItems[i];
+        if (gi.x < minX - 20 || gi.x > maxX + 20 || gi.y < minY - 20 || gi.y > maxY + 20) continue;
+        ctx.beginPath();
+        ctx.arc(gi.x, gi.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     // 11d. Pedestrians, Player & Remote Players
@@ -10500,8 +10874,8 @@ export class GameRenderer {
                              car.type === 'van_cargo_old' || car.type === 'ambulance' || car.type === 'ambulance_van' || car.type === 'ambulance_suv' ||
                              car.type === 'bus_minibus';
 
-      const wheelL = isHeavyTruck ? 10.0 : (isOffroadOrVan ? 8.2 : (isSport ? 7.6 : (isMicro ? 6.2 : 7.0)));
-      const wheelW = isHeavyTruck ? 3.6 : (isOffroadOrVan ? 3.2 : (isSport ? 3.2 : (isMicro ? 2.2 : 2.6)));
+      const wheelL = isHeavyTruck ? 10.0 : (isOffroadOrVan ? 8.6 : (isSport ? 8.0 : (isMicro ? 6.6 : 7.6)));
+      const wheelW = isHeavyTruck ? 3.8 : (isOffroadOrVan ? 3.5 : (isSport ? 3.4 : (isMicro ? 2.5 : 3.0)));
       const frontAxleX = (isThreeAxle || isHeavyTruck) ? halfL * 0.72 : (car.type === 'supercar' ? halfL * 0.68 : halfL * 0.65);
       const trackY = halfW - 0.6; // Tucked slightly inside halfW
 
@@ -13141,16 +13515,111 @@ export class GameRenderer {
     ctx.restore();
   }
 
+  private updateParticleShaderFrameContext(
+    world: GameWorld,
+    player: Player,
+    visibleVehicles: Vehicle[],
+    visiblePedestrians: Pedestrian[],
+    camera: { x: number; y: number; zoom: number; angle: number },
+    nightAlpha: number
+  ) {
+    this.currentParticleCamera.x = camera.x;
+    this.currentParticleCamera.y = camera.y;
+    this.currentParticleCamera.zoom = camera.zoom;
+    this.currentParticleCamera.angle = camera.angle;
+    this.currentWorldWind.vx = world.wind ? world.wind.vx * (world.wind.gust ?? 1.0) : 14;
+    this.currentWorldWind.vy = world.wind ? world.wind.vy * (world.wind.gust ?? 1.0) : 4;
+    this.currentNightAlpha = nightAlpha;
+
+    const cols = this.activeParticleColliders;
+    cols.length = 0;
+
+    // 1. Moving / idling vehicles in viewport create aerodynamic bow waves & Kármán slipstream vortices in smoke/steam/dust
+    for (let i = 0; i < visibleVehicles.length && cols.length < 18; i++) {
+      const v = visibleVehicles[i];
+      const spd = v.speed || 0;
+      const cosA = Math.cos(v.angle);
+      const sinA = Math.sin(v.angle);
+      cols.push({
+        x: v.x,
+        y: v.y,
+        vx: cosA * spd,
+        vy: sinA * spd,
+        radius: Math.max(18, (v.length || 48) * 0.48)
+      });
+    }
+
+    // 2. Player on foot parts smoke, steam, mist, and dust clouds
+    if (!player.inVehicle && !player.insideCarId && !player.insideBusId && cols.length < 24) {
+      cols.push({
+        x: player.x,
+        y: player.y,
+        vx: player.vx || 0,
+        vy: player.vy || 0,
+        radius: 16
+      });
+    }
+
+    // 3. Nearby pedestrians walking through smoke/steam
+    for (let i = 0; i < visiblePedestrians.length && cols.length < 24; i++) {
+      const ped = visiblePedestrians[i];
+      const dx = ped.x - camera.x;
+      const dy = ped.y - camera.y;
+      if (dx * dx + dy * dy > 360000) continue; // within 600px of camera
+      const pedSpd = (ped as any).speed || 26;
+      cols.push({
+        x: ped.x,
+        y: ped.y,
+        vx: Math.cos(ped.angle) * pedSpd,
+        vy: Math.sin(ped.angle) * pedSpd,
+        radius: 14
+      });
+    }
+  }
+
+  private renderVolumetricShaderBatch(batch: Particle[]) {
+    if (batch.length === 0) return;
+    const sunState = getCurrentSunShadowState();
+    const renderedByGpu = this.particleShaderRenderer.renderParticles(
+      this.ctx,
+      batch,
+      this.currentParticleCamera,
+      this.width,
+      this.height,
+      this.backingScale,
+      performance.now() * 0.001,
+      { x: -sunState.cosAngle, y: -sunState.sinAngle },
+      Math.max(0.0, Math.min(1.0, 1.0 - this.currentNightAlpha * 1.15)),
+      this.currentWorldWind,
+      this.activeParticleColliders,
+      performanceConfig.enableGpuPostFx !== false
+    );
+    if (!renderedByGpu) {
+      for (let i = 0; i < batch.length; i++) {
+        const p = batch[i];
+        if (p.type === 'dust') {
+          this.drawDustParticle(p);
+        } else if (p.type === 'water_spray' || p.type === 'water_splash' || p.type === 'water_fountain') {
+          this.drawWaterParticle(p);
+        } else {
+          this.drawGasSmokeParticle(p);
+        }
+      }
+    }
+  }
+
   // 13c. Under-Vehicle Ground Particles: Under-car exhaust gas, flat splatted mud stains, and grounded glass & debris
   // Rendered on the asphalt BEFORE vehicles, roofs, and trees are drawn
   private renderUnderVehicleParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     if (cleanMode || !particles || particles.length === 0) return;
     const len = particles.length;
+    const shaderBatch = this.particleShaderScratch;
+    shaderBatch.length = 0;
 
     for (let i = 0; i < len; i++) {
       const p = particles[i];
       if (p.type === 'exhaust' && p.underVehicle !== false) {
-        this.drawGasSmokeParticle(p);
+        shaderBatch.push(p);
       } else if (p.type === 'mud_clod' && p.splatted) {
         this.drawMudClodParticle(p);
       } else if (p.type === 'glass_shard' && (p.splatted || (p.z !== undefined && p.z <= 0.05))) {
@@ -13158,6 +13627,9 @@ export class GameRenderer {
       } else if (p.type === 'debris' && (p.splatted || (p.z !== undefined && p.z <= 0.05))) {
         this.drawDebrisParticle(p);
       }
+    }
+    if (shaderBatch.length > 0) {
+      this.renderVolumetricShaderBatch(shaderBatch);
     }
     this.ctx.globalAlpha = 1.0;
   }
@@ -13167,18 +13639,23 @@ export class GameRenderer {
   private renderWheelGroundParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     if (cleanMode || !particles || particles.length === 0) return;
     const len = particles.length;
+    const shaderBatch = this.particleShaderScratch;
+    shaderBatch.length = 0;
 
     for (let i = 0; i < len; i++) {
       const p = particles[i];
       if (p.type === 'dust') {
-        this.drawDustParticle(p);
+        shaderBatch.push(p);
       } else if (p.type === 'mud_clod' && !p.splatted) {
         this.drawMudClodParticle(p);
       } else if (p.type === 'tire_smoke' && !p.underVehicle) {
-        this.drawGasSmokeParticle(p);
+        shaderBatch.push(p);
       } else if (p.type === 'water_spray' || (p.type === 'water_splash' && (p.z === undefined || p.z <= 4))) {
-        this.drawWaterParticle(p);
+        shaderBatch.push(p);
       }
+    }
+    if (shaderBatch.length > 0) {
+      this.renderVolumetricShaderBatch(shaderBatch);
     }
     this.ctx.globalAlpha = 1.0;
   }
@@ -13946,14 +14423,14 @@ export class GameRenderer {
 
     const ctx = this.ctx;
 
-    // Pass 1: Render volumetric multi-lobed overhead smoke & steam (billowing above shader flames)
-    if (!cleanMode) {
-      for (let i = 0; i < overheadSmoke.length; i++) {
-        this.drawGasSmokeParticle(overheadSmoke[i]);
-      }
+    // Pass 1: Render volumetric multi-lobed overhead smoke, steam & high water plumes via WebGL2 instanced shader
+    if (!cleanMode && overheadSmoke.length > 0) {
+      this.renderVolumetricShaderBatch(overheadSmoke);
     }
 
     // Pass 2: Render neutral physical elements (glass shards, debris, water splash/fountain, leaves, feathers)
+    const waterShaderBatch = this.particleShaderScratch;
+    waterShaderBatch.length = 0;
     for (let i = 0; i < neutral.length; i++) {
       const p = neutral[i];
       ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
@@ -13968,6 +14445,7 @@ export class GameRenderer {
           this.drawDebrisParticle(p);
         }
       } else if (p.type === 'water_splash' || p.type === 'water_fountain') {
+        waterShaderBatch.push(p);
         this.drawWaterParticle(p);
       } else if (p.type === 'leaf') {
         // Botanical pointed leaf blade with central midrib vein
@@ -14014,6 +14492,9 @@ export class GameRenderer {
       } else {
         this.drawWaterParticle(p);
       }
+    }
+    if (!cleanMode && waterShaderBatch.length > 0) {
+      this.renderVolumetricShaderBatch(waterShaderBatch);
     }
 
     // Pass 3: Render high-velocity incandescent metal sparks & carbon-steel branching forks (zero circles)

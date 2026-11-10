@@ -1507,6 +1507,11 @@ export interface LitterItem {
   airborneTimer?: number;
   altitude?: number;
   isGlowing?: boolean;
+  vz?: number;
+  wetness?: number;
+  mudCoat?: number;
+  crushed?: number;
+  flutterPhase?: number;
 }
 
 export interface Bird {
@@ -1552,6 +1557,8 @@ export interface SkidMark {
   grooveColor?: string;    // dark inner trench shadow color
   slipRatio?: number;      // wheel slip intensity for churned vs rolled tread profile
   arcDist?: number;        // cumulative rolling distance for phase-continuous tread lugs
+  trackKind?: 'rubber' | 'mud_carry' | 'wet_carry' | 'oil_carry' | 'sand_carry' | 'rut';
+  treadPattern?: 'street' | 'offroad' | 'heavy_lug' | 'slick';
 }
 
 export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'water';
@@ -1903,6 +1910,15 @@ export interface GroundItem {
   y: number;
   item: InventoryItem;
   spawnTime?: number;
+  vx?: number;
+  vy?: number;
+  angle?: number;
+  angularVelocity?: number;
+  z?: number;
+  vz?: number;
+  wetness?: number;
+  mudCoat?: number;
+  lastInteractTime?: number;
 }
 
 export type InjuryType = 'abrasion' | 'bruise' | 'sprain' | 'fracture' | 'bleeding' | 'burn';

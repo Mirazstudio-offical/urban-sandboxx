@@ -1307,11 +1307,13 @@ export const CarDealershipModal: React.FC<Props> = ({
     const deformFunc = (x: number, y: number): [number, number] => [x, y];
     
     const drawDeformedRect = (x: number, y: number, w: number, h: number, fill: string | CanvasGradient) => {
+      if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return;
       ctx.fillStyle = fill;
       ctx.fillRect(x, y, w, h);
     };
     
     const drawDeformedLine = (x1: number, y1: number, x2: number, y2: number, stroke: string, width = 1) => {
+      if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
       ctx.strokeStyle = stroke;
       ctx.lineWidth = width;
       ctx.beginPath();
@@ -1321,6 +1323,7 @@ export const CarDealershipModal: React.FC<Props> = ({
     };
     
     const drawDeformedCircle = (cx: number, cy: number, r: number, fill: string, stroke?: string, lineWidth = 1) => {
+      if (!isFinite(cx) || !isFinite(cy) || !isFinite(r) || r <= 0) return;
       ctx.fillStyle = fill;
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);

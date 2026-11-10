@@ -26,6 +26,7 @@ import {
   getDefaultFrameAndBodyForCarType,
   getDefaultFrameForTruck,
   resolveVehicleTruckFrameAndBody,
+  getTruckFrameAxlePositions,
   isConfigurableTruck,
   isConfigurableTruckType,
   getTruckPlatform,
@@ -652,7 +653,13 @@ export function applyPowertrain(veh: Vehicle, forcedPick?: PowertrainPick): void
 
     // Hitch / Fifth-wheel offset
     if (resolvedBody.id === 'body_fifth_wheel') {
-      veh.hitchOffset = pick.frame.fifthWheelOffsetPx;
+      const { rearAxlesX } = getTruckFrameAxlePositions(
+        pick.frame,
+        pick.frame.lengthPx / 2,
+        pick.frame.compatiblePlatforms[0]
+      );
+      const bogieCenterX = rearAxlesX.length >= 2 ? (rearAxlesX[0] + rearAxlesX[1]) * 0.5 : rearAxlesX[0];
+      veh.hitchOffset = Math.round(bogieCenterX + 1.0);
     } else {
       veh.hitchOffset = -Math.round(pick.frame.lengthPx / 2) - 2;
     }
