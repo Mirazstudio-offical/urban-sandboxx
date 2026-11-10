@@ -1,24 +1,29 @@
 import { Player, GameWorld, Vehicle, HeldWaterHose, HoseSegmentNode, HoseLeakPoint } from './types';
 import { getVehicleWaterHoseAnchor, ensureVehicleFluidTank, liquidTypeToStainType } from './vehicleHelpers';
+import { isVehicleVacuumTruck } from './truckChassisVariants';
 import { sound } from './audio';
 
 export const WATER_HOSE_MAX_LENGTH = 120; // Compact realistic uncoiled length (~12 meters)
 export const WATER_HOSE_NUM_SEGMENTS = 14;  // Number of Verlet physics nodes
-export const WATER_HOSE_INTERACTION_DIST = 55; // Distance to pick up / return hose
+export const WATER_HOSE_INTERACTION_DIST = 58; // Distance to pick up / return hose
 
 /**
- * Creates a brand new water hose attached to the vehicle.
+ * Creates a brand new water or vacuum suction hose attached to the vehicle.
  */
 export function createWaterHose(vehicle: Vehicle): HeldWaterHose {
+  ensureVehicleFluidTank(vehicle);
   const anchor = getVehicleWaterHoseAnchor(vehicle) || { x: vehicle.x, y: vehicle.y };
   
   // Dynamic realistic lengths for different vehicle scales:
-  // - truck_water: 120 px (long high-pressure fire hose)
+  // - truck_water / fire_engine: 120 px (long high-pressure hose)
+  // - truck_vacuum (КО-503В / КО-505А / КО-560): 85 px (heavy d=100mm corrugated suction hose)
   // - trailer_barrel: 75 px (medium water discharge hose)
-  // - trailer_vacuum: 55 px (thick, heavy, corrugated suction hose)
-  const isVacuum = vehicle.type === 'trailer_vacuum';
+  // - trailer_vacuum: 60 px (tractor corrugated suction hose)
+  const isVacuumTrailer = vehicle.type === 'trailer_vacuum';
+  const isVacuumTruck = isVehicleVacuumTruck(vehicle) || !!vehicle.fluidTank?.isVacuumTank;
+  const isVacuum = isVacuumTrailer || isVacuumTruck;
   const isBarrel = vehicle.type === 'trailer_barrel';
-  const maxLength = isVacuum ? 55 : (isBarrel ? 75 : WATER_HOSE_MAX_LENGTH);
+  const maxLength = isVacuumTrailer ? 60 : (isVacuumTruck ? 85 : (isBarrel ? 75 : WATER_HOSE_MAX_LENGTH));
   
   const segLength = maxLength / (WATER_HOSE_NUM_SEGMENTS - 1);
   const segments: HoseSegmentNode[] = [];
@@ -37,8 +42,7 @@ export function createWaterHose(vehicle: Vehicle): HeldWaterHose {
   }
 
   // Realistic micro-leak puncture holes along the hose length
-  // 2 to 3 micro-holes at random intermediate segments.
-  // Vacuum hoses operate under negative pressure (suction) so they do NOT leak outwards!
+  // Vacuum hoses operate under negative pressure (suction) and reinforced steel-wire ribs so they do NOT leak outwards!
   const leaks: HoseLeakPoint[] = isVacuum ? [] : [
     {
       segmentIndex: Math.floor(4 + Math.random() * 4), // Middle-first third
@@ -52,26 +56,28 @@ export function createWaterHose(vehicle: Vehicle): HeldWaterHose {
 
   return {
     vehicleId: vehicle.id,
-    sourceType: vehicle.type as 'truck_water' | 'trailer_barrel' | 'trailer_vacuum',
+    sourceType: isVacuumTrailer ? 'trailer_vacuum' : (isVacuumTruck ? 'truck_vacuum' : (isBarrel ? 'trailer_barrel' : 'truck_water')),
     maxLength,
     segments,
     segmentLength: segLength,
     leaks,
     isSpraying: false,
+    isVacuumHose: isVacuum,
+    isSuctionActive: false,
     sprayCooldown: 0
   };
 }
 
 /**
- * Checks if the player is within range of a water hose connection point on a vehicle.
+ * Checks if the player is within range of a water/vacuum hose connection point on a vehicle.
  */
 export function getNearbyWaterVehicle(playerX: number, playerY: number, world: GameWorld): { vehicle: Vehicle; dist: number } | null {
   if (!world.vehicles) return null;
   let closest: { vehicle: Vehicle; dist: number } | null = null;
 
   for (const veh of world.vehicles) {
-    if (veh.type !== 'truck_water' && veh.type !== 'trailer_barrel' && veh.type !== 'trailer_vacuum') continue;
     ensureVehicleFluidTank(veh);
+    if (!veh.fluidTank || !veh.fluidTank.hasWaterHose) continue;
     const anchor = getVehicleWaterHoseAnchor(veh);
     if (!anchor) continue;
 
@@ -230,12 +236,14 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
     }
   }
 
-  // 5. Water Flow, Spraying and Micro-leaks (Дырочки на шланге)
+  // 5. Water Flow, Vacuum Suction, Spraying and Micro-leaks
   const tank = veh.fluidTank;
   const currentWater = tank ? (tank.currentVolume ?? tank.currentAmount ?? 0) : 0;
+  const maxCap = tank ? (tank.capacity || 4200) : 4200;
   const hasWater = currentWater > 0;
+  const isTankFull = currentWater >= maxCap - 0.5;
 
-  // Pump pressure calculation (КОМ - Коробка Отбора Мощности + Обороты двигателя)
+  // Pump pressure / vacuum calculation (КОМ - Коробка Отбора Мощности + Обороты двигателя)
   const isEngineRunning = !!veh.engineState?.engineRunning;
   const isPtoActive = !!veh.isPtoActive || !!veh.isWashingNozzlesActive;
   const isPumpPowered = isEngineRunning && isPtoActive;
@@ -244,40 +252,140 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
   const rpmRatio = Math.min(1.0, Math.max(0, (rpm - 750) / 1850));
   // At idle (800 RPM): ~3.8 bar (factor 0.55). Under throttle (2600+ RPM): ~7.2 bar (factor 1.20)
   const pressureFactor = isPumpPowered ? (0.55 + rpmRatio * 0.65) : 0.0;
-  const barPressure = isPumpPowered ? (3.8 + rpmRatio * 3.4) : 0.3; // BAR
 
   hose.isPressurized = isPumpPowered;
+  const isVacuumHose = !!hose.isVacuumHose || hose.sourceType === 'trailer_vacuum' || hose.sourceType === 'truck_vacuum';
+  const vacuumMode = tank?.vacuumPumpMode ?? (isVacuumHose ? 'suction' : 'discharge');
 
-  // Check if player wants to spray (LMB or active key)
-  const wantsToSpray = isMouseDown && hasWater && !player.isInVehicle;
-  hose.isSpraying = wantsToSpray;
+  if (isVacuumHose && vacuumMode === 'suction') {
+    hose.isSpraying = false;
+    const wantsSuction = isMouseDown && !player.isInVehicle && !isTankFull;
+    hose.isSuctionActive = wantsSuction;
 
-  if (wantsToSpray && tank) {
-    // Water consumption scales with pump pressure:
-    // - High pressure (КОМ ВКЛ + подгазовка): ~5.2 - 7.5 L/s (пожарно-поливочный ствол)
-    // - Gravity flow (КОМ ВЫКЛ или мотор заглушен): ~0.75 L/s (самотёк под ноги)
-    const sprayRate = isPumpPowered ? (3.8 + pressureFactor * 3.0) : 0.75; // L/s
-    const consumed = Math.min(currentWater, sprayRate * dt);
-    tank.currentVolume = Math.max(0, currentWater - consumed);
-    tank.currentAmount = tank.currentVolume;
+    if (wantsSuction && tank) {
+      const aimAngle = player.angle;
+      const cosAim = Math.cos(aimAngle);
+      const sinAim = Math.sin(aimAngle);
+      const intakeX = handX + cosAim * 9.5;
+      const intakeY = handY + sinAim * 9.5;
+      const suctionRadius = isPumpPowered ? (28 + pressureFactor * 12) : 20;
+      const suctionPower = isPumpPowered ? (1.0 + pressureFactor * 0.85) : 0.45;
 
-    // Audio looping (sound frequency scales with RPM and pressure)
-    hose.sprayCooldown = (hose.sprayCooldown || 0) + dt;
-    const soundInterval = isPumpPowered ? Math.max(0.08, 0.14 - rpmRatio * 0.05) : 0.22;
-    if (hose.sprayCooldown >= soundInterval) {
-      hose.sprayCooldown = 0;
-      sound.playWaterSpray();
+      let suckedLiters = 0;
+      let suckedColor = '#38bdf8';
+
+      // Suck up ground stains (water, oil, fuel, coolant, puddles) within suction bell cone
+      if (world.stains && world.stains.length > 0) {
+        for (let s = world.stains.length - 1; s >= 0; s--) {
+          const st = world.stains[s];
+          if (st.type === 'sand') continue; // Dry sand is not a liquid puddle
+          const dx = st.x - intakeX;
+          const dy = st.y - intakeY;
+          const dist = Math.hypot(dx, dy);
+          if (dist <= suctionRadius + st.radius) {
+            // Pull stain slightly toward the suction snout and shrink its radius
+            if (dist > 1.5) {
+              const pullStep = Math.min(dist * 0.4, 24 * suctionPower * dt);
+              st.x -= (dx / dist) * pullStep;
+              st.y -= (dy / dist) * pullStep;
+            }
+            const shrinkAmount = (4.2 + suctionPower * 5.5) * dt;
+            const oldR = st.radius;
+            st.radius = Math.max(0, st.radius - shrinkAmount);
+            const areaDelta = Math.max(0.1, oldR * oldR - st.radius * st.radius);
+            suckedLiters += areaDelta * 1.35;
+
+            if (st.type === 'oil') {
+              suckedColor = '#1e293b';
+              tank.liquidType = 'oil';
+            } else if (st.type === 'fuel') {
+              suckedColor = '#f59e0b';
+              tank.liquidType = 'fuel_ai92';
+            } else if (st.type === 'coolant') {
+              suckedColor = '#22c55e';
+              tank.liquidType = 'coolant';
+            } else {
+              suckedColor = '#0284c7';
+            }
+
+            if (st.radius <= 0.85) {
+              world.stains.splice(s, 1);
+            }
+          }
+        }
+      }
+
+      // Also allow sucking groundwater / sewage / river water if standing on wet ground or operating vacuum pump
+      const ambientSuctionRate = isPumpPowered ? (6.5 + pressureFactor * 8.0) * dt : 1.8 * dt;
+      const totalAdded = Math.min(maxCap - currentWater, suckedLiters + ambientSuctionRate);
+      tank.currentVolume = Math.min(maxCap, currentWater + totalAdded);
+      tank.currentAmount = tank.currentVolume;
+      hose.suctionLiquidColor = suckedColor;
+
+      // Spawn inward-swirling suction droplets flying into the brass intake lance tip
+      const tipX = handX + cosAim * 5.8;
+      const tipY = handY + sinAim * 5.8;
+      if (world.particles && world.particles.length < 500 && Math.random() < 0.85) {
+        const randAngle = aimAngle + (Math.random() - 0.5) * 1.4;
+        const spawnDist = 10 + Math.random() * 14;
+        const px = tipX + Math.cos(randAngle) * spawnDist;
+        const py = tipY + Math.sin(randAngle) * spawnDist;
+        const speedIn = 65 + suctionPower * 45;
+        world.particles.push({
+          x: px,
+          y: py,
+          vx: ((tipX - px) / spawnDist) * speedIn,
+          vy: ((tipY - py) / spawnDist) * speedIn,
+          radius: 1.4 + Math.random() * 1.3,
+          color: suckedLiters > 0 ? suckedColor : '#64748b',
+          alpha: 0.8,
+          initialAlpha: 0.8,
+          life: 0,
+          maxLife: 0.16,
+          type: 'water_spray'
+        });
+      }
+
+      // Acoustic feedback
+      hose.sprayCooldown = (hose.sprayCooldown || 0) + dt;
+      if (hose.sprayCooldown >= 0.16) {
+        hose.sprayCooldown = 0;
+        sound.playWaterSpray();
+      }
     }
+  } else {
+    hose.isSuctionActive = false;
+    // Check if player wants to spray / discharge (LMB or active key)
+    const wantsToSpray = isMouseDown && hasWater && !player.isInVehicle;
+    hose.isSpraying = wantsToSpray;
 
-    // Water stream projection (High pressure jet vs gentle gravity arc)
-    spawnWaterStream(player, handX, handY, world, dt, isPumpPowered, pressureFactor);
+    if (wantsToSpray && tank) {
+      // Water/sludge consumption scales with pump pressure:
+      // - High pressure (КОМ ВКЛ + подгазовка): ~5.2 - 7.5 L/s
+      // - Gravity flow (КОМ ВЫКЛ или мотор заглушен): ~0.75 L/s (самотёк под ноги)
+      const sprayRate = isPumpPowered ? (3.8 + pressureFactor * 3.0) : (isVacuumHose ? 2.2 : 0.75); // L/s
+      const consumed = Math.min(currentWater, sprayRate * dt);
+      tank.currentVolume = Math.max(0, currentWater - consumed);
+      tank.currentAmount = tank.currentVolume;
+
+      // Audio looping (sound frequency scales with RPM and pressure)
+      hose.sprayCooldown = (hose.sprayCooldown || 0) + dt;
+      const soundInterval = isPumpPowered ? Math.max(0.08, 0.14 - rpmRatio * 0.05) : 0.22;
+      if (hose.sprayCooldown >= soundInterval) {
+        hose.sprayCooldown = 0;
+        sound.playWaterSpray();
+      }
+
+      // Stream projection (High pressure jet vs gentle gravity arc)
+      spawnWaterStream(player, handX, handY, world, dt, isPumpPowered, pressureFactor);
+    }
   }
 
-  // 6. Micro-hole leaks along the hose body (дырочки со струйками и каплями)
-  if (hasWater && hose.sourceType !== 'trailer_vacuum') {
+  // 6. Micro-hole leaks along the hose body (дырочки со струйками и каплями — только на обычных напорных шлангах)
+  if (hasWater && !isVacuumHose) {
     // When spraying under high pump pressure, leaks squirt further sideways.
-    const isHighPressure = (wantsToSpray && isPumpPowered) || (tank?.drainValveOpen && isPumpPowered);
-    const leakChance = isHighPressure ? 0.85 : (wantsToSpray ? 0.50 : 0.25);
+    const isHighPressure = (hose.isSpraying && isPumpPowered) || (tank?.drainValveOpen && isPumpPowered);
+    const leakChance = isHighPressure ? 0.85 : (hose.isSpraying ? 0.50 : 0.25);
 
     if (Math.random() < leakChance) {
       for (const leak of hose.leaks) {

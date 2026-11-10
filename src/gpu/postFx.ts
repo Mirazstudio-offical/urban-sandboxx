@@ -1331,44 +1331,56 @@ void main() {
 
   // ============================================================================
   // ============================================================================
+  // ============================================================================
   // SHADER 6: ASPHALT, CONCRETE, MINERAL AGGREGATE & VULCANIZED RUBBER SKIDMARKS
   // ============================================================================
   else if (isRoad) {
-    float rutMask = max(smoothstep(0.60, 0.88, matParam), roadSkidMask * 0.85); // Tire-polished wheel tracks + rubber skids
+    float rutMask = max(smoothstep(0.58, 0.86, matParam), roadSkidMask * 0.90); // Tire-polished wheel tracks + rubber skids
     float isConcrete = (matId == 3) ? 1.0 : 0.0;
-    float isBitumenPatch = (matId == 4) ? (1.0 - smoothstep(0.12, 0.24, matParam)) : 0.0;
+    float isBitumenPatch = (matId == 4) ? (1.0 - smoothstep(0.12, 0.25, matParam)) : 0.0;
 
-    // 0. DRY MINERAL AGGREGATE SPARKLE & BITUMEN REPAIR PATCHES
+    // 0. 3D MINERAL AGGREGATE MICRO-RELIEF, BITUMEN TAR SEAMS & TIRE-POLISHED WHEEL LANES
     if (uSnow < 0.65) {
-      // Crushed granite/quartz/basalt aggregate micro-facets catch sunlight & vehicle headlights on dry/damp pavement
       vec3 roadBloomHere = texture(uBloomWide, uv).rgb;
-      vec2 agCell = floor(worldPos * (isConcrete > 0.5 ? 3.4 : 2.6));
-      float agHash = hash(agCell + floor((uCamPos + uSun * 90.0) * 0.03));
-      float mineralSparkle = smoothstep(0.972, 0.997, agHash)
-        * (1.0 - isBitumenPatch * 0.8)
-        * (1.0 - roadSkidMask * 0.75)
-        * (0.28 * uDay + 0.45 * lampHere + luma(roadBloomHere) * 0.95);
-      c += mix(sunGlintCol, vec3(0.90, 0.94, 1.0), 0.35) * mineralSparkle * (isConcrete > 0.5 ? 0.24 : 0.32);
+      // Direct 3D normal-mapped aggregate & concrete grain lighting from sun and artificial lamps
+      float aggSlope = clamp(-dot(matMicroN * (isConcrete > 0.5 ? 16.0 : 22.0), uSun), -0.35, 0.35);
+      c *= 1.0 + aggSlope * (isConcrete > 0.5 ? 0.18 : 0.26) * (0.45 + 0.55 * uDay);
 
-      // Fresh dark tar/bitumen repair patches have higher dielectric gloss and slightly warmer pitch absorption
+      // Tire-polished wheel-rut lanes have slightly darker compacted bitumen and subtle grazing-angle sky/headlight sheen
+      if (rutMask > 0.02 && roadSkidMask < 0.25) {
+        c *= 1.0 - rutMask * 0.045 * (1.0 - isConcrete * 0.5);
+        float laneSheen = pow(clamp(dot(normalize(matMicroN * 7.0 + uSun * 0.38), uSun), 0.0, 1.0), 14.0) * 0.14;
+        c += (sunGlintCol * laneSheen * uDay + roadBloomHere * 0.28) * rutMask;
+      }
+
+      // Crushed granite/quartz/basalt aggregate micro-facets catch sunlight & vehicle headlights on dry/damp pavement
+      vec2 agCell = floor(worldPos * (isConcrete > 0.5 ? 3.2 : 2.5));
+      float agHash = hash(agCell + floor((uCamPos + uSun * 90.0) * 0.025));
+      float mineralSparkle = smoothstep(0.945, 0.994, agHash)
+        * (1.0 - isBitumenPatch * 0.85)
+        * (1.0 - roadSkidMask * 0.80)
+        * (0.36 * uDay + 0.52 * lampHere + luma(roadBloomHere) * 1.15);
+      c += mix(sunGlintCol, vec3(0.92, 0.96, 1.0), 0.35) * mineralSparkle * (isConcrete > 0.5 ? 0.30 : 0.42);
+
+      // Fresh dark tar/bitumen repair patches & crack seals have higher dielectric gloss and pitch absorption
       if (isBitumenPatch > 0.01) {
-        float tarSun = pow(clamp(dot(normalize(matMicroN * 6.0 + uSun * 0.35), uSun), 0.0, 1.0), 16.0) * 0.16;
-        c *= 1.0 - 0.08 * isBitumenPatch;
-        c += (sunGlintCol * tarSun + roadBloomHere * 0.42) * isBitumenPatch;
+        float tarSun = pow(clamp(dot(normalize(matMicroN * 6.0 + uSun * 0.35), uSun), 0.0, 1.0), 14.0) * 0.24;
+        c *= 1.0 - 0.12 * isBitumenPatch;
+        c += (sunGlintCol * tarSun + roadBloomHere * 0.52) * isBitumenPatch;
       }
     }
 
     // 0B. VULCANIZED RUBBER SKIDMARK & CARRIED TIRE TRACK SHADER
     if (roadSkidMask > 0.01) {
       // Molten/vulcanized polymer fills asphalt pores: anisotropic specular sheen at grazing sun/headlight angles
-      vec2 skidReflUv = clamp(uv + matMicroN * 0.12, vec2(0.001), vec2(0.999));
-      vec3 skidBloom = texture(uBloom, skidReflUv).rgb * 0.55 + texture(uBloomWide, skidReflUv).rgb * 0.95;
-      float rubberSpec = pow(clamp(dot(normalize(matMicroN * 5.0 + uSun * 0.42), uSun), 0.0, 1.0), 18.0) * 0.24;
-      vec3 rubberSheenCol = mix(vec3(0.18, 0.22, 0.29), sunGlintCol * 0.65, uDay);
-      c = mix(c, c * 0.82, roadSkidMask * 0.45);
-      c += (rubberSheenCol * rubberSpec + skidBloom * mix(1.15, 0.45, uDay)) * roadSkidMask;
+      vec2 skidReflUv = clamp(uv + matMicroN * 0.14, vec2(0.001), vec2(0.999));
+      vec3 skidBloom = texture(uBloom, skidReflUv).rgb * 0.65 + texture(uBloomWide, skidReflUv).rgb * 1.15;
+      float rubberSpec = pow(clamp(dot(normalize(matMicroN * 5.0 + uSun * 0.42), uSun), 0.0, 1.0), 14.0) * 0.34;
+      vec3 rubberSheenCol = mix(vec3(0.22, 0.27, 0.36), sunGlintCol * 0.78, uDay);
+      c = mix(c, c * 0.76, roadSkidMask * 0.52);
+      c += (rubberSheenCol * rubberSpec + skidBloom * mix(1.35, 0.55, uDay)) * roadSkidMask;
       if (uLightOn > 0.5) {
-        c += vec3(0.95, 0.90, 0.80) * lampHere * 0.14 * roadSkidMask * (1.0 - uDay * 0.6);
+        c += vec3(0.96, 0.91, 0.82) * lampHere * 0.22 * roadSkidMask * (1.0 - uDay * 0.5);
       }
     }
 
@@ -1433,31 +1445,37 @@ void main() {
     float isMeadowOrCrop = (matId == 1 && matParam >= 0.42 && matParam <= 0.78) ? 1.0 : 0.0;
     float isForestFloor = (matId == 1 && matParam > 0.78) ? 1.0 : 0.0;
 
+    // Base 3D soil/earth micro-normal directional relief across all earth biomes
+    if (uSnow < 0.6) {
+      float earthSlope = clamp(-dot(matMicroN * 18.0, uSun), -0.38, 0.38);
+      c *= 1.0 + earthSlope * (isDirtTrackOrBank > 0.5 ? 0.28 : 0.18) * (0.45 + 0.55 * uDay);
+    }
+
     // 0A. SILICA SAND & SALT FLATS QUARTZ SCINTILLATION + WIND RIPPLE SHADING
     if (isSandOrSalt > 0.5 && uSnow < 0.5) {
       vec3 sandBloom = texture(uBloomWide, uv).rgb;
-      vec2 quartzCell = floor(worldPos * 3.2);
-      float qHash = hash(quartzCell + floor((uCamPos + uSun * 110.0) * 0.035));
-      float quartzGlint = smoothstep(0.966, 0.996, qHash) * (0.55 * uDay + 0.65 * lampHere + luma(sandBloom) * 1.3);
-      float duneLit = clamp(-dot(matMicroN * 14.0, uSun), -0.35, 0.35);
-      c *= 1.0 + duneLit * 0.22 * uDay;
-      c += mix(vec3(1.0, 0.93, 0.76), sunGlintCol, 0.5) * quartzGlint * 0.52;
+      vec2 quartzCell = floor(worldPos * 3.0);
+      float qHash = hash(quartzCell + floor((uCamPos + uSun * 110.0) * 0.03));
+      float quartzGlint = smoothstep(0.945, 0.995, qHash) * (0.60 * uDay + 0.70 * lampHere + luma(sandBloom) * 1.4);
+      float duneLit = clamp(-dot(matMicroN * 16.0, uSun), -0.40, 0.40);
+      c *= 1.0 + duneLit * 0.26 * uDay;
+      c += mix(vec3(1.0, 0.93, 0.76), sunGlintCol, 0.5) * quartzGlint * 0.62;
     }
 
     // 0B. PLOWED CHERNOZEM FURROW RELIEF & HUMUS VELVET ABSORPTION
     if (isPlowedChernozem > 0.5 && uSnow < 0.5) {
       float furrowCrest = sin(worldPos.y * 0.78);
-      float furrowSun = clamp(-dot(matMicroN * 12.0, uSun), -0.4, 0.4);
+      float furrowSun = clamp(-dot(matMicroN * 15.0, uSun), -0.45, 0.45);
       // Deep furrow troughs trap ambient light; overturned moist clod crests catch warm solar rim
-      c *= 0.92 + 0.08 * furrowCrest + furrowSun * 0.24 * uDay;
+      c *= 0.90 + 0.10 * furrowCrest + furrowSun * 0.30 * uDay;
     }
 
-    // 0C. CRUSHED GRAVEL MINERAL FACET GLINTS
-    if (isGravelSurface > 0.5 && uSnow < 0.5) {
-      vec2 gravCell = floor(worldPos * 2.4);
-      float gHash = hash(gravCell + floor(uCamPos * 0.025));
-      float stoneFacet = (gHash - 0.5) * 0.09;
-      c *= 1.0 + stoneFacet * (1.0 - uWet * 0.5);
+    // 0C. CRUSHED GRAVEL & DIRT ROAD MINERAL FACET GLINTS
+    if (isDirtTrackOrBank > 0.5 && uSnow < 0.5) {
+      vec2 gravCell = floor(worldPos * (isGravelSurface > 0.5 ? 2.5 : 1.9));
+      float gHash = hash(gravCell + floor(uCamPos * 0.02));
+      float stoneFacet = (gHash - 0.5) * (isGravelSurface > 0.5 ? 0.14 : 0.09);
+      c *= 1.0 + stoneFacet * (1.0 - uWet * 0.45);
     }
 
     // 0D. MEADOW, STEPPE & CROP CANOPY ANISOTROPIC WIND-GUST WAVES
@@ -1466,19 +1484,20 @@ void main() {
       vec2 wDir = wSpd > 0.1 ? (uWind / wSpd) : vec2(0.92, 0.39);
       vec2 wPerp = vec2(-wDir.y, wDir.x);
       // Travelling wave fronts across grass & crop fields driven by uWindPhase and uWindGust
-      vec3 gustN1 = noise2DAndGrad(worldPos * 0.028 - wDir * (uWindPhase * 0.32) + wPerp * (worldPos.x * 0.008));
-      vec3 gustN2 = noise2DAndGrad(worldPos * 0.085 - wDir * (uWindPhase * 0.58) + vec2(13.7, -9.2));
-      float waveCrest = smoothstep(0.36, 0.78, gustN1.x * 0.62 + gustN2.x * 0.38);
-      float gustStrength = clamp((wSpd / 55.0) * (0.65 + 0.35 * uWindGust), 0.08, 1.0);
+      vec3 gustN1 = noise2DAndGrad(worldPos * 0.026 - wDir * (uWindPhase * 0.38) + wPerp * (worldPos.x * 0.008));
+      vec3 gustN2 = noise2DAndGrad(worldPos * 0.082 - wDir * (uWindPhase * 0.64) + vec2(13.7, -9.2));
+      float waveCrest = smoothstep(0.32, 0.76, gustN1.x * 0.62 + gustN2.x * 0.38);
+      float gustStrength = clamp((max(14.0, wSpd) / 48.0) * (0.65 + 0.35 * uWindGust), 0.18, 1.0);
       // Bent grass/wheat blades expose their glossy underside to the sun & sky
-      vec3 bladeSheen = mix(vec3(0.12, 0.18, 0.09), sunGlintCol * vec3(0.88, 0.96, 0.72), uDay);
-      c += bladeSheen * waveCrest * gustStrength * 0.085 * (0.35 + 0.65 * uDay);
-      c *= 1.0 - (1.0 - waveCrest) * gustStrength * 0.045;
+      vec3 bladeSheen = mix(vec3(0.14, 0.22, 0.10), sunGlintCol * vec3(0.88, 0.98, 0.74), uDay);
+      c += bladeSheen * waveCrest * gustStrength * 0.13 * (0.35 + 0.65 * uDay);
+      c *= 1.0 - (1.0 - waveCrest) * gustStrength * 0.065;
     }
 
     // 0E. FOREST HUMUS & MOSS FLOOR
     if (isForestFloor > 0.5 && uSnow < 0.5) {
-      c *= 0.95;
+      vec3 mossN = noise2DAndGrad(worldPos * 0.18 + vec2(9.4, -14.2));
+      c *= 0.92 + 0.08 * mossN.x;
     }
 
     // 0F. 3D OFFROAD TIRE RUT SHADER (Sunken Trench Walls, Lateral Soil Berms & Wet Rut Mirror)
@@ -1490,16 +1509,16 @@ void main() {
       vec2 rutGrad = vec2(rR - rL, rU - rD);
       float wallSlope = length(rutGrad);
       // Directional self-shadowing & sunlit rim on the 3D rut walls
-      float rutSunLit = clamp(dot(rutGrad, uSun) * 2.8, -0.38, 0.42);
-      c *= 1.0 - offroadRutMask * 0.18 + rutSunLit * (0.35 + 0.65 * uDay);
+      float rutSunLit = clamp(dot(rutGrad, uSun) * 3.4, -0.44, 0.48);
+      c *= 1.0 - offroadRutMask * 0.22 + rutSunLit * (0.38 + 0.62 * uDay);
 
       // Wet or compacted clay/mud at the bottom of the tire rut reflects sky, sun & vehicle headlights
-      float rutWetness = clamp(uWet * 1.25 + bankMoisture * 0.8 + offroadRutMask * 0.45, 0.0, 1.0);
-      vec2 rutReflUv = clamp(uv + (rutGrad * 0.012 + matMicroN * 0.18), vec2(0.001), vec2(0.999));
+      float rutWetness = clamp(uWet * 1.25 + bankMoisture * 0.8 + offroadRutMask * 0.55, 0.0, 1.0);
+      vec2 rutReflUv = clamp(uv + (rutGrad * 0.014 + matMicroN * 0.18), vec2(0.001), vec2(0.999));
       vec3 rutBloom = texture(uBloomWide, rutReflUv).rgb;
-      float rutGlint = pow(clamp(dot(normalize(rutGrad + matMicroN * 6.0 + uSun * 0.35), uSun), 0.0, 1.0), 16.0) * 0.28;
-      c = mix(c, skyCol * 0.82, offroadRutMask * rutWetness * 0.14 * uDay);
-      c += (sunGlintCol * rutGlint + rutBloom * mix(1.35, 0.55, uDay) + vec3(0.95, 0.88, 0.74) * lampHere * 0.18 * wallSlope) * offroadRutMask * rutWetness;
+      float rutGlint = pow(clamp(dot(normalize(rutGrad + matMicroN * 6.0 + uSun * 0.35), uSun), 0.0, 1.0), 14.0) * 0.36;
+      c = mix(c, skyCol * 0.85, offroadRutMask * rutWetness * 0.18 * uDay);
+      c += (sunGlintCol * rutGlint + rutBloom * mix(1.45, 0.60, uDay) + vec3(0.95, 0.88, 0.74) * lampHere * 0.24 * wallSlope) * offroadRutMask * rutWetness;
     }
 
     // A. WET EARTH & SLICK MUD SHADER

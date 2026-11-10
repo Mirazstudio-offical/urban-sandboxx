@@ -44,7 +44,7 @@ import {
   renderTruckBareFrame,
   renderTruckFifthWheelCoupling
 } from './vehicleVisuals';
-import { resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
+import { resolveVehicleTruckFrameAndBody, isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
 import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
@@ -428,36 +428,61 @@ export class GameRenderer {
     const imgData = pctx.createImageData(size, size);
     const d = imgData.data;
 
-    // 1. Continuous per-pixel micro-roughness without any regular lattice or dot lines
+    // 1. Multi-octave per-pixel 3D normal-beveled asphalt aggregate micro-roughness
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const n1 = GameRenderer.roadNoisePRNG(x, y, 101);
         const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 202);
-        const combined = n1 * 0.65 + n2 * 0.35;
-        const delta = Math.round((combined - 0.5) * 14); // subtle natural variation
+        const n3 = GameRenderer.roadNoisePRNG(x >> 2, y >> 2, 255);
+        const nNext = GameRenderer.roadNoisePRNG((x + 1) & 255, (y + 1) & 255, 101);
+        const bevel = (n1 - nNext) * 14;
+        const combined = n1 * 0.50 + n2 * 0.32 + n3 * 0.18;
+        const delta = Math.round((combined - 0.5) * 18 + bevel);
 
         const idx = (y * size + x) * 4;
-        d[idx] = Math.max(0, Math.min(255, 49 + delta));
-        d[idx + 1] = Math.max(0, Math.min(255, 52 + delta));
+        d[idx] = Math.max(0, Math.min(255, 48 + delta));
+        d[idx + 1] = Math.max(0, Math.min(255, 51 + delta));
         d[idx + 2] = Math.max(0, Math.min(255, 58 + delta));
         d[idx + 3] = 255;
       }
     }
     pctx.putImageData(imgData, 0, 0);
 
-    // 2. Fine organic mineral aggregate specks (scattered naturally with high entropy)
-    for (let i = 0; i < 140; i++) {
-      const px = GameRenderer.roadNoisePRNG(i, 11, 303) * (size - 4);
-      const py = GameRenderer.roadNoisePRNG(i, 22, 404) * (size - 4);
-      const prand = GameRenderer.roadNoisePRNG(i, 33, 505);
-      const pradius = 0.8 + prand * 1.0;
+    // 2. Dark glossy bitumen/tar crack seals (subtle organic micro-seams)
+    pctx.strokeStyle = 'rgba(18, 20, 25, 0.42)';
+    pctx.lineWidth = 1.1;
+    for (let s = 0; s < 7; s++) {
+      let sx = GameRenderer.roadNoisePRNG(s, 7, 901) * (size - 40) + 20;
+      let sy = GameRenderer.roadNoisePRNG(s, 13, 902) * (size - 40) + 20;
+      pctx.beginPath();
+      pctx.moveTo(sx, sy);
+      for (let seg = 0; seg < 5; seg++) {
+        sx += (GameRenderer.roadNoisePRNG(s * 10 + seg, 19, 903) - 0.48) * 18;
+        sy += (GameRenderer.roadNoisePRNG(s * 10 + seg, 29, 904) - 0.48) * 18;
+        pctx.lineTo(sx, sy);
+      }
+      pctx.stroke();
+    }
 
-      if (prand < 0.35) {
-        pctx.fillStyle = 'rgba(255, 255, 255, 0.14)'; // Light quartz speck
-      } else if (prand < 0.70) {
-        pctx.fillStyle = 'rgba(20, 22, 26, 0.5)'; // Dark bitumen spot
+    // 3. 3D Mineral aggregate stones (quartz, basalt, granite with NW highlight & SE shadow)
+    for (let i = 0; i < 240; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 11, 303) * (size - 4) + 2;
+      const py = GameRenderer.roadNoisePRNG(i, 22, 404) * (size - 4) + 2;
+      const prand = GameRenderer.roadNoisePRNG(i, 33, 505);
+      const pradius = 0.7 + prand * 1.15;
+
+      // Micro-crevice shadow
+      pctx.fillStyle = 'rgba(12, 14, 18, 0.45)';
+      pctx.beginPath();
+      safeArc(pctx, px + 0.45, py + 0.45, pradius, 0, Math.PI * 2);
+      pctx.fill();
+
+      if (prand < 0.34) {
+        pctx.fillStyle = 'rgba(240, 245, 255, 0.20)'; // Crushed quartz speck
+      } else if (prand < 0.68) {
+        pctx.fillStyle = 'rgba(22, 25, 31, 0.55)'; // Dark bitumen binder
       } else {
-        pctx.fillStyle = 'rgba(95, 100, 110, 0.35)'; // Basalt aggregate
+        pctx.fillStyle = 'rgba(105, 112, 124, 0.42)'; // Grey basalt aggregate
       }
       pctx.beginPath();
       safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
@@ -481,13 +506,16 @@ export class GameRenderer {
     const imgData = pctx.createImageData(size, size);
     const d = imgData.data;
 
-    // Weathered country asphalt base
+    // Weathered coarse rural asphalt base with 3D micro-bevel
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const n1 = GameRenderer.roadNoisePRNG(x, y, 601);
         const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 702);
-        const combined = n1 * 0.6 + n2 * 0.4;
-        const delta = Math.round((combined - 0.5) * 16);
+        const n3 = GameRenderer.roadNoisePRNG(x >> 2, y >> 2, 755);
+        const nNext = GameRenderer.roadNoisePRNG((x + 1) & 255, (y + 1) & 255, 601);
+        const bevel = (n1 - nNext) * 16;
+        const combined = n1 * 0.48 + n2 * 0.34 + n3 * 0.18;
+        const delta = Math.round((combined - 0.5) * 20 + bevel);
 
         const idx = (y * size + x) * 4;
         d[idx] = Math.max(0, Math.min(255, 55 + delta));
@@ -498,19 +526,40 @@ export class GameRenderer {
     }
     pctx.putImageData(imgData, 0, 0);
 
-    // Weathered rural aggregate flecks
-    for (let i = 0; i < 180; i++) {
-      const px = GameRenderer.roadNoisePRNG(i, 44, 808) * (size - 4);
-      const py = GameRenderer.roadNoisePRNG(i, 55, 909) * (size - 4);
+    // Poured tar repair snakes on country road
+    pctx.strokeStyle = 'rgba(20, 22, 27, 0.52)';
+    pctx.lineWidth = 1.4;
+    for (let s = 0; s < 9; s++) {
+      let sx = GameRenderer.roadNoisePRNG(s, 41, 951) * (size - 36) + 18;
+      let sy = GameRenderer.roadNoisePRNG(s, 53, 952) * (size - 36) + 18;
+      pctx.beginPath();
+      pctx.moveTo(sx, sy);
+      for (let seg = 0; seg < 6; seg++) {
+        sx += (GameRenderer.roadNoisePRNG(s * 12 + seg, 61, 953) - 0.48) * 16;
+        sy += (GameRenderer.roadNoisePRNG(s * 12 + seg, 71, 954) - 0.48) * 16;
+        pctx.lineTo(sx, sy);
+      }
+      pctx.stroke();
+    }
+
+    // Weathered rural aggregate flecks with 3D shadow
+    for (let i = 0; i < 260; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 44, 808) * (size - 4) + 2;
+      const py = GameRenderer.roadNoisePRNG(i, 55, 909) * (size - 4) + 2;
       const prand = GameRenderer.roadNoisePRNG(i, 66, 1010);
-      const pradius = 0.9 + prand * 1.2;
+      const pradius = 0.85 + prand * 1.3;
+
+      pctx.fillStyle = 'rgba(14, 16, 20, 0.48)';
+      pctx.beginPath();
+      safeArc(pctx, px + 0.5, py + 0.5, pradius, 0, Math.PI * 2);
+      pctx.fill();
 
       if (prand < 0.4) {
-        pctx.fillStyle = 'rgba(235, 230, 220, 0.16)'; // Dusty mineral
+        pctx.fillStyle = 'rgba(235, 230, 220, 0.22)'; // Dusty mineral
       } else if (prand < 0.75) {
-        pctx.fillStyle = 'rgba(24, 26, 30, 0.55)'; // Tar
+        pctx.fillStyle = 'rgba(24, 26, 30, 0.58)'; // Tar
       } else {
-        pctx.fillStyle = 'rgba(105, 108, 118, 0.4)'; // Stone
+        pctx.fillStyle = 'rgba(112, 116, 126, 0.46)'; // Stone
       }
       pctx.beginPath();
       safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
@@ -538,7 +587,9 @@ export class GameRenderer {
       for (let x = 0; x < size; x++) {
         const n1 = GameRenderer.roadNoisePRNG(x, y, 1101);
         const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 1202);
-        const delta = Math.round(((n1 * 0.7 + n2 * 0.3) - 0.5) * 22);
+        const nNext = GameRenderer.roadNoisePRNG((x + 1) & 255, (y + 1) & 255, 1101);
+        const bevel = (n1 - nNext) * 18;
+        const delta = Math.round(((n1 * 0.65 + n2 * 0.35) - 0.5) * 26 + bevel);
 
         const idx = (y * size + x) * 4;
         d[idx] = Math.max(0, Math.min(255, 91 + delta));
@@ -549,19 +600,24 @@ export class GameRenderer {
     }
     pctx.putImageData(imgData, 0, 0);
 
-    // Scattered natural gravel stones
-    for (let i = 0; i < 220; i++) {
-      const px = GameRenderer.roadNoisePRNG(i, 77, 1303) * (size - 6);
-      const py = GameRenderer.roadNoisePRNG(i, 88, 1404) * (size - 6);
+    // Scattered natural 3D gravel stones with SE crevice shadow & NW sunlit facet
+    for (let i = 0; i < 280; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 77, 1303) * (size - 6) + 3;
+      const py = GameRenderer.roadNoisePRNG(i, 88, 1404) * (size - 6) + 3;
       const prand = GameRenderer.roadNoisePRNG(i, 99, 1505);
-      const pradius = 1.2 + prand * 1.8;
+      const pradius = 1.1 + prand * 1.9;
+
+      pctx.fillStyle = 'rgba(22, 24, 28, 0.52)';
+      pctx.beginPath();
+      safeArc(pctx, px + 0.6, py + 0.6, pradius, 0, Math.PI * 2);
+      pctx.fill();
 
       if (prand < 0.45) {
-        pctx.fillStyle = '#7a7c82'; // Light limestone
+        pctx.fillStyle = '#7e8188'; // Light limestone
       } else if (prand < 0.8) {
-        pctx.fillStyle = '#48494d'; // Dark granite
+        pctx.fillStyle = '#484a4f'; // Dark granite
       } else {
-        pctx.fillStyle = '#a1a3a8'; // White quartz pebble
+        pctx.fillStyle = '#adb0b8'; // White quartz pebble
       }
       pctx.beginPath();
       safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
@@ -3157,8 +3213,8 @@ export class GameRenderer {
     ctx.lineJoin = 'round';
 
     const sunState = getCurrentSunShadowState();
-    const sunDirX = -sunState.cosAngle;
-    const sunDirY = -sunState.sinAngle;
+    const sunDirX = sunState.sunDirX ?? 0.42;
+    const sunDirY = sunState.sunDirY ?? 0.91;
 
     for (let i = Math.max(0, skidMarks.length - performanceConfig.skidMarksLimit); i < skidMarks.length; i++) {
       const sm = skidMarks[i];
@@ -6228,8 +6284,8 @@ export class GameRenderer {
     if (!litter) return;
     const ctx = this.ctx;
     const sunState = getCurrentSunShadowState();
-    const sunLx = -sunState.cosAngle;
-    const sunLy = -sunState.sinAngle;
+    const sunLx = sunState.sunDirX ?? 0.42;
+    const sunLy = sunState.sunDirY ?? 0.91;
 
     const litterStart = Math.max(0, litter.length - performanceConfig.litterLimit);
     for (let li = litterStart; li < litter.length; li++) {
@@ -6514,8 +6570,8 @@ export class GameRenderer {
     if (!groundItems || groundItems.length === 0) return;
     const ctx = this.ctx;
     const sunState = getCurrentSunShadowState();
-    const sunLx = -sunState.cosAngle;
-    const sunLy = -sunState.sinAngle;
+    const sunLx = sunState.sunDirX ?? 0.42;
+    const sunLy = sunState.sunDirY ?? 0.91;
 
     for (const gi of groundItems) {
       if (gi.x < minX - 30 || gi.x > maxX + 30 || gi.y < minY - 30 || gi.y > maxY + 30) continue;
@@ -13145,6 +13201,114 @@ export class GameRenderer {
 
       ctx.restore();
     }
+
+    // World-space pass for KS-3577 boom crane hook target reticle and 4-leg wire rope sling (строп 4СК)
+    for (const car of vehicles) {
+      if (!isVehicleCraneTruck(car)) continue;
+      const geom = getVehicleCraneGeometry(car);
+      const hookX = geom.worldBoomTipX;
+      const hookY = geom.worldBoomTipY;
+      const showReticle = car.isPlayerControlled && (
+        car.craneControlMode ||
+        car.craneOutriggersDeployed ||
+        Math.abs(car.craneTurretAngle ?? 0) > 0.02 ||
+        (car.craneBoomExtension ?? 0) > 0.02 ||
+        !!car.craneHookedVehicleId
+      );
+
+      if (showReticle && !gridMode) {
+        let hasTargetUnderHook = false;
+        if (!car.craneHookedVehicleId) {
+          for (const cand of vehicles) {
+            if (cand.id === car.id) continue;
+            if (Math.hypot(cand.x - hookX, cand.y - hookY) < 38) {
+              hasTargetUnderHook = true;
+              break;
+            }
+          }
+        }
+        ctx.save();
+        const reticleColor = car.craneHookedVehicleId
+          ? 'rgba(245, 158, 11, 0.78)'
+          : hasTargetUnderHook
+          ? 'rgba(16, 185, 129, 0.88)'
+          : 'rgba(250, 204, 21, 0.52)';
+        ctx.strokeStyle = reticleColor;
+        ctx.lineWidth = hasTargetUnderHook ? 1.5 : 1.1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.arc(hookX, hookY, 15, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // 4 crosshair ticks
+        for (let a = 0; a < 4; a++) {
+          const ang = (a * Math.PI) / 2;
+          ctx.beginPath();
+          ctx.moveTo(hookX + Math.cos(ang) * 11, hookY + Math.sin(ang) * 11);
+          ctx.lineTo(hookX + Math.cos(ang) * 18, hookY + Math.sin(ang) * 18);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      if (car.craneHookedVehicleId) {
+        const hooked = vehicles.find(v => v.id === car.craneHookedVehicleId);
+        if (hooked) {
+          const hCos = Math.cos(hooked.angle);
+          const hSin = Math.sin(hooked.angle);
+          const sLx = hooked.length * 0.28;
+          const sLy = hooked.width * 0.36;
+          const corners = [
+            { lx: sLx, ly: -sLy },
+            { lx: sLx, ly: sLy },
+            { lx: -sLx, ly: -sLy },
+            { lx: -sLx, ly: sLy },
+          ];
+          const masterX = hookX;
+          const masterY = hookY - (geom.hookHeight ?? 0.3) * 2.2;
+
+          ctx.save();
+          // Shadow of 4-leg wire rope sling
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.lineWidth = 1.8;
+          for (const c of corners) {
+            const wx = hooked.x + c.lx * hCos - c.ly * hSin;
+            const wy = hooked.y + c.lx * hSin + c.ly * hCos;
+            ctx.beginPath();
+            ctx.moveTo(masterX + 1.5, masterY + 1.5);
+            ctx.lineTo(wx + 1.0, wy + 1.0);
+            ctx.stroke();
+          }
+
+          // Steel cable legs & red forged shackles
+          for (const c of corners) {
+            const wx = hooked.x + c.lx * hCos - c.ly * hSin;
+            const wy = hooked.y + c.lx * hSin + c.ly * hCos;
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 1.25;
+            ctx.beginPath();
+            ctx.moveTo(masterX, masterY);
+            ctx.lineTo(wx, wy);
+            ctx.stroke();
+
+            ctx.fillStyle = '#dc2626';
+            ctx.beginPath();
+            ctx.arc(wx, wy, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Central master ring (звено Рт) on crane hook
+          ctx.fillStyle = '#f59e0b';
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 0.9;
+          ctx.beginPath();
+          ctx.arc(masterX, masterY, 2.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
   }
 
   // --- PARTICLES & VOLUMETRIC FLUID / MATERIAL ENGINE ---
@@ -13550,7 +13714,7 @@ export class GameRenderer {
     }
 
     // 2. Player on foot parts smoke, steam, mist, and dust clouds
-    if (!player.inVehicle && !player.insideCarId && !player.insideBusId && cols.length < 24) {
+    if (!player.isInVehicle && !player.insideCarId && !player.insideBusId && cols.length < 24) {
       cols.push({
         x: player.x,
         y: player.y,
@@ -13588,7 +13752,7 @@ export class GameRenderer {
       this.height,
       this.backingScale,
       performance.now() * 0.001,
-      { x: -sunState.cosAngle, y: -sunState.sinAngle },
+      { x: sunState.sunDirX ?? 0.42, y: sunState.sunDirY ?? 0.91 },
       Math.max(0.0, Math.min(1.0, 1.0 - this.currentNightAlpha * 1.15)),
       this.currentWorldWind,
       this.activeParticleColliders,
@@ -14446,7 +14610,6 @@ export class GameRenderer {
         }
       } else if (p.type === 'water_splash' || p.type === 'water_fountain') {
         waterShaderBatch.push(p);
-        this.drawWaterParticle(p);
       } else if (p.type === 'leaf') {
         // Botanical pointed leaf blade with central midrib vein
         const lr = Math.max(1.6, p.radius);

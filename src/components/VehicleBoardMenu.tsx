@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Player, GameWorld, Vehicle } from '../types';
 import { 
   Lightbulb,
@@ -27,11 +27,13 @@ import {
   Activity,
   CheckCircle2,
   Snowflake,
-  RefreshCw
+  RefreshCw,
+  Anchor
 } from 'lucide-react';
 import { sound } from '../audio';
-import { toggleTrailerHitch } from '../physics';
+import { toggleTrailerHitch, toggleCraneHookAttach } from '../physics';
 import { getLiquidNameRu, hasRoadTrainLights, getVehicleDiffCapabilities, cycleVehicleDiffLock } from '../vehicleHelpers';
+import { isVehicleCraneTruck, isVehicleVacuumTruck, getVehicleCraneGeometry } from '../truckChassisVariants';
 import { getVehicleControlTheme, VehicleControlTheme, CONTROL_THEME_META } from './vehicleControlStyles';
 
 interface VehicleBoardMenuProps {
@@ -944,12 +946,12 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
             </div>
           )}
 
-          {/* ================= 15. SPECIAL: TRUCK WATER PTO PUMP ================= */}
-          {(veh.type === 'truck_water' || veh.type === 'fire_engine') && (
+          {/* ================= 15. SPECIAL: TRUCK WATER / VACUUM PTO PUMP ================= */}
+          {(veh.type === 'truck_water' || veh.type === 'fire_engine' || veh.fluidTank?.hasWaterHose || isVehicleVacuumTruck(veh)) && (
             <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                  КОМ / ВОДОНАСОС
+                  {isVehicleVacuumTruck(veh) ? 'КОМ / ВАКУУМ-НАСОС' : 'КОМ / ВОДОНАСОС'}
                 </span>
                 <div 
                   className={`w-2.5 h-2.5 rounded-none border border-black ${
@@ -978,7 +980,56 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
               </button>
 
               <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-                Коробка отбора мощности
+                {isVehicleVacuumTruck(veh) ? 'Вакуумный насос КО-503 / ВК-6М2' : 'Коробка отбора мощности'}
+              </span>
+            </div>
+          )}
+
+          {/* ================= 15B. VACUUM TRUCK 4-WAY VALVE (SUCTION / DISCHARGE) ================= */}
+          {isVehicleVacuumTruck(veh) && veh.fluidTank && (
+            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
+                  4-ХОДОВОЙ КРАН НАСОСА
+                </span>
+                <span className="text-[9px] font-mono font-bold text-[#c68a35] tabular-nums">
+                  {Math.round(((veh.fluidTank.currentVolume ?? 0) / Math.max(1, veh.fluidTank.capacity)) * 100)}%
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 mt-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playButtonPress();
+                    veh.fluidTank!.vacuumPumpMode = 'suction';
+                  }}
+                  className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1 text-[9.5px] font-mono font-black transition-all cursor-pointer ${
+                    (veh.fluidTank.vacuumPumpMode ?? 'suction') === 'suction'
+                      ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
+                      : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
+                  }`}
+                >
+                  <span>ВСАСЫВАНИЕ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playButtonPress();
+                    veh.fluidTank!.vacuumPumpMode = 'discharge';
+                  }}
+                  className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1 text-[9.5px] font-mono font-black transition-all cursor-pointer ${
+                    veh.fluidTank.vacuumPumpMode === 'discharge'
+                      ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
+                      : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
+                  }`}
+                >
+                  <span>НАГНЕТАНИЕ</span>
+                </button>
+              </div>
+
+              <span className="text-[8px] text-[#5a6272] font-mono mt-2 tabular-nums">
+                Хранилище цистерны: {Math.round(veh.fluidTank.currentVolume ?? 0)} / {veh.fluidTank.capacity} л
               </span>
             </div>
           )}
@@ -988,7 +1039,7 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
             <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider truncate max-w-[130px]">
-                  СЛИВ {getLiquidNameRu(veh.fluidTank.liquidType)}
+                  {isVehicleVacuumTruck(veh) ? 'ЗАДНЯЯ ЗАДВИЖКА АНМ-53' : `СЛИВ ${getLiquidNameRu(veh.fluidTank.liquidType)}`}
                 </span>
                 <div 
                   className={`w-2.5 h-2.5 rounded-none border border-black ${
@@ -1011,16 +1062,86 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
               >
                 <Droplet className="w-4 h-4" />
                 <span className="text-[11px] font-mono font-black uppercase">
-                  {veh.fluidTank.drainValveOpen ? 'КРАН: ОТКРЫТ' : 'КРАН: ЗАКРЫТ'}
+                  {veh.fluidTank.drainValveOpen ? 'ШИБЕР: ОТКРЫТ' : 'ШИБЕР: ЗАКРЫТ'}
                 </span>
                 {veh.fluidTank.drainValveOpen ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
               </button>
 
-              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
+              <span className="text-[8px] text-[#5a6272] font-mono mt-2 tabular-nums">
                 Объём: {Math.round(veh.fluidTank.currentVolume ?? veh.fluidTank.currentAmount ?? 0)} / {veh.fluidTank.capacity} л
               </span>
             </div>
           )}
+
+          {/* ================= 17. SPECIAL: KS-3577 BOOM CRANE CONTROLS ================= */}
+          {isVehicleCraneTruck(veh) && (() => {
+            const cGeom = getVehicleCraneGeometry(veh);
+            return (
+              <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg col-span-1 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
+                    АВТОКРАН КС-3577 «ИВАНОВЕЦ» (16 Т)
+                  </span>
+                  <span className="text-[9px] font-mono font-bold text-[#c68a35] tabular-nums">
+                    СТРЕЛА {cGeom.boomLengthMeters.toFixed(1)} М · ПОВОРОТ {Math.round((cGeom.turretAngle * 180) / Math.PI)}° · MAX {cGeom.maxLoadTons.toFixed(1)} Т
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 mt-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playButtonPress();
+                      veh.craneOutriggersDeployed = !veh.craneOutriggersDeployed;
+                    }}
+                    className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1.5 text-[10px] font-mono font-black transition-all cursor-pointer ${
+                      veh.craneOutriggersDeployed
+                        ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
+                        : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
+                    }`}
+                  >
+                    <Anchor className="w-3.5 h-3.5" />
+                    <span>{veh.craneOutriggersDeployed ? 'ОПОРЫ: В УПОРЕ' : 'ВЫДВИНУТЬ ОПОРЫ'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playButtonPress();
+                      veh.craneControlMode = !veh.craneControlMode;
+                    }}
+                    className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1.5 text-[10px] font-mono font-black transition-all cursor-pointer ${
+                      veh.craneControlMode
+                        ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
+                        : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
+                    }`}
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>{veh.craneControlMode ? 'ПУЛЬТ СТРЕЛЫ: ВКЛ' : 'РЕЖИМ СТРЕЛЫ'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toggleCraneHookAttach(veh, world, player || undefined);
+                    }}
+                    className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1.5 text-[10px] font-mono font-black transition-all cursor-pointer ${
+                      veh.craneHookedVehicleId
+                        ? 'bg-[#10b981] text-[#0b0c0e] border-[#34d399]'
+                        : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
+                    }`}
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span>{veh.craneHookedVehicleId ? 'ОТЦЕПИТЬ СТРОПЫ' : 'ЗАЦЕПИТЬ ГАК'}</span>
+                  </button>
+                </div>
+
+                <span className="text-[8px] text-[#5a6272] font-mono mt-2">
+                  В режиме стрелы клавиши A/D (руль) вращают башню 360°, W/S (газ/тормоз) выдвигают 3-секционную стрелу
+                </span>
+              </div>
+            );
+          })()}
 
         </div>
 

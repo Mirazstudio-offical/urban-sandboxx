@@ -310,20 +310,27 @@ export function createDefaultFluidTank(type: CarType): FluidStorageTank | undefi
 export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefined {
   const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
   if (resolvedTruck) {
-    if (!resolvedTruck.body.fluidTankSpec) {
+    const spec = resolvedTruck.body.fluidTankSpec;
+    if (!spec) {
       car.fluidTank = undefined;
       return undefined;
     }
-    if (!car.fluidTank) {
-      const cap = resolvedTruck.body.fluidTankSpec.capacity;
-      const amt = Math.round(cap * 0.75);
+    if (
+      !car.fluidTank ||
+      car.fluidTank.capacity !== spec.capacity ||
+      car.fluidTank.isVacuumTank !== spec.isVacuumTank
+    ) {
+      const cap = spec.capacity;
+      const amt = spec.currentVolume ?? Math.round(cap * 0.75);
       car.fluidTank = {
-        liquidType: resolvedTruck.body.fluidTankSpec.liquidType,
+        liquidType: spec.liquidType,
         capacity: cap,
         currentVolume: amt,
         currentAmount: amt,
-        isHermetic: resolvedTruck.body.fluidTankSpec.isHermetic,
-        hasWaterHose: resolvedTruck.body.fluidTankSpec.hasWaterHose
+        isHermetic: spec.isHermetic,
+        hasWaterHose: spec.hasWaterHose,
+        isVacuumTank: spec.isVacuumTank,
+        vacuumPumpMode: spec.vacuumPumpMode ?? (spec.isVacuumTank ? 'suction' : undefined),
       };
     }
   } else if (!car.fluidTank) {
@@ -337,10 +344,19 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
     if (car.fluidTank.currentVolume === undefined) {
       car.fluidTank.currentVolume = car.fluidTank.currentAmount ?? 0;
     }
-    const isWaterTruck = resolvedTruck ? resolvedTruck.body.id === 'body_tanker_water' : car.type === 'truck_water';
+    const bId = resolvedTruck?.body.id;
+    const isWaterTruck = resolvedTruck
+      ? (bId === 'body_tanker_water' || bId === 'body_fire_pumper' || bId === 'body_vacuum_ko503' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560')
+      : (car.type === 'truck_water' || car.type === 'fire_engine');
     if (isWaterTruck || car.type === 'trailer_barrel' || car.type === 'trailer_vacuum') {
       if (car.fluidTank.hasWaterHose === undefined) {
         car.fluidTank.hasWaterHose = true;
+      }
+    }
+    if (car.type === 'trailer_vacuum' || bId === 'body_vacuum_ko503' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560') {
+      car.fluidTank.isVacuumTank = true;
+      if (!car.fluidTank.vacuumPumpMode) {
+        car.fluidTank.vacuumPumpMode = 'suction';
       }
     }
   }
@@ -348,7 +364,7 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
 }
 
 /**
- * Calculates world coordinates of the water hose connection point on a vehicle.
+ * Calculates world coordinates of the water/vacuum hose connection point on a vehicle.
  */
 export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number } | null {
   if (!car.fluidTank || !car.fluidTank.hasWaterHose) return null;
@@ -358,7 +374,33 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
   const halfW = car.width / 2;
 
   const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
-  if (car.type === 'truck_water' || resolvedTruck?.body.id === 'body_tanker_water') {
+  const bodyId = resolvedTruck?.body.id;
+
+  if (
+    bodyId === 'body_vacuum_ko503' ||
+    bodyId === 'body_vacuum_sludge_ko505' ||
+    bodyId === 'body_vacuum_kombi_ko560'
+  ) {
+    // Rear ANM-53 / KO-505 brass receiving snout nozzle at rear bottom of the vacuum cistern
+    const localX = -halfL - 2.8;
+    const localY = 0;
+    return {
+      x: car.x + cosA * localX - sinA * localY,
+      y: car.y + sinA * localX + cosA * localY
+    };
+  }
+
+  if (bodyId === 'body_fire_pumper' || (!resolvedTruck && car.type === 'fire_engine')) {
+    // Rear fire pump compartment outlet (ПН-40УВ)
+    const localX = -halfL - 1.2;
+    const localY = halfW * 0.45;
+    return {
+      x: car.x + cosA * localX - sinA * localY,
+      y: car.y + sinA * localX + cosA * localY
+    };
+  }
+
+  if (car.type === 'truck_water' || bodyId === 'body_tanker_water') {
     // Space between cabin and tank on the right equipment platform
     const localX = halfL * 0.08;
     const localY = halfW * 0.76;

@@ -105,6 +105,7 @@ import { FullScreenMap } from './components/FullScreenMap';
 import { Minimap } from './components/Minimap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
+import { TruckSuperstructureHUD } from './components/TruckSuperstructureHUD';
 import { MainMenu } from './components/MainMenu';
 import { VehicleBoardMenu } from './components/VehicleBoardMenu';
 import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
@@ -6154,6 +6155,15 @@ export default function App() {
           />
         );
       })()}
+
+      {/* KS-3577 BOOM CRANE & VACUUM CISTERN OPERATOR HUD (DESKTOP + MOBILE) */}
+      <TruckSuperstructureHUD
+        player={playerRef.current}
+        world={worldRef.current}
+        inputRef={inputRef}
+        isMobileTouch={isMobileTouch}
+        onForceUpdate={() => setVitalsRefreshTick((t) => t + 1)}
+      />
 
       {/* MOBILE ORIENTATION GUARD */}
       <LandscapeGuard />

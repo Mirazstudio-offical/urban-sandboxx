@@ -552,13 +552,16 @@ export interface HoseSegmentNode {
 
 export interface HeldWaterHose {
   vehicleId: string;
-  sourceType: 'truck_water' | 'trailer_barrel' | 'trailer_vacuum';
+  sourceType: 'truck_water' | 'trailer_barrel' | 'trailer_vacuum' | 'truck_vacuum';
   maxLength: number;            // max physical uncoiled length in pixels (e.g. 250 px, ~16m)
   segments: HoseSegmentNode[];   // Verlet physical nodes
   segmentLength: number;         // distance constraint per segment
   leaks: HoseLeakPoint[];        // micro-holes along the hose that drip/squirt
   isSpraying: boolean;           // actively shooting water stream
   isPressurized?: boolean;       // true if high pressure pump running (e.g. truck engine on), false if natural gravity trickle
+  isVacuumHose?: boolean;        // true if thick corrugated vacuum suction/discharge hose (КО-503В / КО-505А / КО-560 / АНМ-53)
+  isSuctionActive?: boolean;     // true when vacuum hose is actively sucking liquid/sludge from ground into tank
+  suctionLiquidColor?: string;   // visual tint of fluid currently being sucked up
   sprayCooldown?: number;        // audio / particle timer
 }
 
@@ -606,6 +609,8 @@ export interface FluidStorageTank {
   _lastLeakAnchor?: { x: number; y: number } | null;
   hasWaterHose?: boolean;        // Vehicle is equipped with water hose reel or discharge spigot
   isWaterHoseDeployed?: boolean; // Hose is currently taken off the reel/bracket
+  isVacuumTank?: boolean;        // True for vacuum sewage/sludge cisterns (КО-503В, КО-505А, КО-560, АНМ-53)
+  vacuumPumpMode?: 'suction' | 'discharge'; // 4-way valve position: 'suction' (Всасывание в бочку) or 'discharge' (Нагнетание/слив)
 }
 
 export interface VehicleDamage {
@@ -939,8 +944,17 @@ export interface Vehicle {
   fogLevel?: number; // 0.0 (clear) to 1.0 (completely fogged)
   windshieldRainLevel?: number;
   cabinSmoke?: number; // 0 to 100% toxic smoke concentration inside vehicle cabin
-  isPtoActive?: boolean; // PTO / PUMP Drive (КОМ - Коробка отбора мощности для водометных систем)
+  isPtoActive?: boolean; // PTO / PUMP Drive (КОМ - Коробка отбора мощности для водометных, вакуумных и крановых систем)
   isWashingNozzlesActive?: boolean; // Street-washing front nozzles active on truck_water
+  // Truck Boom Crane (Автокран КС-3577 / КС-2561К) state
+  craneTurretAngle?: number;        // Revolving turret yaw angle relative to truck heading (radians, 0 = forward)
+  craneBoomExtension?: number;      // Telescopic boom extension ratio (0.0 retracted .. 1.0 full reach)
+  craneBoomElevation?: number;      // Boom luffing elevation ratio (0.0 stowed .. 1.0 raised)
+  craneHookHeight?: number;         // Hook winch height (0.0 lowered to ground .. 1.0 raised to boom head)
+  craneOutriggersDeployed?: boolean;// Hydraulic outriggers target state
+  craneOutriggerExt?: number;       // Smooth 0.0 .. 1.0 outrigger beam deployment progress
+  craneHookedVehicleId?: string | null; // ID of vehicle/trailer currently slung on the crane hook
+  craneControlMode?: boolean;       // Operator crane control mode active
   _waterSpraySoundTimer?: number;
   _washSweepTimer?: number;
   _washParticleTimer?: number;
@@ -2618,4 +2632,11 @@ export interface InputState {
   lookOffsetY?: number; // Normalized custom look offset Y (-1.0 to 1.0)
   isTouchLookActive?: boolean;
   lastPointerType?: 'mouse' | 'touch';
+  // Crane operator controls (keyboard & mobile touch)
+  craneTurretLeft?: boolean;
+  craneTurretRight?: boolean;
+  craneBoomExtend?: boolean;
+  craneBoomRetract?: boolean;
+  craneHookUp?: boolean;
+  craneHookDown?: boolean;
 }

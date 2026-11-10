@@ -1,5 +1,5 @@
 import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock,   getVehicleHeadlightDynamicState } from './vehicleHelpers';
-import { applyPowertrain } from './powertrainVariants';
+import { applyPowertrain, isVehicleCraneTruck, getVehicleCraneGeometry } from './powertrainVariants';
 import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, WheelState, StreetProp, FluidStainType, FluidStain, Roundabout, RollingStockCar, WorldWind, RoadSegment, Intersection } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
@@ -8023,6 +8023,163 @@ export function getSurfaceOffroadProps(surfType: string, isWet: boolean, isStorm
   return { baseSink, wetExtraDrag, wetGripMult, isOffroad, bermColor, grooveColor };
 }
 
+export function toggleCraneHookAttach(
+  craneVehicle: Vehicle,
+  world: GameWorld,
+  player?: Player
+): boolean {
+  if (!isVehicleCraneTruck(craneVehicle)) return false;
+
+  if (craneVehicle.craneHookedVehicleId) {
+    const prevHooked = world.vehicles.find(v => v.id === craneVehicle.craneHookedVehicleId);
+    if (prevHooked) {
+      prevHooked.ghostingAlpha = 1.0;
+      delete (prevHooked as any)._craneHookAngleOffset;
+    }
+    craneVehicle.craneHookedVehicleId = null;
+    if (player) {
+      addPlayerNotification(player, 'Стропы отцеплены: груз освобождён с гака КС-3577', 'info');
+    }
+    sound.playButtonPress();
+    return false;
+  }
+
+  const geom = getVehicleCraneGeometry(craneVehicle);
+  let bestTarget: Vehicle | null = null;
+  let bestDist = 38; // 38 px capture radius around crane hook block
+
+  for (const cand of world.vehicles) {
+    if (cand.id === craneVehicle.id) continue;
+    const d = Math.hypot(cand.x - geom.worldBoomTipX, cand.y - geom.worldBoomTipY);
+    if (d < bestDist) {
+      bestDist = d;
+      bestTarget = cand;
+    }
+  }
+
+  if (bestTarget) {
+    craneVehicle.craneHookedVehicleId = bestTarget.id;
+    (bestTarget as any)._craneHookAngleOffset = bestTarget.angle - (craneVehicle.angle + geom.turretAngle);
+    if ((craneVehicle.craneHookHeight ?? 0.25) < 0.35) {
+      craneVehicle.craneHookHeight = 0.45;
+    }
+    if (player) {
+      addPlayerNotification(player, 'Четырёхветвевой строп зацеплен: груз на гаке КС-3577', 'info');
+    }
+    sound.playButtonPress();
+    return true;
+  } else {
+    if (player) {
+      addPlayerNotification(player, 'Рядом с гаком стрелы нет техники (наведите прицел оголовка на кузов)', 'warning');
+    }
+    return false;
+  }
+}
+
+function updateTruckCraneSuperstructure(
+  vehicle: Vehicle,
+  input: InputState | null,
+  world: GameWorld,
+  dt: number
+) {
+  if (!isVehicleCraneTruck(vehicle)) return;
+
+  // 1. Outriggers hydraulic deployment animation
+  const targetOutrigger = vehicle.craneOutriggersDeployed ? 1.0 : 0.0;
+  const curOutrigger = vehicle.craneOutriggerExt ?? 0.0;
+  if (Math.abs(targetOutrigger - curOutrigger) > 0.001) {
+    const rate = 0.85; // ~1.2s full stroke
+    const step = Math.sign(targetOutrigger - curOutrigger) * Math.min(Math.abs(targetOutrigger - curOutrigger), rate * dt);
+    vehicle.craneOutriggerExt = Math.max(0, Math.min(1, curOutrigger + step));
+  } else {
+    vehicle.craneOutriggerExt = targetOutrigger;
+  }
+
+  // Stabilize truck chassis when outriggers are touching the ground
+  if ((vehicle.craneOutriggerExt ?? 0) > 0.45) {
+    vehicle.vx *= Math.pow(0.02, dt * 10);
+    vehicle.vy *= Math.pow(0.02, dt * 10);
+    vehicle.speed *= Math.pow(0.02, dt * 10);
+    vehicle.angularVelocity = 0;
+    if (Math.hypot(vehicle.vx, vehicle.vy) < 1.0) {
+      vehicle.vx = 0;
+      vehicle.vy = 0;
+      vehicle.speed = 0;
+    }
+  }
+
+  // 2. Operator turret & boom controls when player is in this crane truck
+  if (vehicle.isPlayerControlled && input) {
+    const inCraneMode = !!vehicle.craneControlMode;
+    const rotLeft = !!input.craneTurretLeft || (inCraneMode && (input.left || (typeof input.steeringAxis === 'number' && input.steeringAxis < -0.15)));
+    const rotRight = !!input.craneTurretRight || (inCraneMode && (input.right || (typeof input.steeringAxis === 'number' && input.steeringAxis > 0.15)));
+    const boomExt = !!input.craneBoomExtend || (inCraneMode && input.forward);
+    const boomRet = !!input.craneBoomRetract || (inCraneMode && input.backward);
+    const hookUp = !!input.craneHookUp;
+    const hookDown = !!input.craneHookDown;
+
+    const turretSpeed = 0.72; // rad/s (~41 deg/s smooth hydraulic slewing)
+    let curAngle = vehicle.craneTurretAngle ?? 0;
+    if (rotLeft) curAngle -= turretSpeed * dt;
+    if (rotRight) curAngle += turretSpeed * dt;
+    // Normalize within [-PI, PI]
+    curAngle = ((curAngle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    vehicle.craneTurretAngle = curAngle;
+
+    const extSpeed = 0.32; // full 21.7m telescope in ~3.1s
+    let curExt = vehicle.craneBoomExtension ?? 0;
+    if (boomExt) curExt = Math.min(1.0, curExt + extSpeed * dt);
+    if (boomRet) curExt = Math.max(0.0, curExt - extSpeed * dt);
+    vehicle.craneBoomExtension = curExt;
+
+    const hookSpeed = 0.45;
+    let curHook = vehicle.craneHookHeight ?? 0.25;
+    if (hookUp) curHook = Math.min(1.0, curHook + hookSpeed * dt);
+    if (hookDown) curHook = Math.max(0.0, curHook - hookSpeed * dt);
+    vehicle.craneHookHeight = curHook;
+    vehicle.craneBoomElevation = 0.15 + curHook * 0.65;
+  }
+
+  // 3. Move & suspend hooked vehicle / trailer under the boom head
+  if (vehicle.craneHookedVehicleId) {
+    const hookedVeh = world.vehicles.find(v => v.id === vehicle.craneHookedVehicleId);
+    if (!hookedVeh) {
+      vehicle.craneHookedVehicleId = null;
+    } else {
+      const geom = getVehicleCraneGeometry(vehicle);
+      const liftRatio = Math.max(0, Math.min(1, geom.hookHeight));
+      const targetX = geom.worldBoomTipX;
+      const targetY = geom.worldBoomTipY - liftRatio * 3.0; // subtle 2.5D vertical lift offset
+
+      const dx = targetX - hookedVeh.x;
+      const dy = targetY - hookedVeh.y;
+      const dist = Math.hypot(dx, dy);
+
+      // Break sling only if teleported absurdly far (> 220px)
+      if (dist > 220) {
+        hookedVeh.ghostingAlpha = 1.0;
+        vehicle.craneHookedVehicleId = null;
+      } else {
+        const pullFactor = Math.min(1.0, dt * 14.0);
+        const prevX = hookedVeh.x;
+        const prevY = hookedVeh.y;
+        hookedVeh.x += dx * pullFactor;
+        hookedVeh.y += dy * pullFactor;
+        hookedVeh.vx = (hookedVeh.x - prevX) / Math.max(0.001, dt);
+        hookedVeh.vy = (hookedVeh.y - prevY) / Math.max(0.001, dt);
+        hookedVeh.speed = 0;
+        hookedVeh.isParked = false;
+
+        const targetAngle = vehicle.angle + geom.turretAngle + ((hookedVeh as any)._craneHookAngleOffset || 0);
+        const aDiff = angleDiff(targetAngle, hookedVeh.angle);
+        hookedVeh.angle = ((hookedVeh.angle + aDiff * Math.min(1.0, dt * 10.0) + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+        hookedVeh.angularVelocity = 0;
+        hookedVeh.ghostingAlpha = liftRatio > 0.15 ? 0.92 : 1.0;
+      }
+    }
+  }
+}
+
 export function updateVehiclePhysics(
   vehicle: Vehicle,
   input: InputState | null,
@@ -8033,6 +8190,18 @@ export function updateVehiclePhysics(
   player?: Player
 ) {
   sanitizeVehicleKinematics(vehicle);
+  updateTruckCraneSuperstructure(vehicle, input, world, dt);
+  if (input && isVehicleCraneTruck(vehicle) && (vehicle.craneControlMode || vehicle.craneOutriggersDeployed || (vehicle.craneOutriggerExt ?? 0) > 0.35)) {
+    input = {
+      ...input,
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+      steeringAxis: 0,
+      handbrake: true,
+    };
+  }
   const prevAngularVelocity = vehicle.angularVelocity;
   // Update turn signal timer
   if (vehicle.turnSignal !== 'none') {
@@ -10207,22 +10376,23 @@ export function updateVehiclePhysics(
         if (offroad.isOffroad) {
           // Accumulate soil/mud/sand coating on tire treads while rolling offroad
           if (surf.type === 'sand') {
-            coat.sand = Math.min(1.0, coat.sand + segLen * 0.018);
+            coat.sand = Math.min(1.0, coat.sand + segLen * 0.022);
+          } else if (surf.type === 'gravel_road') {
+            coat.sand = Math.min(0.72, coat.sand + segLen * 0.015);
           } else if (surf.type === 'mud' || isWetSurface) {
-            coat.mud = Math.min(1.0, coat.mud + segLen * 0.024);
-            coat.water = Math.min(1.0, coat.water + segLen * 0.015);
+            coat.mud = Math.min(1.0, coat.mud + segLen * 0.026);
+            coat.water = Math.min(1.0, coat.water + segLen * 0.018);
           } else if (surf.type === 'dirt_road' || surf.type === 'grass') {
-            coat.mud = Math.min(0.78, coat.mud + segLen * 0.012);
+            coat.mud = Math.min(0.85, coat.mud + segLen * 0.016);
           }
 
-          // On dry compacted gravel roads without wheelspin, ruts are very shallow
-          if (surf.type === 'gravel_road' && !isWetSurface && !isSnowySurface && !isWheelSkidding) {
-            return;
-          }
-          // Offroad soil deformation & volumetric rut digging
-          const tireDepth = offroad.baseSink * massFactor * clearanceFactor * (1.0 + wheelSlipAmt * 0.48);
+          // Offroad soil deformation & volumetric rut digging (including shallow gravel tracks on gravel_road)
+          const rawDepth = offroad.baseSink * massFactor * clearanceFactor * (1.0 + wheelSlipAmt * 0.48);
+          const tireDepth = surf.type === 'gravel_road' && !isWetSurface && !isSnowySurface && !isWheelSkidding
+            ? Math.max(0.06, rawDepth * 0.55)
+            : Math.max(0.08, rawDepth);
           const rutWidth = baseTireWidth * (0.94 + Math.min(1.2, tireDepth) * 0.24);
-          const rutAlpha = Math.min(0.94, Math.max(0.28, 0.34 + tireDepth * 0.44 + wheelSlipAmt * 0.22));
+          const rutAlpha = Math.min(0.94, Math.max(0.26, 0.32 + tireDepth * 0.46 + wheelSlipAmt * 0.22));
           const wetRut = isWetSurface || surf.type === 'mud' || coat.water > 0.35;
 
           world.skidMarks.push({
@@ -10244,19 +10414,25 @@ export function updateVehiclePhysics(
             treadPattern
           });
         } else {
-          // Asphalt or concrete: check for vulcanized rubber skid OR carried substance tracks (mud, oil, sand, wet water)
+          // Asphalt or concrete: check for vulcanized rubber skid, cornering/braking scrub, wet road film, or carried substance tracks
           const isAxleLocked = (isHandbraking && !isFrontAxle) || vehicle.isBrakeLocked;
+          const isHardCornerOrBrake = (vSpeedKmh > 22.0 && Math.abs(vehicle.steerAngle || 0) > 0.15) || (vSpeedKmh > 14.0 && brake > 0.38);
           const intentionalMark = isAxleLocked || (isBurnoutHolding && (isFrontAxle ? isFrontSlipping : isRearSlipping));
-          const isSkidOnRoad = (vSpeedKmh > 8.0 && (vehicle.isDrifting || isWheelSkidding)) || intentionalMark;
+          const isSkidOnRoad = (vSpeedKmh > 6.0 && (vehicle.isDrifting || isWheelSkidding || isHardCornerOrBrake)) || intentionalMark;
+
+          if (isWetSurface && !isSkidOnRoad && coat.oil < 0.08 && coat.mud < 0.08) {
+            coat.water = Math.max(coat.water, 0.48);
+          }
 
           if (isSkidOnRoad) {
-            const markAlpha = Math.max(0.12, Math.min(0.76,
-              wheel.skidIntensity * 0.54 +
-              (slipMagnitude / 82) +
-              (isAxleLocked ? 0.28 : 0) +
-              (isWheelPowerSpin ? 0.26 : 0)
+            const markAlpha = Math.max(0.16, Math.min(0.84,
+              wheel.skidIntensity * 0.56 +
+              (slipMagnitude / 75) +
+              (isAxleLocked ? 0.32 : 0) +
+              (isWheelPowerSpin ? 0.30 : 0) +
+              (isHardCornerOrBrake ? 0.18 : 0)
             ));
-            const markColor = isSnowySurface ? 'rgba(235, 242, 250, 0.75)' : '#10151e';
+            const markColor = isSnowySurface ? 'rgba(235, 242, 250, 0.80)' : '#0e131b';
             world.skidMarks.push({
               x1: prevX,
               y1: prevY,
@@ -10264,36 +10440,36 @@ export function updateVehiclePhysics(
               y2: currY,
               alpha: markAlpha,
               color: markColor,
-              width: baseTireWidth * (1.0 + Math.min(0.18, wheelSlipAmt * 0.12)),
+              width: baseTireWidth * (1.0 + Math.min(0.20, wheelSlipAmt * 0.14)),
               depth: 0,
               surfaceType: surf.type === 'concrete' ? 'concrete' : 'asphalt',
               isWet: isWetSurface || coat.water > 0.25,
-              slipRatio: wheelSlipAmt,
+              slipRatio: Math.max(0.25, wheelSlipAmt),
               arcDist: prevArc,
               trackKind: 'rubber',
               treadPattern
             });
-          } else if (coat.oil > 0.08 || coat.mud > 0.08 || coat.sand > 0.08 || coat.water > 0.12) {
+          } else if (coat.oil > 0.06 || coat.mud > 0.06 || coat.sand > 0.06 || coat.water > 0.10) {
             // Deposit tapering carried-substance tire tread imprints onto clean asphalt/concrete
             let trackKind: 'oil_carry' | 'mud_carry' | 'sand_carry' | 'wet_carry' = 'wet_carry';
-            let carryAlpha = 0.2;
+            let carryAlpha = 0.24;
             let carryColor = '#141b24';
-            if (coat.oil >= coat.mud && coat.oil >= coat.sand && coat.oil > 0.08) {
+            if (coat.oil >= coat.mud && coat.oil >= coat.sand && coat.oil > 0.06) {
               trackKind = 'oil_carry';
-              carryAlpha = Math.min(0.68, coat.oil * 0.65);
-              carryColor = '#0c1017';
-            } else if (coat.mud >= coat.sand && coat.mud > 0.08) {
+              carryAlpha = Math.min(0.74, coat.oil * 0.72);
+              carryColor = '#0b0f17';
+            } else if (coat.mud >= coat.sand && coat.mud > 0.06) {
               trackKind = 'mud_carry';
-              carryAlpha = Math.min(0.64, coat.mud * 0.62);
+              carryAlpha = Math.min(0.70, coat.mud * 0.68);
               carryColor = isWetSurface ? '#2b1e14' : '#4a3523';
-            } else if (coat.sand > 0.08) {
+            } else if (coat.sand > 0.06) {
               trackKind = 'sand_carry';
-              carryAlpha = Math.min(0.58, coat.sand * 0.56);
+              carryAlpha = Math.min(0.64, coat.sand * 0.62);
               carryColor = '#bfa372';
             } else {
               trackKind = 'wet_carry';
-              carryAlpha = Math.min(0.46, coat.water * 0.45);
-              carryColor = '#16202c';
+              carryAlpha = Math.min(0.52, coat.water * 0.50);
+              carryColor = '#151f2b';
             }
             world.skidMarks.push({
               x1: prevX,
@@ -10302,7 +10478,7 @@ export function updateVehiclePhysics(
               y2: currY,
               alpha: carryAlpha,
               color: carryColor,
-              width: baseTireWidth * 0.96,
+              width: baseTireWidth * 0.98,
               depth: 0,
               surfaceType: surf.type === 'concrete' ? 'concrete' : 'asphalt',
               isWet: trackKind === 'wet_carry' || trackKind === 'oil_carry' || isWetSurface,
@@ -10314,11 +10490,11 @@ export function updateVehiclePhysics(
           }
 
           // Decay carried tire coatings as the wheel rolls over hard pavement
-          const wear = segLen * 0.0042;
-          coat.oil = Math.max(0, coat.oil - wear * 0.75);
-          coat.mud = Math.max(0, coat.mud - wear * 0.95);
-          coat.sand = Math.max(0, coat.sand - wear * 1.15);
-          coat.water = Math.max(0, coat.water - wear * 1.30);
+          const wear = segLen * 0.0036;
+          coat.oil = Math.max(0, coat.oil - wear * 0.70);
+          coat.mud = Math.max(0, coat.mud - wear * 0.85);
+          coat.sand = Math.max(0, coat.sand - wear * 1.00);
+          coat.water = Math.max(0, coat.water - wear * 1.15);
         }
       };
 
@@ -12867,7 +13043,7 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
   // Gather active aerodynamic wake colliders (moving vehicles, player on foot, nearby running pedestrians)
   const wakeVehicles = world.vehicles;
   const wakeVehLen = wakeVehicles.length;
-  const playerFootSpeed = !player.inVehicle ? Math.hypot(player.vx || 0, player.vy || 0) : 0;
+  const playerFootSpeed = !player.isInVehicle ? Math.hypot(player.vx || 0, player.vy || 0) : 0;
 
   for (let i = 0; i < pCount; i++) {
     const p = pList[i];
@@ -12911,7 +13087,7 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         }
       }
       // 2. Player on foot wake (walking through low-hanging smoke, steam, mist, or leaves parts the cloud)
-      if (!player.inVehicle && (p.z ?? 0) < 42) {
+      if (!player.isInVehicle && (p.z ?? 0) < 42) {
         const dxP = p.x - player.x;
         const dyP = p.y - player.y;
         const dSqP = dxP * dxP + dyP * dyP;
@@ -14067,8 +14243,8 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
   const rainAmt = weatherWeights.rain;
 
   if (world.litter) {
-    const pFootVx = !player.inVehicle ? (player.vx || 0) : 0;
-    const pFootVy = !player.inVehicle ? (player.vy || 0) : 0;
+    const pFootVx = !player.isInVehicle ? (player.vx || 0) : 0;
+    const pFootVy = !player.isInVehicle ? (player.vy || 0) : 0;
     const pFootSpd = Math.hypot(pFootVx, pFootVy);
 
     for (const lit of world.litter) {
@@ -14083,7 +14259,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       const isRollable = lit.type === 'cup' || lit.type === 'can' || lit.type === 'bottle' || lit.type === 'coffee';
       const wetAnchor = 1.0 - Math.min(0.82, (lit.wetness ?? 0) * 0.85); // Wet paper/leaves stick to wet pavement via capillary tension
 
-      // 1. Atmospheric Wind Advection & Gust Lift
+      // 1. Atmospheric Wind Advection & Gust Lift (active even in gentle/moderate breeze for featherweight litter)
       if (lit.isAirborne) {
         const aeroSuscept = isFeatherweight ? 2.6 : 0.85;
         lit.vx += (wVec.vx * 1.15 - lit.vx) * Math.min(1.0, aeroSuscept * dt);
@@ -14092,18 +14268,19 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         const flutterWave = Math.sin(lit.flutterPhase + lit.x * 0.03);
         lit.vx += -Math.sin(wVec.angle) * flutterWave * 28 * dt;
         lit.vy +=  Math.cos(wVec.angle) * flutterWave * 28 * dt;
-      } else if (wSpd > 16 && (isFeatherweight || isRollable)) {
-        const threshold = isFeatherweight ? (22 / Math.max(0.25, wetAnchor)) : 52;
+      } else if (wSpd > 8 && (isFeatherweight || isRollable)) {
+        lit.flutterPhase = (lit.flutterPhase ?? 0) + dt * (3.2 + wSpd * 0.08);
+        const threshold = isFeatherweight ? (10 / Math.max(0.25, wetAnchor)) : 36;
         if (wSpd > threshold) {
-          const push = (wSpd - threshold) * (isFeatherweight ? 0.55 : 0.22) * wetAnchor;
+          const push = (wSpd - threshold) * (isFeatherweight ? 0.65 : 0.26) * wetAnchor;
           lit.vx += Math.cos(wVec.angle) * push * dt;
           lit.vy += Math.sin(wVec.angle) * push * dt;
-          lit.rotationSpeed += Math.sin(lit.x * 0.07 + lit.y * 0.05 + world.timeHour * 40) * 2.5 * dt;
-          // Strong wind gusts lift dry leaves, wrappers, plastic bags, and newspapers into the air
-          if (isFeatherweight && wetAnchor > 0.55 && wSpd > 48 && Math.random() < 0.45 * dt) {
+          lit.rotationSpeed += Math.sin(lit.x * 0.07 + lit.y * 0.05 + world.timeHour * 40) * 2.8 * dt;
+          // Wind gusts lift dry leaves, wrappers, plastic bags, and newspapers into the air
+          if (isFeatherweight && wetAnchor > 0.50 && wSpd > 28 && Math.random() < 0.35 * dt) {
             lit.isAirborne = true;
-            lit.airborneTimer = 0.9 + Math.random() * 1.4;
-            lit.vz = 24 + Math.random() * 28;
+            lit.airborneTimer = 0.85 + Math.random() * 1.3;
+            lit.vz = 20 + Math.random() * 26;
             lit.rotationSpeed = (Math.random() - 0.5) * 9.0;
           }
         }
@@ -14139,9 +14316,9 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           if (vSpd > 8 && (isRollable || lit.type === 'box')) {
             lit.crushed = Math.min(1.0, (lit.crushed ?? 0) + 0.55);
           }
-        } else if (vSpd > 22 && dist < 82) {
+        } else if (vSpd > 16 && dist < 85) {
           // High-speed aerodynamic slipstream & trailing vortex suction
-          const falloff = 1.0 - dist / 82;
+          const falloff = 1.0 - dist / 85;
           const vDirX = Math.cos(veh.angle) * (veh.speed >= 0 ? 1 : -1);
           const vDirY = Math.sin(veh.angle) * (veh.speed >= 0 ? 1 : -1);
           const along = (dx * vDirX + dy * vDirY) / Math.max(1, dist);
@@ -14152,12 +14329,12 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             lit.isAirborne = true;
             lit.airborneTimer = Math.max(lit.airborneTimer || 0, 1.2 + Math.min(1.6, vSpd * 0.015));
             lit.vz = Math.max(lit.vz ?? 0, 22 + vSpd * 0.38 * falloff);
-            const swirlForce = (vSpd * 0.72 + 24) * falloff * wetAnchor;
+            const swirlForce = (vSpd * 0.75 + 24) * falloff * wetAnchor;
             lit.vx += (vDirX * 0.75 + (-vDirY * sideSign) * (along > 0 ? 0.55 : -0.35)) * swirlForce * dt * 8.0;
             lit.vy += (vDirY * 0.75 + ( vDirX * sideSign) * (along > 0 ? 0.55 : -0.35)) * swirlForce * dt * 8.0;
             lit.rotationSpeed += sideSign * (6.0 + vSpd * 0.08) * falloff * dt * 5.0;
-          } else if (isRollable && vSpd > 40) {
-            const rollPush = (vSpd - 35) * 0.45 * falloff;
+          } else if (isRollable && vSpd > 32) {
+            const rollPush = (vSpd - 28) * 0.48 * falloff;
             lit.vx += (vDirX * 0.5 + (dx / dist) * 0.5) * rollPush * dt * 6.0;
             lit.vy += (vDirY * 0.5 + (dy / dist) * 0.5) * rollPush * dt * 6.0;
             lit.rotationSpeed += sideSign * 4.5 * falloff * dt * 4.0;
@@ -14166,7 +14343,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       }
 
       // 3. Player On-Foot Kick & Sprint Draft Reaction
-      if (!player.inVehicle) {
+      if (!player.isInVehicle) {
         const dxP = lit.x - player.x;
         const dyP = lit.y - player.y;
         const dSqP = dxP * dxP + dyP * dyP;
@@ -14183,9 +14360,9 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             lit.airborneTimer = 0.65 + Math.random() * 0.5;
             lit.vz = 18 + Math.min(26, pFootSpd * 0.25);
           }
-        } else if (isFeatherweight && pFootSpd > 65 && dSqP < 1296) { // < 36px sprint slipstream rustle
+        } else if (isFeatherweight && pFootSpd > 45 && dSqP < 1296) { // < 36px sprint slipstream rustle
           const dP = Math.sqrt(dSqP);
-          const draft = (1.0 - dP / 36) * pFootSpd * 0.42 * wetAnchor;
+          const draft = (1.0 - dP / 36) * pFootSpd * 0.45 * wetAnchor;
           lit.vx += (pFootVx / pFootSpd * 0.6 + dxP / dP * 0.4) * draft * dt * 5.0;
           lit.vy += (pFootVy / pFootSpd * 0.6 + dyP / dP * 0.4) * draft * dt * 5.0;
           lit.rotationSpeed += (Math.random() - 0.5) * 8 * dt;
@@ -14233,8 +14410,8 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
   // 4B. WORLD GROUND ITEMS — WIND DRIFT, PLAYER/NPC KICKS & VEHICLE SLIPSTREAM PHYSICS
   if (world.groundItems && world.groundItems.length > 0) {
-    const pFootVx = !player.inVehicle ? (player.vx || 0) : 0;
-    const pFootVy = !player.inVehicle ? (player.vy || 0) : 0;
+    const pFootVx = !player.isInVehicle ? (player.vx || 0) : 0;
+    const pFootVy = !player.isInVehicle ? (player.vy || 0) : 0;
     const pFootSpd = Math.hypot(pFootVx, pFootVy);
 
     for (let gi = 0; gi < world.groundItems.length; gi++) {
@@ -14245,7 +14422,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       if (dxPl * dxPl + dyPl * dyPl > 1440000) continue; // > 1200px
 
       const itemMassKg = Math.max(0.02, gItem.item?.weight ?? (gItem.item?.category === 'trash' ? 0.04 : 0.35));
-      const isLightItem = itemMassKg <= 0.25 || gItem.item?.category === 'trash' || gItem.item?.itemId === 'sack_empty';
+      const isLightItem = itemMassKg <= 0.35 || gItem.item?.category === 'trash' || gItem.item?.itemId === 'sack_empty';
 
       // Rain wetting & mud splash accumulation
       if (rainAmt > 0.05) {
@@ -14254,21 +14431,21 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         gItem.wetness = Math.max(0, (gItem.wetness ?? 0) - dt * 0.018);
       }
 
-      // Strong wind gusts nudge featherweight ground items (wrappers, empty sacks, paper packs)
-      if (isLightItem && wSpd > 38) {
-        const windForce = Math.max(0, wSpd - 36) / (itemMassKg * 18 + 1.0);
+      // Wind gusts nudge featherweight ground items (wrappers, empty sacks, paper packs)
+      if (isLightItem && wSpd > 22) {
+        const windForce = Math.max(0, wSpd - 20) / (itemMassKg * 14 + 0.8);
         gItem.vx = (gItem.vx ?? 0) + Math.cos(wVec.angle) * windForce * dt;
         gItem.vy = (gItem.vy ?? 0) + Math.sin(wVec.angle) * windForce * dt;
-        gItem.angularVelocity = (gItem.angularVelocity ?? 0) + Math.sin(gItem.x * 0.05 + world.timeHour * 30) * 1.4 * dt;
+        gItem.angularVelocity = (gItem.angularVelocity ?? 0) + Math.sin(gItem.x * 0.05 + world.timeHour * 30) * 1.6 * dt;
       }
 
       // Player foot nudge when walking/sprinting directly over a dropped ground item
-      if (!player.inVehicle && pFootSpd > 22) {
+      if (!player.isInVehicle && pFootSpd > 14) {
         const distSqP = dxPl * dxPl + dyPl * dyPl;
-        if (distSqP < 196 && distSqP > 0.04 && itemMassKg < 6.0) { // < 14px
+        if (distSqP < 225 && distSqP > 0.04 && itemMassKg < 6.0) { // < 15px
           const dP = Math.sqrt(distSqP);
           const mobility = 1.0 / (1.0 + itemMassKg * 1.8);
-          const kickSpd = (16 + pFootSpd * 0.55) * mobility;
+          const kickSpd = (18 + pFootSpd * 0.60) * mobility;
           gItem.vx = (gItem.vx ?? 0) + ((pFootVx / pFootSpd) * 0.65 + (dxPl / dP) * 0.35) * kickSpd;
           gItem.vy = (gItem.vy ?? 0) + ((pFootVy / pFootSpd) * 0.65 + (dyPl / dP) * 0.35) * kickSpd;
           gItem.angularVelocity = (Math.random() - 0.5) * 8 * mobility;
@@ -14313,13 +14490,13 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           gItem.angularVelocity = (Math.random() - 0.5) * 9 * mobility;
           gItem.mudCoat = Math.min(1.0, (gItem.mudCoat ?? 0) + 0.18);
           if (itemMassKg < 1.5) gItem.vz = Math.min(32, 10 + vSpd * 0.22 * mobility);
-        } else if (isLightItem && vSpd > 35 && dSqV < 3600) { // < 60px aerodynamic slipstream
+        } else if (isLightItem && vSpd > 25 && dSqV < 4225) { // < 65px aerodynamic slipstream
           const dV = Math.sqrt(dSqV);
-          const falloff = (1.0 - dV / 60) / (1.0 + itemMassKg * 3.0);
+          const falloff = (1.0 - dV / 65) / (1.0 + itemMassKg * 2.5);
           const vDirX = Math.cos(veh.angle) * (veh.speed >= 0 ? 1 : -1);
           const vDirY = Math.sin(veh.angle) * (veh.speed >= 0 ? 1 : -1);
-          gItem.vx = (gItem.vx ?? 0) + (vDirX * 0.7 + (dxV / dV) * 0.3) * vSpd * 0.45 * falloff * dt * 6.0;
-          gItem.vy = (gItem.vy ?? 0) + (vDirY * 0.7 + (dyV / dV) * 0.3) * vSpd * 0.45 * falloff * dt * 6.0;
+          gItem.vx = (gItem.vx ?? 0) + (vDirX * 0.7 + (dxV / dV) * 0.3) * vSpd * 0.52 * falloff * dt * 6.0;
+          gItem.vy = (gItem.vy ?? 0) + (dyV / dV) * 0.3 * vSpd * 0.52 * falloff * dt * 6.0 + vDirY * 0.7 * vSpd * 0.52 * falloff * dt * 6.0;
           gItem.angularVelocity = (gItem.angularVelocity ?? 0) + (Math.random() - 0.5) * 6 * falloff * dt;
         }
       }
@@ -14338,7 +14515,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         let blocked = false;
         for (let bi = 0; bi < world.buildings.length; bi++) {
           const b = world.buildings[bi];
-          if (b.HasInterior) continue;
+          if ((b as any).interiors || (b as any).hasInterior) continue;
           if (nextX > b.x - 4 && nextX < b.x + b.width + 4 && nextY > b.y - 4 && nextY < b.y + b.height + 4) {
             blocked = true;
             break;

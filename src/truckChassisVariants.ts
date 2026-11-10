@@ -724,6 +724,76 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     attachmentCarType: 'fire_rescue',
     notes: 'Кузов-фургон со шторными отсеками под гидравлический аварийно-спасательный инструмент, электрогенератором и телескопической световой мачтой.',
   },
+  {
+    id: 'body_crane_ks3577',
+    nameRu: 'Стреловой автокран КС-3577 «Ивановец» (Телескоп 14–22 м, 16 т)',
+    modelCode: 'КС-3577-4 / КС-45717',
+    massKg: 3150,
+    requiredMounts: ['municipal_pto', 'heavy_tandem', 'medium_subframe', 'long_subframe'],
+    minPayloadKg: 4000,
+    attachmentCarType: 'truck_crane',
+    notes: 'Полноповоротная крановая установка (360°) с трёхсекционной телескопической стрелой 14–22 м, кабиной крановщика, противовесом, грузовой лебёдкой с гаком и 4 выдвижными гидроопорами-аутригерами.',
+  },
+  {
+    id: 'body_vacuum_ko503',
+    nameRu: 'Вакуумная ассенизаторская машина КО-503В / АНМ-53 (Цистерна 4.2 м³)',
+    modelCode: 'КО-503В-2 / АНМ-53',
+    massKg: 1280,
+    requiredMounts: ['municipal_pto', 'medium_subframe', 'short_tipper'],
+    minPayloadKg: 3500,
+    attachmentCarType: 'truck_vacuum_ko503',
+    fluidTankSpec: {
+      liquidType: 'water',
+      capacity: 4200,
+      currentVolume: 1200,
+      currentAmount: 1200,
+      isHermetic: true,
+      hasWaterHose: true,
+      isVacuumTank: true,
+      vacuumPumpMode: 'suction',
+    },
+    notes: 'Наклонная цилиндрическая вакуумная цистерна Горводоканала (4200 л) с пластинчато-роторным насосом КО-503, СПУ с поплавковым клапаном, гофрированным заборным рукавом d=100 мм и шиберной задвижкой АНМ-53.',
+  },
+  {
+    id: 'body_vacuum_sludge_ko505',
+    nameRu: 'Тяжёлая илососная машина КО-505А со стрелой (Цистерна 10 м³)',
+    modelCode: 'КО-505А / КО-507А',
+    massKg: 2650,
+    requiredMounts: ['municipal_pto', 'heavy_tandem', 'long_subframe', 'medium_subframe'],
+    minPayloadKg: 5500,
+    attachmentCarType: 'truck_vacuum_ko505',
+    fluidTankSpec: {
+      liquidType: 'water',
+      capacity: 10000,
+      currentVolume: 2500,
+      currentAmount: 2500,
+      isHermetic: true,
+      hasWaterHose: true,
+      isVacuumTank: true,
+      vacuumPumpMode: 'suction',
+    },
+    notes: 'Толстостенная вакуумно-илососная цистерна (10 000 л) с 4 внешними шпангоутами жёсткости, насосом ВК-6М2, верхней поворотной гидравлической всасывающей стрелой d=100 мм и откидным задним днищем на гидроцилиндрах.',
+  },
+  {
+    id: 'body_vacuum_kombi_ko560',
+    nameRu: 'Комбинированная каналопромывочная вакуум-машина КО-560 (6.5 м³)',
+    modelCode: 'КО-560 / ДКТ-245',
+    massKg: 2180,
+    requiredMounts: ['municipal_pto', 'medium_subframe', 'heavy_tandem', 'long_subframe'],
+    minPayloadKg: 4200,
+    attachmentCarType: 'truck_vacuum_ko560',
+    fluidTankSpec: {
+      liquidType: 'water',
+      capacity: 6500,
+      currentVolume: 3000,
+      currentAmount: 3000,
+      isHermetic: true,
+      hasWaterHose: true,
+      isVacuumTank: true,
+      vacuumPumpMode: 'suction',
+    },
+    notes: 'Двухотсечная аварийная машина Водоканала: боковые баки чистой воды из нержавеющей стали с плунжерным насосом ВД, центральная иловая вакуум-бочка (6500 л), задний барабан РВД и заборный гофрорукав.',
+  },
 ];
 
 // ============================================================================
@@ -955,3 +1025,119 @@ export function getTruckFrameAxlePositions(
 
   return { frontAxlesX, rearAxlesX };
 }
+
+/**
+ * Checks whether a vehicle has the truck boom crane superstructure (КС-3577 «Ивановец»).
+ */
+export function isVehicleCraneTruck(car?: {
+  type?: string;
+  frameId?: string;
+  bodyId?: string;
+  engineState?: { frameId?: string; bodyId?: string };
+} | null): boolean {
+  if (!car || !car.type) return false;
+  if (car.bodyId === 'body_crane_ks3577' || car.engineState?.bodyId === 'body_crane_ks3577') return true;
+  const resolved = resolveVehicleTruckFrameAndBody(car as { type: string; frameId?: string; bodyId?: string; engineState?: { frameId?: string; bodyId?: string } });
+  return resolved?.body.id === 'body_crane_ks3577';
+}
+
+/**
+ * Checks whether a vehicle has one of the vacuum sewage/sludge superstructures (КО-503В, КО-505А, КО-560) or is a vacuum trailer.
+ */
+export function isVehicleVacuumTruck(car?: {
+  type?: string;
+  frameId?: string;
+  bodyId?: string;
+  engineState?: { frameId?: string; bodyId?: string };
+} | null): boolean {
+  if (!car || !car.type) return false;
+  if (car.type === 'trailer_vacuum') return true;
+  const bId = car.bodyId || car.engineState?.bodyId;
+  if (bId === 'body_vacuum_ko503' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560') {
+    return true;
+  }
+  const resolved = resolveVehicleTruckFrameAndBody(car as { type: string; frameId?: string; bodyId?: string; engineState?: { frameId?: string; bodyId?: string } });
+  const rb = resolved?.body.id;
+  return rb === 'body_vacuum_ko503' || rb === 'body_vacuum_sludge_ko505' || rb === 'body_vacuum_kombi_ko560';
+}
+
+/**
+ * Computes exact local and world geometry of the КС-3577 revolving crane turntable, telescopic boom sections, and hook block.
+ */
+export function getVehicleCraneGeometry(car: {
+  x: number;
+  y: number;
+  angle: number;
+  length: number;
+  width: number;
+  craneTurretAngle?: number;
+  craneBoomExtension?: number;
+  craneBoomElevation?: number;
+  craneHookHeight?: number;
+  craneOutriggersDeployed?: boolean;
+  craneOutriggerExt?: number;
+}): {
+  turretLocalX: number;
+  baseBoomLengthPx: number;
+  totalBoomReachPx: number;
+  turretAngleRad: number;
+  turretAngle: number;
+  hookHeight: number;
+  outriggerExt: number;
+  worldTurretX: number;
+  worldTurretY: number;
+  worldBoomAngle: number;
+  worldBoomTipX: number;
+  worldBoomTipY: number;
+  boomLengthMeters: number;
+  maxLoadTons: number;
+} {
+  const halfL = (car.length || 70) / 2;
+  // Revolving turret pedestal center over rear bogie / axle
+  const turretLocalX = -halfL + Math.max(12.5, (car.length || 70) * 0.25);
+  const ext = Math.max(0, Math.min(1, car.craneBoomExtension ?? 0));
+  const elev = Math.max(0, Math.min(1, car.craneBoomElevation ?? 0.2));
+  const hookHeight = Math.max(0, Math.min(1, car.craneHookHeight ?? 0.25));
+  const outriggerExt = Math.max(0, Math.min(1, car.craneOutriggerExt ?? (car.craneOutriggersDeployed ? 1 : 0)));
+  const turretAngleRad = car.craneTurretAngle ?? 0;
+
+  // Base root boom section length + 2 telescopic inner sections
+  const baseBoomLengthPx = Math.max(25, halfL - turretLocalX - 3.5);
+  const telescopicExtraPx = ext * 40.0; // Extends up to +40 px beyond stowed length
+  // Slight foreshortening when elevated steeply in top-down 2.5D projection
+  const elevationProjFactor = 1.0 - elev * 0.14;
+  const totalBoomReachPx = (baseBoomLengthPx + telescopicExtraPx) * elevationProjFactor;
+
+  const cosCar = Math.cos(car.angle || 0);
+  const sinCar = Math.sin(car.angle || 0);
+  const worldTurretX = (car.x || 0) + cosCar * turretLocalX;
+  const worldTurretY = (car.y || 0) + sinCar * turretLocalX;
+
+  const worldBoomAngle = (car.angle || 0) + turretAngleRad;
+  // Boom root pivot is slightly behind turret center (-4.2 px in turret local frame), so tip is at totalBoomReachPx - 4.2 from turret center
+  const tipOffsetFromTurret = Math.max(16, totalBoomReachPx - 4.2);
+  const worldBoomTipX = worldTurretX + Math.cos(worldBoomAngle) * tipOffsetFromTurret;
+  const worldBoomTipY = worldTurretY + Math.sin(worldBoomAngle) * tipOffsetFromTurret;
+
+  const boomLengthMeters = +(9.0 + ext * 12.7).toFixed(1); // 9.0m to 21.7m (КС-3577-4 / КС-45717 spec)
+  const outriggersBonus = car.craneOutriggersDeployed ? 1.0 : 0.45;
+  const maxLoadTons = +((16.0 * (1.0 - ext * 0.62)) * outriggersBonus).toFixed(1);
+
+  return {
+    turretLocalX,
+    baseBoomLengthPx,
+    totalBoomReachPx,
+    turretAngleRad,
+    turretAngle: turretAngleRad,
+    hookHeight,
+    outriggerExt,
+    worldTurretX,
+    worldTurretY,
+    worldBoomAngle,
+    worldBoomTipX,
+    worldBoomTipY,
+    boomLengthMeters,
+    maxLoadTons,
+  };
+}
+

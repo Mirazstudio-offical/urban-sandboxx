@@ -136,6 +136,9 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       routeWaypoints: [],
       aiState: 'parked',
       requiredFuel: 'ai95',
+      craneOutriggerExt: bodyId === 'body_crane_ks3577' ? 0.45 : 0,
+      craneTurretAngle: bodyId === 'body_crane_ks3577' ? 0.14 : 0,
+      craneBoomExtension: bodyId === 'body_crane_ks3577' ? 0.25 : 0,
       damage: createDefaultVehicleDamage(effLength, effWidth)
     } as unknown as Vehicle;
 

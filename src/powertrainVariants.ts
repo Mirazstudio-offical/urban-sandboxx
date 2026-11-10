@@ -32,6 +32,9 @@ import {
   getTruckPlatform,
   getTruckFrameById,
   getTruckBodyById,
+  isVehicleCraneTruck,
+  isVehicleVacuumTruck,
+  getVehicleCraneGeometry,
 } from './truckChassisVariants';
 
 export {
@@ -49,6 +52,9 @@ export {
   getTruckPlatform,
   getTruckFrameById,
   getTruckBodyById,
+  isVehicleCraneTruck,
+  isVehicleVacuumTruck,
+  getVehicleCraneGeometry,
 };
 export type { TruckFrameVariant, TruckBodyVariant };
 
@@ -666,7 +672,12 @@ export function applyPowertrain(veh: Vehicle, forcedPick?: PowertrainPick): void
 
     // Fluid tank synchronization with mounted body
     if (resolvedBody.fluidTankSpec) {
-      if (!veh.fluidTank || veh.fluidTank.liquidType !== resolvedBody.fluidTankSpec.liquidType) {
+      if (
+        !veh.fluidTank ||
+        veh.fluidTank.liquidType !== resolvedBody.fluidTankSpec.liquidType ||
+        veh.fluidTank.capacity !== resolvedBody.fluidTankSpec.capacity ||
+        veh.fluidTank.isVacuumTank !== resolvedBody.fluidTankSpec.isVacuumTank
+      ) {
         veh.fluidTank = { ...resolvedBody.fluidTankSpec };
       }
     } else if (veh.fluidTank && isConfigurableTruck(veh.type)) {

@@ -31,11 +31,12 @@ export class WaterHoseRenderer {
     ctx.lineTo(nodes[nodes.length - 1].x + 1.8, nodes[nodes.length - 1].y + 2.5);
     ctx.stroke();
 
-    const isVacuum = hose.sourceType === 'trailer_vacuum';
+    const isVacuum = !!hose.isVacuumHose || hose.sourceType === 'trailer_vacuum' || hose.sourceType === 'truck_vacuum';
+    const isSuction = !!hose.isSuctionActive;
 
     // 2. Main Realistic Black Rubber Hose Body (Classic matte black)
     ctx.strokeStyle = '#09090b'; // Solid matte black rubber
-    ctx.lineWidth = isVacuum ? 3.0 : 1.8; // Heavy-duty thicker gauge for vacuum suction hose!
+    ctx.lineWidth = isVacuum ? 3.2 : 1.8; // Heavy-duty thicker gauge (d=100mm) for vacuum suction hose!
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -50,7 +51,6 @@ export class WaterHoseRenderer {
 
     if (isVacuum) {
       // Draw ultra-realistic transverse corrugated rib rings along the physics segments of the hose.
-      // This mimics the stored corrugated hoses on the trailer rack perfectly!
       for (let i = 0; i < nodes.length - 1; i++) {
         const n1 = nodes[i];
         const n2 = nodes[i + 1];
@@ -71,26 +71,26 @@ export class WaterHoseRenderer {
             const ry = n1.y + uy * d;
             
             // 1. Dark-gray base rib representing the raised rubber ring
-            ctx.strokeStyle = '#27272a'; // Deep charcoal gray
-            ctx.lineWidth = 1.0;
+            ctx.strokeStyle = '#27272a';
+            ctx.lineWidth = 1.05;
             ctx.beginPath();
-            ctx.moveTo(rx - nx * 1.6, ry - ny * 1.6);
-            ctx.lineTo(rx + nx * 1.6, ry + ny * 1.6);
+            ctx.moveTo(rx - nx * 1.7, ry - ny * 1.7);
+            ctx.lineTo(rx + nx * 1.7, ry + ny * 1.7);
             ctx.stroke();
 
-            // 2. Bright steel core of the rib for brilliant industrial reflection (matching stored hose exactly)
-            ctx.strokeStyle = '#475569'; // Steel blue-gray
-            ctx.lineWidth = 0.6;
+            // 2. Bright steel core of the rib for industrial reflection
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 0.65;
             ctx.beginPath();
-            ctx.moveTo(rx - nx * 1.5, ry - ny * 1.5);
-            ctx.lineTo(rx + nx * 1.5, ry + ny * 1.5);
+            ctx.moveTo(rx - nx * 1.55, ry - ny * 1.55);
+            ctx.lineTo(rx + nx * 1.55, ry + ny * 1.55);
             ctx.stroke();
 
-            // 3. Highlight sheen/glint on the left/top edge for rich 3D roundness
-            ctx.strokeStyle = '#94a3b8'; // Light silver glint
+            // 3. Highlight sheen/glint on the left/top edge for 3D roundness
+            ctx.strokeStyle = '#94a3b8';
             ctx.lineWidth = 0.5;
             ctx.beginPath();
-            ctx.moveTo(rx - nx * 1.5, ry - ny * 1.5);
+            ctx.moveTo(rx - nx * 1.55, ry - ny * 1.55);
             ctx.lineTo(rx - nx * 0.6, ry - ny * 0.6);
             ctx.stroke();
           }
@@ -116,11 +116,11 @@ export class WaterHoseRenderer {
     if (isVacuum) {
       ctx.fillStyle = '#475569'; // Steel camlock coupler
       ctx.beginPath();
-      ctx.arc(anchorNode.x, anchorNode.y, 2.5, 0, Math.PI * 2);
+      ctx.arc(anchorNode.x, anchorNode.y, 2.6, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#94a3b8'; // Silver ring
       ctx.beginPath();
-      ctx.arc(anchorNode.x, anchorNode.y, 1.6, 0, Math.PI * 2);
+      ctx.arc(anchorNode.x, anchorNode.y, 1.7, 0, Math.PI * 2);
       ctx.fill();
     } else {
       ctx.fillStyle = '#1e293b'; // Steel threaded coupler
@@ -164,12 +164,14 @@ export class WaterHoseRenderer {
       }
     }
 
-    // 6. Compact Realistic Spray Gun / Nozzle in Player's Hands
+    // 6. Nozzle / Suction Lance in Player's Hands
     const nozzleNode = nodes[nodes.length - 1];
-    this.renderHandNozzle(ctx, nozzleNode.x, nozzleNode.y, player.angle, isSpraying, time);
+    this.renderHandNozzle(ctx, nozzleNode.x, nozzleNode.y, player.angle, isSpraying, time, isVacuum, isSuction);
 
-    // 7. Full Water Stream when spraying
-    if (isSpraying) {
+    // 7. Full Water Stream when spraying OR Vacuum Suction Vortex when sucking
+    if (isSuction && isVacuum) {
+      this.renderVacuumSuctionVortex(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, hose.suctionLiquidColor || '#38bdf8');
+    } else if (isSpraying) {
       this.renderWaterStream(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, !!hose.isPressurized);
     }
 
@@ -177,7 +179,7 @@ export class WaterHoseRenderer {
   }
 
   /**
-   * Renders the compact, realistic spray pistol / nozzle proportional to player hands.
+   * Renders the compact spray pistol OR heavy ANM-53 / KO-505 steel & brass vacuum suction lance.
    */
   private static renderHandNozzle(
     ctx: CanvasRenderingContext2D,
@@ -185,11 +187,52 @@ export class WaterHoseRenderer {
     y: number,
     angle: number,
     isSpraying: boolean,
-    time: number
+    time: number,
+    isVacuum: boolean = false,
+    isSuction: boolean = false
   ) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
+
+    if (isVacuum) {
+      // Heavy Camlock coupler ring at rear
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(-1.8, -1.5, 2.0, 3.0);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-1.2, -1.8, 0.8, 3.6);
+
+      // Transverse two-handed operator grip bar on the suction pipe (Рукоятки заборной штанги АНМ-53)
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(1.2, -2.8);
+      ctx.lineTo(1.2, 2.8);
+      ctx.stroke();
+
+      // Main galvanized steel intake pipe (Стальной заборный наконечник d=100 мм)
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(0.2, -1.25, 4.6, 2.5);
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(0.4, -0.75, 4.2, 1.5);
+
+      // Flared brass intake bell mouth (Латунный заборный раструб с защитной сеткой)
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(4.8, -1.5, 1.5, 3.0);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(5.8, -1.65, 0.55, 3.3);
+
+      // Active suction glow at bell mouth
+      if (isSuction) {
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.55)';
+        ctx.beginPath();
+        ctx.arc(6.4, 0, 1.9 + Math.sin(time * 28) * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return;
+    }
 
     // Hose crimp nut / coupling at rear
     ctx.fillStyle = '#334155';
@@ -219,6 +262,72 @@ export class WaterHoseRenderer {
       ctx.beginPath();
       ctx.arc(4.8, 0, 1.2 + Math.sin(time * 30) * 0.4, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Renders the animated inward suction vortex at the vacuum intake bell mouth.
+   */
+  private static renderVacuumSuctionVortex(
+    ctx: CanvasRenderingContext2D,
+    muzzleX: number,
+    muzzleY: number,
+    angle: number,
+    time: number,
+    liquidColor: string
+  ) {
+    ctx.save();
+    ctx.translate(muzzleX, muzzleY);
+    ctx.rotate(angle);
+
+    const intakeTipX = 6.3;
+    const coneReach = 24;
+
+    // 1. Soft vacuum depression cone in front of intake bell
+    const grad = ctx.createLinearGradient(intakeTipX + coneReach, 0, intakeTipX, 0);
+    grad.addColorStop(0, 'rgba(56, 189, 248, 0)');
+    grad.addColorStop(0.6, 'rgba(56, 189, 248, 0.22)');
+    grad.addColorStop(1, 'rgba(224, 242, 254, 0.65)');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(intakeTipX, -1.5);
+    ctx.lineTo(intakeTipX + coneReach, -11);
+    ctx.lineTo(intakeTipX + coneReach, 11);
+    ctx.lineTo(intakeTipX, 1.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // 2. Three animated inward-collapsing suction rings & fluid streaks
+    for (let r = 0; r < 3; r++) {
+      const phase = ((time * 3.2 + r * 0.33) % 1.0); // 0 -> 1
+      const invPhase = 1.0 - phase; // Moves inward from coneReach -> 0
+      const ringX = intakeTipX + invPhase * coneReach;
+      const ringRy = 1.5 + invPhase * 8.5;
+      const ringRx = 1.0 + invPhase * 3.0;
+
+      ctx.strokeStyle = r === 0 ? liquidColor : 'rgba(224, 242, 254, 0.65)';
+      ctx.globalAlpha = Math.min(1, phase * 1.4);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.ellipse(ringX, 0, ringRx, ringRy, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1.0;
+
+    // 3. Inward streamline streaks converging into the brass bell mouth
+    ctx.strokeStyle = liquidColor;
+    ctx.lineWidth = 1.2;
+    for (let s = -1; s <= 1; s++) {
+      const offsetPhase = ((time * 5.0 + (s + 1) * 0.3) % 1.0);
+      const startX = intakeTipX + (1.0 - offsetPhase) * coneReach;
+      const startY = s * (1.0 - offsetPhase) * 8.0;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(intakeTipX + 0.5, s * 0.6);
+      ctx.stroke();
     }
 
     ctx.restore();

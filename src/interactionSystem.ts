@@ -457,7 +457,7 @@ export function findActiveInteraction(
   const candidates: InteractionTarget[] = [];
 
   // ==========================================
-  // 1. WATER HOSE (Water truck / Tanker trailer)
+  // 1. WATER & VACUUM HOSE (Water truck / Fire pumper / Vacuum sewage & sludge trucks / Tanker trailers)
   // ==========================================
   if (player.heldWaterHose) {
     const nearWaterVeh = getNearbyWaterVehicle(px, py, world);
@@ -465,13 +465,14 @@ export function findActiveInteraction(
       const anchor = getVehicleWaterHoseAnchor(nearWaterVeh.vehicle);
       const connX = anchor ? anchor.x : nearWaterVeh.vehicle.x;
       const connY = anchor ? anchor.y : nearWaterVeh.vehicle.y;
-      const reach = isTargetInPhysicalReach(px, py, facing, connX, connY, 48, 1.4, mouseWorldPos);
+      const reach = isTargetInPhysicalReach(px, py, facing, connX, connY, 54, 1.4, mouseWorldPos);
       if (reach.inReach) {
+        const isVac = !!nearWaterVeh.vehicle.fluidTank?.isVacuumTank || nearWaterVeh.vehicle.type === 'trailer_vacuum';
         candidates.push({
           type: 'water_hose_stow',
           primaryKey: 'E',
-          actionTitle: 'Смотать поливочный шланг',
-          detail: 'Закрепить шланг на штатное место',
+          actionTitle: isVac ? 'Уложить вакуумный рукав в пенал' : 'Смотать поливочный шланг',
+          detail: isVac ? 'Закрыть задвижку АНМ-53 и закрепить гофрорукав' : 'Закрепить шланг на штатное место',
           x: connX,
           y: connY,
           dist: reach.dist,
@@ -487,16 +488,23 @@ export function findActiveInteraction(
       const anchor = getVehicleWaterHoseAnchor(nearWaterVeh.vehicle);
       const connX = anchor ? anchor.x : nearWaterVeh.vehicle.x;
       const connY = anchor ? anchor.y : nearWaterVeh.vehicle.y;
-      const reach = isTargetInPhysicalReach(px, py, facing, connX, connY, 48, 1.4, mouseWorldPos);
+      const reach = isTargetInPhysicalReach(px, py, facing, connX, connY, 54, 1.4, mouseWorldPos);
       if (reach.inReach) {
         const veh = nearWaterVeh.vehicle;
         const vol = Math.round(veh.fluidTank?.currentVolume ?? veh.fluidTank?.currentAmount ?? 0);
-        const name = veh.type === 'truck_water'? 'насосной станции водовоза': 'крана бочки-цистерны';
+        const cap = Math.round(veh.fluidTank?.capacity ?? 4200);
+        const isVac = !!veh.fluidTank?.isVacuumTank || veh.type === 'trailer_vacuum';
+        const vacMode = (veh.fluidTank?.vacuumPumpMode ?? 'suction') === 'suction' ? 'Откачка' : 'Слив';
+        const name = isVac
+          ? `Хранилище: ${vol} / ${cap} л · Режим: ${vacMode}`
+          : veh.type === 'truck_water'
+            ? `С насосной станции водовоза (Вода: ${vol} л)`
+            : `С крана цистерны (${vol} / ${cap} л)`;
         candidates.push({
           type: 'water_hose_take',
           primaryKey: 'E',
-          actionTitle: 'Взять поливочный шланг',
-          detail: `С ${name} (Вода: ${vol} л)`,
+          actionTitle: isVac ? 'Взять заборный вакуумный рукав' : 'Взять поливочный шланг',
+          detail: name,
           x: connX,
           y: connY,
           dist: reach.dist,
