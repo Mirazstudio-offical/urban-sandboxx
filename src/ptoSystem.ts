@@ -59,3 +59,11 @@ export function togglePto(v: Vehicle, player?: Player | null): boolean {
   }
   return !!v.isPtoActive;
 }
+
+/** Engine speed (rpm) held while the box drives a pump. On a real truck the idle is raised with the
+    hand throttle or an automatic governor: hydraulics are happy near 1100, a vacuum or fire pump needs more. */
+export function getPtoWorkingRPM(v: Vehicle): number {
+  if (isVehicleCraneTruck(v)) return 1100;
+  if (isVehicleVacuumTruck(v)) return 1450;
+  return 1300;
+}

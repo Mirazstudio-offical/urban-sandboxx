@@ -4,7 +4,7 @@ import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
-import { isPtoOn } from './ptoSystem';
+import { isPtoOn, hasPtoDrive, getPtoWorkingRPM } from './ptoSystem';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
 import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight } from './items';
@@ -8492,6 +8492,11 @@ export function updateVehiclePhysics(
       }
 
       const stallThreshold = idleRPM * 0.55;
+
+      // КОМ drives a pump: the governor holds a raised idle so the hydraulics / vacuum / water pump get their flow
+      if (hasPtoDrive(vehicle)) {
+        idleRPM = Math.max(idleRPM, Math.min(getPtoWorkingRPM(vehicle), idleRPM + (redlineRPM - idleRPM) * 0.5));
+      }
       
       // Transfer Case Toggle Logic
       if (input.transferCaseToggle) {
