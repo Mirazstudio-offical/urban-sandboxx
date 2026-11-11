@@ -238,3 +238,24 @@
 .tc-facts b { white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) { .tc-knob { transition: none; } }
+
+/* ---------- phone strips: small, edge-pinned, never over the minimap or the lights row ---------- */
+/* column right of the F / E buttons, inside the left gutter (the swipe zone starts further right) */
+.tc-strip { left: calc(env(safe-area-inset-left, 0px) + 52px); top: 52px; display: flex; flex-direction: column; gap: 4px; width: 36px; }
+.tc-strip .tc-key { width: 36px; height: 36px; padding: 0; background: var(--tc-glass); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.tc-strip .tc-key svg { width: 18px; height: 18px; }
+/* crane cab: three small keys in the bottom-right corner, where the pedals were */
+.tc-strip.is-right { left: auto; top: auto; right: calc(env(safe-area-inset-right, 0px) + 8px); bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); flex-direction: row; width: auto; }
+.tc-vac-fill { display: flex; flex-direction: column; gap: 2px; align-items: stretch; width: 36px; color: var(--tc-ink); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.tc-vac-fill .tc-bar { margin: 0; height: 3px; }
+/* crane cab readout: one line over the bottom-left corner */
+.tc-read-mini { left: calc(env(safe-area-inset-left, 0px) + 8px); bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); width: 110px; color: var(--tc-ink); font-size: 12px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); font-variant-numeric: tabular-nums; }
+.tc-read-mini .tc-mini { height: auto; padding: 0; flex-direction: column; align-items: stretch; gap: 3px; font-size: 12px; }
+.tc-read-mini .tc-bar { margin: 0; height: 3px; }
+.tc-mini-sub { margin-top: 3px; color: var(--tc-ink-2); font-size: 11px; }
+.tc-strip .tc-key.is-on { background: var(--tc-amber); border-color: var(--tc-amber); color: var(--tc-amber-ink); }
+.tc-strip .tc-key.is-good { background: var(--tc-good); border-color: var(--tc-good); color: #0f1a0b; }
+.tc-strip .tc-key.is-blue { background: var(--tc-blue); border-color: var(--tc-blue); color: #0a1620; }
+.tc-strip .tc-key.is-bad { background: var(--tc-bad); border-color: var(--tc-bad); color: #1f0d08; }
+.tc-strip .tc-key svg { color: var(--tc-ink-2); }
+.tc-strip .tc-key.is-on svg, .tc-strip .tc-key.is-good svg, .tc-strip .tc-key.is-blue svg, .tc-strip .tc-key.is-bad svg { color: inherit; }
