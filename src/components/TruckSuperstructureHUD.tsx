@@ -143,6 +143,120 @@ const Lever: React.FC<LeverProps> = ({ name, inputRef, neg, pos, disabled, compa
   );
 };
 
+interface SlideLeverProps {
+  name: string;
+  inputRef: React.MutableRefObject<InputState>;
+  neg: { key: InputFlag; icon: React.ReactNode; title: string };
+  pos: { key: InputFlag; icon: React.ReactNode; title: string };
+  disabled?: boolean;
+}
+
+const SLOT_H = 124;
+const KNOB_H = 36;
+const TRAVEL = (SLOT_H - KNOB_H) / 2;
+const ENGAGE = 0.35;
+
+/* A lever you drag with a finger along a slot, like a gear selector.
+   Up holds the positive input, down holds the negative one, release springs back to neutral. */
+const SlideLever: React.FC<SlideLeverProps> = ({ name, inputRef, neg, pos, disabled = false }) => {
+  const slotRef = React.useRef<HTMLDivElement>(null);
+  const activeId = React.useRef<number | null>(null);
+  const [offset, setOffset] = useState(0); // px from the centre, positive = up
+  const [dragging, setDragging] = useState(false);
+  const dir = React.useRef<-1 | 0 | 1>(0);
+
+  const apply = (v: number) => {
+    const next: -1 | 0 | 1 = v > ENGAGE ? 1 : v < -ENGAGE ? -1 : 0;
+    if (next === dir.current) return;
+    dir.current = next;
+    setFlag(inputRef, pos.key, next === 1);
+    setFlag(inputRef, neg.key, next === -1);
+    if (next !== 0) sound.playHydraulicHiss(0.18);
+  };
+
+  const moveTo = (clientY: number) => {
+    const rect = slotRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const mid = rect.top + rect.height / 2;
+    const px = Math.max(-TRAVEL, Math.min(TRAVEL, mid - clientY));
+    setOffset(px);
+    apply(px / TRAVEL);
+  };
+
+  const release = () => {
+    activeId.current = null;
+    setDragging(false);
+    setOffset(0);
+    apply(0);
+  };
+
+  useEffect(() => {
+    if (disabled && activeId.current !== null) release();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabled]);
+
+  useEffect(
+    () => () => {
+      setFlag(inputRef, pos.key, false);
+      setFlag(inputRef, neg.key, false);
+    },
+    [inputRef, pos.key, neg.key],
+  );
+
+  const state = offset > 0 && dir.current === 1 ? 'is-pos' : offset < 0 && dir.current === -1 ? 'is-neg' : '';
+
+  return (
+    <div className={`tc-slide${disabled ? ' is-off' : ''}`}>
+      <span className="tc-slide-name">{name}</span>
+      <div
+        ref={slotRef}
+        className={`tc-slot ${state}${dragging ? ' is-drag' : ''}`}
+        style={{ height: SLOT_H }}
+        onPointerDown={(e) => {
+          if (disabled || activeId.current !== null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          activeId.current = e.pointerId;
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+          setDragging(true);
+          moveTo(e.clientY);
+        }}
+        onPointerMove={(e) => {
+          if (activeId.current === e.pointerId) moveTo(e.clientY);
+        }}
+        onPointerUp={(e) => {
+          if (activeId.current === e.pointerId) release();
+        }}
+        onPointerCancel={(e) => {
+          if (activeId.current === e.pointerId) release();
+        }}
+        onLostPointerCapture={() => {
+          if (activeId.current !== null) release();
+        }}
+        onContextMenu={(e) => e.preventDefault()}
+        role="slider"
+        aria-label={name}
+        aria-valuemin={-1}
+        aria-valuemax={1}
+        aria-valuenow={dir.current}
+      >
+        <i className="tc-gate" />
+        <span className="tc-slot-end is-top" title={pos.title}>{pos.icon}</span>
+        <span className="tc-slot-end is-bottom" title={neg.title}>{neg.icon}</span>
+        <i className="tc-plate" />
+        <i
+          className="tc-stalk"
+          style={{ height: Math.abs(offset), top: offset > 0 ? `calc(50% - ${offset}px)` : '50%' }}
+        />
+        <i
+          className="tc-knob"
+          style={{ width: KNOB_H, height: KNOB_H, transform: `translate(-50%, calc(-50% - ${offset}px)) scale(${1 - (offset / TRAVEL) * 0.07})` }}
+        />
+      </div>
+    </div>
+  );
+};
+
 interface TapKeyProps {
   onClick: () => void;
   title: string;
@@ -378,20 +492,24 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
                 <Minimize2 />
               </button>
             </div>
+            <div className="tc-facts">
+              <span>Вылет</span><b>{workingRadiusMeters} м</b>
+              <span>Стрела</span><b>{geom.boomLengthMeters.toFixed(1)} м</b>
+              <span>Наклон</span><b>{boomAngleDeg}°</b>
+            </div>
             {!outriggersOk && <div className="tc-state-line">Нет опор</div>}
             {outriggersOk && !hasPressure && <div className="tc-state-line">Нет давления</div>}
-            <div className="tc-pairs">
-              <Lever name="Поворот" inputRef={inputRef} compact disabled={locked} {...slew} />
-              <Lever name="Стрела" inputRef={inputRef} compact disabled={locked} {...elev} />
-            </div>
+          </div>
+
+          <div className="tc tc-bank is-cab" {...stopWorld}>
+            <SlideLever name="Поворот" inputRef={inputRef} disabled={locked} {...slew} />
+            <SlideLever name="Стрела" inputRef={inputRef} disabled={locked} {...elev} />
+            <SlideLever name="Телескоп" inputRef={inputRef} disabled={locked} {...tele} />
+            <SlideLever name="Лебёдка" inputRef={inputRef} disabled={!hasPressure} {...winch} />
           </div>
 
           <div className="tc tc-card tc-edge tc-right is-cab" {...stopWorld}>
             <div className="tc-pairs c2">
-              <Lever name="Телескоп" inputRef={inputRef} compact disabled={locked} {...tele} />
-              <Lever name="Лебёдка" inputRef={inputRef} compact disabled={!hasPressure} {...winch} />
-            </div>
-            <div className="tc-pairs c4" style={{ marginTop: 4 }}>
               <TapKey
                 onClick={toggleHook}
                 title={hookedVeh ? 'Отцепить строп' : 'Зацепить строп'}
@@ -404,7 +522,7 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
               <TapKey onClick={() => onOpenOutriggersModal?.()} title="Пульт выносных опор" icon={<Compass />} isIcon />
             </div>
             <div className="tc-pairs" style={{ marginTop: 4 }}>
-              <TapKey onClick={exitCab} title="Выйти из кабины крановщика" icon={<LogOut />} label="Выйти из кабины" />
+              <TapKey onClick={exitCab} title="Выйти из кабины крановщика" icon={<LogOut />} label="Выйти" />
             </div>
           </div>
         </>
