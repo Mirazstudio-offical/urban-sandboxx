@@ -78,6 +78,8 @@ interface MobileTouchControlsProps {
   tractorBrakeLatch?: boolean;
   uiScale?: number;
   onCycleUiScale?: () => void;
+  /** Crane operator cab: wheel and pedals are not used, the truck console owns the screen edges. */
+  hideDriveControls?: boolean;
 }
 
 const triggerHaptic = (ms: number = 10) => {
@@ -1353,6 +1355,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   tractorBrakeLatch = true,
   uiScale = 0.75,
   onCycleUiScale,
+  hideDriveControls = false,
 }) => {
   // Joystick State (Used for Pedestrian Walking)
   const [joystickActive, setJoystickActive] = useState<boolean>(false);
@@ -1494,7 +1497,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
         <div 
           id="touch-steering-cluster" 
           className="absolute bottom-2.5 left-2.5 pointer-events-auto flex flex-col items-center gap-1.5 z-40 touch-none origin-bottom-left"
-          style={uiScale ? { transform: `scale(${uiScale})` } : undefined}
+          style={{ ...(uiScale ? { transform: `scale(${uiScale})` } : {}), ...(hideDriveControls ? { display: 'none' } : {}) }}
         >
           {/* TURN SIGNAL / INDICATORS BAR ABOVE STEERING WHEEL */}
           <div id="touch-turn-signals" className="flex items-center gap-1.5">
@@ -1578,7 +1581,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
       <div 
         id="touch-actions-zone" 
         className="absolute bottom-2.5 right-2.5 sm:bottom-3 sm:right-3 pointer-events-auto flex flex-col items-end gap-1.5 z-40 touch-none origin-bottom-right"
-        style={uiScale ? { transform: `scale(${uiScale})` } : undefined}
+        style={{ ...(uiScale ? { transform: `scale(${uiScale})` } : {}), ...(hideDriveControls ? { display: 'none' } : {}) }}
       >
         {/* COMPACT TOOLBAR FOR LIGHTS, AUXILIARY & UI SCALE */}
         {isInVehicle && (
