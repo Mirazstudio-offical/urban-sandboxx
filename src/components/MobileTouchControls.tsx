@@ -80,6 +80,9 @@ interface MobileTouchControlsProps {
   onCycleUiScale?: () => void;
   /** Crane operator cab: wheel and pedals are not used, the truck console owns the screen edges. */
   hideDriveControls?: boolean;
+  activeInteraction?: import('../interactionSystem').InteractionTarget | null;
+  onInteractR?: () => void;
+  onInteractKey?: (key: 'E' | 'F' | 'R') => void;
 }
 
 const triggerHaptic = (ms: number = 10) => {
@@ -1356,6 +1359,9 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   uiScale = 0.75,
   onCycleUiScale,
   hideDriveControls = false,
+  activeInteraction = null,
+  onInteractR,
+  onInteractKey,
 }) => {
   // Joystick State (Used for Pedestrian Walking)
   const [joystickActive, setJoystickActive] = useState<boolean>(false);
@@ -1487,6 +1493,46 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
         >
           <Hand className="w-4.5 h-4.5 text-slate-200" />
         </button>
+
+        {/* Dynamic Context Buttons: If the active interaction has another key like R or secondary actions */}
+        {(() => {
+          if (!activeInteraction) return null;
+          // Collect keys that are neither primary F nor E
+          const extraButtons: { key: 'E' | 'F' | 'R'; title: string }[] = [];
+          
+          if (activeInteraction.primaryKey === 'R') {
+            extraButtons.push({ key: 'R', title: activeInteraction.actionTitle });
+          }
+          if (activeInteraction.availableKeys) {
+            for (const ak of activeInteraction.availableKeys) {
+              if (ak.key === 'R' && !extraButtons.some(b => b.key === 'R')) {
+                extraButtons.push(ak);
+              }
+            }
+          }
+
+          return extraButtons.map(btn => (
+            <button
+              key={btn.key}
+              type="button"
+              onClick={() => {
+                triggerHaptic(18);
+                if (btn.key === 'R') {
+                  onInteractR?.();
+                } else {
+                  onInteractKey?.(btn.key);
+                }
+              }}
+              className="w-9.5 h-9.5 rounded-xl border border-amber-500/60 bg-amber-500/25 text-amber-200 backdrop-blur-md flex flex-col items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
+              title={`Действие [${btn.key}]: ${btn.title}`}
+            >
+              <span className="text-[12px] font-black font-mono leading-none">{btn.key}</span>
+              <span className="text-[7.5px] font-bold truncate max-w-[34px] leading-none mt-0.5 opacity-90">
+                {btn.title.split(' ')[0]}
+              </span>
+            </button>
+          ));
+        })()}
       </div>
 
       {/* IN-VEHICLE WINDSHIELD GLANCE ZONE (Swipe road area to glance ahead/sideways with elastic return) */}

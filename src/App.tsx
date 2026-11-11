@@ -4075,7 +4075,7 @@ export default function App() {
         const hudEl = document.getElementById('context-interaction-hud-overlay');
         if (hudEl) {
           const target = activeInteractionRef.current;
-          if (target && target.type !== 'hand_item' && target.type !== 'exit_vehicle') {
+          if (target && !target.isSelfAction && target.type !== 'hand_item' && target.type !== 'exit_vehicle') {
             const screenPos = worldToScreen(target.x, target.y);
             if (screenPos) {
               hudEl.style.display = 'flex';
@@ -6597,6 +6597,27 @@ export default function App() {
             onCycleUiScale={handleCycleTouchScale}
             onToggleTransferCase={() => {
               inputRef.current.transferCaseToggle = true;
+            }}
+            activeInteraction={activeInteraction}
+            onInteractR={() => {
+              const target = activeInteractionRef.current;
+              if (target && (target.primaryKey === 'R' || target.availableKeys?.some(k => k.key === 'R'))) {
+                handleExecuteActiveInteraction({ ...target, primaryKey: 'R' });
+              } else if (playerRef.current && worldRef.current) {
+                const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
+                const rTarget = findActiveInteraction(playerRef.current, worldRef.current, mouseWorld, 'R');
+                if (rTarget) {
+                  handleExecuteActiveInteraction(rTarget);
+                } else {
+                  handleResetVehicle();
+                }
+              }
+            }}
+            onInteractKey={(key) => {
+              const target = activeInteractionRef.current;
+              if (target) {
+                handleExecuteActiveInteraction({ ...target, primaryKey: key });
+              }
             }}
           />
         );

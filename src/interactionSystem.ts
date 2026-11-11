@@ -77,6 +77,7 @@ export interface InteractionTarget {
   score: number;
   data?: any;
   availableKeys?: { key: 'E' | 'F' | 'R'; title: string }[];
+  isSelfAction?: boolean;
 }
 
 /**
@@ -233,13 +234,14 @@ export function findActiveInteraction(
     return {
       type: 'stand_up',
       primaryKey: 'E',
-      actionTitle: 'Встать с места',
-      detail: `${player.sittingState.labelRu} — [E], [Пробел] или движение [WASD]`,
+      actionTitle: 'Встать',
+      detail: player.sittingState.labelRu,
       x: player.x,
       y: player.y,
       dist: 0,
       angleDiff: 0,
       score: 0,
+      isSelfAction: true,
       availableKeys: [
         { key: 'E', title: 'Встать' }
       ]
@@ -448,25 +450,27 @@ export function findActiveInteraction(
       return {
         type: 'exit_crane_cab',
         primaryKey: 'F',
-        actionTitle: 'Покинуть кабину крановщика',
-        detail: 'Нажмите [F] чтобы спуститься на землю',
+        actionTitle: 'Покинуть кабину',
+        detail: 'Спуститься на землю',
         x: player.x,
         y: player.y,
         dist: 0,
         angleDiff: 0,
-        score: 0
+        score: 0,
+        isSelfAction: true
       };
     }
     return {
       type: 'exit_vehicle',
       primaryKey: 'F',
-      actionTitle: 'Выйти из автомобиля',
-      detail: 'Нажмите [F] для выхода, [E] для меню авто',
+      actionTitle: 'Выйти из машины',
+      detail: 'Нажмите [F] для выхода',
       x: player.x,
       y: player.y,
       dist: 0,
       angleDiff: 0,
-      score: 0
+      score: 0,
+      isSelfAction: true
     };
   }
 
@@ -501,12 +505,12 @@ export function findActiveInteraction(
           type: 'water_hose_stow',
           primaryKey: 'E',
           actionTitle: isJetter
-            ? 'Смотать рукав высокого давления РВД на барабан'
+            ? 'Смотать рукав РВД'
             : isVac
-            ? 'Уложить вакуумный рукав в пенал'
-            : 'Смотать поливочный шланг',
+            ? 'Уложить вакуумный рукав'
+            : 'Смотать шланг',
           detail: isVac && !isJetter
-            ? 'Закрыть шиберную задвижку АНМ-53 и закрепить гофрорукав'
+            ? 'Закрыть шибер АНМ-53 и закрепить рукав'
             : 'Закрепить шланг на штатное место',
           x: targetPos.x,
           y: targetPos.y,
@@ -541,24 +545,24 @@ export function findActiveInteraction(
         const isKombiJetter = vacBodyId === 'body_vacuum_kombi_ko560' && tank?.activeHoseMode === 'jetter';
         const vacMode = (tank?.vacuumPumpMode ?? 'suction') === 'suction' ? 'Откачка' : 'Нагнетание';
         const barVal = +(tank?.vacuumPressureBar ?? 0).toFixed(2);
-        const barLabel = barVal < -0.05 ? `${barVal} бар (Вакуум)` : barVal > 0.05 ? `+${barVal} бар (Напор)` : '0.00 бар';
+        const barLabel = barVal < -0.05 ? `${barVal} бар (вакуум)` : barVal > 0.05 ? `+${barVal} бар (напор)` : '0 бар';
         const liqName = getLiquidNameRu(tank?.liquidType || 'sewage');
         const name = isKombiJetter
-          ? `Бак чистой воды КО-560: ${Math.round(tank?.cleanWaterVolume ?? 0)} / ${tank?.cleanWaterCapacity ?? 2500} л (160 бар)`
+          ? `КО-560: ${Math.round(tank?.cleanWaterVolume ?? 0)} / ${tank?.cleanWaterCapacity ?? 2500} л`
           : isVac
-          ? `${liqName}: ${vol}/${cap} л · ${vacMode} · ${barLabel}`
+          ? `${liqName}: ${vol}/${cap} л · ${vacMode} (${barLabel})`
           : veh.type === 'truck_water'
-          ? `С насосной станции водовоза (Вода: ${vol} л)`
-          : `С крана цистерны (${vol} / ${cap} л)`;
+          ? `Водовоз: ${vol} л`
+          : `Цистерна: ${vol} / ${cap} л`;
 
         candidates.push({
           type: 'water_hose_take',
           primaryKey: 'E',
           actionTitle: isKombiJetter
-            ? 'Взять каналопромывочный рукав РВД (КО-560)'
+            ? 'Взять рукав РВД'
             : isVac
-            ? 'Взять заборный вакуумный рукав d=100 мм'
-            : 'Взять поливочный шланг',
+            ? 'Взять вакуумный рукав'
+            : 'Взять шланг',
           detail: name,
           x: targetPos.x,
           y: targetPos.y,
@@ -584,7 +588,7 @@ export function findActiveInteraction(
         type: 'vacuum_gate_valve_toggle',
         primaryKey: 'R',
         actionTitle: veh.fluidTank.drainValveOpen ? 'Закрыть шибер АНМ-53' : 'Открыть шибер АНМ-53',
-        detail: veh.fluidTank.drainValveOpen ? 'Задвижка открыта (проток в рукав/слив разрешён)' : 'Задвижка перекрыта',
+        detail: veh.fluidTank.drainValveOpen ? 'Задвижка открыта' : 'Задвижка перекрыта',
         x: vPos.rearGateValve.x,
         y: vPos.rearGateValve.y,
         dist: rearReach.dist,
@@ -602,10 +606,8 @@ export function findActiveInteraction(
       candidates.push({
         type: 'vacuum_mode_toggle',
         primaryKey: 'E',
-        actionTitle: curMode === 'suction'
-          ? 'Перевести 4-ходовой кран: НАГНЕТАНИЕ'
-          : 'Перевести 4-ходовой кран: ОТКАЧКА (ВАКУУМ)',
-        detail: `Режим: ${curMode === 'suction' ? 'Откачка' : 'Нагнетание'} · Мановакуумметр: ${barVal > 0 ? `+${barVal}` : barVal} бар`,
+        actionTitle: curMode === 'suction' ? 'Кран: Нагнетание' : 'Кран: Откачка (вакуум)',
+        detail: `Манометр: ${barVal > 0 ? `+${barVal}` : barVal} бар`,
         x: vPos.fourWayValve.x,
         y: vPos.fourWayValve.y,
         dist: pumpReach.dist,
@@ -620,10 +622,8 @@ export function findActiveInteraction(
         candidates.push({
           type: 'vacuum_hose_mode_toggle',
           primaryKey: 'R',
-          actionTitle: isJetter
-            ? 'Пост: вакуумный рукав d=100 мм'
-            : 'Пост: барабан РВД (промывка)',
-          detail: 'Выбор рабочего контура КО-560',
+          actionTitle: isJetter ? 'Выбрать вакуумный рукав' : 'Выбрать барабан РВД',
+          detail: 'Контур КО-560',
           x: vPos.fourWayValve.x,
           y: vPos.fourWayValve.y,
           dist: pumpReach.dist,
@@ -777,7 +777,7 @@ export function findActiveInteraction(
         candidates.push({
           type: 'fuel_insert',
           primaryKey: 'E',
-          actionTitle: `Вставить пистолет [${grade?.nameRu || ''}] в бак`,
+          actionTitle: `Вставить пистолет [${grade?.nameRu || ''}]`,
           detail: vehName,
           x: capPos.x,
           y: capPos.y,
@@ -797,8 +797,8 @@ export function findActiveInteraction(
         candidates.push({
           type: 'pump_return_nozzle',
           primaryKey: 'E',
-          actionTitle: `Повесить пистолет на колонку №${nearPump.pumpNumber}`,
-          detail: 'Вернуть топливораздаточный кран',
+          actionTitle: `Повесить пистолет`,
+          detail: `Колонка №${nearPump.pumpNumber}`,
           x: nearPump.x,
           y: nearPump.y,
           dist: reach.dist,
@@ -822,8 +822,8 @@ export function findActiveInteraction(
             candidates.push({
               type: 'fuel_remove',
               primaryKey: 'E',
-              actionTitle: isPumping ? 'Заправка в процессе...': 'Извлечь пистолет из бензобака',
-              detail: isPumping ? `${pump?.displayLiters?.toFixed(1)} / ${pump?.targetLiters} л`: vehName,
+              actionTitle: isPumping ? 'Идёт заправка' : 'Вынуть пистолет',
+              detail: isPumping ? `${pump?.displayLiters?.toFixed(1)} / ${pump?.targetLiters} л` : vehName,
               x: capPos.x,
               y: capPos.y,
               dist: reach.dist,
@@ -845,8 +845,8 @@ export function findActiveInteraction(
         candidates.push({
           type: 'pump_take_nozzle',
           primaryKey: 'E',
-          actionTitle: `Взять пистолет (Колонка №${nearPump.pumpNumber})`,
-          detail: 'Выбрать вид топлива',
+          actionTitle: `Взять пистолет`,
+          detail: `Колонка №${nearPump.pumpNumber}`,
           x: nearPump.x,
           y: nearPump.y,
           dist: reach.dist,
@@ -862,10 +862,10 @@ export function findActiveInteraction(
       candidates.push({
         type: 'gas_cashier',
         primaryKey: 'E',
-        actionTitle: 'Касса АЗС / Оплата топлива',
-        detail: 'Нефть-Магистраль 24/7',
-        x: px,
-        y: py,
+        actionTitle: 'Оплата топлива',
+        detail: 'Касса АЗС',
+        x: 4972, // specific cashier window coords
+        y: 5240,
         dist: 0,
         angleDiff: 0,
         score: -5,
@@ -893,8 +893,8 @@ export function findActiveInteraction(
           candidates.push({
             type: 'open_hood',
             primaryKey: 'E',
-            actionTitle: `Открыть капот (${cfg.name})`,
-            detail: 'Осмотр двигателя, уровней жидкостей и АКБ',
+            actionTitle: 'Открыть капот',
+            detail: cfg.name,
             x: hoodX,
             y: hoodY,
             dist: hoodReach.dist,
@@ -952,26 +952,31 @@ export function findActiveInteraction(
         doorY = passDoorY;
       }
 
-      // If close to center of vehicle, also allow entering if close enough
+      // If close to center of vehicle, find which physical door is closest instead of roof center
       if (!bestDoorReach) {
         const centerReach = isTargetInPhysicalReach(px, py, facing, veh.x, veh.y, Math.max(cfg.length * 0.68, cfg.width * 0.75 + 36), 1.65, mouseWorldPos);
         if (centerReach.inReach) {
           bestDoorReach = centerReach;
-          doorX = veh.x;
-          doorY = veh.y;
+          const distDriver = Math.hypot(px - driverDoorX, py - driverDoorY);
+          const distPass = Math.hypot(px - passDoorX, py - passDoorY);
+          if (distDriver <= distPass) {
+            doorX = driverDoorX;
+            doorY = driverDoorY;
+          } else {
+            doorX = passDoorX;
+            doorY = passDoorY;
+          }
         }
       }
 
       if (bestDoorReach && bestDoorReach.inReach) {
+        const isBus = veh.type === 'bus' || veh.type === 'bus_minibus';
+        const isCrane = isVehicleCraneTruck(veh);
         candidates.push({
           type: 'enter_vehicle',
           primaryKey: 'F',
-          actionTitle: (veh.type === 'bus' || veh.type === 'bus_minibus') 
-            ? `Сесть за руль (${cfg.name})` 
-            : isVehicleCraneTruck(veh)
-            ? `Сесть за руль шасси (${cfg.name})`
-            : `Сесть в автомобиль (${cfg.name})`,
-          detail: isVehicleCraneTruck(veh) ? `Кабина водителя грузовика` : `Дверь водителя`,
+          actionTitle: isBus ? 'Сесть за руль' : isCrane ? 'Кабина водителя' : 'Сесть в машину',
+          detail: cfg.name,
           x: doorX,
           y: doorY,
           dist: bestDoorReach.dist,
@@ -1569,8 +1574,8 @@ export function findActiveInteraction(
         candidates.push({
           type: 'pickup_item',
           primaryKey: 'E',
-          actionTitle: `Подобрать: ${gi.item.nameRu}`,
-          detail: gi.item.weight ? `${gi.item.weight} кг`: undefined,
+          actionTitle: gi.item.nameRu,
+          detail: gi.item.weight ? `${gi.item.weight} кг` : undefined,
           x: gi.x,
           y: gi.y,
           dist: reach.dist,
@@ -1587,27 +1592,27 @@ export function findActiveInteraction(
   // ==========================================
   if (world.litter && world.litter.length > 0) {
     const litterNames: Record<string, string> = {
-      can: 'жестяная банка',
-      bottle: 'бутылка',
-      cup: 'стаканчик',
-      paper: 'бумага',
-      newspaper: 'газета',
-      wrapper: 'обёртка',
-      box: 'коробка',
-      bag: 'пакет',
-      coffee: 'стакан кофе',
-      mask: 'маска',
-      butt: 'окурок',
-      leaf: 'листва'};
+      can: 'Жестяная банка',
+      bottle: 'Бутылка',
+      cup: 'Стаканчик',
+      paper: 'Бумага',
+      newspaper: 'Газета',
+      wrapper: 'Обёртка',
+      box: 'Коробка',
+      bag: 'Пакет',
+      coffee: 'Стакан кофе',
+      mask: 'Маска',
+      butt: 'Окурок',
+      leaf: 'Листва'};
     for (const lit of world.litter) {
       const reach = isTargetInPhysicalReach(px, py, facing, lit.x, lit.y, 40, 1.3, mouseWorldPos);
       if (reach.inReach) {
-        const litName = litterNames[lit.type] || 'бытовой мусор';
+        const litName = litterNames[lit.type] || 'Бытовой мусор';
         candidates.push({
           type: 'pickup_litter',
           primaryKey: 'E',
-          actionTitle: `Собрать: ${litName}`,
-          detail: 'Для эко-сдачи или утилизации',
+          actionTitle: litName,
+          detail: 'Мусор',
           x: lit.x,
           y: lit.y,
           dist: reach.dist,
@@ -1630,8 +1635,8 @@ export function findActiveInteraction(
           candidates.push({
             type: 'eco_recycle',
             primaryKey: 'E',
-            actionTitle: 'Сдать тару в эко-контейнер',
-            detail: 'Получить +$5 за банку/бутылку',
+            actionTitle: 'Сдать тару',
+            detail: 'Эко-контейнер (+5₽)',
             x: prop.x,
             y: prop.y,
             dist: reach.dist,
@@ -1646,8 +1651,8 @@ export function findActiveInteraction(
           candidates.push({
             type: 'trash_throw',
             primaryKey: 'E',
-            actionTitle: 'Выбросить мусор в урну',
-            detail: 'Очистить руки и карманы от мусора',
+            actionTitle: 'Выбросить мусор',
+            detail: 'Урна',
             x: prop.x,
             y: prop.y,
             dist: reach.dist,
@@ -2032,6 +2037,7 @@ export function findActiveInteraction(
         dist: 0,
         angleDiff: 0,
         score: 100,
+        isSelfAction: true,
         data: handItem
       };
     }
@@ -2050,6 +2056,7 @@ export function findActiveInteraction(
         dist: 0,
         angleDiff: 0,
         score: 100,
+        isSelfAction: true,
         data: handItem
       };
     }
@@ -2068,6 +2075,7 @@ export function findActiveInteraction(
         dist: 0,
         angleDiff: 0,
         score: 100,
+        isSelfAction: true,
         data: handItem
       };
     }
@@ -2086,6 +2094,7 @@ export function findActiveInteraction(
         dist: 0,
         angleDiff: 0,
         score: 100,
+        isSelfAction: true,
         data: handItem
       };
     }
@@ -2101,6 +2110,7 @@ export function findActiveInteraction(
         dist: 0,
         angleDiff: 0,
         score: 100,
+        isSelfAction: true,
         data: handItem
       };
     }
