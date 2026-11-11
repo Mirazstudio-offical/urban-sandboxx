@@ -148,17 +148,17 @@ interface SlideLeverProps {
   disabled?: boolean;
 }
 
-const SLOT_H = 124;
-const KNOB_H = 36;
-const TRAVEL = (SLOT_H - KNOB_H) / 2;
+const TRAVEL = 40; // finger travel in px from the press point to full tilt
+const MAX_TILT = 34; // lever tilt in degrees at full travel
 const ENGAGE = 0.35;
 
-/* A lever you drag with a finger along a slot, like a gear selector.
-   Up holds the positive input, down holds the negative one, release springs back to neutral. */
+/* A cab lever: just a stalk and a ball grip, no panel and no captions.
+   Press anywhere on it and push the finger up (lever tilts away, positive input) or down (lever tilts toward you, negative input).
+   Release and it springs back to upright. */
 const SlideLever: React.FC<SlideLeverProps> = ({ name, inputRef, neg, pos, disabled = false }) => {
-  const slotRef = React.useRef<HTMLDivElement>(null);
   const activeId = React.useRef<number | null>(null);
-  const [offset, setOffset] = useState(0); // px from the centre, positive = up
+  const startY = React.useRef(0);
+  const [offset, setOffset] = useState(0); // px, positive = pushed away
   const [dragging, setDragging] = useState(false);
   const dir = React.useRef<-1 | 0 | 1>(0);
 
@@ -172,10 +172,7 @@ const SlideLever: React.FC<SlideLeverProps> = ({ name, inputRef, neg, pos, disab
   };
 
   const moveTo = (clientY: number) => {
-    const rect = slotRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const mid = rect.top + rect.height / 2;
-    const px = Math.max(-TRAVEL, Math.min(TRAVEL, mid - clientY));
+    const px = Math.max(-TRAVEL, Math.min(TRAVEL, startY.current - clientY));
     setOffset(px);
     apply(px / TRAVEL);
   };
@@ -200,23 +197,22 @@ const SlideLever: React.FC<SlideLeverProps> = ({ name, inputRef, neg, pos, disab
     [inputRef, pos.key, neg.key],
   );
 
-  const state = offset > 0 && dir.current === 1 ? 'is-pos' : offset < 0 && dir.current === -1 ? 'is-neg' : '';
+  const state = dir.current === 1 ? 'is-pos' : dir.current === -1 ? 'is-neg' : '';
+  const tilt = (offset / TRAVEL) * MAX_TILT;
 
   return (
-    <div className={`tc-slide${disabled ? ' is-off' : ''}`}>
-      <span className="tc-slide-name">{name}</span>
+    <div className={`tc-lv3${disabled ? ' is-off' : ''}`}>
       <div
-        ref={slotRef}
-        className={`tc-slot ${state}${dragging ? ' is-drag' : ''}`}
-        style={{ height: SLOT_H }}
+        className={`tc-lv3-hit ${state}${dragging ? ' is-drag' : ''}`}
+        style={{ '--a': `${tilt.toFixed(1)}deg` } as React.CSSProperties}
         onPointerDown={(e) => {
           if (disabled || activeId.current !== null) return;
           e.preventDefault();
           e.stopPropagation();
           activeId.current = e.pointerId;
+          startY.current = e.clientY;
           e.currentTarget.setPointerCapture?.(e.pointerId);
           setDragging(true);
-          moveTo(e.clientY);
         }}
         onPointerMove={(e) => {
           if (activeId.current === e.pointerId) moveTo(e.clientY);
@@ -236,19 +232,12 @@ const SlideLever: React.FC<SlideLeverProps> = ({ name, inputRef, neg, pos, disab
         aria-valuemin={-1}
         aria-valuemax={1}
         aria-valuenow={dir.current}
+        title={`${pos.title} / ${neg.title}`}
       >
-        <i className="tc-gate" />
-        <span className="tc-slot-end is-top" title={pos.title}>{pos.icon}</span>
-        <span className="tc-slot-end is-bottom" title={neg.title}>{neg.icon}</span>
-        <i className="tc-plate" />
-        <i
-          className="tc-stalk"
-          style={{ height: Math.abs(offset), top: offset > 0 ? `calc(50% - ${offset}px)` : '50%' }}
-        />
-        <i
-          className="tc-knob"
-          style={{ width: KNOB_H, height: KNOB_H, transform: `translate(-50%, calc(-50% - ${offset}px)) scale(${1 - (offset / TRAVEL) * 0.07})` }}
-        />
+        <i className="tc-lv3-arm">
+          <i className="tc-lv3-rod" />
+          <i className="tc-lv3-grip" />
+        </i>
       </div>
     </div>
   );
