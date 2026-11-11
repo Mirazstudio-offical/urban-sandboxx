@@ -192,40 +192,48 @@
 .tc-lv3.is-off { opacity: 0.4; }
 .tc-lv3-hit { position: relative; width: 56px; height: 112px; perspective: 240px; perspective-origin: 50% 35%; touch-action: none; cursor: grab; }
 .tc-lv3-hit.is-drag { cursor: grabbing; }
-/* rubber bellows boot at the base: it stays put while the stalk tilts out of it */
+/* cast-iron flange with bolts, and a steel dust cup the shaft comes out of (both stay put) */
 .tc-lv3-hit::before {
-  content: ''; position: absolute; left: 50%; bottom: 0; width: 36px; height: 20px; margin-left: -18px; pointer-events: none;
-  clip-path: polygon(0 100%, 100% 100%, 82% 12%, 66% 0, 34% 0, 18% 12%);
+  content: ''; position: absolute; left: 50%; bottom: 0; width: 46px; height: 14px; margin-left: -23px; border-radius: 50%; pointer-events: none;
   background:
-    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0 1px, transparent 1px 4px),
-    linear-gradient(90deg, #0d0d0f 0%, #3a3a3f 30%, #1b1b1e 60%, #09090a 100%);
+    radial-gradient(circle at 14% 50%, #0d0d0e 0 1.6px, transparent 2.2px),
+    radial-gradient(circle at 86% 50%, #0d0d0e 0 1.6px, transparent 2.2px),
+    linear-gradient(180deg, #787a7d 0%, #46484b 50%, #232426 100%);
+  box-shadow: 0 3px 0 #131314, inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.tc-lv3-hit::after {
+  content: ''; position: absolute; left: 50%; bottom: 7px; width: 20px; height: 11px; margin-left: -10px; pointer-events: none;
+  border-radius: 50% 50% 0 0 / 80% 80% 0 0;
+  background: linear-gradient(90deg, #2a2b2e 0%, #9a9c9f 40%, #5c5e61 70%, #1d1e20 100%);
 }
 .tc-lv3-arm {
-  position: absolute; left: 50%; bottom: 17px; display: block; width: 0; height: 56px;
+  position: absolute; left: 50%; bottom: 15px; display: block; width: 0; height: 54px;
   transform-origin: 50% 100%; transform-style: preserve-3d;
   transform: rotateX(var(--a, 0deg));
   transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
   pointer-events: none;
 }
 .tc-lv3-hit.is-drag .tc-lv3-arm { transition: none; }
-/* dull steel shaft */
+/* thick shaft in old hammer-finish paint, rubbed down to bare steel where the hand slides */
 .tc-lv3-rod {
-  position: absolute; left: -3px; bottom: 0; display: block; width: 6px; height: 100%;
-  background: linear-gradient(90deg, #2b2c30 0%, #8b8d92 35%, #b3b5ba 50%, #6a6c71 70%, #222327 100%);
-}
-/* pear-shaped black grip with ribbing: tilts together with the shaft, so perspective squeezes it */
-.tc-lv3-grip {
-  position: absolute; left: 0; top: -34px; display: block; width: 24px; height: 42px; margin-left: -12px;
-  border-radius: 46% 46% 38% 38% / 30% 30% 70% 70%;
+  position: absolute; left: -4px; bottom: 0; display: block; width: 8px; height: 100%;
   background:
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 1px, rgba(0, 0, 0, 0.3) 1px 4px),
-    linear-gradient(90deg, #050506 0%, #2b2b30 30%, #3d3d43 42%, #17171a 70%, #050506 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    linear-gradient(180deg, transparent 0 36%, rgba(190, 192, 196, 0.16) 52%, rgba(190, 192, 196, 0.3) 66%, rgba(190, 192, 196, 0.12) 82%, transparent 92%),
+    linear-gradient(90deg, #1a1d17 0%, #565b4d 34%, #6d7265 48%, #3a3e33 72%, #14160f 100%);
 }
-/* steel collar where the shaft enters the grip */
-.tc-lv3-grip::after {
-  content: ''; position: absolute; left: 50%; bottom: -3px; width: 12px; height: 4px; margin-left: -6px; border-radius: 1px;
-  background: linear-gradient(90deg, #3a3b40, #a9abb0 50%, #3a3b40);
+/* lock nut under the knob */
+.tc-lv3-rod::after {
+  content: ''; position: absolute; left: -3px; top: 0; width: 14px; height: 8px; border-radius: 1px;
+  background: linear-gradient(90deg, #2a2b2e, #a7a9ad 45%, #3a3b3e);
+}
+/* round ebonite knob, dull, with a small worn highlight */
+.tc-lv3-grip {
+  position: absolute; left: 0; top: -27px; display: block; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%;
+  transform: rotateX(calc(var(--a, 0deg) * -1)); /* the ball stays round while the shaft tilts */
+  background:
+    radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.3) 0 5%, transparent 26%),
+    radial-gradient(circle at 50% 46%, #3b2a22 0%, #1d130f 68%, #0a0605 100%);
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .tc-facts { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 0 4px 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
