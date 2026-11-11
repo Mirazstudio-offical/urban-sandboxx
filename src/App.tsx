@@ -6214,8 +6214,8 @@ export default function App() {
         />
       </div>
 
-      {/* BOTTOM-CENTER DETAILED VEHICLE INSTRUMENT CLUSTER */}
-      {isInVehicle && (() => {
+      {/* BOTTOM-CENTER DETAILED VEHICLE INSTRUMENT CLUSTER (phones: the crane cab levers take this spot) */}
+      {isInVehicle && !(isMobileTouch && playerRef.current?.craneOperatorActive) && (() => {
         const playerCar = worldRef.current && playerRef.current
           ? worldRef.current.vehicles.find((v) => v.id === playerRef.current.currentVehicleId) || null
           : null;
