@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { togglePto, isPtoOn, hasPtoDrive, vehicleHasPto } from '../ptoSystem';
 import { Player, GameWorld, Vehicle } from '../types';
 import { 
   Lightbulb,
@@ -946,44 +947,38 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
             </div>
           )}
 
-          {/* ================= 15. SPECIAL: TRUCK WATER / VACUUM PTO PUMP ================= */}
-          {(veh.type === 'truck_water' || veh.type === 'fire_engine' || veh.fluidTank?.hasWaterHose || isVehicleVacuumTruck(veh)) && (
-            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                  {isVehicleVacuumTruck(veh) ? 'КОМ / ВАКУУМ-НАСОС' : 'КОМ / ВОДОНАСОС'}
+          {/* ================= 15. КОМ (the only power take-off switch in the game) ================= */}
+          {vehicleHasPto(veh) && (() => {
+            const on = isPtoOn(veh);
+            const drive = hasPtoDrive(veh);
+            const what = isVehicleCraneTruck(veh) ? 'ГИДРОНАСОС КРАНА' : isVehicleVacuumTruck(veh) ? 'ВАКУУМ-НАСОС' : 'ВОДОНАСОС';
+            return (
+              <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">КОМ / {what}</span>
+                  <div className={`w-2.5 h-2.5 rounded-none border border-black ${drive ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'}`} />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => togglePto(veh, player)}
+                  className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
+                    on
+                      ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                      : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
+                  }`}
+                >
+                  <Gauge className="w-4 h-4" />
+                  <span className="text-[11px] font-mono font-black uppercase">{on ? 'КОМ: ВКЛ' : 'КОМ: ВЫКЛ'}</span>
+                  {on ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
+                </button>
+
+                <span className="text-[8px] text-[#5a6272] font-mono mt-2">
+                  {on && !drive ? 'Заведите двигатель: давления пока нет' : 'Включают на стоянке с работающим двигателем'}
                 </span>
-                <div 
-                  className={`w-2.5 h-2.5 rounded-none border border-black ${
-                    veh.isPtoActive ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
-                  }`} 
-                />
               </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  veh.isPtoActive = !veh.isPtoActive;
-                }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                  veh.isPtoActive
-                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <Gauge className="w-4 h-4" />
-                <span className="text-[11px] font-mono font-black uppercase">
-                  {veh.isPtoActive ? 'НАСОС: ВКЛ' : 'НАСОС: ВЫКЛ'}
-                </span>
-                {veh.isPtoActive ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-              </button>
-
-              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-                {isVehicleVacuumTruck(veh) ? 'Вакуумный насос КО-503 / ВК-6М2' : 'Коробка отбора мощности'}
-              </span>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ================= 15B. VACUUM TRUCK 4-WAY VALVE (SUCTION / DISCHARGE) ================= */}
           {isVehicleVacuumTruck(veh) && veh.fluidTank && (
@@ -1076,8 +1071,7 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
           {/* ================= 17. SPECIAL: KS-3577 CHASSIS CAB CRANE CONTROLS ================= */}
           {isVehicleCraneTruck(veh) && (() => {
             const isEngineRunning = veh.engineState ? veh.engineState.engineRunning : true;
-            const isPtoActive = veh.isPtoActive !== false;
-            const hasHydraulicPressure = isEngineRunning && isPtoActive;
+            const hasHydraulicPressure = hasPtoDrive(veh);
 
             return (
               <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg col-span-1 sm:col-span-2">
@@ -1091,48 +1085,8 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
                 </div>
 
                 <p className="text-[8.5px] font-mono text-[#9ba3af] mt-1.5 leading-relaxed">
-                  Крановые операции производятся из поворотной кабины крановщика. Из кабины шасси
-                  управляется коробка отбора мощности (КОМ), питающая гидронасос.
+                  Краном управляют из поворотной кабины: на неё поднимаются снаружи по лесенке. Гидронасос питает КОМ (карточка выше).
                 </p>
-
-                <div className="grid grid-cols-2 gap-2 mt-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sound.playButtonPress();
-                      veh.isPtoActive = !veh.isPtoActive;
-                      if (veh.isPtoActive) sound.playHydraulicHiss(0.3);
-                    }}
-                    className={`py-2 px-2.5 rounded-[2px] border flex items-center justify-between text-[9.5px] font-mono font-black transition-all cursor-pointer ${
-                      isPtoActive
-                        ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
-                        : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Power className="w-3.5 h-3.5" />
-                      <span>КОМ (ПРИВОД НАСОСА)</span>
-                    </span>
-                    <span className="font-bold">{isPtoActive ? 'ВКЛ' : 'ВЫКЛ'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (player) {
-                        player.craneOperatorActive = true;
-                        veh.craneOperatorActive = true;
-                        veh.craneControlMode = true;
-                        sound.playCarDoor();
-                        onClose();
-                      }
-                    }}
-                    className="py-2 px-2.5 rounded-[2px] bg-[#eab308] hover:bg-[#ca8a04] text-black border border-[#ca8a04] text-[9.5px] font-mono font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-                  >
-                    <Anchor className="w-3.5 h-3.5" />
-                    <span>В КАБИНУ КРАНОВЩИКА</span>
-                  </button>
-                </div>
 
                 <span className="text-[8px] text-[#5a6272] font-mono mt-2">
                   * Выдвижение опор производится снаружи на наружном пульте шасси
@@ -1146,7 +1100,7 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
         {/* Bottom Status / Instructions Bar */}
         <div className="mt-5 pt-3 border-t border-[#2a2e38] flex flex-wrap items-center justify-between gap-2 text-[9px] font-mono text-[#9ba3af]">
           <div>
-            Управление: клик мыши по тумблеру или клавиши на клавиатуре <span className="text-[#c68a35] font-bold">[J, L, U, Y, X, Z, C, K, P, O, V, H]</span>
+            Управление: клик мыши по тумблеру или клавиши на клавиатуре <span className="text-[#c68a35] font-bold">[J, L, U, Y, X, Z, C, K, O, V, H]</span>
           </div>
           <button
             type="button"

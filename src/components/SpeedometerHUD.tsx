@@ -1,3 +1,4 @@
+import { isPtoOn } from '../ptoSystem';
 import React, { useState } from 'react';
 import { Vehicle, CarType, WeatherType, GameCalendarState } from '../types';
 import { getVehicleRequiredKeyType } from '../items';
@@ -1547,36 +1548,6 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               <span>L</span>
             </button>
 
-            {/* Water Truck PTO / Pump Drive Button (P) */}
-            {(vehicle?.type === 'truck_water' || vehicle?.type === 'fire_engine') && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (vehicle) {
-                    vehicle.isPtoActive = !vehicle.isPtoActive;
-                    sound.playButtonPress();
-                  }
-                }}
-                className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                  vehicle.isPtoActive && isEngineRunning
-                    ? 'bg-blue-600/30 border-blue-400 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.3)] animate-pulse font-extrabold'
-                    : vehicle.isPtoActive
-                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                }`}
-                title="КОМ (Коробка Отбора Мощности / Привод Насоса) [P]"
-              >
-                <Gauge className="w-3.5 h-3.5 text-blue-400" />
-                <span>
-                  КОМ [P]: {
-                    vehicle.isPtoActive && isEngineRunning
-                      ? `${(3.8 + Math.min(1.0, Math.max(0, ((vehicle.engineState?.engineRPM || 800) - 750) / 1850)) * 3.8).toFixed(1)} БАР`
-                      : (vehicle.isPtoActive ? 'НЕТ ДВС' : 'САМОТЁК')
-                  }
-                </span>
-              </button>
-            )}
-
             {/* Water Truck Washing Nozzles Button (G) */}
             {vehicle?.type === 'truck_water' && (
               <button
@@ -1589,7 +1560,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 }}
                 className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
                   vehicle.isWashingNozzlesActive
-                    ? vehicle.isPtoActive && isEngineRunning
+                    ? isPtoOn(vehicle) && isEngineRunning
                       ? 'bg-cyan-500/30 border-cyan-400 text-cyan-300 animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.2)] font-extrabold'
                       : 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
                     : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
@@ -1597,7 +1568,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 title="Поливомоечные сопла: Смывать мусор [G / N]"
               >
                 <Droplet className="w-3.5 h-3.5 text-cyan-400" />
-                <span>СОПЛА [G]: {vehicle.isWashingNozzlesActive ? (vehicle.isPtoActive && isEngineRunning ? 'ВКЛ' : 'САМОТЁК') : 'ВЫКЛ'}</span>
+                <span>СОПЛА [G]: {vehicle.isWashingNozzlesActive ? (isPtoOn(vehicle) && isEngineRunning ? 'ВКЛ' : 'САМОТЁК') : 'ВЫКЛ'}</span>
               </button>
             )}
 

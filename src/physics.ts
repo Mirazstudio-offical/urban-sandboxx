@@ -4,6 +4,7 @@ import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
+import { isPtoOn, hasPtoDrive, getPtoWorkingRPM } from './ptoSystem';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
 import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight } from './items';
@@ -4750,7 +4751,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     if (car.type === 'truck_water'&& car.isWashingNozzlesActive) {
       const curWater = fTank.currentVolume ?? fTank.currentAmount ?? 0;
       const isEngineRunning = !!car.engineState?.engineRunning;
-      const isPtoActive = !!car.isPtoActive;
+      const isPtoActive = isPtoOn(car);
       const isPumpPowered = isEngineRunning && isPtoActive;
 
       if (curWater <= 0) {
@@ -8086,7 +8087,7 @@ function updateTruckCraneSuperstructure(
 
   // 1. Hydraulic pressure from truck engine PTO (КОМ - Коробка отбора мощности)
   const isEngineRunning = vehicle.engineState ? vehicle.engineState.engineRunning : true;
-  const isPtoActive = vehicle.isPtoActive !== false;
+  const isPtoActive = isPtoOn(vehicle);
   const hasHydraulicPressure = isEngineRunning && isPtoActive;
 
   // 1. Outriggers hydraulic deployment animation
@@ -8491,6 +8492,11 @@ export function updateVehiclePhysics(
       }
 
       const stallThreshold = idleRPM * 0.55;
+
+      // КОМ drives a pump: the governor holds a raised idle so the hydraulics / vacuum / water pump get their flow
+      if (hasPtoDrive(vehicle)) {
+        idleRPM = Math.max(idleRPM, Math.min(getPtoWorkingRPM(vehicle), idleRPM + (redlineRPM - idleRPM) * 0.5));
+      }
       
       // Transfer Case Toggle Logic
       if (input.transferCaseToggle) {

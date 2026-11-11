@@ -1,3 +1,4 @@
+import { isPtoOn } from './ptoSystem';
 import { Vehicle } from './types';
 import { getVehicleOpticsMounts } from './vehicleHelpers';
 import {
@@ -2197,8 +2198,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     if (car.isWashingNozzlesActive && car.fluidTank && (car.fluidTank.currentVolume ?? car.fluidTank.currentAmount ?? 0) > 0) {
       ctx.save();
       const isEngineRunning = !!car.engineState?.engineRunning;
-      const isPtoOn = !!car.isPtoActive;
-      const isHighPressure = isEngineRunning && isPtoOn;
+      const isHighPressure = isEngineRunning && isPtoOn(car);
       const rpm = car.engineState?.engineRPM || 800;
       const rpmRatio = Math.min(1.0, Math.max(0, (rpm - 750) / 1850));
       const pressureFactor = isHighPressure ? (0.65 + rpmRatio * 0.55) : 0.15;

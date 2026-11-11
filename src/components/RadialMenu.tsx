@@ -615,13 +615,6 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                 </>
               )}
 
-              {(effVehType === 'truck_water' || effVehType === 'fire_engine') && (
-                <>
-                  <Sl>КОМ / водонасос</Sl>
-                  <Tile Icon={Gauge} cls="row" label="Насос" st={sfx(!!veh.isPtoActive)} on={!!veh.isPtoActive} onClick={click(() => { veh.isPtoActive = !veh.isPtoActive; })} />
-                </>
-              )}
-
               {veh.fluidTank && veh.fluidTank.capacity > 0 && (
                 <>
                   <Sl>Слив {getLiquidNameRu(veh.fluidTank.liquidType)}</Sl>

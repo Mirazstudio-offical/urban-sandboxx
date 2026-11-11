@@ -1,3 +1,4 @@
+import { isPtoOn } from './ptoSystem';
 import { Player, GameWorld, Vehicle, HeldWaterHose, HoseSegmentNode, HoseLeakPoint } from './types';
 import { getVehicleWaterHoseAnchor, ensureVehicleFluidTank, liquidTypeToStainType } from './vehicleHelpers';
 import { isVehicleVacuumTruck } from './truckChassisVariants';
@@ -245,7 +246,7 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
 
   // Pump pressure / vacuum calculation (КОМ - Коробка Отбора Мощности + Обороты двигателя)
   const isEngineRunning = !!veh.engineState?.engineRunning;
-  const isPtoActive = !!veh.isPtoActive || !!veh.isWashingNozzlesActive;
+  const isPtoActive = isPtoOn(veh) || !!veh.isWashingNozzlesActive;
   const isPumpPowered = isEngineRunning && isPtoActive;
 
   const rpm = veh.engineState?.engineRPM || 800;
