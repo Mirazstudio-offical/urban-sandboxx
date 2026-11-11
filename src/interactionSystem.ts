@@ -1,5 +1,5 @@
 import { Building, GameWorld, GasPumpDispenser, GroundItem, InventoryItem, LitterItem, Player, Vehicle } from './types';
-import { CAR_CONFIGS, getVehicleFuelCapPosition, getVehicleWaterHoseAnchor, getVehicleVacuumValveWorldPos, getLiquidNameRu, isTrailerVehicle, canVehicleHaveHitch } from './vehicleHelpers';
+import { CAR_CONFIGS, ensureVehicleFluidTank, getVehicleFuelCapPosition, getVehicleWaterHoseAnchor, getVehicleVacuumValveWorldPos, getLiquidNameRu, isTrailerVehicle, canVehicleHaveHitch } from './vehicleHelpers';
 import { getAllBuildingEntrances } from './physics';
 import { getBuildingLayout, getBuildingFloorsCount, getApartmentDoorSegment } from './buildingInteriors';
 import { isPlayerNearGasStationCashier, getNearbyGasPump, getNearbyVehicleForFueling, FUEL_GRADES } from './gasStationSystem';
@@ -481,7 +481,7 @@ export function findActiveInteraction(
   // 1. WATER & VACUUM HOSE + EXTERNAL VALVES
   // ==========================================
   if (player.heldWaterHose) {
-    const veh = world.vehicles.find((v) => v.id === player.heldWaterHose?.vehicleId);
+    const veh = (world.vehicles || []).find((v) => v.id === player.heldWaterHose?.vehicleId);
     if (veh) {
       const anchor = getVehicleWaterHoseAnchor(veh) || { x: veh.x, y: veh.y };
       let reach = isTargetInPhysicalReach(px, py, facing, anchor.x, anchor.y, 64, 1.8, mouseWorldPos);
@@ -518,7 +518,7 @@ export function findActiveInteraction(
       }
     }
   } else {
-    for (const veh of world.vehicles) {
+    for (const veh of (world.vehicles || [])) {
       ensureVehicleFluidTank(veh);
       if (!veh.fluidTank?.hasWaterHose) continue;
       const anchor = getVehicleWaterHoseAnchor(veh) || { x: veh.x, y: veh.y };
@@ -573,7 +573,7 @@ export function findActiveInteraction(
   }
 
   // Наружная арматура вакуумных машин (4-ходовой кран сбоку и задвижка АНМ-53 сзади)
-  for (const veh of world.vehicles) {
+  for (const veh of (world.vehicles || [])) {
     if (!isVehicleVacuumTruck(veh) || !veh.fluidTank) continue;
     const vPos = getVehicleVacuumValveWorldPos(veh);
 

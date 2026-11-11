@@ -40,6 +40,7 @@ import {
   createDefaultVehicleDamage, 
   ensureVehicleDamage, 
   getVehicleFuelCapPosition, 
+  getVehicleWaterHoseAnchor,
   isTrailerVehicle, 
   PX_S_TO_SPEED_KMH, 
   hasRoadTrainLights, 
