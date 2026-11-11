@@ -5950,6 +5950,50 @@ export default function App() {
         return;
       }
 
+      // 0d2. Water / Vacuum Hose Pickup or Stow proximity fallback
+      if (p.heldWaterHose) {
+        const targetVeh = world.vehicles?.find(v => v.id === p.heldWaterHose?.vehicleId);
+        if (targetVeh) {
+          const anchor = getVehicleWaterHoseAnchor(targetVeh) || { x: targetVeh.x, y: targetVeh.y };
+          if (Math.hypot(p.x - anchor.x, p.y - anchor.y) < 70) {
+            const wasVac = !!p.heldWaterHose.isVacuumHose;
+            if (wasVac && targetVeh.fluidTank) {
+              targetVeh.fluidTank.drainValveOpen = false;
+            }
+            stowWaterHose(p, world);
+            addPlayerNotification(
+              p,
+              wasVac
+                ? 'Шиберная задвижка АНМ-53 перекрыта, вакуумный гофрорукав уложен в пенал.'
+                : 'Рукав смотан и закреплён на штатное место.',
+              'info'
+            );
+            sound.playUseItem();
+            setVitalsRefreshTick(t => t + 1);
+            return;
+          }
+        }
+      } else {
+        const nearWaterVeh = getNearbyWaterVehicle(p, world);
+        if (nearWaterVeh) {
+          takeWaterHose(p, nearWaterVeh, world);
+          const isVac = !!nearWaterVeh.fluidTank?.isVacuumTank || nearWaterVeh.type === 'trailer_vacuum';
+          const isJetter = !!p.heldWaterHose?.isJetterHose;
+          if (isJetter) {
+            addPlayerNotification(p, 'Каналопромывочный рукав РВД размотан с барабана КО-560. Включите КОМ и насос ВД для промывки.', 'info');
+          } else if (isVac) {
+            const gateState = nearWaterVeh.fluidTank?.drainValveOpen ? 'Шибер АНМ-53 открыт.' : 'Не забудьте открыть шиберную задвижку АНМ-53 и создать вакуум насосом!';
+            addPlayerNotification(p, `Заборный вакуумный рукав d=100 мм снят с пенала. ${gateState}`, 'info');
+          } else {
+            const sourceName = nearWaterVeh.type === 'truck_water' ? 'насосной станции водовоза' : 'крана бочки-цистерны';
+            addPlayerNotification(p, `Шланг размотан с ${sourceName}! Зажмите ЛКМ для подачи воды.`, 'info');
+          }
+          sound.playUseItem();
+          setVitalsRefreshTick(t => t + 1);
+          return;
+        }
+      }
+
       // 0e. Near Front Hood of a Vehicle
       if (world.vehicles) {
         for (const v of world.vehicles) {

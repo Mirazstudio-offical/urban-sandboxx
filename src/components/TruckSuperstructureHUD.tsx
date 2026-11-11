@@ -5,7 +5,6 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronUp,
-  Droplet,
   Gauge,
   Lightbulb,
   Link2,
@@ -15,20 +14,16 @@ import {
   RotateCw,
   ShieldAlert,
   Volume2,
-  Power,
 } from 'lucide-react';
 import { GameWorld, InputState, Player, Vehicle } from '../types';
 import {
   getVehicleCraneGeometry,
-  getVehicleVacuumBodyId,
   isVehicleCraneTruck,
-  isVehicleVacuumTruck,
   resolveVehicleTruckFrameAndBody,
 } from '../truckChassisVariants';
-import { getLiquidNameRu, getVehicleVacuumValveWorldPos } from '../vehicleHelpers';
 import { toggleCraneHookAttach } from '../physics';
 import { sound } from '../audio';
-import { hasPtoDrive, isPtoOn } from '../ptoSystem';
+import { hasPtoDrive } from '../ptoSystem';
 import './truckConsole.css';
 
 interface TruckSuperstructureHUDProps {
@@ -283,55 +278,19 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
 
   if (!player || !world) return null;
 
-  // Active vehicle: the one the player drives (or its towed vacuum trailer), or the vacuum truck connected to the held hose / nearby on foot
-  let activeVehicle: Vehicle | null = null;
-  let towingTractor: Vehicle | null = null;
+  // Active vehicle: only when player is inside a crane truck cab
+  if (!player.isInVehicle || !player.currentVehicleId) return null;
+  const activeVehicle = world.vehicles.find((v) => v.id === player.currentVehicleId) || null;
+  if (!activeVehicle || !isVehicleCraneTruck(activeVehicle)) return null;
 
-  if (player.isInVehicle && player.currentVehicleId) {
-    const driven = world.vehicles.find((v) => v.id === player.currentVehicleId) || null;
-    if (driven) {
-      if (isVehicleCraneTruck(driven) || isVehicleVacuumTruck(driven)) {
-        activeVehicle = driven;
-      } else if (driven.trailerId) {
-        const trailer = world.vehicles.find((v) => v.id === driven.trailerId) || null;
-        if (trailer && isVehicleVacuumTruck(trailer)) {
-          activeVehicle = trailer;
-          towingTractor = driven;
-        }
-      }
-    }
-  } else if (player.heldWaterHose) {
-    activeVehicle = world.vehicles.find((v) => v.id === player.heldWaterHose?.vehicleId) || null;
-  } else {
-    for (const v of world.vehicles) {
-      if (!isVehicleVacuumTruck(v) || !v.fluidTank) continue;
-      if (Math.hypot(player.x - v.x, player.y - v.y) > 150) continue;
-      const vPos = getVehicleVacuumValveWorldPos(v);
-      const dRear = Math.hypot(player.x - vPos.rearGateValve.x, player.y - vPos.rearGateValve.y);
-      const dPump = Math.hypot(player.x - vPos.fourWayValve.x, player.y - vPos.fourWayValve.y);
-      if (dRear <= 64 || dPump <= 64) {
-        activeVehicle = v;
-        break;
-      }
-    }
-  }
-
-  if (!activeVehicle) return null;
-
-  if (!towingTractor && activeVehicle.type === 'trailer_vacuum') {
-    towingTractor = world.vehicles.find((v) => v.trailerId === activeVehicle!.id) || null;
-  }
-
-  const isCrane = isVehicleCraneTruck(activeVehicle);
-  const isVacuum = isVehicleVacuumTruck(activeVehicle);
-
-  if (!isCrane && !isVacuum) return null;
+  const isOperatorInCraneCab = !!(player.isInVehicle && (player.craneOperatorActive || activeVehicle.craneOperatorActive));
+  if (!isOperatorInCraneCab) return null;
 
   const resolvedTruck = resolveVehicleTruckFrameAndBody(activeVehicle);
   const bodyTitle =
     resolvedTruck?.body.modelCode ||
     resolvedTruck?.body.nameRu ||
-    (activeVehicle.type === 'trailer_vacuum' ? 'ПЦВ-4.2 Вакуумный' : 'Спецнадстройка');
+    'Спецнадстройка';
   const veh = activeVehicle;
 
   const FoldButton = (
@@ -366,441 +325,147 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
   }
 
   // =========================================================================
-  // 1. BOOM CRANE (КС-3577 «Ивановец»)
+  // BOOM CRANE (КС-3577 «Ивановец»)
   // =========================================================================
-  if (isCrane) {
-    const isOperatorInCraneCab = !!(player.isInVehicle && (player.craneOperatorActive || veh.craneOperatorActive));
-    const hasPressure = hasPtoDrive(veh);
+  const hasPressure = hasPtoDrive(veh);
 
-    const geom = getVehicleCraneGeometry(veh);
-    const deg = Math.round((geom.turretAngle * 180) / Math.PI);
-    const outriggerPct = Math.round((geom.outriggerExt ?? 0) * 100);
-    const outriggersOk = (geom.outriggerExt ?? 0) >= 0.7;
+  const geom = getVehicleCraneGeometry(veh);
+  const deg = Math.round((geom.turretAngle * 180) / Math.PI);
+  const outriggerPct = Math.round((geom.outriggerExt ?? 0) * 100);
+  const outriggersOk = (geom.outriggerExt ?? 0) >= 0.7;
 
-    const hookedVeh = veh.craneHookedVehicleId ? world.vehicles.find((v) => v.id === veh.craneHookedVehicleId) : null;
+  const hookedVeh = veh.craneHookedVehicleId ? world.vehicles.find((v) => v.id === veh.craneHookedVehicleId) : null;
 
-    const hookedMassTons = hookedVeh ? (hookedVeh.mass ? +(hookedVeh.mass / 1000).toFixed(1) : 1.8) : 0.0;
-    const loadMomentPct = Math.min(100, Math.round((hookedMassTons / Math.max(0.1, geom.maxLoadTons)) * 100));
-    const workingRadiusMeters = +(geom.totalBoomReachPx * 0.28).toFixed(1);
-    const boomAngleDeg = Math.round(15 + (veh.craneBoomElevation ?? 0.25) * 55);
-    const barTone = loadMomentPct > 95 ? 'is-bad' : loadMomentPct > 75 ? 'is-warn' : '';
-    const locked = !outriggersOk || !hasPressure;
+  const hookedMassTons = hookedVeh ? (hookedVeh.mass ? +(hookedVeh.mass / 1000).toFixed(1) : 1.8) : 0.0;
+  const loadMomentPct = Math.min(100, Math.round((hookedMassTons / Math.max(0.1, geom.maxLoadTons)) * 100));
+  const workingRadiusMeters = +(geom.totalBoomReachPx * 0.28).toFixed(1);
+  const boomAngleDeg = Math.round(15 + (veh.craneBoomElevation ?? 0.25) * 55);
+  const barTone = loadMomentPct > 95 ? 'is-bad' : loadMomentPct > 75 ? 'is-warn' : '';
+  const locked = !outriggersOk || !hasPressure;
 
-    const toggleHook = () => {
-      toggleCraneHookAttach(veh, world, player);
-      onForceUpdate?.();
-    };
-    const toggleLight = () => {
-      sound.playButtonPress();
-      veh.craneSpotlightOn = !veh.craneSpotlightOn;
-      onForceUpdate?.();
-    };
-
-    const status = !outriggersOk
-      ? { cls: 'is-bad', text: 'Нет опор' }
-      : !hasPressure
-      ? { cls: 'is-amber', text: 'Нет давления' }
-      : { cls: 'is-good', text: 'Норма' };
-
-    // --- A: driver's cab. Nothing here: КОМ is in the vehicle menu, outriggers on the frame box (E), the crane cab up the ladder (F). ---
-    if (!isOperatorInCraneCab) return null;
-
-    // --- B: revolving operator cab (reached on foot by the ladder, left with F) ---
-    const slew = {
-      neg: { key: 'craneTurretLeft' as InputFlag, icon: <RotateCcw />, cap: 'A', title: 'Башня влево [A]' },
-      pos: { key: 'craneTurretRight' as InputFlag, icon: <RotateCw />, cap: 'D', title: 'Башня вправо [D]' },
-    };
-    const elev = {
-      neg: { key: 'craneBoomDown' as InputFlag, icon: <ArrowDown />, cap: 'S', title: 'Опустить стрелу [S]' },
-      pos: { key: 'craneBoomUp' as InputFlag, icon: <ArrowUp />, cap: 'W', title: 'Поднять стрелу [W]' },
-    };
-    const tele = {
-      neg: { key: 'craneBoomRetract' as InputFlag, icon: <ChevronDown />, cap: 'Q', title: 'Втянуть секции [Q]' },
-      pos: { key: 'craneBoomExtend' as InputFlag, icon: <ChevronUp />, cap: 'E', title: 'Выдвинуть секции [E]' },
-    };
-    const winch = {
-      neg: { key: 'craneHookDown' as InputFlag, icon: <ArrowDown />, cap: 'F', title: 'Майна, опустить крюк [F]' },
-      pos: { key: 'craneHookUp' as InputFlag, icon: <ArrowUp />, cap: 'R', title: 'Вира, поднять крюк [R]' },
-    };
-    const lockNote = !outriggersOk ? 'Опоры не выставлены' : !hasPressure ? 'Нет давления, включите КОМ' : '';
-
-    if (isMobileTouch) {
-      return (
-        <>
-          <div className="tc tc-read-mini" {...stopWorld}>
-            <div className="tc-mini" title="Загрузка по моменту">
-              <b>{hookedMassTons > 0 ? hookedMassTons.toFixed(1) : '0.0'} / {geom.maxLoadTons.toFixed(1)} т</b>
-              <div className={`tc-bar ${barTone}`}>
-                <i style={{ width: `${Math.max(4, loadMomentPct)}%` }} />
-              </div>
-            </div>
-            <div className="tc-mini-sub">R {workingRadiusMeters} м, {boomAngleDeg}°</div>
-            {lockNote && <div className="tc-state-line">{lockNote}</div>}
-          </div>
-
-          <div className="tc tc-bank is-cab" {...stopWorld}>
-            <SlideLever name="Поворот" inputRef={inputRef} disabled={locked} {...slew} />
-            <SlideLever name="Стрела" inputRef={inputRef} disabled={locked} {...elev} />
-            <SlideLever name="Телескоп" inputRef={inputRef} disabled={locked} {...tele} />
-            <SlideLever name="Лебёдка" inputRef={inputRef} disabled={!hasPressure} {...winch} />
-          </div>
-
-          <div className="tc tc-strip is-right" {...stopWorld}>
-            <TapKey
-              onClick={toggleHook}
-              title={hookedVeh ? 'Отцепить строп' : 'Зацепить строп'}
-              icon={<Link2 />}
-              tone={hookedVeh ? 'good' : undefined}
-              isIcon
-            />
-            <TapKey onClick={() => sound.playCraneHorn()} title="Сигнал крановщика" icon={<Volume2 />} isIcon />
-            <TapKey onClick={toggleLight} title="Фара на стреле" icon={<Lightbulb />} tone={veh.craneSpotlightOn ? 'on' : undefined} isIcon />
-          </div>
-        </>
-      );
-    }
-
-    return (
-      <div className="tc tc-card tc-panel" {...stopWorld}>
-        <div className="tc-head">
-          <Anchor style={{ width: 16, height: 16, color: '#e0ab45' }} />
-          <span className="tc-title">Кабина крана</span>
-          <span className={`tc-tag ${status.cls}`}>{status.text}</span>
-          {FoldButton}
-        </div>
-
-        <div className="tc-read">
-          <div className="tc-read-top">
-            <span className="tc-read-k">Груз / максимум</span>
-            <span className="tc-read-v">
-              {hookedMassTons > 0 ? hookedMassTons.toFixed(1) : '0.0'}
-              <small>/ {geom.maxLoadTons.toFixed(1)} т</small>
-            </span>
-          </div>
-          <div className={`tc-bar ${barTone}`}>
-            <i style={{ width: `${Math.max(2, loadMomentPct)}%` }} />
-          </div>
-          <div className="tc-stats">
-            <div className="tc-stat"><span>Вылет</span><b>{workingRadiusMeters} м</b></div>
-            <div className="tc-stat"><span>Стрела</span><b>{geom.boomLengthMeters.toFixed(1)} м</b></div>
-            <div className="tc-stat"><span>Наклон</span><b>{boomAngleDeg}°</b></div>
-            <div className="tc-stat"><span>Поворот</span><b>{deg > 0 ? `+${deg}` : deg}°</b></div>
-          </div>
-        </div>
-
-        {!outriggersOk && (
-          <div className="tc-warn">
-            <ShieldAlert />
-            <span>Опоры {outriggerPct}%. Спуститесь и выставьте их на пульте у рамы</span>
-          </div>
-        )}
-
-        <div className="tc-levers">
-          <Lever name="Поворот" inputRef={inputRef} disabled={locked} {...slew} />
-          <Lever name="Подъём стрелы" inputRef={inputRef} disabled={locked} {...elev} />
-          <Lever name="Телескоп" inputRef={inputRef} disabled={locked} {...tele} />
-          <Lever name="Лебёдка" inputRef={inputRef} disabled={!hasPressure} {...winch} />
-        </div>
-
-        <div className="tc-row c3">
-          <TapKey
-            onClick={toggleHook}
-            title="Зацепить или отцепить четырёхветвевой строп [Пробел]"
-            icon={<Link2 />}
-            label={hookedVeh ? 'Отцепить' : 'Строп'}
-            tone={hookedVeh ? 'good' : undefined}
-          />
-          <TapKey onClick={() => sound.playCraneHorn()} title="Сигнал крановщика [H]" icon={<Volume2 />} label="Сигнал" />
-          <TapKey onClick={toggleLight} title="Фара на стреле [L]" icon={<Lightbulb />} label="Фара" tone={veh.craneSpotlightOn ? 'on' : undefined} />
-        </div>
-      </div>
-    );
-  }
-
-  // =========================================================================
-  // 2. VACUUM CISTERN / SEWAGE JETTER (КО-503В / КО-505А / КО-560 / ПЦВ)
-  // =========================================================================
-  const tank = veh.fluidTank;
-  if (!tank) return null;
-
-  const vacBodyId = getVehicleVacuumBodyId(veh);
-  const isKo505 = vacBodyId === 'body_vacuum_sludge_ko505';
-  const isKo560 = vacBodyId === 'body_vacuum_kombi_ko560';
-
-  const powerVeh = towingTractor || veh;
-  const ptoOn = isPtoOn(powerVeh) || isPtoOn(veh);
-  const hasPower = hasPtoDrive(powerVeh) || hasPtoDrive(veh);
-
-  const isInCab = !!player.isInVehicle;
-  const valvePos = getVehicleVacuumValveWorldPos(veh);
-  const distToPumpBay = Math.hypot(player.x - valvePos.fourWayValve.x, player.y - valvePos.fourWayValve.y);
-  const distToRearGate = Math.hypot(player.x - valvePos.rearGateValve.x, player.y - valvePos.rearGateValve.y);
-  const canReachPumpBay = !isInCab && distToPumpBay <= 64;
-  const canReachRearGate = !isInCab && distToRearGate <= 64;
-
-  const vol = Math.round(tank.currentVolume ?? tank.currentAmount ?? 0);
-  const cap = Math.max(1, tank.capacity);
-  const fillPct = Math.min(100, Math.round((vol / cap) * 100));
-  const mode = tank.vacuumPumpMode ?? 'suction';
-  const isFull = vol >= cap - 1;
-  const spuCutoff = !!(tank.spuCutoffActive || (isFull && mode === 'suction'));
-  const vacBar = +(tank.vacuumPressureBar ?? 0).toFixed(2);
-  const vacBarStr = `${vacBar > 0 ? '+' : ''}${vacBar.toFixed(2)} бар`;
-  const liquidLabel = vol > 0 ? getLiquidNameRu(tank.liquidType) : 'Пусто';
-  const fillTone = spuCutoff ? 'is-bad' : mode === 'suction' ? 'is-blue' : 'is-amber';
-
-  const toggleMode = () => {
-    if (!canReachPumpBay) return;
+  const toggleHook = () => {
+    toggleCraneHookAttach(veh, world, player);
+    onForceUpdate?.();
+  };
+  const toggleLight = () => {
     sound.playButtonPress();
-    tank.vacuumPumpMode = mode === 'suction' ? 'discharge' : 'suction';
-    onForceUpdate?.();
-  };
-  const toggleDrain = () => {
-    if (!canReachRearGate) return;
-    sound.playButtonPress();
-    tank.drainValveOpen = !tank.drainValveOpen;
-    onForceUpdate?.();
-  };
-  const toggleJetterPump = () => {
-    if (!isInCab) return;
-    sound.playButtonPress();
-    tank.isJetterPumpActive = !tank.isJetterPumpActive;
-    if (tank.isJetterPumpActive) sound.playHydraulicHiss(0.25);
-    onForceUpdate?.();
-  };
-  const toggleHoseMode = () => {
-    if ((!canReachPumpBay && !canReachRearGate) || tank.isWaterHoseDeployed) return;
-    sound.playButtonPress();
-    tank.activeHoseMode = tank.activeHoseMode === 'jetter' ? 'vacuum' : 'jetter';
-    onForceUpdate?.();
-  };
-  const toggleRearDoor = () => {
-    if (!isInCab || (!hasPower && !tank.rearDoorOpen)) return;
-    sound.playButtonPress();
-    tank.rearDoorOpen = !tank.rearDoorOpen;
-    sound.playHydraulicHiss(0.32);
-    onForceUpdate?.();
-  };
-  const rotateSludgeBoom = (delta: number) => {
-    if (!isInCab || !hasPower) return;
-    sound.playHydraulicHiss(0.18);
-    const cur = tank.sludgeBoomAngle ?? 0;
-    tank.sludgeBoomAngle = Math.max(-1.35, Math.min(1.35, +(cur + delta).toFixed(2)));
-    onForceUpdate?.();
-  };
-  const extendSludgeBoom = (delta: number) => {
-    if (!isInCab || !hasPower) return;
-    sound.playHydraulicHiss(0.18);
-    const cur = tank.sludgeBoomExtension ?? 0.35;
-    tank.sludgeBoomExtension = Math.max(0, Math.min(1, +(cur + delta).toFixed(2)));
+    veh.craneSpotlightOn = !veh.craneSpotlightOn;
     onForceUpdate?.();
   };
 
-  const modeKey = (
-    <TapKey
-      onClick={toggleMode}
-      disabled={!canReachPumpBay}
-      title={
-        canReachPumpBay
-          ? 'Четырёхходовой кран: откачка (вакуум) или напорный слив'
-          : isInCab
-          ? 'Ручной 4-ходовой кран расположен снаружи на насосном отсеке'
-          : 'Подойдите к насосному отсеку сбоку кузова, чтобы переключить кран'
-      }
-      icon={<Droplet />}
-      label={mode === 'suction' ? 'Откачка' : 'Напор'}
-      tone={mode === 'suction' ? 'blue' : 'on'}
-    />
-  );
-  const drainKey = (
-    <TapKey
-      onClick={toggleDrain}
-      disabled={!canReachRearGate}
-      title={
-        canReachRearGate
-          ? 'Задняя шиберная задвижка АНМ-53 (открывает проток через рукав или слив)'
-          : isInCab
-          ? 'Ручная шиберная задвижка АНМ-53 расположена сзади на днище цистерны'
-          : 'Подойдите к задней задвижке цистерны, чтобы открыть или закрыть шибер'
-      }
-      label={tank.drainValveOpen ? 'Шибер открыт' : 'Шибер закрыт'}
-      tone={tank.drainValveOpen ? 'bad' : undefined}
-    />
-  );
+  const status = !outriggersOk
+    ? { cls: 'is-bad', text: 'Нет опор' }
+    : !hasPressure
+    ? { cls: 'is-amber', text: 'Нет давления' }
+    : { cls: 'is-good', text: 'Норма' };
+
+  const slew = {
+    neg: { key: 'craneTurretLeft' as InputFlag, icon: <RotateCcw />, cap: 'A', title: 'Башня влево [A]' },
+    pos: { key: 'craneTurretRight' as InputFlag, icon: <RotateCw />, cap: 'D', title: 'Башня вправо [D]' },
+  };
+  const elev = {
+    neg: { key: 'craneBoomDown' as InputFlag, icon: <ArrowDown />, cap: 'S', title: 'Опустить стрелу [S]' },
+    pos: { key: 'craneBoomUp' as InputFlag, icon: <ArrowUp />, cap: 'W', title: 'Поднять стрелу [W]' },
+  };
+  const tele = {
+    neg: { key: 'craneBoomRetract' as InputFlag, icon: <ChevronDown />, cap: 'Q', title: 'Втянуть секции [Q]' },
+    pos: { key: 'craneBoomExtend' as InputFlag, icon: <ChevronUp />, cap: 'E', title: 'Выдвинуть секции [E]' },
+  };
+  const winch = {
+    neg: { key: 'craneHookDown' as InputFlag, icon: <ArrowDown />, cap: 'F', title: 'Майна, опустить крюк [F]' },
+    pos: { key: 'craneHookUp' as InputFlag, icon: <ArrowUp />, cap: 'R', title: 'Вира, поднять крюк [R]' },
+  };
+  const lockNote = !outriggersOk ? 'Опоры не выставлены' : !hasPressure ? 'Нет давления, включите КОМ' : '';
 
   if (isMobileTouch) {
     return (
-      <div className="tc tc-strip is-vac" {...stopWorld}>
-        <div className="tc-vac-fill" title={`Цистерна ${fillPct}% (${vacBarStr})`}>
-          <b>{fillPct}%</b>
-          <div className={`tc-bar ${fillTone}`}><i style={{ width: `${fillPct}%` }} /></div>
+      <>
+        <div className="tc tc-read-mini" {...stopWorld}>
+          <div className="tc-mini" title="Загрузка по моменту">
+            <b>{hookedMassTons > 0 ? hookedMassTons.toFixed(1) : '0.0'} / {geom.maxLoadTons.toFixed(1)} т</b>
+            <div className={`tc-bar ${barTone}`}>
+              <i style={{ width: `${Math.max(4, loadMomentPct)}%` }} />
+            </div>
+          </div>
+          <div className="tc-mini-sub">R {workingRadiusMeters} м, {boomAngleDeg}°</div>
+          {lockNote && <div className="tc-state-line">{lockNote}</div>}
         </div>
-        <TapKey
-          onClick={toggleMode}
-          disabled={!canReachPumpBay}
-          title={
-            canReachPumpBay
-              ? mode === 'suction'
-                ? 'Откачка: переключить на напорный слив'
-                : 'Напор: переключить на откачку'
-              : 'Подойдите к насосному отсеку сбоку кузова'
-          }
-          icon={<Droplet />}
-          tone={mode === 'suction' ? 'blue' : 'on'}
-          isIcon
-        />
-        <TapKey
-          onClick={toggleDrain}
-          disabled={!canReachRearGate}
-          title={
-            canReachRearGate
-              ? tank.drainValveOpen
-                ? 'Шибер открыт'
-                : 'Шибер закрыт'
-              : 'Подойдите к задней задвижке АНМ-53'
-          }
-          icon={<ChevronDown />}
-          tone={tank.drainValveOpen ? 'bad' : undefined}
-          isIcon
-        />
-      </div>
+
+        <div className="tc tc-bank is-cab" {...stopWorld}>
+          <SlideLever name="Поворот" inputRef={inputRef} disabled={locked} {...slew} />
+          <SlideLever name="Стрела" inputRef={inputRef} disabled={locked} {...elev} />
+          <SlideLever name="Телескоп" inputRef={inputRef} disabled={locked} {...tele} />
+          <SlideLever name="Лебёдка" inputRef={inputRef} disabled={!hasPressure} {...winch} />
+        </div>
+
+        <div className="tc tc-strip is-right" {...stopWorld}>
+          <TapKey
+            onClick={toggleHook}
+            title={hookedVeh ? 'Отцепить строп' : 'Зацепить строп'}
+            icon={<Link2 />}
+            tone={hookedVeh ? 'good' : undefined}
+            isIcon
+          />
+          <TapKey onClick={() => sound.playCraneHorn()} title="Сигнал крановщика" icon={<Volume2 />} isIcon />
+          <TapKey onClick={toggleLight} title="Фара на стреле" icon={<Lightbulb />} tone={veh.craneSpotlightOn ? 'on' : undefined} isIcon />
+        </div>
+      </>
     );
   }
-
-  const cleanVol = Math.round(tank.cleanWaterVolume ?? 0);
-  const cleanCap = Math.max(1, tank.cleanWaterCapacity ?? 2500);
-  const cleanPct = Math.min(100, Math.round((cleanVol / cleanCap) * 100));
 
   return (
     <div className="tc tc-card tc-panel" {...stopWorld}>
       <div className="tc-head">
-        <Gauge style={{ width: 16, height: 16, color: '#e0ab45' }} />
-        <span className="tc-title">{bodyTitle}</span>
-        <span className={`tc-tag ${spuCutoff ? 'is-bad' : hasPower ? 'is-good' : ptoOn ? 'is-amber' : ''}`}>
-          {spuCutoff
-            ? 'СПУ: Отсечка'
-            : hasPower
-            ? vacBarStr
-            : ptoOn
-            ? 'КОМ вкл (нет ДВС)'
-            : 'КОМ выключен'}
-        </span>
+        <Anchor style={{ width: 16, height: 16, color: '#e0ab45' }} />
+        <span className="tc-title">Кабина крана</span>
+        <span className={`tc-tag ${status.cls}`}>{status.text}</span>
         {FoldButton}
       </div>
 
       <div className="tc-read">
         <div className="tc-read-top">
-          <span className="tc-read-k">Цистерна · {liquidLabel}</span>
+          <span className="tc-read-k">Груз / максимум</span>
           <span className="tc-read-v">
-            {vol}
-            <small>/ {cap} л, {fillPct}%</small>
+            {hookedMassTons > 0 ? hookedMassTons.toFixed(1) : '0.0'}
+            <small>/ {geom.maxLoadTons.toFixed(1)} т</small>
           </span>
         </div>
-        <div className={`tc-bar ${fillTone}`}>
-          <i style={{ width: `${fillPct}%` }} />
+        <div className={`tc-bar ${barTone}`}>
+          <i style={{ width: `${Math.max(2, loadMomentPct)}%` }} />
         </div>
-
-        {isKo560 && (
-          <>
-            <div className="tc-read-top" style={{ marginTop: 6 }}>
-              <span className="tc-read-k">Баки чистой воды ВД</span>
-              <span className="tc-read-v">
-                {cleanVol}
-                <small>/ {cleanCap} л, {cleanPct}%</small>
-              </span>
-            </div>
-            <div className="tc-bar is-blue">
-              <i style={{ width: `${cleanPct}%` }} />
-            </div>
-          </>
-        )}
-
         <div className="tc-stats">
-          <div className="tc-stat"><span>Манометр</span><b>{vacBarStr}</b></div>
-          <div className="tc-stat"><span>4-х кран</span><b>{mode === 'suction' ? 'Откачка' : 'Напор'}</b></div>
-          <div className="tc-stat"><span>Шибер АНМ-53</span><b>{tank.drainValveOpen ? 'Открыт' : 'Закрыт'}</b></div>
-          <div className="tc-stat"><span>Пост</span><b>{isInCab ? 'Кабина' : canReachPumpBay || canReachRearGate ? 'У кузова' : 'У рукава'}</b></div>
+          <div className="tc-stat"><span>Вылет</span><b>{workingRadiusMeters} м</b></div>
+          <div className="tc-stat"><span>Стрела</span><b>{geom.boomLengthMeters.toFixed(1)} м</b></div>
+          <div className="tc-stat"><span>Наклон</span><b>{boomAngleDeg}°</b></div>
+          <div className="tc-stat"><span>Поворот</span><b>{deg > 0 ? `+${deg}` : deg}°</b></div>
         </div>
       </div>
 
-      <div className="tc-row c2" style={{ marginTop: 0, paddingTop: 0, borderTop: 0 }}>
-        {modeKey}
-        {drainKey}
-      </div>
-
-      {isKo505 && isInCab && (
-        <>
-          <div className="tc-row c4" style={{ marginTop: 4 }}>
-            <TapKey
-              onClick={() => rotateSludgeBoom(-0.22)}
-              disabled={!hasPower}
-              title="Повернуть верхнюю заборную стрелу КО-505А влево"
-              icon={<RotateCcw />}
-              label="Стрела Л"
-            />
-            <TapKey
-              onClick={() => rotateSludgeBoom(0.22)}
-              disabled={!hasPower}
-              title="Повернуть верхнюю заборную стрелу КО-505А вправо"
-              icon={<RotateCw />}
-              label="Стрела П"
-            />
-            <TapKey
-              onClick={() => extendSludgeBoom(-0.18)}
-              disabled={!hasPower}
-              title="Втянуть каретку шланга на стреле"
-              icon={<ChevronDown />}
-              label="Вылет -"
-            />
-            <TapKey
-              onClick={() => extendSludgeBoom(0.18)}
-              disabled={!hasPower}
-              title="Выдвинуть каретку шланга на стреле"
-              icon={<ChevronUp />}
-              label="Вылет +"
-            />
-          </div>
-          <div className="tc-row c1" style={{ marginTop: 4 }}>
-            <TapKey
-              onClick={toggleRearDoor}
-              disabled={!hasPower && !tank.rearDoorOpen}
-              title="Гидропривод заднего днища КО-505А для залпового сброса ила (42 л/с)"
-              label={tank.rearDoorOpen ? 'Заднее днище открыто (залповый сброс)' : 'Открыть заднее днище (залповый сброс)'}
-              tone={tank.rearDoorOpen ? 'bad' : undefined}
-            />
-          </div>
-        </>
-      )}
-
-      {isKo560 && (
-        <div className="tc-row c2" style={{ marginTop: 4 }}>
-          <TapKey
-            onClick={toggleJetterPump}
-            disabled={!isInCab}
-            title={
-              isInCab
-                ? 'Плунжерный насос высокого давления для каналопромывочного рукава РВД'
-                : 'Плунжерный насос ВД включается из кабины'
-            }
-            icon={<Power />}
-            label={tank.isJetterPumpActive ? 'Насос ВД: Вкл' : 'Насос ВД: Выкл'}
-            tone={tank.isJetterPumpActive ? 'blue' : undefined}
-          />
-          <TapKey
-            onClick={toggleHoseMode}
-            disabled={(!canReachPumpBay && !canReachRearGate) || !!tank.isWaterHoseDeployed}
-            title={
-              tank.isWaterHoseDeployed
-                ? 'Сначала смотайте текущий рукав на кузов'
-                : canReachPumpBay || canReachRearGate
-                ? 'Выбрать рукав для размотки: вакуумный заборный d100 или промывочный РВД на барабане'
-                : 'Переключение барабана РВД / вакуумного хобота доступно снаружи у кузова'
-            }
-            label={tank.activeHoseMode === 'jetter' ? 'Рукав: РВД ВД' : 'Рукав: Вакуум d100'}
-            tone={tank.activeHoseMode === 'jetter' ? 'on' : undefined}
-          />
+      {!outriggersOk && (
+        <div className="tc-warn">
+          <ShieldAlert />
+          <span>Опоры {outriggerPct}%. Спуститесь и выставьте их на пульте у рамы</span>
         </div>
       )}
+
+      <div className="tc-levers">
+        <Lever name="Поворот" inputRef={inputRef} disabled={locked} {...slew} />
+        <Lever name="Подъём стрелы" inputRef={inputRef} disabled={locked} {...elev} />
+        <Lever name="Телескоп" inputRef={inputRef} disabled={locked} {...tele} />
+        <Lever name="Лебёдка" inputRef={inputRef} disabled={!hasPressure} {...winch} />
+      </div>
+
+      <div className="tc-row c3">
+        <TapKey
+          onClick={toggleHook}
+          title="Зацепить или отцепить четырёхветвевой строп [Пробел]"
+          icon={<Link2 />}
+          label={hookedVeh ? 'Отцепить' : 'Строп'}
+          tone={hookedVeh ? 'good' : undefined}
+        />
+        <TapKey onClick={() => sound.playCraneHorn()} title="Сигнал крановщика [H]" icon={<Volume2 />} label="Сигнал" />
+        <TapKey onClick={toggleLight} title="Фара на стреле [L]" icon={<Lightbulb />} label="Фара" tone={veh.craneSpotlightOn ? 'on' : undefined} />
+      </div>
     </div>
   );
 };

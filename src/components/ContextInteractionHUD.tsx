@@ -129,7 +129,7 @@ export const ContextInteractionHUD: React.FC<ContextInteractionHUDProps> = ({
           </div>
 
           {target.availableKeys && target.availableKeys.map(ak => {
-            const shortLabel = ak.key === 'F' ? 'Убрать' : ak.key === 'R' ? 'Повернуть' : ak.title;
+            const shortLabel = ak.title || (ak.key === 'F' ? 'Убрать' : ak.key === 'R' ? 'Повернуть' : '');
             return (
               <div
                 key={ak.key}

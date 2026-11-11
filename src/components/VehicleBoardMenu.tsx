@@ -34,7 +34,7 @@ import {
 import { sound } from '../audio';
 import { toggleTrailerHitch, toggleCraneHookAttach } from '../physics';
 import { getLiquidNameRu, hasRoadTrainLights, getVehicleDiffCapabilities, cycleVehicleDiffLock } from '../vehicleHelpers';
-import { isVehicleCraneTruck, isVehicleVacuumTruck, getVehicleCraneGeometry } from '../truckChassisVariants';
+import { isVehicleCraneTruck, isVehicleVacuumTruck, getVehicleVacuumBodyId, getVehicleCraneGeometry } from '../truckChassisVariants';
 import { getVehicleControlTheme, VehicleControlTheme, CONTROL_THEME_META } from './vehicleControlStyles';
 
 interface VehicleBoardMenuProps {
@@ -980,39 +980,143 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
             );
           })()}
 
-          {/* ================= 15B. VACUUM TRUCK EXTERIOR ARMATURE TELEMETRY ================= */}
-          {isVehicleVacuumTruck(veh) && veh.fluidTank && (
-            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                  НАРУЖНАЯ АРМАТУРА ЦИСТЕРНЫ
-                </span>
-                <span className="text-[9px] font-mono font-bold text-[#c68a35] tabular-nums">
-                  {(veh.fluidTank.vacuumPressureBar ?? 0) > 0 ? '+' : ''}
-                  {(veh.fluidTank.vacuumPressureBar ?? 0).toFixed(2)} бар
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5 mt-2.5">
-                <div className="py-2 px-2 rounded-[2px] border border-[#2a2e38] bg-[#111317] flex flex-col justify-between">
-                  <span className="text-[7.5px] font-mono uppercase text-[#6e7787]">4-ходовой кран</span>
-                  <span className="text-[10px] font-mono font-bold text-[#e2e6ec] mt-0.5">
-                    {(veh.fluidTank.vacuumPumpMode ?? 'suction') === 'suction' ? 'ОТКАЧКА' : 'НАПОР'}
+          {/* ================= 15B. VACUUM TRUCK EXTERIOR ARMATURE TELEMETRY & CAB HYDRAULICS ================= */}
+          {isVehicleVacuumTruck(veh) && veh.fluidTank && (() => {
+            const vacBodyId = getVehicleVacuumBodyId(veh);
+            const isKo505 = vacBodyId === 'body_vacuum_sludge_ko505';
+            const isKo560 = vacBodyId === 'body_vacuum_kombi_ko560';
+            const hasPower = hasPtoDrive(veh);
+            return (
+              <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
+                    НАРУЖНАЯ АРМАТУРА ЦИСТЕРНЫ
+                  </span>
+                  <span className="text-[9px] font-mono font-bold text-[#c68a35] tabular-nums">
+                    {(veh.fluidTank.vacuumPressureBar ?? 0) > 0 ? '+' : ''}
+                    {(veh.fluidTank.vacuumPressureBar ?? 0).toFixed(2)} бар
                   </span>
                 </div>
-                <div className="py-2 px-2 rounded-[2px] border border-[#2a2e38] bg-[#111317] flex flex-col justify-between">
-                  <span className="text-[7.5px] font-mono uppercase text-[#6e7787]">Шибер АНМ-53</span>
-                  <span className="text-[10px] font-mono font-bold text-[#e2e6ec] mt-0.5">
-                    {veh.fluidTank.drainValveOpen ? 'ОТКРЫТ' : 'ЗАКРЫТ'}
-                  </span>
-                </div>
-              </div>
 
-              <span className="text-[8px] text-[#5a6272] font-mono mt-2 leading-tight">
-                Рычаги 4-ходового крана и задней задвижки АНМ-53 переключаются снаружи на кузове.
-              </span>
-            </div>
-          )}
+                <div className="grid grid-cols-2 gap-1.5 mt-2.5">
+                  <div className="py-2 px-2 rounded-[2px] border border-[#2a2e38] bg-[#111317] flex flex-col justify-between">
+                    <span className="text-[7.5px] font-mono uppercase text-[#6e7787]">4-ходовой кран</span>
+                    <span className="text-[10px] font-mono font-bold text-[#e2e6ec] mt-0.5">
+                      {(veh.fluidTank.vacuumPumpMode ?? 'suction') === 'suction' ? 'ОТКАЧКА' : 'НАПОР'}
+                    </span>
+                  </div>
+                  <div className="py-2 px-2 rounded-[2px] border border-[#2a2e38] bg-[#111317] flex flex-col justify-between">
+                    <span className="text-[7.5px] font-mono uppercase text-[#6e7787]">Шибер АНМ-53</span>
+                    <span className="text-[10px] font-mono font-bold text-[#e2e6ec] mt-0.5">
+                      {veh.fluidTank.drainValveOpen ? 'ОТКРЫТ' : 'ЗАКРЫТ'}
+                    </span>
+                  </div>
+                </div>
+
+                {isKo505 && (
+                  <div className="mt-2.5 flex flex-col gap-1.5">
+                    <div className="grid grid-cols-4 gap-1">
+                      <button
+                        type="button"
+                        disabled={!hasPower}
+                        onClick={() => {
+                          sound.playHydraulicHiss(0.18);
+                          const cur = veh.fluidTank!.sludgeBoomAngle ?? 0;
+                          veh.fluidTank!.sludgeBoomAngle = Math.max(-1.35, Math.min(1.35, +(cur - 0.22).toFixed(2)));
+                          setTick((t) => t + 1);
+                        }}
+                        className="py-1.5 px-1 rounded-[2px] border border-[#2a2e38] bg-[#1c1f26] hover:bg-[#232730] disabled:opacity-40 text-[9px] font-mono font-bold text-[#e2e6ec]"
+                      >
+                        Стрела Л
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!hasPower}
+                        onClick={() => {
+                          sound.playHydraulicHiss(0.18);
+                          const cur = veh.fluidTank!.sludgeBoomAngle ?? 0;
+                          veh.fluidTank!.sludgeBoomAngle = Math.max(-1.35, Math.min(1.35, +(cur + 0.22).toFixed(2)));
+                          setTick((t) => t + 1);
+                        }}
+                        className="py-1.5 px-1 rounded-[2px] border border-[#2a2e38] bg-[#1c1f26] hover:bg-[#232730] disabled:opacity-40 text-[9px] font-mono font-bold text-[#e2e6ec]"
+                      >
+                        Стрела П
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!hasPower}
+                        onClick={() => {
+                          sound.playHydraulicHiss(0.18);
+                          const cur = veh.fluidTank!.sludgeBoomExtension ?? 0.35;
+                          veh.fluidTank!.sludgeBoomExtension = Math.max(0, Math.min(1, +(cur - 0.18).toFixed(2)));
+                          setTick((t) => t + 1);
+                        }}
+                        className="py-1.5 px-1 rounded-[2px] border border-[#2a2e38] bg-[#1c1f26] hover:bg-[#232730] disabled:opacity-40 text-[9px] font-mono font-bold text-[#e2e6ec]"
+                      >
+                        Вылет -
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!hasPower}
+                        onClick={() => {
+                          sound.playHydraulicHiss(0.18);
+                          const cur = veh.fluidTank!.sludgeBoomExtension ?? 0.35;
+                          veh.fluidTank!.sludgeBoomExtension = Math.max(0, Math.min(1, +(cur + 0.18).toFixed(2)));
+                          setTick((t) => t + 1);
+                        }}
+                        className="py-1.5 px-1 rounded-[2px] border border-[#2a2e38] bg-[#1c1f26] hover:bg-[#232730] disabled:opacity-40 text-[9px] font-mono font-bold text-[#e2e6ec]"
+                      >
+                        Вылет +
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!hasPower && !veh.fluidTank.rearDoorOpen}
+                      onClick={() => {
+                        sound.playHydraulicHiss(0.32);
+                        veh.fluidTank!.rearDoorOpen = !veh.fluidTank!.rearDoorOpen;
+                        setTick((t) => t + 1);
+                      }}
+                      className={`w-full py-1.5 px-2 rounded-[2px] border text-[9.5px] font-mono font-bold uppercase ${
+                        veh.fluidTank.rearDoorOpen
+                          ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e]'
+                          : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af]'
+                      } disabled:opacity-40`}
+                    >
+                      {veh.fluidTank.rearDoorOpen ? 'Днище открыто (залповый сброс)' : 'Открыть заднее днище КО-505А'}
+                    </button>
+                  </div>
+                )}
+
+                {isKo560 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playButtonPress();
+                      veh.fluidTank!.isJetterPumpActive = !veh.fluidTank!.isJetterPumpActive;
+                      if (veh.fluidTank!.isJetterPumpActive) sound.playHydraulicHiss(0.25);
+                      setTick((t) => t + 1);
+                    }}
+                    className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 ${
+                      veh.fluidTank.isJetterPumpActive
+                        ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                        : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
+                    }`}
+                  >
+                    <Power className="w-4 h-4" />
+                    <span className="text-[10px] font-mono font-black uppercase">
+                      {veh.fluidTank.isJetterPumpActive ? 'НАСОС ВД РВД: ВКЛ' : 'НАСОС ВД РВД: ВЫКЛ'}
+                    </span>
+                    {veh.fluidTank.isJetterPumpActive ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
+                  </button>
+                )}
+
+                <span className="text-[8px] text-[#5a6272] font-mono mt-2 leading-tight">
+                  Рычаги 4-ходового крана и задней задвижки АНМ-53 переключаются снаружи на кузове.
+                </span>
+              </div>
+            );
+          })()}
 
           {/* ================= 16. FLUID TANK DRAIN VALVE (NON-VACUUM GRAVITY CISTERNS) ================= */}
           {veh.fluidTank && veh.fluidTank.capacity > 0 && !isVehicleVacuumTruck(veh) && (

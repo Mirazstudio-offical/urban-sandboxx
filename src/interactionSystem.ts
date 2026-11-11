@@ -477,16 +477,23 @@ export function findActiveInteraction(
   const candidates: InteractionTarget[] = [];
 
   // ==========================================
-  // 1. WATER & VACUUM HOSE + EXTERNAL VACUUM VALVES
+  // ==========================================
+  // 1. WATER & VACUUM HOSE + EXTERNAL VALVES
   // ==========================================
   if (player.heldWaterHose) {
-    const nearWaterVeh = getNearbyWaterVehicle(px, py, world);
-    if (nearWaterVeh && nearWaterVeh.vehicle.id === player.heldWaterHose.vehicleId) {
-      const veh = nearWaterVeh.vehicle;
-      const anchor = getVehicleWaterHoseAnchor(veh);
-      const connX = anchor ? anchor.x : veh.x;
-      const connY = anchor ? anchor.y : veh.y;
-      const reach = isTargetInPhysicalReach(px, py, facing, connX, connY, 54, 1.4, mouseWorldPos);
+    const veh = world.vehicles.find((v) => v.id === player.heldWaterHose?.vehicleId);
+    if (veh) {
+      const anchor = getVehicleWaterHoseAnchor(veh) || { x: veh.x, y: veh.y };
+      let reach = isTargetInPhysicalReach(px, py, facing, anchor.x, anchor.y, 64, 1.8, mouseWorldPos);
+      let targetPos = anchor;
+      if (!reach.inReach && isVehicleVacuumTruck(veh)) {
+        const vPos = getVehicleVacuumValveWorldPos(veh);
+        const rearReach = isTargetInPhysicalReach(px, py, facing, vPos.rearGateValve.x, vPos.rearGateValve.y, 64, 1.8, mouseWorldPos);
+        if (rearReach.inReach) {
+          reach = rearReach;
+          targetPos = vPos.rearGateValve;
+        }
+      }
       if (reach.inReach) {
         const isVac = !!veh.fluidTank?.isVacuumTank || veh.type === 'trailer_vacuum';
         const isJetter = !!player.heldWaterHose.isJetterHose;
@@ -501,38 +508,31 @@ export function findActiveInteraction(
           detail: isVac && !isJetter
             ? 'Закрыть шиберную задвижку АНМ-53 и закрепить гофрорукав'
             : 'Закрепить шланг на штатное место',
-          x: connX,
-          y: connY,
+          x: targetPos.x,
+          y: targetPos.y,
           dist: reach.dist,
           angleDiff: reach.angleDiff,
-          score: reach.score - 15,
+          score: reach.score - 28,
           data: veh,
         });
-        if (isVac && !isJetter && veh.fluidTank) {
-          candidates.push({
-            type: 'vacuum_gate_valve_toggle',
-            primaryKey: 'R',
-            actionTitle: veh.fluidTank.drainValveOpen ? 'Перекрыть шибер АНМ-53' : 'Открыть шибер АНМ-53',
-            detail: veh.fluidTank.drainValveOpen ? 'Шибер открыт (поток через рукав разрешён)' : 'Шибер закрыт (проход в цистерну перекрыт)',
-            x: connX,
-            y: connY,
-            dist: reach.dist,
-            angleDiff: reach.angleDiff,
-            score: reach.score - 12,
-            data: veh,
-          });
-        }
       }
     }
   } else {
-    const nearWaterVeh = getNearbyWaterVehicle(px, py, world);
-    if (nearWaterVeh) {
-      const anchor = getVehicleWaterHoseAnchor(nearWaterVeh.vehicle);
-      const connX = anchor ? anchor.x : nearWaterVeh.vehicle.x;
-      const connY = anchor ? anchor.y : nearWaterVeh.vehicle.y;
-      const reach = isTargetInPhysicalReach(px, py, facing, connX, connY, 54, 1.4, mouseWorldPos);
+    for (const veh of world.vehicles) {
+      ensureVehicleFluidTank(veh);
+      if (!veh.fluidTank?.hasWaterHose) continue;
+      const anchor = getVehicleWaterHoseAnchor(veh) || { x: veh.x, y: veh.y };
+      let reach = isTargetInPhysicalReach(px, py, facing, anchor.x, anchor.y, 64, 1.8, mouseWorldPos);
+      let targetPos = anchor;
+      if (!reach.inReach && isVehicleVacuumTruck(veh)) {
+        const vPos = getVehicleVacuumValveWorldPos(veh);
+        const rearReach = isTargetInPhysicalReach(px, py, facing, vPos.rearGateValve.x, vPos.rearGateValve.y, 64, 1.8, mouseWorldPos);
+        if (rearReach.inReach) {
+          reach = rearReach;
+          targetPos = vPos.rearGateValve;
+        }
+      }
       if (reach.inReach) {
-        const veh = nearWaterVeh.vehicle;
         const tank = veh.fluidTank;
         const vol = Math.round(tank?.currentVolume ?? tank?.currentAmount ?? 0);
         const cap = Math.round(tank?.capacity ?? 4200);
@@ -550,6 +550,7 @@ export function findActiveInteraction(
           : veh.type === 'truck_water'
           ? `С насосной станции водовоза (Вода: ${vol} л)`
           : `С крана цистерны (${vol} / ${cap} л)`;
+
         candidates.push({
           type: 'water_hose_take',
           primaryKey: 'E',
@@ -559,67 +560,75 @@ export function findActiveInteraction(
             ? 'Взять заборный вакуумный рукав d=100 мм'
             : 'Взять поливочный шланг',
           detail: name,
-          x: connX,
-          y: connY,
+          x: targetPos.x,
+          y: targetPos.y,
           dist: reach.dist,
           angleDiff: reach.angleDiff,
-          score: reach.score - 10,
+          score: reach.score - 24,
           data: veh,
         });
-        if (vacBodyId === 'body_vacuum_kombi_ko560') {
-          candidates.push({
-            type: 'vacuum_hose_mode_toggle',
-            primaryKey: 'R',
-            actionTitle: isKombiJetter
-              ? 'Переключить пост на вакуумный рукав d=100 мм'
-              : 'Переключить пост на барабан РВД (промывка)',
-            detail: 'Выбор рабочего контура КО-560',
-            x: connX,
-            y: connY,
-            dist: reach.dist,
-            angleDiff: reach.angleDiff,
-            score: reach.score - 8,
-            data: veh,
-          });
-        } else if (isVac && tank) {
-          candidates.push({
-            type: 'vacuum_gate_valve_toggle',
-            primaryKey: 'R',
-            actionTitle: tank.drainValveOpen ? 'Закрыть шиберную задвижку АНМ-53' : 'Открыть шиберную задвижку АНМ-53',
-            detail: tank.drainValveOpen ? 'Задвижка открыта (прямой слив)' : 'Задвижка закрыта',
-            x: connX,
-            y: connY,
-            dist: reach.dist,
-            angleDiff: reach.angleDiff,
-            score: reach.score - 8,
-            data: veh,
-          });
-        }
+        break;
       }
     }
   }
 
-  // 1a. External 4-Way Pump Valve Lever behind Cab / Trailer Drawbar (Четырёхходовой кран вакуум-насоса)
-  if (world.vehicles) {
-    for (const veh of world.vehicles) {
-      if (!isVehicleVacuumTruck(veh) || !veh.fluidTank) continue;
-      const valvePos = getVehicleVacuumValveWorldPos(veh);
-      const reach4Way = isTargetInPhysicalReach(px, py, facing, valvePos.fourWayValve.x, valvePos.fourWayValve.y, 48, 1.4, mouseWorldPos);
-      if (reach4Way.inReach) {
-        const curMode = veh.fluidTank.vacuumPumpMode ?? 'suction';
-        const barVal = +(veh.fluidTank.vacuumPressureBar ?? 0).toFixed(2);
+  // Наружная арматура вакуумных машин (4-ходовой кран сбоку и задвижка АНМ-53 сзади)
+  for (const veh of world.vehicles) {
+    if (!isVehicleVacuumTruck(veh) || !veh.fluidTank) continue;
+    const vPos = getVehicleVacuumValveWorldPos(veh);
+
+    // 1) Задняя шиберная задвижка АНМ-53 [R]
+    const rearReach = isTargetInPhysicalReach(px, py, facing, vPos.rearGateValve.x, vPos.rearGateValve.y, 56, 1.7, mouseWorldPos);
+    if (rearReach.inReach) {
+      candidates.push({
+        type: 'vacuum_gate_valve_toggle',
+        primaryKey: 'R',
+        actionTitle: veh.fluidTank.drainValveOpen ? 'Закрыть шибер АНМ-53' : 'Открыть шибер АНМ-53',
+        detail: veh.fluidTank.drainValveOpen ? 'Задвижка открыта (проток в рукав/слив разрешён)' : 'Задвижка перекрыта',
+        x: vPos.rearGateValve.x,
+        y: vPos.rearGateValve.y,
+        dist: rearReach.dist,
+        angleDiff: rearReach.angleDiff,
+        score: rearReach.score - 12,
+        data: veh,
+      });
+    }
+
+    // 2) Насосный отсек сбоку кузова: 4-ходовой кран вакуум/нагнетание [E] + выбор рукава КО-560 [R]
+    const pumpReach = isTargetInPhysicalReach(px, py, facing, vPos.fourWayValve.x, vPos.fourWayValve.y, 56, 1.7, mouseWorldPos);
+    if (pumpReach.inReach) {
+      const curMode = veh.fluidTank.vacuumPumpMode ?? 'suction';
+      const barVal = +(veh.fluidTank.vacuumPressureBar ?? 0).toFixed(2);
+      candidates.push({
+        type: 'vacuum_mode_toggle',
+        primaryKey: 'E',
+        actionTitle: curMode === 'suction'
+          ? 'Перевести 4-ходовой кран: НАГНЕТАНИЕ'
+          : 'Перевести 4-ходовой кран: ОТКАЧКА (ВАКУУМ)',
+        detail: `Режим: ${curMode === 'suction' ? 'Откачка' : 'Нагнетание'} · Мановакуумметр: ${barVal > 0 ? `+${barVal}` : barVal} бар`,
+        x: vPos.fourWayValve.x,
+        y: vPos.fourWayValve.y,
+        dist: pumpReach.dist,
+        angleDiff: pumpReach.angleDiff,
+        score: pumpReach.score - 18,
+        data: veh,
+      });
+
+      const vacBodyId = getVehicleVacuumBodyId(veh);
+      if (vacBodyId === 'body_vacuum_kombi_ko560' && !veh.fluidTank.isWaterHoseDeployed) {
+        const isJetter = veh.fluidTank.activeHoseMode === 'jetter';
         candidates.push({
-          type: 'vacuum_mode_toggle',
-          primaryKey: 'E',
-          actionTitle: curMode === 'suction'
-            ? 'Перевести 4-ходовой кран в режим «Нагнетание»'
-            : 'Перевести 4-ходовой кран в режим «Откачка (Вакуум)»',
-          detail: `Текущий режим: ${curMode === 'suction' ? 'Откачка' : 'Нагнетание'} · Мановакуумметр: ${barVal > 0 ? `+${barVal}` : barVal} бар`,
-          x: valvePos.fourWayValve.x,
-          y: valvePos.fourWayValve.y,
-          dist: reach4Way.dist,
-          angleDiff: reach4Way.angleDiff,
-          score: reach4Way.score - 11,
+          type: 'vacuum_hose_mode_toggle',
+          primaryKey: 'R',
+          actionTitle: isJetter
+            ? 'Пост: вакуумный рукав d=100 мм'
+            : 'Пост: барабан РВД (промывка)',
+          detail: 'Выбор рабочего контура КО-560',
+          x: vPos.fourWayValve.x,
+          y: vPos.fourWayValve.y,
+          dist: pumpReach.dist,
+          angleDiff: pumpReach.angleDiff,
+          score: pumpReach.score - 12,
           data: veh,
         });
       }
