@@ -615,7 +615,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                 </>
               )}
 
-              {veh.fluidTank && veh.fluidTank.capacity > 0 && (
+              {veh.fluidTank && veh.fluidTank.capacity > 0 && !veh.fluidTank.isVacuumTank && (
                 <>
                   <Sl>Слив {getLiquidNameRu(veh.fluidTank.liquidType)}</Sl>
                   <Tile Icon={Droplet} cls="row" label={veh.fluidTank.drainValveOpen ? 'Кран открыт' : 'Кран закрыт'} on={!!veh.fluidTank.drainValveOpen} onClick={click(() => { veh.fluidTank!.drainValveOpen = !veh.fluidTank!.drainValveOpen; })} />

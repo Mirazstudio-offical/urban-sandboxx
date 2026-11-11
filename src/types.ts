@@ -530,6 +530,7 @@ export interface FuelSystem {
 
 export type StoredLiquidType = 
   | 'water' 
+  | 'sewage'
   | 'fuel_ai95' 
   | 'fuel_ai92' 
   | 'fuel_ai98' 
@@ -560,6 +561,7 @@ export interface HeldWaterHose {
   isSpraying: boolean;           // actively shooting water stream
   isPressurized?: boolean;       // true if high pressure pump running (e.g. truck engine on), false if natural gravity trickle
   isVacuumHose?: boolean;        // true if thick corrugated vacuum suction/discharge hose (КО-503В / КО-505А / КО-560 / АНМ-53)
+  isJetterHose?: boolean;        // true if high-pressure orange sewer jetting hose РВД from КО-560 reel
   isSuctionActive?: boolean;     // true when vacuum hose is actively sucking liquid/sludge from ground into tank
   suctionLiquidColor?: string;   // visual tint of fluid currently being sucked up
   sprayCooldown?: number;        // audio / particle timer
@@ -611,6 +613,15 @@ export interface FluidStorageTank {
   isWaterHoseDeployed?: boolean; // Hose is currently taken off the reel/bracket
   isVacuumTank?: boolean;        // True for vacuum sewage/sludge cisterns (КО-503В, КО-505А, КО-560, АНМ-53)
   vacuumPumpMode?: 'suction' | 'discharge'; // 4-way valve position: 'suction' (Всасывание в бочку) or 'discharge' (Нагнетание/слив)
+  vacuumPressureBar?: number;    // Manometer/vacuummeter reading in bar: -0.85 (deep vacuum) .. 0 (atm) .. +1.50 (compressor overpressure)
+  spuCutoffActive?: boolean;     // True when SPU float cutoff valve blocks suction line because cistern is 100% full
+  cleanWaterCapacity?: number;   // КО-560 side stainless-steel clean water tanks capacity (L)
+  cleanWaterVolume?: number;     // КО-560 current clean water volume for high-pressure jetting (L)
+  isJetterPumpActive?: boolean;  // КО-560 high-pressure plunger pump ВД active
+  activeHoseMode?: 'vacuum' | 'jetter'; // КО-560 selected hose: 'vacuum' (d=100mm suction hose) or 'jetter' (high-pressure РВД reel)
+  rearDoorOpen?: boolean;        // КО-505А hydraulically opened full-bore rear dish door for sludge dumping
+  sludgeBoomAngle?: number;      // КО-505А top revolving hydraulic suction boom angle in radians (-1.3 .. +1.3)
+  sludgeBoomExtension?: number;  // КО-505А top suction boom telescopic/radial reach factor (0 .. 1)
 }
 
 export interface VehicleDamage {
@@ -1578,7 +1589,7 @@ export interface SkidMark {
   treadPattern?: 'street' | 'offroad' | 'heavy_lug' | 'slick';
 }
 
-export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'water';
+export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'water' | 'sewage';
 
 export interface FluidStain {
   id: string;

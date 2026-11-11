@@ -15,14 +15,17 @@ import {
   RotateCw,
   ShieldAlert,
   Volume2,
+  Power,
 } from 'lucide-react';
 import { GameWorld, InputState, Player, Vehicle } from '../types';
 import {
   getVehicleCraneGeometry,
+  getVehicleVacuumBodyId,
   isVehicleCraneTruck,
   isVehicleVacuumTruck,
   resolveVehicleTruckFrameAndBody,
 } from '../truckChassisVariants';
+import { getLiquidNameRu, getVehicleVacuumValveWorldPos } from '../vehicleHelpers';
 import { toggleCraneHookAttach } from '../physics';
 import { sound } from '../audio';
 import { hasPtoDrive, isPtoOn } from '../ptoSystem';
@@ -251,13 +254,15 @@ interface TapKeyProps {
   cap?: string;
   tone?: 'on' | 'good' | 'blue' | 'bad' | 'primary';
   isIcon?: boolean;
+  disabled?: boolean;
 }
 
-const TapKey: React.FC<TapKeyProps> = ({ onClick, title, icon, label, cap, tone, isIcon }) => (
+const TapKey: React.FC<TapKeyProps> = ({ onClick, title, icon, label, cap, tone, isIcon, disabled = false }) => (
   <button
     type="button"
     title={title}
     aria-label={title}
+    disabled={disabled}
     onClick={onClick}
     className={`tc-key${isIcon ? ' is-icon' : ''}${tone ? ` is-${tone}` : ''}`}
   >
@@ -278,15 +283,44 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
 
   if (!player || !world) return null;
 
-  // Active vehicle: the one the player drives, or the vacuum truck connected to the held hose
+  // Active vehicle: the one the player drives (or its towed vacuum trailer), or the vacuum truck connected to the held hose / nearby on foot
   let activeVehicle: Vehicle | null = null;
+  let towingTractor: Vehicle | null = null;
+
   if (player.isInVehicle && player.currentVehicleId) {
-    activeVehicle = world.vehicles.find((v) => v.id === player.currentVehicleId) || null;
+    const driven = world.vehicles.find((v) => v.id === player.currentVehicleId) || null;
+    if (driven) {
+      if (isVehicleCraneTruck(driven) || isVehicleVacuumTruck(driven)) {
+        activeVehicle = driven;
+      } else if (driven.trailerId) {
+        const trailer = world.vehicles.find((v) => v.id === driven.trailerId) || null;
+        if (trailer && isVehicleVacuumTruck(trailer)) {
+          activeVehicle = trailer;
+          towingTractor = driven;
+        }
+      }
+    }
   } else if (player.heldWaterHose) {
     activeVehicle = world.vehicles.find((v) => v.id === player.heldWaterHose?.vehicleId) || null;
+  } else {
+    for (const v of world.vehicles) {
+      if (!isVehicleVacuumTruck(v) || !v.fluidTank) continue;
+      if (Math.hypot(player.x - v.x, player.y - v.y) > 150) continue;
+      const vPos = getVehicleVacuumValveWorldPos(v);
+      const dRear = Math.hypot(player.x - vPos.rearGateValve.x, player.y - vPos.rearGateValve.y);
+      const dPump = Math.hypot(player.x - vPos.fourWayValve.x, player.y - vPos.fourWayValve.y);
+      if (dRear <= 64 || dPump <= 64) {
+        activeVehicle = v;
+        break;
+      }
+    }
   }
 
   if (!activeVehicle) return null;
+
+  if (!towingTractor && activeVehicle.type === 'trailer_vacuum') {
+    towingTractor = world.vehicles.find((v) => v.trailerId === activeVehicle!.id) || null;
+  }
 
   const isCrane = isVehicleCraneTruck(activeVehicle);
   const isVacuum = isVehicleVacuumTruck(activeVehicle);
@@ -294,7 +328,10 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
   if (!isCrane && !isVacuum) return null;
 
   const resolvedTruck = resolveVehicleTruckFrameAndBody(activeVehicle);
-  const bodyTitle = resolvedTruck?.body.modelCode || resolvedTruck?.body.nameRu || 'Спецнадстройка';
+  const bodyTitle =
+    resolvedTruck?.body.modelCode ||
+    resolvedTruck?.body.nameRu ||
+    (activeVehicle.type === 'trailer_vacuum' ? 'ПЦВ-4.2 Вакуумный' : 'Спецнадстройка');
   const veh = activeVehicle;
 
   const FoldButton = (
@@ -481,33 +518,95 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
   }
 
   // =========================================================================
-  // 2. VACUUM CISTERN / SEWAGE JETTER (КО-503В / КО-505А / КО-560)
+  // 2. VACUUM CISTERN / SEWAGE JETTER (КО-503В / КО-505А / КО-560 / ПЦВ)
   // =========================================================================
   const tank = veh.fluidTank;
   if (!tank) return null;
+
+  const vacBodyId = getVehicleVacuumBodyId(veh);
+  const isKo505 = vacBodyId === 'body_vacuum_sludge_ko505';
+  const isKo560 = vacBodyId === 'body_vacuum_kombi_ko560';
+
+  const powerVeh = towingTractor || veh;
+  const ptoOn = isPtoOn(powerVeh) || isPtoOn(veh);
+  const hasPower = hasPtoDrive(powerVeh) || hasPtoDrive(veh);
+
+  const isInCab = !!player.isInVehicle;
+  const valvePos = getVehicleVacuumValveWorldPos(veh);
+  const distToPumpBay = Math.hypot(player.x - valvePos.fourWayValve.x, player.y - valvePos.fourWayValve.y);
+  const distToRearGate = Math.hypot(player.x - valvePos.rearGateValve.x, player.y - valvePos.rearGateValve.y);
+  const canReachPumpBay = !isInCab && distToPumpBay <= 64;
+  const canReachRearGate = !isInCab && distToRearGate <= 64;
 
   const vol = Math.round(tank.currentVolume ?? tank.currentAmount ?? 0);
   const cap = Math.max(1, tank.capacity);
   const fillPct = Math.min(100, Math.round((vol / cap) * 100));
   const mode = tank.vacuumPumpMode ?? 'suction';
   const isFull = vol >= cap - 1;
-  const fillTone = isFull ? 'is-bad' : mode === 'suction' ? 'is-blue' : 'is-amber';
+  const spuCutoff = !!(tank.spuCutoffActive || (isFull && mode === 'suction'));
+  const vacBar = +(tank.vacuumPressureBar ?? 0).toFixed(2);
+  const vacBarStr = `${vacBar > 0 ? '+' : ''}${vacBar.toFixed(2)} бар`;
+  const liquidLabel = vol > 0 ? getLiquidNameRu(tank.liquidType) : 'Пусто';
+  const fillTone = spuCutoff ? 'is-bad' : mode === 'suction' ? 'is-blue' : 'is-amber';
 
   const toggleMode = () => {
+    if (!canReachPumpBay) return;
     sound.playButtonPress();
     tank.vacuumPumpMode = mode === 'suction' ? 'discharge' : 'suction';
     onForceUpdate?.();
   };
   const toggleDrain = () => {
+    if (!canReachRearGate) return;
     sound.playButtonPress();
     tank.drainValveOpen = !tank.drainValveOpen;
+    onForceUpdate?.();
+  };
+  const toggleJetterPump = () => {
+    if (!isInCab) return;
+    sound.playButtonPress();
+    tank.isJetterPumpActive = !tank.isJetterPumpActive;
+    if (tank.isJetterPumpActive) sound.playHydraulicHiss(0.25);
+    onForceUpdate?.();
+  };
+  const toggleHoseMode = () => {
+    if ((!canReachPumpBay && !canReachRearGate) || tank.isWaterHoseDeployed) return;
+    sound.playButtonPress();
+    tank.activeHoseMode = tank.activeHoseMode === 'jetter' ? 'vacuum' : 'jetter';
+    onForceUpdate?.();
+  };
+  const toggleRearDoor = () => {
+    if (!isInCab || (!hasPower && !tank.rearDoorOpen)) return;
+    sound.playButtonPress();
+    tank.rearDoorOpen = !tank.rearDoorOpen;
+    sound.playHydraulicHiss(0.32);
+    onForceUpdate?.();
+  };
+  const rotateSludgeBoom = (delta: number) => {
+    if (!isInCab || !hasPower) return;
+    sound.playHydraulicHiss(0.18);
+    const cur = tank.sludgeBoomAngle ?? 0;
+    tank.sludgeBoomAngle = Math.max(-1.35, Math.min(1.35, +(cur + delta).toFixed(2)));
+    onForceUpdate?.();
+  };
+  const extendSludgeBoom = (delta: number) => {
+    if (!isInCab || !hasPower) return;
+    sound.playHydraulicHiss(0.18);
+    const cur = tank.sludgeBoomExtension ?? 0.35;
+    tank.sludgeBoomExtension = Math.max(0, Math.min(1, +(cur + delta).toFixed(2)));
     onForceUpdate?.();
   };
 
   const modeKey = (
     <TapKey
       onClick={toggleMode}
-      title="Четырёхходовой кран: откачка луж или напорный слив"
+      disabled={!canReachPumpBay}
+      title={
+        canReachPumpBay
+          ? 'Четырёхходовой кран: откачка (вакуум) или напорный слив'
+          : isInCab
+          ? 'Ручной 4-ходовой кран расположен снаружи на насосном отсеке'
+          : 'Подойдите к насосному отсеку сбоку кузова, чтобы переключить кран'
+      }
       icon={<Droplet />}
       label={mode === 'suction' ? 'Откачка' : 'Напор'}
       tone={mode === 'suction' ? 'blue' : 'on'}
@@ -516,7 +615,14 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
   const drainKey = (
     <TapKey
       onClick={toggleDrain}
-      title="Задняя шиберная задвижка"
+      disabled={!canReachRearGate}
+      title={
+        canReachRearGate
+          ? 'Задняя шиберная задвижка АНМ-53 (открывает проток через рукав или слив)'
+          : isInCab
+          ? 'Ручная шиберная задвижка АНМ-53 расположена сзади на днище цистерны'
+          : 'Подойдите к задней задвижке цистерны, чтобы открыть или закрыть шибер'
+      }
       label={tank.drainValveOpen ? 'Шибер открыт' : 'Шибер закрыт'}
       tone={tank.drainValveOpen ? 'bad' : undefined}
     />
@@ -525,36 +631,66 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
   if (isMobileTouch) {
     return (
       <div className="tc tc-strip is-vac" {...stopWorld}>
-        <div className="tc-vac-fill" title={`Цистерна ${fillPct}%`}>
+        <div className="tc-vac-fill" title={`Цистерна ${fillPct}% (${vacBarStr})`}>
           <b>{fillPct}%</b>
           <div className={`tc-bar ${fillTone}`}><i style={{ width: `${fillPct}%` }} /></div>
         </div>
         <TapKey
           onClick={toggleMode}
-          title={mode === 'suction' ? 'Откачка: переключить на напорный слив' : 'Напор: переключить на откачку'}
+          disabled={!canReachPumpBay}
+          title={
+            canReachPumpBay
+              ? mode === 'suction'
+                ? 'Откачка: переключить на напорный слив'
+                : 'Напор: переключить на откачку'
+              : 'Подойдите к насосному отсеку сбоку кузова'
+          }
           icon={<Droplet />}
           tone={mode === 'suction' ? 'blue' : 'on'}
           isIcon
         />
-        <TapKey onClick={toggleDrain} title={tank.drainValveOpen ? 'Шибер открыт' : 'Шибер закрыт'} icon={<ChevronDown />} tone={tank.drainValveOpen ? 'bad' : undefined} isIcon />
+        <TapKey
+          onClick={toggleDrain}
+          disabled={!canReachRearGate}
+          title={
+            canReachRearGate
+              ? tank.drainValveOpen
+                ? 'Шибер открыт'
+                : 'Шибер закрыт'
+              : 'Подойдите к задней задвижке АНМ-53'
+          }
+          icon={<ChevronDown />}
+          tone={tank.drainValveOpen ? 'bad' : undefined}
+          isIcon
+        />
       </div>
     );
   }
+
+  const cleanVol = Math.round(tank.cleanWaterVolume ?? 0);
+  const cleanCap = Math.max(1, tank.cleanWaterCapacity ?? 2500);
+  const cleanPct = Math.min(100, Math.round((cleanVol / cleanCap) * 100));
 
   return (
     <div className="tc tc-card tc-panel" {...stopWorld}>
       <div className="tc-head">
         <Gauge style={{ width: 16, height: 16, color: '#e0ab45' }} />
         <span className="tc-title">{bodyTitle}</span>
-        <span className={`tc-tag ${isFull ? 'is-bad' : isPtoOn(veh) ? 'is-amber' : ''}`}>
-          {isFull ? 'Цистерна полна' : isPtoOn(veh) ? 'КОМ включён' : 'КОМ выключен'}
+        <span className={`tc-tag ${spuCutoff ? 'is-bad' : hasPower ? 'is-good' : ptoOn ? 'is-amber' : ''}`}>
+          {spuCutoff
+            ? 'СПУ: Отсечка'
+            : hasPower
+            ? vacBarStr
+            : ptoOn
+            ? 'КОМ вкл (нет ДВС)'
+            : 'КОМ выключен'}
         </span>
         {FoldButton}
       </div>
 
       <div className="tc-read">
         <div className="tc-read-top">
-          <span className="tc-read-k">Цистерна</span>
+          <span className="tc-read-k">Цистерна · {liquidLabel}</span>
           <span className="tc-read-v">
             {vol}
             <small>/ {cap} л, {fillPct}%</small>
@@ -563,12 +699,109 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
         <div className={`tc-bar ${fillTone}`}>
           <i style={{ width: `${fillPct}%` }} />
         </div>
+
+        {isKo560 && (
+          <>
+            <div className="tc-read-top" style={{ marginTop: 6 }}>
+              <span className="tc-read-k">Баки чистой воды ВД</span>
+              <span className="tc-read-v">
+                {cleanVol}
+                <small>/ {cleanCap} л, {cleanPct}%</small>
+              </span>
+            </div>
+            <div className="tc-bar is-blue">
+              <i style={{ width: `${cleanPct}%` }} />
+            </div>
+          </>
+        )}
+
+        <div className="tc-stats">
+          <div className="tc-stat"><span>Манометр</span><b>{vacBarStr}</b></div>
+          <div className="tc-stat"><span>4-х кран</span><b>{mode === 'suction' ? 'Откачка' : 'Напор'}</b></div>
+          <div className="tc-stat"><span>Шибер АНМ-53</span><b>{tank.drainValveOpen ? 'Открыт' : 'Закрыт'}</b></div>
+          <div className="tc-stat"><span>Пост</span><b>{isInCab ? 'Кабина' : canReachPumpBay || canReachRearGate ? 'У кузова' : 'У рукава'}</b></div>
+        </div>
       </div>
 
       <div className="tc-row c2" style={{ marginTop: 0, paddingTop: 0, borderTop: 0 }}>
         {modeKey}
         {drainKey}
       </div>
+
+      {isKo505 && isInCab && (
+        <>
+          <div className="tc-row c4" style={{ marginTop: 4 }}>
+            <TapKey
+              onClick={() => rotateSludgeBoom(-0.22)}
+              disabled={!hasPower}
+              title="Повернуть верхнюю заборную стрелу КО-505А влево"
+              icon={<RotateCcw />}
+              label="Стрела Л"
+            />
+            <TapKey
+              onClick={() => rotateSludgeBoom(0.22)}
+              disabled={!hasPower}
+              title="Повернуть верхнюю заборную стрелу КО-505А вправо"
+              icon={<RotateCw />}
+              label="Стрела П"
+            />
+            <TapKey
+              onClick={() => extendSludgeBoom(-0.18)}
+              disabled={!hasPower}
+              title="Втянуть каретку шланга на стреле"
+              icon={<ChevronDown />}
+              label="Вылет -"
+            />
+            <TapKey
+              onClick={() => extendSludgeBoom(0.18)}
+              disabled={!hasPower}
+              title="Выдвинуть каретку шланга на стреле"
+              icon={<ChevronUp />}
+              label="Вылет +"
+            />
+          </div>
+          <div className="tc-row c1" style={{ marginTop: 4 }}>
+            <TapKey
+              onClick={toggleRearDoor}
+              disabled={!hasPower && !tank.rearDoorOpen}
+              title="Гидропривод заднего днища КО-505А для залпового сброса ила (42 л/с)"
+              label={tank.rearDoorOpen ? 'Заднее днище открыто (залповый сброс)' : 'Открыть заднее днище (залповый сброс)'}
+              tone={tank.rearDoorOpen ? 'bad' : undefined}
+            />
+          </div>
+        </>
+      )}
+
+      {isKo560 && (
+        <div className="tc-row c2" style={{ marginTop: 4 }}>
+          <TapKey
+            onClick={toggleJetterPump}
+            disabled={!isInCab}
+            title={
+              isInCab
+                ? 'Плунжерный насос высокого давления для каналопромывочного рукава РВД'
+                : 'Плунжерный насос ВД включается из кабины'
+            }
+            icon={<Power />}
+            label={tank.isJetterPumpActive ? 'Насос ВД: Вкл' : 'Насос ВД: Выкл'}
+            tone={tank.isJetterPumpActive ? 'blue' : undefined}
+          />
+          <TapKey
+            onClick={toggleHoseMode}
+            disabled={(!canReachPumpBay && !canReachRearGate) || !!tank.isWaterHoseDeployed}
+            title={
+              tank.isWaterHoseDeployed
+                ? 'Сначала смотайте текущий рукав на кузов'
+                : canReachPumpBay || canReachRearGate
+                ? 'Выбрать рукав для размотки: вакуумный заборный d100 или промывочный РВД на барабане'
+                : 'Переключение барабана РВД / вакуумного хобота доступно снаружи у кузова'
+            }
+            label={tank.activeHoseMode === 'jetter' ? 'Рукав: РВД ВД' : 'Рукав: Вакуум d100'}
+            tone={tank.activeHoseMode === 'jetter' ? 'on' : undefined}
+          />
+        </div>
+      )}
     </div>
   );
 };
+

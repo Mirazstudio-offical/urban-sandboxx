@@ -13,7 +13,14 @@ export const PTO_MAX_ENGAGE_KMH = 5;
 
 export function vehicleHasPto(v: Vehicle | null | undefined): boolean {
   if (!v) return false;
-  return v.type === 'truck_water' || v.type === 'fire_engine' || !!v.fluidTank?.hasWaterHose || isVehicleVacuumTruck(v) || isVehicleCraneTruck(v);
+  return (
+    v.type === 'truck_water' ||
+    v.type === 'fire_engine' ||
+    v.type === 'tractor_mtz' ||
+    !!v.fluidTank?.hasWaterHose ||
+    isVehicleVacuumTruck(v) ||
+    isVehicleCraneTruck(v)
+  );
 }
 
 export function isPtoOn(v: Vehicle | null | undefined): boolean {
@@ -29,6 +36,7 @@ export function hasPtoDrive(v: Vehicle | null | undefined): boolean {
 function describe(v: Vehicle): string {
   if (isVehicleCraneTruck(v)) return 'гидронасос крана';
   if (isVehicleVacuumTruck(v)) return 'вакуумный насос';
+  if (v.type === 'tractor_mtz') return 'вал отбора мощности (ВОМ)';
   return 'водяной насос';
 }
 

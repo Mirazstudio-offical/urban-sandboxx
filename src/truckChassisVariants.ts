@@ -743,14 +743,16 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     minPayloadKg: 3500,
     attachmentCarType: 'truck_vacuum_ko503',
     fluidTankSpec: {
-      liquidType: 'water',
+      liquidType: 'sewage',
       capacity: 4200,
-      currentVolume: 1200,
-      currentAmount: 1200,
+      currentVolume: 0,
+      currentAmount: 0,
       isHermetic: true,
       hasWaterHose: true,
       isVacuumTank: true,
       vacuumPumpMode: 'suction',
+      vacuumPressureBar: 0,
+      spuCutoffActive: false,
     },
     notes: 'Наклонная цилиндрическая вакуумная цистерна Горводоканала (4200 л) с пластинчато-роторным насосом КО-503, СПУ с поплавковым клапаном, гофрированным заборным рукавом d=100 мм и шиберной задвижкой АНМ-53.',
   },
@@ -763,14 +765,19 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     minPayloadKg: 5500,
     attachmentCarType: 'truck_vacuum_ko505',
     fluidTankSpec: {
-      liquidType: 'water',
+      liquidType: 'sewage',
       capacity: 10000,
-      currentVolume: 2500,
-      currentAmount: 2500,
+      currentVolume: 0,
+      currentAmount: 0,
       isHermetic: true,
       hasWaterHose: true,
       isVacuumTank: true,
       vacuumPumpMode: 'suction',
+      vacuumPressureBar: 0,
+      spuCutoffActive: false,
+      rearDoorOpen: false,
+      sludgeBoomAngle: 0,
+      sludgeBoomExtension: 0.35,
     },
     notes: 'Толстостенная вакуумно-илососная цистерна (10 000 л) с 4 внешними шпангоутами жёсткости, насосом ВК-6М2, верхней поворотной гидравлической всасывающей стрелой d=100 мм и откидным задним днищем на гидроцилиндрах.',
   },
@@ -783,14 +790,20 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     minPayloadKg: 4200,
     attachmentCarType: 'truck_vacuum_ko560',
     fluidTankSpec: {
-      liquidType: 'water',
+      liquidType: 'sewage',
       capacity: 6500,
-      currentVolume: 3000,
-      currentAmount: 3000,
+      currentVolume: 0,
+      currentAmount: 0,
       isHermetic: true,
       hasWaterHose: true,
       isVacuumTank: true,
       vacuumPumpMode: 'suction',
+      vacuumPressureBar: 0,
+      spuCutoffActive: false,
+      cleanWaterCapacity: 2500,
+      cleanWaterVolume: 2500,
+      isJetterPumpActive: false,
+      activeHoseMode: 'vacuum',
     },
     notes: 'Двухотсечная аварийная машина Водоканала: боковые баки чистой воды из нержавеющей стали с плунжерным насосом ВД, центральная иловая вакуум-бочка (6500 л), задний барабан РВД и заборный гофрорукав.',
   },
@@ -1042,6 +1055,29 @@ export function isVehicleCraneTruck(car?: {
 }
 
 /**
+ * Returns the specific vacuum superstructure body ID or 'trailer_vacuum' if the vehicle is a vacuum machine.
+ */
+export function getVehicleVacuumBodyId(car?: {
+  type?: string;
+  frameId?: string;
+  bodyId?: string;
+  engineState?: { frameId?: string; bodyId?: string };
+} | null): 'body_vacuum_ko503' | 'body_vacuum_sludge_ko505' | 'body_vacuum_kombi_ko560' | 'trailer_vacuum' | null {
+  if (!car || !car.type) return null;
+  if (car.type === 'trailer_vacuum') return 'trailer_vacuum';
+  const bId = car.bodyId || car.engineState?.bodyId;
+  if (bId === 'body_vacuum_ko503' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560') {
+    return bId;
+  }
+  const resolved = resolveVehicleTruckFrameAndBody(car as { type: string; frameId?: string; bodyId?: string; engineState?: { frameId?: string; bodyId?: string } });
+  const rb = resolved?.body.id;
+  if (rb === 'body_vacuum_ko503' || rb === 'body_vacuum_sludge_ko505' || rb === 'body_vacuum_kombi_ko560') {
+    return rb;
+  }
+  return null;
+}
+
+/**
  * Checks whether a vehicle has one of the vacuum sewage/sludge superstructures (КО-503В, КО-505А, КО-560) or is a vacuum trailer.
  */
 export function isVehicleVacuumTruck(car?: {
@@ -1050,15 +1086,7 @@ export function isVehicleVacuumTruck(car?: {
   bodyId?: string;
   engineState?: { frameId?: string; bodyId?: string };
 } | null): boolean {
-  if (!car || !car.type) return false;
-  if (car.type === 'trailer_vacuum') return true;
-  const bId = car.bodyId || car.engineState?.bodyId;
-  if (bId === 'body_vacuum_ko503' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560') {
-    return true;
-  }
-  const resolved = resolveVehicleTruckFrameAndBody(car as { type: string; frameId?: string; bodyId?: string; engineState?: { frameId?: string; bodyId?: string } });
-  const rb = resolved?.body.id;
-  return rb === 'body_vacuum_ko503' || rb === 'body_vacuum_sludge_ko505' || rb === 'body_vacuum_kombi_ko560';
+  return getVehicleVacuumBodyId(car) !== null;
 }
 
 /**

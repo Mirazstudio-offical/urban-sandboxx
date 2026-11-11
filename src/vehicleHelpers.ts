@@ -321,7 +321,7 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
       car.fluidTank.isVacuumTank !== spec.isVacuumTank
     ) {
       const cap = spec.capacity;
-      const amt = spec.currentVolume ?? Math.round(cap * 0.75);
+      const amt = spec.currentVolume ?? (spec.isVacuumTank ? 0 : Math.round(cap * 0.75));
       car.fluidTank = {
         liquidType: spec.liquidType,
         capacity: cap,
@@ -331,6 +331,15 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
         hasWaterHose: spec.hasWaterHose,
         isVacuumTank: spec.isVacuumTank,
         vacuumPumpMode: spec.vacuumPumpMode ?? (spec.isVacuumTank ? 'suction' : undefined),
+        vacuumPressureBar: spec.vacuumPressureBar ?? 0,
+        spuCutoffActive: spec.spuCutoffActive ?? false,
+        cleanWaterCapacity: spec.cleanWaterCapacity,
+        cleanWaterVolume: spec.cleanWaterVolume,
+        isJetterPumpActive: spec.isJetterPumpActive ?? false,
+        activeHoseMode: spec.activeHoseMode,
+        rearDoorOpen: spec.rearDoorOpen ?? false,
+        sludgeBoomAngle: spec.sludgeBoomAngle ?? 0,
+        sludgeBoomExtension: spec.sludgeBoomExtension ?? 0.35,
       };
     }
   } else if (!car.fluidTank) {
@@ -358,13 +367,26 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
       if (!car.fluidTank.vacuumPumpMode) {
         car.fluidTank.vacuumPumpMode = 'suction';
       }
+      if (car.fluidTank.vacuumPressureBar === undefined) {
+        car.fluidTank.vacuumPressureBar = 0;
+      }
+      if (bId === 'body_vacuum_sludge_ko505') {
+        if (car.fluidTank.sludgeBoomAngle === undefined) car.fluidTank.sludgeBoomAngle = 0;
+        if (car.fluidTank.sludgeBoomExtension === undefined) car.fluidTank.sludgeBoomExtension = 0.35;
+        if (car.fluidTank.rearDoorOpen === undefined) car.fluidTank.rearDoorOpen = false;
+      }
+      if (bId === 'body_vacuum_kombi_ko560') {
+        if (car.fluidTank.cleanWaterCapacity === undefined) car.fluidTank.cleanWaterCapacity = 2500;
+        if (car.fluidTank.cleanWaterVolume === undefined) car.fluidTank.cleanWaterVolume = 2500;
+        if (!car.fluidTank.activeHoseMode) car.fluidTank.activeHoseMode = 'vacuum';
+      }
     }
   }
   return car.fluidTank;
 }
 
 /**
- * Calculates world coordinates of the water/vacuum hose connection point on a vehicle.
+ * Calculates world coordinates of the water/vacuum/jetter hose connection point on a vehicle.
  */
 export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number } | null {
   if (!car.fluidTank || !car.fluidTank.hasWaterHose) return null;
@@ -376,12 +398,35 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
   const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
   const bodyId = resolvedTruck?.body.id;
 
-  if (
-    bodyId === 'body_vacuum_ko503' ||
-    bodyId === 'body_vacuum_sludge_ko505' ||
-    bodyId === 'body_vacuum_kombi_ko560'
-  ) {
-    // Rear ANM-53 / KO-505 brass receiving snout nozzle at rear bottom of the vacuum cistern
+  // КО-505А Heavy Sludge Truck: hose attaches to the top revolving hydraulic suction boom tip!
+  if (bodyId === 'body_vacuum_sludge_ko505') {
+    const turretLocalX = halfL * 0.02;
+    const boomSlew = car.fluidTank.sludgeBoomAngle ?? 0;
+    const boomExt = car.fluidTank.sludgeBoomExtension ?? 0.35;
+    const armReach = (halfL * 0.85) + boomExt * 12;
+    // Boom points rearward by default (angle = Math.PI + boomSlew in vehicle local space)
+    const localBoomDir = Math.PI + boomSlew;
+    const localX = turretLocalX + Math.cos(localBoomDir) * armReach;
+    const localY = Math.sin(localBoomDir) * armReach;
+    return {
+      x: car.x + cosA * localX - sinA * localY,
+      y: car.y + sinA * localX + cosA * localY,
+    };
+  }
+
+  // КО-560 Combined Sewer Jetter & Vacuum Truck: rear high-pressure reel OR lower ANM-53 vacuum snout
+  if (bodyId === 'body_vacuum_kombi_ko560') {
+    const isJetter = car.fluidTank.activeHoseMode === 'jetter';
+    const localX = isJetter ? -halfL - 1.6 : -halfL - 2.8;
+    const localY = isJetter ? 0 : -1.2;
+    return {
+      x: car.x + cosA * localX - sinA * localY,
+      y: car.y + sinA * localX + cosA * localY,
+    };
+  }
+
+  if (bodyId === 'body_vacuum_ko503') {
+    // Rear ANM-53 brass receiving snout nozzle at rear bottom of the vacuum cistern
     const localX = -halfL - 2.8;
     const localY = 0;
     return {
@@ -433,10 +478,89 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
   return null;
 }
 
+/**
+ * Returns the world positions of the external manual 4-way pump valve (behind cab / front of tank)
+ * and the rear slide gate valve АНМ-53 (at the rear dish) for physical operator reach checks.
+ */
+export function getVehicleVacuumValveWorldPos(car: Vehicle): {
+  fourWayValve: { x: number; y: number };
+  rearGateValve: { x: number; y: number };
+} {
+  const cosA = Math.cos(car.angle);
+  const sinA = Math.sin(car.angle);
+  const halfL = car.length / 2;
+  const halfW = car.width / 2;
+
+  if (car.type === 'trailer_vacuum') {
+    const frontX = halfL * 0.65;
+    const rearX = -halfL * 0.88 - 4.5;
+    return {
+      fourWayValve: {
+        x: car.x + cosA * frontX - sinA * (-halfW * 0.7),
+        y: car.y + sinA * frontX + cosA * (-halfW * 0.7),
+      },
+      rearGateValve: {
+        x: car.x + cosA * rearX,
+        y: car.y + sinA * rearX,
+      },
+    };
+  }
+
+  // Pump bay behind cab (left side where rotary-vane pump & 4-way lever are mounted)
+  const pumpLocalX = halfL * 0.16;
+  const pumpLocalY = -halfW - 2.0;
+  // Rear bottom slide gate valve АНМ-53
+  const gateLocalX = -halfL - 2.4;
+  const gateLocalY = 0;
+
+  return {
+    fourWayValve: {
+      x: car.x + cosA * pumpLocalX - sinA * pumpLocalY,
+      y: car.y + sinA * pumpLocalX + cosA * pumpLocalY,
+    },
+    rearGateValve: {
+      x: car.x + cosA * gateLocalX - sinA * gateLocalY,
+      y: car.y + sinA * gateLocalX + cosA * gateLocalY,
+    },
+  };
+}
+
+/**
+ * Realistic mixing of liquids inside a vacuum cistern so sucking a small puddle of water
+ * does not overwrite 4,000 L of oil/sewage into pure water.
+ */
+export function mixTankLiquidType(
+  currentType: StoredLiquidType,
+  currentVol: number,
+  addedType: StoredLiquidType,
+  addedVol: number
+): StoredLiquidType {
+  if (currentVol <= 3) return addedType;
+  if (currentType === addedType) return currentType;
+  // Clean water mixed with sewage or dirty runoff becomes sewage
+  if (
+    (currentType === 'water' && addedType === 'sewage') ||
+    (currentType === 'sewage' && addedType === 'water')
+  ) {
+    return 'sewage';
+  }
+  // Clean water mixed with oil/coolant/fuel: if contaminant is significant or tank was water, becomes sewage/sludge unless pure petroleum dominates
+  if (currentType === 'water' && (addedType === 'oil' || addedType === 'coolant')) {
+    return addedVol > currentVol * 0.5 ? addedType : 'sewage';
+  }
+  // Only switch main petroleum/chemical classification if added volume exceeds existing volume
+  if (addedVol > currentVol) {
+    return addedType;
+  }
+  return currentType;
+}
+
 export function liquidTypeToStainType(liquid: StoredLiquidType): FluidStainType {
   switch (liquid) {
     case 'water':
       return 'water';
+    case 'sewage':
+      return 'sewage';
     case 'oil':
       return 'oil';
     case 'coolant':
@@ -453,13 +577,14 @@ export function liquidTypeToStainType(liquid: StoredLiquidType): FluidStainType 
 
 export function getLiquidNameRu(liquid: StoredLiquidType): string {
   switch (liquid) {
-    case 'water': return 'Вода';
+    case 'water': return 'Чистая вода';
+    case 'sewage': return 'Сточные воды / Ил';
     case 'fuel_ai95': return 'Бензин АИ-95';
     case 'fuel_ai92': return 'Бензин АИ-92';
     case 'fuel_ai98': return 'Бензин АИ-98';
     case 'fuel_ai100': return 'Бензин АИ-100';
     case 'diesel': return 'Дизельное топливо';
-    case 'oil': return 'Моторное масло';
+    case 'oil': return 'Моторное масло / Мазут';
     case 'coolant': return 'Антифриз (ОЖ)';
     default: return 'Жидкость';
   }
@@ -468,6 +593,7 @@ export function getLiquidNameRu(liquid: StoredLiquidType): string {
 export function getLiquidColor(liquid: StoredLiquidType): string {
   switch (liquid) {
     case 'water': return '#38bdf8';
+    case 'sewage': return '#5c6b32';
     case 'fuel_ai95': return '#f59e0b';
     case 'fuel_ai92': return '#fbbf24';
     case 'fuel_ai98': return '#ef4444';

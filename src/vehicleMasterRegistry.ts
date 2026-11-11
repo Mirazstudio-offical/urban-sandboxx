@@ -10174,9 +10174,9 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "fluidTank": {
       "capacity": 800,
-      "currentVolume": 800,
-      "currentAmount": 800,
-      "liquidType": "water",
+      "currentVolume": 0,
+      "currentAmount": 0,
+      "liquidType": "sewage",
       "isHermetic": true,
       "leakProbabilityPerSec": 0,
       "dripRatePerSec": 0,
@@ -10184,7 +10184,10 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "punctureRatePerSec": 12,
       "drainValveOpen": false,
       "hasWaterHose": true,
-      "isWaterHoseDeployed": false
+      "isWaterHoseDeployed": false,
+      "isVacuumTank": true,
+      "vacuumPumpMode": "suction",
+      "vacuumPressureBar": 0
     },
     "chassisAnatomy": {
       "specialPreset": "trailer"

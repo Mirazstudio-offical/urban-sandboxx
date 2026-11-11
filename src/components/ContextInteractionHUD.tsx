@@ -57,6 +57,9 @@ const getIconForType = (type: string) => {
       return <Fuel className="w-4 h-4 text-[#e5a94e]" />;
     case 'water_hose_take':
     case 'water_hose_stow':
+    case 'vacuum_gate_valve_toggle':
+    case 'vacuum_mode_toggle':
+    case 'vacuum_hose_mode_toggle':
       return <Droplet className="w-4 h-4 text-[#e5a94e]" />;
     case 'enter_building':
     case 'exit_building':

@@ -5099,18 +5099,91 @@ export default function App() {
       case 'water_hose_take': {
         const veh = target.data as Vehicle;
         takeWaterHose(p, veh, world);
-        const sourceName = veh.type === 'truck_water'? 'насосной станции водовоза': 'крана бочки-цистерны';
-        addPlayerNotification(p, `Шланг размотан с ${sourceName}! Зажмите ЛКМ или E для подачи воды.`, 'info');
+        const isVac = !!veh.fluidTank?.isVacuumTank || veh.type === 'trailer_vacuum';
+        const isJetter = !!p.heldWaterHose?.isJetterHose;
+        if (isJetter) {
+          addPlayerNotification(p, 'Каналопромывочный рукав РВД размотан с барабана КО-560. Включите КОМ и насос ВД для промывки.', 'info');
+        } else if (isVac) {
+          const gateState = veh.fluidTank?.drainValveOpen ? 'Шибер АНМ-53 открыт.' : 'Не забудьте открыть шиберную задвижку АНМ-53 и создать вакуум насосом!';
+          addPlayerNotification(p, `Заборный вакуумный рукав d=100 мм снят с пенала. ${gateState}`, 'info');
+        } else {
+          const sourceName = veh.type === 'truck_water' ? 'насосной станции водовоза' : 'крана бочки-цистерны';
+          addPlayerNotification(p, `Шланг размотан с ${sourceName}! Зажмите ЛКМ для подачи воды.`, 'info');
+        }
         sound.playUseItem();
         setVitalsRefreshTick(t => t + 1);
         break;
       }
 
       case 'water_hose_stow': {
+        const targetVeh = world.vehicles?.find(v => v.id === p.heldWaterHose?.vehicleId);
+        const wasVac = !!p.heldWaterHose?.isVacuumHose;
+        if (wasVac && targetVeh?.fluidTank) {
+          targetVeh.fluidTank.drainValveOpen = false;
+        }
         stowWaterHose(p, world);
-        addPlayerNotification(p, 'Поливочный шланг смотан и закреплен на штатное место.', 'info');
+        addPlayerNotification(
+          p,
+          wasVac
+            ? 'Шиберная задвижка АНМ-53 перекрыта, вакуумный гофрорукав уложен в пенал.'
+            : 'Рукав смотан и закреплён на штатное место.',
+          'info'
+        );
         sound.playUseItem();
         setVitalsRefreshTick(t => t + 1);
+        break;
+      }
+
+      case 'vacuum_gate_valve_toggle': {
+        const veh = target.data as Vehicle;
+        if (veh?.fluidTank) {
+          veh.fluidTank.drainValveOpen = !veh.fluidTank.drainValveOpen;
+          sound.playHydraulicHiss(0.2);
+          addPlayerNotification(
+            p,
+            veh.fluidTank.drainValveOpen
+              ? 'Задняя шиберная задвижка АНМ-53 открыта.'
+              : 'Задняя шиберная задвижка АНМ-53 закрыта.',
+            'info'
+          );
+          setVitalsRefreshTick(t => t + 1);
+        }
+        break;
+      }
+
+      case 'vacuum_mode_toggle': {
+        const veh = target.data as Vehicle;
+        if (veh?.fluidTank) {
+          const cur = veh.fluidTank.vacuumPumpMode ?? 'suction';
+          veh.fluidTank.vacuumPumpMode = cur === 'suction' ? 'discharge' : 'suction';
+          sound.playHydraulicHiss(0.22);
+          addPlayerNotification(
+            p,
+            veh.fluidTank.vacuumPumpMode === 'suction'
+              ? '4-ходовой кран вакуум-насоса переведён в режим «Откачка (Вакуум)».'
+              : '4-ходовой кран вакуум-насоса переведён в режим «Нагнетание (Слив)».',
+            'info'
+          );
+          setVitalsRefreshTick(t => t + 1);
+        }
+        break;
+      }
+
+      case 'vacuum_hose_mode_toggle': {
+        const veh = target.data as Vehicle;
+        if (veh?.fluidTank) {
+          const cur = veh.fluidTank.activeHoseMode ?? 'vacuum';
+          veh.fluidTank.activeHoseMode = cur === 'vacuum' ? 'jetter' : 'vacuum';
+          sound.playButtonPress();
+          addPlayerNotification(
+            p,
+            veh.fluidTank.activeHoseMode === 'jetter'
+              ? 'Выбран задний барабан РВД высокого давления (каналопромывка чистой водой).'
+              : 'Выбран заборный вакуумный гофрорукав d=100 мм (откачка ила).',
+            'info'
+          );
+          setVitalsRefreshTick(t => t + 1);
+        }
         break;
       }
 

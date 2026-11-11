@@ -1,8 +1,9 @@
 import { Player, GameWorld } from './types';
+import { getLiquidColor } from './vehicleHelpers';
 
 export class WaterHoseRenderer {
   /**
-   * Renders the physical water hose, nozzle, micro-leaks, and pressurized water jet.
+   * Renders the physical water hose, nozzle, micro-leaks, and pressurized water/sludge jet.
    */
   public static render(ctx: CanvasRenderingContext2D, world: GameWorld, player: Player) {
     if (!player.heldWaterHose) return;
@@ -31,12 +32,15 @@ export class WaterHoseRenderer {
     ctx.lineTo(nodes[nodes.length - 1].x + 1.8, nodes[nodes.length - 1].y + 2.5);
     ctx.stroke();
 
-    const isVacuum = !!hose.isVacuumHose || hose.sourceType === 'trailer_vacuum' || hose.sourceType === 'truck_vacuum';
+    const isJetter = !!hose.isJetterHose;
+    const isVacuum = !isJetter && (!!hose.isVacuumHose || hose.sourceType === 'trailer_vacuum' || hose.sourceType === 'truck_vacuum');
     const isSuction = !!hose.isSuctionActive;
+    const veh = world.vehicles?.find((v) => v.id === hose.vehicleId);
+    const liquidColor = veh?.fluidTank ? getLiquidColor(veh.fluidTank.liquidType) : '#5c6b32';
 
-    // 2. Main Realistic Black Rubber Hose Body (Classic matte black)
-    ctx.strokeStyle = '#09090b'; // Solid matte black rubber
-    ctx.lineWidth = isVacuum ? 3.2 : 1.8; // Heavy-duty thicker gauge (d=100mm) for vacuum suction hose!
+    // 2. Main Hose Body (Matte black rubber OR КО-560 high-pressure orange РВД jacket)
+    ctx.strokeStyle = isJetter ? '#ea580c' : '#09090b';
+    ctx.lineWidth = isVacuum ? 3.2 : isJetter ? 1.6 : 1.8;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -168,9 +172,11 @@ export class WaterHoseRenderer {
     const nozzleNode = nodes[nodes.length - 1];
     this.renderHandNozzle(ctx, nozzleNode.x, nozzleNode.y, player.angle, isSpraying, time, isVacuum, isSuction);
 
-    // 7. Full Water Stream when spraying OR Vacuum Suction Vortex when sucking
+    // 7. Full Stream when spraying OR Vacuum Suction Vortex when sucking
     if (isSuction && isVacuum) {
-      this.renderVacuumSuctionVortex(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, hose.suctionLiquidColor || '#38bdf8');
+      this.renderVacuumSuctionVortex(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, hose.suctionLiquidColor || '#5c6b32');
+    } else if (isSpraying && isVacuum) {
+      this.renderVacuumDischargeStream(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, !!hose.isPressurized, liquidColor);
     } else if (isSpraying) {
       this.renderWaterStream(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, !!hose.isPressurized);
     }
@@ -329,6 +335,51 @@ export class WaterHoseRenderer {
       ctx.lineTo(intakeTipX + 0.5, s * 0.6);
       ctx.stroke();
     }
+
+    ctx.restore();
+  }
+
+  /**
+   * Renders realistic wide-bore d=100mm liquid/sludge gusher stream from the vacuum hose bell mouth
+   * matching the actual color of the liquid stored in the cistern.
+   */
+  private static renderVacuumDischargeStream(
+    ctx: CanvasRenderingContext2D,
+    muzzleX: number,
+    muzzleY: number,
+    angle: number,
+    time: number,
+    isCompressorPushing: boolean,
+    liquidColor: string
+  ) {
+    ctx.save();
+    ctx.translate(muzzleX, muzzleY);
+    ctx.rotate(angle);
+
+    const startX = 6.2;
+    const streamLen = isCompressorPushing ? 46 : 24;
+
+    ctx.strokeStyle = liquidColor;
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = isCompressorPushing ? 3.8 : 2.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(startX, 0);
+    ctx.quadraticCurveTo(
+      startX + (streamLen - startX) * 0.5,
+      1.2 + Math.sin(time * 18) * 1.1,
+      streamLen,
+      3.5 + Math.cos(time * 15) * 1.4
+    );
+    ctx.stroke();
+
+    // Impact puddle splash at end of wide-bore gusher
+    const splashR = (isCompressorPushing ? 6.5 : 4.2) + Math.sin(time * 14) * 1.2;
+    ctx.fillStyle = liquidColor;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.ellipse(streamLen, 3.5, splashR, splashR * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
   }

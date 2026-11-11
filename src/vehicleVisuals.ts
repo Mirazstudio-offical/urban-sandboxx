@@ -2715,10 +2715,12 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
 
     // 5. Rear ANM-53 Slide Gate Valve & Brass Receiving Snout (Шиберная задвижка АНМ-53 в заднем днище)
     const flangeX = tankRear - 2.0;
+    const isGateOpen = !!car.fluidTank?.drainValveOpen;
     drawDeformedRect(flangeX, -2.6, 0.8, 5.2, '#334155');
     drawDeformedRect(flangeX - 1.6, -1.5, 1.6, 3.0, '#1e293b');
-    drawDeformedLine(flangeX - 0.8, -0.8, flangeX + 1.8, -3.8, '#475569', 1.1);
-    drawDeformedCircle(flangeX + 1.8, -3.8, 0.65, '#dc2626'); // Red slide gate handle knob
+    const handleTipY = isGateOpen ? 3.6 : -3.8;
+    drawDeformedLine(flangeX - 0.8, -0.8, flangeX + 1.8, handleTipY, '#475569', 1.1);
+    drawDeformedCircle(flangeX + 1.8, handleTipY, 0.65, isGateOpen ? '#22c55e' : '#dc2626'); // Slide gate handle knob
     drawDeformedRect(flangeX - 3.0, -0.85, 1.4, 1.7, '#b45309'); // Brass receiving snout
     drawDeformedCircle(flangeX - 3.1, 0, 0.95, isHoseOut ? '#94a3b8' : '#d97706');
   }
@@ -2756,11 +2758,20 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     ko505Grad.addColorStop(1, '#431407');
 
     drawDeformedRect(tankRear, -tankW / 2, tankL, tankW, ko505Grad);
+    const isRearDoorOpen = !!car.fluidTank?.rearDoorOpen;
+    const doorShift = isRearDoorOpen ? -3.4 : 0;
+    if (isRearDoorOpen) {
+      // Dark interior sludge cavity visible when rear dish door is raised on hydraulic rams
+      drawDeformedRect(tankRear - 1.4, -tankW / 2 + 1.0, 2.0, tankW - 2.0, '#1c1917');
+      // Chrome hydraulic piston rods extended to open the dish door
+      drawDeformedLine(tankRear + 0.2, -tankW / 2 - 0.1, tankRear + doorShift, -tankW / 2 - 0.1, '#f8fafc', 0.9);
+      drawDeformedLine(tankRear + 0.2, tankW / 2 + 0.1, tankRear + doorShift, tankW / 2 + 0.1, '#f8fafc', 0.9);
+    }
     // Hinged full-bore rear dish door (Откидное заднее днище илососа на верхних шарнирах и гидроцилиндрах)
     {
-      const [rTopX, rTopY] = deform(tankRear, -tankW / 2);
-      const [rMidX, rMidY] = deform(tankRear - 2.8, 0);
-      const [rBotX, rBotY] = deform(tankRear, tankW / 2);
+      const [rTopX, rTopY] = deform(tankRear + doorShift, -tankW / 2);
+      const [rMidX, rMidY] = deform(tankRear + doorShift - 2.8, 0);
+      const [rBotX, rBotY] = deform(tankRear + doorShift, tankW / 2);
       ctx.fillStyle = ko505Grad;
       ctx.beginPath();
       ctx.moveTo(rTopX, rTopY);
@@ -2784,22 +2795,25 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     // Twin hydraulic cylinders on rear flanks for opening the rear sludge door + 2 rear acrylic sight glasses
     drawDeformedRect(tankRear - 0.4, -tankW / 2 - 0.6, 5.8, 1.0, '#cbd5e1');
     drawDeformedRect(tankRear - 0.4, tankW / 2 - 0.4, 5.8, 1.0, '#cbd5e1');
-    drawDeformedCircle(tankRear - 1.2, -2.4, 1.05, '#0f172a', '#cbd5e1', 0.5); // Sight glass 1
-    drawDeformedCircle(tankRear - 1.5, 2.4, 1.05, '#0f172a', '#cbd5e1', 0.5);  // Sight glass 2
+    drawDeformedCircle(tankRear + doorShift - 1.2, -2.4, 1.05, '#0f172a', '#cbd5e1', 0.5); // Sight glass 1
+    drawDeformedCircle(tankRear + doorShift - 1.5, 2.4, 1.05, '#0f172a', '#cbd5e1', 0.5);  // Sight glass 2
 
     // 3. Top Revolving Hydraulic Suction Boom (Поворотная гидравлическая всасывающая стрела КО-505 на крыше цистерны)
-    const boomTurretX = tankFront - tankL * 0.30;
+    const boomTurretX = halfL * 0.02;
+    const boomSlew = car.fluidTank?.sludgeBoomAngle ?? 0;
+    const boomExt = car.fluidTank?.sludgeBoomExtension ?? 0.35;
+    const armReach = (halfL * 0.85) + boomExt * 12;
+    const localBoomDir = Math.PI + boomSlew;
+    const boomTipX = boomTurretX + Math.cos(localBoomDir) * armReach;
+    const boomTipY = Math.sin(localBoomDir) * armReach;
+
     drawDeformedCircle(boomTurretX, 0, 3.6, '#0f172a', '#475569', 0.85);
     drawDeformedCircle(boomTurretX, 0, 2.2, '#334155');
-    // Slewing steel suction boom arm extending rearward with corrugated d=100mm suction pipe
-    const boomTipX = tankRear - 1.8;
-    drawDeformedRect(boomTipX, -1.35, boomTurretX - boomTipX + 1.2, 2.7, '#1e293b');
-    drawDeformedRect(boomTipX + 0.6, -0.85, boomTurretX - boomTipX, 1.7, '#facc15');
-    // Thick corrugated hose routed along the top boom
-    drawDeformedLine(boomTipX - 0.6, 0, boomTurretX, 0, '#09090b', 2.2);
-    for (let hx = boomTipX; hx < boomTurretX - 1.0; hx += 1.5) {
-      drawDeformedLine(hx, -1.1, hx, 1.1, '#94a3b8', 0.6);
-    }
+    // Slewing steel suction boom arm & corrugated d=100mm suction pipe
+    drawDeformedLine(boomTurretX, 0, boomTipX, boomTipY, '#1e293b', 2.8);
+    drawDeformedLine(boomTurretX, 0, boomTipX, boomTipY, '#facc15', 1.7);
+    drawDeformedLine(boomTurretX, 0, boomTipX, boomTipY, '#09090b', 1.2);
+    drawDeformedCircle(boomTipX, boomTipY, 1.25, '#b45309', '#0f172a', 0.5);
 
     // 4. Side Hose Cassette Trays & Rear Gate Valve Snout
     const isHoseOut = !!car.fluidTank?.isWaterHoseDeployed;
@@ -2810,8 +2824,8 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     }
     drawDeformedLine(tankRear + 1.2, halfW - 1.0, tankFront - 1.2, halfW - 1.0, '#09090b', 1.9);
     // Rear bottom suction/discharge gate valve & brass snout
-    drawDeformedRect(tankRear - 3.6, -1.4, 1.8, 2.8, '#1e293b');
-    drawDeformedRect(tankRear - 4.8, -0.95, 1.2, 1.9, '#b45309');
+    drawDeformedRect(tankRear + doorShift - 3.6, -1.4, 1.8, 2.8, '#1e293b');
+    drawDeformedRect(tankRear + doorShift - 4.8, -0.95, 1.2, 1.9, '#b45309');
   }
 
   // --- COMBINED SEWER JETTER & VACUUM TRUCK KO-560 (КОМБИНИРОВАННАЯ КАНАЛОПРОМЫВОЧНАЯ И ВАКУУМНАЯ МАШИНА КО-560, 6.5 м³) ---

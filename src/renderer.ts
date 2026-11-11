@@ -3783,6 +3783,17 @@ export class GameRenderer {
           this.drawOrganicBlob(ctx, rx, ry, seed, rough);
           ctx.fill();
         }
+      } else if (stain.type === 'sewage') {
+        // Murky olive-brown sewage & municipal sludge pool with dark organic sediment meniscus
+        const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(48, 54, 24, ${Math.min(0.92, stainAlpha * 0.88)})`);
+        grad.addColorStop(0.58, `rgba(68, 74, 34, ${stainAlpha * 0.78})`);
+        grad.addColorStop(0.86, `rgba(42, 38, 20, ${stainAlpha * 0.54})`);
+        grad.addColorStop(1, `rgba(42, 38, 20, 0)`);
+
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rx, ry, seed, rough);
+        ctx.fill();
       }
 
       if (stain.type !== 'sand') {

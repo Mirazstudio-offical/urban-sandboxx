@@ -980,61 +980,46 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
             );
           })()}
 
-          {/* ================= 15B. VACUUM TRUCK 4-WAY VALVE (SUCTION / DISCHARGE) ================= */}
+          {/* ================= 15B. VACUUM TRUCK EXTERIOR ARMATURE TELEMETRY ================= */}
           {isVehicleVacuumTruck(veh) && veh.fluidTank && (
             <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                  4-ХОДОВОЙ КРАН НАСОСА
+                  НАРУЖНАЯ АРМАТУРА ЦИСТЕРНЫ
                 </span>
                 <span className="text-[9px] font-mono font-bold text-[#c68a35] tabular-nums">
-                  {Math.round(((veh.fluidTank.currentVolume ?? 0) / Math.max(1, veh.fluidTank.capacity)) * 100)}%
+                  {(veh.fluidTank.vacuumPressureBar ?? 0) > 0 ? '+' : ''}
+                  {(veh.fluidTank.vacuumPressureBar ?? 0).toFixed(2)} бар
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-1.5 mt-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    sound.playButtonPress();
-                    veh.fluidTank!.vacuumPumpMode = 'suction';
-                  }}
-                  className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1 text-[9.5px] font-mono font-black transition-all cursor-pointer ${
-                    (veh.fluidTank.vacuumPumpMode ?? 'suction') === 'suction'
-                      ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
-                      : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                  }`}
-                >
-                  <span>ВСАСЫВАНИЕ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    sound.playButtonPress();
-                    veh.fluidTank!.vacuumPumpMode = 'discharge';
-                  }}
-                  className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1 text-[9.5px] font-mono font-black transition-all cursor-pointer ${
-                    veh.fluidTank.vacuumPumpMode === 'discharge'
-                      ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
-                      : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                  }`}
-                >
-                  <span>НАГНЕТАНИЕ</span>
-                </button>
+                <div className="py-2 px-2 rounded-[2px] border border-[#2a2e38] bg-[#111317] flex flex-col justify-between">
+                  <span className="text-[7.5px] font-mono uppercase text-[#6e7787]">4-ходовой кран</span>
+                  <span className="text-[10px] font-mono font-bold text-[#e2e6ec] mt-0.5">
+                    {(veh.fluidTank.vacuumPumpMode ?? 'suction') === 'suction' ? 'ОТКАЧКА' : 'НАПОР'}
+                  </span>
+                </div>
+                <div className="py-2 px-2 rounded-[2px] border border-[#2a2e38] bg-[#111317] flex flex-col justify-between">
+                  <span className="text-[7.5px] font-mono uppercase text-[#6e7787]">Шибер АНМ-53</span>
+                  <span className="text-[10px] font-mono font-bold text-[#e2e6ec] mt-0.5">
+                    {veh.fluidTank.drainValveOpen ? 'ОТКРЫТ' : 'ЗАКРЫТ'}
+                  </span>
+                </div>
               </div>
 
-              <span className="text-[8px] text-[#5a6272] font-mono mt-2 tabular-nums">
-                Хранилище цистерны: {Math.round(veh.fluidTank.currentVolume ?? 0)} / {veh.fluidTank.capacity} л
+              <span className="text-[8px] text-[#5a6272] font-mono mt-2 leading-tight">
+                Рычаги 4-ходового крана и задней задвижки АНМ-53 переключаются снаружи на кузове.
               </span>
             </div>
           )}
 
-          {/* ================= 16. FLUID TANK DRAIN VALVE ================= */}
-          {veh.fluidTank && veh.fluidTank.capacity > 0 && (
+          {/* ================= 16. FLUID TANK DRAIN VALVE (NON-VACUUM GRAVITY CISTERNS) ================= */}
+          {veh.fluidTank && veh.fluidTank.capacity > 0 && !isVehicleVacuumTruck(veh) && (
             <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider truncate max-w-[130px]">
-                  {isVehicleVacuumTruck(veh) ? 'ЗАДНЯЯ ЗАДВИЖКА АНМ-53' : `СЛИВ ${getLiquidNameRu(veh.fluidTank.liquidType)}`}
+                  {`СЛИВ ${getLiquidNameRu(veh.fluidTank.liquidType)}`}
                 </span>
                 <div 
                   className={`w-2.5 h-2.5 rounded-none border border-black ${
@@ -1057,7 +1042,7 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
               >
                 <Droplet className="w-4 h-4" />
                 <span className="text-[11px] font-mono font-black uppercase">
-                  {veh.fluidTank.drainValveOpen ? 'ШИБЕР: ОТКРЫТ' : 'ШИБЕР: ЗАКРЫТ'}
+                  {veh.fluidTank.drainValveOpen ? 'КРАН: ОТКРЫТ' : 'КРАН: ЗАКРЫТ'}
                 </span>
                 {veh.fluidTank.drainValveOpen ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
               </button>
