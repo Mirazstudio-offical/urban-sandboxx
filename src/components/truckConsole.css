@@ -180,11 +180,11 @@
 .tc-left.is-cab { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); }
 
 /* ---------- cab levers (phones, crane operator cab) ----------
-   No panel, no captions: only a chrome stalk and a ball grip, seen from the operator's seat.
+   No panel, no captions, no base: the shafts come up from the floor, so their lower end is below the screen edge.
    Pushing tilts the stalk away from you, pulling tilts it toward you (perspective + rotateX around the base). */
 .tc-bank {
   left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 4px);
+  bottom: 0;
   display: flex; gap: 12px; padding: 0;
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.55));
 }
@@ -192,22 +192,8 @@
 .tc-lv3.is-off { opacity: 0.4; }
 .tc-lv3-hit { position: relative; width: 56px; height: 112px; perspective: 240px; perspective-origin: 50% 35%; touch-action: none; cursor: grab; }
 .tc-lv3-hit.is-drag { cursor: grabbing; }
-/* cast-iron flange with bolts, and a steel dust cup the shaft comes out of (both stay put) */
-.tc-lv3-hit::before {
-  content: ''; position: absolute; left: 50%; bottom: 0; width: 46px; height: 14px; margin-left: -23px; border-radius: 50%; pointer-events: none;
-  background:
-    radial-gradient(circle at 14% 50%, #0d0d0e 0 1.6px, transparent 2.2px),
-    radial-gradient(circle at 86% 50%, #0d0d0e 0 1.6px, transparent 2.2px),
-    linear-gradient(180deg, #787a7d 0%, #46484b 50%, #232426 100%);
-  box-shadow: 0 3px 0 #131314, inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-.tc-lv3-hit::after {
-  content: ''; position: absolute; left: 50%; bottom: 7px; width: 20px; height: 11px; margin-left: -10px; pointer-events: none;
-  border-radius: 50% 50% 0 0 / 80% 80% 0 0;
-  background: linear-gradient(90deg, #2a2b2e 0%, #9a9c9f 40%, #5c5e61 70%, #1d1e20 100%);
-}
 .tc-lv3-arm {
-  position: absolute; left: 50%; bottom: 15px; display: block; width: 0; height: 54px;
+  position: absolute; left: 50%; bottom: -12px; display: block; width: 0; height: 81px;
   transform-origin: 50% 100%; transform-style: preserve-3d;
   transform: rotateX(var(--a, 0deg));
   transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
