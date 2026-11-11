@@ -111,6 +111,7 @@ import { CraneOutriggersModal } from './components/CraneOutriggersModal';
 import { isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
 import { toggleCraneHookAttach } from './physics';
 import { MainMenu } from './components/MainMenu';
+import { GameLoadingScreen, type LoadingScreenState } from './components/GameLoadingScreen';
 import { VehicleBoardMenu } from './components/VehicleBoardMenu';
 import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
 import { PauseMenu, type PauseSessionInfo } from './components/PauseMenu';
@@ -487,6 +488,15 @@ export default function App() {
   const [isCollisionTestOpen, setIsCollisionTestOpen] = useState<boolean>(false);
   const isPauseMenuOpenRef = useRef<boolean>(false);
   isPauseMenuOpenRef.current = isPauseMenuOpen;
+  const [loadingScreen, setLoadingScreen] = useState<LoadingScreenState>({
+    isOpen: false,
+    actionType: 'new_career',
+    title: '',
+    stepText: '',
+    progress: 0
+  });
+  const isLoadingRef = useRef<boolean>(false);
+  isLoadingRef.current = loadingScreen.isOpen;
   // Which screen the main menu opens on (the pause menu can send the player straight to the server list)
   const [mainMenuInitialScreen, setMainMenuInitialScreen] = useState<'main' | 'servers'>('main');
   // Real session statistics shown on the pause screen (reset on new game / load)
@@ -1122,17 +1132,57 @@ export default function App() {
     }
   };
 
+  const waitMs = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
+
   const handleLoadSave = async (saveId: string) => {
+    const save = savesRef.current.find(s => s.id === saveId);
+    if (!save) return;
+
+    const saveMode: 'career' | 'freeroam' = save.mode || 'career';
+    const playerSavedVeh = save.isInVehicle && save.currentVehicleId && Array.isArray(save.vehicles)
+      ? save.vehicles.find((sv: any) => sv.id === save.currentVehicleId)
+      : (Array.isArray(save.vehicles) && save.vehicles.length > 0 ? save.vehicles[0] : null);
+    const savedVehCfg = playerSavedVeh ? (CAR_CONFIGS[playerSavedVeh.type as CarType] || CAR_CONFIGS.sedan) : null;
+
+    setLoadingScreen({
+      isOpen: true,
+      actionType: 'load_save',
+      title: save.name || 'Загрузка сессии',
+      subtitle: saveMode === 'freeroam' ? 'Загрузка сохранения · Freeroam' : 'Загрузка сохранения · Карьера',
+      stepText: 'Чтение карты города и геометрии дорог...',
+      progress: 18,
+      mode: saveMode,
+      locationName: save.streetName || 'Центральный район',
+      timeHour: typeof save.timeHour === 'number' ? save.timeHour : 12,
+      weather: save.weather || 'clear',
+      vehicleType: playerSavedVeh?.type,
+      vehicleName: savedVehCfg?.name || (save.isInVehicle ? 'Автомобиль' : 'Пешком'),
+      vehicleColor: playerSavedVeh?.color,
+      vehicleRoofColor: playerSavedVeh?.roofColor,
+      saveName: save.name
+    });
+
+    await waitMs(60);
+
     onlineManager.leaveRoom();
     closeHostSession();
     await reloadFreshMap();
+
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: 'Восстановление транспорта, объектов и состояния мира...',
+      progress: 62
+    }));
+    await waitMs(90);
+
     const world = worldRef.current;
     const player = playerRef.current;
     const camera = cameraRef.current;
-    if (!world || !player) return;
+    if (!world || !player) {
+      setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
 
-    const save = savesRef.current.find(s => s.id === saveId);
-    if (!save) return;
     resetSessionStats();
 
     // Prevent stuck input keys
@@ -1274,7 +1324,7 @@ export default function App() {
           v.insertedKeyId = sv.insertedKeyId;
           if (sv.ownerId) v.ownerId = sv.ownerId;
           (v as any).playerOwned = sv.playerOwned ?? (v.ownerId === 'player');
-          (v as any).isSpawnedByPlayer = sv.isSpawnedByPlayer ?? (v.ownerId === 'player');
+          (v as any).isSpawnedByPlayer = sv.isSpawnedByPlayer ?? (sv.ownerId === 'player');
           if (v.ownerId === 'player' || (v as any).playerOwned || (v as any).isSpawnedByPlayer || v.id === save.currentVehicleId || playerHasKeyForVehicle(player, v)) {
             v.isLocked = false;
           } else if (sv.isLocked !== undefined) {
@@ -1430,7 +1480,7 @@ export default function App() {
       importFurnitureStorageData((save as any).furnitureStorageState);
     }
 
-    world.gameMode = save.mode || 'career';
+    world.gameMode = saveMode;
     applyTrafficDefaultForMode(world.gameMode);
     if (world.gameMode === 'freeroam') {
       setIsTimeAutoCycling(false);
@@ -1442,8 +1492,15 @@ export default function App() {
       isTimeAutoCyclingRef.current = true;
     }
 
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: 'Синхронизация камеры и запуск сессии...',
+      progress: 100
+    }));
     setIsMainMenuOpen(false);
     setIsPauseMenuOpen(false);
+    await waitMs(180);
+    setLoadingScreen(prev => ({ ...prev, isOpen: false }));
   };
 
   const handleDeleteSave = (saveId: string) => {
@@ -1453,20 +1510,64 @@ export default function App() {
 
   const handleNewGame = async (options?: {
     spawnId?: string;
+    saveName?: string;
+    timeHour?: number;
+    weather?: WeatherType;
     mode?: 'career' | 'freeroam';
     vehicleType?: string;
     vehicleColor?: string;
-    powertrain?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string };
+    powertrain?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string; frameId?: string; bodyId?: string };
   } | string) => {
+    const opts = typeof options === 'string' ? { spawnId: options, mode: 'career' as const } : (options || {});
+    const mode = opts.mode || 'career';
+    const previewSpawnLoc = SPAWN_LOCATIONS.find(s => s.id === opts.spawnId) || SPAWN_LOCATIONS[0];
+    const vehCfg = opts.vehicleType ? (CAR_CONFIGS[opts.vehicleType] || CAR_CONFIGS.sedan) : null;
+    const targetTime = opts.timeHour !== undefined ? opts.timeHour : 12.0;
+    const targetWeather: WeatherType = opts.weather || 'clear';
+
+    setLoadingScreen({
+      isOpen: true,
+      actionType: mode === 'freeroam' ? 'new_freeroam' : 'new_career',
+      title: previewSpawnLoc.nameRu.split('(')[0].trim(),
+      subtitle: mode === 'freeroam' ? 'Новая сессия · Свободная езда' : 'Новая сессия · Карьера',
+      stepText: 'Загрузка карты города и дорожного графа...',
+      progress: 16,
+      mode,
+      locationName: previewSpawnLoc.nameRu.split('(')[0].trim(),
+      locationCategory: previewSpawnLoc.category,
+      timeHour: targetTime,
+      weather: targetWeather,
+      vehicleType: opts.vehicleType,
+      vehicleName: vehCfg ? vehCfg.name : 'Пешком',
+      vehicleColor: opts.vehicleColor,
+      vehicleRoofColor: opts.vehicleColor,
+      frameId: opts.powertrain?.frameId,
+      bodyId: opts.powertrain?.bodyId,
+      saveName: opts.saveName
+    });
+
+    await waitMs(60);
+
     onlineManager.leaveRoom();
     closeHostSession();
     await reloadFreshMap();
-    const opts = typeof options === 'string' ? { spawnId: options, mode: 'career' as const } : (options || {});
-    const mode = opts.mode || 'career';
+
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: mode === 'freeroam'
+        ? 'Подготовка точки старта и сборка выбранного автомобиля...'
+        : 'Инициализация трафика, пешеходов и городской среды...',
+      progress: 64
+    }));
+    await waitMs(90);
+
     const world = worldRef.current;
     const player = playerRef.current;
     const camera = cameraRef.current;
-    if (!world || !player) return;
+    if (!world || !player) {
+      setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
     resetSessionStats();
 
     world.gameMode = mode;
@@ -1533,13 +1634,14 @@ export default function App() {
     setActiveCarName('');
     sound.stopEngine();
 
-    const initialCal = createInitialCalendarState(2026, 10, 8, 12.0);
+    const initialCal = createInitialCalendarState(2026, 10, 8, targetTime);
     calendarRef.current = initialCal;
     setCalendar(initialCal);
-    setTimeHour(12.0);
-    timeHourRef.current = 12.0;
-    setWeather('clear');
-    weatherRef.current = 'clear';
+    setTimeHour(targetTime);
+    timeHourRef.current = targetTime;
+    setWeather(targetWeather);
+    weatherRef.current = targetWeather;
+    world.weather = targetWeather;
     handleSetGpsTarget(null);
 
     if (mode === 'freeroam') {
@@ -1642,7 +1744,25 @@ export default function App() {
     camera.targetY = spawnLoc.y;
     camera.targetZoom = 1.15;
 
+    if (opts.saveName) {
+      setLoadingScreen(prev => ({
+        ...prev,
+        stepText: 'Создание файла сохранения сессии...',
+        progress: 90
+      }));
+      await waitMs(70);
+      handleCreateSave(opts.saveName);
+    }
+
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: 'Готово к старту',
+      progress: 100
+    }));
     setIsMainMenuOpen(false);
+    setIsPauseMenuOpen(false);
+    await waitMs(180);
+    setLoadingScreen(prev => ({ ...prev, isOpen: false }));
   };
 
   const getMouseWorldPos = (sx: number, sy: number) => {
@@ -2214,7 +2334,7 @@ export default function App() {
           e.preventDefault();
           return;
         }
-        if (isMainMenuOpenRef.current) {
+        if (isMainMenuOpenRef.current || isLoadingRef.current) {
           return;
         }
         const nextPause = !isPauseMenuOpenRef.current;
@@ -2231,7 +2351,7 @@ export default function App() {
         return;
       }
 
-      if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current) return;
+      if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current || isLoadingRef.current) return;
 
       // Inventory Modal Toggle (I or Tab)
       if (code === 'KeyI'|| code === 'Tab') {
@@ -2655,7 +2775,7 @@ export default function App() {
     let lastFrameAt = -Infinity;
 
     const gameLoop = (now: number) => {
-      if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current) {
+      if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current || isLoadingRef.current) {
         animationFrameId = requestAnimationFrame(gameLoop);
         return;
       }
@@ -7613,16 +7733,39 @@ export default function App() {
           }}
 
           onExitToMainMenu={async () => {
+            const p = playerRef.current;
+            const w = worldRef.current;
+            const curStreet = w && p ? findStreetNameAtPosition(w, p.x, p.y) : 'Flatbody';
             setIsPauseMenuOpen(false);
+            setLoadingScreen({
+              isOpen: true,
+              actionType: 'exit_menu',
+              title: 'Выход в главное меню',
+              subtitle: 'Завершение текущей сессии',
+              stepText: 'Сохранение параметров и выгрузка сессии...',
+              progress: 35,
+              mode: w?.gameMode || 'career',
+              locationName: curStreet,
+              timeHour: timeHourRef.current,
+              weather: weatherRef.current
+            });
+            sound.stopEngine();
+            sound.stopTireScreech();
+            sound.stopHorn();
+            await waitMs(60);
             onlineManager.leaveRoom();
             closeHostSession();
             resetSessionStats();
             await reloadFreshMap();
+            setLoadingScreen(prev => ({
+              ...prev,
+              stepText: 'Открытие главного меню...',
+              progress: 100
+            }));
             setMainMenuInitialScreen('main');
             setIsMainMenuOpen(true);
-            sound.stopEngine();
-            sound.stopTireScreech();
-            sound.stopHorn();
+            await waitMs(140);
+            setLoadingScreen(prev => ({ ...prev, isOpen: false }));
           }}
           onOpenPerformanceTest={() => {
             setIsPauseMenuOpen(false);
@@ -7644,20 +7787,7 @@ export default function App() {
           onLoadSave={handleLoadSave}
           onDeleteSave={handleDeleteSave}
           onNewGame={({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor, powertrain }) => {
-            handleNewGame({ spawnId, mode, vehicleType, vehicleColor, powertrain });
-            if (newTime !== undefined) {
-              setTimeHour(newTime);
-              timeHourRef.current = newTime;
-              const { calendar: nextCal } = advanceCalendar(calendarRef.current, newTime - calendarRef.current.timeHour);
-              calendarRef.current = nextCal;
-              setCalendar({ ...nextCal });
-            }
-            if (newWeather) {
-              setWeather(newWeather);
-              weatherRef.current = newWeather;
-            }
-            handleCreateSave(saveName);
-            setIsMainMenuOpen(false);
+            handleNewGame({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor, powertrain });
           }}
           currentSettings={settings}
           onUpdateSettings={(newSettings) => {
@@ -7669,6 +7799,9 @@ export default function App() {
           currentUser={currentUser}
         />
       )}
+
+      {/* Fullscreen Loading / Saving Screen */}
+      <GameLoadingScreen state={loadingScreen} />
 
       {/* Online P2P Multiplayer Modal */}
       <OnlineModal
