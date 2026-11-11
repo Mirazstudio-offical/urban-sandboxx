@@ -6334,6 +6334,7 @@ export default function App() {
         return (
           <MobileTouchControls
             inputRef={inputRef}
+            hideDriveControls={Boolean(isInVehicle && (playerRef.current?.craneOperatorActive || playerCar?.craneOperatorActive))}
             isInVehicle={isInVehicle}
             isNearVehicle={Boolean(nearbyCarPrompt)}
             onEnterExitVehicle={handleInteract}
