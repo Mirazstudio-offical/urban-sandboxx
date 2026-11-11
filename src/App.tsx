@@ -1,3 +1,4 @@
+import { isPtoOn } from './ptoSystem';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { setDisplaySettings } from './displaySettings';
 import { 
@@ -2384,29 +2385,6 @@ export default function App() {
         handleToggleWindow();
       }
 
-      // PTO / PUMP Drive Toggle (P key) for water trucks & fire engines
-      if (code === 'KeyP') {
-        const p = playerRef.current;
-        const world = worldRef.current;
-        const currentVeh = world?.vehicles.find((v) => v.id === p?.currentVehicleId) || world?.vehicles.find((v) => v.id === p?.activeHoseState?.vehicleId);
-        if (currentVeh && (currentVeh.type === 'truck_water'|| currentVeh.type === 'fire_engine')) {
-          currentVeh.isPtoActive = !currentVeh.isPtoActive;
-          sound.playButtonPress();
-
-          const isEngineRunning = !!currentVeh.engineState?.engineRunning;
-          let msg = '';
-          if (currentVeh.isPtoActive) {
-            msg = isEngineRunning 
-              ? 'КОМ (Коробка отбора мощности) ВКЛ: Привод насоса активен! (Подгазуйте для максимального напора)': 'КОМ ВКЛ (Заведите двигатель для создания давления в системе)';
-          } else {
-            msg = 'КОМ ВЫКЛ: Насос отключен (переход на режим самотёка)';
-          }
-
-          addPlayerNotification(p, msg, currentVeh.isPtoActive ? 'info': 'warning');
-          e.preventDefault();
-          return;
-        }
-      }
 
       // GBO/LPG Toggle (K key)
       if (code === 'KeyK') {
@@ -2438,7 +2416,7 @@ export default function App() {
         if (p && p.isInVehicle && currentVeh?.type === 'truck_water') {
           currentVeh.isWashingNozzlesActive = !currentVeh.isWashingNozzlesActive;
           sound.playButtonPress();
-          const isPto = !!currentVeh.isPtoActive;
+          const isPto = isPtoOn(currentVeh);
           const isEng = !!currentVeh.engineState?.engineRunning;
           let msg = `Поливомоечные сопла: ${currentVeh.isWashingNozzlesActive ? 'ВКЛЮЧЕНЫ': 'ВЫКЛЮЧЕНЫ'}`;
           if (currentVeh.isWashingNozzlesActive && (!isPto || !isEng)) {

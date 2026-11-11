@@ -11,7 +11,6 @@ import {
   Link2,
   Maximize2,
   Minimize2,
-  Power,
   RotateCcw,
   RotateCw,
   ShieldAlert,
@@ -26,6 +25,7 @@ import {
 } from '../truckChassisVariants';
 import { toggleCraneHookAttach } from '../physics';
 import { sound } from '../audio';
+import { hasPtoDrive, isPtoOn } from '../ptoSystem';
 import './truckConsole.css';
 
 interface TruckSuperstructureHUDProps {
@@ -344,9 +344,7 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
   // =========================================================================
   if (isCrane) {
     const isOperatorInCraneCab = !!(player.isInVehicle && (player.craneOperatorActive || veh.craneOperatorActive));
-    const isEngineRunning = veh.engineState ? veh.engineState.engineRunning : true;
-    const isPtoActive = veh.isPtoActive !== false;
-    const hasPressure = isEngineRunning && isPtoActive;
+    const hasPressure = hasPtoDrive(veh);
 
     const geom = getVehicleCraneGeometry(veh);
     const deg = Math.round((geom.turretAngle * 180) / Math.PI);
@@ -362,12 +360,6 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
     const barTone = loadMomentPct > 95 ? 'is-bad' : loadMomentPct > 75 ? 'is-warn' : '';
     const locked = !outriggersOk || !hasPressure;
 
-    const togglePto = () => {
-      sound.playButtonPress();
-      veh.isPtoActive = !veh.isPtoActive;
-      if (veh.isPtoActive) sound.playHydraulicHiss(0.3);
-      onForceUpdate?.();
-    };
     const toggleHook = () => {
       toggleCraneHookAttach(veh, world, player);
       onForceUpdate?.();
@@ -384,33 +376,8 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
       ? { cls: 'is-amber', text: 'Нет давления' }
       : { cls: 'is-good', text: 'Норма' };
 
-    // --- A: driver's cab. Only the PTO switch lives here; outriggers are on the frame (E), the crane cab is up the ladder (F). ---
-    if (!isOperatorInCraneCab) {
-      if (isMobileTouch) {
-        return (
-          <div className="tc tc-strip" {...stopWorld}>
-            <TapKey
-              onClick={togglePto}
-              title="Коробка отбора мощности (гидронасос)"
-              icon={<Power />}
-              tone={isPtoActive ? 'on' : undefined}
-              isIcon
-            />
-          </div>
-        );
-      }
-      return (
-        <div className="tc tc-card tc-chip" style={{ padding: 4 }} {...stopWorld}>
-          <TapKey
-            onClick={togglePto}
-            title="Коробка отбора мощности (гидронасос)"
-            icon={<Power />}
-            label={isPtoActive ? 'КОМ включён' : 'КОМ выключен'}
-            tone={isPtoActive ? 'on' : undefined}
-          />
-        </div>
-      );
-    }
+    // --- A: driver's cab. Nothing here: КОМ is in the vehicle menu, outriggers on the frame box (E), the crane cab up the ladder (F). ---
+    if (!isOperatorInCraneCab) return null;
 
     // --- B: revolving operator cab (reached on foot by the ladder, left with F) ---
     const slew = {
@@ -429,7 +396,7 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
       neg: { key: 'craneHookDown' as InputFlag, icon: <ArrowDown />, cap: 'F', title: 'Майна, опустить крюк [F]' },
       pos: { key: 'craneHookUp' as InputFlag, icon: <ArrowUp />, cap: 'R', title: 'Вира, поднять крюк [R]' },
     };
-    const lockNote = !outriggersOk ? 'Опоры не выставлены' : !hasPressure ? 'Нет давления' : '';
+    const lockNote = !outriggersOk ? 'Опоры не выставлены' : !hasPressure ? 'Нет давления, включите КОМ' : '';
 
     if (isMobileTouch) {
       return (
@@ -537,12 +504,6 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
   const isFull = vol >= cap - 1;
   const fillTone = isFull ? 'is-bad' : mode === 'suction' ? 'is-blue' : 'is-amber';
 
-  const togglePump = () => {
-    sound.playButtonPress();
-    veh.isPtoActive = !veh.isPtoActive;
-    if (veh.isPtoActive) sound.playHydraulicHiss(0.3);
-    onForceUpdate?.();
-  };
   const toggleMode = () => {
     sound.playButtonPress();
     tank.vacuumPumpMode = mode === 'suction' ? 'discharge' : 'suction';
@@ -554,16 +515,6 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
     onForceUpdate?.();
   };
 
-  const pumpKey = (
-    <TapKey
-      onClick={togglePump}
-      title="Коробка отбора мощности и насос"
-      icon={<Power />}
-      label={isMobileTouch ? 'Насос' : veh.isPtoActive ? 'Насос включён' : 'Насос выключен'}
-      tone={veh.isPtoActive ? 'on' : undefined}
-      isIcon={false}
-    />
-  );
   const modeKey = (
     <TapKey
       onClick={toggleMode}
@@ -589,7 +540,6 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
           <b>{fillPct}%</b>
           <div className={`tc-bar ${fillTone}`}><i style={{ width: `${fillPct}%` }} /></div>
         </div>
-        <TapKey onClick={togglePump} title="Коробка отбора мощности и насос" icon={<Power />} tone={veh.isPtoActive ? 'on' : undefined} isIcon />
         <TapKey
           onClick={toggleMode}
           title={mode === 'suction' ? 'Откачка: переключить на напорный слив' : 'Напор: переключить на откачку'}
@@ -607,8 +557,8 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
       <div className="tc-head">
         <Gauge style={{ width: 16, height: 16, color: '#e0ab45' }} />
         <span className="tc-title">{bodyTitle}</span>
-        <span className={`tc-tag ${isFull ? 'is-bad' : veh.isPtoActive ? 'is-amber' : ''}`}>
-          {isFull ? 'Цистерна полна' : veh.isPtoActive ? 'Насос включён' : 'Насос выключен'}
+        <span className={`tc-tag ${isFull ? 'is-bad' : isPtoOn(veh) ? 'is-amber' : ''}`}>
+          {isFull ? 'Цистерна полна' : isPtoOn(veh) ? 'КОМ включён' : 'КОМ выключен'}
         </span>
         {FoldButton}
       </div>
@@ -626,8 +576,7 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
         </div>
       </div>
 
-      <div className="tc-row c3" style={{ marginTop: 0, paddingTop: 0, borderTop: 0 }}>
-        {pumpKey}
+      <div className="tc-row c2" style={{ marginTop: 0, paddingTop: 0, borderTop: 0 }}>
         {modeKey}
         {drainKey}
       </div>

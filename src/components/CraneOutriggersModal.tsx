@@ -1,3 +1,4 @@
+import { isPtoOn } from '../ptoSystem';
 import React, { useEffect, useState } from 'react';
 import {
   Anchor,
@@ -50,7 +51,7 @@ export const CraneOutriggersModal: React.FC<CraneOutriggersModalProps> = ({
   if (!isOpen || !vehicle || !isVehicleCraneTruck(vehicle)) return null;
 
   const isEngineRunning = vehicle.engineState ? vehicle.engineState.engineRunning : true;
-  const isPtoActive = vehicle.isPtoActive !== false;
+  const isPtoActive = isPtoOn(vehicle);
   const hasHydraulicPressure = isEngineRunning && isPtoActive;
 
   const ext = vehicle.craneOutriggerExt ?? (vehicle.craneOutriggersDeployed ? 1.0 : 0.0);
@@ -76,15 +77,6 @@ export const CraneOutriggersModal: React.FC<CraneOutriggersModalProps> = ({
       setIsDeploying(false);
       onForceUpdate?.();
     }, 1200);
-    onForceUpdate?.();
-  };
-
-  const handleTogglePto = () => {
-    sound.playButtonPress();
-    vehicle.isPtoActive = !vehicle.isPtoActive;
-    if (vehicle.isPtoActive) {
-      sound.playHydraulicHiss(0.3);
-    }
     onForceUpdate?.();
   };
 
@@ -134,15 +126,8 @@ export const CraneOutriggersModal: React.FC<CraneOutriggersModalProps> = ({
           <div className="mb-3 p-2 rounded-[2px] bg-amber-950/40 border border-amber-600/50 flex items-center justify-between gap-2 text-[9.5px]">
             <div className="flex items-center gap-1.5 text-amber-300">
               <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-              <span>НЕТ ДАВЛЕНИЯ В ГИДРОСИСТЕМЕ! ВКЛЮЧИТЕ КОМ (ОТБОР МОЩНОСТИ)</span>
+              <span>НЕТ ДАВЛЕНИЯ. КОМ ВКЛЮЧАЕТСЯ В МЕНЮ УПРАВЛЕНИЯ АВТО, ДВИГАТЕЛЬ ДОЛЖЕН РАБОТАТЬ</span>
             </div>
-            <button
-              type="button"
-              onClick={handleTogglePto}
-              className="px-2 py-1 rounded-[2px] bg-amber-600 hover:bg-amber-500 text-black font-black text-[9px] uppercase tracking-wider shrink-0 cursor-pointer"
-            >
-              ВКЛЮЧИТЬ КОМ
-            </button>
           </div>
         )}
 
