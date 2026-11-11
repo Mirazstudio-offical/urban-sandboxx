@@ -151,8 +151,8 @@ interface SlideLeverProps {
   disabled?: boolean;
 }
 
-const SLOT_H = 112;
-const KNOB_H = 40;
+const SLOT_H = 124;
+const KNOB_H = 36;
 const TRAVEL = (SLOT_H - KNOB_H) / 2;
 const ENGAGE = 0.35;
 
@@ -240,10 +240,18 @@ const SlideLever: React.FC<SlideLeverProps> = ({ name, inputRef, neg, pos, disab
         aria-valuemax={1}
         aria-valuenow={dir.current}
       >
+        <i className="tc-gate" />
         <span className="tc-slot-end is-top" title={pos.title}>{pos.icon}</span>
         <span className="tc-slot-end is-bottom" title={neg.title}>{neg.icon}</span>
-        <i className="tc-slot-rail" />
-        <i className="tc-knob" style={{ height: KNOB_H, transform: `translateY(${-offset}px)` }} />
+        <i className="tc-plate" />
+        <i
+          className="tc-stalk"
+          style={{ height: Math.abs(offset), top: offset > 0 ? `calc(50% - ${offset}px)` : '50%' }}
+        />
+        <i
+          className="tc-knob"
+          style={{ width: KNOB_H, height: KNOB_H, transform: `translate(-50%, calc(-50% - ${offset}px)) scale(${1 - (offset / TRAVEL) * 0.07})` }}
+        />
       </div>
     </div>
   );
@@ -493,7 +501,7 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
             {outriggersOk && !hasPressure && <div className="tc-state-line">Нет давления</div>}
           </div>
 
-          <div className="tc tc-card tc-bank is-cab" {...stopWorld}>
+          <div className="tc tc-bank is-cab" {...stopWorld}>
             <SlideLever name="Поворот" inputRef={inputRef} disabled={locked} {...slew} />
             <SlideLever name="Стрела" inputRef={inputRef} disabled={locked} {...elev} />
             <SlideLever name="Телескоп" inputRef={inputRef} disabled={locked} {...tele} />
