@@ -1,10 +1,11 @@
-import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock,   getVehicleHeadlightDynamicState } from './vehicleHelpers';
+import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleVacuumValveWorldPos, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock,   getVehicleHeadlightDynamicState } from './vehicleHelpers';
 import { applyPowertrain, isVehicleCraneTruck, getVehicleCraneGeometry } from './powertrainVariants';
 import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, WheelState, StreetProp, FluidStainType, FluidStain, Roundabout, RollingStockCar, WorldWind, RoadSegment, Intersection } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
 import { isPtoOn, hasPtoDrive, getPtoWorkingRPM } from './ptoSystem';
+import { isVehicleVacuumTruck } from './truckChassisVariants';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
 import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight } from './items';
@@ -3865,6 +3866,428 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
 }
 
 // --- MODULAR VEHICLE TICK SYSTEMS (ENGINE, COOLING, OIL, FUEL, SUSPENSION) ---
+function updateVehicleFluidStorageSystem(
+  car: Vehicle,
+  dt: number,
+  world: GameWorld,
+  cosA: number,
+  sinA: number,
+  dmg: NonNullable<Vehicle['damage']>
+) {
+  const mightHaveTank =
+    !!car.fluidTank ||
+    !!car.truckBodyType ||
+    car.type === 'trailer_barrel' ||
+    car.type === 'trailer_vacuum' ||
+    car.type === 'truck_water' ||
+    car.type === 'truck_tanker' ||
+    car.type === 'trailer_semi_tanker' ||
+    car.type.startsWith('truck_vacuum');
+  if (!mightHaveTank) return;
+
+  ensureVehicleFluidTank(car);
+  if (!car.fluidTank || car.fluidTank.capacity <= 0) return;
+
+  const fTank = car.fluidTank;
+
+  // Check severe structural damage, crumple, or fire rupture
+  const isTankHeavilyDamaged =
+    dmg.rearCrumple > 3.5 ||
+    dmg.leftDent > 2.0 ||
+    dmg.rightDent > 2.0 ||
+    dmg.frontLeftDent > 2.8 ||
+    dmg.frontRightDent > 2.8 ||
+    dmg.rearLeftDent > 2.8 ||
+    dmg.rearRightDent > 2.8 ||
+    !!dmg.fuelTankFire ||
+    !!dmg.cabinFire ||
+    !!dmg.engineFire;
+
+  if (isTankHeavilyDamaged && !fTank.isPunctured) {
+    fTank.isPunctured = true;
+  }
+
+  const halfL = car.length / 2;
+  const rearOffset = car.type === 'trailer_barrel' || car.type === 'trailer_vacuum' ? -halfL * 0.75 : -halfL * 0.65;
+  const tankAnchor = {
+    x: car.x + cosA * rearOffset,
+    y: car.y + sinA * rearOffset,
+  };
+
+  const targetStainType = liquidTypeToStainType(fTank.liquidType);
+
+  const spawnCisternStain = (wx: number, wy: number, isMajorSpill: boolean) => {
+    const stainRadius = isMajorSpill ? 3.8 + Math.random() * 2.2 : 1.6 + Math.random() * 1.2;
+    const stainMaxRadius = isMajorSpill ? 12 + Math.random() * 4 : 5.5 + Math.random() * 2.5;
+    const stainAlpha =
+      targetStainType === 'oil'
+        ? 0.8
+        : targetStainType === 'coolant'
+        ? 0.7
+        : targetStainType === 'water'
+        ? 0.6
+        : 0.65;
+
+    let merged = false;
+    for (const st of world.stains) {
+      if (st.type === targetStainType) {
+        const dx = st.x - wx;
+        const dy = st.y - wy;
+        const mergeDist = isMajorSpill ? 14 : 7;
+        if (dx * dx + dy * dy < mergeDist * mergeDist) {
+          st.radius = Math.min(st.maxRadius, st.radius + (isMajorSpill ? 0.35 : 0.15));
+          st.maxRadius = Math.max(st.maxRadius, stainMaxRadius);
+          st.life = Math.max(0, st.life - 10);
+          st.alpha = Math.min(0.85, st.alpha + 0.05);
+          merged = true;
+          break;
+        }
+      }
+    }
+
+    if (!merged && world.stains.length < 600) {
+      world.stains.push({
+        id: `tank_stain_${Date.now()}_${Math.random()}`,
+        x: wx,
+        y: wy,
+        radius: stainRadius,
+        maxRadius: stainMaxRadius,
+        type: targetStainType,
+        alpha: stainAlpha,
+        life: 0,
+        maxLife: targetStainType === 'water' ? 60 + Math.random() * 30 : 200 + Math.random() * 100,
+        onFire: false,
+        fireIntensity: 0,
+      });
+    }
+
+    // If water is spilled, douse overlapping ground fire!
+    if (targetStainType === 'water' || targetStainType === 'sewage') {
+      for (const st of world.stains) {
+        if (st.onFire) {
+          const dx = st.x - wx;
+          const dy = st.y - wy;
+          if (dx * dx + dy * dy < 28 * 28) {
+            st.onFire = false;
+            st.fireIntensity = 0;
+            if (world.particles) {
+              world.particles.push({
+                x: st.x,
+                y: st.y,
+                vx: (Math.random() - 0.5) * 16,
+                vy: -25 - Math.random() * 20,
+                radius: 4 + Math.random() * 4,
+                color: '#f8fafc',
+                alpha: 0.75,
+                life: 0,
+                maxLife: 0.65,
+                type: 'engine_smoke',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Droplet particles
+    if (isMajorSpill && world.particles && Math.random() < 0.3) {
+      const pColor =
+        targetStainType === 'water'
+          ? Math.random() < 0.6
+            ? '#38bdf8'
+            : '#e0f2fe'
+          : targetStainType === 'sewage'
+          ? Math.random() < 0.6
+            ? '#5c6b32'
+            : '#3f4d22'
+          : targetStainType === 'fuel'
+          ? Math.random() < 0.7
+            ? '#f59e0b'
+            : '#ca8a04'
+          : targetStainType === 'oil'
+          ? '#0f172a'
+          : '#22c55e';
+      world.particles.push({
+        x: wx,
+        y: wy,
+        vx: (Math.random() - 0.5) * 30,
+        vy: (Math.random() - 0.5) * 30,
+        radius: 1.5 + Math.random() * 1.4,
+        color: pColor,
+        alpha: 0.85,
+        life: 0,
+        maxLife: 0.32,
+        type: 'debris',
+        debrisSubtype: 'liquid_drop',
+      });
+    }
+  };
+
+  // 0. Vacuum / Compressor Pressure Simulation & SPU Float Cutoff Valve (КО-503В, КО-505А, КО-560, МЖТ)
+  let isVacuumPumpRunning = false;
+  if (fTank.isVacuumTank) {
+    let powerCar = car;
+    if (car.type === 'trailer_vacuum' && car.towedById && world.vehicles) {
+      const towing = world.vehicles.find((v) => v.id === car.towedById);
+      if (towing) powerCar = towing;
+    }
+    const isEngRun = !!powerCar.engineState?.engineRunning;
+    const ptoEngaged =
+      car.type === 'trailer_vacuum' ? isPtoOn(car) || isPtoOn(powerCar) : isPtoOn(car);
+    isVacuumPumpRunning = isEngRun && ptoEngaged;
+    const rpm = isEngRun ? powerCar.engineState?.engineRPM || 800 : 0;
+    const rpmFactor = 0.75 + Math.min(1.0, Math.max(0, (rpm - 750) / 1850)) * 0.55;
+
+    // SPU float cutoff valve closes air suction line when cistern is 100% full to protect rotary-vane pump
+    if ((fTank.currentVolume ?? 0) >= fTank.capacity - 0.5) {
+      fTank.spuCutoffActive = true;
+    } else if ((fTank.currentVolume ?? 0) < fTank.capacity - 5) {
+      fTank.spuCutoffActive = false;
+    }
+
+    const mode = fTank.vacuumPumpMode ?? 'suction';
+    let curBar = fTank.vacuumPressureBar ?? 0;
+
+    // Switching 4-way valve to 'discharge' vents any negative vacuum immediately
+    if (mode === 'discharge' && curBar < 0) {
+      curBar = 0;
+      fTank.vacuumPressureBar = 0;
+    }
+
+    if (fTank.isPunctured || fTank.rearDoorOpen) {
+      fTank.vacuumPressureBar = 0;
+      if (fTank.rearDoorOpen) fTank.spuCutoffActive = false;
+    } else if (isVacuumPumpRunning) {
+      if (mode === 'suction') {
+        const openAirLeak = fTank.drainValveOpen && !fTank.isWaterHoseDeployed;
+        const targetVac = fTank.spuCutoffActive
+          ? -0.85
+          : openAirLeak
+          ? -0.18
+          : fTank.drainValveOpen
+          ? -0.76
+          : -0.84;
+        const buildRate = (openAirLeak ? 0.18 : 0.38) * rpmFactor;
+        if (curBar > targetVac) {
+          fTank.vacuumPressureBar = Math.max(targetVac, curBar - buildRate * dt);
+        } else {
+          fTank.vacuumPressureBar = Math.min(targetVac, curBar + 0.15 * dt);
+        }
+      } else {
+        // 'discharge': compressor builds overpressure inside cistern
+        const targetPress = fTank.drainValveOpen ? 0.95 : 1.45;
+        const buildRate = 0.48 * rpmFactor;
+        if (curBar < targetPress) {
+          fTank.vacuumPressureBar = Math.min(targetPress, curBar + buildRate * dt);
+        } else {
+          fTank.vacuumPressureBar = Math.max(targetPress, curBar - 0.2 * dt);
+        }
+      }
+    } else {
+      // Pump off: hermetic cistern holds stored vacuum well so the player can walk with the hose to a puddle!
+      const openUnplugged = fTank.drainValveOpen && !fTank.isWaterHoseDeployed;
+      const bleedRate = openUnplugged ? 0.10 : fTank.drainValveOpen ? 0.012 : 0.003;
+      if (Math.abs(curBar) <= bleedRate * dt) {
+        fTank.vacuumPressureBar = 0;
+      } else {
+        fTank.vacuumPressureBar = curBar - Math.sign(curBar) * bleedRate * dt;
+      }
+    }
+  }
+
+  // A. Puncture / High-speed rupture leak
+  if (fTank.isPunctured && fTank.currentVolume > 0) {
+    const pRate = fTank.punctureRatePerSec || 16.0; // L/s
+    const drained = Math.min(fTank.currentVolume, pRate * dt);
+    fTank.currentVolume = Math.max(0, fTank.currentVolume - drained);
+    fTank.currentAmount = fTank.currentVolume;
+
+    const last = fTank._lastLeakAnchor;
+    if (last) {
+      const dx = tankAnchor.x - last.x;
+      const dy = tankAnchor.y - last.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 10) {
+        const steps = Math.min(10, Math.ceil(dist / 14));
+        for (let s = 1; s <= steps; s++) {
+          const t = s / steps;
+          spawnCisternStain(
+            last.x + dx * t + (Math.random() * 4 - 2),
+            last.y + dy * t + (Math.random() * 4 - 2),
+            true
+          );
+        }
+      } else {
+        spawnCisternStain(
+          tankAnchor.x + (Math.random() * 6 - 3),
+          tankAnchor.y + (Math.random() * 6 - 3),
+          true
+        );
+      }
+    } else {
+      spawnCisternStain(tankAnchor.x, tankAnchor.y, true);
+    }
+    fTank._lastLeakAnchor = { x: tankAnchor.x, y: tankAnchor.y };
+  }
+  // B1. КО-505А Hydraulically Opened Full-Bore Rear Dish Door (Залповый сброс густого ила через открытое заднее днище)
+  else if (fTank.rearDoorOpen && fTank.currentVolume > 0) {
+    const dumpRate = 42.0; // 42 L/s rapid full-bore sludge discharge
+    const drained = Math.min(fTank.currentVolume, dumpRate * dt);
+    fTank.currentVolume = Math.max(0, fTank.currentVolume - drained);
+    fTank.currentAmount = fTank.currentVolume;
+    const rearDishPos = {
+      x: car.x - cosA * (halfL + 8),
+      y: car.y - sinA * (halfL + 8),
+    };
+    spawnCisternStain(
+      rearDishPos.x + (Math.random() * 8 - 4),
+      rearDishPos.y + (Math.random() * 8 - 4),
+      true
+    );
+    if (world.particles && world.particles.length < 500) {
+      const pAngle = car.angle + Math.PI + (Math.random() - 0.5) * 0.5;
+      const pSpeed = 45 + Math.random() * 35;
+      world.particles.push({
+        x: car.x - cosA * (halfL + 2),
+        y: car.y - sinA * (halfL + 2),
+        vx: Math.cos(pAngle) * pSpeed + car.vx * 0.2,
+        vy: Math.sin(pAngle) * pSpeed + car.vy * 0.2,
+        radius: 2.6 + Math.random() * 1.8,
+        color: targetStainType === 'water' ? '#38bdf8' : '#5c6b32',
+        alpha: 0.88,
+        life: 0,
+        maxLife: 0.24,
+        type: 'water_spray',
+      });
+    }
+    fTank._lastLeakAnchor = rearDishPos;
+  }
+  // B2. Manual Slide Gate / Drain Valve opened (Only discharges from rear tap if hose is NOT deployed!)
+  else if (fTank.drainValveOpen && !(fTank.isVacuumTank && fTank.isWaterHoseDeployed)) {
+    const vacBar = fTank.vacuumPressureBar ?? 0;
+    const vacMode = fTank.vacuumPumpMode ?? 'suction';
+    const rearNozzle = isVehicleVacuumTruck(car)
+      ? getVehicleVacuumValveWorldPos(car).rearGateValve
+      : { x: car.x - cosA * (halfL + 2.5), y: car.y - sinA * (halfL + 2.5) };
+
+    const isPressurizedDischarge =
+      fTank.isVacuumTank &&
+      (vacBar > 0.05 || (isVacuumPumpRunning && vacMode === 'discharge'));
+    // Strong active suction vacuum holds the fluid column back; otherwise gravity or overpressure drains it!
+    const isHeldBackBySuction =
+      fTank.isVacuumTank && vacMode === 'suction' && isVacuumPumpRunning && vacBar < -0.22;
+
+    if (fTank.currentVolume > 0 && !isHeldBackBySuction) {
+      const effPress = isPressurizedDischarge ? Math.max(0.5, vacBar) : Math.max(0, vacBar);
+      const overpressureBonus = fTank.isVacuumTank ? effPress * 9.5 : 0;
+      const drainRate = 8.5 + overpressureBonus; // 8.5 L/s gravity ("без вакуума") up to ~22 L/s under compressor discharge
+      const drained = Math.min(fTank.currentVolume, drainRate * dt);
+      fTank.currentVolume = Math.max(0, fTank.currentVolume - drained);
+      fTank.currentAmount = fTank.currentVolume;
+
+      // Stream direction out of the rear gate valve АНМ-53 (backward along -car.angle)
+      const streamReach = isPressurizedDischarge ? 18 + effPress * 16 : 9;
+      const impactX = rearNozzle.x - cosA * streamReach + (Math.random() * 5 - 2.5);
+      const impactY = rearNozzle.y - sinA * streamReach + (Math.random() * 5 - 2.5);
+      spawnCisternStain(impactX, impactY, true);
+      fTank._lastLeakAnchor = { x: impactX, y: impactY };
+
+      // Emit visible liquid stream particles from the rear gate valve snout!
+      if (world.particles && world.particles.length < 500) {
+        const count = isPressurizedDischarge ? 2 : 1;
+        const pColor =
+          targetStainType === 'water'
+            ? Math.random() < 0.6
+              ? '#38bdf8'
+              : '#e0f2fe'
+            : targetStainType === 'sewage'
+            ? Math.random() < 0.6
+              ? '#5c6b32'
+              : '#3f4d22'
+            : targetStainType === 'fuel'
+            ? '#f59e0b'
+            : targetStainType === 'oil'
+            ? '#1e293b'
+            : '#22c55e';
+        for (let i = 0; i < count; i++) {
+          const outAngle =
+            car.angle +
+            Math.PI +
+            (Math.random() - 0.5) * (isPressurizedDischarge ? 0.28 : 0.2);
+          const jetSpeed = isPressurizedDischarge
+            ? 85 + effPress * 65 + Math.random() * 20
+            : 38 + Math.random() * 16;
+          world.particles.push({
+            x: rearNozzle.x - cosA * 1.5,
+            y: rearNozzle.y - sinA * 1.5,
+            vx: Math.cos(outAngle) * jetSpeed + car.vx * 0.2,
+            vy: Math.sin(outAngle) * jetSpeed + car.vy * 0.2,
+            radius: isPressurizedDischarge
+              ? 2.1 + Math.random() * 1.3
+              : 1.7 + Math.random() * 1.0,
+            color: pColor,
+            alpha: 0.88,
+            life: 0,
+            maxLife: isPressurizedDischarge ? 0.24 : 0.2,
+            type: 'water_spray',
+          });
+        }
+      }
+    } else if (
+      fTank.isVacuumTank &&
+      vacMode === 'discharge' &&
+      (isVacuumPumpRunning || vacBar > 0.08)
+    ) {
+      // Tank is empty (0 L), gate valve is open, and pump is in 'discharge' -> blow compressed air/mist from rear valve!
+      if (world.particles && world.particles.length < 500 && Math.random() < 0.65) {
+        const outAngle = car.angle + Math.PI + (Math.random() - 0.5) * 0.38;
+        const airSpeed = 75 + Math.max(0.2, vacBar) * 55;
+        world.particles.push({
+          x: rearNozzle.x - cosA * 1.5,
+          y: rearNozzle.y - sinA * 1.5,
+          vx: Math.cos(outAngle) * airSpeed + car.vx * 0.2,
+          vy: Math.sin(outAngle) * airSpeed + car.vy * 0.2,
+          radius: 1.5 + Math.random() * 1.2,
+          color: '#cbd5e1',
+          alpha: 0.45,
+          life: 0,
+          maxLife: 0.18,
+          type: 'water_spray',
+        });
+      }
+      fTank._lastLeakAnchor = null;
+    } else {
+      fTank._lastLeakAnchor = null;
+    }
+  }
+  // C. Non-Hermetic Idle Micro-Leaks (Water Trucks & Barrel Trailers)
+  else if (!fTank.isHermetic && fTank.currentVolume > 0) {
+    const currentSpeed = Math.hypot(car.vx, car.vy);
+    const isIdleOrParked = currentSpeed < 0.6 || car.isParked;
+
+    fTank.idleLeakTimer = (fTank.idleLeakTimer || 0) + dt;
+
+    const dripInterval = isIdleOrParked ? 1.5 : 4.0;
+    if (fTank.idleLeakTimer >= dripInterval) {
+      fTank.idleLeakTimer = 0;
+      const dripChance =
+        fTank.leakProbabilityPerSec !== undefined ? fTank.leakProbabilityPerSec : 0.3;
+      if (Math.random() < (isIdleOrParked ? Math.max(0.65, dripChance * 2.5) : dripChance)) {
+        const dripAmount = (fTank.dripRatePerSec || 0.12) * (isIdleOrParked ? 1.5 : 0.8);
+        fTank.currentVolume = Math.max(0, fTank.currentVolume - dripAmount);
+        spawnCisternStain(
+          tankAnchor.x + (Math.random() * 4 - 2),
+          tankAnchor.y + (Math.random() * 4 - 2),
+          false
+        );
+      }
+    }
+    fTank._lastLeakAnchor = null;
+  } else {
+    fTank._lastLeakAnchor = null;
+  }
+}
+
 export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld) {
   let spawnedMissingPowertrain = false;
   if (!car.engineState) {
@@ -3894,6 +4317,13 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     }
   }
 
+  const cosA = Math.cos(car.angle);
+  const sinA = Math.sin(car.angle);
+
+  // Run fluid cistern / vacuum tank physics BEFORE trailer / inactive early returns
+  // so trailer_vacuum, trailer_barrel, and engine-off parked trucks ("без вакуума") always drain & update pressure!
+  updateVehicleFluidStorageSystem(car, dt, world, cosA, sinA, dmg);
+
   // Trailers do not have engines, fuel systems, radiators, or internal thermal/fire mechanics
   if (isTrailerVehicle(car)) return;
 
@@ -3920,9 +4350,6 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     eng.oilPressure = 0;
     return;
   }
-
-  const cosA = Math.cos(car.angle);
-  const sinA = Math.sin(car.angle);
 
   // Exact component anchors using vehicle geometry & type
   const radAnchor = getVehicleAnchor(car, 'radiator');
@@ -4574,265 +5001,9 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     (car as any)._lastFuelAnchor = null;
   }
 
-  // 5. UNIFIED FLUID STORAGE SYSTEM (Tankers, Water Trucks, Barrel Trailers)
-  ensureVehicleFluidTank(car);
+  // 5. FRONT STREET-WASHING NOZZLES (Поливомоечные сопла водовоза КО-829А с приводом от КОМ)
   if (car.fluidTank && car.fluidTank.capacity > 0) {
     const fTank = car.fluidTank;
-
-    // Check severe structural damage, crumple, or fire rupture
-    const isTankHeavilyDamaged = (
-      dmg.rearCrumple > 3.5 || 
-      dmg.leftDent > 2.0 || 
-      dmg.rightDent > 2.0 || 
-      dmg.frontLeftDent > 2.8 || 
-      dmg.frontRightDent > 2.8 || 
-      dmg.rearLeftDent > 2.8 || 
-      dmg.rearRightDent > 2.8 || 
-      !!dmg.fuelTankFire ||
-      !!dmg.cabinFire ||
-      !!dmg.engineFire
-    );
-
-    if (isTankHeavilyDamaged && !fTank.isPunctured) {
-      fTank.isPunctured = true;
-    }
-
-    const halfL = car.length / 2;
-    const rearOffset = (car.type === 'trailer_barrel'|| car.type === 'trailer_vacuum') ? -halfL * 0.75 : -halfL * 0.65;
-    const tankAnchor = {
-      x: car.x + cosA * rearOffset,
-      y: car.y + sinA * rearOffset
-    };
-
-    const targetStainType = liquidTypeToStainType(fTank.liquidType);
-
-    const spawnCisternStain = (wx: number, wy: number, isMajorSpill: boolean) => {
-      const stainRadius = isMajorSpill ? (3.8 + Math.random() * 2.2) : (1.6 + Math.random() * 1.2);
-      const stainMaxRadius = isMajorSpill ? (12 + Math.random() * 4) : (5.5 + Math.random() * 2.5);
-      const stainAlpha = targetStainType === 'oil'? 0.80 : (targetStainType === 'coolant'? 0.70 : (targetStainType === 'water'? 0.60 : 0.65));
-
-      let merged = false;
-      for (const st of world.stains) {
-        if (st.type === targetStainType) {
-          const dx = st.x - wx;
-          const dy = st.y - wy;
-          const mergeDist = isMajorSpill ? 14 : 7;
-          if (dx * dx + dy * dy < mergeDist * mergeDist) {
-            st.radius = Math.min(st.maxRadius, st.radius + (isMajorSpill ? 0.35 : 0.15));
-            st.maxRadius = Math.max(st.maxRadius, stainMaxRadius);
-            st.life = Math.max(0, st.life - 10);
-            st.alpha = Math.min(0.85, st.alpha + 0.05);
-            merged = true;
-            break;
-          }
-        }
-      }
-
-      if (!merged && world.stains.length < 600) {
-        world.stains.push({
-          id: `tank_stain_${Date.now()}_${Math.random()}`,
-          x: wx,
-          y: wy,
-          radius: stainRadius,
-          maxRadius: stainMaxRadius,
-          type: targetStainType,
-          alpha: stainAlpha,
-          life: 0,
-          maxLife: targetStainType === 'water'? (60 + Math.random() * 30) : (200 + Math.random() * 100),
-          onFire: false,
-          fireIntensity: 0
-        });
-      }
-
-      // If water is spilled, douse overlapping ground fire!
-      if (targetStainType === 'water') {
-        for (const st of world.stains) {
-          if (st.onFire) {
-            const dx = st.x - wx;
-            const dy = st.y - wy;
-            if (dx * dx + dy * dy < 28 * 28) {
-              st.onFire = false;
-              st.fireIntensity = 0;
-              if (world.particles) {
-                world.particles.push({
-                  x: st.x,
-                  y: st.y,
-                  vx: (Math.random() - 0.5) * 16,
-                  vy: -25 - Math.random() * 20,
-                  radius: 4 + Math.random() * 4,
-                  color: '#f8fafc',
-                  alpha: 0.75,
-                  life: 0,
-                  maxLife: 0.65,
-                  type: 'engine_smoke'});
-              }
-            }
-          }
-        }
-      }
-
-      // Droplet particles
-      if (isMajorSpill && world.particles && Math.random() < 0.30) {
-        const pColor = targetStainType === 'water'? (Math.random() < 0.6 ? '#38bdf8': '#e0f2fe') :
-                       (targetStainType === 'sewage'? (Math.random() < 0.6 ? '#5c6b32': '#3f4d22') :
-                       (targetStainType === 'fuel'? (Math.random() < 0.7 ? '#f59e0b': '#ca8a04') :
-                       (targetStainType === 'oil'? '#0f172a': '#22c55e')));
-        world.particles.push({
-          x: wx,
-          y: wy,
-          vx: (Math.random() - 0.5) * 30,
-          vy: (Math.random() - 0.5) * 30,
-          radius: 1.5 + Math.random() * 1.4,
-          color: pColor,
-          alpha: 0.85,
-          life: 0,
-          maxLife: 0.32,
-          type: 'debris',
-          debrisSubtype: 'liquid_drop'});
-      }
-    };
-
-    // 0. Vacuum / Compressor Pressure Simulation & SPU Float Cutoff Valve (КО-503В, КО-505А, КО-560, МЖТ)
-    if (fTank.isVacuumTank) {
-      let powerCar = car;
-      if (car.type === 'trailer_vacuum' && car.towedById && world.vehicles) {
-        const towing = world.vehicles.find(v => v.id === car.towedById);
-        if (towing) powerCar = towing;
-      }
-      const isEngRun = !!powerCar.engineState?.engineRunning;
-      const ptoEngaged = car.type === 'trailer_vacuum'
-        ? (isPtoOn(car) || isPtoOn(powerCar))
-        : isPtoOn(car);
-      const isVacuumPumpRunning = isEngRun && ptoEngaged;
-      const rpm = isEngRun ? (powerCar.engineState?.engineRPM || 800) : 0;
-      const rpmFactor = 0.75 + Math.min(1.0, Math.max(0, (rpm - 750) / 1850)) * 0.55;
-
-      // SPU float cutoff valve closes air suction line when cistern is 100% full to protect rotary-vane pump
-      if ((fTank.currentVolume ?? 0) >= fTank.capacity - 0.5) {
-        fTank.spuCutoffActive = true;
-      } else if ((fTank.currentVolume ?? 0) < fTank.capacity - 5) {
-        fTank.spuCutoffActive = false;
-      }
-
-      const curBar = fTank.vacuumPressureBar ?? 0;
-      if (fTank.isPunctured || fTank.rearDoorOpen) {
-        fTank.vacuumPressureBar = 0;
-        if (fTank.rearDoorOpen) fTank.spuCutoffActive = false;
-      } else if (isVacuumPumpRunning) {
-        const mode = fTank.vacuumPumpMode ?? 'suction';
-        if (mode === 'suction') {
-          // If rear gate valve is open without a hose attached, outside air leaks in and prevents deep vacuum
-          const openAirLeak = fTank.drainValveOpen && !fTank.isWaterHoseDeployed;
-          const targetVac = fTank.spuCutoffActive
-            ? -0.85
-            : openAirLeak
-            ? -0.18
-            : fTank.drainValveOpen
-            ? -0.72
-            : -0.84;
-          const buildRate = (openAirLeak ? 0.18 : 0.36) * rpmFactor;
-          if (curBar > targetVac) {
-            fTank.vacuumPressureBar = Math.max(targetVac, curBar - buildRate * dt);
-          } else {
-            fTank.vacuumPressureBar = Math.min(targetVac, curBar + 0.15 * dt);
-          }
-        } else {
-          // 'discharge': compressor builds overpressure inside cistern
-          const targetPress = fTank.drainValveOpen ? 0.95 : 1.45;
-          const buildRate = 0.42 * rpmFactor;
-          if (curBar < targetPress) {
-            fTank.vacuumPressureBar = Math.min(targetPress, curBar + buildRate * dt);
-          } else {
-            fTank.vacuumPressureBar = Math.max(targetPress, curBar - 0.2 * dt);
-          }
-        }
-      } else {
-        // Pump off: pressure bleeds toward 0 bar (faster if slide gate valve is open)
-        const bleedRate = fTank.drainValveOpen ? 0.38 : 0.06;
-        if (Math.abs(curBar) <= bleedRate * dt) {
-          fTank.vacuumPressureBar = 0;
-        } else {
-          fTank.vacuumPressureBar = curBar - Math.sign(curBar) * bleedRate * dt;
-        }
-      }
-    }
-
-    // A. Puncture / High-speed rupture leak
-    if (fTank.isPunctured && fTank.currentVolume > 0) {
-      const pRate = fTank.punctureRatePerSec || 16.0; // L/s
-      const drained = Math.min(fTank.currentVolume, pRate * dt);
-      fTank.currentVolume = Math.max(0, fTank.currentVolume - drained);
-      fTank.currentAmount = fTank.currentVolume;
-
-      const last = fTank._lastLeakAnchor;
-      if (last) {
-        const dx = tankAnchor.x - last.x;
-        const dy = tankAnchor.y - last.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > 10) {
-          const steps = Math.min(10, Math.ceil(dist / 14));
-          for (let s = 1; s <= steps; s++) {
-            const t = s / steps;
-            spawnCisternStain(last.x + dx * t + (Math.random() * 4 - 2), last.y + dy * t + (Math.random() * 4 - 2), true);
-          }
-        } else {
-          spawnCisternStain(tankAnchor.x + (Math.random() * 6 - 3), tankAnchor.y + (Math.random() * 6 - 3), true);
-        }
-      } else {
-        spawnCisternStain(tankAnchor.x, tankAnchor.y, true);
-      }
-      fTank._lastLeakAnchor = { x: tankAnchor.x, y: tankAnchor.y };
-    }
-    // B1. КО-505А Hydraulically Opened Full-Bore Rear Dish Door (Залповый сброс густого ила через открытое заднее днище)
-    else if (fTank.rearDoorOpen && fTank.currentVolume > 0) {
-      const dumpRate = 42.0; // 42 L/s rapid full-bore sludge discharge
-      const drained = Math.min(fTank.currentVolume, dumpRate * dt);
-      fTank.currentVolume = Math.max(0, fTank.currentVolume - drained);
-      fTank.currentAmount = fTank.currentVolume;
-      spawnCisternStain(tankAnchor.x + (Math.random() * 7 - 3.5), tankAnchor.y + (Math.random() * 7 - 3.5), true);
-      fTank._lastLeakAnchor = { x: tankAnchor.x, y: tankAnchor.y };
-    }
-    // B2. Manual Slide Gate / Drain Valve opened (Only dumps directly under vehicle if hose is NOT deployed!)
-    else if (fTank.drainValveOpen && fTank.currentVolume > 0 && !(fTank.isVacuumTank && fTank.isWaterHoseDeployed)) {
-      const vacBar = fTank.vacuumPressureBar ?? 0;
-      // Strong vacuum inside cistern holds the fluid column back against gravity
-      if (!fTank.isVacuumTank || vacBar >= -0.22) {
-        const overpressureBonus = fTank.isVacuumTank && vacBar > 0.05 ? vacBar * 8.0 : 0;
-        const drainRate = 8.0 + overpressureBonus; // 8 L/s gravity up to ~19.5 L/s under compressor pressure
-        const drained = Math.min(fTank.currentVolume, drainRate * dt);
-        fTank.currentVolume = Math.max(0, fTank.currentVolume - drained);
-        fTank.currentAmount = fTank.currentVolume;
-        spawnCisternStain(tankAnchor.x + (Math.random() * 4 - 2), tankAnchor.y + (Math.random() * 4 - 2), true);
-        fTank._lastLeakAnchor = { x: tankAnchor.x, y: tankAnchor.y };
-      } else {
-        fTank._lastLeakAnchor = null;
-      }
-    }
-    // C. Non-Hermetic Idle Micro-Leaks (Water Trucks & Barrel Trailers)
-    else if (!fTank.isHermetic && fTank.currentVolume > 0) {
-      const currentSpeed = Math.hypot(car.vx, car.vy);
-      const isIdleOrParked = currentSpeed < 0.6 || car.isParked;
-      
-      fTank.idleLeakTimer = (fTank.idleLeakTimer || 0) + dt;
-
-      // Leak interval: while idle/parked, drips consistently to leave puddles
-      const dripInterval = isIdleOrParked ? 1.5 : 4.0;
-      if (fTank.idleLeakTimer >= dripInterval) {
-        fTank.idleLeakTimer = 0;
-        const dripChance = fTank.leakProbabilityPerSec !== undefined ? fTank.leakProbabilityPerSec : 0.3;
-        if (Math.random() < (isIdleOrParked ? Math.max(0.65, dripChance * 2.5) : dripChance)) {
-          const dripAmount = (fTank.dripRatePerSec || 0.12) * (isIdleOrParked ? 1.5 : 0.8);
-          fTank.currentVolume = Math.max(0, fTank.currentVolume - dripAmount);
-          spawnCisternStain(tankAnchor.x + (Math.random() * 4 - 2), tankAnchor.y + (Math.random() * 4 - 2), false);
-        }
-      }
-      fTank._lastLeakAnchor = null;
-    } else {
-      // Hermetic tanks (like fuel tankers) do not leak when intact
-      fTank._lastLeakAnchor = null;
-    }
-
-    // C. Front Street-Washing Nozzles (Поливомоечные сопла водовоза КО-829А с приводом от КОМ)
     if (car.type === 'truck_water'&& car.isWashingNozzlesActive) {
       const curWater = fTank.currentVolume ?? fTank.currentAmount ?? 0;
       const isEngineRunning = !!car.engineState?.engineRunning;

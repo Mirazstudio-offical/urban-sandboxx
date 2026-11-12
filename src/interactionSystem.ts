@@ -493,17 +493,19 @@ export function findActiveInteraction(
     const veh = (world.vehicles || []).find((v) => v.id === player.heldWaterHose?.vehicleId);
     if (veh) {
       const anchor = getVehicleWaterHoseAnchor(veh) || { x: veh.x, y: veh.y };
-      let reach = isTargetInPhysicalReach(px, py, facing, anchor.x, anchor.y, 64, 1.8, mouseWorldPos);
+      let reach = isTargetInPhysicalReach(px, py, facing, anchor.x, anchor.y, 44, 0.85, mouseWorldPos);
       let targetPos = anchor;
       if (!reach.inReach && isVehicleVacuumTruck(veh)) {
         const vPos = getVehicleVacuumValveWorldPos(veh);
-        const rearReach = isTargetInPhysicalReach(px, py, facing, vPos.rearGateValve.x, vPos.rearGateValve.y, 64, 1.8, mouseWorldPos);
+        const rearReach = isTargetInPhysicalReach(px, py, facing, vPos.rearGateValve.x, vPos.rearGateValve.y, 44, 0.85, mouseWorldPos);
         if (rearReach.inReach) {
           reach = rearReach;
           targetPos = vPos.rearGateValve;
         }
       }
-      if (reach.inReach) {
+      const isDirectMouseHover =
+        !!mouseWorldPos && Math.hypot(mouseWorldPos.x - targetPos.x, mouseWorldPos.y - targetPos.y) < 22;
+      if (reach.inReach && (reach.angleDiff <= 0.95 || isDirectMouseHover)) {
         const isVac = !!veh.fluidTank?.isVacuumTank || veh.type === 'trailer_vacuum';
         const isJetter = !!player.heldWaterHose.isJetterHose;
         candidates.push({
@@ -515,7 +517,7 @@ export function findActiveInteraction(
             ? 'Уложить вакуумный рукав'
             : 'Смотать шланг',
           detail: isVac && !isJetter
-            ? 'Закрыть шибер АНМ-53 и закрепить рукав'
+            ? 'Уложить заборный рукав в боковой пенал'
             : 'Закрепить шланг на штатное место',
           x: targetPos.x,
           y: targetPos.y,
@@ -531,17 +533,19 @@ export function findActiveInteraction(
       ensureVehicleFluidTank(veh);
       if (!veh.fluidTank?.hasWaterHose) continue;
       const anchor = getVehicleWaterHoseAnchor(veh) || { x: veh.x, y: veh.y };
-      let reach = isTargetInPhysicalReach(px, py, facing, anchor.x, anchor.y, 64, 1.8, mouseWorldPos);
+      let reach = isTargetInPhysicalReach(px, py, facing, anchor.x, anchor.y, 48, 0.95, mouseWorldPos);
       let targetPos = anchor;
       if (!reach.inReach && isVehicleVacuumTruck(veh)) {
         const vPos = getVehicleVacuumValveWorldPos(veh);
-        const rearReach = isTargetInPhysicalReach(px, py, facing, vPos.rearGateValve.x, vPos.rearGateValve.y, 64, 1.8, mouseWorldPos);
+        const rearReach = isTargetInPhysicalReach(px, py, facing, vPos.rearGateValve.x, vPos.rearGateValve.y, 48, 0.95, mouseWorldPos);
         if (rearReach.inReach) {
           reach = rearReach;
           targetPos = vPos.rearGateValve;
         }
       }
-      if (reach.inReach) {
+      const isDirectMouseHover =
+        !!mouseWorldPos && Math.hypot(mouseWorldPos.x - targetPos.x, mouseWorldPos.y - targetPos.y) < 24;
+      if (reach.inReach && (reach.angleDiff <= 1.05 || isDirectMouseHover)) {
         const tank = veh.fluidTank;
         const vol = Math.round(tank?.currentVolume ?? tank?.currentAmount ?? 0);
         const cap = Math.round(tank?.capacity ?? 4200);
@@ -582,7 +586,9 @@ export function findActiveInteraction(
 
   // Наружная арматура вакуумных машин (4-ходовой кран сбоку и задвижка АНМ-53 сзади)
   for (const veh of (world.vehicles || [])) {
-    if (!isVehicleVacuumTruck(veh) || !veh.fluidTank) continue;
+    if (!isVehicleVacuumTruck(veh)) continue;
+    ensureVehicleFluidTank(veh);
+    if (!veh.fluidTank) continue;
     const vPos = getVehicleVacuumValveWorldPos(veh);
 
     // 1) Задняя шиберная задвижка АНМ-53 [R]
@@ -934,14 +940,16 @@ export function findActiveInteraction(
       }
 
       // Driver side door:
+      const vTypeStr = veh.type as string;
       const isLongCabForward =
-        veh.type.startsWith('truck') ||
-        veh.type === 'cargo_van' ||
-        veh.type === 'bus' ||
-        veh.type === 'bus_minibus' ||
-        veh.type === 'fire_truck' ||
-        veh.type === 'garbage_truck' ||
-        veh.type === 'tow_truck';
+        vTypeStr.startsWith('truck') ||
+        vTypeStr === 'cargo_van' ||
+        vTypeStr === 'bus' ||
+        vTypeStr === 'bus_minibus' ||
+        vTypeStr === 'fire_engine' ||
+        vTypeStr === 'fire_truck' ||
+        vTypeStr === 'garbage_truck' ||
+        vTypeStr === 'tow_truck';
       const sideOffset = cfg.width * 0.52 + 10;
       const longitudinalOffset = isLongCabForward ? cfg.length * 0.28 : cfg.length * 0.08;
       const driverDoorX = veh.x + cos * longitudinalOffset - sin * sideOffset;

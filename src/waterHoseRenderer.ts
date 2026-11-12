@@ -170,15 +170,16 @@ export class WaterHoseRenderer {
 
     // 6. Nozzle / Suction Lance in Player's Hands
     const nozzleNode = nodes[nodes.length - 1];
-    this.renderHandNozzle(ctx, nozzleNode.x, nozzleNode.y, player.angle, isSpraying, time, isVacuum, isSuction);
+    const aimAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
+    this.renderHandNozzle(ctx, nozzleNode.x, nozzleNode.y, aimAngle, isSpraying, time, isVacuum, isSuction);
 
     // 7. Full Stream when spraying OR Vacuum Suction Vortex when sucking
     if (isSuction && isVacuum) {
-      this.renderVacuumSuctionVortex(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, hose.suctionLiquidColor || '#5c6b32');
+      this.renderVacuumSuctionVortex(ctx, nozzleNode.x, nozzleNode.y, aimAngle, time, hose.suctionLiquidColor || '#5c6b32');
     } else if (isSpraying && isVacuum) {
-      this.renderVacuumDischargeStream(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, !!hose.isPressurized, liquidColor);
+      this.renderVacuumDischargeStream(ctx, nozzleNode.x, nozzleNode.y, aimAngle, time, !!hose.isPressurized, liquidColor);
     } else if (isSpraying) {
-      this.renderWaterStream(ctx, nozzleNode.x, nozzleNode.y, player.angle, time, !!hose.isPressurized);
+      this.renderWaterStream(ctx, nozzleNode.x, nozzleNode.y, aimAngle, time, !!hose.isPressurized);
     }
 
     ctx.restore();

@@ -52,6 +52,12 @@ export const VacuumPumpModal: React.FC<VacuumPumpModalProps> = ({ isOpen, onClos
   const setMode = (m: PumpMode) => {
     if (!vehicle.fluidTank || m === mode) return;
     vehicle.fluidTank.vacuumPumpMode = m;
+    const curBar = vehicle.fluidTank.vacuumPressureBar ?? 0;
+    if (m === 'discharge' && curBar < 0) {
+      vehicle.fluidTank.vacuumPressureBar = 0;
+    } else if (m === 'suction' && curBar > 0) {
+      vehicle.fluidTank.vacuumPressureBar = 0;
+    }
     sound.playHydraulicHiss(0.22);
     onForceUpdate?.();
   };

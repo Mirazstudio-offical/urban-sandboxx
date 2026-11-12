@@ -10174,8 +10174,8 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "fluidTank": {
       "capacity": 800,
-      "currentVolume": 0,
-      "currentAmount": 0,
+      "currentVolume": 350,
+      "currentAmount": 350,
       "liquidType": "sewage",
       "isHermetic": true,
       "leakProbabilityPerSec": 0,

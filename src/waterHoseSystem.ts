@@ -229,8 +229,9 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
   if (numNodes < 2) return;
 
   // Hand position for the nozzle / suction lance
+  const playerAimAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
   const handDist = 6.5;
-  const handAngle = player.angle + 0.2;
+  const handAngle = playerAimAngle + 0.2;
   const handX = player.x + Math.cos(handAngle) * handDist;
   const handY = player.y + Math.sin(handAngle) * handDist;
 
@@ -374,20 +375,22 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
     const vacBar = tank.vacuumPressureBar ?? 0; // negative = vacuum, positive = overpressure
     const isGateOpen = !!tank.drainValveOpen; // Rear slide gate valve АНМ-53 must be OPEN for fluid/air passage through hose!
 
-    if (vacuumMode === 'suction') {
+    const storedVac = Math.max(0, Math.min(1.2, (-vacBar - 0.03) / 0.72));
+    const activeVac = isPumpPowered && vacuumMode === 'suction' ? 0.55 * pressureFactor : 0;
+    const vacuumStrength = Math.max(storedVac, activeVac);
+
+    // If the 4-way valve is in 'discharge' OR the pump is off with no vacuum ("без вакуума"), holding LMB with gate open drains/discharges liquid through the hose!
+    const canSuckPhysically =
+      vacuumMode === 'suction' && isGateOpen && vacuumStrength > 0.02 && !isTankFull && !tank.spuCutoffActive;
+
+    if (vacuumMode === 'suction' && (canSuckPhysically || currentVol <= 0 || vacuumStrength > 0.02)) {
       hose.isSpraying = false;
 
-      // Suction physically requires:
-      // 1) Slide gate valve АНМ-53 open (drainValveOpen === true)
-      // 2) Negative pressure (vacuum) inside the cistern (vacBar < -0.10 bar)
-      // 3) SPU float cutoff valve not blocking the line (!isTankFull)
-      const vacuumStrength = Math.max(0, Math.min(1.2, (-vacBar - 0.08) / 0.72));
-      const canSuckPhysically = isGateOpen && vacuumStrength > 0.02 && !isTankFull && !tank.spuCutoffActive;
       const wantsSuction = isMouseDown && !player.isInVehicle && canSuckPhysically;
       hose.isSuctionActive = wantsSuction;
 
       if (wantsSuction) {
-        const aimAngle = player.angle;
+        const aimAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
         const cosAim = Math.cos(aimAngle);
         const sinAim = Math.sin(aimAngle);
         const intakeX = handX + cosAim * 9.5;
@@ -396,8 +399,8 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
         const vacBodyId = getVehicleVacuumBodyId(veh);
         // Heavy VK-6M2 pump on КО-505А has 1.4x higher suction capacity than КО-503
         const pumpMultiplier = vacBodyId === 'body_vacuum_sludge_ko505' ? 1.4 : 1.0;
-        const suctionRadius = (22 + vacuumStrength * 18) * pumpMultiplier;
-        const suctionPower = (0.7 + vacuumStrength * 1.15) * pumpMultiplier;
+        const suctionRadius = (26 + vacuumStrength * 20) * pumpMultiplier;
+        const suctionPower = (0.85 + vacuumStrength * 1.25) * pumpMultiplier;
 
         let suckedLiters = 0;
         let suckedType: StoredLiquidType = 'sewage';
@@ -415,15 +418,15 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
             if (dist <= suctionRadius + st.radius) {
               foundRealLiquidSource = true;
               if (dist > 1.5) {
-                const pullStep = Math.min(dist * 0.4, 24 * suctionPower * dt);
+                const pullStep = Math.min(dist * 0.45, 28 * suctionPower * dt);
                 st.x -= (dx / dist) * pullStep;
                 st.y -= (dy / dist) * pullStep;
               }
-              const shrinkAmount = (4.0 + suctionPower * 5.5) * dt;
+              const shrinkAmount = (4.5 + suctionPower * 6.0) * dt;
               const oldR = st.radius;
               st.radius = Math.max(0, st.radius - shrinkAmount);
-              const areaDelta = Math.max(0.1, oldR * oldR - st.radius * st.radius);
-              suckedLiters += areaDelta * 1.35;
+              const areaDelta = Math.max(0.15, oldR * oldR - st.radius * st.radius);
+              suckedLiters += areaDelta * 1.45;
 
               if (st.type === 'oil') {
                 suckedType = 'oil';
@@ -449,7 +452,41 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
           }
         }
 
-        // 2. Check if intake bell is submerged in river / natural water body
+        // 2. Check rainwater puddles (`world.puddles`) — ALWAYS check even if stains are nearby!
+        if (world.puddles && world.puddles.length > 0) {
+          for (let pIdx = world.puddles.length - 1; pIdx >= 0; pIdx--) {
+            const pud = world.puddles[pIdx];
+            const dx = pud.x - intakeX;
+            const dy = pud.y - intakeY;
+            const dPud = Math.hypot(dx, dy);
+            const pudR = Math.max(pud.radiusX || 12, pud.radiusY || 12);
+            if (dPud <= suctionRadius + pudR) {
+              foundRealLiquidSource = true;
+              if (!pud.isPond && dPud > 1.5) {
+                const pullStep = Math.min(dPud * 0.35, 18 * suctionPower * dt);
+                pud.x -= (dx / dPud) * pullStep;
+                pud.y -= (dy / dPud) * pullStep;
+              }
+              const shrinkRate = (5.0 + suctionPower * 6.5) * dt;
+              if (pud.isPond) {
+                suckedLiters += (12.0 + suctionPower * 10.0) * dt;
+              } else {
+                const oldArea = (pud.radiusX || 10) * (pud.radiusY || 10);
+                pud.radiusX = Math.max(0, (pud.radiusX || 10) - shrinkRate);
+                pud.radiusY = Math.max(0, (pud.radiusY || 10) - shrinkRate);
+                const newArea = pud.radiusX * pud.radiusY;
+                suckedLiters += Math.max(8.0 * dt, (oldArea - newArea) * 0.85);
+                if (pud.radiusX <= 2.2 || pud.radiusY <= 2.2) {
+                  world.puddles.splice(pIdx, 1);
+                }
+              }
+              suckedType = 'water';
+              suckedColor = '#0284c7';
+            }
+          }
+        }
+
+        // 3. Check if intake bell is submerged in river / natural water body
         if (!foundRealLiquidSource) {
           const riverInfo = getRiverWaterAt(intakeX, intakeY);
           if (riverInfo && riverInfo.inWater) {
@@ -460,12 +497,12 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
           }
         }
 
-        // 3. Check if intake bell is placed over a sewer manhole, storm drain grate, or village well
+        // 4. Check if intake bell is placed over a sewer manhole, storm drain grate, or village well
         if (!foundRealLiquidSource && world.props) {
           for (const prop of world.props) {
             if (prop.type === 'manhole' || prop.type === 'drain_grate' || prop.type === 'village_well') {
               const dProp = Math.hypot(prop.x - intakeX, prop.y - intakeY);
-              if (dProp <= suctionRadius + 14) {
+              if (dProp <= suctionRadius + 16) {
                 foundRealLiquidSource = true;
                 suckedLiters += (11.0 + suctionPower * 9.5) * dt;
                 if (prop.type === 'village_well') {
@@ -481,26 +518,6 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
           }
         }
 
-        // 4. Check rainwater puddles (`world.puddles`)
-        if (!foundRealLiquidSource && world.puddles) {
-          for (let pIdx = world.puddles.length - 1; pIdx >= 0; pIdx--) {
-            const pud = world.puddles[pIdx];
-            const dPud = Math.hypot(pud.x - intakeX, pud.y - intakeY);
-            const pudR = Math.max(pud.radiusX || 12, pud.radiusY || 12);
-            if (dPud <= suctionRadius + pudR) {
-              foundRealLiquidSource = true;
-              suckedLiters += (9.0 + suctionPower * 7.5) * dt;
-              suckedType = 'water';
-              suckedColor = '#0284c7';
-              if (pud.radiusX > 3 && pud.radiusY > 3) {
-                pud.radiusX = Math.max(2, pud.radiusX - 1.8 * dt);
-                pud.radiusY = Math.max(2, pud.radiusY - 1.8 * dt);
-              }
-              break;
-            }
-          }
-        }
-
         if (foundRealLiquidSource && suckedLiters > 0) {
           const totalAdded = Math.min(maxCap - currentVol, suckedLiters);
           tank.liquidType = mixTankLiquidType(tank.liquidType || 'sewage', currentVol, suckedType, totalAdded);
@@ -511,9 +528,11 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
             tank.spuCutoffActive = true;
           }
         } else {
-          // Sucking dry air on dry asphalt: no liquid is added, and open hose bleeds vacuum pressure!
+          // Sucking dry air on dry asphalt: slight vacuum bleed if pump is off
           hose.suctionLiquidColor = 'rgba(148, 163, 184, 0.45)';
-          tank.vacuumPressureBar = Math.min(0, (tank.vacuumPressureBar ?? 0) + 0.22 * dt);
+          if (!isPumpPowered) {
+            tank.vacuumPressureBar = Math.min(0, (tank.vacuumPressureBar ?? 0) + 0.03 * dt);
+          }
         }
 
         // Spawn inward-swirling droplets (or dry dust motes if sucking air) into the brass intake lance tip
@@ -547,21 +566,20 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
         }
       }
     } else {
-      // VACUUM HOSE IN DISCHARGE MODE ('discharge')
+      // VACUUM HOSE IN DISCHARGE MODE ('discharge') OR GRAVITY DRAIN WHEN PUMP OFF ('без вакуума')
       hose.isSuctionActive = false;
       const hasLiquid = currentVol > 0;
-      // Discharge through the d=100mm vacuum hose requires the rear slide gate valve АНМ-53 to be OPEN
-      // and internal pressure not to be strong negative vacuum (vacBar >= -0.08)
       const overpressure = Math.max(0, vacBar);
-      const isCompressorPushing = overpressure > 0.12;
+      const isCompressorPushing = overpressure > 0.08 || (isPumpPowered && vacuumMode === 'discharge');
       hose.isPressurized = isCompressorPushing;
 
-      const wantsToDischarge = isMouseDown && hasLiquid && isGateOpen && vacBar >= -0.08 && !player.isInVehicle;
+      const wantsToDischarge = isMouseDown && hasLiquid && isGateOpen && !player.isInVehicle;
       hose.isSpraying = wantsToDischarge;
 
       if (wantsToDischarge) {
-        // Gravity flow through d=100mm pipe (~3.2 L/s) vs compressor-assisted discharge (~8.5 L/s)
-        const dischargeRate = isCompressorPushing ? (4.8 + overpressure * 3.5) : 3.2;
+        // Gravity flow through d=100mm pipe (~4.5 L/s) vs compressor-assisted discharge (~10.5 L/s)
+        const effOverpressure = isCompressorPushing ? Math.max(0.45, overpressure) : 0;
+        const dischargeRate = isCompressorPushing ? (6.0 + effOverpressure * 4.0) : 4.5;
         const consumed = Math.min(currentVol, dischargeRate * dt);
         tank.currentVolume = Math.max(0, currentVol - consumed);
         tank.currentAmount = tank.currentVolume;
@@ -583,7 +601,7 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
           world,
           dt,
           isCompressorPushing,
-          overpressure * 0.75,
+          Math.max(0.35, effOverpressure * 0.85),
           tank.liquidType || 'sewage',
           true, // heavy d=100mm vacuum hose discharge (shorter reach, wide bore)
           false
@@ -690,7 +708,7 @@ function spawnLiquidStream(
   isWideBoreVacuumDischarge: boolean,
   isHighPressureJetter: boolean
 ) {
-  const aimAngle = player.angle;
+  const aimAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
   const cosAim = Math.cos(aimAngle);
   const sinAim = Math.sin(aimAngle);
 

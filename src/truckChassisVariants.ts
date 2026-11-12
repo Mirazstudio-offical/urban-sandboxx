@@ -745,8 +745,8 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     fluidTankSpec: {
       liquidType: 'sewage',
       capacity: 4200,
-      currentVolume: 0,
-      currentAmount: 0,
+      currentVolume: 1800,
+      currentAmount: 1800,
       isHermetic: true,
       hasWaterHose: true,
       isVacuumTank: true,
@@ -767,8 +767,8 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     fluidTankSpec: {
       liquidType: 'sewage',
       capacity: 10000,
-      currentVolume: 0,
-      currentAmount: 0,
+      currentVolume: 4200,
+      currentAmount: 4200,
       isHermetic: true,
       hasWaterHose: true,
       isVacuumTank: true,
@@ -792,8 +792,8 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     fluidTankSpec: {
       liquidType: 'sewage',
       capacity: 6500,
-      currentVolume: 0,
-      currentAmount: 0,
+      currentVolume: 2600,
+      currentAmount: 2600,
       isHermetic: true,
       hasWaterHose: true,
       isVacuumTank: true,

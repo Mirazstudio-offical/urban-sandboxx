@@ -16,7 +16,7 @@ export function vehicleHasPto(v: Vehicle | null | undefined): boolean {
   return (
     v.type === 'truck_water' ||
     v.type === 'fire_engine' ||
-    v.type === 'tractor_mtz' ||
+    v.type.startsWith('tractor_') ||
     !!v.fluidTank?.hasWaterHose ||
     isVehicleVacuumTruck(v) ||
     isVehicleCraneTruck(v)
@@ -36,7 +36,7 @@ export function hasPtoDrive(v: Vehicle | null | undefined): boolean {
 function describe(v: Vehicle): string {
   if (isVehicleCraneTruck(v)) return 'гидронасос крана';
   if (isVehicleVacuumTruck(v)) return 'вакуумный насос';
-  if (v.type === 'tractor_mtz') return 'вал отбора мощности (ВОМ)';
+  if (v.type.startsWith('tractor_')) return 'вал отбора мощности (ВОМ)';
   return 'водяной насос';
 }
 

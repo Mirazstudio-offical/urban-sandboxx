@@ -133412,25 +133412,55 @@
       "walkways": [
         {
           "x": 2501,
-          "y": 186,
-          "width": 538,
-          "height": 18,
+          "y": 189,
+          "width": 597,
+          "height": 22,
           "style": "concrete"
         },
         {
-          "x": 2608,
-          "y": 199,
-          "width": 18,
-          "height": 495,
+          "x": 2611,
+          "y": 211,
+          "width": 22,
+          "height": 499,
           "style": "concrete"
+        },
+        {
+          "x": 2633,
+          "y": 420,
+          "width": 465,
+          "height": 18,
+          "style": "stone"
+        },
+        {
+          "x": 2840,
+          "y": 211,
+          "width": 18,
+          "height": 499,
+          "style": "stone"
         }
       ],
       "plazas": [
         {
-          "x": 2626,
-          "y": 204,
-          "width": 463,
-          "height": 485,
+          "x": 2633,
+          "y": 211,
+          "width": 115,
+          "height": 88,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 2858,
+          "y": 438,
+          "width": 136,
+          "height": 112,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 2980,
+          "y": 211,
+          "width": 96,
+          "height": 72,
           "shape": "rect",
           "style": "tile"
         }
@@ -133450,27 +133480,57 @@
       "walkways": [
         {
           "x": 3301,
-          "y": 186,
-          "width": 508,
-          "height": 18,
+          "y": 189,
+          "width": 561,
+          "height": 22,
           "style": "concrete"
         },
         {
-          "x": 3408,
-          "y": 199,
-          "width": 18,
-          "height": 495,
+          "x": 3411,
+          "y": 211,
+          "width": 22,
+          "height": 487,
           "style": "concrete"
+        },
+        {
+          "x": 3433,
+          "y": 395,
+          "width": 429,
+          "height": 18,
+          "style": "cobblestone"
+        },
+        {
+          "x": 3630,
+          "y": 211,
+          "width": 18,
+          "height": 487,
+          "style": "cobblestone"
         }
       ],
       "plazas": [
         {
-          "x": 3426,
-          "y": 204,
-          "width": 433,
-          "height": 485,
+          "x": 3433,
+          "y": 211,
+          "width": 110,
+          "height": 84,
           "shape": "rect",
           "style": "tile"
+        },
+        {
+          "x": 3648,
+          "y": 413,
+          "width": 130,
+          "height": 116,
+          "shape": "circle",
+          "style": "tile"
+        },
+        {
+          "x": 3740,
+          "y": 211,
+          "width": 92,
+          "height": 68,
+          "shape": "rect",
+          "style": "stone"
         }
       ],
       "_editorQId": 669
@@ -133488,25 +133548,55 @@
       "walkways": [
         {
           "x": 4131,
-          "y": 186,
-          "width": 508,
-          "height": 18,
+          "y": 189,
+          "width": 567,
+          "height": 22,
           "style": "concrete"
         },
         {
-          "x": 4238,
-          "y": 199,
-          "width": 18,
-          "height": 495,
+          "x": 4241,
+          "y": 211,
+          "width": 22,
+          "height": 487,
           "style": "concrete"
+        },
+        {
+          "x": 4263,
+          "y": 435,
+          "width": 435,
+          "height": 18,
+          "style": "stone"
+        },
+        {
+          "x": 4465,
+          "y": 211,
+          "width": 18,
+          "height": 487,
+          "style": "stone"
         }
       ],
       "plazas": [
         {
-          "x": 4256,
-          "y": 204,
-          "width": 433,
-          "height": 485,
+          "x": 4263,
+          "y": 211,
+          "width": 112,
+          "height": 84,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 4483,
+          "y": 453,
+          "width": 136,
+          "height": 114,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 4575,
+          "y": 211,
+          "width": 94,
+          "height": 68,
           "shape": "rect",
           "style": "tile"
         }
@@ -133526,25 +133616,55 @@
       "walkways": [
         {
           "x": 4901,
-          "y": 186,
-          "width": 508,
-          "height": 18,
+          "y": 189,
+          "width": 561,
+          "height": 22,
           "style": "concrete"
         },
         {
-          "x": 5008,
-          "y": 199,
-          "width": 18,
-          "height": 495,
+          "x": 5011,
+          "y": 211,
+          "width": 22,
+          "height": 487,
           "style": "concrete"
+        },
+        {
+          "x": 5033,
+          "y": 440,
+          "width": 429,
+          "height": 18,
+          "style": "cobblestone"
+        },
+        {
+          "x": 5235,
+          "y": 211,
+          "width": 18,
+          "height": 487,
+          "style": "cobblestone"
         }
       ],
       "plazas": [
         {
-          "x": 5026,
-          "y": 204,
-          "width": 433,
-          "height": 485,
+          "x": 5033,
+          "y": 211,
+          "width": 110,
+          "height": 84,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 5253,
+          "y": 458,
+          "width": 128,
+          "height": 118,
+          "shape": "circle",
+          "style": "stone"
+        },
+        {
+          "x": 5340,
+          "y": 211,
+          "width": 94,
+          "height": 68,
           "shape": "rect",
           "style": "tile"
         }
@@ -133706,13 +133826,50 @@
       "walkways": [
         {
           "x": 4901,
-          "y": 1016,
-          "width": 568,
-          "height": 363,
+          "y": 1011,
+          "width": 561,
+          "height": 24,
+          "style": "tile"
+        },
+        {
+          "x": 4901,
+          "y": 1367,
+          "width": 561,
+          "height": 22,
           "style": "concrete"
+        },
+        {
+          "x": 5040,
+          "y": 1035,
+          "width": 18,
+          "height": 332,
+          "style": "concrete"
+        },
+        {
+          "x": 5312,
+          "y": 1035,
+          "width": 18,
+          "height": 332,
+          "style": "concrete"
+        },
+        {
+          "x": 4901,
+          "y": 1235,
+          "width": 561,
+          "height": 18,
+          "style": "stone"
         }
       ],
-      "plazas": [],
+      "plazas": [
+        {
+          "x": 5108,
+          "y": 1125,
+          "width": 154,
+          "height": 110,
+          "shape": "rect",
+          "style": "tile"
+        }
+      ],
       "_editorQId": 671
     },
     {
@@ -133855,46 +134012,69 @@
       "walkways": [
         {
           "x": 4586,
-          "y": 2276,
+          "y": 2251,
           "width": 50,
-          "height": 18,
-          "style": "asphalt"
-        },
-        {
-          "x": 4254,
-          "y": 1864,
-          "width": 437,
-          "height": 28,
+          "height": 43,
           "style": "asphalt"
         },
         {
           "x": 4129,
-          "y": 1806,
-          "width": 492,
+          "y": 1809,
+          "width": 521,
           "height": 18,
           "style": "concrete"
         },
         {
-          "x": 4236,
-          "y": 1819,
+          "x": 4239,
+          "y": 1827,
           "width": 18,
-          "height": 447,
+          "height": 435,
           "style": "concrete"
         },
         {
-          "x": 4149,
-          "y": 2266,
-          "width": 18,
-          "height": 10,
-          "style": "concrete"
+          "x": 4650,
+          "y": 1705,
+          "width": 44,
+          "height": 129,
+          "style": "asphalt"
+        },
+        {
+          "x": 4257,
+          "y": 2032,
+          "width": 319,
+          "height": 16,
+          "style": "cobblestone"
+        },
+        {
+          "x": 4408,
+          "y": 1827,
+          "width": 16,
+          "height": 435,
+          "style": "cobblestone"
         }
       ],
       "plazas": [
         {
-          "x": 4264,
-          "y": 1834,
-          "width": 100,
-          "height": 80,
+          "x": 4257,
+          "y": 1827,
+          "width": 105,
+          "height": 82,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 4424,
+          "y": 1916,
+          "width": 128,
+          "height": 116,
+          "shape": "rect",
+          "style": "stone"
+        },
+        {
+          "x": 4257,
+          "y": 2048,
+          "width": 124,
+          "height": 96,
           "shape": "rect",
           "style": "tile"
         }
@@ -134003,25 +134183,55 @@
       "walkways": [
         {
           "x": 79,
-          "y": 2638,
-          "width": 560,
-          "height": 18,
+          "y": 2641,
+          "width": 631,
+          "height": 22,
           "style": "concrete"
         },
         {
-          "x": 186,
-          "y": 2651,
-          "width": 18,
-          "height": 443,
+          "x": 189,
+          "y": 2663,
+          "width": 22,
+          "height": 435,
           "style": "concrete"
+        },
+        {
+          "x": 211,
+          "y": 2862,
+          "width": 499,
+          "height": 18,
+          "style": "stone"
+        },
+        {
+          "x": 438,
+          "y": 2663,
+          "width": 18,
+          "height": 435,
+          "style": "stone"
         }
       ],
       "plazas": [
         {
-          "x": 204,
-          "y": 2656,
-          "width": 485,
-          "height": 433,
+          "x": 211,
+          "y": 2663,
+          "width": 105,
+          "height": 78,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 456,
+          "y": 2880,
+          "width": 134,
+          "height": 110,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 612,
+          "y": 2663,
+          "width": 84,
+          "height": 64,
           "shape": "rect",
           "style": "tile"
         }
@@ -134041,27 +134251,57 @@
       "walkways": [
         {
           "x": 901,
-          "y": 2638,
-          "width": 538,
-          "height": 18,
+          "y": 2641,
+          "width": 609,
+          "height": 22,
           "style": "concrete"
         },
         {
-          "x": 1008,
-          "y": 2651,
-          "width": 18,
-          "height": 443,
+          "x": 1011,
+          "y": 2663,
+          "width": 22,
+          "height": 435,
           "style": "concrete"
+        },
+        {
+          "x": 1033,
+          "y": 2862,
+          "width": 477,
+          "height": 18,
+          "style": "cobblestone"
+        },
+        {
+          "x": 1248,
+          "y": 2663,
+          "width": 18,
+          "height": 435,
+          "style": "cobblestone"
         }
       ],
       "plazas": [
         {
-          "x": 1026,
-          "y": 2656,
-          "width": 463,
-          "height": 433,
+          "x": 1033,
+          "y": 2663,
+          "width": 105,
+          "height": 78,
           "shape": "rect",
           "style": "tile"
+        },
+        {
+          "x": 1266,
+          "y": 2880,
+          "width": 130,
+          "height": 110,
+          "shape": "circle",
+          "style": "tile"
+        },
+        {
+          "x": 1412,
+          "y": 2663,
+          "width": 84,
+          "height": 64,
+          "shape": "rect",
+          "style": "stone"
         }
       ],
       "_editorQId": 663
@@ -134079,48 +134319,71 @@
       "walkways": [
         {
           "x": 2186,
-          "y": 3106,
+          "y": 3081,
           "width": 50,
-          "height": 24,
-          "style": "asphalt"
-        },
-        {
-          "x": 1824,
-          "y": 2694,
-          "width": 467,
-          "height": 28,
+          "height": 49,
           "style": "asphalt"
         },
         {
           "x": 1699,
-          "y": 2636,
-          "width": 522,
+          "y": 2639,
+          "width": 551,
           "height": 18,
           "style": "concrete"
         },
         {
-          "x": 1806,
-          "y": 2649,
+          "x": 1809,
+          "y": 2657,
           "width": 18,
-          "height": 447,
+          "height": 441,
           "style": "concrete"
         },
         {
-          "x": 1719,
-          "y": 3096,
+          "x": 2250,
+          "y": 2535,
+          "width": 44,
+          "height": 129,
+          "style": "asphalt"
+        },
+        {
+          "x": 1827,
+          "y": 2875,
+          "width": 349,
+          "height": 18,
+          "style": "stone"
+        },
+        {
+          "x": 1995,
+          "y": 2657,
           "width": 18,
-          "height": 10,
-          "style": "concrete"
+          "height": 441,
+          "style": "stone"
         }
       ],
       "plazas": [
         {
-          "x": 1834,
-          "y": 2664,
-          "width": 100,
-          "height": 80,
+          "x": 1827,
+          "y": 2657,
+          "width": 103,
+          "height": 82,
           "shape": "rect",
           "style": "tile"
+        },
+        {
+          "x": 2013,
+          "y": 2755,
+          "width": 124,
+          "height": 120,
+          "shape": "circle",
+          "style": "tile"
+        },
+        {
+          "x": 1827,
+          "y": 2893,
+          "width": 132,
+          "height": 104,
+          "shape": "rect",
+          "style": "stone"
         }
       ],
       "_editorQId": 669
@@ -134138,46 +134401,69 @@
       "walkways": [
         {
           "x": 2986,
-          "y": 3106,
+          "y": 3081,
           "width": 50,
-          "height": 24,
-          "style": "asphalt"
-        },
-        {
-          "x": 2624,
-          "y": 2694,
-          "width": 467,
-          "height": 28,
+          "height": 49,
           "style": "asphalt"
         },
         {
           "x": 2499,
-          "y": 2636,
-          "width": 522,
+          "y": 2639,
+          "width": 551,
           "height": 18,
           "style": "concrete"
         },
         {
-          "x": 2606,
-          "y": 2649,
+          "x": 2609,
+          "y": 2657,
           "width": 18,
-          "height": 447,
+          "height": 441,
           "style": "concrete"
         },
         {
-          "x": 2519,
-          "y": 3096,
-          "width": 18,
-          "height": 10,
-          "style": "concrete"
+          "x": 3050,
+          "y": 2535,
+          "width": 44,
+          "height": 129,
+          "style": "asphalt"
+        },
+        {
+          "x": 2627,
+          "y": 2855,
+          "width": 349,
+          "height": 16,
+          "style": "cobblestone"
+        },
+        {
+          "x": 2796,
+          "y": 2657,
+          "width": 16,
+          "height": 441,
+          "style": "cobblestone"
         }
       ],
       "plazas": [
         {
-          "x": 2634,
-          "y": 2664,
-          "width": 100,
-          "height": 80,
+          "x": 2627,
+          "y": 2657,
+          "width": 105,
+          "height": 82,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 2812,
+          "y": 2745,
+          "width": 132,
+          "height": 110,
+          "shape": "rect",
+          "style": "stone"
+        },
+        {
+          "x": 2627,
+          "y": 2871,
+          "width": 128,
+          "height": 102,
           "shape": "rect",
           "style": "tile"
         }
@@ -134414,13 +134700,50 @@
       "walkways": [
         {
           "x": 79,
-          "y": 3416,
+          "y": 3411,
           "width": 620,
-          "height": 333,
+          "height": 24,
+          "style": "tile"
+        },
+        {
+          "x": 79,
+          "y": 3737,
+          "width": 620,
+          "height": 22,
           "style": "concrete"
+        },
+        {
+          "x": 228,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 528,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 79,
+          "y": 3618,
+          "width": 620,
+          "height": 18,
+          "style": "stone"
         }
       ],
-      "plazas": [],
+      "plazas": [
+        {
+          "x": 312,
+          "y": 3512,
+          "width": 152,
+          "height": 106,
+          "shape": "rect",
+          "style": "tile"
+        }
+      ],
       "_editorQId": 663
     },
     {
@@ -134436,13 +134759,50 @@
       "walkways": [
         {
           "x": 901,
-          "y": 3416,
+          "y": 3411,
           "width": 598,
-          "height": 333,
+          "height": 24,
+          "style": "tile"
+        },
+        {
+          "x": 901,
+          "y": 3737,
+          "width": 598,
+          "height": 22,
           "style": "concrete"
+        },
+        {
+          "x": 1048,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 1332,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 901,
+          "y": 3618,
+          "width": 598,
+          "height": 18,
+          "style": "cobblestone"
         }
       ],
-      "plazas": [],
+      "plazas": [
+        {
+          "x": 1134,
+          "y": 3508,
+          "width": 132,
+          "height": 110,
+          "shape": "circle",
+          "style": "tile"
+        }
+      ],
       "_editorQId": 663
     },
     {
@@ -134458,46 +134818,69 @@
       "walkways": [
         {
           "x": 2186,
-          "y": 3876,
+          "y": 3851,
           "width": 50,
-          "height": 18,
-          "style": "asphalt"
-        },
-        {
-          "x": 1824,
-          "y": 3464,
-          "width": 467,
-          "height": 28,
+          "height": 43,
           "style": "asphalt"
         },
         {
           "x": 1699,
-          "y": 3406,
-          "width": 522,
+          "y": 3409,
+          "width": 551,
           "height": 18,
           "style": "concrete"
         },
         {
-          "x": 1806,
-          "y": 3419,
+          "x": 1809,
+          "y": 3427,
           "width": 18,
-          "height": 447,
+          "height": 435,
           "style": "concrete"
         },
         {
-          "x": 1719,
-          "y": 3866,
+          "x": 2250,
+          "y": 3305,
+          "width": 44,
+          "height": 129,
+          "style": "asphalt"
+        },
+        {
+          "x": 1827,
+          "y": 3638,
+          "width": 349,
+          "height": 18,
+          "style": "stone"
+        },
+        {
+          "x": 1995,
+          "y": 3427,
           "width": 18,
-          "height": 10,
-          "style": "concrete"
+          "height": 435,
+          "style": "stone"
         }
       ],
       "plazas": [
         {
-          "x": 1834,
-          "y": 3434,
-          "width": 100,
-          "height": 80,
+          "x": 1827,
+          "y": 3427,
+          "width": 105,
+          "height": 82,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 2013,
+          "y": 3530,
+          "width": 132,
+          "height": 108,
+          "shape": "rect",
+          "style": "stone"
+        },
+        {
+          "x": 1827,
+          "y": 3656,
+          "width": 126,
+          "height": 98,
           "shape": "rect",
           "style": "tile"
         }
@@ -134517,46 +134900,69 @@
       "walkways": [
         {
           "x": 2986,
-          "y": 3876,
+          "y": 3851,
           "width": 50,
-          "height": 18,
-          "style": "asphalt"
-        },
-        {
-          "x": 2624,
-          "y": 3464,
-          "width": 467,
-          "height": 28,
+          "height": 43,
           "style": "asphalt"
         },
         {
           "x": 2499,
-          "y": 3406,
-          "width": 522,
+          "y": 3409,
+          "width": 551,
           "height": 18,
           "style": "concrete"
         },
         {
-          "x": 2606,
-          "y": 3419,
+          "x": 2609,
+          "y": 3427,
           "width": 18,
-          "height": 447,
+          "height": 435,
           "style": "concrete"
         },
         {
-          "x": 2519,
-          "y": 3866,
-          "width": 18,
-          "height": 10,
-          "style": "concrete"
+          "x": 3050,
+          "y": 3305,
+          "width": 44,
+          "height": 129,
+          "style": "asphalt"
+        },
+        {
+          "x": 2627,
+          "y": 3632,
+          "width": 349,
+          "height": 16,
+          "style": "cobblestone"
+        },
+        {
+          "x": 2796,
+          "y": 3427,
+          "width": 16,
+          "height": 435,
+          "style": "cobblestone"
         }
       ],
       "plazas": [
         {
-          "x": 2634,
-          "y": 3434,
-          "width": 100,
-          "height": 80,
+          "x": 2627,
+          "y": 3427,
+          "width": 105,
+          "height": 82,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 2812,
+          "y": 3516,
+          "width": 124,
+          "height": 116,
+          "shape": "circle",
+          "style": "stone"
+        },
+        {
+          "x": 2812,
+          "y": 3648,
+          "width": 128,
+          "height": 102,
           "shape": "rect",
           "style": "tile"
         }
@@ -134576,48 +134982,71 @@
       "walkways": [
         {
           "x": 3756,
-          "y": 3876,
+          "y": 3851,
           "width": 50,
-          "height": 18,
-          "style": "asphalt"
-        },
-        {
-          "x": 3424,
-          "y": 3464,
-          "width": 437,
-          "height": 28,
+          "height": 43,
           "style": "asphalt"
         },
         {
           "x": 3299,
-          "y": 3406,
-          "width": 492,
+          "y": 3409,
+          "width": 521,
           "height": 18,
           "style": "concrete"
         },
         {
-          "x": 3406,
-          "y": 3419,
+          "x": 3409,
+          "y": 3427,
           "width": 18,
-          "height": 447,
+          "height": 435,
           "style": "concrete"
         },
         {
-          "x": 3319,
-          "y": 3866,
+          "x": 3820,
+          "y": 3305,
+          "width": 44,
+          "height": 129,
+          "style": "asphalt"
+        },
+        {
+          "x": 3427,
+          "y": 3638,
+          "width": 319,
+          "height": 18,
+          "style": "stone"
+        },
+        {
+          "x": 3578,
+          "y": 3427,
           "width": 18,
-          "height": 10,
-          "style": "concrete"
+          "height": 435,
+          "style": "stone"
         }
       ],
       "plazas": [
         {
-          "x": 3434,
-          "y": 3434,
-          "width": 100,
-          "height": 80,
+          "x": 3427,
+          "y": 3427,
+          "width": 105,
+          "height": 82,
           "shape": "rect",
           "style": "tile"
+        },
+        {
+          "x": 3596,
+          "y": 3530,
+          "width": 126,
+          "height": 108,
+          "shape": "rect",
+          "style": "tile"
+        },
+        {
+          "x": 3427,
+          "y": 3656,
+          "width": 124,
+          "height": 98,
+          "shape": "rect",
+          "style": "stone"
         }
       ],
       "_editorQId": 669
@@ -134635,13 +135064,50 @@
       "walkways": [
         {
           "x": 4131,
-          "y": 3416,
+          "y": 3411,
           "width": 568,
-          "height": 333,
+          "height": 24,
+          "style": "tile"
+        },
+        {
+          "x": 4131,
+          "y": 3737,
+          "width": 568,
+          "height": 22,
           "style": "concrete"
+        },
+        {
+          "x": 4270,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 4542,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 4131,
+          "y": 3618,
+          "width": 568,
+          "height": 18,
+          "style": "stone"
         }
       ],
-      "plazas": [],
+      "plazas": [
+        {
+          "x": 4342,
+          "y": 3512,
+          "width": 146,
+          "height": 106,
+          "shape": "rect",
+          "style": "tile"
+        }
+      ],
       "_editorQId": 671
     },
     {
@@ -134657,13 +135123,50 @@
       "walkways": [
         {
           "x": 4901,
-          "y": 3416,
-          "width": 568,
-          "height": 333,
+          "y": 3411,
+          "width": 561,
+          "height": 24,
+          "style": "tile"
+        },
+        {
+          "x": 4901,
+          "y": 3737,
+          "width": 561,
+          "height": 22,
           "style": "concrete"
+        },
+        {
+          "x": 5040,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 5312,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 4901,
+          "y": 3618,
+          "width": 561,
+          "height": 18,
+          "style": "cobblestone"
         }
       ],
-      "plazas": [],
+      "plazas": [
+        {
+          "x": 5118,
+          "y": 3508,
+          "width": 134,
+          "height": 110,
+          "shape": "circle",
+          "style": "stone"
+        }
+      ],
       "_editorQId": 671
     },
     {
@@ -134679,13 +135182,50 @@
       "walkways": [
         {
           "x": 5731,
-          "y": 3416,
+          "y": 3411,
           "width": 568,
-          "height": 333,
+          "height": 24,
+          "style": "tile"
+        },
+        {
+          "x": 5731,
+          "y": 3737,
+          "width": 568,
+          "height": 22,
           "style": "concrete"
+        },
+        {
+          "x": 5870,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 6142,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 5731,
+          "y": 3618,
+          "width": 568,
+          "height": 18,
+          "style": "stone"
         }
       ],
-      "plazas": [],
+      "plazas": [
+        {
+          "x": 5942,
+          "y": 3512,
+          "width": 146,
+          "height": 106,
+          "shape": "rect",
+          "style": "tile"
+        }
+      ],
       "_editorQId": 25096
     },
     {
@@ -134701,13 +135241,50 @@
       "walkways": [
         {
           "x": 6501,
-          "y": 3416,
+          "y": 3411,
           "width": 598,
-          "height": 333,
+          "height": 24,
+          "style": "tile"
+        },
+        {
+          "x": 6501,
+          "y": 3737,
+          "width": 598,
+          "height": 22,
           "style": "concrete"
+        },
+        {
+          "x": 6648,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 6932,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 6501,
+          "y": 3618,
+          "width": 598,
+          "height": 18,
+          "style": "cobblestone"
         }
       ],
-      "plazas": [],
+      "plazas": [
+        {
+          "x": 6734,
+          "y": 3508,
+          "width": 132,
+          "height": 110,
+          "shape": "circle",
+          "style": "tile"
+        }
+      ],
       "_editorQId": 25096
     },
     {
@@ -134723,13 +135300,50 @@
       "walkways": [
         {
           "x": 7301,
-          "y": 3416,
+          "y": 3411,
           "width": 620,
-          "height": 333,
+          "height": 24,
+          "style": "tile"
+        },
+        {
+          "x": 7301,
+          "y": 3737,
+          "width": 620,
+          "height": 22,
           "style": "concrete"
+        },
+        {
+          "x": 7450,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 7750,
+          "y": 3435,
+          "width": 18,
+          "height": 302,
+          "style": "concrete"
+        },
+        {
+          "x": 7301,
+          "y": 3618,
+          "width": 620,
+          "height": 18,
+          "style": "stone"
         }
       ],
-      "plazas": [],
+      "plazas": [
+        {
+          "x": 7534,
+          "y": 3512,
+          "width": 152,
+          "height": 106,
+          "shape": "rect",
+          "style": "stone"
+        }
+      ],
       "_editorQId": 25096
     },
     {
@@ -134820,51 +135434,19 @@
       "innerLawnColor": "#15803d",
       "driveways": [],
       "walkways": [
-        {
-          "x": 2986,
-          "y": 4706,
-          "width": 50,
-          "height": 24,
-          "style": "asphalt"
-        },
-        {
-          "x": 2624,
-          "y": 4294,
-          "width": 467,
-          "height": 28,
-          "style": "asphalt"
-        },
-        {
-          "x": 2499,
-          "y": 4236,
-          "width": 522,
-          "height": 18,
-          "style": "concrete"
-        },
-        {
-          "x": 2606,
-          "y": 4249,
-          "width": 18,
-          "height": 447,
-          "style": "concrete"
-        },
-        {
-          "x": 2519,
-          "y": 4696,
-          "width": 18,
-          "height": 10,
-          "style": "concrete"
-        }
+        { "x": 2986, "y": 4706, "width": 50, "height": 24, "style": "asphalt" },
+        { "x": 2624, "y": 4294, "width": 467, "height": 28, "style": "asphalt" },
+        { "x": 3024, "y": 4228, "width": 72, "height": 66, "style": "asphalt" },
+        { "x": 2499, "y": 4236, "width": 522, "height": 18, "style": "concrete" },
+        { "x": 2606, "y": 4249, "width": 18, "height": 447, "style": "concrete" },
+        { "x": 2624, "y": 4475, "width": 474, "height": 18, "style": "stone" },
+        { "x": 2805, "y": 4322, "width": 18, "height": 376, "style": "stone" },
+        { "x": 2519, "y": 4696, "width": 18, "height": 10, "style": "concrete" }
       ],
       "plazas": [
-        {
-          "x": 2634,
-          "y": 4264,
-          "width": 100,
-          "height": 80,
-          "shape": "rect",
-          "style": "tile"
-        }
+        { "x": 2624, "y": 4322, "width": 130, "height": 110, "shape": "rect", "style": "tile" },
+        { "x": 2823, "y": 4360, "width": 105, "height": 95, "shape": "rect", "style": "cobblestone" },
+        { "x": 2624, "y": 4493, "width": 120, "height": 88, "shape": "rect", "style": "dirt" }
       ],
       "_editorQId": 16324
     },
@@ -134879,51 +135461,19 @@
       "innerLawnColor": "#15803d",
       "driveways": [],
       "walkways": [
-        {
-          "x": 3756,
-          "y": 4706,
-          "width": 50,
-          "height": 36,
-          "style": "asphalt"
-        },
-        {
-          "x": 3424,
-          "y": 4294,
-          "width": 437,
-          "height": 28,
-          "style": "asphalt"
-        },
-        {
-          "x": 3299,
-          "y": 4236,
-          "width": 492,
-          "height": 18,
-          "style": "concrete"
-        },
-        {
-          "x": 3406,
-          "y": 4249,
-          "width": 18,
-          "height": 447,
-          "style": "concrete"
-        },
-        {
-          "x": 3319,
-          "y": 4696,
-          "width": 18,
-          "height": 10,
-          "style": "concrete"
-        }
+        { "x": 3756, "y": 4706, "width": 50, "height": 36, "style": "asphalt" },
+        { "x": 3424, "y": 4294, "width": 437, "height": 28, "style": "asphalt" },
+        { "x": 3794, "y": 4228, "width": 68, "height": 66, "style": "asphalt" },
+        { "x": 3299, "y": 4236, "width": 492, "height": 18, "style": "concrete" },
+        { "x": 3406, "y": 4249, "width": 18, "height": 447, "style": "concrete" },
+        { "x": 3424, "y": 4475, "width": 438, "height": 18, "style": "stone" },
+        { "x": 3595, "y": 4322, "width": 18, "height": 388, "style": "stone" },
+        { "x": 3319, "y": 4696, "width": 18, "height": 10, "style": "concrete" }
       ],
       "plazas": [
-        {
-          "x": 3434,
-          "y": 4264,
-          "width": 100,
-          "height": 80,
-          "shape": "rect",
-          "style": "tile"
-        }
+        { "x": 3424, "y": 4322, "width": 125, "height": 110, "shape": "rect", "style": "tile" },
+        { "x": 3613, "y": 4355, "width": 100, "height": 95, "shape": "rect", "style": "stone" },
+        { "x": 3424, "y": 4493, "width": 115, "height": 90, "shape": "rect", "style": "dirt" }
       ],
       "_editorQId": 16324
     },
@@ -134938,51 +135488,19 @@
       "innerLawnColor": "#15803d",
       "driveways": [],
       "walkways": [
-        {
-          "x": 4586,
-          "y": 4706,
-          "width": 50,
-          "height": 36,
-          "style": "asphalt"
-        },
-        {
-          "x": 4254,
-          "y": 4294,
-          "width": 437,
-          "height": 28,
-          "style": "asphalt"
-        },
-        {
-          "x": 4129,
-          "y": 4236,
-          "width": 492,
-          "height": 18,
-          "style": "concrete"
-        },
-        {
-          "x": 4236,
-          "y": 4249,
-          "width": 18,
-          "height": 447,
-          "style": "concrete"
-        },
-        {
-          "x": 4149,
-          "y": 4696,
-          "width": 18,
-          "height": 10,
-          "style": "concrete"
-        }
+        { "x": 4586, "y": 4706, "width": 50, "height": 36, "style": "asphalt" },
+        { "x": 4254, "y": 4294, "width": 437, "height": 28, "style": "asphalt" },
+        { "x": 4624, "y": 4228, "width": 72, "height": 66, "style": "asphalt" },
+        { "x": 4129, "y": 4236, "width": 492, "height": 18, "style": "concrete" },
+        { "x": 4236, "y": 4249, "width": 18, "height": 447, "style": "concrete" },
+        { "x": 4254, "y": 4475, "width": 456, "height": 18, "style": "stone" },
+        { "x": 4425, "y": 4322, "width": 18, "height": 388, "style": "stone" },
+        { "x": 4149, "y": 4696, "width": 18, "height": 10, "style": "concrete" }
       ],
       "plazas": [
-        {
-          "x": 4264,
-          "y": 4264,
-          "width": 100,
-          "height": 80,
-          "shape": "rect",
-          "style": "tile"
-        }
+        { "x": 4254, "y": 4322, "width": 130, "height": 110, "shape": "rect", "style": "tile" },
+        { "x": 4443, "y": 4355, "width": 105, "height": 95, "shape": "rect", "style": "cobblestone" },
+        { "x": 4254, "y": 4493, "width": 120, "height": 88, "shape": "rect", "style": "dirt" }
       ],
       "_editorQId": 15780
     },

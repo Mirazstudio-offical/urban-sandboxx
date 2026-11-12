@@ -321,7 +321,7 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
       car.fluidTank.isVacuumTank !== spec.isVacuumTank
     ) {
       const cap = spec.capacity;
-      const amt = spec.currentVolume ?? (spec.isVacuumTank ? 0 : Math.round(cap * 0.75));
+      const amt = spec.currentVolume ?? Math.round(cap * (spec.isVacuumTank ? 0.43 : 0.75));
       car.fluidTank = {
         liquidType: spec.liquidType,
         capacity: cap,
