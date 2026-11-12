@@ -2668,6 +2668,20 @@ export default function App() {
         const screenDy = e.clientY - screenCenterY;
         const camAngle = cameraRef.current.angle;
         player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
+
+        // Immediately refresh active interaction target on mouse move so cursor aiming is instantaneous
+        if (worldRef.current) {
+          const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
+          const nextInteraction = findActiveInteraction(player, worldRef.current, mouseWorld);
+          activeInteractionRef.current = nextInteraction;
+          const interactionKey = nextInteraction
+            ? `${nextInteraction.type}_${nextInteraction.primaryKey}_${nextInteraction.actionTitle}_${Math.round(nextInteraction.x)}_${Math.round(nextInteraction.y)}`
+            : '';
+          if (interactionKey !== prevInteractionKeyRef.current) {
+            prevInteractionKeyRef.current = interactionKey;
+            setActiveInteraction(nextInteraction);
+          }
+        }
       }
     };
 
@@ -2704,9 +2718,19 @@ export default function App() {
           e.preventDefault();
         }
       } else if (e.button === 0 && e.target === canvas) {
+        if (playerRef.current && worldRef.current && !playerRef.current.isInVehicle) {
+          const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
+          const latestTarget = findActiveInteraction(playerRef.current, worldRef.current, mouseWorld);
+          activeInteractionRef.current = latestTarget;
+        }
         const target = activeInteractionRef.current;
-        if (target && target.type !== 'hand_item'&& target.type !== 'exit_vehicle') {
-          handleExecuteActiveInteraction();
+        if (target && target.type !== 'hand_item' && target.type !== 'exit_vehicle') {
+          // Only trigger world interaction on direct canvas click if cursor is reasonably near the marker
+          const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
+          const distToTarget = Math.hypot(mouseWorld.x - target.x, mouseWorld.y - target.y);
+          if (distToTarget < 48) {
+            handleExecuteActiveInteraction(target);
+          }
         }
       }
     };
@@ -3016,20 +3040,30 @@ export default function App() {
                 }
               }
 
-              // Check if player is standing in ANY elevator zone
+              // Check if player is standing in or right next to ANY elevator zone
               const elevators = (layout.elevators && layout.elevators.length > 0) ? layout.elevators : (layout.elevatorZone ? [layout.elevatorZone] : []);
               const inElevator = elevators.some(el =>
                 el &&
-                relX >= el.x && relX <= el.x + el.width &&
-                relY >= el.y && relY <= el.y + el.height
+                relX >= el.x - 10 && relX <= el.x + el.width + 10 &&
+                relY >= el.y - 10 && relY <= el.y + el.height + 10
+              );
+              const nearElevator = elevators.some(el =>
+                el &&
+                relX >= el.x - 46 && relX <= el.x + el.width + 46 &&
+                relY >= el.y - 46 && relY <= el.y + el.height + 46
               );
 
-              // Check if player is standing in ANY stairs zone
+              // Check if player is standing in or right next to ANY stairs zone
               const stairsList = (layout.stairs && layout.stairs.length > 0) ? layout.stairs : (layout.stairsZone ? [layout.stairsZone] : []);
               const inStairs = stairsList.some(st =>
                 st &&
-                relX >= st.x && relX <= st.x + st.width &&
-                relY >= st.y && relY <= st.y + st.height
+                relX >= st.x - 10 && relX <= st.x + st.width + 10 &&
+                relY >= st.y - 10 && relY <= st.y + st.height + 10
+              );
+              const nearStairs = stairsList.some(st =>
+                st &&
+                relX >= st.x - 46 && relX <= st.x + st.width + 46 &&
+                relY >= st.y - 46 && relY <= st.y + st.height + 46
               );
 
               // Check if player is standing in ANY exit zone on floor 0
@@ -3037,8 +3071,12 @@ export default function App() {
               const inExit = exits.some(ex =>
                 ex &&
                 relX >= ex.x - 24 && relX <= ex.x + ex.width + 24 &&
-                relY >= ex.y - 24 && relY <= ex.y + ex.height + 24
+                relY >= ex.y - 24 && relY <= ex.y + stOrExWidth(ex) + 24
               );
+
+              function stOrExWidth(z: { height: number }) {
+                return z.height;
+              }
 
               const maxFloors = getBuildingFloorsCount(bld);
               const canGoUpOrDown = inElevator || inStairs;
@@ -3048,14 +3086,14 @@ export default function App() {
                   if (!prev || prev.bldId !== bld.id || prev.currentFloor !== currentFloor || prev.type !== (inElevator ? 'elevator': 'stairs')) {
                     return {
                       bldId: bld.id,
-                      bldName: (bld.type || 'BUILDING').toUpperCase().replace('_', ''),
+                      bldName: bld.nameRu || (bld.type || 'BUILDING').toUpperCase().replace('_', ''),
                       currentFloor: currentFloor,
                       maxFloors: maxFloors,
                       type: inElevator ? 'elevator': 'stairs'};
                   }
                   return prev;
                 });
-              } else {
+              } else if (!nearElevator && !nearStairs) {
                 setActiveElevatorMenu(null);
               }
 
@@ -3494,7 +3532,9 @@ export default function App() {
           const mouseWorld = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
           const currentInteraction = findActiveInteraction(player, world, mouseWorld);
           activeInteractionRef.current = currentInteraction;
-          const interactionKey = currentInteraction ? `${currentInteraction.type}_${currentInteraction.primaryKey}_${currentInteraction.actionTitle}`: '';
+          const interactionKey = currentInteraction
+            ? `${currentInteraction.type}_${currentInteraction.primaryKey}_${currentInteraction.actionTitle}_${Math.round(currentInteraction.x)}_${Math.round(currentInteraction.y)}`
+            : '';
           if (interactionKey !== prevInteractionKeyRef.current) {
             prevInteractionKeyRef.current = interactionKey;
             setActiveInteraction(currentInteraction);

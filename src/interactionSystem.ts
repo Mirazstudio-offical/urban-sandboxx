@@ -76,7 +76,7 @@ export interface InteractionTarget {
   angleDiff: number;
   score: number;
   data?: any;
-  availableKeys?: { key: 'E' | 'F' | 'R'; title: string }[];
+  availableKeys?: { key: 'E' | 'F' | 'R'; title: string; action?: InteractionTarget }[];
   isSelfAction?: boolean;
 }
 
@@ -124,24 +124,29 @@ export function isTargetInPhysicalReach(
   const targetAngle = Math.atan2(dy, dx);
   const angleDiff = getAngleDiff(targetAngle, playerAngle);
 
-  // Direct mouse hover bonus: if mouse cursor is within 26px of target and player is within reach
+  // Continuous distance-weighted mouse hover bonus:
+  // Pointing the mouse cursor directly at a specific marker smoothly boosts its priority
+  // over adjacent markers (up to +100.8 at 0px, tapering to 0 at 42px).
   let mouseBonus = 0;
   let isMouseHovering = false;
   if (mouseWorldPos && Number.isFinite(mouseWorldPos.x) && Number.isFinite(mouseWorldPos.y)) {
     const mouseDist = Math.hypot(mouseWorldPos.x - tx, mouseWorldPos.y - ty);
-    if (mouseDist < 26) {
+    if (mouseDist < 42) {
       isMouseHovering = true;
-      mouseBonus = 40; // Significant bonus
+      mouseBonus = (42 - mouseDist) * 2.4;
     }
   }
 
+  // Expand angle cone when standing very close to the target so minor angle shifts don't drop the marker
+  const effectiveCone = dist < 22 ? Math.max(maxAngleCone, 2.2) : maxAngleCone;
+
   // Target must be in front of player (or mouse hovered)
-  if (!Number.isFinite(angleDiff) || (angleDiff > maxAngleCone && !isMouseHovering)) {
+  if (!Number.isFinite(angleDiff) || (angleDiff > effectiveCone && !isMouseHovering)) {
     return { inReach: false, dist, angleDiff: Number.isFinite(angleDiff) ? angleDiff : Math.PI, score: 99999 };
   }
 
-  // Score: lower is better. Heavily favors closer and better aligned targets
-  const score = dist + angleDiff * 16 - mouseBonus;
+  // Score: lower is better. Heavily favors mouse-hovered, closer, and better aligned targets
+  const score = dist + angleDiff * 14 - mouseBonus;
   if (!Number.isFinite(score)) {
     return { inReach: false, dist, angleDiff, score: 99999 };
   }
@@ -476,7 +481,7 @@ export function findActiveInteraction(
 
   const px = player.x;
   const py = player.y;
-  const facing = player.angle;
+  const facing = player.aimAngle !== undefined ? player.aimAngle : player.angle;
 
   const candidates: InteractionTarget[] = [];
 
@@ -571,7 +576,6 @@ export function findActiveInteraction(
           score: reach.score - 24,
           data: veh,
         });
-        break;
       }
     }
   }
@@ -831,7 +835,6 @@ export function findActiveInteraction(
               score: reach.score - 12,
               data: { vehicle: v, pump }
             });
-            break;
           }
         }
       }
@@ -931,8 +934,16 @@ export function findActiveInteraction(
       }
 
       // Driver side door:
+      const isLongCabForward =
+        veh.type.startsWith('truck') ||
+        veh.type === 'cargo_van' ||
+        veh.type === 'bus' ||
+        veh.type === 'bus_minibus' ||
+        veh.type === 'fire_truck' ||
+        veh.type === 'garbage_truck' ||
+        veh.type === 'tow_truck';
       const sideOffset = cfg.width * 0.52 + 10;
-      const longitudinalOffset = cfg.length * 0.08;
+      const longitudinalOffset = isLongCabForward ? cfg.length * 0.28 : cfg.length * 0.08;
       const driverDoorX = veh.x + cos * longitudinalOffset - sin * sideOffset;
       const driverDoorY = veh.y + sin * longitudinalOffset + cos * sideOffset;
 
@@ -946,17 +957,20 @@ export function findActiveInteraction(
       let bestDoorReach = dReach.inReach ? dReach : (pReach.inReach ? pReach : null);
       let doorX = driverDoorX;
       let doorY = driverDoorY;
+      let usedCenterFallback = false;
       if (pReach.inReach && (!bestDoorReach || pReach.score < bestDoorReach.score)) {
         bestDoorReach = pReach;
         doorX = passDoorX;
         doorY = passDoorY;
       }
 
-      // If close to center of vehicle, find which physical door is closest instead of roof center
-      if (!bestDoorReach) {
-        const centerReach = isTargetInPhysicalReach(px, py, facing, veh.x, veh.y, Math.max(cfg.length * 0.68, cfg.width * 0.75 + 36), 1.65, mouseWorldPos);
+      // If close to vehicle body, provide a low-priority fallback to nearest physical door
+      // so dedicated stations (hood, crane panel, valves, fuel cap) always win when closer/hovered
+      if (!bestDoorReach && !isTrailerVehicle(veh)) {
+        const centerReach = isTargetInPhysicalReach(px, py, facing, veh.x, veh.y, Math.max(cfg.length * 0.55, cfg.width * 0.75 + 28), 1.45, null);
         if (centerReach.inReach) {
           bestDoorReach = centerReach;
+          usedCenterFallback = true;
           const distDriver = Math.hypot(px - driverDoorX, py - driverDoorY);
           const distPass = Math.hypot(px - passDoorX, py - passDoorY);
           if (distDriver <= distPass) {
@@ -969,7 +983,7 @@ export function findActiveInteraction(
         }
       }
 
-      if (bestDoorReach && bestDoorReach.inReach) {
+      if (bestDoorReach && bestDoorReach.inReach && !isTrailerVehicle(veh)) {
         const isBus = veh.type === 'bus' || veh.type === 'bus_minibus';
         const isCrane = isVehicleCraneTruck(veh);
         candidates.push({
@@ -981,7 +995,7 @@ export function findActiveInteraction(
           y: doorY,
           dist: bestDoorReach.dist,
           angleDiff: bestDoorReach.angleDiff,
-          score: bestDoorReach.score - 6,
+          score: usedCenterFallback ? bestDoorReach.score + 14 : bestDoorReach.score - 6,
           data: veh
         });
       }
@@ -1063,7 +1077,6 @@ export function findActiveInteraction(
             score: reach.score - 12,
             data: bld
           });
-          break;
         }
       }
 
@@ -1074,7 +1087,7 @@ export function findActiveInteraction(
           for (const el of layout.elevators) {
             const elWorldX = bld.x + el.x + el.width / 2;
             const elWorldY = bld.y + el.y + el.height / 2;
-            const reach = isTargetInPhysicalReach(px, py, facing, elWorldX, elWorldY, 44, 1.4, mouseWorldPos);
+            const reach = isTargetInPhysicalReach(px, py, facing, elWorldX, elWorldY, 48, 1.5, mouseWorldPos);
             if (reach.inReach) {
               candidates.push({
                 type: 'building_elevator',
@@ -1085,10 +1098,9 @@ export function findActiveInteraction(
                 y: elWorldY,
                 dist: reach.dist,
                 angleDiff: reach.angleDiff,
-                score: reach.score - 8,
+                score: reach.score - 14,
                 data: { sz: el, bld }
               });
-              break;
             }
           }
         }
@@ -1096,7 +1108,7 @@ export function findActiveInteraction(
           for (const st of layout.stairs) {
             const stWorldX = bld.x + st.x + st.width / 2;
             const stWorldY = bld.y + st.y + st.height / 2;
-            const reach = isTargetInPhysicalReach(px, py, facing, stWorldX, stWorldY, 44, 1.4, mouseWorldPos);
+            const reach = isTargetInPhysicalReach(px, py, facing, stWorldX, stWorldY, 48, 1.5, mouseWorldPos);
             if (reach.inReach) {
               candidates.push({
                 type: 'building_elevator',
@@ -1107,10 +1119,9 @@ export function findActiveInteraction(
                 y: stWorldY,
                 dist: reach.dist,
                 angleDiff: reach.angleDiff,
-                score: reach.score - 8,
+                score: reach.score - 14,
                 data: { sz: st, bld }
               });
-              break;
             }
           }
         }
@@ -1141,7 +1152,20 @@ export function findActiveInteraction(
 
           const furnWorldX = bld.x + furn.x + fw / 2;
           const furnWorldY = bld.y + furn.y + fh / 2;
-          const reach = isTargetInPhysicalReach(px, py, facing, furnWorldX, furnWorldY, 52, 1.45, mouseWorldPos);
+          // For wide/rectangular furniture (counters, beds, sofas, wardrobes), check reach to closest point on its box
+          const minX = bld.x + furn.x;
+          const maxX = bld.x + furn.x + fw;
+          const minY = bld.y + furn.y;
+          const maxY = bld.y + furn.y + fh;
+          const nearX = Math.max(minX, Math.min(px, maxX));
+          const nearY = Math.max(minY, Math.min(py, maxY));
+          const reachCenter = isTargetInPhysicalReach(px, py, facing, furnWorldX, furnWorldY, 52, 1.45, mouseWorldPos);
+          const reachEdge = (fw > 22 || fh > 22)
+            ? isTargetInPhysicalReach(px, py, facing, nearX, nearY, 44, 1.45, mouseWorldPos)
+            : reachCenter;
+          const reach = (!reachCenter.inReach || (reachEdge.inReach && reachEdge.score < reachCenter.score))
+            ? reachEdge
+            : reachCenter;
 
           if (reach.inReach) {
             // Chair, Bench, Sofa, Beanbag, Exam Table Seating interaction
@@ -1249,7 +1273,7 @@ export function findActiveInteraction(
                   y: furnWorldY,
                   dist: reach.dist,
                   angleDiff: reach.angleDiff,
-                  score: reach.score - 5,
+                  score: reach.score - 22,
                   data: { bld }
                 });
               } else {
@@ -1275,7 +1299,7 @@ export function findActiveInteraction(
                     y: furnWorldY,
                     dist: reach.dist,
                     angleDiff: reach.angleDiff,
-                    score: reach.score - 5,
+                    score: reach.score - (furn.type === 'cash_register' ? 24 : 20),
                     data: { zone: { shopType: resolvedShopType }, shopTitle: resolvedShopTitle, bld }
                   });
                 }
@@ -1436,7 +1460,7 @@ export function findActiveInteraction(
                 score: reach.score - 4,
                 data: { bld, ent }
               });
-              break;
+              continue;
             }
 
             // Check if this building corresponds to a cottage or apartment building
@@ -1557,7 +1581,6 @@ export function findActiveInteraction(
                 data: { bld, ent }
               });
             }
-            break;
           }
         }
       }

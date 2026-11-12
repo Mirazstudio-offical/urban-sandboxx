@@ -25,7 +25,7 @@ import {
 
 interface ContextInteractionHUDProps {
   target: InteractionTarget | null;
-  onExecute: () => void;
+  onExecute: (overrideTarget?: InteractionTarget) => void;
   isMobileTouch?: boolean;
 }
 
@@ -90,7 +90,6 @@ const getIconForType = (type: string) => {
 export const ContextInteractionHUD: React.FC<ContextInteractionHUDProps> = ({
   target,
   onExecute,
-  isMobileTouch
 }) => {
   if (!target || target.type === 'hand_item' || target.type === 'exit_vehicle') {
     return null;
@@ -118,7 +117,7 @@ export const ContextInteractionHUD: React.FC<ContextInteractionHUDProps> = ({
         </div>
         <button
           type="button"
-          onClick={onExecute}
+          onClick={() => onExecute(target)}
           className="ml-1.5 px-2 py-0.5 rounded bg-[#c9922b]/20 hover:bg-[#c9922b]/35 border border-[#c9922b]/60 text-[#f0c264] font-mono text-[11px] font-bold tracking-wider active:scale-95 transition-all cursor-pointer"
         >
           {target.primaryKey}
@@ -163,11 +162,18 @@ export const ContextInteractionHUD: React.FC<ContextInteractionHUDProps> = ({
 
         {/* Compact, clean interaction card offset by (22, -26) */}
         <div
-          className="absolute flex flex-col gap-1.5 p-2 rounded-md bg-[rgba(18,20,24,0.94)] border border-white/10 shadow-[0_8px_28px_rgba(0,0,0,0.65)] backdrop-blur-md z-10"
+          className="absolute pointer-events-auto flex flex-col gap-1.5 p-2 rounded-md bg-[rgba(18,20,24,0.94)] border border-white/10 shadow-[0_8px_28px_rgba(0,0,0,0.65)] backdrop-blur-md z-10"
           style={{ left: '22px', bottom: '26px', minWidth: '150px', maxWidth: '240px' }}
         >
           {/* Primary Action Row */}
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onExecute(target);
+            }}
+            className="flex items-center gap-2 text-left w-full rounded hover:bg-white/[0.05] active:scale-[0.99] transition-colors cursor-pointer"
+          >
             <span className="flex items-center justify-center w-5 h-5 rounded bg-[#c9922b]/20 border border-[#c9922b]/60 text-[#f0c264] font-mono text-[11px] font-black shrink-0 shadow-xs">
               {target.primaryKey}
             </span>
@@ -184,20 +190,30 @@ export const ContextInteractionHUD: React.FC<ContextInteractionHUDProps> = ({
             <div className="ml-auto shrink-0 opacity-80">
               {getIconForType(target.type)}
             </div>
-          </div>
+          </button>
 
           {/* Secondary Keys Stack (if any: e.g. R - Повернуть, F - Убрать) */}
           {target.availableKeys && target.availableKeys.length > 0 && (
             <div className="pt-1.5 mt-0.5 border-t border-white/[0.08] flex flex-col gap-1">
               {target.availableKeys.map(ak => (
-                <div key={ak.key} className="flex items-center gap-2">
+                <button
+                  key={ak.key}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (ak.action) {
+                      onExecute(ak.action);
+                    }
+                  }}
+                  className="flex items-center gap-2 text-left w-full rounded hover:bg-white/[0.05] active:scale-[0.99] transition-colors cursor-pointer"
+                >
                   <span className="flex items-center justify-center w-4 h-4 rounded bg-white/[0.08] border border-white/15 text-[#cbd5e1] font-mono text-[9px] font-bold shrink-0">
                     {ak.key}
                   </span>
                   <span className="text-[11px] text-[#cbd5e1] leading-tight truncate">
                     {ak.title}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           )}

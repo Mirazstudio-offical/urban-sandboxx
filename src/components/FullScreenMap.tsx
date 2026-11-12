@@ -223,23 +223,23 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
       const marks = filteredRef.current;
       const selId = sel && sel.kind === 'poi' ? sel.lm.id : null;
       const hov = hoverRef.current;
-      const labels: { x: number; y: number; text: string; hot: boolean }[] = [];
+      const labels: { x: number; y: number; text: string; hot: boolean; lm: Landmark }[] = [];
       for (const m of marks) {
         const sx = toX(m.x), sy = toY(m.y);
         if (sx < -30 || sy < -30 || sx > w + 30 || sy > h + 30) continue;
         const hot = m.id === selId || m.id === hov;
         const r = hot ? 12 : z < 0.1 ? 6 : 9;
         drawPin(ctx, sx, sy, r, GROUP_COLORS[m.group], m.iconKey, m.id === selId);
-        if (hot || z > 0.45) labels.push({ x: sx, y: sy + r + 12, text: m.nameRu, hot });
+        if (hot || z > 0.45) labels.push({ x: sx, y: sy + r + 12, text: m.nameRu, hot, lm: m });
       }
       ctx.font = `700 12px ${MAP_FONT}`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+      const placed: { x0: number; y0: number; x1: number; y1: number; lm: Landmark }[] = [];
       labels.sort((a, b) => Number(b.hot) - Number(a.hot));
       for (const l of labels) {
         const text = l.text.toUpperCase();
         const tw2 = ctx.measureText(text).width + 14;
-        const box = { x0: l.x - tw2 / 2, y0: l.y - 9, x1: l.x + tw2 / 2, y1: l.y + 9 };
+        const box = { x0: l.x - tw2 / 2, y0: l.y - 9, x1: l.x + tw2 / 2, y1: l.y + 9, lm: l.lm };
         if (!l.hot && placed.some(p => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0)) continue;
         placed.push(box);
         ctx.fillStyle = l.hot ? C.amber : 'rgba(16,16,18,0.86)';
@@ -248,6 +248,7 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
         ctx.fillStyle = l.hot ? '#1a1409' : C.text;
         ctx.fillText(text, l.x, l.y + 0.5);
       }
+      placedLabelsRef.current = placed;
 
       // player label
       if (z > 0.15) {
@@ -275,6 +276,7 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
   // ---------------------------------------------------------------- pointer input
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef({ startX: 0, startY: 0, moved: false, pinch: 0, pinchZoom: 1 });
+  const placedLabelsRef = useRef<{ x0: number; y0: number; x1: number; y1: number; lm: Landmark }[]>([]);
 
   const localPos = (e: React.PointerEvent) => {
     const r = canvasRef.current!.getBoundingClientRect();
@@ -288,14 +290,32 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
   const hitTest = (sx: number, sy: number): Landmark | null => {
     const { w, h } = size();
     const v = view.current;
-    const hr = window.matchMedia && window.matchMedia('(pointer:coarse)').matches ? 24 : 16;
+    const isCoarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+    const pinR = v.zoom < 0.1 ? 6 : 9;
+    const hr = (isCoarse ? 26 : 18) + pinR * 0.5;
     let best: Landmark | null = null, bd = hr * hr;
+    const sel = selectedRef.current;
+    const selId = sel && sel.kind === 'poi' ? sel.lm.id : null;
     for (const m of filteredRef.current) {
-      const dx = (m.x - v.x) * v.zoom + w / 2 - sx, dy = (m.y - v.y) * v.zoom + h / 2 - sy;
-      const d = dx * dx + dy * dy;
+      const mx = (m.x - v.x) * v.zoom + w / 2;
+      const my = (m.y - v.y) * v.zoom + h / 2;
+      const dx = mx - sx, dy = my - sy;
+      // Slight preference to non-selected marker if two pins are very close so user can switch selection
+      const d = dx * dx + dy * dy + (m.id === selId ? 4 : 0);
       if (d < bd) { bd = d; best = m; }
     }
-    return best;
+    if (best) return best;
+
+    // Also allow clicking directly on visible marker label pills
+    const pad = isCoarse ? 6 : 3;
+    const labels = placedLabelsRef.current;
+    for (let i = labels.length - 1; i >= 0; i--) {
+      const box = labels[i];
+      if (sx >= box.x0 - pad && sx <= box.x1 + pad && sy >= box.y0 - pad && sy <= box.y1 + pad) {
+        return box.lm;
+      }
+    }
+    return null;
   };
 
   const onPointerDown = (e: React.PointerEvent) => {

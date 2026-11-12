@@ -5570,6 +5570,12 @@ export function updatePlayerPedestrianPhysics(
         player.angle = Math.atan2(worldMoveY, worldMoveX);
       } else {
         player.speed = 0;
+        if (player.aimAngle !== undefined) {
+          let diff = player.aimAngle - player.angle;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          player.angle += diff * Math.min(1, dt * 14);
+        }
       }
 
       constrainPlayerToBusInterior(player, bus, dt);
@@ -5627,6 +5633,12 @@ export function updatePlayerPedestrianPhysics(
         player.angle = Math.atan2(worldMoveY, worldMoveX);
       } else {
         player.speed = 0;
+        if (player.aimAngle !== undefined) {
+          let diff = player.aimAngle - player.angle;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          player.angle += diff * Math.min(1, dt * 14);
+        }
       }
 
       // Constrain player strictly within interior passenger coach walls and compartments
@@ -5682,6 +5694,12 @@ export function updatePlayerPedestrianPhysics(
         player.vx = 0;
         player.vy = 0;
         player.speed = 0;
+        if (player.aimAngle !== undefined) {
+          let diff = player.aimAngle - player.angle;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          player.angle += diff * Math.min(1, dt * 14);
+        }
       }
 
       // Apply movement inside building
