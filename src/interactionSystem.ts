@@ -1980,7 +1980,7 @@ export function findActiveInteraction(
       if (!filterKey) {
         const otherActions = candidates.filter(c => 
           c !== top && 
-          Math.hypot(c.x - top.x, c.y - top.y) < 38 &&
+          Math.hypot(c.x - top.x, c.y - top.y) < 70 &&
           c.primaryKey !== top.primaryKey
         );
         if (otherActions.length > 0) {
@@ -1994,7 +1994,8 @@ export function findActiveInteraction(
           }
           top.availableKeys = uniqueOtherActions.map(oa => ({
             key: oa.primaryKey,
-            title: oa.actionTitle
+            title: oa.actionTitle,
+            action: oa
           }));
         }
       }

@@ -2590,8 +2590,11 @@ export default function App() {
       }
       if (code === 'KeyR') {
         const target = activeInteractionRef.current;
+        const rSubAction = target?.availableKeys?.find(k => k.key === 'R');
         if (target && target.primaryKey === 'R') {
           handleExecuteActiveInteraction(target);
+        } else if (rSubAction?.action) {
+          handleExecuteActiveInteraction(rSubAction.action);
         } else if (playerRef.current && worldRef.current) {
           const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
           const rTarget = findActiveInteraction(playerRef.current, worldRef.current, mouseWorld, 'R');
@@ -6601,8 +6604,11 @@ export default function App() {
             activeInteraction={activeInteraction}
             onInteractR={() => {
               const target = activeInteractionRef.current;
-              if (target && (target.primaryKey === 'R' || target.availableKeys?.some(k => k.key === 'R'))) {
-                handleExecuteActiveInteraction({ ...target, primaryKey: 'R' });
+              const rSubAction = target?.availableKeys?.find(k => k.key === 'R');
+              if (target && target.primaryKey === 'R') {
+                handleExecuteActiveInteraction(target);
+              } else if (rSubAction?.action) {
+                handleExecuteActiveInteraction(rSubAction.action);
               } else if (playerRef.current && worldRef.current) {
                 const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
                 const rTarget = findActiveInteraction(playerRef.current, worldRef.current, mouseWorld, 'R');
@@ -6615,8 +6621,11 @@ export default function App() {
             }}
             onInteractKey={(key) => {
               const target = activeInteractionRef.current;
-              if (target) {
-                handleExecuteActiveInteraction({ ...target, primaryKey: key });
+              const subAction = target?.availableKeys?.find(k => k.key === key);
+              if (target && target.primaryKey === key) {
+                handleExecuteActiveInteraction(target);
+              } else if (subAction?.action) {
+                handleExecuteActiveInteraction(subAction.action);
               }
             }}
           />
