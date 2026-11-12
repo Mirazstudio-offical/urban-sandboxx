@@ -24,6 +24,7 @@ import {
 import { toggleCraneHookAttach } from '../physics';
 import { sound } from '../audio';
 import { hasPtoDrive } from '../ptoSystem';
+import { CabLever } from './CabLever';
 import './truckConsole.css';
 
 interface TruckSuperstructureHUDProps {
@@ -146,47 +147,8 @@ interface SlideLeverProps {
   disabled?: boolean;
 }
 
-const TRAVEL = 40; // finger travel in px from the press point to full tilt
-const MAX_TILT = 34; // lever tilt in degrees at full travel
-const ENGAGE = 0.35;
-
-/* A cab lever: just a stalk and a ball grip, no panel and no captions.
-   Press anywhere on it and push the finger up (lever tilts away, positive input) or down (lever tilts toward you, negative input).
-   Release and it springs back to upright. */
+/* Crane cab lever: pushed holds the positive input, pulled holds the negative one, released clears both. */
 const SlideLever: React.FC<SlideLeverProps> = ({ name, inputRef, neg, pos, disabled = false }) => {
-  const activeId = React.useRef<number | null>(null);
-  const startY = React.useRef(0);
-  const [offset, setOffset] = useState(0); // px, positive = pushed away
-  const [dragging, setDragging] = useState(false);
-  const dir = React.useRef<-1 | 0 | 1>(0);
-
-  const apply = (v: number) => {
-    const next: -1 | 0 | 1 = v > ENGAGE ? 1 : v < -ENGAGE ? -1 : 0;
-    if (next === dir.current) return;
-    dir.current = next;
-    setFlag(inputRef, pos.key, next === 1);
-    setFlag(inputRef, neg.key, next === -1);
-    if (next !== 0) sound.playHydraulicHiss(0.18);
-  };
-
-  const moveTo = (clientY: number) => {
-    const px = Math.max(-TRAVEL, Math.min(TRAVEL, startY.current - clientY));
-    setOffset(px);
-    apply(px / TRAVEL);
-  };
-
-  const release = () => {
-    activeId.current = null;
-    setDragging(false);
-    setOffset(0);
-    apply(0);
-  };
-
-  useEffect(() => {
-    if (disabled && activeId.current !== null) release();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled]);
-
   useEffect(
     () => () => {
       setFlag(inputRef, pos.key, false);
@@ -195,49 +157,17 @@ const SlideLever: React.FC<SlideLeverProps> = ({ name, inputRef, neg, pos, disab
     [inputRef, pos.key, neg.key],
   );
 
-  const state = dir.current === 1 ? 'is-pos' : dir.current === -1 ? 'is-neg' : '';
-  const tilt = (offset / TRAVEL) * MAX_TILT;
-
   return (
-    <div className={`tc-lv3${disabled ? ' is-off' : ''}`}>
-      <div
-        className={`tc-lv3-hit ${state}${dragging ? ' is-drag' : ''}`}
-        style={{ '--a': `${tilt.toFixed(1)}deg` } as React.CSSProperties}
-        onPointerDown={(e) => {
-          if (disabled || activeId.current !== null) return;
-          e.preventDefault();
-          e.stopPropagation();
-          activeId.current = e.pointerId;
-          startY.current = e.clientY;
-          e.currentTarget.setPointerCapture?.(e.pointerId);
-          setDragging(true);
-        }}
-        onPointerMove={(e) => {
-          if (activeId.current === e.pointerId) moveTo(e.clientY);
-        }}
-        onPointerUp={(e) => {
-          if (activeId.current === e.pointerId) release();
-        }}
-        onPointerCancel={(e) => {
-          if (activeId.current === e.pointerId) release();
-        }}
-        onLostPointerCapture={() => {
-          if (activeId.current !== null) release();
-        }}
-        onContextMenu={(e) => e.preventDefault()}
-        role="slider"
-        aria-label={name}
-        aria-valuemin={-1}
-        aria-valuemax={1}
-        aria-valuenow={dir.current}
-        title={`${pos.title} / ${neg.title}`}
-      >
-        <i className="tc-lv3-arm">
-          <i className="tc-lv3-rod" />
-          <i className="tc-lv3-grip" />
-        </i>
-      </div>
-    </div>
+    <CabLever
+      name={name}
+      title={`${pos.title} / ${neg.title}`}
+      disabled={disabled}
+      onDirChange={(d) => {
+        setFlag(inputRef, pos.key, d === 1);
+        setFlag(inputRef, neg.key, d === -1);
+        if (d !== 0) sound.playHydraulicHiss(0.18);
+      }}
+    />
   );
 };
 
