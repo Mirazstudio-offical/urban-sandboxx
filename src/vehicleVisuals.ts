@@ -1,3 +1,4 @@
+import { getLegs } from './craneOutriggers';
 import { isPtoOn } from './ptoSystem';
 import { Vehicle } from './types';
 import { getVehicleOpticsMounts } from './vehicleHelpers';
@@ -2379,37 +2380,38 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedLine(midDeckX - 4.3, bodyW / 2 - 1.1, midDeckX + 4.3, bodyW / 2 - 1.1, '#451a03', 0.55);
 
     // 2. Four Hydraulic Outriggers (4 гидравлические выносные опоры с анимацией выдвижения и подпятниками)
-    const extOut = Math.max(0, Math.min(1, car.craneOutriggerExt ?? (car.craneOutriggersDeployed ? 1.0 : 0.0)));
-    const outriggerReach = extOut * 7.4;
-    const outriggerXs = [bodyX1 + 3.4, bodyX2 - 3.8];
+    const legs = getLegs(car);
+    const outriggerXs = [bodyX2 - 3.8, bodyX1 + 3.4]; // front pair, rear pair
 
-    outriggerXs.forEach((ox) => {
+    outriggerXs.forEach((ox, row) => {
       // Crossbeam housing across frame
       drawDeformedRect(ox - 1.8, -bodyW / 2 - 1.0, 3.6, bodyW + 2.0, '#0f172a');
 
-      // Left sliding/swinging outrigger beam
-      const leftPadY = -bodyW / 2 - 1.2 - outriggerReach;
-      drawDeformedRect(ox - 1.3, leftPadY, 2.6, outriggerReach + 1.6, '#facc15');
-      // Black hazard stripes on left outrigger beam
-      for (let sy = leftPadY + 0.6; sy < -bodyW / 2; sy += 2.0) {
-        drawDeformedLine(ox - 1.2, sy, ox + 1.2, sy + 0.9, '#0f172a', 0.9);
-      }
-      // Round steel ground pad (подпятник) & vertical hydraulic jack cylinder
-      if (extOut > 0.08) {
-        drawDeformedCircle(ox, leftPadY + 0.4, 2.2, '#334155', '#94a3b8', 0.7);
-      }
-      drawDeformedCircle(ox, leftPadY + 0.6, 1.15, '#0f172a', '#cbd5e1', 0.6);
+      [-1, 1].forEach((side) => {
+        const leg = row * 2 + (side < 0 ? 0 : 1); // 0 FL, 1 FR, 2 RL, 3 RR
+        const reach = legs.beam[leg] * 7.4;
+        const jack = legs.jack[leg];
+        const grounded = legs.contact[leg];
+        const edge = side * (bodyW / 2 + 1.2);
+        const padY = edge + side * reach;
 
-      // Right sliding/swinging outrigger beam
-      const rightPadY = bodyW / 2 + 1.2 + outriggerReach;
-      drawDeformedRect(ox - 1.3, bodyW / 2 - 0.4, 2.6, outriggerReach + 1.6, '#facc15');
-      for (let sy = bodyW / 2 + 0.4; sy < rightPadY - 0.4; sy += 2.0) {
-        drawDeformedLine(ox - 1.2, sy, ox + 1.2, sy + 0.9, '#0f172a', 0.9);
-      }
-      if (extOut > 0.08) {
-        drawDeformedCircle(ox, rightPadY - 0.4, 2.2, '#334155', '#94a3b8', 0.7);
-      }
-      drawDeformedCircle(ox, rightPadY - 0.6, 1.15, '#0f172a', '#cbd5e1', 0.6);
+        // sliding beam with hazard stripes
+        const y0 = side < 0 ? padY : side * (bodyW / 2 - 0.4);
+        drawDeformedRect(ox - 1.3, y0, 2.6, reach + 1.6, '#facc15');
+        const sFrom = side < 0 ? padY + 0.6 : bodyW / 2 + 0.4;
+        const sTo = side < 0 ? -bodyW / 2 : padY - 0.4;
+        for (let sy = sFrom; sy < sTo; sy += 2.0) {
+          drawDeformedLine(ox - 1.2, sy, ox + 1.2, sy + 0.9, '#0f172a', 0.9);
+        }
+
+        // jack: the pad grows as it comes down and darkens a shadow under it once it bears on the ground
+        if (legs.beam[leg] > 0.08) {
+          const padR = 1.5 + jack * 1.0;
+          if (grounded) drawDeformedCircle(ox, padY, padR + 1.1, '#0b1220');
+          drawDeformedCircle(ox, padY, padR, grounded ? '#475569' : '#334155', '#94a3b8', 0.7);
+        }
+        drawDeformedCircle(ox, padY, 1.0 + jack * 0.3, '#0f172a', '#cbd5e1', 0.6);
+      });
     });
 
     // 3. Front Boom Rest Trestle ("Козлы" — стойка поддержки стрелы за кабиной)

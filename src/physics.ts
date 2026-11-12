@@ -14,6 +14,7 @@ import { updateMedicineSystem } from './medicineSystem';
 import { updateWorldItemsThermodynamics } from './itemThermalSystem';
 import { GuardrailPhysics } from './guardrailPhysics';
 import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
+import { stepOutriggers, isCraneStabilized } from './craneOutriggers';
 import { getRiverWaterAt, getUniversalWaterDepthAt, emitWaterDisturbance } from './riverSystem';
 import { getBiomeSampleAt } from './biomeSystem';
 import { calculateClimateAtmosphere, createInitialCalendarState, isWorldFreezing } from './calendarSystem';
@@ -8174,19 +8175,8 @@ function updateTruckCraneSuperstructure(
   const isPtoActive = isPtoOn(vehicle);
   const hasHydraulicPressure = isEngineRunning && isPtoActive;
 
-  // 1. Outriggers hydraulic deployment animation
-  const targetOutrigger = vehicle.craneOutriggersDeployed ? 1.0 : 0.0;
-  const curOutrigger = vehicle.craneOutriggerExt ?? 0.0;
-  if (Math.abs(targetOutrigger - curOutrigger) > 0.001) {
-    // Requires hydraulic pressure from PTO to deploy or retract outriggers
-    if (hasHydraulicPressure || curOutrigger > 0) {
-      const rate = 0.85; // ~1.2s full stroke
-      const step = Math.sign(targetOutrigger - curOutrigger) * Math.min(Math.abs(targetOutrigger - curOutrigger), rate * dt);
-      vehicle.craneOutriggerExt = Math.max(0, Math.min(1, curOutrigger + step));
-    }
-  } else {
-    vehicle.craneOutriggerExt = targetOutrigger;
-  }
+  // 1. Four outrigger legs: lever commands move beams and jacks, the body settles on the terrain and the pads
+  stepOutriggers(vehicle, dt, hasHydraulicPressure);
 
   // Stabilize truck chassis when outriggers are touching the ground
   if ((vehicle.craneOutriggerExt ?? 0) > 0.45) {
@@ -8204,7 +8194,8 @@ function updateTruckCraneSuperstructure(
   // 2. Safety Interlock (ОНК-140 / ОГП):
   // According to crane safety regulations (ГОСТ 27584-88), operating the boom without deployed outriggers
   // or without hydraulic pressure is strictly interlocked to prevent crane turnover.
-  const outriggersOk = (vehicle.craneOutriggerExt ?? 0) >= 0.70;
+  // every beam out, every pad on the ground and the chassis level within the permitted slope
+  const outriggersOk = isCraneStabilized(vehicle);
   const canOperateBoom = hasHydraulicPressure && outriggersOk;
 
   // 3. Operator turret & boom controls when player is actively in the crane operator cab ("скворечник")

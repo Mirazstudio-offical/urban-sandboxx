@@ -964,6 +964,13 @@ export interface Vehicle {
   craneHookHeight?: number;         // Hook winch height (0.0 lowered to ground .. 1.0 raised to boom head)
   craneOutriggersDeployed?: boolean;// Hydraulic outriggers target state
   craneOutriggerExt?: number;       // Smooth 0.0 .. 1.0 outrigger beam deployment progress
+  craneOutriggerBeam?: number[];    // Per leg (FL, FR, RL, RR) beam extension 0..1
+  craneOutriggerJack?: number[];    // Per leg jack lowering 0..1
+  craneOutriggerCmd?: number[];     // Per leg lever command: -1 retract, 0 hold, 1 extend
+  craneOutriggerMode?: 'beam' | 'jack'; // What the outrigger levers move: beams or jacks
+  craneOutriggerContact?: boolean[];// Per leg: pad is bearing on the ground
+  craneChassisRoll?: number;        // Chassis roll from terrain and jacks, radians (right side up positive)
+  craneChassisPitch?: number;       // Chassis pitch, radians (nose up positive)
   craneHookedVehicleId?: string | null; // ID of vehicle/trailer currently slung on the crane hook
   craneControlMode?: boolean;       // Operator crane control mode active
   craneOperatorActive?: boolean;    // Operator is seated in revolving crane operator cab ("скворечник")

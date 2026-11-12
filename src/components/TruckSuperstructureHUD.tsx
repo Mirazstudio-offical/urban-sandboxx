@@ -25,6 +25,7 @@ import { toggleCraneHookAttach } from '../physics';
 import { sound } from '../audio';
 import { hasPtoDrive } from '../ptoSystem';
 import { CabLever } from './CabLever';
+import { isCraneStabilized, craneLockReason } from '../craneOutriggers';
 import './truckConsole.css';
 
 interface TruckSuperstructureHUDProps {
@@ -261,8 +262,8 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
 
   const geom = getVehicleCraneGeometry(veh);
   const deg = Math.round((geom.turretAngle * 180) / Math.PI);
-  const outriggerPct = Math.round((geom.outriggerExt ?? 0) * 100);
-  const outriggersOk = (geom.outriggerExt ?? 0) >= 0.7;
+  const outriggersOk = isCraneStabilized(veh);
+  const lockReason = craneLockReason(veh, hasPressure);
 
   const hookedVeh = veh.craneHookedVehicleId ? world.vehicles.find((v) => v.id === veh.craneHookedVehicleId) : null;
 
@@ -305,7 +306,7 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
     neg: { key: 'craneHookDown' as InputFlag, icon: <ArrowDown />, cap: 'F', title: 'Майна, опустить крюк [F]' },
     pos: { key: 'craneHookUp' as InputFlag, icon: <ArrowUp />, cap: 'R', title: 'Вира, поднять крюк [R]' },
   };
-  const lockNote = !outriggersOk ? 'Опоры не выставлены' : !hasPressure ? 'Нет давления, включите КОМ' : '';
+  const lockNote = lockReason;
 
   if (isMobileTouch) {
     return (
@@ -374,7 +375,7 @@ export const TruckSuperstructureHUD: React.FC<TruckSuperstructureHUDProps> = ({
       {!outriggersOk && (
         <div className="tc-warn">
           <ShieldAlert />
-          <span>Опоры {outriggerPct}%. Спуститесь и выставьте их на пульте у рамы</span>
+          <span>{lockReason || 'Опоры не выставлены'}. Спуститесь к пульту у рамы</span>
         </div>
       )}
 

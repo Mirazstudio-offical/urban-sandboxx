@@ -12,34 +12,55 @@
 .op-layer *, .op-layer *::before, .op-layer *::after { box-sizing: border-box; }
 
 .op-post {
-  position: absolute; left: 50%; bottom: 0; width: 296px; height: 104px; margin-left: -148px; padding: 10px 14px 0;
-  display: grid; grid-template-columns: 84px 1fr 72px; align-items: center;
-  border-radius: 6px 6px 0 0;
+  position: absolute; left: 50%; bottom: 92px; width: min(340px, calc(100vw - 12px)); height: 106px; transform: translateX(-50%);
+  padding: 8px 8px 0;
+  display: grid; grid-template-columns: 62px 1fr 62px; grid-template-rows: 62px 1fr; row-gap: 2px; column-gap: 6px; align-items: center;
+  border-radius: 6px;
   background:
     radial-gradient(circle at 22% 30%, rgba(255, 255, 255, 0.06) 0 1px, transparent 2px) 0 0 / 7px 7px,
     radial-gradient(circle at 70% 60%, rgba(0, 0, 0, 0.18) 0 1px, transparent 2px) 0 0 / 11px 11px,
     linear-gradient(180deg, #5d6454 0%, #484e3f 100%);
-  box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 0 0 1px rgba(0, 0, 0, 0.55);
 }
 .op-bolt {
   position: absolute; width: 7px; height: 7px; border-radius: 50%; pointer-events: none;
   background: radial-gradient(circle at 35% 30%, #bdc0b6, #4a4c48 70%);
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
 }
-.op-bolt.is-tl { left: 6px; top: 6px; }
-.op-bolt.is-tr { right: 6px; top: 6px; }
-.op-bolt.is-bl { left: 6px; bottom: 8px; }
-.op-bolt.is-br { right: 6px; bottom: 8px; }
+.op-bolt.is-tl { left: 5px; top: 5px; }
+.op-bolt.is-tr { right: 5px; top: 5px; }
+.op-bolt.is-bl { left: 5px; bottom: 5px; }
+.op-bolt.is-br { right: 5px; bottom: 5px; }
 
 .op-gauge, .op-level { display: block; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
-.op-gauge svg { display: block; width: 84px; height: 84px; }
-.op-level { justify-self: end; }
-.op-level svg { display: block; width: 68px; height: 68px; }
+.op-gauge svg, .op-level svg { display: block; width: 62px; height: 62px; }
 
-.op-lever { position: absolute; left: 50%; bottom: 0; margin-left: -28px; z-index: 2; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.55)); }
+/* beam / jack tumbler between the instruments, with an engraved pictogram on each side */
+.op-mid { display: flex; align-items: center; justify-content: center; gap: 2px; }
+.op-picto svg { display: block; width: 20px; height: 14px; }
+.op-toggle {
+  width: 52px; height: 52px; padding: 0; border: 0; background: none; cursor: pointer; touch-action: manipulation;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+}
+.op-toggle svg { display: block; width: 52px; height: 42px; margin-top: 4px; }
+
+/* engraved plan marks, one over each lever */
+.op-marks {
+  grid-column: 1 / -1; align-self: center; justify-self: center; width: min(272px, calc(100vw - 60px));
+  display: grid; grid-template-columns: repeat(4, 1fr); justify-items: center;
+}
+.op-mark svg { display: block; width: 20px; height: 27px; }
+
+/* one lever per leg, standing on the floor in front of the plate and rising from below the screen edge */
+.op-levers {
+  position: absolute; left: 50%; bottom: 0; width: min(272px, calc(100vw - 60px)); transform: translateX(-50%);
+  display: grid; grid-template-columns: repeat(4, 1fr); justify-items: center;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.55));
+}
+.op-levers .tc-lv3, .op-levers .tc-lv3-hit { width: 100%; max-width: 56px; }
 
 .op-hint {
-  position: absolute; left: 50%; bottom: 116px; transform: translateX(-50%); max-width: calc(100% - 32px);
+  position: absolute; left: 50%; bottom: 208px; transform: translateX(-50%); max-width: calc(100% - 32px);
   color: #e9e6df; font-size: 13px; line-height: 1.25; text-align: center; white-space: nowrap;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
