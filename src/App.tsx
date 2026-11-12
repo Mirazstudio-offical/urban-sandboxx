@@ -109,6 +109,7 @@ import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { TruckSuperstructureHUD } from './components/TruckSuperstructureHUD';
 import { CraneOutriggersModal } from './components/CraneOutriggersModal';
+import { VacuumPumpModal } from './components/VacuumPumpModal';
 import { isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
 import { toggleCraneHookAttach } from './physics';
 import { MainMenu } from './components/MainMenu';
@@ -409,6 +410,8 @@ export default function App() {
   const [engineBayVehicle, setEngineBayVehicle] = useState<Vehicle | null>(null);
   const [isCraneOutriggersModalOpen, setIsCraneOutriggersModalOpen] = useState<boolean>(false);
   const [craneOutriggersVehicle, setCraneOutriggersVehicle] = useState<Vehicle | null>(null);
+  const [isVacuumPumpModalOpen, setIsVacuumPumpModalOpen] = useState<boolean>(false);
+  const [vacuumPumpVehicle, setVacuumPumpVehicle] = useState<Vehicle | null>(null);
   const [gasStationPrompt, setGasStationPrompt] = useState<string | null>(null);
   const [activeInteraction, setActiveInteraction] = useState<InteractionTarget | null>(null);
   const activeInteractionRef = useRef<InteractionTarget | null>(null);
@@ -5275,20 +5278,12 @@ export default function App() {
         break;
       }
 
-      case 'vacuum_mode_toggle': {
-        const veh = target.data as Vehicle;
+      case 'vacuum_pump_panel': {
+        const veh = (target.data && target.data.id) ? (world.vehicles.find(v => v.id === target.data.id) || target.data) : null;
         if (veh?.fluidTank) {
-          const cur = veh.fluidTank.vacuumPumpMode ?? 'suction';
-          veh.fluidTank.vacuumPumpMode = cur === 'suction' ? 'discharge' : 'suction';
-          sound.playHydraulicHiss(0.22);
-          addPlayerNotification(
-            p,
-            veh.fluidTank.vacuumPumpMode === 'suction'
-              ? '4-ходовой кран вакуум-насоса переведён в режим «Откачка (Вакуум)».'
-              : '4-ходовой кран вакуум-насоса переведён в режим «Нагнетание (Слив)».',
-            'info'
-          );
-          setVitalsRefreshTick(t => t + 1);
+          setVacuumPumpVehicle(veh);
+          setIsVacuumPumpModalOpen(true);
+          sound.playUseItem();
         }
         break;
       }
@@ -7333,6 +7328,18 @@ export default function App() {
           isOpen={isCraneOutriggersModalOpen}
           onClose={() => setIsCraneOutriggersModalOpen(false)}
           vehicle={craneOutriggersVehicle || (worldRef.current && playerRef.current ? (worldRef.current.vehicles.find(v => v.id === playerRef.current?.currentVehicleId) || worldRef.current.vehicles.find(v => isVehicleCraneTruck(v) && Math.hypot(v.x - (playerRef.current?.x || 0), v.y - (playerRef.current?.y || 0)) < 150)) : null) || null}
+          player={playerRef.current}
+          world={worldRef.current}
+          onForceUpdate={() => setVitalsRefreshTick((t) => t + 1)}
+        />
+      )}
+
+      {/* VACUUM PUMP CONTROL POST (four-way cock and compound gauge) */}
+      {isVacuumPumpModalOpen && vacuumPumpVehicle && (
+        <VacuumPumpModal
+          isOpen={isVacuumPumpModalOpen}
+          onClose={() => setIsVacuumPumpModalOpen(false)}
+          vehicle={vacuumPumpVehicle}
           player={playerRef.current}
           world={worldRef.current}
           onForceUpdate={() => setVitalsRefreshTick((t) => t + 1)}

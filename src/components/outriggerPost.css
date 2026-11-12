@@ -61,7 +61,7 @@
 
 .op-hint {
   position: absolute; left: 50%; bottom: 208px; transform: translateX(-50%); max-width: calc(100% - 32px);
-  color: #e9e6df; font-size: 13px; line-height: 1.25; text-align: center; white-space: nowrap;
+  color: #e9e6df; font-size: 13px; line-height: 1.25; text-align: center; width: max-content;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
 

@@ -56,7 +56,7 @@ const getIconForType = (type: string) => {
     case 'water_hose_take':
     case 'water_hose_stow':
     case 'vacuum_gate_valve_toggle':
-    case 'vacuum_mode_toggle':
+    case 'vacuum_pump_panel':
     case 'vacuum_hose_mode_toggle':
       return <Droplet className={iconClass} />;
     case 'enter_building':

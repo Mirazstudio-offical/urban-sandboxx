@@ -24,7 +24,7 @@ export type InteractionType =
   | 'water_hose_take'
   | 'water_hose_stow'
   | 'vacuum_gate_valve_toggle'
-  | 'vacuum_mode_toggle'
+  | 'vacuum_pump_panel'
   | 'vacuum_hose_mode_toggle'
   | 'enter_building'
   | 'exit_building'
@@ -604,10 +604,10 @@ export function findActiveInteraction(
       const curMode = veh.fluidTank.vacuumPumpMode ?? 'suction';
       const barVal = +(veh.fluidTank.vacuumPressureBar ?? 0).toFixed(2);
       candidates.push({
-        type: 'vacuum_mode_toggle',
+        type: 'vacuum_pump_panel',
         primaryKey: 'E',
-        actionTitle: curMode === 'suction' ? 'Кран: Нагнетание' : 'Кран: Откачка (вакуум)',
-        detail: `Манометр: ${barVal > 0 ? `+${barVal}` : barVal} бар`,
+        actionTitle: 'Пульт вакуум-насоса',
+        detail: `${curMode === 'suction' ? 'Откачка' : 'Нагнетание'} · ${barVal > 0 ? `+${barVal}` : barVal} бар`,
         x: vPos.fourWayValve.x,
         y: vPos.fourWayValve.y,
         dist: pumpReach.dist,
