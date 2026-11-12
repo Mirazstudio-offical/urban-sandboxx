@@ -1,41 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { togglePto, isPtoOn, hasPtoDrive, vehicleHasPto } from '../ptoSystem';
-import { Player, GameWorld, Vehicle } from '../types';
-import { 
-  Lightbulb,
-  Power, 
-  ShieldAlert, 
-  ChevronLeft, 
-  ChevronRight, 
-  CloudRain, 
-  X,
-  Fan,
-  Wind,
-  AlertTriangle,
-  Thermometer,
-  Gauge,
-  Link2,
-  Droplet,
-  Zap,
-  Truck,
-  Siren,
-  Key,
-  Compass,
-  Radio,
-  Sliders,
-  ToggleLeft,
-  ToggleRight,
-  Activity,
-  CheckCircle2,
-  Snowflake,
-  RefreshCw,
-  Anchor
-} from 'lucide-react';
+import { Player, GameWorld } from '../types';
+import { X } from 'lucide-react';
 import { sound } from '../audio';
-import { toggleTrailerHitch, toggleCraneHookAttach } from '../physics';
+import { toggleTrailerHitch } from '../physics';
 import { getLiquidNameRu, hasRoadTrainLights, getVehicleDiffCapabilities, cycleVehicleDiffLock } from '../vehicleHelpers';
-import { isVehicleCraneTruck, isVehicleVacuumTruck, getVehicleVacuumBodyId, getVehicleCraneGeometry } from '../truckChassisVariants';
+import { isVehicleCraneTruck, isVehicleVacuumTruck, getVehicleVacuumBodyId } from '../truckChassisVariants';
 import { getVehicleControlTheme, VehicleControlTheme, CONTROL_THEME_META } from './vehicleControlStyles';
+import { Cell, Group, HwPush, HwRotary, HwSwitch, Lamp, Lcd, Screw, THEME_FAMILY } from './boardHardware';
 
 interface VehicleBoardMenuProps {
   isOpen: boolean;
@@ -78,6 +50,7 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
   onToggleAC,
   onToggleRecirc
 }) => {
+  const [, setTick] = useState(0);
   // Close menu on Escape or E key
   useEffect(() => {
     if (!isOpen) return;
@@ -130,1078 +103,369 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
   else if (dl?.rear) diffLockDesc = 'МКБ-З (ЗАДНЯЯ)';
   else if (dl?.front) diffLockDesc = 'МКБ-П (ПЕРЕДНЯЯ)';
 
-  // Theme-specific material aesthetics for the physical dashboard panel
-  const panelStyles = {
-    tractor: {
-      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
-      panelTexture: 'radial-gradient(#c68a35 0.5px, transparent 0.5px)',
-      textureSize: '12px 12px',
-      casingBorder: 'border-[#2a2e38] shadow-2xl',
-      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
-      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
-      bezelStyle: 'steel',
-      switchType: 'soviet_toggle',
-      accentColor: '#c68a35',
-      screwColor: 'from-[#3a3f4d] to-[#14161a]'
-    },
-    truck: {
-      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
-      panelTexture: 'none',
-      textureSize: '4px 4px',
-      casingBorder: 'border-[#2a2e38] shadow-2xl',
-      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
-      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
-      bezelStyle: 'steel',
-      switchType: 'truck_rocker',
-      accentColor: '#c68a35',
-      screwColor: 'from-[#3a3f4d] to-[#14161a]'
-    },
-    retro: {
-      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
-      panelTexture: 'none',
-      textureSize: '16px 16px',
-      casingBorder: 'border-[#2a2e38] shadow-2xl',
-      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
-      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
-      bezelStyle: 'steel',
-      switchType: 'soviet_toggle',
-      accentColor: '#c68a35',
-      screwColor: 'from-[#3a3f4d] to-[#14161a]'
-    },
-    sport: {
-      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
-      panelTexture: 'none',
-      textureSize: '6px 6px',
-      casingBorder: 'border-[#2a2e38] shadow-2xl',
-      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
-      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
-      bezelStyle: 'steel',
-      switchType: 'missile_switch',
-      accentColor: '#c68a35',
-      screwColor: 'from-[#3a3f4d] to-[#14161a]'
-    },
-    luxury: {
-      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
-      panelTexture: 'none',
-      textureSize: '14px 14px',
-      casingBorder: 'border-[#2a2e38] shadow-2xl',
-      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
-      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
-      bezelStyle: 'steel',
-      switchType: 'luxury_piano',
-      accentColor: '#c68a35',
-      screwColor: 'from-[#3a3f4d] to-[#14161a]'
-    },
-    offroad: {
-      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
-      panelTexture: 'none',
-      textureSize: '6px 6px',
-      casingBorder: 'border-[#2a2e38] shadow-2xl',
-      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
-      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
-      bezelStyle: 'steel',
-      switchType: 'offroad_rocker',
-      accentColor: '#c68a35',
-      screwColor: 'from-[#3a3f4d] to-[#14161a]'
-    },
-    emergency: {
-      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
-      panelTexture: 'none',
-      textureSize: '10px 10px',
-      casingBorder: 'border-[#2a2e38] shadow-2xl',
-      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
-      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
-      bezelStyle: 'steel',
-      switchType: 'tactical_switch',
-      accentColor: '#c68a35',
-      screwColor: 'from-[#3a3f4d] to-[#14161a]'
-    },
-    standard: {
-      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
-      panelTexture: 'none',
-      textureSize: '10px 10px',
-      casingBorder: 'border-[#2a2e38] shadow-2xl',
-      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
-      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
-      bezelStyle: 'steel',
-      switchType: 'standard_oem',
-      accentColor: '#c68a35',
-      screwColor: 'from-[#3a3f4d] to-[#14161a]'
-    }
-  }[theme];
-
-  // Screws renderer for the metal chassis
-  const renderCornerScrew = (position: string) => (
-    <div 
-      className={`absolute ${position} w-2.5 h-2.5 rounded-[1px] bg-[#2a2e38] border border-[#14161a] flex items-center justify-center pointer-events-none z-20`}
-    >
-      <div className="w-1.5 h-0.5 bg-[#0b0c0e]" />
-    </div>
-  );
+  const family = THEME_FAMILY[theme] ?? 'rocker';
+  const press = () => sound.playButtonPress();
+  const hasSiren = ['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(veh.type);
+  const roadTrainOn = veh.roadTrainLightsOn !== false;
+  const gboOn = veh.fuelSystem?.gboActive !== false;
+  const tank = veh.fluidTank;
+  const covered = family === 'guard';
 
   return (
-    <div 
-      id="radial-menu-backdrop"
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b0c0e]/85 backdrop-blur-md select-none p-3 overflow-y-auto animate-in fade-in duration-200 font-mono"
-      onClick={onClose}
-    >
-      {/* COCKPIT SWITCHBOARD CONSOLE PANEL CHASSIS */}
-      <div 
-        id="cockpit-switchboard-panel"
-        className="relative w-full max-w-[780px] rounded-[2px] border border-[#2a2e38] p-4 sm:p-6 transition-all duration-300 bg-[#14161a] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Chassis Corner Screws */}
-        {renderCornerScrew('top-2 left-2')}
-        {renderCornerScrew('top-2 right-2')}
-        {renderCornerScrew('bottom-2 left-2')}
-        {renderCornerScrew('bottom-2 right-2')}
+    <div id="radial-menu-backdrop" className="hw-backdrop" onClick={onClose}>
+      <div id="cockpit-switchboard-panel" className="hw-board" data-skin={theme} onClick={(e) => e.stopPropagation()}>
+        <Screw className="is-tl" turn={20} />
+        <Screw className="is-tr" turn={-35} />
+        <Screw className="is-bl" turn={70} />
+        <Screw className="is-br" turn={-10} />
 
-        {/* Top Header Plate: Cockpit Panel Title & Telemetry Status */}
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-[2px] border mb-4 bg-[#0b0c0e]/95 border-[#2a2e38] shadow-inner font-mono">
-          {/* Vehicle Identity & Archetype Stamped Badge */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-3 h-3 rounded-none flex items-center justify-center border border-[#c68a35] bg-[#c68a35]">
-              <div className="w-1.5 h-1.5 rounded-none bg-[#0b0c0e]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 text-xs font-mono font-black uppercase tracking-wider text-[#f0f3f6]">
-                <span className="text-[#c68a35]">{themeMeta.badgeText}</span>
-                <span className="text-[#3a3f4d]">|</span>
-                <span className="text-[#cbd5e1]">{veh.nameRu || veh.type}</span>
-              </div>
-              <div className="text-[10px] text-[#9ba3af] font-mono flex items-center gap-2 mt-0.5">
-                <span>БОРТОВАЯ СЕТЬ: <strong className="text-[#c68a35]">{voltage} В</strong></span>
-                <span>•</span>
-                <span>САЛОН: <strong className="text-[#d99a41]">{heaterTemp}°C</strong></span>
-                <span>•</span>
-                <span>МОТОР: <strong className={engTemp > 100 ? 'text-red-400 font-black' : 'text-[#c68a35]'}>{engTemp}°C</strong></span>
-              </div>
-            </div>
+        <header className="hw-head">
+          <div className="hw-nameplate">
+            <small>{themeMeta.badgeText}</small>
+            <strong>{veh.nameRu || veh.type}</strong>
           </div>
-
-          {/* Instrument Mini-Cluster & Close Button */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-baseline gap-1 bg-[#14161a] px-3 py-1 rounded-[2px] border border-[#2a2e38] font-mono">
-              <span className="text-lg font-black text-[#c68a35]">{speedKmh}</span>
-              <span className="text-[9px] text-[#9ba3af] uppercase font-bold">км/ч</span>
-              <span className="text-[#3a3f4d] mx-1">|</span>
-              <span className="text-xs text-[#cbd5e1] font-bold">{rpm}</span>
-              <span className="text-[9px] text-[#5a6272] uppercase">об/мин</span>
-            </div>
-
-            <button 
-              id="radial-menu-close"
-              onClick={onClose}
-              className="p-2 rounded-[2px] bg-[#0b0c0e] hover:bg-[#1c1f26] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:border-[#c68a35]/50 transition-all cursor-pointer active:scale-98 shadow-md"
-              title="Закрыть панель управления [Esc / E]"
-            >
-              <X className="w-4 h-4" />
+          <div className="hw-meters">
+            <Lcd label="БОРТ, В" value={voltage} warn={Number(voltage) < 12} />
+            <Lcd label="САЛОН, °C" value={String(heaterTemp)} />
+            <Lcd label="МОТОР, °C" value={String(engTemp)} warn={engTemp > 100} />
+            <Lcd label="КМ/Ч" value={String(speedKmh)} />
+            <Lcd label="ОБ/МИН" value={String(rpm)} />
+            <button id="radial-menu-close" type="button" className="hw-close" onClick={onClose} title="Закрыть панель [Esc]" aria-label="Закрыть панель">
+              <X />
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* ========================================================================= */}
-        {/* MAIN SWITCHBOARD GRID: PHYSICAL TOGGLES, ROCKERS & SWITCHES               */}
-        {/* ========================================================================= */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          
-          {/* ================= 1. ENGINE IGNITION & STARTER ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                ЗАЖИГАНИЕ [J]
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  isEngineRunning 
-                    ? 'bg-[#c68a35] shadow-[0_0_8px_#c68a35]' 
-                    : isStalled 
-                    ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24] animate-pulse' 
-                    : 'bg-[#2a2e38]'
-                }`} 
+        <div className="hw-groups">
+          <Group title="СВЕТ">
+            <Cell label="Фары" keyHint="L" wide lamp={<Lamp on={headlightsMode !== 'off'} tone={headlightsMode === 'high' ? 'blue' : 'green'} />}>
+              <HwRotary
+                label="Фары"
+                value={headlightsMode}
+                options={[
+                  { id: 'off', label: 'ВЫКЛ' },
+                  { id: 'low', label: 'БЛИЖ' },
+                  { id: 'high', label: 'ДАЛЬН' },
+                ]}
+                onSelect={(m) => {
+                  press();
+                  if (headlightsMode !== m) onToggleHeadlights();
+                }}
+                onKnob={() => {
+                  press();
+                  onToggleHeadlights();
+                }}
+                spread={52}
               />
-            </div>
+            </Cell>
+            <Cell label="ПТФ передние" keyHint="U" lamp={<Lamp on={!!veh.frontFogLightsOn} tone="green" />}>
+              <HwSwitch
+                family={family}
+                on={!!veh.frontFogLightsOn}
+                label="Передние противотуманные фары"
+                lens="green"
+                onClick={() => {
+                  press();
+                  if (onToggleFrontFogLights) onToggleFrontFogLights();
+                  else veh.frontFogLightsOn = !veh.frontFogLightsOn;
+                  setTick((t) => t + 1);
+                }}
+              />
+            </Cell>
+            <Cell label="ПТФ задние" keyHint="Y" lamp={<Lamp on={!!veh.rearFogLightsOn} tone="amber" />}>
+              <HwSwitch
+                family={family}
+                on={!!veh.rearFogLightsOn}
+                label="Задний противотуманный фонарь"
+                lens="amber"
+                onClick={() => {
+                  press();
+                  if (onToggleRearFogLights) onToggleRearFogLights();
+                  else veh.rearFogLightsOn = !veh.rearFogLightsOn;
+                  setTick((t) => t + 1);
+                }}
+              />
+            </Cell>
+            {hasRoadTrainLights(veh) && (
+              <Cell label="Огни автопоезда" keyHint="N" lamp={<Lamp on={roadTrainOn} tone="amber" />}>
+                <HwSwitch
+                  family={family}
+                  on={roadTrainOn}
+                  label="Опознавательные огни автопоезда"
+                  onClick={() => {
+                    press();
+                    if (onToggleRoadTrainLights) onToggleRoadTrainLights();
+                    else veh.roadTrainLightsOn = !veh.roadTrainLightsOn;
+                    setTick((t) => t + 1);
+                  }}
+                />
+              </Cell>
+            )}
+          </Group>
 
-            {/* Push-to-Start Button */}
-            <button
-              type="button"
-              onClick={() => {
-                sound.playButtonPress();
-                if (onToggleEngine) onToggleEngine();
-                if (navigator.vibrate) navigator.vibrate(25);
-              }}
-              className={`w-full mt-3 py-2.5 px-3 rounded-[2px] border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                isEngineRunning
-                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                  : isStalled
-                  ? 'bg-amber-800/80 border-amber-500 text-amber-200 animate-pulse'
-                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
+          <Group title="СИГНАЛИЗАЦИЯ">
+            <Cell label="Левый" keyHint="Z" lamp={<Lamp on={turnSignal === 'left' || turnSignal === 'hazard'} tone="green" blink />}>
+              <HwPush shape="square" glyph="left" label="Левый поворот" lit={turnSignal === 'left'} tone="green" onClick={() => { press(); onToggleTurnSignal('left'); }} />
+            </Cell>
+            <Cell label="Аварийка" keyHint="X" lamp={<Lamp on={turnSignal === 'hazard'} tone="red" blink />}>
+              <HwPush shape="wide" tone="red" glyph="hazard" label="Аварийная сигнализация" lit={turnSignal === 'hazard'} blink onClick={() => { press(); onToggleTurnSignal('hazard'); }} />
+            </Cell>
+            <Cell label="Правый" keyHint="C" lamp={<Lamp on={turnSignal === 'right' || turnSignal === 'hazard'} tone="green" blink />}>
+              <HwPush shape="square" glyph="right" label="Правый поворот" lit={turnSignal === 'right'} tone="green" onClick={() => { press(); onToggleTurnSignal('right'); }} />
+            </Cell>
+            {hasSiren && (
+              <Cell label="Спецсигнал" keyHint="B" lamp={<Lamp on={sirenActive} tone="blue" blink />}>
+                <HwSwitch family={family === 'rocker' || family === 'piano' ? family : 'guard'} on={sirenActive} label="Проблесковые маяки и сирена" lens="blue" onClick={() => { press(); onToggleSiren(); }} />
+              </Cell>
+            )}
+          </Group>
+
+          <Group title="КУЗОВ И САЛОН">
+            <Cell label="Дворники" keyHint="K" lamp={<Lamp on={wipersActive} tone="green" />}>
+              <HwSwitch family={family} on={wipersActive} label="Очиститель лобового стекла" lens="green" onClick={() => { press(); onToggleWipers(); }} />
+            </Cell>
+            <Cell label="Окно двери" keyHint="O" note={isWindowOpen ? 'опущено' : 'поднято'} lamp={<Lamp on={isWindowOpen} tone="amber" />}>
+              <HwSwitch
+                family={family}
+                on={isWindowOpen}
+                label="Стеклоподъёмник"
+                onClick={() => {
+                  sound.playUseItem();
+                  if (onToggleWindow) onToggleWindow();
+                  else veh.windowOpen = !veh.windowOpen;
+                  setTick((t) => t + 1);
+                }}
+              />
+            </Cell>
+            <Cell label="Печка" wide lamp={<Lamp on={heaterMode !== 'off'} tone="amber" />}>
+              <HwRotary
+                label="Отопитель"
+                value={heaterMode}
+                options={[
+                  { id: 'off', label: '0' },
+                  { id: 'low', label: '1' },
+                  { id: 'med', label: '2' },
+                  { id: 'high', label: '3' },
+                ]}
+                onSelect={(m) => {
+                  sound.playButtonPress();
+                  onChangeHeaterMode(m as 'off' | 'low' | 'med' | 'high');
+                }}
+                spread={60}
+              />
+            </Cell>
+            <Cell label="A/C" lamp={<Lamp on={acActive} tone="blue" />}>
+              <HwSwitch family={family} on={acActive} label="Кондиционер" lens="blue" onClick={() => { press(); onToggleAC?.(); }} />
+            </Cell>
+            <Cell label="Рециркуляция" note={recircActive ? 'салонный воздух' : 'уличный воздух'} lamp={<Lamp on={recircActive} tone="amber" />}>
+              <HwSwitch family={family} on={recircActive} label="Рециркуляция воздуха" onClick={() => { press(); onToggleRecirc?.(); }} />
+            </Cell>
+          </Group>
+
+          <Group title="ДВИГАТЕЛЬ И ТРАНСМИССИЯ">
+            <Cell
+              label="Стартер"
+              keyHint="J"
+              note={isEngineRunning ? 'двигатель работает' : isStalled ? 'заглох' : 'двигатель стоит'}
+              lamp={<Lamp on={isEngineRunning || isStalled} tone={isStalled && !isEngineRunning ? 'red' : 'green'} blink={isStalled && !isEngineRunning} />}
             >
-              <Power className="w-4 h-4" />
-              <span className="text-xs font-mono font-black uppercase tracking-wider">
-                {isEngineRunning ? 'МОТОР ВКЛ' : isStalled ? 'ЗАГЛОХ (СТАРТ)' : 'СТАРТ / СТОП'}
-              </span>
-            </button>
-
-            <span className="text-[8px] text-center font-mono text-[#5a6272] mt-2">
-              {isEngineRunning ? 'Холостой ход активен' : 'Двигатель заглушен'}
-            </span>
-          </div>
-
-          {/* ================= 2. HEADLIGHTS MULTI-POSITION SWITCH ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                ФАРЫ [L]
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  headlightsMode === 'high' 
-                    ? 'bg-[#c68a35] shadow-[0_0_8px_#c68a35]' 
-                    : headlightsMode === 'low' 
-                    ? 'bg-[#d99a41]' 
-                    : 'bg-[#2a2e38]'
-                }`} 
+              <HwPush
+                shape="round"
+                tone={isEngineRunning ? 'green' : 'plain'}
+                glyph="power"
+                label="Пуск и остановка двигателя"
+                lit={isEngineRunning}
+                covered={covered}
+                onClick={() => {
+                  press();
+                  if (onToggleEngine) onToggleEngine();
+                  if (navigator.vibrate) navigator.vibrate(25);
+                }}
               />
-            </div>
-
-            {/* 3-Position Rocker / Rotary Selector */}
-            <div className="grid grid-cols-3 gap-1 mt-2.5 bg-[#0b0c0e] p-1 rounded-[2px] border border-[#2a2e38]">
-              {(['off', 'low', 'high'] as const).map((mode) => {
-                const isActive = headlightsMode === mode;
-                const label = mode === 'off' ? 'ВЫКЛ' : mode === 'low' ? 'БЛИЖ' : 'ДАЛЬН';
-                return (
-                  <button
-                    key={mode}
-                    type="button"
+            </Cell>
+            {diffCaps.supported && (
+              <Cell label="Блокировка диффа" keyHint="V" note={diffLockDesc.toLowerCase()} lamp={<Lamp on={isDiffLocked} tone="red" />}>
+                <HwSwitch
+                  family={family}
+                  on={isDiffLocked}
+                  label="Блокировка дифференциала"
+                  lens="red"
+                  onClick={() => {
+                    if (onCycleDiffLock) {
+                      onCycleDiffLock();
+                    } else {
+                      const res = cycleVehicleDiffLock(veh);
+                      if (res.isEngaged) sound.playDiffLockEngage();
+                      else if (res.changed) sound.playDiffLockDisengage();
+                      else sound.playDiffLockWarning();
+                    }
+                    setTick((t) => t + 1);
+                  }}
+                />
+              </Cell>
+            )}
+            {veh.hasGBO && (
+              <Cell label="Газ / бензин" note={gboOn ? `газ ${Math.round(veh.fuelSystem?.gboLevel ?? 0)}%` : 'бензин'} lamp={<Lamp on={gboOn} tone="green" />}>
+                <HwSwitch
+                  family={family}
+                  on={gboOn}
+                  label="Переключатель ГБО"
+                  lens="green"
+                  onClick={() => {
+                    press();
+                    if (veh.fuelSystem) veh.fuelSystem.gboActive = !veh.fuelSystem.gboActive;
+                    setTick((t) => t + 1);
+                  }}
+                />
+              </Cell>
+            )}
+            {vehicleHasPto(veh) && (() => {
+              const on = isPtoOn(veh);
+              const drive = hasPtoDrive(veh);
+              const what = isVehicleCraneTruck(veh) ? 'гидронасос крана' : isVehicleVacuumTruck(veh) ? 'вакуум-насос' : 'водонасос';
+              return (
+                <Cell label="КОМ" note={on && !drive ? 'заведите двигатель' : what} lamp={<Lamp on={drive} tone="green" />}>
+                  <HwSwitch
+                    family={family === 'guard' ? 'guard' : family}
+                    on={on}
+                    label={`Коробка отбора мощности: ${what}`}
+                    lens="green"
                     onClick={() => {
-                      sound.playButtonPress();
-                      if (headlightsMode !== mode) onToggleHeadlights();
+                      togglePto(veh, player);
+                      setTick((t) => t + 1);
                     }}
-                    className={`py-1.5 text-[9px] font-mono font-black rounded-[2px] transition-all cursor-pointer ${
-                      isActive 
-                        ? 'bg-[#c68a35] text-[#0b0c0e] font-black'
-                        : 'text-[#9ba3af] hover:text-[#f0f3f6]'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+                  />
+                </Cell>
+              );
+            })()}
+          </Group>
 
-            <div className="flex items-center justify-between mt-2 text-[8px] font-mono text-[#9ba3af]">
-              <span className="flex items-center gap-1">
-                <Lightbulb className={`w-3 h-3 ${headlightsMode !== 'off' ? 'text-[#c68a35]' : 'text-[#5a6272]'}`} />
-                <span>РЕЖИМ:</span>
-              </span>
-              <span className="font-bold text-[#f0f3f6] uppercase">
-                {headlightsMode === 'off' ? 'ВЫКЛЮЧЕНЫ' : headlightsMode === 'low' ? 'БЛИЖНИЙ СВЕТ' : 'ДАЛЬНИЙ СВЕТ'}
-              </span>
-            </div>
-          </div>
-
-          {/* ================= 3. FRONT FOG LIGHTS (ПТФ) ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                ПТФ ПЕРЕД [U]
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  veh.frontFogLightsOn ? 'bg-[#c68a35] shadow-[0_0_8px_#c68a35]' : 'bg-[#2a2e38]'
-                }`} 
+          <Group title="ПРИЦЕП">
+            <Cell label="Сцепка" keyHint="H" note={veh.trailerId ? 'сцеплен' : 'расцеплен'} lamp={<Lamp on={!!veh.trailerId} tone="green" />}>
+              <HwSwitch
+                family={family}
+                on={!!veh.trailerId}
+                label="Тягово-сцепное устройство"
+                lens="green"
+                onClick={() => {
+                  if (onToggleTrailerHitch) onToggleTrailerHitch();
+                  else toggleTrailerHitch(veh, world);
+                  setTick((t) => t + 1);
+                }}
               />
-            </div>
+            </Cell>
+          </Group>
 
-            <button
-              type="button"
-              onClick={() => {
-                sound.playButtonPress();
-                if (onToggleFrontFogLights) onToggleFrontFogLights();
-                else veh.frontFogLightsOn = !veh.frontFogLightsOn;
-              }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                veh.frontFogLightsOn
-                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-            >
-              <Lightbulb className={`w-4 h-4 ${veh.frontFogLightsOn ? 'text-[#0b0c0e]' : 'text-[#9ba3af]'}`} />
-              <span className="text-[11px] font-mono font-black uppercase">
-                {veh.frontFogLightsOn ? 'ТУМБЛЕР: ВКЛ' : 'ТУМБЛЕР: ВЫКЛ'}
-              </span>
-              {veh.frontFogLightsOn ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-            </button>
-
-            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-              Передние противотуманные фары
-            </span>
-          </div>
-
-          {/* ================= 4. REAR FOG LIGHTS ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                ПТФ ЗАДНИЕ [Y]
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  veh.rearFogLightsOn ? 'bg-[#c68a35] shadow-[0_0_8px_#c68a35]' : 'bg-[#2a2e38]'
-                }`} 
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                sound.playButtonPress();
-                if (onToggleRearFogLights) onToggleRearFogLights();
-                else veh.rearFogLightsOn = !veh.rearFogLightsOn;
-              }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                veh.rearFogLightsOn
-                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-            >
-              <Lightbulb className={`w-4 h-4 ${veh.rearFogLightsOn ? 'text-[#0b0c0e]' : 'text-[#9ba3af]'}`} />
-              <span className="text-[11px] font-mono font-black uppercase">
-                {veh.rearFogLightsOn ? 'ТУМБЛЕР: ВКЛ' : 'ТУМБЛЕР: ВЫКЛ'}
-              </span>
-              {veh.rearFogLightsOn ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-            </button>
-
-            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-              Задний фонарь повышенной яркости
-            </span>
-          </div>
-
-          {/* ================= 5. HAZARD WARNING FLASHER ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                АВАРИЙКА [X]
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  turnSignal === 'hazard' ? 'bg-red-500 shadow-[0_0_10px_#ef4444] animate-ping' : 'bg-[#2a2e38]'
-                }`} 
-              />
-            </div>
-
-            {/* Big Red Emergency Hazard Button */}
-            <button
-              type="button"
-              onClick={() => {
-                sound.playButtonPress();
-                onToggleTurnSignal('hazard');
-              }}
-              className={`w-full mt-2.5 py-2.5 px-3 rounded-[2px] border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                turnSignal === 'hazard'
-                  ? 'bg-red-700 border-red-500 text-white animate-pulse'
-                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-red-400 hover:text-red-300'
-              }`}
-            >
-              <AlertTriangle className="w-4 h-4" />
-              <span className="text-xs font-mono font-black uppercase tracking-wider">
-                {turnSignal === 'hazard' ? 'АВАРИЙКА: ВКЛ' : 'АВАРИЙКА'}
-              </span>
-            </button>
-
-            <span className="text-[8px] text-center text-[#5a6272] font-mono mt-2">
-              Синхронные указатели поворотов
-            </span>
-          </div>
-
-          {/* ================= 6. TURN SIGNALS ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                ПОВОРОТЫ [Z / C]
-              </span>
-              <div className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-none ${turnSignal === 'left' ? 'bg-[#c68a35] animate-pulse' : 'bg-[#2a2e38]'}`} />
-                <div className={`w-2 h-2 rounded-none ${turnSignal === 'right' ? 'bg-[#c68a35] animate-pulse' : 'bg-[#2a2e38]'}`} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 mt-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  onToggleTurnSignal('left');
-                }}
-                className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1 text-[10px] font-mono font-black transition-all cursor-pointer ${
-                  turnSignal === 'left'
-                    ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
-                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                <span>ЛЕВЫЙ [Z]</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  onToggleTurnSignal('right');
-                }}
-                className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1 text-[10px] font-mono font-black transition-all cursor-pointer ${
-                  turnSignal === 'right'
-                    ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
-                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <span>ПРАВЫЙ [C]</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between text-[8px] font-mono text-[#9ba3af] mt-2">
-              <span>СТАТУС:</span>
-              <span className="font-bold text-[#f0f3f6] uppercase">
-                {turnSignal === 'left' ? 'ЛЕВЫЙ БОРТ' : turnSignal === 'right' ? 'ПРАВЫЙ БОРТ' : turnSignal === 'hazard' ? 'АВАРИЙКА' : 'ВЫКЛЮЧЕНЫ'}
-              </span>
-            </div>
-          </div>
-
-          {/* ================= 7. WINDSHIELD WIPERS ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                ДВОРНИКИ [K]
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  wipersActive ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
-                }`} 
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                sound.playButtonPress();
-                onToggleWipers();
-              }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                wipersActive
-                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-            >
-              <CloudRain className="w-4 h-4" />
-              <span className="text-[11px] font-mono font-black uppercase">
-                {wipersActive ? 'ПРИВОД: ВКЛ' : 'ПРИВОД: ВЫКЛ'}
-              </span>
-              {wipersActive ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-            </button>
-
-            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-              Очиститель лобового стекла
-            </span>
-          </div>
-
-          {/* ================= 8. CLIMATE CONTROL / HEATER ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                КЛИМАТ / ПЕЧКА
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  heaterMode === 'high' 
-                    ? 'bg-[#c68a35]' 
-                    : heaterMode === 'med' 
-                    ? 'bg-[#d99a41]' 
-                    : heaterMode === 'low' 
-                    ? 'bg-[#9ba3af]' 
-                    : 'bg-[#2a2e38]'
-                }`} 
-              />
-            </div>
-
-            {/* 4-Step Rotary Switch Selector */}
-            <div className="grid grid-cols-4 gap-1 mt-2 bg-[#0b0c0e] p-1 rounded-[2px] border border-[#2a2e38]">
-              {(['off', 'low', 'med', 'high'] as const).map((m) => {
-                const isActive = heaterMode === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      sound.playButtonPress();
-                      onChangeHeaterMode(m);
-                    }}
-                    className={`py-1 text-[8.5px] font-mono font-black rounded-[2px] transition-all cursor-pointer ${
-                      isActive 
-                        ? 'bg-[#c68a35] text-[#0b0c0e] font-black'
-                        : 'text-[#9ba3af] hover:text-[#f0f3f6]'
-                    }`}
-                  >
-                    {m.toUpperCase()}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* A/C & Recirculation Toggles */}
-            <div className="grid grid-cols-2 gap-1.5 mt-2 bg-[#0b0c0e] p-1 rounded-[2px] border border-[#2a2e38]">
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  if (onToggleAC) onToggleAC();
-                }}
-                className={`py-1 px-1.5 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 text-[8.5px] font-mono font-black ${
-                  acActive
-                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e]'
-                    : 'bg-[#14161a] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <span className="flex items-center gap-1">
-                  <Snowflake className="w-3 h-3" />
-                  <span>A/C</span>
-                </span>
-                {acActive ? <span className="text-[7.5px] font-bold">ВКЛ</span> : <span className="text-[7.5px] text-[#5a6272]">ВЫКЛ</span>}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  if (onToggleRecirc) onToggleRecirc();
-                }}
-                className={`py-1 px-1.5 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 text-[8.5px] font-mono font-black ${
-                  recircActive
-                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e]'
-                    : 'bg-[#14161a] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <span className="flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3" />
-                  <span>РЕЦ.</span>
-                </span>
-                {recircActive ? <span className="text-[7.5px] font-bold">ВНУТ</span> : <span className="text-[7.5px] text-[#5a6272]">УЛИЦ</span>}
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between text-[8px] font-mono text-[#9ba3af] mt-2">
-              <span className="flex items-center gap-1">
-                <Fan className="w-3 h-3 text-[#c68a35]" />
-                <span>САЛОН:</span>
-              </span>
-              <span className="font-bold text-[#f0f3f6]">
-                {heaterTemp}°C
-              </span>
-            </div>
-          </div>
-
-          {/* ================= 9. POWER WINDOW ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                ОКНО ДВЕРИ [O]
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  isWindowOpen ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
-                }`} 
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                sound.playUseItem();
-                if (onToggleWindow) onToggleWindow();
-                else veh.windowOpen = !veh.windowOpen;
-              }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                isWindowOpen
-                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-            >
-              <Wind className="w-4 h-4" />
-              <span className="text-[11px] font-mono font-black uppercase">
-                {isWindowOpen ? 'ОПУЩЕНО' : 'ПОДНЯТО'}
-              </span>
-              {isWindowOpen ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-            </button>
-
-            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-              {isWindowOpen ? 'Стекло открыто (приток воздуха)' : 'Стекло закрыто (герметично)'}
-            </span>
-          </div>
-
-          {/* ================= 10. DIFFERENTIAL LOCK ================= */}
-          {diffCaps.supported && (
-            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                  ДИФФЕРЕНЦИАЛ [V]
-                </span>
-                <div 
-                  className={`w-2.5 h-2.5 rounded-none border border-black ${
-                    isDiffLocked ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
-                  }`} 
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (onCycleDiffLock) {
-                    onCycleDiffLock();
-                  } else {
-                    const res = cycleVehicleDiffLock(veh);
-                    if (res.isEngaged) sound.playDiffLockEngage();
-                    else if (res.changed) sound.playDiffLockDisengage();
-                    else sound.playDiffLockWarning();
-                  }
-                }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                  isDiffLocked
-                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <ShieldAlert className="w-4 h-4" />
-                <span className="text-[10.5px] font-mono font-black uppercase truncate max-w-[120px]">
-                  {diffLockDesc}
-                </span>
-                {isDiffLocked ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-              </button>
-
-              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-                Блокировка дифференциала
-              </span>
-            </div>
-          )}
-
-          {/* ================= 11. TRAILER HITCH ================= */}
-          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                СЦЕПКА / ПРИЦЕП [H]
-              </span>
-              <div 
-                className={`w-2.5 h-2.5 rounded-none border border-black ${
-                  veh.trailerId ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
-                }`} 
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (onToggleTrailerHitch) {
-                  onToggleTrailerHitch();
-                } else {
-                  toggleTrailerHitch(veh, world);
-                }
-              }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                veh.trailerId
-                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-            >
-              <Link2 className="w-4 h-4" />
-              <span className="text-[11px] font-mono font-black uppercase">
-                {veh.trailerId ? 'СЦЕПЛЕН' : 'РАСЦЕПЛЕН'}
-              </span>
-              {veh.trailerId ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-            </button>
-
-            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-              Тягово-сцепное устройство (ТСУ)
-            </span>
-          </div>
-
-          {/* ================= 12. ROAD TRAIN LIGHTS ================= */}
-          {hasRoadTrainLights(veh) && (
-            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                  АВТОПОЕЗД [N]
-                </span>
-                <div 
-                  className={`w-2.5 h-2.5 rounded-none border border-black ${
-                    veh.roadTrainLightsOn !== false ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
-                  }`} 
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  if (onToggleRoadTrainLights) {
-                    onToggleRoadTrainLights();
-                  } else {
-                    veh.roadTrainLightsOn = !veh.roadTrainLightsOn;
-                  }
-                }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                  veh.roadTrainLightsOn !== false
-                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <Truck className="w-4 h-4" />
-                <span className="text-[11px] font-mono font-black uppercase">
-                  {veh.roadTrainLightsOn !== false ? 'ОГНИ: ВКЛ' : 'ОГНИ: ВЫКЛ'}
-                </span>
-                {veh.roadTrainLightsOn !== false ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-              </button>
-
-              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-                3 опознавательных огня автопоезда
-              </span>
-            </div>
-          )}
-
-          {/* ================= 13. SPECIAL: SIREN ================= */}
-          {['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(veh.type) && (
-            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                  СПЕЦСИГНАЛ [B]
-                </span>
-                <div 
-                  className={`w-2.5 h-2.5 rounded-none border border-black ${
-                    sirenActive ? 'bg-cyan-400 shadow-[0_0_10px_#22d3ee] animate-ping' : 'bg-[#2a2e38]'
-                  }`} 
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  onToggleSiren();
-                }}
-                className={`w-full mt-2.5 py-2.5 px-3 rounded-[2px] border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                  sirenActive
-                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <Siren className="w-4 h-4" />
-                <span className="text-xs font-mono font-black uppercase tracking-wider">
-                  {sirenActive ? 'СИРЕНА: АКТИВНА' : 'СИРЕНА / МАЯК'}
-                </span>
-              </button>
-
-              <span className="text-[8px] text-center text-[#5a6272] font-mono mt-2">
-                Проблесковые маяки и звуковой сигнал
-              </span>
-            </div>
-          )}
-
-          {/* ================= 14. GBO (LPG) ================= */}
-          {veh.hasGBO && (
-            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                  ГБО (ПРОПАН) [K]
-                </span>
-                <div 
-                  className={`w-2.5 h-2.5 rounded-none border border-black ${
-                    veh.fuelSystem?.gboActive !== false ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
-                  }`} 
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  if (veh.fuelSystem) {
-                    veh.fuelSystem.gboActive = !veh.fuelSystem.gboActive;
-                  }
-                }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                  veh.fuelSystem?.gboActive !== false
-                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
-              >
-                <Zap className="w-4 h-4" />
-                <span className="text-[11px] font-mono font-black uppercase">
-                  {veh.fuelSystem?.gboActive !== false ? 'ГАЗ: ВКЛ' : 'БЕНЗИН'}
-                </span>
-                {veh.fuelSystem?.gboActive !== false ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-              </button>
-
-              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-                Запас газа: {Math.round(veh.fuelSystem?.gboLevel ?? 0)}%
-              </span>
-            </div>
-          )}
-
-          {/* ================= 15. КОМ (the only power take-off switch in the game) ================= */}
-          {vehicleHasPto(veh) && (() => {
-            const on = isPtoOn(veh);
-            const drive = hasPtoDrive(veh);
-            const what = isVehicleCraneTruck(veh) ? 'ГИДРОНАСОС КРАНА' : isVehicleVacuumTruck(veh) ? 'ВАКУУМ-НАСОС' : 'ВОДОНАСОС';
-            return (
-              <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">КОМ / {what}</span>
-                  <div className={`w-2.5 h-2.5 rounded-none border border-black ${drive ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'}`} />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => togglePto(veh, player)}
-                  className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                    on
-                      ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                      : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                  }`}
-                >
-                  <Gauge className="w-4 h-4" />
-                  <span className="text-[11px] font-mono font-black uppercase">{on ? 'КОМ: ВКЛ' : 'КОМ: ВЫКЛ'}</span>
-                  {on ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-                </button>
-
-                <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-                  {on && !drive ? 'Заведите двигатель: давления пока нет' : 'Включают на стоянке с работающим двигателем'}
-                </span>
-              </div>
-            );
-          })()}
-
-          {/* ================= 15B. VACUUM TRUCK EXTERIOR ARMATURE TELEMETRY & CAB HYDRAULICS ================= */}
-          {isVehicleVacuumTruck(veh) && veh.fluidTank && (() => {
+          {isVehicleVacuumTruck(veh) && tank && (() => {
             const vacBodyId = getVehicleVacuumBodyId(veh);
             const isKo505 = vacBodyId === 'body_vacuum_sludge_ko505';
             const isKo560 = vacBodyId === 'body_vacuum_kombi_ko560';
             const hasPower = hasPtoDrive(veh);
+            const bar = tank.vacuumPressureBar ?? 0;
+            const step = (field: 'sludgeBoomAngle' | 'sludgeBoomExtension', delta: number) => {
+              sound.playHydraulicHiss(0.18);
+              if (field === 'sludgeBoomAngle') {
+                tank.sludgeBoomAngle = Math.max(-1.35, Math.min(1.35, +((tank.sludgeBoomAngle ?? 0) + delta).toFixed(2)));
+              } else {
+                tank.sludgeBoomExtension = Math.max(0, Math.min(1, +((tank.sludgeBoomExtension ?? 0.35) + delta).toFixed(2)));
+              }
+              setTick((t) => t + 1);
+            };
             return (
-              <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                    НАРУЖНАЯ АРМАТУРА ЦИСТЕРНЫ
-                  </span>
-                  <span className="text-[9px] font-mono font-bold text-[#c68a35] tabular-nums">
-                    {(veh.fluidTank.vacuumPressureBar ?? 0) > 0 ? '+' : ''}
-                    {(veh.fluidTank.vacuumPressureBar ?? 0).toFixed(2)} бар
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-1.5 mt-2.5">
-                  <div className="py-2 px-2 rounded-[2px] border border-[#2a2e38] bg-[#111317] flex flex-col justify-between">
-                    <span className="text-[7.5px] font-mono uppercase text-[#6e7787]">4-ходовой кран</span>
-                    <span className="text-[10px] font-mono font-bold text-[#e2e6ec] mt-0.5">
-                      {(veh.fluidTank.vacuumPumpMode ?? 'suction') === 'suction' ? 'ОТКАЧКА' : 'НАПОР'}
-                    </span>
-                  </div>
-                  <div className="py-2 px-2 rounded-[2px] border border-[#2a2e38] bg-[#111317] flex flex-col justify-between">
-                    <span className="text-[7.5px] font-mono uppercase text-[#6e7787]">Шибер АНМ-53</span>
-                    <span className="text-[10px] font-mono font-bold text-[#e2e6ec] mt-0.5">
-                      {veh.fluidTank.drainValveOpen ? 'ОТКРЫТ' : 'ЗАКРЫТ'}
-                    </span>
-                  </div>
-                </div>
-
+              <Group title="ЦИСТЕРНА">
+                <Cell label="Давление" note="бар">
+                  <Lcd label="ЦИСТЕРНА" value={`${bar > 0 ? '+' : ''}${bar.toFixed(2)}`} />
+                </Cell>
+                <Cell label="4-ходовой кран" note="переключается снаружи">
+                  <Lcd label="РЕЖИМ" value={(tank.vacuumPumpMode ?? 'suction') === 'suction' ? 'ОТКАЧКА' : 'НАПОР'} />
+                </Cell>
+                <Cell label="Шибер АНМ-53" note="закрывается снаружи">
+                  <Lcd label="ЗАДВИЖКА" value={tank.drainValveOpen ? 'ОТКРЫТ' : 'ЗАКРЫТ'} />
+                </Cell>
                 {isKo505 && (
-                  <div className="mt-2.5 flex flex-col gap-1.5">
-                    <div className="grid grid-cols-4 gap-1">
-                      <button
-                        type="button"
-                        disabled={!hasPower}
+                  <>
+                    <Cell label="Стрела">
+                      <HwPush shape="square" glyph="left" label="Стрела влево" disabled={!hasPower} onClick={() => step('sludgeBoomAngle', -0.22)} />
+                      <HwPush shape="square" glyph="right" label="Стрела вправо" disabled={!hasPower} onClick={() => step('sludgeBoomAngle', 0.22)} />
+                    </Cell>
+                    <Cell label="Вылет">
+                      <HwPush shape="square" glyph="minus" label="Вылет меньше" disabled={!hasPower} onClick={() => step('sludgeBoomExtension', -0.18)} />
+                      <HwPush shape="square" glyph="plus" label="Вылет больше" disabled={!hasPower} onClick={() => step('sludgeBoomExtension', 0.18)} />
+                    </Cell>
+                    <Cell label="Заднее днище" note={tank.rearDoorOpen ? 'открыто' : 'закрыто'} lamp={<Lamp on={!!tank.rearDoorOpen} tone="red" />}>
+                      <HwSwitch
+                        family={family}
+                        on={!!tank.rearDoorOpen}
+                        label="Заднее днище цистерны"
+                        lens="red"
+                        disabled={!hasPower && !tank.rearDoorOpen}
                         onClick={() => {
-                          sound.playHydraulicHiss(0.18);
-                          const cur = veh.fluidTank!.sludgeBoomAngle ?? 0;
-                          veh.fluidTank!.sludgeBoomAngle = Math.max(-1.35, Math.min(1.35, +(cur - 0.22).toFixed(2)));
+                          sound.playHydraulicHiss(0.32);
+                          tank.rearDoorOpen = !tank.rearDoorOpen;
                           setTick((t) => t + 1);
                         }}
-                        className="py-1.5 px-1 rounded-[2px] border border-[#2a2e38] bg-[#1c1f26] hover:bg-[#232730] disabled:opacity-40 text-[9px] font-mono font-bold text-[#e2e6ec]"
-                      >
-                        Стрела Л
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!hasPower}
-                        onClick={() => {
-                          sound.playHydraulicHiss(0.18);
-                          const cur = veh.fluidTank!.sludgeBoomAngle ?? 0;
-                          veh.fluidTank!.sludgeBoomAngle = Math.max(-1.35, Math.min(1.35, +(cur + 0.22).toFixed(2)));
-                          setTick((t) => t + 1);
-                        }}
-                        className="py-1.5 px-1 rounded-[2px] border border-[#2a2e38] bg-[#1c1f26] hover:bg-[#232730] disabled:opacity-40 text-[9px] font-mono font-bold text-[#e2e6ec]"
-                      >
-                        Стрела П
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!hasPower}
-                        onClick={() => {
-                          sound.playHydraulicHiss(0.18);
-                          const cur = veh.fluidTank!.sludgeBoomExtension ?? 0.35;
-                          veh.fluidTank!.sludgeBoomExtension = Math.max(0, Math.min(1, +(cur - 0.18).toFixed(2)));
-                          setTick((t) => t + 1);
-                        }}
-                        className="py-1.5 px-1 rounded-[2px] border border-[#2a2e38] bg-[#1c1f26] hover:bg-[#232730] disabled:opacity-40 text-[9px] font-mono font-bold text-[#e2e6ec]"
-                      >
-                        Вылет -
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!hasPower}
-                        onClick={() => {
-                          sound.playHydraulicHiss(0.18);
-                          const cur = veh.fluidTank!.sludgeBoomExtension ?? 0.35;
-                          veh.fluidTank!.sludgeBoomExtension = Math.max(0, Math.min(1, +(cur + 0.18).toFixed(2)));
-                          setTick((t) => t + 1);
-                        }}
-                        className="py-1.5 px-1 rounded-[2px] border border-[#2a2e38] bg-[#1c1f26] hover:bg-[#232730] disabled:opacity-40 text-[9px] font-mono font-bold text-[#e2e6ec]"
-                      >
-                        Вылет +
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!hasPower && !veh.fluidTank.rearDoorOpen}
+                      />
+                    </Cell>
+                  </>
+                )}
+                {isKo560 && (
+                  <Cell label="Насос ВД" note="РВД" lamp={<Lamp on={!!tank.isJetterPumpActive} tone="green" />}>
+                    <HwSwitch
+                      family={family}
+                      on={!!tank.isJetterPumpActive}
+                      label="Насос высокого давления"
+                      lens="green"
                       onClick={() => {
-                        sound.playHydraulicHiss(0.32);
-                        veh.fluidTank!.rearDoorOpen = !veh.fluidTank!.rearDoorOpen;
+                        press();
+                        tank.isJetterPumpActive = !tank.isJetterPumpActive;
+                        if (tank.isJetterPumpActive) sound.playHydraulicHiss(0.25);
                         setTick((t) => t + 1);
                       }}
-                      className={`w-full py-1.5 px-2 rounded-[2px] border text-[9.5px] font-mono font-bold uppercase ${
-                        veh.fluidTank.rearDoorOpen
-                          ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e]'
-                          : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af]'
-                      } disabled:opacity-40`}
-                    >
-                      {veh.fluidTank.rearDoorOpen ? 'Днище открыто (залповый сброс)' : 'Открыть заднее днище КО-505А'}
-                    </button>
-                  </div>
+                    />
+                  </Cell>
                 )}
-
-                {isKo560 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sound.playButtonPress();
-                      veh.fluidTank!.isJetterPumpActive = !veh.fluidTank!.isJetterPumpActive;
-                      if (veh.fluidTank!.isJetterPumpActive) sound.playHydraulicHiss(0.25);
-                      setTick((t) => t + 1);
-                    }}
-                    className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 ${
-                      veh.fluidTank.isJetterPumpActive
-                        ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                        : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                    }`}
-                  >
-                    <Power className="w-4 h-4" />
-                    <span className="text-[10px] font-mono font-black uppercase">
-                      {veh.fluidTank.isJetterPumpActive ? 'НАСОС ВД РВД: ВКЛ' : 'НАСОС ВД РВД: ВЫКЛ'}
-                    </span>
-                    {veh.fluidTank.isJetterPumpActive ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-                  </button>
-                )}
-
-                <span className="text-[8px] text-[#5a6272] font-mono mt-2 leading-tight">
-                  Рычаги 4-ходового крана и задней задвижки АНМ-53 переключаются снаружи на кузове.
-                </span>
-              </div>
+              </Group>
             );
           })()}
 
-          {/* ================= 16. FLUID TANK DRAIN VALVE (NON-VACUUM GRAVITY CISTERNS) ================= */}
-          {veh.fluidTank && veh.fluidTank.capacity > 0 && !isVehicleVacuumTruck(veh) && (
-            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider truncate max-w-[130px]">
-                  {`СЛИВ ${getLiquidNameRu(veh.fluidTank.liquidType)}`}
-                </span>
-                <div 
-                  className={`w-2.5 h-2.5 rounded-none border border-black ${
-                    veh.fluidTank.drainValveOpen ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
-                  }`} 
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playButtonPress();
-                  veh.fluidTank!.drainValveOpen = !veh.fluidTank!.drainValveOpen;
-                }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
-                  veh.fluidTank.drainValveOpen
-                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
-                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-                }`}
+          {tank && tank.capacity > 0 && !isVehicleVacuumTruck(veh) && (
+            <Group title="ЦИСТЕРНА">
+              <Cell
+                label={`Слив ${getLiquidNameRu(tank.liquidType)}`}
+                note={`${Math.round(tank.currentVolume ?? tank.currentAmount ?? 0)} / ${tank.capacity} л`}
+                lamp={<Lamp on={!!tank.drainValveOpen} tone="amber" />}
               >
-                <Droplet className="w-4 h-4" />
-                <span className="text-[11px] font-mono font-black uppercase">
-                  {veh.fluidTank.drainValveOpen ? 'КРАН: ОТКРЫТ' : 'КРАН: ЗАКРЫТ'}
-                </span>
-                {veh.fluidTank.drainValveOpen ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
-              </button>
-
-              <span className="text-[8px] text-[#5a6272] font-mono mt-2 tabular-nums">
-                Объём: {Math.round(veh.fluidTank.currentVolume ?? veh.fluidTank.currentAmount ?? 0)} / {veh.fluidTank.capacity} л
-              </span>
-            </div>
+                <HwSwitch
+                  family={family}
+                  on={!!tank.drainValveOpen}
+                  label="Сливной кран"
+                  onClick={() => {
+                    press();
+                    tank.drainValveOpen = !tank.drainValveOpen;
+                    setTick((t) => t + 1);
+                  }}
+                />
+              </Cell>
+            </Group>
           )}
 
-          {/* ================= 17. SPECIAL: KS-3577 CHASSIS CAB CRANE CONTROLS ================= */}
-          {isVehicleCraneTruck(veh) && (() => {
-            const isEngineRunning = veh.engineState ? veh.engineState.engineRunning : true;
-            const hasHydraulicPressure = hasPtoDrive(veh);
-
-            return (
-              <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg col-span-1 sm:col-span-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
-                    АВТОКРАН КС-3577 «ИВАНОВЕЦ» · КАБИНА ШАССИ
-                  </span>
-                  <span className={`text-[9px] font-mono font-bold tabular-nums ${hasHydraulicPressure ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    ГИДРАВЛИКА: {hasHydraulicPressure ? '16 МПа (НОРМА)' : '0 МПа (КОМ ВЫКЛ)'}
-                  </span>
-                </div>
-
-                <p className="text-[8.5px] font-mono text-[#9ba3af] mt-1.5 leading-relaxed">
-                  Краном управляют из поворотной кабины: на неё поднимаются снаружи по лесенке. Гидронасос питает КОМ (карточка выше).
-                </p>
-
-                <span className="text-[8px] text-[#5a6272] font-mono mt-2">
-                  * Выдвижение опор производится снаружи на наружном пульте шасси
-                </span>
-              </div>
-            );
-          })()}
-
+          {isVehicleCraneTruck(veh) && (
+            <Group title="АВТОКРАН КС-3577 «ИВАНОВЕЦ»">
+              <p className="hw-text">
+                Краном управляют из поворотной кабины: на неё поднимаются снаружи по лесенке. Гидронасос питает КОМ.
+                Давление в системе: {hasPtoDrive(veh) ? '16 МПа' : '0 МПа, КОМ выключена'}. Опоры выдвигают снаружи, на пульте шасси.
+              </p>
+            </Group>
+          )}
         </div>
 
-        {/* Bottom Status / Instructions Bar */}
-        <div className="mt-5 pt-3 border-t border-[#2a2e38] flex flex-wrap items-center justify-between gap-2 text-[9px] font-mono text-[#9ba3af]">
-          <div>
-            Управление: клик мыши по тумблеру или клавиши на клавиатуре <span className="text-[#c68a35] font-bold">[J, L, U, Y, X, Z, C, K, O, V, H]</span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1 bg-[#14161a] hover:bg-[#1c1f26] text-[#cbd5e1] hover:text-[#f0f3f6] rounded-[2px] border border-[#2a2e38] hover:border-[#c68a35]/50 cursor-pointer font-bold"
-          >
-            Закрыть панель [Esc]
-          </button>
-        </div>
-
+        <footer className="hw-foot">
+          <span>
+            Клавиши: <kbd>J L U Y X Z C K O V H</kbd>
+          </span>
+          <span>Закрыть: <kbd>Esc</kbd></span>
+        </footer>
       </div>
     </div>
   );
 };
-
