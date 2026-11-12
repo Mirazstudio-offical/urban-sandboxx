@@ -1353,6 +1353,137 @@ export function renderPropBrokenLamp(ctx: CanvasRenderingContext2D, prop: Street
   }
 }
 
+export function renderPropSandbox(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.fillRect(-11, -11, 24, 24);
+
+  // Wooden perimeter planks
+  ctx.fillStyle = '#b45309';
+  ctx.fillRect(-12, -12, 24, 24);
+  ctx.strokeStyle = '#78350f';
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(-12, -12, 24, 24);
+
+  // Warm golden play sand interior
+  ctx.fillStyle = prop.isBroken ? '#a16207' : '#fde047';
+  ctx.fillRect(-9.5, -9.5, 19, 19);
+
+  // Sand ripples and small bucket/mold details
+  ctx.fillStyle = '#facc15';
+  ctx.beginPath();
+  ctx.arc(-3, -2, 3.2, 0, Math.PI * 2);
+  ctx.arc(4, 3, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(3, -4, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Painted wooden corner seat triangles (classic courtyard style)
+  const corners: [number, number, string][] = [
+    [-12, -12, '#ef4444'],
+    [6, -12, '#3b82f6'],
+    [-12, 6, '#22c55e'],
+    [6, 6, '#eab308']
+  ];
+  for (const [cx, cy, col] of corners) {
+    ctx.fillStyle = col;
+    ctx.fillRect(cx, cy, 6, 6);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.7;
+    ctx.strokeRect(cx, cy, 6, 6);
+  }
+}
+
+export function renderPropCarpetRack(ctx: CanvasRenderingContext2D, _prop: StreetProp) {
+  // Ground shadow of tubular H-frame
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+  ctx.fillRect(-11, -1, 24, 5);
+
+  // Concrete post footings
+  ctx.fillStyle = '#64748b';
+  ctx.fillRect(-12, -2.5, 4, 5);
+  ctx.fillRect(8, -2.5, 4, 5);
+
+  // Welded steel pipe crossbar & mid-rail (turquoise/blue courtyard enamel)
+  ctx.strokeStyle = '#0284c7';
+  ctx.lineWidth = 2.6;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-10, 0);
+  ctx.lineTo(10, 0);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(-9, -0.5);
+  ctx.lineTo(9, -0.5);
+  ctx.stroke();
+
+  // Vertical end posts caps
+  ctx.fillStyle = '#0369a1';
+  ctx.beginPath();
+  ctx.arc(-10, 0, 2.2, 0, Math.PI * 2);
+  ctx.arc(10, 0, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+export function renderPropYardRotunda(ctx: CanvasRenderingContext2D, _prop: StreetProp) {
+  const r = 15;
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+  ctx.beginPath();
+  ctx.arc(2.5, 3, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Octagonal wooden deck base
+  ctx.fillStyle = '#78350f';
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4 + Math.PI / 8;
+    const px = Math.cos(a) * r;
+    const py = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Octagonal pitched roof (weathered green or terracotta)
+  ctx.fillStyle = '#15803d';
+  ctx.strokeStyle = '#14532d';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4 + Math.PI / 8;
+    const px = Math.cos(a) * (r - 1);
+    const py = Math.sin(a) * (r - 1);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Roof ridge ribs meeting at center finial
+  ctx.strokeStyle = '#166534';
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4 + Math.PI / 8;
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a) * (r - 1), Math.sin(a) * (r - 1));
+  }
+  ctx.stroke();
+
+  // Center cap finial
+  ctx.fillStyle = '#eab308';
+  ctx.beginPath();
+  ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 // --- MASTER PROP DISPATCHER (GROUND LEVEL) ---
 export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp) {
   switch (prop.type as string) {
@@ -1382,6 +1513,15 @@ export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp
       break;
     case 'playground_swing':
       renderPropPlaygroundSwing(ctx, prop);
+      break;
+    case 'sandbox':
+      renderPropSandbox(ctx, prop);
+      break;
+    case 'carpet_rack':
+      renderPropCarpetRack(ctx, prop);
+      break;
+    case 'yard_rotunda':
+      renderPropYardRotunda(ctx, prop);
       break;
     case 'garage_door':
       renderPropGarageDoor(ctx, prop);

@@ -259,31 +259,38 @@ async function main() {
             ctx.lineWidth = 2;
             ctx.strokeRect(b.x, b.y, b.width, b.height);
 
-            // Entrances (подъезды)
+            // Entrances (подъезды: 28x14 canopy + 6px ramp, matching src/renderer.ts)
             for (const ent of (b.entrances || [])) {
-              let ex = b.x, ey = b.y, ew = 22, eh = 10;
+              let ex = b.x, ey = b.y, ew = 28, eh = 14;
+              let rx = 0, ry = 0, rw = 0, rh = 0;
               if (ent.side === 'south') {
-                ex = b.x + b.width * ent.offsetRatio - 11;
+                ex = b.x + b.width * ent.offsetRatio - 14;
                 ey = b.y + b.height;
-                ew = 22; eh = 9;
+                ew = 28; eh = 14;
+                rx = ex + 29; ry = ey; rw = 5; rh = 14;
               } else if (ent.side === 'north') {
-                ex = b.x + b.width * ent.offsetRatio - 11;
-                ey = b.y - 9;
-                ew = 22; eh = 9;
+                ex = b.x + b.width * ent.offsetRatio - 14;
+                ey = b.y - 14;
+                ew = 28; eh = 14;
+                rx = ex - 6; ry = ey; rw = 5; rh = 14;
               } else if (ent.side === 'east') {
                 ex = b.x + b.width;
-                ey = b.y + b.height * ent.offsetRatio - 11;
-                ew = 9; eh = 22;
+                ey = b.y + b.height * ent.offsetRatio - 14;
+                ew = 14; eh = 28;
+                rx = ex; ry = ey + 29; rw = 14; rh = 5;
               } else if (ent.side === 'west') {
-                ex = b.x - 9;
-                ey = b.y + b.height * ent.offsetRatio - 11;
-                ew = 9; eh = 22;
+                ex = b.x - 14;
+                ey = b.y + b.height * ent.offsetRatio - 14;
+                ew = 14; eh = 28;
+                rx = ex; ry = ey - 6; rw = 14; rh = 5;
               }
               ctx.fillStyle = '#f59e0b';
               ctx.fillRect(ex, ey, ew, eh);
               ctx.strokeStyle = '#ffffff';
               ctx.lineWidth = 1;
               ctx.strokeRect(ex, ey, ew, eh);
+              ctx.fillStyle = '#94a3b8';
+              ctx.fillRect(rx, ry, rw, rh);
             }
 
             // Label
@@ -299,12 +306,11 @@ async function main() {
             ctx.translate(p.x, p.y);
             ctx.rotate(p.angle || 0);
             if (p.type === 'bench') {
-              ctx.fillStyle = '#64748b'; ctx.fillRect(-13, -8, 26, 16);
-              ctx.fillStyle = '#b45309'; ctx.fillRect(-9, -5, 18, 10);
+              ctx.fillStyle = '#b45309'; ctx.fillRect(-11, -5, 22, 10);
+              ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1; ctx.strokeRect(-11, -5, 22, 10);
             } else if (p.type === 'dumpster') {
-              ctx.fillStyle = '#475569'; ctx.fillRect(-18, -13, 36, 26);
-              ctx.fillStyle = '#15803d'; ctx.fillRect(-13, -9, 26, 18);
-              ctx.strokeStyle = '#eab308'; ctx.lineWidth = 1; ctx.strokeRect(-17, -12, 34, 24);
+              ctx.fillStyle = '#15803d'; ctx.fillRect(-14, -10, 28, 20);
+              ctx.strokeStyle = '#eab308'; ctx.lineWidth = 1.2; ctx.strokeRect(-14, -10, 28, 20);
             } else if (p.type === 'flowerbed') {
               ctx.fillStyle = '#94a3b8'; ctx.fillRect(-12, -8, 24, 16);
               ctx.fillStyle = '#15803d'; ctx.fillRect(-10, -6, 20, 12);
@@ -313,21 +319,39 @@ async function main() {
               ctx.fillStyle = '#06b6d4'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
               ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
             } else if (p.type === 'playground_swing') {
-              ctx.fillStyle = 'rgba(234, 179, 8, 0.25)'; ctx.fillRect(-14, -10, 28, 22);
-              ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2.5;
-              ctx.strokeRect(-12, -7, 24, 16);
+              ctx.fillStyle = 'rgba(234, 179, 8, 0.25)'; ctx.fillRect(-12, -8, 24, 16);
+              ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2.2;
+              ctx.strokeRect(-12, -8, 24, 16);
               ctx.strokeStyle = '#eab308'; ctx.lineWidth = 3;
-              ctx.beginPath(); ctx.moveTo(-12, -4); ctx.lineTo(12, -4); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(-12, -2); ctx.lineTo(12, -2); ctx.stroke();
+            } else if (p.type === 'sandbox') {
+              ctx.fillStyle = '#b45309'; ctx.fillRect(-12, -12, 24, 24);
+              ctx.fillStyle = '#fde047'; ctx.fillRect(-9.5, -9.5, 19, 19);
+              ctx.fillStyle = '#ef4444'; ctx.fillRect(-12, -12, 5, 5);
+              ctx.fillStyle = '#3b82f6'; ctx.fillRect(7, -12, 5, 5);
+              ctx.fillStyle = '#22c55e'; ctx.fillRect(-12, 7, 5, 5);
+              ctx.fillStyle = '#eab308'; ctx.fillRect(7, 7, 5, 5);
+            } else if (p.type === 'carpet_rack') {
+              ctx.fillStyle = '#64748b'; ctx.fillRect(-12, -3, 4, 6); ctx.fillRect(8, -3, 4, 6);
+              ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3;
+              ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.stroke();
+            } else if (p.type === 'yard_rotunda') {
+              ctx.fillStyle = '#15803d'; ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI*2); ctx.fill();
+              ctx.strokeStyle = '#fef08a'; ctx.lineWidth = 1.5; ctx.stroke();
+              ctx.fillStyle = '#eab308'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+            } else if (p.type === 'kiosk') {
+              ctx.fillStyle = '#0284c7'; ctx.fillRect(-13, -13, 26, 26);
+              ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 1.5; ctx.strokeRect(-13, -13, 26, 26);
             } else if (p.type === 'trash_can') {
-              ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI*2); ctx.fill();
-              ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+              ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
+              ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI*2); ctx.fill();
             } else if (p.type === 'bollard') {
-              ctx.fillStyle = '#eab308'; ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, Math.PI*2); ctx.fill();
+              ctx.fillStyle = '#eab308'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
             } else if (p.type === 'manhole') {
-              ctx.fillStyle = '#334155'; ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
+              ctx.fillStyle = '#334155'; ctx.beginPath(); ctx.arc(0, 0, 5.5, 0, Math.PI*2); ctx.fill();
               ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.stroke();
             } else if (p.type === 'drain_grate') {
-              ctx.fillStyle = '#1e293b'; ctx.fillRect(-7, -5, 14, 10);
+              ctx.fillStyle = '#1e293b'; ctx.fillRect(-6, -4, 12, 8);
             } else if (p.type === 'lamp' || p.type === 'lamp_concrete' || p.type === 'lamp_highway') {
               ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, Math.PI*2); ctx.fill();
               ctx.strokeStyle = '#ca8a04'; ctx.lineWidth = 1.5; ctx.stroke();
@@ -335,7 +359,8 @@ async function main() {
               ctx.fillStyle = '#14532d'; ctx.fillRect(-18, -3, 36, 6);
               ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 1; ctx.strokeRect(-18, -3, 36, 6);
             } else if (p.type === 'concrete_fence_po2') {
-              ctx.fillStyle = '#94a3b8'; ctx.fillRect(-22, -4, 44, 8);
+              ctx.fillStyle = '#94a3b8'; ctx.fillRect(-19, -6, 38, 12);
+              ctx.strokeStyle = '#475569'; ctx.lineWidth = 1; ctx.strokeRect(-19, -6, 38, 12);
             } else if (p.type === 'tarp_covered_car' || p.type === 'car_on_blocks') {
               ctx.fillStyle = p.type === 'tarp_covered_car' ? '#475569' : '#0284c7';
               ctx.fillRect(-20, -10, 40, 20);
@@ -343,9 +368,10 @@ async function main() {
             } else if (p.type === 'garage_sand_pile') {
               ctx.fillStyle = '#ca8a04'; ctx.beginPath(); ctx.ellipse(0, 0, 11, 8, 0, 0, Math.PI*2); ctx.fill();
             } else if (p.type === 'garden_path_tile') {
-              ctx.fillStyle = '#a8a29e'; ctx.beginPath(); ctx.ellipse(0, 0, 10, 5, 0, 0, Math.PI*2); ctx.fill();
+              ctx.fillStyle = '#a8a29e'; ctx.beginPath(); ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI*2); ctx.fill();
             } else if (p.type === 'garage_sofa') {
               ctx.fillStyle = '#7f1d1d'; ctx.fillRect(-10, -6, 20, 12);
+              ctx.strokeStyle = '#fca5a5'; ctx.lineWidth = 1; ctx.strokeRect(-10, -6, 20, 12);
             } else {
               ctx.fillStyle = '#f43f5e'; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
             }

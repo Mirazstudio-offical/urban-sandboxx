@@ -790,6 +790,7 @@ export interface Vehicle {
   engineState?: EngineState;
   fuelSystem?: FuelSystem;
   fluidTank?: FluidStorageTank;
+  truckBodyType?: string;
 
   // Damage & Deformation
   damage: VehicleDamage;
@@ -1445,6 +1446,9 @@ export interface StreetProp {
     | 'drain_grate'
     | 'tire_flowerbed'
     | 'playground_swing'
+    | 'sandbox'
+    | 'carpet_rack'
+    | 'yard_rotunda'
     | 'garage_door'
     | 'village_well'
     | 'village_sign'

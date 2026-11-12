@@ -1630,6 +1630,33 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
         yieldEnergy: 2.8e6, breakEnergy: 1.8e7,
         isWalkableWhenBroken: false
       };
+    case 'sandbox':
+      return {
+        shape: 'box', halfWidth: 12, halfHeight: 12, resistance: 0.28, displayNameRu: 'детская песочница',
+        anchorType: 'foundation_fixed',
+        postBreakMode: 'remain_solid',
+        massKg: 480, frictionStatic: 0.90, frictionKinetic: 0.85,
+        yieldEnergy: 2.4e6, breakEnergy: 1.6e7,
+        isWalkableWhenBroken: true
+      };
+    case 'carpet_rack':
+      return {
+        shape: 'box', halfWidth: 12, halfHeight: 3, resistance: 0.32, displayNameRu: 'стойка для выбивания ковров',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'remain_solid',
+        massKg: 180, frictionStatic: 0.88, frictionKinetic: 0.82,
+        yieldEnergy: 2.2e6, breakEnergy: 1.4e7,
+        isWalkableWhenBroken: false
+      };
+    case 'yard_rotunda':
+      return {
+        shape: 'circle', radius: 15, resistance: 0.65, displayNameRu: 'дворовая беседка',
+        anchorType: 'foundation_fixed',
+        postBreakMode: 'remain_solid',
+        massKg: 1450, frictionStatic: 0.95, frictionKinetic: 0.90,
+        yieldEnergy: 3.6e6, breakEnergy: 3.5e7,
+        isWalkableWhenBroken: false
+      };
     case 'garage_door':
       return {
         shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'гаражные ворота',

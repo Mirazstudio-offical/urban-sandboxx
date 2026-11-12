@@ -1447,11 +1447,28 @@ function renderStreetPropShadows(
         break;
       }
       case 'flowerbed':
-      case 'tire_flowerbed': {
+      case 'tire_flowerbed':
+      case 'sandbox': {
         const off = getShadowOffset(5.5, sunState);
         sCtx.save();
         clipOutsideRotatedRect(sCtx, prop.x, prop.y, 14, 14, angle, off.dx, off.dy);
         extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 14, 14, angle, 0, 5.5, sunState);
+        sCtx.restore();
+        break;
+      }
+      case 'carpet_rack': {
+        const off = getShadowOffset(10, sunState);
+        sCtx.save();
+        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 20, 4, angle, off.dx, off.dy);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 20, 4, angle, 0, 10, sunState);
+        sCtx.restore();
+        break;
+      }
+      case 'yard_rotunda': {
+        const off = getShadowOffset(16, sunState);
+        sCtx.save();
+        clipOutsideCircle(sCtx, prop.x, prop.y, 14.5, off.dx, off.dy);
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 15, 0, 16, sunState);
         sCtx.restore();
         break;
       }
