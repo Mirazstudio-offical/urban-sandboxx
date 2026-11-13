@@ -1295,7 +1295,40 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   white-space: nowrap;
 }
 
-/* POS Cashier compact single-screen layout */
+/* Cart two-column layout (items list + sticky receipt summary) */
+.gu-shop-cart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  gap: 10px;
+  align-items: start;
+}
+
+.gu-shop-cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gu-shop-cart-summary {
+  position: sticky;
+  top: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(20, 22, 26, 0.86);
+  border: 1px solid var(--gu-line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* POS Cashier compact single-screen layout — no scrollbars */
+#shop-modal .gu-body:has(.gu-shop-pos-grid) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
 .gu-shop-pos-grid {
   display: grid;
   grid-template-columns: minmax(250px, 0.95fr) minmax(0, 1.15fr);
@@ -1318,7 +1351,7 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  padding: 7px 9px;
+  padding: 6px 9px;
   border-radius: 8px;
   background: #0d0e10;
   border: 1px solid var(--gu-line-2);
@@ -1362,11 +1395,7 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   display: flex;
   flex-direction: column;
   gap: 5px;
-  min-height: 58px;
-  max-height: 92px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #3a352b transparent;
+  min-height: 52px;
 }
 
 .gu-shop-tray-chip {
@@ -1404,7 +1433,7 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  height: 36px;
+  height: 34px;
   padding: 0 8px;
   border-radius: 7px;
   background: #0d0e10;
@@ -1513,7 +1542,16 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   }
 }
 
+@media (max-width: 720px) {
+  .gu-shop-cart-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 640px) {
+  #shop-modal .gu-body:has(.gu-shop-pos-grid) {
+    overflow-y: auto;
+  }
   .gu-shop-pos-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1585,18 +1623,19 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
     font-size: 11.5px;
   }
   .gu-shop-pos-col {
-    padding: 8px 10px;
-    gap: 6px;
+    padding: 7px 9px;
+    gap: 5px;
   }
   .gu-shop-denom {
-    height: 30px;
+    height: 28px;
     padding: 0 6px;
   }
   .gu-shop-tray-box {
-    min-height: 44px;
-    max-height: 68px;
+    min-height: 40px;
+    padding: 5px 8px;
   }
 }
+
 
 
 

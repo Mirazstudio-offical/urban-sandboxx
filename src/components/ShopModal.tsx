@@ -2003,10 +2003,6 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     const inCart = cart.find((i) => i.item.id === item.id);
                     const countInCart = inCart ? inCart.count : 0;
                     const previewItem = getShopPreviewItem(item.itemId);
-                    const visShapeRu = previewItem.containerVisuals
-                      ? SHAPE_NAMES_RU[previewItem.containerVisuals.shape]
-                      : previewItem.packagingShapeNameRu || null;
-                    const gummyAttrs = previewItem.gummyAttributes;
                     const totalWeightKg = getItemTotalWeight(previewItem);
                     const weightLabel = formatShopWeight(totalWeightKg);
                     const isSelected = activeInspectedItem?.id === item.id;
@@ -2027,32 +2023,13 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                             {item.nameRu}
                           </div>
                           <div className="gu-shop-item-meta" title={item.description}>
-                            {item.effectText && <b>{item.effectText}</b>}
-                            {item.effectText && weightLabel && <span>·</span>}
-                            {weightLabel && <span>{weightLabel}</span>}
-                            {visShapeRu && (
+                            {weightLabel && (
                               <>
+                                <span>{weightLabel}</span>
                                 <span>·</span>
-                                <span>{visShapeRu}</span>
                               </>
                             )}
-                            {gummyAttrs && (
-                              <>
-                                <span>·</span>
-                                <span
-                                  style={{
-                                    width: 7,
-                                    height: 7,
-                                    borderRadius: 2,
-                                    backgroundColor: gummyAttrs.color,
-                                    border: '1px solid rgba(255,255,255,0.35)',
-                                    display: 'inline-block',
-                                  }}
-                                />
-                                <span>{gummyAttrs.shapeNameRu}</span>
-                              </>
-                            )}
-                            {!item.effectText && !visShapeRu && <span>{item.description}</span>}
+                            <span>{item.description}</span>
                           </div>
                         </div>
 
@@ -2107,10 +2084,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               {activeInspectedItem && (() => {
                 const preview = getShopPreviewItem(activeInspectedItem.itemId);
                 const weightKg = getItemTotalWeight(preview);
-                const weightStr = formatShopWeight(weightKg) || '—';
-                const shapeStr = preview.containerVisuals
-                  ? SHAPE_NAMES_RU[preview.containerVisuals.shape]
-                  : preview.packagingShapeNameRu || 'Стандартная';
+                const weightStr = formatShopWeight(weightKg);
                 const inCartEntry = cart.find((c) => c.item.id === activeInspectedItem.id);
                 const qtyInCart = inCartEntry ? inCartEntry.count : 0;
                 const deptInfo = getItemDept(activeInspectedItem);
@@ -2130,9 +2104,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', lineHeight: 1.25 }}>
                           {activeInspectedItem.nameRu}
                         </div>
-                        {preview.nameRu !== activeInspectedItem.nameRu && (
-                          <div style={{ fontSize: 11.5, color: 'var(--gu-good)', marginTop: 2 }}>
-                            {preview.nameRu}
+                        {weightStr && (
+                          <div style={{ fontSize: 11.5, color: 'var(--gu-mut)', marginTop: 2 }}>
+                            Масса нетто: {weightStr}
                           </div>
                         )}
                         <div className="gu-shop-price" style={{ marginTop: 5, fontSize: 20 }}>
@@ -2144,25 +2118,6 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
                     <div style={{ fontSize: 12, color: 'var(--gu-mut)', lineHeight: 1.4 }}>
                       {activeInspectedItem.description}
-                    </div>
-
-                    <div className="gu-kv-grid">
-                      <div className="gu-kv">
-                        <span className="gu-kv-k">Масса</span>
-                        <span className="gu-kv-v">{weightStr}</span>
-                      </div>
-                      <div className="gu-kv">
-                        <span className="gu-kv-k">Тара</span>
-                        <span className="gu-kv-v">{shapeStr}</span>
-                      </div>
-                      {activeInspectedItem.effectText && (
-                        <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                          <span className="gu-kv-k">Свойства</span>
-                          <span className="gu-kv-v" style={{ color: 'var(--gu-amber-soft)' }}>
-                            {activeInspectedItem.effectText}
-                          </span>
-                        </div>
-                      )}
                     </div>
 
                     <div className="gu-row-between" style={{ paddingTop: 2 }}>
@@ -3037,39 +2992,28 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
       {/* CART TAB */}
       {normalizedTab === 'cart' && (
-        <div className="gu-grp">
-          <div className="gu-sec" style={{ marginBottom: 0 }}>
-            <ShoppingCart className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
-            <span>Товарная корзина покупателя</span>
-            <span className="gu-sec-line" />
-            {cart.length > 0 && (
-              <button type="button" onClick={handleClearCart} className="gu-btn gu-btn-d gu-btn-xs">
-                <Trash2 className="w-3 h-3" />
-                <span>Очистить корзину</span>
-              </button>
-            )}
-          </div>
-
+        <div>
           {cart.length === 0 ? (
             <div className="gu-empty">
-              <ShoppingCart className="gu-empty-ic" />
+              <ShoppingCart className="w-7 h-7" />
               <div className="gu-empty-t">Ваша корзина пуста</div>
-              <div className="gu-empty-s">
+              <div style={{ fontSize: 13 }}>
                 Перейдите в каталог магазина и добавьте необходимые товары для оформления покупки на кассе.
               </div>
               <button
                 type="button"
                 onClick={() => setActiveTab('catalog')}
                 className="gu-btn gu-btn-p gu-btn-sm"
-                style={{ marginTop: 6 }}
+                style={{ marginTop: 4 }}
               >
                 <Package className="w-3.5 h-3.5" />
                 <span>Перейти в каталог</span>
               </button>
             </div>
           ) : (
-            <>
-              <div className="gu-shop-grid">
+            <div className="gu-shop-cart-layout">
+              {/* Left Column: Selected Cart Items */}
+              <div className="gu-shop-cart-list">
                 {cart.map((entry) => {
                   const cartPreview = getShopPreviewItem(entry.item.itemId);
                   const unitWeight = getItemTotalWeight(cartPreview);
@@ -3077,23 +3021,25 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
                   return (
                     <div key={entry.item.id} className="gu-shop-item">
-                      <div className="gu-ic" style={{ width: 38, height: 38 }}>
-                        <ItemIconCanvas itemId={cartPreview.itemId} item={cartPreview} size={32} />
+                      <div className="gu-ic">
+                        <ItemIconCanvas itemId={cartPreview.itemId} item={cartPreview} size={36} />
                       </div>
                       <div className="gu-shop-item-main">
                         <div className="gu-shop-item-name">{entry.item.nameRu}</div>
                         <div className="gu-shop-item-meta">
-                          <span>{cartPreview.nameRu}</span>
+                          <span>{entry.item.price.toLocaleString()} ₽ / шт.</span>
                           {lineWeightStr && (
                             <>
-                              <span className="gu-shop-dot" />
+                              <span>·</span>
                               <span>{lineWeightStr}</span>
                             </>
                           )}
-                          <span className="gu-shop-dot" />
-                          <span className="gu-num" style={{ color: 'var(--gu-accent-bright)' }}>
-                            {entry.item.price.toLocaleString()} ₽ / шт.
-                          </span>
+                          {entry.item.description && (
+                            <>
+                              <span>·</span>
+                              <span>{entry.item.description}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="gu-shop-item-right">
@@ -3108,7 +3054,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         </div>
                         <div
                           className="gu-shop-price"
-                          style={{ minWidth: 78, textAlign: 'right' }}
+                          style={{ minWidth: 74, textAlign: 'right' }}
                         >
                           {(entry.item.price * entry.count).toLocaleString()}
                           <small>₽</small>
@@ -3119,39 +3065,62 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 })}
               </div>
 
-              <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
-                <div className="gu-row" style={{ flexWrap: 'wrap', gap: 14 }}>
-                  <div>
-                    <div style={{ fontSize: 10.5, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      Итого к оплате
-                    </div>
-                    <div className="gu-shop-price" style={{ fontSize: 22 }}>
-                      {cartTotal.toLocaleString()}
-                      <small>₽</small>
-                    </div>
+              {/* Right Column: Sticky Receipt Summary */}
+              <aside className="gu-shop-cart-summary">
+                <div className="gu-row-between">
+                  <span className="gu-grp">Сводка заказа</span>
+                  <button
+                    type="button"
+                    onClick={handleClearCart}
+                    className="gu-btn gu-btn-ghost gu-btn-xs"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Очистить</span>
+                  </button>
+                </div>
+
+                <div className="gu-kv-grid">
+                  <div className="gu-kv">
+                    <span className="gu-kv-k">Позиций</span>
+                    <span className="gu-kv-v">{totalCartItemsCount} шт.</span>
                   </div>
-                  <div style={{ borderLeft: '1px solid var(--gu-line)', paddingLeft: 14 }}>
-                    <div style={{ fontSize: 10.5, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      Суммарный вес покупок
-                    </div>
-                    <div className="gu-num" style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)', marginTop: 2 }}>
-                      {formatShopWeight(totalCartWeightKg) || '0 г'} ({totalCartItemsCount} ед.)
-                    </div>
+                  <div className="gu-kv">
+                    <span className="gu-kv-k">Общий вес</span>
+                    <span className="gu-kv-v">{formatShopWeight(totalCartWeightKg) || '—'}</span>
                   </div>
                 </div>
 
-                <div className="gu-row" style={{ gap: 8 }}>
-                  <button type="button" onClick={() => setActiveTab('catalog')} className="gu-btn gu-btn-s gu-btn-sm">
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>В каталог</span>
-                  </button>
-                  <button type="button" onClick={() => setActiveTab('pos')} className="gu-btn gu-btn-p gu-btn-sm">
+                <div
+                  className="gu-row-between"
+                  style={{ paddingTop: 8, borderTop: '1px solid var(--gu-line)' }}
+                >
+                  <span style={{ fontSize: 12, color: 'var(--gu-mut)' }}>К оплате</span>
+                  <div className="gu-shop-price" style={{ fontSize: 22 }}>
+                    {cartTotal.toLocaleString()}
+                    <small>₽</small>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('pos')}
+                    className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                  >
                     <Receipt className="w-3.5 h-3.5" />
                     <span>Перейти на кассу</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('catalog')}
+                    className="gu-btn gu-btn-s gu-btn-sm gu-btn-block"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Вернуться в каталог</span>
+                  </button>
                 </div>
-              </div>
-            </>
+              </aside>
+            </div>
           )}
         </div>
       )}
