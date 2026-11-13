@@ -1961,6 +1961,23 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       ]}
       footerRight={
         <div className="gu-row" style={{ gap: 8 }}>
+          {normalizedTab === 'pos' && cartTotal > 0 && (
+            <button
+              type="button"
+              disabled={inTrayMoney < cartTotal || posSuccess}
+              onClick={handleExecutePOSPayment}
+              className="gu-btn gu-btn-p gu-btn-sm"
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>
+                {posSuccess
+                  ? 'Оплата проведена'
+                  : inTrayMoney < cartTotal
+                  ? `В лоток еще ${(cartTotal - inTrayMoney).toLocaleString()} ₽`
+                  : `Оплатить и забрать (${cartTotal.toLocaleString()} ₽)`}
+              </span>
+            </button>
+          )}
           {cartTotal > 0 && normalizedTab !== 'pos' && (
             <button
               type="button"
@@ -1995,9 +2012,6 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
         const maxNeeded = Math.max(5, Math.round(tankCap - curLitersInTank));
         const activeGrade = FUEL_GRADES[selectedFuelType] || FUEL_GRADES.ai95;
         const totalFuelCost = Math.round(fuelLiters * activeGrade.pricePerLiter);
-        const isNozzleReady = Boolean(
-          selectedPump && selectedPump.status === 'inserted' && selectedPump.connectedVehicleId
-        );
         const canAffordFuel = playerCash >= totalFuelCost;
         const presetLiters = [10, 20, 30, 40, 50];
 
@@ -2016,11 +2030,11 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
         return (
           <div className="gu-trk-grid">
-            {/* Left Column: TRK Pump Selector (№1..5) */}
-            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Row 1: Horizontal 5-Column TRK Pump Selector (№1..5) */}
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div className="gu-row-between">
-                <span className="gu-grp">1. Топливные колонки (ТРК)</span>
-                <span className="gu-tag">{pumpsList.length} постов</span>
+                <span className="gu-grp">1. Топливные колонки (Посты ТРК №1–5)</span>
+                <span className="gu-tag">{pumpsList.length} постов в линию</span>
               </div>
 
               <div className="gu-trk-pumps">
@@ -2051,36 +2065,94 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       }}
                       className={`gu-trk-pump ${isSel ? 'is-on' : ''} ${isReady ? 'is-ready' : ''}`}
                     >
-                      <div className="gu-row" style={{ gap: 8, minWidth: 0 }}>
-                        <span className="gu-trk-pump-num">№{pump.pumpNumber}</span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
-                            {isLpg ? 'Газовая колонка (LPG)' : `Колонка ТРК №${pump.pumpNumber}`}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: 'var(--gu-mut)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {veh
-                              ? `${veh.nameRu || veh.type} · ${FUEL_GRADES[pump.connectedFuelType || 'ai95']?.badgeText}`
-                              : pump.status === 'nozzle_held'
-                              ? 'Пистолет снят (вставьте в бак)'
-                              : 'Свободна · Ожидание ТС'}
-                          </div>
-                        </div>
+                      <div className="gu-row-between" style={{ width: '100%' }}>
+                        <span className="gu-trk-pump-num">ТРК №{pump.pumpNumber}</span>
+                        <span
+                          className={`gu-tag ${pump.isPumping ? 'warn' : isReady ? 'good' : ''}`}
+                          style={{ height: 18, padding: '0 6px', fontSize: 10 }}
+                        >
+                          {pump.isPumping
+                            ? `${pump.displayLiters.toFixed(1)} л`
+                            : isReady
+                            ? 'В баке'
+                            : 'Свободна'}
+                        </span>
                       </div>
 
-                      <span className={`gu-tag ${pump.isPumping ? 'warn' : isReady ? 'good' : ''}`}>
-                        {pump.isPumping
-                          ? `${pump.displayLiters.toFixed(1)} л`
-                          : isReady
-                          ? 'В баке'
-                          : 'Свободна'}
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#fff',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {veh
+                            ? veh.nameRu || veh.type
+                            : isLpg
+                            ? 'Газ Пропан (LPG)'
+                            : 'Ожидание ТС'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 10.5,
+                            color: 'var(--gu-mut)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {veh
+                            ? `Пистолет: ${FUEL_GRADES[pump.connectedFuelType || 'ai95']?.badgeText}`
+                            : pump.status === 'nozzle_held'
+                            ? 'Пистолет снят'
+                            : isLpg
+                            ? 'ГБО Пост №5'
+                            : '92 · 95 · 98 · ДТ'}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Row 2: Horizontal 5-Column Fuel Grade / Nozzle Row */}
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="gu-row-between">
+                <span className="gu-grp">2. Пистолет и марка горючего</span>
+                <span style={{ fontSize: 12, color: 'var(--gu-amber-hi)', fontWeight: 700 }}>
+                  {activeGrade.nameRu} · {activeGrade.pricePerLiter.toFixed(2)} ₽/л
+                </span>
+              </div>
+
+              <div className="gu-trk-grades">
+                {(Object.keys(FUEL_GRADES) as FuelType[]).map((ft) => {
+                  const g = FUEL_GRADES[ft];
+                  const active = selectedFuelType === ft;
+                  const lockedByNozzle =
+                    selectedPump?.connectedFuelType && selectedPump.connectedFuelType !== ft;
+                  const incompatibleWithPump =
+                    selectedPump?.id === 'gas_pump_5_lpg' ? ft !== 'lpg' : ft === 'lpg';
+
+                  return (
+                    <button
+                      key={ft}
+                      type="button"
+                      disabled={Boolean(lockedByNozzle || incompatibleWithPump)}
+                      onClick={() => {
+                        sound.playUseItem();
+                        setSelectedFuelType(ft);
+                      }}
+                      className={`gu-trk-grade ${active ? 'is-on' : ''}`}
+                      style={{ '--grade-color': g.color } as React.CSSProperties}
+                    >
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{g.badgeText}</span>
+                      <span className="gu-num" style={{ fontSize: 12, color: 'var(--gu-amber-hi)' }}>
+                        {g.pricePerLiter.toFixed(1)} ₽/л
                       </span>
                     </button>
                   );
@@ -2088,84 +2160,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
             </div>
 
-            {/* Right Column: Tank Info + Fuel Grade + Liters + Actions */}
-            <div
-              className="gu-panel gu-pad"
-              style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 10 }}
-            >
-              {connectedVeh ? (
-                <div className="gu-card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div className="gu-row-between">
-                    <div className="gu-row" style={{ gap: 8 }}>
-                      <Car className="w-4 h-4" style={{ color: 'var(--gu-good)' }} />
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>
-                        {connectedVeh.nameRu || connectedVeh.type}
-                      </span>
-                      <span className="gu-tag good">Пистолет в горловине</span>
-                    </div>
-                    <span className="gu-num" style={{ fontSize: 12.5, color: 'var(--gu-amber-hi)' }}>
-                      В баке: {curLitersInTank} / {tankCap} л ({Math.round(curPct)}%)
-                    </span>
-                  </div>
-                  <div className="gu-bar good">
-                    <span style={{ width: `${Math.min(100, curPct)}%` }} />
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className="gu-note warn"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: 12 }}
-                >
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>
-                    На колонке №{selectedPump?.pumpNumber || 1} пистолет еще не вставлен в бак автомобиля. Вы можете оплатить подачу заранее или сначала вставить пистолет на улице <b>[E]</b>.
-                  </span>
-                </div>
-              )}
-
-              {/* Fuel Grade Grid */}
-              <div>
-                <div className="gu-row-between" style={{ marginBottom: 5 }}>
-                  <span className="gu-grp">2. Марка горючего</span>
-                  <span style={{ fontSize: 12, color: 'var(--gu-amber-hi)', fontWeight: 700 }}>
-                    {activeGrade.nameRu} · {activeGrade.pricePerLiter.toFixed(2)} ₽/л
-                  </span>
-                </div>
-
-                <div className="gu-trk-grades">
-                  {(Object.keys(FUEL_GRADES) as FuelType[]).map((ft) => {
-                    const g = FUEL_GRADES[ft];
-                    const active = selectedFuelType === ft;
-                    const lockedByNozzle =
-                      selectedPump?.connectedFuelType && selectedPump.connectedFuelType !== ft;
-                    const incompatibleWithPump =
-                      selectedPump?.id === 'gas_pump_5_lpg' ? ft !== 'lpg' : ft === 'lpg';
-
-                    return (
-                      <button
-                        key={ft}
-                        type="button"
-                        disabled={Boolean(lockedByNozzle || incompatibleWithPump)}
-                        onClick={() => {
-                          sound.playUseItem();
-                          setSelectedFuelType(ft);
-                        }}
-                        className={`gu-trk-grade ${active ? 'is-on' : ''}`}
-                        style={{ '--grade-color': g.color } as React.CSSProperties}
-                      >
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{g.badgeText}</span>
-                        <span className="gu-num" style={{ fontSize: 12, color: 'var(--gu-amber-hi)' }}>
-                          {g.pricePerLiter.toFixed(1)} ₽/л
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Liters Presets & Stepper */}
-              <div>
-                <div className="gu-row-between" style={{ marginBottom: 5 }}>
+            {/* Row 3: 2-Column Bottom Row (Left: Volume + Tank Status, Right: Total + Cart/Pay Buttons) */}
+            <div className="gu-trk-bottom">
+              <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8 }}>
+                <div className="gu-row-between" style={{ gap: 8, flexWrap: 'wrap' }}>
                   <span className="gu-grp">3. Объем заправки (литры)</span>
                   <div className="gu-row" style={{ gap: 6 }}>
                     <button
@@ -2177,7 +2175,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     </button>
                     <span
                       className="gu-num"
-                      style={{ fontSize: 16, fontWeight: 700, color: '#fff', minWidth: 48, textAlign: 'center' }}
+                      style={{ fontSize: 16, fontWeight: 700, color: '#fff', minWidth: 46, textAlign: 'center' }}
                     >
                       {fuelLiters} л
                     </span>
@@ -2218,29 +2216,40 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     Полный ({connectedVeh ? `${maxNeeded}л` : '45л'})
                   </button>
                 </div>
+
+                {connectedVeh ? (
+                  <div>
+                    <div className="gu-row-between" style={{ fontSize: 11.5, marginBottom: 4 }}>
+                      <span style={{ color: '#fff', fontWeight: 600 }}>
+                        <Car className="w-3.5 h-3.5 inline mr-1" style={{ color: 'var(--gu-good)' }} />
+                        {connectedVeh.nameRu || connectedVeh.type}
+                      </span>
+                      <span className="gu-num" style={{ color: 'var(--gu-amber-hi)' }}>
+                        В баке: {curLitersInTank} / {tankCap} л ({Math.round(curPct)}%)
+                      </span>
+                    </div>
+                    <div className="gu-bar good">
+                      <span style={{ width: `${Math.min(100, curPct)}%` }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11.5, color: 'var(--gu-mut)' }}>
+                    На колонке №{selectedPump?.pumpNumber || 1} пистолет еще не вставлен в бак автомобиля. Оплатите заранее или вставьте пистолет на улице <b>[E]</b>.
+                  </div>
+                )}
               </div>
 
-              {/* Footer Actions: Add to Cart OR Instant Pay */}
-              <div
-                className="gu-row-between"
-                style={{
-                  paddingTop: 8,
-                  borderTop: '1px solid var(--gu-line)',
-                  flexWrap: 'wrap',
-                  gap: 10,
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--gu-mut)', textTransform: 'uppercase' }}>
-                    Сумма за топливо ({fuelLiters} л × {activeGrade.pricePerLiter.toFixed(2)} ₽)
+              <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8 }}>
+                <div className="gu-row-between">
+                  <div>
+                    <div style={{ fontSize: 10.5, color: 'var(--gu-mut)', textTransform: 'uppercase' }}>
+                      Сумма за топливо ({fuelLiters} л × {activeGrade.pricePerLiter.toFixed(2)} ₽)
+                    </div>
+                    <div className="gu-shop-price" style={{ fontSize: 24, marginTop: 2 }}>
+                      {totalFuelCost.toLocaleString()}
+                      <small>₽</small>
+                    </div>
                   </div>
-                  <div className="gu-shop-price" style={{ fontSize: 24 }}>
-                    {totalFuelCost.toLocaleString()}
-                    <small>₽</small>
-                  </div>
-                </div>
-
-                <div className="gu-row" style={{ gap: 8, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     onClick={() => {
@@ -2248,38 +2257,38 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       handleAddToCart(fuelItem);
                     }}
                     className="gu-btn gu-btn-s gu-btn-sm"
-                    style={{ height: 36 }}
+                    style={{ height: 32 }}
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>В чек</span>
                   </button>
-
-                  <button
-                    type="button"
-                    disabled={!canAffordFuel || selectedPump?.isPumping}
-                    onClick={() => {
-                      const fuelItem = createFuelShopItem();
-                      if (props.onBuyItems) {
-                        props.onBuyItems([fuelItem], totalFuelCost);
-                        onClose();
-                      } else {
-                        handleAddToCart(fuelItem);
-                        setActiveTab('pos');
-                      }
-                    }}
-                    className="gu-btn gu-btn-p gu-btn-sm"
-                    style={{ height: 36, padding: '0 14px' }}
-                  >
-                    <Fuel className="w-3.5 h-3.5" />
-                    <span>
-                      {selectedPump?.isPumping
-                        ? 'Идет подача...'
-                        : !canAffordFuel
-                        ? `Не хватает средств (${totalFuelCost} ₽)`
-                        : `Оплатить и включить ТРК №${selectedPump?.pumpNumber || 1}`}
-                    </span>
-                  </button>
                 </div>
+
+                <button
+                  type="button"
+                  disabled={!canAffordFuel || selectedPump?.isPumping}
+                  onClick={() => {
+                    const fuelItem = createFuelShopItem();
+                    if (props.onBuyItems) {
+                      props.onBuyItems([fuelItem], totalFuelCost);
+                      onClose();
+                    } else {
+                      handleAddToCart(fuelItem);
+                      setActiveTab('pos');
+                    }
+                  }}
+                  className="gu-btn gu-btn-p gu-btn-block"
+                  style={{ height: 36 }}
+                >
+                  <Fuel className="w-3.5 h-3.5" />
+                  <span>
+                    {selectedPump?.isPumping
+                      ? 'Идет подача...'
+                      : !canAffordFuel
+                      ? `Не хватает средств (${totalFuelCost} ₽)`
+                      : `Оплатить и включить ТРК №${selectedPump?.pumpNumber || 1}`}
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -3546,7 +3555,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 )}
               </div>
 
-              {/* Cashier Tray */}
+              {/* Cashier Tray — 3-column grid with fixed max-height so Pay button never overflows */}
               <div className="gu-shop-tray-box">
                 <div className="gu-row-between" style={{ fontSize: 10, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   <span>Купюры и монеты в лотке</span>
@@ -3554,19 +3563,21 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
 
                 {Object.keys(trayDenoms).length === 0 ? (
-                  <div style={{ fontSize: 11, color: 'var(--gu-fg-3)', padding: '4px 0', textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'var(--gu-fg-3)', padding: '3px 0', textAlign: 'center' }}>
                     Лоток пуст — выберите купюры справа или нажмите «Без сдачи»
                   </div>
                 ) : (
-                  <div className="gu-row" style={{ flexWrap: 'wrap', gap: 5 }}>
+                  <div className="gu-shop-tray-chips">
                     {Object.entries(trayDenoms).map(([itemId, count]) => {
                       const denom = playerDenoms.find((d) => d.itemId === itemId);
                       if (!denom || count <= 0) return null;
                       return (
                         <div key={itemId} className="gu-shop-tray-chip">
-                          <ItemIconCanvas itemId={itemId} size={16} />
-                          <b>{denom.nameRu}</b>
-                          <span className="gu-num" style={{ color: 'var(--gu-fg-2)' }}>×{count}</span>
+                          <div className="gu-row" style={{ gap: 4, minWidth: 0 }}>
+                            <ItemIconCanvas itemId={itemId} size={15} />
+                            <b style={{ whiteSpace: 'nowrap' }}>{denom.nameRu}</b>
+                            <span className="gu-num" style={{ color: 'var(--gu-fg-2)' }}>×{count}</span>
+                          </div>
                           <button
                             type="button"
                             onClick={() => handleRemoveTrayDenom(itemId)}

@@ -55,10 +55,10 @@ export const FuelNozzleSelectorModal: React.FC<FuelNozzleSelectorModalProps> = (
       subtitle={
         isLpgStation
           ? 'Раздаточная колонка сжиженного углеводородного газа (Пропан-Бутан)'
-          : 'Топливораздаточная колонка · Выберите марку топлива и снимите пистолет'
+          : 'Топливораздаточная колонка · Выберите пистолет для заправки'
       }
       onClose={onClose}
-      width={560}
+      width={isLpgStation ? 480 : 740}
       headRight={
         <span className={`gu-tag ${pump.status === 'idle' ? 'good' : 'warn'}`}>
           {pump.status === 'idle'
@@ -98,35 +98,36 @@ export const FuelNozzleSelectorModal: React.FC<FuelNozzleSelectorModalProps> = (
                 className="gu-nozzle-row"
                 style={{ '--nozzle-color': nozzle.color } as React.CSSProperties}
               >
-                <span className="gu-k">[{index + 1}]</span>
-
-                <div
-                  className="gu-nozzle-badge"
-                  style={{ '--nozzle-color': nozzle.color } as React.CSSProperties}
-                >
-                  {nozzle.badgeText}
-                </div>
-
-                <div className="gu-nozzle-main">
-                  <div className="gu-row" style={{ gap: 6 }}>
-                    <span className="gu-nozzle-name">{nozzle.nameRu}</span>
+                <div className="gu-row-between" style={{ width: '100%' }}>
+                  <div
+                    className="gu-nozzle-badge"
+                    style={{ '--nozzle-color': nozzle.color } as React.CSSProperties}
+                  >
+                    {nozzle.badgeText}
+                  </div>
+                  <div className="gu-row" style={{ gap: 4 }}>
                     <span className="gu-tag" style={{ height: 18, padding: '0 6px', fontSize: 10 }}>
                       {isLpg ? 'ГБО Пропан' : isDiesel ? 'Цетан 55' : `Октан ${nozzle.octane}`}
                     </span>
+                    <span className="gu-k">[{index + 1}]</span>
                   </div>
+                </div>
+
+                <div className="gu-nozzle-main">
+                  <div className="gu-nozzle-name">{nozzle.nameRu}</div>
                   <div className="gu-nozzle-sub" title={grade?.engineCompatibility || nozzle.description}>
                     {grade?.engineCompatibility || nozzle.description}
                   </div>
                 </div>
 
                 <div className="gu-nozzle-right">
-                  <div className="gu-shop-price" style={{ fontSize: 18 }}>
+                  <div className="gu-shop-price" style={{ fontSize: 17 }}>
                     {nozzle.pricePerLiter.toFixed(2)}
                     <small>₽/л</small>
                   </div>
 
-                  <span className="gu-btn gu-btn-p gu-btn-sm" style={{ height: 28, padding: '0 10px' }}>
-                    {isLpg ? <Flame className="w-3.5 h-3.5" /> : <Fuel className="w-3.5 h-3.5" />}
+                  <span className="gu-btn gu-btn-p gu-btn-xs" style={{ height: 26, padding: '0 8px' }}>
+                    {isLpg ? <Flame className="w-3 h-3" /> : <Fuel className="w-3 h-3" />}
                     <span>Снять</span>
                   </span>
                 </div>
@@ -141,13 +142,13 @@ export const FuelNozzleSelectorModal: React.FC<FuelNozzleSelectorModalProps> = (
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '6px 10px',
+            padding: '5px 10px',
             fontSize: 11.5,
           }}
         >
           <Info className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--gu-amber-hi)' }} />
           <span>
-            Снимите пистолет, подойдите к лючку бензобака автомобиля и нажмите <b>[E]</b>, затем оплатите литраж на кассе АЗС.
+            Снимите пистолет, вставьте его в горловину бака <b>[E]</b>, затем оплатите подачу на кассе АЗС.
           </span>
         </div>
       </div>

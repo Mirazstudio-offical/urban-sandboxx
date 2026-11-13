@@ -1913,9 +1913,9 @@ export const CarDealershipModal: React.FC<Props> = ({
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="gu-dealer-root">
         {purchaseSuccessMessage && (
-          <div className="gu-note gu-ok gu-row-between" style={{ gap: 10, padding: '8px 12px' }}>
+          <div className="gu-note gu-ok gu-row-between" style={{ gap: 10, padding: '7px 12px', flex: 'none' }}>
             <div className="gu-row" style={{ gap: 8 }}>
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span style={{ fontSize: 12.5 }}>{purchaseSuccessMessage}</span>
@@ -2034,44 +2034,44 @@ export const CarDealershipModal: React.FC<Props> = ({
               <div className="gu-dealer-stage">
                 <canvas
                   ref={canvasRef}
-                  width={220}
-                  height={132}
-                  style={{ width: '100%', height: 120, objectFit: 'contain' }}
+                  width={200}
+                  height={112}
+                  style={{ width: '100%', height: 92, objectFit: 'contain' }}
                 />
-                <span style={{ fontSize: 10.5, color: 'var(--gu-mut)', marginTop: 3 }}>
+                <span style={{ fontSize: 10.5, color: 'var(--gu-mut)', marginTop: 2 }}>
                   Цвет: <b style={{ color: '#fff' }}>{currentColor.name}</b>
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                <div className="gu-row-between" style={{ gap: 8, flexWrap: 'wrap' }}>
-                  <div className="gu-row" style={{ gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+                <div className="gu-row-between" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <div className="gu-row" style={{ gap: 5 }}>
                     <span className="gu-tag warn">{currentCar.brand}</span>
                     <span className="gu-tag">{currentCar.classType}</span>
                     <span className="gu-tag">{currentCar.year} г.в.</span>
                   </div>
                   <span className={`gu-tag ${canAfford ? 'good' : 'bad'}`}>
-                    {canAfford ? 'Доступно к покупке' : 'Недостаточно средств'}
+                    {canAfford ? 'Доступно' : 'Мало средств'}
                   </span>
                 </div>
 
-                <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', lineHeight: 1.15 }}>
+                <div style={{ fontSize: 17.5, fontWeight: 800, color: '#fff', lineHeight: 1.15 }}>
                   {currentCar.nameRu}
                 </div>
 
-                <div style={{ fontSize: 12, color: 'var(--gu-mut)', lineHeight: 1.38 }}>
+                <div style={{ fontSize: 11.5, color: 'var(--gu-mut)', lineHeight: 1.32 }}>
                   {currentCar.descriptionRu}
                 </div>
 
                 <div
                   className="gu-row-between"
-                  style={{ paddingTop: 6, borderTop: '1px solid var(--gu-line)', flexWrap: 'wrap', gap: 8 }}
+                  style={{ paddingTop: 5, borderTop: '1px solid var(--gu-line)', flexWrap: 'wrap', gap: 8 }}
                 >
-                  <div>
-                    <div style={{ fontSize: 10.5, color: 'var(--gu-mut)', textTransform: 'uppercase' }}>
-                      Стоимость автомобиля
-                    </div>
-                    <div className="gu-shop-price" style={{ fontSize: 24 }}>
+                  <div className="gu-row" style={{ gap: 8, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 10.5, color: 'var(--gu-mut)', textTransform: 'uppercase' }}>
+                      Цена:
+                    </span>
+                    <div className="gu-shop-price" style={{ fontSize: 21 }}>
                       {currentCar.priceRub.toLocaleString('ru-RU')}
                       <small>₽</small>
                     </div>
@@ -2081,10 +2081,10 @@ export const CarDealershipModal: React.FC<Props> = ({
                     type="button"
                     disabled={!canAfford}
                     onClick={handleBuy}
-                    className="gu-btn gu-btn-p"
-                    style={{ height: 36, padding: '0 16px' }}
+                    className="gu-btn gu-btn-p gu-btn-sm"
+                    style={{ height: 32, padding: '0 14px' }}
                   >
-                    <Car className="w-4 h-4" />
+                    <Car className="w-3.5 h-3.5" />
                     <span>Купить за {currentCar.priceRub.toLocaleString('ru-RU')} ₽</span>
                   </button>
                 </div>
@@ -2093,9 +2093,9 @@ export const CarDealershipModal: React.FC<Props> = ({
 
             {/* Middle Row: New Car Config OR Used Car Technical Health */}
             {activeTab === 'used' ? (
-              <div className="gu-grid gu-g2">
+              <div className="gu-grid gu-g2" style={{ gap: 8 }}>
                 {/* Used Car Mechanical Condition */}
-                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div className="gu-row-between">
                     <span className="gu-grp">Техническое состояние узлов</span>
                     {(currentCar as any).radiatorPunctured && (
@@ -2103,27 +2103,29 @@ export const CarDealershipModal: React.FC<Props> = ({
                     )}
                   </div>
 
-                  <div>
-                    <div className="gu-row-between" style={{ fontSize: 11.5, marginBottom: 3 }}>
-                      <span className="gu-mute">Ресурс двигателя (ДВС)</span>
-                      <b className="gu-num">{(currentCar as any).engineHealth}%</b>
+                  <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                    <div>
+                      <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 3 }}>
+                        <span className="gu-mute">ДВС</span>
+                        <b className="gu-num">{(currentCar as any).engineHealth}%</b>
+                      </div>
+                      <div className={`gu-bar ${(currentCar as any).engineHealth > 50 ? 'good' : 'bad'}`}>
+                        <span style={{ width: `${(currentCar as any).engineHealth}%` }} />
+                      </div>
                     </div>
-                    <div className={`gu-bar ${(currentCar as any).engineHealth > 50 ? 'good' : 'bad'}`}>
-                      <span style={{ width: `${(currentCar as any).engineHealth}%` }} />
+
+                    <div>
+                      <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 3 }}>
+                        <span className="gu-mute">КПП</span>
+                        <b className="gu-num">{(currentCar as any).transmissionHealth}%</b>
+                      </div>
+                      <div className={`gu-bar ${(currentCar as any).transmissionHealth > 50 ? 'good' : 'bad'}`}>
+                        <span style={{ width: `${(currentCar as any).transmissionHealth}%` }} />
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="gu-row-between" style={{ fontSize: 11.5, marginBottom: 3 }}>
-                      <span className="gu-mute">Коробка передач (КПП)</span>
-                      <b className="gu-num">{(currentCar as any).transmissionHealth}%</b>
-                    </div>
-                    <div className={`gu-bar ${(currentCar as any).transmissionHealth > 50 ? 'good' : 'bad'}`}>
-                      <span style={{ width: `${(currentCar as any).transmissionHealth}%` }} />
-                    </div>
-                  </div>
-
-                  <div className="gu-kv-grid" style={{ marginTop: 2 }}>
+                  <div className="gu-kv-grid">
                     <div className="gu-kv">
                       <span className="gu-kv-k">Заряд АКБ</span>
                       <span className="gu-kv-v">{(currentCar as any).batteryCharge}%</span>
@@ -2139,9 +2141,9 @@ export const CarDealershipModal: React.FC<Props> = ({
                 </div>
 
                 {/* Used Car Body & Installed Mods */}
-                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8 }}>
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 6 }}>
                   <div>
-                    <div className="gu-row-between" style={{ marginBottom: 6 }}>
+                    <div className="gu-row-between" style={{ marginBottom: 5 }}>
                       <span className="gu-grp">Кузов и история ТС</span>
                       <span className="gu-tag warn">
                         Пробег: {(currentCar as any).mileageKm.toLocaleString('ru-RU')} км
