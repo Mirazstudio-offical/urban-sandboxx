@@ -44,7 +44,8 @@ import {
   getPlayerDenominations, 
   calcOptimalTrayPayment,
   PlayerDenomInfo,
-  createPackagedItem
+  createPackagedItem,
+  getItemTotalWeight
 } from '../items';
 import { InventoryItem } from '../types';
 import { SHAPE_NAMES_RU } from '../liquidSystem';
@@ -55,6 +56,17 @@ function getShopPreviewItem(itemId: string): InventoryItem {
     shopPreviewCache[itemId] = createPackagedItem(itemId, 1);
   }
   return shopPreviewCache[itemId];
+}
+
+function formatShopWeight(weightKg: number): string {
+  if (!weightKg || weightKg <= 0) return '';
+  if (weightKg < 1) {
+    const grams = weightKg < 0.01
+      ? Number((weightKg * 1000).toFixed(1))
+      : Math.round(weightKg * 1000);
+    return `${grams} г`;
+  }
+  return `${Number(weightKg.toFixed(2))} кг`;
 }
 import { FUEL_GRADES } from '../gasStationSystem';
 import { createDefaultVehicleDamage, isTrailerVehicle } from '../vehicleHelpers';
@@ -438,10 +450,14 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'gas_water', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в пластиковой бутылке 0.5л.', category: 'food', effectText: '+40% Гидратация' },
     { id: 'gas_water_15', itemId: 'water_bottle_1500', nameRu: 'Питьевая вода (1.5L)', price: 55, description: 'Большая ПЭТ бутылка 1.5л чистой питьевой воды.', category: 'food', effectText: '+80% Гидратация' },
     { id: 'gas_chips', itemId: 'chips', nameRu: 'Картофельные чипсы (дой-пак)', price: 40, description: 'Герметичный пакет хрустящих чипсов с паприкой (8 шт.).', category: 'food', effectText: '+32% Сытость' },
-    { id: 'gas_gummy_mini', itemId: 'gummy_pack_mini_bears', nameRu: 'Мармелад «Фруктовые мишки» (мини-саше 6 шт.)', price: 50, description: 'Компактный плоский саше-пакет с жевательными мишками (клубника, лимон, яблоко, апельсин).', category: 'food', effectText: '+24% Сытость, +24% Энергия' },
-    { id: 'gas_gummy_cola', itemId: 'gummy_pack_flow_cola', nameRu: 'Мармелад «Шипучая Кола» (флоу-пак 8 шт.)', price: 70, description: 'Пакет-подушечка с кислыми мармеладными бутылочками колы в шипучей обсыпке.', category: 'food', effectText: '+32% Сытость, +32% Энергия' },
-    { id: 'gas_gummy_worms', itemId: 'gummy_pack_euro_worms', nameRu: 'Мармелад «Кислые червячки» (евро-пакет 10 шт.)', price: 90, description: 'Прозрачный евро-пакет с подвесом и разноцветными кислыми мармеладными червячками.', category: 'food', effectText: '+40% Сытость, бодрость' },
-    { id: 'gas_gummy_rings', itemId: 'gummy_pack_doypack_rings', nameRu: 'Мармелад «Фруктовые колечки» (дой-пак 12 шт.)', price: 120, description: 'Стоячий дой-пак с зип-локом и двухслойными персиковыми, арбузными и яблочными колечками.', category: 'food', effectText: '+48% Сытость, зип-лок' },
+    { id: 'gas_gummy_mini', itemId: 'gummy_pack_mini_bears', nameRu: 'Мармелад «Фруктовые мишки» (саше 12 шт., 30г)', price: 45, description: 'Компактный плоский саше-пакет с 12 жевательными мишками (клубника, лимон, яблоко, апельсин).', category: 'food', effectText: '30г · +12% Сытость, +14% Энергия' },
+    { id: 'gas_gummy_mint', itemId: 'gummy_pack_mini_mint_hearts', nameRu: 'Мармелад «Мята и Эвкалипт» (саше 10 шт., 40г)', price: 55, description: 'Освежающие дорожные мармеладные сердечки с мятой, лаймом и эвкалиптом.', category: 'food', effectText: '40г · +16% Сытость, свежесть' },
+    { id: 'gas_gummy_cola', itemId: 'gummy_pack_flow_cola', nameRu: 'Мармелад «Шипучая Кола» (флоу-пак 16 шт., 80г)', price: 75, description: 'Пакет-подушечка с 16 кислыми мармеладными бутылочками колы в шипучей обсыпке.', category: 'food', effectText: '80г · +32% Сытость, +40% Энергия' },
+    { id: 'gas_gummy_gold', itemId: 'gummy_pack_flow_bears_gold', nameRu: 'Мармелад «Золотые мишки» (флоу-пак 28 шт., 70г)', price: 70, description: 'Классический карманный пакет: 28 фруктовых мишек пяти вкусов.', category: 'food', effectText: '70г · +28% Сытость, +34% Энергия' },
+    { id: 'gas_gummy_worms', itemId: 'gummy_pack_euro_worms', nameRu: 'Мармелад «Кислые червячки» (евро-пакет 22 шт., 132г)', price: 110, description: 'Прозрачный евро-пакет с подвесом: 22 разноцветных кислых червячка.', category: 'food', effectText: '132г · +53% Сытость, бодрость' },
+    { id: 'gas_gummy_soda', itemId: 'gummy_pack_euro_soda_bottles', nameRu: 'Мармелад «Лимонадный бар» (евро-пакет 26 шт., 130г)', price: 115, description: 'Евро-пакет с шипучими бутылочками: тархун, крем-сода, апельсин и кола-лайм.', category: 'food', effectText: '130г · +52% Сытость, +65% Энергия' },
+    { id: 'gas_gummy_rings', itemId: 'gummy_pack_doypack_rings', nameRu: 'Мармелад «Фруктовые колечки» (дой-пак 28 шт., 196г)', price: 155, description: 'Стоячий дой-пак с зип-локом и двухслойными персиковыми, арбузными и яблочными колечками.', category: 'food', effectText: '196г · +78% Сытость, зип-лок' },
+    { id: 'gas_gummy_sour_mix', itemId: 'gummy_pack_doypack_sour_mix', nameRu: 'Мармелад «Ультра-кислый микс» (дой-пак 40 шт., 195г)', price: 165, description: 'Бодрящий дой-пак для долгой дороги: 40 кислых мармеладок разных форм.', category: 'food', effectText: '195г · +78% Сытость, +90% Энергия' },
     { id: 'gas_chocolate', itemId: 'chocolate', nameRu: 'Шоколадный батончик', price: 30, description: 'Батончик с карамелью и арахисом.', category: 'food', effectText: '+20% Энергия' },
     { id: 'gas_canned', itemId: 'canned_meat', nameRu: 'Армейская тушёнка в банке (0.4L)', price: 110, description: 'Мясные консервы в жестяной банке 0.4л с ключом открытия.', category: 'food', effectText: '+70% Сытость' },
     { id: 'gas_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка АЗС', price: 5, description: 'Пластиковый пакет с ручками для покупок.', category: 'auto', effectText: 'Пакет 5.0L' }
@@ -564,13 +580,21 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
 
     // 7. СНЕКИ, СЛАДОСТИ И ТАРА
     { id: 'sup_chocolate', itemId: 'chocolate', nameRu: 'Шоколад темный 75%', price: 45, description: 'Плитка горького шоколада с кусочками какао.', category: 'food', effectText: '+25% Энергия' },
-    { id: 'sup_gummy_single', itemId: 'gummy_candy', nameRu: 'Мармеладка поштучно (1 шт.)', price: 12, description: 'Одна жевательная мармеладка на кассе со своими цветом, формой и натуральным составом.', category: 'food', effectText: '+4% Сытость, +4% Энергия' },
-    { id: 'sup_gummy_mini', itemId: 'gummy_pack_mini_bears', nameRu: 'Мармелад «Фруктовые мишки» (саше 6 шт.)', price: 45, description: 'Четырёхшовный мини-саше с прозрачным окном: мишки клубника, лимон, яблоко и апельсин.', category: 'food', effectText: '+24% Сытость, +24% Энергия' },
-    { id: 'sup_gummy_cola', itemId: 'gummy_pack_flow_cola', nameRu: 'Мармелад «Шипучая Кола» (флоу-пак 8 шт.)', price: 65, description: 'Пакет-подушечка с мармеладными бутылочками колы и вишнёвой колы в кислой обсыпке.', category: 'food', effectText: '+32% Сытость, +32% Энергия' },
-    { id: 'sup_gummy_worms', itemId: 'gummy_pack_euro_worms', nameRu: 'Мармелад «Кислые червячки» (евро-пакет 10 шт.)', price: 85, description: 'Евро-пакет с подвесом: разноцветные двухцветные червячки с кислой посыпкой.', category: 'food', effectText: '+40% Сытость, +40% Энергия' },
-    { id: 'sup_gummy_rings', itemId: 'gummy_pack_doypack_rings', nameRu: 'Мармелад «Фруктовые колечки» (дой-пак 12 шт.)', price: 115, description: 'Стоячий дой-пак с зип-локом и сочными фруктовыми колечками (персик, арбуз, яблоко).', category: 'food', effectText: '+48% Сытость, зип-лок' },
-    { id: 'sup_gummy_berries', itemId: 'gummy_pack_doypack_berries', nameRu: 'Мармелад «Лесные ягоды и сердца» (дой-пак 12 шт.)', price: 125, description: 'Стоячий дой-пак с мармеладными ягодками малины, ежевики и вишнёвыми сердечками.', category: 'food', effectText: '+48% Сытость, на соке' },
-    { id: 'sup_gummy_party', itemId: 'gummy_pack_large_party', nameRu: 'Мармелад «Мега-Ассорти» (пакет 20 шт.)', price: 190, description: 'Большой пакет с боковыми фальцами: 20 разноцветных мармеладок всех форм и вкусов.', category: 'food', effectText: '+80% Сытость, семейная пачка' },
+    { id: 'sup_gummy_single', itemId: 'gummy_candy', nameRu: 'Мармеладный мишка поштучно (1 шт., 2.5г)', price: 5, description: 'Одна жевательная мармеладка на кассе со своими цветом, формой и натуральным составом.', category: 'food', effectText: '2.5г · +1% Сытость, +1.2% Энергия' },
+    { id: 'sup_gummy_mini', itemId: 'gummy_pack_mini_bears', nameRu: 'Мармелад «Фруктовые мишки» (саше 12 шт., 30г)', price: 40, description: 'Четырёхшовный мини-саше с прозрачным окном: 12 мишек (клубника, лимон, яблоко, апельсин).', category: 'food', effectText: '30г · +12% Сытость, +14% Энергия' },
+    { id: 'sup_gummy_mint', itemId: 'gummy_pack_mini_mint_hearts', nameRu: 'Мармелад «Мята и Эвкалипт» (саше 10 шт., 40г)', price: 50, description: 'Дорожный мини-саше с освежающими сердечками: перечная мята, лайм и эвкалипт с мёдом.', category: 'food', effectText: '40г · +16% Сытость, свежесть' },
+    { id: 'sup_gummy_gold', itemId: 'gummy_pack_flow_bears_gold', nameRu: 'Мармелад «Золотые мишки» (флоу-пак 28 шт., 70г)', price: 65, description: 'Пакет-подушечка: 28 классических фруктовых мишек пяти вкусов на натуральном соке.', category: 'food', effectText: '70г · +28% Сытость, +34% Энергия' },
+    { id: 'sup_gummy_cola', itemId: 'gummy_pack_flow_cola', nameRu: 'Мармелад «Шипучая Кола» (флоу-пак 16 шт., 80г)', price: 70, description: 'Пакет-подушечка: 16 мармеладных бутылочек колы и вишнёвой колы в кислой обсыпке.', category: 'food', effectText: '80г · +32% Сытость, +40% Энергия' },
+    { id: 'sup_gummy_citrus', itemId: 'gummy_pack_flow_citrus_stars', nameRu: 'Мармелад «Цитрусовый микс» (флоу-пак 24 шт., 84г)', price: 78, description: 'Флоу-пак с 24 звёздочками в цитрусовой посыпке: юзу, грейпфрут, красный апельсин, лайм.', category: 'food', effectText: '84г · +34% Сытость, +38% Энергия' },
+    { id: 'sup_gummy_soda', itemId: 'gummy_pack_euro_soda_bottles', nameRu: 'Мармелад «Лимонадный бар» (евро-пакет 26 шт., 130г)', price: 105, description: 'Евро-пакет с шипучими бутылочками: тархун, крем-сода, апельсиновая содовая и кола-лайм.', category: 'food', effectText: '130г · +52% Сытость, +65% Энергия' },
+    { id: 'sup_gummy_worms', itemId: 'gummy_pack_euro_worms', nameRu: 'Мармелад «Кислые червячки» (евро-пакет 22 шт., 132г)', price: 105, description: 'Евро-пакет с подвесом: 22 двухцветных червячка с кислой кристаллической посыпкой.', category: 'food', effectText: '132г · +53% Сытость, +62% Энергия' },
+    { id: 'sup_gummy_tropical', itemId: 'gummy_pack_euro_tropical_cubes', nameRu: 'Мармелад «Тропические кубики» (евро-пакет 28 шт., 140г)', price: 120, description: 'Евро-пакет на пектине и агар-агаре: манго-маракуйя, гуава, ананас-кокос и личи.', category: 'food', effectText: '140г · +56% Сытость, на пектине' },
+    { id: 'sup_gummy_berries', itemId: 'gummy_pack_doypack_berries', nameRu: 'Мармелад «Лесные ягоды и сердца» (дой-пак 48 шт., 176г)', price: 145, description: 'Стоячий дой-пак: 48 ягод малины, ежевики и вишнёвых сердечек на натуральном соке.', category: 'food', effectText: '176г · +70% Сытость, на соке' },
+    { id: 'sup_gummy_sour_mix', itemId: 'gummy_pack_doypack_sour_mix', nameRu: 'Мармелад «Ультра-кислый микс» (дой-пак 40 шт., 195г)', price: 155, description: 'Дой-пак с зип-локом: 40 кислых червячков, кубиков, звёздочек и бутылочек.', category: 'food', effectText: '195г · +78% Сытость, +90% Энергия' },
+    { id: 'sup_gummy_rings', itemId: 'gummy_pack_doypack_rings', nameRu: 'Мармелад «Фруктовые колечки» (дой-пак 28 шт., 196г)', price: 150, description: 'Стоячий дой-пак с зип-локом и 28 двухслойными персиковыми, арбузными и яблочными колечками.', category: 'food', effectText: '196г · +78% Сытость, зип-лок' },
+    { id: 'sup_gummy_bears_xl', itemId: 'gummy_pack_doypack_bears_xl', nameRu: 'Мармелад «Медвежья семья» (дой-пак 80 шт., 200г)', price: 155, description: 'Большой стоячий дой-пак с зип-локом: 80 фруктовых мишек шести вкусов.', category: 'food', effectText: '200г · +80% Сытость, +96% Энергия' },
+    { id: 'sup_gummy_orchard', itemId: 'gummy_pack_large_berry_orchard', nameRu: 'Мармелад «Ягодно-фруктовый сад» (пакет 100 шт., 400г)', price: 295, description: 'Большая пачка с фальцами: 100 мармеладок на пектине и фруктово-ягодном соке.', category: 'food', effectText: '400г · На пектине, семейный' },
+    { id: 'sup_gummy_party', itemId: 'gummy_pack_large_party', nameRu: 'Мармелад «Мега-Ассорти» (пакет 96 шт., 438г)', price: 310, description: 'Большой пакет с боковыми фальцами: 96 разноцветных мармеладок всех 8 форм и вкусов.', category: 'food', effectText: '438г · Семейная пачка' },
     { id: 'sup_cookies', itemId: 'cookie_pack', nameRu: 'Печенье с шоколадными каплями (дой-пак)', price: 50, description: 'Герметичный дой-пак рассыпчатого песочного печенья (6 шт.).', category: 'food', effectText: '+25% Сытость' },
     { id: 'sup_chips', itemId: 'chips', nameRu: 'Картофельные чипсы (дой-пак 8 шт.)', price: 55, description: 'Герметичный дой-пак хрустящих ломтиков картофеля с морской солью.', category: 'food', effectText: '+20% Сытость' },
     { id: 'sup_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка с ручками', price: 5, description: 'Вместительный прочный полиэтиленовый пакет 5.0L.', category: 'auto', effectText: 'Пакет 5.0L' },
@@ -591,8 +615,10 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'ff_banana_chips', itemId: 'banana_dried_chips', nameRu: 'Банановые чипсы (дой-пак)', price: 35, description: 'Герметичный дой-пак хрустящих ломтиков сушеного банана (8 шт.).', category: 'food', effectText: '+18% Сытость, сладость' },
     { id: 'ff_colazero', itemId: 'cola_zero', nameRu: 'Кола Зеро (0.33L)', price: 40, description: 'Алюминиевая баночка газированного напитка без сахара.', category: 'food', effectText: '+28% Гидратация' },
     { id: 'ff_milkshake', itemId: 'milkshake', nameRu: 'Ванильный милкшейк в стакане', price: 60, description: 'Стаканчик густого холодного молочного коктейля.', category: 'food', effectText: '+35% Гидратация, +20% Сытость' },
-    { id: 'ff_gummy_mini', itemId: 'gummy_pack_mini_bears', nameRu: 'Мармелад «Фруктовые мишки» (саше 6 шт.)', price: 50, description: 'Карманный плоский саше-пакетик со сладкими жевательными мишками.', category: 'food', effectText: '+24% Сытость, десерт' },
-    { id: 'ff_gummy_cola', itemId: 'gummy_pack_flow_cola', nameRu: 'Мармелад «Шипучая Кола» (флоу-пак 8 шт.)', price: 70, description: 'Пакет-подушечка с кислыми мармеладными бутылочками колы.', category: 'food', effectText: '+32% Энергия' }
+    { id: 'ff_gummy_mini', itemId: 'gummy_pack_mini_bears', nameRu: 'Мармелад «Фруктовые мишки» (саше 12 шт., 30г)', price: 45, description: 'Карманный плоский саше-пакетик со сладкими жевательными мишками.', category: 'food', effectText: '30г · +12% Сытость, десерт' },
+    { id: 'ff_gummy_cola', itemId: 'gummy_pack_flow_cola', nameRu: 'Мармелад «Шипучая Кола» (флоу-пак 16 шт., 80г)', price: 75, description: 'Пакет-подушечка с 16 кислыми мармеладными бутылочками колы.', category: 'food', effectText: '80г · +32% Сытость, +40% Энергия' },
+    { id: 'ff_gummy_citrus', itemId: 'gummy_pack_flow_citrus_stars', nameRu: 'Мармелад «Цитрусовый микс» (флоу-пак 24 шт., 84г)', price: 85, description: 'Кисло-сладкие мармеладные звёздочки в цитрусовой сахарной посыпке.', category: 'food', effectText: '84г · +34% Сытость, бодрость' },
+    { id: 'ff_gummy_soda', itemId: 'gummy_pack_euro_soda_bottles', nameRu: 'Мармелад «Лимонадный бар» (евро-пакет 26 шт., 130г)', price: 115, description: 'Евро-пакет шипучих бутылочек: тархун, крем-сода, апельсин и кола-лайм.', category: 'food', effectText: '130г · +52% Сытость, +65% Энергия' }
   ],
   pizzeria: [
     { id: 'piz_pepperoni', itemId: 'pizza_slice', nameRu: 'Кусок пиццы Пепперони', price: 60, description: 'Треугольный кусок горячего теста с пикантной колбасой.', category: 'food', effectText: '+35% Сытость, +10% Энергия' },
@@ -601,7 +627,8 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'piz_cherry', itemId: 'tomato_cherry_bunch', nameRu: 'Томаты черри свежие (ветка)', price: 50, description: 'Сладкие маленькие томаты черри на ветке.', category: 'food', effectText: '+15% Гидратация' },
     { id: 'piz_jalapeno', itemId: 'jalapeno_pickled_jar', nameRu: 'Острый халапеньо в баночке (0.2L)', price: 45, description: 'Стеклянная баночка маринованного перца халапеньо колечками.', category: 'food', effectText: '+10% Энергия, острота' },
     { id: 'piz_grape_cup', itemId: 'grapes_berries_cup', nameRu: 'Виноградный десерт в лотке', price: 50, description: 'Пищевой лоток под пленкой со сладкими гроздьями винограда.', category: 'food', effectText: '+15% Сытость, сок' },
-    { id: 'piz_gummy_berries', itemId: 'gummy_pack_doypack_berries', nameRu: 'Мармелад «Лесные ягоды и сердца» (дой-пак 12 шт.)', price: 130, description: 'Стоячий дой-пак с натуральным ягодным мармеладом на десерт.', category: 'food', effectText: '+48% Сытость, десерт' },
+    { id: 'piz_gummy_tropical', itemId: 'gummy_pack_euro_tropical_cubes', nameRu: 'Мармелад «Тропические кубики» (евро-пакет 28 шт., 140г)', price: 125, description: 'Мармеладные кубики манго-маракуйя, гуава и личи на натуральном пектине.', category: 'food', effectText: '140г · +56% Сытость, десерт' },
+    { id: 'piz_gummy_berries', itemId: 'gummy_pack_doypack_berries', nameRu: 'Мармелад «Лесные ягоды и сердца» (дой-пак 48 шт., 176г)', price: 155, description: 'Стоячий дой-пак с натуральным ягодным мармеладом на десерт.', category: 'food', effectText: '176г · +70% Сытость, десерт' },
     { id: 'piz_juice', itemId: 'fresh_juice', nameRu: 'Сок / Фруктовый морс (Тетрапак 1.0L)', price: 40, description: 'Тетрапак освежающего сока и ягодного морса.', category: 'food', effectText: '+30% Гидратация' },
     { id: 'piz_colazero', itemId: 'cola_zero', nameRu: 'Банка Колы (0.33L)', price: 40, description: 'Алюминиевая баночка сильногазированной колы из холодильника.', category: 'food', effectText: '+28% Гидратация' }
   ],
@@ -618,6 +645,8 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sush_shiitake', itemId: 'shiitake_fresh', nameRu: 'Грибы Шиитаке свежие (лоток 5 шт.)', price: 50, description: 'Пищевой лоток под пленкой с ароматными грибами шиитаке.', category: 'food', effectText: '+10% Сытость' },
     { id: 'sush_enoki', itemId: 'enoki_mushroom_bunch', nameRu: 'Грибы Эноки в лотке (2 пучка)', price: 60, description: 'Пищевой лоток под пленкой с пучками хрустящих грибов эноки.', category: 'food', effectText: '+12% Сытость' },
     { id: 'sush_cucumber_sliced', itemId: 'cucumber_sliced', nameRu: 'Огуречная нарезка в лотке (6 шт.)', price: 25, description: 'Пищевой лоток под пленкой со свежими ломтиками огурца.', category: 'food', effectText: '+15% Гидратация' },
+    { id: 'sush_gummy_citrus', itemId: 'gummy_pack_flow_citrus_stars', nameRu: 'Мармелад «Цитрусовый микс Юзу» (флоу-пак 24 шт., 84г)', price: 90, description: 'Японский цитрус юзу, грейпфрут и лайм в виде мармеладных звёздочек.', category: 'food', effectText: '84г · Юзу, десерт' },
+    { id: 'sush_gummy_tropical', itemId: 'gummy_pack_euro_tropical_cubes', nameRu: 'Мармелад «Тропические кубики» (евро-пакет 28 шт., 140г)', price: 130, description: 'Экзотический мармелад на агар-агаре: манго, личи, драгонфрут и кокос.', category: 'food', effectText: '140г · Личи и манго' },
     { id: 'sush_tea', itemId: 'tea_green', nameRu: 'Зеленый чай Сенча в стаканчике (0.25L)', price: 40, description: 'Бумажный стаканчик горячего заваренного зеленого чая.', category: 'food', effectText: '+35% Гидратация, +5 HP' }
   ],
   cinema_bar: [
@@ -631,10 +660,14 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'cin_raisins', itemId: 'raisins_dried_bag', nameRu: 'Изюм кишмиш в дой-паке (6 горстей)', price: 40, description: 'Герметичный дой-пак сладкого бескосточкового изюма.', category: 'food', effectText: '+22% Сытость' },
     { id: 'cin_cranberry', itemId: 'cranberry_dried_bag', nameRu: 'Вяленая клюква в дой-паке (8 горстей)', price: 55, description: 'Герметичный дой-пак кисло-сладкой вяленой клюквы.', category: 'food', effectText: '+18% Сытость' },
     { id: 'cin_colazero', itemId: 'cola_zero', nameRu: 'Баночка Колы (0.33L)', price: 45, description: 'Алюминиевая банка ледяного газированного напитка.', category: 'food', effectText: '+28% Гидратация' },
-    { id: 'cin_gummy_worms', itemId: 'gummy_pack_euro_worms', nameRu: 'Мармелад «Кислые червячки» (евро-пакет 10 шт.)', price: 95, description: 'Разноцветные кислые жевательные червячки на сеанс кино.', category: 'food', effectText: '+40% Сытость, +40% Энергия' },
-    { id: 'cin_gummy_cola', itemId: 'gummy_pack_flow_cola', nameRu: 'Мармелад «Шипучая Кола» (флоу-пак 8 шт.)', price: 75, description: 'Бутылочки колы в шипучей кислой посыпке в пакете-подушечке.', category: 'food', effectText: '+32% Сытость, +32% Энергия' },
-    { id: 'cin_gummy_rings', itemId: 'gummy_pack_doypack_rings', nameRu: 'Мармелад «Фруктовые колечки» (дой-пак 12 шт.)', price: 130, description: 'Удобный дой-пак с зип-локом и мягкими фруктовыми колечками.', category: 'food', effectText: '+48% Сытость, зип-лок' },
-    { id: 'cin_gummy_party', itemId: 'gummy_pack_large_party', nameRu: 'Мармелад «Мега-Ассорти» (пакет 20 шт.)', price: 210, description: 'Большой объёмный пакет с фальцами: ассорти из 20 мармеладок.', category: 'food', effectText: '+80% Сытость, для двоих' },
+    { id: 'cin_gummy_gold', itemId: 'gummy_pack_flow_bears_gold', nameRu: 'Мармелад «Золотые мишки» (флоу-пак 28 шт., 70г)', price: 75, description: '28 классических фруктовых мишек на весь сеанс кино.', category: 'food', effectText: '70г · +28% Сытость' },
+    { id: 'cin_gummy_cola', itemId: 'gummy_pack_flow_cola', nameRu: 'Мармелад «Шипучая Кола» (флоу-пак 16 шт., 80г)', price: 80, description: '16 бутылочек колы в шипучей кислой посыпке в пакете-подушечке.', category: 'food', effectText: '80г · +32% Сытость, +40% Энергия' },
+    { id: 'cin_gummy_soda', itemId: 'gummy_pack_euro_soda_bottles', nameRu: 'Мармелад «Лимонадный бар» (евро-пакет 26 шт., 130г)', price: 120, description: '26 мармеладных бутылочек со вкусом лимонадов и крем-соды.', category: 'food', effectText: '130г · +52% Сытость' },
+    { id: 'cin_gummy_worms', itemId: 'gummy_pack_euro_worms', nameRu: 'Мармелад «Кислые червячки» (евро-пакет 22 шт., 132г)', price: 120, description: '22 разноцветных кислых жевательных червячка на сеанс кино.', category: 'food', effectText: '132г · +53% Сытость, +62% Энергия' },
+    { id: 'cin_gummy_sour_mix', itemId: 'gummy_pack_doypack_sour_mix', nameRu: 'Мармелад «Ультра-кислый микс» (дой-пак 40 шт., 195г)', price: 175, description: 'Большой стоячий дой-пак с кислым ассорти на 40 штук.', category: 'food', effectText: '195г · +78% Сытость, зип-лок' },
+    { id: 'cin_gummy_rings', itemId: 'gummy_pack_doypack_rings', nameRu: 'Мармелад «Фруктовые колечки» (дой-пак 28 шт., 196г)', price: 170, description: 'Удобный дой-пак с зип-локом и 28 мягкими фруктовыми колечками.', category: 'food', effectText: '196г · +78% Сытость, зип-лок' },
+    { id: 'cin_gummy_orchard', itemId: 'gummy_pack_large_berry_orchard', nameRu: 'Мармелад «Ягодно-фруктовый сад» (пакет 100 шт., 400г)', price: 320, description: 'Огромный пакет ягодно-фруктового мармелада на пектине для компании.', category: 'food', effectText: '400г · На компанию' },
+    { id: 'cin_gummy_party', itemId: 'gummy_pack_large_party', nameRu: 'Мармелад «Мега-Ассорти» (пакет 96 шт., 438г)', price: 340, description: 'Большой объёмный пакет с фальцами: ассорти из 96 мармеладок.', category: 'food', effectText: '438г · Для компании' },
     { id: 'cin_chocolate', itemId: 'chocolate', nameRu: 'Шоколадный батончик', price: 30, description: 'Шоколадка с карамелью и арахисом.', category: 'food', effectText: '+20% Энергия' }
   ],
   electronics: [
@@ -741,12 +774,16 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'caf_watermelon_cup', itemId: 'watermelon_diced', nameRu: 'Ломтики арбуза в лотке (4 шт.)', price: 45, description: 'Пищевой лоток под пленкой с сочными ломтиками арбуза.', category: 'food', effectText: '+45% Гидратация' },
     { id: 'caf_berries_tray', itemId: 'berries_tray_fresh', nameRu: 'Свежая клубника в лотке (8 шт.)', price: 120, description: 'Пищевой лоток под пленкой с отборными ягодами к кофе.', category: 'food', effectText: '+20% Сытость, витамины' },
     { id: 'caf_kiwi_slice', itemId: 'kiwi_sliced', nameRu: 'Нарезка киви в лотке (6 кружков)', price: 35, description: 'Пищевой лоток под пленкой с изумрудными кружочками спелого киви.', category: 'food', effectText: '+10% Сытость, витамин C' },
-    { id: 'caf_gummy_mini', itemId: 'gummy_pack_mini_bears', nameRu: 'Мармелад «Фруктовые мишки» (саше 6 шт.)', price: 55, description: 'Сладкие мармеладные мишки в плоском мини-саше к чаю или кофе.', category: 'food', effectText: '+24% Сытость, к чаю' },
-    { id: 'caf_gummy_berries', itemId: 'gummy_pack_doypack_berries', nameRu: 'Мармелад «Лесные ягоды и сердца» (дой-пак 12 шт.)', price: 135, description: 'Натуральный ягодный мармелад на пектине и агар-агаре в дой-паке.', category: 'food', effectText: '+48% Сытость, ягодный' },
+    { id: 'caf_gummy_mini', itemId: 'gummy_pack_mini_bears', nameRu: 'Мармелад «Фруктовые мишки» (саше 12 шт., 30г)', price: 45, description: 'Сладкие мармеладные мишки в плоском мини-саше к чаю или кофе.', category: 'food', effectText: '30г · +12% Сытость, к чаю' },
+    { id: 'caf_gummy_mint', itemId: 'gummy_pack_mini_mint_hearts', nameRu: 'Мармелад «Мята и Эвкалипт» (саше 10 шт., 40г)', price: 55, description: 'Нежные мармеладные сердечки с перечной мятой, лаймом и липовым мёдом.', category: 'food', effectText: '40г · Освежающий' },
+    { id: 'caf_gummy_tropical', itemId: 'gummy_pack_euro_tropical_cubes', nameRu: 'Мармелад «Тропические кубики» (евро-пакет 28 шт., 140г)', price: 125, description: 'Нежные желейные кубики манго-маракуйя и гуавы на натуральном пектине.', category: 'food', effectText: '140г · На пектине' },
+    { id: 'caf_gummy_berries', itemId: 'gummy_pack_doypack_berries', nameRu: 'Мармелад «Лесные ягоды и сердца» (дой-пак 48 шт., 176г)', price: 155, description: 'Натуральный ягодный мармелад на пектине и агар-агаре в дой-паке.', category: 'food', effectText: '176г · +70% Сытость, ягодный' },
     { id: 'caf_soup', itemId: 'soup', nameRu: 'Горячий бульон в суповой пиале (0.5L)', price: 110, description: 'Глубокая суповая пиала согревающего наваристого бульона.', category: 'food', effectText: '+45% Сытость, +8°C Тепло' }
   ],
   gear_shop: [
     { id: 'gea_ration', itemId: 'military_ration', nameRu: 'Армейский сухпай (ИРП)', price: 220, description: 'Зеленая герметичная коробка с пайком на сутки, спичками и ложками.', category: 'food', effectText: '+85% Сытость, +50% Энергия' },
+    { id: 'gea_gummy_mint', itemId: 'gummy_pack_mini_mint_hearts', nameRu: 'Мармелад «Мята и Эвкалипт» (саше 10 шт., 40г)', price: 55, description: 'Компактный герметичный саше с мятой, эвкалиптом и мёдом в карман рюкзака.', category: 'food', effectText: '40г · Энергия в пути' },
+    { id: 'gea_gummy_bears_xl', itemId: 'gummy_pack_doypack_bears_xl', nameRu: 'Мармелад «Медвежья семья» (дой-пак 80 шт., 200г)', price: 165, description: 'Герметичный зип-лок дой-пак: 200г быстрых углеводов для похода и вылазок.', category: 'food', effectText: '200г · +80% Сытость, +96% Энергия' },
     { id: 'gea_lukoshko', itemId: 'lukoshko', nameRu: 'Плетёное берестяное лукошко (2.0L)', price: 90, description: 'Легкая плетеная корзинка с ручкой для сбора лесных ягод и грибов.', category: 'food', effectText: 'Тара для сбора ягод/грибов' },
     { id: 'gea_blueberry_basket', itemId: 'blueberry_basket', nameRu: 'Лукошко лесной черники (1.5L)', price: 180, description: 'Свежесобранная спелая черника в берестяном лукошке.', category: 'food', effectText: '+35% Сытость, витамины' },
     { id: 'gea_chanterelle_basket', itemId: 'chanterelle_basket', nameRu: 'Лукошко свежих лисичек (1.5L)', price: 210, description: 'Отборные рыжие лесные лисички в плетёном лукошке.', category: 'food', effectText: 'Свежие лесные грибы' },
@@ -1802,6 +1839,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   : previewItem.packagingShapeNameRu || null;
                 const gummyAttrs = previewItem.gummyAttributes;
 
+                const totalWeightKg = getItemTotalWeight(previewItem);
+                const weightLabel = formatShopWeight(totalWeightKg);
+
                 return (
                   <div
                     key={item.id}
@@ -1828,6 +1868,11 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                           {item.effectText && (
                             <div className="inline-block px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-[#c68a35] font-mono border border-[#2a2e38]">
                               {item.effectText}
+                            </div>
+                          )}
+                          {weightLabel && (
+                            <div className="inline-block px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-[#cbd5e1] font-mono border border-[#2a2e38]">
+                              Вес: {weightLabel}
                             </div>
                           )}
                           {visShapeRu && (

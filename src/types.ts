@@ -1858,6 +1858,7 @@ export interface InventoryItem {
   clothingStats?: ClothingStats;
   portions?: number;       // Current remaining bites/sips/doses in this unit
   maxPortions?: number;    // Maximum/initial bites/sips/doses
+  fullnessPerBite?: number; // Fullness gain per bite/piece
   // Item Thermodynamics & Surface Heat Contact
   temperature?: number;          // Core internal temperature in °C
   surfaceTemperature?: number;   // External surface temperature in °C (outer surface touching hands/pockets)

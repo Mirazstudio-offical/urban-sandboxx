@@ -117,6 +117,27 @@ export const GUMMY_SHAPE_NAMES_RU: Record<GummyCandyShape, string> = {
   heart: 'Сердечко'
 };
 
+export const GUMMY_SHAPE_SPECS: Record<GummyCandyShape, {
+  weightKg: number;
+  volumeL: number;
+  hunger: number;
+  energy: number;
+  fullnessPerBite: number;
+  calories: number;
+  proteins: number;
+  carbs: number;
+  sugars: number;
+}> = {
+  bear: { weightKg: 0.0025, volumeL: 0.0025, hunger: 1.0, energy: 1.2, fullnessPerBite: 0.3, calories: 9, proteins: 0.2, carbs: 2.0, sugars: 1.5 },
+  berry: { weightKg: 0.0035, volumeL: 0.0035, hunger: 1.4, energy: 1.6, fullnessPerBite: 0.4, calories: 12, proteins: 0.2, carbs: 2.7, sugars: 2.0 },
+  star: { weightKg: 0.0035, volumeL: 0.0035, hunger: 1.4, energy: 1.6, fullnessPerBite: 0.4, calories: 12, proteins: 0.2, carbs: 2.7, sugars: 2.0 },
+  heart: { weightKg: 0.004, volumeL: 0.004, hunger: 1.6, energy: 1.8, fullnessPerBite: 0.5, calories: 14, proteins: 0.25, carbs: 3.1, sugars: 2.3 },
+  cube: { weightKg: 0.005, volumeL: 0.005, hunger: 2.0, energy: 2.2, fullnessPerBite: 0.6, calories: 17, proteins: 0.25, carbs: 3.9, sugars: 3.0 },
+  cola_bottle: { weightKg: 0.005, volumeL: 0.005, hunger: 2.0, energy: 2.5, fullnessPerBite: 0.6, calories: 17, proteins: 0.3, carbs: 3.9, sugars: 3.0 },
+  worm: { weightKg: 0.006, volumeL: 0.006, hunger: 2.4, energy: 2.8, fullnessPerBite: 0.7, calories: 20, proteins: 0.35, carbs: 4.7, sugars: 3.5 },
+  ring: { weightKg: 0.007, volumeL: 0.007, hunger: 2.8, energy: 3.0, fullnessPerBite: 0.8, calories: 24, proteins: 0.4, carbs: 5.5, sugars: 4.2 }
+};
+
 export const DEFAULT_GUMMY_ATTRIBUTES: GummyCandyAttributes = {
   color: '#ef4444',
   colorNameRu: 'Рубиново-красный',
@@ -4397,27 +4418,27 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
 
   // === PLASTIC CANDY & GUMMY PACKAGING (ПЛАСТИКОВЫЕ УПАКОВКИ ИЗ-ПОД МАРМЕЛАДОК И КОНФЕТ РАЗНЫХ ФОРМ И РАЗМЕРОВ) ===
-  // 1. MINI (МИНИ 0.25L) - Плоский 4-шовный саше-пакет (Flat Sachet)
+  // 1. MINI (МИНИ 0.08L) - Плоский 4-шовный саше-пакет (Flat Sachet, ~3г тара, 25–45г мармелада)
   candy_pouch_mini: {
     itemId: 'candy_pouch_mini',
-    name: 'Mini Plastic Candy Sachet (0.25L)',
-    nameRu: 'Мини-пакет от мармеладок (0.25L)',
+    name: 'Mini Plastic Candy Sachet (0.08L)',
+    nameRu: 'Мини-саше от мармеладок (0.08L)',
     category: 'misc',
     maxStack: 1,
     icon: '',
     description: 'Compact 4-side heat-sealed glossy BOPP plastic sachet from fruit gummies with V-tear notches and clear front window.',
     descriptionRu: 'Компактный запаянный пластиковый мини-пакет (форма: плоский 4-шовный саше) из-под фруктовых мармеладок с надсечками для отрыва и прозрачным окошком. Нажмите [E] для вскрытия.',
     effects: {},
-    weight: 0.008,
-    volume: 0.05,
+    weight: 0.003,
+    volume: 0.02,
     usable: true,
     isContainer: true,
     singleUseContainer: true,
     tornItemId: 'candy_pouch_mini_open',
     isTransparentPackaging: true,
-    containerCapacityL: 0.25,
-    maxContainedItemVolumeL: 0.2,
-    maxContainedWeightKg: 0.4,
+    containerCapacityL: 0.08,
+    maxContainedItemVolumeL: 0.05,
+    maxContainedWeightKg: 0.08,
     labelColor: '#ec4899',
     packagingSize: 'mini',
     packagingShape: 'flat_sachet',
@@ -4433,42 +4454,42 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     description: 'Torn-open miniature BOPP gummy sachet with glistening sugar dust residue inside the viewing window.',
     descriptionRu: 'Разорванный пластиковый саше-пакет из-под мини-мармеладок с кристалликами сахара и кислинки внутри. Можно использовать как мелкую тару.',
     effects: {},
-    weight: 0.008,
-    volume: 0.06,
+    weight: 0.003,
+    volume: 0.025,
     usable: false,
     isContainer: true,
     singleUseContainer: false,
     isTransparentPackaging: true,
-    containerCapacityL: 0.25,
-    maxContainedItemVolumeL: 0.2,
-    maxContainedWeightKg: 0.4,
+    containerCapacityL: 0.08,
+    maxContainedItemVolumeL: 0.05,
+    maxContainedWeightKg: 0.08,
     labelColor: '#ec4899',
     packagingSize: 'mini',
     packagingShape: 'flat_sachet',
     packagingShapeNameRu: 'Плоский саше-пакет (4-шовный)'
   },
 
-  // 2. SMALL (МАЛАЯ 0.5L) - Пакет-подушечка / Флоу-пак (Pillow Flow-Pack)
+  // 2. SMALL (МАЛАЯ 0.18L) - Пакет-подушечка / Флоу-пак (Pillow Flow-Pack, ~5г тара, 70–100г мармелада)
   candy_pouch_small: {
     itemId: 'candy_pouch_small',
-    name: 'Small Candy Flow-Pack Pouch (0.5L)',
-    nameRu: 'Малый флоу-пак от конфет (0.5L)',
+    name: 'Small Candy Flow-Pack Pouch (0.18L)',
+    nameRu: 'Малый флоу-пак от конфет (0.18L)',
     category: 'misc',
     maxStack: 1,
     icon: '',
     description: 'Puffy pillow-shaped polypropylene flow-pack wrapper with sawtooth crimped top/bottom weld fins and oval viewing window.',
     descriptionRu: 'Запаянный пластиковый пакет из-под желейных конфет (форма: пакет-подушечка / флоу-пак) с зубчатыми термошвами и овальным окошком. Нажмите [E] для вскрытия.',
     effects: {},
-    weight: 0.012,
-    volume: 0.09,
+    weight: 0.005,
+    volume: 0.04,
     usable: true,
     isContainer: true,
     singleUseContainer: true,
     tornItemId: 'candy_pouch_small_open',
     isTransparentPackaging: true,
-    containerCapacityL: 0.5,
-    maxContainedItemVolumeL: 0.45,
-    maxContainedWeightKg: 0.8,
+    containerCapacityL: 0.18,
+    maxContainedItemVolumeL: 0.12,
+    maxContainedWeightKg: 0.18,
     labelColor: '#f97316',
     packagingSize: 'small',
     packagingShape: 'pillow',
@@ -4484,42 +4505,42 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     description: 'Opened pillow-shaped candy flow-pack with torn top foil lip and crinkled cellophane sheen.',
     descriptionRu: 'Вскрытый пакет-подушечка из-под конфет с разорванным верхним гребешком и фольгированной изнанкой.',
     effects: {},
-    weight: 0.012,
-    volume: 0.1,
+    weight: 0.005,
+    volume: 0.045,
     usable: false,
     isContainer: true,
     singleUseContainer: false,
     isTransparentPackaging: true,
-    containerCapacityL: 0.5,
-    maxContainedItemVolumeL: 0.45,
-    maxContainedWeightKg: 0.8,
+    containerCapacityL: 0.18,
+    maxContainedItemVolumeL: 0.12,
+    maxContainedWeightKg: 0.18,
     labelColor: '#f97316',
     packagingSize: 'small',
     packagingShape: 'pillow',
     packagingShapeNameRu: 'Пакет-подушечка (Флоу-пак)'
   },
 
-  // 3. EURO HANGING (МАЛАЯ/ВИТРИННАЯ 0.6L) - Евро-пакет с хедером-подвесом (Hanging Euro-Card)
+  // 3. EURO HANGING (ВИТРИННАЯ 0.28L) - Евро-пакет с хедером-подвесом (~8г тара, 120–150г мармелада)
   candy_pouch_euro: {
     itemId: 'candy_pouch_euro',
-    name: 'Euro-Slot Candy Hanging Pouch (0.6L)',
-    nameRu: 'Евро-пакет от мармеладок (0.6L)',
+    name: 'Euro-Slot Candy Hanging Pouch (0.28L)',
+    nameRu: 'Евро-пакет от мармеладок (0.28L)',
     category: 'misc',
     maxStack: 1,
     icon: '',
     description: 'Clear retail polypropylene candy bag topped with a stiff printed header card and sombrero euroslot hang punch.',
     descriptionRu: 'Прозрачный витринный пакет из-под мармеладок (форма: евро-пакет с хедером-подвесом) с плотной цветной шапкой и еврослотом. Нажмите [E] для вскрытия.',
     effects: {},
-    weight: 0.015,
-    volume: 0.11,
+    weight: 0.008,
+    volume: 0.06,
     usable: true,
     isContainer: true,
     singleUseContainer: true,
     tornItemId: 'candy_pouch_euro_open',
     isTransparentPackaging: true,
-    containerCapacityL: 0.6,
-    maxContainedItemVolumeL: 0.5,
-    maxContainedWeightKg: 1.0,
+    containerCapacityL: 0.28,
+    maxContainedItemVolumeL: 0.18,
+    maxContainedWeightKg: 0.28,
     labelColor: '#8b5cf6',
     packagingSize: 'small',
     packagingShape: 'hanging_card',
@@ -4535,42 +4556,42 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     description: 'Torn transparent candy pouch with intact retail header card and euroslot hole.',
     descriptionRu: 'Надорванный прозрачный евро-пакет из-под мармеладок с ярким хедером-подвесом.',
     effects: {},
-    weight: 0.015,
-    volume: 0.12,
+    weight: 0.008,
+    volume: 0.065,
     usable: false,
     isContainer: true,
     singleUseContainer: false,
     isTransparentPackaging: true,
-    containerCapacityL: 0.6,
-    maxContainedItemVolumeL: 0.5,
-    maxContainedWeightKg: 1.0,
+    containerCapacityL: 0.28,
+    maxContainedItemVolumeL: 0.18,
+    maxContainedWeightKg: 0.28,
     labelColor: '#8b5cf6',
     packagingSize: 'small',
     packagingShape: 'hanging_card',
     packagingShapeNameRu: 'Евро-пакет с хедером-подвесом'
   },
 
-  // 4. MEDIUM (СРЕДНЯЯ 1.0L) - Стоячий Дой-пак с зип-локом (Stand-Up Doypack)
+  // 4. MEDIUM (СРЕДНЯЯ 0.45L) - Стоячий Дой-пак с зип-локом (~12г тара, 175–250г мармелада)
   candy_pouch: {
     itemId: 'candy_pouch',
-    name: 'Doypack Gummy Pouch (1.0L)',
-    nameRu: 'Пакет-дойпак от мармелада (1.0L)',
+    name: 'Doypack Gummy Pouch (0.45L)',
+    nameRu: 'Пакет-дойпак от мармелада (0.45L)',
     category: 'misc',
     maxStack: 1,
     icon: '',
     description: 'Glossy stand-up doypack plastic candy pouch with bottom gusset fold, double zip-lock track, tear notches, and clear oval window.',
     descriptionRu: 'Плотный глянцевый пакет из-под мармеладных мишек (форма: стоячий дой-пак с зип-локом и донной складкой). Удобно закрывается повторно. Нажмите [E] для вскрытия.',
     effects: {},
-    weight: 0.02,
-    volume: 0.16,
+    weight: 0.012,
+    volume: 0.08,
     usable: true,
     isContainer: true,
     singleUseContainer: true,
     tornItemId: 'candy_pouch_open',
     isTransparentPackaging: true,
-    containerCapacityL: 1.0,
-    maxContainedItemVolumeL: 0.85,
-    maxContainedWeightKg: 1.8,
+    containerCapacityL: 0.45,
+    maxContainedItemVolumeL: 0.25,
+    maxContainedWeightKg: 0.45,
     labelColor: '#e11d48',
     packagingSize: 'medium',
     packagingShape: 'doypack',
@@ -4586,42 +4607,42 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     description: 'Opened reusable stand-up doypack candy pouch with metallized foil lip and working zip-lock seal.',
     descriptionRu: 'Вскрытый стоячий дойпак из-под мармелада с зип-замком и прозрачным окошком. Отлично подходит для хранения мелочей и сладостей.',
     effects: {},
-    weight: 0.02,
-    volume: 0.18,
+    weight: 0.012,
+    volume: 0.09,
     usable: false,
     isContainer: true,
     singleUseContainer: false,
     isTransparentPackaging: true,
-    containerCapacityL: 1.0,
-    maxContainedItemVolumeL: 0.85,
-    maxContainedWeightKg: 1.8,
+    containerCapacityL: 0.45,
+    maxContainedItemVolumeL: 0.25,
+    maxContainedWeightKg: 0.45,
     labelColor: '#e11d48',
     packagingSize: 'medium',
     packagingShape: 'doypack',
     packagingShapeNameRu: 'Стоячий Дой-пак с зип-локом'
   },
 
-  // 5. LARGE (БОЛЬШАЯ 2.0L) - Объёмный пакет с боковыми фальцами (Gusset Standing Bag)
+  // 5. LARGE (БОЛЬШАЯ 0.90L) - Объёмный пакет с боковыми фальцами (~22г тара, 350–500г мармелада)
   candy_pouch_large: {
     itemId: 'candy_pouch_large',
-    name: 'Large Gusset Candy Bag (2.0L)',
-    nameRu: 'Большой пакет от мармеладок (2.0L)',
+    name: 'Large Gusset Candy Bag (0.90L)',
+    nameRu: 'Большой пакет от мармеладок (0.90L)',
     category: 'misc',
     maxStack: 1,
     icon: '',
     description: 'Family-size plastic candy bag with wide 3D side gusset pleats, flat block bottom, crimped clip band, and arched window.',
     descriptionRu: 'Семейная большая пачка от конфет и мармелада (форма: объёмный пакет с боковыми фальцами и плоским дном). Нажмите [E] для вскрытия.',
     effects: {},
-    weight: 0.032,
-    volume: 0.28,
+    weight: 0.022,
+    volume: 0.14,
     usable: true,
     isContainer: true,
     singleUseContainer: true,
     tornItemId: 'candy_pouch_large_open',
     isTransparentPackaging: true,
-    containerCapacityL: 2.0,
-    maxContainedItemVolumeL: 1.75,
-    maxContainedWeightKg: 3.5,
+    containerCapacityL: 0.9,
+    maxContainedItemVolumeL: 0.5,
+    maxContainedWeightKg: 0.9,
     labelColor: '#10b981',
     packagingSize: 'large',
     packagingShape: 'gusset',
@@ -4635,17 +4656,17 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 5,
     icon: '',
     description: 'Opened family-size gusseted candy bag with creased polymer pleats and wide transparent viewing window.',
-    descriptionRu: 'Вскрытая большая пачка с боковыми фальцами из-под мармелада. Вмещает до 2.0 л.',
+    descriptionRu: 'Вскрытая большая пачка с боковыми фальцами из-под мармелада. Вмещает до 0.9 л.',
     effects: {},
-    weight: 0.032,
-    volume: 0.3,
+    weight: 0.022,
+    volume: 0.16,
     usable: false,
     isContainer: true,
     singleUseContainer: false,
     isTransparentPackaging: true,
-    containerCapacityL: 2.0,
-    maxContainedItemVolumeL: 1.75,
-    maxContainedWeightKg: 3.5,
+    containerCapacityL: 0.9,
+    maxContainedItemVolumeL: 0.5,
+    maxContainedWeightKg: 0.9,
     labelColor: '#10b981',
     packagingSize: 'large',
     packagingShape: 'gusset',
@@ -6633,13 +6654,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Single chewy translucent fruit gummy candy with color, shape, and ingredients attributes.',
-    descriptionRu: 'Одна жевательная мармеладка из натурального сока, патоки и желатина со своими цветом, формой и составом.',
-    effects: { hunger: 4, energy: 4 },
-    weight: 0.008,
-    volume: 0.01,
+    descriptionRu: 'Одна жевательная мармеладка (~2.5–7 г) из натурального сока, патоки и желатина со своими цветом, формой и составом.',
+    effects: { hunger: 1.0, energy: 1.2 },
+    weight: 0.0025,
+    volume: 0.0025,
     usable: true,
     biteCount: 1,
-    fullnessPerBite: 1,
+    fullnessPerBite: 0.3,
     gummyAttributes: DEFAULT_GUMMY_ATTRIBUTES
   },
   fries_strip_single: {
@@ -7369,9 +7390,16 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
           ingredients: [...((originalDef?.gummyAttributes || def.gummyAttributes)!.ingredients || [])]
         }
       : undefined,
+    fullnessPerBite: def.fullnessPerBite,
     nutrients:
       resolvedItemId === 'gummy_candy'
-        ? { calories: 16, proteins: 0.4, fats: 0, carbs: 3.6, sugars: 2.8 }
+        ? {
+            calories: GUMMY_SHAPE_SPECS[DEFAULT_GUMMY_ATTRIBUTES.shape].calories,
+            proteins: GUMMY_SHAPE_SPECS[DEFAULT_GUMMY_ATTRIBUTES.shape].proteins,
+            fats: 0,
+            carbs: GUMMY_SHAPE_SPECS[DEFAULT_GUMMY_ATTRIBUTES.shape].carbs,
+            sugars: GUMMY_SHAPE_SPECS[DEFAULT_GUMMY_ATTRIBUTES.shape].sugars
+          }
         : undefined
   };
 
@@ -7402,6 +7430,7 @@ export function createGummyCandy(overrides?: Partial<GummyCandyAttributes>): Inv
   const item = createItem('gummy_candy', 1, undefined, true);
   const shape: GummyCandyShape = overrides?.shape || DEFAULT_GUMMY_ATTRIBUTES.shape;
   const shapeNameRu = overrides?.shapeNameRu || GUMMY_SHAPE_NAMES_RU[shape] || DEFAULT_GUMMY_ATTRIBUTES.shapeNameRu;
+  const spec = GUMMY_SHAPE_SPECS[shape] || GUMMY_SHAPE_SPECS.bear;
   const attrs: GummyCandyAttributes = {
     color: overrides?.color || DEFAULT_GUMMY_ATTRIBUTES.color,
     colorNameRu: overrides?.colorNameRu || DEFAULT_GUMMY_ATTRIBUTES.colorNameRu,
@@ -7412,10 +7441,21 @@ export function createGummyCandy(overrides?: Partial<GummyCandyAttributes>): Inv
     ingredients: overrides?.ingredients ? [...overrides.ingredients] : [...DEFAULT_GUMMY_ATTRIBUTES.ingredients]
   };
   item.gummyAttributes = attrs;
+  item.weight = spec.weightKg;
+  item.volume = spec.volumeL;
+  item.effects = { hunger: spec.hunger, energy: spec.energy };
+  item.fullnessPerBite = spec.fullnessPerBite;
+  const grams = Math.round(spec.weightKg * 10000) / 10;
   const sourPrefix = attrs.sourDust ? 'кислая ' : '';
   item.nameRu = `Мармеладка (${sourPrefix}${attrs.shapeNameRu.toLowerCase()}, ${attrs.colorNameRu.toLowerCase()})`;
-  item.descriptionRu = `Жевательный мармелад: ${attrs.shapeNameRu.toLowerCase()}${attrs.flavorRu ? ` со вкусом «${attrs.flavorRu}»` : ''}${attrs.sourDust ? ' в кислой сахарной обсыпке' : ''}. Цвет: ${attrs.colorNameRu}. Состав: ${attrs.ingredients.join(', ')}.`;
-  item.nutrients = { calories: 16, proteins: 0.4, fats: 0, carbs: 3.6, sugars: 2.8 };
+  item.descriptionRu = `Жевательный мармелад (${grams} г): ${attrs.shapeNameRu.toLowerCase()}${attrs.flavorRu ? ` со вкусом «${attrs.flavorRu}»` : ''}${attrs.sourDust ? ' в кислой сахарной обсыпке' : ''}. Цвет: ${attrs.colorNameRu}. Состав: ${attrs.ingredients.join(', ')}.`;
+  item.nutrients = {
+    calories: spec.calories,
+    proteins: spec.proteins,
+    fats: 0,
+    carbs: spec.carbs,
+    sugars: spec.sugars
+  };
   return item;
 }
 
@@ -7582,12 +7622,15 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
         const flavorSummary = Array.from(
           new Set(container.contents.map(c => c.gummyAttributes?.flavorRu).filter(Boolean))
         ).join(', ');
-        container.descriptionRu = `${customDesc} Внутри: ${numInside} шт. мармелада (${shapeSummary || singleInner.nameRu}${flavorSummary ? `; вкусы: ${flavorSummary}` : ''}). ${actionHint}`;
+        const netWeightGrams = Math.round(
+          container.contents.reduce((sum, c) => sum + (c.weight || 0) * 1000, 0)
+        );
+        container.descriptionRu = `${customDesc} Внутри: ${numInside} шт. (~${netWeightGrams} г нетто; ${shapeSummary || singleInner.nameRu}${flavorSummary ? `; вкусы: ${flavorSummary}` : ''}). ${actionHint}`;
       } else {
         container.descriptionRu = `${customDesc} Внутри: ${singleInner.nameRu} (${numInside} шт.). ${actionHint}`;
       }
-      container.weight = Number(((container.weight || 0.04) + (singleInner.weight || 0.02) * numInside).toFixed(2));
-      container.volume = Number(((container.volume || 0.08) + (singleInner.volume || 0.02) * numInside).toFixed(2));
+      // Note: container.weight & container.volume remain the empty package tare/shell;
+      // getItemTotalWeight/Volume dynamically sums container + contents without double-counting.
     }
     if (container.contents && container.contents.length > 0) {
       const firstInner = container.contents[0];
@@ -7807,7 +7850,7 @@ export function unpackSingleUseContainer(
             if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
             if (inner.category === 'food') {
               const innerDef = ITEM_CATALOG[inner.itemId];
-              const fGain = innerDef?.fullnessPerBite ?? 3;
+              const fGain = inner.fullnessPerBite ?? innerDef?.fullnessPerBite ?? 3;
               player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
               soothePanic(player, 15);
               applyConsumptionThermodynamics(player, inner.temperature ?? container.temperature ?? 20.0, inner.nameRu, false);
@@ -8503,7 +8546,7 @@ export function getItemTotalWeight(item: InventoryItem | null | undefined): numb
       total += getItemTotalWeight(child);
     }
   }
-  return Number(total.toFixed(3));
+  return Number(total.toFixed(4));
 }
 
 // Calculate recursive volume of item (including its contents and fluid capacity)
@@ -8520,7 +8563,7 @@ export function getItemTotalVolume(item: InventoryItem | null | undefined): numb
       total += getItemTotalVolume(child);
     }
   }
-  return Number(total.toFixed(3));
+  return Number(total.toFixed(4));
 }
 
 // Check if an item is bulky/large
@@ -10905,7 +10948,7 @@ export function useItemOnPlayer(
     if (energyGain) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + energyGain));
     if (sleepinessGain) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sleepinessGain));
 
-    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 3 : 1);
+    const fGain = item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 3 : 1));
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
@@ -11057,7 +11100,7 @@ export function useItemOnPlayer(
 
   // Apply Fullness for single portion items
   if (item.category === 'food'|| item.category === 'drink') {
-    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 20 : 15);
+    const fGain = item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 20 : 15));
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
@@ -12044,7 +12087,7 @@ export function useHandItemOnPlayer(
     if (energyGain) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + energyGain));
     if (sleepinessGain) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sleepinessGain));
 
-    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 3 : 1);
+    const fGain = item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 3 : 1));
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
@@ -12178,7 +12221,7 @@ export function useHandItemOnPlayer(
   if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
 
   if (item.category === 'food'|| item.category === 'drink') {
-    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 20 : 15);
+    const fGain = item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 20 : 15));
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);

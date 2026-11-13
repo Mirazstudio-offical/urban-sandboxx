@@ -35,6 +35,17 @@ import { isFluidContainerClosed, openFluidContainerIfNeeded } from '../liquidSys
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ModalShell, Tabs } from './gameUi';
 import { sound } from '../audio';
+
+function formatWeightRu(weightKg: number): string {
+  if (!weightKg || weightKg <= 0) return '0 г';
+  if (weightKg < 1) {
+    const grams = weightKg < 0.01
+      ? Number((weightKg * 1000).toFixed(1))
+      : Math.round(weightKg * 1000);
+    return `${grams} г`;
+  }
+  return `${Number(weightKg.toFixed(2))} кг`;
+}
 import {
   Package,
   Utensils,
@@ -408,7 +419,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
         <div className="gu-li-name">{handItem ? handItem.nameRu : 'Свободна'}</div>
         {handItem && (
           <div className="gu-li-sub">
-            {getItemTotalWeight(handItem)} кг · {getItemTotalVolume(handItem)} л
+            {formatWeightRu(getItemTotalWeight(handItem))} · {getItemTotalVolume(handItem)} л
             {handItem.surfaceTemperature !== undefined && (
               <span style={{ marginLeft: 8, color: handItem.surfaceTemperature >= 52 ? '#efa690' : handItem.surfaceTemperature <= 4 ? '#7dd3fc' : 'var(--gu-amber-soft)' }}>
                 {handItem.surfaceTemperature > 0 ? '+' : ''}{handItem.surfaceTemperature.toFixed(1)}°C
@@ -668,7 +679,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                   }
                                 }}
                                 className={'gu-slot' + (selectedIndex === slotIdx ? ' on' : '') + (matchesFilter(item) ? '' : ' dim') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
-                                title={`${item.nameRu}\n${getItemTotalWeight(item)} кг · ${getItemTotalVolume(item)} л`}
+                                title={`${item.nameRu}\n${formatWeightRu(getItemTotalWeight(item))} · ${getItemTotalVolume(item)} л`}
                               >
                                 {slotIdx < 6 && <span className="gu-ic-hk">{slotIdx + 1}</span>}
                                 <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
@@ -775,7 +786,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             : 'Ценность'}
                         </span>
                         <span className="gu-mut gu-mono" style={{ fontSize: 12 }}>
-                          ×{selectedEntry.item.count} шт. · {getItemTotalWeight(selectedEntry.item)} кг ·{' '}
+                          ×{selectedEntry.item.count} шт. · {formatWeightRu(getItemTotalWeight(selectedEntry.item))} ·{' '}
                           <strong style={{ color: 'var(--gu-amber-hi)' }}>{getItemTotalVolume(selectedEntry.item)} л</strong>
                         </span>
                       </div>
@@ -1389,7 +1400,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 <span>·</span>
                 <span>Объём: <strong style={{ color: 'var(--gu-amber-hi)' }}>{getItemTotalVolume(openContainer)} л</strong></span>
                 <span>·</span>
-                <span>Вес: <strong style={{ color: '#fff' }}>{getItemTotalWeight(openContainer)} кг</strong></span>
+                <span>Вес: <strong style={{ color: '#fff' }}>{formatWeightRu(getItemTotalWeight(openContainer))}</strong></span>
               </div>
             </div>
 
@@ -1406,7 +1417,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           {contItem.nameRu}
                         </div>
                         <div className="gu-item-sub gu-mono">
-                          {contItem.count} шт. · {getItemTotalWeight(contItem)} кг · {getItemTotalVolume(contItem)} л
+                          {contItem.count} шт. · {formatWeightRu(getItemTotalWeight(contItem))} · {getItemTotalVolume(contItem)} л
                         </div>
                         {contItem.gummyAttributes && (
                           <div className="gu-row2" style={{ gap: 6, marginTop: 2, fontSize: 11, color: 'var(--gu-ink-soft)' }}>
@@ -1532,7 +1543,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                               {cand.item.nameRu}
                             </div>
                             <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
-                              {getItemTotalVolume(cand.item)} л · {getItemTotalWeight(cand.item)} кг
+                              {getItemTotalVolume(cand.item)} л · {formatWeightRu(getItemTotalWeight(cand.item))}
                             </div>
                           </div>
                         </button>
@@ -1563,7 +1574,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     <div className="gu-grow">
                       <div className="gu-rw-t">{gi.item.nameRu}</div>
                       <div className="gu-rw-d gu-mono">
-                        {gi.item.count} шт. · {getItemTotalWeight(gi.item)} кг · {getItemTotalVolume(gi.item)} л
+                        {gi.item.count} шт. · {formatWeightRu(getItemTotalWeight(gi.item))} · {getItemTotalVolume(gi.item)} л
                       </div>
                     </div>
                     <div className="gu-rw-end">
