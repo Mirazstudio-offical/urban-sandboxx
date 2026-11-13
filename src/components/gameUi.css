@@ -1025,3 +1025,314 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
 @media (max-width: 720px) and (min-height: 601px) {
   .gu-st-split { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ==========================================================================
+   Shop, Auto Service & POS Cashier Terminal (gu-shop-*)
+   ========================================================================== */
+.gu-shop-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 336px;
+  gap: 16px;
+  align-items: start;
+}
+
+.gu-shop-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.gu-shop-toolbar-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gu-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gu-shop-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(20, 20, 22, 0.86);
+  border: 1px solid var(--gu-line);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s, transform 0.16s;
+}
+.gu-shop-card:hover {
+  background: rgba(28, 28, 31, 0.94);
+  border-color: rgba(201, 146, 43, 0.45);
+}
+.gu-shop-card.on {
+  background: rgba(201, 146, 43, 0.11);
+  border-color: rgba(201, 146, 43, 0.55);
+  border-left-color: var(--gu-amber);
+}
+.gu-shop-card.in-cart {
+  border-left-color: var(--gu-amber-hi);
+}
+
+.gu-shop-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.gu-shop-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.gu-shop-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gu-shop-card-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--gu-mut);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gu-shop-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--gu-ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.gu-shop-meta-sep {
+  color: var(--gu-mut-2);
+}
+
+.gu-shop-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gu-shop-price {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--gu-amber-hi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gu-shop-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(13, 14, 16, 0.9);
+  border: 1px solid var(--gu-line-2);
+}
+.gu-shop-qty-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gu-ink);
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.14s, color 0.14s;
+}
+.gu-shop-qty-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.gu-shop-qty-btn.add {
+  background: var(--gu-amber);
+  color: #1a1409;
+}
+.gu-shop-qty-btn.add:hover {
+  filter: brightness(1.12);
+}
+.gu-shop-qty-val {
+  min-width: 28px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.gu-shop-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+}
+
+.gu-shop-pos-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.gu-shop-display {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #0d0e10;
+  border: 1px solid var(--gu-line-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gu-shop-display-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--gu-mut);
+}
+.gu-shop-display-row.total {
+  padding-top: 8px;
+  border-top: 1px solid var(--gu-line);
+  color: #fff;
+  font-weight: 600;
+}
+
+.gu-shop-denom-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 8px;
+}
+.gu-shop-denom {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0d0e10;
+  border: 1px solid var(--gu-line);
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.gu-shop-denom:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(201, 146, 43, 0.55);
+  transform: translateY(-1px);
+}
+.gu-shop-denom-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gu-shop-denom-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  color: var(--gu-mut);
+  font-variant-numeric: tabular-nums;
+}
+
+.gu-shop-terminal {
+  height: 240px;
+  overflow-y: auto;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #0d0e10;
+  border: 1px solid var(--gu-line);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--gu-ink-dim);
+  scrollbar-width: thin;
+  scrollbar-color: #3a352b transparent;
+}
+
+.gu-shop-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.gu-shop-swatch-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--gu-line);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gu-ink);
+  transition: background 0.15s, border-color 0.15s;
+}
+.gu-shop-swatch-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.gu-shop-swatch-btn.on {
+  background: rgba(201, 146, 43, 0.16);
+  border-color: var(--gu-amber);
+  color: #fff;
+}
+.gu-shop-swatch-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  flex: none;
+}
+
+@media (max-width: 960px) {
+  .gu-shop-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gu-shop-side {
+    position: static;
+  }
+  .gu-shop-pos-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .gu-shop-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gu-shop-swatch-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+

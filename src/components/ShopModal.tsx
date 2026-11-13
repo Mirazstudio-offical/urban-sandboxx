@@ -34,7 +34,8 @@ import {
   RefreshCw,
   Cpu,
   Eye,
-  Disc
+  Disc,
+  Search
 } from 'lucide-react';
 import { sound } from '../audio';
 import { 
@@ -49,6 +50,7 @@ import {
 } from '../items';
 import { InventoryItem } from '../types';
 import { SHAPE_NAMES_RU } from '../liquidSystem';
+import { ModalShell, Tabs, Seg, TabItem } from './gameUi';
 
 const shopPreviewCache: Record<string, InventoryItem> = {};
 function getShopPreviewItem(itemId: string): InventoryItem {
@@ -1012,6 +1014,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos' | 'lpg'>('catalog');
   const [trayDenoms, setTrayDenoms] = useState<Record<string, number>>({});
   const [posSuccess, setPosSuccess] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedDept, setSelectedDept] = useState<string>('all');
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   // Diagnostics states
   const [isScanningEcu, setIsScanningEcu] = useState<boolean>(false);
@@ -1095,6 +1100,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       setHasScannedEcu(false);
       setIsRepairing(false);
       setRepairActionMessage(null);
+      setSearchQuery('');
+      setSelectedDept('all');
+      setSelectedItemId(null);
     }
   }, [isOpen, shop?.id]);
 
@@ -1755,1393 +1763,1666 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     }, 180);
   };
 
+  const getItemDept = (item: ShopItem): { id: string; label: string } => {
+    const id = item.itemId.toLowerCase();
+    const name = item.nameRu.toLowerCase();
+    if (isAutoShopOrGas) {
+      if (id.includes('oil') || id.includes('coolant') || id.includes('fluid') || id.includes('canister') || id.includes('water') || name.includes('масло') || name.includes('антифриз') || name.includes('тосол') || name.includes('тормозн')) {
+        return { id: 'fluids', label: 'Техжидкости и ГСМ' };
+      }
+      if (id.includes('tire') || id.includes('wheel') || id.includes('battery') || id.includes('spark') || id.includes('filter') || id.includes('belt') || id.includes('bulb') || id.includes('fuse') || name.includes('аккумулятор') || name.includes('свеч') || name.includes('фильтр') || name.includes('ламп') || name.includes('шин') || name.includes('колес')) {
+        return { id: 'parts', label: 'Запчасти и агрегаты' };
+      }
+      if (id.includes('wrench') || id.includes('jack') || id.includes('tow') || id.includes('extinguisher') || id.includes('kit') || id.includes('tape') || id.includes('sand') || name.includes('ключ') || name.includes('домкрат') || name.includes('трос') || name.includes('огнетушитель')) {
+        return { id: 'tools', label: 'Инструмент и ЧС' };
+      }
+      return { id: 'misc', label: 'Сопутствующие товары' };
+    } else {
+      if (item.effectType === 'hunger' || id.includes('bread') || id.includes('meat') || id.includes('sausage') || id.includes('cheese') || id.includes('chips') || id.includes('choc') || id.includes('gummy') || id.includes('canned') || id.includes('burger') || id.includes('shawarma') || id.includes('pie') || id.includes('noodle') || id.includes('pelmeni')) {
+        return { id: 'food', label: 'Продукты и гастрономия' };
+      }
+      if (item.effectType === 'thirst' || id.includes('water') || id.includes('cola') || id.includes('soda') || id.includes('juice') || id.includes('energy') || id.includes('milk') || id.includes('tea') || id.includes('coffee') || id.includes('kvass') || id.includes('beer')) {
+        return { id: 'drinks', label: 'Напитки и вода' };
+      }
+      if (id.includes('bag') || id.includes('box') || id.includes('crate') || id.includes('sack') || id.includes('pouch') || id.includes('case') || id.includes('Lock') || id.includes('cigarette') || id.includes('lighter') || id.includes('phone') || id.includes('watch')) {
+        return { id: 'household', label: 'Хозтовары и тара' };
+      }
+      return { id: 'other', label: 'Разное' };
+    }
+  };
+
+  const departmentsMap = new Map<string, { id: string; label: string; count: number }>();
+  catalog.forEach(item => {
+    const d = getItemDept(item);
+    const cur = departmentsMap.get(d.id);
+    if (cur) cur.count += 1;
+    else departmentsMap.set(d.id, { id: d.id, label: d.label, count: 1 });
+  });
+  const departments = Array.from(departmentsMap.values());
+
+  const filteredCatalog = catalog.filter(item => {
+    if (selectedDept !== 'all' && getItemDept(item).id !== selectedDept) return false;
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.trim().toLowerCase();
+      const matchName = item.nameRu.toLowerCase().includes(q);
+      const matchDesc = item.description.toLowerCase().includes(q);
+      const matchEff = (item.effectText || '').toLowerCase().includes(q);
+      return matchName || matchDesc || matchEff;
+    }
+    return true;
+  });
+
+  const activeInspectedItem = catalog.find(i => i.id === selectedItemId) || filteredCatalog[0] || catalog[0] || null;
+
+  const totalCartWeightKg = cart.reduce((sum, entry) => {
+    const pItem = getShopPreviewItem(entry.item.itemId);
+    return sum + getItemTotalWeight(pItem) * entry.count;
+  }, 0);
+
+  const tabItems: TabItem<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[] = [
+    {
+      id: 'catalog',
+      label: isAutoShopOrGas ? 'Автозапчасти' : 'Каталог товаров',
+      icon: <Package className="w-3.5 h-3.5" />,
+      badge: catalog.length,
+    },
+    ...(isAutoShopOrGas
+      ? ([
+          {
+            id: 'diagnostics',
+            label: 'Диагностика',
+            icon: <Activity className="w-3.5 h-3.5" />,
+            badge: dtcErrors.length > 0 ? dtcErrors.length : undefined,
+          },
+          {
+            id: 'repair',
+            label: 'Починка и ТО',
+            icon: <Wrench className="w-3.5 h-3.5" />,
+            badge: getActiveRepairs().length > 0 ? getActiveRepairs().length : undefined,
+          },
+          {
+            id: 'tuning',
+            label: 'Тюнинг и Окраска',
+            icon: <Zap className="w-3.5 h-3.5" />,
+          },
+        ] as TabItem<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[])
+      : []),
+    {
+      id: 'cart',
+      label: 'Корзина',
+      icon: <ShoppingCart className="w-3.5 h-3.5" />,
+      badge: totalCartItemsCount > 0 ? totalCartItemsCount : undefined,
+    },
+    ...(cartTotal > 0 || activeTab === 'pos'
+      ? ([
+          {
+            id: 'pos',
+            label: 'Касса оплаты',
+            icon: <Receipt className="w-3.5 h-3.5" />,
+          },
+        ] as TabItem<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[])
+      : []),
+  ];
+
+  const normalizedTab: 'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos' =
+    activeTab === 'lpg' ? 'tuning' : activeTab;
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-in fade-in duration-200 font-mono">
-      <div className="my-auto relative w-full max-w-4xl max-h-[94vh] sm:max-h-[88vh] bg-[#14161a] text-[#f0f3f6] rounded-[2px] border border-[#2a2e38] shadow-2xl flex flex-col overflow-hidden">
-        
-        {/* Top Header */}
-        <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0b0c0e] border-b border-[#2a2e38] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="p-2 rounded-[2px] bg-[#1c1f26] border border-[#2a2e38] text-[#c68a35] shrink-0">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-lg font-bold text-[#f0f3f6] uppercase tracking-wider truncate">{shop.nameRu}</h2>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-[2px] border border-[#c68a35]/40 bg-[#c68a35]/15 text-[#c68a35] font-bold shrink-0">
-                  Торговля 24/7
-                </span>
-              </div>
-              <p className="text-xs text-[#9ba3af] truncate hidden sm:block">{shop.description}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Player Cash Balance Badge */}
-            <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-[2px] bg-[#0b0c0e] border border-[#2a2e38]">
-              <Coins className="w-4 h-4 text-[#c68a35]" />
-              <span className="text-xs sm:text-sm font-mono font-bold text-[#c68a35]">{playerCash.toLocaleString()} ₽</span>
-            </div>
-
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className="p-1.5 sm:p-2 rounded-[2px] bg-[#14161a] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:bg-[#1c1f26] transition-colors cursor-pointer"
-              aria-label="Закрыть"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Navigation Bar / Tabs */}
-        <div className="px-4 py-2 bg-[#0b0c0e]/60 border-b border-[#2a2e38] flex items-center justify-between gap-2 overflow-x-auto shrink-0">
-          <div className="flex items-center gap-2 min-w-max">
-            <button
-              onClick={() => setActiveTab('catalog')}
-              className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'catalog'
-                  ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
-                  : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              {isAutoShopOrGas ? 'Автозапчасти' : 'Каталог товаров'}
-            </button>
-
-            {isAutoShopOrGas && (
-              <>
-                <button
-                  onClick={() => setActiveTab('diagnostics')}
-                  className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'diagnostics'
-                      ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
-                      : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
-                  }`}
-                >
-                  <Activity className="w-4 h-4" />
-                  Диагностика
-                  {dtcErrors.length > 0 && (
-                    <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-[2px] bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                      {dtcErrors.length}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('repair')}
-                  className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'repair'
-                      ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
-                      : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
-                  }`}
-                >
-                  <Wrench className="w-4 h-4" />
-                  Починка & ТО
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('tuning')}
-                  className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'tuning' || activeTab === 'lpg'
-                      ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
-                      : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
-                  }`}
-                >
-                  <Zap className="w-4 h-4" />
-                  Тюнинг
-                </button>
-              </>
-            )}
-
-            <button
-              onClick={() => setActiveTab('cart')}
-              className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all relative cursor-pointer ${
-                activeTab === 'cart' || activeTab === 'pos'
-                  ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
-                  : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
-              }`}
-            >
-              <ShoppingCart className="w-4 h-4" />
-              Корзина
-              {totalCartItemsCount > 0 && (
-                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-[2px] bg-[#c68a35] text-[#0b0c0e] font-mono">
-                  {totalCartItemsCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Cart Summary Header Widget */}
-          {cartTotal > 0 && (
-            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-[#2a2e38]">
-              <span className="text-xs text-[#9ba3af]">Итого в корзине:</span>
-              <span className="text-sm font-mono font-bold text-[#c68a35]">{cartTotal.toLocaleString()} ₽</span>
-              <button
-                onClick={() => setActiveTab('pos')}
-                className="px-3 py-1.5 bg-[#c68a35] hover:bg-[#d99a41] text-[#0b0c0e] font-bold text-xs rounded-[2px] flex items-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider"
-              >
-                К оплате <Receipt className="w-3.5 h-3.5" />
-              </button>
+    <ModalShell
+      eyebrow={isAutoShopOrGas ? 'СЕРВИСНЫЙ И ТОРГОВЫЙ УЗЕЛ · 24/7' : 'ГОРОДСКАЯ ТОРГОВАЯ СЕТЬ · 24/7'}
+      title={shop.nameRu}
+      subtitle={shop.description}
+      icon={<ShoppingBag className="w-5 h-5" />}
+      onClose={onClose}
+      width={1140}
+      tall
+      wipeKey={normalizedTab}
+      bodyKey={normalizedTab}
+      headerRight={
+        <div className="gu-row gu-gap-2" style={{ flexWrap: 'wrap' }}>
+          {currentVehicle && isAutoShopOrGas && (
+            <div className="gu-pill" title="Подключенный автомобиль в зоне сервиса">
+              <Car className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
+              <span>{currentVehicle.nameRu || currentVehicle.type}</span>
+              <span className="gu-code">{currentVehicle.licensePlate || 'БЕЗ НОМЕРА'}</span>
             </div>
           )}
+          <div className="gu-pill gu-pill-amber" title="Наличные в кошельке и карманах">
+            <Coins className="w-3.5 h-3.5" />
+            <span>Баланс</span>
+            <b>{playerCash.toLocaleString()} ₽</b>
+          </div>
+          {cartTotal > 0 && normalizedTab !== 'pos' && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('pos')}
+              className="gu-btn gu-btn-p gu-btn-sm"
+            >
+              <Receipt className="w-3.5 h-3.5" />
+              <span>К оплате · {cartTotal.toLocaleString()} ₽</span>
+            </button>
+          )}
         </div>
+      }
+      tabs={
+        <Tabs
+          items={tabItems}
+          value={normalizedTab}
+          onChange={(id) => setActiveTab(id)}
+          rightSlot={
+            cartTotal > 0 ? (
+              <div className="gu-row gu-gap-2" style={{ fontSize: 12, color: 'var(--gu-fg-1)' }}>
+                <span>В корзине: <b className="gu-num" style={{ color: 'var(--gu-fg-0)' }}>{totalCartItemsCount} шт.</b></span>
+                <span style={{ color: 'var(--gu-fg-3)' }}>·</span>
+                <span>Вес: <b className="gu-num" style={{ color: 'var(--gu-fg-0)' }}>{formatShopWeight(totalCartWeightKg) || '0 г'}</b></span>
+              </div>
+            ) : null
+          }
+        />
+      }
+      footer={
+        <>
+          <div className="gu-foot-Status">
+            <span>{shop.nameRu}</span>
+            <span>·</span>
+            <span>Позиций в каталоге: {catalog.length}</span>
+            {currentVehicle && isAutoShopOrGas && (
+              <>
+                <span>·</span>
+                <span>ТС в боксе: {currentVehicle.nameRu || currentVehicle.type}</span>
+              </>
+            )}
+          </div>
+          <div className="gu-row gu-gap-2">
+            {cartTotal > 0 && normalizedTab !== 'pos' && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('pos')}
+                className="gu-btn gu-btn-ok gu-btn-sm"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Перейти на кассу ({cartTotal.toLocaleString()} ₽)</span>
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="gu-btn gu-btn-g gu-btn-sm">
+              <span>Закрыть [ESC]</span>
+            </button>
+          </div>
+        </>
+      }
+    >
+      {/* CATALOG TAB */}
+      {normalizedTab === 'catalog' && (
+        <div className="gu-col gu-gap-3">
+          {/* Toolbar: Search + Department Filter Pills */}
+          <div className="gu-shop-toolbar">
+            <div className="gu-search" style={{ width: 260, flexShrink: 0 }}>
+              <Search className="w-4 h-4" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Поиск по названию или свойству..."
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="gu-icon-btn"
+                  style={{ width: 22, height: 22, border: 'none' }}
+                  aria-label="Очистить поиск"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
-        {/* Modal Main Content Area */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5">
-          {/* CATALOG TAB */}
-          {activeTab === 'catalog' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {catalog.map(item => {
-                const inCart = cart.find(i => i.item.id === item.id);
-                const countInCart = inCart ? inCart.count : 0;
-                const previewItem = getShopPreviewItem(item.itemId);
-                const isUnifiedPackage = previewItem.itemId !== item.itemId || Boolean(previewItem.fluidStorage) || Boolean(previewItem.contents && previewItem.contents.length > 0);
-                const visShapeRu = previewItem.containerVisuals
-                  ? SHAPE_NAMES_RU[previewItem.containerVisuals.shape]
-                  : previewItem.packagingShapeNameRu || null;
-                const gummyAttrs = previewItem.gummyAttributes;
+            <div className="gu-pills" style={{ flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => setSelectedDept('all')}
+                className={`gu-pill-btn ${selectedDept === 'all' ? 'is-on' : ''}`}
+              >
+                Все отделы ({catalog.length})
+              </button>
+              {departments.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => setSelectedDept(d.id)}
+                  className={`gu-pill-btn ${selectedDept === d.id ? 'is-on' : ''}`}
+                >
+                  {d.label} ({d.count})
+                </button>
+              ))}
+            </div>
+          </div>
 
-                const totalWeightKg = getItemTotalWeight(previewItem);
-                const weightLabel = formatShopWeight(totalWeightKg);
-
-                return (
-                  <div
-                    key={item.id}
-                    className="p-3 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] flex flex-col justify-between gap-3 hover:border-[#c68a35]/40 transition-colors"
+          <div className="gu-shop-layout">
+            {/* Left Column: Product Cards Grid */}
+            <div>
+              {filteredCatalog.length === 0 ? (
+                <div className="gu-empty">
+                  <Search className="gu-empty-ic" />
+                  <div className="gu-empty-t">Ничего не найдено</div>
+                  <div className="gu-empty-s">
+                    По запросу «{searchQuery}» в выбранном отделе нет подходящих товаров. Сбросьте фильтр для просмотра всего ассортимента.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedDept('all');
+                    }}
+                    className="gu-btn gu-btn-s gu-btn-sm"
+                    style={{ marginTop: 6 }}
                   >
-                    <div className="flex gap-3">
-                      <div className="w-16 h-16 rounded-[2px] bg-[#14161a] border border-[#2a2e38] flex items-center justify-center shrink-0 p-1">
-                        <ItemIconCanvas itemId={previewItem.itemId} item={previewItem} size={52} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-1">
-                          <h3 className="text-sm font-bold text-[#f0f3f6] truncate" title={item.nameRu}>{item.nameRu}</h3>
+                    Показать все товары
+                  </button>
+                </div>
+              ) : (
+                <div className="gu-shop-grid">
+                  {filteredCatalog.map((item) => {
+                    const inCart = cart.find((i) => i.item.id === item.id);
+                    const countInCart = inCart ? inCart.count : 0;
+                    const previewItem = getShopPreviewItem(item.itemId);
+                    const isUnifiedPackage =
+                      previewItem.itemId !== item.itemId ||
+                      Boolean(previewItem.fluidStorage) ||
+                      Boolean(previewItem.contents && previewItem.contents.length > 0);
+                    const visShapeRu = previewItem.containerVisuals
+                      ? SHAPE_NAMES_RU[previewItem.containerVisuals.shape]
+                      : previewItem.packagingShapeNameRu || null;
+                    const gummyAttrs = previewItem.gummyAttributes;
+                    const totalWeightKg = getItemTotalWeight(previewItem);
+                    const weightLabel = formatShopWeight(totalWeightKg);
+                    const isSelected = activeInspectedItem?.id === item.id;
+
+                    const metaSegments: React.ReactNode[] = [];
+                    if (item.effectText) {
+                      metaSegments.push(<b key="eff">{item.effectText}</b>);
+                    }
+                    if (weightLabel) {
+                      metaSegments.push(<span key="wt">{weightLabel}</span>);
+                    }
+                    if (visShapeRu) {
+                      metaSegments.push(<span key="sh">{visShapeRu}</span>);
+                    }
+                    if (gummyAttrs) {
+                      metaSegments.push(
+                        <span key="gm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: 2,
+                              backgroundColor: gummyAttrs.color,
+                              border: '1px solid rgba(255,255,255,0.35)',
+                              display: 'inline-block',
+                            }}
+                          />
+                          {gummyAttrs.shapeNameRu}
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedItemId(item.id)}
+                        className={`gu-shop-card ${countInCart > 0 ? 'is-in-cart' : ''} ${isSelected ? 'is-selected' : ''}`}
+                      >
+                        <div className="gu-shop-card-top">
+                          <div className="gu-shop-icon">
+                            <ItemIconCanvas itemId={previewItem.itemId} item={previewItem} size={50} />
+                          </div>
+                          <div className="gu-shop-card-head">
+                            <h3 className="gu-shop-card-title">{item.nameRu}</h3>
+                            {isUnifiedPackage && (
+                              <div className="gu-shop-card-pkg">{previewItem.nameRu}</div>
+                            )}
+                          </div>
                         </div>
-                        {isUnifiedPackage && (
-                          <div
-                            className="text-[10px] font-mono text-emerald-400/90 truncate mt-0.5"
-                            title={previewItem.nameRu}
-                          >
-                            {previewItem.nameRu}
+
+                        <p className="gu-shop-card-desc">{item.description}</p>
+
+                        {metaSegments.length > 0 && (
+                          <div className="gu-shop-meta-line">
+                            {metaSegments.map((seg, idx) => (
+                              <React.Fragment key={idx}>
+                                {idx > 0 && <span className="gu-shop-meta-dot">·</span>}
+                                {seg}
+                              </React.Fragment>
+                            ))}
                           </div>
                         )}
-                        <p className="text-xs text-[#9ba3af] line-clamp-2 mt-0.5">{item.description}</p>
-                        <div className="flex flex-wrap items-center gap-1 mt-1">
-                          {item.effectText && (
-                            <div className="inline-block px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-[#c68a35] font-mono border border-[#2a2e38]">
-                              {item.effectText}
+
+                        <div className="gu-shop-card-foot" onClick={(e) => e.stopPropagation()}>
+                          <div className="gu-shop-price">
+                            {item.price.toLocaleString()}
+                            <small>₽</small>
+                          </div>
+
+                          {countInCart > 0 ? (
+                            <div className="gu-shop-qty">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOneFromCart(item.id)}
+                                aria-label="Убрать 1 шт."
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span>{countInCart}</span>
+                              <button
+                                type="button"
+                                className="is-plus"
+                                onClick={() => handleAddToCart(item)}
+                                aria-label="Добавить ещё 1 шт."
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
                             </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedItemId(item.id);
+                                handleAddToCart(item);
+                              }}
+                              className="gu-btn gu-btn-s gu-btn-sm"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>В корзину</span>
+                            </button>
                           )}
-                          {weightLabel && (
-                            <div className="inline-block px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-[#cbd5e1] font-mono border border-[#2a2e38]">
-                              Вес: {weightLabel}
-                            </div>
-                          )}
-                          {visShapeRu && (
-                            <div className="inline-block px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-sky-300 font-mono border border-[#2a2e38]">
-                              Форма: {visShapeRu}
-                            </div>
-                          )}
-                          {gummyAttrs && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-[#e2e8f0] font-mono border border-[#2a2e38]">
-                              <span
-                                className="inline-block w-2 h-2 rounded-[1px] border border-white/30"
-                                style={{ backgroundColor: gummyAttrs.color }}
-                              />
-                              <span>{gummyAttrs.shapeNameRu} · {gummyAttrs.colorNameRu}</span>
-                            </div>
-                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Inspector + Live Receipt */}
+            <aside className="gu-shop-side">
+              {/* Item Inspector Card */}
+              {activeInspectedItem && (() => {
+                const preview = getShopPreviewItem(activeInspectedItem.itemId);
+                const weightKg = getItemTotalWeight(preview);
+                const weightStr = formatShopWeight(weightKg) || '—';
+                const shapeStr = preview.containerVisuals
+                  ? SHAPE_NAMES_RU[preview.containerVisuals.shape]
+                  : preview.packagingShapeNameRu || 'Стандартная';
+                const inCartEntry = cart.find((c) => c.item.id === activeInspectedItem.id);
+                const qtyInCart = inCartEntry ? inCartEntry.count : 0;
+                const deptInfo = getItemDept(activeInspectedItem);
+
+                return (
+                  <div className="gu-panel gu-pad gu-col gu-gap-3">
+                    <div className="gu-sec" style={{ marginBottom: 0 }}>
+                      <span>Карточка товара</span>
+                      <span className="gu-sec-line" />
+                      <span className="gu-tag">{deptInfo.label}</span>
+                    </div>
+
+                    <div className="gu-row gu-gap-3" style={{ alignItems: 'flex-start' }}>
+                      <div className="gu-shop-icon" style={{ width: 68, height: 68 }}>
+                        <ItemIconCanvas itemId={preview.itemId} item={preview} size={58} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gu-fg-0)', lineHeight: 1.25 }}>
+                          {activeInspectedItem.nameRu}
+                        </div>
+                        {preview.nameRu !== activeInspectedItem.nameRu && (
+                          <div style={{ fontSize: 11.5, color: 'var(--gu-ok)', marginTop: 3 }}>
+                            Фасовка: {preview.nameRu}
+                          </div>
+                        )}
+                        <div className="gu-shop-price" style={{ marginTop: 6, fontSize: 22 }}>
+                          {activeInspectedItem.price.toLocaleString()}
+                          <small>₽ / шт.</small>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-[#2a2e38]">
-                      <div className="text-base font-mono font-bold text-[#c68a35]">
-                        {item.price.toLocaleString()} ₽
-                      </div>
+                    <p style={{ fontSize: 12.5, color: 'var(--gu-fg-1)', lineHeight: 1.5, margin: 0 }}>
+                      {activeInspectedItem.description}
+                    </p>
 
-                      {countInCart > 0 ? (
-                        <div className="flex items-center gap-2 bg-[#14161a] border border-[#2a2e38] rounded-[2px] p-1">
-                          <button
-                            onClick={() => handleRemoveOneFromCart(item.id)}
-                            className="p-1 min-h-[32px] min-w-[32px] flex items-center justify-center rounded-[2px] bg-[#1c1f26] text-[#cbd5e1] hover:text-[#f0f3f6] cursor-pointer"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="px-2 text-xs font-mono font-bold text-[#f0f3f6]">{countInCart}</span>
-                          <button
-                            onClick={() => handleAddToCart(item)}
-                            className="p-1 min-h-[32px] min-w-[32px] flex items-center justify-center rounded-[2px] bg-[#c68a35] text-[#0b0c0e] hover:bg-[#d99a41] cursor-pointer font-bold"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
+                    <div className="gu-kv-grid">
+                      <div className="gu-kv">
+                        <span className="gu-kv-k">Масса брутто</span>
+                        <span className="gu-kv-v">{weightStr}</span>
+                      </div>
+                      <div className="gu-kv">
+                        <span className="gu-kv-k">Упаковка / Форма</span>
+                        <span className="gu-kv-v">{shapeStr}</span>
+                      </div>
+                      {activeInspectedItem.effectText && (
+                        <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                          <span className="gu-kv-k">Потребительские свойства</span>
+                          <span className="gu-kv-v is-amber">{activeInspectedItem.effectText}</span>
                         </div>
+                      )}
+                    </div>
+
+                    <div className="gu-row-between" style={{ paddingTop: 4 }}>
+                      {qtyInCart > 0 ? (
+                        <>
+                          <span style={{ fontSize: 12, color: 'var(--gu-fg-1)' }}>
+                            В корзине: <b className="gu-num" style={{ color: 'var(--gu-fg-0)' }}>{qtyInCart} шт.</b> ({(qtyInCart * activeInspectedItem.price).toLocaleString()} ₽)
+                          </span>
+                          <div className="gu-shop-qty">
+                            <button type="button" onClick={() => handleRemoveOneFromCart(activeInspectedItem.id)}>
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span>{qtyInCart}</span>
+                            <button type="button" className="is-plus" onClick={() => handleAddToCart(activeInspectedItem)}>
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
                       ) : (
                         <button
-                          onClick={() => handleAddToCart(item)}
-                          className="px-3 py-1.5 bg-[#14161a] hover:bg-[#c68a35] text-[#cbd5e1] hover:text-[#0b0c0e] font-bold text-xs rounded-[2px] border border-[#2a2e38] hover:border-[#c68a35] flex items-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider"
+                          type="button"
+                          onClick={() => handleAddToCart(activeInspectedItem)}
+                          className="gu-btn gu-btn-p gu-btn-block"
                         >
                           <Plus className="w-4 h-4" />
-                          В корзину
+                          <span>Добавить в корзину · {activeInspectedItem.price.toLocaleString()} ₽</span>
                         </button>
                       )}
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
+              })()}
 
-          {/* DIAGNOSTICS TAB */}
-          {activeTab === 'diagnostics' && (
-            <div className="max-w-3xl mx-auto space-y-4">
-              {/* Vehicle Connection Card */}
-              <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                    <Activity className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-zinc-100">
-                        {currentVehicle ? (currentVehicle.nameRu || currentVehicle.type) : 'Автомобиль не подключен'}
-                      </h3>
-                      {currentVehicle && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                          {currentVehicle.licensePlate || 'БЕЗ НОМЕРА'}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-zinc-400">
-                      {currentVehicle
-                        ? 'Электронный блок управления (ECU) подключен через разъем OBD-II'
-                        : 'Подгоните автомобиль к боксу мастерской для сканирования'}
-                    </p>
-                  </div>
-                </div>
-
-                {currentVehicle && (
-                  <button
-                    disabled={isScanningEcu}
-                    onClick={handleScanEcu}
-                    className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors shrink-0 shadow-md"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isScanningEcu ? 'animate-spin' : ''}`} />
-                    {isScanningEcu ? 'Сканирование ECU...' : 'Сканировать OBD-II'}
-                  </button>
-                )}
-              </div>
-
-              {!currentVehicle ? (
-                <div className="p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center space-y-3">
-                  <Car className="w-12 h-12 mx-auto text-zinc-600" />
-                  <p className="text-sm text-zinc-300 font-medium">Транспортное средство не обнаружено в рабочей зоне</p>
-                  <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                    Загоните ваш автомобиль на эстакаду или припаркуйтесь у ворот сервиса, чтобы считать показания датчиков и коды неисправностей.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {/* OBD-II Fault Codes / DTC Section */}
-                  <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                      <div className="flex items-center gap-2">
-                        <Cpu className="w-5 h-5 text-sky-400" />
-                        <h4 className="text-sm font-bold text-zinc-100">Журнал ошибок OBD-II (DTC)</h4>
-                      </div>
-                      <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded ${
-                        dtcErrors.length === 0
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                      }`}>
-                        {dtcErrors.length === 0 ? 'Ошибок нет' : `Кодов: ${dtcErrors.length}`}
-                      </span>
-                    </div>
-
-                    {dtcErrors.length === 0 ? (
-                      <div className="py-4 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        Все электронные системы, датчики и исполнительные механизмы функционируют штатно.
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {dtcErrors.map((err, idx) => (
-                          <div
-                            key={idx}
-                            className={`p-3 rounded-xl border flex items-start gap-3 ${
-                              err.severity === 'critical'
-                                ? 'bg-rose-950/20 border-rose-800/40 text-rose-200'
-                                : 'bg-amber-950/20 border-amber-800/40 text-amber-200'
-                            }`}
-                          >
-                            <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${
-                              err.severity === 'critical' ? 'text-rose-400' : 'text-amber-400'
-                            }`} />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-xs bg-zinc-950/80 px-1.5 py-0.5 rounded border border-zinc-800 text-white">
-                                  {err.code}
-                                </span>
-                                <span className="font-bold text-xs">{err.title}</span>
-                              </div>
-                              <p className="text-[11px] text-zinc-300 mt-1">{err.desc}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Diagnostic Modules Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Engine & Fluids */}
-                    <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
-                        <Gauge className="w-4 h-4 text-amber-400" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">ДВС и Техжидкости</h4>
-                      </div>
-
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400">Здоровье цилиндро-поршневой:</span>
-                          <span className={`font-mono font-bold ${(currentVehicle.engineState?.engineHealth ?? 100) < 50 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                            {Math.round(currentVehicle.engineState?.engineHealth ?? 100)}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-zinc-950 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className={`h-full ${
-                              (currentVehicle.engineState?.engineHealth ?? 100) < 50 ? 'bg-rose-500' : 'bg-emerald-500'
-                            }`}
-                            style={{ width: `${Math.max(5, Math.min(100, currentVehicle.engineState?.engineHealth ?? 100))}%` }}
-                          />
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Моторное масло:</span>
-                          <span className="font-mono font-bold text-zinc-200">
-                            {Math.round(currentVehicle.engineState?.oilLevel ?? 100)}% 
-                            {currentVehicle.engineState?.oilPunctured && ' (ПРОБОЙ КАРТЕРА)'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Охлаждающая жидкость:</span>
-                          <span className="font-mono font-bold text-zinc-200">
-                            {Math.round(currentVehicle.engineState?.radiatorWater ?? 100)}%
-                            {currentVehicle.engineState?.radiatorPunctured && ' (ТЕЧЬ РАДИАТОРА)'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Состояние блока:</span>
-                          <span className={`font-bold ${currentVehicle.engineState?.isSeized ? 'text-rose-400' : 'text-emerald-400'}`}>
-                            {currentVehicle.engineState?.isSeized ? 'КЛИН ДВИГАТЕЛЯ' : 'Исправен, не заклинен'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Suspension & Alignment */}
-                    <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
-                        <Disc className="w-4 h-4 text-emerald-400" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">Подвеска и Рулевое</h4>
-                      </div>
-
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400">Увод руля (Сход-развал):</span>
-                          <span className={`font-mono font-bold ${Math.abs(currentVehicle.damage?.steeringDrift || 0) > 0.05 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                            {Math.abs(currentVehicle.damage?.steeringDrift || 0) < 0.01
-                              ? 'Идеально (0.0°)'
-                              : `${((currentVehicle.damage?.steeringDrift || 0) * 10).toFixed(1)}° ${
-                                  (currentVehicle.damage?.steeringDrift || 0) < 0 ? 'влево' : 'вправо'
-                                }`}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Стойка передняя левая:</span>
-                          <span className="font-mono text-zinc-200">
-                            {100 - Math.round((currentVehicle.damage?.frontLeftSuspensionDamage || 0) * 100)}%
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Стойка передняя правая:</span>
-                          <span className="font-mono text-zinc-200">
-                            {100 - Math.round((currentVehicle.damage?.frontRightSuspensionDamage || 0) * 100)}%
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Модификация шасси:</span>
-                          <span className="font-bold text-amber-400">
-                            {isHeavySuspended ? 'Bilstein HD (Усиленная)' : 'Стандартная подвеска'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Electrical & Fuel */}
-                    <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
-                        <Zap className="w-4 h-4 text-sky-400" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">Электрика и Топливо</h4>
-                      </div>
-
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400">Заряд аккумулятора (АКБ):</span>
-                          <span className="font-mono font-bold text-emerald-400">
-                            {Math.round(currentVehicle.engineState?.batteryCharge ?? 100)}%
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Состояние стартера:</span>
-                          <span className="font-bold text-zinc-200">
-                            {currentVehicle.engineState?.starterWorking === false ? 'Неисправен' : 'Штатный'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Топливная система:</span>
-                          <span className="font-bold text-zinc-200">
-                            {currentVehicle.fuelSystem?.hasLPG ? 'Бензин + Газ (ГБО Lovato 4)' : 'Бензин/Дизель'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Прошивка ЭБУ:</span>
-                          <span className="font-bold text-amber-400">
-                            {isChiptuned ? 'Stage 1 ECU (+15% л.с.)' : 'Заводская прошивка'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Body & Optics */}
-                    <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
-                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">Кузов и Оптика</h4>
-                      </div>
-
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400">Деформация кузова:</span>
-                          <span className={`font-mono font-bold ${
-                            ((currentVehicle.damage?.frontCrumple || 0) + (currentVehicle.damage?.rearCrumple || 0)) > 2
-                              ? 'text-amber-400'
-                              : 'text-emerald-400'
-                          }`}>
-                            {((currentVehicle.damage?.frontCrumple || 0) + (currentVehicle.damage?.rearCrumple || 0)) > 2
-                              ? 'Есть повреждения'
-                              : 'Геометрия в норме'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Остекление:</span>
-                          <span className="font-bold text-zinc-200">
-                            {currentVehicle.damage?.windshieldCracked ? 'Трещина лобового стекла' : 'Целое'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Передние фары:</span>
-                          <span className="font-bold text-zinc-200">
-                            {currentVehicle.damage?.leftHeadlightBroken || currentVehicle.damage?.rightHeadlightBroken
-                              ? 'Повреждена фара'
-                              : 'Исправны'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1">
-                          <span className="text-zinc-400">Камера заднего вида:</span>
-                          <span className="font-bold text-zinc-200">
-                            {hasCameraInstalled ? 'Подключена' : 'Отсутствует'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Fast Action Shortcuts */}
-                  <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
-                    <span className="text-xs text-zinc-400">
-                      Обнаружены неисправности или хотите улучшить характеристики?
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setActiveTab('repair')}
-                        className="px-3 py-1.5 min-h-[36px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors"
-                      >
-                        <Wrench className="w-3.5 h-3.5" /> В раздел починки
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('tuning')}
-                        className="px-3 py-1.5 min-h-[36px] bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors"
-                      >
-                        <Zap className="w-3.5 h-3.5" /> В тюнинг
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* REPAIR & SERVICE TAB */}
-          {activeTab === 'repair' && (
-            <div className="max-w-3xl mx-auto space-y-4">
-              {/* Status Message Notification */}
-              {repairActionMessage && (
-                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-600/50 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  {repairActionMessage}
-                </div>
-              )}
-
-              {/* Connected Vehicle Header */}
-              <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <Wrench className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100">Починка & Техническое обслуживание</h3>
-                    <p className="text-xs text-zinc-400">
-                      {currentVehicle
-                        ? `Автомобиль: ${currentVehicle.nameRu || currentVehicle.type}`
-                        : 'Подгоните ТС в бокс СТО для калькуляции наряд-заказа'}
-                    </p>
-                  </div>
-                </div>
-
-                {currentVehicle && (
-                  <div className="text-right hidden sm:block">
-                    <span className="text-xs text-zinc-400 block">Баланс:</span>
-                    <span className="text-sm font-mono font-bold text-emerald-400">
-                      {playerCash.toLocaleString()} ₽
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {!currentVehicle ? (
-                <div className="p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center space-y-3">
-                  <Car className="w-12 h-12 mx-auto text-zinc-600" />
-                  <p className="text-sm text-zinc-300 font-medium">Транспортное средство не обнаружено на подъемнике</p>
-                  <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                    Загоните вашу машину на двухстоечный подъемник автосервиса PIT-STOP, чтобы компьютерная диагностика могла составить дефектовочную ведомость и рассчитать наряд-заказ.
-                  </p>
-                </div>
-              ) : isRepairing ? (
-                /* IMMERSIVE MECHANIC LOG TERMINAL CONSOLE */
-                <div className="p-5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4 shadow-inner">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
-                    <div className="flex items-center gap-2">
-                      <Cpu className="w-5 h-5 text-sky-400 animate-pulse" />
-                      <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
-                        СТЕНД СТО PIT-STOP — ЦИКЛ РЕМОНТА ТС
-                      </h4>
-                    </div>
-                    <span className="text-xs font-mono text-zinc-500">
-                      Шаг {currentRepairStep} из {totalRepairStepsCount}
-                    </span>
-                  </div>
-
-                  {/* Terminal Screen */}
-                  <div className="h-64 overflow-y-auto bg-black/90 p-4 rounded-xl border border-zinc-900 font-mono text-[11px] leading-relaxed text-zinc-300 space-y-1.5 shadow-inner select-none scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                    {repairLogs.map((log, idx) => (
-                      <div
-                        key={idx}
-                        className={`transition-all duration-300 ${
-                          log.startsWith('>>>')
-                            ? 'text-sky-400 font-bold'
-                            : log.includes('[ОК]') || log.includes('УСПЕШНО')
-                            ? 'text-emerald-400'
-                            : 'text-zinc-300'
-                        }`}
-                      >
-                        {log}
-                      </div>
-                    ))}
-                    {/* Blinking green prompt */}
-                    <div className="flex items-center gap-1 text-sky-400 animate-pulse">
-                      <span>_</span>
-                    </div>
-                  </div>
-
-                  {/* Analog Physical Progress Bar */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-[10px] font-mono text-zinc-400">
-                      <span>ПРОГРЕСС РЕМОНТНЫХ РАБОТ</span>
-                      <span>{Math.round((currentRepairStep / (totalRepairStepsCount || 1)) * 100)}%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800 p-0.5">
-                      <div
-                        className="h-full bg-sky-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
-                        style={{ width: `${(currentRepairStep / (totalRepairStepsCount || 1)) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <p className="text-[10px] text-zinc-500 text-center italic">
-                    Камера заблокирована. Механики производят работы согласно регламенту наряд-заказа СТО.
-                  </p>
-                </div>
-              ) : (
-                /* WORK ORDER PREVIEW */
-                <div className="space-y-4">
-                  {getActiveRepairs().length === 0 ? (
-                    <div className="p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center space-y-4">
-                      <div className="p-3 w-14 h-14 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full mx-auto flex items-center justify-center">
-                        <CheckCircle2 className="w-8 h-8" />
-                      </div>
-                      <div className="space-y-2">
-                        <h4 className="text-base font-bold text-zinc-100">Дефектовка завершена. Проблем нет!</h4>
-                        <p className="text-xs text-zinc-400 max-w-md mx-auto">
-                          Компьютерная диагностика ЭБУ и механический осмотр подвески не выявили никаких отклонений или повреждений. Ваш автомобиль находится в безупречном состоянии!
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between pb-1 border-b border-zinc-800">
-                        <span className="text-xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
-                          ОБНАРУЖЕННЫЕ НЕИСПРАВНОСТИ К ОПЛАТЕ:
-                        </span>
-                        <span className="text-xs font-mono text-zinc-500">
-                          {getActiveRepairs().length} позиций
-                        </span>
-                      </div>
-
-                      <div className="space-y-3">
-                        {getActiveRepairs().map((rep) => (
-                          <div
-                            key={rep.id}
-                            className="p-4 bg-zinc-900/80 border border-zinc-800/80 rounded-2xl hover:border-zinc-700/80 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
-                          >
-                            <div className="space-y-1 max-w-xl">
-                              <h4 className="text-sm font-bold text-zinc-200">{rep.title}</h4>
-                              <p className="text-xs text-zinc-400 leading-relaxed">{rep.desc}</p>
-                            </div>
-                            <div className="font-mono font-bold text-sm text-emerald-400 bg-zinc-950/80 px-3 py-1.5 rounded-xl border border-zinc-800/50 shrink-0">
-                              {rep.price.toLocaleString()} ₽
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* SUMMARY COMPILATION & SUBMIT CARD */}
-                      <div className="p-5 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-4">
-                        <div className="flex justify-between items-center pb-3 border-b border-zinc-800/80">
-                          <span className="text-xs font-bold text-zinc-400 uppercase">ИТОГО К ОПЛАТЕ (ЗАПЧАСТИ + РАБОТЫ):</span>
-                          <span className="text-lg font-mono font-black text-emerald-400">
-                            {getActiveRepairs().reduce((sum, r) => sum + r.price, 0).toLocaleString()} ₽
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                          <div className="text-zinc-400">
-                            Ваш кошелек: <span className="font-mono text-zinc-200">{playerCash.toLocaleString()} ₽</span>
-                          </div>
-                          {playerCash < getActiveRepairs().reduce((sum, r) => sum + r.price, 0) && (
-                            <span className="text-rose-400 font-semibold bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20">
-                              Недостаточно средств на балансе!
-                            </span>
-                          )}
-                        </div>
-
-                        <button
-                          disabled={playerCash < getActiveRepairs().reduce((sum, r) => sum + r.price, 0)}
-                          onClick={handleFullRepair}
-                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 uppercase tracking-wider"
-                        >
-                          <Wrench className="w-4 h-4" />
-                          Утвердить наряд-заказ и начать ремонт
-                        </button>
-                      </div>
-                    </div>
+              {/* Live Mini-Cart Receipt Panel */}
+              <div className="gu-panel gu-pad gu-col gu-gap-3">
+                <div className="gu-sec" style={{ marginBottom: 0 }}>
+                  <span>Текущий чек</span>
+                  <span className="gu-sec-line" />
+                  {cart.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearCart}
+                      className="gu-btn gu-btn-g gu-btn-xs"
+                      style={{ height: 22, padding: '0 6px' }}
+                    >
+                      <Trash2 className="w-3 h-3" /> Очистить
+                    </button>
                   )}
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* TUNING & UPGRADES TAB */}
-          {(activeTab === 'tuning' || activeTab === 'lpg') && (
-            <div className="max-w-3xl mx-auto space-y-4">
-              {/* Header */}
-              <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <Zap className="w-6 h-6" />
+                {cart.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--gu-fg-2)', padding: '10px 0', textAlign: 'center' }}>
+                    Корзина пуста. Выберите товары в каталоге слева.
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100">Тюнинг, Апгрейды & Малярный цех</h3>
-                    <p className="text-xs text-zinc-400">
-                      {currentVehicle
-                        ? `Модификация: ${currentVehicle.nameRu || currentVehicle.type}`
-                        : 'Подгоните автомобиль к боксу тюнинга для установки опций'}
-                    </p>
-                  </div>
-                </div>
-
-                {currentVehicle && (
-                  <div className="text-right hidden sm:block">
-                    <span className="text-xs text-zinc-400 block">Баланс:</span>
-                    <span className="text-sm font-mono font-bold text-emerald-400">
-                      {playerCash.toLocaleString()} ₽
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {!currentVehicle ? (
-                <div className="p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center space-y-3">
-                  <Car className="w-12 h-12 mx-auto text-zinc-600" />
-                  <p className="text-sm text-zinc-300 font-medium">Транспортное средство не обнаружено в боксе</p>
-                  <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                    Припаркуйте автомобиль в боксе автомастерской, чтобы выполнить прошивку Stage 1, установить подвеску Bilstein HD, ГБО или покрасить кузов.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {/* Tuning 1: Stage 1 ECU Remap */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
-                        <Gauge className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-zinc-100">Чип-тюнинг ECU (Stage 1 Прошивка)</h4>
-                          {isChiptuned && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              Установлено
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Оптимизация карт впрыска и угла зажигания. Прирост мощности и крутящего момента +15%, мгновенный отклик на педаль газа.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        {CHIPTUNING_PRICE.toLocaleString()} ₽
-                      </span>
-                      <button
-                        disabled={installingChiptuning || isChiptuned || playerCash < CHIPTUNING_PRICE}
-                        onClick={handleInstallChiptuning}
-                        className="px-4 py-2 min-h-[44px] bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                      >
-                        {installingChiptuning ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" /> {chiptuningProgress}%
-                          </>
-                        ) : isChiptuned ? (
-                          <>
-                            <Check className="w-4 h-4" /> Прошито
-                          </>
-                        ) : (
-                          'Прошить Stage 1'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Tuning 2: Bilstein HD Suspension */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
-                        <Disc className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-zinc-100">Усиленная подвеска Bilstein HD</h4>
-                          {isHeavySuspended && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              Установлено
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Однотрубные газомасляные стойки и пружины с прогрессивной навивкой. Поглощает удары на грунте, снижает износ подвески на 40%.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        {SUSPENSION_PRICE.toLocaleString()} ₽
-                      </span>
-                      <button
-                        disabled={installingSuspension || isHeavySuspended || playerCash < SUSPENSION_PRICE}
-                        onClick={handleInstallSuspension}
-                        className="px-4 py-2 min-h-[44px] bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                      >
-                        {installingSuspension ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" /> {suspensionProgress}%
-                          </>
-                        ) : isHeavySuspended ? (
-                          <>
-                            <Check className="w-4 h-4" /> Установлено
-                          </>
-                        ) : (
-                          'Установить Bilstein'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Tuning 3: LPG System (Lovato 4) */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                        <Flame className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-zinc-100">Установка ГБО Lovato 4 (Пропан 50L)</h4>
-                          {hasLpgInstalled && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              Баллон 50L установлен
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Перевод на сжиженный пропан-бутан. Переключение на газ клавишей на приборной панели, экономия на стоимости топлива в 2 раза.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        {lpgConfig ? `${lpgConfig.price.toLocaleString()} ₽` : '35,000 ₽'}
-                      </span>
-                      {hasLpgInstalled ? (
-                        <button
-                          onClick={handleRemoveLPG}
-                          className="px-4 py-2 min-h-[44px] bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 font-bold text-xs rounded-xl transition-colors whitespace-nowrap"
-                        >
-                          Демонтировать
-                        </button>
-                      ) : (
-                        <button
-                          disabled={installingLpg || !lpgConfig?.isAvailable || playerCash < (lpgConfig?.price || 35000)}
-                          onClick={handleInstallLPG}
-                          className="px-4 py-2 min-h-[44px] bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                        >
-                          {installingLpg ? `Монтаж (${lpgProgress}%)` : 'Установить ГБО'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Tuning 4: Rearview Camera */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
-                        <Video className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-zinc-100">Камера заднего вида с разметкой</h4>
-                          {hasCameraInstalled && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              {isCameraFactoryInstalled ? 'Заводская опция' : 'Установлена'}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Широкоугольный объектив с подсветкой и динамическими траекторными линиями, поворачивающимися вместе с рулем при движении назад.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        {isCameraFactoryInstalled ? 'Бесплатно' : `${CAMERA_PRICE.toLocaleString()} ₽`}
-                      </span>
-                      {isCameraFactoryInstalled ? (
-                        <span className="text-xs text-emerald-400 font-bold px-3 py-2">В базе</span>
-                      ) : hasCameraInstalled ? (
-                        <button
-                          onClick={handleRemoveCamera}
-                          className="px-4 py-2 min-h-[44px] bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 font-bold text-xs rounded-xl transition-colors whitespace-nowrap"
-                        >
-                          Демонтировать
-                        </button>
-                      ) : (
-                        <button
-                          disabled={installingCamera || playerCash < CAMERA_PRICE}
-                          onClick={handleInstallCamera}
-                          className="px-4 py-2 min-h-[44px] bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                        >
-                          {installingCamera ? `Монтаж (${cameraProgress}%)` : 'Установить камеру'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Tuning 5: Custom Spray Paint Booth */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl space-y-4 hover:border-zinc-700 transition-colors">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
-                          <Palette className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-zinc-100">Покрасочная камера (Малярный цех)</h4>
-                          <p className="text-xs text-zinc-400 mt-0.5">
-                            Профессиональная сушка и нанесение эмали. Выберите элемент кузова и оттенок.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
-                        <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                          {PAINT_PRICE.toLocaleString()} ₽
-                        </span>
-
-                        <button
-                          disabled={isPainting || playerCash < PAINT_PRICE}
-                          onClick={handlePaintVehicle}
-                          className="px-5 py-2 min-h-[44px] bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap shadow-md"
-                        >
-                          {isPainting ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" /> {paintProgress}%
-                            </>
-                          ) : (
-                            <>
-                              <Palette className="w-4 h-4" /> Покрасить
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Paint Target Selector */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-400 mr-2">Элемент:</span>
-                      <button
-                        onClick={() => setSelectedPaintTarget('body')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all min-h-[38px] ${
-                          selectedPaintTarget === 'body'
-                            ? 'bg-purple-600 text-white shadow'
-                            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                        }`}
-                      >
-                        Основной кузов
-                      </button>
-                      <button
-                        onClick={() => setSelectedPaintTarget('roof')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all min-h-[38px] ${
-                          selectedPaintTarget === 'roof'
-                            ? 'bg-purple-600 text-white shadow'
-                            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                        }`}
-                      >
-                        Крыша (Контраст)
-                      </button>
-                    </div>
-
-                    {/* Color Swatches Grid */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs text-zinc-400">
-                        <span>Палитра заводских эмалей:</span>
-                        <div className="flex items-center gap-2">
-                          <span>Кастомный цвет:</span>
-                          <input
-                            type="color"
-                            value={selectedColor}
-                            onChange={e => setSelectedColor(e.target.value)}
-                            className="w-7 h-7 rounded border border-zinc-700 bg-transparent cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                        {PAINT_COLORS.map(c => (
-                          <button
-                            key={c.value}
-                            onClick={() => setSelectedColor(c.value)}
-                            className={`p-2 rounded-xl border flex items-center gap-2.5 transition-all min-h-[44px] ${
-                              selectedColor.toLowerCase() === c.value.toLowerCase()
-                                ? 'bg-zinc-800 border-purple-500 shadow-md ring-1 ring-purple-500'
-                                : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
-                            }`}
-                          >
-                            <span
-                              className="w-5 h-5 rounded-full border border-zinc-700 shrink-0 shadow-sm"
-                              style={{ backgroundColor: c.value }}
-                            />
-                            <span className="text-[11px] font-medium text-zinc-200 truncate">{c.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Live Color Swatch Preview */}
-                    <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-10 h-10 rounded-lg border-2 border-zinc-700 shadow-inner"
-                          style={{ backgroundColor: selectedColor }}
-                        />
-                        <div>
-                          <span className="text-xs font-bold text-zinc-200 block">
-                            Выбранный оттенок: {selectedColor.toUpperCase()}
+                ) : (
+                  <>
+                    <div className="gu-shop-mini-list">
+                      {cart.map((entry) => (
+                        <div key={entry.item.id} className="gu-shop-mini-item">
+                          <span className="gu-shop-mini-item-name" title={entry.item.nameRu}>
+                            {entry.item.nameRu}
                           </span>
-                          <span className="text-[11px] text-zinc-400">
-                            Цель нанесения: {selectedPaintTarget === 'roof' ? 'Крыша' : 'Кузов'}
+                          <span className="gu-shop-mini-item-qty">×{entry.count}</span>
+                          <span className="gu-shop-mini-item-sum">
+                            {(entry.item.price * entry.count).toLocaleString()} ₽
                           </span>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* CART VIEW */}
-          {activeTab === 'cart' && (
-            <div className="max-w-2xl mx-auto space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5 text-emerald-400" />
-                  Ваша покупочная корзина ({totalCartItemsCount})
-                </h3>
-                {cart.length > 0 && (
-                  <button
-                    onClick={handleClearCart}
-                    className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Очистить
-                  </button>
-                )}
-              </div>
+                    <div className="gu-divider" />
 
-              {cart.length === 0 ? (
-                <div className="py-12 text-center text-zinc-500 space-y-2">
-                  <ShoppingCart className="w-12 h-12 mx-auto text-zinc-700" />
-                  <p className="text-sm">Корзина пуста. Выберите товары в каталоге.</p>
-                  <button
-                    onClick={() => setActiveTab('catalog')}
-                    className="px-4 py-2 bg-zinc-800 text-zinc-200 text-xs font-bold rounded-xl mt-2"
-                  >
-                    Перейти в каталог
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {cart.map(entry => {
-                    const cartPreview = getShopPreviewItem(entry.item.itemId);
-                    return (
-                    <div
-                      key={entry.item.id}
-                      className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-between gap-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0">
-                          <ItemIconCanvas itemId={cartPreview.itemId} item={cartPreview} size={40} />
-                        </div>
-                        <div>
-                          <div className="text-sm font-bold text-zinc-100">{entry.item.nameRu}</div>
-                          <div className="text-[11px] font-mono text-zinc-400">{cartPreview.nameRu}</div>
-                          <div className="text-xs font-mono text-emerald-400">
-                            {entry.item.price.toLocaleString()} ₽ / шт
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-lg p-1">
-                          <button
-                            onClick={() => handleRemoveOneFromCart(entry.item.id)}
-                            className="p-1 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md bg-zinc-800 text-zinc-300 hover:text-white"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="px-2 text-xs font-mono font-bold text-zinc-100">{entry.count}</span>
-                          <button
-                            onClick={() => handleAddToCart(entry.item)}
-                            className="p-1 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-500"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="text-sm font-mono font-bold text-zinc-100 min-w-[70px] text-right">
-                          {(entry.item.price * entry.count).toLocaleString()} ₽
-                        </div>
-                      </div>
-                    </div>
-                    );
-                  })}
-
-                  <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-between mt-4">
-                    <div>
-                      <span className="text-xs text-zinc-400 block">К оплате:</span>
-                      <span className="text-xl font-mono font-bold text-emerald-400">
-                        {cartTotal.toLocaleString()} ₽
+                    <div className="gu-row-between">
+                      <span style={{ fontSize: 12, color: 'var(--gu-fg-1)' }}>Итого к оплате</span>
+                      <span className="gu-shop-price" style={{ fontSize: 22 }}>
+                        {cartTotal.toLocaleString()}
+                        <small>₽</small>
                       </span>
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => setActiveTab('pos')}
-                      className="px-6 py-3 min-h-[48px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-lg transition-colors"
+                      className="gu-btn gu-btn-ok gu-btn-block"
                     >
-                      Перейти к кассе <Receipt className="w-4 h-4" />
+                      <Receipt className="w-4 h-4" />
+                      <span>Перейти к оплате ({totalCartItemsCount} шт.)</span>
                     </button>
+                  </>
+                )}
+              </div>
+            </aside>
+          </div>
+        </div>
+      )}
+
+      {/* DIAGNOSTICS TAB */}
+      {normalizedTab === 'diagnostics' && (
+        <div className="gu-col gu-gap-4">
+          {/* Vehicle Connection Header Panel */}
+          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <div className="gu-row gu-gap-3">
+              <div className="gu-head-icon">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="gu-row gu-gap-2">
+                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                    {currentVehicle ? (currentVehicle.nameRu || currentVehicle.type) : 'Автомобиль не подключен'}
+                  </span>
+                  {currentVehicle && (
+                    <span className="gu-code">{currentVehicle.licensePlate || 'БЕЗ НОМЕРА'}</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--gu-fg-2)', marginTop: 2 }}>
+                  {currentVehicle
+                    ? 'Электронный блок управления (ECU) подключен по шине CAN / OBD-II'
+                    : 'Подгоните автомобиль к боксу мастерской (ближе 240 м) для считывания телеметрии'}
+                </div>
+              </div>
+            </div>
+
+            {currentVehicle && (
+              <button
+                type="button"
+                disabled={isScanningEcu}
+                onClick={handleScanEcu}
+                className="gu-btn gu-btn-p"
+              >
+                <RefreshCw className={`w-4 h-4 ${isScanningEcu ? 'animate-spin' : ''}`} />
+                <span>{isScanningEcu ? 'Опрос датчиков ECU...' : 'Сканировать OBD-II'}</span>
+              </button>
+            )}
+          </div>
+
+          {!currentVehicle ? (
+            <div className="gu-empty">
+              <Car className="gu-empty-ic" />
+              <div className="gu-empty-t">Транспортное средство не обнаружено в рабочей зоне</div>
+              <div className="gu-empty-s">
+                Загоните автомобиль на эстакаду или припаркуйтесь у ворот сервиса, чтобы считать показания датчиков и коды неисправностей ЭБУ.
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* OBD-II Fault Codes / DTC Section */}
+              <div className="gu-panel gu-pad gu-col gu-gap-3">
+                <div className="gu-sec" style={{ marginBottom: 0 }}>
+                  <Cpu className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
+                  <span>Журнал кодов неисправностей OBD-II (DTC)</span>
+                  <span className="gu-sec-line" />
+                  <span className={`gu-tag ${dtcErrors.length === 0 ? 'gu-tag-ok' : 'gu-tag-err'}`}>
+                    {dtcErrors.length === 0 ? 'Ошибок нет' : `Активных кодов: ${dtcErrors.length}`}
+                  </span>
+                </div>
+
+                {dtcErrors.length === 0 ? (
+                  <div className="gu-banner gu-banner-ok">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>Все электронные системы, датчики и исполнительные механизмы функционируют штатно.</span>
+                  </div>
+                ) : (
+                  <div className="gu-list">
+                    {dtcErrors.map((err, idx) => (
+                      <div key={idx} className="gu-rw" style={{ alignItems: 'flex-start' }}>
+                        <AlertTriangle
+                          className="w-4 h-4 shrink-0"
+                          style={{
+                            marginTop: 2,
+                            color: err.severity === 'critical' ? 'var(--gu-err)' : 'var(--gu-warn)',
+                          }}
+                        />
+                        <div className="gu-rw-main">
+                          <div className="gu-row gu-gap-2">
+                            <span className="gu-code">{err.code}</span>
+                            <span className="gu-rw-title">{err.title}</span>
+                            <span className={`gu-tag ${err.severity === 'critical' ? 'gu-tag-err' : 'gu-tag-warn'}`}>
+                              {err.severity === 'critical' ? 'Критично' : 'Внимание'}
+                            </span>
+                          </div>
+                          <div className="gu-rw-sub" style={{ marginTop: 4 }}>{err.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 4 Telemetry Modules Grid */}
+              <div className="gu-grid-2">
+                {/* 1. Engine & Fluids */}
+                <div className="gu-panel gu-pad gu-col gu-gap-3">
+                  <div className="gu-sec" style={{ marginBottom: 0 }}>
+                    <Gauge className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
+                    <span>ДВС и Техжидкости</span>
+                    <span className="gu-sec-line" />
+                  </div>
+
+                  <div>
+                    <div className="gu-row-between" style={{ fontSize: 12, marginBottom: 6 }}>
+                      <span style={{ color: 'var(--gu-fg-2)' }}>Ресурс ЦПГ двигателя</span>
+                      <b
+                        className="gu-num"
+                        style={{
+                          color:
+                            (currentVehicle.engineState?.engineHealth ?? 100) < 50
+                              ? 'var(--gu-err)'
+                              : 'var(--gu-ok)',
+                        }}
+                      >
+                        {Math.round(currentVehicle.engineState?.engineHealth ?? 100)}%
+                      </b>
+                    </div>
+                    <div
+                      className={`gu-bar ${
+                        (currentVehicle.engineState?.engineHealth ?? 100) < 50 ? 'gu-bar-err' : 'gu-bar-ok'
+                      }`}
+                    >
+                      <span
+                        style={{
+                          width: `${Math.max(5, Math.min(100, currentVehicle.engineState?.engineHealth ?? 100))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="gu-kv-grid">
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Моторное масло</span>
+                      <span className={`gu-kv-v ${currentVehicle.engineState?.oilPunctured ? 'is-err' : ''}`}>
+                        {Math.round(currentVehicle.engineState?.oilLevel ?? 100)}%
+                        {currentVehicle.engineState?.oilPunctured ? ' · Пробой' : ''}
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Охлаждающая жидкость</span>
+                      <span className={`gu-kv-v ${currentVehicle.engineState?.radiatorPunctured ? 'is-err' : ''}`}>
+                        {Math.round(currentVehicle.engineState?.radiatorWater ?? 100)}%
+                        {currentVehicle.engineState?.radiatorPunctured ? ' · Течь' : ''}
+                      </span>
+                    </div>
+                    <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                      <span className="gu-kv-k">Состояние блока цилиндров</span>
+                      <span className={`gu-kv-v ${currentVehicle.engineState?.isSeized ? 'is-err' : 'is-ok'}`}>
+                        {currentVehicle.engineState?.isSeized ? 'КЛИН ДВИГАТЕЛЯ' : 'Исправен, вращение штатное'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              )}
+
+                {/* 2. Suspension & Alignment */}
+                <div className="gu-panel gu-pad gu-col gu-gap-3">
+                  <div className="gu-sec" style={{ marginBottom: 0 }}>
+                    <Disc className="w-3.5 h-3.5" style={{ color: 'var(--gu-ok)' }} />
+                    <span>Ходовая и Сход-развал</span>
+                    <span className="gu-sec-line" />
+                  </div>
+
+                  <div className="gu-kv-grid">
+                    <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                      <span className="gu-kv-k">Увод руля (развал-схождение)</span>
+                      <span
+                        className={`gu-kv-v ${
+                          Math.abs(currentVehicle.damage?.steeringDrift || 0) > 0.05 ? 'is-amber' : 'is-ok'
+                        }`}
+                      >
+                        {Math.abs(currentVehicle.damage?.steeringDrift || 0) < 0.01
+                          ? 'Идеально (0.0°)'
+                          : `${((currentVehicle.damage?.steeringDrift || 0) * 10).toFixed(1)}° ${
+                              (currentVehicle.damage?.steeringDrift || 0) < 0 ? 'влево' : 'вправо'
+                            }`}
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Стойка передняя Л</span>
+                      <span className="gu-kv-v">
+                        {100 - Math.round((currentVehicle.damage?.frontLeftSuspensionDamage || 0) * 100)}%
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Стойка передняя П</span>
+                      <span className="gu-kv-v">
+                        {100 - Math.round((currentVehicle.damage?.frontRightSuspensionDamage || 0) * 100)}%
+                      </span>
+                    </div>
+                    <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                      <span className="gu-kv-k">Конфигурация шасси</span>
+                      <span className="gu-kv-v is-amber">
+                        {isHeavySuspended ? 'Bilstein HD (Усиленная)' : 'Заводская подвеска'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Electrical & Fuel */}
+                <div className="gu-panel gu-pad gu-col gu-gap-3">
+                  <div className="gu-sec" style={{ marginBottom: 0 }}>
+                    <Zap className="w-3.5 h-3.5" style={{ color: 'var(--gu-info)' }} />
+                    <span>Электрика и Топливная система</span>
+                    <span className="gu-sec-line" />
+                  </div>
+
+                  <div className="gu-kv-grid">
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Заряд АКБ</span>
+                      <span className="gu-kv-v is-ok">
+                        {Math.round(currentVehicle.engineState?.batteryCharge ?? 100)}%
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Стартер</span>
+                      <span className={`gu-kv-v ${currentVehicle.engineState?.starterWorking === false ? 'is-err' : ''}`}>
+                        {currentVehicle.engineState?.starterWorking === false ? 'Неисправен' : 'Штатный'}
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Топливная аппаратура</span>
+                      <span className="gu-kv-v">
+                        {currentVehicle.fuelSystem?.hasLPG ? 'Бензин + ГБО 4' : 'Штатная (Бензин/ДТ)'}
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Калибровка ЭБУ</span>
+                      <span className="gu-kv-v is-amber">
+                        {isChiptuned ? 'Stage 1 (+15% л.с.)' : 'Заводской сток'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Body & Optics */}
+                <div className="gu-panel gu-pad gu-col gu-gap-3">
+                  <div className="gu-sec" style={{ marginBottom: 0 }}>
+                    <ShieldCheck className="w-3.5 h-3.5" style={{ color: 'var(--gu-ok)' }} />
+                    <span>Кузов, Остекление и Оптика</span>
+                    <span className="gu-sec-line" />
+                  </div>
+
+                  <div className="gu-kv-grid">
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Геометрия лонжеронов</span>
+                      <span
+                        className={`gu-kv-v ${
+                          (currentVehicle.damage?.frontCrumple || 0) + (currentVehicle.damage?.rearCrumple || 0) > 2
+                            ? 'is-amber'
+                            : 'is-ok'
+                        }`}
+                      >
+                        {(currentVehicle.damage?.frontCrumple || 0) + (currentVehicle.damage?.rearCrumple || 0) > 2
+                          ? 'Деформирован'
+                          : 'В допуске'}
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Лобовое стекло</span>
+                      <span className={`gu-kv-v ${currentVehicle.damage?.windshieldCracked ? 'is-amber' : ''}`}>
+                        {currentVehicle.damage?.windshieldCracked ? 'Трещина триплекса' : 'Целое'}
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Головной свет</span>
+                      <span
+                        className={`gu-kv-v ${
+                          currentVehicle.damage?.leftHeadlightBroken || currentVehicle.damage?.rightHeadlightBroken
+                            ? 'is-amber'
+                            : ''
+                        }`}
+                      >
+                        {currentVehicle.damage?.leftHeadlightBroken || currentVehicle.damage?.rightHeadlightBroken
+                          ? 'Разбита фара'
+                          : 'Исправен'}
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Парковочная камера</span>
+                      <span className="gu-kv-v">{hasCameraInstalled ? 'Установлена' : 'Отсутствует'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action bar */}
+              <div className="gu-panel-inset gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+                <span style={{ fontSize: 12.5, color: 'var(--gu-fg-1)' }}>
+                  Перейдите к оформлению наряд-заказа для устранения неисправностей или в цех дооснащения.
+                </span>
+                <div className="gu-row gu-gap-2">
+                  <button type="button" onClick={() => setActiveTab('repair')} className="gu-btn gu-btn-ok gu-btn-sm">
+                    <Wrench className="w-3.5 h-3.5" />
+                    <span>В цех ремонта ({getActiveRepairs().length})</span>
+                  </button>
+                  <button type="button" onClick={() => setActiveTab('tuning')} className="gu-btn gu-btn-p gu-btn-sm">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Тюнинг и Окраска</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+
+      {/* REPAIR & SERVICE TAB */}
+      {normalizedTab === 'repair' && (
+        <div className="gu-col gu-gap-4">
+          {repairActionMessage && (
+            <div className="gu-banner gu-banner-ok">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{repairActionMessage}</span>
             </div>
           )}
 
-          {/* POS CASHIER PAYMENT TERMINAL */}
-          {activeTab === 'pos' && (
-            <div className="max-w-xl mx-auto space-y-4">
-              <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                  <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                    <Receipt className="w-4 h-4 text-emerald-400" /> POS Кассовый терминал
-                  </h3>
-                  <button
-                    onClick={() => setActiveTab('cart')}
-                    className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors"
+          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <div className="gu-row gu-gap-3">
+              <div className="gu-head-icon">
+                <Wrench className="w-5 h-5" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                  Слесарный ремонт и Техническое обслуживание
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--gu-fg-2)', marginTop: 2 }}>
+                  {currentVehicle
+                    ? `Автомобиль на подъемнике: ${currentVehicle.nameRu || currentVehicle.type}`
+                    : 'Подгоните ТС в бокс СТО для формирования дефектовочной ведомости'}
+                </div>
+              </div>
+            </div>
+
+            {currentVehicle && (
+              <div className="gu-pill gu-pill-amber">
+                <span>Наличный расчет</span>
+                <b>{playerCash.toLocaleString()} ₽</b>
+              </div>
+            )}
+          </div>
+
+          {!currentVehicle ? (
+            <div className="gu-empty">
+              <Car className="gu-empty-ic" />
+              <div className="gu-empty-t">Транспортное средство не обнаружено на подъемнике</div>
+              <div className="gu-empty-s">
+                Загоните вашу машину в бокс автосервиса, чтобы механики провели дефектовку узлов и сформировали наряд-заказ.
+              </div>
+            </div>
+          ) : isRepairing ? (
+            <div className="gu-panel gu-pad gu-col gu-gap-3">
+              <div className="gu-sec" style={{ marginBottom: 0 }}>
+                <Cpu className="w-3.5 h-3.5 animate-pulse" style={{ color: 'var(--gu-info)' }} />
+                <span>Пост СТО — Выполнение регламентных работ</span>
+                <span className="gu-sec-line" />
+                <span className="gu-code">
+                  Этап {currentRepairStep} / {totalRepairStepsCount}
+                </span>
+              </div>
+
+              <div className="gu-shop-terminal">
+                {repairLogs.map((log, idx) => (
+                  <div
+                    key={idx}
+                    className={
+                      log.startsWith('>>>')
+                        ? 'is-step'
+                        : log.includes('[ОК]') || log.includes('УСПЕШНО')
+                        ? 'is-ok'
+                        : ''
+                    }
                   >
-                    <ArrowLeft className="w-3.5 h-3.5" /> Назад к корзине
-                  </button>
-                </div>
+                    {log}
+                  </div>
+                ))}
+                <div className="is-step">_</div>
+              </div>
 
-                {/* Digital Cashier Display */}
-                <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2 font-mono">
-                  <div className="flex justify-between text-xs text-zinc-400">
-                    <span>Сумма покупки:</span>
-                    <span className="text-amber-400 font-bold">{cartTotal.toLocaleString()} ₽</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-zinc-400">
-                    <span>Внесено наличными:</span>
-                    <span className="text-emerald-400 font-bold">{inTrayMoney.toLocaleString()} ₽</span>
-                  </div>
-                  <div className="flex justify-between text-sm pt-2 border-t border-zinc-800">
-                    <span className="text-zinc-200">Сдача:</span>
-                    <span className={`font-bold ${inTrayMoney >= cartTotal ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                      {inTrayMoney >= cartTotal ? `${(inTrayMoney - cartTotal).toLocaleString()} ₽` : '0 ₽'}
-                    </span>
+              <div>
+                <div className="gu-row-between" style={{ fontSize: 11.5, marginBottom: 6 }}>
+                  <span style={{ color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Готовность наряд-заказа
+                  </span>
+                  <b className="gu-num" style={{ color: 'var(--gu-accent)' }}>
+                    {Math.round((currentRepairStep / (totalRepairStepsCount || 1)) * 100)}%
+                  </b>
+                </div>
+                <div className="gu-bar">
+                  <span style={{ width: `${(currentRepairStep / (totalRepairStepsCount || 1)) * 100}%` }} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {getActiveRepairs().length === 0 ? (
+                <div className="gu-empty">
+                  <CheckCircle2 className="gu-empty-ic" style={{ color: 'var(--gu-ok)', opacity: 0.85 }} />
+                  <div className="gu-empty-t">Дефектовка завершена — неисправностей не выявлено</div>
+                  <div className="gu-empty-s">
+                    Все агрегаты, кузовные панели, техжидкости и углы установки колес находятся в заводском допуске.
                   </div>
                 </div>
+              ) : (
+                <div className="gu-col gu-gap-3">
+                  <div className="gu-sec" style={{ marginBottom: 0 }}>
+                    <span>Дефектовочная ведомость к оплате</span>
+                    <span className="gu-sec-line" />
+                    <span className="gu-tag gu-tag-warn">Позиций: {getActiveRepairs().length}</span>
+                  </div>
 
-                {/* Cashier Money Tray (Внесенные в лоток деньги) */}
-                <div className="p-3 bg-zinc-950/60 border border-zinc-800/80 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
-                      <Coins className="w-3.5 h-3.5 text-amber-400" /> Лоток кассы (Внесено):
-                    </span>
-                    {Object.keys(trayDenoms).length > 0 && (
+                  <div className="gu-list">
+                    {getActiveRepairs().map((rep) => (
+                      <div key={rep.id} className="gu-rw">
+                        <Wrench className="w-4 h-4 shrink-0" style={{ color: 'var(--gu-accent)' }} />
+                        <div className="gu-rw-main">
+                          <div className="gu-rw-title">{rep.title}</div>
+                          <div className="gu-rw-sub">{rep.desc}</div>
+                        </div>
+                        <div className="gu-rw-right">
+                          <div className="gu-shop-price" style={{ fontSize: 19 }}>
+                            {rep.price.toLocaleString()}
+                            <small>₽</small>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        Итоговая смета (запчасти + работа)
+                      </div>
+                      <div className="gu-shop-price" style={{ fontSize: 26, marginTop: 2 }}>
+                        {getActiveRepairs().reduce((sum, r) => sum + r.price, 0).toLocaleString()}
+                        <small>₽</small>
+                      </div>
+                    </div>
+
+                    <div className="gu-row gu-gap-3" style={{ flexWrap: 'wrap' }}>
+                      {playerCash < getActiveRepairs().reduce((sum, r) => sum + r.price, 0) && (
+                        <span className="gu-tag gu-tag-err">Недостаточно наличных средств</span>
+                      )}
                       <button
-                        onClick={handleClearTray}
-                        className="text-[11px] text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                        type="button"
+                        disabled={playerCash < getActiveRepairs().reduce((sum, r) => sum + r.price, 0)}
+                        onClick={handleFullRepair}
+                        className="gu-btn gu-btn-ok gu-btn-lg"
                       >
-                        Забрать все
+                        <Wrench className="w-4 h-4" />
+                        <span>Утвердить наряд-заказ и начать ремонт</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TUNING & UPGRADES TAB */}
+      {normalizedTab === 'tuning' && (
+        <div className="gu-col gu-gap-4">
+          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <div className="gu-row gu-gap-3">
+              <div className="gu-head-icon">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                  Дооснащение, Инжиниринг и Малярный цех
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--gu-fg-2)', marginTop: 2 }}>
+                  {currentVehicle
+                    ? `Объект модернизации: ${currentVehicle.nameRu || currentVehicle.type}`
+                    : 'Припаркуйте автомобиль в боксе мастерской для установки дополнительного оборудования'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {!currentVehicle ? (
+            <div className="gu-empty">
+              <Car className="gu-empty-ic" />
+              <div className="gu-empty-t">Транспортное средство не обнаружено в боксе</div>
+              <div className="gu-empty-s">
+                Загоните автомобиль в сервисную зону для калибровки ЭБУ Stage 1, монтажа подвески Bilstein HD, ГБО 4-го поколения или перекраски кузова.
+              </div>
+            </div>
+          ) : (
+            <div className="gu-col gu-gap-3">
+              <div className="gu-grid-2">
+                {/* 1. Stage 1 ECU Remap */}
+                <div className="gu-panel gu-pad gu-col gu-gap-3" style={{ justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="gu-row-between" style={{ marginBottom: 8 }}>
+                      <div className="gu-row gu-gap-2">
+                        <Gauge className="w-4 h-4" style={{ color: 'var(--gu-accent)' }} />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                          Чип-тюнинг ЭБУ Stage 1
+                        </span>
+                      </div>
+                      <span className={`gu-tag ${isChiptuned ? 'gu-tag-ok' : 'gu-tag-amber'}`}>
+                        {isChiptuned ? 'Установлено' : '+15% Мощности'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--gu-fg-2)', lineHeight: 1.45, margin: 0 }}>
+                      Калибровка топливных карт и углов опережения зажигания. Повышает крутящий момент на +15% и убирает задержку педали акселератора.
+                    </p>
+                  </div>
+
+                  <div className="gu-row-between" style={{ paddingTop: 10, borderTop: '1px solid var(--gu-line-subtle)' }}>
+                    <div className="gu-shop-price">
+                      {CHIPTUNING_PRICE.toLocaleString()}
+                      <small>₽</small>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={installingChiptuning || isChiptuned || playerCash < CHIPTUNING_PRICE}
+                      onClick={handleInstallChiptuning}
+                      className={`gu-btn ${isChiptuned ? 'gu-btn-s' : 'gu-btn-p'} gu-btn-sm`}
+                    >
+                      {installingChiptuning ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Запись {chiptuningProgress}%</span>
+                        </>
+                      ) : isChiptuned ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Прошито</span>
+                        </>
+                      ) : (
+                        <span>Прошить Stage 1</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Bilstein HD Suspension */}
+                <div className="gu-panel gu-pad gu-col gu-gap-3" style={{ justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="gu-row-between" style={{ marginBottom: 8 }}>
+                      <div className="gu-row gu-gap-2">
+                        <Disc className="w-4 h-4" style={{ color: 'var(--gu-info)' }} />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                          Подвеска Bilstein B6 HD
+                        </span>
+                      </div>
+                      <span className={`gu-tag ${isHeavySuspended ? 'gu-tag-ok' : ''}`}>
+                        {isHeavySuspended ? 'Установлено' : 'Износ −40%'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--gu-fg-2)', lineHeight: 1.45, margin: 0 }}>
+                      Однотрубные газомасляные амортизаторы и усиленные пружины. Предотвращают пробои на пересеченной местности и снижают износ ходовой на 40%.
+                    </p>
+                  </div>
+
+                  <div className="gu-row-between" style={{ paddingTop: 10, borderTop: '1px solid var(--gu-line-subtle)' }}>
+                    <div className="gu-shop-price">
+                      {SUSPENSION_PRICE.toLocaleString()}
+                      <small>₽</small>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={installingSuspension || isHeavySuspended || playerCash < SUSPENSION_PRICE}
+                      onClick={handleInstallSuspension}
+                      className={`gu-btn ${isHeavySuspended ? 'gu-btn-s' : 'gu-btn-p'} gu-btn-sm`}
+                    >
+                      {installingSuspension ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Монтаж {suspensionProgress}%</span>
+                        </>
+                      ) : isHeavySuspended ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Установлено</span>
+                        </>
+                      ) : (
+                        <span>Установить стойки</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. LPG System Lovato 4 */}
+                <div className="gu-panel gu-pad gu-col gu-gap-3" style={{ justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="gu-row-between" style={{ marginBottom: 8 }}>
+                      <div className="gu-row gu-gap-2">
+                        <Flame className="w-4 h-4" style={{ color: 'var(--gu-ok)' }} />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                          ГБО Lovato 4 (Пропан-Бутан)
+                        </span>
+                      </div>
+                      <span className={`gu-tag ${hasLpgInstalled ? 'gu-tag-ok' : 'gu-tag-amber'}`}>
+                        {hasLpgInstalled
+                          ? 'Установлено'
+                          : lpgConfig?.isAvailable
+                          ? `Баллон ${lpgConfig.tankCapacity} л`
+                          : 'Недоступно'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--gu-fg-2)', lineHeight: 1.45, margin: 0 }}>
+                      {lpgConfig?.description ||
+                        'Двухтопливная система питания сжиженным газом. Позволяет переключаться между бензином и пропаном прямо из салона.'}
+                    </p>
+                  </div>
+
+                  <div className="gu-row-between" style={{ paddingTop: 10, borderTop: '1px solid var(--gu-line-subtle)' }}>
+                    <div className="gu-shop-price">
+                      {lpgConfig ? lpgConfig.price.toLocaleString() : '35,000'}
+                      <small>₽</small>
+                    </div>
+                    {hasLpgInstalled ? (
+                      <button type="button" onClick={handleRemoveLPG} className="gu-btn gu-btn-d gu-btn-sm">
+                        <span>Демонтировать ГБО</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={installingLpg || !lpgConfig?.isAvailable || playerCash < (lpgConfig?.price || 35000)}
+                        onClick={handleInstallLPG}
+                        className="gu-btn gu-btn-p gu-btn-sm"
+                      >
+                        {installingLpg ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Монтаж {lpgProgress}%</span>
+                          </>
+                        ) : (
+                          <span>Установить ГБО</span>
+                        )}
                       </button>
                     )}
                   </div>
+                </div>
 
-                  {Object.keys(trayDenoms).length === 0 ? (
-                    <div className="text-[11px] text-zinc-500 italic py-1 text-center">
-                      Лоток пуст. Нажмите на банкноту или монету ниже, чтобы положить её кассиру.
+                {/* 4. Rearview Camera */}
+                <div className="gu-panel gu-pad gu-col gu-gap-3" style={{ justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="gu-row-between" style={{ marginBottom: 8 }}>
+                      <div className="gu-row gu-gap-2">
+                        <Video className="w-4 h-4" style={{ color: 'var(--gu-info)' }} />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                          Парковочная камера с разметкой
+                        </span>
+                      </div>
+                      <span className={`gu-tag ${hasCameraInstalled ? 'gu-tag-ok' : ''}`}>
+                        {isCameraFactoryInstalled
+                          ? 'Штатная'
+                          : hasCameraInstalled
+                          ? 'Установлена'
+                          : 'Опция'}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {Object.entries(trayDenoms).map(([itemId, count]) => {
-                        const denom = playerDenoms.find(d => d.itemId === itemId);
-                        if (!denom || count <= 0) return null;
-                        return (
-                          <div
-                            key={itemId}
-                            className="flex items-center gap-1.5 px-2 py-1 bg-zinc-900 border border-emerald-500/30 rounded-lg text-xs"
-                          >
-                            <ItemIconCanvas itemId={itemId} size={22} />
-                            <span className="font-mono font-bold text-emerald-400">{denom.nameRu}</span>
-                            <span className="text-[11px] text-zinc-400 font-mono">×{count}</span>
-                            <button
-                              onClick={() => handleRemoveTrayDenom(itemId)}
-                              className="ml-1 p-0.5 rounded bg-zinc-800 hover:bg-rose-950 hover:text-rose-300 text-zinc-400 transition-colors"
-                              title="Забрать одну штуку назад в кошелек"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                          </div>
-                        );
-                      })}
+                    <p style={{ fontSize: 12, color: 'var(--gu-fg-2)', lineHeight: 1.45, margin: 0 }}>
+                      Широкоугольная камера заднего обзора с динамическими траекторными линиями, синхронизированными с поворотом рулевого колеса.
+                    </p>
+                  </div>
+
+                  <div className="gu-row-between" style={{ paddingTop: 10, borderTop: '1px solid var(--gu-line-subtle)' }}>
+                    <div className="gu-shop-price">
+                      {isCameraFactoryInstalled ? 'В базе' : CAMERA_PRICE.toLocaleString()}
+                      {!isCameraFactoryInstalled && <small>₽</small>}
                     </div>
-                  )}
+                    {isCameraFactoryInstalled ? (
+                      <span className="gu-tag gu-tag-ok">Заводская комплектация</span>
+                    ) : hasCameraInstalled ? (
+                      <button type="button" onClick={handleRemoveCamera} className="gu-btn gu-btn-d gu-btn-sm">
+                        <span>Демонтировать</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={installingCamera || playerCash < CAMERA_PRICE}
+                        onClick={handleInstallCamera}
+                        className="gu-btn gu-btn-p gu-btn-sm"
+                      >
+                        {installingCamera ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Монтаж {cameraProgress}%</span>
+                          </>
+                        ) : (
+                          <span>Установить камеру</span>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Paint Booth Section */}
+              <div className="gu-panel gu-pad gu-col gu-gap-3">
+                <div className="gu-sec" style={{ marginBottom: 0 }}>
+                  <Palette className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
+                  <span>Покрасочная камера (Малярный цех)</span>
+                  <span className="gu-sec-line" />
+                  <span className="gu-tag gu-tag-amber">{PAINT_PRICE.toLocaleString()} ₽ за деталь</span>
                 </div>
 
-                {/* Quick Auto-Pay Trays */}
-                <div className="flex items-center gap-2">
+                <div className="gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
+                  <div className="gu-row gu-gap-3" style={{ flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, color: 'var(--gu-fg-2)', fontWeight: 600 }}>Элемент окраски:</span>
+                    <Seg<'body' | 'roof'>
+                      items={[
+                        { id: 'body', label: 'Основной кузов' },
+                        { id: 'roof', label: 'Крыша (контраст)' },
+                      ]}
+                      value={selectedPaintTarget}
+                      onChange={(id) => setSelectedPaintTarget(id)}
+                    />
+                  </div>
+
+                  <div className="gu-row gu-gap-2">
+                    <span style={{ fontSize: 12, color: 'var(--gu-fg-2)' }}>Произвольный оттенок:</span>
+                    <input
+                      type="color"
+                      value={selectedColor}
+                      onChange={(e) => setSelectedColor(e.target.value)}
+                      style={{
+                        width: 32,
+                        height: 28,
+                        padding: 0,
+                        border: '1px solid var(--gu-line-strong)',
+                        borderRadius: 2,
+                        background: 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="gu-shop-swatch-grid">
+                  {PAINT_COLORS.map((c) => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setSelectedColor(c.value)}
+                      className={`gu-shop-swatch ${
+                        selectedColor.toLowerCase() === c.value.toLowerCase() ? 'is-on' : ''
+                      }`}
+                    >
+                      <span className="gu-shop-swatch-dot" style={{ backgroundColor: c.value }} />
+                      <span className="gu-shop-swatch-name">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="gu-panel-inset gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
+                  <div className="gu-row gu-gap-3">
+                    <span
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 2,
+                        backgroundColor: selectedColor,
+                        border: '1px solid rgba(255,255,255,0.28)',
+                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4)',
+                        display: 'inline-block',
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                        Код эмали: <span className="gu-code">{selectedColor.toUpperCase()}</span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--gu-fg-2)' }}>
+                        Зона нанесения: {selectedPaintTarget === 'roof' ? 'Крыша автомобиля' : 'Основной кузов'}
+                      </div>
+                    </div>
+                  </div>
+
                   <button
-                    disabled={playerCash < cartTotal}
-                    onClick={handleExactTrayMoney}
-                    className="flex-1 py-2.5 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-200 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                    type="button"
+                    disabled={isPainting || playerCash < PAINT_PRICE}
+                    onClick={handlePaintVehicle}
+                    className="gu-btn gu-btn-p"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Внести ровно ({cartTotal.toLocaleString()} ₽)
+                    {isPainting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Окраска и сушка {paintProgress}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Palette className="w-4 h-4" />
+                        <span>Покрасить за {PAINT_PRICE.toLocaleString()} ₽</span>
+                      </>
+                    )}
                   </button>
-                  <button
-                    onClick={handleClearTray}
-                    className="px-4 py-2.5 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs font-medium rounded-xl transition-colors"
-                  >
-                    Забрать купюры
-                  </button>
                 </div>
-
-                {/* Banknotes Tray */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-zinc-300">Банкноты в кошельке:</span>
-                    <span className="text-[11px] text-zinc-400 font-mono">
-                      Баланс: {playerCash.toLocaleString()} ₽
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {playerDenoms
-                      .filter(d => d.type === 'banknote')
-                      .map(denom => {
-                        const inTray = trayDenoms[denom.itemId] || 0;
-                        const remaining = Math.max(0, denom.count - inTray);
-                        const canAdd = remaining > 0;
-
-                        return (
-                          <button
-                            key={denom.itemId}
-                            disabled={!canAdd}
-                            onClick={() => handleAddTrayDenom(denom.itemId)}
-                            className={`p-2 min-h-[58px] rounded-xl border flex flex-col items-center justify-between transition-all group relative ${
-                              canAdd
-                                ? 'bg-zinc-950 hover:bg-zinc-800/90 border-zinc-800 hover:border-emerald-500/60 cursor-pointer'
-                                : 'bg-zinc-950/40 border-zinc-900/80 opacity-40 cursor-not-allowed'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 w-full justify-center">
-                              <ItemIconCanvas itemId={denom.itemId} size={30} />
-                              <span className={`text-xs font-mono font-bold ${canAdd ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                                {denom.nameRu}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between w-full text-[10px] pt-1 border-t border-zinc-800/40 mt-1">
-                              <span className="text-zinc-400">В наличии:</span>
-                              <span className={`font-mono font-bold ${remaining > 0 ? 'text-zinc-200' : 'text-zinc-600'}`}>
-                                {remaining} шт
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-
-                {/* Coins Tray */}
-                <div className="space-y-2 pt-1 border-t border-zinc-800/60">
-                  <span className="text-xs font-semibold text-zinc-300 block">Монеты в карманах:</span>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {playerDenoms
-                      .filter(d => d.type === 'coin')
-                      .map(denom => {
-                        const inTray = trayDenoms[denom.itemId] || 0;
-                        const remaining = Math.max(0, denom.count - inTray);
-                        const canAdd = remaining > 0;
-
-                        return (
-                          <button
-                            key={denom.itemId}
-                            disabled={!canAdd}
-                            onClick={() => handleAddTrayDenom(denom.itemId)}
-                            className={`p-2 min-h-[52px] rounded-xl border flex flex-col items-center justify-between transition-all group ${
-                              canAdd
-                                ? 'bg-zinc-950 hover:bg-zinc-800/90 border-zinc-800 hover:border-amber-500/60 cursor-pointer'
-                                : 'bg-zinc-950/40 border-zinc-900/80 opacity-40 cursor-not-allowed'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 w-full justify-center">
-                              <ItemIconCanvas itemId={denom.itemId} size={24} />
-                              <span className={`text-xs font-mono font-bold ${canAdd ? 'text-amber-400' : 'text-zinc-500'}`}>
-                                {denom.nameRu}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between w-full text-[10px] pt-1 border-t border-zinc-800/40 mt-1">
-                              <span className="text-zinc-400">В наличии:</span>
-                              <span className={`font-mono font-bold ${remaining > 0 ? 'text-zinc-200' : 'text-zinc-600'}`}>
-                                {remaining} шт
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-
-                {/* Pay Action Button */}
-                <button
-                  disabled={inTrayMoney < cartTotal || posSuccess}
-                  onClick={handleExecutePOSPayment}
-                  className={`w-full py-3.5 min-h-[50px] font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-all ${
-                    posSuccess
-                      ? 'bg-emerald-500 text-zinc-950'
-                      : inTrayMoney >= cartTotal
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg cursor-pointer'
-                      : 'bg-zinc-800 text-zinc-500 opacity-60 cursor-not-allowed'
-                  }`}
-                >
-                  {posSuccess ? (
-                    <>
-                      <CheckCircle2 className="w-5 h-5 text-zinc-950" /> Оплата прошла успешно!
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="w-5 h-5" /> Оплатить и забрать покупки
-                    </>
-                  )}
-                </button>
               </div>
             </div>
           )}
         </div>
+      )}
 
-        {/* Mobile Sticky Bottom Navigation Bar */}
-        {cartTotal > 0 && activeTab !== 'pos' && (
-          <div className="p-3 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between gap-3 sm:hidden shrink-0">
+      {/* CART TAB */}
+      {normalizedTab === 'cart' && (
+        <div className="gu-col gu-gap-4">
+          <div className="gu-sec" style={{ marginBottom: 0 }}>
+            <ShoppingCart className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
+            <span>Товарная корзина покупателя</span>
+            <span className="gu-sec-line" />
+            {cart.length > 0 && (
+              <button type="button" onClick={handleClearCart} className="gu-btn gu-btn-d gu-btn-xs">
+                <Trash2 className="w-3 h-3" />
+                <span>Очистить корзину</span>
+              </button>
+            )}
+          </div>
+
+          {cart.length === 0 ? (
+            <div className="gu-empty">
+              <ShoppingCart className="gu-empty-ic" />
+              <div className="gu-empty-t">Ваша корзина пуста</div>
+              <div className="gu-empty-s">
+                Перейдите в каталог магазина и добавьте необходимые товары для оформления покупки на кассе.
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('catalog')}
+                className="gu-btn gu-btn-p gu-btn-sm"
+                style={{ marginTop: 6 }}
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>Перейти в каталог</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="gu-list">
+                {cart.map((entry) => {
+                  const cartPreview = getShopPreviewItem(entry.item.itemId);
+                  const unitWeight = getItemTotalWeight(cartPreview);
+                  const lineWeightStr = formatShopWeight(unitWeight * entry.count);
+
+                  return (
+                    <div key={entry.item.id} className="gu-rw">
+                      <div className="gu-shop-icon" style={{ width: 48, height: 48 }}>
+                        <ItemIconCanvas itemId={cartPreview.itemId} item={cartPreview} size={40} />
+                      </div>
+                      <div className="gu-rw-main">
+                        <div className="gu-rw-title">{entry.item.nameRu}</div>
+                        <div className="gu-rw-sub">
+                          <span>{cartPreview.nameRu}</span>
+                          {lineWeightStr && (
+                            <>
+                              <span> · </span>
+                              <span>Масса: {lineWeightStr}</span>
+                            </>
+                          )}
+                          <span> · </span>
+                          <span className="gu-num" style={{ color: 'var(--gu-accent-bright)' }}>
+                            {entry.item.price.toLocaleString()} ₽ / шт.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="gu-rw-right">
+                        <div className="gu-shop-qty">
+                          <button type="button" onClick={() => handleRemoveOneFromCart(entry.item.id)}>
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span>{entry.count}</span>
+                          <button type="button" className="is-plus" onClick={() => handleAddToCart(entry.item)}>
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div
+                          className="gu-shop-price"
+                          style={{ minWidth: 96, textAlign: 'right', fontSize: 19 }}
+                        >
+                          {(entry.item.price * entry.count).toLocaleString()}
+                          <small>₽</small>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 14 }}>
+                <div className="gu-row gu-gap-4" style={{ flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Итого к оплате
+                    </div>
+                    <div className="gu-shop-price" style={{ fontSize: 28 }}>
+                      {cartTotal.toLocaleString()}
+                      <small>₽</small>
+                    </div>
+                  </div>
+                  <div style={{ borderLeft: '1px solid var(--gu-line)', paddingLeft: 16 }}>
+                    <div style={{ fontSize: 11, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Суммарный вес покупок
+                    </div>
+                    <div className="gu-num" style={{ fontSize: 16, fontWeight: 700, color: 'var(--gu-fg-0)', marginTop: 4 }}>
+                      {formatShopWeight(totalCartWeightKg) || '0 г'} ({totalCartItemsCount} ед.)
+                    </div>
+                  </div>
+                </div>
+
+                <div className="gu-row gu-gap-2">
+                  <button type="button" onClick={() => setActiveTab('catalog')} className="gu-btn gu-btn-s">
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Продолжить выбор</span>
+                  </button>
+                  <button type="button" onClick={() => setActiveTab('pos')} className="gu-btn gu-btn-ok gu-btn-lg">
+                    <Receipt className="w-4 h-4" />
+                    <span>Перейти на кассу оплаты</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* POS CASHIER PAYMENT TERMINAL */}
+      {normalizedTab === 'pos' && (
+        <div className="gu-shop-pos-grid">
+          {/* Left Column: Cashier Display + Money Tray + Final Pay Button */}
+          <div className="gu-col gu-gap-3">
+            <div className="gu-panel gu-pad gu-col gu-gap-3">
+              <div className="gu-sec" style={{ marginBottom: 0 }}>
+                <Receipt className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
+                <span>Кассовый терминал · Расчет</span>
+                <span className="gu-sec-line" />
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('cart')}
+                  className="gu-btn gu-btn-g gu-btn-xs"
+                  style={{ height: 22 }}
+                >
+                  <ArrowLeft className="w-3 h-3" /> К корзине
+                </button>
+              </div>
+
+              <div className="gu-shop-display">
+                <div className="gu-shop-display-row">
+                  <span className="gu-shop-display-k">Сумма чека ({totalCartItemsCount} поз.)</span>
+                  <span className="gu-shop-display-v is-amber">{cartTotal.toLocaleString()} ₽</span>
+                </div>
+                <div className="gu-shop-display-row">
+                  <span className="gu-shop-display-k">Принято в лоток кассы</span>
+                  <span className="gu-shop-display-v is-ok">{inTrayMoney.toLocaleString()} ₽</span>
+                </div>
+                <div className="gu-shop-display-row is-total">
+                  <span className="gu-shop-display-k">
+                    {inTrayMoney >= cartTotal ? 'Сдача покупателю' : 'Осталось внести'}
+                  </span>
+                  <span className={`gu-shop-display-v ${inTrayMoney >= cartTotal ? 'is-ok' : ''}`}>
+                    {inTrayMoney >= cartTotal
+                      ? `${(inTrayMoney - cartTotal).toLocaleString()} ₽`
+                      : `${(cartTotal - inTrayMoney).toLocaleString()} ₽`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Exact Pay & Reset Buttons */}
+              <div className="gu-row gu-gap-2">
+                <button
+                  type="button"
+                  disabled={playerCash < cartTotal}
+                  onClick={handleExactTrayMoney}
+                  className="gu-btn gu-btn-s"
+                  style={{ flex: 1 }}
+                >
+                  <Sparkles className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
+                  <span>Отсчитать без сдачи ({cartTotal.toLocaleString()} ₽)</span>
+                </button>
+                {Object.keys(trayDenoms).length > 0 && (
+                  <button type="button" onClick={handleClearTray} className="gu-btn gu-btn-g">
+                    <span>Вернуть в кошелек</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Cashier Tray */}
+              <div className="gu-panel-inset gu-pad gu-col gu-gap-2">
+                <div className="gu-row-between" style={{ fontSize: 11, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  <span>Купюры и монеты в лотке кассира</span>
+                  <span className="gu-num">{inTrayMoney.toLocaleString()} ₽</span>
+                </div>
+
+                {Object.keys(trayDenoms).length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--gu-fg-3)', padding: '14px 0', textAlign: 'center' }}>
+                    Лоток пуст. Выберите купюры или монеты справа либо нажмите «Отсчитать без сдачи».
+                  </div>
+                ) : (
+                  <div className="gu-row gu-gap-2" style={{ flexWrap: 'wrap', paddingTop: 4 }}>
+                    {Object.entries(trayDenoms).map(([itemId, count]) => {
+                      const denom = playerDenoms.find((d) => d.itemId === itemId);
+                      if (!denom || count <= 0) return null;
+                      return (
+                        <div key={itemId} className="gu-shop-tray-chip">
+                          <ItemIconCanvas itemId={itemId} size={20} />
+                          <b>{denom.nameRu}</b>
+                          <span className="gu-num" style={{ color: 'var(--gu-fg-2)' }}>×{count}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTrayDenom(itemId)}
+                            title="Убрать одну купюру/монету"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {playerCash < cartTotal && (
+                <div className="gu-banner gu-banner-err">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Недостаточно наличных денег для оплаты чека (не хватает {(cartTotal - playerCash).toLocaleString()} ₽).</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={inTrayMoney < cartTotal || posSuccess}
+                onClick={handleExecutePOSPayment}
+                className="gu-btn gu-btn-ok gu-btn-lg gu-btn-block"
+              >
+                {posSuccess ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Оплата проведена — Чек закрыт</span>
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4" />
+                    <span>Оплатить и забрать покупки ({cartTotal.toLocaleString()} ₽)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column: Player Wallet Banknotes & Coins */}
+          <div className="gu-panel gu-pad gu-col gu-gap-4">
             <div>
-              <span className="text-[10px] text-zinc-400 uppercase tracking-wider block">Итого в корзине</span>
-              <span className="text-base font-mono font-bold text-emerald-400">{cartTotal.toLocaleString()} ₽</span>
+              <div className="gu-sec">
+                <span>Банкноты в кошельке</span>
+                <span className="gu-sec-line" />
+                <span className="gu-tag gu-tag-amber">Всего: {playerCash.toLocaleString()} ₽</span>
+              </div>
+
+              <div className="gu-shop-denom-grid">
+                {playerDenoms
+                  .filter((d) => d.type === 'banknote')
+                  .map((denom) => {
+                    const inTray = trayDenoms[denom.itemId] || 0;
+                    const remaining = Math.max(0, denom.count - inTray);
+                    const canAdd = remaining > 0;
+
+                    return (
+                      <button
+                        key={denom.itemId}
+                        type="button"
+                        disabled={!canAdd}
+                        onClick={() => handleAddTrayDenom(denom.itemId)}
+                        className="gu-shop-denom"
+                      >
+                        <div className="gu-shop-denom-top">
+                          <ItemIconCanvas itemId={denom.itemId} size={28} />
+                          <span className="gu-shop-denom-val">{denom.nameRu}</span>
+                        </div>
+                        <div className="gu-shop-denom-sub">
+                          <span>В наличии</span>
+                          <b>{remaining} шт.</b>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
             </div>
 
-            <button
-              onClick={() => setActiveTab('pos')}
-              className="px-5 py-2.5 min-h-[44px] bg-emerald-600 active:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg"
-            >
-              К оплате ({totalCartItemsCount}) <Receipt className="w-4 h-4" />
-            </button>
+            <div>
+              <div className="gu-sec">
+                <span>Разменная монета</span>
+                <span className="gu-sec-line" />
+              </div>
+
+              <div className="gu-shop-denom-grid">
+                {playerDenoms
+                  .filter((d) => d.type === 'coin')
+                  .map((denom) => {
+                    const inTray = trayDenoms[denom.itemId] || 0;
+                    const remaining = Math.max(0, denom.count - inTray);
+                    const canAdd = remaining > 0;
+
+                    return (
+                      <button
+                        key={denom.itemId}
+                        type="button"
+                        disabled={!canAdd}
+                        onClick={() => handleAddTrayDenom(denom.itemId)}
+                        className="gu-shop-denom"
+                      >
+                        <div className="gu-shop-denom-top">
+                          <ItemIconCanvas itemId={denom.itemId} size={22} />
+                          <span className="gu-shop-denom-val is-coin">{denom.nameRu}</span>
+                        </div>
+                        <div className="gu-shop-denom-sub">
+                          <span>В наличии</span>
+                          <b>{remaining} шт.</b>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </ModalShell>
   );
 };
+
