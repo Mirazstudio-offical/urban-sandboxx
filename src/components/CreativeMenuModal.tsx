@@ -39,7 +39,7 @@ import { ActivePlacement } from '../types';
 import { GameCalendarState, formatGameDate, formatGameTime } from '../calendarSystem';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { VEHICLE_CATALOG, VehicleCatalogEntry, getVehicleCatalogItem } from '../vehicleCatalog';
-import { ITEM_CATALOG } from '../items';
+import { ITEM_CATALOG, getCandyPackagingShapeNameRu } from '../items';
 
 export interface CreativeMenuModalProps {
   isOpen: boolean;
@@ -671,6 +671,21 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                         <p className="text-[11px] font-mono text-[#8b929e] mt-1 line-clamp-2">
                           {item.descriptionRu || item.description}
                         </p>
+                        {(item.packagingShape || item.packagingShapeNameRu || item.packagingSize) && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            {(item.packagingShapeNameRu || item.packagingShape) && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                                <Package className="w-3 h-3 shrink-0" />
+                                {item.packagingShapeNameRu || getCandyPackagingShapeNameRu(item.packagingShape)}
+                              </span>
+                            )}
+                            {item.packagingSize && (
+                              <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono uppercase">
+                                {item.packagingSize}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">

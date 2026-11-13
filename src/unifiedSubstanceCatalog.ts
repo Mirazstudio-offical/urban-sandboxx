@@ -1,4 +1,5 @@
 import { LiquidId, FluidSubstanceAttributes } from './liquidSystem';
+import { GummyCandyAttributes } from './types';
 
 export interface UnifiedFluidMappingEntry {
   containerId: string;
@@ -12,6 +13,10 @@ export interface UnifiedPackagingMappingEntry {
   countInside?: number;
   innerItemId?: string;
   labelColor?: string;
+  containerTintColor?: string;
+  customNameRu?: string;
+  customDescriptionRu?: string;
+  innerGummyPresets?: Partial<GummyCandyAttributes>[];
 }
 
 function attr(
@@ -2453,5 +2458,277 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
   antipyretic: { containerId: 'blister_pack_10', countInside: 6, innerItemId: 'pill_antipyretic_single', labelColor: '#3b82f6' },
   activated_charcoal: { containerId: 'blister_pack_10', countInside: 10, innerItemId: 'pill_charcoal_single', labelColor: '#18181b' },
   vitamins: { containerId: 'blister_pack_10', countInside: 10, innerItemId: 'pill_vitamin_single', labelColor: '#eab308' },
-  medical_patch: { containerId: 'blister_pack_10', countInside: 6, innerItemId: 'patch_bactericidal_single', labelColor: '#10b981' }
+  medical_patch: { containerId: 'blister_pack_10', countInside: 6, innerItemId: 'patch_bactericidal_single', labelColor: '#10b981' },
+
+  // === 6. GUMMY & CANDY POUCHES (РАЗНООБРАЗНЫЕ УПАКОВКИ МАРМЕЛАДА) ===
+  gummy_pack_mini_bears: {
+    containerId: 'candy_pouch_mini',
+    countInside: 6,
+    innerItemId: 'gummy_candy',
+    labelColor: '#ec4899',
+    containerTintColor: '#f472b6',
+    customNameRu: 'Саше-пакетик мармелад «Фруктовые мишки» (6 шт.)',
+    customDescriptionRu: 'Компактный четырёхшовный мини-саше с прозрачным окошком и шестью классическими мармеладными мишками.',
+    innerGummyPresets: [
+      {
+        color: '#ef4444',
+        colorNameRu: 'Рубиново-красный',
+        shape: 'bear',
+        shapeNameRu: 'Мишка',
+        flavorRu: 'Спелая клубника',
+        ingredients: ['Глюкозный сироп', 'Сахар', 'Желатин пищевой', 'Сок клубники (8%)', 'Лимонная кислота', 'Экстракт кармина', 'Пчелиный воск']
+      },
+      {
+        color: '#eab308',
+        colorNameRu: 'Солнечно-жёлтый',
+        shape: 'bear',
+        shapeNameRu: 'Мишка',
+        flavorRu: 'Сочный лимон',
+        ingredients: ['Глюкозный сироп', 'Сахар', 'Желатин пищевой', 'Лимонный сок (7%)', 'Куркумин', 'Лимонная кислота', 'Карнаубский воск']
+      },
+      {
+        color: '#22c55e',
+        colorNameRu: 'Изумрудно-зелёный',
+        shape: 'bear',
+        shapeNameRu: 'Мишка',
+        flavorRu: 'Зелёное яблоко',
+        ingredients: ['Глюкозный сироп', 'Сахар', 'Желатин пищевой', 'Яблочный сок (8%)', 'Хлорофиллин', 'Яблочная кислота', 'Карнаубский воск']
+      },
+      {
+        color: '#f97316',
+        colorNameRu: 'Янтарно-оранжевый',
+        shape: 'bear',
+        shapeNameRu: 'Мишка',
+        flavorRu: 'Сладкий апельсин',
+        ingredients: ['Глюкозный сироп', 'Сахар', 'Желатин пищевой', 'Апельсиновый сок (8%)', 'Бета-каротин', 'Лимонная кислота', 'Пчелиный воск']
+      }
+    ]
+  },
+  gummy_pack_flow_cola: {
+    containerId: 'candy_pouch_small',
+    countInside: 8,
+    innerItemId: 'gummy_candy',
+    labelColor: '#991b1b',
+    containerTintColor: '#b91c1c',
+    customNameRu: 'Флоу-пак мармелад «Шипучая Кола» (8 шт.)',
+    customDescriptionRu: 'Пухлый герметичный пакет-подушечка с жевательными бутылочками колы и вишнёвой колы в кислой шипучей обсыпке.',
+    innerGummyPresets: [
+      {
+        color: '#78350f',
+        colorNameRu: 'Карамельно-коричневый',
+        shape: 'cola_bottle',
+        shapeNameRu: 'Бутылочка колы',
+        flavorRu: 'Классическая кола',
+        sourDust: true,
+        ingredients: ['Патока крахмальная', 'Сахар', 'Желатин', 'Карамельный колер IV', 'Экстракт ореха кола', 'Яблочная и лимонная кислоты', 'Цитрат натрия']
+      },
+      {
+        color: '#9f1239',
+        colorNameRu: 'Тёмно-вишнёвый',
+        shape: 'cola_bottle',
+        shapeNameRu: 'Бутылочка колы',
+        flavorRu: 'Вишнёвая кола',
+        sourDust: true,
+        ingredients: ['Патока крахмальная', 'Сахар', 'Желатин', 'Вишнёвый сок', 'Карамельный колер', 'Лимонная кислота', 'Шипучая сахарная пудра']
+      }
+    ]
+  },
+  gummy_pack_euro_worms: {
+    containerId: 'candy_pouch_euro',
+    countInside: 10,
+    innerItemId: 'gummy_candy',
+    labelColor: '#8b5cf6',
+    containerTintColor: '#a78bfa',
+    customNameRu: 'Евро-пакет мармелад «Кислые червячки» (10 шт.)',
+    customDescriptionRu: 'Прозрачный магазинный евро-пакет с цветным хедером-подвесом и двухцветными кислыми червячками в кристаллической посыпке.',
+    innerGummyPresets: [
+      {
+        color: '#22c55e',
+        colorNameRu: 'Лаймово-зелёный',
+        shape: 'worm',
+        shapeNameRu: 'Червячок',
+        flavorRu: 'Кислый лайм и ананас',
+        sourDust: true,
+        ingredients: ['Глюкозно-фруктозный сироп', 'Сахар', 'Желатин говяжий', 'Модифицированный крахмал', 'Яблочная кислота', 'Молочная кислота', 'Сок лайма']
+      },
+      {
+        color: '#3b82f6',
+        colorNameRu: 'Лазурно-синий',
+        shape: 'worm',
+        shapeNameRu: 'Червячок',
+        flavorRu: 'Голубая малина и лимон',
+        sourDust: true,
+        ingredients: ['Глюкозно-фруктозный сироп', 'Сахар', 'Желатин говяжий', 'Пектин', 'Лимонная кислота', 'Экстракт спирулины', 'Сахарная посыпка']
+      },
+      {
+        color: '#ef4444',
+        colorNameRu: 'Алый',
+        shape: 'worm',
+        shapeNameRu: 'Червячок',
+        flavorRu: 'Кислая вишня и манго',
+        sourDust: true,
+        ingredients: ['Глюкозно-фруктозный сироп', 'Сахар', 'Желатин говяжий', 'Вишнёвый концентрат', 'Винная кислота', 'Антоцианы', 'Сахарная посыпка']
+      },
+      {
+        color: '#a855f7',
+        colorNameRu: 'Фиолетовый',
+        shape: 'worm',
+        shapeNameRu: 'Червячок',
+        flavorRu: 'Чёрная смородина и цитрус',
+        sourDust: true,
+        ingredients: ['Глюкозно-фруктозный сироп', 'Сахар', 'Желатин говяжий', 'Сок чёрной смородины', 'Яблочная кислота', 'Антоцианы', 'Кристаллы цитруса']
+      }
+    ]
+  },
+  gummy_pack_doypack_rings: {
+    containerId: 'candy_pouch',
+    countInside: 12,
+    innerItemId: 'gummy_candy',
+    labelColor: '#f97316',
+    containerTintColor: '#fb923c',
+    customNameRu: 'Дой-пак мармелад «Фруктовые колечки» (12 шт.)',
+    customDescriptionRu: 'Удобный стоячий пакет дой-пак с зип-локом и двухслойными фруктово-суфлейными колечками (персик, арбуз, яблоко).',
+    innerGummyPresets: [
+      {
+        color: '#fb923c',
+        colorNameRu: 'Персиково-оранжевый',
+        shape: 'ring',
+        shapeNameRu: 'Колечко',
+        flavorRu: 'Бархатный персик',
+        sourDust: true,
+        ingredients: ['Сахар', 'Глюкозный сироп', 'Персиковое пюре (6%)', 'Желатин', 'Пектин яблочный', 'Лимонная кислота', 'Экстракт паприки']
+      },
+      {
+        color: '#f43f5e',
+        colorNameRu: 'Арбузно-розовый',
+        shape: 'ring',
+        shapeNameRu: 'Колечко',
+        flavorRu: 'Сахарный арбуз',
+        sourDust: true,
+        ingredients: ['Сахар', 'Глюкозный сироп', 'Сок арбуза (6%)', 'Желатин', 'Пектин', 'Яблочная кислота', 'Концентрат моркови и гибискуса']
+      },
+      {
+        color: '#10b981',
+        colorNameRu: 'Яблочно-зелёный',
+        shape: 'ring',
+        shapeNameRu: 'Колечко',
+        flavorRu: 'Кисло-сладкое яблоко',
+        sourDust: true,
+        ingredients: ['Сахар', 'Глюкозный сироп', 'Яблочный сок (7%)', 'Желатин', 'Взбитый белковый слой', 'Яблочная кислота', 'Медные комплексы хлорофиллов']
+      }
+    ]
+  },
+  gummy_pack_doypack_berries: {
+    containerId: 'candy_pouch',
+    countInside: 12,
+    innerItemId: 'gummy_candy',
+    labelColor: '#be123c',
+    containerTintColor: '#e11d48',
+    customNameRu: 'Дой-пак мармелад «Лесные ягоды и сердца» (12 шт.)',
+    customDescriptionRu: 'Стоячий дой-пак с застёжкой zip-lock: рельефные ягодки малины, ежевики и нежные вишнёвые сердечки на натуральном соке.',
+    innerGummyPresets: [
+      {
+        color: '#e11d48',
+        colorNameRu: 'Малиново-розовый',
+        shape: 'berry',
+        shapeNameRu: 'Ягодка',
+        flavorRu: 'Лесная малина',
+        ingredients: ['Пюре малины (12%)', 'Сахар тростниковый', 'Сироп топинамбура', 'Пектин цитрусовый', 'Агар-агар', 'Лимонная кислота', 'Сок чёрной моркови']
+      },
+      {
+        color: '#312e81',
+        colorNameRu: 'Ежевично-индиго',
+        shape: 'berry',
+        shapeNameRu: 'Ягодка',
+        flavorRu: 'Дикая ежевика и черника',
+        ingredients: ['Сок ежевики и черники (12%)', 'Сахар', 'Патока', 'Пектин', 'Агар-агар', 'Антоцианы', 'Натуральный воск']
+      },
+      {
+        color: '#dc2626',
+        colorNameRu: 'Вишнёво-алый',
+        shape: 'heart',
+        shapeNameRu: 'Сердечко',
+        flavorRu: 'Спелая вишня',
+        ingredients: ['Вишнёвый сок (10%)', 'Сахар', 'Глюкозный сироп', 'Желатин пищевой', 'Лимонная кислота', 'Экстракт гибискуса']
+      }
+    ]
+  },
+  gummy_pack_large_party: {
+    containerId: 'candy_pouch_large',
+    countInside: 20,
+    innerItemId: 'gummy_candy',
+    labelColor: '#10b981',
+    containerTintColor: '#34d399',
+    customNameRu: 'Семейный пакет мармелад «Мега-Ассорти» (20 шт.)',
+    customDescriptionRu: 'Большая плоская пачка с боковыми фальцами: 20 мармеладок всевозможных форм, цветов и вкусов для большой компании.',
+    innerGummyPresets: [
+      {
+        color: '#ef4444',
+        colorNameRu: 'Клубнично-красный',
+        shape: 'bear',
+        shapeNameRu: 'Мишка',
+        flavorRu: 'Клубника',
+        ingredients: ['Глюкозный сироп', 'Сахар', 'Желатин', 'Клубничный сок', 'Лимонная кислота', 'Карнаубский воск']
+      },
+      {
+        color: '#22c55e',
+        colorNameRu: 'Зелёный',
+        shape: 'worm',
+        shapeNameRu: 'Червячок',
+        flavorRu: 'Кислое яблоко',
+        sourDust: true,
+        ingredients: ['Глюкозный сироп', 'Сахар', 'Желатин', 'Яблочный сок', 'Яблочная кислота', 'Сахарная посыпка']
+      },
+      {
+        color: '#eab308',
+        colorNameRu: 'Лимонно-золотой',
+        shape: 'star',
+        shapeNameRu: 'Звёздочка',
+        flavorRu: 'Юзу и манго',
+        ingredients: ['Сахар', 'Сироп глюкозы', 'Пюре манго', 'Пектин', 'Куркумин', 'Лимонная кислота']
+      },
+      {
+        color: '#a855f7',
+        colorNameRu: 'Виноградно-фиолетовый',
+        shape: 'cube',
+        shapeNameRu: 'Кубик',
+        flavorRu: 'Тёмный виноград Изабелла',
+        sourDust: true,
+        ingredients: ['Сахар', 'Виноградный сок (10%)', 'Пектин фруктовый', 'Агар-агар', 'Винная кислота', 'Сахарная корочка']
+      },
+      {
+        color: '#78350f',
+        colorNameRu: 'Карамельно-коричневый',
+        shape: 'cola_bottle',
+        shapeNameRu: 'Бутылочка колы',
+        flavorRu: 'Освежающая кола',
+        ingredients: ['Патока', 'Сахар', 'Желатин', 'Карамельный колер', 'Лимонная кислота', 'Экстракт колы']
+      },
+      {
+        color: '#ec4899',
+        colorNameRu: 'Нежно-розовый',
+        shape: 'heart',
+        shapeNameRu: 'Сердечко',
+        flavorRu: 'Розовый грейпфрут',
+        ingredients: ['Сахар', 'Сироп глюкозы', 'Сок грейпфрута', 'Желатин', 'Концентрат редиса', 'Карнаубский воск']
+      },
+      {
+        color: '#f97316',
+        colorNameRu: 'Мандариново-оранжевый',
+        shape: 'ring',
+        shapeNameRu: 'Колечко',
+        flavorRu: 'Спелый мандарин',
+        sourDust: true,
+        ingredients: ['Сахар', 'Глюкозный сироп', 'Мандариновый сок', 'Желатин', 'Бета-каротин', 'Лимонная кислота']
+      },
+      {
+        color: '#312e81',
+        colorNameRu: 'Чернично-синий',
+        shape: 'berry',
+        shapeNameRu: 'Ягодка',
+        flavorRu: 'Лесная черника',
+        ingredients: ['Сок черники (12%)', 'Сахар', 'Патока', 'Агар-агар', 'Пектин', 'Антоцианы']
+      }
+    ]
+  }
 };

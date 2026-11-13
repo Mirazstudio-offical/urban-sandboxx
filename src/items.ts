@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, GummyCandyShape, GummyCandyAttributes } from './types';
 import { sound } from './audio';
 import { getPhoneSpecsForItemId } from './phoneData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
@@ -77,7 +77,11 @@ export interface ItemDefinition {
   isTransparentPackaging?: boolean;
   labelColor?: string;              // Custom brand seal label / sticker color
   containerVisuals?: ContainerVisualAttributes; // Visual shape, RGB material color, and RGB label color
+  containerTintColor?: string;
   packagingSize?: 'mini' | 'small' | 'medium' | 'large';
+  packagingShape?: CandyPackagingShape;
+  packagingShapeNameRu?: string;
+  gummyAttributes?: GummyCandyAttributes;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -88,6 +92,46 @@ export interface ItemDefinition {
   heatLossRate?: number;         // Rate of heat dissipation / cooling per second
   heatRetention?: number;        // Thermal insulation / retention factor (0.0 to 1.0)
 }
+
+export const CANDY_PACKAGING_SHAPE_NAMES_RU: Record<CandyPackagingShape, string> = {
+  flat_sachet: 'Плоский саше-пакет (4-шовный)',
+  pillow: 'Пакет-подушечка (Флоу-пак)',
+  hanging_card: 'Евро-пакет с хедером-подвесом',
+  doypack: 'Стоячий Дой-пак с зип-локом',
+  gusset: 'Объёмный пакет с боковыми фальцами'
+};
+
+export function getCandyPackagingShapeNameRu(shape?: CandyPackagingShape): string {
+  if (!shape) return 'Стандартная упаковка';
+  return CANDY_PACKAGING_SHAPE_NAMES_RU[shape] || 'Пластиковая упаковка';
+}
+
+export const GUMMY_SHAPE_NAMES_RU: Record<GummyCandyShape, string> = {
+  bear: 'Мишка',
+  worm: 'Червячок',
+  berry: 'Ягодка',
+  ring: 'Колечко',
+  cube: 'Кубик',
+  cola_bottle: 'Бутылочка колы',
+  star: 'Звёздочка',
+  heart: 'Сердечко'
+};
+
+export const DEFAULT_GUMMY_ATTRIBUTES: GummyCandyAttributes = {
+  color: '#ef4444',
+  colorNameRu: 'Рубиново-красный',
+  shape: 'bear',
+  shapeNameRu: 'Мишка',
+  flavorRu: 'Спелая клубника',
+  ingredients: [
+    'Глюкозный сироп',
+    'Сахар',
+    'Желатин пищевой',
+    'Концентрированный клубничный сок',
+    'Лимонная кислота',
+    'Карнаубский воск'
+  ]
+};
 
 export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   // === FOOD (ЕДА) ===
@@ -4352,6 +4396,262 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     labelColor: '#1e293b'
   },
 
+  // === PLASTIC CANDY & GUMMY PACKAGING (ПЛАСТИКОВЫЕ УПАКОВКИ ИЗ-ПОД МАРМЕЛАДОК И КОНФЕТ РАЗНЫХ ФОРМ И РАЗМЕРОВ) ===
+  // 1. MINI (МИНИ 0.25L) - Плоский 4-шовный саше-пакет (Flat Sachet)
+  candy_pouch_mini: {
+    itemId: 'candy_pouch_mini',
+    name: 'Mini Plastic Candy Sachet (0.25L)',
+    nameRu: 'Мини-пакет от мармеладок (0.25L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Compact 4-side heat-sealed glossy BOPP plastic sachet from fruit gummies with V-tear notches and clear front window.',
+    descriptionRu: 'Компактный запаянный пластиковый мини-пакет (форма: плоский 4-шовный саше) из-под фруктовых мармеладок с надсечками для отрыва и прозрачным окошком. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.008,
+    volume: 0.05,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'candy_pouch_mini_open',
+    isTransparentPackaging: true,
+    containerCapacityL: 0.25,
+    maxContainedItemVolumeL: 0.2,
+    maxContainedWeightKg: 0.4,
+    labelColor: '#ec4899',
+    packagingSize: 'mini',
+    packagingShape: 'flat_sachet',
+    packagingShapeNameRu: 'Плоский саше-пакет (4-шовный)'
+  },
+  candy_pouch_mini_open: {
+    itemId: 'candy_pouch_mini_open',
+    name: 'Open Mini Plastic Candy Sachet',
+    nameRu: 'Вскрытый мини-пакет от мармеладок',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Torn-open miniature BOPP gummy sachet with glistening sugar dust residue inside the viewing window.',
+    descriptionRu: 'Разорванный пластиковый саше-пакет из-под мини-мармеладок с кристалликами сахара и кислинки внутри. Можно использовать как мелкую тару.',
+    effects: {},
+    weight: 0.008,
+    volume: 0.06,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    isTransparentPackaging: true,
+    containerCapacityL: 0.25,
+    maxContainedItemVolumeL: 0.2,
+    maxContainedWeightKg: 0.4,
+    labelColor: '#ec4899',
+    packagingSize: 'mini',
+    packagingShape: 'flat_sachet',
+    packagingShapeNameRu: 'Плоский саше-пакет (4-шовный)'
+  },
+
+  // 2. SMALL (МАЛАЯ 0.5L) - Пакет-подушечка / Флоу-пак (Pillow Flow-Pack)
+  candy_pouch_small: {
+    itemId: 'candy_pouch_small',
+    name: 'Small Candy Flow-Pack Pouch (0.5L)',
+    nameRu: 'Малый флоу-пак от конфет (0.5L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Puffy pillow-shaped polypropylene flow-pack wrapper with sawtooth crimped top/bottom weld fins and oval viewing window.',
+    descriptionRu: 'Запаянный пластиковый пакет из-под желейных конфет (форма: пакет-подушечка / флоу-пак) с зубчатыми термошвами и овальным окошком. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.012,
+    volume: 0.09,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'candy_pouch_small_open',
+    isTransparentPackaging: true,
+    containerCapacityL: 0.5,
+    maxContainedItemVolumeL: 0.45,
+    maxContainedWeightKg: 0.8,
+    labelColor: '#f97316',
+    packagingSize: 'small',
+    packagingShape: 'pillow',
+    packagingShapeNameRu: 'Пакет-подушечка (Флоу-пак)'
+  },
+  candy_pouch_small_open: {
+    itemId: 'candy_pouch_small_open',
+    name: 'Open Small Candy Flow-Pack Pouch',
+    nameRu: 'Вскрытый флоу-пак от конфет',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened pillow-shaped candy flow-pack with torn top foil lip and crinkled cellophane sheen.',
+    descriptionRu: 'Вскрытый пакет-подушечка из-под конфет с разорванным верхним гребешком и фольгированной изнанкой.',
+    effects: {},
+    weight: 0.012,
+    volume: 0.1,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    isTransparentPackaging: true,
+    containerCapacityL: 0.5,
+    maxContainedItemVolumeL: 0.45,
+    maxContainedWeightKg: 0.8,
+    labelColor: '#f97316',
+    packagingSize: 'small',
+    packagingShape: 'pillow',
+    packagingShapeNameRu: 'Пакет-подушечка (Флоу-пак)'
+  },
+
+  // 3. EURO HANGING (МАЛАЯ/ВИТРИННАЯ 0.6L) - Евро-пакет с хедером-подвесом (Hanging Euro-Card)
+  candy_pouch_euro: {
+    itemId: 'candy_pouch_euro',
+    name: 'Euro-Slot Candy Hanging Pouch (0.6L)',
+    nameRu: 'Евро-пакет от мармеладок (0.6L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Clear retail polypropylene candy bag topped with a stiff printed header card and sombrero euroslot hang punch.',
+    descriptionRu: 'Прозрачный витринный пакет из-под мармеладок (форма: евро-пакет с хедером-подвесом) с плотной цветной шапкой и еврослотом. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.015,
+    volume: 0.11,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'candy_pouch_euro_open',
+    isTransparentPackaging: true,
+    containerCapacityL: 0.6,
+    maxContainedItemVolumeL: 0.5,
+    maxContainedWeightKg: 1.0,
+    labelColor: '#8b5cf6',
+    packagingSize: 'small',
+    packagingShape: 'hanging_card',
+    packagingShapeNameRu: 'Евро-пакет с хедером-подвесом'
+  },
+  candy_pouch_euro_open: {
+    itemId: 'candy_pouch_euro_open',
+    name: 'Open Euro-Slot Candy Hanging Pouch',
+    nameRu: 'Вскрытый евро-пакет от мармеладок',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Torn transparent candy pouch with intact retail header card and euroslot hole.',
+    descriptionRu: 'Надорванный прозрачный евро-пакет из-под мармеладок с ярким хедером-подвесом.',
+    effects: {},
+    weight: 0.015,
+    volume: 0.12,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    isTransparentPackaging: true,
+    containerCapacityL: 0.6,
+    maxContainedItemVolumeL: 0.5,
+    maxContainedWeightKg: 1.0,
+    labelColor: '#8b5cf6',
+    packagingSize: 'small',
+    packagingShape: 'hanging_card',
+    packagingShapeNameRu: 'Евро-пакет с хедером-подвесом'
+  },
+
+  // 4. MEDIUM (СРЕДНЯЯ 1.0L) - Стоячий Дой-пак с зип-локом (Stand-Up Doypack)
+  candy_pouch: {
+    itemId: 'candy_pouch',
+    name: 'Doypack Gummy Pouch (1.0L)',
+    nameRu: 'Пакет-дойпак от мармелада (1.0L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Glossy stand-up doypack plastic candy pouch with bottom gusset fold, double zip-lock track, tear notches, and clear oval window.',
+    descriptionRu: 'Плотный глянцевый пакет из-под мармеладных мишек (форма: стоячий дой-пак с зип-локом и донной складкой). Удобно закрывается повторно. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.16,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'candy_pouch_open',
+    isTransparentPackaging: true,
+    containerCapacityL: 1.0,
+    maxContainedItemVolumeL: 0.85,
+    maxContainedWeightKg: 1.8,
+    labelColor: '#e11d48',
+    packagingSize: 'medium',
+    packagingShape: 'doypack',
+    packagingShapeNameRu: 'Стоячий Дой-пак с зип-локом'
+  },
+  candy_pouch_open: {
+    itemId: 'candy_pouch_open',
+    name: 'Open Doypack Gummy Pouch',
+    nameRu: 'Открытый дойпак от мармелада',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened reusable stand-up doypack candy pouch with metallized foil lip and working zip-lock seal.',
+    descriptionRu: 'Вскрытый стоячий дойпак из-под мармелада с зип-замком и прозрачным окошком. Отлично подходит для хранения мелочей и сладостей.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.18,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    isTransparentPackaging: true,
+    containerCapacityL: 1.0,
+    maxContainedItemVolumeL: 0.85,
+    maxContainedWeightKg: 1.8,
+    labelColor: '#e11d48',
+    packagingSize: 'medium',
+    packagingShape: 'doypack',
+    packagingShapeNameRu: 'Стоячий Дой-пак с зип-локом'
+  },
+
+  // 5. LARGE (БОЛЬШАЯ 2.0L) - Объёмный пакет с боковыми фальцами (Gusset Standing Bag)
+  candy_pouch_large: {
+    itemId: 'candy_pouch_large',
+    name: 'Large Gusset Candy Bag (2.0L)',
+    nameRu: 'Большой пакет от мармеладок (2.0L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Family-size plastic candy bag with wide 3D side gusset pleats, flat block bottom, crimped clip band, and arched window.',
+    descriptionRu: 'Семейная большая пачка от конфет и мармелада (форма: объёмный пакет с боковыми фальцами и плоским дном). Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.032,
+    volume: 0.28,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'candy_pouch_large_open',
+    isTransparentPackaging: true,
+    containerCapacityL: 2.0,
+    maxContainedItemVolumeL: 1.75,
+    maxContainedWeightKg: 3.5,
+    labelColor: '#10b981',
+    packagingSize: 'large',
+    packagingShape: 'gusset',
+    packagingShapeNameRu: 'Объёмный пакет с боковыми фальцами'
+  },
+  candy_pouch_large_open: {
+    itemId: 'candy_pouch_large_open',
+    name: 'Open Large Gusset Candy Bag',
+    nameRu: 'Вскрытый большой пакет от мармеладок',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened family-size gusseted candy bag with creased polymer pleats and wide transparent viewing window.',
+    descriptionRu: 'Вскрытая большая пачка с боковыми фальцами из-под мармелада. Вмещает до 2.0 л.',
+    effects: {},
+    weight: 0.032,
+    volume: 0.3,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    isTransparentPackaging: true,
+    containerCapacityL: 2.0,
+    maxContainedItemVolumeL: 1.75,
+    maxContainedWeightKg: 3.5,
+    labelColor: '#10b981',
+    packagingSize: 'large',
+    packagingShape: 'gusset',
+    packagingShapeNameRu: 'Объёмный пакет с боковыми фальцами'
+  },
+
   // === FURNITURE (МЕБЕЛЬ ДЛЯ КВАРТИРЫ) ===
   furn_chair: {
     itemId: 'furn_chair',
@@ -6325,6 +6625,23 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     biteCount: 2,
     fullnessPerBite: 2
   },
+  gummy_candy: {
+    itemId: 'gummy_candy',
+    name: 'Gummy Candy',
+    nameRu: 'Мармеладка (1 шт.)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Single chewy translucent fruit gummy candy with color, shape, and ingredients attributes.',
+    descriptionRu: 'Одна жевательная мармеладка из натурального сока, патоки и желатина со своими цветом, формой и составом.',
+    effects: { hunger: 4, energy: 4 },
+    weight: 0.008,
+    volume: 0.01,
+    usable: true,
+    biteCount: 1,
+    fullnessPerBite: 1,
+    gummyAttributes: DEFAULT_GUMMY_ATTRIBUTES
+  },
   fries_strip_single: {
     itemId: 'fries_strip_single',
     name: 'Golden French Fry Strip',
@@ -7024,7 +7341,13 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     isTransparentPackaging: def.isTransparentPackaging,
     labelColor: def.labelColor,
     containerVisuals: originalDef?.containerVisuals || def.containerVisuals,
-    packagingSize: def.packagingSize,
+    containerTintColor: originalDef?.containerTintColor || def.containerTintColor,
+    packagingSize: originalDef?.packagingSize || def.packagingSize,
+    packagingShape: originalDef?.packagingShape || def.packagingShape,
+    packagingShapeNameRu:
+      originalDef?.packagingShapeNameRu ||
+      def.packagingShapeNameRu ||
+      (def.packagingShape ? getCandyPackagingShapeNameRu(def.packagingShape) : undefined),
     contents: (isContainer && !(fluidStorage && legacyMap?.liquidId)) ? [] : undefined,
     containerCapacityL: containerCap,
     maxContainedItemVolumeL: maxContainedVol,
@@ -7039,7 +7362,17 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     cpu: phoneSpecs?.cpuModel,
     ram: phoneSpecs?.ramGb,
     storage: phoneSpecs?.storageGb,
-    battery: phoneSpecs?.batteryCapacityMah
+    battery: phoneSpecs?.batteryCapacityMah,
+    gummyAttributes: (originalDef?.gummyAttributes || def.gummyAttributes)
+      ? {
+          ...(originalDef?.gummyAttributes || def.gummyAttributes)!,
+          ingredients: [...((originalDef?.gummyAttributes || def.gummyAttributes)!.ingredients || [])]
+        }
+      : undefined,
+    nutrients:
+      resolvedItemId === 'gummy_candy'
+        ? { calories: 16, proteins: 0.4, fats: 0, carbs: 3.6, sugars: 2.8 }
+        : undefined
   };
 
   if (createdItem.fluidStorage) {
@@ -7065,7 +7398,37 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   return createdItem;
 }
 
-export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInside?: number; innerItemId?: string; labelColor?: string }> = {
+export function createGummyCandy(overrides?: Partial<GummyCandyAttributes>): InventoryItem {
+  const item = createItem('gummy_candy', 1, undefined, true);
+  const shape: GummyCandyShape = overrides?.shape || DEFAULT_GUMMY_ATTRIBUTES.shape;
+  const shapeNameRu = overrides?.shapeNameRu || GUMMY_SHAPE_NAMES_RU[shape] || DEFAULT_GUMMY_ATTRIBUTES.shapeNameRu;
+  const attrs: GummyCandyAttributes = {
+    color: overrides?.color || DEFAULT_GUMMY_ATTRIBUTES.color,
+    colorNameRu: overrides?.colorNameRu || DEFAULT_GUMMY_ATTRIBUTES.colorNameRu,
+    shape,
+    shapeNameRu,
+    flavorRu: overrides?.flavorRu ?? DEFAULT_GUMMY_ATTRIBUTES.flavorRu,
+    sourDust: overrides?.sourDust ?? false,
+    ingredients: overrides?.ingredients ? [...overrides.ingredients] : [...DEFAULT_GUMMY_ATTRIBUTES.ingredients]
+  };
+  item.gummyAttributes = attrs;
+  const sourPrefix = attrs.sourDust ? 'кислая ' : '';
+  item.nameRu = `Мармеладка (${sourPrefix}${attrs.shapeNameRu.toLowerCase()}, ${attrs.colorNameRu.toLowerCase()})`;
+  item.descriptionRu = `Жевательный мармелад: ${attrs.shapeNameRu.toLowerCase()}${attrs.flavorRu ? ` со вкусом «${attrs.flavorRu}»` : ''}${attrs.sourDust ? ' в кислой сахарной обсыпке' : ''}. Цвет: ${attrs.colorNameRu}. Состав: ${attrs.ingredients.join(', ')}.`;
+  item.nutrients = { calories: 16, proteins: 0.4, fats: 0, carbs: 3.6, sugars: 2.8 };
+  return item;
+}
+
+export const ITEM_PACKAGING_MAP: Record<string, {
+  containerId: string;
+  countInside?: number;
+  innerItemId?: string;
+  labelColor?: string;
+  containerTintColor?: string;
+  customNameRu?: string;
+  customDescriptionRu?: string;
+  innerGummyPresets?: Partial<GummyCandyAttributes>[];
+}> = {
   // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
   carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2, innerItemId: 'carrot_peeled' },
   garlic_peeled: { containerId: 'vacuum_pack_small', countInside: 5, innerItemId: 'garlic_clove' },
@@ -7187,19 +7550,42 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
     if (packInfo.labelColor) {
       container.labelColor = packInfo.labelColor;
     }
+    if (packInfo.containerTintColor) {
+      container.containerTintColor = packInfo.containerTintColor;
+    }
     const innerId = packInfo.innerItemId || itemId;
     const numInside = packInfo.countInside !== undefined ? packInfo.countInside : count;
     container.contents = [];
     for (let i = 0; i < numInside; i++) {
-      container.contents.push(createItem(innerId, 1, undefined, true));
+      if (innerId === 'gummy_candy') {
+        const preset =
+          packInfo.innerGummyPresets && packInfo.innerGummyPresets.length > 0
+            ? packInfo.innerGummyPresets[i % packInfo.innerGummyPresets.length]
+            : undefined;
+        container.contents.push(createGummyCandy(preset));
+      } else {
+        container.contents.push(createItem(innerId, 1, undefined, true));
+      }
     }
     const singleInner = ITEM_CATALOG[innerId];
     if (singleInner) {
-      container.nameRu = `${container.nameRu} (${singleInner.nameRu}${numInside > 1 ? ` x${numInside}` : ''})`;
+      const baseTitle = packInfo.customNameRu || `${container.nameRu} (${singleInner.nameRu}${numInside > 1 ? ` x${numInside}` : ''})`;
+      container.nameRu = baseTitle;
       const actionHint = container.singleUseContainer
         ? 'Нажмите [E] в руках или используйте в инвентаре, чтобы вскрыть упаковку и достать содержимое.'
         : 'Откройте контейнер в инвентаре или используйте [E], чтобы достать содержимое поштучно.';
-      container.descriptionRu = `${container.descriptionRu} Внутри: ${singleInner.nameRu} (${numInside} шт.). ${actionHint}`;
+      const customDesc = packInfo.customDescriptionRu || container.descriptionRu;
+      if (innerId === 'gummy_candy' && container.contents.length > 0) {
+        const shapeSummary = Array.from(
+          new Set(container.contents.map(c => c.gummyAttributes?.shapeNameRu).filter(Boolean))
+        ).join(', ');
+        const flavorSummary = Array.from(
+          new Set(container.contents.map(c => c.gummyAttributes?.flavorRu).filter(Boolean))
+        ).join(', ');
+        container.descriptionRu = `${customDesc} Внутри: ${numInside} шт. мармелада (${shapeSummary || singleInner.nameRu}${flavorSummary ? `; вкусы: ${flavorSummary}` : ''}). ${actionHint}`;
+      } else {
+        container.descriptionRu = `${customDesc} Внутри: ${singleInner.nameRu} (${numInside} шт.). ${actionHint}`;
+      }
       container.weight = Number(((container.weight || 0.04) + (singleInner.weight || 0.02) * numInside).toFixed(2));
       container.volume = Number(((container.volume || 0.08) + (singleInner.volume || 0.02) * numInside).toFixed(2));
     }
@@ -7334,20 +7720,26 @@ export function unpackSingleUseContainer(
         sample.itemId === 'raisins_handful_single' ||
         sample.itemId === 'cranberry_dried_single' ||
         sample.itemId === 'banana_chip_single' ||
-        sample.itemId === 'nutmeg_whole_seeds';
+        sample.itemId === 'nutmeg_whole_seeds' ||
+        sample.itemId === 'gummy_candy';
 
       if (isEggPiece || isDirectPiece) {
         // STEP 1: If the multi-piece package is still sealed, tearing it open converts it to the opened state first!
         if (isCurrentlySealed) {
+          const sealedTornId = container.tornItemId || def?.tornItemId;
           if (container.itemId === 'pouch_sealed_snack' && ITEM_CATALOG.pouch_sealed_snack_torn) {
             container.itemId = 'pouch_sealed_snack_torn';
             container.name = ITEM_CATALOG.pouch_sealed_snack_torn.name;
           } else if (container.itemId === 'egg_carton_10' && ITEM_CATALOG.egg_carton_10_open) {
             container.itemId = 'egg_carton_10_open';
             container.name = ITEM_CATALOG.egg_carton_10_open.name;
+          } else if (container.itemId.startsWith('candy_pouch') && sealedTornId && ITEM_CATALOG[sealedTornId]) {
+            container.itemId = sealedTornId;
+            container.name = ITEM_CATALOG[sealedTornId].name;
           }
           container.isOpen = true;
           container.singleUseContainer = false;
+          container.tornItemId = undefined;
           container.isContainer = true;
           container.usable = true;
 
@@ -7355,7 +7747,8 @@ export function unpackSingleUseContainer(
           if (!baseOpenName.toLowerCase().includes('вскрыт') && !baseOpenName.toLowerCase().includes('открыт')) {
             baseOpenName = `Открытая упаковка: ${baseOpenName}`;
           }
-          container.nameRu = `${baseOpenName} (${sample.nameRu}: ${container.contents.length} шт)`;
+          const innerSummaryLabel = sample.itemId === 'gummy_candy' ? 'Мармелад' : sample.nameRu;
+          container.nameRu = `${baseOpenName} (${innerSummaryLabel}: ${container.contents.length} шт)`;
           sound.playUseItem();
           const openMsg = `Упаковка вскрыта: ${container.nameRu}. Теперь содержимое можно доставать или употреблять!`;
           addPlayerNotification(player, openMsg, 'pickup');
@@ -7430,7 +7823,8 @@ export function unpackSingleUseContainer(
               if (!baseContainerName.toLowerCase().includes('вскрыт') && !baseContainerName.toLowerCase().includes('открыт')) {
                 baseContainerName = `Открытая упаковка: ${baseContainerName}`;
               }
-              container.nameRu = `${baseContainerName} (${inner.nameRu}: ${remCount} шт)`;
+              const remLabel = inner.itemId === 'gummy_candy' ? 'Мармелад' : inner.nameRu;
+              container.nameRu = `${baseContainerName} (${remLabel}: ${remCount} шт)`;
               const notif = `${inner.nameRu} (осталось в упаковке: ${remCount} шт)`;
               addPlayerNotification(player, notif, inner.category === 'food' ? 'food' : 'heal');
               return { success: true, message: notif };
@@ -7445,7 +7839,14 @@ export function unpackSingleUseContainer(
                 container.isContainer = emptyTornDef.isContainer ?? false;
                 container.usable = false;
                 container.singleUseContainer = false;
+                container.tornItemId = undefined;
+                container.isOpen = true;
                 container.contents = emptyTornDef.isContainer ? [] : undefined;
+                if (!container.packagingSize && emptyTornDef.packagingSize) container.packagingSize = emptyTornDef.packagingSize;
+                if (!container.packagingShape && emptyTornDef.packagingShape) container.packagingShape = emptyTornDef.packagingShape;
+                if (!container.packagingShapeNameRu && emptyTornDef.packagingShapeNameRu) {
+                  container.packagingShapeNameRu = emptyTornDef.packagingShapeNameRu;
+                }
               }
               const notif = `Использовано последнее: ${inner.nameRu}. Осталась пустая упаковка: ${container.nameRu}.`;
               addPlayerNotification(player, notif, 'info');
@@ -7470,6 +7871,10 @@ export function unpackSingleUseContainer(
   }
 
   const existingLabelColor = container.labelColor || def?.labelColor;
+  const existingTintColor = container.containerTintColor || def?.containerTintColor;
+  const existingPackagingSize = container.packagingSize || def?.packagingSize;
+  const existingPackagingShape = container.packagingShape || def?.packagingShape;
+  const existingPackagingShapeNameRu = container.packagingShapeNameRu || def?.packagingShapeNameRu;
 
   // Convert container to its torn/opened counterpart in-place (works for both empty and filled packages!)
   const tornId = container.tornItemId || def?.tornItemId || def?.leftoverId || 'tray_plastic_empty';
@@ -7488,6 +7893,18 @@ export function unpackSingleUseContainer(
   container.descriptionRu = tornDef.descriptionRu;
   if (existingLabelColor) {
     container.labelColor = existingLabelColor;
+  }
+  if (existingTintColor) {
+    container.containerTintColor = existingTintColor;
+  }
+  if (existingPackagingSize || tornDef.packagingSize) {
+    container.packagingSize = existingPackagingSize || tornDef.packagingSize;
+  }
+  if (existingPackagingShape || tornDef.packagingShape) {
+    container.packagingShape = existingPackagingShape || tornDef.packagingShape;
+  }
+  if (existingPackagingShapeNameRu || tornDef.packagingShapeNameRu) {
+    container.packagingShapeNameRu = existingPackagingShapeNameRu || tornDef.packagingShapeNameRu;
   }
 
   if (extractedItems.length === 0) {
@@ -7626,6 +8043,44 @@ export function createPaperPackaging(options?: {
   if (options?.labelColor) {
     item.labelColor = options.labelColor;
   }
+  if (options?.contents && options.contents.length > 0) {
+    item.contents = [...options.contents];
+  }
+  return item;
+}
+
+export function createCandyPackaging(options?: {
+  size?: 'mini' | 'small' | 'medium' | 'large';
+  shape?: CandyPackagingShape;
+  labelColor?: string;
+  tintColor?: string;
+  contents?: InventoryItem[];
+  isOpen?: boolean;
+}): InventoryItem {
+  const shape = options?.shape;
+  const size = options?.size || (shape === 'flat_sachet' ? 'mini' : shape === 'pillow' || shape === 'hanging_card' ? 'small' : shape === 'gusset' ? 'large' : 'medium');
+
+  let baseId = 'candy_pouch';
+  if (shape === 'hanging_card') {
+    baseId = options?.isOpen ? 'candy_pouch_euro_open' : 'candy_pouch_euro';
+  } else if (shape === 'flat_sachet' || size === 'mini') {
+    baseId = options?.isOpen ? 'candy_pouch_mini_open' : 'candy_pouch_mini';
+  } else if (shape === 'pillow' || size === 'small') {
+    baseId = options?.isOpen ? 'candy_pouch_small_open' : 'candy_pouch_small';
+  } else if (shape === 'gusset' || size === 'large') {
+    baseId = options?.isOpen ? 'candy_pouch_large_open' : 'candy_pouch_large';
+  } else {
+    baseId = options?.isOpen ? 'candy_pouch_open' : 'candy_pouch';
+  }
+
+  const item = createItem(baseId, 1);
+  if (size) item.packagingSize = size;
+  if (shape) {
+    item.packagingShape = shape;
+    item.packagingShapeNameRu = getCandyPackagingShapeNameRu(shape);
+  }
+  if (options?.labelColor) item.labelColor = options.labelColor;
+  if (options?.tintColor) item.containerTintColor = options.tintColor;
   if (options?.contents && options.contents.length > 0) {
     item.contents = [...options.contents];
   }
@@ -8496,6 +8951,10 @@ export function removeItemFromContainer(container: InventoryItem, contentIndex: 
     if (tornId && ITEM_CATALOG[tornId]) {
       const tornDef = ITEM_CATALOG[tornId];
       const existingLabelColor = container.labelColor || ITEM_CATALOG[container.itemId]?.labelColor;
+      const existingTintColor = container.containerTintColor || ITEM_CATALOG[container.itemId]?.containerTintColor;
+      const existingPackagingSize = container.packagingSize || ITEM_CATALOG[container.itemId]?.packagingSize;
+      const existingPackagingShape = container.packagingShape || ITEM_CATALOG[container.itemId]?.packagingShape;
+      const existingPackagingShapeNameRu = container.packagingShapeNameRu || ITEM_CATALOG[container.itemId]?.packagingShapeNameRu;
       container.itemId = tornDef.itemId;
       container.name = tornDef.name;
       container.nameRu = tornDef.nameRu;
@@ -8508,6 +8967,18 @@ export function removeItemFromContainer(container: InventoryItem, contentIndex: 
       container.descriptionRu = tornDef.descriptionRu;
       if (existingLabelColor) {
         container.labelColor = existingLabelColor;
+      }
+      if (existingTintColor) {
+        container.containerTintColor = existingTintColor;
+      }
+      if (existingPackagingSize || tornDef.packagingSize) {
+        container.packagingSize = existingPackagingSize || tornDef.packagingSize;
+      }
+      if (existingPackagingShape || tornDef.packagingShape) {
+        container.packagingShape = existingPackagingShape || tornDef.packagingShape;
+      }
+      if (existingPackagingShapeNameRu || tornDef.packagingShapeNameRu) {
+        container.packagingShapeNameRu = existingPackagingShapeNameRu || tornDef.packagingShapeNameRu;
       }
     }
   }
@@ -8672,6 +9143,11 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
     createItem('paper_packaging', 1),
     createItem('paper_packaging_large', 1),
     createItem('paper_packaging_open', 1),
+    createItem('candy_pouch_mini', 1),
+    createItem('candy_pouch_small', 1),
+    createItem('candy_pouch_euro', 1),
+    createItem('candy_pouch', 1),
+    createItem('candy_pouch_large', 1),
     createItem('water_bottle', 1),
     createItem('sandwich', 1),
     createItem('hot_coffee', 1),
@@ -9628,11 +10104,12 @@ export function useItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
-  // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open or consume piece
+  // Single-use vacuum bags, kraft paper packaging, candy pouches & disposable packaging unpack / tear open or consume piece
   if (
     item.singleUseContainer ||
     ITEM_CATALOG[item.itemId]?.singleUseContainer ||
     (item.itemId.startsWith('paper_packaging') && !item.itemId.includes('_open')) ||
+    (item.itemId.startsWith('candy_pouch') && !item.itemId.includes('_open')) ||
     ((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
       item.contents &&
       item.contents.length > 0)
@@ -9644,6 +10121,12 @@ export function useItemOnPlayer(
   if (item.itemId.startsWith('paper_packaging_open')) {
     addPlayerNotification(player, 'Это открытая бумажная упаковка: перетаскивайте в неё предметы для хранения.', 'info');
     return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
+  }
+
+  // Open plastic candy packaging container safety check
+  if (item.itemId.startsWith('candy_pouch') && item.itemId.includes('_open')) {
+    addPlayerNotification(player, 'Это вскрытая пластиковая упаковка от сладостей: перетаскивайте в неё мелкие предметы для хранения.', 'info');
+    return { success: false, message: 'Вскрытая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
   // Reusable filled containers (e.g. lukoshko with berries/mushrooms, open egg carton with eggs)
@@ -10617,6 +11100,16 @@ export function useItemOnPlayer(
   if (item.category === 'med') {
     sound.playUseItem();
     addPlayerNotification(player, `Использовано: ${item.nameRu}`, 'heal');
+  } else if (item.category === 'food') {
+    sound.playEat();
+    if (!def?.leftoverId) {
+      addPlayerNotification(player, `Съедено: ${item.nameRu}`, 'food');
+    }
+  } else if (item.category === 'drink') {
+    sound.playDrink();
+    if (!def?.leftoverId) {
+      addPlayerNotification(player, `Выпито: ${item.nameRu}`, 'drink');
+    }
   }
 
   // Consume 1 item from stack
@@ -10646,11 +11139,12 @@ export function useHandItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
-  // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open from hand
+  // Single-use vacuum bags, kraft paper packaging, candy pouches & disposable packaging unpack / tear open from hand
   if (
     item.singleUseContainer ||
     ITEM_CATALOG[item.itemId]?.singleUseContainer ||
     (item.itemId.startsWith('paper_packaging') && !item.itemId.includes('_open')) ||
+    (item.itemId.startsWith('candy_pouch') && !item.itemId.includes('_open')) ||
     ((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
       item.contents &&
       item.contents.length > 0)
@@ -10662,6 +11156,12 @@ export function useHandItemOnPlayer(
   if (item.itemId.startsWith('paper_packaging_open')) {
     addPlayerNotification(player, 'Это открытая бумажная упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
     return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
+  }
+
+  // Open plastic candy packaging container in hand
+  if (item.itemId.startsWith('candy_pouch') && item.itemId.includes('_open')) {
+    addPlayerNotification(player, 'Это вскрытая пластиковая упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
+    return { success: false, message: 'Вскрытая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
   // Reusable filled containers held in hand (e.g. lukoshko with berries/mushrooms, open egg carton with eggs)
@@ -11707,6 +12207,16 @@ export function useHandItemOnPlayer(
   if (item.category === 'med') {
     sound.playUseItem();
     addPlayerNotification(player, `Использовано: ${item.nameRu}`, 'heal');
+  } else if (item.category === 'food') {
+    sound.playEat();
+    if (!def?.leftoverId) {
+      addPlayerNotification(player, `Съедено: ${item.nameRu}`, 'food');
+    }
+  } else if (item.category === 'drink') {
+    sound.playDrink();
+    if (!def?.leftoverId) {
+      addPlayerNotification(player, `Выпито: ${item.nameRu}`, 'drink');
+    }
   }
 
   if (item.count > 1) {

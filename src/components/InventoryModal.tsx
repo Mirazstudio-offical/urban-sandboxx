@@ -27,7 +27,8 @@ import {
   getTargetVehicleForKey,
   getPlayerCompartments,
   getPlayerTotalSlots,
-  getSlotCompartment
+  getSlotCompartment,
+  getCandyPackagingShapeNameRu
 } from '../items';
 import { getItemThermalDisplayInfo } from '../itemThermalSystem';
 import { isFluidContainerClosed, openFluidContainerIfNeeded } from '../liquidSystem';
@@ -1138,6 +1139,113 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     {selectedEntry.item.descriptionRu}
                   </div>
 
+                  {/* Packaging Attributes (Shape, Size, State, Material) */}
+                  {(selectedEntry.item.packagingShape ||
+                    selectedEntry.item.packagingShapeNameRu ||
+                    selectedEntry.item.packagingSize ||
+                    selectedEntry.item.itemId.startsWith('candy_pouch') ||
+                    selectedEntry.item.itemId.startsWith('paper_packaging')) && (() => {
+                    const it = selectedEntry.item;
+                    const isCandy = it.itemId.startsWith('candy_pouch');
+                    const isOpenPkg = Boolean(it.isOpen || it.itemId.includes('_open') || !it.singleUseContainer);
+                    const sizeLabels: Record<string, string> = {
+                      mini: 'Мини',
+                      small: 'Малая',
+                      medium: 'Средняя',
+                      large: 'Большая'
+                    };
+                    const shapeLabel =
+                      it.packagingShapeNameRu ||
+                      (it.packagingShape
+                        ? getCandyPackagingShapeNameRu(it.packagingShape)
+                        : isCandy
+                        ? 'Пластиковый пакет'
+                        : 'Пергаментный конверт-брикет');
+
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                          <span className="gu-grp" style={{ fontSize: 12 }}>Характеристики упаковки</span>
+                          <span className="gu-tag amber" style={{ fontSize: 10 }}>
+                            <Package width={11} height={11} />
+                            {isOpenPkg ? 'Вскрыта' : 'Запаяна'}
+                          </span>
+                        </div>
+                        <div className="gu-kv-grid">
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Форма</span>
+                            <span className="gu-kv-v">{shapeLabel}</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Размер</span>
+                            <span className="gu-kv-v">{sizeLabels[it.packagingSize || 'medium'] || 'Стандарт'}</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Материал</span>
+                            <span className="gu-kv-v">{isCandy ? 'Пищевой пластик (BOPP)' : 'Пищевой пергамент'}</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Вместимость</span>
+                            <span className="gu-kv-v">{it.containerCapacityL ? `${it.containerCapacityL} л` : '—'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Gummy Candy Attributes (Color, Shape, Flavor, Ingredients) */}
+                  {selectedEntry.item.gummyAttributes && (() => {
+                    const g = selectedEntry.item.gummyAttributes!;
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                          <span className="gu-grp" style={{ fontSize: 12 }}>Свойства мармелада</span>
+                          {g.sourDust && (
+                            <span className="gu-tag amber" style={{ fontSize: 10 }}>
+                              <Sparkles width={11} height={11} />
+                              Кислая посыпка
+                            </span>
+                          )}
+                        </div>
+                        <div className="gu-kv-grid">
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Цвет</span>
+                            <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <span
+                                style={{
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: 2,
+                                  backgroundColor: g.color,
+                                  border: '1px solid rgba(255,255,255,0.35)',
+                                  display: 'inline-block',
+                                  flexShrink: 0
+                                }}
+                              />
+                              <span>{g.colorNameRu}</span>
+                            </span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Форма</span>
+                            <span className="gu-kv-v">{g.shapeNameRu}</span>
+                          </div>
+                          {g.flavorRu && (
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Вкус</span>
+                              <span className="gu-kv-v">{g.flavorRu}</span>
+                            </div>
+                          )}
+                          <div className="gu-kv" style={{ gridColumn: '1 / -1', alignItems: 'flex-start', flexDirection: 'column', gap: 4 }}>
+                            <span className="gu-kv-k">Состав</span>
+                            <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--gu-ink-soft)' }}>
+                              {g.ingredients.join(', ')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Thermodynamics */}
                   {(() => {
                     const thermalInfo = getItemThermalDisplayInfo(selectedEntry.item);
@@ -1300,6 +1408,25 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         <div className="gu-item-sub gu-mono">
                           {contItem.count} шт. · {getItemTotalWeight(contItem)} кг · {getItemTotalVolume(contItem)} л
                         </div>
+                        {contItem.gummyAttributes && (
+                          <div className="gu-row2" style={{ gap: 6, marginTop: 2, fontSize: 11, color: 'var(--gu-ink-soft)' }}>
+                            <span
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 2,
+                                backgroundColor: contItem.gummyAttributes.color,
+                                border: '1px solid rgba(255,255,255,0.35)',
+                                display: 'inline-block',
+                                flexShrink: 0
+                              }}
+                            />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {contItem.gummyAttributes.shapeNameRu} · {contItem.gummyAttributes.colorNameRu}
+                              {contItem.gummyAttributes.flavorRu ? ` (${contItem.gummyAttributes.flavorRu})` : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

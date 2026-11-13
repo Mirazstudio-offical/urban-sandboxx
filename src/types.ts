@@ -1761,6 +1761,40 @@ export type ContainerVisualShape =
   | 'bulbous'
   | 'pinched';
 
+export type CandyPackagingShape =
+  | 'flat_sachet'   // Плоский четырёхшовный саше-пакет
+  | 'pillow'        // Пакет-подушечка (флоу-пак)
+  | 'doypack'       // Стоячий дой-пак с зип-локом и донной складкой
+  | 'gusset'        // Высокий пакет с боковыми фальцами и плоским дном
+  | 'hanging_card'; // Евро-пакет с верхним хедером-подвесом
+
+export type GummyCandyShape =
+  | 'bear'
+  | 'worm'
+  | 'berry'
+  | 'ring'
+  | 'cube'
+  | 'cola_bottle'
+  | 'star'
+  | 'heart';
+
+export interface GummyCandyAttributes {
+  /** Цвет мармеладки в hex (напр. '#ef4444') */
+  color: string;
+  /** Название цвета мармеладки на русском языке */
+  colorNameRu: string;
+  /** Форма мармеладки */
+  shape: GummyCandyShape;
+  /** Название формы мармеладки на русском языке */
+  shapeNameRu: string;
+  /** Состав мармеладки */
+  ingredients: string[];
+  /** Вкус / аромат мармеладки (опционально) */
+  flavorRu?: string;
+  /** Кислая сахарная посыпка (опционально) */
+  sourDust?: boolean;
+}
+
 export interface ContainerVisualAttributes {
   /** Визуальная форма корпуса банки или бутылки (не меняет объём, вес и характеристики) */
   shape: ContainerVisualShape;
@@ -1874,6 +1908,8 @@ export interface InventoryItem {
     };
   };
   culinaryData?: CulinaryItemData;
+  /** Атрибуты мармеладки (цвет, форма, состав, посыпка) */
+  gummyAttributes?: GummyCandyAttributes;
   // Nutrition & Biochemical Culinary Simulation
   nutrients?: {
     calories: number; // kcal
@@ -1893,9 +1929,11 @@ export interface InventoryItem {
   containerItems?: string[];        // Specific item IDs contained inside single-use packaged goods
   tornItemId?: string;              // Item ID of torn leftover packaging (e.g. vacuum_pack_small_torn)
   isTransparentPackaging?: boolean; // Whether the inner contents are visible through transparent packaging
-  labelColor?: string;              // Brand seal label / sticker color (hex or CSS color) for paper packaging
+  labelColor?: string;              // Brand seal label / sticker color (hex or CSS color) for paper/plastic packaging
   containerTintColor?: string;      // Package body tint color (hex or CSS color)
   packagingSize?: 'mini' | 'small' | 'medium' | 'large'; // Physical form factor size of packaging
+  packagingShape?: CandyPackagingShape; // Physical shape/silhouette of plastic candy/gummy packaging
+  packagingShapeNameRu?: string;    // Russian display name of packaging shape
   containerCapacityL?: number;      // Total internal volume capacity in Liters
   maxContainedItemVolumeL?: number; // Max single item volume that fits in this container
   maxContainedWeightKg?: number;    // Max total weight of contained items in kg

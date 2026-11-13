@@ -1,7 +1,8 @@
 // Procedural 2D Canvas Models for Food Items
 import { drawShadow, drawGlossBand } from './itemGraphicShared';
+import { GummyCandyShape } from '../types';
 
-export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
+export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item?: any): boolean {
   switch (itemId) {
     case 'sandwich': {
       drawShadow(ctx, 8, 3, 7.5, 0.22);
@@ -1743,7 +1744,321 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boo
       return true;
     }
 
+    case 'gummy_candy': {
+      drawGummyCandyPiece(ctx, item);
+      return true;
+    }
+
     default:
       return false;
   }
+}
+
+function tintHex(hex: string, amount: number): string {
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map(ch => ch + ch).join('');
+  const num = parseInt(c, 16);
+  if (isNaN(num)) return hex;
+  const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  const r = clamp((num >> 16) + Math.round(255 * amount));
+  const g = clamp(((num >> 8) & 0x00ff) + Math.round(255 * amount));
+  const b = clamp((num & 0x0000ff) + Math.round(255 * amount));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+function drawGummyCandyPiece(ctx: CanvasRenderingContext2D, item?: any): void {
+  const attrs = item?.gummyAttributes;
+  const color: string = attrs?.color || '#ef4444';
+  const shape: GummyCandyShape = attrs?.shape || 'bear';
+  const sourDust = Boolean(attrs?.sourDust);
+
+  const bright = tintHex(color, 0.28);
+  const deep = tintHex(color, -0.24);
+  const rim = tintHex(color, -0.38);
+
+  drawShadow(ctx, 4.4, 2.0, 5.2, 0.22);
+  ctx.save();
+
+  const makeGelatinGrad = (x0: number, y0: number, x1: number, y1: number) => {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0.0, bright);
+    g.addColorStop(0.45, color);
+    g.addColorStop(1.0, deep);
+    return g;
+  };
+
+  switch (shape) {
+    case 'worm': {
+      // Curvy S-shaped two-tone gummy worm
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Deep outline shadow
+      ctx.strokeStyle = rim;
+      ctx.lineWidth = 4.2;
+      ctx.beginPath();
+      ctx.moveTo(-4.8, 2.4);
+      ctx.bezierCurveTo(-2.5, -4.6, 1.5, 4.6, 4.8, -2.2);
+      ctx.stroke();
+
+      // Main gelatin worm body
+      const wormGrad = ctx.createLinearGradient(-5, 2, 5, -2);
+      wormGrad.addColorStop(0.0, color);
+      wormGrad.addColorStop(0.48, bright);
+      wormGrad.addColorStop(0.54, '#facc15');
+      wormGrad.addColorStop(1.0, tintHex('#facc15', -0.18));
+      ctx.strokeStyle = wormGrad;
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(-4.8, 2.4);
+      ctx.bezierCurveTo(-2.5, -4.6, 1.5, 4.6, 4.8, -2.2);
+      ctx.stroke();
+
+      // Ribbed segments along worm
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 0.55;
+      for (const [sx, sy] of [[-3.1, 0.2], [-1.1, -0.8], [1.1, 0.8], [3.1, -0.2]]) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.1, -0.8, 1.4);
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'berry': {
+      // Plump raspberry/blackberry clustered drupelet gummy
+      ctx.fillStyle = rim;
+      ctx.beginPath();
+      ctx.arc(0, 0.6, 4.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      const berries: Array<[number, number, number]> = [
+        [-1.8, -1.2, 1.45], [0, -1.6, 1.55], [1.8, -1.2, 1.45],
+        [-2.3, 0.6, 1.45], [-0.8, 0.4, 1.55], [0.9, 0.4, 1.55], [2.3, 0.6, 1.45],
+        [-1.4, 2.3, 1.4], [0.2, 2.6, 1.45], [1.6, 2.2, 1.35]
+      ];
+      for (const [bx, by, br] of berries) {
+        const bg = ctx.createRadialGradient(bx - br * 0.3, by - br * 0.3, 0.1, bx, by, br);
+        bg.addColorStop(0.0, bright);
+        bg.addColorStop(0.65, color);
+        bg.addColorStop(1.0, deep);
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Tiny emerald gummy stem cap
+      ctx.fillStyle = '#16a34a';
+      ctx.beginPath();
+      ctx.moveTo(-1.8, -3.2);
+      ctx.lineTo(0, -4.4);
+      ctx.lineTo(1.8, -3.2);
+      ctx.lineTo(0, -2.5);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+
+    case 'ring': {
+      // Glossy two-layer gummy ring (foam base + bright fruit top ring)
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.arc(0, 0.9, 4.8, 0, Math.PI * 2);
+      ctx.arc(0, 0.9, 1.9, 0, Math.PI * 2, true);
+      ctx.fill('evenodd');
+
+      ctx.fillStyle = makeGelatinGrad(-4.8, -4.8, 4.8, 4.8);
+      ctx.strokeStyle = rim;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.arc(0, -0.2, 4.8, 0, Math.PI * 2);
+      ctx.arc(0, -0.2, 1.9, 0, Math.PI * 2, true);
+      ctx.fill('evenodd');
+      ctx.stroke();
+
+      // Ring top specular highlight arc
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 0.9;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(0, -0.2, 3.3, -2.4, -0.8);
+      ctx.stroke();
+      break;
+    }
+
+    case 'cube': {
+      // Faceted isometric fruit marmalade cube
+      ctx.fillStyle = rim;
+      ctx.beginPath();
+      ctx.roundRect(-4.4, -4.0, 8.8, 8.4, 1.6);
+      ctx.fill();
+
+      // Front face
+      ctx.fillStyle = makeGelatinGrad(-4, -3, 4, 4);
+      ctx.beginPath();
+      ctx.roundRect(-4.0, -2.0, 8.0, 6.0, 1.3);
+      ctx.fill();
+
+      // Top brighter gelatin facet
+      ctx.fillStyle = bright;
+      ctx.beginPath();
+      ctx.roundRect(-3.8, -3.8, 7.6, 3.0, 1.1);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.beginPath();
+      ctx.ellipse(-1.4, -2.4, 1.8, 0.65, -0.15, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    case 'cola_bottle': {
+      // Classic two-tone gummy cola bottle
+      ctx.strokeStyle = rim;
+      ctx.lineWidth = 0.6;
+
+      // Fizzy pale top neck
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.roundRect(-1.4, -5.6, 2.8, 1.5, 0.6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(254, 243, 199, 0.92)';
+      ctx.beginPath();
+      ctx.moveTo(-1.3, -4.1);
+      ctx.lineTo(1.3, -4.1);
+      ctx.lineTo(2.7, -1.6);
+      ctx.lineTo(-2.7, -1.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Amber/caramel cola body bottom
+      ctx.fillStyle = makeGelatinGrad(-2.7, -1.8, 2.7, 5.2);
+      ctx.beginPath();
+      ctx.roundRect(-2.7, -1.8, 5.4, 6.8, [0.4, 0.4, 1.6, 1.6]);
+      ctx.fill();
+      ctx.stroke();
+
+      // Gloss reflection stripe
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.beginPath();
+      ctx.roundRect(-1.7, -0.8, 0.9, 4.6, 0.45);
+      ctx.fill();
+      break;
+    }
+
+    case 'star': {
+      // Plump 5-point gummy star
+      ctx.fillStyle = makeGelatinGrad(-4.8, -4.8, 4.8, 4.8);
+      ctx.strokeStyle = rim;
+      ctx.lineWidth = 0.6;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+        const r = i % 2 === 0 ? 5.1 : 2.35;
+        const px = Math.cos(angle) * r;
+        const py = Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.58)';
+      ctx.beginPath();
+      ctx.ellipse(-1.0, -1.4, 1.4, 0.7, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    case 'heart': {
+      // Glossy plump gummy heart
+      ctx.fillStyle = makeGelatinGrad(-4.8, -4.2, 4.8, 4.8);
+      ctx.strokeStyle = rim;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(0, 4.6);
+      ctx.bezierCurveTo(-5.8, 1.2, -5.6, -4.6, -2.3, -4.6);
+      ctx.bezierCurveTo(-0.8, -4.6, 0, -3.2, 0, -2.5);
+      ctx.bezierCurveTo(0, -3.2, 0.8, -4.6, 2.3, -4.6);
+      ctx.bezierCurveTo(5.6, -4.6, 5.8, 1.2, 0, 4.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.58)';
+      ctx.beginPath();
+      ctx.ellipse(-2.0, -2.2, 1.2, 0.6, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    case 'bear':
+    default: {
+      // Detailed gummy bear silhouette (ears, head, chubby arms, torso, paws)
+      ctx.fillStyle = makeGelatinGrad(-4, -5, 4, 5);
+      ctx.strokeStyle = rim;
+      ctx.lineWidth = 0.55;
+
+      // Ears
+      for (const ex of [-2.3, 2.3]) {
+        ctx.beginPath();
+        ctx.arc(ex, -3.6, 1.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      // Arms & legs
+      for (const [lx, ly, rx, ry] of [
+        [-3.0, 0.2, 1.4, 1.15],
+        [3.0, 0.2, 1.4, 1.15],
+        [-1.8, 3.8, 1.35, 1.3],
+        [1.8, 3.8, 1.35, 1.3]
+      ]) {
+        ctx.beginPath();
+        ctx.ellipse(lx, ly, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      // Chubby torso
+      ctx.beginPath();
+      ctx.ellipse(0, 1.4, 2.75, 2.9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Round bear head
+      ctx.beginPath();
+      ctx.arc(0, -2.1, 2.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Cute snout bump & glossy belly reflection
+      ctx.fillStyle = bright;
+      ctx.beginPath();
+      ctx.ellipse(0, -1.5, 1.1, 0.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.beginPath();
+      ctx.ellipse(-0.9, 0.9, 0.85, 1.45, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+  }
+
+  // Sour citric sugar dust crystals if present
+  if (sourDust) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+    const crystals: Array<[number, number]> = [
+      [-2.4, -2.2], [1.9, -2.4], [-0.4, -0.7], [2.3, 0.8],
+      [-2.1, 1.6], [0.5, 2.4], [-1.0, 3.1], [1.4, -0.3], [0.1, -3.1]
+    ];
+    for (const [sx, sy] of crystals) {
+      ctx.fillRect(sx, sy, 0.65, 0.65);
+    }
+  }
+
+  ctx.restore();
 }

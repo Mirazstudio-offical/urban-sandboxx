@@ -13,6 +13,7 @@ import { drawFishAndSeafoodItem } from './graphics/fishAndSeafoodGraphics';
 import { drawProduceAndMushroomItem } from './graphics/produceAndMushroomGraphics';
 import { drawPantryAndDairyItem } from './graphics/pantryAndDairyGraphics';
 import { drawPaperPackagingItem } from './graphics/paperPackagingGraphics';
+import { drawCandyPackagingItem } from './graphics/candyPackagingGraphics';
 import { drawShadow, drawFrostAndThermalOverlay } from './graphics/itemGraphicShared';
 import { EXTENDED_LEGACY_CONTAINER_MAP, EXTENDED_ITEM_PACKAGING_MAP, UnifiedFluidMappingEntry } from './unifiedSubstanceCatalog';
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
@@ -123,11 +124,22 @@ export function drawItemModel2D(
     if (legacyPkg) {
       effectiveId = legacyPkg.containerId;
       if (!effectiveItem || !effectiveItem.contents) {
+        const previewCount = Math.min(4, legacyPkg.countInside || 1);
+        const previewContents = Array.from({ length: previewCount }, (_, idx) => {
+          const preset = legacyPkg.innerGummyPresets && legacyPkg.innerGummyPresets.length > 0
+            ? legacyPkg.innerGummyPresets[idx % legacyPkg.innerGummyPresets.length]
+            : undefined;
+          return {
+            itemId: legacyPkg.innerItemId || 'gummy_candy',
+            ...(preset ? { gummyAttributes: preset } : {})
+          };
+        });
         effectiveItem = {
           ...effectiveItem,
           itemId: legacyPkg.containerId,
           labelColor: legacyPkg.labelColor || effectiveItem?.labelColor,
-          contents: [{ itemId: legacyPkg.innerItemId }]
+          containerTintColor: legacyPkg.containerTintColor || effectiveItem?.containerTintColor,
+          contents: previewContents
         };
       }
     } else if (isJarCanOrBottleContainer(effectiveId)) {
@@ -150,9 +162,10 @@ export function drawItemModel2D(
 
   const drawn =
     drawPaperPackagingItem(ctx, effectiveId, effectiveItem) ||
+    drawCandyPackagingItem(ctx, effectiveId, effectiveItem) ||
     drawGearToolItem(ctx, effectiveId, effectiveItem) ||
     drawSmartphoneItem(ctx, effectiveId) ||
-    drawFoodItem(ctx, effectiveId) ||
+    drawFoodItem(ctx, effectiveId, effectiveItem) ||
     drawDrinkItem(ctx, effectiveId) ||
     drawMedicalItem(ctx, effectiveId) ||
     drawFurnitureItem(ctx, effectiveId) ||
