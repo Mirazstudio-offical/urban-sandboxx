@@ -3160,11 +3160,11 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       {normalizedTab === 'pos' && (
         <div className="gu-shop-pos-grid">
           {/* Left Column: Cashier Display + Money Tray + Final Pay Button */}
-          <div className="gu-grp">
-            <div className="gu-panel gu-pad gu-grp">
+          <div className="gu-shop-pos-col">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="gu-sec" style={{ marginBottom: 0 }}>
                 <Receipt className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
-                <span>Кассовый терминал · Расчет</span>
+                <span>Касса · Оплата ({totalCartItemsCount} ед.)</span>
                 <span className="gu-sec-line" />
                 <button
                   type="button"
@@ -3176,20 +3176,20 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </button>
               </div>
 
-              <div className="gu-shop-display">
-                <div className="gu-shop-display-row">
-                  <span className="gu-shop-display-k">Сумма чека ({totalCartItemsCount} поз.)</span>
-                  <span className="gu-shop-display-v is-amber">{cartTotal.toLocaleString()} ₽</span>
+              <div className="gu-shop-pos-kpis">
+                <div className="gu-shop-pos-kpi">
+                  <span className="gu-shop-pos-kpi-k">Сумма чека</span>
+                  <span className="gu-shop-pos-kpi-v is-amber">{cartTotal.toLocaleString()} ₽</span>
                 </div>
-                <div className="gu-shop-display-row">
-                  <span className="gu-shop-display-k">Принято в лоток кассы</span>
-                  <span className="gu-shop-display-v is-ok">{inTrayMoney.toLocaleString()} ₽</span>
+                <div className="gu-shop-pos-kpi">
+                  <span className="gu-shop-pos-kpi-k">В лотке</span>
+                  <span className="gu-shop-pos-kpi-v is-ok">{inTrayMoney.toLocaleString()} ₽</span>
                 </div>
-                <div className="gu-shop-display-row is-total">
-                  <span className="gu-shop-display-k">
-                    {inTrayMoney >= cartTotal ? 'Сдача покупателю' : 'Осталось внести'}
+                <div className="gu-shop-pos-kpi">
+                  <span className="gu-shop-pos-kpi-k">
+                    {inTrayMoney >= cartTotal ? 'Сдача' : 'Остаток'}
                   </span>
-                  <span className={`gu-shop-display-v ${inTrayMoney >= cartTotal ? 'is-ok' : ''}`}>
+                  <span className={`gu-shop-pos-kpi-v ${inTrayMoney >= cartTotal ? 'is-ok' : ''}`}>
                     {inTrayMoney >= cartTotal
                       ? `${(inTrayMoney - cartTotal).toLocaleString()} ₽`
                       : `${(cartTotal - inTrayMoney).toLocaleString()} ₽`}
@@ -3198,43 +3198,48 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
 
               {/* Quick Exact Pay & Reset Buttons */}
-              <div className="gu-row" style={{ gap: 8 }}>
+              <div className="gu-row" style={{ gap: 6 }}>
                 <button
                   type="button"
                   disabled={playerCash < cartTotal}
                   onClick={handleExactTrayMoney}
                   className="gu-btn gu-btn-s gu-btn-sm"
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, height: 30 }}
                 >
                   <Sparkles className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
                   <span>Без сдачи ({cartTotal.toLocaleString()} ₽)</span>
                 </button>
                 {Object.keys(trayDenoms).length > 0 && (
-                  <button type="button" onClick={handleClearTray} className="gu-btn gu-btn-ghost gu-btn-sm">
-                    <span>Вернуть</span>
+                  <button
+                    type="button"
+                    onClick={handleClearTray}
+                    className="gu-btn gu-btn-ghost gu-btn-sm"
+                    style={{ height: 30 }}
+                  >
+                    <span>Очистить лоток</span>
                   </button>
                 )}
               </div>
 
               {/* Cashier Tray */}
-              <div className="gu-panel-inset gu-pad gu-grp" style={{ gap: 6 }}>
-                <div className="gu-row-between" style={{ fontSize: 10.5, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  <span>Купюры и монеты в лотке кассира</span>
+              <div className="gu-shop-tray-box">
+                <div className="gu-row-between" style={{ fontSize: 10, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <span>Купюры и монеты в лотке</span>
                   <span className="gu-num">{inTrayMoney.toLocaleString()} ₽</span>
                 </div>
 
                 {Object.keys(trayDenoms).length === 0 ? (
-                  <div style={{ fontSize: 11.5, color: 'var(--gu-fg-3)', padding: '10px 0', textAlign: 'center' }}>
-                    Лоток пуст. Выберите купюры или монеты справа либо нажмите «Без сдачи».
+                  <div style={{ fontSize: 11, color: 'var(--gu-fg-3)', padding: '4px 0', textAlign: 'center' }}>
+                    Лоток пуст — выберите купюры справа или нажмите «Без сдачи»
                   </div>
                 ) : (
-                  <div className="gu-row" style={{ flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
+                  <div className="gu-row" style={{ flexWrap: 'wrap', gap: 5 }}>
                     {Object.entries(trayDenoms).map(([itemId, count]) => {
                       const denom = playerDenoms.find((d) => d.itemId === itemId);
                       if (!denom || count <= 0) return null;
                       return (
                         <div key={itemId} className="gu-shop-tray-chip">
-                          <ItemIconCanvas itemId={itemId} size={18} />
+                          <ItemIconCanvas itemId={itemId} size={16} />
                           <b>{denom.nameRu}</b>
                           <span className="gu-num" style={{ color: 'var(--gu-fg-2)' }}>×{count}</span>
                           <button
@@ -3250,12 +3255,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   </div>
                 )}
               </div>
+            </div>
 
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {playerCash < cartTotal && (
-                <div className="gu-note bad">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                <div className="gu-note bad" style={{ padding: '5px 8px', fontSize: 11 }}>
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   <div className="gu-note-body">
-                    Недостаточно наличных денег для оплаты чека (не хватает {(cartTotal - playerCash).toLocaleString()} ₽).
+                    Не хватает {(cartTotal - playerCash).toLocaleString()} ₽ наличными.
                   </div>
                 </div>
               )}
@@ -3265,6 +3272,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 disabled={inTrayMoney < cartTotal || posSuccess}
                 onClick={handleExecutePOSPayment}
                 className="gu-btn gu-btn-p gu-btn-block"
+                style={{ height: 34 }}
               >
                 {posSuccess ? (
                   <>
@@ -3274,7 +3282,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 ) : (
                   <>
                     <CreditCard className="w-4 h-4" />
-                    <span>Оплатить и забрать покупки ({cartTotal.toLocaleString()} ₽)</span>
+                    <span>Оплатить и забрать ({cartTotal.toLocaleString()} ₽)</span>
                   </>
                 )}
               </button>
@@ -3282,9 +3290,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
           </div>
 
           {/* Right Column: Player Wallet Banknotes & Coins */}
-          <div className="gu-panel gu-pad gu-grp">
+          <div className="gu-shop-pos-col" style={{ justifyContent: 'flex-start', gap: 8 }}>
             <div>
-              <div className="gu-sec">
+              <div className="gu-sec" style={{ marginBottom: 5 }}>
                 <span>Банкноты в кошельке</span>
                 <span className="gu-sec-line" />
                 <span className="gu-tag warn">Всего: {playerCash.toLocaleString()} ₽</span>
@@ -3307,13 +3315,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         className="gu-shop-denom"
                       >
                         <div className="gu-shop-denom-top">
-                          <ItemIconCanvas itemId={denom.itemId} size={24} />
+                          <ItemIconCanvas itemId={denom.itemId} size={20} />
                           <span className="gu-shop-denom-val">{denom.nameRu}</span>
                         </div>
-                        <div className="gu-shop-denom-sub">
-                          <span>В наличии</span>
-                          <b>{remaining} шт.</b>
-                        </div>
+                        <span className="gu-shop-denom-cnt">×{remaining}</span>
                       </button>
                     );
                   })}
@@ -3321,7 +3326,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
             </div>
 
             <div>
-              <div className="gu-sec">
+              <div className="gu-sec" style={{ marginBottom: 5 }}>
                 <span>Разменная монета</span>
                 <span className="gu-sec-line" />
               </div>
@@ -3343,13 +3348,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         className="gu-shop-denom"
                       >
                         <div className="gu-shop-denom-top">
-                          <ItemIconCanvas itemId={denom.itemId} size={20} />
+                          <ItemIconCanvas itemId={denom.itemId} size={16} />
                           <span className="gu-shop-denom-val is-coin">{denom.nameRu}</span>
                         </div>
-                        <div className="gu-shop-denom-sub">
-                          <span>В наличии</span>
-                          <b>{remaining} шт.</b>
-                        </div>
+                        <span className="gu-shop-denom-cnt">×{remaining}</span>
                       </button>
                     );
                   })}
@@ -3361,5 +3363,6 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     </ModalShell>
   );
 };
+
 
 
