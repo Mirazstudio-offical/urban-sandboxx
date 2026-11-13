@@ -16,7 +16,8 @@ import { resolveVehicleTruckFrameAndBody } from '../truckChassisVariants';
 import { traceSoftbodyPath, renderSoftbodyStressLines } from '../softbodyVisuals';
 import { getPlayerCash, deductPlayerCash, createItem, addItemToPlayer, getCarKeyTier, getCarKeyFeatures, getVehicleRequiredKeyType, addPlayerNotification } from '../items';
 import { sound } from '../audio';
-import { Car, Sparkles, Clock, Coins, CheckCircle2, X } from 'lucide-react';
+import { Car, Sparkles, Clock, Coins, CheckCircle2, X, Search, RefreshCw, Palette, Settings2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { ModalShell, Tabs, Seg, TabItem } from './gameUi';
 
 export interface DealershipCarModel {
   id: string;
@@ -1170,6 +1171,7 @@ export const CarDealershipModal: React.FC<Props> = ({
   const [selectedColorIndex, setSelectedColorIndex] = useState<number>(0);
   const [transmissionMode, setTransmissionMode] = useState<'MANUAL'| 'AUTO'>('MANUAL');
   const [purchaseSuccessMessage, setPurchaseSuccessMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -1470,7 +1472,7 @@ export const CarDealershipModal: React.FC<Props> = ({
     renderSpecializedVehicleAttachments(vCtx);
 
     ctx.restore();
-  }, [isOpen, selectedCarIndex, selectedColorIndex]);
+  }, [isOpen, selectedCarIndex, selectedColorIndex, activeTab, catalogTick, currentCar?.id]);
 
   if (!isOpen) return null;
 
@@ -1803,467 +1805,496 @@ export const CarDealershipModal: React.FC<Props> = ({
     setPurchaseSuccessMessage(`Поздравляем с покупкой ${currentCar.nameRu}! Автомобиль ожидает вас на площадке выдачи у главного входа автосалона. В инвентарь добавлены: Ключ с пультом ЦЗ, ПТС, СТС и Договор купли-продажи.`);
   };
 
+  const filteredCars = carsList
+    .map((car, originalIndex) => ({ car, originalIndex }))
+    .filter(({ car }) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.trim().toLowerCase();
+      return (
+        car.nameRu.toLowerCase().includes(q) ||
+        car.brand.toLowerCase().includes(q) ||
+        car.classType.toLowerCase().includes(q)
+      );
+    });
+
+  const dealerTabs: TabItem<'new' | 'used'>[] = [
+    {
+      id: 'new',
+      label: 'Новые автомобили',
+      icon: <Sparkles className="w-3.5 h-3.5" />,
+      badge: DEALERSHIP_CARS.length,
+    },
+    {
+      id: 'used',
+      label: 'Авторынок Б/У (С пробегом)',
+      icon: <Clock className="w-3.5 h-3.5" />,
+      badge: USED_CAR_CATALOG.length,
+    },
+  ];
+
+  const keyPackageLabel =
+    getVehicleRequiredKeyType(currentCar.type) === 'iron'
+      ? 'Стальной ключ зажигания, ПТС, СТС и ДКП'
+      : getVehicleRequiredKeyType(currentCar.type) === 'gold'
+      ? 'Золотой ключ зажигания, ПТС, СТС и ДКП'
+      : 'Ключ с пультом ЦЗ, ПТС, СТС и ДКП';
+
   return (
-    <div className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-black/80 backdrop-blur-md z-50 flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 font-sans text-zinc-100">
-      <div className="my-auto relative bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-5xl max-h-[94vh] sm:max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* Modal Header */}
-        <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="p-2 sm:p-2.5 rounded-xl bg-zinc-800 text-emerald-400 border border-zinc-700/50 shrink-0">
-              <Car className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-lg font-bold text-zinc-100 truncate">
-                  Автосалон "Премиум Моторс"
-                </h2>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
-                  Продажа ТС
-                </span>
-              </div>
-              <p className="text-xs text-zinc-400 truncate hidden sm:block">
-                Новые автомобили из салона и подержанные авто с авторынка
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <div className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">
-              <Coins className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs sm:text-sm font-mono font-bold text-emerald-400">
-                {playerCash.toLocaleString('ru-RU')} ₽
-              </span>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 sm:p-2 min-h-[38px] min-w-[38px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="bg-zinc-900/60 border-b border-zinc-800 px-4 py-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setActiveTab('new');
-                setSelectedCarIndex(0);
-                setPurchaseSuccessMessage(null);
-              }}
-              className={`px-4 py-2 min-h-[44px] rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                activeTab === 'new'
-                  ? 'bg-emerald-600 text-white border border-emerald-500 shadow-md'
-                  : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Новые авто ({DEALERSHIP_CARS.length})</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('used');
-                setSelectedCarIndex(0);
-                setPurchaseSuccessMessage(null);
-              }}
-              className={`px-4 py-2 min-h-[44px] rounded-xl text-xs font-bold transition-all flex items-center gap-2 relative ${
-                activeTab === 'used'
-                  ? 'bg-amber-600 text-white border border-amber-500 shadow-md'
-                  : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              <span>Авторынок Б/У ({USED_CAR_CATALOG.length})</span>
-            </button>
-          </div>
-
+    <ModalShell
+      id="dealership-modal"
+      title='Автосалон «Премиум Моторс»'
+      subtitle="Продажа новых автомобилей с завода и подержанных ТС с авторынка"
+      onClose={onClose}
+      width={1080}
+      tall
+      wipeKey={activeTab}
+      bodyKey={activeTab}
+      headRight={
+        <div className="gu-row" style={{ gap: 8 }}>
           {activeTab === 'used' && (
-            <div className="text-[11px] text-amber-400 font-mono flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20">
-              <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-              Обновление каждые 5 мин
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                sound.playUseItem();
+                const count = 15 + Math.floor(Math.random() * 11);
+                USED_CAR_CATALOG = generateUsedCars(count);
+                LAST_USED_CAR_UPDATE_TIME = Date.now();
+                setSelectedCarIndex(0);
+                setCatalogTick((t) => t + 1);
+              }}
+              className="gu-btn gu-btn-s gu-btn-sm"
+              title="Обновить предложения на авторынке"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="gu-hide-s">Обновить рынок</span>
+            </button>
           )}
+          <span className="gu-chip" title="Наличные средства">
+            <Coins className="w-4 h-4" style={{ color: 'var(--gu-amber-hi)' }} />
+            <span className="gu-num" style={{ fontSize: 16 }}>
+              {playerCash.toLocaleString('ru-RU')} ₽
+            </span>
+          </span>
         </div>
-
-        {/* Success Alert Banner */}
+      }
+      tabs={
+        <Tabs
+          items={dealerTabs}
+          value={activeTab}
+          onChange={(tab) => {
+            setActiveTab(tab);
+            setSelectedCarIndex(0);
+            setPurchaseSuccessMessage(null);
+          }}
+        />
+      }
+      footerHints={[
+        ['Клик', 'Выбрать автомобиль'],
+        ['Esc', 'Выйти из автосалона'],
+      ]}
+      footerRight={
+        <div className="gu-row" style={{ gap: 8 }}>
+          <span className="gu-tag gu-hide-s" title="Документы при оформлении">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>{keyPackageLabel}</span>
+          </span>
+          <button
+            type="button"
+            disabled={!canAfford}
+            onClick={handleBuy}
+            className="gu-btn gu-btn-p gu-btn-sm"
+          >
+            <Car className="w-3.5 h-3.5" />
+            <span>Оформить за {currentCar.priceRub.toLocaleString('ru-RU')} ₽</span>
+          </button>
+          <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
+            Закрыть
+          </button>
+        </div>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {purchaseSuccessMessage && (
-          <div className="bg-emerald-950/90 border-b border-emerald-700/60 px-4 py-3 flex items-center justify-between text-xs text-emerald-200">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>{purchaseSuccessMessage}</span>
+          <div className="gu-note gu-ok gu-row-between" style={{ gap: 10, padding: '8px 12px' }}>
+            <div className="gu-row" style={{ gap: 8 }}>
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span style={{ fontSize: 12.5 }}>{purchaseSuccessMessage}</span>
             </div>
             <button
+              type="button"
               onClick={() => setPurchaseSuccessMessage(null)}
-              className="px-3 py-1.5 min-h-[36px] rounded-lg bg-emerald-900 text-emerald-200 hover:bg-emerald-800 text-xs font-bold"
+              className="gu-btn gu-btn-s gu-btn-xs"
             >
-              Отлично
+              Понятно
             </button>
           </div>
         )}
 
-        {/* Modal Main Grid */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
-          
-          {/* Left Column: Car Catalog List */}
-          <div className="md:col-span-4 border-r border-zinc-800 bg-zinc-950/60 overflow-y-auto p-3 space-y-2 max-h-[220px] md:max-h-none">
-            <div className="px-1 py-1 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-              {activeTab === 'new' ? 'Новые из автосалона' : 'Подержанные авто на рынке'}:
-            </div>
-            {carsList.map((car, idx) => {
-              const isSelected = idx === selectedCarIndex;
-              const isUsedCar = activeTab === 'used';
-              return (
+        <div className="gu-dealer-layout">
+          {/* Left Column: Search + Vehicle List */}
+          <aside className="gu-dealer-side">
+            <div className="gu-shop-search" style={{ width: '100%', flex: 'none' }}>
+              <Search className="w-3.5 h-3.5" style={{ color: 'var(--gu-mut)', flexShrink: 0 }} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Поиск марки или класса..."
+              />
+              {searchQuery && (
                 <button
-                  key={car.id}
-                  onClick={() => {
-                    setSelectedCarIndex(idx);
-                    setPurchaseSuccessMessage(null);
-                  }}
-                  className={`w-full text-left p-3 min-h-[56px] rounded-xl border transition-all flex flex-col gap-1 cursor-pointer ${
-                    isSelected
-                      ? isUsedCar
-                        ? 'bg-amber-600/15 border-amber-500 text-white'
-                        : 'bg-emerald-600/15 border-emerald-500 text-white'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                  }`}
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="gu-shop-search-clear"
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider block ${isUsedCar ? 'text-amber-400' : 'text-emerald-400'}`}>
-                        {car.brand}
-                      </span>
-                      <h3 className="font-bold text-zinc-100 text-xs sm:text-sm leading-tight">{car.nameRu}</h3>
-                    </div>
-                    <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded border ${isUsedCar ? 'text-amber-300 bg-amber-500/10 border-amber-500/30' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'}`}>
-                      {car.priceRub.toLocaleString('ru-RU')} ₽
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400 mt-1">
-                    <span className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300">{car.classType}</span>
-                    <span>•</span>
-                    <span>{car.year} г.</span>
-                    <span>•</span>
-                    <span className={isUsedCar ? 'text-amber-300' : 'text-emerald-400'}>
-                      {isUsedCar ? `${((car as any).mileageKm / 1000).toFixed(0)}k км` : car.fuelTypeLabel}
-                    </span>
-                  </div>
-
-                  {isUsedCar && (
-                    <div className="w-full mt-1 flex items-center justify-between text-[10px] font-mono text-zinc-400 border-t border-zinc-800/60 pt-1">
-                      <span>Состояние ДВС:</span>
-                      <span className={(car as any).engineHealth > 50 ? 'text-emerald-400' : (car as any).engineHealth > 30 ? 'text-amber-400' : 'text-rose-400'}>
-                        {(car as any).engineHealth}%
-                      </span>
-                    </div>
-                  )}
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              );
-            })}
-          </div>
+              )}
+            </div>
 
-          {/* Right Column: Car Details & Customization */}
-          <div className="md:col-span-8 overflow-y-auto p-4 sm:p-6 flex flex-col gap-5 bg-zinc-900">
-            
-            {/* Top Showcase: Live Canvas & High-level Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-              
-              {/* Canvas Preview */}
-              <div className="sm:col-span-5 flex flex-col items-center justify-center bg-zinc-900 rounded-xl p-3 border border-zinc-800">
+            <div className="gu-dealer-list">
+              {filteredCars.length === 0 ? (
+                <div className="gu-empty" style={{ padding: '20px 12px' }}>
+                  <div className="gu-empty-t" style={{ fontSize: 13 }}>Автомобили не найдены</div>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="gu-btn gu-btn-s gu-btn-xs"
+                  >
+                    Сбросить фильтр
+                  </button>
+                </div>
+              ) : (
+                filteredCars.map(({ car, originalIndex }) => {
+                  const isSelected = originalIndex === selectedCarIndex;
+                  const isUsedCar = activeTab === 'used';
+                  const engHealth = (car as any).engineHealth ?? 100;
+
+                  return (
+                    <button
+                      key={car.id}
+                      type="button"
+                      onClick={() => {
+                        sound.playUseItem();
+                        setSelectedCarIndex(originalIndex);
+                        setPurchaseSuccessMessage(null);
+                      }}
+                      className={`gu-dealer-car-item ${isSelected ? 'is-on' : ''}`}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="gu-row" style={{ gap: 6 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                              color: 'var(--gu-amber-hi)',
+                            }}
+                          >
+                            {car.brand}
+                          </span>
+                          <span style={{ fontSize: 10.5, color: 'var(--gu-mut)' }}>· {car.year} г.</span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: '#fff',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {car.nameRu}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--gu-mut)', marginTop: 1 }}>
+                          {car.classType} ·{' '}
+                          {isUsedCar
+                            ? `${Math.round(((car as any).mileageKm || 0) / 1000)} тыс. км · ДВС ${engHealth}%`
+                            : car.fuelTypeLabel}
+                        </div>
+                      </div>
+
+                      <div className="gu-shop-price" style={{ fontSize: 16 }}>
+                        {car.priceRub.toLocaleString('ru-RU')}
+                        <small>₽</small>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          {/* Right Column: Vehicle Showcase + Config/Condition + Specs */}
+          <div className="gu-dealer-main">
+            {/* Top Hero Card: Live Canvas + Title & Price */}
+            <div className="gu-dealer-hero">
+              <div className="gu-dealer-stage">
                 <canvas
                   ref={canvasRef}
                   width={220}
-                  height={150}
-                  className="w-full h-[140px] object-contain drop-shadow-xl"
+                  height={132}
+                  style={{ width: '100%', height: 120, objectFit: 'contain' }}
                 />
-                <span className="text-[10px] text-zinc-400 mt-2 font-mono">Вид сверху (Визуализация ТС)</span>
+                <span style={{ fontSize: 10.5, color: 'var(--gu-mut)', marginTop: 3 }}>
+                  Цвет: <b style={{ color: '#fff' }}>{currentColor.name}</b>
+                </span>
               </div>
 
-              {/* Title & Price Card */}
-              <div className="sm:col-span-7 flex flex-col gap-2">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">{currentCar.brand}</span>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-zinc-100">{currentCar.nameRu}</h2>
-                  <p className="text-xs text-zinc-400 leading-relaxed mt-1">{currentCar.descriptionRu}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                <div className="gu-row-between" style={{ gap: 8, flexWrap: 'wrap' }}>
+                  <div className="gu-row" style={{ gap: 6 }}>
+                    <span className="gu-tag warn">{currentCar.brand}</span>
+                    <span className="gu-tag">{currentCar.classType}</span>
+                    <span className="gu-tag">{currentCar.year} г.в.</span>
+                  </div>
+                  <span className={`gu-tag ${canAfford ? 'good' : 'bad'}`}>
+                    {canAfford ? 'Доступно к покупке' : 'Недостаточно средств'}
+                  </span>
                 </div>
 
-                <div className="flex items-center gap-3 mt-2">
-                  <div className="text-2xl font-mono font-bold text-emerald-400">
-                    {currentCar.priceRub.toLocaleString('ru-RU')} ₽
+                <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', lineHeight: 1.15 }}>
+                  {currentCar.nameRu}
+                </div>
+
+                <div style={{ fontSize: 12, color: 'var(--gu-mut)', lineHeight: 1.38 }}>
+                  {currentCar.descriptionRu}
+                </div>
+
+                <div
+                  className="gu-row-between"
+                  style={{ paddingTop: 6, borderTop: '1px solid var(--gu-line)', flexWrap: 'wrap', gap: 8 }}
+                >
+                  <div>
+                    <div style={{ fontSize: 10.5, color: 'var(--gu-mut)', textTransform: 'uppercase' }}>
+                      Стоимость автомобиля
+                    </div>
+                    <div className="gu-shop-price" style={{ fontSize: 24 }}>
+                      {currentCar.priceRub.toLocaleString('ru-RU')}
+                      <small>₽</small>
+                    </div>
                   </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border ${
-                    canAfford
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                  }`}>
-                    {canAfford ? 'Доступно к покупке' : 'Недостаточно денег'}
-                  </span>
+
+                  <button
+                    type="button"
+                    disabled={!canAfford}
+                    onClick={handleBuy}
+                    className="gu-btn gu-btn-p"
+                    style={{ height: 36, padding: '0 16px' }}
+                  >
+                    <Car className="w-4 h-4" />
+                    <span>Купить за {currentCar.priceRub.toLocaleString('ru-RU')} ₽</span>
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Customization Options: Color & Transmission */}
+            {/* Middle Row: New Car Config OR Used Car Technical Health */}
             {activeTab === 'used' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Technical Health Indicators */}
-                <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex flex-col gap-3">
-                  <label className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
-                    Техническое состояние:
-                  </label>
-                  
-                  <div className="space-y-2 text-xs">
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-zinc-400">Состояние двигателя:</span>
-                        <span className="font-bold text-zinc-200">{(currentCar as any).engineHealth}%</span>
-                      </div>
-                      <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full ${(currentCar as any).engineHealth > 50 ? 'bg-emerald-500' : (currentCar as any).engineHealth > 25 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                          style={{ width: `${(currentCar as any).engineHealth}%` }}
-                        />
-                      </div>
-                    </div>
+              <div className="gu-grid gu-g2">
+                {/* Used Car Mechanical Condition */}
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <div className="gu-row-between">
+                    <span className="gu-grp">Техническое состояние узлов</span>
+                    {(currentCar as any).radiatorPunctured && (
+                      <span className="gu-tag bad">Пробит радиатор</span>
+                    )}
+                  </div>
 
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-zinc-400">Состояние КПП:</span>
-                        <span className="font-bold text-zinc-200">{(currentCar as any).transmissionHealth}%</span>
-                      </div>
-                      <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full ${(currentCar as any).transmissionHealth > 50 ? 'bg-emerald-500' : (currentCar as any).transmissionHealth > 25 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                          style={{ width: `${(currentCar as any).transmissionHealth}%` }}
-                        />
-                      </div>
+                  <div>
+                    <div className="gu-row-between" style={{ fontSize: 11.5, marginBottom: 3 }}>
+                      <span className="gu-mute">Ресурс двигателя (ДВС)</span>
+                      <b className="gu-num">{(currentCar as any).engineHealth}%</b>
                     </div>
-
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-zinc-400">Заряд аккумулятора:</span>
-                        <span className="font-bold text-zinc-200">{(currentCar as any).batteryCharge}%</span>
-                      </div>
-                      <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(currentCar as any).batteryCharge}%` }} />
-                      </div>
+                    <div className={`gu-bar ${(currentCar as any).engineHealth > 50 ? 'good' : 'bad'}`}>
+                      <span style={{ width: `${(currentCar as any).engineHealth}%` }} />
                     </div>
+                  </div>
 
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-zinc-400">Вода в радиаторе:</span>
-                        <span className="font-bold text-zinc-200">{(currentCar as any).radiatorWater}%</span>
-                      </div>
-                      <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full ${(currentCar as any).radiatorPunctured ? 'bg-rose-600' : 'bg-sky-500'}`}
-                          style={{ width: `${(currentCar as any).radiatorWater}%` }}
-                        />
-                      </div>
-                      {(currentCar as any).radiatorPunctured && (
-                        <div className="text-[10px] text-rose-400 mt-1 font-mono">
-                          Внимание: Радиатор пробит (Течь ОЖ)
-                        </div>
-                      )}
+                  <div>
+                    <div className="gu-row-between" style={{ fontSize: 11.5, marginBottom: 3 }}>
+                      <span className="gu-mute">Коробка передач (КПП)</span>
+                      <b className="gu-num">{(currentCar as any).transmissionHealth}%</b>
+                    </div>
+                    <div className={`gu-bar ${(currentCar as any).transmissionHealth > 50 ? 'good' : 'bad'}`}>
+                      <span style={{ width: `${(currentCar as any).transmissionHealth}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="gu-kv-grid" style={{ marginTop: 2 }}>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Заряд АКБ</span>
+                      <span className="gu-kv-v">{(currentCar as any).batteryCharge}%</span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Охлаждение</span>
+                      <span className="gu-kv-v">
+                        {(currentCar as any).radiatorWater}%
+                        {(currentCar as any).radiatorPunctured ? ' (Течь)' : ''}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Body & Modifications */}
-                <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex flex-col justify-between">
+                {/* Used Car Body & Installed Mods */}
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8 }}>
                   <div>
-                    <label className="text-xs font-bold text-amber-400 uppercase tracking-wider block mb-2">
-                      Модификации и кузов:
-                    </label>
-                    <div className="text-xs space-y-2 mt-1">
-                      <div className="flex justify-between border-b border-zinc-800/80 pb-1">
-                        <span className="text-zinc-400">Кузов:</span>
-                        <span className="font-semibold text-zinc-200">{(currentCar as any).bodyCondition}</span>
+                    <div className="gu-row-between" style={{ marginBottom: 6 }}>
+                      <span className="gu-grp">Кузов и история ТС</span>
+                      <span className="gu-tag warn">
+                        Пробег: {(currentCar as any).mileageKm.toLocaleString('ru-RU')} км
+                      </span>
+                    </div>
+
+                    <div className="gu-kv-grid">
+                      <div className="gu-kv">
+                        <span className="gu-kv-k">Состояние кузова</span>
+                        <span className="gu-kv-v">{(currentCar as any).bodyCondition}</span>
                       </div>
-                      <div className="flex justify-between border-b border-zinc-800/80 pb-1">
-                        <span className="text-zinc-400">Цвет кузова:</span>
-                        <span className="font-semibold text-zinc-200 flex items-center gap-1.5">
-                          <span className="w-3.5 h-3.5 rounded-full border border-zinc-700" style={{ backgroundColor: (currentCar as any).color.hex }} />
-                          {(currentCar as any).color.name}
+                      <div className="gu-kv">
+                        <span className="gu-kv-k">Трансмиссия</span>
+                        <span className="gu-kv-v">
+                          {(currentCar as any).hasManualTrans ? 'МКПП (Механика)' : 'АКПП (Автомат)'}
                         </span>
-                      </div>
-                      <div className="flex justify-between border-b border-zinc-800/80 pb-1">
-                        <span className="text-zinc-400">Коробка:</span>
-                        <span className="font-semibold text-zinc-200">{(currentCar as any).hasManualTrans ? 'МКПП (Механика)' : 'АКПП (Автомат)'}</span>
-                      </div>
-                      <div className="flex justify-between pb-1">
-                        <span className="text-zinc-400">Пробег:</span>
-                        <span className="font-mono font-bold text-amber-400">{(currentCar as any).mileageKm.toLocaleString()} км</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {(currentCar as any).hasGBO && (
-                      <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded">
-                        ГБО Пропан
-                      </span>
-                    )}
-                    {(currentCar as any).isChiptuned && (
-                      <span className="text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded">
-                        Чип-тюнинг
-                      </span>
-                    )}
-                    {(currentCar as any).isHeavySuspended && (
-                      <span className="text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded">
-                        Усиленная подвеска
-                      </span>
-                    )}
+                  <div className="gu-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    {(currentCar as any).hasGBO && <span className="gu-tag good">ГБО Пропан</span>}
+                    {(currentCar as any).isChiptuned && <span className="gu-tag warn">Чип Stage 1</span>}
+                    {(currentCar as any).isHeavySuspended && <span className="gu-tag">Подвеска HD</span>}
+                    {!(currentCar as any).hasGBO &&
+                      !(currentCar as any).isChiptuned &&
+                      !(currentCar as any).isHeavySuspended && (
+                        <span style={{ fontSize: 11.5, color: 'var(--gu-mut)' }}>
+                          Штатная заводская комплектация без доработок
+                        </span>
+                      )}
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Color Selector */}
-                <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                  <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider block mb-2">
-                    Заводской цвет кузова:
-                  </label>
-                  <div className="text-xs font-semibold text-emerald-400 mb-3">
-                    {currentColor.name}
+              <div className="gu-grid gu-g2">
+                {/* Factory Paint Selector */}
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="gu-row-between">
+                    <span className="gu-grp">
+                      <Palette className="w-3.5 h-3.5 inline mr-1" /> Заводской цвет кузова
+                    </span>
+                    <span style={{ fontSize: 11.5, color: 'var(--gu-amber-hi)', fontWeight: 600 }}>
+                      {currentColor.name}
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+
+                  <div className="gu-shop-swatch-grid">
                     {(currentCar as DealershipCarModel).availableColors.map((col, cIdx) => (
                       <button
                         key={col.name}
-                        onClick={() => setSelectedColorIndex(cIdx)}
-                        title={col.name}
-                        className={`w-9 h-9 min-h-[36px] min-w-[36px] rounded-full border-2 transition-transform ${
-                          cIdx === selectedColorIndex ? 'border-emerald-400 scale-110 ring-2 ring-emerald-500/30' : 'border-zinc-700'
-                        }`}
-                        style={{ backgroundColor: col.hex }}
-                      />
+                        type="button"
+                        onClick={() => {
+                          sound.playUseItem();
+                          setSelectedColorIndex(cIdx);
+                        }}
+                        className={`gu-shop-swatch ${cIdx === selectedColorIndex ? 'is-on' : ''}`}
+                      >
+                        <span className="gu-shop-swatch-dot" style={{ backgroundColor: col.hex }} />
+                        <span className="gu-shop-swatch-name">{col.name}</span>
+                      </button>
                     ))}
                   </div>
                 </div>
 
                 {/* Transmission Selector */}
-                <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                  <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider block mb-2">
-                    Коробка передач:
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <button
-                      disabled={!currentCar.hasManualTrans}
-                      onClick={() => setTransmissionMode('MANUAL')}
-                      className={`p-2 min-h-[44px] rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-0.5 ${
-                        transmissionMode === 'MANUAL'
-                          ? 'bg-emerald-600 border-emerald-500 text-white'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      } ${!currentCar.hasManualTrans ? 'opacity-40 cursor-not-allowed' : ''}`}
-                    >
-                      <span>МКПП (Механика)</span>
-                      <span className="text-[10px] font-normal opacity-80">5-ступенчатая</span>
-                    </button>
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8 }}>
+                  <div>
+                    <div className="gu-row-between" style={{ marginBottom: 6 }}>
+                      <span className="gu-grp">
+                        <Settings2 className="w-3.5 h-3.5 inline mr-1" /> Коробка передач (КПП)
+                      </span>
+                      <span className="gu-tag">
+                        {transmissionMode === 'MANUAL' ? '5-ст. МКПП' : 'АКПП Автомат'}
+                      </span>
+                    </div>
 
-                    <button
-                      disabled={!currentCar.hasAutoTrans}
-                      onClick={() => setTransmissionMode('AUTO')}
-                      className={`p-2 min-h-[44px] rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-0.5 ${
-                        transmissionMode === 'AUTO'
-                          ? 'bg-emerald-600 border-emerald-500 text-white'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      } ${!currentCar.hasAutoTrans ? 'opacity-40 cursor-not-allowed' : ''}`}
-                    >
-                      <span>АКПП (Автомат)</span>
-                      <span className="text-[10px] font-normal opacity-80">Гидротрансформатор</span>
-                    </button>
+                    <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        disabled={!currentCar.hasManualTrans}
+                        onClick={() => {
+                          sound.playUseItem();
+                          setTransmissionMode('MANUAL');
+                        }}
+                        className={`gu-btn ${transmissionMode === 'MANUAL' ? 'gu-btn-p' : 'gu-btn-s'} gu-btn-sm`}
+                        style={{ width: '100%', justifyContent: 'center' }}
+                      >
+                        <span>МКПП (Механика)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!currentCar.hasAutoTrans}
+                        onClick={() => {
+                          sound.playUseItem();
+                          setTransmissionMode('AUTO');
+                        }}
+                        className={`gu-btn ${transmissionMode === 'AUTO' ? 'gu-btn-p' : 'gu-btn-s'} gu-btn-sm`}
+                        style={{ width: '100%', justifyContent: 'center' }}
+                      >
+                        <span>АКПП (Автомат)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 11.5, color: 'var(--gu-mut)', lineHeight: 1.35 }}>
+                    Комплект выдачи: <b style={{ color: '#fff' }}>{keyPackageLabel}</b>. Постановка на учет ГИБДД включена.
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Detailed Vehicle Specifications Table */}
-            <div className="bg-zinc-950 rounded-xl border border-zinc-800 p-4">
-              <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-3">
-                Технические характеристики:
-              </h4>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Год выпуска</span>
-                  <span className="font-bold text-zinc-200">{currentCar.year} г.</span>
+            {/* Compact 3x3 Technical Specifications Grid */}
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span className="gu-grp">Паспортные технические характеристики</span>
+              <div className="gu-dealer-specs">
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Двигатель</span>
+                  <span className="gu-kv-v">{currentCar.engineSpec}</span>
                 </div>
-
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Двигатель</span>
-                  <span className="font-bold text-zinc-200 truncate block">{currentCar.engineSpec}</span>
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Мощность</span>
+                  <span className="gu-kv-v" style={{ color: 'var(--gu-good)' }}>
+                    {currentCar.powerHp} л.с.
+                  </span>
                 </div>
-
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Мощность</span>
-                  <span className="font-bold text-emerald-400">{currentCar.powerHp} л.с.</span>
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Топливо и бак</span>
+                  <span className="gu-kv-v" style={{ color: 'var(--gu-amber-hi)' }}>
+                    {currentCar.fuelTypeLabel} · {currentCar.tankCapacityL} л
+                  </span>
                 </div>
-
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Тип топлива</span>
-                  <span className="font-bold text-amber-400">{currentCar.fuelTypeLabel}</span>
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Макс. скорость</span>
+                  <span className="gu-kv-v">{currentCar.topSpeedKmh} км/ч</span>
                 </div>
-
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Макс. скорость</span>
-                  <span className="font-bold text-zinc-200">{currentCar.topSpeedKmh} км/ч</span>
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Разгон 0–100 км/ч</span>
+                  <span className="gu-kv-v">{currentCar.accelSec} сек</span>
                 </div>
-
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Разгон 0-100 км/ч</span>
-                  <span className="font-bold text-zinc-200">{currentCar.accelSec} сек.</span>
-                </div>
-
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Снаряженная масса</span>
-                  <span className="font-bold text-zinc-200">{currentCar.weightKg} кг</span>
-                </div>
-
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Объем бака</span>
-                  <span className="font-bold text-zinc-200">{currentCar.tankCapacityL} литров</span>
-                </div>
-
-                <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80">
-                  <span className="text-zinc-400 block text-[10px]">Габариты кузова</span>
-                  <span className="font-bold text-zinc-200">{currentCar.dimensionsM}</span>
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Масса и габариты</span>
+                  <span className="gu-kv-v">
+                    {currentCar.weightKg} кг · {currentCar.dimensionsM}
+                  </span>
                 </div>
               </div>
             </div>
-
-            {/* Purchase Footer Action */}
-            <div className="pt-3 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between border-t border-zinc-800">
-              <div className="text-xs text-zinc-400">
-                При покупке вы получаете:<br />
-                <span className="text-zinc-200 font-medium">
-                  {getVehicleRequiredKeyType(currentCar.type) === 'iron'
-                    ? 'Ключ зажигания, ПТС и СТС'
-                    : getVehicleRequiredKeyType(currentCar.type) === 'gold'
-                    ? 'Золотой ключ зажигания, ПТС и СТС'
-                    : 'Ключ с пультом ЦЗ, ПТС и СТС'}
-                </span>
-              </div>
-
-              <button
-                disabled={!canAfford}
-                onClick={handleBuy}
-                className={`w-full sm:w-auto px-6 py-3 min-h-[48px] rounded-xl font-bold text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${
-                  canAfford
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                    : 'bg-zinc-800 text-zinc-500 opacity-50 cursor-not-allowed'
-                }`}
-              >
-                <Car className="w-5 h-5" />
-                <span>Оформить за {currentCar.priceRub.toLocaleString('ru-RU')} ₽</span>
-              </button>
-            </div>
-
           </div>
         </div>
-
       </div>
-    </div>
+    </ModalShell>
   );
 };
+

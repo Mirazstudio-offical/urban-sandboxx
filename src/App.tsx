@@ -3122,7 +3122,10 @@ export default function App() {
               let badgeColor = '#f59e0b';
               let shopName = currentRoomName || bld.nameRu || 'Магазин';
 
-              if (bld.shopBrand === 'pharmacy_36_6'|| currentRoomName.includes('Аптека') || currentRoomName.includes('Панацея') || currentRoomName.includes('Медпункт') || bld.type === 'hospital') {
+              if (bld.shopBrand === 'gas_station_shop' || bld.type === 'gas_station_shop' || bld.id === 'bld_gas_station_shop_se') {
+                // Handled strictly via physical cashier register interaction
+                shopType = null;
+              } else if (bld.shopBrand === 'pharmacy_36_6'|| currentRoomName.includes('Аптека') || currentRoomName.includes('Панацея') || currentRoomName.includes('Медпункт') || bld.type === 'hospital') {
                 shopType = 'pharmacy';
                 shopIcon = '[МЕД]';
                 badgeColor = '#10b981';

@@ -1011,12 +1011,17 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   } = props;
 
   const [cart, setCart] = useState<{ item: ShopItem; count: number }[]>([]);
-  const [activeTab, setActiveTab] = useState<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos' | 'lpg'>('catalog');
+  const [activeTab, setActiveTab] = useState<'fuel' | 'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos' | 'lpg'>('catalog');
   const [trayDenoms, setTrayDenoms] = useState<Record<string, number>>({});
   const [posSuccess, setPosSuccess] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+
+  // Gas Station TRK state
+  const [selectedPumpId, setSelectedPumpId] = useState<string>('gas_pump_1');
+  const [selectedFuelType, setSelectedFuelType] = useState<FuelType>('ai95');
+  const [fuelLiters, setFuelLiters] = useState<number>(20);
 
   // Diagnostics states
   const [isScanningEcu, setIsScanningEcu] = useState<boolean>(false);
@@ -1088,10 +1093,28 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     }
   }, [currentVehicle?.id, selectedPaintTarget]);
 
+  const isGasStation =
+    shop.type === 'gas_station_shop' ||
+    shop.nameRu.toLowerCase().includes('азс') ||
+    shop.nameRu.toLowerCase().includes('нефть');
+
+  const isAutoShop =
+    !isGasStation &&
+    (shop.type === 'auto_shop' ||
+      shop.id.includes('pitstop') ||
+      shop.nameRu.toLowerCase().includes('авто') ||
+      shop.nameRu.toLowerCase().includes('сервис') ||
+      shop.nameRu.toLowerCase().includes('pit-stop') ||
+      shop.nameRu.toLowerCase().includes('мастерск') ||
+      shop.nameRu.toLowerCase().includes('сто') ||
+      shop.nameRu.toLowerCase().includes('гараж'));
+
+  const isAutoShopOrGas = isAutoShop || isGasStation;
+
   useEffect(() => {
     if (isOpen) {
       setCart([]);
-      setActiveTab('catalog');
+      setActiveTab(isGasStation ? 'fuel' : 'catalog');
       setTrayDenoms({});
       setPosSuccess(false);
       setInstallingLpg(false);
@@ -1103,22 +1126,32 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       setSearchQuery('');
       setSelectedDept('all');
       setSelectedItemId(null);
+
+      const pumps: GasPumpDispenser[] = props.gasPumps || [];
+      if (pumps.length > 0) {
+        const inserted = pumps.find((p) => p.status === 'inserted' && p.connectedVehicleId);
+        const held = pumps.find((p) => p.nozzleTaken !== null);
+        const chosen = inserted || held || pumps[0];
+        if (chosen) {
+          setSelectedPumpId(chosen.id);
+          if (chosen.connectedFuelType) {
+            setSelectedFuelType(chosen.connectedFuelType);
+          } else if (chosen.nozzleTaken) {
+            setSelectedFuelType(chosen.nozzleTaken);
+          } else if (chosen.id === 'gas_pump_5_lpg') {
+            setSelectedFuelType('lpg');
+          } else {
+            setSelectedFuelType('ai95');
+          }
+        }
+      }
     }
-  }, [isOpen, shop?.id]);
+  }, [isOpen, shop?.id, shop?.type]);
 
   if (!isOpen || !shop || !player) return null;
 
   const playerCash = getPlayerCash(player);
   const catalog = SHOP_CATALOGS[shop.type] || SHOP_CATALOGS.supermarket;
-  const isAutoShopOrGas = shop.type === 'auto_shop' 
-    || shop.type === 'gas_station_shop'
-    || shop.id.includes('pitstop')
-    || shop.nameRu.toLowerCase().includes('авто')
-    || shop.nameRu.toLowerCase().includes('сервис')
-    || shop.nameRu.toLowerCase().includes('pit-stop')
-    || shop.nameRu.toLowerCase().includes('мастерск')
-    || shop.nameRu.toLowerCase().includes('сто')
-    || shop.nameRu.toLowerCase().includes('гараж');
 
   const cartTotal = cart.reduce((acc, entry) => acc + entry.item.price * entry.count, 0);
   const totalCartItemsCount = cart.reduce((acc, entry) => acc + entry.count, 0);
@@ -1766,7 +1799,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   const getItemDept = (item: ShopItem): { id: string; label: string } => {
     const id = item.itemId.toLowerCase();
     const name = item.nameRu.toLowerCase();
-    if (isAutoShopOrGas) {
+    if (isAutoShop) {
       if (id.includes('oil') || id.includes('coolant') || id.includes('fluid') || id.includes('canister') || id.includes('water') || name.includes('масло') || name.includes('антифриз') || name.includes('тосол') || name.includes('тормозн')) {
         return { id: 'fluids', label: 'Техжидкости и ГСМ' };
       }
@@ -1778,14 +1811,18 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       }
       return { id: 'misc', label: 'Сопутствующие товары' };
     } else {
-      if (item.effectType === 'hunger' || id.includes('bread') || id.includes('meat') || id.includes('sausage') || id.includes('cheese') || id.includes('chips') || id.includes('choc') || id.includes('gummy') || id.includes('canned') || id.includes('burger') || id.includes('shawarma') || id.includes('pie') || id.includes('noodle') || id.includes('pelmeni')) {
-        return { id: 'food', label: 'Продукты и гастрономия' };
+      const eff = (item.effectText || '').toLowerCase();
+      if (isGasStation && (id.includes('oil') || id.includes('coolant') || id.includes('fluid') || id.includes('canister') || id.includes('tow') || id.includes('extinguisher') || id.includes('kit') || name.includes('масло') || name.includes('антифриз') || name.includes('тосол') || name.includes('канистр'))) {
+        return { id: 'fluids', label: 'Автотовары и ГСМ' };
       }
-      if (item.effectType === 'thirst' || id.includes('water') || id.includes('cola') || id.includes('soda') || id.includes('juice') || id.includes('energy') || id.includes('milk') || id.includes('tea') || id.includes('coffee') || id.includes('kvass') || id.includes('beer')) {
-        return { id: 'drinks', label: 'Напитки и вода' };
+      if (eff.includes('сытость') || id.includes('bread') || id.includes('meat') || id.includes('sausage') || id.includes('cheese') || id.includes('chips') || id.includes('choc') || id.includes('gummy') || id.includes('canned') || id.includes('burger') || id.includes('shawarma') || id.includes('pie') || id.includes('noodle') || id.includes('pelmeni') || id.includes('hotdog')) {
+        return { id: 'food', label: 'Продукты и перекус' };
       }
-      if (id.includes('bag') || id.includes('box') || id.includes('crate') || id.includes('sack') || id.includes('pouch') || id.includes('case') || id.includes('Lock') || id.includes('cigarette') || id.includes('lighter') || id.includes('phone') || id.includes('watch')) {
-        return { id: 'household', label: 'Хозтовары и тара' };
+      if (eff.includes('жажд') ||eff.includes('бодрость') || id.includes('water') || id.includes('cola') || id.includes('soda') || id.includes('juice') || id.includes('energy') || id.includes('milk') || id.includes('tea') || id.includes('coffee') || id.includes('kvass') || id.includes('beer')) {
+        return { id: 'drinks', label: 'Напитки и кофе' };
+      }
+      if (id.includes('bag') || id.includes('box') || id.includes('crate') || id.includes('sack') || id.includes('pouch') || id.includes('case') || id.includes('lock') || id.includes('cigarette') || id.includes('lighter') || id.includes('phone') || id.includes('watch')) {
+        return { id: 'household', label: 'Табак и сопутствующее' };
       }
       return { id: 'other', label: 'Разное' };
     }
@@ -1819,14 +1856,24 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     return sum + getItemTotalWeight(pItem) * entry.count;
   }, 0);
 
-  const tabItems: TabItem<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[] = [
+  const tabItems: TabItem<'fuel' | 'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[] = [
+    ...(isGasStation
+      ? ([
+          {
+            id: 'fuel',
+            label: 'Заправка ТРК',
+            icon: <Fuel className="w-3.5 h-3.5" />,
+            badge: (props.gasPumps || []).length || 5,
+          },
+        ] as TabItem<'fuel' | 'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[])
+      : []),
     {
       id: 'catalog',
-      label: isAutoShopOrGas ? 'Автозапчасти' : 'Каталог товаров',
+      label: isGasStation ? 'Минимаркет АЗС' : isAutoShop ? 'Автозапчасти' : 'Каталог товаров',
       icon: <Package className="w-3.5 h-3.5" />,
       badge: catalog.length,
     },
-    ...(isAutoShopOrGas
+    ...(isAutoShop
       ? ([
           {
             id: 'diagnostics',
@@ -1845,7 +1892,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
             label: 'Тюнинг и Окраска',
             icon: <Zap className="w-3.5 h-3.5" />,
           },
-        ] as TabItem<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[])
+        ] as TabItem<'fuel' | 'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[])
       : []),
     {
       id: 'cart',
@@ -1860,11 +1907,11 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
             label: 'Касса оплаты',
             icon: <Receipt className="w-3.5 h-3.5" />,
           },
-        ] as TabItem<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[])
+        ] as TabItem<'fuel' | 'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos'>[])
       : []),
   ];
 
-  const normalizedTab: 'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos' =
+  const normalizedTab: 'fuel' | 'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos' =
     activeTab === 'lpg' ? 'tuning' : activeTab;
 
   return (
@@ -1930,6 +1977,315 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
         </div>
       }
     >
+      {/* GAS STATION TRK FUEL DISPENSER TAB */}
+      {normalizedTab === 'fuel' && (() => {
+        const pumpsList: GasPumpDispenser[] = props.gasPumps || [];
+        const selectedPump = pumpsList.find((p) => p.id === selectedPumpId) || pumpsList[0];
+        const connectedVeh = selectedPump?.connectedVehicleId
+          ? vehiclesList.find((v: any) => v.id === selectedPump.connectedVehicleId) || null
+          : null;
+        const isLpgPump = selectedPump?.id === 'gas_pump_5_lpg' || selectedFuelType === 'lpg';
+        const tankCap = isLpgPump
+          ? connectedVeh?.fuelSystem?.gboCapacity || 42
+          : connectedVeh?.fuelSystem?.tankCapacity || 55;
+        const curPct = isLpgPump
+          ? connectedVeh?.fuelSystem?.gboLevel || 0
+          : connectedVeh?.fuelSystem?.tankLevel || 0;
+        const curLitersInTank = Math.round((curPct / 100) * tankCap);
+        const maxNeeded = Math.max(5, Math.round(tankCap - curLitersInTank));
+        const activeGrade = FUEL_GRADES[selectedFuelType] || FUEL_GRADES.ai95;
+        const totalFuelCost = Math.round(fuelLiters * activeGrade.pricePerLiter);
+        const isNozzleReady = Boolean(
+          selectedPump && selectedPump.status === 'inserted' && selectedPump.connectedVehicleId
+        );
+        const canAffordFuel = playerCash >= totalFuelCost;
+        const presetLiters = [10, 20, 30, 40, 50];
+
+        const createFuelShopItem = (): ShopItem => ({
+          id: `fuel_${selectedPump?.id || 'pump1'}_${selectedFuelType}_${fuelLiters}`,
+          itemId: 'fuel_order',
+          nameRu: `Топливо ${activeGrade.badgeText} · ${fuelLiters} л (ТРК №${selectedPump?.pumpNumber || 1})`,
+          price: totalFuelCost,
+          description: `${activeGrade.nameRu} (${activeGrade.pricePerLiter.toFixed(2)} ₽/л) на колонке №${selectedPump?.pumpNumber || 1}`,
+          category: 'auto',
+          effectText: `${fuelLiters} л`,
+          fuelPumpId: selectedPump?.id || 'gas_pump_1',
+          fuelLiters: fuelLiters,
+          fuelType: selectedFuelType,
+        });
+
+        return (
+          <div className="gu-trk-grid">
+            {/* Left Column: TRK Pump Selector (№1..5) */}
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="gu-row-between">
+                <span className="gu-grp">1. Топливные колонки (ТРК)</span>
+                <span className="gu-tag">{pumpsList.length} постов</span>
+              </div>
+
+              <div className="gu-trk-pumps">
+                {pumpsList.map((pump) => {
+                  const isSel = pump.id === (selectedPump?.id || selectedPumpId);
+                  const veh = pump.connectedVehicleId
+                    ? vehiclesList.find((v: any) => v.id === pump.connectedVehicleId)
+                    : null;
+                  const isLpg = pump.id === 'gas_pump_5_lpg';
+                  const isReady = pump.status === 'inserted' && Boolean(veh);
+
+                  return (
+                    <button
+                      key={pump.id}
+                      type="button"
+                      onClick={() => {
+                        sound.playUseItem();
+                        setSelectedPumpId(pump.id);
+                        if (pump.connectedFuelType) {
+                          setSelectedFuelType(pump.connectedFuelType);
+                        } else if (pump.nozzleTaken) {
+                          setSelectedFuelType(pump.nozzleTaken);
+                        } else if (isLpg) {
+                          setSelectedFuelType('lpg');
+                        } else if (selectedFuelType === 'lpg') {
+                          setSelectedFuelType('ai95');
+                        }
+                      }}
+                      className={`gu-trk-pump ${isSel ? 'is-on' : ''} ${isReady ? 'is-ready' : ''}`}
+                    >
+                      <div className="gu-row" style={{ gap: 8, minWidth: 0 }}>
+                        <span className="gu-trk-pump-num">№{pump.pumpNumber}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
+                            {isLpg ? 'Газовая колонка (LPG)' : `Колонка ТРК №${pump.pumpNumber}`}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--gu-mut)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {veh
+                              ? `${veh.nameRu || veh.type} · ${FUEL_GRADES[pump.connectedFuelType || 'ai95']?.badgeText}`
+                              : pump.status === 'nozzle_held'
+                              ? 'Пистолет снят (вставьте в бак)'
+                              : 'Свободна · Ожидание ТС'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className={`gu-tag ${pump.isPumping ? 'warn' : isReady ? 'good' : ''}`}>
+                        {pump.isPumping
+                          ? `${pump.displayLiters.toFixed(1)} л`
+                          : isReady
+                          ? 'В баке'
+                          : 'Свободна'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right Column: Tank Info + Fuel Grade + Liters + Actions */}
+            <div
+              className="gu-panel gu-pad"
+              style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 10 }}
+            >
+              {connectedVeh ? (
+                <div className="gu-card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="gu-row-between">
+                    <div className="gu-row" style={{ gap: 8 }}>
+                      <Car className="w-4 h-4" style={{ color: 'var(--gu-good)' }} />
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>
+                        {connectedVeh.nameRu || connectedVeh.type}
+                      </span>
+                      <span className="gu-tag good">Пистолет в горловине</span>
+                    </div>
+                    <span className="gu-num" style={{ fontSize: 12.5, color: 'var(--gu-amber-hi)' }}>
+                      В баке: {curLitersInTank} / {tankCap} л ({Math.round(curPct)}%)
+                    </span>
+                  </div>
+                  <div className="gu-bar good">
+                    <span style={{ width: `${Math.min(100, curPct)}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="gu-note warn"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: 12 }}
+                >
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>
+                    На колонке №{selectedPump?.pumpNumber || 1} пистолет еще не вставлен в бак автомобиля. Вы можете оплатить подачу заранее или сначала вставить пистолет на улице <b>[E]</b>.
+                  </span>
+                </div>
+              )}
+
+              {/* Fuel Grade Grid */}
+              <div>
+                <div className="gu-row-between" style={{ marginBottom: 5 }}>
+                  <span className="gu-grp">2. Марка горючего</span>
+                  <span style={{ fontSize: 12, color: 'var(--gu-amber-hi)', fontWeight: 700 }}>
+                    {activeGrade.nameRu} · {activeGrade.pricePerLiter.toFixed(2)} ₽/л
+                  </span>
+                </div>
+
+                <div className="gu-trk-grades">
+                  {(Object.keys(FUEL_GRADES) as FuelType[]).map((ft) => {
+                    const g = FUEL_GRADES[ft];
+                    const active = selectedFuelType === ft;
+                    const lockedByNozzle =
+                      selectedPump?.connectedFuelType && selectedPump.connectedFuelType !== ft;
+                    const incompatibleWithPump =
+                      selectedPump?.id === 'gas_pump_5_lpg' ? ft !== 'lpg' : ft === 'lpg';
+
+                    return (
+                      <button
+                        key={ft}
+                        type="button"
+                        disabled={Boolean(lockedByNozzle || incompatibleWithPump)}
+                        onClick={() => {
+                          sound.playUseItem();
+                          setSelectedFuelType(ft);
+                        }}
+                        className={`gu-trk-grade ${active ? 'is-on' : ''}`}
+                        style={{ '--grade-color': g.color } as React.CSSProperties}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{g.badgeText}</span>
+                        <span className="gu-num" style={{ fontSize: 12, color: 'var(--gu-amber-hi)' }}>
+                          {g.pricePerLiter.toFixed(1)} ₽/л
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Liters Presets & Stepper */}
+              <div>
+                <div className="gu-row-between" style={{ marginBottom: 5 }}>
+                  <span className="gu-grp">3. Объем заправки (литры)</span>
+                  <div className="gu-row" style={{ gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => setFuelLiters(Math.max(5, fuelLiters - 5))}
+                      className="gu-btn gu-btn-s gu-btn-xs"
+                    >
+                      <Minus className="w-3 h-3" /> 5 л
+                    </button>
+                    <span
+                      className="gu-num"
+                      style={{ fontSize: 16, fontWeight: 700, color: '#fff', minWidth: 48, textAlign: 'center' }}
+                    >
+                      {fuelLiters} л
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFuelLiters(Math.min(120, fuelLiters + 5))}
+                      className="gu-btn gu-btn-s gu-btn-xs"
+                    >
+                      <Plus className="w-3 h-3" /> 5 л
+                    </button>
+                  </div>
+                </div>
+
+                <div className="gu-trk-presets">
+                  {presetLiters.map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => {
+                        sound.playUseItem();
+                        setFuelLiters(val);
+                      }}
+                      className={`gu-pill ${fuelLiters === val ? 'on' : ''}`}
+                      style={{ justifyContent: 'center', height: 28 }}
+                    >
+                      {val} л
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playUseItem();
+                      setFuelLiters(connectedVeh ? maxNeeded : 45);
+                    }}
+                    className={`gu-pill ${connectedVeh && fuelLiters === maxNeeded ? 'on' : ''}`}
+                    style={{ justifyContent: 'center', height: 28 }}
+                  >
+                    Полный ({connectedVeh ? `${maxNeeded}л` : '45л'})
+                  </button>
+                </div>
+              </div>
+
+              {/* Footer Actions: Add to Cart OR Instant Pay */}
+              <div
+                className="gu-row-between"
+                style={{
+                  paddingTop: 8,
+                  borderTop: '1px solid var(--gu-line)',
+                  flexWrap: 'wrap',
+                  gap: 10,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--gu-mut)', textTransform: 'uppercase' }}>
+                    Сумма за топливо ({fuelLiters} л × {activeGrade.pricePerLiter.toFixed(2)} ₽)
+                  </div>
+                  <div className="gu-shop-price" style={{ fontSize: 24 }}>
+                    {totalFuelCost.toLocaleString()}
+                    <small>₽</small>
+                  </div>
+                </div>
+
+                <div className="gu-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fuelItem = createFuelShopItem();
+                      handleAddToCart(fuelItem);
+                    }}
+                    className="gu-btn gu-btn-s gu-btn-sm"
+                    style={{ height: 36 }}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>В чек</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canAffordFuel || selectedPump?.isPumping}
+                    onClick={() => {
+                      const fuelItem = createFuelShopItem();
+                      if (props.onBuyItems) {
+                        props.onBuyItems([fuelItem], totalFuelCost);
+                        onClose();
+                      } else {
+                        handleAddToCart(fuelItem);
+                        setActiveTab('pos');
+                      }
+                    }}
+                    className="gu-btn gu-btn-p gu-btn-sm"
+                    style={{ height: 36, padding: '0 14px' }}
+                  >
+                    <Fuel className="w-3.5 h-3.5" />
+                    <span>
+                      {selectedPump?.isPumping
+                        ? 'Идет подача...'
+                        : !canAffordFuel
+                        ? `Не хватает средств (${totalFuelCost} ₽)`
+                        : `Оплатить и включить ТРК №${selectedPump?.pumpNumber || 1}`}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* CATALOG TAB */}
       {normalizedTab === 'catalog' && (
         <div>
@@ -2791,7 +3147,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         {hasLpgInstalled
                           ? 'Установлено'
                           : lpgConfig?.isAvailable
-                          ? `Баллон ${lpgConfig.tankCapacity} л`
+                          ? `Баллон ${lpgConfig.capacity} л`
                           : 'Недоступно'}
                       </span>
                     </div>

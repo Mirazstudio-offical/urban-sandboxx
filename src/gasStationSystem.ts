@@ -341,17 +341,28 @@ export function getNearbyVehicleForFueling(
   return closest;
 }
 
-export function isPlayerNearGasStationCashier(player: Player, world: GameWorld): boolean {
-  // If player is inside the gas station shop building
-  if (player.isInsideBuilding && player.insideBuildingId === GAS_STATION_CONFIG.shopId) {
-    return true;
+export function isPlayerNearGasStationCashier(player: Player, _world: GameWorld): boolean {
+  if (!player.isInsideBuilding || player.insideBuildingId !== GAS_STATION_CONFIG.shopId) {
+    return false;
   }
-  // Or if player is near the cashier desk coordinates
-  const dist = Math.hypot(player.x - GAS_STATION_CONFIG.cashierDesk.x, player.y - GAS_STATION_CONFIG.cashierDesk.y);
-  if (dist <= GAS_STATION_CONFIG.cashierDesk.radius) {
-    return true;
+  // Cashier counter in bld_gas_station_shop_se (shopX=5240, shopY=4910) is at local x: 18..52, y: 44..53
+  const minX = GAS_STATION_CONFIG.shopX + 18;
+  const maxX = GAS_STATION_CONFIG.shopX + 52;
+  const minY = GAS_STATION_CONFIG.shopY + 44;
+  const maxY = GAS_STATION_CONFIG.shopY + 53;
+  const nearX = Math.max(minX, Math.min(player.x, maxX));
+  const nearY = Math.max(minY, Math.min(player.y, maxY));
+  const dist = Math.hypot(player.x - nearX, player.y - nearY);
+  if (dist > 44) {
+    return false;
   }
-  return false;
+  const cx = (minX + maxX) * 0.5;
+  const cy = (minY + maxY) * 0.5;
+  const angleToTarget = Math.atan2(cy - player.y, cx - player.x);
+  let diff = angleToTarget - (player.angle || 0);
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return Math.abs(diff) <= 1.35;
 }
 
 /**

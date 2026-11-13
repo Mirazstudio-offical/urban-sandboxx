@@ -165,6 +165,16 @@ export function resolveBuildingShop(bld: Building, roomName: string = ''): { sho
 
   const rm = roomName || '';
 
+  if (
+    bld.shopBrand === 'gas_station_shop' ||
+    bld.type === 'gas_station_shop' ||
+    bld.id === 'bld_gas_station_shop_se' ||
+    rm.includes('АЗС') ||
+    (bld.nameRu && bld.nameRu.includes('АЗС'))
+  ) {
+    return { shopType: 'gas_station_shop', shopTitle: bld.nameRu || 'АЗС «НефтьМагистраль» 24/7' };
+  }
+
   if (bld.shopBrand === 'pharmacy_36_6' || bld.type === 'pharmacy_store' || rm.includes('Аптека') || rm.includes('Панацея') || rm.includes('Медпункт') || bld.type === 'hospital') {
     return { shopType: 'pharmacy', shopTitle: rm || bld.nameRu || 'Аптека "36.6"' };
   }
@@ -871,13 +881,13 @@ export function findActiveInteraction(
       candidates.push({
         type: 'gas_cashier',
         primaryKey: 'E',
-        actionTitle: 'Оплата топлива',
-        detail: 'Касса АЗС',
-        x: 4972, // specific cashier window coords
-        y: 5240,
-        dist: 0,
+        actionTitle: 'Касса АЗС (Топливо и Магазин)',
+        detail: 'АЗС «НефтьМагистраль» 24/7',
+        x: 5275,
+        y: 4958,
+        dist: 12,
         angleDiff: 0,
-        score: -5,
+        score: -26,
         data: null
       });
     }

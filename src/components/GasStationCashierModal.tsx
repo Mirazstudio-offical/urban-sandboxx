@@ -1,25 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import {
-  CreditCard,
-  X,
-  Fuel,
-  CheckCircle2,
-  AlertTriangle,
-  Car,
-  ChevronRight,
-  Sparkles,
-  Zap,
-  Flame,
-  Droplets,
-  Coins,
-  Receipt,
-  RotateCcw
-} from 'lucide-react';
-import { FuelType, GameWorld, GasPumpDispenser, GasPumpNozzle, Player, Vehicle } from '../types';
-import { FUEL_GRADES, GAS_STATION_NOZZLES } from '../gasStationSystem';
+import { FuelType, GameWorld, Player } from '../types';
+import { FUEL_GRADES } from '../gasStationSystem';
 import { CAR_CONFIGS } from '../vehicleHelpers';
-import { sound } from '../audio';
 import { getPlayerCash } from '../items';
+import {
+  Fuel,
+  Car,
+  AlertTriangle,
+  CheckCircle2,
+  Coins,
+  CreditCard,
+  Minus,
+  Plus,
+} from 'lucide-react';
+import { sound } from '../audio';
+import { ModalShell } from './gameUi';
 
 interface GasStationCashierModalProps {
   isOpen: boolean;
@@ -34,339 +29,351 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
   onClose,
   world,
   player,
-  onPayAndFuel
+  onPayAndFuel,
 }) => {
-  const [selectedPumpId, setSelectedPumpId] = useState<string>('gas_pump_1');
+  const pumps = world.gasPumps || [];
+
+  const findInitialPumpId = () => {
+    const inserted = pumps.find((p) => p.status === 'inserted' && p.connectedVehicleId);
+    if (inserted) return inserted.id;
+    const held = pumps.find((p) => p.nozzleTaken !== null);
+    if (held) return held.id;
+    return pumps[0]?.id || 'gas_pump_1';
+  };
+
+  const [selectedPumpId, setSelectedPumpId] = useState<string>(findInitialPumpId);
   const [selectedFuelType, setSelectedFuelType] = useState<FuelType>('ai95');
-  const [liters, setLiters] = useState<number>(30);
-  const [paymentDone, setPaymentDone] = useState<boolean>(false);
+  const [liters, setLiters] = useState<number>(20);
 
-  // Auto-detect a pump that has a nozzle currently inserted in a car
   useEffect(() => {
-    if (!isOpen || !world.gasPumps) return;
-    setPaymentDone(false);
-
-    const insertedPump = world.gasPumps.find(p => p.status === 'inserted' && p.connectedVehicleId);
-    if (insertedPump) {
-      setSelectedPumpId(insertedPump.id);
-      if (insertedPump.connectedFuelType) {
-        setSelectedFuelType(insertedPump.connectedFuelType);
-      }
-      const veh = world.vehicles?.find(v => v.id === insertedPump.connectedVehicleId);
-      if (veh && veh.fuelSystem) {
-        const cap = veh.fuelSystem.tankCapacity || 55;
-        const currentLiters = (veh.fuelSystem.tankLevel / 100) * cap;
-        const missing = Math.max(5, Math.round(cap - currentLiters));
-        setLiters(missing);
-      }
-    } else if (world.gasPumps.length > 0) {
-      setSelectedPumpId(world.gasPumps[0].id);
-      if (world.gasPumps[0].connectedFuelType) {
-        setSelectedFuelType(world.gasPumps[0].connectedFuelType);
-      } else if (world.gasPumps[0].nozzles && world.gasPumps[0].nozzles.length > 0) {
-        setSelectedFuelType(world.gasPumps[0].nozzles[0].fuelType);
+    if (isOpen) {
+      const initId = findInitialPumpId();
+      setSelectedPumpId(initId);
+      const p = pumps.find((gp) => gp.id === initId);
+      if (p) {
+        if (p.connectedFuelType) {
+          setSelectedFuelType(p.connectedFuelType);
+        } else if (p.nozzleTaken) {
+          setSelectedFuelType(p.nozzleTaken);
+        } else if (p.id === 'gas_pump_5_lpg') {
+          setSelectedFuelType('lpg');
+        }
       }
     }
-  }, [isOpen, world]);
+  }, [isOpen]);
 
-  if (!isOpen || !world.gasPumps) return null;
+  if (!isOpen) return null;
 
-  const currentPump = world.gasPumps.find(p => p.id === selectedPumpId) || world.gasPumps[0];
-  const connectedVehicle = world.vehicles?.find(v => v.id === currentPump?.connectedVehicleId);
+  const selectedPump = pumps.find((p) => p.id === selectedPumpId) || pumps[0];
+  const connectedVehicle = selectedPump?.connectedVehicleId
+    ? world.vehicles.find((v) => v.id === selectedPump.connectedVehicleId) || null
+    : null;
 
-  const availableNozzles: GasPumpNozzle[] = (currentPump?.nozzles && currentPump.nozzles.length > 0)
-    ? currentPump.nozzles
-    : (currentPump?.id === 'gas_pump_5_lpg'
-        ? [
-            {
-              fuelType: 'lpg',
-              nameRu: FUEL_GRADES.lpg.nameRu,
-              color: FUEL_GRADES.lpg.color,
-              octane: 105,
-              pricePerLiter: FUEL_GRADES.lpg.pricePerLiter,
-              description: FUEL_GRADES.lpg.description,
-              badgeText: 'ГАЗ'
-            }
-          ]
-        : GAS_STATION_NOZZLES);
+  const vehConfig = connectedVehicle
+    ? CAR_CONFIGS[connectedVehicle.type] || CAR_CONFIGS.sedan
+    : null;
 
-  const isSelectedTypeValid = availableNozzles.some(n => n.fuelType === selectedFuelType);
-  const activeFuelType = isSelectedTypeValid 
-    ? selectedFuelType 
-    : (currentPump?.connectedFuelType || availableNozzles[0]?.fuelType || 'ai95');
+  const isLpgPump =
+    selectedPump?.id === 'gas_pump_5_lpg' || selectedFuelType === 'lpg';
+  const tankCapacity = isLpgPump
+    ? connectedVehicle?.fuelSystem?.gboCapacity || 42
+    : connectedVehicle?.fuelSystem?.tankCapacity || 55;
+  const currentPercent = isLpgPump
+    ? connectedVehicle?.fuelSystem?.gboLevel || 0
+    : connectedVehicle?.fuelSystem?.tankLevel || 0;
+  const currentLitersInTank = Math.round((currentPercent / 100) * tankCapacity);
+  const maxNeededLiters = Math.max(1, Math.round(tankCapacity - currentLitersInTank));
 
-  const grade = FUEL_GRADES[activeFuelType] || FUEL_GRADES.ai95;
-  const totalCost = Math.round(liters * grade.pricePerLiter);
-
+  const activeFuelGrade = FUEL_GRADES[selectedFuelType] || FUEL_GRADES.ai95;
+  const totalCost = Math.round(liters * activeFuelGrade.pricePerLiter);
   const playerCash = getPlayerCash(player);
   const canAfford = playerCash >= totalCost;
+  const isNozzleReady =
+    selectedPump &&
+    selectedPump.status === 'inserted' &&
+    Boolean(selectedPump.connectedVehicleId);
 
-  const handleSelectPump = (pump: GasPumpDispenser) => {
-    setSelectedPumpId(pump.id);
-    const pumpNozzles = pump.nozzles && pump.nozzles.length > 0 
-      ? pump.nozzles 
-      : (pump.id === 'gas_pump_5_lpg' ? [{ fuelType: 'lpg' }] : GAS_STATION_NOZZLES);
-
-    if (pump.connectedFuelType && pumpNozzles.some(n => n.fuelType === pump.connectedFuelType)) {
-      setSelectedFuelType(pump.connectedFuelType);
-    } else if (!pumpNozzles.some(n => n.fuelType === selectedFuelType)) {
-      setSelectedFuelType((pumpNozzles[0] as GasPumpNozzle).fuelType);
-    }
-    sound.playUseItem();
-  };
-
-  const handlePresetLiters = (amount: number) => {
-    setLiters(amount);
-    sound.playUseItem();
-  };
-
-  const handleFullTankPreset = () => {
-    if (connectedVehicle && connectedVehicle.fuelSystem) {
-      const cap = connectedVehicle.fuelSystem.tankCapacity || 55;
-      const cur = (connectedVehicle.fuelSystem.tankLevel / 100) * cap;
-      const missing = Math.max(1, Math.round(cap - cur));
-      setLiters(missing);
-    } else {
-      setLiters(50);
-    }
-    sound.playUseItem();
-  };
-
-  const handleConfirmPayment = () => {
-    if (!canAfford) return;
-    sound.playBuySell();
-    setPaymentDone(true);
-
-    setTimeout(() => {
-      onPayAndFuel(currentPump.id, liters, activeFuelType, totalCost);
-      onClose();
-    }, 1200);
-  };
+  const presetLiters = [10, 20, 30, 40, 50];
 
   return (
-    <div
-      id="gas-station-cashier-modal-overlay"
-      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-fadeIn font-mono"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <ModalShell
+      id="gas-cashier-modal"
+      title="Касса АЗС «НефтьМагистраль» 24/7"
+      subtitle="Пульт управления топливораздаточными колонками ТРК №1–5"
+      onClose={onClose}
+      width={860}
+      headRight={
+        <span className="gu-chip" title="Наличные средства">
+          <Coins className="w-4 h-4" style={{ color: 'var(--gu-amber-hi)' }} />
+          <span className="gu-num" style={{ fontSize: 16 }}>
+            {playerCash.toLocaleString()} ₽
+          </span>
+        </span>
+      }
+      footerHints={[
+        ['Клик', 'Выбрать колонку и объем'],
+        ['Esc', 'Закрыть кассу'],
+      ]}
+      footerRight={
+        <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
+          Закрыть
+        </button>
+      }
     >
-      <div
-        id="gas-station-cashier-container"
-        className="my-auto relative w-full max-w-4xl bg-[#14161a] border border-[#2a2e38] rounded-[2px] shadow-2xl overflow-hidden text-[#f0f3f6] flex flex-col max-h-[94vh] sm:max-h-[88vh]"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0b0c0e] border-b border-[#2a2e38] shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="p-2 rounded-[2px] bg-[#1c1f26] text-[#c68a35] border border-[#2a2e38] shrink-0">
-              <Receipt className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-lg font-bold text-[#f0f3f6] uppercase tracking-wider truncate">
-                  АЗС "Гранд-Ойл 24/7"
-                </h2>
-                <span className="px-2 py-0.5 rounded-[2px] text-[10px] font-bold bg-[#c68a35]/15 text-[#c68a35] border border-[#c68a35]/40 uppercase shrink-0">
-                  Касса АЗС
-                </span>
-              </div>
-              <p className="text-xs text-[#9ba3af] truncate hidden sm:block">
-                Управление заправочными колонками и выбор марки топлива
-              </p>
-            </div>
+      <div className="gu-trk-grid">
+        {/* Left Column: Pump Dispenser Selector (ТРК №1..5) */}
+        <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="gu-row-between">
+            <span className="gu-grp">1. Выбор колонки (ТРК)</span>
+            <span className="gu-tag">{pumps.length} постов</span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-[2px] bg-[#0b0c0e] border border-[#2a2e38]">
-              <Coins className="w-4 h-4 text-[#c68a35]" />
-              <span className="text-sm font-mono font-bold text-[#c68a35]">{playerCash.toLocaleString()} ₽</span>
-            </div>
-            <button
-              id="btn-close-cashier-modal"
-              onClick={onClose}
-              className="p-2 rounded-[2px] bg-[#14161a] hover:bg-[#1c1f26] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+          <div className="gu-trk-pumps">
+            {pumps.map((pump) => {
+              const isSelected = pump.id === selectedPumpId;
+              const veh = pump.connectedVehicleId
+                ? world.vehicles.find((v) => v.id === pump.connectedVehicleId)
+                : null;
+              const vCfg = veh ? CAR_CONFIGS[veh.type] : null;
+              const isLpg = pump.id === 'gas_pump_5_lpg';
+              const isReady = pump.status === 'inserted' && Boolean(veh);
+
+              return (
+                <button
+                  key={pump.id}
+                  type="button"
+                  onClick={() => {
+                    sound.playUseItem();
+                    setSelectedPumpId(pump.id);
+                    if (pump.connectedFuelType) {
+                      setSelectedFuelType(pump.connectedFuelType);
+                    } else if (pump.nozzleTaken) {
+                      setSelectedFuelType(pump.nozzleTaken);
+                    } else if (isLpg) {
+                      setSelectedFuelType('lpg');
+                    }
+                  }}
+                  className={`gu-trk-pump ${isSelected ? 'is-on' : ''} ${isReady ? 'is-ready' : ''}`}
+                >
+                  <div className="gu-row" style={{ gap: 8, minWidth: 0 }}>
+                    <span className="gu-trk-pump-num">№{pump.pumpNumber}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
+                        {isLpg ? 'Газовая колонка (LPG)' : `Колонка ТРК №${pump.pumpNumber}`}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: 'var(--gu-mut)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {veh
+                          ? `${vCfg?.name || veh.type} (${FUEL_GRADES[pump.connectedFuelType || 'ai95']?.badgeText})`
+                          : pump.status === 'nozzle_held'
+                          ? 'Пистолет в руке (не в баке)'
+                          : 'Ожидание автомобиля'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`gu-tag ${
+                      pump.isPumping
+                        ? 'warn'
+                        : isReady
+                        ? 'good'
+                        : ''
+                    }`}
+                  >
+                    {pump.isPumping
+                      ? `${pump.displayLiters.toFixed(1)} л`
+                      : isReady
+                      ? 'В баке'
+                      : 'Свободна'}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Content */}
-        {paymentDone ? (
-          <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center space-y-4">
-            <div className="w-16 h-16 rounded-[2px] bg-[#c68a35]/15 border border-[#c68a35]/40 flex items-center justify-center text-[#c68a35]">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h3 className="text-xl font-bold text-[#f0f3f6] uppercase tracking-wider">Оплата успешно принята!</h3>
-            <p className="text-[#9ba3af] text-sm max-w-md">
-              Колонка №{currentPump.pumpNumber} активирована. Заправка {liters} л топлива{' '}
-              <span className="font-bold text-[#c68a35]">{grade.nameRu}</span> началась.
-            </p>
-          </div>
-        ) : (
-          <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-y-auto">
-            {/* Pump selector */}
-            <div className="lg:col-span-4 flex flex-col space-y-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#9ba3af]">
-                1. Колонка АЗС
-              </span>
-
-              <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
-                {world.gasPumps.map((p) => {
-                  const isSelected = p.id === selectedPumpId;
-                  const veh = world.vehicles?.find(v => v.id === p.connectedVehicleId);
-
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => handleSelectPump(p)}
-                      className={`p-3 rounded-[2px] border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#c68a35]/15 border-[#c68a35] text-[#f0f3f6]'
-                          : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2">
-                          <Fuel className={`w-4 h-4 ${isSelected ? 'text-[#c68a35]' : 'text-[#9ba3af]'}`} />
-                          <span className="font-bold text-sm text-[#f0f3f6]">ТРК №{p.pumpNumber}</span>
-                        </div>
-                        {p.status === 'inserted' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-[2px] bg-[#c68a35]/15 text-[#c68a35] border border-[#c68a35]/40 font-bold uppercase">
-                            В баке
-                          </span>
-                        )}
-                      </div>
-
-                      {veh && (
-                        <div className="mt-1 pt-1 border-t border-[#2a2e38] text-[11px] text-[#9ba3af] truncate">
-                          {CAR_CONFIGS[veh.type]?.name || veh.type}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Fuel & Amount selection */}
-            <div className="lg:col-span-8 flex flex-col space-y-4">
-              {/* Fuel grades */}
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-[#9ba3af] block mb-2">
-                  2. Марка топлива
+        {/* Right Column: Vehicle Tank Info + Fuel Grade + Volume + Pay */}
+        <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 10 }}>
+          {/* Connected Vehicle Banner */}
+          {connectedVehicle && vehConfig ? (
+            <div className="gu-card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="gu-row-between">
+                <div className="gu-row" style={{ gap: 8 }}>
+                  <Car className="w-4 h-4" style={{ color: 'var(--gu-good)' }} />
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>
+                    {vehConfig.name}
+                  </span>
+                  <span className="gu-tag good">Готов к подаче</span>
+                </div>
+                <span className="gu-num" style={{ fontSize: 12.5, color: 'var(--gu-amber-hi)' }}>
+                  В баке: {currentLitersInTank} / {tankCapacity} л ({Math.round(currentPercent)}%)
                 </span>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {availableNozzles.map((noz) => {
-                    const isSelected = activeFuelType === noz.fuelType;
-
-                    return (
-                      <button
-                        key={noz.fuelType}
-                        onClick={() => {
-                          setSelectedFuelType(noz.fuelType);
-                          sound.playUseItem();
-                        }}
-                        className={`p-3 rounded-[2px] border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#0b0c0e] border-[#c68a35] text-[#f0f3f6]'
-                            : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6]'
-                        }`}
-                      >
-                        <div className="font-bold text-xs text-[#f0f3f6]">{noz.nameRu || noz.badgeText}</div>
-                        <div className="text-xs font-mono font-bold text-[#c68a35] mt-1">
-                          {noz.pricePerLiter.toFixed(2)} ₽/л
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
-
-              {/* Liters Stepper */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#9ba3af]">
-                    3. Объем топлива
-                  </span>
-                  <span className="text-sm font-mono font-bold text-[#c68a35]">
-                    {liters} литров
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-5 gap-2 mb-3">
-                  {[10, 20, 30, 50].map((amt) => (
-                    <button
-                      key={amt}
-                      onClick={() => handlePresetLiters(amt)}
-                      className={`py-2 rounded-[2px] text-xs font-bold border transition-all cursor-pointer ${
-                        liters === amt
-                          ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
-                          : 'bg-[#0b0c0e] text-[#cbd5e1] border-[#2a2e38] hover:bg-[#1c1f26]'
-                      }`}
-                    >
-                      {amt} л
-                    </button>
-                  ))}
-                  <button
-                    onClick={handleFullTankPreset}
-                    className="py-2 rounded-[2px] text-xs font-bold bg-[#c68a35]/15 text-[#c68a35] border border-[#c68a35]/40 hover:bg-[#c68a35]/25 cursor-pointer uppercase"
-                  >
-                    Полный бак
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 rounded-[2px] bg-[#0b0c0e] border border-[#2a2e38]">
-                  <button
-                    onClick={() => setLiters(Math.max(1, liters - 1))}
-                    className="p-2 min-w-[36px] rounded-[2px] bg-[#14161a] hover:bg-[#1c1f26] border border-[#2a2e38] text-[#f0f3f6] font-bold cursor-pointer"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="range"
-                    min={1}
-                    max={100}
-                    value={liters}
-                    onChange={(e) => setLiters(parseInt(e.target.value) || 1)}
-                    className="flex-1 accent-[#c68a35] h-2 bg-[#14161a] rounded-[2px] cursor-pointer"
-                  />
-                  <button
-                    onClick={() => setLiters(Math.min(100, liters + 1))}
-                    className="p-2 min-w-[36px] rounded-[2px] bg-[#14161a] hover:bg-[#1c1f26] border border-[#2a2e38] text-[#f0f3f6] font-bold cursor-pointer"
-                  >
-                    +
-                  </button>
-                </div>
+              <div className="gu-bar good">
+                <span style={{ width: `${Math.min(100, currentPercent)}%` }} />
               </div>
+            </div>
+          ) : (
+            <div className="gu-note warn" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: 12 }}>
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>
+                На ТРК №{selectedPump?.pumpNumber} пистолет не вставлен в бак. Сначала снимите пистолет на колонке <b>[E]</b> и вставьте его в горловину авто.
+              </span>
+            </div>
+          )}
 
-              {/* Total & Pay Button */}
-              <div className="p-4 rounded-[2px] bg-[#0b0c0e] border border-[#2a2e38] flex flex-col sm:flex-row items-center justify-between gap-3 mt-auto">
-                <div>
-                  <span className="text-xs text-[#9ba3af] block">К оплате на кассе:</span>
-                  <span className="text-2xl font-mono font-bold text-[#c68a35]">
-                    {totalCost.toLocaleString()} ₽
-                  </span>
-                </div>
+          {/* Fuel Grade Selection */}
+          <div>
+            <div className="gu-row-between" style={{ marginBottom: 5 }}>
+              <span className="gu-grp">2. Марка топлива</span>
+              <span style={{ fontSize: 12, color: 'var(--gu-amber-hi)', fontWeight: 700 }}>
+                {activeFuelGrade.nameRu} · {activeFuelGrade.pricePerLiter.toFixed(2)} ₽/л
+              </span>
+            </div>
 
+            <div className="gu-trk-grades">
+              {(Object.keys(FUEL_GRADES) as FuelType[]).map((ft) => {
+                const g = FUEL_GRADES[ft];
+                const active = selectedFuelType === ft;
+                const lockedByNozzle =
+                  selectedPump?.connectedFuelType && selectedPump.connectedFuelType !== ft;
+                const incompatibleWithPump =
+                  selectedPump?.id === 'gas_pump_5_lpg' ? ft !== 'lpg' : ft === 'lpg';
+
+                return (
+                  <button
+                    key={ft}
+                    type="button"
+                    disabled={Boolean(lockedByNozzle || incompatibleWithPump)}
+                    onClick={() => {
+                      sound.playUseItem();
+                      setSelectedFuelType(ft);
+                    }}
+                    className={`gu-trk-grade ${active ? 'is-on' : ''}`}
+                    style={{ '--grade-color': g.color } as React.CSSProperties}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{g.badgeText}</span>
+                    <span className="gu-num" style={{ fontSize: 12, color: 'var(--gu-amber-hi)' }}>
+                      {g.pricePerLiter.toFixed(1)} ₽
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Volume Selection */}
+          <div>
+            <div className="gu-row-between" style={{ marginBottom: 5 }}>
+              <span className="gu-grp">3. Объем заправки</span>
+              <div className="gu-row" style={{ gap: 6 }}>
                 <button
-                  disabled={!canAfford}
-                  onClick={handleConfirmPayment}
-                  className={`w-full sm:w-auto px-6 py-2.5 rounded-[2px] font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider ${
-                    canAfford
-                      ? 'bg-[#c68a35] hover:bg-[#d99a41] text-[#0b0c0e] shadow-md'
-                      : 'bg-[#1c1f26] text-[#5a6272] border border-[#2a2e38] opacity-50 cursor-not-allowed'
-                  }`}
+                  type="button"
+                  onClick={() => setLiters(Math.max(5, liters - 5))}
+                  className="gu-btn gu-btn-s gu-btn-xs"
                 >
-                  <CreditCard className="w-4 h-4" />
-                  {canAfford ? 'Оплатить заправку' : 'Недостаточно денег'}
+                  <Minus className="w-3 h-3" /> 5 л
+                </button>
+                <span className="gu-num" style={{ fontSize: 16, fontWeight: 700, color: '#fff', minWidth: 48, textAlign: 'center' }}>
+                  {liters} л
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLiters(Math.min(120, liters + 5))}
+                  className="gu-btn gu-btn-s gu-btn-xs"
+                >
+                  <Plus className="w-3 h-3" /> 5 л
                 </button>
               </div>
             </div>
+
+            <div className="gu-trk-presets">
+              {presetLiters.map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => {
+                    sound.playUseItem();
+                    setLiters(val);
+                  }}
+                  className={`gu-pill ${liters === val ? 'on' : ''}`}
+                  style={{ justifyContent: 'center', height: 28 }}
+                >
+                  {val} л
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  sound.playUseItem();
+                  setLiters(connectedVehicle ? maxNeededLiters : 45);
+                }}
+                className={`gu-pill ${connectedVehicle && liters === maxNeededLiters ? 'on' : ''}`}
+                style={{ justifyContent: 'center', height: 28 }}
+              >
+                Полный ({connectedVehicle ? `${maxNeededLiters}л` : '45л'})
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* Total & Pay Footer */}
+          <div
+            className="gu-row-between"
+            style={{
+              paddingTop: 8,
+              borderTop: '1px solid var(--gu-line)',
+              flexWrap: 'wrap',
+              gap: 10,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--gu-mut)', textTransform: 'uppercase' }}>
+                Итого к оплате ({liters} л × {activeFuelGrade.pricePerLiter.toFixed(2)} ₽)
+              </div>
+              <div className="gu-shop-price" style={{ fontSize: 24 }}>
+                {totalCost.toLocaleString()}
+                <small>₽</small>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={!isNozzleReady || !canAfford || selectedPump?.isPumping}
+              onClick={() => {
+                if (!selectedPump) return;
+                sound.playUseItem();
+                onPayAndFuel(selectedPump.id, liters, selectedFuelType, totalCost);
+              }}
+              className="gu-btn gu-btn-p"
+              style={{ height: 38, padding: '0 16px' }}
+            >
+              {selectedPump?.isPumping ? (
+                <>
+                  <Fuel className="w-4 h-4" />
+                  <span>Идет заправка...</span>
+                </>
+              ) : !isNozzleReady ? (
+                <span>Сначала вставьте пистолет в бак</span>
+              ) : !canAfford ? (
+                <span>Недостаточно средств ({totalCost} ₽)</span>
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4" />
+                  <span>Оплатить и включить ТРК №{selectedPump?.pumpNumber}</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };

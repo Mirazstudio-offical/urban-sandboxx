@@ -1636,6 +1636,327 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   }
 }
 
+/* ==========================================================================
+   Fuel Nozzle Selector Modal (gu-nozzle-*)
+   Compact, zero-scroll fuel grade picker when interacting with a gas pump
+   ========================================================================== */
+#fuel-nozzle-modal .gu-body {
+  overflow: hidden;
+  padding: 12px 14px;
+}
 
+.gu-nozzle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
+.gu-nozzle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--gu-line);
+  border-left: 3px solid var(--nozzle-color, var(--gu-amber));
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, transform 0.1s;
+}
+.gu-nozzle-row:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: var(--gu-line-2);
+}
+.gu-nozzle-row:active {
+  transform: translateY(1px);
+}
 
+.gu-nozzle-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: rgba(13, 14, 16, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 1px var(--nozzle-color, transparent);
+  flex: none;
+}
+
+.gu-nozzle-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.gu-nozzle-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.gu-nozzle-sub {
+  font-size: 11.5px;
+  color: var(--gu-mut);
+  line-height: 1.25;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gu-nozzle-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+/* ==========================================================================
+   Gas Station TRK Dispenser & Cashier Terminal (gu-trk-*)
+   Compact 2-column layout without vertical scroll
+   ========================================================================== */
+#shop-modal .gu-body:has(.gu-trk-grid),
+#gas-cashier-modal .gu-body {
+  overflow: hidden;
+}
+
+.gu-trk-grid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.gu-trk-pumps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gu-trk-pump {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.032);
+  border: 1px solid var(--gu-line);
+  border-left: 3px solid transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+}
+.gu-trk-pump:hover {
+  background: rgba(255, 255, 255, 0.065);
+  border-color: var(--gu-line-2);
+}
+.gu-trk-pump.is-on {
+  background: rgba(201, 146, 43, 0.14);
+  border-color: rgba(201, 146, 43, 0.55);
+  border-left-color: var(--gu-amber);
+}
+.gu-trk-pump.is-ready {
+  border-left-color: var(--gu-good);
+}
+
+.gu-trk-pump-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #0d0e10;
+  border: 1px solid var(--gu-line-2);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gu-amber-hi);
+  flex: none;
+}
+
+.gu-trk-grades {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.gu-trk-grade {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--gu-line);
+  border-left: 3px solid var(--grade-color, var(--gu-amber));
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+}
+.gu-trk-grade:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+}
+.gu-trk-grade.is-on {
+  background: rgba(201, 146, 43, 0.16);
+  border-color: var(--gu-amber);
+}
+.gu-trk-grade:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.gu-trk-presets {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+
+/* ==========================================================================
+   Car Dealership & Used Car Market (gu-dealer-*)
+   Compact 2-column showroom layout matching Main Menu & ShopModal
+   ========================================================================== */
+#dealership-modal .gu-body {
+  padding: 12px 14px;
+}
+
+.gu-dealer-layout {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.gu-dealer-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gu-dealer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: calc(min(92vh, 840px) - 215px);
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: #3a352b transparent;
+}
+
+.gu-dealer-car-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.032);
+  border: 1px solid var(--gu-line);
+  border-left: 3px solid transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+}
+.gu-dealer-car-item:hover {
+  background: rgba(255, 255, 255, 0.065);
+  border-color: var(--gu-line-2);
+}
+.gu-dealer-car-item.is-on {
+  background: rgba(201, 146, 43, 0.15);
+  border-color: rgba(201, 146, 43, 0.55);
+  border-left-color: var(--gu-amber);
+}
+
+.gu-dealer-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.gu-dealer-hero {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: rgba(22, 22, 24, 0.72);
+  border: 1px solid var(--gu-line);
+}
+
+.gu-dealer-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 9px;
+  background: #0d0e10;
+  border: 1px solid var(--gu-line);
+}
+
+.gu-dealer-specs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (max-width: 860px) {
+  .gu-trk-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #shop-modal .gu-body:has(.gu-trk-grid),
+  #gas-cashier-modal .gu-body {
+    overflow-y: auto;
+  }
+  .gu-dealer-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gu-dealer-list {
+    max-height: 175px;
+  }
+  .gu-dealer-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gu-dealer-specs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-height: 620px) {
+  #fuel-nozzle-modal .gu-body {
+    padding: 8px 12px;
+  }
+  .gu-nozzle-row {
+    padding: 5px 9px;
+    gap: 8px;
+  }
+  .gu-nozzle-badge {
+    height: 26px;
+    min-width: 40px;
+    font-size: 14px;
+  }
+  .gu-trk-pump {
+    padding: 5px 8px;
+  }
+  .gu-dealer-list {
+    max-height: calc(100vh - 175px);
+  }
+  .gu-dealer-hero {
+    padding: 7px 10px;
+    gap: 10px;
+  }
+}
