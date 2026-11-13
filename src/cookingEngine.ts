@@ -180,6 +180,14 @@ export const NUTRIENT_REFERENCE_PER_100G: Record<string, FoodNutrientRef> = {
 
   // Condiments & Spices
   sugar: { kcal: 387, p: 0.0, f: 0.0, c: 100.0, sugar: 100.0, fiber: 0.0, salt: 0.0, water: 0.0, type: 'condiment' },
+  syrup: { kcal: 310, p: 0.0, f: 0.0, c: 78.0, sugar: 64.0, fiber: 0.0, salt: 0.01, water: 21.0, type: 'condiment' },
+  gelatin: { kcal: 335, p: 85.0, f: 0.1, c: 0.0, sugar: 0.0, fiber: 0.0, salt: 0.2, water: 13.0, type: 'condiment' },
+  pectin: { kcal: 165, p: 0.3, f: 0.0, c: 82.0, sugar: 2.0, fiber: 80.0, salt: 0.1, water: 10.0, type: 'condiment' },
+  starch: { kcal: 360, p: 0.3, f: 0.1, c: 88.0, sugar: 0.0, fiber: 0.9, salt: 0.01, water: 11.0, type: 'grain' },
+  coconut_milk: { kcal: 195, p: 2.0, f: 20.5, c: 3.3, sugar: 2.0, fiber: 0.0, salt: 0.02, water: 73.0, type: 'dairy' },
+  fruit_tropical: { kcal: 58, p: 0.7, f: 0.3, c: 14.2, sugar: 11.0, fiber: 2.2, salt: 0.0, water: 84.0, type: 'veggie' },
+  citrus: { kcal: 44, p: 0.8, f: 0.2, c: 10.5, sugar: 8.0, fiber: 2.0, salt: 0.0, water: 87.0, type: 'veggie' },
+  berry: { kcal: 46, p: 1.0, f: 0.4, c: 10.2, sugar: 6.5, fiber: 4.5, salt: 0.0, water: 85.0, type: 'veggie' },
   salt: { kcal: 0, p: 0.0, f: 0.0, c: 0.0, sugar: 0.0, fiber: 0.0, salt: 100.0, water: 0.0, type: 'condiment' },
   water: { kcal: 0, p: 0.0, f: 0.0, c: 0.0, sugar: 0.0, fiber: 0.0, salt: 0.0, water: 100.0, type: 'condiment' },
   broth: { kcal: 15, p: 2.5, f: 0.5, c: 0.2, sugar: 0.1, fiber: 0.0, salt: 0.8, water: 96.0, type: 'condiment' }
@@ -206,7 +214,8 @@ export function inferNutrientsFromItem(item: InventoryItem, massGrams?: number):
     };
   }
 
-  const id = item.itemId.toLowerCase();
+  const id = (item.originalCatalogId || item.itemId).toLowerCase();
+  const liqId = (item.fluidStorage?.liquidId || '').toLowerCase();
   let ref: FoodNutrientRef = NUTRIENT_REFERENCE_PER_100G.beef;
 
   if (id.includes('pork') || id.includes('свинин')) ref = NUTRIENT_REFERENCE_PER_100G.pork;
@@ -220,7 +229,7 @@ export function inferNutrientsFromItem(item: InventoryItem, massGrams?: number):
   else if (id.includes('potato') || id.includes('картоф')) ref = NUTRIENT_REFERENCE_PER_100G.potato;
   else if (id.includes('onion') || id.includes('лук')) ref = NUTRIENT_REFERENCE_PER_100G.onion;
   else if (id.includes('garlic') || id.includes('чеснок')) ref = NUTRIENT_REFERENCE_PER_100G.garlic;
-  else if (id.includes('carrot') || id.includes('морков')) ref = NUTRIENT_REFERENCE_PER_100G.carrot;
+  else if (id.includes('carrot') || id.includes('морков') || id.includes('radish') || id.includes('редис')) ref = NUTRIENT_REFERENCE_PER_100G.carrot;
   else if (id.includes('tomato') || id.includes('томат') || id.includes('помидор')) ref = NUTRIENT_REFERENCE_PER_100G.tomato;
   else if (id.includes('cucumber') || id.includes('огурец')) ref = NUTRIENT_REFERENCE_PER_100G.cucumber;
   else if (id.includes('cabbage') || id.includes('капуст')) ref = NUTRIENT_REFERENCE_PER_100G.cabbage;
@@ -233,8 +242,16 @@ export function inferNutrientsFromItem(item: InventoryItem, massGrams?: number):
   else if (id.includes('egg') || id.includes('яйц')) ref = NUTRIENT_REFERENCE_PER_100G.egg;
   else if (id.includes('cheese') || id.includes('сыр')) ref = NUTRIENT_REFERENCE_PER_100G.cheese;
   else if (id.includes('butter') || id.includes('масло_слив')) ref = NUTRIENT_REFERENCE_PER_100G.butter;
-  else if (id.includes('oil') || id.includes('масло')) ref = NUTRIENT_REFERENCE_PER_100G.sunflower_oil;
-  else if (id.includes('sugar') || id.includes('сахар')) ref = NUTRIENT_REFERENCE_PER_100G.sugar;
+  else if (id.includes('coconut_milk') || liqId === 'coconut_milk') ref = NUTRIENT_REFERENCE_PER_100G.coconut_milk;
+  else if (id.includes('oil') || id.includes('масло') || liqId === 'essential_oil') ref = NUTRIENT_REFERENCE_PER_100G.sunflower_oil;
+  else if (id.includes('gelatin') || liqId === 'gelatin') ref = NUTRIENT_REFERENCE_PER_100G.gelatin;
+  else if (id.includes('pectin') || id.includes('agar') || liqId === 'pectin' || liqId === 'agar_agar') ref = NUTRIENT_REFERENCE_PER_100G.pectin;
+  else if (id.includes('starch') || liqId === 'starch') ref = NUTRIENT_REFERENCE_PER_100G.starch;
+  else if (id.includes('syrup') || id.includes('molasses') || liqId === 'glucose_syrup' || liqId === 'corn_molasses' || liqId === 'topinambur_syrup') ref = NUTRIENT_REFERENCE_PER_100G.syrup;
+  else if (id.includes('yuzu') || id.includes('grapefruit') || id.includes('mandarin') || id.includes('blood_orange') || id.includes('orange') || id.includes('lemon') || id.includes('lime')) ref = NUTRIENT_REFERENCE_PER_100G.citrus;
+  else if (id.includes('pineapple') || id.includes('mango') || id.includes('passionfruit') || id.includes('guava') || id.includes('papaya') || id.includes('dragonfruit') || id.includes('lychee')) ref = NUTRIENT_REFERENCE_PER_100G.fruit_tropical;
+  else if (id.includes('berry') || id.includes('blackberry') || id.includes('buckthorn') || id.includes('elderberry') || id.includes('blueberry') || id.includes('raspberry') || id.includes('strawberry') || id.includes('cherry')) ref = NUTRIENT_REFERENCE_PER_100G.berry;
+  else if (id.includes('sugar') || id.includes('сахар') || id.includes('gummy')) ref = NUTRIENT_REFERENCE_PER_100G.sugar;
   else if (id.includes('salt') || id.includes('соль')) ref = NUTRIENT_REFERENCE_PER_100G.salt;
 
   return {

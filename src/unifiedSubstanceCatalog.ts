@@ -2402,6 +2402,554 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       '#f8fafc',
       { culinaryEquivalentId: 'salt_shaker' }
     )
+  },
+
+  // === 15. CONFECTIONERY GELLING AGENTS, STARCHES, SYRUPS, ACIDS, DYES & EXTRACTS ===
+  gelatin_powder_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'gelatin',
+    amountMl: 80,
+    attributes: attr(
+      'Желатин пищевой быстрорастворимый П-11 (саше 50 г)',
+      'Гидролизованный коллаген животного происхождения (220 Bloom)',
+      'Экстракция, очистка, сушка и грануляция в герметичный фольгированный саше-пакет',
+      'Желирующий агент для классических мармеладных мишек, желе и заливных блюд',
+      'Образует упругий термообратимый гель с характерным жевательным «щелчком» мармелада',
+      '#f59e0b',
+      { culinaryEquivalentId: 'gelatin_powder_sachet', customEffects: { hunger: 4 } }
+    )
+  },
+  gelatin_beef_pack: {
+    containerId: 'package_bag',
+    liquidId: 'gelatin',
+    amountMl: 450,
+    attributes: attr(
+      'Желатин говяжий кондитерский 240 Bloom (300 г)',
+      'Очищенный говяжий пищевой желатин высокой прочности геля (240 Bloom)',
+      'Выварка говяжьего коллагенового сырья, ионная очистка и фасовка в плотный пакет',
+      'Приготовление плотного упругого мармелада, бутылочек колы и жевательных червячков',
+      'Высокий индекс Bloom обеспечивает эластичность без мутности',
+      '#d97706',
+      { culinaryEquivalentId: 'gelatin_beef_pack', customEffects: { hunger: 6 } }
+    )
+  },
+  pectin_apple_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'pectin',
+    amountMl: 85,
+    attributes: attr(
+      'Пектин яблочный кондитерский (саше 50 г)',
+      'Высокометоксилированный полисахарид из отборного яблочного жмыха',
+      'Кислотная экстракция яблочной клетчатки, осаждение и тонкий помол',
+      'Натуральный растительный загуститель для ягодного, фруктового и долькового мармелада',
+      'Придаёт мармеладу нежный короткий откус без резиновой тягучести',
+      '#84cc16',
+      { culinaryEquivalentId: 'pectin_apple_sachet', customEffects: { hunger: 3 } }
+    )
+  },
+  pectin_citrus_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'pectin',
+    amountMl: 85,
+    attributes: attr(
+      'Пектин цитрусовый NH термообратимый (саше 50 г)',
+      'Натуральный пектин из цедры лимонов, лаймов и горьких апельсинов',
+      'Экстракция цитрусовой цедры и стандартизация по силе желирования',
+      'Основа для глянцевых фруктовых колечек, тропических кубиков и садовых пастилок',
+      'Раскрывает яркий фруктово-цитрусовый вкус даже при низкой кислотности',
+      '#f97316',
+      { culinaryEquivalentId: 'pectin_citrus_sachet', customEffects: { hunger: 3 } }
+    )
+  },
+  agar_agar_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'agar_agar',
+    amountMl: 75,
+    attributes: attr(
+      'Агар-агар 900 из красных водорослей (саше 40 г)',
+      'Чистый растительный агар-агар (Gracilaria, сила геля 900 г/см²)',
+      'Промывка красных морских водорослей, горячая фильтрация и сушка в тонкий порошок',
+      'Веганская основа для тропического мармелада, личи-кубиков и птичьего молока',
+      'Застывает уже при +38°C и держит чёткую форму даже без холодильника',
+      '#0d9488',
+      { culinaryEquivalentId: 'agar_agar_sachet', customEffects: { hunger: 2, health: 2 } }
+    )
+  },
+  starch_modified_pack: {
+    containerId: 'package_bag',
+    liquidId: 'starch',
+    amountMl: 600,
+    attributes: attr(
+      'Крахмал модифицированный кондитерский E1420 (400 г)',
+      'Ацетилированный кукурузно-тапиоковый пищевой крахмал высшего сорта',
+      'Стабилизация крахмальных зёрен для формовочных отливок мармелада',
+      'Создание плотной упругой структуры кислых червячков, колечек и лент',
+      'Удерживает влагу и не даёт мармеладу высыхать при хранении',
+      '#cbd5e1',
+      { culinaryEquivalentId: 'starch_modified_pack' }
+    )
+  },
+  starch_corn_pack: {
+    containerId: 'package_bag',
+    liquidId: 'starch',
+    amountMl: 600,
+    attributes: attr(
+      'Крахмал кукурузный тонкого помола (400 г)',
+      'Очищенный крахмал из зёрен сахарной кукурузы высшего сорта',
+      'Мокрое разделение кукурузного зерна и центрифугирование до белоснежной пудры',
+      'Посыпка форм, отливка мармелада, загущение ягодных пюре и кремов',
+      'Нейтральный вкус и шёлковая сухая текстура',
+      '#fef08a',
+      { culinaryEquivalentId: 'starch_corn_pack' }
+    )
+  },
+  glucose_syrup_bottle: {
+    containerId: 'bottle_plastic_500',
+    liquidId: 'glucose_syrup',
+    amountMl: 500,
+    attributes: attr(
+      'Глюкозный сироп кондитерский 43 DE (0.5 л)',
+      'Концентрированный водный раствор чистой D-глюкозы и мальтозы',
+      'Ферментативный гидролиз кукурузного крахмала и вакуумное уваривание',
+      'Антикристаллизатор для блестящего тягучего мармелада, карамели и глазури',
+      'Предотвращает засахаривание мармеладной массы и даёт упругую прозрачность',
+      '#fef08a',
+      { culinaryEquivalentId: 'glucose_syrup_bottle', customEffects: { hunger: 20, energy: 28, thirst: -4 } }
+    )
+  },
+  glucose_fructose_syrup_bottle: {
+    containerId: 'bottle_plastic_500',
+    liquidId: 'glucose_syrup',
+    amountMl: 500,
+    attributes: attr(
+      'Глюкозно-фруктозный сироп ГФС-42 (0.5 л)',
+      'Сбалансированный сироп глюкозы и кристаллической фруктозы',
+      'Изомеризация части глюкозы в фруктозу для мягкой фруктовой сладости',
+      'Основа мармелада «Золотые мишки», шипучих бутылочек колы и лимонадного микса',
+      'Удерживает влагу внутри мармелада и усиливает фруктовую кислинку',
+      '#fbbf24',
+      { culinaryEquivalentId: 'glucose_fructose_syrup_bottle', customEffects: { hunger: 22, energy: 30, thirst: -4 } }
+    )
+  },
+  starch_molasses_jar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'corn_molasses',
+    amountMl: 200,
+    attributes: attr(
+      'Патока крахмальная карамельная в банке (270 г)',
+      'Осахаренный кукурузный крахмал с высоким содержанием декстринов',
+      'Медленное уваривание до густого янтарного блеска в стеклянной банке твист-офф',
+      'Придаёт мармеладу плотность, глянец и мягкую сладость без приторности',
+      'Классический компонент советских и европейских кондитерских рецептур',
+      '#d97706',
+      { culinaryEquivalentId: 'starch_molasses_jar', customEffects: { hunger: 22, energy: 26 } }
+    )
+  },
+  topinambur_syrup_bottle: {
+    containerId: 'bottle_glass_small',
+    liquidId: 'topinambur_syrup',
+    amountMl: 250,
+    attributes: attr(
+      'Сироп топинамбура натуральный пребиотический (0.25 л)',
+      'Уваренный сок клубней топинамбура (инулин и фруктоолигосахариды)',
+      'Холодное прессование клубней и щадящее вакуумное выпаривание',
+      'Натуральный подсластитель для мармелада на пектине и здоровых десертов',
+      'Низкий гликемический индекс и тёплый карамельно-травяной оттенок вкуса',
+      '#92400e',
+      { culinaryEquivalentId: 'topinambur_syrup_bottle', customEffects: { hunger: 18, energy: 22, health: 4 } }
+    )
+  },
+  coconut_milk_can: {
+    containerId: 'can_metal_medium',
+    liquidId: 'coconut_milk',
+    amountMl: 400,
+    attributes: attr(
+      'Кокосовое молоко 19% в жестяной банке (0.4 л)',
+      'Натуральная эмульсия прессованной мякоти зрелого кокоса и очищенной воды',
+      'Отжим свежей копры и стерилизация в белой лакированной банке с ключом',
+      'Тропический мармелад ананас-кокос, взбитый слой, карри и десерты',
+      'Нежная сливочная текстура с натуральным ароматом кокосового ореха',
+      '#0d9488',
+      { culinaryEquivalentId: 'coconut_milk_can', customEffects: { thirst: 22, hunger: 16, energy: 10 } }
+    )
+  },
+  citric_acid_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'citric_acid',
+    amountMl: 80,
+    attributes: attr(
+      'Лимонная кислота пищевая кристаллическая (саше 80 г)',
+      'Моногидрат лимонной кислоты E330 тонкой кристаллической фракции',
+      'Биоферментация углеводов с многоступенчатой перекристаллизацией',
+      'Запуск желирования пектина, кислая сахарная обсыпка, маринады и напитки',
+      'Чистая звонкая цитрусовая кислинка без постороннего привкуса',
+      '#facc15',
+      { culinaryEquivalentId: 'citric_acid_sachet' }
+    )
+  },
+  citric_acid_jar: {
+    containerId: 'jar_spice_small',
+    liquidId: 'citric_acid',
+    amountMl: 100,
+    attributes: attr(
+      'Лимонная кислота крупнокристаллическая в банке (100 г)',
+      'Крупные прозрачные кристаллы пищевой лимонной кислоты E330',
+      'Расфасовка в герметичную стеклянную баночку с закруткой от слёживания',
+      'Кондитерская обсыпка для ультра-кислых мармеладных червячков и колечек',
+      'Не мокнет в банке и даёт мгновенную резкую искру кислотности на языке',
+      '#eab308',
+      { culinaryEquivalentId: 'citric_acid_jar' }
+    )
+  },
+  malic_acid_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'malic_acid',
+    amountMl: 70,
+    attributes: attr(
+      'Яблочная кислота пищевая E296 (саше 70 г)',
+      'Органическая яблочная дикарбоновая кислота тонкого кристаллического помола',
+      'Сверхчистая кристаллизация для кондитерской кислой обсыпки',
+      'Создание «взрывной» долгоиграющей кислой пудры и яблочного мармелада',
+      'Дольше держит кислоту во рту и подчёркивает вкус зелёного яблока и ягод',
+      '#84cc16',
+      { culinaryEquivalentId: 'malic_acid_sachet' }
+    )
+  },
+  tartaric_acid_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'tartaric_acid',
+    amountMl: 70,
+    attributes: attr(
+      'Винная кислота пищевая E334 (саше 70 г)',
+      'Натуральная правовращающая виннокаменная кислота из виноградного камня',
+      'Переработка осадков виноградного сусла и сушка кристаллов',
+      'Шипучая обсыпка и терпкая кислинка виноградного, вишнёвого и кола-мармелада',
+      'Придаёт сладостям характерную освежающую терпкость винного камня',
+      '#a855f7',
+      { culinaryEquivalentId: 'tartaric_acid_sachet' }
+    )
+  },
+  lactic_acid_bottle: {
+    containerId: 'bottle_glass_small',
+    liquidId: 'lactic_acid',
+    amountMl: 200,
+    attributes: attr(
+      'Молочная кислота пищевая 80% E270 (0.2 л)',
+      'Очищенный водный концентрат L-молочной кислоты натурального брожения',
+      'Молочнокислое сбраживание глюкозы и мембранная очистка в янтарное стекло',
+      'Мягкий регулятор кислотности для ягодного, персикового и молочного мармелада',
+      'Сглаживает резкие углы кислоты и продлевает свежесть продукта',
+      '#eab308',
+      { culinaryEquivalentId: 'lactic_acid_bottle' }
+    )
+  },
+  sodium_citrate_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'sodium_citrate',
+    amountMl: 75,
+    attributes: attr(
+      'Цитрат натрия кондитерский E331 (саше 75 г)',
+      'Трёхзамещённая натриевая соль лимонной кислоты (буферная соль)',
+      'Нейтрализация пищевой лимонной кислоты и сушка до рассыпчатого порошка',
+      'Контроль pH при варке пектинового мармелада и эмульгирование сыров',
+      'Не даёт пектину свернуться раньше времени до разлива по формам',
+      '#38bdf8',
+      { culinaryEquivalentId: 'sodium_citrate_sachet' }
+    )
+  },
+  menthol_crystals_tin: {
+    containerId: 'tin_round_mini',
+    liquidId: 'menthol',
+    amountMl: 30,
+    attributes: attr(
+      'Кристаллы натурального ментола (шайба 30 мл)',
+      '100% чистый кристаллический L-ментол из масла перечной мяты',
+      'Вымораживание мятного масла и фасовка в герметичную ментоловую шайбу',
+      'Мармеладные сердечки «Мята и Эвкалипт», ингаляции и освежающие леденцы',
+      'Игольчатые ледяные кристаллы вызывают мощный холодок рецепторов TRPM8',
+      '#0d9488',
+      { culinaryEquivalentId: 'menthol_crystals_tin', customEffects: { energy: 8 } }
+    )
+  },
+  menthol_crystals_jar: {
+    containerId: 'jar_spice_small',
+    liquidId: 'menthol',
+    amountMl: 80,
+    attributes: attr(
+      'Ментол натуральный кристаллический в банке (80 мл)',
+      'Крупные игольчатые кристаллы природного мятного ментола высшей очистки',
+      'Дробная кристаллизация в янтарной светозащитной баночке',
+      'Кондитерское производство освежающего мармелада и травяных леденцов',
+      'Сохраняет пронзительную свежесть благодаря герметичной крышке',
+      '#0f766e',
+      { culinaryEquivalentId: 'menthol_crystals_jar' }
+    )
+  },
+  carmine_extract_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'dye_carmine',
+    amountMl: 100,
+    attributes: attr(
+      'Краситель пищевой Кармин E120 (капельница 100 мл)',
+      'Водоглицериновый раствор карминовой кислоты природного происхождения',
+      'Экстракция пигмента в стерильном флаконе с узким носиком-дозатором',
+      'Ярко-рубиновое окрашивание вишнёвого, малинового и клубничного мармелада',
+      'Стойкий насыщенный малиновый оттенок всего с 2–3 капель',
+      '#be123c',
+      { culinaryEquivalentId: 'carmine_extract_bottle' }
+    )
+  },
+  chlorophyllin_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'dye_chlorophyllin',
+    amountMl: 100,
+    attributes: attr(
+      'Медные комплексы хлорофиллов E141 (капельница 100 мл)',
+      'Водорастворимый хлорофиллин из листьев люцерны и крапивы',
+      'Хелатирование растительного хлорофилла для устойчивого изумрудного цвета',
+      'Окрашивание мармелада с яблоком, лаймом, тархуном и мятой',
+      'Не выцветает при нагревании и сохраняет глубокий зелёный тон',
+      '#15803d',
+      { culinaryEquivalentId: 'chlorophyllin_bottle' }
+    )
+  },
+  anthocyanin_extract_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'dye_anthocyanin',
+    amountMl: 100,
+    attributes: attr(
+      'Экстракт антоцианов ягодный E163 (капельница 100 мл)',
+      'Концентрированные антоциановые пигменты кожицы красного винограда и бузины',
+      'Кислотная водно-спиртовая экстракция без синтетических примесей',
+      'Фиолетово-бордовый цвет виноградного, ежевичного и ягодного мармелада',
+      'Меняет оттенок от рубинового в кислой среде до фиолетового в нейтральной',
+      '#7e22ce',
+      { culinaryEquivalentId: 'anthocyanin_extract_bottle' }
+    )
+  },
+  spirulina_extract_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'dye_spirulina',
+    amountMl: 100,
+    attributes: attr(
+      'Экстракт голубой спирулины фикоцианин (100 мл)',
+      'Очищенный голубой пигментный белок сине-зелёной водоросли Arthrospira platensis',
+      'Холодная мембранная фильтрация спирулины во флакон-капельницу',
+      'Единственный ярко-голубой и бирюзовый природный краситель для мармелада',
+      'Даёт чистый небесный цвет для акул, драгонфрута и газированных бутылочек',
+      '#0284c7',
+      { culinaryEquivalentId: 'spirulina_extract_bottle' }
+    )
+  },
+  beta_carotene_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'dye_beta_carotene',
+    amountMl: 100,
+    attributes: attr(
+      'Бета-каротин вододисперсный E160a (капельница 100 мл)',
+      'Натуральная эмульсия провитамина А в растительном глицерине',
+      'Микроинкапсуляция каротина для равномерного окрашивания мармеладной массы',
+      'Солнечно-жёлтые и апельсиновые мишки, манго, маракуйя, юзу и персик',
+      'Без синтетических азокрасителей — яркий тёплый янтарно-золотистый цвет',
+      '#f97316',
+      { culinaryEquivalentId: 'beta_carotene_bottle' }
+    )
+  },
+  caramel_color_bottle: {
+    containerId: 'bottle_glass_small',
+    liquidId: 'dye_caramel',
+    amountMl: 250,
+    attributes: attr(
+      'Карамельный колер IV E150d (бутылочка 250 мл)',
+      'Концентрированный тёмно-коричневый жжёный сахар карамелизации IV',
+      'Термическая карамелизация пищевой декстрозы с розливом в стекло',
+      'Глубокий цвет бутылочек «Шипучая Кола» и вишнёвой колы',
+      'Густой тёмно-коньячный пигмент с лёгкой горчинкой жжёного сахара',
+      '#78350f',
+      { culinaryEquivalentId: 'caramel_color_bottle' }
+    )
+  },
+  lycopene_extract_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'dye_lycopene',
+    amountMl: 100,
+    attributes: attr(
+      'Ликопин натуральный пигмент E160d (капельница 100 мл)',
+      'Каротиноидный красный экстракт из спелых томатов, арбуза и гуавы',
+      'Масляно-водная микроэмульсия в пластиковом дозаторе 100 мл',
+      'Тёплый ало-коралловый тон арбузных колечек, грейпфрута и розовой гуавы',
+      'Стойкий природный красный пигмент без привкуса',
+      '#ef4444',
+      { culinaryEquivalentId: 'lycopene_extract_bottle' }
+    )
+  },
+  kola_nut_extract_bottle: {
+    containerId: 'bottle_glass_small',
+    liquidId: 'botanical_extract',
+    amountMl: 150,
+    attributes: attr(
+      'Экстракт ореха кола натуральный (флакон 150 мл)',
+      'Ароматический экстракт западноафриканских семян Cola acuminata и пряной ванили',
+      'Водно-глицериновая мацерация обжаренного ореха колы с цедрой цитрусов',
+      'Настоящий вкус бутылочек шипучей колы и классической газировки',
+      'Содержит природный кофеин и богатый пряно-ореховый букет',
+      '#451a03',
+      { culinaryEquivalentId: 'kola_nut_extract_bottle', customEffects: { energy: 10 } }
+    )
+  },
+  vanilla_extract_bottle: {
+    containerId: 'bottle_glass_small',
+    liquidId: 'botanical_extract',
+    amountMl: 100,
+    attributes: attr(
+      'Экстракт бурбонской ванили (стекло 100 мл)',
+      'Натуральная вытяжка измельчённых стручков мадагаскарской ванили',
+      'Длительная выдержка в тёмном стекле до насыщенного янтарного оттенка',
+      'Крем-сода, нежные желейные сердечки, зефир и сливочная выпечка',
+      'Живой глубокий аромат настоящего ванилина без синтетической резкости',
+      '#92400e',
+      { culinaryEquivalentId: 'vanilla_extract_bottle' }
+    )
+  },
+  hibiscus_extract_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'botanical_extract',
+    amountMl: 100,
+    attributes: attr(
+      'Концентрат гибискуса (каркаде) жидкий (100 мл)',
+      'Концентрированная вытяжка рубиновых чашечек суданской розы Hibiscus sabdariffa',
+      'Холодная экстракция с сохранением рубиновых антоцианов и фруктовых кислот',
+      'Красно-вишнёвый цвет и ягодная кислинка фруктового мармелада',
+      'Даёт чистый яркий рубиновый оттенок в паре с концентратом моркови',
+      '#9f1239',
+      { culinaryEquivalentId: 'hibiscus_extract_bottle' }
+    )
+  },
+  safflower_extract_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'botanical_extract',
+    amountMl: 100,
+    attributes: attr(
+      'Экстракт сафлора красильного (капельница 100 мл)',
+      'Концентрированный золотисто-лимонный настой цветков Carthamus tinctorius',
+      'Бережная водная вытяжка жёлтых флавоноидов сафлора',
+      'Лимонно-солнечное окрашивание жёлтых мишек, звёздочек и ананасных кубиков',
+      'Смешивается со спирулиной для получения насыщенного лаймово-зелёного тона',
+      '#eab308',
+      { culinaryEquivalentId: 'safflower_extract_bottle' }
+    )
+  },
+  paprika_extract_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'dye_beta_carotene',
+    amountMl: 100,
+    attributes: attr(
+      'Экстракт паприки сладкой E160c (капельница 100 мл)',
+      'Очищенный капсантин из сладкого красного перца без жгучих капсаицинов',
+      'Дезодорированная масляно-водная эмульсия натурального пигмента',
+      'Апельсиново-мандариновый и персиковый цвет фруктового мармелада',
+      'Совершенно не острый — только чистый тёплый оранжево-красный оттенок',
+      '#ea580c',
+      { culinaryEquivalentId: 'paprika_extract_bottle' }
+    )
+  },
+  black_carrot_concentrate_bottle: {
+    containerId: 'bottle_glass_small',
+    liquidId: 'dye_anthocyanin',
+    amountMl: 200,
+    attributes: attr(
+      'Концентрат сока чёрной моркови (бутылочка 200 мл)',
+      'Выпаренный сок тёмно-фиолетовой моркови Daucus carota ssp. sativus',
+      'Ультрафильтрация свежевыжатого сока чёрной моркови и розлив в стекло',
+      'Ключевой природный краситель ягодного, ежевичного и цитрусового мармелада',
+      'Богат стабильными антоцианами: даёт цвет от мадженты до тёмной вишни',
+      '#6b21a8',
+      { culinaryEquivalentId: 'black_carrot_concentrate_bottle' }
+    )
+  },
+  tarragon_extract_bottle: {
+    containerId: 'bottle_glass_small',
+    liquidId: 'botanical_extract',
+    amountMl: 150,
+    attributes: attr(
+      'Экстракт кавказского тархуна (эстрагона) 150 мл',
+      'Концентрированный настой молодых побегов эстрагона с анисовой эссенцией',
+      'Паровая дистилляция листьев Artemisia dracunculus с природным хлорофиллом',
+      'Изумрудные лимонадные бутылочки «Тархун» и пряные десертные сиропы',
+      'Тот самый легендарный освежающий вкус газировки тархун',
+      '#16a34a',
+      { culinaryEquivalentId: 'tarragon_extract_bottle', customEffects: { energy: 4 } }
+    )
+  },
+  eucalyptus_extract_bottle: {
+    containerId: 'bottle_glass_small',
+    liquidId: 'botanical_extract',
+    amountMl: 100,
+    attributes: attr(
+      'Экстракт листьев эвкалипта очищенный (100 мл)',
+      'Концентрированная вытяжка листьев шаровидного эвкалипта с цинеолом',
+      'Экстракция свежих листьев с розливом в светозащитный стеклянный флакон',
+      'Мармеладные сердечки «Мята и Эвкалипт», леденцы для горла и ингаляции',
+      'Очищает дыхательные пути и придаёт прохладный хвойный оттенок',
+      '#047857',
+      { culinaryEquivalentId: 'eucalyptus_extract_bottle', customEffects: { health: 4, energy: 4 } }
+    )
+  },
+  peppermint_oil_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'essential_oil',
+    amountMl: 50,
+    attributes: attr(
+      'Эфирное масло перечной мяты пищевое (50 мл)',
+      '100% натуральное пародистиллированное масло Mentha piperita (52% ментола)',
+      'Паровая перегонка цветущих побегов перечной мяты в амбровый капельный флакон',
+      'Ароматизация мятно-эвкалиптового мармелада, шоколада и напитков',
+      'Буквально 1–2 капли дают ледяной освежающий мятный удар',
+      '#10b981',
+      { culinaryEquivalentId: 'peppermint_oil_bottle' }
+    )
+  },
+  spearmint_oil_bottle: {
+    containerId: 'bottle_plastic_100',
+    liquidId: 'essential_oil',
+    amountMl: 50,
+    attributes: attr(
+      'Эфирное масло мяты кудрявой (колосьевой) 50 мл',
+      'Натуральное масло Mentha spicata с высоким содержанием L-карвона',
+      'Бережная дистилляция мягких кудрявых листьев мяты',
+      'Мягкий сладковатый мятный профиль для жвачки и зелёных мармеладных сердец',
+      'В отличие от перечной мяты не обжигает — даёт нежную сладкую свежесть',
+      '#34d399',
+      { culinaryEquivalentId: 'spearmint_oil_bottle' }
+    )
+  },
+  hibiscus_dried_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'spice_dry',
+    amountMl: 80,
+    attributes: attr(
+      'Цветки гибискуса (каркаде) сушёные (саше 60 г)',
+      'Цельные бордовые лепестки суданской розы Hibiscus sabdariffa',
+      'Воздушная теневая сушка с сохранением природных кислот и антоцианов',
+      'Заваривание рубинового каркаде, окрашивание отваров и фруктового мармелада',
+      'Даёт насыщенный кисло-ягодный вкус и глубокий вишнёво-алый настой',
+      '#be123c',
+      { culinaryEquivalentId: 'hibiscus_dried_sachet', customEffects: { hunger: 2, health: 3 } }
+    )
+  },
+  safflower_dried_sachet: {
+    containerId: 'package_sachet',
+    liquidId: 'spice_dry',
+    amountMl: 70,
+    attributes: attr(
+      'Лепестки сафлора красильного сушёные (саше 40 г)',
+      'Оранжево-золотистые лепестки дикого шафрана (Carthamus tinctorius)',
+      'Ручной сбор цветков и бережная конвекционная сушка',
+      'Натуральное жёлтое окрашивание отваров, плова, напитков и мармелада',
+      'Мягкий медово-цветочный аромат и яркий золотой настой без горечи',
+      '#f59e0b',
+      { culinaryEquivalentId: 'safflower_dried_sachet', customEffects: { hunger: 2, health: 2 } }
+    )
   }
 };
 
@@ -2418,6 +2966,9 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
   blackcurrant_basket: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_blackcurrant_single' },
   redcurrant_basket: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_redcurrant_single' },
   cherry_basket: { containerId: 'lukoshko', countInside: 12, innerItemId: 'berry_cherry_single' },
+  blackberry_basket: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_blackberry_single' },
+  sea_buckthorn_basket: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_sea_buckthorn_single' },
+  elderberry_basket: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_elderberry_single' },
   chanterelle_basket: { containerId: 'lukoshko', countInside: 8, innerItemId: 'mushroom_chanterelle_single' },
   honey_agaric_basket: { containerId: 'lukoshko', countInside: 10, innerItemId: 'mushroom_honey_agaric_single' },
 

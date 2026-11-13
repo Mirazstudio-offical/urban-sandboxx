@@ -108,7 +108,9 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
     case 'cloves_buds_dried':
     case 'cardamom_pods_dried':
     case 'coriander_seeds_sachet':
-    case 'allspice_berries_sachet': {
+    case 'allspice_berries_sachet':
+    case 'hibiscus_dried_sachet':
+    case 'safflower_dried_sachet': {
       drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
 
       let sachetBg = '#dc2626'; // chili
@@ -118,12 +120,22 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       if (itemId === 'bay_leaves_dried_sachet' || itemId === 'cardamom_pods_dried') sachetBg = '#15803d';
       if (itemId === 'cinnamon_powder_sachet' || itemId === 'cloves_buds_dried' || itemId === 'allspice_berries_sachet') sachetBg = '#78350f';
       if (itemId === 'coriander_seeds_sachet' || itemId === 'yeast_dry_sachet') sachetBg = '#ca8a04';
+      if (itemId === 'hibiscus_dried_sachet') sachetBg = '#9f1239';
+      if (itemId === 'safflower_dried_sachet') sachetBg = '#d97706';
 
-      // Glossy sealed spice pouch
+      // Glossy sealed spice pouch with subtle foil gradient
+      const pouchGrad = ctx.createLinearGradient(-4.8, -6, 4.8, 6);
+      pouchGrad.addColorStop(0, sachetBg);
+      pouchGrad.addColorStop(0.5, sachetBg);
+      pouchGrad.addColorStop(1, '#0f172a');
       ctx.fillStyle = sachetBg;
       ctx.beginPath();
       ctx.roundRect(-4.8, -6, 9.6, 12, 1.2);
       ctx.fill();
+
+      // Subtle glossy highlight ribbon
+      ctx.fillStyle = 'rgba(255,255,255,0.16)';
+      ctx.fillRect(-3.6, -5.5, 1.8, 11);
 
       // Metallic crimped top and bottom seal borders
       ctx.fillStyle = '#cbd5e1';
@@ -132,34 +144,79 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
 
       // Label window
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3.6, -2, 7.2, 4);
+      ctx.beginPath();
+      ctx.roundRect(-3.6, -2.2, 7.2, 4.4, 0.5);
+      ctx.fill();
+
+      // Botanical blossom emblem for hibiscus/safflower
+      if (itemId === 'hibiscus_dried_sachet' || itemId === 'safflower_dried_sachet') {
+        ctx.fillStyle = itemId === 'hibiscus_dried_sachet' ? '#be123c' : '#f59e0b';
+        for (let a = 0; a < 5; a++) {
+          const rad = (a * Math.PI * 2) / 5;
+          ctx.beginPath();
+          ctx.arc(Math.cos(rad) * 1.1, Math.sin(rad) * 1.1, 0.75, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
       return true;
     }
 
-    // Fresh Herb Sprigs (Rosemary, Thyme, Basil, Dill, Parsley, Cilantro, Mint)
+    // Fresh Herb Sprigs (Rosemary, Thyme, Basil, Dill, Parsley, Cilantro, Mint, Tarragon, Eucalyptus)
     case 'rosemary_sprigs_fresh':
     case 'thyme_sprigs_fresh':
     case 'basil_leaves_fresh':
     case 'dill_bunch_fresh':
     case 'parsley_bunch_fresh':
     case 'cilantro_bunch_fresh':
-    case 'mint_leaves_fresh': {
+    case 'mint_leaves_fresh':
+    case 'tarragon_sprigs_fresh':
+    case 'eucalyptus_leaves_fresh': {
       drawShadow(ctx, 7, 2.5, 7.8, 0.2);
 
+      const isEuc = itemId === 'eucalyptus_leaves_fresh';
+      const isTar = itemId === 'tarragon_sprigs_fresh';
+
       // Tied green herbs bunch
-      ctx.strokeStyle = '#15803d';
+      ctx.strokeStyle = isEuc ? '#0f766e' : '#15803d';
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.moveTo(-5, 4); ctx.lineTo(4, -4);
       ctx.moveTo(-4, 5); ctx.lineTo(5, -3);
       ctx.stroke();
 
-      // Herb leaves
-      ctx.fillStyle = '#22c55e';
-      for (const pt of [[-2, 1], [0, -1], [2, -3], [-1, 2], [1, 0], [3, -2]]) {
-        ctx.beginPath();
-        ctx.ellipse(pt[0], pt[1], 1.8, 0.9, 0.6, 0, Math.PI * 2);
-        ctx.fill();
+      // Species-specific leaves
+      ctx.fillStyle = isEuc ? '#2dd4bf' : isTar ? '#10b981' : '#22c55e';
+      if (isTar) {
+        // Long narrow lance-shaped tarragon leaves
+        for (const [lx, ly, ang] of [[-2, 1, -0.3], [0, -1, 0.9], [2, -3, -0.2], [1, 1, 0.8], [3, -1, 0.4]]) {
+          ctx.save();
+          ctx.translate(lx, ly);
+          ctx.rotate(ang);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 2.6, 0.55, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      } else if (isEuc) {
+        // Rounded silvery-blue eucalyptus leaves
+        for (const pt of [[-2.2, 1.2], [0.2, -1.2], [2.4, -3.0], [-0.4, 2.2], [1.8, 0.4], [3.5, -1.6]]) {
+          ctx.beginPath();
+          ctx.arc(pt[0], pt[1], 1.55, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#99f6e4';
+          ctx.lineWidth = 0.35;
+          ctx.stroke();
+        }
+      } else {
+        for (const pt of [[-2, 1], [0, -1], [2, -3], [-1, 2], [1, 0], [3, -2]]) {
+          ctx.beginPath();
+          ctx.ellipse(pt[0], pt[1], 1.8, 0.9, 0.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       // Twine tie at base
@@ -968,6 +1025,109 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
           ctx.fill();
         }
       }
+      return true;
+    }
+
+    case 'beeswax_bar': {
+      drawShadow(ctx, 7.2, 2.6, 6.8, 0.24);
+      // Isometric chamfered golden beeswax brick
+      const topGrad = ctx.createLinearGradient(-6, -5.5, 6, 1);
+      topGrad.addColorStop(0, '#fde047');
+      topGrad.addColorStop(1, '#eab308');
+      ctx.fillStyle = topGrad;
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -1.5);
+      ctx.lineTo(-2.5, -5.0);
+      ctx.lineTo(6.5, -3.5);
+      ctx.lineTo(2.5, 0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Front face
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -1.5);
+      ctx.lineTo(2.5, 0.5);
+      ctx.lineTo(2.5, 4.8);
+      ctx.lineTo(-6.5, 2.6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Right beveled side
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.moveTo(2.5, 0.5);
+      ctx.lineTo(6.5, -3.5);
+      ctx.lineTo(6.5, 0.8);
+      ctx.lineTo(2.5, 4.8);
+      ctx.closePath();
+      ctx.fill();
+
+      // Embossed honeycomb cell relief on top face
+      ctx.strokeStyle = 'rgba(180, 83, 9, 0.55)';
+      ctx.lineWidth = 0.55;
+      for (const [cx, cy] of [[-1.5, -2.5], [1.0, -2.2], [-0.2, -1.3], [2.4, -1.9]]) {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3;
+          const px = cx + Math.cos(a) * 0.9;
+          const py = cy + Math.sin(a) * 0.55;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+      return true;
+    }
+
+    case 'carnauba_wax_pack': {
+      drawShadow(ctx, 6.5, 2.8, 7.6, 0.22);
+      // Translucent zipped stand-up pouch
+      const bagGrad = ctx.createLinearGradient(-5.5, -6.5, 5.5, 6.5);
+      bagGrad.addColorStop(0, '#f8fafc');
+      bagGrad.addColorStop(1, '#cbd5e1');
+      ctx.fillStyle = bagGrad;
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -6.5, 11.0, 13.5, 1.4);
+      ctx.fill();
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+      // Zip seal line
+      ctx.strokeStyle = '#64748b';
+      ctx.beginPath();
+      ctx.moveTo(-5.0, -4.6);
+      ctx.lineTo(5.0, -4.6);
+      ctx.stroke();
+
+      // Transparent window filled with pale-gold carnauba palm wax flakes
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.roundRect(-4.2, -0.5, 8.4, 5.6, 0.8);
+      ctx.fill();
+      const flakes = [
+        [-2.8, 1.2, 0.2], [-1.0, 2.4, -0.4], [1.2, 1.4, 0.5], [2.6, 2.8, -0.2],
+        [-2.0, 3.8, 0.3], [0.2, 4.0, -0.1], [2.2, 4.2, 0.4], [-0.4, 1.0, 0.1]
+      ];
+      for (const [fx, fy, rot] of flakes) {
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.rotate(rot);
+        ctx.fillStyle = fx % 2 === 0 ? '#facc15' : '#eab308';
+        ctx.fillRect(-0.9, -0.5, 1.8, 1.0);
+        ctx.restore();
+      }
+
+      // Eco green palm label band
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(-4.4, -3.5, 8.8, 2.4);
+      ctx.fillStyle = '#fef08a';
+      ctx.font = 'bold 1.8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('E903 WAX', 0, -2.3);
       return true;
     }
 

@@ -946,7 +946,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
-    // Woven berry baskets (Blueberry, Lingonberry, Cranberry, Raspberry, Strawberry, Blackcurrant, Redcurrant, Cherry)
+    // Woven berry baskets (Blueberry, Lingonberry, Cranberry, Raspberry, Strawberry, Blackcurrant, Redcurrant, Cherry, Blackberry, Sea Buckthorn, Elderberry)
     case 'blueberry_basket':
     case 'lingonberry_basket':
     case 'cranberry_basket':
@@ -954,7 +954,10 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
     case 'strawberry_basket':
     case 'blackcurrant_basket':
     case 'redcurrant_basket':
-    case 'cherry_basket': {
+    case 'cherry_basket':
+    case 'blackberry_basket':
+    case 'sea_buckthorn_basket':
+    case 'elderberry_basket': {
       drawShadow(ctx, 7.5, 3, 7.8, 0.26);
 
       // Woven wicker basket base
@@ -977,12 +980,20 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       if (itemId === 'lingonberry_basket' || itemId === 'cranberry_basket' || itemId === 'redcurrant_basket') berryColor = '#dc2626';
       if (itemId === 'raspberry_basket' || itemId === 'strawberry_basket') berryColor = '#e11d48';
       if (itemId === 'blackcurrant_basket' || itemId === 'cherry_basket') berryColor = '#18181b';
+      if (itemId === 'blackberry_basket') berryColor = '#09090b';
+      if (itemId === 'sea_buckthorn_basket') berryColor = '#f97316';
+      if (itemId === 'elderberry_basket') berryColor = '#3b0764';
 
       ctx.fillStyle = berryColor;
       for (const pt of [[-4, -3], [-1.5, -4], [1.5, -4], [4, -3], [-3, -1], [0, -1.5], [3, -1]]) {
         ctx.beginPath();
         ctx.arc(pt[0], pt[1], 1.6, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.beginPath();
+        ctx.arc(pt[0] - 0.5, pt[1] - 0.5, 0.45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = berryColor;
       }
       return true;
     }
@@ -2419,6 +2430,327 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
         ctx.ellipse(0, -1.0, 4.4, 2.6, 0, Math.PI, 0);
       }
       ctx.fill();
+      return true;
+    }
+
+    case 'berry_blackberry_single': {
+      drawShadow(ctx, 4.8, 2.0, 5.8, 0.22);
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.ellipse(-1.2, -3.6, 2.0, 0.9, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+      // Multi-drupelet glossy black aggregate fruit
+      const drupes = [
+        [-1.3, -1.8, 1.3], [1.3, -1.8, 1.3], [0, -2.3, 1.4],
+        [-1.8, 0, 1.3], [0, -0.2, 1.4], [1.8, 0, 1.3],
+        [-1.1, 1.8, 1.2], [1.1, 1.8, 1.2], [0, 2.4, 1.3]
+      ];
+      for (const [dx, dy, dr] of drupes) {
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(dx, dy, dr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(148,163,184,0.45)';
+        ctx.beginPath();
+        ctx.arc(dx - 0.35, dy - 0.35, 0.38, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    case 'berry_sea_buckthorn_single': {
+      drawShadow(ctx, 5.2, 2.0, 5.8, 0.2);
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(-4, 2.5);
+      ctx.lineTo(4, -2.5);
+      ctx.stroke();
+      const drupes = [[-2.0, 0.8], [-0.4, -0.2], [1.2, -1.1], [2.4, -1.8], [0.2, 1.3]];
+      for (const [dx, dy] of drupes) {
+        const g = ctx.createRadialGradient(dx - 0.4, dy - 0.4, 0.2, dx, dy, 1.7);
+        g.addColorStop(0, '#fde047');
+        g.addColorStop(0.5, '#f97316');
+        g.addColorStop(1, '#c2410c');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(dx, dy, 1.45, 1.15, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    case 'berry_elderberry_single': {
+      drawShadow(ctx, 5.2, 2.2, 6.0, 0.22);
+      // Reddish-purple umbel branching stems
+      ctx.strokeStyle = '#be123c';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(0, -4.5); ctx.lineTo(0, -1.5);
+      ctx.moveTo(0, -3.0); ctx.lineTo(-2.5, 0);
+      ctx.moveTo(0, -3.0); ctx.lineTo(2.5, 0);
+      ctx.moveTo(0, -1.5); ctx.lineTo(-1.2, 2.2);
+      ctx.moveTo(0, -1.5); ctx.lineTo(1.2, 2.2);
+      ctx.stroke();
+      for (const [dx, dy] of [[-2.6, 0.5], [2.6, 0.5], [0, -0.6], [-1.3, 2.3], [1.3, 2.3], [0, 3.2]]) {
+        ctx.fillStyle = '#2e1065';
+        ctx.beginPath();
+        ctx.arc(dx, dy, 1.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.beginPath();
+        ctx.arc(dx - 0.4, dy - 0.4, 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    // === NEW EXOTIC FRUITS, CITRUSES & RADISH BUNCH ===
+    case 'pineapple_whole': {
+      drawShadow(ctx, 6.5, 3.0, 8.2, 0.28);
+      // Leafy green crown
+      ctx.fillStyle = '#15803d';
+      for (const [ang, len] of [[-0.5, 6.5], [-0.22, 7.8], [0, 8.5], [0.22, 7.8], [0.5, 6.5]]) {
+        ctx.save();
+        ctx.translate(0, -3.0);
+        ctx.rotate(ang);
+        ctx.beginPath();
+        ctx.moveTo(-1.2, 0);
+        ctx.lineTo(0, -len);
+        ctx.lineTo(1.2, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      // Golden oval body
+      const pGrad = ctx.createRadialGradient(-1.5, 0.5, 1, 0, 2, 7);
+      pGrad.addColorStop(0, '#facc15');
+      pGrad.addColorStop(0.7, '#d97706');
+      pGrad.addColorStop(1, '#92400e');
+      ctx.fillStyle = pGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 2.2, 4.8, 5.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Diamond scale cross-hatch
+      ctx.strokeStyle = 'rgba(120, 53, 15, 0.65)';
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      for (let i = -3; i <= 3; i += 2.2) {
+        ctx.moveTo(-4, i + 1); ctx.lineTo(4, i + 4);
+        ctx.moveTo(4, i + 1); ctx.lineTo(-4, i + 4);
+      }
+      ctx.stroke();
+      return true;
+    }
+
+    case 'mango_whole': {
+      drawShadow(ctx, 6.2, 2.8, 7.2, 0.24);
+      const mGrad = ctx.createLinearGradient(-5, -5, 5, 6);
+      mGrad.addColorStop(0, '#ef4444');
+      mGrad.addColorStop(0.45, '#f59e0b');
+      mGrad.addColorStop(1, '#84cc16');
+      ctx.fillStyle = mGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.5, 4.6, 5.8, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-1.8, -1.8, 1.3, 2.2, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(-0.5, -6.2, 1.0, 1.6);
+      return true;
+    }
+
+    case 'passionfruit_whole': {
+      drawShadow(ctx, 5.2, 2.4, 6.5, 0.24);
+      const pfGrad = ctx.createRadialGradient(-1.5, -1.5, 1, 0, 0, 5.5);
+      pfGrad.addColorStop(0, '#9333ea');
+      pfGrad.addColorStop(0.65, '#581c87');
+      pfGrad.addColorStop(1, '#2e1065');
+      ctx.fillStyle = pfGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0.5, 4.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      ctx.beginPath();
+      ctx.arc(-1.8, -1.2, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#65a30d';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(0, -4.2); ctx.lineTo(0.8, -6.0);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'guava_whole': {
+      drawShadow(ctx, 5.6, 2.4, 6.8, 0.22);
+      const gGrad = ctx.createRadialGradient(-1.4, -1.2, 1, 0, 0.5, 5.6);
+      gGrad.addColorStop(0, '#bef264');
+      gGrad.addColorStop(0.6, '#65a30d');
+      gGrad.addColorStop(1, '#3f6212');
+      ctx.fillStyle = gGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.6, 4.8, 5.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Pink blush + calyx tip
+      ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
+      ctx.beginPath();
+      ctx.arc(1.2, 1.5, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#365314';
+      ctx.fillRect(-0.8, -5.4, 1.6, 1.2);
+      return true;
+    }
+
+    case 'papaya_whole': {
+      drawShadow(ctx, 6.8, 3.0, 7.8, 0.25);
+      const papGrad = ctx.createLinearGradient(-4, -6, 4, 6);
+      papGrad.addColorStop(0, '#84cc16');
+      papGrad.addColorStop(0.35, '#facc15');
+      papGrad.addColorStop(1, '#ea580c');
+      ctx.fillStyle = papGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.4, 4.5, 6.6, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(154, 52, 18, 0.35)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.4, 2.2, 6.2, 0.2, 0, Math.PI * 2);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'dragonfruit_whole': {
+      drawShadow(ctx, 6.2, 2.8, 7.6, 0.25);
+      const dfGrad = ctx.createRadialGradient(-1.5, -1.0, 1, 0, 0.5, 6.5);
+      dfGrad.addColorStop(0, '#f43f5e');
+      dfGrad.addColorStop(0.7, '#db2777');
+      dfGrad.addColorStop(1, '#831843');
+      ctx.fillStyle = dfGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.6, 4.8, 6.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Green-tipped dragon scales
+      ctx.fillStyle = '#84cc16';
+      for (const [sx, sy, ax] of [[-4.5, -2.0, -0.5], [4.5, -2.0, 0.5], [-4.8, 1.5, -0.4], [4.8, 1.5, 0.4], [0, -5.8, 0]]) {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(ax);
+        ctx.beginPath();
+        ctx.moveTo(-1.0, 1.0);
+        ctx.lineTo(0, -1.6);
+        ctx.lineTo(1.0, 1.0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      return true;
+    }
+
+    case 'lychee_fruit': {
+      drawShadow(ctx, 6.2, 2.6, 6.8, 0.22);
+      // Cluster of 3 bumpy pink-red lychees on woody stem
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(0, -5.5); ctx.lineTo(-2.5, -1.0);
+      ctx.moveTo(0, -5.5); ctx.lineTo(2.5, -0.8);
+      ctx.moveTo(0, -5.5); ctx.lineTo(0, 2.0);
+      ctx.stroke();
+      for (const [lx, ly] of [[-2.6, 0.2], [2.6, 0.4], [0, 2.6]]) {
+        const lGrad = ctx.createRadialGradient(lx - 0.6, ly - 0.6, 0.3, lx, ly, 2.5);
+        lGrad.addColorStop(0, '#fda4af');
+        lGrad.addColorStop(0.6, '#e11d48');
+        lGrad.addColorStop(1, '#881337');
+        ctx.fillStyle = lGrad;
+        ctx.beginPath();
+        ctx.arc(lx, ly, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.fillRect(lx - 0.6, ly - 0.6, 0.5, 0.5);
+        ctx.fillRect(lx + 0.4, ly + 0.3, 0.5, 0.5);
+      }
+      return true;
+    }
+
+    case 'yuzu_citrus':
+    case 'grapefruit_pink':
+    case 'mandarin_citrus':
+    case 'blood_orange_citrus': {
+      drawShadow(ctx, 5.8, 2.5, 6.8, 0.24);
+      const isYuzu = itemId === 'yuzu_citrus';
+      const isGrapefruit = itemId === 'grapefruit_pink';
+      const isBlood = itemId === 'blood_orange_citrus';
+      const r = isGrapefruit ? 5.6 : itemId === 'mandarin_citrus' ? 4.4 : 5.0;
+      const cGrad = ctx.createRadialGradient(-1.5, -1.5, 0.8, 0, 0.5, r);
+      if (isYuzu) {
+        cGrad.addColorStop(0, '#fef08a');
+        cGrad.addColorStop(0.65, '#eab308');
+        cGrad.addColorStop(1, '#a16207');
+      } else if (isGrapefruit) {
+        cGrad.addColorStop(0, '#fda4af');
+        cGrad.addColorStop(0.55, '#fb923c');
+        cGrad.addColorStop(1, '#c2410c');
+      } else if (isBlood) {
+        cGrad.addColorStop(0, '#fb923c');
+        cGrad.addColorStop(0.55, '#dc2626');
+        cGrad.addColorStop(1, '#7f1d1d');
+      } else {
+        cGrad.addColorStop(0, '#fdba74');
+        cGrad.addColorStop(0.65, '#f97316');
+        cGrad.addColorStop(1, '#c2410c');
+      }
+      ctx.fillStyle = cGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.5, r, itemId === 'mandarin_citrus' ? r * 0.85 : r, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Citrus peel dimples + green leaf
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      for (const [dx, dy] of [[-1.5, -1], [1.2, 1.5], [-0.4, 2.2], [1.8, -1.2]]) {
+        ctx.beginPath();
+        ctx.arc(dx, dy, 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.ellipse(1.6, -r + 0.5, 2.0, 0.9, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'radish_bunch_fresh': {
+      drawShadow(ctx, 6.8, 2.8, 7.6, 0.22);
+      // Leafy green tops
+      ctx.fillStyle = '#16a34a';
+      for (const [lx, ly, rot] of [[-2.2, -3.5, -0.3], [0, -4.5, 0], [2.2, -3.5, 0.3]]) {
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(rot);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 1.4, 3.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      // Three crisp crimson radishes with white root tips
+      for (const [rx, ry] of [[-2.6, 1.6], [2.6, 1.6], [0, 2.8]]) {
+        ctx.fillStyle = '#e11d48';
+        ctx.beginPath();
+        ctx.arc(rx, ry, 2.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.moveTo(rx - 0.8, ry + 1.6);
+        ctx.lineTo(rx, ry + 3.6);
+        ctx.lineTo(rx + 0.8, ry + 1.6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.beginPath();
+        ctx.arc(rx - 0.7, ry - 0.7, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
       return true;
     }
 

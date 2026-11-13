@@ -129,7 +129,30 @@ export type LiquidId =
   | 'dry_mix'
   | 'grain'
   | 'spice_dry'
-  | 'medical_solution';
+  | 'medical_solution'
+  | 'gelatin'
+  | 'pectin'
+  | 'agar_agar'
+  | 'starch'
+  | 'citric_acid'
+  | 'malic_acid'
+  | 'tartaric_acid'
+  | 'lactic_acid'
+  | 'sodium_citrate'
+  | 'menthol'
+  | 'glucose_syrup'
+  | 'corn_molasses'
+  | 'topinambur_syrup'
+  | 'coconut_milk'
+  | 'dye_carmine'
+  | 'dye_chlorophyllin'
+  | 'dye_anthocyanin'
+  | 'dye_spirulina'
+  | 'dye_beta_carotene'
+  | 'dye_caramel'
+  | 'dye_lycopene'
+  | 'botanical_extract'
+  | 'essential_oil';
 
 export interface FluidSubstanceAttributes {
   varietyRu: string;
@@ -1788,6 +1811,295 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     color: '#0284c7',
     toxicWarning: 'Фармацевтический препарат для медицинского применения.',
     stainType: 'water'
+  },
+  gelatin: {
+    id: 'gelatin',
+    name: 'Food Gelatin Granules',
+    nameRu: 'Пищевой желатин',
+    category: 'granular',
+    densityKgPerL: 0.72,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fde68a',
+    toxicWarning: 'Сухие гранулы пищевого желатина — загуститель для мармелада и желе.',
+    stainType: 'sand'
+  },
+  pectin: {
+    id: 'pectin',
+    name: 'Fruit Pectin Powder',
+    nameRu: 'Пектин фруктовый',
+    category: 'granular',
+    densityKgPerL: 0.65,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fef3c7',
+    toxicWarning: 'Мелкодисперсный яблочно-цитрусовый пектин для желирования мармелада и джемов.',
+    stainType: 'sand'
+  },
+  agar_agar: {
+    id: 'agar_agar',
+    name: 'Agar-Agar Seaweed Powder',
+    nameRu: 'Агар-агар 900',
+    category: 'granular',
+    densityKgPerL: 0.62,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f5f5f4',
+    toxicWarning: 'Растительный полисахарид из красных водорослей для плотного мармелада и суфле.',
+    stainType: 'sand'
+  },
+  starch: {
+    id: 'starch',
+    name: 'Modified Food Starch',
+    nameRu: 'Пищевой крахмал',
+    category: 'granular',
+    densityKgPerL: 0.68,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f8fafc',
+    toxicWarning: 'Тонкий белоснежный крахмал для стабилизации текстуры сладостей и соусов.',
+    stainType: 'sand'
+  },
+  citric_acid: {
+    id: 'citric_acid',
+    name: 'Citric Acid Crystals',
+    nameRu: 'Лимонная кислота',
+    category: 'granular',
+    densityKgPerL: 0.95,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#ffffff',
+    toxicWarning: 'Кристаллическая пищевая лимонная кислота — не употреблять в сухом виде.',
+    stainType: 'sand'
+  },
+  malic_acid: {
+    id: 'malic_acid',
+    name: 'Malic Acid Powder',
+    nameRu: 'Яблочная кислота',
+    category: 'granular',
+    densityKgPerL: 0.92,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fefce8',
+    toxicWarning: 'Пищевая яблочная кислота E296 для интенсивной кислой посыпки мармелада.',
+    stainType: 'sand'
+  },
+  tartaric_acid: {
+    id: 'tartaric_acid',
+    name: 'Tartaric Acid Crystals',
+    nameRu: 'Винная кислота',
+    category: 'granular',
+    densityKgPerL: 0.98,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f8fafc',
+    toxicWarning: 'Виннокаменная кислота E334 с резкой фруктовой кислинкой.',
+    stainType: 'sand'
+  },
+  lactic_acid: {
+    id: 'lactic_acid',
+    name: 'Food Lactic Acid 80%',
+    nameRu: 'Молочная кислота 80%',
+    category: 'chemical',
+    densityKgPerL: 1.2,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#fef9c3',
+    toxicWarning: 'Концентрированный водный раствор молочной кислоты E270 — употреблять только в составе блюд.',
+    stainType: 'water'
+  },
+  sodium_citrate: {
+    id: 'sodium_citrate',
+    name: 'Sodium Citrate Buffer',
+    nameRu: 'Цитрат натрия',
+    category: 'granular',
+    densityKgPerL: 0.96,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f1f5f9',
+    toxicWarning: 'Пищевой регулятор кислотности E331 для пектинового мармелада.',
+    stainType: 'sand'
+  },
+  menthol: {
+    id: 'menthol',
+    name: 'Natural Menthol Crystals',
+    nameRu: 'Ментол натуральный кристаллический',
+    category: 'granular',
+    densityKgPerL: 0.89,
+    isDrinkable: false,
+    isFlammable: true,
+    isGranular: true,
+    color: '#ecfeff',
+    toxicWarning: 'Концентрированные кристаллы природного ментола — сильный холодящий эффект.',
+    stainType: 'sand'
+  },
+  glucose_syrup: {
+    id: 'glucose_syrup',
+    name: 'Confectionery Glucose Syrup',
+    nameRu: 'Глюкозный сироп',
+    category: 'food',
+    densityKgPerL: 1.38,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#fef9c3',
+    effects: { hunger: 20, energy: 28, thirst: -4 },
+    tasteMessages: ['Густой тягучий сироп обволакивает нёбо чистой мягкой сладостью.', 'Вязкая прозрачная глюкоза мгновенно даёт прилив сахара.'],
+    stainType: 'water'
+  },
+  corn_molasses: {
+    id: 'corn_molasses',
+    name: 'Starch Corn Molasses',
+    nameRu: 'Крахмальная патока',
+    category: 'food',
+    densityKgPerL: 1.36,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#fbbf24',
+    effects: { hunger: 22, energy: 26, thirst: -4 },
+    tasteMessages: ['Тягучая янтарная крахмальная патока с мягким карамельно-солодовым послевкусием.'],
+    stainType: 'water'
+  },
+  topinambur_syrup: {
+    id: 'topinambur_syrup',
+    name: 'Topinambur Root Syrup',
+    nameRu: 'Сироп топинамбура',
+    category: 'food',
+    densityKgPerL: 1.32,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#b45309',
+    effects: { hunger: 18, energy: 22, health: 4 },
+    tasteMessages: ['Мягкий тёмно-янтарный сироп топинамбура с тонкой фруктово-цветочной нотой.'],
+    stainType: 'water'
+  },
+  coconut_milk: {
+    id: 'coconut_milk',
+    name: 'Coconut Milk Cream',
+    nameRu: 'Кокосовое молоко',
+    category: 'food',
+    densityKgPerL: 1.01,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#f8fafc',
+    effects: { thirst: 22, hunger: 16, energy: 10 },
+    tasteMessages: ['Нежное бархатистое кокосовое молоко со сливочным тропическим вкусом!'],
+    stainType: 'water'
+  },
+  dye_carmine: {
+    id: 'dye_carmine',
+    name: 'Natural Carmine Extract E120',
+    nameRu: 'Натуральный краситель кармин',
+    category: 'food',
+    densityKgPerL: 1.06,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#be123c',
+    toxicWarning: 'Концентрированный рубиново-малиновый пищевой краситель — разводится по каплям.',
+    stainType: 'water'
+  },
+  dye_chlorophyllin: {
+    id: 'dye_chlorophyllin',
+    name: 'Copper Chlorophyllin E141',
+    nameRu: 'Краситель хлорофиллин (медный комплекс)',
+    category: 'food',
+    densityKgPerL: 1.04,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#15803d',
+    toxicWarning: 'Насыщенный изумрудный растительный пигмент из крапивы и люцерны.',
+    stainType: 'water'
+  },
+  dye_anthocyanin: {
+    id: 'dye_anthocyanin',
+    name: 'Anthocyanin Berry Extract E163',
+    nameRu: 'Пищевой экстракт антоцианов',
+    category: 'food',
+    densityKgPerL: 1.08,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#581c87',
+    toxicWarning: 'Тёмно-фиолетовый концентрированный пигмент из ягод и чёрной моркови.',
+    stainType: 'water'
+  },
+  dye_spirulina: {
+    id: 'dye_spirulina',
+    name: 'Blue Spirulina Phycocyanin',
+    nameRu: 'Экстракт голубой спирулины',
+    category: 'food',
+    densityKgPerL: 1.03,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#0284c7',
+    toxicWarning: 'Ярко-лазурный природный пигмент фикоцианин из микроводоросли спирулины.',
+    stainType: 'water'
+  },
+  dye_beta_carotene: {
+    id: 'dye_beta_carotene',
+    name: 'Beta-Carotene Emulsion E160a',
+    nameRu: 'Бета-каротин (пищевой пигмент)',
+    category: 'food',
+    densityKgPerL: 1.02,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#f97316',
+    toxicWarning: 'Концентрированная ярко-оранжевая провитаминная эмульсия каротина.',
+    stainType: 'water'
+  },
+  dye_caramel: {
+    id: 'dye_caramel',
+    name: 'Caramel Color IV E150d',
+    nameRu: 'Карамельный колер IV',
+    category: 'food',
+    densityKgPerL: 1.24,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#451a03',
+    toxicWarning: 'Густой жжёно-сахарный колер для тёмной колы и карамельного мармелада.',
+    stainType: 'water'
+  },
+  dye_lycopene: {
+    id: 'dye_lycopene',
+    name: 'Natural Lycopene Extract E160d',
+    nameRu: 'Краситель ликопин натуральный',
+    category: 'food',
+    densityKgPerL: 1.03,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#dc2626',
+    toxicWarning: 'Концентрированный алый томатно-ягодный каротиноидный пигмент.',
+    stainType: 'water'
+  },
+  botanical_extract: {
+    id: 'botanical_extract',
+    name: 'Concentrated Botanical Extract',
+    nameRu: 'Концентрированный растительный экстракт',
+    category: 'food',
+    densityKgPerL: 1.05,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#7c2d12',
+    toxicWarning: 'Ароматический экстракт для кондитерских изделий и напитков — дозируется по каплям.',
+    stainType: 'water'
+  },
+  essential_oil: {
+    id: 'essential_oil',
+    name: 'Pure Culinary Essential Oil',
+    nameRu: 'Пищевое эфирное масло',
+    category: 'food',
+    densityKgPerL: 0.9,
+    isDrinkable: false,
+    isFlammable: true,
+    color: '#34d399',
+    toxicWarning: 'Высококонцентрированное эфирное масло — опасно пить неразбавленным.',
+    stainType: 'oil'
   }
 };
 
@@ -2885,16 +3197,24 @@ export function resolveContainerVisualAttributes(
     if (isSpice) {
       const spiceShapes: ContainerVisualShape[] = ['square', 'hexagonal', 'classic'];
       shape = spiceShapes[hash % spiceShapes.length];
-      materialRgb = hash % 3 === 0 ? [180, 83, 9] : [224, 242, 254];
-      materialNameRu = hash % 3 === 0 ? 'Янтарное аптечное стекло' : 'Прозрачное силикатное стекло';
-      capRgb = [220, 38, 38];
+      materialRgb = liquidId === 'menthol' ? [180, 83, 9] : hash % 3 === 0 ? [180, 83, 9] : [224, 242, 254];
+      materialNameRu = liquidId === 'menthol' ? 'Янтарное аптечное стекло' : hash % 3 === 0 ? 'Янтарное аптечное стекло' : 'Прозрачное силикатное стекло';
+      if (liquidId === 'citric_acid' && !labelRgb) labelRgb = [250, 204, 21];
+      if (liquidId === 'menthol' && !labelRgb) labelRgb = [13, 148, 136];
+      capRgb = liquidId === 'menthol' ? [15, 118, 110] : liquidId === 'citric_acid' ? [234, 179, 8] : [220, 38, 38];
     } else if (is3L) {
       shape = hash % 2 === 0 ? 'barrel' : 'classic';
       materialRgb = [167, 243, 208];
       materialNameRu = 'Зеленоватое баночное стекло';
       capRgb = [234, 179, 8];
-    } else if (liquidId === 'honey') {
-      if (eqId.includes('wild')) {
+    } else if (liquidId === 'honey' || liquidId === 'corn_molasses') {
+      if (liquidId === 'corn_molasses') {
+        shape = 'barrel';
+        materialRgb = [254, 243, 199];
+        materialNameRu = 'Прозрачное толстостенное стекло';
+        if (!labelRgb) labelRgb = [217, 119, 6];
+        labelAccentRgb = [254, 240, 138];
+      } else if (eqId.includes('wild')) {
         shape = 'barrel';
         materialRgb = [209, 250, 229];
         materialNameRu = 'Лесное зеленоватое стекло';
@@ -3005,12 +3325,25 @@ export function resolveContainerVisualAttributes(
       labelAccentRgb = [254, 240, 138];
     } else if (containerId.startsWith('tin_round_')) {
       shape = 'classic';
-      materialRgb = [220, 38, 38];
-      materialNameRu = 'Эмалированная штампованная жесть';
-      labelRgb = [250, 204, 21];
+      if (liquidId === 'menthol') {
+        materialRgb = [13, 148, 136];
+        materialNameRu = 'Матовая ментоловая жесть';
+        labelRgb = [204, 251, 241];
+        labelAccentRgb = [15, 118, 110];
+      } else {
+        materialRgb = [220, 38, 38];
+        materialNameRu = 'Эмалированная штампованная жесть';
+        labelRgb = [250, 204, 21];
+      }
     } else {
       // Large, medium, small metal cans
-      if (eqId.includes('pork') || eqId.includes('ham') || eqId.includes('pate') || eqId.includes('spam')) {
+      if (liquidId === 'coconut_milk') {
+        shape = 'classic';
+        materialRgb = [241, 245, 249];
+        materialNameRu = 'Лакированная белая жесть';
+        if (!labelRgb) labelRgb = [13, 148, 136];
+        labelAccentRgb = [254, 243, 199];
+      } else if (eqId.includes('pork') || eqId.includes('ham') || eqId.includes('pate') || eqId.includes('spam')) {
         shape = 'rectangular';
         materialRgb = [234, 179, 8];
         materialNameRu = 'Золотистая консервная жесть';
@@ -3098,6 +3431,24 @@ export function resolveContainerVisualAttributes(
         labelRgb = [2, 132, 199];
         labelAccentRgb = [255, 255, 255];
         capRgb = [2, 132, 199];
+      } else if (
+        containerId === 'bottle_plastic_100' &&
+        liquidId &&
+        (String(liquidId).startsWith('dye_') || liquidId === 'botanical_extract' || liquidId === 'essential_oil')
+      ) {
+        shape = 'classic';
+        materialRgb = liquidId === 'essential_oil' ? [120, 53, 15] : [224, 242, 254];
+        materialNameRu = liquidId === 'essential_oil' ? 'Светозащитный янтарный ПЭТ-флакон' : 'Прозрачный флакон-капельница ПЭТ';
+        if (!labelRgb) labelRgb = [2, 132, 199];
+        labelAccentRgb = [248, 250, 252];
+        capRgb = liquidId === 'essential_oil' ? [24, 24, 27] : [255, 255, 255];
+      } else if (liquidId === 'glucose_syrup' || liquidId === 'corn_molasses' || liquidId === 'topinambur_syrup') {
+        shape = 'pinched';
+        materialRgb = [254, 249, 195];
+        materialNameRu = 'Плотный пищевой ПЭТ для сиропов';
+        if (!labelRgb) labelRgb = [217, 119, 6];
+        labelAccentRgb = [254, 243, 199];
+        capRgb = [217, 119, 6];
       } else {
         const petShapes: ContainerVisualShape[] = ['pinched', 'classic', 'bordeaux', 'bulbous', 'flask'];
         shape = petShapes[hash % petShapes.length];
@@ -3160,12 +3511,24 @@ export function resolveContainerVisualAttributes(
           : 'Прозрачное бутылочное стекло';
         if (!labelRgb) labelRgb = [185, 28, 28];
         capRgb = [220, 38, 38];
-      } else if (liquidId === 'syrup_sweet') {
+      } else if (
+        liquidId === 'syrup_sweet' ||
+        liquidId === 'glucose_syrup' ||
+        liquidId === 'topinambur_syrup' ||
+        liquidId === 'dye_caramel'
+      ) {
         shape = 'bulbous';
-        materialRgb = [254, 243, 199];
-        materialNameRu = 'Тёплое графинное стекло';
+        materialRgb = liquidId === 'dye_caramel' ? [120, 53, 15] : [254, 243, 199];
+        materialNameRu = liquidId === 'dye_caramel' ? 'Янтарное сиропное стекло' : 'Тёплое графинное стекло';
         if (!labelRgb) labelRgb = [217, 119, 6];
         capRgb = [180, 83, 9];
+      } else if (liquidId === 'lactic_acid' || liquidId === 'botanical_extract' || liquidId === 'essential_oil') {
+        shape = 'square';
+        materialRgb = [120, 53, 15];
+        materialNameRu = 'Тёмно-янтарное экстракционное стекло';
+        if (!labelRgb) labelRgb = [16, 185, 129];
+        labelAccentRgb = [254, 249, 195];
+        capRgb = [24, 24, 27];
       } else if (liquidId === 'medical_solution' || containerId === 'bottle_med_glass_brown') {
         shape = 'flask';
         materialRgb = [120, 53, 15];
