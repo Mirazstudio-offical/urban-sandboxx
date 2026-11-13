@@ -1869,29 +1869,26 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
   return (
     <ModalShell
-      eyebrow={isAutoShopOrGas ? 'СЕРВИСНЫЙ И ТОРГОВЫЙ УЗЕЛ · 24/7' : 'ГОРОДСКАЯ ТОРГОВАЯ СЕТЬ · 24/7'}
+      id="shop-modal"
       title={shop.nameRu}
       subtitle={shop.description}
-      icon={<ShoppingBag className="w-5 h-5" />}
       onClose={onClose}
-      width={1140}
+      width={1080}
       tall
       wipeKey={normalizedTab}
       bodyKey={normalizedTab}
-      headerRight={
-        <div className="gu-row gu-gap-2" style={{ flexWrap: 'wrap' }}>
+      headRight={
+        <div className="gu-row" style={{ gap: 8 }}>
           {currentVehicle && isAutoShopOrGas && (
-            <div className="gu-pill" title="Подключенный автомобиль в зоне сервиса">
-              <Car className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
+            <span className="gu-tag gu-hide-s" title="Подключенный автомобиль в зоне сервиса">
+              <Car className="w-3.5 h-3.5" />
               <span>{currentVehicle.nameRu || currentVehicle.type}</span>
-              <span className="gu-code">{currentVehicle.licensePlate || 'БЕЗ НОМЕРА'}</span>
-            </div>
+            </span>
           )}
-          <div className="gu-pill gu-pill-amber" title="Наличные в кошельке и карманах">
-            <Coins className="w-3.5 h-3.5" />
-            <span>Баланс</span>
-            <b>{playerCash.toLocaleString()} ₽</b>
-          </div>
+          <span className="gu-chip" title="Наличные в кошельке и карманах">
+            <Coins className="w-4 h-4" style={{ color: 'var(--gu-amber-hi)' }} />
+            <span className="gu-num" style={{ fontSize: 16 }}>{playerCash.toLocaleString()} ₽</span>
+          </span>
           {cartTotal > 0 && normalizedTab !== 'pos' && (
             <button
               type="button"
@@ -1899,7 +1896,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               className="gu-btn gu-btn-p gu-btn-sm"
             >
               <Receipt className="w-3.5 h-3.5" />
-              <span>К оплате · {cartTotal.toLocaleString()} ₽</span>
+              <span>Касса · {cartTotal.toLocaleString()} ₽</span>
             </button>
           )}
         </div>
@@ -1909,67 +1906,48 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
           items={tabItems}
           value={normalizedTab}
           onChange={(id) => setActiveTab(id)}
-          rightSlot={
-            cartTotal > 0 ? (
-              <div className="gu-row gu-gap-2" style={{ fontSize: 12, color: 'var(--gu-fg-1)' }}>
-                <span>В корзине: <b className="gu-num" style={{ color: 'var(--gu-fg-0)' }}>{totalCartItemsCount} шт.</b></span>
-                <span style={{ color: 'var(--gu-fg-3)' }}>·</span>
-                <span>Вес: <b className="gu-num" style={{ color: 'var(--gu-fg-0)' }}>{formatShopWeight(totalCartWeightKg) || '0 г'}</b></span>
-              </div>
-            ) : null
-          }
         />
       }
-      footer={
-        <>
-          <div className="gu-foot-Status">
-            <span>{shop.nameRu}</span>
-            <span>·</span>
-            <span>Позиций в каталоге: {catalog.length}</span>
-            {currentVehicle && isAutoShopOrGas && (
-              <>
-                <span>·</span>
-                <span>ТС в боксе: {currentVehicle.nameRu || currentVehicle.type}</span>
-              </>
-            )}
-          </div>
-          <div className="gu-row gu-gap-2">
-            {cartTotal > 0 && normalizedTab !== 'pos' && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('pos')}
-                className="gu-btn gu-btn-ok gu-btn-sm"
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>Перейти на кассу ({cartTotal.toLocaleString()} ₽)</span>
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="gu-btn gu-btn-g gu-btn-sm">
-              <span>Закрыть [ESC]</span>
+      footerHints={[
+        ['Клик', 'Выбрать товар'],
+        ['Esc', 'Закрыть'],
+      ]}
+      footerRight={
+        <div className="gu-row" style={{ gap: 8 }}>
+          {cartTotal > 0 && normalizedTab !== 'pos' && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('pos')}
+              className="gu-btn gu-btn-p gu-btn-sm"
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Перейти на кассу ({cartTotal.toLocaleString()} ₽)</span>
             </button>
-          </div>
-        </>
+          )}
+          <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
+            Закрыть
+          </button>
+        </div>
       }
     >
       {/* CATALOG TAB */}
       {normalizedTab === 'catalog' && (
-        <div className="gu-col gu-gap-3">
-          {/* Toolbar: Search + Department Filter Pills */}
-          <div className="gu-shop-toolbar">
-            <div className="gu-search" style={{ width: 260, flexShrink: 0 }}>
-              <Search className="w-4 h-4" />
+        <div>
+          {/* Single-row compact toolbar: Search + Department Filter Pills */}
+          <div className="gu-shop-bar">
+            <div className="gu-shop-search">
+              <Search className="w-3.5 h-3.5" style={{ color: 'var(--gu-mut)', flexShrink: 0 }} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск по названию или свойству..."
+                placeholder="Поиск товара..."
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="gu-icon-btn"
-                  style={{ width: 22, height: 22, border: 'none' }}
+                  className="gu-shop-search-clear"
                   aria-label="Очистить поиск"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -1977,20 +1955,20 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               )}
             </div>
 
-            <div className="gu-pills" style={{ flex: 1 }}>
+            <div className="gu-shop-depts">
               <button
                 type="button"
                 onClick={() => setSelectedDept('all')}
-                className={`gu-pill-btn ${selectedDept === 'all' ? 'is-on' : ''}`}
+                className={`gu-pill ${selectedDept === 'all' ? 'on' : ''}`}
               >
-                Все отделы ({catalog.length})
+                Все ({catalog.length})
               </button>
               {departments.map((d) => (
                 <button
                   key={d.id}
                   type="button"
                   onClick={() => setSelectedDept(d.id)}
-                  className={`gu-pill-btn ${selectedDept === d.id ? 'is-on' : ''}`}
+                  className={`gu-pill ${selectedDept === d.id ? 'on' : ''}`}
                 >
                   {d.label} ({d.count})
                 </button>
@@ -1999,14 +1977,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
           </div>
 
           <div className="gu-shop-layout">
-            {/* Left Column: Product Cards Grid */}
+            {/* Left Column: Compact Product Row-Cards Grid */}
             <div>
               {filteredCatalog.length === 0 ? (
                 <div className="gu-empty">
-                  <Search className="gu-empty-ic" />
+                  <Search className="w-7 h-7" />
                   <div className="gu-empty-t">Ничего не найдено</div>
-                  <div className="gu-empty-s">
-                    По запросу «{searchQuery}» в выбранном отделе нет подходящих товаров. Сбросьте фильтр для просмотра всего ассортимента.
+                  <div style={{ fontSize: 13 }}>
+                    По запросу «{searchQuery}» в выбранном отделе нет подходящих товаров.
                   </div>
                   <button
                     type="button"
@@ -2015,7 +1993,6 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       setSelectedDept('all');
                     }}
                     className="gu-btn gu-btn-s gu-btn-sm"
-                    style={{ marginTop: 6 }}
                   >
                     Показать все товары
                   </button>
@@ -2026,10 +2003,6 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     const inCart = cart.find((i) => i.item.id === item.id);
                     const countInCart = inCart ? inCart.count : 0;
                     const previewItem = getShopPreviewItem(item.itemId);
-                    const isUnifiedPackage =
-                      previewItem.itemId !== item.itemId ||
-                      Boolean(previewItem.fluidStorage) ||
-                      Boolean(previewItem.contents && previewItem.contents.length > 0);
                     const visShapeRu = previewItem.containerVisuals
                       ? SHAPE_NAMES_RU[previewItem.containerVisuals.shape]
                       : previewItem.packagingShapeNameRu || null;
@@ -2038,66 +2011,52 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     const weightLabel = formatShopWeight(totalWeightKg);
                     const isSelected = activeInspectedItem?.id === item.id;
 
-                    const metaSegments: React.ReactNode[] = [];
-                    if (item.effectText) {
-                      metaSegments.push(<b key="eff">{item.effectText}</b>);
-                    }
-                    if (weightLabel) {
-                      metaSegments.push(<span key="wt">{weightLabel}</span>);
-                    }
-                    if (visShapeRu) {
-                      metaSegments.push(<span key="sh">{visShapeRu}</span>);
-                    }
-                    if (gummyAttrs) {
-                      metaSegments.push(
-                        <span key="gm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <span
-                            style={{
-                              width: 7,
-                              height: 7,
-                              borderRadius: 2,
-                              backgroundColor: gummyAttrs.color,
-                              border: '1px solid rgba(255,255,255,0.35)',
-                              display: 'inline-block',
-                            }}
-                          />
-                          {gummyAttrs.shapeNameRu}
-                        </span>
-                      );
-                    }
-
                     return (
                       <div
                         key={item.id}
                         onClick={() => setSelectedItemId(item.id)}
-                        className={`gu-shop-card ${countInCart > 0 ? 'is-in-cart' : ''} ${isSelected ? 'is-selected' : ''}`}
+                        className={`gu-shop-item ${countInCart > 0 ? 'in-cart' : ''} ${isSelected ? 'on' : ''}`}
                       >
-                        <div className="gu-shop-card-top">
-                          <div className="gu-shop-icon">
-                            <ItemIconCanvas itemId={previewItem.itemId} item={previewItem} size={50} />
+                        <div className="gu-ic">
+                          <ItemIconCanvas itemId={previewItem.itemId} item={previewItem} size={40} />
+                          {countInCart > 0 && <span className="gu-ic-n">×{countInCart}</span>}
+                        </div>
+
+                        <div className="gu-shop-item-main">
+                          <div className="gu-shop-item-name" title={item.nameRu}>
+                            {item.nameRu}
                           </div>
-                          <div className="gu-shop-card-head">
-                            <h3 className="gu-shop-card-title">{item.nameRu}</h3>
-                            {isUnifiedPackage && (
-                              <div className="gu-shop-card-pkg">{previewItem.nameRu}</div>
+                          <div className="gu-shop-item-meta" title={item.description}>
+                            {item.effectText && <b>{item.effectText}</b>}
+                            {item.effectText && weightLabel && <span>·</span>}
+                            {weightLabel && <span>{weightLabel}</span>}
+                            {visShapeRu && (
+                              <>
+                                <span>·</span>
+                                <span>{visShapeRu}</span>
+                              </>
                             )}
+                            {gummyAttrs && (
+                              <>
+                                <span>·</span>
+                                <span
+                                  style={{
+                                    width: 7,
+                                    height: 7,
+                                    borderRadius: 2,
+                                    backgroundColor: gummyAttrs.color,
+                                    border: '1px solid rgba(255,255,255,0.35)',
+                                    display: 'inline-block',
+                                  }}
+                                />
+                                <span>{gummyAttrs.shapeNameRu}</span>
+                              </>
+                            )}
+                            {!item.effectText && !visShapeRu && <span>{item.description}</span>}
                           </div>
                         </div>
 
-                        <p className="gu-shop-card-desc">{item.description}</p>
-
-                        {metaSegments.length > 0 && (
-                          <div className="gu-shop-meta-line">
-                            {metaSegments.map((seg, idx) => (
-                              <React.Fragment key={idx}>
-                                {idx > 0 && <span className="gu-shop-meta-dot">·</span>}
-                                {seg}
-                              </React.Fragment>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="gu-shop-card-foot" onClick={(e) => e.stopPropagation()}>
+                        <div className="gu-shop-item-right" onClick={(e) => e.stopPropagation()}>
                           <div className="gu-shop-price">
                             {item.price.toLocaleString()}
                             <small>₽</small>
@@ -2110,7 +2069,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                                 onClick={() => handleRemoveOneFromCart(item.id)}
                                 aria-label="Убрать 1 шт."
                               >
-                                <Minus className="w-3.5 h-3.5" />
+                                <Minus className="w-3 h-3" />
                               </button>
                               <span>{countInCart}</span>
                               <button
@@ -2119,7 +2078,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                                 onClick={() => handleAddToCart(item)}
                                 aria-label="Добавить ещё 1 шт."
                               >
-                                <Plus className="w-3.5 h-3.5" />
+                                <Plus className="w-3 h-3" />
                               </button>
                             </div>
                           ) : (
@@ -2129,10 +2088,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                                 setSelectedItemId(item.id);
                                 handleAddToCart(item);
                               }}
-                              className="gu-btn gu-btn-s gu-btn-sm"
+                              className="gu-shop-add-btn"
                             >
                               <Plus className="w-3.5 h-3.5" />
-                              <span>В корзину</span>
+                              <span>Купить</span>
                             </button>
                           )}
                         </div>
@@ -2143,9 +2102,8 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               )}
             </div>
 
-            {/* Right Column: Inspector + Live Receipt */}
+            {/* Right Column (Desktop > 920px & > 620px height): Inspector + Live Receipt */}
             <aside className="gu-shop-side">
-              {/* Item Inspector Card */}
               {activeInspectedItem && (() => {
                 const preview = getShopPreviewItem(activeInspectedItem.itemId);
                 const weightKg = getItemTotalWeight(preview);
@@ -2158,59 +2116,60 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 const deptInfo = getItemDept(activeInspectedItem);
 
                 return (
-                  <div className="gu-panel gu-pad gu-col gu-gap-3">
-                    <div className="gu-sec" style={{ marginBottom: 0 }}>
-                      <span>Карточка товара</span>
-                      <span className="gu-sec-line" />
+                  <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="gu-row-between">
+                      <span className="gu-grp">О товаре</span>
                       <span className="gu-tag">{deptInfo.label}</span>
                     </div>
 
-                    <div className="gu-row gu-gap-3" style={{ alignItems: 'flex-start' }}>
-                      <div className="gu-shop-icon" style={{ width: 68, height: 68 }}>
-                        <ItemIconCanvas itemId={preview.itemId} item={preview} size={58} />
+                    <div className="gu-row" style={{ gap: 10, alignItems: 'flex-start' }}>
+                      <div className="gu-ic gu-md">
+                        <ItemIconCanvas itemId={preview.itemId} item={preview} size={52} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gu-fg-0)', lineHeight: 1.25 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', lineHeight: 1.25 }}>
                           {activeInspectedItem.nameRu}
                         </div>
                         {preview.nameRu !== activeInspectedItem.nameRu && (
-                          <div style={{ fontSize: 11.5, color: 'var(--gu-ok)', marginTop: 3 }}>
-                            Фасовка: {preview.nameRu}
+                          <div style={{ fontSize: 11.5, color: 'var(--gu-good)', marginTop: 2 }}>
+                            {preview.nameRu}
                           </div>
                         )}
-                        <div className="gu-shop-price" style={{ marginTop: 6, fontSize: 22 }}>
+                        <div className="gu-shop-price" style={{ marginTop: 5, fontSize: 20 }}>
                           {activeInspectedItem.price.toLocaleString()}
                           <small>₽ / шт.</small>
                         </div>
                       </div>
                     </div>
 
-                    <p style={{ fontSize: 12.5, color: 'var(--gu-fg-1)', lineHeight: 1.5, margin: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--gu-mut)', lineHeight: 1.4 }}>
                       {activeInspectedItem.description}
-                    </p>
+                    </div>
 
                     <div className="gu-kv-grid">
                       <div className="gu-kv">
-                        <span className="gu-kv-k">Масса брутто</span>
+                        <span className="gu-kv-k">Масса</span>
                         <span className="gu-kv-v">{weightStr}</span>
                       </div>
                       <div className="gu-kv">
-                        <span className="gu-kv-k">Упаковка / Форма</span>
+                        <span className="gu-kv-k">Тара</span>
                         <span className="gu-kv-v">{shapeStr}</span>
                       </div>
                       {activeInspectedItem.effectText && (
                         <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                          <span className="gu-kv-k">Потребительские свойства</span>
-                          <span className="gu-kv-v is-amber">{activeInspectedItem.effectText}</span>
+                          <span className="gu-kv-k">Свойства</span>
+                          <span className="gu-kv-v" style={{ color: 'var(--gu-amber-soft)' }}>
+                            {activeInspectedItem.effectText}
+                          </span>
                         </div>
                       )}
                     </div>
 
-                    <div className="gu-row-between" style={{ paddingTop: 4 }}>
+                    <div className="gu-row-between" style={{ paddingTop: 2 }}>
                       {qtyInCart > 0 ? (
                         <>
-                          <span style={{ fontSize: 12, color: 'var(--gu-fg-1)' }}>
-                            В корзине: <b className="gu-num" style={{ color: 'var(--gu-fg-0)' }}>{qtyInCart} шт.</b> ({(qtyInCart * activeInspectedItem.price).toLocaleString()} ₽)
+                          <span style={{ fontSize: 12, color: 'var(--gu-mut)' }}>
+                            В корзине: <b className="gu-num">{qtyInCart} шт.</b>
                           </span>
                           <div className="gu-shop-qty">
                             <button type="button" onClick={() => handleRemoveOneFromCart(activeInspectedItem.id)}>
@@ -2226,10 +2185,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => handleAddToCart(activeInspectedItem)}
-                          className="gu-btn gu-btn-p gu-btn-block"
+                          className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
                         >
-                          <Plus className="w-4 h-4" />
-                          <span>Добавить в корзину · {activeInspectedItem.price.toLocaleString()} ₽</span>
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>В корзину · {activeInspectedItem.price.toLocaleString()} ₽</span>
                         </button>
                       )}
                     </div>
@@ -2238,16 +2197,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               })()}
 
               {/* Live Mini-Cart Receipt Panel */}
-              <div className="gu-panel gu-pad gu-col gu-gap-3">
-                <div className="gu-sec" style={{ marginBottom: 0 }}>
-                  <span>Текущий чек</span>
-                  <span className="gu-sec-line" />
+              <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="gu-row-between">
+                  <span className="gu-grp">Чек ({totalCartItemsCount})</span>
                   {cart.length > 0 && (
                     <button
                       type="button"
                       onClick={handleClearCart}
-                      className="gu-btn gu-btn-g gu-btn-xs"
-                      style={{ height: 22, padding: '0 6px' }}
+                      className="gu-btn gu-btn-ghost gu-btn-xs"
                     >
                       <Trash2 className="w-3 h-3" /> Очистить
                     </button>
@@ -2255,8 +2212,8 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
 
                 {cart.length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'var(--gu-fg-2)', padding: '10px 0', textAlign: 'center' }}>
-                    Корзина пуста. Выберите товары в каталоге слева.
+                  <div style={{ fontSize: 12, color: 'var(--gu-mut)', padding: '6px 0' }}>
+                    Корзина пуста. Нажмите «Купить» напротив нужного товара.
                   </div>
                 ) : (
                   <>
@@ -2274,11 +2231,12 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       ))}
                     </div>
 
-                    <div className="gu-divider" />
-
-                    <div className="gu-row-between">
-                      <span style={{ fontSize: 12, color: 'var(--gu-fg-1)' }}>Итого к оплате</span>
-                      <span className="gu-shop-price" style={{ fontSize: 22 }}>
+                    <div
+                      className="gu-row-between"
+                      style={{ paddingTop: 6, borderTop: '1px solid var(--gu-line)' }}
+                    >
+                      <span style={{ fontSize: 12, color: 'var(--gu-mut)' }}>Итого</span>
+                      <span className="gu-shop-price" style={{ fontSize: 20 }}>
                         {cartTotal.toLocaleString()}
                         <small>₽</small>
                       </span>
@@ -2287,10 +2245,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => setActiveTab('pos')}
-                      className="gu-btn gu-btn-ok gu-btn-block"
+                      className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
                     >
-                      <Receipt className="w-4 h-4" />
-                      <span>Перейти к оплате ({totalCartItemsCount} шт.)</span>
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>Перейти к оплате</span>
                     </button>
                   </>
                 )}
@@ -2302,26 +2260,26 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
       {/* DIAGNOSTICS TAB */}
       {normalizedTab === 'diagnostics' && (
-        <div className="gu-col gu-gap-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {/* Vehicle Connection Header Panel */}
-          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
-            <div className="gu-row gu-gap-3">
-              <div className="gu-head-icon">
+          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+            <div className="gu-row" style={{ gap: 10 }}>
+              <div className="gu-ico">
                 <Activity className="w-5 h-5" />
               </div>
               <div>
-                <div className="gu-row gu-gap-2">
-                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                <div className="gu-row" style={{ gap: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
                     {currentVehicle ? (currentVehicle.nameRu || currentVehicle.type) : 'Автомобиль не подключен'}
                   </span>
                   {currentVehicle && (
                     <span className="gu-code">{currentVehicle.licensePlate || 'БЕЗ НОМЕРА'}</span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--gu-fg-2)', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--gu-mut)', marginTop: 2 }}>
                   {currentVehicle
-                    ? 'Электронный блок управления (ECU) подключен по шине CAN / OBD-II'
-                    : 'Подгоните автомобиль к боксу мастерской (ближе 240 м) для считывания телеметрии'}
+                    ? 'Электронный блок управления (ECU) подключен по шине OBD-II'
+                    : 'Подгоните автомобиль к боксу мастерской для считывания телеметрии'}
                 </div>
               </div>
             </div>
@@ -2331,60 +2289,57 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 type="button"
                 disabled={isScanningEcu}
                 onClick={handleScanEcu}
-                className="gu-btn gu-btn-p"
+                className="gu-btn gu-btn-p gu-btn-sm"
               >
-                <RefreshCw className={`w-4 h-4 ${isScanningEcu ? 'animate-spin' : ''}`} />
-                <span>{isScanningEcu ? 'Опрос датчиков ECU...' : 'Сканировать OBD-II'}</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${isScanningEcu ? 'gu-spin' : ''}`} />
+                <span>{isScanningEcu ? 'Сканирование...' : 'Сканировать OBD-II'}</span>
               </button>
             )}
           </div>
 
           {!currentVehicle ? (
             <div className="gu-empty">
-              <Car className="gu-empty-ic" />
+              <Car className="w-8 h-8" />
               <div className="gu-empty-t">Транспортное средство не обнаружено в рабочей зоне</div>
-              <div className="gu-empty-s">
+              <div style={{ fontSize: 13, maxWidth: 460 }}>
                 Загоните автомобиль на эстакаду или припаркуйтесь у ворот сервиса, чтобы считать показания датчиков и коды неисправностей ЭБУ.
               </div>
             </div>
           ) : (
             <>
               {/* OBD-II Fault Codes / DTC Section */}
-              <div className="gu-panel gu-pad gu-col gu-gap-3">
-                <div className="gu-sec" style={{ marginBottom: 0 }}>
-                  <Cpu className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
-                  <span>Журнал кодов неисправностей OBD-II (DTC)</span>
-                  <span className="gu-sec-line" />
-                  <span className={`gu-tag ${dtcErrors.length === 0 ? 'gu-tag-ok' : 'gu-tag-err'}`}>
-                    {dtcErrors.length === 0 ? 'Ошибок нет' : `Активных кодов: ${dtcErrors.length}`}
+              <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="gu-row-between">
+                  <span className="gu-grp">Журнал кодов неисправностей OBD-II (DTC)</span>
+                  <span className={`gu-tag ${dtcErrors.length === 0 ? 'good' : 'bad'}`}>
+                    {dtcErrors.length === 0 ? 'Ошибок нет' : `Кодов: ${dtcErrors.length}`}
                   </span>
                 </div>
 
                 {dtcErrors.length === 0 ? (
-                  <div className="gu-banner gu-banner-ok">
+                  <div className="gu-note gu-ok" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>Все электронные системы, датчики и исполнительные механизмы функционируют штатно.</span>
                   </div>
                 ) : (
-                  <div className="gu-list">
+                  <div className="gu-li-list">
                     {dtcErrors.map((err, idx) => (
-                      <div key={idx} className="gu-rw" style={{ alignItems: 'flex-start' }}>
+                      <div key={idx} className="gu-item">
                         <AlertTriangle
                           className="w-4 h-4 shrink-0"
                           style={{
-                            marginTop: 2,
-                            color: err.severity === 'critical' ? 'var(--gu-err)' : 'var(--gu-warn)',
+                            color: err.severity === 'critical' ? 'var(--gu-bad)' : 'var(--gu-amber-hi)',
                           }}
                         />
-                        <div className="gu-rw-main">
-                          <div className="gu-row gu-gap-2">
-                            <span className="gu-code">{err.code}</span>
-                            <span className="gu-rw-title">{err.title}</span>
-                            <span className={`gu-tag ${err.severity === 'critical' ? 'gu-tag-err' : 'gu-tag-warn'}`}>
+                        <div className="gu-item-main">
+                          <div className="gu-row" style={{ gap: 8 }}>
+                            <span className="gu-code" style={{ padding: '2px 6px', fontSize: 11 }}>{err.code}</span>
+                            <span className="gu-item-title">{err.title}</span>
+                            <span className={`gu-tag ${err.severity === 'critical' ? 'bad' : 'warn'}`}>
                               {err.severity === 'critical' ? 'Критично' : 'Внимание'}
                             </span>
                           </div>
-                          <div className="gu-rw-sub" style={{ marginTop: 4 }}>{err.desc}</div>
+                          <div className="gu-item-sub">{err.desc}</div>
                         </div>
                       </div>
                     ))}
@@ -2393,33 +2348,24 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
 
               {/* 4 Telemetry Modules Grid */}
-              <div className="gu-grid-2">
+              <div className="gu-grid gu-g2">
                 {/* 1. Engine & Fluids */}
-                <div className="gu-panel gu-pad gu-col gu-gap-3">
-                  <div className="gu-sec" style={{ marginBottom: 0 }}>
-                    <Gauge className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
-                    <span>ДВС и Техжидкости</span>
-                    <span className="gu-sec-line" />
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="gu-row" style={{ gap: 6 }}>
+                    <Gauge className="w-4 h-4" style={{ color: 'var(--gu-amber-hi)' }} />
+                    <span className="gu-grp">ДВС и Техжидкости</span>
                   </div>
 
                   <div>
-                    <div className="gu-row-between" style={{ fontSize: 12, marginBottom: 6 }}>
-                      <span style={{ color: 'var(--gu-fg-2)' }}>Ресурс ЦПГ двигателя</span>
-                      <b
-                        className="gu-num"
-                        style={{
-                          color:
-                            (currentVehicle.engineState?.engineHealth ?? 100) < 50
-                              ? 'var(--gu-err)'
-                              : 'var(--gu-ok)',
-                        }}
-                      >
+                    <div className="gu-row-between" style={{ fontSize: 12, marginBottom: 4 }}>
+                      <span className="gu-mute">Ресурс ЦПГ двигателя</span>
+                      <b className="gu-num">
                         {Math.round(currentVehicle.engineState?.engineHealth ?? 100)}%
                       </b>
                     </div>
                     <div
                       className={`gu-bar ${
-                        (currentVehicle.engineState?.engineHealth ?? 100) < 50 ? 'gu-bar-err' : 'gu-bar-ok'
+                        (currentVehicle.engineState?.engineHealth ?? 100) < 50 ? 'bad' : 'good'
                       }`}
                     >
                       <span
@@ -2433,21 +2379,26 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   <div className="gu-kv-grid">
                     <div className="gu-kv">
                       <span className="gu-kv-k">Моторное масло</span>
-                      <span className={`gu-kv-v ${currentVehicle.engineState?.oilPunctured ? 'is-err' : ''}`}>
+                      <span className="gu-kv-v">
                         {Math.round(currentVehicle.engineState?.oilLevel ?? 100)}%
                         {currentVehicle.engineState?.oilPunctured ? ' · Пробой' : ''}
                       </span>
                     </div>
                     <div className="gu-kv">
                       <span className="gu-kv-k">Охлаждающая жидкость</span>
-                      <span className={`gu-kv-v ${currentVehicle.engineState?.radiatorPunctured ? 'is-err' : ''}`}>
+                      <span className="gu-kv-v">
                         {Math.round(currentVehicle.engineState?.radiatorWater ?? 100)}%
                         {currentVehicle.engineState?.radiatorPunctured ? ' · Течь' : ''}
                       </span>
                     </div>
                     <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                      <span className="gu-kv-k">Состояние блока цилиндров</span>
-                      <span className={`gu-kv-v ${currentVehicle.engineState?.isSeized ? 'is-err' : 'is-ok'}`}>
+                      <span className="gu-kv-k">Блок цилиндров</span>
+                      <span
+                        className="gu-kv-v"
+                        style={{
+                          color: currentVehicle.engineState?.isSeized ? 'var(--gu-bad)' : 'var(--gu-good)',
+                        }}
+                      >
                         {currentVehicle.engineState?.isSeized ? 'КЛИН ДВИГАТЕЛЯ' : 'Исправен, вращение штатное'}
                       </span>
                     </div>
@@ -2455,21 +2406,16 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
 
                 {/* 2. Suspension & Alignment */}
-                <div className="gu-panel gu-pad gu-col gu-gap-3">
-                  <div className="gu-sec" style={{ marginBottom: 0 }}>
-                    <Disc className="w-3.5 h-3.5" style={{ color: 'var(--gu-ok)' }} />
-                    <span>Ходовая и Сход-развал</span>
-                    <span className="gu-sec-line" />
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="gu-row" style={{ gap: 6 }}>
+                    <Disc className="w-4 h-4" style={{ color: 'var(--gu-good)' }} />
+                    <span className="gu-grp">Ходовая и Сход-развал</span>
                   </div>
 
                   <div className="gu-kv-grid">
                     <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
                       <span className="gu-kv-k">Увод руля (развал-схождение)</span>
-                      <span
-                        className={`gu-kv-v ${
-                          Math.abs(currentVehicle.damage?.steeringDrift || 0) > 0.05 ? 'is-amber' : 'is-ok'
-                        }`}
-                      >
+                      <span className="gu-kv-v">
                         {Math.abs(currentVehicle.damage?.steeringDrift || 0) < 0.01
                           ? 'Идеально (0.0°)'
                           : `${((currentVehicle.damage?.steeringDrift || 0) * 10).toFixed(1)}° ${
@@ -2491,7 +2437,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     </div>
                     <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
                       <span className="gu-kv-k">Конфигурация шасси</span>
-                      <span className="gu-kv-v is-amber">
+                      <span className="gu-kv-v" style={{ color: 'var(--gu-amber-soft)' }}>
                         {isHeavySuspended ? 'Bilstein HD (Усиленная)' : 'Заводская подвеска'}
                       </span>
                     </div>
@@ -2499,35 +2445,32 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
 
                 {/* 3. Electrical & Fuel */}
-                <div className="gu-panel gu-pad gu-col gu-gap-3">
-                  <div className="gu-sec" style={{ marginBottom: 0 }}>
-                    <Zap className="w-3.5 h-3.5" style={{ color: 'var(--gu-info)' }} />
-                    <span>Электрика и Топливная система</span>
-                    <span className="gu-sec-line" />
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="gu-row" style={{ gap: 6 }}>
+                    <Zap className="w-4 h-4" style={{ color: 'var(--gu-amber-hi)' }} />
+                    <span className="gu-grp">Электрика и Топливо</span>
                   </div>
 
                   <div className="gu-kv-grid">
                     <div className="gu-kv">
                       <span className="gu-kv-k">Заряд АКБ</span>
-                      <span className="gu-kv-v is-ok">
-                        {Math.round(currentVehicle.engineState?.batteryCharge ?? 100)}%
-                      </span>
+                      <span className="gu-kv-v">{Math.round(currentVehicle.engineState?.batteryCharge ?? 100)}%</span>
                     </div>
                     <div className="gu-kv">
                       <span className="gu-kv-k">Стартер</span>
-                      <span className={`gu-kv-v ${currentVehicle.engineState?.starterWorking === false ? 'is-err' : ''}`}>
+                      <span className="gu-kv-v">
                         {currentVehicle.engineState?.starterWorking === false ? 'Неисправен' : 'Штатный'}
                       </span>
                     </div>
                     <div className="gu-kv">
-                      <span className="gu-kv-k">Топливная аппаратура</span>
+                      <span className="gu-kv-k">Питание</span>
                       <span className="gu-kv-v">
                         {currentVehicle.fuelSystem?.hasLPG ? 'Бензин + ГБО 4' : 'Штатная (Бензин/ДТ)'}
                       </span>
                     </div>
                     <div className="gu-kv">
-                      <span className="gu-kv-k">Калибровка ЭБУ</span>
-                      <span className="gu-kv-v is-amber">
+                      <span className="gu-kv-k">Прошивка ЭБУ</span>
+                      <span className="gu-kv-v" style={{ color: 'var(--gu-amber-soft)' }}>
                         {isChiptuned ? 'Stage 1 (+15% л.с.)' : 'Заводской сток'}
                       </span>
                     </div>
@@ -2535,23 +2478,16 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
 
                 {/* 4. Body & Optics */}
-                <div className="gu-panel gu-pad gu-col gu-gap-3">
-                  <div className="gu-sec" style={{ marginBottom: 0 }}>
-                    <ShieldCheck className="w-3.5 h-3.5" style={{ color: 'var(--gu-ok)' }} />
-                    <span>Кузов, Остекление и Оптика</span>
-                    <span className="gu-sec-line" />
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="gu-row" style={{ gap: 6 }}>
+                    <ShieldCheck className="w-4 h-4" style={{ color: 'var(--gu-good)' }} />
+                    <span className="gu-grp">Кузов и Оптика</span>
                   </div>
 
                   <div className="gu-kv-grid">
                     <div className="gu-kv">
-                      <span className="gu-kv-k">Геометрия лонжеронов</span>
-                      <span
-                        className={`gu-kv-v ${
-                          (currentVehicle.damage?.frontCrumple || 0) + (currentVehicle.damage?.rearCrumple || 0) > 2
-                            ? 'is-amber'
-                            : 'is-ok'
-                        }`}
-                      >
+                      <span className="gu-kv-k">Геометрия кузова</span>
+                      <span className="gu-kv-v">
                         {(currentVehicle.damage?.frontCrumple || 0) + (currentVehicle.damage?.rearCrumple || 0) > 2
                           ? 'Деформирован'
                           : 'В допуске'}
@@ -2559,26 +2495,20 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     </div>
                     <div className="gu-kv">
                       <span className="gu-kv-k">Лобовое стекло</span>
-                      <span className={`gu-kv-v ${currentVehicle.damage?.windshieldCracked ? 'is-amber' : ''}`}>
+                      <span className="gu-kv-v">
                         {currentVehicle.damage?.windshieldCracked ? 'Трещина триплекса' : 'Целое'}
                       </span>
                     </div>
                     <div className="gu-kv">
                       <span className="gu-kv-k">Головной свет</span>
-                      <span
-                        className={`gu-kv-v ${
-                          currentVehicle.damage?.leftHeadlightBroken || currentVehicle.damage?.rightHeadlightBroken
-                            ? 'is-amber'
-                            : ''
-                        }`}
-                      >
+                      <span className="gu-kv-v">
                         {currentVehicle.damage?.leftHeadlightBroken || currentVehicle.damage?.rightHeadlightBroken
                           ? 'Разбита фара'
                           : 'Исправен'}
                       </span>
                     </div>
                     <div className="gu-kv">
-                      <span className="gu-kv-k">Парковочная камера</span>
+                      <span className="gu-kv-k">Камера ЗВ</span>
                       <span className="gu-kv-v">{hasCameraInstalled ? 'Установлена' : 'Отсутствует'}</span>
                     </div>
                   </div>
@@ -2586,14 +2516,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
 
               {/* Action bar */}
-              <div className="gu-panel-inset gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
-                <span style={{ fontSize: 12.5, color: 'var(--gu-fg-1)' }}>
-                  Перейдите к оформлению наряд-заказа для устранения неисправностей или в цех дооснащения.
+              <div className="gu-card-sm gu-row-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <span style={{ fontSize: 12.5, color: 'var(--gu-mut)' }}>
+                  Перейдите к оформлению наряд-заказа для ремонта или в цех дооснащения:
                 </span>
-                <div className="gu-row gu-gap-2">
-                  <button type="button" onClick={() => setActiveTab('repair')} className="gu-btn gu-btn-ok gu-btn-sm">
+                <div className="gu-row" style={{ gap: 8 }}>
+                  <button type="button" onClick={() => setActiveTab('repair')} className="gu-btn gu-btn-s gu-btn-sm">
                     <Wrench className="w-3.5 h-3.5" />
-                    <span>В цех ремонта ({getActiveRepairs().length})</span>
+                    <span>Починка и ТО ({getActiveRepairs().length})</span>
                   </button>
                   <button type="button" onClick={() => setActiveTab('tuning')} className="gu-btn gu-btn-p gu-btn-sm">
                     <Zap className="w-3.5 h-3.5" />
@@ -2609,24 +2539,24 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
       {/* REPAIR & SERVICE TAB */}
       {normalizedTab === 'repair' && (
-        <div className="gu-col gu-gap-4">
+        <div className="gu-grp">
           {repairActionMessage && (
-            <div className="gu-banner gu-banner-ok">
+            <div className="gu-note good">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{repairActionMessage}</span>
+              <div className="gu-note-body">{repairActionMessage}</div>
             </div>
           )}
 
-          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
-            <div className="gu-row gu-gap-3">
-              <div className="gu-head-icon">
-                <Wrench className="w-5 h-5" />
+          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+            <div className="gu-row" style={{ gap: 10 }}>
+              <div className="gu-ico">
+                <Wrench className="w-4 h-4" />
               </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
                   Слесарный ремонт и Техническое обслуживание
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--gu-fg-2)', marginTop: 2 }}>
+                <div style={{ fontSize: 11.5, color: 'var(--gu-fg-2)', marginTop: 1 }}>
                   {currentVehicle
                     ? `Автомобиль на подъемнике: ${currentVehicle.nameRu || currentVehicle.type}`
                     : 'Подгоните ТС в бокс СТО для формирования дефектовочной ведомости'}
@@ -2635,9 +2565,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
             </div>
 
             {currentVehicle && (
-              <div className="gu-pill gu-pill-amber">
-                <span>Наличный расчет</span>
-                <b>{playerCash.toLocaleString()} ₽</b>
+              <div className="gu-pill is-on">
+                <span>Наличные:</span>
+                <b className="gu-num">{playerCash.toLocaleString()} ₽</b>
               </div>
             )}
           </div>
@@ -2651,7 +2581,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
             </div>
           ) : isRepairing ? (
-            <div className="gu-panel gu-pad gu-col gu-gap-3">
+            <div className="gu-panel gu-pad gu-grp">
               <div className="gu-sec" style={{ marginBottom: 0 }}>
                 <Cpu className="w-3.5 h-3.5 animate-pulse" style={{ color: 'var(--gu-info)' }} />
                 <span>Пост СТО — Выполнение регламентных работ</span>
@@ -2680,7 +2610,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
 
               <div>
-                <div className="gu-row-between" style={{ fontSize: 11.5, marginBottom: 6 }}>
+                <div className="gu-row-between" style={{ fontSize: 11, marginBottom: 5 }}>
                   <span style={{ color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     Готовность наряд-заказа
                   </span>
@@ -2704,23 +2634,27 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   </div>
                 </div>
               ) : (
-                <div className="gu-col gu-gap-3">
+                <div className="gu-grp">
                   <div className="gu-sec" style={{ marginBottom: 0 }}>
                     <span>Дефектовочная ведомость к оплате</span>
                     <span className="gu-sec-line" />
-                    <span className="gu-tag gu-tag-warn">Позиций: {getActiveRepairs().length}</span>
+                    <span className="gu-tag warn">Позиций: {getActiveRepairs().length}</span>
                   </div>
 
-                  <div className="gu-list">
+                  <div className="gu-shop-grid">
                     {getActiveRepairs().map((rep) => (
-                      <div key={rep.id} className="gu-rw">
-                        <Wrench className="w-4 h-4 shrink-0" style={{ color: 'var(--gu-accent)' }} />
-                        <div className="gu-rw-main">
-                          <div className="gu-rw-title">{rep.title}</div>
-                          <div className="gu-rw-sub">{rep.desc}</div>
+                      <div key={rep.id} className="gu-shop-item">
+                        <div className="gu-ic" style={{ width: 34, height: 34 }}>
+                          <Wrench className="w-4 h-4" style={{ color: 'var(--gu-accent)' }} />
                         </div>
-                        <div className="gu-rw-right">
-                          <div className="gu-shop-price" style={{ fontSize: 19 }}>
+                        <div className="gu-shop-item-main">
+                          <div className="gu-shop-item-name">{rep.title}</div>
+                          <div className="gu-shop-item-meta">
+                            <span>{rep.desc}</span>
+                          </div>
+                        </div>
+                        <div className="gu-shop-item-right">
+                          <div className="gu-shop-price">
                             {rep.price.toLocaleString()}
                             <small>₽</small>
                           </div>
@@ -2729,26 +2663,26 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     ))}
                   </div>
 
-                  <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 14 }}>
+                  <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
                     <div>
-                      <div style={{ fontSize: 11, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      <div style={{ fontSize: 10.5, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                         Итоговая смета (запчасти + работа)
                       </div>
-                      <div className="gu-shop-price" style={{ fontSize: 26, marginTop: 2 }}>
+                      <div className="gu-shop-price" style={{ fontSize: 21, marginTop: 2 }}>
                         {getActiveRepairs().reduce((sum, r) => sum + r.price, 0).toLocaleString()}
                         <small>₽</small>
                       </div>
                     </div>
 
-                    <div className="gu-row gu-gap-3" style={{ flexWrap: 'wrap' }}>
+                    <div className="gu-row" style={{ flexWrap: 'wrap', gap: 8 }}>
                       {playerCash < getActiveRepairs().reduce((sum, r) => sum + r.price, 0) && (
-                        <span className="gu-tag gu-tag-err">Недостаточно наличных средств</span>
+                        <span className="gu-tag bad">Недостаточно наличных средств</span>
                       )}
                       <button
                         type="button"
                         disabled={playerCash < getActiveRepairs().reduce((sum, r) => sum + r.price, 0)}
                         onClick={handleFullRepair}
-                        className="gu-btn gu-btn-ok gu-btn-lg"
+                        className="gu-btn gu-btn-p"
                       >
                         <Wrench className="w-4 h-4" />
                         <span>Утвердить наряд-заказ и начать ремонт</span>
@@ -2764,17 +2698,17 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
       {/* TUNING & UPGRADES TAB */}
       {normalizedTab === 'tuning' && (
-        <div className="gu-col gu-gap-4">
-          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
-            <div className="gu-row gu-gap-3">
-              <div className="gu-head-icon">
-                <Zap className="w-5 h-5" />
+        <div className="gu-grp">
+          <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+            <div className="gu-row" style={{ gap: 10 }}>
+              <div className="gu-ico">
+                <Zap className="w-4 h-4" />
               </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
                   Дооснащение, Инжиниринг и Малярный цех
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--gu-fg-2)', marginTop: 2 }}>
+                <div style={{ fontSize: 11.5, color: 'var(--gu-fg-2)', marginTop: 1 }}>
                   {currentVehicle
                     ? `Объект модернизации: ${currentVehicle.nameRu || currentVehicle.type}`
                     : 'Припаркуйте автомобиль в боксе мастерской для установки дополнительного оборудования'}
@@ -2792,28 +2726,28 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
             </div>
           ) : (
-            <div className="gu-col gu-gap-3">
-              <div className="gu-grid-2">
+            <div className="gu-grp">
+              <div className="gu-grid gu-g2">
                 {/* 1. Stage 1 ECU Remap */}
-                <div className="gu-panel gu-pad gu-col gu-gap-3" style={{ justifyContent: 'space-between' }}>
+                <div className="gu-panel gu-pad gu-grp" style={{ justifyContent: 'space-between' }}>
                   <div>
-                    <div className="gu-row-between" style={{ marginBottom: 8 }}>
-                      <div className="gu-row gu-gap-2">
+                    <div className="gu-row-between" style={{ marginBottom: 6 }}>
+                      <div className="gu-row" style={{ gap: 6 }}>
                         <Gauge className="w-4 h-4" style={{ color: 'var(--gu-accent)' }} />
-                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
                           Чип-тюнинг ЭБУ Stage 1
                         </span>
                       </div>
-                      <span className={`gu-tag ${isChiptuned ? 'gu-tag-ok' : 'gu-tag-amber'}`}>
+                      <span className={`gu-tag ${isChiptuned ? 'good' : 'warn'}`}>
                         {isChiptuned ? 'Установлено' : '+15% Мощности'}
                       </span>
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--gu-fg-2)', lineHeight: 1.45, margin: 0 }}>
+                    <p style={{ fontSize: 11.5, color: 'var(--gu-fg-2)', lineHeight: 1.4, margin: 0 }}>
                       Калибровка топливных карт и углов опережения зажигания. Повышает крутящий момент на +15% и убирает задержку педали акселератора.
                     </p>
                   </div>
 
-                  <div className="gu-row-between" style={{ paddingTop: 10, borderTop: '1px solid var(--gu-line-subtle)' }}>
+                  <div className="gu-row-between" style={{ paddingTop: 8, borderTop: '1px solid var(--gu-line-subtle)' }}>
                     <div className="gu-shop-price">
                       {CHIPTUNING_PRICE.toLocaleString()}
                       <small>₽</small>
@@ -2842,25 +2776,25 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
 
                 {/* 2. Bilstein HD Suspension */}
-                <div className="gu-panel gu-pad gu-col gu-gap-3" style={{ justifyContent: 'space-between' }}>
+                <div className="gu-panel gu-pad gu-grp" style={{ justifyContent: 'space-between' }}>
                   <div>
-                    <div className="gu-row-between" style={{ marginBottom: 8 }}>
-                      <div className="gu-row gu-gap-2">
+                    <div className="gu-row-between" style={{ marginBottom: 6 }}>
+                      <div className="gu-row" style={{ gap: 6 }}>
                         <Disc className="w-4 h-4" style={{ color: 'var(--gu-info)' }} />
-                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
                           Подвеска Bilstein B6 HD
                         </span>
                       </div>
-                      <span className={`gu-tag ${isHeavySuspended ? 'gu-tag-ok' : ''}`}>
+                      <span className={`gu-tag ${isHeavySuspended ? 'good' : ''}`}>
                         {isHeavySuspended ? 'Установлено' : 'Износ −40%'}
                       </span>
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--gu-fg-2)', lineHeight: 1.45, margin: 0 }}>
+                    <p style={{ fontSize: 11.5, color: 'var(--gu-fg-2)', lineHeight: 1.4, margin: 0 }}>
                       Однотрубные газомасляные амортизаторы и усиленные пружины. Предотвращают пробои на пересеченной местности и снижают износ ходовой на 40%.
                     </p>
                   </div>
 
-                  <div className="gu-row-between" style={{ paddingTop: 10, borderTop: '1px solid var(--gu-line-subtle)' }}>
+                  <div className="gu-row-between" style={{ paddingTop: 8, borderTop: '1px solid var(--gu-line-subtle)' }}>
                     <div className="gu-shop-price">
                       {SUSPENSION_PRICE.toLocaleString()}
                       <small>₽</small>
@@ -2889,16 +2823,16 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
 
                 {/* 3. LPG System Lovato 4 */}
-                <div className="gu-panel gu-pad gu-col gu-gap-3" style={{ justifyContent: 'space-between' }}>
+                <div className="gu-panel gu-pad gu-grp" style={{ justifyContent: 'space-between' }}>
                   <div>
-                    <div className="gu-row-between" style={{ marginBottom: 8 }}>
-                      <div className="gu-row gu-gap-2">
+                    <div className="gu-row-between" style={{ marginBottom: 6 }}>
+                      <div className="gu-row" style={{ gap: 6 }}>
                         <Flame className="w-4 h-4" style={{ color: 'var(--gu-ok)' }} />
-                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
                           ГБО Lovato 4 (Пропан-Бутан)
                         </span>
                       </div>
-                      <span className={`gu-tag ${hasLpgInstalled ? 'gu-tag-ok' : 'gu-tag-amber'}`}>
+                      <span className={`gu-tag ${hasLpgInstalled ? 'good' : 'warn'}`}>
                         {hasLpgInstalled
                           ? 'Установлено'
                           : lpgConfig?.isAvailable
@@ -2906,13 +2840,13 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                           : 'Недоступно'}
                       </span>
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--gu-fg-2)', lineHeight: 1.45, margin: 0 }}>
+                    <p style={{ fontSize: 11.5, color: 'var(--gu-fg-2)', lineHeight: 1.4, margin: 0 }}>
                       {lpgConfig?.description ||
                         'Двухтопливная система питания сжиженным газом. Позволяет переключаться между бензином и пропаном прямо из салона.'}
                     </p>
                   </div>
 
-                  <div className="gu-row-between" style={{ paddingTop: 10, borderTop: '1px solid var(--gu-line-subtle)' }}>
+                  <div className="gu-row-between" style={{ paddingTop: 8, borderTop: '1px solid var(--gu-line-subtle)' }}>
                     <div className="gu-shop-price">
                       {lpgConfig ? lpgConfig.price.toLocaleString() : '35,000'}
                       <small>₽</small>
@@ -2942,16 +2876,16 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 </div>
 
                 {/* 4. Rearview Camera */}
-                <div className="gu-panel gu-pad gu-col gu-gap-3" style={{ justifyContent: 'space-between' }}>
+                <div className="gu-panel gu-pad gu-grp" style={{ justifyContent: 'space-between' }}>
                   <div>
-                    <div className="gu-row-between" style={{ marginBottom: 8 }}>
-                      <div className="gu-row gu-gap-2">
+                    <div className="gu-row-between" style={{ marginBottom: 6 }}>
+                      <div className="gu-row" style={{ gap: 6 }}>
                         <Video className="w-4 h-4" style={{ color: 'var(--gu-info)' }} />
-                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
                           Парковочная камера с разметкой
                         </span>
                       </div>
-                      <span className={`gu-tag ${hasCameraInstalled ? 'gu-tag-ok' : ''}`}>
+                      <span className={`gu-tag ${hasCameraInstalled ? 'good' : ''}`}>
                         {isCameraFactoryInstalled
                           ? 'Штатная'
                           : hasCameraInstalled
@@ -2959,18 +2893,18 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                           : 'Опция'}
                       </span>
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--gu-fg-2)', lineHeight: 1.45, margin: 0 }}>
+                    <p style={{ fontSize: 11.5, color: 'var(--gu-fg-2)', lineHeight: 1.4, margin: 0 }}>
                       Широкоугольная камера заднего обзора с динамическими траекторными линиями, синхронизированными с поворотом рулевого колеса.
                     </p>
                   </div>
 
-                  <div className="gu-row-between" style={{ paddingTop: 10, borderTop: '1px solid var(--gu-line-subtle)' }}>
+                  <div className="gu-row-between" style={{ paddingTop: 8, borderTop: '1px solid var(--gu-line-subtle)' }}>
                     <div className="gu-shop-price">
                       {isCameraFactoryInstalled ? 'В базе' : CAMERA_PRICE.toLocaleString()}
                       {!isCameraFactoryInstalled && <small>₽</small>}
                     </div>
                     {isCameraFactoryInstalled ? (
-                      <span className="gu-tag gu-tag-ok">Заводская комплектация</span>
+                      <span className="gu-tag good">Заводская комплектация</span>
                     ) : hasCameraInstalled ? (
                       <button type="button" onClick={handleRemoveCamera} className="gu-btn gu-btn-d gu-btn-sm">
                         <span>Демонтировать</span>
@@ -2997,36 +2931,36 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
 
               {/* 5. Paint Booth Section */}
-              <div className="gu-panel gu-pad gu-col gu-gap-3">
+              <div className="gu-panel gu-pad gu-grp">
                 <div className="gu-sec" style={{ marginBottom: 0 }}>
                   <Palette className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
                   <span>Покрасочная камера (Малярный цех)</span>
                   <span className="gu-sec-line" />
-                  <span className="gu-tag gu-tag-amber">{PAINT_PRICE.toLocaleString()} ₽ за деталь</span>
+                  <span className="gu-tag warn">{PAINT_PRICE.toLocaleString()} ₽ за деталь</span>
                 </div>
 
-                <div className="gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
-                  <div className="gu-row gu-gap-3" style={{ flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12, color: 'var(--gu-fg-2)', fontWeight: 600 }}>Элемент окраски:</span>
+                <div className="gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+                  <div className="gu-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--gu-fg-2)', fontWeight: 600 }}>Элемент окраски:</span>
                     <Seg<'body' | 'roof'>
-                      items={[
-                        { id: 'body', label: 'Основной кузов' },
-                        { id: 'roof', label: 'Крыша (контраст)' },
+                      options={[
+                        { v: 'body', label: 'Основной кузов' },
+                        { v: 'roof', label: 'Крыша (контраст)' },
                       ]}
                       value={selectedPaintTarget}
                       onChange={(id) => setSelectedPaintTarget(id)}
                     />
                   </div>
 
-                  <div className="gu-row gu-gap-2">
-                    <span style={{ fontSize: 12, color: 'var(--gu-fg-2)' }}>Произвольный оттенок:</span>
+                  <div className="gu-row" style={{ gap: 6 }}>
+                    <span style={{ fontSize: 11.5, color: 'var(--gu-fg-2)' }}>Оттенок:</span>
                     <input
                       type="color"
                       value={selectedColor}
                       onChange={(e) => setSelectedColor(e.target.value)}
                       style={{
-                        width: 32,
-                        height: 28,
+                        width: 28,
+                        height: 24,
                         padding: 0,
                         border: '1px solid var(--gu-line-strong)',
                         borderRadius: 2,
@@ -3053,12 +2987,12 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   ))}
                 </div>
 
-                <div className="gu-panel-inset gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 12 }}>
-                  <div className="gu-row gu-gap-3">
+                <div className="gu-panel-inset gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+                  <div className="gu-row" style={{ gap: 10 }}>
                     <span
                       style={{
-                        width: 34,
-                        height: 34,
+                        width: 28,
+                        height: 28,
                         borderRadius: 2,
                         backgroundColor: selectedColor,
                         border: '1px solid rgba(255,255,255,0.28)',
@@ -3067,10 +3001,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       }}
                     />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gu-fg-0)' }}>
                         Код эмали: <span className="gu-code">{selectedColor.toUpperCase()}</span>
                       </div>
-                      <div style={{ fontSize: 11.5, color: 'var(--gu-fg-2)' }}>
+                      <div style={{ fontSize: 11, color: 'var(--gu-fg-2)' }}>
                         Зона нанесения: {selectedPaintTarget === 'roof' ? 'Крыша автомобиля' : 'Основной кузов'}
                       </div>
                     </div>
@@ -3080,16 +3014,16 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     type="button"
                     disabled={isPainting || playerCash < PAINT_PRICE}
                     onClick={handlePaintVehicle}
-                    className="gu-btn gu-btn-p"
+                    className="gu-btn gu-btn-p gu-btn-sm"
                   >
                     {isPainting ? (
                       <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                         <span>Окраска и сушка {paintProgress}%</span>
                       </>
                     ) : (
                       <>
-                        <Palette className="w-4 h-4" />
+                        <Palette className="w-3.5 h-3.5" />
                         <span>Покрасить за {PAINT_PRICE.toLocaleString()} ₽</span>
                       </>
                     )}
@@ -3103,7 +3037,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
       {/* CART TAB */}
       {normalizedTab === 'cart' && (
-        <div className="gu-col gu-gap-4">
+        <div className="gu-grp">
           <div className="gu-sec" style={{ marginBottom: 0 }}>
             <ShoppingCart className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
             <span>Товарная корзина покупателя</span>
@@ -3135,46 +3069,46 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
             </div>
           ) : (
             <>
-              <div className="gu-list">
+              <div className="gu-shop-grid">
                 {cart.map((entry) => {
                   const cartPreview = getShopPreviewItem(entry.item.itemId);
                   const unitWeight = getItemTotalWeight(cartPreview);
                   const lineWeightStr = formatShopWeight(unitWeight * entry.count);
 
                   return (
-                    <div key={entry.item.id} className="gu-rw">
-                      <div className="gu-shop-icon" style={{ width: 48, height: 48 }}>
-                        <ItemIconCanvas itemId={cartPreview.itemId} item={cartPreview} size={40} />
+                    <div key={entry.item.id} className="gu-shop-item">
+                      <div className="gu-ic" style={{ width: 38, height: 38 }}>
+                        <ItemIconCanvas itemId={cartPreview.itemId} item={cartPreview} size={32} />
                       </div>
-                      <div className="gu-rw-main">
-                        <div className="gu-rw-title">{entry.item.nameRu}</div>
-                        <div className="gu-rw-sub">
+                      <div className="gu-shop-item-main">
+                        <div className="gu-shop-item-name">{entry.item.nameRu}</div>
+                        <div className="gu-shop-item-meta">
                           <span>{cartPreview.nameRu}</span>
                           {lineWeightStr && (
                             <>
-                              <span> · </span>
-                              <span>Масса: {lineWeightStr}</span>
+                              <span className="gu-shop-dot" />
+                              <span>{lineWeightStr}</span>
                             </>
                           )}
-                          <span> · </span>
+                          <span className="gu-shop-dot" />
                           <span className="gu-num" style={{ color: 'var(--gu-accent-bright)' }}>
                             {entry.item.price.toLocaleString()} ₽ / шт.
                           </span>
                         </div>
                       </div>
-                      <div className="gu-rw-right">
+                      <div className="gu-shop-item-right">
                         <div className="gu-shop-qty">
                           <button type="button" onClick={() => handleRemoveOneFromCart(entry.item.id)}>
-                            <Minus className="w-3.5 h-3.5" />
+                            <Minus className="w-3 h-3" />
                           </button>
                           <span>{entry.count}</span>
                           <button type="button" className="is-plus" onClick={() => handleAddToCart(entry.item)}>
-                            <Plus className="w-3.5 h-3.5" />
+                            <Plus className="w-3 h-3" />
                           </button>
                         </div>
                         <div
                           className="gu-shop-price"
-                          style={{ minWidth: 96, textAlign: 'right', fontSize: 19 }}
+                          style={{ minWidth: 78, textAlign: 'right' }}
                         >
                           {(entry.item.price * entry.count).toLocaleString()}
                           <small>₽</small>
@@ -3185,35 +3119,35 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 })}
               </div>
 
-              <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 14 }}>
-                <div className="gu-row gu-gap-4" style={{ flexWrap: 'wrap' }}>
+              <div className="gu-panel gu-pad gu-row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+                <div className="gu-row" style={{ flexWrap: 'wrap', gap: 14 }}>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                       Итого к оплате
                     </div>
-                    <div className="gu-shop-price" style={{ fontSize: 28 }}>
+                    <div className="gu-shop-price" style={{ fontSize: 22 }}>
                       {cartTotal.toLocaleString()}
                       <small>₽</small>
                     </div>
                   </div>
-                  <div style={{ borderLeft: '1px solid var(--gu-line)', paddingLeft: 16 }}>
-                    <div style={{ fontSize: 11, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  <div style={{ borderLeft: '1px solid var(--gu-line)', paddingLeft: 14 }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                       Суммарный вес покупок
                     </div>
-                    <div className="gu-num" style={{ fontSize: 16, fontWeight: 700, color: 'var(--gu-fg-0)', marginTop: 4 }}>
+                    <div className="gu-num" style={{ fontSize: 14, fontWeight: 700, color: 'var(--gu-fg-0)', marginTop: 2 }}>
                       {formatShopWeight(totalCartWeightKg) || '0 г'} ({totalCartItemsCount} ед.)
                     </div>
                   </div>
                 </div>
 
-                <div className="gu-row gu-gap-2">
-                  <button type="button" onClick={() => setActiveTab('catalog')} className="gu-btn gu-btn-s">
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Продолжить выбор</span>
+                <div className="gu-row" style={{ gap: 8 }}>
+                  <button type="button" onClick={() => setActiveTab('catalog')} className="gu-btn gu-btn-s gu-btn-sm">
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>В каталог</span>
                   </button>
-                  <button type="button" onClick={() => setActiveTab('pos')} className="gu-btn gu-btn-ok gu-btn-lg">
-                    <Receipt className="w-4 h-4" />
-                    <span>Перейти на кассу оплаты</span>
+                  <button type="button" onClick={() => setActiveTab('pos')} className="gu-btn gu-btn-p gu-btn-sm">
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>Перейти на кассу</span>
                   </button>
                 </div>
               </div>
@@ -3226,8 +3160,8 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       {normalizedTab === 'pos' && (
         <div className="gu-shop-pos-grid">
           {/* Left Column: Cashier Display + Money Tray + Final Pay Button */}
-          <div className="gu-col gu-gap-3">
-            <div className="gu-panel gu-pad gu-col gu-gap-3">
+          <div className="gu-grp">
+            <div className="gu-panel gu-pad gu-grp">
               <div className="gu-sec" style={{ marginBottom: 0 }}>
                 <Receipt className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
                 <span>Кассовый терминал · Расчет</span>
@@ -3235,7 +3169,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 <button
                   type="button"
                   onClick={() => setActiveTab('cart')}
-                  className="gu-btn gu-btn-g gu-btn-xs"
+                  className="gu-btn gu-btn-ghost gu-btn-xs"
                   style={{ height: 22 }}
                 >
                   <ArrowLeft className="w-3 h-3" /> К корзине
@@ -3264,43 +3198,43 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
 
               {/* Quick Exact Pay & Reset Buttons */}
-              <div className="gu-row gu-gap-2">
+              <div className="gu-row" style={{ gap: 8 }}>
                 <button
                   type="button"
                   disabled={playerCash < cartTotal}
                   onClick={handleExactTrayMoney}
-                  className="gu-btn gu-btn-s"
+                  className="gu-btn gu-btn-s gu-btn-sm"
                   style={{ flex: 1 }}
                 >
                   <Sparkles className="w-3.5 h-3.5" style={{ color: 'var(--gu-accent)' }} />
-                  <span>Отсчитать без сдачи ({cartTotal.toLocaleString()} ₽)</span>
+                  <span>Без сдачи ({cartTotal.toLocaleString()} ₽)</span>
                 </button>
                 {Object.keys(trayDenoms).length > 0 && (
-                  <button type="button" onClick={handleClearTray} className="gu-btn gu-btn-g">
-                    <span>Вернуть в кошелек</span>
+                  <button type="button" onClick={handleClearTray} className="gu-btn gu-btn-ghost gu-btn-sm">
+                    <span>Вернуть</span>
                   </button>
                 )}
               </div>
 
               {/* Cashier Tray */}
-              <div className="gu-panel-inset gu-pad gu-col gu-gap-2">
-                <div className="gu-row-between" style={{ fontSize: 11, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              <div className="gu-panel-inset gu-pad gu-grp" style={{ gap: 6 }}>
+                <div className="gu-row-between" style={{ fontSize: 10.5, color: 'var(--gu-fg-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                   <span>Купюры и монеты в лотке кассира</span>
                   <span className="gu-num">{inTrayMoney.toLocaleString()} ₽</span>
                 </div>
 
                 {Object.keys(trayDenoms).length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'var(--gu-fg-3)', padding: '14px 0', textAlign: 'center' }}>
-                    Лоток пуст. Выберите купюры или монеты справа либо нажмите «Отсчитать без сдачи».
+                  <div style={{ fontSize: 11.5, color: 'var(--gu-fg-3)', padding: '10px 0', textAlign: 'center' }}>
+                    Лоток пуст. Выберите купюры или монеты справа либо нажмите «Без сдачи».
                   </div>
                 ) : (
-                  <div className="gu-row gu-gap-2" style={{ flexWrap: 'wrap', paddingTop: 4 }}>
+                  <div className="gu-row" style={{ flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
                     {Object.entries(trayDenoms).map(([itemId, count]) => {
                       const denom = playerDenoms.find((d) => d.itemId === itemId);
                       if (!denom || count <= 0) return null;
                       return (
                         <div key={itemId} className="gu-shop-tray-chip">
-                          <ItemIconCanvas itemId={itemId} size={20} />
+                          <ItemIconCanvas itemId={itemId} size={18} />
                           <b>{denom.nameRu}</b>
                           <span className="gu-num" style={{ color: 'var(--gu-fg-2)' }}>×{count}</span>
                           <button
@@ -3318,9 +3252,11 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               </div>
 
               {playerCash < cartTotal && (
-                <div className="gu-banner gu-banner-err">
+                <div className="gu-note bad">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>Недостаточно наличных денег для оплаты чека (не хватает {(cartTotal - playerCash).toLocaleString()} ₽).</span>
+                  <div className="gu-note-body">
+                    Недостаточно наличных денег для оплаты чека (не хватает {(cartTotal - playerCash).toLocaleString()} ₽).
+                  </div>
                 </div>
               )}
 
@@ -3328,7 +3264,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 type="button"
                 disabled={inTrayMoney < cartTotal || posSuccess}
                 onClick={handleExecutePOSPayment}
-                className="gu-btn gu-btn-ok gu-btn-lg gu-btn-block"
+                className="gu-btn gu-btn-p gu-btn-block"
               >
                 {posSuccess ? (
                   <>
@@ -3346,12 +3282,12 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
           </div>
 
           {/* Right Column: Player Wallet Banknotes & Coins */}
-          <div className="gu-panel gu-pad gu-col gu-gap-4">
+          <div className="gu-panel gu-pad gu-grp">
             <div>
               <div className="gu-sec">
                 <span>Банкноты в кошельке</span>
                 <span className="gu-sec-line" />
-                <span className="gu-tag gu-tag-amber">Всего: {playerCash.toLocaleString()} ₽</span>
+                <span className="gu-tag warn">Всего: {playerCash.toLocaleString()} ₽</span>
               </div>
 
               <div className="gu-shop-denom-grid">
@@ -3371,7 +3307,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         className="gu-shop-denom"
                       >
                         <div className="gu-shop-denom-top">
-                          <ItemIconCanvas itemId={denom.itemId} size={28} />
+                          <ItemIconCanvas itemId={denom.itemId} size={24} />
                           <span className="gu-shop-denom-val">{denom.nameRu}</span>
                         </div>
                         <div className="gu-shop-denom-sub">
@@ -3407,7 +3343,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                         className="gu-shop-denom"
                       >
                         <div className="gu-shop-denom-top">
-                          <ItemIconCanvas itemId={denom.itemId} size={22} />
+                          <ItemIconCanvas itemId={denom.itemId} size={20} />
                           <span className="gu-shop-denom-val is-coin">{denom.nameRu}</span>
                         </div>
                         <div className="gu-shop-denom-sub">
@@ -3425,4 +3361,5 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     </ModalShell>
   );
 };
+
 

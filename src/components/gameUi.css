@@ -1028,124 +1028,166 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
 
 /* ==========================================================================
    Shop, Auto Service & POS Cashier Terminal (gu-shop-*)
+   Compact, high-density, responsive layout matching Main Menu & Inventory
    ========================================================================== */
-.gu-shop-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 336px;
-  gap: 16px;
-  align-items: start;
-}
 
-.gu-shop-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.gu-shop-toolbar-top {
+.gu-shop-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
+}
+
+.gu-shop-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 220px;
+  flex: 0 0 220px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: rgba(22, 22, 24, 0.78);
+  border: 1px solid var(--gu-line);
+  transition: border-color 0.15s;
+}
+.gu-shop-search:focus-within {
+  border-color: rgba(201, 146, 43, 0.65);
+}
+.gu-shop-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: none;
+  border: 0;
+  outline: 0;
+  font-size: 13px;
+  color: var(--gu-ink);
+}
+.gu-shop-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--gu-mut);
+}
+.gu-shop-search-clear:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gu-shop-depts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 0;
+}
+.gu-shop-depts::-webkit-scrollbar {
+  display: none;
+}
+
+.gu-shop-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 12px;
+  align-items: start;
 }
 
 .gu-shop-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 7px;
 }
 
-.gu-shop-card {
+/* Compact horizontal item card — fits 10–14 items per screen without bloat */
+.gu-shop-item {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(20, 20, 22, 0.86);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--gu-line);
   border-left: 3px solid transparent;
   cursor: pointer;
-  transition: background 0.16s, border-color 0.16s, transform 0.16s;
+  transition: background 0.14s, border-color 0.14s;
+  min-width: 0;
 }
-.gu-shop-card:hover {
-  background: rgba(28, 28, 31, 0.94);
-  border-color: rgba(201, 146, 43, 0.45);
+.gu-shop-item:hover {
+  background: rgba(255, 255, 255, 0.065);
+  border-color: var(--gu-line-2);
 }
-.gu-shop-card.on {
-  background: rgba(201, 146, 43, 0.11);
-  border-color: rgba(201, 146, 43, 0.55);
+.gu-shop-item.on {
+  background: rgba(201, 146, 43, 0.13);
+  border-color: rgba(201, 146, 43, 0.5);
   border-left-color: var(--gu-amber);
 }
-.gu-shop-card.in-cart {
+.gu-shop-item.in-cart {
   border-left-color: var(--gu-amber-hi);
 }
 
-.gu-shop-card-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  min-width: 0;
-}
-
-.gu-shop-card-body {
+.gu-shop-item-main {
   flex: 1;
   min-width: 0;
 }
 
-.gu-shop-card-title {
-  font-size: 15px;
+.gu-shop-item-name {
+  font-size: 13.5px;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.2;
   color: #fff;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.gu-shop-card-desc {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--gu-mut);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.gu-shop-meta-line {
+.gu-shop-item-meta {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--gu-ink-dim);
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.2;
+  color: var(--gu-mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.gu-shop-meta-sep {
-  color: var(--gu-mut-2);
+.gu-shop-item-meta b {
+  color: var(--gu-amber-soft);
+  font-weight: 600;
 }
 
-.gu-shop-card-foot {
+.gu-shop-item-right {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 8px;
+  flex: none;
 }
 
 .gu-shop-price {
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1;
   color: var(--gu-amber-hi);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.gu-shop-price small {
+  font-size: 0.78em;
+  font-weight: 600;
+  color: var(--gu-mut);
+  margin-left: 2px;
 }
 
 .gu-shop-qty {
@@ -1153,14 +1195,14 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border-radius: 8px;
-  background: rgba(13, 14, 16, 0.9);
+  border-radius: 7px;
+  background: rgba(13, 14, 16, 0.92);
   border: 1px solid var(--gu-line-2);
 }
-.gu-shop-qty-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+.gu-shop-qty > button {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1168,171 +1210,343 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   background: rgba(255, 255, 255, 0.06);
   transition: background 0.14s, color 0.14s;
 }
-.gu-shop-qty-btn:hover {
+.gu-shop-qty > button:hover {
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
-.gu-shop-qty-btn.add {
+.gu-shop-qty > button.is-plus {
   background: var(--gu-amber);
   color: #1a1409;
 }
-.gu-shop-qty-btn.add:hover {
+.gu-shop-qty > button.is-plus:hover {
   filter: brightness(1.12);
 }
-.gu-shop-qty-val {
-  min-width: 28px;
+.gu-shop-qty > span {
+  min-width: 22px;
   text-align: center;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #fff;
   font-variant-numeric: tabular-nums;
 }
 
+.gu-shop-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--gu-line-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gu-ink);
+  white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.gu-shop-add-btn:hover {
+  background: var(--gu-amber);
+  border-color: var(--gu-amber);
+  color: #1a1409;
+}
+
 .gu-shop-side {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   position: sticky;
   top: 0;
 }
 
+.gu-shop-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a352b transparent;
+  padding-right: 2px;
+}
+.gu-shop-mini-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--gu-ink-dim);
+}
+.gu-shop-mini-item-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gu-shop-mini-item-qty {
+  color: var(--gu-mut);
+  font-variant-numeric: tabular-nums;
+}
+.gu-shop-mini-item-sum {
+  font-weight: 600;
+  color: var(--gu-amber-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* POS Cashier two-column layout */
 .gu-shop-pos-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: 16px;
+  gap: 12px;
   align-items: start;
 }
 
 .gu-shop-display {
-  padding: 14px 16px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
   background: #0d0e10;
   border: 1px solid var(--gu-line-2);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .gu-shop-display-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  font-size: 14px;
+  gap: 10px;
+  font-size: 13px;
   color: var(--gu-mut);
 }
-.gu-shop-display-row.total {
-  padding-top: 8px;
+.gu-shop-display-row.is-total {
+  padding-top: 6px;
   border-top: 1px solid var(--gu-line);
   color: #fff;
   font-weight: 600;
 }
+.gu-shop-display-v {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gu-ink);
+  font-variant-numeric: tabular-nums;
+}
+.gu-shop-display-v.is-amber { color: var(--gu-amber-hi); }
+.gu-shop-display-v.is-ok { color: var(--gu-good); }
+
+.gu-shop-tray-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--gu-line-2);
+  font-size: 12px;
+}
+.gu-shop-tray-chip > button {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--gu-mut);
+}
+.gu-shop-tray-chip > button:hover {
+  background: rgba(217, 116, 90, 0.25);
+  color: #efa690;
+}
 
 .gu-shop-denom-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: 6px;
 }
 .gu-shop-denom {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 9px;
   background: #0d0e10;
   border: 1px solid var(--gu-line);
-  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  transition: border-color 0.14s, background 0.14s;
 }
 .gu-shop-denom:not(:disabled):hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(201, 146, 43, 0.55);
-  transform: translateY(-1px);
 }
 .gu-shop-denom-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
-.gu-shop-denom-foot {
+.gu-shop-denom-val {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gu-good);
+}
+.gu-shop-denom-val.is-coin {
+  color: var(--gu-amber-hi);
+}
+.gu-shop-denom-sub {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 6px;
+  padding-top: 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--gu-mut);
   font-variant-numeric: tabular-nums;
 }
+.gu-shop-denom-sub b {
+  color: var(--gu-ink);
+}
 
 .gu-shop-terminal {
-  height: 240px;
+  height: 180px;
   overflow-y: auto;
-  padding: 14px 16px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
   background: #0d0e10;
   border: 1px solid var(--gu-line);
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 11.5px;
+  line-height: 1.5;
   color: var(--gu-ink-dim);
   scrollbar-width: thin;
   scrollbar-color: #3a352b transparent;
 }
+.gu-shop-terminal .is-step { color: #7dd3fc; font-weight: 700; }
+.gu-shop-terminal .is-ok { color: var(--gu-good); }
 
 .gu-shop-swatch-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  gap: 6px;
 }
-.gu-shop-swatch-btn {
+.gu-shop-swatch {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 40px;
-  padding: 0 12px;
-  border-radius: 9px;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--gu-line);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--gu-ink);
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.14s, border-color 0.14s;
 }
-.gu-shop-swatch-btn:hover {
+.gu-shop-swatch:hover {
   background: rgba(255, 255, 255, 0.07);
 }
-.gu-shop-swatch-btn.on {
+.gu-shop-swatch.is-on {
   background: rgba(201, 146, 43, 0.16);
   border-color: var(--gu-amber);
   color: #fff;
 }
 .gu-shop-swatch-dot {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   flex: none;
 }
+.gu-shop-swatch-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-@media (max-width: 960px) {
+/* Responsive rules for medium, narrow, and short landscape screens */
+@media (max-width: 920px) {
   .gu-shop-layout {
     grid-template-columns: minmax(0, 1fr);
   }
   .gu-shop-side {
-    position: static;
+    display: none;
   }
   .gu-shop-pos-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 680px) {
+  .gu-shop-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .gu-shop-search {
+    width: 100%;
+    flex: 1 1 100%;
+    height: 32px;
+  }
   .gu-shop-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
   }
-  .gu-shop-swatch-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .gu-shop-item {
+    padding: 6px 8px;
+    gap: 8px;
   }
 }
+
+@media (max-height: 620px) {
+  .gu-shop-bar {
+    margin-bottom: 6px;
+    gap: 6px;
+  }
+  .gu-shop-search {
+    height: 28px;
+    width: 180px;
+    flex: 0 0 180px;
+  }
+  .gu-shop-side {
+    display: none;
+  }
+  .gu-shop-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gu-shop-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .gu-shop-item {
+    padding: 5px 8px;
+    gap: 8px;
+    border-radius: 8px;
+  }
+  .gu-shop-item-name {
+    font-size: 12.5px;
+  }
+  .gu-shop-item-meta {
+    font-size: 11px;
+    margin-top: 1px;
+  }
+  .gu-shop-price {
+    font-size: 15px;
+  }
+  .gu-shop-add-btn {
+    height: 24px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+  .gu-shop-qty > button {
+    width: 20px;
+    height: 20px;
+  }
+  .gu-shop-qty > span {
+    min-width: 18px;
+    font-size: 11.5px;
+  }
+}
+
 
