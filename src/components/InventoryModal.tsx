@@ -31,7 +31,15 @@ import {
   getCandyPackagingShapeNameRu
 } from '../items';
 import { getItemThermalDisplayInfo } from '../itemThermalSystem';
-import { isFluidContainerClosed, openFluidContainerIfNeeded } from '../liquidSystem';
+import { isFluidContainerClosed, openFluidContainerIfNeeded, LIQUID_REGISTRY, LiquidId } from '../liquidSystem';
+import {
+  InteractionSlotGrid4,
+  InteractionCategory,
+  INTERACTION_CRAFT_RECIPES,
+  NAMED_MIXTURE_RULES,
+  evaluateInteractionGrid,
+  getEffectiveFluidWrapper,
+} from '../interactionCrafting';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ModalShell, Tabs } from './gameUi';
 import { sound } from '../audio';
@@ -61,6 +69,14 @@ import {
   Weight,
   ArrowDownToLine,
   ArrowUpFromLine,
+  ArrowDown,
+  ArrowRight,
+  ArrowUpDown,
+  FlaskConical,
+  Wrench,
+  BookOpen,
+  RotateCcw,
+  Check,
   Layers,
   ChevronLeft,
   Smartphone,
@@ -97,7 +113,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<'inventory' | 'surroundings' | 'clothing'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'interaction' | 'surroundings' | 'clothing'>('inventory');
+  const [recipeCategory, setRecipeCategory] = useState<InteractionCategory>('all');
   const [openContainer, setOpenContainer] = useState<InventoryItem | null>(null);
   const [, setSelectedContainerItemIdx] = useState<number>(0);
   const [, forceRender] = useState(0);
@@ -457,6 +474,264 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     </div>
   );
 
+  // ==================== 10-SLOT INTERACTION WORKBENCH STATE & HELPERS ====================
+  // Persisted on player instance so items placed in the 4 Input or 4 Output slots are never lost across modal closes
+  const pAny = player as any;
+  if (!pAny._interactionInputs) {
+    pAny._interactionInputs = [null, null, null, null] as InteractionSlotGrid4;
+  }
+  if (!pAny._interactionOutputs) {
+    pAny._interactionOutputs = [null, null, null, null] as InteractionSlotGrid4;
+  }
+  const interactionInputs: InteractionSlotGrid4 = pAny._interactionInputs;
+  const interactionOutputs: InteractionSlotGrid4 = pAny._interactionOutputs;
+
+  const hasCommittedOutputs = interactionOutputs.some(it => it !== null);
+  const evalResult = evaluateInteractionGrid(interactionInputs);
+
+  const returnWorkbenchItemToPlayer = (item: InventoryItem, preferHand?: 'left' | 'right'): boolean => {
+    if (preferHand === 'left' && !player.leftHandItem) {
+      const res = putItemInHand(player, 'left', item, world);
+      if (res.success) return true;
+    }
+    if (preferHand === 'right' && !player.rightHandItem) {
+      const res = putItemInHand(player, 'right', item, world);
+      if (res.success) return true;
+    }
+    if (!player.leftHandItem) {
+      const res = putItemInHand(player, 'left', item, world);
+      if (res.success) return true;
+    }
+    if (!player.rightHandItem) {
+      const res = putItemInHand(player, 'right', item, world);
+      if (res.success) return true;
+    }
+    const addedToPockets = addItemToPlayer(player, item, { preferPockets: true, skipHands: false });
+    if (addedToPockets) return true;
+    // Fallback: drop at feet so item is never lost
+    if (world) {
+      if (!world.groundItems) world.groundItems = [];
+      world.groundItems.push({
+        id: `ground_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        x: player.x + (Math.random() * 14 - 7),
+        y: player.y + (Math.random() * 14 - 7),
+        item,
+        spawnTime: Date.now()
+      });
+      addPlayerNotification(player, `Руки и карманы заняты — положено на землю: ${item.nameRu}`, 'warning');
+      return true;
+    }
+    return false;
+  };
+
+  const handlePlaceHandIntoInput = (hand: 'left' | 'right', preferredRow: 'top' | 'bottom' | 'any' = 'any', exactSlot?: number) => {
+    const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+    if (!handItem) return;
+
+    let targetSlot = exactSlot;
+    if (targetSlot === undefined) {
+      const candidateIndices =
+        preferredRow === 'top' ? [0, 1, 2, 3] : preferredRow === 'bottom' ? [2, 3, 0, 1] : [0, 2, 1, 3];
+      targetSlot = candidateIndices.find(idx => interactionInputs[idx] === null);
+    }
+    if (targetSlot === undefined || targetSlot < 0 || targetSlot > 3) {
+      addPlayerNotification(player, 'Все 4 слота ввода уже заняты!', 'warning');
+      return;
+    }
+
+    const taken = takeItemFromHand(player, hand);
+    if (!taken) return;
+
+    const displaced = interactionInputs[targetSlot];
+    interactionInputs[targetSlot] = taken;
+    if (displaced) {
+      putItemInHand(player, hand, displaced, world);
+    }
+    sound.playPickup();
+    forceRender(n => n + 1);
+  };
+
+  const handlePlaceBothHandsIntoInput = () => {
+    const leftItem = player.leftHandItem;
+    const rightItem = player.rightHandItem;
+    if (!leftItem && !rightItem) {
+      addPlayerNotification(player, 'Обе руки пусты!', 'warning');
+      return;
+    }
+    if (leftItem && !rightItem) {
+      handlePlaceHandIntoInput('left', 'top');
+      return;
+    }
+    if (!leftItem && rightItem) {
+      handlePlaceHandIntoInput('right', 'bottom');
+      return;
+    }
+
+    // Both hands have items! Smartly decide which goes into Top (Source [0]) and Bottom (Receiver [2])
+    // If right hand has a fuller container and left hand is empty/receiver, put right on top and left on bottom
+    const leftFluid = getEffectiveFluidWrapper(leftItem!);
+    const rightFluid = getEffectiveFluidWrapper(rightItem!);
+    let topHand: 'left' | 'right' = 'left';
+    let bottomHand: 'left' | 'right' = 'right';
+
+    if (leftFluid && rightFluid) {
+      if (leftFluid.state.currentMl === 0 && rightFluid.state.currentMl > 0) {
+        topHand = 'right';
+        bottomHand = 'left';
+      }
+    } else if (leftItem!.isContainer && !rightItem!.isContainer && (!leftItem!.contents || leftItem!.contents.length === 0)) {
+      topHand = 'right';
+      bottomHand = 'left';
+    }
+
+    const col = interactionInputs[0] === null && interactionInputs[2] === null ? 0 : (interactionInputs[1] === null && interactionInputs[3] === null ? 1 : 0);
+    const topIdx = col;
+    const bottomIdx = col + 2;
+
+    if (interactionInputs[topIdx]) {
+      returnWorkbenchItemToPlayer(interactionInputs[topIdx]!);
+      interactionInputs[topIdx] = null;
+    }
+    if (interactionInputs[bottomIdx]) {
+      returnWorkbenchItemToPlayer(interactionInputs[bottomIdx]!);
+      interactionInputs[bottomIdx] = null;
+    }
+
+    const topTaken = takeItemFromHand(player, topHand);
+    const bottomTaken = takeItemFromHand(player, bottomHand);
+    if (topTaken) interactionInputs[topIdx] = topTaken;
+    if (bottomTaken) interactionInputs[bottomIdx] = bottomTaken;
+
+    sound.playPickup();
+    addPlayerNotification(player, 'Предметы из обеих рук уложены в сетку ввода (Верх → Низ)', 'pickup');
+    forceRender(n => n + 1);
+  };
+
+  const handlePlacePocketIntoInput = (invIdx: number, preferredRow: 'top' | 'bottom' = 'top') => {
+    const item = player.inventory?.[invIdx];
+    if (!item) return;
+
+    const candidateIndices = preferredRow === 'top' ? [0, 1, 2, 3] : [2, 3, 0, 1];
+    const targetSlot = candidateIndices.find(idx => interactionInputs[idx] === null);
+    if (targetSlot === undefined) {
+      addPlayerNotification(player, 'Все 4 слота ввода заняты! Сначала освободите слот.', 'warning');
+      return;
+    }
+
+    player.inventory[invIdx] = null as any;
+    interactionInputs[targetSlot] = item;
+    sound.playPickup();
+    forceRender(n => n + 1);
+  };
+
+  const handleRemoveInputSlot = (slotIdx: number, target?: 'left' | 'right' | 'pockets') => {
+    const item = interactionInputs[slotIdx];
+    if (!item) return;
+    interactionInputs[slotIdx] = null;
+    if (target === 'pockets') {
+      const added = addItemToPlayer(player, item, { preferPockets: true, skipHands: true });
+      if (!added) returnWorkbenchItemToPlayer(item);
+    } else {
+      returnWorkbenchItemToPlayer(item, target);
+    }
+    sound.playPickup();
+    forceRender(n => n + 1);
+  };
+
+  const handleSwapTopBottomInputs = () => {
+    const t0 = interactionInputs[0];
+    const t1 = interactionInputs[1];
+    interactionInputs[0] = interactionInputs[2];
+    interactionInputs[1] = interactionInputs[3];
+    interactionInputs[2] = t0;
+    interactionInputs[3] = t1;
+    sound.playButtonPress();
+    forceRender(n => n + 1);
+  };
+
+  const handleExecuteInteraction = () => {
+    if (!evalResult.isValid) return;
+    if (hasCommittedOutputs) {
+      // Automatically return previous unclaimed outputs first so nothing is lost
+      for (let i = 0; i < 4; i++) {
+        if (interactionOutputs[i]) {
+          returnWorkbenchItemToPlayer(interactionOutputs[i]!);
+          interactionOutputs[i] = null;
+        }
+      }
+    }
+
+    for (let i = 0; i < 4; i++) {
+      interactionInputs[i] = null;
+      interactionOutputs[i] = evalResult.previewOutputs[i]
+        ? JSON.parse(JSON.stringify(evalResult.previewOutputs[i]))
+        : null;
+    }
+
+    if (evalResult.kind === 'pour_liquid' || evalResult.kind === 'mix_liquid') {
+      sound.playWaterSpray();
+    } else {
+      sound.playUseItem();
+    }
+    addPlayerNotification(player, `${evalResult.title}: ${evalResult.subtitle}`, 'heal');
+    forceRender(n => n + 1);
+  };
+
+  const handleClaimOutputSlot = (slotIdx: number, target?: 'left' | 'right' | 'pockets') => {
+    const item = interactionOutputs[slotIdx];
+    if (!item) return;
+    interactionOutputs[slotIdx] = null;
+    if (target === 'pockets') {
+      const added = addItemToPlayer(player, item, { preferPockets: true, skipHands: true });
+      if (!added) returnWorkbenchItemToPlayer(item);
+    } else {
+      returnWorkbenchItemToPlayer(item, target);
+    }
+    sound.playPickup();
+    forceRender(n => n + 1);
+  };
+
+  const handleClaimAllOutputs = () => {
+    let count = 0;
+    for (let i = 0; i < 4; i++) {
+      const item = interactionOutputs[i];
+      if (item) {
+        interactionOutputs[i] = null;
+        returnWorkbenchItemToPlayer(item);
+        count++;
+      }
+    }
+    if (count > 0) {
+      sound.playPickup();
+      addPlayerNotification(player, `Забрано из слотов вывода: ${count} предм.`, 'pickup');
+      forceRender(n => n + 1);
+    }
+  };
+
+  const handleReturnAllWorkbenchItems = () => {
+    let count = 0;
+    for (let i = 0; i < 4; i++) {
+      if (interactionInputs[i]) {
+        returnWorkbenchItemToPlayer(interactionInputs[i]!);
+        interactionInputs[i] = null;
+        count++;
+      }
+      if (interactionOutputs[i]) {
+        returnWorkbenchItemToPlayer(interactionOutputs[i]!);
+        interactionOutputs[i] = null;
+        count++;
+      }
+    }
+    if (count > 0) {
+      sound.playPickup();
+      addPlayerNotification(player, `Все предметы возвращены в руки и карманы (${count} шт.)`, 'info');
+      forceRender(n => n + 1);
+    }
+  };
+
+  const workbenchActiveCount =
+    interactionInputs.filter(Boolean).length + interactionOutputs.filter(Boolean).length;
+
   return (
     <ModalShell
       id="inventory-modal"
@@ -500,6 +775,12 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 label: 'Карманы',
                 icon: <Package width={16} height={16} />,
                 badge: inventory.filter(Boolean).length
+              },
+              {
+                id: 'interaction',
+                label: 'Взаимодействие',
+                icon: <Layers width={16} height={16} />,
+                badge: workbenchActiveCount > 0 ? workbenchActiveCount : undefined
               },
               {
                 id: 'surroundings',
@@ -1669,6 +1950,1044 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             )}
           </div>
         )}
+
+        {/* ==================== TAB 4: INTERACTION (10 SLOTS: 2 HANDS + 4 INPUT + 4 OUTPUT) ==================== */}
+        {activeTab === 'interaction' && (() => {
+          const getFluidBadgeInfo = (item: InventoryItem | null) => {
+            if (!item) return null;
+            const wrap = getEffectiveFluidWrapper(item);
+            if (!wrap) return null;
+            const st = wrap.state;
+            const liq = st.liquidId ? LIQUID_REGISTRY[st.liquidId as LiquidId] : undefined;
+            const unit = liq?.isGranular || wrap.isGranularContainer ? 'г' : 'мл';
+            const pct = st.maxMl > 0 ? Math.max(0, Math.min(100, Math.round((st.currentMl / st.maxMl) * 100))) : 0;
+            const subName =
+              st.currentMl <= 0 || !st.liquidId
+                ? 'Пусто'
+                : st.attributes?.varietyRu || liq?.nameRu || st.liquidId;
+            const color = st.attributes?.customColor || liq?.color || '#38bdf8';
+            return {
+              currentMl: Math.round(st.currentMl),
+              maxMl: st.maxMl,
+              freeMl: Math.max(0, Math.round(st.maxMl - st.currentMl)),
+              unit,
+              pct,
+              subName,
+              color,
+              isOpened: wrap.isOpened,
+            };
+          };
+
+          const handleDropOnInputSlot = (targetSlotIdx: number, rawData: string) => {
+            if (!rawData) return;
+            if (rawData === 'hand:left') {
+              handlePlaceHandIntoInput('left', 'any', targetSlotIdx);
+              return;
+            }
+            if (rawData === 'hand:right') {
+              handlePlaceHandIntoInput('right', 'any', targetSlotIdx);
+              return;
+            }
+            if (rawData.startsWith('input:')) {
+              const fromSlot = parseInt(rawData.replace('input:', ''), 10);
+              if (!isNaN(fromSlot) && fromSlot >= 0 && fromSlot < 4 && fromSlot !== targetSlotIdx) {
+                const temp = interactionInputs[targetSlotIdx];
+                interactionInputs[targetSlotIdx] = interactionInputs[fromSlot];
+                interactionInputs[fromSlot] = temp;
+                sound.playPickup();
+                forceRender(n => n + 1);
+              }
+              return;
+            }
+            const invIdx = parseInt(rawData, 10);
+            if (!isNaN(invIdx) && player.inventory && player.inventory[invIdx]) {
+              const item = player.inventory[invIdx];
+              const displaced = interactionInputs[targetSlotIdx];
+              interactionInputs[targetSlotIdx] = item;
+              player.inventory[invIdx] = (displaced || null) as any;
+              sound.playPickup();
+              forceRender(n => n + 1);
+            }
+          };
+
+          const renderWorkbenchInputSlot = (slotIdx: number, slotLabel: string, rowRoleLabel: string) => {
+            const item = interactionInputs[slotIdx];
+            const fluidInfo = getFluidBadgeInfo(item);
+            const isTopRow = slotIdx < 2;
+
+            return (
+              <div
+                key={`wb-in-${slotIdx}`}
+                id={`interaction-input-slot-${slotIdx}`}
+                draggable={Boolean(item)}
+                onDragStart={e => {
+                  if (item) e.dataTransfer.setData('text/plain', `input:${slotIdx}`);
+                }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDropOnInputSlot(slotIdx, e.dataTransfer.getData('text/plain'));
+                }}
+                className="gu-card-sm"
+                style={{
+                  padding: '8px 10px',
+                  minHeight: 96,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  border: item
+                    ? isTopRow
+                      ? '1px solid rgba(201, 146, 43, 0.55)'
+                      : '1px solid rgba(56, 189, 248, 0.48)'
+                    : '1px dashed rgba(255, 255, 255, 0.14)',
+                  background: item
+                    ? isTopRow
+                      ? 'rgba(201, 146, 43, 0.07)'
+                      : 'rgba(56, 189, 248, 0.06)'
+                    : 'rgba(12, 13, 16, 0.55)',
+                }}
+              >
+                <div className="gu-row2" style={{ justifyContent: 'space-between', fontSize: 10 }}>
+                  <span className="gu-mono" style={{ color: isTopRow ? 'var(--gu-amber-hi)' : '#7dd3fc', fontWeight: 700 }}>
+                    {slotLabel}
+                  </span>
+                  <span className="gu-mut">{rowRoleLabel}</span>
+                </div>
+
+                {item ? (
+                  <>
+                    <div className="gu-row2" style={{ gap: 8, marginTop: 4 }}>
+                      <div className="gu-ic" style={{ width: 42, height: 42, flexShrink: 0 }}>
+                        <ItemIconCanvas itemId={item.itemId} item={item} size={38} />
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: 12,
+                            color: '#fff',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={item.nameRu}
+                        >
+                          {item.nameRu}
+                        </div>
+                        {fluidInfo ? (
+                          <div className="gu-mono" style={{ fontSize: 11, color: '#d4d0c8', marginTop: 1 }}>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                width: 7,
+                                height: 7,
+                                borderRadius: 99,
+                                background: fluidInfo.color,
+                                marginRight: 5,
+                              }}
+                            />
+                            {fluidInfo.subName} · {fluidInfo.currentMl}/{fluidInfo.maxMl} {fluidInfo.unit}
+                          </div>
+                        ) : (
+                          <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                            {item.count > 1 ? `${item.count} шт. · ` : ''}
+                            {formatWeightRu(getItemTotalWeight(item))} · {getItemTotalVolume(item)} л
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {fluidInfo && (
+                      <div
+                        style={{
+                          height: 4,
+                          background: 'rgba(255,255,255,0.09)',
+                          borderRadius: 2,
+                          overflow: 'hidden',
+                          marginTop: 5,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${fluidInfo.pct}%`,
+                            height: '100%',
+                            background: fluidInfo.color,
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <div className="gu-row2" style={{ justifyContent: 'space-between', marginTop: 6, gap: 4 }}>
+                      <button
+                        type="button"
+                        className="gu-btn gu-btn-xs"
+                        title="Вернуть в руку"
+                        onClick={() => handleRemoveInputSlot(slotIdx)}
+                      >
+                        В руку
+                      </button>
+                      <button
+                        type="button"
+                        className="gu-btn gu-btn-xs"
+                        title="Убрать в карманы"
+                        onClick={() => handleRemoveInputSlot(slotIdx, 'pockets')}
+                      >
+                        В карман
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div
+                    className="gu-mut"
+                    style={{
+                      fontSize: 11,
+                      textAlign: 'center',
+                      padding: '14px 4px',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {isTopRow
+                      ? 'Пусто (Положите верхнюю тару / инструмент)'
+                      : 'Пусто (Положите нижнюю приёмную тару)'}
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          const renderWorkbenchOutputSlot = (slotIdx: number, slotLabel: string) => {
+            const committedItem = interactionOutputs[slotIdx];
+            const previewItem = !hasCommittedOutputs && evalResult.isValid ? evalResult.previewOutputs[slotIdx] : null;
+            const displayItem = committedItem || previewItem;
+            const isPreviewOnly = !committedItem && Boolean(previewItem);
+            const fluidInfo = getFluidBadgeInfo(displayItem);
+            const isTopRow = slotIdx < 2;
+
+            return (
+              <div
+                key={`wb-out-${slotIdx}`}
+                id={`interaction-output-slot-${slotIdx}`}
+                className="gu-card-sm"
+                style={{
+                  padding: '8px 10px',
+                  minHeight: 96,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  border: committedItem
+                    ? '1px solid rgba(154, 201, 133, 0.65)'
+                    : isPreviewOnly
+                    ? '1px dashed rgba(224, 171, 69, 0.55)'
+                    : '1px dashed rgba(255, 255, 255, 0.12)',
+                  background: committedItem
+                    ? 'rgba(154, 201, 133, 0.09)'
+                    : isPreviewOnly
+                    ? 'rgba(201, 146, 43, 0.06)'
+                    : 'rgba(12, 13, 16, 0.45)',
+                  opacity: isPreviewOnly ? 0.92 : 1,
+                }}
+              >
+                <div className="gu-row2" style={{ justifyContent: 'space-between', fontSize: 10 }}>
+                  <span
+                    className="gu-mono"
+                    style={{
+                      color: committedItem ? '#9ac985' : isPreviewOnly ? 'var(--gu-amber-hi)' : '#8f8b81',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {slotLabel}
+                  </span>
+                  <span className="gu-mut">
+                    {committedItem
+                      ? 'Готово'
+                      : isPreviewOnly
+                      ? isTopRow
+                        ? 'Прогноз (Верх)'
+                        : 'Прогноз (Низ)'
+                      : 'Вывод'}
+                  </span>
+                </div>
+
+                {displayItem ? (
+                  <>
+                    <div className="gu-row2" style={{ gap: 8, marginTop: 4 }}>
+                      <div className="gu-ic" style={{ width: 42, height: 42, flexShrink: 0 }}>
+                        <ItemIconCanvas itemId={displayItem.itemId} item={displayItem} size={38} />
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: 12,
+                            color: '#fff',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={displayItem.nameRu}
+                        >
+                          {displayItem.nameRu}
+                        </div>
+                        {fluidInfo ? (
+                          <div className="gu-mono" style={{ fontSize: 11, color: '#e9e6df', marginTop: 1 }}>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                width: 7,
+                                height: 7,
+                                borderRadius: 99,
+                                background: fluidInfo.color,
+                                marginRight: 5,
+                              }}
+                            />
+                            {fluidInfo.subName} · {fluidInfo.currentMl}/{fluidInfo.maxMl} {fluidInfo.unit}
+                          </div>
+                        ) : (
+                          <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                            {displayItem.count > 1 ? `${displayItem.count} шт. · ` : ''}
+                            {formatWeightRu(getItemTotalWeight(displayItem))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {fluidInfo && (
+                      <div
+                        style={{
+                          height: 4,
+                          background: 'rgba(255,255,255,0.09)',
+                          borderRadius: 2,
+                          overflow: 'hidden',
+                          marginTop: 5,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${fluidInfo.pct}%`,
+                            height: '100%',
+                            background: fluidInfo.color,
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {committedItem ? (
+                      <div className="gu-row2" style={{ justifyContent: 'space-between', marginTop: 6, gap: 4 }}>
+                        <button
+                          type="button"
+                          className="gu-btn gu-btn-p gu-btn-xs"
+                          onClick={() => handleClaimOutputSlot(slotIdx, 'left')}
+                          title="Взять в левую руку"
+                        >
+                          Лев. рука
+                        </button>
+                        <button
+                          type="button"
+                          className="gu-btn gu-btn-p gu-btn-xs"
+                          onClick={() => handleClaimOutputSlot(slotIdx, 'right')}
+                          title="Взять в правую руку"
+                        >
+                          Прав. рука
+                        </button>
+                        <button
+                          type="button"
+                          className="gu-btn gu-btn-xs"
+                          onClick={() => handleClaimOutputSlot(slotIdx, 'pockets')}
+                          title="Убрать в карман"
+                        >
+                          Карман
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="gu-mut" style={{ fontSize: 10, marginTop: 5 }}>
+                        Нажмите «{evalResult.actionLabel}» для получения
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div
+                    className="gu-mut"
+                    style={{
+                      fontSize: 11,
+                      textAlign: 'center',
+                      padding: '18px 4px',
+                    }}
+                  >
+                    Слот результата пуст
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          const pocketItemsWithIdx = (player.inventory || [])
+            .map((item, idx) => ({ item, idx }))
+            .filter((entry): entry is { item: InventoryItem; idx: number } => Boolean(entry.item));
+
+          const filteredRecipes = INTERACTION_CRAFT_RECIPES.filter(
+            r => recipeCategory === 'all' || r.category === recipeCategory
+          );
+
+          const handleAutoFillRecipe = (recipeId: string) => {
+            const recipe = INTERACTION_CRAFT_RECIPES.find(r => r.id === recipeId);
+            if (!recipe) return;
+
+            // First return any existing input items back to player so we start clean
+            for (let i = 0; i < 4; i++) {
+              if (interactionInputs[i]) {
+                returnWorkbenchItemToPlayer(interactionInputs[i]!);
+                interactionInputs[i] = null;
+              }
+            }
+
+            // Collect candidate sources from hands and pockets
+            const findAndExtractCandidate = (ing: (typeof recipe.ingredients)[number]): InventoryItem | null => {
+              const matchesItem = (it: InventoryItem | null | undefined): boolean => {
+                if (!it) return false;
+                if (ing.liquidIds && ing.liquidIds.length > 0) {
+                  const wrap = getEffectiveFluidWrapper(it);
+                  if (!wrap || !wrap.state.liquidId) return false;
+                  if (!ing.liquidIds.includes(wrap.state.liquidId)) return false;
+                  if (ing.minMl && wrap.state.currentMl < ing.minMl) return false;
+                  return true;
+                }
+                if (ing.itemIds && ing.itemIds.length > 0) {
+                  return (
+                    ing.itemIds.includes(it.itemId) ||
+                    Boolean(it.originalCatalogId && ing.itemIds.includes(it.originalCatalogId))
+                  );
+                }
+                return false;
+              };
+
+              if (matchesItem(player.leftHandItem)) {
+                return takeItemFromHand(player, 'left');
+              }
+              if (matchesItem(player.rightHandItem)) {
+                return takeItemFromHand(player, 'right');
+              }
+              if (player.inventory) {
+                for (let idx = 0; idx < player.inventory.length; idx++) {
+                  if (matchesItem(player.inventory[idx])) {
+                    const found = player.inventory[idx];
+                    player.inventory[idx] = null as any;
+                    return found;
+                  }
+                }
+              }
+              return null;
+            };
+
+            let placedCount = 0;
+            recipe.ingredients.forEach((ing, iIdx) => {
+              const extracted = findAndExtractCandidate(ing);
+              if (extracted) {
+                const preferredSlots =
+                  ing.rowHint === 'top'
+                    ? [0, 1, 2, 3]
+                    : ing.rowHint === 'bottom'
+                    ? [2, 3, 0, 1]
+                    : iIdx === 0
+                    ? [0, 1, 2, 3]
+                    : [2, 1, 3, 0];
+                const slot = preferredSlots.find(s => interactionInputs[s] === null);
+                if (slot !== undefined) {
+                  interactionInputs[slot] = extracted;
+                  placedCount++;
+                } else {
+                  returnWorkbenchItemToPlayer(extracted);
+                }
+              }
+            });
+
+            if (placedCount > 0) {
+              sound.playPickup();
+              addPlayerNotification(
+                player,
+                `Подставлено предметов для «${recipe.title}»: ${placedCount} из ${recipe.ingredients.length}`,
+                'pickup'
+              );
+              forceRender(n => n + 1);
+            } else {
+              addPlayerNotification(
+                player,
+                `В руках и карманах не найдено подходящих предметов для «${recipe.title}»`,
+                'warning'
+              );
+            }
+          };
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* TOP BANNER: 10-SLOT OVERVIEW & QUICK CONTROLS */}
+              <div className="gu-panel gu-pad" style={{ padding: '10px 14px' }}>
+                <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', gap: 10 }}>
+                  <div>
+                    <div className="gu-grp" style={{ color: 'var(--gu-amber-hi)' }}>
+                      Стол взаимодействия и переливания · 10 слотов (2 руки + 4 ввод + 4 вывод)
+                    </div>
+                    <div className="gu-mut" style={{ fontSize: 12, marginTop: 2 }}>
+                      Положите до 2 предметов из рук или карманов. В сетке ввода верхняя тара переливает или пересыпает содержимое в нижнюю тару (с расчётом остатка и смешиванием жидкостей).
+                    </div>
+                  </div>
+                  <div className="gu-row2 gu-wrap" style={{ gap: 6 }}>
+                    <button
+                      type="button"
+                      id="btn-interaction-both-hands"
+                      className="gu-btn gu-btn-p gu-btn-sm"
+                      disabled={!player.leftHandItem && !player.rightHandItem}
+                      onClick={handlePlaceBothHandsIntoInput}
+                      title="Переложить предметы сразу из обеих рук в верхний и нижний слот ввода"
+                    >
+                      <Hand width={14} height={14} />
+                      <span>Из 2-х рук в сетку (Верх → Низ)</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-interaction-swap-rows"
+                      className="gu-btn gu-btn-s gu-btn-sm"
+                      disabled={!interactionInputs.some(Boolean)}
+                      onClick={handleSwapTopBottomInputs}
+                      title="Поменять местами верхний ряд (источник) и нижний ряд (приёмник)"
+                    >
+                      <ArrowUpDown width={14} height={14} />
+                      <span>Поменять верх и низ</span>
+                    </button>
+                    {workbenchActiveCount > 0 && (
+                      <button
+                        type="button"
+                        id="btn-interaction-return-all"
+                        className="gu-btn gu-btn-sm"
+                        onClick={handleReturnAllWorkbenchItems}
+                      >
+                        <RotateCcw width={14} height={14} />
+                        <span>Вернуть всё ({workbenchActiveCount})</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* MAIN 10-SLOT WORKBENCH: [2 HANDS] -> [4 INPUTS 2x2] -> [4 OUTPUTS 2x2] */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(250px, 1fr) minmax(340px, 1.35fr) minmax(340px, 1.35fr)',
+                  gap: 10,
+                  alignItems: 'stretch',
+                }}
+              >
+                {/* COLUMN 1: 2 HAND SLOTS (SLOTS 1 & 2) */}
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                    <span className="gu-grp">Слоты 1–2 · Руки (2 слота)</span>
+                    <span className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                      {(player.leftHandItem ? 1 : 0) + (player.rightHandItem ? 1 : 0)} / 2
+                    </span>
+                  </div>
+
+                  {(['left', 'right'] as const).map((hand, hIdx) => {
+                    const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+                    const handTitle = hand === 'left' ? 'Слот 1 · Левая рука' : 'Слот 2 · Правая рука';
+                    const fluidInfo = getFluidBadgeInfo(handItem || null);
+
+                    return (
+                      <div
+                        key={hand}
+                        id={`interaction-hand-slot-${hand}`}
+                        draggable={Boolean(handItem)}
+                        onDragStart={e => {
+                          if (handItem) e.dataTransfer.setData('text/plain', `hand:${hand}`);
+                        }}
+                        className="gu-card-sm"
+                        style={{
+                          padding: '9px 10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6,
+                          border: handItem
+                            ? '1px solid rgba(255, 255, 255, 0.16)'
+                            : '1px dashed rgba(255, 255, 255, 0.1)',
+                        }}
+                      >
+                        <div className="gu-row2" style={{ justifyContent: 'space-between', fontSize: 11 }}>
+                          <span className="gu-mono" style={{ color: 'var(--gu-amber-soft)', fontWeight: 600 }}>
+                            {handTitle}
+                          </span>
+                          <span className="gu-mut">{hIdx === 0 ? 'По умолч. → Верх' : 'По умолч. → Низ'}</span>
+                        </div>
+
+                        <div className="gu-row2" style={{ gap: 10 }}>
+                          <div className="gu-ic" style={{ width: 44, height: 44, flexShrink: 0 }}>
+                            {handItem ? (
+                              <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={40} />
+                            ) : (
+                              <Hand width={20} height={20} color="#8f8b81" />
+                            )}
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                fontSize: 13,
+                                color: handItem ? '#fff' : '#8f8b81',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {handItem ? handItem.nameRu : 'Свободна'}
+                            </div>
+                            {handItem && fluidInfo ? (
+                              <div className="gu-mono" style={{ fontSize: 11, color: '#d4d0c8' }}>
+                                {fluidInfo.subName} · {fluidInfo.currentMl}/{fluidInfo.maxMl} {fluidInfo.unit}
+                              </div>
+                            ) : handItem ? (
+                              <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                                {formatWeightRu(getItemTotalWeight(handItem))} · {getItemTotalVolume(handItem)} л
+                              </div>
+                            ) : (
+                              <div className="gu-mut" style={{ fontSize: 11 }}>
+                                Возьмите предмет в руку
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {handItem && (
+                          <div className="gu-row2" style={{ gap: 5, marginTop: 2 }}>
+                            <button
+                              type="button"
+                              className="gu-btn gu-btn-p gu-btn-xs"
+                              style={{ flex: 1 }}
+                              onClick={() => handlePlaceHandIntoInput(hand, 'top')}
+                              title="Положить в верхний ряд (источник переливания)"
+                            >
+                              <ArrowUpFromLine width={12} height={12} />
+                              <span>В верх (Источник)</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="gu-btn gu-btn-s gu-btn-xs"
+                              style={{ flex: 1 }}
+                              onClick={() => handlePlaceHandIntoInput(hand, 'bottom')}
+                              title="Положить в нижний ряд (приёмная тара)"
+                            >
+                              <ArrowDownToLine width={12} height={12} />
+                              <span>В низ (Приёмник)</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    className="gu-btn gu-btn-p gu-btn-sm"
+                    style={{ width: '100%', marginTop: 'auto' }}
+                    disabled={!player.leftHandItem && !player.rightHandItem}
+                    onClick={handlePlaceBothHandsIntoInput}
+                  >
+                    <ArrowRight width={15} height={15} />
+                    <span>Положить оба предмета из 2-х рук</span>
+                  </button>
+                </div>
+
+                {/* COLUMN 2: 4 INPUT SLOTS (SLOTS 3–6, 2x2 GRID) */}
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                    <span className="gu-grp" style={{ color: 'var(--gu-amber-hi)' }}>
+                      Слоты 3–6 · Ввод (Сетка 2×2)
+                    </span>
+                    <span className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                      Занято: {interactionInputs.filter(Boolean).length} / 4
+                    </span>
+                  </div>
+
+                  {/* TOP ROW: SLOTS 3 & 4 (SOURCE / UPPER CONTAINER) */}
+                  <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                    {renderWorkbenchInputSlot(0, 'Слот 3 · Верх-Лев', 'Источник А')}
+                    {renderWorkbenchInputSlot(1, 'Слот 4 · Верх-Прав', 'Источник Б')}
+                  </div>
+
+                  {/* DIRECTIONAL POURING / TRANSFER INDICATOR */}
+                  <div
+                    className="gu-row2"
+                    style={{
+                      justifyContent: 'space-between',
+                      padding: '4px 10px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      borderRadius: 6,
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                    }}
+                  >
+                    <div className="gu-row2" style={{ gap: 5, fontSize: 11, color: 'var(--gu-amber-soft)' }}>
+                      <ArrowDown width={14} height={14} />
+                      <span>Колонка А: Слот 3 → Слот 5</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="gu-btn gu-btn-xs"
+                      onClick={handleSwapTopBottomInputs}
+                      disabled={!interactionInputs.some(Boolean)}
+                      title="Поменять верхнюю и нижнюю тару местами"
+                    >
+                      <ArrowUpDown width={12} height={12} />
+                      <span>Верх ↔ Низ</span>
+                    </button>
+                    <div className="gu-row2" style={{ gap: 5, fontSize: 11, color: '#7dd3fc' }}>
+                      <ArrowDown width={14} height={14} />
+                      <span>Колонка Б: Слот 4 → Слот 6</span>
+                    </div>
+                  </div>
+
+                  {/* BOTTOM ROW: SLOTS 5 & 6 (RECEIVER / LOWER CONTAINER) */}
+                  <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                    {renderWorkbenchInputSlot(2, 'Слот 5 · Низ-Лев', 'Приёмник А')}
+                    {renderWorkbenchInputSlot(3, 'Слот 6 · Низ-Прав', 'Приёмник Б')}
+                  </div>
+
+                  {/* ACTION / EXECUTE BAR */}
+                  <div
+                    style={{
+                      marginTop: 'auto',
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      background: evalResult.isValid
+                        ? 'rgba(201, 146, 43, 0.14)'
+                        : 'rgba(255, 255, 255, 0.03)',
+                      border: evalResult.isValid
+                        ? '1px solid rgba(201, 146, 43, 0.5)'
+                        : '1px solid rgba(255, 255, 255, 0.08)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                    }}
+                  >
+                    <div className="gu-row2" style={{ justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 12, color: evalResult.isValid ? '#fff' : '#b8b3a8' }}>
+                          {evalResult.title}
+                        </div>
+                        <div className="gu-mut" style={{ fontSize: 11, marginTop: 1 }}>
+                          {evalResult.subtitle}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        id="btn-execute-interaction"
+                        className="gu-btn gu-btn-p gu-btn-sm"
+                        disabled={!evalResult.isValid}
+                        onClick={handleExecuteInteraction}
+                        style={{ flexShrink: 0 }}
+                      >
+                        <FlaskConical width={15} height={15} />
+                        <span>{evalResult.actionLabel}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* COLUMN 3: 4 OUTPUT SLOTS (SLOTS 7–10, 2x2 GRID) */}
+                <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                    <span className="gu-grp" style={{ color: hasCommittedOutputs ? '#9ac985' : 'var(--gu-amber-soft)' }}>
+                      Слоты 7–10 · Вывод (Сетка 2×2)
+                    </span>
+                    {hasCommittedOutputs ? (
+                      <button
+                        type="button"
+                        id="btn-claim-all-outputs"
+                        className="gu-btn gu-btn-p gu-btn-xs"
+                        onClick={handleClaimAllOutputs}
+                      >
+                        <Check width={13} height={13} />
+                        <span>Забрать всё ({interactionOutputs.filter(Boolean).length})</span>
+                      </button>
+                    ) : (
+                      <span className="gu-mut" style={{ fontSize: 11 }}>
+                        {evalResult.isValid ? 'Предпросмотр результата' : 'Ожидание ввода'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* TOP OUTPUT ROW: SLOTS 7 & 8 (UPPER CONTAINER AFTER POURING / TOOL) */}
+                  <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                    {renderWorkbenchOutputSlot(0, 'Слот 7 · Вывод Верх-Лев')}
+                    {renderWorkbenchOutputSlot(1, 'Слот 8 · Вывод Верх-Прав')}
+                  </div>
+
+                  {/* TRANSFER SUMMARY DETAILS */}
+                  <div
+                    style={{
+                      padding: '4px 10px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      borderRadius: 6,
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      fontSize: 11,
+                      color: '#b8b3a8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    {evalResult.transferDetails.length > 0 ? (
+                      <span className="gu-mono" style={{ color: '#e9e6df' }}>
+                        {evalResult.transferDetails[0].transferredAmountLabel} · {evalResult.transferDetails[0].remainingSourceLabel}
+                      </span>
+                    ) : (
+                      <span>Верхний ряд вывода — остаток тары · Нижний ряд вывода — наполненная/смешанная тара</span>
+                    )}
+                  </div>
+
+                  {/* BOTTOM OUTPUT ROW: SLOTS 9 & 10 (LOWER CONTAINER WITH MIXTURE / RESULT) */}
+                  <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                    {renderWorkbenchOutputSlot(2, 'Слот 9 · Вывод Низ-Лев')}
+                    {renderWorkbenchOutputSlot(3, 'Слот 10 · Вывод Низ-Прав')}
+                  </div>
+
+                  <div style={{ marginTop: 'auto' }}>
+                    <button
+                      type="button"
+                      className="gu-btn gu-btn-p gu-btn-sm"
+                      style={{ width: '100%' }}
+                      disabled={!hasCommittedOutputs}
+                      onClick={handleClaimAllOutputs}
+                    >
+                      <ArrowDownToLine width={15} height={15} />
+                      <span>Забрать готовые предметы в руки / карманы</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* QUICK POCKET ITEM PICKER FOR WORKBENCH */}
+              <div className="gu-panel gu-pad" style={{ padding: '10px 14px' }}>
+                <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span className="gu-grp">Быстрая подача предметов из карманов ({pocketItemsWithIdx.length})</span>
+                  <span className="gu-mut" style={{ fontSize: 11 }}>
+                    Нажмите «В верх» (источник) или «В низ» (приёмная тара), либо перетащите мышью в слот
+                  </span>
+                </div>
+
+                {pocketItemsWithIdx.length > 0 ? (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(225px, 1fr))',
+                      gap: 8,
+                      maxHeight: 170,
+                      overflowY: 'auto',
+                      paddingRight: 4,
+                    }}
+                  >
+                    {pocketItemsWithIdx.map(({ item, idx }) => {
+                      const fInfo = getFluidBadgeInfo(item);
+                      return (
+                        <div
+                          key={`pocket-pick-${idx}`}
+                          draggable
+                          onDragStart={e => e.dataTransfer.setData('text/plain', idx.toString())}
+                          className="gu-card-sm gu-row2"
+                          style={{ justifyContent: 'space-between', padding: '6px 8px', gap: 8 }}
+                        >
+                          <div className="gu-row2" style={{ minWidth: 0, gap: 8 }}>
+                            <div className="gu-ic" style={{ width: 34, height: 34, flexShrink: 0 }}>
+                              <ItemIconCanvas itemId={item.itemId} item={item} size={32} />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontWeight: 600,
+                                  fontSize: 12,
+                                  color: '#fff',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title={item.nameRu}
+                              >
+                                {item.nameRu}
+                              </div>
+                              <div className="gu-mut gu-mono" style={{ fontSize: 10 }}>
+                                {fInfo
+                                  ? `${fInfo.subName} (${fInfo.currentMl}/${fInfo.maxMl} ${fInfo.unit})`
+                                  : `${item.count > 1 ? item.count + ' шт. · ' : ''}${formatWeightRu(getItemTotalWeight(item))}`}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="gu-row2" style={{ gap: 4, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              className="gu-btn gu-btn-p gu-btn-xs"
+                              title="Положить в верхний ряд (источник)"
+                              onClick={() => handlePlacePocketIntoInput(idx, 'top')}
+                            >
+                              В верх
+                            </button>
+                            <button
+                              type="button"
+                              className="gu-btn gu-btn-s gu-btn-xs"
+                              title="Положить в нижний ряд (приёмник)"
+                              onClick={() => handlePlacePocketIntoInput(idx, 'bottom')}
+                            >
+                              В низ
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="gu-mut" style={{ fontSize: 12 }}>
+                    В карманах сейчас нет предметов. Используйте предметы из рук или подберите их во вкладке «Рядом».
+                  </div>
+                )}
+              </div>
+
+              {/* CRAFTING & MIXING TABLE ("ТАБЛИЦА КРАФТОВ И СМЕШИВАНИЙ") */}
+              <div className="gu-panel gu-pad" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
+                  <div className="gu-row2" style={{ gap: 8 }}>
+                    <BookOpen width={16} height={16} color="#e0ab45" />
+                    <span className="gu-grp" style={{ color: '#fff' }}>
+                      Таблица крафтов, переливаний и смешиваний ({filteredRecipes.length})
+                    </span>
+                  </div>
+
+                  <div className="gu-pills">
+                    {[
+                      { id: 'all', label: 'Все рецепты' },
+                      { id: 'pouring', label: 'Переливание тары' },
+                      { id: 'mixing', label: 'Смешивание жидкостей' },
+                      { id: 'cooking', label: 'Кулинария и вскрытие' },
+                      { id: 'workshop', label: 'Техника и гараж' },
+                      { id: 'medical', label: 'Медицина' },
+                    ].map(cat => (
+                      <button
+                        type="button"
+                        key={cat.id}
+                        onClick={() => setRecipeCategory(cat.id as InteractionCategory)}
+                        className={'gu-pill' + (recipeCategory === cat.id ? ' on' : '')}
+                      >
+                        <span>{cat.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                  {filteredRecipes.map(recipe => (
+                    <div
+                      key={recipe.id}
+                      className="gu-card-sm"
+                      style={{
+                        padding: '10px 12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                      }}
+                    >
+                      <div>
+                        <div className="gu-row2" style={{ justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: '#fff' }}>{recipe.title}</span>
+                          <span className="gu-tag">{recipe.actionLabel}</span>
+                        </div>
+                        <div className="gu-mut" style={{ fontSize: 11, marginTop: 4, lineHeight: 1.35 }}>
+                          {recipe.description}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: '6px 8px',
+                          background: 'rgba(0,0,0,0.25)',
+                          borderRadius: 5,
+                          fontSize: 11,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 3,
+                        }}
+                      >
+                        {recipe.ingredients.map((ing, i) => (
+                          <div key={i} className="gu-row2" style={{ gap: 6, color: '#d4d0c8' }}>
+                            <span className="gu-mono" style={{ color: 'var(--gu-amber-hi)', fontSize: 10 }}>
+                              {ing.rowHint === 'top' ? '[ВЕРХ]' : ing.rowHint === 'bottom' ? '[НИЗ]' : `[ВВОД ${i + 1}]`}
+                            </span>
+                            <span>{ing.label}</span>
+                          </div>
+                        ))}
+                        <div className="gu-row2" style={{ gap: 6, color: '#9ac985', marginTop: 2 }}>
+                          <span className="gu-mono" style={{ fontSize: 10 }}>[ВЫВОД]</span>
+                          <span>{recipe.resultsSummary.join(' + ')}</span>
+                        </div>
+                      </div>
+
+                      <div className="gu-row2" style={{ justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          className="gu-btn gu-btn-s gu-btn-xs"
+                          onClick={() => handleAutoFillRecipe(recipe.id)}
+                        >
+                          <Wrench width={12} height={12} />
+                          <span>Подставить из рук / карманов</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* NAMED LIQUID MIXTURES REFERENCE TABLE */}
+                {(recipeCategory === 'all' || recipeCategory === 'mixing' || recipeCategory === 'pouring') && (
+                  <div style={{ marginTop: 4 }}>
+                    <div className="gu-grp" style={{ marginBottom: 6 }}>
+                      Таблица особых смесей при переливании из верхней тары в нижнюю ({NAMED_MIXTURE_RULES.length})
+                    </div>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                        gap: 6,
+                      }}
+                    >
+                      {NAMED_MIXTURE_RULES.map(rule => {
+                        const l1 = LIQUID_REGISTRY[rule.liquids[0] as LiquidId]?.nameRu || rule.liquids[0];
+                        const l2 = LIQUID_REGISTRY[rule.liquids[1] as LiquidId]?.nameRu || rule.liquids[1];
+                        return (
+                          <div
+                            key={rule.id}
+                            className="gu-card-sm"
+                            style={{ padding: '7px 10px', display: 'flex', alignItems: 'center', gap: 8 }}
+                          >
+                            <span
+                              style={{
+                                width: 12,
+                                height: 12,
+                                borderRadius: 3,
+                                background: rule.colorHex,
+                                border: '1px solid rgba(255,255,255,0.25)',
+                                flexShrink: 0,
+                              }}
+                            />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 12, color: '#fff' }}>{rule.nameRu}</div>
+                              <div className="gu-mut gu-mono" style={{ fontSize: 10 }}>
+                                {l1} + {l2}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </ModalShell>
   );
