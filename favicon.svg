@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" xmlns:c2pa="http://c2pa.org/manifest">
+  <!-- квадратная подложка -->
+  <rect x="0" y="0" width="512" height="512" rx="72" fill="#4a463f"/>
+  <rect x="14" y="14" width="484" height="484" rx="60" fill="none" stroke="#c9922b" stroke-width="4" opacity="0.5"/>
+
+  <!-- иконка: квадрат из 4 нод и балок (2D софт-боди) -->
+  <g transform="translate(256 256)">
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-120 -120 L120 -120 L120 120 L-120 120 Z" stroke="#0d0e10" stroke-width="24"/>
+      <path d="M-120 -120 L120 120" stroke="#0d0e10" stroke-width="8" stroke-dasharray="22 18" opacity="1"/>
+      <path d="M120 -120 L-120 120" stroke="#0d0e10" stroke-width="8" stroke-dasharray="22 18" opacity="1"/>
+    </g>
+    <circle cx="-120" cy="-120" r="38" fill="#c9922b"/>
+    <circle cx="120" cy="-120" r="38" fill="#c9922b"/>
+    <circle cx="120" cy="120" r="38" fill="#c9922b"/>
+    <circle cx="-120" cy="120" r="38" fill="#c9922b"/>
+    <circle cx="0" cy="0" r="14" fill="#c9922b"/>
+  </g>
+</svg>
