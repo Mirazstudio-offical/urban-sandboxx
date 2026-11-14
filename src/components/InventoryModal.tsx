@@ -1169,16 +1169,20 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     window.addEventListener('pointercancel', onPointerCancel);
   };
 
-  // Reusable Hand Slot Card (works as a real draggable/droppable slot in Карманы, Контейнер, Рядом, Одежда)
-  const renderHandSlotCard = (hand: 'left' | 'right', label: string, handItem: InventoryItem | null | undefined) => {
+  // Compact square Hand Slot (standard .gu-slot size, rendered inside the scrollable compartment list)
+  const renderHandSquareSlot = (hand: 'left' | 'right', shortBadge: string, label: string, handItem: InventoryItem | null | undefined) => {
     const slotKey = `hand:${hand}`;
     const isBeingDragged = wbDragUi?.sourceKey === slotKey;
     const isDropTarget = wbDragUi?.overKey === slotKey;
     const isSelected = selectedHand === hand || selectedWbSlot === slotKey;
     const info = getSlotFillInfo(handItem);
+    const temp = handItem?.surfaceTemperature;
+    const isHot = temp !== undefined && temp >= 40;
+    const isCold = temp !== undefined && temp <= 4;
 
     return (
       <div
+        key={slotKey}
         id={`inv-${hand}-hand-card`}
         data-wb-slot={slotKey}
         draggable={false}
@@ -1197,86 +1201,51 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             handleStowHand(hand);
           }
         }}
-        className={'gu-hand' + (handItem ? ' full' : '') + (isDropTarget || isSelected ? ' on' : '')}
+        className={
+          'gu-slot' +
+          (!handItem ? ' empty' : '') +
+          (isDropTarget || isSelected ? ' on' : '') +
+          (isHot ? ' hot' : '') +
+          (isCold ? ' cold' : '')
+        }
         style={{
           touchAction: 'none',
           cursor: handItem ? 'grab' : selectedWbSlot ? 'pointer' : 'default',
-          opacity: isBeingDragged ? 0.38 : 1,
-          borderColor: isDropTarget ? 'var(--gu-amber-hi)' : isSelected ? 'var(--gu-amber)' : undefined,
-          boxShadow: isDropTarget ? '0 0 0 1px var(--gu-amber-hi) inset' : undefined,
+          opacity: isBeingDragged ? 0.35 : 1,
+          borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
         }}
-        title={info?.tooltip || `${label} — перетащите сюда предмет`}
+        title={info ? `${label}: ${info.tooltip}` : `${label} (пусто — перетащите предмет)`}
       >
-        <div
-          className={'gu-slot' + (!handItem ? ' empty' : '') + (isDropTarget || isSelected ? ' on' : '')}
-          style={{ width: 52, height: 52, flexShrink: 0, cursor: handItem ? 'grab' : 'pointer' }}
-        >
-          {handItem ? (
-            <>
-              <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={42} />
-              {handItem.count > 1 ? (
-                <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{handItem.count}</span>
-              ) : handItem.isContainer ? (
-                <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{handItem.contents?.length || 0}</span>
-              ) : null}
-              {info && info.pct !== null && (
-                <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
-                  <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
-                </div>
-              )}
-            </>
-          ) : (
-            <Hand width={20} height={20} color="#6b675e" />
-          )}
-        </div>
-
-        <div className="gu-li-main" style={{ pointerEvents: 'none' }}>
-          <div className="gu-li-sub" style={{ marginTop: 0 }}>{label}</div>
-          <div className="gu-li-name">{handItem ? handItem.nameRu : 'Свободный слот руки'}</div>
-          {handItem ? (
-            <div className="gu-li-sub">
-              {formatWeightRu(getItemTotalWeight(handItem))} · {getItemTotalVolume(handItem)} л
-              {handItem.surfaceTemperature !== undefined && (
-                <span style={{ marginLeft: 8, color: handItem.surfaceTemperature >= 52 ? '#efa690' : handItem.surfaceTemperature <= 4 ? '#7dd3fc' : 'var(--gu-amber-soft)' }}>
-                  {handItem.surfaceTemperature > 0 ? '+' : ''}{handItem.surfaceTemperature.toFixed(1)}°C
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="gu-li-sub">Перетащите предмет в руку</div>
-          )}
-        </div>
-
-        {handItem && (
-          <div className="gu-hand-acts">
-            {handItem.clothingStats && (
-              <button type="button" className="gu-btn gu-btn-p gu-btn-xs" title="Надеть" onClick={() => handleEquipFromHand(hand)}>
-                <Shirt width={14} height={14} />
-              </button>
+        <span className="gu-ic-hk" style={{ pointerEvents: 'none' }}>{shortBadge}</span>
+        {handItem ? (
+          <>
+            <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={44} />
+            {handItem.count > 1 ? (
+              <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{handItem.count}</span>
+            ) : handItem.isContainer ? (
+              <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{handItem.contents?.length || 0}</span>
+            ) : null}
+            {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(temp!)}°</span>}
+            {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(temp!)}°</span>}
+            {(handItem.wetness ?? 0) > 0 && (
+              <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
+                <CloudRain width={11} height={11} />
+              </span>
             )}
-            {handItem.isContainer && (
-              <button
-                type="button"
-                className="gu-btn gu-btn-p gu-btn-xs"
-                title="Открыть"
-                onClick={() => { setOpenContainer(handItem); setSelectedContainerItemIdx(0); }}
-              >
-                <Luggage width={14} height={14} />
-              </button>
+            {info && info.pct !== null && (
+              <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
+                <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
+              </div>
             )}
-            <button type="button" className="gu-btn gu-btn-s gu-btn-xs" title="Убрать в карманы" onClick={() => handleStowHand(hand)}>
-              <ArrowDownToLine width={14} height={14} />
-            </button>
-            <button type="button" className="gu-btn gu-btn-d gu-btn-xs" title="Бросить" onClick={() => handleDropFromHand(hand)}>
-              <Trash2 width={14} height={14} />
-            </button>
-          </div>
+          </>
+        ) : (
+          <Hand width={18} height={18} color="#5e5b54" style={{ pointerEvents: 'none' }} />
         )}
       </div>
     );
   };
 
-  // Reusable Player Compartments Slot Grid (used across Карманы, Контейнер, Рядом, Одежда)
+  // Reusable Player Hand + Compartments Slot Grid (all inside the scroll block)
   const renderCompartmentsSlotGrid = () => {
     const getCompIcon = (type: string, size = 15) => {
       if (type === 'user') return <User width={size} height={size} />;
@@ -1290,8 +1259,26 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       return <Luggage width={size} height={size} />;
     };
 
+    const handsCount = (player.leftHandItem ? 1 : 0) + (player.rightHandItem ? 1 : 0);
+
     return (
       <div data-wb-drop-zone="zone:pockets">
+        {/* Hands as the first compact slot group inside the scroll container */}
+        <div className="gu-group">
+          <div className="gu-group-h">
+            <span className="gu-group-t">
+              <Hand width={15} height={15} />
+              Активные руки
+            </span>
+            <span className="gu-grp-meta gu-mono">
+              {handsCount}/2 слота · Лев: {player.leftHandItem ? player.leftHandItem.nameRu : 'пусто'} · Прав: {player.rightHandItem ? player.rightHandItem.nameRu : 'пусто'}
+            </span>
+          </div>
+          <div className="gu-slots">
+            {renderHandSquareSlot('left', 'Л', 'Левая рука', player.leftHandItem)}
+            {renderHandSquareSlot('right', 'П', 'Правая рука', player.rightHandItem)}
+          </div>
+        </div>
         {compartments.map(comp => {
           const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
           const compVolumePct = Math.round((comp.usedVolumeL / comp.capacityL) * 100);
@@ -1568,19 +1555,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </div>
               )}
 
-              {/* Pinned Active Hand Slots (Draggable & Droppable) */}
-              <div className="gu-panel" style={{ flex: 'none', padding: '8px 10px' }}>
-                <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span className="gu-grp" style={{ fontSize: 11.5 }}>Слоты рук</span>
-                  <span className="gu-mut gu-hide-s" style={{ fontSize: 11 }}>Перетащите предмет в руку или из руки</span>
-                </div>
-                <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                  {renderHandSlotCard('left', 'Левая рука', player.leftHandItem)}
-                  {renderHandSlotCard('right', 'Правая рука', player.rightHandItem)}
-                </div>
-              </div>
-
-              {/* Scrollable Compartments & Carried Containers */}
+              {/* Scrollable Hands, Compartments & Carried Containers */}
               <div className="gu-inv-left-scroll">
                 <div className="gu-panel" style={{ padding: '10px 12px' }}>
                   {renderCompartmentsSlotGrid()}
@@ -2476,19 +2451,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   )}
                 </div>
 
-                {/* RIGHT COLUMN: PLAYER HAND SLOTS + POCKET SLOTS */}
-                <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px', gap: 8 }}>
-                  <div style={{ flex: 'none' }}>
-                    <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 5 }}>
-                      <span className="gu-grp" style={{ fontSize: 11.5 }}>Слоты рук</span>
-                      <span className="gu-mut" style={{ fontSize: 11 }}>Перетащите в контейнер или из него</span>
-                    </div>
-                    <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                      {renderHandSlotCard('left', 'Левая рука', player.leftHandItem)}
-                      {renderHandSlotCard('right', 'Правая рука', player.rightHandItem)}
-                    </div>
-                  </div>
-
+                {/* RIGHT COLUMN: SCROLLABLE PLAYER HAND SLOTS + POCKET SLOTS */}
+                <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px' }}>
                   <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                     {renderCompartmentsSlotGrid()}
                   </div>
@@ -2579,19 +2543,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </div>
               </div>
 
-              {/* RIGHT COLUMN: PLAYER HAND SLOTS + POCKET SLOTS */}
-              <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px', gap: 8 }}>
-                <div style={{ flex: 'none' }}>
-                  <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span className="gu-grp" style={{ fontSize: 11.5 }}>Слоты рук</span>
-                    <span className="gu-mut" style={{ fontSize: 11 }}>Перетащите предмет в руку</span>
-                  </div>
-                  <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                    {renderHandSlotCard('left', 'Левая рука', player.leftHandItem)}
-                    {renderHandSlotCard('right', 'Правая рука', player.rightHandItem)}
-                  </div>
-                </div>
-
+              {/* RIGHT COLUMN: SCROLLABLE PLAYER HAND SLOTS + POCKET SLOTS */}
+              <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px' }}>
                 <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                   {renderCompartmentsSlotGrid()}
                 </div>
@@ -2609,6 +2562,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             });
           });
           const isClothZoneTarget = wbDragUi?.overKey === 'zone:clothing';
+          const totalClothSlots = Math.max(12, equippedEntries.length + 4);
 
           return (
             <div className="gu-st-split" style={{ flex: 1, minHeight: 0 }}>
@@ -2630,8 +2584,29 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </div>
 
                 <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                  <div className="gu-grid gu-g2" style={{ gap: 8 }}>
-                    {equippedEntries.map(({ slot, layer, item }) => {
+                  <div className="gu-slots">
+                    {Array.from({ length: totalClothSlots }).map((_, idx) => {
+                      const entry = equippedEntries[idx];
+                      if (!entry) {
+                        const emptyKey = idx === equippedEntries.length ? 'zone:clothing' : `cloth:empty-${idx}`;
+                        const isOver = wbDragUi?.overKey === emptyKey;
+                        return (
+                          <div
+                            key={emptyKey}
+                            data-wb-slot={emptyKey}
+                            draggable={false}
+                            onDragStart={e => e.preventDefault()}
+                            onPointerDown={e => startSlotPointerDrag(e, emptyKey, null)}
+                            className={'gu-slot empty' + (isOver ? ' on' : '')}
+                            style={{
+                              touchAction: 'none',
+                              borderColor: isOver ? 'var(--gu-amber-hi)' : undefined,
+                            }}
+                          />
+                        );
+                      }
+
+                      const { slot, layer, item } = entry;
                       const slotKey = `cloth:${slot}:${layer}`;
                       const isBeingDragged = wbDragUi?.sourceKey === slotKey;
                       const isDropTarget = wbDragUi?.overKey === slotKey;
@@ -2644,70 +2619,28 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           onDragStart={e => e.preventDefault()}
                           onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
                           onDoubleClick={() => handleUnequipItem(slot, layer)}
-                          className={'gu-hand full' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
+                          className={'gu-slot' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
                           style={{
                             touchAction: 'none',
                             cursor: 'grab',
                             opacity: isBeingDragged ? 0.35 : 1,
                             borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
                           }}
-                          title={`${item.nameRu} — перетащите в руку или карманы чтобы снять`}
+                          title={`${item.nameRu}\n${CLOTHING_SLOT_LABELS[slot] || slot} · ${CLOTHING_LAYER_LABELS[layer] || layer}`}
                         >
-                          <div className="gu-slot" style={{ width: 52, height: 52, flexShrink: 0, cursor: 'grab' }}>
-                            <ItemIconCanvas itemId={item.itemId} item={item} size={42} />
-                          </div>
-                          <div className="gu-li-main" style={{ pointerEvents: 'none' }}>
-                            <div className="gu-li-sub" style={{ marginTop: 0 }}>
-                              {CLOTHING_SLOT_LABELS[slot] || slot} · {CLOTHING_LAYER_LABELS[layer] || layer}
-                            </div>
-                            <div className="gu-li-name">{item.nameRu}</div>
-                            {item.clothingStats?.pocketCapacityL ? (
-                              <div className="gu-li-sub" style={{ color: 'var(--gu-amber-soft)' }}>
-                                +{item.clothingStats.pocketCapacityL} л ({item.clothingStats.maxPocketWeightKg || 1.5} кг)
-                              </div>
-                            ) : null}
-                          </div>
+                          <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
+                          {item.clothingStats?.pocketCapacityL ? (
+                            <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>+{item.clothingStats.pocketCapacityL}л</span>
+                          ) : null}
                         </div>
                       );
                     })}
-
-                    {/* Empty drop slot for equipping clothing */}
-                    <div
-                      data-wb-slot="zone:clothing"
-                      draggable={false}
-                      onDragStart={e => e.preventDefault()}
-                      onPointerDown={e => startSlotPointerDrag(e, 'zone:clothing', null)}
-                      className={'gu-hand' + (isClothZoneTarget ? ' on' : '')}
-                      style={{
-                        borderStyle: 'dashed',
-                        borderColor: isClothZoneTarget ? 'var(--gu-amber-hi)' : undefined,
-                      }}
-                    >
-                      <div className="gu-slot empty" style={{ width: 52, height: 52, flexShrink: 0 }}>
-                        <Shirt width={20} height={20} color="#6b675e" />
-                      </div>
-                      <div className="gu-li-main" style={{ pointerEvents: 'none' }}>
-                        <div className="gu-li-sub" style={{ marginTop: 0 }}>Надеть одежду</div>
-                        <div className="gu-li-name" style={{ color: 'var(--gu-mut)' }}>Перетащите одежду сюда</div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* RIGHT COLUMN: PLAYER HAND SLOTS + POCKET SLOTS */}
-              <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px', gap: 8 }}>
-                <div style={{ flex: 'none' }}>
-                  <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span className="gu-grp" style={{ fontSize: 11.5 }}>Слоты рук</span>
-                    <span className="gu-mut" style={{ fontSize: 11 }}>Перетащите одежду сюда или отсюда</span>
-                  </div>
-                  <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                    {renderHandSlotCard('left', 'Левая рука', player.leftHandItem)}
-                    {renderHandSlotCard('right', 'Правая рука', player.rightHandItem)}
-                  </div>
-                </div>
-
+              {/* RIGHT COLUMN: SCROLLABLE PLAYER HAND SLOTS + POCKET SLOTS */}
+              <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px' }}>
                 <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                   {renderCompartmentsSlotGrid()}
                 </div>

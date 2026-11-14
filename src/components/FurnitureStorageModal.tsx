@@ -895,71 +895,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             </span>
           </div>
 
-          {/* Active Hand Slots (Draggable & Droppable) */}
-          <div className="gu-grid gu-g2" style={{ flex: 'none', gap: 6 }}>
-            {(['left', 'right'] as const).map(hand => {
-              const hItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-              const slotKey = `hand:${hand}`;
-              const isBeingDragged = stDragUi?.sourceKey === slotKey;
-              const isDropTarget = stDragUi?.overKey === slotKey;
-              const isSelected = selectedHand === hand || selectedStSlot === slotKey;
-
-              return (
-                <div
-                  key={hand}
-                  data-st-slot={slotKey}
-                  draggable={false}
-                  onDragStart={e => e.preventDefault()}
-                  onPointerDown={e =>
-                    startSlotPointerDrag(e, slotKey, hItem, () => {
-                      if (!hItem) return;
-                      setSelectedHand(hand);
-                      setSelectedInventoryIdx(null);
-                      setSelectedStorageIdx(null);
-                    })
-                  }
-                  onDoubleClick={() => {
-                    if (hItem) handleStoreFromHand(hand);
-                  }}
-                  className={'gu-hand' + (hItem ? ' full' : '') + (isSelected || isDropTarget ? ' on' : '')}
-                  style={{
-                    touchAction: 'none',
-                    cursor: hItem ? 'grab' : selectedStSlot ? 'pointer' : 'default',
-                    opacity: isBeingDragged ? 0.35 : 1,
-                    borderColor: isDropTarget ? 'var(--gu-amber-hi)' : isSelected ? 'var(--gu-amber)' : undefined,
-                    background: isSelected || isDropTarget ? 'rgba(201, 146, 43, 0.14)' : undefined
-                  }}
-                  title={hItem ? `${hItem.nameRu} — перетащите в хранилище или карман` : 'Перетащите сюда предмет, чтобы взять в руку'}
-                >
-                  <div
-                    className={'gu-slot' + (!hItem ? ' empty' : '') + (isSelected || isDropTarget ? ' on' : '')}
-                    style={{ cursor: hItem ? 'grab' : 'pointer' }}
-                  >
-                    {hItem ? <ItemIconCanvas itemId={hItem.itemId} item={hItem} size={34} /> : <Hand width={18} height={18} />}
-                  </div>
-                  <div className="gu-li-main" style={{ pointerEvents: 'none' }}>
-                    <div className="gu-li-sub" style={{ marginTop: 0 }}>{hand === 'left' ? 'Левая рука' : 'Правая рука'}</div>
-                    <div className="gu-li-name">{hItem ? hItem.nameRu : 'Свободный слот'}</div>
-                  </div>
-                  {hItem && (
-                    <button
-                      type="button"
-                      className="gu-btn gu-btn-p gu-btn-xs"
-                      style={{ height: 26, padding: '0 7px', fontSize: 11 }}
-                      title={isRadiator ? 'Положить на батарею' : 'Убрать в хранилище'}
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleStoreFromHand(hand);
-                      }}
-                    >
-                      <ArrowLeft width={12} height={12} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
           <div className="gu-pills" style={{ flex: 'none', marginBottom: 0 }}>
             {(['all', 'clothing', 'food', 'drink', 'tool', 'valuable', 'misc'] as const).map(cat => (
               <button
@@ -987,6 +922,83 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
           </div>
 
           <div className="gu-st-scroll">
+            {/* Compact Hand Slots inside the scroll block */}
+            <div className="gu-group">
+              <div className="gu-group-h">
+                <span className="gu-group-t"><Hand width={15} height={15} />Активные руки</span>
+                <span className="gu-grp-meta">
+                  Лев: {player.leftHandItem ? player.leftHandItem.nameRu : 'пусто'} · Прав: {player.rightHandItem ? player.rightHandItem.nameRu : 'пусто'}
+                </span>
+              </div>
+              <div className="gu-slots">
+                {(['left', 'right'] as const).map(hand => {
+                  const hItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+                  const slotKey = `hand:${hand}`;
+                  const isBeingDragged = stDragUi?.sourceKey === slotKey;
+                  const isDropTarget = stDragUi?.overKey === slotKey;
+                  const isSelected = selectedHand === hand || selectedStSlot === slotKey;
+                  const itemTemp = hItem ? (hItem.surfaceTemperature ?? hItem.temperature ?? 20) : 20;
+                  const isHot = !!hItem && itemTemp >= 40;
+                  const isCold = !!hItem && itemTemp <= 4;
+
+                  return (
+                    <div
+                      key={hand}
+                      data-st-slot={slotKey}
+                      draggable={false}
+                      onDragStart={e => e.preventDefault()}
+                      onPointerDown={e =>
+                        startSlotPointerDrag(e, slotKey, hItem, () => {
+                          if (!hItem) return;
+                          setSelectedHand(hand);
+                          setSelectedInventoryIdx(null);
+                          setSelectedStorageIdx(null);
+                        })
+                      }
+                      onDoubleClick={() => {
+                        if (hItem) handleStoreFromHand(hand);
+                      }}
+                      className={
+                        'gu-slot' +
+                        (!hItem ? ' empty' : '') +
+                        (isSelected || isDropTarget ? ' on' : '') +
+                        (isHot ? ' hot' : '') +
+                        (isCold ? ' cold' : '')
+                      }
+                      style={{
+                        touchAction: 'none',
+                        cursor: hItem ? 'grab' : selectedStSlot ? 'pointer' : 'default',
+                        opacity: isBeingDragged ? 0.35 : 1,
+                        borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
+                      }}
+                      title={
+                        hItem
+                          ? `${hand === 'left' ? 'Левая рука' : 'Правая рука'}: ${hItem.nameRu}\n${formatWeightRu(getItemTotalWeight(hItem))} · ${getItemTotalVolume(hItem)} л`
+                          : `${hand === 'left' ? 'Левая рука' : 'Правая рука'} (перетащите сюда предмет)`
+                      }
+                    >
+                      <span className="gu-ic-hk" style={{ pointerEvents: 'none' }}>{hand === 'left' ? 'Л' : 'П'}</span>
+                      {hItem ? (
+                        <>
+                          <ItemIconCanvas itemId={hItem.itemId} item={hItem} size={40} />
+                          {hItem.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{hItem.count}</span>}
+                          {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(itemTemp)}°</span>}
+                          {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(itemTemp)}°</span>}
+                          {(hItem.wetness ?? 0) > 0 && (
+                            <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
+                              <CloudRain width={11} height={11} />
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <Hand width={18} height={18} color="#5e5b54" style={{ pointerEvents: 'none' }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {compartments.map(comp => {
               const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
               const CompIcon = comp.iconType === 'user' ? User : comp.iconType === 'shirt' ? Shirt : Luggage;
