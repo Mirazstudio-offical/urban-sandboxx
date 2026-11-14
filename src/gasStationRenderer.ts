@@ -1200,6 +1200,10 @@ export class GasStationRenderer {
 
   private static currentCanopyAlpha: number = 1.0;
 
+  public static getCanopyAlpha(): number {
+    return this.currentCanopyAlpha;
+  }
+
   /**
    * Render grand overhead canopy roof and neon signage with smooth see-through transparency
    * when player or vehicle is under or near the canopy.

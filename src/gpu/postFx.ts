@@ -150,6 +150,7 @@ uniform float uLightOn;
 uniform vec2 uLightSize;
 uniform sampler2D uMat;
 uniform float uMatOn;
+uniform vec2 uMatSize;
 uniform float uGi;
 uniform float uWet;
 uniform float uSnow;
@@ -734,7 +735,7 @@ int classifyMatCode(float r255) {
 
 void sampleMaterial(
   vec2 uv,
-  vec2 texel,
+  vec2 matTexel,
   out int matId,
   out float paramG,
   out float alphaB,
@@ -747,10 +748,10 @@ void sampleMaterial(
   if (uMatOn < 0.5) return;
 
   vec4 mC = texture(uMat, uv);
-  vec4 mL = texture(uMat, clamp(uv - vec2(texel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
-  vec4 mR = texture(uMat, clamp(uv + vec2(texel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
-  vec4 mD = texture(uMat, clamp(uv - vec2(0.0, texel.y * 1.5), vec2(0.001), vec2(0.999)));
-  vec4 mU = texture(uMat, clamp(uv + vec2(0.0, texel.y * 1.5), vec2(0.001), vec2(0.999)));
+  vec4 mL = texture(uMat, clamp(uv - vec2(matTexel.x, 0.0), vec2(0.001), vec2(0.999)));
+  vec4 mR = texture(uMat, clamp(uv + vec2(matTexel.x, 0.0), vec2(0.001), vec2(0.999)));
+  vec4 mD = texture(uMat, clamp(uv - vec2(0.0, matTexel.y), vec2(0.001), vec2(0.999)));
+  vec4 mU = texture(uMat, clamp(uv + vec2(0.0, matTexel.y), vec2(0.001), vec2(0.999)));
 
   float rC = mC.r * 255.0;
   float rL = mL.r * 255.0;
@@ -758,31 +759,40 @@ void sampleMaterial(
   float rD = mD.r * 255.0;
   float rU = mU.r * 255.0;
 
-  float rMin = min(rC, min(min(rL, rR), min(rD, rU)));
-  float rMax = max(rC, max(max(rL, rR), max(rD, rU)));
-
-  // Strict Occluder Guard: if this pixel or its anti-aliased edge touches MAT_OCCLUDER (0),
-  // immediately classify as MAT_OCCLUDER (0) so cars/roofs never get water/road shaders!
-  if (rC < 16.0 || (rMin < 8.0 && (rMax - rMin) > 12.0 && abs(rC - rMax) > 4.0)) {
+  // Strict Occluder Guard: destination-out erases alpha to 0 on solid occluders (cars, trains, trees, buildings, props).
+  // Any pixel with reduced alpha or touching an erased occluder edge immediately classifies as MAT_OCCLUDER (0).
+  float aMin = min(mL.a, min(mR.a, min(mD.a, mU.a)));
+  if (mC.a < 0.94 || rC < 16.0 || (mC.a < 0.99 && aMin < 0.50)) {
     matId = 0;
     return;
   }
 
-  // Snap 1-pixel Canvas 2D anti-aliased seams between two materials to the nearest valid material code
-  if ((rMax - rMin) > 10.0 && abs(rC - rMin) > 4.0 && abs(rC - rMax) > 4.0) {
-    rC = (abs(rC - rMax) <= abs(rC - rMin)) ? rMax : rMin;
-  }
-
-  matId = classifyMatCode(rC);
   paramG = mC.g;
   alphaB = mC.b;
 
+  // Snap 1-pixel Canvas2D anti-aliased seams between two distinct surfaces so blended RGB never triggers wrong G-params
+  float rMin = min(rC, min(min(rL, rR), min(rD, rU)));
+  float rMax = max(rC, max(max(rL, rR), max(rD, rU)));
+  if ((rMax - rMin) > 10.0 && abs(rC - rMin) > 4.0 && abs(rC - rMax) > 4.0) {
+    vec4 best = mC;
+    float bestDiff = 1e6;
+    if (mL.a >= 0.94 && mL.r * 255.0 >= 16.0) { float d = abs(rC - rL); if (d < bestDiff) { bestDiff = d; best = mL; } }
+    if (mR.a >= 0.94 && mR.r * 255.0 >= 16.0) { float d = abs(rC - rR); if (d < bestDiff) { bestDiff = d; best = mR; } }
+    if (mD.a >= 0.94 && mD.r * 255.0 >= 16.0) { float d = abs(rC - rD); if (d < bestDiff) { bestDiff = d; best = mD; } }
+    if (mU.a >= 0.94 && mU.r * 255.0 >= 16.0) { float d = abs(rC - rU); if (d < bestDiff) { bestDiff = d; best = mU; } }
+    rC = best.r * 255.0;
+    paramG = best.g;
+    alphaB = best.b;
+  }
+
+  matId = classifyMatCode(rC);
+
   // For liquid puddles & stains (matId >= 6), compute the outward 3D meniscus contact-rim normal
   if (matId >= 6) {
-    float hL = (classifyMatCode(rL) == matId) ? mL.g : 0.0;
-    float hR = (classifyMatCode(rR) == matId) ? mR.g : 0.0;
-    float hD = (classifyMatCode(rD) == matId) ? mD.g : 0.0;
-    float hU = (classifyMatCode(rU) == matId) ? mU.g : 0.0;
+    float hL = (mL.a >= 0.94 && classifyMatCode(rL) == matId) ? mL.g : 0.0;
+    float hR = (mR.a >= 0.94 && classifyMatCode(rR) == matId) ? mR.g : 0.0;
+    float hD = (mD.a >= 0.94 && classifyMatCode(rD) == matId) ? mD.g : 0.0;
+    float hU = (mU.a >= 0.94 && classifyMatCode(rU) == matId) ? mU.g : 0.0;
     meniscusN = vec2(hL - hR, hD - hU);
   }
 }
@@ -896,11 +906,12 @@ void main() {
   }
 
   // --- Exact Material G-Buffer Lookup -----------------------------------------------------------------------
+  vec2 matTexel = 1.0 / max(uMatSize, vec2(1.0));
   int matId = 0;
   float matParam = 0.0;
   float matAlpha = 0.0;
   vec2 meniscusN = vec2(0.0);
-  sampleMaterial(uv, texel, matId, matParam, matAlpha, meniscusN);
+  sampleMaterial(uv, matTexel, matId, matParam, matAlpha, meniscusN);
 
   bool isWaterBody = (matId == 5);
   bool isPuddleWater = (matId == 6);
@@ -914,7 +925,7 @@ void main() {
   vec3 cRaw = fetchSrc(uv);
   float waterMask = (isWaterBody && uFreezing < 0.5 && uWaterShader > 0.001) ? uWaterShader : 0.0;
   float puddleBasinMask = (isPuddleWater && uFreezing < 0.5 && uWaterShader > 0.001)
-    ? smoothstep(0.16, 0.36, matParam) * clamp(matAlpha * 1.15, 0.0, 1.0) * uWaterShader
+    ? smoothstep(0.18, 0.38, matParam) * clamp(matAlpha * 1.15, 0.0, 1.0) * uWaterShader
     : 0.0;
 
   vec2 waveN = vec2(0.0);
@@ -925,29 +936,26 @@ void main() {
     bool inRiver = (worldPos.y >= -4250.0 && worldPos.y <= -1750.0 && worldPos.x >= -3500.0 && worldPos.x <= 50500.0);
     waveN = computeWaterWaveNormal(worldPos, uTime, inRiver, wakeFoam, crestHighlight)
           + computeRaindropRipples(worldPos, uTime, uRain) * 0.65;
-    // Real-time UV refraction strictly guarded by uMat so dry cars/bridges/banks never bleed into water!
     vec2 refrUv = clamp(uv + waveN * texel * (0.7 + 2.6 * gWaterDepth01) * waterMask, vec2(0.001), vec2(0.999));
-    float rRefr = texture(uMat, refrUv).r * 255.0;
-    if (classifyMatCode(rRefr) == 5) {
-      vec3 cRefr = fetchSrc(refrUv);
-      cRaw = mix(cRaw, cRefr, waterMask * 0.85);
+    vec4 mRefr = texture(uMat, refrUv);
+    if (mRefr.a > 0.94 && classifyMatCode(mRefr.r * 255.0) == 5) {
+      cRaw = mix(cRaw, fetchSrc(refrUv), waterMask * 0.85);
     }
   } else if (puddleBasinMask > 0.01) {
     waveN = computePuddleWaveNormal(worldPos, uTime, matParam)
           + computeRaindropRipples(worldPos, uTime, uRain)
           + meniscusN * 0.42;
-    vec2 refrUv = clamp(uv + waveN * texel * 1.55 * puddleBasinMask, vec2(0.001), vec2(0.999));
-    float rRefr = texture(uMat, refrUv).r * 255.0;
-    if (classifyMatCode(rRefr) == 6) {
-      vec3 cRefr = fetchSrc(refrUv);
-      cRaw = mix(cRaw, cRefr, puddleBasinMask * 0.72);
+    vec2 refrUv = clamp(uv + waveN * texel * 1.45 * puddleBasinMask, vec2(0.001), vec2(0.999));
+    vec4 mRefr = texture(uMat, refrUv);
+    if (mRefr.a > 0.94 && classifyMatCode(mRefr.r * 255.0) == 6) {
+      cRaw = mix(cRaw, fetchSrc(refrUv), puddleBasinMask * 0.72);
     }
   } else if (isCoolant) {
     vec2 coolCapN = computePuddleWaveNormal(worldPos, uTime * 0.45, matParam) * 0.35 + meniscusN * 1.15;
     waveN = coolCapN;
     vec2 refrUv = clamp(uv + coolCapN * texel * 1.15 * matAlpha, vec2(0.001), vec2(0.999));
-    float rRefr = texture(uMat, refrUv).r * 255.0;
-    if (classifyMatCode(rRefr) == 9) {
+    vec4 mRefr = texture(uMat, refrUv);
+    if (mRefr.a > 0.94 && classifyMatCode(mRefr.r * 255.0) == 9) {
       cRaw = mix(cRaw, fetchSrc(refrUv), matAlpha * 0.55);
     }
   }
@@ -984,14 +992,13 @@ void main() {
   float offroadRutMask = isEarthOrDirt ? clamp((matAlpha - 0.52) * 2.15, 0.0, 1.0) : 0.0;
 
   if (isRoad) {
-    vec3 ag1 = noise2DAndGrad(worldPos * 0.85);
-    vec3 ag2 = noise2DAndGrad(worldPos * 2.35 + vec2(17.3, -9.1));
-    // Bitumen repair patches (matParam < 0.22) and vulcanized rubber skidmarks smooth out raw stone aggregate pores
-    float isBitumenPatch = 1.0 - smoothstep(0.12, 0.24, matParam);
-    float granScale = ((matId == 4) ? 0.050 : 0.032) * (1.0 - isBitumenPatch * 0.45) * (1.0 - roadSkidMask * 0.62);
+    vec3 ag1 = noise2DAndGrad(worldPos * 0.72);
+    vec3 ag2 = noise2DAndGrad(worldPos * 2.10 + vec2(17.3, -9.1));
+    float rutSmooth = smoothstep(0.58, 0.86, matParam);
+    float granScale = ((matId == 4) ? 0.036 : 0.026) * (1.0 - rutSmooth * 0.25) * (1.0 - roadSkidMask * 0.65);
     matMicroN = worldDirToScreenUv(ag1.yz * 0.55 + ag2.yz * 0.45) * granScale;
     if (uSnow > 0.01) {
-      float rutMask = max(smoothstep(0.60, 0.88, matParam), roadSkidMask);
+      float rutMask = max(rutSmooth, roadSkidMask);
       vec3 snN = noise2DAndGrad(worldPos * 0.16 + vec2(5.2, 11.8));
       matMicroN = mix(matMicroN, worldDirToScreenUv(snN.yz) * 0.065, uSnow * (1.0 - rutMask * 0.75));
     }
@@ -1002,12 +1009,10 @@ void main() {
     vec2 baseEarthGrad = er1.yz * 0.65 + er2.yz * 0.35;
 
     if (matId == 1 && matParam < 0.25) {
-      // Plowed Chernozem: regular tractor furrow ridges + heavy soil clods
       float furrowDeriv = cos(worldPos.y * 0.78 + er1.x * 1.4) * 0.85;
       baseEarthGrad = mix(baseEarthGrad, vec2(er2.y * 0.4, furrowDeriv), 0.65);
       earthScale = 0.064;
     } else if (matId == 1 && matParam >= 0.25 && matParam < 0.42) {
-      // Silica Sand & Salt Flats: wind-rippled micro-dunes perpendicular to prevailing wind
       float wLen = length(uWind);
       vec2 wDir = wLen > 0.1 ? (uWind / wLen) : vec2(0.92, 0.39);
       float ripplePhase = dot(worldPos, wDir) * 0.55 - uWindPhase * 0.15 + er1.x * 1.8;
@@ -1017,13 +1022,16 @@ void main() {
     }
     matMicroN = worldDirToScreenUv(baseEarthGrad) * earthScale;
 
-    // 3D Offroad Tire Rut normal perturbation from uMat.b screen-space height gradient
+    // 3D Offroad Tire Rut normal perturbation from uMat.b screen-space height gradient (material-guarded)
     if (offroadRutMask > 0.01) {
-      float rL = clamp((texture(uMat, uv + vec2(-texel.x * 2.0, 0.0)).b - 0.52) * 2.15, 0.0, 1.0);
-      float rR = clamp((texture(uMat, uv + vec2( texel.x * 2.0, 0.0)).b - 0.52) * 2.15, 0.0, 1.0);
-      float rD = clamp((texture(uMat, uv + vec2(0.0, -texel.y * 2.0)).b - 0.52) * 2.15, 0.0, 1.0);
-      float rU = clamp((texture(uMat, uv + vec2(0.0,  texel.y * 2.0)).b - 0.52) * 2.15, 0.0, 1.0);
-      // Trench is sunken (-height), so gradient of depth points into the trench walls
+      vec4 mRL = texture(uMat, clamp(uv + vec2(-matTexel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
+      vec4 mRR = texture(uMat, clamp(uv + vec2( matTexel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
+      vec4 mRD = texture(uMat, clamp(uv + vec2(0.0, -matTexel.y * 1.5), vec2(0.001), vec2(0.999)));
+      vec4 mRU = texture(uMat, clamp(uv + vec2(0.0,  matTexel.y * 1.5), vec2(0.001), vec2(0.999)));
+      float rL = (mRL.a >= 0.94 && classifyMatCode(mRL.r * 255.0) == matId) ? clamp((mRL.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
+      float rR = (mRR.a >= 0.94 && classifyMatCode(mRR.r * 255.0) == matId) ? clamp((mRR.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
+      float rD = (mRD.a >= 0.94 && classifyMatCode(mRD.r * 255.0) == matId) ? clamp((mRD.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
+      float rU = (mRU.a >= 0.94 && classifyMatCode(mRU.r * 255.0) == matId) ? clamp((mRU.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
       vec2 rutWallN = vec2(rL - rR, rD - rU) * 0.18;
       matMicroN = mix(matMicroN, matMicroN * 0.45 + rutWallN, min(1.0, offroadRutMask * 1.35));
     }
@@ -1034,7 +1042,6 @@ void main() {
       matMicroN = mix(matMicroN, worldDirToScreenUv(drift1.yz * 0.65 + drift2.yz * 0.35) * 0.085, uSnow * (1.0 - offroadRutMask * 0.65));
     }
   } else if (isOil) {
-    // Viscous oil damps underlying asphalt grain in its core and forms a steep 3D meniscus rim
     waveN = meniscusN * 1.65 + computePuddleWaveNormal(worldPos, uTime * 0.25, matParam) * 0.12;
   } else if (isFuel) {
     waveN = meniscusN * 0.75 + computePuddleWaveNormal(worldPos, uTime * 0.80, matParam) * 0.32;
@@ -1047,13 +1054,14 @@ void main() {
     float hr = luma(texture(uSrc, uv + vec2( texel.x * 1.5, 0.0)).rgb);
     float hd = luma(texture(uSrc, uv + vec2(0.0, -texel.y * 1.5)).rgb);
     float hu = luma(texture(uSrc, uv + vec2(0.0,  texel.y * 1.5)).rgb);
-    // Viscous oil smooths out underlying substrate roughness
+    // Painted vehicle/building/prop colors should NOT be heavily embossed as height bumps; preserve full relief on terrain/roads
+    float lumaBumpGain = (matId == 0) ? 0.16 : 0.75;
     float subRoughSuppress = isOil ? (1.0 - smoothstep(0.15, 0.65, matParam) * matAlpha * 0.85) : 1.0;
-    g = (vec2(hr - hl, hu - hd) + matMicroN) * subRoughSuppress + waveN * max(waterMask, puddleBasinMask) * 0.14;
+    g = (vec2(hr - hl, hu - hd) * lumaBumpGain + matMicroN) * subRoughSuppress + waveN * max(waterMask, puddleBasinMask) * 0.14;
     float shade = 1.0 - l0 * 0.55;
 
     if (uRelief > 0.001) {
-      float sunLit = clamp(-dot(g, uSun) * 3.2, -0.35, 0.35);
+      float sunLit = clamp(-dot(g, uSun) * 3.0, -0.32, 0.32);
       c *= 1.0 + sunLit * uRelief * mix(0.5, 1.0, uDay) * shade;
       if (uLightOn > 0.5) {
         vec2 lt = vec2(12.0) / uLightSize;
@@ -1113,6 +1121,8 @@ void main() {
   vec3 skyCol = mix(nightSkyCol, daySkyCol, uDay);
   vec3 sunGlintCol = mix(vec3(0.55, 0.72, 0.96) * 0.38, vec3(1.0, 0.96, 0.84), uDay);
   float lampHere = (uLightOn > 0.5) ? (1.0 - texture(uLight, uv).a) : 0.0;
+  float dayBloomDamp = mix(1.0, 0.18, uDay); // Prevents sunny white cars/paint from blooming onto puddles & roads in daylight
+  const vec3 VIEW_REFL = vec3(0.0, -0.77, 0.64);
 
   // ============================================================================
   // SHADER 1: DEEP / FLOWING WATER BODIES (River "Быстрица", Salt Lakes, Fountain)
@@ -1128,7 +1138,7 @@ void main() {
       float frostSparkle = step(0.965, hash(floor(worldPos * 2.4) + floor(uCamPos * 0.02))) * (0.35 * uDay + 0.65 * lampHere);
       vec3 reflBloom = texture(uBloomWide, clamp(uv + iceGrad * 0.008, vec2(0.001), vec2(0.999))).rgb;
       c = mix(c, skyCol * 1.08, 0.12);
-      c += sunGlintCol * iceGlaze + vec3(0.88, 0.95, 1.0) * frostSparkle * 0.55 + reflBloom * 0.65;
+      c += sunGlintCol * iceGlaze + vec3(0.88, 0.95, 1.0) * frostSparkle * 0.55 + reflBloom * 0.65 * dayBloomDamp;
     } else if (waterMask > 0.01) {
       float waveSlopeMag = length(waveN);
       float sunDot = dot(waveN, uSun);
@@ -1140,12 +1150,8 @@ void main() {
       c *= 1.0 + clamp(sunDot * 0.18, -0.14, 0.16) * waterMask;
 
       // 2. Schlick Fresnel on the real wave normal + procedural sky / cloud reflection.
-      //    N is the surface normal rebuilt from the height gradient. The reflection term uses a mildly oblique eye vector:
-      //    from a true nadir view water reflects only ~2%, which would hide the sky entirely, so the game camera is treated
-      //    as pitched ~50 deg for this term only. Reflectance then depends on how each facet is tilted, not on a constant.
       vec3 waterN = normalize(vec3(-waveN, 1.0));
       float sunE = clamp(uSunElev, 0.05, 1.0);
-      const vec3 VIEW_REFL = vec3(0.0, -0.77, 0.64);
       float cosV = clamp(dot(waterN, VIEW_REFL), 0.0, 1.0);
       float fresnel = 0.02 + 0.98 * pow(1.0 - cosV, 5.0);
       vec3 skyRefl = waterSkyRadiance(reflect(-VIEW_REFL, waterN), worldPos, sunE);
@@ -1194,9 +1200,9 @@ void main() {
   // ============================================================================
   else if (isPuddleWater) {
     float pAlpha = clamp(matAlpha * 1.15, 0.0, 1.0);
-    // Outer porous wet darkening meniscus ring (water soaked into asphalt/soil pores around the puddle)
-    float soakRing = smoothstep(0.02, 0.22, matParam) * (1.0 - smoothstep(0.24, 0.48, matParam));
-    c *= 1.0 - 0.28 * soakRing * pAlpha;
+    // Outer porous wet capillary darkening collar around puddle shore
+    float soakRing = smoothstep(0.01, 0.14, matParam) * (1.0 - smoothstep(0.16, 0.34, matParam));
+    c *= 1.0 - 0.34 * soakRing * pAlpha;
 
     if (uFreezing > 0.5) {
       // Frozen road puddle (Наледь / Тонкий лёд на асфальте)
@@ -1205,27 +1211,38 @@ void main() {
       float iceSpec = pow(clamp(dot(normalize(iceN + uSun * 0.45), uSun), 0.0, 1.0), 20.0) * 0.42;
       vec3 reflB = texture(uBloomWide, clamp(uv + iceN * 0.008, vec2(0.001), vec2(0.999))).rgb;
       c = mix(c, skyCol * 1.12, 0.22 * pAlpha * smoothstep(0.12, 0.35, matParam));
-      c += (sunGlintCol * iceSpec + reflB * 0.95) * pAlpha;
+      c += (sunGlintCol * iceSpec + reflB * 0.95 * dayBloomDamp) * pAlpha;
     } else if (puddleBasinMask > 0.01) {
-      // Standing puddle water basin: planar sky mirror + capillary/rain ripples + headlight/lamp reflections
       float slopeMag = length(waveN);
-      float sunDot = dot(waveN, uSun);
-      // Darker wet substrate beneath shallow puddle water
-      c *= 1.0 - 0.18 * puddleBasinMask;
+      // Wet porous substrate darkened beneath shallow rainwater + subtle depth attenuation
+      float depthTerm = smoothstep(0.22, 0.88, matParam);
+      c *= 1.0 - (0.28 + 0.08 * depthTerm) * puddleBasinMask;
+      c *= mix(vec3(1.0), vec3(0.88, 0.94, 0.99), puddleBasinMask * 0.35);
 
-      // Planar Fresnel sky reflection (stronger on flat puddle mirror, perturbed by ripples)
-      float puddleFresnel = clamp(0.18 + 0.14 * smoothstep(0.25, 0.85, matParam) + 0.08 * sunDot, 0.0, 0.38);
-      c = mix(c, skyCol, puddleBasinMask * puddleFresnel);
+      // Physical 3D Schlick Fresnel sky & drifting cloud reflection in the puddle
+      vec3 pN = normalize(vec3(-waveN * 1.15 - meniscusN * 0.55, 1.0));
+      float sunE = clamp(uSunElev, 0.05, 1.0);
+      float cosV = clamp(dot(pN, VIEW_REFL), 0.0, 1.0);
+      float fresnel = 0.02 + 0.98 * pow(1.0 - cosV, 5.0);
+      vec3 pSkyRefl = waterSkyRadiance(reflect(-VIEW_REFL, pN), worldPos, sunE);
+      float skyAmt = clamp(fresnel * (1.30 + 0.50 * depthTerm), 0.05, 0.40);
+      c = mix(c, pSkyRefl, puddleBasinMask * skyAmt);
 
-      // Sharp solar / lunar glint on puddle ripples & meniscus rim
-      float sunAlign = dot(normalize(waveN + uSun * 0.38), uSun);
-      float pGlint = pow(clamp(sunAlign, 0.0, 1.0), 22.0) * smoothstep(0.04, 0.32, slopeMag) * 0.48;
-      c += sunGlintCol * puddleBasinMask * pGlint;
+      // 3D Blinn-Phong solar / lunar glitter + raised capillary meniscus highlight
+      vec2 sunXY = length(uSun) > 1e-3 ? normalize(uSun) : vec2(0.0, 1.0);
+      vec3 lightDir = normalize(vec3(sunXY * sqrt(max(0.0, 1.0 - sunE * sunE)), sunE));
+      vec3 eyeGlint = normalize(vec3(-sunXY * 0.42, 1.0));
+      vec3 halfV = normalize(lightDir + eyeGlint);
+      float nDotH = max(dot(pN, halfV), 0.0);
+      float menRimSpec = smoothstep(0.03, 0.25, length(meniscusN)) * 0.28;
+      float pGlint = (pow(nDotH, mix(26.0, 80.0, sunE)) * 0.18 + pow(nDotH, mix(110.0, 280.0, sunE)) * 0.55 + menRimSpec * pow(nDotH, 12.0));
+      float clearSky = 1.0 - 0.82 * uRain;
+      c += sunGlintCol * puddleBasinMask * pGlint * clearSky;
 
-      // Mirror reflection of headlights, taillights, neon, and streetlamps in the puddle
+      // Headlight, taillight, neon, and streetlamp reflections (attenuated by daylight so white paint doesn't halo)
       vec2 pReflUv = clamp(uv + waveN * 0.012, vec2(0.001), vec2(0.999));
-      vec3 pBloom = texture(uBloom, pReflUv).rgb + texture(uBloomWide, pReflUv).rgb * 1.15;
-      c += pBloom * puddleBasinMask * mix(1.85, 0.80, uDay);
+      vec3 pBloom = texture(uBloom, pReflUv).rgb + texture(uBloomWide, pReflUv).rgb * 1.10;
+      c += pBloom * puddleBasinMask * mix(1.65, 0.20, uDay);
 
       if (uLightOn > 0.5) {
         float litP = 1.0 - texture(uLight, clamp(uv + waveN * 0.014, vec2(0.001), vec2(0.999))).a;
@@ -1335,78 +1352,79 @@ void main() {
   // SHADER 6: ASPHALT, CONCRETE, MINERAL AGGREGATE & VULCANIZED RUBBER SKIDMARKS
   // ============================================================================
   else if (isRoad) {
-    float rutMask = max(smoothstep(0.58, 0.86, matParam), roadSkidMask * 0.90); // Tire-polished wheel tracks + rubber skids
+    float rutMask = max(smoothstep(0.58, 0.86, matParam), roadSkidMask * 0.90);
     float isConcrete = (matId == 3) ? 1.0 : 0.0;
-    float isBitumenPatch = (matId == 4) ? (1.0 - smoothstep(0.12, 0.25, matParam)) : 0.0;
 
-    // 0. 3D MINERAL AGGREGATE MICRO-RELIEF, BITUMEN TAR SEAMS & TIRE-POLISHED WHEEL LANES
+    // 0. 3D MINERAL AGGREGATE MICRO-RELIEF & TIRE-POLISHED WHEEL LANES
     if (uSnow < 0.65) {
       vec3 roadBloomHere = texture(uBloomWide, uv).rgb;
-      // Direct 3D normal-mapped aggregate & concrete grain lighting from sun and artificial lamps
-      float aggSlope = clamp(-dot(matMicroN * (isConcrete > 0.5 ? 16.0 : 22.0), uSun), -0.35, 0.35);
-      c *= 1.0 + aggSlope * (isConcrete > 0.5 ? 0.18 : 0.26) * (0.45 + 0.55 * uDay);
+      // Direct 3D normal-mapped aggregate & concrete grain lighting from sun (subtle matte grain, no harsh speckles)
+      float aggSlope = clamp(-dot(matMicroN * (isConcrete > 0.5 ? 12.0 : 16.0), uSun), -0.26, 0.26);
+      c *= 1.0 + aggSlope * (isConcrete > 0.5 ? 0.14 : 0.20) * (0.45 + 0.55 * uDay);
 
-      // Tire-polished wheel-rut lanes have slightly darker compacted bitumen and subtle grazing-angle sky/headlight sheen
+      // Crushed basalt/granite micro-stone contrast (matte stone tone modulation, zero TV-static glitter)
+      vec3 stoneTex = noise2DAndGrad(worldPos * (isConcrete > 0.5 ? 1.8 : 1.35));
+      c *= 0.965 + 0.070 * stoneTex.x;
+
+      // Subtle tire-polished wheel-rut compaction (slightly smoother aggregate & night lamp grazing sheen)
       if (rutMask > 0.02 && roadSkidMask < 0.25) {
-        c *= 1.0 - rutMask * 0.045 * (1.0 - isConcrete * 0.5);
-        float laneSheen = pow(clamp(dot(normalize(matMicroN * 7.0 + uSun * 0.38), uSun), 0.0, 1.0), 14.0) * 0.14;
-        c += (sunGlintCol * laneSheen * uDay + roadBloomHere * 0.28) * rutMask;
-      }
-
-      // Crushed granite/quartz/basalt aggregate micro-facets catch sunlight & vehicle headlights on dry/damp pavement
-      vec2 agCell = floor(worldPos * (isConcrete > 0.5 ? 3.2 : 2.5));
-      float agHash = hash(agCell + floor((uCamPos + uSun * 90.0) * 0.025));
-      float mineralSparkle = smoothstep(0.945, 0.994, agHash)
-        * (1.0 - isBitumenPatch * 0.85)
-        * (1.0 - roadSkidMask * 0.80)
-        * (0.36 * uDay + 0.52 * lampHere + luma(roadBloomHere) * 1.15);
-      c += mix(sunGlintCol, vec3(0.92, 0.96, 1.0), 0.35) * mineralSparkle * (isConcrete > 0.5 ? 0.30 : 0.42);
-
-      // Fresh dark tar/bitumen repair patches & crack seals have higher dielectric gloss and pitch absorption
-      if (isBitumenPatch > 0.01) {
-        float tarSun = pow(clamp(dot(normalize(matMicroN * 6.0 + uSun * 0.35), uSun), 0.0, 1.0), 14.0) * 0.24;
-        c *= 1.0 - 0.12 * isBitumenPatch;
-        c += (sunGlintCol * tarSun + roadBloomHere * 0.52) * isBitumenPatch;
+        c *= 1.0 - rutMask * 0.032 * (1.0 - isConcrete * 0.5);
+        c += roadBloomHere * dayBloomDamp * 0.24 * rutMask;
       }
     }
 
     // 0B. VULCANIZED RUBBER SKIDMARK & CARRIED TIRE TRACK SHADER
     if (roadSkidMask > 0.01) {
-      // Molten/vulcanized polymer fills asphalt pores: anisotropic specular sheen at grazing sun/headlight angles
       vec2 skidReflUv = clamp(uv + matMicroN * 0.14, vec2(0.001), vec2(0.999));
-      vec3 skidBloom = texture(uBloom, skidReflUv).rgb * 0.65 + texture(uBloomWide, skidReflUv).rgb * 1.15;
-      float rubberSpec = pow(clamp(dot(normalize(matMicroN * 5.0 + uSun * 0.42), uSun), 0.0, 1.0), 14.0) * 0.34;
-      vec3 rubberSheenCol = mix(vec3(0.22, 0.27, 0.36), sunGlintCol * 0.78, uDay);
+      vec3 skidBloom = texture(uBloom, skidReflUv).rgb * 0.55 + texture(uBloomWide, skidReflUv).rgb;
+      float rubberSpec = pow(clamp(dot(normalize(matMicroN * 5.0 + uSun * 0.42), uSun), 0.0, 1.0), 16.0) * 0.26;
+      vec3 rubberSheenCol = mix(vec3(0.22, 0.27, 0.36), sunGlintCol * 0.72, uDay);
       c = mix(c, c * 0.76, roadSkidMask * 0.52);
-      c += (rubberSheenCol * rubberSpec + skidBloom * mix(1.35, 0.55, uDay)) * roadSkidMask;
+      c += (rubberSheenCol * rubberSpec + skidBloom * mix(1.30, 0.16, uDay)) * roadSkidMask;
       if (uLightOn > 0.5) {
         c += vec3(0.96, 0.91, 0.82) * lampHere * 0.22 * roadSkidMask * (1.0 - uDay * 0.5);
       }
     }
 
-    // A. WET ROAD SHADER (Angstrom porous darkening, wheel-rut water film, anisotropic headlight/sky mirror)
+    // A. WET ROAD SHADER (Deep wet-porosity bitumen, flooded drainage ruts, physical Fresnel sky/cloud & lamp reflections)
     if (uWet > 0.005 && uFreezing < 0.5) {
-      vec3 wPatch1 = noise2DAndGrad(worldPos * 0.035);
-      vec3 wPatch2 = noise2DAndGrad(worldPos * 0.11 + vec2(23.4, -11.7));
-      float puddleFilm = clamp((wPatch1.x * 0.6 + wPatch2.x * 0.4 - 0.32) * 1.45 + rutMask * 0.46, 0.0, 1.0);
+      vec3 wPatch1 = noise2DAndGrad(worldPos * 0.032);
+      vec3 wPatch2 = noise2DAndGrad(worldPos * 0.10 + vec2(23.4, -11.7));
+      float puddleFilm = clamp((wPatch1.x * 0.6 + wPatch2.x * 0.4 - 0.34) * 1.45 + rutMask * 0.48, 0.0, 1.0);
       float localWet = uWet * (0.55 + 0.45 * puddleFilm);
+      float filmWater = clamp(puddleFilm * (0.40 + 0.68 * rutMask), 0.0, 1.0) * uWet;
 
-      // Porous wet asphalt darkening (water fills micro-cavities, causing internal light trapping)
-      c *= 1.0 - 0.25 * localWet * (1.0 - isConcrete * 0.28);
+      // Porous wet asphalt darkening (water fills aggregate cavities, producing authentic dark rain-slick bitumen)
+      c *= 1.0 - (0.30 + 0.14 * filmWater) * localWet * (1.0 - isConcrete * 0.30);
 
-      // Anisotropic specular reflection perturbed by bitumen aggregate micro-normals
-      vec2 wetReflUv = clamp(uv + matMicroN * 0.22, vec2(0.001), vec2(0.999));
-      vec3 wetBloom = texture(uBloom, wetReflUv).rgb * 0.65 + texture(uBloomWide, wetReflUv).rgb * 1.35;
-      float sunSpec = pow(clamp(dot(normalize(matMicroN * 8.0 + uSun * 0.35), uSun), 0.0, 1.0), 14.0) * 0.22;
+      // Film water levels out coarse stone micro-normals in drainage ruts so reflections are sharper there
+      vec2 dampN = mix(matMicroN * 14.0, vec2(0.0), filmWater * 0.72);
+      vec3 roadN = normalize(vec3(-dampN, 1.0));
+      float sunE = clamp(uSunElev, 0.05, 1.0);
+      float cosV = clamp(dot(roadN, VIEW_REFL), 0.0, 1.0);
+      float fresnel = 0.02 + 0.98 * pow(1.0 - cosV, 5.0);
+      vec3 roadSkyRefl = waterSkyRadiance(reflect(-VIEW_REFL, roadN), worldPos, sunE);
 
-      float skySheen = localWet * (0.06 + 0.13 * puddleFilm * (0.5 + 0.5 * rutMask));
-      c = mix(c, skyCol, skySheen * uDay);
-      c += wetBloom * localWet * (1.25 + 0.90 * rutMask) * mix(1.55, 0.55, uDay);
-      c += sunGlintCol * sunSpec * localWet * (0.6 + 0.65 * rutMask);
+      // Only smooth flooded drainage films catch crisp sky reflections; damp rough aggregate stays dark
+      float skySheen = clamp(fresnel * (0.20 + 0.95 * filmWater), 0.0, 0.26) * localWet;
+      c = mix(c, roadSkyRefl, skySheen);
+
+      // Anisotropic sun shimmer & night headlight/lamp reflections
+      vec2 sunXY = length(uSun) > 1e-3 ? normalize(uSun) : vec2(0.0, 1.0);
+      vec3 lightDir = normalize(vec3(sunXY * sqrt(max(0.0, 1.0 - sunE * sunE)), sunE));
+      vec3 eyeGlint = normalize(vec3(-sunXY * 0.42, 1.0));
+      vec3 halfV = normalize(lightDir + eyeGlint);
+      float nDotH = max(dot(roadN, halfV), 0.0);
+      float sunSpec = pow(nDotH, mix(14.0, 48.0, filmWater)) * 0.16 * (1.0 - 0.78 * uRain);
+
+      vec2 wetReflUv = clamp(uv + dampN * 0.016, vec2(0.001), vec2(0.999));
+      vec3 wetBloom = texture(uBloom, wetReflUv).rgb * 0.60 + texture(uBloomWide, wetReflUv).rgb * 1.25;
+      c += wetBloom * localWet * (1.15 + 0.85 * rutMask) * mix(1.50, 0.18, uDay);
+      c += sunGlintCol * sunSpec * localWet * (0.5 + 0.6 * filmWater);
 
       if (uLightOn > 0.5) {
-        float litPert = 1.0 - texture(uLight, clamp(uv + matMicroN * 0.25, vec2(0.001), vec2(0.999))).a;
-        float roadLampSpec = max(0.0, litPert - lampHere * 0.72) + lampHere * 0.18 * puddleFilm;
+        float litPert = 1.0 - texture(uLight, clamp(uv + dampN * 0.018, vec2(0.001), vec2(0.999))).a;
+        float roadLampSpec = max(0.0, litPert - lampHere * 0.72) + lampHere * 0.20 * filmWater;
         c += vec3(1.0, 0.93, 0.78) * roadLampSpec * localWet * (0.35 + 0.65 * rutMask) * (0.35 + 0.65 * (1.0 - uDay));
       }
     }
@@ -1417,13 +1435,11 @@ void main() {
       float snowCoverMask = clamp(uSnow * (1.0 - rutMask * 0.72 + (snNoise.x - 0.45) * 0.45), 0.0, 1.0);
       float glazeIceMask = clamp((uFreezing * 0.65 + uSnow * 0.55) * (0.35 + 0.65 * rutMask), 0.0, 1.0);
 
-      // Glaze ice (гололёд / накатанная ледяная колея) specular sheen in wheel tracks
       vec2 iceReflUv = clamp(uv + matMicroN * 0.18, vec2(0.001), vec2(0.999));
       vec3 iceBloom = texture(uBloomWide, iceReflUv).rgb;
       float iceSunGlint = pow(clamp(dot(normalize(matMicroN * 6.0 + uSun * 0.4), uSun), 0.0, 1.0), 16.0) * 0.24;
-      c += (iceBloom * 0.95 + sunGlintCol * iceSunGlint) * glazeIceMask;
+      c += (iceBloom * 0.95 * dayBloomDamp + sunGlintCol * iceSunGlint) * glazeIceMask;
 
-      // Micro-crystalline diamond snow glints on snow-covered road shoulders & lanes
       if (snowCoverMask > 0.05) {
         vec2 crystalCell = floor(worldPos * 2.8);
         float cHash = hash(crystalCell + floor((uCamPos + uSun * 120.0) * 0.04));
@@ -1500,25 +1516,27 @@ void main() {
       c *= 0.92 + 0.08 * mossN.x;
     }
 
-    // 0F. 3D OFFROAD TIRE RUT SHADER (Sunken Trench Walls, Lateral Soil Berms & Wet Rut Mirror)
+    // 0F. 3D OFFROAD TIRE RUT SHADER (Sunken Trench Walls, Lateral Soil Berms & Wet Rut Mirror, material-guarded)
     if (offroadRutMask > 0.01) {
-      float rL = clamp((texture(uMat, uv + vec2(-texel.x * 2.0, 0.0)).b - 0.52) * 2.15, 0.0, 1.0);
-      float rR = clamp((texture(uMat, uv + vec2( texel.x * 2.0, 0.0)).b - 0.52) * 2.15, 0.0, 1.0);
-      float rD = clamp((texture(uMat, uv + vec2(0.0, -texel.y * 2.0)).b - 0.52) * 2.15, 0.0, 1.0);
-      float rU = clamp((texture(uMat, uv + vec2(0.0,  texel.y * 2.0)).b - 0.52) * 2.15, 0.0, 1.0);
+      vec4 mRL = texture(uMat, clamp(uv + vec2(-matTexel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
+      vec4 mRR = texture(uMat, clamp(uv + vec2( matTexel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
+      vec4 mRD = texture(uMat, clamp(uv + vec2(0.0, -matTexel.y * 1.5), vec2(0.001), vec2(0.999)));
+      vec4 mRU = texture(uMat, clamp(uv + vec2(0.0,  matTexel.y * 1.5), vec2(0.001), vec2(0.999)));
+      float rL = (mRL.a >= 0.94 && classifyMatCode(mRL.r * 255.0) == matId) ? clamp((mRL.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
+      float rR = (mRR.a >= 0.94 && classifyMatCode(mRR.r * 255.0) == matId) ? clamp((mRR.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
+      float rD = (mRD.a >= 0.94 && classifyMatCode(mRD.r * 255.0) == matId) ? clamp((mRD.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
+      float rU = (mRU.a >= 0.94 && classifyMatCode(mRU.r * 255.0) == matId) ? clamp((mRU.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
       vec2 rutGrad = vec2(rR - rL, rU - rD);
       float wallSlope = length(rutGrad);
-      // Directional self-shadowing & sunlit rim on the 3D rut walls
       float rutSunLit = clamp(dot(rutGrad, uSun) * 3.4, -0.44, 0.48);
       c *= 1.0 - offroadRutMask * 0.22 + rutSunLit * (0.38 + 0.62 * uDay);
 
-      // Wet or compacted clay/mud at the bottom of the tire rut reflects sky, sun & vehicle headlights
       float rutWetness = clamp(uWet * 1.25 + bankMoisture * 0.8 + offroadRutMask * 0.55, 0.0, 1.0);
       vec2 rutReflUv = clamp(uv + (rutGrad * 0.014 + matMicroN * 0.18), vec2(0.001), vec2(0.999));
       vec3 rutBloom = texture(uBloomWide, rutReflUv).rgb;
       float rutGlint = pow(clamp(dot(normalize(rutGrad + matMicroN * 6.0 + uSun * 0.35), uSun), 0.0, 1.0), 14.0) * 0.36;
       c = mix(c, skyCol * 0.85, offroadRutMask * rutWetness * 0.18 * uDay);
-      c += (sunGlintCol * rutGlint + rutBloom * mix(1.45, 0.60, uDay) + vec3(0.95, 0.88, 0.74) * lampHere * 0.24 * wallSlope) * offroadRutMask * rutWetness;
+      c += (sunGlintCol * rutGlint + rutBloom * mix(1.45, 0.22, uDay) + vec3(0.95, 0.88, 0.74) * lampHere * 0.24 * wallSlope) * offroadRutMask * rutWetness;
     }
 
     // A. WET EARTH & SLICK MUD SHADER
@@ -1758,7 +1776,7 @@ export class GpuPostFx {
     this.pUp = this.makeProgram(VS, FS_UP, ['uTex', 'uTexel', 'uScale']);
     this.pComposite = this.makeProgram(VS, FS_COMPOSITE, [
       'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize',
-      'uMat', 'uMatOn', 'uGi', 'uWet', 'uSnow', 'uRain', 'uFogGlow',
+      'uMat', 'uMatOn', 'uMatSize', 'uGi', 'uWet', 'uSnow', 'uRain', 'uFogGlow',
       'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun', 'uSunElev',
       'uCamPos', 'uCamZoom', 'uCamAngle', 'uFreezing',
       'uRelief', 'uClarity', 'uBloomStr',
@@ -2066,6 +2084,7 @@ export class GpuPostFx {
     gl.uniform1f(c.u.uLightOn, lm ? 1 : 0);
     gl.uniform2f(c.u.uLightSize, lm ? lm.width : 1, lm ? lm.height : 1);
     gl.uniform1f(c.u.uMatOn, mm ? 1 : 0);
+    gl.uniform2f(c.u.uMatSize, mm ? mm.width : 1, mm ? mm.height : 1);
     gl.uniform1f(c.u.uGi, bloomOn ? (s.gi / 100) * 0.55 : 0);
 
     const effWetWeather = Math.max(g.wet, frame.hasResidualWetness ? 0.35 : 0);

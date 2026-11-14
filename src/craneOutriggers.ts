@@ -13,7 +13,7 @@ export const LEG_NAMES = ['Передняя левая', 'Передняя пр�
 
 /* Same scale the speedometer uses for grade: one terrain height unit is 2.5 px of ground. */
 const TERRAIN_K = 2.5;
-const BEAM_REACH_PX = 7.4;
+export const BEAM_REACH_PX = 12.5;
 const JACK_STROKE_PX = 12; // vertical pad travel
 const PAD_CLEARANCE_PX = 3; // how high the retracted pad hangs above flat ground
 const CONTACT_EPS_PX = 0.3;
@@ -70,8 +70,8 @@ export function getLegs(v: LegState): { beam: number[]; jack: number[]; contact:
 function legAnchors(length: number, width: number): { x: number; y: number }[] {
   const halfL = length / 2;
   const halfW = width / 2;
-  const xFront = -halfL + 0.5 * length - 2;
-  const xRear = -halfL + 8;
+  const xFront = length >= 73 ? length * 0.11 : -1.5;
+  const xRear = -halfL + 5.2;
   return [
     { x: xFront, y: -halfW },
     { x: xFront, y: halfW },

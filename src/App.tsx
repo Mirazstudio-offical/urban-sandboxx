@@ -4072,13 +4072,14 @@ export default function App() {
               const worldWind = worldRef.current.wind;
               const windGust = worldWind?.gust ?? 1.0;
               const camRiver = getRiverWaterAt(camera.x, camera.y);
+              const camShake = rendererRef.current.getActiveCameraShake();
               const ok = fx.render(
                 {
                   hour: displayTimeHourRef.current,
                   weather: weatherRef.current,
                   cameraAngle: camera.angle,
-                  cameraX: camera.x,
-                  cameraY: camera.y,
+                  cameraX: camera.x - camShake.x,
+                  cameraY: camera.y - camShake.y,
                   cameraZoom: camera.zoom,
                   isFreezing: ((calendarRef.current as any).ambientTempC ?? 15) <= -1.0,
                   windVx: worldWind ? worldWind.vx * windGust : 14,

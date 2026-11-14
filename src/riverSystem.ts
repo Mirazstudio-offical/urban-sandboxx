@@ -2739,8 +2739,10 @@ export function renderRiverMaterialMask(
   ctx.fillStyle = 'rgb(160, 220, 255)';
   ctx.fill();
 
-  // 3. Emergent dry boulder tops -> MAT_OCCLUDER (R=0, G=0, B=0)
-  ctx.fillStyle = 'rgb(0, 0, 0)';
+  // 3. Emergent dry boulder tops, Logging Bridge Deck & Fishing Piers -> MAT_OCCLUDER (alpha = 0 via destination-out)
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = 'rgba(0, 0, 0, 1)';
   for (let k = kStart; k <= kEnd; k++) {
     const pt = RIVER_SPLINE_POINTS[k];
     const seed = k * 43.17;
@@ -2762,17 +2764,17 @@ export function renderRiverMaterialMask(
       const stoneRot = Math.atan2(pt.ty, pt.tx) + (riverHash(sSeed * 5.3) - 0.5) * 0.55;
 
       ctx.beginPath();
-      ctx.ellipse(rx, ry, stoneRadX * 0.92, stoneRadY * 0.92, stoneRot, 0, Math.PI * 2);
+      ctx.ellipse(rx, ry, stoneRadX * 0.94, stoneRadY * 0.94, stoneRot, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // 4. Logging Bridge Deck -> MAT_OCCLUDER (R=0, G=0, B=0)
+  // 4. Logging Bridge Deck -> MAT_OCCLUDER
   if (minX <= 9500 && maxX >= 9300 && minY <= -3200 && maxY >= -3400) {
     ctx.fillRect(9400 - 34, -3300 - 88, 68, 176);
   }
 
-  // 5. Fishing Piers -> MAT_OCCLUDER (R=0, G=0, B=0)
+  // 5. Fishing Piers -> MAT_OCCLUDER
   if (minX <= 14350 && maxX >= 14100 && minY <= -2750 && maxY >= -3150) {
     const pierPositions = [
       { x: 14160, y: -3020, angle: 0.15, length: 75, width: 20 },
@@ -2786,5 +2788,6 @@ export function renderRiverMaterialMask(
       ctx.restore();
     }
   }
+  ctx.restore();
 }
 

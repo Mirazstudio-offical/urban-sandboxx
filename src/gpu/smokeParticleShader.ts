@@ -582,7 +582,7 @@ export class GpuParticleShaderRenderer {
         kind = VolumetricParticleKind.TerraDust;
       } else if (p.type === 'water_spray' || p.type === 'water_splash' || p.type === 'water_fountain') {
         kind = VolumetricParticleKind.HydroMist;
-      } else if (p.isSteam || (p.color && (p.color === '#ffffff' || p.color.startsWith('#f8') || p.color.startsWith('#f1')))) {
+      } else if (p.isSteam) {
         kind = VolumetricParticleKind.CondensateSteam;
       } else if (p.type === 'tire_smoke') {
         kind = VolumetricParticleKind.TireSmoke;

@@ -1129,9 +1129,10 @@ export function getVehicleCraneGeometry(car: {
   const outriggerExt = Math.max(0, Math.min(1, car.craneOutriggerExt ?? (car.craneOutriggersDeployed ? 1 : 0)));
   const turretAngleRad = car.craneTurretAngle ?? 0;
 
-  // Base root boom section length + 2 telescopic inner sections
-  const baseBoomLengthPx = Math.max(25, halfL - turretLocalX - 3.5);
-  const telescopicExtraPx = ext * 40.0; // Extends up to +40 px beyond stowed length
+  // Base root boom section length + 2 telescopic inner sections (stowed boom tip sits over cab front / windshield per КС-3577/45717 blueprint)
+  const rootOffsetPx = 5.4; // Boom trunnion pivot behind turret center
+  const baseBoomLengthPx = Math.max(30, halfL - turretLocalX + rootOffsetPx - 1.8);
+  const telescopicExtraPx = ext * 44.0; // Extends up to +44 px beyond stowed length
   // Slight foreshortening when elevated steeply in top-down 2.5D projection
   const elevationProjFactor = 1.0 - elev * 0.14;
   const totalBoomReachPx = (baseBoomLengthPx + telescopicExtraPx) * elevationProjFactor;
@@ -1142,8 +1143,8 @@ export function getVehicleCraneGeometry(car: {
   const worldTurretY = (car.y || 0) + sinCar * turretLocalX;
 
   const worldBoomAngle = (car.angle || 0) + turretAngleRad;
-  // Boom root pivot is slightly behind turret center (-4.2 px in turret local frame), so tip is at totalBoomReachPx - 4.2 from turret center
-  const tipOffsetFromTurret = Math.max(16, totalBoomReachPx - 4.2);
+  // Boom root pivot is behind turret center (-rootOffsetPx in turret local frame), so tip is at totalBoomReachPx - rootOffsetPx
+  const tipOffsetFromTurret = Math.max(18, totalBoomReachPx - rootOffsetPx);
   const worldBoomTipX = worldTurretX + Math.cos(worldBoomAngle) * tipOffsetFromTurret;
   const worldBoomTipY = worldTurretY + Math.sin(worldBoomAngle) * tipOffsetFromTurret;
 

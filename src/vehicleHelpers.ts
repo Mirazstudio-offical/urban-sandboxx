@@ -417,7 +417,7 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
   // КО-560 Combined Sewer Jetter & Vacuum Truck: rear high-pressure reel OR lower ANM-53 vacuum snout
   if (bodyId === 'body_vacuum_kombi_ko560') {
     const isJetter = car.fluidTank.activeHoseMode === 'jetter';
-    const localX = isJetter ? -halfL - 1.6 : -halfL - 2.8;
+    const localX = isJetter ? -halfL + 0.6 : -halfL - 0.4;
     const localY = isJetter ? 0 : -1.2;
     return {
       x: car.x + cosA * localX - sinA * localY,
@@ -427,7 +427,7 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
 
   if (bodyId === 'body_vacuum_ko503') {
     // Rear ANM-53 brass receiving snout nozzle at rear bottom of the vacuum cistern
-    const localX = -halfL - 2.8;
+    const localX = -halfL - 1.1;
     const localY = 0;
     return {
       x: car.x + cosA * localX - sinA * localY,
