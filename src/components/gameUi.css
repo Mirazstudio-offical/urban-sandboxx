@@ -2069,3 +2069,11 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
     gap: 5px;
   }
 }
+
+#inventory-modal .gu-body:has(.gu-interaction-board) {
+  overflow: hidden;
+}
+#inventory-modal .gu-stagger:has(.gu-interaction-board) > * {
+  animation: gu-fade 0.18s ease both;
+}
+

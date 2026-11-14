@@ -107,6 +107,25 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const [openContainer, setOpenContainer] = useState<InventoryItem | null>(null);
   const [, setSelectedContainerItemIdx] = useState<number>(0);
   const [, forceRender] = useState(0);
+  const [selectedWbSlot, setSelectedWbSlot] = useState<string | null>(null);
+  const [wbDragUi, setWbDragUi] = useState<{
+    sourceKey: string;
+    item: InventoryItem;
+    x: number;
+    y: number;
+    overKey: string | null;
+  } | null>(null);
+  const wbDragRef = React.useRef<{
+    sourceKey: string;
+    item: InventoryItem;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+    active: boolean;
+    overKey: string | null;
+  } | null>(null);
+  const wbDropHandlerRef = React.useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
 
   useEffect(() => {
     if (!isOpen || !player) return;
@@ -604,7 +623,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       title="Инвентарь и нагрузка"
       subtitle="Физический объём (л), вес (кг), карманы и активные руки"
       width={1140}
-      tall
+      tall={activeTab !== 'interaction'}
       onClose={onClose}
       wipeKey={activeTab + '-' + (openContainer?.id || 'root')}
       headRight={
@@ -1948,6 +1967,141 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             }
           };
 
+          wbDropHandlerRef.current = handleSlotDrop;
+
+          const findTargetWbSlotAt = (x: number, y: number, sourceKey: string): string | null => {
+            const nodes = document.querySelectorAll<HTMLElement>('[data-wb-slot]');
+            let bestKey: string | null = null;
+            let bestDist = Infinity;
+
+            nodes.forEach(node => {
+              const key = node.getAttribute('data-wb-slot');
+              if (!key || key === sourceKey || key.startsWith('output:')) return;
+              const rect = node.getBoundingClientRect();
+              if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                bestKey = key;
+                bestDist = -1;
+                return;
+              }
+              if (bestDist >= 0) {
+                const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
+                const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+                const d = Math.hypot(dx, dy);
+                if (d <= 22 && d < bestDist) {
+                  bestDist = d;
+                  bestKey = key;
+                }
+              }
+            });
+
+            if (!bestKey) {
+              const inputGrid = document.querySelector<HTMLElement>('[data-wb-input-grid]');
+              if (inputGrid) {
+                const gRect = inputGrid.getBoundingClientRect();
+                if (
+                  x >= gRect.left - 16 &&
+                  x <= gRect.right + 16 &&
+                  y >= gRect.top - 16 &&
+                  y <= gRect.bottom + 16
+                ) {
+                  const emptyIdx = [0, 1, 2, 3].find(i => !interactionInputs[i]);
+                  const fallbackIdx = emptyIdx !== undefined ? emptyIdx : 0;
+                  const candidate = `input:${fallbackIdx}`;
+                  if (candidate !== sourceKey) return candidate;
+                }
+              }
+            }
+
+            return bestKey;
+          };
+
+          const startSlotPointerDrag = (
+            e: React.PointerEvent<HTMLDivElement>,
+            slotKey: string,
+            item: InventoryItem | null | undefined
+          ) => {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+
+            // If user clicked an empty target slot while another slot was selected, move immediately
+            if (!item) {
+              if (selectedWbSlot && selectedWbSlot !== slotKey && !slotKey.startsWith('output:')) {
+                wbDropHandlerRef.current?.(slotKey, selectedWbSlot);
+                setSelectedWbSlot(null);
+              }
+              return;
+            }
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            wbDragRef.current = {
+              sourceKey: slotKey,
+              item,
+              startX,
+              startY,
+              x: startX,
+              y: startY,
+              active: false,
+              overKey: null,
+            };
+
+            const onPointerMove = (ev: PointerEvent) => {
+              const st = wbDragRef.current;
+              if (!st) return;
+              st.x = ev.clientX;
+              st.y = ev.clientY;
+              if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 3) {
+                st.active = true;
+              }
+              if (st.active) {
+                const over = findTargetWbSlotAt(ev.clientX, ev.clientY, st.sourceKey);
+                st.overKey = over;
+                setWbDragUi({
+                  sourceKey: st.sourceKey,
+                  item: st.item,
+                  x: st.x,
+                  y: st.y,
+                  overKey: over,
+                });
+              }
+            };
+
+            const finishDrag = (ev: PointerEvent, cancelled: boolean) => {
+              window.removeEventListener('pointermove', onPointerMove);
+              window.removeEventListener('pointerup', onPointerUp);
+              window.removeEventListener('pointercancel', onPointerCancel);
+
+              const st = wbDragRef.current;
+              wbDragRef.current = null;
+              setWbDragUi(null);
+
+              if (!st || cancelled) return;
+
+              if (st.active) {
+                const targetKey = findTargetWbSlotAt(ev.clientX, ev.clientY, st.sourceKey) || st.overKey;
+                if (targetKey && targetKey !== st.sourceKey) {
+                  wbDropHandlerRef.current?.(targetKey, st.sourceKey);
+                  setSelectedWbSlot(null);
+                }
+              } else {
+                // Click without drag: support click-source then click-target
+                if (selectedWbSlot && selectedWbSlot !== slotKey && !slotKey.startsWith('output:')) {
+                  wbDropHandlerRef.current?.(slotKey, selectedWbSlot);
+                  setSelectedWbSlot(null);
+                } else {
+                  setSelectedWbSlot(prev => (prev === slotKey ? null : slotKey));
+                }
+              }
+            };
+
+            const onPointerUp = (ev: PointerEvent) => finishDrag(ev, false);
+            const onPointerCancel = (ev: PointerEvent) => finishDrag(ev, true);
+
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('pointercancel', onPointerCancel);
+          };
+
           const renderSquareSlot = (
             slotKey: string,
             item: InventoryItem | null | undefined,
@@ -1958,33 +2112,37 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             }
           ) => {
             const info = getSlotFillInfo(item);
-            const canDrag = Boolean(item);
             const isPreview = Boolean(options?.isPreview);
+            const isBeingDragged = wbDragUi?.sourceKey === slotKey;
+            const isDropTarget = wbDragUi?.overKey === slotKey;
+            const isSelected = selectedWbSlot === slotKey;
 
             return (
               <div
                 key={slotKey}
                 id={`slot-${slotKey.replace(':', '-')}`}
-                draggable={canDrag}
-                onDragStart={e => {
-                  if (canDrag) {
-                    e.dataTransfer.setData('text/plain', slotKey);
-                  }
-                }}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSlotDrop(slotKey, e.dataTransfer.getData('text/plain'));
-                }}
+                data-wb-slot={slotKey}
+                draggable={false}
+                onDragStart={e => e.preventDefault()}
+                onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
                 onDoubleClick={options?.onDoubleClick}
-                className={'gu-slot' + (!item ? ' empty' : '')}
+                className={
+                  'gu-slot' +
+                  (!item ? ' empty' : '') +
+                  (isDropTarget || isSelected ? ' on' : '')
+                }
                 style={{
                   width: 72,
                   height: 72,
-                  opacity: isPreview ? 0.85 : 1,
-                  borderStyle: isPreview ? 'dashed' : undefined,
-                  borderColor: isPreview ? 'rgba(224, 171, 69, 0.65)' : undefined,
+                  touchAction: 'none',
+                  cursor: item ? 'grab' : selectedWbSlot && !slotKey.startsWith('output:') ? 'pointer' : 'default',
+                  opacity: isBeingDragged ? 0.35 : isPreview ? 0.85 : 1,
+                  borderStyle: isPreview && !isDropTarget ? 'dashed' : undefined,
+                  borderColor: isDropTarget
+                    ? 'var(--gu-amber-hi)'
+                    : isPreview
+                    ? 'rgba(224, 171, 69, 0.65)'
+                    : undefined,
                 }}
                 title={info?.tooltip}
               >
@@ -1992,12 +2150,12 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   <>
                     <ItemIconCanvas itemId={item.itemId} item={item} size={48} />
                     {item.count > 1 ? (
-                      <span className="gu-ic-n">{item.count}</span>
+                      <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{item.count}</span>
                     ) : item.isContainer ? (
-                      <span className="gu-ic-n">{item.contents?.length || 0}</span>
+                      <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{item.contents?.length || 0}</span>
                     ) : null}
                     {info && info.pct !== null && (
-                      <div className="gu-ic-fill">
+                      <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
                         <i
                           style={{
                             width: `${info.pct}%`,
@@ -2008,7 +2166,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     )}
                   </>
                 ) : options?.isHand ? (
-                  <Hand width={22} height={22} color="#5e5b54" />
+                  <Hand width={22} height={22} color="#5e5b54" style={{ pointerEvents: 'none' }} />
                 ) : null}
               </div>
             );
@@ -2016,14 +2174,13 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
           return (
             <div
-              className="gu-panel gu-pad"
+              className="gu-panel gu-pad gu-interaction-board"
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 32,
-                padding: '36px 24px',
-                minHeight: 260,
+                padding: '20px 24px',
               }}
             >
               {/* 2 HAND SLOTS */}
@@ -2042,7 +2199,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               </div>
 
               {/* 2x2 INPUT SLOTS */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div
+                data-wb-input-grid="true"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
+              >
                 <span className="gu-grp">Ввод</span>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 72px)', gap: 8 }}>
                   {[0, 1, 2, 3].map(idx =>
@@ -2085,6 +2245,30 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   })}
                 </div>
               </div>
+
+              {/* FLOATING DRAG PREVIEW */}
+              {wbDragUi && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    left: wbDragUi.x - 36,
+                    top: wbDragUi.y - 36,
+                    width: 72,
+                    height: 72,
+                    borderRadius: 9,
+                    background: 'rgba(20, 20, 22, 0.92)',
+                    border: '1px solid var(--gu-amber-hi)',
+                    boxShadow: '0 10px 28px rgba(0, 0, 0, 0.65)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                    zIndex: 9999,
+                  }}
+                >
+                  <ItemIconCanvas itemId={wbDragUi.item.itemId} item={wbDragUi.item} size={48} />
+                </div>
+              )}
             </div>
           );
         })()}
