@@ -23,23 +23,23 @@ export class TowRopeRenderer {
         const vibrationAmount = tension > 0.2 ? Math.min(1.2, tension * 0.8) : 0;
 
         // Shadow of the rope on the ground
-        const shadowOffsetY = isTaut ? 1.5 : 2.8;
+        const shadowOffsetY = isTaut ? 0.9 : 1.5;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 1.3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(nodes[0].x + 1.2, nodes[0].y + shadowOffsetY);
+        ctx.moveTo(nodes[0].x + 0.7, nodes[0].y + shadowOffsetY);
         for (let i = 1; i < nodes.length - 1; i++) {
           const jitter = vibrationAmount > 0 ? Math.sin(animTime * 15 + i) * vibrationAmount * 0.4 : 0;
-          const xc = (nodes[i].x + nodes[i + 1].x) / 2 + 1.2;
+          const xc = (nodes[i].x + nodes[i + 1].x) / 2 + 0.7;
           const yc = (nodes[i].y + nodes[i + 1].y) / 2 + shadowOffsetY + jitter;
-          ctx.quadraticCurveTo(nodes[i].x + 1.2, nodes[i].y + shadowOffsetY + jitter, xc, yc);
+          ctx.quadraticCurveTo(nodes[i].x + 0.7, nodes[i].y + shadowOffsetY + jitter, xc, yc);
         }
-        ctx.lineTo(nodes[nodes.length - 1].x + 1.2, nodes[nodes.length - 1].y + shadowOffsetY);
+        ctx.lineTo(nodes[nodes.length - 1].x + 0.7, nodes[nodes.length - 1].y + shadowOffsetY);
         ctx.stroke();
 
-        // Main Strap Body (Heavy-duty woven nylon recovery strap)
+        // Main Strap Body (Heavy-duty woven nylon recovery strap, scaled to 10 px/m)
         // High tension shifts color slightly to alert bright orange/yellow
         let strapColor = '#ea580c';
         if (tension > 0.8) {
@@ -47,7 +47,7 @@ export class TowRopeRenderer {
         }
 
         ctx.strokeStyle = strapColor;
-        ctx.lineWidth = isTaut ? Math.max(1.4, 2.2 - tension * 0.3) : 2.2;
+        ctx.lineWidth = isTaut ? Math.max(0.85, 1.2 - tension * 0.15) : 1.2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
@@ -63,8 +63,8 @@ export class TowRopeRenderer {
 
         // Inner stitched pattern stripe (High-contrast yellow/black stitching along center)
         ctx.strokeStyle = tension > 1.0 ? '#ef4444' : '#facc15';
-        ctx.lineWidth = 0.6;
-        ctx.setLineDash([3, 2.5]);
+        ctx.lineWidth = 0.4;
+        ctx.setLineDash([2.2, 2.0]);
         ctx.beginPath();
         ctx.moveTo(nodes[0].x, nodes[0].y);
         for (let i = 1; i < nodes.length - 1; i++) {
@@ -97,22 +97,22 @@ export class TowRopeRenderer {
       if (nodes && nodes.length >= 2) {
         // Shadow on the ground
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 1.3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(nodes[0].x + 1.2, nodes[0].y + 2.5);
+        ctx.moveTo(nodes[0].x + 0.7, nodes[0].y + 1.3);
         for (let i = 1; i < nodes.length - 1; i++) {
-          const xc = (nodes[i].x + nodes[i + 1].x) / 2 + 1.2;
-          const yc = (nodes[i].y + nodes[i + 1].y) / 2 + 2.5;
-          ctx.quadraticCurveTo(nodes[i].x + 1.2, nodes[i].y + 2.5, xc, yc);
+          const xc = (nodes[i].x + nodes[i + 1].x) / 2 + 0.7;
+          const yc = (nodes[i].y + nodes[i + 1].y) / 2 + 1.3;
+          ctx.quadraticCurveTo(nodes[i].x + 0.7, nodes[i].y + 1.3, xc, yc);
         }
-        ctx.lineTo(nodes[nodes.length - 1].x + 1.2, nodes[nodes.length - 1].y + 2.5);
+        ctx.lineTo(nodes[nodes.length - 1].x + 0.7, nodes[nodes.length - 1].y + 1.3);
         ctx.stroke();
 
         // Main Strap Body
         ctx.strokeStyle = '#ea580c';
-        ctx.lineWidth = 2.0;
+        ctx.lineWidth = 1.15;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
@@ -127,8 +127,8 @@ export class TowRopeRenderer {
 
         // Inner stitched pattern stripe
         ctx.strokeStyle = '#facc15';
-        ctx.lineWidth = 0.6;
-        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 0.4;
+        ctx.setLineDash([2.2, 2.2]);
         ctx.beginPath();
         ctx.moveTo(nodes[0].x, nodes[0].y);
         for (let i = 1; i < nodes.length - 1; i++) {
@@ -146,7 +146,7 @@ export class TowRopeRenderer {
         // Simple loop / knot held in player's hands
         ctx.fillStyle = '#0f172a';
         ctx.beginPath();
-        ctx.arc(nodes[nodes.length - 1].x, nodes[nodes.length - 1].y, 1.4, 0, Math.PI * 2);
+        ctx.arc(nodes[nodes.length - 1].x, nodes[nodes.length - 1].y, 0.75, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -163,59 +163,59 @@ export class TowRopeRenderer {
     ctx.translate(x, y);
     ctx.rotate(ropeAngle);
 
-    // Flag dimensions (scaled to world: 4.5 x 4.5 px)
-    const flagW = 4.8;
-    const flagH = 4.8;
+    // Flag dimensions (scaled to 10 px/m world: ~2.6 x 2.6 px)
+    const flagW = 2.6;
+    const flagH = 2.6;
 
     // Small mounting collar clip
     ctx.fillStyle = '#334155';
-    ctx.fillRect(-1.0, -1.0, 2.0, 2.0);
+    ctx.fillRect(-0.6, -0.6, 1.2, 1.2);
 
     // Flag shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.fillRect(-flagW / 2 + 0.8, 1.2, flagW, flagH);
+    ctx.fillRect(-flagW / 2 + 0.4, 0.7, flagW, flagH);
 
     // White base plate
     ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(-flagW / 2, 0.6, flagW, flagH);
+    ctx.fillRect(-flagW / 2, 0.35, flagW, flagH);
 
     // Diagonal red stripes
     ctx.save();
     ctx.beginPath();
-    ctx.rect(-flagW / 2, 0.6, flagW, flagH);
+    ctx.rect(-flagW / 2, 0.35, flagW, flagH);
     ctx.clip();
 
     ctx.fillStyle = '#dc2626'; // Vivid red stripe
     ctx.beginPath();
     // Stripe 1
-    ctx.moveTo(-flagW / 2 - 2, 0.6);
-    ctx.lineTo(-flagW / 2 + 2, 0.6);
-    ctx.lineTo(-flagW / 2 - 1, 0.6 + flagH);
-    ctx.lineTo(-flagW / 2 - 5, 0.6 + flagH);
+    ctx.moveTo(-flagW / 2 - 1.1, 0.35);
+    ctx.lineTo(-flagW / 2 + 1.1, 0.35);
+    ctx.lineTo(-flagW / 2 - 0.5, 0.35 + flagH);
+    ctx.lineTo(-flagW / 2 - 2.7, 0.35 + flagH);
     ctx.fill();
 
     // Stripe 2
     ctx.beginPath();
-    ctx.moveTo(-flagW / 2 + 1.5, 0.6);
-    ctx.lineTo(-flagW / 2 + 5.5, 0.6);
-    ctx.lineTo(-flagW / 2 + 2.5, 0.6 + flagH);
-    ctx.lineTo(-flagW / 2 - 1.5, 0.6 + flagH);
+    ctx.moveTo(-flagW / 2 + 0.8, 0.35);
+    ctx.lineTo(-flagW / 2 + 3.0, 0.35);
+    ctx.lineTo(-flagW / 2 + 1.4, 0.35 + flagH);
+    ctx.lineTo(-flagW / 2 - 0.8, 0.35 + flagH);
     ctx.fill();
 
     // Stripe 3
     ctx.beginPath();
-    ctx.moveTo(-flagW / 2 + 5.0, 0.6);
-    ctx.lineTo(-flagW / 2 + 9.0, 0.6);
-    ctx.lineTo(-flagW / 2 + 6.0, 0.6 + flagH);
-    ctx.lineTo(-flagW / 2 + 2.0, 0.6 + flagH);
+    ctx.moveTo(-flagW / 2 + 2.7, 0.35);
+    ctx.lineTo(-flagW / 2 + 4.9, 0.35);
+    ctx.lineTo(-flagW / 2 + 3.3, 0.35 + flagH);
+    ctx.lineTo(-flagW / 2 + 1.1, 0.35 + flagH);
     ctx.fill();
 
     ctx.restore();
 
     // Fine border
     ctx.strokeStyle = 'rgba(15, 23, 42, 0.4)';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(-flagW / 2, 0.6, flagW, flagH);
+    ctx.lineWidth = 0.35;
+    ctx.strokeRect(-flagW / 2, 0.35, flagW, flagH);
 
     ctx.restore();
   }
@@ -230,17 +230,17 @@ export class TowRopeRenderer {
     // Steel ring collar
     ctx.fillStyle = '#475569'; // Galvanized steel base
     ctx.beginPath();
-    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+    ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = '#94a3b8'; // Polished silver finish
     ctx.beginPath();
-    ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
+    ctx.arc(0, 0, 0.65, 0, Math.PI * 2);
     ctx.fill();
 
     // Small locking latch gate
     ctx.fillStyle = '#ef4444';
-    ctx.fillRect(-0.4, -0.4, 0.8, 0.8);
+    ctx.fillRect(-0.25, -0.25, 0.5, 0.5);
 
     ctx.restore();
   }

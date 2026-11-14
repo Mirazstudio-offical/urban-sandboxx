@@ -19,17 +19,17 @@ export class WaterHoseRenderer {
 
     // 1. Soft Shadow on Ground
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.30)';
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 1.2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(nodes[0].x + 1.8, nodes[0].y + 2.5);
+    ctx.moveTo(nodes[0].x + 0.9, nodes[0].y + 1.2);
     for (let i = 1; i < nodes.length - 1; i++) {
-      const xc = (nodes[i].x + nodes[i + 1].x) / 2 + 1.8;
-      const yc = (nodes[i].y + nodes[i + 1].y) / 2 + 2.5;
-      ctx.quadraticCurveTo(nodes[i].x + 1.8, nodes[i].y + 2.5, xc, yc);
+      const xc = (nodes[i].x + nodes[i + 1].x) / 2 + 0.9;
+      const yc = (nodes[i].y + nodes[i + 1].y) / 2 + 1.2;
+      ctx.quadraticCurveTo(nodes[i].x + 0.9, nodes[i].y + 1.2, xc, yc);
     }
-    ctx.lineTo(nodes[nodes.length - 1].x + 1.8, nodes[nodes.length - 1].y + 2.5);
+    ctx.lineTo(nodes[nodes.length - 1].x + 0.9, nodes[nodes.length - 1].y + 1.2);
     ctx.stroke();
 
     const isJetter = !!hose.isJetterHose;
@@ -38,9 +38,9 @@ export class WaterHoseRenderer {
     const veh = world.vehicles?.find((v) => v.id === hose.vehicleId);
     const liquidColor = veh?.fluidTank ? getLiquidColor(veh.fluidTank.liquidType) : '#5c6b32';
 
-    // 2. Main Hose Body (Matte black rubber OR КО-560 high-pressure orange РВД jacket)
+    // 2. Main Hose Body (Matte black rubber OR КО-560 high-pressure orange РВД jacket, scaled to 10 px/m)
     ctx.strokeStyle = isJetter ? '#ea580c' : '#09090b';
-    ctx.lineWidth = isVacuum ? 3.2 : isJetter ? 1.6 : 1.8;
+    ctx.lineWidth = isVacuum ? 1.4 : isJetter ? 0.75 : 0.85;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -54,7 +54,7 @@ export class WaterHoseRenderer {
     ctx.stroke();
 
     if (isVacuum) {
-      // Draw ultra-realistic transverse corrugated rib rings along the physics segments of the hose.
+      // Draw transverse corrugated rib rings along the physics segments of the d=100mm hose.
       for (let i = 0; i < nodes.length - 1; i++) {
         const n1 = nodes[i];
         const n2 = nodes[i + 1];
@@ -68,34 +68,34 @@ export class WaterHoseRenderer {
           const nx = -uy; // Perpendicular normal vector
           const ny = ux;
           
-          // Place corrugation ribs every 1.5 pixels along the segment
-          const spacing = 1.5;
+          // Place corrugation ribs every 1.1 pixels along the segment
+          const spacing = 1.1;
           for (let d = 0; d < segLen; d += spacing) {
             const rx = n1.x + ux * d;
             const ry = n1.y + uy * d;
             
             // 1. Dark-gray base rib representing the raised rubber ring
             ctx.strokeStyle = '#27272a';
-            ctx.lineWidth = 1.05;
+            ctx.lineWidth = 0.6;
             ctx.beginPath();
-            ctx.moveTo(rx - nx * 1.7, ry - ny * 1.7);
-            ctx.lineTo(rx + nx * 1.7, ry + ny * 1.7);
+            ctx.moveTo(rx - nx * 0.85, ry - ny * 0.85);
+            ctx.lineTo(rx + nx * 0.85, ry + ny * 0.85);
             ctx.stroke();
 
             // 2. Bright steel core of the rib for industrial reflection
             ctx.strokeStyle = '#475569';
-            ctx.lineWidth = 0.65;
+            ctx.lineWidth = 0.4;
             ctx.beginPath();
-            ctx.moveTo(rx - nx * 1.55, ry - ny * 1.55);
-            ctx.lineTo(rx + nx * 1.55, ry + ny * 1.55);
+            ctx.moveTo(rx - nx * 0.75, ry - ny * 0.75);
+            ctx.lineTo(rx + nx * 0.75, ry + ny * 0.75);
             ctx.stroke();
 
             // 3. Highlight sheen/glint on the left/top edge for 3D roundness
             ctx.strokeStyle = '#94a3b8';
-            ctx.lineWidth = 0.5;
+            ctx.lineWidth = 0.3;
             ctx.beginPath();
-            ctx.moveTo(rx - nx * 1.55, ry - ny * 1.55);
-            ctx.lineTo(rx - nx * 0.6, ry - ny * 0.6);
+            ctx.moveTo(rx - nx * 0.75, ry - ny * 0.75);
+            ctx.lineTo(rx - nx * 0.3, ry - ny * 0.3);
             ctx.stroke();
           }
         }
@@ -103,15 +103,15 @@ export class WaterHoseRenderer {
     } else {
       // 3. Subtle Upper Rubber Sheen / Ridge for 3D depth on normal hose
       ctx.strokeStyle = '#27272a';
-      ctx.lineWidth = 0.6;
+      ctx.lineWidth = 0.35;
       ctx.beginPath();
-      ctx.moveTo(nodes[0].x, nodes[0].y - 0.3);
+      ctx.moveTo(nodes[0].x, nodes[0].y - 0.18);
       for (let i = 1; i < nodes.length - 1; i++) {
         const xc = (nodes[i].x + nodes[i + 1].x) / 2;
-        const yc = (nodes[i].y + nodes[i + 1].y) / 2 - 0.3;
-        ctx.quadraticCurveTo(nodes[i].x, nodes[i].y - 0.3, xc, yc);
+        const yc = (nodes[i].y + nodes[i + 1].y) / 2 - 0.18;
+        ctx.quadraticCurveTo(nodes[i].x, nodes[i].y - 0.18, xc, yc);
       }
-      ctx.lineTo(nodes[nodes.length - 1].x, nodes[nodes.length - 1].y - 0.3);
+      ctx.lineTo(nodes[nodes.length - 1].x, nodes[nodes.length - 1].y - 0.18);
       ctx.stroke();
     }
 
@@ -120,20 +120,20 @@ export class WaterHoseRenderer {
     if (isVacuum) {
       ctx.fillStyle = '#475569'; // Steel camlock coupler
       ctx.beginPath();
-      ctx.arc(anchorNode.x, anchorNode.y, 2.6, 0, Math.PI * 2);
+      ctx.arc(anchorNode.x, anchorNode.y, 1.4, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#94a3b8'; // Silver ring
       ctx.beginPath();
-      ctx.arc(anchorNode.x, anchorNode.y, 1.7, 0, Math.PI * 2);
+      ctx.arc(anchorNode.x, anchorNode.y, 0.9, 0, Math.PI * 2);
       ctx.fill();
     } else {
       ctx.fillStyle = '#1e293b'; // Steel threaded coupler
       ctx.beginPath();
-      ctx.arc(anchorNode.x, anchorNode.y, 1.8, 0, Math.PI * 2);
+      ctx.arc(anchorNode.x, anchorNode.y, 1.0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#b45309'; // Brass nipple ring
       ctx.beginPath();
-      ctx.arc(anchorNode.x, anchorNode.y, 1.0, 0, Math.PI * 2);
+      ctx.arc(anchorNode.x, anchorNode.y, 0.55, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -154,13 +154,13 @@ export class WaterHoseRenderer {
         // Tiny worn puncture spot
         ctx.fillStyle = '#09090b';
         ctx.beginPath();
-        ctx.arc(node.x, node.y, 1.2, 0, Math.PI * 2);
+        ctx.arc(node.x, node.y, 0.65, 0, Math.PI * 2);
         ctx.fill();
 
         // Fine micro water spray / drip escaping from the hole
-        const squirtLen = isSpraying ? (3.5 + Math.sin(time * 16 + segIdx) * 1.8) : (1.2 + Math.sin(time * 6 + segIdx) * 0.8);
+        const squirtLen = isSpraying ? (2.2 + Math.sin(time * 16 + segIdx) * 1.1) : (0.8 + Math.sin(time * 6 + segIdx) * 0.5);
         ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
-        ctx.lineWidth = 0.6;
+        ctx.lineWidth = 0.45;
         ctx.beginPath();
         ctx.moveTo(node.x, node.y);
         ctx.lineTo(node.x + normX * squirtLen, node.y + normY * squirtLen);
@@ -201,6 +201,8 @@ export class WaterHoseRenderer {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
+    // Scale handheld nozzle/lance to 10 px/m player hands (~0.48x)
+    ctx.scale(0.48, 0.48);
 
     if (isVacuum) {
       // Heavy Camlock coupler ring at rear
@@ -289,8 +291,8 @@ export class WaterHoseRenderer {
     ctx.translate(muzzleX, muzzleY);
     ctx.rotate(angle);
 
-    const intakeTipX = 6.3;
-    const coneReach = 24;
+    const intakeTipX = 3.0;
+    const coneReach = 16;
 
     // 1. Soft vacuum depression cone in front of intake bell
     const grad = ctx.createLinearGradient(intakeTipX + coneReach, 0, intakeTipX, 0);
@@ -300,10 +302,10 @@ export class WaterHoseRenderer {
 
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.moveTo(intakeTipX, -1.5);
-    ctx.lineTo(intakeTipX + coneReach, -11);
-    ctx.lineTo(intakeTipX + coneReach, 11);
-    ctx.lineTo(intakeTipX, 1.5);
+    ctx.moveTo(intakeTipX, -0.8);
+    ctx.lineTo(intakeTipX + coneReach, -7.5);
+    ctx.lineTo(intakeTipX + coneReach, 7.5);
+    ctx.lineTo(intakeTipX, 0.8);
     ctx.closePath();
     ctx.fill();
 
@@ -312,12 +314,12 @@ export class WaterHoseRenderer {
       const phase = ((time * 3.2 + r * 0.33) % 1.0); // 0 -> 1
       const invPhase = 1.0 - phase; // Moves inward from coneReach -> 0
       const ringX = intakeTipX + invPhase * coneReach;
-      const ringRy = 1.5 + invPhase * 8.5;
-      const ringRx = 1.0 + invPhase * 3.0;
+      const ringRy = 0.8 + invPhase * 5.8;
+      const ringRx = 0.6 + invPhase * 2.0;
 
       ctx.strokeStyle = r === 0 ? liquidColor : 'rgba(224, 242, 254, 0.65)';
       ctx.globalAlpha = Math.min(1, phase * 1.4);
-      ctx.lineWidth = 1.1;
+      ctx.lineWidth = 0.85;
       ctx.beginPath();
       ctx.ellipse(ringX, 0, ringRx, ringRy, 0, 0, Math.PI * 2);
       ctx.stroke();
@@ -326,14 +328,14 @@ export class WaterHoseRenderer {
 
     // 3. Inward streamline streaks converging into the brass bell mouth
     ctx.strokeStyle = liquidColor;
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 0.9;
     for (let s = -1; s <= 1; s++) {
       const offsetPhase = ((time * 5.0 + (s + 1) * 0.3) % 1.0);
       const startX = intakeTipX + (1.0 - offsetPhase) * coneReach;
-      const startY = s * (1.0 - offsetPhase) * 8.0;
+      const startY = s * (1.0 - offsetPhase) * 5.5;
       ctx.beginPath();
       ctx.moveTo(startX, startY);
-      ctx.lineTo(intakeTipX + 0.5, s * 0.6);
+      ctx.lineTo(intakeTipX + 0.3, s * 0.35);
       ctx.stroke();
     }
 
@@ -357,29 +359,29 @@ export class WaterHoseRenderer {
     ctx.translate(muzzleX, muzzleY);
     ctx.rotate(angle);
 
-    const startX = 6.2;
-    const streamLen = isCompressorPushing ? 46 : 24;
+    const startX = 3.0;
+    const streamLen = isCompressorPushing ? 38 : 20;
 
     ctx.strokeStyle = liquidColor;
     ctx.globalAlpha = 0.85;
-    ctx.lineWidth = isCompressorPushing ? 3.8 : 2.8;
+    ctx.lineWidth = isCompressorPushing ? 2.0 : 1.5;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(startX, 0);
     ctx.quadraticCurveTo(
       startX + (streamLen - startX) * 0.5,
-      1.2 + Math.sin(time * 18) * 1.1,
+      1.0 + Math.sin(time * 18) * 0.8,
       streamLen,
-      3.5 + Math.cos(time * 15) * 1.4
+      2.6 + Math.cos(time * 15) * 1.0
     );
     ctx.stroke();
 
     // Impact puddle splash at end of wide-bore gusher
-    const splashR = (isCompressorPushing ? 6.5 : 4.2) + Math.sin(time * 14) * 1.2;
+    const splashR = (isCompressorPushing ? 4.8 : 3.2) + Math.sin(time * 14) * 0.9;
     ctx.fillStyle = liquidColor;
     ctx.globalAlpha = 0.55;
     ctx.beginPath();
-    ctx.ellipse(streamLen, 3.5, splashR, splashR * 0.55, 0, 0, Math.PI * 2);
+    ctx.ellipse(streamLen, 2.6, splashR, splashR * 0.55, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
@@ -400,11 +402,11 @@ export class WaterHoseRenderer {
     ctx.translate(muzzleX, muzzleY);
     ctx.rotate(angle);
 
-    const startX = 4.8; // Aligns with the compact nozzle tip
+    const startX = 2.3; // Aligns with the compact 0.48x nozzle tip
 
     if (!isPressurized) {
       // --- NATURAL GRAVITY TRICKLE / GARDEN HOSE FLOW ---
-      const streamLen = 34;
+      const streamLen = 28;
 
       // Soft water stream arching gently downwards
       const trickleGrad = ctx.createLinearGradient(startX, 0, streamLen, 0);
@@ -414,23 +416,23 @@ export class WaterHoseRenderer {
       trickleGrad.addColorStop(1, 'rgba(224, 242, 254, 0)');
 
       ctx.strokeStyle = trickleGrad;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 1.1;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(startX, 0);
       // Parabolic drop curve
       ctx.quadraticCurveTo(
         startX + (streamLen - startX) * 0.5,
-        1.5 + Math.sin(time * 12) * 0.8,
+        1.2 + Math.sin(time * 12) * 0.6,
         streamLen,
-        4.5 + Math.sin(time * 16) * 1.2
+        3.5 + Math.sin(time * 16) * 0.9
       );
       ctx.stroke();
 
       // Gentle small ground splash ripple at end
       const impactX = streamLen;
-      const impactY = 4.5;
-      const splashR = 3.5 + Math.sin(time * 10) * 1.2;
+      const impactY = 3.5;
+      const splashR = 2.8 + Math.sin(time * 10) * 0.8;
 
       ctx.fillStyle = 'rgba(224, 242, 254, 0.35)';
       ctx.beginPath();
@@ -442,7 +444,7 @@ export class WaterHoseRenderer {
     }
 
     // --- HIGH PRESSURE MOTORIZED PUMP STREAM (TRUCK ENGINE RUNNING) ---
-    const streamLen = 135;
+    const streamLen = 120;
 
     // 1. Broad Outer Turbulent Spray Cone (Translucent sky-blue mist)
     const coneGrad = ctx.createLinearGradient(startX, 0, streamLen, 0);
@@ -453,12 +455,12 @@ export class WaterHoseRenderer {
 
     ctx.fillStyle = coneGrad;
     ctx.beginPath();
-    ctx.moveTo(startX, -1.2);
-    ctx.lineTo(streamLen * 0.5, -7 + Math.sin(time * 25) * 1.5);
-    ctx.lineTo(streamLen, -14 + Math.sin(time * 20) * 3);
-    ctx.lineTo(streamLen, 14 + Math.cos(time * 20) * 3);
-    ctx.lineTo(streamLen * 0.5, 7 + Math.cos(time * 25) * 1.5);
-    ctx.lineTo(startX, 1.2);
+    ctx.moveTo(startX, -0.7);
+    ctx.lineTo(streamLen * 0.5, -5.5 + Math.sin(time * 25) * 1.2);
+    ctx.lineTo(streamLen, -11 + Math.sin(time * 20) * 2.4);
+    ctx.lineTo(streamLen, 11 + Math.cos(time * 20) * 2.4);
+    ctx.lineTo(streamLen * 0.5, 5.5 + Math.cos(time * 25) * 1.2);
+    ctx.lineTo(startX, 0.7);
     ctx.closePath();
     ctx.fill();
 
@@ -470,30 +472,30 @@ export class WaterHoseRenderer {
     coreGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
 
     ctx.strokeStyle = coreGrad;
-    ctx.lineWidth = 3.2;
+    ctx.lineWidth = 2.0;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(startX, 0);
     // Subtle high frequency wavy oscillation
     ctx.quadraticCurveTo(
       streamLen * 0.4,
-      Math.sin(time * 35) * 1.8,
+      Math.sin(time * 35) * 1.4,
       streamLen * 0.85,
-      Math.cos(time * 30) * 3.5
+      Math.cos(time * 30) * 2.6
     );
     ctx.stroke();
 
     // Inner pure white razor core
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 0.9;
     ctx.beginPath();
     ctx.moveTo(startX, 0);
-    ctx.lineTo(streamLen * 0.5, Math.sin(time * 35) * 0.8);
+    ctx.lineTo(streamLen * 0.5, Math.sin(time * 35) * 0.6);
     ctx.stroke();
 
     // 3. Impact Ground Splash Rings at target range
     const impactX = streamLen * 0.9;
-    const splashRadius = 14 + Math.sin(time * 15) * 4;
+    const splashRadius = 11 + Math.sin(time * 15) * 3;
 
     ctx.fillStyle = 'rgba(224, 242, 254, 0.4)';
     ctx.beginPath();
@@ -501,7 +503,7 @@ export class WaterHoseRenderer {
     ctx.fill();
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 0.9;
     ctx.beginPath();
     ctx.ellipse(impactX, 0, splashRadius, splashRadius * 0.5, 0, 0, Math.PI * 2);
     ctx.stroke();

@@ -231,10 +231,10 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
   const numNodes = hose.segments.length;
   if (numNodes < 2) return;
 
-  // Hand position for the nozzle / suction lance
+  // Hand position for the nozzle / suction lance (scaled to 10 px/m player anatomy)
   const playerAimAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
-  const handDist = 6.5;
-  const handAngle = playerAimAngle + 0.2;
+  const handDist = 2.8;
+  const handAngle = playerAimAngle + 0.35;
   const handX = player.x + Math.cos(handAngle) * handDist;
   const handY = player.y + Math.sin(handAngle) * handDist;
 
@@ -396,8 +396,8 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
         const aimAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
         const cosAim = Math.cos(aimAngle);
         const sinAim = Math.sin(aimAngle);
-        const intakeX = handX + cosAim * 9.5;
-        const intakeY = handY + sinAim * 9.5;
+        const intakeX = handX + cosAim * 4.5;
+        const intakeY = handY + sinAim * 4.5;
 
         const vacBodyId = getVehicleVacuumBodyId(veh);
         // Heavy VK-6M2 pump on КО-505А sludge has 1.4x, КО-505 (310 m3/h) on twin-tank has 1.25x capacity vs КО-503
@@ -544,8 +544,8 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
         }
 
         // Spawn inward-swirling droplets (or dry dust motes if sucking air) into the brass intake lance tip
-        const tipX = handX + cosAim * 5.8;
-        const tipY = handY + sinAim * 5.8;
+        const tipX = handX + cosAim * 3.0;
+        const tipY = handY + sinAim * 3.0;
         if (world.particles && world.particles.length < 500 && Math.random() < (foundRealLiquidSource ? 0.85 : 0.35)) {
           const randAngle = aimAngle + (Math.random() - 0.5) * 1.4;
           const spawnDist = 10 + Math.random() * 14;

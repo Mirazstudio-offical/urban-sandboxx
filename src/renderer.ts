@@ -6633,20 +6633,20 @@ export class GameRenderer {
       ctx.save();
       ctx.translate(gi.x, gi.y - zLift * 0.85);
 
-      // 1. Soft 3D Ground Contact Ambient Occlusion & Wet Puddle Meniscus Ring
+      // 1. Soft 3D Ground Contact Ambient Occlusion & Wet Puddle Meniscus Ring (scaled to 10 px/m)
       if (zLift < 2.0) {
         ctx.fillStyle = wet > 0.18
           ? `rgba(8, 16, 28, ${0.34 + wet * 0.24})`
           : 'rgba(10, 15, 25, 0.28)';
         ctx.beginPath();
-        safeEllipse(ctx, -sunLx * 0.8, -sunLy * 0.8, 6.8, 5.2, rot, 0, Math.PI * 2);
+        safeEllipse(ctx, -sunLx * 0.4, -sunLy * 0.4, 3.2, 2.4, rot, 0, Math.PI * 2);
         ctx.fill();
 
         if (wet > 0.22) {
           ctx.strokeStyle = `rgba(186, 226, 253, ${wet * 0.34})`;
-          ctx.lineWidth = 0.65;
+          ctx.lineWidth = 0.45;
           ctx.beginPath();
-          safeEllipse(ctx, sunLx * 0.5, sunLy * 0.5, 7.2, 5.5, rot, 0, Math.PI * 2);
+          safeEllipse(ctx, sunLx * 0.3, sunLy * 0.3, 3.5, 2.6, rot, 0, Math.PI * 2);
           ctx.stroke();
         }
       } else {
@@ -6654,7 +6654,7 @@ export class GameRenderer {
         const shScale = Math.max(0.45, 1.0 - zLift * 0.02);
         ctx.fillStyle = `rgba(10, 15, 25, ${0.26 * shScale})`;
         ctx.beginPath();
-        safeEllipse(ctx, -sunLx * zLift * 0.35, zLift * 0.85 - sunLy * zLift * 0.35, 6.2 * shScale, 4.6 * shScale, rot, 0, Math.PI * 2);
+        safeEllipse(ctx, -sunLx * zLift * 0.2, zLift * 0.85 - sunLy * zLift * 0.2, 3.0 * shScale, 2.2 * shScale, rot, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -6662,16 +6662,16 @@ export class GameRenderer {
       ctx.scale(scaleZ, scaleZ);
       ctx.rotate(rot);
 
-      // 2. Item 2D Procedural Model
+      // 2. Item 2D Procedural Model (scaled to 10 px/m ground size)
       if (gi.item.itemId) {
-        drawItemModel2D(ctx, gi.item.itemId, 0, 0, 12, gi.item);
+        drawItemModel2D(ctx, gi.item.itemId, 0, 0, 5.5, gi.item);
       }
 
       // 3. Mud splash coat or wet dielectric solar glint on metallic/glass/packaged items
       if (mud > 0.1) {
         ctx.fillStyle = `rgba(58, 38, 22, ${mud * 0.42})`;
         ctx.beginPath();
-        safeEllipse(ctx, 1.2, 0.8, 3.8, 2.6, 0.4, 0, Math.PI * 2);
+        safeEllipse(ctx, 0.6, 0.4, 1.8, 1.2, 0.4, 0, Math.PI * 2);
         ctx.fill();
       }
       if (wet > 0.15 || gi.item.category === 'valuable' || gi.item.category === 'electronics' || gi.item.category === 'tool' || gi.item.category === 'drink') {
@@ -6681,7 +6681,7 @@ export class GameRenderer {
         const ly = -sunLx * sinR + sunLy * cosR;
         ctx.fillStyle = `rgba(255, 255, 255, ${0.28 + wet * 0.32})`;
         ctx.beginPath();
-        safeEllipse(ctx, lx * 2.2, ly * 2.2, 1.6, 0.85, -rot * 0.5, 0, Math.PI * 2);
+        safeEllipse(ctx, lx * 1.0, ly * 1.0, 0.8, 0.45, -rot * 0.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -10381,12 +10381,12 @@ export class GameRenderer {
       ctx.arc(3.5, 4.2, 1.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Render items held in hands
+      // Render items held in hands (seated posture)
       if (player.leftHandItem) {
-        drawItemModel2D(ctx, player.leftHandItem.itemId, 2.5, -6.5, 9, player.leftHandItem);
+        drawItemModel2D(ctx, player.leftHandItem.itemId, 3.6, -4.4, 5.2, player.leftHandItem);
       }
       if (player.rightHandItem) {
-        drawItemModel2D(ctx, player.rightHandItem.itemId, 2.5, 6.5, 9, player.rightHandItem);
+        drawItemModel2D(ctx, player.rightHandItem.itemId, 3.6, 4.4, 5.2, player.rightHandItem);
       }
 
       // Head
@@ -10477,12 +10477,12 @@ export class GameRenderer {
       ctx.arc(-armSwing + 1, 5.2 + armOutBalance, 1.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Render items held in hands
+      // Render items held in hands (standing/walking posture)
       if (player.leftHandItem) {
-        drawItemModel2D(ctx, player.leftHandItem.itemId, armSwing + 2.5, -6.5 - armOutBalance, 9, player.leftHandItem);
+        drawItemModel2D(ctx, player.leftHandItem.itemId, armSwing + 1.8, -5.2 - armOutBalance, 5.2, player.leftHandItem);
       }
       if (player.rightHandItem) {
-        drawItemModel2D(ctx, player.rightHandItem.itemId, -armSwing + 2.5, 6.5 + armOutBalance, 9, player.rightHandItem);
+        drawItemModel2D(ctx, player.rightHandItem.itemId, -armSwing + 1.8, 5.2 + armOutBalance, 5.2, player.rightHandItem);
       }
 
       // Head
@@ -16074,15 +16074,15 @@ export class GameRenderer {
     for (const ped of visiblePedestrians) {
       if (ped.isInsideBuilding) continue;
       if (ped.state === 'idle_phone' || ped.handheldProp === 'phone') {
-        const px = ped.x + Math.cos(ped.angle) * 6;
-        const py = ped.y + Math.sin(ped.angle) * 6;
-        const pGrad = lCtx.createRadialGradient(px, py, 0.5, px, py, 12 * fogFactor);
+        const px = ped.x + Math.cos(ped.angle) * 2.6;
+        const py = ped.y + Math.sin(ped.angle) * 2.6;
+        const pGrad = lCtx.createRadialGradient(px, py, 0.3, px, py, 7 * fogFactor);
         pGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.65)');
         pGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
         pGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = pGrad;
         lCtx.beginPath();
-        lCtx.arc(px, py, 12 * fogFactor, 0, Math.PI * 2);
+        lCtx.arc(px, py, 7 * fogFactor, 0, Math.PI * 2);
         lCtx.fill();
       }
     }

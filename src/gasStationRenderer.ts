@@ -1020,8 +1020,8 @@ export class GasStationRenderer {
       const pump = world.gasPumps.find(p => p.id === nozzle.pumpId);
       if (pump) {
         const origin = this.getPumpNozzleOrigin(pump, nozzle.fuelType);
-        const targetX = player.x + Math.cos(player.angle + 0.4) * 12;
-        const targetY = player.y + Math.sin(player.angle + 0.4) * 12;
+        const targetX = player.x + Math.cos(player.angle + 0.45) * 2.8;
+        const targetY = player.y + Math.sin(player.angle + 0.45) * 2.8;
 
         this.drawCatenaryHose(ctx, origin.x, origin.y, targetX, targetY, nozzle.color, false, time);
         // Draw metallic nozzle in player's hand
@@ -1065,25 +1065,25 @@ export class GasStationRenderer {
     const dist = Math.hypot(x2 - x1, y2 - y1);
     const midX = (x1 + x2) / 2;
     // Sag down with gravity / distance
-    const sag = Math.min(28, dist * 0.22);
+    const sag = Math.min(14, dist * 0.18);
     const midY = (y1 + y2) / 2 + sag;
 
     ctx.save();
 
     // Dynamic Hose Drop Shadow on Asphalt (driven by solar/lunar position)
     const sun = getCurrentSunShadowState();
-    const hSx = sun.castX * 0.45;
-    const hSy = sun.castY * 0.45;
+    const hSx = sun.castX * 0.35;
+    const hSy = sun.castY * 0.35;
     ctx.strokeStyle = `rgba(0, 0, 0, ${(0.14 + sun.shadowOpacity * 0.45).toFixed(2)})`;
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(x1 + hSx * 0.6, y1 + hSy * 0.6);
     ctx.quadraticCurveTo(midX + hSx, midY + hSy, x2 + hSx * 0.6, y2 + hSy * 0.6);
     ctx.stroke();
 
-    // Base Heavy Rubber Hose (Black)
+    // Base Heavy Rubber Hose (Black, scaled to 10 px/m)
     ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 3.2;
+    ctx.lineWidth = 1.4;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -1092,17 +1092,17 @@ export class GasStationRenderer {
 
     // Highlight sheen along rubber hose
     ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 0.5;
     ctx.beginPath();
-    ctx.moveTo(x1, y1 - 0.5);
-    ctx.quadraticCurveTo(midX, midY - 0.5, x2, y2 - 0.5);
+    ctx.moveTo(x1, y1 - 0.25);
+    ctx.quadraticCurveTo(midX, midY - 0.25, x2, y2 - 0.25);
     ctx.stroke();
 
     // If fuel is flowing, draw pulsating glowing energy dots inside hose
     if (isPumping) {
       ctx.strokeStyle = gradeColor;
-      ctx.lineWidth = 1.6;
-      ctx.setLineDash([6, 12]);
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([4, 8]);
       ctx.lineDashOffset = -(time * 40);
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -1127,6 +1127,7 @@ export class GasStationRenderer {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
+    ctx.scale(0.45, 0.45);
 
     // Dark grey hose sleeve at the back
     ctx.fillStyle = '#1e293b';
@@ -1162,6 +1163,7 @@ export class GasStationRenderer {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
+    ctx.scale(0.55, 0.55);
 
     // Open fuel door flap
     ctx.fillStyle = '#64748b';

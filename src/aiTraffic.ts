@@ -6866,10 +6866,10 @@ export function updatePedestrians(
         rotationSpeed: (Math.random() - 0.5) * 10,
         type: (ped.handheldProp === 'extinguisher'? 'can': ped.handheldProp) as any,
         color: ped.propColor || '#ffffff',
-        size: ped.handheldProp === 'box'? 12 : (ped.handheldProp === 'phone'? 4 : 6),
+        size: ped.handheldProp === 'box'? 5.5 : (ped.handheldProp === 'phone'? 2.0 : 3.0),
         isAirborne: true,
         airborneTimer: 0.5 + Math.random() * 0.5,
-        altitude: 15,
+        altitude: 8,
         isGlowing: ped.handheldProp === 'phone'});
       // Remove prop from hand
       ped.handheldProp = null;
