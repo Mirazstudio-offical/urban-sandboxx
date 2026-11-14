@@ -355,14 +355,14 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
     }
     const bId = resolvedTruck?.body.id;
     const isWaterTruck = resolvedTruck
-      ? (bId === 'body_tanker_water' || bId === 'body_fire_pumper' || bId === 'body_vacuum_ko503' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560')
+      ? (bId === 'body_tanker_water' || bId === 'body_fire_pumper' || bId === 'body_vacuum_ko503' || bId === 'body_vacuum_twin_ko505' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560')
       : (car.type === 'truck_water' || car.type === 'fire_engine');
     if (isWaterTruck || car.type === 'trailer_barrel' || car.type === 'trailer_vacuum') {
       if (car.fluidTank.hasWaterHose === undefined) {
         car.fluidTank.hasWaterHose = true;
       }
     }
-    if (car.type === 'trailer_vacuum' || bId === 'body_vacuum_ko503' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560') {
+    if (car.type === 'trailer_vacuum' || bId === 'body_vacuum_ko503' || bId === 'body_vacuum_twin_ko505' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560') {
       car.fluidTank.isVacuumTank = true;
       if (!car.fluidTank.vacuumPumpMode) {
         car.fluidTank.vacuumPumpMode = 'suction';
@@ -425,8 +425,8 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
     };
   }
 
-  if (bodyId === 'body_vacuum_ko503') {
-    // Rear ANM-53 brass receiving snout nozzle at rear bottom of the vacuum cistern
+  if (bodyId === 'body_vacuum_ko503' || bodyId === 'body_vacuum_twin_ko505') {
+    // Rear ANM-53 brass receiving snout nozzle at rear bottom of the vacuum cistern / twin-tank collector
     const localX = -halfL - 1.1;
     const localY = 0;
     return {

@@ -6919,9 +6919,9 @@ export function updatePedestrians(
       const dx = ped.x - other.x;
       const dy = ped.y - other.y;
       const distSq = dx * dx + dy * dy;
-      if (distSq < 14 * 14 && distSq > 0.001) {
+      if (distSq < 7.0 * 7.0 && distSq > 0.001) {
         const dist = Math.sqrt(distSq);
-        const force = (14 - dist) * 1.5;
+        const force = (7.0 - dist) * 1.5;
         ped.vx += (dx / dist) * force;
         ped.vy += (dy / dist) * force;
       }
@@ -6968,7 +6968,7 @@ export function updatePedestrians(
     // 6. Robust vehicle physical separation (Optimized with vehGrid)
     const nearbyCarsForCollision = vehGrid ? vehGrid.queryRadius(nextX, nextY, 40) : world.vehicles;
     for (const car of nearbyCarsForCollision) {
-      const res = checkPedestrianVehicleCollision(nextX, nextY, 7.0, car);
+      const res = checkPedestrianVehicleCollision(nextX, nextY, 3.2, car);
       if (res.collided) {
         nextX = res.x;
         nextY = res.y;
@@ -6977,7 +6977,7 @@ export function updatePedestrians(
 
     // 7. Collision with Buildings (Only when not crossing - Optimized with bldGrid)
     if (!ped.isCrossingRoad) {
-      const pedRadius = 6.0;
+      const pedRadius = 3.2;
       const nearbyBuildings = bldGrid ? bldGrid.queryRadius(nextX, nextY, 50) : world.buildings;
       for (const bld of nearbyBuildings) {
         if (
@@ -6993,24 +6993,24 @@ export function updatePedestrians(
 
     // 7b. Collision with and Avoidance of Street Props (excluding broken ones - Optimized with propGrid)
     {
-      const pedRadius = 6.0;
+      const pedRadius = 3.2;
       const nearbyProps = propGrid ? propGrid.queryRadius(nextX, nextY, 40) : world.props;
       for (const prop of nearbyProps) {
         const hitbox = getPropHitbox(prop);
         if (hitbox.shape === 'none' || (prop.isBroken && hitbox.isWalkableWhenBroken)) continue;
 
-        let propRadius = 5.0;
-        if (prop.type === 'bench') propRadius = 9.0;
-        else if (prop.type === 'kiosk') propRadius = 16.0;
-        else if (prop.type === 'mailbox') propRadius = 7.0;
-        else if (prop.type === 'cone') propRadius = 4.0;
-        else if (prop.type === 'trash_can') propRadius = 6.0;
-        else if (prop.type === 'bus_stop') propRadius = 16.0;
-        else if (prop.type === 'dumpster') propRadius = 14.0;
-        else if (prop.type === 'flowerbed') propRadius = 12.0;
-        else if (prop.type === 'tire_flowerbed') propRadius = 9.0;
-        else if (prop.type === 'lamp_concrete') propRadius = 7.0;
-        else if (prop.type === 'playground_swing') propRadius = 12.0;
+        let propRadius = 2.8;
+        if (prop.type === 'bench') propRadius = 6.5;
+        else if (prop.type === 'kiosk') propRadius = 11.5;
+        else if (prop.type === 'mailbox') propRadius = 3.5;
+        else if (prop.type === 'cone') propRadius = 2.2;
+        else if (prop.type === 'trash_can') propRadius = 3.0;
+        else if (prop.type === 'bus_stop') propRadius = 12.5;
+        else if (prop.type === 'dumpster') propRadius = 8.0;
+        else if (prop.type === 'flowerbed') propRadius = 8.5;
+        else if (prop.type === 'tire_flowerbed') propRadius = 5.2;
+        else if (prop.type === 'lamp_concrete') propRadius = 5.5;
+        else if (prop.type === 'playground_swing') propRadius = 10.0;
 
         const dx = nextX - prop.x;
         const dy = nextY - prop.y;

@@ -282,7 +282,7 @@ export function findActiveInteraction(
     const doors = getBusDoors(bus.type, bus.length, bus.width);
     for (const d of doors) {
       const distToDoor = Math.hypot(localX - d.vestibuleLocalX, localY - d.vestibuleLocalY);
-      if (distToDoor < 18) {
+      if (distToDoor < 12) {
         return {
           type: 'exit_bus_saloon',
           primaryKey: 'F',
@@ -301,7 +301,7 @@ export function findActiveInteraction(
     // 2. Check if near passenger seats to sit down
     const seats = getBusSeatPositions(bus.type);
     let closestSeat: any = null;
-    let closestDist = 22;
+    let closestDist = 14;
 
     for (const s of seats) {
       const d = Math.hypot(localX - s.localX, localY - s.localY);
@@ -350,13 +350,14 @@ export function findActiveInteraction(
 
     const halfL = car.length / 2;
     const halfW = car.width / 2;
+    const cScale = (car.width || 30) / 60;
     const localX = player.carLocalX ?? 0;
     const localY = player.carLocalY ?? 0;
 
     // Check vestibules for exit doors
-    // Working vestibule: localX > halfL - 33
-    // Non-working vestibule: localX < -halfL + 36
-    if (localX > halfL - 33) {
+    // Working vestibule: localX > halfL - 33 * cScale
+    // Non-working vestibule: localX < -halfL + 36 * cScale
+    if (localX > halfL - 33 * cScale) {
       if (localY <= 0) {
         return {
           type: 'exit_passenger_car',
@@ -368,7 +369,7 @@ export function findActiveInteraction(
           dist: 0,
           angleDiff: 0,
           score: 0,
-          data: { car, doorId: 'work_north', exitLocalY: -halfW - 14 }
+          data: { car, doorId: 'work_north', exitLocalY: -halfW - 7 }
         };
       } else {
         return {
@@ -381,10 +382,10 @@ export function findActiveInteraction(
           dist: 0,
           angleDiff: 0,
           score: 0,
-          data: { car, doorId: 'work_south', exitLocalY: halfW + 14 }
+          data: { car, doorId: 'work_south', exitLocalY: halfW + 7 }
         };
       }
-    } else if (localX < -halfL + 36) {
+    } else if (localX < -halfL + 36 * cScale) {
       if (localY <= 0) {
         return {
           type: 'exit_passenger_car',
@@ -396,7 +397,7 @@ export function findActiveInteraction(
           dist: 0,
           angleDiff: 0,
           score: 0,
-          data: { car, doorId: 'nonwork_north', exitLocalY: -halfW - 14 }
+          data: { car, doorId: 'nonwork_north', exitLocalY: -halfW - 7 }
         };
       } else {
         return {
@@ -409,7 +410,7 @@ export function findActiveInteraction(
           dist: 0,
           angleDiff: 0,
           score: 0,
-          data: { car, doorId: 'nonwork_south', exitLocalY: halfW + 14 }
+          data: { car, doorId: 'nonwork_south', exitLocalY: halfW + 7 }
         };
       }
     }
@@ -417,7 +418,7 @@ export function findActiveInteraction(
     // Check if near train compartment seats or berths to sit down
     const trainSeats = getTrainCoachSeats(car);
     let closestSeat: any = null;
-    let closestDist = 22;
+    let closestDist = 12;
 
     for (const s of trainSeats) {
       const d = Math.hypot(localX - s.localX, localY - s.localY);
@@ -726,18 +727,19 @@ export function findActiveInteraction(
     const cos = Math.cos(car.angle);
     const sin = Math.sin(car.angle);
 
+    const cScale = (car.width || 30) / 60;
     const doors = [
-      { id: 'work_north', name: 'Рабочий тамбур (северная дверь)', localX: halfL - 19, localY: -halfW, vestibuleLocalX: halfL - 19, vestibuleLocalY: -8 },
-      { id: 'work_south', name: 'Рабочий тамбур (южная дверь)', localX: halfL - 19, localY: halfW, vestibuleLocalX: halfL - 19, vestibuleLocalY: 8 },
-      { id: 'nonwork_north', name: 'Нерабочий тамбур (северная дверь)', localX: -halfL + 18, localY: -halfW, vestibuleLocalX: -halfL + 18, vestibuleLocalY: -8 },
-      { id: 'nonwork_south', name: 'Нерабочий тамбур (южная дверь)', localX: -halfL + 18, localY: halfW, vestibuleLocalX: -halfL + 18, vestibuleLocalY: 8 },
+      { id: 'work_north', name: 'Рабочий тамбур (северная дверь)', localX: halfL - 19 * cScale, localY: -halfW, vestibuleLocalX: halfL - 19 * cScale, vestibuleLocalY: -8 * cScale },
+      { id: 'work_south', name: 'Рабочий тамбур (южная дверь)', localX: halfL - 19 * cScale, localY: halfW, vestibuleLocalX: halfL - 19 * cScale, vestibuleLocalY: 8 * cScale },
+      { id: 'nonwork_north', name: 'Нерабочий тамбур (северная дверь)', localX: -halfL + 18 * cScale, localY: -halfW, vestibuleLocalX: -halfL + 18 * cScale, vestibuleLocalY: -8 * cScale },
+      { id: 'nonwork_south', name: 'Нерабочий тамбур (южная дверь)', localX: -halfL + 18 * cScale, localY: halfW, vestibuleLocalX: -halfL + 18 * cScale, vestibuleLocalY: 8 * cScale },
     ];
 
     for (const d of doors) {
       const doorWorldX = car.x + d.localX * cos - d.localY * sin;
       const doorWorldY = car.y + d.localX * sin + d.localY * cos;
 
-      const reach = isTargetInPhysicalReach(px, py, facing, doorWorldX, doorWorldY, 44, 2.2, mouseWorldPos);
+      const reach = isTargetInPhysicalReach(px, py, facing, doorWorldX, doorWorldY, 32, 2.2, mouseWorldPos);
       if (reach.inReach) {
         candidates.push({
           type: 'enter_passenger_car',

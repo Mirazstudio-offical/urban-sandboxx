@@ -971,18 +971,19 @@ export function constrainPlayerToCarInterior(
   car: RollingStockCar,
   dt: number
 ): void {
+  const scale = (car.width || 30) / 60;
   let px = player.carLocalX ?? 0;
-  let py = player.carLocalY ?? 8;
+  let py = player.carLocalY ?? 8 * scale;
 
-  const playerRadius = 4.8;
+  const playerRadius = 4.8 * scale;
   const halfL = car.length / 2;
   const halfW = car.width / 2;
 
   // 1. Boundary of outer car hull and end gangways
-  const minX = -halfL + 4 + playerRadius;
-  const maxX = halfL - 4 - playerRadius;
-  const minY = -halfW + 3 + playerRadius;
-  const maxY = halfW - 3 - playerRadius;
+  const minX = -halfL + 4 * scale + playerRadius;
+  const maxX = halfL - 4 * scale - playerRadius;
+  const minY = -halfW + 3 * scale + playerRadius;
+  const maxY = halfW - 3 * scale - playerRadius;
 
   px = Math.max(minX, Math.min(maxX, px));
   py = Math.max(minY, Math.min(maxY, py));
@@ -991,45 +992,39 @@ export function constrainPlayerToCarInterior(
     (car.name && car.name.toLowerCase().includes('плацкарт'));
 
   // 2. Define interior wall segments [{ x1, y1, x2, y2 }]
-  const nwVestEnd = -halfL + 36; // -209
-  const wcEndX = -halfL + 85;    // -160
-  const saloonStartX = wcEndX;   // -160
-  const saloonEndX = halfL - 75; // 170
-  const srvEndX = halfL - 33;    // 212
+  const nwVestEnd = -halfL + 36 * scale;
+  const wcEndX = -halfL + 85 * scale;
+  const saloonStartX = wcEndX;
+  const saloonEndX = halfL - 75 * scale;
+  const srvEndX = halfL - 33 * scale;
+  const yInset = 2 * scale;
 
   const walls: { x1: number; y1: number; x2: number; y2: number }[] = [
-    // Non-working vestibule bulkhead at nwVestEnd (-209)
-    // Passageway door is at y in [2, 16]
-    { x1: nwVestEnd, y1: -halfW + 2, x2: nwVestEnd, y2: 2 },
-    { x1: nwVestEnd, y1: 16, x2: nwVestEnd, y2: halfW - 2 },
+    // Non-working vestibule bulkhead
+    { x1: nwVestEnd, y1: -halfW + yInset, x2: nwVestEnd, y2: 2 * scale },
+    { x1: nwVestEnd, y1: 16 * scale, x2: nwVestEnd, y2: halfW - yInset },
 
-    // Working vestibule bulkhead at srvEndX (212)
-    // Passageway door is at y in [2, 14]
-    { x1: srvEndX, y1: -halfW + 2, x2: srvEndX, y2: 2 },
-    { x1: srvEndX, y1: 14, x2: srvEndX, y2: halfW - 2 },
+    // Working vestibule bulkhead
+    { x1: srvEndX, y1: -halfW + yInset, x2: srvEndX, y2: 2 * scale },
+    { x1: srvEndX, y1: 14 * scale, x2: srvEndX, y2: halfW - yInset },
 
-    // WC sanitary cabins (y in [-halfW + 2, 0], x in [-209, -160])
-    // WC front wall at y = 0 with 2 cabin doors: door 1 at [-202, -192], door 2 at [-178, -168]
-    { x1: nwVestEnd, y1: 0, x2: nwVestEnd + 7, y2: 0 },
-    { x1: nwVestEnd + 17, y1: 0, x2: nwVestEnd + 31, y2: 0 },
-    { x1: nwVestEnd + 41, y1: 0, x2: wcEndX, y2: 0 },
-    // Dividing wall between WC cabin 1 and WC cabin 2 at -184.5
-    { x1: (nwVestEnd + wcEndX) / 2, y1: -halfW + 2, x2: (nwVestEnd + wcEndX) / 2, y2: 0 },
-    // End wall separating WC from passenger saloon
-    { x1: wcEndX, y1: -halfW + 2, x2: wcEndX, y2: 0 },
+    // WC sanitary cabins
+    { x1: nwVestEnd, y1: 0, x2: nwVestEnd + 7 * scale, y2: 0 },
+    { x1: nwVestEnd + 17 * scale, y1: 0, x2: nwVestEnd + 31 * scale, y2: 0 },
+    { x1: nwVestEnd + 41 * scale, y1: 0, x2: wcEndX, y2: 0 },
+    { x1: (nwVestEnd + wcEndX) / 2, y1: -halfW + yInset, x2: (nwVestEnd + wcEndX) / 2, y2: 0 },
+    { x1: wcEndX, y1: -halfW + yInset, x2: wcEndX, y2: 0 },
 
-    // Conductor's compartment in service zone (x in [170, 212], y in [-halfW + 2, 0])
-    // Divider bulkhead between saloon and conductor compartment
-    { x1: saloonEndX, y1: -halfW + 2, x2: saloonEndX, y2: 0 },
-    // Front corridor wall at y = 0 with door at [178, 190]
-    { x1: saloonEndX, y1: 0, x2: saloonEndX + 8, y2: 0 },
-    { x1: saloonEndX + 20, y1: 0, x2: srvEndX, y2: 0 }
+    // Conductor's compartment in service zone
+    { x1: saloonEndX, y1: -halfW + yInset, x2: saloonEndX, y2: 0 },
+    { x1: saloonEndX, y1: 0, x2: saloonEndX + 8 * scale, y2: 0 },
+    { x1: saloonEndX + 20 * scale, y1: 0, x2: srvEndX, y2: 0 }
   ];
 
   // Compartment partitions & corridor doors
-  const saloonL = saloonEndX - saloonStartX; // 330
+  const saloonL = saloonEndX - saloonStartX;
   const numComps = 9;
-  const compW = saloonL / numComps; // 36.67
+  const compW = saloonL / numComps;
 
   for (let i = 0; i < numComps; i++) {
     const compX = saloonStartX + i * compW;
@@ -1038,26 +1033,25 @@ export function constrainPlayerToCarInterior(
     if (i > 0) {
       walls.push({
         x1: compX,
-        y1: -halfW + 2,
+        y1: -halfW + yInset,
         x2: compX,
-        y2: isPlatskart ? 0 : 1.5
+        y2: isPlatskart ? 0 : 1.5 * scale
       });
     }
 
     if (!isPlatskart) {
-      // In Kupe: longitudinal corridor wall at y = 1.5
-      // Door opening is from compX + 11 to compX + compW - 11 (~14.7 px wide)
+      // In Kupe: longitudinal corridor wall
       walls.push({
         x1: compX,
-        y1: 1.5,
-        x2: compX + 11,
-        y2: 1.5
+        y1: 1.5 * scale,
+        x2: compX + 11 * scale,
+        y2: 1.5 * scale
       });
       walls.push({
-        x1: compX + compW - 11,
-        y1: 1.5,
+        x1: compX + compW - 11 * scale,
+        y1: 1.5 * scale,
         x2: compX + compW,
-        y2: 1.5
+        y2: 1.5 * scale
       });
     }
   }
@@ -1078,7 +1072,7 @@ export function constrainPlayerToCarInterior(
     const distDx = px - closestX;
     const distDy = py - closestY;
     const distSq = distDx * distDx + distDy * distDy;
-    const minDist = playerRadius + 1.2;
+    const minDist = playerRadius + 1.2 * scale;
 
     if (distSq < minDist * minDist) {
       const dist = Math.sqrt(distSq);
@@ -1097,33 +1091,33 @@ export function constrainPlayerToCarInterior(
 
   // Titan copper boiler & fireplace hearth in service zone
   furnitureBoxes.push({
-    minX: saloonEndX + 4,
-    maxX: saloonEndX + 20,
-    minY: 14.5,
-    maxY: halfW - 2
+    minX: saloonEndX + 4 * scale,
+    maxX: saloonEndX + 20 * scale,
+    minY: 14.5 * scale,
+    maxY: halfW - yInset
   });
 
   // Conductor's desk inside conductor compartment
   furnitureBoxes.push({
-    minX: saloonEndX + 22,
-    maxX: srvEndX - 3,
-    minY: -halfW + 3,
-    maxY: -halfW + 15
+    minX: saloonEndX + 22 * scale,
+    maxX: srvEndX - 3 * scale,
+    minY: -halfW + 3 * scale,
+    maxY: -halfW + 15 * scale
   });
 
   // Toilets inside WC cabins
   const cabinW = (wcEndX - nwVestEnd) / 2;
   furnitureBoxes.push({
-    minX: nwVestEnd + 4,
-    maxX: nwVestEnd + 10,
-    minY: -halfW + 3,
-    maxY: -halfW + 12
+    minX: nwVestEnd + 4 * scale,
+    maxX: nwVestEnd + 10 * scale,
+    minY: -halfW + 3 * scale,
+    maxY: -halfW + 12 * scale
   });
   furnitureBoxes.push({
-    minX: nwVestEnd + cabinW + 4,
-    maxX: nwVestEnd + cabinW + 10,
-    minY: -halfW + 3,
-    maxY: -halfW + 12
+    minX: nwVestEnd + cabinW + 4 * scale,
+    maxX: nwVestEnd + cabinW + 10 * scale,
+    minY: -halfW + 3 * scale,
+    maxY: -halfW + 12 * scale
   });
 
   // Compartment dining tables & berths
@@ -1132,19 +1126,19 @@ export function constrainPlayerToCarInterior(
 
     // Dining table by window in every compartment
     furnitureBoxes.push({
-      minX: compX + 13.5,
-      maxX: compX + compW - 13.5,
-      minY: -halfW + 2,
-      maxY: -halfW + 15.5
+      minX: compX + 13.5 * scale,
+      maxX: compX + compW - 13.5 * scale,
+      minY: -halfW + yInset,
+      maxY: -halfW + 15.5 * scale
     });
 
     if (isPlatskart) {
       // Platskart side berths (боковушки) on bottom wall
       furnitureBoxes.push({
-        minX: compX + 2,
-        maxX: compX + compW - 2,
-        minY: 14.0,
-        maxY: halfW - 2
+        minX: compX + 2 * scale,
+        maxX: compX + compW - 2 * scale,
+        minY: 14.0 * scale,
+        maxY: halfW - yInset
       });
     }
   }
@@ -1569,7 +1563,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
   switch (prop.type as string) {
     case 'bench':
       return {
-        shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 0.14, displayNameRu: 'скамейка',
+        shape: 'box', halfWidth: 7.5, halfHeight: 3.5, resistance: 0.14, displayNameRu: 'скамейка',
         anchorType: prop.isBroken ? 'movable_rigid' : 'ground_anchored',
         postBreakMode: 'detach_body',
         massKg: 95, frictionStatic: 0.55, frictionKinetic: 0.65,
@@ -1578,7 +1572,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'dumpster':
       return {
-        shape: 'box', halfWidth: 14, halfHeight: 10, resistance: 0.34, displayNameRu: 'мусорный контейнер',
+        shape: 'box', halfWidth: 7.5, halfHeight: 5.0, resistance: 0.34, displayNameRu: 'мусорный контейнер',
         anchorType: 'movable_rigid',
         postBreakMode: 'remain_solid',
         massKg: 380, frictionStatic: 0.28, frictionKinetic: 0.42, // Heavy steel bin on caster wheels
@@ -1587,7 +1581,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'flowerbed':
       return {
-        shape: 'box', halfWidth: 12, halfHeight: 8, resistance: 0.55, displayNameRu: 'бетонная клумба',
+        shape: 'box', halfWidth: 8.0, halfHeight: 5.2, resistance: 0.55, displayNameRu: 'бетонная клумба',
         anchorType: 'foundation_fixed',
         postBreakMode: 'remain_solid',
         massKg: 1400, frictionStatic: 0.95, frictionKinetic: 0.90,
@@ -1596,7 +1590,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'bus_stop':
       return {
-        shape: 'box', halfWidth: 19, halfHeight: 11, resistance: 0.52, displayNameRu: 'автобусная остановка',
+        shape: 'box', halfWidth: 14.0, halfHeight: 8.5, resistance: 0.52, displayNameRu: 'автобусная остановка',
         anchorType: 'foundation_fixed',
         postBreakMode: 'remain_solid',
         massKg: 1650, frictionStatic: 0.95, frictionKinetic: 0.90,
@@ -1605,7 +1599,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'kiosk':
       return {
-        shape: 'box', halfWidth: 13, halfHeight: 13, resistance: 0.68, displayNameRu: 'киоск',
+        shape: 'box', halfWidth: 9.5, halfHeight: 9.5, resistance: 0.68, displayNameRu: 'киоск',
         anchorType: 'foundation_fixed',
         postBreakMode: 'remain_solid',
         massKg: 2400, frictionStatic: 0.98, frictionKinetic: 0.95,
@@ -1614,7 +1608,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'mailbox':
       return {
-        shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 0.12, displayNameRu: 'почтовый ящик',
+        shape: 'box', halfWidth: 2.8, halfHeight: 2.8, resistance: 0.12, displayNameRu: 'почтовый ящик',
         anchorType: prop.isBroken ? 'movable_rigid' : 'ground_anchored',
         postBreakMode: 'detach_body',
         massKg: 55, frictionStatic: 0.50, frictionKinetic: 0.60,
@@ -1623,7 +1617,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'playground_swing':
       return {
-        shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.35, displayNameRu: 'детские качели',
+        shape: 'box', halfWidth: 10.0, halfHeight: 5.0, resistance: 0.35, displayNameRu: 'детские качели',
         anchorType: 'foundation_fixed',
         postBreakMode: 'remain_solid',
         massKg: 320, frictionStatic: 0.90, frictionKinetic: 0.85,
@@ -1632,7 +1626,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'sandbox':
       return {
-        shape: 'box', halfWidth: 12, halfHeight: 12, resistance: 0.28, displayNameRu: 'детская песочница',
+        shape: 'box', halfWidth: 10.0, halfHeight: 10.0, resistance: 0.28, displayNameRu: 'детская песочница',
         anchorType: 'foundation_fixed',
         postBreakMode: 'remain_solid',
         massKg: 480, frictionStatic: 0.90, frictionKinetic: 0.85,
@@ -1689,7 +1683,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'hydrant':
       return {
-        shape: 'circle', radius: 4.2, resistance: 0.36, displayNameRu: 'пожарный гидрант',
+        shape: 'circle', radius: 2.2, resistance: 0.36, displayNameRu: 'пожарный гидрант',
         anchorType: prop.isBroken ? 'movable_rigid' : 'ground_anchored',
         postBreakMode: 'detach_body',
         massKg: 135, frictionStatic: 0.65, frictionKinetic: 0.72,
@@ -1698,7 +1692,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'trash_can':
       return {
-        shape: 'circle', radius: 4.0, resistance: 0.10, displayNameRu: 'урна',
+        shape: 'circle', radius: 2.2, resistance: 0.10, displayNameRu: 'урна',
         anchorType: prop.isBroken ? 'movable_rigid' : 'ground_anchored',
         postBreakMode: 'detach_body',
         massKg: 45, frictionStatic: 0.45, frictionKinetic: 0.58,
@@ -1707,7 +1701,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'bollard':
       return {
-        shape: 'circle', radius: prop.isBroken ? 2.4 : 2.8, resistance: 0.30, displayNameRu: 'столбик ограждения',
+        shape: 'circle', radius: prop.isBroken ? 1.4 : 1.6, resistance: 0.30, displayNameRu: 'столбик ограждения',
         anchorType: 'ground_anchored',
         postBreakMode: 'topple_pole',
         massKg: 110, frictionStatic: 0.85, frictionKinetic: 0.80,
@@ -1716,7 +1710,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'cone':
       return {
-        shape: 'circle', radius: 3.0, resistance: 0.02, displayNameRu: 'дорожный конус',
+        shape: 'circle', radius: 1.6, resistance: 0.02, displayNameRu: 'дорожный конус',
         anchorType: 'movable_rigid',
         postBreakMode: 'remain_solid',
         massKg: 5, frictionStatic: 0.35, frictionKinetic: 0.55,
@@ -1725,7 +1719,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'tire_flowerbed':
       return {
-        shape: 'circle', radius: 7.5, resistance: 0.18, displayNameRu: 'клумба из покрышки',
+        shape: 'circle', radius: 4.2, resistance: 0.18, displayNameRu: 'клумба из покрышки',
         anchorType: 'movable_rigid',
         postBreakMode: 'remain_solid',
         massKg: 120, frictionStatic: 0.72, frictionKinetic: 0.82,
@@ -1761,7 +1755,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'village_sign':
       return {
-        shape: 'box', halfWidth: prop.isBroken ? 3.5 : 10, halfHeight: 3, resistance: 0.18, displayNameRu: 'дорожный указатель',
+        shape: 'box', halfWidth: prop.isBroken ? 2.8 : 7.2, halfHeight: 2.2, resistance: 0.18, displayNameRu: 'дорожный указатель',
         anchorType: 'ground_anchored',
         postBreakMode: 'pedestal_only',
         massKg: 85, frictionStatic: 0.85, frictionKinetic: 0.80,
@@ -1779,7 +1773,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'woodpile':
       return {
-        shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.38, displayNameRu: 'поленница дров',
+        shape: 'box', halfWidth: 9.5, halfHeight: 4.8, resistance: 0.38, displayNameRu: 'поленница дров',
         anchorType: 'granular_mound',
         postBreakMode: 'remain_solid',
         massKg: 680, frictionStatic: 0.88, frictionKinetic: 0.82,
@@ -1823,7 +1817,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
     }
     case 'pallet_stack':
       return {
-        shape: 'box', halfWidth: 10, halfHeight: 8, resistance: 0.24, displayNameRu: 'стопка деревянных поддонов',
+        shape: 'box', halfWidth: 6.0, halfHeight: 4.2, resistance: 0.24, displayNameRu: 'стопка деревянных поддонов',
         anchorType: 'movable_rigid',
         postBreakMode: 'remain_solid',
         massKg: 210, frictionStatic: 0.58, frictionKinetic: 0.68,
@@ -1844,7 +1838,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'cable_spool':
       return {
-        shape: 'circle', radius: 9, resistance: 0.42, displayNameRu: 'кабельный барабан',
+        shape: 'circle', radius: 6.5, resistance: 0.42, displayNameRu: 'кабельный барабан',
         anchorType: 'movable_rigid',
         postBreakMode: 'remain_solid',
         massKg: 520, frictionStatic: 0.45, frictionKinetic: 0.55,
@@ -1876,7 +1870,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'industrial_tires':
       return {
-        shape: 'circle', radius: 10, resistance: 0.48, displayNameRu: 'штабель карьерных шин',
+        shape: 'circle', radius: 8.2, resistance: 0.48, displayNameRu: 'штабель карьерных шин',
         anchorType: 'movable_rigid',
         postBreakMode: 'remain_solid',
         massKg: 620, frictionStatic: 0.78, frictionKinetic: 0.86,
@@ -1894,7 +1888,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'industrial_sign':
       return {
-        shape: 'box', halfWidth: prop.isBroken ? 3.5 : 8, halfHeight: 3, resistance: 0.18, displayNameRu: 'щит-указатель',
+        shape: 'box', halfWidth: prop.isBroken ? 2.8 : 6.0, halfHeight: 2.2, resistance: 0.18, displayNameRu: 'щит-указатель',
         anchorType: 'ground_anchored',
         postBreakMode: 'pedestal_only',
         massKg: 95, frictionStatic: 0.85, frictionKinetic: 0.80,
@@ -1984,7 +1978,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'garage_sofa':
       return {
-        shape: 'box', halfWidth: 10, halfHeight: 6, resistance: 0.25, displayNameRu: 'гаражный диван',
+        shape: 'box', halfWidth: 8.5, halfHeight: 4.5, resistance: 0.25, displayNameRu: 'гаражный диван',
         anchorType: 'movable_rigid',
         postBreakMode: 'remain_solid',
         massKg: 85, frictionStatic: 0.55, frictionKinetic: 0.68,
@@ -1993,7 +1987,7 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       };
     case 'garage_workbench':
       return {
-        shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.48, displayNameRu: 'верстак с тисками',
+        shape: 'box', halfWidth: 9.0, halfHeight: 4.0, resistance: 0.48, displayNameRu: 'верстак с тисками',
         anchorType: 'movable_rigid',
         postBreakMode: 'remain_solid',
         massKg: 290, frictionStatic: 0.68, frictionKinetic: 0.78,
@@ -6283,7 +6277,7 @@ export function updatePlayerPedestrianPhysics(
   let newY = player.y + player.vy * dt;
 
   // Collision with buildings
-  const pedRadius = 7.0;
+  const pedRadius = 3.2;
   for (const bld of buildings) {
     if (newX + pedRadius > bld.x && newX - pedRadius < bld.x + bld.width &&
         newY + pedRadius > bld.y && newY - pedRadius < bld.y + bld.height) {

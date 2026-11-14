@@ -9,6 +9,16 @@ import { RollingStockRenderer } from './rollingStockRenderer';
 import { getLevelCrossings } from './levelCrossingSystem';
 
 export class RailwayRenderer {
+  private static getNormGauge(track: RailwayTrackSegment): number {
+    const g = track.gauge ?? 17;
+    return g >= 26 ? g * 0.5 : g;
+  }
+
+  private static getNormBallast(track: RailwayTrackSegment): number {
+    const b = track.ballastWidth ?? 42;
+    return b >= 60 ? b * 0.5 : b;
+  }
+
   /**
    * 1. Renders the complete track superstructure: Ballast bed, sleepers, rails, switches, and buffer stops.
    * Cached into static map chunks for 60fps performance.
@@ -79,8 +89,8 @@ export class RailwayRenderer {
     ctx.save();
 
     for (const track of tracks) {
-      const gauge = track.gauge ?? 34;
-      const ballastW = track.ballastWidth ?? 92;
+      const gauge = this.getNormGauge(track);
+      const ballastW = this.getNormBallast(track);
       const halfBallast = ballastW / 2;
 
       if (track.curvePoints && track.curvePoints.length > 1) {
@@ -93,7 +103,7 @@ export class RailwayRenderer {
 
         // 1a. Outer dark soil edge shadow
         ctx.strokeStyle = '#262422';
-        ctx.lineWidth = ballastW + 12;
+        ctx.lineWidth = ballastW + 6;
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < n; i++) ctx.lineTo(pts[i].x, pts[i].y);
@@ -101,7 +111,7 @@ export class RailwayRenderer {
 
         // 1b. Ballast slope base
         ctx.strokeStyle = '#383532';
-        ctx.lineWidth = ballastW + 4;
+        ctx.lineWidth = ballastW + 2;
         ctx.stroke();
 
         // 1c. Ballast crushed granite core
@@ -111,7 +121,7 @@ export class RailwayRenderer {
 
         // 1d. Ballast crown / top surface
         ctx.strokeStyle = '#56514b';
-        ctx.lineWidth = ballastW - 8;
+        ctx.lineWidth = ballastW - 4;
         ctx.stroke();
 
         // 1e. Center track grease and oil stain
@@ -133,11 +143,11 @@ export class RailwayRenderer {
 
         // 1a. Outer dark soil edge shadow
         ctx.fillStyle = '#262422';
-        ctx.fillRect(0, -halfBallast - 6, len, ballastW + 12);
+        ctx.fillRect(0, -halfBallast - 3, len, ballastW + 6);
 
         // 1b. Ballast slope base
         ctx.fillStyle = '#383532';
-        ctx.fillRect(0, -halfBallast - 2, len, ballastW + 4);
+        ctx.fillRect(0, -halfBallast - 1, len, ballastW + 2);
 
         // 1c. Ballast crushed granite core
         ctx.fillStyle = '#4a4641';
@@ -145,7 +155,7 @@ export class RailwayRenderer {
 
         // 1d. Ballast crown / top surface
         ctx.fillStyle = '#56514b';
-        ctx.fillRect(0, -halfBallast + 4, len, ballastW - 8);
+        ctx.fillRect(0, -halfBallast + 2, len, ballastW - 4);
 
         // 1e. Central oil and grease staining patina
         ctx.fillStyle = 'rgba(24, 20, 16, 0.45)';
@@ -178,13 +188,13 @@ export class RailwayRenderer {
     const viewMaxY = maxY + pad;
 
     for (const track of tracks) {
-      const gauge = track.gauge ?? 34;
+      const gauge = this.getNormGauge(track);
       const halfGauge = gauge / 2;
       const isWood = track.sleepersType === 'wood';
-      const sleeperSpacing = isWood ? 18 : 17;
-      const sleeperL = gauge + 28; // ~62 px length
+      const sleeperSpacing = isWood ? 9 : 8.5;
+      const sleeperL = gauge + 14; // ~31 px length (2.7 m real sleeper + scale padding)
       const halfSleeperL = sleeperL / 2;
-      const sleeperW = isWood ? 5.8 : 5.2;
+      const sleeperW = isWood ? 2.9 : 2.6;
 
       if (track.curvePoints && track.curvePoints.length > 1) {
         const pts = track.curvePoints;
@@ -256,20 +266,20 @@ export class RailwayRenderer {
             ctx.fillStyle = '#2b1e15';
             ctx.fillRect(x - sleeperW / 2, -halfSleeperL, sleeperW, sleeperL);
             ctx.fillStyle = '#42372f';
-            ctx.fillRect(x - 2.0, -halfGauge - 3.2, 4.0, 6.4);
-            ctx.fillRect(x - 2.0, halfGauge - 3.2, 4.0, 6.4);
+            ctx.fillRect(x - 1.0, -halfGauge - 1.6, 2.0, 3.2);
+            ctx.fillRect(x - 1.0, halfGauge - 1.6, 2.0, 3.2);
           }
         } else {
           for (let x = startX; x <= endX; x += sleeperSpacing) {
             ctx.fillStyle = '#6f6d68';
             ctx.fillRect(x - sleeperW / 2, -halfSleeperL, sleeperW, sleeperL);
             ctx.fillStyle = '#898782';
-            ctx.fillRect(x - sleeperW / 2, -halfSleeperL, 1.1, sleeperL);
+            ctx.fillRect(x - sleeperW / 2, -halfSleeperL, 0.65, sleeperL);
             ctx.fillStyle = '#595753';
             ctx.fillRect(x - sleeperW / 2, -halfGauge * 0.45, sleeperW, gauge * 0.9);
             ctx.fillStyle = '#313338';
-            ctx.fillRect(x - 2.2, -halfGauge - 3.6, 4.4, 7.2);
-            ctx.fillRect(x - 2.2, halfGauge - 3.6, 4.4, 7.2);
+            ctx.fillRect(x - 1.1, -halfGauge - 1.8, 2.2, 3.6);
+            ctx.fillRect(x - 1.1, halfGauge - 1.8, 2.2, 3.6);
           }
         }
 
@@ -298,27 +308,27 @@ export class RailwayRenderer {
       ctx.fillRect(-sleeperW / 2, -halfSleeperL, sleeperW, sleeperL);
       // Steel tie-plates
       ctx.fillStyle = '#42372f';
-      ctx.fillRect(-2.0, -halfGauge - 3.2, 4.0, 6.4);
-      ctx.fillRect(-2.0, halfGauge - 3.2, 4.0, 6.4);
+      ctx.fillRect(-1.0, -halfGauge - 1.6, 2.0, 3.2);
+      ctx.fillRect(-1.0, halfGauge - 1.6, 2.0, 3.2);
     } else {
       // Reinforced concrete sleeper Ш-3
       ctx.fillStyle = '#6f6d68';
       ctx.fillRect(-sleeperW / 2, -halfSleeperL, sleeperW, sleeperL);
       // Highlight edge
       ctx.fillStyle = '#898782';
-      ctx.fillRect(-sleeperW / 2, -halfSleeperL, 1.1, sleeperL);
+      ctx.fillRect(-sleeperW / 2, -halfSleeperL, 0.65, sleeperL);
       // Recessed center trough
       ctx.fillStyle = '#595753';
       ctx.fillRect(-sleeperW / 2, -halfGauge * 0.45, sleeperW, gauge * 0.9);
       // Heavy steel tie plates & KB-65 clips
       ctx.fillStyle = '#313338';
-      ctx.fillRect(-2.2, -halfGauge - 3.6, 4.4, 7.2);
-      ctx.fillRect(-2.2, halfGauge - 3.6, 4.4, 7.2);
+      ctx.fillRect(-1.1, -halfGauge - 1.8, 2.2, 3.6);
+      ctx.fillRect(-1.1, halfGauge - 1.8, 2.2, 3.6);
       ctx.fillStyle = '#4b4d52';
-      ctx.fillRect(-1.4, -halfGauge - 2.8, 2.8, 1.6);
-      ctx.fillRect(-1.4, -halfGauge + 1.2, 2.8, 1.6);
-      ctx.fillRect(-1.4, halfGauge - 2.8, 2.8, 1.6);
-      ctx.fillRect(-1.4, halfGauge + 1.2, 2.8, 1.6);
+      ctx.fillRect(-0.7, -halfGauge - 1.4, 1.4, 0.8);
+      ctx.fillRect(-0.7, -halfGauge + 0.6, 1.4, 0.8);
+      ctx.fillRect(-0.7, halfGauge - 1.4, 1.4, 0.8);
+      ctx.fillRect(-0.7, halfGauge + 0.6, 1.4, 0.8);
     }
   }
 
@@ -329,7 +339,7 @@ export class RailwayRenderer {
     ctx.save();
 
     for (const track of tracks) {
-      const gauge = track.gauge ?? 34;
+      const gauge = this.getNormGauge(track);
       const halfGauge = gauge / 2;
 
       if (track.curvePoints && track.curvePoints.length > 1) {
@@ -394,7 +404,7 @@ export class RailwayRenderer {
 
     // Pass 1: Rail base shadow
     ctx.strokeStyle = '#1e1c1a';
-    ctx.lineWidth = 6.2;
+    ctx.lineWidth = 3.2;
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < n; i++) ctx.lineTo(pts[i].x, pts[i].y);
@@ -402,17 +412,17 @@ export class RailwayRenderer {
 
     // Pass 2: Rust web patina
     ctx.strokeStyle = '#53453b';
-    ctx.lineWidth = 4.8;
+    ctx.lineWidth = 2.4;
     ctx.stroke();
 
     // Pass 3: Polished steel head
     ctx.strokeStyle = '#c7cbd2';
-    ctx.lineWidth = 3.2;
+    ctx.lineWidth = 1.6;
     ctx.stroke();
 
     // Pass 4: Specular running contact mirror line
     ctx.strokeStyle = '#f8fafc';
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 0.7;
     ctx.stroke();
   }
 
@@ -423,9 +433,9 @@ export class RailwayRenderer {
     ctx.save();
 
     for (const track of tracks) {
-      const gauge = track.gauge ?? 34;
+      const gauge = this.getNormGauge(track);
       const halfGauge = gauge / 2;
-      const ballastW = track.ballastWidth ?? 92;
+      const ballastW = this.getNormBallast(track);
       const halfBallast = ballastW / 2;
 
       // 1. Buffer stops
@@ -454,12 +464,12 @@ export class RailwayRenderer {
         // Crushed stone mound
         ctx.fillStyle = '#48433e';
         ctx.beginPath();
-        ctx.ellipse(-10, 0, 16, halfBallast * 0.8, 0, 0, Math.PI * 2);
+        ctx.ellipse(-5, 0, 8, halfBallast * 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Massive timber & steel bumper beam across rails
-        const beamL = gauge + 14;
-        const beamW = 6.4;
+        const beamL = gauge + 7;
+        const beamW = 3.2;
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(-beamW / 2, -beamL / 2, beamW, beamL);
 
@@ -468,20 +478,20 @@ export class RailwayRenderer {
         const stripeH = beamL / numStripes;
         for (let s = 0; s < numStripes; s++) {
           ctx.fillStyle = s % 2 === 0 ? '#dc2626' : '#f8fafc';
-          ctx.fillRect(-beamW / 2 + 0.5, -beamL / 2 + s * stripeH, beamW - 1.0, stripeH);
+          ctx.fillRect(-beamW / 2 + 0.3, -beamL / 2 + s * stripeH, beamW - 0.6, stripeH);
         }
 
         // Twin buffer discs
         ctx.fillStyle = '#334155';
         ctx.beginPath();
-        ctx.arc(-2.0, -halfGauge, 4.2, 0, Math.PI * 2);
-        ctx.arc(-2.0, halfGauge, 4.2, 0, Math.PI * 2);
+        ctx.arc(-1.0, -halfGauge, 2.1, 0, Math.PI * 2);
+        ctx.arc(-1.0, halfGauge, 2.1, 0, Math.PI * 2);
         ctx.fill();
 
         // Center red marker light
         ctx.fillStyle = '#ef4444';
         ctx.beginPath();
-        ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+        ctx.arc(0, 0, 1.1, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
@@ -502,18 +512,18 @@ export class RailwayRenderer {
         ctx.rotate(angle);
 
         // Point machine drive box
-        const driveY = isLeft ? -halfBallast - 8 : halfBallast + 3;
+        const driveY = isLeft ? -halfBallast - 5 : halfBallast + 2;
         ctx.fillStyle = '#1f242d';
-        ctx.fillRect(pointLX - 6, driveY - 1, 12, 7);
+        ctx.fillRect(pointLX - 4, driveY - 0.5, 8, 4);
         ctx.fillStyle = '#475569';
-        ctx.fillRect(pointLX - 5.5, driveY - 0.5, 11, 6);
+        ctx.fillRect(pointLX - 3.6, driveY - 0.2, 7.2, 3.4);
         ctx.fillStyle = '#eab308';
-        ctx.fillRect(pointLX - 1.5, driveY + 1.5, 3, 2);
+        ctx.fillRect(pointLX - 1, driveY + 0.8, 2, 1.2);
 
         // Operating throw rod
         ctx.fillStyle = '#64748b';
         const rodTargetY = isLeft ? -halfGauge : halfGauge;
-        ctx.fillRect(pointLX - 1.0, Math.min(driveY + 2, rodTargetY), 2.0, Math.abs(rodTargetY - driveY));
+        ctx.fillRect(pointLX - 0.5, Math.min(driveY + 1, rodTargetY), 1.0, Math.abs(rodTargetY - driveY));
 
         ctx.restore();
       }
@@ -567,55 +577,55 @@ export class RailwayRenderer {
       for (const track of cross.tracks) {
         const tX = track.x;
         const trackY = track.y;
-        const gauge = 34;
+        const gauge = 17;
         const halfGauge = gauge / 2;
         
         // Horizontal span across the track based on road crossing angle
         const sinA = Math.abs(Math.sin(roadAngle)) || 1.0;
-        const spanL = Math.max(rW + 12, (rW / sinA) + 12);
+        const spanL = Math.max(rW + 6, (rW / sinA) + 6);
         const panelLeft = tX - spanL / 2;
 
         // Outer approach rubber panels (внешние аппарели)
         ctx.fillStyle = '#18181b';
-        ctx.fillRect(panelLeft, trackY - halfGauge - 12, spanL, 10);
-        ctx.fillRect(panelLeft, trackY + halfGauge + 2, spanL, 10);
+        ctx.fillRect(panelLeft, trackY - halfGauge - 6, spanL, 5);
+        ctx.fillRect(panelLeft, trackY + halfGauge + 1, spanL, 5);
 
         // Inner between-rails rubber panel (межрельсовый резиновый настил)
         ctx.fillStyle = '#18181b';
-        ctx.fillRect(panelLeft, trackY - halfGauge + 4, spanL, gauge - 8);
+        ctx.fillRect(panelLeft, trackY - halfGauge + 2, spanL, gauge - 4);
 
         // Flangeway wheel gap channel (темные желоба для гребней колес)
         ctx.fillStyle = '#09090b';
-        ctx.fillRect(panelLeft, trackY - halfGauge + 0.5, spanL, 3.5);
-        ctx.fillRect(panelLeft, trackY + halfGauge - 4.0, spanL, 3.5);
+        ctx.fillRect(panelLeft, trackY - halfGauge + 0.3, spanL, 1.8);
+        ctx.fillRect(panelLeft, trackY + halfGauge - 2.1, spanL, 1.8);
 
         // Anti-slip ribbed texture lines along rubber surface
         ctx.strokeStyle = '#27272a';
-        ctx.lineWidth = 1.0;
-        for (let rx = panelLeft + 6; rx < panelLeft + spanL; rx += 8) {
+        ctx.lineWidth = 0.7;
+        for (let rx = panelLeft + 4; rx < panelLeft + spanL; rx += 5) {
           ctx.beginPath();
-          ctx.moveTo(rx, trackY - halfGauge + 5);
-          ctx.lineTo(rx, trackY + halfGauge - 5);
+          ctx.moveTo(rx, trackY - halfGauge + 2.5);
+          ctx.lineTo(rx, trackY + halfGauge - 2.5);
           ctx.stroke();
         }
 
         // Galvanized recessed fixing bolts (болтовые крепления резиновых плит)
         ctx.fillStyle = '#71717a';
-        for (let bx = panelLeft + 8; bx < panelLeft + spanL; bx += 16) {
+        for (let bx = panelLeft + 5; bx < panelLeft + spanL; bx += 10) {
           ctx.beginPath();
-          ctx.arc(bx, trackY - halfGauge + 7, 1.2, 0, Math.PI * 2);
-          ctx.arc(bx, trackY + halfGauge - 7, 1.2, 0, Math.PI * 2);
+          ctx.arc(bx, trackY - halfGauge + 3.5, 0.7, 0, Math.PI * 2);
+          ctx.arc(bx, trackY + halfGauge - 3.5, 0.7, 0, Math.PI * 2);
           ctx.fill();
         }
 
         // Steel edge protection framing with yellow/black hazard warning stripes
-        const stripeW = 6;
+        const stripeW = 3;
         for (let s = 0; s < spanL; s += stripeW) {
           ctx.fillStyle = Math.floor(s / stripeW) % 2 === 0 ? '#eab308' : '#09090b';
           // North edge
-          ctx.fillRect(panelLeft + s, trackY - halfGauge - 13, stripeW, 1.6);
+          ctx.fillRect(panelLeft + s, trackY - halfGauge - 6.8, stripeW, 1.0);
           // South edge
-          ctx.fillRect(panelLeft + s, trackY + halfGauge + 11.4, stripeW, 1.6);
+          ctx.fillRect(panelLeft + s, trackY + halfGauge + 5.8, stripeW, 1.0);
         }
       }
 
@@ -770,49 +780,49 @@ export class RailwayRenderer {
 
       // 4. Bright yellow tactile warning strip with raised studs (тактильная плитка)
       const isIsland = p.trackSide === 'island';
-      const studStart = Math.max(p.x + 4, Math.floor((minX - p.x) / 8) * 8 + p.x);
-      const studEnd = Math.min(p.x + p.width - 6, Math.ceil((maxX - p.x) / 8) * 8 + p.x);
+      const studStart = Math.max(p.x + 3, Math.floor((minX - p.x) / 5) * 5 + p.x);
+      const studEnd = Math.min(p.x + p.width - 4, Math.ceil((maxX - p.x) / 5) * 5 + p.x);
 
       if (isIsland || p.trackSide === 'north') {
-        const edgeY = p.y + 3;
+        const edgeY = p.y + 2;
         const stripMinX = Math.max(p.x + 2, minX);
         const stripMaxX = Math.min(p.x + p.width - 2, maxX);
         const stripW = stripMaxX - stripMinX;
         if (stripW > 0) {
           ctx.fillStyle = '#eab308';
-          ctx.fillRect(stripMinX, edgeY, stripW, 3.5);
+          ctx.fillRect(stripMinX, edgeY, stripW, 2.2);
         }
         ctx.fillStyle = '#ca8a04';
-        for (let tx = studStart; tx <= studEnd; tx += 8) {
-          ctx.fillRect(tx, edgeY + 0.8, 2.0, 1.8);
+        for (let tx = studStart; tx <= studEnd; tx += 5) {
+          ctx.fillRect(tx, edgeY + 0.5, 1.2, 1.2);
         }
-        const whiteMinX = Math.max(p.x + 4, minX);
-        const whiteMaxX = Math.min(p.x + p.width - 4, maxX);
+        const whiteMinX = Math.max(p.x + 3, minX);
+        const whiteMaxX = Math.min(p.x + p.width - 3, maxX);
         const whiteW = whiteMaxX - whiteMinX;
         if (whiteW > 0) {
           ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(whiteMinX, edgeY + 5, whiteW, 1.4);
+          ctx.fillRect(whiteMinX, edgeY + 3.2, whiteW, 1.0);
         }
       }
       if (isIsland || p.trackSide === 'south') {
-        const edgeY = p.y + p.height - 6.5;
+        const edgeY = p.y + p.height - 4.2;
         const stripMinX = Math.max(p.x + 2, minX);
         const stripMaxX = Math.min(p.x + p.width - 2, maxX);
         const stripW = stripMaxX - stripMinX;
         if (stripW > 0) {
           ctx.fillStyle = '#eab308';
-          ctx.fillRect(stripMinX, edgeY, stripW, 3.5);
+          ctx.fillRect(stripMinX, edgeY, stripW, 2.2);
         }
         ctx.fillStyle = '#ca8a04';
-        for (let tx = studStart; tx <= studEnd; tx += 8) {
-          ctx.fillRect(tx, edgeY + 0.8, 2.0, 1.8);
+        for (let tx = studStart; tx <= studEnd; tx += 5) {
+          ctx.fillRect(tx, edgeY + 0.5, 1.2, 1.2);
         }
-        const whiteMinX = Math.max(p.x + 4, minX);
-        const whiteMaxX = Math.min(p.x + p.width - 4, maxX);
+        const whiteMinX = Math.max(p.x + 3, minX);
+        const whiteMaxX = Math.min(p.x + p.width - 3, maxX);
         const whiteW = whiteMaxX - whiteMinX;
         if (whiteW > 0) {
           ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(whiteMinX, edgeY - 3, whiteW, 1.4);
+          ctx.fillRect(whiteMinX, edgeY - 2.0, whiteW, 1.0);
         }
       }
 
@@ -843,30 +853,30 @@ export class RailwayRenderer {
       // 7. Platform Signs & Benches spaced along monumental platform length
       const signSpacing = 500;
       for (let sx = p.x + 250; sx < p.x + p.width - 150; sx += signSpacing) {
-        const signW = 120;
-        const signH = 12;
+        const signW = 90;
+        const signH = 9;
         const signY = p.y + p.height * 0.5 - signH / 2;
         ctx.fillStyle = '#1d4ed8'; // Russian Railways classic station blue
         ctx.fillRect(sx, signY, signW, signH);
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.0;
+        ctx.lineWidth = 0.8;
         ctx.strokeRect(sx, signY, signW, signH);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 8px sans-serif';
+        ctx.font = 'bold 6px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(`СТАНЦИЯ СТЕПНАЯ • ПУТЬ ${p.platformNumber}`, sx + signW / 2, signY + signH / 2);
       }
 
-      // Station benches along platform
+      // Station benches along platform (scaled to 1.4m x 0.35m)
       for (let bx = p.x + 80; bx < p.x + p.width - 80; bx += 180) {
         const by = p.y + p.height * 0.5;
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(bx - 12, by - 3, 24, 6);
+        ctx.fillRect(bx - 7, by - 1.75, 14, 3.5);
         ctx.fillStyle = '#b45309';
-        ctx.fillRect(bx - 11, by - 2.5, 22, 2.0);
-        ctx.fillRect(bx - 11, by + 0.5, 22, 2.0);
+        ctx.fillRect(bx - 6, by - 1.4, 12, 1.1);
+        ctx.fillRect(bx - 6, by + 0.3, 12, 1.1);
       }
 
       // 8. Authentic RZD Trackside Stop Signs: «ОСТАНОВКА 1 ВАГОНА» (ОПВ) / «ОСТАНОВКА ЛОКОМОТИВА» (ОЛ)
@@ -878,58 +888,58 @@ export class RailwayRenderer {
 
       for (const opv of opvLocations) {
         const signX = opv.x;
-        const signY = p.trackSide === 'north' ? p.y + p.height - 12 : p.y + 12;
+        const signY = p.trackSide === 'north' ? p.y + p.height - 9 : p.y + 9;
 
         // Striped signal mast / post
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(signX - 1.5, signY - 14, 3, 28);
+        ctx.fillRect(signX - 0.8, signY - 7, 1.6, 14);
         // Red and white reflective diagonal safety stripes on mast
         ctx.fillStyle = '#dc2626';
-        ctx.fillRect(signX - 1.5, signY - 8, 3, 3);
-        ctx.fillRect(signX - 1.5, signY + 2, 3, 3);
+        ctx.fillRect(signX - 0.8, signY - 4, 1.6, 1.8);
+        ctx.fillRect(signX - 0.8, signY + 1, 1.6, 1.8);
 
         // 8a. Primary Sign Board: «ОПВ» / «ОСТ. 1 ВАГОНА» (Остановка первого вагона)
-        const opvW = 50;
-        const opvH = 11;
+        const opvW = 28;
+        const opvH = 6;
         const opvX = signX - opvW / 2;
-        const opvY = signY - 12;
+        const opvY = signY - 6.5;
 
         ctx.fillStyle = '#f8fafc';
         ctx.fillRect(opvX, opvY, opvW, opvH);
         ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 0.8;
         ctx.strokeRect(opvX, opvY, opvW, opvH);
 
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 6px monospace';
+        ctx.font = 'bold 4px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('ОПВ • ОСТ. 1 ВАГ', signX, opvY + opvH / 2);
+        ctx.fillText('ОПВ • 1 ВАГ', signX, opvY + opvH / 2);
 
         // Red reflector marker on sign edge
         ctx.fillStyle = '#ef4444';
-        ctx.fillRect(opv.dir === 'east' ? opvX + opvW - 2.5 : opvX + 0.5, opvY + 1.5, 2.0, opvH - 3);
+        ctx.fillRect(opv.dir === 'east' ? opvX + opvW - 1.5 : opvX + 0.3, opvY + 0.8, 1.2, opvH - 1.6);
 
         // 8b. Secondary Sign Board: «ОЛ» / «ОСТ. ЛОКОМОТИВА» (Остановка локомотива)
-        const olW = 44;
-        const olH = 10;
+        const olW = 25;
+        const olH = 5.5;
         const olX = signX - olW / 2;
-        const olY = signY + 2;
+        const olY = signY + 1;
 
         ctx.fillStyle = '#f8fafc';
         ctx.fillRect(olX, olY, olW, olH);
         ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 0.8;
         ctx.strokeRect(olX, olY, olW, olH);
 
         ctx.fillStyle = '#1e3a8a'; // Deep blue accent for OL sign
-        ctx.font = 'bold 6px monospace';
+        ctx.font = 'bold 4px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('ОЛ • ЛОКОМОТИВ', signX, olY + olH / 2);
+        ctx.fillText('ОЛ • ЛОКОМ', signX, olY + olH / 2);
 
         ctx.fillStyle = '#3b82f6';
-        ctx.fillRect(opv.dir === 'east' ? olX + olW - 2.5 : olX + 0.5, olY + 1.5, 2.0, olH - 3);
+        ctx.fillRect(opv.dir === 'east' ? olX + olW - 1.5 : olX + 0.3, olY + 0.8, 1.2, olH - 1.6);
       }
 
       ctx.restore();
@@ -992,20 +1002,20 @@ export class RailwayRenderer {
           const nx = -cdy / clen;
           const ny = cdx / clen;
           const mastSide = (i % 2 === 0 ? 1 : -1);
-          const mastDist = 38 * mastSide;
+          const mastDist = 19 * mastSide;
 
           ctx.fillStyle = '#64748b';
-          ctx.fillRect(pt.x + nx * mastDist - 2.5, pt.y + ny * mastDist - 2.5, 5, 5);
+          ctx.fillRect(pt.x + nx * mastDist - 1.5, pt.y + ny * mastDist - 1.5, 3, 3);
 
           ctx.strokeStyle = '#475569';
-          ctx.lineWidth = 1.2;
+          ctx.lineWidth = 0.9;
           ctx.beginPath();
           ctx.moveTo(pt.x + nx * mastDist, pt.y + ny * mastDist);
           ctx.lineTo(pt.x, pt.y);
           ctx.stroke();
 
           ctx.fillStyle = '#0891b2';
-          ctx.fillRect(pt.x + nx * 2 - 1.5, pt.y + ny * 2 - 1.5, 3, 3);
+          ctx.fillRect(pt.x + nx * 1 - 0.9, pt.y + ny * 1 - 0.9, 1.8, 1.8);
         }
 
         ctx.restore();
@@ -1030,7 +1040,7 @@ export class RailwayRenderer {
 
       // Contact wire directly overhead along centerline (контактный провод)
       ctx.strokeStyle = nightAlpha > 0.3 ? 'rgba(148, 163, 184, 0.45)' : 'rgba(71, 85, 105, 0.65)';
-      ctx.lineWidth = 1.0;
+      ctx.lineWidth = 0.8;
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(len, 0);
@@ -1038,11 +1048,11 @@ export class RailwayRenderer {
 
       // Catenary messenger cable with subtle zigzag / stagger (зигзаг контактного провода ±200мм)
       ctx.strokeStyle = 'rgba(100, 116, 139, 0.35)';
-      ctx.lineWidth = 0.8;
+      ctx.lineWidth = 0.6;
       ctx.beginPath();
-      const span = 80;
+      const span = 50;
       for (let x = 0; x < len; x += span) {
-        const stagger = (Math.floor(x / span) % 2 === 0 ? 1.5 : -1.5);
+        const stagger = (Math.floor(x / span) % 2 === 0 ? 1.0 : -1.0);
         if (x === 0) ctx.moveTo(0, stagger);
         else ctx.lineTo(x, stagger);
       }
@@ -1052,15 +1062,15 @@ export class RailwayRenderer {
       // Catenary Poles / Masts with cantilever arms
       for (let mx = 30; mx < len - 20; mx += span) {
         const mastSide = Math.floor(mx / span) % 2 === 0 ? -1 : 1;
-        const mastY = mastSide * (track.ballastWidth ?? 38) * 0.55;
+        const mastY = mastSide * this.getNormBallast(track) * 0.55;
 
         // Concrete mast base
         ctx.fillStyle = '#64748b';
-        ctx.fillRect(mx - 2.5, mastY - 2.5, 5.0, 5.0);
+        ctx.fillRect(mx - 1.5, mastY - 1.5, 3.0, 3.0);
 
         // Cantilever horizontal support bracket (консоль опоры)
         ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.0;
         ctx.beginPath();
         ctx.moveTo(mx, mastY);
         ctx.lineTo(mx, 0);
@@ -1068,7 +1078,7 @@ export class RailwayRenderer {
 
         // Ceramic suspension insulator (гирлянда изоляторов)
         ctx.fillStyle = '#0891b2'; // Turquoise polymer insulator
-        ctx.fillRect(mx - 1.5, -mastSide * 2.0, 3.0, 2.5);
+        ctx.fillRect(mx - 1.0, -mastSide * 1.2, 2.0, 1.6);
       }
 
       ctx.restore();

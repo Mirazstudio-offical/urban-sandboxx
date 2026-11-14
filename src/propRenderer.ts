@@ -6,8 +6,39 @@ import { RailwaySignalingSystem } from './railwaySignalingSystem';
  * Every prop has detailed textures, physical materials, and realistic damage states.
  */
 
+// --- WORLD SCALE NORMALIZATION FOR PROPS (10 px = 1 m) ---
+export function getPropRenderScale(type: string): { sx: number; sy: number } {
+  switch (type) {
+    case 'bench': return { sx: 0.72, sy: 0.56 };
+    case 'dumpster': return { sx: 0.54, sy: 0.54 };
+    case 'flowerbed': return { sx: 0.68, sy: 0.65 };
+    case 'bollard': return { sx: 0.55, sy: 0.55 };
+    case 'cone': return { sx: 0.52, sy: 0.52 };
+    case 'trash_can': return { sx: 0.50, sy: 0.50 };
+    case 'hydrant': return { sx: 0.52, sy: 0.52 };
+    case 'tire_flowerbed': return { sx: 0.55, sy: 0.55 };
+    case 'playground_swing': return { sx: 0.85, sy: 0.85 };
+    case 'sandbox': return { sx: 0.83, sy: 0.83 };
+    case 'bus_stop': return { sx: 0.80, sy: 0.78 };
+    case 'kiosk': return { sx: 0.75, sy: 0.75 };
+    case 'mailbox': return { sx: 0.55, sy: 0.55 };
+    case 'garage_sofa': return { sx: 0.90, sy: 0.75 };
+    case 'garage_workbench': return { sx: 0.75, sy: 0.65 };
+    case 'pallet_stack': return { sx: 0.60, sy: 0.55 };
+    case 'cable_spool': return { sx: 0.72, sy: 0.72 };
+    case 'industrial_tires': return { sx: 0.82, sy: 0.82 };
+    case 'industrial_sign':
+    case 'village_sign': return { sx: 0.72, sy: 0.72 };
+    case 'woodpile': return { sx: 0.80, sy: 0.80 };
+    default: return { sx: 1.0, sy: 1.0 };
+  }
+}
+
 // --- STATIONARY FOUNDATIONS (ОСТАЮТСЯ НА МЕСТЕ ПРИ СДВИГЕ ИЛИ ОТРЫВЕ ПРОПА) ---
 export function renderStreetPropFoundation(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  const { sx, sy } = getPropRenderScale(prop.type as string);
+  ctx.save();
+  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
   switch (prop.type as string) {
     case 'bench': {
       // Concrete foundation pad always stays embedded in the ground at (originX, originY)
@@ -115,6 +146,7 @@ export function renderStreetPropFoundation(ctx: CanvasRenderingContext2D, prop: 
       break;
     }
   }
+  ctx.restore();
 }
 
 // --- 1. BENCH (СКАМЕЙКА) ---
@@ -1486,6 +1518,9 @@ export function renderPropYardRotunda(ctx: CanvasRenderingContext2D, _prop: Stre
 
 // --- MASTER PROP DISPATCHER (GROUND LEVEL) ---
 export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  const { sx, sy } = getPropRenderScale(prop.type as string);
+  ctx.save();
+  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
   switch (prop.type as string) {
     case 'bench':
       renderPropBench(ctx, prop);
@@ -1693,6 +1728,7 @@ export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp
       renderPropAnthill(ctx, prop);
       break;
   }
+  ctx.restore();
 }
 
 // --- INDUSTRIAL & FREIGHT HUB PROPS ---

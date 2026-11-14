@@ -120,7 +120,7 @@ export function constrainPlayerToBusInterior(
   const isMinibus = bus.type === 'bus_minibus';
   const halfL = bus.length / 2;
   const halfW = bus.width / 2;
-  const playerRadius = 4.5;
+  const playerRadius = 2.4;
 
   let px = player.busLocalX ?? (halfL - 14);
   let py = player.busLocalY ?? 5.5;
@@ -192,12 +192,13 @@ export function constrainPlayerToBusInterior(
  */
 export function getTrainCoachSeats(car: RollingStockCar): BusSeat[] {
   const halfL = car.length / 2;
+  const scale = (car.width || 30) / 60;
   const isPlatskart = (car.type && car.type.includes('platskart')) ||
     (car.name && car.name.toLowerCase().includes('плацкарт'));
 
-  const wcEndX = -halfL + 85;    // -160
-  const saloonStartX = wcEndX;   // -160
-  const saloonEndX = halfL - 75; // 170
+  const wcEndX = -halfL + 85 * scale;
+  const saloonStartX = wcEndX;
+  const saloonEndX = halfL - 75 * scale;
   const saloonL = saloonEndX - saloonStartX;
   const numComps = 9;
   const compW = saloonL / numComps;
@@ -211,8 +212,8 @@ export function getTrainCoachSeats(car: RollingStockCar): BusSeat[] {
     // Left lower berth / seat (facing right / East)
     seats.push({
       id: `train_comp_${compNum}_l`,
-      localX: compX + 8,
-      localY: -7,
+      localX: compX + 8 * scale,
+      localY: -7 * scale,
       angle: 0,
       labelRu: `Купе №${compNum} (нижняя полка у окна)`
     });
@@ -220,8 +221,8 @@ export function getTrainCoachSeats(car: RollingStockCar): BusSeat[] {
     // Right lower berth / seat (facing left / West)
     seats.push({
       id: `train_comp_${compNum}_r`,
-      localX: compX + compW - 8,
-      localY: -7,
+      localX: compX + compW - 8 * scale,
+      localY: -7 * scale,
       angle: Math.PI,
       labelRu: `Купе №${compNum} (нижняя полка у двери)`
     });
@@ -230,15 +231,15 @@ export function getTrainCoachSeats(car: RollingStockCar): BusSeat[] {
       // Side lower berth seats along the corridor
       seats.push({
         id: `train_side_${compNum}_l`,
-        localX: compX + 8,
-        localY: 8,
+        localX: compX + 8 * scale,
+        localY: 8 * scale,
         angle: 0,
         labelRu: `Боковое место №${compNum * 2} (боковушка)`
       });
       seats.push({
         id: `train_side_${compNum}_r`,
-        localX: compX + compW - 8,
-        localY: 8,
+        localX: compX + compW - 8 * scale,
+        localY: 8 * scale,
         angle: Math.PI,
         labelRu: `Боковое место №${compNum * 2 + 1} (боковушка)`
       });
@@ -248,8 +249,8 @@ export function getTrainCoachSeats(car: RollingStockCar): BusSeat[] {
   // Conductor compartment chair
   seats.push({
     id: 'conductor_chair',
-    localX: saloonEndX + 14,
-    localY: -6,
+    localX: saloonEndX + 14 * scale,
+    localY: -6 * scale,
     angle: 0,
     labelRu: 'Служебное кресло проводника'
   });

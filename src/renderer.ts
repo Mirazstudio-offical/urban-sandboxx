@@ -4282,16 +4282,19 @@ export class GameRenderer {
 
   // --- REALISTIC PARKING BAY DRAWING (U-SHAPE STALL LINES & WHEEL STOP) ---
   private drawParkingSpot(ctx: CanvasRenderingContext2D, spot: ParkingSpot) {
-    const w = spot.width || 38;
-    const len = spot.length || 54;
+    const w = spot.width || 28;
+    const len = spot.length || 50;
     const hw = w / 2;
     const hl = len / 2;
     const openSide = spot.openSide || (spot.angle === 0 ? 'south' : (spot.angle === Math.PI ? 'north' : (spot.angle > 0 ? 'east' : 'west')));
     const isHandicap = !!spot.isHandicap;
+    const bumperSpan = Math.round(w * 0.62);
+    const bumperHalf = bumperSpan / 2;
+    const bumperThick = 4;
 
     ctx.save();
     ctx.strokeStyle = '#f8fafc';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.lineCap = 'square';
     ctx.lineJoin = 'miter';
 
@@ -4299,8 +4302,8 @@ export class GameRenderer {
     ctx.beginPath();
     let bumperX = spot.x;
     let bumperY = spot.y;
-    let bumperW = 24;
-    let bumperH = 6;
+    let bumperW = bumperSpan;
+    let bumperH = bumperThick;
     let iconAngle = 0;
 
     if (openSide === 'south') {
@@ -4309,10 +4312,10 @@ export class GameRenderer {
       ctx.lineTo(spot.x - hw, spot.y - hl);
       ctx.lineTo(spot.x + hw, spot.y - hl);
       ctx.lineTo(spot.x + hw, spot.y + hl);
-      bumperX = spot.x - 12;
-      bumperY = spot.y - hl + 8;
-      bumperW = 24;
-      bumperH = 6;
+      bumperX = spot.x - bumperHalf;
+      bumperY = spot.y - hl + 6;
+      bumperW = bumperSpan;
+      bumperH = bumperThick;
       iconAngle = -Math.PI / 2;
     } else if (openSide === 'north') {
       // Open at North (-y). Dividers on Left and Right, Back at South (+y)
@@ -4320,10 +4323,10 @@ export class GameRenderer {
       ctx.lineTo(spot.x - hw, spot.y + hl);
       ctx.lineTo(spot.x + hw, spot.y + hl);
       ctx.lineTo(spot.x + hw, spot.y - hl);
-      bumperX = spot.x - 12;
-      bumperY = spot.y + hl - 14;
-      bumperW = 24;
-      bumperH = 6;
+      bumperX = spot.x - bumperHalf;
+      bumperY = spot.y + hl - 6 - bumperThick;
+      bumperW = bumperSpan;
+      bumperH = bumperThick;
       iconAngle = Math.PI / 2;
     } else if (openSide === 'east') {
       // Open at East (+x). Dividers on Top (-y) and Bottom (+y), Back at West (-x)
@@ -4331,10 +4334,10 @@ export class GameRenderer {
       ctx.lineTo(spot.x - hl, spot.y - hw);
       ctx.lineTo(spot.x - hl, spot.y + hw);
       ctx.lineTo(spot.x + hl, spot.y + hw);
-      bumperX = spot.x - hl + 8;
-      bumperY = spot.y - 12;
-      bumperW = 6;
-      bumperH = 24;
+      bumperX = spot.x - hl + 6;
+      bumperY = spot.y - bumperHalf;
+      bumperW = bumperThick;
+      bumperH = bumperSpan;
       iconAngle = 0;
     } else if (openSide === 'west') {
       // Open at West (-x). Dividers on Top and Bottom, Back at East (+x)
@@ -4342,10 +4345,10 @@ export class GameRenderer {
       ctx.lineTo(spot.x + hl, spot.y - hw);
       ctx.lineTo(spot.x + hl, spot.y + hw);
       ctx.lineTo(spot.x - hl, spot.y + hw);
-      bumperX = spot.x + hl - 14;
-      bumperY = spot.y - 12;
-      bumperW = 6;
-      bumperH = 24;
+      bumperX = spot.x + hl - 6 - bumperThick;
+      bumperY = spot.y - bumperHalf;
+      bumperW = bumperThick;
+      bumperH = bumperSpan;
       iconAngle = Math.PI;
     }
     ctx.stroke();
@@ -4355,9 +4358,9 @@ export class GameRenderer {
     ctx.fillRect(bumperX, bumperY, bumperW, bumperH);
     ctx.fillStyle = '#94a3b8';
     if (bumperW > bumperH) {
-      ctx.fillRect(bumperX + 1, bumperY + 1, bumperW - 2, 2);
+      ctx.fillRect(bumperX + 1, bumperY + 1, bumperW - 2, 1.5);
     } else {
-      ctx.fillRect(bumperX + 1, bumperY + 1, 2, bumperH - 2);
+      ctx.fillRect(bumperX + 1, bumperY + 1, 1.5, bumperH - 2);
     }
 
     // 3. Handicap Accessible Road Marking (Разметка 1.24.3 "Инвалиды")
@@ -4374,6 +4377,7 @@ export class GameRenderer {
     ctx.save();
     ctx.translate(cx, cy);
     if (angle !== 0) ctx.rotate(angle);
+    ctx.scale(0.7, 0.7);
 
     ctx.strokeStyle = '#f8fafc';
     ctx.fillStyle = '#f8fafc';
@@ -9034,13 +9038,13 @@ export class GameRenderer {
       ctx.translate(p.x, p.y);
       if (p.angle) ctx.rotate(p.angle);
       if (pt === 'bench') {
-        ctx.fillRect(-11, -7, 22, 14);
+        ctx.fillRect(-8, -4, 16, 8);
       } else if (pt === 'dumpster') {
-        ctx.fillRect(-14, -10, 28, 20);
+        ctx.fillRect(-8, -5.5, 16, 11);
       } else if (pt === 'kiosk') {
-        ctx.fillRect(-16, -16, 32, 32);
+        ctx.fillRect(-10, -10, 20, 20);
       } else if (pt === 'bus_stop') {
-        ctx.fillRect(-23, -15, 46, 30);
+        ctx.fillRect(-15, -9, 30, 18);
       } else if (pt === 'shipping_container') {
         let ph = 0;
         for (let ci = 0; ci < p.id.length; ci++) ph = (ph * 31 + p.id.charCodeAt(ci)) >>> 0;
@@ -9053,16 +9057,16 @@ export class GameRenderer {
       } else if (pt === 'rustic_car_wreck') {
         ctx.fillRect(-20, -10, 40, 20);
       } else if (pt === 'sandbox') {
-        ctx.fillRect(-13, -13, 26, 26);
+        ctx.fillRect(-10.5, -10.5, 21, 21);
       } else if (pt === 'woodpile') {
-        ctx.fillRect(-13, -7, 26, 14);
+        ctx.fillRect(-10.5, -5.5, 21, 11);
       } else if (pt === 'silo_tank' || pt === 'yard_rotunda' || pt === 'haystack') {
         ctx.beginPath();
         ctx.arc(0, 0, 16, 0, Math.PI * 2);
         ctx.fill();
       } else {
         ctx.beginPath();
-        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -9072,7 +9076,7 @@ export class GameRenderer {
         const gi = world.groundItems[i];
         if (gi.x < minX - 20 || gi.x > maxX + 20 || gi.y < minY - 20 || gi.y > maxY + 20) continue;
         ctx.beginPath();
-        ctx.arc(gi.x, gi.y, 7, 0, Math.PI * 2);
+        ctx.arc(gi.x, gi.y, 4.5, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -9082,14 +9086,14 @@ export class GameRenderer {
       const ped = visiblePedestrians[i];
       if (((ped as any).waterDepth || 0) > 0.35) continue;
       ctx.beginPath();
-      ctx.arc(ped.x, ped.y, ((ped as any).radius || 7) + 2, 0, Math.PI * 2);
+      ctx.arc(ped.x, ped.y, ((ped as any).radius || 3.2) + 1.0, 0, Math.PI * 2);
       ctx.fill();
     }
     if (!player.isInVehicle && !player.insideCarId && !player.insideBusId) {
       const pDepth = player.waterDepth || 0;
       if (pDepth < 0.55) {
         ctx.beginPath();
-        ctx.arc(player.x, player.y, ((player as any).radius || 8) + (pDepth > 0.12 ? -1 : 2), 0, Math.PI * 2);
+        ctx.arc(player.x, player.y, ((player as any).radius || 3.4) + (pDepth > 0.12 ? -0.5 : 1.0), 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -9098,7 +9102,7 @@ export class GameRenderer {
         const rp = remotePlayers[i];
         if (!rp.isInVehicle && !(rp as any).insideCarId && !(rp as any).insideBusId) {
           ctx.beginPath();
-          ctx.arc(rp.x, rp.y, 9, 0, Math.PI * 2);
+          ctx.arc(rp.x, rp.y, 4.2, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -9282,31 +9286,31 @@ export class GameRenderer {
           ctx.save();
           // Shadow of the hose
           ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-          ctx.lineWidth = 2.0;
+          ctx.lineWidth = 1.1;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
           ctx.beginPath();
-          ctx.moveTo(rearX + 1.5, rearY + 2);
+          ctx.moveTo(rearX + 1.0, rearY + 1.2);
           const midX = (rearX + ped.x) / 2;
-          const midY = (rearY + ped.y) / 2 + 15; // sag downwards slightly
-          ctx.quadraticCurveTo(midX, midY, ped.x + 1.5, ped.y + 2);
+          const midY = (rearY + ped.y) / 2 + 12; // sag downwards slightly
+          ctx.quadraticCurveTo(midX, midY, ped.x + 1.0, ped.y + 1.2);
           ctx.stroke();
 
           // The main hose (thick protective gray-white)
           ctx.strokeStyle = '#cbd5e1';
-          ctx.lineWidth = 2.0;
+          ctx.lineWidth = 1.1;
           ctx.beginPath();
           ctx.moveTo(rearX, rearY);
-          ctx.quadraticCurveTo(midX, midY - 2, ped.x, ped.y);
+          ctx.quadraticCurveTo(midX, midY - 1.5, ped.x, ped.y);
           ctx.stroke();
 
           // A bright red/orange line on the hose (water indicator/stripe)
           ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = 0.5;
-          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 0.35;
+          ctx.setLineDash([3, 3]);
           ctx.beginPath();
           ctx.moveTo(rearX, rearY);
-          ctx.quadraticCurveTo(midX, midY - 2, ped.x, ped.y);
+          ctx.quadraticCurveTo(midX, midY - 1.5, ped.x, ped.y);
           ctx.stroke();
           ctx.setLineDash([]); // Reset
           ctx.restore();
@@ -9317,14 +9321,11 @@ export class GameRenderer {
       ctx.translate(ped.x, ped.y);
       
       const isFirefighter = (ped as any).isFirefighter;
-      
-      // Scale down if child
-      if (ped.isChild) {
-        ctx.scale(0.7, 0.7);
-      }
+      const pedScale = (ped.isChild ? 0.7 : 1.0) * 0.44;
 
       ctx.save();
       ctx.rotate(ped.angle);
+      ctx.scale(pedScale, pedScale);
 
       // Pedestrian 3D body shadow is projected in world space via unified shadow shroud
 
@@ -10124,7 +10125,7 @@ export class GameRenderer {
         const bh = 16;
         
         ctx.save();
-        ctx.translate(0, -18);
+        ctx.translate(0, -11);
         
         // Bubble tail
         ctx.fillStyle = '#ffffff';
@@ -10166,9 +10167,9 @@ export class GameRenderer {
     // Ground Directional Indicator Ring (hidden in deep wading / swimming so water optics remain pure)
     if (waterDepth < 0.30) {
       ctx.strokeStyle = isRemote ? 'rgba(34, 197, 94, 0.45)' : 'rgba(56, 189, 248, 0.4)';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.85;
       ctx.beginPath();
-      ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      ctx.arc(0, 0, 5.2, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -10179,9 +10180,12 @@ export class GameRenderer {
     if (waterDepth < 0.30) {
       ctx.fillStyle = isRemote ? '#22c55e' : '#38bdf8';
       ctx.beginPath();
-      ctx.arc(12, 0, 2.2, 0, Math.PI * 2);
+      ctx.arc(6.6, 0, 1.25, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    // Scale human silhouette to canonical 10 px/m world scale (~0.70m shoulder span)
+    ctx.scale(0.44, 0.44);
 
     // Dodge Roll Motion Trail
     if (player.isDashing && !isSwimming) {
@@ -10505,32 +10509,32 @@ export class GameRenderer {
 
     // Flying levitation aura & indicator
     if (player.isFlying) {
-      const flyPulse = Math.sin(Date.now() * 0.008) * 3;
+      const flyPulse = Math.sin(Date.now() * 0.008) * 1.5;
       ctx.strokeStyle = '#06b6d4';
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.arc(0, 0, 16 + flyPulse, 0, Math.PI * 2);
+      ctx.arc(0, 0, 8 + flyPulse, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.strokeStyle = 'rgba(165, 243, 252, 0.5)';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.85;
       ctx.beginPath();
-      ctx.arc(0, 0, 22 + flyPulse, 0, Math.PI * 2);
+      ctx.arc(0, 0, 11.5 + flyPulse, 0, Math.PI * 2);
       ctx.stroke();
 
       // Badge above head
-      ctx.font = 'bold 11px sans-serif';
+      ctx.font = 'bold 10px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#0f172a';
-      safeRoundRect(ctx, -28, -28, 56, 18, 9);
+      safeRoundRect(ctx, -24, -22, 48, 16, 8);
       ctx.fill();
       ctx.strokeStyle = '#06b6d4';
       ctx.lineWidth = 1;
-      safeRoundRect(ctx, -28, -28, 56, 18, 9);
+      safeRoundRect(ctx, -24, -22, 48, 16, 8);
       ctx.stroke();
 
       ctx.fillStyle = '#22d3ee';
-      ctx.fillText('ФЛАЙ', 0, -15);
+      ctx.fillText('ФЛАЙ', 0, -10.5);
     }
 
     ctx.restore(); // end translate

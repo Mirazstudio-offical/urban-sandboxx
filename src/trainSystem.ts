@@ -131,7 +131,7 @@ export class TrainSystem {
       const headId = `sched_${sched.id}_loco`;
       const carIds: string[] = [headId];
 
-      const locoLen = isVL80 ? 320 : 420;
+      const locoLen = isVL80 ? 164 : 217;
       const headNumber = isVL80
         ? (sched.locomotive.roadNumber ? (sched.locomotive.roadNumber.includes('А') ? sched.locomotive.roadNumber : `${sched.locomotive.roadNumber}А`) : 'ВЛ80С-1420А')
         : (sched.locomotive.roadNumber || 'ТЭП70БС');
@@ -145,7 +145,7 @@ export class TrainSystem {
           x: sched.spawnX,
           y: sched.spawnY,
           length: locoLen,
-          width: 62,
+          width: 31,
           angle: sched.spawnDirection === 1 ? 0 : Math.PI,
           livery: sched.locomotive.livery || 'rzd_classic',
           roadNumber: headNumber,
@@ -157,6 +157,8 @@ export class TrainSystem {
       } else {
         headCar.x = sched.spawnX;
         headCar.y = sched.spawnY;
+        headCar.length = locoLen;
+        headCar.width = 31;
         headCar.speed = sched.spawnSpeed;
         headCar.direction = sched.spawnDirection;
         headCar.angle = sched.spawnDirection === 1 ? 0 : Math.PI;
@@ -171,7 +173,7 @@ export class TrainSystem {
         const secBId = `sched_${sched.id}_loco_b`;
         carIds.push(secBId);
 
-        const couplerDist = locoLen / 2 + locoLen / 2 + 10;
+        const couplerDist = locoLen / 2 + locoLen / 2 + 5;
         accumOffset += couplerDist;
         const secBX = sched.spawnDirection === 1 ? sched.spawnX - accumOffset : sched.spawnX + accumOffset;
 
@@ -188,7 +190,7 @@ export class TrainSystem {
             x: secBX,
             y: sched.spawnY,
             length: locoLen,
-            width: 62,
+            width: 31,
             angle: (sched.spawnDirection === 1 ? 0 : Math.PI) + Math.PI,
             livery: sched.locomotive.livery || 'rzd_classic',
             roadNumber: secBNumber,
@@ -200,6 +202,8 @@ export class TrainSystem {
         } else {
           secBCar.x = secBX;
           secBCar.y = sched.spawnY;
+          secBCar.length = locoLen;
+          secBCar.width = 31;
           secBCar.speed = sched.spawnSpeed;
           secBCar.direction = sched.spawnDirection;
           secBCar.isSectionB = true;
@@ -214,14 +218,14 @@ export class TrainSystem {
         carIds.push(carId);
 
         const carLen = carDef.type.includes('hopper')
-          ? (carDef.cargoType === 'grain' ? 285 : 270)
+          ? (carDef.cargoType === 'grain' ? 142 : 135)
           : carDef.type.includes('tanker')
-          ? 230
+          ? 120
           : carDef.type.includes('timber') || carDef.type.includes('flatcar')
-          ? 280
-          : 490; // TVZ 61-4440/61-4447 passenger coach is 25.5m (490px)
-        const carW = 60;
-        const couplerDist = prevCarLen / 2 + carLen / 2 + 10;
+          ? 140
+          : 255; // TVZ 61-4440/61-4447 passenger coach is 25.5m (255px)
+        const carW = 30;
+        const couplerDist = prevCarLen / 2 + carLen / 2 + 5;
         accumOffset += couplerDist;
         const carX = sched.spawnDirection === 1 ? sched.spawnX - accumOffset : sched.spawnX + accumOffset;
         prevCarLen = carLen;
@@ -246,6 +250,8 @@ export class TrainSystem {
         } else {
           car.x = carX;
           car.y = sched.spawnY;
+          car.length = carLen;
+          car.width = carW;
           car.speed = sched.spawnSpeed;
           car.direction = sched.spawnDirection;
           car.angle = sched.spawnDirection === 1 ? 0 : Math.PI;
@@ -307,7 +313,7 @@ export class TrainSystem {
     let locoCars: RollingStockCar[] = [];
 
     if (locoChoice < 0.40) {
-      // 2-Section VL80S Electric Locomotive
+      // 2-Section VL80S Electric Locomotive (16.4m per section = 164px)
       const locoNum = 1200 + Math.floor(Math.random() * 800);
       locoCars = [
         {
@@ -316,8 +322,8 @@ export class TrainSystem {
           type: 'locomotive_electric_vl80',
           x: startX,
           y: trackY,
-          length: 320,
-          width: 62,
+          length: 164,
+          width: 31,
           angle: Math.PI,
           livery: 'rzd_classic',
           roadNumber: `ВЛ80С-${locoNum}А`,
@@ -330,10 +336,10 @@ export class TrainSystem {
           id: 'train_freight_loco_2',
           name: `Магистральный электровоз ВЛ80С-${locoNum} (Секция Б)`,
           type: 'locomotive_electric_vl80',
-          x: startX + 330,
+          x: startX + 169,
           y: trackY,
-          length: 320,
-          width: 62,
+          length: 164,
+          width: 31,
           angle: 0,
           livery: 'rzd_classic',
           roadNumber: `ВЛ80С-${locoNum}Б`,
@@ -353,8 +359,8 @@ export class TrainSystem {
           type: 'locomotive_electric_vl80',
           x: startX,
           y: trackY,
-          length: 320,
-          width: 62,
+          length: 164,
+          width: 31,
           angle: Math.PI,
           livery: 'rzd_classic',
           roadNumber: `ВЛ80С-${locoNum}А`,
@@ -367,10 +373,10 @@ export class TrainSystem {
           id: 'train_freight_loco_2',
           name: `Бустерная промежуточная секция ВЛ80С-${locoNum}П`,
           type: 'locomotive_electric_vl80',
-          x: startX + 330,
+          x: startX + 169,
           y: trackY,
-          length: 320,
-          width: 62,
+          length: 164,
+          width: 31,
           angle: 0,
           livery: 'rzd_classic',
           roadNumber: `ВЛ80С-${locoNum}П`,
@@ -383,10 +389,10 @@ export class TrainSystem {
           id: 'train_freight_loco_3',
           name: `Магистральный электровоз ВЛ80С-${locoNum} (Секция Б)`,
           type: 'locomotive_electric_vl80',
-          x: startX + 660,
+          x: startX + 338,
           y: trackY,
-          length: 320,
-          width: 62,
+          length: 164,
+          width: 31,
           angle: 0,
           livery: 'rzd_classic',
           roadNumber: `ВЛ80С-${locoNum}Б`,
@@ -397,7 +403,7 @@ export class TrainSystem {
         }
       ];
     } else {
-      // 2-Section Heavy Diesel Locomotive 2TE116 / 2TE10M
+      // 2-Section Heavy Diesel Locomotive 2TE116 / 2TE10M (18.1m per section = 181px)
       const locoNum = 1400 + Math.floor(Math.random() * 400);
       locoCars = [
         {
@@ -406,8 +412,8 @@ export class TrainSystem {
           type: 'locomotive_diesel',
           x: startX,
           y: trackY,
-          length: 330,
-          width: 62,
+          length: 181,
+          width: 31,
           angle: Math.PI,
           livery: 'rzd_classic',
           roadNumber: `2ТЭ116-${locoNum}А`,
@@ -420,10 +426,10 @@ export class TrainSystem {
           id: 'train_freight_loco_2',
           name: `Магистральный тепловоз 2ТЭ116-${locoNum} (Секция Б)`,
           type: 'locomotive_diesel',
-          x: startX + 340,
+          x: startX + 186,
           y: trackY,
-          length: 330,
-          width: 62,
+          length: 181,
+          width: 31,
           angle: 0,
           livery: 'rzd_classic',
           roadNumber: `2ТЭ116-${locoNum}Б`,
@@ -445,37 +451,37 @@ export class TrainSystem {
     if (themeChoice < 0.22) {
       // 1. Нефтеналивной маршрут («Нефтяная вертушка»)
       carTypesPool = [
-        { type: 'freight_tanker', length: 230, name: '4-осная нефтяная цистерна 15-1443', cargo: 'crude_oil', liveries: ['freight_rust_brown', 'freight_black'] },
-        { type: 'freight_tanker', length: 230, name: '4-осная цистерна (Дизельное топливо)', cargo: 'fuel', liveries: ['freight_black', 'freight_blue'] },
-        { type: 'freight_tanker', length: 230, name: '4-осная цистерна (Бензин АИ-95)', cargo: 'gasoline', liveries: ['freight_black', 'freight_rust_brown'] }
+        { type: 'freight_tanker', length: 120, name: '4-осная нефтяная цистерна 15-1443', cargo: 'crude_oil', liveries: ['freight_rust_brown', 'freight_black'] },
+        { type: 'freight_tanker', length: 120, name: '4-осная цистерна (Дизельное топливо)', cargo: 'fuel', liveries: ['freight_black', 'freight_blue'] },
+        { type: 'freight_tanker', length: 120, name: '4-осная цистерна (Бензин АИ-95)', cargo: 'gasoline', liveries: ['freight_black', 'freight_rust_brown'] }
       ];
     } else if (themeChoice < 0.42) {
       // 2. Лесовозный маршрут («Сибирский лесовоз»)
       carTypesPool = [
-        { type: 'freight_flatcar_timber', length: 260, name: 'Спецплатформа-лесовоз с хвойным пиловочником', cargo: 'timber', liveries: ['freight_timber', 'freight_rust_brown'] },
-        { type: 'freight_flatcar_timber', length: 260, name: 'Платформа-лесовоз 13-4012 с пиломатериалами', cargo: 'lumber', liveries: ['freight_timber', 'freight_rust_brown'] }
+        { type: 'freight_flatcar_timber', length: 135, name: 'Спецплатформа-лесовоз с хвойным пиловочником', cargo: 'timber', liveries: ['freight_timber', 'freight_rust_brown'] },
+        { type: 'freight_flatcar_timber', length: 135, name: 'Платформа-лесовоз 13-4012 с пиломатериалами', cargo: 'lumber', liveries: ['freight_timber', 'freight_rust_brown'] }
       ];
     } else if (themeChoice < 0.62) {
       // 3. Угольный вертушечный поезд («Кузбасский уголь»)
       carTypesPool = [
-        { type: 'freight_hopper', length: 270, name: '4-осный полувагон 12-132 с каменным углем', cargo: 'coal', liveries: ['freight_rust_brown', 'freight_black'] },
-        { type: 'freight_hopper', length: 270, name: 'Полувагон с коксующимся углем', cargo: 'coal', liveries: ['freight_rust_brown'] }
+        { type: 'freight_hopper', length: 135, name: '4-осный полувагон 12-132 с каменным углем', cargo: 'coal', liveries: ['freight_rust_brown', 'freight_black'] },
+        { type: 'freight_hopper', length: 135, name: 'Полувагон с коксующимся углем', cargo: 'coal', liveries: ['freight_rust_brown'] }
       ];
     } else if (themeChoice < 0.78) {
       // 4. Зерновой маршрут («Зерновоз»)
       carTypesPool = [
-        { type: 'freight_hopper', length: 285, name: 'Хоппер-зерновоз 19-752 (Пшеница целинная)', cargo: 'grain', liveries: ['freight_blue', 'freight_green'] },
-        { type: 'freight_hopper', length: 285, name: 'Хоппер-зерновоз (Ячмень продовольственный)', cargo: 'grain', liveries: ['freight_blue', 'freight_rust_brown'] }
+        { type: 'freight_hopper', length: 142, name: 'Хоппер-зерновоз 19-752 (Пшеница целинная)', cargo: 'grain', liveries: ['freight_blue', 'freight_green'] },
+        { type: 'freight_hopper', length: 142, name: 'Хоппер-зерновоз (Ячмень продовольственный)', cargo: 'grain', liveries: ['freight_blue', 'freight_rust_brown'] }
       ];
     } else {
       // 5. Сборный тяжелопоезд (Смешанный состав из разных видов грузов)
       carTypesPool = [
-        { type: 'freight_tanker', length: 230, name: '4-осная цистерна', cargo: 'crude_oil', liveries: ['freight_rust_brown', 'freight_black'] },
-        { type: 'freight_hopper', length: 270, name: 'Полувагон с каменным углем', cargo: 'coal', liveries: ['freight_rust_brown'] },
-        { type: 'freight_hopper', length: 270, name: 'Полувагон со щебнем гранитным', cargo: 'gravel', liveries: ['freight_rust_brown', 'freight_blue'] },
-        { type: 'freight_hopper', length: 285, name: 'Хоппер-зерновоз 19-752', cargo: 'grain', liveries: ['freight_blue'] },
-        { type: 'freight_flatcar_timber', length: 260, name: 'Платформа-лесовоз', cargo: 'timber', liveries: ['freight_timber', 'freight_rust_brown'] },
-        { type: 'freight_flatcar_timber', length: 260, name: 'Универсальная платформа со стальным прокатом', cargo: 'steel', liveries: ['freight_rust_brown'] }
+        { type: 'freight_tanker', length: 120, name: '4-осная цистерна', cargo: 'crude_oil', liveries: ['freight_rust_brown', 'freight_black'] },
+        { type: 'freight_hopper', length: 135, name: 'Полувагон с каменным углем', cargo: 'coal', liveries: ['freight_rust_brown'] },
+        { type: 'freight_hopper', length: 135, name: 'Полувагон со щебнем гранитным', cargo: 'gravel', liveries: ['freight_rust_brown', 'freight_blue'] },
+        { type: 'freight_hopper', length: 142, name: 'Хоппер-зерновоз 19-752', cargo: 'grain', liveries: ['freight_blue'] },
+        { type: 'freight_flatcar_timber', length: 135, name: 'Платформа-лесовоз', cargo: 'timber', liveries: ['freight_timber', 'freight_rust_brown'] },
+        { type: 'freight_flatcar_timber', length: 135, name: 'Универсальная платформа со стальным прокатом', cargo: 'steel', liveries: ['freight_rust_brown'] }
       ];
     }
 
@@ -485,7 +491,7 @@ export class TrainSystem {
     }
 
     const generatedCars: RollingStockCar[] = [...locoCars];
-    let currentXOffset = locoCars.reduce((acc, l) => acc + l.length + 10, 0);
+    let currentXOffset = locoCars.reduce((acc, l) => acc + l.length + 5, 0);
 
     for (let i = 1; i <= targetCarCount; i++) {
       const template = carTypesPool[Math.floor(Math.random() * carTypesPool.length)];
@@ -494,7 +500,7 @@ export class TrainSystem {
       carIds.push(carId);
 
       const carX = startX + currentXOffset + template.length / 2;
-      currentXOffset += template.length + 10;
+      currentXOffset += template.length + 5;
 
       generatedCars.push({
         id: carId,
@@ -503,7 +509,7 @@ export class TrainSystem {
         x: carX,
         y: trackY,
         length: template.length,
-        width: 60,
+        width: 30,
         angle: Math.PI,
         livery: livery as any,
         roadNumber: `${5000 + Math.floor(Math.random() * 4000)} ${1000 + i}`,
@@ -541,10 +547,10 @@ export class TrainSystem {
         id: 'train_loco_1',
         name: 'Магистральный тепловоз ТЭП70БС-0245',
         type: 'locomotive_diesel',
-        x: 12210, // Nose at X=12420 (знак «Остановка первого вагона»)
+        x: 12311, // Nose at X≈12420 (знак «Остановка первого вагона»)
         y: 8600,
-        length: 420, // Real Kolomna TEP70BS: 21.7m (420px)
-        width: 62,
+        length: 217, // Real Kolomna TEP70BS: 21.7m (217px)
+        width: 31,
         angle: 0,
         livery: 'rzd_classic',
         roadNumber: 'ТЭП70БС-0245',
@@ -557,10 +563,10 @@ export class TrainSystem {
         id: 'train_coach_1',
         name: 'Фирменный купейный вагон РЖД 61-4440 №01',
         type: 'passenger_coach_rzhd',
-        x: 11745,
+        x: 12070,
         y: 8600,
-        length: 490, // Real TVZ 61-4440: 25.5m (490px)
-        width: 60,
+        length: 255, // Real TVZ 61-4440: 25.5m (255px)
+        width: 30,
         angle: 0,
         livery: 'rzd_classic',
         roadNumber: '018 24519'
@@ -569,10 +575,10 @@ export class TrainSystem {
         id: 'train_coach_2',
         name: 'Фирменный плацкартный вагон РЖД 61-4447 №02',
         type: 'passenger_coach_platskart',
-        x: 11245,
+        x: 11810,
         y: 8600,
-        length: 490, // Real TVZ 61-4447: 25.5m (490px)
-        width: 60,
+        length: 255, // Real TVZ 61-4447: 25.5m (255px)
+        width: 30,
         angle: 0,
         livery: 'rzd_classic',
         roadNumber: '018 24527'
@@ -581,10 +587,10 @@ export class TrainSystem {
         id: 'train_coach_3',
         name: 'Фирменный купейный вагон РЖД 61-4440 №03',
         type: 'passenger_coach_rzhd',
-        x: 10745,
+        x: 11550,
         y: 8600,
-        length: 490, // Real TVZ 61-4440: 25.5m (490px)
-        width: 60,
+        length: 255, // Real TVZ 61-4440: 25.5m (255px)
+        width: 30,
         angle: 0,
         livery: 'rzd_classic',
         roadNumber: '018 24535'
@@ -593,10 +599,10 @@ export class TrainSystem {
         id: 'train_coach_4',
         name: 'Штабной вагон с купе начальника поезда №04',
         type: 'passenger_coach_rzhd',
-        x: 10245,
+        x: 11290,
         y: 8600,
-        length: 490, // Real TVZ 61-4440: 25.5m (490px)
-        width: 60,
+        length: 255, // Real TVZ 61-4440: 25.5m (255px)
+        width: 30,
         angle: 0,
         livery: 'rzd_classic',
         roadNumber: '018 24501'
@@ -773,7 +779,7 @@ export class TrainSystem {
    * Replaces step-wise speed ladders: the train starts braking early enough and the curve is continuous.
    */
   private static brakingCurveSpeed(dist: number, decel: number): number {
-    const STOP_MARGIN = 25; // nose stops this far before the stop point
+    const STOP_MARGIN = 12; // nose stops this far before the stop point
     const SAFETY = 0.8;     // use 80% of the nominal braking rate
     if (dist <= STOP_MARGIN) return 0;
     return Math.sqrt(2 * Math.max(1, decel) * SAFETY * (dist - STOP_MARGIN));
@@ -879,12 +885,12 @@ export class TrainSystem {
       const dir = sched.spawnDirection;
       const spawnXs: number[] = [sched.spawnX];
       for (let i = 1; i < ordered.length; i++) {
-        spawnXs.push(spawnXs[i - 1] - dir * (ordered[i - 1].length / 2 + ordered[i].length / 2 + 10));
+        spawnXs.push(spawnXs[i - 1] - dir * (ordered[i - 1].length / 2 + ordered[i].length / 2 + 5));
       }
 
       // Never spawn onto a track that another train occupies: wait and retry on the next tick.
       // Block signals only protect entrances, so this check is what keeps two trains apart at spawn.
-      const CLEARANCE = 150;
+      const CLEARANCE = 90;
       const ownIds = new Set(consist.carIds);
       const spawnBlocked = (world.rollingStock || []).some(other => {
         if (ownIds.has(other.id) || Math.abs(other.y - sched.spawnY) >= 60) return false;
@@ -968,7 +974,7 @@ export class TrainSystem {
         // --- 1. PASSENGER EXPRESS №12 («Степной Экспресс») ---
         // Route: Enters West on Main I -> Swerves via Switch #1 (9100..9600) to Track 3 Platform (8600)
         // -> Dwells at Platform 1 (pulled up to sign «Остановка первого вагона» at X=12420) -> Departs via Switch #3 (12900..13400) to Main I
-        const platformStopX = 12210; // Locomotive center so front nose stops right at sign «Остановка первого вагона» (X=12420)
+        const platformStopX = 12311; // Locomotive center so front nose stops right at sign «Остановка первого вагона» (X=12420)
 
         // Continuously obey signals ahead along the route
         const signalSpeed = this.evaluateSignalsInFrontEastbound(headCar.x, signals, consist.maxSpeed, (headCar.railTrackY ?? consist.trackY), headCar.length, isShunter, consist.deceleration);
@@ -977,7 +983,7 @@ export class TrainSystem {
         if (headCar.x < platformStopX && consist.stationDwellTimer >= 0) {
           const distToStop = platformStopX - headCar.x;
           targetSpeed = Math.min(targetSpeed, this.brakingCurveSpeed(distToStop, consist.deceleration));
-          if (distToStop < 25 && consist.stationDwellTimer === 0 && consist.speed < 12) {
+          if (distToStop < 15 && consist.stationDwellTimer === 0 && consist.speed < 12) {
             consist.stationDwellTimer = 25; // Boarding time at Platform 1
             targetSpeed = 0;
             sound.playTrainBrakeAir(this.calcDistanceGain(headCar.x, headCar.y, playerX, playerY));
@@ -1205,7 +1211,7 @@ export class TrainSystem {
         const car = carMap.get(consist.carIds[i]);
         if (!car) continue;
 
-        const couplerDistance = prevCar.length / 2 + car.length / 2 + 10;
+        const couplerDistance = prevCar.length / 2 + car.length / 2 + 5;
         const prevSlope = this.getTrackState(prevCar.x, consist.routeType, prevCar.railTrackY ?? consist.trackY).slope;
         const approxStep = couplerDistance / Math.sqrt(1 + prevSlope * prevSlope);
         const midSlope = this.getTrackState(prevCar.x + relDir * approxStep * 0.5, consist.routeType, prevCar.railTrackY ?? consist.trackY).slope;
@@ -1266,9 +1272,9 @@ export class TrainSystem {
 
         if (isDiesel && headCar.throttle > 0.1) {
           // Diesel exhaust puff from engine manifold chimney on locomotive roof
-          const exhaustOffset = headCar.type.includes('chme3') ? 10 : 25;
+          const exhaustOffset = headCar.type.includes('chme3') ? 5 : 13;
           const exX = headCar.x - consist.direction * exhaustOffset;
-          const exY = headCar.y - 2;
+          const exY = headCar.y - 1;
           const atmo = getAtmosphereState(world);
           const isCold = atmo.isCold;
           const spawnChance = (headCar.throttle > 0.8 ? 0.70 : 0.28) * (isCold ? 1.35 : 1.0);
@@ -1277,14 +1283,14 @@ export class TrainSystem {
               ? (atmo.outsideTemp < 3 ? '#f8fafc' : '#cbd5e1')
               : (headCar.throttle > 0.8 ? 'rgba(30, 34, 42, 0.55)' : 'rgba(75, 85, 99, 0.35)');
             const initAlpha = isCold ? (0.75 + atmo.condensationFactor * 0.20) : (0.50 + headCar.throttle * 0.15);
-            const initRadius = (4 + Math.random() * 5) * (1.0 + atmo.condensationFactor * 0.65);
+            const initRadius = (2.2 + Math.random() * 2.8) * (1.0 + atmo.condensationFactor * 0.65);
             const maxLife = (1.2 + Math.random() * 0.8) * (isCold ? 1.45 : 0.9);
 
             world.particles.push({
-              x: exX + (Math.random() - 0.5) * 6,
-              y: exY + (Math.random() - 0.5) * 6,
-              vx: -consist.direction * (consist.speed * 0.15 + Math.random() * 10) + atmo.wind.vx * 0.22,
-              vy: -15 - Math.random() * 15 + atmo.wind.vy * 0.22,
+              x: exX + (Math.random() - 0.5) * 3,
+              y: exY + (Math.random() - 0.5) * 3,
+              vx: -consist.direction * (consist.speed * 0.15 + Math.random() * 8) + atmo.wind.vx * 0.22,
+              vy: -10 - Math.random() * 10 + atmo.wind.vy * 0.22,
               radius: initRadius,
               color: smokeColor,
               alpha: initAlpha,
@@ -1295,8 +1301,8 @@ export class TrainSystem {
               underVehicle: false,
               isSteam: isCold,
               tempC: 135,
-              buoyancy: 24,
-              expansionRate: 11
+              buoyancy: 14,
+              expansionRate: 6
             });
           }
         } else if (isElectric) {
@@ -1304,14 +1310,14 @@ export class TrainSystem {
           const isOnTurnout = (headCar.x >= 9050 && headCar.x <= 9650) || (headCar.x >= 12850 && headCar.x <= 13450);
           const sparkChance = isOnTurnout ? 0.18 : (headCar.throttle > 0.8 ? 0.08 : 0.02);
           if (Math.random() < sparkChance) {
-            const pantoX = headCar.x + (Math.random() - 0.5) * 40;
-            const pantoY = headCar.y + (Math.random() - 0.5) * 4;
+            const pantoX = headCar.x + (Math.random() - 0.5) * 20;
+            const pantoY = headCar.y + (Math.random() - 0.5) * 2;
             world.particles.push({
               x: pantoX,
               y: pantoY,
-              vx: (Math.random() - 0.5) * 30,
-              vy: (Math.random() - 0.5) * 30,
-              radius: 1.5 + Math.random() * 2.5,
+              vx: (Math.random() - 0.5) * 20,
+              vy: (Math.random() - 0.5) * 20,
+              radius: 1.0 + Math.random() * 1.4,
               color: Math.random() > 0.3 ? '#38bdf8' : '#ffffff',
               alpha: 0.9,
               life: 0,
@@ -1540,8 +1546,8 @@ export class TrainSystem {
           const dx = player.x - trainCar.x;
           const dy = player.y - trainCar.y;
           const pDistSq = dx * dx + dy * dy;
-          if (pDistSq < (halfTL + 35) * (halfTL + 35)) {
-            const pCol = this.checkPointInRotatedBox(player.x, player.y, trainCar.x, trainCar.y, halfTL + 10, halfTW + 10, trainCar.angle);
+          if (pDistSq < (halfTL + 20) * (halfTL + 20)) {
+            const pCol = this.checkPointInRotatedBox(player.x, player.y, trainCar.x, trainCar.y, halfTL + 4, halfTW + 4, trainCar.angle);
             if (pCol.inside) {
               // Positional separation: gently push player outside train car body
               player.x += pCol.normalX * (pCol.depth + 1.0);
@@ -1756,11 +1762,11 @@ export class TrainSystem {
 
       // Head-on ("лоб в лоб") needs a larger margin; both cases brake along the same curve
       const isOncoming = other.direction !== consist.direction;
-      const margin = isOncoming ? 150 : 100;
+      const margin = isOncoming ? 80 : 50;
       safeSpeed = Math.min(safeSpeed, this.brakingCurveSpeed(gap - margin, consist.deceleration));
 
       // Too close to stop with the service brake: apply the emergency brake
-      if (gap < 30) {
+      if (gap < 18) {
         consist.emergencyBrake = true;
         consist.emergencyBrakeTimer = Math.max(consist.emergencyBrakeTimer || 0, 5);
         safeSpeed = 0;
@@ -1778,7 +1784,7 @@ export class TrainSystem {
     signals: RailwaySignal[],
     maxSpeed: number,
     trackY: number = 8740,
-    locoLen: number = 270,
+    locoLen: number = 165,
     isShunter: boolean = false,
     decel: number = 20
   ): number {
@@ -1842,7 +1848,7 @@ export class TrainSystem {
     signals: RailwaySignal[],
     maxSpeed: number,
     trackY: number = 8880,
-    locoLen: number = 270,
+    locoLen: number = 165,
     isShunter: boolean = false,
     decel: number = 20
   ): number {

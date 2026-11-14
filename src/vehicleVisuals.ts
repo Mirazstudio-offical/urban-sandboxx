@@ -2638,12 +2638,12 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawTurretRect(-4.7, 2.1, 2.1, 1.5, '#1e293b', '#0f172a', 0.55);
     drawTurretCircle(-3.65, 3.1, 0.75, '#475569', '#0f172a', 0.45);
 
-    // 6. Crane Operator Cabin ("Скворечник" — сдвинутая вперёд левая кабина крановщика КС-3577/45717)
+    // 6. Crane Operator Cabin ("Скворечник" — выносная левая кабина крановщика КС-3577/45717, ширина 0.87м = 8.7px)
     drawTurretPoly(
       [
-        [-4.2, -9.5],
-        [4.2, -9.5],
-        [5.4, -8.3],
+        [-4.2, -12.8],
+        [4.2, -12.8],
+        [5.4, -11.4],
         [5.4, -4.1],
         [-4.2, -4.1],
       ],
@@ -2652,64 +2652,64 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
       0.95
     );
     // Steel entry step bar along outer left cab edge
-    drawTurretRect(-1.8, -10.0, 3.2, 0.5, '#334155', '#0f172a', 0.4);
+    drawTurretRect(-2.0, -13.3, 3.6, 0.5, '#334155', '#0f172a', 0.4);
     // Raised cabin roof crown bevel & rear ventilation grill
-    drawTurretRect(-3.6, -9.0, 4.8, 4.4, '#ca8a04', '#a16207', 0.5);
-    drawTurretLine(-3.1, -8.3, -3.1, -5.2, '#0f172a', 0.5);
-    drawTurretLine(-2.4, -8.3, -2.4, -5.2, '#0f172a', 0.5);
+    drawTurretRect(-3.6, -12.2, 4.8, 7.5, '#ca8a04', '#a16207', 0.5);
+    drawTurretLine(-3.1, -11.3, -3.1, -5.5, '#0f172a', 0.5);
+    drawTurretLine(-2.4, -11.3, -2.4, -5.5, '#0f172a', 0.5);
 
     // Panoramic slanted skylight + windshield glass with rubber gasket
     drawTurretPoly(
       [
-        [1.4, -9.0],
-        [4.0, -9.0],
-        [4.9, -8.1],
-        [4.9, -4.5],
-        [1.4, -4.5],
+        [1.4, -12.1],
+        [4.0, -12.1],
+        [4.9, -11.0],
+        [4.9, -4.6],
+        [1.4, -4.6],
       ],
       '#0f172a'
     );
     drawTurretPoly(
       [
-        [1.7, -8.7],
-        [3.9, -8.7],
-        [4.6, -7.9],
-        [4.6, -4.8],
-        [1.7, -4.8],
+        [1.7, -11.7],
+        [3.9, -11.7],
+        [4.6, -10.8],
+        [4.6, -5.0],
+        [1.7, -5.0],
       ],
       'rgba(56, 189, 248, 0.40)',
       '#38bdf8',
       0.45
     );
     // Operator seat, dual hydraulic joysticks & ONK-140 display inside glass
-    drawTurretRect(0.2, -7.7, 1.8, 2.2, '#1e293b');
-    drawTurretCircle(2.5, -7.6, 0.35, '#0f172a');
-    drawTurretCircle(2.5, -5.7, 0.35, '#0f172a');
-    drawTurretRect(3.8, -7.2, 0.7, 1.2, '#020617'); // ONK-140 console
-    drawTurretCircle(4.1, -6.6, 0.25, '#22c55e');
+    drawTurretRect(0.1, -10.0, 2.0, 3.2, '#1e293b');
+    drawTurretCircle(2.5, -10.3, 0.4, '#0f172a');
+    drawTurretCircle(2.5, -6.5, 0.4, '#0f172a');
+    drawTurretRect(3.8, -9.2, 0.7, 1.8, '#020617'); // ONK-140 console
+    drawTurretCircle(4.1, -8.3, 0.28, '#22c55e');
 
     // Protective steel skylight guard bars (защитная решётка верхнего остекления) & windshield wiper
-    drawTurretLine(1.7, -7.7, 4.6, -7.7, '#1e293b', 0.45);
-    drawTurretLine(1.7, -6.7, 4.6, -6.7, '#1e293b', 0.45);
-    drawTurretLine(1.7, -5.7, 4.6, -5.7, '#1e293b', 0.45);
-    drawTurretLine(4.5, -6.2, 2.9, -7.3, '#0f172a', 0.55);
+    drawTurretLine(1.7, -10.4, 4.6, -10.4, '#1e293b', 0.45);
+    drawTurretLine(1.7, -8.5, 4.6, -8.5, '#1e293b', 0.45);
+    drawTurretLine(1.7, -6.6, 4.6, -6.6, '#1e293b', 0.45);
+    drawTurretLine(4.6, -7.8, 2.8, -9.8, '#0f172a', 0.55);
 
     // Front-left roof corner work spotlight
-    drawTurretCircle(5.0, -8.5, 0.75, car.craneSpotlightOn ? '#fef08a' : '#94a3b8', '#0f172a', 0.55);
+    drawTurretCircle(5.0, -11.6, 0.8, car.craneSpotlightOn ? '#fef08a' : '#94a3b8', '#0f172a', 0.55);
 
     // Operator seated in crane cab ("скворечник")
     if (car.craneOperatorActive) {
-      drawTurretRect(0.1, -8.1, 1.4, 2.0, '#1e293b');
-      drawTurretCircle(1.0, -7.1, 1.25, '#f59e0b', '#78350f', 0.65);
+      drawTurretRect(0.0, -10.5, 2.0, 4.2, '#1e293b');
+      drawTurretCircle(1.0, -8.4, 1.45, '#f59e0b', '#78350f', 0.6);
     }
 
     // Work spotlight illumination beam
     if (car.craneSpotlightOn) {
       drawTurretPoly(
         [
-          [5.0, -8.5],
-          [28.0, -19.0],
-          [30.0, 2.0],
+          [5.0, -11.6],
+          [28.0, -22.0],
+          [30.0, 0.5],
         ],
         'rgba(254, 240, 138, 0.16)'
       );
@@ -3030,6 +3030,263 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedCircle(flangeX + 1.6, handleTipY, 0.62, isGateOpen ? '#22c55e' : '#dc2626');
     drawDeformedRect(flangeX - 3.3, -0.85, 1.6, 1.7, '#b45309'); // Brass ANM-53 receiving snout
     drawDeformedCircle(flangeX - 3.4, 0, 0.92, isHoseOut ? '#94a3b8' : '#d97706', '#0f172a', 0.45);
+  }
+
+  // --- TWIN-TANK VACUUM SEWAGE TRUCK KO-505A ("ДВУСТВОЛКА" КО-505А, 2 x 5 м³ = 10 м³) ---
+  else if (effectiveType === 'truck_vacuum_ko505_twin') {
+    const cabBackX = resolvedTruck ? resolvedTruck.cabRearX : (cabinX - cabinL / 2);
+    const bodyX1 = resolvedTruck ? resolvedTruck.rearBodyX + 0.4 : (-halfL + rc + 1.2);
+    const bodyX2 = cabBackX - 0.6;
+
+    // 1. Rear Tandem Axle Mudguards & Mudflaps (Крылья задней балансирной тележки)
+    if (resolvedTruck) {
+      const { rearAxlesX } = getTruckFrameAxlePositions(resolvedTruck.frame, halfL, resolvedTruck.platform);
+      const fenderFrontX = rearAxlesX[0] + 5.1;
+      const fenderRearX = rearAxlesX[rearAxlesX.length - 1] - 5.1;
+      const fenderL = fenderFrontX - fenderRearX;
+      const fenderW = resolvedTruck.frame.rearTireType === 'dual' ? 5.0 : 3.9;
+
+      drawDeformedRect(fenderRearX, -halfW + 0.15, fenderL, fenderW, '#1e293b');
+      drawDeformedLine(fenderRearX, -halfW + 0.2, fenderFrontX, -halfW + 0.2, '#64748b', 0.85);
+      drawDeformedRect(fenderRearX, halfW - fenderW - 0.15, fenderL, fenderW, '#1e293b');
+      drawDeformedLine(fenderRearX, halfW - 0.2, fenderFrontX, halfW - 0.2, '#64748b', 0.85);
+
+      drawDeformedRect(fenderRearX - 1.1, -halfW + 0.25, 1.2, fenderW, '#090d14');
+      drawDeformedLine(fenderRearX - 0.55, -halfW + 0.7, fenderRearX - 0.55, -halfW + fenderW - 0.4, '#f8fafc', 0.65);
+      drawDeformedRect(fenderRearX - 1.1, halfW - fenderW - 0.25, 1.2, fenderW, '#090d14');
+      drawDeformedLine(fenderRearX - 0.55, halfW - fenderW + 0.4, fenderRearX - 0.55, halfW - 0.7, '#f8fafc', 0.65);
+    }
+
+    // 2. Front Open Subframe Equipment Platform Behind Cab (Площадка вакуумного насоса КО-505 и 4-ходового крана)
+    const eqX2 = bodyX2;
+    const eqX1 = eqX2 - 6.0;
+    const eqMidX = (eqX1 + eqX2) / 2;
+    const platW = halfW * 2 - 2.8;
+    drawDeformedRect(eqX1, -platW / 2, eqX2 - eqX1, platW, '#1e293b');
+    drawDeformedRect(eqX1 + 0.4, -platW / 2 + 0.4, eqX2 - eqX1 - 0.8, platW - 0.8, '#334155');
+
+    // Left: КО-505 rotary-vane pump (310 m3/h) with 8 radial cooling fins, PTO belt shroud & oil lubricator tank
+    drawDeformedRect(eqMidX - 2.4, -platW / 2 + 0.6, 4.8, 5.4, '#0f172a');
+    for (let fx = eqMidX - 1.9; fx <= eqMidX + 1.9; fx += 0.55) {
+      drawDeformedLine(fx, -platW / 2 + 0.8, fx, -platW / 2 + 5.7, '#64748b', 0.45);
+    }
+    drawDeformedRect(eqMidX + 1.3, -platW / 2 + 0.9, 1.2, 4.5, '#475569'); // PTO belt/drive shroud
+    drawDeformedCircle(eqMidX - 0.7, -platW / 2 + 2.8, 0.75, '#d97706', '#0f172a', 0.45); // Brass drip oiler
+    drawDeformedRect(eqMidX - 2.2, -platW / 2 + 6.4, 2.2, 1.8, '#475569'); // Pump lube oil reservoir
+
+    // Outward-facing Round Vacuum Manometer Gauge on left bracket
+    drawDeformedCircle(eqMidX - 0.3, -platW / 2 - 0.25, 1.4, '#0f172a');
+    drawDeformedCircle(eqMidX - 0.3, -platW / 2 - 0.25, 0.98, '#f8fafc');
+    drawDeformedLine(eqMidX - 0.3, -platW / 2 - 0.25, eqMidX - 0.95, -platW / 2 - 0.65, '#dc2626', 0.5);
+
+    // Center-Left: 4-Way Air Selector Valve (Четырёхходовой кран Всасывание / Нагнетание)
+    const isSuctionMode = (car.fluidTank?.vacuumPumpMode ?? 'suction') === 'suction';
+    drawDeformedCircle(eqMidX + 0.3, -1.6, 1.3, '#1e293b', '#64748b', 0.5);
+    drawDeformedLine(
+      eqMidX + 0.3,
+      -1.6,
+      eqMidX + (isSuctionMode ? 2.3 : -1.7),
+      -3.4,
+      '#cbd5e1',
+      0.85
+    );
+    drawDeformedCircle(eqMidX + (isSuctionMode ? 2.3 : -1.7), -3.4, 0.62, isSuctionMode ? '#22c55e' : '#f59e0b');
+
+    // Right: Intermediate Moisture/Condensate Trap Tank & Exhaust Silencer Drum
+    drawDeformedCircle(eqMidX + 0.3, 2.7, 1.9, '#334155', '#0f172a', 0.7);
+    drawDeformedCircle(eqMidX + 0.3, 2.7, 0.7, '#64748b');
+    drawDeformedRect(eqMidX - 2.1, 5.5, 4.2, 2.6, '#475569'); // Exhaust silencer barrel
+    drawDeformedLine(eqMidX - 2.1, 6.8, eqMidX + 2.1, 6.8, '#64748b', 0.7);
+    drawDeformedCircle(eqMidX - 1.2, 8.7, 0.88, '#0f172a', '#64748b', 0.45); // Exhaust stub pipe
+
+    // 3. Twin Parallel Cylindrical 5 m³ Cisterns (2 × ø1200 мм -> ~9.2 px each) = 10 m³ "Двустволка"
+    const tankFront = eqX1 - 0.5;
+    const tankRear = bodyX1 + 2.9;
+    const tankL = Math.max(14, tankFront - tankRear);
+
+    const trayW = 2.05;
+    const trayGap = 0.45;
+    const centerGap = 1.25;
+    const availForTwin = Math.max(14, (halfW * 2 - 0.6) - 2 * (trayW + trayGap) - centerGap);
+    const singleTankW = Math.min(9.4, availForTwin * 0.5);
+    const leftCy = -(singleTankW * 0.5 + centerGap * 0.5);
+    const rightCy = +(singleTankW * 0.5 + centerGap * 0.5);
+    const outerSpanHalf = singleTankW + centerGap * 0.5;
+
+    // 3 Transverse Steel Cradle Beams supporting both twin barrels on the truck chassis
+    [0.14, 0.50, 0.86].forEach((frac) => {
+      const cx = tankRear + tankL * frac;
+      drawDeformedRect(cx - 0.85, -outerSpanHalf - 0.4, 1.7, outerSpanHalf * 2 + 0.8, '#1e293b');
+    });
+
+    const drawTwinBarrel = (cy: number, isLeftBarrel: boolean) => {
+      const y1 = cy - singleTankW / 2;
+      const y2 = cy + singleTankW / 2;
+      const barrelGrad = ctx.createLinearGradient(0, y1, 0, y2);
+      barrelGrad.addColorStop(0, '#78350f');
+      barrelGrad.addColorStop(0.22, '#d97706');
+      barrelGrad.addColorStop(0.48, '#fbbf24');
+      barrelGrad.addColorStop(0.76, '#b45309');
+      barrelGrad.addColorStop(1, '#713f12');
+
+      drawDeformedRect(tankRear, y1, tankL, singleTankW, barrelGrad);
+
+      // Front & Rear Welded Torispherical Dome Caps for each barrel
+      const [fTopX, fTopY] = deform(tankFront, y1);
+      const [fMidX, fMidY] = deform(tankFront + 1.9, cy);
+      const [fBotX, fBotY] = deform(tankFront, y2);
+      ctx.fillStyle = barrelGrad;
+      ctx.beginPath();
+      ctx.moveTo(fTopX, fTopY);
+      ctx.quadraticCurveTo(fMidX, fMidY, fBotX, fBotY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 1.0;
+      ctx.stroke();
+
+      const [rTopX, rTopY] = deform(tankRear, y1);
+      const [rMidX, rMidY] = deform(tankRear - 2.1, cy);
+      const [rBotX, rBotY] = deform(tankRear, y2);
+      ctx.fillStyle = barrelGrad;
+      ctx.beginPath();
+      ctx.moveTo(rTopX, rTopY);
+      ctx.quadraticCurveTo(rMidX, rMidY, rBotX, rBotY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = 1.05;
+      ctx.stroke();
+
+      drawDeformedLine(tankRear, y1, tankFront, y1, '#78350f', 0.95);
+      drawDeformedLine(tankRear, y2, tankFront, y2, '#78350f', 0.95);
+
+      // White municipal stripe on the outward shoulder of each barrel
+      const stripeY = isLeftBarrel ? y1 + 0.65 : y2 - 1.5;
+      drawDeformedRect(tankRear + 0.9, stripeY, tankL - 1.8, 0.85, '#f8fafc');
+    };
+
+    drawTwinBarrel(leftCy, true);
+    drawTwinBarrel(rightCy, false);
+
+    // 4 Clamping Band Straps (Стяжные бандажи-стремянки обеих цистерн) with center turnbuckle bolts
+    [0.16, 0.39, 0.62, 0.85].forEach((frac) => {
+      const sx = tankRear + tankL * frac;
+      drawDeformedRect(sx - 0.5, leftCy - singleTankW / 2 - 0.2, 1.0, singleTankW + 0.4, '#0f172a');
+      drawDeformedRect(sx - 0.5, rightCy - singleTankW / 2 - 0.2, 1.0, singleTankW + 0.4, '#0f172a');
+      drawDeformedLine(sx, leftCy - singleTankW / 2 - 0.15, sx, leftCy + singleTankW / 2 + 0.15, '#94a3b8', 0.35);
+      drawDeformedLine(sx, rightCy - singleTankW / 2 - 0.15, sx, rightCy + singleTankW / 2 + 0.15, '#94a3b8', 0.35);
+      // Center bridge clamp linking left & right straps
+      drawDeformedRect(sx - 0.45, -centerGap * 0.6, 0.9, centerGap * 1.2, '#334155');
+    });
+
+    // 4. Top Catwalk Walkway Platform Between Barrels + Dual Manholes + Dual SPU Float Valves + H-Manifold
+    const spuX = tankFront - tankL * 0.21;
+    const manholeX = tankRear + tankL * 0.44;
+    const sightX = tankRear + tankL * 0.14;
+    const fillRatio = car.fluidTank ? (car.fluidTank.currentVolume / Math.max(1, car.fluidTank.capacity)) : 0.3;
+    const sightColor = fillRatio > 0.85 ? '#ef4444' : (fillRatio > 0.1 ? '#38bdf8' : '#334155');
+
+    // Perforated steel service catwalk bridge & safety handrail between barrels (Площадка обслуживания и поручень)
+    const walkX1 = manholeX - 3.6;
+    const walkX2 = spuX + 2.4;
+    drawDeformedRect(walkX1, -2.0, walkX2 - walkX1, 4.0, '#1e293b');
+    drawDeformedRect(walkX1 + 0.3, -1.65, walkX2 - walkX1 - 0.6, 3.3, '#475569');
+    for (let gx = walkX1 + 0.9; gx < walkX2 - 0.7; gx += 1.1) {
+      drawDeformedLine(gx, -1.5, gx, 1.5, '#0f172a', 0.45);
+    }
+    drawDeformedLine(walkX1 + 0.4, -1.9, walkX2 - 0.4, -1.9, '#cbd5e1', 0.55); // Handrail
+    drawDeformedLine(walkX1 + 0.4, 1.9, walkX2 - 0.4, 1.9, '#cbd5e1', 0.55);
+
+    // Rear central steel access ladder descending between the two rear domes
+    drawDeformedLine(tankRear - 0.8, -1.35, tankRear + 1.4, -1.35, '#94a3b8', 0.6);
+    drawDeformedLine(tankRear - 0.8, 1.35, tankRear + 1.4, 1.35, '#94a3b8', 0.6);
+    for (let lx = tankRear - 0.5; lx <= tankRear + 1.2; lx += 0.85) {
+      drawDeformedLine(lx, -1.35, lx, 1.35, '#cbd5e1', 0.45);
+    }
+
+    // Twin Bolted Top Manhole Hatches (d=500 мм), Twin SPU Float Cutoffs & Twin Rear Sight Glasses
+    [leftCy, rightCy].forEach((cy) => {
+      // Inspection manhole hatch
+      drawDeformedCircle(manholeX, cy, 2.2, '#0f172a', '#64748b', 0.65);
+      drawDeformedCircle(manholeX, cy, 1.35, '#334155');
+      for (let bi = 0; bi < 6; bi++) {
+        const ba = (bi * Math.PI * 2) / 6;
+        drawDeformedCircle(manholeX + Math.cos(ba) * 1.8, cy + Math.sin(ba) * 1.8, 0.2, '#cbd5e1');
+      }
+
+      // SPU float cutoff dome
+      drawDeformedCircle(spuX, cy, 2.05, '#0f172a', '#64748b', 0.65);
+      drawDeformedCircle(spuX, cy, 1.25, '#d97706');
+      drawDeformedCircle(spuX, cy, 0.55, '#fbbf24');
+
+      // Rear fill level sight-glass port
+      drawDeformedCircle(sightX, cy, 1.25, '#0f172a', '#cbd5e1', 0.5);
+      drawDeformedCircle(sightX, cy, 0.78, sightColor);
+    });
+
+    // Overhead H-Manifold Vacuum Air Pipe joining both SPU domes -> central collector -> moisture trap -> 4-way valve -> pump
+    drawDeformedLine(spuX, leftCy, spuX, rightCy, '#94a3b8', 1.2);
+    drawDeformedCircle(spuX, 0, 0.85, '#475569', '#0f172a', 0.4); // Central T-junction flange
+    drawDeformedLine(spuX, 0, eqMidX + 0.3, 0, '#94a3b8', 1.3);
+    drawDeformedLine(eqMidX + 0.3, 0, eqMidX + 0.3, 2.7, '#64748b', 1.2);
+    drawDeformedLine(eqMidX + 0.3, 0, eqMidX + 0.3, -1.6, '#64748b', 1.2);
+    drawDeformedLine(eqMidX + 0.3, -1.6, eqMidX, -platW / 2 + 5.2, '#475569', 1.15);
+    drawDeformedCircle(eqMidX + 0.3, 0, 0.75, '#475569', '#0f172a', 0.4);
+
+    // 5. Galvanized Side Hose Carrier Trays (Боковые пеналы для рукавов d=100 мм; левый пустеет при снятии рукава)
+    const isHoseOut = !!car.fluidTank?.isWaterHoseDeployed;
+    const lTrayY = -outerSpanHalf - trayGap - trayW;
+    const rTrayY = outerSpanHalf + trayGap;
+    const tX1 = tankRear + 0.5;
+    const tX2 = tankFront - 0.3;
+    const tLen = Math.max(10, tX2 - tX1);
+
+    const drawKo505TwinTray = (ty: number, hasHose: boolean, isLeft: boolean) => {
+      [0.16, 0.50, 0.84].forEach((frac) => {
+        const bx = tX1 + tLen * frac;
+        const innerY = isLeft ? -outerSpanHalf : outerSpanHalf;
+        const outerY = isLeft ? ty + 0.35 : ty + trayW - 0.35;
+        drawDeformedLine(bx, innerY, bx, outerY, '#334155', 0.9);
+      });
+      drawDeformedRect(tX1, ty, tLen, trayW, '#475569');
+      drawDeformedRect(tX1 + 0.3, ty + 0.3, tLen - 0.6, trayW - 0.6, '#1e293b');
+      if (hasHose) {
+        const hy = ty + trayW * 0.5;
+        drawDeformedLine(tX1 + 0.8, hy, tX2 - 0.8, hy, '#090d14', 1.65);
+        drawDeformedLine(tX1 + 1.0, hy - 0.2, tX2 - 1.0, hy - 0.2, '#1e293b', 0.45);
+        drawDeformedRect(tX1 + 0.4, hy - 0.55, 0.95, 1.1, '#b45309');
+        drawDeformedRect(tX2 - 1.35, hy - 0.55, 0.95, 1.1, '#64748b');
+      }
+      [0.20, 0.50, 0.80].forEach((frac) => {
+        const sx = tX1 + tLen * frac;
+        drawDeformedRect(sx - 0.32, ty - 0.05, 0.64, trayW + 0.1, '#94a3b8');
+        drawDeformedCircle(sx, isLeft ? ty + 0.22 : ty + trayW - 0.22, 0.2, '#0f172a');
+      });
+    };
+
+    drawKo505TwinTray(lTrayY, !isHoseOut, true);
+    drawKo505TwinTray(rTrayY, true, false);
+
+    // 6. Rear Y-Shaped Lower Discharge Collector + ANM-53 Slide Gate Valve & Brass Receiving Snout
+    const yJunctionX = tankRear - 2.3;
+    drawDeformedLine(tankRear - 0.8, leftCy, yJunctionX, 0, '#334155', 1.75);
+    drawDeformedLine(tankRear - 0.8, rightCy, yJunctionX, 0, '#334155', 1.75);
+    drawDeformedLine(tankRear - 0.8, leftCy, yJunctionX, 0, '#64748b', 0.85);
+    drawDeformedLine(tankRear - 0.8, rightCy, yJunctionX, 0, '#64748b', 0.85);
+
+    const flangeX = yJunctionX;
+    const isGateOpen = !!car.fluidTank?.drainValveOpen;
+    drawDeformedRect(flangeX, -2.3, 0.85, 4.6, '#334155');
+    drawDeformedCircle(flangeX + 0.4, -1.65, 0.3, '#cbd5e1');
+    drawDeformedCircle(flangeX + 0.4, 1.65, 0.3, '#cbd5e1');
+    drawDeformedRect(flangeX - 1.6, -1.4, 1.6, 2.8, '#1e293b');
+    drawDeformedRect(flangeX - 1.0, -1.75, 0.55, 3.5, '#0f172a');
+    const handleTipY = isGateOpen ? 3.3 : -3.5;
+    drawDeformedLine(flangeX - 0.8, -0.6, flangeX + 1.5, handleTipY, '#64748b', 0.95);
+    drawDeformedCircle(flangeX + 1.5, handleTipY, 0.6, isGateOpen ? '#22c55e' : '#dc2626');
+    drawDeformedRect(flangeX - 3.1, -0.8, 1.5, 1.6, '#b45309'); // Brass ANM-53 receiving snout
+    drawDeformedCircle(flangeX - 3.2, 0, 0.88, isHoseOut ? '#94a3b8' : '#d97706', '#0f172a', 0.45);
   }
 
   // --- HEAVY SLUDGE VACUUM TRUCK KO-505A (ТЯЖЁЛЫЙ ИЛОСОС КО-505А / КО-507А СО СТРЕЛОЙ, 10 м³) ---

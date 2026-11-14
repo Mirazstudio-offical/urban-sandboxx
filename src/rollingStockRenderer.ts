@@ -41,38 +41,42 @@ export class RollingStockRenderer {
       ctx.save();
       ctx.translate(car.x, car.y);
       ctx.rotate(car.angle);
+      // Authoritative vector models are authored in 20 px/m local coordinates (railG = 17 => 34 px gauge);
+      // scale down by 0.5x so canonical 10 px/m RollingStockCar lengths/widths render on 17 px gauge tracks.
+      ctx.scale(0.5, 0.5);
 
-      const halfL = car.length / 2;
-      const halfW = car.width / 2;
+      const scaledCar: RollingStockCar = { ...car, length: car.length * 2, width: car.width * 2 };
+      const halfL = scaledCar.length / 2;
+      const halfW = scaledCar.width / 2;
 
       // 1. Realistic Deep Drop Shadow onto ballast bed and rails
-      this.renderDropShadow(ctx, car, halfL, halfW);
+      this.renderDropShadow(ctx, scaledCar, halfL, halfW);
 
       // 2. Wheel Bogies (18-100 and passenger 2-axle / 3-axle bogies underneath)
-      this.renderBogies(ctx, car, halfL, halfW);
+      this.renderBogies(ctx, scaledCar, halfL, halfW);
 
       // 3. Automatic Couplers SA-3, Uncoupling Levers & Air Brake Hoses
-      this.renderCouplersAndBrakePipes(ctx, car, halfL, halfW);
+      this.renderCouplersAndBrakePipes(ctx, scaledCar, halfL, halfW);
 
       // 4. Car / Locomotive Body (Strict Top-Down Orthogonal View)
-      const type = car.type || '';
+      const type = scaledCar.type || '';
       if (type === 'locomotive_diesel' || type === 'locomotive_passenger' || type.includes('tep70')) {
-        this.renderTEP70BS(ctx, car, halfL, halfW, nightAlpha);
+        this.renderTEP70BS(ctx, scaledCar, halfL, halfW, nightAlpha);
       } else if (type === 'locomotive_electric_vl80' || type.includes('vl80')) {
-        this.renderVL80S(ctx, car, halfL, halfW, nightAlpha);
+        this.renderVL80S(ctx, scaledCar, halfL, halfW, nightAlpha);
       } else if (type === 'locomotive_diesel_chme3' || type === 'locomotive_shunter' || type.includes('chme3')) {
-        this.renderCHME3(ctx, car, halfL, halfW, nightAlpha);
+        this.renderCHME3(ctx, scaledCar, halfL, halfW, nightAlpha);
       } else if (type.startsWith('passenger_') || type.includes('coach') || type.includes('platskart') || type.includes('kupe') || type.includes('passenger')) {
-        this.renderPassengerCoachRZHD(ctx, car, halfL, halfW, nightAlpha);
+        this.renderPassengerCoachRZHD(ctx, scaledCar, halfL, halfW, nightAlpha);
       } else if (type === 'freight_hopper' || type.includes('hopper') || type.includes('gondola')) {
-        this.renderFreightHopper(ctx, car, halfL, halfW, nightAlpha);
+        this.renderFreightHopper(ctx, scaledCar, halfL, halfW, nightAlpha);
       } else if (type === 'freight_tanker' || type.includes('tanker')) {
-        this.renderFreightTanker(ctx, car, halfL, halfW, nightAlpha);
+        this.renderFreightTanker(ctx, scaledCar, halfL, halfW, nightAlpha);
       } else if (type === 'freight_flatcar_timber' || type.includes('timber') || type.includes('flatcar')) {
-        this.renderFreightFlatcarTimber(ctx, car, halfL, halfW, nightAlpha);
+        this.renderFreightFlatcarTimber(ctx, scaledCar, halfL, halfW, nightAlpha);
       } else {
         // Universal freight fallback with authentic detailing
-        this.renderFreightHopper(ctx, car, halfL, halfW, nightAlpha);
+        this.renderFreightHopper(ctx, scaledCar, halfL, halfW, nightAlpha);
       }
 
       ctx.restore();

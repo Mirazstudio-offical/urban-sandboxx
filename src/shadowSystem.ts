@@ -998,7 +998,7 @@ function renderRailwayShadows(
   tier: 'low' | 'high'
 ) {
   if (tier === 'low') {
-    // 1. Concrete Passenger Platforms (z = 0 .. 11px)
+    // 1. Concrete Passenger Platforms (z = 0 .. 6px -> ~0.6m..1.1m height)
     if (world.railwayPlatforms) {
       for (const plat of world.railwayPlatforms) {
         if (
@@ -1009,10 +1009,10 @@ function renderRailwayShadows(
         ) {
           continue;
         }
-        const pOff = getShadowOffset(11, sunState);
+        const pOff = getShadowOffset(6, sunState);
         sCtx.save();
         clipOutsideRect(sCtx, plat.x, plat.y, plat.width, plat.height, pOff.dx, pOff.dy);
-        extrudeRectShadow(sCtx, plat.x, plat.y, plat.width, plat.height, 0, 11, sunState);
+        extrudeRectShadow(sCtx, plat.x, plat.y, plat.width, plat.height, 0, 6, sunState);
         sCtx.restore();
       }
     }
@@ -1021,26 +1021,26 @@ function renderRailwayShadows(
     if (world.rollingStock) {
       for (const car of world.rollingStock) {
         if (car.x < minX - 180 || car.x > maxX + 180 || car.y < minY - 180 || car.y > maxY + 180) continue;
-        const length = car.length || 84;
-        const width = car.width || 24;
-        const off = getShadowOffset(36, sunState);
+        const length = car.length || 140;
+        const width = car.width || 30;
+        const off = getShadowOffset(19, sunState);
 
         // Main carbody shadow (clipped outside the sunlit carbody top)
         sCtx.save();
         clipOutsideRotatedRect(sCtx, car.x, car.y, length - 2, width - 2, car.angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, car.x, car.y, length, width, car.angle, 4, 36, sunState);
+        extrudeRotatedRectShadow(sCtx, car.x, car.y, length, width, car.angle, 2, 19, sunState);
         sCtx.restore();
 
         // Rooftop pantograph / air reservoir equipment shadow cast across the train roof
-        const eqOff = getShadowOffset(8, sunState);
+        const eqOff = getShadowOffset(4.5, sunState);
         const cos = Math.cos(car.angle);
         const sin = Math.sin(car.angle);
         for (const xFrac of [-0.28, 0.28]) {
           const ex = car.x + cos * (length * xFrac);
           const ey = car.y + sin * (length * xFrac);
           sCtx.save();
-          clipOutsideRotatedRect(sCtx, ex, ey, 12, 10, car.angle, eqOff.dx, eqOff.dy);
-          extrudeRotatedRectShadow(sCtx, ex, ey, 12, 10, car.angle, 0, 8, sunState);
+          clipOutsideRotatedRect(sCtx, ex, ey, 6, 5, car.angle, eqOff.dx, eqOff.dy);
+          extrudeRotatedRectShadow(sCtx, ex, ey, 6, 5, car.angle, 0, 4.5, sunState);
           sCtx.restore();
         }
       }
@@ -1072,13 +1072,13 @@ function renderRailwayShadows(
         const frac = (i + 0.5) / numCols;
         const cx = isHoriz ? canopyX + canopyW * frac : canopyX + canopyW * 0.5;
         const cy = isHoriz ? canopyY + canopyH * 0.5 : canopyY + canopyH * frac;
-        extrudeCylinderShadow(sCtx, cx, cy, 2.2, 11, 34, sunState);
+        extrudeCylinderShadow(sCtx, cx, cy, 1.4, 6, 19, sunState);
       }
 
-      const cOff = getShadowOffset(36, sunState);
+      const cOff = getShadowOffset(20, sunState);
       sCtx.save();
       clipOutsideRect(sCtx, canopyX, canopyY, canopyW, canopyH, cOff.dx, cOff.dy);
-      extrudeRectShadow(sCtx, canopyX, canopyY, canopyW, canopyH, 28, 36, sunState);
+      extrudeRectShadow(sCtx, canopyX, canopyY, canopyW, canopyH, 16, 20, sunState);
       sCtx.restore();
     }
   }
@@ -1088,10 +1088,10 @@ function renderRailwayShadows(
     for (const sig of world.railwaySignals) {
       if (sig.x < minX - 100 || sig.x > maxX + 100 || sig.y < minY - 100 || sig.y > maxY + 100) continue;
       const isDwarf = sig.mastType === 'dwarf';
-      const sigH = isDwarf ? 9 : 38;
-      extrudeCylinderShadow(sCtx, sig.x, sig.y, isDwarf ? 2.2 : 1.8, 0, sigH, sunState);
+      const sigH = isDwarf ? 5 : 22;
+      extrudeCylinderShadow(sCtx, sig.x, sig.y, isDwarf ? 1.4 : 1.1, 0, sigH, sunState);
       if (!isDwarf) {
-        extrudeCylinderShadow(sCtx, sig.x, sig.y, 4.0, sigH - 9, sigH, sunState);
+        extrudeCylinderShadow(sCtx, sig.x, sig.y, 2.5, sigH - 5, sigH, sunState);
       }
       if (sig.isCrossingGate && sig.barrierLength) {
         const closeProg = sig.barrierProgress ?? 0;
@@ -1301,44 +1301,44 @@ function renderStreetPropShadows(
       case 'industrial_sign':
       case 'railway_platform_sign':
       case 'railway_clock': {
-        // Sign post (z = 0..28px) + sign plate at top (z = 20..28px)
-        extrudeCylinderShadow(sCtx, prop.x, prop.y, 1.5, 0, 28, sunState);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 4.0, 14, angle, 20, 28, sunState);
+        // Sign post (z = 0..22px) + sign plate at top (z = 16..22px)
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 1.1, 0, 22, sunState);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 3.0, 10.5, angle, 16, 22, sunState);
         break;
       }
       case 'bus_stop': {
-        // Bus shelter back/side glass walls (z = 0..30px) + cantilevered roof (z = 24..32px)
-        const off = getShadowOffset(32, sunState);
+        // Bus shelter back/side glass walls (z = 0..24px) + cantilevered roof (z = 20..26px)
+        const off = getShadowOffset(26, sunState);
         sCtx.save();
-        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 36, 14, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 36, 14, angle, 24, 32, sunState);
+        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 29, 12.5, angle, off.dx, off.dy);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 29, 12.5, angle, 20, 26, sunState);
         extrudeRotatedRectShadow(
           sCtx,
-          prop.x - sin * 5.5,
-          prop.y + cos * 5.5,
-          35,
-          2.2,
+          prop.x - sin * 4.2,
+          prop.y + cos * 4.2,
+          28,
+          1.8,
           angle,
           0,
-          30,
+          24,
           sunState
         );
         sCtx.restore();
         break;
       }
       case 'kiosk': {
-        const off = getShadowOffset(32, sunState);
+        const off = getShadowOffset(26, sunState);
         sCtx.save();
-        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 24, 18, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 24, 18, angle, 0, 32, sunState);
+        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 18, 18, angle, off.dx, off.dy);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 18, 18, angle, 0, 26, sunState);
         sCtx.restore();
         break;
       }
       case 'shipping_container': {
-        const off = getShadowOffset(30, sunState);
+        const off = getShadowOffset(26, sunState);
         sCtx.save();
         clipOutsideRotatedRect(sCtx, prop.x, prop.y, 48, 20, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 48, 20, angle, 0, 30, sunState);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 48, 20, angle, 0, 26, sunState);
         sCtx.restore();
         break;
       }
@@ -1359,10 +1359,10 @@ function renderStreetPropShadows(
       case 'industrial_gate':
       case 'cottage_gate':
       case 'wicket_gate': {
-        const off = getShadowOffset(22, sunState);
+        const off = getShadowOffset(20, sunState);
         sCtx.save();
         clipOutsideRotatedRect(sCtx, prop.x, prop.y, 28, 3.8, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 28, 3.8, angle, 0, 22, sunState);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 28, 3.8, angle, 0, 20, sunState);
         sCtx.restore();
         break;
       }
@@ -1370,20 +1370,20 @@ function renderStreetPropShadows(
       case 'security_barrier':
       case 'railway_crossing_gate':
       case 'railway_buffer_stop': {
-        const off = getShadowOffset(11, sunState);
+        const off = getShadowOffset(10, sunState);
         sCtx.save();
         clipOutsideRotatedRect(sCtx, prop.x, prop.y, 20, 5, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 20, 5, angle, 0, 11, sunState);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 20, 5, angle, 0, 10, sunState);
         sCtx.restore();
         break;
       }
       case 'bench':
       case 'garage_sofa':
       case 'garage_workbench': {
-        const off = getShadowOffset(9.5, sunState);
+        const off = getShadowOffset(7.5, sunState);
         sCtx.save();
-        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 16, 6.5, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 16, 6.5, angle, 1.5, 9.5, sunState);
+        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 14.4, 6.7, angle, off.dx, off.dy);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 14.4, 6.7, angle, 1.0, 7.5, sunState);
         sCtx.restore();
         break;
       }
@@ -1391,68 +1391,72 @@ function renderStreetPropShadows(
       case 'village_well':
       case 'pallet_stack':
       case 'woodpile': {
-        const off = getShadowOffset(15, sunState);
+        const wSh = prop.type === 'dumpster' ? 14.5 : (prop.type === 'pallet_stack' ? 12 : 14);
+        const hSh = prop.type === 'dumpster' ? 10 : (prop.type === 'pallet_stack' ? 8.2 : 10);
+        const off = getShadowOffset(11, sunState);
         sCtx.save();
-        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 14, 10, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 14, 10, angle, 0, 15, sunState);
+        clipOutsideRotatedRect(sCtx, prop.x, prop.y, wSh, hSh, angle, off.dx, off.dy);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, wSh, hSh, angle, 0, 11, sunState);
         sCtx.restore();
         break;
       }
       case 'rustic_car_wreck':
       case 'tarp_covered_car':
       case 'car_on_blocks': {
-        const off = getShadowOffset(15, sunState);
+        const off = getShadowOffset(14, sunState);
         sCtx.save();
         clipOutsideRotatedRect(sCtx, prop.x, prop.y, 38, 18, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 38, 18, angle, 1, 15, sunState);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 38, 18, angle, 1, 14, sunState);
         sCtx.restore();
         break;
       }
       case 'haystack':
       case 'cable_spool':
       case 'oil_barrel_cluster': {
-        const off = getShadowOffset(16, sunState);
+        const rC = prop.type === 'cable_spool' ? 6.0 : 7.5;
+        const off = getShadowOffset(13, sunState);
         sCtx.save();
-        clipOutsideCircle(sCtx, prop.x, prop.y, 7.5, off.dx, off.dy);
-        extrudeCylinderShadow(sCtx, prop.x, prop.y, 8.0, 0, 16, sunState);
+        clipOutsideCircle(sCtx, prop.x, prop.y, rC * 0.9, off.dx, off.dy);
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, rC, 0, 13, sunState);
         sCtx.restore();
         break;
       }
       case 'trash_can':
       case 'mailbox':
       case 'railway_switch_box': {
-        const off = getShadowOffset(11, sunState);
+        const off = getShadowOffset(8.5, sunState);
         sCtx.save();
-        clipOutsideCircle(sCtx, prop.x, prop.y, 3.2, off.dx, off.dy);
-        extrudeCylinderShadow(sCtx, prop.x, prop.y, 3.5, 0, 11, sunState);
+        clipOutsideCircle(sCtx, prop.x, prop.y, 2.2, off.dx, off.dy);
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.5, 0, 8.5, sunState);
         sCtx.restore();
         break;
       }
       case 'hydrant': {
-        const off = getShadowOffset(10, sunState);
+        const off = getShadowOffset(7.5, sunState);
         sCtx.save();
-        clipOutsideCircle(sCtx, prop.x, prop.y, 2.6, off.dx, off.dy);
-        extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.8, 0, 10, sunState);
+        clipOutsideCircle(sCtx, prop.x, prop.y, 1.8, off.dx, off.dy);
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.0, 0, 7.5, sunState);
         sCtx.restore();
         break;
       }
       case 'bollard':
       case 'cone':
       case 'railway_picket_post': {
-        const off = getShadowOffset(8.5, sunState);
+        const off = getShadowOffset(6.5, sunState);
         sCtx.save();
-        clipOutsideCircle(sCtx, prop.x, prop.y, 1.8, off.dx, off.dy);
-        extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.0, 0, 8.5, sunState);
+        clipOutsideCircle(sCtx, prop.x, prop.y, 1.2, off.dx, off.dy);
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 1.3, 0, 6.5, sunState);
         sCtx.restore();
         break;
       }
       case 'flowerbed':
       case 'tire_flowerbed':
       case 'sandbox': {
-        const off = getShadowOffset(5.5, sunState);
+        const sz = prop.type === 'sandbox' ? 20 : (prop.type === 'tire_flowerbed' ? 8.4 : 13);
+        const off = getShadowOffset(4.5, sunState);
         sCtx.save();
-        clipOutsideRotatedRect(sCtx, prop.x, prop.y, 14, 14, angle, off.dx, off.dy);
-        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, 14, 14, angle, 0, 5.5, sunState);
+        clipOutsideRotatedRect(sCtx, prop.x, prop.y, sz, sz, angle, off.dx, off.dy);
+        extrudeRotatedRectShadow(sCtx, prop.x, prop.y, sz, sz, angle, 0, 4.5, sunState);
         sCtx.restore();
         break;
       }
@@ -1856,19 +1860,20 @@ function renderHumanShadow(
   handheldProp?: string | null,
   hasBroom?: boolean
 ) {
-  const s = scale || 1.0;
+  const s = scale || 0.44;
+  const hScale = s / 0.44;
 
   if (isLyingDown) {
-    const off = getShadowOffset(4.5 * s, sunState);
+    const off = getShadowOffset(3.0 * hScale, sunState);
     sCtx.save();
     clipOutsideRotatedRect(sCtx, x, y, 16 * s, 7 * s, bodyAngle, off.dx, off.dy);
-    extrudeRotatedRectShadow(sCtx, x, y, 16 * s, 7 * s, bodyAngle, 0, 4.5 * s, sunState);
+    extrudeRotatedRectShadow(sCtx, x, y, 16 * s, 7 * s, bodyAngle, 0, 3.0 * hScale, sunState);
     sCtx.restore();
     return;
   }
 
-  // Standing human is ~22px tall in 3D world scale; sitting on bench is ~15px tall
-  const totalH = (isSitting ? 15.0 : 22.0) * s;
+  // Standing human is ~1.8m (18px 3D shadow height); sitting is ~1.2m (12px)
+  const totalH = (isSitting ? 12.0 : 18.0) * hScale;
   const pelvisOff = getShadowOffset(totalH * 0.45, sunState);
   const shoulderOff = getShadowOffset(totalH * 0.80, sunState);
   const headOff = getShadowOffset(totalH, sunState);
@@ -1882,8 +1887,8 @@ function renderHumanShadow(
   sCtx.save();
   clipOutsideCircle(
     sCtx,
-    x - sunState.shadowDirX * 0.8,
-    y - sunState.shadowDirY * 0.8,
+    x - sunState.shadowDirX * 0.6,
+    y - sunState.shadowDirY * 0.6,
     3.4 * s,
     headOff.dx,
     headOff.dy
@@ -1930,11 +1935,11 @@ function renderHumanShadow(
   sCtx.fill();
 
   // 3. Swinging Arms Shadow
-  const armSwing = isSitting ? 1.5 : Math.cos(walkCycle) * 3.2 * s;
-  const handLX = x + (-armSwing * cos - -(shoulderSpan + 1.0) * sin) + pelvisOff.dx * 1.15;
-  const handLY = y + (-armSwing * sin + -(shoulderSpan + 1.0) * cos) + pelvisOff.dy * 1.15;
-  const handRX = x + (armSwing * cos - (shoulderSpan + 1.0) * sin) + pelvisOff.dx * 1.15;
-  const handRY = y + (armSwing * sin + (shoulderSpan + 1.0) * cos) + pelvisOff.dy * 1.15;
+  const armSwing = isSitting ? 1.5 * s : Math.cos(walkCycle) * 3.2 * s;
+  const handLX = x + (-armSwing * cos - -(shoulderSpan + 1.0 * s) * sin) + pelvisOff.dx * 1.15;
+  const handLY = y + (-armSwing * sin + -(shoulderSpan + 1.0 * s) * cos) + pelvisOff.dy * 1.15;
+  const handRX = x + (armSwing * cos - (shoulderSpan + 1.0 * s) * sin) + pelvisOff.dx * 1.15;
+  const handRY = y + (armSwing * sin + (shoulderSpan + 1.0 * s) * cos) + pelvisOff.dy * 1.15;
 
   sCtx.lineWidth = 2.2 * s;
   sCtx.beginPath();
@@ -1951,23 +1956,23 @@ function renderHumanShadow(
 
   // 5. Handheld Props (Box, Shopping Bag, Broom, Extinguisher, Coffee)
   if (hasBroom) {
-    const broomStartX = x + cos * 4.5 + pelvisOff.dx * 1.1;
-    const broomStartY = y + sin * 4.5 + pelvisOff.dy * 1.1;
-    const broomEndX = x + cos * 16.5;
-    const broomEndY = y + sin * 16.5;
-    sCtx.lineWidth = 1.6;
+    const broomStartX = x + cos * (4.5 * s) + pelvisOff.dx * 1.1;
+    const broomStartY = y + sin * (4.5 * s) + pelvisOff.dy * 1.1;
+    const broomEndX = x + cos * (16.5 * s);
+    const broomEndY = y + sin * (16.5 * s);
+    sCtx.lineWidth = 1.6 * s;
     sCtx.beginPath();
     sCtx.moveTo(broomStartX, broomStartY);
     sCtx.lineTo(broomEndX, broomEndY);
     sCtx.stroke();
   } else if (handheldProp === 'box') {
-    const bx = x + cos * 6.5;
-    const by = y + sin * 6.5;
-    extrudeRotatedRectShadow(sCtx, bx, by, 5.2, 7.2, bodyAngle, totalH * 0.45, totalH * 0.72, sunState);
+    const bx = x + cos * (6.5 * s);
+    const by = y + sin * (6.5 * s);
+    extrudeRotatedRectShadow(sCtx, bx, by, 5.2 * s, 7.2 * s, bodyAngle, totalH * 0.45, totalH * 0.72, sunState);
   } else if (handheldProp === 'bag' || handheldProp === 'extinguisher') {
-    const bx = x + cos * 2.0 - sin * 6.5;
-    const by = y + sin * 2.0 + cos * 6.5;
-    extrudeCylinderShadow(sCtx, bx, by, 2.8, totalH * 0.2, totalH * 0.52, sunState);
+    const bx = x + cos * (2.0 * s) - sin * (6.5 * s);
+    const by = y + sin * (2.0 * s) + cos * (6.5 * s);
+    extrudeCylinderShadow(sCtx, bx, by, 2.8 * s, totalH * 0.2, totalH * 0.52, sunState);
   }
 
   sCtx.restore();
@@ -2666,7 +2671,7 @@ export function renderUnifiedWorldShadows(
   if (performanceConfig.enablePedestrianShadows !== false) {
     for (const ped of visiblePedestrians) {
       if (ped.isInsideBuilding) continue;
-      const pedScale = ped.isChild || ped.ageGroup === 'child' ? 0.74 : 1.0;
+      const pedScale = (ped.isChild || ped.ageGroup === 'child' ? 0.74 : 1.0) * 0.44;
       renderHumanShadow(
         sCtx,
         ped.x,
@@ -2681,16 +2686,16 @@ export function renderUnifiedWorldShadows(
         ped.hasBroom
       );
 
-      // Pedestrian's Dog Companion Shadow (z = 0 .. 9.5px)
+      // Pedestrian's Dog Companion Shadow (z = 0 .. 4.5px)
       if (ped.hasDog) {
         const cosP = Math.cos(ped.angle);
         const sinP = Math.sin(ped.angle);
-        const dogX = ped.x + cosP * 11 - sinP * 8.5;
-        const dogY = ped.y + sinP * 11 + cosP * 8.5;
-        const dOff = getShadowOffset(9.5, sunState);
+        const dogX = ped.x + cosP * 5.0 - sinP * 3.8;
+        const dogY = ped.y + sinP * 5.0 + cosP * 3.8;
+        const dOff = getShadowOffset(4.5, sunState);
         sCtx.save();
-        clipOutsideRotatedRect(sCtx, dogX, dogY, 8.5, 4.0, ped.angle, dOff.dx, dOff.dy);
-        extrudeRotatedRectShadow(sCtx, dogX, dogY, 9.0, 4.2, ped.angle, 1.5, 9.5, sunState);
+        clipOutsideRotatedRect(sCtx, dogX, dogY, 3.8, 1.8, ped.angle, dOff.dx, dOff.dy);
+        extrudeRotatedRectShadow(sCtx, dogX, dogY, 4.0, 1.9, ped.angle, 0.7, 4.5, sunState);
         sCtx.restore();
       }
     }
@@ -2712,7 +2717,7 @@ export function renderUnifiedWorldShadows(
         walkPhase,
         isLying,
         false,
-        1.0,
+        0.44,
         sunState
       );
     }
@@ -2721,7 +2726,7 @@ export function renderUnifiedWorldShadows(
         if (rp.isInVehicle) continue;
         if (rp.x < minX - 80 || rp.x > maxX + 80 || rp.y < minY - 80 || rp.y > maxY + 80) continue;
         const walkPhase = (rp as any).isMoving ? Date.now() * 0.012 : 0;
-        renderHumanShadow(sCtx, rp.x, rp.y, rp.angle, walkPhase, false, false, 1.0, sunState);
+        renderHumanShadow(sCtx, rp.x, rp.y, rp.angle, walkPhase, false, false, 0.44, sunState);
       }
     }
   }

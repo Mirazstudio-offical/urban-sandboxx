@@ -208,16 +208,16 @@ export function createDefaultSuburbanLayout(bld: Building, floor: number): Build
     ];
     const furniture: InteriorFurniture[] = [
       // Metal Workbench with Vise & Tools
-      { type: 'desk', x: 12, y: 12, width: 36, height: 16, angle: 0, color: '#334155' },
-      { type: 'chair', x: 22, y: 32, width: 8, height: 8, angle: 0, color: '#0f172a' },
+      { type: 'desk', x: 12, y: 12, width: 24, height: 11, angle: 0, color: '#334155' },
+      { type: 'chair', x: 20, y: 26, width: 6, height: 6, angle: 0, color: '#0f172a' },
       // Shelving units & Tool racks
-      { type: 'shelf', x: 54, y: 10, width: 32, height: 12, angle: 0, color: '#475569' },
-      { type: 'shelf', x: 92, y: 10, width: 32, height: 12, angle: 0, color: '#475569' },
+      { type: 'shelf', x: 54, y: 10, width: 24, height: 8, angle: 0, color: '#475569' },
+      { type: 'shelf', x: 92, y: 10, width: 24, height: 8, angle: 0, color: '#475569' },
       // Storage safe & Parts bin
-      { type: 'safe', x: 130, y: 12, width: 14, height: 14, angle: 0, color: '#0f172a' },
-      { type: 'file_cabinet', x: 130, y: 32, width: 14, height: 14, angle: 0, color: '#64748b' },
+      { type: 'safe', x: 132, y: 12, width: 10, height: 10, angle: 0, color: '#0f172a' },
+      { type: 'file_cabinet', x: 132, y: 28, width: 10, height: 10, angle: 0, color: '#64748b' },
       // Resting sofa in corner
-      { type: 'sofa', x: 12, y: 64, width: 34, height: 16, angle: 0, color: '#78350f' }
+      { type: 'sofa', x: 12, y: 68, width: 22, height: 10, angle: 0, color: '#78350f' }
     ];
     const exitZone: InteriorZone = { x: 55, y: 88, width: 34, height: 16 };
     return {
@@ -263,18 +263,18 @@ export function createDefaultSuburbanLayout(bld: Building, floor: number): Build
     ];
     const furniture: InteriorFurniture[] = [
       // Resting room (Предбанник)
-      { type: 'table', x: 16, y: 16, width: 28, height: 18, angle: 0, color: '#7c2d12' },
-      { type: 'chair', x: 10, y: 20, width: 6, height: 6, angle: 0, color: '#451a03' },
-      { type: 'chair', x: 44, y: 20, width: 6, height: 6, angle: 0, color: '#451a03' },
-      { type: 'bench' as any, x: 14, y: 44, width: 34, height: 10, angle: 0, color: '#7c2d12' },
-      { type: 'coat_rack', x: 12, y: 64, width: 10, height: 10, angle: 0, color: '#451a03' },
-      { type: 'mirror', x: 40, y: 66, width: 4, height: 14, angle: 0, color: '#f59e0b' },
+      { type: 'table', x: 18, y: 16, width: 20, height: 12, angle: 0, color: '#7c2d12' },
+      { type: 'chair', x: 11, y: 19, width: 5, height: 5, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 40, y: 19, width: 5, height: 5, angle: 0, color: '#451a03' },
+      { type: 'bench' as any, x: 14, y: 44, width: 22, height: 7, angle: 0, color: '#7c2d12' },
+      { type: 'coat_rack', x: 12, y: 64, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'mirror', x: 40, y: 66, width: 3, height: 11, angle: 0, color: '#f59e0b' },
       // Steam room (Парная)
-      { type: 'stove', x: 86, y: 12, width: 20, height: 20, angle: 0, color: '#c2410c' }, // Sauna stone stove
-      { type: 'bench' as any, x: 110, y: 12, width: 28, height: 36, angle: 0, color: '#b45309' }, // Sauna wooden tier tiers
+      { type: 'stove', x: 86, y: 12, width: 14, height: 14, angle: 0, color: '#c2410c' }, // Sauna stone stove
+      { type: 'bench' as any, x: 112, y: 12, width: 22, height: 26, angle: 0, color: '#b45309' }, // Sauna wooden tiers
       // Washing room (Помывочная)
-      { type: 'bath', x: 86, y: 60, width: 32, height: 18, angle: 0, color: '#f1f5f9' },
-      { type: 'sink', x: 122, y: 60, width: 14, height: 12, angle: 0, color: '#e2e8f0' }
+      { type: 'bath', x: 86, y: 60, width: 20, height: 10, angle: 0, color: '#f1f5f9' },
+      { type: 'sink', x: 122, y: 60, width: 10, height: 8, angle: 0, color: '#e2e8f0' }
     ];
     const exitZone: InteriorZone = { x: 16, y: 80, width: 24, height: 14 };
     return {
@@ -326,22 +326,22 @@ export function createDefaultSuburbanLayout(bld: Building, floor: number): Build
     ];
     const furniture: InteriorFurniture[] = [
       // Горница (Living/Kitchen)
-      { type: 'stove', x: 62, y: 12, width: 34, height: 34, angle: 0, color: '#c2410c' }, // Russian Oven
-      { type: 'table', x: 120, y: 44, width: 34, height: 22, angle: 0, color: '#7c2d12' }, // Wooden dining table
-      { type: 'chair', x: 108, y: 52, width: 8, height: 8, angle: 0, color: '#451a03' },
-      { type: 'chair', x: 136, y: 52, width: 8, height: 8, angle: 0, color: '#451a03' },
-      { type: 'kitchen_counter', x: 160, y: 12, width: 28, height: 14, angle: 0, color: '#7c2d12' },
-      { type: 'fridge', x: 102, y: 12, width: 16, height: 16, angle: 0, color: '#e2e8f0' },
+      { type: 'stove', x: 62, y: 12, width: 22, height: 22, angle: 0, color: '#c2410c' }, // Russian Oven
+      { type: 'table', x: 120, y: 44, width: 22, height: 14, angle: 0, color: '#7c2d12' }, // Wooden dining table
+      { type: 'chair', x: 110, y: 48, width: 6, height: 6, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 144, y: 48, width: 6, height: 6, angle: 0, color: '#451a03' },
+      { type: 'kitchen_counter', x: 162, y: 12, width: 22, height: 9, angle: 0, color: '#7c2d12' },
+      { type: 'fridge', x: 102, y: 12, width: 10, height: 10, angle: 0, color: '#e2e8f0' },
       // Опочивальня (Bedroom)
-      { type: 'bed', x: 64, y: 88, width: 44, height: 30, angle: 0, color: '#ea580c' },
-      { type: 'dresser', x: 120, y: 88, width: 24, height: 12, angle: 0, color: '#7c2d12' },
-      { type: 'floor_lamp', x: 154, y: 88, width: 8, height: 8, angle: 0, color: '#ea580c' },
+      { type: 'bed', x: 64, y: 88, width: 24, height: 18, angle: 0, color: '#ea580c' },
+      { type: 'dresser', x: 120, y: 88, width: 18, height: 8, angle: 0, color: '#7c2d12' },
+      { type: 'floor_lamp', x: 154, y: 88, width: 6, height: 6, angle: 0, color: '#ea580c' },
       // Баня (Bath/Sauna)
-      { type: 'bath', x: 10, y: 10, width: 38, height: 18, angle: 0, color: '#f1f5f9' },
-      { type: 'stove', x: 12, y: 32, width: 14, height: 14, angle: 0, color: '#334155' }, // Bath stone heater
+      { type: 'bath', x: 10, y: 10, width: 22, height: 10, angle: 0, color: '#f1f5f9' },
+      { type: 'stove', x: 12, y: 32, width: 11, height: 11, angle: 0, color: '#334155' }, // Bath stone heater
       // Сени (Entryway)
-      { type: 'coat_rack', x: 12, y: 74, width: 10, height: 10, angle: 0, color: '#451a03' },
-      { type: 'mirror', x: 44, y: 74, width: 4, height: 16, angle: 0, color: '#f59e0b' }
+      { type: 'coat_rack', x: 12, y: 74, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'mirror', x: 44, y: 74, width: 3, height: 12, angle: 0, color: '#f59e0b' }
     ];
     const exitZone: InteriorZone = { x: 18, y: 110, width: 24, height: 12 };
     return {
@@ -423,41 +423,41 @@ export function createCottageFloor0Layout(buildingId: string, width = 160, heigh
 
   const furniture: InteriorFurniture[] = [
     // --- 1. ПРИХОЖАЯ / ХОЛЛ ---
-    { type: 'coat_rack', x: 10, y: yMid + 4, width: 8, height: 8, angle: 0, color: '#451a03' },
-    { type: 'bench', x: 10, y: yMid + 16, width: 14, height: 6, angle: 0, color: '#78350f' },
-    { type: 'mirror', x: 8, y: yMid + 26, width: 3, height: 10, angle: 0, color: '#f59e0b' },
+    { type: 'coat_rack', x: 10, y: yMid + 4, width: 6, height: 6, angle: 0, color: '#451a03' },
+    { type: 'bench', x: 10, y: yMid + 16, width: 12, height: 5, angle: 0, color: '#78350f' },
+    { type: 'mirror', x: 8, y: yMid + 26, width: 2.5, height: 8, angle: 0, color: '#f59e0b' },
 
     // --- 2. ВАННАЯ КОМНАТА & САУНА ---
-    { type: 'bath', x: 10, y: 10, width: 24, height: 14, angle: 0, color: '#f1f5f9' },
-    { type: 'toilet', x: 10, y: 28, width: 10, height: 10, angle: 0, color: '#ffffff' },
-    { type: 'sink', x: 10, y: 42, width: 10, height: 10, angle: 0, color: '#e2e8f0' },
-    { type: 'stove', x: xCol1 - 18, y: 10, width: 10, height: 10, angle: 0, color: '#c2410c' },
+    { type: 'bath', x: 10, y: 10, width: 18, height: 10, angle: 0, color: '#f1f5f9' },
+    { type: 'toilet', x: 10, y: 26, width: 6, height: 7, angle: 0, color: '#ffffff' },
+    { type: 'sink', x: 10, y: 38, width: 7, height: 6, angle: 0, color: '#e2e8f0' },
+    { type: 'stove', x: xCol1 - 16, y: 10, width: 8, height: 8, angle: 0, color: '#c2410c' },
 
     // --- 3. КАМИННЫЙ ЗАЛ / ГОСТИНАЯ ---
-    { type: 'stove', x: Math.round((xCol1 + xCol2) / 2) - 8, y: 8, width: 16, height: 10, angle: 0, color: '#b45309' },
-    { type: 'sofa', x: xCol1 + 8, y: 24, width: 28, height: 14, angle: 0, color: '#991b1b' },
-    { type: 'carpet', x: xCol1 + 6, y: 22, width: 32, height: 18, angle: 0, color: '#7f1d1d' },
-    { type: 'tv', x: xCol1 + 8, y: 10, width: 16, height: 4, angle: 0, color: '#0f172a' },
-    { type: 'plant', x: xCol2 - 16, y: 10, width: 8, height: 8, angle: 0, color: '#16a34a' },
+    { type: 'stove', x: Math.round((xCol1 + xCol2) / 2) - 7, y: 8, width: 14, height: 8, angle: 0, color: '#b45309' },
+    { type: 'sofa', x: xCol1 + 8, y: 24, width: 22, height: 10, angle: 0, color: '#991b1b' },
+    { type: 'carpet', x: xCol1 + 6, y: 22, width: 26, height: 14, angle: 0, color: '#7f1d1d' },
+    { type: 'tv', x: xCol1 + 8, y: 10, width: 14, height: 3, angle: 0, color: '#0f172a' },
+    { type: 'plant', x: xCol2 - 14, y: 10, width: 6, height: 6, angle: 0, color: '#16a34a' },
 
     // --- 4. КУХНЯ-СТОЛОВАЯ ---
-    { type: 'fridge', x: xCol1 + 4, y: yMid + 6, width: 12, height: 12, angle: 0, color: '#e2e8f0' },
-    { type: 'kitchen_counter', x: xCol1 + 4, y: H - 18, width: 18, height: 10, angle: 0, color: '#64748b' },
-    { type: 'stove', x: xCol1 + 24, y: H - 18, width: 12, height: 10, angle: 0, color: '#334155' },
-    { type: 'table', x: xCol2 - 28, y: yMid + 10, width: 20, height: 14, angle: 0, color: '#78350f' },
-    { type: 'chair', x: xCol2 - 34, y: yMid + 14, width: 5, height: 5, angle: 0, color: '#92400e' },
-    { type: 'chair', x: xCol2 - 6, y: yMid + 14, width: 5, height: 5, angle: 0, color: '#92400e' },
+    { type: 'fridge', x: xCol1 + 4, y: yMid + 6, width: 9, height: 9, angle: 0, color: '#e2e8f0' },
+    { type: 'kitchen_counter', x: xCol1 + 4, y: H - 16, width: 15, height: 8, angle: 0, color: '#64748b' },
+    { type: 'stove', x: xCol1 + 21, y: H - 16, width: 9, height: 8, angle: 0, color: '#334155' },
+    { type: 'table', x: xCol2 - 26, y: yMid + 10, width: 16, height: 10, angle: 0, color: '#78350f' },
+    { type: 'chair', x: xCol2 - 32, y: yMid + 13, width: 4.5, height: 4.5, angle: 0, color: '#92400e' },
+    { type: 'chair', x: xCol2 - 8, y: yMid + 13, width: 4.5, height: 4.5, angle: 0, color: '#92400e' },
 
     // --- 5. МАСТЕР-СПАЛЬНЯ ---
-    { type: 'bed', x: W - 36, y: 10, width: 28, height: 24, angle: 0, color: '#d97706' },
-    { type: 'nightstand', x: xCol2 + 4, y: 10, width: 6, height: 6, angle: 0, color: '#78350f' },
-    { type: 'dresser', x: xCol2 + 4, y: 38, width: 20, height: 10, angle: 0, color: '#78350f' },
+    { type: 'bed', x: W - 32, y: 10, width: 22, height: 18, angle: 0, color: '#d97706' },
+    { type: 'nightstand', x: xCol2 + 4, y: 10, width: 5, height: 5, angle: 0, color: '#78350f' },
+    { type: 'dresser', x: xCol2 + 4, y: 38, width: 16, height: 7, angle: 0, color: '#78350f' },
 
     // --- 6. САДОВАЯ ТЕРРАСА ---
-    { type: 'table', x: xCol2 + 10, y: yMid + 12, width: 16, height: 10, angle: 0, color: '#451a03' },
-    { type: 'chair', x: xCol2 + 4, y: yMid + 14, width: 5, height: 5, angle: 0, color: '#78350f' },
-    { type: 'chair', x: xCol2 + 28, y: yMid + 14, width: 5, height: 5, angle: 0, color: '#78350f' },
-    { type: 'plant', x: W - 16, y: H - 18, width: 8, height: 8, angle: 0, color: '#16a34a' }
+    { type: 'table', x: xCol2 + 10, y: yMid + 12, width: 14, height: 8, angle: 0, color: '#451a03' },
+    { type: 'chair', x: xCol2 + 4, y: yMid + 14, width: 4.5, height: 4.5, angle: 0, color: '#78350f' },
+    { type: 'chair', x: xCol2 + 26, y: yMid + 14, width: 4.5, height: 4.5, angle: 0, color: '#78350f' },
+    { type: 'plant', x: W - 14, y: H - 16, width: 6, height: 6, angle: 0, color: '#16a34a' }
   ];
 
   const exitZone: InteriorZone = { x: 14, y: H - 14, width: 24, height: 10 };
@@ -533,30 +533,30 @@ export function createCottageFloor1Layout(buildingId: string, width = 160, heigh
 
   const furniture: InteriorFurniture[] = [
     // --- 1. ХОЛЛ 2-ГО ЭТАЖА ---
-    { type: 'bookshelf', x: xCol1 + 4, y: 10, width: 14, height: 8, angle: 0, color: '#451a03' },
-    { type: 'plant', x: xCol2 - 14, y: 10, width: 8, height: 8, angle: 0, color: '#16a34a' },
-    { type: 'sofa', x: xCol1 + 4, y: yMid - 18, width: 22, height: 10, angle: 0, color: '#1e3a8a' },
+    { type: 'bookshelf', x: xCol1 + 4, y: 10, width: 12, height: 6, angle: 0, color: '#451a03' },
+    { type: 'plant', x: xCol2 - 12, y: 10, width: 6, height: 6, angle: 0, color: '#16a34a' },
+    { type: 'sofa', x: xCol1 + 4, y: yMid - 16, width: 18, height: 9, angle: 0, color: '#1e3a8a' },
 
     // --- 2. ЛИЧНЫЙ КАБИНЕТ & БИБЛИОТЕКА ---
-    { type: 'desk', x: 20, y: 12, width: 22, height: 12, angle: 0, color: '#78350f' },
-    { type: 'chair', x: 28, y: 26, width: 6, height: 6, angle: 0, color: '#1e3a8a' },
-    { type: 'computer', x: 26, y: 13, width: 8, height: 5, angle: 0, color: '#0f172a' },
-    { type: 'bookshelf', x: 8, y: 8, width: 10, height: 8, angle: 0, color: '#451a03' },
+    { type: 'desk', x: 20, y: 12, width: 18, height: 9, angle: 0, color: '#78350f' },
+    { type: 'chair', x: 26, y: 24, width: 5, height: 5, angle: 0, color: '#1e3a8a' },
+    { type: 'computer', x: 25, y: 13, width: 6, height: 4, angle: 0, color: '#0f172a' },
+    { type: 'bookshelf', x: 8, y: 8, width: 9, height: 6, angle: 0, color: '#451a03' },
 
     // --- 3. ГОСТЕВАЯ СПАЛЬНЯ ---
-    { type: 'bed', x: 10, y: yMid + 8, width: 26, height: 18, angle: 0, color: '#0284c7' },
-    { type: 'nightstand', x: 10, y: H - 16, width: 6, height: 6, angle: 0, color: '#78350f' },
-    { type: 'dresser', x: 22, y: H - 16, width: 16, height: 8, angle: 0, color: '#78350f' },
+    { type: 'bed', x: 10, y: yMid + 8, width: 22, height: 16, angle: 0, color: '#0284c7' },
+    { type: 'nightstand', x: 10, y: H - 14, width: 5, height: 5, angle: 0, color: '#78350f' },
+    { type: 'dresser', x: 20, y: H - 14, width: 14, height: 7, angle: 0, color: '#78350f' },
 
     // --- 4. ВЕРХНИЙ САНУЗЕЛ ---
-    { type: 'bath', x: xCol2 + 6, y: 10, width: 22, height: 12, angle: 0, color: '#ffffff' },
-    { type: 'sink', x: xCol2 + 6, y: 26, width: 10, height: 8, angle: 0, color: '#e2e8f0' },
-    { type: 'toilet', x: xCol2 + 6, y: 38, width: 8, height: 10, angle: 0, color: '#ffffff' },
+    { type: 'bath', x: xCol2 + 6, y: 10, width: 18, height: 10, angle: 0, color: '#ffffff' },
+    { type: 'sink', x: xCol2 + 6, y: 24, width: 7, height: 6, angle: 0, color: '#e2e8f0' },
+    { type: 'toilet', x: xCol2 + 6, y: 34, width: 6, height: 7, angle: 0, color: '#ffffff' },
 
     // --- 5. БИЛЬЯРДНАЯ & ЛАУНЖ ---
-    { type: 'table', x: xCol1 + 18, y: yMid + 10, width: 28, height: 16, angle: 0, color: '#15803d' }, // Billiard table
-    { type: 'sofa', x: W - 30, y: H - 18, width: 22, height: 10, angle: 0, color: '#7c2d12' },
-    { type: 'plant', x: xCol1 + 4, y: H - 16, width: 8, height: 8, angle: 0, color: '#16a34a' }
+    { type: 'table', x: xCol1 + 18, y: yMid + 10, width: 22, height: 12, angle: 0, color: '#15803d' }, // Billiard table
+    { type: 'sofa', x: W - 28, y: H - 16, width: 18, height: 9, angle: 0, color: '#7c2d12' },
+    { type: 'plant', x: xCol1 + 4, y: H - 14, width: 6, height: 6, angle: 0, color: '#16a34a' }
   ];
 
   // Match Floor 0 stairs position exactly!
@@ -622,29 +622,29 @@ export function createRealEstateAgencyLayout(): BuildingLayout {
     ],
     furniture: [
       // Reception desk
-      { type: 'desk_reception', x: 85, y: 78, width: 50, height: 14, angle: 0, color: '#eab308' },
-      { type: 'computer', x: 95, y: 78, width: 8, height: 6, angle: 0, color: '#0f172a' },
-      { type: 'computer', x: 115, y: 78, width: 8, height: 6, angle: 0, color: '#0f172a' },
-      { type: 'chair', x: 98, y: 95, width: 8, height: 8, angle: 0, color: '#1e293b' },
-      { type: 'chair', x: 118, y: 95, width: 8, height: 8, angle: 0, color: '#1e293b' },
+      { type: 'desk_reception', x: 92, y: 78, width: 36, height: 10, angle: 0, color: '#eab308' },
+      { type: 'computer', x: 98, y: 78, width: 6, height: 4, angle: 0, color: '#0f172a' },
+      { type: 'computer', x: 114, y: 78, width: 6, height: 4, angle: 0, color: '#0f172a' },
+      { type: 'chair', x: 100, y: 92, width: 6, height: 6, angle: 0, color: '#1e293b' },
+      { type: 'chair', x: 116, y: 92, width: 6, height: 6, angle: 0, color: '#1e293b' },
       // Client waiting area
-      { type: 'sofa', x: 30, y: 85, width: 36, height: 16, angle: 0, color: '#0284c7' },
-      { type: 'table', x: 36, y: 105, width: 24, height: 12, angle: 0, color: '#475569' },
-      { type: 'plant', x: 15, y: 85, width: 10, height: 10, angle: 0, color: '#16a34a' },
-      { type: 'cooler', x: 15, y: 110, width: 8, height: 8, angle: 0, color: '#38bdf8' },
-      { type: 'atm', x: 188, y: 85, width: 10, height: 10, angle: 0, color: '#059669' },
+      { type: 'sofa', x: 30, y: 85, width: 24, height: 10, angle: 0, color: '#0284c7' },
+      { type: 'table', x: 34, y: 102, width: 16, height: 9, angle: 0, color: '#475569' },
+      { type: 'plant', x: 15, y: 85, width: 7, height: 7, angle: 0, color: '#16a34a' },
+      { type: 'cooler', x: 15, y: 108, width: 6, height: 6, angle: 0, color: '#38bdf8' },
+      { type: 'atm', x: 190, y: 85, width: 7, height: 7, angle: 0, color: '#059669' },
       // Notary cabinet
-      { type: 'desk', x: 18, y: 18, width: 32, height: 14, angle: 0, color: '#78350f' },
-      { type: 'chair', x: 28, y: 34, width: 8, height: 8, angle: 0, color: '#451a03' },
-      { type: 'file_cabinet', x: 52, y: 15, width: 14, height: 10, angle: 0, color: '#94a3b8' },
-      { type: 'bookshelf', x: 52, y: 30, width: 14, height: 10, angle: 0, color: '#475569' },
+      { type: 'desk', x: 18, y: 18, width: 22, height: 10, angle: 0, color: '#78350f' },
+      { type: 'chair', x: 26, y: 31, width: 6, height: 6, angle: 0, color: '#451a03' },
+      { type: 'file_cabinet', x: 52, y: 15, width: 11, height: 8, angle: 0, color: '#94a3b8' },
+      { type: 'bookshelf', x: 52, y: 28, width: 11, height: 8, angle: 0, color: '#475569' },
       // VIP Meeting Room
-      { type: 'table', x: 150, y: 20, width: 44, height: 20, angle: 0, color: '#78350f' },
-      { type: 'chair', x: 155, y: 12, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'chair', x: 175, y: 12, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'chair', x: 155, y: 44, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'chair', x: 175, y: 44, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'plant', x: 195, y: 15, width: 10, height: 10, angle: 0, color: '#15803d' }
+      { type: 'table', x: 156, y: 22, width: 30, height: 14, angle: 0, color: '#78350f' },
+      { type: 'chair', x: 160, y: 14, width: 5.5, height: 5.5, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 176, y: 14, width: 5.5, height: 5.5, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 160, y: 40, width: 5.5, height: 5.5, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 176, y: 40, width: 5.5, height: 5.5, angle: 0, color: '#451a03' },
+      { type: 'plant', x: 196, y: 15, width: 7, height: 7, angle: 0, color: '#15803d' }
     ],
     exitZone: { x: 95, y: 118, width: 30, height: 16 },
     stairsZone: { x: -100, y: -100, width: 0, height: 0 },
@@ -703,14 +703,14 @@ export function createRailwayStationLayout(bld: Building, floor: number): Buildi
         { x1: 235, y1: 6, x2: 235, y2: H - 6 }
       ],
       furniture: [
-        { type: 'desk', x: 40, y: 30, width: 45, height: 22, angle: 0, color: '#334155' },
-        { type: 'chair', x: 58, y: 56, width: 9, height: 9, angle: 0, color: '#0284c7' },
-        { type: 'file_cabinet', x: 15, y: 15, width: 25, height: 12, angle: 0, color: '#475569' },
-        { type: 'desk', x: 180, y: 40, width: 30, height: 18, angle: 0, color: '#78350f' },
-        { type: 'chair', x: 190, y: 62, width: 9, height: 9, angle: 0, color: '#9a3412' },
-        { type: 'safe', x: 215, y: 15, width: 12, height: 12, angle: 0, color: '#1e293b' },
-        { type: 'sofa', x: 255, y: 25, width: 40, height: 16, angle: 0, color: '#047857' },
-        { type: 'table', x: 265, y: 55, width: 22, height: 14, angle: 0, color: '#b45309' }
+        { type: 'desk', x: 46, y: 32, width: 30, height: 14, angle: 0, color: '#334155' },
+        { type: 'chair', x: 58, y: 50, width: 6, height: 6, angle: 0, color: '#0284c7' },
+        { type: 'file_cabinet', x: 15, y: 15, width: 18, height: 9, angle: 0, color: '#475569' },
+        { type: 'desk', x: 180, y: 40, width: 22, height: 11, angle: 0, color: '#78350f' },
+        { type: 'chair', x: 188, y: 55, width: 6, height: 6, angle: 0, color: '#9a3412' },
+        { type: 'safe', x: 215, y: 15, width: 9, height: 9, angle: 0, color: '#1e293b' },
+        { type: 'sofa', x: 258, y: 25, width: 26, height: 10, angle: 0, color: '#047857' },
+        { type: 'table', x: 265, y: 55, width: 16, height: 10, angle: 0, color: '#b45309' }
       ],
       exitZone: { x: -100, y: -100, width: 0, height: 0 },
       stairsZone: { x: 145, y: 70, width: 22, height: 22 },
@@ -788,23 +788,23 @@ export function createRailwayStationLayout(bld: Building, floor: number): Buildi
       { x1: 236, y1: 56, x2: W - 6, y2: 56 }
     ],
     furniture: [
-      { type: 'desk', x: 20, y: 22, width: 22, height: 12, angle: 0, color: '#dc2626' },
-      { type: 'desk', x: 50, y: 22, width: 22, height: 12, angle: 0, color: '#dc2626' },
-      { type: 'sofa', x: 105, y: 35, width: 34, height: 10, angle: 0, color: '#92400e' },
-      { type: 'sofa', x: 105, y: 55, width: 34, height: 10, angle: 0, color: '#92400e' },
-      { type: 'sofa', x: 180, y: 35, width: 34, height: 10, angle: 0, color: '#92400e' },
-      { type: 'sofa', x: 180, y: 55, width: 34, height: 10, angle: 0, color: '#92400e' },
-      { type: 'kitchen_counter', x: 245, y: 18, width: 45, height: 12, angle: 0, color: '#ca8a04' },
-      { type: 'table', x: 255, y: 36, width: 14, height: 14, angle: 0, color: '#78350f' },
-      { type: 'chair', x: 246, y: 39, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'chair', x: 271, y: 39, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'lockers', x: 20, y: 68, width: 28, height: 12, angle: 0, color: '#475569' },
-      { type: 'lockers', x: 50, y: 68, width: 26, height: 12, angle: 0, color: '#475569' },
-      { type: 'desk', x: 250, y: 68, width: 26, height: 14, angle: 0, color: '#1e3a8a' },
-      { type: 'chair', x: 258, y: 84, width: 8, height: 8, angle: 0, color: '#1e40af' },
-      { type: 'safe', x: 285, y: 68, width: 12, height: 12, angle: 0, color: '#0f172a' },
-      { type: 'plant', x: 92, y: 14, width: 10, height: 10, angle: 0, color: '#15803d' },
-      { type: 'plant', x: 220, y: 14, width: 10, height: 10, angle: 0, color: '#15803d' }
+      { type: 'desk', x: 20, y: 22, width: 18, height: 9, angle: 0, color: '#dc2626' },
+      { type: 'desk', x: 50, y: 22, width: 18, height: 9, angle: 0, color: '#dc2626' },
+      { type: 'sofa', x: 108, y: 35, width: 24, height: 8, angle: 0, color: '#92400e' },
+      { type: 'sofa', x: 108, y: 55, width: 24, height: 8, angle: 0, color: '#92400e' },
+      { type: 'sofa', x: 184, y: 35, width: 24, height: 8, angle: 0, color: '#92400e' },
+      { type: 'sofa', x: 184, y: 55, width: 24, height: 8, angle: 0, color: '#92400e' },
+      { type: 'kitchen_counter', x: 248, y: 18, width: 32, height: 9, angle: 0, color: '#ca8a04' },
+      { type: 'table', x: 255, y: 36, width: 11, height: 11, angle: 0, color: '#78350f' },
+      { type: 'chair', x: 247, y: 39, width: 5.5, height: 5.5, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 270, y: 39, width: 5.5, height: 5.5, angle: 0, color: '#451a03' },
+      { type: 'lockers', x: 20, y: 68, width: 22, height: 9, angle: 0, color: '#475569' },
+      { type: 'lockers', x: 50, y: 68, width: 20, height: 9, angle: 0, color: '#475569' },
+      { type: 'desk', x: 250, y: 68, width: 20, height: 10, angle: 0, color: '#1e3a8a' },
+      { type: 'chair', x: 258, y: 82, width: 6, height: 6, angle: 0, color: '#1e40af' },
+      { type: 'safe', x: 285, y: 68, width: 9, height: 9, angle: 0, color: '#0f172a' },
+      { type: 'plant', x: 92, y: 14, width: 7, height: 7, angle: 0, color: '#15803d' },
+      { type: 'plant', x: 220, y: 14, width: 7, height: 7, angle: 0, color: '#15803d' }
     ],
     exitZone: exitNorth,
     stairsZone: { x: 145, y: 70, width: 22, height: 22 },
@@ -1398,8 +1398,8 @@ export function getBuildingLayout(bld: Building, floor: number, aptId?: string |
           type: df.type as any,
           x: df.x,
           y: df.y,
-          width: df.width || 20,
-          height: df.height || 20,
+          width: df.width || 10,
+          height: df.height || 10,
           angle: df.rotation || 0,
           color: df.color || '#64748b'
         }));
@@ -1423,8 +1423,8 @@ export function getBuildingLayout(bld: Building, floor: number, aptId?: string |
           type: df.type as any,
           x: df.x,
           y: df.y,
-          width: df.width || 20,
-          height: df.height || 20,
+          width: df.width || 10,
+          height: df.height || 10,
           angle: df.rotation || 0,
           color: df.color || '#64748b'
         }));
@@ -1628,11 +1628,11 @@ export function constrainPlayerToInterior(
   let px = player.x - bld.x;
   let py = player.y - bld.y;
 
-  const radius = 6.5;
+  const radius = 3.0;
 
   // A. Constrain inside outer walls
-  px = Math.max(radius + 7, Math.min(layout.width - radius - 7, px));
-  py = Math.max(radius + 7, Math.min(layout.height - radius - 7, py));
+  px = Math.max(radius + 4, Math.min(layout.width - radius - 4, px));
+  py = Math.max(radius + 4, Math.min(layout.height - radius - 4, py));
 
   // B. Collide with internal walls (slide-collision physics)
   for (const wall of layout.walls) {
@@ -1655,7 +1655,7 @@ export function constrainPlayerToInterior(
     const distDx = px - closestX;
     const distDy = py - closestY;
     const distSq = distDx * distDx + distDy * distDy;
-    const minDist = radius + 1.5;
+    const minDist = radius + 0.8;
 
     if (distSq < minDist * minDist) {
       const dist = Math.sqrt(distSq);

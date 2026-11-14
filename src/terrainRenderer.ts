@@ -1623,7 +1623,8 @@ export class TerrainRenderer {
 
       for (let i = 0; i < activeTracks.length; i++) {
         const tr = activeTracks[i];
-        const halfB = (tr.ballastWidth || 38) / 2 + 4;
+        const normBallast = tr.ballastWidth && tr.ballastWidth >= 60 ? tr.ballastWidth * 0.5 : (tr.ballastWidth || 42);
+        const halfB = normBallast / 2 + 3;
         const sdx = tr.x2 - tr.x1;
         const sdy = tr.y2 - tr.y1;
         const lenSq = sdx * sdx + sdy * sdy;

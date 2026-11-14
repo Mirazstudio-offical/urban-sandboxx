@@ -757,6 +757,30 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     notes: 'Наклонная цилиндрическая вакуумная цистерна Горводоканала (4200 л) с пластинчато-роторным насосом КО-503, СПУ с поплавковым клапаном, гофрированным заборным рукавом d=100 мм и шиберной задвижкой АНМ-53.',
   },
   {
+    id: 'body_vacuum_twin_ko505',
+    nameRu: 'Вакуумная машина «Двустволка» КО-505А (2 цистерны × 5 м³)',
+    modelCode: 'КО-505А (2×5 м³)',
+    massKg: 2420,
+    requiredMounts: ['medium_subframe', 'long_subframe'],
+    minPayloadKg: 9500,
+    minAxleCount: 3,
+    compatiblePlatforms: ['kamaz', 'zil4331', 'zil130'],
+    attachmentCarType: 'truck_vacuum_ko505_twin',
+    fluidTankSpec: {
+      liquidType: 'sewage',
+      capacity: 10000,
+      currentVolume: 4500,
+      currentAmount: 4500,
+      isHermetic: true,
+      hasWaterHose: true,
+      isVacuumTank: true,
+      vacuumPumpMode: 'suction',
+      vacuumPressureBar: 0,
+      spuCutoffActive: false,
+    },
+    notes: 'Двухцистерновая вакуумная ассенизаторская машина («Двустволка» 2 × 5 м³ = 10 000 л) для трёхосных и четырёхосных шасси: две параллельные цилиндрические бочки ø1200 мм на поперечных ложементах, общий воздушный коллектор к двум СПУ, влагоотделитель, пластинчато-роторный насос КО-505 (310 м³/ч), центральный мостик обслуживания и Y-образный коллектор к шиберу АНМ-53.',
+  },
+  {
     id: 'body_vacuum_sludge_ko505',
     nameRu: 'Тяжёлая илососная машина КО-505А со стрелой (Цистерна 10 м³)',
     modelCode: 'КО-505А / КО-507А',
@@ -1062,23 +1086,23 @@ export function getVehicleVacuumBodyId(car?: {
   frameId?: string;
   bodyId?: string;
   engineState?: { frameId?: string; bodyId?: string };
-} | null): 'body_vacuum_ko503' | 'body_vacuum_sludge_ko505' | 'body_vacuum_kombi_ko560' | 'trailer_vacuum' | null {
+} | null): 'body_vacuum_ko503' | 'body_vacuum_twin_ko505' | 'body_vacuum_sludge_ko505' | 'body_vacuum_kombi_ko560' | 'trailer_vacuum' | null {
   if (!car || !car.type) return null;
   if (car.type === 'trailer_vacuum') return 'trailer_vacuum';
   const bId = car.bodyId || car.engineState?.bodyId;
-  if (bId === 'body_vacuum_ko503' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560') {
+  if (bId === 'body_vacuum_ko503' || bId === 'body_vacuum_twin_ko505' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560') {
     return bId;
   }
   const resolved = resolveVehicleTruckFrameAndBody(car as { type: string; frameId?: string; bodyId?: string; engineState?: { frameId?: string; bodyId?: string } });
   const rb = resolved?.body.id;
-  if (rb === 'body_vacuum_ko503' || rb === 'body_vacuum_sludge_ko505' || rb === 'body_vacuum_kombi_ko560') {
+  if (rb === 'body_vacuum_ko503' || rb === 'body_vacuum_twin_ko505' || rb === 'body_vacuum_sludge_ko505' || rb === 'body_vacuum_kombi_ko560') {
     return rb;
   }
   return null;
 }
 
 /**
- * Checks whether a vehicle has one of the vacuum sewage/sludge superstructures (КО-503В, КО-505А, КО-560) or is a vacuum trailer.
+ * Checks whether a vehicle has one of the vacuum sewage/sludge superstructures (КО-503В, КО-505А Двустволка, КО-505А/507А илосос, КО-560) or is a vacuum trailer.
  */
 export function isVehicleVacuumTruck(car?: {
   type?: string;

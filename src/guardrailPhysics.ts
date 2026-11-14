@@ -65,7 +65,7 @@ export class GuardrailPhysics {
       return;
     }
 
-    const playerRadius = 12; // Player physical collision footprint
+    const playerRadius = 3.5; // Player physical collision footprint (10 px/m)
 
     for (const rail of world.guardrails) {
       const minX = Math.min(rail.x1, rail.x2) - playerRadius - 20;

@@ -73,6 +73,7 @@ export function createWaterHose(vehicle: Vehicle): HeldWaterHose {
   // - truck_water / fire_engine: 120 px (long high-pressure hose)
   // - КО-560 РВД jetter hose: 115 px (flexible orange high-pressure sewer jetting hose)
   // - КО-505А sludge boom hose: 95 px (heavy d=100mm suction hose from top slewing boom)
+  // - КО-505А twin-tank vacuum hose: 92 px (heavy d=100mm corrugated suction hose)
   // - КО-503В vacuum hose: 85 px (heavy d=100mm corrugated suction hose)
   // - trailer_barrel: 75 px (medium water discharge hose)
   // - trailer_vacuum: 65 px (tractor corrugated suction hose)
@@ -82,6 +83,8 @@ export function createWaterHose(vehicle: Vehicle): HeldWaterHose {
     ? 65
     : vacBodyId === 'body_vacuum_sludge_ko505'
     ? 95
+    : vacBodyId === 'body_vacuum_twin_ko505'
+    ? 92
     : isVacuumTruck
     ? 85
     : isBarrel
@@ -397,8 +400,13 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
         const intakeY = handY + sinAim * 9.5;
 
         const vacBodyId = getVehicleVacuumBodyId(veh);
-        // Heavy VK-6M2 pump on КО-505А has 1.4x higher suction capacity than КО-503
-        const pumpMultiplier = vacBodyId === 'body_vacuum_sludge_ko505' ? 1.4 : 1.0;
+        // Heavy VK-6M2 pump on КО-505А sludge has 1.4x, КО-505 (310 m3/h) on twin-tank has 1.25x capacity vs КО-503
+        const pumpMultiplier =
+          vacBodyId === 'body_vacuum_sludge_ko505'
+            ? 1.4
+            : vacBodyId === 'body_vacuum_twin_ko505'
+            ? 1.25
+            : 1.0;
         const suctionRadius = (26 + vacuumStrength * 20) * pumpMultiplier;
         const suctionPower = (0.85 + vacuumStrength * 1.25) * pumpMultiplier;
 

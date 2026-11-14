@@ -4940,7 +4940,7 @@ export default function App() {
           const cos = Math.cos(bus.angle);
           const sin = Math.sin(bus.angle);
           const exitLocalX = p.busLocalX ?? (bus.length / 2 - 14);
-          const exitLocalY = bus.width / 2 + 12;
+          const exitLocalY = bus.width / 2 + 7;
 
           p.insideBusId = null;
           p.sittingState = null;
@@ -5004,7 +5004,8 @@ export default function App() {
             p.carLocalX = door.vestibuleLocalX;
             p.carLocalY = door.vestibuleLocalY;
           } else {
-            p.carLocalX = car.length / 2 - 19;
+            const cScale = (car.width || 30) / 60;
+            p.carLocalX = car.length / 2 - 19 * cScale;
             p.carLocalY = 0;
           }
 
@@ -5041,8 +5042,9 @@ export default function App() {
           const sin = Math.sin(car.angle);
           
           // Exit player to the side of the carriage at that specific vestibule door
-          const exitLocalX = p.carLocalX ?? (car.length / 2 - 19);
-          const exitLocalY = target.data?.exitLocalY ?? ((p.carLocalY ?? 0) <= 0 ? -car.width / 2 - 14 : car.width / 2 + 14);
+          const cScale = (car.width || 30) / 60;
+          const exitLocalX = p.carLocalX ?? (car.length / 2 - 19 * cScale);
+          const exitLocalY = target.data?.exitLocalY ?? ((p.carLocalY ?? 0) <= 0 ? -car.width / 2 - 7 : car.width / 2 + 7);
 
           p.insideCarId = null;
           world.player = p;
