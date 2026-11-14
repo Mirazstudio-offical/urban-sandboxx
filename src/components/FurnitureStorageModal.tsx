@@ -14,6 +14,11 @@ import { syncFurnitureStorageThermodynamics } from '../itemThermalSystem';
 import {
   addItemToPlayer,
   removeItemFromPlayer,
+  moveInventoryItem,
+  canItemFitInCompartment,
+  canItemFitInContainer,
+  addItemToContainer,
+  stowItemFromHandToPockets,
   getPlayerPocketCapacity,
   getPlayerTotalCarriedWeight,
   getItemTotalWeight,
@@ -93,6 +98,25 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [, forceRender] = useState(0);
+  const [selectedStSlot, setSelectedStSlot] = useState<string | null>(null);
+  const [stDragUi, setStDragUi] = useState<{
+    sourceKey: string;
+    item: InventoryItem;
+    x: number;
+    y: number;
+    overKey: string | null;
+  } | null>(null);
+  const stDragRef = React.useRef<{
+    sourceKey: string;
+    item: InventoryItem;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+    active: boolean;
+    overKey: string | null;
+  } | null>(null);
+  const stDropHandlerRef = React.useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
 
   useEffect(() => {
     if (!isOpen || !storage) return;
@@ -174,21 +198,79 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     notifyChange();
   };
 
-  // Take item from furniture storage into player pockets
-  const handleTakeItem = (storageIdx: number, countToTake?: number) => {
+  // Take item from furniture storage into player pockets (optionally targeting a specific slot)
+  const handleTakeItem = (storageIdx: number, countToTake?: number, exactPocketSlotIdx?: number) => {
     setErrorMessage(null);
     if (!storage.items || storageIdx < 0 || storageIdx >= storage.items.length) return;
     const targetItem = storage.items[storageIdx];
     if (!targetItem) return;
 
     const count = countToTake ?? targetItem.count;
+
+    // If user dropped onto a specific pocket slot
+    if (exactPocketSlotIdx !== undefined && exactPocketSlotIdx >= 0) {
+      if (!player.inventory) player.inventory = [];
+      const existing = player.inventory[exactPocketSlotIdx];
+
+      // If existing slot holds a container that can accept the storage item
+      if (
+        existing &&
+        existing.isContainer &&
+        !existing.singleUseContainer &&
+        canItemFitInContainer(existing, { ...targetItem, count }).fits
+      ) {
+        const removed = removeItemFromFurnitureStorage(storage, storageIdx, count);
+        if (removed) {
+          const cRes = addItemToContainer(existing, removed);
+          if (cRes.success) {
+            sound.playPickup();
+            addPlayerNotification(player, cRes.message, 'pickup');
+            notifyChange();
+            return;
+          } else {
+            storage.items.splice(Math.min(storageIdx, storage.items.length), 0, removed);
+          }
+        }
+      }
+
+      const fit = canItemFitInCompartment(player, exactPocketSlotIdx, { ...targetItem, count }, {
+        ignoreSlotIdx: existing ? exactPocketSlotIdx : undefined,
+      });
+      if (!fit.fits) {
+        setErrorMessage(fit.reason || 'Предмет не помещается в этот отсек карманов');
+        sound.playUseItem();
+        return;
+      }
+
+      if (!existing) {
+        const removed = removeItemFromFurnitureStorage(storage, storageIdx, count);
+        if (removed) {
+          player.inventory[exactPocketSlotIdx] = removed;
+          sound.playPickup();
+          addPlayerNotification(player, `Взято ${isRadiator ? 'с батареи' : `из ${cfg.nameRu}`}: ${removed.nameRu}`, 'pickup');
+          notifyChange();
+          return;
+        }
+      } else if (canItemFitInFurniture(storage, existing).fits) {
+        // Swap storage item with existing pocket slot item
+        const removed = removeItemFromFurnitureStorage(storage, storageIdx, count);
+        if (removed) {
+          player.inventory[exactPocketSlotIdx] = removed;
+          addItemToFurnitureStorage(storage, existing, existing.count);
+          sound.playPickup();
+          notifyChange();
+          return;
+        }
+      }
+    }
+
     const removed = removeItemFromFurnitureStorage(storage, storageIdx, count);
     if (!removed) return;
 
     const added = addItemToPlayer(player, removed, { preferPockets: true, skipHands: true });
     if (!added) {
       storage.items.splice(Math.min(storageIdx, storage.items.length), 0, removed);
-      setErrorMessage('В карманах недостаточно места — попробуйте взять в левую или правую руку');
+      setErrorMessage('В карманах недостаточно места — перетащите предмет в слот руки');
       sound.playUseItem();
       return;
     }
@@ -204,7 +286,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     notifyChange();
   };
 
-  // Take item directly to hand
+  // Take item directly to hand (or swap with hand if occupied)
   const handleTakeToHand = (storageIdx: number, hand: 'left' | 'right') => {
     setErrorMessage(null);
     if (!storage.items || storageIdx < 0 || storageIdx >= storage.items.length) return;
@@ -213,6 +295,24 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
 
     const currentHandItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
     if (currentHandItem) {
+      if (canItemFitInFurniture(storage, currentHandItem).fits) {
+        const countToTake = targetItem.count > 1 ? 1 : targetItem.count;
+        const removed = removeItemFromFurnitureStorage(storage, storageIdx, countToTake);
+        if (!removed) return;
+        const displaced = takeItemFromHand(player, hand);
+        const res = putItemInHand(player, hand, removed, world || undefined);
+        if (res.success) {
+          if (displaced) addItemToFurnitureStorage(storage, displaced, displaced.count);
+          sound.playPickup();
+          notifyChange();
+          return;
+        } else {
+          if (displaced) putItemInHand(player, hand, displaced, world || undefined);
+          storage.items.splice(Math.min(storageIdx, storage.items.length), 0, removed);
+          setErrorMessage(res.message);
+          return;
+        }
+      }
       setErrorMessage(`${hand === 'left' ? 'Левая' : 'Правая'} рука уже занята!`);
       return;
     }
@@ -237,6 +337,299 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     sound.playPickup();
     addPlayerNotification(player, `Взято в ${hand === 'left' ? 'левую' : 'правую'} руку: ${removed.nameRu}`, 'pickup');
     notifyChange();
+  };
+
+  // ==================== CUSTOM POINTER DRAG-AND-DROP ENGINE ====================
+  const handleStorageSlotDrop = (targetKey: string, sourceKey: string) => {
+    if (!sourceKey || sourceKey === targetKey) return;
+
+    const isSourceStorage = sourceKey.startsWith('storage:') && !sourceKey.startsWith('storage:empty-');
+    const isTargetStorage = targetKey.startsWith('storage:') || targetKey === 'zone:storage';
+
+    // 1. Player Inventory Slot -> Storage
+    if (sourceKey.startsWith('inv:') && isTargetStorage) {
+      const fromIdx = parseInt(sourceKey.replace('inv:', ''), 10);
+      if (!isNaN(fromIdx)) {
+        handleStoreItem(fromIdx);
+      }
+      return;
+    }
+
+    // 2. Player Hand -> Storage
+    if ((sourceKey === 'hand:left' || sourceKey === 'hand:right') && isTargetStorage) {
+      const hand = sourceKey === 'hand:left' ? 'left' : 'right';
+      handleStoreFromHand(hand);
+      return;
+    }
+
+    // 3. Storage -> Player Hand
+    if (isSourceStorage && (targetKey === 'hand:left' || targetKey === 'hand:right')) {
+      const sIdx = parseInt(sourceKey.replace('storage:', ''), 10);
+      const hand = targetKey === 'hand:left' ? 'left' : 'right';
+      if (!isNaN(sIdx)) {
+        handleTakeToHand(sIdx, hand);
+      }
+      return;
+    }
+
+    // 4. Storage -> Player Inventory Slot or Pockets Zone
+    if (isSourceStorage && (targetKey.startsWith('inv:') || targetKey === 'zone:pockets')) {
+      const sIdx = parseInt(sourceKey.replace('storage:', ''), 10);
+      if (isNaN(sIdx)) return;
+      if (targetKey.startsWith('inv:')) {
+        const toSlotIdx = parseInt(targetKey.replace('inv:', ''), 10);
+        handleTakeItem(sIdx, undefined, isNaN(toSlotIdx) ? undefined : toSlotIdx);
+      } else {
+        handleTakeItem(sIdx);
+      }
+      return;
+    }
+
+    // 5. Player Inventory Slot <-> Player Inventory Slot
+    if (sourceKey.startsWith('inv:') && targetKey.startsWith('inv:')) {
+      const fromIdx = parseInt(sourceKey.replace('inv:', ''), 10);
+      const toIdx = parseInt(targetKey.replace('inv:', ''), 10);
+      if (!isNaN(fromIdx) && !isNaN(toIdx) && fromIdx !== toIdx) {
+        if (moveInventoryItem(player, fromIdx, toIdx)) {
+          sound.playPickup();
+          setSelectedInventoryIdx(toIdx);
+          setSelectedHand(null);
+          notifyChange();
+        }
+      }
+      return;
+    }
+
+    // 6. Player Inventory Slot -> Player Hand
+    if (sourceKey.startsWith('inv:') && (targetKey === 'hand:left' || targetKey === 'hand:right')) {
+      const fromIdx = parseInt(sourceKey.replace('inv:', ''), 10);
+      const hand = targetKey === 'hand:left' ? 'left' : 'right';
+      if (isNaN(fromIdx)) return;
+      const item = player.inventory?.[fromIdx];
+      if (!item) return;
+      const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+      if (handItem) {
+        const fit = canItemFitInCompartment(player, fromIdx, handItem, { ignoreSlotIdx: fromIdx });
+        if (!fit.fits) {
+          setErrorMessage(fit.reason || 'Предмет из руки не помещается в этот отсек!');
+          return;
+        }
+        const displaced = takeItemFromHand(player, hand);
+        player.inventory[fromIdx] = null as any;
+        const res = putItemInHand(player, hand, item, world || undefined);
+        if (res.success) {
+          player.inventory[fromIdx] = displaced as any;
+          sound.playPickup();
+          notifyChange();
+        } else {
+          if (displaced) putItemInHand(player, hand, displaced, world || undefined);
+          player.inventory[fromIdx] = item;
+        }
+        return;
+      }
+      player.inventory[fromIdx] = null as any;
+      const res = putItemInHand(player, hand, item, world || undefined);
+      if (!res.success) {
+        player.inventory[fromIdx] = item;
+        setErrorMessage(res.message);
+        return;
+      }
+      sound.playPickup();
+      notifyChange();
+      return;
+    }
+
+    // 7. Player Hand -> Player Inventory Slot or Pockets Zone
+    if (
+      (sourceKey === 'hand:left' || sourceKey === 'hand:right') &&
+      (targetKey.startsWith('inv:') || targetKey === 'zone:pockets')
+    ) {
+      const hand = sourceKey === 'hand:left' ? 'left' : 'right';
+      const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+      if (!handItem) return;
+
+      if (targetKey.startsWith('inv:')) {
+        const toIdx = parseInt(targetKey.replace('inv:', ''), 10);
+        if (!isNaN(toIdx) && toIdx >= 0) {
+          if (!player.inventory) player.inventory = [];
+          const existing = player.inventory[toIdx];
+          const fit = canItemFitInCompartment(player, toIdx, handItem, {
+            ignoreSlotIdx: existing ? toIdx : undefined,
+          });
+          if (!fit.fits) {
+            setErrorMessage(fit.reason || 'Не помещается в этот отсек!');
+            return;
+          }
+          const taken = takeItemFromHand(player, hand);
+          if (!taken) return;
+          player.inventory[toIdx] = taken;
+          if (existing) {
+            putItemInHand(player, hand, existing, world || undefined);
+          }
+          sound.playPickup();
+          notifyChange();
+          return;
+        }
+      }
+
+      const res = stowItemFromHandToPockets(player, hand);
+      if (res.success) {
+        sound.playPickup();
+        notifyChange();
+      }
+      return;
+    }
+
+    // 8. Hand <-> Hand
+    if (
+      (sourceKey === 'hand:left' || sourceKey === 'hand:right') &&
+      (targetKey === 'hand:left' || targetKey === 'hand:right')
+    ) {
+      const srcHand = sourceKey === 'hand:left' ? 'left' : 'right';
+      const tgtHand = targetKey === 'hand:left' ? 'left' : 'right';
+      const srcItem = takeItemFromHand(player, srcHand);
+      if (!srcItem) return;
+      const displaced = takeItemFromHand(player, tgtHand);
+      putItemInHand(player, tgtHand, srcItem, world || undefined);
+      if (displaced) {
+        putItemInHand(player, srcHand, displaced, world || undefined);
+      }
+      sound.playPickup();
+      notifyChange();
+    }
+  };
+
+  stDropHandlerRef.current = handleStorageSlotDrop;
+
+  const findTargetStSlotAt = (x: number, y: number, sourceKey: string): string | null => {
+    const nodes = document.querySelectorAll<HTMLElement>('[data-st-slot]');
+    let bestKey: string | null = null;
+    let bestDist = Infinity;
+
+    nodes.forEach(node => {
+      const key = node.getAttribute('data-st-slot');
+      if (!key || key === sourceKey) return;
+      const rect = node.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        bestKey = key;
+        bestDist = -1;
+        return;
+      }
+      if (bestDist >= 0) {
+        const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
+        const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+        const d = Math.hypot(dx, dy);
+        if (d <= 16 && d < bestDist) {
+          bestDist = d;
+          bestKey = key;
+        }
+      }
+    });
+
+    if (!bestKey) {
+      const zones = document.querySelectorAll<HTMLElement>('[data-st-zone]');
+      zones.forEach(zone => {
+        if (bestKey) return;
+        const zKey = zone.getAttribute('data-st-zone');
+        if (!zKey) return;
+        const rect = zone.getBoundingClientRect();
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          bestKey = zKey;
+        }
+      });
+    }
+
+    return bestKey;
+  };
+
+  const startSlotPointerDrag = (
+    e: React.PointerEvent<HTMLElement>,
+    slotKey: string,
+    item: InventoryItem | null | undefined,
+    onSelectClick?: () => void
+  ) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement)?.closest('button')) return;
+    e.stopPropagation();
+
+    if (!item) {
+      if (selectedStSlot && selectedStSlot !== slotKey) {
+        stDropHandlerRef.current?.(slotKey, selectedStSlot);
+        setSelectedStSlot(null);
+      } else {
+        onSelectClick?.();
+      }
+      return;
+    }
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    stDragRef.current = {
+      sourceKey: slotKey,
+      item,
+      startX,
+      startY,
+      x: startX,
+      y: startY,
+      active: false,
+      overKey: null,
+    };
+
+    const onPointerMove = (ev: PointerEvent) => {
+      const st = stDragRef.current;
+      if (!st) return;
+      st.x = ev.clientX;
+      st.y = ev.clientY;
+      if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 3) {
+        st.active = true;
+      }
+      if (st.active) {
+        const over = findTargetStSlotAt(ev.clientX, ev.clientY, st.sourceKey);
+        st.overKey = over;
+        setStDragUi({
+          sourceKey: st.sourceKey,
+          item: st.item,
+          x: st.x,
+          y: st.y,
+          overKey: over,
+        });
+      }
+    };
+
+    const finishDrag = (ev: PointerEvent, cancelled: boolean) => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+
+      const st = stDragRef.current;
+      stDragRef.current = null;
+      setStDragUi(null);
+
+      if (!st || cancelled) return;
+
+      if (st.active) {
+        const targetKey = findTargetStSlotAt(ev.clientX, ev.clientY, st.sourceKey) || st.overKey;
+        if (targetKey && targetKey !== st.sourceKey) {
+          stDropHandlerRef.current?.(targetKey, st.sourceKey);
+          setSelectedStSlot(null);
+        }
+      } else {
+        onSelectClick?.();
+        if (selectedStSlot && selectedStSlot !== slotKey) {
+          stDropHandlerRef.current?.(slotKey, selectedStSlot);
+          setSelectedStSlot(null);
+        } else {
+          setSelectedStSlot(prev => (prev === slotKey ? null : slotKey));
+        }
+      }
+    };
+
+    const onPointerUp = (ev: PointerEvent) => finishDrag(ev, false);
+    const onPointerCancel = (ev: PointerEvent) => finishDrag(ev, true);
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
   };
 
   const compartments = getPlayerCompartments(player);
@@ -297,7 +690,11 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
           )}
         </div>
       }
-      footerHints={[['Клик', 'Выбрать'], ['2× Клик', 'Переместить 1 шт.'], ['Esc', 'Закрыть']]}
+      footerHints={[
+        ['Перетаскивание', 'Из карманов / рук в хранилище и обратно'],
+        ['2× Клик', 'Переместить 1 шт.'],
+        ['Esc', 'Закрыть']
+      ]}
       footerRight={
         <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
           Готово
@@ -321,10 +718,16 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
 
       <div className="gu-st-split">
         {/* LEFT PANEL: what is inside the furniture */}
-        <div className="gu-panel gu-st-col">
+        <div
+          className="gu-panel gu-st-col"
+          data-st-zone="zone:storage"
+          style={{
+            borderColor: stDragUi?.overKey === 'zone:storage' ? 'var(--gu-amber-hi)' : undefined,
+          }}
+        >
           <div className="gu-st-head" style={{ marginBottom: 0 }}>
             <span className="gu-st-title" style={{ fontSize: 16 }}>
-              {isRadiator ? 'Поверхность радиатора' : 'Содержимое хранилища'}
+              {isRadiator ? 'Поверхность радиатора' : 'Слоты хранилища'}
             </span>
             <span className="gu-st-sub gu-mono" style={{ fontSize: 12 }}>
               {storage.items.length} предм.
@@ -353,37 +756,72 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
           </div>
 
           <div className="gu-st-scroll">
-            {storage.items.length === 0 && (
-              <div className="gu-mut" style={{ fontSize: 12.5, padding: '6px 0 8px' }}>
-                {isRadiator
-                  ? 'На батарее ничего не сушится. Выберите мокрую одежду, обувь или предмет справа.'
-                  : 'Хранилище пусто. Выберите предмет в руках или карманах справа.'}
-              </div>
-            )}
             <div className="gu-slots">
               {Array.from({ length: Math.max(24, storage.items.length + 6) }, (_, idx) => {
                 const it = storage.items[idx];
-                if (!it) return <div key={'e' + idx} className="gu-slot empty" />;
+                const slotKey = it ? `storage:${idx}` : `storage:empty-${idx}`;
+                const isBeingDragged = stDragUi?.sourceKey === slotKey;
+                const isDropTarget = stDragUi?.overKey === slotKey;
+
+                if (!it) {
+                  return (
+                    <div
+                      key={slotKey}
+                      data-st-slot={slotKey}
+                      draggable={false}
+                      onDragStart={e => e.preventDefault()}
+                      onPointerDown={e => startSlotPointerDrag(e, slotKey, null)}
+                      className={'gu-slot empty' + (isDropTarget ? ' on' : '')}
+                      style={{
+                        touchAction: 'none',
+                        borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
+                      }}
+                    />
+                  );
+                }
+
                 const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
                 const isHot = itemTemp >= 40;
                 const isCold = itemTemp <= 4;
+                const isSelected = selectedStorageIdx === idx || selectedStSlot === slotKey;
+
                 return (
                   <div
                     key={it.id || idx}
-                    onClick={() => {
-                      setSelectedStorageIdx(idx);
-                      setSelectedInventoryIdx(null);
-                      setSelectedHand(null);
-                    }}
+                    data-st-slot={slotKey}
+                    draggable={false}
+                    onDragStart={e => e.preventDefault()}
+                    onPointerDown={e =>
+                      startSlotPointerDrag(e, slotKey, it, () => {
+                        setSelectedStorageIdx(idx);
+                        setSelectedInventoryIdx(null);
+                        setSelectedHand(null);
+                      })
+                    }
                     onDoubleClick={() => handleTakeItem(idx, 1)}
-                    className={'gu-slot' + (selectedStorageIdx === idx ? ' on' : '') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
+                    className={
+                      'gu-slot' +
+                      (isSelected || isDropTarget ? ' on' : '') +
+                      (isHot ? ' hot' : '') +
+                      (isCold ? ' cold' : '')
+                    }
+                    style={{
+                      touchAction: 'none',
+                      cursor: 'grab',
+                      opacity: isBeingDragged ? 0.35 : 1,
+                      borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
+                    }}
                     title={`${it.nameRu}\n${formatWeightRu(getItemTotalWeight(it))} · ${getItemTotalVolume(it)} л`}
                   >
                     <ItemIconCanvas itemId={it.itemId} item={it} size={40} />
-                    {it.count > 1 && <span className="gu-ic-n">{it.count}</span>}
-                    {isHot && <span className="gu-slot-t">+{Math.round(itemTemp)}°</span>}
-                    {isCold && <span className="gu-slot-t cold">{Math.round(itemTemp)}°</span>}
-                    {(it.wetness ?? 0) > 0 && <span className="gu-slot-wet"><CloudRain width={11} height={11} /></span>}
+                    {it.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{it.count}</span>}
+                    {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(itemTemp)}°</span>}
+                    {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(itemTemp)}°</span>}
+                    {(it.wetness ?? 0) > 0 && (
+                      <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
+                        <CloudRain width={11} height={11} />
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -408,7 +846,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                 <button
                   type="button"
                   onClick={() => handleTakeToHand(selectedStorageIdx, 'left')}
-                  disabled={!!player.leftHandItem}
                   className="gu-btn gu-btn-s gu-btn-xs"
                   title="Взять в левую руку"
                 >
@@ -417,7 +854,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                 <button
                   type="button"
                   onClick={() => handleTakeToHand(selectedStorageIdx, 'right')}
-                  disabled={!!player.rightHandItem}
                   className="gu-btn gu-btn-s gu-btn-xs"
                   title="Взять в правую руку"
                 >
@@ -444,42 +880,66 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
           )}
         </div>
 
-        {/* RIGHT PANEL: player's active hands & pockets */}
-        <div className="gu-panel gu-st-col">
+        {/* RIGHT PANEL: player's active hand slots & pocket slots */}
+        <div
+          className="gu-panel gu-st-col"
+          data-st-zone="zone:pockets"
+          style={{
+            borderColor: stDragUi?.overKey === 'zone:pockets' ? 'var(--gu-amber-hi)' : undefined,
+          }}
+        >
           <div className="gu-st-head" style={{ marginBottom: 0 }}>
-            <span className="gu-st-title" style={{ fontSize: 16 }}>Инвентарь игрока</span>
+            <span className="gu-st-title" style={{ fontSize: 16 }}>Слоты игрока (Руки и карманы)</span>
             <span className="gu-st-sub gu-mono" style={{ fontSize: 12 }}>
               {playerCarriedWt.toFixed(1)} кг · {playerPocketCap.usedVolumeL}/{playerPocketCap.totalCapacityL} л
             </span>
           </div>
 
-          {/* Active Hands Strip */}
+          {/* Active Hand Slots (Draggable & Droppable) */}
           <div className="gu-grid gu-g2" style={{ flex: 'none', gap: 6 }}>
             {(['left', 'right'] as const).map(hand => {
               const hItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-              const isSelected = selectedHand === hand;
+              const slotKey = `hand:${hand}`;
+              const isBeingDragged = stDragUi?.sourceKey === slotKey;
+              const isDropTarget = stDragUi?.overKey === slotKey;
+              const isSelected = selectedHand === hand || selectedStSlot === slotKey;
+
               return (
                 <div
                   key={hand}
-                  onClick={() => {
-                    if (!hItem) return;
-                    setSelectedHand(hand);
-                    setSelectedInventoryIdx(null);
-                    setSelectedStorageIdx(null);
+                  data-st-slot={slotKey}
+                  draggable={false}
+                  onDragStart={e => e.preventDefault()}
+                  onPointerDown={e =>
+                    startSlotPointerDrag(e, slotKey, hItem, () => {
+                      if (!hItem) return;
+                      setSelectedHand(hand);
+                      setSelectedInventoryIdx(null);
+                      setSelectedStorageIdx(null);
+                    })
+                  }
+                  onDoubleClick={() => {
+                    if (hItem) handleStoreFromHand(hand);
                   }}
-                  className={'gu-hand' + (hItem ? ' full' : '') + (isSelected ? ' on' : '')}
+                  className={'gu-hand' + (hItem ? ' full' : '') + (isSelected || isDropTarget ? ' on' : '')}
                   style={{
-                    cursor: hItem ? 'pointer' : 'default',
-                    borderColor: isSelected ? 'var(--gu-amber)' : undefined,
-                    background: isSelected ? 'rgba(201, 146, 43, 0.14)' : undefined
+                    touchAction: 'none',
+                    cursor: hItem ? 'grab' : selectedStSlot ? 'pointer' : 'default',
+                    opacity: isBeingDragged ? 0.35 : 1,
+                    borderColor: isDropTarget ? 'var(--gu-amber-hi)' : isSelected ? 'var(--gu-amber)' : undefined,
+                    background: isSelected || isDropTarget ? 'rgba(201, 146, 43, 0.14)' : undefined
                   }}
+                  title={hItem ? `${hItem.nameRu} — перетащите в хранилище или карман` : 'Перетащите сюда предмет, чтобы взять в руку'}
                 >
-                  <div className="gu-slot" style={{ cursor: hItem ? 'pointer' : 'default' }}>
+                  <div
+                    className={'gu-slot' + (!hItem ? ' empty' : '') + (isSelected || isDropTarget ? ' on' : '')}
+                    style={{ cursor: hItem ? 'grab' : 'pointer' }}
+                  >
                     {hItem ? <ItemIconCanvas itemId={hItem.itemId} item={hItem} size={34} /> : <Hand width={18} height={18} />}
                   </div>
-                  <div className="gu-li-main">
+                  <div className="gu-li-main" style={{ pointerEvents: 'none' }}>
                     <div className="gu-li-sub" style={{ marginTop: 0 }}>{hand === 'left' ? 'Левая рука' : 'Правая рука'}</div>
-                    <div className="gu-li-name">{hItem ? hItem.nameRu : 'Свободна'}</div>
+                    <div className="gu-li-name">{hItem ? hItem.nameRu : 'Свободный слот'}</div>
                   </div>
                   {hItem && (
                     <button
@@ -539,29 +999,71 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                   <div className="gu-slots">
                     {slots.map(slotIdx => {
                       const item = (player.inventory || [])[slotIdx];
-                      if (!item) return <div key={slotIdx} className="gu-slot empty" />;
+                      const slotKey = `inv:${slotIdx}`;
+                      const isBeingDragged = stDragUi?.sourceKey === slotKey;
+                      const isDropTarget = stDragUi?.overKey === slotKey;
+
+                      if (!item) {
+                        return (
+                          <div
+                            key={slotIdx}
+                            data-st-slot={slotKey}
+                            draggable={false}
+                            onDragStart={e => e.preventDefault()}
+                            onPointerDown={e => startSlotPointerDrag(e, slotKey, null)}
+                            className={'gu-slot empty' + (isDropTarget ? ' on' : '')}
+                            style={{
+                              touchAction: 'none',
+                              borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
+                            }}
+                          />
+                        );
+                      }
+
                       const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
                       const isHot = itemTemp >= 40;
                       const isCold = itemTemp <= 4;
                       const matches = selectedCategory === 'all' || item.category === selectedCategory;
-                      const isSel = selectedHand === null && selectedInventoryIdx === slotIdx;
+                      const isSel = (selectedHand === null && selectedInventoryIdx === slotIdx) || selectedStSlot === slotKey;
+
                       return (
                         <div
                           key={slotIdx}
-                          onClick={() => {
-                            setSelectedInventoryIdx(slotIdx);
-                            setSelectedHand(null);
-                            setSelectedStorageIdx(null);
-                          }}
+                          data-st-slot={slotKey}
+                          draggable={false}
+                          onDragStart={e => e.preventDefault()}
+                          onPointerDown={e =>
+                            startSlotPointerDrag(e, slotKey, item, () => {
+                              setSelectedInventoryIdx(slotIdx);
+                              setSelectedHand(null);
+                              setSelectedStorageIdx(null);
+                            })
+                          }
                           onDoubleClick={() => handleStoreItem(slotIdx, 1)}
-                          className={'gu-slot' + (isSel ? ' on' : '') + (matches ? '' : ' dim') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
+                          className={
+                            'gu-slot' +
+                            (isSel || isDropTarget ? ' on' : '') +
+                            (matches ? '' : ' dim') +
+                            (isHot ? ' hot' : '') +
+                            (isCold ? ' cold' : '')
+                          }
+                          style={{
+                            touchAction: 'none',
+                            cursor: 'grab',
+                            opacity: isBeingDragged ? 0.35 : 1,
+                            borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
+                          }}
                           title={`${item.nameRu}\n${formatWeightRu(getItemTotalWeight(item))} · ${getItemTotalVolume(item)} л`}
                         >
                           <ItemIconCanvas itemId={item.itemId} item={item} size={40} />
-                          {item.count > 1 && <span className="gu-ic-n">{item.count}</span>}
-                          {isHot && <span className="gu-slot-t">+{Math.round(itemTemp)}°</span>}
-                          {isCold && <span className="gu-slot-t cold">{Math.round(itemTemp)}°</span>}
-                          {(item.wetness ?? 0) > 0 && <span className="gu-slot-wet"><CloudRain width={11} height={11} /></span>}
+                          {item.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{item.count}</span>}
+                          {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(itemTemp)}°</span>}
+                          {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(itemTemp)}°</span>}
+                          {(item.wetness ?? 0) > 0 && (
+                            <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
+                              <CloudRain width={11} height={11} />
+                            </span>
+                          )}
                         </div>
                       );
                     })}
@@ -617,6 +1119,30 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
           )}
         </div>
       </div>
+
+      {/* FLOATING DRAG PREVIEW FOR STORAGE MODAL */}
+      {stDragUi && (
+        <div
+          style={{
+            position: 'fixed',
+            left: stDragUi.x - 32,
+            top: stDragUi.y - 32,
+            width: 64,
+            height: 64,
+            borderRadius: 9,
+            background: 'rgba(20, 20, 22, 0.92)',
+            border: '1px solid var(--gu-amber-hi)',
+            boxShadow: '0 10px 28px rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 9999,
+          }}
+        >
+          <ItemIconCanvas itemId={stDragUi.item.itemId} item={stDragUi.item} size={44} />
+        </div>
+      )}
     </ModalShell>
   );
 };
