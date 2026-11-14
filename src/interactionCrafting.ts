@@ -1931,7 +1931,7 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
     kind: 'none',
     title: 'Комбинация не распознана',
     subtitle:
-      'Для переливания поставьте полную тару в верхний ряд, а приёмную — под неё в нижний ряд, либо выберите рецепт из таблицы ниже.',
+      'Для переливания поставьте полную тару в верхний ряд, а приёмную — под неё в нижний ряд, либо совместите подходящие предметы в слотах ввода.',
     actionLabel: 'Нет доступного действия',
     previewOutputs: [null, null, null, null],
     transferDetails: [],
