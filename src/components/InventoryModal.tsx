@@ -721,22 +721,22 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
         </span>
       }
     >
-      <div className="gu-stagger">
+      <div className="gu-stagger gu-inv-root">
         {/* ==================== TAB 1: INVENTORY & POCKETS ==================== */}
         {activeTab === 'inventory' && !openContainer && (
           <div className="gu-inv-split">
-            {/* LEFT: HANDS + COMPARTMENTS + CONTAINERS */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* LEFT: PINNED HANDS + SCROLLABLE COMPARTMENTS & CONTAINERS */}
+            <div className="gu-inv-left">
               {(!hasWallet || !hasBag) && (
-                <div className="gu-note gu-warn gu-row2" style={{ justifyContent: 'space-between', padding: '8px 12px' }}>
-                  <div className="gu-row2">
-                    <Sparkles width={15} height={15} />
+                <div className="gu-note gu-warn gu-row2" style={{ flex: 'none', justifyContent: 'space-between', padding: '7px 10px' }}>
+                  <div className="gu-row2" style={{ gap: 6, fontSize: 12 }}>
+                    <Sparkles width={14} height={14} />
                     <span>
                       {!hasWallet && !hasBag
                         ? 'Кошелёк и пакет не найдены в инвентаре'
                         : !hasWallet
-                        ? 'Кожаный бумажник не найден в инвентаре'
-                        : 'Пакет для покупок не найден в инвентаре'}
+                        ? 'Кожаный бумажник не найден'
+                        : 'Пакет для покупок не найден'}
                     </span>
                   </div>
                   <button
@@ -753,194 +753,200 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </div>
               )}
 
-              {/* Active Hands */}
-              <div className="gu-panel gu-pad" style={{ padding: '10px 12px' }}>
-                <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span className="gu-grp">Активные руки</span>
+              {/* Pinned Active Hands */}
+              <div className="gu-panel" style={{ flex: 'none', padding: '8px 10px' }}>
+                <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span className="gu-grp" style={{ fontSize: 11.5 }}>Активные руки</span>
                   <span className="gu-mut gu-hide-s" style={{ fontSize: 11 }}>Клавиша E — действие с предметом</span>
                 </div>
-                <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                <div className="gu-grid gu-g2" style={{ gap: 6 }}>
                   {renderHandCard('left', 'Левая рука', player.leftHandItem)}
                   {renderHandCard('right', 'Правая рука', player.rightHandItem)}
                 </div>
               </div>
 
-              {/* Pockets / backpack: slot grid grouped by whose slots they are */}
-              <div className="gu-panel gu-pad">
-                {(() => {
-                  const getCompIcon = (type: string, size = 16) => {
-                    if (type === 'user') return <User width={size} height={size} />;
-                    if (type === 'shirt') return <Shirt width={size} height={size} />;
-                    if (type === 'pants')
+              {/* Scrollable Compartments & Carried Containers */}
+              <div className="gu-inv-left-scroll">
+                <div className="gu-panel" style={{ padding: '10px 12px' }}>
+                  {(() => {
+                    const getCompIcon = (type: string, size = 15) => {
+                      if (type === 'user') return <User width={size} height={size} />;
+                      if (type === 'shirt') return <Shirt width={size} height={size} />;
+                      if (type === 'pants')
+                        return (
+                          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
+                          </svg>
+                        );
+                      return <Luggage width={size} height={size} />;
+                    };
+
+                    return compartments.map(comp => {
+                      const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
+                      const compVolumePct = Math.round((comp.usedVolumeL / comp.capacityL) * 100);
+                      const compWeightPct = Math.round((comp.usedWeightKg / comp.maxWeightKg) * 100);
+
                       return (
-                        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
-                        </svg>
-                      );
-                    return <Luggage width={size} height={size} />;
-                  };
+                        <div key={comp.id} className="gu-group">
+                          <div className="gu-group-h">
+                            <span className="gu-group-t">
+                              {getCompIcon(comp.iconType)}
+                              {comp.nameRu}
+                            </span>
+                            <span className="gu-grp-meta gu-mono">
+                              <span className={compVolumePct > 95 ? 'bad' : ''}>{comp.usedVolumeL}/{comp.capacityL} л</span>
+                              {' · '}
+                              <span className={compWeightPct > 95 ? 'bad' : ''}>{comp.usedWeightKg}/{comp.maxWeightKg} кг</span>
+                            </span>
+                          </div>
 
-                  return compartments.map(comp => {
-                    const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
-                    const compVolumePct = Math.round((comp.usedVolumeL / comp.capacityL) * 100);
-                    const compWeightPct = Math.round((comp.usedWeightKg / comp.maxWeightKg) * 100);
-
-                    return (
-                      <div key={comp.id} className="gu-group">
-                        <div className="gu-group-h">
-                          <span className="gu-group-t">
-                            {getCompIcon(comp.iconType)}
-                            {comp.nameRu}
-                          </span>
-                          <span className="gu-grp-meta">
-                            <span className={compVolumePct > 95 ? 'bad' : ''}>{comp.usedVolumeL}/{comp.capacityL} л</span>
-                            {' · '}
-                            <span className={compWeightPct > 95 ? 'bad' : ''}>{comp.usedWeightKg}/{comp.maxWeightKg} кг</span>
-                          </span>
-                        </div>
-
-                        <div className="gu-slots">
-                          {slots.map(slotIdx => {
-                            const item = inventory[slotIdx];
-                            const dropProps = {
-                              onDragOver: (e: React.DragEvent) => e.preventDefault(),
-                              onDrop: (e: React.DragEvent) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                                if (!isNaN(from) && from !== slotIdx) {
-                                  moveInventoryItem(player, from, slotIdx);
-                                  forceRender(n => n + 1);
-                                }
-                              }
-                            };
-
-                            if (!item) {
-                              return <div key={slotIdx} id={`inventory-slot-${slotIdx}`} className="gu-slot empty" {...dropProps} />;
-                            }
-
-                            const temp = item.surfaceTemperature;
-                            const isHot = temp !== undefined && temp >= 40;
-                            const isCold = temp !== undefined && temp <= 4;
-                            const fillPct = item.fluidStorage
-                              ? Math.max(0, Math.min(100, (item.fluidStorage.currentMl / (item.fluidStorage.maxMl || 1)) * 100))
-                              : item.maxPortions && item.maxPortions > 1
-                              ? Math.max(0, Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100))
-                              : null;
-
-                            return (
-                              <div
-                                key={slotIdx}
-                                id={`inventory-slot-${slotIdx}`}
-                                draggable
-                                onDragStart={e => e.dataTransfer.setData('text/plain', slotIdx.toString())}
-                                {...dropProps}
-                                onClick={() => setSelectedIndex(slotIdx)}
-                                onDoubleClick={() => {
-                                  if (item.isContainer && !item.singleUseContainer && !((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open' || item.itemId === 'lukoshko') && item.contents && item.contents.length > 0)) {
-                                    setOpenContainer(item);
-                                    setSelectedContainerItemIdx(0);
-                                  } else {
-                                    handleUseItem(slotIdx);
+                          <div className="gu-slots">
+                            {slots.map(slotIdx => {
+                              const item = inventory[slotIdx];
+                              const dropProps = {
+                                onDragOver: (e: React.DragEvent) => e.preventDefault(),
+                                onDrop: (e: React.DragEvent) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                                  if (!isNaN(from) && from !== slotIdx) {
+                                    moveInventoryItem(player, from, slotIdx);
+                                    forceRender(n => n + 1);
                                   }
-                                }}
-                                className={'gu-slot' + (selectedIndex === slotIdx ? ' on' : '') + (matchesFilter(item) ? '' : ' dim') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
-                                title={`${item.nameRu}\n${formatWeightRu(getItemTotalWeight(item))} · ${getItemTotalVolume(item)} л`}
-                              >
-                                {slotIdx < 6 && <span className="gu-ic-hk">{slotIdx + 1}</span>}
-                                <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
-                                {item.count > 1 ? (
-                                  <span className="gu-ic-n">{item.count}</span>
-                                ) : item.isContainer ? (
-                                  <span className="gu-ic-n">{item.contents?.length || 0}</span>
-                                ) : null}
-                                {isHot && <span className="gu-slot-t">+{Math.round(temp!)}°</span>}
-                                {isCold && <span className="gu-slot-t cold">{Math.round(temp!)}°</span>}
-                                {(item.wetness ?? 0) > 0 && <span className="gu-slot-wet"><CloudRain width={11} height={11} /></span>}
-                                {fillPct !== null && <div className="gu-ic-fill"><i style={{ width: `${fillPct}%` }} /></div>}
-                              </div>
-                            );
-                          })}
+                                }
+                              };
+
+                              if (!item) {
+                                return <div key={slotIdx} id={`inventory-slot-${slotIdx}`} className="gu-slot empty" {...dropProps} />;
+                              }
+
+                              const temp = item.surfaceTemperature;
+                              const isHot = temp !== undefined && temp >= 40;
+                              const isCold = temp !== undefined && temp <= 4;
+                              const fillPct = item.fluidStorage
+                                ? Math.max(0, Math.min(100, (item.fluidStorage.currentMl / (item.fluidStorage.maxMl || 1)) * 100))
+                                : item.maxPortions && item.maxPortions > 1
+                                ? Math.max(0, Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100))
+                                : null;
+
+                              return (
+                                <div
+                                  key={slotIdx}
+                                  id={`inventory-slot-${slotIdx}`}
+                                  draggable
+                                  onDragStart={e => e.dataTransfer.setData('text/plain', slotIdx.toString())}
+                                  {...dropProps}
+                                  onClick={() => setSelectedIndex(slotIdx)}
+                                  onDoubleClick={() => {
+                                    if (item.isContainer && !item.singleUseContainer && !((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open' || item.itemId === 'lukoshko') && item.contents && item.contents.length > 0)) {
+                                      setOpenContainer(item);
+                                      setSelectedContainerItemIdx(0);
+                                    } else {
+                                      handleUseItem(slotIdx);
+                                    }
+                                  }}
+                                  className={'gu-slot' + (selectedIndex === slotIdx ? ' on' : '') + (matchesFilter(item) ? '' : ' dim') + (isHot ? ' hot' : '') + (isCold ? ' cold' : '')}
+                                  title={`${item.nameRu}\n${formatWeightRu(getItemTotalWeight(item))} · ${getItemTotalVolume(item)} л`}
+                                >
+                                  {slotIdx < 6 && <span className="gu-ic-hk">{slotIdx + 1}</span>}
+                                  <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
+                                  {item.count > 1 ? (
+                                    <span className="gu-ic-n">{item.count}</span>
+                                  ) : item.isContainer ? (
+                                    <span className="gu-ic-n">{item.contents?.length || 0}</span>
+                                  ) : null}
+                                  {isHot && <span className="gu-slot-t">+{Math.round(temp!)}°</span>}
+                                  {isCold && <span className="gu-slot-t cold">{Math.round(temp!)}°</span>}
+                                  {(item.wetness ?? 0) > 0 && <span className="gu-slot-wet"><CloudRain width={11} height={11} /></span>}
+                                  {fillPct !== null && <div className="gu-ic-fill"><i style={{ width: `${fillPct}%` }} /></div>}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Standalone Carried Containers */}
+                {(() => {
+                  const pocketContainers = (player.inventory || []).filter(i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId);
+                  const handContainers = [player.leftHandItem, player.rightHandItem].filter(
+                    i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId
+                  ) as InventoryItem[];
+                  const allContainers: { item: InventoryItem; source: string }[] = [];
+
+                  pocketContainers.forEach(c => allContainers.push({ item: c, source: 'В карманах' }));
+                  handContainers.forEach(c => allContainers.push({ item: c, source: 'В руке' }));
+
+                  if (allContainers.length === 0) return null;
+
+                  return (
+                    <div className="gu-panel" style={{ padding: '8px 10px' }}>
+                      <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span className="gu-grp" style={{ fontSize: 11.5 }}>Контейнеры и кошельки ({allContainers.length})</span>
+                        <span className="gu-mut gu-hide-s" style={{ fontSize: 11 }}>Быстрый доступ</span>
                       </div>
-                    );
-                  });
+
+                      <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                        {allContainers.map((entry, cIdx) => {
+                          const cItem = entry.item;
+                          const count = cItem.contents?.length || 0;
+                          const maxVol = cItem.containerCapacityL || 20;
+                          const curVol = (cItem.contents || []).reduce((acc, it) => acc + getItemTotalVolume(it), 0);
+
+                          return (
+                            <div key={cIdx} className="gu-card-sm gu-row2" style={{ justifyContent: 'space-between', padding: '6px 8px', gap: 8 }}>
+                              <div className="gu-row2" style={{ minWidth: 0, gap: 8 }}>
+                                <div className="gu-ic" style={{ width: 34, height: 34 }}>
+                                  <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={30} />
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontWeight: 600, fontSize: 12.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {cItem.nameRu}
+                                  </div>
+                                  <div className="gu-mut gu-mono" style={{ fontSize: 10.5 }}>
+                                    {count} предм. · {curVol.toFixed(1)}/{maxVol} л
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="gu-btn gu-btn-p gu-btn-xs"
+                                style={{ flexShrink: 0 }}
+                                onClick={() => {
+                                  setOpenContainer(cItem);
+                                  setSelectedContainerItemIdx(0);
+                                }}
+                              >
+                                Открыть
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
                 })()}
               </div>
-
-              {/* Standalone Carried Containers */}
-              {(() => {
-                const pocketContainers = (player.inventory || []).filter(i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId);
-                const handContainers = [player.leftHandItem, player.rightHandItem].filter(
-                  i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId
-                ) as InventoryItem[];
-                const allContainers: { item: InventoryItem; source: string }[] = [];
-
-                pocketContainers.forEach(c => allContainers.push({ item: c, source: 'В карманах' }));
-                handContainers.forEach(c => allContainers.push({ item: c, source: 'В руке' }));
-
-                if (allContainers.length === 0) return null;
-
-                return (
-                  <div className="gu-panel gu-pad" style={{ padding: '10px 12px' }}>
-                    <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span className="gu-grp">Контейнеры и кошельки ({allContainers.length})</span>
-                      <span className="gu-mut gu-hide-s" style={{ fontSize: 11 }}>Быстрый доступ</span>
-                    </div>
-
-                    <div className="gu-grid gu-g2" style={{ gap: 8 }}>
-                      {allContainers.map((entry, cIdx) => {
-                        const cItem = entry.item;
-                        const count = cItem.contents?.length || 0;
-                        const maxVol = cItem.containerCapacityL || 20;
-                        const curVol = (cItem.contents || []).reduce((acc, it) => acc + getItemTotalVolume(it), 0);
-
-                        return (
-                          <div key={cIdx} className="gu-card-sm gu-row2" style={{ justifyContent: 'space-between', padding: '8px 10px' }}>
-                            <div className="gu-row2" style={{ minWidth: 0, gap: 10 }}>
-                              <div className="gu-ic">
-                                <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={38} />
-                              </div>
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {cItem.nameRu}
-                                </div>
-                                <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
-                                  {count} предм. · {curVol.toFixed(1)}/{maxVol} л
-                                </div>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="gu-btn gu-btn-p gu-btn-xs"
-                              onClick={() => {
-                                setOpenContainer(cItem);
-                                setSelectedContainerItemIdx(0);
-                              }}
-                            >
-                              Открыть
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
 
-            {/* RIGHT: ITEM DETAILS & ACTIONS */}
-            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* RIGHT: PINNED HEADER + SCROLLABLE SPECS + PINNED ACTION FOOTER */}
+            <div className="gu-panel gu-inv-detail">
               {selectedEntry && selectedEntry.item ? (
                 <>
-                  {/* Item Header */}
-                  <div className="gu-row2" style={{ alignItems: 'flex-start', gap: 12 }}>
-                    <div className="gu-ic gu-md">
-                      <ItemIconCanvas itemId={selectedEntry.item.itemId} item={selectedEntry.item} size={50} />
+                  {/* Pinned Item Header */}
+                  <div className="gu-row2" style={{ flex: 'none', alignItems: 'flex-start', gap: 10, paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
+                    <div className="gu-ic gu-md" style={{ width: 48, height: 48, flexShrink: 0 }}>
+                      <ItemIconCanvas itemId={selectedEntry.item.itemId} item={selectedEntry.item} size={44} />
                     </div>
-                    <div className="gu-grow">
-                      <div className="gu-row2 gu-wrap" style={{ gap: 6, marginBottom: 3 }}>
-                        <span className="gu-tag amber">
+                    <div className="gu-grow" style={{ minWidth: 0 }}>
+                      <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedEntry.item.nameRu}
+                      </div>
+                      <div className="gu-mut gu-mono" style={{ fontSize: 11.5, marginTop: 3 }}>
+                        <span style={{ color: 'var(--gu-amber-hi)' }}>
                           {selectedEntry.item.category === 'food'
                             ? 'Еда'
                             : selectedEntry.item.category === 'drink'
@@ -949,22 +955,21 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             ? 'Медицина'
                             : selectedEntry.item.category === 'tool'
                             ? 'Инструмент'
-                            : 'Ценность'}
+                            : 'Предмет'}
                         </span>
-                        <span className="gu-mut gu-mono" style={{ fontSize: 12 }}>
-                          ×{selectedEntry.item.count} шт. · {formatWeightRu(getItemTotalWeight(selectedEntry.item))} ·{' '}
-                          <strong style={{ color: 'var(--gu-amber-hi)' }}>{getItemTotalVolume(selectedEntry.item)} л</strong>
-                        </span>
-                      </div>
-                      <div className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
-                        {selectedEntry.item.nameRu}
+                        {' · '}
+                        {selectedEntry.item.count} шт.
+                        {' · '}
+                        {formatWeightRu(getItemTotalWeight(selectedEntry.item))}
+                        {' · '}
+                        <strong style={{ color: '#e9e6df' }}>{getItemTotalVolume(selectedEntry.item)} л</strong>
                       </div>
                       {(() => {
                         const slotComp = getSlotCompartment(player, selectedEntry.originalIndex);
                         if (!slotComp) return null;
                         return (
                           <div className="gu-mut" style={{ fontSize: 11, marginTop: 2 }}>
-                            <span style={{ color: 'var(--gu-amber-hi)' }}>{slotComp.compartment.nameRu}</span>
+                            <span style={{ color: 'var(--gu-amber-soft)' }}>{slotComp.compartment.nameRu}</span>
                             {slotComp.compartment.sourceItemNameRu && slotComp.compartment.id !== 'base' && (
                               <span> ({slotComp.compartment.sourceItemNameRu})</span>
                             )}
@@ -975,8 +980,216 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Primary Actions — immediately accessible at the top */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
+                  {/* Middle Scrollable Specs */}
+                  <div className="gu-inv-detail-scroll">
+                    <div className="gu-note" style={{ lineHeight: 1.4, padding: '7px 10px', fontSize: 12, color: 'var(--gu-ink-dim)' }}>
+                      {selectedEntry.item.descriptionRu}
+                    </div>
+
+                    {/* Packaging Attributes */}
+                    {(selectedEntry.item.packagingShape ||
+                      selectedEntry.item.packagingShapeNameRu ||
+                      selectedEntry.item.packagingSize ||
+                      selectedEntry.item.itemId.startsWith('candy_pouch') ||
+                      selectedEntry.item.itemId.startsWith('paper_packaging')) && (() => {
+                      const it = selectedEntry.item;
+                      const isCandy = it.itemId.startsWith('candy_pouch');
+                      const isOpenPkg = Boolean(it.isOpen || it.itemId.includes('_open') || !it.singleUseContainer);
+                      const sizeLabels: Record<string, string> = {
+                        mini: 'Мини',
+                        small: 'Малая',
+                        medium: 'Средняя',
+                        large: 'Большая'
+                      };
+                      const shapeLabel =
+                        it.packagingShapeNameRu ||
+                        (it.packagingShape
+                          ? getCandyPackagingShapeNameRu(it.packagingShape)
+                          : isCandy
+                          ? 'Пластиковый пакет'
+                          : 'Пергамент-брикет');
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                            <span className="gu-grp" style={{ fontSize: 11 }}>Упаковка</span>
+                            <span className="gu-mut gu-mono" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
+                              {isOpenPkg ? 'Вскрыта' : 'Запаяна'}
+                            </span>
+                          </div>
+                          <div className="gu-kv-grid gu-g4 gu-kv-compact">
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Форма</span>
+                              <span className="gu-kv-v">{shapeLabel}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Размер</span>
+                              <span className="gu-kv-v">{sizeLabels[it.packagingSize || 'medium'] || 'Стандарт'}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Материал</span>
+                              <span className="gu-kv-v">{isCandy ? 'Пластик' : 'Пергамент'}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Объём</span>
+                              <span className="gu-kv-v">{it.containerCapacityL ? `${it.containerCapacityL} л` : '—'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Gummy Candy Attributes */}
+                    {selectedEntry.item.gummyAttributes && (() => {
+                      const g = selectedEntry.item.gummyAttributes!;
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                            <span className="gu-grp" style={{ fontSize: 11 }}>Мармелад</span>
+                            {g.sourDust && (
+                              <span className="gu-mut" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
+                                Кислая посыпка
+                              </span>
+                            )}
+                          </div>
+                          <div className="gu-kv-grid gu-g3 gu-kv-compact">
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Цвет</span>
+                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                <span
+                                  style={{
+                                    width: 9,
+                                    height: 9,
+                                    borderRadius: 2,
+                                    backgroundColor: g.color,
+                                    border: '1px solid rgba(255,255,255,0.35)',
+                                    display: 'inline-block',
+                                    flexShrink: 0
+                                  }}
+                                />
+                                <span>{g.colorNameRu}</span>
+                              </span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Форма</span>
+                              <span className="gu-kv-v">{g.shapeNameRu}</span>
+                            </div>
+                            {g.flavorRu && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Вкус</span>
+                                <span className="gu-kv-v">{g.flavorRu}</span>
+                              </div>
+                            )}
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Состав</span>
+                              <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
+                                {g.ingredients.join(', ')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Thermodynamics */}
+                    {(() => {
+                      const thermalInfo = getItemThermalDisplayInfo(selectedEntry.item);
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                            <span className="gu-grp" style={{ fontSize: 11 }}>Термодинамика</span>
+                            {thermalInfo.hazardBadge && (
+                              <span className="gu-tag bad" style={{ height: 18, padding: '0 6px', fontSize: 10 }}>
+                                <Flame width={10} height={10} />
+                                {thermalInfo.hazardBadge.text}
+                              </span>
+                            )}
+                          </div>
+                          <div className="gu-kv-grid gu-g4 gu-kv-compact">
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Внутри</span>
+                              <span className="gu-kv-v">{thermalInfo.coreTempText}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Снаружи</span>
+                              <span className="gu-kv-v">{thermalInfo.surfaceTempText}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Потеря</span>
+                              <span className="gu-kv-v">{thermalInfo.heatLossText}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Удержание</span>
+                              <span className="gu-kv-v">{thermalInfo.retentionText}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Nutritional Profile */}
+                    {selectedEntry.item.nutrients && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                          <span className="gu-grp" style={{ fontSize: 11 }}>Пищевая ценность (БЖУ)</span>
+                          <span className="gu-mut gu-mono" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
+                            {selectedEntry.item.nutrients.calories} ккал
+                          </span>
+                        </div>
+                        <div className="gu-kv-grid gu-g4 gu-kv-compact">
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Белки</span>
+                            <span className="gu-kv-v">{selectedEntry.item.nutrients.proteins} г</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Жиры</span>
+                            <span className="gu-kv-v" style={{ color: '#f0c264' }}>{selectedEntry.item.nutrients.fats} г</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Углеводы</span>
+                            <span className="gu-kv-v">{selectedEntry.item.nutrients.carbs} г</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Сахар{selectedEntry.item.nutrients.salt !== undefined ? ' / Соль' : ''}</span>
+                            <span className="gu-kv-v">
+                              {selectedEntry.item.nutrients.sugars} г{selectedEntry.item.nutrients.salt !== undefined ? ` · ${selectedEntry.item.nutrients.salt} г` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Smartphone Specs */}
+                    {selectedEntry.item.phoneSpecs && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                          <span className="gu-grp" style={{ fontSize: 11 }}>{selectedEntry.item.phoneSpecs.modelName}</span>
+                          <span className="gu-mut gu-mono" style={{ fontSize: 11 }}>{selectedEntry.item.phoneSpecs.osName}</span>
+                        </div>
+                        <div className="gu-kv-grid gu-g4 gu-kv-compact">
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Экран</span>
+                            <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.screenSize} ({selectedEntry.item.phoneSpecs.refreshRateHz}Hz)</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Камера</span>
+                            <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.cameraMegaPixels} MP</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Память</span>
+                            <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.storageGb} GB</span>
+                          </div>
+                          <div className="gu-kv">
+                            <span className="gu-kv-k">Батарея</span>
+                            <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.batteryCapacityMah} мАч</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pinned Action Footer */}
+                  <div className="gu-inv-detail-foot">
                     {selectedEntry.item.clothingStats ? (
                       <button
                         type="button"
@@ -984,28 +1197,28 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
                         onClick={() => handleEquipItem(selectedEntry.originalIndex)}
                       >
-                        <Shirt width={15} height={15} />
+                        <Shirt width={14} height={14} />
                         <span>Надеть / Экипировать</span>
                       </button>
                     ) : selectedEntry.item.isContainer ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div className="gu-grid gu-g2" style={{ gap: 6 }}>
                         {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
                           !selectedEntry.item.isOpen && (
                             <button
                               type="button"
                               id="btn-unpack-selected-container"
-                              className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                              className="gu-btn gu-btn-p gu-btn-sm"
                               onClick={() => {
                                 unpackSingleUseContainer(player, selectedEntry.item, world);
                                 sound.resume();
                                 forceRender(n => n + 1);
                               }}
                             >
-                              <Scissors width={15} height={15} />
+                              <Scissors width={14} height={14} />
                               <span>
-                                Вскрыть упаковку
+                                Вскрыть
                                 {selectedEntry.item.contents && selectedEntry.item.contents.length > 0
-                                  ? ` (${selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)} шт.)`
+                                  ? ` (${selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)})`
                                   : ''}
                               </span>
                             </button>
@@ -1019,21 +1232,21 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             <button
                               type="button"
                               id="btn-consume-from-opened-package"
-                              className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                              className="gu-btn gu-btn-p gu-btn-sm"
                               onClick={() => {
                                 useItemOnPlayer(player, selectedEntry.originalIndex, world || undefined);
                                 sound.resume();
                                 forceRender(n => n + 1);
                               }}
                             >
-                              <Utensils width={15} height={15} />
+                              <Utensils width={14} height={14} />
                               <span>
                                 {selectedEntry.item.itemId.startsWith('egg_carton')
                                   ? 'Достать 1 шт.'
                                   : selectedEntry.item.contents[0]?.category === 'med'
                                   ? 'Применить 1 шт.'
                                   : 'Съесть 1 шт.'}{' '}
-                                (осталось {selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)} шт.)
+                                ({selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)})
                               </span>
                             </button>
                           )}
@@ -1044,14 +1257,28 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             (selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) && !selectedEntry.item.isOpen
                               ? 'gu-btn-s'
                               : 'gu-btn-p'
-                          } gu-btn-sm gu-btn-block`}
+                          } gu-btn-sm`}
+                          style={{
+                            gridColumn:
+                              !((selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) && !selectedEntry.item.isOpen) &&
+                              !(
+                                (selectedEntry.item.isOpen ||
+                                  selectedEntry.item.itemId === 'pouch_sealed_snack_torn' ||
+                                  selectedEntry.item.itemId === 'egg_carton_10_open' ||
+                                  selectedEntry.item.itemId === 'lukoshko') &&
+                                selectedEntry.item.contents &&
+                                selectedEntry.item.contents.length > 0
+                              )
+                                ? '1 / -1'
+                                : undefined
+                          }}
                           onClick={() => {
                             setOpenContainer(selectedEntry.item);
                             setSelectedContainerItemIdx(0);
                           }}
                         >
-                          <Package width={15} height={15} />
-                          <span>Открыть контейнер ({selectedEntry.item.contents?.length || 0} предм.)</span>
+                          <Package width={14} height={14} />
+                          <span>Открыть ({selectedEntry.item.contents?.length || 0} предм.)</span>
                         </button>
                       </div>
                     ) : selectedEntry.item.phoneSpecs ||
@@ -1063,11 +1290,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
                         onClick={() => handleUseItem(selectedEntry.originalIndex)}
                       >
-                        <Smartphone width={15} height={15} />
+                        <Smartphone width={14} height={14} />
                         <span>Включить экран телефона</span>
                       </button>
                     ) : selectedEntry.item.itemId.startsWith('car_key') ? (
-                      <div className="gu-note" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 10px' }}>
+                      <div className="gu-note" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '7px 9px' }}>
                         {(() => {
                           const targetVeh = world ? getTargetVehicleForKey(player, selectedEntry.item, world) : null;
                           const distM = targetVeh ? Math.round(Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y) / 10) : null;
@@ -1075,8 +1302,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
                           return (
                             <>
-                              <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                                <span className="gu-grp" style={{ fontSize: 12 }}>
+                              <div className="gu-row2" style={{ justifyContent: 'space-between', fontSize: 11.5 }}>
+                                <span className="gu-grp" style={{ fontSize: 11 }}>
                                   {selectedEntry.item.keyTier === 'display'
                                     ? 'Smart Display Key'
                                     : selectedEntry.item.keyTier === 'smart'
@@ -1084,38 +1311,18 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                     : selectedEntry.item.keyTier === 'flip'
                                     ? 'Выкидной брелок'
                                     : 'Ключ зажигания'}
+                                  {targetVeh && (
+                                    <span className="gu-mut gu-mono" style={{ fontWeight: 400, marginLeft: 6 }}>
+                                      {targetVeh.isLocked ? 'ЦЗ закрыт' : 'ЦЗ открыт'} · ДВС {targetVeh.engineState?.engineRunning ? 'вкл' : 'выкл'}
+                                    </span>
+                                  )}
                                 </span>
-                                {distM !== null ? (
-                                  <span className="gu-tag amber">{distM} м до авто</span>
-                                ) : (
-                                  <span className="gu-tag">Вне зоны</span>
-                                )}
+                                <span className="gu-mut gu-mono" style={{ color: distM !== null ? 'var(--gu-amber-hi)' : undefined }}>
+                                  {distM !== null ? `${distM} м` : 'Вне зоны'}
+                                </span>
                               </div>
 
-                              {targetVeh && (
-                                <div className="gu-grid gu-g3" style={{ gap: 6 }}>
-                                  <div className="gu-kv" style={{ padding: '5px 8px' }}>
-                                    <span className="gu-kv-k">Замок</span>
-                                    <span className="gu-kv-v" style={{ color: targetVeh.isLocked ? '#f0c264' : '#9ac985' }}>
-                                      {targetVeh.isLocked ? 'Закрыт' : 'Открыт'}
-                                    </span>
-                                  </div>
-                                  <div className="gu-kv" style={{ padding: '5px 8px' }}>
-                                    <span className="gu-kv-k">ДВС</span>
-                                    <span className="gu-kv-v" style={{ color: targetVeh.engineState?.engineRunning ? '#9ac985' : 'var(--gu-mut)' }}>
-                                      {targetVeh.engineState?.engineRunning ? 'Вкл' : 'Выкл'}
-                                    </span>
-                                  </div>
-                                  <div className="gu-kv" style={{ padding: '5px 8px' }}>
-                                    <span className="gu-kv-k">Фары</span>
-                                    <span className="gu-kv-v" style={{ color: targetVeh.headlightsOn ? '#f0c264' : 'var(--gu-mut)' }}>
-                                      {targetVeh.headlightsOn ? 'Вкл' : 'Выкл'}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                              <div className="gu-grid gu-g2" style={{ gap: 5 }}>
                                 <button
                                   type="button"
                                   className="gu-btn gu-btn-s gu-btn-xs"
@@ -1124,7 +1331,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                     forceRender(n => n + 1);
                                   }}
                                 >
-                                  {targetVeh?.isLocked ? <Unlock width={13} height={13} color="#c9922b" /> : <Lock width={13} height={13} color="#c9922b" />}
+                                  {targetVeh?.isLocked ? <Unlock width={12} height={12} color="#c9922b" /> : <Lock width={12} height={12} color="#c9922b" />}
                                   <span>{targetVeh?.isLocked ? 'Открыть ЦЗ' : 'Закрыть ЦЗ'}</span>
                                 </button>
 
@@ -1137,7 +1344,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                       forceRender(n => n + 1);
                                     }}
                                   >
-                                    <Zap width={13} height={13} />
+                                    <Zap width={12} height={12} />
                                     <span>{targetVeh?.engineState?.engineRunning ? 'Заглушить' : 'Автозапуск'}</span>
                                   </button>
                                 ) : (
@@ -1149,7 +1356,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                       forceRender(n => n + 1);
                                     }}
                                   >
-                                    <Volume2 width={13} height={13} color="#c9922b" />
+                                    <Volume2 width={12} height={12} color="#c9922b" />
                                     <span>Поиск авто</span>
                                   </button>
                                 )}
@@ -1163,7 +1370,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                       forceRender(n => n + 1);
                                     }}
                                   >
-                                    <Lightbulb width={13} height={13} color="#c9922b" />
+                                    <Lightbulb width={12} height={12} color="#c9922b" />
                                     <span>{targetVeh?.headlightsOn ? 'Выкл фары' : 'Вкл фары'}</span>
                                   </button>
                                 )}
@@ -1177,8 +1384,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                       forceRender(n => n + 1);
                                     }}
                                   >
-                                    <Volume2 width={13} height={13} color="#c9922b" />
-                                    <span>Поиск (Сигнал)</span>
+                                    <Volume2 width={12} height={12} color="#c9922b" />
+                                    <span>Сигнал</span>
                                   </button>
                                 )}
                               </div>
@@ -1196,8 +1403,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
                         onClick={() => onInspectDocument?.(selectedEntry.item)}
                       >
-                        <FileText width={15} height={15} />
-                        <span>Изучить / Просмотреть документ</span>
+                        <FileText width={14} height={14} />
+                        <span>Просмотреть документ</span>
                       </button>
                     ) : isFluidContainerClosed(selectedEntry.item) ? (
                       <button
@@ -1210,7 +1417,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           forceRender(n => n + 1);
                         }}
                       >
-                        <Scissors width={15} height={15} />
+                        <Scissors width={14} height={14} />
                         <span>
                           {selectedEntry.item.itemId.startsWith('can_metal_')
                             ? 'Вскрыть консервную банку'
@@ -1230,7 +1437,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
                         onClick={() => handleUseItem(selectedEntry.originalIndex)}
                       >
-                        <Utensils width={15} height={15} />
+                        <Utensils width={14} height={14} />
                         <span>Использовать</span>
                       </button>
                     ) : null}
@@ -1242,7 +1449,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         onClick={() => handleTakeToHand('left', selectedEntry.originalIndex)}
                         disabled={!!player.leftHandItem}
                       >
-                        <Hand width={13} height={13} />
+                        <Hand width={12} height={12} />
                         <span>В левую руку</span>
                       </button>
                       <button
@@ -1251,12 +1458,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         onClick={() => handleTakeToHand('right', selectedEntry.originalIndex)}
                         disabled={!!player.rightHandItem}
                       >
-                        <Hand width={13} height={13} />
+                        <Hand width={12} height={12} />
                         <span>В правую руку</span>
                       </button>
                     </div>
 
-                    {/* Stash into reusable containers */}
                     {availableContainers.filter(cont => cont.id !== selectedEntry.item.id).length > 0 && (
                       <div className="gu-row2 gu-wrap" style={{ gap: 4 }}>
                         <span className="gu-mut" style={{ fontSize: 11, marginRight: 2 }}>Убрать в:</span>
@@ -1271,7 +1477,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                 onClick={() => handlePutIntoContainer(cont, selectedEntry.originalIndex)}
                                 disabled={!check.fits}
                                 className="gu-btn gu-btn-s gu-btn-xs"
-                                style={{ height: 26, padding: '0 8px', fontSize: 11 }}
+                                style={{ height: 24, padding: '0 7px', fontSize: 11 }}
                                 title={check.fits ? `Положить ${selectedEntry.item.nameRu} в ${cont.nameRu}` : check.reason}
                               >
                                 <ArrowDownToLine width={11} height={11} color="#c9922b" />
@@ -1282,14 +1488,14 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       </div>
                     )}
 
-                    <div className="gu-row2" style={{ gap: 6 }}>
+                    <div className={world && isPlayerNearTrashBin(player, world) ? 'gu-grid gu-g2' : 'gu-row2'} style={{ gap: 6 }}>
                       <button
                         type="button"
                         id="btn-drop-selected-item"
                         className="gu-btn gu-btn-d gu-btn-xs gu-btn-block"
                         onClick={() => handleDropItem(selectedEntry.originalIndex)}
                       >
-                        <Trash2 width={13} height={13} />
+                        <Trash2 width={12} height={12} />
                         <span>Выбросить 1 шт.</span>
                       </button>
 
@@ -1304,230 +1510,20 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             forceRender(n => n + 1);
                           }}
                         >
-                          <Trash2 width={13} height={13} />
-                          <span>В урну (+Деньги)</span>
+                          <Trash2 width={12} height={12} />
+                          <span>В урну</span>
                         </button>
                       )}
                     </div>
                   </div>
-
-                  {/* Description */}
-                  <div className="gu-note" style={{ lineHeight: 1.45, padding: '8px 12px', fontSize: 12, color: 'var(--gu-ink-dim)' }}>
-                    {selectedEntry.item.descriptionRu}
-                  </div>
-
-                  {/* Packaging Attributes (Shape, Size, State, Material) */}
-                  {(selectedEntry.item.packagingShape ||
-                    selectedEntry.item.packagingShapeNameRu ||
-                    selectedEntry.item.packagingSize ||
-                    selectedEntry.item.itemId.startsWith('candy_pouch') ||
-                    selectedEntry.item.itemId.startsWith('paper_packaging')) && (() => {
-                    const it = selectedEntry.item;
-                    const isCandy = it.itemId.startsWith('candy_pouch');
-                    const isOpenPkg = Boolean(it.isOpen || it.itemId.includes('_open') || !it.singleUseContainer);
-                    const sizeLabels: Record<string, string> = {
-                      mini: 'Мини',
-                      small: 'Малая',
-                      medium: 'Средняя',
-                      large: 'Большая'
-                    };
-                    const shapeLabel =
-                      it.packagingShapeNameRu ||
-                      (it.packagingShape
-                        ? getCandyPackagingShapeNameRu(it.packagingShape)
-                        : isCandy
-                        ? 'Пластиковый пакет'
-                        : 'Пергаментный конверт-брикет');
-
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                          <span className="gu-grp" style={{ fontSize: 12 }}>Характеристики упаковки</span>
-                          <span className="gu-tag amber" style={{ fontSize: 10 }}>
-                            <Package width={11} height={11} />
-                            {isOpenPkg ? 'Вскрыта' : 'Запаяна'}
-                          </span>
-                        </div>
-                        <div className="gu-kv-grid">
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Форма</span>
-                            <span className="gu-kv-v">{shapeLabel}</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Размер</span>
-                            <span className="gu-kv-v">{sizeLabels[it.packagingSize || 'medium'] || 'Стандарт'}</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Материал</span>
-                            <span className="gu-kv-v">{isCandy ? 'Пищевой пластик (BOPP)' : 'Пищевой пергамент'}</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Вместимость</span>
-                            <span className="gu-kv-v">{it.containerCapacityL ? `${it.containerCapacityL} л` : '—'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Gummy Candy Attributes (Color, Shape, Flavor, Ingredients) */}
-                  {selectedEntry.item.gummyAttributes && (() => {
-                    const g = selectedEntry.item.gummyAttributes!;
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                          <span className="gu-grp" style={{ fontSize: 12 }}>Свойства мармелада</span>
-                          {g.sourDust && (
-                            <span className="gu-tag amber" style={{ fontSize: 10 }}>
-                              <Sparkles width={11} height={11} />
-                              Кислая посыпка
-                            </span>
-                          )}
-                        </div>
-                        <div className="gu-kv-grid">
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Цвет</span>
-                            <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <span
-                                style={{
-                                  width: 10,
-                                  height: 10,
-                                  borderRadius: 2,
-                                  backgroundColor: g.color,
-                                  border: '1px solid rgba(255,255,255,0.35)',
-                                  display: 'inline-block',
-                                  flexShrink: 0
-                                }}
-                              />
-                              <span>{g.colorNameRu}</span>
-                            </span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Форма</span>
-                            <span className="gu-kv-v">{g.shapeNameRu}</span>
-                          </div>
-                          {g.flavorRu && (
-                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                              <span className="gu-kv-k">Вкус</span>
-                              <span className="gu-kv-v">{g.flavorRu}</span>
-                            </div>
-                          )}
-                          <div className="gu-kv" style={{ gridColumn: '1 / -1', alignItems: 'flex-start', flexDirection: 'column', gap: 4 }}>
-                            <span className="gu-kv-k">Состав</span>
-                            <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--gu-ink-soft)' }}>
-                              {g.ingredients.join(', ')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Thermodynamics */}
-                  {(() => {
-                    const thermalInfo = getItemThermalDisplayInfo(selectedEntry.item);
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                          <span className="gu-grp" style={{ fontSize: 12 }}>Термодинамика</span>
-                          {thermalInfo.hazardBadge && (
-                            <span className="gu-tag bad">
-                              <Flame width={11} height={11} />
-                              {thermalInfo.hazardBadge.text}
-                            </span>
-                          )}
-                        </div>
-                        <div className="gu-kv-grid">
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Внутри</span>
-                            <span className="gu-kv-v">{thermalInfo.coreTempText}</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Снаружи</span>
-                            <span className="gu-kv-v">{thermalInfo.surfaceTempText}</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Потеря тепла</span>
-                            <span className="gu-kv-v">{thermalInfo.heatLossText}</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Удержание</span>
-                            <span className="gu-kv-v">{thermalInfo.retentionText}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Nutritional Profile */}
-                  {selectedEntry.item.nutrients && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                        <span className="gu-grp" style={{ fontSize: 12 }}>Пищевая ценность (БЖУ)</span>
-                        <span className="gu-tag amber">{selectedEntry.item.nutrients.calories} ккал</span>
-                      </div>
-                      <div className="gu-kv-grid">
-                        <div className="gu-kv">
-                          <span className="gu-kv-k">Белки</span>
-                          <span className="gu-kv-v">{selectedEntry.item.nutrients.proteins} г</span>
-                        </div>
-                        <div className="gu-kv">
-                          <span className="gu-kv-k">Жиры</span>
-                          <span className="gu-kv-v" style={{ color: '#f0c264' }}>{selectedEntry.item.nutrients.fats} г</span>
-                        </div>
-                        <div className="gu-kv">
-                          <span className="gu-kv-k">Углеводы</span>
-                          <span className="gu-kv-v">{selectedEntry.item.nutrients.carbs} г</span>
-                        </div>
-                        <div className="gu-kv">
-                          <span className="gu-kv-k">Сахара</span>
-                          <span className="gu-kv-v">{selectedEntry.item.nutrients.sugars} г</span>
-                        </div>
-                        {selectedEntry.item.nutrients.salt !== undefined && (
-                          <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                            <span className="gu-kv-k">Соль (NaCl)</span>
-                            <span className="gu-kv-v">{selectedEntry.item.nutrients.salt} г</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Smartphone Specs */}
-                  {selectedEntry.item.phoneSpecs && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                        <span className="gu-grp" style={{ fontSize: 12 }}>{selectedEntry.item.phoneSpecs.modelName}</span>
-                        <span className="gu-tag">{selectedEntry.item.phoneSpecs.osName}</span>
-                      </div>
-                      <div className="gu-kv-grid">
-                        <div className="gu-kv">
-                          <span className="gu-kv-k">Экран</span>
-                          <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.screenSize} ({selectedEntry.item.phoneSpecs.refreshRateHz}Hz)</span>
-                        </div>
-                        <div className="gu-kv">
-                          <span className="gu-kv-k">Камера</span>
-                          <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.cameraMegaPixels} MP</span>
-                        </div>
-                        <div className="gu-kv">
-                          <span className="gu-kv-k">Память</span>
-                          <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.storageGb} GB</span>
-                        </div>
-                        <div className="gu-kv">
-                          <span className="gu-kv-k">Батарея</span>
-                          <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.batteryCapacityMah} мАч</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </>
               ) : (
-                <div className="gu-empty" style={{ minHeight: 320 }}>
-                  <Package width={42} height={42} color="#8f8b81" />
-                  <div className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>
+                <div className="gu-empty" style={{ flex: 1 }}>
+                  <Package width={38} height={38} color="#8f8b81" />
+                  <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>
                     Выберите предмет в ячейке
                   </div>
-                  <div className="gu-mut" style={{ fontSize: 13, maxWidth: 280 }}>
+                  <div className="gu-mut" style={{ fontSize: 12.5, maxWidth: 260 }}>
                     Отобразятся физические свойства, термодинамика, пищевая ценность и доступные действия.
                   </div>
                 </div>
@@ -1538,231 +1534,269 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
         {/* ==================== SUB-INVENTORY: CONTAINER VIEW ==================== */}
         {activeTab === 'inventory' && openContainer && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="gu-panel gu-pad gu-row2 gu-wrap" style={{ justifyContent: 'space-between' }}>
-              <div className="gu-row2" style={{ gap: 12 }}>
-                <button id="btn-close-container-view" type="button" className="gu-btn gu-btn-s gu-btn-sm" onClick={() => setOpenContainer(null)}>
-                  <ChevronLeft width={16} height={16} color="#c9922b" />
-                  <span>Назад в карманы</span>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Compact Pinned Header */}
+            <div className="gu-panel gu-row2 gu-wrap" style={{ flex: 'none', justifyContent: 'space-between', padding: '8px 12px' }}>
+              <div className="gu-row2" style={{ gap: 10, minWidth: 0 }}>
+                <button id="btn-close-container-view" type="button" className="gu-btn gu-btn-s gu-btn-xs" onClick={() => setOpenContainer(null)}>
+                  <ChevronLeft width={14} height={14} color="#c9922b" />
+                  <span>В карманы</span>
                 </button>
-                <div className="gu-ic">
-                  <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={38} />
+                <div className="gu-ic" style={{ width: 34, height: 34, flexShrink: 0 }}>
+                  <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={30} />
                 </div>
-                <div>
-                  <div className="gu-row2" style={{ gap: 8 }}>
-                    <span className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>
-                      {openContainer.nameRu}
-                    </span>
-                    <span className="gu-tag amber">Контейнер</span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="gu-cn" style={{ fontSize: 17, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
+                    {openContainer.nameRu}
                   </div>
-                  <div className="gu-mut gu-mono" style={{ fontSize: 12 }}>
-                    Вместимость: {openContainer.containerCapacityL} л · Макс. вес: {openContainer.maxContainedWeightKg} кг
+                  <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                    Контейнер · Макс. {openContainer.containerCapacityL} л · {openContainer.maxContainedWeightKg} кг
                   </div>
                 </div>
               </div>
 
-              <div className="gu-row2 gu-mono" style={{ gap: 10, fontSize: 13, color: 'var(--gu-mut)' }}>
-                <span>Предметов: <strong style={{ color: '#fff' }}>{openContainer.contents?.length || 0}</strong></span>
+              <div className="gu-row2 gu-mono" style={{ gap: 8, fontSize: 12, color: 'var(--gu-mut)' }}>
+                <span><strong style={{ color: '#fff' }}>{openContainer.contents?.length || 0}</strong> предм.</span>
                 <span>·</span>
-                <span>Объём: <strong style={{ color: 'var(--gu-amber-hi)' }}>{getItemTotalVolume(openContainer)} л</strong></span>
+                <span><strong style={{ color: 'var(--gu-amber-hi)' }}>{getItemTotalVolume(openContainer)}</strong> / {openContainer.containerCapacityL} л</span>
                 <span>·</span>
-                <span>Вес: <strong style={{ color: '#fff' }}>{formatWeightRu(getItemTotalWeight(openContainer))}</strong></span>
+                <span><strong style={{ color: '#fff' }}>{formatWeightRu(getItemTotalWeight(openContainer))}</strong></span>
               </div>
             </div>
 
-            {(openContainer.contents || []).length > 0 ? (
-              <div className="gu-grid gu-g2" style={{ gap: 8 }}>
-                {openContainer.contents!.map((contItem, cIdx) => (
-                  <div key={cIdx} className="gu-item" style={{ justifyContent: 'space-between', padding: '8px 12px' }}>
-                    <div className="gu-row2" style={{ minWidth: 0, gap: 10 }}>
-                      <div className="gu-ic">
-                        <ItemIconCanvas itemId={contItem.itemId} item={contItem} size={38} />
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div className="gu-item-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {contItem.nameRu}
-                        </div>
-                        <div className="gu-item-sub gu-mono">
-                          {contItem.count} шт. · {formatWeightRu(getItemTotalWeight(contItem))} · {getItemTotalVolume(contItem)} л
-                        </div>
-                        {contItem.gummyAttributes && (
-                          <div className="gu-row2" style={{ gap: 6, marginTop: 2, fontSize: 11, color: 'var(--gu-ink-soft)' }}>
-                            <span
-                              style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: 2,
-                                backgroundColor: contItem.gummyAttributes.color,
-                                border: '1px solid rgba(255,255,255,0.35)',
-                                display: 'inline-block',
-                                flexShrink: 0
-                              }}
-                            />
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {contItem.gummyAttributes.shapeNameRu} · {contItem.gummyAttributes.colorNameRu}
-                              {contItem.gummyAttributes.flavorRu ? ` (${contItem.gummyAttributes.flavorRu})` : ''}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="gu-row2" style={{ gap: 6, flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-p gu-btn-xs"
-                        onClick={() => handleExtractFromContainer(openContainer, cIdx, 'pockets')}
-                      >
-                        <ArrowUpFromLine width={13} height={13} />
-                        <span>В карман</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-s gu-btn-xs"
-                        disabled={!!player.rightHandItem}
-                        onClick={() => handleExtractFromContainer(openContainer, cIdx, 'rightHand')}
-                      >
-                        <Hand width={13} height={13} />
-                        <span>В руку</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="gu-btn gu-btn-d gu-btn-xs"
-                        onClick={() => handleDropFromContainer(openContainer, cIdx)}
-                        title="Выбросить на землю"
-                      >
-                        <Trash2 width={13} height={13} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="gu-panel gu-empty">
-                <Package width={38} height={38} color="#8f8b81" />
-                <div className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>Контейнер пуст</div>
-                <div className="gu-mut" style={{ fontSize: 13 }}>
-                  Выберите предметы ниже, чтобы быстро сложить их внутрь «{openContainer.nameRu}».
+            {/* 2 Equal Columns: Contents | Deposit */}
+            <div className="gu-cont-split">
+              {/* LEFT: CONTAINER CONTENTS */}
+              <div className="gu-panel gu-cont-col">
+                <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between' }}>
+                  <span className="gu-grp" style={{ fontSize: 11.5 }}>Содержимое ({openContainer.contents?.length || 0})</span>
+                  <span className="gu-mut" style={{ fontSize: 11 }}>Достать или выбросить</span>
                 </div>
+
+                {(openContainer.contents || []).length > 0 ? (
+                  <div className="gu-cont-scroll">
+                    {openContainer.contents!.map((contItem, cIdx) => (
+                      <div key={cIdx} className="gu-shop-item" style={{ padding: '7px 9px', gap: 8 }}>
+                        <div className="gu-ic" style={{ width: 36, height: 36, flexShrink: 0 }}>
+                          <ItemIconCanvas itemId={contItem.itemId} item={contItem} size={32} />
+                        </div>
+                        <div className="gu-grow" style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {contItem.nameRu}
+                          </div>
+                          <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                            {contItem.count} шт. · {formatWeightRu(getItemTotalWeight(contItem))} · {getItemTotalVolume(contItem)} л
+                          </div>
+                          {contItem.gummyAttributes && (
+                            <div className="gu-row2" style={{ gap: 5, marginTop: 2, fontSize: 10.5, color: 'var(--gu-ink-soft)' }}>
+                              <span
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: 2,
+                                  backgroundColor: contItem.gummyAttributes.color,
+                                  border: '1px solid rgba(255,255,255,0.35)',
+                                  display: 'inline-block',
+                                  flexShrink: 0
+                                }}
+                              />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {contItem.gummyAttributes.shapeNameRu} · {contItem.gummyAttributes.colorNameRu}
+                                {contItem.gummyAttributes.flavorRu ? ` (${contItem.gummyAttributes.flavorRu})` : ''}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="gu-row2" style={{ gap: 4, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            className="gu-btn gu-btn-p gu-btn-xs"
+                            onClick={() => handleExtractFromContainer(openContainer, cIdx, 'pockets')}
+                          >
+                            <ArrowUpFromLine width={12} height={12} />
+                            <span>В карман</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="gu-btn gu-btn-s gu-btn-xs"
+                            disabled={!!player.rightHandItem}
+                            onClick={() => handleExtractFromContainer(openContainer, cIdx, 'rightHand')}
+                            title="В правую руку"
+                          >
+                            <Hand width={12} height={12} />
+                            <span>В руку</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="gu-btn gu-btn-d gu-btn-xs"
+                            onClick={() => handleDropFromContainer(openContainer, cIdx)}
+                            title="Выбросить на землю"
+                          >
+                            <Trash2 width={12} height={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="gu-empty" style={{ flex: 1 }}>
+                    <Package width={32} height={32} color="#8f8b81" />
+                    <div className="gu-cn" style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>Контейнер пуст</div>
+                    <div className="gu-mut" style={{ fontSize: 12 }}>
+                      Выберите предметы справа, чтобы сложить их внутрь.
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* Quick Deposit Section */}
-            {(() => {
-              const depositCandidates: { item: InventoryItem; source: 'inventory' | 'leftHand' | 'rightHand'; index?: number }[] = [];
-              (player.inventory || []).forEach((invItem, idx) => {
-                if (invItem && invItem.id !== openContainer.id) {
-                  depositCandidates.push({ item: invItem, source: 'inventory', index: idx });
-                }
-              });
-              if (player.leftHandItem && player.leftHandItem.id !== openContainer.id) {
-                depositCandidates.push({ item: player.leftHandItem, source: 'leftHand' });
-              }
-              if (player.rightHandItem && player.rightHandItem.id !== openContainer.id) {
-                depositCandidates.push({ item: player.rightHandItem, source: 'rightHand' });
-              }
+              {/* RIGHT: QUICK DEPOSIT FROM HANDS & POCKETS */}
+              <div className="gu-panel gu-cont-col">
+                {(() => {
+                  const depositCandidates: { item: InventoryItem; source: 'inventory' | 'leftHand' | 'rightHand'; index?: number }[] = [];
+                  if (player.leftHandItem && player.leftHandItem.id !== openContainer.id) {
+                    depositCandidates.push({ item: player.leftHandItem, source: 'leftHand' });
+                  }
+                  if (player.rightHandItem && player.rightHandItem.id !== openContainer.id) {
+                    depositCandidates.push({ item: player.rightHandItem, source: 'rightHand' });
+                  }
+                  (player.inventory || []).forEach((invItem, idx) => {
+                    if (invItem && invItem.id !== openContainer.id) {
+                      depositCandidates.push({ item: invItem, source: 'inventory', index: idx });
+                    }
+                  });
 
-              if (depositCandidates.length === 0) return null;
+                  return (
+                    <>
+                      <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between' }}>
+                        <span className="gu-grp" style={{ fontSize: 11.5 }}>Положить из рук и карманов ({depositCandidates.length})</span>
+                        <span className="gu-mut" style={{ fontSize: 11 }}>Клик — убрать</span>
+                      </div>
 
-              return (
-                <div className="gu-panel gu-pad">
-                  <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
-                    <span className="gu-grp">Положить предмет в {openContainer.nameRu}</span>
-                    <span className="gu-mut" style={{ fontSize: 12 }}>Нажмите на предмет для перемещения</span>
-                  </div>
-                  <div className="gu-grid gu-g4" style={{ gap: 8 }}>
-                    {depositCandidates.map((cand, cIdx) => {
-                      const check = canItemFitInContainer(openContainer, cand.item);
-                      return (
-                        <button
-                          type="button"
-                          key={cIdx}
-                          disabled={!check.fits}
-                          className="gu-card"
-                          style={{ padding: '8px 10px', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 10 }}
-                          title={check.fits ? `Положить ${cand.item.nameRu} в ${openContainer.nameRu}` : check.reason}
-                          onClick={() => {
-                            if (cand.source === 'inventory' && cand.index !== undefined) {
-                              handlePutIntoContainer(openContainer, cand.index);
-                            } else if (cand.source === 'leftHand' || cand.source === 'rightHand') {
-                              const hand = cand.source === 'leftHand' ? 'left' : 'right';
-                              const itemFromHand = takeItemFromHand(player, hand);
-                              if (itemFromHand) {
-                                const res = addItemToContainer(openContainer, itemFromHand);
-                                if (res.success) {
-                                  sound.playPickup();
-                                  addPlayerNotification(player, res.message, 'pickup');
-                                  forceRender(n => n + 1);
-                                } else {
-                                  putItemInHand(player, hand, itemFromHand, world);
-                                  addPlayerNotification(player, res.message, 'warning');
-                                }
-                              }
-                            }
-                          }}
-                        >
-                          <div className="gu-ic">
-                            <ItemIconCanvas itemId={cand.item.itemId} item={cand.item} size={38} />
+                      {depositCandidates.length > 0 ? (
+                        <div className="gu-cont-scroll">
+                          <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                            {depositCandidates.map((cand, cIdx) => {
+                              const check = canItemFitInContainer(openContainer, cand.item);
+                              const srcLabel =
+                                cand.source === 'leftHand'
+                                  ? 'Лев. рука'
+                                  : cand.source === 'rightHand'
+                                  ? 'Прав. рука'
+                                  : `Слот #${(cand.index ?? 0) + 1}`;
+                              return (
+                                <button
+                                  type="button"
+                                  key={cIdx}
+                                  disabled={!check.fits}
+                                  className="gu-card-sm"
+                                  style={{
+                                    padding: '7px 9px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-start',
+                                    gap: 8,
+                                    textAlign: 'left',
+                                    cursor: check.fits ? 'pointer' : 'not-allowed',
+                                    opacity: check.fits ? 1 : 0.48
+                                  }}
+                                  title={check.fits ? `Положить ${cand.item.nameRu} в ${openContainer.nameRu}` : check.reason}
+                                  onClick={() => {
+                                    if (cand.source === 'inventory' && cand.index !== undefined) {
+                                      handlePutIntoContainer(openContainer, cand.index);
+                                    } else if (cand.source === 'leftHand' || cand.source === 'rightHand') {
+                                      const hand = cand.source === 'leftHand' ? 'left' : 'right';
+                                      const itemFromHand = takeItemFromHand(player, hand);
+                                      if (itemFromHand) {
+                                        const res = addItemToContainer(openContainer, itemFromHand);
+                                        if (res.success) {
+                                          sound.playPickup();
+                                          addPlayerNotification(player, res.message, 'pickup');
+                                          forceRender(n => n + 1);
+                                        } else {
+                                          putItemInHand(player, hand, itemFromHand, world);
+                                          addPlayerNotification(player, res.message, 'warning');
+                                        }
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <div className="gu-ic" style={{ width: 34, height: 34, flexShrink: 0 }}>
+                                    <ItemIconCanvas itemId={cand.item.itemId} item={cand.item} size={30} />
+                                  </div>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontWeight: 600, fontSize: 12.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {cand.item.nameRu}
+                                    </div>
+                                    <div className="gu-mut gu-mono" style={{ fontSize: 10.5 }}>
+                                      {srcLabel} · {getItemTotalVolume(cand.item)} л · {formatWeightRu(getItemTotalWeight(cand.item))}
+                                    </div>
+                                  </div>
+                                  <ArrowDownToLine width={13} height={13} color="#c9922b" style={{ flexShrink: 0 }} />
+                                </button>
+                              );
+                            })}
                           </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {cand.item.nameRu}
-                            </div>
-                            <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
-                              {getItemTotalVolume(cand.item)} л · {formatWeightRu(getItemTotalWeight(cand.item))}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
+                        </div>
+                      ) : (
+                        <div className="gu-empty" style={{ flex: 1 }}>
+                          <Package width={32} height={32} color="#8f8b81" />
+                          <div className="gu-cn" style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>Нет предметов</div>
+                          <div className="gu-mut" style={{ fontSize: 12 }}>В руках и карманах пока пусто.</div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
         )}
 
         {/* ==================== TAB 2: SURROUNDINGS ==================== */}
         {activeTab === 'surroundings' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-              <span className="gu-grp">Предметы и объекты поблизости (в радиусе 8 м)</span>
-              <span className="gu-mut gu-mono" style={{ fontSize: 13 }}>Найдено: {nearbyGroundItems.length}</span>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="gu-panel gu-row2" style={{ flex: 'none', justifyContent: 'space-between', padding: '8px 12px' }}>
+              <span className="gu-grp" style={{ fontSize: 12 }}>Предметы поблизости (в радиусе 8 м)</span>
+              <span className="gu-mut gu-mono" style={{ fontSize: 12 }}>Найдено: <strong style={{ color: '#fff' }}>{nearbyGroundItems.length}</strong></span>
             </div>
 
             {nearbyGroundItems.length > 0 ? (
-              <div className="gu-list">
-                {nearbyGroundItems.map(gi => (
-                  <div key={gi.id} className="gu-rw">
-                    <div className="gu-ic">
-                      <ItemIconCanvas itemId={gi.item.itemId} item={gi.item} size={38} />
-                    </div>
-                    <div className="gu-grow">
-                      <div className="gu-rw-t">{gi.item.nameRu}</div>
-                      <div className="gu-rw-d gu-mono">
-                        {gi.item.count} шт. · {formatWeightRu(getItemTotalWeight(gi.item))} · {getItemTotalVolume(gi.item)} л
+              <div className="gu-inv-scroll-page">
+                <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                  {nearbyGroundItems.map(gi => (
+                    <div key={gi.id} className="gu-shop-item" style={{ padding: '8px 10px', gap: 10 }}>
+                      <div className="gu-ic" style={{ width: 38, height: 38, flexShrink: 0 }}>
+                        <ItemIconCanvas itemId={gi.item.itemId} item={gi.item} size={34} />
                       </div>
-                    </div>
-                    <div className="gu-rw-end">
+                      <div className="gu-grow" style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {gi.item.nameRu}
+                        </div>
+                        <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                          {gi.item.count} шт. · {formatWeightRu(getItemTotalWeight(gi.item))} · {getItemTotalVolume(gi.item)} л
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        className="gu-btn gu-btn-p gu-btn-sm"
+                        className="gu-btn gu-btn-p gu-btn-xs"
+                        style={{ flexShrink: 0 }}
                         onClick={() => handlePickupGroundItem(gi)}
                       >
-                        <Plus width={15} height={15} />
+                        <Plus width={13} height={13} />
                         <span>Подобрать</span>
                       </button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="gu-panel gu-empty" style={{ minHeight: 280 }}>
-                <Sparkles width={40} height={40} color="#8f8b81" />
-                <div className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>
+              <div className="gu-panel gu-empty" style={{ flex: 1 }}>
+                <Sparkles width={36} height={36} color="#8f8b81" />
+                <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>
                   Поблизости нет предметов на земле
                 </div>
-                <div className="gu-mut" style={{ fontSize: 13, maxWidth: 340 }}>
+                <div className="gu-mut" style={{ fontSize: 12.5, maxWidth: 320 }}>
                   Подходите ближе к предметам на улице или в помещениях, чтобы подобрать их в карманы или руки.
                 </div>
               </div>
@@ -1772,15 +1806,15 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
         {/* ==================== TAB 3: CLOTHING ==================== */}
         {activeTab === 'clothing' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="gu-panel gu-pad gu-row2 gu-wrap" style={{ justifyContent: 'space-between' }}>
-              <div>
-                <div className="gu-grp">Надетая одежда и вместимость карманов</div>
-                <div className="gu-mut" style={{ fontSize: 13, marginTop: 2 }}>
-                  Верхняя одежда, брюки и рюкзаки добавляют слоты и литраж карманов
-                </div>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="gu-panel gu-row2 gu-wrap" style={{ flex: 'none', justifyContent: 'space-between', padding: '8px 12px' }}>
+              <div className="gu-row2" style={{ gap: 8 }}>
+                <span className="gu-grp" style={{ fontSize: 12 }}>Надетая одежда</span>
+                <span className="gu-mut gu-hide-s" style={{ fontSize: 12 }}>
+                  · Одежда и рюкзаки увеличивают литраж и число слотов
+                </span>
               </div>
-              <div className="gu-row2 gu-mono" style={{ gap: 8, fontSize: 13 }}>
+              <div className="gu-row2 gu-mono" style={{ gap: 6, fontSize: 12.5 }}>
                 <span className="gu-mut">Объём карманов:</span>
                 <strong style={{ color: 'var(--gu-amber-hi)' }}>
                   {pocketCap.usedVolumeL} / {pocketCap.totalCapacityL} л
@@ -1789,48 +1823,51 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             </div>
 
             {Object.keys(player.equippedClothing || {}).length > 0 ? (
-              <div className="gu-grid gu-g2">
-                {Object.entries(player.equippedClothing || {}).map(([slot, layers]) => (
-                  <div key={slot} className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div className="gu-grp">{CLOTHING_SLOT_LABELS[slot] || slot}</div>
-                    {Object.entries(layers).map(([layer, item]) => (
-                      <div key={layer} className="gu-card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                        <div className="gu-row2" style={{ gap: 10, minWidth: 0 }}>
-                          <div className="gu-ic">
-                            <ItemIconCanvas itemId={item.itemId} item={item} size={38} />
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 15, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {item.nameRu}
+              <div className="gu-inv-scroll-page">
+                <div className="gu-grid gu-g2" style={{ gap: 8 }}>
+                  {Object.entries(player.equippedClothing || {}).map(([slot, layers]) => (
+                    <div key={slot} className="gu-panel" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px' }}>
+                      <div className="gu-grp" style={{ fontSize: 11 }}>{CLOTHING_SLOT_LABELS[slot] || slot}</div>
+                      {Object.entries(layers).map(([layer, item]) => (
+                        <div key={layer} className="gu-card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '6px 8px' }}>
+                          <div className="gu-row2" style={{ gap: 8, minWidth: 0 }}>
+                            <div className="gu-ic" style={{ width: 34, height: 34, flexShrink: 0 }}>
+                              <ItemIconCanvas itemId={item.itemId} item={item} size={30} />
                             </div>
-                            <div className="gu-mut" style={{ fontSize: 12 }}>
-                              {CLOTHING_LAYER_LABELS[layer] || layer}
-                              {item.clothingStats && item.clothingStats.pocketCapacityL ? (
-                                <span style={{ color: 'var(--gu-amber-soft)' }}>
-                                  {' · '}+{item.clothingStats.pocketCapacityL} л (до {item.clothingStats.maxPocketWeightKg || 1.5} кг)
-                                </span>
-                              ) : null}
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 13.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.nameRu}
+                              </div>
+                              <div className="gu-mut" style={{ fontSize: 11 }}>
+                                {CLOTHING_LAYER_LABELS[layer] || layer}
+                                {item.clothingStats && item.clothingStats.pocketCapacityL ? (
+                                  <span style={{ color: 'var(--gu-amber-soft)' }}>
+                                    {' · '}+{item.clothingStats.pocketCapacityL} л ({item.clothingStats.maxPocketWeightKg || 1.5} кг)
+                                  </span>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <button
-                          type="button"
-                          className="gu-btn gu-btn-d gu-btn-xs"
-                          onClick={() => handleUnequipItem(slot, layer)}
-                        >
-                          Снять
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ))}
+                          <button
+                            type="button"
+                            className="gu-btn gu-btn-d gu-btn-xs"
+                            style={{ flexShrink: 0 }}
+                            onClick={() => handleUnequipItem(slot, layer)}
+                          >
+                            Снять
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="gu-panel gu-empty" style={{ minHeight: 260 }}>
-                <Shirt width={40} height={40} color="#8f8b81" />
-                <div className="gu-cn" style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>Нет надетой экипировки</div>
-                <div className="gu-mut" style={{ fontSize: 13 }}>Выберите одежду в карманах или руках и нажмите «Надеть».</div>
+              <div className="gu-panel gu-empty" style={{ flex: 1 }}>
+                <Shirt width={36} height={36} color="#8f8b81" />
+                <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>Нет надетой экипировки</div>
+                <div className="gu-mut" style={{ fontSize: 12.5 }}>Выберите одежду в карманах или руках и нажмите «Надеть».</div>
               </div>
             )}
           </div>
