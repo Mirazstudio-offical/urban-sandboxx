@@ -1859,8 +1859,8 @@ function renderHumanShadow(
   const x = entity.x;
   const y = entity.y;
   const bodyAngle = entity.angle || 0;
-  const s = scale || 0.44;
-  const hScale = s / 0.44;
+  const s = scale || 0.74;
+  const hScale = s / 0.74;
 
   const pose = computeHumanPose(entity, isPlayer, nowSec);
 
@@ -3011,19 +3011,19 @@ export function renderUnifiedWorldShadows(
     const nowSec = typeof performance !== 'undefined' ? performance.now() * 0.001 : Date.now() * 0.001;
     for (const ped of visiblePedestrians) {
       if (ped.isInsideBuilding) continue;
-      const pedScale = (ped.isChild || ped.ageGroup === 'child' ? 0.74 : 1.0) * 0.44;
+      const pedScale = (ped.isChild || ped.ageGroup === 'child' ? 0.7 : 1.0) * 0.74;
       renderHumanShadow(sCtx, ped, false, pedScale, sunState, nowSec);
     }
 
     // 1G. Player & Remote Players (when on foot)
     if (player && !player.isInVehicle && !player.isInsideBuilding && !player.insideBusId) {
-      renderHumanShadow(sCtx, player, true, 0.44, sunState, nowSec);
+      renderHumanShadow(sCtx, player, true, 0.74, sunState, nowSec);
     }
     if (remotePlayers) {
       for (const rp of remotePlayers) {
         if (rp.isInVehicle) continue;
         if (rp.x < minX - 80 || rp.x > maxX + 80 || rp.y < minY - 80 || rp.y > maxY + 80) continue;
-        renderHumanShadow(sCtx, rp, true, 0.44, sunState, nowSec);
+        renderHumanShadow(sCtx, rp, true, 0.74, sunState, nowSec);
       }
     }
   }

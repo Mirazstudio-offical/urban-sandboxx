@@ -29,6 +29,7 @@ export type HumanActionType =
   | 'checking_watch'
   | 'key_fob'
   | 'phone_use'
+  | 'using_phone'
   | 'sweeping'
   | 'firefighter_hose'
   | 'water_hose_use'
@@ -151,6 +152,7 @@ export interface HumanPose3D {
       zTop: number;
       swingX: number;
       swingY: number;
+      swingPitch: number;
     };
     coffee?: {
       x: number;
@@ -184,7 +186,9 @@ export interface HumanPose3D {
     };
     bicycle?: {
       crankAngle: number;
+      pedalAngle: number;
       steerAngle: number;
+      leanRoll: number;
     };
     scooter?: {
       pushPhase: number;
@@ -195,7 +199,9 @@ export interface HumanPose3D {
       z: number;
       angle: number;
       walkPhase: number;
+      legPhase: number;
       tailWag: number;
+      tailAngle: number;
       headBob: number;
       leashStart: Vec3;
       leashMid: Vec3;
@@ -217,6 +223,7 @@ export interface HumanPose3D {
     };
     actionEffect?: {
       kind: 'bandage_gauze' | 'wrench_tool' | 'pour_stream' | 'sand_arc' | 'knife_arc' | 'lighter_flame' | 'crumbs' | 'med_mist';
+      type: 'bandage_gauze' | 'wrench_tool' | 'pour_stream' | 'sand_arc' | 'knife_arc' | 'lighter_flame' | 'crumbs' | 'med_mist';
       x: number;
       y: number;
       z: number;
@@ -233,21 +240,40 @@ export function triggerPlayerActionAnim(
   player: Player | null | undefined,
   type: HumanActionType,
   duration: number = 1.1,
-  options?: {
-    hand?: 'left' | 'right' | 'both';
-    itemId?: string;
-    intensity?: number;
-  }
+  optionsOrHandOrItemId?:
+    | string
+    | {
+        hand?: 'left' | 'right' | 'both';
+        itemId?: string;
+        intensity?: number;
+      },
+  maybeItemId?: string
 ): void {
   if (!player) return;
   const nowSec = typeof performance !== 'undefined' ? performance.now() * 0.001 : Date.now() * 0.001;
+  let hand: 'left' | 'right' | 'both' | undefined;
+  let itemId: string | undefined = maybeItemId;
+  let intensity = 1.0;
+
+  if (typeof optionsOrHandOrItemId === 'string') {
+    if (optionsOrHandOrItemId === 'left' || optionsOrHandOrItemId === 'right' || optionsOrHandOrItemId === 'both') {
+      hand = optionsOrHandOrItemId;
+    } else {
+      itemId = optionsOrHandOrItemId;
+    }
+  } else if (optionsOrHandOrItemId && typeof optionsOrHandOrItemId === 'object') {
+    hand = optionsOrHandOrItemId.hand;
+    itemId = optionsOrHandOrItemId.itemId ?? itemId;
+    intensity = optionsOrHandOrItemId.intensity ?? 1.0;
+  }
+
   player.actionAnim = {
     type,
     startTime: nowSec,
     duration: Math.max(0.2, duration),
-    hand: options?.hand,
-    itemId: options?.itemId,
-    intensity: options?.intensity ?? 1.0,
+    hand,
+    itemId,
+    intensity,
   };
 }
 
@@ -638,7 +664,9 @@ export function computeHumanPose(
 
     props.bicycle = {
       crankAngle: crank,
+      pedalAngle: crank,
       steerAngle: Math.sin(walkCycle * 0.5) * 0.06,
+      leanRoll: Math.sin(walkCycle * 0.5) * 0.08,
     };
   } else if (actionType === 'scooter') {
     // Electric scooter rider posture
@@ -804,6 +832,7 @@ export function computeHumanPose(
       };
       props.actionEffect = {
         kind: 'crumbs',
+        type: 'crumbs',
         x: 4.8,
         y: sideSign * 0.5,
         z: 15.2,
@@ -856,6 +885,7 @@ export function computeHumanPose(
       };
       props.actionEffect = {
         kind: 'bandage_gauze',
+        type: 'bandage_gauze',
         x: 4.8,
         y: 0,
         z: 11.2,
@@ -875,6 +905,7 @@ export function computeHumanPose(
       armR.hand = { x: 4.5 + rub * 0.6, y: 0.4 + rub * 0.5, z: 12.2 };
       props.actionEffect = {
         kind: 'med_mist',
+        type: 'med_mist',
         x: 4.3,
         y: -0.4,
         z: 11.6,
@@ -1004,6 +1035,7 @@ export function computeHumanPose(
       armR.hand = { x: 5.8 + ratchet * 0.9, y: 1.4 - ratchet * 0.8, z: 10.4 };
       props.actionEffect = {
         kind: 'wrench_tool',
+        type: 'wrench_tool',
         x: 5.8 + ratchet * 0.9,
         y: 1.4 - ratchet * 0.8,
         z: 10.4,
@@ -1024,6 +1056,7 @@ export function computeHumanPose(
       armR.hand = { x: 5.6, y: 1.8, z: 11.4 - tilt };
       props.actionEffect = {
         kind: 'pour_stream',
+        type: 'pour_stream',
         x: 6.8,
         y: 0,
         z: 10.2,
@@ -1044,6 +1077,7 @@ export function computeHumanPose(
       armR.hand = { x: 5.8 + heave * 0.8, y: 2.0, z: 9.8 };
       props.actionEffect = {
         kind: 'sand_arc',
+        type: 'sand_arc',
         x: 6.6,
         y: 0,
         z: 9.5,
@@ -1081,6 +1115,7 @@ export function computeHumanPose(
       targetArm.hand = { x: 5.8, y: sideSign * 1.2, z: 12.8 + flick };
       props.actionEffect = {
         kind: 'lighter_flame',
+        type: 'lighter_flame',
         x: 6.4,
         y: sideSign * 1.2,
         z: 13.4,
@@ -1110,6 +1145,7 @@ export function computeHumanPose(
       targetArm.wristAngle = slashAngle;
       props.actionEffect = {
         kind: 'knife_arc',
+        type: 'knife_arc',
         x: targetArm.hand.x,
         y: targetArm.hand.y,
         z: 12.2,
@@ -1119,6 +1155,7 @@ export function computeHumanPose(
       break;
     }
 
+    case 'using_phone':
     case 'phone_use': {
       // Cradling glowing smartphone in front of chest, head tilted down, thumb tapping
       const tap = Math.sin(nowSec * 7.5 + phaseOffset);
@@ -1257,6 +1294,7 @@ export function computeHumanPose(
         zTop: 8.2,
         swingX: bagSwing,
         swingY: Math.abs(bagSwing) * 0.25,
+        swingPitch: bagSwing,
       };
       break;
     }
@@ -1398,7 +1436,9 @@ export function computeHumanPose(
       z: 4.5,
       angle: Math.sin(walkCycle * 0.4) * 0.08,
       walkPhase: dogWalkPhase,
+      legPhase: dogWalkPhase,
       tailWag,
+      tailAngle: tailWag,
       headBob,
       leashStart: { x: armR.hand.x, y: armR.hand.y, z: armR.hand.z },
       leashMid: {

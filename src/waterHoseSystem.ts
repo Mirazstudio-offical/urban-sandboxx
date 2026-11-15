@@ -231,9 +231,9 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
   const numNodes = hose.segments.length;
   if (numNodes < 2) return;
 
-  // Hand position for the nozzle / suction lance (scaled to 10 px/m player anatomy)
+  // Hand position for the nozzle / suction lance (matched to 0.74x adult player anatomy)
   const playerAimAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
-  const handDist = 2.8;
+  const handDist = 4.6;
   const handAngle = playerAimAngle + 0.35;
   const handX = player.x + Math.cos(handAngle) * handDist;
   const handY = player.y + Math.sin(handAngle) * handDist;
@@ -396,8 +396,8 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
         const aimAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
         const cosAim = Math.cos(aimAngle);
         const sinAim = Math.sin(aimAngle);
-        const intakeX = handX + cosAim * 4.5;
-        const intakeY = handY + sinAim * 4.5;
+        const intakeX = handX + cosAim * 7.0;
+        const intakeY = handY + sinAim * 7.0;
 
         const vacBodyId = getVehicleVacuumBodyId(veh);
         // Heavy VK-6M2 pump on КО-505А sludge has 1.4x, КО-505 (310 m3/h) on twin-tank has 1.25x capacity vs КО-503

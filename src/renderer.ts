@@ -6634,20 +6634,20 @@ export class GameRenderer {
       ctx.save();
       ctx.translate(gi.x, gi.y - zLift * 0.85);
 
-      // 1. Soft 3D Ground Contact Ambient Occlusion & Wet Puddle Meniscus Ring (scaled to 10 px/m)
+      // 1. Soft 3D Ground Contact Ambient Occlusion & Wet Puddle Meniscus Ring
       if (zLift < 2.0) {
         ctx.fillStyle = wet > 0.18
           ? `rgba(8, 16, 28, ${0.34 + wet * 0.24})`
           : 'rgba(10, 15, 25, 0.28)';
         ctx.beginPath();
-        safeEllipse(ctx, -sunLx * 0.4, -sunLy * 0.4, 3.2, 2.4, rot, 0, Math.PI * 2);
+        safeEllipse(ctx, -sunLx * 0.4, -sunLy * 0.4, 4.6, 3.5, rot, 0, Math.PI * 2);
         ctx.fill();
 
         if (wet > 0.22) {
           ctx.strokeStyle = `rgba(186, 226, 253, ${wet * 0.34})`;
-          ctx.lineWidth = 0.45;
+          ctx.lineWidth = 0.55;
           ctx.beginPath();
-          safeEllipse(ctx, sunLx * 0.3, sunLy * 0.3, 3.5, 2.6, rot, 0, Math.PI * 2);
+          safeEllipse(ctx, sunLx * 0.3, sunLy * 0.3, 5.0, 3.8, rot, 0, Math.PI * 2);
           ctx.stroke();
         }
       } else {
@@ -6655,7 +6655,7 @@ export class GameRenderer {
         const shScale = Math.max(0.45, 1.0 - zLift * 0.02);
         ctx.fillStyle = `rgba(10, 15, 25, ${0.26 * shScale})`;
         ctx.beginPath();
-        safeEllipse(ctx, -sunLx * zLift * 0.2, zLift * 0.85 - sunLy * zLift * 0.2, 3.0 * shScale, 2.2 * shScale, rot, 0, Math.PI * 2);
+        safeEllipse(ctx, -sunLx * zLift * 0.2, zLift * 0.85 - sunLy * zLift * 0.2, 4.2 * shScale, 3.2 * shScale, rot, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -6663,9 +6663,9 @@ export class GameRenderer {
       ctx.scale(scaleZ, scaleZ);
       ctx.rotate(rot);
 
-      // 2. Item 2D Procedural Model (scaled to 10 px/m ground size)
+      // 2. Item 2D Procedural Model (proportional to 0.74x adult human scale)
       if (gi.item.itemId) {
-        drawItemModel2D(ctx, gi.item.itemId, 0, 0, 5.5, gi.item);
+        drawItemModel2D(ctx, gi.item.itemId, 0, 0, 8.0, gi.item);
       }
 
       // 3. Mud splash coat or wet dielectric solar glint on metallic/glass/packaged items
@@ -9075,9 +9075,9 @@ export class GameRenderer {
     if (world.groundItems) {
       for (let i = 0; i < world.groundItems.length; i++) {
         const gi = world.groundItems[i];
-        if (gi.x < minX - 20 || gi.x > maxX + 20 || gi.y < minY - 20 || gi.y > maxY + 20) continue;
+        if (gi.x < minX - 20 || gi.x > maxX + 20 || gi.y < minY - 20 || gi.y > maxY + 30) continue;
         ctx.beginPath();
-        ctx.arc(gi.x, gi.y, 4.5, 0, Math.PI * 2);
+        ctx.arc(gi.x, gi.y, 5.2, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -9087,14 +9087,14 @@ export class GameRenderer {
       const ped = visiblePedestrians[i];
       if (((ped as any).waterDepth || 0) > 0.35) continue;
       ctx.beginPath();
-      ctx.arc(ped.x, ped.y, ((ped as any).radius || 3.2) + 1.0, 0, Math.PI * 2);
+      ctx.arc(ped.x, ped.y, ((ped as any).radius || 4.6) + 1.2, 0, Math.PI * 2);
       ctx.fill();
     }
     if (!player.isInVehicle && !player.insideCarId && !player.insideBusId) {
       const pDepth = player.waterDepth || 0;
       if (pDepth < 0.55) {
         ctx.beginPath();
-        ctx.arc(player.x, player.y, ((player as any).radius || 3.4) + (pDepth > 0.12 ? -0.5 : 1.0), 0, Math.PI * 2);
+        ctx.arc(player.x, player.y, ((player as any).radius || 4.8) + (pDepth > 0.12 ? -0.5 : 1.2), 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -9103,7 +9103,7 @@ export class GameRenderer {
         const rp = remotePlayers[i];
         if (!rp.isInVehicle && !(rp as any).insideCarId && !(rp as any).insideBusId) {
           ctx.beginPath();
-          ctx.arc(rp.x, rp.y, 4.2, 0, Math.PI * 2);
+          ctx.arc(rp.x, rp.y, 5.6, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -9322,7 +9322,7 @@ export class GameRenderer {
       ctx.translate(ped.x, ped.y);
 
       const isFirefighter = (ped as any).isFirefighter;
-      const pedScale = (ped.isChild ? 0.7 : 1.0) * 0.44;
+      const pedScale = (ped.isChild ? 0.7 : 1.0) * 0.74;
       const nowSec = performance.now() * 0.001;
       const pose = computeHumanPose(ped, false, nowSec);
 
@@ -9756,7 +9756,7 @@ export class GameRenderer {
         ctx.fill();
 
         // Delicate rising hot coffee steam wisps
-        const steamPhase = nowSec * 2.6 + ped.id * 1.3;
+        const steamPhase = pose.props.coffee.steamPhase;
         ctx.strokeStyle = 'rgba(248, 250, 252, 0.45)';
         ctx.lineWidth = 0.55;
         ctx.beginPath();
@@ -9824,8 +9824,8 @@ export class GameRenderer {
         ctx.save();
 
         // Subtle dust puff particles when sweeping bristles reach stroke extremes
-        const sweepVel = Math.abs(Math.cos(nowSec * 3.8 + ped.id));
-        if (sweepVel < 0.35) {
+        const sweepVel = Math.abs(br.sweepNorm);
+        if (sweepVel > 0.75) {
           ctx.fillStyle = 'rgba(203, 213, 225, 0.28)';
           ctx.beginPath();
           ctx.arc(br.shaftEnd.x + 2.8, br.shaftEnd.y + (br.headAngle > 0 ? 3.2 : -3.2), 2.2, 0, Math.PI * 2);
@@ -10228,9 +10228,9 @@ export class GameRenderer {
     // Ground Directional Indicator Ring (hidden in deep wading / swimming so water optics remain pure)
     if (waterDepth < 0.30) {
       ctx.strokeStyle = isRemote ? 'rgba(34, 197, 94, 0.45)' : 'rgba(56, 189, 248, 0.4)';
-      ctx.lineWidth = 0.85;
+      ctx.lineWidth = 1.0;
       ctx.beginPath();
-      ctx.arc(0, 0, 5.2, 0, Math.PI * 2);
+      ctx.arc(0, 0, 7.6, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -10241,12 +10241,12 @@ export class GameRenderer {
     if (waterDepth < 0.30) {
       ctx.fillStyle = isRemote ? '#22c55e' : '#38bdf8';
       ctx.beginPath();
-      ctx.arc(6.6, 0, 1.25, 0, Math.PI * 2);
+      ctx.arc(9.4, 0, 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Scale human silhouette to canonical 10 px/m world scale (~0.70m shoulder span)
-    ctx.scale(0.44, 0.44);
+    // Scale human silhouette to balanced 0.74x adult top-down world scale (~8.9px shoulder span, ~5.0px head)
+    ctx.scale(0.74, 0.74);
 
     // Dodge Roll Motion Trail
     if (player.isDashing && !isSwimming) {
@@ -10613,19 +10613,19 @@ export class GameRenderer {
       drawPlayerArm(pose.armR, false);
 
       // 4. Held Hand Items & Active Consumption Item (positioned at exact articulated hand coordinates)
-      const consItem = (player as Player).consumption?.item;
+      const consItem = ((player as Player).consumption as any)?.item;
       if (player.leftHandItem) {
         const hx = pose.props.handItemL ? pose.props.handItemL.x : pose.armL.hand.x + 0.8;
         const hy = pose.props.handItemL ? pose.props.handItemL.y : pose.armL.hand.y;
-        drawItemModel2D(ctx, player.leftHandItem.itemId, hx, hy, 5.2, player.leftHandItem);
+        drawItemModel2D(ctx, player.leftHandItem.itemId, hx, hy, 6.2, player.leftHandItem);
       }
       if (player.rightHandItem) {
         const hx = pose.props.handItemR ? pose.props.handItemR.x : pose.armR.hand.x + 0.8;
         const hy = pose.props.handItemR ? pose.props.handItemR.y : pose.armR.hand.y;
-        drawItemModel2D(ctx, player.rightHandItem.itemId, hx, hy, 5.2, player.rightHandItem);
+        drawItemModel2D(ctx, player.rightHandItem.itemId, hx, hy, 6.2, player.rightHandItem);
       } else if (consItem) {
         // If consuming from inventory without item in right hand, show the item in the active right hand!
-        drawItemModel2D(ctx, consItem.itemId, pose.armR.hand.x + 0.6, pose.armR.hand.y, 4.8, consItem);
+        drawItemModel2D(ctx, consItem.itemId, pose.armR.hand.x + 0.6, pose.armR.hand.y, 5.8, consItem);
       }
 
       // 5. Bespoke Action Visual Effects (Bandage gauze, Wrench, Pouring stream, Sand arc, Knife slash, Lighter flame, Crumbs, Med mist)
@@ -16349,15 +16349,15 @@ export class GameRenderer {
     for (const ped of visiblePedestrians) {
       if (ped.isInsideBuilding) continue;
       if (ped.state === 'idle_phone' || ped.handheldProp === 'phone') {
-        const px = ped.x + Math.cos(ped.angle) * 2.6;
-        const py = ped.y + Math.sin(ped.angle) * 2.6;
-        const pGrad = lCtx.createRadialGradient(px, py, 0.3, px, py, 7 * fogFactor);
+        const px = ped.x + Math.cos(ped.angle) * 4.4;
+        const py = ped.y + Math.sin(ped.angle) * 4.4;
+        const pGrad = lCtx.createRadialGradient(px, py, 0.4, px, py, 10 * fogFactor);
         pGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.65)');
         pGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
         pGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = pGrad;
         lCtx.beginPath();
-        lCtx.arc(px, py, 7 * fogFactor, 0, Math.PI * 2);
+        lCtx.arc(px, py, 10 * fogFactor, 0, Math.PI * 2);
         lCtx.fill();
       }
     }

@@ -1020,8 +1020,8 @@ export class GasStationRenderer {
       const pump = world.gasPumps.find(p => p.id === nozzle.pumpId);
       if (pump) {
         const origin = this.getPumpNozzleOrigin(pump, nozzle.fuelType);
-        const targetX = player.x + Math.cos(player.angle + 0.45) * 2.8;
-        const targetY = player.y + Math.sin(player.angle + 0.45) * 2.8;
+        const targetX = player.x + Math.cos(player.angle + 0.45) * 4.8;
+        const targetY = player.y + Math.sin(player.angle + 0.45) * 4.8;
 
         this.drawCatenaryHose(ctx, origin.x, origin.y, targetX, targetY, nozzle.color, false, time);
         // Draw metallic nozzle in player's hand
@@ -1075,15 +1075,15 @@ export class GasStationRenderer {
     const hSx = sun.castX * 0.35;
     const hSy = sun.castY * 0.35;
     ctx.strokeStyle = `rgba(0, 0, 0, ${(0.14 + sun.shadowOpacity * 0.45).toFixed(2)})`;
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
     ctx.moveTo(x1 + hSx * 0.6, y1 + hSy * 0.6);
     ctx.quadraticCurveTo(midX + hSx, midY + hSy, x2 + hSx * 0.6, y2 + hSy * 0.6);
     ctx.stroke();
 
-    // Base Heavy Rubber Hose (Black, scaled to 10 px/m)
+    // Base Heavy Rubber Hose (Black, proportional to 0.74x player & pump island)
     ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 2.0;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -1092,10 +1092,10 @@ export class GasStationRenderer {
 
     // Highlight sheen along rubber hose
     ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 0.7;
     ctx.beginPath();
-    ctx.moveTo(x1, y1 - 0.25);
-    ctx.quadraticCurveTo(midX, midY - 0.25, x2, y2 - 0.25);
+    ctx.moveTo(x1, y1 - 0.35);
+    ctx.quadraticCurveTo(midX, midY - 0.35, x2, y2 - 0.35);
     ctx.stroke();
 
     // If fuel is flowing, draw pulsating glowing energy dots inside hose
@@ -1127,7 +1127,7 @@ export class GasStationRenderer {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
-    ctx.scale(0.45, 0.45);
+    ctx.scale(0.72, 0.72);
 
     // Dark grey hose sleeve at the back
     ctx.fillStyle = '#1e293b';
@@ -1163,7 +1163,7 @@ export class GasStationRenderer {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
-    ctx.scale(0.55, 0.55);
+    ctx.scale(0.75, 0.75);
 
     // Open fuel door flap
     ctx.fillStyle = '#64748b';

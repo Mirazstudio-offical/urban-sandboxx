@@ -6277,7 +6277,7 @@ export function updatePlayerPedestrianPhysics(
   let newY = player.y + player.vy * dt;
 
   // Collision with buildings
-  const pedRadius = 3.2;
+  const pedRadius = 4.6;
   for (const bld of buildings) {
     if (newX + pedRadius > bld.x && newX - pedRadius < bld.x + bld.width &&
         newY + pedRadius > bld.y && newY - pedRadius < bld.y + bld.height) {

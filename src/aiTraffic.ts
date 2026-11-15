@@ -6866,7 +6866,7 @@ export function updatePedestrians(
         rotationSpeed: (Math.random() - 0.5) * 10,
         type: (ped.handheldProp === 'extinguisher'? 'can': ped.handheldProp) as any,
         color: ped.propColor || '#ffffff',
-        size: ped.handheldProp === 'box'? 5.5 : (ped.handheldProp === 'phone'? 2.0 : 3.0),
+        size: ped.handheldProp === 'box'? 8.0 : (ped.handheldProp === 'phone'? 3.0 : 4.5),
         isAirborne: true,
         airborneTimer: 0.5 + Math.random() * 0.5,
         altitude: 8,
@@ -6919,9 +6919,9 @@ export function updatePedestrians(
       const dx = ped.x - other.x;
       const dy = ped.y - other.y;
       const distSq = dx * dx + dy * dy;
-      if (distSq < 7.0 * 7.0 && distSq > 0.001) {
+      if (distSq < 9.5 * 9.5 && distSq > 0.001) {
         const dist = Math.sqrt(distSq);
-        const force = (7.0 - dist) * 1.5;
+        const force = (9.5 - dist) * 1.5;
         ped.vx += (dx / dist) * force;
         ped.vy += (dy / dist) * force;
       }
@@ -6968,7 +6968,7 @@ export function updatePedestrians(
     // 6. Robust vehicle physical separation (Optimized with vehGrid)
     const nearbyCarsForCollision = vehGrid ? vehGrid.queryRadius(nextX, nextY, 40) : world.vehicles;
     for (const car of nearbyCarsForCollision) {
-      const res = checkPedestrianVehicleCollision(nextX, nextY, 3.2, car);
+      const res = checkPedestrianVehicleCollision(nextX, nextY, 4.6, car);
       if (res.collided) {
         nextX = res.x;
         nextY = res.y;
@@ -6977,7 +6977,7 @@ export function updatePedestrians(
 
     // 7. Collision with Buildings (Only when not crossing - Optimized with bldGrid)
     if (!ped.isCrossingRoad) {
-      const pedRadius = 3.2;
+      const pedRadius = 4.6;
       const nearbyBuildings = bldGrid ? bldGrid.queryRadius(nextX, nextY, 50) : world.buildings;
       for (const bld of nearbyBuildings) {
         if (
@@ -6993,16 +6993,16 @@ export function updatePedestrians(
 
     // 7b. Collision with and Avoidance of Street Props (excluding broken ones - Optimized with propGrid)
     {
-      const pedRadius = 3.2;
+      const pedRadius = 4.6;
       const nearbyProps = propGrid ? propGrid.queryRadius(nextX, nextY, 40) : world.props;
       for (const prop of nearbyProps) {
         const hitbox = getPropHitbox(prop);
         if (hitbox.shape === 'none' || (prop.isBroken && hitbox.isWalkableWhenBroken)) continue;
 
-        let propRadius = 2.8;
-        if (prop.type === 'bench') propRadius = 6.5;
-        else if (prop.type === 'kiosk') propRadius = 11.5;
-        else if (prop.type === 'mailbox') propRadius = 3.5;
+        let propRadius = 3.8;
+        if (prop.type === 'bench') propRadius = 7.5;
+        else if (prop.type === 'kiosk') propRadius = 12.5;
+        else if (prop.type === 'mailbox') propRadius = 4.5;
         else if (prop.type === 'cone') propRadius = 2.2;
         else if (prop.type === 'trash_can') propRadius = 3.0;
         else if (prop.type === 'bus_stop') propRadius = 12.5;

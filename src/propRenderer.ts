@@ -6,30 +6,30 @@ import { RailwaySignalingSystem } from './railwaySignalingSystem';
  * Every prop has detailed textures, physical materials, and realistic damage states.
  */
 
-// --- WORLD SCALE NORMALIZATION FOR PROPS (10 px = 1 m) ---
+// --- WORLD SCALE NORMALIZATION FOR PROPS (matched to 0.74x adult human & vehicle scale) ---
 export function getPropRenderScale(type: string): { sx: number; sy: number } {
   switch (type) {
-    case 'bench': return { sx: 0.72, sy: 0.56 };
-    case 'dumpster': return { sx: 0.54, sy: 0.54 };
-    case 'flowerbed': return { sx: 0.68, sy: 0.65 };
-    case 'bollard': return { sx: 0.55, sy: 0.55 };
-    case 'cone': return { sx: 0.52, sy: 0.52 };
-    case 'trash_can': return { sx: 0.50, sy: 0.50 };
-    case 'hydrant': return { sx: 0.52, sy: 0.52 };
-    case 'tire_flowerbed': return { sx: 0.55, sy: 0.55 };
-    case 'playground_swing': return { sx: 0.85, sy: 0.85 };
-    case 'sandbox': return { sx: 0.83, sy: 0.83 };
-    case 'bus_stop': return { sx: 0.80, sy: 0.78 };
-    case 'kiosk': return { sx: 0.75, sy: 0.75 };
-    case 'mailbox': return { sx: 0.55, sy: 0.55 };
-    case 'garage_sofa': return { sx: 0.90, sy: 0.75 };
-    case 'garage_workbench': return { sx: 0.75, sy: 0.65 };
-    case 'pallet_stack': return { sx: 0.60, sy: 0.55 };
-    case 'cable_spool': return { sx: 0.72, sy: 0.72 };
-    case 'industrial_tires': return { sx: 0.82, sy: 0.82 };
+    case 'bench': return { sx: 0.84, sy: 0.74 };
+    case 'dumpster': return { sx: 0.72, sy: 0.72 };
+    case 'flowerbed': return { sx: 0.80, sy: 0.76 };
+    case 'bollard': return { sx: 0.72, sy: 0.72 };
+    case 'cone': return { sx: 0.70, sy: 0.70 };
+    case 'trash_can': return { sx: 0.68, sy: 0.68 };
+    case 'hydrant': return { sx: 0.70, sy: 0.70 };
+    case 'tire_flowerbed': return { sx: 0.72, sy: 0.72 };
+    case 'playground_swing': return { sx: 0.90, sy: 0.90 };
+    case 'sandbox': return { sx: 0.88, sy: 0.88 };
+    case 'bus_stop': return { sx: 0.88, sy: 0.86 };
+    case 'kiosk': return { sx: 0.84, sy: 0.84 };
+    case 'mailbox': return { sx: 0.72, sy: 0.72 };
+    case 'garage_sofa': return { sx: 0.92, sy: 0.82 };
+    case 'garage_workbench': return { sx: 0.84, sy: 0.76 };
+    case 'pallet_stack': return { sx: 0.74, sy: 0.70 };
+    case 'cable_spool': return { sx: 0.80, sy: 0.80 };
+    case 'industrial_tires': return { sx: 0.86, sy: 0.86 };
     case 'industrial_sign':
-    case 'village_sign': return { sx: 0.72, sy: 0.72 };
-    case 'woodpile': return { sx: 0.80, sy: 0.80 };
+    case 'village_sign': return { sx: 0.80, sy: 0.80 };
+    case 'woodpile': return { sx: 0.85, sy: 0.85 };
     default: return { sx: 1.0, sy: 1.0 };
   }
 }
