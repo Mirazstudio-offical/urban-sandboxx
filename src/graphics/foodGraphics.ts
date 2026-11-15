@@ -1458,17 +1458,44 @@ function drawPelmenPiece(ctx: CanvasRenderingContext2D, item?: any): void {
     ctx.fill();
   }
 
-  // White flour dusting & frost crystals if frozen/raw or flourDusting
+  // Fine flour dusting & delicate crystalline rime needles if frozen/raw or flourDusting
   if (flourDusting) {
-    ctx.fillStyle = state === 'frozen' ? 'rgba(248, 250, 252, 0.82)' : 'rgba(255, 251, 235, 0.72)';
-    const specks: Array<[number, number, number]> = [
-      [-2.1, -1.6, 0.55], [1.8, -1.5, 0.5], [-1.5, 1.4, 0.6],
-      [1.9, 1.2, 0.5], [0.2, -2.4, 0.45], [-0.4, 2.2, 0.5]
-    ];
-    for (const [fx, fy, fr] of specks) {
-      ctx.beginPath();
-      ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-      ctx.fill();
+    if (state === 'frozen') {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.lineWidth = 0.28;
+      ctx.lineCap = 'round';
+      const needles: Array<[number, number, number, number]> = [
+        [-2.0, -1.4, 0.45, 0.65],
+        [1.7, -1.3, -0.5, 0.6],
+        [-1.3, 1.3, 1.1, 0.55],
+        [1.6, 1.1, -0.9, 0.6],
+        [0.1, -2.0, 0.2, 0.5]
+      ];
+      for (const [nx, ny, ang, len] of needles) {
+        const dx = Math.cos(ang) * len;
+        const dy = Math.sin(ang) * len;
+        ctx.beginPath();
+        ctx.moveTo(nx - dx, ny - dy);
+        ctx.lineTo(nx + dx, ny + dy);
+        ctx.moveTo(nx - dy * 0.55, ny + dx * 0.55);
+        ctx.lineTo(nx + dy * 0.55, ny - dx * 0.55);
+        ctx.stroke();
+      }
+    } else {
+      ctx.fillStyle = 'rgba(255, 251, 235, 0.62)';
+      const grains: Array<[number, number, number]> = [
+        [-1.9, -1.4, 0.24], [1.6, -1.3, 0.22], [-1.3, 1.2, 0.25],
+        [1.7, 1.0, 0.22], [0.1, -2.1, 0.2], [-0.3, 1.9, 0.22]
+      ];
+      for (const [gx, gy, gr] of grains) {
+        ctx.beginPath();
+        ctx.moveTo(gx, gy - gr);
+        ctx.lineTo(gx + gr, gy);
+        ctx.lineTo(gx, gy + gr);
+        ctx.lineTo(gx - gr, gy);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
   }
 
