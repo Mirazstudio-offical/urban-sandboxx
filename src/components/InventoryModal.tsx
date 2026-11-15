@@ -113,6 +113,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     overKey: string | null;
   } | null>(null);
   const wbDragRef = React.useRef<{
+    pointerId: number;
     sourceKey: string;
     item: InventoryItem;
     startX: number;
@@ -1078,6 +1079,31 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     return bestKey;
   };
 
+  const findScrollableContainerAt = (x: number, y: number): HTMLElement | null => {
+    const hit = document.elementFromPoint(x, y) as HTMLElement | null;
+    let el: HTMLElement | null = hit;
+    while (el && el !== document.body) {
+      if (el.scrollHeight > el.clientHeight + 2) {
+        const style = window.getComputedStyle(el);
+        if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+          return el;
+        }
+      }
+      el = el.parentElement;
+    }
+    const scrollables = document.querySelectorAll<HTMLElement>(
+      '.gu-st-scroll, .gu-inv-left-scroll, .gu-inv-detail-scroll, .gu-cont-scroll, #inventory-modal .gu-body'
+    );
+    for (let i = 0; i < scrollables.length; i++) {
+      const node = scrollables[i];
+      const r = node.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && node.scrollHeight > node.clientHeight + 2) {
+        return node;
+      }
+    }
+    return null;
+  };
+
   const startSlotPointerDrag = (
     e: React.PointerEvent<HTMLElement>,
     slotKey: string,
@@ -1085,6 +1111,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     onSelectClick?: () => void
   ) => {
     if (e.button !== 0) return;
+    // If one finger is already holding/dragging an item, do not let a second finger hijack or cancel the drag
+    if (wbDragRef.current && wbDragRef.current.pointerId !== e.pointerId) {
+      return;
+    }
     // Ignore clicks on nested action buttons
     if ((e.target as HTMLElement)?.closest('button')) return;
     e.stopPropagation();
@@ -1099,9 +1129,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       return;
     }
 
+    const dragPointerId = e.pointerId;
     const startX = e.clientX;
     const startY = e.clientY;
     wbDragRef.current = {
+      pointerId: dragPointerId,
       sourceKey: slotKey,
       item,
       startX,
@@ -1112,37 +1144,101 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       overKey: null,
     };
 
+    let secondScrollPointer: {
+      pointerId: number;
+      lastX: number;
+      lastY: number;
+      scrollEl: HTMLElement | null;
+    } | null = null;
+
+    const refreshHoverUnderDraggedItem = () => {
+      const st = wbDragRef.current;
+      if (!st || !st.active) return;
+      const over = findTargetWbSlotAt(st.x, st.y, st.sourceKey);
+      st.overKey = over;
+      setWbDragUi({
+        sourceKey: st.sourceKey,
+        item: st.item,
+        x: st.x,
+        y: st.y,
+        overKey: over,
+      });
+    };
+
+    const onExtraPointerDown = (ev: PointerEvent) => {
+      const st = wbDragRef.current;
+      if (!st || ev.pointerId === st.pointerId) return;
+      // Second finger touched down while holding item with first finger: activate drag preview and start scrolling
+      if (!st.active) {
+        st.active = true;
+        refreshHoverUnderDraggedItem();
+      }
+      secondScrollPointer = {
+        pointerId: ev.pointerId,
+        lastX: ev.clientX,
+        lastY: ev.clientY,
+        scrollEl: findScrollableContainerAt(ev.clientX, ev.clientY),
+      };
+    };
+
     const onPointerMove = (ev: PointerEvent) => {
       const st = wbDragRef.current;
       if (!st) return;
-      st.x = ev.clientX;
-      st.y = ev.clientY;
-      if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 3) {
-        st.active = true;
+
+      if (ev.pointerId === st.pointerId) {
+        st.x = ev.clientX;
+        st.y = ev.clientY;
+        if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 3) {
+          st.active = true;
+        }
+        if (st.active) {
+          refreshHoverUnderDraggedItem();
+        }
+        return;
       }
-      if (st.active) {
-        const over = findTargetWbSlotAt(ev.clientX, ev.clientY, st.sourceKey);
-        st.overKey = over;
-        setWbDragUi({
-          sourceKey: st.sourceKey,
-          item: st.item,
-          x: st.x,
-          y: st.y,
-          overKey: over,
-        });
+
+      if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
+        const dy = ev.clientY - secondScrollPointer.lastY;
+        const dx = ev.clientX - secondScrollPointer.lastX;
+        secondScrollPointer.lastY = ev.clientY;
+        secondScrollPointer.lastX = ev.clientX;
+        if (!secondScrollPointer.scrollEl) {
+          secondScrollPointer.scrollEl = findScrollableContainerAt(ev.clientX, ev.clientY);
+        }
+        if (secondScrollPointer.scrollEl) {
+          secondScrollPointer.scrollEl.scrollTop -= dy;
+          secondScrollPointer.scrollEl.scrollLeft -= dx;
+          refreshHoverUnderDraggedItem();
+        }
       }
     };
 
+    const onWheelWhileDragging = () => {
+      refreshHoverUnderDraggedItem();
+    };
+
     const finishDrag = (ev: PointerEvent, cancelled: boolean) => {
+      const st = wbDragRef.current;
+      if (!st) return;
+
+      // If the second (scrolling) finger was lifted/cancelled, only end second-finger scroll
+      if (ev.pointerId !== st.pointerId) {
+        if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
+          secondScrollPointer = null;
+        }
+        return;
+      }
+
+      window.removeEventListener('pointerdown', onExtraPointerDown, true);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('wheel', onWheelWhileDragging, true);
 
-      const st = wbDragRef.current;
       wbDragRef.current = null;
       setWbDragUi(null);
 
-      if (!st || cancelled) return;
+      if (cancelled) return;
 
       if (st.active) {
         const targetKey = findTargetWbSlotAt(ev.clientX, ev.clientY, st.sourceKey) || st.overKey;
@@ -1164,9 +1260,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     const onPointerUp = (ev: PointerEvent) => finishDrag(ev, false);
     const onPointerCancel = (ev: PointerEvent) => finishDrag(ev, true);
 
+    window.addEventListener('pointerdown', onExtraPointerDown, true);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('wheel', onWheelWhileDragging, true);
   };
 
   // Compact square Hand Slot (standard .gu-slot size, rendered inside the scrollable compartment list)
@@ -1555,72 +1653,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </div>
               )}
 
-              {/* Scrollable Hands, Compartments & Carried Containers */}
+              {/* Player Hands & Compartments Column (no side scrollbar) */}
               <div className="gu-inv-left-scroll">
-                <div className="gu-panel" style={{ padding: '10px 12px' }}>
+                <div className="gu-panel" style={{ padding: '10px 12px', flex: 1 }}>
                   {renderCompartmentsSlotGrid()}
                 </div>
-
-                {/* Standalone Carried Containers */}
-                {(() => {
-                  const pocketContainers = (player.inventory || []).filter(i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId);
-                  const handContainers = [player.leftHandItem, player.rightHandItem].filter(
-                    i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId
-                  ) as InventoryItem[];
-                  const allContainers: { item: InventoryItem; source: string }[] = [];
-
-                  pocketContainers.forEach(c => allContainers.push({ item: c, source: 'В карманах' }));
-                  handContainers.forEach(c => allContainers.push({ item: c, source: 'В руке' }));
-
-                  if (allContainers.length === 0) return null;
-
-                  return (
-                    <div className="gu-panel" style={{ padding: '8px 10px' }}>
-                      <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-                        <span className="gu-grp" style={{ fontSize: 11.5 }}>Контейнеры и кошельки ({allContainers.length})</span>
-                        <span className="gu-mut gu-hide-s" style={{ fontSize: 11 }}>Клик — открыть в 2 столбика</span>
-                      </div>
-
-                      <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                        {allContainers.map((entry, cIdx) => {
-                          const cItem = entry.item;
-                          const count = cItem.contents?.length || 0;
-                          const maxVol = cItem.containerCapacityL || 20;
-                          const curVol = (cItem.contents || []).reduce((acc, it) => acc + getItemTotalVolume(it), 0);
-
-                          return (
-                            <div key={cIdx} className="gu-card-sm gu-row2" style={{ justifyContent: 'space-between', padding: '6px 8px', gap: 8 }}>
-                              <div className="gu-row2" style={{ minWidth: 0, gap: 8 }}>
-                                <div className="gu-ic" style={{ width: 34, height: 34 }}>
-                                  <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={30} />
-                                </div>
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontWeight: 600, fontSize: 12.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {cItem.nameRu}
-                                  </div>
-                                  <div className="gu-mut gu-mono" style={{ fontSize: 10.5 }}>
-                                    {count} предм. · {curVol.toFixed(1)}/{maxVol} л
-                                  </div>
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                className="gu-btn gu-btn-p gu-btn-xs"
-                                style={{ flexShrink: 0 }}
-                                onClick={() => {
-                                  setOpenContainer(cItem);
-                                  setSelectedContainerItemIdx(0);
-                                }}
-                              >
-                                Открыть
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
             </div>
 
@@ -1689,9 +1726,12 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       selectedEntry.item.packagingShapeNameRu ||
                       selectedEntry.item.packagingSize ||
                       selectedEntry.item.itemId.startsWith('candy_pouch') ||
-                      selectedEntry.item.itemId.startsWith('paper_packaging')) && (() => {
+                      selectedEntry.item.itemId.startsWith('paper_packaging') ||
+                      selectedEntry.item.itemId.startsWith('pelmeni_pack')) && (() => {
                       const it = selectedEntry.item;
                       const isCandy = it.itemId.startsWith('candy_pouch');
+                      const isPelmeniBox = it.itemId === 'pelmeni_pack_box';
+                      const isPelmeniBag = it.itemId.startsWith('pelmeni_pack') && !isPelmeniBox;
                       const isOpenPkg = Boolean(it.isOpen || it.itemId.includes('_open') || !it.singleUseContainer);
                       const sizeLabels: Record<string, string> = {
                         mini: 'Мини',
@@ -1703,6 +1743,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         it.packagingShapeNameRu ||
                         (it.packagingShape
                           ? getCandyPackagingShapeNameRu(it.packagingShape)
+                          : isPelmeniBox
+                          ? 'Картонная пачка с окошком'
+                          : isPelmeniBag
+                          ? 'Пакет со скрепкой-клипсой'
                           : isCandy
                           ? 'Пластиковый пакет'
                           : 'Пергамент-брикет');
@@ -1726,7 +1770,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             </div>
                             <div className="gu-kv">
                               <span className="gu-kv-k">Материал</span>
-                              <span className="gu-kv-v">{isCandy ? 'Пластик' : 'Пергамент'}</span>
+                              <span className="gu-kv-v">
+                                {isPelmeniBox ? 'Картон' : isCandy || isPelmeniBag ? 'Пластик' : 'Пергамент'}
+                              </span>
                             </div>
                             <div className="gu-kv">
                               <span className="gu-kv-k">Объём</span>
@@ -1782,6 +1828,82 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                               <span className="gu-kv-k">Состав</span>
                               <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
                                 {g.ingredients.join(', ')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Pelmen Attributes (on pelmen item or pelmeni_pack container) */}
+                    {(selectedEntry.item.pelmenAttributes || selectedEntry.item.contents?.[0]?.pelmenAttributes) && (() => {
+                      const p = (selectedEntry.item.pelmenAttributes || selectedEntry.item.contents?.[0]?.pelmenAttributes)!;
+                      const isInsidePack = !selectedEntry.item.pelmenAttributes && Boolean(selectedEntry.item.contents?.length);
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
+                            <span className="gu-grp" style={{ fontSize: 11 }}>
+                              {isInsidePack ? `Пельмени внутри (${selectedEntry.item.contents!.length} шт.)` : 'Пельмень (лепка и состав)'}
+                            </span>
+                            <span className="gu-mut" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
+                              {p.stateNameRu}
+                            </span>
+                          </div>
+                          <div className="gu-kv-grid gu-g3 gu-kv-compact">
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Форма</span>
+                              <span className="gu-kv-v">{p.shapeNameRu}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Размер</span>
+                              <span className="gu-kv-v">{p.sizeNameRu}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Лепка</span>
+                              <span className="gu-kv-v">{p.moldingMethodRu}</span>
+                            </div>
+                            <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
+                              <span className="gu-kv-k">Тесто ({p.doughThicknessMm} мм)</span>
+                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                <span
+                                  style={{
+                                    width: 9,
+                                    height: 9,
+                                    borderRadius: 2,
+                                    backgroundColor: p.doughColor,
+                                    border: '1px solid rgba(255,255,255,0.35)',
+                                    display: 'inline-block',
+                                    flexShrink: 0
+                                  }}
+                                />
+                                <span>{p.doughNameRu}</span>
+                              </span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Доля фарша</span>
+                              <span className="gu-kv-v">{p.fillingRatioPercent}%</span>
+                            </div>
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Начинка</span>
+                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'normal' }}>
+                                <span
+                                  style={{
+                                    width: 9,
+                                    height: 9,
+                                    borderRadius: 2,
+                                    backgroundColor: p.fillingColor,
+                                    border: '1px solid rgba(255,255,255,0.35)',
+                                    display: 'inline-block',
+                                    flexShrink: 0
+                                  }}
+                                />
+                                <span>{p.fillingRu}</span>
+                              </span>
+                            </div>
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Состав</span>
+                              <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
+                                {p.ingredients.join(', ')}
                               </span>
                             </div>
                           </div>
@@ -1999,7 +2121,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                 >
                                   <Utensils width={14} height={14} />
                                   <span>
-                                    {selectedEntry.item.itemId.startsWith('egg_carton')
+                                    {selectedEntry.item.itemId.startsWith('egg_carton') ||
+                                    selectedEntry.item.itemId.startsWith('pelmeni_pack') ||
+                                    selectedEntry.item.contents[0]?.itemId === 'pelmen'
                                       ? 'Достать 1 шт.'
                                       : selectedEntry.item.contents[0]?.category === 'med'
                                       ? 'Применить 1 шт.'
@@ -2451,9 +2575,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   )}
                 </div>
 
-                {/* RIGHT COLUMN: SCROLLABLE PLAYER HAND SLOTS + POCKET SLOTS */}
+                {/* RIGHT COLUMN: PLAYER HAND SLOTS + POCKET SLOTS */}
                 <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px' }}>
-                  <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                  <div className="gu-st-scroll gu-player-inv-scroll" style={{ flex: 1, minHeight: 0 }}>
                     {renderCompartmentsSlotGrid()}
                   </div>
                 </div>

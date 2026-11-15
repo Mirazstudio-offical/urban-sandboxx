@@ -1,5 +1,5 @@
 import { LiquidId, FluidSubstanceAttributes } from './liquidSystem';
-import { GummyCandyAttributes } from './types';
+import { GummyCandyAttributes, PelmenAttributes } from './types';
 
 export interface UnifiedFluidMappingEntry {
   containerId: string;
@@ -17,6 +17,7 @@ export interface UnifiedPackagingMappingEntry {
   customNameRu?: string;
   customDescriptionRu?: string;
   innerGummyPresets?: Partial<GummyCandyAttributes>[];
+  innerPelmenPresets?: Partial<PelmenAttributes>[];
 }
 
 function attr(
@@ -2990,19 +2991,8 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
   cookies: { containerId: 'pouch_sealed_snack', countInside: 6, innerItemId: 'cookie_choco_single', labelColor: '#78350f' },
   cookie_pack: { containerId: 'pouch_sealed_snack', countInside: 6, innerItemId: 'cookie_choco_single', labelColor: '#78350f' },
   nachos: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'nacho_chip_single', labelColor: '#ea580c' },
-  french_fries: { containerId: 'takeout_pocket_fries', countInside: 8, innerItemId: 'fries_strip_single', labelColor: '#dc2626' },
-  nuggets: { containerId: 'takeout_box_nuggets', countInside: 6, innerItemId: 'nugget_chicken_single', labelColor: '#f59e0b' },
-  nuggets_box: { containerId: 'takeout_box_nuggets', countInside: 6, innerItemId: 'nugget_chicken_single', labelColor: '#f59e0b' },
-  chicken_wings_box: { containerId: 'takeout_box_nuggets', countInside: 5, innerItemId: 'chicken_wing_crispy_single', labelColor: '#dc2626' },
-  sushi_set: { containerId: 'takeout_box_nuggets', countInside: 6, innerItemId: 'sushi_roll_piece', labelColor: '#0f172a' },
   popcorn_bucket: { containerId: 'takeout_box_wok', countInside: 6, innerItemId: 'popcorn_handful', labelColor: '#dc2626' },
   popcorn_caramel: { containerId: 'takeout_box_wok', countInside: 6, innerItemId: 'popcorn_handful', labelColor: '#d97706' },
-  apple_dried_rings: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'apple_ring_dried_single', labelColor: '#eab308' },
-  prune_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'prune_dried_single', labelColor: '#312e81' },
-  apricot_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'apricot_dried_single', labelColor: '#f59e0b' },
-  raisins_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 6, innerItemId: 'raisins_handful_single', labelColor: '#78350f' },
-  cranberry_dried_bag: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'cranberry_dried_single', labelColor: '#be123c' },
-  banana_dried_chips: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'banana_chip_single', labelColor: '#facc15' },
 
   // === 5. MEDICAL BLISTERS -> STANDALONE SINGLE PILLS & PATCHES ===
   painkillers: { containerId: 'blister_pack_10', countInside: 6, innerItemId: 'pill_painkiller_single', labelColor: '#ef4444' },
@@ -3653,5 +3643,289 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
         ingredients: ['Пюре абрикоса (10%)', 'Сок облепихи (6%)', 'Сироп глюкозы', 'Пектин', 'Бета-каротин', 'Лимонная кислота']
       }
     ]
+  },
+
+  // === 7. PELMENI & DUMPLING PACKAGES (УПАКОВКИ ПОД ПЕЛЬМЕШКИ С АТРИБУТАМИ ЛЕПКИ, ФОРМЫ, РАЗМЕРА И СОСТАВА) ===
+  pelmeni_siberian_pack: {
+    containerId: 'pelmeni_pack',
+    countInside: 45,
+    innerItemId: 'pelmen',
+    labelColor: '#b91c1c',
+    containerTintColor: '#f8fafc',
+    customNameRu: 'Пачка пельменей «Сибирские отборные» со скрепкой (45 шт., 675 г)',
+    customDescriptionRu: 'Плотный морозный пакет со скрепкой-клипсой и прозрачным смотровым окном: классические сибирские пельмени «ушко» из тонкого яичного теста с сочным фаршем из говядины и свинины.',
+    innerPelmenPresets: [
+      {
+        shape: 'ear',
+        shapeNameRu: 'Сибирское «ушко»',
+        size: 'medium',
+        sizeNameRu: 'Классический («Домашний», 15 г)',
+        state: 'frozen',
+        stateNameRu: 'Замороженный (-16 °C)',
+        doughColor: '#fef3c7',
+        doughNameRu: 'Пшеничное высший сорт на куриных яйцах',
+        doughThicknessMm: 1.2,
+        fillingRu: 'Рубленая говядина и свиная грудинка с репчатым луком и чёрным перцем',
+        fillingColor: '#991b1b',
+        fillingRatioPercent: 62,
+        moldingMethodRu: 'Ручная лепка защипом «ушко»',
+        flourDusting: true,
+        ingredients: [
+          'Говядина охлаждённая',
+          'Свинина полужирная',
+          'Мука пшеничная хлебопекарная в/с',
+          'Лук репчатый свежий',
+          'Вода питьевая ледяная',
+          'Яйцо куриное пищевое',
+          'Соль каменная',
+          'Перец чёрный свежемолотый'
+        ]
+      }
+    ]
+  },
+  pelmeni_mini_bullion_pack: {
+    containerId: 'pelmeni_pack_small',
+    countInside: 55,
+    innerItemId: 'pelmen',
+    labelColor: '#0284c7',
+    containerTintColor: '#f0f9ff',
+    customNameRu: 'Малая пачка пельменей «Бульонные Малютки» (55 шт., 385 г)',
+    customDescriptionRu: 'Компактный пакет с синей клипсой: миниатюрные круглые пельмешки «Сатурн» с тонким пояском и нежной начинкой из телятины и индейки со сливочным маслом.',
+    innerPelmenPresets: [
+      {
+        shape: 'saturn',
+        shapeNameRu: 'Круглый «Сатурн» с пояском',
+        size: 'mini',
+        sizeNameRu: 'Мини («Малютка», 7 г)',
+        state: 'frozen',
+        stateNameRu: 'Замороженный (-16 °C)',
+        doughColor: '#fffbeb',
+        doughNameRu: 'Тонкое заварное пшеничное тесто',
+        doughThicknessMm: 0.9,
+        fillingRu: 'Нежная телятина и филе индейки со сливками и мускатным орехом',
+        fillingColor: '#b91c1c',
+        fillingRatioPercent: 58,
+        moldingMethodRu: 'Барабанная штамповка с пояском',
+        flourDusting: true,
+        ingredients: [
+          'Телятина молочная',
+          'Филе грудки индейки',
+          'Мука пшеничная твёрдых сортов (дурум)',
+          'Сливки питьевые 20%',
+          'Масло сливочное 82.5%',
+          'Лук репчатый',
+          'Яйцо куриное',
+          'Соль морская',
+          'Мускатный орех молотый'
+        ]
+      }
+    ]
+  },
+  pelmeni_ural_box: {
+    containerId: 'pelmeni_pack_box',
+    countInside: 32,
+    innerItemId: 'pelmen',
+    labelColor: '#dc2626',
+    containerTintColor: '#fffbeb',
+    customNameRu: 'Картонная пачка пельменей «Уральские по ГОСТу» (32 шт., 480 г)',
+    customDescriptionRu: 'Традиционная картонная коробка с перфорированным отрывным клапаном и смотровым окошком: пельмени в форме полумесяца с фигурной косичкой из трёх видов мяса.',
+    innerPelmenPresets: [
+      {
+        shape: 'crescent',
+        shapeNameRu: 'Полумесяц с косичкой',
+        size: 'medium',
+        sizeNameRu: 'Классический («Домашний», 15 г)',
+        state: 'frozen',
+        stateNameRu: 'Замороженный (-16 °C)',
+        doughColor: '#fef3c7',
+        doughNameRu: 'Уральское крутое тесто на яйцах и ледяной воде',
+        doughThicknessMm: 1.3,
+        fillingRu: 'Говядина, свинина и молодая баранина с чесноком и укропом',
+        fillingColor: '#7f1d1d',
+        fillingRatioPercent: 60,
+        moldingMethodRu: 'Фигурный защип косичкой',
+        flourDusting: true,
+        ingredients: [
+          'Говядина первого сорта',
+          'Свинина шейная часть',
+          'Баранина лопаточная часть',
+          'Мука пшеничная хлебопекарная в/с',
+          'Лук репчатый',
+          'Чеснок свежий',
+          'Яйцо куриное',
+          'Вода питьевая',
+          'Соль поваренная',
+          'Перец чёрный и душистый молотый'
+        ]
+      }
+    ]
+  },
+  pelmeni_bogatyr_large_pack: {
+    containerId: 'pelmeni_pack_large',
+    countInside: 40,
+    innerItemId: 'pelmen',
+    labelColor: '#15803d',
+    containerTintColor: '#f8fafc',
+    customNameRu: 'Семейный мешок пельменей «Богатырские Крупные» (40 шт., 880 г)',
+    customDescriptionRu: 'Большой семейный пакет со скрепкой: крупные мясистые пельмени категории А (68% рубленого мяса) в форме ушка.',
+    innerPelmenPresets: [
+      {
+        shape: 'ear',
+        shapeNameRu: 'Сибирское «ушко»',
+        size: 'large',
+        sizeNameRu: 'Крупный («Богатырский», 22 г)',
+        state: 'frozen',
+        stateNameRu: 'Замороженный (-16 °C)',
+        doughColor: '#fde68a',
+        doughNameRu: 'Домашнее тесто на деревенских желтках',
+        doughThicknessMm: 1.4,
+        fillingRu: 'Крупнорубленая мраморная говядина и свиная грудинка с колотым льдом для бульона',
+        fillingColor: '#991b1b',
+        fillingRatioPercent: 68,
+        moldingMethodRu: 'Ручная лепка двойным защипом',
+        flourDusting: true,
+        ingredients: [
+          'Говядина тазобедренная часть',
+          'Свиная грудинка',
+          'Мука пшеничная высший сорт',
+          'Лук репчатый рубленый',
+          'Желток яичный',
+          'Лёд фраппе (для бульона внутри)',
+          'Масло топлёное',
+          'Соль каменная',
+          'Крупнодробленый чёрный перец',
+          'Кориандр молотый'
+        ]
+      }
+    ]
+  },
+  pelmeni_khinkali_lamb_pack: {
+    containerId: 'pelmeni_pack',
+    countInside: 28,
+    innerItemId: 'pelmen',
+    labelColor: '#92400e',
+    containerTintColor: '#fef3c7',
+    customNameRu: 'Пачка пельменей-бууз «Восточные мешочки с бараниной» (28 шт., 616 г)',
+    customDescriptionRu: 'Фирменный пакет с клипсой: крупные фигурные пельмени-мешочки со складками и хвостиком, сочной бараниной, зирой и свежей кинзой.',
+    innerPelmenPresets: [
+      {
+        shape: 'khinkali',
+        shapeNameRu: 'Мешочек со складками (бууза)',
+        size: 'large',
+        sizeNameRu: 'Крупный («Богатырский», 22 г)',
+        state: 'frozen',
+        stateNameRu: 'Замороженный (-16 °C)',
+        doughColor: '#fef9c3',
+        doughNameRu: 'Эластичное слоёное тесто длительного вымеса',
+        doughThicknessMm: 1.5,
+        fillingRu: 'Рубленая баранина с курдючным жирком, свежей кинзой и зирой',
+        fillingColor: '#7f1d1d',
+        fillingRatioPercent: 65,
+        moldingMethodRu: 'Сборка складками в узелок-хвостик',
+        flourDusting: true,
+        ingredients: [
+          'Баранина рубленая',
+          'Курдючный жир',
+          'Мука пшеничная высший сорт',
+          'Лук репчатый',
+          'Кинза свежая (кориандр)',
+          'Зира (кумин) молотая',
+          'Чеснок',
+          'Перец красный и чёрный',
+          'Соль',
+          'Ледяной мясной бульон'
+        ]
+      }
+    ]
+  },
+  pelmeni_colored_kids_pack: {
+    containerId: 'pelmeni_pack_small',
+    countInside: 36,
+    innerItemId: 'pelmen',
+    labelColor: '#7c3aed',
+    containerTintColor: '#faf5ff',
+    customNameRu: 'Пачка цветных пельмешек «Радужные Розочки и Подушечки» (36 шт., 396 г)',
+    customDescriptionRu: 'Яркая пачка с клипсой: фигурные пельмешки на натуральном шпинатном, свекольном и морковном соке с диетическим филе индейки и курицы.',
+    innerPelmenPresets: [
+      {
+        shape: 'rose',
+        shapeNameRu: 'Фигурный «Розочка»',
+        size: 'small',
+        sizeNameRu: 'Мелкий («Столичный», 11 г)',
+        state: 'frozen',
+        stateNameRu: 'Замороженный (-16 °C)',
+        doughColor: '#bbf7d0',
+        doughNameRu: 'Пшеничное тесто со свежевыжатым соком шпината',
+        doughThicknessMm: 1.1,
+        fillingRu: 'Филе куриной грудки и индейки со сливочным сыром',
+        fillingColor: '#fca5a5',
+        fillingRatioPercent: 58,
+        moldingMethodRu: 'Фигурная формовка бутоном',
+        flourDusting: true,
+        ingredients: [
+          'Филе грудки индейки',
+          'Филе куриной грудки',
+          'Мука пшеничная в/с',
+          'Сок листьев шпината натуральный',
+          'Сыр сливочный',
+          'Лук сладкий белый',
+          'Яйцо перепелиное',
+          'Соль морская'
+        ]
+      },
+      {
+        shape: 'pillow',
+        shapeNameRu: 'Подушечка с зубчатым краем',
+        size: 'small',
+        sizeNameRu: 'Мелкий («Столичный», 11 г)',
+        state: 'frozen',
+        stateNameRu: 'Замороженный (-16 °C)',
+        doughColor: '#fecdd3',
+        doughNameRu: 'Пшеничное тесто с натуральным соком молодой свёклы',
+        doughThicknessMm: 1.1,
+        fillingRu: 'Нежная телятина со сливками и сладким луком',
+        fillingColor: '#dc2626',
+        fillingRatioPercent: 60,
+        moldingMethodRu: 'Зубчатая штамповка конвертиком',
+        flourDusting: true,
+        ingredients: [
+          'Телятина вырезка',
+          'Сливки 20%',
+          'Мука пшеничная в/с',
+          'Сок молодой свёклы прямого отжима',
+          'Лук репчатый',
+          'Яйцо куриное',
+          'Масло сливочное',
+          'Соль'
+        ]
+      },
+      {
+        shape: 'ear',
+        shapeNameRu: 'Сибирское «ушко»',
+        size: 'small',
+        sizeNameRu: 'Мелкий («Столичный», 11 г)',
+        state: 'frozen',
+        stateNameRu: 'Замороженный (-16 °C)',
+        doughColor: '#fde047',
+        doughNameRu: 'Пшеничное тесто с морковным соком и куркумой',
+        doughThicknessMm: 1.1,
+        fillingRu: 'Индейка и кролик с топлёным маслом',
+        fillingColor: '#f87171',
+        fillingRatioPercent: 59,
+        moldingMethodRu: 'Ручной защип колечком',
+        flourDusting: true,
+        ingredients: [
+          'Мясо кролика бескостное',
+          'Филе бедра индейки',
+          'Мука пшеничная в/с',
+          'Сок морковный свежевыжатый',
+          'Куркума натуральная',
+          'Масло топлёное',
+          'Яйцо куриное',
+          'Соль'
+        ]
+      }
+    ]
   }
 };
+

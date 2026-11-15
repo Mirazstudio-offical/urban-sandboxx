@@ -2094,17 +2094,6 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
-    case 'apple_dried_rings': {
-      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
-      for (const pt of [[-2.5, 0], [2.5, 0.5]]) {
-        ctx.fillStyle = '#d97706';
-        ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#0f172a'; // cutout hole
-        ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.2, 0, Math.PI * 2); ctx.fill();
-      }
-      return true;
-    }
-
     case 'apple_puree_jar': {
       drawShadow(ctx, 5.5, 2.4, 7.8, 0.22);
       // Smooth honey-gold puree
@@ -2125,28 +2114,6 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
         ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = isPlum ? '#fbbf24' : '#fed7aa'; // hollow interior
         ctx.beginPath(); ctx.arc(pt[0], pt[1], 2.8, 0, Math.PI * 2); ctx.fill();
-      }
-      return true;
-    }
-
-    case 'prune_dried_bag':
-    case 'apricot_dried_bag':
-    case 'raisins_dried_bag':
-    case 'cranberry_dried_bag':
-    case 'banana_dried_chips': {
-      drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
-      // Transparent sachet
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-      ctx.beginPath(); ctx.roundRect(-5, -5.5, 10, 11, 2); ctx.fill();
-      // Dried contents
-      let dColor = '#18181b'; // prune
-      if (itemId === 'apricot_dried_bag') dColor = '#f59e0b';
-      if (itemId === 'raisins_dried_bag') dColor = '#78350f';
-      if (itemId === 'cranberry_dried_bag') dColor = '#9f1239';
-      if (itemId === 'banana_dried_chips') dColor = '#fde047';
-      ctx.fillStyle = dColor;
-      for (const pt of [[-2, -2], [1.5, -1.5], [-1.5, 1.5], [1.5, 2]]) {
-        ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.5, 0, Math.PI * 2); ctx.fill();
       }
       return true;
     }

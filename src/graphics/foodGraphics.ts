@@ -1,275 +1,9 @@
 // Procedural 2D Canvas Models for Food Items
 import { drawShadow, drawGlossBand } from './itemGraphicShared';
-import { GummyCandyShape } from '../types';
+import { GummyCandyShape, PelmenShape, PelmenSize, PelmenState } from '../types';
 
 export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item?: any): boolean {
   switch (itemId) {
-    case 'sandwich': {
-      drawShadow(ctx, 8, 3, 7.5, 0.22);
-
-      // Bottom toasted bread slice
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.moveTo(-8, 3);
-      ctx.lineTo(8, 3);
-      ctx.lineTo(0, 8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Bottom crust bevel
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.moveTo(-7.2, 3);
-      ctx.lineTo(7.2, 3);
-      ctx.lineTo(0, 7.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Folded ham layer
-      ctx.fillStyle = '#f43f5e';
-      ctx.beginPath();
-      ctx.roundRect(-7.5, 1.2, 15, 2.2, 1);
-      ctx.fill();
-      ctx.fillStyle = '#fda4af';
-      ctx.fillRect(-6, 1.6, 12, 0.8);
-
-      // Melted Cheddar Cheese with drooping corner
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.moveTo(-8, 1);
-      ctx.lineTo(8, 1);
-      ctx.lineTo(4, 4.5);
-      ctx.lineTo(2, 2.5);
-      ctx.lineTo(-2, 4);
-      ctx.lineTo(-5, 2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Crispy curled lettuce
-      ctx.fillStyle = '#16a34a';
-      ctx.beginPath();
-      ctx.arc(-5, 0.5, 2.2, 0, Math.PI * 2);
-      ctx.arc(0, 0.2, 2.5, 0, Math.PI * 2);
-      ctx.arc(5, 0.5, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#4ade80';
-      ctx.beginPath();
-      ctx.arc(-2.5, 0.2, 1.8, 0, Math.PI * 2);
-      ctx.arc(2.5, 0.2, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Tomato slices peeking
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-6, -1.5, 5, 2, 1);
-      ctx.roundRect(1, -1.5, 5, 2, 1);
-      ctx.fill();
-
-      // Top toasted bread slice
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.moveTo(-8.5, -6);
-      ctx.lineTo(8.5, -6);
-      ctx.lineTo(0, 1.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Bread crust bevel
-      ctx.fillStyle = '#92400e';
-      ctx.beginPath();
-      ctx.moveTo(-8.5, -6);
-      ctx.lineTo(8.5, -6);
-      ctx.lineTo(8.5, -4.8);
-      ctx.lineTo(-8.5, -4.8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Fluffy golden crumb face
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.moveTo(-7.2, -5.2);
-      ctx.lineTo(7.2, -5.2);
-      ctx.lineTo(0, 0.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Toasted surface markings
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.ellipse(-2, -3.2, 2.5, 1.2, -0.2, 0, Math.PI * 2);
-      ctx.ellipse(2.5, -2.8, 2, 1, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-      return true;
-    }
-
-    case 'burger': {
-      drawShadow(ctx, 8.5, 3.2, 7.8, 0.25);
-
-      // Bottom toasted bun
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.roundRect(-7.5, 3.2, 15, 4.2, [1, 1, 3, 3]);
-      ctx.fill();
-      ctx.fillStyle = '#fde68a';
-      ctx.fillRect(-7, 3.2, 14, 1.2);
-
-      // Charbroiled beef patty
-      ctx.fillStyle = '#3f1a04';
-      ctx.beginPath();
-      ctx.roundRect(-8.5, 0.8, 17, 3.4, 1.5);
-      ctx.fill();
-      // Grill texture
-      ctx.fillStyle = '#1c0a00';
-      ctx.fillRect(-6, 1.4, 2.5, 2);
-      ctx.fillRect(-1, 1.4, 2.5, 2);
-      ctx.fillRect(4, 1.4, 2.5, 2);
-
-      // Melted Cheddar Cheese drooping over patty
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.moveTo(-8, 1);
-      ctx.lineTo(8, 1);
-      ctx.lineTo(6.5, 3.8);
-      ctx.lineTo(4, 2);
-      ctx.lineTo(1.5, 4.2);
-      ctx.lineTo(-1, 2);
-      ctx.lineTo(-4.5, 4);
-      ctx.lineTo(-6.5, 2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Crisp ruffled lettuce
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.arc(-5.5, -0.5, 2.8, 0, Math.PI * 2);
-      ctx.arc(-1.5, -0.8, 2.8, 0, Math.PI * 2);
-      ctx.arc(2.5, -0.6, 2.8, 0, Math.PI * 2);
-      ctx.arc(6, -0.4, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#4ade80';
-      ctx.beginPath();
-      ctx.arc(-3.5, -0.4, 2, 0, Math.PI * 2);
-      ctx.arc(4, -0.3, 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Red tomato slice
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-7.5, -2.5, 15, 2.2, 1);
-      ctx.fill();
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(-6, -2.2, 12, 0.8);
-
-      // Glazed brioche top bun
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.arc(0, -2, 8, Math.PI, 0);
-      ctx.fill();
-
-      // Bun gradient / highlight
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.arc(0, -2, 7.2, Math.PI, 0);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(254, 243, 199, 0.45)';
-      ctx.beginPath();
-      ctx.ellipse(-2, -6, 4, 1.8, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Sesame seeds
-      ctx.fillStyle = '#fef08a';
-      const seeds = [
-        [-4, -5.5, 0.2],
-        [-1, -7, -0.3],
-        [2.5, -6, 0.4],
-        [5, -4.5, 0.1],
-        [-5, -3.5, -0.2],
-        [0, -4.2, 0.3],
-        [3, -3.8, -0.3]
-      ];
-      seeds.forEach(([sx, sy, rot]) => {
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(rot);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 0.7, 1.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      });
-      return true;
-    }
-
-    case 'pizza_slice': {
-      drawShadow(ctx, 8, 3.2, 7.5, 0.22);
-
-      // Golden baked crust edge (top arc)
-      ctx.fillStyle = '#92400e';
-      ctx.beginPath();
-      ctx.arc(0, -6.5, 8.8, Math.PI * 0.78, Math.PI * 2.22);
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#b45309';
-      ctx.stroke();
-
-      // Crust dough
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.ellipse(0, -6.5, 8.5, 2.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Melted cheesy triangle body
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.moveTo(-7.8, -5.5);
-      ctx.lineTo(7.8, -5.5);
-      ctx.lineTo(0, 8.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Rich cheese & sauce marbling
-      ctx.fillStyle = '#fbbf24';
-      ctx.beginPath();
-      ctx.moveTo(-6.5, -4.8);
-      ctx.lineTo(6.5, -4.8);
-      ctx.lineTo(0, 7);
-      ctx.closePath();
-      ctx.fill();
-
-      // Red marinara peeking through
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-2, -4.5, 4, 1.2);
-      ctx.fillRect(-5, -3, 2, 1);
-      ctx.fillRect(3, -2, 2, 1);
-
-      // Crispy Pepperoni slices
-      const pepps = [
-        [-2.2, -2.5, 2.3],
-        [2.8, -1.2, 2.2],
-        [0, 2.5, 2.0]
-      ];
-      pepps.forEach(([px, py, pr]) => {
-        ctx.fillStyle = '#991b1b';
-        ctx.beginPath();
-        ctx.arc(px, py, pr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.arc(px - 0.3, py - 0.3, pr * 0.82, 0, Math.PI * 2);
-        ctx.fill();
-        // Pepper specks
-        ctx.fillStyle = '#450a0a';
-        ctx.fillRect(px - 0.5, py - 0.5, 0.8, 0.8);
-        ctx.fillRect(px + 0.6, py + 0.3, 0.8, 0.8);
-      });
-
-      // Herb sprinkles (oregano / basil)
-      ctx.fillStyle = '#15803d';
-      ctx.fillRect(-4, -1, 0.8, 0.8);
-      ctx.fillRect(1, 0, 0.8, 0.8);
-      ctx.fillRect(-1, 5, 0.8, 0.8);
-      ctx.fillRect(2, -4, 0.8, 0.8);
-      return true;
-    }
-
     case 'apple': {
       drawShadow(ctx, 6.5, 2.6, 7.5, 0.22);
 
@@ -323,52 +57,6 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       ctx.beginPath();
       ctx.ellipse(3, 2, 1.2, 2.2, 0.4, 0, Math.PI * 2);
       ctx.fill();
-      return true;
-    }
-
-    case 'chocolate': {
-      drawShadow(ctx, 7.5, 2.8, 7.5, 0.22);
-
-      // Shiny silver foil underlayer
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.roundRect(-6.5, -4, 13, 11, 1.5);
-      ctx.fill();
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(-6.5, -4, 3, 11);
-
-      // Deep red wrapper sleeve pushed down
-      ctx.fillStyle = '#991b1b';
-      ctx.beginPath();
-      ctx.roundRect(-6.8, -0.5, 13.6, 8, 1);
-      ctx.fill();
-      // Gold brand foil seal on wrapper
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(-5.5, 1.5, 11, 2);
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(-3, 2, 6, 1);
-
-      // Unwrapped Dark Chocolate blocks protruding from top
-      ctx.fillStyle = '#3b1806';
-      ctx.beginPath();
-      ctx.roundRect(-5.8, -8.5, 11.6, 5.5, 1);
-      ctx.fill();
-
-      // 2x2 chocolate segment blocks with beveled relief
-      const blocks = [
-        [-5.2, -8, 5, 2.2],
-        [0.2, -8, 5, 2.2],
-        [-5.2, -5.2, 5, 2.2],
-        [0.2, -5.2, 5, 2.2]
-      ];
-      blocks.forEach(([bx, by, bw, bh]) => {
-        ctx.fillStyle = '#270e03';
-        ctx.fillRect(bx, by, bw, bh);
-        ctx.fillStyle = '#4a200a';
-        ctx.fillRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.fillRect(bx + 0.5, by + 0.5, bw - 1, 0.6);
-      });
       return true;
     }
 
@@ -470,46 +158,6 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       return true;
     }
 
-    case 'croissant': {
-      drawShadow(ctx, 8.5, 3, 7.2, 0.2);
-
-      // Golden baked crescent body
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 9.2, 5.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Main flaky layer
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.ellipse(0, -0.5, 8, 4.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Tender butter pastry center
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.ellipse(0, -1, 6.2, 3.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glaze highlights
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.ellipse(0, -1.8, 4, 1.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Characteristic baker crescent fold ridges
-      ctx.strokeStyle = '#92400e';
-      ctx.lineWidth = 1.1;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-5.5, -2); ctx.lineTo(-4.5, 2.5);
-      ctx.moveTo(-2.5, -3.2); ctx.lineTo(-1.8, 3.8);
-      ctx.moveTo(1.8, -3.2); ctx.lineTo(1.2, 3.8);
-      ctx.moveTo(5, -2); ctx.lineTo(4.2, 2.5);
-      ctx.stroke();
-      return true;
-    }
-
     case 'soup':
     case 'hot_soup':
     case 'broth':
@@ -590,419 +238,6 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       ctx.quadraticCurveTo(-4.0, -8.0, -2.0, -10.5);
       ctx.moveTo(2.0, -5.5);
       ctx.quadraticCurveTo(3.5, -8.0, 1.5, -10.5);
-      ctx.stroke();
-      return true;
-    }
-
-    case 'french_fries': {
-      drawShadow(ctx, 7.5, 2.8, 7.5, 0.22);
-
-      // Golden potato fries sticking up
-      const fries = [
-        [-4.5, -3, -0.25, 8],
-        [-2.8, -4, -0.1, 9.5],
-        [-1, -4.5, 0.05, 10.5],
-        [1.2, -4, 0.12, 10],
-        [3, -3.5, 0.22, 9],
-        [4.6, -3, 0.35, 7.5],
-        [-3.8, -2, -0.18, 7],
-        [0, -2.5, 0, 8.5],
-        [2.2, -2, 0.15, 7.5]
-      ];
-      fries.forEach(([fx, fy, rot, len]) => {
-        ctx.save();
-        ctx.translate(fx, fy);
-        ctx.rotate(rot);
-        ctx.fillStyle = '#eab308';
-        ctx.fillRect(-1, -len, 2, len);
-        ctx.fillStyle = '#facc15';
-        ctx.fillRect(-0.8, -len, 1.6, len * 0.8);
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(-1, -len, 2, 1.2); // toasted tip
-        ctx.restore();
-      });
-
-      // Red fast food cardboard container
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.moveTo(-6.5, -2);
-      ctx.lineTo(6.5, -2);
-      ctx.lineTo(4.8, 7.5);
-      ctx.lineTo(-4.8, 7.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Curved cutout on top front of container
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.ellipse(0, -2, 4.5, 1.8, 0, 0, Math.PI);
-      ctx.fill();
-
-      // Yellow double arch / stripe
-      ctx.strokeStyle = '#facc15';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.arc(-1.6, 2.5, 1.8, Math.PI, 0);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(1.6, 2.5, 1.8, Math.PI, 0);
-      ctx.stroke();
-      return true;
-    }
-
-    case 'nuggets': {
-      drawShadow(ctx, 8.5, 3, 7.5, 0.22);
-
-      // 3 crispy nuggets in a cluster
-      const nuggs: Array<{ nx: number; ny: number; nw: number; nh: number; cBase: string; cTop: string }> = [
-        { nx: -4.5, ny: 1, nw: 6.2, nh: 4.8, cBase: '#b45309', cTop: '#d97706' },
-        { nx: 3.5, ny: 1.5, nw: 6.5, nh: 5, cBase: '#92400e', cTop: '#b45309' },
-        { nx: -0.5, ny: -2.5, nw: 7, nh: 5.2, cBase: '#b45309', cTop: '#d97706' }
-      ];
-      nuggs.forEach(({ nx, ny, nw, nh, cBase, cTop }) => {
-        ctx.fillStyle = cBase;
-        ctx.beginPath();
-        ctx.roundRect(nx - nw / 2, ny - nh / 2, nw, nh, 2.2);
-        ctx.fill();
-
-        ctx.fillStyle = cTop;
-        ctx.beginPath();
-        ctx.roundRect(nx - nw / 2 + 0.6, ny - nh / 2 + 0.6, nw - 1.2, nh - 1.2, 1.8);
-        ctx.fill();
-
-        // Crunchy batter flecks
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(nx - 1, ny - 1, 1.5, 1.5);
-        ctx.fillRect(nx + 1.2, ny + 0.5, 1.2, 1.2);
-      });
-      return true;
-    }
-
-    case 'nugget_single': {
-      drawShadow(ctx, 6.5, 2.5, 6.8, 0.22);
-
-      // Single crispy golden chicken nugget with realistic panko crust
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.moveTo(-5.5, -2.5);
-      ctx.quadraticCurveTo(-6.5, 2, -3.5, 4.5);
-      ctx.quadraticCurveTo(2, 5.5, 5.5, 3);
-      ctx.quadraticCurveTo(6.5, -1.5, 3.5, -4);
-      ctx.quadraticCurveTo(-1.5, -5.5, -5.5, -2.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Top golden-amber panko crust face
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.moveTo(-4.5, -2);
-      ctx.quadraticCurveTo(-5.5, 1.5, -3, 3.8);
-      ctx.quadraticCurveTo(1.5, 4.6, 4.5, 2.5);
-      ctx.quadraticCurveTo(5.2, -1, 2.8, -3.2);
-      ctx.quadraticCurveTo(-1, -4.5, -4.5, -2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Golden bubbly crisp highlights
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.ellipse(-1.5, -0.5, 3.5, 2.2, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Crunchy textured batter crumbs & blistered panko flakes
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(-3, -1.5, 1.2, 1.2);
-      ctx.fillRect(1, 0.5, 1.4, 1.2);
-      ctx.fillRect(-0.5, 2, 1.2, 1);
-      ctx.fillRect(2.5, -2, 1, 1);
-
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-2, 1.5, 0.9, 0.9);
-      ctx.fillRect(2.2, 1.2, 0.9, 0.9);
-      ctx.fillRect(-3.8, 0, 0.8, 0.8);
-
-      // Delicate hot oil sheen glint
-      drawGlossBand(ctx, -2.5, -2, 2.5, 1.2, 0.4);
-      return true;
-    }
-
-    case 'hot_dog': {
-      drawShadow(ctx, 9, 3.2, 7.5, 0.22);
-
-      // Toasted bun bottom
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.roundRect(-8.5, -2, 17, 7.5, 3.5);
-      ctx.fill();
-
-      ctx.fillStyle = '#fde68a';
-      ctx.beginPath();
-      ctx.roundRect(-7.8, -1.2, 15.6, 6, 2.8);
-      ctx.fill();
-
-      // Grilled sausage
-      ctx.fillStyle = '#9f1239';
-      ctx.beginPath();
-      ctx.roundRect(-9.5, -2.5, 19, 4.5, 2.2);
-      ctx.fill();
-      ctx.fillStyle = '#be123c';
-      ctx.beginPath();
-      ctx.roundRect(-9, -2, 18, 3.5, 1.8);
-      ctx.fill();
-
-      // Sausage grill marks
-      ctx.fillStyle = '#4c0519';
-      for (let gx = -7; gx <= 7; gx += 3) {
-        ctx.fillRect(gx, -2, 1.2, 3.5);
-      }
-
-      // Zigzag yellow mustard drizzle
-      ctx.strokeStyle = '#eab308';
-      ctx.lineWidth = 1.4;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-8, -1);
-      ctx.lineTo(-5, 1);
-      ctx.lineTo(-2, -1);
-      ctx.lineTo(1, 1);
-      ctx.lineTo(4, -1);
-      ctx.lineTo(7, 0.5);
-      ctx.stroke();
-
-      // Crispy fried onion bits
-      ctx.fillStyle = '#78350f';
-      const onions = [[-6, 0], [-3, 1], [0, -0.5], [3, 1], [5, -0.5]];
-      onions.forEach(([ox, oy]) => ctx.fillRect(ox, oy, 1, 1));
-      return true;
-    }
-
-    case 'donut': {
-      drawShadow(ctx, 8.5, 3.2, 7.5, 0.22);
-
-      // Golden baked doughnut ring
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.arc(0, 0, 8.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glossy strawberry pink glaze
-      ctx.fillStyle = '#f472b6';
-      ctx.beginPath();
-      ctx.arc(0, 0, 6.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fbcfe8';
-      ctx.beginPath();
-      ctx.ellipse(-2, -3, 3, 1.5, -0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Center donut hole
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(0, 0, 2.6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rainbow sprinkles
-      const sprinkles = [
-        [-4, -3, '#38bdf8'],
-        [3, -4, '#facc15'],
-        [4, 1.5, '#4ade80'],
-        [-3.5, 2.8, '#ffffff'],
-        [0, -4.8, '#ec4899'],
-        [-2.5, -1, '#fbbf24'],
-        [2, 3.5, '#38bdf8']
-      ];
-      sprinkles.forEach(([sx, sy, col]) => {
-        ctx.fillStyle = col as string;
-        ctx.fillRect(sx as number, sy as number, 1.6, 0.9);
-      });
-      return true;
-    }
-
-    case 'sushi_set': {
-      drawShadow(ctx, 9.2, 3.2, 7.8, 0.25);
-
-      // Glossy black lacquer tray
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.roundRect(-9.2, -6, 18.4, 12.5, 2);
-      ctx.fill();
-      ctx.strokeStyle = '#3f3f46';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // 3 Philadelphia salmon maki rolls
-      const rolls = [-5, 0, 5];
-      rolls.forEach(rx => {
-        // Nori outer ring
-        ctx.fillStyle = '#052e16';
-        ctx.beginPath();
-        ctx.arc(rx, -0.5, 2.8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Pearl sushi rice
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.arc(rx, -0.5, 2.3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Fresh orange salmon center
-        ctx.fillStyle = '#fb923c';
-        ctx.beginPath();
-        ctx.arc(rx, -0.5, 1.3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Cucumber & cream cheese core
-        ctx.fillStyle = '#15803d';
-        ctx.fillRect(rx - 0.4, -0.8, 0.8, 0.8);
-      });
-
-      // Wasabi quenelle
-      ctx.fillStyle = '#84cc16';
-      ctx.beginPath();
-      ctx.arc(6.5, -3.5, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Pickled pink ginger rosette
-      ctx.fillStyle = '#f472b6';
-      ctx.beginPath();
-      ctx.arc(6.5, 3.5, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Soy sauce corner puddle
-      ctx.fillStyle = '#1c1917';
-      ctx.beginPath();
-      ctx.roundRect(-8, 2.5, 3.5, 2.5, 1);
-      ctx.fill();
-      return true;
-    }
-
-    case 'sushi_roll_piece': {
-      drawShadow(ctx, 7.2, 2.8, 7.0, 0.24);
-
-      // Outer jet-black nori seaweed wrap
-      ctx.fillStyle = '#09090b';
-      ctx.beginPath();
-      ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Dark seaweed sheen ring
-      ctx.strokeStyle = '#14532d';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.arc(0, 0, 5.8, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Seasoned sushi rice circle with translucent grain texture
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.arc(0, 0, 5.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rice grains micro-detail
-      ctx.fillStyle = '#e2e8f0';
-      for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
-        ctx.fillRect(Math.cos(a) * 4.2 - 0.4, Math.sin(a) * 4.2 - 0.4, 0.9, 0.9);
-      }
-
-      // Fresh vibrant orange Atlantic salmon drape / filling
-      ctx.fillStyle = '#ea580c';
-      ctx.beginPath();
-      ctx.arc(0.5, -0.5, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fb923c';
-      ctx.beginPath();
-      ctx.arc(0.3, -0.7, 2.7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Salmon fat marbling striations
-      ctx.strokeStyle = '#fed7aa';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(-1.2, -2.5); ctx.lineTo(1.8, -0.5);
-      ctx.moveTo(-0.5, -1.8); ctx.lineTo(2.2, 0.2);
-      ctx.stroke();
-
-      // Creamy white Philadelphia cheese core
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.ellipse(-0.8, 0.8, 1.6, 1.2, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Crisp dark green cucumber baton
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.rect(0.6, 0.4, 1.4, 1.4);
-      ctx.fill();
-      ctx.fillStyle = '#86efac';
-      ctx.fillRect(0.9, 0.7, 0.8, 0.8);
-
-      // Toasted sesame seeds garnish
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(-2.5, -3.2, 0.7, 1.2);
-      ctx.fillRect(2.8, -2.2, 1.1, 0.7);
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(-3.2, 1.5, 1.1, 0.7);
-      ctx.fillRect(1.5, 3.2, 0.7, 1.1);
-
-      // Delicate vinegar/oil gloss highlight
-      drawGlossBand(ctx, -2, -2, 2.5, 1.2, 0.4);
-      return true;
-    }
-
-    case 'wok_box': {
-      drawShadow(ctx, 7.5, 2.8, 7.5, 0.22);
-
-      // Folded white paperboard takeout box
-      ctx.fillStyle = '#f1f5f9';
-      ctx.beginPath();
-      ctx.moveTo(-6.5, -4.5);
-      ctx.lineTo(6.5, -4.5);
-      ctx.lineTo(4.8, 7.2);
-      ctx.lineTo(-4.8, 7.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Box face shadow & folds
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.moveTo(0, -4.5);
-      ctx.lineTo(6.5, -4.5);
-      ctx.lineTo(4.8, 7.2);
-      ctx.lineTo(0, 7.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Red Chinese Pagoda Logo
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-2, 0, 4, 3);
-      ctx.beginPath();
-      ctx.moveTo(-3.5, 0);
-      ctx.lineTo(3.5, 0);
-      ctx.lineTo(0, -2.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillRect(-0.6, -3.5, 1.2, 1);
-
-      // Bamboo chopsticks angled out top
-      ctx.strokeStyle = '#b45309';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(-5, -8.5);
-      ctx.lineTo(3, 4);
-      ctx.moveTo(-3, -9);
-      ctx.lineTo(5, 4);
-      ctx.stroke();
-
-      // Wire handle arched across
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.arc(0, -4.5, 5, Math.PI, 0);
       ctx.stroke();
       return true;
     }
@@ -1272,36 +507,6 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       ctx.beginPath();
       ctx.arc(0, 1, 1, 0, Math.PI * 2);
       ctx.fill();
-      return true;
-    }
-
-    case 'military_ration': {
-      drawShadow(ctx, 8.5, 3, 7.5, 0.25);
-
-      // Olive drab military combat MRE pouch
-      ctx.fillStyle = '#365314';
-      ctx.beginPath();
-      ctx.roundRect(-8.5, -6.5, 17, 13.5, 2);
-      ctx.fill();
-
-      // Heat-sealed crimped border
-      ctx.strokeStyle = '#1a2e05';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(-8.5, -6.5, 17, 13.5);
-
-      // Tear notches on sides
-      ctx.fillStyle = '#1a2e05';
-      ctx.beginPath();
-      ctx.moveTo(-8.5, -4); ctx.lineTo(-7.5, -3.5); ctx.lineTo(-8.5, -3); ctx.closePath(); ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(8.5, -4); ctx.lineTo(7.5, -3.5); ctx.lineTo(8.5, -3); ctx.closePath(); ctx.fill();
-
-      // Military stenciled text block
-      ctx.fillStyle = '#14532d';
-      ctx.fillRect(-6.5, -3, 13, 2);
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(-5, 0.5, 10, 1.4);
-      ctx.fillRect(-3.5, 2.8, 7, 1.2);
       return true;
     }
 
@@ -1616,28 +821,6 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       return true;
     }
 
-    case 'fries_strip_single': {
-      drawShadow(ctx, 3.0, 1.4, 6.0, 0.16);
-      ctx.fillStyle = '#facc15';
-      ctx.strokeStyle = '#ca8a04';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.roundRect(-1.3, -5.5, 2.6, 11.0, 0.6);
-      ctx.fill();
-      ctx.stroke();
-      return true;
-    }
-
-    case 'nugget_chicken_single':
-    case 'chicken_wing_crispy_single': {
-      drawShadow(ctx, 5.0, 2.0, 5.8, 0.22);
-      ctx.fillStyle = itemId === 'chicken_wing_crispy_single' ? '#b45309' : '#d97706';
-      ctx.beginPath();
-      ctx.ellipse(0, 0.5, 4.6, 3.2, 0.2, 0, Math.PI * 2);
-      ctx.fill();
-      return true;
-    }
-
     case 'popcorn_handful': {
       drawShadow(ctx, 5.0, 2.0, 5.8, 0.18);
       ctx.fillStyle = '#fef9c3';
@@ -1685,67 +868,13 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       return true;
     }
 
-    case 'apple_ring_dried_single': {
-      drawShadow(ctx, 4.4, 1.8, 5.5, 0.18);
-      ctx.fillStyle = '#fde68a';
-      ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 0.7;
-      ctx.beginPath();
-      ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.arc(0, 0, 1.4, 0, Math.PI * 2);
-      ctx.fill();
-      return true;
-    }
-
-    case 'prune_dried_single':
-    case 'apricot_dried_single': {
-      drawShadow(ctx, 4.4, 1.8, 5.4, 0.2);
-      const isApricot = itemId === 'apricot_dried_single';
-      ctx.fillStyle = isApricot ? '#f59e0b' : '#312e81';
-      ctx.strokeStyle = isApricot ? '#b45309' : '#1e1b4b';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 4.2, 3.0, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      return true;
-    }
-
-    case 'raisins_handful_single':
-    case 'cranberry_dried_single': {
-      drawShadow(ctx, 4.6, 1.8, 5.5, 0.18);
-      const isCran = itemId === 'cranberry_dried_single';
-      ctx.fillStyle = isCran ? '#be123c' : '#78350f';
-      for (const [rx, ry] of [[-1.8, 0.6], [1.6, 0.8], [0, -1.2], [-0.4, 1.6], [1.4, -0.8]]) {
-        ctx.beginPath();
-        ctx.ellipse(rx, ry, 1.6, 1.2, 0.3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      return true;
-    }
-
-    case 'banana_chip_single': {
-      drawShadow(ctx, 4.0, 1.6, 5.2, 0.18);
-      ctx.fillStyle = '#fef08a';
-      ctx.strokeStyle = '#ca8a04';
-      ctx.lineWidth = 0.7;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 3.8, 3.2, 0.15, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#a16207';
-      ctx.beginPath();
-      ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
-      ctx.fill();
-      return true;
-    }
-
     case 'gummy_candy': {
       drawGummyCandyPiece(ctx, item);
+      return true;
+    }
+
+    case 'pelmen': {
+      drawPelmenPiece(ctx, item);
       return true;
     }
 
@@ -2062,3 +1191,287 @@ function drawGummyCandyPiece(ctx: CanvasRenderingContext2D, item?: any): void {
 
   ctx.restore();
 }
+
+function drawPelmenPiece(ctx: CanvasRenderingContext2D, item?: any): void {
+  const attrs = item?.pelmenAttributes;
+  const shape: PelmenShape = attrs?.shape || 'ear';
+  const size: PelmenSize = attrs?.size || 'medium';
+  const state: PelmenState = attrs?.state || 'frozen';
+  const doughColor: string = attrs?.doughColor || '#fef3c7';
+  const fillingColor: string = attrs?.fillingColor || '#991b1b';
+  const flourDusting = attrs?.flourDusting ?? (state === 'frozen' || state === 'raw');
+  const butterGlaze = attrs?.butterGlaze ?? (state === 'boiled' || state === 'fried');
+
+  const sizeScale =
+    size === 'mini' ? 0.76 : size === 'small' ? 0.88 : size === 'large' ? 1.15 : 1.0;
+
+  const doughBright = tintHex(doughColor, state === 'boiled' ? 0.12 : 0.08);
+  const doughShade = tintHex(doughColor, state === 'fried' ? -0.22 : -0.14);
+  const doughRim = tintHex(doughColor, state === 'fried' ? -0.36 : -0.24);
+
+  drawShadow(ctx, 4.8 * sizeScale, 2.1 * sizeScale, 5.4 * sizeScale, 0.23);
+
+  ctx.save();
+  ctx.scale(sizeScale, sizeScale);
+
+  const makeDoughGrad = (r: number = 4.6) => {
+    const g = ctx.createRadialGradient(-1.2, -1.4, 0.4, 0, 0.4, r);
+    g.addColorStop(0.0, doughBright);
+    g.addColorStop(0.65, doughColor);
+    g.addColorStop(1.0, doughShade);
+    return g;
+  };
+
+  switch (shape) {
+    case 'crescent': {
+      // Half-moon crescent dumpling with braided pleated edge
+      ctx.fillStyle = makeDoughGrad(5.4);
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(-4.8, 1.4);
+      ctx.bezierCurveTo(-4.4, -3.8, 4.4, -3.8, 4.8, 1.4);
+      ctx.bezierCurveTo(2.4, 3.2, -2.4, 3.2, -4.8, 1.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Translucent meat belly glow through thin dough
+      ctx.fillStyle = fillingColor;
+      ctx.globalAlpha = state === 'boiled' ? 0.24 : 0.14;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.2, 2.5, 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Braided crimp pleats along top arch
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.55;
+      for (let i = -3; i <= 3; i++) {
+        const px = i * 1.15;
+        const py = -2.2 + Math.abs(i) * 0.32;
+        ctx.beginPath();
+        ctx.arc(px, py, 0.75, Math.PI * 0.9, Math.PI * 2.1);
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'saturn': {
+      // Stamped round "Saturn" pelmen with equatorial flange rim
+      ctx.fillStyle = doughShade;
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.3, 5.1, 4.1, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Equatorial crimped ring notches
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.45;
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * 4.1, 0.3 + Math.sin(a) * 3.2);
+        ctx.lineTo(Math.cos(a) * 5.0, 0.3 + Math.sin(a) * 4.0);
+        ctx.stroke();
+      }
+
+      // Plump central dome over meat filling
+      ctx.fillStyle = makeDoughGrad(3.6);
+      ctx.beginPath();
+      ctx.ellipse(0, -0.2, 3.5, 2.8, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = fillingColor;
+      ctx.globalAlpha = state === 'boiled' ? 0.25 : 0.15;
+      ctx.beginPath();
+      ctx.ellipse(0, -0.2, 2.2, 1.7, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+      break;
+    }
+
+    case 'khinkali': {
+      // Pleated pouch dumpling (buuza / mini-khinkali) with twisted top knot
+      ctx.fillStyle = makeDoughGrad(5.0);
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.8, 4.5, 3.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Radial pleats converging to top knot
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ang) * 0.8, -1.1 + Math.sin(ang) * 0.5);
+        ctx.quadraticCurveTo(
+          Math.cos(ang + 0.25) * 2.6,
+          0.2 + Math.sin(ang + 0.25) * 2.0,
+          Math.cos(ang) * 4.1,
+          0.8 + Math.sin(ang) * 3.1
+        );
+        ctx.stroke();
+      }
+
+      // Top twisted dough crown ("хвостик")
+      ctx.fillStyle = doughBright;
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, -1.3, 1.35, 0.95, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      break;
+    }
+
+    case 'rose': {
+      // Tortellini / rosebud folded ring dumpling
+      ctx.fillStyle = makeDoughGrad(4.8);
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.65;
+
+      // Outer petal loop
+      ctx.beginPath();
+      ctx.arc(0, 0.2, 4.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Inner curled rose fold
+      ctx.beginPath();
+      ctx.moveTo(-2.8, -1.2);
+      ctx.bezierCurveTo(-1.2, -3.2, 2.6, -2.4, 2.4, 0.6);
+      ctx.bezierCurveTo(2.1, 2.8, -2.2, 2.8, -2.2, 0.4);
+      ctx.bezierCurveTo(-2.1, -1.0, 0.8, -1.2, 1.0, 0.3);
+      ctx.stroke();
+
+      ctx.fillStyle = fillingColor;
+      ctx.globalAlpha = state === 'boiled' ? 0.24 : 0.15;
+      ctx.beginPath();
+      ctx.arc(0, 0.1, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+      break;
+    }
+
+    case 'pillow': {
+      // Square cushion dumpling with crimped pinked edges (ravioli / kundyum)
+      ctx.fillStyle = makeDoughGrad(5.2);
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -4.0, 9.0, 8.0, 1.2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Zig-zag crimp border ticks
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.45;
+      for (let d = -3.4; d <= 3.4; d += 1.35) {
+        ctx.beginPath();
+        ctx.moveTo(d, -4.0);
+        ctx.lineTo(d, -3.1);
+        ctx.moveTo(d, 4.0);
+        ctx.lineTo(d, 3.1);
+        ctx.moveTo(-4.5, d * 0.85);
+        ctx.lineTo(-3.6, d * 0.85);
+        ctx.moveTo(4.5, d * 0.85);
+        ctx.lineTo(3.6, d * 0.85);
+        ctx.stroke();
+      }
+
+      // Central pillow mound
+      ctx.beginPath();
+      ctx.roundRect(-2.9, -2.4, 5.8, 4.8, 1.6);
+      ctx.stroke();
+
+      ctx.fillStyle = fillingColor;
+      ctx.globalAlpha = state === 'boiled' ? 0.24 : 0.15;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 2.2, 1.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+      break;
+    }
+
+    case 'ear':
+    default: {
+      // Classic Siberian/Ural "ear" pelmen with pinched tips wrapped into a ring
+      ctx.fillStyle = makeDoughGrad(4.9);
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.65;
+
+      // Plump rounded body with pinched ear tips meeting at bottom
+      ctx.beginPath();
+      ctx.arc(0, 0.1, 4.35, Math.PI * 0.82, Math.PI * 0.18, false);
+      ctx.quadraticCurveTo(2.4, 4.3, 0, 3.6);
+      ctx.quadraticCurveTo(-2.4, 4.3, -3.7, 2.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Subtle warm meat filling visible beneath stretched dough dome
+      ctx.fillStyle = fillingColor;
+      ctx.globalAlpha = state === 'boiled' ? 0.25 : 0.15;
+      ctx.beginPath();
+      ctx.ellipse(0, -0.5, 2.4, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Characteristic central dimple & folded ear pinch seam
+      ctx.strokeStyle = doughRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.arc(0, 0.7, 1.65, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, 1.6);
+      ctx.lineTo(0, 3.6);
+      ctx.stroke();
+      break;
+    }
+  }
+
+  // Fried golden-brown Maillard crust sear patch if state === 'fried'
+  if (state === 'fried') {
+    const searGrad = ctx.createRadialGradient(-0.3, -0.3, 0.2, 0, 0, 2.8);
+    searGrad.addColorStop(0.0, 'rgba(180, 83, 9, 0.78)');
+    searGrad.addColorStop(0.65, 'rgba(217, 119, 6, 0.52)');
+    searGrad.addColorStop(1.0, 'rgba(217, 119, 6, 0)');
+    ctx.fillStyle = searGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, -0.2, 2.8, 2.0, -0.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Melted butter / hot broth specular sheen if boiled/fried or butterGlaze
+  if (butterGlaze) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.58)';
+    ctx.beginPath();
+    ctx.ellipse(-1.2, -1.3, 1.35, 0.65, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // White flour dusting & frost crystals if frozen/raw or flourDusting
+  if (flourDusting) {
+    ctx.fillStyle = state === 'frozen' ? 'rgba(248, 250, 252, 0.82)' : 'rgba(255, 251, 235, 0.72)';
+    const specks: Array<[number, number, number]> = [
+      [-2.1, -1.6, 0.55], [1.8, -1.5, 0.5], [-1.5, 1.4, 0.6],
+      [1.9, 1.2, 0.5], [0.2, -2.4, 0.45], [-0.4, 2.2, 0.5]
+    ];
+    for (const [fx, fy, fr] of specks) {
+      ctx.beginPath();
+      ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+}
+

@@ -4549,20 +4549,26 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    // Pill Blister Pack (Блистер для таблеток 10 ячеек и пустой)
+    // Pill Blister Pack (Блистер для таблеток 10 ячеек: целый, начатый или пустой)
     case 'blister_pack_10':
     case 'blister_pack_empty': {
       drawShadow(ctx, 7.0, 3.5, 7.5, 0.2);
-      const isEmpty = itemId === 'blister_pack_empty' || (item?.contents && item.contents.length === 0);
+      const hasContentsArray = Array.isArray(item?.contents);
+      const isEmpty = itemId === 'blister_pack_empty' || (hasContentsArray && item!.contents!.length === 0);
 
       // Silver aluminum blister sheet
-      ctx.fillStyle = '#cbd5e1';
+      ctx.fillStyle = item?.containerTintColor || '#cbd5e1';
       ctx.strokeStyle = '#94a3b8';
       ctx.lineWidth = 0.6;
       ctx.beginPath();
       ctx.roundRect(-5.5, -7.5, 11.0, 15.0, 1.2);
       ctx.fill();
       ctx.stroke();
+
+      if (item?.labelColor) {
+        ctx.fillStyle = item.labelColor;
+        ctx.fillRect(-5.2, -7.2, 10.4, 1.3);
+      }
 
       const firstPill = item?.contents?.[0]?.itemId || '';
       const pillColor = firstPill.includes('charcoal')
@@ -4571,20 +4577,21 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ? '#f59e0b'
         : firstPill.includes('antipyretic')
         ? '#38bdf8'
-        : '#f8fafc';
+        : item?.labelColor || '#f8fafc';
 
-      const remCount = isEmpty ? 0 : item?.contents ? item.contents.length : 10;
+      const remCount = isEmpty ? 0 : hasContentsArray ? item!.contents!.length : 10;
       let idx = 0;
       for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 2; c++) {
           const px = c === 0 ? -2.4 : 2.4;
-          const py = -5.2 + r * 2.6;
+          const py = -5.0 + r * 2.5;
           if (idx < remCount) {
             ctx.fillStyle = pillColor;
             ctx.beginPath();
             ctx.ellipse(px, py, 1.5, 1.0, 0, 0, Math.PI * 2);
             ctx.fill();
           } else {
+            // Popped foil cavity
             ctx.fillStyle = '#64748b';
             ctx.beginPath();
             ctx.ellipse(px, py, 1.4, 0.9, 0, 0, Math.PI * 2);
@@ -4602,10 +4609,10 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'egg_carton_quail_18': {
       drawShadow(ctx, 9.5, 4.0, 7.5, 0.25);
       const isQuail = itemId === 'egg_carton_quail_18';
-      const isOpen = itemId === 'egg_carton_10_open' || isQuail;
+      const isOpen = Boolean(item?.isOpen) || itemId === 'egg_carton_10_open' || isQuail;
 
       // Molded pulp carton base
-      ctx.fillStyle = isQuail ? 'rgba(226, 232, 240, 0.65)' : '#d6d3d1';
+      ctx.fillStyle = item?.containerTintColor || (isQuail ? 'rgba(226, 232, 240, 0.65)' : '#d6d3d1');
       ctx.strokeStyle = '#a8a29e';
       ctx.lineWidth = 0.7;
       ctx.beginPath();
@@ -4615,11 +4622,23 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       if (!isOpen) {
         // Closed carton lid label
-        ctx.fillStyle = '#f59e0b';
+        ctx.fillStyle = item?.labelColor || '#f59e0b';
         ctx.fillRect(-5.5, -2.2, 11.0, 4.4);
       } else {
-        // Draw eggs inside cells
-        const count = item?.contents ? Math.min(10, item.contents.length) : 10;
+        // Draw recessed cells first
+        for (let i = 0; i < 10; i++) {
+          const c = i % 5;
+          const r = Math.floor(i / 5);
+          const ex = -6.0 + c * 3.0;
+          const ey = r === 0 ? -2.2 : 2.2;
+          ctx.fillStyle = 'rgba(120, 113, 108, 0.35)';
+          ctx.beginPath();
+          ctx.ellipse(ex, ey, 1.2, 1.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Draw remaining eggs inside cells
+        const hasContentsArray = Array.isArray(item?.contents);
+        const count = hasContentsArray ? Math.min(10, item!.contents!.length) : (itemId === 'egg_carton_10_open' ? 0 : 10);
         for (let i = 0; i < count; i++) {
           const c = i % 5;
           const r = Math.floor(i / 5);
@@ -4634,110 +4653,98 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    // Takeout Fast-Food Boxes (Коробочка WOK, Конвертик для фри, Бокс для наггетсов)
-    case 'takeout_box_wok':
-    case 'takeout_pocket_fries':
-    case 'takeout_box_nuggets': {
+    // Takeout Cardboard Box (Коробочка WOK / попкорн)
+    case 'takeout_box_wok': {
       drawShadow(ctx, 7.0, 3.5, 7.5, 0.25);
-      if (itemId === 'takeout_pocket_fries') {
-        // Red cardboard fry pocket
-        ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.moveTo(-5.5, -4.5);
-        ctx.lineTo(5.5, -4.5);
-        ctx.lineTo(4.2, 7.0);
-        ctx.lineTo(-4.2, 7.0);
-        ctx.closePath();
-        ctx.fill();
-        if (item?.contents && item.contents.length > 0) {
-          ctx.fillStyle = '#facc15';
-          for (let i = -3; i <= 3; i += 1.5) {
-            ctx.fillRect(i - 0.5, -7.5, 1.1, 4.0);
-          }
-        }
-        return true;
-      }
-
-      // Wok box or Nugget box
-      ctx.fillStyle = itemId === 'takeout_box_wok' ? '#b91c1c' : '#f59e0b';
+      const isOpen = Boolean(item?.isOpen);
+      ctx.fillStyle = item?.containerTintColor || '#b91c1c';
       ctx.beginPath();
       ctx.roundRect(-6.5, -5.5, 13.0, 12.0, 1.4);
       ctx.fill();
-      ctx.fillStyle = '#fef3c7';
+      ctx.fillStyle = item?.labelColor || '#fef3c7';
       ctx.fillRect(-4.5, -2.0, 9.0, 4.0);
+      if (isOpen) {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-5.2, -5.2, 10.4, 2.2);
+      }
       return true;
     }
 
-    // Single-use Vacuum Sealed Pouches & Produce Mesh Bags
+    // Single-use Vacuum Sealed Pouches & Produce Mesh Bags (Целые и вскрытые)
     case 'pouch_vacuum_sealed':
     case 'vacuum_pack_small':
     case 'vacuum_pack_medium':
     case 'vacuum_pack_large':
-    case 'mesh_bag_produce': {
-      const isLg = itemId === 'vacuum_pack_large';
-      const isMd = itemId === 'vacuum_pack_medium' || itemId === 'pouch_vacuum_sealed';
+    case 'mesh_bag_produce':
+    case 'pouch_torn_meat':
+    case 'mesh_bag_torn':
+    case 'vacuum_pack_small_torn':
+    case 'vacuum_pack_medium_torn':
+    case 'vacuum_pack_large_torn': {
+      const isLg = itemId.includes('large') || item?.packagingSize === 'large';
+      const isMd = itemId.includes('medium') || itemId === 'pouch_vacuum_sealed' || item?.packagingSize === 'medium';
       const w = isLg ? 11.0 : (isMd ? 9.0 : 7.5);
       const h = isLg ? 15.0 : (isMd ? 12.5 : 10.5);
+      const isOpen = Boolean(item?.isOpen) || itemId.includes('_torn');
 
-      drawShadow(ctx, w, h * 0.35, 8.0, 0.22);
+      drawShadow(ctx, w, h * (isOpen ? 0.25 : 0.35), isOpen ? 5.5 : 8.0, isOpen ? 0.16 : 0.22);
 
-      if (item?.contents && item.contents.length > 0) {
-        ctx.save();
-        ctx.translate(0, 0.4);
-        const innerItem = item.contents[0];
-        drawItemModel2D(ctx, innerItem.itemId, 0, 0, 16, innerItem);
-        ctx.restore();
-      } else {
+      const hasContents = Boolean(item?.contents && item.contents.length > 0);
+      if (hasContents) {
+        const innerItem = item!.contents![0];
+        if (innerItem && innerItem.itemId !== itemId) {
+          ctx.save();
+          ctx.translate(0, 0.4);
+          drawItemModel2D(ctx, innerItem.itemId, 0, 0, 16, innerItem, true);
+          ctx.restore();
+        }
+      } else if (!isOpen) {
         ctx.fillStyle = '#b91c1c';
         ctx.beginPath();
         ctx.ellipse(0, 0.5, w * 0.62, h * 0.35, -0.15, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      ctx.fillStyle = itemId === 'mesh_bag_produce' ? 'rgba(234, 88, 12, 0.28)' : 'rgba(241, 245, 249, 0.35)';
-      ctx.beginPath();
-      ctx.roundRect(-w, -h / 2, w * 2, h, 1.2);
-      ctx.fill();
-
-      ctx.strokeStyle = itemId === 'mesh_bag_produce' ? 'rgba(234, 88, 12, 0.65)' : 'rgba(148, 163, 184, 0.65)';
+      ctx.fillStyle = itemId.startsWith('mesh_bag') ? 'rgba(234, 88, 12, 0.28)' : 'rgba(241, 245, 249, 0.35)';
+      ctx.strokeStyle = itemId.startsWith('mesh_bag') ? 'rgba(234, 88, 12, 0.65)' : 'rgba(148, 163, 184, 0.68)';
       ctx.lineWidth = 0.8;
-      ctx.strokeRect(-w, -h / 2, w * 2, h);
+
+      if (!isOpen) {
+        ctx.beginPath();
+        ctx.roundRect(-w, -h / 2, w * 2, h, 1.2);
+        ctx.fill();
+        ctx.strokeRect(-w, -h / 2, w * 2, h);
+      } else {
+        // Torn jagged top edge preserving package dimensions
+        ctx.beginPath();
+        ctx.moveTo(-w, h / 2);
+        ctx.lineTo(-w + 0.8, -h / 2 + 2.8);
+        ctx.lineTo(-w * 0.4, -h / 2 + 1.0);
+        ctx.lineTo(0, -h / 2 + 2.2);
+        ctx.lineTo(w * 0.45, -h / 2 + 0.9);
+        ctx.lineTo(w - 0.8, -h / 2 + 2.4);
+        ctx.lineTo(w, h / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      if (item?.labelColor) {
+        ctx.fillStyle = item.labelColor;
+        ctx.fillRect(-w * 0.45, h * 0.12, w * 0.9, 2.2);
+      }
       return true;
     }
 
-    // Torn Empty Vacuum Pouches & Mesh Bags
-    case 'pouch_torn_meat':
-    case 'mesh_bag_torn':
-    case 'vacuum_pack_small_torn':
-    case 'vacuum_pack_medium_torn':
-    case 'vacuum_pack_large_torn': {
-      const w = 8.0;
-      const h = 10.0;
-      drawShadow(ctx, w, h * 0.25, 5.0, 0.15);
-
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.35)';
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
-      ctx.lineWidth = 0.8;
-
-      ctx.beginPath();
-      ctx.moveTo(-w, h / 2);
-      ctx.lineTo(-w + 1.0, -h / 2 + 3.0);
-      ctx.lineTo(-w + 2.5, -h / 2 + 1.0);
-      ctx.lineTo(0, -h / 2 + 1.5);
-      ctx.lineTo(w - 1.5, -h / 2 + 2.0);
-      ctx.lineTo(w, h / 2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      return true;
-    }
-
-    // Sealed Food Tray (Пищевой подложка-лоток под запайку)
+    // Sealed & Opened Food Tray (Пищевой подложка-лоток под запайку и вскрытый)
     case 'tray_plastic_sealed':
-    case 'tray_sealed_food': {
-      drawShadow(ctx, 10.0, 5.0, 8.0, 0.28);
+    case 'tray_sealed_food':
+    case 'tray_plastic_empty':
+    case 'tray_sealed_food_torn': {
+      const isOpen = Boolean(item?.isOpen) || itemId === 'tray_plastic_empty' || itemId === 'tray_sealed_food_torn';
+      drawShadow(ctx, 10.0, isOpen ? 4.5 : 5.0, isOpen ? 7.0 : 8.0, isOpen ? 0.22 : 0.28);
 
-      ctx.fillStyle = '#18181b';
+      ctx.fillStyle = item?.containerTintColor || '#18181b';
       ctx.beginPath();
       ctx.roundRect(-9.5, -6.5, 19.0, 13.0, 1.8);
       ctx.fill();
@@ -4747,85 +4754,92 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
       ctx.fill();
 
-      if (item?.contents && item.contents.length > 0) {
-        ctx.save();
-        const inner = item.contents[0];
-        drawItemModel2D(ctx, inner.itemId, 0, 0, 15, inner);
-        ctx.restore();
-      } else {
+      const hasContents = Boolean(item?.contents && item.contents.length > 0);
+      if (hasContents) {
+        const inner = item!.contents![0];
+        if (inner && inner.itemId !== itemId) {
+          ctx.save();
+          drawItemModel2D(ctx, inner.itemId, 0, 0, 15, inner, true);
+          ctx.restore();
+        }
+      } else if (!isOpen) {
         ctx.fillStyle = '#991b1b';
         ctx.beginPath();
         ctx.roundRect(-6.5, -3.8, 13.0, 7.6, 2.0);
         ctx.fill();
       }
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.beginPath();
-      ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
-      ctx.fill();
-      return true;
-    }
-
-    // Opened / Torn Food Tray
-    case 'tray_plastic_empty':
-    case 'tray_sealed_food_torn': {
-      drawShadow(ctx, 10.0, 4.5, 7.0, 0.22);
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.roundRect(-9.5, -6.5, 19.0, 13.0, 1.8);
-      ctx.fill();
-      ctx.fillStyle = '#09090b';
-      ctx.beginPath();
-      ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
-      ctx.fill();
-      return true;
-    }
-
-    // Sealed Snack Doypack Pouch (Герметичный пакет-дойпак)
-    case 'pouch_sealed_snack': {
-      drawShadow(ctx, 8.0, 3.5, 7.5, 0.22);
-
-      const pouchGrad = ctx.createLinearGradient(-6, -7, 6, 8);
-      pouchGrad.addColorStop(0, '#f1f5f9');
-      pouchGrad.addColorStop(0.5, '#cbd5e1');
-      pouchGrad.addColorStop(1, '#94a3b8');
-
-      ctx.fillStyle = pouchGrad;
-      ctx.beginPath();
-      ctx.roundRect(-6.0, -7.5, 12.0, 15.0, 1.5);
-      ctx.fill();
-
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.beginPath();
-      ctx.ellipse(0, 0.5, 4.2, 3.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (item?.contents && item.contents.length > 0) {
-        ctx.save();
+      if (!isOpen) {
+        // Intact heat-sealed barrier film
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
         ctx.beginPath();
-        ctx.ellipse(0, 0.5, 4.0, 3.0, 0, 0, Math.PI * 2);
-        ctx.clip();
-        const inner = item.contents[0];
-        drawItemModel2D(ctx, inner.itemId, 0, 0.5, 14, inner);
-        ctx.restore();
+        ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
+        ctx.fill();
       } else {
-        ctx.fillStyle = '#d97706';
+        // Peeled-back corner of barrier film on opened tray
+        ctx.fillStyle = 'rgba(241, 245, 249, 0.22)';
         ctx.beginPath();
-        ctx.arc(-1.5, 0, 1.4, 0, Math.PI * 2);
-        ctx.arc(1.5, 0.5, 1.2, 0, Math.PI * 2);
+        ctx.moveTo(4.2, -5.2);
+        ctx.lineTo(8.2, -5.2);
+        ctx.lineTo(8.2, 1.5);
+        ctx.closePath();
         ctx.fill();
       }
 
-      ctx.fillStyle = '#64748b';
-      ctx.fillRect(-6.0, -7.5, 12.0, 1.8);
+      if (item?.labelColor) {
+        ctx.fillStyle = item.labelColor;
+        ctx.fillRect(3.2, 2.2, 4.4, 2.4);
+      }
       return true;
     }
 
-    // Torn Snack Doypack (Вскрытый дойпак)
+    // Sealed & Torn Snack Doypack Pouch (Герметичный и вскрытый пакет-дойпак)
+    case 'pouch_sealed_snack':
     case 'pouch_torn_snack':
     case 'pouch_sealed_snack_torn': {
-      drawShadow(ctx, 7.5, 3.0, 6.0, 0.18);
+      const isOpen = Boolean(item?.isOpen) || itemId === 'pouch_torn_snack' || itemId === 'pouch_sealed_snack_torn';
+      drawShadow(ctx, isOpen ? 7.5 : 8.0, isOpen ? 3.0 : 3.5, isOpen ? 6.0 : 7.5, isOpen ? 0.18 : 0.22);
 
+      if (!isOpen) {
+        const pouchGrad = ctx.createLinearGradient(-6, -7, 6, 8);
+        pouchGrad.addColorStop(0, '#f1f5f9');
+        pouchGrad.addColorStop(0.5, item?.containerTintColor || '#cbd5e1');
+        pouchGrad.addColorStop(1, '#94a3b8');
+
+        ctx.fillStyle = pouchGrad;
+        ctx.beginPath();
+        ctx.roundRect(-6.0, -7.5, 12.0, 15.0, 1.5);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0.5, 4.2, 3.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (item?.contents && item.contents.length > 0) {
+          const inner = item.contents[0];
+          if (inner && inner.itemId !== itemId) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(0, 0.5, 4.0, 3.0, 0, 0, Math.PI * 2);
+            ctx.clip();
+            drawItemModel2D(ctx, inner.itemId, 0, 0.5, 14, inner, true);
+            ctx.restore();
+          }
+        } else {
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.arc(-1.5, 0, 1.4, 0, Math.PI * 2);
+          ctx.arc(1.5, 0.5, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = item?.labelColor || '#64748b';
+        ctx.fillRect(-6.0, -7.5, 12.0, 1.8);
+        return true;
+      }
+
+      // Opened / Torn Snack Doypack
       ctx.fillStyle = item?.containerTintColor || '#cbd5e1';
       ctx.beginPath();
       ctx.moveTo(-5.5, 7.0);
@@ -4838,6 +4852,11 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
+      if (item?.labelColor) {
+        ctx.fillStyle = item.labelColor;
+        ctx.fillRect(-5.5, 3.8, 11.0, 2.0);
+      }
+
       ctx.fillStyle = '#334155';
       ctx.beginPath();
       ctx.ellipse(0, -3.5, 3.8, 1.2, 0, 0, Math.PI * 2);
@@ -4845,14 +4864,211 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       if (item?.contents && item.contents.length > 0) {
         const inner = item.contents[0];
+        if (inner && inner.itemId !== itemId) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(-4.0, -2.0, 8.0, 7.5, 1.0);
+          ctx.clip();
+          drawItemModel2D(ctx, inner.itemId, 0, 1.5, 11, inner, true);
+          ctx.restore();
+        }
+      }
+
+      return true;
+    }
+
+    // Dumpling / Pelmeni Packaging (Пачка и пакет с клипсой под пельмени: запечатанная и вскрытая)
+    case 'pelmeni_pack_small':
+    case 'pelmeni_pack':
+    case 'pelmeni_pack_large':
+    case 'pelmeni_pack_box': {
+      const isBox = itemId === 'pelmeni_pack_box' || item?.packagingShapeNameRu?.toLowerCase().includes('короб') || item?.packagingShapeNameRu?.toLowerCase().includes('пачка');
+      const sz = item?.packagingSize || (itemId.includes('small') ? 'small' : itemId.includes('large') ? 'large' : 'medium');
+      const scale = sz === 'mini' ? 0.8 : sz === 'small' ? 0.9 : sz === 'large' ? 1.12 : 1.0;
+      const isOpen = Boolean(item?.isOpen);
+      const labelColor = item?.labelColor || '#b91c1c';
+      const bodyTint = item?.containerTintColor || (isBox ? '#fffbeb' : '#f8fafc');
+      const hasContents = Boolean(item?.contents && item.contents.length > 0);
+
+      drawShadow(ctx, 7.8 * scale, 3.2 * scale, 7.8 * scale, 0.24);
+      ctx.save();
+      ctx.scale(scale, scale);
+
+      if (isBox) {
+        // Cardboard Pelmeni Box with viewing window and tear-strip flap
+        ctx.fillStyle = bodyTint;
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.roundRect(-6.4, -7.2, 12.8, 14.4, 1.1);
+        ctx.fill();
+        ctx.stroke();
+
+        // Brand header band with traditional geometric pattern
+        ctx.fillStyle = labelColor;
+        ctx.fillRect(-6.1, -6.9, 12.2, 3.6);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        for (let ox = -5.2; ox <= 4.8; ox += 2.0) {
+          ctx.fillRect(ox, -3.9, 1.0, 0.45);
+        }
+
+        if (isOpen) {
+          // Opened top cardboard flap slot
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-5.4, -7.2, 10.8, 1.7);
+          ctx.fillStyle = bodyTint;
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-5.4, -7.2);
+          ctx.lineTo(-4.6, -8.8);
+          ctx.lineTo(4.6, -8.8);
+          ctx.lineTo(5.4, -7.2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Clear viewing window showing inner pelmeni
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+        ctx.beginPath();
+        ctx.roundRect(-4.6, -1.6, 9.2, 6.2, 1.6);
+        ctx.fill();
+
+        if (hasContents) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(-4.4, -1.4, 8.8, 5.8, 1.4);
+          ctx.clip();
+          const offsets: Array<[number, number]> = [[-2.0, 2.0], [2.0, 2.1], [0, 0.4]];
+          const countToShow = Math.min(3, item!.contents!.length);
+          for (let i = 0; i < countToShow; i++) {
+            const inner = item!.contents![i];
+            if (!inner || inner.itemId === itemId) continue;
+            const [ox, oy] = offsets[i];
+            drawItemModel2D(ctx, inner.itemId, ox, oy, 11, inner, true);
+          }
+          ctx.restore();
+        }
+
+        // Glossy window film highlight
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.roundRect(-4.6, -1.6, 9.2, 6.2, 1.6);
+        ctx.stroke();
+
+        // Footer accent bar
+        ctx.fillStyle = labelColor;
+        ctx.fillRect(-6.1, 5.4, 12.2, 1.4);
+        ctx.restore();
+        return true;
+      }
+
+      // Classic Gathered Clip-Top Polymer Pelmeni Bag (Пакет с клипсой под пельмени)
+      if (!isOpen) {
+        // Top fan-folded polymer crest above clip
+        ctx.fillStyle = bodyTint;
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-1.4, -4.8);
+        ctx.lineTo(-3.4, -8.2);
+        ctx.lineTo(-1.2, -7.6);
+        ctx.lineTo(0, -8.5);
+        ctx.lineTo(1.2, -7.6);
+        ctx.lineTo(3.4, -8.2);
+        ctx.lineTo(1.4, -4.8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Main plump pillow bag body
+      const bagTop = isOpen ? -5.8 : -4.8;
+      const bagGrad = ctx.createLinearGradient(-6.8, bagTop, 6.8, 7.4);
+      bagGrad.addColorStop(0.0, '#ffffff');
+      bagGrad.addColorStop(0.5, bodyTint);
+      bagGrad.addColorStop(1.0, '#cbd5e1');
+
+      ctx.fillStyle = bagGrad;
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      if (!isOpen) {
+        ctx.moveTo(-1.6, -4.8);
+        ctx.bezierCurveTo(-6.8, -4.2, -7.2, 2.5, -6.0, 7.2);
+        ctx.lineTo(6.0, 7.2);
+        ctx.bezierCurveTo(7.2, 2.5, 6.8, -4.2, 1.6, -4.8);
+        ctx.closePath();
+      } else {
+        // Opened unclipped bag mouth
+        ctx.moveTo(-4.8, -5.6);
+        ctx.lineTo(-2.4, -4.8);
+        ctx.lineTo(0, -5.8);
+        ctx.lineTo(2.4, -4.8);
+        ctx.lineTo(4.8, -5.6);
+        ctx.bezierCurveTo(7.0, -1.5, 7.0, 3.2, 6.0, 7.2);
+        ctx.lineTo(-6.0, 7.2);
+        ctx.bezierCurveTo(-7.0, 3.2, -7.0, -1.5, -4.8, -5.6);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      if (!isOpen) {
+        // Metallic / plastic neck clip clamping the gathered top
+        ctx.fillStyle = labelColor;
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 0.45;
+        ctx.beginPath();
+        ctx.roundRect(-2.3, -5.5, 4.6, 1.5, 0.4);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Dark open interior mouth of unclipped pelmeni bag
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.ellipse(0, -5.1, 3.9, 1.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Colored brand arch band across upper chest of the bag
+      ctx.fillStyle = labelColor;
+      ctx.beginPath();
+      ctx.roundRect(-5.6, -3.2, 11.2, 2.4, 0.8);
+      ctx.fill();
+
+      // Clear oval viewing window showing pelmeni inside
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+      ctx.beginPath();
+      ctx.ellipse(0, 2.4, 4.6, 3.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (hasContents) {
         ctx.save();
         ctx.beginPath();
-        ctx.roundRect(-4.0, -2.0, 8.0, 7.5, 1.0);
+        ctx.ellipse(0, 2.4, 4.4, 3.0, 0, 0, Math.PI * 2);
         ctx.clip();
-        drawItemModel2D(ctx, inner.itemId, 0, 1.5, 11, inner);
+        const offsets: Array<[number, number]> = [[-1.9, 3.0], [1.9, 3.0], [0, 1.4]];
+        const countToShow = Math.min(3, item!.contents!.length);
+        for (let i = 0; i < countToShow; i++) {
+          const inner = item!.contents![i];
+          if (!inner || inner.itemId === itemId) continue;
+          const [ox, oy] = offsets[i];
+          drawItemModel2D(ctx, inner.itemId, ox, oy, 11, inner, true);
+        }
         ctx.restore();
       }
 
+      // Window border & frost specks
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 2.4, 4.6, 3.2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.restore();
       return true;
     }
 

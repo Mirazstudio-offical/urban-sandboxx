@@ -107,6 +107,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     overKey: string | null;
   } | null>(null);
   const stDragRef = React.useRef<{
+    pointerId: number;
     sourceKey: string;
     item: InventoryItem;
     startX: number;
@@ -542,6 +543,31 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     return bestKey;
   };
 
+  const findScrollableContainerAt = (x: number, y: number): HTMLElement | null => {
+    const hit = document.elementFromPoint(x, y) as HTMLElement | null;
+    let el: HTMLElement | null = hit;
+    while (el && el !== document.body) {
+      if (el.scrollHeight > el.clientHeight + 2) {
+        const style = window.getComputedStyle(el);
+        if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+          return el;
+        }
+      }
+      el = el.parentElement;
+    }
+    const scrollables = document.querySelectorAll<HTMLElement>(
+      '#furniture-storage-modal .gu-st-scroll, #furniture-storage-modal .gu-body'
+    );
+    for (let i = 0; i < scrollables.length; i++) {
+      const node = scrollables[i];
+      const r = node.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && node.scrollHeight > node.clientHeight + 2) {
+        return node;
+      }
+    }
+    return null;
+  };
+
   const startSlotPointerDrag = (
     e: React.PointerEvent<HTMLElement>,
     slotKey: string,
@@ -549,6 +575,10 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     onSelectClick?: () => void
   ) => {
     if (e.button !== 0) return;
+    // If one finger is already holding/dragging an item, do not let a second finger hijack or cancel the drag
+    if (stDragRef.current && stDragRef.current.pointerId !== e.pointerId) {
+      return;
+    }
     if ((e.target as HTMLElement)?.closest('button')) return;
     e.stopPropagation();
 
@@ -562,9 +592,11 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
       return;
     }
 
+    const dragPointerId = e.pointerId;
     const startX = e.clientX;
     const startY = e.clientY;
     stDragRef.current = {
+      pointerId: dragPointerId,
       sourceKey: slotKey,
       item,
       startX,
@@ -575,37 +607,99 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
       overKey: null,
     };
 
+    let secondScrollPointer: {
+      pointerId: number;
+      lastX: number;
+      lastY: number;
+      scrollEl: HTMLElement | null;
+    } | null = null;
+
+    const refreshHoverUnderDraggedItem = () => {
+      const st = stDragRef.current;
+      if (!st || !st.active) return;
+      const over = findTargetStSlotAt(st.x, st.y, st.sourceKey);
+      st.overKey = over;
+      setStDragUi({
+        sourceKey: st.sourceKey,
+        item: st.item,
+        x: st.x,
+        y: st.y,
+        overKey: over,
+      });
+    };
+
+    const onExtraPointerDown = (ev: PointerEvent) => {
+      const st = stDragRef.current;
+      if (!st || ev.pointerId === st.pointerId) return;
+      if (!st.active) {
+        st.active = true;
+        refreshHoverUnderDraggedItem();
+      }
+      secondScrollPointer = {
+        pointerId: ev.pointerId,
+        lastX: ev.clientX,
+        lastY: ev.clientY,
+        scrollEl: findScrollableContainerAt(ev.clientX, ev.clientY),
+      };
+    };
+
     const onPointerMove = (ev: PointerEvent) => {
       const st = stDragRef.current;
       if (!st) return;
-      st.x = ev.clientX;
-      st.y = ev.clientY;
-      if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 3) {
-        st.active = true;
+
+      if (ev.pointerId === st.pointerId) {
+        st.x = ev.clientX;
+        st.y = ev.clientY;
+        if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 3) {
+          st.active = true;
+        }
+        if (st.active) {
+          refreshHoverUnderDraggedItem();
+        }
+        return;
       }
-      if (st.active) {
-        const over = findTargetStSlotAt(ev.clientX, ev.clientY, st.sourceKey);
-        st.overKey = over;
-        setStDragUi({
-          sourceKey: st.sourceKey,
-          item: st.item,
-          x: st.x,
-          y: st.y,
-          overKey: over,
-        });
+
+      if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
+        const dy = ev.clientY - secondScrollPointer.lastY;
+        const dx = ev.clientX - secondScrollPointer.lastX;
+        secondScrollPointer.lastY = ev.clientY;
+        secondScrollPointer.lastX = ev.clientX;
+        if (!secondScrollPointer.scrollEl) {
+          secondScrollPointer.scrollEl = findScrollableContainerAt(ev.clientX, ev.clientY);
+        }
+        if (secondScrollPointer.scrollEl) {
+          secondScrollPointer.scrollEl.scrollTop -= dy;
+          secondScrollPointer.scrollEl.scrollLeft -= dx;
+          refreshHoverUnderDraggedItem();
+        }
       }
     };
 
+    const onWheelWhileDragging = () => {
+      refreshHoverUnderDraggedItem();
+    };
+
     const finishDrag = (ev: PointerEvent, cancelled: boolean) => {
+      const st = stDragRef.current;
+      if (!st) return;
+
+      if (ev.pointerId !== st.pointerId) {
+        if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
+          secondScrollPointer = null;
+        }
+        return;
+      }
+
+      window.removeEventListener('pointerdown', onExtraPointerDown, true);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('wheel', onWheelWhileDragging, true);
 
-      const st = stDragRef.current;
       stDragRef.current = null;
       setStDragUi(null);
 
-      if (!st || cancelled) return;
+      if (cancelled) return;
 
       if (st.active) {
         const targetKey = findTargetStSlotAt(ev.clientX, ev.clientY, st.sourceKey) || st.overKey;
@@ -627,9 +721,11 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     const onPointerUp = (ev: PointerEvent) => finishDrag(ev, false);
     const onPointerCancel = (ev: PointerEvent) => finishDrag(ev, true);
 
+    window.addEventListener('pointerdown', onExtraPointerDown, true);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('wheel', onWheelWhileDragging, true);
   };
 
   const compartments = getPlayerCompartments(player);
@@ -921,7 +1017,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             ))}
           </div>
 
-          <div className="gu-st-scroll">
+          <div className="gu-st-scroll gu-player-inv-scroll">
             {/* Compact Hand Slots inside the scroll block */}
             <div className="gu-group">
               <div className="gu-group-h">

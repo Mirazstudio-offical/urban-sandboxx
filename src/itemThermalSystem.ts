@@ -1,6 +1,6 @@
 import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player } from './types';
 import { sound } from './audio';
-import { addPlayerNotification, getItemTotalWeight, takeItemFromHand, getSlotCompartment } from './items';
+import { ITEM_CATALOG, addPlayerNotification, getItemTotalWeight, takeItemFromHand, getSlotCompartment } from './items';
 import { addInjuryToPart } from './bodySystem';
 import { getOutsideTemperature } from './physics';
 
@@ -51,66 +51,6 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
     heatLossRate: 0.0025,
     heatRetention: 0.42,
     surfaceTemperature: 54.0
-  },
-  pizza_slice: {
-    temperature: 72.0,
-    heatLossRate: 0.0040,
-    heatRetention: 0.28,
-    surfaceTemperature: 57.5
-  },
-  burger: {
-    temperature: 68.0,
-    heatLossRate: 0.0030,
-    heatRetention: 0.35,
-    surfaceTemperature: 51.0
-  },
-  hot_dog: {
-    temperature: 70.0,
-    heatLossRate: 0.0032,
-    heatRetention: 0.32,
-    surfaceTemperature: 54.0
-  },
-  french_fries: {
-    temperature: 74.0,
-    heatLossRate: 0.0045,
-    heatRetention: 0.25,
-    surfaceTemperature: 60.0
-  },
-  nuggets: {
-    temperature: 72.0,
-    heatLossRate: 0.0038,
-    heatRetention: 0.30,
-    surfaceTemperature: 56.0
-  },
-  wok_box: {
-    temperature: 76.0,
-    heatLossRate: 0.0028,
-    heatRetention: 0.40,
-    surfaceTemperature: 53.0
-  },
-  shawarma: {
-    temperature: 72.0,
-    heatLossRate: 0.0028,
-    heatRetention: 0.38,
-    surfaceTemperature: 52.0
-  },
-  pie_meat: {
-    temperature: 75.0,
-    heatLossRate: 0.0030,
-    heatRetention: 0.35,
-    surfaceTemperature: 56.0
-  },
-  cheburek: {
-    temperature: 76.0,
-    heatLossRate: 0.0032,
-    heatRetention: 0.32,
-    surfaceTemperature: 58.0
-  },
-  samsa: {
-    temperature: 75.0,
-    heatLossRate: 0.0030,
-    heatRetention: 0.35,
-    surfaceTemperature: 56.0
   },
   popcorn_caramel: {
     temperature: 46.0,
@@ -192,12 +132,6 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
     heatRetention: 0.18,
     surfaceTemperature: 5.2
   },
-  sushi_set: {
-    temperature: 8.0,
-    heatLossRate: 0.0030,
-    heatRetention: 0.30,
-    surfaceTemperature: 9.0
-  },
 
   // === FROZEN SUPERMARKET MEAT, POULTRY & SEAFOOD SECTION (-16°C) ===
   beef_minced: {
@@ -268,18 +202,6 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
   },
 
   // === DEEP FREEZE & FROZEN SECTION (-18°C to -6°C) ===
-  ice_cream: {
-    temperature: -12.0,
-    heatLossRate: 0.0028,
-    heatRetention: 0.30,
-    surfaceTemperature: -9.0
-  },
-  milkshake: {
-    temperature: -3.0,
-    heatLossRate: 0.0035,
-    heatRetention: 0.32,
-    surfaceTemperature: -1.5
-  },
   vegetable_mix_frozen: {
     temperature: -16.0,
     heatLossRate: 0.0015,
@@ -384,17 +306,19 @@ export function calculateSurfaceTemperature(
 }
 
 /**
- * Retrieves default thermal properties for a given item ID or category
+ * Retrieves default thermal properties for a given item ID or category,
+ * reading directly from ITEM_CATALOG[itemId] first (Single Source of Truth).
  */
 export function getItemThermalDefaults(itemId: string, category: ItemCategory = 'misc'): ItemThermalConfig {
+  const catalogDef = ITEM_CATALOG ? ITEM_CATALOG[itemId] : undefined;
   const specific = ITEM_THERMAL_CONFIGS[itemId];
   const catDefault = CATEGORY_THERMAL_DEFAULTS[category] || CATEGORY_THERMAL_DEFAULTS.misc;
 
   return {
-    temperature: specific?.temperature,
-    heatLossRate: specific?.heatLossRate ?? catDefault.heatLossRate,
-    heatRetention: specific?.heatRetention ?? catDefault.heatRetention,
-    surfaceTemperature: specific?.surfaceTemperature
+    temperature: catalogDef?.temperature ?? specific?.temperature,
+    heatLossRate: catalogDef?.heatLossRate ?? specific?.heatLossRate ?? catDefault.heatLossRate,
+    heatRetention: catalogDef?.heatRetention ?? specific?.heatRetention ?? catDefault.heatRetention,
+    surfaceTemperature: catalogDef?.surfaceTemperature ?? specific?.surfaceTemperature
   };
 }
 

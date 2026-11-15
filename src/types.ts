@@ -1795,6 +1795,61 @@ export interface GummyCandyAttributes {
   sourDust?: boolean;
 }
 
+export type PelmenShape =
+  | 'ear'       // Классическое урало-сибирское «ушко» (колечком)
+  | 'crescent'  // Полумесяц с фигурной косичкой
+  | 'saturn'    // Круглый «Сатурн» с экваториальным пояском
+  | 'khinkali'  // Мешочек со складками (бууза / мини-хинкали)
+  | 'rose'      // Фигурный бутон «розочка» / тортеллини
+  | 'pillow';   // Квадратная подушечка с зубчатым краем (равиоли / кундюмы)
+
+export type PelmenSize =
+  | 'mini'      // Мини («Малютки» бульонные, ~7 г)
+  | 'small'     // Мелкий («Столичные», ~11 г)
+  | 'medium'    // Классический («Сибирские» / «Домашние», ~15 г)
+  | 'large';    // Крупный («Богатырские» / «Царские», ~22 г)
+
+export type PelmenState =
+  | 'frozen'    // Замороженный (-16 °C)
+  | 'raw'       // Сырой охлаждённый (+4 °C)
+  | 'boiled'    // Отварной горячий (+72 °C)
+  | 'fried';    // Жареный с румяной корочкой (+78 °C)
+
+export interface PelmenAttributes {
+  /** Форма лепки пельменя */
+  shape: PelmenShape;
+  /** Название формы лепки на русском языке */
+  shapeNameRu: string;
+  /** Калибр / размер пельменя */
+  size: PelmenSize;
+  /** Название размера на русском языке */
+  sizeNameRu: string;
+  /** Кулинарное состояние пельменя */
+  state: PelmenState;
+  /** Название состояния на русском языке */
+  stateNameRu: string;
+  /** Цвет теста в hex (напр. '#fef3c7') */
+  doughColor: string;
+  /** Название теста на русском языке (напр. 'Пшеничное на яйцах') */
+  doughNameRu: string;
+  /** Толщина раскатки теста в мм (напр. 1.2) */
+  doughThicknessMm: number;
+  /** Описание начинки на русском языке (напр. 'Говядина и свинина с репчатым луком') */
+  fillingRu: string;
+  /** Цвет начинки в hex */
+  fillingColor: string;
+  /** Доля начинки в процентах (напр. 60) */
+  fillingRatioPercent: number;
+  /** Способ лепки (напр. 'Ручная лепка' или 'Автоматная штамповка') */
+  moldingMethodRu: string;
+  /** Полный состав пельменя (тесто, фарш, специи) */
+  ingredients: string[];
+  /** Мучная обсыпка снаружи */
+  flourDusting?: boolean;
+  /** Блеск сливочного масла / бульона */
+  butterGlaze?: boolean;
+}
+
 export interface ContainerVisualAttributes {
   /** Визуальная форма корпуса банки или бутылки (не меняет объём, вес и характеристики) */
   shape: ContainerVisualShape;
@@ -1911,6 +1966,8 @@ export interface InventoryItem {
   culinaryData?: CulinaryItemData;
   /** Атрибуты мармеладки (цвет, форма, состав, посыпка) */
   gummyAttributes?: GummyCandyAttributes;
+  /** Атрибуты пельмешка (форма лепки, размер, тесто, начинка, состояние, состав) */
+  pelmenAttributes?: PelmenAttributes;
   // Nutrition & Biochemical Culinary Simulation
   nutrients?: {
     calories: number; // kcal

@@ -1,5 +1,5 @@
 import { InventoryItem, ItemCategory, Player } from './types';
-import { createItem, getItemTotalWeight, getItemTotalVolume } from './items';
+import { ITEM_CATALOG, isRegisteredItemId, createItem, getItemTotalWeight, getItemTotalVolume } from './items';
 import { sound } from './audio';
 import { syncFurnitureStorageThermodynamics } from './itemThermalSystem';
 
@@ -258,7 +258,8 @@ export function buildFurnitureStorageId(
 }
 
 /**
- * Seeds initial realistic items for apartment furniture
+ * Seeds initial realistic items for apartment furniture,
+ * automatically validating against ITEM_CATALOG and merging ItemDefinition.furnitureSpawns.
  */
 function seedApartmentFurnitureItems(
   storageId: string,
@@ -266,62 +267,67 @@ function seedApartmentFurnitureItems(
   aptId?: string
 ): InventoryItem[] {
   const items: InventoryItem[] = [];
+  const pushValid = (id: string, count: number = 1) => {
+    if (!isRegisteredItemId(id)) return;
+    for (let i = 0; i < count; i++) {
+      items.push(createItem(id, 1));
+    }
+  };
 
   if (furnitureType === 'wardrobe') {
-    items.push(createItem('thermal_coat', 1));
-    items.push(createItem('beanie_black', 1));
-    items.push(createItem('tshirt_white', 1));
-    items.push(createItem('jeans_classic', 1));
-    items.push(createItem('shoes_sneakers', 1));
+    pushValid('thermal_coat');
+    pushValid('beanie_black');
+    pushValid('tshirt_white');
+    pushValid('jeans_classic');
+    pushValid('shoes_sneakers');
     if (aptId?.includes('lenina') || aptId?.includes('cottage')) {
-      items.push(createItem('ushanka_hat', 1));
-      items.push(createItem('jacket_leather', 1));
-      items.push(createItem('backpack', 1));
+      pushValid('ushanka_hat');
+      pushValid('jacket_leather');
+      pushValid('backpack');
     }
   } else if (furnitureType === 'fridge') {
-    items.push(createItem('water_bottle', 1));
-    items.push(createItem('water_bottle', 1));
-    items.push(createItem('apple', 1));
-    items.push(createItem('apple', 1));
-    items.push(createItem('apple', 1));
-    items.push(createItem('sandwich', 1));
-    items.push(createItem('sandwich', 1));
-    items.push(createItem('energy_drink', 1));
+    pushValid('water_bottle', 2);
+    pushValid('apple', 3);
+    pushValid('energy_drink');
     if (aptId?.includes('cottage')) {
-      items.push(createItem('burger', 1));
-      items.push(createItem('burger', 1));
-      items.push(createItem('camp_flask', 1));
+      pushValid('camp_flask');
     }
   } else if (furnitureType === 'kitchen_counter') {
-    items.push(createItem('military_ration', 1));
-    items.push(createItem('pocket_knife', 1));
-    items.push(createItem('duct_tape', 1));
-    items.push(createItem('rag', 1));
-    items.push(createItem('rag', 1));
+    pushValid('pocket_knife');
+    pushValid('duct_tape');
+    pushValid('rag', 2);
   } else if (furnitureType === 'nightstand') {
-    items.push(createItem('flashlight_police', 1));
-    items.push(createItem('zippo_lighter', 1));
-    items.push(createItem('painkillers', 1));
-    items.push(createItem('coin_10', 1));
+    pushValid('flashlight_police');
+    pushValid('zippo_lighter');
+    pushValid('painkillers');
+    pushValid('coin_10');
   } else if (furnitureType === 'bookshelf') {
-    items.push(createItem('compass', 1));
-    items.push(createItem('cash_500', 1));
+    pushValid('compass');
+    pushValid('cash_500');
   } else if (furnitureType === 'file_cabinet') {
-    items.push(createItem('duct_tape', 1));
-    items.push(createItem('bandage', 1));
-    items.push(createItem('bandage', 1));
+    pushValid('duct_tape');
+    pushValid('bandage', 2);
   } else if (furnitureType === 'desk') {
-    items.push(createItem('smartphone', 1));
-    items.push(createItem('cash_1000', 1));
-    items.push(createItem('vitamins', 1));
+    pushValid('smartphone');
+    pushValid('cash_1000');
+    pushValid('vitamins');
   } else if (furnitureType === 'tv_cabinet') {
-    items.push(createItem('screwdriver', 1));
-    items.push(createItem('duct_tape', 1));
-    items.push(createItem('cash_500', 1));
+    pushValid('screwdriver');
+    pushValid('duct_tape');
+    pushValid('cash_500');
   } else if (furnitureType === 'sink') {
-    items.push(createItem('rag', 1));
-    items.push(createItem('rag', 1));
-    items.push(createItem('bandage', 1));
+    pushValid('rag', 2);
+    pushValid('bandage');
+  }
+
+  // Also include any items in ITEM_CATALOG that declare furnitureSpawns for this furnitureType
+  for (const def of Object.values(ITEM_CATALOG)) {
+    if (!def.furnitureSpawns) continue;
+    for (const spawn of def.furnitureSpawns) {
+      if (spawn.furnitureType !== furnitureType) continue;
+      if (spawn.aptFilter && (!aptId || !aptId.includes(spawn.aptFilter))) continue;
+      pushValid(def.itemId, spawn.count || 1);
+    }
   }
 
   return items;

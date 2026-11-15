@@ -8,7 +8,7 @@ import {
   syncItemContainerProperties,
   isFluidContainerClosed,
 } from './liquidSystem';
-import { createItem, canItemFitInContainer, getItemTotalWeight } from './items';
+import { isRegisteredItemId, createItem, canItemFitInContainer, getItemTotalWeight } from './items';
 
 function recalculateContainerWeight(container: InventoryItem): void {
   if (!container.isContainer) return;
@@ -1356,78 +1356,6 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     },
   },
   {
-    id: 'craft_make_sandwich',
-    title: 'Сытный дорожный сэндвич / бутерброд',
-    category: 'cooking',
-    description:
-      'Соберите питательный сэндвич из хлеба и мясной/сырной начинки (колбаса, ветчина, сыр, тушёнка или бекон).',
-    actionLabel: 'Сделать сэндвич',
-    ingredients: [
-      {
-        itemIds: ['bread_loaf', 'bread_white', 'bread_rye', 'baguette_french', 'bun_sweet'],
-        label: 'Хлеб / Батон / Багет',
-      },
-      {
-        itemIds: [
-          'sausage_cooked',
-          'sausage_smoked',
-          'salami_sliced',
-          'ham_sliced',
-          'bacon_strips',
-          'cheese_cheddar',
-          'cheese_gouda',
-          'cheese_mozzarella',
-          'canned_meat',
-          'canned_fish',
-        ],
-        label: 'Колбаса / Ветчина / Сыр / Тушёнка',
-      },
-    ],
-    resultsSummary: ['Сытный сэндвич (2 шт.)'],
-    matchAndPreview: (inputs) => {
-      const present = inputs.filter((x): x is InventoryItem => x !== null);
-      if (present.length < 2 || present.length > 3) return null;
-      const breadIds = ['bread_loaf', 'bread_white', 'bread_rye', 'baguette_french', 'bun_sweet'];
-      const fillingIds = [
-        'sausage_cooked',
-        'sausage_smoked',
-        'salami_sliced',
-        'ham_sliced',
-        'bacon_strips',
-        'cheese_cheddar',
-        'cheese_gouda',
-        'cheese_mozzarella',
-        'canned_meat',
-        'canned_fish',
-      ];
-      const bread = present.find((x) => itemMatchesAnyId(x, breadIds));
-      const filling = present.find((x) => itemMatchesAnyId(x, fillingIds));
-      const optionalKnife = present.find((x) => itemMatchesAnyId(x, KNIFE_IDS));
-      if (!bread || !filling) return null;
-      if (present.length === 3 && !optionalKnife) return null;
-
-      const sandwich = createItem('sandwich', 2);
-      const isCanned = itemMatchesAnyId(filling, ['canned_meat', 'canned_fish']);
-      const emptyTin = isCanned ? createItem('tin_can_empty', 1) : null;
-
-      return {
-        isValid: true,
-        kind: 'craft_recipe',
-        title: 'Приготовление дорожного сэндвича',
-        subtitle: `${bread.nameRu} + ${filling.nameRu} → 2 сытных сэндвича`,
-        actionLabel: 'Собрать сэндвич',
-        previewOutputs: [
-          sandwich,
-          optionalKnife ? cloneInventoryItem(optionalKnife) : emptyTin,
-          optionalKnife && emptyTin ? emptyTin : null,
-          null,
-        ],
-        transferDetails: [],
-        matchedRecipeId: 'craft_make_sandwich',
-      };
-    },
-  },
-  {
     id: 'craft_refill_zippo',
     title: 'Заправка бензиновой зажигалки Zippo',
     category: 'workshop',
@@ -1751,6 +1679,14 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
   },
 ];
 
+export function getActiveInteractionCraftRecipes(): InteractionCraftRecipe[] {
+  return INTERACTION_CRAFT_RECIPES.filter((recipe) =>
+    recipe.ingredients.every(
+      (ing) => !ing.itemIds || ing.itemIds.length === 0 || ing.itemIds.some((id) => isRegisteredItemId(id))
+    )
+  );
+}
+
 /**
  * Evaluates the 4 input slots (`[0, 1]` = Top Row, `[2, 3]` = Bottom Row) and returns
  * the resulting 4 output slots (`previewOutputs`) along with detailed transfer/craft info.
@@ -1771,7 +1707,7 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
   }
 
   // 1. Check concrete crafting/tool recipes first
-  for (const recipe of INTERACTION_CRAFT_RECIPES) {
+  for (const recipe of getActiveInteractionCraftRecipes()) {
     if (recipe.matchAndPreview) {
       const matched = recipe.matchAndPreview(inputs);
       if (matched && matched.isValid) {

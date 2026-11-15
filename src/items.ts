@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, GummyCandyShape, GummyCandyAttributes } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes } from './types';
 import { sound } from './audio';
 import { getPhoneSpecsForItemId } from './phoneData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
@@ -43,6 +43,38 @@ import {
 import { EXTENDED_LEGACY_CONTAINER_MAP, EXTENDED_ITEM_PACKAGING_MAP } from './unifiedSubstanceCatalog';
 import { initItemThermalProperties, applyConsumptionThermodynamics, calculateSurfaceTemperature } from './itemThermalSystem';
 
+export interface ItemPackagingConfig {
+  containerId: string;
+  countInside?: number;
+  innerItemId?: string;
+  labelColor?: string;
+  containerTintColor?: string;
+  customNameRu?: string;
+  customDescriptionRu?: string;
+  innerGummyPresets?: Partial<GummyCandyAttributes>[];
+  innerPelmenPresets?: Partial<PelmenAttributes>[];
+}
+
+export interface ItemFluidContainerConfig {
+  containerId: string;
+  liquidId: LiquidId | null;
+  amountMl: number;
+  attributes?: FluidSubstanceAttributes;
+}
+
+export interface ItemShopListingConfig {
+  shopType: string;
+  price: number;
+  category?: 'food' | 'medical' | 'auto';
+  effectText?: string;
+}
+
+export interface ItemFurnitureSpawnConfig {
+  furnitureType: string;
+  count?: number;
+  aptFilter?: string;
+}
+
 export interface ItemDefinition {
   itemId: string;
   name: string;
@@ -82,6 +114,7 @@ export interface ItemDefinition {
   packagingShape?: CandyPackagingShape;
   packagingShapeNameRu?: string;
   gummyAttributes?: GummyCandyAttributes;
+  pelmenAttributes?: PelmenAttributes;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -91,6 +124,13 @@ export interface ItemDefinition {
   surfaceTemperature?: number;   // Initial external surface temperature in °C
   heatLossRate?: number;         // Rate of heat dissipation / cooling per second
   heatRetention?: number;        // Thermal insulation / retention factor (0.0 to 1.0)
+  // Unified single-source-of-truth extensions
+  fluidContainer?: ItemFluidContainerConfig;
+  isDirectPiece?: boolean;
+  clothingStats?: import('./types').ClothingStats;
+  shopListings?: ItemShopListingConfig[];
+  furnitureSpawns?: ItemFurnitureSpawnConfig[];
+  render2D?: (ctx: CanvasRenderingContext2D, item?: any) => void;
 }
 
 export const CANDY_PACKAGING_SHAPE_NAMES_RU: Record<CandyPackagingShape, string> = {
@@ -154,59 +194,76 @@ export const DEFAULT_GUMMY_ATTRIBUTES: GummyCandyAttributes = {
   ]
 };
 
+export const PELMEN_SHAPE_NAMES_RU: Record<PelmenShape, string> = {
+  ear: 'Сибирское «ушко»',
+  crescent: 'Полумесяц с косичкой',
+  saturn: 'Круглый «Сатурн» с пояском',
+  khinkali: 'Мешочек со складками (бууза)',
+  rose: 'Фигурный «Розочка»',
+  pillow: 'Подушечка с зубчатым краем'
+};
+
+export const PELMEN_SIZE_NAMES_RU: Record<PelmenSize, string> = {
+  mini: 'Мини («Малютка», 7 г)',
+  small: 'Мелкий («Столичный», 11 г)',
+  medium: 'Классический («Домашний», 15 г)',
+  large: 'Крупный («Богатырский», 22 г)'
+};
+
+export const PELMEN_STATE_NAMES_RU: Record<PelmenState, string> = {
+  frozen: 'Замороженный (-16 °C)',
+  raw: 'Сырой охлаждённый (+4 °C)',
+  boiled: 'Отварной горячий (+72 °C)',
+  fried: 'Жареный румяный (+78 °C)'
+};
+
+export const PELMEN_SIZE_SPECS: Record<PelmenSize, {
+  weightKg: number;
+  volumeL: number;
+  hunger: number;
+  energy: number;
+  fullnessPerBite: number;
+  calories: number;
+  proteins: number;
+  fats: number;
+  carbs: number;
+}> = {
+  mini: { weightKg: 0.007, volumeL: 0.008, hunger: 2.0, energy: 1.0, fullnessPerBite: 0.8, calories: 19, proteins: 0.9, fats: 1.0, carbs: 1.6 },
+  small: { weightKg: 0.011, volumeL: 0.012, hunger: 3.2, energy: 1.5, fullnessPerBite: 1.2, calories: 30, proteins: 1.4, fats: 1.5, carbs: 2.5 },
+  medium: { weightKg: 0.015, volumeL: 0.016, hunger: 4.5, energy: 2.2, fullnessPerBite: 1.6, calories: 41, proteins: 1.9, fats: 2.1, carbs: 3.5 },
+  large: { weightKg: 0.022, volumeL: 0.024, hunger: 6.5, energy: 3.2, fullnessPerBite: 2.4, calories: 60, proteins: 2.8, fats: 3.1, carbs: 5.1 }
+};
+
+export const DEFAULT_PELMEN_ATTRIBUTES: PelmenAttributes = {
+  shape: 'ear',
+  shapeNameRu: 'Сибирское «ушко»',
+  size: 'medium',
+  sizeNameRu: 'Классический («Домашний», 15 г)',
+  state: 'frozen',
+  stateNameRu: 'Замороженный (-16 °C)',
+  doughColor: '#fef3c7',
+  doughNameRu: 'Пшеничное высший сорт на куриных яйцах',
+  doughThicknessMm: 1.2,
+  fillingRu: 'Рубленая говядина и свиная грудинка с репчатым луком и чёрным перцем',
+  fillingColor: '#991b1b',
+  fillingRatioPercent: 62,
+  moldingMethodRu: 'Ручная лепка защипом «ушко»',
+  flourDusting: true,
+  butterGlaze: false,
+  ingredients: [
+    'Говядина охлаждённая',
+    'Свинина полужирная',
+    'Мука пшеничная хлебопекарная в/с',
+    'Лук репчатый свежий',
+    'Вода питьевая ледяная',
+    'Яйцо куриное пищевое',
+    'Соль каменная',
+    'Перец чёрный свежемолотый'
+  ]
+};
+
 export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   // === FOOD (ЕДА) ===
-  sandwich: {
-    itemId: 'sandwich',
-    name: 'Ham & Cheese Sandwich',
-    nameRu: 'Сэндвич с ветчиной и сыром',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Fresh toasted sandwich with smoked ham, cheddar and greens. Restores food and slight health.',
-    descriptionRu: 'Свежий тост с копченой ветчиной, чеддером и зеленью. Утоляет голод и восстанавливает здоровье.',
-    effects: { hunger: 40, health: 8, energy: 10 },
-    weight: 0.25,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 1.0,
-    fullnessPerBite: 4,
-    tasteMessages: ['Хрустящий тост с ветчиной...', 'Сыр тает на языке...', 'Свежий хруст салата...', 'Копченая ветчина — классика!', 'Приятный хрустящий кусочек...', 'Сливочный соус и зелень...', 'Вкусно и сытно...', 'Последний сытный кусочек сэндвича!']
-  },
-  burger: {
-    itemId: 'burger',
-    name: 'Juicy Cheeseburger',
-    nameRu: 'Сочный чизбургер',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Hearty grilled beef patty with cheese, tomato and sesame bun. High satiety.',
-    descriptionRu: 'Сытная котлета из говядины на гриле с сыром, томатом и кунжутной булочкой. Высокая сытность.',
-    effects: { hunger: 60, health: 12, energy: 15 },
-    weight: 0.35,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 1.0,
-    fullnessPerBite: 5,
-    tasteMessages: ['Сочный укус котлеты с гриля...', 'Плавленый сыр чеддер...', 'Хрустящий маринованный огурчик...', 'Свежий томат оттеняет мясо...', 'Ароматная булочка с кунжутом...', 'Пряный фирменный соус...', 'Мясистый сытный укус...', 'Сок течет по пальцам...', 'Насыщенный вкус говядины...', 'Финальный сытный укус бургера!']
-  },
-  pizza_slice: {
-    itemId: 'pizza_slice',
-    name: 'Pepperoni Pizza Slice',
-    nameRu: 'Кусок пиццы Пепперони',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Hot slice with crispy mozzarella and spicy sausage.',
-    descriptionRu: 'Горячий кусок пиццы с хрустящей моцареллой и пикантной колбасой.',
-    effects: { hunger: 35, health: 6, energy: 8 },
-    weight: 0.2,
-    usable: true,
-    biteCount: 6,
-    biteDuration: 0.9,
-    fullnessPerBite: 4,
-    tasteMessages: ['Тягучий сыр моцарелла...', 'Пикантная пепперони с перчинкой...', 'Хрустящая корочка теста...', 'Сочный томатный соус...', 'Ароматные орегано и базилик...', 'Хрустящий бортик пиццы!']
-  },
   apple: {
     itemId: 'apple',
     name: 'Crisp Red Apple',
@@ -225,25 +282,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     leftoverNameRu: 'Огрызок яблока',
     fullnessPerBite: 2,
     tasteMessages: ['Хрустящий сладкий укус...', 'Сок брызжет при укусе...', 'Сладкий натуральный вкус...', 'Кислинка освежает рецепторы...', 'Сочная мякоть яблока...', 'Хруст свежести...', 'Приятная сладость...', 'Остался только огрызок!']
-  },
-  chocolate: {
-    itemId: 'chocolate',
-    name: 'Dark Chocolate Bar',
-    nameRu: 'Шоколадный батончик',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Rich dark cocoa bar. Provides a fast burst of stamina and calories.',
-    descriptionRu: 'Плитка шоколада. Дает быстрый прилив бодрости, энергии и калорий.',
-    effects: { hunger: 22, energy: 25, sleepiness: -10 },
-    weight: 0.1,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.7,
-    leftoverId: 'chocolate_wrapper',
-    leftoverNameRu: 'Фольга от шоколада',
-    fullnessPerBite: 2,
-    tasteMessages: ['Долька шоколада тает во рту...', 'Глубокий вкус какао...', 'Сладкая бодрость...', 'Нежная шоколадная текстура...', 'Прилив энергии от какао-бобов...', 'Приятное сладкое послевкусие...']
   },
   chips: {
     itemId: 'chips',
@@ -493,22 +531,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 12,
     biteDuration: 0.8,
-    fullnessPerBite: 3
-  },
-  ice_cream: {
-    itemId: 'ice_cream',
-    name: 'Creamy Vanilla Ice Cream',
-    nameRu: 'Мороженое Пломбир',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Chilled sweet vanilla ice cream (-12°C). Refreshing treat.',
-    descriptionRu: 'Настоящий сливочный пломбир в стаканчике (-12°C). Быстро охлаждает.',
-    effects: { hunger: 25, thirst: 10, energy: 20 },
-    weight: 0.12,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.7,
     fullnessPerBite: 3
   },
 
@@ -1447,23 +1469,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     fullnessPerBite: 1,
     tasteMessages: ['Нежная сливочная пенка...', 'Мягкий кофейный вкус...', 'Идеальное утреннее тепло...', 'Сладковатый кофейный аромат...']
   },
-  croissant: {
-    itemId: 'croissant',
-    name: 'Butter Croissant',
-    nameRu: 'Свежий круассан',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Crispy and buttery French pastry.',
-    descriptionRu: 'Хрустящая французская выпечка из слоеного теста.',
-    effects: { hunger: 25, energy: 10 },
-    weight: 0.1,
-    usable: true,
-    biteCount: 6,
-    biteDuration: 0.7,
-    fullnessPerBite: 3,
-    tasteMessages: ['Хрустящее слоёное тесто...', 'Масляный аромат выпечки...', 'Нежная мягкая серединка!', 'Золотистая корочка круассана...']
-  },
   soup: {
     itemId: 'soup',
     name: 'Hot Chicken Soup',
@@ -1482,63 +1487,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     leftoverNameRu: 'Пустая тарелка из-под супа',
     fullnessPerBite: 3,
     tasteMessages: ['Горячий куриный бульон согревает...', 'Нежное куриное мясо...', 'Аромат домашней зелени...', 'Ложка наваристого супа...']
-  },
-
-  // === NEW FAST FOOD & RESTAURANT ITEMS ===
-  french_fries: {
-    itemId: 'french_fries',
-    name: 'Crispy French Fries',
-    nameRu: 'Картофель фри',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Golden crispy potato fries with sea salt.',
-    descriptionRu: 'Хрустящий золотистый картофель фри с морской солью.',
-    effects: { hunger: 30, energy: 15 },
-    weight: 0.15,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.5,
-    leftoverId: 'fries_box',
-    leftoverNameRu: 'Пустая коробочка от фри',
-    fullnessPerBite: 2,
-    tasteMessages: ['Хрустящая картофельная соломка...', 'Горячая соленая корочка...', 'Аромат жареного картофеля...', 'Вкусная порция фри!']
-  },
-  nuggets: {
-    itemId: 'nuggets',
-    name: 'Crispy Chicken Nuggets',
-    nameRu: 'Куриные наггетсы (6 шт)',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Tender chicken nuggets in crispy batter.',
-    descriptionRu: 'Нежное куриное филе в хрустящей золотистой панировке.',
-    effects: { hunger: 35, energy: 20 },
-    weight: 0.2,
-    usable: true,
-    biteCount: 6,
-    biteDuration: 0.6,
-    leftoverId: 'fries_box',
-    leftoverNameRu: 'Пустая коробка из-под наггетсов',
-    fullnessPerBite: 3,
-    tasteMessages: ['Хрустящий сочный наггетс...', 'Нежное куриное мясо...', 'Горячая золотистая панировка...']
-  },
-  hot_dog: {
-    itemId: 'hot_dog',
-    name: 'Classic Hot Dog',
-    nameRu: 'Датский хот-дог',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Juicy sausage in a toasted bun with mustard and crispy onions.',
-    descriptionRu: 'Сочная сосиска в булочке с горчицей, кетчупом и хрустящим луком.',
-    effects: { hunger: 40, energy: 20 },
-    weight: 0.22,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.8,
-    fullnessPerBite: 3,
-    tasteMessages: ['Сочная поджаристая сосиска...', 'Хрустящий жареный лук и горчица...', 'Теплая мягкая булочка...', 'Сытный укус хот-дога!']
   },
   cola_zero: {
     itemId: 'cola_zero',
@@ -1559,25 +1507,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     fullnessPerBite: 1,
     tasteMessages: ['Освежающие шипящие пузырьки...', 'Ледяной вкус Колы...', 'Приятная бодрость без сахара...']
   },
-  milkshake: {
-    itemId: 'milkshake',
-    name: 'Vanilla Milkshake',
-    nameRu: 'Ванильный милкшейк',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Thick cold milkshake with real vanilla ice cream.',
-    descriptionRu: 'Густой молочный коктейль с натуральным пломбиром и сливками.',
-    effects: { thirst: 35, hunger: 20, energy: 25 },
-    weight: 0.4,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.6,
-    leftoverId: 'shake_cup',
-    leftoverNameRu: 'Пустой стакан с соломинкой',
-    fullnessPerBite: 2,
-    tasteMessages: ['Густой сливочно-ванильный глоток...', 'Холодный сладкий пломбир...', 'Нежнейший молочный шейк!']
-  },
   tea_green: {
     itemId: 'tea_green',
     name: 'Green Sencha Tea',
@@ -1596,61 +1525,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     leftoverNameRu: 'Бумажный стаканчик',
     fullnessPerBite: 1,
     tasteMessages: ['Теплый травяной вкус...', 'Тонкий аромат зеленого чая...', 'Умиротворяющее тепло...']
-  },
-  donut: {
-    itemId: 'donut',
-    name: 'Pink Glazed Donut',
-    nameRu: 'Пончик с розовой глазурью',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Fresh donut with sweet strawberry glaze and sprinkles.',
-    descriptionRu: 'Пышный пончик с клубничной глазурью и цветной посыпкой.',
-    effects: { hunger: 25, energy: 20 },
-    weight: 0.1,
-    usable: true,
-    biteCount: 5,
-    biteDuration: 0.6,
-    fullnessPerBite: 2,
-    tasteMessages: ['Сладкая клубничная глазурь...', 'Нежное воздушное тесто...', 'Хрустящая сладкая посыпка!']
-  },
-  sushi_set: {
-    itemId: 'sushi_set',
-    name: 'Philadelphia Rolls Set',
-    nameRu: 'Сет роллов Филадельфия',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Fresh Atlantic salmon, cream cheese, sushi rice and avocado.',
-    descriptionRu: 'Свежий атлантический лосось, сливочный сыр и рис. Соевый соус и имбирь.',
-    effects: { hunger: 55, thirst: 10, health: 15, energy: 25 },
-    weight: 0.35,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.8,
-    leftoverId: 'sushi_tray_empty',
-    leftoverNameRu: 'Пустой лоток от суши',
-    fullnessPerBite: 3,
-    tasteMessages: ['Нежный свежий лосось...', 'Сливочный сыр с рисом...', 'Пикантный соевый соус с васаби!']
-  },
-  wok_box: {
-    itemId: 'wok_box',
-    name: 'Teriyaki Chicken WOK',
-    nameRu: 'WOK-лапша с курицей Терияки',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Stir-fried egg noodles with vegetables, tender chicken and sweet soy glaze.',
-    descriptionRu: 'Яичная лапша вок с овощами, куриным филе и сладковатым соусом терияки.',
-    effects: { hunger: 60, thirst: 10, energy: 30 },
-    weight: 0.45,
-    usable: true,
-    biteCount: 12,
-    biteDuration: 0.8,
-    leftoverId: 'wok_box_empty',
-    leftoverNameRu: 'Пустая вок-коробочка',
-    fullnessPerBite: 3,
-    tasteMessages: ['Ароматная горячая лапша...', 'Нежная курица в соусе терияки...', 'Хрустящие овощи вок!']
   },
   banana: {
     itemId: 'banana',
@@ -1685,7 +1559,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 10,
     biteDuration: 0.7,
-    leftoverId: 'sandwich_bag',
+    leftoverId: 'package_bag',
     leftoverNameRu: 'Пакет от хлеба',
     fullnessPerBite: 3,
     tasteMessages: ['Хрустящая корочка свежего хлеба...', 'Мягкий теплый мякиш...']
@@ -2188,25 +2062,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxContainedItemVolumeL: 22.0,
     maxContainedWeightKg: 30.0
   },
-  military_ration: {
-    itemId: 'military_ration',
-    name: 'Army Combat Ration (MRE)',
-    nameRu: 'Армейский сухпай (ИРП)',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Complete balanced combat ration with entrees, crackers and sweets.',
-    descriptionRu: 'Сбалансированный армейский рацион питания: тушеное мясо, галеты, чай и джем.',
-    effects: { hunger: 85, thirst: 30, health: 20, energy: 50 },
-    weight: 1.2,
-    usable: true,
-    biteCount: 16,
-    biteDuration: 0.9,
-    leftoverId: 'ration_box',
-    leftoverNameRu: 'Пустая коробка от сухпайка',
-    fullnessPerBite: 3,
-    tasteMessages: ['Питательное армейское рагу...', 'Хрустящие армейские галеты...', 'Густой сладкий джем...']
-  },
   zippo_lighter: {
     itemId: 'zippo_lighter',
     name: 'Windproof Brass Lighter',
@@ -2467,32 +2322,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.03,
     usable: false
   },
-  fries_box: {
-    itemId: 'fries_box',
-    name: 'Empty Fries Box',
-    nameRu: 'Коробочка от картошки фри',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Red cardboard fries container.',
-    descriptionRu: 'Пустая красная картонная коробочка от картофеля фри.',
-    effects: {},
-    weight: 0.01,
-    usable: false
-  },
-  shake_cup: {
-    itemId: 'shake_cup',
-    name: 'Empty Milkshake Cup',
-    nameRu: 'Пустой стакан от коктейля',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Clear plastic cup with domed lid and straw.',
-    descriptionRu: 'Прозрачный пластиковый стаканчик с купольной крышкой и соломинкой.',
-    effects: {},
-    weight: 0.015,
-    usable: false
-  },
   popcorn_bucket: {
     itemId: 'popcorn_bucket',
     name: 'Empty Popcorn Bucket',
@@ -2506,32 +2335,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.02,
     usable: false
   },
-  wok_box_empty: {
-    itemId: 'wok_box_empty',
-    name: 'Empty WOK Container',
-    nameRu: 'Пустая коробочка ВОК',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty Chinese food container with wooden chopsticks.',
-    descriptionRu: 'Пустая картонная коробочка вок с деревянными палочками.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
-  ration_box: {
-    itemId: 'ration_box',
-    name: 'Empty MRE Packaging',
-    nameRu: 'Пустая упаковка сухпайка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Discarded green military ration container.',
-    descriptionRu: 'Пустая зеленая полимерная упаковка от армейского сухого пайка.',
-    effects: {},
-    weight: 0.05,
-    usable: false
-  },
   apple_core: {
     itemId: 'apple_core',
     name: 'Apple Core',
@@ -2543,58 +2346,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Бурый окислившийся огрызок. Выбросьте в урну.',
     effects: {},
     weight: 0.02,
-    usable: false
-  },
-  burger_wrapper: {
-    itemId: 'burger_wrapper',
-    name: 'Burger Wrapper',
-    nameRu: 'Обёртка от бургера',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Greasy paper wrapper from a cheeseburger.',
-    descriptionRu: 'Жирная бумажная обёртка от чизбургера.',
-    effects: {},
-    weight: 0.01,
-    usable: false
-  },
-  pizza_plate: {
-    itemId: 'pizza_plate',
-    name: 'Paper Plate',
-    nameRu: 'Бумажная тарелка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Greasy paper plate with pizza crumbs.',
-    descriptionRu: 'Жирная бумажная тарелка с крошками пиццы.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
-  sandwich_bag: {
-    itemId: 'sandwich_bag',
-    name: 'Sandwich Bag',
-    nameRu: 'Пакет от сэндвича',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty plastic sandwich bag.',
-    descriptionRu: 'Пустой пластиковый пакет из-под сэндвича.',
-    effects: {},
-    weight: 0.005,
-    usable: false
-  },
-  chocolate_wrapper: {
-    itemId: 'chocolate_wrapper',
-    name: 'Chocolate Foil',
-    nameRu: 'Фольга от шоколада',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Torn foil wrapper from a chocolate bar.',
-    descriptionRu: 'Рваная фольга от шоколадного батончика.',
-    effects: {},
-    weight: 0.005,
     usable: false
   },
   chips_bag: {
@@ -2740,32 +2491,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.15,
     usable: false
   },
-  hot_dog_wrapper: {
-    itemId: 'hot_dog_wrapper',
-    name: 'Hot Dog Paper Tray',
-    nameRu: 'Обёртка от хот-дога',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Paper food boat with mustard smear.',
-    descriptionRu: 'Бумажный лоток из-под хот-дога со следами горчицы.',
-    effects: {},
-    weight: 0.01,
-    usable: false
-  },
-  sushi_tray_empty: {
-    itemId: 'sushi_tray_empty',
-    name: 'Empty Bento Sushi Tray',
-    nameRu: 'Пустой лоток от суши',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Black sushi bento tray with decorative grass divider.',
-    descriptionRu: 'Черный лоток из-под роллов с зеленой перегородкой и следами соевого соуса.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
   nachos_tray_empty: {
     itemId: 'nachos_tray_empty',
     name: 'Empty Nachos Boat',
@@ -2854,23 +2579,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
 
   // === SINGLE-PIECE UNBOXED FOOD ITEMS ===
-  nugget_single: {
-    itemId: 'nugget_single',
-    name: 'Crispy Chicken Nugget',
-    nameRu: 'Куриный наггетс (1 шт)',
-    category: 'food',
-    maxStack: 12,
-    icon: '',
-    description: 'Single golden chicken nugget.',
-    descriptionRu: 'Сочный куриный наггетс в панировке.',
-    effects: { hunger: 6, energy: 3 },
-    weight: 0.035,
-    usable: true,
-    biteCount: 2,
-    biteDuration: 0.5,
-    fullnessPerBite: 1,
-    tasteMessages: ['Хрустящий золотистый наггетс!']
-  },
   cookie_single: {
     itemId: 'cookie_single',
     name: 'Chocolate Chip Cookie',
@@ -6364,46 +6072,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxContainedItemVolumeL: 0.5,
     maxContainedWeightKg: 0.8
   },
-  takeout_pocket_fries: {
-    itemId: 'takeout_pocket_fries',
-    name: 'Cardboard Takeout Pocket',
-    nameRu: 'Картонный кармашек для фритюра',
-    category: 'misc',
-    maxStack: 15,
-    icon: '',
-    description: 'Open-top red/kraft cardboard pocket for french fries or strips.',
-    descriptionRu: 'Картонный фастфуд-кармашек для картофеля фри или снеков.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.3,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    tornItemId: 'paper_packaging_small_open',
-    containerCapacityL: 0.35,
-    maxContainedItemVolumeL: 0.2,
-    maxContainedWeightKg: 0.5
-  },
-  takeout_box_nuggets: {
-    itemId: 'takeout_box_nuggets',
-    name: 'Clamshell Takeout Box',
-    nameRu: 'Картонный бокс с откидной крышкой',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Corrugated cardboard clamshell box for nuggets, wings, or rolls.',
-    descriptionRu: 'Картонная коробочка с откидной крышкой для наггетсов, крылышек или роллов.',
-    effects: {},
-    weight: 0.04,
-    volume: 0.55,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    tornItemId: 'box_cardboard_small',
-    containerCapacityL: 0.6,
-    maxContainedItemVolumeL: 0.4,
-    maxContainedWeightKg: 0.8
-  },
 
   // === STANDALONE SINGLE DISCRETE ITEMS (ЯГОДЫ, ГРИБЫ, ЯЙЦА, СНЕКИ, ТАБЛЕТКИ ПОШТУЧНО) ===
   berry_forest_single: {
@@ -6711,72 +6379,133 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     fullnessPerBite: 0.3,
     gummyAttributes: DEFAULT_GUMMY_ATTRIBUTES
   },
-  fries_strip_single: {
-    itemId: 'fries_strip_single',
-    name: 'Golden French Fry Strip',
-    nameRu: 'Ломтик картофеля фри',
+  pelmen: {
+    itemId: 'pelmen',
+    name: 'Pelmen Dumpling (1 pc)',
+    nameRu: 'Пельмешек (1 шт.)',
     category: 'food',
-    maxStack: 25,
+    maxStack: 1,
     icon: '',
-    description: 'Single hot crispy golden french fry strip.',
-    descriptionRu: 'Обжаренный во фритюре золотистый брусочек картофеля фри с крупинками морской соли.',
-    effects: { hunger: 5, thirst: -1, energy: 2 },
+    description: 'Single filled dough dumpling (pelmen) with customizable shape, size, dough, meat filling, and state attributes.',
+    descriptionRu: 'Один пельмешек (~7–22 г) из тонкого теста с сочной мясной начинкой, своими атрибутами формы лепки, размера, состояния и состава.',
+    effects: { hunger: 4.5, energy: 2.2 },
     weight: 0.015,
-    volume: 0.02,
+    volume: 0.016,
     usable: true,
     biteCount: 1,
-    fullnessPerBite: 1,
-    temperature: 55
+    fullnessPerBite: 1.6,
+    temperature: -16.0,
+    heatLossRate: 0.025,
+    heatRetention: 0.35,
+    pelmenAttributes: DEFAULT_PELMEN_ATTRIBUTES,
+    tasteMessages: [
+      'Тонкое упругое тесто и сочная мясная начинка с перчиком...',
+      'Ароматный пельмешек с луком и пряным бульоном внутри...'
+    ]
   },
-  nugget_chicken_single: {
-    itemId: 'nugget_chicken_single',
-    name: 'Crispy Chicken Nugget',
-    nameRu: 'Куриный наггетс в панировке (1 шт.)',
-    category: 'food',
-    maxStack: 15,
+  pelmeni_pack_small: {
+    itemId: 'pelmeni_pack_small',
+    name: 'Small Pelmeni Clip-Bag (0.55L)',
+    nameRu: 'Малая пачка под пельмени с клипсой (0.55L)',
+    category: 'misc',
+    maxStack: 1,
     icon: '',
-    description: 'Single tender chicken breast nugget in golden tempura breading.',
-    descriptionRu: 'Нежное куриное филе в хрустящей золотистой панировке.',
-    effects: { hunger: 8, energy: 3, health: 1 },
+    description: 'Compact frosted polymer dumpling bag with gathered neck clip and clear oval window.',
+    descriptionRu: 'Малый плотный полиэтиленовый пакет для пельменей со скрепкой-клипсой наверху и прозрачным смотровым окошком.',
+    effects: {},
+    weight: 0.008,
+    volume: 0.06,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    containerCapacityL: 0.55,
+    maxContainedItemVolumeL: 0.35,
+    maxContainedWeightKg: 0.6,
+    labelColor: '#0284c7',
+    containerTintColor: '#f0f9ff',
+    packagingSize: 'small',
+    packagingShapeNameRu: 'Пакет со скрепкой-клипсой',
+    temperature: -16.0,
+    heatRetention: 0.45
+  },
+  pelmeni_pack: {
+    itemId: 'pelmeni_pack',
+    name: 'Pelmeni Clip-Top Bag (0.9L)',
+    nameRu: 'Пачка под пельмени с клипсой (0.9L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Standard frosted polymer pelmeni bag gathered at the top with a metal/plastic clip and clear viewing window.',
+    descriptionRu: 'Классический плотный пакет для пельменей со сборкой «гребешком», металлической скрепкой-клипсой и смотровым окном.',
+    effects: {},
+    weight: 0.012,
+    volume: 0.09,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    containerCapacityL: 0.9,
+    maxContainedItemVolumeL: 0.5,
+    maxContainedWeightKg: 1.0,
+    labelColor: '#b91c1c',
+    containerTintColor: '#f8fafc',
+    packagingSize: 'medium',
+    packagingShapeNameRu: 'Пакет со скрепкой-клипсой',
+    temperature: -16.0,
+    heatRetention: 0.45
+  },
+  pelmeni_pack_large: {
+    itemId: 'pelmeni_pack_large',
+    name: 'Large Family Pelmeni Bag (1.4L)',
+    nameRu: 'Большой мешок под пельмени с клипсой (1.4L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Heavy-duty family-sized polymer pelmeni sack with clip seal and viewing window.',
+    descriptionRu: 'Крупный семейный пакет для пельменей из морозостойкой плёнки с верхней клипсой и широким смотровым окном.',
+    effects: {},
+    weight: 0.018,
+    volume: 0.14,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    containerCapacityL: 1.4,
+    maxContainedItemVolumeL: 0.8,
+    maxContainedWeightKg: 1.5,
+    labelColor: '#15803d',
+    containerTintColor: '#f8fafc',
+    packagingSize: 'large',
+    packagingShapeNameRu: 'Семейный мешок с клипсой',
+    temperature: -16.0,
+    heatRetention: 0.5
+  },
+  pelmeni_pack_box: {
+    itemId: 'pelmeni_pack_box',
+    name: 'Cardboard Pelmeni Box (0.65L)',
+    nameRu: 'Картонная пачка под пельмени с окошком (0.65L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Traditional rectangular cardboard pelmeni box with perforated tear-strip flap and clear window.',
+    descriptionRu: 'Формованная картонная пачка для пельменей с отрывным верхним клапаном, орнаментом и прозрачным смотровым окошком.',
+    effects: {},
     weight: 0.025,
-    volume: 0.03,
+    volume: 0.12,
     usable: true,
-    biteCount: 2,
-    fullnessPerBite: 2,
-    temperature: 58
-  },
-  chicken_wing_crispy_single: {
-    itemId: 'chicken_wing_crispy_single',
-    name: 'Spicy Fried Chicken Wing',
-    nameRu: 'Острое куриное крылышко в панировке (1 шт.)',
-    category: 'food',
-    maxStack: 12,
-    icon: '',
-    description: 'Single hot crispy breaded chicken wing.',
-    descriptionRu: 'Сочное обжаренное куриное крылышко в острой хрустящей панировке.',
-    effects: { hunger: 10, energy: 4, health: 2 },
-    weight: 0.04,
-    volume: 0.05,
-    usable: true,
-    biteCount: 2,
-    fullnessPerBite: 3,
-    temperature: 60
-  },
-  sushi_roll_piece: {
-    itemId: 'sushi_roll_piece',
-    name: 'Philadelphia Roll Piece',
-    nameRu: 'Ролл «Филадельфия» с лососем (1 шт.)',
-    category: 'food',
-    maxStack: 12,
-    icon: '',
-    description: 'Single sushi roll piece with salmon, cream cheese, nori, and rice.',
-    descriptionRu: 'Аккуратный кусочек ролла из риса, нори, сливочного сыра и ломтика свежего лосося.',
-    effects: { hunger: 8, health: 2, energy: 2 },
-    weight: 0.03,
-    volume: 0.035,
-    usable: true,
-    biteCount: 1,
-    fullnessPerBite: 2
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    containerCapacityL: 0.65,
+    maxContainedItemVolumeL: 0.45,
+    maxContainedWeightKg: 0.75,
+    labelColor: '#dc2626',
+    containerTintColor: '#fffbeb',
+    packagingSize: 'medium',
+    packagingShapeNameRu: 'Картонная пачка с окошком',
+    temperature: -16.0,
+    heatRetention: 0.55
   },
   nacho_chip_single: {
     itemId: 'nacho_chip_single',
@@ -6809,116 +6538,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 1,
     fullnessPerBite: 1
-  },
-  apple_ring_dried_single: {
-    itemId: 'apple_ring_dried_single',
-    name: 'Dried Apple Ring (1 pc)',
-    nameRu: 'Сушёное яблочное колечко (1 шт.)',
-    category: 'food',
-    maxStack: 25,
-    icon: '',
-    description: 'Single sweet chewy dried apple ring.',
-    descriptionRu: 'Душистое упругое колечко сушёного садового яблока без сердцевины.',
-    effects: { hunger: 4, energy: 3, health: 1 },
-    weight: 0.012,
-    volume: 0.015,
-    usable: true,
-    biteCount: 1,
-    fullnessPerBite: 1
-  },
-  prune_dried_single: {
-    itemId: 'prune_dried_single',
-    name: 'Pitted Dried Prune (1 pc)',
-    nameRu: 'Чернослив вяленый без косточки (1 шт.)',
-    category: 'food',
-    maxStack: 25,
-    icon: '',
-    description: 'Single dark sweet pitted dried plum.',
-    descriptionRu: 'Крупная мясистая ягода вяленого чернослива без косточки с лёгким копчёно-медовым оттенком.',
-    effects: { hunger: 5, energy: 3, health: 2 },
-    weight: 0.015,
-    volume: 0.018,
-    usable: true,
-    biteCount: 1,
-    fullnessPerBite: 1
-  },
-  apricot_dried_single: {
-    itemId: 'apricot_dried_single',
-    name: 'Golden Dried Apricot (1 pc)',
-    nameRu: 'Курага сушёная золотистая (1 шт.)',
-    category: 'food',
-    maxStack: 25,
-    icon: '',
-    description: 'Single sun-dried golden apricot half.',
-    descriptionRu: 'Солнечная половинка вяленого южного абрикоса, богатая калием и природными сахарами.',
-    effects: { hunger: 5, energy: 4, health: 2 },
-    weight: 0.015,
-    volume: 0.018,
-    usable: true,
-    biteCount: 1,
-    fullnessPerBite: 1
-  },
-  raisins_handful_single: {
-    itemId: 'raisins_handful_single',
-    name: 'Handful of Sweet Raisins',
-    nameRu: 'Горсть сушёного изюма кишмиш',
-    category: 'food',
-    maxStack: 20,
-    icon: '',
-    description: 'Handful of sweet seedless dried grapes.',
-    descriptionRu: 'Щепотка янтарного бескосточкового сушёного винограда кишмиш.',
-    effects: { hunger: 5, energy: 4, health: 1 },
-    weight: 0.018,
-    volume: 0.02,
-    usable: true,
-    biteCount: 1,
-    fullnessPerBite: 1
-  },
-  cranberry_dried_single: {
-    itemId: 'cranberry_dried_single',
-    name: 'Dried Sweetened Cranberries (handful)',
-    nameRu: 'Вяленая клюква (горсть)',
-    category: 'food',
-    maxStack: 25,
-    icon: '',
-    description: 'Handful of ruby-red sweetened dried cranberries.',
-    descriptionRu: 'Горсть кисло-сладких рубиновых ягод вяленой таёжной клюквы.',
-    effects: { hunger: 4, energy: 3, health: 2 },
-    weight: 0.015,
-    volume: 0.018,
-    usable: true,
-    biteCount: 1,
-    fullnessPerBite: 1
-  },
-  banana_chip_single: {
-    itemId: 'banana_chip_single',
-    name: 'Crispy Banana Chip (1 pc)',
-    nameRu: 'Хрустящий банановый чипс (1 ломтик)',
-    category: 'food',
-    maxStack: 25,
-    icon: '',
-    description: 'Single crunchy caramelized dried banana coin.',
-    descriptionRu: 'Золотистый хрустящий кружочек сушёного спелого банана в кокосовой глазури.',
-    effects: { hunger: 4, energy: 4 },
-    weight: 0.01,
-    volume: 0.015,
-    usable: true,
-    biteCount: 1,
-    fullnessPerBite: 1
-  },
-  apple_dried_rings: {
-    itemId: 'apple_dried_rings',
-    name: 'Dried Apple Rings Pouch',
-    nameRu: 'Сушёные яблочные кольца (дой-пак)',
-    category: 'food',
-    maxStack: 5,
-    icon: '',
-    description: 'Sealed snack pouch of sweet dried apple rings.',
-    descriptionRu: 'Герметичный пакетик душистых сушёных яблочных колец.',
-    effects: { hunger: 24, energy: 14, health: 4 },
-    weight: 0.14,
-    volume: 0.25,
-    usable: true
   },
   bottle_glass_750: {
     itemId: 'bottle_glass_750',
@@ -7208,8 +6827,6 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   tea: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250 },
   tea_green: { containerId: 'paper_cup', liquidId: 'tea_green', amountMl: 250 },
   cappuccino: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
-  shake_cup: { containerId: 'paper_cup', liquidId: 'milk', amountMl: 250 },
-  milkshake: { containerId: 'paper_cup', liquidId: 'milk', amountMl: 350 },
   glass_mug: { containerId: 'glass_mug', liquidId: null, amountMl: 0 },
 
   // Aluminum Cans
@@ -7311,23 +6928,31 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   ...EXTENDED_LEGACY_CONTAINER_MAP
 };
 
+export function getResolvedFluidContainerConfig(itemId: string): ItemFluidContainerConfig | null {
+  const fromCatalog = ITEM_CATALOG[itemId]?.fluidContainer;
+  const fromMap = fromCatalog || LEGACY_CONTAINER_MAP[itemId] || (
+    CONTAINER_CONFIGS[itemId]
+      ? {
+          containerId: itemId,
+          liquidId: CONTAINER_CONFIGS[itemId].defaultLiquidId || null,
+          amountMl: CONTAINER_CONFIGS[itemId].defaultAmountMl || 0,
+          attributes: undefined
+        }
+      : null
+  );
+  if (!fromMap) return null;
+  if (!ITEM_CATALOG[fromMap.containerId] && !CONTAINER_CONFIGS[fromMap.containerId]) return null;
+  return fromMap;
+}
+
 export function createItem(itemId: string, count: number = 1, initialPortions?: number, rawCatalogOnly?: boolean): InventoryItem {
   // If this item is a packaged discrete item container (lukoshko with berries/mushrooms, egg carton, blister pack, tray, pouch, box),
   // instantiate the unified container holding the standalone inner items unless rawCatalogOnly is requested.
-  if (!rawCatalogOnly && ITEM_PACKAGING_MAP[itemId]) {
+  if (!rawCatalogOnly && getResolvedPackagingConfig(itemId)) {
     return createPackagedItem(itemId, count);
   }
 
-  const legacyMap = LEGACY_CONTAINER_MAP[itemId] || (
-    CONTAINER_CONFIGS[itemId] 
-      ? { 
-          containerId: itemId, 
-          liquidId: CONTAINER_CONFIGS[itemId].defaultLiquidId || null, 
-          amountMl: CONTAINER_CONFIGS[itemId].defaultAmountMl || 0,
-          attributes: undefined
-        } 
-      : null
-  );
+  const legacyMap = getResolvedFluidContainerConfig(itemId);
 
   // Use the unified container's catalog definition when mapped via LEGACY_CONTAINER_MAP
   const effectiveContainerId = legacyMap ? legacyMap.containerId : itemId;
@@ -7336,7 +6961,7 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   itemCounter++;
   const maxPortions = def.biteCount || 1;
   const portions = initialPortions !== undefined ? initialPortions : maxPortions;
-  const stats = CLOTHING_STATS[def.itemId];
+  const stats = def.clothingStats || CLOTHING_STATS[def.itemId];
   const isContainer = !!def.isContainer || (!!stats && !!stats.pocketCapacityL && stats.pocketCapacityL > 0);
   const containerCap = def.containerCapacityL || stats?.pocketCapacityL;
   const maxContainedVol = def.maxContainedItemVolumeL || stats?.maxPocketItemVolumeL;
@@ -7438,6 +7063,12 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
           ingredients: [...((originalDef?.gummyAttributes || def.gummyAttributes)!.ingredients || [])]
         }
       : undefined,
+    pelmenAttributes: (originalDef?.pelmenAttributes || def.pelmenAttributes)
+      ? {
+          ...(originalDef?.pelmenAttributes || def.pelmenAttributes)!,
+          ingredients: [...((originalDef?.pelmenAttributes || def.pelmenAttributes)!.ingredients || [])]
+        }
+      : undefined,
     fullnessPerBite: def.fullnessPerBite,
     nutrients:
       resolvedItemId === 'gummy_candy'
@@ -7447,6 +7078,14 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
             fats: 0,
             carbs: GUMMY_SHAPE_SPECS[DEFAULT_GUMMY_ATTRIBUTES.shape].carbs,
             sugars: GUMMY_SHAPE_SPECS[DEFAULT_GUMMY_ATTRIBUTES.shape].sugars
+          }
+        : resolvedItemId === 'pelmen'
+        ? {
+            calories: PELMEN_SIZE_SPECS[DEFAULT_PELMEN_ATTRIBUTES.size].calories,
+            proteins: PELMEN_SIZE_SPECS[DEFAULT_PELMEN_ATTRIBUTES.size].proteins,
+            fats: PELMEN_SIZE_SPECS[DEFAULT_PELMEN_ATTRIBUTES.size].fats,
+            carbs: PELMEN_SIZE_SPECS[DEFAULT_PELMEN_ATTRIBUTES.size].carbs,
+            sugars: 0.2
           }
         : undefined
   };
@@ -7507,6 +7146,90 @@ export function createGummyCandy(overrides?: Partial<GummyCandyAttributes>): Inv
   return item;
 }
 
+export function createPelmen(overrides?: Partial<PelmenAttributes>): InventoryItem {
+  const item = createItem('pelmen', 1, undefined, true);
+  const shape: PelmenShape = overrides?.shape || DEFAULT_PELMEN_ATTRIBUTES.shape;
+  const size: PelmenSize = overrides?.size || DEFAULT_PELMEN_ATTRIBUTES.size;
+  const state: PelmenState = overrides?.state || DEFAULT_PELMEN_ATTRIBUTES.state;
+  const shapeNameRu = overrides?.shapeNameRu || PELMEN_SHAPE_NAMES_RU[shape] || DEFAULT_PELMEN_ATTRIBUTES.shapeNameRu;
+  const sizeNameRu = overrides?.sizeNameRu || PELMEN_SIZE_NAMES_RU[size] || DEFAULT_PELMEN_ATTRIBUTES.sizeNameRu;
+  const stateNameRu = overrides?.stateNameRu || PELMEN_STATE_NAMES_RU[state] || DEFAULT_PELMEN_ATTRIBUTES.stateNameRu;
+  const spec = PELMEN_SIZE_SPECS[size] || PELMEN_SIZE_SPECS.medium;
+
+  const attrs: PelmenAttributes = {
+    shape,
+    shapeNameRu,
+    size,
+    sizeNameRu,
+    state,
+    stateNameRu,
+    doughColor: overrides?.doughColor || DEFAULT_PELMEN_ATTRIBUTES.doughColor,
+    doughNameRu: overrides?.doughNameRu || DEFAULT_PELMEN_ATTRIBUTES.doughNameRu,
+    doughThicknessMm: overrides?.doughThicknessMm ?? DEFAULT_PELMEN_ATTRIBUTES.doughThicknessMm,
+    fillingRu: overrides?.fillingRu || DEFAULT_PELMEN_ATTRIBUTES.fillingRu,
+    fillingColor: overrides?.fillingColor || DEFAULT_PELMEN_ATTRIBUTES.fillingColor,
+    fillingRatioPercent: overrides?.fillingRatioPercent ?? DEFAULT_PELMEN_ATTRIBUTES.fillingRatioPercent,
+    moldingMethodRu: overrides?.moldingMethodRu || DEFAULT_PELMEN_ATTRIBUTES.moldingMethodRu,
+    flourDusting: overrides?.flourDusting ?? (state === 'frozen' || state === 'raw'),
+    butterGlaze: overrides?.butterGlaze ?? (state === 'boiled' || state === 'fried'),
+    ingredients: overrides?.ingredients ? [...overrides.ingredients] : [...DEFAULT_PELMEN_ATTRIBUTES.ingredients]
+  };
+
+  item.pelmenAttributes = attrs;
+  item.weight = spec.weightKg;
+  item.volume = spec.volumeL;
+
+  const isCooked = state === 'boiled' || state === 'fried';
+  const hungerMult = isCooked ? 1.35 : 0.85;
+  item.effects = {
+    hunger: Math.round(spec.hunger * hungerMult * 10) / 10,
+    energy: Math.round(spec.energy * (isCooked ? 1.4 : 0.8) * 10) / 10,
+    ...(isCooked ? { health: 1.5 } : {})
+  };
+  item.fullnessPerBite = spec.fullnessPerBite;
+
+  const targetTemp = state === 'frozen' ? -16.0 : state === 'raw' ? 4.0 : state === 'boiled' ? 72.0 : 78.0;
+  item.temperature = targetTemp;
+  item.surfaceTemperature = calculateSurfaceTemperature(targetTemp, 20.0, item.heatRetention ?? 0.35);
+
+  const grams = Math.round(spec.weightKg * 1000);
+  const shortState = state === 'frozen' ? 'замороженный' : state === 'raw' ? 'сырой' : state === 'boiled' ? 'отварной' : 'жареный';
+  item.nameRu = `Пельмешек (${attrs.shapeNameRu.toLowerCase()}, ${grams} г, ${shortState})`;
+  item.descriptionRu = `Пельмень (${grams} г, ${attrs.sizeNameRu.toLowerCase()}, ${shortState}): форма — ${attrs.shapeNameRu.toLowerCase()} (${attrs.moldingMethodRu.toLowerCase()}). Тесто: ${attrs.doughNameRu.toLowerCase()} (толщина ${attrs.doughThicknessMm} мм). Начинка (${attrs.fillingRatioPercent}%): ${attrs.fillingRu}. Состав: ${attrs.ingredients.join(', ')}.`;
+  item.nutrients = {
+    calories: spec.calories,
+    proteins: spec.proteins,
+    fats: spec.fats,
+    carbs: spec.carbs,
+    sugars: 0.2
+  };
+  return item;
+}
+
+export function createPelmeniPackaging(options?: {
+  size?: 'small' | 'medium' | 'large';
+  isBox?: boolean;
+  labelColor?: string;
+  tintColor?: string;
+  contents?: InventoryItem[];
+  isOpen?: boolean;
+}): InventoryItem {
+  const size = options?.size || 'medium';
+  const baseId = options?.isBox
+    ? 'pelmeni_pack_box'
+    : size === 'small'
+    ? 'pelmeni_pack_small'
+    : size === 'large'
+    ? 'pelmeni_pack_large'
+    : 'pelmeni_pack';
+  return createFilledPackage(baseId, options?.contents || [], {
+    isOpen: Boolean(options?.isOpen),
+    labelColor: options?.labelColor,
+    containerTintColor: options?.tintColor,
+    packagingSize: size
+  });
+}
+
 export const ITEM_PACKAGING_MAP: Record<string, {
   containerId: string;
   countInside?: number;
@@ -7516,6 +7239,7 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   customNameRu?: string;
   customDescriptionRu?: string;
   innerGummyPresets?: Partial<GummyCandyAttributes>[];
+  innerPelmenPresets?: Partial<PelmenAttributes>[];
 }> = {
   // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
   carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2, innerItemId: 'carrot_peeled' },
@@ -7605,14 +7329,7 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   squid_tubes: { containerId: 'vacuum_pack_medium', innerItemId: 'squid_tubes' },
   mussels_meat: { containerId: 'vacuum_pack_small', innerItemId: 'mussels_half_shell', countInside: 8 },
 
-  // 6. Dried Fruits & Snack Pouches
-  dried_apricots: { containerId: 'pouch_sealed_snack', innerItemId: 'apricot_dried_single', countInside: 8, labelColor: '#f59e0b' },
-  prunes_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'prune_dried_single', countInside: 8, labelColor: '#312e81' },
-  raisins_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'raisins_handful_single', countInside: 6, labelColor: '#78350f' },
-  banana_chips: { containerId: 'pouch_sealed_snack', innerItemId: 'banana_chip_single', countInside: 8, labelColor: '#facc15' },
-  cranberries_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'cranberry_dried_single', countInside: 8, labelColor: '#be123c' },
-  dates_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'prune_dried_single', countInside: 8, labelColor: '#78350f' },
-  figs_dried: { containerId: 'pouch_sealed_snack', innerItemId: 'apricot_dried_single', countInside: 8, labelColor: '#a16207' },
+  // 6. Nuts & Seeds Snack Pouches
   walnuts: { containerId: 'pouch_sealed_snack', innerItemId: 'nutmeg_whole_seeds', countInside: 8, labelColor: '#92400e' },
   sunflower_seeds: { containerId: 'pouch_sealed_snack', innerItemId: 'nutmeg_whole_seeds', countInside: 10, labelColor: '#18181b' },
 
@@ -7630,40 +7347,165 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   ...EXTENDED_ITEM_PACKAGING_MAP
 };
 
-export function createPackagedItem(itemId: string, count: number = 1): InventoryItem {
-  const packInfo = ITEM_PACKAGING_MAP[itemId];
-  if (packInfo) {
-    const container = createItem(packInfo.containerId, 1, undefined, true);
-    container.originalCatalogId = itemId;
-    if (packInfo.labelColor) {
-      container.labelColor = packInfo.labelColor;
+export function getResolvedPackagingConfig(itemId: string): ItemPackagingConfig | null {
+  const pkg = ITEM_PACKAGING_MAP[itemId];
+  if (!pkg) return null;
+  if (!ITEM_CATALOG[pkg.containerId]) return null;
+  const innerId = pkg.innerItemId || itemId;
+  if (!ITEM_CATALOG[innerId]) return null;
+  return pkg;
+}
+
+export function isRegisteredItemId(itemId: string): boolean {
+  if (!itemId) return false;
+  if (Boolean(ITEM_CATALOG[itemId])) return true;
+  if (Boolean(getResolvedPackagingConfig(itemId))) return true;
+  if (Boolean(getResolvedFluidContainerConfig(itemId))) return true;
+  return false;
+}
+
+export function formatItemEffectSummary(itemId: string): string {
+  const def = ITEM_CATALOG[itemId];
+  if (def?.effects) {
+    const parts: string[] = [];
+    if (def.effects.hunger) parts.push(`${def.effects.hunger > 0 ? '+' : ''}${def.effects.hunger} сытость`);
+    if (def.effects.thirst) parts.push(`${def.effects.thirst > 0 ? '+' : ''}${def.effects.thirst} жажда`);
+    if (def.effects.health) parts.push(`${def.effects.health > 0 ? '+' : ''}${def.effects.health} здоровье`);
+    if (def.effects.energy) parts.push(`${def.effects.energy > 0 ? '+' : ''}${def.effects.energy} бодрость`);
+    if (parts.length > 0) return parts.join(', ');
+  }
+  const pkg = getResolvedPackagingConfig(itemId);
+  if (pkg) {
+    const innerDef = ITEM_CATALOG[pkg.innerItemId || itemId];
+    if (innerDef) {
+      return `${innerDef.nameRu}${pkg.countInside && pkg.countInside > 1 ? ` (${pkg.countInside} шт.)` : ''}`;
     }
-    if (packInfo.containerTintColor) {
-      container.containerTintColor = packInfo.containerTintColor;
-    }
-    const innerId = packInfo.innerItemId || itemId;
-    const numInside = packInfo.countInside !== undefined ? packInfo.countInside : count;
+  }
+  const fluid = getResolvedFluidContainerConfig(itemId);
+  if (fluid && fluid.liquidId && LIQUID_REGISTRY[fluid.liquidId]) {
+    return `${LIQUID_REGISTRY[fluid.liquidId].nameRu} (${fluid.amountMl} мл)`;
+  }
+  return def?.category === 'med' ? 'Медикамент' : def?.category === 'tool' ? 'Инструмент' : 'Предмет';
+}
+
+export interface PackageAttributesSpec {
+  isOpen?: boolean;
+  labelColor?: string;
+  containerTintColor?: string;
+  packagingSize?: 'mini' | 'small' | 'medium' | 'large';
+  packagingShape?: CandyPackagingShape;
+  customNameRu?: string;
+  customDescriptionRu?: string;
+  originalCatalogId?: string;
+}
+
+function getOpenedPackageBaseNameRu(container: InventoryItem): string {
+  const id = container.itemId;
+  const baseDef = ITEM_CATALOG[id];
+  if (id === 'tray_sealed_food' || id === 'tray_plastic_sealed') return 'Вскрытый пищевой лоток';
+  if (id === 'vacuum_pack_small') return 'Вскрытый вакуумный пакет (0.5L)';
+  if (id === 'vacuum_pack_medium') return 'Вскрытый вакуумный пакет (1.2L)';
+  if (id === 'vacuum_pack_large') return 'Вскрытый большой вакуум-пакет (2.5L)';
+  if (id === 'pouch_sealed_snack') return 'Вскрытый дой-пак';
+  if (id === 'egg_carton_10') return 'Открытая кассета для яиц (10 ячеек)';
+  if (id === 'egg_carton_quail_18') return 'Открытый коррекс для перепелиных яиц';
+  if (id === 'blister_pack_10') return 'Вскрытый блистер для таблеток';
+  if (id === 'takeout_box_wok') return 'Открытая коробочка WOK';
+  if (id === 'pelmeni_pack_small') return 'Вскрытая малая пачка из-под пельменей';
+  if (id === 'pelmeni_pack') return 'Вскрытая пачка из-под пельменей';
+  if (id === 'pelmeni_pack_large') return 'Вскрытый большой мешок из-под пельменей';
+  if (id === 'pelmeni_pack_box') return 'Открытая картонная пачка из-под пельменей';
+  if (id.startsWith('paper_packaging')) {
+    const sz = container.packagingSize || baseDef?.packagingSize;
+    const szLabel = sz === 'mini' ? 'Мини' : sz === 'small' ? 'Малая' : sz === 'large' ? 'Большая' : '';
+    return szLabel ? `Открытая бумажная упаковка (${szLabel})` : 'Открытая бумажная упаковка';
+  }
+  if (id.startsWith('candy_pouch')) {
+    const shapeRu = container.packagingShapeNameRu || (container.packagingShape ? getCandyPackagingShapeNameRu(container.packagingShape) : '');
+    return shapeRu ? `Вскрытая упаковка (${shapeRu})` : 'Вскрытая пластиковая упаковка';
+  }
+  const rawName = baseDef?.nameRu || 'Упаковка';
+  if (rawName.toLowerCase().includes('вскрыт') || rawName.toLowerCase().includes('открыт')) {
+    return rawName;
+  }
+  return `Вскрытая упаковка: ${rawName}`;
+}
+
+export function isPackageContainerItem(item: InventoryItem): boolean {
+  const id = item.itemId;
+  return (
+    Boolean(item.singleUseContainer) ||
+    Boolean(ITEM_CATALOG[id]?.singleUseContainer) ||
+    Boolean(item.isOpen) ||
+    id === 'tray_sealed_food' ||
+    id.startsWith('vacuum_pack_') ||
+    id === 'pouch_sealed_snack' ||
+    id.startsWith('paper_packaging') ||
+    id.startsWith('candy_pouch') ||
+    id.startsWith('pelmeni_pack') ||
+    id === 'egg_carton_10' ||
+    id === 'egg_carton_quail_18' ||
+    id === 'blister_pack_10' ||
+    id === 'takeout_box_wok'
+  );
+}
+
+export function syncPackageContainerState(
+  container: InventoryItem,
+  customSealedNameRu?: string,
+  customSealedDescRu?: string
+): void {
+  const baseDef = ITEM_CATALOG[container.itemId];
+  container.isContainer = true;
+  if (!container.contents) {
     container.contents = [];
-    for (let i = 0; i < numInside; i++) {
-      if (innerId === 'gummy_candy') {
-        const preset =
-          packInfo.innerGummyPresets && packInfo.innerGummyPresets.length > 0
-            ? packInfo.innerGummyPresets[i % packInfo.innerGummyPresets.length]
-            : undefined;
-        container.contents.push(createGummyCandy(preset));
-      } else {
-        container.contents.push(createItem(innerId, 1, undefined, true));
-      }
+  }
+  if (container.packagingShape && !container.packagingShapeNameRu) {
+    container.packagingShapeNameRu = getCandyPackagingShapeNameRu(container.packagingShape);
+  }
+
+  const numInside = container.contents.length;
+  const firstInner = numInside > 0 ? container.contents[0] : undefined;
+  const singleInnerDef = firstInner ? ITEM_CATALOG[firstInner.itemId] : undefined;
+  const innerTitle = firstInner
+    ? firstInner.itemId === 'gummy_candy'
+      ? 'Жевательный мармелад'
+      : firstInner.itemId === 'pelmen'
+      ? 'Пельмени'
+      : firstInner.nameRu || singleInnerDef?.nameRu || 'Предмет'
+    : '';
+
+  if (container.isOpen) {
+    container.singleUseContainer = false;
+    container.tornItemId = undefined;
+    container.usable = numInside > 0;
+    const openedBaseTitle = getOpenedPackageBaseNameRu(container);
+    if (numInside > 0) {
+      const shortInnerLabel =
+        firstInner?.itemId === 'gummy_candy'
+          ? 'Мармелад'
+          : firstInner?.itemId === 'pelmen'
+          ? 'Пельмени'
+          : innerTitle;
+      container.nameRu = `${openedBaseTitle} (${shortInnerLabel}: ${numInside} шт)`;
+      container.descriptionRu = `Вскрытая упаковка (${baseDef?.nameRu || openedBaseTitle}). Внутри: ${shortInnerLabel} (${numInside} шт.). Нажмите [E] или откройте контейнер в инвентаре, чтобы достать содержимое.`;
+    } else {
+      container.nameRu = openedBaseTitle;
+      container.descriptionRu = `Вскрытая пустая упаковка (${baseDef?.nameRu || openedBaseTitle}). Сохранила все атрибуты упаковки; можно положить предметы внутрь или утилизировать.`;
     }
-    const singleInner = ITEM_CATALOG[innerId];
-    if (singleInner) {
-      const baseTitle = packInfo.customNameRu || `${container.nameRu} (${singleInner.nameRu}${numInside > 1 ? ` x${numInside}` : ''})`;
-      container.nameRu = baseTitle;
+  } else {
+    container.isOpen = false;
+    container.singleUseContainer = baseDef?.singleUseContainer ?? true;
+    container.usable = true;
+    const baseTitle = baseDef?.nameRu || container.nameRu || 'Упаковка';
+    if (numInside > 0 && firstInner) {
+      container.nameRu =
+        customSealedNameRu || `${baseTitle} (${innerTitle}${numInside > 1 ? ` x${numInside}` : ''})`;
       const actionHint = container.singleUseContainer
         ? 'Нажмите [E] в руках или используйте в инвентаре, чтобы вскрыть упаковку и достать содержимое.'
         : 'Откройте контейнер в инвентаре или используйте [E], чтобы достать содержимое поштучно.';
-      const customDesc = packInfo.customDescriptionRu || container.descriptionRu;
-      if (innerId === 'gummy_candy' && container.contents.length > 0) {
+      const baseDesc = customSealedDescRu || baseDef?.descriptionRu || container.descriptionRu;
+      if (firstInner.itemId === 'gummy_candy') {
         const shapeSummary = Array.from(
           new Set(container.contents.map(c => c.gummyAttributes?.shapeNameRu).filter(Boolean))
         ).join(', ');
@@ -7673,22 +7515,97 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
         const netWeightGrams = Math.round(
           container.contents.reduce((sum, c) => sum + (c.weight || 0) * 1000, 0)
         );
-        container.descriptionRu = `${customDesc} Внутри: ${numInside} шт. (~${netWeightGrams} г нетто; ${shapeSummary || singleInner.nameRu}${flavorSummary ? `; вкусы: ${flavorSummary}` : ''}). ${actionHint}`;
+        container.descriptionRu = `${baseDesc} Внутри: ${numInside} шт. (~${netWeightGrams} г нетто; ${shapeSummary || innerTitle}${flavorSummary ? `; вкусы: ${flavorSummary}` : ''}). ${actionHint}`;
+      } else if (firstInner.itemId === 'pelmen') {
+        const shapeSummary = Array.from(
+          new Set(container.contents.map(c => c.pelmenAttributes?.shapeNameRu).filter(Boolean))
+        ).join(', ');
+        const fillingSummary = Array.from(
+          new Set(container.contents.map(c => c.pelmenAttributes?.fillingRu).filter(Boolean))
+        ).join('; ');
+        const netWeightGrams = Math.round(
+          container.contents.reduce((sum, c) => sum + (c.weight || 0) * 1000, 0)
+        );
+        container.descriptionRu = `${baseDesc} Внутри: ${numInside} шт. (~${netWeightGrams} г нетто; форма: ${shapeSummary || 'классическая'}${fillingSummary ? `; начинка: ${fillingSummary}` : ''}). ${actionHint}`;
       } else {
-        container.descriptionRu = `${customDesc} Внутри: ${singleInner.nameRu} (${numInside} шт.). ${actionHint}`;
+        container.descriptionRu = `${baseDesc} Внутри: ${innerTitle} (${numInside} шт.). ${actionHint}`;
       }
-      // Note: container.weight & container.volume remain the empty package tare/shell;
-      // getItemTotalWeight/Volume dynamically sums container + contents without double-counting.
+    } else {
+      container.nameRu = customSealedNameRu || baseTitle;
+      container.descriptionRu = customSealedDescRu || baseDef?.descriptionRu || container.descriptionRu;
     }
-    if (container.contents && container.contents.length > 0) {
-      const firstInner = container.contents[0];
-      if (firstInner && typeof firstInner.temperature === 'number') {
-        container.temperature = firstInner.temperature;
-        container.heatLossRate = firstInner.heatLossRate;
-        container.surfaceTemperature = calculateSurfaceTemperature(firstInner.temperature, 20.0, container.heatRetention ?? 0.4);
+  }
+
+  if (firstInner && typeof firstInner.temperature === 'number') {
+    container.temperature = firstInner.temperature;
+    container.heatLossRate = firstInner.heatLossRate;
+    container.surfaceTemperature = calculateSurfaceTemperature(
+      firstInner.temperature,
+      20.0,
+      container.heatRetention ?? 0.4
+    );
+  }
+}
+
+export function createFilledPackage(
+  containerId: string,
+  innerItems: InventoryItem[],
+  attrs?: PackageAttributesSpec
+): InventoryItem {
+  const container = createItem(containerId, 1, undefined, true);
+  if (attrs?.originalCatalogId) {
+    container.originalCatalogId = attrs.originalCatalogId;
+  }
+  if (attrs?.labelColor) {
+    container.labelColor = attrs.labelColor;
+  }
+  if (attrs?.containerTintColor) {
+    container.containerTintColor = attrs.containerTintColor;
+  }
+  if (attrs?.packagingSize) {
+    container.packagingSize = attrs.packagingSize;
+  }
+  if (attrs?.packagingShape) {
+    container.packagingShape = attrs.packagingShape;
+    container.packagingShapeNameRu = getCandyPackagingShapeNameRu(attrs.packagingShape);
+  }
+  container.isOpen = Boolean(attrs?.isOpen);
+  container.contents = innerItems.map(it => ({ ...it, count: 1, maxStack: 1 }));
+  syncPackageContainerState(container, attrs?.customNameRu, attrs?.customDescriptionRu);
+  return container;
+}
+
+export function createPackagedItem(itemId: string, count: number = 1): InventoryItem {
+  const packInfo = getResolvedPackagingConfig(itemId);
+  if (packInfo) {
+    const innerId = packInfo.innerItemId || itemId;
+    const numInside = packInfo.countInside !== undefined ? packInfo.countInside : count;
+    const innerItems: InventoryItem[] = [];
+    for (let i = 0; i < numInside; i++) {
+      if (innerId === 'gummy_candy') {
+        const preset =
+          packInfo.innerGummyPresets && packInfo.innerGummyPresets.length > 0
+            ? packInfo.innerGummyPresets[i % packInfo.innerGummyPresets.length]
+            : undefined;
+        innerItems.push(createGummyCandy(preset));
+      } else if (innerId === 'pelmen') {
+        const pelmenPreset =
+          packInfo.innerPelmenPresets && packInfo.innerPelmenPresets.length > 0
+            ? packInfo.innerPelmenPresets[i % packInfo.innerPelmenPresets.length]
+            : undefined;
+        innerItems.push(createPelmen(pelmenPreset));
+      } else {
+        innerItems.push(createItem(innerId, 1, undefined, true));
       }
     }
-    return container;
+    return createFilledPackage(packInfo.containerId, innerItems, {
+      isOpen: false,
+      labelColor: packInfo.labelColor,
+      containerTintColor: packInfo.containerTintColor,
+      customNameRu: packInfo.customNameRu,
+      customDescriptionRu: packInfo.customDescriptionRu,
+      originalCatalogId: itemId
+    });
   }
   return createItem(itemId, count, undefined, true);
 }
@@ -7787,89 +7704,62 @@ export function unpackSingleUseContainer(
   targetInjuryId?: string
 ): { success: boolean; message: string } {
   const def = ITEM_CATALOG[container.itemId];
-  const isCurrentlySealed = Boolean((container.singleUseContainer || def?.singleUseContainer) && !container.isOpen);
+  const isCurrentlySealed = !container.isOpen && Boolean(
+    container.singleUseContainer ??
+    def?.singleUseContainer ??
+    ((container.itemId.startsWith('paper_packaging') || container.itemId.startsWith('candy_pouch')) && !container.itemId.includes('_open'))
+  );
 
   // Piece-by-piece consumption/extraction for multi-piece blisters, snack bags, takeout boxes, and egg cartons
   if (container.contents && container.contents.length > 0) {
     const sample = container.contents[container.contents.length - 1];
     if (sample) {
-      const isEggPiece = sample.itemId === 'egg_chicken_single' || sample.itemId === 'egg_quail_single';
+      const isExtractablePiece =
+        sample.itemId === 'egg_chicken_single' ||
+        sample.itemId === 'egg_quail_single' ||
+        sample.itemId === 'pelmen';
+      const sampleDef = ITEM_CATALOG[sample.itemId];
       const isDirectPiece =
-        sample.itemId.startsWith('pill_') ||
-        sample.itemId === 'patch_bactericidal_single' ||
-        sample.itemId === 'chip_potato_single' ||
-        sample.itemId === 'cookie_choco_single' ||
-        sample.itemId === 'fries_strip_single' ||
-        sample.itemId === 'nugget_chicken_single' ||
-        sample.itemId === 'chicken_wing_crispy_single' ||
-        sample.itemId === 'sushi_roll_piece' ||
-        sample.itemId === 'nacho_chip_single' ||
-        sample.itemId === 'popcorn_handful' ||
-        sample.itemId === 'apple_ring_dried_single' ||
-        sample.itemId === 'prune_dried_single' ||
-        sample.itemId === 'apricot_dried_single' ||
-        sample.itemId === 'raisins_handful_single' ||
-        sample.itemId === 'cranberry_dried_single' ||
-        sample.itemId === 'banana_chip_single' ||
-        sample.itemId === 'nutmeg_whole_seeds' ||
-        sample.itemId === 'gummy_candy';
+        !isExtractablePiece &&
+        Boolean(
+          sampleDef?.isDirectPiece ||
+          sample.itemId.startsWith('pill_') ||
+          sample.itemId.endsWith('_single') ||
+          sample.itemId === 'gummy_candy' ||
+          sample.itemId === 'popcorn_handful' ||
+          sample.itemId === 'nutmeg_whole_seeds'
+        );
 
-      if (isEggPiece || isDirectPiece) {
-        // STEP 1: If the multi-piece package is still sealed, tearing it open converts it to the opened state first!
+      if (isExtractablePiece || isDirectPiece) {
+        // STEP 1: If the multi-piece package is still sealed, tearing it open converts it to the opened state in-place without changing itemId!
         if (isCurrentlySealed) {
-          const sealedTornId = container.tornItemId || def?.tornItemId;
-          if (container.itemId === 'pouch_sealed_snack' && ITEM_CATALOG.pouch_sealed_snack_torn) {
-            container.itemId = 'pouch_sealed_snack_torn';
-            container.name = ITEM_CATALOG.pouch_sealed_snack_torn.name;
-          } else if (container.itemId === 'egg_carton_10' && ITEM_CATALOG.egg_carton_10_open) {
-            container.itemId = 'egg_carton_10_open';
-            container.name = ITEM_CATALOG.egg_carton_10_open.name;
-          } else if (container.itemId.startsWith('candy_pouch') && sealedTornId && ITEM_CATALOG[sealedTornId]) {
-            container.itemId = sealedTornId;
-            container.name = ITEM_CATALOG[sealedTornId].name;
-          }
           container.isOpen = true;
-          container.singleUseContainer = false;
-          container.tornItemId = undefined;
-          container.isContainer = true;
-          container.usable = true;
-
-          let baseOpenName = ITEM_CATALOG[container.itemId]?.nameRu || 'Упаковка';
-          if (!baseOpenName.toLowerCase().includes('вскрыт') && !baseOpenName.toLowerCase().includes('открыт')) {
-            baseOpenName = `Открытая упаковка: ${baseOpenName}`;
-          }
-          const innerSummaryLabel = sample.itemId === 'gummy_candy' ? 'Мармелад' : sample.nameRu;
-          container.nameRu = `${baseOpenName} (${innerSummaryLabel}: ${container.contents.length} шт)`;
+          syncPackageContainerState(container);
           sound.playUseItem();
           const openMsg = `Упаковка вскрыта: ${container.nameRu}. Теперь содержимое можно доставать или употреблять!`;
           addPlayerNotification(player, openMsg, 'pickup');
           return { success: true, message: openMsg };
         }
 
-        // STEP 2: Package is already open -> extract 1 egg or consume/apply 1 piece
-        if (isEggPiece) {
-          const eggItem = container.contents.pop()!;
-          const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Ячейка для яиц';
-          if (container.contents.length > 0) {
-            container.nameRu = `${baseName} (${eggItem.nameRu}: ${container.contents.length} шт)`;
-          } else {
-            container.nameRu = baseName;
-            container.usable = false;
-          }
-          const added = addItemToPlayer(player, eggItem);
+        // STEP 2: Package is already open -> extract 1 piece (egg or pelmen) or consume/apply 1 direct piece
+        if (isExtractablePiece) {
+          const pieceItem = container.contents.pop()!;
+          container.isOpen = true;
+          syncPackageContainerState(container);
+          const added = addItemToPlayer(player, pieceItem);
           if (!added && world) {
             if (!world.groundItems) world.groundItems = [];
             const angle = player.angle || 0;
             world.groundItems.push({
-              id: `ground_${eggItem.id}_${Date.now()}`,
+              id: `ground_${pieceItem.id}_${Date.now()}`,
               x: player.x + Math.cos(angle) * 20,
               y: player.y + Math.sin(angle) * 20,
-              item: eggItem,
+              item: pieceItem,
               spawnTime: Date.now()
             });
           }
           sound.playPickup();
-          const msg = `Достали из ячейки: ${eggItem.nameRu} (осталось ${container.contents.length} шт)`;
+          const msg = `Достали из упаковки: ${pieceItem.nameRu} (осталось ${container.contents.length} шт)`;
           addPlayerNotification(player, msg, 'pickup');
           return { success: true, message: msg };
         }
@@ -7908,38 +7798,15 @@ export function unpackSingleUseContainer(
               sound.playUseItem();
             }
 
+            container.isOpen = true;
+            syncPackageContainerState(container);
             const remCount = container.contents ? container.contents.length : 0;
             if (remCount > 0) {
-              let baseContainerName = ITEM_CATALOG[container.itemId]?.nameRu || 'Упаковка';
-              if (!baseContainerName.toLowerCase().includes('вскрыт') && !baseContainerName.toLowerCase().includes('открыт')) {
-                baseContainerName = `Открытая упаковка: ${baseContainerName}`;
-              }
-              const remLabel = inner.itemId === 'gummy_candy' ? 'Мармелад' : inner.nameRu;
-              container.nameRu = `${baseContainerName} (${remLabel}: ${remCount} шт)`;
               const notif = `${inner.nameRu} (осталось в упаковке: ${remCount} шт)`;
               addPlayerNotification(player, notif, inner.category === 'food' ? 'food' : 'heal');
               return { success: true, message: notif };
             } else {
-              const emptyTornId = container.tornItemId || def?.tornItemId || container.itemId;
-              const emptyTornDef = ITEM_CATALOG[emptyTornId];
-              if (emptyTornDef) {
-                container.itemId = emptyTornDef.itemId;
-                container.name = emptyTornDef.name;
-                container.nameRu = emptyTornDef.nameRu;
-                container.category = emptyTornDef.category || 'misc';
-                container.isContainer = emptyTornDef.isContainer ?? false;
-                container.usable = false;
-                container.singleUseContainer = false;
-                container.tornItemId = undefined;
-                container.isOpen = true;
-                container.contents = emptyTornDef.isContainer ? [] : undefined;
-                if (!container.packagingSize && emptyTornDef.packagingSize) container.packagingSize = emptyTornDef.packagingSize;
-                if (!container.packagingShape && emptyTornDef.packagingShape) container.packagingShape = emptyTornDef.packagingShape;
-                if (!container.packagingShapeNameRu && emptyTornDef.packagingShapeNameRu) {
-                  container.packagingShapeNameRu = emptyTornDef.packagingShapeNameRu;
-                }
-              }
-              const notif = `Использовано последнее: ${inner.nameRu}. Осталась пустая упаковка: ${container.nameRu}.`;
+              const notif = `Использовано последнее: ${inner.nameRu}. Осталась вскрытая упаковка: ${container.nameRu}.`;
               addPlayerNotification(player, notif, 'info');
               return { success: true, message: notif };
             }
@@ -7957,51 +7824,18 @@ export function unpackSingleUseContainer(
   } else {
     const list: string[] = container.containerItems || def?.containerItems || [];
     for (const cId of list) {
-      extractedItems.push(createItem(cId, 1));
+      extractedItems.push(createItem(cId, 1, undefined, true));
     }
   }
 
-  const existingLabelColor = container.labelColor || def?.labelColor;
-  const existingTintColor = container.containerTintColor || def?.containerTintColor;
-  const existingPackagingSize = container.packagingSize || def?.packagingSize;
-  const existingPackagingShape = container.packagingShape || def?.packagingShape;
-  const existingPackagingShapeNameRu = container.packagingShapeNameRu || def?.packagingShapeNameRu;
-
-  // Convert container to its torn/opened counterpart in-place (works for both empty and filled packages!)
-  const tornId = container.tornItemId || def?.tornItemId || def?.leftoverId || 'tray_plastic_empty';
-  const tornDef = ITEM_CATALOG[tornId] || ITEM_CATALOG.tray_plastic_empty;
-
-  container.itemId = tornDef.itemId;
-  container.name = tornDef.name;
-  container.nameRu = tornDef.nameRu;
-  container.category = tornDef.category || 'misc';
-  container.isContainer = tornDef.isContainer ?? false;
-  container.usable = tornDef.usable ?? false;
-  container.singleUseContainer = false;
+  // Convert package to its opened state in-place, keeping its itemId and all visual/structural attributes!
   container.isOpen = true;
-  container.contents = tornDef.isContainer ? [] : undefined;
-  container.description = tornDef.description;
-  container.descriptionRu = tornDef.descriptionRu;
-  if (existingLabelColor) {
-    container.labelColor = existingLabelColor;
-  }
-  if (existingTintColor) {
-    container.containerTintColor = existingTintColor;
-  }
-  if (existingPackagingSize || tornDef.packagingSize) {
-    container.packagingSize = existingPackagingSize || tornDef.packagingSize;
-  }
-  if (existingPackagingShape || tornDef.packagingShape) {
-    container.packagingShape = existingPackagingShape || tornDef.packagingShape;
-  }
-  if (existingPackagingShapeNameRu || tornDef.packagingShapeNameRu) {
-    container.packagingShapeNameRu = existingPackagingShapeNameRu || tornDef.packagingShapeNameRu;
-  }
+  syncPackageContainerState(container);
 
   if (extractedItems.length === 0) {
     sound.playUseItem();
     if (onContainerConsumed) onContainerConsumed();
-    const notifMsg = `Упаковка вскрыта: теперь это ${tornDef.nameRu}.`;
+    const notifMsg = `Упаковка вскрыта: теперь это ${container.nameRu}.`;
     addPlayerNotification(player, notifMsg, 'pickup');
     return { success: true, message: notifMsg };
   }
@@ -8033,7 +7867,7 @@ export function unpackSingleUseContainer(
 
   const itemsNames = extractedItems.map(i => i.nameRu).join(', ');
   const dropMsg = droppedCount > 0 ? ` (${droppedCount} предм. упали на землю)` : '';
-  const notifMsg = `Упаковка вскрыта: извлечено ${itemsNames}${dropMsg}. Мусор: ${tornDef.nameRu}.`;
+  const notifMsg = `Упаковка вскрыта: извлечено ${itemsNames}${dropMsg}. Упаковка: ${container.nameRu}.`;
   addPlayerNotification(player, notifMsg, 'pickup');
 
   return { success: true, message: notifMsg };
@@ -8049,6 +7883,7 @@ function handleReusableFilledContainerAction(
   }
   if (
     container.itemId !== 'lukoshko' &&
+    container.itemId !== 'egg_carton_10' &&
     container.itemId !== 'egg_carton_10_open' &&
     container.itemId !== 'egg_carton_quail_18'
   ) {
@@ -8089,11 +7924,16 @@ function handleReusableFilledContainerAction(
 
   // Otherwise (mushrooms or eggs): extract 1 item into inventory/hands
   const popped = container.contents.pop()!;
-  const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Контейнер';
-  if (container.contents.length > 0) {
-    container.nameRu = `${baseName} (${popped.nameRu}: ${container.contents.length} шт)`;
+  if (container.itemId !== 'lukoshko') {
+    container.isOpen = true;
+    syncPackageContainerState(container);
   } else {
-    container.nameRu = baseName;
+    const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Контейнер';
+    if (container.contents.length > 0) {
+      container.nameRu = `${baseName} (${popped.nameRu}: ${container.contents.length} шт)`;
+    } else {
+      container.nameRu = baseName;
+    }
   }
   const added = addItemToPlayer(player, popped);
   if (!added && world) {
@@ -8120,24 +7960,19 @@ export function createPaperPackaging(options?: {
   isOpen?: boolean;
 }): InventoryItem {
   const size = options?.size || 'medium';
-  let baseId = 'paper_packaging';
-  if (size === 'mini') {
-    baseId = options?.isOpen ? 'paper_packaging_mini_open' : 'paper_packaging_mini';
-  } else if (size === 'small') {
-    baseId = options?.isOpen ? 'paper_packaging_small_open' : 'paper_packaging_small';
-  } else if (size === 'large') {
-    baseId = options?.isOpen ? 'paper_packaging_large_open' : 'paper_packaging_large';
-  } else {
-    baseId = options?.isOpen ? 'paper_packaging_open' : 'paper_packaging';
-  }
-  const item = createItem(baseId, 1);
-  if (options?.labelColor) {
-    item.labelColor = options.labelColor;
-  }
-  if (options?.contents && options.contents.length > 0) {
-    item.contents = [...options.contents];
-  }
-  return item;
+  const baseId =
+    size === 'mini'
+      ? 'paper_packaging_mini'
+      : size === 'small'
+      ? 'paper_packaging_small'
+      : size === 'large'
+      ? 'paper_packaging_large'
+      : 'paper_packaging';
+  return createFilledPackage(baseId, options?.contents || [], {
+    isOpen: Boolean(options?.isOpen),
+    labelColor: options?.labelColor,
+    packagingSize: size
+  });
 }
 
 export function createCandyPackaging(options?: {
@@ -8149,33 +7984,34 @@ export function createCandyPackaging(options?: {
   isOpen?: boolean;
 }): InventoryItem {
   const shape = options?.shape;
-  const size = options?.size || (shape === 'flat_sachet' ? 'mini' : shape === 'pillow' || shape === 'hanging_card' ? 'small' : shape === 'gusset' ? 'large' : 'medium');
+  const size =
+    options?.size ||
+    (shape === 'flat_sachet'
+      ? 'mini'
+      : shape === 'pillow' || shape === 'hanging_card'
+      ? 'small'
+      : shape === 'gusset'
+      ? 'large'
+      : 'medium');
 
-  let baseId = 'candy_pouch';
-  if (shape === 'hanging_card') {
-    baseId = options?.isOpen ? 'candy_pouch_euro_open' : 'candy_pouch_euro';
-  } else if (shape === 'flat_sachet' || size === 'mini') {
-    baseId = options?.isOpen ? 'candy_pouch_mini_open' : 'candy_pouch_mini';
-  } else if (shape === 'pillow' || size === 'small') {
-    baseId = options?.isOpen ? 'candy_pouch_small_open' : 'candy_pouch_small';
-  } else if (shape === 'gusset' || size === 'large') {
-    baseId = options?.isOpen ? 'candy_pouch_large_open' : 'candy_pouch_large';
-  } else {
-    baseId = options?.isOpen ? 'candy_pouch_open' : 'candy_pouch';
-  }
+  const baseId =
+    shape === 'hanging_card'
+      ? 'candy_pouch_euro'
+      : shape === 'flat_sachet' || size === 'mini'
+      ? 'candy_pouch_mini'
+      : shape === 'pillow' || size === 'small'
+      ? 'candy_pouch_small'
+      : shape === 'gusset' || size === 'large'
+      ? 'candy_pouch_large'
+      : 'candy_pouch';
 
-  const item = createItem(baseId, 1);
-  if (size) item.packagingSize = size;
-  if (shape) {
-    item.packagingShape = shape;
-    item.packagingShapeNameRu = getCandyPackagingShapeNameRu(shape);
-  }
-  if (options?.labelColor) item.labelColor = options.labelColor;
-  if (options?.tintColor) item.containerTintColor = options.tintColor;
-  if (options?.contents && options.contents.length > 0) {
-    item.contents = [...options.contents];
-  }
-  return item;
+  return createFilledPackage(baseId, options?.contents || [], {
+    isOpen: Boolean(options?.isOpen),
+    labelColor: options?.labelColor,
+    containerTintColor: options?.tintColor,
+    packagingSize: size,
+    packagingShape: shape
+  });
 }
 
 // Start multi-step consumption (eating/drinking) - kept for backward compatibility if used
@@ -9025,6 +8861,9 @@ export function addItemToContainer(container: InventoryItem, itemToAdd: Inventor
   itemToAdd.count = 1;
   itemToAdd.maxStack = 1;
   container.contents.push(itemToAdd);
+  if (isPackageContainerItem(container)) {
+    syncPackageContainerState(container);
+  }
   return { success: true, message: `Помещено в ${container.nameRu}: ${itemToAdd.nameRu}`};
 }
 
@@ -9036,42 +8875,10 @@ export function removeItemFromContainer(container: InventoryItem, contentIndex: 
 
   container.contents.splice(contentIndex, 1);
 
-  // If this was a single-use container (vacuum pouch, sealed tray, snack pouch, vegetable mesh, paper packaging), convert to torn version!
-  if (container.contents.length === 0 && (container.singleUseContainer || ITEM_CATALOG[container.itemId]?.singleUseContainer)) {
-    const tornId = container.tornItemId || ITEM_CATALOG[container.itemId]?.tornItemId;
-    if (tornId && ITEM_CATALOG[tornId]) {
-      const tornDef = ITEM_CATALOG[tornId];
-      const existingLabelColor = container.labelColor || ITEM_CATALOG[container.itemId]?.labelColor;
-      const existingTintColor = container.containerTintColor || ITEM_CATALOG[container.itemId]?.containerTintColor;
-      const existingPackagingSize = container.packagingSize || ITEM_CATALOG[container.itemId]?.packagingSize;
-      const existingPackagingShape = container.packagingShape || ITEM_CATALOG[container.itemId]?.packagingShape;
-      const existingPackagingShapeNameRu = container.packagingShapeNameRu || ITEM_CATALOG[container.itemId]?.packagingShapeNameRu;
-      container.itemId = tornDef.itemId;
-      container.name = tornDef.name;
-      container.nameRu = tornDef.nameRu;
-      container.category = tornDef.category || 'misc';
-      container.isContainer = tornDef.isContainer ?? false;
-      container.contents = tornDef.isContainer ? [] : undefined;
-      container.usable = tornDef.usable ?? false;
-      container.singleUseContainer = false;
-      container.description = tornDef.description;
-      container.descriptionRu = tornDef.descriptionRu;
-      if (existingLabelColor) {
-        container.labelColor = existingLabelColor;
-      }
-      if (existingTintColor) {
-        container.containerTintColor = existingTintColor;
-      }
-      if (existingPackagingSize || tornDef.packagingSize) {
-        container.packagingSize = existingPackagingSize || tornDef.packagingSize;
-      }
-      if (existingPackagingShape || tornDef.packagingShape) {
-        container.packagingShape = existingPackagingShape || tornDef.packagingShape;
-      }
-      if (existingPackagingShapeNameRu || tornDef.packagingShapeNameRu) {
-        container.packagingShapeNameRu = existingPackagingShapeNameRu || tornDef.packagingShapeNameRu;
-      }
-    }
+  // If this was a package container, extracting an item marks the package as opened in-place while preserving its itemId and attributes!
+  if (isPackageContainerItem(container)) {
+    container.isOpen = true;
+    syncPackageContainerState(container);
   }
 
   return { ...item, count: 1, maxStack: 1 };
@@ -9240,9 +9047,7 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
     createItem('candy_pouch', 1),
     createItem('candy_pouch_large', 1),
     createItem('water_bottle', 1),
-    createItem('sandwich', 1),
     createItem('hot_coffee', 1),
-    createItem('chocolate', 1),
     createItem('zippo_lighter', 1)
   ];
 }
@@ -10196,26 +10001,29 @@ export function useItemOnPlayer(
   }
 
   // Single-use vacuum bags, kraft paper packaging, candy pouches & disposable packaging unpack / tear open or consume piece
-  if (
-    item.singleUseContainer ||
-    ITEM_CATALOG[item.itemId]?.singleUseContainer ||
-    (item.itemId.startsWith('paper_packaging') && !item.itemId.includes('_open')) ||
-    (item.itemId.startsWith('candy_pouch') && !item.itemId.includes('_open')) ||
-    ((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
-      item.contents &&
-      item.contents.length > 0)
-  ) {
+  const isUnopenedPackage =
+    !item.isOpen &&
+    Boolean(
+      item.singleUseContainer ??
+      ITEM_CATALOG[item.itemId]?.singleUseContainer ??
+      ((item.itemId.startsWith('paper_packaging') || item.itemId.startsWith('candy_pouch')) && !item.itemId.includes('_open'))
+    );
+  const isOpenedPackageWithContents =
+    Boolean(item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
+    Boolean(item.contents && item.contents.length > 0);
+
+  if (isUnopenedPackage || isOpenedPackageWithContents) {
     return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
-  // Open paper packaging container safety check
-  if (item.itemId.startsWith('paper_packaging_open')) {
+  // Open empty paper packaging container safety check
+  if (item.itemId.startsWith('paper_packaging') && (item.isOpen || item.itemId.includes('_open'))) {
     addPlayerNotification(player, 'Это открытая бумажная упаковка: перетаскивайте в неё предметы для хранения.', 'info');
     return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
-  // Open plastic candy packaging container safety check
-  if (item.itemId.startsWith('candy_pouch') && item.itemId.includes('_open')) {
+  // Open empty plastic candy packaging container safety check
+  if (item.itemId.startsWith('candy_pouch') && (item.isOpen || item.itemId.includes('_open'))) {
     addPlayerNotification(player, 'Это вскрытая пластиковая упаковка от сладостей: перетаскивайте в неё мелкие предметы для хранения.', 'info');
     return { success: false, message: 'Вскрытая упаковка: используйте инвентарь для перемещения предметов' };
   }
@@ -11231,26 +11039,29 @@ export function useHandItemOnPlayer(
   }
 
   // Single-use vacuum bags, kraft paper packaging, candy pouches & disposable packaging unpack / tear open from hand
-  if (
-    item.singleUseContainer ||
-    ITEM_CATALOG[item.itemId]?.singleUseContainer ||
-    (item.itemId.startsWith('paper_packaging') && !item.itemId.includes('_open')) ||
-    (item.itemId.startsWith('candy_pouch') && !item.itemId.includes('_open')) ||
-    ((item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
-      item.contents &&
-      item.contents.length > 0)
-  ) {
+  const isUnopenedHandPackage =
+    !item.isOpen &&
+    Boolean(
+      item.singleUseContainer ??
+      ITEM_CATALOG[item.itemId]?.singleUseContainer ??
+      ((item.itemId.startsWith('paper_packaging') || item.itemId.startsWith('candy_pouch')) && !item.itemId.includes('_open'))
+    );
+  const isOpenedHandPackageWithContents =
+    Boolean(item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
+    Boolean(item.contents && item.contents.length > 0);
+
+  if (isUnopenedHandPackage || isOpenedHandPackageWithContents) {
     return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
-  // Open paper packaging container in hand
-  if (item.itemId.startsWith('paper_packaging_open')) {
+  // Open empty paper packaging container in hand
+  if (item.itemId.startsWith('paper_packaging') && (item.isOpen || item.itemId.includes('_open'))) {
     addPlayerNotification(player, 'Это открытая бумажная упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
     return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
-  // Open plastic candy packaging container in hand
-  if (item.itemId.startsWith('candy_pouch') && item.itemId.includes('_open')) {
+  // Open empty plastic candy packaging container in hand
+  if (item.itemId.startsWith('candy_pouch') && (item.isOpen || item.itemId.includes('_open'))) {
     addPlayerNotification(player, 'Это вскрытая пластиковая упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
     return { success: false, message: 'Вскрытая упаковка: используйте инвентарь для перемещения предметов' };
   }
@@ -12404,13 +12215,6 @@ export function seedInitialGroundItems(world: GameWorld) {
         x: 4380,
         y: 2830,
         item: createItem('energy_drink', 1),
-        spawnTime: Date.now()
-      },
-      {
-        id: 'ground_seed_4',
-        x: 4350,
-        y: 2010,
-        item: createItem('burger', 1),
         spawnTime: Date.now()
       },
       {

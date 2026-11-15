@@ -627,53 +627,6 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
       return true;
     }
 
-    case 'milkshake': {
-      drawShadow(ctx, 6.5, 2.5, 7.8, 0.22);
-
-      // Clear sundae cup with pink strawberry shake
-      ctx.fillStyle = '#f472b6';
-      ctx.beginPath();
-      ctx.moveTo(-5, -2);
-      ctx.lineTo(5, -2);
-      ctx.lineTo(3.6, 7.2);
-      ctx.lineTo(-3.6, 7.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Swirled whipped cream dome
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(-2, -3.5, 2.8, 0, Math.PI * 2);
-      ctx.arc(2, -3.5, 2.8, 0, Math.PI * 2);
-      ctx.arc(0, -5.5, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glossy ruby red maraschino cherry with stem
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.arc(0, -7.5, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(0, -7.5);
-      ctx.quadraticCurveTo(2, -10, 1.5, -11.5);
-      ctx.stroke();
-
-      // Diagonal pink-and-white spiral straw
-      ctx.strokeStyle = '#ec4899';
-      ctx.lineWidth = 1.8;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(2, -4);
-      ctx.lineTo(4.5, -10.5);
-      ctx.stroke();
-
-      // Glass specular reflection
-      drawGlossBand(ctx, -3.6, -2, 1.2, 9, 0.35);
-      return true;
-    }
-
     case 'tea_green':
     case 'tea_cup':
     case 'tea':

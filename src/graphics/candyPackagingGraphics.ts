@@ -917,7 +917,9 @@ function drawClearCandyWindow(
     const count = item.contents.length;
     if (count === 1) {
       const inner = item.contents[0];
-      drawItemModel2D(ctx, inner.itemId, cx, cy, Math.min(rx, ry) * 3.1, inner);
+      if (inner && inner.itemId !== item.itemId) {
+        drawItemModel2D(ctx, inner.itemId, cx, cy, Math.min(rx, ry) * 3.1, inner, true);
+      }
     } else {
       const displayCount = Math.min(4, count);
       const pieceSize = Math.min(rx, ry) * (displayCount === 2 ? 2.15 : 1.75);
@@ -931,12 +933,12 @@ function drawClearCandyWindow(
       for (let i = 0; i < displayCount; i++) {
         const sampleIdx = Math.min(count - 1, Math.floor((i * count) / displayCount));
         const inner = item.contents[sampleIdx];
-        if (!inner) continue;
+        if (!inner || inner.itemId === item.itemId) continue;
         const [ox, oy, rot] = offsets[i];
         ctx.save();
         ctx.translate(cx + ox, cy + oy);
         ctx.rotate(rot);
-        drawItemModel2D(ctx, inner.itemId, 0, 0, pieceSize, inner);
+        drawItemModel2D(ctx, inner.itemId, 0, 0, pieceSize, inner, true);
         ctx.restore();
       }
     }

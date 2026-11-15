@@ -2115,16 +2115,27 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   height: 100%;
 }
 
-.gu-inv-left-scroll {
+.gu-inv-left-scroll,
+.gu-player-inv-scroll,
+#furniture-storage-modal .gu-st-col[data-st-zone="zone:pockets"] .gu-st-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-right: 2px;
-  scrollbar-width: thin;
-  scrollbar-color: #3a352b transparent;
+  gap: 6px;
+  padding-right: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.gu-inv-left-scroll::-webkit-scrollbar,
+.gu-player-inv-scroll::-webkit-scrollbar,
+#furniture-storage-modal .gu-st-col[data-st-zone="zone:pockets"] .gu-st-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .gu-inv-detail {
@@ -2219,50 +2230,38 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
 }
 
 .gu-inv-split .gu-group + .gu-group,
+.gu-player-inv-scroll .gu-group + .gu-group,
 #furniture-storage-modal .gu-group + .gu-group {
-  margin-top: 10px;
+  margin-top: 7px;
 }
 
 .gu-inv-split .gu-group-h,
+.gu-player-inv-scroll .gu-group-h,
 #furniture-storage-modal .gu-group-h {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .gu-inv-split .gu-group-t,
+.gu-player-inv-scroll .gu-group-t,
 #furniture-storage-modal .gu-group-t {
-  font-size: 14.5px;
-  gap: 6px;
+  font-size: 13.5px;
+  gap: 5px;
 }
 
 .gu-inv-split .gu-group-m,
+.gu-player-inv-scroll .gu-group-m,
 #furniture-storage-modal .gu-group-m,
 .gu-inv-split .gu-grp-meta,
+.gu-player-inv-scroll .gu-grp-meta,
 #furniture-storage-modal .gu-grp-meta {
-  font-size: 11.5px;
-}
-
-.gu-inv-split .gu-hand,
-#furniture-storage-modal .gu-hand {
-  padding: 6px 8px;
-  gap: 8px;
-  border-radius: 10px;
-}
-
-.gu-inv-split .gu-hand .gu-slot,
-#furniture-storage-modal .gu-hand .gu-slot {
-  width: 44px;
-  height: 44px;
-  flex: none;
-}
-
-.gu-inv-split .gu-hand .gu-li-name,
-#furniture-storage-modal .gu-hand .gu-li-name {
-  font-size: 13.5px;
-}
-
-.gu-inv-split .gu-hand .gu-li-sub,
-#furniture-storage-modal .gu-hand .gu-li-sub {
   font-size: 11px;
+}
+
+.gu-inv-split .gu-slots,
+.gu-player-inv-scroll .gu-slots,
+#furniture-storage-modal .gu-st-col[data-st-zone="zone:pockets"] .gu-slots {
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 6px;
 }
 
 .gu-kv-grid.gu-g3 {
