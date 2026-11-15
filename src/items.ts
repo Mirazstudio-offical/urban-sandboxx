@@ -8656,32 +8656,14 @@ export function getPlayerPocketCapacity(player: Player): {
   usedVolumeL: number;
   usedWeightKg: number;
 } {
-  // Baseline capacity for hands / inner pocket if wearing basic clothes
-  let totalCapacityL = 0.6;
-  let maxItemVolumeL = 0.35;
-  let maxWeightKg = 1.5;
-
-  if (player.equippedClothing) {
-    for (const slotKey of Object.keys(player.equippedClothing) as (keyof typeof player.equippedClothing)[]) {
-      const slot = player.equippedClothing[slotKey];
-      if (!slot) continue;
-      for (const layerKey of Object.keys(slot) as (keyof typeof slot)[]) {
-        const cloth = slot[layerKey];
-        if (cloth && cloth.clothingStats) {
-          const stats = cloth.clothingStats;
-          if (stats.pocketCapacityL) {
-            totalCapacityL += stats.pocketCapacityL;
-          }
-          if (stats.maxPocketItemVolumeL && stats.maxPocketItemVolumeL > maxItemVolumeL) {
-            maxItemVolumeL = stats.maxPocketItemVolumeL;
-          }
-          if (stats.maxPocketWeightKg) {
-            maxWeightKg += stats.maxPocketWeightKg;
-          }
-        }
-      }
-    }
-  }
+  // Single source of truth: the same compartments that define the slot grid.
+  // (Previously this summed clothingStats across every worn layer, which disagreed
+  // with the compartments: wrong defaults, backpack containerCapacityL ignored,
+  // and pockets of garments that never get a compartment were counted.)
+  const comps = getPlayerCompartments(player);
+  const totalCapacityL = comps.reduce((sum, c) => sum + c.capacityL, 0);
+  const maxItemVolumeL = comps.reduce((max, c) => Math.max(max, c.maxItemVolumeL), 0);
+  const maxWeightKg = comps.reduce((sum, c) => sum + c.maxWeightKg, 0);
 
   // Calculate used volume & weight in player.inventory
   let usedVolumeL = 0;
@@ -8702,6 +8684,19 @@ export function getPlayerPocketCapacity(player: Player): {
     usedVolumeL: Number(usedVolumeL.toFixed(2)),
     usedWeightKg: Number(usedWeightKg.toFixed(2))
   };
+}
+
+// Speed multiplier from carried mass (0..1). Shared by physics and the inventory UI
+// so the displayed percentage always matches the real movement penalty.
+//   0 - 8 kg: 1.0 | 8 - 25 kg: 1.0 -> 0.75 | 25 - 45 kg: 0.75 -> 0.45
+//   45 - 80 kg: 0.45 -> 0.10 | 80+ kg: 0.10 -> 0.02 (crawl)
+export const CARRY_BULKY_SPEED_FACTOR = 0.82;
+export function getCarryWeightPenalty(carriedWeightKg: number): number {
+  if (carriedWeightKg <= 8) return 1.0;
+  if (carriedWeightKg <= 25) return 1.0 - ((carriedWeightKg - 8) / 17) * 0.25;
+  if (carriedWeightKg <= 45) return 0.75 - ((carriedWeightKg - 25) / 20) * 0.30;
+  if (carriedWeightKg <= 80) return 0.45 - ((carriedWeightKg - 45) / 35) * 0.35;
+  return Math.max(0.02, 0.10 - ((carriedWeightKg - 80) / 40) * 0.08);
 }
 
 // Calculate total carried weight across ALL locations (inventory, hands, equipped clothes and all their contents)

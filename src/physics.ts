@@ -8,7 +8,7 @@ import { isPtoOn, hasPtoDrive, getPtoWorkingRPM } from './ptoSystem';
 import { isVehicleVacuumTruck } from './truckChassisVariants';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
-import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight } from './items';
+import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight, getCarryWeightPenalty, CARRY_BULKY_SPEED_FACTOR } from './items';
 import { defaultBodyState } from './sensations';
 import { updateBodySystem, distributeImpactDamage, applyDriverVehicleCrashTrauma, addInjuryToPart } from './bodySystem';
 import { updateMedicineSystem } from './medicineSystem';
@@ -6002,26 +6002,10 @@ export function updatePlayerPedestrianPhysics(
     const rightBulky = !!(player.rightHandItem && (player.rightHandItem.volume || 0) >= 10);
     const isCarryingBulky = leftBulky || rightBulky;
 
-    // Weight penalty:
-    // 0 - 8 kg: 1.0 (light, no penalty)
-    // 8 - 25 kg: scales down from 1.0 to 0.75
-    // 25 - 45 kg: scales down from 0.75 to 0.45
-    // 45 - 80 kg: heavily encumbered, scales down from 0.45 to 0.10
-    // 80+ kg: extreme overencumbrance, slows to a crawl (down to 0.02)
-    let weightPenalty = 1.0;
-    if (carriedWeight > 8) {
-      if (carriedWeight <= 25) {
-        weightPenalty = 1.0 - ((carriedWeight - 8) / 17) * 0.25;
-      } else if (carriedWeight <= 45) {
-        weightPenalty = 0.75 - ((carriedWeight - 25) / 20) * 0.30;
-      } else if (carriedWeight <= 80) {
-        weightPenalty = 0.45 - ((carriedWeight - 45) / 35) * 0.35;
-      } else {
-        weightPenalty = Math.max(0.02, 0.10 - ((carriedWeight - 80) / 40) * 0.08);
-      }
-    }
+    // Weight penalty: shared curve (see getCarryWeightPenalty in items.ts)
+    let weightPenalty = getCarryWeightPenalty(carriedWeight);
     if (isCarryingBulky) {
-      weightPenalty *= 0.82; // Holding a big 20L canister or bulky bag slows your stride
+      weightPenalty *= CARRY_BULKY_SPEED_FACTOR; // Holding a big 20L canister or bulky bag slows your stride
     }
 
     const canSprint = input.sprint && (!player.needs || player.needs.energy > 5) && !hasLegInjury && carriedWeight < 40 && !isCarryingBulky;

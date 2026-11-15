@@ -11,6 +11,8 @@ import {
   unequipClothing,
   getPlayerPocketCapacity,
   getPlayerTotalCarriedWeight,
+  getCarryWeightPenalty,
+  CARRY_BULKY_SPEED_FACTOR,
   getItemTotalWeight,
   getItemTotalVolume,
   putItemInHand,
@@ -166,17 +168,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     player.leftHandItem?.itemId === 'plastic_bag' ||
     player.rightHandItem?.itemId === 'plastic_bag';
 
-  let weightSpeedPct = 100;
-  if (carriedWeight > 8) {
-    if (carriedWeight <= 25) {
-      weightSpeedPct = Math.round((1.0 - ((carriedWeight - 8) / 17) * 0.25) * 100);
-    } else if (carriedWeight <= 45) {
-      weightSpeedPct = Math.round((0.75 - ((carriedWeight - 25) / 20) * 0.30) * 100);
-    } else {
-      weightSpeedPct = Math.round(Math.max(0.25, 0.45 - ((carriedWeight - 45) / 25) * 0.20) * 100);
-    }
-  }
-  if (isBulkyHand) weightSpeedPct = Math.round(weightSpeedPct * 0.82);
+  let weightSpeedPct = Math.round(getCarryWeightPenalty(carriedWeight) * 100);
+  if (isBulkyHand) weightSpeedPct = Math.round(weightSpeedPct * CARRY_BULKY_SPEED_FACTOR);
 
   const matchesFilter = (item: InventoryItem | undefined) => {
     if (selectedCategory === 'all') return true;
