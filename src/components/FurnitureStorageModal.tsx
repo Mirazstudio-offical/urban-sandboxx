@@ -33,8 +33,6 @@ import { ModalShell } from './gameUi';
 import { sound } from '../audio';
 import {
   Snowflake,
-  ArrowRight,
-  ArrowLeft,
   Hand,
   Info,
   Flame,
@@ -730,36 +728,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
 
   const compartments = getPlayerCompartments(player);
 
-  const selectedStorageItem =
-    selectedStorageIdx !== null && storage.items[selectedStorageIdx] ? storage.items[selectedStorageIdx] : null;
-  const selectedPlayerItem: InventoryItem | null =
-    selectedHand === 'left'
-      ? player.leftHandItem || null
-      : selectedHand === 'right'
-      ? player.rightHandItem || null
-      : selectedInventoryIdx !== null && player.inventory?.[selectedInventoryIdx]
-      ? player.inventory[selectedInventoryIdx]!
-      : null;
-
-  const renderItemMetaLine = (it: InventoryItem) => {
-    const temp = it.surfaceTemperature ?? it.temperature;
-    const wet = Math.round(it.wetness ?? 0);
-    return (
-      <span className="gu-mut gu-mono" style={{ fontSize: 11 }}>
-        {it.count > 1 ? `×${it.count} шт. · ` : ''}
-        {formatWeightRu(getItemTotalWeight(it))} · {getItemTotalVolume(it)} л
-        {temp !== undefined && (
-          <span style={{ color: temp >= 40 ? '#efa690' : temp <= 4 ? '#7dd3fc' : 'var(--gu-ink-dim)' }}>
-            {' · '}{temp > 0 ? '+' : ''}{Math.round(temp)}°C
-          </span>
-        )}
-        {wet > 0 && (
-          <span style={{ color: '#7dd3fc' }}>{' · '}Влага {wet}%</span>
-        )}
-      </span>
-    );
-  };
-
   return (
     <ModalShell
       id="furniture-storage-modal"
@@ -924,56 +892,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             </div>
           </div>
 
-          {selectedStorageItem && selectedStorageIdx !== null && (
-            <div className="gu-st-pick">
-              <div className="gu-row2" style={{ gap: 8, minWidth: 0 }}>
-                <div className="gu-ic" style={{ width: 34, height: 34 }}>
-                  <ItemIconCanvas itemId={selectedStorageItem.itemId} item={selectedStorageItem} size={26} />
-                </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {selectedStorageItem.nameRu}
-                  </div>
-                  {renderItemMetaLine(selectedStorageItem)}
-                </div>
-              </div>
-
-              <div className="gu-grid gu-g3" style={{ gap: 5 }}>
-                <button
-                  type="button"
-                  onClick={() => handleTakeToHand(selectedStorageIdx, 'left')}
-                  className="gu-btn gu-btn-s gu-btn-xs"
-                  title="Взять в левую руку"
-                >
-                  <Hand width={12} height={12} /> В левую
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleTakeToHand(selectedStorageIdx, 'right')}
-                  className="gu-btn gu-btn-s gu-btn-xs"
-                  title="Взять в правую руку"
-                >
-                  <Hand width={12} height={12} /> В правую
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleTakeItem(selectedStorageIdx, selectedStorageItem.count > 1 ? 1 : selectedStorageItem.count)}
-                  className="gu-btn gu-btn-p gu-btn-xs"
-                >
-                  <ArrowRight width={12} height={12} /> {selectedStorageItem.count > 1 ? 'В карман (1)' : 'В карманы'}
-                </button>
-              </div>
-              {selectedStorageItem.count > 1 && (
-                <button
-                  type="button"
-                  onClick={() => handleTakeItem(selectedStorageIdx, selectedStorageItem.count)}
-                  className="gu-btn gu-btn-s gu-btn-xs gu-btn-block"
-                >
-                  <ArrowRight width={12} height={12} /> Забрать все (×{selectedStorageItem.count} шт.) в карманы
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* RIGHT PANEL: player's active hand slots & pocket slots */}
@@ -1181,50 +1099,6 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             })}
           </div>
 
-          {selectedPlayerItem && (
-            <div className="gu-st-pick">
-              <div className="gu-row2" style={{ gap: 8, minWidth: 0 }}>
-                <div className="gu-ic" style={{ width: 34, height: 34 }}>
-                  <ItemIconCanvas itemId={selectedPlayerItem.itemId} item={selectedPlayerItem} size={26} />
-                </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {selectedPlayerItem.nameRu}
-                  </div>
-                  {renderItemMetaLine(selectedPlayerItem)}
-                </div>
-              </div>
-
-              {selectedHand ? (
-                <button
-                  type="button"
-                  onClick={() => handleStoreFromHand(selectedHand)}
-                  className="gu-btn gu-btn-p gu-btn-xs gu-btn-block"
-                >
-                  <ArrowLeft width={12} height={12} /> {isRadiator ? 'Положить на батарею' : 'Убрать из руки в хранилище'}
-                </button>
-              ) : selectedInventoryIdx !== null ? (
-                <div className="gu-grid" style={{ gridTemplateColumns: selectedPlayerItem.count > 1 ? '1fr 1fr' : '1fr', gap: 5 }}>
-                  <button
-                    type="button"
-                    onClick={() => handleStoreItem(selectedInventoryIdx, 1)}
-                    className="gu-btn gu-btn-p gu-btn-xs gu-btn-block"
-                  >
-                    <ArrowLeft width={12} height={12} /> {isRadiator ? 'На батарею (1)' : selectedPlayerItem.count > 1 ? 'Убрать 1 шт.' : 'В хранилище'}
-                  </button>
-                  {selectedPlayerItem.count > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleStoreItem(selectedInventoryIdx, selectedPlayerItem.count)}
-                      className="gu-btn gu-btn-s gu-btn-xs gu-btn-block"
-                    >
-                      <ArrowLeft width={12} height={12} /> Убрать все (×{selectedPlayerItem.count})
-                    </button>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          )}
         </div>
       </div>
 

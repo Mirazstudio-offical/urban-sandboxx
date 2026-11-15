@@ -77,6 +77,11 @@ import {
   Scissors,
   Flame,
   CloudRain,
+  HardHat,
+  Glasses,
+  Footprints,
+  Backpack,
+  Thermometer,
 } from 'lucide-react';
 
 interface InventoryModalProps {
@@ -553,26 +558,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     ...(player.rightHandItem && player.rightHandItem.isContainer && !player.rightHandItem.singleUseContainer && !player.rightHandItem.tornItemId && !player.rightHandItem.itemId.startsWith('paper_packaging') ? [player.rightHandItem] : []),
     ...(player.equippedClothing?.back?.outerwear?.isContainer ? [player.equippedClothing.back.outerwear] : [])
   ];
-
-  const CLOTHING_SLOT_LABELS: Record<string, string> = {
-    head: 'Голова',
-    eyes: 'Глаза и очки',
-    neck: 'Шея',
-    torso: 'Торс и корпус',
-    hands: 'Кисти и перчатки',
-    legs: 'Ноги и брюки',
-    feet: 'Обувь',
-    back: 'Спина и рюкзак'
-  };
-
-  const CLOTHING_LAYER_LABELS: Record<string, string> = {
-    underwear: 'Нижний слой',
-    shirt: 'Рубашка / Кофта',
-    sweater: 'Утепляющий слой',
-    outerwear: 'Верхний слой',
-    vest: 'Разгрузка / Жилет',
-    accessory: 'Аксессуар'
-  };
 
   // ==================== 10-SLOT INTERACTION WORKBENCH STATE & HELPERS ====================
   const pAny = player as any;
@@ -2677,95 +2662,176 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           );
         })()}
 
-        {/* ==================== TAB 3: CLOTHING (2-COLUMN SLOT LAYOUT) ==================== */}
+        {/* ==================== TAB 3: CLOTHING (BODY-PART EQUIPMENT LIST) ==================== */}
         {activeTab === 'clothing' && (() => {
-          const equippedEntries: { slot: string; layer: string; item: InventoryItem }[] = [];
-          Object.entries(player.equippedClothing || {}).forEach(([slot, layers]) => {
-            Object.entries(layers || {}).forEach(([layer, item]) => {
-              if (item) equippedEntries.push({ slot, layer, item });
-            });
+          const SLOT_ORDER: { slot: string; label: string; icon: React.ReactNode }[] = [
+            { slot: 'head', label: 'Голова', icon: <HardHat width={16} height={16} /> },
+            { slot: 'face', label: 'Лицо', icon: <Glasses width={16} height={16} /> },
+            { slot: 'torso', label: 'Торс', icon: <Shirt width={16} height={16} /> },
+            {
+              slot: 'legs',
+              label: 'Ноги',
+              icon: (
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
+                </svg>
+              ),
+            },
+            { slot: 'hands', label: 'Кисти', icon: <Hand width={16} height={16} /> },
+            { slot: 'feet', label: 'Обувь', icon: <Footprints width={16} height={16} /> },
+            { slot: 'back', label: 'Спина', icon: <Backpack width={16} height={16} /> },
+          ];
+          const LAYER_ORDER = ['skin', 'underwear', 'shirt', 'jacket', 'outerwear'];
+          const LAYER_LABELS_RU: Record<string, string> = {
+            skin: 'Тело',
+            underwear: 'Бельё',
+            shirt: 'Рубашка',
+            jacket: 'Куртка',
+            outerwear: 'Верхний слой',
+          };
+
+          const worn = player.equippedClothing || {};
+          const knownSlots = new Set(SLOT_ORDER.map(r => r.slot));
+          const extraSlots = Object.keys(worn).filter(
+            sl => !knownSlots.has(sl) && Object.values((worn as any)[sl] || {}).some(Boolean)
+          );
+          const rows = [
+            ...SLOT_ORDER,
+            ...extraSlots.map(sl => ({ slot: sl, label: sl, icon: <Shirt width={16} height={16} /> })),
+          ].map(r => {
+            const layers = ((worn as any)[r.slot] || {}) as Record<string, InventoryItem | undefined>;
+            const keys = [
+              ...LAYER_ORDER.filter(l => layers[l]),
+              ...Object.keys(layers).filter(l => !LAYER_ORDER.includes(l) && layers[l]),
+            ];
+            return { ...r, entries: keys.map(layer => ({ layer, item: layers[layer] as InventoryItem })) };
           });
+
+          let totalInsulation = 0;
+          let totalMobility = 0;
+          let totalPocketsL = 0;
+          let wornCount = 0;
+          rows.forEach(r =>
+            r.entries.forEach(({ item }) => {
+              wornCount += 1;
+              totalInsulation += item.clothingStats?.insulation || 0;
+              totalMobility += item.clothingStats?.mobilityPenalty || 0;
+              totalPocketsL += item.clothingStats?.pocketCapacityL || 0;
+            })
+          );
+          const coveredCount = rows.filter(r => r.entries.length > 0).length;
           const isClothZoneTarget = wbDragUi?.overKey === 'zone:clothing';
-          const totalClothSlots = Math.max(12, equippedEntries.length + 4);
+          const fmt = (n: number) => Number(n.toFixed(1)).toString();
 
           return (
             <div className="gu-st-split" style={{ flex: 1, minHeight: 0 }}>
-              {/* LEFT COLUMN: EQUIPPED CLOTHING SLOTS */}
+              {/* LEFT COLUMN: EQUIPMENT BY BODY PART */}
               <div
-                className="gu-panel"
+                className="gu-panel gu-eq-panel"
                 data-wb-drop-zone="zone:clothing"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: 0,
-                  padding: '10px 12px',
-                  borderColor: isClothZoneTarget ? 'var(--gu-amber-hi)' : undefined,
-                }}
+                style={{ borderColor: isClothZoneTarget ? 'var(--gu-amber-hi)' : undefined }}
               >
-                <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span className="gu-grp" style={{ fontSize: 11.5 }}>Слоты экипировки ({equippedEntries.length})</span>
-                  <span className="gu-mut" style={{ fontSize: 11 }}>Перетащите одежду сюда чтобы надеть, или в карман чтобы снять</span>
-                </div>
-
-                <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                  <div className="gu-slots">
-                    {Array.from({ length: totalClothSlots }).map((_, idx) => {
-                      const entry = equippedEntries[idx];
-                      if (!entry) {
-                        const emptyKey = idx === equippedEntries.length ? 'zone:clothing' : `cloth:empty-${idx}`;
-                        const isOver = wbDragUi?.overKey === emptyKey;
-                        return (
-                          <div
-                            key={emptyKey}
-                            data-wb-slot={emptyKey}
-                            draggable={false}
-                            onDragStart={e => e.preventDefault()}
-                            onPointerDown={e => startSlotPointerDrag(e, emptyKey, null)}
-                            className={'gu-slot empty' + (isOver ? ' on' : '')}
-                            style={{
-                              touchAction: 'none',
-                              borderColor: isOver ? 'var(--gu-amber-hi)' : undefined,
-                            }}
-                          />
-                        );
-                      }
-
-                      const { slot, layer, item } = entry;
-                      const slotKey = `cloth:${slot}:${layer}`;
-                      const isBeingDragged = wbDragUi?.sourceKey === slotKey;
-                      const isDropTarget = wbDragUi?.overKey === slotKey;
-
-                      return (
-                        <div
-                          key={slotKey}
-                          data-wb-slot={slotKey}
-                          draggable={false}
-                          onDragStart={e => e.preventDefault()}
-                          onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
-                          onDoubleClick={() => handleUnequipItem(slot, layer)}
-                          className={'gu-slot' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
-                          style={{
-                            touchAction: 'none',
-                            cursor: 'grab',
-                            opacity: isBeingDragged ? 0.35 : 1,
-                            borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                          }}
-                          title={`${item.nameRu}\n${CLOTHING_SLOT_LABELS[slot] || slot} · ${CLOTHING_LAYER_LABELS[layer] || layer}`}
-                        >
-                          <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
-                          {item.clothingStats?.pocketCapacityL ? (
-                            <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>+{item.clothingStats.pocketCapacityL}л</span>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                <div className="gu-eq-summary">
+                  <div className="gu-eq-stat" title="Суммарная теплоизоляция всех надетых слоёв">
+                    <Thermometer width={16} height={16} />
+                    <span className="gu-eq-stat-k">Тепло</span>
+                    <b className="gu-eq-stat-v">{fmt(totalInsulation)}</b>
                   </div>
+                  <div className="gu-eq-stat" title="Суммарный штраф к подвижности от одежды">
+                    <Weight width={16} height={16} />
+                    <span className="gu-eq-stat-k">Подвижность</span>
+                    <b className={'gu-eq-stat-v' + (totalMobility > 0 ? ' bad' : '')}>{totalMobility > 0 ? '−' : ''}{fmt(totalMobility)}</b>
+                  </div>
+                  <div className="gu-eq-stat" title="Объём карманов, который даёт одежда">
+                    <Package width={16} height={16} />
+                    <span className="gu-eq-stat-k">Карманы</span>
+                    <b className="gu-eq-stat-v">+{fmt(totalPocketsL)} л</b>
+                  </div>
+                  <span className="gu-eq-count gu-mono">{coveredCount}/{SLOT_ORDER.length} частей тела · {wornCount} предм.</span>
                 </div>
+
+                <div className="gu-eq-list gu-inv-left-scroll">
+                  {rows.map(row => (
+                    <div key={row.slot} className={'gu-eq-row' + (row.entries.length === 0 ? ' bare' : '')}>
+                      <div className="gu-eq-part">
+                        {row.icon}
+                        <span>{row.label}</span>
+                      </div>
+
+                      <div className="gu-eq-items">
+                        {row.entries.length === 0 ? (
+                          (() => {
+                            const emptyKey = `cloth:empty:${row.slot}`;
+                            const isOver = wbDragUi?.overKey === emptyKey;
+                            return (
+                              <div
+                                data-wb-slot={emptyKey}
+                                draggable={false}
+                                onDragStart={e => e.preventDefault()}
+                                onPointerDown={e => startSlotPointerDrag(e, emptyKey, null)}
+                                className={'gu-eq-empty' + (isOver ? ' on' : '')}
+                                style={{ touchAction: 'none' }}
+                              >
+                                Ничего не надето
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          row.entries.map(({ layer, item }) => {
+                            const slotKey = `cloth:${row.slot}:${layer}`;
+                            const isBeingDragged = wbDragUi?.sourceKey === slotKey;
+                            const isDropTarget = wbDragUi?.overKey === slotKey;
+                            const st = item.clothingStats;
+                            const wet = Math.round(item.wetness ?? st?.wetness ?? 0);
+                            const metaParts: string[] = [LAYER_LABELS_RU[layer] || layer];
+                            if (st) {
+                              metaParts.push(`Тепло ${Math.round(st.insulation)}`);
+                              if (st.waterResistance > 0) metaParts.push(`Вода ${Math.round(st.waterResistance)}%`);
+                              if (st.pocketCapacityL) metaParts.push(`+${st.pocketCapacityL} л`);
+                            }
+                            return (
+                              <div
+                                key={slotKey}
+                                data-wb-slot={slotKey}
+                                draggable={false}
+                                onDragStart={e => e.preventDefault()}
+                                onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
+                                onDoubleClick={() => handleUnequipItem(row.slot, layer)}
+                                className={'gu-eq-item' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
+                                style={{
+                                  touchAction: 'none',
+                                  cursor: 'grab',
+                                  opacity: isBeingDragged ? 0.35 : 1,
+                                }}
+                                title="Двойной клик или перетащить в карман, чтобы снять"
+                              >
+                                <span className="gu-eq-ic">
+                                  <ItemIconCanvas itemId={item.itemId} item={item} size={36} />
+                                </span>
+                                <span className="gu-eq-body">
+                                  <span className="gu-eq-name">{item.nameRu}</span>
+                                  <span className="gu-eq-sub gu-mono">{metaParts.join(' · ')}</span>
+                                </span>
+                                {wet > 0 && (
+                                  <span className="gu-eq-wet gu-mono" title="Влажность ткани">
+                                    <CloudRain width={12} height={12} />
+                                    {wet}%
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="gu-eq-hint">Перетащите одежду сюда, чтобы надеть, или в карман, чтобы снять</div>
               </div>
 
-              {/* RIGHT COLUMN: SCROLLABLE PLAYER HAND SLOTS + POCKET SLOTS */}
+              {/* RIGHT COLUMN: HANDS + POCKETS (scrolls without a visible scrollbar) */}
               <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px' }}>
-                <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                <div className="gu-inv-left-scroll">
                   {renderCompartmentsSlotGrid()}
                 </div>
               </div>
