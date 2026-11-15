@@ -4,6 +4,7 @@ import { mapPolyToDeformVerts } from './softbodyPolyMap';
 import { getEffectiveWeatherWeights } from './weatherTransition';
 import { performanceConfig } from './performanceConfig';
 import { RemotePlayerState } from './onlineSystem';
+import { computeHumanPose, Vec3 } from './humanAnimationSystem';
 
 export type Point = Vector2D;
 
@@ -1844,26 +1845,26 @@ function renderVehicleShadow(
 }
 
 /**
- * Renders an articulated 3D human shadow (feet -> legs -> torso/arms -> head + handheld props)
- * along the world-space solar shadow vector.
+ * Renders an articulated 3D human shadow (feet -> knees -> hips -> torso/backpack -> shoulders -> elbows -> hands -> head/hat + active props & dog)
+ * along the world-space solar shadow vector, 100% synchronized with `computeHumanPose`.
  */
 function renderHumanShadow(
   sCtx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  bodyAngle: number,
-  walkCycle: number,
-  isLyingDown: boolean,
-  isSitting: boolean,
+  entity: Player | Pedestrian | any,
+  isPlayer: boolean,
   scale: number,
   sunState: SunShadowState,
-  handheldProp?: string | null,
-  hasBroom?: boolean
+  nowSec: number
 ) {
+  const x = entity.x;
+  const y = entity.y;
+  const bodyAngle = entity.angle || 0;
   const s = scale || 0.44;
   const hScale = s / 0.44;
 
-  if (isLyingDown) {
+  const pose = computeHumanPose(entity, isPlayer, nowSec);
+
+  if (pose.isLyingDown) {
     const off = getShadowOffset(3.0 * hScale, sunState);
     sCtx.save();
     clipOutsideRotatedRect(sCtx, x, y, 16 * s, 7 * s, bodyAngle, off.dx, off.dy);
@@ -1872,107 +1873,445 @@ function renderHumanShadow(
     return;
   }
 
-  // Standing human is ~1.8m (18px 3D shadow height); sitting is ~1.2m (12px)
-  const totalH = (isSitting ? 12.0 : 18.0) * hScale;
-  const pelvisOff = getShadowOffset(totalH * 0.45, sunState);
-  const shoulderOff = getShadowOffset(totalH * 0.80, sunState);
-  const headOff = getShadowOffset(totalH, sunState);
+  // If deeply submerged while swimming, water optics handle surface silhouette
+  if (pose.isSwimming) {
+    const headOff = getShadowOffset(3.6 * hScale, sunState);
+    sCtx.save();
+    sCtx.beginPath();
+    sCtx.arc(x + headOff.dx, y + headOff.dy, 3.3 * s, 0, Math.PI * 2);
+    sCtx.fill();
+    sCtx.restore();
+    return;
+  }
 
   const cos = Math.cos(bodyAngle);
   const sin = Math.sin(bodyAngle);
-  const stride = isSitting ? 0 : Math.sin(walkCycle) * 3.4 * s;
-  const shoulderSpan = 4.4 * s;
 
-  // Clip out only the sunlit top of the head/shoulders so the person doesn't darken their own head/hat
+  // Projects a 3D point in character-local coordinates (lx, ly in local units, lz in human height units) onto the world ground plane
+  const proj = (pt: Vec3): { x: number; y: number } => ({
+    x: x + (pt.x * cos - pt.y * sin) * s + sunState.castX * (pt.z * hScale),
+    y: y + (pt.x * sin + pt.y * cos) * s + sunState.castY * (pt.z * hScale),
+  });
+
+  const headWorld = proj(pose.head);
+  const headOff = getShadowOffset(pose.head.z * hScale, sunState);
+
+  // Clip out only the sunlit top of the head/umbrella so the character never darkens their own top crown
   sCtx.save();
-  clipOutsideCircle(
-    sCtx,
-    x - sunState.shadowDirX * 0.6,
-    y - sunState.shadowDirY * 0.6,
-    3.4 * s,
-    headOff.dx,
-    headOff.dy
-  );
-
-  // 1. Left & Right Leg Shadows connecting the feet on the ground to the pelvis shadow
-  const leftFootX = x + stride * cos - -2.2 * s * sin;
-  const leftFootY = y + stride * sin + -2.2 * s * cos;
-  const rightFootX = x - stride * cos - 2.2 * s * sin;
-  const rightFootY = y - stride * sin + 2.2 * s * cos;
-
-  const leftHipX = x - -2.0 * s * sin + pelvisOff.dx;
-  const leftHipY = y + -2.0 * s * cos + pelvisOff.dy;
-  const rightHipX = x - 2.0 * s * sin + pelvisOff.dx;
-  const rightHipY = y + 2.0 * s * cos + pelvisOff.dy;
+  if (pose.props.umbrella) {
+    const umbOff = getShadowOffset(pose.props.umbrella.z * hScale, sunState);
+    clipOutsideCircle(
+      sCtx,
+      x + (pose.props.umbrella.x * cos - pose.props.umbrella.y * sin) * s,
+      y + (pose.props.umbrella.x * sin + pose.props.umbrella.y * cos) * s,
+      (pose.props.umbrella.radius - 0.5) * s,
+      umbOff.dx,
+      umbOff.dy
+    );
+  } else {
+    clipOutsideCircle(
+      sCtx,
+      x - sunState.shadowDirX * 0.6,
+      y - sunState.shadowDirY * 0.6,
+      3.4 * s,
+      headOff.dx,
+      headOff.dy
+    );
+  }
 
   sCtx.lineCap = 'round';
   sCtx.lineJoin = 'round';
-  sCtx.lineWidth = 2.8 * s;
+
+  // 0. Bicycle or Electric Scooter Base Shadow
+  if (pose.props.bicycle) {
+    const rearWheelBottom = proj({ x: -6.5, y: 0, z: 0.4 });
+    const rearWheelTop = proj({ x: -6.5, y: 0, z: 5.2 });
+    const frontWheelBottom = proj({ x: 6.5, y: 0, z: 0.4 });
+    const frontWheelTop = proj({ x: 6.5, y: 0, z: 5.2 });
+    const seatHub = proj({ x: -2.0, y: 0, z: 7.8 });
+    const stemHub = proj({ x: 4.2, y: 0, z: 9.8 });
+    const barL = proj({ x: 4.0, y: -3.2, z: 10.4 });
+    const barR = proj({ x: 4.0, y: 3.2, z: 10.4 });
+
+    sCtx.lineWidth = 1.8 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(rearWheelBottom.x, rearWheelBottom.y);
+    sCtx.lineTo(rearWheelTop.x, rearWheelTop.y);
+    sCtx.moveTo(frontWheelBottom.x, frontWheelBottom.y);
+    sCtx.lineTo(frontWheelTop.x, frontWheelTop.y);
+    sCtx.moveTo(rearWheelTop.x, rearWheelTop.y);
+    sCtx.lineTo(seatHub.x, seatHub.y);
+    sCtx.lineTo(stemHub.x, stemHub.y);
+    sCtx.lineTo(frontWheelTop.x, frontWheelTop.y);
+    sCtx.moveTo(barL.x, barL.y);
+    sCtx.lineTo(barR.x, barR.y);
+    sCtx.stroke();
+  } else if (pose.props.scooter) {
+    const deckRear = proj({ x: -6.5, y: 0, z: 1.0 });
+    const deckFront = proj({ x: 5.5, y: 0, z: 1.0 });
+    const stemTop = proj({ x: 4.5, y: 0, z: 11.6 });
+    const barL = proj({ x: 4.4, y: -2.8, z: 11.8 });
+    const barR = proj({ x: 4.4, y: 2.8, z: 11.8 });
+
+    sCtx.lineWidth = 2.6 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(deckRear.x, deckRear.y);
+    sCtx.lineTo(deckFront.x, deckFront.y);
+    sCtx.stroke();
+
+    sCtx.lineWidth = 1.5 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(deckFront.x, deckFront.y);
+    sCtx.lineTo(stemTop.x, stemTop.y);
+    sCtx.moveTo(barL.x, barL.y);
+    sCtx.lineTo(barR.x, barR.y);
+    sCtx.stroke();
+  }
+
+  // 1. Articulated 2-Segment Leg Shadows (Foot -> Knee -> Hip)
+  const footL = proj(pose.legL.foot);
+  const kneeL = proj(pose.legL.knee);
+  const hipL = proj(pose.legL.hip);
+
+  const footR = proj(pose.legR.foot);
+  const kneeR = proj(pose.legR.knee);
+  const hipR = proj(pose.legR.hip);
+
+  sCtx.lineWidth = 2.6 * s;
   sCtx.beginPath();
-  sCtx.moveTo(leftFootX, leftFootY);
-  sCtx.lineTo(leftHipX, leftHipY);
-  sCtx.moveTo(rightFootX, rightFootY);
-  sCtx.lineTo(rightHipX, rightHipY);
+  sCtx.moveTo(footL.x, footL.y);
+  sCtx.lineTo(kneeL.x, kneeL.y);
+  sCtx.lineTo(hipL.x, hipL.y);
+  sCtx.moveTo(footR.x, footR.y);
+  sCtx.lineTo(kneeR.x, kneeR.y);
+  sCtx.lineTo(hipR.x, hipR.y);
   sCtx.stroke();
 
-  // 2. Extruded Torso & Shoulders Shadow (from pelvis z=0.45H to shoulders z=0.80H)
-  const shLX = x - -shoulderSpan * sin + shoulderOff.dx;
-  const shLY = y + -shoulderSpan * cos + shoulderOff.dy;
-  const shRX = x - shoulderSpan * sin + shoulderOff.dx;
-  const shRY = y + shoulderSpan * cos + shoulderOff.dy;
+  // Shoe toe shadow caps at feet
+  const toeL = proj({
+    x: pose.legL.foot.x + 1.4,
+    y: pose.legL.foot.y,
+    z: pose.legL.foot.z,
+  });
+  const toeR = proj({
+    x: pose.legR.foot.x + 1.4,
+    y: pose.legR.foot.y,
+    z: pose.legR.foot.z,
+  });
+  sCtx.lineWidth = 2.4 * s;
+  sCtx.beginPath();
+  sCtx.moveTo(footL.x, footL.y);
+  sCtx.lineTo(toeL.x, toeL.y);
+  sCtx.moveTo(footR.x, footR.y);
+  sCtx.lineTo(toeR.x, toeR.y);
+  sCtx.stroke();
+
+  // 2. Extruded Torso & Shoulders Shadow (connecting Hips to Shoulders)
+  const shL = proj(pose.armL.shoulder);
+  const shR = proj(pose.armR.shoulder);
 
   sCtx.beginPath();
-  sCtx.moveTo(leftHipX, leftHipY);
-  sCtx.lineTo(rightHipX, rightHipY);
-  sCtx.lineTo(shRX, shRY);
-  sCtx.lineTo(shLX, shLY);
+  sCtx.moveTo(hipL.x, hipL.y);
+  sCtx.lineTo(hipR.x, hipR.y);
+  sCtx.lineTo(shR.x, shR.y);
+  sCtx.lineTo(shL.x, shL.y);
   sCtx.closePath();
   sCtx.fill();
 
-  // Rounded shoulder caps
+  // Rounded chest/shoulder silhouette cap
+  const chestTop = proj({
+    x: pose.torso.x,
+    y: pose.torso.y,
+    z: pose.torso.zTop,
+  });
   sCtx.beginPath();
-  sCtx.arc((shLX + shRX) * 0.5, (shLY + shRY) * 0.5, shoulderSpan * 0.92, 0, Math.PI * 2);
+  sCtx.arc(chestTop.x, chestTop.y, 4.1 * s, 0, Math.PI * 2);
   sCtx.fill();
 
-  // 3. Swinging Arms Shadow
-  const armSwing = isSitting ? 1.5 * s : Math.cos(walkCycle) * 3.2 * s;
-  const handLX = x + (-armSwing * cos - -(shoulderSpan + 1.0 * s) * sin) + pelvisOff.dx * 1.15;
-  const handLY = y + (-armSwing * sin + -(shoulderSpan + 1.0 * s) * cos) + pelvisOff.dy * 1.15;
-  const handRX = x + (armSwing * cos - (shoulderSpan + 1.0 * s) * sin) + pelvisOff.dx * 1.15;
-  const handRY = y + (armSwing * sin + (shoulderSpan + 1.0 * s) * cos) + pelvisOff.dy * 1.15;
+  // Backpack shadow bump if character wears a backpack
+  const hasBackpack = Boolean(
+    (entity as Pedestrian).hasBackpack ||
+    (isPlayer && entity.equippedClothing?.back?.outerwear)
+  );
+  if (hasBackpack) {
+    const bpCenter = proj({
+      x: pose.torso.x - 3.2,
+      y: pose.torso.y,
+      z: (pose.torso.zBottom + pose.torso.zTop) * 0.52,
+    });
+    sCtx.beginPath();
+    sCtx.arc(bpCenter.x, bpCenter.y, 3.2 * s, 0, Math.PI * 2);
+    sCtx.fill();
+  }
 
-  sCtx.lineWidth = 2.2 * s;
+  // 3. Articulated 2-Segment Arm Shadows (Shoulder -> Elbow -> Hand)
+  const elbL = proj(pose.armL.elbow);
+  const hndL = proj(pose.armL.hand);
+  const elbR = proj(pose.armR.elbow);
+  const hndR = proj(pose.armR.hand);
+
+  sCtx.lineWidth = 2.1 * s;
   sCtx.beginPath();
-  sCtx.moveTo(shLX, shLY);
-  sCtx.lineTo(handLX, handLY);
-  sCtx.moveTo(shRX, shRY);
-  sCtx.lineTo(handRX, handRY);
+  sCtx.moveTo(shL.x, shL.y);
+  sCtx.lineTo(elbL.x, elbL.y);
+  sCtx.lineTo(hndL.x, hndL.y);
+  sCtx.moveTo(shR.x, shR.y);
+  sCtx.lineTo(elbR.x, elbR.y);
+  sCtx.lineTo(hndR.x, hndR.y);
   sCtx.stroke();
 
-  // 4. Projected 3D Head Shadow at z = totalH
+  // Hand shadow caps
   sCtx.beginPath();
-  sCtx.arc(x + headOff.dx, y + headOff.dy, 3.3 * s, 0, Math.PI * 2);
+  sCtx.arc(hndL.x, hndL.y, 1.15 * s, 0, Math.PI * 2);
+  sCtx.arc(hndR.x, hndR.y, 1.15 * s, 0, Math.PI * 2);
   sCtx.fill();
 
-  // 5. Handheld Props (Box, Shopping Bag, Broom, Extinguisher, Coffee)
-  if (hasBroom) {
-    const broomStartX = x + cos * (4.5 * s) + pelvisOff.dx * 1.1;
-    const broomStartY = y + sin * (4.5 * s) + pelvisOff.dy * 1.1;
-    const broomEndX = x + cos * (16.5 * s);
-    const broomEndY = y + sin * (16.5 * s);
-    sCtx.lineWidth = 1.6 * s;
+  // 4. Projected 3D Head & Hat/Helmet Shadow
+  const isFirefighter = Boolean((entity as any).isFirefighter);
+  const hatType = (entity as Pedestrian).hatType;
+  const hasHat = Boolean((entity as Pedestrian).hasHat || (isPlayer && entity.equippedClothing?.head?.outerwear));
+  const headRad = (isFirefighter ? 4.1 : hatType === 'sunhat' ? 5.5 : hatType === 'fedora' ? 4.6 : pose.head.radius) * s;
+
+  sCtx.beginPath();
+  sCtx.arc(headWorld.x, headWorld.y, headRad, 0, Math.PI * 2);
+  sCtx.fill();
+
+  // Baseball cap visor bill or ponytail shadow detail
+  if (hasHat && hatType === 'cap') {
+    const visorTip = proj({
+      x: pose.head.x + 3.8 * Math.cos(pose.head.yaw),
+      y: pose.head.y + 3.8 * Math.sin(pose.head.yaw),
+      z: pose.head.z - 0.3,
+    });
+    sCtx.lineWidth = 2.6 * s;
     sCtx.beginPath();
-    sCtx.moveTo(broomStartX, broomStartY);
-    sCtx.lineTo(broomEndX, broomEndY);
+    sCtx.moveTo(headWorld.x, headWorld.y);
+    sCtx.lineTo(visorTip.x, visorTip.y);
     sCtx.stroke();
-  } else if (handheldProp === 'box') {
-    const bx = x + cos * (6.5 * s);
-    const by = y + sin * (6.5 * s);
-    extrudeRotatedRectShadow(sCtx, bx, by, 5.2 * s, 7.2 * s, bodyAngle, totalH * 0.45, totalH * 0.72, sunState);
-  } else if (handheldProp === 'bag' || handheldProp === 'extinguisher') {
-    const bx = x + cos * (2.0 * s) - sin * (6.5 * s);
-    const by = y + sin * (2.0 * s) + cos * (6.5 * s);
-    extrudeCylinderShadow(sCtx, bx, by, 2.8 * s, totalH * 0.2, totalH * 0.52, sunState);
+  } else if (!hasHat && ((entity as Pedestrian).hairStyle === 'ponytail' || (entity as Pedestrian).hairStyle === 'bun')) {
+    const hairBack = proj({
+      x: pose.head.x - 3.6 * Math.cos(pose.head.yaw),
+      y: pose.head.y - 3.6 * Math.sin(pose.head.yaw),
+      z: pose.head.z - 0.5,
+    });
+    sCtx.beginPath();
+    sCtx.arc(hairBack.x, hairBack.y, 1.8 * s, 0, Math.PI * 2);
+    sCtx.fill();
+  }
+
+  // 5. Synchronized 3D Handheld Props & Equipment Shadows
+  if (pose.props.broom) {
+    const b = pose.props.broom;
+    const broomStart = proj(b.gripL);
+    const broomEnd = proj(b.shaftEnd);
+    sCtx.lineWidth = 1.5 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(broomStart.x, broomStart.y);
+    sCtx.lineTo(broomEnd.x, broomEnd.y);
+    sCtx.stroke();
+
+    // Wide sweeping bristle head shadow at the end of the broom shaft
+    const headAng = bodyAngle + b.headAngle;
+    const hCos = Math.cos(headAng);
+    const hSin = Math.sin(headAng);
+    const bL = {
+      x: broomEnd.x - hSin * (-5.2 * s),
+      y: broomEnd.y + hCos * (-5.2 * s),
+    };
+    const bR = {
+      x: broomEnd.x - hSin * (5.2 * s),
+      y: broomEnd.y + hCos * (5.2 * s),
+    };
+    const bTipR = {
+      x: bR.x + hCos * (4.6 * s),
+      y: bR.y + hSin * (4.6 * s),
+    };
+    const bTipL = {
+      x: bL.x + hCos * (4.6 * s),
+      y: bL.y + hSin * (4.6 * s),
+    };
+    sCtx.beginPath();
+    sCtx.moveTo(bL.x, bL.y);
+    sCtx.lineTo(bR.x, bR.y);
+    sCtx.lineTo(bTipR.x, bTipR.y);
+    sCtx.lineTo(bTipL.x, bTipL.y);
+    sCtx.closePath();
+    sCtx.fill();
+  }
+
+  if (pose.props.box) {
+    const bx = x + (pose.props.box.x * cos - pose.props.box.y * sin) * s;
+    const by = y + (pose.props.box.x * sin + pose.props.box.y * cos) * s;
+    extrudeRotatedRectShadow(
+      sCtx,
+      bx,
+      by,
+      pose.props.box.w * s,
+      pose.props.box.l * s,
+      bodyAngle,
+      pose.props.box.zBottom * hScale,
+      pose.props.box.zTop * hScale,
+      sunState
+    );
+  }
+
+  if (pose.props.bag) {
+    const bx = x + (pose.props.bag.x * cos - pose.props.bag.y * sin) * s;
+    const by = y + (pose.props.bag.x * sin + pose.props.bag.y * cos) * s;
+    extrudeCylinderShadow(
+      sCtx,
+      bx,
+      by,
+      2.8 * s,
+      pose.props.bag.zBottom * hScale,
+      pose.props.bag.zTop * hScale,
+      sunState
+    );
+  }
+
+  if (pose.props.extinguisher) {
+    const ex = x + (pose.props.extinguisher.x * cos - pose.props.extinguisher.y * sin) * s;
+    const ey = y + (pose.props.extinguisher.x * sin + pose.props.extinguisher.y * cos) * s;
+    extrudeCylinderShadow(
+      sCtx,
+      ex,
+      ey,
+      2.4 * s,
+      pose.props.extinguisher.zBottom * hScale,
+      pose.props.extinguisher.zTop * hScale,
+      sunState
+    );
+  }
+
+  if (pose.props.fireNozzle) {
+    const nStart = proj({ x: pose.props.fireNozzle.x - 1.0, y: 0, z: pose.props.fireNozzle.z });
+    const nTip = proj({ x: pose.props.fireNozzle.x + 3.8, y: 0, z: pose.props.fireNozzle.z });
+    sCtx.lineWidth = 2.2 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(nStart.x, nStart.y);
+    sCtx.lineTo(nTip.x, nTip.y);
+    sCtx.stroke();
+  }
+
+  if (pose.props.coffee) {
+    const cupPos = proj({
+      x: pose.props.coffee.x,
+      y: pose.props.coffee.y,
+      z: pose.props.coffee.z,
+    });
+    sCtx.beginPath();
+    sCtx.arc(cupPos.x, cupPos.y, 1.8 * s, 0, Math.PI * 2);
+    sCtx.fill();
+  }
+
+  if (pose.props.phone) {
+    const phPos = proj({
+      x: pose.props.phone.x,
+      y: pose.props.phone.y,
+      z: pose.props.phone.z,
+    });
+    sCtx.beginPath();
+    sCtx.arc(phPos.x, phPos.y, 1.5 * s, 0, Math.PI * 2);
+    sCtx.fill();
+  }
+
+  // Player held items in left/right hands
+  if (pose.props.handItemL) {
+    const itemPos = proj({
+      x: pose.props.handItemL.x,
+      y: pose.props.handItemL.y,
+      z: pose.props.handItemL.z,
+    });
+    sCtx.beginPath();
+    sCtx.arc(itemPos.x, itemPos.y, 2.0 * s, 0, Math.PI * 2);
+    sCtx.fill();
+  }
+  if (pose.props.handItemR) {
+    const itemPos = proj({
+      x: pose.props.handItemR.x,
+      y: pose.props.handItemR.y,
+      z: pose.props.handItemR.z,
+    });
+    sCtx.beginPath();
+    sCtx.arc(itemPos.x, itemPos.y, 2.0 * s, 0, Math.PI * 2);
+    sCtx.fill();
+  }
+
+  // Overhead Rain Umbrella Canopy & Shaft Shadow
+  if (pose.props.umbrella) {
+    const umb = pose.props.umbrella;
+    const shaftTop = proj({ x: umb.x, y: umb.y, z: umb.z });
+    sCtx.lineWidth = 1.1 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(hndL.x, hndL.y);
+    sCtx.lineTo(shaftTop.x, shaftTop.y);
+    sCtx.stroke();
+
+    // Wide umbrella canopy shadow projected at z = umb.z
+    sCtx.beginPath();
+    sCtx.arc(shaftTop.x, shaftTop.y, umb.radius * s, 0, Math.PI * 2);
+    sCtx.fill();
+  }
+
+  // 6. Synchronized Animated Dog Companion & Leash Shadow
+  if (pose.props.dog) {
+    const d = pose.props.dog;
+    const lStart = proj(d.leashStart);
+    const lMid = proj(d.leashMid);
+    const lEnd = proj(d.leashEnd);
+
+    // Sagging 3D leash shadow
+    sCtx.lineWidth = 0.8 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(lStart.x, lStart.y);
+    sCtx.quadraticCurveTo(lMid.x, lMid.y, lEnd.x, lEnd.y);
+    sCtx.stroke();
+
+    // Dog 4-paw trotting legs shadow
+    const pStride = Math.sin(d.walkPhase) * 2.0;
+    const flPaw = proj({ x: d.x + 2.2 + pStride, y: d.y - 1.4, z: 0.2 });
+    const frPaw = proj({ x: d.x + 2.2 - pStride, y: d.y + 1.4, z: 0.2 });
+    const rlPaw = proj({ x: d.x - 2.4 - pStride, y: d.y - 1.4, z: 0.2 });
+    const rrPaw = proj({ x: d.x - 2.4 + pStride, y: d.y + 1.4, z: 0.2 });
+
+    const flSh = proj({ x: d.x + 1.8, y: d.y - 1.3, z: 3.2 });
+    const frSh = proj({ x: d.x + 1.8, y: d.y + 1.3, z: 3.2 });
+    const rlHip = proj({ x: d.x - 2.0, y: d.y - 1.3, z: 3.2 });
+    const rrHip = proj({ x: d.x - 2.0, y: d.y + 1.3, z: 3.2 });
+
+    sCtx.lineWidth = 1.4 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(flPaw.x, flPaw.y);
+    sCtx.lineTo(flSh.x, flSh.y);
+    sCtx.moveTo(frPaw.x, frPaw.y);
+    sCtx.lineTo(frSh.x, frSh.y);
+    sCtx.moveTo(rlPaw.x, rlPaw.y);
+    sCtx.lineTo(rlHip.x, rlHip.y);
+    sCtx.moveTo(rrPaw.x, rrPaw.y);
+    sCtx.lineTo(rrHip.x, rrHip.y);
+    sCtx.stroke();
+
+    // Dog torso, head, and wagging tail shadow
+    const dogTorsoRear = proj({ x: d.x - 2.2, y: d.y, z: 3.6 });
+    const dogTorsoFront = proj({ x: d.x + 2.0, y: d.y, z: 3.8 });
+    const dogHead = proj({ x: d.x + 3.6, y: d.y + d.headBob * 0.4, z: 4.8 + d.headBob * 0.3 });
+    const dogTailTip = proj({ x: d.x - 4.8, y: d.y + d.tailWag * 2.4, z: 4.4 });
+
+    sCtx.lineWidth = 4.2 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(dogTorsoRear.x, dogTorsoRear.y);
+    sCtx.lineTo(dogTorsoFront.x, dogTorsoFront.y);
+    sCtx.stroke();
+
+    sCtx.beginPath();
+    sCtx.arc(dogHead.x, dogHead.y, 2.0 * s, 0, Math.PI * 2);
+    sCtx.fill();
+
+    sCtx.lineWidth = 1.2 * s;
+    sCtx.beginPath();
+    sCtx.moveTo(dogTorsoRear.x, dogTorsoRear.y);
+    sCtx.lineTo(dogTailTip.x, dogTailTip.y);
+    sCtx.stroke();
   }
 
   sCtx.restore();
@@ -2669,64 +3008,22 @@ export function renderUnifiedWorldShadows(
 
   // 1F. Pedestrians & Dogs (z = 0 .. 22px)
   if (performanceConfig.enablePedestrianShadows !== false) {
+    const nowSec = typeof performance !== 'undefined' ? performance.now() * 0.001 : Date.now() * 0.001;
     for (const ped of visiblePedestrians) {
       if (ped.isInsideBuilding) continue;
       const pedScale = (ped.isChild || ped.ageGroup === 'child' ? 0.74 : 1.0) * 0.44;
-      renderHumanShadow(
-        sCtx,
-        ped.x,
-        ped.y,
-        ped.angle,
-        ped.walkCycle || 0,
-        false,
-        false,
-        pedScale,
-        sunState,
-        ped.handheldProp,
-        ped.hasBroom
-      );
-
-      // Pedestrian's Dog Companion Shadow (z = 0 .. 4.5px)
-      if (ped.hasDog) {
-        const cosP = Math.cos(ped.angle);
-        const sinP = Math.sin(ped.angle);
-        const dogX = ped.x + cosP * 5.0 - sinP * 3.8;
-        const dogY = ped.y + sinP * 5.0 + cosP * 3.8;
-        const dOff = getShadowOffset(4.5, sunState);
-        sCtx.save();
-        clipOutsideRotatedRect(sCtx, dogX, dogY, 3.8, 1.8, ped.angle, dOff.dx, dOff.dy);
-        extrudeRotatedRectShadow(sCtx, dogX, dogY, 4.0, 1.9, ped.angle, 0.7, 4.5, sunState);
-        sCtx.restore();
-      }
+      renderHumanShadow(sCtx, ped, false, pedScale, sunState, nowSec);
     }
 
     // 1G. Player & Remote Players (when on foot)
     if (player && !player.isInVehicle && !player.isInsideBuilding && !player.insideBusId) {
-      const pAny = player as any;
-      const isLying =
-        !!pAny.body?.isUnconscious ||
-        pAny.sleepState === 'asleep' ||
-        pAny.sleepState === 'falling_asleep';
-      const isMoving = Math.hypot(player.vx || 0, player.vy || 0) > 2;
-      const walkPhase = isMoving ? Date.now() * 0.012 : 0;
-      renderHumanShadow(
-        sCtx,
-        player.x,
-        player.y,
-        player.angle,
-        walkPhase,
-        isLying,
-        false,
-        0.44,
-        sunState
-      );
+      renderHumanShadow(sCtx, player, true, 0.44, sunState, nowSec);
     }
     if (remotePlayers) {
       for (const rp of remotePlayers) {
         if (rp.isInVehicle) continue;
         if (rp.x < minX - 80 || rp.x > maxX + 80 || rp.y < minY - 80 || rp.y > maxY + 80) continue;
-        const walkPhase = (rp as any).isMoving ? Date.now() * 0.012 : 0;
-        renderHumanShadow(sCtx, rp.x, rp.y, rp.angle, walkPhase, false, false, 0.44, sunState);
+        renderHumanShadow(sCtx, rp, true, 0.44, sunState, nowSec);
       }
     }
   }

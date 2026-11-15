@@ -56,6 +56,7 @@ import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
 import { RailwaySignalingSystem } from './railwaySignalingSystem';
 import { TrainSystem } from './trainSystem';
+import { triggerPlayerActionAnim } from './humanAnimationSystem';
 import { 
   getAllBuildingEntrances,
   updateBreakablePropsAndLivingWorld,
@@ -5204,6 +5205,7 @@ export default function App() {
       case 'open_hood': {
         const v = target.data as Vehicle;
         if (v && v.engineState) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.9);
           v.engineState.hoodOpen = true;
           setEngineBayVehicle(v);
           setIsEngineBayOpen(true);
@@ -5221,6 +5223,7 @@ export default function App() {
           const nozzleFuelType = p.heldFuelNozzle.fuelType;
           const success = insertNozzleIntoVehicle(p, nearbyVeh, pump, world);
           if (success) {
+            triggerPlayerActionAnim(p, 'fuel_nozzle_use', 0.85);
             const grade = FUEL_GRADES[nozzleFuelType];
             const vehName = CAR_CONFIGS[nearbyVeh.type]?.name || nearbyVeh.type;
             addPlayerNotification(p, `Топливный пистолет [${grade?.nameRu || ''}] вставлен в бак (${vehName}). Пройдите в кассу АЗС для оплаты.`, 'info');
@@ -5238,6 +5241,7 @@ export default function App() {
           return;
         }
         if (vehicle && pump) {
+          triggerPlayerActionAnim(p, 'fuel_nozzle_use', 0.85);
           removeNozzleFromVehicle(p, vehicle, pump, world);
           addPlayerNotification(p, `Топливный пистолет извлечен из бака. Повесьте его обратно на колонку №${pump.pumpNumber}.`, 'info');
           sound.playUseItem();
@@ -5252,6 +5256,7 @@ export default function App() {
           addPlayerNotification(p, `Колонка №${pump.pumpNumber} в процессе подачи топлива.`, 'info');
           return;
         }
+        triggerPlayerActionAnim(p, 'fuel_nozzle_use', 0.85);
         setActiveGasPump(pump);
         setIsFuelNozzleModalOpen(true);
         sound.playUseItem();
@@ -5261,6 +5266,7 @@ export default function App() {
       case 'pump_return_nozzle': {
         const pump = target.data as GasPumpDispenser;
         if (pump) {
+          triggerPlayerActionAnim(p, 'fuel_nozzle_use', 0.85);
           returnNozzleToPump(p, pump);
           addPlayerNotification(p, `Топливный пистолет возвращен на колонку №${pump.pumpNumber}.`, 'info');
           sound.playUseItem();
@@ -5279,6 +5285,7 @@ export default function App() {
 
       case 'water_hose_take': {
         const veh = target.data as Vehicle;
+        triggerPlayerActionAnim(p, 'water_hose_use', 0.9);
         takeWaterHose(p, veh, world);
         const isVac = !!veh.fluidTank?.isVacuumTank || veh.type === 'trailer_vacuum';
         const isJetter = !!p.heldWaterHose?.isJetterHose;
@@ -5298,6 +5305,7 @@ export default function App() {
 
       case 'water_hose_stow': {
         const wasVac = !!p.heldWaterHose?.isVacuumHose;
+        triggerPlayerActionAnim(p, 'water_hose_use', 0.9);
         stowWaterHose(p, world);
         addPlayerNotification(
           p,
@@ -5314,6 +5322,7 @@ export default function App() {
       case 'vacuum_gate_valve_toggle': {
         const veh = target.data as Vehicle;
         if (veh?.fluidTank) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.95);
           veh.fluidTank.drainValveOpen = !veh.fluidTank.drainValveOpen;
           sound.playHydraulicHiss(0.2);
           addPlayerNotification(
@@ -5331,6 +5340,7 @@ export default function App() {
       case 'vacuum_pump_panel': {
         const veh = (target.data && target.data.id) ? (world.vehicles.find(v => v.id === target.data.id) || target.data) : null;
         if (veh?.fluidTank) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.85);
           setVacuumPumpVehicle(veh);
           setIsVacuumPumpModalOpen(true);
           sound.playUseItem();
@@ -5341,6 +5351,7 @@ export default function App() {
       case 'vacuum_hose_mode_toggle': {
         const veh = target.data as Vehicle;
         if (veh?.fluidTank) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.85);
           const cur = veh.fluidTank.activeHoseMode ?? 'vacuum';
           veh.fluidTank.activeHoseMode = cur === 'vacuum' ? 'jetter' : 'vacuum';
           sound.playButtonPress();
@@ -5358,6 +5369,7 @@ export default function App() {
 
       case 'tow_rope_detach': {
         const data = target.data;
+        triggerPlayerActionAnim(p, 'pickup', 0.75);
         if (data && data.isDragging) {
           // Cancel player dragging rope
           p.heldTowRope = null;
@@ -5442,6 +5454,7 @@ export default function App() {
         if (activeHandItem && (activeHandItem.category === 'drink'|| activeHandItem.id.includes('bottle') || activeHandItem.id.includes('can') || activeHandItem.id.includes('cup'))) {
           const handSlot = p.activeHand === 'left'? p.leftHandSlotIndex : p.rightHandSlotIndex;
           if (handSlot !== null && handSlot !== undefined && p.inventory[handSlot]) {
+            triggerPlayerActionAnim(p, 'throw_trash', 0.65);
             p.inventory[handSlot] = null as any;
             addPlayerCash(p, 5);
             addPlayerNotification(p, `Эко-фандомат: тара сдана на переработку (+$5)`, 'info');
@@ -5461,6 +5474,7 @@ export default function App() {
         if (activeHandItem && (activeHandItem.category === 'trash'|| activeHandItem.id.includes('trash') || activeHandItem.id.includes('wrapper') || activeHandItem.id.includes('empty'))) {
           const handSlot = p.activeHand === 'left'? p.leftHandSlotIndex : p.rightHandSlotIndex;
           if (handSlot !== null && handSlot !== undefined && p.inventory[handSlot]) {
+            triggerPlayerActionAnim(p, 'throw_trash', 0.65);
             p.inventory[handSlot] = null as any;
             addPlayerNotification(p, 'Мусор утилизирован в урну.', 'info');
             sound.playUseItem();
@@ -5479,6 +5493,7 @@ export default function App() {
         if (trailer && towingVeh) {
           const success = hitchTrailerToVehicle(towingVeh, trailer, world);
           if (success) {
+            triggerPlayerActionAnim(p, 'mechanic_work', 1.1);
             addPlayerNotification(p, `Прицеп успешно сцеплен с ${CAR_CONFIGS[towingVeh.type]?.name || towingVeh.type}!`, 'info');
             trailer.trailerPlugConnected = false;
             trailer.trailerBrakesConnected = false;
@@ -5494,6 +5509,7 @@ export default function App() {
         if (trailer && towingVeh) {
           const success = unhitchTrailerFromVehicle(towingVeh, world);
           if (success) {
+            triggerPlayerActionAnim(p, 'mechanic_work', 1.0);
             trailer.trailerPlugConnected = false;
             trailer.trailerBrakesConnected = false;
             addPlayerNotification(p, `Прицеп отцеплен от ${CAR_CONFIGS[towingVeh.type]?.name || towingVeh.type}.`, 'info');
@@ -5507,6 +5523,7 @@ export default function App() {
       case 'trailer_connect_plug': {
         const { trailer } = target.data;
         if (trailer) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.85);
           trailer.trailerPlugConnected = true;
           addPlayerNotification(p, 'Электрическая вилка светотехники подключена!', 'info');
           sound.playUseItem();
@@ -5518,6 +5535,7 @@ export default function App() {
       case 'trailer_disconnect_plug': {
         const { trailer } = target.data;
         if (trailer) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.8);
           trailer.trailerPlugConnected = false;
           addPlayerNotification(p, 'Кабель светотехники отключен.', 'info');
           sound.playUseItem();
@@ -5529,6 +5547,7 @@ export default function App() {
       case 'trailer_connect_brakes': {
         const { trailer } = target.data;
         if (trailer) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.85);
           trailer.trailerBrakesConnected = true;
           addPlayerNotification(p, 'Тормозной пневмошланг подключен к тягачу!', 'info');
           sound.playUseItem();
@@ -5540,6 +5559,7 @@ export default function App() {
       case 'trailer_disconnect_brakes': {
         const { trailer } = target.data;
         if (trailer) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.8);
           trailer.trailerBrakesConnected = false;
           addPlayerNotification(p, 'Тормозной пневмошланг отключен от тягача.', 'info');
           sound.playUseItem();
@@ -5551,6 +5571,7 @@ export default function App() {
       case 'trailer_toggle_handbrake': {
         const trailer = target.data;
         if (trailer) {
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.9);
           const currentlyEngaged = trailer.trailerParkingBrakeEngaged !== false;
           trailer.trailerParkingBrakeEngaged = !currentlyEngaged;
           if (trailer.trailerParkingBrakeEngaged) {
@@ -5586,6 +5607,7 @@ export default function App() {
           sound.playUseItem();
           return;
         }
+        triggerPlayerActionAnim(p, 'key_fob', 0.75);
         const res = toggleApartmentLock(p, apt);
         sound.playUseItem();
         addPlayerNotification(p, res.message, res.success ? 'heal' : 'warning');
@@ -5601,6 +5623,7 @@ export default function App() {
             sound.playUseItem();
             return;
           }
+          triggerPlayerActionAnim(p, 'key_fob', 0.75);
           prop.isOpen = !prop.isOpen;
           const isGate = prop.type === 'cottage_gate';
           const isWicket = prop.type === 'wicket_gate';
@@ -5622,6 +5645,7 @@ export default function App() {
             sound.playUseItem();
             return;
           }
+          triggerPlayerActionAnim(p, 'key_fob', 0.75);
           prop.isLocked = !prop.isLocked;
           if (prop.isLocked) {
             prop.isOpen = false; // Locking ensures it's closed

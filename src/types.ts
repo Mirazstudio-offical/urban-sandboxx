@@ -1107,6 +1107,7 @@ export interface Pedestrian {
   
   // State & Panic
   state: 'walking' | 'waiting_light' | 'waiting_traffic' | 'crossing' | 'panicking' | 'waiting_taxi' | 'entering_building' | 'exiting_building' | 'idle_phone' | 'idle_window' | 'greeting' | 'extinguishing_fire';
+  idleSubAction?: 'phone' | 'window' | 'watch' | 'stretch' | 'wave' | 'coffee_sip';
   panicTimer: number;
   behaviorTimer: number; // For idle states
   alertBubbleText: string | null;
@@ -2256,6 +2257,14 @@ export interface Player {
   aimAngle?: number;
   flashlightOn?: boolean;
   phoneFlashlightOn?: boolean;
+  actionAnim?: {
+    type: string;
+    startTime: number;
+    duration: number;
+    hand?: 'left' | 'right' | 'both';
+    itemId?: string;
+    intensity?: number;
+  } | null;
 
   // Water & Aquatic Physics
   isSwimming?: boolean;

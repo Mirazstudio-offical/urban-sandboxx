@@ -87,6 +87,7 @@ import {
   getLocalShadowOffset,
   renderUnifiedWorldShadows
 } from './shadowSystem';
+import { computeHumanPose } from './humanAnimationSystem';
 
 interface CloudShadowLobe {
   relX: number;
@@ -9319,87 +9320,134 @@ export class GameRenderer {
 
       ctx.save();
       ctx.translate(ped.x, ped.y);
-      
+
       const isFirefighter = (ped as any).isFirefighter;
       const pedScale = (ped.isChild ? 0.7 : 1.0) * 0.44;
+      const nowSec = performance.now() * 0.001;
+      const pose = computeHumanPose(ped, false, nowSec);
 
       ctx.save();
       ctx.rotate(ped.angle);
       ctx.scale(pedScale, pedScale);
 
-      // Pedestrian 3D body shadow is projected in world space via unified shadow shroud
+      // Pedestrian 3D body shadow is projected in world space via unified shadow shroud (computeHumanPose)
 
-      // Cyclist / Scooter base
-      if (ped.isCyclist) {
-        // Bicycle frame
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(-6, 0); ctx.lineTo(6, 0);
-        ctx.moveTo(2, 0); ctx.lineTo(4, -3);
-        ctx.moveTo(2, 0); ctx.lineTo(4, 3);
-        ctx.stroke();
+      // 0. Cyclist / Scooter base (synchronized with pose.props.bicycle / pose.props.scooter)
+      if (pose.props.bicycle) {
+        const bike = pose.props.bicycle;
+        ctx.save();
+        ctx.translate(0, bike.leanRoll * 2.0);
         // Wheels
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-8, -0.8, 4, 1.6);
-        ctx.fillRect(4, -0.8, 4, 1.6);
-      } else if (ped.isScooter) {
-        // Electric scooter base
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(-7, -1.5, 14, 3);
-        // Handlebar stem
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(4, -0.5, 1, 1);
-        ctx.fillRect(4.5, -3, 0.8, 6);
-      }
-
-      const pedWalkCycle = ped.walkCycle || 0;
-      const legSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.sin(pedWalkCycle) * 2.8 : 0;
-      const armSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.cos(pedWalkCycle) * 2.2 : 0;
-
-      // 1. Legs / Pants / Shoes
-      if (isFirefighter) {
-        // Heavy duty navy/charcoal firefighter trousers
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-1.5, -legSwing - 3.5, 3, 3);
-        ctx.fillRect(-1.5, legSwing + 0.5, 3, 3);
-
-        // Bright high-vis reflective band on ankles (Neon yellow/lime + silver)
-        ctx.fillStyle = '#a3e635'; // Lime
-        ctx.fillRect(-0.4, -legSwing - 3.5, 0.9, 3);
-        ctx.fillRect(-0.4, legSwing + 0.5, 0.9, 3);
-        ctx.fillStyle = '#f8fafc'; // Silver
-        ctx.fillRect(-0.1, -legSwing - 3.5, 0.3, 3);
-        ctx.fillRect(-0.1, legSwing + 0.5, 0.3, 3);
-
-        // Heavy fireman boots
+        ctx.fillRect(-8.6, -0.85, 4.4, 1.7);
+        ctx.fillRect(4.2, -0.85, 4.4, 1.7);
+        // Rotating pedal cranks
+        const crankX = -0.5;
+        const pLx = crankX + Math.cos(bike.pedalAngle) * 2.0;
+        const pRx = crankX - Math.cos(bike.pedalAngle) * 2.0;
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(crankX, -1.6); ctx.lineTo(pLx, -2.5);
+        ctx.moveTo(crankX, 1.6); ctx.lineTo(pRx, 2.5);
+        ctx.stroke();
         ctx.fillStyle = '#020617';
-        ctx.fillRect(1.5, -legSwing - 3.5, 1.3, 3);
-        ctx.fillRect(1.5, legSwing + 0.5, 1.3, 3);
-      } else {
-        ctx.fillStyle = ped.pantsColor;
-        if (!ped.isCyclist && !ped.isScooter) {
-          ctx.fillRect(-1.5, -legSwing - 3.5, 3, 3);
-          ctx.fillRect(-1.5, legSwing + 0.5, 3, 3);
-          // Shoes / Sneakers visible on feet during movement
-          ctx.fillStyle = '#0f172a';
-          ctx.fillRect(1.5, -legSwing - 3.5, 1.2, 3);
-          ctx.fillRect(1.5, legSwing + 0.5, 1.2, 3);
-        } else {
-          // Pedaling or standing on scooter
-          ctx.fillRect(-1.5, -2.5, 3, 2);
-          ctx.fillRect(-1.5, 0.5, 3, 2);
-          ctx.fillStyle = '#0f172a';
-          ctx.fillRect(1.5, -2.5, 1.2, 2);
-          ctx.fillRect(1.5, 0.5, 1.2, 2);
-        }
+        ctx.fillRect(pLx - 0.7, -3.0, 1.4, 0.9);
+        ctx.fillRect(pRx - 0.7, 2.1, 1.4, 0.9);
+        // Bicycle diamond frame & handlebars
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1.45;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-6.2, 0); ctx.lineTo(5.6, 0);
+        ctx.moveTo(3.6, 0); ctx.lineTo(4.6, -3.8);
+        ctx.moveTo(3.6, 0); ctx.lineTo(4.6, 3.8);
+        ctx.stroke();
+        // Saddle
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        safeEllipse(ctx, -2.2, 0, 1.8, 1.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (pose.props.scooter) {
+        // Electric scooter base
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-7.8, -0.75, 2.6, 1.5);
+        ctx.fillRect(5.2, -0.75, 2.6, 1.5);
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        safeRoundRect(ctx, -6.5, -1.6, 12.5, 3.2, 1.0);
+        ctx.fill();
+        // Handlebar stem & grips
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(4.4, -0.6, 1.2, 1.2);
+        ctx.fillRect(4.8, -3.4, 0.85, 6.8);
       }
 
-      // 2. Torso & Detailed Clothing (Top-Down Silhouette with Shoulders, Collars, Jackets & Dresses)
+      // 1. Articulated 2-Segment Legs (Hip -> Knee -> Foot) & Footwear
+      const drawArticulatedPedLeg = (leg: typeof pose.legL) => {
+        // Foot / Shoe at ground contact or lifted stride
+        ctx.save();
+        ctx.translate(leg.foot.x, leg.foot.y);
+        ctx.rotate(leg.footAngle);
+        const shoeScale = 1.0 + Math.min(0.18, leg.foot.z * 0.04);
+        ctx.scale(shoeScale, shoeScale);
+        if (isFirefighter) {
+          ctx.fillStyle = '#020617';
+          ctx.beginPath();
+          safeRoundRect(ctx, -1.4, -1.4, 3.3, 2.8, 0.7);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          safeRoundRect(ctx, -1.3, -1.25, 3.0, 2.5, 0.7);
+          ctx.fill();
+          // Sneaker toe cap accent
+          ctx.fillStyle = 'rgba(255,255,255,0.22)';
+          ctx.fillRect(1.0, -0.95, 0.55, 1.9);
+        }
+        ctx.restore();
+
+        // Thigh (hip -> knee) & Shin (knee -> foot)
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = isFirefighter ? '#0f172a' : ped.pantsColor;
+        ctx.lineWidth = isFirefighter ? 3.1 : 2.8;
+        ctx.beginPath();
+        ctx.moveTo(leg.hip.x, leg.hip.y);
+        ctx.lineTo(leg.knee.x, leg.knee.y);
+        ctx.lineTo(leg.foot.x, leg.foot.y);
+        ctx.stroke();
+
+        // Subtle knee cap highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.beginPath();
+        ctx.arc(leg.knee.x, leg.knee.y, 1.25, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (isFirefighter) {
+          // High-vis reflective ankle bands
+          ctx.fillStyle = '#a3e635';
+          ctx.fillRect(leg.foot.x - 0.6, leg.foot.y - 1.35, 0.9, 2.7);
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(leg.foot.x - 0.3, leg.foot.y - 1.35, 0.3, 2.7);
+        }
+        ctx.restore();
+      };
+      drawArticulatedPedLeg(pose.legL);
+      drawArticulatedPedLeg(pose.legR);
+
+      // 2. Torso & Detailed Clothing (with breathing expansion, pitch lean, and yaw counter-rotation)
       const clothType = ped.clothingType || 'tshirt';
       const mainShirtColor = ped.shirtColor || '#3b82f6';
       const jacketCol = ped.jacketColor || '#1e293b';
       const innerCol = ped.innerShirtColor || '#ffffff';
+
+      ctx.save();
+      ctx.translate(pose.torso.x, pose.torso.y);
+      ctx.rotate(pose.torso.yaw);
+      ctx.scale(pose.torso.breathScale, pose.torso.breathScale);
 
       // Base shoulder width & torso shape
       if (isFirefighter) {
@@ -9410,19 +9458,17 @@ export class GameRenderer {
         ctx.fill();
 
         // High-vis lime-green reflective safety harness stripes across shoulders/chest
-        ctx.strokeStyle = '#a3e635'; // Neon lime
+        ctx.strokeStyle = '#a3e635';
         ctx.lineWidth = 1.0;
         ctx.beginPath();
-        // Left and right vertical shoulder stripes
         ctx.moveTo(-1.2, -4.5); ctx.lineTo(-1.2, 4.5);
         ctx.moveTo(1.4, -4.5); ctx.lineTo(1.4, 4.5);
-        // Horizontal stripes across torso
         ctx.moveTo(-3.5, -2.0); ctx.lineTo(3.5, -2.0);
         ctx.moveTo(-3.5, 2.0); ctx.lineTo(3.5, 2.0);
         ctx.stroke();
 
         // Silver inner reflective core stripe
-        ctx.strokeStyle = '#f8fafc'; // Silver
+        ctx.strokeStyle = '#f8fafc';
         ctx.lineWidth = 0.4;
         ctx.beginPath();
         ctx.moveTo(-1.2, -4.5); ctx.lineTo(-1.2, 4.5);
@@ -9431,13 +9477,11 @@ export class GameRenderer {
         ctx.moveTo(-3.5, 2.0); ctx.lineTo(3.5, 2.0);
         ctx.stroke();
       } else if (clothType === 'open_jacket' || clothType === 'suit') {
-        // Open unbuttoned jacket or formal suit jacket
         ctx.fillStyle = clothType === 'suit' ? '#0f172a' : jacketCol;
         ctx.beginPath();
         ctx.ellipse(0, 0, 4.2, 5.8, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Inner shirt V-opening down the chest center
         ctx.fillStyle = innerCol;
         ctx.beginPath();
         ctx.moveTo(3.5, 0);
@@ -9447,7 +9491,6 @@ export class GameRenderer {
         ctx.fill();
 
         if (clothType === 'suit') {
-          // Dark formal tie
           ctx.fillStyle = '#ef4444';
           ctx.beginPath();
           ctx.moveTo(2.5, 0);
@@ -9457,7 +9500,6 @@ export class GameRenderer {
           ctx.closePath();
           ctx.fill();
         } else {
-          // Open Jacket lapel collar edges
           ctx.strokeStyle = 'rgba(255,255,255,0.25)';
           ctx.lineWidth = 0.6;
           ctx.beginPath();
@@ -9466,19 +9508,16 @@ export class GameRenderer {
           ctx.stroke();
         }
       } else if (clothType === 'hoodie') {
-        // Hoodie sweatshirt
         ctx.fillStyle = mainShirtColor;
         ctx.beginPath();
         ctx.ellipse(0.2, 0, 4.5, 5.8, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Bunched fabric hood behind the neck
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
         ctx.arc(-2.6, 0, 2.6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Drawstrings
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 0.5;
         ctx.beginPath();
@@ -9486,7 +9525,6 @@ export class GameRenderer {
         ctx.moveTo(1.2, 0.8); ctx.lineTo(2.8, 0.6);
         ctx.stroke();
       } else if (clothType === 'dress') {
-        // Flowing dress / skirt top
         ctx.fillStyle = mainShirtColor;
         ctx.beginPath();
         ctx.moveTo(-3.5, -5.8);
@@ -9496,37 +9534,31 @@ export class GameRenderer {
         ctx.closePath();
         ctx.fill();
 
-        // Waist belt / accent ribbon
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.fillRect(-0.8, -4.8, 1.2, 9.6);
       } else if (clothType === 'button_shirt') {
-        // Button-up collared shirt
         ctx.fillStyle = mainShirtColor;
         ctx.beginPath();
         ctx.ellipse(0, 0, 4.0, 5.5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Collar flaps at neck line
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.moveTo(1.8, -1.8); ctx.lineTo(3.2, -0.8); ctx.lineTo(1.8, 0);
         ctx.moveTo(1.8, 1.8); ctx.lineTo(3.2, 0.8); ctx.lineTo(1.8, 0);
         ctx.fill();
 
-        // Button placket line
         ctx.strokeStyle = 'rgba(0,0,0,0.15)';
         ctx.lineWidth = 0.6;
         ctx.beginPath();
         ctx.moveTo(-2.5, 0); ctx.lineTo(2.0, 0);
         ctx.stroke();
       } else {
-        // Standard T-shirt / Janitor / Vest
         ctx.fillStyle = ped.isJanitor ? '#ca8a04' : mainShirtColor;
         ctx.beginPath();
         ctx.ellipse(0, 0, 4.0, 5.5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // High-vis silver reflective stripes for janitors
         if (ped.isJanitor) {
           ctx.strokeStyle = '#f8fafc';
           ctx.lineWidth = 1.0;
@@ -9535,7 +9567,6 @@ export class GameRenderer {
           ctx.moveTo(1.2, -4.5); ctx.lineTo(1.2, 4.5);
           ctx.stroke();
         } else {
-          // Curved t-shirt neck collar line revealing skin
           ctx.fillStyle = ped.skinColor;
           ctx.beginPath();
           ctx.arc(1.8, 0, 1.4, 0, Math.PI * 2);
@@ -9543,7 +9574,7 @@ export class GameRenderer {
         }
       }
 
-      // Backpack
+      // Backpack (attached to torso so it twists and breathes naturally with the back)
       if (ped.hasBackpack) {
         ctx.fillStyle = ped.backpackColor || '#1e293b';
         ctx.beginPath();
@@ -9553,7 +9584,6 @@ export class GameRenderer {
         ctx.lineWidth = 0.5;
         ctx.strokeRect(-5.2, -3.6, 3.8, 7.2);
 
-        // Shoulder straps over front shoulders
         ctx.strokeStyle = 'rgba(0,0,0,0.4)';
         ctx.lineWidth = 0.8;
         ctx.beginPath();
@@ -9561,483 +9591,271 @@ export class GameRenderer {
         ctx.moveTo(-1.5, 3.2); ctx.lineTo(1.5, 2.8);
         ctx.stroke();
       }
+      ctx.restore(); // end torso transform
 
-      // Arms & Hand Posing
-      const sleeveColor = isFirefighter ? '#0f172a' : (clothType === 'open_jacket' ? jacketCol : mainShirtColor);
-      const handSkinColor = isFirefighter ? '#d97706' : ped.skinColor;
-      if (isFirefighter) {
-        // Firefighters extend both arms forward to firmly hold the high-pressure brass hose nozzle
-        ctx.fillStyle = sleeveColor;
-        ctx.fillRect(1.0, -4.0, 3.8, 2.0);  // Left sleeve extended forward
-        ctx.fillRect(1.0, 2.0, 3.8, 2.0);   // Right sleeve extended forward
+      // 2.5 Articulated 2-Segment Arms (Shoulder -> Elbow -> Hand)
+      const sleeveColor = isFirefighter
+        ? '#0f172a'
+        : ped.isJanitor
+          ? '#ca8a04'
+          : clothType === 'open_jacket'
+            ? jacketCol
+            : clothType === 'suit'
+              ? '#0f172a'
+              : mainShirtColor;
+      const handSkinColor = isFirefighter ? '#d97724' : ped.skinColor;
 
-        // Tan protective heavy duty fire gloves
-        ctx.fillStyle = '#d97706';
-        ctx.fillRect(4.5, -3.2, 1.8, 1.6);  // Left glove
-        ctx.fillRect(4.5, 1.6, 1.8, 1.6);   // Right glove
-
-        // Custom brass high-pressure hose nozzle (ствол пожарного рукава)
-        ctx.fillStyle = '#b45309'; // Rich brass/bronze color
-        ctx.fillRect(4.8, -1.2, 3.6, 2.4);  // Main nozzle cylinder
-        ctx.fillStyle = '#475569'; // Dark metal handle / tip
-        ctx.fillRect(8.0, -0.6, 1.2, 1.2);  // High-pressure tip
-        ctx.fillRect(5.5, 0.8, 0.8, 1.5);   // Under-nozzle support handle
-      } else if (ped.state === 'idle_phone' || ped.handheldProp === 'phone') {
-        // Both arms extended forward holding phone in front of chest
-        ctx.fillStyle = sleeveColor;
-        ctx.fillRect(1.0, -4.2, 3.2, 2.0);  // Left sleeve
-        ctx.fillRect(1.0, 2.2, 3.2, 2.0);   // Right sleeve
-        ctx.fillStyle = handSkinColor;
-        ctx.fillRect(3.8, -2.6, 2.0, 1.8);  // Left hand
-        ctx.fillRect(3.8, 0.8, 2.0, 1.8);   // Right hand
-      } else if (ped.handheldProp === 'box') {
-        // Holding box in front with both hands
-        ctx.fillStyle = sleeveColor;
-        ctx.fillRect(1.0, -4.8, 4.0, 2.0);  // Left sleeve
-        ctx.fillRect(1.0, 2.8, 4.0, 2.0);   // Right sleeve
-        ctx.fillStyle = handSkinColor;
-        ctx.fillRect(4.8, -3.8, 1.8, 1.6);  // Left hand
-        ctx.fillRect(4.8, 2.2, 1.8, 1.6);   // Right hand
-      } else if (ped.hasBroom) {
-        // Janitor holding broom handle
-        ctx.fillStyle = ped.isJanitor ? '#ca8a04' : sleeveColor;
-        ctx.fillRect(1.0, -3.8, 3.5, 2.0);  // Left sleeve
-        ctx.fillRect(1.0, 2.0, 4.5, 2.0);   // Right sleeve
-        ctx.fillStyle = handSkinColor;
-        ctx.fillRect(4.2, -2.2, 1.6, 1.6);  // Left hand
-        ctx.fillRect(5.2, 0.2, 1.8, 1.6);   // Right hand
-      } else if (ped.handheldProp === 'coffee') {
-        // Right arm extended forward holding coffee cup
-        ctx.fillStyle = sleeveColor;
-        ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2); // Left arm swinging
-        ctx.fillRect(1.0, 2.8, 3.5, 2.0);            // Right sleeve forward
-        ctx.fillStyle = handSkinColor;
-        ctx.fillRect(4.2, 3.8, 1.6, 1.8);            // Right hand holding cup
-      } else if (ped.handheldProp === 'bag') {
-        // Right arm carrying shopping bag beside body
-        const bagArmSwing = Math.cos(ped.walkCycle) * 0.8;
-        ctx.fillStyle = sleeveColor;
-        ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2);      // Left arm swinging
-        ctx.fillRect(bagArmSwing - 0.5, 3.6, 2.8, 2.0);  // Right sleeve
-        ctx.fillStyle = handSkinColor;
-        ctx.fillRect(bagArmSwing + 0.5, 5.8, 2.0, 2.0);  // Right hand holding bag handle
-      } else if (ped.isCyclist || ped.isScooter) {
-        // Holding handlebars
-        ctx.fillStyle = sleeveColor;
-        ctx.fillRect(2, -4.5, 3, 2);
-        ctx.fillRect(2, 2.5, 3, 2);
-      } else {
-        ctx.fillStyle = sleeveColor;
-        ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2);
-        ctx.fillRect(-armSwing - 1.5, 2.6, 3, 2.2);
-        ctx.fillStyle = handSkinColor;
-        ctx.fillRect(armSwing + 1.2, -4.8, 1.5, 2.2);
-        ctx.fillRect(-armSwing + 1.2, 2.6, 1.5, 2.2);
-      }
-
-      // 3. Head & Facial Anatomy (Ears, Nose, Glasses)
-      // Ears on left and right side of head
-      ctx.fillStyle = ped.skinColor;
-      ctx.beginPath();
-      ctx.arc(1.5, -3.4, 0.9, 0, Math.PI * 2); // Left ear
-      ctx.arc(1.5, 3.4, 0.9, 0, Math.PI * 2);  // Right ear
-      ctx.fill();
-
-      // Head Base
-      ctx.beginPath();
-      ctx.arc(1.5, 0, 3.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Subtle nose bump at front of face (+X)
-      ctx.beginPath();
-      ctx.arc(4.6, 0, 0.6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glasses / Sunglasses
-      if (ped.hasGlasses) {
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(3.2, -2.4, 1.0, 1.8); // Left lens
-        ctx.fillRect(3.2, 0.6, 1.0, 1.8);  // Right lens
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(3.7, -0.6); ctx.lineTo(3.7, 0.6); // Bridge
-        ctx.moveTo(3.7, -2.4); ctx.lineTo(1.8, -3.4); // Ear stem L
-        ctx.moveTo(3.7, 2.4); ctx.lineTo(1.8, 3.4);   // Ear stem R
-        ctx.stroke();
-      }
-
-      // 4. Hairstyles (Deep Top-Down Detailing)
-      if (isFirefighter) {
-        // Skip hair, helmet handles head protection!
-      } else if (ped.hairStyle === 'bald') {
-        // Bald head shine highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        ctx.beginPath();
-        ctx.arc(2.2, -0.8, 0.9, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (!ped.hasHat) {
-        ctx.fillStyle = ped.hairColor;
-        ctx.beginPath();
-        if (ped.hairStyle === 'short') {
-          // Neat short hair with crown texture & sideburns
-          ctx.arc(0.4, 0, 3.2, Math.PI * 0.45, Math.PI * 1.55);
-          ctx.fill();
-          // Hair parted crown highlight line
-          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-          ctx.lineWidth = 0.6;
-          ctx.beginPath();
-          ctx.moveTo(0.8, -1.5); ctx.lineTo(2.2, -0.2);
-          ctx.stroke();
-        } else if (ped.hairStyle === 'long') {
-          // Flowing long hair over shoulders
-          ctx.arc(0, 0, 3.5, Math.PI * 0.35, Math.PI * 1.65);
-          ctx.ellipse(-1.8, -2.8, 3.2, 1.8, -Math.PI / 5, 0, Math.PI * 2);
-          ctx.ellipse(-1.8, 2.8, 3.2, 1.8, Math.PI / 5, 0, Math.PI * 2);
-          ctx.fill();
-          // Hair strand highlights
-          ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-          ctx.lineWidth = 0.5;
-          ctx.beginPath();
-          ctx.moveTo(-1.0, -3.5); ctx.lineTo(-3.2, -2.5);
-          ctx.moveTo(-1.0, 3.5); ctx.lineTo(-3.2, 2.5);
-          ctx.stroke();
-        } else if (ped.hairStyle === 'bun') {
-          // Smooth hair pulled into a voluminous bun
-          ctx.arc(0.4, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
-          ctx.arc(-2.6, 0, 2.2, 0, Math.PI * 2);
-          ctx.fill();
-          // Bun hair tie ring
-          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-          ctx.lineWidth = 0.6;
-          ctx.stroke();
-        } else if (ped.hairStyle === 'ponytail') {
-          // Hair pulled back into a trailing ponytail
-          ctx.arc(0.4, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
-          ctx.ellipse(-3.8, 0, 3.4, 1.3, 0, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (ped.hairStyle === 'spiky') {
-          // Spiky hair locks
-          ctx.moveTo(0.4, -3.2);
-          ctx.lineTo(2.2, -4.2); ctx.lineTo(1.2, -2.2);
-          ctx.lineTo(3.2, -1.2); ctx.lineTo(1.8, 0);
-          ctx.lineTo(3.2, 1.2); ctx.lineTo(1.2, 2.2);
-          ctx.lineTo(2.2, 4.2); ctx.lineTo(0.4, 3.2);
-          ctx.arc(0.4, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
-          ctx.fill();
-        } else if (ped.hairStyle === 'curly') {
-          // Curly hair ringlets around head
-          for (let angle = 0.5; angle < Math.PI * 1.8; angle += 0.45) {
-            const hx = 1.0 + Math.cos(angle) * 3.2;
-            const hy = Math.sin(angle) * 3.2;
-            ctx.arc(hx, hy, 1.3, 0, Math.PI * 2);
-          }
-          ctx.fill();
-        } else if (ped.hairStyle === 'afro') {
-          // Volumetric rounded afro
-          ctx.arc(0.2, 0, 4.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-          ctx.lineWidth = 0.5;
-          ctx.stroke();
-        }
-      }
-
-      // 5. Headphones (Over-Ear)
-      if (ped.hasHeadphones && !ped.hasHat) {
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 1.0;
-        ctx.beginPath();
-        ctx.arc(1.5, 0, 3.6, -Math.PI * 0.4, Math.PI * 0.4); // Headband
-        ctx.stroke();
-        ctx.fillStyle = '#38bdf8'; // Earcups
-        ctx.fillRect(1.0, -4.2, 1.6, 1.2);
-        ctx.fillRect(1.0, 3.0, 1.6, 1.2);
-      }
-
-      // 6. Hats / Caps / Sunhats / Fedoras
-      if (isFirefighter) {
-        // Draw standard modern firefighter helmet (Gallet F1 style)
-        // Main helmet shell: brilliant high-gloss yellow-orange
-        ctx.fillStyle = '#f97316'; // Vivid orange-yellow
-        ctx.beginPath();
-        ctx.arc(1.5, 0, 4.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Thick black protective brim trim running around sides & back
-        ctx.strokeStyle = '#020617';
-        ctx.lineWidth = 1.0;
-        ctx.beginPath();
-        ctx.arc(1.5, 0, 4.2, -Math.PI * 0.95, Math.PI * 0.95);
-        ctx.stroke();
-
-        // High-vis silver reflective helmet stripes
-        ctx.strokeStyle = '#cbd5e1'; // Silver
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.arc(1.5, 0, 3.4, -Math.PI * 0.35, Math.PI * 0.35); // Curved crest highlight
-        ctx.stroke();
-
-        // Red central crest badge on front
-        ctx.fillStyle = '#ef4444'; // Red
-        ctx.beginPath();
-        ctx.moveTo(4.6, -1.0);
-        ctx.lineTo(5.8, 0);
-        ctx.lineTo(4.6, 1.0);
-        ctx.closePath();
-        ctx.fill();
-
-        // Red crest stripe running from front to back along center
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(-2.5, -0.6, 6.8, 1.2);
-
-        // Glossy dark protective visor extending in front of eyes
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'; // Visor glass
-        ctx.beginPath();
-        ctx.arc(1.5, 0, 4.4, -Math.PI * 0.22, Math.PI * 0.22);
-        ctx.lineTo(3.2, 0);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Visor gold-tinted reflective edge line
-        ctx.strokeStyle = '#fbbf24';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      } else if (ped.hasHat) {
-        ctx.fillStyle = ped.hatColor || '#1e293b';
-        ctx.beginPath();
-        if (ped.hatType === 'cap') {
-          ctx.arc(0.8, 0, 3.2, 0, Math.PI * 2);
-          ctx.fillRect(3.0, -2.0, 3.2, 4.0); // Baseball cap visor bill
-        } else if (ped.hatType === 'beanie') {
-          ctx.arc(0.6, 0, 3.5, 0, Math.PI * 2);
-          ctx.fill();
-          // Knit texture lines on beanie
-          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-          ctx.lineWidth = 0.6;
-          ctx.beginPath();
-          ctx.moveTo(-2.5, -2.0); ctx.lineTo(2.5, -2.0);
-          ctx.moveTo(-2.5, 0); ctx.lineTo(2.5, 0);
-          ctx.moveTo(-2.5, 2.0); ctx.lineTo(2.5, 2.0);
-          ctx.stroke();
-        } else if (ped.hatType === 'sunhat') {
-          ctx.arc(1.0, 0, 5.8, 0, Math.PI * 2); // Wide brim
-          ctx.fill();
-          ctx.fillStyle = 'rgba(0,0,0,0.2)'; // Sunhat band
-          ctx.beginPath();
-          ctx.arc(1.0, 0, 3.2, 0, Math.PI * 2);
-        } else if (ped.hatType === 'fedora') {
-          ctx.arc(1.0, 0, 4.8, 0, Math.PI * 2); // Fedora brim
-          ctx.fill();
-          ctx.fillStyle = '#0f172a'; // Hat band
-          ctx.beginPath();
-          ctx.arc(1.0, 0, 3.2, 0, Math.PI * 2);
-        }
-        ctx.fill();
-      }
-
-      // Handheld Prop (Top-down view, held in hands in front/side of character)
-      if ((ped.handheldProp || ped.state === 'idle_phone') && !ped.hasDroppedProp && ped.state !== 'panicking') {
-        const propType = ped.handheldProp || (ped.state === 'idle_phone' ? 'phone' : null);
+      const drawArticulatedPedArm = (arm: typeof pose.armL, isLeft: boolean) => {
         ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
-        if (propType === 'phone') {
-          // Top-down Smartphone held in hands in front of chest at X = 6.0, Y = 0
-          ctx.translate(6.0, 0);
+        // Upper arm (shoulder -> elbow)
+        ctx.strokeStyle = sleeveColor;
+        ctx.lineWidth = 2.35;
+        ctx.beginPath();
+        ctx.moveTo(arm.shoulder.x, arm.shoulder.y);
+        ctx.lineTo(arm.elbow.x, arm.elbow.y);
+        ctx.stroke();
 
-          // Soft glowing screen cone projected on ground in front
-          const screenGlow = ctx.createRadialGradient(2, 0, 0.5, 2, 0, 7);
-          screenGlow.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
-          screenGlow.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
-          ctx.fillStyle = screenGlow;
-          ctx.beginPath();
-          ctx.arc(2, 0, 7, -Math.PI * 0.4, Math.PI * 0.4);
-          ctx.fill();
+        // Forearm (elbow -> hand)
+        const isShortSleeve = !isFirefighter && !ped.isJanitor && (clothType === 'tshirt' || clothType === 'dress');
+        ctx.strokeStyle = isShortSleeve ? ped.skinColor : sleeveColor;
+        ctx.lineWidth = 2.05;
+        ctx.beginPath();
+        ctx.moveTo(arm.elbow.x, arm.elbow.y);
+        ctx.lineTo(arm.hand.x, arm.hand.y);
+        ctx.stroke();
 
-          // Phone outer casing (sleek dark rounded rectangle)
+        // Elbow crease highlight
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.beginPath();
+        ctx.arc(arm.elbow.x, arm.elbow.y, 0.95, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wristwatch when checking watch on left wrist
+        if (isLeft && pose.actionType === 'checking_watch') {
+          const wx = arm.elbow.x * 0.25 + arm.hand.x * 0.75;
+          const wy = arm.elbow.y * 0.25 + arm.hand.y * 0.75;
           ctx.fillStyle = '#0f172a';
           ctx.beginPath();
-          safeRoundRect(ctx, -1.6, -1.4, 3.6, 2.8, 0.6);
+          ctx.arc(wx, wy, 1.15, 0, Math.PI * 2);
           ctx.fill();
-
-          // Phone metal bezel
-          ctx.fillStyle = '#334155';
-          ctx.beginPath();
-          safeRoundRect(ctx, -1.4, -1.2, 3.2, 2.4, 0.4);
-          ctx.fill();
-
-          // Top-down illuminated glass screen
           ctx.fillStyle = '#38bdf8';
-          ctx.fillRect(-1.2, -1.0, 2.8, 2.0);
-
-          // Screen UI layout lines (top bar, content blocks viewed from top)
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(-0.8, -0.7, 1.4, 0.4);
-          ctx.fillRect(-0.8, -0.1, 2.0, 0.4);
-          ctx.fillRect(-0.8, 0.4, 1.0, 0.4);
-
-          // Top-down skin thumbs/fingers gripping phone sides
-          ctx.fillStyle = ped.skinColor;
           ctx.beginPath();
-          ctx.arc(-0.4, -1.4, 0.7, 0, Math.PI * 2);
-          ctx.arc(-0.4, 1.4, 0.7, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (propType === 'extinguisher') {
-          // Top-down Fire Extinguisher held in hands at X = 5.0, Y = 0
-          ctx.translate(5.0, 0);
-
-          // Red cylinder body
-          ctx.fillStyle = '#dc2626';
-          ctx.beginPath();
-          safeRoundRect(ctx, -1.5, -2.5, 3.0, 5.0, 1.0);
-          ctx.fill();
-
-          // Metal collar / valve top
-          ctx.fillStyle = '#94a3b8';
-          ctx.fillRect(-1.0, -2.8, 2.0, 0.8);
-
-          // Black nozzle / hose
-          ctx.fillStyle = '#0f172a';
-          ctx.beginPath();
-          ctx.arc(0, -3.2, 0.8, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (propType === 'coffee') {
-          // Top-down Coffee Cup held in right hand at X = 5.4, Y = 4.8
-          ctx.translate(5.4, 4.8);
-
-          // White takeaway cup outer rim (top-down circle)
-          ctx.fillStyle = '#f8fafc';
-          ctx.beginPath();
-          ctx.arc(0, 0, 2.4, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Kraft brown heat sleeve ring
-          ctx.fillStyle = '#d97706';
-          ctx.beginPath();
-          ctx.arc(0, 0, 2.0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Dark plastic dome lid circle
-          ctx.fillStyle = '#1e293b';
-          ctx.beginPath();
-          ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Sip hole spout dot on lid
-          ctx.fillStyle = '#0f172a';
-          ctx.beginPath();
-          ctx.arc(0.9, 0, 0.4, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Skin fingers gripping cup edge
-          ctx.fillStyle = ped.skinColor;
-          ctx.beginPath();
-          ctx.arc(0, 2.2, 0.8, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (propType === 'box') {
-          // Top-down Cardboard Box held in front of chest at X = 7.0, Y = 0
-          ctx.translate(7.0, 0);
-
-          // Cardboard top surface
-          ctx.fillStyle = '#b45309';
-          ctx.fillRect(-2.6, -3.6, 5.2, 7.2);
-
-          // Box perimeter outline
-          ctx.strokeStyle = '#78350f';
-          ctx.lineWidth = 0.8;
-          ctx.strokeRect(-2.6, -3.6, 5.2, 7.2);
-
-          // Center seam of top box flaps
-          ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-          ctx.lineWidth = 0.6;
-          ctx.beginPath();
-          ctx.moveTo(0, -3.6);
-          ctx.lineTo(0, 3.6);
-          ctx.stroke();
-
-          // Beige packing tape strip across top flaps
-          ctx.fillStyle = '#fef3c7';
-          ctx.fillRect(-0.7, -3.6, 1.4, 7.2);
-
-          // Shipping label rectangle on box top
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(-2.0, -2.6, 1.4, 2.0);
-
-          // Skin hands gripping left and right edges from top view
-          ctx.fillStyle = ped.skinColor;
-          ctx.beginPath();
-          ctx.arc(0, -3.6, 1.0, 0, Math.PI * 2);
-          ctx.arc(0, 3.6, 1.0, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (propType === 'bag') {
-          // Top-down Shopping Bag held in right hand beside body at X = bagArmSwing + 1.2, Y = 7.2
-          const bagArmSwing = Math.cos(ped.walkCycle) * 0.8;
-          ctx.translate(bagArmSwing + 1.2, 7.2);
-
-          const bagColor = ped.propColor || '#e11d48';
-
-          // Top-down bag body (open-top rectangular/elliptical tote bag)
-          ctx.fillStyle = bagColor;
-          ctx.beginPath();
-          safeRoundRect(ctx, -3.2, -1.8, 6.4, 3.6, 1.0);
-          ctx.fill();
-
-          // Bag top rim highlight/border
-          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-          ctx.lineWidth = 0.6;
-          ctx.strokeRect(-3.2, -1.8, 6.4, 3.6);
-
-          // Dark interior opening visible from top view
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-          ctx.beginPath();
-          ctx.ellipse(0, 0, 2.4, 1.0, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Bag handles going from inside bag rim to hand grip point
-          ctx.strokeStyle = '#f8fafc';
-          ctx.lineWidth = 0.8;
-          ctx.beginPath();
-          ctx.moveTo(-1.8, -0.6);
-          ctx.lineTo(-0.6, -2.2);
-          ctx.moveTo(1.8, -0.6);
-          ctx.lineTo(0.6, -2.2);
-          ctx.stroke();
-
-          // Skin hand fingers gripping handles
-          ctx.fillStyle = ped.skinColor;
-          ctx.beginPath();
-          ctx.arc(0, -2.2, 0.9, 0, Math.PI * 2);
+          ctx.arc(wx, wy, 0.7, 0, Math.PI * 2);
           ctx.fill();
         }
+
+        // Hand / Glove at wrist end
+        ctx.fillStyle = handSkinColor;
+        ctx.beginPath();
+        ctx.arc(arm.hand.x, arm.hand.y, 1.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+      drawArticulatedPedArm(pose.armL, true);
+      drawArticulatedPedArm(pose.armR, false);
+
+      // Firefighter Brass Nozzle (synchronized with pose.props.fireNozzle)
+      if (isFirefighter && pose.props.fireNozzle) {
+        const fn = pose.props.fireNozzle;
+        ctx.save();
+        ctx.translate(fn.x, fn.y);
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(-1.4, -1.2, 3.6, 2.4);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(1.8, -0.6, 1.3, 1.2);
+        ctx.fillRect(-0.6, 0.8, 0.8, 1.5);
         ctx.restore();
       }
 
-      // Janitor Broom (Pure Top-Down View: shaft extends forward from hands, broom head at front)
-      if (ped.hasBroom) {
+      // 3. Synchronized Handheld Props & Sweeping Janitor Broom (drawn before head/umbrella so depth layering is natural)
+      if (pose.props.phone) {
+        const ph = pose.props.phone;
         ctx.save();
+        ctx.translate(ph.x, ph.y);
+        ctx.rotate(ph.angle);
 
-        // Broom Shaft: wooden pole extending forward from hands (X = 4.5 to 16.5)
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = 1.6;
-        ctx.lineCap = 'round';
+        // Soft glowing screen cone projected on chest/face
+        const screenGlow = ctx.createRadialGradient(0.8, 0, 0.4, 0.8, 0, 6.8);
+        screenGlow.addColorStop(0, 'rgba(56, 189, 248, 0.38)');
+        screenGlow.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+        ctx.fillStyle = screenGlow;
         ctx.beginPath();
-        ctx.moveTo(4.5, -1.0);
-        ctx.lineTo(16.5, 0.5);
+        ctx.arc(0.8, 0, 6.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Phone outer casing
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        safeRoundRect(ctx, -1.6, -1.4, 3.6, 2.8, 0.6);
+        ctx.fill();
+
+        // Illuminated glass screen
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(-1.2, -1.0, 2.8, 2.0);
+
+        // Dynamic scrolling UI cards on screen
+        const scrollShift = (nowSec * 1.2) % 1.2;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-0.8, -0.7 + scrollShift * 0.3, 1.4, 0.38);
+        ctx.fillRect(-0.8, -0.1, 2.0, 0.38);
+        ctx.fillRect(-0.8, 0.45 - scrollShift * 0.2, 1.1, 0.35);
+
+        // Thumbs gripping sides (right thumb taps screen)
+        const tapOffset = Math.max(0, Math.sin(nowSec * 7.5)) * 0.35;
+        ctx.fillStyle = ped.skinColor;
+        ctx.beginPath();
+        ctx.arc(-0.4, -1.35, 0.65, 0, Math.PI * 2);
+        ctx.arc(-0.3 + tapOffset, 1.35 - tapOffset * 0.8, 0.65, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (pose.props.extinguisher) {
+        const ext = pose.props.extinguisher;
+        ctx.save();
+        ctx.translate(ext.x, ext.y);
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        safeRoundRect(ctx, -1.5, -2.5, 3.0, 5.0, 1.0);
+        ctx.fill();
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-1.0, -2.8, 2.0, 0.8);
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0, -3.2, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (pose.props.coffee) {
+        const cf = pose.props.coffee;
+        ctx.save();
+        ctx.translate(cf.x, cf.y);
+
+        // White takeaway cup outer rim
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(0, 0, 2.35, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Kraft brown heat sleeve ring
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.95, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dark plastic dome lid circle
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.45, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sip hole spout dot
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(-0.85, 0, 0.38, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Delicate rising hot coffee steam wisps
+        const steamPhase = nowSec * 2.6 + ped.id * 1.3;
+        ctx.strokeStyle = 'rgba(248, 250, 252, 0.45)';
+        ctx.lineWidth = 0.55;
+        ctx.beginPath();
+        ctx.arc(Math.sin(steamPhase) * 0.6, Math.cos(steamPhase * 0.8) * 0.6, 0.9 + (steamPhase % 1) * 0.8, 0, Math.PI * 1.4);
         ctx.stroke();
 
-        // Metallic collar where shaft joins broom head
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(15.2, -0.2, 1.4, 1.4);
-
-        // Broom Head (Transverse bar & dense sweeping bristles at X = 16.5)
+        ctx.restore();
+      } else if (pose.props.box) {
+        const bx = pose.props.box;
         ctx.save();
-        ctx.translate(16.5, 0.5);
+        ctx.translate(bx.x, bx.y);
+        ctx.rotate(bx.angle);
 
-        // Transverse wooden head bar (top view perpendicular to handle)
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(-2.6, -3.6, 5.2, 7.2);
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-2.6, -3.6, 5.2, 7.2);
+
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(0, -3.6);
+        ctx.lineTo(0, 3.6);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(-0.7, -3.6, 1.4, 7.2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-2.0, -2.6, 1.4, 2.0);
+        ctx.restore();
+      } else if (pose.props.bag) {
+        const bg = pose.props.bag;
+        ctx.save();
+        ctx.translate(bg.x, bg.y);
+        ctx.rotate(bg.swingPitch * 0.45);
+
+        const bagColor = ped.propColor || '#e11d48';
+        ctx.fillStyle = bagColor;
+        ctx.beginPath();
+        safeRoundRect(ctx, -3.2, -1.8, 6.4, 3.6, 1.0);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 0.6;
+        ctx.strokeRect(-3.2, -1.8, 6.4, 3.6);
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 2.4, 1.0, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-1.8, -0.6); ctx.lineTo(-0.6, -2.0);
+        ctx.moveTo(1.8, -0.6); ctx.lineTo(0.6, -2.0);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Janitor Broom (Synchronized with pose.props.broom sweeping arc!)
+      if (pose.props.broom) {
+        const br = pose.props.broom;
+        ctx.save();
+
+        // Subtle dust puff particles when sweeping bristles reach stroke extremes
+        const sweepVel = Math.abs(Math.cos(nowSec * 3.8 + ped.id));
+        if (sweepVel < 0.35) {
+          ctx.fillStyle = 'rgba(203, 213, 225, 0.28)';
+          ctx.beginPath();
+          ctx.arc(br.shaftEnd.x + 2.8, br.shaftEnd.y + (br.headAngle > 0 ? 3.2 : -3.2), 2.2, 0, Math.PI * 2);
+          ctx.arc(br.shaftEnd.x + 4.2, br.shaftEnd.y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Broom Shaft from left grip through right grip to broom head
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 1.55;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(br.gripL.x - 1.2, br.gripL.y - 0.5);
+        ctx.lineTo(br.shaftEnd.x, br.shaftEnd.y);
+        ctx.stroke();
+
+        // Broom Head at shaftEnd rotated by br.headAngle
+        ctx.save();
+        ctx.translate(br.shaftEnd.x, br.shaftEnd.y);
+        ctx.rotate(br.headAngle);
+
+        // Metallic collar
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-1.4, -0.7, 1.4, 1.4);
+
+        // Transverse wooden head bar
         ctx.fillStyle = '#571c05';
         ctx.fillRect(-0.8, -5.0, 2.2, 10.0);
 
-        // Dense broom bristles spreading forward along +X axis from head bar
+        // Dense broom bristles
         ctx.fillStyle = '#fde047';
         ctx.beginPath();
         ctx.moveTo(1.4, -5.0);
@@ -10046,7 +9864,6 @@ export class GameRenderer {
         ctx.lineTo(1.4, 5.0);
         ctx.fill();
 
-        // Bristle fiber texture lines
         ctx.strokeStyle = '#eab308';
         ctx.lineWidth = 0.6;
         ctx.beginPath();
@@ -10055,62 +9872,304 @@ export class GameRenderer {
           ctx.lineTo(6.0, y * 1.15);
         }
         ctx.stroke();
+        ctx.restore();
 
-        ctx.restore(); // restore broom head translate
-
-        // Hands gripping handle in front of chest at X = 5.2 and X = 6.8
+        // Hands gripping broom shaft
         ctx.fillStyle = ped.skinColor;
         ctx.beginPath();
-        ctx.arc(5.2, -0.9, 1.0, 0, Math.PI * 2);
-        ctx.arc(6.8, 0.5, 1.0, 0, Math.PI * 2);
+        ctx.arc(br.gripL.x, br.gripL.y, 1.05, 0, Math.PI * 2);
+        ctx.arc(br.gripR.x, br.gripR.y, 1.05, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
       }
 
-      // Rain Umbrella
-      if (ped.hasUmbrella) {
-        ctx.fillStyle = ped.umbrellaColor || '#ef4444';
-        ctx.beginPath();
-        ctx.arc(0, 0, 9, 0, Math.PI * 2);
-        ctx.fill();
+      // 4. Head, Facial Anatomy, Hairstyles & Hats (synchronized with pose.head yaw/pitch/position)
+      ctx.save();
+      ctx.translate(pose.head.x, pose.head.y);
+      ctx.rotate(pose.head.yaw);
+      const pitchShiftX = -pose.head.pitch * 1.35; // Looking down shifts crown forward, nose slightly under
 
-        // Umbrella ribs / highlights
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 0.8;
+      // Ears on left and right side of head
+      ctx.fillStyle = ped.skinColor;
+      ctx.beginPath();
+      ctx.arc(-3.4 * Math.sin(pose.head.roll) * 0.2, -3.4, 0.9, 0, Math.PI * 2);
+      ctx.arc(3.4 * Math.sin(pose.head.roll) * 0.2, 3.4, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Head Base
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Subtle nose bump at front of face (+X, tucked slightly when looking down at phone/watch)
+      ctx.beginPath();
+      ctx.arc(3.1 + pitchShiftX * 0.6, 0, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glasses / Sunglasses
+      if (ped.hasGlasses) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(1.7 + pitchShiftX * 0.4, -2.4, 1.0, 1.8);
+        ctx.fillRect(1.7 + pitchShiftX * 0.4, 0.6, 1.0, 1.8);
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.6;
         ctx.beginPath();
-        ctx.moveTo(-9, 0); ctx.lineTo(9, 0);
-        ctx.moveTo(0, -9); ctx.lineTo(0, 9);
+        ctx.moveTo(2.2 + pitchShiftX * 0.4, -0.6); ctx.lineTo(2.2 + pitchShiftX * 0.4, 0.6);
+        ctx.moveTo(2.2 + pitchShiftX * 0.4, -2.4); ctx.lineTo(0.3, -3.4);
+        ctx.moveTo(2.2 + pitchShiftX * 0.4, 2.4); ctx.lineTo(0.3, 3.4);
         ctx.stroke();
       }
 
-      // Dog walking
-      if (ped.hasDog) {
-        ctx.save();
-        ctx.rotate(-Math.PI / 6); // Dog slightly to the side
-        ctx.translate(14, 6);
-        
-        // Leash line
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 0.5;
+      // Hairstyles
+      if (isFirefighter) {
+        // Helmet drawn below
+      } else if (ped.hairStyle === 'bald') {
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
         ctx.beginPath();
-        ctx.moveTo(-14, -6);
-        ctx.lineTo(0, 0);
+        ctx.arc(0.7, -0.8, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (!ped.hasHat) {
+        ctx.fillStyle = ped.hairColor;
+        ctx.beginPath();
+        if (ped.hairStyle === 'short') {
+          ctx.arc(-1.1, 0, 3.2, Math.PI * 0.45, Math.PI * 1.55);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(-0.7, -1.5); ctx.lineTo(0.7, -0.2);
+          ctx.stroke();
+        } else if (ped.hairStyle === 'long') {
+          ctx.arc(-1.5, 0, 3.5, Math.PI * 0.35, Math.PI * 1.65);
+          ctx.ellipse(-3.3, -2.8, 3.2, 1.8, -Math.PI / 5, 0, Math.PI * 2);
+          ctx.ellipse(-3.3, 2.8, 3.2, 1.8, Math.PI / 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-2.5, -3.5); ctx.lineTo(-4.7, -2.5);
+          ctx.moveTo(-2.5, 3.5); ctx.lineTo(-4.7, 2.5);
+          ctx.stroke();
+        } else if (ped.hairStyle === 'bun') {
+          ctx.arc(-1.1, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.arc(-4.1, 0, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+        } else if (ped.hairStyle === 'ponytail') {
+          const tailWag = Math.sin(ped.walkCycle || 0) * 0.16;
+          ctx.arc(-1.1, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.ellipse(-5.3, tailWag * 2.0, 3.4, 1.3, tailWag, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (ped.hairStyle === 'spiky') {
+          ctx.moveTo(-1.1, -3.2);
+          ctx.lineTo(0.7, -4.2); ctx.lineTo(-0.3, -2.2);
+          ctx.lineTo(1.7, -1.2); ctx.lineTo(0.3, 0);
+          ctx.lineTo(1.7, 1.2); ctx.lineTo(-0.3, 2.2);
+          ctx.lineTo(0.7, 4.2); ctx.lineTo(-1.1, 3.2);
+          ctx.arc(-1.1, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.fill();
+        } else if (ped.hairStyle === 'curly') {
+          for (let angle = 0.5; angle < Math.PI * 1.8; angle += 0.45) {
+            const hx = -0.5 + Math.cos(angle) * 3.2;
+            const hy = Math.sin(angle) * 3.2;
+            ctx.arc(hx, hy, 1.3, 0, Math.PI * 2);
+          }
+          ctx.fill();
+        } else if (ped.hairStyle === 'afro') {
+          ctx.arc(-1.3, 0, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+
+      // Headphones (Over-Ear)
+      if (ped.hasHeadphones && !ped.hasHat) {
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.6, -Math.PI * 0.4, Math.PI * 0.4);
+        ctx.stroke();
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(-0.5, -4.2, 1.6, 1.2);
+        ctx.fillRect(-0.5, 3.0, 1.6, 1.2);
+      }
+
+      // Hats / Helmets
+      if (isFirefighter) {
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#020617';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.arc(0, 0, 4.2, -Math.PI * 0.95, Math.PI * 0.95);
         ctx.stroke();
 
-        // Dog body
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.4, -Math.PI * 0.35, Math.PI * 0.35);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(3.1, -1.0);
+        ctx.lineTo(4.3, 0);
+        ctx.lineTo(3.1, 1.0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(-4.0, -0.6, 6.8, 1.2);
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4.4, -Math.PI * 0.22, Math.PI * 0.22);
+        ctx.lineTo(1.7, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      } else if (ped.hasHat) {
+        ctx.fillStyle = ped.hatColor || '#1e293b';
+        ctx.beginPath();
+        if (ped.hatType === 'cap') {
+          ctx.arc(-0.7, 0, 3.2, 0, Math.PI * 2);
+          ctx.fillRect(1.5, -2.0, 3.2, 4.0);
+        } else if (ped.hatType === 'beanie') {
+          ctx.arc(-0.9, 0, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(-4.0, -2.0); ctx.lineTo(1.0, -2.0);
+          ctx.moveTo(-4.0, 0); ctx.lineTo(1.0, 0);
+          ctx.moveTo(-4.0, 2.0); ctx.lineTo(1.0, 2.0);
+          ctx.stroke();
+        } else if (ped.hatType === 'sunhat') {
+          ctx.arc(-0.5, 0, 5.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0.2)';
+          ctx.beginPath();
+          ctx.arc(-0.5, 0, 3.2, 0, Math.PI * 2);
+        } else if (ped.hatType === 'fedora') {
+          ctx.arc(-0.5, 0, 4.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(-0.5, 0, 3.2, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+      ctx.restore(); // end head transform
+
+      // 5. Rain Umbrella (synchronized with pose.props.umbrella)
+      if (pose.props.umbrella) {
+        const umb = pose.props.umbrella;
+        ctx.save();
+        ctx.translate(umb.x, umb.y);
+        ctx.fillStyle = ped.umbrellaColor || '#ef4444';
+        ctx.beginPath();
+        ctx.arc(0, 0, umb.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 8-segmented canopy ribs & center ferrule cap
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.38)';
+        ctx.lineWidth = 0.75;
+        ctx.beginPath();
+        for (let a = 0; a < Math.PI; a += Math.PI / 4) {
+          ctx.moveTo(-Math.cos(a) * umb.radius, -Math.sin(a) * umb.radius);
+          ctx.lineTo(Math.cos(a) * umb.radius, Math.sin(a) * umb.radius);
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 6. Animated 4-Paw Dog Companion & Sagging Leash (synchronized with pose.props.dog)
+      if (pose.props.dog) {
+        const dog = pose.props.dog;
+
+        // Curved slack leash from hand to collar
+        ctx.save();
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 0.65;
+        ctx.beginPath();
+        ctx.moveTo(dog.leashStart.x, dog.leashStart.y);
+        const midLx = (dog.leashStart.x + dog.leashEnd.x) * 0.5 - 0.8;
+        const midLy = (dog.leashStart.y + dog.leashEnd.y) * 0.5 + 1.2;
+        ctx.quadraticCurveTo(midLx, midLy, dog.leashEnd.x, dog.leashEnd.y);
+        ctx.stroke();
+
+        // Dog body & animated limbs
+        ctx.translate(dog.x, dog.y);
+        ctx.rotate(dog.angle);
+
+        const pawStride = Math.sin(dog.legPhase) * 2.1;
+        ctx.fillStyle = '#451a03';
+        // 4 trotting paws (FL, FR, BL, BR)
+        ctx.beginPath();
+        ctx.arc(2.6 + pawStride, -2.1, 0.95, 0, Math.PI * 2);
+        ctx.arc(2.6 - pawStride, 2.1, 0.95, 0, Math.PI * 2);
+        ctx.arc(-2.6 - pawStride, -2.1, 0.95, 0, Math.PI * 2);
+        ctx.arc(-2.6 + pawStride, 2.1, 0.95, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wagging tail
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 1.3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-4.0, 0);
+        ctx.quadraticCurveTo(-5.8, dog.tailAngle * 2.2, -7.2, dog.tailAngle * 4.5);
+        ctx.stroke();
+
+        // Dog torso
         ctx.fillStyle = '#78350f';
         ctx.beginPath();
-        ctx.ellipse(0, 0, 4.5, 2.8, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 4.5, 2.6, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Dog head
+
+        // Red collar
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1.0;
         ctx.beginPath();
-        ctx.arc(3.5, 0, 2.2, 0, Math.PI * 2);
+        ctx.moveTo(2.2, -2.1);
+        ctx.lineTo(2.2, 2.1);
+        ctx.stroke();
+
+        // Dog head & snout
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.arc(3.6, 0, 2.2, 0, Math.PI * 2);
+        ctx.ellipse(5.4, 0, 1.4, 1.05, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Dog ears
+
+        // Black nose tip
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(6.5, 0, 0.55, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Floppy ears
         ctx.fillStyle = '#451a03';
-        ctx.fillRect(2, -2.5, 1.5, 1.5);
-        ctx.fillRect(2, 1, 1.5, 1.5);
+        ctx.beginPath();
+        safeRoundRect(ctx, 2.1, -2.7, 1.6, 1.4, 0.5);
+        safeRoundRect(ctx, 2.1, 1.3, 1.6, 1.4, 0.5);
+        ctx.fill();
+
         ctx.restore();
       }
 
@@ -10123,10 +10182,10 @@ export class GameRenderer {
         const tw = ctx.measureText(text).width;
         const bw = tw + 10;
         const bh = 16;
-        
+
         ctx.save();
         ctx.translate(0, -11);
-        
+
         // Bubble tail
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
@@ -10134,7 +10193,7 @@ export class GameRenderer {
         ctx.lineTo(-3, 0);
         ctx.lineTo(3, 0);
         ctx.fill();
-        
+
         // Bubble body
         ctx.beginPath();
         safeRoundRect(ctx, -bw / 2, -bh, bw, bh, 6);
@@ -10142,7 +10201,7 @@ export class GameRenderer {
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1;
         ctx.stroke();
-        
+
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -10163,6 +10222,8 @@ export class GameRenderer {
     const waterDepth = !player.insideBuildingId && !player.isFlying ? ((player as Player).waterDepth || 0) : 0;
     const isSwimming = !!(player as Player).isSwimming || waterDepth > 0.85;
     const isWading = !isSwimming && waterDepth > 0.06;
+    const nowSec = performance.now() * 0.001;
+    const pose = computeHumanPose(player as Player, true, nowSec);
 
     // Ground Directional Indicator Ring (hidden in deep wading / swimming so water optics remain pure)
     if (waterDepth < 0.30) {
@@ -10219,13 +10280,13 @@ export class GameRenderer {
       else if (player.equippedClothing.feet?.jacket) cShoes = player.equippedClothing.feet.jacket.clothingStats?.color || cShoes;
 
       if (player.equippedClothing.head?.outerwear) cHat = player.equippedClothing.head.outerwear.clothingStats?.color;
-      
+
       if (player.equippedClothing.back?.outerwear) cBack = player.equippedClothing.back.outerwear.clothingStats?.color;
 
       if (player.equippedClothing.hands?.outerwear) cHands = player.equippedClothing.hands.outerwear.clothingStats?.color || cHands;
     }
 
-    // Wet fabric darkening: when clothing is soaked in rain, river water, or melting snow, fabrics absorb more light and darken
+    // Wet fabric darkening
     const wetness = Math.max((player as any).bodyState?.wetness || 0, waterDepth > 0.15 ? Math.min(100, waterDepth * 85) : 0);
     if (wetness > 8) {
       const wetDarkenFactor = Math.max(0.55, 1.0 - (wetness / 100) * 0.40);
@@ -10236,25 +10297,20 @@ export class GameRenderer {
       if (cShoes) cShoes = darkenHexColor(cShoes, wetDarkenFactor);
     }
 
-    const isSeated = !!(player as any).sittingState;
     const playerWalkCycle = player.walkCycle || 0;
-    const legSwing = isSeated ? 0 : Math.sin(playerWalkCycle) * 3.2;
-    const armSwing = isSeated ? 0 : Math.sin(playerWalkCycle) * 2.8;
 
     if (isSwimming) {
       // =====================================================================
       // HORIZONTAL PRONE SWIMMING POSTURE (First-Principles Breaststroke / Crawl)
       // =====================================================================
       const strokePhase = (player as Player).swimStrokePhase ?? (playerWalkCycle * 0.75);
-      const timeSec = performance.now() * 0.001;
-      const refrShift = Math.sin(timeSec * 3.8 + player.x * 0.06) * 0.85;
+      const refrShift = Math.sin(nowSec * 3.8 + player.x * 0.06) * 0.85;
       const kickL = Math.sin(strokePhase * 2.0) * 2.2;
       const kickR = -kickL;
-      // Breaststroke arm trajectory: reach forward (+x), sweep wide (+/-y), pull back
       const reachX = Math.cos(strokePhase) * 3.8 + 2.6;
       const sweepY = Math.max(0, Math.sin(strokePhase)) * 4.2 + 4.0;
 
-      // 1. Submerged Kicking Legs & Feet (drawn with underwater refraction shift)
+      // 1. Submerged Kicking Legs & Feet
       ctx.save();
       ctx.globalAlpha = 0.58;
       ctx.fillStyle = cShoes;
@@ -10267,7 +10323,7 @@ export class GameRenderer {
       safeEllipse(ctx, -8.5, 2.3 + kickR * 0.35 + refrShift * 0.7, 4.6, 1.85, 0.08 * kickR, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. Prone Horizontal Torso (partially submerged below the waterline)
+      // 2. Prone Horizontal Torso
       ctx.globalAlpha = 0.78;
       ctx.fillStyle = cShirt;
       ctx.beginPath();
@@ -10280,7 +10336,7 @@ export class GameRenderer {
       }
       ctx.restore();
 
-      // 3. Underwater Beer-Lambert Teal Attenuation Veil over Submerged Lower Body & Back
+      // 3. Underwater Beer-Lambert Teal Attenuation Veil
       const subGrad = ctx.createLinearGradient(-15, 0, 5, 0);
       subGrad.addColorStop(0, 'rgba(10, 58, 74, 0.82)');
       subGrad.addColorStop(0.55, 'rgba(14, 78, 96, 0.62)');
@@ -10291,7 +10347,7 @@ export class GameRenderer {
       safeEllipse(ctx, -5.2, 0, 10.5, 6.4, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 4. Sweeping Breaststroke / Freestyle Arms & Hands breaking the water surface
+      // 4. Sweeping Breaststroke Arms & Hands
       ctx.strokeStyle = cShirt;
       ctx.lineWidth = 2.7;
       ctx.lineCap = 'round';
@@ -10308,7 +10364,6 @@ export class GameRenderer {
       ctx.arc(reachX + 0.8, sweepY * 0.72, 1.35, 0, Math.PI * 2);
       ctx.fill();
 
-      // Hand stroke foam splashes when pulling through water
       const pullFoamAlpha = Math.max(0, Math.sin(strokePhase)) * 0.55;
       if (pullFoamAlpha > 0.05) {
         ctx.strokeStyle = `rgba(226, 246, 255, ${pullFoamAlpha.toFixed(3)})`;
@@ -10319,7 +10374,7 @@ export class GameRenderer {
         ctx.stroke();
       }
 
-      // 5. Emergent Head tilted up to breathe above the waterline + collar foam meniscus
+      // 5. Emergent Head
       ctx.strokeStyle = 'rgba(224, 245, 254, 0.52)';
       ctx.lineWidth = 1.25;
       ctx.beginPath();
@@ -10342,95 +10397,115 @@ export class GameRenderer {
         ctx.arc(1.9, 0, 3.25, Math.PI * 0.45, Math.PI * 1.55);
         ctx.fill();
       }
-    } else if (isSeated) {
-      // Seated posture: thighs forward, knees bent, feet resting
-      ctx.fillStyle = cPants;
+    } else if (pose.isLyingDown) {
+      // =====================================================================
+      // HORIZONTAL SLEEPING / UNCONSCIOUS POSTURE (Synchronized with 3D shadow)
+      // =====================================================================
+      ctx.save();
+      // Legs stretched back
+      ctx.strokeStyle = cPants;
+      ctx.lineWidth = 3.1;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.fillRect(-1.5, -3.2, 5.5, 2.4);
-      ctx.fillRect(-1.5, 0.8, 5.5, 2.4);
-      ctx.fill();
+      ctx.moveTo(pose.legL.hip.x, pose.legL.hip.y);
+      ctx.lineTo(pose.legL.knee.x, pose.legL.knee.y);
+      ctx.lineTo(pose.legL.foot.x, pose.legL.foot.y);
+      ctx.moveTo(pose.legR.hip.x, pose.legR.hip.y);
+      ctx.lineTo(pose.legR.knee.x, pose.legR.knee.y);
+      ctx.lineTo(pose.legR.foot.x, pose.legR.foot.y);
+      ctx.stroke();
 
-      // Shoes at knees/feet
       ctx.fillStyle = cShoes;
-      ctx.fillRect(3.2, -3.2, 2.8, 2.4);
-      ctx.fillRect(3.2, 0.8, 2.8, 2.4);
+      ctx.fillRect(pose.legL.foot.x - 1.5, pose.legL.foot.y - 1.2, 3.0, 2.4);
+      ctx.fillRect(pose.legR.foot.x - 1.5, pose.legR.foot.y - 1.2, 3.0, 2.4);
 
-      // Torso comfortably leaning
+      // Supine Torso with slow breathing
       ctx.fillStyle = cShirt;
       ctx.beginPath();
-      ctx.ellipse(-1.0, 0, 4.2, 5.6, 0, 0, Math.PI * 2);
+      safeEllipse(ctx, pose.torso.x, pose.torso.y, 6.2 * pose.torso.breathScale, 4.8 * pose.torso.breathScale, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Backpack resting against seat back
-      if (cBack) {
-        ctx.fillStyle = cBack;
-        ctx.fillRect(-5.5, -2.8, 3.2, 5.6);
-      }
-
-      // Arms resting on thighs / armrests
-      ctx.fillStyle = cShirt;
+      // Arms resting along sides/chest
+      ctx.strokeStyle = cShirt;
+      ctx.lineWidth = 2.4;
       ctx.beginPath();
-      ctx.arc(1.5, -4.5, 1.6, 0, Math.PI * 2);
-      ctx.arc(1.5, 4.5, 1.6, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(pose.armL.shoulder.x, pose.armL.shoulder.y);
+      ctx.lineTo(pose.armL.elbow.x, pose.armL.elbow.y);
+      ctx.lineTo(pose.armL.hand.x, pose.armL.hand.y);
+      ctx.moveTo(pose.armR.shoulder.x, pose.armR.shoulder.y);
+      ctx.lineTo(pose.armR.elbow.x, pose.armR.elbow.y);
+      ctx.lineTo(pose.armR.hand.x, pose.armR.hand.y);
+      ctx.stroke();
 
-      // Hands resting on knees
       ctx.fillStyle = cHands;
       ctx.beginPath();
-      ctx.arc(3.5, -4.2, 1.2, 0, Math.PI * 2);
-      ctx.arc(3.5, 4.2, 1.2, 0, Math.PI * 2);
+      ctx.arc(pose.armL.hand.x, pose.armL.hand.y, 1.2, 0, Math.PI * 2);
+      ctx.arc(pose.armR.hand.x, pose.armR.hand.y, 1.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Render items held in hands (seated posture)
-      if (player.leftHandItem) {
-        drawItemModel2D(ctx, player.leftHandItem.itemId, 3.6, -4.4, 5.2, player.leftHandItem);
-      }
-      if (player.rightHandItem) {
-        drawItemModel2D(ctx, player.rightHandItem.itemId, 3.6, 4.4, 5.2, player.rightHandItem);
-      }
-
-      // Head
+      // Head on pillow
       ctx.fillStyle = cSkin;
       ctx.beginPath();
-      ctx.arc(1.8, 0, 3.4, 0, Math.PI * 2);
+      ctx.arc(pose.head.x, pose.head.y, 3.4, 0, Math.PI * 2);
       ctx.fill();
-
       if (cHat) {
         ctx.fillStyle = cHat;
         ctx.beginPath();
-        ctx.arc(1.5, 0, 3.5, 0, Math.PI * 2);
+        ctx.arc(pose.head.x - 0.3, pose.head.y, 3.5, 0, Math.PI * 2);
         ctx.fill();
       } else {
         ctx.fillStyle = cHair;
         ctx.beginPath();
-        ctx.arc(0.6, 0, 3.2, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.arc(pose.head.x - 1.0, pose.head.y, 3.2, Math.PI * 0.45, Math.PI * 1.55);
         ctx.fill();
       }
+      ctx.restore();
     } else {
-      // Standard Standing / Walking / Wading posture
+      // =====================================================================
+      // ARTICULATED STANDING / WALKING / SITTING / CROUCHING / ACTION POSTURE
+      // =====================================================================
       const wadeRatio = isWading ? Math.min(1, waterDepth / 0.85) : 0;
-      const legStrideScale = 1 - wadeRatio * 0.42;
-      const effLegSwing = legSwing * legStrideScale;
-      const armOutBalance = wadeRatio > 0.35 ? (wadeRatio - 0.35) * 2.2 : 0;
 
-      // Legs / Pants (attenuated by water optical absorption when wading)
+      // 1. Articulated 2-Segment Legs & Footwear (with water optical attenuation when wading)
       ctx.save();
       if (wadeRatio > 0.12) {
         ctx.globalAlpha = Math.max(0.28, 1 - wadeRatio * 0.72);
       }
-      ctx.fillStyle = cPants;
-      ctx.beginPath();
-      ctx.arc(effLegSwing, -1.8, 2.2, 0, Math.PI * 2);
-      ctx.arc(-effLegSwing, 1.8, 2.2, 0, Math.PI * 2);
-      ctx.fill();
 
-      // Shoes
-      if (wadeRatio < 0.65) {
-        ctx.globalAlpha = Math.max(0.15, 1 - wadeRatio * 1.35);
-        ctx.fillStyle = cShoes;
-        ctx.fillRect(-1.5 + effLegSwing, -3.5, 3, 3.2);
-        ctx.fillRect(-1.5 - effLegSwing, 0.5, 3, 3.2);
-      }
+      const drawPlayerLeg = (leg: typeof pose.legL) => {
+        if (wadeRatio < 0.65) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0.15, (wadeRatio > 0.12 ? Math.max(0.28, 1 - wadeRatio * 0.72) : 1) * (1 - wadeRatio * 1.1));
+          ctx.translate(leg.foot.x, leg.foot.y);
+          ctx.rotate(leg.footAngle);
+          const shoeScale = 1.0 + Math.min(0.18, leg.foot.z * 0.04);
+          ctx.scale(shoeScale, shoeScale);
+          ctx.fillStyle = cShoes;
+          ctx.beginPath();
+          safeRoundRect(ctx, -1.4, -1.35, 3.2, 2.7, 0.7);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.18)';
+          ctx.fillRect(1.1, -1.0, 0.55, 2.0);
+          ctx.restore();
+        }
+
+        ctx.strokeStyle = cPants;
+        ctx.lineWidth = 3.0;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(leg.hip.x, leg.hip.y);
+        ctx.lineTo(leg.knee.x, leg.knee.y);
+        ctx.lineTo(leg.foot.x, leg.foot.y);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.09)';
+        ctx.beginPath();
+        ctx.arc(leg.knee.x, leg.knee.y, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawPlayerLeg(pose.legL);
+      drawPlayerLeg(pose.legR);
       ctx.restore();
 
       // Subtle underwater refraction veil over submerged legs when wading
@@ -10441,13 +10516,29 @@ export class GameRenderer {
         ctx.fill();
       }
 
-      // Torso
+      // 2. Torso & Backpack (with breathing expansion, pitch lean, and yaw counter-rotation)
+      ctx.save();
+      ctx.translate(pose.torso.x, pose.torso.y);
+      ctx.rotate(pose.torso.yaw);
+      ctx.scale(pose.torso.breathScale, pose.torso.breathScale);
+
       ctx.fillStyle = cShirt;
       ctx.beginPath();
       ctx.ellipse(0, 0, 4.5, 6.0, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Waist-deep waterline foam ring around torso if wading deep (0.45m .. 0.85m)
+      // Subtle shoulder seam & collar detail on player torso
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(0.4, -5.2); ctx.lineTo(0.4, 5.2);
+      ctx.stroke();
+      ctx.fillStyle = cSkin;
+      ctx.beginPath();
+      ctx.arc(1.9, 0, 1.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Waist-deep waterline foam ring around torso if wading deep
       if (wadeRatio > 0.48) {
         const waistAlpha = (wadeRatio - 0.48) * 0.75;
         ctx.strokeStyle = `rgba(224, 245, 254, ${waistAlpha.toFixed(3)})`;
@@ -10460,49 +10551,233 @@ export class GameRenderer {
       // Backpack
       if (cBack) {
         ctx.fillStyle = cBack;
-        ctx.fillRect(-4.5, -3, 3.5, 6);
+        ctx.beginPath();
+        safeRoundRect(ctx, -5.0, -3.3, 3.6, 6.6, 0.8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 0.6;
+        ctx.strokeRect(-5.0, -3.3, 3.6, 6.6);
+        // Backpack shoulder straps
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(-1.5, -3.0); ctx.lineTo(1.6, -2.7);
+        ctx.moveTo(-1.5, 3.0); ctx.lineTo(1.6, 2.7);
+        ctx.stroke();
       }
+      ctx.restore();
 
-      // Arms swinging with walk cycle (held slightly wider for balance in deep water)
-      ctx.fillStyle = cShirt;
-      ctx.beginPath();
-      ctx.arc(armSwing, -5.2 - armOutBalance, 1.8, 0, Math.PI * 2);
-      ctx.arc(-armSwing, 5.2 + armOutBalance, 1.8, 0, Math.PI * 2);
-      ctx.fill();
+      // 3. Articulated 2-Segment Arms (Shoulder -> Elbow -> Hand)
+      const drawPlayerArm = (arm: typeof pose.armL, isLeft: boolean) => {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
-      // Hands
-      ctx.fillStyle = cHands;
-      ctx.beginPath();
-      ctx.arc(armSwing + 1, -5.2 - armOutBalance, 1.2, 0, Math.PI * 2);
-      ctx.arc(-armSwing + 1, 5.2 + armOutBalance, 1.2, 0, Math.PI * 2);
-      ctx.fill();
+        // Upper arm & forearm sleeve
+        ctx.strokeStyle = cShirt;
+        ctx.lineWidth = 2.55;
+        ctx.beginPath();
+        ctx.moveTo(arm.shoulder.x, arm.shoulder.y);
+        ctx.lineTo(arm.elbow.x, arm.elbow.y);
+        ctx.lineTo(arm.hand.x, arm.hand.y);
+        ctx.stroke();
 
-      // Render items held in hands (standing/walking posture)
+        // Elbow joint shading
+        ctx.fillStyle = 'rgba(0,0,0,0.14)';
+        ctx.beginPath();
+        ctx.arc(arm.elbow.x, arm.elbow.y, 1.0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wristwatch on left wrist when checking watch
+        if (isLeft && pose.actionType === 'checking_watch') {
+          const wx = arm.elbow.x * 0.25 + arm.hand.x * 0.75;
+          const wy = arm.elbow.y * 0.25 + arm.hand.y * 0.75;
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(wx, wy, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(wx, wy, 0.75, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Hand / Glove
+        ctx.fillStyle = cHands;
+        ctx.beginPath();
+        ctx.arc(arm.hand.x, arm.hand.y, 1.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+      drawPlayerArm(pose.armL, true);
+      drawPlayerArm(pose.armR, false);
+
+      // 4. Held Hand Items & Active Consumption Item (positioned at exact articulated hand coordinates)
+      const consItem = (player as Player).consumption?.item;
       if (player.leftHandItem) {
-        drawItemModel2D(ctx, player.leftHandItem.itemId, armSwing + 1.8, -5.2 - armOutBalance, 5.2, player.leftHandItem);
+        const hx = pose.props.handItemL ? pose.props.handItemL.x : pose.armL.hand.x + 0.8;
+        const hy = pose.props.handItemL ? pose.props.handItemL.y : pose.armL.hand.y;
+        drawItemModel2D(ctx, player.leftHandItem.itemId, hx, hy, 5.2, player.leftHandItem);
       }
       if (player.rightHandItem) {
-        drawItemModel2D(ctx, player.rightHandItem.itemId, -armSwing + 1.8, 5.2 + armOutBalance, 5.2, player.rightHandItem);
+        const hx = pose.props.handItemR ? pose.props.handItemR.x : pose.armR.hand.x + 0.8;
+        const hy = pose.props.handItemR ? pose.props.handItemR.y : pose.armR.hand.y;
+        drawItemModel2D(ctx, player.rightHandItem.itemId, hx, hy, 5.2, player.rightHandItem);
+      } else if (consItem) {
+        // If consuming from inventory without item in right hand, show the item in the active right hand!
+        drawItemModel2D(ctx, consItem.itemId, pose.armR.hand.x + 0.6, pose.armR.hand.y, 4.8, consItem);
       }
 
-      // Head
+      // 5. Bespoke Action Visual Effects (Bandage gauze, Wrench, Pouring stream, Sand arc, Knife slash, Lighter flame, Crumbs, Med mist)
+      if (pose.props.actionEffect) {
+        const fx = pose.props.actionEffect;
+        ctx.save();
+        if (fx.type === 'bandage_gauze') {
+          // White sterile gauze strip stretching between left arm and orbiting right hand
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = 1.35;
+          ctx.beginPath();
+          ctx.moveTo(pose.armL.hand.x, pose.armL.hand.y);
+          ctx.quadraticCurveTo(
+            (pose.armL.hand.x + pose.armR.hand.x) * 0.5 + 1.0,
+            (pose.armL.hand.y + pose.armR.hand.y) * 0.5,
+            pose.armR.hand.x,
+            pose.armR.hand.y
+          );
+          ctx.stroke();
+          // Wrap band around left forearm
+          ctx.fillStyle = '#f1f5f9';
+          ctx.beginPath();
+          ctx.arc(pose.armL.hand.x - 0.5, pose.armL.hand.y, 1.55, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (fx.type === 'med_mist') {
+          // Antiseptic / analgesic aerosol mist puff
+          const mistR = 1.2 + (fx.progress * 3.5) % 2.8;
+          ctx.fillStyle = 'rgba(125, 211, 252, 0.42)';
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, mistR, 0, Math.PI * 2);
+          ctx.arc(fx.x - 0.8, fx.y - 0.6, mistR * 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (fx.type === 'wrench_tool') {
+          // Chrome mechanic wrench turning with right hand
+          ctx.translate(fx.x, fx.y);
+          ctx.rotate(fx.angle);
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 1.25;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-1.0, 0);
+          ctx.lineTo(3.2, 0);
+          ctx.stroke();
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 0.9;
+          ctx.beginPath();
+          ctx.arc(3.6, 0, 1.0, -Math.PI * 0.65, Math.PI * 0.65);
+          ctx.stroke();
+        } else if (fx.type === 'pour_stream') {
+          // Liquid stream pouring from tilted canister spout
+          ctx.strokeStyle = 'rgba(245, 158, 11, 0.78)';
+          ctx.lineWidth = 1.3;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(pose.armR.hand.x + 1.0, pose.armR.hand.y - 0.5);
+          ctx.quadraticCurveTo(fx.x + 1.2, fx.y, fx.x + 2.2 + Math.sin(nowSec * 14) * 0.4, fx.y + 0.3);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.55)';
+          ctx.beginPath();
+          ctx.arc(fx.x + 2.2, fx.y + 0.3, 1.2 + Math.sin(nowSec * 18) * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (fx.type === 'sand_arc') {
+          // Golden silica sand granules scattering in a wide arc from the sack
+          ctx.fillStyle = '#eab308';
+          for (let i = 0; i < 7; i++) {
+            const a = (i - 3) * 0.25 + Math.sin(nowSec * 12 + i) * 0.15;
+            const d = 1.5 + ((nowSec * 10 + i * 0.7) % 4.5);
+            ctx.beginPath();
+            ctx.arc(fx.x + Math.cos(a) * d, fx.y + Math.sin(a) * d, 0.65, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (fx.type === 'knife_arc') {
+          // Gleaming steel blade & kinetic slash arc
+          ctx.strokeStyle = 'rgba(226, 232, 240, 0.65)';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(pose.torso.x + 2.5, pose.torso.y, 6.2, -0.65, 0.55);
+          ctx.stroke();
+          ctx.save();
+          ctx.translate(pose.armR.hand.x, pose.armR.hand.y);
+          ctx.rotate(fx.angle);
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath();
+          ctx.moveTo(0.8, -0.45);
+          ctx.lineTo(4.2, 0);
+          ctx.lineTo(0.8, 0.45);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else if (fx.type === 'lighter_flame') {
+          // Warm flickering Zippo flame glow & teardrop core
+          const flicker = Math.sin(nowSec * 28) * 0.25;
+          const glow = ctx.createRadialGradient(fx.x, fx.y, 0.2, fx.x, fx.y, 4.5);
+          glow.addColorStop(0, 'rgba(251, 191, 36, 0.65)');
+          glow.addColorStop(1, 'rgba(249, 115, 22, 0.0)');
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath();
+          ctx.arc(fx.x + flicker, fx.y, 0.95, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (fx.type === 'crumbs') {
+          // Tiny food crumbs / wrapper rustle near mouth during bite
+          if (Math.sin(fx.progress * Math.PI * 6) > 0.3) {
+            ctx.fillStyle = '#fde68a';
+            ctx.beginPath();
+            ctx.arc(fx.x + 0.8, fx.y - 0.6, 0.42, 0, Math.PI * 2);
+            ctx.arc(fx.x + 1.1, fx.y + 0.5, 0.35, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+
+      // 6. Head, Ears, Nose & Hair/Hat (synchronized with pose.head yaw/pitch/position)
+      ctx.save();
+      ctx.translate(pose.head.x, pose.head.y);
+      ctx.rotate(pose.head.yaw);
+      const pitchShiftX = -pose.head.pitch * 1.35;
+
+      // Ears
       ctx.fillStyle = cSkin;
       ctx.beginPath();
-      ctx.arc(1.8, 0, 3.4, 0, Math.PI * 2);
+      ctx.arc(0, -3.4, 0.85, 0, Math.PI * 2);
+      ctx.arc(0, 3.4, 0.85, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Head Base
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Nose bump
+      ctx.beginPath();
+      ctx.arc(3.15 + pitchShiftX * 0.6, 0, 0.6, 0, Math.PI * 2);
       ctx.fill();
 
       // Hair or Hat
       if (cHat) {
         ctx.fillStyle = cHat;
         ctx.beginPath();
-        ctx.arc(1.5, 0, 3.5, 0, Math.PI * 2);
+        ctx.arc(-0.3, 0, 3.5, 0, Math.PI * 2);
         ctx.fill();
       } else {
         ctx.fillStyle = cHair;
         ctx.beginPath();
-        ctx.arc(0.6, 0, 3.2, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.arc(-1.2, 0, 3.2, Math.PI * 0.5, Math.PI * 1.5);
         ctx.fill();
       }
+      ctx.restore();
     }
 
     ctx.restore(); // end rotated part

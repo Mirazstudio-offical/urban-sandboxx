@@ -24,6 +24,7 @@ import { soothePanic } from './bodySystem';
 import { isTrailerVehicle, CAR_CONFIGS, MASTER_VEHICLE_CONFIGS } from './vehicleHelpers';
 import { getCityApartments } from './propertySystem';
 import { clearInteriorCanvasCache } from './buildingInteriors';
+import { triggerPlayerActionAnim } from './humanAnimationSystem';
 import {
   LIQUID_REGISTRY,
   CONTAINER_CONFIGS,
@@ -7619,78 +7620,96 @@ export function applyMedicalEffectById(
   if (medId === 'bandage') {
     const res = applyBandage(player, targetInjuryId);
     if (!res && targetInjuryId) return { applied: false, errorMsg: 'Этот бинт нельзя применить к этой травме' };
+    if (res) triggerPlayerActionAnim(player, 'med_bandage', 1.4, medId);
     return { applied: res };
   }
   if (medId === 'splint') {
     const res = applySplint(player, targetInjuryId);
     if (!res && targetInjuryId) return { applied: false, errorMsg: 'Шину можно наложить только на свежий перелом' };
+    if (res) triggerPlayerActionAnim(player, 'med_bandage', 1.5, medId);
     return { applied: res };
   }
   if (medId === 'medical_patch' || medId === 'patch_bactericidal_single') {
     const res = applyMedicalPatch(player, targetInjuryId);
     if (!res && targetInjuryId) return { applied: false, errorMsg: 'Пластырь не подходит для этой травмы' };
+    if (res) triggerPlayerActionAnim(player, 'med_bandage', 1.1, medId);
     return { applied: res };
   }
   if (medId === 'antiseptic') {
     const res = applyAntiseptic(player, targetInjuryId);
     if (!res && targetInjuryId) return { applied: false, errorMsg: 'Антисептик не подходит для этой травмы' };
+    if (res) triggerPlayerActionAnim(player, 'med_spray', 1.1, medId);
     return { applied: res };
   }
   if (medId === 'panthenol_spray') {
     applyPanthenolSpray(player, targetInjuryId);
+    triggerPlayerActionAnim(player, 'med_spray', 1.2, medId);
     return { applied: true };
   }
   if (medId === 'spasatel_ointment') {
     applySpasatelOintment(player, targetInjuryId);
+    triggerPlayerActionAnim(player, 'med_spray', 1.2, medId);
     return { applied: true };
   }
   if (medId === 'zelenka') {
     applyZelenka(player, targetInjuryId);
+    triggerPlayerActionAnim(player, 'med_spray', 1.1, medId);
     return { applied: true };
   }
   if (medId === 'iodine') {
     applyIodine(player, targetInjuryId);
+    triggerPlayerActionAnim(player, 'med_spray', 1.1, medId);
     return { applied: true };
   }
   if (medId === 'diclofenac_gel') {
     applyDiclofenacGel(player, targetInjuryId);
+    triggerPlayerActionAnim(player, 'med_spray', 1.2, medId);
     return { applied: true };
   }
   if (medId === 'hydrogen_peroxide') {
     applyHydrogenPeroxide(player, targetInjuryId);
+    triggerPlayerActionAnim(player, 'med_spray', 1.1, medId);
     return { applied: true };
   }
   if (medId === 'ammonia_spirit') {
     applyAmmoniaSpirit(player);
+    triggerPlayerActionAnim(player, 'med_pills', 1.0, medId);
     return { applied: true };
   }
   if (medId === 'balm_star') {
     applyBalmStar(player);
+    triggerPlayerActionAnim(player, 'med_spray', 1.1, medId);
     return { applied: true };
   }
   if (medId === 'activated_charcoal' || medId === 'pill_charcoal_single') {
     applyActivatedCharcoal(player);
+    triggerPlayerActionAnim(player, 'med_pills', 1.0, medId);
     return { applied: true };
   }
   if (medId === 'valerian_drops') {
     applyValerianDrops(player);
+    triggerPlayerActionAnim(player, 'drinking', 1.1, medId);
     return { applied: true };
   }
   if (medId === 'medkit') {
     applyMedkit(player);
+    triggerPlayerActionAnim(player, 'med_bandage', 1.6, medId);
     return { applied: true };
   }
   if (medId === 'painkillers' || medId === 'pill_painkiller_single' || medId === 'pill_antipyretic_single') {
     administerMedication(player, 'painkillers');
+    triggerPlayerActionAnim(player, 'med_pills', 1.0, medId);
     return { applied: true };
   }
   if (medId === 'morphine') {
     administerMedication(player, 'morphine');
+    triggerPlayerActionAnim(player, 'med_spray', 1.1, medId);
     return { applied: true };
   }
   if (medId === 'vitamins' || medId === 'pill_vitamin_single') {
     player.needs.energy = Math.min(100, player.needs.energy + 4);
     administerMedication(player, 'vitamins');
+    triggerPlayerActionAnim(player, 'med_pills', 1.0, medId);
     return { applied: true };
   }
   return { applied: false };
@@ -7735,6 +7754,7 @@ export function unpackSingleUseContainer(
         if (isCurrentlySealed) {
           container.isOpen = true;
           syncPackageContainerState(container);
+          triggerPlayerActionAnim(player, 'unpacking', 0.95, container.itemId);
           sound.playUseItem();
           const openMsg = `Упаковка вскрыта: ${container.nameRu}. Теперь содержимое можно доставать или употреблять!`;
           addPlayerNotification(player, openMsg, 'pickup');
@@ -7746,6 +7766,7 @@ export function unpackSingleUseContainer(
           const pieceItem = container.contents.pop()!;
           container.isOpen = true;
           syncPackageContainerState(container);
+          triggerPlayerActionAnim(player, 'unpacking', 0.75, pieceItem.itemId);
           const added = addItemToPlayer(player, pieceItem);
           if (!added && world) {
             if (!world.groundItems) world.groundItems = [];
@@ -7792,9 +7813,11 @@ export function unpackSingleUseContainer(
               player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
               soothePanic(player, 15);
               applyConsumptionThermodynamics(player, inner.temperature ?? container.temperature ?? 20.0, inner.nameRu, false);
+              triggerPlayerActionAnim(player, 'eating', 1.1, inner.itemId);
               sound.playEat();
             } else {
               soothePanic(player, 25);
+              triggerPlayerActionAnim(player, 'med_pills', 1.0, inner.itemId);
               sound.playUseItem();
             }
 
@@ -7831,6 +7854,7 @@ export function unpackSingleUseContainer(
   // Convert package to its opened state in-place, keeping its itemId and all visual/structural attributes!
   container.isOpen = true;
   syncPackageContainerState(container);
+  triggerPlayerActionAnim(player, 'unpacking', 1.05, container.itemId);
 
   if (extractedItems.length === 0) {
     sound.playUseItem();
@@ -7910,6 +7934,7 @@ function handleReusableFilledContainerAction(
     if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + 2);
     soothePanic(player, 15);
+    triggerPlayerActionAnim(player, 'eating', 1.1, popped.itemId);
     sound.playEat();
     const baseName = ITEM_CATALOG[container.itemId]?.nameRu || 'Лукошко';
     if (container.contents.length > 0) {
@@ -7924,6 +7949,7 @@ function handleReusableFilledContainerAction(
 
   // Otherwise (mushrooms or eggs): extract 1 item into inventory/hands
   const popped = container.contents.pop()!;
+  triggerPlayerActionAnim(player, 'unpacking', 0.8, popped.itemId);
   if (container.itemId !== 'lukoshko') {
     container.isOpen = true;
     syncPackageContainerState(container);
@@ -9898,6 +9924,7 @@ export function butcherItem(player: Player, item: InventoryItem, world?: GameWor
   const birdIds = ['chicken', 'duck', 'goose', 'turkey', 'pheasant', 'quail'];
   const fishIds = ['salmon', 'tuna', 'cod', 'perch', 'herring', 'pike', 'eel', 'catfish'];
 
+  triggerPlayerActionAnim(player, 'knife_slash', 0.85, 'kitchen_knife_chef');
   sound.playPropBreak('metal'); // Slicing sound
 
   const spawnOrGive = (id: string) => {
@@ -10105,6 +10132,7 @@ export function useItemOnPlayer(
 
   // Smartphone activation (screen & interactive apps)
   if (item.itemId.startsWith('phone_') || item.itemId === 'smartphone'|| item.phoneSpecs) {
+    triggerPlayerActionAnim(player, 'using_phone', 1.8, item.itemId);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('open_phone_modal', { detail: { item } }));
     }
@@ -10115,6 +10143,7 @@ export function useItemOnPlayer(
 
   // Watches & valuables inspection from inventory
   if (item.itemId === 'valuable_gold_watch' || item.itemId === 'valuable_silver_pocket_watch') {
+    triggerPlayerActionAnim(player, 'checking_watch', 1.6, item.itemId, 'left');
     sound.playUseItem();
     addPlayerNotification(player, `Вы смотрите на ${item.nameRu}. Механизм работает с безупречной точностью.`, 'info');
     return { success: true, message: `Время проверено по ${item.nameRu}` };
@@ -10122,6 +10151,7 @@ export function useItemOnPlayer(
 
   // Chef knife inspection from inventory
   if (item.itemId === 'kitchen_knife_chef') {
+    triggerPlayerActionAnim(player, 'knife_slash', 0.75, item.itemId);
     sound.playUseItem();
     addPlayerNotification(player, `Острый кухонный нож шеф-повара. Нажмите [E] с ножом в руке для взмаха.`, 'info');
     return { success: true, message: 'Кухонный нож осмотрен' };
@@ -10136,6 +10166,7 @@ export function useItemOnPlayer(
 
   // Apartment key usage (Lock/Unlock apartment door or inspect key code)
   if (item.itemId === 'apartment_key' || item.itemId === 'apartment_key_spare') {
+    triggerPlayerActionAnim(player, 'key_fob', 0.75, item.itemId);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('apartment_key_activated', { detail: { item } }));
     }
@@ -10146,6 +10177,7 @@ export function useItemOnPlayer(
 
   // Real estate legal deeds and documents inspection
   if (item.itemId === 'property_deed_egrn' || item.itemId === 'property_contract_dkp' || item.itemId === 'property_tech_passport') {
+    triggerPlayerActionAnim(player, 'unpacking', 1.2, item.itemId);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('open_property_document_modal', { detail: { item } }));
     }
@@ -10156,9 +10188,11 @@ export function useItemOnPlayer(
 
   // Automotive Key Fob usage
   if (item.itemId === 'car_key_gold'|| item.itemId === 'car_key_iron') {
+    triggerPlayerActionAnim(player, 'key_fob', 0.75, item.itemId);
     return handleMechanicalKeyUsage(player, item, world, null, itemIndex);
   }
   if (item.itemId.startsWith('car_key')) {
+    triggerPlayerActionAnim(player, 'key_fob', 0.75, item.itemId);
     return handleCarKeyActivation(player, item, world);
   }
 
@@ -10171,7 +10205,15 @@ export function useItemOnPlayer(
         return { success: false, message: medRes.errorMsg };
       }
     }
-    return tryFillOrUseFluidContainer(player, item, world);
+    const res = tryFillOrUseFluidContainer(player, item, world);
+    if (res.success) {
+      if (item.itemId.includes('canister')) {
+        triggerPlayerActionAnim(player, 'pouring_canister', 1.25, item.itemId);
+      } else if (!medId) {
+        triggerPlayerActionAnim(player, 'drinking', 1.25, item.itemId);
+      }
+    }
+    return res;
   }
 
   // Special repair tool usage
@@ -10183,6 +10225,7 @@ export function useItemOnPlayer(
         veh = world.vehicles.find(v => Math.hypot(v.x - player.x, v.y - player.y) < 120);
       }
       if (veh) {
+        triggerPlayerActionAnim(player, 'mechanic_work', 1.5, item.itemId);
         if (veh.damage) {
           veh.damage.frontCrumple = 0;
           veh.damage.rearCrumple = 0;
@@ -10256,6 +10299,7 @@ export function useItemOnPlayer(
     const maxPortions = item.maxPortions || def?.biteCount || 20;
     const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
+    triggerPlayerActionAnim(player, 'pouring_canister', 1.25, item.itemId);
     sound.playWaterSpray();
 
     let refueledVehicleName: string | null = null;
@@ -10423,6 +10467,8 @@ export function useItemOnPlayer(
     const maxPortions = item.maxPortions || def?.biteCount || 10;
     const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
+    triggerPlayerActionAnim(player, 'lighter_flick', 0.95, item.itemId);
+
     // Spawn flint sparks and compact ignition flash
     if (world) {
       const handAng = player.aimAngle ?? player.angle ?? 0;
@@ -10529,6 +10575,7 @@ export function useItemOnPlayer(
 
   // Sandbag usage (pours 1 kg sand at a distance, extinguishing fires and drying/absorbing oil, fuel, and antifreeze spills)
   if (item.itemId === 'sandbag') {
+    triggerPlayerActionAnim(player, 'pouring_sandbag', 1.15, item.itemId);
     sound.playWaterSpray();
 
     const angle = player.aimAngle !== undefined ? player.aimAngle : (player.angle || 0);
@@ -10656,6 +10703,8 @@ export function useItemOnPlayer(
   if (item.itemId === 'extinguisher') {
     const maxPortions = item.maxPortions || def?.biteCount || 10;
     const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+    triggerPlayerActionAnim(player, 'extinguisher_spray', 0.9, item.itemId);
 
     // Spawn foam powder stream particles
     if (world) {
@@ -10859,12 +10908,21 @@ export function useItemOnPlayer(
       applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
     }
 
-    // Play sound
+    // Play sound & trigger synchronized 3D action animation
     if (item.category === 'food') {
+      triggerPlayerActionAnim(player, 'eating', 1.15, item.itemId);
       sound.playEat();
     } else if (item.category === 'drink') {
+      triggerPlayerActionAnim(player, 'drinking', 1.2, item.itemId);
       sound.playDrink();
     } else {
+      if (['bandage', 'splint', 'medical_patch', 'medkit'].includes(item.itemId)) {
+        triggerPlayerActionAnim(player, 'med_bandage', 1.35, item.itemId);
+      } else if (['panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide', 'antiseptic', 'balm_star'].includes(item.itemId)) {
+        triggerPlayerActionAnim(player, 'med_spray', 1.15, item.itemId);
+      } else {
+        triggerPlayerActionAnim(player, 'med_pills', 1.0, item.itemId);
+      }
       sound.playUseItem();
     }
 
@@ -10995,16 +11053,18 @@ export function useItemOnPlayer(
     applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
   }
 
-  // Play appropriate procedural sound
+  // Play appropriate procedural sound & trigger synchronized 3D action animation
   if (item.category === 'med') {
     sound.playUseItem();
     addPlayerNotification(player, `Использовано: ${item.nameRu}`, 'heal');
   } else if (item.category === 'food') {
+    triggerPlayerActionAnim(player, 'eating', 1.2, item.itemId);
     sound.playEat();
     if (!def?.leftoverId) {
       addPlayerNotification(player, `Съедено: ${item.nameRu}`, 'food');
     }
   } else if (item.category === 'drink') {
+    triggerPlayerActionAnim(player, 'drinking', 1.25, item.itemId);
     sound.playDrink();
     if (!def?.leftoverId) {
       addPlayerNotification(player, `Выпито: ${item.nameRu}`, 'drink');
@@ -11094,6 +11154,7 @@ export function useHandItemOnPlayer(
 
   // Watched & valuables held in hand
   if (item.itemId === 'valuable_gold_watch' || item.itemId === 'valuable_silver_pocket_watch') {
+    triggerPlayerActionAnim(player, 'checking_watch', 1.6, item.itemId, hand);
     sound.playUseItem();
     addPlayerNotification(player, `Вы подносите ${item.nameRu} к уху. Слышно мерное тиканье механизма.`, 'heal');
     return { success: true, message: `Тиканье ${item.nameRu}` };
@@ -11101,6 +11162,7 @@ export function useHandItemOnPlayer(
 
   // Chef knife held in hand
   if (item.itemId === 'kitchen_knife_chef') {
+    triggerPlayerActionAnim(player, 'knife_slash', 0.75, item.itemId, hand);
     sound.playPropBreak('metal');
     addPlayerNotification(player, `Вы рассекаете воздух кухонным ножом шеф-повара!`, 'warning');
     return { success: true, message: 'Взмах ножом' };
@@ -11217,6 +11279,7 @@ export function useHandItemOnPlayer(
 
   // Smartphone activation (triggers when held in active hand and pressing E)
   if (item.itemId.startsWith('phone_') || item.itemId === 'smartphone'|| item.phoneSpecs) {
+    triggerPlayerActionAnim(player, 'using_phone', 1.8, item.itemId, hand);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('open_phone_modal', { detail: { item } }));
     }
@@ -11227,6 +11290,7 @@ export function useHandItemOnPlayer(
 
   // Apartment key usage from hands (Lock/Unlock apartment door)
   if (item.itemId === 'apartment_key' || item.itemId === 'apartment_key_spare') {
+    triggerPlayerActionAnim(player, 'key_fob', 0.75, item.itemId, hand);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('apartment_key_activated', { detail: { item } }));
     }
@@ -11237,6 +11301,7 @@ export function useHandItemOnPlayer(
 
   // Real estate legal deeds and documents inspection from hands
   if (item.itemId === 'property_deed_egrn' || item.itemId === 'property_contract_dkp' || item.itemId === 'property_tech_passport') {
+    triggerPlayerActionAnim(player, 'unpacking', 1.2, item.itemId, hand);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('open_property_document_modal', { detail: { item } }));
     }
@@ -11247,9 +11312,11 @@ export function useHandItemOnPlayer(
 
   // Automotive Key Fob usage (triggers when held in active hand and pressing E)
   if (item.itemId === 'car_key_gold'|| item.itemId === 'car_key_iron') {
+    triggerPlayerActionAnim(player, 'key_fob', 0.75, item.itemId, hand);
     return handleMechanicalKeyUsage(player, item, world, hand, null);
   }
   if (item.itemId.startsWith('car_key')) {
+    triggerPlayerActionAnim(player, 'key_fob', 0.75, item.itemId, hand);
     return handleCarKeyActivation(player, item, world);
   }
 
@@ -11262,6 +11329,7 @@ export function useHandItemOnPlayer(
         veh = world.vehicles.find(v => Math.hypot(v.x - player.x, v.y - player.y) < 120);
       }
       if (veh) {
+        triggerPlayerActionAnim(player, 'mechanic_work', 1.5, item.itemId, hand);
         if (veh.damage) {
           veh.damage.frontCrumple = 0;
           veh.damage.rearCrumple = 0;
@@ -11351,7 +11419,15 @@ export function useHandItemOnPlayer(
         return { success: false, message: medRes.errorMsg };
       }
     }
-    return tryFillOrUseFluidContainer(player, item, world);
+    const res = tryFillOrUseFluidContainer(player, item, world);
+    if (res.success) {
+      if (item.itemId.includes('canister')) {
+        triggerPlayerActionAnim(player, 'pouring_canister', 1.25, item.itemId, hand);
+      } else if (!medId) {
+        triggerPlayerActionAnim(player, 'drinking', 1.25, item.itemId, hand);
+      }
+    }
+    return res;
   }
 
   // Gasoline Canister usage (spills fuel puddles on ground or refuels nearby vehicle)
@@ -11359,6 +11435,7 @@ export function useHandItemOnPlayer(
     const maxPortions = item.maxPortions || def?.biteCount || 20;
     const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
+    triggerPlayerActionAnim(player, 'pouring_canister', 1.25, item.itemId, hand);
     sound.playWaterSpray();
 
     let refueledVehicleName: string | null = null;
@@ -11529,6 +11606,8 @@ export function useHandItemOnPlayer(
     const maxPortions = item.maxPortions || def?.biteCount || 10;
     const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
+    triggerPlayerActionAnim(player, 'lighter_flick', 0.95, item.itemId, hand);
+
     // Spawn flint sparks and compact ignition flash
     if (world) {
       const handAng = player.aimAngle ?? player.angle ?? 0;
@@ -11644,6 +11723,8 @@ export function useHandItemOnPlayer(
     const maxPortions = item.maxPortions || def?.biteCount || 10;
     const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
+    triggerPlayerActionAnim(player, 'extinguisher_spray', 0.9, item.itemId, hand);
+
     // Spawn foam powder stream particles
     if (world) {
       const sprayAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
@@ -11754,6 +11835,7 @@ export function useHandItemOnPlayer(
 
   // Sandbag usage in hand (pours 1 kg sand at a distance, extinguishing fires and drying/absorbing oil, fuel, and antifreeze spills)
   if (item.itemId === 'sandbag') {
+    triggerPlayerActionAnim(player, 'pouring_sandbag', 1.15, item.itemId, hand);
     sound.playWaterSpray();
 
     const angle = player.aimAngle !== undefined ? player.aimAngle : (player.angle || 0);
@@ -12000,9 +12082,22 @@ export function useHandItemOnPlayer(
       applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
     }
 
-    if (item.category === 'food') sound.playEat();
-    else if (item.category === 'drink') sound.playDrink();
-    else sound.playUseItem();
+    if (item.category === 'food') {
+      triggerPlayerActionAnim(player, 'eating', 1.15, item.itemId, hand);
+      sound.playEat();
+    } else if (item.category === 'drink') {
+      triggerPlayerActionAnim(player, 'drinking', 1.2, item.itemId, hand);
+      sound.playDrink();
+    } else {
+      if (['bandage', 'splint', 'medical_patch', 'medkit'].includes(item.itemId)) {
+        triggerPlayerActionAnim(player, 'med_bandage', 1.35, item.itemId, hand);
+      } else if (['panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide', 'antiseptic', 'balm_star'].includes(item.itemId)) {
+        triggerPlayerActionAnim(player, 'med_spray', 1.15, item.itemId, hand);
+      } else {
+        triggerPlayerActionAnim(player, 'med_pills', 1.0, item.itemId, hand);
+      }
+      sound.playUseItem();
+    }
 
     const remaining = currentPortions - 1;
     item.portions = remaining;
@@ -12110,11 +12205,13 @@ export function useHandItemOnPlayer(
     sound.playUseItem();
     addPlayerNotification(player, `Использовано: ${item.nameRu}`, 'heal');
   } else if (item.category === 'food') {
+    triggerPlayerActionAnim(player, 'eating', 1.2, item.itemId, hand);
     sound.playEat();
     if (!def?.leftoverId) {
       addPlayerNotification(player, `Съедено: ${item.nameRu}`, 'food');
     }
   } else if (item.category === 'drink') {
+    triggerPlayerActionAnim(player, 'drinking', 1.25, item.itemId, hand);
     sound.playDrink();
     if (!def?.leftoverId) {
       addPlayerNotification(player, `Выпито: ${item.nameRu}`, 'drink');
@@ -12187,6 +12284,7 @@ export function pickupGroundItem(
   const added = addItemToPlayer(player, groundItem.item);
   if (added) {
     world.groundItems.splice(idx, 1);
+    triggerPlayerActionAnim(player, 'pickup', 0.65, groundItem.item.itemId);
     sound.playPickup();
     return true;
   }
@@ -12307,6 +12405,7 @@ export function pickupNearbyLitter(player: Player, world: GameWorld): boolean {
     const trashItem = createItem('litter_trash', 1);
     const added = addItemToPlayer(player, trashItem);
     if (added) {
+      triggerPlayerActionAnim(player, 'pickup', 0.65, 'litter_trash');
       sound.playPickup();
       addPlayerNotification(player, 'Подобран уличный мусор (Вторсырье)', 'pickup');
       return true;

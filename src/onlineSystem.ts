@@ -107,6 +107,7 @@ export interface RemotePlayerState {
   leftHandItem?: InventoryItem | null;
   rightHandItem?: InventoryItem | null;
   activeHand?: 'left' | 'right';
+  actionAnim?: Player['actionAnim'];
   
   // Transport & vehicle
   isInVehicle: boolean;
@@ -961,6 +962,7 @@ class OnlineManager {
       leftHandItem: player.leftHandItem,
       rightHandItem: player.rightHandItem,
       activeHand: player.activeHand,
+      actionAnim: player.actionAnim || null,
       isInVehicle: player.isInVehicle,
       currentVehicleId: player.currentVehicleId,
       vehicleState,
