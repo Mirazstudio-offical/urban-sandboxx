@@ -6,7 +6,6 @@ import { ensureWorldGuardrails } from './guardrails';
 import { createRealEstateAgencyLayout } from './buildingInteriors';
 import { initializeCityApartmentsFromWorld } from './propertySystem';
 import { setWorldRoadsForElevation } from './terrainElevation';
-import defaultMapData from '../public/map.json';
 
 export interface LoadedMapResult {
   world: GameWorld;
@@ -444,13 +443,15 @@ export async function loadMap(): Promise<GameWorld> {
     const world = normalizeWorld(parsed);
     return sanitizeWorldVehicles(world);
   } catch (err: any) {
-    console.warn(`[MapLoader] Сетевая загрузка "${url}" не удалась (${err.message || err}). Загрузка из вшитой карты map.json...`);
-    if (defaultMapData && Array.isArray((defaultMapData as any).roads) && (defaultMapData as any).roads.length > 0) {
-      console.log(`[MapLoader] Успешно загружена карта из вшитого файла map.json (Дорог: ${(defaultMapData as any).roads.length}, Зданий: ${(defaultMapData as any).buildings?.length || 0})`);
-      const world = normalizeWorld(defaultMapData);
-      return sanitizeWorldVehicles(world);
+    console.warn(`[MapLoader] Сетевая загрузка "${url}" не удалась (${err.message || err}). Повторная попытка загрузки map.json...`);
+    const fallbackRes = await fetch(`${cleanBase}map.json`);
+    if (fallbackRes.ok) {
+      const parsed = await fallbackRes.json();
+      if (parsed && Array.isArray(parsed.roads) && parsed.roads.length > 0) {
+        const world = normalizeWorld(parsed);
+        return sanitizeWorldVehicles(world);
+      }
     }
-    
     throw new Error(`Ошибка загрузки карты из map.json: ${err.message || err}`);
   }
 }

@@ -930,15 +930,18 @@ export class IntersectionReservationManager {
 
   public update(dt: number, world: GameWorld) {
     const now = performance.now() / 1000;
-    const livingVehicleIds = new Set(world.vehicles.map((v) => v.id));
+    const vehicleById = new Map<string, Vehicle>();
+    for (let i = 0, len = world.vehicles.length; i < len; i++) {
+      const v = world.vehicles[i];
+      vehicleById.set(v.id, v);
+    }
 
     // 1. Clean up expired / stale active reservations
     for (const [interId, resList] of this.reservations.entries()) {
       const valid = resList.filter((r) => {
-        if (!livingVehicleIds.has(r.vehicleId)) return false;
-        if (now - r.entryTime > 7.5) return false;
-        const v = world.vehicles.find((veh) => veh.id === r.vehicleId);
+        const v = vehicleById.get(r.vehicleId);
         if (!v) return false;
+        if (now - r.entryTime > 7.5) return false;
         if (!v.inIntersection && !v.currentConnection) return false;
         return true;
       });
@@ -951,10 +954,10 @@ export class IntersectionReservationManager {
 
     // 2. Update waiting entries, aging priority, and detect circular deadlocks
     for (const [interId, waitList] of this.waitingMap.entries()) {
-      const validWait = waitList.filter((w) => livingVehicleIds.has(w.vehicleId));
+      const validWait = waitList.filter((w) => vehicleById.has(w.vehicleId));
       for (const w of validWait) {
         w.waitTime += dt;
-        const v = world.vehicles.find((veh) => veh.id === w.vehicleId);
+        const v = vehicleById.get(w.vehicleId);
         if (v) {
           v.intersectionWaitTimer = w.waitTime;
         }
@@ -969,14 +972,14 @@ export class IntersectionReservationManager {
       this.waitingMap.set(interId, validWait);
 
       // 3. LIVE DIRECTED WAIT-FOR GRAPH & DEADLOCK CYCLE DETECTION
-      this.detectAndResolveDeadlockCycles(interId, validWait, world, now);
+      this.detectAndResolveDeadlockCycles(interId, validWait, world, now, vehicleById);
 
       // 4. SYMMETRY BREAKER: If no cycle detected yet vehicles waiting > 1.5s, elect priority pass
       if (validWait.length > 0) {
         const elected = this.electedPriority.get(interId);
-        if (!elected || now > elected.expiry || !livingVehicleIds.has(elected.vehicleId)) {
+        if (!elected || now > elected.expiry || !vehicleById.has(elected.vehicleId)) {
           const readyWait = validWait.filter((w) => {
-            const v = world.vehicles.find((veh) => veh.id === w.vehicleId);
+            const v = vehicleById.get(w.vehicleId);
             return v && v.aiState !== 'stopping_light' && !w.spillbackBlocked;
           });
 
@@ -984,15 +987,18 @@ export class IntersectionReservationManager {
             let topCandidate = readyWait[0];
             let topCandidateScore = -Infinity;
 
+            const validWaitIds = new Set<string>();
+            for (let wi = 0; wi < validWait.length; wi++) validWaitIds.add(validWait[wi].vehicleId);
+
             const junctionVehicles = world.vehicles.filter((v) => {
               if (v.isParked) return false;
               return (v.inIntersection && v.intersectionReservationId === interId) ||
-                     validWait.some((w) => w.vehicleId === v.id);
+                     validWaitIds.has(v.id);
             });
 
             for (let i = 0; i < readyWait.length; i++) {
               const candEntry = readyWait[i];
-              const candCar = world.vehicles.find((veh) => veh.id === candEntry.vehicleId);
+              const candCar = vehicleById.get(candEntry.vehicleId);
               let score = candEntry.priorityScore || 0;
 
               // Physical forward clearance check: does candCar have an open path ahead?
@@ -1039,15 +1045,21 @@ export class IntersectionReservationManager {
     interId: string,
     waitList: WaitingQueueEntry[],
     world: GameWorld,
-    now: number
+    now: number,
+    vehicleById: Map<string, Vehicle>
   ) {
     if (waitList.length < 2) return;
+
+    const waitById = new Map<string, WaitingQueueEntry>();
+    for (let i = 0; i < waitList.length; i++) {
+      waitById.set(waitList[i].vehicleId, waitList[i]);
+    }
 
     // Filter vehicles involved at this intersection (waiting + inside junction)
     const activeVehicles = world.vehicles.filter((v) => {
       if (v.isParked || v.isPlayerControlled) return false;
       return (v.inIntersection && v.intersectionReservationId === interId) ||
-             waitList.some((w) => w.vehicleId === v.id);
+             waitById.has(v.id);
     });
 
     if (activeVehicles.length < 2) return;
@@ -1056,13 +1068,13 @@ export class IntersectionReservationManager {
     const adj = new Map<string, string[]>();
     for (const carA of activeVehicles) {
       adj.set(carA.id, []);
-      const waitA = waitList.find((w) => w.vehicleId === carA.id);
+      const waitA = waitById.get(carA.id);
       const pathA = carA.currentConnection?.pathWaypoints || waitA?.pathWaypoints;
       if (!pathA) continue;
 
       for (const carB of activeVehicles) {
         if (carA.id === carB.id) continue;
-        const waitB = waitList.find((w) => w.vehicleId === carB.id);
+        const waitB = waitById.get(carB.id);
         const pathB = carB.currentConnection?.pathWaypoints || waitB?.pathWaypoints;
         if (!pathB) continue;
 
@@ -1136,14 +1148,14 @@ export class IntersectionReservationManager {
       let maxDissolutionScore = -Infinity;
 
       for (const cId of cycleIds) {
-        const car = world.vehicles.find((v) => v.id === cId);
+        const car = vehicleById.get(cId);
         if (!car) continue;
 
         // Check if car's immediate forward path is blocked by another cycle vehicle
         let isPathBlocked = false;
         for (const otherId of cycleIds) {
           if (otherId === cId) continue;
-          const otherCar = world.vehicles.find((v) => v.id === otherId);
+          const otherCar = vehicleById.get(otherId);
           if (otherCar && isVehicleForwardPathBlocked(car, otherCar, Math.max(35, car.length * 0.85))) {
             isPathBlocked = true;
             break;

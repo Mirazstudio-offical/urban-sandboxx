@@ -2466,6 +2466,7 @@ function buildSunlitCrownClipPolygon(
  * - Pines cast serrated whorled coniferous cone shadows with radiating needle-bough tips.
  * - Broadleaf (oak, maple) & birch trees cast multi-lobed scalloped foliage shadows anchored by forked boughs.
  */
+const MAX_TREE_SHADOW_SPRITES = 768;
 const treeShadowSpriteCache = new Map<
   string,
   { canvas: HTMLCanvasElement; half: number }
@@ -2489,16 +2490,30 @@ function renderTreeShadow(
     const cacheKey = `${species}_${qRad}_${qHash}_${season}_${cxKey}_${cyKey}`;
     let cached = treeShadowSpriteCache.get(cacheKey);
     if (!cached) {
-      if (treeShadowSpriteCache.size > 512) {
-        treeShadowSpriteCache.clear();
+      let offCanvas: HTMLCanvasElement | undefined;
+      if (treeShadowSpriteCache.size >= MAX_TREE_SHADOW_SPRITES) {
+        const oldestKey = treeShadowSpriteCache.keys().next().value;
+        if (oldestKey !== undefined) {
+          const evicted = treeShadowSpriteCache.get(oldestKey);
+          treeShadowSpriteCache.delete(oldestKey);
+          if (evicted) {
+            offCanvas = evicted.canvas;
+          }
+        }
       }
       const maxShadowReach = Math.ceil(qRad * 2.5 * Math.hypot(sunState.castX, sunState.castY) + qRad * 1.6 + 12);
       const half = Math.max(48, Math.min(220, maxShadowReach));
-      const offCanvas = document.createElement('canvas');
-      offCanvas.width = half * 2;
-      offCanvas.height = half * 2;
+      const dim = half * 2;
+      if (!offCanvas) {
+        offCanvas = document.createElement('canvas');
+      }
+      if (offCanvas.width !== dim || offCanvas.height !== dim) {
+        offCanvas.width = dim;
+        offCanvas.height = dim;
+      }
       const offCtx = offCanvas.getContext('2d');
       if (offCtx) {
+        offCtx.clearRect(0, 0, dim, dim);
         offCtx.fillStyle = 'rgb(4, 8, 22)';
         offCtx.strokeStyle = 'rgb(4, 8, 22)';
         offCtx.lineCap = 'round';
@@ -2508,6 +2523,9 @@ function renderTreeShadow(
         cached = { canvas: offCanvas, half };
         treeShadowSpriteCache.set(cacheKey, cached);
       }
+    } else {
+      treeShadowSpriteCache.delete(cacheKey);
+      treeShadowSpriteCache.set(cacheKey, cached);
     }
     if (cached) {
       sCtx.drawImage(cached.canvas, tree.x - cached.half, tree.y - cached.half);

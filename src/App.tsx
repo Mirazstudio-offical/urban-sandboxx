@@ -3103,11 +3103,11 @@ export default function App() {
                   return prev;
                 });
               } else if (!nearElevator && !nearStairs) {
-                setActiveElevatorMenu(null);
+                setActiveElevatorMenu(prev => (prev === null ? prev : null));
               }
 
-              setCanExitBuilding(inExit);
-              setCanEnterBuilding(null);
+              setCanExitBuilding(prev => (prev === inExit ? prev : inExit));
+              setCanEnterBuilding(prev => (prev === null ? prev : null));
 
               // Check if player is inside a physical shop building or commercial room
               let currentRoomName = '';
@@ -3220,8 +3220,9 @@ export default function App() {
 
               let shopFound: CityShop | null = null;
               if (shopType) {
+                const stableShopId = `room_shop_${bld.id}_${currentFloor}_${currentRoomName || shopType}`;
                 shopFound = {
-                  id: `room_shop_${bld.id}_${currentFloor}_${Math.floor(relX)}_${Math.floor(relY)}`,
+                  id: stableShopId,
                   nameRu: shopName,
                   type: shopType,
                   x: bld.x + relX,
@@ -3232,19 +3233,26 @@ export default function App() {
               }
 
               nearShopRef.current = shopFound;
-              setNearShop(shopFound);
-              setCanRepairVehicle(shopFound?.type === 'auto_shop');
+              setNearShop(prev => {
+                if (!prev && !shopFound) return prev;
+                if (prev && shopFound && prev.id === shopFound.id && prev.nameRu === shopFound.nameRu && prev.type === shopFound.type) {
+                  return prev;
+                }
+                return shopFound;
+              });
+              const canRepair = shopFound?.type === 'auto_shop';
+              setCanRepairVehicle(prev => (prev === canRepair ? prev : canRepair));
             } else {
-              setActiveElevatorMenu(null);
-              setCanExitBuilding(false);
-              setCanEnterBuilding(null);
+              setActiveElevatorMenu(prev => (prev === null ? prev : null));
+              setCanExitBuilding(prev => (prev === false ? prev : false));
+              setCanEnterBuilding(prev => (prev === null ? prev : null));
               nearShopRef.current = null;
-              setNearShop(null);
-              setCanRepairVehicle(false);
+              setNearShop(prev => (prev === null ? prev : null));
+              setCanRepairVehicle(prev => (prev === false ? prev : false));
             }
           } else {
-            setActiveElevatorMenu(null);
-            setCanExitBuilding(false);
+            setActiveElevatorMenu(prev => (prev === null ? prev : null));
+            setCanExitBuilding(prev => (prev === false ? prev : false));
 
             // Check if player is near any building entrance outside (checking all entrances)
             let nearEntrance = false;
@@ -3264,20 +3272,21 @@ export default function App() {
             }
 
             if (nearEntrance && bldNear) {
-              setCanEnterBuilding(bldNear);
+              setCanEnterBuilding(prev => (prev?.id === bldNear!.id ? prev : bldNear));
             } else {
-              setCanEnterBuilding(null);
+              setCanEnterBuilding(prev => (prev === null ? prev : null));
             }
 
             // Outside on roads/streets: no shop interaction prompt
             nearShopRef.current = null;
-            setNearShop(null);
-            setCanRepairVehicle(player.isInVehicle);
+            setNearShop(prev => (prev === null ? prev : null));
+            const inVeh = player.isInVehicle;
+            setCanRepairVehicle(prev => (prev === inVeh ? prev : inVeh));
           }
         } else {
-          setActiveElevatorMenu(null);
-          setCanExitBuilding(false);
-          setCanEnterBuilding(null);
+          setActiveElevatorMenu(prev => (prev === null ? prev : null));
+          setCanExitBuilding(prev => (prev === false ? prev : false));
+          setCanEnterBuilding(prev => (prev === null ? prev : null));
         }
 
         // Update all vehicles (both AI and player car)

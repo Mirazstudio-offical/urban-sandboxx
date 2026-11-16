@@ -33,7 +33,7 @@ const tap = (fn: () => void) => ({
   onTouchEnd: (e: React.TouchEvent) => { e.preventDefault(); e.stopPropagation(); fn(); },
 });
 
-export const Minimap: React.FC<MinimapProps> = ({
+export const Minimap: React.FC<MinimapProps> = React.memo(({
   worldRef, playerRef, cameraRef, streetName, paused = false, onOpenMap, onCameraZoomIn, onCameraZoomOut, frameTimeRef
 }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -47,6 +47,21 @@ export const Minimap: React.FC<MinimapProps> = ({
   const frameRef = useRef<HTMLDivElement | null>(null);
   const routeRef = useRef<HTMLSpanElement | null>(null);
   const routeWrapRef = useRef<HTMLDivElement | null>(null);
+  const staticCacheRef = useRef<{
+    canvas: HTMLCanvasElement;
+    centerX: number;
+    centerY: number;
+    halfSpanWorld: number;
+    rng: number;
+    scale: number;
+    dpr: number;
+    worldRefObj: GameWorld | null;
+  } | null>(null);
+  const vignetteCacheRef = useRef<{
+    w: number;
+    h: number;
+    gradient: CanvasGradient;
+  } | null>(null);
 
   const changeRange = (f: number) => setRange(r => Math.round(Math.min(RANGE_MAX, Math.max(RANGE_MIN, r * f))));
 
@@ -67,7 +82,11 @@ export const Minimap: React.FC<MinimapProps> = ({
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       cssW = frame.clientWidth; cssH = frame.clientHeight;
       const tw = Math.max(1, Math.round(cssW * dpr)), th = Math.max(1, Math.round(cssH * dpr));
-      if (canvas.width !== tw || canvas.height !== th) { canvas.width = tw; canvas.height = th; }
+      if (canvas.width !== tw || canvas.height !== th) {
+        canvas.width = tw;
+        canvas.height = th;
+        vignetteCacheRef.current = null;
+      }
     };
     fit();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
@@ -104,11 +123,81 @@ export const Minimap: React.FC<MinimapProps> = ({
       const reach = Math.hypot(cssW, cssH) / 2 * px + 80;
       const v: View = { minX: player.x - reach, maxX: player.x + reach, minY: player.y - reach, maxY: player.y + reach };
 
-      drawTerrain(ctx, world, px);
-      drawRoads(ctx, world, v, px, rng < 900);
-      drawRails(ctx, world, v, px);
-      drawParkings(ctx, world, v, px, false);
-      drawBuildings(ctx, world, v, px);
+      // Regional offscreen static cache for terrain, roads, rails, parkings, and buildings
+      const roamBuffer = Math.max(320, reach * 0.55);
+      const cacheHalfSpan = reach + roamBuffer;
+      let sCache = staticCacheRef.current;
+      const needsRebuild =
+        !sCache ||
+        sCache.worldRefObj !== world ||
+        sCache.rng !== rng ||
+        sCache.dpr !== dpr ||
+        Math.abs(player.x - sCache.centerX) > roamBuffer - 20 ||
+        Math.abs(player.y - sCache.centerY) > roamBuffer - 20;
+
+      if (needsRebuild) {
+        if (!sCache) {
+          sCache = {
+            canvas: document.createElement('canvas'),
+            centerX: player.x,
+            centerY: player.y,
+            halfSpanWorld: cacheHalfSpan,
+            rng,
+            scale,
+            dpr,
+            worldRefObj: world
+          };
+          staticCacheRef.current = sCache;
+        }
+        const pixelScale = scale * dpr;
+        const cw = Math.min(2048, Math.max(64, Math.ceil(cacheHalfSpan * 2 * pixelScale)));
+        const ch = cw;
+        const effScale = cw / (cacheHalfSpan * 2);
+        if (sCache.canvas.width !== cw || sCache.canvas.height !== ch) {
+          sCache.canvas.width = cw;
+          sCache.canvas.height = ch;
+        }
+        sCache.centerX = player.x;
+        sCache.centerY = player.y;
+        sCache.halfSpanWorld = cacheHalfSpan;
+        sCache.rng = rng;
+        sCache.scale = scale;
+        sCache.dpr = dpr;
+        sCache.worldRefObj = world;
+
+        const sCtx = sCache.canvas.getContext('2d');
+        if (sCtx) {
+          sCtx.setTransform(1, 0, 0, 1, 0, 0);
+          sCtx.fillStyle = C.bgDeep;
+          sCtx.fillRect(0, 0, cw, ch);
+          sCtx.save();
+          sCtx.scale(effScale, effScale);
+          sCtx.translate(-(sCache.centerX - cacheHalfSpan), -(sCache.centerY - cacheHalfSpan));
+          const cacheView: View = {
+            minX: sCache.centerX - cacheHalfSpan,
+            maxX: sCache.centerX + cacheHalfSpan,
+            minY: sCache.centerY - cacheHalfSpan,
+            maxY: sCache.centerY + cacheHalfSpan
+          };
+          drawTerrain(sCtx, world, px);
+          drawRoads(sCtx, world, cacheView, px, rng < 900);
+          drawRails(sCtx, world, cacheView, px);
+          drawParkings(sCtx, world, cacheView, px, false);
+          drawBuildings(sCtx, world, cacheView, px);
+          sCtx.restore();
+        }
+      }
+
+      if (sCache) {
+        ctx.drawImage(
+          sCache.canvas,
+          sCache.centerX - sCache.halfSpanWorld,
+          sCache.centerY - sCache.halfSpanWorld,
+          sCache.halfSpanWorld * 2,
+          sCache.halfSpanWorld * 2
+        );
+      }
+
       drawSignals(ctx, world, v, px);
       drawRoute(ctx, world, px, time);
       drawDestination(ctx, world, px, time);
@@ -160,11 +249,17 @@ export const Minimap: React.FC<MinimapProps> = ({
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('С', nx, ny + 0.5);
 
-      // soft vignette
-      const g = ctx.createRadialGradient(cx, cy, Math.min(cssW, cssH) * 0.32, cx, cy, Math.max(cssW, cssH) * 0.72);
-      g.addColorStop(0, 'rgba(11,12,14,0)');
-      g.addColorStop(1, 'rgba(11,12,14,0.55)');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, cssW, cssH);
+      // soft vignette (cached per canvas size)
+      let vig = vignetteCacheRef.current;
+      if (!vig || vig.w !== cssW || vig.h !== cssH) {
+        const g = ctx.createRadialGradient(cx, cy, Math.min(cssW, cssH) * 0.32, cx, cy, Math.max(cssW, cssH) * 0.72);
+        g.addColorStop(0, 'rgba(11,12,14,0)');
+        g.addColorStop(1, 'rgba(11,12,14,0.55)');
+        vig = { w: cssW, h: cssH, gradient: g };
+        vignetteCacheRef.current = vig;
+      }
+      ctx.fillStyle = vig.gradient;
+      ctx.fillRect(0, 0, cssW, cssH);
 
       // route readout (DOM, updated a few times per second)
       if (now - lastInfo > 250) {
@@ -235,4 +330,4 @@ export const Minimap: React.FC<MinimapProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -493,6 +493,15 @@ export function ensureVehicleNodeBeam(
   }
   const dmg = veh.damage;
   const existing = dmg.nodeBeam;
+  if (
+    existing &&
+    (existing as any)._verified &&
+    existing.forceScaleVersion === FORCE_SCALE_VERSION &&
+    existing.stableDt &&
+    existing. stableDt > 0
+  ) {
+    return existing;
+  }
   const meshOutdated = !!existing && (
     !Array.isArray(existing.nodes) ||
     !existing.nodes.some(n => n.group === 'wheel') ||
@@ -512,6 +521,7 @@ export function ensureVehicleNodeBeam(
     dmg.nodeBeam.stableDt = computeStableDt(dmg.nodeBeam.nodes, dmg.nodeBeam.beams);
   }
   sanitizeNodeBeamSystem(dmg.nodeBeam);
+  (dmg.nodeBeam as any)._verified = true;
   return dmg.nodeBeam;
 }
 

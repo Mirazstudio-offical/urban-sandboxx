@@ -13348,9 +13348,23 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
   const pCount = pList.length;
   let pWrite = 0;
 
-  // Gather active aerodynamic wake colliders (moving vehicles, player on foot, nearby running pedestrians)
-  const wakeVehicles = world.vehicles;
-  const wakeVehLen = wakeVehicles.length;
+  // Gather active aerodynamic wake colliders (only vehicles moving >= 10 px/s) and precompute heading vectors once
+  const allVehicles = world.vehicles;
+  const allVehLen = allVehicles.length;
+  scratchVehicleList.length = 0;
+  for (let vi = 0; vi < allVehLen; vi++) {
+    const veh = allVehicles[vi];
+    const vSpd = Math.abs(veh.speed);
+    if (vSpd >= 10) {
+      const sign = veh.speed >= 0 ? 1 : -1;
+      (veh as any)._wakeSpd = vSpd;
+      (veh as any)._wakeDirX = Math.cos(veh.angle) * sign;
+      (veh as any)._wakeDirY = Math.sin(veh.angle) * sign;
+      (veh as any)._wakeBaseRad = (veh.length || 54) * 1.45;
+      scratchVehicleList.push(veh);
+    }
+  }
+  const wakeVehLen = scratchVehicleList.length;
   const playerFootSpeed = !player.isInVehicle ? Math.hypot(player.vx || 0, player.vy || 0) : 0;
 
   for (let i = 0; i < pCount; i++) {
@@ -13364,18 +13378,17 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
     if (isAerosol || isLightDebris) {
       // 1. Moving vehicle bow-wave & Kármán slipstream vortex
       for (let vi = 0; vi < wakeVehLen; vi++) {
-        const veh = wakeVehicles[vi];
-        const vSpd = Math.abs(veh.speed);
-        if (vSpd < 10) continue;
+        const veh = scratchVehicleList[vi];
         const dxV = p.x - veh.x;
         const dyV = p.y - veh.y;
         const distSq = dxV * dxV + dyV * dyV;
-        const wakeRad = (veh.length || 54) * 1.45 + p.radius;
+        const wakeRad = (veh as any)._wakeBaseRad + p.radius;
         if (distSq < wakeRad * wakeRad && distSq > 1.0) {
+          const vSpd = (veh as any)._wakeSpd;
           const dist = Math.sqrt(distSq);
           const falloff = (1.0 - dist / wakeRad);
-          const vDirX = Math.cos(veh.angle) * (veh.speed >= 0 ? 1 : -1);
-          const vDirY = Math.sin(veh.angle) * (veh.speed >= 0 ? 1 : -1);
+          const vDirX = (veh as any)._wakeDirX;
+          const vDirY = (veh as any)._wakeDirY;
           const along = (dxV * vDirX + dyV * vDirY) / dist;
           const side = dxV * (-vDirY) + dyV * vDirX;
           const sideSign = side >= 0 ? 1 : -1;
@@ -13695,6 +13708,10 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
 }
 
 const scratchVehicleList: Vehicle[] = [];
+const PROP_CELL_SIZE = 120;
+const PROP_STAMP_MASK = 8191;
+const activeVehiclePropCellStamp = new Int32Array(PROP_STAMP_MASK + 1);
+let currentPropCellStampId = 1;
 
 export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number, vehGrid?: any) {
   const weatherWeights = getEffectiveWeatherWeights(world);
@@ -13702,8 +13719,11 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
   // Spawn new puddles dynamically if it's raining
   if (isRaining) {
-    const nonPondPuddles = world.puddles.filter(p => !p.isPond);
-    if (nonPondPuddles.length < 50 && Math.random() < 0.05 * weatherWeights.rain) {
+    let nonPondCount = 0;
+    for (let i = 0; i < world.puddles.length; i++) {
+      if (!world.puddles[i].isPond) nonPondCount++;
+    }
+    if (nonPondCount < 50 && Math.random() < 0.05 * weatherWeights.rain) {
       const roads = world.roads || [];
       if (roads.length > 0) {
         const road = roads[Math.floor(Math.random() * roads.length)];
@@ -13733,12 +13753,53 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     }
   }
 
+  // Stamp 3x3 cells (120px grid) around all active/moving vehicles so stationary props far from vehicles
+  // can skip getPropHitbox() and vehGrid.queryRadius() in O(1)
+  currentPropCellStampId = (currentPropCellStampId + 1) & 0x3fffffff;
+  if (currentPropCellStampId === 0) {
+    activeVehiclePropCellStamp.fill(0);
+    currentPropCellStampId = 1;
+  }
+  const stamp = currentPropCellStampId;
+  for (let vi = 0; vi < world.vehicles.length; vi++) {
+    const v = world.vehicles[vi];
+    if (
+      v.isParked &&
+      !v.isPlayerControlled &&
+      Math.abs(v.speed) < 0.2 &&
+      Math.abs(v.vx || 0) < 0.2 &&
+      Math.abs(v.vy || 0) < 0.2
+    ) {
+      continue;
+    }
+    const vcx = Math.floor(v.x / PROP_CELL_SIZE);
+    const vcy = Math.floor(v.y / PROP_CELL_SIZE);
+    for (let dx = -1; dx <= 1; dx++) {
+      const hx = Math.imul(vcx + dx, 73856093);
+      for (let dy = -1; dy <= 1; dy++) {
+        const idx = (hx ^ Math.imul(vcy + dy, 19349663)) & PROP_STAMP_MASK;
+        activeVehiclePropCellStamp[idx] = stamp;
+      }
+    }
+  }
+
   // 1. UPDATE PROPS, RIGID-BODY SLIDING, STRUCTURAL DEFORMATION & WATER FOUNTAINS
   for (const prop of world.props) {
     // Capture original foundation coordinates once so foundations never slide with detached/pushed bodies
     if (prop.originX === undefined) prop.originX = prop.x;
     if (prop.originY === undefined) prop.originY = prop.y;
     if (prop.originAngle === undefined) prop.originAngle = prop.angle ?? 0;
+
+    const isSliding = Boolean(prop.breakVX || prop.breakVY || prop.breakSpin);
+    const hasFountain = prop.type === 'hydrant' && (prop.waterFountainTimer ?? 0) > 0;
+    if (!isSliding && !hasFountain) {
+      const pcx = Math.floor(prop.x / PROP_CELL_SIZE);
+      const pcy = Math.floor(prop.y / PROP_CELL_SIZE);
+      const pIdx = (Math.imul(pcx, 73856093) ^ Math.imul(pcy, 19349663)) & PROP_STAMP_MASK;
+      if (activeVehiclePropCellStamp[pIdx] !== stamp) {
+        continue;
+      }
+    }
 
     const hitbox = getPropHitbox(prop);
     const canBodyMove =
@@ -14531,14 +14592,16 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
   }
 
   // 3b. JANITOR CLEANUP
-  const janitors = world.pedestrians.filter(p => p.isJanitor && p.state === 'walking');
-  if (world.litter) {
-    for (let i = world.litter.length - 1; i >= 0; i--) {
-      const lit = world.litter[i];
-      for (const janitor of janitors) {
-        if (Math.hypot(janitor.x - lit.x, janitor.y - lit.y) < 30 && !lit.isAirborne) {
-          world.litter.splice(i, 1);
-          break; // Stop checking janitors for this litter piece
+  if (world.litter && world.litter.length > 0) {
+    const janitors = world.pedestrians.filter(p => p.isJanitor && p.state === 'walking');
+    if (janitors.length > 0) {
+      for (let i = world.litter.length - 1; i >= 0; i--) {
+        const lit = world.litter[i];
+        for (const janitor of janitors) {
+          if (Math.hypot(janitor.x - lit.x, janitor.y - lit.y) < 30 && !lit.isAirborne) {
+            world.litter.splice(i, 1);
+            break; // Stop checking janitors for this litter piece
+          }
         }
       }
     }
@@ -14556,6 +14619,13 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     const pFootSpd = Math.hypot(pFootVx, pFootVy);
 
     for (const lit of world.litter) {
+      // Skip distant grounded litter outside active simulation area
+      if (!lit.isAirborne) {
+        const dxL = lit.x - player.x;
+        const dyL = lit.y - player.y;
+        if (dxL * dxL + dyL * dyL > 2250000) continue; // > 1500px
+      }
+
       // Surface wetness & mud adhesion
       if (rainAmt > 0.05) {
         lit.wetness = Math.min(1.0, (lit.wetness ?? 0) + dt * 0.12 * rainAmt);

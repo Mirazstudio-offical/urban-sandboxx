@@ -19,48 +19,83 @@ function strokePath(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }
   ctx.stroke();
 }
 
+function strokeSegmentOrCurve(
+  ctx: CanvasRenderingContext2D,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  pts?: { x: number; y: number }[] | null
+) {
+  ctx.beginPath();
+  if (pts && pts.length > 1) {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  } else {
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+  }
+  ctx.stroke();
+}
+
+const visibleRoadsScratch: any[] = [];
+const visibleRailsScratch: any[] = [];
+
 export function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, v: View, px: number, detail: boolean) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+
+  visibleRoadsScratch.length = 0;
+  const minW = 2.4 * px;
+  for (let i = 0; i < world.roads.length; i++) {
+    const r = world.roads[i];
+    if (r.isRoundabout) continue;
+    if (r._minX === undefined) {
+      const pts = r.curvePoints && r.curvePoints.length > 1 ? r.curvePoints : null;
+      if (pts) {
+        let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
+        for (let j = 0; j < pts.length; j++) {
+          const p = pts[j];
+          if (p.x < mnx) mnx = p.x;
+          if (p.x > mxx) mxx = p.x;
+          if (p.y < mny) mny = p.y;
+          if (p.y > mxy) mxy = p.y;
+        }
+        r._minX = mnx; r._maxX = mxx; r._minY = mny; r._maxY = mxy;
+      } else {
+        r._minX = Math.min(r.x1, r.x2);
+        r._maxX = Math.max(r.x1, r.x2);
+        r._minY = Math.min(r.y1, r.y2);
+        r._maxY = Math.max(r.y1, r.y2);
+      }
+    }
+    const pad = Math.max(r.width, minW);
+    if (
+      r._maxX! + pad < v.minX ||
+      r._minX! - pad > v.maxX ||
+      r._maxY! + pad < v.minY ||
+      r._minY! - pad > v.maxY
+    ) {
+      continue;
+    }
+    visibleRoadsScratch.push(r);
+  }
+
   // pass 1: casing, pass 2: surface (keeps junctions clean)
   for (let pass = 0; pass < 2; pass++) {
-    for (const r of world.roads) {
-      if (r.isRoundabout) continue;
-      const w = Math.max(r.width, 2.4 * px);
-      const pad = w;
+    for (let i = 0; i < visibleRoadsScratch.length; i++) {
+      const r = visibleRoadsScratch[i];
+      const w = Math.max(r.width, minW);
       const pts = r.curvePoints && r.curvePoints.length > 1 ? r.curvePoints : null;
-      let minX: number, maxX: number, minY: number, maxY: number;
-      if (pts) {
-        if (r._minX === undefined) {
-          let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
-          for (let i = 0; i < pts.length; i++) {
-            const p = pts[i];
-            if (p.x < mnx) mnx = p.x;
-            if (p.x > mxx) mxx = p.x;
-            if (p.y < mny) mny = p.y;
-            if (p.y > mxy) mxy = p.y;
-          }
-          r._minX = mnx; r._maxX = mxx; r._minY = mny; r._maxY = mxy;
-        }
-        minX = r._minX! - pad;
-        maxX = r._maxX! + pad;
-        minY = r._minY! - pad;
-        maxY = r._maxY! + pad;
-      } else {
-        minX = Math.min(r.x1, r.x2) - pad; maxX = Math.max(r.x1, r.x2) + pad;
-        minY = Math.min(r.y1, r.y2) - pad; maxY = Math.max(r.y1, r.y2) + pad;
-      }
-      if (maxX < v.minX || minX > v.maxX || maxY < v.minY || minY > v.maxY) continue;
-      const line = pts || [{ x: r.x1, y: r.y1 }, { x: r.x2, y: r.y2 }];
       if (pass === 0) {
         if (r.isDirt || r.isGravel || w < 6 * px) continue;
         ctx.strokeStyle = C.roadAsphaltEdge;
         ctx.lineWidth = w + 3 * px;
-        strokePath(ctx, line);
+        strokeSegmentOrCurve(ctx, r.x1, r.y1, r.x2, r.y2, pts);
       } else {
         ctx.strokeStyle = roadColor(r);
         ctx.lineWidth = w;
-        strokePath(ctx, line);
+        strokeSegmentOrCurve(ctx, r.x1, r.y1, r.x2, r.y2, pts);
       }
     }
     if (pass === 1 && world.roundabouts) {
@@ -78,19 +113,20 @@ export function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, v: Vi
   ctx.strokeStyle = C.roadMark;
   ctx.lineWidth = Math.max(1.4 * px, 2);
   ctx.setLineDash([14 * Math.max(px, 1), 12 * Math.max(px, 1)]);
-  for (const r of world.roads) {
-    if (r.isRoundabout || r.isDirt || r.isGravel || r.width < 40) continue;
-    const pts = r.curvePoints && r.curvePoints.length > 1 ? r.curvePoints : [{ x: r.x1, y: r.y1 }, { x: r.x2, y: r.y2 }];
-    let mnX: number, mxX: number, mnY: number, mxY: number;
-    if (r.curvePoints && r.curvePoints.length > 1) {
-      mnX = r._minX!; mxX = r._maxX!;
-      mnY = r._minY!; mxY = r._maxY!;
+  ctx.beginPath();
+  for (let i = 0; i < visibleRoadsScratch.length; i++) {
+    const r = visibleRoadsScratch[i];
+    if (r.isDirt || r.isGravel || r.width < 40) continue;
+    const pts = r.curvePoints && r.curvePoints.length > 1 ? r.curvePoints : null;
+    if (pts) {
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
     } else {
-      mnX = Math.min(r.x1, r.x2); mxX = Math.max(r.x1, r.x2); mnY = Math.min(r.y1, r.y2); mxY = Math.max(r.y1, r.y2);
+      ctx.moveTo(r.x1, r.y1);
+      ctx.lineTo(r.x2, r.y2);
     }
-    if (mxX + r.width < v.minX || mnX - r.width > v.maxX || mxY + r.width < v.minY || mnY - r.width > v.maxY) continue;
-    strokePath(ctx, pts);
   }
+  ctx.stroke();
   ctx.setLineDash([]);
 }
 
@@ -98,28 +134,58 @@ export function drawRails(ctx: CanvasRenderingContext2D, world: GameWorld, v: Vi
   if (!world.railwayTracks) return;
   ctx.lineCap = 'butt';
   ctx.lineJoin = 'round';
-  for (let pass = 0; pass < 2; pass++) {
-    for (const t of world.railwayTracks) {
-      const pts = t.curvePoints && t.curvePoints.length > 1 ? t.curvePoints : [{ x: t.x1, y: t.y1 }, { x: t.x2, y: t.y2 }];
-      let minX = (t as any)._minX as number | undefined;
-      let maxX = (t as any)._maxX as number | undefined;
-      let minY = (t as any)._minY as number | undefined;
-      let maxY = (t as any)._maxY as number | undefined;
-      if (minX === undefined) {
-        minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
-        for (const p of pts) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
-        (t as any)._minX = minX; (t as any)._maxX = maxX; (t as any)._minY = minY; (t as any)._maxY = maxY;
+  visibleRailsScratch.length = 0;
+  for (let i = 0; i < world.railwayTracks.length; i++) {
+    const t = world.railwayTracks[i] as any;
+    if (t._minX === undefined) {
+      const pts = t.curvePoints && t.curvePoints.length > 1 ? t.curvePoints : null;
+      if (pts) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (let j = 0; j < pts.length; j++) {
+          const p = pts[j];
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        }
+        t._minX = minX; t._maxX = maxX; t._minY = minY; t._maxY = maxY;
+      } else {
+        t._minX = Math.min(t.x1, t.x2);
+        t._maxX = Math.max(t.x1, t.x2);
+        t._minY = Math.min(t.y1, t.y2);
+        t._maxY = Math.max(t.y1, t.y2);
       }
-      if (maxX! + 30 < v.minX || minX! - 30 > v.maxX || maxY! + 30 < v.minY || minY! - 30 > v.maxY) continue;
-      if (pass === 0) { ctx.strokeStyle = C.railBed; ctx.lineWidth = Math.max(12, 3 * px); }
-      else {
-        ctx.strokeStyle = C.rail; ctx.lineWidth = Math.max(2.5, 1.2 * px);
-        ctx.setLineDash([Math.max(10, 5 * px), Math.max(10, 5 * px)]);
-      }
-      strokePath(ctx, pts);
-      ctx.setLineDash([]);
     }
+    if (t._maxX + 30 < v.minX || t._minX - 30 > v.maxX || t._maxY + 30 < v.minY || t._minY - 30 > v.maxY) continue;
+    visibleRailsScratch.push(t);
   }
+  if (visibleRailsScratch.length === 0) return;
+
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass === 0) {
+      ctx.strokeStyle = C.railBed;
+      ctx.lineWidth = Math.max(12, 3 * px);
+      ctx.setLineDash([]);
+    } else {
+      ctx.strokeStyle = C.rail;
+      ctx.lineWidth = Math.max(2.5, 1.2 * px);
+      ctx.setLineDash([Math.max(10, 5 * px), Math.max(10, 5 * px)]);
+    }
+    ctx.beginPath();
+    for (let i = 0; i < visibleRailsScratch.length; i++) {
+      const t = visibleRailsScratch[i];
+      const pts = t.curvePoints && t.curvePoints.length > 1 ? t.curvePoints : null;
+      if (pts) {
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
+      } else {
+        ctx.moveTo(t.x1, t.y1);
+        ctx.lineTo(t.x2, t.y2);
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
 }
 
 export function drawBuildings(ctx: CanvasRenderingContext2D, world: GameWorld, v: View, px: number) {

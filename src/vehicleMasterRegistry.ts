@@ -6961,15 +6961,15 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "chassisAnatomy": {
       "xNose": 0.5,
       "xCowl": 0.24,
-      "xA": 0.2,
-      "xB": 0.16,
-      "xC": 0.12,
-      "xRearHeader": 0.08,
+      "xA": 0.22,
+      "xB": 0.2,
+      "xC": 0.18,
+      "xRearHeader": 0.14,
       "xTail": -0.5,
       "xFrontAxle": 0.28,
       "xRearAxle": -0.22,
       "xEngine": 0.37,
-      "xCore": -0.02,
+      "xCore": -0.1,
       "frameRatio": 0.8
     },
     "opticsMounts": {
@@ -8086,7 +8086,8 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "xRearAxle": -0.2,
       "xEngine": 0.36,
       "xCore": -0.1,
-      "frameRatio": 0.85
+      "frameRatio": 0.85,
+      "frameMaxHalfWidth": 0.15
     },
     "opticsMounts": {
       "headlightLeft": {
@@ -10608,17 +10609,17 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.3,
-      "xA": 0.25,
-      "xB": 0.05,
-      "xC": -0.1,
-      "xRearHeader": -0.3,
+      "xCowl": 0.32,
+      "xA": 0.26,
+      "xB": 0.18,
+      "xC": 0.1,
+      "xRearHeader": 0.04,
       "xTail": -0.5,
       "xFrontAxle": 0.32,
       "xRearAxle": -0.34,
-      "xEngine": 0.18,
-      "xCore": 0,
-      "frameRatio": 0.6
+      "xEngine": 0.22,
+      "xCore": -0.12,
+      "frameRatio": 0.65
     },
     "opticsMounts": {
       "headlightLeft": {
@@ -10757,17 +10758,17 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.3,
-      "xA": 0.25,
-      "xB": 0.05,
-      "xC": -0.1,
-      "xRearHeader": -0.3,
+      "xCowl": 0.32,
+      "xA": 0.26,
+      "xB": 0.18,
+      "xC": 0.1,
+      "xRearHeader": 0.04,
       "xTail": -0.5,
       "xFrontAxle": 0.32,
       "xRearAxle": -0.34,
-      "xEngine": 0.18,
-      "xCore": 0,
-      "frameRatio": 0.52
+      "xEngine": 0.22,
+      "xCore": -0.12,
+      "frameRatio": 0.65
     },
     "opticsMounts": {
       "headlightLeft": {
@@ -10906,17 +10907,17 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.3,
-      "xA": 0.25,
-      "xB": 0.05,
-      "xC": -0.1,
-      "xRearHeader": -0.3,
+      "xCowl": 0.32,
+      "xA": 0.26,
+      "xB": 0.18,
+      "xC": 0.1,
+      "xRearHeader": 0.04,
       "xTail": -0.5,
       "xFrontAxle": 0.32,
       "xRearAxle": -0.34,
-      "xEngine": 0.18,
-      "xCore": 0,
-      "frameRatio": 0.6
+      "xEngine": 0.22,
+      "xCore": -0.12,
+      "frameRatio": 0.65
     },
     "opticsMounts": {
       "headlightLeft": {

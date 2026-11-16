@@ -241,13 +241,20 @@ function ensureCurveScratchCapacity(n: number) {
   }
 }
 
+const hashStringCache = new Map<string, number>();
 const hashString = (str: string): number => {
+  const cached = hashStringCache.get(str);
+  if (cached !== undefined) return cached;
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = (hash << 5) - hash + str.charCodeAt(i);
     hash |= 0;
   }
-  return (Math.abs(hash) % 1000) / 1000;
+  const res = (Math.abs(hash) % 1000) / 1000;
+  if (hashStringCache.size < 8192) {
+    hashStringCache.set(str, res);
+  }
+  return res;
 };
 
 export const isVehicleReverseGearActive = (car: Vehicle): boolean => {
@@ -381,20 +388,28 @@ export class GameRenderer {
   private currentWorldWind: { vx: number; vy: number } = { vx: 14, vy: 4 };
   private currentNightAlpha: number = 0;
 
-  /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit`. */
+  private cappedParticlesScratch: Particle[] = [];
+
+  /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit` with zero heap allocation. */
   private capParticles(particles: GameWorld['particles']): GameWorld['particles'] {
     const lim = performanceConfig.renderParticleLimit;
-    const src = particles.length > lim ? particles.slice(particles.length - lim) : particles;
-    // Плотность дыма из настроек «Игра»: каждой частице закреплён случайный порог при первом кадре,
-    // поэтому при снижении плотности одни и те же облака исчезают, а не мерцают.
     const density = getDisplaySettings().smokeDensity / 100;
-    if (density >= 1) return src;
-    return src.filter(p => {
-      if (p.type !== 'engine_smoke' && p.type !== 'tire_smoke') return true;
-      const anyP = p as any;
-      if (anyP._smokeSeed === undefined) anyP._smokeSeed = Math.random();
-      return anyP._smokeSeed < density;
-    });
+    if (particles.length <= lim && density >= 1) {
+      return particles;
+    }
+    const out = this.cappedParticlesScratch;
+    out.length = 0;
+    const startIdx = particles.length > lim ? particles.length - lim : 0;
+    for (let i = startIdx; i < particles.length; i++) {
+      const p = particles[i];
+      if (density < 1 && (p.type === 'engine_smoke' || p.type === 'tire_smoke')) {
+        const anyP = p as any;
+        if (anyP._smokeSeed === undefined) anyP._smokeSeed = Math.random();
+        if (anyP._smokeSeed >= density) continue;
+      }
+      out.push(p);
+    }
+    return out;
   }
   private lightmapCtx: CanvasRenderingContext2D;
   private shadowCtx: CanvasRenderingContext2D;
@@ -402,7 +417,10 @@ export class GameRenderer {
 
   // Offscreen Chunk Cache for static world geometry (Ground, Sidewalks, Roads, Parkings)
   private chunkCache = new Map<string, HTMLCanvasElement>();
+  private materialChunkCache = new Map<string, HTMLCanvasElement>();
   private lastChunkSeasonKey: string = '';
+  private lastChunkWorldRef: GameWorld | null = null;
+  private lastMaterialWorldRef: GameWorld | null = null;
   private chunkSize: number = 1000;
 
   // Cached High-Fidelity Procedural Surface Patterns for Roads & Shoulders
@@ -967,13 +985,14 @@ export class GameRenderer {
     const seasonKey = world.calendar
       ? `${world.calendar.season}_${world.calendar.month}_${isWet ? 'wet' : 'dry'}_${isWorldFreezing(world) ? 'frz' : 'thw'}`
       : `default_${isWet ? 'wet' : 'dry'}`;
-    if (this.lastChunkSeasonKey !== seasonKey) {
+    if (this.lastChunkSeasonKey !== seasonKey || this.lastChunkWorldRef !== world) {
       for (const oldCanvas of this.chunkCache.values()) {
         oldCanvas.width = 0;
         oldCanvas.height = 0;
       }
       this.chunkCache.clear();
       this.lastChunkSeasonKey = seasonKey;
+      this.lastChunkWorldRef = world;
     }
     const key = `${cx},${cy}_${seasonKey}`;
     let canvas = this.chunkCache.get(key);
@@ -1000,6 +1019,59 @@ export class GameRenderer {
       // Move to back for LRU
       this.chunkCache.delete(key);
       this.chunkCache.set(key, canvas);
+    }
+    return canvas;
+  }
+
+  private getMaterialChunkCanvas(cx: number, cy: number, world: GameWorld): HTMLCanvasElement {
+    if (this.lastMaterialWorldRef !== world) {
+      for (const oldCanvas of this.materialChunkCache.values()) {
+        oldCanvas.width = 0;
+        oldCanvas.height = 0;
+      }
+      this.materialChunkCache.clear();
+      this.lastMaterialWorldRef = world;
+    }
+    const key = `${cx},${cy}`;
+    let canvas = this.materialChunkCache.get(key);
+    if (!canvas) {
+      if (this.materialChunkCache.size >= GameRenderer.MAX_CHUNKS) {
+        const firstKey = this.materialChunkCache.keys().next().value;
+        if (firstKey !== undefined) {
+          const recycledCanvas = this.materialChunkCache.get(firstKey);
+          this.materialChunkCache.delete(firstKey);
+          if (recycledCanvas) {
+            canvas = recycledCanvas;
+          }
+        }
+      }
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.width = this.chunkSize;
+        canvas.height = this.chunkSize;
+      } else if (canvas.width !== this.chunkSize || canvas.height !== this.chunkSize) {
+        canvas.width = this.chunkSize;
+        canvas.height = this.chunkSize;
+      }
+      const chunkCtx = canvas.getContext('2d', { alpha: false })!;
+      const chunkX = cx * this.chunkSize;
+      const chunkY = cy * this.chunkSize;
+      const minX = chunkX;
+      const minY = chunkY;
+      const maxX = chunkX + this.chunkSize;
+      const maxY = chunkY + this.chunkSize;
+      chunkCtx.save();
+      chunkCtx.setTransform(1, 0, 0, 1, 0, 0);
+      chunkCtx.imageSmoothingEnabled = false;
+      chunkCtx.fillStyle = 'rgb(32, 128, 128)';
+      chunkCtx.fillRect(0, 0, this.chunkSize, this.chunkSize);
+      chunkCtx.translate(-chunkX, -chunkY);
+      this.renderMaterialStaticRegion(chunkCtx, world, world.sidewalks || [], minX, minY, maxX, maxY);
+      chunkCtx.restore();
+      this.materialChunkCache.set(key, canvas);
+    } else {
+      this.materialChunkCache.delete(key);
+      this.materialChunkCache.set(key, canvas);
     }
     return canvas;
   }
@@ -8443,41 +8515,15 @@ export class GameRenderer {
    *     For asphalt/dirt roads (64, 128): tire-polished wheel track weight (0.55 on crown -> 0.92 in wheel ruts)
    * - B channel encodes fluid alpha/opacity (0..255)
    */
-  private renderMaterialBuffer(
+  private renderMaterialStaticRegion(
+    ctx: CanvasRenderingContext2D,
     world: GameWorld,
-    player: Player,
-    camera: Camera,
-    shakeX: number,
-    shakeY: number,
-    visibleBuildings: Building[],
-    visibleVehicles: Vehicle[],
-    visiblePedestrians: Pedestrian[],
-    vpTrees: Tree[],
-    vpProps: StreetProp[],
-    vpSidewalks: SidewalkBlock[],
-    remotePlayers: RemotePlayerState[],
+    sidewalks: SidewalkBlock[],
     minX: number,
     minY: number,
     maxX: number,
     maxY: number
   ) {
-    const ctx = this.materialCtx;
-    const bs = this.backingScale;
-
-    ctx.setTransform(bs, 0, 0, bs, 0, 0);
-    ctx.imageSmoothingEnabled = false;
-    ctx.globalCompositeOperation = 'source-over';
-
-    // 1. Base Terrain: Natural Meadow / Steppe Grass (MAT_EARTH = 32, G = 128 -> matParam = 0.502)
-    ctx.fillStyle = 'rgb(32, 128, 128)';
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    ctx.save();
-    ctx.translate(this.width / 2, this.height / 2);
-    ctx.scale(camera.zoom, camera.zoom);
-    ctx.rotate(-camera.angle - Math.PI / 2);
-    ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
-
     // 1b. Agricultural Field Biomes & Silica Sand / Salt Shores (MAT_EARTH = 32, G encodes sub-biome)
     const agParcels = [
       { x: 10300, y: 1200, w: 6100, h: 2500, g: 160 },
@@ -8532,8 +8578,8 @@ export class GameRenderer {
 
     // 4. Sidewalks (MAT_CONCRETE = 96)
     ctx.fillStyle = 'rgb(96, 150, 128)';
-    for (let i = 0; i < vpSidewalks.length; i++) {
-      const sw = vpSidewalks[i];
+    for (let i = 0; i < sidewalks.length; i++) {
+      const sw = sidewalks[i];
       if (sw.x + sw.width < minX || sw.x > maxX || sw.y + sw.height < minY || sw.y > maxY) continue;
       ctx.fillRect(sw.x, sw.y, sw.width, sw.height);
     }
@@ -8589,14 +8635,20 @@ export class GameRenderer {
         const pts = road.curvePoints;
         const n = pts.length;
         const halfW = rw * 0.5;
-        let minPX = Infinity, maxPX = -Infinity, minPY = Infinity, maxPY = -Infinity;
-        for (let pi = 0; pi < n; pi++) {
-          if (pts[pi].x < minPX) minPX = pts[pi].x;
-          if (pts[pi].x > maxPX) maxPX = pts[pi].x;
-          if (pts[pi].y < minPY) minPY = pts[pi].y;
-          if (pts[pi].y > maxPY) maxPY = pts[pi].y;
+        if (road._minX === undefined) {
+          let minPX = Infinity, maxPX = -Infinity, minPY = Infinity, maxPY = -Infinity;
+          for (let pi = 0; pi < n; pi++) {
+            if (pts[pi].x < minPX) minPX = pts[pi].x;
+            if (pts[pi].x > maxPX) maxPX = pts[pi].x;
+            if (pts[pi].y < minPY) minPY = pts[pi].y;
+            if (pts[pi].y > maxPY) maxPY = pts[pi].y;
+          }
+          road._minX = minPX;
+          road._maxX = maxPX;
+          road._minY = minPY;
+          road._maxY = maxPY;
         }
-        if (maxPX + halfW + 16 < minX || minPX - halfW - 16 > maxX || maxPY + halfW + 16 < minY || minPY - halfW - 16 > maxY) continue;
+        if (road._maxX! + halfW + 16 < minX || road._minX! - halfW - 16 > maxX || road._maxY! + halfW + 16 < minY || road._minY! - halfW - 16 > maxY) continue;
 
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -8657,12 +8709,14 @@ export class GameRenderer {
         continue;
       }
 
+      if (road._minX === undefined) {
+        road._minX = Math.min(road.x1, road.x2);
+        road._maxX = Math.max(road.x1, road.x2);
+        road._minY = Math.min(road.y1, road.y2);
+        road._maxY = Math.max(road.y1, road.y2);
+      }
       const margin = rw * 0.5 + 20;
-      const rMinX = (road._minX ?? Math.min(road.x1, road.x2)) - margin;
-      const rMaxX = (road._maxX ?? Math.max(road.x1, road.x2)) + margin;
-      const rMinY = (road._minY ?? Math.min(road.y1, road.y2)) - margin;
-      const rMaxY = (road._maxY ?? Math.max(road.y1, road.y2)) + margin;
-      if (rMaxX < minX || rMinX > maxX || rMaxY < minY || rMinY > maxY) continue;
+      if (road._maxX! + margin < minX || road._minX! - margin > maxX || road._maxY! + margin < minY || road._minY! - margin > maxY) continue;
 
       const dx = road.x2 - road.x1;
       const dy = road.y2 - road.y1;
@@ -8748,6 +8802,84 @@ export class GameRenderer {
     // 8. River "Быстрица" Channel, Banks, Boulders, Bridge & Piers
     renderRiverMaterialMask(ctx, minX, minY, maxX, maxY);
 
+    // 9b. Garage Cooperative Static Alley Puddles (MAT_PUDDLE_WATER = 192)
+    for (const z of gskZones) {
+      if (z.x2 < minX || z.x1 > maxX || z.y2 < minY || z.y1 > maxY) continue;
+      const alleyPuddles = [
+        { x: z.x1 + 160, y: z.y1 + 120, rx: 18, ry: 9, angle: 0.1 },
+        { x: z.x1 + 420, y: z.y1 + 115, rx: 24, ry: 11, angle: -0.05 },
+        { x: z.x1 + 270, y: z.y1 + 305, rx: 22, ry: 10, angle: 0.15 },
+        { x: z.x1 + 540, y: z.y1 + 310, rx: 20, ry: 10, angle: -0.2 },
+        { x: z.x1 + 210, y: z.y1 + 495, rx: 26, ry: 12, angle: 0.05 },
+        { x: z.x1 + 480, y: z.y1 + 500, rx: 22, ry: 9, angle: 0.1 }
+      ];
+      for (const ap of alleyPuddles) {
+        if (ap.x + ap.rx < minX || ap.x - ap.rx > maxX || ap.y + ap.ry < minY || ap.y - ap.ry > maxY) continue;
+        ctx.save();
+        ctx.translate(ap.x, ap.y);
+        ctx.rotate(ap.angle);
+        ctx.scale(ap.rx, ap.ry);
+        const grad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, 1);
+        grad.addColorStop(0.0, 'rgb(192, 230, 220)');
+        grad.addColorStop(0.68, 'rgb(192, 150, 220)');
+        grad.addColorStop(0.92, 'rgb(192, 32, 220)');
+        grad.addColorStop(1.0, 'rgb(192, 10, 220)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  private renderMaterialBuffer(
+    world: GameWorld,
+    player: Player,
+    camera: Camera,
+    shakeX: number,
+    shakeY: number,
+    visibleBuildings: Building[],
+    visibleVehicles: Vehicle[],
+    visiblePedestrians: Pedestrian[],
+    vpTrees: Tree[],
+    vpProps: StreetProp[],
+    vpSidewalks: SidewalkBlock[],
+    remotePlayers: RemotePlayerState[],
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ) {
+    const ctx = this.materialCtx;
+    const bs = this.backingScale;
+
+    ctx.setTransform(bs, 0, 0, bs, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = 'source-over';
+
+    // 1. Base Terrain: Natural Meadow / Steppe Grass (MAT_EARTH = 32, G = 128 -> matParam = 0.502)
+    ctx.fillStyle = 'rgb(32, 128, 128)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.save();
+    ctx.translate(this.width / 2, this.height / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.rotate(-camera.angle - Math.PI / 2);
+    ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
+
+    const startChunkX = Math.floor(minX / this.chunkSize);
+    const endChunkX = Math.floor(maxX / this.chunkSize);
+    const startChunkY = Math.floor(minY / this.chunkSize);
+    const endChunkY = Math.floor(maxY / this.chunkSize);
+
+    for (let cx = startChunkX; cx <= endChunkX; cx++) {
+      for (let cy = startChunkY; cy <= endChunkY; cy++) {
+        const matChunk = this.getMaterialChunkCanvas(cx, cy, world);
+        ctx.drawImage(matChunk, cx * this.chunkSize, cy * this.chunkSize);
+      }
+    }
+
     // 8b. Tire SkidMarks & 3D Offroad Wheel Ruts encoded into uMat.b (> 134 -> 0.525..1.0)
     if (world.skidMarks && world.skidMarks.length > 0) {
       const smStart = Math.max(0, world.skidMarks.length - performanceConfig.skidMarksLimit);
@@ -8802,36 +8934,6 @@ export class GameRenderer {
         grad.addColorStop(1.0, 'rgb(192, 10, 235)');
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, 1, 1, seed);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // 9b. Garage Cooperative Static Alley Puddles (MAT_PUDDLE_WATER = 192)
-    for (const z of gskZones) {
-      if (z.x2 < minX || z.x1 > maxX || z.y2 < minY || z.y1 > maxY) continue;
-      const alleyPuddles = [
-        { x: z.x1 + 160, y: z.y1 + 120, rx: 18, ry: 9, angle: 0.1 },
-        { x: z.x1 + 420, y: z.y1 + 115, rx: 24, ry: 11, angle: -0.05 },
-        { x: z.x1 + 270, y: z.y1 + 305, rx: 22, ry: 10, angle: 0.15 },
-        { x: z.x1 + 540, y: z.y1 + 310, rx: 20, ry: 10, angle: -0.2 },
-        { x: z.x1 + 210, y: z.y1 + 495, rx: 26, ry: 12, angle: 0.05 },
-        { x: z.x1 + 480, y: z.y1 + 500, rx: 22, ry: 9, angle: 0.1 }
-      ];
-      for (const ap of alleyPuddles) {
-        if (ap.x + ap.rx < minX || ap.x - ap.rx > maxX || ap.y + ap.ry < minY || ap.y - ap.ry > maxY) continue;
-        ctx.save();
-        ctx.translate(ap.x, ap.y);
-        ctx.rotate(ap.angle);
-        ctx.scale(ap.rx, ap.ry);
-        const grad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, 1);
-        grad.addColorStop(0.0, 'rgb(192, 230, 220)');
-        grad.addColorStop(0.68, 'rgb(192, 150, 220)');
-        grad.addColorStop(0.92, 'rgb(192, 32, 220)');
-        grad.addColorStop(1.0, 'rgb(192, 10, 220)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(0, 0, 1, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
@@ -9047,9 +9149,13 @@ export class GameRenderer {
       } else if (pt === 'bus_stop') {
         ctx.fillRect(-15, -9, 30, 18);
       } else if (pt === 'shipping_container') {
-        let ph = 0;
-        for (let ci = 0; ci < p.id.length; ci++) ph = (ph * 31 + p.id.charCodeAt(ci)) >>> 0;
-        const cLen = (ph % 3) === 0 ? 94 : 58;
+        let cLen = (p as any)._cLen as number | undefined;
+        if (cLen === undefined) {
+          let ph = 0;
+          for (let ci = 0; ci < p.id.length; ci++) ph = (ph * 31 + p.id.charCodeAt(ci)) >>> 0;
+          cLen = (ph % 3) === 0 ? 94 : 58;
+          (p as any)._cLen = cLen;
+        }
         ctx.fillRect(-cLen * 0.5, -13, cLen, 26);
       } else if (pt === 'industrial_tank') {
         ctx.fillRect(-23, -12, 46, 24);
@@ -15470,12 +15576,16 @@ export class GameRenderer {
       if (car.isParked) return false;
       if (isRaining || isFog || weights.overcast > 0.50) return true;
 
-      // Dynamic sunset/sunrise headlights
-      const stringId = car.id || 'car';
-      let sum = 0;
-      for (let i = 0; i < stringId.length; i++) sum += stringId.charCodeAt(i);
-      const carHash = Math.sin(sum * 12.9898) * 43758.5453;
-      const randVal = carHash - Math.floor(carHash);
+      // Dynamic sunset/sunrise headlights (cache per-vehicle random hash)
+      let randVal = (car as any)._headlightRand as number | undefined;
+      if (randVal === undefined) {
+        const stringId = car.id || 'car';
+        let sum = 0;
+        for (let i = 0; i < stringId.length; i++) sum += stringId.charCodeAt(i);
+        const carHash = Math.sin(sum * 12.9898) * 43758.5453;
+        randVal = carHash - Math.floor(carHash);
+        (car as any)._headlightRand = randVal;
+      }
 
       // European/Russian DRL standard: ~35% of daytime traffic runs with DRL / dipped headlights
       if (randVal < 0.35) return true;
