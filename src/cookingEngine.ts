@@ -961,6 +961,26 @@ export function finishCookwareToInventoryItem(
       })),
       liquids: vessel.liquids.map(l => ({ ...l })),
       tasteNotes
+    },
+    attributes: {
+      varietyRu: finalNameRu,
+      ingredients: namesList.length > 0 ? namesList : ['Вода'],
+      preparationMethod: isCharred
+        ? 'Сильное обугливание при термообработке'
+        : isSoup
+        ? 'Варка на медленном огне в посуде'
+        : isFried
+        ? 'Обжарка с реакцией Майяра на сковороде'
+        : 'Тушение и томление ингредиентов',
+      purpose: 'Готовое домашнее блюдо для утоления голода и восстановления сил',
+      state: isCharred ? 'burnt' : isSoup ? 'boiled' : isFried ? 'fried' : 'cooked',
+      stateNameRu: isCharred ? 'Подгоревшее' : isSoup ? 'Отварное / Суп' : isFried ? 'Жареное' : 'Приготовленное',
+      dishType: isCharred ? 'burnt_mess' : (isSoup ? 'soup' : (isFried ? 'fried' : 'stew')),
+      tasteNotes,
+      visuals: {
+        shape: containerType,
+        shapeNameRu: containerType === 'pan' ? 'Сковорода' : containerType === 'pot' ? 'Кастрюля' : containerType === 'bowl' ? 'Пиала' : 'Тарелка'
+      }
     }
   };
 
@@ -1059,6 +1079,20 @@ export function createDryMixFromVessel(vessel: CookwareVessel): InventoryItem | 
       })),
       liquids: vessel.liquids.map(l => ({ ...l })),
       tasteNotes: ['Сухая смесь ингредиентов со свежими ароматами пряностей и овощей.']
+    },
+    attributes: {
+      varietyRu: mixTitle,
+      ingredients: namesList,
+      preparationMethod: 'Нарезка и смешивание сырых подготовленных ингредиентов',
+      purpose: 'Заготовка для варки супа, тушения или жарки на сковороде',
+      state: 'raw',
+      stateNameRu: 'Сырая смесь / Заготовка',
+      dishType: 'mix',
+      tasteNotes: ['Сухая смесь ингредиентов со свежими ароматами пряностей и овощей.'],
+      visuals: {
+        shape: 'bowl',
+        shapeNameRu: 'Миска со смесью'
+      }
     }
   };
 }
@@ -1198,6 +1232,24 @@ export function createWorkpieceFromVessel(
       })),
       liquids: vessel.liquids.map(l => ({ ...l })),
       tasteNotes: ['Сырая кулинарная заготовка со свежими соками... Требуется термообработка.']
+    },
+    attributes: {
+      varietyRu: prepTitle,
+      ingredients: namesList,
+      preparationMethod: isMinced
+        ? 'Мелкая рубка и смешивание подготовленных ингредиентов'
+        : isSliced
+        ? 'Нарезка и подготовка ингредиентов на доске'
+        : 'Подготовка сырых ингредиентов',
+      purpose: 'Кулинарный полуфабрикат для жарки, варки или запекания',
+      state: 'raw',
+      stateNameRu: 'Сырая заготовка',
+      dishType: 'workpiece',
+      tasteNotes: ['Сырая кулинарная заготовка со свежими соками... Требуется термообработка.'],
+      visuals: {
+        shape: containerType,
+        shapeNameRu: containerType === 'board' ? 'На разделочной доске' : containerType === 'paper' ? 'В пергаменте' : 'В посуде'
+      }
     }
   };
 

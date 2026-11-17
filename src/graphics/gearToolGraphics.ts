@@ -3400,7 +3400,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       const isLg = itemId.startsWith('jar_glass_large');
       const isSm = itemId.startsWith('jar_glass_small');
       const isSpice = itemId.startsWith('jar_spice_small');
-      const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId.endsWith('_open'));
 
       const vis = resolveContainerVisualAttributes(
         itemId,
@@ -3627,7 +3627,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'tin_round_mini_open':
     case 'can_alu_330':
     case 'can_alu_330_open': {
-      const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId.endsWith('_open'));
       const isMini = itemId.startsWith('tin_round_mini');
       const isAlu = itemId.startsWith('can_alu_330');
       const isOvalBase = itemId.startsWith('can_metal_oval');
@@ -4344,7 +4344,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'cup_plastic_dairy_medium':
     case 'cup_plastic_dairy_medium_open': {
       const isMd = itemId.includes('medium');
-      const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId.endsWith('_open'));
       const topW = isMd ? 11.0 : 9.0;
       const botW = isMd ? 8.4 : 6.8;
       const h = isMd ? 11.5 : 8.5;
@@ -4401,7 +4401,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.beginPath();
       ctx.arc(0.5, 0.5, 1.8, 0, Math.PI * 2);
       ctx.fill();
-      if (itemId === 'tetra_pack_250_open') {
+      if (item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'tetra_pack_250_open') {
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
         ctx.ellipse(1.8, -4.2, 1.2, 0.7, 0, 0, Math.PI * 2);
@@ -4429,7 +4429,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       // Crimped seams
       ctx.fillStyle = '#94a3b8';
-      if (itemId === 'package_sachet_open') {
+      if (item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'package_sachet_open') {
         ctx.fillRect(-4.2, 5.1, 8.4, 1.4);
         ctx.fillStyle = '#334155';
         ctx.beginPath();
@@ -4493,7 +4493,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'pot_clay_large_open': {
       const isSm = itemId.includes('small');
       const isLg = itemId.includes('large');
-      const isOpen = itemId.endsWith('_open') || Boolean(item?.fluidStorage?.attributes?.isOpened);
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId.endsWith('_open'));
       const scale = isLg ? 1.18 : isSm ? 0.82 : 1.0;
 
       ctx.save();

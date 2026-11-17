@@ -1,6 +1,6 @@
 // Procedural 2D Canvas Models for Food Items
 import { drawShadow, drawGlossBand } from './itemGraphicShared';
-import { GummyCandyShape, PelmenShape, PelmenSize, PelmenState } from '../types';
+import { GummyCandyShape, PelmenShape, PelmenSize, PelmenState, ChocolateShape, ChocolateSize } from '../types';
 
 export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item?: any): boolean {
   switch (itemId) {
@@ -878,6 +878,11 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       return true;
     }
 
+    case 'chocolate': {
+      drawChocolatePiece(ctx, item);
+      return true;
+    }
+
     default:
       return false;
   }
@@ -1498,6 +1503,511 @@ function drawPelmenPiece(ctx: CanvasRenderingContext2D, item?: any): void {
       }
     }
   }
+
+  ctx.restore();
+}
+
+function drawChocolatePiece(ctx: CanvasRenderingContext2D, item?: any): void {
+  const attrs = item?.chocolateAttributes;
+  const shape: ChocolateShape = attrs?.shape || 'classic_bar';
+  const size: ChocolateSize = attrs?.size || 'medium';
+  const outerColor: string = attrs?.outerColor || '#6b3e26';
+  const innerColor: string = attrs?.innerColor || '#8d5524';
+  const hasFilling: boolean = attrs?.hasFilling ?? (outerColor.toLowerCase() !== innerColor.toLowerCase());
+  const surfaceTexture: string = attrs?.surfaceTexture || 'smooth';
+
+  const sizeScale =
+    size === 'mini'
+      ? 0.74
+      : size === 'small'
+      ? 0.88
+      : size === 'medium'
+      ? 1.0
+      : size === 'large'
+      ? 1.12
+      : 1.22; // king
+
+  const outerBright = tintHex(outerColor, 0.22);
+  const outerShade = tintHex(outerColor, -0.22);
+  const outerRim = tintHex(outerColor, -0.36);
+  const innerBright = tintHex(innerColor, 0.18);
+  const innerShade = tintHex(innerColor, -0.18);
+
+  drawShadow(ctx, 5.8 * sizeScale, 2.2 * sizeScale, 6.6 * sizeScale, 0.26);
+
+  ctx.save();
+  ctx.scale(sizeScale, sizeScale);
+
+  const makeOuterGrad = (x0: number, y0: number, x1: number, y1: number) => {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0.0, outerBright);
+    g.addColorStop(0.45, outerColor);
+    g.addColorStop(1.0, outerShade);
+    return g;
+  };
+
+  const drawSurfaceDetails = (rx: number, ry: number) => {
+    if (surfaceTexture === 'nuts') {
+      ctx.fillStyle = '#d6a972';
+      for (const [nx, ny, nr] of [[-rx * 0.45, -ry * 0.28, 0.85], [rx * 0.35, -ry * 0.35, 0.75], [-rx * 0.15, ry * 0.32, 0.8], [rx * 0.48, ry * 0.25, 0.7]]) {
+        ctx.beginPath();
+        ctx.ellipse(nx, ny, nr, nr * 0.75, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (surfaceTexture === 'crisps') {
+      ctx.fillStyle = '#fef3c7';
+      for (const [cx, cy] of [[-rx * 0.5, -ry * 0.3], [rx * 0.25, -ry * 0.4], [0, 0.1], [-rx * 0.3, ry * 0.4], [rx * 0.45, ry * 0.3]]) {
+        ctx.fillRect(cx, cy, 0.65, 0.55);
+      }
+    } else if (surfaceTexture === 'marbled') {
+      ctx.strokeStyle = innerBright;
+      ctx.lineWidth = 0.8;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-rx * 0.6, -ry * 0.3);
+      ctx.bezierCurveTo(-rx * 0.2, ry * 0.4, rx * 0.2, -ry * 0.5, rx * 0.6, ry * 0.2);
+      ctx.stroke();
+    } else if (surfaceTexture === 'dusted') {
+      ctx.fillStyle = outerRim;
+      for (const [dx, dy] of [[-2.0, -1.3], [1.6, -1.6], [-0.4, 0.3], [2.1, 1.1], [-1.7, 1.4], [0.5, -0.8]]) {
+        ctx.fillRect(dx, dy, 0.55, 0.55);
+      }
+    }
+  };
+
+  // Draws a clean broken corner / slice window revealing inner filling material & color
+  const drawCrossSectionSlice = (cx: number, cy: number, rw: number, rh: number, round: number = 0.6) => {
+    const fg = ctx.createLinearGradient(cx - rw, cy - rh, cx + rw, cy + rh);
+    fg.addColorStop(0.0, innerBright);
+    fg.addColorStop(0.55, innerColor);
+    fg.addColorStop(1.0, innerShade);
+    ctx.fillStyle = fg;
+    ctx.strokeStyle = outerRim;
+    ctx.lineWidth = 0.45;
+    ctx.beginPath();
+    ctx.roundRect(cx - rw, cy - rh, rw * 2, rh * 2, round);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+    ctx.beginPath();
+    ctx.ellipse(cx - rw * 0.25, cy - rh * 0.25, rw * 0.45, rh * 0.22, -0.25, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  switch (shape) {
+    case 'chunky_bar': {
+      // Thick rounded snack bar with cross-section snapped end exposing inner filling
+      ctx.save();
+      ctx.rotate(-0.22);
+      ctx.fillStyle = makeOuterGrad(-7.5, -3.5, 7.5, 3.5);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.roundRect(-7.6, -3.5, 15.2, 7.0, 1.6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Chunky pillow segments
+      for (const sx of [-5.2, -1.8, 1.6]) {
+        ctx.fillStyle = outerBright;
+        ctx.beginPath();
+        ctx.roundRect(sx - 1.3, -2.5, 2.6, 5.0, 0.9);
+        ctx.fill();
+        ctx.strokeStyle = outerShade;
+        ctx.lineWidth = 0.45;
+        ctx.stroke();
+      }
+
+      // Snapped right end showing inner filling core
+      if (hasFilling) {
+        drawCrossSectionSlice(5.5, 0, 1.75, 2.4, 0.7);
+      } else {
+        ctx.fillStyle = outerShade;
+        ctx.beginPath();
+        ctx.roundRect(4.2, -2.4, 2.4, 4.8, 0.7);
+        ctx.fill();
+      }
+      drawSurfaceDetails(5.5, 2.4);
+      ctx.restore();
+      break;
+    }
+
+    case 'square_tile': {
+      // Square Ritter-style 3x3 segmented tile with snapped bottom-right corner showing inner core
+      ctx.fillStyle = makeOuterGrad(-6, -6, 6, 6);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.roundRect(-6.2, -6.2, 12.4, 12.4, 1.1);
+      ctx.fill();
+      ctx.stroke();
+
+      // 3x3 beveled square segments
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (r === 2 && c === 2 && hasFilling) continue;
+          const sx = -5.4 + c * 3.7;
+          const sy = -5.4 + r * 3.7;
+          ctx.fillStyle = outerBright;
+          ctx.fillRect(sx, sy, 3.1, 3.1);
+          ctx.fillStyle = outerColor;
+          ctx.fillRect(sx + 0.35, sy + 0.35, 2.4, 2.4);
+        }
+      }
+
+      if (hasFilling) {
+        drawCrossSectionSlice(3.6, 3.6, 1.75, 1.75, 0.5);
+      }
+      drawSurfaceDetails(5.0, 5.0);
+      break;
+    }
+
+    case 'triangle_prism': {
+      // Sawtooth mountain-peak Toblerone-style chocolate bar
+      ctx.save();
+      ctx.rotate(-0.2);
+      // Base plinth
+      ctx.fillStyle = outerShade;
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.roundRect(-7.8, 1.4, 15.6, 2.8, 0.6);
+      ctx.fill();
+      ctx.stroke();
+
+      // 4 triangular prism peaks
+      for (let i = 0; i < 4; i++) {
+        const px = -5.6 + i * 3.7;
+        // Left lit triangle face
+        ctx.fillStyle = outerBright;
+        ctx.beginPath();
+        ctx.moveTo(px - 1.7, 1.5);
+        ctx.lineTo(px, -3.6);
+        ctx.lineTo(px + 0.2, 1.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Right shaded triangle face
+        ctx.fillStyle = outerColor;
+        ctx.beginPath();
+        ctx.moveTo(px, -3.6);
+        ctx.lineTo(px + 1.8, 1.5);
+        ctx.lineTo(px + 0.2, 1.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Snapped right triangle exposing inner honey/almond nougat
+      if (hasFilling) {
+        ctx.fillStyle = innerColor;
+        ctx.beginPath();
+        ctx.moveTo(4.6, 1.0);
+        ctx.lineTo(5.6, -2.4);
+        ctx.lineTo(6.7, 1.0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = outerRim;
+        ctx.lineWidth = 0.45;
+        ctx.stroke();
+      }
+      drawSurfaceDetails(5.5, 2.0);
+      ctx.restore();
+      break;
+    }
+
+    case 'wafer_stick': {
+      // Crisp wafer-filled chocolate stick / bar
+      ctx.save();
+      ctx.rotate(-0.26);
+      ctx.fillStyle = makeOuterGrad(-8, -2.6, 8, 2.6);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.roundRect(-8.0, -2.6, 16.0, 5.2, 1.0);
+      ctx.fill();
+      ctx.stroke();
+
+      // Diagonal wafer drizzle stripes
+      ctx.strokeStyle = outerBright;
+      ctx.lineWidth = 0.65;
+      for (let wx = -6.0; wx <= 2.5; wx += 2.1) {
+        ctx.beginPath();
+        ctx.moveTo(wx, -2.4);
+        ctx.lineTo(wx + 1.3, 2.4);
+        ctx.stroke();
+      }
+
+      // Exposed layered wafer cross-section on right tip
+      if (hasFilling) {
+        drawCrossSectionSlice(6.0, 0, 1.7, 1.9, 0.5);
+        ctx.fillStyle = outerColor;
+        ctx.fillRect(4.5, -0.45, 3.0, 0.4);
+        ctx.fillRect(4.5, 0.45, 3.0, 0.4);
+      }
+      ctx.restore();
+      break;
+    }
+
+    case 'truffle_dome': {
+      // Plump dome truffle bonbon with cut wedge showing creamy ganache core
+      ctx.fillStyle = makeOuterGrad(-5, -5, 5, 5);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.arc(0, 0.3, 5.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Top chocolate swirl cap
+      ctx.strokeStyle = outerBright;
+      ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      ctx.arc(0, -0.3, 2.8, Math.PI * 0.8, Math.PI * 2.2);
+      ctx.stroke();
+
+      if (hasFilling) {
+        // Cut truffle core wedge on lower-right
+        ctx.fillStyle = innerColor;
+        ctx.strokeStyle = outerRim;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0.4, 0.4);
+        ctx.arc(0, 0.3, 4.2, -0.15, Math.PI * 0.58);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      drawSurfaceDetails(4.0, 4.0);
+      break;
+    }
+
+    case 'praline_heart': {
+      // Molded chocolate heart with glossy bevel and split filling half
+      ctx.fillStyle = makeOuterGrad(-5.4, -4.6, 5.4, 5.2);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(0, 5.4);
+      ctx.bezierCurveTo(-6.6, 1.4, -6.2, -5.2, -2.6, -5.2);
+      ctx.bezierCurveTo(-0.9, -5.2, 0, -3.6, 0, -2.8);
+      ctx.bezierCurveTo(0, -3.6, 0.9, -5.2, 2.6, -5.2);
+      ctx.bezierCurveTo(6.2, -5.2, 6.6, 1.4, 0, 5.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      if (hasFilling) {
+        ctx.fillStyle = innerColor;
+        ctx.beginPath();
+        ctx.ellipse(1.6, -0.6, 2.0, 1.6, 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = outerRim;
+        ctx.lineWidth = 0.45;
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.36)';
+      ctx.beginPath();
+      ctx.ellipse(-2.2, -2.4, 1.3, 0.6, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    case 'medallion_coin': {
+      // Round embossed chocolate medallion / disc with cut inner reveal
+      ctx.fillStyle = makeOuterGrad(-5.4, -5.4, 5.4, 5.4);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Embossed inner ring
+      ctx.strokeStyle = outerBright;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (hasFilling) {
+        ctx.fillStyle = innerColor;
+        ctx.beginPath();
+        ctx.arc(1.2, 1.1, 2.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = outerRim;
+        ctx.lineWidth = 0.45;
+        ctx.stroke();
+      }
+      drawSurfaceDetails(4.2, 4.2);
+      break;
+    }
+
+    case 'shell_seashell': {
+      // Belgian marbled seashell praline with ribbed fan grooves
+      ctx.fillStyle = makeOuterGrad(-5.4, -4.5, 5.4, 4.8);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(0, 5.0);
+      ctx.bezierCurveTo(-5.8, 2.6, -5.8, -4.6, 0, -5.0);
+      ctx.bezierCurveTo(5.8, -4.6, 5.8, 2.6, 0, 5.0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Marbled inner chocolate swirl & shell fan ribs
+      ctx.strokeStyle = hasFilling ? innerColor : outerBright;
+      ctx.lineWidth = 0.7;
+      for (const ang of [-0.55, -0.22, 0.15, 0.5]) {
+        ctx.beginPath();
+        ctx.moveTo(0, 4.0);
+        ctx.quadraticCurveTo(Math.sin(ang) * 3.5, 0.2, Math.sin(ang) * 4.4, -3.2);
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'diamond_bonbon': {
+      // Faceted diamond-cut jewel bonbon with center filling window
+      ctx.fillStyle = makeOuterGrad(-5.4, -5.4, 5.4, 5.4);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(0, -5.8);
+      ctx.lineTo(5.4, 0);
+      ctx.lineTo(0, 5.8);
+      ctx.lineTo(-5.4, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Inner faceted crown
+      ctx.fillStyle = outerBright;
+      ctx.beginPath();
+      ctx.moveTo(0, -3.2);
+      ctx.lineTo(3.0, 0);
+      ctx.lineTo(0, 3.2);
+      ctx.lineTo(-3.0, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      if (hasFilling) {
+        ctx.fillStyle = innerColor;
+        ctx.beginPath();
+        ctx.moveTo(0, -1.9);
+        ctx.lineTo(1.8, 0);
+        ctx.lineTo(0, 1.9);
+        ctx.lineTo(-1.8, 0);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+
+    case 'break_piece': {
+      // Single snapped chocolate cushion block clearly showing outer shell & exposed inner core along broken edge
+      ctx.fillStyle = makeOuterGrad(-5.2, -4.6, 5.2, 4.6);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(-5.0, -4.4);
+      ctx.lineTo(4.8, -4.4);
+      ctx.lineTo(5.2, 1.6);
+      ctx.lineTo(2.4, 4.6);
+      ctx.lineTo(-4.8, 4.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Raised top square bevel
+      ctx.fillStyle = outerBright;
+      ctx.beginPath();
+      ctx.roundRect(-3.6, -3.2, 6.2, 5.2, 0.8);
+      ctx.fill();
+      ctx.strokeStyle = outerShade;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+
+      // Broken front-right cross-section revealing inner filling
+      if (hasFilling) {
+        drawCrossSectionSlice(1.9, 2.0, 2.2, 1.35, 0.45);
+      }
+      drawSurfaceDetails(4.0, 3.5);
+      break;
+    }
+
+    case 'wave_bar': {
+      // Sculpted wavy-segmented artisanal bar (like Dubai / layered bars) with exposed inner filling
+      ctx.fillStyle = makeOuterGrad(-5.4, -7.2, 5.4, 7.2);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.roundRect(-5.4, -7.4, 10.8, 14.8, 1.3);
+      ctx.fill();
+      ctx.stroke();
+
+      // Wavy molded ridges across the bar
+      ctx.strokeStyle = outerBright;
+      ctx.lineWidth = 0.8;
+      for (const wy of [-4.6, -1.6, 1.4]) {
+        ctx.beginPath();
+        ctx.moveTo(-4.4, wy);
+        ctx.bezierCurveTo(-1.8, wy - 1.1, 1.8, wy + 1.1, 4.4, wy);
+        ctx.stroke();
+      }
+
+      // Snapped lower section exposing thick lush inner filling (e.g. pistachio kataifi!)
+      if (hasFilling) {
+        drawCrossSectionSlice(0, 4.3, 4.3, 2.1, 0.7);
+      }
+      drawSurfaceDetails(4.2, 5.5);
+      break;
+    }
+
+    case 'classic_bar':
+    default: {
+      // Classic 2x4 molded rectangle chocolate bar with snapped corner showing inner material/color
+      ctx.fillStyle = makeOuterGrad(-5.4, -7.4, 5.4, 7.4);
+      ctx.strokeStyle = outerRim;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.roundRect(-5.4, -7.5, 10.8, 15.0, 0.9);
+      ctx.fill();
+      ctx.stroke();
+
+      // 2 cols x 4 rows beveled chocolate squares (skip bottom-right square if filled to show break cross-section)
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 2; c++) {
+          if (r === 3 && c === 1 && hasFilling) continue;
+          const sx = -4.5 + c * 4.7;
+          const sy = -6.6 + r * 3.45;
+          ctx.fillStyle = outerBright;
+          ctx.fillRect(sx, sy, 4.1, 2.9);
+          ctx.fillStyle = outerColor;
+          ctx.fillRect(sx + 0.45, sy + 0.4, 3.2, 2.1);
+          ctx.fillStyle = outerShade;
+          ctx.fillRect(sx + 0.45, sy + 2.2, 3.2, 0.3);
+        }
+      }
+
+      if (hasFilling) {
+        drawCrossSectionSlice(2.3, 5.15, 2.1, 1.45, 0.45);
+      }
+      drawSurfaceDetails(4.2, 5.8);
+      break;
+    }
+  }
+
+  // Crisp glossy cocoa-butter highlight
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.24)';
+  ctx.beginPath();
+  ctx.ellipse(-2.0, -3.0, 1.6, 0.55, -0.35, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }

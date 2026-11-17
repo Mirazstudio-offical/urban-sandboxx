@@ -1,5 +1,5 @@
 import { LiquidId, FluidSubstanceAttributes } from './liquidSystem';
-import { GummyCandyAttributes, PelmenAttributes } from './types';
+import { GummyCandyAttributes, PelmenAttributes, ChocolateAttributes } from './types';
 
 export interface UnifiedFluidMappingEntry {
   containerId: string;
@@ -18,11 +18,12 @@ export interface UnifiedPackagingMappingEntry {
   customDescriptionRu?: string;
   innerGummyPresets?: Partial<GummyCandyAttributes>[];
   innerPelmenPresets?: Partial<PelmenAttributes>[];
+  innerChocolatePresets?: Partial<ChocolateAttributes>[];
 }
 
 function attr(
   varietyRu: string,
-  sourceIngredients: string,
+  ingredients: string,
   preparationMethod: string,
   purpose: string,
   reasonAndOrigin: string,
@@ -31,7 +32,7 @@ function attr(
 ): FluidSubstanceAttributes {
   return {
     varietyRu,
-    sourceIngredients,
+    ingredients,
     preparationMethod,
     purpose,
     reasonAndOrigin,
@@ -202,7 +203,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   // === 3. MARINADED GOODS (МАРИНАДЫ В ЗАЛИВКЕ) ===
   garlic_pickled: {
     containerId: 'jar_glass_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 200,
     attributes: attr(
       'Чеснок маринованный со свёклой',
@@ -216,7 +217,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   ginger_pickled_jar: {
     containerId: 'jar_glass_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 200,
     attributes: attr(
       'Имбирь маринованный розовый (Гари)',
@@ -230,7 +231,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   olives_green_jar: {
     containerId: 'jar_glass_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 200,
     attributes: attr(
       'Оливки зелёные без косточки в маринаде',
@@ -244,7 +245,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   olives_black_jar: {
     containerId: 'can_metal_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 250,
     attributes: attr(
       'Маслины чёрные в пряной заливке',
@@ -258,7 +259,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   capers_pickled_jar: {
     containerId: 'jar_spice_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 100,
     attributes: attr(
       'Каперсы маринованные в винном уксусе',
@@ -272,7 +273,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   sun_dried_tomatoes_jar: {
     containerId: 'jar_glass_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 200,
     attributes: attr(
       'Томаты вяленые в оливковом масле с травами',
@@ -286,7 +287,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   butter_boletus_pickled: {
     containerId: 'jar_glass_medium',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 500,
     attributes: attr(
       'Маслята лесные маринованные с луком',
@@ -300,7 +301,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   honey_agaric_pickled: {
     containerId: 'jar_glass_medium',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 500,
     attributes: attr(
       'Опята осенние маринованные по-домашнему',
@@ -756,7 +757,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   // === 7. VEGETABLE CAVIAR (ИКРА ОВОЩНАЯ УВАРЕННАЯ) ===
   caviar_squash_jar: {
     containerId: 'jar_glass_medium',
-    liquidId: 'vegetable_caviar',
+    liquidId: 'caviar',
     amountMl: 500,
     attributes: attr(
       'Икра кабачковая уваренная (ГОСТ)',
@@ -770,7 +771,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   caviar_squash: {
     containerId: 'jar_glass_medium',
-    liquidId: 'vegetable_caviar',
+    liquidId: 'caviar',
     amountMl: 500,
     attributes: attr(
       'Икра кабачковая домашняя',
@@ -784,7 +785,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   caviar_eggplant_jar: {
     containerId: 'jar_glass_medium',
-    liquidId: 'vegetable_caviar',
+    liquidId: 'caviar',
     amountMl: 500,
     attributes: attr(
       'Икра баклажанная заморская с дымком',
@@ -798,7 +799,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   caviar_eggplant: {
     containerId: 'jar_glass_medium',
-    liquidId: 'vegetable_caviar',
+    liquidId: 'caviar',
     amountMl: 500,
     attributes: attr(
       'Икра баклажанная пряная',
@@ -2224,7 +2225,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   // === 20. ADDITIONAL CATALOG JARS, PICKLES, SPICES & DRINKS ===
   tomato_sundried_jar: {
     containerId: 'jar_glass_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 200,
     attributes: attr(
       'Томаты вяленые итальянские в оливковом масле с травами',
@@ -2266,7 +2267,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   eggplant_caviar_jar: {
     containerId: 'jar_glass_medium',
-    liquidId: 'vegetable_caviar',
+    liquidId: 'caviar',
     amountMl: 500,
     attributes: attr(
       'Икра баклажанная запечённая по-домашнему',
@@ -2280,7 +2281,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   zucchini_caviar_jar: {
     containerId: 'jar_glass_medium',
-    liquidId: 'vegetable_caviar',
+    liquidId: 'caviar',
     amountMl: 500,
     attributes: attr(
       'Икра кабачковая уваренная нежная (ГОСТ)',
@@ -2308,7 +2309,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   jalapeno_pickled_jar: {
     containerId: 'jar_glass_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 200,
     attributes: attr(
       'Перец халапеньо острый маринованный колечками',
@@ -2322,7 +2323,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   ginger_pickled_box: {
     containerId: 'jar_glass_small',
-    liquidId: 'marinade',
+    liquidId: 'pickles',
     amountMl: 200,
     attributes: attr(
       'Имбирь маринованный розовый «Гари» лепестками',
@@ -2408,7 +2409,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   // === 15. CONFECTIONERY GELLING AGENTS, STARCHES, SYRUPS, ACIDS, DYES & EXTRACTS ===
   gelatin_powder_sachet: {
     containerId: 'package_sachet',
-    liquidId: 'gelatin',
+    liquidId: 'dry_mix',
     amountMl: 80,
     attributes: attr(
       'Желатин пищевой быстрорастворимый П-11 (саше 50 г)',
@@ -2422,7 +2423,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   gelatin_beef_pack: {
     containerId: 'package_bag',
-    liquidId: 'gelatin',
+    liquidId: 'dry_mix',
     amountMl: 450,
     attributes: attr(
       'Желатин говяжий кондитерский 240 Bloom (300 г)',
@@ -2436,7 +2437,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   pectin_apple_sachet: {
     containerId: 'package_sachet',
-    liquidId: 'pectin',
+    liquidId: 'dry_mix',
     amountMl: 85,
     attributes: attr(
       'Пектин яблочный кондитерский (саше 50 г)',
@@ -2450,7 +2451,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   pectin_citrus_sachet: {
     containerId: 'package_sachet',
-    liquidId: 'pectin',
+    liquidId: 'dry_mix',
     amountMl: 85,
     attributes: attr(
       'Пектин цитрусовый NH термообратимый (саше 50 г)',
@@ -2464,7 +2465,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   agar_agar_sachet: {
     containerId: 'package_sachet',
-    liquidId: 'agar_agar',
+    liquidId: 'dry_mix',
     amountMl: 75,
     attributes: attr(
       'Агар-агар 900 из красных водорослей (саше 40 г)',
@@ -2478,7 +2479,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   starch_modified_pack: {
     containerId: 'package_bag',
-    liquidId: 'starch',
+    liquidId: 'dry_mix',
     amountMl: 600,
     attributes: attr(
       'Крахмал модифицированный кондитерский E1420 (400 г)',
@@ -2492,7 +2493,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   starch_corn_pack: {
     containerId: 'package_bag',
-    liquidId: 'starch',
+    liquidId: 'dry_mix',
     amountMl: 600,
     attributes: attr(
       'Крахмал кукурузный тонкого помола (400 г)',
@@ -2506,7 +2507,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   glucose_syrup_bottle: {
     containerId: 'bottle_plastic_500',
-    liquidId: 'glucose_syrup',
+    liquidId: 'syrup_sweet',
     amountMl: 500,
     attributes: attr(
       'Глюкозный сироп кондитерский 43 DE (0.5 л)',
@@ -2520,7 +2521,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   glucose_fructose_syrup_bottle: {
     containerId: 'bottle_plastic_500',
-    liquidId: 'glucose_syrup',
+    liquidId: 'syrup_sweet',
     amountMl: 500,
     attributes: attr(
       'Глюкозно-фруктозный сироп ГФС-42 (0.5 л)',
@@ -2534,7 +2535,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   starch_molasses_jar: {
     containerId: 'jar_glass_small',
-    liquidId: 'corn_molasses',
+    liquidId: 'syrup_sweet',
     amountMl: 200,
     attributes: attr(
       'Патока крахмальная карамельная в банке (270 г)',
@@ -2548,7 +2549,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   topinambur_syrup_bottle: {
     containerId: 'bottle_glass_small',
-    liquidId: 'topinambur_syrup',
+    liquidId: 'syrup_sweet',
     amountMl: 250,
     attributes: attr(
       'Сироп топинамбура натуральный пребиотический (0.25 л)',
@@ -2562,7 +2563,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   coconut_milk_can: {
     containerId: 'can_metal_medium',
-    liquidId: 'coconut_milk',
+    liquidId: 'milk',
     amountMl: 400,
     attributes: attr(
       'Кокосовое молоко 19% в жестяной банке (0.4 л)',
@@ -2576,7 +2577,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   citric_acid_sachet: {
     containerId: 'package_sachet',
-    liquidId: 'citric_acid',
+    liquidId: 'food_acid',
     amountMl: 80,
     attributes: attr(
       'Лимонная кислота пищевая кристаллическая (саше 80 г)',
@@ -2590,7 +2591,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   citric_acid_jar: {
     containerId: 'jar_spice_small',
-    liquidId: 'citric_acid',
+    liquidId: 'food_acid',
     amountMl: 100,
     attributes: attr(
       'Лимонная кислота крупнокристаллическая в банке (100 г)',
@@ -2604,7 +2605,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   malic_acid_sachet: {
     containerId: 'package_sachet',
-    liquidId: 'malic_acid',
+    liquidId: 'food_acid',
     amountMl: 70,
     attributes: attr(
       'Яблочная кислота пищевая E296 (саше 70 г)',
@@ -2618,7 +2619,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   tartaric_acid_sachet: {
     containerId: 'package_sachet',
-    liquidId: 'tartaric_acid',
+    liquidId: 'food_acid',
     amountMl: 70,
     attributes: attr(
       'Винная кислота пищевая E334 (саше 70 г)',
@@ -2632,7 +2633,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   lactic_acid_bottle: {
     containerId: 'bottle_glass_small',
-    liquidId: 'lactic_acid',
+    liquidId: 'food_acid',
     amountMl: 200,
     attributes: attr(
       'Молочная кислота пищевая 80% E270 (0.2 л)',
@@ -2646,7 +2647,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   sodium_citrate_sachet: {
     containerId: 'package_sachet',
-    liquidId: 'sodium_citrate',
+    liquidId: 'food_acid',
     amountMl: 75,
     attributes: attr(
       'Цитрат натрия кондитерский E331 (саше 75 г)',
@@ -2660,7 +2661,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   menthol_crystals_tin: {
     containerId: 'tin_round_mini',
-    liquidId: 'menthol',
+    liquidId: 'food_acid',
     amountMl: 30,
     attributes: attr(
       'Кристаллы натурального ментола (шайба 30 мл)',
@@ -2674,7 +2675,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   menthol_crystals_jar: {
     containerId: 'jar_spice_small',
-    liquidId: 'menthol',
+    liquidId: 'food_acid',
     amountMl: 80,
     attributes: attr(
       'Ментол натуральный кристаллический в банке (80 мл)',
@@ -2688,7 +2689,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   carmine_extract_bottle: {
     containerId: 'bottle_plastic_100',
-    liquidId: 'dye_carmine',
+    liquidId: 'food_dye',
     amountMl: 100,
     attributes: attr(
       'Краситель пищевой Кармин E120 (капельница 100 мл)',
@@ -2702,7 +2703,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   chlorophyllin_bottle: {
     containerId: 'bottle_plastic_100',
-    liquidId: 'dye_chlorophyllin',
+    liquidId: 'food_dye',
     amountMl: 100,
     attributes: attr(
       'Медные комплексы хлорофиллов E141 (капельница 100 мл)',
@@ -2716,7 +2717,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   anthocyanin_extract_bottle: {
     containerId: 'bottle_plastic_100',
-    liquidId: 'dye_anthocyanin',
+    liquidId: 'food_dye',
     amountMl: 100,
     attributes: attr(
       'Экстракт антоцианов ягодный E163 (капельница 100 мл)',
@@ -2730,7 +2731,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   spirulina_extract_bottle: {
     containerId: 'bottle_plastic_100',
-    liquidId: 'dye_spirulina',
+    liquidId: 'food_dye',
     amountMl: 100,
     attributes: attr(
       'Экстракт голубой спирулины фикоцианин (100 мл)',
@@ -2744,7 +2745,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   beta_carotene_bottle: {
     containerId: 'bottle_plastic_100',
-    liquidId: 'dye_beta_carotene',
+    liquidId: 'food_dye',
     amountMl: 100,
     attributes: attr(
       'Бета-каротин вододисперсный E160a (капельница 100 мл)',
@@ -2758,7 +2759,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   caramel_color_bottle: {
     containerId: 'bottle_glass_small',
-    liquidId: 'dye_caramel',
+    liquidId: 'food_dye',
     amountMl: 250,
     attributes: attr(
       'Карамельный колер IV E150d (бутылочка 250 мл)',
@@ -2772,7 +2773,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   lycopene_extract_bottle: {
     containerId: 'bottle_plastic_100',
-    liquidId: 'dye_lycopene',
+    liquidId: 'food_dye',
     amountMl: 100,
     attributes: attr(
       'Ликопин натуральный пигмент E160d (капельница 100 мл)',
@@ -2842,7 +2843,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   paprika_extract_bottle: {
     containerId: 'bottle_plastic_100',
-    liquidId: 'dye_beta_carotene',
+    liquidId: 'food_dye',
     amountMl: 100,
     attributes: attr(
       'Экстракт паприки сладкой E160c (капельница 100 мл)',
@@ -2856,7 +2857,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
   black_carrot_concentrate_bottle: {
     containerId: 'bottle_glass_small',
-    liquidId: 'dye_anthocyanin',
+    liquidId: 'food_dye',
     amountMl: 200,
     attributes: attr(
       'Концентрат сока чёрной моркови (бутылочка 200 мл)',
@@ -2951,6 +2952,273 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       '#f59e0b',
       { culinaryEquivalentId: 'safflower_dried_sachet', customEffects: { hunger: 2, health: 2 } }
     )
+  },
+  // === CLEAN CANONICAL SUBSTANCE IDS (WITHOUT CONTAINER SUFFIXES) & NEW SUBSTANCES ===
+  carnauba_wax: {
+    containerId: 'package_bag',
+    liquidId: 'dry_mix',
+    amountMl: 100,
+    attributes: attr(
+      'Карнаубский воск E903 в хлопьях',
+      'Очищенный растительный воск листьев бразильской пальмы Copernicia prunifera',
+      'Экстракция воскового налёта пальмовых листьев, фильтрация и кристаллизация в тонкие хлопья',
+      'Глазирование жевательного мармелада, драже и конфет для зеркального блеска и защиты от слипания',
+      'Самый тугоплавкий природный пищевой воск (температура плавления 82–86 °C) — не тает в руках',
+      '#fde047',
+      { culinaryEquivalentId: 'carnauba_wax_pack' }
+    )
+  },
+  carnauba_wax_pack: {
+    containerId: 'package_bag',
+    liquidId: 'dry_mix',
+    amountMl: 100,
+    attributes: attr(
+      'Карнаубский воск E903 в хлопьях',
+      'Очищенный растительный воск листьев бразильской пальмы Copernicia prunifera',
+      'Экстракция воскового налёта пальмовых листьев, фильтрация и кристаллизация в тонкие хлопья',
+      'Глазирование жевательного мармелада, драже и конфет для зеркального блеска и защиты от слипания',
+      'Самый тугоплавкий природный пищевой воск (температура плавления 82–86 °C) — не тает в руках',
+      '#fde047',
+      { culinaryEquivalentId: 'carnauba_wax_pack' }
+    )
+  },
+  olives_green: {
+    containerId: 'jar_glass_small',
+    liquidId: 'pickles',
+    amountMl: 200,
+    attributes: attr(
+      'Оливки зелёные без косточки в маринаде',
+      'Крупные зелёные плоды оливы, рассол, винный уксус, лимонная кислота',
+      'Щелочное удаление природной горечи (олеуропеина) и консервация в слабом маринаде',
+      'Приготовление мясной солянки, пиццы, греческого салата и закусок',
+      'Сырые оливки с дерева несъедобно горькие — только вымачивание и рассол делают их маслянистыми и нежными',
+      '#84cc16',
+      { culinaryEquivalentId: 'olives_green_jar' }
+    )
+  },
+  olives_black: {
+    containerId: 'can_metal_small',
+    liquidId: 'pickles',
+    amountMl: 250,
+    attributes: attr(
+      'Маслины чёрные без косточки в пряной заливке',
+      'Маслины без косточки, вода, соль, глюконат железа',
+      'Окисление в рассоле и стерилизация в жестяной банке',
+      'Классический компонент сборной солянки, пиццы и средиземноморских салатов',
+      'Жестяная банка защищает плоды от света и сохраняет глубокий антрацитовый цвет и мягкую текстуру',
+      '#27272a',
+      { culinaryEquivalentId: 'olives_black_jar' }
+    )
+  },
+  capers_pickled: {
+    containerId: 'jar_spice_small',
+    liquidId: 'pickles',
+    amountMl: 100,
+    attributes: attr(
+      'Каперсы маринованные в винном уксусе',
+      'Нераспустившиеся цветочные бутоны каперсника, белый винный уксус, морская соль',
+      'Подвяливание бутонов на солнце и маринование в крепком винном уксусе',
+      'Приготовление соуса тартар, солянки и рыбных блюд',
+      'Во время маринования в бутонах кристаллизуется рутин, создавая характерный взрывной горчично-пряный вкус',
+      '#3f6212',
+      { culinaryEquivalentId: 'capers_pickled_jar' }
+    )
+  },
+  sun_dried_tomatoes: {
+    containerId: 'jar_glass_small',
+    liquidId: 'pickles',
+    amountMl: 200,
+    attributes: attr(
+      'Томаты вяленые в оливковом масле с травами',
+      'Половинки сливовидных томатов, оливковое масло Extra Virgin, орегано, базилик, чеснок',
+      'Медленное вяление на солнце с морской солью и заливка тёплым пряным маслом',
+      'Паста, брускетты, выпечка фокаччи и мясные рулеты',
+      'Удаление влаги концентрирует глутаматы и сахара томата, а масло запечатывает аромат трав',
+      '#991b1b',
+      { culinaryEquivalentId: 'tomato_sundried_jar' }
+    )
+  },
+  corn_canned: {
+    containerId: 'can_metal_medium',
+    liquidId: 'canned_preserve',
+    amountMl: 400,
+    attributes: attr(
+      'Кукуруза сахарная деликатесная в зёрнах',
+      'Цельные зёрна сахарной кукурузы молочной спелости, вода, сахар, соль',
+      'Бланширование свежих зёрен и вакуумная стерилизация в жестяной банке',
+      'Крабовый и овощной салаты, гарниры, мексиканские блюда',
+      'Консервация в первые часы после сбора початка сохраняет природную сладость и сочность зерна',
+      '#facc15',
+      { culinaryEquivalentId: 'corn_canned_jar' }
+    )
+  },
+  cherry_pitted: {
+    containerId: 'jar_glass_medium',
+    liquidId: 'canned_preserve',
+    amountMl: 500,
+    attributes: attr(
+      'Вишня без косточки в собственном соку',
+      'Крупная тёмная садовая вишня без косточки, вишнёвый сок, сахар',
+      'Удаление косточек и пастеризация в стеклянной банке',
+      'Начинка для вареников, штруделя, пирогов и соусов к утке',
+      'Отсутствие косточек исключает накопление амигдалина и делает ягоды готовыми для выпечки',
+      '#881337',
+      { culinaryEquivalentId: 'cherry_pitted_jar' }
+    )
+  },
+  perch_caviar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'caviar',
+    amountMl: 140,
+    attributes: attr(
+      'Икра речного окуня солёная',
+      'Свежая икра речного окуня, соль, молотый белый перец',
+      'Отделение от ястычных плёнок и домашний посол',
+      'Рыбацкая закуска на ржаном хлебе с маслом',
+      'Мелкое нежное зерно с характерным речным послевкусием',
+      '#facc15',
+      { culinaryEquivalentId: 'perch_caviar_jar' }
+    )
+  },
+  herring_caviar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'caviar',
+    amountMl: 140,
+    attributes: attr(
+      'Икра тихоокеанской сельди в масле',
+      'Хрустящая икра сельди, соль, рафинированное масло',
+      'Посол в ястыках и пробивка с ароматным маслом',
+      'Закуска к картофелю и чёрному хлебу',
+      'Знаменита своим плотным хрустом и насыщенным морским вкусом',
+      '#fbbf24',
+      { culinaryEquivalentId: 'herring_caviar_jar' }
+    )
+  },
+  tuna_caviar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'caviar',
+    amountMl: 140,
+    attributes: attr(
+      'Икра морского тунца пряного посола',
+      'Икра тунца, морская соль, оливковое масло',
+      'Выдержка в морской соли и консервация с маслом',
+      'Добавка в пасту, брускетты и рыбные блюда',
+      'Обладает выраженным вкусом умами и плотной текстурой',
+      '#dc2626',
+      { culinaryEquivalentId: 'tuna_caviar_jar' }
+    )
+  },
+  eel_caviar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'caviar',
+    amountMl: 140,
+    attributes: attr(
+      'Икра угря тёмная деликатесная',
+      'Зернистая икра угря, морская соль',
+      'Бережный посол и фасовка в стекло',
+      'Изысканная закуска и украшение канапе',
+      'Тёмные мелкие икринки с маслянистым ореховым оттенком вкуса',
+      '#1e293b',
+      { culinaryEquivalentId: 'eel_caviar_jar' }
+    )
+  },
+  catfish_caviar: {
+    containerId: 'jar_glass_small',
+    liquidId: 'caviar',
+    amountMl: 140,
+    attributes: attr(
+      'Икра сома речного пробойная',
+      'Крупная икра речного сома, соль, душистый перец',
+      'Пастеризация и пряный посол',
+      'Сытная намазка на хлеб и тосты',
+      'Питательная речная икра с мягким сливочным послевкусием',
+      '#334155',
+      { culinaryEquivalentId: 'catfish_caviar_jar' }
+    )
+  },
+  garlic_powder: {
+    containerId: 'jar_spice_small',
+    liquidId: 'spice_dry',
+    amountMl: 100,
+    attributes: attr(
+      'Чеснок сушёный гранулированный',
+      'Зубчики зрелого ярового чеснока сублимационной сушки',
+      'Дегидратация при 50 °C и дробление в мелкую крупку',
+      'Мясные маринады, супы, колбасный фарш и чесночные гренки',
+      'В отличие от свежего чеснока не подгорает на сковороде и равномерно отдаёт аромат блюду',
+      '#fef08a',
+      { culinaryEquivalentId: 'garlic_powder_jar' }
+    )
+  },
+  dill_dried: {
+    containerId: 'jar_spice_small',
+    liquidId: 'spice_dry',
+    amountMl: 100,
+    attributes: attr(
+      'Укроп сушёный душистый',
+      'Верхушки и иголочки молодого огородного укропа',
+      'Теневая конвекционная сушка для сохранения эфирных масел и изумрудного цвета',
+      'Заправка ухи, борща, картофеля и сметанных соусов',
+      'Концентрирует эфирное масло карвон и заменяет свежую зелень в зимний сезон',
+      '#15803d',
+      { culinaryEquivalentId: 'dill_dried_jar' }
+    )
+  },
+  basil_dried: {
+    containerId: 'jar_spice_small',
+    liquidId: 'spice_dry',
+    amountMl: 100,
+    attributes: attr(
+      'Базилик сушёный сладкий',
+      'Листья фиолетового и зелёного душистого базилика',
+      'Бережная сушка и измельчение без стеблей',
+      'Томатные соусы, пицца, паста, запечённое мясо и овощные рагу',
+      'При нагревании в томатном соусе раскрывает тёплый пряно-гвоздичный аромат',
+      '#166534',
+      { culinaryEquivalentId: 'basil_dried_jar' }
+    )
+  },
+  mint_dried: {
+    containerId: 'jar_spice_small',
+    liquidId: 'spice_dry',
+    amountMl: 100,
+    attributes: attr(
+      'Мята перечная сушёная листовая',
+      'Отборные листья перечной мяты с высоким содержанием ментола',
+      'Сушка в проветриваемой тени сразу после сбора до цветения',
+      'Заваривание успокаивающего чая, компотов, кваса и пряной выпечки',
+      'Эфирное масло ментола снимает спазмы, освежает и успокаивает нервную систему',
+      '#059669',
+      { culinaryEquivalentId: 'mint_dried_jar' }
+    )
+  },
+  tomato_paste: {
+    containerId: 'jar_glass_small',
+    liquidId: 'puree',
+    amountMl: 200,
+    attributes: attr(
+      'Томатная паста концентрированная (ГОСТ, 25% сухих веществ)',
+      'Спелые красные грунтовые томаты, соль',
+      'Протирание томатной мякоти без кожицы и семян и вакуумное выпаривание в 6 раз',
+      'Заправка для борща, голубцов, тефтелей, гуляша и пиццы',
+      'Концентрирует ликопин и природную кислоту, придавая супам и соусам густоту и рубиновый цвет',
+      '#b91c1c',
+      { culinaryEquivalentId: 'tomato_paste_jar' }
+    )
+  },
+  apple_puree: {
+    containerId: 'jar_glass_small',
+    liquidId: 'puree',
+    amountMl: 200,
+    attributes: attr(
+      'Пюре яблочное нежное без сахара',
+      'Печёные и томлёные зелёные и красные садовые яблоки',
+      'Разваривание очищенных яблок под крышкой и гомогенизация в бархатистое пюре',
+      'Лёгкий диетический перекус, детское питание и основа для зефира, мармелада и пастилы',
+      'Яблочный пектин создаёт нежную обволакивающую текстуру и легко усваивается желудком',
+      '#fde047',
+      { culinaryEquivalentId: 'apple_puree_jar' }
+    )
   }
 };
 
@@ -2973,12 +3241,15 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
   chanterelle_basket: { containerId: 'lukoshko', countInside: 8, innerItemId: 'mushroom_chanterelle_single' },
   honey_agaric_basket: { containerId: 'lukoshko', countInside: 10, innerItemId: 'mushroom_honey_agaric_single' },
 
-  // === 2. BERRIES IN FOOD TRAYS -> STANDALONE SINGLE BERRIES ===
+  // === 2. BERRIES & FRUITS IN FOOD TRAYS -> STANDALONE SINGLE ITEMS ===
   berries_tray_fresh: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'berry_strawberry_single' },
   strawberry_fresh: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'berry_strawberry_single' },
   raspberry_fresh: { containerId: 'tray_sealed_food', countInside: 12, innerItemId: 'berry_raspberry_single' },
   blueberry_fresh: { containerId: 'tray_sealed_food', countInside: 15, innerItemId: 'berry_blueberry_single' },
   cherry_fresh: { containerId: 'tray_sealed_food', countInside: 10, innerItemId: 'berry_cherry_single' },
+  tomato_cherry_bunch: { containerId: 'tray_sealed_food', countInside: 12, innerItemId: 'tomato_cherry_single' },
+  melon_diced: { containerId: 'tray_sealed_food', countInside: 4, innerItemId: 'melon_slice' },
+  lychee_fruit: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'berry_cherry_single' },
 
   // === 3. EGG CARTONS -> STANDALONE SINGLE EGGS ===
   egg_chicken_carton: { containerId: 'egg_carton_10', countInside: 10, innerItemId: 'egg_chicken_single' },
@@ -3924,6 +4195,573 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
           'Яйцо куриное',
           'Соль'
         ]
+      }
+    ]
+  },
+
+  // === ШОКОЛАД И ШОКОЛАДНЫЕ УПАКОВКИ ===
+  choc_mini_truffle_hazelnut: {
+    containerId: 'chocolate_pack_mini',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#7c2d12',
+    containerTintColor: '#f59e0b',
+    customNameRu: 'Конфета «Золотой трюфель» (мини-обёртка, 12г)',
+    customDescriptionRu: 'Мини-обёртка из золотистой фольги с манжетой: купольный трюфель из тёмного шоколада, обсыпанный какао, с начинкой пралине и дроблёного фундука.',
+    innerChocolatePresets: [
+      {
+        shape: 'truffle_dome',
+        shapeNameRu: 'Купольный трюфель',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Тёмный шоколад 64% с бархатистой пудрой алкализованного какао',
+        outerColor: '#3b1d12',
+        outerColorNameRu: 'Глубокий тёмно-каштановый',
+        innerMaterialRu: 'Нежный трюфельный ганаш-пралине с тёртым фундуком',
+        innerColor: '#92400e',
+        innerColorNameRu: 'Золотисто-ореховый',
+        hasFilling: true,
+        cocoaPercent: 64,
+        flavorRu: 'Трюфель с жареным фундуком',
+        surfaceTexture: 'dusted',
+        ingredients: [
+          'Какао тёртое',
+          'Масло какао',
+          'Пралине фундучное (28%)',
+          'Сливки пастеризованные',
+          'Сахар',
+          'Какао-порошок алкализованный'
+        ]
+      }
+    ]
+  },
+  choc_mini_ruby_heart: {
+    containerId: 'chocolate_pack_mini',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#be185d',
+    containerTintColor: '#fbcfe8',
+    customNameRu: 'Шоколадное сердечко «Рубиновая малина» (мини-обёртка, 12г)',
+    customDescriptionRu: 'Миниатюрная обёртка из розовой фольги с рубиновым шоколадным сердечком и малиновой кремовой начинкой.',
+    innerChocolatePresets: [
+      {
+        shape: 'praline_heart',
+        shapeNameRu: 'Фигурное сердечко пралине',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Розовый рубиновый шоколад Ruby (47% какао-бобов)',
+        outerColor: '#db2777',
+        outerColorNameRu: 'Ягодно-рубиновый',
+        innerMaterialRu: 'Воздушный крем-мусс с сублимированной лесной малиной',
+        innerColor: '#fda4af',
+        innerColorNameRu: 'Нежно-малиновый',
+        hasFilling: true,
+        cocoaPercent: 47,
+        flavorRu: 'Рубиновый шоколад и малина',
+        surfaceTexture: 'smooth',
+        ingredients: [
+          'Сахар',
+          'Масло какао',
+          'Какао-бобы Ruby',
+          'Молоко сухое цельное',
+          'Малина сублимированная',
+          'Сливки сухие',
+          'Лимонная кислота'
+        ]
+      }
+    ]
+  },
+  choc_bar_caramel_chunky: {
+    containerId: 'chocolate_pack_bar',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#b45309',
+    containerTintColor: '#e2e8f0',
+    customNameRu: 'Батончик «Солёная карамель и арахис» (флоу-пак, 45г)',
+    customDescriptionRu: 'Узкий флоу-пак: батончик с округлыми сегментами из молочного шоколада, тягучей солёной карамелью и хрустящим арахисом внутри.',
+    innerChocolatePresets: [
+      {
+        shape: 'chunky_bar',
+        shapeNameRu: 'Батончик с округлыми сегментами',
+        size: 'small',
+        sizeNameRu: 'Малый батончик (45 г)',
+        outerMaterialRu: 'Молочный шоколад 38% с обжаренной арахисовой крошкой',
+        outerColor: '#6f3e21',
+        outerColorNameRu: 'Тёпло-шоколадный',
+        innerMaterialRu: 'Тягучая солёная сливочная карамель с дроблёным арахисом',
+        innerColor: '#d97706',
+        innerColorNameRu: 'Янтарно-карамельный',
+        hasFilling: true,
+        cocoaPercent: 38,
+        flavorRu: 'Солёная карамель и жареный арахис',
+        surfaceTexture: 'nuts',
+        ingredients: [
+          'Молочный шоколад',
+          'Карамель сливочная',
+          'Арахис жареный дроблёный',
+          'Соль морская флёр-де-сель',
+          'Патока',
+          'Масло сливочное'
+        ]
+      }
+    ]
+  },
+  choc_bar_coconut_bounty: {
+    containerId: 'chocolate_pack_bar',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#0284c7',
+    containerTintColor: '#f8fafc',
+    customNameRu: 'Батончик «Тропический кокос» (флоу-пак, 45г)',
+    customDescriptionRu: 'Узкий флоу-пак с батончиком из молочного шоколада и белоснежной сочной мякотью кокоса внутри.',
+    innerChocolatePresets: [
+      {
+        shape: 'chunky_bar',
+        shapeNameRu: 'Батончик с округлыми сегментами',
+        size: 'small',
+        sizeNameRu: 'Малый батончик (45 г)',
+        outerMaterialRu: 'Сливочный молочный шоколад 35%',
+        outerColor: '#724124',
+        outerColorNameRu: 'Светло-шоколадный',
+        innerMaterialRu: 'Влажная стружка мякоти спелого кокоса в кокосовых сливках',
+        innerColor: '#f8fafc',
+        innerColorNameRu: 'Белоснежный кокосовый',
+        hasFilling: true,
+        cocoaPercent: 35,
+        flavorRu: 'Нежный кокос и молочный шоколад',
+        surfaceTexture: 'smooth',
+        ingredients: [
+          'Мякоть кокоса сушёная (34%)',
+          'Молочный шоколад',
+          'Сахар',
+          'Глюкозный сироп',
+          'Кокосовые сливки',
+          'Ванилин натуральный'
+        ]
+      }
+    ]
+  },
+  choc_bar_wafer_crispy: {
+    containerId: 'chocolate_pack_bar',
+    countInside: 2,
+    innerItemId: 'chocolate',
+    labelColor: '#dc2626',
+    containerTintColor: '#cbd5e1',
+    customNameRu: 'Вафельные палочки в шоколаде «Хрустящий дуэт» (флоу-пак, 24г)',
+    customDescriptionRu: 'Узкий флоу-пак с двумя хрустящими вафельными палочками, покрытыми молочным шоколадом, со слоями сливочно-орехового пралине.',
+    innerChocolatePresets: [
+      {
+        shape: 'wafer_stick',
+        shapeNameRu: 'Вафельно-шоколадная палочка',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Глазурь из молочного шоколада 34% с вафельной крошкой',
+        outerColor: '#7c4727',
+        outerColorNameRu: 'Сливочно-коричневый',
+        innerMaterialRu: 'Тонкие хрустящие вафельные коржи с прослойкой лесного ореха',
+        innerColor: '#fde68a',
+        innerColorNameRu: 'Золотисто-кремовый вафельный',
+        hasFilling: true,
+        cocoaPercent: 34,
+        flavorRu: 'Хрустящая вафля и сливочное пралине',
+        surfaceTexture: 'crisps',
+        ingredients: [
+          'Молочный шоколад',
+          'Мука пшеничная в/с',
+          'Сахар',
+          'Масло кокосовое',
+          'Фундучная паста',
+          'Сухое молоко'
+        ]
+      }
+    ]
+  },
+  choc_foil_milk_classic: {
+    containerId: 'chocolate_pack_foil',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#1d4ed8',
+    containerTintColor: '#e2e8f0',
+    customNameRu: 'Шоколад «Альпийское молоко» классический (фольга+бумага, 95г)',
+    customDescriptionRu: 'Классическая двухслойная обёртка (тиснёная серебряная фольга + бумажная этикетка): цельная дольчатая плитка молочного шоколада.',
+    innerChocolatePresets: [
+      {
+        shape: 'classic_bar',
+        shapeNameRu: 'Классическая дольчатая плитка',
+        size: 'medium',
+        sizeNameRu: 'Стандартная плитка (95 г)',
+        outerMaterialRu: 'Классический альпийский молочный шоколад 36%',
+        outerColor: '#6b3e26',
+        outerColorNameRu: 'Тёпло-коричневый (молочный)',
+        innerMaterialRu: 'Однородная цельная масса из цельного молока и какао-масла',
+        innerColor: '#7c4a2d',
+        innerColorNameRu: 'Сливочно-шоколадный',
+        hasFilling: false,
+        cocoaPercent: 36,
+        flavorRu: 'Сливочное молоко и бурбонская ваниль',
+        surfaceTexture: 'smooth',
+        ingredients: [
+          'Сахар',
+          'Масло какао',
+          'Молоко сухое цельное (22%)',
+          'Какао тёртое',
+          'Сыворотка молочная',
+          'Экстракт ванили'
+        ]
+      }
+    ]
+  },
+  choc_foil_dark_bitter_85: {
+    containerId: 'chocolate_pack_foil',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#18181b',
+    containerTintColor: '#fbbf24',
+    customNameRu: 'Шоколад горький элитный 85% «Эквадор» (фольга+бумага, 95г)',
+    customDescriptionRu: 'Тиснёная золотая фольга и строгий бумажный рукав: плитка горького шоколада из отборных бобов Ариба Насьональ с какао-крупкой.',
+    innerChocolatePresets: [
+      {
+        shape: 'classic_bar',
+        shapeNameRu: 'Классическая дольчатая плитка',
+        size: 'medium',
+        sizeNameRu: 'Стандартная плитка (95 г)',
+        outerMaterialRu: 'Экстра-горький тёмный шоколад 85% (моносорт Эквадор)',
+        outerColor: '#26130b',
+        outerColorNameRu: 'Глубокий чёрно-шоколадный',
+        innerMaterialRu: 'Насыщенная терпкая какао-масса с обжаренными какао-нибсами',
+        innerColor: '#361a0e',
+        innerColorNameRu: 'Тёмный эспрессо-какао',
+        hasFilling: false,
+        cocoaPercent: 85,
+        flavorRu: 'Благородная горчинка и дымный какао',
+        surfaceTexture: 'crisps',
+        ingredients: [
+          'Какао тёртое Эквадор (74%)',
+          'Масло какао (11%)',
+          'Сахар тростниковый нерафинированный',
+          'Крупка какао-бобов обжаренная'
+        ]
+      }
+    ]
+  },
+  choc_foil_dubai_pistachio: {
+    containerId: 'chocolate_pack_foil',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#047857',
+    containerTintColor: '#fbbf24',
+    customNameRu: 'Шоколад «Дубайский фисташковый катаифи» (фольга+бумага, 95г)',
+    customDescriptionRu: 'Золотая фольга и изумрудная обёртка: рельефная волнистая плитка из молочного шоколада с хрустящим тестом катаифи, фисташковой пастой и тахини внутри.',
+    innerChocolatePresets: [
+      {
+        shape: 'wave_bar',
+        shapeNameRu: 'Волнистая рельефная плитка',
+        size: 'medium',
+        sizeNameRu: 'Стандартная плитка (95 г)',
+        outerMaterialRu: 'Глянцевый молочный шоколад 40% с фисташковыми брызгами',
+        outerColor: '#6d3b20',
+        outerColorNameRu: 'Блестящий какао-молочный',
+        innerMaterialRu: 'Хрустящее обжаренное тесто катаифи, паста зелёной фисташки и тахини',
+        innerColor: '#65a30d',
+        innerColorNameRu: 'Изумрудно-фисташковый',
+        hasFilling: true,
+        cocoaPercent: 40,
+        flavorRu: 'Фисташковый крем, тахини и хруст катаифи',
+        surfaceTexture: 'marbled',
+        ingredients: [
+          'Молочный шоколад (50%)',
+          'Паста фисташковая 100% (24%)',
+          'Нити теста катаифи обжаренные (16%)',
+          'Кунжутная паста тахини',
+          'Масло топлёное',
+          'Щепотка соли'
+        ]
+      }
+    ]
+  },
+  choc_square_mint_fondant: {
+    containerId: 'chocolate_pack_square',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#0f766e',
+    containerTintColor: '#e2e8f0',
+    customNameRu: 'Шоколад квадратный «Мятная прохлада» (кник-пак, 95г)',
+    customDescriptionRu: 'Квадратная упаковка кник-пак: плитка 3×3 из тёмного шоколада со свежей мятной помадной начинкой внутри.',
+    innerChocolatePresets: [
+      {
+        shape: 'square_tile',
+        shapeNameRu: 'Квадратная плитка (3×3)',
+        size: 'medium',
+        sizeNameRu: 'Стандартная плитка (95 г)',
+        outerMaterialRu: 'Тёмный десертный шоколад 62%',
+        outerColor: '#351b11',
+        outerColorNameRu: 'Тёмно-коричневый',
+        innerMaterialRu: 'Охлаждающая помадка с натуральным маслом перечной мяты',
+        innerColor: '#a7f3d0',
+        innerColorNameRu: 'Светло-мятный нежный',
+        hasFilling: true,
+        cocoaPercent: 62,
+        flavorRu: 'Терпкий какао и свежая перечная мята',
+        surfaceTexture: 'smooth',
+        ingredients: [
+          'Тёмный шоколад (58%)',
+          'Сахарная помадка',
+          'Глюкозный сироп',
+          'Масло перечной мяты натуральное',
+          'Инвертаза'
+        ]
+      }
+    ]
+  },
+  choc_square_white_strawberry: {
+    containerId: 'chocolate_pack_square',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#e11d48',
+    containerTintColor: '#fef3c7',
+    customNameRu: 'Шоколад квадратный «Белый с клубничным кремом» (кник-пак, 95г)',
+    customDescriptionRu: 'Квадратная упаковка с линией разлома: белая плитка 3×3 из натурального какао-масла со сливочно-клубничной начинкой.',
+    innerChocolatePresets: [
+      {
+        shape: 'square_tile',
+        shapeNameRu: 'Квадратная плитка (3×3)',
+        size: 'medium',
+        sizeNameRu: 'Стандартная плитка (95 г)',
+        outerMaterialRu: 'Белый шоколад на чистом масле какао и сливках',
+        outerColor: '#f5e6c8',
+        outerColorNameRu: 'Сливочно-кремовый (белый)',
+        innerMaterialRu: 'Ягодный мусс из пюре садовой клубники и маскарпоне',
+        innerColor: '#fb7185',
+        innerColorNameRu: 'Нежно-розовый клубничный',
+        hasFilling: true,
+        cocoaPercent: 32,
+        flavorRu: 'Сливочная ваниль и спелая клубника',
+        surfaceTexture: 'smooth',
+        ingredients: [
+          'Масло какао',
+          'Сахар',
+          'Молоко сухое цельное',
+          'Пюре клубники сублимированное',
+          'Сыр сливочный сухой',
+          'Ваниль мадагаскарская'
+        ]
+      }
+    ]
+  },
+  choc_prism_honey_nougat: {
+    containerId: 'chocolate_pack_prism',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#ca8a04',
+    containerTintColor: '#fbbf24',
+    customNameRu: 'Шоколад-призма «Альпийский пик с мёдом и нугой» (180г)',
+    customDescriptionRu: 'Знаменитая треугольная картонная призма с золотой фольгой: крупная треугольная плитка с зубцами из молочного шоколада, медово-миндальной нуги и дроблёного миндаля.',
+    innerChocolatePresets: [
+      {
+        shape: 'triangle_prism',
+        shapeNameRu: 'Треугольная призма с зубцами',
+        size: 'large',
+        sizeNameRu: 'Большая плитка (180 г)',
+        outerMaterialRu: 'Швейцарский молочный шоколад 34% с крошкой миндальной нуги',
+        outerColor: '#704124',
+        outerColorNameRu: 'Золотисто-коричневый молочный',
+        innerMaterialRu: 'Твёрдая медово-миндальная нуга с цветочным мёдом и орехами',
+        innerColor: '#fef08a',
+        innerColorNameRu: 'Медово-кремовый',
+        hasFilling: true,
+        cocoaPercent: 34,
+        flavorRu: 'Цветочный мёд, миндаль и тягучая нуга',
+        surfaceTexture: 'nuts',
+        ingredients: [
+          'Сахар',
+          'Молоко сухое цельное',
+          'Масло какао',
+          'Какао тёртое',
+          'Мёд цветочный (3%)',
+          'Миндаль жареный дроблёный (1.6%)',
+          'Белок яичный (нуга)'
+        ]
+      }
+    ]
+  },
+  choc_king_whole_hazelnut: {
+    containerId: 'chocolate_pack_king',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#451a03',
+    containerTintColor: '#fbbf24',
+    customNameRu: 'Большая плитка XXL «Цельный лесной орех» (крафт, 300г)',
+    customDescriptionRu: 'Массивный крафт-конверт XXL с золочёной фольгой: гигантская семейная плитка 300 г с цельными ядрами жареного фундука.',
+    innerChocolatePresets: [
+      {
+        shape: 'classic_bar',
+        shapeNameRu: 'Классическая дольчатая плитка',
+        size: 'king',
+        sizeNameRu: 'Семейный XXL (300 г)',
+        outerMaterialRu: 'Плотный молочно-ореховый шоколад (42% какао) с цельным фундуком',
+        outerColor: '#5c331c',
+        outerColorNameRu: 'Насыщенно-коричневый ореховый',
+        innerMaterialRu: 'Цельные хрустящие ядра отборного жареного фундука в шоколаде',
+        innerColor: '#d97706',
+        innerColorNameRu: 'Жареный фундук в шоколаде',
+        hasFilling: true,
+        cocoaPercent: 42,
+        flavorRu: 'Цельный жареный фундук и бархатный шоколад',
+        surfaceTexture: 'nuts',
+        ingredients: [
+          'Молочный шоколад 42%',
+          'Фундук цельный отборный жареный (26%)',
+          'Тёртая ореховая паста джандуйя',
+          'Экстракт ванили'
+        ]
+      }
+    ]
+  },
+  choc_king_matcha_yuzu: {
+    containerId: 'chocolate_pack_king',
+    countInside: 1,
+    innerItemId: 'chocolate',
+    labelColor: '#3f6212',
+    containerTintColor: '#fde047',
+    customNameRu: 'Ремесленная плитка XXL «Матча Удзи и Юзу» (крафт, 180г)',
+    customDescriptionRu: 'Крупный крафт-конверт: ремесленная волнистая плитка белого шоколада с японским зелёным чаем Матча и цитрусовой начинкой юзу.',
+    innerChocolatePresets: [
+      {
+        shape: 'wave_bar',
+        shapeNameRu: 'Волнистая рельефная плитка',
+        size: 'large',
+        sizeNameRu: 'Большая плитка (180 г)',
+        outerMaterialRu: 'Белый шоколад, растёртый на меланжере с пудрой зелёного чая Матча',
+        outerColor: '#4d7c0f',
+        outerColorNameRu: 'Травянисто-зелёный (Матча)',
+        innerMaterialRu: 'Ароматный цитрусовый ганаш из японского юзу и лимонного курда',
+        innerColor: '#fde047',
+        innerColorNameRu: 'Солнечно-лимонный юзу',
+        hasFilling: true,
+        cocoaPercent: 34,
+        flavorRu: 'Терпкий зелёный чай Матча и яркий юзу',
+        surfaceTexture: 'marbled',
+        ingredients: [
+          'Масло какао холодного отжима',
+          'Сахар тростниковый',
+          'Молоко сухое цельное',
+          'Чай Матча Удзи церемониальный',
+          'Сок и цедра юзу',
+          'Сливки 33%'
+        ]
+      }
+    ]
+  },
+  choc_gift_box_assorted: {
+    containerId: 'chocolate_pack_box',
+    countInside: 16,
+    innerItemId: 'chocolate',
+    labelColor: '#881337',
+    containerTintColor: '#fbbf24',
+    customNameRu: 'Коробка шоколадных конфет «Ассорти Гранд Пралине» (16 шт., 192г)',
+    customDescriptionRu: 'Роскошная подарочная коробка со смотровым окном, золотым коррексом и атласным бантом: 16 фигурных конфет (ракушки, ромбы, медальоны, сердечки, трюфели и дольки).',
+    innerChocolatePresets: [
+      {
+        shape: 'shell_seashell',
+        shapeNameRu: 'Морская ракушка пралине',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Мраморный бельгийский молочный и белый шоколад',
+        outerColor: '#854d27',
+        outerColorNameRu: 'Мраморный карамельно-шоколадный',
+        innerMaterialRu: 'Шелковистое бельгийское ореховое пралине с нотой фундука',
+        innerColor: '#a16207',
+        innerColorNameRu: 'Кремово-ореховый',
+        hasFilling: true,
+        cocoaPercent: 38,
+        flavorRu: 'Мраморная ракушка с фундучным пралине',
+        surfaceTexture: 'marbled',
+        ingredients: ['Бельгийский шоколад', 'Пралине из фундука', 'Масло какао', 'Ваниль']
+      },
+      {
+        shape: 'diamond_bonbon',
+        shapeNameRu: 'Огранённый ромб-конфета',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Тёмный глянцевый шоколад 70%',
+        outerColor: '#2d160c',
+        outerColorNameRu: 'Тёмно-глянцевый какао',
+        innerMaterialRu: 'Апельсиново-коньячный трюфельный ганаш с цедрой',
+        innerColor: '#ea580c',
+        innerColorNameRu: 'Апельсиново-медный',
+        hasFilling: true,
+        cocoaPercent: 70,
+        flavorRu: 'Горький шоколад и красный апельсин',
+        surfaceTexture: 'smooth',
+        ingredients: ['Тёмный шоколад 70%', 'Сливки', 'Цедра сицилийского апельсина', 'Мёд']
+      },
+      {
+        shape: 'medallion_coin',
+        shapeNameRu: 'Шоколадный медальон',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Карамелизованный золотой шоколад Dulce (35% какао)',
+        outerColor: '#b45309',
+        outerColorNameRu: 'Золотисто-карамельный',
+        innerMaterialRu: 'Сливочный крем-брюле с хрустящей вафельной крошкой роялтин',
+        innerColor: '#fef3c7',
+        innerColorNameRu: 'Ванильно-сливочный',
+        hasFilling: true,
+        cocoaPercent: 35,
+        flavorRu: 'Жжёная карамель и хрустящий роялтин',
+        surfaceTexture: 'smooth',
+        ingredients: ['Карамельный шоколад', 'Сливки', 'Вафельная крошка', 'Морская соль']
+      },
+      {
+        shape: 'praline_heart',
+        shapeNameRu: 'Фигурное сердечко пралине',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Рубиновый ягодный шоколад Ruby',
+        outerColor: '#be185d',
+        outerColorNameRu: 'Рубиново-розовый',
+        innerMaterialRu: 'Крем из вишни и миндального марципана',
+        innerColor: '#f43f5e',
+        innerColorNameRu: 'Вишнёвый',
+        hasFilling: true,
+        cocoaPercent: 47,
+        flavorRu: 'Вишнёвый марципан в рубиновом шоколаде',
+        surfaceTexture: 'smooth',
+        ingredients: ['Шоколад Ruby', 'Миндаль бланшированный', 'Вишнёвое пюре', 'Сахар']
+      },
+      {
+        shape: 'truffle_dome',
+        shapeNameRu: 'Купольный трюфель',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Тёмный шоколад 65% в какао-пудре',
+        outerColor: '#3b1d12',
+        outerColorNameRu: 'Бархатный каштановый',
+        innerMaterialRu: 'Классический сливочно-кофейный ганаш эспрессо',
+        innerColor: '#573018',
+        innerColorNameRu: 'Кофейно-шоколадный',
+        hasFilling: true,
+        cocoaPercent: 65,
+        flavorRu: 'Кофейный трюфель в какао',
+        surfaceTexture: 'dusted',
+        ingredients: ['Тёмный шоколад', 'Сливки 35%', 'Эспрессо', 'Какао-порошок']
+      },
+      {
+        shape: 'break_piece',
+        shapeNameRu: 'Отломанная долька со сколом',
+        size: 'mini',
+        sizeNameRu: 'Мини (12 г)',
+        outerMaterialRu: 'Молочный шоколад 40% с кусочками миндаля',
+        outerColor: '#6b3e26',
+        outerColorNameRu: 'Классический молочный',
+        innerMaterialRu: 'Фисташковый марципан с цельным миндалём',
+        innerColor: '#84cc16',
+        innerColorNameRu: 'Фисташково-салатовый',
+        hasFilling: true,
+        cocoaPercent: 40,
+        flavorRu: 'Ореховый скол с фисташковым марципаном',
+        surfaceTexture: 'nuts',
+        ingredients: ['Молочный шоколад', 'Фисташковый марципан', 'Миндаль', 'Масло какао']
       }
     ]
   }

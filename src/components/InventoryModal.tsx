@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Player, InventoryItem, ItemCategory, GameWorld, GroundItem } from '../types';
+import { Player, InventoryItem, ItemCategory, GameWorld, GroundItem, CandyPackagingShape, ChocolatePackagingShape } from '../types';
 import {
   useItemOnPlayer,
   dropItemFromPlayer,
@@ -29,7 +29,9 @@ import {
   getPlayerCompartments,
   getPlayerTotalSlots,
   getSlotCompartment,
-  getCandyPackagingShapeNameRu
+  getCandyPackagingShapeNameRu,
+  getChocolatePackagingShapeNameRu,
+  getUnifiedItemAttributes
 } from '../items';
 import { getItemThermalDisplayInfo } from '../itemThermalSystem';
 import { isFluidContainerClosed, openFluidContainerIfNeeded, LIQUID_REGISTRY, LiquidId } from '../liquidSystem';
@@ -1706,191 +1708,337 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       {selectedEntry.item.descriptionRu}
                     </div>
 
-                    {/* Packaging Attributes */}
-                    {(selectedEntry.item.packagingShape ||
-                      selectedEntry.item.packagingShapeNameRu ||
-                      selectedEntry.item.packagingSize ||
-                      selectedEntry.item.itemId.startsWith('candy_pouch') ||
-                      selectedEntry.item.itemId.startsWith('paper_packaging') ||
-                      selectedEntry.item.itemId.startsWith('pelmeni_pack')) && (() => {
+                    {/* Unified Attributes (единый стандарт для всех предметов, продуктов, жидкостей, сыпучего и тары) */}
+                    {(() => {
                       const it = selectedEntry.item;
-                      const isCandy = it.itemId.startsWith('candy_pouch');
-                      const isPelmeniBox = it.itemId === 'pelmeni_pack_box';
-                      const isPelmeniBag = it.itemId.startsWith('pelmeni_pack') && !isPelmeniBox;
-                      const isOpenPkg = Boolean(it.isOpen || it.itemId.includes('_open') || !it.singleUseContainer);
-                      const sizeLabels: Record<string, string> = {
-                        mini: 'Мини',
-                        small: 'Малая',
-                        medium: 'Средняя',
-                        large: 'Большая'
-                      };
+                      const uAttrs = getUnifiedItemAttributes(it);
+                      const fs = it.fluidStorage;
+                      const liq = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
+                      const hasFluid = Boolean(fs?.liquidId && fs.currentMl > 0);
+                      const fluidUnit = liq?.isGranular ? 'г' : 'мл';
+
+                      const innerFirst = it.contents && it.contents.length > 0 ? it.contents[0] : undefined;
+                      const innerAttrs = innerFirst ? getUnifiedItemAttributes(innerFirst) : undefined;
+                      const detailSource = (uAttrs.doughNameRu || uAttrs.fillingRu || uAttrs.outerMaterialRu || uAttrs.innerMaterialRu || uAttrs.flavorRu) ? uAttrs : (innerAttrs || uAttrs);
+
+                      const vis = uAttrs.visuals;
+                      const swatchColor =
+                        vis?.color ||
+                        uAttrs.customColor ||
+                        (hasFluid ? liq?.color : undefined);
+
+                      const rawIngredients = uAttrs.ingredients ?? uAttrs.sourceIngredients;
+                      const ingText = Array.isArray(rawIngredients)
+                        ? rawIngredients.filter(Boolean).join(', ')
+                        : rawIngredients;
+
                       const shapeLabel =
+                        vis?.shapeNameRu ||
                         it.packagingShapeNameRu ||
                         (it.packagingShape
-                          ? getCandyPackagingShapeNameRu(it.packagingShape)
-                          : isPelmeniBox
-                          ? 'Картонная пачка с окошком'
-                          : isPelmeniBag
-                          ? 'Пакет со скрепкой-клипсой'
-                          : isCandy
-                          ? 'Пластиковый пакет'
-                          : 'Пергамент-брикет');
+                          ? (it.itemId.startsWith('chocolate_pack')
+                              ? getChocolatePackagingShapeNameRu(it.packagingShape as ChocolatePackagingShape)
+                              : getCandyPackagingShapeNameRu(it.packagingShape as CandyPackagingShape))
+                          : undefined);
+                      const innerShapeLabel =
+                        innerFirst && detailSource !== uAttrs
+                          ? detailSource.visuals?.shapeNameRu
+                          : undefined;
+                      const sizeLabel = vis?.sizeNameRu || uAttrs.sizeNameRu;
+                      const innerSizeLabel =
+                        innerFirst && detailSource !== uAttrs
+                          ? detailSource.visuals?.sizeNameRu || detailSource.sizeNameRu
+                          : undefined;
+                      const materialLabel = vis?.materialNameRu;
 
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                            <span className="gu-grp" style={{ fontSize: 11 }}>Упаковка</span>
-                            <span className="gu-mut gu-mono" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
-                              {isOpenPkg ? 'Вскрыта' : 'Запаяна'}
-                            </span>
-                          </div>
-                          <div className="gu-kv-grid gu-g4 gu-kv-compact">
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Форма</span>
-                              <span className="gu-kv-v">{shapeLabel}</span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Размер</span>
-                              <span className="gu-kv-v">{sizeLabels[it.packagingSize || 'medium'] || 'Стандарт'}</span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Материал</span>
-                              <span className="gu-kv-v">
-                                {isPelmeniBox ? 'Картон' : isCandy || isPelmeniBag ? 'Пластик' : 'Пергамент'}
-                              </span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Объём</span>
-                              <span className="gu-kv-v">{it.containerCapacityL ? `${it.containerCapacityL} л` : '—'}</span>
-                            </div>
-                          </div>
-                        </div>
+                      const stateBadge =
+                        hasFluid && fs
+                          ? (uAttrs.stateNameRu || `${Math.round(fs.currentMl)} / ${fs.maxMl} ${fluidUnit}`)
+                          : uAttrs.stateNameRu;
+
+                      const hasAnySpec = Boolean(
+                        hasFluid ||
+                        shapeLabel ||
+                        sizeLabel ||
+                        materialLabel ||
+                        vis?.colorNameRu ||
+                        it.containerCapacityL ||
+                        detailSource.flavorRu ||
+                        detailSource.doughNameRu ||
+                        detailSource.fillingRu ||
+                        detailSource.outerMaterialRu ||
+                        detailSource.innerMaterialRu ||
+                        ingText ||
+                        uAttrs.preparationMethod ||
+                        uAttrs.purpose ||
+                        (uAttrs.varietyRu && uAttrs.varietyRu !== it.nameRu)
                       );
-                    })()}
 
-                    {/* Gummy Candy Attributes */}
-                    {selectedEntry.item.gummyAttributes && (() => {
-                      const g = selectedEntry.item.gummyAttributes!;
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                            <span className="gu-grp" style={{ fontSize: 11 }}>Мармелад</span>
-                            {g.sourDust && (
-                              <span className="gu-mut" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
-                                Кислая посыпка
-                              </span>
-                            )}
-                          </div>
-                          <div className="gu-kv-grid gu-g3 gu-kv-compact">
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Цвет</span>
-                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                <span
-                                  style={{
-                                    width: 9,
-                                    height: 9,
-                                    borderRadius: 2,
-                                    backgroundColor: g.color,
-                                    border: '1px solid rgba(255,255,255,0.35)',
-                                    display: 'inline-block',
-                                    flexShrink: 0
-                                  }}
-                                />
-                                <span>{g.colorNameRu}</span>
-                              </span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Форма</span>
-                              <span className="gu-kv-v">{g.shapeNameRu}</span>
-                            </div>
-                            {g.flavorRu && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Вкус</span>
-                                <span className="gu-kv-v">{g.flavorRu}</span>
-                              </div>
-                            )}
-                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                              <span className="gu-kv-k">Состав</span>
-                              <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
-                                {g.ingredients.join(', ')}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                      if (!hasAnySpec) return null;
 
-                    {/* Pelmen Attributes (on pelmen item or pelmeni_pack container) */}
-                    {(selectedEntry.item.pelmenAttributes || selectedEntry.item.contents?.[0]?.pelmenAttributes) && (() => {
-                      const p = (selectedEntry.item.pelmenAttributes || selectedEntry.item.contents?.[0]?.pelmenAttributes)!;
-                      const isInsidePack = !selectedEntry.item.pelmenAttributes && Boolean(selectedEntry.item.contents?.length);
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                           <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
                             <span className="gu-grp" style={{ fontSize: 11 }}>
-                              {isInsidePack ? `Пельмени внутри (${selectedEntry.item.contents!.length} шт.)` : 'Пельмень (лепка и состав)'}
+                              {hasFluid
+                                ? `Содержимое (${liq?.nameRu || fs!.liquidId})`
+                                : innerFirst && (innerFirst.pelmenAttributes || innerFirst.gummyAttributes || innerFirst.chocolateAttributes || innerAttrs?.doughNameRu || innerAttrs?.outerMaterialRu)
+                                ? `Упаковка и состав (${it.contents!.length} шт.)`
+                                : 'Атрибуты и состав'}
                             </span>
-                            <span className="gu-mut" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
-                              {p.stateNameRu}
-                            </span>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              {detailSource.sourDust && (
+                                <span className="gu-mut" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
+                                  Кислая посыпка
+                                </span>
+                              )}
+                              {stateBadge && (
+                                <span className="gu-mut gu-mono" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
+                                  {stateBadge}
+                                </span>
+                              )}
+                            </div>
                           </div>
+
                           <div className="gu-kv-grid gu-g3 gu-kv-compact">
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Форма</span>
-                              <span className="gu-kv-v">{p.shapeNameRu}</span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Размер</span>
-                              <span className="gu-kv-v">{p.sizeNameRu}</span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Лепка</span>
-                              <span className="gu-kv-v">{p.moldingMethodRu}</span>
-                            </div>
-                            <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
-                              <span className="gu-kv-k">Тесто ({p.doughThicknessMm} мм)</span>
-                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                <span
-                                  style={{
-                                    width: 9,
-                                    height: 9,
-                                    borderRadius: 2,
-                                    backgroundColor: p.doughColor,
-                                    border: '1px solid rgba(255,255,255,0.35)',
-                                    display: 'inline-block',
-                                    flexShrink: 0
-                                  }}
-                                />
-                                <span>{p.doughNameRu}</span>
-                              </span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Доля фарша</span>
-                              <span className="gu-kv-v">{p.fillingRatioPercent}%</span>
-                            </div>
-                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                              <span className="gu-kv-k">Начинка</span>
-                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'normal' }}>
-                                <span
-                                  style={{
-                                    width: 9,
-                                    height: 9,
-                                    borderRadius: 2,
-                                    backgroundColor: p.fillingColor,
-                                    border: '1px solid rgba(255,255,255,0.35)',
-                                    display: 'inline-block',
-                                    flexShrink: 0
-                                  }}
-                                />
-                                <span>{p.fillingRu}</span>
-                              </span>
-                            </div>
-                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                              <span className="gu-kv-k">Состав</span>
-                              <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
-                                {p.ingredients.join(', ')}
-                              </span>
-                            </div>
+                            {hasFluid && fs && (
+                              <>
+                                <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
+                                  <span className="gu-kv-k">Базовое вещество</span>
+                                  <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    {swatchColor && (
+                                      <span
+                                        style={{
+                                          width: 9,
+                                          height: 9,
+                                          borderRadius: 2,
+                                          backgroundColor: swatchColor,
+                                          border: '1px solid rgba(255,255,255,0.35)',
+                                          display: 'inline-block',
+                                          flexShrink: 0
+                                        }}
+                                      />
+                                    )}
+                                    <span>{liq?.nameRu || fs.liquidId}</span>
+                                  </span>
+                                </div>
+                                <div className="gu-kv">
+                                  <span className="gu-kv-k">Количество</span>
+                                  <span className="gu-kv-v">
+                                    {Math.round(fs.currentMl)} / {fs.maxMl} {fluidUnit}
+                                  </span>
+                                </div>
+                              </>
+                            )}
+
+                            {uAttrs.varietyRu && uAttrs.varietyRu !== it.nameRu && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Вид / Сорт</span>
+                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.varietyRu}</span>
+                              </div>
+                            )}
+
+                            {shapeLabel && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Форма</span>
+                                <span className="gu-kv-v">{shapeLabel}</span>
+                              </div>
+                            )}
+                            {sizeLabel && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Размер</span>
+                                <span className="gu-kv-v">{sizeLabel}</span>
+                              </div>
+                            )}
+                            {materialLabel && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Материал</span>
+                                <span className="gu-kv-v">{materialLabel}</span>
+                              </div>
+                            )}
+                            {!hasFluid && it.containerCapacityL && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Объём тары</span>
+                                <span className="gu-kv-v">{it.containerCapacityL} л</span>
+                              </div>
+                            )}
+                            {vis?.colorNameRu && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Цвет</span>
+                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                  {swatchColor && (
+                                    <span
+                                      style={{
+                                        width: 9,
+                                        height: 9,
+                                        borderRadius: 2,
+                                        backgroundColor: swatchColor,
+                                        border: '1px solid rgba(255,255,255,0.35)',
+                                        display: 'inline-block',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                  )}
+                                  <span>{vis.colorNameRu}</span>
+                                </span>
+                              </div>
+                            )}
+                            {detailSource.flavorRu && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Вкус</span>
+                                <span className="gu-kv-v">{detailSource.flavorRu}</span>
+                              </div>
+                            )}
+                            {detailSource.doughNameRu && (
+                              <>
+                                <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
+                                  <span className="gu-kv-k">
+                                    Тесто{detailSource.doughThicknessMm ? ` (${detailSource.doughThicknessMm} мм)` : ''}
+                                  </span>
+                                  <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    {detailSource.doughColor && (
+                                      <span
+                                        style={{
+                                          width: 9,
+                                          height: 9,
+                                          borderRadius: 2,
+                                          backgroundColor: detailSource.doughColor,
+                                          border: '1px solid rgba(255,255,255,0.35)',
+                                          display: 'inline-block',
+                                          flexShrink: 0
+                                        }}
+                                      />
+                                    )}
+                                    <span>{detailSource.doughNameRu}</span>
+                                  </span>
+                                </div>
+                                {detailSource.fillingRatioPercent !== undefined && (
+                                  <div className="gu-kv">
+                                    <span className="gu-kv-k">Доля начинки</span>
+                                    <span className="gu-kv-v">{detailSource.fillingRatioPercent}%</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            {detailSource.fillingRu && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Начинка</span>
+                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'normal' }}>
+                                  {detailSource.fillingColor && (
+                                    <span
+                                      style={{
+                                        width: 9,
+                                        height: 9,
+                                        borderRadius: 2,
+                                        backgroundColor: detailSource.fillingColor,
+                                        border: '1px solid rgba(255,255,255,0.35)',
+                                        display: 'inline-block',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                  )}
+                                  <span>{detailSource.fillingRu}</span>
+                                </span>
+                              </div>
+                            )}
+
+                            {innerShapeLabel && innerShapeLabel !== shapeLabel && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Форма внутри</span>
+                                <span className="gu-kv-v">{innerShapeLabel}</span>
+                              </div>
+                            )}
+                            {innerSizeLabel && innerSizeLabel !== sizeLabel && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Размер внутри</span>
+                                <span className="gu-kv-v">{innerSizeLabel}</span>
+                              </div>
+                            )}
+                            {detailSource.outerMaterialRu && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">
+                                  Внешняя часть{detailSource.cocoaPercent !== undefined ? ` (${detailSource.cocoaPercent}% какао)` : ''}
+                                </span>
+                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'normal' }}>
+                                  {detailSource.outerColor && (
+                                    <span
+                                      style={{
+                                        width: 9,
+                                        height: 9,
+                                        borderRadius: 2,
+                                        backgroundColor: detailSource.outerColor,
+                                        border: '1px solid rgba(255,255,255,0.35)',
+                                        display: 'inline-block',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                  )}
+                                  <span>
+                                    {detailSource.outerMaterialRu}
+                                    {detailSource.outerColorNameRu ? ` · Цвет: ${detailSource.outerColorNameRu}` : ''}
+                                  </span>
+                                </span>
+                              </div>
+                            )}
+                            {detailSource.innerMaterialRu && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">
+                                  Внутренняя часть{detailSource.hasFilling === false ? ' (однородная)' : ' (начинка)'}
+                                </span>
+                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'normal' }}>
+                                  {detailSource.innerColor && (
+                                    <span
+                                      style={{
+                                        width: 9,
+                                        height: 9,
+                                        borderRadius: 2,
+                                        backgroundColor: detailSource.innerColor,
+                                        border: '1px solid rgba(255,255,255,0.35)',
+                                        display: 'inline-block',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                  )}
+                                  <span>
+                                    {detailSource.innerMaterialRu}
+                                    {detailSource.innerColorNameRu ? ` · Цвет: ${detailSource.innerColorNameRu}` : ''}
+                                  </span>
+                                </span>
+                              </div>
+                            )}
+
+                            {ingText && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Из чего (Состав)</span>
+                                <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
+                                  {ingText}
+                                </span>
+                              </div>
+                            )}
+                            {uAttrs.preparationMethod && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Приготовление / Обработка</span>
+                                <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
+                                  {uAttrs.preparationMethod}
+                                </span>
+                              </div>
+                            )}
+                            {uAttrs.purpose && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Назначение</span>
+                                <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
+                                  {uAttrs.purpose}
+                                </span>
+                              </div>
+                            )}
+                            {uAttrs.tasteNotes && uAttrs.tasteNotes.length > 0 && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Вкусовые ноты</span>
+                                <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
+                                  {uAttrs.tasteNotes.join('; ')}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -2108,7 +2256,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                   <span>
                                     {selectedEntry.item.itemId.startsWith('egg_carton') ||
                                     selectedEntry.item.itemId.startsWith('pelmeni_pack') ||
-                                    selectedEntry.item.contents[0]?.itemId === 'pelmen'
+                                    selectedEntry.item.itemId.startsWith('chocolate_pack') ||
+                                    selectedEntry.item.contents[0]?.itemId === 'pelmen' ||
+                                    selectedEntry.item.contents[0]?.itemId === 'chocolate'
                                       ? 'Достать 1 шт.'
                                       : selectedEntry.item.contents[0]?.category === 'med'
                                       ? 'Применить 1 шт.'

@@ -1769,6 +1769,69 @@ export type CandyPackagingShape =
   | 'gusset'        // Высокий пакет с боковыми фальцами и плоским дном
   | 'hanging_card'; // Евро-пакет с верхним хедером-подвесом
 
+export type ChocolatePackagingShape =
+  | 'mini_foil_wrap'    // Мини-обёртка / фольгированный фантик-конвертик
+  | 'flow_bar'          // Узкий герметичный флоу-пак для батончика
+  | 'foil_paper_sleeve' // Классическая двухслойная обёртка (фольга + бумажная манжета)
+  | 'square_flow'       // Квадратный запаянный пакет / конверт
+  | 'triangular_prism'  // Треугольная картонная коробочка-призма
+  | 'craft_envelope_xl' // Крупный картонно-фольгированный конверт XXL
+  | 'gift_box';         // Подарочная картонная коробка с коррексом и окошком
+
+export type ChocolateShape =
+  | 'classic_bar'     // Классическая дольчатая плитка
+  | 'chunky_bar'      // Объёмный батончик с округлыми сегментами
+  | 'square_tile'     // Квадратная порционная плитка
+  | 'triangle_prism'  // Треугольная призма с зубцами
+  | 'wafer_stick'     // Вафельно-шоколадная палочка
+  | 'truffle_dome'    // Купольная конфета-трюфель
+  | 'praline_heart'   // Фигурное шоколадное сердечко
+  | 'medallion_coin'  // Шоколадный медальон с тиснением
+  | 'shell_seashell'  // Морская ракушка пралине
+  | 'diamond_bonbon'  // Огранённый ромб-конфета
+  | 'break_piece'     // Отломанная долька со сколом
+  | 'wave_bar';       // Волнистая фигурная плитка
+
+export type ChocolateSize =
+  | 'mini'    // Мини (конфета / долька, ~12 г)
+  | 'small'   // Малый (батончик, ~45 г)
+  | 'medium'  // Стандартный (плитка, ~95 г)
+  | 'large'   // Большой (крупная плитка, ~180 г)
+  | 'king';   // Семейный XXL (макси-плитка, ~300 г)
+
+export interface ChocolateAttributes {
+  /** Форма шоколадки */
+  shape: ChocolateShape;
+  /** Название формы шоколадки на русском языке */
+  shapeNameRu: string;
+  /** Размер шоколадки */
+  size: ChocolateSize;
+  /** Название размера шоколадки на русском языке */
+  sizeNameRu: string;
+  /** Из чего сделана внешняя часть (оболочка / корпус) */
+  outerMaterialRu: string;
+  /** Цвет внешней части в hex */
+  outerColor: string;
+  /** Название цвета внешней части на русском языке */
+  outerColorNameRu: string;
+  /** Из чего сделана внутренняя часть (начинка / сердцевина) */
+  innerMaterialRu: string;
+  /** Цвет внутренней части в hex */
+  innerColor: string;
+  /** Название цвета внутренней части на русском языке */
+  innerColorNameRu: string;
+  /** Есть ли отдельная начинка внутри (влияет на отображение скола/начинки) */
+  hasFilling?: boolean;
+  /** Процент какао-продуктов во внешней оболочке */
+  cocoaPercent?: number;
+  /** Вкус / ароматический профиль */
+  flavorRu?: string;
+  /** Фактура поверхности ('smooth' | 'nuts' | 'crisps' | 'marbled' | 'dusted') */
+  surfaceTexture?: 'smooth' | 'nuts' | 'crisps' | 'marbled' | 'dusted';
+  /** Полный состав шоколадки (внешняя + внутренняя часть) */
+  ingredients: string[];
+}
+
 export type GummyCandyShape =
   | 'bear'
   | 'worm'
@@ -1868,6 +1931,106 @@ export interface ContainerVisualAttributes {
   capRgb?: [number, number, number];
 }
 
+export interface UnifiedVisualAttributes {
+  /** Форма предмета, тары, лепки или упаковки */
+  shape?: string;
+  /** Название формы на русском языке */
+  shapeNameRu?: string;
+  /** Основной цвет в hex/CSS (для продуктов, начинки, жидкости) */
+  color?: string;
+  /** Название цвета на русском языке */
+  colorNameRu?: string;
+  /** Дополнительный акцентный цвет в hex/CSS */
+  secondaryColor?: string;
+  /** Цвет корпуса/фона упаковки в hex/CSS */
+  tintColor?: string;
+  /** Цвет этикетки в hex/CSS */
+  labelColor?: string;
+  /** Цвет материала тары в RGB [R, G, B] */
+  materialRgb?: [number, number, number];
+  /** Название материала на русском языке */
+  materialNameRu?: string;
+  /** Цвет этикетки тары в RGB [R, G, B] */
+  labelRgb?: [number, number, number] | null;
+  /** Акцентный цвет этикетки в RGB [R, G, B] */
+  labelAccentRgb?: [number, number, number];
+  /** Цвет крышки/клипсы в RGB [R, G, B] */
+  capRgb?: [number, number, number];
+  /** Размер форм-фактора ('mini' | 'small' | 'medium' | 'large') */
+  size?: string;
+  /** Название размера на русском языке */
+  sizeNameRu?: string;
+}
+
+export interface UnifiedAttributes {
+  /** Сорт, разновидность, марка или ключевое наименование варианта */
+  varietyRu?: string;
+  varietyEn?: string;
+  /** Единое поле состава ("из чего сделано") для всех предметов, продуктов, жидкостей и смесей */
+  ingredients?: string | string[];
+  /** Обратная совместимость со старыми JSON-сейвами жидкостей (синхронизируется в ingredients) */
+  sourceIngredients?: string | string[];
+  /** Способ приготовления, обработки, лепки или производства */
+  preparationMethod?: string;
+  /** Назначение и область применения */
+  purpose?: string;
+  /** Происхождение, примечания и детали */
+  reasonAndOrigin?: string;
+  /** Кулинарное/физическое состояние ('frozen' | 'raw' | 'boiled' | 'fried' | 'sealed' | 'opened' | 'fresh' | 'dried') */
+  state?: string;
+  /** Локализованное состояние на русском языке */
+  stateNameRu?: string;
+  /** Вкус / аромат */
+  flavorRu?: string;
+  /** Размер / калибр */
+  size?: string;
+  sizeNameRu?: string;
+  /** Единые визуальные атрибуты (форма, цвета, материал, этикетка, размер) */
+  visuals?: UnifiedVisualAttributes;
+  /** Быстрый доступ к цвету содержимого/вещества в hex */
+  customColor?: string;
+  secondaryColor?: string;
+  /** Открыта/вскрыта ли тара или упаковка */
+  isOpened?: boolean;
+  /** Идентификатор кулинарного эквивалента или медицинского эффекта */
+  culinaryEquivalentId?: string;
+  medicalEffectId?: string;
+  /** Визуальные атрибуты тары в формате RGB */
+  containerVisuals?: ContainerVisualAttributes;
+  /** Кастомные статусные эффекты при употреблении */
+  customEffects?: {
+    hunger?: number;
+    thirst?: number;
+    health?: number;
+    energy?: number;
+    sleepiness?: number;
+    soothePanic?: number;
+    alcohol?: number;
+  };
+  customTasteMessages?: string[];
+  /** Опциональные расширения для формованных/многослойных и кондитерских изделий */
+  doughColor?: string;
+  doughNameRu?: string;
+  doughThicknessMm?: number;
+  fillingRu?: string;
+  fillingColor?: string;
+  fillingRatioPercent?: number;
+  sourDust?: boolean;
+  flourDusting?: boolean;
+  butterGlaze?: boolean;
+  outerMaterialRu?: string;
+  outerColor?: string;
+  outerColorNameRu?: string;
+  innerMaterialRu?: string;
+  innerColor?: string;
+  innerColorNameRu?: string;
+  cocoaPercent?: number;
+  hasFilling?: boolean;
+  dishType?: string;
+  cookingAttributes?: CookingAttributes;
+  tasteNotes?: string[];
+}
+
 export interface CulinaryItemData {
   isPreparedDish?: boolean;
   isWorkpiece?: boolean;
@@ -1932,6 +2095,8 @@ export interface InventoryItem {
   originalCatalogId?: string; // Original item definition ID before unified container wrapping
   /** Чисто визуальные атрибуты тары (банки, бутылки, консервы): форма, RGB цвет материала и RGB цвет этикетки */
   containerVisuals?: ContainerVisualAttributes;
+  /** Единый стандарт атрибутов для ВСЕХ предметов, продуктов, жидкостей, упаковок и блюд */
+  attributes?: UnifiedAttributes;
   fluidStorage?: {
     liquidId: string | null;
     currentMl: number;
@@ -1940,35 +2105,15 @@ export interface InventoryItem {
     baseItemNameRu: string;
     baseItemNameEn?: string;
     containerVisuals?: ContainerVisualAttributes;
-    attributes?: {
-      varietyRu: string;
-      varietyEn?: string;
-      sourceIngredients: string | string[];
-      preparationMethod: string;
-      purpose: string;
-      reasonAndOrigin: string;
-      customColor?: string;
-      secondaryColor?: string;
-      isOpened?: boolean;
-      culinaryEquivalentId?: string;
-      medicalEffectId?: string;
-      containerVisuals?: ContainerVisualAttributes;
-      customEffects?: {
-        hunger?: number;
-        thirst?: number;
-        health?: number;
-        energy?: number;
-        sleepiness?: number;
-        soothePanic?: number;
-      };
-      customTasteMessages?: string[];
-    };
+    attributes?: UnifiedAttributes;
   };
   culinaryData?: CulinaryItemData;
   /** Атрибуты мармеладки (цвет, форма, состав, посыпка) */
   gummyAttributes?: GummyCandyAttributes;
   /** Атрибуты пельмешка (форма лепки, размер, тесто, начинка, состояние, состав) */
   pelmenAttributes?: PelmenAttributes;
+  /** Атрибуты шоколадки (форма, размер, материал и цвет внешней/внутренней части, состав) */
+  chocolateAttributes?: ChocolateAttributes;
   // Nutrition & Biochemical Culinary Simulation
   nutrients?: {
     calories: number; // kcal
@@ -1990,8 +2135,8 @@ export interface InventoryItem {
   isTransparentPackaging?: boolean; // Whether the inner contents are visible through transparent packaging
   labelColor?: string;              // Brand seal label / sticker color (hex or CSS color) for paper/plastic packaging
   containerTintColor?: string;      // Package body tint color (hex or CSS color)
-  packagingSize?: 'mini' | 'small' | 'medium' | 'large'; // Physical form factor size of packaging
-  packagingShape?: CandyPackagingShape; // Physical shape/silhouette of plastic candy/gummy packaging
+  packagingSize?: 'mini' | 'small' | 'medium' | 'large' | 'king'; // Physical form factor size of packaging
+  packagingShape?: CandyPackagingShape | ChocolatePackagingShape; // Physical shape/silhouette of candy/chocolate packaging
   packagingShapeNameRu?: string;    // Russian display name of packaging shape
   containerCapacityL?: number;      // Total internal volume capacity in Liters
   maxContainedItemVolumeL?: number; // Max single item volume that fits in this container

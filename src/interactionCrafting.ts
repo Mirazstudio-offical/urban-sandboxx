@@ -5,6 +5,7 @@ import {
   FluidContainerState,
   FluidSubstanceAttributes,
   CONTAINER_CONFIGS,
+  getContainerConfig,
   syncItemContainerProperties,
   isFluidContainerClosed,
 } from './liquidSystem';
@@ -193,7 +194,7 @@ const LEGACY_CONTAINER_BRIDGES: Record<string, LegacyContainerBridge> = {
     emptyWeightKg: 0.25,
     baseItemNameRu: 'Суповая миска (0.5 л)',
     emptyItemId: 'soup_bowl_empty',
-    defaultLiquidId: 'broth_chicken',
+    defaultLiquidId: 'broth',
     defaultCurrentMl: 450,
     defaultTemperatureC: 65,
   },
@@ -553,7 +554,7 @@ export function getEffectiveFluidWrapper(item: InventoryItem | null): EffectiveF
   if (item.fluidStorage) {
     const state: FluidContainerState = JSON.parse(JSON.stringify(item.fluidStorage));
     const closed = isFluidContainerClosed(item);
-    const cfg = CONTAINER_CONFIGS[item.itemId];
+    const cfg = getContainerConfig(item.itemId);
     return {
       state,
       temperatureC: item.temperature ?? item.surfaceTemperature ?? 20,
@@ -602,10 +603,11 @@ export function applyEffectiveFluidToItem(
   const key = item.originalCatalogId || item.itemId;
   const bridge = LEGACY_CONTAINER_BRIDGES[key] || LEGACY_CONTAINER_BRIDGES[item.itemId];
 
-  // Auto-open container variant if it was a sealed variant
-  const cfg = CONTAINER_CONFIGS[item.itemId];
-  if (cfg?.openedVariantId && CONTAINER_CONFIGS[cfg.openedVariantId]) {
-    item.itemId = cfg.openedVariantId;
+  // Auto-open container in-place if it was a sealed variant
+  const cfg = getContainerConfig(item.itemId);
+  if (cfg?.requiresOpening) {
+    item.isOpen = true;
+    if (nextState.attributes) nextState.attributes.isOpened = true;
   }
 
   // Special case: empty sandbag becomes `sack_empty` if completely drained
@@ -649,7 +651,7 @@ export function applyEffectiveFluidToItem(
   syncItemContainerProperties(item);
 
   // If item wasn't in CONTAINER_CONFIGS (e.g. a kitchen mug or pot), ensure its Russian display name reflects the contents!
-  if (!CONTAINER_CONFIGS[item.itemId]) {
+  if (!getContainerConfig(item.itemId)) {
     const baseName = nextState.baseItemNameRu || originalItem.nameRu;
     if (nextState.currentMl <= 0 || !nextState.liquidId) {
       item.nameRu = `${baseName} (Пусто)`;
@@ -690,11 +692,17 @@ function getSubstanceColor(state: FluidContainerState): string {
   return '#38bdf8';
 }
 
-function findNamedMixture(liqA: string, liqB: string): NamedMixtureRule | undefined {
-  return NAMED_MIXTURE_RULES.find(
-    (r) =>
-      (r.liquids[0] === liqA && r.liquids[1] === liqB) ||
-      (r.liquids[0] === liqB && r.liquids[1] === liqA)
+function findNamedMixture(stateA: FluidContainerState, stateB: FluidContainerState): NamedMixtureRule | undefined {
+  const keysA = [stateA.liquidId, stateA.attributes?.culinaryEquivalentId].filter(Boolean) as string[];
+  const keysB = [stateB.liquidId, stateB.attributes?.culinaryEquivalentId].filter(Boolean) as string[];
+  return NAMED_MIXTURE_RULES.find((r) =>
+    keysA.some((a) =>
+      keysB.some(
+        (b) =>
+          (r.liquids[0] === a && r.liquids[1] === b) ||
+          (r.liquids[0] === b && r.liquids[1] === a)
+      )
+    )
   );
 }
 
@@ -803,7 +811,7 @@ export function tryPourOrMixTopToBottom(
       const colorTop = getSubstanceColor(topState);
       const blendedColor = blendHexColors(colorBottom, prevBottomMl, colorTop, transferMl);
 
-      const namedRule = findNamedMixture(bottomState.liquidId, topState.liquidId);
+      const namedRule = findNamedMixture(bottomState, topState);
 
       // Compute weighted nutritional/status effects
       const bEff = bottomState.attributes?.customEffects || bottomSpec.effects || {};
@@ -858,29 +866,35 @@ export function tryPourOrMixTopToBottom(
           : topState.liquidId
       ) as LiquidId;
 
-      const bIngs = Array.isArray(bottomState.attributes?.sourceIngredients)
-        ? bottomState.attributes!.sourceIngredients
-        : bottomState.attributes?.sourceIngredients
-        ? [bottomState.attributes.sourceIngredients]
+      const rawBIngs = bottomState.attributes?.ingredients ?? bottomState.attributes?.sourceIngredients;
+      const bIngs = Array.isArray(rawBIngs)
+        ? rawBIngs
+        : rawBIngs
+        ? [rawBIngs]
         : [bottomNameBefore];
 
-      const tIngs = Array.isArray(topState.attributes?.sourceIngredients)
-        ? topState.attributes!.sourceIngredients
-        : topState.attributes?.sourceIngredients
-        ? [topState.attributes.sourceIngredients]
+      const rawTIngs = topState.attributes?.ingredients ?? topState.attributes?.sourceIngredients;
+      const tIngs = Array.isArray(rawTIngs)
+        ? rawTIngs
+        : rawTIngs
+        ? [rawTIngs]
         : [topNameBefore];
 
       const uniqueIngredients = Array.from(new Set([...bIngs, ...tIngs]));
 
       const customAttr: FluidSubstanceAttributes = {
         varietyRu: computedVarietyRu,
-        sourceIngredients: uniqueIngredients,
+        ingredients: uniqueIngredients,
         preparationMethod: 'Смешивание в сетке взаимодействия (Верх → Низ)',
         purpose: namedRule
           ? namedRule.descriptionRu
           : `Смешанный состав (${uniqueIngredients.join(' + ')})`,
         reasonAndOrigin: 'Приготовлено игроком путём переливания и смешивания компонентов.',
         customColor: computedColor,
+        visuals: {
+          ...(bottomState.attributes?.visuals || {}),
+          color: computedColor
+        },
         isOpened: true,
         customEffects: {
           hunger: mixHunger,
@@ -1235,14 +1249,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
       // Case 1: Fluid container that is sealed (`isFluidContainerClosed(target)`)
       if (isFluidContainerClosed(target) && target.fluidStorage) {
         const openedItem = cloneInventoryItem(target);
-        const cfg = CONTAINER_CONFIGS[openedItem.itemId];
-        if (cfg?.openedVariantId && CONTAINER_CONFIGS[cfg.openedVariantId]) {
-          const openCfg = CONTAINER_CONFIGS[cfg.openedVariantId];
-          openedItem.itemId = openCfg.itemId;
-          openedItem.name = openCfg.name;
-          openedItem.fluidStorage!.baseItemNameRu = openCfg.nameRu;
-          openedItem.fluidStorage!.baseItemNameEn = openCfg.name;
-        }
+        openedItem.isOpen = true;
         if (openedItem.fluidStorage!.attributes) {
           openedItem.fluidStorage!.attributes.isOpened = true;
         }
@@ -1509,8 +1516,9 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
       const isLiquidDisinfectant =
         wrap &&
         (wrap.state.liquidId === 'vodka' ||
-          wrap.state.liquidId === 'antiseptic' ||
-          wrap.state.liquidId === 'peroxide') &&
+          wrap.state.liquidId === 'medical_solution' ||
+          wrap.state.attributes?.medicalEffectId === 'antiseptic' ||
+          wrap.state.attributes?.medicalEffectId === 'peroxide') &&
         wrap.state.currentMl >= 50;
 
       if (!isMedBottle && !isLiquidDisinfectant) return null;

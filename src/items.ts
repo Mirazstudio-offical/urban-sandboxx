@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, UnifiedAttributes, UnifiedVisualAttributes } from './types';
 import { sound } from './audio';
 import { getPhoneSpecsForItemId } from './phoneData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
@@ -28,9 +28,11 @@ import { triggerPlayerActionAnim } from './humanAnimationSystem';
 import {
   LIQUID_REGISTRY,
   CONTAINER_CONFIGS,
+  getContainerConfig,
   LiquidId,
   FluidContainerState,
   FluidSubstanceAttributes,
+  LEGACY_LIQUID_TO_GENERIC_MAP,
   isFluidContainer,
   getFluidContainerWeight,
   getFluidContainerVolume,
@@ -54,12 +56,14 @@ export interface ItemPackagingConfig {
   customDescriptionRu?: string;
   innerGummyPresets?: Partial<GummyCandyAttributes>[];
   innerPelmenPresets?: Partial<PelmenAttributes>[];
+  innerChocolatePresets?: Partial<ChocolateAttributes>[];
 }
 
 export interface ItemFluidContainerConfig {
   containerId: string;
   liquidId: LiquidId | null;
   amountMl: number;
+  isOpen?: boolean;
   attributes?: FluidSubstanceAttributes;
 }
 
@@ -111,11 +115,12 @@ export interface ItemDefinition {
   labelColor?: string;              // Custom brand seal label / sticker color
   containerVisuals?: ContainerVisualAttributes; // Visual shape, RGB material color, and RGB label color
   containerTintColor?: string;
-  packagingSize?: 'mini' | 'small' | 'medium' | 'large';
-  packagingShape?: CandyPackagingShape;
+  packagingSize?: 'mini' | 'small' | 'medium' | 'large' | 'king';
+  packagingShape?: CandyPackagingShape | ChocolatePackagingShape;
   packagingShapeNameRu?: string;
   gummyAttributes?: GummyCandyAttributes;
   pelmenAttributes?: PelmenAttributes;
+  chocolateAttributes?: ChocolateAttributes;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -128,6 +133,7 @@ export interface ItemDefinition {
   // Unified single-source-of-truth extensions
   fluidContainer?: ItemFluidContainerConfig;
   isDirectPiece?: boolean;
+  attributes?: UnifiedAttributes;
   clothingStats?: import('./types').ClothingStats;
   shopListings?: ItemShopListingConfig[];
   furnitureSpawns?: ItemFurnitureSpawnConfig[];
@@ -263,6 +269,89 @@ export const DEFAULT_PELMEN_ATTRIBUTES: PelmenAttributes = {
   ]
 };
 
+export const CHOCOLATE_PACKAGING_SHAPE_NAMES_RU: Record<ChocolatePackagingShape, string> = {
+  mini_foil_wrap: 'Мини-обёртка из фольги с манжетой',
+  flow_bar: 'Узкий флоу-пак для батончика',
+  foil_paper_sleeve: 'Классическая фольга + бумажная обёртка',
+  square_flow: 'Квадратный пакет-конверт (кник-пак)',
+  triangular_prism: 'Треугольная картонная призма-туба',
+  craft_envelope_xl: 'Большой крафт-конверт XXL с фольгой',
+  gift_box: 'Подарочная коробка ассорти с коррексом'
+};
+
+export function getChocolatePackagingShapeNameRu(shape?: ChocolatePackagingShape): string {
+  if (!shape) return 'Шоколадная упаковка';
+  return CHOCOLATE_PACKAGING_SHAPE_NAMES_RU[shape] || 'Шоколадная упаковка';
+}
+
+export const CHOCOLATE_SHAPE_NAMES_RU: Record<ChocolateShape, string> = {
+  classic_bar: 'Классическая дольчатая плитка',
+  chunky_bar: 'Батончик с округлыми сегментами',
+  square_tile: 'Квадратная плитка (3×3)',
+  triangle_prism: 'Треугольная призма с зубцами',
+  wafer_stick: 'Вафельно-шоколадная палочка',
+  truffle_dome: 'Купольный трюфель',
+  praline_heart: 'Фигурное сердечко пралине',
+  medallion_coin: 'Шоколадный медальон',
+  shell_seashell: 'Морская ракушка пралине',
+  diamond_bonbon: 'Огранённый ромб-конфета',
+  break_piece: 'Отломанная долька со сколом',
+  wave_bar: 'Волнистая рельефная плитка'
+};
+
+export const CHOCOLATE_SIZE_NAMES_RU: Record<ChocolateSize, string> = {
+  mini: 'Мини (12 г)',
+  small: 'Малый батончик (45 г)',
+  medium: 'Стандартная плитка (95 г)',
+  large: 'Большая плитка (180 г)',
+  king: 'Семейный XXL (300 г)'
+};
+
+export const CHOCOLATE_SIZE_SPECS: Record<ChocolateSize, {
+  weightKg: number;
+  volumeL: number;
+  hunger: number;
+  energy: number;
+  biteCount: number;
+  fullnessPerBite: number;
+  calories: number;
+  proteins: number;
+  fats: number;
+  carbs: number;
+  sugars: number;
+}> = {
+  mini: { weightKg: 0.012, volumeL: 0.012, hunger: 3.5, energy: 4.5, biteCount: 1, fullnessPerBite: 1.5, calories: 65, proteins: 0.8, fats: 4.0, carbs: 6.8, sugars: 5.5 },
+  small: { weightKg: 0.045, volumeL: 0.042, hunger: 12, energy: 14, biteCount: 2, fullnessPerBite: 2.5, calories: 235, proteins: 2.8, fats: 13.5, carbs: 25.0, sugars: 21.0 },
+  medium: { weightKg: 0.095, volumeL: 0.09, hunger: 24, energy: 26, biteCount: 4, fullnessPerBite: 3.5, calories: 515, proteins: 6.8, fats: 31.0, carbs: 51.0, sugars: 44.0 },
+  large: { weightKg: 0.18, volumeL: 0.17, hunger: 42, energy: 44, biteCount: 6, fullnessPerBite: 4.5, calories: 970, proteins: 13.0, fats: 58.0, carbs: 96.0, sugars: 82.0 },
+  king: { weightKg: 0.3, volumeL: 0.28, hunger: 68, energy: 65, biteCount: 8, fullnessPerBite: 5.5, calories: 1620, proteins: 21.5, fats: 96.0, carbs: 160.0, sugars: 135.0 }
+};
+
+export const DEFAULT_CHOCOLATE_ATTRIBUTES: ChocolateAttributes = {
+  shape: 'classic_bar',
+  shapeNameRu: 'Классическая дольчатая плитка',
+  size: 'medium',
+  sizeNameRu: 'Стандартная плитка (95 г)',
+  outerMaterialRu: 'Классический молочный шоколад (36% какао на цельном молоке)',
+  outerColor: '#6b3e26',
+  outerColorNameRu: 'Тёпло-коричневый (молочный шоколад)',
+  innerMaterialRu: 'Однородный цельный молочный шоколад с бурбонской ванилью',
+  innerColor: '#7c4a2d',
+  innerColorNameRu: 'Карамельно-шоколадный',
+  hasFilling: false,
+  cocoaPercent: 36,
+  flavorRu: 'Нежный сливочный какао с ванилью',
+  surfaceTexture: 'smooth',
+  ingredients: [
+    'Сахар тростниковый',
+    'Масло какао натуральное',
+    'Молоко сухое цельное (21%)',
+    'Какао тёртое',
+    'Эмульгатор лецитин соевый',
+    'Натуральный экстракт бурбонской ванили'
+  ]
+};
+
 export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   // === FOOD (ЕДА) ===
   apple: {
@@ -284,45 +373,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     fullnessPerBite: 2,
     tasteMessages: ['Хрустящий сладкий укус...', 'Сок брызжет при укусе...', 'Сладкий натуральный вкус...', 'Кислинка освежает рецепторы...', 'Сочная мякоть яблока...', 'Хруст свежести...', 'Приятная сладость...', 'Остался только огрызок!']
   },
-  chips: {
-    itemId: 'chips',
-    name: 'Crunchy Potato Chips',
-    nameRu: 'Картофельные чипсы',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Salty snack. Gives quick energy but slightly increases thirst.',
-    descriptionRu: 'Хрустящие соленые чипсы. Быстрый перекус, но слегка усиливает жажду.',
-    effects: { hunger: 25, energy: 12, thirst: -8 },
-    weight: 0.15,
-    usable: true,
-    biteCount: 15,
-    biteDuration: 0.5,
-    leftoverId: 'chips_bag',
-    leftoverNameRu: 'Пустой пакет от чипсов',
-    fullnessPerBite: 2,
-    tasteMessages: ['Хрустящий ломтик с солью...', 'Золотистая картофельная чипсина...', 'Аппетитный хруст...', 'Соль щиплет язык, хочется пить...', 'Хруст-хруст! Вкус паприки...', 'Еще горсточка чипсов...']
-  },
-  canned_meat: {
-    itemId: 'canned_meat',
-    name: 'Canned Beef Stew',
-    nameRu: 'Армейская тушёнка',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'High-calorie canned preserved meat with long shelf life.',
-    descriptionRu: 'Высококалорийные мясные консервы длительного хранения.',
-    effects: { hunger: 70, health: 15, energy: 20 },
-    weight: 0.5,
-    usable: true,
-    biteCount: 12,
-    biteDuration: 1.0,
-    leftoverId: 'tin_can_empty',
-    leftoverNameRu: 'Банка из-под тушёнки',
-    fullnessPerBite: 5,
-    tasteMessages: ['Густой мясной бульон...', 'Нежная тушеная говядина...', 'Пряный лавровый лист и перец...', 'Сытный кусок мяса...', 'Классическая армейская тушёнка!', 'Очень сытно и калорийно...']
-  },
-
   // === FROZEN MEATS, SEAFOOD & GROCERIES (-16°C) ===
   beef_minced: {
     itemId: 'beef_minced',
@@ -388,7 +438,15 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 20,
     biteDuration: 1.0,
-    fullnessPerBite: 4
+    fullnessPerBite: 4,
+    attributes: {
+      varietyRu: 'Фарш из грудки индейки',
+      ingredients: ['Филе грудки индейки охлаждённое'],
+      preparationMethod: 'Измельчение на мясорубке (решётка 4 мм), шоковая заморозка',
+      purpose: 'Для диетических котлет, тефтелей и начинки',
+      state: 'frozen',
+      stateNameRu: 'Замороженный (-16 °C)'
+    }
   },
   minced_meat_mixed: {
     itemId: 'minced_meat_mixed',
@@ -404,7 +462,15 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 20,
     biteDuration: 1.0,
-    fullnessPerBite: 5
+    fullnessPerBite: 5,
+    attributes: {
+      varietyRu: 'Фарш «Домашний» (говядина 55% / свинина 45%)',
+      ingredients: ['Говядина тазобедренная', 'Свинина полужирная'],
+      preparationMethod: 'Крупный помол и смешивание в пропорции 55/45, шоковая заморозка',
+      purpose: 'Для котлет, пельменей, фрикаделек и запеканок',
+      state: 'frozen',
+      stateNameRu: 'Замороженный (-16 °C)'
+    }
   },
   beef_rump_large: {
     itemId: 'beef_rump_large',
@@ -420,7 +486,15 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 30,
     biteDuration: 1.2,
-    fullnessPerBite: 4
+    fullnessPerBite: 4,
+    attributes: {
+      varietyRu: 'Отруб говяжьего оковалка бескостный',
+      ingredients: ['Говядина (тазобедренная часть)'],
+      preparationMethod: 'Обвалка и зачистка от плёнок, глубокая заморозка',
+      purpose: 'Для стейков, запекания, тушения и наваристых бульонов',
+      state: 'frozen',
+      stateNameRu: 'Замороженный (-16 °C)'
+    }
   },
   chicken_breast_large: {
     itemId: 'chicken_breast_large',
@@ -436,7 +510,15 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 20,
     biteDuration: 1.0,
-    fullnessPerBite: 4
+    fullnessPerBite: 4,
+    attributes: {
+      varietyRu: 'Филе грудки цыплёнка-бройлера без кожи',
+      ingredients: ['Куриная грудка (белое мясо)'],
+      preparationMethod: 'Разделка тушки, снятие кожи и заморозка',
+      purpose: 'Для жарки, варки, бульонов и рубленых котлет',
+      state: 'frozen',
+      stateNameRu: 'Замороженное (-16 °C)'
+    }
   },
   chicken_thighs_medium: {
     itemId: 'chicken_thighs_medium',
@@ -452,7 +534,15 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 20,
     biteDuration: 1.0,
-    fullnessPerBite: 4
+    fullnessPerBite: 4,
+    attributes: {
+      varietyRu: 'Бедро цыплёнка на кости с кожей',
+      ingredients: ['Куриное бедро (красное мясо)'],
+      preparationMethod: 'Порционная разделка и охлаждение до -16 °C',
+      purpose: 'Для запекания в духовке, тушения и жарки на сковороде',
+      state: 'frozen',
+      stateNameRu: 'Замороженные (-16 °C)'
+    }
   },
   pork_ribs_medium: {
     itemId: 'pork_ribs_medium',
@@ -502,136 +592,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     biteDuration: 1.0,
     fullnessPerBite: 4
   },
-  berries_mixed_frozen: {
-    itemId: 'berries_mixed_frozen',
-    name: 'Frozen Wild Berries Pack',
-    nameRu: 'Замороженные лесные ягоды',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Deep frozen wild berries (raspberries, blueberries, blackberries) (-16°C).',
-    descriptionRu: 'Смесь глубокой заморозки из малины, черники и ежевики (-16°C).',
-    effects: { hunger: 30, thirst: 15, health: 12, energy: 15 },
-    weight: 0.4,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.8,
-    fullnessPerBite: 3
-  },
-  vegetable_mix_frozen: {
-    itemId: 'vegetable_mix_frozen',
-    name: 'Frozen Spring Vegetables',
-    nameRu: 'Замороженные овощи',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Frozen vegetable mix (peas, corn, carrots, broccoli) (-16°C).',
-    descriptionRu: 'Замороженное овощное ассорти (-16°C).',
-    effects: { hunger: 35, health: 15, energy: 10 },
-    weight: 0.5,
-    usable: true,
-    biteCount: 12,
-    biteDuration: 0.8,
-    fullnessPerBite: 3
-  },
-
-  // === DRINKS (НАПИТКИ) ===
-  water_bottle: {
-    itemId: 'water_bottle',
-    name: 'Mineral Water (0.5L)',
-    nameRu: 'Бутылка минеральной воды',
-    category: 'drink',
-    maxStack: 1,
-    icon: '',
-    description: 'Clean pure spring water. Essential for hydration and survival.',
-    descriptionRu: 'Чистая родниковая вода (0.5 л). Главное средство от жажды и обезвоживания.',
-    effects: { thirst: 50, health: 5, energy: 10 },
-    weight: 0.5,
-    usable: true,
-    biteCount: 12,
-    biteDuration: 0.6,
-    leftoverId: 'bottle_empty',
-    leftoverNameRu: 'Пустая пластиковая бутылка',
-    fullnessPerBite: 1,
-    tasteMessages: ['Чистый прохладный глоток воды...', 'Освежающая минеральная влага...', 'Жажда постепенно отступает...', 'Родниковая свежесть...', 'Приятная прохлада в горле...', 'Бодрящий глоток чистоты...']
-  },
-  soda_can: {
-    itemId: 'soda_can',
-    name: 'Cola Soda Can',
-    nameRu: 'Баночка Колы',
-    category: 'drink',
-    maxStack: 1,
-    icon: '',
-    description: 'Carbonated chilled soda with sweet caramel taste and light caffeine.',
-    descriptionRu: 'Освежающая газировка со сладким вкусом и легким тонизирующим эффектом.',
-    effects: { thirst: 35, energy: 20, sleepiness: -8 },
-    weight: 0.35,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.6,
-    leftoverId: 'can_empty',
-    leftoverNameRu: 'Пустая жестяная банка',
-    fullnessPerBite: 1,
-    tasteMessages: ['Шипящие сладкие пузырьки колы...', 'Холодный карамельный вкус...', 'Бодрящий сладкий глоток...', 'Газировка приятно покалывает язык...']
-  },
-  hot_coffee: {
-    itemId: 'hot_coffee',
-    name: 'Hot Espresso Coffee',
-    nameRu: 'Горячий кофе Эспрессо',
-    category: 'drink',
-    maxStack: 1,
-    icon: '',
-    description: 'Freshly brewed strong coffee. Dramatically banishes drowsiness and restores stamina.',
-    descriptionRu: 'Крепкий свежесваренный кофе. Эффективно снимает сонливость и возвращает бодрость.',
-    effects: { thirst: 25, energy: 40, sleepiness: -40 },
-    weight: 0.25,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.8,
-    leftoverId: 'cup_disposable',
-    leftoverNameRu: 'Одноразовый стаканчик',
-    fullnessPerBite: 1,
-    tasteMessages: ['Ароматный горячий глоток эспрессо...', 'Крепкий кофе разгоняет сонливость...', 'Тёплый глоток — и голова проясняется...', 'Насыщенный вкус свежей арабики...']
-  },
-  energy_drink: {
-    itemId: 'energy_drink',
-    name: 'Turbo Energy Drink',
-    nameRu: 'Энергетик «Турбо-Драйв»',
-    category: 'drink',
-    maxStack: 1,
-    icon: '',
-    description: 'High-octane taurine and caffeine booster for maximum alertness.',
-    descriptionRu: 'Мощный энергетик с таурином и кофеином для мгновенного снятия усталости.',
-    effects: { thirst: 35, energy: 55, sleepiness: -50, health: -2 },
-    weight: 0.35,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.6,
-    leftoverId: 'energy_can_empty',
-    leftoverNameRu: 'Смятая банка энергетика',
-    fullnessPerBite: 1,
-    tasteMessages: ['Кислый бодрящий вкус таурина...', 'Мощный всплеск кофеина в крови!', 'Взрыв энергии и учащение пульса...', 'Усталость отступает на второй план!']
-  },
-  fresh_juice: {
-    itemId: 'fresh_juice',
-    name: 'Fresh Orange Juice',
-    nameRu: 'Апельсиновый сок',
-    category: 'drink',
-    maxStack: 1,
-    icon: '',
-    description: 'Vitamin C rich citrus juice. Quenches thirst and supports health.',
-    descriptionRu: 'Натуральный сок с витамином C. Отлично утоляет жажду и укрепляет здоровье.',
-    effects: { thirst: 45, hunger: 15, health: 10, energy: 15 },
-    weight: 0.35,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.7,
-    leftoverId: 'juice_box',
-    leftoverNameRu: 'Пустой пакетик от сока',
-    fullnessPerBite: 1,
-    tasteMessages: ['Свежевыжатый цитрусовый вкус!', 'Витамин C бодрит тело...', 'Натуральная сладкая кислинка сока...']
-  },
-
   // === FRESH PRODUCE (СВЕЖИЕ ОВОЩИ И КОРНЕПЛОДЫ) ===
   carrot_fresh: {
     itemId: 'carrot_fresh',
@@ -694,60 +654,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 4
   },
-  painkillers: {
-    itemId: 'painkillers',
-    name: 'Painkiller Tablets',
-    nameRu: 'Обезболивающие таблетки',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Alleviates pain and fatigue, helping restore mobility.',
-    descriptionRu: 'Снимают болевой синдром при авариях и восстанавливают выносливость (10 таблеток в блистере).',
-    effects: { health: 20, energy: 30, sleepiness: 10 },
-    weight: 0.05,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.4,
-    leftoverId: 'pill_pack',
-    leftoverNameRu: 'Пустой блистер из-под таблеток',
-    tasteMessages: ['Таблетка обезболивающего запита водой...', 'Боль постепенно притупляется...', 'Мышечный спазм отпускает...', 'Лекарство начинает действовать...']
-  },
-  morphine: {
-    itemId: 'morphine',
-    name: 'Morphine Ampoule',
-    nameRu: 'Ампула с морфином',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Powerful clinical analgesic for extreme pain, fractures, and severe trauma.',
-    descriptionRu: 'Сильнодействующий рецептурный анальгетик для купирования острой боли, переломов и тяжелых травм.',
-    effects: { health: 30, energy: 20, sleepiness: 15 },
-    weight: 0.05,
-    usable: true,
-    biteCount: 1,
-    biteDuration: 1.2,
-    leftoverId: 'pill_pack',
-    leftoverNameRu: 'Пустая ампула от анальгетика',
-    tasteMessages: ['Введение сильнодействующего анальгетика...', 'Острая боль стремительно угасает...', 'Тепло разливается по телу, снимая болевой шок...']
-  },
-  vitamins: {
-    itemId: 'vitamins',
-    name: 'Multivitamin Complex',
-    nameRu: 'Комплекс витаминов',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Daily essential micronutrients. Improves metabolism and natural healing.',
-    descriptionRu: 'Комплекс микроэлементов (12 драже в баночке). Улучшает самочувствие и бодрость.',
-    effects: { health: 15, energy: 24, sleepiness: -15 },
-    weight: 0.05,
-    usable: true,
-    biteCount: 12,
-    biteDuration: 0.4,
-    leftoverId: 'pill_bottle_empty',
-    leftoverNameRu: 'Пустая баночка от витаминов',
-    tasteMessages: ['Принята витаминка с цитрусовым вкусом...', 'Прилив микроэлементов и тонуса...', 'Иммунитет укрепляется...']
-  },
   splint: {
     itemId: 'splint',
     name: 'Medical Splint',
@@ -761,186 +667,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.4,
     usable: true,
     biteCount: 1
-  },
-  panthenol_spray: {
-    itemId: 'panthenol_spray',
-    name: 'Panthenol Aerosol Foam Spray',
-    nameRu: 'Аэрозоль Пантенол от ожогов',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Specialized burn foam with D-panthenol. Stimulates rapid epidermal regeneration and relieves severe burn pain (10 doses).',
-    descriptionRu: 'Специализированная регенерирующая пена при термических ожогах 1-3 степени. Ускоряет заживление и мгновенно охлаждает (10 применений).',
-    effects: { health: 30 },
-    weight: 0.18,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.6,
-    leftoverId: 'panthenol_empty',
-    leftoverNameRu: 'Пустой баллончик Пантенола',
-    tasteMessages: ['Охлаждающая пена Пантенола покрыла ожог...', 'Боль и саднящее жжение быстро отступают...', 'Защитная пена ускоряет регенерацию кожи...']
-  },
-  spasatel_ointment: {
-    itemId: 'spasatel_ointment',
-    name: 'Rescuer Healing Balm',
-    nameRu: 'Бальзам «Спасатель»',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Natural regenerative balm based on sea buckthorn and propolis for treating burns, wounds and bruises (8 doses).',
-    descriptionRu: 'Натуральный регенерирующий бальзам на основе облепихи и прополиса для ожогов, ран и глубоких ссадин (туба на 8 нанесений).',
-    effects: { health: 25 },
-    weight: 0.08,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.6,
-    leftoverId: 'ointment_tube_empty',
-    leftoverNameRu: 'Пустой тюбик «Спасателя»',
-    tasteMessages: ['Маслянистый бальзам нанесен на поврежденное место...', 'Натуральный прополис и облепиха затягивают рану...']
-  },
-  zelenka: {
-    itemId: 'zelenka',
-    name: 'Brilliant Green Solution (Zelenka)',
-    nameRu: 'Раствор бриллиантового зелёного (Зелёнка)',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Classic pharmacy antiseptic. Dries and sterilizes abrasions and edges of wounds (15 doses).',
-    descriptionRu: 'Народный аптечный антисептик. Прижигает и дезинфицирует раны, ссадины и ожоги (флакон на 15 обработок).',
-    effects: { health: 18 },
-    weight: 0.05,
-    usable: true,
-    biteCount: 15,
-    biteDuration: 0.4,
-    leftoverId: 'zelenka_bottle_empty',
-    leftoverNameRu: 'Пустой пузырек из-под зелёнки',
-    tasteMessages: ['Зелёнка щиплет рану, образуя зеленый защитный слой...', 'Антисептическая дезинфекция завершена...']
-  },
-  iodine: {
-    itemId: 'iodine',
-    name: 'Iodine Tincture 5%',
-    nameRu: 'Раствор йода спиртовой 5%',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Iodine antiseptic. Warms deep bruises and sprains through iodine grid, disinfects cuts (15 doses).',
-    descriptionRu: 'Спиртовой раствор йода. Йодная сетка снимает отек при ушибах и растяжениях, дезинфицирует ссадины (15 применений).',
-    effects: { health: 18 },
-    weight: 0.05,
-    usable: true,
-    biteCount: 15,
-    biteDuration: 0.4,
-    leftoverId: 'iodine_bottle_empty',
-    leftoverNameRu: 'Пустой пузырек из-под йода',
-    tasteMessages: ['Йодная сетка нанесена на место ушиба...', 'Глубокое согревающее действие снимает воспаление...']
-  },
-  diclofenac_gel: {
-    itemId: 'diclofenac_gel',
-    name: 'Diclofenac Anti-Inflammatory Gel',
-    nameRu: 'Гель Диклофенак 5%',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Potent NSAID gel for joint sprains, tendon injuries and muscular pain from impacts (10 doses).',
-    descriptionRu: 'Сильное обезболивающее и противовоспалительное средство при растяжениях связок и ушибах суставов (10 доз).',
-    effects: { health: 20 },
-    weight: 0.09,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.5,
-    leftoverId: 'diclofenac_tube_empty',
-    leftoverNameRu: 'Пустой тюбик Диклофенака',
-    tasteMessages: ['Гель Диклофенак втерт в растянутую связку...', 'Отек и скованность в суставе заметно уменьшаются...']
-  },
-  hydrogen_peroxide: {
-    itemId: 'hydrogen_peroxide',
-    name: 'Hydrogen Peroxide 3%',
-    nameRu: 'Перекись водорода 3%',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Foaming hemostatic antiseptic. Cleans wounds and halts capillary bleeding (12 doses).',
-    descriptionRu: 'Пенообразующий антисептик. Останавливает капиллярное кровотечение и механически вымывает грязь (12 доз).',
-    effects: { health: 22 },
-    weight: 0.1,
-    usable: true,
-    biteCount: 12,
-    biteDuration: 0.5,
-    leftoverId: 'peroxide_bottle_empty',
-    leftoverNameRu: 'Пустой флакон от перекиси',
-    tasteMessages: ['Перекись зашипела и обильно запенилась на ране...', 'Пена смыла загрязнения и остановила кровь!']
-  },
-  ammonia_spirit: {
-    itemId: 'ammonia_spirit',
-    name: 'Ammonia Spirit 10%',
-    nameRu: 'Нашатырный спирт (Аммиак 10%)',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Pungent smelling salts. Instantly stimulates the respiratory center, preventing syncope and shock (20 uses).',
-    descriptionRu: 'Резкий раствор для вдыхания. Мгновенно выводит из полуобморока, снимает шок и сонливость (20 применений).',
-    effects: { energy: 35, sleepiness: -40 },
-    weight: 0.05,
-    usable: true,
-    biteCount: 20,
-    biteDuration: 0.3,
-    leftoverId: 'ammonia_bottle_empty',
-    leftoverNameRu: 'Пустой флакон от нашатыря',
-    tasteMessages: ['Резкий запах аммиака ударил в нос!', 'Дыхание перехватило, зрение мгновенно прояснилось!']
-  },
-  balm_star: {
-    itemId: 'balm_star',
-    name: 'Golden Star Balm (Zvezdochka)',
-    nameRu: 'Бальзам «Золотая Звезда» (Звёздочка)',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Legendary aromatic balm with essential oils. Relieves headaches, clears mind and reduces panic (25 uses).',
-    descriptionRu: 'Легендарный аптечный бальзам с маслами мяты, гвоздики и корицы. Снимает головную боль и успокаивает (25 применений).',
-    effects: { energy: 20, sleepiness: -25 },
-    weight: 0.02,
-    usable: true,
-    biteCount: 25,
-    biteDuration: 0.3,
-    leftoverId: 'star_tin_empty',
-    leftoverNameRu: 'Пустая металлическая баночка «Звёздочки»',
-    tasteMessages: ['Ментол и гвоздика нанесены на виски...', 'Освежающий холодок снимает спазм и головную боль...']
-  },
-  activated_charcoal: {
-    itemId: 'activated_charcoal',
-    name: 'Activated Charcoal Tablets',
-    nameRu: 'Активированный уголь',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Natural enterosorbent. Absorbs stomach toxins, eliminates nausea and indigestion (10 tablets).',
-    descriptionRu: 'Природный сорбент. Связывает токсины в желудочно-кишечном тракте, снимает тошноту и отравление (10 таблеток).',
-    effects: { health: 15 },
-    weight: 0.03,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.4,
-    leftoverId: 'pill_pack',
-    leftoverNameRu: 'Пустой блистер угля',
-    tasteMessages: ['Таблетки черного угля запиты водой...', 'Тошнота и дискомфорт в животе проходят...']
-  },
-  valerian_drops: {
-    itemId: 'valerian_drops',
-    name: 'Valerian Tincture Drops',
-    nameRu: 'Капли настойки валерианы',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Natural sedative tincture. Rapidly lowers heart rate, panic, fear and physical tremor (15 doses).',
-    descriptionRu: 'Натуральное седативное средство. Успокаивает учащенный пульс, снимает страх и панику после аварии (15 доз).',
-    effects: { sleepiness: 15 },
-    weight: 0.05,
-    usable: true,
-    biteCount: 15,
-    biteDuration: 0.4,
-    leftoverId: 'valerian_bottle_empty',
-    leftoverNameRu: 'Пустой флакон от валерианы',
-    tasteMessages: ['Приняты капли валерианы с характерным травяным вкусом...', 'Пульс замедляется, дыхание становится ровным...']
   },
 
   // === TOOLS & VALUABLES (ИНСТРУМЕНТЫ И ЦЕННОСТИ) ===
@@ -1380,35 +1106,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.3,
     usable: true
   },
-  antiseptic: {
-    itemId: 'antiseptic',
-    name: 'Wound Antiseptic',
-    nameRu: 'Антисептик для ран',
-    category: 'med',
-    maxStack: 1,
-    icon: '',
-    description: 'Disinfects deep cuts and scrapes to prevent infection (8 doses).',
-    descriptionRu: 'Обеззараживает глубокие царапины и предотвращает инфекцию (флакон на 8 обработок).',
-    effects: { health: 15 },
-    weight: 0.1,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.5,
-    leftoverId: 'antiseptic_empty',
-    leftoverNameRu: 'Пустой флакон антисептика'},
-  motor_oil: {
-    itemId: 'motor_oil',
-    name: 'Motor Oil Canister',
-    nameRu: 'Канистра моторного масла',
-    category: 'tool',
-    maxStack: 1,
-    icon: '',
-    description: 'High-grade synthetic engine oil for engine protection and smooth operation.',
-    descriptionRu: 'Высококачественное синтетическое масло для защиты двигателя.',
-    effects: {},
-    weight: 1.2,
-    usable: true
-  },
   car_battery: {
     itemId: 'car_battery',
     name: 'Spare Car Battery',
@@ -1451,82 +1148,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 1.2,
     usable: false
   },
-  cappuccino: {
-    itemId: 'cappuccino',
-    name: 'Creamy Cappuccino',
-    nameRu: 'Сливочный Капучино',
-    category: 'drink',
-    maxStack: 1,
-    icon: '',
-    description: 'Delicious coffee with whipped cream. Warms up and restores stamina.',
-    descriptionRu: 'Вкусный кофейный напиток со сливочной пенкой. Согревает и бодрит.',
-    effects: { thirst: 30, energy: 30, sleepiness: -25 },
-    weight: 0.3,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.8,
-    leftoverId: 'cup_disposable',
-    leftoverNameRu: 'Одноразовый стаканчик',
-    fullnessPerBite: 1,
-    tasteMessages: ['Нежная сливочная пенка...', 'Мягкий кофейный вкус...', 'Идеальное утреннее тепло...', 'Сладковатый кофейный аромат...']
-  },
-  soup: {
-    itemId: 'soup',
-    name: 'Hot Chicken Soup',
-    nameRu: 'Горячий куриный бульон',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Warming and highly nutritious soup.',
-    descriptionRu: 'Питательный домашний суп. Отлично согревает.',
-    effects: { hunger: 45, thirst: 15, health: 10, energy: 15 },
-    weight: 0.4,
-    usable: true,
-    biteCount: 12,
-    biteDuration: 0.9,
-    leftoverId: 'soup_bowl_empty',
-    leftoverNameRu: 'Пустая тарелка из-под супа',
-    fullnessPerBite: 3,
-    tasteMessages: ['Горячий куриный бульон согревает...', 'Нежное куриное мясо...', 'Аромат домашней зелени...', 'Ложка наваристого супа...']
-  },
-  cola_zero: {
-    itemId: 'cola_zero',
-    name: 'Cola Zero (Can)',
-    nameRu: 'Кола Зеро (0.33L)',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Sugar-free refreshing iced cola soda.',
-    descriptionRu: 'Освежающая газировка без сахара со льдом.',
-    effects: { thirst: 28, energy: 15 },
-    weight: 0.35,
-    usable: true,
-    biteCount: 7,
-    biteDuration: 0.5,
-    leftoverId: 'cola_zero_empty',
-    leftoverNameRu: 'Смятая банка Колы Зеро',
-    fullnessPerBite: 1,
-    tasteMessages: ['Освежающие шипящие пузырьки...', 'Ледяной вкус Колы...', 'Приятная бодрость без сахара...']
-  },
-  tea_green: {
-    itemId: 'tea_green',
-    name: 'Green Sencha Tea',
-    nameRu: 'Зеленый чай Сенча',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Hot fragrant green tea with antioxidants.',
-    descriptionRu: 'Горячий зеленый чай с антиоксидантами. Снимает стресс и бодрит.',
-    effects: { thirst: 35, energy: 15, health: 5 },
-    weight: 0.3,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.7,
-    leftoverId: 'cup_disposable',
-    leftoverNameRu: 'Бумажный стаканчик',
-    fullnessPerBite: 1,
-    tasteMessages: ['Теплый травяной вкус...', 'Тонкий аромат зеленого чая...', 'Умиротворяющее тепло...']
-  },
   banana: {
     itemId: 'banana',
     name: 'Fresh Banana',
@@ -1565,118 +1186,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     fullnessPerBite: 3,
     tasteMessages: ['Хрустящая корочка свежего хлеба...', 'Мягкий теплый мякиш...']
   },
-  cookie_pack: {
-    itemId: 'cookie_pack',
-    name: 'Chocolate Chip Cookies',
-    nameRu: 'Печенье с шоколадной крошкой',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Sweet cookies with rich Belgian chocolate drops.',
-    descriptionRu: 'Хрустящее печенье с кусочками темного шоколада.',
-    effects: { hunger: 25, energy: 20 },
-    weight: 0.2,
-    usable: true,
-    biteCount: 6,
-    biteDuration: 0.6,
-    leftoverId: 'chips_bag',
-    leftoverNameRu: 'Упаковка от печенья',
-    fullnessPerBite: 2,
-    tasteMessages: ['Хрустящее сладкое печенье...', 'Тающие кусочки шоколада...']
-  },
-  popcorn_caramel: {
-    itemId: 'popcorn_caramel',
-    name: 'Caramel Cinema Popcorn',
-    nameRu: 'Карамельный попкорн',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Crispy sweet popcorn bucket from cinema snack bar.',
-    descriptionRu: 'Большое ведерко сладкого попкорна в золотистой карамели.',
-    effects: { hunger: 25, energy: 18 },
-    weight: 0.2,
-    usable: true,
-    biteCount: 12,
-    biteDuration: 0.4,
-    leftoverId: 'popcorn_bucket',
-    leftoverNameRu: 'Пустое ведерко из-под попкорна',
-    fullnessPerBite: 1,
-    tasteMessages: ['Хрустящие карамельные зерна...', 'Сладкий кинотеатральный вкус!']
-  },
-  nachos: {
-    itemId: 'nachos',
-    name: 'Cheese Nachos',
-    nameRu: 'Начос с сырным соусом',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Crispy Mexican corn tortilla chips with warm cheddar dip.',
-    descriptionRu: 'Хрустящие кукурузные чипсы начос с теплым сырным соусом чеддер.',
-    effects: { hunger: 32, energy: 15 },
-    weight: 0.25,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.5,
-    leftoverId: 'nachos_tray_empty',
-    leftoverNameRu: 'Лоток из-под начос',
-    fullnessPerBite: 2,
-    tasteMessages: ['Хрустящий кукурузный начос...', 'Пикантный сырный соус чеддер!']
-  },
 
   // === NEW PHARMACY ITEMS ===
-  antipyretic: {
-    itemId: 'antipyretic',
-    name: 'Antipyretic Fever Reducer',
-    nameRu: 'Жаропонижающее "Парацетамол"',
-    category: 'medical',
-    maxStack: 1,
-    icon: '',
-    description: 'Reduces fever and stabilizes core body temperature.',
-    descriptionRu: 'Снижает температуру, устраняет озноб и жар при простуде.',
-    effects: { health: 15 },
-    weight: 0.05,
-    usable: true,
-    biteCount: 6,
-    biteDuration: 0.5,
-    leftoverId: 'pill_pack',
-    leftoverNameRu: 'Пустой блистер жаропонижающего',
-    fullnessPerBite: 0,
-    tasteMessages: ['Таблетка жаропонижающего снижает температуру...']
-  },
-  eye_drops: {
-    itemId: 'eye_drops',
-    name: 'Moisturizing Eye Drops',
-    nameRu: 'Глазные капли "Чистый Взор"',
-    category: 'medical',
-    maxStack: 1,
-    icon: '',
-    description: 'Relieves eye strain and clears vision fatigue.',
-    descriptionRu: 'Снимает сухость и усталость глаз, восстанавливает четкость зрения.',
-    effects: { energy: 10, health: 5 },
-    weight: 0.04,
-    usable: true,
-    biteCount: 8,
-    biteDuration: 0.4,
-    fullnessPerBite: 0,
-    tasteMessages: ['Капли увлажняют глаза, зрение становится кристально четким!']
-  },
-  medical_patch: {
-    itemId: 'medical_patch',
-    name: 'Adhesive Plaster Pack',
-    nameRu: 'Набор бактерицидных пластырей',
-    category: 'medical',
-    maxStack: 1,
-    icon: '',
-    description: 'Protective plaster for small scratches and blisters.',
-    descriptionRu: 'Быстро заклеивает порезы и царапины, предотвращая попадание грязи.',
-    effects: { health: 10 },
-    weight: 0.02,
-    usable: true,
-    biteCount: 5,
-    biteDuration: 0.5,
-    fullnessPerBite: 0,
-    tasteMessages: ['Пластырь надежно защищает поврежденную кожу.']
-  },
   thermometer: {
     itemId: 'thermometer',
     name: 'Digital Medical Thermometer',
@@ -2092,37 +1603,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.08,
     usable: false
   },
-  fuel_canister: {
-    itemId: 'fuel_canister',
-    name: 'Gasoline Canister (20L)',
-    nameRu: 'Канистра с бензином (20л)',
-    category: 'tool',
-    maxStack: 1,
-    icon: '',
-    description: 'Heavy metal canister filled with A-95 gasoline (20L). Heavy and bulky: must be carried in hand or vehicle trunk.',
-    descriptionRu: 'Тяжелая металлическая канистра с бензином АИ-95 (20л). Слишком крупная для рюкзака — переносится в руке.',
-    effects: {},
-    weight: 16.5,
-    volume: 20.0,
-    usable: true,
-    biteCount: 20,
-    biteDuration: 0.3,
-    leftoverId: 'canister_empty',
-    leftoverNameRu: 'Пустая канистра (20л)'},
-  canister_empty: {
-    itemId: 'canister_empty',
-    name: 'Empty Canister (20L)',
-    nameRu: 'Пустая канистра (20л)',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty 20-liter metal canister. Bulky item carried in hand. Can be filled from cisterns or fuel tanks.',
-    descriptionRu: 'Пустая металлическая 20-литровая канистра. Можно наполнить из цистерны или бака.',
-    effects: {},
-    weight: 2.5,
-    volume: 20.0,
-    usable: true
-  },
   sandbag: {
     itemId: 'sandbag',
     name: 'Bag of Sand (1kg)',
@@ -2256,45 +1736,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
 
   // === NEW AUTO GOODS ===
-  antifreeze: {
-    itemId: 'antifreeze',
-    name: 'G12+ Coolant Antifreeze (5L)',
-    nameRu: 'Канистра антифриза G12+',
-    category: 'auto',
-    maxStack: 1,
-    icon: '',
-    description: 'High performance engine coolant prevents overheating and freezing.',
-    descriptionRu: 'Охлаждающая жидкость для радиатора. Предотвращает перегрев двигателя.',
-    effects: {},
-    weight: 5.2,
-    usable: false
-  },
-  antifreeze_empty: {
-    itemId: 'antifreeze_empty',
-    name: 'Empty Coolant Canister',
-    nameRu: 'Пустая канистра от антифриза',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty plastic canister for G12+ antifreeze.',
-    descriptionRu: 'Пустая пластиковая канистра из-под антифриза.',
-    effects: {},
-    weight: 0.3,
-    usable: false
-  },
-  motor_oil_empty: {
-    itemId: 'motor_oil_empty',
-    name: 'Empty Oil Canister',
-    nameRu: 'Пустая канистра из-под масла',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty plastic canister from engine oil.',
-    descriptionRu: 'Пустая пластиковая канистра из-под моторного масла.',
-    effects: {},
-    weight: 0.25,
-    usable: false
-  },
   tow_rope: {
     itemId: 'tow_rope',
     name: 'Reinforced Towing Rope (5T)',
@@ -2323,19 +1764,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.03,
     usable: false
   },
-  popcorn_bucket: {
-    itemId: 'popcorn_bucket',
-    name: 'Empty Popcorn Bucket',
-    nameRu: 'Ведерко от попкорна',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Striped cardboard cinema popcorn bucket.',
-    descriptionRu: 'Полосатое картонное ведерко из-под попкорна.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
   apple_core: {
     itemId: 'apple_core',
     name: 'Apple Core',
@@ -2345,188 +1773,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     icon: '',
     description: 'Brown oxidized apple core. Throw in trash.',
     descriptionRu: 'Бурый окислившийся огрызок. Выбросьте в урну.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
-  chips_bag: {
-    itemId: 'chips_bag',
-    name: 'Empty Chips Bag',
-    nameRu: 'Пустой пакет от чипсов',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Crinkled empty potato chips bag.',
-    descriptionRu: 'Мятый пустой пакет от картофельных чипсов.',
-    effects: {},
-    weight: 0.005,
-    usable: false
-  },
-  can_empty: {
-    itemId: 'can_empty',
-    name: 'Empty Can',
-    nameRu: 'Пустая жестяная банка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty crushed tin can.',
-    descriptionRu: 'Пустая сплющенная жестяная банка.',
-    effects: {},
-    weight: 0.03,
-    usable: false
-  },
-  bottle_empty: {
-    itemId: 'bottle_empty',
-    name: 'Empty Bottle',
-    nameRu: 'Пустая пластиковая бутылка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty clear plastic water bottle.',
-    descriptionRu: 'Пустая прозрачная пластиковая бутылка.',
-    effects: {},
-    weight: 0.015,
-    usable: false
-  },
-  cup_disposable: {
-    itemId: 'cup_disposable',
-    name: 'Disposable Cup',
-    nameRu: 'Одноразовый стаканчик',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty paper coffee cup.',
-    descriptionRu: 'Пустой бумажный стаканчик из-под кофе.',
-    effects: {},
-    weight: 0.01,
-    usable: false
-  },
-  juice_box: {
-    itemId: 'juice_box',
-    name: 'Empty Juice Box',
-    nameRu: 'Пустой пакетик от сока',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty tetra pak juice container.',
-    descriptionRu: 'Пустой тетрапак от апельсинового сока.',
-    effects: {},
-    weight: 0.01,
-    usable: false
-  },
-  pill_pack: {
-    itemId: 'pill_pack',
-    name: 'Blister Pack',
-    nameRu: 'Блистер из-под таблеток',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty medicine blister pack.',
-    descriptionRu: 'Пустой блистер из-под лекарства.',
-    effects: {},
-    weight: 0.005,
-    usable: false
-  },
-  tin_can_empty: {
-    itemId: 'tin_can_empty',
-    name: 'Empty Stew Can',
-    nameRu: 'Банка из-под тушёнки',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty tin can with curled lid.',
-    descriptionRu: 'Пустая жестяная консервная банка с отогнутой крышкой.',
-    effects: {},
-    weight: 0.04,
-    usable: false
-  },
-  cola_zero_empty: {
-    itemId: 'cola_zero_empty',
-    name: 'Crushed Cola Zero Can',
-    nameRu: 'Смятая банка Колы Зеро',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Crushed black aluminum cola can.',
-    descriptionRu: 'Смятая черная алюминиевая банка из-под диетической колы.',
-    effects: {},
-    weight: 0.015,
-    usable: false
-  },
-  energy_can_empty: {
-    itemId: 'energy_can_empty',
-    name: 'Crushed Energy Drink Can',
-    nameRu: 'Смятая банка энергетика',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Crushed navy energy drink can with open pull tab.',
-    descriptionRu: 'Смятая синяя банка из-под энергетического напитка.',
-    effects: {},
-    weight: 0.015,
-    usable: false
-  },
-  camp_flask_empty: {
-    itemId: 'camp_flask_empty',
-    name: 'Empty Steel Flask',
-    nameRu: 'Пустая стальная фляга',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty stainless steel hip flask with dangling cap.',
-    descriptionRu: 'Пустая походная металлическая фляга с отвинченной крышкой.',
-    effects: {},
-    weight: 0.25,
-    usable: false
-  },
-  soup_bowl_empty: {
-    itemId: 'soup_bowl_empty',
-    name: 'Empty Soup Bowl',
-    nameRu: 'Пустая суповая тарелка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty ceramic bowl with spoon and broth sheen.',
-    descriptionRu: 'Пустая глубокая тарелка из-под горячего бульона с ложкой.',
-    effects: {},
-    weight: 0.15,
-    usable: false
-  },
-  nachos_tray_empty: {
-    itemId: 'nachos_tray_empty',
-    name: 'Empty Nachos Boat',
-    nameRu: 'Лоток из-под начос',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Cardboard boat with cheese dip residue.',
-    descriptionRu: 'Картонный лоток из-под чипсов начос с пустым соусником.',
-    effects: {},
-    weight: 0.015,
-    usable: false
-  },
-  pill_bottle_empty: {
-    itemId: 'pill_bottle_empty',
-    name: 'Empty Vitamin Bottle',
-    nameRu: 'Пустая баночка от витаминов',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty amber pill bottle with open cap.',
-    descriptionRu: 'Пустая янтарная пластиковая баночка из-под поливитаминов.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
-  antiseptic_empty: {
-    itemId: 'antiseptic_empty',
-    name: 'Empty Antiseptic Spray',
-    nameRu: 'Пустой флакон антисептика',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Depleted green antiseptic spray bottle.',
-    descriptionRu: 'Пустой зеленый флакон с распылителем от антисептика.',
     effects: {},
     weight: 0.02,
     usable: false
@@ -2549,34 +1795,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxContainedItemVolumeL: 2.0,
     maxContainedWeightKg: 5.0,
     allowedItemCategories: ['med', 'medical', 'misc']
-  },
-
-  // === GENERIC OPENED PACKAGING & TRASH ===
-  tray_plastic_empty: {
-    itemId: 'tray_plastic_empty',
-    name: 'Open Plastic Food Tray',
-    nameRu: 'Открытый пластиковый лоток',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Empty opened food tray.',
-    descriptionRu: 'Пустой открытый пластиковый лоток от продуктов.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
-  vacuum_pack_torn: {
-    itemId: 'vacuum_pack_torn',
-    name: 'Opened Vacuum Pouch',
-    nameRu: 'Вскрытая вакуумная упаковка',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened vacuum pouch wrapper.',
-    descriptionRu: 'Вскрытая вакуумная упаковка.',
-    effects: {},
-    weight: 0.01,
-    usable: false
   },
 
   // === SINGLE-PIECE UNBOXED FOOD ITEMS ===
@@ -2651,238 +1869,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: {},
     weight: 0.1,
     usable: false
-  },
-  washer_fluid: {
-    itemId: 'washer_fluid',
-    name: 'Windshield Washer Fluid (-25°C)',
-    nameRu: 'Стеклоомыватель зимний (-25°C)',
-    category: 'auto',
-    maxStack: 1,
-    icon: '',
-    description: '5L frost-resistant windshield washer fluid canister.',
-    descriptionRu: 'Канистра зимней незамерзающей жидкости (5 л) для бачка омывателя стекол.',
-    effects: {},
-    weight: 5.1,
-    volume: 5.2,
-    usable: true
-  },
-  kvas: {
-    itemId: 'kvas',
-    name: 'Traditional Bread Kvas (1.5L)',
-    nameRu: 'Хлебный квас "Старорусский" (1.5L)',
-    category: 'drink',
-    maxStack: 1,
-    icon: '',
-    description: 'Refreshing fermented rye bread beverage in 1.5L PET bottle.',
-    descriptionRu: 'Традиционный хлебный квас живого брожения в пластиковой бутылке 1.5 л.',
-    effects: { thirst: 50, hunger: 20, energy: 15 },
-    weight: 1.55,
-    volume: 1.6,
-    usable: true,
-    portions: 5,
-    maxPortions: 5,
-    leftoverId: 'bottle_plastic_1500'
-  },
-  cola: {
-    itemId: 'cola',
-    name: 'Classic Cola Can (0.33L)',
-    nameRu: 'Баночка Колы (0.33L)',
-    category: 'drink',
-    maxStack: 4,
-    icon: '',
-    description: 'Chilled carbonated cola soda in aluminum can.',
-    descriptionRu: 'Алюминиевая банка сильногазированной сладкой колы (0.33 л).',
-    effects: { thirst: 30, energy: 15 },
-    weight: 0.35,
-    volume: 0.35,
-    usable: true,
-    portions: 1,
-    maxPortions: 1,
-    leftoverId: 'can_empty'
-  },
-  beer: {
-    itemId: 'beer',
-    name: 'Lager Beer Can (0.5L)',
-    nameRu: 'Пиво светлое фильтрованное (0.5L)',
-    category: 'drink',
-    maxStack: 4,
-    icon: '',
-    description: 'Cold premium lager beer 4.8% in aluminum can.',
-    descriptionRu: 'Банка светлого ячменного лагера (0.5 л) 4.8% крепости.',
-    effects: { thirst: 25, energy: -10, sleepiness: 15 },
-    weight: 0.52,
-    volume: 0.52,
-    usable: true,
-    portions: 2,
-    maxPortions: 2,
-    leftoverId: 'can_empty'
-  },
-  canned_fish: {
-    itemId: 'canned_fish',
-    name: 'Canned Baltic Sprats in Oil',
-    nameRu: 'Рыбные консервы в масле (0.15L)',
-    category: 'food',
-    maxStack: 4,
-    icon: '',
-    description: 'Smoked Baltic sprats in vegetable oil with key pull.',
-    descriptionRu: 'Балтийские шпроты в ароматном масле в жестяной банке с ключом.',
-    effects: { hunger: 65, health: 10 },
-    weight: 0.18,
-    volume: 0.2,
-    usable: true,
-    portions: 2,
-    maxPortions: 2,
-    leftoverId: 'tin_can_empty'
-  },
-  condensed_milk: {
-    itemId: 'condensed_milk',
-    name: 'Sweetened Condensed Milk',
-    nameRu: 'Сгущённое молоко цельное (0.4L)',
-    category: 'food',
-    maxStack: 4,
-    icon: '',
-    description: 'Classic GOST whole condensed milk with sugar.',
-    descriptionRu: 'Цельное сгущенное молоко с сахаром по ГОСТ в жестяной банке.',
-    effects: { hunger: 50, energy: 35 },
-    weight: 0.42,
-    volume: 0.4,
-    usable: true,
-    portions: 3,
-    maxPortions: 3,
-    leftoverId: 'tin_can_empty'
-  },
-  jar_pickles: {
-    itemId: 'jar_pickles',
-    name: 'Pickled Cucumbers Jar (0.5L)',
-    nameRu: 'Огурчики маринованные в банке (0.5L)',
-    category: 'food',
-    maxStack: 2,
-    icon: '',
-    description: 'Crisp gherkins in aromatic dill and garlic brine.',
-    descriptionRu: 'Стеклянная банка хрустящих маринованных огурчиков с укропом и чесноком.',
-    effects: { hunger: 30, thirst: 30, health: 5 },
-    weight: 0.85,
-    volume: 0.6,
-    usable: true,
-    portions: 4,
-    maxPortions: 4,
-    leftoverId: 'jar_glass_medium'
-  },
-  jam_raspberry: {
-    itemId: 'jam_raspberry',
-    name: 'Raspberry Jam Jar (0.2L)',
-    nameRu: 'Малиновое варенье в банке (0.2L)',
-    category: 'food',
-    maxStack: 2,
-    icon: '',
-    description: 'Natural sweet raspberry preserves with whole berries.',
-    descriptionRu: 'Домашнее варенье из спелой садовой малины в баночке с винтовой крышкой.',
-    effects: { hunger: 42, health: 15, energy: 20 },
-    weight: 0.38,
-    volume: 0.25,
-    usable: true,
-    portions: 4,
-    maxPortions: 4,
-    leftoverId: 'jar_glass_small'
-  },
-  jam_strawberry: {
-    itemId: 'jam_strawberry',
-    name: 'Strawberry Jam Jar (0.2L)',
-    nameRu: 'Клубничный джем в стекле (0.2L)',
-    category: 'food',
-    maxStack: 2,
-    icon: '',
-    description: 'Delicious ripe strawberry fruit jam.',
-    descriptionRu: 'Сладкий клубничный джем в стеклянной баночке.',
-    effects: { hunger: 42, health: 10, energy: 20 },
-    weight: 0.38,
-    volume: 0.25,
-    usable: true,
-    portions: 4,
-    maxPortions: 4,
-    leftoverId: 'jar_glass_small'
-  },
-  jar_honey: {
-    itemId: 'jar_honey',
-    name: 'Pure Flower Honey (0.2L)',
-    nameRu: 'Натуральный цветочный мёд (0.2L)',
-    category: 'food',
-    maxStack: 2,
-    icon: '',
-    description: 'Golden linden and meadow floral honey.',
-    descriptionRu: 'Натуральный янтарный липовый мёд в стеклянной баночке.',
-    effects: { hunger: 45, health: 20, energy: 30 },
-    weight: 0.42,
-    volume: 0.25,
-    usable: true,
-    portions: 4,
-    maxPortions: 4,
-    leftoverId: 'jar_glass_small'
-  },
-  caviar_squash_jar: {
-    itemId: 'caviar_squash_jar',
-    name: 'Squash Caviar Jar (0.5L)',
-    nameRu: 'Кабачковая икра в банке (0.5L)',
-    category: 'food',
-    maxStack: 2,
-    icon: '',
-    description: 'Smooth cooked vegetable spread with carrots and tomatoes.',
-    descriptionRu: 'Нежная обжаренная кабачковая икра по-домашнему в стекле.',
-    effects: { hunger: 45, health: 10 },
-    weight: 0.8,
-    volume: 0.55,
-    usable: true,
-    portions: 3,
-    maxPortions: 3,
-    leftoverId: 'jar_glass_medium'
-  },
-  caviar_eggplant_jar: {
-    itemId: 'caviar_eggplant_jar',
-    name: 'Eggplant Caviar Jar (0.5L)',
-    nameRu: 'Баклажанная икра в банке (0.5L)',
-    category: 'food',
-    maxStack: 2,
-    icon: '',
-    description: 'Roasted eggplant spread with garlic and herbs.',
-    descriptionRu: 'Пикантная баклажанная икра с чесноком и специями.',
-    effects: { hunger: 48, health: 10 },
-    weight: 0.8,
-    volume: 0.55,
-    usable: true,
-    portions: 3,
-    maxPortions: 3,
-    leftoverId: 'jar_glass_medium'
-  },
-  carton_milk: {
-    itemId: 'carton_milk',
-    name: 'Pasteurized Milk 3.2% (1.0L)',
-    nameRu: 'Молоко пастеризованное 3.2% (1.0L)',
-    category: 'drink',
-    maxStack: 2,
-    icon: '',
-    description: '1.0L carton of pasteurized whole milk.',
-    descriptionRu: 'Пакет питьевого пастеризованного молока 3.2% жирности (1.0 л).',
-    effects: { thirst: 35, hunger: 20 },
-    weight: 1.05,
-    volume: 1.0,
-    usable: true,
-    portions: 3,
-    maxPortions: 3,
-    leftoverId: 'juice_box'
-  },
-  sugar: {
-    itemId: 'sugar',
-    name: 'Refined White Sugar (1kg)',
-    nameRu: 'Сахар-песок в пакете (1 кг)',
-    category: 'food',
-    maxStack: 2,
-    icon: '',
-    description: '1 kg paper bag of pure refined granulated sugar.',
-    descriptionRu: 'Пакет белоснежного кристального сахара-песка (1 кг).',
-    effects: { hunger: 10, energy: 30 },
-    weight: 1.02,
-    volume: 1.1,
-    usable: true
   },
   phone_retro: {
     itemId: 'phone_retro',
@@ -3014,124 +2000,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.15,
     usable: false
   },
-  panthenol_empty: {
-    itemId: 'panthenol_empty',
-    name: 'Empty Panthenol Spray Can',
-    nameRu: 'Пустой баллончик Пантенола',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty aluminum spray canister from panthenol burn foam.',
-    descriptionRu: 'Пустой алюминиевый баллончик из-под пены Пантенол.',
-    effects: {},
-    weight: 0.05,
-    usable: false
-  },
-  ointment_tube_empty: {
-    itemId: 'ointment_tube_empty',
-    name: 'Empty Ointment Tube',
-    nameRu: 'Пустой тюбик мази',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty squeezed metal tube from healing ointment.',
-    descriptionRu: 'Смятый пустой металлический тюбик из-под мази «Спасатель».',
-    effects: {},
-    weight: 0.01,
-    usable: false
-  },
-  zelenka_bottle_empty: {
-    itemId: 'zelenka_bottle_empty',
-    name: 'Empty Zelenka Vial',
-    nameRu: 'Пустой флакон зелёнки',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty glass vial with emerald green crust on rim.',
-    descriptionRu: 'Пустой стеклянный флакончик со следами бриллиантового зеленого.',
-    effects: {},
-    weight: 0.03,
-    usable: false
-  },
-  iodine_bottle_empty: {
-    itemId: 'iodine_bottle_empty',
-    name: 'Empty Iodine Vial',
-    nameRu: 'Пустой флакон йода',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty amber glass vial from iodine disinfectant.',
-    descriptionRu: 'Пустой флакон из темного стекла со следами раствора йода.',
-    effects: {},
-    weight: 0.03,
-    usable: false
-  },
-  diclofenac_tube_empty: {
-    itemId: 'diclofenac_tube_empty',
-    name: 'Empty Diclofenac Gel Tube',
-    nameRu: 'Пустой тюбик Диклофенака',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Rolled up empty tube from anti-inflammatory gel.',
-    descriptionRu: 'Свернутый пустой тюбик из-под геля Диклофенак.',
-    effects: {},
-    weight: 0.015,
-    usable: false
-  },
-  peroxide_bottle_empty: {
-    itemId: 'peroxide_bottle_empty',
-    name: 'Empty Peroxide Bottle',
-    nameRu: 'Пустой флакон перекиси',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty white plastic hydrogen peroxide dispenser bottle.',
-    descriptionRu: 'Пустой белый полиэтиленовый флакон из-под перекиси водорода.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
-  ammonia_bottle_empty: {
-    itemId: 'ammonia_bottle_empty',
-    name: 'Empty Ammonia Spirit Vial',
-    nameRu: 'Пустой флакон нашатыря',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty miniature glass vial from 10% ammonia spirit.',
-    descriptionRu: 'Пустой стеклянный флакончик из-под нашатырного спирта.',
-    effects: {},
-    weight: 0.025,
-    usable: false
-  },
-  star_tin_empty: {
-    itemId: 'star_tin_empty',
-    name: 'Empty Golden Star Balm Tin',
-    nameRu: 'Пустая баночка «Звёздочки»',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty tiny red circular tin from aromatic herbal balm.',
-    descriptionRu: 'Крошечная пустая круглая жестяная баночка из-под бальзама «Золотая Звезда».',
-    effects: {},
-    weight: 0.005,
-    usable: false
-  },
-  valerian_bottle_empty: {
-    itemId: 'valerian_bottle_empty',
-    name: 'Empty Valerian Drops Bottle',
-    nameRu: 'Пустой флакон валерьянки',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Empty brown glass dropper bottle from soothing valerian drops.',
-    descriptionRu: 'Пустой коричневый стеклянный флакон-капельница из-под настойки валерианы.',
-    effects: {},
-    weight: 0.03,
-    usable: false
-  },
-
   // === UNIFIED FLUID & BULK CONTAINERS (УНИФИЦИРОВАННАЯ ТАРА) ===
   bottle_plastic_500: {
     itemId: 'bottle_plastic_500',
@@ -3498,8 +2366,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Airtight sealed vacuum pouch preserving peeled produce, cuts, and portions. Tears open upon unpacking.',
-    descriptionRu: 'Герметичный вакуумный пакет из плотной барьерной пленки. Сохраняет свежесть продуктов. При вскрытии разрывается.',
+    description: 'Airtight sealed vacuum pouch preserving peeled produce, cuts, and portions.',
+    descriptionRu: 'Герметичный вакуумный пакет из плотной барьерной пленки. Сохраняет свежесть продуктов.',
     effects: {},
     weight: 0.005,
     volume: 0.05,
@@ -3507,25 +2375,9 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     isContainer: true,
     singleUseContainer: true,
     isTransparentPackaging: true,
-    tornItemId: 'vacuum_pack_small_torn',
     containerCapacityL: 0.6,
     maxContainedItemVolumeL: 0.5,
     maxContainedWeightKg: 2.0
-  },
-  vacuum_pack_small_torn: {
-    itemId: 'vacuum_pack_small_torn',
-    name: 'Torn Vacuum Pouch (0.5L)',
-    nameRu: 'Вскрытый вакуумный пакет',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Torn disposable vacuum plastic pouch leftover. Household trash.',
-    descriptionRu: 'Разорванный полимерный вакуумный пакет с надорванным швом. Бытовой мусор / вторсырье.',
-    effects: {},
-    weight: 0.005,
-    volume: 0.02,
-    usable: false,
-    isContainer: false
   },
   vacuum_pack_medium: {
     itemId: 'vacuum_pack_medium',
@@ -3543,25 +2395,9 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     isContainer: true,
     singleUseContainer: true,
     isTransparentPackaging: true,
-    tornItemId: 'vacuum_pack_medium_torn',
     containerCapacityL: 1.5,
     maxContainedItemVolumeL: 1.2,
     maxContainedWeightKg: 4.0
-  },
-  vacuum_pack_medium_torn: {
-    itemId: 'vacuum_pack_medium_torn',
-    name: 'Torn Vacuum Pouch (1.2L)',
-    nameRu: 'Вскрытый вакуум-пакет (1.2L)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Torn vacuum plastic film leftover.',
-    descriptionRu: 'Вскрытая плотная вакуумная упаковка. Утилизируется в урну.',
-    effects: {},
-    weight: 0.01,
-    volume: 0.03,
-    usable: false,
-    isContainer: false
   },
   vacuum_pack_large: {
     itemId: 'vacuum_pack_large',
@@ -3579,25 +2415,9 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     isContainer: true,
     singleUseContainer: true,
     isTransparentPackaging: true,
-    tornItemId: 'vacuum_pack_large_torn',
     containerCapacityL: 3.0,
     maxContainedItemVolumeL: 2.5,
     maxContainedWeightKg: 8.0
-  },
-  vacuum_pack_large_torn: {
-    itemId: 'vacuum_pack_large_torn',
-    name: 'Torn Large Vacuum Bag',
-    nameRu: 'Вскрытый большой вакуум-пакет',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Ripped large vacuum polymer sack.',
-    descriptionRu: 'Разорванный крупный вакуумный пакет. Утиль.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.05,
-    usable: false,
-    isContainer: false
   },
   tray_sealed_food: {
     itemId: 'tray_sealed_food',
@@ -3615,25 +2435,9 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     isContainer: true,
     singleUseContainer: true,
     isTransparentPackaging: true,
-    tornItemId: 'tray_sealed_food_torn',
     containerCapacityL: 1.2,
     maxContainedItemVolumeL: 1.0,
     maxContainedWeightKg: 3.0
-  },
-  tray_sealed_food_torn: {
-    itemId: 'tray_sealed_food_torn',
-    name: 'Opened Food Tray',
-    nameRu: 'Вскрытый пищевой лоток',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Empty plastic food tray with peeled-off film.',
-    descriptionRu: 'Пустой пластиковый лоток со снятой защитной пленкой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.2,
-    usable: false,
-    isContainer: false
   },
   pouch_sealed_snack: {
     itemId: 'pouch_sealed_snack',
@@ -3651,25 +2455,9 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     isContainer: true,
     singleUseContainer: true,
     isTransparentPackaging: true,
-    tornItemId: 'pouch_sealed_snack_torn',
     containerCapacityL: 0.8,
     maxContainedItemVolumeL: 0.7,
     maxContainedWeightKg: 2.0
-  },
-  pouch_sealed_snack_torn: {
-    itemId: 'pouch_sealed_snack_torn',
-    name: 'Torn Snack Doypack',
-    nameRu: 'Вскрытый дой-пак',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened empty doypack snack pouch.',
-    descriptionRu: 'Вскрытый пустой пакет-дойпак с оторванной верхней кромкой.',
-    effects: {},
-    weight: 0.015,
-    volume: 0.03,
-    usable: false,
-    isContainer: false
   },
   soup_bowl: {
     itemId: 'soup_bowl',
@@ -3686,9 +2474,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true
   },
 
-  // === KRAFT PAPER PACKAGING & TAKEOUT WOK BOXES (БУМАЖНАЯ УПАКОВКА С ЦВЕТНОЙ ЭТИКЕТКОЙ) ===
   // === FACTORY WRAPPED PAPER PACKAGING (ЗАВОДСКАЯ БУМАЖНАЯ УПАКОВКА ДЛЯ МАСЛА, СЫРА И ПРОДУКТОВ) ===
-  // 1. MINI (МИНИ 0.4L) - 1st smaller size (порционный брикет / сырок)
   paper_packaging_mini: {
     itemId: 'paper_packaging_mini',
     name: 'Mini Paper Packaging (0.4L)',
@@ -3696,7 +2482,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Factory-wrapped miniature parchment paper block with sealed envelope folds and branded color label. Ideal for small portion butter, curd bars, or cheese snacks.',
+    description: 'Factory-wrapped miniature parchment paper block with sealed envelope folds and branded color label.',
     descriptionRu: 'Заводская пергаментная упаковка (мини-брикет 0.4L) с конвертными складками и цветной этикеткой-пломбой. Отлично подходит для порционного масла, деликатесов и сырков. Нажмите [E] для вскрытия.',
     effects: {},
     weight: 0.01,
@@ -3704,7 +2490,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'paper_packaging_mini_open',
     containerCapacityL: 0.45,
     maxContainedItemVolumeL: 0.4,
     maxContainedWeightKg: 0.8,
@@ -3714,29 +2499,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     heatRetention: 0.75,
     heatLossRate: 0.02
   },
-  paper_packaging_mini_open: {
-    itemId: 'paper_packaging_mini_open',
-    name: 'Open Mini Paper Packaging',
-    nameRu: 'Открытая бумажная упаковка (Мини)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Unfolded miniature factory parchment paper wrapper with creased flaps and waxy grease imprint.',
-    descriptionRu: 'Развернутая мини-обертка из пищевого пергамента со складками и масляным оттиском. Удобна для хранения мелочей.',
-    effects: {},
-    weight: 0.01,
-    volume: 0.09,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 0.45,
-    maxContainedItemVolumeL: 0.4,
-    maxContainedWeightKg: 0.8,
-    labelColor: '#e11d48',
-    packagingSize: 'mini'
-  },
-
-  // 2. SMALL (МАЛАЯ 0.8L) - 2nd smaller size (стандартный брикет масла 180-200г / сыр)
   paper_packaging_small: {
     itemId: 'paper_packaging_small',
     name: 'Small Paper Packaging (0.8L)',
@@ -3744,7 +2506,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Standard factory greaseproof butter wrapper (0.8L) with authentic envelope tuck folds, embossed measurement marks, and branded label band.',
+    description: 'Standard factory greaseproof butter wrapper (0.8L) with authentic envelope tuck folds and branded label band.',
     descriptionRu: 'Классическая заводская бумажная упаковка (брикет 0.8L) из подпергамента с аккуратными складками-конвертом и цветной этикеткой. Стандарт для сливочного масла и сыра. Нажмите [E] для вскрытия.',
     effects: {},
     weight: 0.015,
@@ -3752,7 +2514,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'paper_packaging_small_open',
     containerCapacityL: 0.85,
     maxContainedItemVolumeL: 0.75,
     maxContainedWeightKg: 1.6,
@@ -3762,29 +2523,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     heatRetention: 0.75,
     heatLossRate: 0.018
   },
-  paper_packaging_small_open: {
-    itemId: 'paper_packaging_small_open',
-    name: 'Open Small Paper Packaging',
-    nameRu: 'Открытая бумажная упаковка (Малая)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Unfolded small factory paper wrapper with torn label, grease imprint and creased side flaps.',
-    descriptionRu: 'Развернутая малая пергаментная обертка с надорванной этикеткой, масляным следом от бруска и замятыми уголками.',
-    effects: {},
-    weight: 0.015,
-    volume: 0.16,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 0.85,
-    maxContainedItemVolumeL: 0.75,
-    maxContainedWeightKg: 1.6,
-    labelColor: '#e11d48',
-    packagingSize: 'small'
-  },
-
-  // 3. MEDIUM / STANDARD (СТАНДАРТ 1.2L) - брусок сыра / семейная пачка
   paper_packaging: {
     itemId: 'paper_packaging',
     name: 'Paper Packaging',
@@ -3792,7 +2530,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Factory-wrapped rectangular brick in durable greaseproof food paper. Sealed with folded side envelope corners and a printed brand label band. Press [E] in hands or use to unwrap.',
+    description: 'Factory-wrapped rectangular brick in durable greaseproof food paper. Sealed with folded side envelope corners and a printed brand label band.',
     descriptionRu: 'Заводская бумажная упаковка (пергаментная обертка брикета) со сложенными конвертом краями и фирменной цветной этикеткой-лентой. Надежно защищает масло и сыр. Нажмите [E] в руках или используйте для вскрытия.',
     effects: {},
     weight: 0.02,
@@ -3800,7 +2538,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'paper_packaging_open',
     containerCapacityL: 1.2,
     maxContainedItemVolumeL: 1.0,
     maxContainedWeightKg: 2.5,
@@ -3810,29 +2547,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     heatRetention: 0.75,
     heatLossRate: 0.015
   },
-  paper_packaging_open: {
-    itemId: 'paper_packaging_open',
-    name: 'Open Paper Packaging',
-    nameRu: 'Открытая бумажная упаковка',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Unwrapped factory parchment paper with torn printed label band, creased envelope wings, and greasy butter/cheese imprint. Reusable paper bed.',
-    descriptionRu: 'Развернутая заводская бумажная обертка с разорванной цветной этикеткой, распахнутыми уголками и масляным оттиском от продукта.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.25,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#e11d48',
-    packagingSize: 'medium'
-  },
-
-  // 4. LARGE (БОЛЬШАЯ 2.4L) - 1 larger size (крупный блок сыра / весовой брус)
   paper_packaging_large: {
     itemId: 'paper_packaging_large',
     name: 'Large Paper Packaging (2.4L)',
@@ -3848,7 +2562,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'paper_packaging_large_open',
     containerCapacityL: 2.6,
     maxContainedItemVolumeL: 2.3,
     maxContainedWeightKg: 5.0,
@@ -3858,276 +2571,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     heatRetention: 0.80,
     heatLossRate: 0.012
   },
-  paper_packaging_large_open: {
-    itemId: 'paper_packaging_large_open',
-    name: 'Open Large Paper Packaging (2.4L)',
-    nameRu: 'Открытая бумажная упаковка (Большая)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Unwrapped large factory deli parchment paper with torn label and wide creased paper flaps.',
-    descriptionRu: 'Развернутая крупная пергаментная обертка сырного блока с надорванной этикеткой и широкими складками.',
-    effects: {},
-    weight: 0.035,
-    volume: 0.45,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 2.6,
-    maxContainedItemVolumeL: 2.3,
-    maxContainedWeightKg: 5.0,
-    labelColor: '#e11d48',
-    packagingSize: 'large'
-  },
-  paper_packaging_red: {
-    itemId: 'paper_packaging_red',
-    name: 'Paper Packaging (Ruby Label)',
-    nameRu: 'Бумажная упаковка (рубиновая этикетка)',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Factory-wrapped paper block with a vibrant ruby red seal label.',
-    descriptionRu: 'Заводская пергаментная упаковка с рубиновой фирменной этикеткой-лентой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.2,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    tornItemId: 'paper_packaging_open_red',
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#e11d48'
-  },
-  paper_packaging_open_red: {
-    itemId: 'paper_packaging_open_red',
-    name: 'Open Paper Packaging (Ruby Label)',
-    nameRu: 'Открытая бумажная упаковка (красная)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Unfolded factory paper wrapper with torn ruby red label.',
-    descriptionRu: 'Развернутая пергаментная обертка с разорванной рубиновой этикеткой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.25,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#e11d48'
-  },
-  paper_packaging_green: {
-    itemId: 'paper_packaging_green',
-    name: 'Paper Packaging (Jade Label)',
-    nameRu: 'Бумажная упаковка (изумрудная этикетка)',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Craft paper packaging with a rich emerald green brand seal.',
-    descriptionRu: 'Крафтовая эко-упаковка с изумрудно-зеленой фирменной этикеткой-пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.2,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    tornItemId: 'paper_packaging_open_green',
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#16a34a'
-  },
-  paper_packaging_open_green: {
-    itemId: 'paper_packaging_open_green',
-    name: 'Open Paper Packaging (Jade Label)',
-    nameRu: 'Открытая бумажная упаковка (зеленая)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened craft paper packaging with torn emerald label.',
-    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной зеленой пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.25,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#16a34a'
-  },
-  paper_packaging_blue: {
-    itemId: 'paper_packaging_blue',
-    name: 'Paper Packaging (Cobalt Label)',
-    nameRu: 'Бумажная упаковка (синяя этикетка)',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Craft paper packaging with a royal cobalt blue brand seal.',
-    descriptionRu: 'Крафтовая эко-упаковка с благородной синей фирменной этикеткой-пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.2,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    tornItemId: 'paper_packaging_open_blue',
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#2563eb'
-  },
-  paper_packaging_open_blue: {
-    itemId: 'paper_packaging_open_blue',
-    name: 'Open Paper Packaging (Cobalt Label)',
-    nameRu: 'Открытая бумажная упаковка (синяя)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened craft paper packaging with torn blue label.',
-    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной синей пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.25,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#2563eb'
-  },
-  paper_packaging_amber: {
-    itemId: 'paper_packaging_amber',
-    name: 'Paper Packaging (Gold Label)',
-    nameRu: 'Бумажная упаковка (золотая этикетка)',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Craft paper packaging with an artisan amber gold seal.',
-    descriptionRu: 'Крафтовая эко-упаковка с янтарно-золотой фирменной этикеткой-пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.2,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    tornItemId: 'paper_packaging_open_amber',
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#d97706'
-  },
-  paper_packaging_open_amber: {
-    itemId: 'paper_packaging_open_amber',
-    name: 'Open Paper Packaging (Gold Label)',
-    nameRu: 'Открытая бумажная упаковка (золотая)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened craft paper packaging with torn gold label.',
-    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной золотистой пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.25,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#d97706'
-  },
-  paper_packaging_purple: {
-    itemId: 'paper_packaging_purple',
-    name: 'Paper Packaging (Violet Label)',
-    nameRu: 'Бумажная упаковка (фиолетовая этикетка)',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Craft paper packaging with an imperial violet brand seal.',
-    descriptionRu: 'Крафтовая эко-упаковка с фиолетовой фирменной этикеткой-пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.2,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    tornItemId: 'paper_packaging_open_purple',
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#9333ea'
-  },
-  paper_packaging_open_purple: {
-    itemId: 'paper_packaging_open_purple',
-    name: 'Open Paper Packaging (Violet Label)',
-    nameRu: 'Открытая бумажная упаковка (фиолетовая)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened craft paper packaging with torn violet label.',
-    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной фиолетовой пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.25,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#9333ea'
-  },
-  paper_packaging_black: {
-    itemId: 'paper_packaging_black',
-    name: 'Paper Packaging (Noir Label)',
-    nameRu: 'Бумажная упаковка (черная этикетка)',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Craft paper packaging with a minimalist obsidian noir seal.',
-    descriptionRu: 'Крафтовая эко-упаковка со стильной черной матовой этикеткой-пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.2,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    tornItemId: 'paper_packaging_open_black',
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#1e293b'
-  },
-  paper_packaging_open_black: {
-    itemId: 'paper_packaging_open_black',
-    name: 'Open Paper Packaging (Noir Label)',
-    nameRu: 'Открытая бумажная упаковка (черная)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened craft paper packaging with torn noir label.',
-    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной черной пломбой.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.25,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    containerCapacityL: 1.2,
-    maxContainedItemVolumeL: 1.0,
-    maxContainedWeightKg: 2.5,
-    labelColor: '#1e293b'
-  },
 
   // === PLASTIC CANDY & GUMMY PACKAGING (ПЛАСТИКОВЫЕ УПАКОВКИ ИЗ-ПОД МАРМЕЛАДОК И КОНФЕТ РАЗНЫХ ФОРМ И РАЗМЕРОВ) ===
-  // 1. MINI (МИНИ 0.08L) - Плоский 4-шовный саше-пакет (Flat Sachet, ~3г тара, 25–45г мармелада)
   candy_pouch_mini: {
     itemId: 'candy_pouch_mini',
     name: 'Mini Plastic Candy Sachet (0.08L)',
@@ -4143,7 +2588,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'candy_pouch_mini_open',
     isTransparentPackaging: true,
     containerCapacityL: 0.08,
     maxContainedItemVolumeL: 0.05,
@@ -4153,32 +2597,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     packagingShape: 'flat_sachet',
     packagingShapeNameRu: 'Плоский саше-пакет (4-шовный)'
   },
-  candy_pouch_mini_open: {
-    itemId: 'candy_pouch_mini_open',
-    name: 'Open Mini Plastic Candy Sachet',
-    nameRu: 'Вскрытый мини-пакет от мармеладок',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Torn-open miniature BOPP gummy sachet with glistening sugar dust residue inside the viewing window.',
-    descriptionRu: 'Разорванный пластиковый саше-пакет из-под мини-мармеладок с кристалликами сахара и кислинки внутри. Можно использовать как мелкую тару.',
-    effects: {},
-    weight: 0.003,
-    volume: 0.025,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    isTransparentPackaging: true,
-    containerCapacityL: 0.08,
-    maxContainedItemVolumeL: 0.05,
-    maxContainedWeightKg: 0.08,
-    labelColor: '#ec4899',
-    packagingSize: 'mini',
-    packagingShape: 'flat_sachet',
-    packagingShapeNameRu: 'Плоский саше-пакет (4-шовный)'
-  },
-
-  // 2. SMALL (МАЛАЯ 0.18L) - Пакет-подушечка / Флоу-пак (Pillow Flow-Pack, ~5г тара, 70–100г мармелада)
   candy_pouch_small: {
     itemId: 'candy_pouch_small',
     name: 'Small Candy Flow-Pack Pouch (0.18L)',
@@ -4194,7 +2612,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'candy_pouch_small_open',
     isTransparentPackaging: true,
     containerCapacityL: 0.18,
     maxContainedItemVolumeL: 0.12,
@@ -4204,32 +2621,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     packagingShape: 'pillow',
     packagingShapeNameRu: 'Пакет-подушечка (Флоу-пак)'
   },
-  candy_pouch_small_open: {
-    itemId: 'candy_pouch_small_open',
-    name: 'Open Small Candy Flow-Pack Pouch',
-    nameRu: 'Вскрытый флоу-пак от конфет',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened pillow-shaped candy flow-pack with torn top foil lip and crinkled cellophane sheen.',
-    descriptionRu: 'Вскрытый пакет-подушечка из-под конфет с разорванным верхним гребешком и фольгированной изнанкой.',
-    effects: {},
-    weight: 0.005,
-    volume: 0.045,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    isTransparentPackaging: true,
-    containerCapacityL: 0.18,
-    maxContainedItemVolumeL: 0.12,
-    maxContainedWeightKg: 0.18,
-    labelColor: '#f97316',
-    packagingSize: 'small',
-    packagingShape: 'pillow',
-    packagingShapeNameRu: 'Пакет-подушечка (Флоу-пак)'
-  },
-
-  // 3. EURO HANGING (ВИТРИННАЯ 0.28L) - Евро-пакет с хедером-подвесом (~8г тара, 120–150г мармелада)
   candy_pouch_euro: {
     itemId: 'candy_pouch_euro',
     name: 'Euro-Slot Candy Hanging Pouch (0.28L)',
@@ -4245,7 +2636,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'candy_pouch_euro_open',
     isTransparentPackaging: true,
     containerCapacityL: 0.28,
     maxContainedItemVolumeL: 0.18,
@@ -4255,32 +2645,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     packagingShape: 'hanging_card',
     packagingShapeNameRu: 'Евро-пакет с хедером-подвесом'
   },
-  candy_pouch_euro_open: {
-    itemId: 'candy_pouch_euro_open',
-    name: 'Open Euro-Slot Candy Hanging Pouch',
-    nameRu: 'Вскрытый евро-пакет от мармеладок',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Torn transparent candy pouch with intact retail header card and euroslot hole.',
-    descriptionRu: 'Надорванный прозрачный евро-пакет из-под мармеладок с ярким хедером-подвесом.',
-    effects: {},
-    weight: 0.008,
-    volume: 0.065,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    isTransparentPackaging: true,
-    containerCapacityL: 0.28,
-    maxContainedItemVolumeL: 0.18,
-    maxContainedWeightKg: 0.28,
-    labelColor: '#8b5cf6',
-    packagingSize: 'small',
-    packagingShape: 'hanging_card',
-    packagingShapeNameRu: 'Евро-пакет с хедером-подвесом'
-  },
-
-  // 4. MEDIUM (СРЕДНЯЯ 0.45L) - Стоячий Дой-пак с зип-локом (~12г тара, 175–250г мармелада)
   candy_pouch: {
     itemId: 'candy_pouch',
     name: 'Doypack Gummy Pouch (0.45L)',
@@ -4296,7 +2660,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'candy_pouch_open',
     isTransparentPackaging: true,
     containerCapacityL: 0.45,
     maxContainedItemVolumeL: 0.25,
@@ -4306,32 +2669,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     packagingShape: 'doypack',
     packagingShapeNameRu: 'Стоячий Дой-пак с зип-локом'
   },
-  candy_pouch_open: {
-    itemId: 'candy_pouch_open',
-    name: 'Open Doypack Gummy Pouch',
-    nameRu: 'Открытый дойпак от мармелада',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened reusable stand-up doypack candy pouch with metallized foil lip and working zip-lock seal.',
-    descriptionRu: 'Вскрытый стоячий дойпак из-под мармелада с зип-замком и прозрачным окошком. Отлично подходит для хранения мелочей и сладостей.',
-    effects: {},
-    weight: 0.012,
-    volume: 0.09,
-    usable: false,
-    isContainer: true,
-    singleUseContainer: false,
-    isTransparentPackaging: true,
-    containerCapacityL: 0.45,
-    maxContainedItemVolumeL: 0.25,
-    maxContainedWeightKg: 0.45,
-    labelColor: '#e11d48',
-    packagingSize: 'medium',
-    packagingShape: 'doypack',
-    packagingShapeNameRu: 'Стоячий Дой-пак с зип-локом'
-  },
-
-  // 5. LARGE (БОЛЬШАЯ 0.90L) - Объёмный пакет с боковыми фальцами (~22г тара, 350–500г мармелада)
   candy_pouch_large: {
     itemId: 'candy_pouch_large',
     name: 'Large Gusset Candy Bag (0.90L)',
@@ -4347,7 +2684,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'candy_pouch_large_open',
     isTransparentPackaging: true,
     containerCapacityL: 0.9,
     maxContainedItemVolumeL: 0.5,
@@ -4357,29 +2693,176 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     packagingShape: 'gusset',
     packagingShapeNameRu: 'Объёмный пакет с боковыми фальцами'
   },
-  candy_pouch_large_open: {
-    itemId: 'candy_pouch_large_open',
-    name: 'Open Large Gusset Candy Bag',
-    nameRu: 'Вскрытый большой пакет от мармеладок',
+
+  // === CHOCOLATE PACKAGING CONTAINERS (УПАКОВКИ ДЛЯ ШОКОЛАДА РАЗНОГО РАЗМЕРА И ФОРМЫ) ===
+  chocolate_pack_mini: {
+    itemId: 'chocolate_pack_mini',
+    name: 'Mini Foil Chocolate Wrap (0.05L)',
+    nameRu: 'Мини-обёртка для шоколадки (0.05L)',
     category: 'misc',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
-    description: 'Opened family-size gusseted candy bag with creased polymer pleats and wide transparent viewing window.',
-    descriptionRu: 'Вскрытая большая пачка с боковыми фальцами из-под мармелада. Вмещает до 0.9 л.',
+    description: 'Compact metallized foil bonbon wrap with paper belly band for mini chocolate squares and truffles.',
+    descriptionRu: 'Компактная фольгированная мини-обёртка с бумажной манжетой (форма: мини-обёртка с крылышками) для порционных долек, трюфелей и шоколадных конфет. Нажмите [E] для вскрытия.',
     effects: {},
-    weight: 0.022,
-    volume: 0.16,
-    usable: false,
+    weight: 0.002,
+    volume: 0.015,
+    usable: true,
     isContainer: true,
-    singleUseContainer: false,
-    isTransparentPackaging: true,
-    containerCapacityL: 0.9,
-    maxContainedItemVolumeL: 0.5,
-    maxContainedWeightKg: 0.9,
-    labelColor: '#10b981',
+    singleUseContainer: true,
+    containerCapacityL: 0.05,
+    maxContainedItemVolumeL: 0.035,
+    maxContainedWeightKg: 0.05,
+    labelColor: '#9f1239',
+    containerTintColor: '#e2e8f0',
+    packagingSize: 'mini',
+    packagingShape: 'mini_foil_wrap',
+    packagingShapeNameRu: 'Мини-обёртка из фольги с манжетой'
+  },
+  chocolate_pack_bar: {
+    itemId: 'chocolate_pack_bar',
+    name: 'Chocolate Bar Flow-Pack (0.14L)',
+    nameRu: 'Флоу-пак для батончика (0.14L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Sleek elongated heat-sealed flow-pack wrapper with crimped ends for chocolate snack bars.',
+    descriptionRu: 'Узкий герметичный флоу-пак с зубчатыми торцевыми швами (форма: вытянутый батончик) для шоколадных и вафельных батончиков. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.004,
+    volume: 0.035,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    containerCapacityL: 0.14,
+    maxContainedItemVolumeL: 0.1,
+    maxContainedWeightKg: 0.15,
+    labelColor: '#78350f',
+    containerTintColor: '#e2e8f0',
+    packagingSize: 'small',
+    packagingShape: 'flow_bar',
+    packagingShapeNameRu: 'Узкий флоу-пак для батончика'
+  },
+  chocolate_pack_foil: {
+    itemId: 'chocolate_pack_foil',
+    name: 'Classic Foil & Paper Chocolate Sleeve (0.24L)',
+    nameRu: 'Классическая обёртка от шоколадки (0.24L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Traditional two-layer chocolate bar wrapper: embossed silver/gold foil inside a printed paper sleeve.',
+    descriptionRu: 'Традиционная двухслойная упаковка плитки шоколада: внутренняя тиснёная фольга и наружная бумажная манжета-этикетка. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.007,
+    volume: 0.05,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    containerCapacityL: 0.24,
+    maxContainedItemVolumeL: 0.18,
+    maxContainedWeightKg: 0.25,
+    labelColor: '#1d4ed8',
+    containerTintColor: '#e2e8f0',
+    packagingSize: 'medium',
+    packagingShape: 'foil_paper_sleeve',
+    packagingShapeNameRu: 'Классическая фольга + бумажная обёртка'
+  },
+  chocolate_pack_square: {
+    itemId: 'chocolate_pack_square',
+    name: 'Square Chocolate Knick-Pack (0.25L)',
+    nameRu: 'Квадратная упаковка от шоколада (0.25L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Square heat-sealed barrier wrapper with snap-open rear crease for square chocolate tiles.',
+    descriptionRu: 'Квадратная герметичная упаковка с линией разлома (форма: квадратный кник-пак) для квадратных плиток с начинкой. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.006,
+    volume: 0.05,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    containerCapacityL: 0.25,
+    maxContainedItemVolumeL: 0.18,
+    maxContainedWeightKg: 0.25,
+    labelColor: '#0f766e',
+    containerTintColor: '#e2e8f0',
+    packagingSize: 'medium',
+    packagingShape: 'square_flow',
+    packagingShapeNameRu: 'Квадратный пакет-конверт (кник-пак)'
+  },
+  chocolate_pack_prism: {
+    itemId: 'chocolate_pack_prism',
+    name: 'Triangular Prism Chocolate Box (0.30L)',
+    nameRu: 'Треугольная туба-призма от шоколада (0.30L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Distinctive triangular cardboard prism box with golden foil inner wrap for peaked nougat chocolate.',
+    descriptionRu: 'Фирменная трёхгранная картонная коробочка-призма с торцевым клапаном и золотистой фольгой для треугольного шоколада с нугой. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.015,
+    volume: 0.075,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    containerCapacityL: 0.3,
+    maxContainedItemVolumeL: 0.22,
+    maxContainedWeightKg: 0.3,
+    labelColor: '#ca8a04',
+    containerTintColor: '#fbbf24',
+    packagingSize: 'medium',
+    packagingShape: 'triangular_prism',
+    packagingShapeNameRu: 'Треугольная картонная призма-туба'
+  },
+  chocolate_pack_king: {
+    itemId: 'chocolate_pack_king',
+    name: 'King-Size XXL Craft Chocolate Envelope (0.50L)',
+    nameRu: 'Большая крафт-упаковка XXL для шоколада (0.50L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Oversized thick kraft-paper and gold-foil chocolate envelope with tear-strip perforation for 180-300g bars.',
+    descriptionRu: 'Крупный плотный крафт-конверт с отрывной перфорацией и золочёной фольгой внутри для больших семейных плиток шоколада (180–300 г). Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.018,
+    volume: 0.11,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    containerCapacityL: 0.5,
+    maxContainedItemVolumeL: 0.35,
+    maxContainedWeightKg: 0.5,
+    labelColor: '#1e293b',
+    containerTintColor: '#fbbf24',
     packagingSize: 'large',
-    packagingShape: 'gusset',
-    packagingShapeNameRu: 'Объёмный пакет с боковыми фальцами'
+    packagingShape: 'craft_envelope_xl',
+    packagingShapeNameRu: 'Большой крафт-конверт XXL с фольгой'
+  },
+  chocolate_pack_box: {
+    itemId: 'chocolate_pack_box',
+    name: 'Luxury Assorted Chocolate Gift Box (0.65L)',
+    nameRu: 'Подарочная коробка от шоколадного ассорти (0.65L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Presentation cardboard gift box with molded gold blister tray, satin ribbon accent, and clear display window.',
+    descriptionRu: 'Презентабельная картонная коробка с золотистым коррексом, атласным бантом и прозрачным смотровым окном для набора шоколадных конфет-пралине. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.042,
+    volume: 0.18,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    containerCapacityL: 0.65,
+    maxContainedItemVolumeL: 0.35,
+    maxContainedWeightKg: 0.7,
+    labelColor: '#881337',
+    containerTintColor: '#fbbf24',
+    packagingSize: 'large',
+    packagingShape: 'gift_box',
+    packagingShapeNameRu: 'Подарочная коробка ассорти с коррексом'
   },
 
   // === FURNITURE (МЕБЕЛЬ ДЛЯ КВАРТИРЫ) ===
@@ -5497,20 +3980,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.30,
     usable: true
   },
-  pot_clay_small_open: {
-    itemId: 'pot_clay_small_open',
-    name: 'Opened Small Clay Pot (0.25L)',
-    nameRu: 'Малый глиняный горшочек (открытый, 0.25л)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened small glazed ceramic pot (0.25L).',
-    descriptionRu: 'Открытый малый керамический горшочек со снятой крышкой (0.25л).',
-    effects: {},
-    weight: 0.22,
-    volume: 0.30,
-    usable: true
-  },
   pot_clay_medium: {
     itemId: 'pot_clay_medium',
     name: 'Medium Clay Pot (0.5L)',
@@ -5522,20 +3991,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Глазурованный керамический горшок (0.5л) с крышкой для деревенской сметаны, смальца или топлёного жира.',
     effects: {},
     weight: 0.38,
-    volume: 0.55,
-    usable: true
-  },
-  pot_clay_medium_open: {
-    itemId: 'pot_clay_medium_open',
-    name: 'Opened Clay Pot (0.5L)',
-    nameRu: 'Глиняный горшочек (открытый, 0.5л)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened glazed ceramic pot (0.5L).',
-    descriptionRu: 'Открытый керамический горшочек (0.5л) со снятой крышкой.',
-    effects: {},
-    weight: 0.35,
     volume: 0.55,
     usable: true
   },
@@ -5553,20 +4008,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 1.15,
     usable: true
   },
-  pot_clay_large_open: {
-    itemId: 'pot_clay_large_open',
-    name: 'Opened Large Clay Pot (1L)',
-    nameRu: 'Большой глиняный горшок (открытый, 1л)',
-    category: 'misc',
-    maxStack: 3,
-    icon: '',
-    description: 'Opened large earthenware pot (1.0L).',
-    descriptionRu: 'Открытый большой глиняный горшок (1л).',
-    effects: {},
-    weight: 0.60,
-    volume: 1.15,
-    usable: true
-  },
   jar_spice_small: {
     itemId: 'jar_spice_small',
     name: 'Spice Glass Jar (0.1L)',
@@ -5579,62 +4020,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: {},
     weight: 0.09,
     volume: 0.12,
-    usable: true
-  },
-  jar_spice_small_open: {
-    itemId: 'jar_spice_small_open',
-    name: 'Opened Spice Glass Jar (0.1L)',
-    nameRu: 'Баночка для специй (открытая, 0.1л)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened compact glass spice jar (0.1L).',
-    descriptionRu: 'Открытая стеклянная баночка для специй (0.1л).',
-    effects: {},
-    weight: 0.08,
-    volume: 0.12,
-    usable: true
-  },
-  jar_glass_small_open: {
-    itemId: 'jar_glass_small_open',
-    name: 'Opened Small Glass Jar (0.2L)',
-    nameRu: 'Малая стеклянная банка (открытая, 0.2л)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened small glass jar (0.2L) without lid.',
-    descriptionRu: 'Вскрытая малая стеклянная баночка (0.2л) со снятой крышкой.',
-    effects: {},
-    weight: 0.13,
-    volume: 0.22,
-    usable: true
-  },
-  jar_glass_medium_open: {
-    itemId: 'jar_glass_medium_open',
-    name: 'Opened Medium Glass Jar (0.5L)',
-    nameRu: 'Стеклянная банка (открытая, 0.5л)',
-    category: 'misc',
-    maxStack: 8,
-    icon: '',
-    description: 'Opened medium glass jar (0.5L).',
-    descriptionRu: 'Открытая полулитровая стеклянная банка (0.5л).',
-    effects: {},
-    weight: 0.23,
-    volume: 0.55,
-    usable: true
-  },
-  jar_glass_large_open: {
-    itemId: 'jar_glass_large_open',
-    name: 'Opened Large Glass Jar (1L)',
-    nameRu: 'Большая стеклянная банка (открытая, 1л)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened 1L glass jar.',
-    descriptionRu: 'Открытая литровая стеклянная банка (1л).',
-    effects: {},
-    weight: 0.38,
-    volume: 1.1,
     usable: true
   },
   jar_glass_3l: {
@@ -5651,20 +4036,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 3.3,
     usable: true
   },
-  jar_glass_3l_open: {
-    itemId: 'jar_glass_3l_open',
-    name: 'Opened 3-Liter Glass Jar (3L)',
-    nameRu: 'Трёхлитровая стеклянная банка (открытая, 3л)',
-    category: 'misc',
-    maxStack: 2,
-    icon: '',
-    description: 'Opened 3-liter glass jar.',
-    descriptionRu: 'Открытая трёхлитровая стеклянная банка (3л) со снятой крышкой.',
-    effects: {},
-    weight: 0.92,
-    volume: 3.3,
-    usable: true
-  },
   can_metal_flat: {
     itemId: 'can_metal_flat',
     name: 'Flat Tin Can (0.18L)',
@@ -5674,20 +4045,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     icon: '',
     description: 'Low cylindrical flat tin can for caviar, pate, or tuna.',
     descriptionRu: 'Низкая широкая жестяная банка-шайба (0.18л) с ключом-кольцом для икры, паштетов и рыбного филе.',
-    effects: {},
-    weight: 0.05,
-    volume: 0.20,
-    usable: true
-  },
-  can_metal_flat_open: {
-    itemId: 'can_metal_flat_open',
-    name: 'Opened Flat Tin Can (0.18L)',
-    nameRu: 'Вскрытая плоская консервная банка (0.18л)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened flat round tin can with peeled metal lid.',
-    descriptionRu: 'Вскрытая плоская жестяная банка-шайба с отогнутой жестяной крышкой.',
     effects: {},
     weight: 0.05,
     volume: 0.20,
@@ -5707,62 +4064,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.22,
     usable: true
   },
-  can_metal_oval_open: {
-    itemId: 'can_metal_oval_open',
-    name: 'Opened Oval Fish Tin Can (0.20L)',
-    nameRu: 'Вскрытая овальная консервная банка (0.20л)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened oval tin can with curled metal lid.',
-    descriptionRu: 'Вскрытая овальная жестяная банка с отогнутой крышкой.',
-    effects: {},
-    weight: 0.06,
-    volume: 0.22,
-    usable: true
-  },
-  can_metal_small_open: {
-    itemId: 'can_metal_small_open',
-    name: 'Opened Small Tin Can (0.25L)',
-    nameRu: 'Вскрытая малая консервная банка (0.25л)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened small tin can (0.25L) with jagged/bent lid.',
-    descriptionRu: 'Вскрытая малая жестяная консервная банка (0.25л) с отогнутой крышкой.',
-    effects: {},
-    weight: 0.06,
-    volume: 0.27,
-    usable: true
-  },
-  can_metal_medium_open: {
-    itemId: 'can_metal_medium_open',
-    name: 'Opened Tin Can (0.4L)',
-    nameRu: 'Вскрытая консервная банка (0.4л)',
-    category: 'misc',
-    maxStack: 8,
-    icon: '',
-    description: 'Opened standard cylindrical tin can (0.4L) with bent metal lid.',
-    descriptionRu: 'Вскрытая стандартная жестяная консервная банка (0.4л) с отогнутой крышкой.',
-    effects: {},
-    weight: 0.09,
-    volume: 0.44,
-    usable: true
-  },
-  can_metal_large_open: {
-    itemId: 'can_metal_large_open',
-    name: 'Opened Large Tin Can (0.8L)',
-    nameRu: 'Вскрытая большая консервная банка (0.8л)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened large tin can (0.8L) with bent metal lid.',
-    descriptionRu: 'Вскрытая большая жестяная консервная банка (0.8л) с отогнутой крышкой.',
-    effects: {},
-    weight: 0.14,
-    volume: 0.85,
-    usable: true
-  },
   tin_round_mini: {
     itemId: 'tin_round_mini',
     name: 'Mini Round Metal Tin (30ml)',
@@ -5777,34 +4078,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.04,
     usable: true
   },
-  tin_round_mini_open: {
-    itemId: 'tin_round_mini_open',
-    name: 'Opened Mini Metal Tin (30ml)',
-    nameRu: 'Открытая жестяная баночка-шайба (30мл)',
-    category: 'misc',
-    maxStack: 15,
-    icon: '',
-    description: 'Opened pocket-sized metal tin (30ml).',
-    descriptionRu: 'Открытая миниатюрная жестяная баночка (30мл).',
-    effects: {},
-    weight: 0.02,
-    volume: 0.04,
-    usable: true
-  },
-  can_alu_330_open: {
-    itemId: 'can_alu_330_open',
-    name: 'Opened Aluminum Can (0.33L)',
-    nameRu: 'Вскрытая алюминиевая банка (0.33л)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened 330ml aluminum beverage can with popped tab.',
-    descriptionRu: 'Вскрытая алюминиевая банка (0.33л) с продавленным язычком-ключом.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.35,
-    usable: true
-  },
   cup_plastic_dairy_small: {
     itemId: 'cup_plastic_dairy_small',
     name: 'Plastic Dairy Cup (0.2L)',
@@ -5814,20 +4087,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     icon: '',
     description: 'Small polypropylene dairy cup sealed with aluminum foil (0.2L).',
     descriptionRu: 'Малый пластиковый стаканчик (0.2л), запаянный фольгированной мембраной, для йогурта, сметаны или мусса.',
-    effects: {},
-    weight: 0.02,
-    volume: 0.22,
-    usable: true
-  },
-  cup_plastic_dairy_small_open: {
-    itemId: 'cup_plastic_dairy_small_open',
-    name: 'Opened Plastic Dairy Cup (0.2L)',
-    nameRu: 'Вскрытый пластиковый стаканчик (0.2л)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened small plastic dairy cup with peeled foil lid.',
-    descriptionRu: 'Вскрытый пластиковый стаканчик (0.2л) с отогнутой фольгированной крышкой.',
     effects: {},
     weight: 0.02,
     volume: 0.22,
@@ -5845,62 +4104,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: {},
     weight: 0.04,
     volume: 0.44,
-    usable: true
-  },
-  cup_plastic_dairy_medium_open: {
-    itemId: 'cup_plastic_dairy_medium_open',
-    name: 'Opened Plastic Dairy Tub (0.4L)',
-    nameRu: 'Открытый пластиковый контейнер-ванночка (0.4л)',
-    category: 'misc',
-    maxStack: 8,
-    icon: '',
-    description: 'Opened medium plastic tub container (0.4L).',
-    descriptionRu: 'Открытый пластиковый контейнер-ванночка (0.4л) со снятой крышкой.',
-    effects: {},
-    weight: 0.04,
-    volume: 0.44,
-    usable: true
-  },
-  tetra_pack_1000_open: {
-    itemId: 'tetra_pack_1000_open',
-    name: 'Opened Tetra Pak (1.0L)',
-    nameRu: 'Вскрытый тетрапак (1.0л)',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Opened 1.0L carton Tetra Pak.',
-    descriptionRu: 'Вскрытый картонный пакет тетрапак (1.0л) с открученной крышкой.',
-    effects: {},
-    weight: 0.04,
-    volume: 1.05,
-    usable: true
-  },
-  tetra_pack_250_open: {
-    itemId: 'tetra_pack_250_open',
-    name: 'Opened Small Tetra Pak (0.25L)',
-    nameRu: 'Вскрытый малый тетрапак (0.25л)',
-    category: 'misc',
-    maxStack: 15,
-    icon: '',
-    description: 'Opened 250ml small Tetra Pak carton.',
-    descriptionRu: 'Вскрытый компактный картонный тетрапак (0.25л).',
-    effects: {},
-    weight: 0.012,
-    volume: 0.28,
-    usable: true
-  },
-  package_sachet_open: {
-    itemId: 'package_sachet_open',
-    name: 'Opened Seasoning Sachet (100ml)',
-    nameRu: 'Вскрытый пакетик-саше',
-    category: 'misc',
-    maxStack: 20,
-    icon: '',
-    description: 'Opened foil seasoning sachet with torn corner.',
-    descriptionRu: 'Надорванный фольгированный пакетик-саше.',
-    effects: {},
-    weight: 0.002,
-    volume: 0.1,
     usable: true
   },
   bottle_sauce_squeeze: {
@@ -5974,25 +4177,10 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'blister_pack_empty',
     isTransparentPackaging: true,
     containerCapacityL: 0.15,
     maxContainedItemVolumeL: 0.05,
     maxContainedWeightKg: 0.2
-  },
-  blister_pack_empty: {
-    itemId: 'blister_pack_empty',
-    name: 'Empty Popped Blister Pack',
-    nameRu: 'Пустой выдавленный блистер',
-    category: 'misc',
-    maxStack: 20,
-    icon: '',
-    description: 'Empty popped foil pill blister pack.',
-    descriptionRu: 'Пустой блистер с прорванной фольгой из-под таблеток.',
-    effects: {},
-    weight: 0.01,
-    volume: 0.03,
-    usable: false
   },
   egg_carton_10: {
     itemId: 'egg_carton_10',
@@ -6009,25 +4197,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'egg_carton_10_open',
-    containerCapacityL: 1.0,
-    maxContainedItemVolumeL: 0.15,
-    maxContainedWeightKg: 1.2
-  },
-  egg_carton_10_open: {
-    itemId: 'egg_carton_10_open',
-    name: 'Opened Egg Carton (10 cells)',
-    nameRu: 'Открытая кассета для яиц (10 ячеек)',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Opened cardboard egg carton that can hold small items or eggs.',
-    descriptionRu: 'Открытая картонная кассета из-под яиц: можно складывать яйца или мелкие предметы.',
-    effects: {},
-    weight: 0.06,
-    volume: 0.85,
-    usable: false,
-    isContainer: true,
     containerCapacityL: 1.0,
     maxContainedItemVolumeL: 0.15,
     maxContainedWeightKg: 1.2
@@ -6047,7 +4216,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'tray_plastic_empty',
     isTransparentPackaging: true,
     containerCapacityL: 0.5,
     maxContainedItemVolumeL: 0.08,
@@ -6068,7 +4236,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     isContainer: true,
     singleUseContainer: true,
-    tornItemId: 'box_cardboard_small',
     containerCapacityL: 0.6,
     maxContainedItemVolumeL: 0.5,
     maxContainedWeightKg: 0.8
@@ -6402,6 +4569,31 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     tasteMessages: [
       'Тонкое упругое тесто и сочная мясная начинка с перчиком...',
       'Ароматный пельмешек с луком и пряным бульоном внутри...'
+    ]
+  },
+  chocolate: {
+    itemId: 'chocolate',
+    name: 'Chocolate',
+    nameRu: 'Шоколадка',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Artisanal or classic chocolate with customizable shape, size, outer shell, inner filling material, and colors.',
+    descriptionRu: 'Шоколадка или фигурная шоколадная конфета с подробными атрибутами: формой, размером, материалом и цветом внешней оболочки и внутренней начинки.',
+    effects: { hunger: 24, energy: 26 },
+    weight: 0.095,
+    volume: 0.09,
+    usable: true,
+    biteCount: 4,
+    fullnessPerBite: 3.5,
+    temperature: 20.0,
+    heatLossRate: 0.018,
+    heatRetention: 0.25,
+    chocolateAttributes: DEFAULT_CHOCOLATE_ATTRIBUTES,
+    tasteMessages: [
+      'Бархатистый какао мягко тает на языке...',
+      'Сладкий сливочно-шоколадный вкус моментально заряжает энергией...',
+      'Хрусткий разлом дольки дарит насыщенный аромат какао-бобов...'
     ]
   },
   pelmeni_pack_small: {
@@ -6751,7 +4943,7 @@ export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
   thermal_coat: { slot: 'torso', layer: 'jacket', insulation: 85, windResistance: 85, waterResistance: 75, breathability: 25, mobilityPenalty: 12, color: '#2d3748', pocketCapacityL: 4.0, maxPocketItemVolumeL: 1.0, maxPocketWeightKg: 4.5 },
 };
 
-export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidId: LiquidId | null; amountMl: number; attributes?: FluidSubstanceAttributes }> = {
+export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   // Plastic Bottles
   bottle_plastic_500: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
   bottle_plastic_1500: { containerId: 'bottle_plastic_1500', liquidId: null, amountMl: 0 },
@@ -6760,7 +4952,7 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   water_bottle: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
   water_bottle_1500: { containerId: 'bottle_plastic_1500', liquidId: 'water', amountMl: 1500 },
   bottle_water: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
-  mineral_water: { containerId: 'bottle_plastic_500', liquidId: 'mineral_water', amountMl: 500 },
+  mineral_water: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.mineral_water.attributes },
   kvas_bottle: { containerId: 'bottle_plastic_1500', liquidId: 'kvas', amountMl: 1500 },
   kvas: { containerId: 'bottle_plastic_1500', liquidId: 'kvas', amountMl: 1500 },
   milk_bottle: { containerId: 'bottle_plastic_1500', liquidId: 'milk', amountMl: 1000 },
@@ -6776,12 +4968,12 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   vodka_bottle: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
   bottle_vodka: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
   vodka: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
-  bottle_wine: { containerId: 'bottle_glass_750', liquidId: 'wine_red', amountMl: 750 },
-  wine_bottle: { containerId: 'bottle_glass_750', liquidId: 'wine_red', amountMl: 750 },
-  wine_white_cooking: { containerId: 'bottle_glass_750', liquidId: 'wine_white', amountMl: 750 },
-  wine_white: { containerId: 'bottle_glass_750', liquidId: 'wine_white', amountMl: 750 },
-  wine_red_cooking: { containerId: 'bottle_glass_750', liquidId: 'wine_red', amountMl: 750 },
-  wine_red: { containerId: 'bottle_glass_750', liquidId: 'wine_red', amountMl: 750 },
+  bottle_wine: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_red.attributes },
+  wine_bottle: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_red.attributes },
+  wine_white_cooking: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_white.attributes },
+  wine_white: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_white.attributes },
+  wine_red_cooking: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_red.attributes },
+  wine_red: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_red.attributes },
   
   // Canisters & Technical Fluids
   canister_metal_20l: { containerId: 'canister_metal_20l', liquidId: null, amountMl: 0 },
@@ -6814,7 +5006,18 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   ampoule_glass_small: { containerId: 'ampoule_glass_small', liquidId: null, amountMl: 0 },
   aerosol_can_small: { containerId: 'aerosol_can_small', liquidId: null, amountMl: 0 },
   tin_round_mini: { containerId: 'tin_round_mini', liquidId: null, amountMl: 0 },
-  tin_round_mini_open: { containerId: 'tin_round_mini_open', liquidId: null, amountMl: 0 },
+  tin_round_mini_open: { containerId: 'tin_round_mini', liquidId: null, amountMl: 0, isOpen: true },
+  star_tin_empty: { containerId: 'tin_round_mini', liquidId: null, amountMl: 0, isOpen: true },
+  panthenol_empty: { containerId: 'aerosol_can_small', liquidId: null, amountMl: 0, isOpen: true },
+  ointment_tube_empty: { containerId: 'tube_ointment_small', liquidId: null, amountMl: 0, isOpen: true },
+  diclofenac_tube_empty: { containerId: 'tube_ointment_small', liquidId: null, amountMl: 0, isOpen: true },
+  zelenka_bottle_empty: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0, isOpen: true },
+  iodine_bottle_empty: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0, isOpen: true },
+  peroxide_bottle_empty: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0, isOpen: true },
+  ammonia_bottle_empty: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0, isOpen: true },
+  valerian_bottle_empty: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0, isOpen: true },
+  antiseptic_empty: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0, isOpen: true },
+  pill_bottle_empty: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0, isOpen: true },
 
   // Cups & Mugs
   paper_cup: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
@@ -6826,13 +5029,13 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   coffee: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
   tea_cup: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250 },
   tea: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250 },
-  tea_green: { containerId: 'paper_cup', liquidId: 'tea_green', amountMl: 250 },
+  tea_green: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.tea_green.attributes },
   cappuccino: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
   glass_mug: { containerId: 'glass_mug', liquidId: null, amountMl: 0 },
 
   // Aluminum Cans
   can_alu_330: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
-  can_alu_330_open: { containerId: 'can_alu_330_open', liquidId: null, amountMl: 0 },
+  can_alu_330_open: { containerId: 'can_alu_330', liquidId: null, amountMl: 0, isOpen: true },
   energy_drink: { containerId: 'can_alu_330', liquidId: 'energy_drink', amountMl: 330 },
   cola_can: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
   soda_can: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
@@ -6841,9 +5044,9 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   can_beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
   beer_can: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
   beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
-  can_empty: { containerId: 'can_alu_330_open', liquidId: null, amountMl: 0 },
-  cola_zero_empty: { containerId: 'can_alu_330_open', liquidId: null, amountMl: 0 },
-  energy_can_empty: { containerId: 'can_alu_330_open', liquidId: null, amountMl: 0 },
+  can_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0, isOpen: true },
+  cola_zero_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0, isOpen: true },
+  energy_can_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0, isOpen: true },
 
   // Flasks & Thermoses
   camp_flask: { containerId: 'camp_flask', liquidId: 'water', amountMl: 800 },
@@ -6863,56 +5066,56 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
 
   // Empty Glass Jars, Clay Pots, Tin Cans & Dairy Cups
   jar_glass_3l: { containerId: 'jar_glass_3l', liquidId: null, amountMl: 0 },
-  jar_glass_3l_open: { containerId: 'jar_glass_3l_open', liquidId: null, amountMl: 0 },
+  jar_glass_3l_open: { containerId: 'jar_glass_3l', liquidId: null, amountMl: 0, isOpen: true },
   jar_glass_large: { containerId: 'jar_glass_large', liquidId: null, amountMl: 0 },
-  jar_glass_large_open: { containerId: 'jar_glass_large_open', liquidId: null, amountMl: 0 },
+  jar_glass_large_open: { containerId: 'jar_glass_large', liquidId: null, amountMl: 0, isOpen: true },
   jar_glass_medium: { containerId: 'jar_glass_medium', liquidId: null, amountMl: 0 },
-  jar_glass_medium_open: { containerId: 'jar_glass_medium_open', liquidId: null, amountMl: 0 },
+  jar_glass_medium_open: { containerId: 'jar_glass_medium', liquidId: null, amountMl: 0, isOpen: true },
   jar_glass_small: { containerId: 'jar_glass_small', liquidId: null, amountMl: 0 },
-  jar_glass_small_open: { containerId: 'jar_glass_small_open', liquidId: null, amountMl: 0 },
+  jar_glass_small_open: { containerId: 'jar_glass_small', liquidId: null, amountMl: 0, isOpen: true },
   jar_spice_small: { containerId: 'jar_spice_small', liquidId: null, amountMl: 0 },
-  jar_spice_small_open: { containerId: 'jar_spice_small_open', liquidId: null, amountMl: 0 },
+  jar_spice_small_open: { containerId: 'jar_spice_small', liquidId: null, amountMl: 0, isOpen: true },
   pot_clay_small: { containerId: 'pot_clay_small', liquidId: null, amountMl: 0 },
-  pot_clay_small_open: { containerId: 'pot_clay_small_open', liquidId: null, amountMl: 0 },
+  pot_clay_small_open: { containerId: 'pot_clay_small', liquidId: null, amountMl: 0, isOpen: true },
   pot_clay_medium: { containerId: 'pot_clay_medium', liquidId: null, amountMl: 0 },
-  pot_clay_medium_open: { containerId: 'pot_clay_medium_open', liquidId: null, amountMl: 0 },
+  pot_clay_medium_open: { containerId: 'pot_clay_medium', liquidId: null, amountMl: 0, isOpen: true },
   pot_clay_large: { containerId: 'pot_clay_large', liquidId: null, amountMl: 0 },
-  pot_clay_large_open: { containerId: 'pot_clay_large_open', liquidId: null, amountMl: 0 },
+  pot_clay_large_open: { containerId: 'pot_clay_large', liquidId: null, amountMl: 0, isOpen: true },
   can_metal_large: { containerId: 'can_metal_large', liquidId: null, amountMl: 0 },
-  can_metal_large_open: { containerId: 'can_metal_large_open', liquidId: null, amountMl: 0 },
+  can_metal_large_open: { containerId: 'can_metal_large', liquidId: null, amountMl: 0, isOpen: true },
   can_metal_medium: { containerId: 'can_metal_medium', liquidId: null, amountMl: 0 },
-  can_metal_medium_open: { containerId: 'can_metal_medium_open', liquidId: null, amountMl: 0 },
+  can_metal_medium_open: { containerId: 'can_metal_medium', liquidId: null, amountMl: 0, isOpen: true },
   can_metal_small: { containerId: 'can_metal_small', liquidId: null, amountMl: 0 },
-  can_metal_small_open: { containerId: 'can_metal_small_open', liquidId: null, amountMl: 0 },
+  can_metal_small_open: { containerId: 'can_metal_small', liquidId: null, amountMl: 0, isOpen: true },
   can_metal_flat: { containerId: 'can_metal_flat', liquidId: null, amountMl: 0 },
-  can_metal_flat_open: { containerId: 'can_metal_flat_open', liquidId: null, amountMl: 0 },
+  can_metal_flat_open: { containerId: 'can_metal_flat', liquidId: null, amountMl: 0, isOpen: true },
   can_metal_oval: { containerId: 'can_metal_oval', liquidId: null, amountMl: 0 },
-  can_metal_oval_open: { containerId: 'can_metal_oval_open', liquidId: null, amountMl: 0 },
-  tin_can_empty: { containerId: 'can_metal_medium_open', liquidId: null, amountMl: 0 },
+  can_metal_oval_open: { containerId: 'can_metal_oval', liquidId: null, amountMl: 0, isOpen: true },
+  tin_can_empty: { containerId: 'can_metal_medium', liquidId: null, amountMl: 0, isOpen: true },
   cup_plastic_dairy_small: { containerId: 'cup_plastic_dairy_small', liquidId: null, amountMl: 0 },
-  cup_plastic_dairy_small_open: { containerId: 'cup_plastic_dairy_small_open', liquidId: null, amountMl: 0 },
+  cup_plastic_dairy_small_open: { containerId: 'cup_plastic_dairy_small', liquidId: null, amountMl: 0, isOpen: true },
   cup_plastic_dairy_medium: { containerId: 'cup_plastic_dairy_medium', liquidId: null, amountMl: 0 },
-  cup_plastic_dairy_medium_open: { containerId: 'cup_plastic_dairy_medium_open', liquidId: null, amountMl: 0 },
+  cup_plastic_dairy_medium_open: { containerId: 'cup_plastic_dairy_medium', liquidId: null, amountMl: 0, isOpen: true },
   bottle_sauce_squeeze: { containerId: 'bottle_sauce_squeeze', liquidId: null, amountMl: 0 },
 
   // Bowls & Broths
   soup_bowl: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
   soup_bowl_empty: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
-  hot_soup: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
-  soup: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
+  hot_soup: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_beef.attributes },
+  soup: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_beef.attributes },
   broth: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500 },
-  broth_beef: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
-  broth_chicken: { containerId: 'soup_bowl', liquidId: 'broth_chicken', amountMl: 500 },
-  broth_fish: { containerId: 'soup_bowl', liquidId: 'broth_fish', amountMl: 500 },
-  broth_vegetable: { containerId: 'soup_bowl', liquidId: 'broth_vegetable', amountMl: 500 },
-  broth_mushroom: { containerId: 'soup_bowl', liquidId: 'broth_mushroom', amountMl: 500 },
+  broth_beef: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_beef.attributes },
+  broth_chicken: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_chicken.attributes },
+  broth_fish: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_fish.attributes },
+  broth_vegetable: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_vegetable.attributes },
+  broth_mushroom: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_mushroom.attributes },
 
   // Plastic Bags & Sacks
   package_bag: { containerId: 'package_bag', liquidId: null, amountMl: 0 },
   package_sachet: { containerId: 'package_sachet', liquidId: null, amountMl: 0 },
-  package_sachet_open: { containerId: 'package_sachet_open', liquidId: null, amountMl: 0 },
-  tetra_pack_1000_open: { containerId: 'tetra_pack_1000_open', liquidId: null, amountMl: 0 },
-  tetra_pack_250_open: { containerId: 'tetra_pack_250_open', liquidId: null, amountMl: 0 },
+  package_sachet_open: { containerId: 'package_sachet', liquidId: null, amountMl: 0, isOpen: true },
+  tetra_pack_1000_open: { containerId: 'tetra_pack_1000', liquidId: null, amountMl: 0, isOpen: true },
+  tetra_pack_250_open: { containerId: 'tetra_pack_250', liquidId: null, amountMl: 0, isOpen: true },
   plastic_bag: { containerId: 'plastic_bag', liquidId: null, amountMl: 0 },
   sugar: { containerId: 'package_bag', liquidId: 'sugar', amountMl: 1000 },
   sugar_bag: { containerId: 'package_bag', liquidId: 'sugar', amountMl: 1000 },
@@ -6927,6 +5130,50 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
 
   // Generalized Preparation-Method Liquids & Bulk Substances with Full Attributes
   ...EXTENDED_LEGACY_CONTAINER_MAP
+};
+
+const LEGACY_DISCRETE_CONTAINER_ALIASES: Record<string, { baseId: string; isOpen?: boolean; labelColor?: string }> = {
+  paper_packaging_mini_open: { baseId: 'paper_packaging_mini', isOpen: true },
+  paper_packaging_small_open: { baseId: 'paper_packaging_small', isOpen: true },
+  paper_packaging_open: { baseId: 'paper_packaging', isOpen: true },
+  paper_packaging_large_open: { baseId: 'paper_packaging_large', isOpen: true },
+  paper_packaging_red: { baseId: 'paper_packaging', labelColor: '#e11d48' },
+  paper_packaging_open_red: { baseId: 'paper_packaging', isOpen: true, labelColor: '#e11d48' },
+  paper_packaging_green: { baseId: 'paper_packaging', labelColor: '#16a34a' },
+  paper_packaging_open_green: { baseId: 'paper_packaging', isOpen: true, labelColor: '#16a34a' },
+  paper_packaging_blue: { baseId: 'paper_packaging', labelColor: '#2563eb' },
+  paper_packaging_open_blue: { baseId: 'paper_packaging', isOpen: true, labelColor: '#2563eb' },
+  paper_packaging_amber: { baseId: 'paper_packaging', labelColor: '#d97706' },
+  paper_packaging_open_amber: { baseId: 'paper_packaging', isOpen: true, labelColor: '#d97706' },
+  paper_packaging_purple: { baseId: 'paper_packaging', labelColor: '#9333ea' },
+  paper_packaging_open_purple: { baseId: 'paper_packaging', isOpen: true, labelColor: '#9333ea' },
+  paper_packaging_black: { baseId: 'paper_packaging', labelColor: '#1e293b' },
+  paper_packaging_open_black: { baseId: 'paper_packaging', isOpen: true, labelColor: '#1e293b' },
+  candy_pouch_mini_open: { baseId: 'candy_pouch_mini', isOpen: true },
+  candy_pouch_small_open: { baseId: 'candy_pouch_small', isOpen: true },
+  candy_pouch_euro_open: { baseId: 'candy_pouch_euro', isOpen: true },
+  candy_pouch_open: { baseId: 'candy_pouch', isOpen: true },
+  candy_pouch_large_open: { baseId: 'candy_pouch_large', isOpen: true },
+  chocolate_pack_mini_open: { baseId: 'chocolate_pack_mini', isOpen: true },
+  chocolate_pack_bar_open: { baseId: 'chocolate_pack_bar', isOpen: true },
+  chocolate_pack_foil_open: { baseId: 'chocolate_pack_foil', isOpen: true },
+  chocolate_pack_square_open: { baseId: 'chocolate_pack_square', isOpen: true },
+  chocolate_pack_prism_open: { baseId: 'chocolate_pack_prism', isOpen: true },
+  chocolate_pack_king_open: { baseId: 'chocolate_pack_king', isOpen: true },
+  chocolate_pack_box_open: { baseId: 'chocolate_pack_box', isOpen: true },
+  vacuum_pack_small_torn: { baseId: 'vacuum_pack_small', isOpen: true },
+  vacuum_pack_medium_torn: { baseId: 'vacuum_pack_medium', isOpen: true },
+  vacuum_pack_large_torn: { baseId: 'vacuum_pack_large', isOpen: true },
+  vacuum_pack_torn: { baseId: 'vacuum_pack_medium', isOpen: true },
+  tray_sealed_food_torn: { baseId: 'tray_sealed_food', isOpen: true },
+  tray_plastic_empty: { baseId: 'tray_sealed_food', isOpen: true },
+  pouch_sealed_snack_torn: { baseId: 'pouch_sealed_snack', isOpen: true },
+  chips_bag: { baseId: 'pouch_sealed_snack', isOpen: true },
+  popcorn_bucket: { baseId: 'takeout_box_wok', isOpen: true },
+  nachos_tray_empty: { baseId: 'tray_sealed_food', isOpen: true },
+  blister_pack_empty: { baseId: 'blister_pack_10', isOpen: true },
+  pill_pack: { baseId: 'blister_pack_10', isOpen: true },
+  egg_carton_10_open: { baseId: 'egg_carton_10', isOpen: true }
 };
 
 export function getResolvedFluidContainerConfig(itemId: string): ItemFluidContainerConfig | null {
@@ -6953,12 +5200,13 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     return createPackagedItem(itemId, count);
   }
 
+  const discreteAlias = LEGACY_DISCRETE_CONTAINER_ALIASES[itemId];
   const legacyMap = getResolvedFluidContainerConfig(itemId);
 
-  // Use the unified container's catalog definition when mapped via LEGACY_CONTAINER_MAP
-  const effectiveContainerId = legacyMap ? legacyMap.containerId : itemId;
+  // Use the unified container's catalog definition when mapped via LEGACY_CONTAINER_MAP or LEGACY_DISCRETE_CONTAINER_ALIASES
+  const effectiveContainerId = discreteAlias ? discreteAlias.baseId : (legacyMap ? legacyMap.containerId : itemId);
   const originalDef = ITEM_CATALOG[itemId];
-  const def = ITEM_CATALOG[effectiveContainerId] || originalDef || ITEM_CATALOG.water_bottle;
+  const def = ITEM_CATALOG[effectiveContainerId] || originalDef || ITEM_CATALOG.bottle_plastic_500;
   itemCounter++;
   const maxPortions = def.biteCount || 1;
   const portions = initialPortions !== undefined ? initialPortions : maxPortions;
@@ -6994,7 +5242,7 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   let fluidStorage: FluidContainerState | undefined;
   // If item is a physical item container (bag, sack, box, basket, medkit) and not a pre-filled fluid/bulk package, don't attach fluidStorage
   if (legacyMap && (!isContainer || (legacyMap.liquidId && legacyMap.amountMl > 0))) {
-    const cfg = CONTAINER_CONFIGS[legacyMap.containerId];
+    const cfg = getContainerConfig(legacyMap.containerId);
     if (cfg) {
       fluidStorage = {
         liquidId: legacyMap.liquidId,
@@ -7031,10 +5279,11 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     portions: fluidStorage ? undefined : portions,
     maxPortions: fluidStorage ? undefined : maxPortions,
     isContainer: fluidStorage && legacyMap?.liquidId ? false : isContainer,
-    singleUseContainer: def.singleUseContainer,
+    singleUseContainer: discreteAlias?.isOpen ? false : def.singleUseContainer,
+    isOpen: Boolean(discreteAlias?.isOpen || legacyMap?.isOpen || fluidStorage?.attributes?.isOpened),
     tornItemId: def.tornItemId,
     isTransparentPackaging: def.isTransparentPackaging,
-    labelColor: def.labelColor,
+    labelColor: discreteAlias?.labelColor || def.labelColor,
     containerVisuals: originalDef?.containerVisuals || def.containerVisuals,
     containerTintColor: originalDef?.containerTintColor || def.containerTintColor,
     packagingSize: originalDef?.packagingSize || def.packagingSize,
@@ -7042,7 +5291,11 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     packagingShapeNameRu:
       originalDef?.packagingShapeNameRu ||
       def.packagingShapeNameRu ||
-      (def.packagingShape ? getCandyPackagingShapeNameRu(def.packagingShape) : undefined),
+      (def.packagingShape
+        ? def.itemId.startsWith('chocolate_pack')
+          ? getChocolatePackagingShapeNameRu(def.packagingShape as ChocolatePackagingShape)
+          : getCandyPackagingShapeNameRu(def.packagingShape as CandyPackagingShape)
+        : undefined),
     contents: (isContainer && !(fluidStorage && legacyMap?.liquidId)) ? [] : undefined,
     containerCapacityL: containerCap,
     maxContainedItemVolumeL: maxContainedVol,
@@ -7050,9 +5303,9 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     allowedItemCategories: def.allowedItemCategories,
     fluidStorage,
     batteryCharge: def.itemId === 'car_battery'? 100 : undefined,
-    fluidLiters: def.itemId === 'antifreeze'? 5.0 : def.itemId === 'motor_oil'? 4.0 : undefined,
-    maxFluidLiters: def.itemId === 'antifreeze'? 5.0 : def.itemId === 'motor_oil'? 4.0 : undefined,
-    fluidType: def.itemId === 'antifreeze'? 'coolant': def.itemId === 'motor_oil'? 'oil': undefined,
+    fluidLiters: fluidStorage?.liquidId === 'antifreeze' ? 5.0 : fluidStorage?.liquidId === 'motor_oil' ? 4.0 : undefined,
+    maxFluidLiters: fluidStorage?.liquidId === 'antifreeze' ? 5.0 : fluidStorage?.liquidId === 'motor_oil' ? 4.0 : undefined,
+    fluidType: fluidStorage?.liquidId === 'antifreeze' ? 'coolant' : fluidStorage?.liquidId === 'motor_oil' ? 'oil' : undefined,
     phoneSpecs: phoneSpecs ? { ...phoneSpecs } : undefined,
     cpu: phoneSpecs?.cpuModel,
     ram: phoneSpecs?.ramGb,
@@ -7068,6 +5321,12 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
       ? {
           ...(originalDef?.pelmenAttributes || def.pelmenAttributes)!,
           ingredients: [...((originalDef?.pelmenAttributes || def.pelmenAttributes)!.ingredients || [])]
+        }
+      : undefined,
+    chocolateAttributes: (originalDef?.chocolateAttributes || def.chocolateAttributes)
+      ? {
+          ...(originalDef?.chocolateAttributes || def.chocolateAttributes)!,
+          ingredients: [...((originalDef?.chocolateAttributes || def.chocolateAttributes)!.ingredients || [])]
         }
       : undefined,
     fullnessPerBite: def.fullnessPerBite,
@@ -7088,9 +5347,20 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
             carbs: PELMEN_SIZE_SPECS[DEFAULT_PELMEN_ATTRIBUTES.size].carbs,
             sugars: 0.2
           }
+        : resolvedItemId === 'chocolate'
+        ? {
+            calories: CHOCOLATE_SIZE_SPECS[DEFAULT_CHOCOLATE_ATTRIBUTES.size].calories,
+            proteins: CHOCOLATE_SIZE_SPECS[DEFAULT_CHOCOLATE_ATTRIBUTES.size].proteins,
+            fats: CHOCOLATE_SIZE_SPECS[DEFAULT_CHOCOLATE_ATTRIBUTES.size].fats,
+            carbs: CHOCOLATE_SIZE_SPECS[DEFAULT_CHOCOLATE_ATTRIBUTES.size].carbs,
+            sugars: CHOCOLATE_SIZE_SPECS[DEFAULT_CHOCOLATE_ATTRIBUTES.size].sugars
+          }
         : undefined
   };
 
+  if (discreteAlias?.isOpen) {
+    syncPackageContainerState(createdItem);
+  }
   if (createdItem.fluidStorage) {
     syncItemContainerProperties(createdItem);
   }
@@ -7111,7 +5381,363 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   }
   initItemThermalProperties(createdItem, 20.0);
 
-  return createdItem;
+  return normalizeItemAttributes(createdItem, originalDef || def);
+}
+
+const PACKAGING_SIZE_NAMES_RU: Record<string, string> = {
+  mini: 'Мини',
+  small: 'Малый',
+  medium: 'Средний',
+  large: 'Большой',
+  king: 'Макси (XXL)'
+};
+
+function inferPackageShapeLabelRu(item: InventoryItem): string | undefined {
+  if (item.packagingShapeNameRu) return item.packagingShapeNameRu;
+  if (item.packagingShape) {
+    if (item.itemId.startsWith('chocolate_pack')) {
+      return getChocolatePackagingShapeNameRu(item.packagingShape as ChocolatePackagingShape);
+    }
+    return getCandyPackagingShapeNameRu(item.packagingShape as CandyPackagingShape);
+  }
+  if (item.containerVisuals?.shapeNameRu) return item.containerVisuals.shapeNameRu;
+  if (item.itemId === 'pelmeni_pack_box') return 'Картонная пачка с окошком';
+  if (item.itemId.startsWith('pelmeni_pack')) return 'Пакет со скрепкой-клипсой';
+  if (item.itemId.startsWith('chocolate_pack')) return 'Шоколадная упаковка';
+  if (item.itemId.startsWith('candy_pouch')) return 'Пластиковый пакет';
+  if (item.itemId.startsWith('paper_packaging')) return 'Пергамент-брикет';
+  if (item.itemId === 'tray_sealed_food' || item.itemId === 'tray_plastic_sealed') return 'Пищевой лоток под плёнкой';
+  if (item.itemId.startsWith('vacuum_pack_')) return 'Вакуумный пакет';
+  if (item.itemId === 'pouch_sealed_snack') return 'Дой-пак с зип-локом';
+  return undefined;
+}
+
+function inferPackageMaterialRu(item: InventoryItem): string | undefined {
+  if (item.containerVisuals?.materialNameRu) return item.containerVisuals.materialNameRu;
+  if (item.itemId === 'chocolate_pack_foil') return 'Тиснёная фольга и бумага';
+  if (item.itemId === 'chocolate_pack_mini') return 'Металлизированная фольга и бумажная манжета';
+  if (item.itemId === 'chocolate_pack_bar' || item.itemId === 'chocolate_pack_square') return 'Пищевой барьерный полимер BOPP';
+  if (item.itemId === 'chocolate_pack_prism') return 'Картон и золочёная фольга';
+  if (item.itemId === 'chocolate_pack_king') return 'Плотный крафт-картон и фольга';
+  if (item.itemId === 'chocolate_pack_box') return 'Дизайнерский картон с золотым коррексом';
+  if (item.itemId === 'pelmeni_pack_box' || item.itemId === 'egg_carton_10') return 'Картон';
+  if (item.itemId.startsWith('paper_packaging')) return 'Вощёный пергамент';
+  if (
+    item.itemId.startsWith('candy_pouch') ||
+    item.itemId.startsWith('pelmeni_pack') ||
+    item.itemId === 'tray_sealed_food' ||
+    item.itemId.startsWith('vacuum_pack_') ||
+    item.itemId === 'pouch_sealed_snack' ||
+    item.itemId === 'blister_pack_10'
+  ) {
+    return 'Пищевой полимер';
+  }
+  return undefined;
+}
+
+/**
+ * Приводит атрибуты ЛЮБОГО предмета (еда, жидкость, сыпучее, мармелад, пельмень,
+ * блюдо, полуфабрикат, упаковка, инструмент, медикамент) к единому JSON-стандарту UnifiedAttributes.
+ */
+export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinition): InventoryItem {
+  if (item.fluidStorage) {
+    syncItemContainerProperties(item);
+  }
+
+  const catalogDef = def || ITEM_CATALOG[item.originalCatalogId || item.itemId] || ITEM_CATALOG[item.itemId];
+  const prevAttrs: UnifiedAttributes = item.attributes ? { ...item.attributes } : {};
+  const defAttrs: UnifiedAttributes = catalogDef?.attributes ? { ...catalogDef.attributes } : {};
+  const visuals: UnifiedVisualAttributes = {
+    ...(defAttrs.visuals || {}),
+    ...(prevAttrs.visuals || {})
+  };
+
+  // Migrate legacy sourceIngredients -> ingredients everywhere
+  const prevIng = prevAttrs.ingredients ?? prevAttrs.sourceIngredients;
+  const defIng = defAttrs.ingredients ?? defAttrs.sourceIngredients;
+  let resolvedIngredients: string | string[] | undefined = prevIng ?? defIng;
+
+  let varietyRu = prevAttrs.varietyRu || defAttrs.varietyRu;
+  let preparationMethod = prevAttrs.preparationMethod || defAttrs.preparationMethod;
+  let purpose = prevAttrs.purpose || defAttrs.purpose;
+  let state = prevAttrs.state || defAttrs.state;
+  let stateNameRu = prevAttrs.stateNameRu || defAttrs.stateNameRu;
+  let flavorRu = prevAttrs.flavorRu || defAttrs.flavorRu;
+  let size = prevAttrs.size || defAttrs.size;
+  let sizeNameRu = prevAttrs.sizeNameRu || defAttrs.sizeNameRu;
+  let dishType = prevAttrs.dishType || defAttrs.dishType;
+  let tasteNotes = prevAttrs.tasteNotes || defAttrs.tasteNotes;
+  let cookingAttributes = prevAttrs.cookingAttributes || defAttrs.cookingAttributes;
+
+  // Optional gummy / pelmen / chocolate extensions
+  let doughColor = prevAttrs.doughColor || defAttrs.doughColor;
+  let doughNameRu = prevAttrs.doughNameRu || defAttrs.doughNameRu;
+  let doughThicknessMm = prevAttrs.doughThicknessMm ?? defAttrs.doughThicknessMm;
+  let fillingRu = prevAttrs.fillingRu || defAttrs.fillingRu;
+  let fillingColor = prevAttrs.fillingColor || defAttrs.fillingColor;
+  let fillingRatioPercent = prevAttrs.fillingRatioPercent ?? defAttrs.fillingRatioPercent;
+  let sourDust = prevAttrs.sourDust ?? defAttrs.sourDust;
+  let flourDusting = prevAttrs.flourDusting ?? defAttrs.flourDusting;
+  let butterGlaze = prevAttrs.butterGlaze ?? defAttrs.butterGlaze;
+  let outerMaterialRu = prevAttrs.outerMaterialRu || defAttrs.outerMaterialRu;
+  let outerColor = prevAttrs.outerColor || defAttrs.outerColor;
+  let outerColorNameRu = prevAttrs.outerColorNameRu || defAttrs.outerColorNameRu;
+  let innerMaterialRu = prevAttrs.innerMaterialRu || defAttrs.innerMaterialRu;
+  let innerColor = prevAttrs.innerColor || defAttrs.innerColor;
+  let innerColorNameRu = prevAttrs.innerColorNameRu || defAttrs.innerColorNameRu;
+  let cocoaPercent = prevAttrs.cocoaPercent ?? defAttrs.cocoaPercent;
+  let hasFilling = prevAttrs.hasFilling ?? defAttrs.hasFilling;
+
+  // 1. Gummy candy mapping
+  if (item.gummyAttributes) {
+    const g = item.gummyAttributes;
+    varietyRu = varietyRu || `Мармелад «${g.shapeNameRu}»`;
+    flavorRu = flavorRu || g.flavorRu;
+    sourDust = sourDust ?? g.sourDust;
+    resolvedIngredients = resolvedIngredients || [...(g.ingredients || [])];
+    preparationMethod = preparationMethod || (g.sourDust
+      ? 'Отливка желейной массы в формы и обсыпка кислой сахарной пудрой'
+      : 'Отливка желейной массы на основе желатина и фруктового сока в формы');
+    purpose = purpose || 'Сладость к чаю или быстрый источник энергии и глюкозы';
+    state = state || 'ready';
+    stateNameRu = stateNameRu || 'Готовый к употреблению';
+    visuals.shape = visuals.shape || g.shape;
+    visuals.shapeNameRu = visuals.shapeNameRu || g.shapeNameRu;
+    visuals.color = visuals.color || g.color;
+    visuals.colorNameRu = visuals.colorNameRu || g.colorNameRu;
+  }
+
+  // 2. Pelmen mapping
+  if (item.pelmenAttributes) {
+    const p = item.pelmenAttributes;
+    varietyRu = varietyRu || `Пельмень (${p.shapeNameRu})`;
+    resolvedIngredients = resolvedIngredients || [...(p.ingredients || [])];
+    preparationMethod = preparationMethod || p.moldingMethodRu;
+    purpose = purpose || 'Полуфабрикат или готовое горячее мясное блюдо (варка/жарка)';
+    state = p.state || state;
+    stateNameRu = p.stateNameRu || stateNameRu;
+    size = size || p.size;
+    sizeNameRu = sizeNameRu || p.sizeNameRu;
+    doughColor = p.doughColor;
+    doughNameRu = p.doughNameRu;
+    doughThicknessMm = p.doughThicknessMm;
+    fillingRu = p.fillingRu;
+    fillingColor = p.fillingColor;
+    fillingRatioPercent = p.fillingRatioPercent;
+    flourDusting = p.flourDusting;
+    butterGlaze = p.butterGlaze;
+    visuals.shape = visuals.shape || p.shape;
+    visuals.shapeNameRu = visuals.shapeNameRu || p.shapeNameRu;
+    visuals.color = visuals.color || p.fillingColor;
+    visuals.tintColor = visuals.tintColor || p.doughColor;
+    visuals.size = visuals.size || p.size;
+    visuals.sizeNameRu = visuals.sizeNameRu || p.sizeNameRu;
+  }
+
+  // 2b. Chocolate mapping
+  if (item.chocolateAttributes) {
+    const ch = item.chocolateAttributes;
+    varietyRu = varietyRu || `Шоколад (${ch.shapeNameRu})`;
+    flavorRu = flavorRu || ch.flavorRu;
+    resolvedIngredients = resolvedIngredients || [...(ch.ingredients || [])];
+    preparationMethod = preparationMethod || (ch.hasFilling
+      ? 'Темперирование внешней шоколадной оболочки в форме и заполнение внутренней начинкой'
+      : 'Конширование какао-массы и темперирование в фигурные формы');
+    purpose = purpose || 'Кондитерское изделие к чаю/кофе и быстрый источник энергии';
+    state = state || 'ready';
+    stateNameRu = stateNameRu || 'Готов к употреблению';
+    size = size || ch.size;
+    sizeNameRu = sizeNameRu || ch.sizeNameRu;
+    outerMaterialRu = ch.outerMaterialRu;
+    outerColor = ch.outerColor;
+    outerColorNameRu = ch.outerColorNameRu;
+    innerMaterialRu = ch.innerMaterialRu;
+    innerColor = ch.innerColor;
+    innerColorNameRu = ch.innerColorNameRu;
+    cocoaPercent = ch.cocoaPercent;
+    hasFilling = ch.hasFilling;
+    visuals.shape = visuals.shape || ch.shape;
+    visuals.shapeNameRu = visuals.shapeNameRu || ch.shapeNameRu;
+    visuals.color = visuals.color || ch.outerColor;
+    visuals.colorNameRu = visuals.colorNameRu || ch.outerColorNameRu;
+    visuals.secondaryColor = visuals.secondaryColor || ch.innerColor;
+    visuals.size = visuals.size || ch.size;
+    visuals.sizeNameRu = visuals.sizeNameRu || ch.sizeNameRu;
+  }
+
+  // 3. Culinary dish / workpiece / mix mapping
+  if (item.culinaryData) {
+    const cd = item.culinaryData;
+    dishType = dishType || cd.dishType;
+    cookingAttributes = cookingAttributes || cd.cookingAttributes;
+    tasteNotes = tasteNotes || cd.tasteNotes;
+    if (!resolvedIngredients) {
+      if (cd.ingredientsList && cd.ingredientsList.length > 0) {
+        resolvedIngredients = [...cd.ingredientsList];
+      } else if (cd.ingredients && cd.ingredients.length > 0) {
+        resolvedIngredients = cd.ingredients.map((i: any) => i.nameRu || i.name).filter(Boolean);
+      }
+    }
+    if (!state) {
+      state = cd.isPreparedDish ? 'cooked' : 'raw';
+    }
+    if (!stateNameRu) {
+      stateNameRu = cd.isPreparedDish ? 'Приготовленное блюдо' : 'Сырая заготовка';
+    }
+    if (!preparationMethod) {
+      preparationMethod = cd.isPreparedDish
+        ? 'Термообработка в посуде на плите'
+        : 'Подготовка и нарезка сырых продуктов';
+    }
+    if (!purpose) {
+      purpose = cd.isPreparedDish
+        ? 'Готовое блюдо для утоления голода'
+        : 'Кулинарный полуфабрикат для дальнейшей готовки';
+    }
+  }
+
+  // 4. Container visuals / packaging properties mapping
+  const isPkg = isPackageContainerItem(item) || Boolean(item.containerVisuals || item.packagingShape || item.packagingSize);
+  if (isPkg && !item.fluidStorage) {
+    const pkgShapeRu = inferPackageShapeLabelRu(item);
+    const pkgMatRu = inferPackageMaterialRu(item);
+    const pkgSize = item.packagingSize || catalogDef?.packagingSize;
+    if (pkgShapeRu && !visuals.shapeNameRu) visuals.shapeNameRu = pkgShapeRu;
+    if ((item.packagingShape || item.containerVisuals?.shape) && !visuals.shape) {
+      visuals.shape = item.packagingShape || item.containerVisuals?.shape;
+    }
+    if (pkgMatRu && !visuals.materialNameRu) visuals.materialNameRu = pkgMatRu;
+    if (pkgSize) {
+      size = size || pkgSize;
+      sizeNameRu = sizeNameRu || PACKAGING_SIZE_NAMES_RU[pkgSize] || pkgSize;
+      visuals.size = visuals.size || pkgSize;
+      visuals.sizeNameRu = visuals.sizeNameRu || PACKAGING_SIZE_NAMES_RU[pkgSize] || pkgSize;
+    }
+    if (item.labelColor && !visuals.labelColor) visuals.labelColor = item.labelColor;
+    if (item.containerTintColor && !visuals.tintColor) visuals.tintColor = item.containerTintColor;
+    if (item.containerVisuals) {
+      if (!visuals.materialRgb) visuals.materialRgb = item.containerVisuals.materialRgb;
+      if (item.containerVisuals.labelRgb !== undefined && visuals.labelRgb === undefined) {
+        visuals.labelRgb = item.containerVisuals.labelRgb;
+      }
+      if (item.containerVisuals.labelAccentRgb && !visuals.labelAccentRgb) {
+        visuals.labelAccentRgb = item.containerVisuals.labelAccentRgb;
+      }
+      if (item.containerVisuals.capRgb && !visuals.capRgb) {
+        visuals.capRgb = item.containerVisuals.capRgb;
+      }
+    }
+    if (isPackageContainerItem(item)) {
+      const openFlag = Boolean(item.isOpen);
+      state = openFlag ? 'opened' : 'sealed';
+      stateNameRu = openFlag ? 'Вскрыта' : 'Запаяна';
+    }
+    // Derive composition / purpose from contents if it's a filled food/candy/pelmeni package
+    if (item.contents && item.contents.length > 0 && !resolvedIngredients) {
+      const firstInner = item.contents[0];
+      const normalizedFirst = normalizeItemAttributes(firstInner);
+      if (normalizedFirst.attributes?.ingredients) {
+        resolvedIngredients = Array.isArray(normalizedFirst.attributes.ingredients)
+          ? [...normalizedFirst.attributes.ingredients]
+          : normalizedFirst.attributes.ingredients;
+      } else {
+        resolvedIngredients = Array.from(new Set(item.contents.map(c => c.nameRu).filter(Boolean)));
+      }
+      if (!varietyRu) {
+        varietyRu = normalizedFirst.attributes?.varietyRu || `${firstInner.nameRu} (${item.contents.length} шт.)`;
+      }
+      if (!preparationMethod && normalizedFirst.attributes?.preparationMethod) {
+        preparationMethod = normalizedFirst.attributes.preparationMethod;
+      }
+      if (!purpose && normalizedFirst.attributes?.purpose) {
+        purpose = normalizedFirst.attributes.purpose;
+      }
+      if (!flavorRu && normalizedFirst.attributes?.flavorRu) {
+        flavorRu = normalizedFirst.attributes.flavorRu;
+      }
+    }
+  }
+
+  // 5. Fallback defaults for standard items so every InventoryItem has a coherent JSON schema
+  if (!varietyRu) {
+    varietyRu = catalogDef?.nameRu || item.nameRu;
+  }
+  if (!resolvedIngredients && item.category === 'food' && !item.isContainer && !item.fluidStorage) {
+    resolvedIngredients = [catalogDef?.nameRu || item.nameRu];
+  }
+  if (!purpose) {
+    purpose = item.category === 'food'
+      ? 'Продукт питания / кулинарный ингредиент'
+      : item.category === 'drink'
+      ? 'Напиток для утоления жажды'
+      : item.category === 'med'
+      ? 'Медицинское средство для лечения травм и симптомов'
+      : item.category === 'tool'
+      ? 'Рабочий инструмент или снаряжение'
+      : item.category === 'clothing'
+      ? 'Одежда и экипировка (защита от холода и карманы)'
+      : 'Предмет инвентаря';
+  }
+
+  const unified: UnifiedAttributes = {
+    ...defAttrs,
+    ...prevAttrs,
+    varietyRu,
+    ...(resolvedIngredients !== undefined ? { ingredients: resolvedIngredients } : {}),
+    ...(preparationMethod ? { preparationMethod } : {}),
+    ...(purpose ? { purpose } : {}),
+    ...(state ? { state } : {}),
+    ...(stateNameRu ? { stateNameRu } : {}),
+    ...(flavorRu ? { flavorRu } : {}),
+    ...(size ? { size } : {}),
+    ...(sizeNameRu ? { sizeNameRu } : {}),
+    ...(doughColor ? { doughColor } : {}),
+    ...(doughNameRu ? { doughNameRu } : {}),
+    ...(doughThicknessMm !== undefined ? { doughThicknessMm } : {}),
+    ...(fillingRu ? { fillingRu } : {}),
+    ...(fillingColor ? { fillingColor } : {}),
+    ...(fillingRatioPercent !== undefined ? { fillingRatioPercent } : {}),
+    ...(sourDust !== undefined ? { sourDust } : {}),
+    ...(flourDusting !== undefined ? { flourDusting } : {}),
+    ...(butterGlaze !== undefined ? { butterGlaze } : {}),
+    ...(outerMaterialRu ? { outerMaterialRu } : {}),
+    ...(outerColor ? { outerColor } : {}),
+    ...(outerColorNameRu ? { outerColorNameRu } : {}),
+    ...(innerMaterialRu ? { innerMaterialRu } : {}),
+    ...(innerColor ? { innerColor } : {}),
+    ...(innerColorNameRu ? { innerColorNameRu } : {}),
+    ...(cocoaPercent !== undefined ? { cocoaPercent } : {}),
+    ...(hasFilling !== undefined ? { hasFilling } : {}),
+    ...(dishType ? { dishType } : {}),
+    ...(tasteNotes ? { tasteNotes } : {}),
+    ...(cookingAttributes ? { cookingAttributes } : {}),
+    ...(Object.keys(visuals).length > 0 ? { visuals } : {})
+  };
+  delete unified.sourceIngredients;
+  if (item.isContainer || item.fluidStorage) {
+    unified.isOpened = Boolean(item.isOpen || prevAttrs.isOpened);
+  }
+
+  item.attributes = unified;
+  if (item.fluidStorage?.attributes) {
+    item.fluidStorage.attributes = {
+      ...item.fluidStorage.attributes,
+      ...unified
+    };
+    delete item.fluidStorage.attributes.sourceIngredients;
+  }
+
+  return item;
+}
+
+/**
+ * Безопасное чтение унифицированных атрибутов с автоматической миграцией старых JSON-сейвов.
+ */
+export function getUnifiedItemAttributes(item: InventoryItem): UnifiedAttributes {
+  if (!item.attributes || (item.attributes as any).sourceIngredients) {
+    normalizeItemAttributes(item);
+  }
+  return item.attributes || {};
 }
 
 export function createGummyCandy(overrides?: Partial<GummyCandyAttributes>): InventoryItem {
@@ -7144,7 +5770,7 @@ export function createGummyCandy(overrides?: Partial<GummyCandyAttributes>): Inv
     carbs: spec.carbs,
     sugars: spec.sugars
   };
-  return item;
+  return normalizeItemAttributes(item);
 }
 
 export function createPelmen(overrides?: Partial<PelmenAttributes>): InventoryItem {
@@ -7204,7 +5830,7 @@ export function createPelmen(overrides?: Partial<PelmenAttributes>): InventoryIt
     carbs: spec.carbs,
     sugars: 0.2
   };
-  return item;
+  return normalizeItemAttributes(item);
 }
 
 export function createPelmeniPackaging(options?: {
@@ -7231,6 +5857,100 @@ export function createPelmeniPackaging(options?: {
   });
 }
 
+export function createChocolate(overrides?: Partial<ChocolateAttributes>): InventoryItem {
+  const item = createItem('chocolate', 1, undefined, true);
+  const shape: ChocolateShape = overrides?.shape || DEFAULT_CHOCOLATE_ATTRIBUTES.shape;
+  const size: ChocolateSize = overrides?.size || DEFAULT_CHOCOLATE_ATTRIBUTES.size;
+  const shapeNameRu = overrides?.shapeNameRu || CHOCOLATE_SHAPE_NAMES_RU[shape] || DEFAULT_CHOCOLATE_ATTRIBUTES.shapeNameRu;
+  const sizeNameRu = overrides?.sizeNameRu || CHOCOLATE_SIZE_NAMES_RU[size] || DEFAULT_CHOCOLATE_ATTRIBUTES.sizeNameRu;
+  const spec = CHOCOLATE_SIZE_SPECS[size] || CHOCOLATE_SIZE_SPECS.medium;
+
+  const outerColor = overrides?.outerColor || DEFAULT_CHOCOLATE_ATTRIBUTES.outerColor;
+  const innerColor = overrides?.innerColor || DEFAULT_CHOCOLATE_ATTRIBUTES.innerColor;
+  const hasFilling = overrides?.hasFilling ?? (outerColor.toLowerCase() !== innerColor.toLowerCase());
+
+  const attrs: ChocolateAttributes = {
+    shape,
+    shapeNameRu,
+    size,
+    sizeNameRu,
+    outerMaterialRu: overrides?.outerMaterialRu || DEFAULT_CHOCOLATE_ATTRIBUTES.outerMaterialRu,
+    outerColor,
+    outerColorNameRu: overrides?.outerColorNameRu || DEFAULT_CHOCOLATE_ATTRIBUTES.outerColorNameRu,
+    innerMaterialRu: overrides?.innerMaterialRu || DEFAULT_CHOCOLATE_ATTRIBUTES.innerMaterialRu,
+    innerColor,
+    innerColorNameRu: overrides?.innerColorNameRu || DEFAULT_CHOCOLATE_ATTRIBUTES.innerColorNameRu,
+    hasFilling,
+    cocoaPercent: overrides?.cocoaPercent ?? DEFAULT_CHOCOLATE_ATTRIBUTES.cocoaPercent,
+    flavorRu: overrides?.flavorRu ?? DEFAULT_CHOCOLATE_ATTRIBUTES.flavorRu,
+    surfaceTexture: overrides?.surfaceTexture ?? DEFAULT_CHOCOLATE_ATTRIBUTES.surfaceTexture,
+    ingredients: overrides?.ingredients ? [...overrides.ingredients] : [...DEFAULT_CHOCOLATE_ATTRIBUTES.ingredients]
+  };
+
+  item.chocolateAttributes = attrs;
+  item.weight = spec.weightKg;
+  item.volume = spec.volumeL;
+  item.effects = { hunger: spec.hunger, energy: spec.energy };
+  item.portions = spec.biteCount;
+  item.maxPortions = spec.biteCount;
+  item.fullnessPerBite = spec.fullnessPerBite;
+
+  const grams = Math.round(spec.weightKg * 1000);
+  item.nameRu = `Шоколадка (${attrs.shapeNameRu.toLowerCase()}, ${grams} г)`;
+  item.descriptionRu = `Шоколад (${grams} г, ${attrs.sizeNameRu.toLowerCase()}): форма — ${attrs.shapeNameRu.toLowerCase()}. Внешняя часть: ${attrs.outerMaterialRu} (${attrs.outerColorNameRu}). Внутренняя часть: ${attrs.innerMaterialRu} (${attrs.innerColorNameRu}). Состав: ${attrs.ingredients.join(', ')}.`;
+  item.nutrients = {
+    calories: spec.calories,
+    proteins: spec.proteins,
+    fats: spec.fats,
+    carbs: spec.carbs,
+    sugars: spec.sugars
+  };
+  return normalizeItemAttributes(item);
+}
+
+export function createChocolatePackaging(options?: {
+  size?: 'mini' | 'small' | 'medium' | 'large' | 'king';
+  shape?: ChocolatePackagingShape;
+  labelColor?: string;
+  tintColor?: string;
+  contents?: InventoryItem[];
+  isOpen?: boolean;
+}): InventoryItem {
+  const shape = options?.shape;
+  const size =
+    options?.size ||
+    (shape === 'mini_foil_wrap'
+      ? 'mini'
+      : shape === 'flow_bar'
+      ? 'small'
+      : shape === 'craft_envelope_xl' || shape === 'gift_box'
+      ? 'large'
+      : 'medium');
+
+  const baseId =
+    shape === 'mini_foil_wrap' || size === 'mini'
+      ? 'chocolate_pack_mini'
+      : shape === 'flow_bar' || size === 'small'
+      ? 'chocolate_pack_bar'
+      : shape === 'square_flow'
+      ? 'chocolate_pack_square'
+      : shape === 'triangular_prism'
+      ? 'chocolate_pack_prism'
+      : shape === 'gift_box'
+      ? 'chocolate_pack_box'
+      : shape === 'craft_envelope_xl' || size === 'large' || size === 'king'
+      ? 'chocolate_pack_king'
+      : 'chocolate_pack_foil';
+
+  return createFilledPackage(baseId, options?.contents || [], {
+    isOpen: Boolean(options?.isOpen),
+    labelColor: options?.labelColor,
+    containerTintColor: options?.tintColor,
+    packagingSize: size,
+    packagingShape: shape
+  });
+}
+
 export const ITEM_PACKAGING_MAP: Record<string, {
   containerId: string;
   countInside?: number;
@@ -7241,6 +5961,7 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   customDescriptionRu?: string;
   innerGummyPresets?: Partial<GummyCandyAttributes>[];
   innerPelmenPresets?: Partial<PelmenAttributes>[];
+  innerChocolatePresets?: Partial<ChocolateAttributes>[];
 }> = {
   // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
   carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2, innerItemId: 'carrot_peeled' },
@@ -7360,6 +6081,7 @@ export function getResolvedPackagingConfig(itemId: string): ItemPackagingConfig 
 export function isRegisteredItemId(itemId: string): boolean {
   if (!itemId) return false;
   if (Boolean(ITEM_CATALOG[itemId])) return true;
+  if (Boolean(LEGACY_DISCRETE_CONTAINER_ALIASES[itemId])) return true;
   if (Boolean(getResolvedPackagingConfig(itemId))) return true;
   if (Boolean(getResolvedFluidContainerConfig(itemId))) return true;
   return false;
@@ -7393,8 +6115,8 @@ export interface PackageAttributesSpec {
   isOpen?: boolean;
   labelColor?: string;
   containerTintColor?: string;
-  packagingSize?: 'mini' | 'small' | 'medium' | 'large';
-  packagingShape?: CandyPackagingShape;
+  packagingSize?: 'mini' | 'small' | 'medium' | 'large' | 'king';
+  packagingShape?: CandyPackagingShape | ChocolatePackagingShape;
   customNameRu?: string;
   customDescriptionRu?: string;
   originalCatalogId?: string;
@@ -7416,13 +6138,21 @@ function getOpenedPackageBaseNameRu(container: InventoryItem): string {
   if (id === 'pelmeni_pack') return 'Вскрытая пачка из-под пельменей';
   if (id === 'pelmeni_pack_large') return 'Вскрытый большой мешок из-под пельменей';
   if (id === 'pelmeni_pack_box') return 'Открытая картонная пачка из-под пельменей';
+  if (id.startsWith('chocolate_pack')) {
+    const shapeRu =
+      container.packagingShapeNameRu ||
+      (container.packagingShape ? getChocolatePackagingShapeNameRu(container.packagingShape as ChocolatePackagingShape) : '');
+    return shapeRu ? `Развёрнутая обёртка (${shapeRu})` : 'Развёрнутая упаковка от шоколадки';
+  }
   if (id.startsWith('paper_packaging')) {
     const sz = container.packagingSize || baseDef?.packagingSize;
     const szLabel = sz === 'mini' ? 'Мини' : sz === 'small' ? 'Малая' : sz === 'large' ? 'Большая' : '';
     return szLabel ? `Открытая бумажная упаковка (${szLabel})` : 'Открытая бумажная упаковка';
   }
   if (id.startsWith('candy_pouch')) {
-    const shapeRu = container.packagingShapeNameRu || (container.packagingShape ? getCandyPackagingShapeNameRu(container.packagingShape) : '');
+    const shapeRu =
+      container.packagingShapeNameRu ||
+      (container.packagingShape ? getCandyPackagingShapeNameRu(container.packagingShape as CandyPackagingShape) : '');
     return shapeRu ? `Вскрытая упаковка (${shapeRu})` : 'Вскрытая пластиковая упаковка';
   }
   const rawName = baseDef?.nameRu || 'Упаковка';
@@ -7443,6 +6173,7 @@ export function isPackageContainerItem(item: InventoryItem): boolean {
     id === 'pouch_sealed_snack' ||
     id.startsWith('paper_packaging') ||
     id.startsWith('candy_pouch') ||
+    id.startsWith('chocolate_pack') ||
     id.startsWith('pelmeni_pack') ||
     id === 'egg_carton_10' ||
     id === 'egg_carton_quail_18' ||
@@ -7462,7 +6193,9 @@ export function syncPackageContainerState(
     container.contents = [];
   }
   if (container.packagingShape && !container.packagingShapeNameRu) {
-    container.packagingShapeNameRu = getCandyPackagingShapeNameRu(container.packagingShape);
+    container.packagingShapeNameRu = container.itemId.startsWith('chocolate_pack')
+      ? getChocolatePackagingShapeNameRu(container.packagingShape as ChocolatePackagingShape)
+      : getCandyPackagingShapeNameRu(container.packagingShape as CandyPackagingShape);
   }
 
   const numInside = container.contents.length;
@@ -7473,6 +6206,8 @@ export function syncPackageContainerState(
       ? 'Жевательный мармелад'
       : firstInner.itemId === 'pelmen'
       ? 'Пельмени'
+      : firstInner.itemId === 'chocolate'
+      ? 'Шоколад'
       : firstInner.nameRu || singleInnerDef?.nameRu || 'Предмет'
     : '';
 
@@ -7487,6 +6222,8 @@ export function syncPackageContainerState(
           ? 'Мармелад'
           : firstInner?.itemId === 'pelmen'
           ? 'Пельмени'
+          : firstInner?.itemId === 'chocolate'
+          ? 'Шоколад'
           : innerTitle;
       container.nameRu = `${openedBaseTitle} (${shortInnerLabel}: ${numInside} шт)`;
       container.descriptionRu = `Вскрытая упаковка (${baseDef?.nameRu || openedBaseTitle}). Внутри: ${shortInnerLabel} (${numInside} шт.). Нажмите [E] или откройте контейнер в инвентаре, чтобы достать содержимое.`;
@@ -7528,6 +6265,20 @@ export function syncPackageContainerState(
           container.contents.reduce((sum, c) => sum + (c.weight || 0) * 1000, 0)
         );
         container.descriptionRu = `${baseDesc} Внутри: ${numInside} шт. (~${netWeightGrams} г нетто; форма: ${shapeSummary || 'классическая'}${fillingSummary ? `; начинка: ${fillingSummary}` : ''}). ${actionHint}`;
+      } else if (firstInner.itemId === 'chocolate') {
+        const shapeSummary = Array.from(
+          new Set(container.contents.map(c => c.chocolateAttributes?.shapeNameRu).filter(Boolean))
+        ).join(', ');
+        const outerSummary = Array.from(
+          new Set(container.contents.map(c => c.chocolateAttributes?.outerMaterialRu).filter(Boolean))
+        ).join('; ');
+        const innerSummary = Array.from(
+          new Set(container.contents.map(c => c.chocolateAttributes?.innerMaterialRu).filter(Boolean))
+        ).join('; ');
+        const netWeightGrams = Math.round(
+          container.contents.reduce((sum, c) => sum + (c.weight || 0) * 1000, 0)
+        );
+        container.descriptionRu = `${baseDesc} Внутри: ${numInside} шт. (~${netWeightGrams} г нетто; форма: ${shapeSummary || 'плитка'}${outerSummary ? `; внешняя часть: ${outerSummary}` : ''}${innerSummary ? `; внутри: ${innerSummary}` : ''}). ${actionHint}`;
       } else {
         container.descriptionRu = `${baseDesc} Внутри: ${innerTitle} (${numInside} шт.). ${actionHint}`;
       }
@@ -7546,6 +6297,7 @@ export function syncPackageContainerState(
       container.heatRetention ?? 0.4
     );
   }
+  normalizeItemAttributes(container);
 }
 
 export function createFilledPackage(
@@ -7568,12 +6320,14 @@ export function createFilledPackage(
   }
   if (attrs?.packagingShape) {
     container.packagingShape = attrs.packagingShape;
-    container.packagingShapeNameRu = getCandyPackagingShapeNameRu(attrs.packagingShape);
+    container.packagingShapeNameRu = container.itemId.startsWith('chocolate_pack')
+      ? getChocolatePackagingShapeNameRu(attrs.packagingShape as ChocolatePackagingShape)
+      : getCandyPackagingShapeNameRu(attrs.packagingShape as CandyPackagingShape);
   }
   container.isOpen = Boolean(attrs?.isOpen);
-  container.contents = innerItems.map(it => ({ ...it, count: 1, maxStack: 1 }));
+  container.contents = innerItems.map(it => normalizeItemAttributes({ ...it, count: 1, maxStack: 1 }));
   syncPackageContainerState(container, attrs?.customNameRu, attrs?.customDescriptionRu);
-  return container;
+  return normalizeItemAttributes(container);
 }
 
 export function createPackagedItem(itemId: string, count: number = 1): InventoryItem {
@@ -7595,6 +6349,12 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
             ? packInfo.innerPelmenPresets[i % packInfo.innerPelmenPresets.length]
             : undefined;
         innerItems.push(createPelmen(pelmenPreset));
+      } else if (innerId === 'chocolate') {
+        const chocoPreset =
+          packInfo.innerChocolatePresets && packInfo.innerChocolatePresets.length > 0
+            ? packInfo.innerChocolatePresets[i % packInfo.innerChocolatePresets.length]
+            : undefined;
+        innerItems.push(createChocolate(chocoPreset));
       } else {
         innerItems.push(createItem(innerId, 1, undefined, true));
       }
@@ -7726,7 +6486,7 @@ export function unpackSingleUseContainer(
   const isCurrentlySealed = !container.isOpen && Boolean(
     container.singleUseContainer ??
     def?.singleUseContainer ??
-    ((container.itemId.startsWith('paper_packaging') || container.itemId.startsWith('candy_pouch')) && !container.itemId.includes('_open'))
+    ((container.itemId.startsWith('paper_packaging') || container.itemId.startsWith('candy_pouch') || container.itemId.startsWith('chocolate_pack')) && !container.itemId.includes('_open'))
   );
 
   // Piece-by-piece consumption/extraction for multi-piece blisters, snack bags, takeout boxes, and egg cartons
@@ -7736,7 +6496,8 @@ export function unpackSingleUseContainer(
       const isExtractablePiece =
         sample.itemId === 'egg_chicken_single' ||
         sample.itemId === 'egg_quail_single' ||
-        sample.itemId === 'pelmen';
+        sample.itemId === 'pelmen' ||
+        sample.itemId === 'chocolate';
       const sampleDef = ITEM_CATALOG[sample.itemId];
       const isDirectPiece =
         !isExtractablePiece &&
@@ -10027,13 +8788,13 @@ export function useItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
-  // Single-use vacuum bags, kraft paper packaging, candy pouches & disposable packaging unpack / tear open or consume piece
+  // Single-use vacuum bags, kraft paper packaging, candy pouches, chocolate wrappers & disposable packaging unpack / tear open or consume piece
   const isUnopenedPackage =
     !item.isOpen &&
     Boolean(
       item.singleUseContainer ??
       ITEM_CATALOG[item.itemId]?.singleUseContainer ??
-      ((item.itemId.startsWith('paper_packaging') || item.itemId.startsWith('candy_pouch')) && !item.itemId.includes('_open'))
+      ((item.itemId.startsWith('paper_packaging') || item.itemId.startsWith('candy_pouch') || item.itemId.startsWith('chocolate_pack')) && !item.itemId.includes('_open'))
     );
   const isOpenedPackageWithContents =
     Boolean(item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
@@ -10053,6 +8814,12 @@ export function useItemOnPlayer(
   if (item.itemId.startsWith('candy_pouch') && (item.isOpen || item.itemId.includes('_open'))) {
     addPlayerNotification(player, 'Это вскрытая пластиковая упаковка от сладостей: перетаскивайте в неё мелкие предметы для хранения.', 'info');
     return { success: false, message: 'Вскрытая упаковка: используйте инвентарь для перемещения предметов' };
+  }
+
+  // Open empty chocolate packaging container safety check
+  if (item.itemId.startsWith('chocolate_pack') && (item.isOpen || item.itemId.includes('_open'))) {
+    addPlayerNotification(player, 'Это развёрнутая упаковка от шоколада: перетаскивайте в неё шоколадки и сладости для хранения.', 'info');
+    return { success: false, message: 'Развёрнутая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
   // Reusable filled containers (e.g. lukoshko with berries/mushrooms, open egg carton with eggs)
@@ -10931,7 +9698,12 @@ export function useItemOnPlayer(
     item.maxPortions = maxPortions;
 
     let taste = '';
-    if (def?.tasteMessages && def.tasteMessages.length > 0) {
+    if (item.chocolateAttributes) {
+      const ch = item.chocolateAttributes;
+      taste = ch.hasFilling
+        ? `Отламываете кусочек: ${ch.outerMaterialRu.toLowerCase()} и нежная начинка (${ch.innerMaterialRu.toLowerCase()})...`
+        : `Долька тает во рту: ${ch.outerMaterialRu.toLowerCase()}...`;
+    } else if (def?.tasteMessages && def.tasteMessages.length > 0) {
       taste = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
     }
 
@@ -11098,13 +9870,13 @@ export function useHandItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
-  // Single-use vacuum bags, kraft paper packaging, candy pouches & disposable packaging unpack / tear open from hand
+  // Single-use vacuum bags, kraft paper packaging, candy pouches, chocolate wrappers & disposable packaging unpack / tear open from hand
   const isUnopenedHandPackage =
     !item.isOpen &&
     Boolean(
       item.singleUseContainer ??
       ITEM_CATALOG[item.itemId]?.singleUseContainer ??
-      ((item.itemId.startsWith('paper_packaging') || item.itemId.startsWith('candy_pouch')) && !item.itemId.includes('_open'))
+      ((item.itemId.startsWith('paper_packaging') || item.itemId.startsWith('candy_pouch') || item.itemId.startsWith('chocolate_pack')) && !item.itemId.includes('_open'))
     );
   const isOpenedHandPackageWithContents =
     Boolean(item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
@@ -11124,6 +9896,12 @@ export function useHandItemOnPlayer(
   if (item.itemId.startsWith('candy_pouch') && (item.isOpen || item.itemId.includes('_open'))) {
     addPlayerNotification(player, 'Это вскрытая пластиковая упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
     return { success: false, message: 'Вскрытая упаковка: используйте инвентарь для перемещения предметов' };
+  }
+
+  // Open empty chocolate packaging container in hand
+  if (item.itemId.startsWith('chocolate_pack') && (item.isOpen || item.itemId.includes('_open'))) {
+    addPlayerNotification(player, 'Это развёрнутая упаковка от шоколада в руке: используйте инвентарь, чтобы сложить или достать сладости.', 'info');
+    return { success: false, message: 'Развёрнутая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
   // Reusable filled containers held in hand (e.g. lukoshko with berries/mushrooms, open egg carton with eggs)
@@ -12104,7 +10882,12 @@ export function useHandItemOnPlayer(
     item.maxPortions = maxPortions;
 
     let taste = '';
-    if (def?.tasteMessages && def.tasteMessages.length > 0) {
+    if (item.chocolateAttributes) {
+      const ch = item.chocolateAttributes;
+      taste = ch.hasFilling
+        ? `Отламываете кусочек: ${ch.outerMaterialRu.toLowerCase()} и нежная начинка (${ch.innerMaterialRu.toLowerCase()})...`
+        : `Долька тает во рту: ${ch.outerMaterialRu.toLowerCase()}...`;
+    } else if (def?.tasteMessages && def.tasteMessages.length > 0) {
       taste = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
     }
 

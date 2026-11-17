@@ -35,11 +35,12 @@ import {
   Zap
 } from 'lucide-react';
 import { CAR_CONFIGS } from '../vehicleHelpers';
-import { ActivePlacement } from '../types';
+import { ActivePlacement, CandyPackagingShape, ChocolatePackagingShape } from '../types';
 import { GameCalendarState, formatGameDate, formatGameTime } from '../calendarSystem';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { VEHICLE_CATALOG, VehicleCatalogEntry, getVehicleCatalogItem } from '../vehicleCatalog';
-import { ITEM_CATALOG, getCandyPackagingShapeNameRu } from '../items';
+import { ITEM_CATALOG, getCandyPackagingShapeNameRu, getChocolatePackagingShapeNameRu } from '../items';
+import { EXTENDED_ITEM_PACKAGING_MAP } from '../unifiedSubstanceCatalog';
 
 export interface CreativeMenuModalProps {
   isOpen: boolean;
@@ -179,7 +180,45 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
     return prop.category === propCategoryFilter;
   });
 
-  const filteredItems = Object.entries(ITEM_CATALOG).filter(([key, item]) => {
+  const allCreativeItems = useMemo(() => {
+    const entries: Array<[string, {
+      name: string;
+      nameRu?: string;
+      description: string;
+      descriptionRu?: string;
+      category: string;
+      maxStack: number;
+      weight: number;
+      packagingShape?: CandyPackagingShape | ChocolatePackagingShape;
+      packagingShapeNameRu?: string;
+      packagingSize?: string;
+    }]> = Object.entries(ITEM_CATALOG);
+
+    Object.entries(EXTENDED_ITEM_PACKAGING_MAP).forEach(([key, pkg]) => {
+      if (ITEM_CATALOG[key] || !pkg.customNameRu) return;
+      const containerDef = ITEM_CATALOG[pkg.containerId];
+      const innerDef = pkg.innerItemId ? ITEM_CATALOG[pkg.innerItemId] : undefined;
+      if (!containerDef) return;
+      entries.push([
+        key,
+        {
+          name: key,
+          nameRu: pkg.customNameRu,
+          description: pkg.customDescriptionRu || containerDef.description,
+          descriptionRu: pkg.customDescriptionRu || containerDef.descriptionRu,
+          category: innerDef?.category || 'food',
+          maxStack: 1,
+          weight: containerDef.weight,
+          packagingShape: containerDef.packagingShape,
+          packagingShapeNameRu: containerDef.packagingShapeNameRu,
+          packagingSize: containerDef.packagingSize
+        }
+      ]);
+    });
+    return entries;
+  }, []);
+
+  const filteredItems = allCreativeItems.filter(([key, item]) => {
     const q = itemSearch.trim().toLowerCase();
     const matchesSearch = !q ||
       item.name.toLowerCase().includes(q) ||
@@ -676,7 +715,10 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                             {(item.packagingShapeNameRu || item.packagingShape) && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
                                 <Package className="w-3 h-3 shrink-0" />
-                                {item.packagingShapeNameRu || getCandyPackagingShapeNameRu(item.packagingShape)}
+                                {item.packagingShapeNameRu ||
+                                  (key.startsWith('chocolate_pack') || key.startsWith('choc_')
+                                    ? getChocolatePackagingShapeNameRu(item.packagingShape as ChocolatePackagingShape)
+                                    : getCandyPackagingShapeNameRu(item.packagingShape as CandyPackagingShape))}
                               </span>
                             )}
                             {item.packagingSize && (

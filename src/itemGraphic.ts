@@ -14,6 +14,7 @@ import { drawProduceAndMushroomItem } from './graphics/produceAndMushroomGraphic
 import { drawPantryAndDairyItem } from './graphics/pantryAndDairyGraphics';
 import { drawPaperPackagingItem } from './graphics/paperPackagingGraphics';
 import { drawCandyPackagingItem } from './graphics/candyPackagingGraphics';
+import { drawChocolatePackagingItem } from './graphics/chocolatePackagingGraphics';
 import { drawShadow, drawFrostAndThermalOverlay } from './graphics/itemGraphicShared';
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
 import { ITEM_CATALOG, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
@@ -76,7 +77,7 @@ export function drawItemModel2D(
         const origPkgId = effectiveId;
         effectiveId = legacyPkg.containerId;
         if (!effectiveItem || !effectiveItem.contents) {
-          const previewCount = Math.min(4, legacyPkg.countInside || 1);
+          const previewCount = Math.min(6, legacyPkg.countInside || 1);
           const previewContents = Array.from({ length: previewCount }, (_, idx) => {
             const preset = legacyPkg.innerGummyPresets && legacyPkg.innerGummyPresets.length > 0
               ? legacyPkg.innerGummyPresets[idx % legacyPkg.innerGummyPresets.length]
@@ -84,10 +85,14 @@ export function drawItemModel2D(
             const pelmenPreset = legacyPkg.innerPelmenPresets && legacyPkg.innerPelmenPresets.length > 0
               ? legacyPkg.innerPelmenPresets[idx % legacyPkg.innerPelmenPresets.length]
               : undefined;
+            const chocoPreset = legacyPkg.innerChocolatePresets && legacyPkg.innerChocolatePresets.length > 0
+              ? legacyPkg.innerChocolatePresets[idx % legacyPkg.innerChocolatePresets.length]
+              : undefined;
             return {
               itemId: legacyPkg.innerItemId || origPkgId,
               ...(preset ? { gummyAttributes: preset } : {}),
-              ...(pelmenPreset ? { pelmenAttributes: pelmenPreset } : {})
+              ...(pelmenPreset ? { pelmenAttributes: pelmenPreset } : {}),
+              ...(chocoPreset ? { chocolateAttributes: chocoPreset } : {})
             };
           });
           effectiveItem = {
@@ -126,6 +131,7 @@ export function drawItemModel2D(
         drawn =
           drawPaperPackagingItem(targetCtx, effectiveId, effectiveItem) ||
           drawCandyPackagingItem(targetCtx, effectiveId, effectiveItem) ||
+          drawChocolatePackagingItem(targetCtx, effectiveId, effectiveItem) ||
           drawGearToolItem(targetCtx, effectiveId, effectiveItem) ||
           drawSmartphoneItem(targetCtx, effectiveId) ||
           drawFoodItem(targetCtx, effectiveId, effectiveItem) ||

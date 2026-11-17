@@ -1,5 +1,5 @@
-import { InventoryItem, Player, GameWorld, Vehicle, ContainerVisualShape, ContainerVisualAttributes } from './types';
-export type { ContainerVisualShape, ContainerVisualAttributes };
+import { InventoryItem, Player, GameWorld, Vehicle, ContainerVisualShape, ContainerVisualAttributes, UnifiedAttributes } from './types';
+export type { ContainerVisualShape, ContainerVisualAttributes, UnifiedAttributes };
 import { sound } from './audio';
 import { addPlayerNotification } from './items';
 import { soothePanic } from './bodySystem';
@@ -8,23 +8,40 @@ import { applyConsumptionThermodynamics } from './itemThermalSystem';
 
 export type LiquidId =
   | 'water'
-  | 'mineral_water'
   | 'tea'
-  | 'tea_green'
   | 'coffee'
   | 'energy_drink'
   | 'cola'
   | 'juice'
   | 'milk'
-  | 'milk_raw'
-  | 'cream_heavy'
-  | 'sour_cream'
-  | 'kefir'
+  | 'dairy_fermented'
   | 'kvas'
   | 'beer'
   | 'vodka'
-  | 'wine_white'
-  | 'wine_red'
+  | 'wine'
+  | 'honey'
+  | 'broth'
+  | 'caviar'
+  | 'jam'
+  | 'pickles'
+  | 'canned_preserve'
+  | 'puree'
+  | 'rendered_fat'
+  | 'oil_culinary'
+  | 'vinegar'
+  | 'sauce'
+  | 'syrup_sweet'
+  | 'dry_mix'
+  | 'grain'
+  | 'spice_dry'
+  | 'sugar'
+  | 'flour'
+  | 'salt'
+  | 'food_acid'
+  | 'food_dye'
+  | 'botanical_extract'
+  | 'essential_oil'
+  | 'medical_solution'
   | 'gasoline_95'
   | 'gasoline_92'
   | 'gasoline_98'
@@ -34,149 +51,9 @@ export type LiquidId =
   | 'antifreeze'
   | 'brake_fluid'
   | 'washer_fluid'
-  | 'sand'
-  | 'antiseptic'
-  | 'saline'
-  | 'saline_solution'
-  | 'zelenka'
-  | 'iodine'
-  | 'peroxide'
-  | 'valerian_tincture'
-  | 'ammonia_solution'
-  | 'honey'
-  | 'honey_wild'
-  | 'honey_buckwheat'
-  | 'maple_syrup'
-  | 'broth'
-  | 'broth_beef'
-  | 'broth_chicken'
-  | 'broth_fish'
-  | 'broth_vegetable'
-  | 'broth_mushroom'
-  | 'caviar'
-  | 'caviar_red'
-  | 'caviar_black'
-  | 'caviar_pike'
-  | 'caviar_cod'
-  | 'caviar_squash'
-  | 'caviar_eggplant'
-  | 'jam'
-  | 'jam_raspberry'
-  | 'jam_strawberry'
-  | 'jam_blueberry'
-  | 'condensed_milk'
-  | 'pickles'
-  | 'pickles_salted_mushrooms'
-  | 'stew_meat'
-  | 'fish_preserves'
-  | 'berries'
-  | 'berries_blueberry'
-  | 'berries_lingonberry'
-  | 'berries_cranberry'
-  | 'berries_raspberry'
-  | 'berries_strawberry'
-  | 'mushrooms_chanterelle'
-  | 'mushrooms_honey_agaric'
-  | 'oil_sunflower'
-  | 'oil_olive'
-  | 'oil_linseed'
-  | 'oil_sesame'
-  | 'vinegar_table'
-  | 'vinegar_apple'
-  | 'vinegar_balsamic'
-  | 'sauce_soy'
-  | 'sauce_fish'
-  | 'sauce_worcestershire'
-  | 'sauce_narsharab'
-  | 'sauce_teriyaki'
-  | 'mustard_dijon'
-  | 'lard_pork'
-  | 'beef_tallow'
-  | 'ghee'
-  | 'cottage_cheese'
-  | 'yogurt'
-  | 'yeast_liquid'
-  | 'black_pepper_ground'
-  | 'chili_powder'
-  | 'paprika'
-  | 'cinnamon'
-  | 'turmeric'
-  | 'grain_wheat'
-  | 'grain_rye'
-  | 'grain_oats'
-  | 'rice'
-  | 'buckwheat'
-  | 'barley'
-  | 'millet'
-  | 'semolina'
-  | 'peas'
-  | 'beans'
-  | 'lentils'
-  | 'chickpeas'
-  | 'sugar'
-  | 'flour'
-  | 'salt'
-  | 'marinade'
-  | 'canned_preserve'
-  | 'vegetable_caviar'
-  | 'puree'
-  | 'rendered_fat'
-  | 'oil_culinary'
-  | 'vinegar'
-  | 'sauce'
-  | 'syrup_sweet'
-  | 'dairy_fermented'
-  | 'dry_mix'
-  | 'grain'
-  | 'spice_dry'
-  | 'medical_solution'
-  | 'gelatin'
-  | 'pectin'
-  | 'agar_agar'
-  | 'starch'
-  | 'citric_acid'
-  | 'malic_acid'
-  | 'tartaric_acid'
-  | 'lactic_acid'
-  | 'sodium_citrate'
-  | 'menthol'
-  | 'glucose_syrup'
-  | 'corn_molasses'
-  | 'topinambur_syrup'
-  | 'coconut_milk'
-  | 'dye_carmine'
-  | 'dye_chlorophyllin'
-  | 'dye_anthocyanin'
-  | 'dye_spirulina'
-  | 'dye_beta_carotene'
-  | 'dye_caramel'
-  | 'dye_lycopene'
-  | 'botanical_extract'
-  | 'essential_oil';
+  | 'sand';
 
-export interface FluidSubstanceAttributes {
-  varietyRu: string;
-  varietyEn?: string;
-  sourceIngredients: string | string[];
-  preparationMethod: string;
-  purpose: string;
-  reasonAndOrigin: string;
-  customColor?: string;
-  secondaryColor?: string;
-  isOpened?: boolean;
-  culinaryEquivalentId?: string;
-  medicalEffectId?: string;
-  containerVisuals?: ContainerVisualAttributes;
-  customEffects?: {
-    hunger?: number;
-    thirst?: number;
-    health?: number;
-    energy?: number;
-    sleepiness?: number;
-    soothePanic?: number;
-  };
-  customTasteMessages?: string[];
-}
+export type FluidSubstanceAttributes = UnifiedAttributes;
 
 export interface LiquidDef {
   id: LiquidId;
@@ -217,35 +94,22 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     tasteMessages: ['Чистая прохладная вода', 'Освежающий глоток чистой воды', 'Утоляющая жажду вода'],
     stainType: 'water'
   },
-  mineral_water: {
-    id: 'mineral_water',
-    name: 'Mineral Water',
-    nameRu: 'Минералка',
-    category: 'water',
-    densityKgPerL: 1.00,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#0284c7',
-    effects: { thirst: 40, energy: 5, soothePanic: 25 },
-    tasteMessages: ['Освежающая минералка с газом', 'Приятные покалывающие пузырьки газа'],
-    stainType: 'water'
-  },
   tea: {
     id: 'tea',
-    name: 'Hot Tea',
-    nameRu: 'Горячий чай',
+    name: 'Tea',
+    nameRu: 'Чай',
     category: 'beverage',
     densityKgPerL: 1.00,
     isDrinkable: true,
     isFlammable: false,
     color: '#b45309',
-    effects: { thirst: 30, energy: 10, sleepiness: -5, soothePanic: 35 },
-    tasteMessages: ['Ароматный крепкий чай', 'Согревающий теплый черный чай с легкой терпкостью'],
+    effects: { thirst: 35, energy: 10, sleepiness: -5, soothePanic: 35 },
+    tasteMessages: ['Ароматный заваренный чай', 'Приятный терпкий вкус чая'],
     stainType: 'water'
   },
   coffee: {
     id: 'coffee',
-    name: 'Fresh Coffee',
+    name: 'Coffee',
     nameRu: 'Кофе',
     category: 'beverage',
     densityKgPerL: 1.00,
@@ -284,7 +148,7 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
   },
   juice: {
     id: 'juice',
-    name: 'Fruit Juice',
+    name: 'Juice',
     nameRu: 'Сок',
     category: 'beverage',
     densityKgPerL: 1.04,
@@ -292,7 +156,7 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     isFlammable: false,
     color: '#ea580c',
     effects: { thirst: 30, hunger: 15, health: 5, soothePanic: 20 },
-    tasteMessages: ['Натуральный сладкий фруктовый сок', 'Сочный витаминный вкус мякоти'],
+    tasteMessages: ['Натуральный сладкий фруктово-ягодный сок', 'Сочный витаминный вкус мякоти'],
     stainType: 'water'
   },
   milk: {
@@ -305,12 +169,25 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     isFlammable: false,
     color: '#f8fafc',
     effects: { thirst: 25, hunger: 30, health: 5, soothePanic: 30 },
-    tasteMessages: ['Нежное свежее цельное молоко', 'Мягкий сливочный вкус деревенского молока'],
+    tasteMessages: ['Нежное свежее цельное молоко', 'Мягкий сливочный вкус молока'],
+    stainType: 'water'
+  },
+  dairy_fermented: {
+    id: 'dairy_fermented',
+    name: 'Fermented Dairy',
+    nameRu: 'Кисломолочный продукт',
+    category: 'food',
+    densityKgPerL: 1.02,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#f8fafc',
+    effects: { thirst: 20, hunger: 32, health: 10, energy: 18, soothePanic: 22 },
+    tasteMessages: ['Натуральный кисломолочный продукт со сливочной кислинкой'],
     stainType: 'water'
   },
   kvas: {
     id: 'kvas',
-    name: 'Bread Kvas',
+    name: 'Kvass',
     nameRu: 'Квас',
     category: 'beverage',
     densityKgPerL: 1.02,
@@ -323,7 +200,7 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
   },
   beer: {
     id: 'beer',
-    name: 'Lager Beer',
+    name: 'Beer',
     nameRu: 'Пиво',
     category: 'alcohol',
     densityKgPerL: 1.01,
@@ -336,7 +213,7 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
   },
   vodka: {
     id: 'vodka',
-    name: 'Vodka 40%',
+    name: 'Vodka',
     nameRu: 'Водка',
     category: 'alcohol',
     densityKgPerL: 0.94,
@@ -345,6 +222,327 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     color: '#e2e8f0',
     effects: { alcohol: 45, health: -5, soothePanic: 60 },
     tasteMessages: ['Обжигающий крепкий глоток спиртного'],
+    stainType: 'water'
+  },
+  wine: {
+    id: 'wine',
+    name: 'Wine',
+    nameRu: 'Вино',
+    category: 'alcohol',
+    densityKgPerL: 0.99,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#881337',
+    effects: { thirst: 15, alcohol: 12, soothePanic: 35 },
+    tasteMessages: ['Благородный букет виноградного вина'],
+    stainType: 'water'
+  },
+  honey: {
+    id: 'honey',
+    name: 'Honey',
+    nameRu: 'Мёд',
+    category: 'food',
+    densityKgPerL: 1.42,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#d97706',
+    effects: { hunger: 45, energy: 35, thirst: 5, health: 14, soothePanic: 30 },
+    tasteMessages: ['Густой ароматный натуральный мёд тает на языке...', 'Сладкий тягучий мёд согревает горло.'],
+    stainType: 'water'
+  },
+  broth: {
+    id: 'broth',
+    name: 'Broth',
+    nameRu: 'Бульон',
+    category: 'food',
+    densityKgPerL: 1.04,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#b45309',
+    effects: { hunger: 55, thirst: 35, energy: 20, health: 15, soothePanic: 40 },
+    tasteMessages: ['Наваристый горячий бульон с пряностями и кореньями...', 'Сытный согревающий суповой бульон.'],
+    stainType: 'water'
+  },
+  caviar: {
+    id: 'caviar',
+    name: 'Caviar',
+    nameRu: 'Икра',
+    category: 'food',
+    densityKgPerL: 1.14,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#ea580c',
+    effects: { hunger: 58, energy: 28, health: 22, soothePanic: 45 },
+    tasteMessages: ['Нежная отборная икра с насыщенным деликатесным вкусом...'],
+    stainType: 'water'
+  },
+  jam: {
+    id: 'jam',
+    name: 'Jam',
+    nameRu: 'Варенье',
+    category: 'food',
+    densityKgPerL: 1.35,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#be123c',
+    effects: { hunger: 40, energy: 30, thirst: 5, health: 12, soothePanic: 28 },
+    tasteMessages: ['Сладкое ароматное домашнее варенье на сахарном сиропе...'],
+    stainType: 'water'
+  },
+  pickles: {
+    id: 'pickles',
+    name: 'Pickles & Preserves',
+    nameRu: 'Соленье',
+    category: 'food',
+    densityKgPerL: 1.08,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#84cc16',
+    effects: { hunger: 32, thirst: 15, health: 12, soothePanic: 25 },
+    tasteMessages: ['Хрустящее домашнее соленье в пряном рассоле и маринаде!'],
+    stainType: 'water'
+  },
+  canned_preserve: {
+    id: 'canned_preserve',
+    name: 'Canned Preserve',
+    nameRu: 'Консервы',
+    category: 'food',
+    densityKgPerL: 1.12,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#b45309',
+    effects: { hunger: 55, energy: 22, health: 12, soothePanic: 25 },
+    tasteMessages: ['Сытные консервы автоклавной стерилизации в собственном соку.'],
+    stainType: 'oil'
+  },
+  puree: {
+    id: 'puree',
+    name: 'Puree & Paste',
+    nameRu: 'Пюре / Паста',
+    category: 'food',
+    densityKgPerL: 1.14,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#dc2626',
+    effects: { hunger: 38, energy: 20, health: 10, soothePanic: 20 },
+    tasteMessages: ['Густая однородная кулинарная паста и уваренное пюре.'],
+    stainType: 'water'
+  },
+  rendered_fat: {
+    id: 'rendered_fat',
+    name: 'Rendered Fat',
+    nameRu: 'Топлёный жир',
+    category: 'food',
+    densityKgPerL: 0.91,
+    isDrinkable: true,
+    isFlammable: true,
+    color: '#fef3c7',
+    effects: { hunger: 45, energy: 22, health: 6 },
+    tasteMessages: ['Сытный вытопленный кулинарный жир для жарки и заправки блюд.'],
+    stainType: 'oil'
+  },
+  oil_culinary: {
+    id: 'oil_culinary',
+    name: 'Culinary Oil',
+    nameRu: 'Растительное масло',
+    category: 'lubricant',
+    densityKgPerL: 0.92,
+    isDrinkable: true,
+    isFlammable: true,
+    color: '#eab308',
+    effects: { hunger: 22, health: 4 },
+    tasteMessages: ['Маслянистое растительное масло отжима для жарки и заправки.'],
+    stainType: 'oil'
+  },
+  vinegar: {
+    id: 'vinegar',
+    name: 'Vinegar',
+    nameRu: 'Уксус',
+    category: 'chemical',
+    densityKgPerL: 1.01,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#fef08a',
+    effects: { thirst: -8, hunger: 4 },
+    tasteMessages: ['Кисло-пряный кулинарный уксус для маринадов и заправок.'],
+    stainType: 'water'
+  },
+  sauce: {
+    id: 'sauce',
+    name: 'Sauce',
+    nameRu: 'Соус',
+    category: 'food',
+    densityKgPerL: 1.15,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#dc2626',
+    effects: { hunger: 18, energy: 10, soothePanic: 15 },
+    tasteMessages: ['Насыщенный пряный соус для заправки и подачи блюд.'],
+    stainType: 'water'
+  },
+  syrup_sweet: {
+    id: 'syrup_sweet',
+    name: 'Sweet Syrup',
+    nameRu: 'Сироп / Сгущёнка',
+    category: 'food',
+    densityKgPerL: 1.32,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#fef9c3',
+    effects: { hunger: 40, energy: 32, soothePanic: 35 },
+    tasteMessages: ['Густой сладкий уваренный сироп и сгущённое лакомство.'],
+    stainType: 'water'
+  },
+  dry_mix: {
+    id: 'dry_mix',
+    name: 'Culinary Dry Mix',
+    nameRu: 'Сухая смесь',
+    category: 'food',
+    densityKgPerL: 0.68,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fef3c7',
+    effects: { hunger: 14, energy: 6 },
+    tasteMessages: ['Сухая кулинарная смесь, крахмал или желирующий компонент.'],
+    stainType: 'sand'
+  },
+  grain: {
+    id: 'grain',
+    name: 'Grain & Legumes',
+    nameRu: 'Крупа',
+    category: 'food',
+    densityKgPerL: 0.82,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fde047',
+    effects: { hunger: 22, thirst: -10 },
+    tasteMessages: ['Отборная сухая крупа и зернобобовые для варки гарниров и супов.'],
+    stainType: 'sand'
+  },
+  spice_dry: {
+    id: 'spice_dry',
+    name: 'Dry Spice & Herbs',
+    nameRu: 'Специи',
+    category: 'food',
+    densityKgPerL: 0.50,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#b45309',
+    effects: { hunger: 5, energy: 8 },
+    tasteMessages: ['Пряная ароматная молотая специя и сушёные травы.'],
+    stainType: 'sand'
+  },
+  sugar: {
+    id: 'sugar',
+    name: 'Granulated Sugar',
+    nameRu: 'Сахар-песок',
+    category: 'food',
+    densityKgPerL: 0.85,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f8fafc',
+    effects: { hunger: 18, energy: 20, soothePanic: 15 },
+    tasteMessages: ['Сладкие кристаллы белого сахара-песка'],
+    stainType: 'sand'
+  },
+  flour: {
+    id: 'flour',
+    name: 'Wheat Flour',
+    nameRu: 'Пшеничная мука',
+    category: 'food',
+    densityKgPerL: 0.60,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fefce8',
+    effects: { hunger: 15, thirst: -15 },
+    tasteMessages: ['Сухая мука тонкого помола'],
+    stainType: 'sand'
+  },
+  salt: {
+    id: 'salt',
+    name: 'Table Salt',
+    nameRu: 'Поваренная соль',
+    category: 'food',
+    densityKgPerL: 1.20,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#e2e8f0',
+    effects: { thirst: -35, nausea: 10 },
+    tasteMessages: ['Соленые кристаллы каменной поваренной соли'],
+    stainType: 'sand'
+  },
+  food_acid: {
+    id: 'food_acid',
+    name: 'Culinary Acid',
+    nameRu: 'Пищевая кислота',
+    category: 'food',
+    densityKgPerL: 0.95,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f8fafc',
+    effects: { thirst: 8, energy: 5 },
+    tasteMessages: ['Яркая освежающая кислинка органической пищевой кислоты.'],
+    stainType: 'sand'
+  },
+  food_dye: {
+    id: 'food_dye',
+    name: 'Natural Food Dye',
+    nameRu: 'Пищевой краситель',
+    category: 'food',
+    densityKgPerL: 1.05,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#be123c',
+    effects: { health: 2 },
+    tasteMessages: ['Концентрированный натуральный пищевой пигмент.'],
+    stainType: 'water'
+  },
+  botanical_extract: {
+    id: 'botanical_extract',
+    name: 'Botanical Extract',
+    nameRu: 'Растительный экстракт',
+    category: 'food',
+    densityKgPerL: 1.02,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#991b1b',
+    effects: { thirst: 8, health: 10, energy: 8, soothePanic: 15 },
+    tasteMessages: ['Концентрированная растительная вытяжка из плодов и трав.'],
+    stainType: 'water'
+  },
+  essential_oil: {
+    id: 'essential_oil',
+    name: 'Essential Oil',
+    nameRu: 'Эфирное масло',
+    category: 'food',
+    densityKgPerL: 0.89,
+    isDrinkable: true,
+    isFlammable: true,
+    color: '#fbbf24',
+    effects: { energy: 10, soothePanic: 25 },
+    tasteMessages: ['Высококонцентрированное душистое эфирное масло.'],
+    stainType: 'oil'
+  },
+  medical_solution: {
+    id: 'medical_solution',
+    name: 'Medical Preparation',
+    nameRu: 'Медицинский состав',
+    category: 'medical',
+    densityKgPerL: 1.00,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#e0f2fe',
+    effects: { health: 20, soothePanic: 20 },
+    tasteMessages: ['Фармацевтический препарат для первой помощи и лечения.'],
+    toxicWarning: 'Медицинский препарат. Применять согласно назначению.',
     stainType: 'water'
   },
   gasoline_95: {
@@ -467,1641 +665,1709 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     color: '#eab308',
     toxicWarning: 'Сухой сыпучий кварцевый песок! Используется для тушения и абсорбции.',
     stainType: 'sand'
-  },
-  antiseptic: {
-    id: 'antiseptic',
-    name: 'Medical Antiseptic 70%',
-    nameRu: 'Антисептик спиртовой',
-    category: 'medical',
-    densityKgPerL: 0.87,
-    isDrinkable: false,
-    isFlammable: true,
-    color: '#10b981',
-    toxicWarning: 'Концентрированный медицинский антисептик для наружного применения.',
-    stainType: 'water'
-  },
-  saline: {
-    id: 'saline',
-    name: 'Saline Solution 0.9%',
-    nameRu: 'Физраствор',
-    category: 'medical',
-    densityKgPerL: 1.01,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#e0f2fe',
-    effects: { thirst: 20 },
-    tasteMessages: ['Слабосоленый медицинский раствор натрия хлорида'],
-    stainType: 'water'
-  },
-  // === DAIRY ===
-  milk_raw: {
-    id: 'milk_raw',
-    name: 'Raw Farm Milk',
-    nameRu: 'Парное деревенское молоко',
-    category: 'beverage',
-    densityKgPerL: 1.03,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fffbeb',
-    effects: { thirst: 35, hunger: 20, health: 10, energy: 15, soothePanic: 20 },
-    tasteMessages: ['Сладкий, жирный вкус парного молока!', 'Насыщенный домашний сливочный вкус цельного молока.'],
-    stainType: 'water'
-  },
-  cream_heavy: {
-    id: 'cream_heavy',
-    name: 'Heavy Cream 30%',
-    nameRu: 'Деревенские густые сливки',
-    category: 'food',
-    densityKgPerL: 1.01,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fef3c7',
-    effects: { hunger: 40, energy: 25, health: 8, soothePanic: 25 },
-    tasteMessages: ['Густые сладкие деревенские сливки...', 'Нежнейшая сливочная текстура натуральных сливок.'],
-    stainType: 'water'
-  },
-  sour_cream: {
-    id: 'sour_cream',
-    name: 'Sour Cream 20%',
-    nameRu: 'Густая сметана',
-    category: 'food',
-    densityKgPerL: 1.02,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#ffffff',
-    effects: { hunger: 35, energy: 20, health: 8, soothePanic: 20 },
-    tasteMessages: ['Густая, нежная сметана со сливочной кислинкой! Классический вкус.'],
-    stainType: 'water'
-  },
-  kefir: {
-    id: 'kefir',
-    name: 'Kefir 2.5%',
-    nameRu: 'Кисломолочный кефир',
-    category: 'beverage',
-    densityKgPerL: 1.02,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#f8fafc',
-    effects: { thirst: 35, hunger: 20, health: 12, soothePanic: 20 },
-    tasteMessages: ['Густой освежающий кефир приятно покалывает язык кисломолочным вкусом.'],
-    stainType: 'water'
-  },
-
-  // === HONEYS & SYRUPS ===
-  honey: {
-    id: 'honey',
-    name: 'Natural Flower Honey',
-    nameRu: 'Натуральный мёд',
-    category: 'food',
-    densityKgPerL: 1.42,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#d97706',
-    effects: { hunger: 45, energy: 35, thirst: 5, health: 12, soothePanic: 30 },
-    tasteMessages: ['Густой ароматный цветочный мёд тает на языке...', 'Сладкий тягучий золотистый мёд согревает горло.', 'Натуральный липовый мёд дарит силы и тепло.'],
-    stainType: 'water'
-  },
-  honey_wild: {
-    id: 'honey_wild',
-    name: 'Wild Forest Honey',
-    nameRu: 'Дикий лесной мёд',
-    category: 'food',
-    densityKgPerL: 1.44,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#b45309',
-    effects: { hunger: 50, energy: 40, health: 18, soothePanic: 35 },
-    tasteMessages: ['Терпкий дикий бортевой мёд с ароматом таежного разнотравья!', 'Густой темный мёд с нотками смолы и диких цветов.'],
-    stainType: 'water'
-  },
-  honey_buckwheat: {
-    id: 'honey_buckwheat',
-    name: 'Dark Buckwheat Honey',
-    nameRu: 'Гречишный тёмный мёд',
-    category: 'food',
-    densityKgPerL: 1.45,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#78350f',
-    effects: { hunger: 48, energy: 38, health: 16, soothePanic: 30 },
-    tasteMessages: ['Глубокий, терпкий вкус гречишного мёда слегка першит в горле...', 'Богатый железом и микроэлементами темный мёд.'],
-    stainType: 'water'
-  },
-  maple_syrup: {
-    id: 'maple_syrup',
-    name: 'Pure Maple Syrup',
-    nameRu: 'Кленовый сироп',
-    category: 'food',
-    densityKgPerL: 1.33,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#9a3412',
-    effects: { hunger: 40, energy: 35, soothePanic: 20 },
-    tasteMessages: ['Сладкий древесно-карамельный кленовый сироп...', 'Насыщенная янтарная сладость кленового сока.'],
-    stainType: 'water'
-  },
-
-  // === BROTHS & SOUPS ===
-  broth: {
-    id: 'broth',
-    name: 'Rich Hot Broth',
-    nameRu: 'Горячий бульон',
-    category: 'food',
-    densityKgPerL: 1.05,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#b45309',
-    effects: { hunger: 55, thirst: 35, energy: 20, health: 14, soothePanic: 40 },
-    tasteMessages: ['Наваристый горячий мясной бульон с травами...', 'Сытный согревающий суповой бульон.', 'Пряный ароматный суп утоляет голод и согревает.'],
-    stainType: 'water'
-  },
-  broth_beef: {
-    id: 'broth_beef',
-    name: 'Rich Beef Bone Broth',
-    nameRu: 'Наваристый говяжий бульон',
-    category: 'food',
-    densityKgPerL: 1.06,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#78350f',
-    effects: { hunger: 60, thirst: 35, energy: 25, health: 18, soothePanic: 45 },
-    tasteMessages: ['Густой наваристый костный говяжий бульон с жирком...', 'Глубокий вкус томленого мяса и кореньев согревает изнутри.'],
-    stainType: 'water'
-  },
-  broth_chicken: {
-    id: 'broth_chicken',
-    name: 'Golden Chicken Broth',
-    nameRu: 'Золотистый куриный бульон',
-    category: 'food',
-    densityKgPerL: 1.04,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#d97706',
-    effects: { hunger: 50, thirst: 40, energy: 20, health: 16, soothePanic: 40 },
-    tasteMessages: ['Прозрачный золотистый куриный бульон с укропом...', 'Легкий и целебный домашний куриный суп.'],
-    stainType: 'water'
-  },
-  broth_fish: {
-    id: 'broth_fish',
-    name: 'Fish Soup / Ukha',
-    nameRu: 'Рыбная уха',
-    category: 'food',
-    densityKgPerL: 1.03,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#ca8a04',
-    effects: { hunger: 50, thirst: 35, energy: 18, health: 15, soothePanic: 35 },
-    tasteMessages: ['Наваристая костровая уха из свежей рыбы с дымком...', 'Ароматный рыбный навар с лавровым листом и перцем.'],
-    stainType: 'water'
-  },
-  broth_vegetable: {
-    id: 'broth_vegetable',
-    name: 'Vegetable Root Broth',
-    nameRu: 'Овощной пряный бульон',
-    category: 'food',
-    densityKgPerL: 1.02,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#65a30d',
-    effects: { hunger: 35, thirst: 45, energy: 15, health: 12, soothePanic: 30 },
-    tasteMessages: ['Легкий ароматный отвар моркови, сельдерея, лука и трав...', 'Чистый витаминный овощной настой.'],
-    stainType: 'water'
-  },
-  broth_mushroom: {
-    id: 'broth_mushroom',
-    name: 'Wild Mushroom Soup',
-    nameRu: 'Грибной суп-бульон',
-    category: 'food',
-    densityKgPerL: 1.04,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#57534e',
-    effects: { hunger: 55, thirst: 30, energy: 20, health: 15, soothePanic: 40 },
-    tasteMessages: ['Темный густой бульон из белых лесных грибов...', 'Неповторимый лесной аромат боровиков и подосиновиков.'],
-    stainType: 'water'
-  },
-
-  // === CAVIARS ===
-  caviar: {
-    id: 'caviar',
-    name: 'Granular Caviar',
-    nameRu: 'Зернистая икра',
-    category: 'food',
-    densityKgPerL: 1.15,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#dc2626',
-    effects: { hunger: 60, energy: 30, health: 25, soothePanic: 45 },
-    tasteMessages: ['Нежные икринки приятно лопаются на языке...', 'Изысканный солоноватый вкус благородного деликатеса.', 'Богатый насыщенный вкус отборной икры.'],
-    stainType: 'water'
-  },
-  caviar_red: {
-    id: 'caviar_red',
-    name: 'Red Salmon Caviar',
-    nameRu: 'Красная икра (лососевая)',
-    category: 'food',
-    densityKgPerL: 1.15,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#ea580c',
-    effects: { hunger: 65, energy: 30, health: 25, soothePanic: 50 },
-    tasteMessages: ['Крупные янтарные икринки лосося упруго лопаются на языке!', 'Роскошный сливочно-соленый вкус отборной красной икры.'],
-    stainType: 'water'
-  },
-  caviar_black: {
-    id: 'caviar_black',
-    name: 'Black Sturgeon Caviar',
-    nameRu: 'Чёрная икра (осетровая)',
-    category: 'food',
-    densityKgPerL: 1.16,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#18181b',
-    effects: { hunger: 70, energy: 35, health: 30, soothePanic: 60 },
-    tasteMessages: ['Изысканный бархатный ореховый привкус черной осетровой икры...', 'Царский деликатес высшей пробы.'],
-    stainType: 'water'
-  },
-  caviar_pike: {
-    id: 'caviar_pike',
-    name: 'Pike Caviar',
-    nameRu: 'Щучья икра',
-    category: 'food',
-    densityKgPerL: 1.12,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#facc15',
-    effects: { hunger: 55, energy: 25, health: 20, soothePanic: 40 },
-    tasteMessages: ['Мелкая золотистая щучья икра с нежным малосольным вкусом...'],
-    stainType: 'water'
-  },
-  caviar_cod: {
-    id: 'caviar_cod',
-    name: 'Cod Caviar',
-    nameRu: 'Икра трески',
-    category: 'food',
-    densityKgPerL: 1.13,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fed7aa',
-    effects: { hunger: 50, energy: 22, health: 18, soothePanic: 35 },
-    tasteMessages: ['Нежная паштетная текстура икры трески с морским солоноватым вкусом.'],
-    stainType: 'water'
-  },
-  caviar_squash: {
-    id: 'caviar_squash',
-    name: 'Squash Caviar',
-    nameRu: 'Кабачковая икра',
-    category: 'food',
-    densityKgPerL: 1.08,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#ea580c',
-    effects: { hunger: 45, energy: 20, health: 12, soothePanic: 30 },
-    tasteMessages: ['Нежная обжаренная кабачковая икра с томатом и морковью...', 'Любимый домашний вкус заготовок.'],
-    stainType: 'water'
-  },
-  caviar_eggplant: {
-    id: 'caviar_eggplant',
-    name: 'Eggplant Caviar',
-    nameRu: 'Баклажанная икра',
-    category: 'food',
-    densityKgPerL: 1.09,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#7c2d12',
-    effects: { hunger: 48, energy: 22, health: 14, soothePanic: 30 },
-    tasteMessages: ['Пряная баклажанная икра с чесночком и сладким перцем...'],
-    stainType: 'water'
-  },
-
-  // === JAMS ===
-  jam: {
-    id: 'jam',
-    name: 'Berry Jam',
-    nameRu: 'Домашнее варенье',
-    category: 'food',
-    densityKgPerL: 1.35,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#991b1b',
-    effects: { hunger: 40, energy: 30, thirst: 5, health: 8, soothePanic: 25 },
-    tasteMessages: ['Сладкое ароматное домашнее ягодное варенье...', 'Кусочки спелых ягод в густом сахарном сиропе.'],
-    stainType: 'water'
-  },
-  jam_raspberry: {
-    id: 'jam_raspberry',
-    name: 'Raspberry Jam',
-    nameRu: 'Малиновое варенье',
-    category: 'food',
-    densityKgPerL: 1.35,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#be123c',
-    effects: { hunger: 42, energy: 32, health: 15, soothePanic: 30 },
-    tasteMessages: ['Душистое малиновое варенье отлично сбивает простуду и согревает!', 'Сладкие зернышки спелой садовой малины в сиропе.'],
-    stainType: 'water'
-  },
-  jam_strawberry: {
-    id: 'jam_strawberry',
-    name: 'Strawberry Jam',
-    nameRu: 'Клубничное варенье',
-    category: 'food',
-    densityKgPerL: 1.36,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#dc2626',
-    effects: { hunger: 42, energy: 30, health: 10, soothePanic: 28 },
-    tasteMessages: ['Цельные сладкие ягоды клубники в густом прозрачном рубиновом сиропе.'],
-    stainType: 'water'
-  },
-  jam_blueberry: {
-    id: 'jam_blueberry',
-    name: 'Wild Blueberry Jam',
-    nameRu: 'Черничное варенье',
-    category: 'food',
-    densityKgPerL: 1.37,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#312e81',
-    effects: { hunger: 40, energy: 30, health: 14, soothePanic: 25 },
-    tasteMessages: ['Густое темное варенье из дикой лесной черники... Полезно для зрения.'],
-    stainType: 'water'
-  },
-
-  // === BERRIES & MUSHROOMS IN BASKETS ===
-  berries: {
-    id: 'berries',
-    name: 'Wild Forest Berries',
-    nameRu: 'Лесные ягоды',
-    category: 'food',
-    densityKgPerL: 0.85,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#701a75',
-    effects: { hunger: 25, thirst: 20, health: 15, energy: 15, soothePanic: 25 },
-    tasteMessages: ['Свежие лесные ягоды: черника, брусника и земляника...', 'Сладкий сок спелых диких ягод освежает рецепторы.'],
-    stainType: 'water'
-  },
-  berries_blueberry: {
-    id: 'berries_blueberry',
-    name: 'Fresh Blueberries',
-    nameRu: 'Свежая черника',
-    category: 'food',
-    densityKgPerL: 0.85,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#3730a3',
-    effects: { hunger: 25, thirst: 20, health: 16, energy: 15, soothePanic: 25 },
-    tasteMessages: ['Горсть сладкой лесной черники приятно красит язык в фиолетовый цвет...'],
-    stainType: 'water'
-  },
-  berries_lingonberry: {
-    id: 'berries_lingonberry',
-    name: 'Fresh Lingonberries',
-    nameRu: 'Таёжная брусника',
-    category: 'food',
-    densityKgPerL: 0.86,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#dc2626',
-    effects: { hunger: 22, thirst: 22, health: 18, energy: 15, soothePanic: 25 },
-    tasteMessages: ['Горьковато-кислый, освежающий дикий вкус таежной брусники!'],
-    stainType: 'water'
-  },
-  berries_cranberry: {
-    id: 'berries_cranberry',
-    name: 'Wild Cranberries',
-    nameRu: 'Болотная клюква',
-    category: 'food',
-    densityKgPerL: 0.86,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#e11d48',
-    effects: { hunger: 20, thirst: 25, health: 20, energy: 18, soothePanic: 25 },
-    tasteMessages: ['Резкий, пронзительно-кислый витаминный взрыв болотной клюквы!'],
-    stainType: 'water'
-  },
-  berries_raspberry: {
-    id: 'berries_raspberry',
-    name: 'Garden Raspberries',
-    nameRu: 'Спелая малина',
-    category: 'food',
-    densityKgPerL: 0.82,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#e11d48',
-    effects: { hunger: 28, thirst: 18, health: 16, energy: 16, soothePanic: 28 },
-    tasteMessages: ['Нежнейшие, ароматные сладкие ягоды садовой малины тают во рту...'],
-    stainType: 'water'
-  },
-  berries_strawberry: {
-    id: 'berries_strawberry',
-    name: 'Juicy Strawberries',
-    nameRu: 'Сочная клубника',
-    category: 'food',
-    densityKgPerL: 0.84,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#ef4444',
-    effects: { hunger: 30, thirst: 20, health: 14, energy: 16, soothePanic: 30 },
-    tasteMessages: ['Роскошный летний вкус спелой сладкой клубники!'],
-    stainType: 'water'
-  },
-  mushrooms_chanterelle: {
-    id: 'mushrooms_chanterelle',
-    name: 'Fresh Chanterelles',
-    nameRu: 'Свежие лисички',
-    category: 'food',
-    densityKgPerL: 0.75,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#f59e0b',
-    effects: { hunger: 25, health: 12, energy: 12, soothePanic: 20 },
-    tasteMessages: ['Упругие рыжие лисички с приятным ароматом соснового леса...'],
-    stainType: 'water'
-  },
-  mushrooms_honey_agaric: {
-    id: 'mushrooms_honey_agaric',
-    name: 'Forest Honey Agarics',
-    nameRu: 'Осенние опята',
-    category: 'food',
-    densityKgPerL: 0.78,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#b45309',
-    effects: { hunger: 25, health: 10, energy: 12, soothePanic: 20 },
-    tasteMessages: ['Упругие лесные опята...'],
-    stainType: 'water'
-  },
-
-  // === CULINARY OILS, SAUCES & VINEGARS ===
-  oil_sunflower: {
-    id: 'oil_sunflower',
-    name: 'Sunflower Oil',
-    nameRu: 'Подсолнечное масло',
-    category: 'lubricant',
-    densityKgPerL: 0.92,
-    isDrinkable: true,
-    isFlammable: true,
-    color: '#eab308',
-    effects: { hunger: 20 },
-    tasteMessages: ['Вязкий, жирный глоток подсолнечного масла... Слишком маслянисто.'],
-    stainType: 'oil'
-  },
-  oil_olive: {
-    id: 'oil_olive',
-    name: 'Extra Virgin Olive Oil',
-    nameRu: 'Оливковое масло',
-    category: 'lubricant',
-    densityKgPerL: 0.91,
-    isDrinkable: true,
-    isFlammable: true,
-    color: '#84cc16',
-    effects: { hunger: 22, health: 5 },
-    tasteMessages: ['Густой оливковый вкус с благородной горчинкой в горле.'],
-    stainType: 'oil'
-  },
-  oil_linseed: {
-    id: 'oil_linseed',
-    name: 'Linseed Oil',
-    nameRu: 'Льняное масло',
-    category: 'lubricant',
-    densityKgPerL: 0.93,
-    isDrinkable: true,
-    isFlammable: true,
-    color: '#ca8a04',
-    effects: { hunger: 18, health: 8 },
-    tasteMessages: ['Специфический масляный вкус льняного масла.'],
-    stainType: 'oil'
-  },
-  oil_sesame: {
-    id: 'oil_sesame',
-    name: 'Toasted Sesame Oil',
-    nameRu: 'Кунжутное масло',
-    category: 'lubricant',
-    densityKgPerL: 0.92,
-    isDrinkable: true,
-    isFlammable: true,
-    color: '#92400e',
-    effects: { hunger: 20 },
-    tasteMessages: ['Яркий, насыщенный ореховый привкус жареного кунжута.'],
-    stainType: 'oil'
-  },
-  vinegar_table: {
-    id: 'vinegar_table',
-    name: 'Table Vinegar 9%',
-    nameRu: 'Столовый уксус 9%',
-    category: 'chemical',
-    densityKgPerL: 1.01,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#e2e8f0',
-    effects: { health: -15, thirst: -10 },
-    tasteMessages: ['Обжигающая уксусная кислота перехватывает дыхание!'],
-    stainType: 'water'
-  },
-  vinegar_apple: {
-    id: 'vinegar_apple',
-    name: 'Apple Cider Vinegar',
-    nameRu: 'Яблочный уксус',
-    category: 'chemical',
-    densityKgPerL: 1.01,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fef08a',
-    effects: { health: -8, thirst: -5 },
-    tasteMessages: ['Кислый яблочный вкус со жгучей уксусной остротой...'],
-    stainType: 'water'
-  },
-  vinegar_balsamic: {
-    id: 'vinegar_balsamic',
-    name: 'Balsamic Vinegar',
-    nameRu: 'Бальзамический уксус',
-    category: 'chemical',
-    densityKgPerL: 1.07,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#451a03',
-    effects: { hunger: 5 },
-    tasteMessages: ['Кисло-сладкий, сложный виноградный вкус выдержанного бальзамика.'],
-    stainType: 'water'
-  },
-  sauce_soy: {
-    id: 'sauce_soy',
-    name: 'Soy Sauce',
-    nameRu: 'Соевый соус',
-    category: 'food',
-    densityKgPerL: 1.15,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#1c1917',
-    effects: { hunger: 5, thirst: -25 },
-    tasteMessages: ['Очень соленый, насыщенный вкус умами... Срочно нужна вода!'],
-    stainType: 'water'
-  },
-  sauce_fish: {
-    id: 'sauce_fish',
-    name: 'Fish Sauce',
-    nameRu: 'Азиатский рыбный соус',
-    category: 'food',
-    densityKgPerL: 1.18,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#78350f',
-    effects: { hunger: 5, thirst: -25 },
-    tasteMessages: ['Резкий соленый анчоусный вкус концентрированного рыбного соуса.'],
-    stainType: 'water'
-  },
-  sauce_worcestershire: {
-    id: 'sauce_worcestershire',
-    name: 'Worcestershire Sauce',
-    nameRu: 'Соус Ворчестер',
-    category: 'food',
-    densityKgPerL: 1.16,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#3b0764',
-    effects: { hunger: 6, thirst: -15 },
-    tasteMessages: ['Сложный кисло-сладкий пряный вкус ворчестершира...'],
-    stainType: 'water'
-  },
-  sauce_narsharab: {
-    id: 'sauce_narsharab',
-    name: 'Narsharab Pomegranate Sauce',
-    nameRu: 'Гранатовый соус Наршараб',
-    category: 'food',
-    densityKgPerL: 1.25,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#881337',
-    effects: { hunger: 15, thirst: 5, energy: 10 },
-    tasteMessages: ['Терпкий, кисло-сладкий концентрированный гранатовый соус.'],
-    stainType: 'water'
-  },
-  sauce_teriyaki: {
-    id: 'sauce_teriyaki',
-    name: 'Teriyaki Sauce',
-    nameRu: 'Соус Терияки',
-    category: 'food',
-    densityKgPerL: 1.20,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#451a03',
-    effects: { hunger: 15, energy: 8 },
-    tasteMessages: ['Сладковато-соленый соус с карамельными нотками и имбирем.'],
-    stainType: 'water'
-  },
-  mustard_dijon: {
-    id: 'mustard_dijon',
-    name: 'Dijon Mustard',
-    nameRu: 'Дижонская горчица',
-    category: 'food',
-    densityKgPerL: 1.15,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#ca8a04',
-    effects: { hunger: 10, energy: 10, soothePanic: 15 },
-    tasteMessages: ['Пикантный пряный вкус цельных горчичных зерен приятно бодрит!'],
-    stainType: 'water'
-  },
-  tea_green: {
-    id: 'tea_green',
-    name: 'Green Sencha Tea',
-    nameRu: 'Зеленый чай Сенча',
-    category: 'beverage',
-    densityKgPerL: 1.00,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#65a30d',
-    effects: { thirst: 35, energy: 15, health: 5, soothePanic: 20 },
-    tasteMessages: ['Тонкий травяной вкус свежезаваренного зеленого чая.', 'Приятное умиротворяющее тепло.'],
-    stainType: 'water'
-  },
-  wine_white: {
-    id: 'wine_white',
-    name: 'Dry White Wine',
-    nameRu: 'Белое сухое вино',
-    category: 'alcohol',
-    densityKgPerL: 0.99,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fef08a',
-    effects: { thirst: 15, alcohol: 12, soothePanic: 30 },
-    tasteMessages: ['Освежающий виноградный вкус белого вина с легкой кислинкой.'],
-    stainType: 'water'
-  },
-  wine_red: {
-    id: 'wine_red',
-    name: 'Dry Red Wine',
-    nameRu: 'Красное сухое вино',
-    category: 'alcohol',
-    densityKgPerL: 0.99,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#881337',
-    effects: { thirst: 15, alcohol: 12, soothePanic: 35 },
-    tasteMessages: ['Терпкий ягодный вкус выдержанного красного сухого вина.'],
-    stainType: 'water'
-  },
-  saline_solution: {
-    id: 'saline_solution',
-    name: 'Sterile Saline Solution',
-    nameRu: 'Физраствор (0.9% NaCl)',
-    category: 'medical',
-    densityKgPerL: 1.00,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#e0f2fe',
-    effects: { thirst: 20, health: 5 },
-    tasteMessages: ['Слабосоленый стерильный раствор для промывания глаз и ран.'],
-    stainType: 'water'
-  },
-  zelenka: {
-    id: 'zelenka',
-    name: 'Brilliant Green (Zelenka)',
-    nameRu: 'Раствор бриллиантового зелёного',
-    category: 'medical',
-    densityKgPerL: 0.95,
-    isDrinkable: false,
-    isFlammable: true,
-    color: '#15803d',
-    toxicWarning: 'Спиртовой антисептик для наружного применения! Не пить!',
-    stainType: 'water'
-  },
-  iodine: {
-    id: 'iodine',
-    name: 'Iodine Tincture 5%',
-    nameRu: 'Спиртовой раствор йода 5%',
-    category: 'medical',
-    densityKgPerL: 0.96,
-    isDrinkable: false,
-    isFlammable: true,
-    color: '#78350f',
-    toxicWarning: 'Спиртовой раствор йода предназначен строго для наружной дезинфекции!',
-    stainType: 'water'
-  },
-  peroxide: {
-    id: 'peroxide',
-    name: 'Hydrogen Peroxide 3%',
-    nameRu: 'Перекись водорода 3%',
-    category: 'medical',
-    densityKgPerL: 1.01,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#f0fdf4',
-    toxicWarning: 'Медицинский антисептик для промывания ран! Не принимать внутрь!',
-    stainType: 'water'
-  },
-  valerian_tincture: {
-    id: 'valerian_tincture',
-    name: 'Valerian Drops',
-    nameRu: 'Настойка валерианы',
-    category: 'medical',
-    densityKgPerL: 0.98,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#854d0e',
-    effects: { sleepiness: 25, soothePanic: 60 },
-    tasteMessages: ['Характерный травяной вкус валерианы быстро успокаивает пульс и тревогу.'],
-    stainType: 'water'
-  },
-  ammonia_solution: {
-    id: 'ammonia_solution',
-    name: 'Ammonia Spirit 10%',
-    nameRu: 'Нашатырный спирт 10%',
-    category: 'medical',
-    densityKgPerL: 0.96,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#f8fafc',
-    toxicWarning: 'Резкий раствор аммиака для ингаляционной стимуляции дыхания при обмороке!',
-    stainType: 'water'
-  },
-  pickles_salted_mushrooms: {
-    id: 'pickles_salted_mushrooms',
-    name: 'Salted White Milk Mushrooms',
-    nameRu: 'Соленые грузди с рассолом',
-    category: 'food',
-    densityKgPerL: 1.10,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fef08a',
-    effects: { hunger: 35, thirst: 15, health: 12, soothePanic: 25 },
-    tasteMessages: ['Хрустящий соленый груздь с пряным укропно-чесночным рассолом!'],
-    stainType: 'water'
-  },
-  lard_pork: {
-    id: 'lard_pork',
-    name: 'Rendered Pork Lard',
-    nameRu: 'Свиной смалец (лярд)',
-    category: 'food',
-    densityKgPerL: 0.92,
-    isDrinkable: true,
-    isFlammable: true,
-    color: '#fef3c7',
-    effects: { hunger: 45, energy: 20 },
-    tasteMessages: ['Сытный топленый смалец...', 'Наваристый мясной жир.'],
-    stainType: 'oil'
-  },
-  beef_tallow: {
-    id: 'beef_tallow',
-    name: 'Rendered Beef Tallow',
-    nameRu: 'Топленый говяжий жир',
-    category: 'food',
-    densityKgPerL: 0.91,
-    isDrinkable: true,
-    isFlammable: true,
-    color: '#fef9c3',
-    effects: { hunger: 40, energy: 18 },
-    tasteMessages: ['Густой топленый говяжий жир.'],
-    stainType: 'oil'
-  },
-  ghee: {
-    id: 'ghee',
-    name: 'Ghee Clarified Butter',
-    nameRu: 'Топленое масло Гхи',
-    category: 'food',
-    densityKgPerL: 0.90,
-    isDrinkable: true,
-    isFlammable: true,
-    color: '#fbbf24',
-    effects: { hunger: 45, energy: 25, health: 8 },
-    tasteMessages: ['Благородный сливочно-ореховый вкус топленого масла Гхи.'],
-    stainType: 'oil'
-  },
-  cottage_cheese: {
-    id: 'cottage_cheese',
-    name: 'Fresh Cottage Cheese',
-    nameRu: 'Творог рассыпчатый',
-    category: 'food',
-    densityKgPerL: 0.88,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#ffffff',
-    effects: { hunger: 30, energy: 15, health: 10 },
-    tasteMessages: ['Нежный кисловато-сливочный вкус рассыпчатого домашнего творога.'],
-    stainType: 'water'
-  },
-  yogurt: {
-    id: 'yogurt',
-    name: 'Natural Yogurt',
-    nameRu: 'Натуральный йогурт',
-    category: 'food',
-    densityKgPerL: 1.05,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#f8fafc',
-    effects: { hunger: 20, thirst: 15, health: 8, energy: 12 },
-    tasteMessages: ['Легкий йогурт со сливочной текстурой и освежающим вкусом.'],
-    stainType: 'water'
-  },
-  yeast_liquid: {
-    id: 'yeast_liquid',
-    name: 'Liquid Sourdough Yeast',
-    nameRu: 'Жидкая дрожжевая закваска',
-    category: 'food',
-    densityKgPerL: 1.02,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fef3c7',
-    effects: { hunger: 8 },
-    tasteMessages: ['Кислый бродящий хлебный вкус живой дрожжевой закваски.'],
-    stainType: 'water'
-  },
-  black_pepper_ground: {
-    id: 'black_pepper_ground',
-    name: 'Ground Black Pepper',
-    nameRu: 'Молотый черный перец',
-    category: 'granular',
-    densityKgPerL: 0.55,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#27272a',
-    toxicWarning: 'Ароматный пряный черный перец для кулинарных блюд.',
-    stainType: 'sand'
-  },
-  chili_powder: {
-    id: 'chili_powder',
-    name: 'Ground Chili Powder',
-    nameRu: 'Молотый перец чили',
-    category: 'granular',
-    densityKgPerL: 0.50,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#dc2626',
-    toxicWarning: 'Обжигающий молотый перец чили! Берегите глаза!',
-    stainType: 'sand'
-  },
-  paprika: {
-    id: 'paprika',
-    name: 'Sweet Smoked Paprika',
-    nameRu: 'Сладкая паприка',
-    category: 'granular',
-    densityKgPerL: 0.52,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#b91c1c',
-    toxicWarning: 'Ароматная сладкая копченая паприка.',
-    stainType: 'sand'
-  },
-  cinnamon: {
-    id: 'cinnamon',
-    name: 'Ground Cinnamon',
-    nameRu: 'Молотая корица',
-    category: 'granular',
-    densityKgPerL: 0.55,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#9a3412',
-    toxicWarning: 'Душистая молотая корица для выпечки и десертов.',
-    stainType: 'sand'
-  },
-  turmeric: {
-    id: 'turmeric',
-    name: 'Golden Turmeric',
-    nameRu: 'Молотая куркума',
-    category: 'granular',
-    densityKgPerL: 0.60,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#f59e0b',
-    toxicWarning: 'Пряная золотистая молотая куркума.',
-    stainType: 'sand'
-  },
-  grain_wheat: {
-    id: 'grain_wheat',
-    name: 'Raw Wheat Grain',
-    nameRu: 'Цельное зерно пшеницы',
-    category: 'granular',
-    densityKgPerL: 0.78,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fde047',
-    toxicWarning: 'Твердые отборные зерна пшеницы для помола или каши.',
-    stainType: 'sand'
-  },
-  grain_rye: {
-    id: 'grain_rye',
-    name: 'Raw Rye Grain',
-    nameRu: 'Цельное зерно ржи',
-    category: 'granular',
-    densityKgPerL: 0.72,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#a16207',
-    toxicWarning: 'Фуражное и пищевое цельное зерно ржи.',
-    stainType: 'sand'
-  },
-  grain_oats: {
-    id: 'grain_oats',
-    name: 'Rolled Oats',
-    nameRu: 'Овсяные хлопья',
-    category: 'granular',
-    densityKgPerL: 0.45,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fef08a',
-    toxicWarning: 'Овсяные хлопья Геркулес для варки сытной каши.',
-    stainType: 'sand'
-  },
-  rice: {
-    id: 'rice',
-    name: 'Rice Grains',
-    nameRu: 'Рисовая крупа',
-    category: 'granular',
-    densityKgPerL: 0.85,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#ffffff',
-    toxicWarning: 'Белый шлифованный рис для плова и гарниров.',
-    stainType: 'sand'
-  },
-  buckwheat: {
-    id: 'buckwheat',
-    name: 'Roasted Buckwheat',
-    nameRu: 'Гречневая крупа ядрица',
-    category: 'granular',
-    densityKgPerL: 0.80,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#78350f',
-    toxicWarning: 'Отборная обжаренная гречневая крупа.',
-    stainType: 'sand'
-  },
-  barley: {
-    id: 'barley',
-    name: 'Pearl Barley',
-    nameRu: 'Перловая крупа',
-    category: 'granular',
-    densityKgPerL: 0.82,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#e2e8f0',
-    toxicWarning: 'Шлифованная перловая ячменная крупа.',
-    stainType: 'sand'
-  },
-  millet: {
-    id: 'millet',
-    name: 'Yellow Millet',
-    nameRu: 'Золотое пшено',
-    category: 'granular',
-    densityKgPerL: 0.80,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#eab308',
-    toxicWarning: 'Шлифованное круглое золотистое пшено.',
-    stainType: 'sand'
-  },
-  semolina: {
-    id: 'semolina',
-    name: 'Semolina Groats',
-    nameRu: 'Манная крупа',
-    category: 'granular',
-    densityKgPerL: 0.70,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fef3c7',
-    toxicWarning: 'Манная крупа из пшеницы тонкого помола.',
-    stainType: 'sand'
-  },
-  peas: {
-    id: 'peas',
-    name: 'Split Yellow Peas',
-    nameRu: 'Колотый горох',
-    category: 'granular',
-    densityKgPerL: 0.85,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#facc15',
-    toxicWarning: 'Сушеный колотый желтый горох для супов.',
-    stainType: 'sand'
-  },
-  beans: {
-    id: 'beans',
-    name: 'Dry Beans',
-    nameRu: 'Сухая фасоль',
-    category: 'granular',
-    densityKgPerL: 0.85,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#991b1b',
-    toxicWarning: 'Сухая фасоль для тушения и супов.',
-    stainType: 'sand'
-  },
-  lentils: {
-    id: 'lentils',
-    name: 'Dry Lentils',
-    nameRu: 'Чечевица',
-    category: 'granular',
-    densityKgPerL: 0.85,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#ea580c',
-    toxicWarning: 'Сушеная чечевица для гарниров.',
-    stainType: 'sand'
-  },
-  chickpeas: {
-    id: 'chickpeas',
-    name: 'Garbanzo Chickpeas',
-    nameRu: 'Нут сухой',
-    category: 'granular',
-    densityKgPerL: 0.80,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fef08a',
-    toxicWarning: 'Крупный сухой турецкий горох нут.',
-    stainType: 'sand'
-  },
-  condensed_milk: {
-    id: 'condensed_milk',
-    name: 'Condensed Milk',
-    nameRu: 'Сгущённое молоко',
-    category: 'food',
-    densityKgPerL: 1.30,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fef3c7',
-    effects: { hunger: 50, energy: 35, health: 6, soothePanic: 30 },
-    tasteMessages: ['Тягучая сладкая сгущенка по ГОСТу...', 'Нежный сливочно-карамельный вкус сгущенного молока.'],
-    stainType: 'water'
-  },
-  pickles: {
-    id: 'pickles',
-    name: 'Pickled Cucumbers & Brine',
-    nameRu: 'Соленья с рассолом',
-    category: 'food',
-    densityKgPerL: 1.10,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#15803d',
-    effects: { hunger: 30, thirst: 30, energy: 10, health: 8, soothePanic: 25 },
-    tasteMessages: ['Хрустящий соленый огурчик и ядреный пряный рассол...', 'Освежающий соленый рассол с укропом и чесноком.'],
-    stainType: 'water'
-  },
-  stew_meat: {
-    id: 'stew_meat',
-    name: 'Stewed Beef',
-    nameRu: 'Тушёная говядина',
-    category: 'food',
-    densityKgPerL: 1.15,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#7f1d1d',
-    effects: { hunger: 75, energy: 25, health: 15, soothePanic: 35 },
-    tasteMessages: ['Сытные волокна тушеного мяса в ароматном соку...', 'Настоящая армейская тушенка высшего сорта.'],
-    stainType: 'water'
-  },
-  fish_preserves: {
-    id: 'fish_preserves',
-    name: 'Fish Preserves in Oil',
-    nameRu: 'Рыбные консервы',
-    category: 'food',
-    densityKgPerL: 1.12,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#b45309',
-    effects: { hunger: 65, energy: 20, health: 14, soothePanic: 30 },
-    tasteMessages: ['Нежные кусочки рыбы в пряном ароматном масле...', 'Сытный вкус натуральных рыбных консервов.'],
-    stainType: 'water'
-  },
-  sugar: {
-    id: 'sugar',
-    name: 'Granulated Sugar',
-    nameRu: 'Сахар-песок',
-    category: 'granular',
-    densityKgPerL: 0.85,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#f8fafc',
-    toxicWarning: 'Сухой сыпучий сахар-песок для кулинарии и заготовок.',
-    stainType: 'sand'
-  },
-  flour: {
-    id: 'flour',
-    name: 'Wheat Flour',
-    nameRu: 'Пшеничная мука',
-    category: 'granular',
-    densityKgPerL: 0.60,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#f1f5f9',
-    toxicWarning: 'Пшеничная мука высшего сорта для выпечки.',
-    stainType: 'sand'
-  },
-  salt: {
-    id: 'salt',
-    name: 'Table Salt',
-    nameRu: 'Поваренная соль',
-    category: 'granular',
-    densityKgPerL: 1.20,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#e2e8f0',
-    toxicWarning: 'Пищевая поваренная соль для блюд и консервации.',
-    stainType: 'sand'
-  },
-  marinade: {
-    id: 'marinade',
-    name: 'Marinated Preserve',
-    nameRu: 'Маринованная заготовка',
-    category: 'food',
-    densityKgPerL: 1.05,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#ca8a04',
-    effects: { hunger: 22, thirst: 12, energy: 6, soothePanic: 20 },
-    tasteMessages: ['Пикантный кисло-пряный вкус маринованной заготовки', 'Ароматный пряный маринад с уксусной кислинкой'],
-    stainType: 'water'
-  },
-  canned_preserve: {
-    id: 'canned_preserve',
-    name: 'Sterilized Canned Preserve',
-    nameRu: 'Консервы стерилизованные',
-    category: 'food',
-    densityKgPerL: 1.12,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#9a3412',
-    effects: { hunger: 45, thirst: 8, energy: 12, soothePanic: 25 },
-    tasteMessages: ['Сытные автоклавированные консервы в собственном соку', 'Густое томлёное содержимое консервной банки'],
-    stainType: 'oil'
-  },
-  vegetable_caviar: {
-    id: 'vegetable_caviar',
-    name: 'Braised Vegetable Caviar',
-    nameRu: 'Икра овощная томлёная',
-    category: 'food',
-    densityKgPerL: 1.08,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#ea580c',
-    effects: { hunger: 32, thirst: 10, health: 4, soothePanic: 20 },
-    tasteMessages: ['Нежная томлёная овощная икра с маслом и кореньями', 'Густая протёртая овощная масса домашнего увара'],
-    stainType: 'oil'
-  },
-  puree: {
-    id: 'puree',
-    name: 'Concentrated Puree / Paste',
-    nameRu: 'Пюре / Паста густая',
-    category: 'food',
-    densityKgPerL: 1.15,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#b91c1c',
-    effects: { hunger: 25, thirst: 6, energy: 8, soothePanic: 15 },
-    tasteMessages: ['Густое однородное концентрированное пюре', 'Насыщенная уваренная паста мелкого протирания'],
-    stainType: 'water'
-  },
-  rendered_fat: {
-    id: 'rendered_fat',
-    name: 'Rendered Culinary Fat',
-    nameRu: 'Топлёный жир / Смалец',
-    category: 'food',
-    densityKgPerL: 0.92,
-    isDrinkable: false,
-    isFlammable: true,
-    color: '#fef08a',
-    toxicWarning: 'Чистый вытопленный кулинарный жир для жарки, томления и смазки сковороды.',
-    stainType: 'oil'
-  },
-  oil_culinary: {
-    id: 'oil_culinary',
-    name: 'Pressed Culinary Oil',
-    nameRu: 'Масло кулинарное отжимное',
-    category: 'food',
-    densityKgPerL: 0.92,
-    isDrinkable: false,
-    isFlammable: true,
-    color: '#eab308',
-    toxicWarning: 'Кулинарное масло прямого отжима для жарки и заправки блюд.',
-    stainType: 'oil'
-  },
-  vinegar: {
-    id: 'vinegar',
-    name: 'Fermented / Table Vinegar',
-    nameRu: 'Уксус кулинарный',
-    category: 'food',
-    densityKgPerL: 1.01,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#fef3c7',
-    toxicWarning: 'Кислотный уксус для маринадов, консервации и заправки. Пить в чистом виде нельзя!',
-    stainType: 'water'
-  },
-  sauce: {
-    id: 'sauce',
-    name: 'Culinary Sauce',
-    nameRu: 'Соус кулинарный',
-    category: 'food',
-    densityKgPerL: 1.12,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#7f1d1d',
-    effects: { hunger: 12, thirst: -4, energy: 5, soothePanic: 15 },
-    tasteMessages: ['Пряный концентрированный кулинарный соус', 'Насыщенный вкус выдержанного соуса'],
-    stainType: 'water'
-  },
-  syrup_sweet: {
-    id: 'syrup_sweet',
-    name: 'Sweet Syrup / Condensed Sweet',
-    nameRu: 'Сироп / Сгущённая сладость',
-    category: 'food',
-    densityKgPerL: 1.30,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fde68a',
-    effects: { hunger: 38, energy: 25, soothePanic: 35 },
-    tasteMessages: ['Густая тягучая карамельно-сливочная сладость', 'Приторно-сладкий густой сироп'],
-    stainType: 'water'
-  },
-  dairy_fermented: {
-    id: 'dairy_fermented',
-    name: 'Fermented Dairy Product',
-    nameRu: 'Кисломолочный продукт',
-    category: 'food',
-    densityKgPerL: 1.03,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#f8fafc',
-    effects: { hunger: 26, thirst: 18, health: 6, soothePanic: 25 },
-    tasteMessages: ['Нежный освежающий кисломолочный вкус на живой закваске', 'Густой ферментированный молочный продукт'],
-    stainType: 'water'
-  },
-  dry_mix: {
-    id: 'dry_mix',
-    name: 'Dry Culinary Mix / Powder',
-    nameRu: 'Сухая смесь',
-    category: 'granular',
-    densityKgPerL: 0.55,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#d6d3d1',
-    toxicWarning: 'Сухая кулинарная смесь или концентрат. Требует заваривания, разведения или термической готовки.',
-    stainType: 'sand'
-  },
-  grain: {
-    id: 'grain',
-    name: 'Dry Grain / Groats',
-    nameRu: 'Крупа / Зерно сухое',
-    category: 'granular',
-    densityKgPerL: 0.78,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fde047',
-    toxicWarning: 'Сухая крупа или зерно. Требует варки в воде или бульоне.',
-    stainType: 'sand'
-  },
-  spice_dry: {
-    id: 'spice_dry',
-    name: 'Dry Spice / Seasoning',
-    nameRu: 'Пряность / Специя сухая',
-    category: 'granular',
-    densityKgPerL: 0.50,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#b45309',
-    toxicWarning: 'Концентрированная сухая пряность для приправления блюд при готовке.',
-    stainType: 'sand'
-  },
-  medical_solution: {
-    id: 'medical_solution',
-    name: 'Medical Solution / Liniment',
-    nameRu: 'Медицинский состав',
-    category: 'medical',
-    densityKgPerL: 0.98,
-    isDrinkable: false,
-    isFlammable: true,
-    color: '#0284c7',
-    toxicWarning: 'Фармацевтический препарат для медицинского применения.',
-    stainType: 'water'
-  },
-  gelatin: {
-    id: 'gelatin',
-    name: 'Food Gelatin Granules',
-    nameRu: 'Пищевой желатин',
-    category: 'granular',
-    densityKgPerL: 0.72,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fde68a',
-    toxicWarning: 'Сухие гранулы пищевого желатина — загуститель для мармелада и желе.',
-    stainType: 'sand'
-  },
-  pectin: {
-    id: 'pectin',
-    name: 'Fruit Pectin Powder',
-    nameRu: 'Пектин фруктовый',
-    category: 'granular',
-    densityKgPerL: 0.65,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fef3c7',
-    toxicWarning: 'Мелкодисперсный яблочно-цитрусовый пектин для желирования мармелада и джемов.',
-    stainType: 'sand'
-  },
-  agar_agar: {
-    id: 'agar_agar',
-    name: 'Agar-Agar Seaweed Powder',
-    nameRu: 'Агар-агар 900',
-    category: 'granular',
-    densityKgPerL: 0.62,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#f5f5f4',
-    toxicWarning: 'Растительный полисахарид из красных водорослей для плотного мармелада и суфле.',
-    stainType: 'sand'
-  },
-  starch: {
-    id: 'starch',
-    name: 'Modified Food Starch',
-    nameRu: 'Пищевой крахмал',
-    category: 'granular',
-    densityKgPerL: 0.68,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#f8fafc',
-    toxicWarning: 'Тонкий белоснежный крахмал для стабилизации текстуры сладостей и соусов.',
-    stainType: 'sand'
-  },
-  citric_acid: {
-    id: 'citric_acid',
-    name: 'Citric Acid Crystals',
-    nameRu: 'Лимонная кислота',
-    category: 'granular',
-    densityKgPerL: 0.95,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#ffffff',
-    toxicWarning: 'Кристаллическая пищевая лимонная кислота — не употреблять в сухом виде.',
-    stainType: 'sand'
-  },
-  malic_acid: {
-    id: 'malic_acid',
-    name: 'Malic Acid Powder',
-    nameRu: 'Яблочная кислота',
-    category: 'granular',
-    densityKgPerL: 0.92,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#fefce8',
-    toxicWarning: 'Пищевая яблочная кислота E296 для интенсивной кислой посыпки мармелада.',
-    stainType: 'sand'
-  },
-  tartaric_acid: {
-    id: 'tartaric_acid',
-    name: 'Tartaric Acid Crystals',
-    nameRu: 'Винная кислота',
-    category: 'granular',
-    densityKgPerL: 0.98,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#f8fafc',
-    toxicWarning: 'Виннокаменная кислота E334 с резкой фруктовой кислинкой.',
-    stainType: 'sand'
-  },
-  lactic_acid: {
-    id: 'lactic_acid',
-    name: 'Food Lactic Acid 80%',
-    nameRu: 'Молочная кислота 80%',
-    category: 'chemical',
-    densityKgPerL: 1.2,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#fef9c3',
-    toxicWarning: 'Концентрированный водный раствор молочной кислоты E270 — употреблять только в составе блюд.',
-    stainType: 'water'
-  },
-  sodium_citrate: {
-    id: 'sodium_citrate',
-    name: 'Sodium Citrate Buffer',
-    nameRu: 'Цитрат натрия',
-    category: 'granular',
-    densityKgPerL: 0.96,
-    isDrinkable: false,
-    isFlammable: false,
-    isGranular: true,
-    color: '#f1f5f9',
-    toxicWarning: 'Пищевой регулятор кислотности E331 для пектинового мармелада.',
-    stainType: 'sand'
-  },
-  menthol: {
-    id: 'menthol',
-    name: 'Natural Menthol Crystals',
-    nameRu: 'Ментол натуральный кристаллический',
-    category: 'granular',
-    densityKgPerL: 0.89,
-    isDrinkable: false,
-    isFlammable: true,
-    isGranular: true,
-    color: '#ecfeff',
-    toxicWarning: 'Концентрированные кристаллы природного ментола — сильный холодящий эффект.',
-    stainType: 'sand'
-  },
-  glucose_syrup: {
-    id: 'glucose_syrup',
-    name: 'Confectionery Glucose Syrup',
-    nameRu: 'Глюкозный сироп',
-    category: 'food',
-    densityKgPerL: 1.38,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fef9c3',
-    effects: { hunger: 20, energy: 28, thirst: -4 },
-    tasteMessages: ['Густой тягучий сироп обволакивает нёбо чистой мягкой сладостью.', 'Вязкая прозрачная глюкоза мгновенно даёт прилив сахара.'],
-    stainType: 'water'
-  },
-  corn_molasses: {
-    id: 'corn_molasses',
-    name: 'Starch Corn Molasses',
-    nameRu: 'Крахмальная патока',
-    category: 'food',
-    densityKgPerL: 1.36,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#fbbf24',
-    effects: { hunger: 22, energy: 26, thirst: -4 },
-    tasteMessages: ['Тягучая янтарная крахмальная патока с мягким карамельно-солодовым послевкусием.'],
-    stainType: 'water'
-  },
-  topinambur_syrup: {
-    id: 'topinambur_syrup',
-    name: 'Topinambur Root Syrup',
-    nameRu: 'Сироп топинамбура',
-    category: 'food',
-    densityKgPerL: 1.32,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#b45309',
-    effects: { hunger: 18, energy: 22, health: 4 },
-    tasteMessages: ['Мягкий тёмно-янтарный сироп топинамбура с тонкой фруктово-цветочной нотой.'],
-    stainType: 'water'
-  },
-  coconut_milk: {
-    id: 'coconut_milk',
-    name: 'Coconut Milk Cream',
-    nameRu: 'Кокосовое молоко',
-    category: 'food',
-    densityKgPerL: 1.01,
-    isDrinkable: true,
-    isFlammable: false,
-    color: '#f8fafc',
-    effects: { thirst: 22, hunger: 16, energy: 10 },
-    tasteMessages: ['Нежное бархатистое кокосовое молоко со сливочным тропическим вкусом!'],
-    stainType: 'water'
-  },
-  dye_carmine: {
-    id: 'dye_carmine',
-    name: 'Natural Carmine Extract E120',
-    nameRu: 'Натуральный краситель кармин',
-    category: 'food',
-    densityKgPerL: 1.06,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#be123c',
-    toxicWarning: 'Концентрированный рубиново-малиновый пищевой краситель — разводится по каплям.',
-    stainType: 'water'
-  },
-  dye_chlorophyllin: {
-    id: 'dye_chlorophyllin',
-    name: 'Copper Chlorophyllin E141',
-    nameRu: 'Краситель хлорофиллин (медный комплекс)',
-    category: 'food',
-    densityKgPerL: 1.04,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#15803d',
-    toxicWarning: 'Насыщенный изумрудный растительный пигмент из крапивы и люцерны.',
-    stainType: 'water'
-  },
-  dye_anthocyanin: {
-    id: 'dye_anthocyanin',
-    name: 'Anthocyanin Berry Extract E163',
-    nameRu: 'Пищевой экстракт антоцианов',
-    category: 'food',
-    densityKgPerL: 1.08,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#581c87',
-    toxicWarning: 'Тёмно-фиолетовый концентрированный пигмент из ягод и чёрной моркови.',
-    stainType: 'water'
-  },
-  dye_spirulina: {
-    id: 'dye_spirulina',
-    name: 'Blue Spirulina Phycocyanin',
-    nameRu: 'Экстракт голубой спирулины',
-    category: 'food',
-    densityKgPerL: 1.03,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#0284c7',
-    toxicWarning: 'Ярко-лазурный природный пигмент фикоцианин из микроводоросли спирулины.',
-    stainType: 'water'
-  },
-  dye_beta_carotene: {
-    id: 'dye_beta_carotene',
-    name: 'Beta-Carotene Emulsion E160a',
-    nameRu: 'Бета-каротин (пищевой пигмент)',
-    category: 'food',
-    densityKgPerL: 1.02,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#f97316',
-    toxicWarning: 'Концентрированная ярко-оранжевая провитаминная эмульсия каротина.',
-    stainType: 'water'
-  },
-  dye_caramel: {
-    id: 'dye_caramel',
-    name: 'Caramel Color IV E150d',
-    nameRu: 'Карамельный колер IV',
-    category: 'food',
-    densityKgPerL: 1.24,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#451a03',
-    toxicWarning: 'Густой жжёно-сахарный колер для тёмной колы и карамельного мармелада.',
-    stainType: 'water'
-  },
-  dye_lycopene: {
-    id: 'dye_lycopene',
-    name: 'Natural Lycopene Extract E160d',
-    nameRu: 'Краситель ликопин натуральный',
-    category: 'food',
-    densityKgPerL: 1.03,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#dc2626',
-    toxicWarning: 'Концентрированный алый томатно-ягодный каротиноидный пигмент.',
-    stainType: 'water'
-  },
-  botanical_extract: {
-    id: 'botanical_extract',
-    name: 'Concentrated Botanical Extract',
-    nameRu: 'Концентрированный растительный экстракт',
-    category: 'food',
-    densityKgPerL: 1.05,
-    isDrinkable: false,
-    isFlammable: false,
-    color: '#7c2d12',
-    toxicWarning: 'Ароматический экстракт для кондитерских изделий и напитков — дозируется по каплям.',
-    stainType: 'water'
-  },
-  essential_oil: {
-    id: 'essential_oil',
-    name: 'Pure Culinary Essential Oil',
-    nameRu: 'Пищевое эфирное масло',
-    category: 'food',
-    densityKgPerL: 0.9,
-    isDrinkable: false,
-    isFlammable: true,
-    color: '#34d399',
-    toxicWarning: 'Высококонцентрированное эфирное масло — опасно пить неразбавленным.',
-    stainType: 'oil'
   }
 };
+export const DEFAULT_GENERIC_LIQUID_ATTRIBUTES: Partial<Record<LiquidId, FluidSubstanceAttributes>> = {
+  water: {
+    varietyRu: 'Пресная питьевая',
+    ingredients: 'Природная родниковая или очищенная артезианская вода',
+    preparationMethod: 'Механическая фильтрация и отстаивание',
+    purpose: 'Утоление жажды, основа для супов, бульонов, чая и маринадов'
+  },
+  tea: {
+    varietyRu: 'Чёрный байховый листовой',
+    ingredients: 'Ферментированный чайный лист (Camellia sinensis), горячая вода',
+    preparationMethod: 'Заваривание сухого чайного листа крутым кипятком',
+    purpose: 'Согревающий и тонизирующий напиток'
+  },
+  coffee: {
+    varietyRu: 'Чёрный заварной (Арабика)',
+    ingredients: 'Обжаренные молотые зёрна кофе арабика, горячая вода',
+    preparationMethod: 'Экстракция молотого зерна горячей водой',
+    purpose: 'Бодрящий напиток, снимающий сонливость и усталость'
+  },
+  energy_drink: {
+    varietyRu: 'Таурин-кофеиновый тоник',
+    ingredients: 'Газированная вода, сахароза, кофеин, таурин, витамины группы B',
+    preparationMethod: 'Промышленное купажирование и карбонизация',
+    purpose: 'Экстренное восстановление бодрости и снятие сонливости'
+  },
+  cola: {
+    varietyRu: 'Классическая карамельная',
+    ingredients: 'Газированная вода, сахар, карамельный колер, ортофосфорная кислота, экстракт ореха кола и ванили',
+    preparationMethod: 'Смешивание пряно-карамельного сиропа с сатурированной водой',
+    purpose: 'Освежающий сладкий газированный напиток'
+  },
+  juice: {
+    varietyRu: 'Фруктово-ягодный прямого отжима',
+    ingredients: 'Спелые садовые яблоки, апельсины, лесные и садовые ягоды',
+    preparationMethod: 'Холодный прессовый отжим с мягкой пастеризацией',
+    purpose: 'Утоление жажды, восполнение витаминов и приготовление мармелада'
+  },
+  milk: {
+    varietyRu: 'Цельное коровье (3.2%)',
+    ingredients: 'Натуральное цельное коровье молоко',
+    preparationMethod: 'Бережная пастеризация и охлаждение',
+    purpose: 'Питьё, варка молочных каш, замешивание теста и кремов'
+  },
+  dairy_fermented: {
+    varietyRu: 'Домашняя сметана / Кефир',
+    ingredients: 'Цельное коровье молоко, сливки, живая молочнокислая закваска',
+    preparationMethod: 'Молочнокислое сквашивание и термостатное созревание',
+    purpose: 'Заправка супов и пельменей, выпечка и прямое употребление'
+  },
+  kvas: {
+    varietyRu: 'Хлебный бочковой',
+    ingredients: 'Вода, ржаной и ячменный солод, ржаные сухари, сахар, хлебопекарные дрожжи',
+    preparationMethod: 'Двойное молочнокислое и спиртовое брожение сусла',
+    purpose: 'Освежающий славянский напиток и основа для окрошки'
+  },
+  beer: {
+    varietyRu: 'Светлое ячменное (Лагер)',
+    ingredients: 'Вода, светлый ячменный солод, шишковой хмель, пивные дрожжи',
+    preparationMethod: 'Затирание солодового сусла и низовое брожение',
+    purpose: 'Слабоалкогольный пенный напиток для снятия стресса'
+  },
+  vodka: {
+    varietyRu: 'Пшеничная классическая 40%',
+    ingredients: 'Исправленная вода, спирт этиловый ректификованный «Люкс» из пшеничного зерна',
+    preparationMethod: 'Ректификация зернового спирта и угольная фильтрация',
+    purpose: 'Крепкий алкогольный напиток, антисептик и основа для настоек'
+  },
+  wine: {
+    varietyRu: 'Сухое виноградное выдержанное',
+    ingredients: 'Ферментированный сок спелого технического винограда',
+    preparationMethod: 'Сбраживание виноградного сусла и выдержка в дубовой таре',
+    purpose: 'Благородный напиток, основа для глинтвейна, маринадов и соусов'
+  },
+  honey: {
+    varietyRu: 'Цветочный луговой',
+    ingredients: 'Цветочный нектар разнотравья и липы, переработанный медоносными пчёлами',
+    preparationMethod: 'Сбор запечатанных медовых сот и холодная откачка в медогонке',
+    purpose: 'Природный источник быстрой энергии, лечение простуды и выпечка',
+    culinaryEquivalentId: 'honey'
+  },
+  broth: {
+    varietyRu: 'Домашний мясной на кореньях',
+    ingredients: 'Вода, мясо на кости, репчатый лук, морковь, лавровый лист, чёрный перец, соль',
+    preparationMethod: 'Долгое медленное томление мяса и кореньев на слабом огне',
+    purpose: 'Горячее первое блюдо и питательная основа для супов и соусов',
+    culinaryEquivalentId: 'broth'
+  },
+  caviar: {
+    varietyRu: 'Лососевая зернистая малосольная',
+    ingredients: 'Отборная икра тихоокеанских лососевых рыб, каменная соль, капля растительного масла',
+    preparationMethod: 'Пробивка ястыков через грохотку и охлаждённый посол в тузлуке',
+    purpose: 'Высококалорийный деликатес для бутербродов, блинов и закусок',
+    culinaryEquivalentId: 'caviar_red'
+  },
+  jam: {
+    varietyRu: 'Домашнее ягодное на сиропе',
+    ingredients: 'Спелые садовые и лесные ягоды, сахар-песок, родниковая вода',
+    preparationMethod: 'Многократная томлёная варка ягод в густом сахарном сиропе',
+    purpose: 'Сладкое лакомство к чаю, начинка для пирогов и блинов',
+    culinaryEquivalentId: 'jam'
+  },
+  pickles: {
+    varietyRu: 'Огурцы и томаты бочкового посола',
+    ingredients: 'Свежие огурцы и томаты, вода, каменная соль, зонтики укропа, чеснок, лист хрена и смородины',
+    preparationMethod: 'Молочнокислое квашение и пряный рассольный посол',
+    purpose: 'Хрустящая закуска, восполняющая водно-солевой баланс',
+    culinaryEquivalentId: 'pickles'
+  },
+  canned_preserve: {
+    varietyRu: 'Мясные и овощные консервы ГОСТ',
+    ingredients: 'Крупнокусковое мясо или отборные овощи, собственный сок, соль, перец, лавровый лист',
+    preparationMethod: 'Герметичная закатка и высокотемпературная стерилизация в автоклаве',
+    purpose: 'Длительное хранение, готовое сытное блюдо или основа для супа и каши',
+    culinaryEquivalentId: 'stew_meat'
+  },
+  puree: {
+    varietyRu: 'Томатная и орехово-овощная паста',
+    ingredients: 'Уваренная протёртая мякоть спелых плодов и обжаренных семян, щепотка соли',
+    preparationMethod: 'Тонкое протирание через сито и вакуумное уваривание до густоты',
+    purpose: 'Заправка супов, подлив, соусов и сытных бутербродов',
+    culinaryEquivalentId: 'tomato_paste'
+  },
+  rendered_fat: {
+    varietyRu: 'Топлёный кулинарный жир (смалец / гхи)',
+    ingredients: 'Отборный нутряной животный жир или сливочное масло высшего сорта',
+    preparationMethod: 'Медленное вытапливание на водяной бане с фильтрацией шкварок и белка',
+    purpose: 'Жарка без пригорания, заправка каш и защита от холода',
+    culinaryEquivalentId: 'lard_pork'
+  },
+  oil_culinary: {
+    varietyRu: 'Подсолнечное нерафинированное первого отжима',
+    ingredients: 'Обжаренные и сырые семена масличного подсолнечника',
+    preparationMethod: 'Шнековый прессовый отжим и механическая фильтрация',
+    purpose: 'Жарка на сковороде, фритюр, заправка салатов и выпечка',
+    culinaryEquivalentId: 'oil_sunflower'
+  },
+  vinegar: {
+    varietyRu: 'Столовый спиртовой 9%',
+    ingredients: 'Вода питьевая, пищевая уксусная кислота биохимического брожения',
+    preparationMethod: 'Уксуснокислое окисление спиртового сусла и разведение до 9%',
+    purpose: 'Консервация, маринование шашлыка и подача к пельменям',
+    culinaryEquivalentId: 'vinegar_table'
+  },
+  sauce: {
+    varietyRu: 'Кулинарный пряный соус',
+    ingredients: 'Уваренные томаты, соевые бобы или горчичное зерно, уксус, сахар, соль, букет специй',
+    preparationMethod: 'Купажирование и томление основы с пряностями и специями',
+    purpose: 'Приправление горячих мясных, рыбных блюд, гарниров и пельменей',
+    culinaryEquivalentId: 'sauce_ketchup'
+  },
+  syrup_sweet: {
+    varietyRu: 'Сгущённое молоко с сахаром ГОСТ',
+    ingredients: 'Цельное коровье молоко, нормализованные сливки, свекловичный сахар',
+    preparationMethod: 'Вакуумное выпаривание влаги при щадящей температуре с кристаллизацией лактозы',
+    purpose: 'Добавка в чай и кофе, начинка для выпечки и быстрый источник углеводов',
+    culinaryEquivalentId: 'condensed_milk'
+  },
+  dry_mix: {
+    varietyRu: 'Кулинарный загуститель / Сухая смесь',
+    ingredients: 'Очищенный крахмал, природный желатин или пектин из растительного сырья',
+    preparationMethod: 'Экстракция, вакуумная сушка и тонкий ситовой помол',
+    purpose: 'Приготовление домашнего мармелада, киселей, желе и соусов',
+    culinaryEquivalentId: 'starch'
+  },
+  grain: {
+    varietyRu: 'Крупа зерновая отборная',
+    ingredients: 'Очищенное и шлифованное зерно злаковых или бобовых культур',
+    preparationMethod: 'Шелушение семенной оболочки, шлифовка и калибровка зерна',
+    purpose: 'Варка рассыпчатых гарниров, густых похлёбок, плова и каш',
+    culinaryEquivalentId: 'rice'
+  },
+  spice_dry: {
+    varietyRu: 'Молотая пряность и сушёные травы',
+    ingredients: 'Высушенные плоды перца, коренья, кора и душистые огородные травы',
+    preparationMethod: 'Теневая сушка и холодный жерновой помол для сохранения эфирных масел',
+    purpose: 'Придание блюдам, супам и фаршу яркого аромата и остроты',
+    culinaryEquivalentId: 'black_pepper_ground'
+  },
+  sugar: {
+    varietyRu: 'Белый кристаллический свекловичный',
+    ingredients: 'Корнеплоды сахарной свёклы (сахароза 99.8%)',
+    preparationMethod: 'Диффузионная вытяжка, очистка сиропа и вакуумная кристаллизация',
+    purpose: 'Подслащивание напитков, выпечка, варка варенья и мармелада',
+    culinaryEquivalentId: 'sugar'
+  },
+  flour: {
+    varietyRu: 'Пшеничная хлебопекарная высшего сорта',
+    ingredients: 'Отборное эндоспермовое зерно мягкой и твёрдой пшеницы',
+    preparationMethod: 'Вальцовый многоступенчатый помол и просеивание через шёлковые сита',
+    purpose: 'Замешивание пельменного, хлебного и сдобного теста',
+    culinaryEquivalentId: 'flour'
+  },
+  salt: {
+    varietyRu: 'Каменная поваренная пищевая (помол №1)',
+    ingredients: 'Природный минерал галит (хлорид натрия NaCl 98.5%)',
+    preparationMethod: 'Шахтная добыча каменной соли, дробление и грохочение',
+    purpose: 'Базовая приправа ко всем блюдам, засолка рыбы, сала, икры и овощей',
+    culinaryEquivalentId: 'salt'
+  },
+  food_acid: {
+    varietyRu: 'Лимонная кристаллическая (E330)',
+    ingredients: 'Очищенная лимонная или яблочная органическая кислота пищевой чистоты',
+    preparationMethod: 'Биосинтез из сахаристого сырья и перекристаллизация в гранулы',
+    purpose: 'Регулирование кислотности мармелада, напитков и домашних консерваций',
+    culinaryEquivalentId: 'citric_acid'
+  },
+  food_dye: {
+    varietyRu: 'Натуральный растительный пигмент',
+    ingredients: 'Концентрированная вытяжка красящих антоцианов, каротина или хлорофилла из ягод и трав',
+    preparationMethod: 'Водно-спиртовая экстракция и бережное сгущение пигмента',
+    purpose: 'Окрашивание домашнего мармелада, кремов, глазури и напитков',
+    culinaryEquivalentId: 'dye_carmine'
+  },
+  botanical_extract: {
+    varietyRu: 'Натуральная плодово-травяная вытяжка',
+    ingredients: 'Плоды, ягоды, хвоя, мята и целебные коренья на водно-глицериновой основе',
+    preparationMethod: 'Мацерация и перколяция растительного сырья с вакуумным концентрированием',
+    purpose: 'Ароматизация и обогащение мармелада, чая и десертов витаминами'
+  },
+  essential_oil: {
+    varietyRu: 'Натуральное эфирное масло первого отжима',
+    ingredients: 'Цедра цитрусовых, листья перечной мяты, хвоя пихты или бутоны гвоздики',
+    preparationMethod: 'Паровая дистилляция и холодное прессование эфиромасличного сырья',
+    purpose: 'Придание яркого природного аромата кондитерским изделиям и напиткам'
+  },
+  medical_solution: {
+    varietyRu: 'Антисептический и перевязочный раствор',
+    ingredients: 'Очищенная вода, фармакопейное действующее вещество (антисептик / анальгетик)',
+    preparationMethod: 'Стерильное фармацевтическое приготовление по аптечной прописи',
+    purpose: 'Оказание первой медицинской помощи, дезинфекция ран и снятие боли',
+    medicalEffectId: 'antiseptic'
+  }
+};
+
+export const LEGACY_LIQUID_TO_GENERIC_MAP: Record<string, { liquidId: LiquidId; attributes: FluidSubstanceAttributes }> = {
+  mineral_water: {
+    liquidId: 'water',
+    attributes: {
+      varietyRu: 'Минеральная лечебно-столовая газированная',
+      ingredients: 'Природная подземная минеральная вода скважинного розлива, природный углекислый газ',
+      preparationMethod: 'Добыча с глубинного водоносного горизонта и сатурация',
+      purpose: 'Утоление жажды и восстановление солевого баланса',
+      customEffects: { thirst: 40, energy: 5, soothePanic: 25 },
+      customTasteMessages: ['Освежающая минералка с колючими пузырьками газа!']
+    }
+  },
+  tea_green: {
+    liquidId: 'tea',
+    attributes: {
+      varietyRu: 'Зелёный листовой (Сенча)',
+      ingredients: 'Неферментированный зелёный чайный лист пропаренной фиксации, мягкая вода',
+      preparationMethod: 'Заваривание при температуре 80°C для сохранения антиоксидантов',
+      purpose: 'Тонизирующий напиток, мягко снимающий усталость и стресс',
+      culinaryEquivalentId: 'tea_green',
+      customEffects: { thirst: 40, energy: 15, health: 5, soothePanic: 30 },
+      customTasteMessages: ['Тонкий травянистый аромат свежезаваренного зелёного чая.']
+    }
+  },
+  milk_raw: {
+    liquidId: 'milk',
+    attributes: {
+      varietyRu: 'Парное деревенское цельное (4.5%)',
+      ingredients: 'Свежевыдоенное цельное фермерское коровье молоко со сливками',
+      preparationMethod: 'Утренняя дойка и процеживание через марлю без сепарации',
+      purpose: 'Сытное питьё, сбивание масла, варка каш и приготовление творога',
+      culinaryEquivalentId: 'milk_raw',
+      customEffects: { thirst: 35, hunger: 22, health: 10, energy: 15, soothePanic: 25 },
+      customTasteMessages: ['Густое деревенское парное молоко со сливочной пенкой!']
+    }
+  },
+  coconut_milk: {
+    liquidId: 'milk',
+    attributes: {
+      varietyRu: 'Кокосовое сливочное молоко (18%)',
+      ingredients: 'Перетёртая белая мякоть зрелого кокосового ореха, фильтрованная вода',
+      preparationMethod: 'Горячее прессование кокосовой копры с получением густой эмульсии',
+      purpose: 'Приготовление сливочных супов, карри, десертов и нежного мармелада',
+      culinaryEquivalentId: 'coconut_milk',
+      customEffects: { thirst: 25, hunger: 20, energy: 12, soothePanic: 20 },
+      customTasteMessages: ['Нежное бархатистое кокосовое молоко со сливочным тропическим вкусом!']
+    }
+  },
+  cream_heavy: {
+    liquidId: 'dairy_fermented',
+    attributes: {
+      varietyRu: 'Сливки деревенские густые (33%)',
+      ingredients: 'Высокожирные сливки из цельного коровьего молока',
+      preparationMethod: 'Сепарирование парного молока и охлаждение для созревания',
+      purpose: 'Добавление в кофе, взбивание крема, сливочные соусы и супы-пюре',
+      culinaryEquivalentId: 'cream_heavy',
+      customEffects: { thirst: 15, hunger: 40, energy: 25, health: 8, soothePanic: 25 },
+      customTasteMessages: ['Густые сладкие деревенские сливки 33% жирности.']
+    }
+  },
+  sour_cream: {
+    liquidId: 'dairy_fermented',
+    attributes: {
+      varietyRu: 'Сметана домашняя густая (20%)',
+      ingredients: 'Пастеризованные коровьи сливки, закваска молочнокислых стрептококков',
+      preparationMethod: 'Ферментация густых сливок и холодное созревание до густоты ложки',
+      purpose: 'Подача к пельменям, борщу, щам, блинам и тушение мяса или грибов',
+      culinaryEquivalentId: 'sour_cream',
+      customEffects: { thirst: 10, hunger: 35, energy: 20, health: 8, soothePanic: 25 },
+      customTasteMessages: ['Густая прохладная сметана со сливочной кислинкой!']
+    }
+  },
+  kefir: {
+    liquidId: 'dairy_fermented',
+    attributes: {
+      varietyRu: 'Кефир живой на кефирных грибках (3.2%)',
+      ingredients: 'Цельное коровье молоко, симбиотическая закваска кефирных грибков',
+      preparationMethod: 'Смешанное молочнокислое и спиртовое брожение молока',
+      purpose: 'Освежающий кисломолочный напиток, улучшающий пищеварение, и основа для оладий',
+      culinaryEquivalentId: 'kefir',
+      customEffects: { thirst: 35, hunger: 20, health: 12, soothePanic: 25 },
+      customTasteMessages: ['Густой освежающий кефир приятно покалывает язык.']
+    }
+  },
+  cottage_cheese: {
+    liquidId: 'dairy_fermented',
+    attributes: {
+      varietyRu: 'Творог домашний рассыпчатый (9%)',
+      ingredients: 'Цельное сквашенное коровье молоко (простокваша)',
+      preparationMethod: 'Томление простокваши в печи и отцеживание сыворотки в полотняном мешочке',
+      purpose: 'Сытный белковый завтрак, начинка для вареников и сырников',
+      culinaryEquivalentId: 'cottage_cheese',
+      customEffects: { hunger: 35, energy: 18, health: 10, soothePanic: 20 },
+      customTasteMessages: ['Нежный кисловато-сливочный вкус рассыпчатого домашнего творога.']
+    }
+  },
+  yogurt: {
+    liquidId: 'dairy_fermented',
+    attributes: {
+      varietyRu: 'Йогурт натуральный греческий',
+      ingredients: 'Отборное коровье молоко, культуры болгарской палочки и термофильного стрептококка',
+      preparationMethod: 'Термостатное сквашивание с отцеживанием лишней сыворотки',
+      purpose: 'Лёгкий перекус, заправка фруктовых и овощных салатов, основа для соусов',
+      culinaryEquivalentId: 'yogurt',
+      customEffects: { hunger: 24, thirst: 18, health: 10, energy: 12 },
+      customTasteMessages: ['Нежный сливочный йогурт с приятной освежающей кислинкой.']
+    }
+  },
+  yeast_liquid: {
+    liquidId: 'dairy_fermented',
+    attributes: {
+      varietyRu: 'Живая хлебная дрожжевая закваска',
+      ingredients: 'Ржаная и пшеничная обдирная мука, тёплая родниковая вода, дикие культуры дрожжей (Saccharomyces)',
+      preparationMethod: 'Многодневное спонтанное сбраживание мучной болтушки с подкормкой',
+      purpose: 'Выпечка пышного домашнего хлеба, пирогов и блинов, постановка браги',
+      culinaryEquivalentId: 'yeast_liquid'
+    }
+  },
+  wine_white: {
+    liquidId: 'wine',
+    attributes: {
+      varietyRu: 'Белое сухое (Совиньон Блан / Шардоне)',
+      ingredients: 'Ферментированный сок светлых сортов винограда без кожицы',
+      preparationMethod: 'Холодное брожение осветлённого виноградного сусла в стальных чанах',
+      purpose: 'Подача к рыбе и птице, приготовление ризотто и белых соусов',
+      culinaryEquivalentId: 'wine_white',
+      customEffects: { thirst: 20, alcohol: 12, soothePanic: 35 },
+      customTasteMessages: ['Освежающий букет белого сухого вина с цитрусовой кислинкой.']
+    }
+  },
+  wine_red: {
+    liquidId: 'wine',
+    attributes: {
+      varietyRu: 'Красное сухое (Каберне / Саперави)',
+      ingredients: 'Ферментированный виноград тёмных сортов с косточкой и кожицей',
+      preparationMethod: 'Мацерация на мезге и длительная выдержка в дубовых бочках',
+      purpose: 'Подача к стейкам и дичи, тушение говядины и варка пряного глинтвейна',
+      culinaryEquivalentId: 'wine_red',
+      customEffects: { thirst: 15, alcohol: 12, soothePanic: 35 },
+      customTasteMessages: ['Терпкий рубиновый вкус выдержанного красного сухого вина.']
+    }
+  },
+  honey_wild: {
+    liquidId: 'honey',
+    attributes: {
+      varietyRu: 'Дикий бортевой таёжный мёд',
+      ingredients: 'Нектар лесного кипрея, малины, вереска и хвойная падь диких пчёл',
+      preparationMethod: 'Ручной сбор диких сотов из бортей и отжим без нагрева',
+      purpose: 'Укрепление иммунитета, лечение простуды и целебное лакомство',
+      culinaryEquivalentId: 'honey_wild',
+      customEffects: { hunger: 50, energy: 40, health: 18, soothePanic: 35 },
+      customTasteMessages: ['Терпкий дикий бортевой мёд с ароматом таёжного разнотравья и смолы!']
+    }
+  },
+  honey_buckwheat: {
+    liquidId: 'honey',
+    attributes: {
+      varietyRu: 'Гречишный тёмный пасечный мёд',
+      ingredients: 'Нектар цветущих полей посевной гречихи (богат железом и белком)',
+      preparationMethod: 'Центробежная откачка тёмных запечатанных рамок',
+      purpose: 'Восстановление сил при малокровии, пряная выпечка и медовые маринады',
+      culinaryEquivalentId: 'honey_buckwheat',
+      customEffects: { hunger: 48, energy: 38, health: 16, soothePanic: 30 },
+      customTasteMessages: ['Густой тёмный гречишный мёд с благородной горчинкой приятно першит в горле.']
+    }
+  },
+  maple_syrup: {
+    liquidId: 'syrup_sweet',
+    attributes: {
+      varietyRu: 'Кленовый янтарный сироп (Grade A)',
+      ingredients: 'Уваренный весенний сок сахарного и остролистного клёна (100%)',
+      preparationMethod: 'Собирание кленового сока и выпаривание в 40 раз на дровяном огне',
+      purpose: 'Поливка блинов, оладий, каш и карамельная глазурь для запекания мяса',
+      culinaryEquivalentId: 'maple_syrup',
+      customEffects: { hunger: 40, energy: 35, soothePanic: 25 },
+      customTasteMessages: ['Сладкий древесно-карамельный кленовый сироп.']
+    }
+  },
+  condensed_milk: {
+    liquidId: 'syrup_sweet',
+    attributes: {
+      varietyRu: 'Сгущённое цельное молоко с сахаром (8.5%)',
+      ingredients: 'Цельное коровье молоко, сливки, сахар-песок (сахароза 43.5%)',
+      preparationMethod: 'Вакуумное сгущение молока с сахаром по классическому ГОСТу',
+      purpose: 'Лакомство в походах, добавка в горячий чай и кофе, крем для тортов',
+      culinaryEquivalentId: 'condensed_milk',
+      customEffects: { hunger: 50, energy: 35, health: 6, soothePanic: 40 },
+      customTasteMessages: ['Тягучая кремовая сгущёнка ГОСТ — любимое сладкое лакомство!']
+    }
+  },
+  glucose_syrup: {
+    liquidId: 'syrup_sweet',
+    attributes: {
+      varietyRu: 'Кондитерский глюкозный сироп (DE 42)',
+      ingredients: 'Очищенный кукурузный и пшеничный крахмал, артезианская вода',
+      preparationMethod: 'Ферментативный гидролиз крахмала и вакуумное уваривание до прозрачной вязкости',
+      purpose: 'Предотвращение засахаривания мармелада, карамели и глянцевой глазури',
+      culinaryEquivalentId: 'glucose_syrup'
+    }
+  },
+  corn_molasses: {
+    liquidId: 'syrup_sweet',
+    attributes: {
+      varietyRu: 'Крахмальная карамельная патока',
+      ingredients: 'Кукурузный крахмал, мальтоза, декстрины, глюкоза',
+      preparationMethod: 'Кислотно-ферментативное осахаривание крахмального молока',
+      purpose: 'Придание тягучести и упругости жевательному мармеладу, нуге и пряникам',
+      culinaryEquivalentId: 'corn_molasses'
+    }
+  },
+  topinambur_syrup: {
+    liquidId: 'syrup_sweet',
+    attributes: {
+      varietyRu: 'Натуральный инулиновый сироп топинамбура',
+      ingredients: 'Клубни земляной груши (топинамбура), родниковая вода, лимонный сок',
+      preparationMethod: 'Холодный отжим сока клубней и бережное вакуумное выпаривание при 55°C',
+      purpose: 'Полезный природный подсластитель с низким гликемическим индексом для десертов и мармелада',
+      culinaryEquivalentId: 'topinambur_syrup'
+    }
+  },
+  broth_beef: {
+    liquidId: 'broth',
+    attributes: {
+      varietyRu: 'Говяжий костный наваристый бульон',
+      ingredients: 'Мозговые говяжьи кости, грудинка, лук, печёная морковь, сельдерей, лавровый лист, чёрный перец',
+      preparationMethod: 'Шестичасовое томление обожжённых костей и мяса со снятием пены',
+      purpose: 'Сытное горячее блюдо и основа для борща, солянки и пельменей',
+      culinaryEquivalentId: 'broth_beef',
+      customEffects: { hunger: 60, thirst: 35, energy: 25, health: 18, soothePanic: 45 },
+      customTasteMessages: ['Густой наваристый костный говяжий бульон с янтарным жирком!']
+    }
+  },
+  broth_chicken: {
+    liquidId: 'broth',
+    attributes: {
+      varietyRu: 'Куриный золотистый домашний бульон',
+      ingredients: 'Домашняя курица на кости, репчатый лук, морковь, свежий укроп, душистый перец, соль',
+      preparationMethod: 'Медленная варка при едва заметном кипении для прозрачности бульона',
+      purpose: 'Лечебное согревающее питьё при простуде и основа для лапши',
+      culinaryEquivalentId: 'broth_chicken',
+      customEffects: { hunger: 50, thirst: 40, energy: 20, health: 16, soothePanic: 40 },
+      customTasteMessages: ['Прозрачный золотистый куриный бульон с укропом согревает изнутри!']
+    }
+  },
+  broth_fish: {
+    liquidId: 'broth',
+    attributes: {
+      varietyRu: 'Рыбный бульон (Костровая юшка / Уха)',
+      ingredients: 'Головы, плавники и филе речной щуки, окуня и судака, лук, корень петрушки, лавровый лист, перец горошком',
+      preparationMethod: 'Двойная варка мелкой и крупной речной рыбы в котелке с дымком',
+      purpose: 'Ароматная рыбацкая уха и основа для рыбных супов и заливного',
+      culinaryEquivalentId: 'broth_fish',
+      customEffects: { hunger: 50, thirst: 35, energy: 18, health: 15, soothePanic: 35 },
+      customTasteMessages: ['Наваристая костровая уха из свежей рыбы с лавровым листом и дымком!']
+    }
+  },
+  broth_vegetable: {
+    liquidId: 'broth',
+    attributes: {
+      varietyRu: 'Овощной пряный отвар на кореньях',
+      ingredients: 'Морковь, корень сельдерея и пастернака, репчатый лук, чеснок, стебли петрушки и укропа',
+      preparationMethod: 'Томление запечённых корнеплодов и свежей зелени в родниковой воде',
+      purpose: 'Лёгкая диетическая основа для овощных супов, ризотто и тушения',
+      culinaryEquivalentId: 'broth_vegetable',
+      customEffects: { hunger: 35, thirst: 45, energy: 15, health: 12, soothePanic: 30 },
+      customTasteMessages: ['Лёгкий ароматный отвар моркови, сельдерея, лука и пряных трав.']
+    }
+  },
+  broth_mushroom: {
+    liquidId: 'broth',
+    attributes: {
+      varietyRu: 'Грибной лесной бульон из белых грибов',
+      ingredients: 'Сушёные и свежие белые грибы (боровики), подосиновики, лук, тимьян, сметана и соль',
+      preparationMethod: 'Замачивание и долгое вываривание лесных грибов для тёмного навара',
+      purpose: 'Душистая грибная похлёбка и основа для лесных соусов и жульенов',
+      culinaryEquivalentId: 'broth_mushroom',
+      customEffects: { hunger: 55, thirst: 30, energy: 20, health: 15, soothePanic: 40 },
+      customTasteMessages: ['Тёмный густой бульон с неповторимым лесным ароматом белых грибов!']
+    }
+  },
+  caviar_red: {
+    liquidId: 'caviar',
+    attributes: {
+      varietyRu: 'Красная лососевая зернистая (Горбуша / Кета)',
+      ingredients: 'Зернистая икра дальневосточных лососевых рыб (кета, горбуша), соль поваренная 3.2%, масло растительное',
+      preparationMethod: 'Малосольный бочковой посол свежей икры первого сорта',
+      purpose: 'Праздничный деликатес для бутербродов со сливочным маслом и блинов',
+      culinaryEquivalentId: 'caviar_red',
+      customEffects: { hunger: 65, energy: 30, health: 25, soothePanic: 50 },
+      customTasteMessages: ['Крупные янтарные икринки лосося упруго лопаются на языке!']
+    }
+  },
+  caviar_black: {
+    liquidId: 'caviar',
+    attributes: {
+      varietyRu: 'Чёрная осетровая зернистая (Белуга / Осётр)',
+      ingredients: 'Отборная зернистая икра каспийского осетра и белуги, соль мелкого помола',
+      preparationMethod: 'Традиционный малосольный астраханский посол через решётку-грохотку',
+      purpose: 'Редчайший питательный деликатес, восстанавливающий силы и настроение',
+      culinaryEquivalentId: 'caviar_black',
+      customEffects: { hunger: 70, energy: 35, health: 30, soothePanic: 60 },
+      customTasteMessages: ['Изысканный бархатный орехово-сливочный вкус чёрной осетровой икры!']
+    }
+  },
+  caviar_pike: {
+    liquidId: 'caviar',
+    attributes: {
+      varietyRu: 'Щучья янтарная речная икра',
+      ingredients: 'Зернистая икра речной щуки весеннего улова, каменная соль, капля подсолнечного масла',
+      preparationMethod: 'Ошпаривание горячим рассолом и холодное созревание с маслом',
+      purpose: 'Традиционная русская закуска на гренках со сметаной и зелёным луком',
+      culinaryEquivalentId: 'caviar_pike',
+      customEffects: { hunger: 55, energy: 25, health: 20, soothePanic: 40 },
+      customTasteMessages: ['Мелкая золотистая щучья икра с нежным малосольным вкусом!']
+    }
+  },
+  caviar_cod: {
+    liquidId: 'caviar',
+    attributes: {
+      varietyRu: 'Пробойная солёная икра трески и минтая',
+      ingredients: 'Икра северной трески и охотоморского минтая, соль, подсолнечное масло',
+      preparationMethod: 'Пробивка зрелых ястыков и пастеризация в банках с растительным маслом',
+      purpose: 'Сытная белковая намазка на хлеб и ингредиент для рыбных закусок',
+      culinaryEquivalentId: 'caviar_cod',
+      customEffects: { hunger: 50, energy: 22, health: 18, soothePanic: 35 },
+      customTasteMessages: ['Нежная паштетная текстура икры трески с морским солоноватым вкусом.']
+    }
+  },
+  caviar_squash: {
+    liquidId: 'caviar',
+    attributes: {
+      varietyRu: 'Кабачковая овощная икра (ГОСТ)',
+      ingredients: 'Обжаренные молодые кабачки, пассерованная морковь, репчатый лук, томатная паста, подсолнечное масло, чеснок, соль, перец',
+      preparationMethod: 'Обжарка овощей в масле, тонкое протирание и долгое уваривание в котле',
+      purpose: 'Готовая овощная закуска, намазка на свежий хлеб и гарнир к мясу',
+      culinaryEquivalentId: 'caviar_squash',
+      customEffects: { hunger: 45, energy: 20, health: 12, soothePanic: 30 },
+      customTasteMessages: ['Любимая с детства нежная уваренная кабачковая икра с морковью и томатом!']
+    }
+  },
+  caviar_eggplant: {
+    liquidId: 'caviar',
+    attributes: {
+      varietyRu: 'Баклажанная икра томлёная («Заморская»)',
+      ingredients: 'Печёные на углях баклажаны, сладкий болгарский перец, спелые томаты, лук, чеснок, кинза, подсолнечное масло',
+      preparationMethod: 'Запекание баклажанов до дымной корочки, рубка и томление с томатами',
+      purpose: 'Пряная овощная закуска и сытный гарнир к шашлыку и горячим блюдам',
+      culinaryEquivalentId: 'caviar_eggplant',
+      customEffects: { hunger: 48, energy: 22, health: 14, soothePanic: 30 },
+      customTasteMessages: ['Пряная баклажанная икра с печёным перцем, томатом и чесночком!']
+    }
+  },
+  vegetable_caviar: {
+    liquidId: 'caviar',
+    attributes: {
+      varietyRu: 'Икра овощная/грибная домашнего томления',
+      ingredients: 'Томлёные овощи и лесные грибы, жареный лук, морковь, томатная паста, растительное масло, пряности',
+      preparationMethod: 'Медленное уваривание измельчённых овощей и грибов с пряным маслом',
+      purpose: 'Сытная домашняя закуска в банке для бутербродов и гарниров',
+      culinaryEquivalentId: 'caviar_squash'
+    }
+  },
+  jam_raspberry: {
+    liquidId: 'jam',
+    attributes: {
+      varietyRu: 'Малиновое домашнее варенье',
+      ingredients: 'Свежая лесная и садовая малина (60%), сахарный песок (40%)',
+      preparationMethod: 'Бережная варка-пятиминутка в собственном малиновом соку с сахаром',
+      purpose: 'Первое средство от простуды и переохлаждения с горячим чаем',
+      culinaryEquivalentId: 'jam_raspberry',
+      customEffects: { hunger: 42, energy: 32, health: 16, soothePanic: 35 },
+      customTasteMessages: ['Душистое малиновое варенье отлично сбивает простуду и согревает!']
+    }
+  },
+  jam_strawberry: {
+    liquidId: 'jam',
+    attributes: {
+      varietyRu: 'Клубничное варенье с цельными ягодами',
+      ingredients: 'Отборная садовая земляника (клубника), сахар-песок, капля лимонного сока',
+      preparationMethod: 'Трёхкратная выстойка ягод в сиропе с коротким увариванием для сохранения формы ягод',
+      purpose: 'Десерт к чаю, начинка для пирогов, блинов и оладий',
+      culinaryEquivalentId: 'jam_strawberry',
+      customEffects: { hunger: 42, energy: 30, health: 10, soothePanic: 35 },
+      customTasteMessages: ['Цельные сладкие ягоды клубники в густом рубиновом сиропе!']
+    }
+  },
+  jam_blueberry: {
+    liquidId: 'jam',
+    attributes: {
+      varietyRu: 'Черничное таёжное густое варенье',
+      ingredients: 'Дикорастущая таёжная черника ручного сбора, сахар-песок',
+      preparationMethod: 'Уваривание черники на медленном огне до желирования природного пектина',
+      purpose: 'Восстановление сил и остроты зрения, сладкая начинка для выпечки',
+      culinaryEquivalentId: 'jam_blueberry',
+      customEffects: { hunger: 40, energy: 30, health: 15, soothePanic: 35 },
+      customTasteMessages: ['Густое тёмное варенье из дикой лесной черники с терпкой сладостью!']
+    }
+  },
+  berries: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Свежие дикие лесные ягоды (ассорти)',
+      ingredients: 'Свежесобранная лесная черника, таёжная брусника, земляника и костяника',
+      preparationMethod: 'Ручной сбор спелых лесных ягод в плетёное лукошко и переборка от хвои',
+      purpose: 'Еда в свежем виде, варка варенья, компотов, морсов и начинки для пирогов',
+      culinaryEquivalentId: 'berries',
+      customEffects: { hunger: 25, thirst: 20, health: 15, energy: 15, soothePanic: 25 },
+      customTasteMessages: ['Горсть сочных сладких лесных ягод освежает и бодрит!']
+    }
+  },
+  berries_blueberry: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Свежая лесная черника',
+      ingredients: 'Спелые тёмно-синие ягоды дикорастущей лесной черники с сизым налётом',
+      preparationMethod: 'Бережный сбор в сосновом бору без повреждения нежной кожицы',
+      purpose: 'Еда горстями, приготовление черничного варенья, вареников и мармелада',
+      culinaryEquivalentId: 'berries_blueberry',
+      customEffects: { hunger: 25, thirst: 20, health: 16, energy: 15, soothePanic: 25 },
+      customTasteMessages: ['Горсть сладкой лесной черники приятно красит язык в фиолетовый цвет!']
+    }
+  },
+  berries_lingonberry: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Таёжная брусника (свежая / мочёная)',
+      ingredients: 'Плотные алые ягоды дикой брусники, богатые природной бензойной кислотой',
+      preparationMethod: 'Сбор зрелой осенней брусники и хранение в собственном соку',
+      purpose: 'Витаминный перекус, соус к дичи и мясу, морсы и пироги',
+      culinaryEquivalentId: 'berries_lingonberry',
+      customEffects: { hunger: 22, thirst: 22, health: 18, energy: 15, soothePanic: 25 },
+      customTasteMessages: ['Горьковато-кислый освежающий дикий вкус таёжной брусники!']
+    }
+  },
+  berries_cranberry: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Болотная крупная клюква',
+      ingredients: 'Свежие упругие ягоды верховой болотной клюквы (источник витамина C)',
+      preparationMethod: 'Осенний сбор на торфяных мхах после первых заморозков',
+      purpose: 'Приготовление кислых морсов от жара, киселей, соусов и мармелада',
+      culinaryEquivalentId: 'berries_cranberry',
+      customEffects: { hunger: 20, thirst: 25, health: 20, energy: 18, soothePanic: 25 },
+      customTasteMessages: ['Резкий пронзительно-кислый витаминный взрыв болотной клюквы!']
+    }
+  },
+  berries_raspberry: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Спелая лесная и садовая малина',
+      ingredients: 'Душистые бархатистые ягоды спелой красной малины',
+      preparationMethod: 'Сбор в сухую солнечную погоду прямо с куста в туесок',
+      purpose: 'Лакомство в свежем виде, варка целебного малинового варенья и чая',
+      culinaryEquivalentId: 'berries_raspberry',
+      customEffects: { hunger: 28, thirst: 18, health: 16, energy: 16, soothePanic: 28 },
+      customTasteMessages: ['Нежнейшие ароматные ягоды спелой малины тают во рту!']
+    }
+  },
+  berries_strawberry: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Сочная садовая клубника и лесная земляника',
+      ingredients: 'Спелые душистые ягоды красной клубники и полянной земляники',
+      preparationMethod: 'Сбор спелых ягод с чашелистиками для сохранения сочности',
+      purpose: 'Десерт со сливками и сметаной, варка клубничного варенья и джемов',
+      culinaryEquivalentId: 'berries_strawberry',
+      customEffects: { hunger: 30, thirst: 20, health: 14, energy: 16, soothePanic: 30 },
+      customTasteMessages: ['Роскошный летний вкус спелой сладкой клубники!']
+    }
+  },
+  mushrooms_chanterelle: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Свежие лесные рыжие лисички',
+      ingredients: 'Плотные упругие плодовые тела лесных лисичек (Cantharellus cibarius)',
+      preparationMethod: 'Сбор во мху хвойно-берёзового леса и сухая очистка от лесного сора',
+      purpose: 'Жарка с картошкой и сметаной, грибные супы и маринование на зиму',
+      culinaryEquivalentId: 'mushrooms_chanterelle',
+      customEffects: { hunger: 25, health: 12, energy: 12, soothePanic: 20 },
+      customTasteMessages: ['Упругие рыжие лисички с тонким фруктово-лесным ароматом.']
+    }
+  },
+  mushrooms_honey_agaric: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Осенние лесные опята',
+      ingredients: 'Молодые шляпки и ножки осенних пнёвых опят с нежной плёночкой',
+      preparationMethod: 'Срезка дружных семейств с берёзовых пней и валежника',
+      purpose: 'Засолка и маринование в банках, жарка с луком и варка грибной лапши',
+      culinaryEquivalentId: 'mushrooms_honey_agaric',
+      customEffects: { hunger: 25, health: 10, energy: 12, soothePanic: 20 },
+      customTasteMessages: ['Упругие лесные опята с насыщенным грибным духом.']
+    }
+  },
+  pickles_salted_mushrooms: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Грузди белые солёные в пряном рассоле',
+      ingredients: 'Отборные белые и чёрные грузди, каменная соль, чеснок, зонтики укропа, лист смородины и дуба',
+      preparationMethod: 'Трёхдневное вымачивание и сорокадневный холодный посол под гнётом',
+      purpose: 'Царская лесная закуска под сметану с лучком и горячую картошку',
+      culinaryEquivalentId: 'pickles_salted_mushrooms',
+      customEffects: { hunger: 35, thirst: 15, health: 12, soothePanic: 25 },
+      customTasteMessages: ['Хрустящий солёный груздь с пряным укропно-чесночным рассолом!']
+    }
+  },
+  marinade: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Маринованные овощи и грибы',
+      ingredients: 'Овощи или грибы, вода, уксус 9%, сахар, соль, лавровый лист, гвоздика, душистый перец, чеснок',
+      preparationMethod: 'Заливка кипящим пряно-уксусным маринадом с герметичной закаткой',
+      purpose: 'Пикантная кисло-пряная закуска к мясным блюдам и гарнирам',
+      culinaryEquivalentId: 'pickles'
+    }
+  },
+  olives: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Оливки и маслины в пряном рассоле',
+      ingredients: 'Крупные плоды средиземноморской оливы без косточки, вода, морская соль, лимонная кислота',
+      preparationMethod: 'Удаление природной горечи вымачиванием и ферментация в солевом рассоле',
+      purpose: 'Ингредиент для мясной солянки, пиццы, салатов и самостоятельная закуска',
+      culinaryEquivalentId: 'olives',
+      customEffects: { hunger: 22, thirst: 4, soothePanic: 12 },
+      customTasteMessages: ['Маслянистая упругая оливка в пикантном пряном рассоле!']
+    }
+  },
+  capers: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Каперсы бутонные маринованные',
+      ingredients: 'Нераспустившиеся цветочные бутоны колючего каперсника, винный уксус, вода, морская соль',
+      preparationMethod: 'Подвяливание бутонов и выдержка в крепком винно-солевом маринаде',
+      purpose: 'Острая пикантная приправа к солянке, тартару, рыбе и соусам',
+      culinaryEquivalentId: 'capers',
+      customEffects: { hunger: 12, thirst: -4, energy: 4 },
+      customTasteMessages: ['Яркий горчично-винный взрыв маринованного бутона каперса!']
+    }
+  },
+  sauerkraut: {
+    liquidId: 'pickles',
+    attributes: {
+      varietyRu: 'Капуста белокочанная квашеная с морковью',
+      ingredients: 'Тонко шинкованная поздняя белокочанная капуста, тёртая морковь, каменная соль, ягоды клюквы и тмин',
+      preparationMethod: 'Молочнокислое брожение в собственном капустном соку под деревянным гнётом',
+      purpose: 'Витаминная хрустящая закуска, основа для кислых щей, бигуса и пирогов',
+      culinaryEquivalentId: 'sauerkraut',
+      customEffects: { hunger: 26, thirst: 8, health: 10, energy: 6 },
+      customTasteMessages: ['Хрустящая квашеная капуста с морковью и бодрящим кислым рассолом!']
+    }
+  },
+  stew_meat: {
+    liquidId: 'canned_preserve',
+    attributes: {
+      varietyRu: 'Говядина тушёная высший сорт (ГОСТ)',
+      ingredients: 'Крупнокусковая жилованная говядина (87%), говяжий жир-сырец, лук репчатый, соль, лист лавровый, перец чёрный',
+      preparationMethod: 'Закладка сырого мяса со специями в банки и автоклавное томление при 120°C',
+      purpose: 'Сытное готовое мясное блюдо, основа для макарон по-флотски, каш и походного супа',
+      culinaryEquivalentId: 'stew_meat',
+      customEffects: { hunger: 75, energy: 25, health: 15, soothePanic: 35 },
+      customTasteMessages: ['Сытные волокна тушёного мяса в ароматном желе и топлёном жирке!']
+    }
+  },
+  fish_preserves: {
+    liquidId: 'canned_preserve',
+    attributes: {
+      varietyRu: 'Рыба натуральная с добавлением масла (Сайра / Горбуша)',
+      ingredients: 'Куски тихоокеанской сайры или горбуши, рафинированное растительное масло, соль, душистый перец, кориандр',
+      preparationMethod: 'Бланширование рыбы паром, заливка пряным маслом и автоклавная стерилизация',
+      purpose: 'Готовая рыбная закуска, основа для рыбного супа и салатов',
+      culinaryEquivalentId: 'fish_preserves',
+      customEffects: { hunger: 65, energy: 20, health: 14, soothePanic: 30 },
+      customTasteMessages: ['Нежные кусочки рыбы в пряном ароматном масле!']
+    }
+  },
+  canned_corn: {
+    liquidId: 'canned_preserve',
+    attributes: {
+      varietyRu: 'Кукуруза сахарная консервированная в зёрнах',
+      ingredients: 'Цельные зёрна сахарной кукурузы молочной спелости, питьевая вода, сахар, соль',
+      preparationMethod: 'Бланширование свежих зёрен и вакуумная стерилизация в сладковатой заливке',
+      purpose: 'Добавка в салаты, гарниры, супы и самостоятельный сочный перекус',
+      culinaryEquivalentId: 'canned_corn',
+      customEffects: { hunger: 32, thirst: 12, energy: 8 },
+      customTasteMessages: ['Сладкие сочные зёрнышки консервированной кукурузы лопаются на зубах!']
+    }
+  },
+  canned_peas: {
+    liquidId: 'canned_preserve',
+    attributes: {
+      varietyRu: 'Горошек зелёный мозговых сортов консервированный',
+      ingredients: 'Свежий зелёный горошек мозговых сортов, вода, сахар, соль',
+      preparationMethod: 'Щадящая стерилизация в банках в день сбора урожая',
+      purpose: 'Классический ингредиент для салата Оливье, винегрета и гарнир к сосискам и мясу',
+      culinaryEquivalentId: 'canned_peas',
+      customEffects: { hunger: 34, thirst: 10, energy: 6 },
+      customTasteMessages: ['Нежный сладковатый зелёный горошек мозговых сортов в лёгкой заливке!']
+    }
+  },
+  canned_beans: {
+    liquidId: 'canned_preserve',
+    attributes: {
+      varietyRu: 'Фасоль красная в густом томатном соусе',
+      ingredients: 'Отборная красная фасоль, томатная паста, вода, сахар, соль, паприка, чеснок, чёрный перец',
+      preparationMethod: 'Томление набухшей фасоли под давлением в пряной томатной заливке',
+      purpose: 'Сытный белковый гарнир, заправка для борща, лобио и чили',
+      culinaryEquivalentId: 'canned_beans',
+      customEffects: { hunger: 48, thirst: 6, energy: 10 },
+      customTasteMessages: ['Сытная мягкая фасоль в густом пряном томатном соусе!']
+    }
+  },
+  peanut_butter: {
+    liquidId: 'puree',
+    attributes: {
+      varietyRu: 'Арахисовая паста кремовая обжаренная',
+      ingredients: 'Обжаренные ядра отборного арахиса (95%), капля арахисового масла, морская соль, мёд',
+      preparationMethod: 'Сухая обжарка ядер арахиса и многократное перетирание на каменных жерновах до кремовой пасты',
+      purpose: 'Высококалорийная питательная паста для тостов, каш и энергетических перекусов',
+      culinaryEquivalentId: 'peanut_butter',
+      customEffects: { hunger: 65, thirst: -10, energy: 18, soothePanic: 15 },
+      customTasteMessages: ['Густая калорийная арахисовая паста обволакивает нёбо насыщенным ореховым вкусом!']
+    }
+  },
+  tahini: {
+    liquidId: 'puree',
+    attributes: {
+      varietyRu: 'Кунжутная паста Тахини (урбеч)',
+      ingredients: 'Очищенные и бережно обжаренные семена белого кунжута (100%)',
+      preparationMethod: 'Жерновое перетирание семян кунжута до выделения природного масла',
+      purpose: 'Основа для хумуса, восточных соусов, халвы и сытных заправок',
+      culinaryEquivalentId: 'tahini',
+      customEffects: { hunger: 55, thirst: -8, energy: 14 },
+      customTasteMessages: ['Бархатистая орехово-кунжутная паста с благородной горчинкой.']
+    }
+  },
+  miso_paste: {
+    liquidId: 'puree',
+    attributes: {
+      varietyRu: 'Паста Мисо соевая ферментированная (Ака-мисо)',
+      ingredients: 'Отварные соевые бобы, рис и ячмень, морская соль, заквасочная культура кодзи (Aspergillus oryzae)',
+      preparationMethod: 'Многомесячная ферментация размятых соевых бобов с солодовым грибком кодзи в кедровых бочках',
+      purpose: 'Основа для согревающего мисо-супа, маринадов для рыбы и мяса, соусов умами',
+      culinaryEquivalentId: 'miso_paste',
+      customEffects: { hunger: 28, thirst: -12, health: 4 },
+      customTasteMessages: ['Насыщенная солёно-умами паста мисо из ферментированных соевых бобов.']
+    }
+  },
+  tomato_paste: {
+    liquidId: 'puree',
+    attributes: {
+      varietyRu: 'Томатная паста концентрированная (25% сухих веществ)',
+      ingredients: 'Уваренная протёртая мякоть спелых красных томатов без кожицы и семян, щепотка соли',
+      preparationMethod: 'Протирание томатной пульпы и шестикратное вакуумное уваривание',
+      purpose: 'База для борща, харчо, голубцов, тушёного мяса, пиццы и домашних соусов',
+      culinaryEquivalentId: 'tomato_paste',
+      customEffects: { hunger: 25, thirst: 4, health: 4 },
+      customTasteMessages: ['Густая кисло-сладкая уваренная мякоть спелых томатов.']
+    }
+  },
+  lard_pork: {
+    liquidId: 'rendered_fat',
+    attributes: {
+      varietyRu: 'Свиной топлёный смалец (лярд)',
+      ingredients: 'Нутряной и подкожный свиной жир-сырец, щепотка соли, чеснок и лавровый лист',
+      preparationMethod: 'Медленное вытапливание сала в чугунке и процеживание белоснежного смальца',
+      purpose: 'Жарка картофеля и мяса, смазка форм, сытная намазка на чёрный хлеб с чесноком',
+      culinaryEquivalentId: 'lard_pork',
+      customEffects: { hunger: 45, energy: 20 },
+      customTasteMessages: ['Сытный домашний топлёный свиной смалец.']
+    }
+  },
+  beef_tallow: {
+    liquidId: 'rendered_fat',
+    attributes: {
+      varietyRu: 'Топлёный говяжий кулинарный жир',
+      ingredients: 'Околопочечный говяжий жир-сырец высшего сорта',
+      preparationMethod: 'Длительное вытапливание при умеренном нагреве и тонкая фильтрация',
+      purpose: 'Жарка во фритюре при высоких температурах, приготовление плова и теста для самсы',
+      culinaryEquivalentId: 'beef_tallow',
+      customEffects: { hunger: 40, energy: 18 },
+      customTasteMessages: ['Густой наваристый топлёный говяжий жир.']
+    }
+  },
+  ghee: {
+    liquidId: 'rendered_fat',
+    attributes: {
+      varietyRu: 'Топлёное сливочное масло Гхи (99% молочного жира)',
+      ingredients: 'Натуральное сладкосливочное коровье масло 82.5% жирности',
+      preparationMethod: 'Медленное томление сливочного масла с полным выпариванием воды и снятием молочного белка',
+      purpose: 'Идеальное масло для жарки без дыма, заправки каш, пельменей и блинов',
+      culinaryEquivalentId: 'ghee',
+      customEffects: { hunger: 45, energy: 25, health: 8 },
+      customTasteMessages: ['Благородный сливочно-ореховый вкус янтарного топлёного масла Гхи!']
+    }
+  },
+  oil_sunflower: {
+    liquidId: 'oil_culinary',
+    attributes: {
+      varietyRu: 'Подсолнечное масло золотистое',
+      ingredients: 'Отборные семена масличного подсолнечника (100%)',
+      preparationMethod: 'Прессовый отжим семян подсолнечника и бережная очистка',
+      purpose: 'Жарка на сковороде, пассеровка овощей, заправка салатов и квашеной капусты',
+      culinaryEquivalentId: 'oil_sunflower'
+    }
+  },
+  oil_olive: {
+    liquidId: 'oil_culinary',
+    attributes: {
+      varietyRu: 'Оливковое масло первого холодного отжима (Extra Virgin)',
+      ingredients: 'Свежесобранные плоды средиземноморской оливы (Olea europaea)',
+      preparationMethod: 'Первое механическое холодное прессование при температуре до 27°C',
+      purpose: 'Заправка свежих салатов, пасты, маринадов и бережное томление блюд',
+      culinaryEquivalentId: 'oil_olive',
+      customEffects: { hunger: 25, health: 8 },
+      customTasteMessages: ['Густой оливковый вкус с травянистым ароматом и благородной горчинкой.']
+    }
+  },
+  oil_linseed: {
+    liquidId: 'oil_culinary',
+    attributes: {
+      varietyRu: 'Льняное сыродавленное масло',
+      ingredients: 'Семена масличного бурого и золотистого льна (богаты Омега-3)',
+      preparationMethod: 'Холодный дубовый прессовый отжим без нагрева',
+      purpose: 'Заправка варёного картофеля, каш, винегрета и укрепление сосудов',
+      culinaryEquivalentId: 'oil_linseed',
+      customEffects: { hunger: 20, health: 10 },
+      customTasteMessages: ['Насыщенное льняное масло с характерной орехово-травяной терпкостью.']
+    }
+  },
+  oil_sesame: {
+    liquidId: 'oil_culinary',
+    attributes: {
+      varietyRu: 'Кунжутное ароматное масло из обжаренных семян',
+      ingredients: 'Карамелизованные обжаренные семена кунжута (сезама)',
+      preparationMethod: 'Обжарка кунжутного семени до золотистого цвета и шнековый отжим',
+      purpose: 'Финишная ароматизация лапши вок, жареного риса, пельменей и маринадов',
+      culinaryEquivalentId: 'oil_sesame',
+      customEffects: { hunger: 22, energy: 8 },
+      customTasteMessages: ['Яркий насыщенный ореховый вкус масла из жареного кунжута!']
+    }
+  },
+  vinegar_table: {
+    liquidId: 'vinegar',
+    attributes: {
+      varietyRu: 'Столовый спиртовой уксус 9%',
+      ingredients: 'Очищенная вода, пищевая уксусная кислота (9%)',
+      preparationMethod: 'Биохимическое сбраживание пищевого спирта уксуснокислыми бактериями',
+      purpose: 'Подача к горячим пельменям с перцем, маринование лука, шашлыка и заготовок на зиму',
+      culinaryEquivalentId: 'vinegar_table'
+    }
+  },
+  vinegar_apple: {
+    liquidId: 'vinegar',
+    attributes: {
+      varietyRu: 'Яблочный натуральный уксус 6%',
+      ingredients: 'Сброженный яблочный сидр из спелых садовых яблок, родниковая вода',
+      preparationMethod: 'Естественное аэробное скисание яблочного сидра в деревянных чанах',
+      purpose: 'Мягкие маринады для птицы и свинины, заправка салатов и соусов',
+      culinaryEquivalentId: 'vinegar_apple'
+    }
+  },
+  vinegar_balsamic: {
+    liquidId: 'vinegar',
+    attributes: {
+      varietyRu: 'Бальзамический выдержанный уксус из Модены',
+      ingredients: 'Уваренное виноградное сусло сортов Треббьяно и Ламбруско, винный уксус',
+      preparationMethod: 'Многолетняя выдержка уваренного виноградного сусла в каскаде бочек из дуба, каштана и вишни',
+      purpose: 'Глазирование стейков, заправка томатов, сыров и изысканных соусов',
+      culinaryEquivalentId: 'vinegar_balsamic',
+      customEffects: { hunger: 8, soothePanic: 10 },
+      customTasteMessages: ['Густой кисло-сладкий виноградный вкус выдержанного бальзамического уксуса!']
+    }
+  },
+  vinegar_rice: {
+    liquidId: 'vinegar',
+    attributes: {
+      varietyRu: 'Рисовый мягкий кулинарный уксус (Мицукан)',
+      ingredients: 'Ферментированный шлифованный рис, родниковая вода, тростниковый сахар, морская соль',
+      preparationMethod: 'Осахаривание пропаренного риса культурой кодзи и мягкое уксусное брожение',
+      purpose: 'Заправка отварного риса, приготовление кисло-сладких соусов и быстрых маринадов',
+      culinaryEquivalentId: 'vinegar_rice'
+    }
+  },
+  vinegar_wine: {
+    liquidId: 'vinegar',
+    attributes: {
+      varietyRu: 'Винный красный виноградный уксус 6%',
+      ingredients: 'Выдержанное красное сухое виноградное вино',
+      preparationMethod: 'Медленное уксуснокислое окисление красного вина по орлеанскому методу',
+      purpose: 'Маринование говядины и баранины для шашлыка, деглазирование сковороды и винегретные заправки',
+      culinaryEquivalentId: 'vinegar_wine'
+    }
+  },
+  sauce_soy: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Соевый соус натурального брожения',
+      ingredients: 'Соевые бобы, обжаренная пшеница, вода, морская соль, культура кодзи',
+      preparationMethod: 'Шестимесячная естественная ферментация соево-пшеничного затора и прессование',
+      purpose: 'Приправа умами к пельменям, рису, лапше, рыбе и основа для маринадов',
+      culinaryEquivalentId: 'sauce_soy',
+      customEffects: { hunger: 8, thirst: -20 },
+      customTasteMessages: ['Солёный ферментированный соевый соус с глубоким вкусом умами.']
+    }
+  },
+  sauce_ketchup: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Кетчуп томатный пряный («Шашлычный»)',
+      ingredients: 'Уваренная мякоть спелых томатов, сахар, яблочный уксус, соль, чеснок, кориандр, гвоздика, душистый и красный перец',
+      preparationMethod: 'Уваривание томатного пюре с карамелизированным сахаром и пряным букетом специй',
+      purpose: 'Подача к жареному мясу, пельменям, сосискам, картофелю и макаронам',
+      culinaryEquivalentId: 'sauce_ketchup',
+      customEffects: { hunger: 22, thirst: 5, soothePanic: 15 },
+      customTasteMessages: ['Густой пряный кетчуп из спелых солнечных томатов!']
+    }
+  },
+  sauce_mayo: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Майонез классический «Провансаль» 67%',
+      ingredients: 'Подсолнечное рафинированное масло, свежие яичные желтки, русская горчица, уксус, сахар, соль',
+      preparationMethod: 'Тонкое эмульгирование яичных желтков с горчицей и растительным маслом',
+      purpose: 'Заправка салатов, подача к пельменям, вареникам, яйцам и запекание блюд под румяной корочкой',
+      culinaryEquivalentId: 'sauce_mayo',
+      customEffects: { hunger: 38, energy: 18, soothePanic: 20 },
+      customTasteMessages: ['Густой калорийный майонез «Провансаль» на яичных желтках и горчице!']
+    }
+  },
+  sauce_fish: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Рыбный ферментированный соус (Нам Пла)',
+      ingredients: 'Свежие морские анчоусы, морская соль, вода',
+      preparationMethod: 'Годичная выдержка солёных анчоусов под прессом в бочках с фильтрацией янтарного сока',
+      purpose: 'Придание супам, лапше и жареным блюдам глубокого солёного вкуса умами',
+      culinaryEquivalentId: 'sauce_fish'
+    }
+  },
+  sauce_worcestershire: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Вустерширский выдержанный соус',
+      ingredients: 'Солодовый уксус, патока, анчоусы, мякоть тамаринда, лук-шалот, чеснок, гвоздика, перец чили',
+      preparationMethod: 'Двухлетняя бочковая ферментация пряно-рыбного настоя с уксусом и патокой',
+      purpose: 'Приправление стейков, бургеров, мясного фарша, рагу и томатных напитков',
+      culinaryEquivalentId: 'sauce_worcestershire'
+    }
+  },
+  sauce_narsharab: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Гранатовый уваренный соус «Наршараб»',
+      ingredients: 'Сок дикого и садового граната прямого отжима, кориандр, базилик, корица, лавровый лист, чёрный перец',
+      preparationMethod: 'Медленное выпаривание гранатового сока в медном котле до густоты тягучего рубинового нектара',
+      purpose: 'Идеальный кисло-сладкий соус к шашлыку из баранины, говядины и запечённой рыбе',
+      culinaryEquivalentId: 'sauce_narsharab',
+      customEffects: { hunger: 18, thirst: 5, energy: 12 },
+      customTasteMessages: ['Терпкий кисло-сладкий концентрированный гранатовый соус Наршараб!']
+    }
+  },
+  sauce_teriyaki: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Соус-глазурь Терияки с имбирём и мёдом',
+      ingredients: 'Натуральный соевый соус, тростниковый сахар, цветочный мёд, рисовое мирин-вино, свежий корень имбиря, чеснок',
+      preparationMethod: 'Карамелизация соевого соуса с мёдом и имбирным соком до глянцевой густоты',
+      purpose: 'Глазирование жареной курицы, рыбы, свинины и заправка лапши с овощами',
+      culinaryEquivalentId: 'sauce_teriyaki'
+    }
+  },
+  sauce_sriracha: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Острый перечно-чесночный соус Шрирача',
+      ingredients: 'Спелый красный перец чили Халапеньо и Серрано, чеснок, тростниковый сахар, дистиллированный уксус, морская соль',
+      preparationMethod: 'Трёхмесячная ферментация перечного пюре с чесноком и тонкий помол',
+      purpose: 'Придание огненной остроты пельменям, супам, мясу на углях и бургерам',
+      culinaryEquivalentId: 'sauce_sriracha',
+      customEffects: { hunger: 16, energy: 25, sleepiness: -20, soothePanic: 15 },
+      customTasteMessages: ['Огненно-жгучий перечно-чесночный соус Шрирача пробирает до слёз!']
+    }
+  },
+  mustard_dijon: {
+    liquidId: 'sauce',
+    attributes: {
+      varietyRu: 'Горчица столовая ядрёная и зернистая',
+      ingredients: 'Молотые и цельные семена белой, сарептской и чёрной горчицы, винный уксус, подсолнечное масло, сахар, соль, куркума',
+      preparationMethod: 'Заваривание горчичного порошка и зёрен пряным рассолом с созреванием в тепле',
+      purpose: 'Традиционная острая приправа к холодцу, салу, сосискам, пельменям и буженине',
+      culinaryEquivalentId: 'mustard_dijon',
+      customEffects: { hunger: 15, energy: 20, sleepiness: -15, soothePanic: 15 },
+      customTasteMessages: ['Крепкая ядрёная горчица приятно обжигает и прочищает дыхание!']
+    }
+  },
+  gelatin: {
+    liquidId: 'dry_mix',
+    attributes: {
+      varietyRu: 'Желатин пищевой кристаллический (П-11 / 220 Bloom)',
+      ingredients: 'Натуральный очищенный коллагеновый белок животного происхождения (100%)',
+      preparationMethod: 'Выварка, многоступенчатая фильтрация и вакуумная сушка в прозрачные гранулы',
+      purpose: 'Базовый желирующий агент для классического упругого жевательного мармелада, холодца и заливного',
+      culinaryEquivalentId: 'gelatin'
+    }
+  },
+  pectin: {
+    liquidId: 'dry_mix',
+    attributes: {
+      varietyRu: 'Пектин яблочно-цитрусовый (NH / Жёлтый)',
+      ingredients: 'Выжимки печёных яблок и белая цедра цитрусовых плодов (полигалактуроновая кислота)',
+      preparationMethod: 'Кислотная экстракция растительных волокон, осаждение и тонкий помол',
+      purpose: 'Приготовление французского пластового мармелада, конфитюров, зефира и пастилы',
+      culinaryEquivalentId: 'pectin'
+    }
+  },
+  agar_agar: {
+    liquidId: 'dry_mix',
+    attributes: {
+      varietyRu: 'Агар-агар морской водорослевый (сила геля 900)',
+      ingredients: 'Красные тихоокеанские водоросли анфельция и грацилярия (100%)',
+      preparationMethod: 'Горячая вытяжка морских водорослей, вымораживание и распылительная сушка',
+      purpose: 'Термообратимое плотное желирование ягодного мармелада, суфле «Птичье молоко» и желе',
+      culinaryEquivalentId: 'agar_agar'
+    }
+  },
+  starch: {
+    liquidId: 'dry_mix',
+    attributes: {
+      varietyRu: 'Крахмал пищевой высшего сорта (картофельный / кукурузный)',
+      ingredients: 'Отмытые крахмальные зёрна спелого картофеля и сахарной кукурузы',
+      preparationMethod: 'Тонкое измельчение сырья, гидроциклонная промывка и бережная сушка',
+      purpose: 'Формовка мармеладных фигурок, варка густых ягодных киселей и загущение подлив',
+      culinaryEquivalentId: 'starch'
+    }
+  },
+  carnauba_wax: {
+    liquidId: 'dry_mix',
+    attributes: {
+      varietyRu: 'Карнаубский пальмовый воск в хлопьях (E903)',
+      ingredients: 'Восковой налёт листьев бразильской восконосной пальмы (Copernicia prunifera)',
+      preparationMethod: 'Сбор восковой пыльцы с пальмовых листьев, рафинация и охлаждение в чешуйки',
+      purpose: 'Глянцевое защитное глазирование жевательного мармелада и драже против слипания',
+      culinaryEquivalentId: 'carnauba_wax'
+    }
+  },
+  citric_acid: {
+    liquidId: 'food_acid',
+    attributes: {
+      varietyRu: 'Лимонная кислота кристаллическая (моногидрат E330)',
+      ingredients: 'Чистая кристаллическая трёхосновная лимонная кислота пищевой квалификации',
+      preparationMethod: 'Глубинная ферментация свекловичной мелассы и кристаллизация',
+      purpose: 'Придание яркой кислинки мармеладу, лимонадам, варенью и консервации',
+      culinaryEquivalentId: 'citric_acid'
+    }
+  },
+  malic_acid: {
+    liquidId: 'food_acid',
+    attributes: {
+      varietyRu: 'Яблочная кислота пищевая (E296)',
+      ingredients: 'Органическая оксиянтарная (яблочная) кислота из зелёных яблок и рябины',
+      preparationMethod: 'Выделение и кристаллизация в мелкий белый порошок',
+      purpose: 'Создание экстремально кислой сахарной обсыпки для кислых мармеладных червячков и ремешков',
+      culinaryEquivalentId: 'malic_acid'
+    }
+  },
+  tartaric_acid: {
+    liquidId: 'food_acid',
+    attributes: {
+      varietyRu: 'Винная (виннокаменная) кислота (E334)',
+      ingredients: 'Природный винный камень из винных бочек после выдержки виноградного вина',
+      preparationMethod: 'Очистка винного камня и перекристаллизация в прозрачные гранулы',
+      purpose: 'Стабилизация взбитых белков, шипучих напитков и виноградно-ягодного мармелада',
+      culinaryEquivalentId: 'tartaric_acid'
+    }
+  },
+  lactic_acid: {
+    liquidId: 'food_acid',
+    attributes: {
+      varietyRu: 'Молочная пищевая кислота 80% (E270)',
+      ingredients: 'Продукт молочнокислого брожения сыворотки и кукурузного сахара, вода 20%',
+      preparationMethod: 'Ферментация лактобактериями и вакуумное концентрирование до прозрачного сиропа',
+      purpose: 'Мягкое сливочно-кислое подкисление йогуртового мармелада, сыров и рассолов',
+      culinaryEquivalentId: 'lactic_acid'
+    }
+  },
+  sodium_citrate: {
+    liquidId: 'food_acid',
+    attributes: {
+      varietyRu: 'Цитрат натрия буферный (тринатрийцитрат E331)',
+      ingredients: 'Натриевая соль лимонной кислоты высокой пищевой чистоты',
+      preparationMethod: 'Нейтрализация лимонной кислоты содой с последующей сушкой кристаллов',
+      purpose: 'Контроль точки схватывания пектинового мармелада и плавления сырных соусов',
+      culinaryEquivalentId: 'sodium_citrate'
+    }
+  },
+  menthol: {
+    liquidId: 'botanical_extract',
+    attributes: {
+      varietyRu: 'Ментол натуральный кристаллический (L-ментол)',
+      ingredients: 'Эфирное масло японской и перечной холодной мяты (Mentha arvensis)',
+      preparationMethod: 'Вымораживание мятного эфирного масла при -20°C с ростом прозрачных кристаллов-игл',
+      purpose: 'Придание морозной ледяной свежести эвкалиптово-мятному мармеладу, пастилкам и напиткам',
+      culinaryEquivalentId: 'menthol'
+    }
+  },
+  dye_carmine: {
+    liquidId: 'food_dye',
+    attributes: {
+      varietyRu: 'Кармин рубиново-алый натуральный (E120)',
+      ingredients: 'Карминовая кислота природного происхождения, очищенная вода',
+      preparationMethod: 'Водная экстракция природного пигмента и стабилизация раствора',
+      purpose: 'Окрашивание клубничного, малинового и вишнёвого мармелада и кремов в сочный рубиновый цвет',
+      culinaryEquivalentId: 'dye_carmine'
+    }
+  },
+  dye_chlorophyllin: {
+    liquidId: 'food_dye',
+    attributes: {
+      varietyRu: 'Хлорофиллин изумрудно-зелёный (E141)',
+      ingredients: 'Листья молодой крапивы, люцерны и шпината (медный комплекс хлорофилла)',
+      preparationMethod: 'Бережная вытяжка зелёного пигмента из листьев крапивы и стабилизация от выцветания',
+      purpose: 'Натуральное окрашивание яблочного, мятного и тархунового мармелада и напитков',
+      culinaryEquivalentId: 'dye_chlorophyllin'
+    }
+  },
+  dye_anthocyanin: {
+    liquidId: 'food_dye',
+    attributes: {
+      varietyRu: 'Антоцианы тёмно-ягодные фиолетовые (E163)',
+      ingredients: 'Кожица тёмного винограда, ягоды черники, чёрной бузины и корнеплоды чёрной моркови',
+      preparationMethod: 'Холодное прессование и мембранная фильтрация клеточного сока ягод',
+      purpose: 'Придание глубокого чернично-ежевичного и фиолетового оттенка десертам и мармеладу',
+      culinaryEquivalentId: 'dye_anthocyanin'
+    }
+  },
+  dye_spirulina: {
+    liquidId: 'food_dye',
+    attributes: {
+      varietyRu: 'Фикоцианин голубой спирулины (Лазурный пигмент)',
+      ingredients: 'Микроводоросль спирулина платенсис (Arthrospira platensis), родниковая вода',
+      preparationMethod: 'Холодная водная вытяжка белкового синего пигмента фикоцианина из спирулины',
+      purpose: 'Единственный натуральный ярко-голубой и бирюзовый краситель для мармелада и глазури',
+      culinaryEquivalentId: 'dye_spirulina'
+    }
+  },
+  dye_beta_carotene: {
+    liquidId: 'food_dye',
+    attributes: {
+      varietyRu: 'Бета-каротин солнечно-оранжевый (Провитамин А / E160a)',
+      ingredients: 'Сок сладкой моркови, мякоть облепихи и тыквы в тонкой масляно-водной эмульсии',
+      preparationMethod: 'Экстракция каротиноидов из моркови и облепихи с микроэмульгированием',
+      purpose: 'Окрашивание апельсинового, мангового и персикового мармелада, масла и выпечки',
+      culinaryEquivalentId: 'dye_beta_carotene'
+    }
+  },
+  dye_caramel: {
+    liquidId: 'food_dye',
+    attributes: {
+      varietyRu: 'Карамельный колер тёмно-янтарный (Жжёнка E150)',
+      ingredients: 'Тростниковый и свекловичный сахар, патока, питьевая вода',
+      preparationMethod: 'Контролируемая термическая карамелизация сахара в медном котле до тёмного колера',
+      purpose: 'Придание насыщенного цвета коле, квасу, пряникам, соусам и кофейно-кольному мармеладу',
+      culinaryEquivalentId: 'dye_caramel'
+    }
+  },
+  dye_lycopene: {
+    liquidId: 'food_dye',
+    attributes: {
+      varietyRu: 'Ликопин томатно-арбузный алый (E160d)',
+      ingredients: 'Спелые красные томаты, мякоть арбуза и плоды шиповника',
+      preparationMethod: 'Выделение природного антиоксидантного пигмента ликопина из томатной кожицы',
+      purpose: 'Стойкое алое и коралловое окрашивание мармелада, желе и соусов',
+      culinaryEquivalentId: 'dye_lycopene'
+    }
+  },
+  grain_wheat: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Пшеница цельнозерновая отборная',
+      ingredients: 'Цельное очищенное зерно яровой и озимой пшеницы твёрдых и мягких сортов',
+      preparationMethod: 'Обмолот колосьев, отвеивание на ветру и калибровка на решётах',
+      purpose: 'Помол в домашнюю муку, проращивание, варка сытной кутьи и пшеничной каши',
+      culinaryEquivalentId: 'grain_wheat'
+    }
+  },
+  grain_rye: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Рожь озимая цельнозерновая',
+      ingredients: 'Продолговатое зерно северной озимой ржи (Secale cereale)',
+      preparationMethod: 'Сушка в зерносушилке и очистка от половы',
+      purpose: 'Помол ржаной муки для чёрного хлеба, приготовление солода и хлебного кваса',
+      culinaryEquivalentId: 'grain_rye'
+    }
+  },
+  grain_oats: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Овсяные хлопья «Геркулес»',
+      ingredients: 'Цельное пропаренное и плющеное зерно голозёрного овса',
+      preparationMethod: 'Пропаривание овсяной крупы, плющение гладкими вальцами и подсушивание',
+      purpose: 'Быстрая варка питательной утренней овсяной каши на молоке или воде, выпечка печенья',
+      culinaryEquivalentId: 'grain_oats'
+    }
+  },
+  rice: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Рис белый шлифованный (Длиннозёрный / Круглозёрный)',
+      ingredients: 'Очищенное и отшлифованное зерно посевного риса высшего сорта',
+      preparationMethod: 'Шелушение рисовой шелухи и бережная жемчужная шлифовка зерна',
+      purpose: 'Приготовление рассыпчатого плова, гарниров, голубцов, тефтелей и молочной рисовой каши',
+      culinaryEquivalentId: 'rice'
+    }
+  },
+  buckwheat: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Гречневая крупа ядрица обжаренная (Высший сорт)',
+      ingredients: 'Цельное трёхгранное ядро плодов гречихи посевной',
+      preparationMethod: 'Калибровка, обработка паром под давлением и золотистая обжарка для орехового аромата',
+      purpose: 'Варка душистой рассыпчатой гречневой каши с маслом, тушёнкой или белыми грибами',
+      culinaryEquivalentId: 'buckwheat'
+    }
+  },
+  barley: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Перловая ячменная крупа шлифованная',
+      ingredients: 'Цельное зерно ячменя, очищенное от цветочных плёнок и отшлифованное до гладкости жемчуга',
+      preparationMethod: 'Шелушение и многократная круглая шлифовка ячменного ядра',
+      purpose: 'Варка классического рассольника, грибных супов и сытной армейской перловой каши с тушёнкой',
+      culinaryEquivalentId: 'barley'
+    }
+  },
+  millet: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Пшено шлифованное золотистое',
+      ingredients: 'Очищенные от оболочек ярко-жёлтые зёрна культурного проса',
+      preparationMethod: 'Обрушивание колосковых плёнок проса и полировка ядра',
+      purpose: 'Варка полевой кулеша-похлёбки с салом и сладкой тыквенно-пшённой молочной каши',
+      culinaryEquivalentId: 'millet'
+    }
+  },
+  semolina: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Манная крупа пшеничная (марка МТ)',
+      ingredients: 'Крупка из центральной части эндосперма пшеничного зерна (размер частиц 0.25–0.75 мм)',
+      preparationMethod: 'Сортовой помол пшеницы с отбором чистой светлой крупки на ситах',
+      purpose: 'Варка нежной молочной манной каши, выпечка манника, запеканок и панировка котлет',
+      culinaryEquivalentId: 'semolina'
+    }
+  },
+  peas: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Горох колотый лущёный жёлтый',
+      ingredients: 'Сушёные очищенные семядоли спелого посевного гороха (100% растительный белок)',
+      preparationMethod: 'Сушка гороха, скалывание семенной кожуры и разделение на половинки',
+      purpose: 'Варка наваристого горохового супа с копчёностями и густой гороховой каши',
+      culinaryEquivalentId: 'peas'
+    }
+  },
+  beans: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Фасоль зерновая сухая (Красная Рубиновая)',
+      ingredients: 'Крупные сухие семена кустовой красной фасоли',
+      preparationMethod: 'Обмолот вызревших стручков, естественная сушка и ручная переборка',
+      purpose: 'Варка сытного борща, лобио с орехами и чесноком, рагу и мясных похлёбок',
+      culinaryEquivalentId: 'beans'
+    }
+  },
+  lentils: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Чечевица красная и зелёная тарелочная',
+      ingredients: 'Плоские сушёные семена чечевицы пищевой (богаты белком и железом)',
+      preparationMethod: 'Очистка, калибровка и бережная шлифовка без потери зародыша',
+      purpose: 'Быстрая варка густых чечевичных супов-пюре, пряных похлёбок и гарниров без замачивания',
+      culinaryEquivalentId: 'lentils'
+    }
+  },
+  chickpeas: {
+    liquidId: 'grain',
+    attributes: {
+      varietyRu: 'Нут крупный сухой (Турецкий горох)',
+      ingredients: 'Крупные ребристые зёрна среднеазиатского нута с ореховым привкусом',
+      preparationMethod: 'Сушка на солнце и калибровка крупных зёрен',
+      purpose: 'Приготовление настоящего узбекского плова, шурпы, хумуса и фалафеля',
+      culinaryEquivalentId: 'chickpeas'
+    }
+  },
+  black_pepper_ground: {
+    liquidId: 'spice_dry',
+    attributes: {
+      varietyRu: 'Перец чёрный молотый душистый',
+      ingredients: 'Высушенные на солнце незрелые плоды тропической лианы Piper nigrum (100%)',
+      preparationMethod: 'Ферментация горошин на солнце до почернения и свежий жерновой помол',
+      purpose: 'Главная пряность для пельменного фарша, бульонов, стейков и горячих блюд',
+      culinaryEquivalentId: 'black_pepper_ground'
+    }
+  },
+  chili_powder: {
+    liquidId: 'spice_dry',
+    attributes: {
+      varietyRu: 'Перец красный острый чили (Кайенский молотый)',
+      ingredients: 'Высушенные стручки жгучего красного перца чили с семенами (высокий капсаицин)',
+      preparationMethod: 'Огневая и солнечная сушка стручков с последующим тонким размолом',
+      purpose: 'Придание жгучей согревающей остроты мясу, супам харчо, гуляшу и соусам',
+      culinaryEquivalentId: 'chili_powder'
+    }
+  },
+  paprika: {
+    liquidId: 'spice_dry',
+    attributes: {
+      varietyRu: 'Паприка красная сладкая копчёная',
+      ingredients: 'Мясистые спелые плоды сладкого красного перца сортов Капия и Паприка',
+      preparationMethod: 'Медленное копчение стручков над дубовыми дровами и тонкий помол без семян',
+      purpose: 'Придание гуляшу, птице, картофелю и колбаскам рубинового цвета и аромата дымка',
+      culinaryEquivalentId: 'paprika'
+    }
+  },
+  cinnamon: {
+    liquidId: 'spice_dry',
+    attributes: {
+      varietyRu: 'Корица цейлонская молотая ароматная',
+      ingredients: 'Тонкий внутренний слой коры молодых побегов вечнозелёного коричного дерева',
+      preparationMethod: 'Снятие внутренней коры, скручивание в трубочки на солнце и пудровый помол',
+      purpose: 'Ароматизация сдобных булочек, яблочных пирогов, глинтвейна, кофе и каш',
+      culinaryEquivalentId: 'cinnamon'
+    }
+  },
+  turmeric: {
+    liquidId: 'spice_dry',
+    attributes: {
+      varietyRu: 'Куркума индийская золотая молотая',
+      ingredients: 'Высушенные корневища куркумы длинной (Curcuma longa, богата куркумином)',
+      preparationMethod: 'Варка корневищ на пару, сушка на солнце и размол в ярко-золотистую пудру',
+      purpose: 'Окрашивание и пряная заправка плова, куриного бульона, риса и соусов',
+      culinaryEquivalentId: 'turmeric'
+    }
+  },
+  garlic_powder: {
+    liquidId: 'spice_dry',
+    attributes: {
+      varietyRu: 'Чеснок сушёный гранулированный',
+      ingredients: 'Отборные зубчики свежего ярового чеснока без шелухи (100%)',
+      preparationMethod: 'Нарезка чесночных долек, бережная конвекционная сушка и дробление в мелкую крупку',
+      purpose: 'Пряная приправа для пельменного фарша, домашних колбас, супов и жареного мяса',
+      culinaryEquivalentId: 'garlic_powder'
+    }
+  },
+  dried_herbs: {
+    liquidId: 'spice_dry',
+    attributes: {
+      varietyRu: 'Сбор сушёных пряных трав (Укроп, Петрушка, Чабрец, Душица)',
+      ingredients: 'Листья и соцветия огородного укропа, петрушки, базилика, лесного чабреца и мяты',
+      preparationMethod: 'Сбор в период цветения и сушка пучками в тени на чердачном сквозняке',
+      purpose: 'Добавление в горячие супы, бульоны, тушёное мясо и заваривание душистого лесного чая',
+      culinaryEquivalentId: 'dried_herbs'
+    }
+  },
+  antiseptic: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Спиртовой кожный антисептик 70%',
+      ingredients: 'Спирт этиловый медицинский 70%, вода очищенная, хлоргексидина биглюконат, глицерин',
+      preparationMethod: 'Фармацевтическое смешивание спиртового антисептического раствора',
+      purpose: 'Экстренная обработка рук, краёв ран, ссадин и медицинских инструментов',
+      medicalEffectId: 'antiseptic'
+    }
+  },
+  saline: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Физраствор стерильный изотонический (0.9% NaCl)',
+      ingredients: 'Хлорид натрия фармакопейный 9 г/л, вода для инъекций бидистиллированная',
+      preparationMethod: 'Растворение и автоклавная стерилизация при 121°C',
+      purpose: 'Промывание открытых ран, глаз, слизистых и разведение лекарств',
+      medicalEffectId: 'saline_solution'
+    }
+  },
+  saline_solution: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Физраствор стерильный изотонический (0.9% NaCl)',
+      ingredients: 'Хлорид натрия фармакопейный 9 г/л, вода для инъекций бидистиллированная',
+      preparationMethod: 'Растворение и автоклавная стерилизация при 121°C',
+      purpose: 'Промывание открытых ран, глаз, слизистых и разведение лекарств',
+      medicalEffectId: 'saline_solution'
+    }
+  },
+  zelenka: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Раствор бриллиантового зелёного 1% («Зелёнка»)',
+      ingredients: 'Бриллиантовый зелёный (тетраэтил-4,4-диаминотрифенилметана оксалат) 1%, этанол 60%, вода',
+      preparationMethod: 'Растворение анилинового антисептического красителя в водно-спиртовой основе',
+      purpose: 'Наружное обеззараживание свежих порезов, царапин и ссадин с подсушивающим эффектом',
+      medicalEffectId: 'zelenka'
+    }
+  },
+  iodine: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Раствор йода спиртовой 5%',
+      ingredients: 'Йод кристаллический 5%, калия йодид 2%, спирт этиловый 95% и очищенная вода',
+      preparationMethod: 'Растворение кристаллического йода в комплексе с йодидом калия в водно-спиртовой среде',
+      purpose: 'Дезинфекция краёв ран, ссадин и нанесение согревающей йодной сетки при ушибах',
+      medicalEffectId: 'iodine'
+    }
+  },
+  peroxide: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Перекись водорода медицинская 3%',
+      ingredients: 'Пероксид водорода медицинский (H2O2) 3%, бензоат натрия (стабилизатор), очищенная вода',
+      preparationMethod: 'Разведение пергидроля бидистиллированной водой со стабилизацией',
+      purpose: 'Первичное пенное промывание загрязнённых ран и остановка капиллярных кровотечений',
+      medicalEffectId: 'peroxide'
+    }
+  },
+  valerian_tincture: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Настойка корневищ валерианы лекарственной',
+      ingredients: 'Дроблёные корневища с корнями валерианы лекарственной (Valeriana officinalis), этанол 70%',
+      preparationMethod: 'Настаивание (перколяция) валерианового корня на 70% спирте в соотношении 1:5',
+      purpose: 'Быстрое снятие паники, тревоги, тахикардии и помощь при бессоннице',
+      medicalEffectId: 'valerian_tincture'
+    }
+  },
+  ammonia_solution: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Нашатырный спирт (Раствор аммиака 10%)',
+      ingredients: 'Аммиака водный раствор концентрированный 10% (NH4OH), очищенная вода',
+      preparationMethod: 'Насыщение дистиллированной воды очищенным газообразным аммиаком',
+      purpose: 'Экстренная стимуляция дыхательного центра при обмороке, шоке и алкогольном опьянении',
+      medicalEffectId: 'ammonia_solution'
+    }
+  },
+  ointment_healing: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Бальзам-мазь ранозаживляющая («Спасатель»)',
+      ingredients: 'Топлёное масло Гхи, облепиховое и пихтовое масло, пчелиный воск, экстракт календулы, пантенол, витамин Е',
+      preparationMethod: 'Гомогенизация природных масел, пчелиного воска и фитоэкстрактов на водяной бане',
+      purpose: 'Заживление глубоких ссадин, ожогов, обморожений, трещин и гематом',
+      medicalEffectId: 'ointment_healing'
+    }
+  },
+  ointment_diclofenac: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Гель противовоспалительный «Диклофенак» 5%',
+      ingredients: 'Диклофенак натрия 50 мг/г, изопропанол, пропиленгликоль, карбомер, масло лаванды, вода',
+      preparationMethod: 'Фармацевтическое диспергирование НПВС в проникающей гидрогелевой основе',
+      purpose: 'Снятие острой боли и воспаления при растяжениях связок, ушибах и болях в спине',
+      medicalEffectId: 'ointment_diclofenac'
+    }
+  },
+  panthenol_foam: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Пена противоожоговая с декспантенолом («Пантенол» 5%)',
+      ingredients: 'Декспантенол (провитамин B5) 5%, аллантоин, витамин Е, эмульсионный воск, вода, пропеллент',
+      preparationMethod: 'Приготовление стерильной охлаждающей эмульсии под давлением в аэрозольном баллоне',
+      purpose: 'Экстренная помощь при термических и солнечных ожогах, регенерация повреждённой кожи',
+      medicalEffectId: 'panthenol_foam'
+    }
+  },
+  balm_star: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Бальзам ароматический «Золотая Звезда» («Звёздочка»)',
+      ingredients: 'Кристаллический ментол, камфора, эфирные масла перечной мяты, эвкалипта, гвоздики и корицы, пчелиный воск, вазелин',
+      preparationMethod: 'Сплавление пчелиного воска и вазелина с концентрированными восточными эфирными маслами',
+      purpose: 'Снятие головной боли, заложенности носа, простуды, сонливости и зуда от укусов насекомых',
+      medicalEffectId: 'balm_star'
+    }
+  },
+  eye_drops: {
+    liquidId: 'medical_solution',
+    attributes: {
+      varietyRu: 'Капли глазные увлажняющие и противовоспалительные',
+      ingredients: 'Таурин 4%, гиалуронат натрия, борная кислота, стерильная вода для инъекций',
+      preparationMethod: 'Ультрафильтрация и асептический розлив изотонического офтальмологического раствора',
+      purpose: 'Промывание глаз от пыли, дыма и песка, снятие рези и усталости зрения',
+      medicalEffectId: 'eye_drops'
+    }
+  }
+};
+
+/**
+ * Normalizes any FluidContainerState so that legacy specific liquidIds
+ * (e.g. 'caviar_red', 'pickles_salted_mushrooms', 'honey_buckwheat', 'jam_raspberry')
+ * are automatically converted to their unified generic LiquidId ('caviar', 'pickles', 'honey', 'jam', etc.)
+ * and their specific origin/composition ('из чего оно') is preserved in `storage.attributes`.
+ */
+export function normalizeFluidStorageState(
+  storage: FluidContainerState | { liquidId: string | null; attributes?: FluidSubstanceAttributes } | undefined | null
+): void {
+  if (!storage || !storage.liquidId) return;
+  const rawId = String(storage.liquidId);
+  const legacyMapped = LEGACY_LIQUID_TO_GENERIC_MAP[rawId];
+  if (legacyMapped) {
+    (storage as FluidContainerState).liquidId = legacyMapped.liquidId;
+    const prevAttrs = storage.attributes || {};
+    const prevIng = prevAttrs.ingredients ?? prevAttrs.sourceIngredients;
+    const mappedIng = legacyMapped.attributes.ingredients ?? legacyMapped.attributes.sourceIngredients;
+    storage.attributes = {
+      ...DEFAULT_GENERIC_LIQUID_ATTRIBUTES[legacyMapped.liquidId],
+      ...legacyMapped.attributes,
+      ...prevAttrs,
+      varietyRu: prevAttrs.varietyRu || legacyMapped.attributes.varietyRu,
+      ingredients: prevIng || mappedIng,
+      preparationMethod: prevAttrs.preparationMethod || legacyMapped.attributes.preparationMethod,
+      purpose: prevAttrs.purpose || legacyMapped.attributes.purpose,
+      culinaryEquivalentId: prevAttrs.culinaryEquivalentId || legacyMapped.attributes.culinaryEquivalentId,
+      medicalEffectId: prevAttrs.medicalEffectId || legacyMapped.attributes.medicalEffectId
+    };
+    if (storage.attributes.sourceIngredients && !storage.attributes.ingredients) {
+      storage.attributes.ingredients = storage.attributes.sourceIngredients;
+    }
+    delete storage.attributes.sourceIngredients;
+    return;
+  }
+
+  // Fallback for unknown legacy prefixes if any
+  if (!(rawId in LIQUID_REGISTRY)) {
+    if (rawId.startsWith('caviar_')) storage.liquidId = 'caviar';
+    else if (rawId.startsWith('jam_')) storage.liquidId = 'jam';
+    else if (rawId.startsWith('honey_')) storage.liquidId = 'honey';
+    else if (rawId.startsWith('broth_')) storage.liquidId = 'broth';
+    else if (rawId.startsWith('pickles_') || rawId.startsWith('berries_') || rawId.startsWith('mushrooms_')) storage.liquidId = 'pickles';
+    else if (rawId.startsWith('oil_')) storage.liquidId = 'oil_culinary';
+    else if (rawId.startsWith('vinegar_')) storage.liquidId = 'vinegar';
+    else if (rawId.startsWith('sauce_')) storage.liquidId = 'sauce';
+    else if (rawId.startsWith('wine_')) storage.liquidId = 'wine';
+    else if (rawId.startsWith('grain_')) storage.liquidId = 'grain';
+    else if (rawId.startsWith('dye_')) storage.liquidId = 'food_dye';
+    else storage.liquidId = 'water';
+  }
+
+  const defAttrs = DEFAULT_GENERIC_LIQUID_ATTRIBUTES[storage.liquidId as LiquidId];
+  if (!storage.attributes) {
+    storage.attributes = defAttrs ? { ...defAttrs } : {};
+  } else {
+    if (!storage.attributes.ingredients && storage.attributes.sourceIngredients) {
+      storage.attributes.ingredients = storage.attributes.sourceIngredients;
+    }
+    delete storage.attributes.sourceIngredients;
+    if (defAttrs) {
+      if (!storage.attributes.varietyRu && defAttrs.varietyRu) storage.attributes.varietyRu = defAttrs.varietyRu;
+      if (!storage.attributes.ingredients && defAttrs.ingredients) storage.attributes.ingredients = defAttrs.ingredients;
+      if (!storage.attributes.preparationMethod && defAttrs.preparationMethod) storage.attributes.preparationMethod = defAttrs.preparationMethod;
+      if (!storage.attributes.purpose && defAttrs.purpose) storage.attributes.purpose = defAttrs.purpose;
+      if (!storage.attributes.culinaryEquivalentId && defAttrs.culinaryEquivalentId) storage.attributes.culinaryEquivalentId = defAttrs.culinaryEquivalentId;
+      if (!storage.attributes.medicalEffectId && defAttrs.medicalEffectId) storage.attributes.medicalEffectId = defAttrs.medicalEffectId;
+    }
+  }
+}
 
 export interface FluidContainerState {
   liquidId: LiquidId | null;
@@ -2127,9 +2393,15 @@ export interface ContainerDefConfig {
   descriptionEn: string;
   defaultLiquidId?: LiquidId | null;
   defaultAmountMl?: number;
+  requiresOpening?: boolean;
   openedVariantId?: string;
   isSealedByDefault?: boolean;
   defaultVisuals?: ContainerVisualAttributes;
+}
+
+export function getContainerConfig(itemId: string | undefined | null): ContainerDefConfig | undefined {
+  if (!itemId) return undefined;
+  return CONTAINER_CONFIGS[itemId] || CONTAINER_CONFIGS[itemId.replace(/_open$/, '')];
 }
 
 export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
@@ -2264,19 +2536,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'CupSoda',
     descriptionRu: 'Алюминиевая банка с ключом-кольцом (0.33 л).',
     descriptionEn: 'Aluminum beverage can (330 ml).',
-    openedVariantId: 'can_alu_330_open'
-  },
-  can_alu_330_open: {
-    itemId: 'can_alu_330_open',
-    name: 'Opened Aluminum Can (0.33L)',
-    nameRu: 'Алюминиевая банка 0.33л (вскрытая)',
-    maxMl: 330,
-    emptyWeightKg: 0.015,
-    emptyVolumeL: 0.35,
-    category: 'drink',
-    icon: 'CupSoda',
-    descriptionRu: 'Вскрытая алюминиевая банка на 0.33 литра с продавленным клапаном.',
-    descriptionEn: 'Opened 330ml aluminum beverage can.'
+    requiresOpening: true
   },
   glass_bottle_500: {
     itemId: 'glass_bottle_500',
@@ -2301,22 +2561,10 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'Box',
     descriptionRu: 'Картонная упаковка тетрапак с пластиковым клапаном объемом 1 литр.',
     descriptionEn: '1-liter carton Tetra Pak packaging.',
-    openedVariantId: 'tetra_pack_1000_open',
+    requiresOpening: true,
     isSealedByDefault: true
   },
-  tetra_pack_1000_open: {
-    itemId: 'tetra_pack_1000_open',
-    name: 'Opened Tetra Pak (1.0L)',
-    nameRu: 'Тетрапак 1.0л (вскрытый)',
-    maxMl: 1000,
-    emptyWeightKg: 0.04,
-    emptyVolumeL: 1.05,
-    category: 'drink',
-    icon: 'Box',
-    descriptionRu: 'Вскрытый картонный пакет тетрапак на 1 литр с открученным клапаном.',
-    descriptionEn: 'Opened 1-liter Tetra Pak carton.'
-  },
-  // === UNIFIED GLASS JARS (Various sizes + Opened states) ===
+  // === UNIFIED GLASS JARS ===
   jar_glass_3l: {
     itemId: 'jar_glass_3l',
     name: 'Large Glass Jar (3.0L)',
@@ -2328,19 +2576,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'GlassWater',
     descriptionRu: 'Большая трёхлитровая стеклянная банка под закатку для солений, маринадов и компотов.',
     descriptionEn: 'Large 3.0L glass canning jar.',
-    openedVariantId: 'jar_glass_3l_open'
-  },
-  jar_glass_3l_open: {
-    itemId: 'jar_glass_3l_open',
-    name: 'Opened Large Glass Jar (3.0L)',
-    nameRu: 'Стеклянная банка 3.0л (открытая)',
-    maxMl: 3000,
-    emptyWeightKg: 0.82,
-    emptyVolumeL: 3.3,
-    category: 'gear',
-    icon: 'GlassWater',
-    descriptionRu: 'Открытая трёхлитровая стеклянная банка со снятой крышкой.',
-    descriptionEn: 'Opened 3.0L glass canning jar without lid.'
+    requiresOpening: true
   },
   jar_glass_large: {
     itemId: 'jar_glass_large',
@@ -2353,19 +2589,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'GlassWater',
     descriptionRu: 'Унифицированная стеклянная банка объемом 1 литр с винтовой крышкой.',
     descriptionEn: 'Unified 1.0L glass jar.',
-    openedVariantId: 'jar_glass_large_open'
-  },
-  jar_glass_large_open: {
-    itemId: 'jar_glass_large_open',
-    name: 'Opened Glass Jar (1.0L)',
-    nameRu: 'Стеклянная банка 1.0л (открытая)',
-    maxMl: 1000,
-    emptyWeightKg: 0.38,
-    emptyVolumeL: 1.1,
-    category: 'gear',
-    icon: 'GlassWater',
-    descriptionRu: 'Открытая стеклянная банка объемом 1 литр со снятой крышкой.',
-    descriptionEn: 'Opened 1.0L glass jar.'
+    requiresOpening: true
   },
   jar_glass_medium: {
     itemId: 'jar_glass_medium',
@@ -2378,19 +2602,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'GlassWater',
     descriptionRu: 'Унифицированная стеклянная банка объемом 0.5 литра с винтовой крышкой.',
     descriptionEn: 'Unified 0.5L glass jar.',
-    openedVariantId: 'jar_glass_medium_open'
-  },
-  jar_glass_medium_open: {
-    itemId: 'jar_glass_medium_open',
-    name: 'Opened Glass Jar (0.5L)',
-    nameRu: 'Стеклянная банка 0.5л (открытая)',
-    maxMl: 500,
-    emptyWeightKg: 0.23,
-    emptyVolumeL: 0.55,
-    category: 'gear',
-    icon: 'GlassWater',
-    descriptionRu: 'Открытая стеклянная банка объемом 0.5 литра без крышки.',
-    descriptionEn: 'Opened 0.5L glass jar.'
+    requiresOpening: true
   },
   jar_glass_small: {
     itemId: 'jar_glass_small',
@@ -2403,19 +2615,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'GlassWater',
     descriptionRu: 'Малая стеклянная баночка объемом 0.2 литра с крышкой твист-офф.',
     descriptionEn: 'Unified 0.2L small glass jar.',
-    openedVariantId: 'jar_glass_small_open'
-  },
-  jar_glass_small_open: {
-    itemId: 'jar_glass_small_open',
-    name: 'Opened Glass Jar (0.2L)',
-    nameRu: 'Стеклянная банка 0.2л (открытая)',
-    maxMl: 200,
-    emptyWeightKg: 0.11,
-    emptyVolumeL: 0.22,
-    category: 'gear',
-    icon: 'GlassWater',
-    descriptionRu: 'Открытая малая стеклянная баночка объемом 0.2 литра.',
-    descriptionEn: 'Opened 0.2L small glass jar.'
+    requiresOpening: true
   },
   jar_spice_small: {
     itemId: 'jar_spice_small',
@@ -2428,21 +2628,9 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'GlassWater',
     descriptionRu: 'Узкая стеклянная баночка с крышкой-мельницей/дозатором для соли, перца и сухих специй (100 мл).',
     descriptionEn: 'Small glass spice shaker/grinder jar (100 ml).',
-    openedVariantId: 'jar_spice_small_open'
+    requiresOpening: true
   },
-  jar_spice_small_open: {
-    itemId: 'jar_spice_small_open',
-    name: 'Opened Spice Jar (0.1L)',
-    nameRu: 'Баночка для специй 0.1л (открытая)',
-    maxMl: 100,
-    emptyWeightKg: 0.07,
-    emptyVolumeL: 0.12,
-    category: 'gear',
-    icon: 'GlassWater',
-    descriptionRu: 'Открытая стеклянная баночка для специй со снятым дозатором.',
-    descriptionEn: 'Opened small glass spice jar.'
-  },
-  // === UNIFIED METAL TIN CANS (Different sizes, shapes, and opened states) ===
+  // === UNIFIED METAL TIN CANS ===
   can_metal_large: {
     itemId: 'can_metal_large',
     name: 'Large Tin Can (0.8L)',
@@ -2452,22 +2640,10 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.85,
     category: 'gear',
     icon: 'CupSoda',
-    descriptionRu: 'Большая цилиндрическая жестяная консервная банка объемом 0.8 литра (запаянная).',
-    descriptionEn: 'Large sealed 0.8L cylindrical tin can.',
-    openedVariantId: 'can_metal_large_open',
+    descriptionRu: 'Большая цилиндрическая жестяная консервная банка объемом 0.8 литра.',
+    descriptionEn: 'Large 0.8L cylindrical tin can.',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  can_metal_large_open: {
-    itemId: 'can_metal_large_open',
-    name: 'Opened Large Tin Can (0.8L)',
-    nameRu: 'Консервная банка большая 0.8л (вскрытая)',
-    maxMl: 800,
-    emptyWeightKg: 0.10,
-    emptyVolumeL: 0.85,
-    category: 'gear',
-    icon: 'CupSoda',
-    descriptionRu: 'Вскрытая большая жестяная консервная банка на 0.8 литра с отогнутой крышкой.',
-    descriptionEn: 'Opened 0.8L tin can with peeled lid.'
   },
   can_metal_medium: {
     itemId: 'can_metal_medium',
@@ -2478,22 +2654,10 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.45,
     category: 'gear',
     icon: 'CupSoda',
-    descriptionRu: 'Стандартная высокая жестяная консервная банка объемом 0.4 литра (запаянная).',
-    descriptionEn: 'Standard 0.4L sealed tin can.',
-    openedVariantId: 'can_metal_medium_open',
+    descriptionRu: 'Стандартная высокая жестяная консервная банка объемом 0.4 литра.',
+    descriptionEn: 'Standard 0.4L tin can.',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  can_metal_medium_open: {
-    itemId: 'can_metal_medium_open',
-    name: 'Opened Standard Tin Can (0.4L)',
-    nameRu: 'Консервная банка средняя 0.4л (вскрытая)',
-    maxMl: 400,
-    emptyWeightKg: 0.06,
-    emptyVolumeL: 0.45,
-    category: 'gear',
-    icon: 'CupSoda',
-    descriptionRu: 'Вскрытая стандартная консервная банка на 0.4 литра с отогнутой жестяной крышкой.',
-    descriptionEn: 'Opened 0.4L tin can with peeled metal lid.'
   },
   can_metal_small: {
     itemId: 'can_metal_small',
@@ -2504,22 +2668,10 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.28,
     category: 'gear',
     icon: 'CupSoda',
-    descriptionRu: 'Малая цилиндрическая консервная банка объемом 0.25 литра (запаянная).',
-    descriptionEn: 'Small 0.25L sealed cylindrical tin can.',
-    openedVariantId: 'can_metal_small_open',
+    descriptionRu: 'Малая цилиндрическая консервная банка объемом 0.25 литра.',
+    descriptionEn: 'Small 0.25L cylindrical tin can.',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  can_metal_small_open: {
-    itemId: 'can_metal_small_open',
-    name: 'Opened Small Tin Can (0.25L)',
-    nameRu: 'Консервная банка малая 0.25л (вскрытая)',
-    maxMl: 250,
-    emptyWeightKg: 0.04,
-    emptyVolumeL: 0.28,
-    category: 'gear',
-    icon: 'CupSoda',
-    descriptionRu: 'Вскрытая малая цилиндрическая консервная банка на 0.25 литра.',
-    descriptionEn: 'Opened 0.25L small tin can.'
   },
   can_metal_flat: {
     itemId: 'can_metal_flat',
@@ -2532,20 +2684,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'Disc',
     descriptionRu: 'Низкая широкая круглая консервная банка-шайба с ключом-кольцом под рыбу, паштеты или икру (0.18 л).',
     descriptionEn: 'Flat round fish/caviar tin can (0.18L).',
-    openedVariantId: 'can_metal_flat_open',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  can_metal_flat_open: {
-    itemId: 'can_metal_flat_open',
-    name: 'Opened Flat Round Tin Can (0.18L)',
-    nameRu: 'Консервная банка плоская 0.18л (вскрытая)',
-    maxMl: 180,
-    emptyWeightKg: 0.03,
-    emptyVolumeL: 0.20,
-    category: 'gear',
-    icon: 'Disc',
-    descriptionRu: 'Вскрытая плоская круглая консервная банка-шайба со свёрнутой крышкой.',
-    descriptionEn: 'Opened flat round tin can (0.18L).'
   },
   can_metal_oval: {
     itemId: 'can_metal_oval',
@@ -2558,20 +2698,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'Disc',
     descriptionRu: 'Продолговатая овальная жестяная банка («шпротная») с ключом-кольцом (0.20 л).',
     descriptionEn: 'Oval sprat-style tin can with pull tab (0.20L).',
-    openedVariantId: 'can_metal_oval_open',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  can_metal_oval_open: {
-    itemId: 'can_metal_oval_open',
-    name: 'Opened Oval Tin Can (0.20L)',
-    nameRu: 'Консервная банка овальная 0.20л (вскрытая)',
-    maxMl: 200,
-    emptyWeightKg: 0.035,
-    emptyVolumeL: 0.22,
-    category: 'gear',
-    icon: 'Disc',
-    descriptionRu: 'Вскрытая овальная жестяная консервная банка на 0.20 литра.',
-    descriptionEn: 'Opened oval tin can (0.20L).'
   },
   tin_round_mini: {
     itemId: 'tin_round_mini',
@@ -2584,21 +2712,9 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'Disc',
     descriptionRu: 'Миниатюрная круглая жестяная баночка с плотной крышкой для бальзамов, воска и густых мазей (30 мл).',
     descriptionEn: 'Mini round metal tin box for balms and wax (30 ml).',
-    openedVariantId: 'tin_round_mini_open'
+    requiresOpening: true
   },
-  tin_round_mini_open: {
-    itemId: 'tin_round_mini_open',
-    name: 'Opened Mini Metal Tin (30ml)',
-    nameRu: 'Жестяная шайба-футляр 30мл (открытая)',
-    maxMl: 30,
-    emptyWeightKg: 0.01,
-    emptyVolumeL: 0.04,
-    category: 'gear',
-    icon: 'Disc',
-    descriptionRu: 'Открытая миниатюрная жестяная баночка-шайба.',
-    descriptionEn: 'Opened mini round metal tin.'
-  },
-  // === UNIFIED CLAY POTS (Small, Medium, Large + Opened states) ===
+  // === UNIFIED CLAY POTS ===
   pot_clay_small: {
     itemId: 'pot_clay_small',
     name: 'Small Clay Pot (0.25L)',
@@ -2610,19 +2726,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'Utensils',
     descriptionRu: 'Малый обожжённый глиняный горшочек с вощаной обвязкой (0.25 л).',
     descriptionEn: 'Small earthenware clay pot (250 ml).',
-    openedVariantId: 'pot_clay_small_open'
-  },
-  pot_clay_small_open: {
-    itemId: 'pot_clay_small_open',
-    name: 'Opened Small Clay Pot (0.25L)',
-    nameRu: 'Глиняный горшочек малый 0.25л (открытый)',
-    maxMl: 250,
-    emptyWeightKg: 0.20,
-    emptyVolumeL: 0.32,
-    category: 'food',
-    icon: 'Utensils',
-    descriptionRu: 'Открытый малый глиняный горшочек на 0.25 литра.',
-    descriptionEn: 'Opened small earthenware clay pot (250 ml).'
+    requiresOpening: true
   },
   pot_clay_medium: {
     itemId: 'pot_clay_medium',
@@ -2635,19 +2739,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'Utensils',
     descriptionRu: 'Обожжённый глиняный горшок на 0.5 литра для смальца, топлёного масла, мёда или жаркого.',
     descriptionEn: 'Medium earthenware clay pot for lard, ghee, or stews (500 ml).',
-    openedVariantId: 'pot_clay_medium_open'
-  },
-  pot_clay_medium_open: {
-    itemId: 'pot_clay_medium_open',
-    name: 'Opened Clay Pot (0.5L)',
-    nameRu: 'Глиняный горшок средний 0.5л (открытый)',
-    maxMl: 500,
-    emptyWeightKg: 0.35,
-    emptyVolumeL: 0.6,
-    category: 'food',
-    icon: 'Utensils',
-    descriptionRu: 'Открытый средний глиняный горшок на 0.5 литра со снятой обвязкой.',
-    descriptionEn: 'Opened medium earthenware clay pot (500 ml).'
+    requiresOpening: true
   },
   pot_clay_large: {
     itemId: 'pot_clay_large',
@@ -2660,19 +2752,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'Utensils',
     descriptionRu: 'Большой толстостенный глиняный корчага-горшок на 1.0 литр для заготовок, топлёного жира и томления в печи.',
     descriptionEn: 'Large thick-walled earthenware clay pot (1.0L).',
-    openedVariantId: 'pot_clay_large_open'
-  },
-  pot_clay_large_open: {
-    itemId: 'pot_clay_large_open',
-    name: 'Opened Large Clay Pot (1.0L)',
-    nameRu: 'Глиняный горшок большой 1.0л (открытый)',
-    maxMl: 1000,
-    emptyWeightKg: 0.65,
-    emptyVolumeL: 1.15,
-    category: 'food',
-    icon: 'Utensils',
-    descriptionRu: 'Открытый большой глиняный горшок объемом 1.0 литр.',
-    descriptionEn: 'Opened large earthenware clay pot (1.0L).'
+    requiresOpening: true
   },
   // === UNIFIED PLASTIC DAIRY CUPS / TUBS ===
   cup_plastic_dairy_small: {
@@ -2686,20 +2766,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'CupSoda',
     descriptionRu: 'Пластиковый стаканчик на 200 мл, запаянный сверху алюминиевой мембраной (под йогурт, сметану или десерт).',
     descriptionEn: 'Foil-sealed 200ml plastic dairy cup.',
-    openedVariantId: 'cup_plastic_dairy_small_open',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  cup_plastic_dairy_small_open: {
-    itemId: 'cup_plastic_dairy_small_open',
-    name: 'Opened Plastic Dairy Cup (0.20L)',
-    nameRu: 'Пластиковый стаканчик 0.2л (вскрытый)',
-    maxMl: 200,
-    emptyWeightKg: 0.01,
-    emptyVolumeL: 0.22,
-    category: 'food',
-    icon: 'CupSoda',
-    descriptionRu: 'Вскрытый пластиковый стаканчик на 200 мл с отогнутой фольгированной крышкой.',
-    descriptionEn: 'Opened 200ml plastic dairy cup.'
   },
   cup_plastic_dairy_medium: {
     itemId: 'cup_plastic_dairy_medium',
@@ -2712,20 +2780,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'CupSoda',
     descriptionRu: 'Широкий пластиковый стакан-ванночка на 400 мл с крышкой и защитной фольгой.',
     descriptionEn: '400ml plastic dairy tub with lid.',
-    openedVariantId: 'cup_plastic_dairy_medium_open',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  cup_plastic_dairy_medium_open: {
-    itemId: 'cup_plastic_dairy_medium_open',
-    name: 'Opened Plastic Dairy Tub (0.40L)',
-    nameRu: 'Пластиковая ванночка-стакан 0.4л (вскрытая)',
-    maxMl: 400,
-    emptyWeightKg: 0.018,
-    emptyVolumeL: 0.45,
-    category: 'food',
-    icon: 'CupSoda',
-    descriptionRu: 'Вскрытая пластиковая ванночка-стакан на 400 мл.',
-    descriptionEn: 'Opened 400ml plastic dairy tub.'
   },
   // === UNIFIED MEDICAL / CULINARY TUBES, AMPOULES & AEROSOLS ===
   tube_ointment_small: {
@@ -2941,20 +2997,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'Box',
     descriptionRu: 'Компактный картонный тетрапак на 250 мл с трубочкой для сока или молока.',
     descriptionEn: 'Compact 250ml Tetra Pak carton with straw.',
-    openedVariantId: 'tetra_pack_250_open',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  tetra_pack_250_open: {
-    itemId: 'tetra_pack_250_open',
-    name: 'Opened Small Tetra Pak (0.25L)',
-    nameRu: 'Тетрапак 0.25л (вскрытый)',
-    maxMl: 250,
-    emptyWeightKg: 0.012,
-    emptyVolumeL: 0.28,
-    category: 'drink',
-    icon: 'Box',
-    descriptionRu: 'Вскрытый компактный картонный тетрапак на 250 мл с проткнутой фольгой.',
-    descriptionEn: 'Opened 250ml Tetra Pak carton.'
   },
   package_sachet: {
     itemId: 'package_sachet',
@@ -2967,20 +3011,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'ShoppingBag',
     descriptionRu: 'Герметичный фольгированный пакетик-саше для молотых пряностей, специй и сухих смесей.',
     descriptionEn: 'Airtight foil sachet pack for spices, seasonings, and dry mixes.',
-    openedVariantId: 'package_sachet_open',
+    requiresOpening: true,
     isSealedByDefault: true
-  },
-  package_sachet_open: {
-    itemId: 'package_sachet_open',
-    name: 'Opened Seasoning Sachet (100ml)',
-    nameRu: 'Пакетик-саше (вскрытый)',
-    maxMl: 100,
-    emptyWeightKg: 0.002,
-    emptyVolumeL: 0.1,
-    category: 'gear',
-    icon: 'ShoppingBag',
-    descriptionRu: 'Надорванный фольгированный пакетик-саше с оторванным верхним уголком.',
-    descriptionEn: 'Opened foil sachet pack with torn top corner.'
   },
   box_cardboard_large: {
     itemId: 'box_cardboard_large',
@@ -3042,6 +3074,7 @@ export function isFluidContainer(item: InventoryItem | null | undefined): boolea
 export function getFluidContainerWeight(item: InventoryItem): number {
   if (!item.fluidStorage) return item.weight || 0.2;
   const storage = item.fluidStorage;
+  normalizeFluidStorageState(storage);
   const emptyWeight = storage.emptyWeightKg ?? 0.05;
   if (!storage.liquidId || storage.currentMl <= 0) {
     return Math.round(emptyWeight * 100) / 100;
@@ -3060,20 +3093,20 @@ export function getFluidContainerVolume(item: InventoryItem): number {
 export function getFluidContainerDisplayName(item: InventoryItem): string {
   if (!item.fluidStorage) return item.nameRu;
   const storage = item.fluidStorage;
-  const cfg = CONTAINER_CONFIGS[item.itemId];
+  normalizeFluidStorageState(storage);
+  const cfg = getContainerConfig(item.itemId);
   const baseName = cfg?.nameRu || storage.baseItemNameRu || item.nameRu;
 
   const cleanBaseName = baseName.replace(/\s*\([\d\.\,\s]+(?:L|л|ml|мл)\)\s*$/i, '').trim();
+  const isOpened = Boolean(item.isOpen || storage.attributes?.isOpened || item.itemId.endsWith('_open'));
+  const openedSuffix = cfg?.requiresOpening && isOpened ? ' (вскрыто)' : '';
 
   if (!storage.liquidId || storage.currentMl <= 0) {
-    return `${cleanBaseName} (Пусто)`;
+    return `${cleanBaseName}${openedSuffix} (Пусто)`;
   }
 
   const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
-  const attrs = storage.attributes;
-  const substanceLabel = attrs?.varietyRu
-    ? `${liquid.nameRu}: ${attrs.varietyRu}`
-    : liquid.nameRu;
+  const substanceLabel = liquid.nameRu;
 
   function formatLiters(ml: number): string {
     const liters = ml / 1000;
@@ -3085,7 +3118,7 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
     ? `${formatLiters(storage.currentMl)}/${formatLiters(storage.maxMl)} л`
     : `${Math.round(storage.currentMl)}/${Math.round(storage.maxMl)} мл`;
 
-  return `${cleanBaseName} [${substanceLabel}, ${volLabel}]`;
+  return `${cleanBaseName}${openedSuffix} [${substanceLabel}, ${volLabel}]`;
 }
 
 export const SHAPE_NAMES_RU: Record<ContainerVisualShape, string> = {
@@ -3193,22 +3226,24 @@ export function resolveContainerVisualAttributes(
   if (containerId.startsWith('jar_glass_') || containerId.startsWith('jar_spice_')) {
     const is3L = containerId.startsWith('jar_glass_3l');
     const isSpice = containerId.startsWith('jar_spice_');
+    const isMenthol = eqId.includes('menthol');
+    const isCitric = liquidId === 'food_acid' || eqId.includes('citric') || eqId.includes('acid');
 
     if (isSpice) {
       const spiceShapes: ContainerVisualShape[] = ['square', 'hexagonal', 'classic'];
       shape = spiceShapes[hash % spiceShapes.length];
-      materialRgb = liquidId === 'menthol' ? [180, 83, 9] : hash % 3 === 0 ? [180, 83, 9] : [224, 242, 254];
-      materialNameRu = liquidId === 'menthol' ? 'Янтарное аптечное стекло' : hash % 3 === 0 ? 'Янтарное аптечное стекло' : 'Прозрачное силикатное стекло';
-      if (liquidId === 'citric_acid' && !labelRgb) labelRgb = [250, 204, 21];
-      if (liquidId === 'menthol' && !labelRgb) labelRgb = [13, 148, 136];
-      capRgb = liquidId === 'menthol' ? [15, 118, 110] : liquidId === 'citric_acid' ? [234, 179, 8] : [220, 38, 38];
+      materialRgb = isMenthol ? [180, 83, 9] : hash % 3 === 0 ? [180, 83, 9] : [224, 242, 254];
+      materialNameRu = isMenthol ? 'Янтарное аптечное стекло' : hash % 3 === 0 ? 'Янтарное аптечное стекло' : 'Прозрачное силикатное стекло';
+      if (isCitric && !labelRgb) labelRgb = [250, 204, 21];
+      if (isMenthol && !labelRgb) labelRgb = [13, 148, 136];
+      capRgb = isMenthol ? [15, 118, 110] : isCitric ? [234, 179, 8] : [220, 38, 38];
     } else if (is3L) {
       shape = hash % 2 === 0 ? 'barrel' : 'classic';
       materialRgb = [167, 243, 208];
       materialNameRu = 'Зеленоватое баночное стекло';
       capRgb = [234, 179, 8];
-    } else if (liquidId === 'honey' || liquidId === 'corn_molasses') {
-      if (liquidId === 'corn_molasses') {
+    } else if (liquidId === 'honey' || eqId.includes('molasses')) {
+      if (eqId.includes('molasses')) {
         shape = 'barrel';
         materialRgb = [254, 243, 199];
         materialNameRu = 'Прозрачное толстостенное стекло';
@@ -3243,28 +3278,30 @@ export function resolveContainerVisualAttributes(
       labelAccentRgb = [254, 226, 226];
       capRgb = [225, 29, 72];
     } else if (liquidId === 'pickles') {
-      const pickleShapes: ContainerVisualShape[] = ['barrel', 'classic', 'amphora'];
+      const pickleShapes: ContainerVisualShape[] = ['barrel', 'classic', 'amphora', 'hexagonal'];
       shape = pickleShapes[hash % pickleShapes.length];
       materialRgb = [167, 243, 208];
       materialNameRu = 'Полубелое зеленоватое стекло';
       if (!labelRgb) labelRgb = [101, 163, 13];
       labelAccentRgb = [236, 252, 203];
       capRgb = [234, 179, 8];
-    } else if (liquidId === 'marinade') {
-      const marShapes: ContainerVisualShape[] = ['amphora', 'hexagonal', 'square', 'classic'];
-      shape = marShapes[hash % marShapes.length];
-      materialRgb = [207, 250, 254];
-      materialNameRu = 'Осветлённое тарное стекло';
-      if (!labelRgb) labelRgb = [22, 163, 74];
-      capRgb = [22, 163, 74];
     } else if (liquidId === 'caviar') {
-      shape = hash % 2 === 0 ? 'hexagonal' : 'amphora';
-      materialRgb = [224, 242, 254];
-      materialNameRu = 'Оптическое хрустальное стекло';
-      labelRgb = eqId.includes('black') ? [29, 78, 216] : [220, 38, 38];
-      labelAccentRgb = [250, 204, 21];
-      capRgb = [234, 179, 8];
-    } else if (liquidId === 'vegetable_caviar' || liquidId === 'puree' || liquidId === 'sauce') {
+      if (eqId.includes('squash') || eqId.includes('eggplant') || eqId.includes('vegetable') || eqId.includes('mushroom') || eqId.includes('beet') || eqId.includes('zucchini')) {
+        const sqShapes: ContainerVisualShape[] = ['square', 'hexagonal', 'barrel', 'classic'];
+        shape = sqShapes[hash % sqShapes.length];
+        materialRgb = [224, 242, 254];
+        materialNameRu = 'Прозрачное тарное стекло';
+        if (!labelRgb) labelRgb = [217, 119, 6];
+        capRgb = [234, 179, 8];
+      } else {
+        shape = hash % 2 === 0 ? 'hexagonal' : 'amphora';
+        materialRgb = [224, 242, 254];
+        materialNameRu = 'Оптическое хрустальное стекло';
+        labelRgb = eqId.includes('black') ? [29, 78, 216] : [220, 38, 38];
+        labelAccentRgb = [250, 204, 21];
+        capRgb = [234, 179, 8];
+      }
+    } else if (liquidId === 'puree' || liquidId === 'sauce') {
       const sqShapes: ContainerVisualShape[] = ['square', 'hexagonal', 'barrel', 'classic'];
       shape = sqShapes[hash % sqShapes.length];
       materialRgb = [224, 242, 254];
@@ -3325,7 +3362,7 @@ export function resolveContainerVisualAttributes(
       labelAccentRgb = [254, 240, 138];
     } else if (containerId.startsWith('tin_round_')) {
       shape = 'classic';
-      if (liquidId === 'menthol') {
+      if (eqId.includes('menthol')) {
         materialRgb = [13, 148, 136];
         materialNameRu = 'Матовая ментоловая жесть';
         labelRgb = [204, 251, 241];
@@ -3337,7 +3374,7 @@ export function resolveContainerVisualAttributes(
       }
     } else {
       // Large, medium, small metal cans
-      if (liquidId === 'coconut_milk') {
+      if (eqId.includes('coconut')) {
         shape = 'classic';
         materialRgb = [241, 245, 249];
         materialNameRu = 'Лакированная белая жесть';
@@ -3397,14 +3434,14 @@ export function resolveContainerVisualAttributes(
         labelRgb = [217, 119, 6];
         labelAccentRgb = [254, 240, 138];
         capRgb = [120, 53, 15];
-      } else if (liquidId === 'milk' || liquidId === 'kefir' || liquidId === 'dairy_fermented') {
+      } else if (liquidId === 'milk' || liquidId === 'dairy_fermented') {
         shape = 'burgundy';
         materialRgb = [248, 250, 252];
         materialNameRu = 'Матовый белый полиэтилен HDPE';
         labelRgb = [56, 189, 248];
         labelAccentRgb = [255, 255, 255];
         capRgb = [2, 132, 199];
-      } else if (liquidId === 'mineral_water' || eqId.includes('mineral')) {
+      } else if (eqId.includes('mineral')) {
         shape = 'bordeaux';
         materialRgb = [74, 222, 128];
         materialNameRu = 'Изумрудно-зелёный ПЭТ-пластик';
@@ -3434,7 +3471,7 @@ export function resolveContainerVisualAttributes(
       } else if (
         containerId === 'bottle_plastic_100' &&
         liquidId &&
-        (String(liquidId).startsWith('dye_') || liquidId === 'botanical_extract' || liquidId === 'essential_oil')
+        (liquidId === 'food_dye' || liquidId === 'botanical_extract' || liquidId === 'essential_oil')
       ) {
         shape = 'classic';
         materialRgb = liquidId === 'essential_oil' ? [120, 53, 15] : [224, 242, 254];
@@ -3442,7 +3479,7 @@ export function resolveContainerVisualAttributes(
         if (!labelRgb) labelRgb = [2, 132, 199];
         labelAccentRgb = [248, 250, 252];
         capRgb = liquidId === 'essential_oil' ? [24, 24, 27] : [255, 255, 255];
-      } else if (liquidId === 'glucose_syrup' || liquidId === 'corn_molasses' || liquidId === 'topinambur_syrup') {
+      } else if (liquidId === 'syrup_sweet') {
         shape = 'pinched';
         materialRgb = [254, 249, 195];
         materialNameRu = 'Плотный пищевой ПЭТ для сиропов';
@@ -3473,20 +3510,20 @@ export function resolveContainerVisualAttributes(
         labelRgb = [220, 38, 38];
         labelAccentRgb = [255, 255, 255];
         capRgb = [203, 213, 225];
-      } else if (liquidId === 'wine_red' || eqId.includes('wine_red') || eqId === 'wine_bottle' || eqId === 'bottle_wine') {
-        shape = 'bordeaux';
-        materialRgb = [6, 78, 59];
-        materialNameRu = 'Тёмно-изумрудное винное стекло';
-        labelRgb = [153, 27, 27];
-        labelAccentRgb = [254, 243, 199];
-        capRgb = [127, 29, 29];
-      } else if (liquidId === 'wine_white' || eqId.includes('wine_white')) {
+      } else if (liquidId === 'wine' && (eqId.includes('white') || attributes?.varietyRu?.toLowerCase().includes('бел'))) {
         shape = 'burgundy';
         materialRgb = [16, 185, 129];
         materialNameRu = 'Оливково-зелёное винное стекло';
         labelRgb = [254, 243, 199];
         labelAccentRgb = [21, 128, 61];
         capRgb = [234, 179, 8];
+      } else if (liquidId === 'wine' || eqId.includes('wine_red') || eqId === 'wine_bottle' || eqId === 'bottle_wine') {
+        shape = 'bordeaux';
+        materialRgb = [6, 78, 59];
+        materialNameRu = 'Тёмно-изумрудное винное стекло';
+        labelRgb = [153, 27, 27];
+        labelAccentRgb = [254, 243, 199];
+        capRgb = [127, 29, 29];
       } else if (liquidId === 'oil_culinary') {
         if (eqId.includes('olive') || eqId.includes('sesame') || eqId.includes('truffle') || eqId.includes('flax')) {
           shape = 'square';
@@ -3511,18 +3548,13 @@ export function resolveContainerVisualAttributes(
           : 'Прозрачное бутылочное стекло';
         if (!labelRgb) labelRgb = [185, 28, 28];
         capRgb = [220, 38, 38];
-      } else if (
-        liquidId === 'syrup_sweet' ||
-        liquidId === 'glucose_syrup' ||
-        liquidId === 'topinambur_syrup' ||
-        liquidId === 'dye_caramel'
-      ) {
+      } else if (liquidId === 'syrup_sweet' || eqId.includes('caramel')) {
         shape = 'bulbous';
-        materialRgb = liquidId === 'dye_caramel' ? [120, 53, 15] : [254, 243, 199];
-        materialNameRu = liquidId === 'dye_caramel' ? 'Янтарное сиропное стекло' : 'Тёплое графинное стекло';
+        materialRgb = eqId.includes('caramel') ? [120, 53, 15] : [254, 243, 199];
+        materialNameRu = eqId.includes('caramel') ? 'Янтарное сиропное стекло' : 'Тёплое графинное стекло';
         if (!labelRgb) labelRgb = [217, 119, 6];
         capRgb = [180, 83, 9];
-      } else if (liquidId === 'lactic_acid' || liquidId === 'botanical_extract' || liquidId === 'essential_oil') {
+      } else if (liquidId === 'food_acid' || liquidId === 'botanical_extract' || liquidId === 'essential_oil') {
         shape = 'square';
         materialRgb = [120, 53, 15];
         materialNameRu = 'Тёмно-янтарное экстракционное стекло';
@@ -3575,10 +3607,17 @@ export function resolveContainerVisualAttributes(
 export function syncItemContainerProperties(item: InventoryItem): void {
   if (!item.fluidStorage) return;
   const storage = item.fluidStorage;
-  const cfg = CONTAINER_CONFIGS[item.itemId];
+  normalizeFluidStorageState(storage);
+  const cfg = getContainerConfig(item.itemId);
   if (cfg) {
     storage.baseItemNameRu = cfg.nameRu;
     storage.baseItemNameEn = cfg.name;
+  }
+
+  if (item.itemId.endsWith('_open')) {
+    item.itemId = item.itemId.replace(/_open$/, '');
+    item.isOpen = true;
+    if (storage.attributes) storage.attributes.isOpened = true;
   }
 
   // Ensure visual attributes (shape, materialRgb, labelRgb) are resolved & persisted on the container
@@ -3595,6 +3634,12 @@ export function syncItemContainerProperties(item: InventoryItem): void {
     storage.containerVisuals = resolvedVis;
   }
 
+  const isOpened = Boolean(item.isOpen || storage.attributes?.isOpened);
+  if (isOpened) {
+    item.isOpen = true;
+    if (storage.attributes) storage.attributes.isOpened = true;
+  }
+
   item.weight = getFluidContainerWeight(item);
   item.volume = getFluidContainerVolume(item);
   item.nameRu = getFluidContainerDisplayName(item);
@@ -3604,33 +3649,57 @@ export function syncItemContainerProperties(item: InventoryItem): void {
     ? ` Параметры модели тары: форма — ${vis.shapeNameRu || vis.shape}, материал — ${vis.materialNameRu || 'Стандарт'} (RGB: ${vis.materialRgb.join(', ')}), этикетка — ${vis.labelRgb ? `RGB(${vis.labelRgb.join(', ')})` : 'нет'}.`
     : '';
 
-  if (cfg?.openedVariantId && !item.itemId.endsWith('_open')) {
+  if (cfg?.requiresOpening && !isOpened) {
     item.usable = true;
   }
 
   if (storage.currentMl > 0 && storage.liquidId) {
     const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId];
-    if (liquid?.isDrinkable || storage.attributes?.medicalEffectId || cfg?.openedVariantId) {
+    if (liquid?.isDrinkable || storage.attributes?.medicalEffectId || cfg?.requiresOpening) {
       item.usable = true;
     }
     if (storage.attributes) {
       const a = storage.attributes;
-      const openBadge = item.itemId.endsWith('_open')
+      const openBadge = isOpened
         ? ' (Тара вскрыта)'
-        : (cfg?.openedVariantId && a.isOpened !== true ? ' (Закрыто — нажмите [E] или Вскрыть, чтобы открыть тару)' : '');
+        : (cfg?.requiresOpening ? ' (Закрыто — нажмите [E] или Вскрыть, чтобы открыть тару)' : '');
       const volText = storage.maxMl >= 1000
         ? `${(storage.currentMl / 1000).toFixed(2)} л`
         : `${Math.round(storage.currentMl)} мл`;
-      const ingredientsText = Array.isArray(a.sourceIngredients)
-        ? a.sourceIngredients.join(', ')
-        : (a.sourceIngredients || 'Не указаны');
+      const rawIng = a.ingredients ?? a.sourceIngredients;
+      const ingredientsText = Array.isArray(rawIng)
+        ? rawIng.join(', ')
+        : (rawIng || 'Не указаны');
       item.descriptionRu =
         `Унифицированная тара: ${cfg?.nameRu || storage.baseItemNameRu}${openBadge}.${visBadge} ` +
-        `Внутри: ${liquid?.nameRu || storage.liquidId} — «${a.varietyRu}» (${volText}). ` +
+        `Содержимое: ${liquid?.nameRu || storage.liquidId}${a.varietyRu ? ` (${a.varietyRu})` : ''} (${volText}). ` +
         `Из чего: ${ingredientsText}. ` +
-        `Способ готовки: ${a.preparationMethod}. ` +
-        `Зачем: ${a.purpose}. ` +
-        `Почему: ${a.reasonAndOrigin}`;
+        (a.preparationMethod ? `Способ готовки: ${a.preparationMethod}. ` : '') +
+        (a.purpose ? `Назначение: ${a.purpose}.` : '');
+
+      // Sync identical unified attributes structure to item.attributes
+      item.attributes = {
+        ...(item.attributes || {}),
+        ...a,
+        ingredients: rawIng,
+        state: cfg?.requiresOpening ? (isOpened ? 'opened' : 'sealed') : (a.state || 'contained'),
+        stateNameRu: cfg?.requiresOpening ? (isOpened ? 'Вскрыта' : 'Запаяна') : a.stateNameRu,
+        customColor: a.customColor || liquid?.color,
+        visuals: {
+          ...(item.attributes?.visuals || {}),
+          ...(a.visuals || {}),
+          ...(vis ? {
+            shape: vis.shape,
+            shapeNameRu: vis.shapeNameRu,
+            materialRgb: vis.materialRgb,
+            materialNameRu: vis.materialNameRu,
+            labelRgb: vis.labelRgb,
+            labelAccentRgb: vis.labelAccentRgb,
+            capRgb: vis.capRgb
+          } : {}),
+          color: a.visuals?.color || a.customColor || liquid?.color
+        }
+      };
     } else if (visBadge) {
       const baseDesc = cfg?.descriptionRu || 'Унифицированная ёмкость.';
       item.descriptionRu = `${baseDesc}${visBadge}`;
@@ -3638,13 +3707,34 @@ export function syncItemContainerProperties(item: InventoryItem): void {
   } else {
     const baseDesc = cfg?.descriptionRu || 'Пустая унифицированная ёмкость.';
     item.descriptionRu = `${baseDesc}${visBadge} Сейчас пуста (0 мл).`;
+    item.attributes = {
+      ...(item.attributes || {}),
+      varietyRu: cfg?.nameRu || storage.baseItemNameRu || item.nameRu,
+      preparationMethod: vis?.materialNameRu ? `Тара (${vis.materialNameRu})` : 'Унифицированная тара',
+      purpose: cfg?.descriptionRu || 'Хранение жидкостей и сыпучих веществ',
+      state: cfg?.requiresOpening ? (isOpened ? 'opened' : 'sealed') : 'empty',
+      stateNameRu: 'Пусто',
+      visuals: {
+        ...(item.attributes?.visuals || {}),
+        ...(vis ? {
+          shape: vis.shape,
+          shapeNameRu: vis.shapeNameRu,
+          materialRgb: vis.materialRgb,
+          materialNameRu: vis.materialNameRu,
+          labelRgb: vis.labelRgb,
+          labelAccentRgb: vis.labelAccentRgb,
+          capRgb: vis.capRgb
+        } : {})
+      }
+    };
   }
 }
 
 export function isFluidContainerClosed(item: InventoryItem | null | undefined): boolean {
   if (!item || !item.fluidStorage) return false;
-  const cfg = CONTAINER_CONFIGS[item.itemId];
-  return Boolean(cfg?.openedVariantId && !item.itemId.endsWith('_open'));
+  const cfg = getContainerConfig(item.itemId);
+  const isOpened = Boolean(item.isOpen || item.fluidStorage.attributes?.isOpened || item.itemId.endsWith('_open'));
+  return Boolean(cfg?.requiresOpening && !isOpened);
 }
 
 export function openFluidContainerIfNeeded(
@@ -3652,29 +3742,25 @@ export function openFluidContainerIfNeeded(
   container: InventoryItem
 ): { justOpened: boolean; message: string } {
   const storage = container.fluidStorage;
-  const cfg = CONTAINER_CONFIGS[container.itemId];
-  if (!storage || !cfg?.openedVariantId || container.itemId.endsWith('_open')) {
-    if (storage?.attributes && storage.attributes.isOpened === false) {
-      storage.attributes.isOpened = true;
+  const cfg = getContainerConfig(container.itemId);
+  const alreadyOpen = Boolean(container.isOpen || storage?.attributes?.isOpened || container.itemId.endsWith('_open'));
+  if (!storage || !cfg?.requiresOpening || alreadyOpen) {
+    if (alreadyOpen) {
+      container.isOpen = true;
+      if (storage?.attributes) storage.attributes.isOpened = true;
       syncItemContainerProperties(container);
     }
     return { justOpened: false, message: '' };
   }
 
-  const openCfg = CONTAINER_CONFIGS[cfg.openedVariantId];
-  if (!openCfg) return { justOpened: false, message: '' };
-
-  container.itemId = openCfg.itemId;
-  container.name = openCfg.name;
-  storage.baseItemNameRu = openCfg.nameRu;
-  storage.baseItemNameEn = openCfg.name;
+  container.isOpen = true;
   if (storage.attributes) {
     storage.attributes.isOpened = true;
   }
   syncItemContainerProperties(container);
 
   sound.playUseItem();
-  const msg = `Тара вскрыта: ${openCfg.nameRu}. Теперь содержимое можно употреблять или переливать!`;
+  const msg = `Тара вскрыта: ${cfg.nameRu}. Теперь содержимое можно употреблять или переливать!`;
   addPlayerNotification(player, msg, 'info');
   return { justOpened: true, message: msg };
 }
@@ -3721,14 +3807,16 @@ export function pourLiquidBetweenContainers(
     return { success: false, message: 'Не удалось перелить жидкость', transferredMl: 0 };
   }
 
-  // Auto-open sealed source or target containers when pouring
-  const srcCfg = CONTAINER_CONFIGS[source.itemId];
-  if (srcCfg?.openedVariantId && CONTAINER_CONFIGS[srcCfg.openedVariantId]) {
-    source.itemId = srcCfg.openedVariantId;
+  // Auto-open sealed source or target containers in-place when pouring
+  const srcCfg = getContainerConfig(source.itemId);
+  if (srcCfg?.requiresOpening) {
+    source.isOpen = true;
+    if (srcStorage.attributes) srcStorage.attributes.isOpened = true;
   }
-  const tgtCfg = CONTAINER_CONFIGS[target.itemId];
-  if (tgtCfg?.openedVariantId && CONTAINER_CONFIGS[tgtCfg.openedVariantId]) {
-    target.itemId = tgtCfg.openedVariantId;
+  const tgtCfg = getContainerConfig(target.itemId);
+  if (tgtCfg?.requiresOpening) {
+    target.isOpen = true;
+    if (tgtStorage.attributes) tgtStorage.attributes.isOpened = true;
   }
 
   // Realistic spillage waste: ~1.5% to 4% is spilled on walls or drips down the neck
@@ -3810,6 +3898,7 @@ export function handleConsumeFluid(
   }
 
   const storage = container.fluidStorage;
+  normalizeFluidStorageState(storage);
   if (storage.currentMl <= 0 || !storage.liquidId) {
     addPlayerNotification(player, `${storage.baseItemNameRu} пуста! Наберите жидкость или сыпучее вещество.`, 'info');
     return { success: false, message: 'Емкость пуста' };
