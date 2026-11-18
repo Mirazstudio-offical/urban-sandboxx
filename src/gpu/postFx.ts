@@ -80,6 +80,7 @@ export interface PostFxFrame {
   season?: string;
   hasResidualWetness?: boolean;
   lightmap?: HTMLCanvasElement | null; // darkness layer (alpha = dark), null when the frame had none
+  lightColor?: HTMLCanvasElement | null; // accumulated RGB light color map masked by D_env
   materialMap?: HTMLCanvasElement | null; // exact G-buffer material ID & fluid thickness map
   fires?: PostFxFireSource[];          // active world-space fire sources for heat haze & normal relief lighting
   wakes?: PostFxWaterWake[];           // active world-space water wakes & ripples for direct GPU wave/foam simulation
@@ -148,6 +149,8 @@ uniform sampler2D uBloomWide;
 uniform sampler2D uLight;
 uniform float uLightOn;
 uniform vec2 uLightSize;
+uniform sampler2D uLightCol;
+uniform float uLightColOn;
 uniform sampler2D uMat;
 uniform float uMatOn;
 uniform vec2 uMatSize;
@@ -1121,6 +1124,12 @@ void main() {
   vec3 skyCol = mix(nightSkyCol, daySkyCol, uDay);
   vec3 sunGlintCol = mix(vec3(0.55, 0.72, 0.96) * 0.38, vec3(1.0, 0.96, 0.84), uDay);
   float lampHere = (uLightOn > 0.5) ? (1.0 - texture(uLight, uv).a) : 0.0;
+  vec3 rawLightCol = (uLightColOn > 0.5) ? texture(uLightCol, uv).rgb : vec3(0.0);
+  float lcMax = max(rawLightCol.r, max(rawLightCol.g, rawLightCol.b));
+  vec3 normLightCol = (lcMax > 0.008) ? (rawLightCol / lcMax) : vec3(1.0, 0.92, 0.76);
+  vec3 localLightCol = (uLightColOn > 0.5)
+    ? mix(vec3(1.0, 0.92, 0.76), normLightCol, smoothstep(0.01, 0.14, lcMax))
+    : vec3(1.0, 0.92, 0.76);
   float dayBloomDamp = mix(1.0, 0.18, uDay); // Prevents sunny white cars/paint from blooming onto puddles & roads in daylight
   const vec3 VIEW_REFL = vec3(0.0, -0.77, 0.64);
 
@@ -1187,9 +1196,16 @@ void main() {
       c += reflBloom * waterMask * waveFacetHighlight * mix(1.55, 0.65, uDay);
 
       if (uLightOn > 0.5) {
-        float litPerturbed = 1.0 - texture(uLight, clamp(uv + waveN * 0.018, vec2(0.001), vec2(0.999))).a;
+        vec2 wReflUv = clamp(uv + waveN * 0.018, vec2(0.001), vec2(0.999));
+        float litPerturbed = 1.0 - texture(uLight, wReflUv).a;
         float specRipple = max(0.0, litPerturbed - lampHere * 0.65) + litPerturbed * pow(max(0.0, waveSlopeMag * 0.75), 2.0);
-        vec3 artificialSpecCol = mix(vec3(1.0, 0.93, 0.78), reflBloom * 1.6 + vec3(0.45, 0.55, 0.70), 0.55);
+        vec3 wLightCol = localLightCol;
+        if (uLightColOn > 0.5) {
+          vec3 wc = texture(uLightCol, wReflUv).rgb;
+          float wcMax = max(wc.r, max(wc.g, wc.b));
+          if (wcMax > 0.008) wLightCol = mix(localLightCol, wc / wcMax, smoothstep(0.01, 0.14, wcMax));
+        }
+        vec3 artificialSpecCol = mix(wLightCol, reflBloom * 1.6 + wLightCol * 0.55, 0.55);
         c += artificialSpecCol * waterMask * specRipple * (0.28 + 0.55 * (1.0 - uDay));
       }
     }
@@ -1245,9 +1261,16 @@ void main() {
       c += pBloom * puddleBasinMask * mix(1.65, 0.20, uDay);
 
       if (uLightOn > 0.5) {
-        float litP = 1.0 - texture(uLight, clamp(uv + waveN * 0.014, vec2(0.001), vec2(0.999))).a;
+        vec2 pLightUv = clamp(uv + waveN * 0.014, vec2(0.001), vec2(0.999));
+        float litP = 1.0 - texture(uLight, pLightUv).a;
         float rippleSpec = max(0.0, litP - lampHere * 0.55) + litP * smoothstep(0.05, 0.45, slopeMag) * 0.45;
-        c += mix(vec3(1.0, 0.94, 0.80), pBloom * 1.5 + vec3(0.55, 0.68, 0.85), 0.5) * puddleBasinMask * rippleSpec * (0.35 + 0.65 * (1.0 - uDay));
+        vec3 pLightCol = localLightCol;
+        if (uLightColOn > 0.5) {
+          vec3 pc = texture(uLightCol, pLightUv).rgb;
+          float pcMax = max(pc.r, max(pc.g, pc.b));
+          if (pcMax > 0.008) pLightCol = mix(localLightCol, pc / pcMax, smoothstep(0.01, 0.14, pcMax));
+        }
+        c += mix(pLightCol, pBloom * 1.5 + pLightCol * 0.62, 0.5) * puddleBasinMask * rippleSpec * (0.35 + 0.65 * (1.0 - uDay));
       }
     }
   }
@@ -1314,7 +1337,7 @@ void main() {
     vec2 oReflUv = clamp(uv + oilN * 0.012, vec2(0.001), vec2(0.999));
     vec3 oBloom = texture(uBloom, oReflUv).rgb + texture(uBloomWide, oReflUv).rgb * 1.2;
     float lampRim = (uLightOn > 0.5) ? lampHere * smoothstep(0.03, 0.28, menMag) * 0.55 : 0.0;
-    c += (sunGlintCol * rimSpec * 0.72 + vec3(1.0, 0.92, 0.76) * lampRim + oBloom * mix(2.1, 0.95, uDay)) * oAlpha;
+    c += (sunGlintCol * rimSpec * 0.72 + localLightCol * lampRim + oBloom * mix(2.1, 0.95, uDay)) * oAlpha;
   }
 
   // ============================================================================
@@ -1382,7 +1405,7 @@ void main() {
       c = mix(c, c * 0.76, roadSkidMask * 0.52);
       c += (rubberSheenCol * rubberSpec + skidBloom * mix(1.30, 0.16, uDay)) * roadSkidMask;
       if (uLightOn > 0.5) {
-        c += vec3(0.96, 0.91, 0.82) * lampHere * 0.22 * roadSkidMask * (1.0 - uDay * 0.5);
+        c += localLightCol * lampHere * 0.22 * roadSkidMask * (1.0 - uDay * 0.5);
       }
     }
 
@@ -1423,9 +1446,16 @@ void main() {
       c += sunGlintCol * sunSpec * localWet * (0.5 + 0.6 * filmWater);
 
       if (uLightOn > 0.5) {
-        float litPert = 1.0 - texture(uLight, clamp(uv + dampN * 0.018, vec2(0.001), vec2(0.999))).a;
+        vec2 rLightUv = clamp(uv + dampN * 0.018, vec2(0.001), vec2(0.999));
+        float litPert = 1.0 - texture(uLight, rLightUv).a;
         float roadLampSpec = max(0.0, litPert - lampHere * 0.72) + lampHere * 0.20 * filmWater;
-        c += vec3(1.0, 0.93, 0.78) * roadLampSpec * localWet * (0.35 + 0.65 * rutMask) * (0.35 + 0.65 * (1.0 - uDay));
+        vec3 roadLightCol = localLightCol;
+        if (uLightColOn > 0.5) {
+          vec3 rc = texture(uLightCol, rLightUv).rgb;
+          float rcMax = max(rc.r, max(rc.g, rc.b));
+          if (rcMax > 0.008) roadLightCol = mix(localLightCol, rc / rcMax, smoothstep(0.01, 0.14, rcMax));
+        }
+        c += roadLightCol * roadLampSpec * localWet * (0.35 + 0.65 * rutMask) * (0.35 + 0.65 * (1.0 - uDay));
       }
     }
 
@@ -1536,7 +1566,7 @@ void main() {
       vec3 rutBloom = texture(uBloomWide, rutReflUv).rgb;
       float rutGlint = pow(clamp(dot(normalize(rutGrad + matMicroN * 6.0 + uSun * 0.35), uSun), 0.0, 1.0), 14.0) * 0.36;
       c = mix(c, skyCol * 0.85, offroadRutMask * rutWetness * 0.18 * uDay);
-      c += (sunGlintCol * rutGlint + rutBloom * mix(1.45, 0.22, uDay) + vec3(0.95, 0.88, 0.74) * lampHere * 0.24 * wallSlope) * offroadRutMask * rutWetness;
+      c += (sunGlintCol * rutGlint + rutBloom * mix(1.45, 0.22, uDay) + localLightCol * lampHere * 0.24 * wallSlope) * offroadRutMask * rutWetness;
     }
 
     // A. WET EARTH & SLICK MUD SHADER
@@ -1590,12 +1620,35 @@ void main() {
   if (uLightOn > 0.5 && uFogGlow > 0.001) {
     vec2 r1 = vec2(20.0) / uLightSize;
     vec2 r2 = vec2(46.0) / uLightSize;
-    float gl = (1.0 - texture(uLight, uv).a) * 0.25;
-    gl += (1.0 - texture(uLight, uv + vec2( r1.x, 0.0)).a + 1.0 - texture(uLight, uv + vec2(-r1.x, 0.0)).a
-         + 1.0 - texture(uLight, uv + vec2(0.0,  r1.y)).a + 1.0 - texture(uLight, uv + vec2(0.0, -r1.y)).a) * 0.125;
-    gl += (1.0 - texture(uLight, uv + vec2( r2.x,  r2.y)).a + 1.0 - texture(uLight, uv + vec2(-r2.x,  r2.y)).a
-         + 1.0 - texture(uLight, uv + vec2( r2.x, -r2.y)).a + 1.0 - texture(uLight, uv + vec2(-r2.x, -r2.y)).a) * 0.0625;
-    c += vec3(1.0, 0.92, 0.76) * smoothstep(0.25, 0.95, gl) * uFogGlow * (0.25 + 0.75 * (1.0 - uDay)) * 0.5;
+    vec2 uvR = clamp(uv + vec2( r1.x, 0.0), vec2(0.001), vec2(0.999));
+    vec2 uvL = clamp(uv + vec2(-r1.x, 0.0), vec2(0.001), vec2(0.999));
+    vec2 uvU = clamp(uv + vec2(0.0,  r1.y), vec2(0.001), vec2(0.999));
+    vec2 uvD = clamp(uv + vec2(0.0, -r1.y), vec2(0.001), vec2(0.999));
+    vec2 uvTR = clamp(uv + vec2( r2.x,  r2.y), vec2(0.001), vec2(0.999));
+    vec2 uvTL = clamp(uv + vec2(-r2.x,  r2.y), vec2(0.001), vec2(0.999));
+    vec2 uvBR = clamp(uv + vec2( r2.x, -r2.y), vec2(0.001), vec2(0.999));
+    vec2 uvBL = clamp(uv + vec2(-r2.x, -r2.y), vec2(0.001), vec2(0.999));
+    float g0 = 1.0 - texture(uLight, uv).a;
+    float gR = 1.0 - texture(uLight, uvR).a;
+    float gL = 1.0 - texture(uLight, uvL).a;
+    float gU = 1.0 - texture(uLight, uvU).a;
+    float gD = 1.0 - texture(uLight, uvD).a;
+    float gTR = 1.0 - texture(uLight, uvTR).a;
+    float gTL = 1.0 - texture(uLight, uvTL).a;
+    float gBR = 1.0 - texture(uLight, uvBR).a;
+    float gBL = 1.0 - texture(uLight, uvBL).a;
+    float gl = g0 * 0.25 + (gR + gL + gU + gD) * 0.125 + (gTR + gTL + gBR + gBL) * 0.0625;
+    vec3 fogTint = vec3(1.0, 0.92, 0.76);
+    if (uLightColOn > 0.5) {
+      vec3 glCol = texture(uLightCol, uv).rgb * 0.25
+        + (texture(uLightCol, uvR).rgb + texture(uLightCol, uvL).rgb + texture(uLightCol, uvU).rgb + texture(uLightCol, uvD).rgb) * 0.125
+        + (texture(uLightCol, uvTR).rgb + texture(uLightCol, uvTL).rgb + texture(uLightCol, uvBR).rgb + texture(uLightCol, uvBL).rgb) * 0.0625;
+      float glColMax = max(glCol.r, max(glCol.g, glCol.b));
+      if (glColMax > 0.008) {
+        fogTint = mix(fogTint, glCol / glColMax, smoothstep(0.01, 0.14, glColMax));
+      }
+    }
+    c += fogTint * smoothstep(0.25, 0.95, gl) * uFogGlow * (0.25 + 0.75 * (1.0 - uDay)) * 0.5;
   }
 
   // --- bloom ------------------------------------------------------------------------------------------------
@@ -1713,6 +1766,7 @@ export class GpuPostFx {
 
   private srcTex: WebGLTexture | null = null;
   private lightTex: WebGLTexture | null = null;
+  private lightColTex: WebGLTexture | null = null;
   private matTex: WebGLTexture | null = null;
   private srcW = 0;
   private srcH = 0;
@@ -1775,7 +1829,7 @@ export class GpuPostFx {
     this.pDown = this.makeProgram(VS, FS_DOWN, ['uTex', 'uTexel', 'uThreshold', 'uKnee']);
     this.pUp = this.makeProgram(VS, FS_UP, ['uTex', 'uTexel', 'uScale']);
     this.pComposite = this.makeProgram(VS, FS_COMPOSITE, [
-      'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize',
+      'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize', 'uLightCol', 'uLightColOn',
       'uMat', 'uMatOn', 'uMatSize', 'uGi', 'uWet', 'uSnow', 'uRain', 'uFogGlow',
       'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun', 'uSunElev',
       'uCamPos', 'uCamZoom', 'uCamAngle', 'uFreezing',
@@ -1795,6 +1849,10 @@ export class GpuPostFx {
     this.lightTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.lightTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+    this.setTexParams(true);
+    this.lightColTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.lightColTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     this.setTexParams(true);
     this.matTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.matTex);
@@ -2001,12 +2059,18 @@ export class GpuPostFx {
     }
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
 
-    // --- lightmap (darkness layer) ---------------------------------------------------------------------------
+    // --- lightmap (darkness layer & accumulated RGB light color) -----------------------------------------------
     const lm = frame.lightmap && frame.lightmap.width > 1 && frame.lightmap.height > 1 ? frame.lightmap : null;
     if (lm && this.lightTex) {
       this.bindTex(3, this.lightTex);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, lm);
+    }
+    const lcm = frame.lightColor && frame.lightColor.width > 1 && frame.lightColor.height > 1 ? frame.lightColor : null;
+    if (lcm && this.lightColTex) {
+      this.bindTex(6, this.lightColTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, lcm);
     }
 
     // --- material G-buffer (material IDs + fluid thickness) --------------------------------------------------
@@ -2075,14 +2139,17 @@ export class GpuPostFx {
     this.bindTex(3, this.lightTex);
     this.bindTex(4, bloomOn ? this.bloomChain[2].tex : this.srcTex);
     this.bindTex(5, this.matTex);
+    this.bindTex(6, this.lightColTex);
     gl.uniform1i(c.u.uSrc, 0);
     gl.uniform1i(c.u.uBloom, 1);
     gl.uniform1i(c.u.uBlur, 2);
     gl.uniform1i(c.u.uLight, 3);
     gl.uniform1i(c.u.uBloomWide, 4);
     gl.uniform1i(c.u.uMat, 5);
+    gl.uniform1i(c.u.uLightCol, 6);
     gl.uniform1f(c.u.uLightOn, lm ? 1 : 0);
     gl.uniform2f(c.u.uLightSize, lm ? lm.width : 1, lm ? lm.height : 1);
+    gl.uniform1f(c.u.uLightColOn, lcm ? 1 : 0);
     gl.uniform1f(c.u.uMatOn, mm ? 1 : 0);
     gl.uniform2f(c.u.uMatSize, mm ? mm.width : 1, mm ? mm.height : 1);
     gl.uniform1f(c.u.uGi, bloomOn ? (s.gi / 100) * 0.55 : 0);
@@ -2224,6 +2291,7 @@ export class GpuPostFx {
     if (gl) {
       if (this.srcTex) gl.deleteTexture(this.srcTex);
       if (this.lightTex) gl.deleteTexture(this.lightTex);
+      if (this.lightColTex) gl.deleteTexture(this.lightColTex);
       if (this.matTex) gl.deleteTexture(this.matTex);
       if (this.vao) gl.deleteVertexArray(this.vao);
       [this.pDown, this.pUp, this.pComposite, this.pFinal].forEach((p) => p && gl.deleteProgram(p.prog));

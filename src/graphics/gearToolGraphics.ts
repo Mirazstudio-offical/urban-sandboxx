@@ -2346,6 +2346,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     }
 
     // Heavy Steel Diesel Jerrycan (Канистра Дизель)
+    case 'diesel':
     case 'canister_diesel': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.26);
 
@@ -2392,6 +2393,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     }
 
     // Food-grade White Potable Water Canister with Dispenser Tap (Канистра питьевой воды)
+    case 'drinking_water_20l':
     case 'canister_water': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
 
@@ -2445,6 +2447,8 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_metal_20l':
     case 'canister_fuel':
     case 'jerrycan_steel':
+    case 'gasoline_95':
+    case 'gasoline_92':
     case 'fuel_canister': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.25);
 
@@ -3174,7 +3178,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.ellipse(m.x, m.y, m.r, m.r * 0.65, 0, Math.PI, 0);
           ctx.fill();
         });
-      } else if (firstInnerId.startsWith('berry_') || item?.fluidStorage?.liquidId === 'berries' || itemId === 'berries_basket') {
+      } else if (firstInnerId.startsWith('berry_') || firstInnerId.startsWith('berries_') || item?.fluidStorage?.liquidId === 'berries' || itemId === 'berries_basket') {
         let primaryC = '#4338ca';
         let secondaryC = '#dc2626';
         if (firstInnerId.includes('blueberry')) { primaryC = '#1e1b4b'; secondaryC = '#312e81'; }

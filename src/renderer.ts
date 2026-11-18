@@ -368,11 +368,15 @@ export class GameRenderer {
   private height: number = window.innerHeight;
   private cloudShadows: CloudShadowCluster[] = [];
 
-  // Offscreen buffer for the Lightmap (prevents punching holes in the world)
+  // Offscreen buffers for the Lightmap & Colored Illumination (prevents punching holes without color)
   private lightmapCanvas: HTMLCanvasElement;
+  private lightEnvCanvas: HTMLCanvasElement;
+  private lightColorCanvas: HTMLCanvasElement;
+  private lightTintCanvas: HTMLCanvasElement;
   private shadowCanvas: HTMLCanvasElement;
   private materialCanvas: HTMLCanvasElement;
   private lightmapUsedThisFrame = false;
+  private lightColorUsedThisFrame = false;
   private materialUsedThisFrame = false;
   private backingScale: number = 1;
   private lastShakeX: number = 0;
@@ -412,6 +416,9 @@ export class GameRenderer {
     return out;
   }
   private lightmapCtx: CanvasRenderingContext2D;
+  private lightEnvCtx: CanvasRenderingContext2D;
+  private lightColorCtx: CanvasRenderingContext2D;
+  private lightTintCtx: CanvasRenderingContext2D;
   private shadowCtx: CanvasRenderingContext2D;
   private materialCtx: CanvasRenderingContext2D;
 
@@ -866,6 +873,12 @@ export class GameRenderer {
     this.ctx = ctx;
     this.lightmapCanvas = document.createElement('canvas');
     this.lightmapCtx = this.lightmapCanvas.getContext('2d')!;
+    this.lightEnvCanvas = document.createElement('canvas');
+    this.lightEnvCtx = this.lightEnvCanvas.getContext('2d')!;
+    this.lightColorCanvas = document.createElement('canvas');
+    this.lightColorCtx = this.lightColorCanvas.getContext('2d')!;
+    this.lightTintCanvas = document.createElement('canvas');
+    this.lightTintCtx = this.lightTintCanvas.getContext('2d')!;
     this.shadowCanvas = document.createElement('canvas');
     this.shadowCtx = this.shadowCanvas.getContext('2d')!;
     this.materialCanvas = document.createElement('canvas');
@@ -1088,6 +1101,10 @@ export class GameRenderer {
     return this.lightmapUsedThisFrame ? this.lightmapCanvas : null;
   }
 
+  public getFxLightColorMap(): HTMLCanvasElement | null {
+    return this.lightColorUsedThisFrame ? this.lightColorCanvas : null;
+  }
+
   public getFxMaterialMap(): HTMLCanvasElement | null {
     return this.materialUsedThisFrame ? this.materialCanvas : null;
   }
@@ -1106,6 +1123,12 @@ export class GameRenderer {
     this.backingScale = backingScale > 0 ? backingScale : 1;
     this.lightmapCanvas.width = width;
     this.lightmapCanvas.height = height;
+    this.lightEnvCanvas.width = width;
+    this.lightEnvCanvas.height = height;
+    this.lightColorCanvas.width = width;
+    this.lightColorCanvas.height = height;
+    this.lightTintCanvas.width = width;
+    this.lightTintCanvas.height = height;
     this.materialCanvas.width = Math.max(1, Math.round(width * this.backingScale));
     this.materialCanvas.height = Math.max(1, Math.round(height * this.backingScale));
     const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 1.0));
@@ -15596,12 +15619,63 @@ export class GameRenderer {
       return (timeHour >= sunsetHour || timeHour < sunriseHour);
     };
 
+    const getVehicleHeadlightColors = (car: Vehicle): { core: readonly [number, number, number]; outer: readonly [number, number, number] } => {
+      const t = car.type;
+      if (
+        t === 'supercar' || t === 'coupe_gt' || t === 'sports' ||
+        t === 'sedan_luxury' || t === 'suv_luxury' || t === 'hatch_hot' ||
+        t === 'wagon_modern' || t === 'wagon_allroad' || t === 'crossover_compact' ||
+        t === 'sedan_polo' || t === 'sedan_accent' || t === 'police' ||
+        t === 'ambulance' || t === 'ambulance_van' || t === 'ambulance_suv' ||
+        t === 'moto_sport'
+      ) {
+        return { core: [226, 240, 255], outer: [195, 224, 255] };
+      }
+      if (
+        t === 'sedan_classic' || t === 'wagon_classic' || t === 'sedan_samara' ||
+        t === 'hatch_samara' || t === 'liftback_tavria' || t === 'classic_compact' ||
+        t === 'retro_bubble' || t === 'micro_car' || t === 'muscle_classic' ||
+        t === 'suv_classic_box' || t === 'van_cargo_old' || t === 'truck_zil_dump' ||
+        t === 'truck_water' || t === 'truck_flatbed' || t === 'truck_covered' ||
+        t === 'tractor_mtz82' || t === 'tractor_mtz80' || t === 'tractor_mtz80_old' ||
+        t === 'moto_izh_jupiter' || t === 'moto_ural_sidecar' || t === 'moto_jawa350' ||
+        t === 'moped_soviet' || t === 'moto_chopper'
+      ) {
+        return { core: [255, 236, 178], outer: [255, 212, 132] };
+      }
+      return { core: [255, 244, 210], outer: [255, 226, 166] };
+    };
+
+    const getTrafficLightRgb = (prop: StreetProp): readonly [number, number, number] | null => {
+      const inter = world.intersections.find((i) => i.id === prop.intersectionId);
+      const phase = inter?.phases?.[inter.currentPhaseIndex] || inter?.phases?.[0];
+      if (!phase) return null;
+      const state = (prop.direction === 'north' || prop.direction === 'south') ? phase.nsState : phase.ewState;
+      if (state === 'green') return [34, 215, 118];
+      if (state === 'green_flashing') {
+        return Math.floor(Date.now() / 250) % 2 === 0 ? [34, 215, 118] : null;
+      }
+      if (state === 'yellow') return [245, 185, 36];
+      return [255, 58, 52];
+    };
+
+    const getPlayerFlashlightRgb = (pl: Player): readonly [number, number, number] => {
+      const isHandheldOn = !!(
+        pl.flashlightOn ||
+        (pl.leftHandItem?.itemId === 'flashlight' && (pl.leftHandItem as any).isOn) ||
+        (pl.rightHandItem?.itemId === 'flashlight' && (pl.rightHandItem as any).isOn) ||
+        pl.inventory?.some(it => it && it.itemId === 'flashlight' && (it as any).isOn)
+      );
+      return isHandheldOn ? [255, 240, 200] : [226, 240, 255];
+    };
+
     const sunState = getCurrentSunShadowState();
     const hasActiveShadows = performanceConfig.enableShadows && sunState.shadowOpacity > 0.005;
     const hasDarknessShroud = effectiveAlpha > 0.003 || weights.rain > 0.02 || weights.snow > 0.02 || weights.fog > 0.02 || weights.overcast > 0.02 || (world.lightningFlashTimer ?? 0) > 0;
     const useLightmap = hasDarknessShroud || hasActiveShadows;
 
     this.lightmapUsedThisFrame = useLightmap;
+    this.lightColorUsedThisFrame = !!(useLightmap && performanceConfig.enableDynamicLighting !== false);
 
     // --- PASS 1: Generate Unified Darkness Shroud & 3D World Shadows Offscreen ---
     if (useLightmap) {
@@ -15657,15 +15731,35 @@ export class GameRenderer {
       }
 
       if (performanceConfig.enableDynamicLighting !== false) {
+      const eCtx = this.lightEnvCtx;
+      const cCtx = this.lightColorCtx;
+      eCtx.save();
+      eCtx.setTransform(1, 0, 0, 1, 0, 0);
+      eCtx.clearRect(0, 0, this.width, this.height);
+      const lowSunFloor = (!sunState.isNight && sunState.sunElevation < 0.28)
+        ? (1.0 - sunState.sunElevation / 0.28) * 0.22
+        : 0;
+      if (lowSunFloor > 0.004) {
+        eCtx.fillStyle = `rgba(0, 0, 0, ${lowSunFloor.toFixed(3)})`;
+        eCtx.fillRect(0, 0, this.width, this.height);
+      }
+      eCtx.drawImage(this.lightmapCanvas, 0, 0);
+      eCtx.restore();
+
+      cCtx.save();
+      cCtx.setTransform(1, 0, 0, 1, 0, 0);
+      cCtx.clearRect(0, 0, this.width, this.height);
+
       lCtx.save();
-      // Synchronize offscreen transform with main camera
+      // Synchronize offscreen lightmap & colored light buffers with main camera
       {
-        // Offscreen lightmap is CSS-sized: strip the base backing scale from the current transform
         const t = ctx.getTransform();
         const ik = 1 / this.backingScale;
         lCtx.setTransform(t.a * ik, t.b * ik, t.c * ik, t.d * ik, t.e * ik, t.f * ik);
+        cCtx.setTransform(t.a * ik, t.b * ik, t.c * ik, t.d * ik, t.e * ik, t.f * ik);
       }
       lCtx.globalCompositeOperation = 'destination-out';
+      cCtx.globalCompositeOperation = 'lighter';
 
     // A. Automotive Headlight, Trailer & Vehicle Light Cutouts (Pass 1 - Organic illumination footprints)
     for (const car of nearbyVehicles) {
@@ -15699,7 +15793,14 @@ export class GameRenderer {
         const trailerLightsActive = car.headlightsOn || car.positionLightsOn || car.brakeLightsOn || car.isReversing || (car.turnSignal && car.turnSignal !== 'none');
         if (!trailerLightsActive) continue;
 
-        const cutTrailerLight = (rxOffset: number, ryOffset: number, radius: number, peakAlpha: number = 0.8) => {
+        const cutTrailerLight = (
+          rxOffset: number,
+          ryOffset: number,
+          radius: number,
+          peakAlpha: number = 0.8,
+          rgb: readonly [number, number, number] = [255, 240, 210],
+          colorPeak: number = 0.52
+        ) => {
           const rx = car.x + cosA * rxOffset - sinA * ryOffset;
           const ry = car.y + sinA * rxOffset + cosA * ryOffset;
           const targetRadius = radius * fogFactor;
@@ -15712,6 +15813,19 @@ export class GameRenderer {
           lCtx.beginPath();
           lCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
           lCtx.fill();
+
+          const ca = peakAlpha * colorPeak;
+          if (ca > 0.005) {
+            const cGrad = cCtx.createRadialGradient(rx, ry, 0, rx, ry, targetRadius);
+            cGrad.addColorStop(0.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ca.toFixed(3)})`);
+            cGrad.addColorStop(0.4, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.50).toFixed(3)})`);
+            cGrad.addColorStop(0.8, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.14).toFixed(3)})`);
+            cGrad.addColorStop(1.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
+            cCtx.fillStyle = cGrad;
+            cCtx.beginPath();
+            cCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
+            cCtx.fill();
+          }
         };
 
         let rLeftLX = -halfL * 0.94;
@@ -15748,34 +15862,34 @@ export class GameRenderer {
 
         const hasTrailerRunningLights = (car.positionLightsOn || car.headlightsOn) && (car.type !== 'trailer_barrel');
 
-        // Reversing lights cutout
+        // Reversing lights cutout & white wash
         if (car.isReversing && hasRev) {
-          cutTrailerLight(rLeftLX, rLeftLY, 28, 0.82);
-          cutTrailerLight(rRightLX, rRightLY, 28, 0.82);
+          cutTrailerLight(rLeftLX, rLeftLY, 28, 0.82, [236, 246, 255], 0.56);
+          cutTrailerLight(rRightLX, rRightLY, 28, 0.82, [236, 246, 255], 0.56);
         }
         if (car.brakeLightsOn) {
-          // Brake lights cutout
-          cutTrailerLight(rLeftLX, rLeftLY, 30, 0.85);
-          cutTrailerLight(rRightLX, rRightLY, 30, 0.85);
+          // Brake lights cutout & crimson wash
+          cutTrailerLight(rLeftLX, rLeftLY, 30, 0.85, [255, 36, 32], 0.62);
+          cutTrailerLight(rRightLX, rRightLY, 30, 0.85, [255, 36, 32], 0.62);
         } else if (!car.isReversing && hasTrailerRunningLights) {
           // Running tail lights
-          cutTrailerLight(rLeftLX, rLeftLY, 12, 0.50);
-          cutTrailerLight(rRightLX, rRightLY, 12, 0.50);
-          // Side clearance marker lights along trailer flanks (illuminating ground beside trailer)
+          cutTrailerLight(rLeftLX, rLeftLY, 12, 0.50, [228, 28, 28], 0.45);
+          cutTrailerLight(rRightLX, rRightLY, 12, 0.50, [228, 28, 28], 0.45);
+          // Side clearance marker lights along trailer flanks
           for (const smx of sideMarkerXs) {
-            cutTrailerLight(smx, -halfW - 1.2, 7, 0.35);
-            cutTrailerLight(smx, halfW + 1.2, 7, 0.35);
+            cutTrailerLight(smx, -halfW - 1.2, 7, 0.35, [255, 168, 24], 0.48);
+            cutTrailerLight(smx, halfW + 1.2, 7, 0.35, [255, 168, 24], 0.48);
           }
         }
 
-        // Turn signal cutouts
+        // Turn signal cutouts & amber wash
         if (car.turnSignal && car.turnSignal !== 'none') {
           const signalState = getVehicleTurnSignalDynamicState(car);
           if (signalState.intensity > 0.05) {
             const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
             const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-            if (isLeft) cutTrailerLight(rLeftLX, rLeftLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
-            if (isRight) cutTrailerLight(rRightLX, rRightLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
+            if (isLeft) cutTrailerLight(rLeftLX, rLeftLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 165, 22], 0.58);
+            if (isRight) cutTrailerLight(rRightLX, rRightLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 165, 22], 0.58);
           }
         }
 
@@ -15787,16 +15901,13 @@ export class GameRenderer {
       if (car.speed !== undefined) {
         if (car.brakeLightsOn && Math.abs(car.speed) > 3) {
           const brakeStrength = Math.min(1.0, Math.abs(car.speed) / 50);
-          pitchFactor = 1.0 - 0.16 * brakeStrength; // nose dive shortens beam on braking
+          pitchFactor = 1.0 - 0.16 * brakeStrength;
         } else if (car.engineState?.engineRunning && car.speed > 15) {
-          pitchFactor = 1.0 + Math.min(0.12, (car.speed / 160) * 0.10); // squat on hard acceleration
+          pitchFactor = 1.0 + Math.min(0.12, (car.speed / 160) * 0.10);
         }
       }
 
       const isHighBeam = car.headlightMode === 'high';
-      // First-principles fog extinction & Mie lateral scatter:
-      // Low beam aims under fog boundary layer with moderate extinction;
-      // High beam hits upper droplet strata directly -> severe extinction & forward scattering!
       const fogSpreadMult = 1.0 + 0.45 * weights.fog;
       const baseBeamReach = (isHighBeam 
         ? 500 * Math.max(0.24, 1.0 - 0.74 * weights.fog)
@@ -15813,6 +15924,7 @@ export class GameRenderer {
       const optics = getVehicleOpticsMounts(car);
       const isSoloMoto = optics.headlightLeft.yFrac === 0 && optics.headlightRight.yFrac === 0;
       const isTractor = car.type.startsWith('tractor_');
+      const { core: headCoreRgb, outer: headOuterRgb } = getVehicleHeadlightColors(car);
 
       const leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc);
       const leftLampLY = car.width * optics.headlightLeft.yFrac + ld * 0.15;
@@ -15823,14 +15935,13 @@ export class GameRenderer {
       const hasPositionLightsOn = !!(car.positionLightsOn || hasHeadlightsOn);
       const isIgnitionOn = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || hasHeadlightsOn);
 
-      // Independent Dual-Beam Optical System with ECE R112 Asymmetric Cutoff
+      // Independent Dual-Beam Optical System with ECE R112 Asymmetric Cutoff & True Color Radiance
       if (hasHeadlightsOn) {
         const leftActive = !dmg.leftHeadlightBroken;
         const rightActive = !isSoloMoto && !dmg.rightHeadlightBroken;
 
         if (leftActive || rightActive) {
-          // Function to render an individual headlamp optical projection
-          const renderHeadlampBeam = (lampLX: number, lampLY: number, isLeftHeadlamp: boolean) => {
+          const renderHeadlampBeam = (lampLX: number, lampLY: number, _isLeftHeadlamp: boolean) => {
             const lx = car.x + cosA * lampLX - sinA * lampLY;
             const ly = car.y + sinA * lampLX + cosA * lampLY;
 
@@ -15840,17 +15951,13 @@ export class GameRenderer {
             let focalOffsetSide = 0;
 
             if (!isHighBeam) {
-              // ECE R112 European Asymmetric Low Beam Pattern (Right-Hand Traffic standard)
-              // Left flank (oncoming traffic side): clipped flat, shorter reach to prevent glare
-              // Right flank (curb/shoulder/signs): 15-degree rising wedge for pedestrian & roadside safety
               leftSpread = baseSpreadWidth * 0.38;
               rightSpread = baseSpreadWidth * 0.88;
               const leftFlankReach = baseBeamReach * 0.74;
               const rightFlankReach = baseBeamReach * 1.06;
               beamReach = baseBeamReach * 0.94;
-              focalOffsetSide = 6.5; // slight tilt toward right verge
+              focalOffsetSide = 6.5;
 
-              // Asymmetric polygon footprint
               const startLX = lx - sinA * (isSoloMoto ? -1.5 : -2.0);
               const startLY = ly + cosA * (isSoloMoto ? -1.5 : -2.0);
               const startRX = lx - sinA * (isSoloMoto ? 1.5 : 2.0);
@@ -15861,33 +15968,31 @@ export class GameRenderer {
               const endRX = lx + cosA * rightFlankReach - sinA * rightSpread;
               const endRY = ly + sinA * rightFlankReach + cosA * rightSpread;
 
+              const traceOuterBeam = (tCtx: CanvasRenderingContext2D) => {
+                tCtx.beginPath();
+                tCtx.moveTo(startLX, startLY);
+                const ctrlLeftDist = leftFlankReach * 0.45;
+                tCtx.quadraticCurveTo(
+                  lx + cosA * ctrlLeftDist - sinA * (-leftSpread * 0.6),
+                  ly + sinA * ctrlLeftDist + cosA * (-leftSpread * 0.6),
+                  endLX, endLY
+                );
+                tCtx.bezierCurveTo(
+                  endLX + cosA * 20, endLY + sinA * 20,
+                  endRX + cosA * 15, endRY + sinA * 15,
+                  endRX, endRY
+                );
+                const ctrlRightDist = rightFlankReach * 0.50;
+                tCtx.quadraticCurveTo(
+                  lx + cosA * ctrlRightDist - sinA * (rightSpread * 0.65),
+                  ly + sinA * ctrlRightDist + cosA * (rightSpread * 0.65),
+                  startRX, startRY
+                );
+                tCtx.closePath();
+              };
+
               lCtx.save();
-              lCtx.beginPath();
-              lCtx.moveTo(startLX, startLY);
-
-              const ctrlLeftDist = leftFlankReach * 0.45;
-              lCtx.quadraticCurveTo(
-                lx + cosA * ctrlLeftDist - sinA * (-leftSpread * 0.6),
-                ly + sinA * ctrlLeftDist + cosA * (-leftSpread * 0.6),
-                endLX, endLY
-              );
-
-              // 15-degree rising shelf connecting left cutoff to right shoulder projection
-              lCtx.bezierCurveTo(
-                endLX + cosA * 20, endLY + sinA * 20,
-                endRX + cosA * 15, endRY + sinA * 15,
-                endRX, endRY
-              );
-
-              const ctrlRightDist = rightFlankReach * 0.50;
-              lCtx.quadraticCurveTo(
-                lx + cosA * ctrlRightDist - sinA * (rightSpread * 0.65),
-                ly + sinA * ctrlRightDist + cosA * (rightSpread * 0.65),
-                startRX, startRY
-              );
-              lCtx.closePath();
-
-              // Smooth photometrical gradient decay (High contrast 1.00 clarity in core, soft penumbra)
+              traceOuterBeam(lCtx);
               const beamGrad = lCtx.createRadialGradient(
                 lx, ly, 2,
                 lx + cosA * (beamReach * 0.38) - sinA * focalOffsetSide,
@@ -15900,33 +16005,56 @@ export class GameRenderer {
               beamGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.24)');
               beamGrad.addColorStop(0.90, 'rgba(0, 0, 0, 0.05)');
               beamGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
-
               lCtx.fillStyle = beamGrad;
               lCtx.fill();
 
-              // Concentrated high-candela optical hot-spot core (projector lens focus)
+              cCtx.save();
+              traceOuterBeam(cCtx);
+              const cBeamGrad = cCtx.createRadialGradient(
+                lx, ly, 2,
+                lx + cosA * (beamReach * 0.38) - sinA * focalOffsetSide,
+                ly + sinA * (beamReach * 0.38) + cosA * focalOffsetSide,
+                rightFlankReach
+              );
+              cBeamGrad.addColorStop(0.00, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.52)`);
+              cBeamGrad.addColorStop(0.25, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.38)`);
+              cBeamGrad.addColorStop(0.55, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.18)`);
+              cBeamGrad.addColorStop(0.85, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.04)`);
+              cBeamGrad.addColorStop(1.00, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+              cCtx.fillStyle = cBeamGrad;
+              cCtx.fill();
+
+              // Concentrated high-candela optical hot-spot core (smooth curved shelf, zero polygon corners)
               if ((performanceConfig.headlightQuality ?? 2) >= 2) {
                 const hotReach = beamReach * 0.55;
                 const hotSpread = rightSpread * 0.42;
-                lCtx.beginPath();
-                lCtx.moveTo(startLX, startLY);
-                lCtx.quadraticCurveTo(
-                  lx + cosA * (hotReach * 0.45) - sinA * (-leftSpread * 0.25),
-                  ly + sinA * (hotReach * 0.45) + cosA * (-leftSpread * 0.25),
-                  lx + cosA * hotReach - sinA * (-leftSpread * 0.3),
-                  ly + sinA * hotReach + cosA * (-leftSpread * 0.3)
-                );
-                lCtx.lineTo(
-                  lx + cosA * (hotReach * 1.08) - sinA * hotSpread,
-                  ly + sinA * (hotReach * 1.08) + cosA * hotSpread
-                );
-                lCtx.quadraticCurveTo(
-                  lx + cosA * (hotReach * 0.5) - sinA * (hotSpread * 0.6),
-                  ly + sinA * (hotReach * 0.5) + cosA * (hotSpread * 0.6),
-                  startRX, startRY
-                );
-                lCtx.closePath();
+                const hotEndLX = lx + cosA * hotReach - sinA * (-leftSpread * 0.3);
+                const hotEndLY = ly + sinA * hotReach + cosA * (-leftSpread * 0.3);
+                const hotEndRX = lx + cosA * (hotReach * 1.08) - sinA * hotSpread;
+                const hotEndRY = ly + sinA * (hotReach * 1.08) + cosA * hotSpread;
 
+                const traceHotCore = (tCtx: CanvasRenderingContext2D) => {
+                  tCtx.beginPath();
+                  tCtx.moveTo(startLX, startLY);
+                  tCtx.quadraticCurveTo(
+                    lx + cosA * (hotReach * 0.45) - sinA * (-leftSpread * 0.25),
+                    ly + sinA * (hotReach * 0.45) + cosA * (-leftSpread * 0.25),
+                    hotEndLX, hotEndLY
+                  );
+                  tCtx.quadraticCurveTo(
+                    lx + cosA * (hotReach * 1.14) - sinA * (hotSpread * 0.32),
+                    ly + sinA * (hotReach * 1.14) + cosA * (hotSpread * 0.32),
+                    hotEndRX, hotEndRY
+                  );
+                  tCtx.quadraticCurveTo(
+                    lx + cosA * (hotReach * 0.5) - sinA * (hotSpread * 0.6),
+                    ly + sinA * (hotReach * 0.5) + cosA * (hotSpread * 0.6),
+                    startRX, startRY
+                  );
+                  tCtx.closePath();
+                };
+
+                traceHotCore(lCtx);
                 const hotGrad = lCtx.createRadialGradient(
                   lx, ly, 1,
                   lx + cosA * (hotReach * 0.4) - sinA * 4,
@@ -15938,7 +16066,21 @@ export class GameRenderer {
                 hotGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
                 lCtx.fillStyle = hotGrad;
                 lCtx.fill();
+
+                traceHotCore(cCtx);
+                const cHotGrad = cCtx.createRadialGradient(
+                  lx, ly, 1,
+                  lx + cosA * (hotReach * 0.4) - sinA * 4,
+                  ly + sinA * (hotReach * 0.4) + cosA * 4,
+                  hotReach * 1.1
+                );
+                cHotGrad.addColorStop(0.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.36)`);
+                cHotGrad.addColorStop(0.48, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.16)`);
+                cHotGrad.addColorStop(1.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0)`);
+                cCtx.fillStyle = cHotGrad;
+                cCtx.fill();
               }
+              cCtx.restore();
               lCtx.restore();
             } else {
               // High Beam: Symmetrical, high-power penetrating field
@@ -15955,28 +16097,30 @@ export class GameRenderer {
               const endRX = forwardX - sinA * rightSpread;
               const endRY = forwardY + cosA * rightSpread;
 
-              lCtx.save();
-              lCtx.beginPath();
-              lCtx.moveTo(startLX, startLY);
-
               const ctrlDist = beamReach * 0.48;
-              lCtx.quadraticCurveTo(
-                lx + cosA * ctrlDist - sinA * (-leftSpread * 0.6),
-                ly + sinA * ctrlDist + cosA * (-leftSpread * 0.6),
-                endLX, endLY
-              );
-              lCtx.bezierCurveTo(
-                endLX + cosA * 25, endLY + sinA * 25,
-                endRX + cosA * 25, endRY + sinA * 25,
-                endRX, endRY
-              );
-              lCtx.quadraticCurveTo(
-                lx + cosA * ctrlDist - sinA * (rightSpread * 0.6),
-                ly + sinA * ctrlDist + cosA * (rightSpread * 0.6),
-                startRX, startRY
-              );
-              lCtx.closePath();
+              const traceHighBeam = (tCtx: CanvasRenderingContext2D) => {
+                tCtx.beginPath();
+                tCtx.moveTo(startLX, startLY);
+                tCtx.quadraticCurveTo(
+                  lx + cosA * ctrlDist - sinA * (-leftSpread * 0.6),
+                  ly + sinA * ctrlDist + cosA * (-leftSpread * 0.6),
+                  endLX, endLY
+                );
+                tCtx.bezierCurveTo(
+                  endLX + cosA * 25, endLY + sinA * 25,
+                  endRX + cosA * 25, endRY + sinA * 25,
+                  endRX, endRY
+                );
+                tCtx.quadraticCurveTo(
+                  lx + cosA * ctrlDist - sinA * (rightSpread * 0.6),
+                  ly + sinA * ctrlDist + cosA * (rightSpread * 0.6),
+                  startRX, startRY
+                );
+                tCtx.closePath();
+              };
 
+              lCtx.save();
+              traceHighBeam(lCtx);
               const highGrad = lCtx.createRadialGradient(
                 lx, ly, 2,
                 lx + cosA * (beamReach * 0.40),
@@ -15989,38 +16133,88 @@ export class GameRenderer {
               highGrad.addColorStop(0.78, 'rgba(0, 0, 0, 0.28)');
               highGrad.addColorStop(0.92, 'rgba(0, 0, 0, 0.06)');
               highGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
-
               lCtx.fillStyle = highGrad;
               lCtx.fill();
 
-              // Penetrating high-beam center core
+              cCtx.save();
+              traceHighBeam(cCtx);
+              const cHighGrad = cCtx.createRadialGradient(
+                lx, ly, 2,
+                lx + cosA * (beamReach * 0.40),
+                ly + sinA * (beamReach * 0.40),
+                beamReach
+              );
+              cHighGrad.addColorStop(0.00, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.56)`);
+              cHighGrad.addColorStop(0.25, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.42)`);
+              cHighGrad.addColorStop(0.55, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.22)`);
+              cHighGrad.addColorStop(0.86, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.05)`);
+              cHighGrad.addColorStop(1.00, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+              cCtx.fillStyle = cHighGrad;
+              cCtx.fill();
+
+              // Penetrating high-beam center core (smooth curved flanks & front arc, zero sharp triangle)
               const coreReach = beamReach * 0.70;
               const coreSpread = baseSpreadWidth * 0.22;
-              lCtx.beginPath();
-              lCtx.moveTo(startLX, startLY);
-              lCtx.lineTo(lx + cosA * coreReach - sinA * -coreSpread, ly + sinA * coreReach + cosA * -coreSpread);
-              lCtx.lineTo(lx + cosA * coreReach - sinA * coreSpread, ly + sinA * coreReach + cosA * coreSpread);
-              lCtx.lineTo(startRX, startRY);
-              lCtx.closePath();
+              const coreEndLX = lx + cosA * coreReach - sinA * -coreSpread;
+              const coreEndLY = ly + sinA * coreReach + cosA * -coreSpread;
+              const coreEndRX = lx + cosA * coreReach - sinA * coreSpread;
+              const coreEndRY = ly + sinA * coreReach + cosA * coreSpread;
 
+              const traceHighCore = (tCtx: CanvasRenderingContext2D) => {
+                tCtx.beginPath();
+                tCtx.moveTo(startLX, startLY);
+                tCtx.quadraticCurveTo(
+                  lx + cosA * (coreReach * 0.5) - sinA * (-coreSpread * 0.65),
+                  ly + sinA * (coreReach * 0.5) + cosA * (-coreSpread * 0.65),
+                  coreEndLX, coreEndLY
+                );
+                tCtx.quadraticCurveTo(
+                  lx + cosA * (coreReach * 1.12),
+                  ly + sinA * (coreReach * 1.12),
+                  coreEndRX, coreEndRY
+                );
+                tCtx.quadraticCurveTo(
+                  lx + cosA * (coreReach * 0.5) - sinA * (coreSpread * 0.65),
+                  ly + sinA * (coreReach * 0.5) + cosA * (coreSpread * 0.65),
+                  startRX, startRY
+                );
+                tCtx.closePath();
+              };
+
+              traceHighCore(lCtx);
               const coreGrad = lCtx.createRadialGradient(lx, ly, 1, lx + cosA * (coreReach * 0.5), ly + sinA * (coreReach * 0.5), coreReach);
               coreGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.85)');
               coreGrad.addColorStop(0.60, 'rgba(0, 0, 0, 0.35)');
               coreGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
               lCtx.fillStyle = coreGrad;
               lCtx.fill();
+
+              traceHighCore(cCtx);
+              const cCoreGrad = cCtx.createRadialGradient(lx, ly, 1, lx + cosA * (coreReach * 0.5), ly + sinA * (coreReach * 0.5), coreReach);
+              cCoreGrad.addColorStop(0.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.38)`);
+              cCoreGrad.addColorStop(0.58, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.14)`);
+              cCoreGrad.addColorStop(1.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0)`);
+              cCtx.fillStyle = cCoreGrad;
+              cCtx.fill();
+
+              cCtx.restore();
               lCtx.restore();
             }
 
-            // Crisp physical bulb emission cut on the glass
+            // Crisp physical bulb emission cut & tint on the glass
             const bulbCut = lCtx.createRadialGradient(lx, ly, 0, lx, ly, 4.5);
             bulbCut.addColorStop(0, 'rgba(0, 0, 0, 1.00)');
             bulbCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
             lCtx.fillStyle = bulbCut;
             lCtx.beginPath(); lCtx.arc(lx, ly, 4.5, 0, Math.PI * 2); lCtx.fill();
+
+            const cBulb = cCtx.createRadialGradient(lx, ly, 0, lx, ly, 5.5);
+            cBulb.addColorStop(0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.55)`);
+            cBulb.addColorStop(1, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0)`);
+            cCtx.fillStyle = cBulb;
+            cCtx.beginPath(); cCtx.arc(lx, ly, 5.5, 0, Math.PI * 2); cCtx.fill();
           };
 
-          // Render individual physical beams
           if (leftActive) renderHeadlampBeam(leftLampLX, leftLampLY, true);
           if (rightActive) renderHeadlampBeam(rightLampLX, rightLampLY, false);
 
@@ -16036,24 +16230,41 @@ export class GameRenderer {
           lCtx.beginPath();
           lCtx.arc(bumperX + cosA * 12, bumperY + sinA * 12, apronRad, 0, Math.PI * 2);
           lCtx.fill();
+
+          const cApron = cCtx.createRadialGradient(bumperX, bumperY, 1, bumperX + cosA * 15, bumperY + sinA * 15, apronRad);
+          cApron.addColorStop(0.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.36)`);
+          cApron.addColorStop(0.5, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.16)`);
+          cApron.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+          cCtx.fillStyle = cApron;
+          cCtx.beginPath();
+          cCtx.arc(bumperX + cosA * 12, bumperY + sinA * 12, apronRad, 0, Math.PI * 2);
+          cCtx.fill();
         }
       } else if (isIgnitionOn) {
         // Front position lights (габариты / ДХО) gentle soft clearance
         const cutPositionLight = (lxOffset: number, lyOffset: number) => {
           const px = car.x + cosA * lxOffset - sinA * lyOffset;
           const py = car.y + sinA * lxOffset + cosA * lyOffset;
-          const pGrad = lCtx.createRadialGradient(px, py, 0, px, py, 9 * fogFactor);
+          const rPos = 9 * fogFactor;
+          const pGrad = lCtx.createRadialGradient(px, py, 0, px, py, rPos);
           pGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
           pGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)');
           pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           lCtx.fillStyle = pGrad;
-          lCtx.beginPath(); lCtx.arc(px, py, 9 * fogFactor, 0, Math.PI * 2); lCtx.fill();
+          lCtx.beginPath(); lCtx.arc(px, py, rPos, 0, Math.PI * 2); lCtx.fill();
+
+          const cPos = cCtx.createRadialGradient(px, py, 0, px, py, rPos);
+          cPos.addColorStop(0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.48)`);
+          cPos.addColorStop(0.5, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.18)`);
+          cPos.addColorStop(1, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+          cCtx.fillStyle = cPos;
+          cCtx.beginPath(); cCtx.arc(px, py, rPos, 0, Math.PI * 2); cCtx.fill();
         };
         if (!dmg.leftHeadlightBroken) cutPositionLight(leftLampLX, leftLampLY);
         if (!isSoloMoto && !dmg.rightHeadlightBroken) cutPositionLight(rightLampLX, rightLampLY);
       }
 
-      // Front Fog Lights (ПТФ передние) Cutout
+      // Front Fog Lights (ПТФ передние - selective yellow contrast)
       if (car.frontFogLightsOn) {
         const fogLeftLX = car.length * (optics.fogLightLeft?.xFrac ?? 0.48) - fc;
         const fogLeftLY = car.width * (optics.fogLightLeft?.yFrac ?? -0.31);
@@ -16068,35 +16279,46 @@ export class GameRenderer {
           const fogBeamLen = 140 * (1.0 - 0.25 * weights.fog);
           const fogSpread = 90 * fogSpreadMult;
 
+          const traceFogCone = (tCtx: CanvasRenderingContext2D) => {
+            tCtx.beginPath();
+            tCtx.moveTo(lx - sinA * -2.0, ly + cosA * -2.0);
+            const endLX = lx + cosA * fogBeamLen;
+            const endLY = ly + sinA * fogBeamLen;
+            tCtx.quadraticCurveTo(
+              lx + cosA * (fogBeamLen * 0.4) - sinA * (fogSpread * 0.55),
+              ly + sinA * (fogBeamLen * 0.4) + cosA * (fogSpread * 0.55),
+              endLX - sinA * fogSpread, endLY + cosA * fogSpread
+            );
+            tCtx.bezierCurveTo(
+              endLX + cosA * 15 - sinA * (fogSpread * 0.5), endLY + sinA * 15 + cosA * (fogSpread * 0.5),
+              endLX + cosA * 15 + sinA * (fogSpread * 0.5), endLY + sinA * 15 - cosA * (fogSpread * 0.5),
+              endLX + sinA * fogSpread, endLY - cosA * fogSpread
+            );
+            tCtx.quadraticCurveTo(
+              lx + cosA * (fogBeamLen * 0.4) + sinA * (fogSpread * 0.55),
+              ly + sinA * (fogBeamLen * 0.4) - cosA * (fogSpread * 0.55),
+              lx - sinA * 2.0, ly + cosA * 2.0
+            );
+            tCtx.closePath();
+          };
+
           const beamGrad = lCtx.createRadialGradient(lx, ly, 0, lx + cosA * (fogBeamLen * 0.4), ly + sinA * (fogBeamLen * 0.4), fogBeamLen);
           beamGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.82)');
           beamGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.55)');
           beamGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.20)');
           beamGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-
-          // Multi-point parabolic fog cone without harsh triangular lines
           lCtx.fillStyle = beamGrad;
-          lCtx.beginPath();
-          lCtx.moveTo(lx, ly);
-          const endLX = lx + cosA * fogBeamLen;
-          const endLY = ly + sinA * fogBeamLen;
-          lCtx.quadraticCurveTo(
-            lx + cosA * (fogBeamLen * 0.4) - sinA * (fogSpread * 0.55),
-            ly + sinA * (fogBeamLen * 0.4) + cosA * (fogSpread * 0.55),
-            endLX - sinA * fogSpread, endLY + cosA * fogSpread
-          );
-          lCtx.bezierCurveTo(
-            endLX + cosA * 15 - sinA * (fogSpread * 0.5), endLY + sinA * 15 + cosA * (fogSpread * 0.5),
-            endLX + cosA * 15 + sinA * (fogSpread * 0.5), endLY + sinA * 15 - cosA * (fogSpread * 0.5),
-            endLX + sinA * fogSpread, endLY - cosA * fogSpread
-          );
-          lCtx.quadraticCurveTo(
-            lx + cosA * (fogBeamLen * 0.4) + sinA * (fogSpread * 0.55),
-            ly + sinA * (fogBeamLen * 0.4) - cosA * (fogSpread * 0.55),
-            lx, ly
-          );
-          lCtx.closePath();
+          traceFogCone(lCtx);
           lCtx.fill();
+
+          const cFog = cCtx.createRadialGradient(lx, ly, 0, lx + cosA * (fogBeamLen * 0.4), ly + sinA * (fogBeamLen * 0.4), fogBeamLen);
+          cFog.addColorStop(0.0, 'rgba(255, 214, 96, 0.50)');
+          cFog.addColorStop(0.35, 'rgba(255, 206, 78, 0.30)');
+          cFog.addColorStop(0.72, 'rgba(255, 195, 62, 0.10)');
+          cFog.addColorStop(1.0, 'rgba(255, 190, 50, 0)');
+          cCtx.fillStyle = cFog;
+          traceFogCone(cCtx);
+          cCtx.fill();
         };
 
         if (isSoloMoto) {
@@ -16107,17 +16329,24 @@ export class GameRenderer {
         }
       }
 
-      // Rear Vehicle Lighting Cutouts (Smooth natural diffusion)
+      // Rear Vehicle Lighting Cutouts & True Spectral Radiance
       const rc = Math.min(12, dmg.rearCrumple || 0);
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      let rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4;
-      let rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
-      let rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4;
-      let rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
+      const rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4;
+      const rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
+      const rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4;
+      const rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
 
-      const cutSmoothRearLight = (rxOffset: number, ryOffset: number, radius: number, peakAlpha: number = 0.8) => {
+      const cutSmoothRearLight = (
+        rxOffset: number,
+        ryOffset: number,
+        radius: number,
+        peakAlpha: number = 0.8,
+        rgb: readonly [number, number, number] = [255, 40, 35],
+        colorPeak: number = 0.56
+      ) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
         const ry = car.y + sinA * rxOffset + cosA * ryOffset;
         const targetRadius = radius * fogFactor;
@@ -16130,84 +16359,127 @@ export class GameRenderer {
         lCtx.beginPath();
         lCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
         lCtx.fill();
+
+        const ca = peakAlpha * colorPeak;
+        if (ca > 0.005) {
+          const cGrad = cCtx.createRadialGradient(rx, ry, 0, rx, ry, targetRadius);
+          cGrad.addColorStop(0.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ca.toFixed(3)})`);
+          cGrad.addColorStop(0.4, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.50).toFixed(3)})`);
+          cGrad.addColorStop(0.8, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.14).toFixed(3)})`);
+          cGrad.addColorStop(1.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
+          cCtx.fillStyle = cGrad;
+          cCtx.beginPath();
+          cCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
+          cCtx.fill();
+        }
       };
 
-      const cutRearBeamCone = (rxOffset: number, ryOffset: number, beamLen: number, beamSpread: number, peakAlpha: number = 0.8) => {
+      const cutRearBeamCone = (
+        rxOffset: number,
+        ryOffset: number,
+        beamLen: number,
+        beamSpread: number,
+        peakAlpha: number = 0.8,
+        rgb: readonly [number, number, number] = [255, 36, 32],
+        colorPeak: number = 0.62
+      ) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
         const ry = car.y + sinA * rxOffset + cosA * ryOffset;
         const rearAngle = car.angle + Math.PI;
         const effLen = beamLen * fogFactor;
         const effSpread = beamSpread * fogFactor;
 
+        const traceSmoothRear = (tCtx: CanvasRenderingContext2D) => {
+          tCtx.beginPath();
+          tCtx.moveTo(0, -2.0);
+          tCtx.quadraticCurveTo(effLen * 0.42, -effSpread * 0.62, effLen, -effSpread * 0.72);
+          tCtx.quadraticCurveTo(effLen * 1.15, 0, effLen, effSpread * 0.72);
+          tCtx.quadraticCurveTo(effLen * 0.42, effSpread * 0.62, 0, 2.0);
+          tCtx.closePath();
+        };
+
         lCtx.save();
         lCtx.translate(rx, ry);
         lCtx.rotate(rearAngle);
-
-        const beamGrad = lCtx.createRadialGradient(
-          0, 0, 1,
-          effLen * 0.45, 0, effLen
-        );
+        const beamGrad = lCtx.createRadialGradient(0, 0, 1, effLen * 0.42, 0, effLen * 1.05);
         beamGrad.addColorStop(0.00, `rgba(0, 0, 0, ${peakAlpha})`);
         beamGrad.addColorStop(0.35, `rgba(0, 0, 0, ${(peakAlpha * 0.55).toFixed(3)})`);
         beamGrad.addColorStop(0.70, `rgba(0, 0, 0, ${(peakAlpha * 0.18).toFixed(3)})`);
         beamGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-
         lCtx.fillStyle = beamGrad;
-        lCtx.beginPath();
-        lCtx.moveTo(0, 0);
-        lCtx.quadraticCurveTo(effLen * 0.4, -effSpread * 0.55, effLen, -effSpread);
-        lCtx.lineTo(effLen, effSpread);
-        lCtx.quadraticCurveTo(effLen * 0.4, effSpread * 0.55, 0, 0);
-        lCtx.closePath();
+        traceSmoothRear(lCtx);
         lCtx.fill();
         lCtx.restore();
+
+        const ca = peakAlpha * colorPeak;
+        if (ca > 0.005) {
+          cCtx.save();
+          cCtx.translate(rx, ry);
+          cCtx.rotate(rearAngle);
+          const cGrad = cCtx.createRadialGradient(0, 0, 1, effLen * 0.42, 0, effLen * 1.05);
+          cGrad.addColorStop(0.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ca.toFixed(3)})`);
+          cGrad.addColorStop(0.36, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.54).toFixed(3)})`);
+          cGrad.addColorStop(0.74, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.16).toFixed(3)})`);
+          cGrad.addColorStop(1.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
+          cCtx.fillStyle = cGrad;
+          traceSmoothRear(cCtx);
+          cCtx.fill();
+          cCtx.restore();
+        }
       };
 
       const isReversing = isVehicleReverseGearActive(car);
       const isBraking = !!car.brakeLightsOn;
 
-      // Rear Fog Lights (ECE R38 warning lamp - localized diffuse visibility in dark/fog, NOT a 160px headlight cone!)
+      // Rear Fog Lights (ECE R38 crimson warning lamp)
       if (car.rearFogLightsOn) {
-        cutSmoothRearLight(rearLeftLX, rearLeftLY, 22, 0.85);
-        if (!isSoloMoto) cutSmoothRearLight(rearRightLX, rearRightLY, 22, 0.85);
+        cutSmoothRearLight(rearLeftLX, rearLeftLY, 22, 0.85, [255, 28, 28], 0.65);
+        if (!isSoloMoto) cutSmoothRearLight(rearRightLX, rearRightLY, 22, 0.85, [255, 28, 28], 0.65);
       }
 
       if (isReversing) {
-        cutRearBeamCone(rearLeftLX, rearLeftLY, 52, 36, 0.75);
-        cutRearBeamCone(rearRightLX, rearRightLY, 52, 36, 0.75);
+        cutRearBeamCone(rearLeftLX, rearLeftLY, 52, 36, 0.75, [236, 246, 255], 0.55);
+        cutRearBeamCone(rearRightLX, rearRightLY, 52, 36, 0.75, [236, 246, 255], 0.55);
+        if (isTractor) {
+          const cabFloodLX = -halfL * 0.26;
+          const cabFloodLY = halfW * 0.35;
+          cutRearBeamCone(cabFloodLX, -cabFloodLY, 58, 42, 0.75, [255, 238, 175], 0.56);
+          cutRearBeamCone(cabFloodLX, cabFloodLY, 58, 42, 0.75, [255, 238, 175], 0.56);
+        }
       }
       if (isBraking) {
-        cutRearBeamCone(rearLeftLX, rearLeftLY, 42, 32, 0.80);
-        if (!isSoloMoto) cutRearBeamCone(rearRightLX, rearRightLY, 42, 32, 0.80);
+        cutRearBeamCone(rearLeftLX, rearLeftLY, 44, 32, 0.80, [255, 34, 30], 0.66);
+        if (!isSoloMoto) cutRearBeamCone(rearRightLX, rearRightLY, 44, 32, 0.80, [255, 34, 30], 0.66);
         if (optics.thirdBrakeLight?.enabled) {
           const tblLX = car.length * optics.thirdBrakeLight.xFrac + rc * 0.7;
           const tblLY = car.width * optics.thirdBrakeLight.yFrac;
-          cutSmoothRearLight(tblLX, tblLY, 16, 0.65);
+          cutSmoothRearLight(tblLX, tblLY, 16, 0.65, [255, 34, 30], 0.58);
         }
       } else if (!isReversing && hasPositionLightsOn) {
-        cutSmoothRearLight(rearLeftLX, rearLeftLY, 10, 0.45);
-        cutSmoothRearLight(rearRightLX, rearRightLY, 10, 0.45);
+        cutSmoothRearLight(rearLeftLX, rearLeftLY, 10, 0.45, [228, 28, 28], 0.48);
+        cutSmoothRearLight(rearRightLX, rearRightLY, 10, 0.45, [228, 28, 28], 0.48);
       }
 
-      // Turn signal cutouts
+      // Turn signal cutouts & amber glow
       if (car.turnSignal !== 'none') {
         const signalState = getVehicleTurnSignalDynamicState(car);
         if (signalState.intensity > 0.05) {
           const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
           const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-          
+          const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
+          const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
           if (isLeft) {
-            cutSmoothRearLight(leftLampLX, leftLampLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
-            cutSmoothRearLight(rearLeftLX, rearLeftLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
+            cutSmoothRearLight(frontTurnLX, -frontTurnLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+            cutSmoothRearLight(rearLeftLX, rearLeftLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
           }
           if (isRight) {
-            cutSmoothRearLight(rightLampLX, rightLampLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
-            cutSmoothRearLight(rearRightLX, rearRightLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
+            cutSmoothRearLight(frontTurnLX, frontTurnLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+            cutSmoothRearLight(rearRightLX, rearRightLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
           }
         }
       }
 
-      // Road Train Marker Lights Lightmap Cutout (Огни автопоезда - мягкая подсветка крыши и кабины)
+      // Road Train Marker Lights Lightmap Cutout & Amber Roof Tint
       if (hasRoadTrainLights(car) && car.roadTrainLightsOn !== false && isIgnitionOn) {
         let mRoofX = halfL * 0.35;
         if (isTractor) {
@@ -16231,63 +16503,75 @@ export class GameRenderer {
         lCtx.beginPath();
         lCtx.arc(mWorldX, mWorldY, trainCutRadius, 0, Math.PI * 2);
         lCtx.fill();
+
+        const cTrain = cCtx.createRadialGradient(mWorldX, mWorldY, 0, mWorldX, mWorldY, trainCutRadius);
+        cTrain.addColorStop(0.0, 'rgba(255, 174, 42, 0.38)');
+        cTrain.addColorStop(0.45, 'rgba(255, 158, 24, 0.16)');
+        cTrain.addColorStop(1.0, 'rgba(255, 148, 12, 0)');
+        cCtx.fillStyle = cTrain;
+        cCtx.beginPath();
+        cCtx.arc(mWorldX, mWorldY, trainCutRadius, 0, Math.PI * 2);
+        cCtx.fill();
       }
     }
 
-    // C. Street Lamp Cutouts (Smooth polynomial light field with zero concentric ring banding)
+    // C. Street Lamp Cutouts & Sodium / Tungsten Radiance
     for (const prop of props) {
       if (getStreetLampOn(prop) && prop.x >= minX - 60 && prop.x <= maxX + 60 && prop.y >= minY - 60 && prop.y <= maxY + 60) {
+        let lx = prop.x;
+        let ly = prop.y;
+        let lampRadius = 110 * fogFactor;
+        let peakCut = 0.92;
+        let lampRgb: readonly [number, number, number] = [255, 222, 146]; // courtyard/park warm cream-gold
+        let colorPeak = 0.56;
+
         if (prop.type === 'lamp_highway') {
           const angle = prop.angle || 0;
-          const lx = prop.x + Math.cos(angle) * 22;
-          const ly = prop.y + Math.sin(angle) * 22;
-
-          const lampRadius = 145 * fogFactor;
-          const lampGrad = lCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
-          lampGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.95)');
-          lampGrad.addColorStop(0.22, 'rgba(0, 0, 0, 0.74)');
-          lampGrad.addColorStop(0.50, 'rgba(0, 0, 0, 0.40)');
-          lampGrad.addColorStop(0.78, 'rgba(0, 0, 0, 0.12)');
-          lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = lampGrad;
-          lCtx.beginPath();
-          lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
-          lCtx.fill();
+          lx = prop.x + Math.cos(angle) * 22;
+          ly = prop.y + Math.sin(angle) * 22;
+          lampRadius = 145 * fogFactor;
+          peakCut = 0.95;
+          lampRgb = [255, 174, 68]; // ДНаТ high-pressure sodium amber-orange
+          colorPeak = 0.64;
         } else if (prop.type === 'lamp_concrete') {
           const angle = prop.angle || 0;
-          const lx = prop.x + Math.cos(angle) * 9;
-          const ly = prop.y + Math.sin(angle) * 9;
-
-          const lampRadius = 120 * fogFactor;
-          const lampGrad = lCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
-          lampGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.92)');
-          lampGrad.addColorStop(0.25, 'rgba(0, 0, 0, 0.68)');
-          lampGrad.addColorStop(0.52, 'rgba(0, 0, 0, 0.36)');
-          lampGrad.addColorStop(0.80, 'rgba(0, 0, 0, 0.10)');
-          lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = lampGrad;
-          lCtx.beginPath();
-          lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
-          lCtx.fill();
-        } else {
-          const lampRadius = 110 * fogFactor;
-          const lampGrad = lCtx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, lampRadius);
-          lampGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.92)');
-          lampGrad.addColorStop(0.25, 'rgba(0, 0, 0, 0.68)');
-          lampGrad.addColorStop(0.52, 'rgba(0, 0, 0, 0.36)');
-          lampGrad.addColorStop(0.80, 'rgba(0, 0, 0, 0.10)');
-          lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = lampGrad;
-          lCtx.beginPath();
-          lCtx.arc(prop.x, prop.y, lampRadius, 0, Math.PI * 2);
-          lCtx.fill();
+          lx = prop.x + Math.cos(angle) * 9;
+          ly = prop.y + Math.sin(angle) * 9;
+          lampRadius = 120 * fogFactor;
+          peakCut = 0.92;
+          lampRgb = [255, 186, 86];
+          colorPeak = 0.60;
         }
+
+        const lampGrad = lCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
+        lampGrad.addColorStop(0.00, `rgba(0, 0, 0, ${peakCut})`);
+        lampGrad.addColorStop(0.24, `rgba(0, 0, 0, ${(peakCut * 0.74).toFixed(2)})`);
+        lampGrad.addColorStop(0.52, `rgba(0, 0, 0, ${(peakCut * 0.40).toFixed(2)})`);
+        lampGrad.addColorStop(0.80, `rgba(0, 0, 0, ${(peakCut * 0.12).toFixed(2)})`);
+        lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = lampGrad;
+        lCtx.beginPath();
+        lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
+        lCtx.fill();
+
+        const cLampGrad = cCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
+        cLampGrad.addColorStop(0.00, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${colorPeak.toFixed(2)})`);
+        cLampGrad.addColorStop(0.28, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.66).toFixed(2)})`);
+        cLampGrad.addColorStop(0.58, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.28).toFixed(2)})`);
+        cLampGrad.addColorStop(0.85, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.07).toFixed(2)})`);
+        cLampGrad.addColorStop(1.00, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, 0)`);
+        cCtx.fillStyle = cLampGrad;
+        cCtx.beginPath();
+        cCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
+        cCtx.fill();
       }
     }
 
-    // D. Traffic Light Cutouts
+    // D. Traffic Light Cutouts & Colored Ground Spill
     for (const prop of props) {
       if (prop.type === 'traffic_light' && !prop.isBroken && prop.x >= minX - 40 && prop.x <= maxX + 40 && prop.y >= minY - 40 && prop.y <= maxY + 40) {
+        const tfRgb = getTrafficLightRgb(prop);
+        if (!tfRgb) continue;
         const tfRadius = 24 * fogFactor;
         const tfGrad = lCtx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, tfRadius);
         tfGrad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
@@ -16297,19 +16581,77 @@ export class GameRenderer {
         lCtx.beginPath();
         lCtx.arc(prop.x, prop.y, tfRadius, 0, Math.PI * 2);
         lCtx.fill();
+
+        const cTfGrad = cCtx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, tfRadius);
+        cTfGrad.addColorStop(0, `rgba(${tfRgb[0]}, ${tfRgb[1]}, ${tfRgb[2]}, 0.42)`);
+        cTfGrad.addColorStop(0.5, `rgba(${tfRgb[0]}, ${tfRgb[1]}, ${tfRgb[2]}, 0.16)`);
+        cTfGrad.addColorStop(1, `rgba(${tfRgb[0]}, ${tfRgb[1]}, ${tfRgb[2]}, 0)`);
+        cCtx.fillStyle = cTfGrad;
+        cCtx.beginPath();
+        cCtx.arc(prop.x, prop.y, tfRadius, 0, Math.PI * 2);
+        cCtx.fill();
       }
     }
 
     // F. Gas Station Nighttime Light Cutouts (real canopy lighting)
     if (maxX >= 4800 && minX <= 5520 && maxY >= 4800 && minY <= 5520) {
-      GasStationRenderer.renderLightmapCutouts(lCtx, nightAlpha, fogFactor);
+      GasStationRenderer.renderLightmapCutouts(lCtx, nightAlpha, fogFactor, cCtx);
     }
 
-    // G. Player Handheld & Smartphone Flashlight Cutout (Pass 1)
+    const drawSmoothFlashlightCone = (
+      ox: number,
+      oy: number,
+      aimAngle: number,
+      fRange: number,
+      fSpread: number,
+      rgb: readonly [number, number, number]
+    ) => {
+      const farX = Math.cos(fSpread) * fRange;
+      const farY = Math.sin(fSpread) * fRange;
+      const traceSmoothFlash = (tCtx: CanvasRenderingContext2D) => {
+        tCtx.beginPath();
+        tCtx.moveTo(4, -2.5);
+        tCtx.quadraticCurveTo(fRange * 0.48, -farY * 0.62, farX, -farY);
+        tCtx.quadraticCurveTo(fRange * 1.12, 0, farX, farY);
+        tCtx.quadraticCurveTo(fRange * 0.48, farY * 0.62, 4, 2.5);
+        tCtx.closePath();
+      };
+
+      lCtx.save();
+      lCtx.translate(ox, oy);
+      lCtx.rotate(aimAngle);
+      const coneGrad = lCtx.createRadialGradient(4, 0, 2, fRange * 0.34, 0, fRange * 1.05);
+      coneGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.95)');
+      coneGrad.addColorStop(0.28, 'rgba(0, 0, 0, 0.80)');
+      coneGrad.addColorStop(0.58, 'rgba(0, 0, 0, 0.44)');
+      coneGrad.addColorStop(0.84, 'rgba(0, 0, 0, 0.14)');
+      coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+      lCtx.fillStyle = coneGrad;
+      traceSmoothFlash(lCtx);
+      lCtx.fill();
+      lCtx.restore();
+
+      cCtx.save();
+      cCtx.translate(ox, oy);
+      cCtx.rotate(aimAngle);
+      const cConeGrad = cCtx.createRadialGradient(4, 0, 2, fRange * 0.34, 0, fRange * 1.05);
+      cConeGrad.addColorStop(0.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.56)`);
+      cConeGrad.addColorStop(0.28, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.40)`);
+      cConeGrad.addColorStop(0.60, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.18)`);
+      cConeGrad.addColorStop(0.86, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.05)`);
+      cConeGrad.addColorStop(1.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
+      cCtx.fillStyle = cConeGrad;
+      traceSmoothFlash(cCtx);
+      cCtx.fill();
+      cCtx.restore();
+    };
+
+    // G. Player Handheld & Smartphone Flashlight Cutout (Pass 1 - Smooth parabolic cone + LED/Halogen tint)
     if (p && isPlayerFlashlightOn && p.x >= minX - 300 && p.x <= maxX + 300 && p.y >= minY - 300 && p.y <= maxY + 300) {
       const aimAngle = p.aimAngle !== undefined ? p.aimAngle : p.angle;
       const fRange = 280 * fogFactor;
-      const fSpread = 0.52; // ~30 degrees half-cone
+      const fSpread = 0.48;
+      const fRgb = getPlayerFlashlightRgb(p);
 
       // 1. Ambient soft circle around player's hands/body
       const bodyHaloRad = 24 * fogFactor;
@@ -16322,64 +16664,44 @@ export class GameRenderer {
       lCtx.arc(p.x, p.y, bodyHaloRad, 0, Math.PI * 2);
       lCtx.fill();
 
-      // 2. Focused forward flashlight beam with smooth curved falloff
-      lCtx.save();
-      lCtx.translate(p.x, p.y);
-      lCtx.rotate(aimAngle);
+      const cBodyGrad = cCtx.createRadialGradient(p.x, p.y, 1, p.x, p.y, bodyHaloRad);
+      cBodyGrad.addColorStop(0, `rgba(${fRgb[0]}, ${fRgb[1]}, ${fRgb[2]}, 0.34)`);
+      cBodyGrad.addColorStop(0.5, `rgba(${fRgb[0]}, ${fRgb[1]}, ${fRgb[2]}, 0.12)`);
+      cBodyGrad.addColorStop(1, `rgba(${fRgb[0]}, ${fRgb[1]}, ${fRgb[2]}, 0)`);
+      cCtx.fillStyle = cBodyGrad;
+      cCtx.beginPath();
+      cCtx.arc(p.x, p.y, bodyHaloRad, 0, Math.PI * 2);
+      cCtx.fill();
 
-      const coneGrad = lCtx.createRadialGradient(0, 0, 2, fRange * 0.3, 0, fRange);
-      coneGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.95)');
-      coneGrad.addColorStop(0.25, 'rgba(0, 0, 0, 0.80)');
-      coneGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.45)');
-      coneGrad.addColorStop(0.82, 'rgba(0, 0, 0, 0.15)');
-      coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-
-      lCtx.fillStyle = coneGrad;
-      lCtx.beginPath();
-      lCtx.moveTo(0, 0);
-      lCtx.arc(0, 0, fRange, -fSpread, fSpread);
-      lCtx.closePath();
-      lCtx.fill();
-      lCtx.restore();
+      // 2. Smooth parabolic forward flashlight beam
+      drawSmoothFlashlightCone(p.x, p.y, aimAngle, fRange, fSpread, fRgb);
     }
 
-    // G. Railway Signal Lights (ISI focused directional cones and optic glow cutouts)
-    RailwaySignalingSystem.renderLightmap(lCtx, world, minX, minY, maxX, maxY, Math.max(nightAlpha, sunState.shadowOpacity * 0.6));
+    // G2. Railway Signal Lights (ISI focused directional cones and optic glow cutouts)
+    RailwaySignalingSystem.renderLightmap(lCtx, world, minX, minY, maxX, maxY, Math.max(nightAlpha, sunState.shadowOpacity * 0.6), cCtx);
 
     // H. Rolling Stock Dynamic Light Cutouts (Projector searchlights, buffer lights, and passenger windows)
-    RollingStockRenderer.renderLightmapCutouts(lCtx, world, minX, minY, maxX, maxY, Math.max(effectiveAlpha, sunState.shadowOpacity * 0.8), fogFactor);
+    RollingStockRenderer.renderLightmapCutouts(lCtx, world, minX, minY, maxX, maxY, Math.max(effectiveAlpha, sunState.shadowOpacity * 0.8), fogFactor, cCtx);
 
     // I. Garage Cooperative Gate & Guardhouse Light Cutouts
-    GarageCooperativeRenderer.renderLightmapCutouts(lCtx, world, nightAlpha, fogFactor);
+    GarageCooperativeRenderer.renderLightmapCutouts(lCtx, world, nightAlpha, fogFactor, cCtx);
 
     // J. Remote Players' Handheld & Smartphone Flashlight Cutouts
     if (remotePlayers && remotePlayers.length > 0) {
       for (const rp of remotePlayers) {
-        const rpFlashOn = !rp.isInVehicle && ((rp as any).phoneFlashlightOn || (rp as any).flashlightOn);
-        if (rpFlashOn && rp.x >= minX - 300 && rp.x <= maxX + 300 && rp.y >= minY - 300 && rp.y <= maxY + 300) {
+        const rpPhoneOn = !rp.isInVehicle && !!(rp as any).phoneFlashlightOn;
+        const rpHandOn = !rp.isInVehicle && !!(rp as any).flashlightOn;
+        if ((rpPhoneOn || rpHandOn) && rp.x >= minX - 300 && rp.x <= maxX + 300 && rp.y >= minY - 300 && rp.y <= maxY + 300) {
           const aimAngle = (rp as any).aimAngle !== undefined ? (rp as any).aimAngle : rp.angle;
           const fRange = 260 * fogFactor;
-          const fSpread = 0.50;
-          lCtx.save();
-          lCtx.translate(rp.x, rp.y);
-          lCtx.rotate(aimAngle);
-          const coneGrad = lCtx.createRadialGradient(0, 0, 2, fRange * 0.3, 0, fRange);
-          coneGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.95)');
-          coneGrad.addColorStop(0.30, 'rgba(0, 0, 0, 0.78)');
-          coneGrad.addColorStop(0.65, 'rgba(0, 0, 0, 0.35)');
-          coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = coneGrad;
-          lCtx.beginPath();
-          lCtx.moveTo(0, 0);
-          lCtx.arc(0, 0, fRange, -fSpread, fSpread);
-          lCtx.closePath();
-          lCtx.fill();
-          lCtx.restore();
+          const fSpread = 0.46;
+          const rpRgb: readonly [number, number, number] = rpHandOn ? [255, 240, 200] : [226, 240, 255];
+          drawSmoothFlashlightCone(rp.x, rp.y, aimAngle, fRange, fSpread, rpRgb);
         }
       }
     }
 
-    // K. Active Fires (Burning ground stains & burning vehicles) illuminate darkness and shadows with chaotic combustion flicker!
+    // K. Active Fires (Burning ground stains & burning vehicles) illuminate darkness and shadows with blackbody amber-orange flicker!
     const nowFireSec = performance.now() * 0.001;
     if (world.stains) {
       const stainStart = Math.max(0, world.stains.length - performanceConfig.stainsLimit);
@@ -16393,30 +16715,43 @@ export class GameRenderer {
         const jy = Math.cos(nowFireSec * 19.1 - stPhase) * 1.6;
         const fInt = Math.max(0.25, st.fireIntensity || 0.65);
         const fireRad = Math.max(52, st.radius * 5.2) * (0.55 + 0.45 * fInt) * stFlicker * fogFactor;
-        const fGrad = lCtx.createRadialGradient(st.x + jx, st.y + jy, 2, st.x + jx, st.y + jy, fireRad);
+        const fx = st.x + jx;
+        const fy = st.y + jy;
+
+        const fGrad = lCtx.createRadialGradient(fx, fy, 2, fx, fy, fireRad);
         fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.98)');
         fGrad.addColorStop(0.32, 'rgba(0, 0, 0, 0.80)');
         fGrad.addColorStop(0.68, 'rgba(0, 0, 0, 0.34)');
         fGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = fGrad;
         lCtx.beginPath();
-        lCtx.arc(st.x + jx, st.y + jy, fireRad, 0, Math.PI * 2);
+        lCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
         lCtx.fill();
+
+        const cFire = cCtx.createRadialGradient(fx, fy, 2, fx, fy, fireRad);
+        cFire.addColorStop(0.0, 'rgba(255, 210, 108, 0.66)');
+        cFire.addColorStop(0.30, 'rgba(255, 134, 34, 0.44)');
+        cFire.addColorStop(0.68, 'rgba(220, 58, 12, 0.16)');
+        cFire.addColorStop(1.0, 'rgba(180, 32, 6, 0)');
+        cCtx.fillStyle = cFire;
+        cCtx.beginPath();
+        cCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
+        cCtx.fill();
       }
     }
     for (const car of nearbyVehicles) {
+      const cosA = Math.cos(car.angle);
+      const sinA = Math.sin(car.angle);
+      const halfL = car.length * 0.5;
+      const halfW = car.width * 0.5;
       const dmg = car.damage;
       const hasFire = dmg && !dmg.isFullyBurnt && (dmg.engineFire || dmg.cabinFire || dmg.fuelTankFire);
       if (hasFire && dmg) {
-        const cosA = Math.cos(car.angle);
-        const sinA = Math.sin(car.angle);
-        const halfL = car.length * 0.5;
         const cPhase = (car.x * 0.09 + car.y * 0.17) % 62.8;
         const cFlicker = 0.90 + 0.06 * Math.sin(nowFireSec * 14.9 + cPhase) + 0.04 * Math.cos(nowFireSec * 24.7 - cPhase * 1.4);
         const jx = Math.sin(nowFireSec * 17.8 + cPhase) * 2.2;
         const jy = Math.cos(nowFireSec * 21.2 - cPhase) * 2.2;
 
-        // Position light cutout at actual burning zone(s) along vehicle body
         let offsetL = 0;
         if (dmg.cabinFire) {
           offsetL = 0;
@@ -16438,47 +16773,191 @@ export class GameRenderer {
         lCtx.beginPath();
         lCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
         lCtx.fill();
+
+        const cCarFire = cCtx.createRadialGradient(fx, fy, 4, fx, fy, fireRad);
+        cCarFire.addColorStop(0.0, 'rgba(255, 212, 112, 0.70)');
+        cCarFire.addColorStop(0.34, 'rgba(255, 132, 34, 0.46)');
+        cCarFire.addColorStop(0.72, 'rgba(218, 56, 12, 0.17)');
+        cCarFire.addColorStop(1.0, 'rgba(180, 32, 6, 0)');
+        cCtx.fillStyle = cCarFire;
+        cCtx.beginPath();
+        cCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
+        cCtx.fill();
       }
 
-      // Emergency Vehicle Rotating/Flashing Strobe Bar Cutout
+      // Emergency Vehicle Rotating Red/Blue Siren Lobes (Smooth parabolic lobes, ZERO sharp triangles!)
       if (car.sirenOn) {
+        const strobe = (car.sirenStrobe || 0);
+        const redAngle = car.angle + Math.sin(strobe) * 1.25;
+        const blueAngle = car.angle - Math.sin(strobe) * 1.25;
+        const sirenReach = 122 * fogFactor;
+        const sirenSpread = 0.62;
+
+        const drawSirenLobe = (originX: number, originY: number, lobeAngle: number, rgb: readonly [number, number, number]) => {
+          const farX = Math.cos(sirenSpread) * sirenReach;
+          const farY = Math.sin(sirenSpread) * sirenReach;
+          const traceSirenLobe = (tCtx: CanvasRenderingContext2D) => {
+            tCtx.beginPath();
+            tCtx.moveTo(0, -4.5);
+            tCtx.quadraticCurveTo(sirenReach * 0.45, -farY * 0.64, farX, -farY);
+            tCtx.quadraticCurveTo(sirenReach * 1.15, 0, farX, farY);
+            tCtx.quadraticCurveTo(sirenReach * 0.45, farY * 0.64, 0, 4.5);
+            tCtx.closePath();
+          };
+
+          lCtx.save();
+          lCtx.translate(originX, originY);
+          lCtx.rotate(lobeAngle);
+          const lSiren = lCtx.createRadialGradient(0, 0, 2, sirenReach * 0.36, 0, sirenReach);
+          lSiren.addColorStop(0.0, 'rgba(0, 0, 0, 0.88)');
+          lSiren.addColorStop(0.42, 'rgba(0, 0, 0, 0.48)');
+          lSiren.addColorStop(0.80, 'rgba(0, 0, 0, 0.12)');
+          lSiren.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = lSiren;
+          traceSirenLobe(lCtx);
+          lCtx.fill();
+          lCtx.restore();
+
+          cCtx.save();
+          cCtx.translate(originX, originY);
+          cCtx.rotate(lobeAngle);
+          const cSiren = cCtx.createRadialGradient(0, 0, 2, sirenReach * 0.36, 0, sirenReach);
+          cSiren.addColorStop(0.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.60)`);
+          cSiren.addColorStop(0.38, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.30)`);
+          cSiren.addColorStop(0.76, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.08)`);
+          cSiren.addColorStop(1.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
+          cCtx.fillStyle = cSiren;
+          traceSirenLobe(cCtx);
+          cCtx.fill();
+          cCtx.restore();
+        };
+
+        // Left & right lightbar emitters on roof
+        const barRX = car.x - sinA * -4.0;
+        const barRY = car.y + cosA * -4.0;
+        const barBX = car.x - sinA * 4.0;
+        const barBY = car.y + cosA * 4.0;
+        drawSirenLobe(barRX, barRY, redAngle, [255, 42, 48]);
+        drawSirenLobe(barBX, barBY, blueAngle, [48, 128, 255]);
+
+        // Ambient roof halo around vehicle
         const strobePhase = Math.sin(Date.now() * 0.018 + car.x);
-        const strobeRad = (55 + Math.abs(strobePhase) * 35) * fogFactor;
+        const strobeRad = (48 + Math.abs(strobePhase) * 28) * fogFactor;
         const sGrad = lCtx.createRadialGradient(car.x, car.y, 2, car.x, car.y, strobeRad);
-        sGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.88)');
-        sGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.45)');
+        sGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.85)');
+        sGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.40)');
         sGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = sGrad;
         lCtx.beginPath();
         lCtx.arc(car.x, car.y, strobeRad, 0, Math.PI * 2);
         lCtx.fill();
       }
+
+      // Heavy Machinery & Utility Amber Strobe Beacons (Environment-masked ground bounce)
+      const isArticulated = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
+      const isTractorMach = car.type.startsWith('tractor_');
+      const isVehicleLit = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || getVehicleHeadlightOn(car));
+      if (isVehicleLit && (isArticulated || car.type === 'paver_asphalt_wheeled' || isTractorMach || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
+        const beaconPeriod = 0.35;
+        const beaconPulse = Math.sin((Date.now() / 1000) / beaconPeriod * Math.PI * 2);
+        if (beaconPulse > 0.1) {
+          let bX = halfL * 0.25;
+          if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
+          else if (car.type === 'roller_compact_sidewalk') bX = -halfL * 0.58;
+          else if (car.type === 'roller_pneumatic') bX = -halfL * 0.28;
+          else if (car.type === 'paver_asphalt_wheeled') bX = -halfL * 0.42;
+          else if (isTractorMach) bX = -halfL * 0.10;
+
+          const wx = car.x + cosA * bX;
+          const wy = car.y + sinA * bX;
+          const bRadius = (18 + beaconPulse * 14) * fogFactor;
+
+          const bCut = lCtx.createRadialGradient(wx, wy, 0.5, wx, wy, bRadius);
+          bCut.addColorStop(0, `rgba(0, 0, 0, ${(0.75 * beaconPulse).toFixed(3)})`);
+          bCut.addColorStop(0.5, `rgba(0, 0, 0, ${(0.32 * beaconPulse).toFixed(3)})`);
+          bCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = bCut;
+          lCtx.beginPath(); lCtx.arc(wx, wy, bRadius, 0, Math.PI * 2); lCtx.fill();
+
+          const bCol = cCtx.createRadialGradient(wx, wy, 0.5, wx, wy, bRadius);
+          bCol.addColorStop(0, `rgba(255, 184, 38, ${(0.60 * beaconPulse).toFixed(3)})`);
+          bCol.addColorStop(0.5, `rgba(245, 152, 16, ${(0.28 * beaconPulse).toFixed(3)})`);
+          bCol.addColorStop(1, 'rgba(245, 152, 16, 0)');
+          cCtx.fillStyle = bCol;
+          cCtx.beginPath(); cCtx.arc(wx, wy, bRadius, 0, Math.PI * 2); cCtx.fill();
+        }
+      }
     }
 
-    // L. Pedestrians' Glowing Smartphone Screens (subtle local cutout in shadows & night)
+    // L. Pedestrians' Glowing Smartphone Screens (subtle cool OLED glow in shadows & night)
     for (const ped of visiblePedestrians) {
       if (ped.isInsideBuilding) continue;
       if (ped.state === 'idle_phone' || ped.handheldProp === 'phone') {
         const px = ped.x + Math.cos(ped.angle) * 4.4;
         const py = ped.y + Math.sin(ped.angle) * 4.4;
-        const pGrad = lCtx.createRadialGradient(px, py, 0.4, px, py, 10 * fogFactor);
+        const pRad = 10 * fogFactor;
+        const pGrad = lCtx.createRadialGradient(px, py, 0.4, px, py, pRad);
         pGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.65)');
         pGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
         pGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = pGrad;
         lCtx.beginPath();
-        lCtx.arc(px, py, 10 * fogFactor, 0, Math.PI * 2);
+        lCtx.arc(px, py, pRad, 0, Math.PI * 2);
         lCtx.fill();
+
+        const cPhone = cCtx.createRadialGradient(px, py, 0.4, px, py, pRad);
+        cPhone.addColorStop(0.0, 'rgba(165, 208, 255, 0.42)');
+        cPhone.addColorStop(0.5, 'rgba(140, 190, 255, 0.16)');
+        cPhone.addColorStop(1.0, 'rgba(140, 190, 255, 0)');
+        cCtx.fillStyle = cPhone;
+        cCtx.beginPath();
+        cCtx.arc(px, py, pRad, 0, Math.PI * 2);
+        cCtx.fill();
       }
     }
 
+    // Mask accumulated colored illumination strictly by pre-cutout environment darkness & 3D shadows
+    cCtx.save();
+    cCtx.setTransform(1, 0, 0, 1, 0, 0);
+    cCtx.globalCompositeOperation = 'destination-in';
+    cCtx.drawImage(this.lightEnvCanvas, 0, 0);
+    cCtx.restore();
+
+    cCtx.restore();
     lCtx.restore();
     } // end enableDynamicLighting
 
-    // --- Apply Lightmap to Main Canvas ---
+    // --- Apply Lightmap + Environment-Masked Colored Light to Main Canvas ---
     ctx.save();
     ctx.setTransform(this.backingScale, 0, 0, this.backingScale, 0, 0); // Screen space (CSS px) mapped to backing store
     ctx.drawImage(this.lightmapCanvas, 0, 0);
+
+    if (this.lightColorUsedThisFrame) {
+      // 1. Spectral tint pass via multiply: neutral #ffffff everywhere unlit, true Kelvin hue on bright snow/concrete/markings
+      const tCtx = this.lightTintCtx;
+      tCtx.save();
+      tCtx.setTransform(1, 0, 0, 1, 0, 0);
+      tCtx.globalCompositeOperation = 'source-over';
+      tCtx.globalAlpha = 1.0;
+      tCtx.fillStyle = '#ffffff';
+      tCtx.fillRect(0, 0, this.width, this.height);
+      tCtx.globalAlpha = 0.54;
+      tCtx.drawImage(this.lightColorCanvas, 0, 0);
+      tCtx.restore();
+
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = 1.0;
+      ctx.drawImage(this.lightTintCanvas, 0, 0);
+
+      // 2. Colored radiance pass via screen: gently illuminates asphalt, grass, and shadow troughs without HDR whiteout
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.48;
+      ctx.drawImage(this.lightColorCanvas, 0, 0);
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1.0;
+    }
+
     ctx.restore();
     }
 
@@ -16487,50 +16966,55 @@ export class GameRenderer {
     }
 
     // --- PASS 2: Additive Glow / Optics (lighter) ---
-    // Pure optical flares and subtle atmospheric mist (Zero white blowouts or concentric circle rings!)
+    // Pure optical bulb/lens emitters, glare starbursts, and genuine fog/rain Mie scatter (ZERO unmasked ground triangles!)
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
-    // A. Street Lamp Additive Ground Atmosphere & Fixture Pinpoints
+    // A. Street Lamp Fixture Pinpoints & Fog Halo
     for (const prop of props) {
       if (getStreetLampOn(prop) && prop.x >= minX - 60 && prop.x <= maxX + 60 && prop.y >= minY - 60 && prop.y <= maxY + 60) {
         let lx = prop.x;
         let ly = prop.y;
+        let isSodium = false;
         if (prop.type === 'lamp_highway') {
           const angle = prop.angle || 0;
           lx = prop.x + Math.cos(angle) * 22;
           ly = prop.y + Math.sin(angle) * 22;
+          isSodium = true;
         } else if (prop.type === 'lamp_concrete') {
           const angle = prop.angle || 0;
           lx = prop.x + Math.cos(angle) * 9;
           ly = prop.y + Math.sin(angle) * 9;
+          isSodium = true;
         }
 
-        // Soft, continuous warm ground pool (NO concentric step rings!)
-        const poolRadius = (prop.type === 'lamp_highway' ? 100 : 80) * fogFactor;
-        const poolGrad = ctx.createRadialGradient(lx, ly, 2, lx, ly, poolRadius);
-        poolGrad.addColorStop(0.0, `rgba(255, 230, 160, ${0.14 * fogFactor})`);
-        poolGrad.addColorStop(0.4, `rgba(255, 210, 110, ${0.05 * fogFactor})`);
-        poolGrad.addColorStop(0.8, `rgba(255, 190, 80, ${0.01 * fogFactor})`);
-        poolGrad.addColorStop(1.0, 'rgba(255, 190, 80, 0)');
-        ctx.fillStyle = poolGrad;
-        ctx.beginPath();
-        ctx.arc(lx, ly, poolRadius, 0, Math.PI * 2);
-        ctx.fill();
+        // Atmospheric scatter around luminaire ONLY in genuine fog
+        if (isFog && weights.fog > 0.08) {
+          const haloRad = (prop.type === 'lamp_highway' ? 44 : 32) * fogFactor;
+          const haloA = Math.min(0.16, (0.04 + 0.12 * weights.fog) * weatherTransition);
+          const haloGrad = ctx.createRadialGradient(lx, ly, 1, lx, ly, haloRad);
+          haloGrad.addColorStop(0.0, isSodium ? `rgba(255, 195, 95, ${haloA.toFixed(3)})` : `rgba(255, 235, 175, ${haloA.toFixed(3)})`);
+          haloGrad.addColorStop(0.5, isSodium ? `rgba(255, 165, 60, ${(haloA * 0.35).toFixed(3)})` : `rgba(255, 215, 130, ${(haloA * 0.35).toFixed(3)})`);
+          haloGrad.addColorStop(1.0, 'rgba(255, 180, 70, 0)');
+          ctx.fillStyle = haloGrad;
+          ctx.beginPath();
+          ctx.arc(lx, ly, haloRad, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         // Tiny physical bulb fixture emitter
-        const bulbGlow = ctx.createRadialGradient(lx, ly, 0, lx, ly, 3.5);
-        bulbGlow.addColorStop(0, 'rgba(255, 255, 240, 0.85)');
-        bulbGlow.addColorStop(0.5, 'rgba(255, 225, 140, 0.45)');
-        bulbGlow.addColorStop(1, 'rgba(255, 200, 80, 0)');
+        const bulbGlow = ctx.createRadialGradient(lx, ly, 0, lx, ly, 4.0);
+        bulbGlow.addColorStop(0, isSodium ? 'rgba(255, 240, 200, 0.90)' : 'rgba(255, 255, 240, 0.88)');
+        bulbGlow.addColorStop(0.45, isSodium ? 'rgba(255, 185, 78, 0.45)' : 'rgba(255, 225, 145, 0.45)');
+        bulbGlow.addColorStop(1, 'rgba(255, 190, 70, 0)');
         ctx.fillStyle = bulbGlow;
         ctx.beginPath();
-        ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+        ctx.arc(lx, ly, 4.0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // B. Vehicle Headlights, Trailers & Signal Optics (Additive)
+    // B. Vehicle Headlights, Trailers & Signal Optics (Additive Lens Emitters + Fog Scatter)
     for (const car of nearbyVehicles) {
       const cosA = Math.cos(car.angle);
       const sinA = Math.sin(car.angle);
@@ -16543,7 +17027,7 @@ export class GameRenderer {
         const trailerLightsActive = car.headlightsOn || car.positionLightsOn || car.brakeLightsOn || car.isReversing || (car.turnSignal && car.turnSignal !== 'none');
         if (!trailerLightsActive && nightAlpha <= 0.05) continue;
 
-        const drawTrailerRearEmitter = (lxOffset: number, lyOffset: number, washLen: number, washSpread: number, color: string) => {
+        const drawTrailerRearEmitter = (lxOffset: number, lyOffset: number, lensRadius: number, color: string) => {
           const lx = car.x + cosA * lxOffset - sinA * lyOffset;
           const ly = car.y + sinA * lxOffset + cosA * lyOffset;
           const rearAngle = car.angle + Math.PI;
@@ -16552,43 +17036,26 @@ export class GameRenderer {
           ctx.translate(lx, ly);
           ctx.rotate(rearAngle);
 
-          // Physical diffuse road reflectance on asphalt behind trailer (active in night, shadow shroud, or wet conditions)
-          const darknessFactor = Math.max(nightAlpha, sunState.shadowOpacity * 0.45, (weights.rain + weights.snow) * 0.35);
-          if (washLen > 8 && darknessFactor > 0.05) {
-            const effLen = washLen * fogFactor;
-            const effSpread = washSpread * fogFactor;
+          const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
+          const r = m ? m[1] : '255';
+          const g = m ? m[2] : '255';
+          const b = m ? m[3] : '255';
+          const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
 
-            const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
-            const r = m ? m[1] : '255';
-            const g = m ? m[2] : '255';
-            const b = m ? m[3] : '255';
-            const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
-            const groundAlpha = baseA * darknessFactor * 0.45;
+          // Physical lens face bloom
+          const lensGrad = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, lensRadius);
+          lensGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.85).toFixed(3)})`);
+          lensGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.30).toFixed(3)})`);
+          lensGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+          ctx.fillStyle = lensGrad;
+          ctx.beginPath();
+          ctx.arc(0.4, 0, lensRadius, 0, Math.PI * 2);
+          ctx.fill();
 
-            const groundGrad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, effLen);
-            groundGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${groundAlpha.toFixed(3)})`);
-            groundGrad.addColorStop(0.35, `rgba(${r}, ${g}, ${b}, ${(groundAlpha * 0.50).toFixed(3)})`);
-            groundGrad.addColorStop(0.75, `rgba(${r}, ${g}, ${b}, ${(groundAlpha * 0.12).toFixed(3)})`);
-            groundGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
-
-            ctx.fillStyle = groundGrad;
-            ctx.beginPath();
-            ctx.moveTo(0, -1.8);
-            ctx.quadraticCurveTo(effLen * 0.45, -effSpread * 0.55, effLen, -effSpread * 0.5);
-            ctx.lineTo(effLen, effSpread * 0.5);
-            ctx.quadraticCurveTo(effLen * 0.45, effSpread * 0.55, 0, 1.8);
-            ctx.closePath();
-            ctx.fill();
-          }
-
-          // Atmospheric scattering in genuine dense particulate fog ONLY (soft radial mist halo around lens)
+          // Atmospheric scattering in genuine dense particulate fog ONLY
           if (isFog && weights.fog > 0.05) {
             const mistAlpha = Math.min(0.20, (0.03 + 0.07 * weights.fog) * weatherTransition);
             if (mistAlpha > 0.005) {
-              const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
-              const r = m ? m[1] : '255';
-              const g = m ? m[2] : '255';
-              const b = m ? m[3] : '255';
               const haloRadius = 10 + 14 * weights.fog;
               const mistGrad = ctx.createRadialGradient(0.4, 0, 0.4, 0.4, 0, haloRadius);
               mistGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(mistAlpha * 0.9).toFixed(3)})`);
@@ -16647,15 +17114,15 @@ export class GameRenderer {
         const hasTrailerRunningLights = (car.positionLightsOn || car.headlightsOn) && (car.type !== 'trailer_barrel');
 
         if (car.isReversing && hasRev) {
-          drawTrailerRearEmitter(rLeftLX, rLeftLY, 28, 20, 'rgba(255, 255, 255, 0.65)');
-          drawTrailerRearEmitter(rRightLX, rRightLY, 28, 20, 'rgba(255, 255, 255, 0.65)');
+          drawTrailerRearEmitter(rLeftLX, rLeftLY, 3.2, 'rgba(240, 248, 255, 0.70)');
+          drawTrailerRearEmitter(rRightLX, rRightLY, 3.2, 'rgba(240, 248, 255, 0.70)');
         }
         if (car.brakeLightsOn) {
-          drawTrailerRearEmitter(rLeftLX, rLeftLY, 24, 18, 'rgba(255, 30, 30, 0.75)');
-          drawTrailerRearEmitter(rRightLX, rRightLY, 24, 18, 'rgba(255, 30, 30, 0.75)');
+          drawTrailerRearEmitter(rLeftLX, rLeftLY, 3.8, 'rgba(255, 36, 32, 0.80)');
+          drawTrailerRearEmitter(rRightLX, rRightLY, 3.8, 'rgba(255, 36, 32, 0.80)');
         } else if (!car.isReversing && hasTrailerRunningLights) {
-          drawTrailerRearEmitter(rLeftLX, rLeftLY, 6, 8, 'rgba(220, 20, 20, 0.45)');
-          drawTrailerRearEmitter(rRightLX, rRightLY, 6, 8, 'rgba(220, 20, 20, 0.45)');
+          drawTrailerRearEmitter(rLeftLX, rLeftLY, 2.6, 'rgba(225, 25, 25, 0.50)');
+          drawTrailerRearEmitter(rRightLX, rRightLY, 2.6, 'rgba(225, 25, 25, 0.50)');
           for (const smx of sideMarkerXs) {
             drawTrailerSideMarker(smx, -halfW - 0.2);
             drawTrailerSideMarker(smx, halfW + 0.2);
@@ -16667,9 +17134,9 @@ export class GameRenderer {
           if (signalState.intensity > 0.05) {
             const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
             const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-            const amberColor = `rgba(255, 160, 0, ${0.75 * signalState.intensity})`;
-            if (isLeft) drawTrailerRearEmitter(rLeftLX, rLeftLY - 1.5, 16 * signalState.intensity, 14, amberColor);
-            if (isRight) drawTrailerRearEmitter(rRightLX, rRightLY + 1.5, 16 * signalState.intensity, 14, amberColor);
+            const amberColor = `rgba(255, 165, 20, ${(0.75 * signalState.intensity).toFixed(3)})`;
+            if (isLeft) drawTrailerRearEmitter(rLeftLX, rLeftLY - 1.5, 3.2, amberColor);
+            if (isRight) drawTrailerRearEmitter(rRightLX, rRightLY + 1.5, 3.2, amberColor);
           }
         }
 
@@ -16693,16 +17160,17 @@ export class GameRenderer {
       const optics = getVehicleOpticsMounts(car);
       const isSoloMoto = optics.headlightLeft.yFrac === 0 && optics.headlightRight.yFrac === 0;
       const isTractor = car.type.startsWith('tractor_');
+      const { core: headCoreRgb, outer: headOuterRgb } = getVehicleHeadlightColors(car);
 
       const isArticulated = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
       const frontAngle = isArticulated ? (car.angle + (car.steerAngle || 0)) : car.angle;
       const cosFA = Math.cos(frontAngle);
       const sinFA = Math.sin(frontAngle);
 
-      let leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc);
-      let leftLampLY = car.width * optics.headlightLeft.yFrac + ld * 0.15;
-      let rightLampLX = car.length * optics.headlightRight.xFrac - Math.max(frd, fc);
-      let rightLampLY = car.width * optics.headlightRight.yFrac - rd * 0.15;
+      const leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc);
+      const leftLampLY = car.width * optics.headlightLeft.yFrac + ld * 0.15;
+      const rightLampLX = car.length * optics.headlightRight.xFrac - Math.max(frd, fc);
+      const rightLampLY = car.width * optics.headlightRight.yFrac - rd * 0.15;
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
       const hasPositionLightsOn = !!(car.positionLightsOn || hasHeadlightsOn);
@@ -16711,10 +17179,8 @@ export class GameRenderer {
       const drawRearLightAdditive = (
         rxOffset: number,
         ryOffset: number,
-        washLen: number,
-        washSpread: number,
+        lensRadius: number,
         color: string,
-        lensWidth: number = 3.6,
         isFogWarningLamp: boolean = false
       ) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
@@ -16725,16 +17191,26 @@ export class GameRenderer {
         ctx.translate(rx, ry);
         ctx.rotate(rearAngle);
 
-        const hw = lensWidth * 0.5;
+        const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
+        const r = m ? m[1] : '255';
+        const g = m ? m[2] : '255';
+        const b = m ? m[3] : '255';
+        const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
 
-        // Atmospheric Mie scattering in air ONLY during genuine dense particulate fog (zero fake air shapes in clear weather)
+        // Crisp physical tail/brake/reverse lens emitter bloom (ground illumination is handled in Pass 1 cCtx masked by D_env)
+        const lensGrad = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, lensRadius);
+        lensGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.85).toFixed(3)})`);
+        lensGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.28).toFixed(3)})`);
+        lensGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+        ctx.fillStyle = lensGrad;
+        ctx.beginPath();
+        ctx.arc(0.4, 0, lensRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Atmospheric Mie scattering in air ONLY during genuine dense particulate fog
         if (isFog && weights.fog > 0.05) {
           const fogMistAlpha = Math.min(0.25, (0.04 + 0.12 * weights.fog) * weatherTransition);
           if (fogMistAlpha > 0.005) {
-            const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
-            const r = m ? m[1] : '255';
-            const g = m ? m[2] : '255';
-            const b = m ? m[3] : '255';
             const haloRadius = isFogWarningLamp ? (14 + 18 * weights.fog) : (8 + 12 * weights.fog);
             const haloGrad = ctx.createRadialGradient(0.4, 0, 0.5, 0.4, 0, haloRadius);
             haloGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(fogMistAlpha * 0.9).toFixed(3)})`);
@@ -16745,41 +17221,6 @@ export class GameRenderer {
             ctx.arc(0.4, 0, haloRadius, 0, Math.PI * 2);
             ctx.fill();
           }
-        }
-
-        // Physical diffuse road surface illumination (asphalt wash)
-        // STRICT FIRST-PRINCIPLES RULES:
-        // 1. Only active in darkness/night/dusk or wet conditions. In bright daylight, sunlight completely washes out road reflections from 21W lamps.
-        // 2. Continuous fan originating AT the bumper (x=0), spreading backward onto the asphalt. NO detached floating ovals in mid-air!
-        // 3. Fog warning lamps (ПТФ) are signaling lamps, they don't project ground washes.
-        const darknessFactor = Math.max(nightAlpha, sunState.shadowOpacity * 0.45, (weights.rain + weights.snow) * 0.35);
-        if (!isFogWarningLamp && washLen > 8 && darknessFactor > 0.05) {
-          const effLen = washLen * fogFactor;
-          const effSpread = washSpread * fogFactor;
-
-          const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
-          const r = m ? m[1] : '255';
-          const g = m ? m[2] : '255';
-          const b = m ? m[3] : '255';
-          const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
-          const groundAlpha = baseA * darknessFactor * 0.45;
-
-          // Radial gradient anchored directly at the lamp emitter (0, 0)
-          const groundGrad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, effLen);
-          groundGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${groundAlpha.toFixed(3)})`);
-          groundGrad.addColorStop(0.35, `rgba(${r}, ${g}, ${b}, ${(groundAlpha * 0.50).toFixed(3)})`);
-          groundGrad.addColorStop(0.75, `rgba(${r}, ${g}, ${b}, ${(groundAlpha * 0.12).toFixed(3)})`);
-          groundGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
-
-          ctx.fillStyle = groundGrad;
-          // Smooth trapezoidal/fan light cone opening backward from the bumper
-          ctx.beginPath();
-          ctx.moveTo(0, -hw);
-          ctx.quadraticCurveTo(effLen * 0.45, -effSpread * 0.55, effLen, -effSpread * 0.5);
-          ctx.lineTo(effLen, effSpread * 0.5);
-          ctx.quadraticCurveTo(effLen * 0.45, effSpread * 0.55, 0, hw);
-          ctx.closePath();
-          ctx.fill();
         }
 
         ctx.restore();
@@ -16795,48 +17236,46 @@ export class GameRenderer {
         ctx.translate(wx, wy);
         ctx.rotate(emitAngle);
 
-        // Tight micro-bloom at the amber glass face (zero mid-air geometric wedge)
-        const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, 3.0);
-        lensBloom.addColorStop(0.0, `rgba(255, 185, 40, ${(0.65 * intensity).toFixed(3)})`);
-        lensBloom.addColorStop(0.5, `rgba(255, 150, 0, ${(0.22 * intensity).toFixed(3)})`);
+        // Tight micro-bloom at the amber glass face
+        const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, 3.2);
+        lensBloom.addColorStop(0.0, `rgba(255, 185, 40, ${(0.72 * intensity).toFixed(3)})`);
+        lensBloom.addColorStop(0.5, `rgba(255, 150, 0, ${(0.25 * intensity).toFixed(3)})`);
         lensBloom.addColorStop(1.0, 'rgba(255, 150, 0, 0)');
         ctx.fillStyle = lensBloom;
         ctx.beginPath();
-        ctx.arc(0.4, 0, 3.0, 0, Math.PI * 2);
+        ctx.arc(0.4, 0, 3.2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Subtle local diffuse ground bounce on asphalt directly beneath vehicle corner (no air triangles!)
-        if (intensity > 0.15) {
-          const groundRadius = 9 * intensity * fogFactor;
-          const groundBounce = ctx.createRadialGradient(2.0, 0, 0, 2.0, 0, groundRadius);
-          groundBounce.addColorStop(0.0, `rgba(255, 160, 0, ${(0.28 * intensity).toFixed(3)})`);
-          groundBounce.addColorStop(0.5, `rgba(255, 140, 0, ${(0.10 * intensity).toFixed(3)})`);
-          groundBounce.addColorStop(1.0, 'rgba(255, 140, 0, 0)');
-          ctx.fillStyle = groundBounce;
+        if (isFog && weights.fog > 0.08 && intensity > 0.15) {
+          const haloRad = 8 + 10 * weights.fog;
+          const fogA = Math.min(0.14, 0.10 * weights.fog * intensity * weatherTransition);
+          const fogHalo = ctx.createRadialGradient(0.4, 0, 0.4, 0.4, 0, haloRad);
+          fogHalo.addColorStop(0.0, `rgba(255, 170, 20, ${fogA.toFixed(3)})`);
+          fogHalo.addColorStop(1.0, 'rgba(255, 150, 0, 0)');
+          ctx.fillStyle = fogHalo;
           ctx.beginPath();
-          ctx.ellipse(2.5, 0, groundRadius, groundRadius * 0.75, 0, 0, Math.PI * 2);
+          ctx.arc(0.4, 0, haloRad, 0, Math.PI * 2);
           ctx.fill();
         }
 
         ctx.restore();
       };
 
-      const drawHeadlightAdd = (lxOffset: number, lyOffset: number, broken: boolean, isLeftHeadlamp: boolean) => {
+      const drawHeadlightAdd = (lxOffset: number, lyOffset: number, broken: boolean, _isLeftHeadlamp: boolean) => {
         if (broken) return;
         const lx = car.x + cosFA * lxOffset - sinFA * lyOffset;
         const ly = car.y + sinFA * lxOffset + cosFA * lyOffset;
 
-        // Forward-Facing Optical Lens Bloom entering beam path (headlight body is already drawn in step 7)
+        // Forward-Facing Optical Lens Bloom matching bulb Kelvin color
         ctx.save();
         ctx.translate(lx, ly);
         ctx.rotate(frontAngle);
 
-        const lensW = isSoloMoto ? 3.0 : 4.4;
-        const forwardReach = isHighBeam ? 3.5 : 2.5;
+        const forwardReach = isHighBeam ? 3.8 : 2.8;
         const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, forwardReach);
-        lensBloom.addColorStop(0.0, isHighBeam ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 245, 205, 0.75)');
-        lensBloom.addColorStop(0.4, isHighBeam ? 'rgba(224, 242, 254, 0.35)' : 'rgba(255, 235, 170, 0.25)');
-        lensBloom.addColorStop(1.0, 'rgba(255, 255, 255, 0)');
+        lensBloom.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${isHighBeam ? 0.88 : 0.78})`);
+        lensBloom.addColorStop(0.4, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${isHighBeam ? 0.36 : 0.26})`);
+        lensBloom.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
         ctx.fillStyle = lensBloom;
         ctx.beginPath();
         ctx.arc(0.4, 0, forwardReach, -Math.PI * 0.5, Math.PI * 0.5);
@@ -16845,8 +17284,10 @@ export class GameRenderer {
         ctx.restore();
 
         // Wet Road Specular Reflection (Glistening sheen on rain / wet asphalt)
-        if (isRaining) {
+        const wetDarkScale = Math.max(nightAlpha, sunState.shadowOpacity * 0.45, weights.rain * 0.35);
+        if (isRaining && wetDarkScale > 0.08) {
           const wetLen = (isHighBeam ? 210 : 140) * fogFactor;
+          const wetA = Math.min(0.14, 0.12 * wetDarkScale);
           const wetSheen = ctx.createRadialGradient(
             lx + cosFA * (wetLen * 0.35),
             ly + sinFA * (wetLen * 0.35),
@@ -16855,9 +17296,9 @@ export class GameRenderer {
             ly + sinFA * (wetLen * 0.5),
             wetLen * 0.65
           );
-          wetSheen.addColorStop(0.0, 'rgba(235, 245, 255, 0.12)');
-          wetSheen.addColorStop(0.5, 'rgba(215, 235, 255, 0.04)');
-          wetSheen.addColorStop(1.0, 'rgba(200, 225, 255, 0)');
+          wetSheen.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${wetA.toFixed(3)})`);
+          wetSheen.addColorStop(0.5, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(wetA * 0.35).toFixed(3)})`);
+          wetSheen.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
           ctx.fillStyle = wetSheen;
           ctx.beginPath();
           ctx.ellipse(
@@ -16872,19 +17313,18 @@ export class GameRenderer {
           ctx.fill();
         }
 
-        // Atmospheric Volumetric Mist & Mie Scattering (Strictly gated to real atmospheric fog; zero air cones in clear/dry air)
+        // Atmospheric Volumetric Mist & Mie Scattering (Strictly gated to real atmospheric fog)
         if (isFog && weights.fog > 0.04) {
           if (isHighBeam) {
-            // HIGH BEAM IN FOG: Dense Mie backscatter "White Wall" directly ahead of car
             const mistAlpha = Math.min(0.36, (0.14 + 0.20 * weights.fog) * weatherTransition);
             const hGlow = ctx.createRadialGradient(
               lx + cosFA * (beamLen * 0.3), ly + sinFA * (beamLen * 0.3), 3,
               lx + cosFA * (beamLen * 0.4), ly + sinFA * (beamLen * 0.4), beamLen * 0.65
             );
-            hGlow.addColorStop(0.0, `rgba(240, 248, 255, ${mistAlpha.toFixed(3)})`);
-            hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${(mistAlpha * 0.5).toFixed(3)})`);
-            hGlow.addColorStop(0.85, `rgba(224, 242, 254, ${(mistAlpha * 0.08).toFixed(3)})`);
-            hGlow.addColorStop(1.0, 'rgba(224, 242, 254, 0)');
+            hGlow.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${mistAlpha.toFixed(3)})`);
+            hGlow.addColorStop(0.4, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(mistAlpha * 0.5).toFixed(3)})`);
+            hGlow.addColorStop(0.85, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(mistAlpha * 0.08).toFixed(3)})`);
+            hGlow.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
 
             ctx.fillStyle = hGlow;
             ctx.beginPath();
@@ -16899,7 +17339,6 @@ export class GameRenderer {
             );
             ctx.fill();
 
-            // Blinding white fog wall bank in dense fog
             if (weights.fog > 0.08) {
               const wallDist = 115 * (1.0 - 0.25 * weights.fog);
               const wallSpread = beamSpread * 1.15;
@@ -16927,17 +17366,16 @@ export class GameRenderer {
               ctx.fill();
             }
           } else {
-            // LOW BEAM IN FOG: Soft, ground-hugging atmospheric haze without self-blinding backscatter
             const mistAlpha = (0.040 + 0.035 * weights.fog) * weatherTransition;
             if (mistAlpha > 0.005) {
               const hGlow = ctx.createRadialGradient(
                 lx + cosFA * (beamLen * 0.3), ly + sinFA * (beamLen * 0.3), 2,
                 lx + cosFA * (beamLen * 0.4), ly + sinFA * (beamLen * 0.4), beamLen * 0.55
               );
-              hGlow.addColorStop(0.0, `rgba(240, 248, 255, ${mistAlpha.toFixed(3)})`);
-              hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${(mistAlpha * 0.4).toFixed(3)})`);
-              hGlow.addColorStop(0.85, `rgba(224, 242, 254, ${(mistAlpha * 0.06).toFixed(3)})`);
-              hGlow.addColorStop(1.0, 'rgba(224, 242, 254, 0)');
+              hGlow.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${mistAlpha.toFixed(3)})`);
+              hGlow.addColorStop(0.4, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(mistAlpha * 0.4).toFixed(3)})`);
+              hGlow.addColorStop(0.85, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(mistAlpha * 0.06).toFixed(3)})`);
+              hGlow.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
 
               ctx.fillStyle = hGlow;
               ctx.beginPath();
@@ -16967,7 +17405,7 @@ export class GameRenderer {
           drawHeadlightAdd(rightLampLX, rightLampLY, dmg.rightHeadlightBroken, false);
         }
 
-        // Diegetic Glare / Blinding Effect on Player (When looking directly at oncoming vehicle headlights)
+        // Diegetic Glare / Blinding Effect on Player
         if (performanceConfig.enableHeadlightGlare !== false && player && (leftActive || rightActive)) {
           const toPlayerX = player.x - car.x;
           const toPlayerY = player.y - car.y;
@@ -17012,21 +17450,19 @@ export class GameRenderer {
                     const wx = car.x + cosFA * pt.lx - sinFA * pt.ly;
                     const wy = car.y + sinFA * pt.lx + cosFA * pt.ly;
 
-                    // Brilliant optical starburst
                     const gGrad = ctx.createRadialGradient(wx, wy, 0, wx, wy, glareRadius);
                     gGrad.addColorStop(0.0, `rgba(255, 255, 255, ${0.92 * glareIntensity})`);
-                    gGrad.addColorStop(0.2, `rgba(255, 250, 220, ${0.55 * glareIntensity})`);
-                    gGrad.addColorStop(0.6, `rgba(210, 235, 255, ${0.15 * glareIntensity})`);
+                    gGrad.addColorStop(0.2, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${0.55 * glareIntensity})`);
+                    gGrad.addColorStop(0.6, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${0.15 * glareIntensity})`);
                     gGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0)');
                     ctx.fillStyle = gGrad;
                     ctx.beginPath();
                     ctx.arc(wx, wy, glareRadius, 0, Math.PI * 2);
                     ctx.fill();
 
-                    // Anamorphic horizontal optical flare streak
                     const streakW = glareRadius * 2.8;
                     const streakH = 1.6;
-                    ctx.fillStyle = `rgba(224, 242, 254, ${0.35 * glareIntensity})`;
+                    ctx.fillStyle = `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${0.35 * glareIntensity})`;
                     ctx.fillRect(wx - streakW * 0.5, wy - streakH * 0.5, streakW, streakH);
                   }
                 }
@@ -17036,40 +17472,40 @@ export class GameRenderer {
         }
       }
 
-      // Amber Strobe Beacons on Roof / ROPS Bar (Heavy Machinery & Service Vehicles)
+      // Amber Strobe Beacons on Roof / ROPS Bar (Compact dome flare; ground amber spill is masked in Pass 1 cCtx)
       if (isIgnitionOn && (isArticulated || car.type === 'paver_asphalt_wheeled' || isTractor || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
         const beaconPeriod = 0.35;
         const beaconPulse = Math.sin((Date.now() / 1000) / beaconPeriod * Math.PI * 2);
         if (beaconPulse > 0.1) {
-          let bX = 0;
-          let bY = 0;
-          if (car.type === 'roller_heavy_tandem') {
-            bX = -halfL * 0.09; bY = 0;
-          } else if (car.type === 'roller_compact_sidewalk') {
-            bX = -halfL * 0.58; bY = 0;
-          } else if (car.type === 'roller_pneumatic') {
-            bX = -halfL * 0.28; bY = 0;
-          } else if (car.type === 'paver_asphalt_wheeled') {
-            bX = -halfL * 0.42; bY = 0;
-          } else if (isTractor) {
-            bX = -halfL * 0.10; bY = 0;
-          } else {
-            bX = halfL * 0.25; bY = 0;
-          }
+          let bX = halfL * 0.25;
+          if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
+          else if (car.type === 'roller_compact_sidewalk') bX = -halfL * 0.58;
+          else if (car.type === 'roller_pneumatic') bX = -halfL * 0.28;
+          else if (car.type === 'paver_asphalt_wheeled') bX = -halfL * 0.42;
+          else if (isTractor) bX = -halfL * 0.10;
 
-          const wx = car.x + cosA * bX - sinA * bY;
-          const wy = car.y + sinA * bX + cosA * bY;
-          const bRadius = (16 + beaconPulse * 14) * fogFactor;
-          const bGrad = ctx.createRadialGradient(wx, wy, 0.5, wx, wy, bRadius);
-          bGrad.addColorStop(0, `rgba(255, 220, 100, ${0.85 * beaconPulse})`);
-          bGrad.addColorStop(0.4, `rgba(245, 158, 11, ${0.45 * beaconPulse})`);
+          const wx = car.x + cosA * bX;
+          const wy = car.y + sinA * bX;
+          const domeRadius = 5.5 + beaconPulse * 2.5;
+          const bGrad = ctx.createRadialGradient(wx, wy, 0.4, wx, wy, domeRadius);
+          bGrad.addColorStop(0, `rgba(255, 230, 130, ${(0.90 * beaconPulse).toFixed(3)})`);
+          bGrad.addColorStop(0.45, `rgba(245, 158, 11, ${(0.45 * beaconPulse).toFixed(3)})`);
           bGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
           ctx.fillStyle = bGrad;
-          ctx.beginPath(); ctx.arc(wx, wy, bRadius, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(wx, wy, domeRadius, 0, Math.PI * 2); ctx.fill();
+
+          if (isFog && weights.fog > 0.08) {
+            const haloRad = (16 + beaconPulse * 12) * fogFactor;
+            const haloGrad = ctx.createRadialGradient(wx, wy, 1, wx, wy, haloRad);
+            haloGrad.addColorStop(0, `rgba(255, 195, 70, ${(0.18 * weights.fog * beaconPulse).toFixed(3)})`);
+            haloGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+            ctx.fillStyle = haloGrad;
+            ctx.beginPath(); ctx.arc(wx, wy, haloRad, 0, Math.PI * 2); ctx.fill();
+          }
         }
       }
 
-      // Front Fog Lights (ПТФ передние) Forward-Oriented Additive Optics
+      // Front Fog Lights (ПТФ передние) Fog Scattering Only
       if (car.frontFogLightsOn) {
         const fogLeftLX = car.length * (optics.fogLightLeft?.xFrac ?? 0.48) - fc;
         const fogLeftLY = car.width * (optics.fogLightLeft?.yFrac ?? -0.31);
@@ -17081,7 +17517,13 @@ export class GameRenderer {
           const lx = car.x + cosA * lxOffset - sinA * lyOffset;
           const ly = car.y + sinA * lxOffset + cosA * lyOffset;
 
-          // Atmospheric scattering in genuine particulate fog ONLY (zero air cones in clear/dry weather)
+          // Lens emitter pip
+          const lensPip = ctx.createRadialGradient(lx, ly, 0.2, lx, ly, 2.6);
+          lensPip.addColorStop(0, 'rgba(255, 240, 160, 0.80)');
+          lensPip.addColorStop(1, 'rgba(255, 210, 80, 0)');
+          ctx.fillStyle = lensPip;
+          ctx.beginPath(); ctx.arc(lx, ly, 2.6, 0, Math.PI * 2); ctx.fill();
+
           if (isFog && weights.fog > 0.05) {
             const fogSpreadMult = 1.0 + 0.20 * weights.fog;
             const fogBeamLen = 130 * (1.0 - 0.25 * weights.fog);
@@ -17124,50 +17566,41 @@ export class GameRenderer {
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      let rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4;
-      let rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
-      let rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4;
-      let rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
+      const rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4;
+      const rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
+      const rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4;
+      const rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
 
       const isReversing = isVehicleReverseGearActive(car);
       const isBraking = !!car.brakeLightsOn;
 
-      // Rear Fog Lights (Задние ПТФ): High-candela warning lamp.
-      // Pure optical lens emitter with zero ground searchlight and zero floating ovals.
-      // In genuine particulate fog only, a soft atmospheric halo radiates around the lens face.
       if (car.rearFogLightsOn) {
-        drawRearLightAdditive(rearLeftLX, rearLeftLY, 0, 0, 'rgba(255, 20, 20, 0.90)', 4.0, true);
-        if (!isSoloMoto) drawRearLightAdditive(rearRightLX, rearRightLY, 0, 0, 'rgba(255, 20, 20, 0.90)', 4.0, true);
+        drawRearLightAdditive(rearLeftLX, rearLeftLY, 4.0, 'rgba(255, 20, 20, 0.90)', true);
+        if (!isSoloMoto) drawRearLightAdditive(rearRightLX, rearRightLY, 4.0, 'rgba(255, 20, 20, 0.90)', true);
       }
 
       if (isReversing) {
-        // Reverse lights: crisp neutral-white backward ground wash anchored at rear fascia
-        drawRearLightAdditive(rearLeftLX, rearLeftLY, 32, 22, 'rgba(255, 255, 255, 0.65)', 3.6);
-        drawRearLightAdditive(rearRightLX, rearRightLY, 32, 22, 'rgba(255, 255, 255, 0.65)', 3.6);
+        drawRearLightAdditive(rearLeftLX, rearLeftLY, 3.2, 'rgba(240, 248, 255, 0.72)');
+        drawRearLightAdditive(rearRightLX, rearRightLY, 3.2, 'rgba(240, 248, 255, 0.72)');
         if (isTractor) {
-          // Tractor rear cab work floods
           const cabFloodLX = -halfL * 0.26;
           const cabFloodLY = halfW * 0.35;
-          drawRearLightAdditive(cabFloodLX, -cabFloodLY, 42, 35, 'rgba(255, 255, 220, 0.70)', 4.8);
-          drawRearLightAdditive(cabFloodLX, cabFloodLY, 42, 35, 'rgba(255, 255, 220, 0.70)', 4.8);
+          drawRearLightAdditive(cabFloodLX, -cabFloodLY, 4.0, 'rgba(255, 244, 205, 0.75)');
+          drawRearLightAdditive(cabFloodLX, cabFloodLY, 4.0, 'rgba(255, 244, 205, 0.75)');
         }
       }
 
-      // Brake lights: High-intensity red illumination behind the vehicle (runs ALONGSIDE reverse when braking in reverse!)
       if (isBraking) {
-        drawRearLightAdditive(rearLeftLX, rearLeftLY, 26, 20, 'rgba(255, 30, 30, 0.75)', 4.2);
-        drawRearLightAdditive(rearRightLX, rearRightLY, 26, 20, 'rgba(255, 30, 30, 0.75)', 4.2);
-
-        // Third Brake Light (CHMSL) strictly driven by vehicle optics mounts
+        drawRearLightAdditive(rearLeftLX, rearLeftLY, 3.8, 'rgba(255, 34, 30, 0.82)');
+        drawRearLightAdditive(rearRightLX, rearRightLY, 3.8, 'rgba(255, 34, 30, 0.82)');
         if (optics.thirdBrakeLight?.enabled) {
           const tblLX = car.length * optics.thirdBrakeLight.xFrac + rc * 0.7;
           const tblLY = car.width * optics.thirdBrakeLight.yFrac;
-          drawRearLightAdditive(tblLX, tblLY, 14, 10, 'rgba(255, 35, 35, 0.75)', 4.5);
+          drawRearLightAdditive(tblLX, tblLY, 3.6, 'rgba(255, 36, 36, 0.78)');
         }
       } else if (!isReversing && hasPositionLightsOn) {
-        // Ruby red running lights
-        drawRearLightAdditive(rearLeftLX, rearLeftLY, 6, 8, 'rgba(220, 20, 20, 0.35)', 3.6);
-        drawRearLightAdditive(rearRightLX, rearRightLY, 6, 8, 'rgba(220, 20, 20, 0.35)', 3.6);
+        drawRearLightAdditive(rearLeftLX, rearLeftLY, 2.8, 'rgba(220, 20, 20, 0.45)');
+        drawRearLightAdditive(rearRightLX, rearRightLY, 2.8, 'rgba(220, 20, 20, 0.45)');
       }
 
       if (car.turnSignal !== 'none') {
@@ -17224,40 +17657,13 @@ export class GameRenderer {
       }
     }
 
-    // C. Traffic Lights Glowing Lenses (Additive - Subtle focused 8px lens aura)
+    // C. Traffic Lights Glowing Lenses (Additive - Focused 8px lens aura)
     for (const prop of props) {
       if (prop.type !== 'traffic_light' || prop.isBroken) continue;
       if (prop.x < minX - 100 || prop.x > maxX + 100 || prop.y < minY - 100 || prop.y > maxY + 100) continue;
 
-      const inter = world.intersections.find((i) => i.id === prop.intersectionId);
-      if (!inter) continue;
-
-      const phase = inter.phases?.[inter.currentPhaseIndex] || inter.phases?.[0];
-      if (!phase) continue;
-      let lightColor = '';
-      if (prop.direction === 'north' || prop.direction === 'south') {
-        const state = phase.nsState;
-        if (state === 'green') {
-          lightColor = 'rgba(34, 197, 94, 0.95)';
-        } else if (state === 'green_flashing') {
-          lightColor = Math.floor(Date.now() / 250) % 2 === 0 ? 'rgba(34, 197, 94, 0.95)' : 'rgba(0, 0, 0, 0)';
-        } else if (state === 'yellow') {
-          lightColor = 'rgba(234, 179, 8, 0.95)';
-        } else {
-          lightColor = 'rgba(239, 68, 68, 0.95)';
-        }
-      } else {
-        const state = phase.ewState;
-        if (state === 'green') {
-          lightColor = 'rgba(34, 197, 94, 0.95)';
-        } else if (state === 'green_flashing') {
-          lightColor = Math.floor(Date.now() / 250) % 2 === 0 ? 'rgba(34, 197, 94, 0.95)' : 'rgba(0, 0, 0, 0)';
-        } else if (state === 'yellow') {
-          lightColor = 'rgba(234, 179, 8, 0.95)';
-        } else {
-          lightColor = 'rgba(239, 68, 68, 0.95)';
-        }
-      }
+      const tfRgb = getTrafficLightRgb(prop);
+      if (!tfRgb) continue;
 
       const cosFA = Math.cos(prop.angle);
       const sinFA = Math.sin(prop.angle);
@@ -17265,8 +17671,8 @@ export class GameRenderer {
       const signalY = prop.y + sinFA * 8.5;
 
       const sigGlow = ctx.createRadialGradient(signalX, signalY, 0.5, signalX, signalY, 8);
-      sigGlow.addColorStop(0, lightColor);
-      sigGlow.addColorStop(0.5, lightColor.replace('0.95', '0.30'));
+      sigGlow.addColorStop(0, `rgba(${tfRgb[0]}, ${tfRgb[1]}, ${tfRgb[2]}, 0.92)`);
+      sigGlow.addColorStop(0.5, `rgba(${tfRgb[0]}, ${tfRgb[1]}, ${tfRgb[2]}, 0.28)`);
       sigGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = sigGlow;
       ctx.beginPath();
@@ -17274,66 +17680,50 @@ export class GameRenderer {
       ctx.fill();
     }
 
-    // D. Police Siren Beams (Rotating volumetric optical lobes with curved diffusion)
+    // D. Police Siren Lightbar Pinpoints & Weather Halo (Ground rotating lobes are now in Pass 1 cCtx masked by D_env)
     for (const car of nearbyVehicles) {
       if (car.sirenOn) {
+        const cosA = Math.cos(car.angle);
+        const sinA = Math.sin(car.angle);
         const strobe = (car.sirenStrobe || 0);
-        const redAngle = car.angle + Math.sin(strobe) * 1.2;
-        const blueAngle = car.angle - Math.sin(strobe) * 1.2;
-        const sirenReach = 115;
-        const sirenSpread = 0.65;
+        const pulseRed = Math.max(0.25, 0.5 + 0.5 * Math.sin(strobe));
+        const pulseBlue = Math.max(0.25, 0.5 - 0.5 * Math.sin(strobe));
+        const barRX = car.x - sinA * -4.0;
+        const barRY = car.y + cosA * -4.0;
+        const barBX = car.x - sinA * 4.0;
+        const barBY = car.y + cosA * 4.0;
 
-        // Red rotating beacon lobe
-        const redMidX = car.x + Math.cos(redAngle) * (sirenReach * 0.45);
-        const redMidY = car.y + Math.sin(redAngle) * (sirenReach * 0.45);
-        const rGlow = ctx.createRadialGradient(car.x, car.y, 2, redMidX, redMidY, sirenReach);
-        rGlow.addColorStop(0.0, 'rgba(255, 60, 60, 0.55)');
-        rGlow.addColorStop(0.3, 'rgba(255, 40, 40, 0.28)');
-        rGlow.addColorStop(0.7, 'rgba(239, 68, 68, 0.07)');
-        rGlow.addColorStop(1.0, 'rgba(239, 68, 68, 0)');
-        ctx.fillStyle = rGlow;
-        ctx.beginPath();
-        ctx.moveTo(car.x, car.y);
-        const rLeftX = car.x + Math.cos(redAngle - sirenSpread) * sirenReach;
-        const rLeftY = car.y + Math.sin(redAngle - sirenSpread) * sirenReach;
-        const rRightX = car.x + Math.cos(redAngle + sirenSpread) * sirenReach;
-        const rRightY = car.y + Math.sin(redAngle + sirenSpread) * sirenReach;
-        ctx.quadraticCurveTo(car.x + Math.cos(redAngle - sirenSpread * 0.5) * (sirenReach * 0.6), car.y + Math.sin(redAngle - sirenSpread * 0.5) * (sirenReach * 0.6), rLeftX, rLeftY);
-        ctx.quadraticCurveTo(car.x + Math.cos(redAngle) * (sirenReach + 20), car.y + Math.sin(redAngle) * (sirenReach + 20), rRightX, rRightY);
-        ctx.quadraticCurveTo(car.x + Math.cos(redAngle + sirenSpread * 0.5) * (sirenReach * 0.6), car.y + Math.sin(redAngle + sirenSpread * 0.5) * (sirenReach * 0.6), car.x, car.y);
-        ctx.closePath();
-        ctx.fill();
+        // Crisp left/right roof lightbar optical lens flares
+        const rPin = ctx.createRadialGradient(barRX, barRY, 0.4, barRX, barRY, 7.5);
+        rPin.addColorStop(0.0, `rgba(255, 220, 220, ${(0.90 * pulseRed).toFixed(3)})`);
+        rPin.addColorStop(0.35, `rgba(255, 48, 48, ${(0.60 * pulseRed).toFixed(3)})`);
+        rPin.addColorStop(1.0, 'rgba(239, 68, 68, 0)');
+        ctx.fillStyle = rPin;
+        ctx.beginPath(); ctx.arc(barRX, barRY, 7.5, 0, Math.PI * 2); ctx.fill();
 
-        // Blue rotating beacon lobe
-        const blueMidX = car.x + Math.cos(blueAngle) * (sirenReach * 0.45);
-        const blueMidY = car.y + Math.sin(blueAngle) * (sirenReach * 0.45);
-        const bGlow = ctx.createRadialGradient(car.x, car.y, 2, blueMidX, blueMidY, sirenReach);
-        bGlow.addColorStop(0.0, 'rgba(60, 130, 255, 0.55)');
-        bGlow.addColorStop(0.3, 'rgba(40, 100, 255, 0.28)');
-        bGlow.addColorStop(0.7, 'rgba(59, 130, 246, 0.07)');
-        bGlow.addColorStop(1.0, 'rgba(59, 130, 246, 0)');
-        ctx.fillStyle = bGlow;
-        ctx.beginPath();
-        ctx.moveTo(car.x, car.y);
-        const bLeftX = car.x + Math.cos(blueAngle - sirenSpread) * sirenReach;
-        const bLeftY = car.y + Math.sin(blueAngle - sirenSpread) * sirenReach;
-        const bRightX = car.x + Math.cos(blueAngle + sirenSpread) * sirenReach;
-        const bRightY = car.y + Math.sin(blueAngle + sirenSpread) * sirenReach;
-        ctx.quadraticCurveTo(car.x + Math.cos(blueAngle - sirenSpread * 0.5) * (sirenReach * 0.6), car.y + Math.sin(blueAngle - sirenSpread * 0.5) * (sirenReach * 0.6), bLeftX, bLeftY);
-        ctx.quadraticCurveTo(car.x + Math.cos(blueAngle) * (sirenReach + 20), car.y + Math.sin(blueAngle) * (sirenReach + 20), bRightX, bRightY);
-        ctx.quadraticCurveTo(car.x + Math.cos(blueAngle + sirenSpread * 0.5) * (sirenReach * 0.6), car.y + Math.sin(blueAngle + sirenSpread * 0.5) * (sirenReach * 0.6), car.x, car.y);
-        ctx.closePath();
-        ctx.fill();
+        const bPin = ctx.createRadialGradient(barBX, barBY, 0.4, barBX, barBY, 7.5);
+        bPin.addColorStop(0.0, `rgba(220, 238, 255, ${(0.90 * pulseBlue).toFixed(3)})`);
+        bPin.addColorStop(0.35, `rgba(52, 132, 255, ${(0.60 * pulseBlue).toFixed(3)})`);
+        bPin.addColorStop(1.0, 'rgba(59, 130, 246, 0)');
+        ctx.fillStyle = bPin;
+        ctx.beginPath(); ctx.arc(barBX, barBY, 7.5, 0, Math.PI * 2); ctx.fill();
 
-        // Central roof strobe lens flare
-        const roofBeacon = ctx.createRadialGradient(car.x, car.y, 0.5, car.x, car.y, 8);
-        roofBeacon.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-        roofBeacon.addColorStop(0.5, 'rgba(147, 197, 253, 0.4)');
-        roofBeacon.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = roofBeacon;
-        ctx.beginPath();
-        ctx.arc(car.x, car.y, 8, 0, Math.PI * 2);
-        ctx.fill();
+        // Atmospheric scatter around lightbar ONLY in fog or rain
+        if (isFog || isRaining) {
+          const mistScale = Math.min(0.24, (isFog ? 0.18 * weights.fog : 0.08 * weights.rain) * weatherTransition);
+          const mistRad = 30 * fogFactor;
+          const rMist = ctx.createRadialGradient(barRX, barRY, 2, barRX, barRY, mistRad);
+          rMist.addColorStop(0, `rgba(255, 55, 55, ${(mistScale * pulseRed).toFixed(3)})`);
+          rMist.addColorStop(1, 'rgba(239, 68, 68, 0)');
+          ctx.fillStyle = rMist;
+          ctx.beginPath(); ctx.arc(barRX, barRY, mistRad, 0, Math.PI * 2); ctx.fill();
+
+          const bMist = ctx.createRadialGradient(barBX, barBY, 2, barBX, barBY, mistRad);
+          bMist.addColorStop(0, `rgba(60, 140, 255, ${(mistScale * pulseBlue).toFixed(3)})`);
+          bMist.addColorStop(1, 'rgba(59, 130, 246, 0)');
+          ctx.fillStyle = bMist;
+          ctx.beginPath(); ctx.arc(barBX, barBY, mistRad, 0, Math.PI * 2); ctx.fill();
+        }
       }
     }
 
@@ -17342,52 +17732,71 @@ export class GameRenderer {
       GasStationRenderer.renderAdditiveGlow(ctx, nightAlpha, fogFactor);
     }
 
-    // G. Player Handheld & Smartphone Flashlight Volumetric Cone & LED Flare (Pass 2)
-    if (p && isPlayerFlashlightOn && p.x >= minX - 300 && p.x <= maxX + 300 && p.y >= minY - 300 && p.y <= maxY + 300) {
-      const aimAngle = p.aimAngle !== undefined ? p.aimAngle : p.angle;
-      const fRange = 280 * fogFactor;
-      const fSpread = 0.52;
+    // F2. Railway Signal Lens Flares & Garage Sconce Bulb Pinpoints
+    RailwaySignalingSystem.renderAdditiveOptics(ctx, world, minX, minY, maxX, maxY);
+    GarageCooperativeRenderer.renderAdditiveGlow(ctx, world, nightAlpha, fogFactor);
 
+    // G. Player & Remote Handheld Flashlight Lens Flare + Smooth Parabolic Weather Haze (Pass 2)
+    const drawFlashlightAdd = (ox: number, oy: number, aimAngle: number, fRange: number, fSpread: number, rgb: readonly [number, number, number]) => {
       ctx.save();
-      ctx.translate(p.x, p.y);
+      ctx.translate(ox, oy);
       ctx.rotate(aimAngle);
 
-      // Atmospheric haze only when foggy or rainy
       if (isFog || isRaining) {
-        const mistAlpha = (isFog ? 0.08 : 0.035) * weatherTransition;
-        const addCone = ctx.createRadialGradient(0, 0, 2, fRange * 0.3, 0, fRange);
-        addCone.addColorStop(0, `rgba(240, 249, 255, ${mistAlpha})`);
-        addCone.addColorStop(0.4, `rgba(224, 242, 254, ${mistAlpha * 0.35})`);
-        addCone.addColorStop(1, 'rgba(186, 230, 253, 0)');
+        const mistAlpha = (isFog ? 0.07 : 0.03) * weatherTransition;
+        const farX = Math.cos(fSpread) * fRange;
+        const farY = Math.sin(fSpread) * fRange;
+        const addCone = ctx.createRadialGradient(4, 0, 2, fRange * 0.34, 0, fRange * 1.05);
+        addCone.addColorStop(0.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${mistAlpha.toFixed(3)})`);
+        addCone.addColorStop(0.45, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(mistAlpha * 0.35).toFixed(3)})`);
+        addCone.addColorStop(1.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
 
         ctx.fillStyle = addCone;
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, fRange, -fSpread, fSpread);
+        ctx.moveTo(4, -2.5);
+        ctx.quadraticCurveTo(fRange * 0.48, -farY * 0.62, farX, -farY);
+        ctx.quadraticCurveTo(fRange * 1.12, 0, farX, farY);
+        ctx.quadraticCurveTo(fRange * 0.48, farY * 0.62, 4, 2.5);
         ctx.closePath();
         ctx.fill();
       }
 
-      // Compact LED emitter lens flare at player origin
-      const emitterGlow = ctx.createRadialGradient(0, 0, 0.5, 0, 0, 6);
-      emitterGlow.addColorStop(0, 'rgba(255, 255, 255, 0.90)');
-      emitterGlow.addColorStop(0.5, 'rgba(224, 242, 254, 0.35)');
-      emitterGlow.addColorStop(1, 'rgba(224, 242, 254, 0)');
+      const emitterGlow = ctx.createRadialGradient(0, 0, 0.5, 0, 0, 5.5);
+      emitterGlow.addColorStop(0, 'rgba(255, 255, 255, 0.88)');
+      emitterGlow.addColorStop(0.5, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.34)`);
+      emitterGlow.addColorStop(1, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
       ctx.fillStyle = emitterGlow;
       ctx.beginPath();
-      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
+    };
+
+    if (p && isPlayerFlashlightOn && p.x >= minX - 300 && p.x <= maxX + 300 && p.y >= minY - 300 && p.y <= maxY + 300) {
+      const aimAngle = p.aimAngle !== undefined ? p.aimAngle : p.angle;
+      drawFlashlightAdd(p.x, p.y, aimAngle, 280 * fogFactor, 0.48, getPlayerFlashlightRgb(p));
     }
 
-    // G. Rolling Stock Dynamic Light Optics (Additive volumetric projector beam, lenses, and warm windows)
-    RollingStockRenderer.renderLightmapOptics(ctx, world, minX, minY, maxX, maxY, effectiveAlpha, fogFactor);
+    if (remotePlayers && remotePlayers.length > 0) {
+      for (const rp of remotePlayers) {
+        const rpPhoneOn = !rp.isInVehicle && !!(rp as any).phoneFlashlightOn;
+        const rpHandOn = !rp.isInVehicle && !!(rp as any).flashlightOn;
+        if ((rpPhoneOn || rpHandOn) && rp.x >= minX - 300 && rp.x <= maxX + 300 && rp.y >= minY - 300 && rp.y <= maxY + 300) {
+          const aimAngle = (rp as any).aimAngle !== undefined ? (rp as any).aimAngle : rp.angle;
+          const rpRgb: readonly [number, number, number] = rpHandOn ? [255, 240, 200] : [226, 240, 255];
+          drawFlashlightAdd(rp.x, rp.y, aimAngle, 260 * fogFactor, 0.46, rpRgb);
+        }
+      }
+    }
+
+    // G2. Rolling Stock Dynamic Light Optics (Projector, buffer, tail lens flares, and night window glow)
+    RollingStockRenderer.renderLightmapOptics(ctx, world, minX, minY, maxX, maxY, nightAlpha, fogFactor);
 
     // H. Active Fires Photometric Blackbody Radiance (Warm flickering firelight pool on asphalt, cars & walls)
     {
       const nowAddSec = performance.now() * 0.001;
-      const ambientBoost = 0.32 + 0.68 * Math.max(effectiveAlpha, sunState.shadowOpacity * 0.65);
+      const ambientBoost = 0.28 + 0.72 * Math.max(effectiveAlpha, sunState.shadowOpacity * 0.65);
 
       const drawWarmFirePool = (fx: number, fy: number, coreR: number, outerR: number, peakAlpha: number) => {
         if (peakAlpha <= 0.004 || outerR <= 2) return;
@@ -17414,7 +17823,7 @@ export class GameRenderer {
           const jy = Math.cos(nowAddSec * 19.1 - stPhase) * 1.5;
           const fInt = Math.max(0.2, st.fireIntensity || 0.6) * Math.min(1.0, (st.alpha ?? 0.6) * 2.0);
           const rad = Math.max(46, st.radius * 4.8) * flick * fogFactor;
-          const peakA = Math.min(0.34, 0.24 * fInt * ambientBoost * flick);
+          const peakA = Math.min(0.28, 0.20 * fInt * ambientBoost * flick);
           drawWarmFirePool(st.x + jx, st.y + jy, Math.max(1.5, st.radius * 0.35), rad, peakA);
         }
       }
@@ -17434,17 +17843,17 @@ export class GameRenderer {
         if (dmg.engineFire) {
           const ex = car.x + cosA * (halfL * 0.30) + jx;
           const ey = car.y + sinA * (halfL * 0.30) + jy;
-          drawWarmFirePool(ex, ey, 3.0, (82 + fInt * 55) * flick * fogFactor, Math.min(0.36, 0.26 * fInt * ambientBoost * flick));
+          drawWarmFirePool(ex, ey, 3.0, (82 + fInt * 55) * flick * fogFactor, Math.min(0.30, 0.22 * fInt * ambientBoost * flick));
         }
         if (dmg.cabinFire) {
           const cx = car.x + jx;
           const cy = car.y + jy;
-          drawWarmFirePool(cx, cy, 4.0, (105 + fInt * 68) * flick * fogFactor, Math.min(0.40, 0.30 * fInt * ambientBoost * flick));
+          drawWarmFirePool(cx, cy, 4.0, (105 + fInt * 68) * flick * fogFactor, Math.min(0.34, 0.25 * fInt * ambientBoost * flick));
         }
         if (dmg.fuelTankFire) {
           const tx = car.x - cosA * (halfL * 0.34) + jx;
           const ty = car.y - sinA * (halfL * 0.34) + jy;
-          drawWarmFirePool(tx, ty, 3.0, (78 + fInt * 52) * flick * fogFactor, Math.min(0.35, 0.25 * fInt * ambientBoost * flick));
+          drawWarmFirePool(tx, ty, 3.0, (78 + fInt * 52) * flick * fogFactor, Math.min(0.29, 0.21 * fInt * ambientBoost * flick));
         }
       }
     }

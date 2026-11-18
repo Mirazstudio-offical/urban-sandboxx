@@ -405,6 +405,7 @@ export function drawMedicalItem(ctx: CanvasRenderingContext2D, itemId: string): 
       return true;
     }
 
+    case 'panthenol':
     case 'panthenol_spray': {
       drawShadow(ctx, 6.8, 2.8, 8, 0.22);
 

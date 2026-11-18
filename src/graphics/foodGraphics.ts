@@ -316,6 +316,7 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       return true;
     }
 
+    case 'cookies':
     case 'cookie_pack': {
       drawShadow(ctx, 7.5, 2.8, 7.5, 0.22);
 

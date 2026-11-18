@@ -127,7 +127,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
         const id = getEffectiveMedId(item);
         if (!id) return false;
         if (id === 'splint') return injury.type === 'fracture';
-        if (id === 'panthenol_spray') return injury.type === 'burn' || injury.type === 'abrasion';
+        if (id === 'panthenol' || id === 'panthenol_spray') return injury.type === 'burn' || injury.type === 'abrasion';
         if (id === 'spasatel_ointment') return injury.type === 'burn' || injury.type === 'abrasion' || injury.type === 'bruise';
         if (id === 'zelenka') return injury.type === 'abrasion' || injury.type === 'bleeding' || injury.type === 'bruise' || injury.type === 'burn';
         if (id === 'iodine') return injury.type === 'abrasion' || injury.type === 'bruise' || injury.type === 'sprain';

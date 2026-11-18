@@ -947,6 +947,17 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
     }
 
     // Woven berry baskets (Blueberry, Lingonberry, Cranberry, Raspberry, Strawberry, Blackcurrant, Redcurrant, Cherry, Blackberry, Sea Buckthorn, Elderberry)
+    case 'berries_blueberry':
+    case 'berries_lingonberry':
+    case 'berries_cranberry':
+    case 'berries_raspberry':
+    case 'berries_strawberry':
+    case 'berries_blackcurrant':
+    case 'berries_redcurrant':
+    case 'berries_cherry':
+    case 'berries_blackberry':
+    case 'berries_sea_buckthorn':
+    case 'berries_elderberry':
     case 'blueberry_basket':
     case 'lingonberry_basket':
     case 'cranberry_basket':
@@ -977,12 +988,12 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
 
       // Berry mound on top
       let berryColor = '#2563eb';
-      if (itemId === 'lingonberry_basket' || itemId === 'cranberry_basket' || itemId === 'redcurrant_basket') berryColor = '#dc2626';
-      if (itemId === 'raspberry_basket' || itemId === 'strawberry_basket') berryColor = '#e11d48';
-      if (itemId === 'blackcurrant_basket' || itemId === 'cherry_basket') berryColor = '#18181b';
-      if (itemId === 'blackberry_basket') berryColor = '#09090b';
-      if (itemId === 'sea_buckthorn_basket') berryColor = '#f97316';
-      if (itemId === 'elderberry_basket') berryColor = '#3b0764';
+      if (itemId === 'berries_lingonberry' || itemId === 'berries_cranberry' || itemId === 'berries_redcurrant' || itemId === 'lingonberry_basket' || itemId === 'cranberry_basket' || itemId === 'redcurrant_basket') berryColor = '#dc2626';
+      if (itemId === 'berries_raspberry' || itemId === 'berries_strawberry' || itemId === 'raspberry_basket' || itemId === 'strawberry_basket') berryColor = '#e11d48';
+      if (itemId === 'berries_blackcurrant' || itemId === 'berries_cherry' || itemId === 'blackcurrant_basket' || itemId === 'cherry_basket') berryColor = '#18181b';
+      if (itemId === 'berries_blackberry' || itemId === 'blackberry_basket') berryColor = '#09090b';
+      if (itemId === 'berries_sea_buckthorn' || itemId === 'sea_buckthorn_basket') berryColor = '#f97316';
+      if (itemId === 'berries_elderberry' || itemId === 'elderberry_basket') berryColor = '#3b0764';
 
       ctx.fillStyle = berryColor;
       for (const pt of [[-4, -3], [-1.5, -4], [1.5, -4], [4, -3], [-3, -1], [0, -1.5], [3, -1]]) {
@@ -1202,6 +1213,8 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'mushrooms_chanterelle':
+    case 'mushrooms_honey_agaric':
     case 'chanterelle_basket':
     case 'honey_agaric_basket': {
       drawShadow(ctx, 7.5, 3, 7.8, 0.26);
@@ -1214,7 +1227,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       ctx.fill();
 
       // Yellow Chanterelles or Honey agaric caps
-      const mushColor = itemId === 'chanterelle_basket' ? '#fbbf24' : '#d97706';
+      const mushColor = (itemId === 'mushrooms_chanterelle' || itemId === 'chanterelle_basket') ? '#fbbf24' : '#d97706';
       ctx.fillStyle = mushColor;
       for (const pt of [[-3.5, -3], [-1, -4.5], [2, -3.5], [-2, -1.5], [1.5, -1.5]]) {
         ctx.beginPath();
@@ -1327,6 +1340,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
     }
 
     case 'shiitake_fresh':
+    case 'shiitake_dried':
     case 'shiitake_dried_bag':
     case 'portobello_mushroom':
     case 'wood_ear_mushroom_dried':
@@ -1759,9 +1773,13 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'garlic_powder':
     case 'garlic_powder_jar':
+    case 'dill_dried':
     case 'dill_dried_jar':
+    case 'basil_dried':
     case 'basil_dried_jar':
+    case 'mint_dried':
     case 'mint_dried_jar': {
       drawShadow(ctx, 5.5, 2.4, 7.8, 0.22);
       // Glass spice jar
@@ -1771,9 +1789,9 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       ctx.fill();
       // Spice color contents
       let spiceColor = '#fef08a'; // garlic
-      if (itemId === 'dill_dried_jar') spiceColor = '#4d7c0f';
-      if (itemId === 'basil_dried_jar') spiceColor = '#15803d';
-      if (itemId === 'mint_dried_jar') spiceColor = '#065f46';
+      if (itemId === 'dill_dried' || itemId === 'dill_dried_jar') spiceColor = '#4d7c0f';
+      if (itemId === 'basil_dried' || itemId === 'basil_dried_jar') spiceColor = '#15803d';
+      if (itemId === 'mint_dried' || itemId === 'mint_dried_jar') spiceColor = '#065f46';
       ctx.fillStyle = spiceColor;
       ctx.fillRect(-3.2, -2, 6.4, 7);
       // Gold cap
@@ -1796,6 +1814,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'sun_dried_tomatoes':
     case 'tomato_sundried_jar': {
       drawShadow(ctx, 6, 2.5, 7.8, 0.24);
       // Glass jar with golden oil
@@ -1813,6 +1832,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'tomato_paste':
     case 'tomato_paste_jar': {
       drawShadow(ctx, 6, 2.5, 7.8, 0.24);
       // Rich red paste inside glass jar
@@ -1842,6 +1862,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'cucumber_pickled':
     case 'cucumber_pickled_jar': {
       drawShadow(ctx, 6.5, 2.8, 7.8, 0.25);
       // Green brine
@@ -1870,11 +1891,13 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'caviar_eggplant':
+    case 'caviar_squash':
     case 'eggplant_caviar_jar':
     case 'zucchini_caviar_jar': {
       drawShadow(ctx, 6.5, 2.8, 7.8, 0.25);
       // Caviar spread color
-      ctx.fillStyle = itemId === 'eggplant_caviar_jar' ? '#78350f' : '#ea580c';
+      ctx.fillStyle = (itemId === 'caviar_eggplant' || itemId === 'eggplant_caviar_jar') ? '#78350f' : '#ea580c';
       ctx.beginPath();
       ctx.roundRect(-5, -4, 10, 11, 2);
       ctx.fill();
@@ -1907,6 +1930,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'pumpkin_seeds':
     case 'pumpkin_seeds_bag': {
       drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
       // Transparent sachet
@@ -1955,6 +1979,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'cabbage_sauerkraut':
     case 'cabbage_sauerkraut_jar': {
       drawShadow(ctx, 6.5, 2.8, 7.8, 0.25);
       // Sauerkraut inside
@@ -2042,6 +2067,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'jalapeno_pickled':
     case 'jalapeno_pickled_jar': {
       drawShadow(ctx, 6, 2.5, 7.8, 0.24);
       // Glass jar with olive green rings
@@ -2063,6 +2089,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'ginger_pickled':
     case 'ginger_pickled_box': {
       drawShadow(ctx, 7, 2.6, 7.8, 0.22);
       // Black bento tray
@@ -2094,6 +2121,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'apple_puree':
     case 'apple_puree_jar': {
       drawShadow(ctx, 5.5, 2.4, 7.8, 0.22);
       // Smooth honey-gold puree
@@ -2118,6 +2146,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'peach_halves':
     case 'peach_halves_canned': {
       drawShadow(ctx, 6.5, 2.8, 7.8, 0.26);
       // Golden tin can
@@ -2206,7 +2235,9 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
 
     case 'melon_diced':
     case 'watermelon_diced':
+    case 'pomegranate_seeds':
     case 'pomegranate_seeds_cup':
+    case 'grapes_berries':
     case 'grapes_berries_cup': {
       drawShadow(ctx, 7, 2.8, 7.8, 0.22);
       // Clear plastic cup / tray
@@ -2216,8 +2247,8 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       // Internal treats
       let cColor = '#fb923c'; // melon
       if (itemId === 'watermelon_diced') cColor = '#ef4444';
-      if (itemId === 'pomegranate_seeds_cup') cColor = '#be123c';
-      if (itemId === 'grapes_berries_cup') cColor = '#84cc16';
+      if (itemId === 'pomegranate_seeds' || itemId === 'pomegranate_seeds_cup') cColor = '#be123c';
+      if (itemId === 'grapes_berries' || itemId === 'grapes_berries_cup') cColor = '#84cc16';
       ctx.fillStyle = cColor;
       for (const pt of [[-2.5, -2], [2, -1.5], [-1.5, 1.5], [2, 2]]) {
         ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.8, 0, Math.PI * 2); ctx.fill();
@@ -2225,6 +2256,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'berries_fresh':
     case 'berries_tray_fresh': {
       drawShadow(ctx, 8.8, 3.4, 7.8, 0.24);
 
@@ -2283,11 +2315,13 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    case 'jam_strawberry':
+    case 'jam_raspberry':
     case 'strawberry_jam_jar':
     case 'raspberry_jam_jar': {
       drawShadow(ctx, 6, 2.5, 7.8, 0.24);
       // Luscious ruby/crimson jam
-      ctx.fillStyle = itemId === 'strawberry_jam_jar' ? '#e11d48' : '#be123c';
+      ctx.fillStyle = (itemId === 'jam_strawberry' || itemId === 'strawberry_jam_jar') ? '#e11d48' : '#be123c';
       ctx.beginPath(); ctx.roundRect(-4.5, -4, 9, 10, 1.5); ctx.fill();
       // Gold lid with check fabric top
       ctx.fillStyle = '#eab308';

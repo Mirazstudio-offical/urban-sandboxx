@@ -42,7 +42,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
     if (itemId === 'splint') {
       return injury.type === 'fracture';
     }
-    if (itemId === 'panthenol_spray') {
+    if (itemId === 'panthenol' || itemId === 'panthenol_spray') {
       return injury.type === 'burn' || injury.type === 'abrasion';
     }
     if (itemId === 'spasatel_ointment') {

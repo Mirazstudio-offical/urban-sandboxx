@@ -2301,12 +2301,12 @@ export class RollingStockRenderer {
   }
 
   // =========================================================================
-  // --- 12. NIGHTTIME LIGHTMAP CUTOUTS (PASS 1: DESTINATION-OUT) ---
+  // --- 12. NIGHTTIME LIGHTMAP CUTOUTS (PASS 1: DESTINATION-OUT + COLOR) ---
   // =========================================================================
   /**
-   * Cuts darkness out of the lightmap so train headlights, windows, and cab lights
-   * genuinely penetrate and illuminate the night world around them with natural
-   * curved falloff and penumbra instead of hard polygon edges.
+   * Cuts darkness out of the lightmap and accumulates matching physical color
+   * so train headlights, windows, and cab lights genuinely illuminate and tint
+   * the world with natural curved falloff instead of hard polygon edges.
    */
   public static renderLightmapCutouts(
     lCtx: CanvasRenderingContext2D,
@@ -2316,7 +2316,8 @@ export class RollingStockRenderer {
     maxX: number,
     maxY: number,
     nightAlpha: number,
-    fogFactor: number = 1.0
+    fogFactor: number = 1.0,
+    cCtx?: CanvasRenderingContext2D | null
   ): void {
     if (nightAlpha <= 0.04) return;
     const cars = world.rollingStock;
@@ -2339,10 +2340,29 @@ export class RollingStockRenderer {
       lCtx.translate(car.x, car.y);
       lCtx.rotate(car.angle);
 
+      if (cCtx) {
+        cCtx.save();
+        cCtx.translate(car.x, car.y);
+        cCtx.rotate(car.angle);
+      }
+
       // A. Forward Projector & Headlight Beam Cutout (Прожектор локомотива)
       if (isLead) {
         const beamLen = 540 * fogFactor;
         const beamHalfW = 120 * fogFactor;
+
+        const traceBeamPath = (targetCtx: CanvasRenderingContext2D) => {
+          targetCtx.beginPath();
+          targetCtx.moveTo(0, -3.5);
+          targetCtx.quadraticCurveTo(beamLen * 0.45, -beamHalfW * 0.58, beamLen, -beamHalfW);
+          targetCtx.bezierCurveTo(
+            beamLen + 45, -beamHalfW * 0.5,
+            beamLen + 45, beamHalfW * 0.5,
+            beamLen, beamHalfW
+          );
+          targetCtx.quadraticCurveTo(beamLen * 0.45, beamHalfW * 0.58, 0, 3.5);
+          targetCtx.closePath();
+        };
 
         // 1. Natural volumetric beam with curved parabolic boundary and penumbra
         lCtx.save();
@@ -2357,18 +2377,24 @@ export class RollingStockRenderer {
         coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
 
         lCtx.fillStyle = coneGrad;
-        lCtx.beginPath();
-        lCtx.moveTo(0, 0);
-        lCtx.quadraticCurveTo(beamLen * 0.45, -beamHalfW * 0.55, beamLen, -beamHalfW);
-        lCtx.bezierCurveTo(
-          beamLen + 40, -beamHalfW * 0.5,
-          beamLen + 40, beamHalfW * 0.5,
-          beamLen, beamHalfW
-        );
-        lCtx.quadraticCurveTo(beamLen * 0.45, beamHalfW * 0.55, 0, 0);
-        lCtx.closePath();
+        traceBeamPath(lCtx);
         lCtx.fill();
         lCtx.restore();
+
+        if (cCtx) {
+          cCtx.save();
+          cCtx.translate(halfL, 0);
+          const colBeamGrad = cCtx.createRadialGradient(0, 0, 4, beamLen * 0.35, 0, beamLen);
+          colBeamGrad.addColorStop(0.00, 'rgba(255, 240, 198, 0.48)');
+          colBeamGrad.addColorStop(0.22, 'rgba(255, 232, 172, 0.34)');
+          colBeamGrad.addColorStop(0.55, 'rgba(255, 222, 146, 0.16)');
+          colBeamGrad.addColorStop(0.82, 'rgba(255, 212, 128, 0.05)');
+          colBeamGrad.addColorStop(1.00, 'rgba(255, 212, 128, 0)');
+          cCtx.fillStyle = colBeamGrad;
+          traceBeamPath(cCtx);
+          cCtx.fill();
+          cCtx.restore();
+        }
 
         // 2. High-intensity nose halo & dual buffer lights (diffuse ground illumination)
         const noseHalo = lCtx.createRadialGradient(halfL, 0, 2, halfL, 0, 65 * fogFactor);
@@ -2381,6 +2407,17 @@ export class RollingStockRenderer {
         lCtx.arc(halfL, 0, 65 * fogFactor, 0, Math.PI * 2);
         lCtx.fill();
 
+        if (cCtx) {
+          const noseCol = cCtx.createRadialGradient(halfL, 0, 2, halfL, 0, 65 * fogFactor);
+          noseCol.addColorStop(0.0, 'rgba(255, 238, 190, 0.36)');
+          noseCol.addColorStop(0.45, 'rgba(255, 224, 152, 0.16)');
+          noseCol.addColorStop(1.0, 'rgba(255, 214, 130, 0)');
+          cCtx.fillStyle = noseCol;
+          cCtx.beginPath();
+          cCtx.arc(halfL, 0, 65 * fogFactor, 0, Math.PI * 2);
+          cCtx.fill();
+        }
+
         // Left & right buffer light ground illumination
         for (const by of [-halfW + 6, halfW - 6]) {
           const bGrad = lCtx.createRadialGradient(halfL - 2, by, 1, halfL - 2, by, 36 * fogFactor);
@@ -2392,6 +2429,17 @@ export class RollingStockRenderer {
           lCtx.beginPath();
           lCtx.arc(halfL - 2, by, 36 * fogFactor, 0, Math.PI * 2);
           lCtx.fill();
+
+          if (cCtx) {
+            const bCol = cCtx.createRadialGradient(halfL - 2, by, 1, halfL - 2, by, 36 * fogFactor);
+            bCol.addColorStop(0.0, 'rgba(255, 234, 175, 0.32)');
+            bCol.addColorStop(0.45, 'rgba(255, 214, 132, 0.12)');
+            bCol.addColorStop(1.0, 'rgba(255, 214, 132, 0)');
+            cCtx.fillStyle = bCol;
+            cCtx.beginPath();
+            cCtx.arc(halfL - 2, by, 36 * fogFactor, 0, Math.PI * 2);
+            cCtx.fill();
+          }
         }
 
         // 3. Soft locomotive cab interior glow cutout
@@ -2404,6 +2452,17 @@ export class RollingStockRenderer {
         lCtx.beginPath();
         lCtx.arc(cabX, 0, 32, 0, Math.PI * 2);
         lCtx.fill();
+
+        if (cCtx) {
+          const cabCol = cCtx.createRadialGradient(cabX, 0, 1, cabX, 0, 32);
+          cabCol.addColorStop(0.0, 'rgba(255, 210, 122, 0.28)');
+          cabCol.addColorStop(0.5, 'rgba(255, 192, 92, 0.10)');
+          cabCol.addColorStop(1.0, 'rgba(255, 192, 92, 0)');
+          cCtx.fillStyle = cabCol;
+          cCtx.beginPath();
+          cCtx.arc(cabX, 0, 32, 0, Math.PI * 2);
+          cCtx.fill();
+        }
       }
 
       // B. Passenger Coach & Railbus Windows Illumination (Individual soft-penumbra window pools)
@@ -2434,6 +2493,18 @@ export class RollingStockRenderer {
             lCtx.beginPath();
             lCtx.arc(wx, wy, winSpillRadius, 0, Math.PI * 2);
             lCtx.fill();
+
+            if (cCtx) {
+              const wcGrad = cCtx.createRadialGradient(wx, wy, 1, wx, wy, winSpillRadius);
+              wcGrad.addColorStop(0.0, 'rgba(255, 216, 122, 0.30)');
+              wcGrad.addColorStop(0.4, 'rgba(255, 198, 88, 0.14)');
+              wcGrad.addColorStop(0.8, 'rgba(255, 180, 62, 0.04)');
+              wcGrad.addColorStop(1.0, 'rgba(255, 180, 62, 0)');
+              cCtx.fillStyle = wcGrad;
+              cCtx.beginPath();
+              cCtx.arc(wx, wy, winSpillRadius, 0, Math.PI * 2);
+              cCtx.fill();
+            }
           }
         }
 
@@ -2462,9 +2533,21 @@ export class RollingStockRenderer {
         lCtx.beginPath();
         lCtx.arc(tailX, 0, 26 * fogFactor, 0, Math.PI * 2);
         lCtx.fill();
+
+        if (cCtx) {
+          const tcGrad = cCtx.createRadialGradient(tailX, 0, 1, tailX, 0, 26 * fogFactor);
+          tcGrad.addColorStop(0.0, 'rgba(255, 44, 40, 0.45)');
+          tcGrad.addColorStop(0.5, 'rgba(235, 30, 28, 0.16)');
+          tcGrad.addColorStop(1.0, 'rgba(220, 25, 25, 0)');
+          cCtx.fillStyle = tcGrad;
+          cCtx.beginPath();
+          cCtx.arc(tailX, 0, 26 * fogFactor, 0, Math.PI * 2);
+          cCtx.fill();
+        }
       }
 
       lCtx.restore();
+      if (cCtx) cCtx.restore();
     }
   }
 
@@ -2472,9 +2555,8 @@ export class RollingStockRenderer {
   // --- 13. NIGHTTIME LIGHTMAP OPTICS (PASS 2: ADDITIVE 'LIGHTER') ---
   // =========================================================================
   /**
-   * Draws brilliant optical flares, projector volumetric rays, and warm window
-   * glows directly on top of the world with additive blending.
-   * Uses realistic curved penumbra and soft diffusion (zero hard triangle/laser edges).
+   * Draws crisp optical lens flares and glowing window panes on top of the world
+   * with additive blending (ground beam illumination & color is handled by lightColorCanvas).
    */
   public static renderLightmapOptics(
     ctx: CanvasRenderingContext2D,
@@ -2486,9 +2568,9 @@ export class RollingStockRenderer {
     nightAlpha: number,
     fogFactor: number = 1.0
   ): void {
-    if (nightAlpha <= 0.04) return;
     const cars = world.rollingStock;
     if (!cars || cars.length === 0) return;
+    const vis = Math.max(0.15, Math.min(1.0, nightAlpha * 1.15));
 
     for (let i = 0; i < cars.length; i++) {
       const car = cars[i];
@@ -2507,107 +2589,60 @@ export class RollingStockRenderer {
       ctx.translate(car.x, car.y);
       ctx.rotate(car.angle);
 
-      // A. Locomotive Projector & Headlights Volumetric Scattering (Additive)
+      // A. Locomotive Projector & Buffer Lens Flares
       if (isLead) {
-        const beamLen = 540 * fogFactor;
-        const beamOriginX = halfL;
-        const beamHalfW = 120 * fogFactor;
-
-        // 1. Broad Volumetric Scattering with soft curved boundary and gaussian-like falloff
-        ctx.save();
-        ctx.translate(beamOriginX, 0);
-
-        const beamGrad = ctx.createRadialGradient(10, 0, 5, beamLen * 0.4, 0, beamLen);
-        beamGrad.addColorStop(0.00, `rgba(255, 248, 220, ${0.40 * nightAlpha})`);
-        beamGrad.addColorStop(0.25, `rgba(255, 240, 180, ${0.22 * nightAlpha})`);
-        beamGrad.addColorStop(0.55, `rgba(255, 230, 150, ${0.08 * nightAlpha})`);
-        beamGrad.addColorStop(0.85, `rgba(255, 220, 120, ${0.02 * nightAlpha})`);
-        beamGrad.addColorStop(1.00, 'rgba(255, 220, 120, 0)');
-
-        ctx.fillStyle = beamGrad;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(beamLen * 0.45, -beamHalfW * 0.55, beamLen, -beamHalfW);
-        ctx.bezierCurveTo(
-          beamLen + 40, -beamHalfW * 0.5,
-          beamLen + 40, beamHalfW * 0.5,
-          beamLen, beamHalfW
-        );
-        ctx.quadraticCurveTo(beamLen * 0.45, beamHalfW * 0.55, 0, 0);
-        ctx.closePath();
-        ctx.fill();
-
-        // 2. Soft Forward Optical Core (Natural smooth beam spine)
-        const coreGrad = ctx.createRadialGradient(2, 0, 2, beamLen * 0.35, 0, beamLen * 0.65);
-        coreGrad.addColorStop(0.00, `rgba(255, 255, 255, ${0.55 * nightAlpha})`);
-        coreGrad.addColorStop(0.35, `rgba(255, 250, 225, ${0.22 * nightAlpha})`);
-        coreGrad.addColorStop(0.70, `rgba(255, 240, 195, ${0.06 * nightAlpha})`);
-        coreGrad.addColorStop(1.00, 'rgba(255, 240, 195, 0)');
-        ctx.fillStyle = coreGrad;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(beamLen * 0.35, -28 * fogFactor, beamLen * 0.65, -35 * fogFactor);
-        ctx.quadraticCurveTo(beamLen * 0.70, 0, beamLen * 0.65, 35 * fogFactor);
-        ctx.quadraticCurveTo(beamLen * 0.35, 28 * fogFactor, 0, 0);
-        ctx.closePath();
-        ctx.fill();
-
-        // 3. Projector Lens Flare & Glare Core
-        const flareGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 18);
-        flareGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.95)');
-        flareGrad.addColorStop(0.25, 'rgba(255, 248, 210, 0.65)');
-        flareGrad.addColorStop(0.65, 'rgba(255, 230, 140, 0.20)');
+        const flareGrad = ctx.createRadialGradient(halfL, 0, 1, halfL, 0, 16 * fogFactor);
+        flareGrad.addColorStop(0.0, `rgba(255, 255, 240, ${(0.90 * vis).toFixed(3)})`);
+        flareGrad.addColorStop(0.3, `rgba(255, 242, 195, ${(0.45 * vis).toFixed(3)})`);
+        flareGrad.addColorStop(0.7, `rgba(255, 224, 130, ${(0.12 * vis).toFixed(3)})`);
         flareGrad.addColorStop(1.0, 'rgba(255, 220, 100, 0)');
         ctx.fillStyle = flareGrad;
         ctx.beginPath();
-        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.arc(halfL, 0, 16 * fogFactor, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.restore();
-
-        // 4. Front Buffer Lights Additive Optics
         for (const by of [-halfW + 6, halfW - 6]) {
-          const bGrad = ctx.createRadialGradient(halfL - 2, by, 1, halfL - 2, by, 14);
-          bGrad.addColorStop(0.0, `rgba(255, 252, 235, ${0.85 * nightAlpha})`);
-          bGrad.addColorStop(0.4, `rgba(255, 235, 170, ${0.35 * nightAlpha})`);
+          const bGrad = ctx.createRadialGradient(halfL - 2, by, 0.5, halfL - 2, by, 9);
+          bGrad.addColorStop(0.0, `rgba(255, 252, 235, ${(0.80 * vis).toFixed(3)})`);
+          bGrad.addColorStop(0.45, `rgba(255, 230, 160, ${(0.28 * vis).toFixed(3)})`);
           bGrad.addColorStop(1.0, 'rgba(255, 210, 120, 0)');
           ctx.fillStyle = bGrad;
           ctx.beginPath();
-          ctx.arc(halfL - 2, by, 14, 0, Math.PI * 2);
+          ctx.arc(halfL - 2, by, 9, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
-      // B. Passenger Coach & Railbus Windows Interior Glow (Additive)
-      if (isPassenger) {
+      // B. Passenger Coach & Railbus Window Pane Glow (Additive)
+      if (isPassenger && nightAlpha > 0.06) {
         const roofL = car.length - 24;
         const numWindows = 9;
         const winStep = (roofL - 30) / numWindows;
         for (let w = 0; w < numWindows; w++) {
           const wx = -roofL / 2 + 15 + w * winStep;
           for (const wy of [-halfW + 2, halfW - 2]) {
-            const wGrad = ctx.createRadialGradient(wx + 7, wy, 1, wx + 7, wy, 16);
-            wGrad.addColorStop(0.0, `rgba(254, 240, 138, ${0.55 * nightAlpha})`);
-            wGrad.addColorStop(0.45, `rgba(254, 215, 100, ${0.20 * nightAlpha})`);
+            const wGrad = ctx.createRadialGradient(wx + 7, wy, 0.5, wx + 7, wy, 10);
+            wGrad.addColorStop(0.0, `rgba(254, 240, 148, ${(0.38 * nightAlpha).toFixed(3)})`);
+            wGrad.addColorStop(0.5, `rgba(254, 210, 96, ${(0.12 * nightAlpha).toFixed(3)})`);
             wGrad.addColorStop(1.0, 'rgba(254, 180, 50, 0)');
             ctx.fillStyle = wGrad;
             ctx.beginPath();
-            ctx.arc(wx + 7, wy, 16, 0, Math.PI * 2);
+            ctx.arc(wx + 7, wy, 10, 0, Math.PI * 2);
             ctx.fill();
           }
         }
       }
 
-      // C. Rear Red Tail Marker Light (Additive)
+      // C. Rear Red Tail Marker Lens (Additive)
       if (isTail) {
         const tailX = -halfL;
-        const tGrad = ctx.createRadialGradient(tailX, 0, 1, tailX, 0, 18);
-        tGrad.addColorStop(0.0, `rgba(239, 68, 68, ${0.90 * nightAlpha})`);
-        tGrad.addColorStop(0.4, `rgba(220, 38, 38, ${0.40 * nightAlpha})`);
+        const tGrad = ctx.createRadialGradient(tailX, 0, 0.5, tailX, 0, 10);
+        tGrad.addColorStop(0.0, `rgba(255, 68, 64, ${(0.85 * vis).toFixed(3)})`);
+        tGrad.addColorStop(0.45, `rgba(235, 38, 38, ${(0.32 * vis).toFixed(3)})`);
         tGrad.addColorStop(1.0, 'rgba(185, 28, 28, 0)');
         ctx.fillStyle = tGrad;
         ctx.beginPath();
-        ctx.arc(tailX, 0, 18, 0, Math.PI * 2);
+        ctx.arc(tailX, 0, 10, 0, Math.PI * 2);
         ctx.fill();
       }
 

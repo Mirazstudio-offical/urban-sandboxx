@@ -1403,13 +1403,14 @@ export class GasStationRenderer {
   }
 
   /**
-   * Render nighttime light cutouts on the offscreen lightmap canvas (Pass 1 - destination-out).
-   * Cuts out darkness overlay for canopy, minimarket, price totem, signposts, and floodlights.
+   * Render nighttime light cutouts on the offscreen lightmap canvas (Pass 1 - destination-out),
+   * and optionally accumulate their physical light colors into cCtx (lightColorCanvas).
    */
   public static renderLightmapCutouts(
     lCtx: CanvasRenderingContext2D,
     nightAlpha: number,
-    fogFactor: number = 1.0
+    fogFactor: number = 1.0,
+    cCtx?: CanvasRenderingContext2D | null
   ) {
     const canopyX = GAS_STATION_CONFIG.canopyX;
     const canopyY = GAS_STATION_CONFIG.canopyY;
@@ -1436,6 +1437,19 @@ export class GasStationRenderer {
     lCtx.roundRect(canopyX - 50, canopyY - 50, canopyW + 100, canopyH + 100, 35);
     lCtx.fill();
 
+    if (cCtx) {
+      // Cool-neutral 5000K commercial canopy LED illumination (active 24/7 inside canopy shadow & at night)
+      const cColGrad = cCtx.createRadialGradient(cCenterX, cCenterY, 24, cCenterX, cCenterY, canopyRadius);
+      cColGrad.addColorStop(0.0, 'rgba(236, 246, 255, 0.38)');
+      cColGrad.addColorStop(0.45, 'rgba(232, 244, 255, 0.24)');
+      cColGrad.addColorStop(0.80, 'rgba(220, 238, 255, 0.08)');
+      cColGrad.addColorStop(1.0, 'rgba(220, 238, 255, 0)');
+      cCtx.fillStyle = cColGrad;
+      cCtx.beginPath();
+      cCtx.roundRect(canopyX - 50, canopyY - 50, canopyW + 100, canopyH + 100, 35);
+      cCtx.fill();
+    }
+
     if (nightAlpha < 0.05) return;
 
     // 2. Minimarket Shop Interior & Customer Plaza Cutout
@@ -1460,6 +1474,18 @@ export class GasStationRenderer {
     lCtx.roundRect(shopX - 20, shopY - 20, shopW + 40, shopH + 110, 25);
     lCtx.fill();
 
+    if (cCtx) {
+      const shopColGrad = cCtx.createRadialGradient(sCenterX, sCenterY, 18, sCenterX, sCenterY, shopRadius);
+      shopColGrad.addColorStop(0.0, 'rgba(255, 224, 140, 0.42)');
+      shopColGrad.addColorStop(0.45, 'rgba(255, 206, 108, 0.24)');
+      shopColGrad.addColorStop(0.80, 'rgba(251, 188, 82, 0.08)');
+      shopColGrad.addColorStop(1.0, 'rgba(251, 188, 82, 0)');
+      cCtx.fillStyle = shopColGrad;
+      cCtx.beginPath();
+      cCtx.roundRect(shopX - 20, shopY - 20, shopW + 40, shopH + 110, 25);
+      cCtx.fill();
+    }
+
     // 3. Price Totem Cutout
     const totemX = GAS_STATION_CONFIG.priceTotemX;
     const totemY = GAS_STATION_CONFIG.priceTotemY;
@@ -1476,6 +1502,18 @@ export class GasStationRenderer {
     lCtx.arc(totemX, totemY, totemRadius, 0, Math.PI * 2);
     lCtx.fill();
 
+    if (cCtx) {
+      const totemColGrad = cCtx.createRadialGradient(totemX, totemY, 3, totemX, totemY, totemRadius);
+      totemColGrad.addColorStop(0.0, 'rgba(72, 224, 158, 0.40)');
+      totemColGrad.addColorStop(0.42, 'rgba(245, 185, 66, 0.18)');
+      totemColGrad.addColorStop(0.80, 'rgba(52, 211, 153, 0.05)');
+      totemColGrad.addColorStop(1.0, 'rgba(52, 211, 153, 0)');
+      cCtx.fillStyle = totemColGrad;
+      cCtx.beginPath();
+      cCtx.arc(totemX, totemY, totemRadius, 0, Math.PI * 2);
+      cCtx.fill();
+    }
+
     // 4. Entrance & Exit Signposts Cutouts
     const signs = [
       { x: 4877, y: 4898 },
@@ -1491,6 +1529,17 @@ export class GasStationRenderer {
       lCtx.beginPath();
       lCtx.arc(s.x, s.y, 45 * fogFactor, 0, Math.PI * 2);
       lCtx.fill();
+
+      if (cCtx) {
+        const scGrad = cCtx.createRadialGradient(s.x, s.y, 2, s.x, s.y, 45 * fogFactor);
+        scGrad.addColorStop(0.0, 'rgba(255, 228, 165, 0.34)');
+        scGrad.addColorStop(0.5, 'rgba(255, 208, 120, 0.14)');
+        scGrad.addColorStop(1.0, 'rgba(255, 208, 120, 0)');
+        cCtx.fillStyle = scGrad;
+        cCtx.beginPath();
+        cCtx.arc(s.x, s.y, 45 * fogFactor, 0, Math.PI * 2);
+        cCtx.fill();
+      }
     }
 
     // 5. High-Mast Yard Floodlight Poles (NW & East Apron)
@@ -1510,11 +1559,23 @@ export class GasStationRenderer {
       lCtx.beginPath();
       lCtx.arc(yL.x, yL.y, yRadius, 0, Math.PI * 2);
       lCtx.fill();
+
+      if (cCtx) {
+        const ycGrad = cCtx.createRadialGradient(yL.x, yL.y, 4, yL.x, yL.y, yRadius);
+        ycGrad.addColorStop(0.0, 'rgba(255, 232, 170, 0.38)');
+        ycGrad.addColorStop(0.4, 'rgba(255, 208, 118, 0.18)');
+        ycGrad.addColorStop(0.8, 'rgba(245, 185, 92, 0.05)');
+        ycGrad.addColorStop(1.0, 'rgba(245, 185, 92, 0)');
+        cCtx.fillStyle = ycGrad;
+        cCtx.beginPath();
+        cCtx.arc(yL.x, yL.y, yRadius, 0, Math.PI * 2);
+        cCtx.fill();
+      }
     }
   }
 
   /**
-   * Render additive glowing optics, halos, and neon streams for gas station (Pass 2 - lighter).
+   * Render additive glowing optics, fixture pinpoints, and neon signage for gas station (Pass 2 - lighter).
    */
   public static renderAdditiveGlow(
     ctx: CanvasRenderingContext2D,
@@ -1528,18 +1589,17 @@ export class GasStationRenderer {
     const canopyW = GAS_STATION_CONFIG.canopyW;
     const canopyH = GAS_STATION_CONFIG.canopyH;
 
-    // 1. 8 Overhead Canopy LED Spotlight Optics & Floor Light Pools
+    // 1. 8 Overhead Canopy LED Spotlight Fixture Pinpoints
     const lightCols = [canopyX + 60, canopyX + 135, canopyX + 210];
     const lightRows = [canopyY + 50, canopyY + 105, canopyY + 160];
 
     for (const lx of lightCols) {
       for (const ly of lightRows) {
-        const spotRadius = 48 * fogFactor;
-        const spotGrad = ctx.createRadialGradient(lx, ly, 1, lx, ly, spotRadius);
-        spotGrad.addColorStop(0, `rgba(255, 255, 240, ${0.28 * nightAlpha})`);
-        spotGrad.addColorStop(0.3, `rgba(250, 240, 190, ${0.12 * nightAlpha})`);
-        spotGrad.addColorStop(0.7, `rgba(250, 240, 190, ${0.04 * nightAlpha})`);
-        spotGrad.addColorStop(1, 'rgba(250, 240, 190, 0)');
+        const spotRadius = 16 * fogFactor;
+        const spotGrad = ctx.createRadialGradient(lx, ly, 0.5, lx, ly, spotRadius);
+        spotGrad.addColorStop(0, `rgba(245, 250, 255, ${0.32 * nightAlpha})`);
+        spotGrad.addColorStop(0.45, `rgba(225, 240, 255, ${0.10 * nightAlpha})`);
+        spotGrad.addColorStop(1, 'rgba(225, 240, 255, 0)');
 
         ctx.fillStyle = spotGrad;
         ctx.beginPath();
@@ -1565,52 +1625,31 @@ export class GasStationRenderer {
     ctx.fillText('APEX PETROL • DRIVE-THRU', canopyX + canopyW / 2, canopyY + canopyH - 18);
     ctx.shadowBlur = 0;
 
-    // 3. Minimarket Storefront Golden Ambient Light Stream
-    const shopX = 5230;
-    const shopY = 4910;
-    const shopW = 210;
-
-    const shopGlow = ctx.createRadialGradient(shopX + shopW / 2, shopY + 130, 10, shopX + shopW / 2, shopY + 130, 95 * fogFactor);
-    shopGlow.addColorStop(0, `rgba(254, 240, 138, ${0.25 * nightAlpha})`);
-    shopGlow.addColorStop(0.4, `rgba(251, 191, 36, ${0.09 * nightAlpha})`);
-    shopGlow.addColorStop(0.8, `rgba(251, 191, 36, ${0.02 * nightAlpha})`);
-    shopGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
-
-    ctx.fillStyle = shopGlow;
-    ctx.beginPath();
-    ctx.arc(shopX + shopW / 2, shopY + 130, 95 * fogFactor, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 4. Price Totem Digital LED Glow
+    // 3. Price Totem Digital LED Lens Glow
     const totemX = GAS_STATION_CONFIG.priceTotemX;
     const totemY = GAS_STATION_CONFIG.priceTotemY;
-
-    const totemGlow = ctx.createRadialGradient(totemX, totemY, 2, totemX, totemY, 40 * fogFactor);
-    totemGlow.addColorStop(0, `rgba(34, 197, 94, ${0.35 * nightAlpha})`);
-    totemGlow.addColorStop(0.4, `rgba(234, 179, 8, ${0.12 * nightAlpha})`);
+    const totemGlow = ctx.createRadialGradient(totemX, totemY, 1, totemX, totemY, 14 * fogFactor);
+    totemGlow.addColorStop(0, `rgba(52, 211, 153, ${0.38 * nightAlpha})`);
+    totemGlow.addColorStop(0.5, `rgba(234, 179, 8, ${0.12 * nightAlpha})`);
     totemGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
     ctx.fillStyle = totemGlow;
     ctx.beginPath();
-    ctx.arc(totemX, totemY, 40 * fogFactor, 0, Math.PI * 2);
+    ctx.arc(totemX, totemY, 14 * fogFactor, 0, Math.PI * 2);
     ctx.fill();
 
-    // 5. High-Mast Yard Floodlight Poles Additive Pools
+    // 4. High-Mast Yard Floodlight Bulb Pinpoints
     const yardLamps = [
       { x: 4940, y: 4905 },
       { x: 5440, y: 5280 }
     ];
     for (const yL of yardLamps) {
-      const poolRadius = 100 * fogFactor;
-      const yPool = ctx.createRadialGradient(yL.x, yL.y, 4, yL.x, yL.y, poolRadius);
-      yPool.addColorStop(0, `rgba(255, 245, 200, ${0.22 * nightAlpha})`);
-      yPool.addColorStop(0.4, `rgba(250, 210, 120, ${0.08 * nightAlpha})`);
-      yPool.addColorStop(0.8, `rgba(250, 210, 120, ${0.02 * nightAlpha})`);
-      yPool.addColorStop(1, 'rgba(250, 210, 120, 0)');
-
-      ctx.fillStyle = yPool;
+      const bulbGrad = ctx.createRadialGradient(yL.x, yL.y, 0.5, yL.x, yL.y, 6);
+      bulbGrad.addColorStop(0, `rgba(255, 252, 235, ${0.75 * nightAlpha})`);
+      bulbGrad.addColorStop(0.5, `rgba(255, 225, 145, ${0.28 * nightAlpha})`);
+      bulbGrad.addColorStop(1, 'rgba(255, 225, 145, 0)');
+      ctx.fillStyle = bulbGrad;
       ctx.beginPath();
-      ctx.arc(yL.x, yL.y, poolRadius, 0, Math.PI * 2);
+      ctx.arc(yL.x, yL.y, 6, 0, Math.PI * 2);
       ctx.fill();
     }
   }

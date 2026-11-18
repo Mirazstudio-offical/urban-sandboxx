@@ -41,6 +41,221 @@ function attr(
   };
 }
 
+export const LEGACY_SUBSTANCE_ID_ALIASES: Record<string, string> = {
+  "water_bottle": "drinking_water",
+  "water_bottle_1500": "drinking_water_1500",
+  "bottle_water": "drinking_water",
+  "kvas_bottle": "kvas",
+  "milk_bottle": "milk",
+  "beer_bottle": "beer",
+  "bottle_beer": "beer",
+  "vodka_bottle": "vodka",
+  "bottle_vodka": "vodka",
+  "bottle_wine": "wine_red",
+  "wine_bottle": "wine_red",
+  "wine_white_cooking": "wine_white",
+  "wine_red_cooking": "wine_red",
+  "fuel_canister": "gasoline_95",
+  "canister_fuel": "gasoline_95",
+  "canister_diesel": "diesel",
+  "canister_water": "drinking_water_20l",
+  "oil_canister": "motor_oil",
+  "canister_oil": "motor_oil",
+  "antifreeze_canister": "antifreeze",
+  "canister_coolant": "antifreeze",
+  "washer_fluid_can": "washer_fluid",
+  "canister_washer_fluid": "washer_fluid",
+  "brake_fluid_can": "brake_fluid",
+  "canister_brake_fluid": "brake_fluid",
+  "coffee_cup": "coffee",
+  "hot_coffee": "coffee",
+  "tea_cup": "tea",
+  "cola_can": "cola",
+  "soda_can": "cola",
+  "can_beer": "beer",
+  "beer_can": "beer",
+  "carton_milk": "milk",
+  "juice_pack": "juice",
+  "milk_pasteurized_carton": "milk",
+  "hot_soup": "soup",
+  "sugar_bag": "sugar",
+  "salt_pack": "salt",
+  "salt_bag_coarse": "salt_coarse",
+  "jar_honey": "honey",
+  "honey_wild_jar": "honey_wild",
+  "jar_pickles": "pickles",
+  "ginger_pickled_jar": "ginger_pickled",
+  "ginger_pickled_box": "ginger_pickled",
+  "olives_green_jar": "olives_green",
+  "olives_black_jar": "olives_black",
+  "capers_pickled_jar": "capers_pickled",
+  "sun_dried_tomatoes_jar": "sun_dried_tomatoes",
+  "tomato_sundried_jar": "sun_dried_tomatoes",
+  "cucumber_pickled_jar": "cucumber_pickled",
+  "cabbage_sauerkraut_jar": "cabbage_sauerkraut",
+  "jalapeno_pickled_jar": "jalapeno_pickled",
+  "canned_meat": "stew_meat",
+  "canned_stew": "stew_meat",
+  "canned_fish": "fish_preserves",
+  "corn_canned_jar": "sweet_corn",
+  "corn_canned": "sweet_corn",
+  "canned_corn": "sweet_corn",
+  "peas_canned_green": "green_peas",
+  "canned_peas": "green_peas",
+  "beans_canned_tomato": "beans_tomato",
+  "canned_beans": "beans_tomato",
+  "pineapple_rings_canned": "pineapple_rings",
+  "peach_halves_canned": "peach_halves",
+  "cherry_pitted_jar": "cherry_pitted",
+  "jar_jam": "jam",
+  "raspberry_jam_jar": "jam_raspberry",
+  "strawberry_jam_jar": "jam_strawberry",
+  "canned_caviar": "caviar",
+  "salmon_caviar_jar": "salmon_caviar",
+  "pike_caviar_jar": "pike_caviar",
+  "cod_caviar_jar": "cod_caviar",
+  "perch_caviar_jar": "perch_caviar",
+  "herring_caviar_jar": "herring_caviar",
+  "tuna_caviar_jar": "tuna_caviar",
+  "eel_caviar_jar": "eel_caviar",
+  "catfish_caviar_jar": "catfish_caviar",
+  "caviar_squash_jar": "caviar_squash",
+  "zucchini_caviar_jar": "caviar_squash",
+  "caviar_eggplant_jar": "caviar_eggplant",
+  "eggplant_caviar_jar": "caviar_eggplant",
+  "apple_puree_jar": "apple_puree",
+  "tomato_paste_can": "tomato_paste",
+  "tomato_paste_jar": "tomato_paste",
+  "peanut_butter_jar": "peanut_butter",
+  "tahini_paste_jar": "tahini_paste",
+  "miso_paste_tub": "miso_paste",
+  "miso_paste_jar": "miso_paste",
+  "broth_beef_jar": "broth_beef",
+  "broth_chicken_jar": "broth_chicken",
+  "broth_fish_jar": "broth_fish",
+  "broth_vegetable_jar": "broth_vegetable",
+  "lard_pork_pot": "lard_pork",
+  "fat_beef_pot": "fat_beef",
+  "ghee_butter_pot": "ghee_butter",
+  "oil_sunflower_bottle": "oil_sunflower",
+  "oil_olive_extra_virgin": "oil_olive",
+  "oil_linseed_bottle": "oil_linseed",
+  "oil_sesame_bottle": "oil_sesame",
+  "vinegar_table_bottle": "vinegar_table",
+  "vinegar_apple_cider": "vinegar_apple",
+  "vinegar_balsamic_premium": "vinegar_balsamic",
+  "sauce_teriyaki_bottle": "sauce_teriyaki",
+  "mustard_dijon_jar": "mustard_dijon",
+  "canned_condensed_milk": "condensed_milk",
+  "maple_syrup_bottle": "maple_syrup",
+  "milk_bottle_raw": "milk_raw",
+  "cream_heavy_jar": "cream_heavy",
+  "sour_cream_pot": "sour_cream",
+  "kefir_fermented_bottle": "kefir",
+  "buttermilk_fermented_jar": "buttermilk",
+  "yogurt_natural_cup": "yogurt",
+  "cottage_cheese_pack": "cottage_cheese",
+  "yeast_dry_sachet": "yeast_dry",
+  "flour_bag": "flour",
+  "flour_wheat_bag_1k": "flour_wheat",
+  "flour_rye_bag_1k": "flour_rye",
+  "flour_corn_bag_500g": "flour_corn",
+  "flour_rice_bag_500g": "flour_rice",
+  "grain_wheat_raw_bag": "grain_wheat_raw",
+  "grain_rye_raw_bag": "grain_rye_raw",
+  "grain_oats_bag": "grain_oats",
+  "rice_basmati_bag": "rice_basmati",
+  "rice_arborio_bag": "rice_arborio",
+  "rice_white_bag_1k": "rice_white",
+  "buckwheat_roasted_bag": "buckwheat_roasted",
+  "barley_pearl_bag": "barley_pearl",
+  "millet_yellow_bag": "millet_yellow",
+  "semolina_wheat_bag": "semolina_wheat",
+  "salt_sea_premium": "salt_sea",
+  "black_pepper_grinder": "black_pepper_whole",
+  "black_pepper_powder_sachet": "black_pepper_ground",
+  "chili_powder_sachet": "chili_powder",
+  "paprika_sweet_sachet": "paprika_sweet",
+  "bay_leaves_dried_sachet": "bay_leaves_dried",
+  "cinnamon_powder_sachet": "cinnamon_powder",
+  "turmeric_powder_sachet": "turmeric_powder",
+  "coriander_seeds_sachet": "coriander_seeds",
+  "allspice_berries_sachet": "allspice_berries",
+  "shiitake_dried_bag": "shiitake_dried",
+  "garlic_powder_jar": "garlic_powder",
+  "dill_dried_jar": "dill_dried",
+  "basil_dried_jar": "basil_dried",
+  "mint_dried_jar": "mint_dried",
+  "salt_shaker": "salt_fine",
+  "antiseptic_bottle": "antiseptic",
+  "iodine_bottle": "iodine",
+  "panthenol_spray": "panthenol",
+  "gelatin_powder_sachet": "gelatin_powder",
+  "gelatin_beef_pack": "gelatin_beef",
+  "pectin_apple_sachet": "pectin_apple",
+  "pectin_citrus_sachet": "pectin_citrus",
+  "agar_agar_sachet": "agar_agar",
+  "starch_modified_pack": "starch_modified",
+  "starch_corn_pack": "starch_corn",
+  "glucose_syrup_bottle": "glucose_syrup",
+  "glucose_fructose_syrup_bottle": "glucose_fructose_syrup",
+  "starch_molasses_jar": "starch_molasses",
+  "topinambur_syrup_bottle": "topinambur_syrup",
+  "coconut_milk_can": "coconut_milk",
+  "citric_acid_sachet": "citric_acid",
+  "citric_acid_jar": "citric_acid_coarse",
+  "malic_acid_sachet": "malic_acid",
+  "tartaric_acid_sachet": "tartaric_acid",
+  "lactic_acid_bottle": "lactic_acid",
+  "sodium_citrate_sachet": "sodium_citrate",
+  "menthol_crystals_tin": "menthol_crystals",
+  "menthol_crystals_jar": "menthol_crystals_coarse",
+  "carmine_extract_bottle": "dye_carmine",
+  "chlorophyllin_bottle": "dye_chlorophyllin",
+  "anthocyanin_extract_bottle": "dye_anthocyanin",
+  "spirulina_extract_bottle": "dye_spirulina",
+  "beta_carotene_bottle": "dye_beta_carotene",
+  "caramel_color_bottle": "dye_caramel",
+  "lycopene_extract_bottle": "dye_lycopene",
+  "kola_nut_extract_bottle": "extract_kola_nut",
+  "vanilla_extract_bottle": "extract_vanilla",
+  "hibiscus_extract_bottle": "extract_hibiscus",
+  "safflower_extract_bottle": "extract_safflower",
+  "paprika_extract_bottle": "extract_paprika",
+  "black_carrot_concentrate_bottle": "concentrate_black_carrot",
+  "tarragon_extract_bottle": "extract_tarragon",
+  "eucalyptus_extract_bottle": "extract_eucalyptus",
+  "peppermint_oil_bottle": "oil_peppermint",
+  "spearmint_oil_bottle": "oil_spearmint",
+  "hibiscus_dried_sachet": "hibiscus_dried",
+  "safflower_dried_sachet": "safflower_dried",
+  "carnauba_wax_pack": "carnauba_wax",
+  "egg_chicken_carton": "eggs_chicken",
+  "eggs_chicken_carton": "eggs_chicken",
+  "egg_quail_carton": "eggs_quail",
+  "eggs_quail_pack": "eggs_quail",
+  "cookie_pack": "cookies",
+  "pomegranate_seeds_cup": "pomegranate_seeds",
+  "grapes_berries_cup": "grapes_berries",
+  "grape_cup": "grapes_berries",
+  "berries_basket": "berries",
+  "blueberry_basket": "berries_blueberry",
+  "lingonberry_basket": "berries_lingonberry",
+  "cranberry_basket": "berries_cranberry",
+  "raspberry_basket": "berries_raspberry",
+  "strawberry_basket": "berries_strawberry",
+  "blackcurrant_basket": "berries_blackcurrant",
+  "redcurrant_basket": "berries_redcurrant",
+  "cherry_basket": "berries_cherry",
+  "blackberry_basket": "berries_blackberry",
+  "sea_buckthorn_basket": "berries_sea_buckthorn",
+  "elderberry_basket": "berries_elderberry",
+  "chanterelle_basket": "mushrooms_chanterelle",
+  "honey_agaric_basket": "mushrooms_honey_agaric",
+  "berries_tray_fresh": "berries_fresh",
+  "popcorn_bucket": "popcorn_salted"
+};
+
 export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEntry> = {
   // === 1. HONEY (МЁД НАТУРАЛЬНЫЙ) ===
   honey: {
@@ -55,34 +270,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Высокая концентрация природных сахаров препятствует развитию бактерий и позволяет хранить продукт годами',
       '#f59e0b',
       { culinaryEquivalentId: 'honey' }
-    )
-  },
-  jar_honey: {
-    containerId: 'jar_glass_small',
-    liquidId: 'honey',
-    amountMl: 200,
-    attributes: attr(
-      'Мёд цветочный луговой',
-      'Цветочный нектар разнотравья, ферменты медоносных пчёл',
-      'Естественная ферментация в сотах и холодная откачка в медогонке',
-      'Укрепление иммунитета, быстрое восстановление энергии и подслащивание чая или выпечки',
-      'Высокая концентрация природных сахаров препятствует развитию бактерий и позволяет хранить продукт годами',
-      '#f59e0b',
-      { culinaryEquivalentId: 'jar_honey' }
-    )
-  },
-  honey_wild_jar: {
-    containerId: 'jar_glass_medium',
-    liquidId: 'honey',
-    amountMl: 500,
-    attributes: attr(
-      'Мёд дикий бортевой таёжный',
-      'Нектар лесной липы, кипрея, малины и диких трав, перга и воск',
-      'Сбор из дупла-борти диких пчёл с отжимом без нагрева',
-      'Согревающее и общеукрепляющее средство при переохлаждении, питательный десерт',
-      'Бортевой мёд созревает в естественных условиях леса и содержит максимум микроэлементов и прополиса',
-      '#d97706',
-      { culinaryEquivalentId: 'honey_wild_jar' }
     )
   },
   honey_wild: {
@@ -115,20 +302,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 2. PICKLES & SALTED PRESERVES (СОЛЕНЬЯ И КВАШЕНИЯ) ===
-  jar_pickles: {
-    containerId: 'jar_glass_3l',
-    liquidId: 'pickles',
-    amountMl: 3000,
-    attributes: attr(
-      'Огурцы солёные бочкового посола в рассоле',
-      'Грунтовые огурцы, родниковая вода, каменная соль, зонтики укропа, лист хрена, смородины и чеснок',
-      'Молочнокислое брожение (холодное квашение) в пряном рассоле с последующей укупоркой в 3-литровую банку',
-      'Закуска, рассольник, солянка, восстановление водно-солевого баланса',
-      'Молочная кислота естественного брожения сохраняет хруст огурцов и насыщает рассол электролитами',
-      '#65a30d',
-      { culinaryEquivalentId: 'jar_pickles' }
-    )
-  },
   pickles: {
     containerId: 'jar_glass_medium',
     liquidId: 'pickles',
@@ -215,76 +388,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'garlic_pickled' }
     )
   },
-  ginger_pickled_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'pickles',
-    amountMl: 200,
-    attributes: attr(
-      'Имбирь маринованный розовый (Гари)',
-      'Тонкие лепестки молодого корня имбиря, рисовый уксус, тростниковый сахар, морская соль',
-      'Тонкая нарезка и выдержка в сладком рисовом уксусе',
-      'Освежение вкусовых рецепторов к роллам, рыбе и азиатским блюдам',
-      'Антоцианы молодого имбиря при реакции с уксусной кислотой окрашивают лепестки в нежно-розовый цвет',
-      '#fda4af',
-      { culinaryEquivalentId: 'ginger_pickled_jar' }
-    )
-  },
-  olives_green_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'pickles',
-    amountMl: 200,
-    attributes: attr(
-      'Оливки зелёные без косточки в маринаде',
-      'Крупные зелёные плоды оливы, рассол, винный уксус, лимонная кислота',
-      'Щелочное удаление природной горечи (олеуропеина) и консервация в слабом маринаде',
-      'Приготовление мясной солянки, пиццы, греческого салата и закусок',
-      'Сырые оливки с дерева несъедобно горькие — только вымачивание и рассол делают их маслянистыми и нежными',
-      '#84cc16',
-      { culinaryEquivalentId: 'olives_green_jar' }
-    )
-  },
-  olives_black_jar: {
-    containerId: 'can_metal_small',
-    liquidId: 'pickles',
-    amountMl: 250,
-    attributes: attr(
-      'Маслины чёрные в пряной заливке',
-      'Маслины без косточки, вода, соль, глюконат железа (фиксатор окраски)',
-      'Окисление в рассоле и стерилизация в жестяной банке',
-      'Классический компонент сборной солянки, пиццы и средиземноморских салатов',
-      'Жестяная банка защищает плоды от света и сохраняет глубокий антрацитовый цвет и мягкую текстуру',
-      '#27272a',
-      { culinaryEquivalentId: 'olives_black_jar' }
-    )
-  },
-  capers_pickled_jar: {
-    containerId: 'jar_spice_small',
-    liquidId: 'pickles',
-    amountMl: 100,
-    attributes: attr(
-      'Каперсы маринованные в винном уксусе',
-      'Нераспустившиеся цветочные бутоны каперсника, белый винный уксус, морская соль',
-      'Подвяливание бутонов на солнце и маринование в крепком винном уксусе',
-      'Приготовление соуса тартар, солянки и рыбных блюд',
-      'Во время маринования в бутонах кристаллизуется рутин, создавая характерный взрывной горчично-пряный вкус',
-      '#3f6212',
-      { culinaryEquivalentId: 'capers_pickled_jar' }
-    )
-  },
-  sun_dried_tomatoes_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'pickles',
-    amountMl: 200,
-    attributes: attr(
-      'Томаты вяленые в оливковом масле с травами',
-      'Половинки сливовидных томатов, оливковое масло Extra Virgin, орегано, базилик, чеснок, каперсы',
-      'Медленное вяление на солнце с морской солью и заливка тёплым пряным маслом',
-      'Паста, брускетты, выпечка фокаччи и мясные рулеты',
-      'Удаление влаги концентрирует глутаматы и сахара томата, а масло запечатывает аромат трав',
-      '#991b1b',
-      { culinaryEquivalentId: 'sun_dried_tomatoes_jar' }
-    )
-  },
   butter_boletus_pickled: {
     containerId: 'jar_glass_medium',
     liquidId: 'pickles',
@@ -315,34 +418,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 4. CANNED PRESERVES (КОНСЕРВЫ В БАНКАХ И ЖЕСТИ) ===
-  canned_meat: {
-    containerId: 'can_metal_medium',
-    liquidId: 'canned_preserve',
-    amountMl: 400,
-    attributes: attr(
-      'Говядина тушёная высшего сорта (ГОСТ)',
-      'Крупнокусковая говядина (87%), жир-сырец говяжий, лук репчатый, соль, лист лавровый, перец чёрный',
-      'Закладка сырого мяса в жестяную банку, герметичная закатка и автоклавирование при 120 °C',
-      'Походное блюдо, макароны по-флотски, быстрый наваристый суп или рагу с картофелем',
-      'Стерилизация в автоклаве под давлением превращает соединительную ткань в нежное желе и хранит мясо до 5 лет',
-      '#991b1b',
-      { culinaryEquivalentId: 'canned_meat', customEffects: { hunger: 75, health: 10, energy: 10 } }
-    )
-  },
-  canned_stew: {
-    containerId: 'can_metal_medium',
-    liquidId: 'canned_preserve',
-    amountMl: 400,
-    attributes: attr(
-      'Тушёнка армейская мясная в собственном соку',
-      'Отборная говядина и свинина, топлёный жир, лавровый лист, чёрный перец горошком',
-      'Термическое томление в запаянной жестяной таре (автоклав)',
-      'Высококалорийное питание в дороге и основа для сытных вторых блюд',
-      'Слой застывшего сверху жира надёжно изолирует мясо от окисления',
-      '#991b1b',
-      { culinaryEquivalentId: 'canned_stew', customEffects: { hunger: 75, health: 10, energy: 10 } }
-    )
-  },
   stew_meat: {
     containerId: 'can_metal_medium',
     liquidId: 'canned_preserve',
@@ -355,20 +430,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Богата полноценным белком и коллагеном',
       '#991b1b',
       { culinaryEquivalentId: 'stew_meat', customEffects: { hunger: 75, health: 10, energy: 10 } }
-    )
-  },
-  canned_fish: {
-    containerId: 'can_metal_oval',
-    liquidId: 'canned_preserve',
-    amountMl: 200,
-    attributes: attr(
-      'Шпроты балтийские в масле горячего копчения',
-      'Тушки балтийской кильки, рафинированное подсолнечное и горчичное масло, соль',
-      'Копчение на ольховой щепе и стерилизация в золотистой овальной банке с маслом',
-      'Приготовление бутербродов со шпротами, закусок и рыбных салатов',
-      'Ольховый дым придаёт рыбкам золотистый цвет, а масло делает косточки мягкими и съедобными',
-      '#d97706',
-      { culinaryEquivalentId: 'canned_fish', customEffects: { hunger: 55, health: 8, energy: 8 } }
     )
   },
   fish_preserves: {
@@ -385,7 +446,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'fish_preserves', customEffects: { hunger: 55, health: 8, energy: 8 } }
     )
   },
-  corn_canned_jar: {
+  sweet_corn: {
     containerId: 'can_metal_medium',
     liquidId: 'canned_preserve',
     amountMl: 400,
@@ -396,10 +457,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Крабовый и овощной салаты, гарниры, мексиканские блюда',
       'Консервация в первые часы после сбора початка сохраняет природную сладость и сочность зерна',
       '#facc15',
-      { culinaryEquivalentId: 'corn_canned_jar' }
+      { culinaryEquivalentId: 'sweet_corn' }
     )
   },
-  peas_canned_green: {
+  green_peas: {
     containerId: 'can_metal_medium',
     liquidId: 'canned_preserve',
     amountMl: 400,
@@ -410,10 +471,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Незаменимый ингредиент салата «Оливье», винегрета и гарниров',
       'Мозговые сорта содержат больше сахаров и меньше крахмала, поэтому горошины остаются нежными и не мучнистыми',
       '#4ade80',
-      { culinaryEquivalentId: 'peas_canned_green' }
+      { culinaryEquivalentId: 'green_peas' }
     )
   },
-  beans_canned_tomato: {
+  beans_tomato: {
     containerId: 'can_metal_medium',
     liquidId: 'canned_preserve',
     amountMl: 400,
@@ -424,10 +485,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Готовый сытный гарнир, начинка для буррито, добавка в борщ и чили кон карне',
       'Длительное томление под давлением разрушает фитиновую кислоту бобов и делает их мягкими и питательными',
       '#b91c1c',
-      { culinaryEquivalentId: 'beans_canned_tomato' }
+      { culinaryEquivalentId: 'beans_tomato' }
     )
   },
-  pineapple_rings_canned: {
+  pineapple_rings: {
     containerId: 'can_metal_medium',
     liquidId: 'canned_preserve',
     amountMl: 400,
@@ -438,10 +499,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Десерт, запекание мяса и птицы, фруктовые салаты и пицца',
       'Термическая обработка деактивирует фермент бромелайн, поэтому консервированный ананас не щиплет язык',
       '#fde047',
-      { culinaryEquivalentId: 'pineapple_rings_canned' }
+      { culinaryEquivalentId: 'pineapple_rings' }
     )
   },
-  peach_halves_canned: {
+  peach_halves: {
     containerId: 'can_metal_medium',
     liquidId: 'canned_preserve',
     amountMl: 400,
@@ -452,39 +513,11 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Фруктовый десерт, украшение тортов, выпечка и утоление голода и жажды',
       'Сироп сохраняет плотную бархатистую текстуру и солнечный аромат южных персиков круглый год',
       '#fb923c',
-      { culinaryEquivalentId: 'peach_halves_canned' }
-    )
-  },
-  cherry_pitted_jar: {
-    containerId: 'jar_glass_medium',
-    liquidId: 'canned_preserve',
-    amountMl: 500,
-    attributes: attr(
-      'Вишня без косточки в собственном соку',
-      'Крупная тёмная садовая вишня без косточки, вишнёвый сок, немного сахара',
-      'Удаление косточек и пастеризация в стеклянной банке',
-      'Начинка для вареников, штруделя, пирогов и соусов к утке',
-      'Отсутствие косточек исключает накопление амигдалина и делает ягоды готовыми для выпечки',
-      '#881337',
-      { culinaryEquivalentId: 'cherry_pitted_jar' }
+      { culinaryEquivalentId: 'peach_halves' }
     )
   },
 
   // === 5. JAMS & FRUIT PRESERVES (ВАРЕНЬЕ И ДЖЕМ) ===
-  jar_jam: {
-    containerId: 'jar_glass_small',
-    liquidId: 'jam',
-    amountMl: 200,
-    attributes: attr(
-      'Варенье домашнее ягодное пятиминутка',
-      'Садовые ягоды, сахар-песок, лимонный сок',
-      'Кратковременная варка в медном тазу с сохранением целых ягод и горячий розлив',
-      'К чаю, блинам, оладьям, сырникам и тостам',
-      'Высокая концентрация сахара консервирует ягоды, сохраняя летний аромат и быстрые углеводы',
-      '#be123c',
-      { culinaryEquivalentId: 'jar_jam' }
-    )
-  },
   jam: {
     containerId: 'jar_glass_small',
     liquidId: 'jam',
@@ -513,20 +546,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'jam_raspberry' }
     )
   },
-  raspberry_jam_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'jam',
-    amountMl: 200,
-    attributes: attr(
-      'Варенье малиновое густое',
-      'Спелая малина, тростниковый и свекловичный сахар',
-      'Трёхкратная варка с выстаиванием в сиропе',
-      'Подача к блинам, кашам и горячему чаю',
-      'Насыщенный рубиновый цвет и густой ягодный сироп согревают и поднимают тонус',
-      '#be123c',
-      { culinaryEquivalentId: 'raspberry_jam_jar' }
-    )
-  },
   jam_strawberry: {
     containerId: 'jar_glass_small',
     liquidId: 'jam',
@@ -539,20 +558,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Постепенное пропитывание сиропом не даёт ягодам развариться и сохраняет их форму',
       '#dc2626',
       { culinaryEquivalentId: 'jam_strawberry' }
-    )
-  },
-  strawberry_jam_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'jam',
-    amountMl: 200,
-    attributes: attr(
-      'Конфитюр клубничный десертный',
-      'Спелая клубника, сахар, яблочный пектин',
-      'Уваривание с природным пектином до желеобразной густоты',
-      'Прослойка для бисквитов, намазка на круассаны и тосты',
-      'Пектин удерживает ягодный сок внутри густого ароматного желе',
-      '#e11d48',
-      { culinaryEquivalentId: 'strawberry_jam_jar' }
     )
   },
   jam_blueberry: {
@@ -585,34 +590,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'caviar' }
     )
   },
-  canned_caviar: {
-    containerId: 'can_metal_flat',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра красная дальневосточная в жестяной шайбе',
-      'Икра горбуши, соль морская, масло растительное',
-      'Заводской малосольный посол на месте промысла',
-      'Деликатесная закуска, восстанавливающая силы и настроение',
-      'Герметичная плоская шайба с ключом защищает нежные икринки от света и смятия',
-      '#ea580c',
-      { culinaryEquivalentId: 'canned_caviar' }
-    )
-  },
-  salmon_caviar_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра кеты и лосося крупнозернистая',
-      'Отборная крупная икра тихоокеанского лосося, соль',
-      'Малосольный посол и фасовка в прозрачную стеклянную баночку',
-      'Бутерброды, блины, украшение рыбных блюд и суши',
-      'Прозрачное стекло позволяет видеть янтарный блеск и целостность каждого зерна',
-      '#ea580c',
-      { culinaryEquivalentId: 'salmon_caviar_jar' }
-    )
-  },
   salmon_caviar: {
     containerId: 'jar_glass_small',
     liquidId: 'caviar',
@@ -625,20 +602,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Источник легкоусвояемого белка и фосфора',
       '#ea580c',
       { culinaryEquivalentId: 'salmon_caviar' }
-    )
-  },
-  pike_caviar_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра щучья зернистая по-астрахански',
-      'Мелкая янтарно-золотистая икра речной щуки, соль',
-      'Ошпаривание кипятком, взбивание вилкой от плёнок и мягкий посол',
-      'Традиционная русская закуска на тостах со сметаной и зелёным луком',
-      'В старину щучья икра ценилась как царский деликатес за рассыпчатость и тонкий свежий вкус',
-      '#eab308',
-      { culinaryEquivalentId: 'pike_caviar_jar' }
     )
   },
   pike_caviar: {
@@ -655,20 +618,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'pike_caviar' }
     )
   },
-  cod_caviar_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра трески пробойная деликатесная',
-      'Мелкозернистая икра северной трески, соль, капля подсолнечного масла',
-      'Нежный посол с пробивкой до кремовой зернистой текстуры',
-      'Сытная намазка на хлеб, фаршированные яйца и рыбные закуски',
-      'Богата йодом, кальцием и витамином D северных морей',
-      '#fde047',
-      { culinaryEquivalentId: 'cod_caviar_jar' }
-    )
-  },
   cod_caviar: {
     containerId: 'jar_glass_small',
     liquidId: 'caviar',
@@ -683,92 +632,8 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'cod_caviar' }
     )
   },
-  perch_caviar_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра речного окуня солёная',
-      'Свежая икра речного окуня, соль, молотый белый перец',
-      'Отделение от ястычных плёнок и домашний посол',
-      'Рыбацкая закуска на ржаном хлебе с маслом',
-      'Мелкое нежное зерно с характерным речным послевкусием',
-      '#facc15',
-      { culinaryEquivalentId: 'perch_caviar_jar' }
-    )
-  },
-  herring_caviar_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра тихоокеанской сельди в масле',
-      'Хрустящая икра сельди, соль, рафинированное масло',
-      'Посол в ястыках и нарезка/пробивка с ароматным маслом',
-      'Закуска к картофелю и чёрному хлебу',
-      'Знаменита своим плотным хрустом и насыщенным морским вкусом',
-      '#fbbf24',
-      { culinaryEquivalentId: 'herring_caviar_jar' }
-    )
-  },
-  tuna_caviar_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра морского тунца пряного посола',
-      'Икра тунца, морская соль, оливковое масло',
-      'Выдержка в морской соли и консервация с маслом',
-      'Добавка в пасту, брускетты и рыбные блюда',
-      'Обладает выраженным вкусом умами и плотной текстурой',
-      '#dc2626',
-      { culinaryEquivalentId: 'tuna_caviar_jar' }
-    )
-  },
-  eel_caviar_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра угря тёмная деликатесная',
-      'Зернистая икра угря, морская соль',
-      'Бережный посол и фасовка в стекло',
-      'Изысканная закуска и украшение канапе',
-      'Тёмные мелкие икринки с маслянистым ореховым оттенком вкуса',
-      '#1e293b',
-      { culinaryEquivalentId: 'eel_caviar_jar' }
-    )
-  },
-  catfish_caviar_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'caviar',
-    amountMl: 140,
-    attributes: attr(
-      'Икра сома речного пробойная',
-      'Крупная икра речного сома, соль, душистый перец',
-      'Пастеризация и пряный посол',
-      'Сытная намазка на хлеб и тосты',
-      'Питательная речная икра с мягким сливочным послевкусием',
-      '#334155',
-      { culinaryEquivalentId: 'catfish_caviar_jar' }
-    )
-  },
 
   // === 7. VEGETABLE CAVIAR (ИКРА ОВОЩНАЯ УВАРЕННАЯ) ===
-  caviar_squash_jar: {
-    containerId: 'jar_glass_medium',
-    liquidId: 'caviar',
-    amountMl: 500,
-    attributes: attr(
-      'Икра кабачковая уваренная (ГОСТ)',
-      'Обжаренные кабачки, морковь, репчатый лук, томатная паста, подсолнечное масло, соль, сахар, белый перец',
-      'Обжарка овощей в масле, тонкое протирание и длительное уваривание в вакуум-аппарате',
-      'Готовая закуска на хлеб, холодный гарнир к картофелю, сосискам и мясу',
-      'Именно обжарка кабачков перед протиранием и вакуумное уваривание дают тот самый карамельно-нежный вкус по ГОСТу',
-      '#d97706',
-      { culinaryEquivalentId: 'caviar_squash_jar' }
-    )
-  },
   caviar_squash: {
     containerId: 'jar_glass_medium',
     liquidId: 'caviar',
@@ -781,20 +646,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Лёгкое, но сытное овощное блюдо, богатое клетчаткой и каротином',
       '#d97706',
       { culinaryEquivalentId: 'caviar_squash' }
-    )
-  },
-  caviar_eggplant_jar: {
-    containerId: 'jar_glass_medium',
-    liquidId: 'caviar',
-    amountMl: 500,
-    attributes: attr(
-      'Икра баклажанная заморская с дымком',
-      'Печёные синие баклажаны, сладкий болгарский перец, спелые томаты, лук, чеснок, кинза, подсолнечное масло',
-      'Запекание баклажанов и перцев до румяной корочки, рубка и томление с томатами и чесноком',
-      'Ароматная закуска к мясу, шашлыку и свежему лавашу',
-      'Запекание овощей перед тушением убирает горечь соланина и насыщает икру благородным ароматом костра',
-      '#78350f',
-      { culinaryEquivalentId: 'caviar_eggplant_jar' }
     )
   },
   caviar_eggplant: {
@@ -813,35 +664,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 8. PUREES & PASTES (ПЮРЕ И ГУСТЫЕ ПАСТЫ) ===
-  apple_puree_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'puree',
-    amountMl: 200,
-    attributes: attr(
-      'Пюре яблочное нежное («Неженка»)',
-      'Печёные кисло-сладкие яблоки антоновка, немного сахара и сливок',
-      'Распаривание очищенных яблок, тонкая гомогенизация и стерилизация в баночке',
-      'Лёгкий диетический перекус, детское питание и начинка для блинчиков',
-      'Богато природным яблочным пектином, мягко восстанавливающим пищеварение',
-      '#fef08a',
-      { culinaryEquivalentId: 'apple_puree_jar' }
-    )
-  },
-  tomato_paste_can: {
-    containerId: 'can_metal_small',
-    liquidId: 'puree',
-    amountMl: 250,
-    attributes: attr(
-      'Томатная паста концентрированная (25% сухих веществ)',
-      'Спелые красные грунтовые томаты, соль',
-      'Протирание томатной мякоти без кожицы и семян и шестикратное уваривание в вакуум-выпарной установке',
-      'Зажарка для борща, солянки, харчо, гуляша, пасты и пиццы',
-      'В одной ложке пасты сконцентрирован вкус целого килограмма свежих помидоров и природный ликопин',
-      '#991b1b',
-      { culinaryEquivalentId: 'tomato_paste_can' }
-    )
-  },
-  peanut_butter_jar: {
+  peanut_butter: {
     containerId: 'jar_glass_small',
     liquidId: 'puree',
     amountMl: 200,
@@ -852,10 +675,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Питательные тосты на завтрак, энергетический перекус в походе, соусы и выпечка',
       'Сверхвысокая калорийность и растительный белок надолго утоляют голод при малом объёме',
       '#b45309',
-      { culinaryEquivalentId: 'peanut_butter_jar' }
+      { culinaryEquivalentId: 'peanut_butter' }
     )
   },
-  tahini_paste_jar: {
+  tahini_paste: {
     containerId: 'jar_glass_small',
     liquidId: 'puree',
     amountMl: 200,
@@ -866,24 +689,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Обязательная основа для хумуса, фалафеля, халвы и восточных заправок',
       'Рекордсмен по содержанию природного кальция и цинка с характерной благородной ореховой горчинкой',
       '#e7e5e4',
-      { culinaryEquivalentId: 'tahini_paste_jar' }
+      { culinaryEquivalentId: 'tahini_paste' }
     )
   },
-  miso_paste_tub: {
-    containerId: 'cup_plastic_dairy_medium',
-    liquidId: 'puree',
-    amountMl: 400,
-    attributes: attr(
-      'Паста Мисо ферментированная соевая (Ака-мисо)',
-      'Соевые бобы, рис, морская соль, культура грибка кодзи (Aspergillus oryzae)',
-      'Многомесячная ферментация отварных соевых бобов с солью и солодом кодзи в кедровых бочках',
-      'Приготовление мисо-супа, рамена, маринадов для рыбы и глазировки овощей',
-      'Длительная ферментация расщепляет соевый белок до свободных аминокислот, создавая глубокий вкус умами',
-      '#92400e',
-      { culinaryEquivalentId: 'miso_paste_tub' }
-    )
-  },
-  miso_paste_jar: {
+  miso_paste: {
     containerId: 'jar_glass_small',
     liquidId: 'puree',
     amountMl: 200,
@@ -894,12 +703,12 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Приготовление мисо-супа, рамена, маринадов для рыбы и глазировки овощей',
       'Длительная ферментация расщепляет соевый белок до свободных аминокислот, создавая глубокий вкус умами',
       '#92400e',
-      { culinaryEquivalentId: 'miso_paste_tub' }
+      { culinaryEquivalentId: 'miso_paste' }
     )
   },
 
   // === 9. BROTHS (БУЛЬОНЫ И НАВАРЫ) ===
-  broth_beef_jar: {
+  broth_beef: {
     containerId: 'jar_glass_medium',
     liquidId: 'broth',
     amountMl: 450,
@@ -910,10 +719,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Основа для борща, щей, соусов демиглас или согревающее питьё для восстановления сил',
       'Долгое томление вытягивает из костей коллаген и желатин, застывающий при охлаждении в упругое желе',
       '#78350f',
-      { culinaryEquivalentId: 'broth_beef_jar' }
+      { culinaryEquivalentId: 'broth_beef' }
     )
   },
-  broth_chicken_jar: {
+  broth_chicken: {
     containerId: 'jar_glass_medium',
     liquidId: 'broth',
     amountMl: 450,
@@ -924,10 +733,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Домашняя лапша, ризотто, пельмени и первое средство для больного или продрогшего человека',
       'Цистеин и карнозин куриного бульона облегчают дыхание и быстро согревают организм изнутри',
       '#eab308',
-      { culinaryEquivalentId: 'broth_chicken_jar' }
+      { culinaryEquivalentId: 'broth_chicken' }
     )
   },
-  broth_fish_jar: {
+  broth_fish: {
     containerId: 'jar_glass_medium',
     liquidId: 'broth',
     amountMl: 450,
@@ -938,10 +747,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Наваристая рыбацкая уха, рыбная солянка, буйабес и сливочные соусы к морепродуктам',
       'Хрящи рыбьих голов отдают в отвар клейкие вещества и фосфор, делая уху бархатистой и наваристой',
       '#fef08a',
-      { culinaryEquivalentId: 'broth_fish_jar' }
+      { culinaryEquivalentId: 'broth_fish' }
     )
   },
-  broth_vegetable_jar: {
+  broth_vegetable: {
     containerId: 'jar_glass_medium',
     liquidId: 'broth',
     amountMl: 450,
@@ -952,12 +761,12 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Лёгкие вегетарианские супы, супы-пюре, тушение овощей и варка круп',
       'Предварительное запекание овощей придаёт постному отвару глубокий золотисто-янтарный цвет и насыщенность',
       '#facc15',
-      { culinaryEquivalentId: 'broth_vegetable_jar' }
+      { culinaryEquivalentId: 'broth_vegetable' }
     )
   },
 
   // === 10. RENDERED FATS (ТОПЛЁНЫЕ ЖИРЫ И МАСЛА) ===
-  lard_pork_pot: {
+  lard_pork: {
     containerId: 'pot_clay_medium',
     liquidId: 'rendered_fat',
     amountMl: 500,
@@ -968,10 +777,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Сытная намазка на ржаной хлеб с солью и луком, жарка картофеля и заправка каш',
       'При вытапливании испаряется вся влага, поэтому смалец в керамическом горшочке не портится месяцами и не горит на сковороде',
       '#fef9c3',
-      { culinaryEquivalentId: 'lard_pork_pot' }
+      { culinaryEquivalentId: 'lard_pork' }
     )
   },
-  fat_beef_pot: {
+  fat_beef: {
     containerId: 'pot_clay_medium',
     liquidId: 'rendered_fat',
     amountMl: 500,
@@ -982,10 +791,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Жарка во фритюре, плов, самса, чебуреки и румяный картофель',
       'Обладает высокой температурой дымления (210 °C), благодаря чему даёт самую хрустящую корочку без канцерогенов',
       '#fef08a',
-      { culinaryEquivalentId: 'fat_beef_pot' }
+      { culinaryEquivalentId: 'fat_beef' }
     )
   },
-  ghee_butter_pot: {
+  ghee_butter: {
     containerId: 'pot_clay_small',
     liquidId: 'rendered_fat',
     amountMl: 250,
@@ -996,25 +805,11 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Жарка блинов, стейков, каш, выпечка и заправка горячих блюд',
       'После удаления молочного белка масло приобретает ореховый аромат, янтарный цвет и не горит при 250 °C',
       '#f59e0b',
-      { culinaryEquivalentId: 'ghee_butter_pot' }
+      { culinaryEquivalentId: 'ghee_butter' }
     )
   },
 
   // === 11. CULINARY OILS (РАСТИТЕЛЬНЫЕ МАСЛА) ===
-  oil_sunflower_bottle: {
-    containerId: 'bottle_glass_large',
-    liquidId: 'oil_culinary',
-    amountMl: 1000,
-    attributes: attr(
-      'Масло подсолнечное нерафинированное душистое',
-      'Обжаренные семена кубанского подсолнечника',
-      'Первый прессовый отжим жареной семечки и отстаивание',
-      'Заправка винегрета, квашеной капусты, свежих салатов и жарка',
-      'Обжарка ядер перед прессованием раскрывает яркий аромат жареных семечек и сохраняет витамин E',
-      '#facc15',
-      { culinaryEquivalentId: 'oil_sunflower_bottle' }
-    )
-  },
   oil_sunflower: {
     containerId: 'bottle_glass_large',
     liquidId: 'oil_culinary',
@@ -1027,20 +822,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Базовое кулинарное масло для тепловой обработки',
       '#facc15',
       { culinaryEquivalentId: 'oil_sunflower' }
-    )
-  },
-  oil_olive_extra_virgin: {
-    containerId: 'bottle_glass_medium',
-    liquidId: 'oil_culinary',
-    amountMl: 500,
-    attributes: attr(
-      'Масло оливковое Extra Virgin первого холодного отжима',
-      'Свежесобранные средиземноморские оливки',
-      'Механический холодный отжим (при температуре до 27 °C) без рафинации',
-      'Заправка салатов, брускетт, карпаччо, пасты и маринадов',
-      'Сохраняет полифенолы и олеиновую кислоту, дающие травянистый аромат и лёгкую перечную горчинку в послевкусии',
-      '#84cc16',
-      { culinaryEquivalentId: 'oil_olive_extra_virgin' }
     )
   },
   oil_olive: {
@@ -1057,20 +838,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'oil_olive' }
     )
   },
-  oil_linseed_bottle: {
-    containerId: 'bottle_glass_medium',
-    liquidId: 'oil_culinary',
-    amountMl: 500,
-    attributes: attr(
-      'Масло льняное сыродавленное',
-      'Зрелые семена бурого льна',
-      'Холодное прессование в дубовом прессе без нагрева',
-      'Заправка холодных блюд, каш, отварного картофеля и квашеной капусты',
-      'Содержит рекордное количество жирных кислот Омега-3 с характерной благородной горчинкой',
-      '#ca8a04',
-      { culinaryEquivalentId: 'oil_linseed_bottle' }
-    )
-  },
   oil_linseed: {
     containerId: 'bottle_glass_medium',
     liquidId: 'oil_culinary',
@@ -1083,20 +850,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Природный источник альфа-линоленовой кислоты (Омега-3)',
       '#ca8a04',
       { culinaryEquivalentId: 'oil_linseed' }
-    )
-  },
-  oil_sesame_bottle: {
-    containerId: 'bottle_glass_small',
-    liquidId: 'oil_culinary',
-    amountMl: 250,
-    attributes: attr(
-      'Масло кунжутное тёмное из обжаренных семян',
-      'Обжаренные семена белого и чёрного кунжута',
-      'Тёмная обжарка кунжутного семени и горячее прессование',
-      'Финальная ароматизация вок-лапши, супов рамен, битых огурцов и маринадов',
-      'Даже несколько капель в конце готовки придают блюду мощный орехово-дымный азиатский профиль',
-      '#92400e',
-      { culinaryEquivalentId: 'oil_sesame_bottle' }
     )
   },
   oil_sesame: {
@@ -1115,20 +868,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 12. VINEGARS (УКСУСЫ КУЛИНАРНЫЕ) ===
-  vinegar_table_bottle: {
-    containerId: 'bottle_glass_medium',
-    liquidId: 'vinegar',
-    amountMl: 500,
-    attributes: attr(
-      'Уксус столовый 9% пищевой',
-      'Ректификованный пищевой спирт, подготовленная вода, уксуснокислые бактерии',
-      'Биохимическое окисление спиртового сусла и разведение до 9% крепости',
-      'Маринование шашлыка и лука, подача к пельменям, консервация и гашение соды',
-      'Кислая среда размягчает жёсткие мышечные волокна мяса и подавляет развитие бактерий в заготовках',
-      '#f1f5f9',
-      { culinaryEquivalentId: 'vinegar_table_bottle' }
-    )
-  },
   vinegar_table: {
     containerId: 'bottle_glass_medium',
     liquidId: 'vinegar',
@@ -1143,20 +882,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'vinegar_table' }
     )
   },
-  vinegar_apple_cider: {
-    containerId: 'bottle_glass_medium',
-    liquidId: 'vinegar',
-    amountMl: 500,
-    attributes: attr(
-      'Уксус яблочный натуральный нефильтрованный (6%)',
-      'Свежевыжатый сок спелых садовых яблок',
-      'Двойная ферментация яблочного сидра с участием уксусной матки',
-      'Салатные заправки винегрет, маринады для птицы и свинины, соусы',
-      'В отличие от спиртового уксуса, сохраняет мягкую фруктовую кислинку и яблочную кислоту',
-      '#fbbf24',
-      { culinaryEquivalentId: 'vinegar_apple_cider' }
-    )
-  },
   vinegar_apple: {
     containerId: 'bottle_glass_medium',
     liquidId: 'vinegar',
@@ -1169,20 +894,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Мягкая фруктовая кислота и аромат осенних яблок',
       '#fbbf24',
       { culinaryEquivalentId: 'vinegar_apple' }
-    )
-  },
-  vinegar_balsamic_premium: {
-    containerId: 'bottle_glass_small',
-    liquidId: 'vinegar',
-    amountMl: 250,
-    attributes: attr(
-      'Уксус бальзамический выдержанный (Модена)',
-      'Уваренное виноградное сусло сортов Треббиано и Ламбруско, винный уксус',
-      'Уваривание виноградного сока и многолетняя выдержка в батарее деревянных бочек',
-      'Капрезе с томатами и моцареллой, стейки, сыры и клубника',
-      'Во время выдержки в дубовых и каштановых бочках уксус густеет, темнеет и обретает бархатный кисло-сладкий букет',
-      '#27272a',
-      { culinaryEquivalentId: 'vinegar_balsamic_premium' }
     )
   },
   vinegar_balsamic: {
@@ -1313,20 +1024,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'sauce_narsharab' }
     )
   },
-  sauce_teriyaki_bottle: {
-    containerId: 'bottle_glass_small',
-    liquidId: 'sauce',
-    amountMl: 250,
-    attributes: attr(
-      'Соус Терияки густой глазирующий',
-      'Соевый соус, сладкое рисовое вино мирин, тростниковый сахар, свежий имбирь, чеснок, кунжут',
-      'Карамелизация соевого соуса с сахаром, мирином и корнем имбиря',
-      'Жарка курицы, лосося, овощей вок и глазировка шашлычков якитори',
-      'Слово «тэри» означает «блеск» — сахара в соусе при обжарке покрывают мясо зеркальной румяной корочкой',
-      '#451a03',
-      { culinaryEquivalentId: 'sauce_teriyaki_bottle' }
-    )
-  },
   sauce_teriyaki: {
     containerId: 'bottle_glass_small',
     liquidId: 'sauce',
@@ -1339,20 +1036,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Сладковато-пряный вкус и глянцевая корочка при жарке',
       '#451a03',
       { culinaryEquivalentId: 'sauce_teriyaki' }
-    )
-  },
-  mustard_dijon_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'sauce',
-    amountMl: 200,
-    attributes: attr(
-      'Горчица Дижонская классическая',
-      'Очищенные семена бурой и чёрной горчицы, белое сухое вино, вержус (сок незрелого винограда), соль',
-      'Замачивание горчичного зерна в белом вине и тонкое перетирание на каменных жерновах',
-      'Подача к стейкам, колбаскам, холодцу, буженине и приготовление салатных эмульсий',
-      'Кислота белого вина смягчает резкий ожог аллилового масла, делая горчицу кремовой и благородно-острой',
-      '#eab308',
-      { culinaryEquivalentId: 'mustard_dijon_jar' }
     )
   },
   mustard_dijon: {
@@ -1371,20 +1054,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 14. SWEET SYRUPS & CONDENSED MILK (СИРОПЫ И СГУЩЁННОЕ МОЛОКО) ===
-  canned_condensed_milk: {
-    containerId: 'can_metal_medium',
-    liquidId: 'syrup_sweet',
-    amountMl: 400,
-    attributes: attr(
-      'Молоко цельное сгущённое с сахаром (8.5% ГОСТ)',
-      'Цельное коровье молоко, сливки, сахар-песок (сахароза и лактоза)',
-      'Вакуумное выпаривание влаги из молока с сахаром при 55 °C без кипячения и закатка в жестяную банку',
-      'Добавка в кофе и чай, поливка для блинов и оладий, крем для тортов или лакомство ложкой из банки',
-      'Вакуумное сгущение при низкой температуре сохраняет молочные витамины, а 43% сахара консервируют молоко на годы',
-      '#fef9c3',
-      { culinaryEquivalentId: 'canned_condensed_milk', customEffects: { hunger: 60, energy: 25, health: 5 } }
-    )
-  },
   condensed_milk: {
     containerId: 'can_metal_medium',
     liquidId: 'syrup_sweet',
@@ -1397,20 +1066,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Густое сливочное лакомство с мощным зарядом быстрых углеводов',
       '#fef9c3',
       { culinaryEquivalentId: 'condensed_milk', customEffects: { hunger: 60, energy: 25, health: 5 } }
-    )
-  },
-  maple_syrup_bottle: {
-    containerId: 'bottle_glass_small',
-    liquidId: 'syrup_sweet',
-    amountMl: 250,
-    attributes: attr(
-      'Сироп кленовый натуральный янтарный (Grade A)',
-      '100% весенний сок сахарного клёна (Acer saccharum)',
-      'Сбор сока из подсочки клёнов и сорокакратное выпаривание на дровяном огне без добавок',
-      'Панкейки, вафли, овсяная каша, мороженое и глазировка бекона',
-      'Карамелизация древесных сахаров при выпаривании рождает неповторимый ванильно-древесный букет',
-      '#b45309',
-      { culinaryEquivalentId: 'maple_syrup_bottle' }
     )
   },
   maple_syrup: {
@@ -1429,7 +1084,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 15. FERMENTED DAIRY & CREAM (КИСЛОМОЛОЧНЫЕ ПРОДУКТЫ, СМЕТАНА, ЗАКВАСКИ) ===
-  milk_bottle_raw: {
+  milk_raw: {
     containerId: 'bottle_glass_large',
     liquidId: 'milk',
     amountMl: 1000,
@@ -1440,10 +1095,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Питьё, варка каш, приготовление домашнего творога, простокваши и выпечки',
       'Сверху в бутылке отстаивается густой слой натуральных жёлтых сливок',
       '#fffbeb',
-      { culinaryEquivalentId: 'milk_bottle_raw' }
+      { culinaryEquivalentId: 'milk_raw' }
     )
   },
-  cream_heavy_jar: {
+  cream_heavy: {
     containerId: 'jar_glass_medium',
     liquidId: 'dairy_fermented',
     amountMl: 500,
@@ -1454,10 +1109,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Взбивание крема, сливочные соусы для пасты и жюльена, добавление в кофе и крем-супы',
       'Высокая массовая доля молочного жира (33%) позволяет взбивать сливки в пышную стойкую пену и сбивать домашнее масло',
       '#fefce8',
-      { culinaryEquivalentId: 'cream_heavy_jar' }
+      { culinaryEquivalentId: 'cream_heavy' }
     )
   },
-  sour_cream_pot: {
+  sour_cream: {
     containerId: 'pot_clay_medium',
     liquidId: 'dairy_fermented',
     amountMl: 500,
@@ -1468,10 +1123,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Заправка борща, щей, пельменей, вареников, блинов, грибов в сметане и выпечки',
       'При холодном созревании жировые шарики сливок кристаллизуются, делая сметану густой и бархатистой без загустителей',
       '#fefce8',
-      { culinaryEquivalentId: 'sour_cream_pot' }
+      { culinaryEquivalentId: 'sour_cream' }
     )
   },
-  kefir_fermented_bottle: {
+  kefir: {
     containerId: 'bottle_glass_large',
     liquidId: 'dairy_fermented',
     amountMl: 1000,
@@ -1482,10 +1137,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Освежающий напиток, основа для окрошки, пышных оладий и маринадов',
       'Симбиоз молочнокислых бактерий и дрожжей придаёт кефиру лёгкую природную газированность и освежающую кислинку',
       '#f8fafc',
-      { culinaryEquivalentId: 'kefir_fermented_bottle' }
+      { culinaryEquivalentId: 'kefir' }
     )
   },
-  buttermilk_fermented_jar: {
+  buttermilk: {
     containerId: 'jar_glass_medium',
     liquidId: 'dairy_fermented',
     amountMl: 500,
@@ -1496,10 +1151,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Идеальная основа для бисквитов, панкейков и нежного питья',
       'Богата фосфолипидами (лецитином), делающими любую выпечку невесомой и долго не черствеющей',
       '#fef3c7',
-      { culinaryEquivalentId: 'buttermilk_fermented_jar' }
+      { culinaryEquivalentId: 'buttermilk' }
     )
   },
-  yogurt_natural_cup: {
+  yogurt: {
     containerId: 'cup_plastic_dairy_small',
     liquidId: 'dairy_fermented',
     amountMl: 200,
@@ -1510,7 +1165,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Лёгкий белковый завтрак с ягодами и мёдом, соус дзадзики и заправка для салатов',
       'Удаление сыворотки удваивает концентрацию белка и создаёт плотную сливочную текстуру',
       '#ffffff',
-      { culinaryEquivalentId: 'yogurt_natural_cup' }
+      { culinaryEquivalentId: 'yogurt' }
     )
   },
   liquid_yeast_mixture: {
@@ -1529,7 +1184,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 16. DRY MIXES, POWDERS & FLOURS (СУХИЕ СМЕСИ, МУКА, ПОРОШКИ) ===
-  yeast_dry_sachet: {
+  yeast_dry: {
     containerId: 'package_sachet',
     liquidId: 'dry_mix',
     amountMl: 50,
@@ -1540,7 +1195,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Быстрый подъём сдобного, хлебного и пирожкового теста',
       'В спящем обезвоженном состоянии клетки дрожжей сохраняют активность месяцами и пробуждаются при контакте с тёплой водой и сахаром',
       '#d6d3d1',
-      { culinaryEquivalentId: 'yeast_dry_sachet' }
+      { culinaryEquivalentId: 'yeast_dry' }
     )
   },
   flour: {
@@ -1557,21 +1212,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'flour' }
     )
   },
-  flour_bag: {
-    containerId: 'sack_cloth_medium',
-    liquidId: 'flour',
-    amountMl: 3000,
-    attributes: attr(
-      'Мука пшеничная высшего сорта',
-      'Зерно пшеницы',
-      'Тонкий мельничный помол',
-      'Хлебопечение, кулинария, тесто и соусы',
-      'Базовая основа любого мучного изделия',
-      '#f8fafc',
-      { culinaryEquivalentId: 'flour_bag' }
-    )
-  },
-  flour_wheat_bag_1k: {
+  flour_wheat: {
     containerId: 'sack_cloth_small',
     liquidId: 'flour',
     amountMl: 1000,
@@ -1582,10 +1223,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Домашняя выпечка, блины, вареники и пельмени',
       'Белоснежная мука мелкого помола для пышного сдобного теста',
       '#f8fafc',
-      { culinaryEquivalentId: 'flour_wheat_bag_1k' }
+      { culinaryEquivalentId: 'flour_wheat' }
     )
   },
-  flour_rye_bag_1k: {
+  flour_rye: {
     containerId: 'sack_cloth_small',
     liquidId: 'flour',
     amountMl: 1000,
@@ -1596,10 +1237,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Выпечка бородинского и дарницкого ржаного хлеба, калиток, пряников и закваски для кваса',
       'Богата пентозанами, клетчаткой и витаминами группы B, придающими ржаному хлебу сочный мякиш и солодовый дух',
       '#d6d3d1',
-      { culinaryEquivalentId: 'flour_rye_bag_1k' }
+      { culinaryEquivalentId: 'flour_rye' }
     )
   },
-  flour_corn_bag_500g: {
+  flour_corn: {
     containerId: 'package_bag',
     liquidId: 'flour',
     amountMl: 500,
@@ -1610,10 +1251,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Кукурузные лепёшки тортильи, мамалыга, полента, мчади и хрустящая панировка',
       'Не содержит глютена, окрашивает выпечку в солнечный жёлтый цвет и даёт рассыпчатую текстуру',
       '#fde047',
-      { culinaryEquivalentId: 'flour_corn_bag_500g' }
+      { culinaryEquivalentId: 'flour_corn' }
     )
   },
-  flour_rice_bag_500g: {
+  flour_rice: {
     containerId: 'package_bag',
     liquidId: 'flour',
     amountMl: 500,
@@ -1624,12 +1265,12 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Идеальные сырники, кляр темпура, рисовая лапша, моти и безглютеновые десерты',
       'Впитывает меньше масла при жарке и не даёт сырникам расползаться на сковороде',
       '#ffffff',
-      { culinaryEquivalentId: 'flour_rice_bag_500g' }
+      { culinaryEquivalentId: 'flour_rice' }
     )
   },
 
   // === 17. GRAINS, CEREALS & LEGUMES (КРУПЫ, ЗЛАКИ И БОБОВЫЕ) ===
-  grain_wheat_raw_bag: {
+  grain_wheat_raw: {
     containerId: 'sack_cloth_small',
     liquidId: 'grain',
     amountMl: 1000,
@@ -1640,10 +1281,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Помол в муку, проращивание, варка кутьи и полбяной каши',
       'В цельном зерне сохранены зародыш и оболочка со всеми природными маслами и минералами',
       '#d97706',
-      { culinaryEquivalentId: 'grain_wheat_raw_bag' }
+      { culinaryEquivalentId: 'grain_wheat_raw' }
     )
   },
-  grain_rye_raw_bag: {
+  grain_rye_raw: {
     containerId: 'sack_cloth_small',
     liquidId: 'grain',
     amountMl: 1000,
@@ -1654,10 +1295,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Приготовление ржаного солода, домашнего хлебного кваса и обдирной муки',
       'При проращивании и томлении зерно ржи образует диастазу, осахаривающую крахмал в сладкий солод',
       '#a16207',
-      { culinaryEquivalentId: 'grain_rye_raw_bag' }
+      { culinaryEquivalentId: 'grain_rye_raw' }
     )
   },
-  grain_oats_bag: {
+  grain_oats: {
     containerId: 'package_bag',
     liquidId: 'grain',
     amountMl: 500,
@@ -1668,10 +1309,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Утренняя овсяная каша на молоке или воде, овсяное печенье, гранола и кисель',
       'Плющение ускоряет варку в 4 раза, сохраняя бета-глюканы, обволакивающие желудок и дающие долгую сытость',
       '#fde68a',
-      { culinaryEquivalentId: 'grain_oats_bag' }
+      { culinaryEquivalentId: 'grain_oats' }
     )
   },
-  rice_basmati_bag: {
+  rice_basmati: {
     containerId: 'sack_cloth_small',
     liquidId: 'grain',
     amountMl: 1000,
@@ -1682,10 +1323,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Плов, рассыпчатые восточные гарниры и карри',
       'Благодаря выдержке зёрна при варке удлиняются вдвое, не слипаются и источают тонкий орехово-сливочный аромат',
       '#f8fafc',
-      { culinaryEquivalentId: 'rice_basmati_bag' }
+      { culinaryEquivalentId: 'rice_basmati' }
     )
   },
-  rice_arborio_bag: {
+  rice_arborio: {
     containerId: 'package_bag',
     liquidId: 'grain',
     amountMl: 500,
@@ -1696,10 +1337,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Сливочное ризотто, молочная рисовая каша, пудинги и голубцы',
       'Внешний слой зерна отдаёт в бульон бархатистый крахмал, а плотное ядро внутри сохраняет упругость «аль денте»',
       '#f1f5f9',
-      { culinaryEquivalentId: 'rice_arborio_bag' }
+      { culinaryEquivalentId: 'rice_arborio' }
     )
   },
-  rice_white_bag_1k: {
+  rice_white: {
     containerId: 'sack_cloth_small',
     liquidId: 'grain',
     amountMl: 1000,
@@ -1710,10 +1351,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Лепка суши нигири, роллов маки, онигири, поке и молочных каш',
       'Высокая доля разветвлённого крахмала позволяет зёрнам прочно держаться вместе в ролле, оставаясь упругими и глянцевыми',
       '#ffffff',
-      { culinaryEquivalentId: 'rice_arborio_bag' }
+      { culinaryEquivalentId: 'rice_arborio' }
     )
   },
-  buckwheat_roasted_bag: {
+  buckwheat_roasted: {
     containerId: 'sack_cloth_small',
     liquidId: 'grain',
     amountMl: 1000,
@@ -1724,10 +1365,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Рассыпчатая гречневая каша с маслом, греча по-купечески с мясом и грибами, супы',
       'Пропаривание и обжарка укрепляют ядро, чтобы каша получалась пушистой, зернистой и с насыщенным ореховым духом',
       '#92400e',
-      { culinaryEquivalentId: 'buckwheat_roasted_bag' }
+      { culinaryEquivalentId: 'buckwheat_roasted' }
     )
   },
-  barley_pearl_bag: {
+  barley_pearl: {
     containerId: 'sack_cloth_small',
     liquidId: 'grain',
     amountMl: 1000,
@@ -1738,10 +1379,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Классический рассольник, грибной суп, перловая каша с тушёнкой',
       'Название происходит от слова «перл» (жемчуг) — при долгом томлении зёрна набухают втрое и остаются упругими',
       '#e7e5e4',
-      { culinaryEquivalentId: 'barley_pearl_bag' }
+      { culinaryEquivalentId: 'barley_pearl' }
     )
   },
-  millet_yellow_bag: {
+  millet_yellow: {
     containerId: 'package_bag',
     liquidId: 'grain',
     amountMl: 800,
@@ -1752,10 +1393,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Сливочная пшённая каша с тыквой, полевой кулеш с салом и рыбацкая уха',
       'Богато кремнием, железом и калием, согревающими и восстанавливающими силы после тяжёлой работы',
       '#facc15',
-      { culinaryEquivalentId: 'millet_yellow_bag' }
+      { culinaryEquivalentId: 'millet_yellow' }
     )
   },
-  semolina_wheat_bag: {
+  semolina_wheat: {
     containerId: 'package_bag',
     liquidId: 'grain',
     amountMl: 500,
@@ -1766,7 +1407,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Нежная молочная манная каша, запеканки, манник, клёцки и панировка для котлет',
       'Отсутствие грубой клетчатки позволяет манке свариться за 3 минуты и мгновенно усвоиться организмом',
       '#fef9c3',
-      { culinaryEquivalentId: 'semolina_wheat_bag' }
+      { culinaryEquivalentId: 'semolina_wheat' }
     )
   },
   peas_split_yellow: {
@@ -1855,7 +1496,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 18. DRY SPICES & HERBS (СУХИЕ ПРЯНОСТИ, ТРАВЫ И СПЕЦИИ) ===
-  salt_sea_premium: {
+  salt_sea: {
     containerId: 'jar_spice_small',
     liquidId: 'salt',
     amountMl: 100,
@@ -1866,10 +1507,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Посол стейков, запекание рыбы в соли и финальная подача блюд',
       'Содержит природные микроэлементы моря — магний, калий, кальций и йод, делающие вкус мягче каменной соли',
       '#f8fafc',
-      { culinaryEquivalentId: 'salt_sea_premium' }
+      { culinaryEquivalentId: 'salt_sea' }
     )
   },
-  black_pepper_grinder: {
+  black_pepper_whole: {
     containerId: 'jar_spice_small',
     liquidId: 'spice_dry',
     amountMl: 100,
@@ -1880,10 +1521,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Универсальная пряность для супов, стейков, пельменей, яичницы и маринадов',
       'Алкалоид пиперин в оболочке и эфирные масла ядра дают жгучую остроту и хвойно-пряный аромат',
       '#27272a',
-      { culinaryEquivalentId: 'black_pepper_grinder' }
+      { culinaryEquivalentId: 'black_pepper_whole' }
     )
   },
-  black_pepper_powder_sachet: {
+  black_pepper_ground: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 50,
@@ -1894,10 +1535,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Приправление фарша, супов, котлет и вторых блюд',
       'Мелкий помол равномерно распределяет остроту по всему объёму блюда',
       '#3f3f46',
-      { culinaryEquivalentId: 'black_pepper_powder_sachet' }
+      { culinaryEquivalentId: 'black_pepper_ground' }
     )
   },
-  chili_powder_sachet: {
+  chili_powder: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 50,
@@ -1908,10 +1549,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Острые супы харчо и том ям, маринады для крылышек, гуляш и соусы',
       'Капсаицин вызывает выброс эндорфинов, разгоняет кровообращение и мгновенно согревает на морозе',
       '#dc2626',
-      { culinaryEquivalentId: 'chili_powder_sachet' }
+      { culinaryEquivalentId: 'chili_powder' }
     )
   },
-  paprika_sweet_sachet: {
+  paprika_sweet: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 50,
@@ -1922,10 +1563,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Венгерский гуляш, запечённый картофель, курица гриль, плов и колбасы',
       'Окрашивает бульоны и корочку мяса в аппетитный багряно-золотой цвет и дарит сладковатый аромат костра',
       '#ea580c',
-      { culinaryEquivalentId: 'paprika_sweet_sachet' }
+      { culinaryEquivalentId: 'paprika_sweet' }
     )
   },
-  bay_leaves_dried_sachet: {
+  bay_leaves_dried: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 50,
@@ -1936,10 +1577,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Супы, борщи, пельменный бульон, холодец, тушёнка и все виды маринадов',
       'При нагревании в бульоне лист отдаёт благородный смолисто-камфорный аромат, убирающий посторонние запахи мяса и рыбы',
       '#4d7c0f',
-      { culinaryEquivalentId: 'bay_leaves_dried_sachet' }
+      { culinaryEquivalentId: 'bay_leaves_dried' }
     )
   },
-  cinnamon_powder_sachet: {
+  cinnamon_powder: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 50,
@@ -1950,7 +1591,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Булочки с корицей, яблочный штрудель, глинтвейн, кофе, каши и восточные мясные блюда',
       'Коричный альдегид создаёт тёплый уютный аромат домашней выпечки и снижает тягу к сладкому',
       '#92400e',
-      { culinaryEquivalentId: 'cinnamon_powder_sachet' }
+      { culinaryEquivalentId: 'cinnamon_powder' }
     )
   },
   cloves_buds_dried: {
@@ -1967,7 +1608,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'cloves_buds_dried' }
     )
   },
-  turmeric_powder_sachet: {
+  turmeric_powder: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 50,
@@ -1978,7 +1619,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Плов, куриный бульон, карри, рис и соусы',
       'Природный пигмент куркумин окрашивает рис и плов в сияющий золотой цвет и обладает противовоспалительными свойствами',
       '#eab308',
-      { culinaryEquivalentId: 'turmeric_powder_sachet' }
+      { culinaryEquivalentId: 'turmeric_powder' }
     )
   },
   cardamom_pods_dried: {
@@ -1995,7 +1636,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { culinaryEquivalentId: 'cardamom_pods_dried' }
     )
   },
-  coriander_seeds_sachet: {
+  coriander_seeds: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 50,
@@ -2006,10 +1647,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Выпечка бородинского хлеба, маринование шашлыка, моркови по-корейски и посол сала',
       'При созревании семян травяной запах клопов кинзы исчезает, уступая место тёплому древесно-лимонному аромату линалоола',
       '#a16207',
-      { culinaryEquivalentId: 'coriander_seeds_sachet' }
+      { culinaryEquivalentId: 'coriander_seeds' }
     )
   },
-  allspice_berries_sachet: {
+  allspice_berries: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 50,
@@ -2020,10 +1661,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Холодец, уха, рассолы для огурцов и грибов, тушёнка и маринады',
       'Сочетает в одной горошине сразу четыре аромата: чёрного перца, гвоздики, мускатного ореха и корицы',
       '#57534e',
-      { culinaryEquivalentId: 'allspice_berries_sachet' }
+      { culinaryEquivalentId: 'allspice_berries' }
     )
   },
-  shiitake_dried_bag: {
+  shiitake_dried: {
     containerId: 'package_bag',
     liquidId: 'spice_dry',
     amountMl: 250,
@@ -2034,7 +1675,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Наваристые грибные бульоны, рамен, гречка с грибами и вок (после замачивания)',
       'При сушке в шиитаке образуется гуанилат — вещество, многократно усиливающее грибной аромат и вкус умами при варке',
       '#78350f',
-      { culinaryEquivalentId: 'shiitake_dried_bag' }
+      { culinaryEquivalentId: 'shiitake_dried' }
     )
   },
   wood_ear_mushroom_dried: {
@@ -2063,20 +1704,6 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Асептическое приготовление водного бактерицидного раствора во флаконе с носиком',
       'Безболезненное промывание и обеззараживание открытых ран, ссадин, ожогов и кровотечений',
       'Разрушает клеточные мембраны бактерий, не обжигая живые ткани раны в отличие от спирта',
-      '#e0f2fe',
-      { medicalEffectId: 'antiseptic', customEffects: { health: 8 } }
-    )
-  },
-  antiseptic_bottle: {
-    containerId: 'bottle_plastic_100',
-    liquidId: 'medical_solution',
-    amountMl: 100,
-    attributes: attr(
-      'Раствор антисептический кожный',
-      'Хлоргексидин, изопропиловый спирт, очищенная вода',
-      'Фармацевтический синтез и стерильный розлив',
-      'Дезинфекция ран, порезов и рук',
-      'Предотвращает нагноение и инфицирование повреждённой кожи',
       '#e0f2fe',
       { medicalEffectId: 'antiseptic', customEffects: { health: 8 } }
     )
@@ -2193,7 +1820,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       { medicalEffectId: 'diclofenac_gel', customEffects: { health: 10 } }
     )
   },
-  panthenol_spray: {
+  panthenol: {
     containerId: 'aerosol_can_small',
     liquidId: 'medical_solution',
     amountMl: 150,
@@ -2204,7 +1831,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Первая помощь при термических и солнечных ожогах 1–2 степени и обширных ссадинах',
       'Воздушная охлаждающая пена наносится бесконтактно, не травмируя обожжённую кожу, и переходит в тканях в пантотеновую кислоту',
       '#ffffff',
-      { medicalEffectId: 'panthenol_spray', customEffects: { health: 14 } }
+      { medicalEffectId: 'panthenol', customEffects: { health: 14 } }
     )
   },
   balm_star: {
@@ -2223,91 +1850,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
   },
 
   // === 20. ADDITIONAL CATALOG JARS, PICKLES, SPICES & DRINKS ===
-  tomato_sundried_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'pickles',
-    amountMl: 200,
-    attributes: attr(
-      'Томаты вяленые итальянские в оливковом масле с травами',
-      'Половинки вяленых на солнце сливовидных томатов, оливковое масло Extra Virgin, орегано, базилик, чеснок, винный уксус',
-      'Медленное вяление спелых томатов и заливка пряным прогретым оливковым маслом в стеклянной баночке',
-      'Изысканная закуска к чиабатте, пицце, пасте, сырной тарелке и салатам',
-      'При вялении в томатах многократно концентрируется ликопин и природный глутамат (вкус умами), а оливковое масло пропитывается ароматом трав',
-      '#b91c1c',
-      { culinaryEquivalentId: 'tomato_sundried_jar', customEffects: { hunger: 25, energy: 8 } }
-    )
-  },
-  tomato_paste_jar: {
-    containerId: 'jar_glass_small',
-    liquidId: 'puree',
-    amountMl: 200,
-    attributes: attr(
-      'Паста томатная густая концентрированная (25% сухих веществ)',
-      'Спелые красные грунтовые томаты, поваренная соль',
-      'Протирание томатной мякоти без кожицы и семян и вакуумное выпаривание до густой пасты',
-      'Основа для борща, солянки, пицца-соуса, гуляша и тушёных овощей',
-      'Термическая концентрация раскрывает яркий кисло-сладкий вкус и рубиновый цвет томатов',
-      '#991b1b',
-      { culinaryEquivalentId: 'tomato_paste_jar', customEffects: { hunger: 20, thirst: 5 } }
-    )
-  },
-  cucumber_pickled_jar: {
-    containerId: 'jar_glass_medium',
-    liquidId: 'pickles',
-    amountMl: 500,
-    attributes: attr(
-      'Огурцы солёные бочковые хрустящие в рассоле',
-      'Грунтовые пупырчатые огурцы, вода, каменная соль, зонтики укропа, лист хрена, чеснок, лист смородины',
-      'Молочнокислое брожение с пряной зеленью и фасовка в полулитровую стеклянную банку',
-      'Традиционная хрустящая закуска, рассольник, винегрет, оливье и восполнение солей',
-      'Лист хрена и дубильные вещества смородины сохраняют плотный хруст огурцов, а рассол богат электролитами',
-      '#4d7c0f',
-      { culinaryEquivalentId: 'cucumber_pickled_jar', customEffects: { hunger: 28, thirst: 25 } }
-    )
-  },
-  eggplant_caviar_jar: {
-    containerId: 'jar_glass_medium',
-    liquidId: 'caviar',
-    amountMl: 500,
-    attributes: attr(
-      'Икра баклажанная запечённая по-домашнему',
-      'Запечённые баклажаны, сладкий болгарский перец, спелые томаты, репчатый лук, чеснок, подсолнечное масло, соль',
-      'Запекание баклажанов до дымного аромата, рубка и медленное томление с томатами и маслом',
-      'Питательная овощная намазка на свежий хлеб и гарнир к мясу',
-      'Томление в масле смягчает клетчатку баклажанов и создаёт бархатистую пикантную текстуру',
-      '#78350f',
-      { culinaryEquivalentId: 'eggplant_caviar_jar', customEffects: { hunger: 48, thirst: 10 } }
-    )
-  },
-  zucchini_caviar_jar: {
-    containerId: 'jar_glass_medium',
-    liquidId: 'caviar',
-    amountMl: 500,
-    attributes: attr(
-      'Икра кабачковая уваренная нежная (ГОСТ)',
-      'Молодые кабачки, морковь, репчатый лук, томатная паста, подсолнечное масло, соль, душистый перец',
-      'Обжарка овощей, тонкое пюрирование и длительное уваривание со специями',
-      'Лёгкая диетическая закуска, намазка на хлеб и гарнир',
-      'Нежная гомогенизированная текстура легко усваивается и быстро утоляет голод',
-      '#ea580c',
-      { culinaryEquivalentId: 'zucchini_caviar_jar', customEffects: { hunger: 45, thirst: 12 } }
-    )
-  },
-  cabbage_sauerkraut_jar: {
-    containerId: 'jar_glass_medium',
-    liquidId: 'pickles',
-    amountMl: 500,
-    attributes: attr(
-      'Капуста квашеная хрустящая с морковью в рассоле',
-      'Белокочанная капуста, садовая морковь, каменная соль, семена тмина',
-      'Шинковка, перетирание с солью до выделения сока и естественная лактоферментация под гнётом',
-      'Витаминный салат, кислые щи, солянка, тушёный гарнир и источник витамина C',
-      'Молочнокислые бактерии консервируют капусту и обогащают её пробиотиками и аскорбиновой кислотой',
-      '#fef08a',
-      { culinaryEquivalentId: 'cabbage_sauerkraut_jar', customEffects: { hunger: 25, thirst: 18, health: 5 } }
-    )
-  },
-  jalapeno_pickled_jar: {
+  jalapeno_pickled: {
     containerId: 'jar_glass_small',
     liquidId: 'pickles',
     amountMl: 200,
@@ -2318,10 +1861,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Острый топпинг к бургерам, пицце, начос, хот-догам и мясным блюдам',
       'Капсаицин в сочетании с уксусным маринадом мгновенно согревает, бодрит и усиливает аппетит',
       '#15803d',
-      { culinaryEquivalentId: 'jalapeno_pickled_jar', customEffects: { hunger: 12, energy: 12 } }
+      { culinaryEquivalentId: 'jalapeno_pickled', customEffects: { hunger: 12, energy: 12 } }
     )
   },
-  ginger_pickled_box: {
+  ginger_pickled: {
     containerId: 'jar_glass_small',
     liquidId: 'pickles',
     amountMl: 200,
@@ -2332,66 +1875,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Подача к суши и роллам для очищения вкусовых рецепторов и антибактериальной защиты',
       'Гингерол и рисовый уксус освежают полость рта, стимулируют пищеварение и обладают природным антисептическим эффектом',
       '#f43f5e',
-      { culinaryEquivalentId: 'ginger_pickled_box', customEffects: { hunger: 8, health: 4, energy: 6 } }
+      { culinaryEquivalentId: 'ginger_pickled', customEffects: { hunger: 8, health: 4, energy: 6 } }
     )
   },
-  garlic_powder_jar: {
-    containerId: 'jar_spice_small',
-    liquidId: 'spice_dry',
-    amountMl: 100,
-    attributes: attr(
-      'Чеснок сушёный гранулированный в баночке',
-      'Отборные зубчики свежего чеснока (Allium sativum) тонкого помола',
-      'Бережная конвекционная сушка чесночных пластинок и дробление в мелкую крупку',
-      'Ароматная приправа к стейкам, курице, супам, соусам и чесночному хлебу',
-      'При контакте с влагой блюда фермент аллииназа вновь активирует пряный чесночный аромат без риска подгорания на сковороде',
-      '#fef3c7',
-      { culinaryEquivalentId: 'garlic_powder_jar', customEffects: { hunger: 4, health: 3 } }
-    )
-  },
-  dill_dried_jar: {
-    containerId: 'jar_spice_small',
-    liquidId: 'spice_dry',
-    amountMl: 100,
-    attributes: attr(
-      'Укроп огородный сушёный душистый',
-      'Молодые пушистые веточки зелёного укропа без грубых стеблей',
-      'Теневая сушка с сохранением эфирных масел и изумрудно-зелёного цвета',
-      'Добавка в горячие супы, уху, отварной картофель, сметанные соусы и соленья',
-      'Эфирное масло укропа (карвон) придаёт блюдам свежий летний аромат',
-      '#15803d',
-      { culinaryEquivalentId: 'dill_dried_jar', customEffects: { hunger: 3, health: 2 } }
-    )
-  },
-  basil_dried_jar: {
-    containerId: 'jar_spice_small',
-    liquidId: 'spice_dry',
-    amountMl: 100,
-    attributes: attr(
-      'Базилик душистый сушёный (орегано-базиликовый букет)',
-      'Листья фиолетового и зелёного сладкого базилика (Ocimum basilicum)',
-      'Бережная сушка листьев до раскрытия пряно-гвоздичного аромата эвгенола',
-      'Томатные соусы для пиццы и пасты, запечённое мясо, овощные рагу и сыры',
-      'Идеально сочетается с томатами, оливковым маслом и чесноком в средиземноморской и кавказской кухне',
-      '#166534',
-      { culinaryEquivalentId: 'basil_dried_jar', customEffects: { hunger: 3, health: 2 } }
-    )
-  },
-  mint_dried_jar: {
-    containerId: 'jar_spice_small',
-    liquidId: 'spice_dry',
-    amountMl: 100,
-    attributes: attr(
-      'Мята перечная сушёная листовая для чая',
-      'Цельные и дроблёные листья перечной мяты с высоким содержанием ментола',
-      'Сбор во время цветения и медленная сушка в тени',
-      'Заваривание успокаивающего мятного чая, приготовление морсов и десертов',
-      'Природный ментол мягко снимает нервное напряжение, спазмы и освежает дыхание',
-      '#047857',
-      { culinaryEquivalentId: 'mint_dried_jar', customEffects: { hunger: 2, health: 4, energy: 4 } }
-    )
-  },
-  salt_shaker: {
+  salt_fine: {
     containerId: 'jar_spice_small',
     liquidId: 'salt',
     amountMl: 100,
@@ -2402,12 +1889,12 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Досаливание готовых блюд, супов, яичницы, салатов и мяса за столом',
       'Чистые мелкие кристаллы мгновенно растворяются на поверхности горячей и холодной пищи',
       '#f8fafc',
-      { culinaryEquivalentId: 'salt_shaker' }
+      { culinaryEquivalentId: 'salt_fine' }
     )
   },
 
   // === 15. CONFECTIONERY GELLING AGENTS, STARCHES, SYRUPS, ACIDS, DYES & EXTRACTS ===
-  gelatin_powder_sachet: {
+  gelatin_powder: {
     containerId: 'package_sachet',
     liquidId: 'dry_mix',
     amountMl: 80,
@@ -2418,10 +1905,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Желирующий агент для классических мармеладных мишек, желе и заливных блюд',
       'Образует упругий термообратимый гель с характерным жевательным «щелчком» мармелада',
       '#f59e0b',
-      { culinaryEquivalentId: 'gelatin_powder_sachet', customEffects: { hunger: 4 } }
+      { culinaryEquivalentId: 'gelatin_powder', customEffects: { hunger: 4 } }
     )
   },
-  gelatin_beef_pack: {
+  gelatin_beef: {
     containerId: 'package_bag',
     liquidId: 'dry_mix',
     amountMl: 450,
@@ -2432,10 +1919,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Приготовление плотного упругого мармелада, бутылочек колы и жевательных червячков',
       'Высокий индекс Bloom обеспечивает эластичность без мутности',
       '#d97706',
-      { culinaryEquivalentId: 'gelatin_beef_pack', customEffects: { hunger: 6 } }
+      { culinaryEquivalentId: 'gelatin_beef', customEffects: { hunger: 6 } }
     )
   },
-  pectin_apple_sachet: {
+  pectin_apple: {
     containerId: 'package_sachet',
     liquidId: 'dry_mix',
     amountMl: 85,
@@ -2446,10 +1933,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Натуральный растительный загуститель для ягодного, фруктового и долькового мармелада',
       'Придаёт мармеладу нежный короткий откус без резиновой тягучести',
       '#84cc16',
-      { culinaryEquivalentId: 'pectin_apple_sachet', customEffects: { hunger: 3 } }
+      { culinaryEquivalentId: 'pectin_apple', customEffects: { hunger: 3 } }
     )
   },
-  pectin_citrus_sachet: {
+  pectin_citrus: {
     containerId: 'package_sachet',
     liquidId: 'dry_mix',
     amountMl: 85,
@@ -2460,10 +1947,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Основа для глянцевых фруктовых колечек, тропических кубиков и садовых пастилок',
       'Раскрывает яркий фруктово-цитрусовый вкус даже при низкой кислотности',
       '#f97316',
-      { culinaryEquivalentId: 'pectin_citrus_sachet', customEffects: { hunger: 3 } }
+      { culinaryEquivalentId: 'pectin_citrus', customEffects: { hunger: 3 } }
     )
   },
-  agar_agar_sachet: {
+  agar_agar: {
     containerId: 'package_sachet',
     liquidId: 'dry_mix',
     amountMl: 75,
@@ -2474,10 +1961,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Веганская основа для тропического мармелада, личи-кубиков и птичьего молока',
       'Застывает уже при +38°C и держит чёткую форму даже без холодильника',
       '#0d9488',
-      { culinaryEquivalentId: 'agar_agar_sachet', customEffects: { hunger: 2, health: 2 } }
+      { culinaryEquivalentId: 'agar_agar', customEffects: { hunger: 2, health: 2 } }
     )
   },
-  starch_modified_pack: {
+  starch_modified: {
     containerId: 'package_bag',
     liquidId: 'dry_mix',
     amountMl: 600,
@@ -2488,10 +1975,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Создание плотной упругой структуры кислых червячков, колечек и лент',
       'Удерживает влагу и не даёт мармеладу высыхать при хранении',
       '#cbd5e1',
-      { culinaryEquivalentId: 'starch_modified_pack' }
+      { culinaryEquivalentId: 'starch_modified' }
     )
   },
-  starch_corn_pack: {
+  starch_corn: {
     containerId: 'package_bag',
     liquidId: 'dry_mix',
     amountMl: 600,
@@ -2502,10 +1989,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Посыпка форм, отливка мармелада, загущение ягодных пюре и кремов',
       'Нейтральный вкус и шёлковая сухая текстура',
       '#fef08a',
-      { culinaryEquivalentId: 'starch_corn_pack' }
+      { culinaryEquivalentId: 'starch_corn' }
     )
   },
-  glucose_syrup_bottle: {
+  glucose_syrup: {
     containerId: 'bottle_plastic_500',
     liquidId: 'syrup_sweet',
     amountMl: 500,
@@ -2516,10 +2003,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Антикристаллизатор для блестящего тягучего мармелада, карамели и глазури',
       'Предотвращает засахаривание мармеладной массы и даёт упругую прозрачность',
       '#fef08a',
-      { culinaryEquivalentId: 'glucose_syrup_bottle', customEffects: { hunger: 20, energy: 28, thirst: -4 } }
+      { culinaryEquivalentId: 'glucose_syrup', customEffects: { hunger: 20, energy: 28, thirst: -4 } }
     )
   },
-  glucose_fructose_syrup_bottle: {
+  glucose_fructose_syrup: {
     containerId: 'bottle_plastic_500',
     liquidId: 'syrup_sweet',
     amountMl: 500,
@@ -2530,10 +2017,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Основа мармелада «Золотые мишки», шипучих бутылочек колы и лимонадного микса',
       'Удерживает влагу внутри мармелада и усиливает фруктовую кислинку',
       '#fbbf24',
-      { culinaryEquivalentId: 'glucose_fructose_syrup_bottle', customEffects: { hunger: 22, energy: 30, thirst: -4 } }
+      { culinaryEquivalentId: 'glucose_fructose_syrup', customEffects: { hunger: 22, energy: 30, thirst: -4 } }
     )
   },
-  starch_molasses_jar: {
+  starch_molasses: {
     containerId: 'jar_glass_small',
     liquidId: 'syrup_sweet',
     amountMl: 200,
@@ -2544,10 +2031,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Придаёт мармеладу плотность, глянец и мягкую сладость без приторности',
       'Классический компонент советских и европейских кондитерских рецептур',
       '#d97706',
-      { culinaryEquivalentId: 'starch_molasses_jar', customEffects: { hunger: 22, energy: 26 } }
+      { culinaryEquivalentId: 'starch_molasses', customEffects: { hunger: 22, energy: 26 } }
     )
   },
-  topinambur_syrup_bottle: {
+  topinambur_syrup: {
     containerId: 'bottle_glass_small',
     liquidId: 'syrup_sweet',
     amountMl: 250,
@@ -2558,10 +2045,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Натуральный подсластитель для мармелада на пектине и здоровых десертов',
       'Низкий гликемический индекс и тёплый карамельно-травяной оттенок вкуса',
       '#92400e',
-      { culinaryEquivalentId: 'topinambur_syrup_bottle', customEffects: { hunger: 18, energy: 22, health: 4 } }
+      { culinaryEquivalentId: 'topinambur_syrup', customEffects: { hunger: 18, energy: 22, health: 4 } }
     )
   },
-  coconut_milk_can: {
+  coconut_milk: {
     containerId: 'can_metal_medium',
     liquidId: 'milk',
     amountMl: 400,
@@ -2572,10 +2059,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Тропический мармелад ананас-кокос, взбитый слой, карри и десерты',
       'Нежная сливочная текстура с натуральным ароматом кокосового ореха',
       '#0d9488',
-      { culinaryEquivalentId: 'coconut_milk_can', customEffects: { thirst: 22, hunger: 16, energy: 10 } }
+      { culinaryEquivalentId: 'coconut_milk', customEffects: { thirst: 22, hunger: 16, energy: 10 } }
     )
   },
-  citric_acid_sachet: {
+  citric_acid: {
     containerId: 'package_sachet',
     liquidId: 'food_acid',
     amountMl: 80,
@@ -2586,10 +2073,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Запуск желирования пектина, кислая сахарная обсыпка, маринады и напитки',
       'Чистая звонкая цитрусовая кислинка без постороннего привкуса',
       '#facc15',
-      { culinaryEquivalentId: 'citric_acid_sachet' }
+      { culinaryEquivalentId: 'citric_acid' }
     )
   },
-  citric_acid_jar: {
+  citric_acid_coarse: {
     containerId: 'jar_spice_small',
     liquidId: 'food_acid',
     amountMl: 100,
@@ -2600,10 +2087,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Кондитерская обсыпка для ультра-кислых мармеладных червячков и колечек',
       'Не мокнет в банке и даёт мгновенную резкую искру кислотности на языке',
       '#eab308',
-      { culinaryEquivalentId: 'citric_acid_jar' }
+      { culinaryEquivalentId: 'citric_acid_coarse' }
     )
   },
-  malic_acid_sachet: {
+  malic_acid: {
     containerId: 'package_sachet',
     liquidId: 'food_acid',
     amountMl: 70,
@@ -2614,10 +2101,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Создание «взрывной» долгоиграющей кислой пудры и яблочного мармелада',
       'Дольше держит кислоту во рту и подчёркивает вкус зелёного яблока и ягод',
       '#84cc16',
-      { culinaryEquivalentId: 'malic_acid_sachet' }
+      { culinaryEquivalentId: 'malic_acid' }
     )
   },
-  tartaric_acid_sachet: {
+  tartaric_acid: {
     containerId: 'package_sachet',
     liquidId: 'food_acid',
     amountMl: 70,
@@ -2628,10 +2115,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Шипучая обсыпка и терпкая кислинка виноградного, вишнёвого и кола-мармелада',
       'Придаёт сладостям характерную освежающую терпкость винного камня',
       '#a855f7',
-      { culinaryEquivalentId: 'tartaric_acid_sachet' }
+      { culinaryEquivalentId: 'tartaric_acid' }
     )
   },
-  lactic_acid_bottle: {
+  lactic_acid: {
     containerId: 'bottle_glass_small',
     liquidId: 'food_acid',
     amountMl: 200,
@@ -2642,10 +2129,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Мягкий регулятор кислотности для ягодного, персикового и молочного мармелада',
       'Сглаживает резкие углы кислоты и продлевает свежесть продукта',
       '#eab308',
-      { culinaryEquivalentId: 'lactic_acid_bottle' }
+      { culinaryEquivalentId: 'lactic_acid' }
     )
   },
-  sodium_citrate_sachet: {
+  sodium_citrate: {
     containerId: 'package_sachet',
     liquidId: 'food_acid',
     amountMl: 75,
@@ -2656,10 +2143,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Контроль pH при варке пектинового мармелада и эмульгирование сыров',
       'Не даёт пектину свернуться раньше времени до разлива по формам',
       '#38bdf8',
-      { culinaryEquivalentId: 'sodium_citrate_sachet' }
+      { culinaryEquivalentId: 'sodium_citrate' }
     )
   },
-  menthol_crystals_tin: {
+  menthol_crystals: {
     containerId: 'tin_round_mini',
     liquidId: 'food_acid',
     amountMl: 30,
@@ -2670,10 +2157,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Мармеладные сердечки «Мята и Эвкалипт», ингаляции и освежающие леденцы',
       'Игольчатые ледяные кристаллы вызывают мощный холодок рецепторов TRPM8',
       '#0d9488',
-      { culinaryEquivalentId: 'menthol_crystals_tin', customEffects: { energy: 8 } }
+      { culinaryEquivalentId: 'menthol_crystals', customEffects: { energy: 8 } }
     )
   },
-  menthol_crystals_jar: {
+  menthol_crystals_coarse: {
     containerId: 'jar_spice_small',
     liquidId: 'food_acid',
     amountMl: 80,
@@ -2684,10 +2171,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Кондитерское производство освежающего мармелада и травяных леденцов',
       'Сохраняет пронзительную свежесть благодаря герметичной крышке',
       '#0f766e',
-      { culinaryEquivalentId: 'menthol_crystals_jar' }
+      { culinaryEquivalentId: 'menthol_crystals_coarse' }
     )
   },
-  carmine_extract_bottle: {
+  dye_carmine: {
     containerId: 'bottle_plastic_100',
     liquidId: 'food_dye',
     amountMl: 100,
@@ -2698,10 +2185,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Ярко-рубиновое окрашивание вишнёвого, малинового и клубничного мармелада',
       'Стойкий насыщенный малиновый оттенок всего с 2–3 капель',
       '#be123c',
-      { culinaryEquivalentId: 'carmine_extract_bottle' }
+      { culinaryEquivalentId: 'dye_carmine' }
     )
   },
-  chlorophyllin_bottle: {
+  dye_chlorophyllin: {
     containerId: 'bottle_plastic_100',
     liquidId: 'food_dye',
     amountMl: 100,
@@ -2712,10 +2199,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Окрашивание мармелада с яблоком, лаймом, тархуном и мятой',
       'Не выцветает при нагревании и сохраняет глубокий зелёный тон',
       '#15803d',
-      { culinaryEquivalentId: 'chlorophyllin_bottle' }
+      { culinaryEquivalentId: 'dye_chlorophyllin' }
     )
   },
-  anthocyanin_extract_bottle: {
+  dye_anthocyanin: {
     containerId: 'bottle_plastic_100',
     liquidId: 'food_dye',
     amountMl: 100,
@@ -2726,10 +2213,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Фиолетово-бордовый цвет виноградного, ежевичного и ягодного мармелада',
       'Меняет оттенок от рубинового в кислой среде до фиолетового в нейтральной',
       '#7e22ce',
-      { culinaryEquivalentId: 'anthocyanin_extract_bottle' }
+      { culinaryEquivalentId: 'dye_anthocyanin' }
     )
   },
-  spirulina_extract_bottle: {
+  dye_spirulina: {
     containerId: 'bottle_plastic_100',
     liquidId: 'food_dye',
     amountMl: 100,
@@ -2740,10 +2227,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Единственный ярко-голубой и бирюзовый природный краситель для мармелада',
       'Даёт чистый небесный цвет для акул, драгонфрута и газированных бутылочек',
       '#0284c7',
-      { culinaryEquivalentId: 'spirulina_extract_bottle' }
+      { culinaryEquivalentId: 'dye_spirulina' }
     )
   },
-  beta_carotene_bottle: {
+  dye_beta_carotene: {
     containerId: 'bottle_plastic_100',
     liquidId: 'food_dye',
     amountMl: 100,
@@ -2754,10 +2241,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Солнечно-жёлтые и апельсиновые мишки, манго, маракуйя, юзу и персик',
       'Без синтетических азокрасителей — яркий тёплый янтарно-золотистый цвет',
       '#f97316',
-      { culinaryEquivalentId: 'beta_carotene_bottle' }
+      { culinaryEquivalentId: 'dye_beta_carotene' }
     )
   },
-  caramel_color_bottle: {
+  dye_caramel: {
     containerId: 'bottle_glass_small',
     liquidId: 'food_dye',
     amountMl: 250,
@@ -2768,10 +2255,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Глубокий цвет бутылочек «Шипучая Кола» и вишнёвой колы',
       'Густой тёмно-коньячный пигмент с лёгкой горчинкой жжёного сахара',
       '#78350f',
-      { culinaryEquivalentId: 'caramel_color_bottle' }
+      { culinaryEquivalentId: 'dye_caramel' }
     )
   },
-  lycopene_extract_bottle: {
+  dye_lycopene: {
     containerId: 'bottle_plastic_100',
     liquidId: 'food_dye',
     amountMl: 100,
@@ -2782,10 +2269,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Тёплый ало-коралловый тон арбузных колечек, грейпфрута и розовой гуавы',
       'Стойкий природный красный пигмент без привкуса',
       '#ef4444',
-      { culinaryEquivalentId: 'lycopene_extract_bottle' }
+      { culinaryEquivalentId: 'dye_lycopene' }
     )
   },
-  kola_nut_extract_bottle: {
+  extract_kola_nut: {
     containerId: 'bottle_glass_small',
     liquidId: 'botanical_extract',
     amountMl: 150,
@@ -2796,10 +2283,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Настоящий вкус бутылочек шипучей колы и классической газировки',
       'Содержит природный кофеин и богатый пряно-ореховый букет',
       '#451a03',
-      { culinaryEquivalentId: 'kola_nut_extract_bottle', customEffects: { energy: 10 } }
+      { culinaryEquivalentId: 'extract_kola_nut', customEffects: { energy: 10 } }
     )
   },
-  vanilla_extract_bottle: {
+  extract_vanilla: {
     containerId: 'bottle_glass_small',
     liquidId: 'botanical_extract',
     amountMl: 100,
@@ -2810,10 +2297,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Крем-сода, нежные желейные сердечки, зефир и сливочная выпечка',
       'Живой глубокий аромат настоящего ванилина без синтетической резкости',
       '#92400e',
-      { culinaryEquivalentId: 'vanilla_extract_bottle' }
+      { culinaryEquivalentId: 'extract_vanilla' }
     )
   },
-  hibiscus_extract_bottle: {
+  extract_hibiscus: {
     containerId: 'bottle_plastic_100',
     liquidId: 'botanical_extract',
     amountMl: 100,
@@ -2824,10 +2311,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Красно-вишнёвый цвет и ягодная кислинка фруктового мармелада',
       'Даёт чистый яркий рубиновый оттенок в паре с концентратом моркови',
       '#9f1239',
-      { culinaryEquivalentId: 'hibiscus_extract_bottle' }
+      { culinaryEquivalentId: 'extract_hibiscus' }
     )
   },
-  safflower_extract_bottle: {
+  extract_safflower: {
     containerId: 'bottle_plastic_100',
     liquidId: 'botanical_extract',
     amountMl: 100,
@@ -2838,10 +2325,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Лимонно-солнечное окрашивание жёлтых мишек, звёздочек и ананасных кубиков',
       'Смешивается со спирулиной для получения насыщенного лаймово-зелёного тона',
       '#eab308',
-      { culinaryEquivalentId: 'safflower_extract_bottle' }
+      { culinaryEquivalentId: 'extract_safflower' }
     )
   },
-  paprika_extract_bottle: {
+  extract_paprika: {
     containerId: 'bottle_plastic_100',
     liquidId: 'food_dye',
     amountMl: 100,
@@ -2852,10 +2339,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Апельсиново-мандариновый и персиковый цвет фруктового мармелада',
       'Совершенно не острый — только чистый тёплый оранжево-красный оттенок',
       '#ea580c',
-      { culinaryEquivalentId: 'paprika_extract_bottle' }
+      { culinaryEquivalentId: 'extract_paprika' }
     )
   },
-  black_carrot_concentrate_bottle: {
+  concentrate_black_carrot: {
     containerId: 'bottle_glass_small',
     liquidId: 'food_dye',
     amountMl: 200,
@@ -2866,10 +2353,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Ключевой природный краситель ягодного, ежевичного и цитрусового мармелада',
       'Богат стабильными антоцианами: даёт цвет от мадженты до тёмной вишни',
       '#6b21a8',
-      { culinaryEquivalentId: 'black_carrot_concentrate_bottle' }
+      { culinaryEquivalentId: 'concentrate_black_carrot' }
     )
   },
-  tarragon_extract_bottle: {
+  extract_tarragon: {
     containerId: 'bottle_glass_small',
     liquidId: 'botanical_extract',
     amountMl: 150,
@@ -2880,10 +2367,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Изумрудные лимонадные бутылочки «Тархун» и пряные десертные сиропы',
       'Тот самый легендарный освежающий вкус газировки тархун',
       '#16a34a',
-      { culinaryEquivalentId: 'tarragon_extract_bottle', customEffects: { energy: 4 } }
+      { culinaryEquivalentId: 'extract_tarragon', customEffects: { energy: 4 } }
     )
   },
-  eucalyptus_extract_bottle: {
+  extract_eucalyptus: {
     containerId: 'bottle_glass_small',
     liquidId: 'botanical_extract',
     amountMl: 100,
@@ -2894,10 +2381,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Мармеладные сердечки «Мята и Эвкалипт», леденцы для горла и ингаляции',
       'Очищает дыхательные пути и придаёт прохладный хвойный оттенок',
       '#047857',
-      { culinaryEquivalentId: 'eucalyptus_extract_bottle', customEffects: { health: 4, energy: 4 } }
+      { culinaryEquivalentId: 'extract_eucalyptus', customEffects: { health: 4, energy: 4 } }
     )
   },
-  peppermint_oil_bottle: {
+  oil_peppermint: {
     containerId: 'bottle_plastic_100',
     liquidId: 'essential_oil',
     amountMl: 50,
@@ -2908,10 +2395,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Ароматизация мятно-эвкалиптового мармелада, шоколада и напитков',
       'Буквально 1–2 капли дают ледяной освежающий мятный удар',
       '#10b981',
-      { culinaryEquivalentId: 'peppermint_oil_bottle' }
+      { culinaryEquivalentId: 'oil_peppermint' }
     )
   },
-  spearmint_oil_bottle: {
+  oil_spearmint: {
     containerId: 'bottle_plastic_100',
     liquidId: 'essential_oil',
     amountMl: 50,
@@ -2922,10 +2409,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Мягкий сладковатый мятный профиль для жвачки и зелёных мармеладных сердец',
       'В отличие от перечной мяты не обжигает — даёт нежную сладкую свежесть',
       '#34d399',
-      { culinaryEquivalentId: 'spearmint_oil_bottle' }
+      { culinaryEquivalentId: 'oil_spearmint' }
     )
   },
-  hibiscus_dried_sachet: {
+  hibiscus_dried: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 80,
@@ -2936,10 +2423,10 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Заваривание рубинового каркаде, окрашивание отваров и фруктового мармелада',
       'Даёт насыщенный кисло-ягодный вкус и глубокий вишнёво-алый настой',
       '#be123c',
-      { culinaryEquivalentId: 'hibiscus_dried_sachet', customEffects: { hunger: 2, health: 3 } }
+      { culinaryEquivalentId: 'hibiscus_dried', customEffects: { hunger: 2, health: 3 } }
     )
   },
-  safflower_dried_sachet: {
+  safflower_dried: {
     containerId: 'package_sachet',
     liquidId: 'spice_dry',
     amountMl: 70,
@@ -2950,7 +2437,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Натуральное жёлтое окрашивание отваров, плова, напитков и мармелада',
       'Мягкий медово-цветочный аромат и яркий золотой настой без горечи',
       '#f59e0b',
-      { culinaryEquivalentId: 'safflower_dried_sachet', customEffects: { hunger: 2, health: 2 } }
+      { culinaryEquivalentId: 'safflower_dried', customEffects: { hunger: 2, health: 2 } }
     )
   },
   // === CLEAN CANONICAL SUBSTANCE IDS (WITHOUT CONTAINER SUFFIXES) & NEW SUBSTANCES ===
@@ -2965,21 +2452,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Глазирование жевательного мармелада, драже и конфет для зеркального блеска и защиты от слипания',
       'Самый тугоплавкий природный пищевой воск (температура плавления 82–86 °C) — не тает в руках',
       '#fde047',
-      { culinaryEquivalentId: 'carnauba_wax_pack' }
-    )
-  },
-  carnauba_wax_pack: {
-    containerId: 'package_bag',
-    liquidId: 'dry_mix',
-    amountMl: 100,
-    attributes: attr(
-      'Карнаубский воск E903 в хлопьях',
-      'Очищенный растительный воск листьев бразильской пальмы Copernicia prunifera',
-      'Экстракция воскового налёта пальмовых листьев, фильтрация и кристаллизация в тонкие хлопья',
-      'Глазирование жевательного мармелада, драже и конфет для зеркального блеска и защиты от слипания',
-      'Самый тугоплавкий природный пищевой воск (температура плавления 82–86 °C) — не тает в руках',
-      '#fde047',
-      { culinaryEquivalentId: 'carnauba_wax_pack' }
+      { culinaryEquivalentId: 'carnauba_wax' }
     )
   },
   olives_green: {
@@ -2993,7 +2466,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Приготовление мясной солянки, пиццы, греческого салата и закусок',
       'Сырые оливки с дерева несъедобно горькие — только вымачивание и рассол делают их маслянистыми и нежными',
       '#84cc16',
-      { culinaryEquivalentId: 'olives_green_jar' }
+      { culinaryEquivalentId: 'olives_green' }
     )
   },
   olives_black: {
@@ -3007,7 +2480,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Классический компонент сборной солянки, пиццы и средиземноморских салатов',
       'Жестяная банка защищает плоды от света и сохраняет глубокий антрацитовый цвет и мягкую текстуру',
       '#27272a',
-      { culinaryEquivalentId: 'olives_black_jar' }
+      { culinaryEquivalentId: 'olives_black' }
     )
   },
   capers_pickled: {
@@ -3021,7 +2494,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Приготовление соуса тартар, солянки и рыбных блюд',
       'Во время маринования в бутонах кристаллизуется рутин, создавая характерный взрывной горчично-пряный вкус',
       '#3f6212',
-      { culinaryEquivalentId: 'capers_pickled_jar' }
+      { culinaryEquivalentId: 'capers_pickled' }
     )
   },
   sun_dried_tomatoes: {
@@ -3035,21 +2508,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Паста, брускетты, выпечка фокаччи и мясные рулеты',
       'Удаление влаги концентрирует глутаматы и сахара томата, а масло запечатывает аромат трав',
       '#991b1b',
-      { culinaryEquivalentId: 'tomato_sundried_jar' }
-    )
-  },
-  corn_canned: {
-    containerId: 'can_metal_medium',
-    liquidId: 'canned_preserve',
-    amountMl: 400,
-    attributes: attr(
-      'Кукуруза сахарная деликатесная в зёрнах',
-      'Цельные зёрна сахарной кукурузы молочной спелости, вода, сахар, соль',
-      'Бланширование свежих зёрен и вакуумная стерилизация в жестяной банке',
-      'Крабовый и овощной салаты, гарниры, мексиканские блюда',
-      'Консервация в первые часы после сбора початка сохраняет природную сладость и сочность зерна',
-      '#facc15',
-      { culinaryEquivalentId: 'corn_canned_jar' }
+      { culinaryEquivalentId: 'sun_dried_tomatoes' }
     )
   },
   cherry_pitted: {
@@ -3063,7 +2522,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Начинка для вареников, штруделя, пирогов и соусов к утке',
       'Отсутствие косточек исключает накопление амигдалина и делает ягоды готовыми для выпечки',
       '#881337',
-      { culinaryEquivalentId: 'cherry_pitted_jar' }
+      { culinaryEquivalentId: 'cherry_pitted' }
     )
   },
   perch_caviar: {
@@ -3077,7 +2536,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Рыбацкая закуска на ржаном хлебе с маслом',
       'Мелкое нежное зерно с характерным речным послевкусием',
       '#facc15',
-      { culinaryEquivalentId: 'perch_caviar_jar' }
+      { culinaryEquivalentId: 'perch_caviar' }
     )
   },
   herring_caviar: {
@@ -3091,7 +2550,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Закуска к картофелю и чёрному хлебу',
       'Знаменита своим плотным хрустом и насыщенным морским вкусом',
       '#fbbf24',
-      { culinaryEquivalentId: 'herring_caviar_jar' }
+      { culinaryEquivalentId: 'herring_caviar' }
     )
   },
   tuna_caviar: {
@@ -3105,7 +2564,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Добавка в пасту, брускетты и рыбные блюда',
       'Обладает выраженным вкусом умами и плотной текстурой',
       '#dc2626',
-      { culinaryEquivalentId: 'tuna_caviar_jar' }
+      { culinaryEquivalentId: 'tuna_caviar' }
     )
   },
   eel_caviar: {
@@ -3119,7 +2578,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Изысканная закуска и украшение канапе',
       'Тёмные мелкие икринки с маслянистым ореховым оттенком вкуса',
       '#1e293b',
-      { culinaryEquivalentId: 'eel_caviar_jar' }
+      { culinaryEquivalentId: 'eel_caviar' }
     )
   },
   catfish_caviar: {
@@ -3133,7 +2592,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Сытная намазка на хлеб и тосты',
       'Питательная речная икра с мягким сливочным послевкусием',
       '#334155',
-      { culinaryEquivalentId: 'catfish_caviar_jar' }
+      { culinaryEquivalentId: 'catfish_caviar' }
     )
   },
   garlic_powder: {
@@ -3147,7 +2606,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Мясные маринады, супы, колбасный фарш и чесночные гренки',
       'В отличие от свежего чеснока не подгорает на сковороде и равномерно отдаёт аромат блюду',
       '#fef08a',
-      { culinaryEquivalentId: 'garlic_powder_jar' }
+      { culinaryEquivalentId: 'garlic_powder' }
     )
   },
   dill_dried: {
@@ -3161,7 +2620,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Заправка ухи, борща, картофеля и сметанных соусов',
       'Концентрирует эфирное масло карвон и заменяет свежую зелень в зимний сезон',
       '#15803d',
-      { culinaryEquivalentId: 'dill_dried_jar' }
+      { culinaryEquivalentId: 'dill_dried' }
     )
   },
   basil_dried: {
@@ -3175,7 +2634,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Томатные соусы, пицца, паста, запечённое мясо и овощные рагу',
       'При нагревании в томатном соусе раскрывает тёплый пряно-гвоздичный аромат',
       '#166534',
-      { culinaryEquivalentId: 'basil_dried_jar' }
+      { culinaryEquivalentId: 'basil_dried' }
     )
   },
   mint_dried: {
@@ -3189,7 +2648,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Заваривание успокаивающего чая, компотов, кваса и пряной выпечки',
       'Эфирное масло ментола снимает спазмы, освежает и успокаивает нервную систему',
       '#059669',
-      { culinaryEquivalentId: 'mint_dried_jar' }
+      { culinaryEquivalentId: 'mint_dried' }
     )
   },
   tomato_paste: {
@@ -3203,7 +2662,7 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Заправка для борща, голубцов, тефтелей, гуляша и пиццы',
       'Концентрирует ликопин и природную кислоту, придавая супам и соусам густоту и рубиновый цвет',
       '#b91c1c',
-      { culinaryEquivalentId: 'tomato_paste_jar' }
+      { culinaryEquivalentId: 'tomato_paste' }
     )
   },
   apple_puree: {
@@ -3217,7 +2676,21 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
       'Лёгкий диетический перекус, детское питание и основа для зефира, мармелада и пастилы',
       'Яблочный пектин создаёт нежную обволакивающую текстуру и легко усваивается желудком',
       '#fde047',
-      { culinaryEquivalentId: 'apple_puree_jar' }
+      { culinaryEquivalentId: 'apple_puree' }
+    )
+  },
+  cottage_cheese: {
+    containerId: 'cup_plastic_dairy_medium',
+    liquidId: 'dairy_fermented',
+    amountMl: 250,
+    attributes: attr(
+      'Творог рассыпчатый натуральный (9%)',
+      'Цельное пастеризованное коровье молоко, закваска молочнокислых культур, сычужный фермент',
+      'Сквашивание молока, бережный нагрев сгустка и отжим сыворотки в мешочках',
+      'Белковый завтрак со сметаной, мёдом или вареньем, приготовление сырников и запеканок',
+      'Щадящее сцеживание сохраняет нежное рассыпчатое зерно и легкоусвояемый казеиновый белок',
+      '#ffffff',
+      { culinaryEquivalentId: 'cottage_cheese' }
     )
   }
 };
@@ -3225,24 +2698,23 @@ export const EXTENDED_LEGACY_CONTAINER_MAP: Record<string, UnifiedFluidMappingEn
 export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMappingEntry> = {
   // === 1. FOREST BERRIES & MUSHROOMS IN UNIFIED WICKER BASKET (ЛУКОШКО) ===
   berries: { containerId: 'lukoshko', countInside: 12, innerItemId: 'berry_forest_single' },
-  berries_basket: { containerId: 'lukoshko', countInside: 12, innerItemId: 'berry_forest_single' },
   forest_berries: { containerId: 'lukoshko', countInside: 12, innerItemId: 'berry_forest_single' },
-  blueberry_basket: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_blueberry_single' },
-  lingonberry_basket: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_lingonberry_single' },
-  cranberry_basket: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_cranberry_single' },
-  raspberry_basket: { containerId: 'lukoshko', countInside: 12, innerItemId: 'berry_raspberry_single' },
-  strawberry_basket: { containerId: 'lukoshko', countInside: 10, innerItemId: 'berry_strawberry_single' },
-  blackcurrant_basket: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_blackcurrant_single' },
-  redcurrant_basket: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_redcurrant_single' },
-  cherry_basket: { containerId: 'lukoshko', countInside: 12, innerItemId: 'berry_cherry_single' },
-  blackberry_basket: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_blackberry_single' },
-  sea_buckthorn_basket: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_sea_buckthorn_single' },
-  elderberry_basket: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_elderberry_single' },
-  chanterelle_basket: { containerId: 'lukoshko', countInside: 8, innerItemId: 'mushroom_chanterelle_single' },
-  honey_agaric_basket: { containerId: 'lukoshko', countInside: 10, innerItemId: 'mushroom_honey_agaric_single' },
+  berries_blueberry: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_blueberry_single' },
+  berries_lingonberry: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_lingonberry_single' },
+  berries_cranberry: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_cranberry_single' },
+  berries_raspberry: { containerId: 'lukoshko', countInside: 12, innerItemId: 'berry_raspberry_single' },
+  berries_strawberry: { containerId: 'lukoshko', countInside: 10, innerItemId: 'berry_strawberry_single' },
+  berries_blackcurrant: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_blackcurrant_single' },
+  berries_redcurrant: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_redcurrant_single' },
+  berries_cherry: { containerId: 'lukoshko', countInside: 12, innerItemId: 'berry_cherry_single' },
+  berries_blackberry: { containerId: 'lukoshko', countInside: 14, innerItemId: 'berry_blackberry_single' },
+  berries_sea_buckthorn: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_sea_buckthorn_single' },
+  berries_elderberry: { containerId: 'lukoshko', countInside: 15, innerItemId: 'berry_elderberry_single' },
+  mushrooms_chanterelle: { containerId: 'lukoshko', countInside: 8, innerItemId: 'mushroom_chanterelle_single' },
+  mushrooms_honey_agaric: { containerId: 'lukoshko', countInside: 10, innerItemId: 'mushroom_honey_agaric_single' },
 
   // === 2. BERRIES & FRUITS IN FOOD TRAYS -> STANDALONE SINGLE ITEMS ===
-  berries_tray_fresh: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'berry_strawberry_single' },
+  berries_fresh: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'berry_strawberry_single' },
   strawberry_fresh: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'berry_strawberry_single' },
   raspberry_fresh: { containerId: 'tray_sealed_food', countInside: 12, innerItemId: 'berry_raspberry_single' },
   blueberry_fresh: { containerId: 'tray_sealed_food', countInside: 15, innerItemId: 'berry_blueberry_single' },
@@ -3252,17 +2724,14 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
   lychee_fruit: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'berry_cherry_single' },
 
   // === 3. EGG CARTONS -> STANDALONE SINGLE EGGS ===
-  egg_chicken_carton: { containerId: 'egg_carton_10', countInside: 10, innerItemId: 'egg_chicken_single' },
-  eggs_chicken_carton: { containerId: 'egg_carton_10', countInside: 10, innerItemId: 'egg_chicken_single' },
-  egg_quail_carton: { containerId: 'egg_carton_quail_18', countInside: 18, innerItemId: 'egg_quail_single' },
-  eggs_quail_pack: { containerId: 'egg_carton_quail_18', countInside: 18, innerItemId: 'egg_quail_single' },
+  eggs_chicken: { containerId: 'egg_carton_10', countInside: 10, innerItemId: 'egg_chicken_single' },
+  eggs_quail: { containerId: 'egg_carton_quail_18', countInside: 18, innerItemId: 'egg_quail_single' },
 
   // === 4. SNACK POUCHES & FAST-FOOD BOXES -> STANDALONE SINGLE PIECES ===
   chips: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'chip_potato_single', labelColor: '#eab308' },
   cookies: { containerId: 'pouch_sealed_snack', countInside: 6, innerItemId: 'cookie_choco_single', labelColor: '#78350f' },
-  cookie_pack: { containerId: 'pouch_sealed_snack', countInside: 6, innerItemId: 'cookie_choco_single', labelColor: '#78350f' },
   nachos: { containerId: 'pouch_sealed_snack', countInside: 8, innerItemId: 'nacho_chip_single', labelColor: '#ea580c' },
-  popcorn_bucket: { containerId: 'takeout_box_wok', countInside: 6, innerItemId: 'popcorn_handful', labelColor: '#dc2626' },
+  popcorn_salted: { containerId: 'takeout_box_wok', countInside: 6, innerItemId: 'popcorn_handful', labelColor: '#dc2626' },
   popcorn_caramel: { containerId: 'takeout_box_wok', countInside: 6, innerItemId: 'popcorn_handful', labelColor: '#d97706' },
 
   // === 5. MEDICAL BLISTERS -> STANDALONE SINGLE PILLS & PATCHES ===

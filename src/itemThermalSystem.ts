@@ -16,10 +16,16 @@ export interface ItemThermalConfig {
  */
 export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
   // === HOT BEVERAGES & FAST FOOD (CAFE, PIZZERIA, ASIAN, BAKERY) ===
-  hot_coffee: {
+  coffee: {
     temperature: 82.0,
     heatLossRate: 0.0035,
     heatRetention: 0.35, // Disposable paper cup conducts significant heat to the outer surface
+    surfaceTemperature: 60.5
+  },
+  hot_coffee: {
+    temperature: 82.0,
+    heatLossRate: 0.0035,
+    heatRetention: 0.35,
     surfaceTemperature: 60.5
   },
   cappuccino: {
@@ -66,11 +72,23 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
   },
 
   // === REFRIGERATED SUPERMARKET & BEVERAGE SECTION (+2°C to +5°C) ===
+  milk: {
+    temperature: 3.5,
+    heatLossRate: 0.0022,
+    heatRetention: 0.35,
+    surfaceTemperature: 5.0
+  },
   carton_milk: {
     temperature: 3.5,
     heatLossRate: 0.0022,
     heatRetention: 0.35,
     surfaceTemperature: 5.0
+  },
+  sour_cream: {
+    temperature: 3.5,
+    heatLossRate: 0.0020,
+    heatRetention: 0.40,
+    surfaceTemperature: 4.8
   },
   sour_cream_pot: {
     temperature: 3.5,
@@ -309,16 +327,17 @@ export function calculateSurfaceTemperature(
  * Retrieves default thermal properties for a given item ID or category,
  * reading directly from ITEM_CATALOG[itemId] first (Single Source of Truth).
  */
-export function getItemThermalDefaults(itemId: string, category: ItemCategory = 'misc'): ItemThermalConfig {
+export function getItemThermalDefaults(itemId: string, category: ItemCategory = 'misc', originalCatalogId?: string): ItemThermalConfig {
+  const origDef = originalCatalogId && ITEM_CATALOG ? ITEM_CATALOG[originalCatalogId] : undefined;
   const catalogDef = ITEM_CATALOG ? ITEM_CATALOG[itemId] : undefined;
-  const specific = ITEM_THERMAL_CONFIGS[itemId];
+  const specific = (originalCatalogId ? ITEM_THERMAL_CONFIGS[originalCatalogId] : undefined) || ITEM_THERMAL_CONFIGS[itemId];
   const catDefault = CATEGORY_THERMAL_DEFAULTS[category] || CATEGORY_THERMAL_DEFAULTS.misc;
 
   return {
-    temperature: catalogDef?.temperature ?? specific?.temperature,
-    heatLossRate: catalogDef?.heatLossRate ?? specific?.heatLossRate ?? catDefault.heatLossRate,
-    heatRetention: catalogDef?.heatRetention ?? specific?.heatRetention ?? catDefault.heatRetention,
-    surfaceTemperature: catalogDef?.surfaceTemperature ?? specific?.surfaceTemperature
+    temperature: origDef?.temperature ?? catalogDef?.temperature ?? specific?.temperature,
+    heatLossRate: origDef?.heatLossRate ?? catalogDef?.heatLossRate ?? specific?.heatLossRate ?? catDefault.heatLossRate,
+    heatRetention: origDef?.heatRetention ?? catalogDef?.heatRetention ?? specific?.heatRetention ?? catDefault.heatRetention,
+    surfaceTemperature: origDef?.surfaceTemperature ?? catalogDef?.surfaceTemperature ?? specific?.surfaceTemperature
   };
 }
 
@@ -326,7 +345,7 @@ export function getItemThermalDefaults(itemId: string, category: ItemCategory = 
  * Initializes thermal attributes on an item if not yet set
  */
 export function initItemThermalProperties(item: InventoryItem, ambientTemp: number = 20.0): void {
-  const defaults = getItemThermalDefaults(item.itemId, item.category);
+  const defaults = getItemThermalDefaults(item.itemId, item.category, item.originalCatalogId);
 
   if (typeof item.heatLossRate !== 'number' || !Number.isFinite(item.heatLossRate)) {
     item.heatLossRate = defaults.heatLossRate;

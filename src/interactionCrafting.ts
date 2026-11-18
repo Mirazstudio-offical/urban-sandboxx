@@ -9,7 +9,7 @@ import {
   syncItemContainerProperties,
   isFluidContainerClosed,
 } from './liquidSystem';
-import { isRegisteredItemId, createItem, canItemFitInContainer, getItemTotalWeight } from './items';
+import { isRegisteredItemId, createItem, canItemFitInContainer, getItemTotalWeight, resolveCanonicalSubstanceId } from './items';
 
 function recalculateContainerWeight(container: InventoryItem): void {
   if (!container.isContainer) return;
@@ -99,6 +99,15 @@ interface LegacyContainerBridge {
 }
 
 const LEGACY_CONTAINER_BRIDGES: Record<string, LegacyContainerBridge> = {
+  drinking_water: {
+    maxMl: 500,
+    emptyWeightKg: 0.03,
+    baseItemNameRu: 'Пластиковая бутылка (0.5 л)',
+    emptyItemId: 'bottle_empty',
+    defaultLiquidId: 'water',
+    defaultCurrentMl: 500,
+    defaultTemperatureC: 16,
+  },
   water_bottle: {
     maxMl: 500,
     emptyWeightKg: 0.03,
@@ -114,6 +123,15 @@ const LEGACY_CONTAINER_BRIDGES: Record<string, LegacyContainerBridge> = {
     baseItemNameRu: 'Пластиковая бутылка (0.5 л)',
     emptyItemId: 'bottle_empty',
   },
+  coffee: {
+    maxMl: 250,
+    emptyWeightKg: 0.02,
+    baseItemNameRu: 'Стаканчик (0.25 л)',
+    emptyItemId: 'cup_disposable',
+    defaultLiquidId: 'coffee',
+    defaultCurrentMl: 250,
+    defaultTemperatureC: 72,
+  },
   hot_coffee: {
     maxMl: 250,
     emptyWeightKg: 0.02,
@@ -128,6 +146,15 @@ const LEGACY_CONTAINER_BRIDGES: Record<string, LegacyContainerBridge> = {
     emptyWeightKg: 0.02,
     baseItemNameRu: 'Стаканчик (0.25 л)',
     emptyItemId: 'cup_disposable',
+  },
+  cola: {
+    maxMl: 330,
+    emptyWeightKg: 0.02,
+    baseItemNameRu: 'Алюминиевая банка (0.33 л)',
+    emptyItemId: 'can_empty',
+    defaultLiquidId: 'cola',
+    defaultCurrentMl: 330,
+    defaultTemperatureC: 10,
   },
   soda_can: {
     maxMl: 330,
@@ -203,6 +230,15 @@ const LEGACY_CONTAINER_BRIDGES: Record<string, LegacyContainerBridge> = {
     emptyWeightKg: 0.25,
     baseItemNameRu: 'Суповая миска (0.5 л)',
     emptyItemId: 'soup_bowl_empty',
+  },
+  gasoline_95: {
+    maxMl: 20000,
+    emptyWeightKg: 2.5,
+    baseItemNameRu: 'Стальная канистра (20 л)',
+    emptyItemId: 'canister_empty',
+    defaultLiquidId: 'gasoline_95',
+    defaultCurrentMl: 20000,
+    defaultTemperatureC: 20,
   },
   fuel_canister: {
     maxMl: 20000,
@@ -1069,11 +1105,12 @@ const KNIFE_IDS = [
 
 function getItemCatalogKeys(item: InventoryItem | null): string[] {
   if (!item) return [];
-  const keys = [item.itemId];
-  if (item.originalCatalogId && item.originalCatalogId !== item.itemId) {
-    keys.push(item.originalCatalogId);
+  const keys = new Set<string>([item.itemId, resolveCanonicalSubstanceId(item.itemId)]);
+  if (item.originalCatalogId) {
+    keys.add(item.originalCatalogId);
+    keys.add(resolveCanonicalSubstanceId(item.originalCatalogId));
   }
-  return keys;
+  return Array.from(keys);
 }
 
 function itemMatchesAnyId(item: InventoryItem | null, allowedIds: string[]): boolean {
@@ -1104,7 +1141,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     actionLabel: 'Перелить / Пересыпать',
     ingredients: [
       {
-        itemIds: ['water_bottle', 'fuel_canister', 'sandbag', 'thermos', 'bottle_plastic_1500'],
+        itemIds: ['drinking_water', 'gasoline_95', 'sandbag', 'thermos', 'bottle_plastic_1500'],
         label: 'Верхний ряд: Полная тара (бутылка, канистра, мешок, термос)',
         rowHint: 'top',
       },
@@ -1128,13 +1165,13 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     actionLabel: 'Смешать напиток',
     ingredients: [
       {
-        itemIds: ['hot_coffee', 'thermos', 'glass_mug', 'paper_cup'],
+        itemIds: ['coffee', 'thermos', 'glass_mug', 'paper_cup'],
         liquidIds: ['coffee'],
         label: 'Верх: Тара с кофе',
         rowHint: 'top',
       },
       {
-        itemIds: ['bottle_milk_glass', 'glass_mug', 'paper_cup', 'can_metal_400_open'],
+        itemIds: ['bottle_glass_large', 'glass_mug', 'paper_cup', 'can_metal_medium_open'],
         liquidIds: ['milk', 'cream_heavy', 'condensed_milk'],
         label: 'Низ: Ёмкость с молоком / сливками / сгущёнкой',
         rowHint: 'bottom',
@@ -1154,7 +1191,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     actionLabel: 'Смешать чай',
     ingredients: [
       {
-        itemIds: ['jar_glass_500', 'jar_glass_1000', 'paper_cup', 'glass_mug'],
+        itemIds: ['jar_glass_medium', 'jar_glass_large', 'paper_cup', 'glass_mug'],
         liquidIds: ['honey', 'jam', 'sugar'],
         label: 'Верх: Мёд / Варенье / Сахар',
         rowHint: 'top',
@@ -1177,16 +1214,16 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     actionLabel: 'Смешать топливо 2Т',
     ingredients: [
       {
-        itemIds: ['bottle_oil_1l', 'canister_plastic_5l', 'fuel_canister'],
+        itemIds: ['canister_plastic_5l', 'motor_oil', 'gasoline_95'],
         liquidIds: ['motor_oil'],
         label: 'Верх: Моторное масло',
         rowHint: 'top',
       },
       {
         itemIds: [
-          'fuel_canister',
+          'gasoline_95',
           'canister_plastic_5l',
-          'canister_steel_20l',
+          'canister_metal_20l',
           'bottle_plastic_1500',
         ],
         liquidIds: ['gasoline_92', 'gasoline_95'],
@@ -1211,20 +1248,20 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
       },
       {
         itemIds: [
-          'can_metal_400',
-          'can_metal_330',
-          'canned_meat',
-          'canned_fish',
-          'canned_beans',
-          'canned_corn',
-          'canned_peas',
-          'canned_olives',
-          'canned_peaches',
-          'canned_pickles',
-          'canned_tomatoes',
+          'can_metal_medium',
+          'can_alu_330',
+          'stew_meat',
+          'fish_preserves',
+          'beans_tomato',
+          'sweet_corn',
+          'green_peas',
+          'olives_green',
+          'peach_halves',
+          'pickles',
+          'sun_dried_tomatoes',
           'candy_pouch_sealed',
           'paper_packaging_sealed',
-          'milk_carton_sealed',
+          'tetra_pack_1000',
           'egg_carton_10_closed',
         ],
         label: 'Закрытая банка или запечатанная упаковка',
@@ -1372,9 +1409,9 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     ingredients: [
       {
         itemIds: [
-          'fuel_canister',
+          'gasoline_95',
           'canister_plastic_5l',
-          'canister_steel_20l',
+          'canister_metal_20l',
           'bottle_plastic_500',
         ],
         liquidIds: ['gasoline_92', 'gasoline_95'],
@@ -1446,7 +1483,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
           'painkillers',
           'antibiotics',
           'antiseptic',
-          'iodine_bottle',
+          'iodine',
           'hydrogen_peroxide',
         ],
         label: 'Обезболивающее / Антисептик / Антибиотики',
@@ -1464,7 +1501,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
         'painkillers',
         'antibiotics',
         'antiseptic',
-        'iodine_bottle',
+        'iodine',
         'hydrogen_peroxide',
       ];
       const med = present.find((x) => itemMatchesAnyId(x, medIds));
@@ -1493,7 +1530,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     actionLabel: 'Продезинфицировать ткань',
     ingredients: [
       {
-        itemIds: ['antiseptic', 'hydrogen_peroxide', 'iodine_bottle', 'bottle_vodka'],
+        itemIds: ['antiseptic', 'hydrogen_peroxide', 'iodine', 'vodka'],
         liquidIds: ['vodka', 'antiseptic', 'peroxide'],
         label: 'Антисептик / Перекись / Водка',
       },
@@ -1510,7 +1547,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
       const isMedBottle = itemMatchesAnyId(other, [
         'antiseptic',
         'hydrogen_peroxide',
-        'iodine_bottle',
+        'iodine',
       ]);
       const wrap = getEffectiveFluidWrapper(other);
       const isLiquidDisinfectant =

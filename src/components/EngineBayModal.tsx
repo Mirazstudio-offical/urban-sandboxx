@@ -88,7 +88,7 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
     if (i.fluidStorage) {
       return (i.fluidStorage.liquidId === 'antifreeze' || i.fluidStorage.liquidId === 'water') && i.fluidStorage.currentMl > 0;
     }
-    return (i.itemId === 'antifreeze' || i.itemId === 'water_bottle') && ((i.fluidLiters ?? 5.0) > 0);
+    return (i.itemId === 'antifreeze' || i.itemId === 'drinking_water' || i.itemId === 'water_bottle') && ((i.fluidLiters ?? 5.0) > 0);
   });
   const oilInHand = getHandItem(i => {
     if (i.fluidStorage) {

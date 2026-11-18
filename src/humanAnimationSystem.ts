@@ -303,6 +303,7 @@ function isBulkyHandItem(item: InventoryItem | null | undefined): boolean {
   const id = item.itemId || '';
   if (
     id.startsWith('furn_') ||
+    id === 'canister_metal_20l' ||
     id === 'fuel_canister' ||
     id === 'canister_empty' ||
     id === 'sandbag' ||

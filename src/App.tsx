@@ -2989,7 +2989,7 @@ export default function App() {
           if (input.isMouseDown || input.actionE) {
             const currentSlot = selectedHotbarIndexRef.current ?? 0;
             const item = player.inventory?.[currentSlot];
-            if (item && item.usable && (item.itemId === 'extinguisher'|| item.itemId === 'zippo_lighter'|| item.itemId === 'fuel_canister')) {
+            if (item && item.usable && (item.itemId === 'extinguisher'|| item.itemId === 'zippo_lighter'|| item.itemId === 'fuel_canister' || (item.itemId === 'canister_metal_20l' && (item.fluidStorage?.liquidId === 'gasoline_95' || item.fluidStorage?.liquidId === 'diesel')))) {
               continuousUseTimerRef.current = (continuousUseTimerRef.current || 0) + dt;
               if (continuousUseTimerRef.current >= 0.08) {
                 continuousUseTimerRef.current = 0;
@@ -4103,6 +4103,7 @@ export default function App() {
                   season: cal.season,
                   hasResidualWetness: (worldRef.current.puddles?.length ?? 0) > 0,
                   lightmap: rendererRef.current.getFxLightmap(),
+                  lightColor: rendererRef.current.getFxLightColorMap(),
                   materialMap: rendererRef.current.getFxMaterialMap(),
                   fires: rendererRef.current.getActivePostFxFires(),
                   wakes: getActivePostFxWaterWakes(camera.x, camera.y, 32),
@@ -5862,8 +5863,9 @@ export default function App() {
             break;
           }
 
-          const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
-          if ((handItem.category === 'med' && TOPICAL_ITEMS.includes(handItem.itemId)) || (handItem as any).requiresLimbSelection) {
+          const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+          const handMedId = handItem.fluidStorage?.attributes?.medicalEffectId || handItem.originalCatalogId || handItem.itemId;
+          if ((handItem.category === 'med' && (TOPICAL_ITEMS.includes(handMedId) || TOPICAL_ITEMS.includes(handItem.itemId))) || (handItem as any).requiresLimbSelection) {
             setTreatmentModalItem({ index: -1, item: handItem });
             sound.playUseItem();
             break;
@@ -6081,8 +6083,9 @@ export default function App() {
         return;
       }
 
-      const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
-      if ((handItem.category === 'med'&& TOPICAL_ITEMS.includes(handItem.itemId)) || handItem.requiresLimbSelection) {
+      const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+      const handMedId = handItem.fluidStorage?.attributes?.medicalEffectId || handItem.originalCatalogId || handItem.itemId;
+      if ((handItem.category === 'med'&& (TOPICAL_ITEMS.includes(handMedId) || TOPICAL_ITEMS.includes(handItem.itemId))) || handItem.requiresLimbSelection) {
         setTreatmentModalItem({ index: -1, item: handItem });
         sound.playUseItem();
         return;
@@ -6212,8 +6215,9 @@ export default function App() {
     const selectedPocketItem = p?.inventory?.[currentSlot];
 
     if (selectedPocketItem && selectedPocketItem.usable) {
-      const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
-      if (selectedPocketItem.category === 'med'&& TOPICAL_ITEMS.includes(selectedPocketItem.itemId)) {
+      const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+      const pocketMedId = selectedPocketItem.fluidStorage?.attributes?.medicalEffectId || selectedPocketItem.originalCatalogId || selectedPocketItem.itemId;
+      if (selectedPocketItem.category === 'med'&& (TOPICAL_ITEMS.includes(pocketMedId) || TOPICAL_ITEMS.includes(selectedPocketItem.itemId))) {
         setTreatmentModalItem({ index: currentSlot, item: selectedPocketItem });
         return;
       }
@@ -6903,8 +6907,9 @@ export default function App() {
           const p = playerRef.current;
           if (p && p.inventory && p.inventory[idx]) {
             const item = p.inventory[idx];
-            const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
-            if (item && item.category === 'med'&& TOPICAL_ITEMS.includes(item.itemId)) {
+            const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+            const hotbarMedId = item.fluidStorage?.attributes?.medicalEffectId || item.originalCatalogId || item.itemId;
+            if (item && item.category === 'med'&& (TOPICAL_ITEMS.includes(hotbarMedId) || TOPICAL_ITEMS.includes(item.itemId))) {
               setTreatmentModalItem({ index: idx, item });
               return;
             }
@@ -7623,7 +7628,7 @@ export default function App() {
                     const cause = playerRef.current.evacCause || 'general';
                     if (!playerRef.current.inventory) playerRef.current.inventory = [];
                     if (cause === 'fire_burns') {
-                      addItemToPlayer(playerRef.current, createItem('panthenol_spray', 1));
+                      addItemToPlayer(playerRef.current, createItem('panthenol', 1));
                       addItemToPlayer(playerRef.current, createItem('spasatel_ointment', 1));
                       addItemToPlayer(playerRef.current, createItem('painkillers', 1));
                     } else if (cause === 'fractures_shock') {

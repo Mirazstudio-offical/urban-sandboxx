@@ -43,7 +43,7 @@ import {
   pourLiquidBetweenContainers,
   fillContainerWithLiquid
 } from './liquidSystem';
-import { EXTENDED_LEGACY_CONTAINER_MAP, EXTENDED_ITEM_PACKAGING_MAP } from './unifiedSubstanceCatalog';
+import { EXTENDED_LEGACY_CONTAINER_MAP, EXTENDED_ITEM_PACKAGING_MAP, LEGACY_SUBSTANCE_ID_ALIASES } from './unifiedSubstanceCatalog';
 import { initItemThermalProperties, applyConsumptionThermodynamics, calculateSurfaceTemperature } from './itemThermalSystem';
 
 export interface ItemPackagingConfig {
@@ -4949,56 +4949,37 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   bottle_plastic_1500: { containerId: 'bottle_plastic_1500', liquidId: null, amountMl: 0 },
   bottle_empty: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
   water_bottle_empty: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
-  water_bottle: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
-  water_bottle_1500: { containerId: 'bottle_plastic_1500', liquidId: 'water', amountMl: 1500 },
-  bottle_water: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
+  drinking_water: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
+  drinking_water_1500: { containerId: 'bottle_plastic_1500', liquidId: 'water', amountMl: 1500 },
   mineral_water: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.mineral_water.attributes },
-  kvas_bottle: { containerId: 'bottle_plastic_1500', liquidId: 'kvas', amountMl: 1500 },
   kvas: { containerId: 'bottle_plastic_1500', liquidId: 'kvas', amountMl: 1500 },
-  milk_bottle: { containerId: 'bottle_plastic_1500', liquidId: 'milk', amountMl: 1000 },
-  
+
   // Glass Bottles
   glass_bottle_500: { containerId: 'glass_bottle_500', liquidId: null, amountMl: 0 },
   bottle_glass_750: { containerId: 'bottle_glass_750', liquidId: null, amountMl: 0 },
   bottle_glass_small: { containerId: 'bottle_glass_small', liquidId: null, amountMl: 0 },
   bottle_glass_medium: { containerId: 'bottle_glass_medium', liquidId: null, amountMl: 0 },
   bottle_glass_large: { containerId: 'bottle_glass_large', liquidId: null, amountMl: 0 },
-  beer_bottle: { containerId: 'glass_bottle_500', liquidId: 'beer', amountMl: 500 },
-  bottle_beer: { containerId: 'glass_bottle_500', liquidId: 'beer', amountMl: 500 },
-  vodka_bottle: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
-  bottle_vodka: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
+  beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
   vodka: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
-  bottle_wine: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_red.attributes },
-  wine_bottle: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_red.attributes },
-  wine_white_cooking: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_white.attributes },
   wine_white: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_white.attributes },
-  wine_red_cooking: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_red.attributes },
   wine_red: { containerId: 'bottle_glass_750', liquidId: 'wine', amountMl: 750, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.wine_red.attributes },
-  
+
   // Canisters & Technical Fluids
   canister_metal_20l: { containerId: 'canister_metal_20l', liquidId: null, amountMl: 0 },
   canister_empty: { containerId: 'canister_metal_20l', liquidId: null, amountMl: 0 },
   jerrycan_steel: { containerId: 'canister_metal_20l', liquidId: null, amountMl: 0 },
-  fuel_canister: { containerId: 'canister_metal_20l', liquidId: 'gasoline_95', amountMl: 20000 },
-  canister_fuel: { containerId: 'canister_metal_20l', liquidId: 'gasoline_95', amountMl: 20000 },
-  canister_diesel: { containerId: 'canister_metal_20l', liquidId: 'diesel', amountMl: 20000 },
-  canister_water: { containerId: 'canister_metal_20l', liquidId: 'water', amountMl: 20000 },
+  gasoline_95: { containerId: 'canister_metal_20l', liquidId: 'gasoline_95', amountMl: 20000 },
+  diesel: { containerId: 'canister_metal_20l', liquidId: 'diesel', amountMl: 20000 },
+  drinking_water_20l: { containerId: 'canister_metal_20l', liquidId: 'water', amountMl: 20000 },
   canister_plastic_10l: { containerId: 'canister_plastic_10l', liquidId: null, amountMl: 0 },
   canister_plastic_5l: { containerId: 'canister_plastic_5l', liquidId: null, amountMl: 0 },
   motor_oil: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 5000 },
-  oil_canister: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 5000 },
-  canister_oil: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 5000 },
   motor_oil_empty: { containerId: 'canister_plastic_5l', liquidId: null, amountMl: 0 },
   antifreeze: { containerId: 'canister_plastic_5l', liquidId: 'antifreeze', amountMl: 5000 },
-  antifreeze_canister: { containerId: 'canister_plastic_5l', liquidId: 'antifreeze', amountMl: 5000 },
-  canister_coolant: { containerId: 'canister_plastic_5l', liquidId: 'antifreeze', amountMl: 5000 },
   antifreeze_empty: { containerId: 'canister_plastic_5l', liquidId: null, amountMl: 0 },
   washer_fluid: { containerId: 'canister_plastic_5l', liquidId: 'washer_fluid', amountMl: 5000 },
-  washer_fluid_can: { containerId: 'canister_plastic_5l', liquidId: 'washer_fluid', amountMl: 5000 },
-  canister_washer_fluid: { containerId: 'canister_plastic_5l', liquidId: 'washer_fluid', amountMl: 5000 },
   brake_fluid: { containerId: 'bottle_plastic_500', liquidId: 'brake_fluid', amountMl: 500 },
-  brake_fluid_can: { containerId: 'bottle_plastic_500', liquidId: 'brake_fluid', amountMl: 500 },
-  canister_brake_fluid: { containerId: 'bottle_plastic_500', liquidId: 'brake_fluid', amountMl: 500 },
 
   // Pharmacy & Medical Empty Containers
   bottle_plastic_100: { containerId: 'bottle_plastic_100', liquidId: null, amountMl: 0 },
@@ -5023,11 +5004,8 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   paper_cup: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
   plastic_cup: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
   cup_disposable: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
-  coffee_cup: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
   coffee_cup_empty: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
-  hot_coffee: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
   coffee: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
-  tea_cup: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250 },
   tea: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250 },
   tea_green: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.tea_green.attributes },
   cappuccino: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
@@ -5037,13 +5015,8 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   can_alu_330: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
   can_alu_330_open: { containerId: 'can_alu_330', liquidId: null, amountMl: 0, isOpen: true },
   energy_drink: { containerId: 'can_alu_330', liquidId: 'energy_drink', amountMl: 330 },
-  cola_can: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
-  soda_can: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
   cola: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
   cola_zero: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
-  can_beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
-  beer_can: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
-  beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
   can_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0, isOpen: true },
   cola_zero_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0, isOpen: true },
   energy_can_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0, isOpen: true },
@@ -5056,13 +5029,10 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   // Tetra Paks
   tetra_pack_1000: { containerId: 'tetra_pack_1000', liquidId: null, amountMl: 0 },
   tetra_pack_250: { containerId: 'tetra_pack_250', liquidId: null, amountMl: 0 },
-  carton_milk: { containerId: 'tetra_pack_1000', liquidId: 'milk', amountMl: 1000 },
   milk: { containerId: 'tetra_pack_1000', liquidId: 'milk', amountMl: 1000 },
-  juice_pack: { containerId: 'tetra_pack_1000', liquidId: 'juice', amountMl: 1000 },
   juice_box: { containerId: 'tetra_pack_250', liquidId: 'juice', amountMl: 250 },
   fresh_juice: { containerId: 'tetra_pack_1000', liquidId: 'juice', amountMl: 1000 },
   juice: { containerId: 'tetra_pack_1000', liquidId: 'juice', amountMl: 1000 },
-  milk_pasteurized_carton: { containerId: 'tetra_pack_1000', liquidId: 'milk', amountMl: 1000 },
 
   // Empty Glass Jars, Clay Pots, Tin Cans & Dairy Cups
   jar_glass_3l: { containerId: 'jar_glass_3l', liquidId: null, amountMl: 0 },
@@ -5101,13 +5071,8 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   // Bowls & Broths
   soup_bowl: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
   soup_bowl_empty: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
-  hot_soup: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_beef.attributes },
   soup: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_beef.attributes },
   broth: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500 },
-  broth_beef: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_beef.attributes },
-  broth_chicken: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_chicken.attributes },
-  broth_fish: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_fish.attributes },
-  broth_vegetable: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_vegetable.attributes },
   broth_mushroom: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_mushroom.attributes },
 
   // Plastic Bags & Sacks
@@ -5118,10 +5083,8 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   tetra_pack_250_open: { containerId: 'tetra_pack_250', liquidId: null, amountMl: 0, isOpen: true },
   plastic_bag: { containerId: 'plastic_bag', liquidId: null, amountMl: 0 },
   sugar: { containerId: 'package_bag', liquidId: 'sugar', amountMl: 1000 },
-  sugar_bag: { containerId: 'package_bag', liquidId: 'sugar', amountMl: 1000 },
   salt: { containerId: 'package_bag', liquidId: 'salt', amountMl: 500 },
-  salt_pack: { containerId: 'package_bag', liquidId: 'salt', amountMl: 500 },
-  salt_bag_coarse: { containerId: 'sack_cloth_small', liquidId: 'salt', amountMl: 1000 },
+  salt_coarse: { containerId: 'sack_cloth_small', liquidId: 'salt', amountMl: 1000 },
   sack_cloth_large: { containerId: 'sack_cloth_large', liquidId: null, amountMl: 0 },
   sack_cloth_medium: { containerId: 'sack_cloth_medium', liquidId: null, amountMl: 0 },
   sack_cloth_small: { containerId: 'sack_cloth_small', liquidId: null, amountMl: 0 },
@@ -5176,9 +5139,14 @@ const LEGACY_DISCRETE_CONTAINER_ALIASES: Record<string, { baseId: string; isOpen
   egg_carton_10_open: { baseId: 'egg_carton_10', isOpen: true }
 };
 
-export function getResolvedFluidContainerConfig(itemId: string): ItemFluidContainerConfig | null {
-  const fromCatalog = ITEM_CATALOG[itemId]?.fluidContainer;
-  const fromMap = fromCatalog || LEGACY_CONTAINER_MAP[itemId] || (
+export function resolveCanonicalSubstanceId(itemId: string): string {
+  return LEGACY_SUBSTANCE_ID_ALIASES[itemId] || itemId;
+}
+
+export function getResolvedFluidContainerConfig(rawItemId: string): ItemFluidContainerConfig | null {
+  const itemId = resolveCanonicalSubstanceId(rawItemId);
+  const fromCatalog = ITEM_CATALOG[itemId]?.fluidContainer || ITEM_CATALOG[rawItemId]?.fluidContainer;
+  const fromMap = fromCatalog || LEGACY_CONTAINER_MAP[itemId] || LEGACY_CONTAINER_MAP[rawItemId] || (
     CONTAINER_CONFIGS[itemId]
       ? {
           containerId: itemId,
@@ -5193,14 +5161,15 @@ export function getResolvedFluidContainerConfig(itemId: string): ItemFluidContai
   return fromMap;
 }
 
-export function createItem(itemId: string, count: number = 1, initialPortions?: number, rawCatalogOnly?: boolean): InventoryItem {
+export function createItem(rawItemId: string, count: number = 1, initialPortions?: number, rawCatalogOnly?: boolean): InventoryItem {
+  const itemId = resolveCanonicalSubstanceId(rawItemId);
   // If this item is a packaged discrete item container (lukoshko with berries/mushrooms, egg carton, blister pack, tray, pouch, box),
   // instantiate the unified container holding the standalone inner items unless rawCatalogOnly is requested.
   if (!rawCatalogOnly && getResolvedPackagingConfig(itemId)) {
     return createPackagedItem(itemId, count);
   }
 
-  const discreteAlias = LEGACY_DISCRETE_CONTAINER_ALIASES[itemId];
+  const discreteAlias = LEGACY_DISCRETE_CONTAINER_ALIASES[itemId] || LEGACY_DISCRETE_CONTAINER_ALIASES[rawItemId];
   const legacyMap = getResolvedFluidContainerConfig(itemId);
 
   // Use the unified container's catalog definition when mapped via LEGACY_CONTAINER_MAP or LEGACY_DISCRETE_CONTAINER_ALIASES
@@ -5440,11 +5409,23 @@ function inferPackageMaterialRu(item: InventoryItem): string | undefined {
  * блюдо, полуфабрикат, упаковка, инструмент, медикамент) к единому JSON-стандарту UnifiedAttributes.
  */
 export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinition): InventoryItem {
+  if (item.originalCatalogId && LEGACY_SUBSTANCE_ID_ALIASES[item.originalCatalogId]) {
+    item.originalCatalogId = LEGACY_SUBSTANCE_ID_ALIASES[item.originalCatalogId];
+  }
+  if (item.fluidStorage?.attributes?.medicalEffectId === 'panthenol_spray') {
+    item.fluidStorage.attributes.medicalEffectId = 'panthenol';
+  }
   if (item.fluidStorage) {
     syncItemContainerProperties(item);
   }
 
-  const catalogDef = def || ITEM_CATALOG[item.originalCatalogId || item.itemId] || ITEM_CATALOG[item.itemId];
+  const canonicalOrigId = item.originalCatalogId ? resolveCanonicalSubstanceId(item.originalCatalogId) : undefined;
+  const canonicalItemId = resolveCanonicalSubstanceId(item.itemId);
+  const catalogDef =
+    def ||
+    (canonicalOrigId ? ITEM_CATALOG[canonicalOrigId] : undefined) ||
+    ITEM_CATALOG[canonicalItemId] ||
+    ITEM_CATALOG[item.itemId];
   const prevAttrs: UnifiedAttributes = item.attributes ? { ...item.attributes } : {};
   const defAttrs: UnifiedAttributes = catalogDef?.attributes ? { ...catalogDef.attributes } : {};
   const visuals: UnifiedVisualAttributes = {
@@ -6002,11 +5983,10 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   kiwi_sliced: { containerId: 'tray_sealed_food', innerItemId: 'kiwi_sliced', countInside: 6 },
   watermelon_cubes: { containerId: 'tray_sealed_food', innerItemId: 'watermelon_slice', countInside: 4 },
   melon_slices: { containerId: 'tray_sealed_food', innerItemId: 'melon_slice', countInside: 4 },
-  grape_cup: { containerId: 'tray_sealed_food', innerItemId: 'grapes_green_bunch', countInside: 2 },
   melon_diced: { containerId: 'tray_sealed_food', innerItemId: 'melon_slice', countInside: 4 },
   watermelon_diced: { containerId: 'tray_sealed_food', innerItemId: 'watermelon_slice', countInside: 4 },
-  pomegranate_seeds_cup: { containerId: 'tray_sealed_food', innerItemId: 'pomegranate_whole', countInside: 2 },
-  grapes_berries_cup: { containerId: 'tray_sealed_food', innerItemId: 'grapes_green_bunch', countInside: 2 },
+  pomegranate_seeds: { containerId: 'tray_sealed_food', innerItemId: 'pomegranate_whole', countInside: 2 },
+  grapes_berries: { containerId: 'tray_sealed_food', innerItemId: 'grapes_green_bunch', countInside: 2 },
 
   // 4. Fresh Raw Meats & Poultry in Trays / Vacuum
   beef_steak: { containerId: 'tray_sealed_food', innerItemId: 'beef_rump_large' },
@@ -6063,14 +6043,14 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   cheese_mozzarella_ball: { containerId: 'paper_packaging_small', labelColor: '#0284c7' },
   cheese_suluguni_braid: { containerId: 'paper_packaging', labelColor: '#b45309' },
   cheese_feta_block: { containerId: 'paper_packaging_small', labelColor: '#059669' },
-  cottage_cheese_pack: { containerId: 'paper_packaging', labelColor: '#2563eb' },
 
   // 8. Extended Discrete Packaging (Lukoshko Baskets, Egg Cartons, Blister Packs, Takeout Boxes)
   ...EXTENDED_ITEM_PACKAGING_MAP
 };
 
-export function getResolvedPackagingConfig(itemId: string): ItemPackagingConfig | null {
-  const pkg = ITEM_PACKAGING_MAP[itemId];
+export function getResolvedPackagingConfig(rawItemId: string): ItemPackagingConfig | null {
+  const itemId = resolveCanonicalSubstanceId(rawItemId);
+  const pkg = ITEM_PACKAGING_MAP[itemId] || ITEM_PACKAGING_MAP[rawItemId];
   if (!pkg) return null;
   if (!ITEM_CATALOG[pkg.containerId]) return null;
   const innerId = pkg.innerItemId || itemId;
@@ -6078,16 +6058,18 @@ export function getResolvedPackagingConfig(itemId: string): ItemPackagingConfig 
   return pkg;
 }
 
-export function isRegisteredItemId(itemId: string): boolean {
-  if (!itemId) return false;
-  if (Boolean(ITEM_CATALOG[itemId])) return true;
-  if (Boolean(LEGACY_DISCRETE_CONTAINER_ALIASES[itemId])) return true;
+export function isRegisteredItemId(rawItemId: string): boolean {
+  if (!rawItemId) return false;
+  const itemId = resolveCanonicalSubstanceId(rawItemId);
+  if (Boolean(ITEM_CATALOG[itemId] || ITEM_CATALOG[rawItemId])) return true;
+  if (Boolean(LEGACY_DISCRETE_CONTAINER_ALIASES[itemId] || LEGACY_DISCRETE_CONTAINER_ALIASES[rawItemId])) return true;
   if (Boolean(getResolvedPackagingConfig(itemId))) return true;
   if (Boolean(getResolvedFluidContainerConfig(itemId))) return true;
   return false;
 }
 
-export function formatItemEffectSummary(itemId: string): string {
+export function formatItemEffectSummary(rawItemId: string): string {
+  const itemId = resolveCanonicalSubstanceId(rawItemId);
   const def = ITEM_CATALOG[itemId];
   if (def?.effects) {
     const parts: string[] = [];
@@ -6330,7 +6312,8 @@ export function createFilledPackage(
   return normalizeItemAttributes(container);
 }
 
-export function createPackagedItem(itemId: string, count: number = 1): InventoryItem {
+export function createPackagedItem(rawItemId: string, count: number = 1): InventoryItem {
+  const itemId = resolveCanonicalSubstanceId(rawItemId);
   const packInfo = getResolvedPackagingConfig(itemId);
   if (packInfo) {
     const innerId = packInfo.innerItemId || itemId;
@@ -6401,9 +6384,9 @@ export function applyMedicalEffectById(
     if (res) triggerPlayerActionAnim(player, 'med_spray', 1.1, medId);
     return { applied: res };
   }
-  if (medId === 'panthenol_spray') {
+  if (medId === 'panthenol' || medId === 'panthenol_spray' || medId === 'panthenol_foam') {
     applyPanthenolSpray(player, targetInjuryId);
-    triggerPlayerActionAnim(player, 'med_spray', 1.2, medId);
+    triggerPlayerActionAnim(player, 'med_spray', 1.2, 'panthenol');
     return { applied: true };
   }
   if (medId === 'spasatel_ointment') {
@@ -7833,8 +7816,8 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
     createItem('candy_pouch_euro', 1),
     createItem('candy_pouch', 1),
     createItem('candy_pouch_large', 1),
-    createItem('water_bottle', 1),
-    createItem('hot_coffee', 1),
+    createItem('drinking_water', 1),
+    createItem('coffee', 1),
     createItem('zippo_lighter', 1)
   ];
 }
@@ -9187,7 +9170,16 @@ export function useItemOnPlayer(
             sound.playWaterSpray();
 
             removeItemFromPlayer(player, itemIndex, 1);
-            const filled = createItem('fuel_canister', 1);
+            const targetId = veh.fluidTank.liquidType === 'water'
+              ? 'drinking_water_20l'
+              : veh.fluidTank.liquidType === 'diesel'
+              ? 'diesel'
+              : 'gasoline_95';
+            const filled = createItem(targetId, 1);
+            if (filled.fluidStorage) {
+              filled.fluidStorage.currentMl = Math.round(drawVol) * 1000;
+              syncItemContainerProperties(filled);
+            }
             filled.portions = Math.round(drawVol);
             filled.maxPortions = 20;
 
@@ -9640,7 +9632,7 @@ export function useItemOnPlayer(
       applyMedicalPatch(player, targetInjuryId);
     } else if (item.itemId === 'medkit') {
       applyMedkit(player);
-    } else if (item.itemId === 'panthenol_spray') {
+    } else if (item.itemId === 'panthenol' || item.itemId === 'panthenol_spray') {
       applyPanthenolSpray(player, targetInjuryId);
     } else if (item.itemId === 'spasatel_ointment') {
       applySpasatelOintment(player, targetInjuryId);
@@ -9685,7 +9677,7 @@ export function useItemOnPlayer(
     } else {
       if (['bandage', 'splint', 'medical_patch', 'medkit'].includes(item.itemId)) {
         triggerPlayerActionAnim(player, 'med_bandage', 1.35, item.itemId);
-      } else if (['panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide', 'antiseptic', 'balm_star'].includes(item.itemId)) {
+      } else if (['panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide', 'antiseptic', 'balm_star'].includes(item.itemId)) {
         triggerPlayerActionAnim(player, 'med_spray', 1.15, item.itemId);
       } else {
         triggerPlayerActionAnim(player, 'med_pills', 1.0, item.itemId);
@@ -10345,7 +10337,16 @@ export function useHandItemOnPlayer(
               takeItemFromHand(player, hand);
             }
 
-            const filled = createItem('fuel_canister', 1);
+            const targetId = veh.fluidTank.liquidType === 'water'
+              ? 'drinking_water_20l'
+              : veh.fluidTank.liquidType === 'diesel'
+              ? 'diesel'
+              : 'gasoline_95';
+            const filled = createItem(targetId, 1);
+            if (filled.fluidStorage) {
+              filled.fluidStorage.currentMl = Math.round(drawVol) * 1000;
+              syncItemContainerProperties(filled);
+            }
             filled.portions = Math.round(drawVol);
             filled.maxPortions = 20;
 
@@ -10826,7 +10827,7 @@ export function useHandItemOnPlayer(
       applyMedicalPatch(player, targetInjuryId);
     } else if (item.itemId === 'medkit') {
       applyMedkit(player);
-    } else if (item.itemId === 'panthenol_spray') {
+    } else if (item.itemId === 'panthenol' || item.itemId === 'panthenol_spray') {
       applyPanthenolSpray(player, targetInjuryId);
     } else if (item.itemId === 'spasatel_ointment') {
       applySpasatelOintment(player, targetInjuryId);
@@ -10869,7 +10870,7 @@ export function useHandItemOnPlayer(
     } else {
       if (['bandage', 'splint', 'medical_patch', 'medkit'].includes(item.itemId)) {
         triggerPlayerActionAnim(player, 'med_bandage', 1.35, item.itemId, hand);
-      } else if (['panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide', 'antiseptic', 'balm_star'].includes(item.itemId)) {
+      } else if (['panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide', 'antiseptic', 'balm_star'].includes(item.itemId)) {
         triggerPlayerActionAnim(player, 'med_spray', 1.15, item.itemId, hand);
       } else {
         triggerPlayerActionAnim(player, 'med_pills', 1.0, item.itemId, hand);
@@ -11081,7 +11082,7 @@ export function seedInitialGroundItems(world: GameWorld) {
         id: 'ground_seed_1',
         x: 4420,
         y: 2790,
-        item: createItem('water_bottle', 1),
+        item: createItem('drinking_water', 1),
         spawnTime: Date.now()
       },
       {

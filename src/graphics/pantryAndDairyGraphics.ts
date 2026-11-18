@@ -4,6 +4,7 @@ import { drawShadow, drawGlossBand } from './itemGraphicShared';
 export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
   switch (itemId) {
     // === SALT & PEPPER ===
+    case 'salt_fine':
     case 'salt_shaker': {
       drawShadow(ctx, 5.5, 2.2, 7.8, 0.2);
 
@@ -35,6 +36,7 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
     }
 
     case 'salt':
+    case 'salt_coarse':
     case 'salt_pack':
     case 'salt_bag_coarse': {
       drawShadow(ctx, 7.5, 3.2, 8, 0.24);
@@ -52,6 +54,7 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       return true;
     }
 
+    case 'salt_sea':
     case 'salt_sea_premium': {
       drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
 
@@ -72,6 +75,7 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       return true;
     }
 
+    case 'black_pepper_whole':
     case 'black_pepper_grinder': {
       drawShadow(ctx, 5.5, 2.2, 7.8, 0.24);
 
@@ -98,30 +102,41 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
     }
 
     // Foil sachets (Black pepper, Chili, Paprika, Turmeric, Bay leaves, Cinnamon, Yeast, Cloves, Cardamom, Coriander, Allspice)
+    case 'black_pepper_ground':
     case 'black_pepper_powder_sachet':
+    case 'chili_powder':
     case 'chili_powder_sachet':
+    case 'paprika_sweet':
     case 'paprika_sweet_sachet':
+    case 'turmeric_powder':
     case 'turmeric_powder_sachet':
+    case 'bay_leaves_dried':
     case 'bay_leaves_dried_sachet':
+    case 'cinnamon_powder':
     case 'cinnamon_powder_sachet':
+    case 'yeast_dry':
     case 'yeast_dry_sachet':
     case 'cloves_buds_dried':
     case 'cardamom_pods_dried':
+    case 'coriander_seeds':
     case 'coriander_seeds_sachet':
+    case 'allspice_berries':
     case 'allspice_berries_sachet':
+    case 'hibiscus_dried':
     case 'hibiscus_dried_sachet':
+    case 'safflower_dried':
     case 'safflower_dried_sachet': {
       drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
 
       let sachetBg = '#dc2626'; // chili
-      if (itemId === 'black_pepper_powder_sachet') sachetBg = '#1e293b';
-      if (itemId === 'paprika_sweet_sachet') sachetBg = '#ea580c';
-      if (itemId === 'turmeric_powder_sachet') sachetBg = '#eab308';
-      if (itemId === 'bay_leaves_dried_sachet' || itemId === 'cardamom_pods_dried') sachetBg = '#15803d';
-      if (itemId === 'cinnamon_powder_sachet' || itemId === 'cloves_buds_dried' || itemId === 'allspice_berries_sachet') sachetBg = '#78350f';
-      if (itemId === 'coriander_seeds_sachet' || itemId === 'yeast_dry_sachet') sachetBg = '#ca8a04';
-      if (itemId === 'hibiscus_dried_sachet') sachetBg = '#9f1239';
-      if (itemId === 'safflower_dried_sachet') sachetBg = '#d97706';
+      if (itemId === 'black_pepper_ground' || itemId === 'black_pepper_powder_sachet') sachetBg = '#1e293b';
+      if (itemId === 'paprika_sweet' || itemId === 'paprika_sweet_sachet') sachetBg = '#ea580c';
+      if (itemId === 'turmeric_powder' || itemId === 'turmeric_powder_sachet') sachetBg = '#eab308';
+      if (itemId === 'bay_leaves_dried' || itemId === 'bay_leaves_dried_sachet' || itemId === 'cardamom_pods_dried') sachetBg = '#15803d';
+      if (itemId === 'cinnamon_powder' || itemId === 'cinnamon_powder_sachet' || itemId === 'cloves_buds_dried' || itemId === 'allspice_berries' || itemId === 'allspice_berries_sachet') sachetBg = '#78350f';
+      if (itemId === 'coriander_seeds' || itemId === 'coriander_seeds_sachet' || itemId === 'yeast_dry' || itemId === 'yeast_dry_sachet') sachetBg = '#ca8a04';
+      if (itemId === 'hibiscus_dried' || itemId === 'hibiscus_dried_sachet') sachetBg = '#9f1239';
+      if (itemId === 'safflower_dried' || itemId === 'safflower_dried_sachet') sachetBg = '#d97706';
 
       // Glossy sealed spice pouch with subtle foil gradient
       const pouchGrad = ctx.createLinearGradient(-4.8, -6, 4.8, 6);
@@ -149,8 +164,8 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       ctx.fill();
 
       // Botanical blossom emblem for hibiscus/safflower
-      if (itemId === 'hibiscus_dried_sachet' || itemId === 'safflower_dried_sachet') {
-        ctx.fillStyle = itemId === 'hibiscus_dried_sachet' ? '#be123c' : '#f59e0b';
+      if (itemId === 'hibiscus_dried' || itemId === 'hibiscus_dried_sachet' || itemId === 'safflower_dried' || itemId === 'safflower_dried_sachet') {
+        ctx.fillStyle = (itemId === 'hibiscus_dried' || itemId === 'hibiscus_dried_sachet') ? '#be123c' : '#f59e0b';
         for (let a = 0; a < 5; a++) {
           const rad = (a * Math.PI * 2) / 5;
           ctx.beginPath();
@@ -295,8 +310,11 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
     }
 
     // === FATS & BROTHS ===
+    case 'lard_pork':
     case 'lard_pork_pot':
+    case 'fat_beef':
     case 'fat_beef_pot':
+    case 'ghee_butter':
     case 'ghee_butter_pot': {
       drawShadow(ctx, 7.5, 3.2, 8, 0.26);
 
@@ -308,8 +326,8 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
 
       // Top fat layer (Lard: white, Beef: pale ivory, Ghee: golden)
       let fatColor = '#f8fafc';
-      if (itemId === 'fat_beef_pot') fatColor = '#fef3c7';
-      if (itemId === 'ghee_butter_pot') fatColor = '#facc15';
+      if (itemId === 'fat_beef' || itemId === 'fat_beef_pot') fatColor = '#fef3c7';
+      if (itemId === 'ghee_butter' || itemId === 'ghee_butter_pot') fatColor = '#facc15';
 
       ctx.fillStyle = fatColor;
       ctx.beginPath();
@@ -318,9 +336,13 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       return true;
     }
 
+    case 'broth_beef':
     case 'broth_beef_jar':
+    case 'broth_chicken':
     case 'broth_chicken_jar':
+    case 'broth_fish':
     case 'broth_fish_jar':
+    case 'broth_vegetable':
     case 'broth_vegetable_jar': {
       drawShadow(ctx, 6.5, 2.6, 7.8, 0.24);
 
@@ -332,9 +354,9 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
 
       // Broth colors: Beef dark brown, Chicken golden, Fish clear, Veg amber
       let brothColor = '#d97706';
-      if (itemId === 'broth_beef_jar') brothColor = '#78350f';
-      if (itemId === 'broth_chicken_jar') brothColor = '#eab308';
-      if (itemId === 'broth_fish_jar') brothColor = '#fef08a';
+      if (itemId === 'broth_beef' || itemId === 'broth_beef_jar') brothColor = '#78350f';
+      if (itemId === 'broth_chicken' || itemId === 'broth_chicken_jar') brothColor = '#eab308';
+      if (itemId === 'broth_fish' || itemId === 'broth_fish_jar') brothColor = '#fef08a';
 
       ctx.fillStyle = brothColor;
       ctx.fillRect(-3.8, -1.5, 7.6, 7.8);
@@ -431,18 +453,32 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
     // === FLOURS & GRAIN SACKS ===
     case 'flour':
     case 'flour_bag':
+    case 'flour_wheat':
     case 'flour_wheat_bag_1k':
+    case 'flour_rye':
     case 'flour_rye_bag_1k':
+    case 'flour_corn':
     case 'flour_corn_bag_500g':
+    case 'flour_rice':
     case 'flour_rice_bag_500g':
+    case 'grain_wheat_raw':
     case 'grain_wheat_raw_bag':
+    case 'grain_rye_raw':
     case 'grain_rye_raw_bag':
+    case 'grain_oats':
     case 'grain_oats_bag':
+    case 'rice_basmati':
     case 'rice_basmati_bag':
+    case 'rice_arborio':
     case 'rice_arborio_bag':
+    case 'rice_white':
+    case 'buckwheat_roasted':
     case 'buckwheat_roasted_bag':
+    case 'barley_pearl':
     case 'barley_pearl_bag':
+    case 'millet_yellow':
     case 'millet_yellow_bag':
+    case 'semolina_wheat':
     case 'semolina_wheat_bag':
     case 'peas_split_yellow':
     case 'beans_red_kidney':
@@ -848,7 +884,9 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
     }
 
     // === DAIRY & EGGS ===
+    case 'cream_heavy':
     case 'cream_heavy_jar':
+    case 'sour_cream':
     case 'sour_cream_pot': {
       drawShadow(ctx, 7, 2.8, 7.8, 0.24);
 
@@ -866,6 +904,7 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       return true;
     }
 
+    case 'cottage_cheese':
     case 'cottage_cheese_pack': {
       drawShadow(ctx, 7.5, 3, 7.8, 0.24);
 
@@ -881,6 +920,7 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       return true;
     }
 
+    case 'yogurt':
     case 'yogurt_natural_cup': {
       drawShadow(ctx, 6, 2.5, 7.8, 0.22);
 
@@ -979,7 +1019,9 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
     }
 
     // Eggs
+    case 'eggs_chicken':
     case 'eggs_chicken_carton':
+    case 'eggs_quail':
     case 'eggs_quail_pack': {
       drawShadow(ctx, 8, 3.2, 8, 0.26);
 
@@ -990,7 +1032,7 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       ctx.fill();
 
       // Eggs peeking inside carton
-      ctx.fillStyle = itemId === 'eggs_quail_pack' ? '#fef3c7' : '#fed7aa';
+      ctx.fillStyle = (itemId === 'eggs_quail' || itemId === 'eggs_quail_pack') ? '#fef3c7' : '#fed7aa';
       for (const pt of [[-5, -2], [-1.8, -2], [1.8, -2], [5, -2], [-5, 1.5], [-1.8, 1.5], [1.8, 1.5], [5, 1.5]]) {
         ctx.beginPath();
         ctx.arc(pt[0], pt[1], 1.4, 0, Math.PI * 2);
@@ -1081,6 +1123,7 @@ export function drawPantryAndDairyItem(ctx: CanvasRenderingContext2D, itemId: st
       return true;
     }
 
+    case 'carnauba_wax':
     case 'carnauba_wax_pack': {
       drawShadow(ctx, 6.5, 2.8, 7.6, 0.22);
       // Translucent zipped stand-up pouch

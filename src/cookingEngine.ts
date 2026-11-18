@@ -96,7 +96,7 @@ export function isKnifeItem(itemId?: string | null): boolean {
 
 export function isSaltItem(itemId?: string | null): boolean {
   if (!itemId) return false;
-  return itemId === 'salt_shaker' || itemId === 'salt' || itemId === 'spice_dry';
+  return itemId === 'salt_fine' || itemId === 'salt_shaker' || itemId === 'salt' || itemId === 'spice_dry';
 }
 
 export function isOilOrFatItem(itemId?: string | null): boolean {

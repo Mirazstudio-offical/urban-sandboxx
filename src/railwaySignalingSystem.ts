@@ -3434,20 +3434,123 @@ export class RailwaySignalingSystem {
   }
 
   // =========================================================================
-  // NIGHT LIGHTMAP
+  // NIGHT LIGHTMAP & COLORED SIGNAL OPTICS
   // =========================================================================
   public static renderLightmap(
-    ctx: CanvasRenderingContext2D,
+    lCtx: CanvasRenderingContext2D,
     world: GameWorld,
     minX: number,
     minY: number,
     maxX: number,
     maxY: number,
-    nightAlpha: number
+    nightAlpha: number,
+    cCtx?: CanvasRenderingContext2D | null
   ): void {
     if (nightAlpha <= 0.05) return;
     this.ensureInitialized(world);
 
+    const signals = world.railwaySignals || [];
+    const pad = 120;
+    const time = this.globalTime;
+
+    for (const sig of signals) {
+      if (sig.x < minX - pad || sig.x > maxX + pad || sig.y < minY - pad || sig.y > maxY + pad) {
+        continue;
+      }
+
+      const activeLenses = this.getActiveLensesForAspect(sig, time);
+      if (activeLenses.length === 0) continue;
+
+      lCtx.save();
+      lCtx.translate(sig.x, sig.y);
+      lCtx.rotate(sig.angle);
+
+      if (cCtx) {
+        cCtx.save();
+        cCtx.translate(sig.x, sig.y);
+        cCtx.rotate(sig.angle);
+      }
+
+      for (const idx of activeLenses) {
+        const color = sig.lenses[idx];
+        let rgb = '24, 215, 130';
+        if (color === 'red') rgb = '255, 52, 48';
+        else if (color === 'yellow') rgb = '255, 178, 24';
+        else if (color === 'blue') rgb = '52, 142, 255';
+        else if (color === 'white') rgb = '230, 242, 255';
+
+        // 1. Local pole/trackside ground pool (destination-out + color)
+        const groundGrad = lCtx.createRadialGradient(0, 0, 1, 0, 0, 32);
+        groundGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.72)');
+        groundGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.28)');
+        groundGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = groundGrad;
+        lCtx.beginPath();
+        lCtx.arc(0, 0, 32, 0, Math.PI * 2);
+        lCtx.fill();
+
+        if (cCtx) {
+          const groundCol = cCtx.createRadialGradient(0, 0, 1, 0, 0, 32);
+          groundCol.addColorStop(0.0, `rgba(${rgb}, 0.45)`);
+          groundCol.addColorStop(0.45, `rgba(${rgb}, 0.16)`);
+          groundCol.addColorStop(1.0, `rgba(${rgb}, 0)`);
+          cCtx.fillStyle = groundCol;
+          cCtx.beginPath();
+          cCtx.arc(0, 0, 32, 0, Math.PI * 2);
+          cCtx.fill();
+        }
+
+        // 2. Smooth rounded-origin directional signal beam (no razor triangle apex)
+        const coneReach = 92;
+        const coneHalfW = 30;
+        const traceConePath = (targetCtx: CanvasRenderingContext2D) => {
+          targetCtx.beginPath();
+          targetCtx.moveTo(2, -1.8);
+          targetCtx.quadraticCurveTo(coneReach * 0.45, -coneHalfW * 0.65, coneReach, -coneHalfW);
+          targetCtx.bezierCurveTo(
+            coneReach + 18, -coneHalfW * 0.45,
+            coneReach + 18, coneHalfW * 0.45,
+            coneReach, coneHalfW
+          );
+          targetCtx.quadraticCurveTo(coneReach * 0.45, coneHalfW * 0.65, 2, 1.8);
+          targetCtx.closePath();
+        };
+
+        const coneCut = lCtx.createRadialGradient(2, 0, 1, coneReach * 0.42, 0, coneReach);
+        coneCut.addColorStop(0.00, 'rgba(0, 0, 0, 0.78)');
+        coneCut.addColorStop(0.35, 'rgba(0, 0, 0, 0.42)');
+        coneCut.addColorStop(0.75, 'rgba(0, 0, 0, 0.12)');
+        coneCut.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = coneCut;
+        traceConePath(lCtx);
+        lCtx.fill();
+
+        if (cCtx) {
+          const coneCol = cCtx.createRadialGradient(2, 0, 1, coneReach * 0.42, 0, coneReach);
+          coneCol.addColorStop(0.00, `rgba(${rgb}, 0.52)`);
+          coneCol.addColorStop(0.32, `rgba(${rgb}, 0.26)`);
+          coneCol.addColorStop(0.72, `rgba(${rgb}, 0.07)`);
+          coneCol.addColorStop(1.00, `rgba(${rgb}, 0)`);
+          cCtx.fillStyle = coneCol;
+          traceConePath(cCtx);
+          cCtx.fill();
+        }
+      }
+
+      lCtx.restore();
+      if (cCtx) cCtx.restore();
+    }
+  }
+
+  public static renderAdditiveOptics(
+    ctx: CanvasRenderingContext2D,
+    world: GameWorld,
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ): void {
+    this.ensureInitialized(world);
     const signals = world.railwaySignals || [];
     const pad = 120;
     const time = this.globalTime;
@@ -3466,49 +3569,15 @@ export class RailwaySignalingSystem {
 
       for (const idx of activeLenses) {
         const color = sig.lenses[idx];
-        let rgb = '16, 185, 129';
-        if (color === 'red') rgb = '239, 68, 68';
-        else if (color === 'yellow') rgb = '245, 158, 11';
-        else if (color === 'blue') rgb = '59, 130, 246';
-        else if (color === 'white') rgb = '241, 245, 249';
+        let rgb = '24, 215, 130';
+        if (color === 'red') rgb = '255, 52, 48';
+        else if (color === 'yellow') rgb = '255, 178, 24';
+        else if (color === 'blue') rgb = '52, 142, 255';
+        else if (color === 'white') rgb = '230, 242, 255';
 
-        const groundGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 28);
-        groundGrad.addColorStop(0.0, `rgba(${rgb}, ${0.50 * nightAlpha})`);
-        groundGrad.addColorStop(0.4, `rgba(${rgb}, ${0.18 * nightAlpha})`);
-        groundGrad.addColorStop(0.8, `rgba(${rgb}, ${0.04 * nightAlpha})`);
-        groundGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = groundGrad;
-        ctx.beginPath();
-        ctx.arc(0, 0, 28, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Focused optical lens emission with curved parabolic penumbra and radial falloff (no harsh triangle polygon)
-        const coneReach = 85;
-        const coneHalfW = 28;
-        const coneGrad = ctx.createRadialGradient(2, 0, 1, coneReach * 0.45, 0, coneReach);
-        coneGrad.addColorStop(0.00, `rgba(${rgb}, ${0.60 * nightAlpha})`);
-        coneGrad.addColorStop(0.30, `rgba(${rgb}, ${0.28 * nightAlpha})`);
-        coneGrad.addColorStop(0.70, `rgba(${rgb}, ${0.07 * nightAlpha})`);
-        coneGrad.addColorStop(0.92, `rgba(${rgb}, ${0.01 * nightAlpha})`);
-        coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-
-        ctx.fillStyle = coneGrad;
-        ctx.beginPath();
-        ctx.moveTo(2, 0);
-        ctx.quadraticCurveTo(coneReach * 0.45, -coneHalfW * 0.6, coneReach, -coneHalfW);
-        ctx.bezierCurveTo(
-          coneReach + 15, -coneHalfW * 0.4,
-          coneReach + 15, coneHalfW * 0.4,
-          coneReach, coneHalfW
-        );
-        ctx.quadraticCurveTo(coneReach * 0.45, coneHalfW * 0.6, 2, 0);
-        ctx.closePath();
-        ctx.fill();
-
-        // Optical lens flare core directly on the signal optic
         const flareGrad = ctx.createRadialGradient(2, 0, 0.5, 2, 0, 7.5);
-        flareGrad.addColorStop(0.0, `rgba(${rgb}, 0.95)`);
-        flareGrad.addColorStop(0.5, `rgba(${rgb}, 0.45)`);
+        flareGrad.addColorStop(0.0, `rgba(${rgb}, 0.90)`);
+        flareGrad.addColorStop(0.45, `rgba(${rgb}, 0.38)`);
         flareGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = flareGrad;
         ctx.beginPath();

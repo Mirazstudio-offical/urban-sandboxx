@@ -952,17 +952,19 @@ export class GarageCooperativeRenderer {
   }
 
   /**
-   * Render warm golden amber light cutouts on the night lightmap in front of garage gates and guardhouses.
+   * Render warm golden amber light cutouts on the night lightmap in front of garage gates and guardhouses,
+   * and accumulate warm amber sconce illumination into cCtx.
    */
   public static renderLightmapCutouts(
     lCtx: CanvasRenderingContext2D,
     world: GameWorld,
     nightAlpha: number,
-    fogFactor: number
+    fogFactor: number,
+    cCtx?: CanvasRenderingContext2D | null
   ) {
     if (nightAlpha < 0.25) return;
 
-    const garages = world.buildings.filter(b => 
+    const garages = world.buildings.filter(b =>
       (b.type === 'garage_box' || b.type === 'garage_workshop' || b.type === 'garage_gatehouse')
     );
 
@@ -971,25 +973,36 @@ export class GarageCooperativeRenderer {
       const isGatehouse = bld.type === 'garage_gatehouse' || bld.garageSubtype === 'gatehouse';
       const side = bld.entranceSide || 'south';
 
-      let lightX = bld.x + bld.width / 2;
-      let lightY = side === 'north' ? bld.y - 6 : bld.y + bld.height + 6;
+      const lightX = bld.x + bld.width / 2;
+      const lightY = side === 'north' ? bld.y - 6 : bld.y + bld.height + 6;
 
-      const radius = isGatehouse ? 32 : 18;
-      const grad = lCtx.createRadialGradient(lightX, lightY, 2, lightX, lightY, radius);
-      grad.addColorStop(0, 'rgba(254, 240, 138, 0.85)'); // Warm amber bulb center
-      grad.addColorStop(0.5, 'rgba(245, 158, 11, 0.35)');
+      const radius = (isGatehouse ? 36 : 22) * fogFactor;
+      const grad = lCtx.createRadialGradient(lightX, lightY, 1.5, lightX, lightY, radius);
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0.88)');
+      grad.addColorStop(0.45, 'rgba(0, 0, 0, 0.42)');
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
       lCtx.fillStyle = grad;
       lCtx.beginPath();
       lCtx.arc(lightX, lightY, radius, 0, Math.PI * 2);
       lCtx.fill();
+
+      if (cCtx) {
+        const colGrad = cCtx.createRadialGradient(lightX, lightY, 1.5, lightX, lightY, radius);
+        colGrad.addColorStop(0.0, isGatehouse ? 'rgba(255, 224, 130, 0.42)' : 'rgba(255, 205, 105, 0.34)');
+        colGrad.addColorStop(0.45, 'rgba(245, 168, 42, 0.16)');
+        colGrad.addColorStop(1.0, 'rgba(245, 158, 11, 0)');
+        cCtx.fillStyle = colGrad;
+        cCtx.beginPath();
+        cCtx.arc(lightX, lightY, radius, 0, Math.PI * 2);
+        cCtx.fill();
+      }
     }
     lCtx.restore();
   }
 
   /**
-   * Render additive glowing atmospheric halos for garage lights.
+   * Render additive glowing fixture pinpoints for garage sconce bulbs.
    */
   public static renderAdditiveGlow(
     ctx: CanvasRenderingContext2D,
@@ -999,24 +1012,24 @@ export class GarageCooperativeRenderer {
   ) {
     if (nightAlpha < 0.3) return;
 
-    const garages = world.buildings.filter(b => 
+    const garages = world.buildings.filter(b =>
       (b.type === 'garage_box' || b.type === 'garage_workshop' || b.type === 'garage_gatehouse') &&
-      (b.id.charCodeAt(b.id.length - 1) % 2 === 0) // Alternating lamps
+      (b.id.charCodeAt(b.id.length - 1) % 2 === 0 || b.type === 'garage_gatehouse')
     );
 
     ctx.save();
-    ctx.globalCompositeOperation = 'screen';
+    ctx.globalCompositeOperation = 'lighter';
 
     for (const bld of garages) {
       const side = bld.entranceSide || 'south';
       const lightX = bld.x + bld.width / 2;
       const lightY = side === 'north' ? bld.y - 6 : bld.y + bld.height + 6;
 
-      const radius = 22;
-      const grad = ctx.createRadialGradient(lightX, lightY, 1, lightX, lightY, radius);
-      grad.addColorStop(0, `rgba(254, 240, 138, ${(0.35 * nightAlpha).toFixed(2)})`);
-      grad.addColorStop(0.6, `rgba(245, 158, 11, ${(0.12 * nightAlpha).toFixed(2)})`);
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      const radius = 5.5 * fogFactor;
+      const grad = ctx.createRadialGradient(lightX, lightY, 0.4, lightX, lightY, radius);
+      grad.addColorStop(0, `rgba(255, 245, 195, ${(0.55 * nightAlpha).toFixed(2)})`);
+      grad.addColorStop(0.5, `rgba(255, 190, 60, ${(0.22 * nightAlpha).toFixed(2)})`);
+      grad.addColorStop(1, 'rgba(245, 158, 11, 0)');
 
       ctx.fillStyle = grad;
       ctx.beginPath();

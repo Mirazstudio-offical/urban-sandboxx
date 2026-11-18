@@ -286,7 +286,7 @@ function seedApartmentFurnitureItems(
       pushValid('backpack');
     }
   } else if (furnitureType === 'fridge') {
-    pushValid('water_bottle', 2);
+    pushValid('drinking_water', 2);
     pushValid('apple', 3);
     pushValid('energy_drink');
     if (aptId?.includes('cottage')) {

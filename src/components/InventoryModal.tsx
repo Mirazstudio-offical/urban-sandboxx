@@ -228,6 +228,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       'splint',
       'medical_patch',
       'antiseptic',
+      'panthenol',
       'panthenol_spray',
       'spasatel_ointment',
       'zelenka',
@@ -235,7 +236,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       'diclofenac_gel',
       'hydrogen_peroxide'
     ];
-    if (item && item.category === 'med' && TOPICAL_ITEMS.includes(item.itemId)) {
+    const effectiveMedId = item.fluidStorage?.attributes?.medicalEffectId || item.originalCatalogId || item.itemId;
+    if (item && item.category === 'med' && (TOPICAL_ITEMS.includes(effectiveMedId) || TOPICAL_ITEMS.includes(item.itemId))) {
       onRequestLimbTreatment?.(idx, item);
       return;
     }

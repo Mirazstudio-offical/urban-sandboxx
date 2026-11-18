@@ -4,6 +4,7 @@ import { drawShadow, drawGlossBand } from './itemGraphicShared';
 export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
   switch (itemId) {
     // Standard 0.5L PET Plastic Water Bottle
+    case 'drinking_water':
     case 'bottle_plastic_500':
     case 'bottle_water':
     case 'mineral_water':
@@ -70,6 +71,7 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
     }
 
     // Tall 1.5L Large PET Plastic Water Bottle (Пластиковая бутылка 1.5л)
+    case 'drinking_water_1500':
     case 'bottle_plastic_1500': {
       drawShadow(ctx, 7.2, 2.8, 8.5, 0.25);
 
@@ -1119,6 +1121,8 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
       return true;
     }
 
+    case 'wine_red':
+    case 'wine_white':
     case 'wine_bottle':
     case 'bottle_wine': {
       drawShadow(ctx, 6.2, 2.4, 7.8, 0.24);
@@ -1804,6 +1808,7 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
       return true;
     }
 
+    case 'milk_raw':
     case 'milk_bottle_raw': {
       drawShadow(ctx, 6.2, 2.5, 7.8, 0.22);
 
@@ -1883,6 +1888,7 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
       return true;
     }
 
+    case 'kefir':
     case 'kefir_fermented_bottle': {
       drawShadow(ctx, 6.2, 2.5, 7.8, 0.22);
 
@@ -1916,6 +1922,7 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
       return true;
     }
 
+    case 'buttermilk':
     case 'buttermilk_fermented_jar': {
       drawShadow(ctx, 7, 2.8, 7.8, 0.24);
 

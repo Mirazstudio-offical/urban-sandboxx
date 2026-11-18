@@ -1484,7 +1484,7 @@ export const LEGACY_LIQUID_TO_GENERIC_MAP: Record<string, { liquidId: LiquidId; 
       ingredients: 'Цельные зёрна сахарной кукурузы молочной спелости, питьевая вода, сахар, соль',
       preparationMethod: 'Бланширование свежих зёрен и вакуумная стерилизация в сладковатой заливке',
       purpose: 'Добавка в салаты, гарниры, супы и самостоятельный сочный перекус',
-      culinaryEquivalentId: 'canned_corn',
+      culinaryEquivalentId: 'sweet_corn',
       customEffects: { hunger: 32, thirst: 12, energy: 8 },
       customTasteMessages: ['Сладкие сочные зёрнышки консервированной кукурузы лопаются на зубах!']
     }
@@ -1496,7 +1496,7 @@ export const LEGACY_LIQUID_TO_GENERIC_MAP: Record<string, { liquidId: LiquidId; 
       ingredients: 'Свежий зелёный горошек мозговых сортов, вода, сахар, соль',
       preparationMethod: 'Щадящая стерилизация в банках в день сбора урожая',
       purpose: 'Классический ингредиент для салата Оливье, винегрета и гарнир к сосискам и мясу',
-      culinaryEquivalentId: 'canned_peas',
+      culinaryEquivalentId: 'green_peas',
       customEffects: { hunger: 34, thirst: 10, energy: 6 },
       customTasteMessages: ['Нежный сладковатый зелёный горошек мозговых сортов в лёгкой заливке!']
     }
@@ -1508,7 +1508,7 @@ export const LEGACY_LIQUID_TO_GENERIC_MAP: Record<string, { liquidId: LiquidId; 
       ingredients: 'Отборная красная фасоль, томатная паста, вода, сахар, соль, паприка, чеснок, чёрный перец',
       preparationMethod: 'Томление набухшей фасоли под давлением в пряной томатной заливке',
       purpose: 'Сытный белковый гарнир, заправка для борща, лобио и чили',
-      culinaryEquivalentId: 'canned_beans',
+      culinaryEquivalentId: 'beans_tomato',
       customEffects: { hunger: 48, thirst: 6, energy: 10 },
       customTasteMessages: ['Сытная мягкая фасоль в густом пряном томатном соусе!']
     }
@@ -3517,7 +3517,7 @@ export function resolveContainerVisualAttributes(
         labelRgb = [254, 243, 199];
         labelAccentRgb = [21, 128, 61];
         capRgb = [234, 179, 8];
-      } else if (liquidId === 'wine' || eqId.includes('wine_red') || eqId === 'wine_bottle' || eqId === 'bottle_wine') {
+      } else if (liquidId === 'wine' || eqId === 'wine_red' || eqId === 'wine_white' || eqId === 'wine_bottle' || eqId === 'bottle_wine') {
         shape = 'bordeaux';
         materialRgb = [6, 78, 59];
         materialNameRu = 'Тёмно-изумрудное винное стекло';
