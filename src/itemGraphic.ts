@@ -15,7 +15,8 @@ import { drawPantryAndDairyItem } from './graphics/pantryAndDairyGraphics';
 import { drawPaperPackagingItem } from './graphics/paperPackagingGraphics';
 import { drawCandyPackagingItem } from './graphics/candyPackagingGraphics';
 import { drawChocolatePackagingItem } from './graphics/chocolatePackagingGraphics';
-import { drawShadow, drawFrostAndThermalOverlay } from './graphics/itemGraphicShared';
+import { drawCulinaryDishItem } from './graphics/culinaryGraphics';
+import { drawShadow, drawFrostAndThermalOverlay, drawMicroBarcode } from './graphics/itemGraphicShared';
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
 import { ITEM_CATALOG, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
 
@@ -132,6 +133,7 @@ export function drawItemModel2D(
           drawPaperPackagingItem(targetCtx, effectiveId, effectiveItem) ||
           drawCandyPackagingItem(targetCtx, effectiveId, effectiveItem) ||
           drawChocolatePackagingItem(targetCtx, effectiveId, effectiveItem) ||
+          drawCulinaryDishItem(targetCtx, effectiveId, effectiveItem) ||
           drawGearToolItem(targetCtx, effectiveId, effectiveItem) ||
           drawSmartphoneItem(targetCtx, effectiveId) ||
           drawFoodItem(targetCtx, effectiveId, effectiveItem) ||
@@ -148,16 +150,36 @@ export function drawItemModel2D(
       }
 
       if (!drawn) {
-        // Fallback item graphics: durable supply parcel with shadow and tape
-        drawShadow(targetCtx, 7, 2.5, 7.5, 0.2);
-        targetCtx.fillStyle = '#64748b';
+        // Fallback item graphics: kraft corrugated supply parcel with tape & shipping barcode
+        drawShadow(targetCtx, 7.2, 2.6, 7.6, 0.24);
+        const boxGrad = targetCtx.createLinearGradient(-6.5, -6.5, 6.5, 6.5);
+        boxGrad.addColorStop(0.0, '#d97706');
+        boxGrad.addColorStop(0.55, '#b45309');
+        boxGrad.addColorStop(1.0, '#78350f');
+        targetCtx.fillStyle = boxGrad;
         targetCtx.beginPath();
-        targetCtx.roundRect(-6.5, -6.5, 13, 13, 2);
+        targetCtx.roundRect(-6.5, -6.5, 13, 13, 1.2);
         targetCtx.fill();
-        targetCtx.fillStyle = '#94a3b8';
-        targetCtx.fillRect(-6.5, -6.5, 13, 2);
-        targetCtx.fillStyle = '#f59e0b';
-        targetCtx.fillRect(-1.5, -6.5, 3, 13);
+
+        // Top lid seam & highlights
+        targetCtx.fillStyle = 'rgba(254, 243, 199, 0.16)';
+        targetCtx.fillRect(-6.5, -6.5, 13, 2.0);
+        targetCtx.strokeStyle = 'rgba(69, 26, 3, 0.55)';
+        targetCtx.lineWidth = 0.45;
+        targetCtx.beginPath();
+        targetCtx.moveTo(-6.5, -4.5);
+        targetCtx.lineTo(6.5, -4.5);
+        targetCtx.stroke();
+
+        // Packing tape strap
+        targetCtx.fillStyle = 'rgba(254, 240, 138, 0.55)';
+        targetCtx.fillRect(-1.4, -6.5, 2.8, 13);
+        targetCtx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        targetCtx.lineWidth = 0.3;
+        targetCtx.strokeRect(-1.4, -6.5, 2.8, 13);
+
+        // Shipping barcode label
+        drawMicroBarcode(targetCtx, 1.8, 2.6, 4.0, 2.6);
       }
     };
 

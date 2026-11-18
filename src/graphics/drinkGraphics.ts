@@ -1,5 +1,587 @@
-// Procedural 2D Canvas Models for Drink Items
-import { drawShadow, drawGlossBand } from './itemGraphicShared';
+// Procedural 2D Canvas Studio Models for Drink, Oil, Vinegar & Sauce Vessels
+import {
+  drawShadow,
+  drawBotanicalLeaf,
+  drawMetalCanLid,
+  drawGlassJarShell,
+  applyCylinderLightingOverlay,
+  drawStudioLabelPanel,
+  drawScrewCap,
+  drawCrownCap,
+  drawMicroBarcode,
+  adjustHex,
+  hexToRgba
+} from './itemGraphicShared';
+
+interface PetBottleSpec {
+  w: number;
+  topY: number;
+  botY: number;
+  plasticTint: string;
+  liquidTop?: string;
+  liquidBot?: string;
+  liquidLevelY?: number; // y where meniscus sits
+  emptyCrinkled?: boolean;
+  ribCount?: number;
+  capColor: string;
+  labelBand: string;
+  labelPaper: string;
+  labelAccent: string;
+  emblem: 'circle' | 'crest' | 'diamond' | 'leaf' | 'none';
+}
+
+function drawStudioPetBottle(ctx: CanvasRenderingContext2D, spec: PetBottleSpec) {
+  const {
+    w,
+    topY,
+    botY,
+    plasticTint,
+    liquidTop,
+    liquidBot,
+    liquidLevelY = topY + (botY - topY) * 0.32,
+    emptyCrinkled = false,
+    ribCount = 2,
+    capColor,
+    labelBand,
+    labelPaper,
+    labelAccent,
+    emblem
+  } = spec;
+
+  const hw = w * 0.5;
+  const shY = topY + 2.8;
+  const neckW = Math.min(2.2, hw * 0.44);
+  const waistY = (shY + botY) * 0.5;
+
+  const traceBody = () => {
+    ctx.beginPath();
+    ctx.moveTo(-neckW, topY);
+    ctx.lineTo(neckW, topY);
+    ctx.lineTo(neckW, topY + 1.2);
+    ctx.bezierCurveTo(hw * 0.92, topY + 1.6, hw, shY, hw, shY + 1.4);
+    ctx.bezierCurveTo(hw * 0.98, waistY - 0.6, hw * 0.88, waistY, hw * 0.94, waistY + 1.6);
+    ctx.lineTo(hw * 0.94, botY - 1.3);
+    ctx.quadraticCurveTo(hw * 0.92, botY + 0.5, hw * 0.55, botY + 0.65);
+    ctx.quadraticCurveTo(0, botY + 0.85, -hw * 0.55, botY + 0.65);
+    ctx.quadraticCurveTo(-hw * 0.92, botY + 0.5, -hw * 0.94, botY - 1.3);
+    ctx.lineTo(-hw * 0.94, waistY + 1.6);
+    ctx.bezierCurveTo(-hw * 0.88, waistY, -hw * 0.98, waistY - 0.6, -hw, shY + 1.4);
+    ctx.bezierCurveTo(-hw, shY, -hw * 0.92, topY + 1.6, -neckW, topY + 1.2);
+    ctx.closePath();
+  };
+
+  // Translucent PET shell background
+  const shellGrad = ctx.createLinearGradient(-hw, 0, hw, 0);
+  shellGrad.addColorStop(0.0, hexToRgba(adjustHex(plasticTint, -0.25), emptyCrinkled ? 0.34 : 0.62));
+  shellGrad.addColorStop(0.24, hexToRgba(adjustHex(plasticTint, 0.35), emptyCrinkled ? 0.28 : 0.48));
+  shellGrad.addColorStop(0.55, hexToRgba(plasticTint, emptyCrinkled ? 0.14 : 0.28));
+  shellGrad.addColorStop(0.88, hexToRgba(adjustHex(plasticTint, -0.2), emptyCrinkled ? 0.3 : 0.55));
+  shellGrad.addColorStop(1.0, hexToRgba(adjustHex(plasticTint, -0.35), emptyCrinkled ? 0.38 : 0.68));
+  ctx.fillStyle = shellGrad;
+  traceBody();
+  ctx.fill();
+
+  // Interior liquid column clipped inside PET walls
+  if (!emptyCrinkled && liquidTop && liquidBot) {
+    ctx.save();
+    traceBody();
+    ctx.clip();
+
+    const liqGrad = ctx.createLinearGradient(0, liquidLevelY, 0, botY + 0.8);
+    liqGrad.addColorStop(0.0, liquidTop);
+    liqGrad.addColorStop(0.55, adjustHex(liquidTop, -0.14));
+    liqGrad.addColorStop(1.0, liquidBot);
+    ctx.fillStyle = liqGrad;
+    ctx.fillRect(-hw - 0.5, liquidLevelY, w + 1, botY - liquidLevelY + 1.2);
+
+    // Cylindrical refraction shading through liquid
+    applyCylinderLightingOverlay(ctx, -hw, liquidLevelY, w, botY - liquidLevelY + 1.2, 0.26, 0.34);
+
+    // Bright curved surface meniscus ellipse
+    ctx.fillStyle = hexToRgba(adjustHex(liquidTop, 0.45), 0.72);
+    ctx.beginPath();
+    ctx.ellipse(0, liquidLevelY, hw * 0.92, 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 0.24;
+    ctx.stroke();
+
+    // Thick molded petaloid PET base refraction
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.16)';
+    for (const bx of [-hw * 0.48, 0, hw * 0.48]) {
+      ctx.beginPath();
+      ctx.ellipse(bx, botY - 0.2, hw * 0.26, 0.75, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  } else if (emptyCrinkled) {
+    // Crinkled fold facets & dry condensate streaks inside empty bottle
+    ctx.save();
+    traceBody();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.48)';
+    ctx.lineWidth = 0.35;
+    ctx.beginPath();
+    ctx.moveTo(-hw * 0.65, shY + 1.2);
+    ctx.lineTo(hw * 0.25, waistY);
+    ctx.lineTo(-hw * 0.4, botY - 1.5);
+    ctx.moveTo(hw * 0.55, shY + 1.8);
+    ctx.lineTo(-hw * 0.2, waistY + 1.2);
+    ctx.lineTo(hw * 0.45, botY - 2.2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Structural blow-molded annular ribs above/below label
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.38)';
+  ctx.lineWidth = 0.28;
+  for (let i = 0; i < ribCount; i++) {
+    const ry = shY + 1.6 + i * 1.1;
+    ctx.beginPath();
+    ctx.moveTo(-hw * 0.9, ry);
+    ctx.quadraticCurveTo(0, ry + 0.42, hw * 0.9, ry);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(-hw * 0.9, botY - 1.6);
+  ctx.quadraticCurveTo(0, botY - 1.2, hw * 0.9, botY - 1.6);
+  ctx.stroke();
+
+  // Wrap-around studio paper/BOPP label in recessed waist
+  const lblH = Math.min(4.6, (botY - shY) * 0.42);
+  const lblY = waistY - lblH * 0.45;
+  drawStudioLabelPanel(ctx, -hw * 0.94, lblY, w * 0.94, lblH, {
+    paperColor: labelPaper,
+    bandColor: labelBand,
+    accentColor: labelAccent,
+    inkColor: '#0f172a',
+    goldFoil: false,
+    hasBarcode: !emptyCrinkled,
+    emblem,
+    cylindrical: true
+  });
+
+  // Crisp PET studio softbox specular pillar + right rim highlight
+  const fGrad = ctx.createLinearGradient(-hw * 0.72, 0, -hw * 0.36, 0);
+  fGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.05)');
+  fGrad.addColorStop(0.42, 'rgba(255, 255, 255, 0.62)');
+  fGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = fGrad;
+  ctx.fillRect(-hw * 0.72, shY, hw * 0.36, botY - shY - 0.6);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+  ctx.fillRect(hw * 0.66, shY + 0.4, hw * 0.14, botY - shY - 1.2);
+
+  // Thin crisp PET rim outline
+  ctx.strokeStyle = hexToRgba(adjustHex(plasticTint, -0.45), 0.55);
+  ctx.lineWidth = 0.34;
+  traceBody();
+  ctx.stroke();
+
+  // Knurled screw cap with tamper ring
+  drawScrewCap(ctx, 0, topY - 1.65, neckW * 2.15, 2.05, capColor, true);
+}
+
+interface GlassBottleSpec {
+  glassHex: string;
+  glassTintAlpha?: number;
+  liquidHex?: string;
+  liquidTopY?: number;
+  w?: number;
+  topY?: number;
+  botY?: number;
+  shoulderStyle?: 'bordeaux' | 'burgundy' | 'square' | 'tapered';
+  closure?: 'capsule' | 'crown' | 'screw' | 'pourer' | 'cork';
+  closureColor: string;
+  foilCollarColor?: string;
+  labelPaper?: string;
+  labelBand?: string;
+  labelAccent?: string;
+  labelStyle?: 'studio' | 'hex_soy' | 'crest';
+  emblem?: 'circle' | 'crest' | 'diamond' | 'leaf' | 'none';
+}
+
+function drawStudioGlassBottle(ctx: CanvasRenderingContext2D, spec: GlassBottleSpec) {
+  const {
+    glassHex,
+    glassTintAlpha = 0.88,
+    liquidHex,
+    liquidTopY = -1.6,
+    w = 8.4,
+    topY = -8.4,
+    botY = 7.2,
+    shoulderStyle = 'bordeaux',
+    closure = 'screw',
+    closureColor,
+    foilCollarColor,
+    labelPaper = '#f8f5ec',
+    labelBand = '#1e293b',
+    labelAccent = '#b45309',
+    labelStyle = 'studio',
+    emblem = 'crest'
+  } = spec;
+
+  const hw = w * 0.5;
+  const neckW = Math.min(1.75, hw * 0.38);
+  const shY = shoulderStyle === 'burgundy' ? -0.8 : -2.6;
+
+  const traceBottle = () => {
+    ctx.beginPath();
+    ctx.moveTo(-neckW, topY);
+    ctx.lineTo(neckW, topY);
+    ctx.lineTo(neckW, -5.2);
+    if (shoulderStyle === 'tapered') {
+      ctx.quadraticCurveTo(hw * 0.8, -1.0, hw, botY - 0.8);
+    } else if (shoulderStyle === 'square') {
+      ctx.quadraticCurveTo(hw * 0.98, -4.6, hw, -3.0);
+      ctx.lineTo(hw, botY - 1.1);
+    } else if (shoulderStyle === 'burgundy') {
+      ctx.bezierCurveTo(neckW * 1.1, -3.2, hw, shY - 1.8, hw, shY + 1.2);
+      ctx.lineTo(hw * 0.96, botY - 1.0);
+    } else {
+      ctx.bezierCurveTo(neckW * 1.2, -4.2, hw, -4.0, hw, shY);
+      ctx.lineTo(hw * 0.96, botY - 1.0);
+    }
+    ctx.quadraticCurveTo(hw * 0.94, botY + 0.4, hw * 0.52, botY + 0.55);
+    ctx.quadraticCurveTo(0, botY + 0.72, -hw * 0.52, botY + 0.55);
+    ctx.quadraticCurveTo(-hw * 0.94, botY + 0.4, -hw * 0.96, botY - 1.0);
+    if (shoulderStyle === 'tapered') {
+      ctx.lineTo(-hw, botY - 0.8);
+      ctx.quadraticCurveTo(-hw * 0.8, -1.0, -neckW, -5.2);
+    } else if (shoulderStyle === 'square') {
+      ctx.lineTo(-hw, -3.0);
+      ctx.quadraticCurveTo(-hw * 0.98, -4.6, -neckW, -5.2);
+    } else if (shoulderStyle === 'burgundy') {
+      ctx.lineTo(-hw, shY + 1.2);
+      ctx.bezierCurveTo(-hw, shY - 1.8, -neckW * 1.1, -3.2, -neckW, -5.2);
+    } else {
+      ctx.lineTo(-hw, shY);
+      ctx.bezierCurveTo(-hw, -4.0, -neckW * 1.2, -4.2, -neckW, -5.2);
+    }
+    ctx.closePath();
+  };
+
+  // Glass body cylindrical gradient
+  const gGrad = ctx.createLinearGradient(-hw, 0, hw, 0);
+  gGrad.addColorStop(0.0, hexToRgba(adjustHex(glassHex, -0.35), glassTintAlpha));
+  gGrad.addColorStop(0.24, hexToRgba(adjustHex(glassHex, 0.32), glassTintAlpha * 0.86));
+  gGrad.addColorStop(0.54, hexToRgba(glassHex, glassTintAlpha * 0.76));
+  gGrad.addColorStop(0.86, hexToRgba(adjustHex(glassHex, -0.28), glassTintAlpha * 0.92));
+  gGrad.addColorStop(1.0, hexToRgba(adjustHex(glassHex, -0.45), glassTintAlpha));
+  ctx.fillStyle = gGrad;
+  traceBottle();
+  ctx.fill();
+
+  // Internal liquid fill + punt refraction
+  ctx.save();
+  traceBottle();
+  ctx.clip();
+
+  if (liquidHex) {
+    const lGrad = ctx.createLinearGradient(-hw, liquidTopY, hw, botY);
+    lGrad.addColorStop(0.0, adjustHex(liquidHex, -0.15));
+    lGrad.addColorStop(0.32, adjustHex(liquidHex, 0.16));
+    lGrad.addColorStop(0.75, liquidHex);
+    lGrad.addColorStop(1.0, adjustHex(liquidHex, -0.38));
+    ctx.fillStyle = lGrad;
+    ctx.fillRect(-hw - 0.5, liquidTopY, w + 1, botY - liquidTopY + 1.2);
+
+    // Meniscus refraction line
+    ctx.fillStyle = hexToRgba(adjustHex(liquidHex, 0.45), 0.55);
+    ctx.beginPath();
+    ctx.ellipse(0, liquidTopY, hw * 0.9, 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Thick glass bottom punt wedge & shadow
+  const puntGrad = ctx.createLinearGradient(0, botY - 1.8, 0, botY + 0.6);
+  puntGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.08)');
+  puntGrad.addColorStop(0.45, 'rgba(226, 232, 240, 0.34)');
+  puntGrad.addColorStop(1.0, 'rgba(15, 23, 42, 0.48)');
+  ctx.fillStyle = puntGrad;
+  ctx.fillRect(-hw, botY - 1.5, w, 2.2);
+
+  // Curved glass punt dome arch inside base
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.lineWidth = 0.35;
+  ctx.beginPath();
+  ctx.arc(0, botY + 0.6, hw * 0.48, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.stroke();
+
+  // Soft cylindrical shade across glass
+  applyCylinderLightingOverlay(ctx, -hw, topY, w, botY - topY + 1, 0.22, 0.34);
+  ctx.restore();
+
+  // Glass shoulder collar & finish ring under closure
+  ctx.fillStyle = hexToRgba(adjustHex(glassHex, 0.28), 0.72);
+  ctx.beginPath();
+  ctx.roundRect(-neckW - 0.28, topY + 0.9, (neckW + 0.28) * 2, 0.65, 0.25);
+  ctx.fill();
+
+  // Optional neck foil band
+  if (foilCollarColor) {
+    const fGrad = ctx.createLinearGradient(-neckW - 0.1, 0, neckW + 0.1, 0);
+    fGrad.addColorStop(0, adjustHex(foilCollarColor, -0.35));
+    fGrad.addColorStop(0.32, adjustHex(foilCollarColor, 0.35));
+    fGrad.addColorStop(0.75, foilCollarColor);
+    fGrad.addColorStop(1, adjustHex(foilCollarColor, -0.4));
+    ctx.fillStyle = fGrad;
+    ctx.fillRect(-neckW - 0.1, -6.2, (neckW + 0.1) * 2, 1.5);
+  }
+
+  // Front label
+  if (labelStyle === 'hex_soy') {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, 0.4);
+    ctx.lineTo(2.45, 1.5);
+    ctx.lineTo(2.45, 4.15);
+    ctx.lineTo(0, 5.25);
+    ctx.lineTo(-2.45, 4.15);
+    ctx.lineTo(-2.45, 1.5);
+    ctx.closePath();
+    ctx.fillStyle = labelPaper;
+    ctx.fill();
+    ctx.strokeStyle = labelAccent;
+    ctx.lineWidth = 0.32;
+    ctx.stroke();
+    ctx.fillStyle = labelBand;
+    ctx.fillRect(-1.45, 2.3, 2.9, 0.85);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-1.1, 3.55, 2.2, 0.35);
+    ctx.restore();
+  } else {
+    const lblH = shoulderStyle === 'tapered' ? 4.2 : 5.2;
+    const lblY = shoulderStyle === 'tapered' ? 1.2 : 0.2;
+    const lblW = w * (shoulderStyle === 'tapered' ? 0.68 : 0.86);
+    drawStudioLabelPanel(ctx, -lblW * 0.5, lblY, lblW, lblH, {
+      paperColor: labelPaper,
+      bandColor: labelBand,
+      accentColor: labelAccent,
+      inkColor: '#1e293b',
+      goldFoil: true,
+      hasBarcode: lblW >= 6.8,
+      emblem,
+      cylindrical: true
+    });
+  }
+
+  // Studio Fresnel left reflection streak & neck catchlight
+  const sGrad = ctx.createLinearGradient(-hw * 0.72, 0, -hw * 0.35, 0);
+  sGrad.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+  sGrad.addColorStop(0.45, 'rgba(255, 255, 255, 0.58)');
+  sGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = sGrad;
+  ctx.fillRect(-hw * 0.72, shY + 0.5, hw * 0.34, botY - shY - 1.5);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+  ctx.fillRect(-neckW * 0.68, topY + 0.5, neckW * 0.35, 3.2);
+  ctx.fillRect(hw * 0.68, shY + 0.8, hw * 0.14, botY - shY - 2.0);
+
+  // Outer crisp glass rim
+  ctx.strokeStyle = hexToRgba(adjustHex(glassHex, -0.5), 0.52);
+  ctx.lineWidth = 0.34;
+  traceBottle();
+  ctx.stroke();
+
+  // Closure hardware
+  if (closure === 'crown') {
+    drawCrownCap(ctx, 0, topY - 1.35, neckW * 2.3, 1.55, closureColor);
+  } else if (closure === 'capsule') {
+    const capH = 3.1;
+    const cGrad = ctx.createLinearGradient(-neckW - 0.2, 0, neckW + 0.2, 0);
+    cGrad.addColorStop(0, adjustHex(closureColor, -0.4));
+    cGrad.addColorStop(0.3, adjustHex(closureColor, 0.25));
+    cGrad.addColorStop(0.7, closureColor);
+    cGrad.addColorStop(1, adjustHex(closureColor, -0.45));
+    ctx.fillStyle = cGrad;
+    ctx.beginPath();
+    ctx.roundRect(-neckW - 0.18, topY - 1.4, (neckW + 0.18) * 2, capH, 0.45);
+    ctx.fill();
+    // Gold foil neck tear band
+    ctx.fillStyle = labelAccent;
+    ctx.fillRect(-neckW - 0.18, topY + 0.8, (neckW + 0.18) * 2, 0.32);
+  } else if (closure === 'pourer') {
+    // Dual-ear dispenser pourer cap (soy sauce)
+    drawScrewCap(ctx, 0, topY - 1.8, neckW * 2.2, 2.2, closureColor, false);
+    ctx.fillStyle = closureColor;
+    ctx.beginPath();
+    ctx.moveTo(-neckW - 1.0, topY - 1.1);
+    ctx.lineTo(-neckW * 1.9, topY - 1.5);
+    ctx.lineTo(-neckW * 1.8, topY - 0.5);
+    ctx.lineTo(-neckW - 0.6, topY - 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(neckW + 1.0, topY - 1.1);
+    ctx.lineTo(neckW * 1.9, topY - 1.5);
+    ctx.lineTo(neckW * 1.8, topY - 0.5);
+    ctx.lineTo(neckW + 0.6, topY - 0.3);
+    ctx.closePath();
+    ctx.fill();
+  } else if (closure === 'cork') {
+    const corkGrad = ctx.createLinearGradient(-neckW, 0, neckW, 0);
+    corkGrad.addColorStop(0, '#92400e');
+    corkGrad.addColorStop(0.4, '#d97706');
+    corkGrad.addColorStop(1, '#78350f');
+    ctx.fillStyle = corkGrad;
+    ctx.beginPath();
+    ctx.roundRect(-neckW * 0.92, topY - 1.2, neckW * 1.84, 1.8, 0.35);
+    ctx.fill();
+  } else {
+    drawScrewCap(ctx, 0, topY - 1.7, neckW * 2.18, 2.1, closureColor, true);
+  }
+}
+
+function drawStudioAluminumCan(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  topY: number,
+  botY: number,
+  bodyHex: string,
+  accentHex: string,
+  variant: 'cola' | 'cola_zero' | 'energy' | 'beer'
+) {
+  const hw = w * 0.5;
+  const lidRx = hw * 0.91;
+  const neckY = topY + 1.35;
+
+  // Rolled brushed aluminum bottom chime
+  const botGrad = ctx.createLinearGradient(-lidRx, 0, lidRx, 0);
+  botGrad.addColorStop(0, '#64748b');
+  botGrad.addColorStop(0.3, '#f1f5f9');
+  botGrad.addColorStop(0.7, '#94a3b8');
+  botGrad.addColorStop(1, '#475569');
+  ctx.fillStyle = botGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, botY - 0.35, lidRx, 1.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const traceCanBody = () => {
+    ctx.beginPath();
+    ctx.moveTo(-lidRx, topY + 0.3);
+    ctx.lineTo(lidRx, topY + 0.3);
+    ctx.lineTo(hw, neckY);
+    ctx.lineTo(hw, botY - 1.1);
+    ctx.lineTo(lidRx, botY - 0.3);
+    ctx.quadraticCurveTo(0, botY + 0.45, -lidRx, botY - 0.3);
+    ctx.lineTo(-hw, botY - 1.1);
+    ctx.lineTo(-hw, neckY);
+    ctx.closePath();
+  };
+
+  // Brushed satin anodized can base gradient
+  const bGrad = ctx.createLinearGradient(-hw, 0, hw, 0);
+  bGrad.addColorStop(0.0, adjustHex(bodyHex, -0.35));
+  bGrad.addColorStop(0.22, adjustHex(bodyHex, 0.3));
+  bGrad.addColorStop(0.42, bodyHex);
+  bGrad.addColorStop(0.78, adjustHex(bodyHex, -0.25));
+  bGrad.addColorStop(0.95, adjustHex(bodyHex, -0.45));
+  bGrad.addColorStop(1.0, adjustHex(bodyHex, -0.18));
+  ctx.fillStyle = bGrad;
+  traceCanBody();
+  ctx.fill();
+
+  ctx.save();
+  traceCanBody();
+  ctx.clip();
+
+  // Upper bare-aluminum necked-in shoulder band
+  const shGrad = ctx.createLinearGradient(-hw, 0, hw, 0);
+  shGrad.addColorStop(0, '#64748b');
+  shGrad.addColorStop(0.28, '#f8fafc');
+  shGrad.addColorStop(0.6, '#cbd5e1');
+  shGrad.addColorStop(1, '#475569');
+  ctx.fillStyle = shGrad;
+  ctx.fillRect(-hw, topY, w, 1.45);
+
+  if (variant === 'cola' || variant === 'cola_zero') {
+    // Crisp dynamic brushed silver & crimson ribbon swoosh
+    ctx.strokeStyle = variant === 'cola_zero' ? accentHex : '#f8fafc';
+    ctx.lineWidth = 1.45;
+    ctx.beginPath();
+    ctx.moveTo(-hw - 0.5, 2.8);
+    ctx.bezierCurveTo(-1.8, 0.4, 1.5, 2.4, hw + 0.5, -0.8);
+    ctx.stroke();
+
+    ctx.strokeStyle = variant === 'cola_zero' ? '#e2e8f0' : 'rgba(254, 202, 202, 0.8)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(-hw - 0.5, 3.8);
+    ctx.bezierCurveTo(-1.8, 1.5, 1.5, 3.4, hw + 0.5, 0.2);
+    ctx.stroke();
+
+    if (variant === 'cola_zero') {
+      // Matte red satin emblem band
+      ctx.fillStyle = accentHex;
+      ctx.fillRect(-hw, -2.5, w, 2.2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-2.6, -1.7, 5.2, 0.55);
+    }
+    drawMicroBarcode(ctx, hw - 2.6, 3.4, 2.0, 2.2, '#0f172a', 'rgba(255, 255, 255, 0.78)');
+  } else if (variant === 'energy') {
+    // Precision faceted geometric chevron & cyan micro-grid lines
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 0.45;
+    ctx.beginPath();
+    ctx.moveTo(-hw, -4.4);
+    ctx.lineTo(hw, -2.6);
+    ctx.moveTo(-hw, 4.4);
+    ctx.lineTo(hw, 2.6);
+    ctx.stroke();
+
+    const boltGrad = ctx.createLinearGradient(-2, -4, 2, 4);
+    boltGrad.addColorStop(0, '#fef08a');
+    boltGrad.addColorStop(0.5, accentHex);
+    boltGrad.addColorStop(1, '#ca8a04');
+    ctx.fillStyle = boltGrad;
+    ctx.beginPath();
+    ctx.moveTo(0.8, -4.4);
+    ctx.lineTo(-2.5, 0.2);
+    ctx.lineTo(-0.2, 0.2);
+    ctx.lineTo(-1.1, 4.4);
+    ctx.lineTo(2.6, -0.4);
+    ctx.lineTo(0.2, -0.4);
+    ctx.closePath();
+    ctx.fill();
+    drawMicroBarcode(ctx, -hw + 0.7, 3.4, 1.8, 2.2, '#0f172a', 'rgba(255, 255, 255, 0.75)');
+  } else if (variant === 'beer') {
+    // Cream frosted top collar wave + heraldic cream/gold pilsner crest
+    ctx.fillStyle = 'rgba(248, 250, 252, 0.9)';
+    ctx.beginPath();
+    ctx.moveTo(-hw, neckY + 0.4);
+    ctx.lineTo(hw, neckY + 0.4);
+    ctx.lineTo(hw, neckY + 1.8);
+    ctx.quadraticCurveTo(2.0, neckY + 2.6, 0, neckY + 1.7);
+    ctx.quadraticCurveTo(-2.2, neckY + 0.9, -hw, neckY + 2.0);
+    ctx.closePath();
+    ctx.fill();
+
+    drawStudioLabelPanel(ctx, -hw * 0.84, -1.6, w * 0.84, 5.8, {
+      paperColor: '#fdf8e8',
+      bandColor: '#14532d',
+      accentColor: '#d97706',
+      inkColor: '#14532d',
+      goldFoil: true,
+      hasBarcode: true,
+      emblem: 'crest',
+      cylindrical: false
+    });
+  }
+
+  // Anisotropic metallic reflection strips
+  applyCylinderLightingOverlay(ctx, -hw, topY, w, botY - topY, 0.34, 0.34);
+  ctx.restore();
+
+  // Sharp can edge
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.34)';
+  ctx.lineWidth = 0.32;
+  traceCanBody();
+  ctx.stroke();
+
+  // Detailed double-seamed stay-on tab aluminum top lid
+  drawMetalCanLid(ctx, 0, topY + 0.1, lidRx, 1.55, true, '#cbd5e1');
+}
 
 export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
   switch (itemId) {
@@ -9,301 +591,108 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
     case 'bottle_water':
     case 'mineral_water':
     case 'water_bottle': {
-      drawShadow(ctx, 6.2, 2.5, 7.8, 0.22);
-
-      // Translucent PET plastic body (contoured waist)
-      ctx.fillStyle = 'rgba(186, 230, 253, 0.75)';
-      ctx.beginPath();
-      ctx.moveTo(-4.5, -4);
-      ctx.lineTo(-3.8, 5.5);
-      ctx.quadraticCurveTo(-3.8, 7.2, 0, 7.2);
-      ctx.quadraticCurveTo(3.8, 7.2, 3.8, 5.5);
-      ctx.lineTo(4.5, -4);
-      ctx.quadraticCurveTo(4.5, -5.5, 2.2, -6.5);
-      ctx.lineTo(2.2, -8);
-      ctx.lineTo(-2.2, -8);
-      ctx.lineTo(-2.2, -6.5);
-      ctx.quadraticCurveTo(-4.5, -5.5, -4.5, -4);
-      ctx.closePath();
-      ctx.fill();
-
-      // Clear spring water liquid inside
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.moveTo(-3.8, -1);
-      ctx.lineTo(-3.6, 5.2);
-      ctx.quadraticCurveTo(-3.6, 6.8, 0, 6.8);
-      ctx.quadraticCurveTo(3.6, 6.8, 3.6, 5.2);
-      ctx.lineTo(3.8, -1);
-      ctx.closePath();
-      ctx.fill();
-
-      // White and blue brand label
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-4.2, -0.5, 8.4, 4);
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-4.2, 0.8, 8.4, 1.5);
-      // Droplet wave on label
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.arc(0, 1.5, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Horizontal bottle reinforcement ribs
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-4, -2.5); ctx.lineTo(4, -2.5);
-      ctx.moveTo(-3.8, 5); ctx.lineTo(3.8, 5);
-      ctx.stroke();
-
-      // Glossy specular reflection streak
-      drawGlossBand(ctx, -3.2, -4, 1.4, 10, 0.45);
-
-      // Deep blue threaded screw cap
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(-2.6, -9.2, 5.2, 2.8, 0.8);
-      ctx.fill();
-      ctx.fillStyle = '#0369a1';
-      ctx.fillRect(-2.6, -7.2, 5.2, 0.8); // tamper ring
+      drawShadow(ctx, 5.8, 2.3, 7.8, 0.24);
+      drawStudioPetBottle(ctx, {
+        w: 8.6,
+        topY: -7.8,
+        botY: 7.2,
+        plasticTint: '#bae6fd',
+        liquidTop: '#7dd3fc',
+        liquidBot: '#0284c7',
+        liquidLevelY: -2.2,
+        ribCount: 2,
+        capColor: '#0284c7',
+        labelBand: '#0284c7',
+        labelPaper: '#f8fafc',
+        labelAccent: '#38bdf8',
+        emblem: 'circle'
+      });
       return true;
     }
 
-    // Tall 1.5L Large PET Plastic Water Bottle (Пластиковая бутылка 1.5л)
+    // Tall 1.5L Large PET Plastic Water Bottle
     case 'drinking_water_1500':
     case 'bottle_plastic_1500': {
-      drawShadow(ctx, 7.2, 2.8, 8.5, 0.25);
-
-      // Tall contoured 1.5L PET bottle with ribbed waist and tapered neck
-      ctx.fillStyle = 'rgba(186, 230, 253, 0.75)';
-      ctx.beginPath();
-      ctx.moveTo(-5.5, -6);
-      ctx.lineTo(-4.8, 6.5);
-      ctx.quadraticCurveTo(-4.8, 8.2, 0, 8.2);
-      ctx.quadraticCurveTo(4.8, 8.2, 4.8, 6.5);
-      ctx.lineTo(5.5, -6);
-      ctx.quadraticCurveTo(5.5, -8, 2.6, -9);
-      ctx.lineTo(2.6, -11);
-      ctx.lineTo(-2.6, -11);
-      ctx.lineTo(-2.6, -9);
-      ctx.quadraticCurveTo(-5.5, -8, -5.5, -6);
-      ctx.closePath();
-      ctx.fill();
-
-      // Clear purified spring water inside (up to neck)
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.moveTo(-4.8, -3);
-      ctx.lineTo(-4.4, 6.2);
-      ctx.quadraticCurveTo(-4.4, 7.8, 0, 7.8);
-      ctx.quadraticCurveTo(4.4, 7.8, 4.4, 6.2);
-      ctx.lineTo(4.8, -3);
-      ctx.closePath();
-      ctx.fill();
-
-      // Wide brand label across middle
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-5.2, -2, 10.4, 5.5);
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-5.2, -0.5, 10.4, 2.2);
-
-      // 1.5L typography on label
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2.4px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('1.5L', 0, 0.6);
-
-      // Multiple structural annular ribs
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-5, -4.5); ctx.lineTo(5, -4.5);
-      ctx.moveTo(-4.6, 4.5); ctx.lineTo(4.6, 4.5);
-      ctx.moveTo(-4.6, 6.0); ctx.lineTo(4.6, 6.0);
-      ctx.stroke();
-
-      drawGlossBand(ctx, -4.0, -6, 1.5, 13, 0.45);
-
-      // Blue screw cap on tall neck
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(-2.8, -12.2, 5.6, 3.0, 0.8);
-      ctx.fill();
-      ctx.fillStyle = '#0369a1';
-      ctx.fillRect(-2.8, -10.0, 5.6, 0.8);
+      drawShadow(ctx, 6.8, 2.6, 8.6, 0.26);
+      drawStudioPetBottle(ctx, {
+        w: 10.2,
+        topY: -10.4,
+        botY: 8.2,
+        plasticTint: '#bae6fd',
+        liquidTop: '#7dd3fc',
+        liquidBot: '#0284c7',
+        liquidLevelY: -4.2,
+        ribCount: 3,
+        capColor: '#0284c7',
+        labelBand: '#0369a1',
+        labelPaper: '#ffffff',
+        labelAccent: '#38bdf8',
+        emblem: 'crest'
+      });
       return true;
     }
 
-    // Empty Transparent Crinkled Plastic Water Bottle (Пустая пластиковая бутылка)
+    // Empty Transparent Crinkled PET Bottle
     case 'bottle_empty':
     case 'water_bottle_empty': {
-      drawShadow(ctx, 6.0, 2.2, 7.5, 0.16);
-
-      // Ultra-transparent crinkled PET plastic body (clear air inside, NO water)
-      ctx.fillStyle = 'rgba(224, 242, 254, 0.35)';
-      ctx.strokeStyle = 'rgba(186, 230, 253, 0.75)';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-4.5, -4);
-      ctx.lineTo(-3.8, 5.5);
-      ctx.quadraticCurveTo(-3.8, 7.2, 0, 7.2);
-      ctx.quadraticCurveTo(3.8, 7.2, 3.8, 5.5);
-      ctx.lineTo(4.5, -4);
-      ctx.quadraticCurveTo(4.5, -5.5, 2.2, -6.5);
-      ctx.lineTo(2.2, -8);
-      ctx.lineTo(-2.2, -8);
-      ctx.lineTo(-2.2, -6.5);
-      ctx.quadraticCurveTo(-4.5, -5.5, -4.5, -4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Crinkle lines & dry internal reflections
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(-2.5, -2); ctx.lineTo(1.5, 1); ctx.lineTo(-1, 4.5);
-      ctx.moveTo(2, -1); ctx.lineTo(-1.5, 2.5);
-      ctx.stroke();
-
-      // Torn / faded label band
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.fillRect(-4.0, -0.2, 8.0, 3.2);
-
-      drawGlossBand(ctx, -3.2, -4, 1.0, 9.5, 0.4);
-
-      // Blue cap
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(-2.6, -9.2, 5.2, 2.8, 0.8);
-      ctx.fill();
+      drawShadow(ctx, 5.6, 2.1, 7.6, 0.16);
+      drawStudioPetBottle(ctx, {
+        w: 8.4,
+        topY: -7.8,
+        botY: 7.1,
+        plasticTint: '#e0f2fe',
+        emptyCrinkled: true,
+        ribCount: 2,
+        capColor: '#0284c7',
+        labelBand: '#94a3b8',
+        labelPaper: 'rgba(248, 250, 252, 0.72)',
+        labelAccent: '#cbd5e1',
+        emblem: 'none'
+      });
       return true;
     }
 
-    // Glass / Plastic Milk Bottle (Бутылка молока)
+    // Glass Milk Bottle with Gold Foil Cap & Cream Collar
     case 'milk_bottle': {
-      drawShadow(ctx, 6.8, 2.6, 7.8, 0.25);
-
-      // Glass bottle with rich opaque creamy white milk
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(-4.6, -4);
-      ctx.lineTo(-4.0, 5.5);
-      ctx.quadraticCurveTo(-4.0, 7.2, 0, 7.2);
-      ctx.quadraticCurveTo(4.0, 7.2, 4.0, 5.5);
-      ctx.lineTo(4.6, -4);
-      ctx.quadraticCurveTo(4.6, -5.5, 2.4, -6.5);
-      ctx.lineTo(2.4, -8);
-      ctx.lineTo(-2.4, -8);
-      ctx.lineTo(-2.4, -6.5);
-      ctx.quadraticCurveTo(-4.6, -5.5, -4.6, -4);
-      ctx.closePath();
-      ctx.fill();
-
-      // Glass outline
-      ctx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Green farm dairy label
-      ctx.fillStyle = '#16a34a';
-      ctx.fillRect(-4.2, -0.5, 8.4, 4);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('МОЛОКО', 0, 1.5);
-
-      // Dairy gold foil top cap
-      ctx.fillStyle = '#eab308';
-      ctx.beginPath();
-      ctx.roundRect(-2.8, -9.2, 5.6, 2.8, 0.8);
-      ctx.fill();
-
-      drawGlossBand(ctx, -3.4, -4, 1.2, 10, 0.35);
+      drawShadow(ctx, 6.2, 2.5, 7.8, 0.25);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#e2e8f0',
+        glassTintAlpha: 0.9,
+        liquidHex: '#f8fafc',
+        liquidTopY: -2.6,
+        w: 8.8,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'burgundy',
+        closure: 'capsule',
+        closureColor: '#ca8a04',
+        labelPaper: '#fffbeb',
+        labelBand: '#15803d',
+        labelAccent: '#eab308',
+        emblem: 'leaf'
+      });
       return true;
     }
 
+    // Dark Amber Ribbed 1.5L Bread Kvas Bottle
     case 'kvas':
     case 'kvas_bottle': {
-      drawShadow(ctx, 6.5, 2.6, 7.8, 0.24);
-
-      // Authentic 1.5L Russian Bread Kvas in Dark Amber Ribbed Bottle
-      // Rich translucent malt amber-brown bottle
-      const kvasBottleGrad = ctx.createLinearGradient(-4.8, -6, 4.8, 7.5);
-      kvasBottleGrad.addColorStop(0, '#78350f');
-      kvasBottleGrad.addColorStop(0.3, '#92400e');
-      kvasBottleGrad.addColorStop(0.7, '#451a03');
-      kvasBottleGrad.addColorStop(1, '#291102');
-      ctx.fillStyle = kvasBottleGrad;
-      ctx.beginPath();
-      ctx.moveTo(-4.8, -4);
-      ctx.lineTo(-4.0, 5.5);
-      ctx.quadraticCurveTo(-4.0, 7.2, 0, 7.2);
-      ctx.quadraticCurveTo(4.0, 7.2, 4.0, 5.5);
-      ctx.lineTo(4.8, -4);
-      ctx.quadraticCurveTo(4.8, -5.5, 2.4, -6.5);
-      ctx.lineTo(2.4, -8.2);
-      ctx.lineTo(-2.4, -8.2);
-      ctx.lineTo(-2.4, -6.5);
-      ctx.quadraticCurveTo(-4.8, -5.5, -4.8, -4);
-      ctx.closePath();
-      ctx.fill();
-
-      // Deep fermented malt liquid inside with foamy micro-bubbles
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.moveTo(-4.0, -1);
-      ctx.lineTo(-3.8, 5.2);
-      ctx.quadraticCurveTo(-3.8, 6.8, 0, 6.8);
-      ctx.quadraticCurveTo(3.8, 6.8, 3.8, 5.2);
-      ctx.lineTo(4.0, -1);
-      ctx.closePath();
-      ctx.fill();
-
-      // Foam head layer
-      ctx.fillStyle = 'rgba(254, 243, 199, 0.7)';
-      ctx.fillRect(-3.8, -1.2, 7.6, 0.8);
-
-      // Traditional Gold & Rye Bread Label
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.roundRect(-4.4, -0.5, 8.8, 4.8, 0.6);
-      ctx.fill();
-
-      // Dark brown & gold borders
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-4.4, -0.5, 8.8, 1.0);
-      ctx.fillRect(-4.4, 3.3, 8.8, 1.0);
-
-      // Golden rye sheaf icon
-      ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(0, 3.0); ctx.lineTo(0, 0.8);
-      ctx.moveTo(-1.2, 1.6); ctx.lineTo(0, 2.2); ctx.lineTo(1.2, 1.6);
-      ctx.stroke();
-
-      // Horizontal reinforcement ridges
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 0.7;
-      ctx.beginPath();
-      ctx.moveTo(-4.2, -2.8); ctx.lineTo(4.2, -2.8);
-      ctx.moveTo(-3.8, 5.2); ctx.lineTo(3.8, 5.2);
-      ctx.stroke();
-
-      // Specular PET reflection streak
-      drawGlossBand(ctx, -3.2, -4.5, 1.2, 10.5, 0.35);
-
-      // Dark chocolate-brown plastic screw cap
-      ctx.fillStyle = '#451a03';
-      ctx.beginPath();
-      ctx.roundRect(-2.6, -9.4, 5.2, 2.6, 0.8);
-      ctx.fill();
-      ctx.fillStyle = '#291102';
-      ctx.fillRect(-2.6, -7.5, 5.2, 0.7);
+      drawShadow(ctx, 6.4, 2.5, 7.8, 0.25);
+      drawStudioPetBottle(ctx, {
+        w: 9.2,
+        topY: -8.4,
+        botY: 7.2,
+        plasticTint: '#78350f',
+        liquidTop: '#b45309',
+        liquidBot: '#451a03',
+        liquidLevelY: -2.4,
+        ribCount: 2,
+        capColor: '#451a03',
+        labelBand: '#78350f',
+        labelPaper: '#fef3c7',
+        labelAccent: '#d97706',
+        emblem: 'crest'
+      });
       return true;
     }
 
@@ -311,813 +700,595 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
     case 'can_alu_330':
     case 'cola_can':
     case 'cola': {
-      drawShadow(ctx, 6.8, 2.6, 7.8, 0.25);
-
-      // Red aluminum can cylinder body
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-5.5, -6, 11, 13.5, 2);
-      ctx.fill();
-
-      // Bottom silver rim
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.ellipse(0, 7.2, 5.2, 1.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Iconic white swooping wave graphic
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(-5.5, 3.5);
-      ctx.quadraticCurveTo(0, -1, 5.5, 1);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#fca5a5';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-5.5, 4.8);
-      ctx.quadraticCurveTo(0, 0.5, 5.5, 2.5);
-      ctx.stroke();
-
-      // Vertical metallic sheen highlight
-      drawGlossBand(ctx, -3.8, -6, 1.8, 13.5, 0.35);
-
-      // Silver aluminum top rim
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.ellipse(0, -6, 5.5, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Recessed lid
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.ellipse(0, -6, 4.4, 1.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Metal pull tab with rivet
-      ctx.fillStyle = '#64748b';
-      ctx.beginPath();
-      ctx.roundRect(-1.2, -7, 2.4, 2, 0.5);
-      ctx.fill();
-      ctx.fillStyle = '#475569';
-      ctx.beginPath();
-      ctx.arc(0, -6, 0.6, 0, Math.PI * 2);
-      ctx.fill();
+      drawShadow(ctx, 6.2, 2.4, 7.8, 0.25);
+      drawStudioAluminumCan(ctx, 10.6, -6.2, 7.6, '#dc2626', '#ffffff', 'cola');
       return true;
     }
 
+    case 'energy_drink': {
+      drawShadow(ctx, 5.8, 2.3, 7.8, 0.25);
+      drawStudioAluminumCan(ctx, 9.6, -7.4, 7.6, '#0f172a', '#facc15', 'energy');
+      return true;
+    }
+
+    case 'cola_zero': {
+      drawShadow(ctx, 6.2, 2.4, 7.8, 0.25);
+      drawStudioAluminumCan(ctx, 10.6, -6.2, 7.6, '#18181b', '#dc2626', 'cola_zero');
+      return true;
+    }
+
+    case 'can_beer':
+    case 'beer_can': {
+      drawShadow(ctx, 6.2, 2.4, 7.8, 0.25);
+      drawStudioAluminumCan(ctx, 10.8, -6.4, 7.6, '#15803d', '#eab308', 'beer');
+      return true;
+    }
+
+    // Takeaway Espresso / Hot Coffee Paper Cup with Corrugated Kraft Sleeve
     case 'hot_coffee':
     case 'coffee':
     case 'paper_cup':
     case 'coffee_cup':
     case 'plastic_cup':
     case 'coffee_cup_empty': {
-      drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
+      drawShadow(ctx, 6.0, 2.4, 7.8, 0.24);
 
-      // Tapered white paper cup body
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.moveTo(-5.2, -5.5);
-      ctx.lineTo(5.2, -5.5);
-      ctx.lineTo(4, 7.2);
-      ctx.lineTo(-4, 7.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Soft cup shadow on side
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.moveTo(1.5, -5.5);
-      ctx.lineTo(5.2, -5.5);
-      ctx.lineTo(4, 7.2);
-      ctx.lineTo(1.2, 7.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Kraft brown corrugated heat sleeve
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.moveTo(-4.9, -1.8);
-      ctx.lineTo(4.9, -1.8);
-      ctx.lineTo(4.3, 3.8);
-      ctx.lineTo(-4.3, 3.8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Sleeve corrugated texture lines
-      ctx.strokeStyle = '#92400e';
-      ctx.lineWidth = 0.7;
-      for (let x = -3.8; x <= 3.8; x += 1.4) {
+      const traceCup = () => {
         ctx.beginPath();
-        ctx.moveTo(x, -1.8);
-        ctx.lineTo(x * 0.9, 3.8);
+        ctx.moveTo(-5.0, -5.2);
+        ctx.lineTo(5.0, -5.2);
+        ctx.lineTo(3.8, 7.0);
+        ctx.quadraticCurveTo(0, 7.75, -3.8, 7.0);
+        ctx.closePath();
+      };
+
+      // Satin off-white paperboard cup
+      const cupGrad = ctx.createLinearGradient(-5, 0, 5, 0);
+      cupGrad.addColorStop(0.0, '#cbd5e1');
+      cupGrad.addColorStop(0.28, '#ffffff');
+      cupGrad.addColorStop(0.65, '#f1f5f9');
+      cupGrad.addColorStop(1.0, '#94a3b8');
+      ctx.fillStyle = cupGrad;
+      traceCup();
+      ctx.fill();
+
+      // Clipped corrugated kraft heat sleeve + botanical coffee roast seal
+      ctx.save();
+      traceCup();
+      ctx.clip();
+
+      const slGrad = ctx.createLinearGradient(-4.8, 0, 4.8, 0);
+      slGrad.addColorStop(0.0, '#78350f');
+      slGrad.addColorStop(0.3, '#b45309');
+      slGrad.addColorStop(0.7, '#92400e');
+      slGrad.addColorStop(1.0, '#451a03');
+      ctx.fillStyle = slGrad;
+      ctx.fillRect(-5.2, -1.8, 10.4, 5.4);
+
+      // Corrugated vertical flutes
+      ctx.strokeStyle = 'rgba(28, 12, 3, 0.3)';
+      ctx.lineWidth = 0.28;
+      for (let rx = -4.2; rx <= 4.2; rx += 0.72) {
+        ctx.beginPath();
+        ctx.moveTo(rx, -1.8);
+        ctx.lineTo(rx * 0.9, 3.6);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(254, 243, 199, 0.16)';
+      ctx.lineWidth = 0.22;
+      for (let rx = -4.0; rx <= 4.0; rx += 0.72) {
+        ctx.beginPath();
+        ctx.moveTo(rx + 0.22, -1.8);
+        ctx.lineTo(rx * 0.9 + 0.2, 3.6);
         ctx.stroke();
       }
 
-      // Stylized coffee bean logo on sleeve
-      ctx.fillStyle = '#3b1806';
+      // Roasted coffee bean emblem on circular parchment medallion
+      ctx.fillStyle = '#fef3c7';
       ctx.beginPath();
-      ctx.ellipse(0, 1, 1.8, 2.2, 0.2, 0, Math.PI * 2);
+      ctx.arc(0, 0.9, 1.75, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#b45309';
-      ctx.lineWidth = 0.6;
+      ctx.fillStyle = '#451a03';
       ctx.beginPath();
-      ctx.moveTo(-0.2, -0.8);
-      ctx.quadraticCurveTo(0.6, 1, -0.2, 2.8);
+      ctx.ellipse(0, 0.9, 0.9, 1.2, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fef3c7';
+      ctx.lineWidth = 0.34;
+      ctx.beginPath();
+      ctx.moveTo(-0.15, -0.1);
+      ctx.quadraticCurveTo(0.35, 0.9, -0.15, 1.9);
       ctx.stroke();
 
-      // Snug black travel lid
-      ctx.fillStyle = '#18181b';
+      // Cast shadow directly under lid skirt
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
+      ctx.fillRect(-5.2, -5.2, 10.4, 0.8);
+      ctx.restore();
+
+      // Matte molded ABS travel lid with stepped rim & sip spout
+      const lidGrad = ctx.createLinearGradient(-5.6, 0, 5.6, 0);
+      lidGrad.addColorStop(0.0, '#18181b');
+      lidGrad.addColorStop(0.32, '#3f3f46');
+      lidGrad.addColorStop(0.75, '#18181b');
+      lidGrad.addColorStop(1.0, '#09090b');
+      ctx.fillStyle = lidGrad;
       ctx.beginPath();
-      ctx.ellipse(0, -5.5, 5.8, 2.2, 0, 0, Math.PI * 2);
+      ctx.roundRect(-5.6, -6.5, 11.2, 1.75, 0.65);
       ctx.fill();
 
-      // Raised lid drinking spout
       ctx.fillStyle = '#27272a';
       ctx.beginPath();
-      ctx.roundRect(-2.8, -7.5, 5.6, 2.2, 0.8);
+      ctx.roundRect(-4.6, -7.8, 9.2, 1.65, 0.55);
       ctx.fill();
-      // Sip hole
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+      ctx.fillRect(-4.0, -7.6, 8.0, 0.32);
+
+      // Sip hole & vent pinhole
       ctx.fillStyle = '#09090b';
       ctx.beginPath();
-      ctx.ellipse(0, -6.8, 1.2, 0.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(1.6, -7.25, 0.78, 0.32, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-1.8, -7.2, 0.2, 0, Math.PI * 2);
       ctx.fill();
       return true;
     }
 
-    case 'energy_drink': {
-      drawShadow(ctx, 6.2, 2.5, 7.8, 0.25);
-
-      // Sleek midnight navy blue aluminum cylinder
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.roundRect(-5, -7.5, 10, 15, 2);
-      ctx.fill();
-
-      // Electric yellow lightning chevron
-      ctx.fillStyle = '#eab308';
-      ctx.beginPath();
-      ctx.moveTo(0.5, -4.5);
-      ctx.lineTo(-2.8, 0.5);
-      ctx.lineTo(-0.2, 0.5);
-      ctx.lineTo(-1.2, 4.8);
-      ctx.lineTo(2.8, -0.2);
-      ctx.lineTo(0.2, -0.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Neon cyan secondary accents
-      ctx.strokeStyle = '#06b6d4';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.moveTo(-4.5, -6);
-      ctx.lineTo(4.5, -3);
-      ctx.moveTo(-4.5, 5);
-      ctx.lineTo(4.5, 2);
-      ctx.stroke();
-
-      // Metallic gleam
-      drawGlossBand(ctx, -3.5, -7.5, 1.6, 15, 0.3);
-
-      // Silver top rim & recessed lid
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.ellipse(0, -7.5, 5, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.ellipse(0, -7.5, 4, 1.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Neon pull tab
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(-1, -8.5, 2, 1.8);
-      return true;
-    }
-
+    // Tetra Brik / Gable Carton Citrus Juice (1L)
     case 'fresh_juice':
     case 'tetra_pack_1000':
     case 'tetra_pack_1000_open':
     case 'juice_pack':
     case 'juice':
     case 'juice_box': {
-      drawShadow(ctx, 6.8, 2.6, 7.8, 0.22);
+      drawShadow(ctx, 6.6, 2.5, 7.8, 0.24);
 
-      // Orange tetrapak carton body
-      ctx.fillStyle = '#ea580c';
+      // 3D perspective juice carton: front face (-5.2..2.8) + right shaded depth flank (2.8..5.4)
+      const frontGrad = ctx.createLinearGradient(-5.2, -5.5, 2.8, 7.2);
+      frontGrad.addColorStop(0.0, '#fb923c');
+      frontGrad.addColorStop(0.55, '#ea580c');
+      frontGrad.addColorStop(1.0, '#c2410c');
+      ctx.fillStyle = frontGrad;
       ctx.beginPath();
-      ctx.roundRect(-5.5, -6, 11, 13.5, 1.5);
+      ctx.roundRect(-5.2, -5.6, 8.0, 12.8, [0.4, 0, 0.4, 0.6]);
       ctx.fill();
 
-      // Top folded roof
-      ctx.fillStyle = '#c2410c';
+      // Shaded side panel
+      ctx.fillStyle = '#9a3412';
       ctx.beginPath();
-      ctx.moveTo(-5.5, -6);
-      ctx.lineTo(0, -8);
-      ctx.lineTo(5.5, -6);
+      ctx.moveTo(2.8, -5.6);
+      ctx.lineTo(5.2, -4.6);
+      ctx.lineTo(5.2, 6.4);
+      ctx.lineTo(2.8, 7.2);
       ctx.closePath();
       ctx.fill();
 
-      // Citrus slice graphic on front
+      // Top slanted foil-laminated roof + folded gusset ear
+      ctx.fillStyle = '#fdba74';
+      ctx.beginPath();
+      ctx.moveTo(-5.2, -5.6);
+      ctx.lineTo(-2.8, -7.3);
+      ctx.lineTo(5.2, -4.6);
+      ctx.lineTo(2.8, -5.6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#c2410c';
+      ctx.beginPath();
+      ctx.moveTo(-5.2, -5.6);
+      ctx.lineTo(-3.4, -7.0);
+      ctx.lineTo(2.8, -5.6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Crisp cream editorial fruit card on front panel
+      ctx.fillStyle = '#fffbeb';
+      ctx.beginPath();
+      ctx.roundRect(-4.4, -3.6, 6.4, 8.8, 0.45);
+      ctx.fill();
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(-4.4, -3.6, 6.4, 1.45);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-3.2, -3.05, 4.0, 0.4);
+
+      // Detailed botanical citrus slice & green leaf inside cream panel
+      drawBotanicalLeaf(ctx, 0.3, -0.4, 2.2, 0.72, -0.55, '#4ade80', '#166534');
       ctx.fillStyle = '#fef08a';
       ctx.beginPath();
-      ctx.arc(0, 0.5, 3.5, 0, Math.PI * 2);
+      ctx.arc(-1.2, 1.4, 2.25, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#f97316';
       ctx.beginPath();
-      ctx.arc(0, 0.5, 3.0, 0, Math.PI * 2);
+      ctx.arc(-1.2, 1.4, 1.88, 0, Math.PI * 2);
       ctx.fill();
-      // Segments
-      ctx.strokeStyle = '#fef08a';
-      ctx.lineWidth = 0.6;
-      for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+      ctx.strokeStyle = '#fef9c3';
+      ctx.lineWidth = 0.28;
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4;
         ctx.beginPath();
-        ctx.moveTo(0, 0.5);
-        ctx.lineTo(Math.cos(a) * 3, 0.5 + Math.sin(a) * 3);
+        ctx.moveTo(-1.2, 1.4);
+        ctx.lineTo(-1.2 + Math.cos(a) * 1.85, 1.4 + Math.sin(a) * 1.85);
         ctx.stroke();
       }
-
-      // Green bendy drinking straw
-      ctx.strokeStyle = '#16a34a';
-      ctx.lineWidth = 1.6;
-      ctx.lineCap = 'round';
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(2, -7.5);
-      ctx.lineTo(3.2, -10.5);
-      ctx.lineTo(5.5, -11.5);
-      ctx.stroke();
+      ctx.arc(-1.2, 1.4, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Barcode on shaded side panel
+      drawMicroBarcode(ctx, 3.25, 1.8, 1.5, 2.8, '#0f172a', 'rgba(255,255,255,0.8)');
+
+      // White threaded reclosable TetraCap spout (open/closed visual)
+      drawScrewCap(ctx, 0.6, -6.9, 2.1, 1.35, '#f8fafc', false);
       return true;
     }
 
+    // Artisan Cappuccino with Microfoam Rosetta
     case 'cappuccino': {
-      drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
-
-      // Tapered warm terracotta cup body
-      ctx.fillStyle = '#78350f';
+      drawShadow(ctx, 6.0, 2.4, 7.8, 0.24);
+      const cupGrad = ctx.createLinearGradient(-5.2, 0, 5.2, 0);
+      cupGrad.addColorStop(0.0, '#451a03');
+      cupGrad.addColorStop(0.32, '#92400e');
+      cupGrad.addColorStop(0.75, '#78350f');
+      cupGrad.addColorStop(1.0, '#290f02');
+      ctx.fillStyle = cupGrad;
       ctx.beginPath();
-      ctx.moveTo(-5.5, -4);
-      ctx.lineTo(5.5, -4);
-      ctx.lineTo(4.2, 7.2);
-      ctx.lineTo(-4.2, 7.2);
+      ctx.moveTo(-5.2, -3.8);
+      ctx.lineTo(5.2, -3.8);
+      ctx.lineTo(3.9, 7.0);
+      ctx.quadraticCurveTo(0, 7.75, -3.9, 7.0);
       ctx.closePath();
       ctx.fill();
 
-      // Cream wrap band
+      // Cream satin band with roast emblem
       ctx.fillStyle = '#fef3c7';
-      ctx.fillRect(-5, 0, 10, 3.5);
+      ctx.fillRect(-4.7, 0.2, 9.4, 3.0);
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-2.8, 1.15, 5.6, 0.45);
+      ctx.fillRect(-1.8, 2.0, 3.6, 0.35);
 
-      // Fluffy white steamed milk foam topping
-      ctx.fillStyle = '#f8fafc';
+      // Rolled cup lip
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 0.55;
       ctx.beginPath();
-      ctx.ellipse(0, -4, 5.8, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -3.8, 5.25, 2.15, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Espresso crema ring + velvety microfoam + latte rosetta
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.ellipse(0, -3.8, 4.95, 1.9, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Cocoa / cinnamon dusting spiral
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 1;
+      const foamGrad = ctx.createRadialGradient(-0.8, -4.1, 0.3, 0, -3.8, 4.4);
+      foamGrad.addColorStop(0.0, '#ffffff');
+      foamGrad.addColorStop(0.7, '#fefce8');
+      foamGrad.addColorStop(1.0, '#d97706');
+      ctx.fillStyle = foamGrad;
       ctx.beginPath();
-      ctx.arc(0, -4, 2.5, 0.2, Math.PI * 1.5);
-      ctx.stroke();
+      ctx.ellipse(0, -3.8, 4.35, 1.65, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cocoa rosetta heart swirl
+      ctx.fillStyle = '#78350f';
       ctx.beginPath();
-      ctx.arc(0, -4, 1.2, Math.PI * 1.2, Math.PI * 2.5);
-      ctx.stroke();
+      ctx.arc(-0.55, -3.9, 0.65, 0, Math.PI * 2);
+      ctx.arc(0.55, -3.9, 0.65, 0, Math.PI * 2);
+      ctx.moveTo(-1.15, -3.7);
+      ctx.lineTo(0, -2.75);
+      ctx.lineTo(1.15, -3.7);
+      ctx.closePath();
+      ctx.fill();
       return true;
     }
 
-    case 'cola_zero': {
-      drawShadow(ctx, 6.8, 2.6, 7.8, 0.25);
-
-      // Matte pitch black aluminum body
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.roundRect(-5.5, -6, 11, 13.5, 2);
-      ctx.fill();
-
-      // Bold crimson "ZERO" banner
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-5.5, -0.5, 11, 4.5);
-
-      // White ZERO lettering graphic block
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3.8, 0.8, 7.6, 1.8);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-2.2, 1.2, 4.4, 1.0);
-
-      // Brushed silver rims
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.ellipse(0, 7.2, 5.2, 1.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.ellipse(0, -6, 5.5, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Recessed lid
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.ellipse(0, -6, 4.4, 1.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Pull tab
-      ctx.fillStyle = '#64748b';
-      ctx.fillRect(-1.2, -7, 2.4, 2);
-
-      // Sleek gloss reflection
-      drawGlossBand(ctx, -3.8, -6, 1.4, 13.5, 0.25);
-      return true;
-    }
-
+    // Borosilicate Double-Wall Tea Glass Mug
     case 'tea_green':
     case 'tea_cup':
     case 'tea':
     case 'glass_mug': {
-      drawShadow(ctx, 6.8, 2.6, 7.8, 0.22);
+      drawShadow(ctx, 6.2, 2.5, 7.8, 0.22);
 
-      // Glass teacup / mug
-      ctx.fillStyle = 'rgba(241, 245, 249, 0.5)';
+      // Curved glass C-handle with bright catchlight
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.85)';
+      ctx.lineWidth = 1.45;
       ctx.beginPath();
-      ctx.roundRect(-5.5, -4, 11, 11.2, [1, 1, 3.5, 3.5]);
-      ctx.fill();
-
-      // Mug handle
-      ctx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
-      ctx.lineWidth = 1.8;
+      ctx.arc(5.1, 1.2, 2.8, -Math.PI * 0.44, Math.PI * 0.44);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 0.45;
       ctx.beginPath();
-      ctx.arc(5.8, 1, 3.2, -Math.PI * 0.4, Math.PI * 0.4);
+      ctx.arc(5.2, 1.0, 2.95, -Math.PI * 0.36, Math.PI * 0.12);
       ctx.stroke();
 
-      // Jade green brewed tea liquid
-      ctx.fillStyle = '#10b981';
+      // Glass outer wall
+      const glGrad = ctx.createLinearGradient(-5.2, 0, 5.2, 0);
+      glGrad.addColorStop(0.0, 'rgba(148, 163, 184, 0.42)');
+      glGrad.addColorStop(0.28, 'rgba(255, 255, 255, 0.46)');
+      glGrad.addColorStop(0.75, 'rgba(226, 232, 240, 0.25)');
+      glGrad.addColorStop(1.0, 'rgba(100, 116, 139, 0.48)');
+      ctx.fillStyle = glGrad;
       ctx.beginPath();
-      ctx.roundRect(-4.8, -2.5, 9.6, 9.2, [0, 0, 2.8, 2.8]);
+      ctx.roundRect(-5.2, -3.8, 10.4, 10.8, [0.8, 0.8, 3.2, 3.2]);
       ctx.fill();
 
-      // Floating mint / tea leaf
-      ctx.fillStyle = '#047857';
+      // Steeped emerald-jade green tea infusion
+      const teaGrad = ctx.createRadialGradient(-1, 1.5, 0.4, 0, 2.2, 5.8);
+      teaGrad.addColorStop(0.0, '#6ee7b7');
+      teaGrad.addColorStop(0.45, '#10b981');
+      teaGrad.addColorStop(1.0, '#065f46');
+      ctx.fillStyle = teaGrad;
       ctx.beginPath();
-      ctx.ellipse(0, -1, 2.4, 1.2, 0.3, 0, Math.PI * 2);
+      ctx.roundRect(-4.5, -2.0, 9.0, 8.2, [0.3, 0.3, 2.6, 2.6]);
       ctx.fill();
 
-      // Teabag string & tag draped over side
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 0.8;
+      // Top hot tea meniscus + floating detailed mint leaf
+      ctx.fillStyle = 'rgba(167, 243, 208, 0.72)';
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(-4, -5, -6.5, -1);
+      ctx.ellipse(0, -2.0, 4.45, 0.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+      drawBotanicalLeaf(ctx, -1.6, -1.9, 3.0, 0.82, 0.14, '#34d399', '#065f46');
+
+      // Glass softbox streak & thick glass bottom
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.fillRect(-3.8, -3.2, 1.1, 8.8);
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.52)';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, 5.6, 9.0, 1.3, [0, 0, 2.6, 2.6]);
+      ctx.fill();
+
+      // Draped cotton teabag string + cream tea tag
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(1.2, -2.0);
+      ctx.quadraticCurveTo(-2.6, -5.2, -6.1, -0.6);
       ctx.stroke();
 
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(-7.5, -1, 2, 2.5);
+      ctx.fillStyle = '#fffbeb';
+      ctx.beginPath();
+      ctx.roundRect(-7.2, -0.8, 2.1, 2.5, 0.3);
+      ctx.fill();
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(-6.8, 0.1, 1.3, 0.75);
       return true;
     }
 
-    // Filled Steel Army Flask (Походная стальная фляга)
+    // Filled Stainless Steel Army Flask
     case 'camp_flask': {
-      drawShadow(ctx, 7.5, 2.8, 7.8, 0.25);
-
-      // Stainless steel kidney-shaped flask body
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.roundRect(-6.5, -4.5, 13, 12, 2.5);
-      ctx.fill();
-
-      // Brushed steel vertical gradient sheen
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-4.5, -4.5, 3, 12);
-      ctx.fillStyle = '#64748b';
-      ctx.fillRect(3.5, -4.5, 3, 12);
-
-      // Subtle embossed diamond crest
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.moveTo(0, -1.5);
-      ctx.lineTo(2.5, 1.5);
-      ctx.lineTo(0, 4.5);
-      ctx.lineTo(-2.5, 1.5);
-      ctx.closePath();
-      ctx.stroke();
-
-      // Screw neck & knurled captive cap
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(-1.5, -6.5, 3, 2);
-
-      // Knurled metal cap
-      ctx.fillStyle = '#64748b';
-      ctx.beginPath();
-      ctx.roundRect(-2.4, -8.5, 4.8, 2.5, 0.8);
-      ctx.fill();
-
-      // Captive hinge strap
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.moveTo(-2, -6);
-      ctx.lineTo(-3.2, -7.5);
-      ctx.lineTo(-2.4, -8);
-      ctx.stroke();
-      return true;
-    }
-
-    // Empty Army Flask with Unscrewed Dangling Cap (Пустая фляга)
-    case 'camp_flask_empty': {
-      drawShadow(ctx, 7.2, 2.6, 7.5, 0.2);
-
-      // Scuffed steel flask body
-      ctx.fillStyle = '#64748b';
-      ctx.beginPath();
-      ctx.roundRect(-6.5, -4.5, 13, 12, 2.5);
-      ctx.fill();
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-4.5, -4.5, 2.5, 12);
-
-      // Open threaded spout (hollow inside)
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(-1.5, -6.5, 3, 2);
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.ellipse(0, -6.5, 1.2, 0.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Cap unscrewed and hanging to the side
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.moveTo(-1.5, -5.5);
-      ctx.quadraticCurveTo(-4, -6, -4.5, -3);
-      ctx.stroke();
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.roundRect(-6, -3, 3, 4, 0.6);
-      ctx.fill();
-      return true;
-    }
-
-    // Heavy Vacuum Thermos with Cup Lid (Походный термос 1.0L)
-    case 'thermos': {
-      drawShadow(ctx, 7.8, 2.8, 8.5, 0.26);
-
-      // Tall cylindrical brushed stainless steel thermos body
-      const stGrad = ctx.createLinearGradient(-5, -6, 5, 8);
-      stGrad.addColorStop(0, '#94a3b8');
-      stGrad.addColorStop(0.3, '#f1f5f9');
-      stGrad.addColorStop(0.7, '#cbd5e1');
-      stGrad.addColorStop(1, '#64748b');
+      drawShadow(ctx, 7.2, 2.7, 7.8, 0.25);
+      const stGrad = ctx.createLinearGradient(-6.2, 0, 6.2, 0);
+      stGrad.addColorStop(0.0, '#64748b');
+      stGrad.addColorStop(0.24, '#f1f5f9');
+      stGrad.addColorStop(0.46, '#cbd5e1');
+      stGrad.addColorStop(0.82, '#64748b');
+      stGrad.addColorStop(1.0, '#94a3b8');
       ctx.fillStyle = stGrad;
       ctx.beginPath();
-      ctx.roundRect(-5.2, -6, 10.4, 14, 2);
+      ctx.roundRect(-6.2, -4.4, 12.4, 11.8, 2.4);
       ctx.fill();
 
-      // Black rubber textured anti-slip grip rings
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-5.3, -3.5, 10.6, 1.8);
-      ctx.fillRect(-5.3, 3.5, 10.6, 1.8);
-
-      // Ribbed silicone grip texture
-      ctx.fillStyle = '#334155';
-      for (let x = -4.5; x <= 4.5; x += 1.5) {
-        ctx.fillRect(x, -3.3, 0.7, 1.4);
-        ctx.fillRect(x, 3.7, 0.7, 1.4);
-      }
-
-      // Detachable insulated chrome/black drinking cup cap on top
-      ctx.fillStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.roundRect(-4.8, -11, 9.6, 5.2, 1.2);
-      ctx.fill();
-
-      // Chrome rim on cup cap
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-4.8, -6.5, 9.6, 1);
-      ctx.fillRect(-4.5, -11.5, 9.0, 0.8);
-
-      // Red one-touch push-button valve indicator peeking
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.arc(0, -6, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Nylon shoulder strap attachment loop
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(-5.2, -2);
-      ctx.lineTo(-7, 0);
-      ctx.lineTo(-5.2, 2);
+      // Top & bottom spun rim shadow
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.25)';
+      ctx.lineWidth = 0.35;
       ctx.stroke();
 
-      drawGlossBand(ctx, -3.8, -6, 1.4, 13.5, 0.4);
+      // Stamped crisp recessed crest medallion
+      ctx.strokeStyle = 'rgba(51, 65, 85, 0.45)';
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(0, -1.6);
+      ctx.lineTo(2.4, 1.4);
+      ctx.lineTo(0, 4.4);
+      ctx.lineTo(-2.4, 1.4);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Captive hinge arm + knurled screw cap
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(-1.8, -5.6);
+      ctx.lineTo(-3.1, -6.8);
+      ctx.lineTo(-2.2, -7.8);
+      ctx.stroke();
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-1.4, -6.2, 2.8, 1.9);
+      drawScrewCap(ctx, 0, -8.3, 4.2, 2.2, '#94a3b8', false);
       return true;
     }
 
-    // === PREMIUM GLASS BOTTLES (Стеклянные бутылки) ===
+    // Empty Army Flask with Open Hollow Neck & Dangling Cap
+    case 'camp_flask_empty': {
+      drawShadow(ctx, 7.0, 2.5, 7.6, 0.2);
+      const stGrad = ctx.createLinearGradient(-6.2, 0, 6.2, 0);
+      stGrad.addColorStop(0.0, '#475569');
+      stGrad.addColorStop(0.24, '#cbd5e1');
+      stGrad.addColorStop(0.5, '#94a3b8');
+      stGrad.addColorStop(0.85, '#475569');
+      stGrad.addColorStop(1.0, '#64748b');
+      ctx.fillStyle = stGrad;
+      ctx.beginPath();
+      ctx.roundRect(-6.2, -4.4, 12.4, 11.8, 2.4);
+      ctx.fill();
+
+      // Machined threaded neck & hollow dark bore
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-1.4, -6.4, 2.8, 2.1);
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.28;
+      ctx.beginPath();
+      ctx.moveTo(-1.4, -5.8); ctx.lineTo(1.4, -5.4);
+      ctx.moveTo(-1.4, -5.1); ctx.lineTo(1.4, -4.7);
+      ctx.stroke();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(0, -6.4, 1.1, 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Dangling hinged cap
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(-1.4, -5.3);
+      ctx.quadraticCurveTo(-4.0, -5.8, -4.4, -2.8);
+      ctx.stroke();
+      drawScrewCap(ctx, -4.4, -3.2, 3.2, 2.4, '#64748b', false);
+      return true;
+    }
+
+    // Heavy Vacuum Stainless Thermos (1.0L)
+    case 'thermos': {
+      drawShadow(ctx, 7.2, 2.6, 8.4, 0.26);
+      const stGrad = ctx.createLinearGradient(-5, 0, 5, 0);
+      stGrad.addColorStop(0.0, '#64748b');
+      stGrad.addColorStop(0.24, '#f8fafc');
+      stGrad.addColorStop(0.48, '#cbd5e1');
+      stGrad.addColorStop(0.84, '#475569');
+      stGrad.addColorStop(1.0, '#94a3b8');
+      ctx.fillStyle = stGrad;
+      ctx.beginPath();
+      ctx.roundRect(-5.0, -5.8, 10.0, 13.8, 1.6);
+      ctx.fill();
+
+      // Molded anti-slip elastomer grip collars
+      for (const gy of [-3.4, 3.6]) {
+        const gGrad = ctx.createLinearGradient(-5.2, gy, 5.2, gy);
+        gGrad.addColorStop(0.0, '#09090b');
+        gGrad.addColorStop(0.32, '#334155');
+        gGrad.addColorStop(0.8, '#0f172a');
+        gGrad.addColorStop(1.0, '#1e293b');
+        ctx.fillStyle = gGrad;
+        ctx.fillRect(-5.15, gy, 10.3, 1.75);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+        ctx.lineWidth = 0.35;
+        for (let kx = -4.2; kx <= 4.2; kx += 0.9) {
+          ctx.beginPath();
+          ctx.moveTo(kx, gy + 0.2);
+          ctx.lineTo(kx, gy + 1.55);
+          ctx.stroke();
+        }
+      }
+
+      // Red push-button inner valve peek
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(-1.4, -6.5, 2.8, 1.0, 0.3);
+      ctx.fill();
+
+      // Insulated matte slate & chrome drinking cup lid
+      const capGrad = ctx.createLinearGradient(-4.7, 0, 4.7, 0);
+      capGrad.addColorStop(0.0, '#0f172a');
+      capGrad.addColorStop(0.28, '#475569');
+      capGrad.addColorStop(0.75, '#1e293b');
+      capGrad.addColorStop(1.0, '#09090b');
+      ctx.fillStyle = capGrad;
+      ctx.beginPath();
+      ctx.roundRect(-4.65, -10.8, 9.3, 4.8, 1.0);
+      ctx.fill();
+
+      // Machined steel cup collar & top dome lip
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(-4.65, -6.7, 9.3, 0.72);
+      ctx.fillRect(-4.1, -11.1, 8.2, 0.55);
+
+      // Shoulder strap webbing D-ring on left
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(-5.0, -1.8);
+      ctx.lineTo(-6.3, 0);
+      ctx.lineTo(-5.0, 1.8);
+      ctx.stroke();
+      return true;
+    }
+
+    // === GLASS BEVERAGE & LIQUOR BOTTLES ===
     case 'bottle_glass_medium':
     case 'glass_bottle_500': {
-      drawShadow(ctx, 6.2, 2.4, 7.8, 0.22);
-
-      // Translucent soda-lime glass body with slight greenish-cyan tint
-      const glassGrad = ctx.createLinearGradient(-4.5, -6, 4.5, 7.5);
-      glassGrad.addColorStop(0, 'rgba(207, 250, 254, 0.75)');
-      glassGrad.addColorStop(0.3, 'rgba(165, 243, 252, 0.5)');
-      glassGrad.addColorStop(0.7, 'rgba(103, 232, 249, 0.6)');
-      glassGrad.addColorStop(1, 'rgba(6, 182, 212, 0.7)');
-
-      ctx.fillStyle = glassGrad;
-      ctx.beginPath();
-      // Bottom base
-      ctx.moveTo(-4.2, 6.8);
-      ctx.lineTo(-4.5, -0.5);
-      // Shoulder taper
-      ctx.quadraticCurveTo(-4.5, -3.5, -1.8, -5.5);
-      // Neck
-      ctx.lineTo(-1.8, -8);
-      ctx.lineTo(1.8, -8);
-      ctx.lineTo(1.8, -5.5);
-      ctx.quadraticCurveTo(4.5, -3.5, 4.5, -0.5);
-      ctx.lineTo(4.2, 6.8);
-      ctx.quadraticCurveTo(0, 7.6, -4.2, 6.8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Thick glass punt / heavy bottom
-      ctx.fillStyle = 'rgba(6, 182, 212, 0.55)';
-      ctx.beginPath();
-      ctx.ellipse(0, 6.2, 3.8, 1.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Embossed glass ring details
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
-      ctx.moveTo(-4, 4.5); ctx.lineTo(4, 4.5);
-      ctx.stroke();
-
-      // Embossed volume text "0.5 L"
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.font = 'bold 2.5px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('0.5 L', 0, 2.2);
-
-      // Crisp vertical specular reflection streak
-      drawGlossBand(ctx, -3.2, -4.5, 1.2, 10.5, 0.45);
-      drawGlossBand(ctx, 2.2, -4, 0.7, 9.5, 0.3);
-
-      // Crown cap / metal screw closure
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -9.2, 4.4, 2.2, 0.6);
-      ctx.fill();
-      ctx.fillStyle = '#64748b';
-      ctx.fillRect(-2.2, -7.5, 4.4, 0.6);
+      drawShadow(ctx, 5.8, 2.3, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#cffafe',
+        glassTintAlpha: 0.78,
+        w: 8.6,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'crown',
+        closureColor: '#94a3b8',
+        labelPaper: 'rgba(248, 250, 252, 0.65)',
+        labelBand: '#0284c7',
+        labelAccent: '#38bdf8',
+        emblem: 'circle'
+      });
       return true;
     }
 
     case 'bottle_glass_large': {
-      drawShadow(ctx, 7.0, 2.6, 7.8, 0.25);
-
-      // Sturdy 1.0L tall glass bottle body
-      const glassGrad = ctx.createLinearGradient(-5.2, -8, 5.2, 7.5);
-      glassGrad.addColorStop(0, 'rgba(224, 242, 254, 0.8)');
-      glassGrad.addColorStop(0.3, 'rgba(186, 230, 253, 0.55)');
-      glassGrad.addColorStop(0.7, 'rgba(125, 211, 252, 0.65)');
-      glassGrad.addColorStop(1, 'rgba(56, 189, 248, 0.75)');
-
-      ctx.fillStyle = glassGrad;
-      ctx.beginPath();
-      ctx.moveTo(-5, 6.8);
-      ctx.lineTo(-5.2, -1);
-      // Broad sturdy shoulder
-      ctx.quadraticCurveTo(-5.2, -4.5, -2, -6.5);
-      // Neck
-      ctx.lineTo(-2, -9);
-      ctx.lineTo(2, -9);
-      ctx.lineTo(2, -6.5);
-      ctx.quadraticCurveTo(5.2, -4.5, 5.2, -1);
-      ctx.lineTo(5, 6.8);
-      ctx.quadraticCurveTo(0, 7.8, -5, 6.8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Heavy reinforced bottom glass layer
-      ctx.fillStyle = 'rgba(14, 165, 233, 0.5)';
-      ctx.beginPath();
-      ctx.ellipse(0, 6.2, 4.5, 1.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Embossed "1.0 L" glass mark
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-      ctx.font = 'bold 3.2px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('1.0 L', 0, 2.5);
-
-      // Glass wall refraction & highlights
-      drawGlossBand(ctx, -3.8, -5, 1.4, 11, 0.5);
-      drawGlossBand(ctx, 2.8, -4.5, 0.8, 10, 0.35);
-
-      // Knurled metal closure with seal ring
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(-2.4, -10.2, 4.8, 2.4, 0.7);
-      ctx.fill();
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(-2.4, -8.3, 4.8, 0.6);
-      return true;
-    }
-
-    case 'can_beer':
-    case 'beer_can': {
-      drawShadow(ctx, 6.8, 2.6, 7.8, 0.25);
-
-      // Authentic 0.5L Aluminum Beer Can (Lager / Pilsner)
-      // Metallic deep forest green and gold can cylinder
-      const canGrad = ctx.createLinearGradient(-5.5, -6, 5.5, 7.5);
-      canGrad.addColorStop(0, '#15803d');
-      canGrad.addColorStop(0.4, '#166534');
-      canGrad.addColorStop(0.8, '#14532d');
-      canGrad.addColorStop(1, '#052e16');
-      ctx.fillStyle = canGrad;
-      ctx.beginPath();
-      ctx.roundRect(-5.5, -6, 11, 13.5, 2);
-      ctx.fill();
-
-      // Brushed silver rims at top and bottom
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.ellipse(0, 7.2, 5.2, 1.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(0, -6, 5.2, 1.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Recessed lid and pull-tab
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.ellipse(0, -6, 4.2, 1.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#64748b';
-      ctx.fillRect(-1.0, -7.0, 2.0, 1.8);
-
-      // Gold central shield with hop cone and barley ears
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -1.0, 9.0, 6.2, 1.0);
-      ctx.fill();
-
-      // Gold border
-      ctx.strokeStyle = '#ca8a04';
-      ctx.lineWidth = 0.8;
-      ctx.strokeRect(-4.3, -0.8, 8.6, 5.8);
-
-      // Gold hop emblem
-      ctx.fillStyle = '#ca8a04';
-      ctx.beginPath();
-      ctx.arc(0, 1.2, 1.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.arc(0, 1.2, 0.7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // "LAGER 0.5L" banner
-      ctx.fillStyle = '#166534';
-      ctx.font = 'bold 1.8px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('LAGER', 0, 4.0);
-
-      // White frothy foam wave at shoulder
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.beginPath();
-      ctx.moveTo(-5.5, -3.5);
-      ctx.quadraticCurveTo(-2, -5.0, 0, -3.8);
-      ctx.quadraticCurveTo(2, -2.8, 5.5, -4.0);
-      ctx.lineTo(5.5, -2.5);
-      ctx.lineTo(-5.5, -2.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Metallic specular reflection streak
-      drawGlossBand(ctx, -3.6, -6, 1.4, 13.5, 0.35);
+      drawShadow(ctx, 6.6, 2.5, 7.8, 0.25);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#bae6fd',
+        glassTintAlpha: 0.82,
+        w: 9.8,
+        topY: -9.4,
+        botY: 7.4,
+        shoulderStyle: 'bordeaux',
+        closure: 'screw',
+        closureColor: '#0284c7',
+        labelPaper: 'rgba(248, 250, 252, 0.72)',
+        labelBand: '#0369a1',
+        labelAccent: '#7dd3fc',
+        emblem: 'crest'
+      });
       return true;
     }
 
     case 'beer':
     case 'bottle_beer':
     case 'beer_bottle': {
-      drawShadow(ctx, 6.2, 2.4, 7.8, 0.24);
-
-      // Dark amber / brown beer bottle glass
-      const amberGrad = ctx.createLinearGradient(-4.5, -6, 4.5, 7.5);
-      amberGrad.addColorStop(0, '#92400e');
-      amberGrad.addColorStop(0.4, '#b45309');
-      amberGrad.addColorStop(0.8, '#78350f');
-      amberGrad.addColorStop(1, '#451a03');
-
-      ctx.fillStyle = amberGrad;
-      ctx.beginPath();
-      ctx.moveTo(-4.2, 6.8);
-      ctx.lineTo(-4.4, 0);
-      ctx.quadraticCurveTo(-4.4, -3.5, -1.8, -5.5);
-      ctx.lineTo(-1.8, -8);
-      ctx.lineTo(1.8, -8);
-      ctx.lineTo(1.8, -5.5);
-      ctx.quadraticCurveTo(4.4, -3.5, 4.4, 0);
-      ctx.lineTo(4.2, 6.8);
-      ctx.quadraticCurveTo(0, 7.6, -4.2, 6.8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Craft brewery parchment label
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.roundRect(-4.0, 0.5, 8.0, 5.0, 0.5);
-      ctx.fill();
-      // Label golden hop badge
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.arc(0, 3.0, 1.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.arc(0, 3.0, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Neck gold foil band
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(-1.8, -5.8, 3.6, 1.4);
-
-      // Amber glass specular reflection
-      drawGlossBand(ctx, -3.2, -4, 1.2, 10, 0.35);
-
-      // Crimped golden crown cap
-      ctx.fillStyle = '#ca8a04';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -9.2, 4.4, 2.0, 0.5);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.3, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#92400e',
+        glassTintAlpha: 0.94,
+        liquidHex: '#78350f',
+        liquidTopY: -2.4,
+        w: 8.6,
+        topY: -8.4,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'crown',
+        closureColor: '#ca8a04',
+        foilCollarColor: '#eab308',
+        labelPaper: '#fdf8e8',
+        labelBand: '#14532d',
+        labelAccent: '#ca8a04',
+        emblem: 'crest'
+      });
       return true;
     }
 
     case 'vodka':
     case 'bottle_vodka':
     case 'vodka_bottle': {
-      drawShadow(ctx, 6.2, 2.4, 7.8, 0.24);
-
-      // Clear heavy-base flint glass cylinder
-      const vodkaGrad = ctx.createLinearGradient(-4.5, -6, 4.5, 7.5);
-      vodkaGrad.addColorStop(0, 'rgba(241, 245, 249, 0.85)');
-      vodkaGrad.addColorStop(0.3, 'rgba(226, 232, 240, 0.65)');
-      vodkaGrad.addColorStop(0.7, 'rgba(203, 213, 225, 0.7)');
-      vodkaGrad.addColorStop(1, 'rgba(148, 163, 184, 0.8)');
-
-      ctx.fillStyle = vodkaGrad;
-      ctx.beginPath();
-      ctx.moveTo(-4.2, 6.8);
-      ctx.lineTo(-4.4, -0.5);
-      ctx.quadraticCurveTo(-4.4, -3.8, -1.9, -5.8);
-      ctx.lineTo(-1.9, -8.2);
-      ctx.lineTo(1.9, -8.2);
-      ctx.lineTo(1.9, -5.8);
-      ctx.quadraticCurveTo(4.4, -3.8, 4.4, -0.5);
-      ctx.lineTo(4.2, 6.8);
-      ctx.quadraticCurveTo(0, 7.6, -4.2, 6.8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Thick crystal glass bottom punt
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
-      ctx.beginPath();
-      ctx.ellipse(0, 5.8, 3.8, 1.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Silver & frost blue premium label
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.roundRect(-4.0, 0.0, 8.0, 4.8, 0.5);
-      ctx.fill();
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-3.5, 1.2, 7.0, 1.2);
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.arc(0, 3.2, 0.9, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Specular crystal gleams
-      drawGlossBand(ctx, -3.2, -4.5, 1.3, 10.5, 0.5);
-      drawGlossBand(ctx, 2.2, -4, 0.7, 9.5, 0.35);
-
-      // Brushed silver tall screw cap
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -9.8, 4.4, 2.6, 0.7);
-      ctx.fill();
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-2.2, -7.8, 4.4, 0.6);
+      drawShadow(ctx, 5.8, 2.3, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#e2e8f0',
+        glassTintAlpha: 0.86,
+        liquidHex: 'rgba(248, 250, 252, 0.55)',
+        liquidTopY: -2.5,
+        w: 8.6,
+        topY: -8.6,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'screw',
+        closureColor: '#cbd5e1',
+        foilCollarColor: '#0284c7',
+        labelPaper: '#f8fafc',
+        labelBand: '#0f172a',
+        labelAccent: '#38bdf8',
+        emblem: 'diamond'
+      });
       return true;
     }
 
@@ -1125,837 +1296,526 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
     case 'wine_white':
     case 'wine_bottle':
     case 'bottle_wine': {
-      drawShadow(ctx, 6.2, 2.4, 7.8, 0.24);
-
-      // Authentic 0.75L Bordeaux Wine Bottle in Dark Olive-Emerald Glass
-      const wineGlassGrad = ctx.createLinearGradient(-4.5, -6, 4.5, 7.5);
-      wineGlassGrad.addColorStop(0, '#064e3b');
-      wineGlassGrad.addColorStop(0.4, '#047857');
-      wineGlassGrad.addColorStop(0.8, '#064e3b');
-      wineGlassGrad.addColorStop(1, '#022c22');
-      ctx.fillStyle = wineGlassGrad;
-      ctx.beginPath();
-      ctx.moveTo(-4.2, 6.8);
-      ctx.lineTo(-4.4, -0.2);
-      ctx.quadraticCurveTo(-4.4, -3.5, -1.8, -5.5);
-      ctx.lineTo(-1.8, -8.5);
-      ctx.lineTo(1.8, -8.5);
-      ctx.lineTo(1.8, -5.5);
-      ctx.quadraticCurveTo(4.4, -3.5, 4.4, -0.2);
-      ctx.lineTo(4.2, 6.8);
-      ctx.quadraticCurveTo(0, 7.6, -4.2, 6.8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Deep Ruby Red Wine Level inside bottle
-      ctx.fillStyle = '#4c0519';
-      ctx.beginPath();
-      ctx.roundRect(-3.8, -1.0, 7.6, 7.5, 1);
-      ctx.fill();
-
-      // Cream Parchment Chateaux Label
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.roundRect(-3.8, 0.2, 7.6, 5.4, 0.6);
-      ctx.fill();
-
-      // Crimson & Gold Coat of Arms Crest
-      ctx.strokeStyle = '#991b1b';
-      ctx.lineWidth = 0.6;
-      ctx.strokeRect(-3.5, 0.5, 7.0, 4.8);
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.arc(0, 2.0, 1.0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-2.5, 3.6, 5.0, 0.7);
-
-      // Glass specular reflection
-      drawGlossBand(ctx, -3.2, -4, 1.2, 10, 0.35);
-
-      // Crimson shrink capsule / wax seal on neck & cork
-      ctx.fillStyle = '#991b1b';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -10.2, 4.4, 3.2, 0.6);
-      ctx.fill();
-      ctx.fillStyle = '#b91c1c';
-      ctx.fillRect(-2.2, -7.5, 4.4, 0.6);
+      drawShadow(ctx, 5.8, 2.3, 7.8, 0.25);
+      const isWhite = itemId === 'wine_white';
+      drawStudioGlassBottle(ctx, {
+        glassHex: isWhite ? '#4d7c0f' : '#064e3b',
+        glassTintAlpha: 0.94,
+        liquidHex: isWhite ? '#fde047' : '#4c0519',
+        liquidTopY: -2.2,
+        w: 8.6,
+        topY: -8.8,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'capsule',
+        closureColor: isWhite ? '#d97706' : '#881337',
+        labelPaper: '#fdf6e4',
+        labelBand: isWhite ? '#365314' : '#7f1d1d',
+        labelAccent: '#d97706',
+        emblem: 'crest'
+      });
       return true;
     }
 
     // === CULINARY OILS ===
     case 'oil_sunflower':
     case 'oil_sunflower_bottle': {
-      drawShadow(ctx, 6, 2.5, 7.8, 0.22);
-
-      // Clear PET bottle with golden-yellow sunflower oil
-      ctx.fillStyle = 'rgba(254, 240, 138, 0.85)';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -4, 9, 11.5, 2);
-      ctx.fill();
-
-      // Golden oil liquid inside
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.roundRect(-4, -2.5, 8, 9.5, 1.5);
-      ctx.fill();
-
-      // Glossy sheen band
-      drawGlossBand(ctx, -3.5, -3.5, 1.2, 10, 0.4);
-
-      // Sunflower floral label
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3.8, 0, 7.6, 4.5);
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(0, 2.2, 1.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.arc(0, 2.2, 0.7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Slender neck and bright red pourer cap
-      ctx.fillStyle = 'rgba(254, 240, 138, 0.9)';
-      ctx.fillRect(-2, -6.5, 4, 3);
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-2.4, -8.5, 4.8, 2.5, 0.8);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.4, 7.8, 0.24);
+      drawStudioPetBottle(ctx, {
+        w: 8.6,
+        topY: -8.0,
+        botY: 7.2,
+        plasticTint: '#fef9c3',
+        liquidTop: '#fde047',
+        liquidBot: '#ca8a04',
+        liquidLevelY: -2.6,
+        ribCount: 2,
+        capColor: '#dc2626',
+        labelBand: '#ca8a04',
+        labelPaper: '#fffbeb',
+        labelAccent: '#f59e0b',
+        emblem: 'circle'
+      });
       return true;
     }
 
     case 'oil_olive':
     case 'oil_olive_extra_virgin': {
-      drawShadow(ctx, 6, 2.5, 7.8, 0.24);
-
-      // Dark square antique green Marasca glass bottle
-      const oliveGrad = ctx.createLinearGradient(-4.5, -4, 4.5, 7);
-      oliveGrad.addColorStop(0, '#14532d');
-      oliveGrad.addColorStop(0.5, '#166534');
-      oliveGrad.addColorStop(1, '#052e16');
-      ctx.fillStyle = oliveGrad;
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -4.5, 9, 12, 1.5);
-      ctx.fill();
-
-      // Golden green olive oil liquid shimmer peek
-      ctx.fillStyle = '#84cc16';
-      ctx.fillRect(-3.5, -1, 7, 7);
-
-      // Premium parchment label with olive branch emblem
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.roundRect(-3.6, 0.5, 7.2, 5, 0.5);
-      ctx.fill();
-
-      // Olive branch
-      ctx.strokeStyle = '#3f6212';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-2, 3); ctx.lineTo(2, 3);
-      ctx.stroke();
-      ctx.fillStyle = '#1e3a8a';
-      ctx.beginPath();
-      ctx.ellipse(-0.8, 3, 0.8, 0.5, 0.3, 0, Math.PI * 2);
-      ctx.ellipse(0.8, 3, 0.8, 0.5, -0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glass specular reflection
-      drawGlossBand(ctx, -3.8, -4, 1, 11, 0.35);
-
-      // Slender neck and dark bronze screw cap
-      ctx.fillStyle = '#14532d';
-      ctx.fillRect(-1.8, -6.8, 3.6, 2.8);
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8.8, 4.4, 2.4, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.4, 7.8, 0.25);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#15803d',
+        glassTintAlpha: 0.94,
+        liquidHex: '#65a30d',
+        liquidTopY: -2.0,
+        w: 8.4,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'square',
+        closure: 'capsule',
+        closureColor: '#b45309',
+        labelPaper: '#fef3c7',
+        labelBand: '#14532d',
+        labelAccent: '#ca8a04',
+        emblem: 'leaf'
+      });
       return true;
     }
 
     case 'oil_linseed':
     case 'oil_linseed_bottle': {
-      drawShadow(ctx, 5.8, 2.4, 7.8, 0.22);
-
-      // Amber medicinal glass bottle
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.roundRect(-4, -4, 8, 11.5, 1.8);
-      ctx.fill();
-
-      // Rich amber oil level
-      ctx.fillStyle = '#b45309';
-      ctx.fillRect(-3.2, -2, 6.4, 8.5);
-
-      // Blue flax flower label
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3.2, 0.5, 6.4, 4.5);
-      ctx.fillStyle = '#3b82f6';
-      ctx.beginPath();
-      ctx.arc(0, 2.7, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(0, 2.7, 0.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      drawGlossBand(ctx, -3.2, -3.5, 0.9, 10, 0.35);
-
-      // Neck & black cap
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-1.6, -6.5, 3.2, 2.8);
-      ctx.fillStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.roundRect(-2, -8.5, 4, 2.4, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.6, 2.3, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#92400e',
+        glassTintAlpha: 0.94,
+        liquidHex: '#d97706',
+        liquidTopY: -1.8,
+        w: 8.0,
+        topY: -8.0,
+        botY: 7.2,
+        shoulderStyle: 'burgundy',
+        closure: 'screw',
+        closureColor: '#1e293b',
+        labelPaper: '#fffbeb',
+        labelBand: '#1d4ed8',
+        labelAccent: '#d97706',
+        emblem: 'circle'
+      });
       return true;
     }
 
     case 'oil_sesame':
     case 'oil_sesame_bottle': {
-      drawShadow(ctx, 5.5, 2.2, 7.8, 0.22);
-
-      // Compact dark amber bottle for toasted sesame oil
-      ctx.fillStyle = '#451a03';
-      ctx.beginPath();
-      ctx.roundRect(-3.8, -3.5, 7.6, 11, 1.6);
-      ctx.fill();
-
-      // Deep dark toasted oil
-      ctx.fillStyle = '#713f12';
-      ctx.fillRect(-3, -1.5, 6, 8);
-
-      // Japanese / Asian style calligraphy banner label
-      ctx.fillStyle = '#fef3c7';
-      ctx.fillRect(-3, 0.8, 6, 4.2);
-      ctx.fillStyle = '#b91c1c';
-      ctx.fillRect(-2.4, 1.4, 1.8, 3);
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(0.2, 2.2, 2, 1.2);
-
-      drawGlossBand(ctx, -3, -3, 0.8, 9.5, 0.35);
-
-      // Black fluted neck cap
-      ctx.fillStyle = '#451a03';
-      ctx.fillRect(-1.5, -5.8, 3, 2.5);
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.roundRect(-1.9, -7.8, 3.8, 2.2, 0.5);
-      ctx.fill();
+      drawShadow(ctx, 5.4, 2.2, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#78350f',
+        glassTintAlpha: 0.94,
+        liquidHex: '#92400e',
+        liquidTopY: -1.8,
+        w: 7.6,
+        topY: -7.8,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'screw',
+        closureColor: '#18181b',
+        labelPaper: '#fef3c7',
+        labelBand: '#b91c1c',
+        labelAccent: '#d97706',
+        emblem: 'diamond'
+      });
       return true;
     }
 
     // === VINEGARS ===
     case 'vinegar_table':
     case 'vinegar_table_bottle': {
-      drawShadow(ctx, 6, 2.4, 7.8, 0.2);
-
-      // Clear glass bottle with fluted neck and crystal water-clear 9% vinegar
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.7)';
-      ctx.beginPath();
-      ctx.roundRect(-4.2, -4, 8.4, 11.5, 1.8);
-      ctx.fill();
-
-      // Water-clear liquid reflection
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.fillRect(-3.4, -2, 6.8, 8.5);
-
-      // White label with red 9% bold text bar
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3.6, 0.2, 7.2, 4.5);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-3.2, 1.2, 6.4, 1.4);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-1, 1.4, 2, 1);
-
-      drawGlossBand(ctx, -3.2, -3.5, 1, 10, 0.45);
-
-      // Slender neck and white plastic dispenser cap
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.8)';
-      ctx.fillRect(-1.8, -6.5, 3.6, 2.8);
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8.5, 4.4, 2.4, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.3, 7.8, 0.22);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#e2e8f0',
+        glassTintAlpha: 0.85,
+        liquidHex: '#f1f5f9',
+        liquidTopY: -2.0,
+        w: 8.2,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'screw',
+        closureColor: '#f8fafc',
+        labelPaper: '#ffffff',
+        labelBand: '#dc2626',
+        labelAccent: '#94a3b8',
+        emblem: 'diamond'
+      });
       return true;
     }
 
     case 'vinegar_apple':
     case 'vinegar_apple_cider': {
-      drawShadow(ctx, 6.2, 2.5, 7.8, 0.22);
-
-      // Rounded retro bottle with golden-amber apple cider vinegar
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.75)';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -4, 9, 11.5, 2.2);
-      ctx.fill();
-
-      // Warm amber hazy liquid
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.roundRect(-3.8, -2, 7.6, 8.5, 1.5);
-      ctx.fill();
-
-      // Craft label with red apple emblem
-      ctx.fillStyle = '#fef3c7';
-      ctx.fillRect(-3.8, 0.5, 7.6, 4.5);
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.arc(0, 2.7, 1.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#15803d';
-      ctx.fillRect(-0.2, 1.2, 0.8, 0.8);
-
-      drawGlossBand(ctx, -3.6, -3.5, 1.1, 10, 0.4);
-
-      // Slender neck & green screw cap
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
-      ctx.fillRect(-1.8, -6.5, 3.6, 2.8);
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8.5, 4.4, 2.4, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.4, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#fde68a',
+        glassTintAlpha: 0.88,
+        liquidHex: '#d97706',
+        liquidTopY: -2.0,
+        w: 8.6,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'burgundy',
+        closure: 'screw',
+        closureColor: '#15803d',
+        labelPaper: '#fef3c7',
+        labelBand: '#991b1b',
+        labelAccent: '#15803d',
+        emblem: 'leaf'
+      });
       return true;
     }
 
     case 'vinegar_balsamic':
     case 'vinegar_balsamic_premium': {
-      drawShadow(ctx, 6.2, 2.6, 7.8, 0.25);
-
-      // Squat antique dark bottle of Modena balsamic vinegar
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.roundRect(-5, -3, 10, 10.5, 2.5);
-      ctx.fill();
-
-      // Deep dark syrupy purple-black vinegar
-      ctx.fillStyle = '#3b0764';
-      ctx.fillRect(-4.2, -1, 8.4, 7.5);
-
-      // Rich vintage gold-bordered crest label
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.roundRect(-4, 0.5, 8, 4.5, 0.8);
-      ctx.fill();
-      ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 0.6;
-      ctx.strokeRect(-3.8, 0.7, 7.6, 4.1);
-
-      // Gold coat of arms seal
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.arc(0, 2.7, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      drawGlossBand(ctx, -4.2, -2.5, 1.1, 9, 0.35);
-
-      // Gold foil wrapped neck and cork finish
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(-2, -5.5, 4, 2.8);
-      ctx.fillStyle = '#fbbf24';
-      ctx.beginPath();
-      ctx.roundRect(-2.4, -7.8, 4.8, 2.6, 0.7);
-      ctx.fill();
+      drawShadow(ctx, 6.2, 2.5, 7.8, 0.25);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#27272a',
+        glassTintAlpha: 0.96,
+        liquidHex: '#09090b',
+        liquidTopY: -1.8,
+        w: 9.4,
+        topY: -7.8,
+        botY: 7.2,
+        shoulderStyle: 'square',
+        closure: 'capsule',
+        closureColor: '#d97706',
+        labelPaper: '#fdf6e4',
+        labelBand: '#18181b',
+        labelAccent: '#d97706',
+        emblem: 'crest'
+      });
       return true;
     }
 
     // === SAUCES ===
     case 'sauce_soy':
     case 'soy_sauce_classic': {
-      drawShadow(ctx, 6.5, 2.6, 7.8, 0.24);
-
-      // Iconic hourglass dispenser bottle with wide stable base
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-      ctx.beginPath();
-      ctx.moveTo(-4.5, 7);
-      ctx.lineTo(-4, 2);
-      ctx.lineTo(-2.8, -2.5);
-      ctx.lineTo(-2.8, -4.5);
-      ctx.lineTo(2.8, -4.5);
-      ctx.lineTo(2.8, -2.5);
-      ctx.lineTo(4, 2);
-      ctx.lineTo(4.5, 7);
-      ctx.closePath();
-      ctx.fill();
-
-      // Dark umami soy sauce liquid
-      ctx.fillStyle = '#1c1917';
-      ctx.beginPath();
-      ctx.moveTo(-4, 6.5);
-      ctx.lineTo(-3.6, 2.2);
-      ctx.lineTo(-2.5, -1);
-      ctx.lineTo(2.5, -1);
-      ctx.lineTo(3.6, 2.2);
-      ctx.lineTo(4, 6.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Classic yellow hexagonal brand label
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.moveTo(0, 1.5);
-      ctx.lineTo(2.2, 2.5);
-      ctx.lineTo(2.2, 4.5);
-      ctx.lineTo(0, 5.5);
-      ctx.lineTo(-2.2, 4.5);
-      ctx.lineTo(-2.2, 2.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-1.2, 3.2, 2.4, 0.8);
-
-      drawGlossBand(ctx, -3.2, -1, 1, 7.5, 0.35);
-
-      // Iconic dual-spout bright red dispenser cap
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-3.5, -7, 7, 2.8, 0.8);
-      ctx.fill();
-      // Spout nozzles
-      ctx.fillRect(-4.5, -6.2, 1.5, 1.2);
-      ctx.fillRect(3, -6.2, 1.5, 1.2);
+      drawShadow(ctx, 6.2, 2.5, 7.8, 0.25);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#292524',
+        glassTintAlpha: 0.94,
+        liquidHex: '#09090b',
+        liquidTopY: -1.6,
+        w: 8.8,
+        topY: -5.8,
+        botY: 7.2,
+        shoulderStyle: 'tapered',
+        closure: 'pourer',
+        closureColor: '#dc2626',
+        labelPaper: '#fef08a',
+        labelBand: '#dc2626',
+        labelAccent: '#b45309',
+        labelStyle: 'hex_soy'
+      });
       return true;
     }
 
     case 'sauce_fish_premium': {
-      drawShadow(ctx, 5.8, 2.4, 7.8, 0.22);
-
-      // Slender glass bottle with clear amber-brown fermented fish sauce
-      ctx.fillStyle = 'rgba(217, 119, 6, 0.8)';
-      ctx.beginPath();
-      ctx.roundRect(-4, -4, 8, 11.5, 1.8);
-      ctx.fill();
-
-      ctx.fillStyle = '#9a3412';
-      ctx.fillRect(-3.2, -2, 6.4, 8.5);
-
-      // Marine blue label with golden swimming fish
-      ctx.fillStyle = '#1e3a8a';
-      ctx.fillRect(-3.4, 0.5, 6.8, 4.5);
-      ctx.fillStyle = '#fbbf24';
-      ctx.beginPath();
-      ctx.ellipse(0, 2.7, 1.8, 0.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Fish tail
-      ctx.beginPath();
-      ctx.moveTo(1.6, 2.7); ctx.lineTo(2.5, 1.8); ctx.lineTo(2.5, 3.6);
-      ctx.closePath();
-      ctx.fill();
-
-      drawGlossBand(ctx, -3.2, -3.5, 1, 10, 0.4);
-
-      // Yellow tamper cap
-      ctx.fillStyle = 'rgba(217, 119, 6, 0.85)';
-      ctx.fillRect(-1.6, -6.5, 3.2, 2.8);
-      ctx.fillStyle = '#eab308';
-      ctx.beginPath();
-      ctx.roundRect(-2, -8.5, 4, 2.4, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.6, 2.3, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#9a3412',
+        glassTintAlpha: 0.92,
+        liquidHex: '#78350f',
+        liquidTopY: -2.0,
+        w: 7.8,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'screw',
+        closureColor: '#eab308',
+        labelPaper: '#eff6ff',
+        labelBand: '#1e3a8a',
+        labelAccent: '#fbbf24',
+        emblem: 'crest'
+      });
       return true;
     }
 
     case 'sauce_worcestershire': {
-      drawShadow(ctx, 5.8, 2.4, 7.8, 0.24);
-
-      // Slender dark glass bottle wrapped in iconic orange/parchment label
-      ctx.fillStyle = '#1c1917';
-      ctx.beginPath();
-      ctx.roundRect(-4, -4.5, 8, 12, 1.8);
-      ctx.fill();
-
-      // Vintage orange paper wrap label
-      ctx.fillStyle = '#ea580c';
-      ctx.fillRect(-3.6, -1.5, 7.2, 7.5);
-      ctx.fillStyle = '#fef3c7';
-      ctx.fillRect(-3.2, -0.5, 6.4, 5.5);
-
-      // Vintage cursive text lines
-      ctx.fillStyle = '#1c1917';
-      ctx.fillRect(-2.5, 0.5, 5, 0.7);
-      ctx.fillRect(-2, 1.8, 4, 0.6);
-      ctx.fillRect(-2.5, 3, 5, 0.6);
-
-      drawGlossBand(ctx, -3.2, -4, 0.9, 10.5, 0.3);
-
-      // Slender dark neck with maroon seal cap
-      ctx.fillStyle = '#1c1917';
-      ctx.fillRect(-1.6, -6.8, 3.2, 2.6);
-      ctx.fillStyle = '#991b1b';
-      ctx.beginPath();
-      ctx.roundRect(-2, -8.8, 4, 2.3, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.6, 2.3, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#292524',
+        glassTintAlpha: 0.95,
+        liquidHex: '#0c0a09',
+        liquidTopY: -2.0,
+        w: 7.8,
+        topY: -8.4,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'screw',
+        closureColor: '#991b1b',
+        labelPaper: '#fef3c7',
+        labelBand: '#ea580c',
+        labelAccent: '#1c1917',
+        emblem: 'crest'
+      });
       return true;
     }
 
     case 'sauce_teriyaki':
     case 'sauce_teriyaki_bottle': {
-      drawShadow(ctx, 6, 2.4, 7.8, 0.24);
-
-      // Dark glass bottle with thick rich teriyaki glaze
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.roundRect(-4.2, -4, 8.4, 11.5, 1.8);
-      ctx.fill();
-
-      // Deep brown-black glossy sauce peek
-      ctx.fillStyle = '#292524';
-      ctx.fillRect(-3.4, -2, 6.8, 8.5);
-
-      // Sleek black and red label with gold kanji / grill marks
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-3.6, 0.2, 7.2, 4.5);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-3.2, 1, 6.4, 3);
-      ctx.fillStyle = '#fbbf24';
-      ctx.beginPath();
-      ctx.arc(0, 2.5, 1.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      drawGlossBand(ctx, -3.4, -3.5, 1, 10, 0.35);
-
-      // Black fluted neck and cap
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(-1.8, -6.5, 3.6, 2.8);
-      ctx.fillStyle = '#27272a';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8.5, 4.4, 2.4, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.3, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#27272a',
+        glassTintAlpha: 0.95,
+        liquidHex: '#09090b',
+        liquidTopY: -2.0,
+        w: 8.2,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'screw',
+        closureColor: '#27272a',
+        labelPaper: '#f8fafc',
+        labelBand: '#dc2626',
+        labelAccent: '#fbbf24',
+        emblem: 'circle'
+      });
       return true;
     }
 
     case 'sauce_narsharab':
     case 'sauce_pomegranate_narsharab': {
-      drawShadow(ctx, 6.5, 2.6, 7.8, 0.25);
-
-      // Flared teardrop / bell shaped bottle for Narsharab
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-      ctx.beginPath();
-      ctx.moveTo(-4.8, 7);
-      ctx.lineTo(-4.5, 3);
-      ctx.quadraticCurveTo(-3.5, 0, -2.5, -3.5);
-      ctx.lineTo(2.5, -3.5);
-      ctx.quadraticCurveTo(3.5, 0, 4.5, 3);
-      ctx.lineTo(4.8, 7);
-      ctx.closePath();
-      ctx.fill();
-
-      // Thick ruby-garnet pomegranate molasses
-      const narGrad = ctx.createLinearGradient(0, -2, 0, 7);
-      narGrad.addColorStop(0, '#881337');
-      narGrad.addColorStop(1, '#4c0519');
-      ctx.fillStyle = narGrad;
-      ctx.beginPath();
-      ctx.moveTo(-4.2, 6.5);
-      ctx.lineTo(-4, 3.2);
-      ctx.quadraticCurveTo(-3, 0.5, -2, -2);
-      ctx.lineTo(2, -2);
-      ctx.quadraticCurveTo(3, 0.5, 4, 3.2);
-      ctx.lineTo(4.2, 6.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Ripe split pomegranate emblem label
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3, 1.5, 6, 4.2);
-      ctx.fillStyle = '#be123c';
-      ctx.beginPath();
-      ctx.arc(0, 3.5, 1.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(-0.4, 2, 0.8, 0.6); // crown
-
-      drawGlossBand(ctx, -2.8, -2, 1, 8, 0.4);
-
-      // Gold capped slender neck
-      ctx.fillStyle = '#881337';
-      ctx.fillRect(-1.8, -6, 3.6, 2.8);
-      ctx.fillStyle = '#fbbf24';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8, 4.4, 2.3, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 6.2, 2.5, 7.8, 0.25);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#e2e8f0',
+        glassTintAlpha: 0.78,
+        liquidHex: '#4c0519',
+        liquidTopY: -1.8,
+        w: 9.0,
+        topY: -6.4,
+        botY: 7.2,
+        shoulderStyle: 'tapered',
+        closure: 'screw',
+        closureColor: '#d97706',
+        labelPaper: '#fff1f2',
+        labelBand: '#881337',
+        labelAccent: '#fbbf24',
+        emblem: 'circle'
+      });
       return true;
     }
 
     // === COOKING WINES ===
     case 'wine_white_cooking': {
-      drawShadow(ctx, 6, 2.5, 7.8, 0.22);
-
-      // Classic slender Bordeaux wine bottle in translucent green glass
-      ctx.fillStyle = 'rgba(74, 222, 128, 0.35)';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -3.5, 9, 11, 2);
-      ctx.fill();
-
-      // Pale straw-yellow white wine
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(-3.8, -1.5, 7.6, 8.2);
-
-      // Elegant cream wine estate label with green grape emblem
-      ctx.fillStyle = '#fef9c3';
-      ctx.fillRect(-3.6, 0.5, 7.2, 4.8);
-      ctx.strokeStyle = '#ca8a04';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(-3.4, 0.7, 6.8, 4.4);
-
-      // Grape cluster
-      ctx.fillStyle = '#84cc16';
-      ctx.beginPath();
-      ctx.arc(-0.6, 2.5, 0.6, 0, Math.PI * 2);
-      ctx.arc(0.6, 2.5, 0.6, 0, Math.PI * 2);
-      ctx.arc(0, 3.4, 0.6, 0, Math.PI * 2);
-      ctx.fill();
-
-      drawGlossBand(ctx, -3.6, -3, 1.1, 9.8, 0.4);
-
-      // Long bottle neck with green foil capsule
-      ctx.fillStyle = 'rgba(74, 222, 128, 0.5)';
-      ctx.fillRect(-1.8, -7, 3.6, 3.8);
-      ctx.fillStyle = '#16a34a';
-      ctx.beginPath();
-      ctx.roundRect(-2.1, -9.2, 4.2, 3.2, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.4, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#4ade80',
+        glassTintAlpha: 0.68,
+        liquidHex: '#fde047',
+        liquidTopY: -2.0,
+        w: 8.6,
+        topY: -8.6,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'capsule',
+        closureColor: '#16a34a',
+        labelPaper: '#fefce8',
+        labelBand: '#15803d',
+        labelAccent: '#ca8a04',
+        emblem: 'leaf'
+      });
       return true;
     }
 
     case 'wine_red_cooking': {
-      drawShadow(ctx, 6, 2.5, 7.8, 0.25);
-
-      // Classic dark glass Burgundy wine bottle with deep ruby red wine
-      ctx.fillStyle = '#1c1917';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -3.5, 9, 11, 2);
-      ctx.fill();
-
-      // Deep rich ruby wine liquid peek
-      ctx.fillStyle = '#881337';
-      ctx.fillRect(-3.8, -1.5, 7.6, 8.2);
-
-      // Vintage parchment chateau label
-      ctx.fillStyle = '#fef3c7';
-      ctx.fillRect(-3.6, 0.5, 7.2, 4.8);
-      ctx.strokeStyle = '#991b1b';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(-3.4, 0.7, 6.8, 4.4);
-
-      // Red wine vineyard crest
-      ctx.fillStyle = '#991b1b';
-      ctx.beginPath();
-      ctx.arc(0, 2.8, 1.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      drawGlossBand(ctx, -3.6, -3, 1.1, 9.8, 0.35);
-
-      // Crimson foil wrapped neck capsule
-      ctx.fillStyle = '#1c1917';
-      ctx.fillRect(-1.8, -7, 3.6, 3.8);
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-2.1, -9.2, 4.2, 3.2, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.4, 7.8, 0.25);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#292524',
+        glassTintAlpha: 0.94,
+        liquidHex: '#4c0519',
+        liquidTopY: -2.0,
+        w: 8.6,
+        topY: -8.6,
+        botY: 7.2,
+        shoulderStyle: 'bordeaux',
+        closure: 'capsule',
+        closureColor: '#991b1b',
+        labelPaper: '#fef3c7',
+        labelBand: '#7f1d1d',
+        labelAccent: '#d97706',
+        emblem: 'crest'
+      });
       return true;
     }
 
     // === FERMENTATION & DAIRY DRINKS ===
     case 'liquid_yeast_mixture': {
-      drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
+      drawShadow(ctx, 6.2, 2.5, 7.8, 0.24);
+      drawGlassJarShell(ctx, -4.6, -3.5, 9.2, 10.6, 1.8, '#b45309', '#78350f', () => {
+        const yGrad = ctx.createLinearGradient(0, -1.2, 0, 7.0);
+        yGrad.addColorStop(0.0, '#fffbeb');
+        yGrad.addColorStop(0.55, '#fde68a');
+        yGrad.addColorStop(1.0, '#b45309');
+        ctx.fillStyle = yGrad;
+        ctx.fillRect(-4.2, -1.0, 8.4, 8.0);
 
-      // Glass cylindrical fermentation jar / flask
-      ctx.fillStyle = 'rgba(241, 245, 249, 0.75)';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -3.5, 9, 11, 2);
-      ctx.fill();
+        // Frothy yeast krausen foam layer
+        ctx.fillStyle = '#fffbeb';
+        for (const [fx, fy, fr] of [[-2.0, -0.9, 1.0], [0, -1.2, 1.2], [2.0, -0.8, 1.0]]) {
+          ctx.beginPath();
+          ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // CO2 fermentation micro-bubbles
+        ctx.fillStyle = 'rgba(180, 83, 9, 0.65)';
+        for (const [bx, by, br] of [[-1.5, 2.0, 0.35], [1.2, 3.5, 0.4], [-0.8, 5.0, 0.32], [1.8, 1.2, 0.28]]) {
+          ctx.beginPath();
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
 
-      // Frothy active bubbling yeast sourdough liquid
-      ctx.fillStyle = '#fef3c7';
+      // Milliliter graduation hash ticks etched on side
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 0.32;
       ctx.beginPath();
-      ctx.roundRect(-3.8, -1, 7.6, 8, 1);
-      ctx.fill();
-
-      // Frothy foam bubbles on top
-      ctx.fillStyle = '#fffbeb';
-      ctx.beginPath();
-      ctx.arc(-2, -1, 1.1, 0, Math.PI * 2);
-      ctx.arc(0, -1.4, 1.3, 0, Math.PI * 2);
-      ctx.arc(2, -0.9, 1.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Active fermentation bubble specks inside
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.arc(-1.5, 2, 0.4, 0, Math.PI * 2);
-      ctx.arc(1.2, 3.5, 0.5, 0, Math.PI * 2);
-      ctx.arc(-0.8, 5, 0.4, 0, Math.PI * 2);
-      ctx.arc(1.8, 1.2, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Measuring scale graduation ticks on glass
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(-3.8, 1); ctx.lineTo(-2.2, 1);
-      ctx.moveTo(-3.8, 3); ctx.lineTo(-2.5, 3);
-      ctx.moveTo(-3.8, 5); ctx.lineTo(-2.2, 5);
+      ctx.moveTo(-3.8, 0.8); ctx.lineTo(-2.2, 0.8);
+      ctx.moveTo(-3.8, 2.8); ctx.lineTo(-2.5, 2.8);
+      ctx.moveTo(-3.8, 4.8); ctx.lineTo(-2.2, 4.8);
       ctx.stroke();
-
-      drawGlossBand(ctx, -3.5, -3, 1, 9.5, 0.4);
-
-      // Wide mouth sealed with natural cork / cheesecloth
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.roundRect(-2.8, -6, 5.6, 2.8, 0.8);
-      ctx.fill();
       return true;
     }
 
     case 'milk_raw':
     case 'milk_bottle_raw': {
-      drawShadow(ctx, 6.2, 2.5, 7.8, 0.22);
-
-      // Traditional glass milk bottle with creamy white whole farm milk
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -4, 9, 11.5, 2);
-      ctx.fill();
-
-      // Rich whole milk body
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(-3.8, -2, 7.6, 9, 1.5);
-      ctx.fill();
-
-      // Cream line separation near top
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(-3.8, -2, 7.6, 1.2);
-
-      // Blue farm crest label with cow emblem
-      ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(-3.6, 0.5, 7.2, 4.2);
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(0, 2.6, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      drawGlossBand(ctx, -3.5, -3.5, 1.2, 10, 0.45);
-
-      // Fluted glass bottle neck & blue foil crimped milk cap
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.fillRect(-2, -6.5, 4, 2.8);
-      ctx.fillStyle = '#2563eb';
-      ctx.beginPath();
-      ctx.roundRect(-2.6, -8.5, 5.2, 2.4, 0.8);
-      ctx.fill();
+      drawShadow(ctx, 6.0, 2.4, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#f1f5f9',
+        glassTintAlpha: 0.92,
+        liquidHex: '#ffffff',
+        liquidTopY: -2.4,
+        w: 8.6,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'burgundy',
+        closure: 'screw',
+        closureColor: '#1d4ed8',
+        labelPaper: '#ffffff',
+        labelBand: '#1d4ed8',
+        labelAccent: '#fef08a',
+        emblem: 'circle'
+      });
       return true;
     }
 
     case 'carton_milk':
     case 'milk':
     case 'milk_pasteurized_carton': {
-      drawShadow(ctx, 6.5, 2.8, 7.8, 0.24);
+      drawShadow(ctx, 6.4, 2.6, 7.8, 0.25);
 
-      // Classic gable-top Tetra cardboard milk carton (White & Sky Blue)
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -3.5, 9, 11, 1.2);
-      ctx.fill();
+      // 3D gable-top dairy carton
+      const fGrad = ctx.createLinearGradient(-5.2, 0, 2.8, 0);
+      fGrad.addColorStop(0.0, '#ffffff');
+      fGrad.addColorStop(1.0, '#e2e8f0');
+      ctx.fillStyle = fGrad;
+      ctx.fillRect(-5.2, -3.6, 8.0, 10.8);
 
-      // Gable top pitched roof
-      ctx.fillStyle = '#e2e8f0';
+      // Shaded right panel
+      ctx.fillStyle = '#cbd5e1';
       ctx.beginPath();
-      ctx.moveTo(-4.5, -3.5);
-      ctx.lineTo(0, -7.5);
-      ctx.lineTo(4.5, -3.5);
+      ctx.moveTo(2.8, -3.6);
+      ctx.lineTo(5.2, -2.6);
+      ctx.lineTo(5.2, 6.4);
+      ctx.lineTo(2.8, 7.2);
       ctx.closePath();
       ctx.fill();
 
-      // Gable ridge fin
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(-1.5, -8.2, 3, 1.2);
-
-      // White plastic screw pour spout on gable side
-      ctx.fillStyle = '#38bdf8';
+      // Gable roof slopes
+      ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.arc(1.8, -5, 1, 0, Math.PI * 2);
+      ctx.moveTo(-5.2, -3.6);
+      ctx.lineTo(-1.2, -7.2);
+      ctx.lineTo(2.8, -3.6);
+      ctx.closePath();
       ctx.fill();
 
-      // Blue printed branding banner and cow pasture graphic
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.moveTo(-1.2, -7.2);
+      ctx.lineTo(1.2, -6.2);
+      ctx.lineTo(5.2, -2.6);
+      ctx.lineTo(2.8, -3.6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Heat-sealed top fin
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.moveTo(-1.2, -8.0);
+      ctx.lineTo(1.2, -7.0);
+      ctx.lineTo(1.2, -6.2);
+      ctx.lineTo(-1.2, -7.2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Editorial dairy blue & meadow band
       ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-4.5, -1, 9, 4.5);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3, 0.2, 6, 1.2); // "MILK"
+      ctx.fillRect(-5.2, -1.6, 8.0, 4.4);
+      ctx.fillStyle = '#0369a1';
+      ctx.beginPath();
+      ctx.moveTo(2.8, -1.6);
+      ctx.lineTo(5.2, -0.8);
+      ctx.lineTo(5.2, 3.3);
+      ctx.lineTo(2.8, 2.8);
+      ctx.closePath();
+      ctx.fill();
+
       ctx.fillStyle = '#16a34a';
-      ctx.fillRect(-4.5, 4.5, 9, 2.5); // green pasture wave
+      ctx.fillRect(-5.2, 4.4, 8.0, 2.8);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(-1.2, 0.5, 1.15, 0, Math.PI * 2);
+      ctx.fill();
+      drawMicroBarcode(ctx, 3.25, 3.5, 1.45, 2.2, '#0f172a', 'rgba(255,255,255,0.85)');
+
+      // Plastic dairy cap on gable slope
+      drawScrewCap(ctx, 1.8, -5.8, 2.1, 1.35, '#0284c7', false);
       return true;
     }
 
     case 'kefir':
     case 'kefir_fermented_bottle': {
-      drawShadow(ctx, 6.2, 2.5, 7.8, 0.22);
-
-      // White HDPE plastic bottle with contoured ribs for fermented kefir
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -4, 9, 11.5, 2);
-      ctx.fill();
-
-      // Probiotic green band wave
-      ctx.fillStyle = '#16a34a';
-      ctx.fillRect(-4.5, 0, 9, 4.5);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3, 1.2, 6, 1.2);
-
-      // Drop graphic
-      ctx.fillStyle = '#4ade80';
-      ctx.beginPath();
-      ctx.arc(0, 3.2, 0.9, 0, Math.PI * 2);
-      ctx.fill();
-
-      drawGlossBand(ctx, -3.5, -3.5, 1.2, 10, 0.35);
-
-      // Ribbed green screw cap
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(-2, -6.5, 4, 2.8);
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.roundRect(-2.5, -8.5, 5, 2.4, 0.8);
-      ctx.fill();
+      drawShadow(ctx, 5.8, 2.4, 7.8, 0.24);
+      drawStudioGlassBottle(ctx, {
+        glassHex: '#f1f5f9',
+        glassTintAlpha: 0.94,
+        liquidHex: '#ffffff',
+        liquidTopY: -2.4,
+        w: 8.6,
+        topY: -8.2,
+        botY: 7.2,
+        shoulderStyle: 'burgundy',
+        closure: 'screw',
+        closureColor: '#15803d',
+        labelPaper: '#f8fafc',
+        labelBand: '#16a34a',
+        labelAccent: '#4ade80',
+        emblem: 'leaf'
+      });
       return true;
     }
 
     case 'buttermilk':
     case 'buttermilk_fermented_jar': {
-      drawShadow(ctx, 7, 2.8, 7.8, 0.24);
-
-      // Traditional ceramic earthenware crock / jar with pale cultured buttermilk
-      const crockGrad = ctx.createLinearGradient(-5, -4, 5, 6);
-      crockGrad.addColorStop(0, '#fef3c7');
-      crockGrad.addColorStop(0.5, '#fde68a');
-      crockGrad.addColorStop(1, '#d97706');
+      drawShadow(ctx, 6.8, 2.7, 7.8, 0.25);
+      // Glazed earthenware crock with parchment tie-cover
+      const crockGrad = ctx.createLinearGradient(-5.2, 0, 5.2, 0);
+      crockGrad.addColorStop(0.0, '#78350f');
+      crockGrad.addColorStop(0.28, '#d97706');
+      crockGrad.addColorStop(0.65, '#92400e');
+      crockGrad.addColorStop(1.0, '#451a03');
       ctx.fillStyle = crockGrad;
       ctx.beginPath();
-      ctx.roundRect(-5, -3.5, 10, 11, 2.5);
+      ctx.roundRect(-5.0, -3.4, 10.0, 10.8, 2.4);
       ctx.fill();
 
-      // Glazed ceramic rim collar
-      ctx.fillStyle = '#b45309';
+      // Glazed rim collar
+      ctx.fillStyle = '#5c2c0e';
       ctx.beginPath();
-      ctx.roundRect(-5.5, -4.2, 11, 2, 0.8);
+      ctx.roundRect(-5.4, -4.1, 10.8, 1.8, 0.7);
       ctx.fill();
 
-      // Rustic tied cloth cover on top with twine string
-      ctx.fillStyle = '#fef3c7';
+      // Pleated breathable linen/parchment cover tied with hemp twine
+      ctx.fillStyle = '#fef9c3';
       ctx.beginPath();
-      ctx.roundRect(-4.5, -6.2, 9, 2.8, 1);
+      ctx.roundRect(-4.7, -6.2, 9.4, 2.6, 0.9);
       ctx.fill();
-
       ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.8;
+      ctx.lineWidth = 0.55;
       ctx.beginPath();
-      ctx.moveTo(-4.5, -4.2); ctx.lineTo(4.5, -4.2);
+      ctx.moveTo(-4.7, -4.1);
+      ctx.lineTo(4.7, -4.1);
       ctx.stroke();
 
-      // Rustic pottery glaze highlight
-      drawGlossBand(ctx, -3.8, -2, 1.2, 8.5, 0.4);
+      // Studio glaze specular highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.fillRect(-3.6, -2.0, 1.1, 8.2);
       return true;
     }
 

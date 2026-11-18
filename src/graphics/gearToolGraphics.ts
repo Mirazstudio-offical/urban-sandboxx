@@ -1,5 +1,18 @@
 // Procedural 2D Canvas Models for Tools, Auto, Gear, and Valuables
-import { drawShadow, drawGlossBand } from './itemGraphicShared';
+import {
+  drawShadow,
+  drawGlossBand,
+  drawLitEllipse,
+  drawBotanicalLeaf,
+  drawCrimpedSeal,
+  drawPouchCrinkles,
+  drawStudioLabelPanel,
+  drawFilmWindow,
+  drawMicroBarcode,
+  drawScrewCap,
+  drawMetalCanLid,
+  applyCylinderLightingOverlay
+} from './itemGraphicShared';
 import { drawItemModel2D } from '../itemGraphic';
 import {
   resolveContainerVisualAttributes,
@@ -920,96 +933,78 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_oil': {
       drawShadow(ctx, 8.5, 3.2, 8, 0.28);
 
-      // Authentic 4L Automotive Engine Oil Canister (Genesis / Mobil / Castrol style)
-      // Premium dark titanium / gunmetal sculpted polymer body
+      // Sculpted 4L dark titanium-graphite HDPE automotive oil jug
       const canGrad = ctx.createLinearGradient(-7, -4.5, 7, 7.5);
-      canGrad.addColorStop(0, '#334155');
-      canGrad.addColorStop(0.5, '#1e293b');
-      canGrad.addColorStop(1, '#0f172a');
+      canGrad.addColorStop(0.0, '#475569');
+      canGrad.addColorStop(0.28, '#1e293b');
+      canGrad.addColorStop(0.75, '#0f172a');
+      canGrad.addColorStop(1.0, '#020617');
       ctx.fillStyle = canGrad;
       ctx.beginPath();
       ctx.roundRect(-7, -4.5, 14, 12, 2.2);
       ctx.fill();
-
-      // Canister chassis beveled edge highlight
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+      ctx.lineWidth = 0.45;
       ctx.stroke();
 
-      // Integrated heavy-duty top carrying handle with finger grip
+      // Ergonomic molded carrying handle with grip recess
       ctx.fillStyle = '#1e293b';
       ctx.beginPath();
-      ctx.roundRect(-4, -8, 10.5, 3.8, 1.5);
+      ctx.roundRect(-3.8, -8, 10.2, 3.8, 1.5);
       ctx.fill();
       ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 0.7;
+      ctx.lineWidth = 0.45;
       ctx.stroke();
-      // Ergonomic grip cutout
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.roundRect(-2.5, -6.5, 7.5, 2.2, 1);
-      ctx.fill();
-
-      // Angled pouring neck at top-left
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(-6.5, -7.5, 2.8, 3.5);
-      // Gold threaded screw cap with safety seal ring
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.roundRect(-7, -8.5, 3.8, 2.8, 0.8);
-      ctx.fill();
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(-6.8, -8.5, 3.4, 0.7); // Cap highlight
-      ctx.fillStyle = '#b45309';
-      ctx.fillRect(-7, -6.2, 3.8, 0.6); // Tamper seal ring
-
-      // Clear measuring sight-strip on side revealing fresh golden-amber synthetic oil
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(4.6, -3.5, 1.8, 10);
-      // Amber liquid fill inside gauge (Full 4 Liters)
-      const oilGrad = ctx.createLinearGradient(4.6, -3.5, 6.4, 6.5);
-      oilGrad.addColorStop(0, '#f59e0b');
-      oilGrad.addColorStop(1, '#d97706');
-      ctx.fillStyle = oilGrad;
-      ctx.fillRect(4.8, -3.2, 1.4, 9.4);
-      // Gradation ticks (1L, 2L, 3L, 4L)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(4.5, -2, 0.8, 0.5);
-      ctx.fillRect(4.5, 0.5, 0.8, 0.5);
-      ctx.fillRect(4.5, 3, 0.8, 0.5);
-
-      // High-Performance Sports Racing Label
       ctx.fillStyle = '#09090b';
       ctx.beginPath();
-      ctx.roundRect(-5.5, -2.5, 9, 8.5, 1.2);
+      ctx.roundRect(-2.4, -6.5, 7.4, 2.1, 0.9);
       ctx.fill();
 
-      // Gold & Red Racing Chevron Trim
-      ctx.fillStyle = '#d97706';
-      ctx.fillRect(-5.5, -2.5, 9, 1.2);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-5.5, -1.3, 9, 0.6);
+      // Angled pouring neck & knurled amber screw cap with tamper ring
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(-6.4, -7.2, 2.6, 3.2);
+      drawScrewCap(ctx, -5.1, -8.7, 3.6, 2.3, '#d97706', true);
 
-      // Viscosity Designation "5W-40" in Bold
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2.2px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('5W-40', -1, 1.8);
+      // Recessed clear sight-level gauge with golden synthetic oil meniscus
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.roundRect(4.6, -3.5, 1.7, 10.0, 0.5);
+      ctx.fill();
+      const oilGrad = ctx.createLinearGradient(4.8, -3.2, 6.1, 6.2);
+      oilGrad.addColorStop(0.0, '#fbbf24');
+      oilGrad.addColorStop(0.5, '#d97706');
+      oilGrad.addColorStop(1.0, '#92400e');
+      ctx.fillStyle = oilGrad;
+      ctx.fillRect(4.85, -3.1, 1.2, 9.2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+      for (let ty = -2.0; ty <= 4.5; ty += 2.0) {
+        ctx.fillRect(4.5, ty, 0.7, 0.32);
+      }
 
-      // Gold "SYNTHETIC" banner
+      // High-performance carbon & gold technical label with viscosity gauge + barcode
+      drawStudioLabelPanel(ctx, -5.6, -2.5, 9.2, 8.6, {
+        paperColor: '#0f172a',
+        bandColor: '#b45309',
+        accentColor: '#dc2626',
+        inkColor: '#e2e8f0',
+        goldFoil: true,
+        hasBarcode: true,
+        emblem: 'none',
+        cylindrical: false
+      });
+
+      // Technical viscosity spec bars + golden oil drop insignia
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-4.4, 1.1, 5.2, 0.72);
       ctx.fillStyle = '#fbbf24';
-      ctx.font = 'bold 1.1px sans-serif';
-      ctx.fillText('SYNTHETIC', -1, 3.4);
+      ctx.fillRect(-4.4, 2.15, 3.6, 0.42);
+      ctx.beginPath();
+      ctx.moveTo(2.1, 0.9);
+      ctx.bezierCurveTo(3.0, 2.1, 2.9, 3.1, 2.1, 3.1);
+      ctx.bezierCurveTo(1.3, 3.1, 1.2, 2.1, 2.1, 0.9);
+      ctx.fill();
 
-      // Engine piston emblem
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-2, 4.2, 2, 1.2);
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(-2, 4.2, 2, 1.2);
-
-      // Specular gloss reflection across canister body
-      drawGlossBand(ctx, -6, -4, 2.5, 11);
+      drawGlossBand(ctx, -6, -4, 1.6, 11, 0.25);
       return true;
     }
 
@@ -1843,106 +1838,80 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_coolant': {
       drawShadow(ctx, 8.5, 3.2, 8, 0.28);
 
-      // Authentic 5L Automotive Coolant Canister (G12+ Long Life / Felix / Sintec style)
-      // Translucent milky HDPE white/light-grey polymer container
+      // Semi-translucent milky HDPE 5L coolant tank
       const canGrad = ctx.createLinearGradient(-7, -4.5, 7, 7.5);
-      canGrad.addColorStop(0, '#f8fafc');
+      canGrad.addColorStop(0.0, '#f8fafc');
       canGrad.addColorStop(0.5, '#e2e8f0');
-      canGrad.addColorStop(1, '#cbd5e1');
+      canGrad.addColorStop(1.0, '#94a3b8');
       ctx.fillStyle = canGrad;
       ctx.beginPath();
       ctx.roundRect(-7, -4.5, 14, 12, 2.2);
       ctx.fill();
 
-      // Translucent inner chamber: Vibrant Ruby-Crimson G12+ Coolant Liquid visible through plastic
+      // Vibrant ruby-crimson G12+ coolant refraction visible through HDPE wall
       const coolantGrad = ctx.createLinearGradient(-6.2, -3.5, 6.2, 7);
-      coolantGrad.addColorStop(0, 'rgba(225, 29, 72, 0.75)'); // Vibrant G12+ Crimson
-      coolantGrad.addColorStop(1, 'rgba(190, 18, 60, 0.85)');
+      coolantGrad.addColorStop(0.0, 'rgba(244, 63, 94, 0.72)');
+      coolantGrad.addColorStop(0.6, 'rgba(225, 29, 72, 0.84)');
+      coolantGrad.addColorStop(1.0, 'rgba(136, 19, 55, 0.92)');
       ctx.fillStyle = coolantGrad;
       ctx.beginPath();
       ctx.roundRect(-6.2, -3.5, 12.4, 10.5, 1.5);
       ctx.fill();
 
-      // Outer plastic body border highlight
       ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.8;
+      ctx.lineWidth = 0.55;
       ctx.beginPath();
       ctx.roundRect(-7, -4.5, 14, 12, 2.2);
       ctx.stroke();
 
-      // Molded ergonomic top carrying handle with finger ribs
+      // Molded carry handle + safety screw cap
       ctx.fillStyle = '#e2e8f0';
       ctx.beginPath();
-      ctx.roundRect(-4.5, -8, 11, 3.8, 1.5);
+      ctx.roundRect(-4.2, -8, 10.6, 3.8, 1.5);
       ctx.fill();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.7;
-      ctx.stroke();
-      // Handle cutout hole
       ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.roundRect(-3, -6.5, 8, 2.2, 1);
+      ctx.roundRect(-2.8, -6.5, 7.6, 2.1, 0.9);
       ctx.fill();
 
-      // Angled pouring spout at top-left
       ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(-6.5, -7.5, 2.8, 3.5);
-      // Crimson-red ribbed childproof safety cap with lock ring
-      ctx.fillStyle = '#be123c';
-      ctx.beginPath();
-      ctx.roundRect(-7, -8.5, 3.8, 2.8, 0.8);
-      ctx.fill();
-      ctx.fillStyle = '#f43f5e';
-      ctx.fillRect(-6.8, -8.5, 3.4, 0.7); // Cap highlight
-      ctx.fillStyle = '#881337';
-      ctx.fillRect(-7, -6.2, 3.8, 0.6); // Lock ring
+      ctx.fillRect(-6.4, -7.2, 2.6, 3.2);
+      drawScrewCap(ctx, -5.1, -8.7, 3.6, 2.3, '#be123c', true);
 
-      // Clear volume gauge strip on right side
-      ctx.fillStyle = '#94a3b8';
+      // Clear volume sight gauge
+      ctx.fillStyle = '#475569';
       ctx.fillRect(4.8, -3.5, 1.4, 10);
-      // Deep crimson liquid inside gauge
-      ctx.fillStyle = '#e11d48';
-      ctx.fillRect(5, -3.2, 1, 9.4);
-      // Volume marks
+      ctx.fillStyle = '#f43f5e';
+      ctx.fillRect(5.0, -3.2, 1.0, 9.4);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(4.6, -2, 0.8, 0.5);
-      ctx.fillRect(4.6, 0.5, 0.8, 0.5);
-      ctx.fillRect(4.6, 3, 0.8, 0.5);
+      for (let ty = -2; ty <= 4; ty += 2.2) {
+        ctx.fillRect(4.6, ty, 0.7, 0.32);
+      }
 
-      // High-Contrast Diagnostic Coolant Label
-      ctx.fillStyle = '#ffffff';
+      // Clinical coolant spec placard with frost crystal & radiator fin vector
+      drawStudioLabelPanel(ctx, -5.6, -2.5, 9.2, 8.6, {
+        paperColor: '#f8fafc',
+        bandColor: '#be123c',
+        accentColor: '#0284c7',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'none',
+        cylindrical: false
+      });
+
+      // Radiator grille + snowflake micro-emblem
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 0.45;
+      ctx.strokeRect(-4.4, 1.1, 3.2, 1.8);
       ctx.beginPath();
-      ctx.roundRect(-5.5, -2.5, 9, 8.5, 1.2);
-      ctx.fill();
-      ctx.strokeStyle = '#e11d48';
-      ctx.lineWidth = 0.7;
+      ctx.moveTo(-3.4, 1.1); ctx.lineTo(-3.4, 2.9);
+      ctx.moveTo(-2.2, 1.1); ctx.lineTo(-2.2, 2.9);
+      ctx.moveTo(1.2, 1.0); ctx.lineTo(1.2, 3.0);
+      ctx.moveTo(0.2, 2.0); ctx.lineTo(2.2, 2.0);
       ctx.stroke();
 
-      // Crimson Header Strip with "G12+"
-      ctx.fillStyle = '#e11d48';
-      ctx.fillRect(-5.5, -2.5, 9, 2.8);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('G12+', -1, -0.4);
-
-      // Subzero Frost Resistance Badge: "-40°C" with snowflake
-      ctx.fillStyle = '#0284c7';
-      ctx.font = 'bold 1.8px sans-serif';
-      ctx.fillText('-40°C', -1, 3);
-
-      // Radiator cooling circuit icon
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 0.6;
-      ctx.strokeRect(-3, 3.8, 4, 1.6);
-      ctx.beginPath();
-      ctx.moveTo(-2, 3.8); ctx.lineTo(-2, 5.4);
-      ctx.moveTo(-1, 3.8); ctx.lineTo(-1, 5.4);
-      ctx.moveTo(0, 3.8); ctx.lineTo(0, 5.4);
-      ctx.stroke();
-
-      // Specular gloss reflection across translucent container
-      drawGlossBand(ctx, -6, -4, 2.5, 11);
+      drawGlossBand(ctx, -6, -4, 1.8, 11, 0.35);
       return true;
     }
 
@@ -1951,108 +1920,83 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_washer_fluid': {
       drawShadow(ctx, 8.5, 3.2, 8, 0.28);
 
-      // Authentic 5L Winter Windshield Washer Fluid ("Омывайка -25°C Arctic")
-      // Semi-translucent frosted HDPE plastic canister
+      // Frosted translucent HDPE 5L winter washer canister
       const canGrad = ctx.createLinearGradient(-7, -4.5, 7, 7.5);
-      canGrad.addColorStop(0, 'rgba(240, 249, 255, 0.9)');
-      canGrad.addColorStop(0.5, 'rgba(224, 242, 254, 0.85)');
-      canGrad.addColorStop(1, 'rgba(186, 230, 253, 0.9)');
+      canGrad.addColorStop(0.0, 'rgba(240, 249, 255, 0.92)');
+      canGrad.addColorStop(0.5, 'rgba(224, 242, 254, 0.84)');
+      canGrad.addColorStop(1.0, 'rgba(148, 163, 184, 0.88)');
       ctx.fillStyle = canGrad;
       ctx.beginPath();
       ctx.roundRect(-7, -4.5, 14, 12, 2.2);
       ctx.fill();
 
-      // Glowing Neon Cyan / Azure Washer Fluid visible inside tank
+      // Vibrant arctic-cyan washer fluid refraction
       const fluidGrad = ctx.createLinearGradient(-6.2, -3.5, 6.2, 7);
-      fluidGrad.addColorStop(0, 'rgba(14, 165, 233, 0.85)'); // Vivid Arctic Cyan-Blue
-      fluidGrad.addColorStop(1, 'rgba(2, 132, 199, 0.92)');
+      fluidGrad.addColorStop(0.0, 'rgba(56, 189, 248, 0.78)');
+      fluidGrad.addColorStop(0.6, 'rgba(14, 165, 233, 0.88)');
+      fluidGrad.addColorStop(1.0, 'rgba(3, 105, 161, 0.94)');
       ctx.fillStyle = fluidGrad;
       ctx.beginPath();
       ctx.roundRect(-6.2, -3.5, 12.4, 10.5, 1.5);
       ctx.fill();
 
-      // Container outer rim stroke
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.roundRect(-7, -4.5, 14, 12, 2.2);
       ctx.stroke();
 
-      // Molded ergonomic top carrying handle
+      // Handle & arctic screw cap
       ctx.fillStyle = '#e0f2fe';
       ctx.beginPath();
-      ctx.roundRect(-4.5, -8, 11, 3.8, 1.5);
+      ctx.roundRect(-4.2, -8, 10.6, 3.8, 1.5);
       ctx.fill();
-      ctx.strokeStyle = '#bae6fd';
-      ctx.lineWidth = 0.7;
-      ctx.stroke();
-
-      // Handle cutout hole
       ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.roundRect(-3, -6.5, 8, 2.2, 1);
+      ctx.roundRect(-2.8, -6.5, 7.6, 2.1, 0.9);
       ctx.fill();
 
-      // Spout & bright blue child-safe screw cap
       ctx.fillStyle = '#bae6fd';
-      ctx.fillRect(-6.5, -7.5, 2.8, 3.5);
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(-7, -8.5, 3.8, 2.8, 0.8);
-      ctx.fill();
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(-6.8, -8.5, 3.4, 0.7); // Cap highlight
-      ctx.fillStyle = '#0369a1';
-      ctx.fillRect(-7, -6.2, 3.8, 0.6); // Lock ring
+      ctx.fillRect(-6.4, -7.2, 2.6, 3.2);
+      drawScrewCap(ctx, -5.1, -8.7, 3.6, 2.3, '#0284c7', true);
 
-      // Measurement sight-gauge on right side
-      ctx.fillStyle = '#bae6fd';
+      // Volume gauge
+      ctx.fillStyle = '#7dd3fc';
       ctx.fillRect(4.8, -3.5, 1.4, 10);
-      ctx.fillStyle = '#0ea5e9';
-      ctx.fillRect(5, -3.2, 1, 9.4);
-      // Ticks (1L, 2L, 3L, 4L, 5L)
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(5.0, -3.2, 1.0, 9.4);
       ctx.fillStyle = '#ffffff';
-      for (let ty = -2; ty <= 5; ty += 1.8) {
-        ctx.fillRect(4.6, ty, 0.8, 0.4);
+      for (let ty = -2; ty <= 4; ty += 2.2) {
+        ctx.fillRect(4.6, ty, 0.7, 0.32);
       }
 
-      // Large Arctic Winter Diagnostic Label
-      ctx.fillStyle = '#0c4a6e';
-      ctx.beginPath();
-      ctx.roundRect(-5.5, -2.5, 9.2, 8.5, 1.2);
-      ctx.fill();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 0.7;
-      ctx.stroke();
+      // Arctic deep-navy & cyan label with snowflake & windshield sweep arc
+      drawStudioLabelPanel(ctx, -5.6, -2.5, 9.2, 8.6, {
+        paperColor: '#0c4a6e',
+        bandColor: '#0284c7',
+        accentColor: '#7dd3fc',
+        inkColor: '#e0f2fe',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'none',
+        cylindrical: false
+      });
 
-      // Top cyan banner: "-25°C"
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-5.5, -2.5, 9.2, 3.0);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2.1px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('-25°C', -0.9, -0.3);
-
-      // Snowflake emblem
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 0.6;
-      const sfx = -0.9, sfy = 2.2;
+      ctx.lineWidth = 0.45;
+      const sfx = -2.2, sfy = 2.0;
       ctx.beginPath();
-      ctx.moveTo(sfx - 1.8, sfy); ctx.lineTo(sfx + 1.8, sfy);
-      ctx.moveTo(sfx, sfy - 1.8); ctx.lineTo(sfx, sfy + 1.8);
-      ctx.moveTo(sfx - 1.2, sfy - 1.2); ctx.lineTo(sfx + 1.2, sfy + 1.2);
-      ctx.moveTo(sfx - 1.2, sfy + 1.2); ctx.lineTo(sfx + 1.2, sfy - 1.2);
+      ctx.moveTo(sfx - 1.3, sfy); ctx.lineTo(sfx + 1.3, sfy);
+      ctx.moveTo(sfx, sfy - 1.3); ctx.lineTo(sfx, sfy + 1.3);
+      ctx.moveTo(sfx - 0.9, sfy - 0.9); ctx.lineTo(sfx + 0.9, sfy + 0.9);
+      ctx.moveTo(sfx - 0.9, sfy + 0.9); ctx.lineTo(sfx + 0.9, sfy - 0.9);
       ctx.stroke();
-
-      // Windshield wiper sweep graphic icon
       ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 0.7;
       ctx.beginPath();
-      ctx.arc(-0.9, 5.2, 2.5, -Math.PI * 0.75, -Math.PI * 0.25);
+      ctx.arc(1.2, 3.3, 1.9, -Math.PI * 0.8, -Math.PI * 0.2);
       ctx.stroke();
 
-      // Specular gloss reflection streak
-      drawGlossBand(ctx, -6, -4, 2.2, 11, 0.4);
+      drawGlossBand(ctx, -6, -4, 1.8, 11, 0.38);
       return true;
     }
 
@@ -2061,53 +2005,44 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_brake_fluid': {
       drawShadow(ctx, 6.5, 2.5, 7.8, 0.22);
 
-      // Authentic 500ml Automotive Synthetic Brake Fluid DOT-4 (Castrol / Bosch style)
-      // Dark graphite / charcoal cylindrical polymer bottle
-      ctx.fillStyle = '#1e293b';
+      // Cylindrical charcoal HDPE 500ml synthetic brake fluid bottle
+      const cylGrad = ctx.createLinearGradient(-4.8, 0, 4.8, 0);
+      cylGrad.addColorStop(0.0, '#0f172a');
+      cylGrad.addColorStop(0.3, '#475569');
+      cylGrad.addColorStop(0.65, '#1e293b');
+      cylGrad.addColorStop(1.0, '#020617');
+      ctx.fillStyle = cylGrad;
       ctx.beginPath();
-      ctx.roundRect(-4.8, -4.5, 9.6, 12, 1.8);
+      ctx.roundRect(-4.8, -4.5, 9.6, 12, 1.7);
       ctx.fill();
 
-      // Bottle neck & yellow childproof ribbed safety cap
+      // Bottle neck & childproof amber-yellow cap
       ctx.fillStyle = '#334155';
-      ctx.fillRect(-1.6, -7.0, 3.2, 3.0);
-      ctx.fillStyle = '#eab308';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8.6, 4.4, 2.6, 0.8);
-      ctx.fill();
-      ctx.fillStyle = '#ca8a04';
-      ctx.fillRect(-2.2, -6.6, 4.4, 0.6); // Tamper seal
+      ctx.fillRect(-1.6, -7.0, 3.2, 2.8);
+      drawScrewCap(ctx, 0, -8.8, 4.2, 2.3, '#eab308', true);
 
-      // High-Temperature Racing Formula Label
-      ctx.fillStyle = '#09090b';
-      ctx.beginPath();
-      ctx.roundRect(-4.2, -2.5, 8.4, 8.5, 1.0);
-      ctx.fill();
+      // Sleek matte obsidian & gold racing spec label
+      drawStudioLabelPanel(ctx, -4.4, -2.5, 8.8, 8.2, {
+        paperColor: '#09090b',
+        bandColor: '#eab308',
+        accentColor: '#dc2626',
+        inkColor: '#e2e8f0',
+        goldFoil: true,
+        hasBarcode: true,
+        emblem: 'none',
+        cylindrical: true
+      });
 
-      // Yellow top stripe
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(-4.2, -2.5, 8.4, 1.4);
-
-      // "DOT 4" bold lettering
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2.4px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('DOT 4', 0, 1.2);
-
-      // Gold badge "SYNTHETIC"
-      ctx.fillStyle = '#fbbf24';
-      ctx.font = 'bold 1.0px sans-serif';
-      ctx.fillText('BRAKE FLUID', 0, 3.0);
-
-      // Perforated brake disc rotor icon
+      // Perforated brake disc rotor vector emblem
       ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.6;
+      ctx.lineWidth = 0.52;
       ctx.beginPath();
-      ctx.arc(0, 4.5, 1.2, 0, Math.PI * 2);
+      ctx.arc(-1.0, 2.2, 1.3, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(0.2, 1.3, 0.7, 1.8);
 
-      // Gloss streak
-      drawGlossBand(ctx, -3.8, -4.0, 1.2, 11, 0.35);
+      drawGlossBand(ctx, -3.8, -4.0, 1.1, 10.8, 0.3);
       return true;
     }
 
@@ -2239,55 +2174,54 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_plastic_10l': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.25);
 
-      // Blue HDPE rectangular body with rounded corners
+      // Blue HDPE ribbed utility tank
       const bodyGrad = ctx.createLinearGradient(-6.5, -5, 6.5, 7);
-      bodyGrad.addColorStop(0, '#0284c7');
-      bodyGrad.addColorStop(0.4, '#0369a1');
-      bodyGrad.addColorStop(1, '#075985');
+      bodyGrad.addColorStop(0.0, '#0ea5e9');
+      bodyGrad.addColorStop(0.35, '#0284c7');
+      bodyGrad.addColorStop(0.8, '#0369a1');
+      bodyGrad.addColorStop(1.0, '#0c4a6e');
       ctx.fillStyle = bodyGrad;
       ctx.beginPath();
       ctx.roundRect(-6.5, -4, 13, 11, 2.2);
       ctx.fill();
 
-      // Molded top carry handle loop
+      // Molded top carry handle & cap
       ctx.fillStyle = '#0284c7';
       ctx.beginPath();
       ctx.roundRect(-4.5, -7.5, 9, 3.5, 1.2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
       ctx.fillRect(-3.2, -6.5, 6.4, 2);
 
-      // Translucent liquid level vertical view strip
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.fillRect(4.2, -3.5, 1.4, 9.8);
-      // Embossed liter tick marks
+      // Translucent level view strip with ticks
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.72)';
+      ctx.fillRect(4.3, -3.2, 1.3, 9.2);
       ctx.fillStyle = '#0369a1';
-      for (let y = -2.5; y <= 5.5; y += 2) {
-        ctx.fillRect(3.8, y, 0.8, 0.5);
+      for (let y = -2.2; y <= 5.2; y += 1.9) {
+        ctx.fillRect(3.9, y, 0.75, 0.35);
       }
 
-      // Large red screw fill cap with grip ridges
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-5.5, -8.5, 3.2, 2.2, 0.6);
-      ctx.fill();
-      ctx.fillStyle = '#b91c1c';
-      ctx.fillRect(-5.5, -7.2, 3.2, 0.5);
+      drawScrewCap(ctx, -3.9, -8.8, 3.2, 2.2, '#dc2626', true);
 
-      // White rear breather vent plug
+      // Rear vent plug
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.arc(3.5, -7.2, 1.1, 0, Math.PI * 2);
+      ctx.arc(3.5, -7.2, 1.0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Molded "10L HDPE" label
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.font = 'bold 2.8px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('10L', -0.5, 1.5);
+      // Industrial HDPE spec sticker
+      drawStudioLabelPanel(ctx, -5.2, -2.0, 8.4, 7.2, {
+        paperColor: '#f8fafc',
+        bandColor: '#0369a1',
+        accentColor: '#0284c7',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'diamond',
+        cylindrical: false
+      });
 
-      drawGlossBand(ctx, -5.5, -4, 1.4, 10.5, 0.35);
+      drawGlossBand(ctx, -5.5, -4, 1.3, 10.5, 0.35);
       return true;
     }
 
@@ -2295,14 +2229,13 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_plastic_5l': {
       drawShadow(ctx, 7.8, 2.8, 7.5, 0.25);
 
-      // Compact red blow-molded HDPE canister body
       const redGrad = ctx.createLinearGradient(-6, -4, 6, 6);
-      redGrad.addColorStop(0, '#ef4444');
-      redGrad.addColorStop(0.4, '#dc2626');
-      redGrad.addColorStop(1, '#991b1b');
+      redGrad.addColorStop(0.0, '#f87171');
+      redGrad.addColorStop(0.35, '#dc2626');
+      redGrad.addColorStop(1.0, '#7f1d1d');
       ctx.fillStyle = redGrad;
       ctx.beginPath();
-      ctx.roundRect(-6, -3, 12, 9.5, 2.2);
+      ctx.roundRect(-6, -3, 12, 9.5, 2.0);
       ctx.fill();
 
       // Molded top handle
@@ -2310,16 +2243,12 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.beginPath();
       ctx.roundRect(-4.5, -6.5, 9, 3.2, 1.2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
       ctx.fillRect(-3.2, -5.5, 6.4, 1.8);
 
-      // Yellow safety screw-cap with child lock
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.roundRect(2.5, -7.5, 3.2, 2.2, 0.6);
-      ctx.fill();
+      drawScrewCap(ctx, 4.1, -7.7, 3.2, 2.1, '#facc15', true);
 
-      // Flexible accordion black pouring spout clipped to side
+      // Accordion flexible black pour nozzle clipped to side
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 1.4;
       ctx.beginPath();
@@ -2328,18 +2257,17 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.lineTo(-4.2, 5.5);
       ctx.stroke();
 
-      // White hazard flame decal
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2.6px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('5L', 0, 1.5);
-
-      // Warning flame silhouette
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.arc(0, -1, 0.9, 0, Math.PI * 2);
-      ctx.fill();
+      // Hazard spec placard with flame badge & micro-barcode
+      drawStudioLabelPanel(ctx, -3.6, -1.6, 7.8, 6.6, {
+        paperColor: '#fef2f2',
+        bandColor: '#991b1b',
+        accentColor: '#eab308',
+        inkColor: '#450a0a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'diamond',
+        cylindrical: false
+      });
 
       drawGlossBand(ctx, -4.5, -3, 1.2, 9.2, 0.35);
       return true;
@@ -2350,22 +2278,31 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_diesel': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.26);
 
-      // Heavy 20L Jerrycan in dark olive/golden yellow diesel color
-      ctx.fillStyle = '#854d0e';
+      const dGrad = ctx.createLinearGradient(-7, -5, 7, 7);
+      dGrad.addColorStop(0.0, '#a16207');
+      dGrad.addColorStop(0.45, '#854d0e');
+      dGrad.addColorStop(1.0, '#422006');
+      ctx.fillStyle = dGrad;
       ctx.beginPath();
       ctx.roundRect(-7, -5, 14, 12, 2.5);
       ctx.fill();
 
-      // Distinctive wide yellow identity stripe across middle
+      // Wide amber-gold diesel band
       ctx.fillStyle = '#eab308';
-      ctx.fillRect(-7, -0.5, 14, 4);
+      ctx.fillRect(-7, -0.8, 14, 3.8);
 
-      // X-rib stamp
-      ctx.strokeStyle = '#713f12';
-      ctx.lineWidth = 1.2;
+      // Beveled stamped X-rib
+      ctx.strokeStyle = '#422006';
+      ctx.lineWidth = 1.3;
       ctx.beginPath();
       ctx.moveTo(-5, -3); ctx.lineTo(5, 5);
       ctx.moveTo(5, -3); ctx.lineTo(-5, 5);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.28)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-4.6, -3); ctx.lineTo(4.6, 5);
+      ctx.moveTo(4.6, -3); ctx.lineTo(-4.6, 5);
       ctx.stroke();
 
       // Triple steel handle
@@ -2373,22 +2310,26 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.beginPath();
       ctx.roundRect(-5.5, -8, 11, 3.5, 1.2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
       ctx.fillRect(-4.5, -7, 3.2, 1.8);
       ctx.fillRect(1.3, -7, 3.2, 1.8);
 
-      // Stenciled black "DIESEL" text
+      // Stencil fuel diamond & bar code stencil (no big cartoon text)
       ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 2.4px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('DIESEL', 0, 1.5);
+      ctx.beginPath();
+      ctx.moveTo(0, -0.2);
+      ctx.lineTo(1.4, 1.1);
+      ctx.lineTo(0, 2.4);
+      ctx.lineTo(-1.4, 1.1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(-4.8, 0.7, 2.6, 0.8);
+      ctx.fillRect(2.2, 0.7, 2.6, 0.8);
 
-      // Cam lock spout
       ctx.fillStyle = '#ca8a04';
       ctx.fillRect(3.6, -9.2, 3.6, 1.4);
 
-      drawGlossBand(ctx, -6, -5, 1.4, 12, 0.28);
+      drawGlossBand(ctx, -6, -5, 1.3, 12, 0.28);
       return true;
     }
 
@@ -2397,31 +2338,32 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_water': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
 
-      // Milky translucent white polymer body
       const waterCanGrad = ctx.createLinearGradient(-6.5, -5, 6.5, 7);
-      waterCanGrad.addColorStop(0, '#f8fafc');
-      waterCanGrad.addColorStop(0.5, '#e2e8f0');
-      waterCanGrad.addColorStop(1, '#cbd5e1');
+      waterCanGrad.addColorStop(0.0, '#ffffff');
+      waterCanGrad.addColorStop(0.45, '#e2e8f0');
+      waterCanGrad.addColorStop(1.0, '#94a3b8');
       ctx.fillStyle = waterCanGrad;
       ctx.beginPath();
       ctx.roundRect(-6.5, -4, 13, 11, 2.2);
       ctx.fill();
 
-      // Blue carry handle
+      // Subtle cool water refraction inside translucent wall
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.35)';
+      ctx.beginPath();
+      ctx.roundRect(-5.8, -1.2, 11.6, 7.6, 1.6);
+      ctx.fill();
+
+      // Blue carry handle & screw cap
       ctx.fillStyle = '#0284c7';
       ctx.beginPath();
       ctx.roundRect(-4.5, -7.5, 9, 3.5, 1.2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
       ctx.fillRect(-3.2, -6.5, 6.4, 2);
 
-      // Blue screw mouth cap
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(-5.5, -8.5, 3.4, 2.2, 0.6);
-      ctx.fill();
+      drawScrewCap(ctx, -3.8, -8.8, 3.4, 2.2, '#0284c7', true);
 
-      // Integrated blue rotary water tap / spigot at bottom right
+      // Rotary spigot tap
       ctx.fillStyle = '#0369a1';
       ctx.beginPath();
       ctx.roundRect(5.5, 3, 2.6, 2.6, 0.6);
@@ -2429,18 +2371,19 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.fillStyle = '#38bdf8';
       ctx.fillRect(6.5, 4.5, 1.5, 1);
 
-      // Water droplet blue insignia
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.arc(-0.5, 1.5, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 2.2px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('H2O', -0.5, 1.5);
+      // Studio potable water spec badge with droplet icon & barcode
+      drawStudioLabelPanel(ctx, -5.0, -1.6, 8.8, 6.8, {
+        paperColor: '#f0f9ff',
+        bandColor: '#0284c7',
+        accentColor: '#38bdf8',
+        inkColor: '#0c4a6e',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'circle',
+        cylindrical: false
+      });
 
-      drawGlossBand(ctx, -5.5, -4, 1.4, 10.5, 0.4);
+      drawGlossBand(ctx, -5.5, -4, 1.4, 10.5, 0.38);
       return true;
     }
 
@@ -2452,76 +2395,71 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'fuel_canister': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.25);
 
-      // Stamped steel 20L military Jerrycan body (olive drab)
-      ctx.fillStyle = '#3f4f2c';
+      const jGrad = ctx.createLinearGradient(-7, -5, 7, 7);
+      jGrad.addColorStop(0.0, '#4d6036');
+      jGrad.addColorStop(0.45, '#3f4f2c');
+      jGrad.addColorStop(1.0, '#222b18');
+      ctx.fillStyle = jGrad;
       ctx.beginPath();
       ctx.roundRect(-7, -5, 14, 12, 2.5);
       ctx.fill();
 
-      // Recessed stamped structural X-rib indentations on side panel
-      ctx.strokeStyle = '#2d381f';
+      // Pressed steel structural X-rib
+      ctx.strokeStyle = '#222b18';
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.moveTo(-5, -3); ctx.lineTo(5, 5);
-      ctx.moveTo(5, -3);  ctx.lineTo(-5, 5);
+      ctx.moveTo(5, -3); ctx.lineTo(-5, 5);
       ctx.stroke();
-
-      // Highlight inner bevel for pressed steel ribs
-      ctx.strokeStyle = '#4d6036';
-      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = '#5c7241';
+      ctx.lineWidth = 0.65;
       ctx.beginPath();
       ctx.moveTo(-4.5, -3); ctx.lineTo(4.5, 5);
-      ctx.moveTo(4.5, -3);  ctx.lineTo(-4.5, 5);
+      ctx.moveTo(4.5, -3); ctx.lineTo(-4.5, 5);
       ctx.stroke();
 
-      // Triple tube carry handle on top (classic 3-handle Jerrycan design)
+      // Triple steel handle
       ctx.fillStyle = '#2d381f';
       ctx.beginPath();
-      // Outer carry frame
       ctx.roundRect(-5.5, -8, 11, 3.5, 1.2);
       ctx.fill();
-      // Handle cutouts (dual grip slots)
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
       ctx.fillRect(-4.5, -7, 3.2, 1.8);
       ctx.fillRect(1.3, -7, 3.2, 1.8);
-      // Three distinct round handle bars
       ctx.fillStyle = '#4d6036';
       ctx.fillRect(-5.2, -8, 1.4, 3.2);
       ctx.fillRect(-0.7, -8, 1.4, 3.2);
       ctx.fillRect(3.8, -8, 1.4, 3.2);
 
-      // Offset spout neck with heavy cam-lock sealed cap
+      // Brass cam-lock spout & chain
       ctx.fillStyle = '#1c1917';
       ctx.fillRect(4, -8.5, 2.8, 2);
-      ctx.fillStyle = '#ca8a04'; // Brass lock cap
+      ctx.fillStyle = '#ca8a04';
       ctx.fillRect(3.6, -9.2, 3.6, 1.2);
-
-      // Retention chain & cotter pin
       ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.7;
+      ctx.lineWidth = 0.65;
       ctx.beginPath();
       ctx.moveTo(3.6, -8.6);
       ctx.quadraticCurveTo(2.5, -7.5, 3.2, -6.5);
       ctx.stroke();
 
-      // Stenciled white text and hazard markings
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.font = 'bold 3.2px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('20L', -0.5, 1);
-
-      // Flammable diamond hazard badge (Red)
+      // Flammable hazard diamond & crisp stencil lines (no cartoonish font)
       ctx.fillStyle = '#dc2626';
       ctx.beginPath();
-      ctx.moveTo(-0.5, -2);
-      ctx.lineTo(1.2, -0.5);
-      ctx.lineTo(-0.5, 1);
-      ctx.lineTo(-2.2, -0.5);
+      ctx.moveTo(-0.5, -1.8);
+      ctx.lineTo(1.2, -0.3);
+      ctx.lineTo(-0.5, 1.2);
+      ctx.lineTo(-2.2, -0.3);
       ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+      ctx.lineWidth = 0.35;
+      ctx.stroke();
 
-      // Steel gloss reflection band
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
+      ctx.fillRect(-2.4, 2.2, 3.8, 0.55);
+      ctx.fillRect(-1.8, 3.2, 2.6, 0.45);
+
       drawGlossBand(ctx, -6, -5, 1.4, 12, 0.28);
       return true;
     }
@@ -2529,26 +2467,23 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'canister_empty': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
 
-      // Stamped steel 20L military Jerrycan body (scuffed olive drab)
       ctx.fillStyle = '#3f4f2c';
       ctx.beginPath();
       ctx.roundRect(-7, -5, 14, 12, 2.5);
       ctx.fill();
 
-      // Structural X-rib indentations
       ctx.strokeStyle = '#2d381f';
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.moveTo(-5, -3); ctx.lineTo(5, 5);
-      ctx.moveTo(5, -3);  ctx.lineTo(-5, 5);
+      ctx.moveTo(5, -3); ctx.lineTo(-5, 5);
       ctx.stroke();
 
-      // Three carry handles on top
       ctx.fillStyle = '#2d381f';
       ctx.beginPath();
       ctx.roundRect(-5.5, -8, 11, 3.5, 1.2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
       ctx.fillRect(-4.5, -7, 3.2, 1.8);
       ctx.fillRect(1.3, -7, 3.2, 1.8);
       ctx.fillStyle = '#4d6036';
@@ -2556,47 +2491,37 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.fillRect(-0.7, -8, 1.4, 3.2);
       ctx.fillRect(3.8, -8, 1.4, 3.2);
 
-      // Open, unscrewed spout neck (dark hollow opening)
+      // Open spout neck
       ctx.fillStyle = '#1c1917';
       ctx.fillRect(4, -8.5, 2.8, 2.2);
-      ctx.fillStyle = '#0f172a'; // Deep empty hollow hole
+      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
       ctx.ellipse(5.4, -8.5, 1.2, 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Brass cap dangling open on its retention chain
       ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.7;
+      ctx.lineWidth = 0.65;
       ctx.beginPath();
       ctx.moveTo(4, -8);
       ctx.quadraticCurveTo(2.5, -7, 2, -5.5);
       ctx.stroke();
-      ctx.fillStyle = '#ca8a04'; // Open dangling cap
+      ctx.fillStyle = '#ca8a04';
       ctx.beginPath();
       ctx.roundRect(1.2, -6, 1.8, 2.5, 0.6);
       ctx.fill();
 
-      // Dried fuel drip stain running down beneath the spout
+      // Dried fuel streak & scuffed metal rim
       ctx.fillStyle = 'rgba(28, 25, 23, 0.35)';
       ctx.beginPath();
-      ctx.moveTo(4.5, -5);
-      ctx.lineTo(6, -5);
-      ctx.lineTo(5.5, 0);
-      ctx.lineTo(4.8, 2);
+      ctx.moveTo(4.5, -5); ctx.lineTo(6, -5); ctx.lineTo(5.5, 0); ctx.lineTo(4.8, 2);
       ctx.closePath();
       ctx.fill();
-
-      // Bare metal paint scratch wear along bottom rim
       ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-6.5, 6, 2, 0.8);
-      ctx.fillRect(2, 6, 3, 0.8);
+      ctx.fillRect(-6.5, 6, 2, 0.6);
+      ctx.fillRect(2, 6, 3, 0.6);
 
-      // Faded stenciled 20L marking
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.font = 'bold 3.2px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('20L', -0.5, 1);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+      ctx.fillRect(-2.2, 2.2, 3.4, 0.5);
       return true;
     }
 
@@ -2647,68 +2572,52 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'plastic_bag': {
       drawShadow(ctx, 8.5, 3.8, 8, 0.18);
 
-      // Thin crinkled plastic handles on top
-      ctx.fillStyle = 'rgba(241, 245, 249, 0.9)';
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.7;
+      // Frosted semi-translucent LDPE T-shirt carrier bag with gusset handles
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.65)';
+      ctx.lineWidth = 0.45;
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.82)';
 
-      // Left handle loop
       ctx.beginPath();
-      ctx.roundRect(-6, -9, 3.2, 7, 1.2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.clearRect(-4.8, -7.5, 1.2, 4.5);
-
-      // Right handle loop
-      ctx.beginPath();
-      ctx.roundRect(2.8, -9, 3.2, 7, 1.2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.clearRect(3.6, -7.5, 1.2, 4.5);
-
-      // Main plastic bag body (white grocery sack with crinkles)
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.moveTo(-6.5, -3);
-      ctx.lineTo(6.5, -3);
-      ctx.quadraticCurveTo(7.5, 4, 6.8, 7.5);
-      ctx.quadraticCurveTo(0, 8.5, -6.8, 7.5);
-      ctx.quadraticCurveTo(-7.5, 4, -6.5, -3);
+      ctx.moveTo(-6.4, -3.2);
+      ctx.lineTo(-5.8, -8.8);
+      ctx.lineTo(-3.8, -8.8);
+      ctx.lineTo(-3.2, -3.0);
+      ctx.lineTo(3.2, -3.0);
+      ctx.lineTo(3.8, -8.8);
+      ctx.lineTo(5.8, -8.8);
+      ctx.lineTo(6.4, -3.2);
+      ctx.quadraticCurveTo(7.4, 3.8, 6.6, 7.5);
+      ctx.quadraticCurveTo(0, 8.4, -6.6, 7.5);
+      ctx.quadraticCurveTo(-7.4, 3.8, -6.4, -3.2);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      // Fold crinkle shading
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)';
-      ctx.lineWidth = 0.7;
-      ctx.beginPath();
-      ctx.moveTo(-4, -1); ctx.lineTo(-1, 5);
-      ctx.moveTo(3, -2); ctx.lineTo(1, 4);
-      ctx.stroke();
+      drawPouchCrinkles(ctx, -5.6, -2.5, 11.2, 9.2, 12, 0.25);
 
-      // Store print logo (cheerful supermarket basket / stripes)
+      // Minimalist cobalt market monogram print
       ctx.fillStyle = '#0284c7';
       ctx.beginPath();
-      ctx.roundRect(-3.5, 0.5, 7, 3, 0.8);
+      ctx.roundRect(-3.4, 0.5, 6.8, 3.0, 0.6);
       ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-2.5, 1.5, 5, 0.9);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-2.4, 1.3, 4.8, 0.52);
+      ctx.fillRect(-1.8, 2.2, 3.6, 0.35);
       return true;
     }
 
     case 'sandbag': {
       drawShadow(ctx, 8.5, 4.5, 7.5, 0.25);
 
-      // Main burlap canvas sandbag body (bulging, heavy 3D shape)
+      // Bulging heavy woven burlap sandbag
       const grad = ctx.createLinearGradient(-8, -7, 8, 8);
-      grad.addColorStop(0, '#d97706'); // Warm canvas amber top highlight
-      grad.addColorStop(0.35, '#b45309'); // Rich burlap body
-      grad.addColorStop(0.75, '#92400e'); // Shaded canvas base
-      grad.addColorStop(1, '#78350f');   // Deep bottom shadow
-
+      grad.addColorStop(0.0, '#d9a05b');
+      grad.addColorStop(0.35, '#b45309');
+      grad.addColorStop(0.75, '#92400e');
+      grad.addColorStop(1.0, '#5c2808');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.moveTo(-3, -7.5); // Cinched neck top
+      ctx.moveTo(-3, -7.5);
       ctx.quadraticCurveTo(-6.5, -6, -8, -1);
       ctx.quadraticCurveTo(-9, 4, -7, 7.5);
       ctx.quadraticCurveTo(0, 9.5, 7, 7.5);
@@ -2718,23 +2627,21 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
-      // Burlap woven texture lines (fine cross-hatching)
-      ctx.strokeStyle = 'rgba(69, 26, 3, 0.25)';
-      ctx.lineWidth = 0.6;
+      // Fine linen cross-weave texture
+      ctx.strokeStyle = 'rgba(69, 26, 3, 0.26)';
+      ctx.lineWidth = 0.45;
       ctx.beginPath();
-      // Vertical fabric weave curves
-      for (let x = -6; x <= 6; x += 3) {
+      for (let x = -6; x <= 6; x += 2.4) {
         ctx.moveTo(x, -5);
         ctx.quadraticCurveTo(x * 1.15, 1, x * 0.9, 7);
       }
-      // Horizontal fabric weave curves
-      for (let y = -4; y <= 6; y += 2.5) {
+      for (let y = -4; y <= 6; y += 2.0) {
         ctx.moveTo(-7, y);
-        ctx.quadraticCurveTo(0, y + 1.2, 7, y);
+        ctx.quadraticCurveTo(0, y + 1.1, 7, y);
       }
       ctx.stroke();
 
-      // Flared ruffled top canvas mouth above neck tie
+      // Ruffled burlap top flare & twisted hemp neck cord
       ctx.fillStyle = '#d9a05b';
       ctx.beginPath();
       ctx.moveTo(-3, -7.5);
@@ -2744,50 +2651,39 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
-      // Heavy twined rope/cord neck tie
       ctx.fillStyle = '#fef08a';
       ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.8;
+      ctx.lineWidth = 0.6;
       ctx.beginPath();
-      ctx.roundRect(-3.5, -8, 7, 2.2, 0.8);
+      ctx.roundRect(-3.4, -8, 6.8, 2.0, 0.8);
       ctx.fill();
       ctx.stroke();
 
-      // Cord knot details
-      ctx.fillStyle = '#eab308';
-      ctx.beginPath();
-      ctx.arc(0, -6.9, 1.2, 0, Math.PI * 2);
-      ctx.fill();
+      // Clean burlap stencil crest + stitched shipping tag (no big raw text)
+      ctx.strokeStyle = 'rgba(69, 26, 3, 0.72)';
+      ctx.lineWidth = 0.55;
+      ctx.strokeRect(-4.0, -1.6, 8.0, 4.6);
+      ctx.fillStyle = 'rgba(69, 26, 3, 0.78)';
+      ctx.fillRect(-2.8, -0.4, 5.6, 0.75);
+      ctx.fillRect(-2.0, 1.0, 4.0, 0.55);
 
-      // Stencil stamp label on burlap "ПЕСОК 1KG"
-      ctx.fillStyle = 'rgba(69, 26, 3, 0.85)';
-      ctx.font = 'bold 3.2px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('ПЕСОК', 0, 0);
-      ctx.font = 'bold 2.8px monospace';
-      ctx.fillText('1 KG', 0, 3.5);
-
-      // Leaking fine golden sand grain speckles at seam
+      // Silica sand specks at lower seam
       ctx.fillStyle = '#fef08a';
       ctx.beginPath();
-      ctx.arc(4.5, 6, 0.8, 0, Math.PI * 2);
-      ctx.arc(6, 7.2, 0.6, 0, Math.PI * 2);
-      ctx.arc(-5, 6.8, 0.7, 0, Math.PI * 2);
+      ctx.arc(4.5, 6, 0.55, 0, Math.PI * 2);
+      ctx.arc(5.8, 7.0, 0.45, 0, Math.PI * 2);
+      ctx.arc(-5, 6.8, 0.5, 0, Math.PI * 2);
       ctx.fill();
-
       return true;
     }
 
     case 'sack_empty': {
       drawShadow(ctx, 8, 3.5, 6, 0.18);
 
-      // Folded/flat empty burlap canvas bag
       const grad = ctx.createLinearGradient(-7, -5, 7, 6);
-      grad.addColorStop(0, '#d9a05b'); // Light empty canvas
+      grad.addColorStop(0.0, '#d9a05b');
       grad.addColorStop(0.5, '#b45309');
-      grad.addColorStop(1, '#78350f');
-
+      grad.addColorStop(1.0, '#78350f');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.moveTo(-6.5, -5);
@@ -2798,33 +2694,27 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
-      // Dark open hollow bag mouth at top
       ctx.fillStyle = '#451a03';
       ctx.beginPath();
       ctx.ellipse(0, -5, 5.5, 1.8, 0, 0, Math.PI * 2);
       ctx.fill();
-
-      // Inner shadow inside mouth
       ctx.fillStyle = '#1c0a00';
       ctx.beginPath();
       ctx.ellipse(0, -5, 4.2, 1.2, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Burlap cloth fold lines & edge stitching
       ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.7;
+      ctx.lineWidth = 0.55;
       ctx.beginPath();
       ctx.moveTo(-5, -3); ctx.lineTo(-2, 4);
       ctx.moveTo(4, -3); ctx.lineTo(1, 5);
       ctx.stroke();
 
-      // Perimeter seam stitching
       ctx.strokeStyle = '#fef08a';
-      ctx.lineWidth = 0.5;
-      ctx.setLineDash([1.2, 1.2]);
+      ctx.lineWidth = 0.42;
+      ctx.setLineDash([1.1, 1.1]);
       ctx.strokeRect(-5.8, -4, 11.6, 10);
       ctx.setLineDash([]);
-
       return true;
     }
 
@@ -3217,11 +3107,26 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'package_bag': {
       drawShadow(ctx, 6.5, 3, 6.5, 0.18);
 
-      ctx.fillStyle = 'rgba(241, 245, 249, 0.45)';
-      ctx.strokeStyle = 'rgba(203, 213, 225, 0.85)';
-      ctx.lineWidth = 0.8;
+      // Gathered twisted LDPE neck tuft
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.75)';
       ctx.beginPath();
-      ctx.roundRect(-5.5, -6.5, 11, 14, 2);
+      ctx.moveTo(-1.2, -6.2);
+      ctx.lineTo(-2.4, -8.2);
+      ctx.lineTo(0, -7.6);
+      ctx.lineTo(2.4, -8.2);
+      ctx.lineTo(1.2, -6.2);
+      ctx.closePath();
+      ctx.fill();
+
+      const bagGrad = ctx.createLinearGradient(-5.5, -6.2, 5.5, 7.2);
+      bagGrad.addColorStop(0.0, 'rgba(248, 250, 252, 0.62)');
+      bagGrad.addColorStop(0.5, 'rgba(226, 232, 240, 0.36)');
+      bagGrad.addColorStop(1.0, 'rgba(148, 163, 184, 0.52)');
+      ctx.fillStyle = bagGrad;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.lineWidth = 0.45;
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -6.2, 11, 13.4, 2.0);
       ctx.fill();
       ctx.stroke();
 
@@ -3231,26 +3136,25 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         const fillFrac = Math.min(1, Math.max(0.22, fs.currentMl / (fs.maxMl || 1500)));
         const liqDef = fs.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
         const fillCol = liqDef?.color || '#f8fafc';
-        const moundTopY = 7.0 - fillFrac * 10.2;
+        const moundTopY = 6.8 - fillFrac * 10.0;
 
         ctx.save();
         ctx.beginPath();
-        ctx.roundRect(-5.0, -6.0, 10, 13, 1.6);
+        ctx.roundRect(-5.0, -5.8, 10, 12.6, 1.6);
         ctx.clip();
 
-        const pGrad = ctx.createLinearGradient(0, moundTopY, 0, 7.2);
+        const pGrad = ctx.createLinearGradient(0, moundTopY, 0, 7.0);
         pGrad.addColorStop(0, fillCol);
         pGrad.addColorStop(1, '#cbd5e1');
         ctx.fillStyle = pGrad;
         ctx.beginPath();
-        ctx.moveTo(-5.2, 7.5);
+        ctx.moveTo(-5.2, 7.2);
         ctx.lineTo(-5.2, moundTopY + 1.2);
         ctx.quadraticCurveTo(0, moundTopY - 1.4, 5.2, moundTopY + 1.2);
-        ctx.lineTo(5.2, 7.5);
+        ctx.lineTo(5.2, 7.2);
         ctx.closePath();
         ctx.fill();
 
-        // Subtle granular texture dots
         ctx.fillStyle = 'rgba(15, 23, 42, 0.12)';
         for (const [gx, gy] of [[-2.5, 3], [0, 4], [2.4, 2.5], [-1.2, 5.5], [1.6, 5.0]]) {
           if (gy > moundTopY + 0.5) {
@@ -3261,31 +3165,28 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         }
         ctx.restore();
 
-        // Colored confectionery label stripe if customColor set
         if (fs.attributes?.customColor) {
-          ctx.fillStyle = fs.attributes.customColor;
-          ctx.beginPath();
-          ctx.roundRect(-4.6, -2.5, 9.2, 2.6, 0.5);
-          ctx.fill();
-          ctx.fillStyle = 'rgba(255,255,255,0.85)';
-          ctx.fillRect(-3.6, -1.6, 7.2, 0.7);
+          drawStudioLabelPanel(ctx, -4.4, -2.5, 8.8, 3.6, {
+            paperColor: '#f8fafc',
+            bandColor: fs.attributes.customColor,
+            accentColor: '#ca8a04',
+            inkColor: '#0f172a',
+            goldFoil: false,
+            hasBarcode: true,
+            emblem: 'none',
+            cylindrical: false
+          });
         }
       }
 
-      // Twisted plastic knot top
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.85)';
+      // Wire twist collar + film crinkles
+      ctx.fillStyle = '#94a3b8';
       ctx.beginPath();
-      ctx.ellipse(0, -6.5, 2.2, 1.2, 0, 0, Math.PI * 2);
+      ctx.roundRect(-1.8, -6.5, 3.6, 0.85, 0.35);
       ctx.fill();
 
-      // Translucent wrinkles and crinkles
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(-3.5, -4);
-      ctx.lineTo(2, 1);
-      ctx.lineTo(-1, 5);
-      ctx.stroke();
+      drawPouchCrinkles(ctx, -4.8, -5.4, 9.6, 11.8, 15, 0.25);
+      drawGlossBand(ctx, -4.2, -5.2, 1.0, 11.0, 0.35);
       return true;
     }
 
@@ -3293,8 +3194,11 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'shopping_bag': {
       drawShadow(ctx, 8, 3.5, 7.5, 0.22);
 
-      // White/light blue shopping bag with handles
-      ctx.fillStyle = '#f8fafc';
+      const sGrad = ctx.createLinearGradient(-6.5, -8, 6.5, 8);
+      sGrad.addColorStop(0.0, '#ffffff');
+      sGrad.addColorStop(0.6, '#f1f5f9');
+      sGrad.addColorStop(1.0, '#cbd5e1');
+      ctx.fillStyle = sGrad;
       ctx.beginPath();
       ctx.moveTo(-6.5, -4);
       ctx.lineTo(-6.5, 7.5);
@@ -3310,19 +3214,20 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.lineTo(-3.5, -4);
       ctx.closePath();
       ctx.fill();
-
-      // Outline & subtle crinkles
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.65)';
+      ctx.lineWidth = 0.45;
       ctx.stroke();
 
-      // Thank you / store green logo stamp
-      ctx.fillStyle = '#16a34a';
+      drawPouchCrinkles(ctx, -5.6, -2.5, 11.2, 9.2, 23, 0.22);
+
+      // Market botanical seal print
+      ctx.fillStyle = '#15803d';
       ctx.beginPath();
-      ctx.arc(0, 1.5, 2.2, 0, Math.PI * 2);
+      ctx.arc(0, 1.8, 2.2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-1.2, 1.1, 2.4, 0.8);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-1.3, 1.35, 2.6, 0.55);
+      ctx.fillRect(-0.9, 2.15, 1.8, 0.32);
       return true;
     }
 
@@ -3331,11 +3236,10 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'soup_bowl_empty': {
       drawShadow(ctx, 8, 3.5, 7.5, 0.28);
 
-      // Ceramic bowl body
       const bowlGrad = ctx.createLinearGradient(-7, -4, 7, 6);
-      bowlGrad.addColorStop(0, '#f1f5f9');
-      bowlGrad.addColorStop(0.7, '#cbd5e1');
-      bowlGrad.addColorStop(1, '#94a3b8');
+      bowlGrad.addColorStop(0.0, '#ffffff');
+      bowlGrad.addColorStop(0.55, '#e2e8f0');
+      bowlGrad.addColorStop(1.0, '#94a3b8');
       ctx.fillStyle = bowlGrad;
       ctx.beginPath();
       ctx.moveTo(-7.5, -2);
@@ -3344,38 +3248,36 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
-      // Decorative folk blue stripe on porcelain
       ctx.strokeStyle = '#2563eb';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
       ctx.ellipse(0, -1.8, 7.4, 2.3, 0, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Top opening ellipse
-      ctx.fillStyle = '#1e293b';
+      const cavGrad = ctx.createRadialGradient(-1, -2.5, 0.5, 0, -2.2, 7.0);
+      cavGrad.addColorStop(0, '#cbd5e1');
+      cavGrad.addColorStop(1, '#334155');
+      ctx.fillStyle = cavGrad;
       ctx.beginPath();
       ctx.ellipse(0, -2.2, 7.0, 2.6, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Hot broth if filled
       if (item?.fluidStorage?.currentMl > 0 || itemId === 'soup_bowl') {
         const soupColor = item?.fluidStorage?.attributes?.customColor || (item?.fluidStorage?.liquidId === 'broth' ? '#b45309' : '#d97706');
         ctx.fillStyle = soupColor;
         ctx.beginPath();
         ctx.ellipse(0, -2.2, 6.2, 2.1, 0, 0, Math.PI * 2);
         ctx.fill();
-
-        // Fresh green parsley herbs floating on broth
-        ctx.fillStyle = '#15803d';
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.5)';
         ctx.beginPath();
-        ctx.arc(-2, -2.5, 0.7, 0, Math.PI * 2);
-        ctx.arc(1.5, -1.8, 0.6, 0, Math.PI * 2);
-        ctx.arc(3.0, -2.6, 0.5, 0, Math.PI * 2);
-        ctx.arc(-0.5, -1.6, 0.6, 0, Math.PI * 2);
+        ctx.ellipse(-1.8, -2.4, 0.75, 0.35, 0, 0, Math.PI * 2);
+        ctx.ellipse(1.6, -1.9, 0.65, 0.3, 0, 0, Math.PI * 2);
         ctx.fill();
+
+        drawBotanicalLeaf(ctx, -2.2, -2.3, 1.6, 0.5, -0.3, '#4ade80', '#14532d');
+        drawBotanicalLeaf(ctx, 1.5, -2.0, 1.5, 0.45, 0.4, '#22c55e', '#14532d');
       }
 
-      // Ceramic soup spoon resting on edge
       ctx.fillStyle = '#e2e8f0';
       ctx.beginPath();
       ctx.moveTo(3.5, 0.5);
@@ -3540,71 +3442,71 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.ellipse(0, botY - 0.6, hw - 1.0, 1.1, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      const volText = is3L ? '3.0 L' : isLg ? '1.0 L' : isSpice ? '0.1 L' : isSm ? '0.2 L' : '0.5 L';
-
-      // Front paper/foil label colored by labelRgb (if present)
+      // Studio paper/foil label colored dynamically by labelRgb
       if (labelRgb) {
         const lblW = w - 1.4;
-        const lblH = Math.max(3.2, bodyH * 0.36);
+        const lblH = Math.max(3.4, bodyH * 0.40);
         const lblY = bodyTop + (bodyH - lblH) * 0.52;
 
-        // Cream paper backing border
-        ctx.fillStyle = '#fefce8';
-        ctx.beginPath();
-        ctx.roundRect(-lblW / 2, lblY, lblW, lblH, 0.6);
-        ctx.fill();
-
-        // Main RGB label color band
-        ctx.fillStyle = rgbTupleToCss(labelRgb);
-        ctx.beginPath();
-        ctx.roundRect(-lblW / 2 + 0.35, lblY + 0.35, lblW - 0.7, lblH - 0.7, 0.4);
-        ctx.fill();
-
-        // Accent stripe
-        if (labelAccentRgb) {
-          ctx.fillStyle = rgbTupleToCss(labelAccentRgb);
-          ctx.fillRect(-lblW / 2 + 0.35, lblY + lblH * 0.22, lblW - 0.7, 0.7);
-        }
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${isSpice || isSm ? 1.8 : 2.3}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(volText, 0, lblY + lblH * 0.6);
+        drawStudioLabelPanel(ctx, -lblW / 2, lblY, lblW, lblH, {
+          paperColor: '#f8f5ec',
+          bandColor: rgbTupleToCss(labelRgb),
+          accentColor: labelAccentRgb ? rgbTupleToCss(labelAccentRgb) : '#ca8a04',
+          inkColor: '#1e293b',
+          goldFoil: true,
+          hasBarcode: lblW >= 6.8 && lblH >= 3.8,
+          emblem: 'crest',
+          cylindrical: true
+        });
       } else {
-        // Embossed glass volume marking when no label is attached
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
-        ctx.font = `bold ${isSpice || isSm ? 1.9 : 2.5}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(volText, 0, topY + h * 0.56);
+        // Subtle embossed glass graduation marks when unlabelled
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+        ctx.lineWidth = 0.28;
+        for (let gy = bodyTop + 1.8; gy < botY - 1.4; gy += 1.6) {
+          ctx.beginPath();
+          ctx.moveTo(hw - 2.2, gy);
+          ctx.lineTo(hw - 0.9, gy);
+          ctx.stroke();
+        }
       }
 
       // Glass refraction streaks & vertical highlights
-      drawGlossBand(ctx, -hw + 1.2, bodyTop + 0.5, 1.2, bodyH - 1.5, 0.42);
-      drawGlossBand(ctx, hw - 2.0, bodyTop + 0.5, 0.7, bodyH - 1.5, 0.28);
+      drawGlossBand(ctx, -hw + 1.2, bodyTop + 0.5, 1.15, bodyH - 1.5, 0.44);
+      drawGlossBand(ctx, hw - 2.0, bodyTop + 0.5, 0.65, bodyH - 1.5, 0.26);
 
       // Threaded glass neck
       const neckW = is3L ? w * 0.62 : w - 1.6;
       ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 15), 0.9);
       ctx.fillRect(-neckW / 2, topY + 0.4, neckW, 1.8);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.lineWidth = 0.5;
+      ctx.lineWidth = 0.4;
       ctx.strokeRect(-neckW / 2, topY + 0.4, neckW, 1.8);
 
       if (!isOpen) {
         const lidRgb: [number, number, number] = capRgb || (isSpice ? [220, 38, 38] : [234, 179, 8]);
         const lidGrad = ctx.createLinearGradient(-neckW / 2 - 0.5, topY - 1.5, neckW / 2 + 0.5, topY + 1.2);
-        lidGrad.addColorStop(0, rgbTupleToCss(shiftRgbTuple(lidRgb, 40)));
-        lidGrad.addColorStop(0.5, rgbTupleToCss(lidRgb));
-        lidGrad.addColorStop(1, rgbTupleToCss(shiftRgbTuple(lidRgb, -55)));
+        lidGrad.addColorStop(0.0, rgbTupleToCss(shiftRgbTuple(lidRgb, -35)));
+        lidGrad.addColorStop(0.28, rgbTupleToCss(shiftRgbTuple(lidRgb, 48)));
+        lidGrad.addColorStop(0.65, rgbTupleToCss(lidRgb));
+        lidGrad.addColorStop(1.0, rgbTupleToCss(shiftRgbTuple(lidRgb, -60)));
 
         ctx.fillStyle = lidGrad;
         ctx.beginPath();
-        ctx.roundRect(-neckW / 2 - 0.5, topY - 1.2, neckW + 1.0, 2.2, 0.7);
+        ctx.roundRect(-neckW / 2 - 0.5, topY - 1.2, neckW + 1.0, 2.2, 0.65);
         ctx.fill();
+
+        // Twist-off lug knurls & top rim highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fillRect(-neckW / 2, topY - 1.05, neckW, 0.38);
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.24)';
+        ctx.lineWidth = 0.24;
+        for (let kx = -neckW / 2 + 0.6; kx < neckW / 2 - 0.3; kx += 0.9) {
+          ctx.beginPath();
+          ctx.moveTo(kx, topY - 0.65);
+          ctx.lineTo(kx, topY + 0.85);
+          ctx.stroke();
+        }
       } else {
-        // Open glass rim ellipse
         ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
         ctx.beginPath();
         ctx.ellipse(0, topY + 0.5, neckW / 2 - 0.3, 0.9, 0, 0, Math.PI * 2);
@@ -3649,22 +3551,34 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       const { shape, materialRgb, labelRgb, labelAccentRgb } = vis;
 
       if (isMini) {
-        drawShadow(ctx, 4.5, 2.2, 5.5, 0.24);
+        drawShadow(ctx, 4.6, 2.2, 5.5, 0.26);
         const isMenthol = item?.fluidStorage?.liquidId === 'menthol';
-        ctx.fillStyle = rgbTupleToCss(materialRgb);
+        const baseHex = rgbTupleToCss(materialRgb);
+        const rimGrad = ctx.createRadialGradient(-1.4, -0.4, 0.5, 0, 1.0, 4.6);
+        rimGrad.addColorStop(0.0, rgbTupleToCss(shiftRgbTuple(materialRgb, 55)));
+        rimGrad.addColorStop(0.6, baseHex);
+        rimGrad.addColorStop(1.0, rgbTupleToCss(shiftRgbTuple(materialRgb, -55)));
+        ctx.fillStyle = rimGrad;
         ctx.beginPath();
-        ctx.arc(0, 1.0, 4.4, 0, Math.PI * 2);
+        ctx.arc(0, 1.0, 4.5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = labelRgb ? rgbTupleToCss(labelRgb) : '#fbbf24';
-        ctx.lineWidth = 0.8;
+
+        // Rolled metallic bezel ring
+        ctx.strokeStyle = labelRgb ? rgbTupleToCss(labelRgb) : '#eab308';
+        ctx.lineWidth = 0.65;
         ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 0.25;
+        ctx.beginPath();
+        ctx.arc(0, 1.0, 3.85, 0, Math.PI * 2);
+        ctx.stroke();
+
         if (!isOpen) {
           if (isMenthol) {
-            // Menthol ice crystal motif on lid
             ctx.strokeStyle = '#ccfbf1';
-            ctx.lineWidth = 0.65;
+            ctx.lineWidth = 0.55;
             ctx.beginPath();
-            ctx.moveTo(0, -1.6); ctx.lineTo(0, 3.6);
+            ctx.moveTo(0, -1.4); ctx.lineTo(0, 3.4);
             ctx.moveTo(-2.4, 1.0); ctx.lineTo(2.4, 1.0);
             ctx.moveTo(-1.7, -0.7); ctx.lineTo(1.7, 2.7);
             ctx.moveTo(-1.7, 2.7); ctx.lineTo(1.7, -0.7);
@@ -3672,26 +3586,37 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           } else {
             ctx.fillStyle = labelRgb ? rgbTupleToCss(labelRgb) : '#fef08a';
             ctx.beginPath();
-            ctx.arc(0, 1.0, 1.5, 0, Math.PI * 2);
+            ctx.arc(0, 1.0, 1.35, 0, Math.PI * 2);
             ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+            ctx.lineWidth = 0.22;
+            ctx.stroke();
           }
+          // Specular lid crest
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.24)';
+          ctx.beginPath();
+          ctx.ellipse(-1.4, -0.8, 1.8, 0.7, -0.5, 0, Math.PI * 2);
+          ctx.fill();
         } else if (isMenthol) {
-          // Open tin with shimmering menthol crystal needles
           ctx.fillStyle = '#0f172a';
           ctx.beginPath();
-          ctx.arc(0, 1.0, 3.3, 0, Math.PI * 2);
+          ctx.arc(0, 1.0, 3.4, 0, Math.PI * 2);
           ctx.fill();
           ctx.strokeStyle = '#e0f2fe';
-          ctx.lineWidth = 0.7;
+          ctx.lineWidth = 0.65;
           ctx.beginPath();
           ctx.moveTo(-2.2, 0.2); ctx.lineTo(1.8, 2.0);
           ctx.moveTo(-1.4, 2.4); ctx.lineTo(2.0, -0.4);
           ctx.moveTo(-0.2, -1.4); ctx.lineTo(0.4, 3.0);
           ctx.stroke();
         } else {
-          ctx.fillStyle = '#fde047';
+          const balmGrad = ctx.createRadialGradient(-0.8, 0.2, 0.4, 0, 1.0, 3.1);
+          balmGrad.addColorStop(0.0, '#fef9c3');
+          balmGrad.addColorStop(0.6, '#fde047');
+          balmGrad.addColorStop(1.0, '#ca8a04');
+          ctx.fillStyle = balmGrad;
           ctx.beginPath();
-          ctx.arc(0, 1.0, 3.0, 0, Math.PI * 2);
+          ctx.arc(0, 1.0, 3.2, 0, Math.PI * 2);
           ctx.fill();
         }
         return true;
@@ -3749,20 +3674,19 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       traceCanBody();
       ctx.fill();
 
-      // Lithographed or paper label band colored by labelRgb
+      // Lithographed or editorial paper label band colored by labelRgb
       if (labelRgb) {
         ctx.save();
         traceCanBody();
         ctx.clip();
 
-        const lblTop = isAlu ? topY + 1.8 : topY + h * 0.28;
-        const lblH = isAlu ? h - 3.6 : h * 0.44;
-        ctx.fillStyle = rgbTupleToCss(labelRgb);
-        ctx.fillRect(-hw - 1.5, lblTop, w + 3.0, lblH);
-
-        if (labelAccentRgb) {
-          ctx.fillStyle = rgbTupleToCss(labelAccentRgb);
-          if (isAlu) {
+        const lblTop = isAlu ? topY + 1.8 : topY + h * 0.24;
+        const lblH = isAlu ? h - 3.6 : Math.max(3.0, h * 0.50);
+        if (isAlu) {
+          ctx.fillStyle = rgbTupleToCss(labelRgb);
+          ctx.fillRect(-hw - 1.5, lblTop, w + 3.0, lblH);
+          if (labelAccentRgb) {
+            ctx.fillStyle = rgbTupleToCss(labelAccentRgb);
             ctx.beginPath();
             ctx.moveTo(-hw - 1, lblTop + lblH * 0.65);
             ctx.quadraticCurveTo(0, lblTop + lblH * 0.25, hw + 1, lblTop + lblH * 0.45);
@@ -3770,22 +3694,34 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
             ctx.quadraticCurveTo(0, lblTop + lblH * 0.40, -hw - 1, lblTop + lblH * 0.80);
             ctx.closePath();
             ctx.fill();
-          } else {
-            ctx.fillRect(-hw - 1.5, lblTop, w + 3.0, 0.7);
-            ctx.fillRect(-hw - 1.5, lblTop + lblH - 0.7, w + 3.0, 0.7);
+          }
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+          ctx.fillRect(-hw * 0.55, lblTop + lblH * 0.22, hw * 1.1, 0.52);
+          drawMicroBarcode(ctx, hw * 0.15, lblTop + lblH * 0.72, hw * 0.55, 0.85);
+        } else {
+          drawStudioLabelPanel(ctx, -hw - 0.4, lblTop, w + 0.8, lblH, {
+            paperColor: '#f8f5ec',
+            bandColor: rgbTupleToCss(labelRgb),
+            accentColor: labelAccentRgb ? rgbTupleToCss(labelAccentRgb) : '#ca8a04',
+            inkColor: '#1e293b',
+            goldFoil: true,
+            hasBarcode: lblH >= 3.6,
+            emblem: item?.fluidStorage?.liquidId === 'coconut_milk' ? 'none' : 'crest',
+            cylindrical: false
+          });
+          if (item?.fluidStorage?.liquidId === 'coconut_milk') {
+            const cy = lblTop + lblH * 0.56;
+            ctx.fillStyle = '#78350f';
+            ctx.beginPath();
+            ctx.arc(-hw * 0.25, cy, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(-hw * 0.25, cy, 1.0, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
-        if (item?.fluidStorage?.liquidId === 'coconut_milk') {
-          const cy = lblTop + lblH * 0.5;
-          ctx.fillStyle = '#78350f';
-          ctx.beginPath();
-          ctx.arc(0, cy, 1.7, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(0, cy, 1.2, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        applyCylinderLightingOverlay(ctx, -hw - 1.5, topY + 1.0, w + 3.0, h - 2.0, 0.26, 0.34);
         ctx.restore();
       }
 
@@ -3809,7 +3745,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.lineTo(hw - 1.2, botY - 1.2);
         ctx.stroke();
       } else if (!isAlu) {
-        // Stamped corrugated reinforcement ribs
         ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -60), 0.75);
         ctx.lineWidth = 0.6;
         const ribCount = isFlat || isOval || isSm ? 1 : isLg || isDrum ? 4 : 3;
@@ -3823,7 +3758,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         }
       }
 
-      // Vertical metallic sheen highlight
       drawGlossBand(ctx, -hw + 1.8, topY + 1.2, 1.5, h - 2.4, 0.38);
 
       // Crimped bottom seam rim
@@ -3836,67 +3770,63 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       }
       ctx.fill();
 
-      // Crimped top seam rim
-      ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -15));
-      ctx.beginPath();
-      if (isRect) {
-        ctx.roundRect(-hw - 0.5, topY + 0.2, w + 1.0, 2.0, 0.6);
+      // Top double-seamed lid
+      if (!isOpen && !isRect) {
+        drawMetalCanLid(ctx, 0, topY + 1.0, hw + 0.35, 1.45, !isAlu);
       } else {
-        ctx.ellipse(0, topY + 1.0, hw + 0.5, 1.5, 0, 0, Math.PI * 2);
-      }
-      ctx.fill();
-
-      if (!isOpen) {
-        // Closed recessed tin lid with pull tab
-        ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 20));
+        ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -15));
         ctx.beginPath();
         if (isRect) {
-          ctx.roundRect(-hw + 0.4, topY + 0.5, w - 0.8, 1.4, 0.4);
+          ctx.roundRect(-hw - 0.5, topY + 0.2, w + 1.0, 2.0, 0.6);
         } else {
-          ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, topY + 1.0, hw + 0.5, 1.5, 0, 0, Math.PI * 2);
         }
         ctx.fill();
 
-        ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55));
-        ctx.beginPath();
-        ctx.roundRect(-1.2, topY - 0.2, 2.4, 2.0, 0.4);
-        ctx.fill();
-      } else {
-        // Opened interior cavity + bent-up tin lid on right edge (or Dark Tab hole for Alu Can)
-        const innerColor =
-          item?.fluidStorage && item.fluidStorage.currentMl > 0
-            ? item.fluidStorage.attributes?.customColor ||
-              (item.fluidStorage.liquidId ? LIQUID_REGISTRY[item.fluidStorage.liquidId as LiquidId]?.color : undefined) ||
-              '#9a3412'
-            : '#1e293b';
-
-        if (isAlu) {
-          ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 15));
+        if (!isOpen) {
+          ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 20));
           ctx.beginPath();
-          ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+          ctx.roundRect(-hw + 0.4, topY + 0.5, w - 0.8, 1.4, 0.4);
           ctx.fill();
-          ctx.fillStyle = '#09090b';
+          ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55));
           ctx.beginPath();
-          ctx.ellipse(1.0, topY + 1.0, 1.8, 0.8, 0, 0, Math.PI * 2);
+          ctx.roundRect(-1.2, topY - 0.2, 2.4, 2.0, 0.4);
           ctx.fill();
         } else {
-          ctx.fillStyle = innerColor;
-          ctx.beginPath();
-          if (isRect) {
-            ctx.roundRect(-hw + 0.4, topY + 0.5, w - 0.8, 1.4, 0.4);
-          } else {
-            ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
-          }
-          ctx.fill();
+          const innerColor =
+            item?.fluidStorage && item.fluidStorage.currentMl > 0
+              ? item.fluidStorage.attributes?.customColor ||
+                (item.fluidStorage.liquidId ? LIQUID_REGISTRY[item.fluidStorage.liquidId as LiquidId]?.color : undefined) ||
+                '#9a3412'
+              : '#1e293b';
 
-          // Bent-up sharp tin lid flap
-          ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 15));
-          ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55));
-          ctx.lineWidth = 0.6;
-          ctx.beginPath();
-          ctx.ellipse(hw - 1.2, topY - 1.6, 2.2, 2.6, 0.35, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
+          if (isAlu) {
+            ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 15));
+            ctx.beginPath();
+            ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#09090b';
+            ctx.beginPath();
+            ctx.ellipse(1.0, topY + 1.0, 1.8, 0.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillStyle = innerColor;
+            ctx.beginPath();
+            if (isRect) {
+              ctx.roundRect(-hw + 0.4, topY + 0.5, w - 0.8, 1.4, 0.4);
+            } else {
+              ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.1, 0, 0, Math.PI * 2);
+            }
+            ctx.fill();
+
+            ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 15));
+            ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55));
+            ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.ellipse(hw - 1.2, topY - 1.6, 2.2, 2.6, 0.35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
         }
       }
 
@@ -3919,10 +3849,10 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       drawShadow(ctx, hw + 1.0, 3.5, botY + 0.5, 0.25);
 
       const sackGrad = ctx.createLinearGradient(-hw, topY, hw, botY);
-      sackGrad.addColorStop(0, '#e5d5b5');
+      sackGrad.addColorStop(0.0, '#e5d5b5');
       sackGrad.addColorStop(0.35, '#cbb48b');
       sackGrad.addColorStop(0.75, '#9a7b4f');
-      sackGrad.addColorStop(1, '#6b4f2c');
+      sackGrad.addColorStop(1.0, '#6b4f2c');
 
       ctx.fillStyle = sackGrad;
       ctx.beginPath();
@@ -3936,6 +3866,20 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
+      // Burlap cross-weave lines
+      ctx.strokeStyle = 'rgba(69, 26, 3, 0.22)';
+      ctx.lineWidth = 0.4;
+      ctx.beginPath();
+      for (let x = -hw * 0.65; x <= hw * 0.65; x += 2.4) {
+        ctx.moveTo(x, topY + 2.5);
+        ctx.lineTo(x, botY - 1.0);
+      }
+      for (let y = topY + 3.5; y <= botY - 1.5; y += 2.2) {
+        ctx.moveTo(-hw * 0.78, y);
+        ctx.quadraticCurveTo(0, y + 0.8, hw * 0.78, y);
+      }
+      ctx.stroke();
+
       ctx.fillStyle = '#dec79f';
       ctx.beginPath();
       ctx.moveTo(-hw * 0.4, topY);
@@ -3947,17 +3891,23 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       ctx.fillStyle = '#fef08a';
       ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.7;
+      ctx.lineWidth = 0.6;
       ctx.beginPath();
       ctx.roundRect(-hw * 0.45, topY - 0.6, hw * 0.9, 1.8, 0.6);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(69, 26, 3, 0.8)';
-      ctx.font = `bold ${isSm ? 2.2 : (isLg ? 3.4 : 2.8)}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(isLg ? '10 L' : (isSm ? '1 L' : '5 L'), 0, topY + (botY - topY) * 0.55);
+      // Stitched parchment farm tag + barcode (no big sans-serif text)
+      drawStudioLabelPanel(ctx, -hw * 0.56, topY + (botY - topY) * 0.36, hw * 1.12, 4.2, {
+        paperColor: '#f8f5ec',
+        bandColor: '#78350f',
+        accentColor: '#ca8a04',
+        inkColor: '#451a03',
+        goldFoil: false,
+        hasBarcode: hw >= 6.0,
+        emblem: 'leaf',
+        cylindrical: false
+      });
 
       return true;
     }
@@ -3979,20 +3929,23 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       drawShadow(ctx, hw + 1.2, 3.2, botY + 0.8, 0.28);
 
+      // Kraft corrugated box body
       const frontGrad = ctx.createLinearGradient(-hw, topY + 2.5, hw, botY);
-      frontGrad.addColorStop(0, '#d97706');
-      frontGrad.addColorStop(0.5, '#b45309');
-      frontGrad.addColorStop(1, '#92400e');
-
+      frontGrad.addColorStop(0.0, '#d6b084');
+      frontGrad.addColorStop(0.55, '#b6895b');
+      frontGrad.addColorStop(1.0, '#855830');
       ctx.fillStyle = frontGrad;
       ctx.beginPath();
-      ctx.roundRect(-hw, topY + 2.5, w, h - 2.5, 0.8);
+      ctx.roundRect(-hw, topY + 2.5, w, h - 2.5, 0.65);
       ctx.fill();
+      ctx.strokeStyle = '#6b4220';
+      ctx.lineWidth = 0.35;
+      ctx.stroke();
 
+      // Top lid bevel with center flap seam + clear packing tape strip
       const topGrad = ctx.createLinearGradient(-hw, topY, hw, topY + 2.5);
-      topGrad.addColorStop(0, '#f59e0b');
-      topGrad.addColorStop(1, '#d97706');
-
+      topGrad.addColorStop(0.0, '#e5c59e');
+      topGrad.addColorStop(1.0, '#c6996b');
       ctx.fillStyle = topGrad;
       ctx.beginPath();
       ctx.moveTo(-hw, topY + 2.5);
@@ -4002,16 +3955,30 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.closePath();
       ctx.fill();
 
+      ctx.strokeStyle = 'rgba(69, 26, 3, 0.45)';
+      ctx.lineWidth = 0.35;
+      ctx.beginPath();
+      ctx.moveTo(-hw + 1.0, topY + 1.25);
+      ctx.lineTo(hw - 1.0, topY + 1.25);
+      ctx.stroke();
+
+      // Translucent acrylic packing tape wrapping down front seam
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.36)';
+      ctx.fillRect(-1.4, topY, 2.8, 5.2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 0.22;
+      ctx.strokeRect(-1.4, topY, 2.8, 5.2);
+
       if (item?.fluidStorage?.attributes?.customColor) {
         ctx.fillStyle = item.fluidStorage.attributes.customColor;
-        ctx.fillRect(-hw + 1.5, topY + 4.2, w - 3.0, h * 0.35);
+        ctx.fillRect(-hw + 1.2, topY + 4.0, w - 2.4, h * 0.25);
       }
 
-      ctx.fillStyle = 'rgba(69, 26, 3, 0.85)';
-      ctx.font = `bold ${isSm ? 2.0 : 2.6}px monospace`;
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(isLg ? '15L' : (isSm ? '1L' : '5L'), hw - 1.5, botY - 1.2);
+      // White shipping label with micro-barcode + handling icon
+      drawMicroBarcode(ctx, hw - 4.8, botY - 2.8, 3.6, 1.5);
+      ctx.fillStyle = 'rgba(69, 26, 3, 0.72)';
+      ctx.fillRect(-hw + 1.2, botY - 2.6, 1.6, 0.35);
+      ctx.fillRect(-hw + 1.2, botY - 1.9, 1.2, 0.35);
 
       return true;
     }
@@ -4067,7 +4034,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       const traceBottlePath = () => {
         ctx.beginPath();
         if (shape === 'square') {
-          // Angular square "Maraska" bottle (olive oil, vinegar, soy sauce)
           ctx.moveTo(-hnw, neckTopY);
           ctx.lineTo(hnw, neckTopY);
           ctx.lineTo(hnw, shoulderTopY);
@@ -4078,7 +4044,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.lineTo(-hnw, shoulderTopY);
           ctx.closePath();
         } else if (shape === 'flask') {
-          // Flat wide shtof / pocket flask with chamfered shoulders
           ctx.moveTo(-hnw, neckTopY);
           ctx.lineTo(hnw, neckTopY);
           ctx.lineTo(hnw, shoulderTopY);
@@ -4089,7 +4054,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.lineTo(-hnw, shoulderTopY);
           ctx.closePath();
         } else if (shape === 'bulbous') {
-          // Round pot-bellied carafe / jug bottle
           const bellyY = (shoulderTopY + botY) * 0.58;
           ctx.moveTo(-hnw, neckTopY);
           ctx.lineTo(hnw, neckTopY);
@@ -4099,7 +4063,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.bezierCurveTo(-hw - 2.4, bellyY + 2.5, -hw - 2.2, shoulderTopY + 2.0, -hnw, shoulderTopY);
           ctx.closePath();
         } else if (shape === 'pinched') {
-          // Ergonomic pinched-waist PET / squeeze bottle
           const waistY = (bodyTopY + botY) * 0.48;
           ctx.moveTo(-hnw, neckTopY);
           ctx.lineTo(hnw, neckTopY);
@@ -4112,7 +4075,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.quadraticCurveTo(-hw, shoulderTopY + 1.0, -hnw, shoulderTopY);
           ctx.closePath();
         } else if (shape === 'burgundy') {
-          // Long gently sloped conical shoulders (Burgundy wine / beer / milk bottle)
           ctx.moveTo(-hnw, neckTopY);
           ctx.lineTo(hnw, neckTopY);
           ctx.lineTo(hnw, shoulderTopY);
@@ -4123,7 +4085,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.quadraticCurveTo(-hw * 0.85, shoulderTopY + 2.2, -hnw, shoulderTopY);
           ctx.closePath();
         } else {
-          // Bordeaux / Classic high-shoulder straight-walled bottle
           ctx.moveTo(-hnw, neckTopY);
           ctx.lineTo(hnw, neckTopY);
           ctx.lineTo(hnw, shoulderTopY);
@@ -4168,10 +4129,11 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
         ctx.fillStyle = fluidColor;
         ctx.fillRect(-hw - 3, fluidTop, w + 6, fluidH + 1.5);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+        ctx.fillRect(-hw - 3, fluidTop, w + 6, 0.42);
         ctx.restore();
       }
 
-      // Shape-specific structural lines (Maraska square edges, Flask recessed panel, PET ribs)
       if (shape === 'square') {
         ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 35), 0.55);
         ctx.lineWidth = 0.6;
@@ -4196,7 +4158,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.stroke();
       }
 
-      // Heavy bottom punt for glass bottles
       if (!isPlastic) {
         ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, -55), 0.55);
         ctx.beginPath();
@@ -4204,7 +4165,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.fill();
       }
 
-      // Front bottle label colored by labelRgb
+      // Studio paper/film label colored dynamically by labelRgb
       const liqId = item?.fluidStorage?.liquidId;
       const isDropperBottle =
         is100 &&
@@ -4215,44 +4176,32 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       if (labelRgb) {
         const lblW = w - 1.2;
         const availH = botY - bodyTopY;
-        const lblH = Math.max(3.2, availH * 0.46);
+        const lblH = Math.max(3.4, availH * 0.48);
         const lblY = bodyTopY + (availH - lblH) * 0.48;
 
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.roundRect(-lblW / 2, lblY, lblW, lblH, 0.5);
-        ctx.fill();
-
-        ctx.fillStyle = rgbTupleToCss(labelRgb);
-        ctx.beginPath();
-        ctx.roundRect(-lblW / 2 + 0.3, lblY + 0.3, lblW - 0.6, lblH - 0.6, 0.35);
-        ctx.fill();
-
-        if (labelAccentRgb) {
-          ctx.fillStyle = rgbTupleToCss(labelAccentRgb);
-          ctx.fillRect(-lblW / 2 + 0.3, lblY + lblH * 0.25, lblW - 0.6, 0.7);
-        }
+        drawStudioLabelPanel(ctx, -lblW / 2, lblY, lblW, lblH, {
+          paperColor: '#f8f5ec',
+          bandColor: rgbTupleToCss(labelRgb),
+          accentColor: labelAccentRgb ? rgbTupleToCss(labelAccentRgb) : '#ca8a04',
+          inkColor: '#1e293b',
+          goldFoil: !isPlastic,
+          hasBarcode: !isDropperBottle && lblW >= 6.6 && lblH >= 3.8,
+          emblem: isDropperBottle ? 'none' : 'crest',
+          cylindrical: true
+        });
 
         if (isDropperBottle) {
-          // Dropper liquid teardrop badge on label
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = rgbTupleToCss(labelRgb);
           ctx.beginPath();
           ctx.moveTo(0, lblY + lblH * 0.42);
-          ctx.bezierCurveTo(1.2, lblY + lblH * 0.72, 1.1, lblY + lblH * 0.88, 0, lblY + lblH * 0.88);
-          ctx.bezierCurveTo(-1.1, lblY + lblH * 0.88, -1.2, lblY + lblH * 0.72, 0, lblY + lblH * 0.42);
+          ctx.bezierCurveTo(1.1, lblY + lblH * 0.72, 1.0, lblY + lblH * 0.88, 0, lblY + lblH * 0.88);
+          ctx.bezierCurveTo(-1.0, lblY + lblH * 0.88, -1.1, lblY + lblH * 0.72, 0, lblY + lblH * 0.42);
           ctx.fill();
-        } else {
-          const volMark = is1500 ? '1.5L' : is1000 ? '1.0L' : is750 ? '0.75' : is100 ? '100' : isSmall ? '0.25' : '0.5L';
-          ctx.fillStyle = '#ffffff';
-          ctx.font = `bold ${isSmall || is100 ? 1.7 : 2.1}px sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(volMark, 0, lblY + lblH * 0.64);
         }
       }
 
-      // Vertical specular reflection streak
-      drawGlossBand(ctx, -hw + 1.2, bodyTopY, 1.1, botY - bodyTopY - 0.8, 0.4);
+      // Fresnel glass/PET specular reflections
+      drawGlossBand(ctx, -hw + 1.2, bodyTopY, 1.1, botY - bodyTopY - 0.8, 0.42);
 
       // Cap or Squeeze Dispenser Nozzle
       const finalCapRgb: [number, number, number] = capRgb || (isPlastic ? [2, 132, 199] : [148, 163, 184]);
@@ -4265,7 +4214,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.closePath();
         ctx.fill();
       } else if (isDropperBottle) {
-        // Fine precision pipette dropper tip
         ctx.fillStyle = rgbTupleToCss(finalCapRgb);
         ctx.beginPath();
         ctx.roundRect(-hnw - 0.3, neckTopY - 0.8, neckW + 0.6, 1.8, 0.4);
@@ -4277,12 +4225,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.closePath();
         ctx.fill();
       } else {
-        ctx.fillStyle = rgbTupleToCss(finalCapRgb);
-        ctx.beginPath();
-        ctx.roundRect(-hnw - 0.4, neckTopY - 1.2, neckW + 0.8, 2.3, 0.6);
-        ctx.fill();
-        ctx.fillStyle = rgbTupleToCss(shiftRgbTuple(finalCapRgb, -40));
-        ctx.fillRect(-hnw - 0.4, neckTopY + 0.5, neckW + 0.8, 0.6);
+        drawScrewCap(ctx, 0, neckTopY - 1.2, neckW + 0.8, 2.3, rgbTupleToCss(finalCapRgb), true);
       }
 
       return true;
@@ -4292,53 +4235,135 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'tube_ointment_small':
     case 'ampoule_glass_small':
     case 'aerosol_can_small': {
-      drawShadow(ctx, 4.0, 1.8, 7.5, 0.2);
+      drawShadow(ctx, 4.2, 1.8, 7.6, 0.22);
       const customC = item?.fluidStorage?.attributes?.customColor;
 
       if (itemId === 'tube_ointment_small') {
-        ctx.fillStyle = '#f8fafc';
+        const tGrad = ctx.createLinearGradient(-4.3, -4.5, 4.3, 6.5);
+        tGrad.addColorStop(0.0, '#ffffff');
+        tGrad.addColorStop(0.4, '#f1f5f9');
+        tGrad.addColorStop(1.0, '#cbd5e1');
+        ctx.fillStyle = tGrad;
         ctx.beginPath();
-        ctx.moveTo(-4.2, 6.5);
-        ctx.lineTo(-2.6, -4.5);
-        ctx.lineTo(2.6, -4.5);
-        ctx.lineTo(4.2, 6.5);
+        ctx.moveTo(-4.3, 6.6);
+        ctx.lineTo(-2.6, -4.4);
+        ctx.lineTo(2.6, -4.4);
+        ctx.lineTo(4.3, 6.6);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = customC || '#16a34a';
-        ctx.fillRect(-3.4, 0, 6.8, 3.2);
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(-4.2, 5.5, 8.4, 1.2);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(-1.5, -7.0, 3.0, 2.5);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 0.35;
+        ctx.stroke();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(-4.3, 6.6);
+        ctx.lineTo(-2.6, -4.4);
+        ctx.lineTo(2.6, -4.4);
+        ctx.lineTo(4.3, 6.6);
+        ctx.closePath();
+        ctx.clip();
+        drawStudioLabelPanel(ctx, -3.7, -2.2, 7.4, 6.2, {
+          paperColor: '#ffffff',
+          bandColor: customC || '#16a34a',
+          accentColor: '#cbd5e1',
+          inkColor: '#0f172a',
+          goldFoil: false,
+          hasBarcode: true,
+          emblem: 'diamond',
+          cylindrical: true
+        });
+        applyCylinderLightingOverlay(ctx, -4.3, -4.4, 8.6, 11.0, 0.26, 0.24);
+        ctx.restore();
+
+        drawCrimpedSeal(ctx, -4.3, 5.4, 8.6, 1.35, '#94a3b8', true, 0.68);
+        drawScrewCap(ctx, 0, -7.1, 3.2, 2.7, '#e2e8f0', false);
         return true;
       }
 
       if (itemId === 'ampoule_glass_small') {
-        ctx.fillStyle = 'rgba(224, 242, 254, 0.82)';
+        const gGrad = ctx.createLinearGradient(-2.6, -7.5, 2.6, 6.5);
+        gGrad.addColorStop(0.0, 'rgba(224, 242, 254, 0.72)');
+        gGrad.addColorStop(0.5, 'rgba(186, 230, 253, 0.35)');
+        gGrad.addColorStop(1.0, 'rgba(148, 163, 184, 0.55)');
+        ctx.fillStyle = gGrad;
         ctx.beginPath();
-        ctx.roundRect(-2.4, -1.5, 4.8, 8.0, 1.4);
+        ctx.roundRect(-2.5, -1.6, 5.0, 8.2, 1.4);
         ctx.fill();
         ctx.beginPath();
-        ctx.moveTo(-1.2, -1.5);
-        ctx.lineTo(0, -7.5);
-        ctx.lineTo(1.2, -1.5);
+        ctx.moveTo(-1.3, -1.6);
+        ctx.lineTo(-0.5, -5.2);
+        ctx.lineTo(-0.9, -6.2);
+        ctx.lineTo(0, -7.8);
+        ctx.lineTo(0.9, -6.2);
+        ctx.lineTo(0.5, -5.2);
+        ctx.lineTo(1.3, -1.6);
         ctx.closePath();
         ctx.fill();
+
         if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
           ctx.fillStyle = customC || '#38bdf8';
-          ctx.fillRect(-1.9, 1.0, 3.8, 5.0);
+          ctx.beginPath();
+          ctx.roundRect(-2.0, 0.8, 4.0, 5.3, 0.9);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.fillRect(-1.9, 0.8, 3.8, 0.45);
         }
+
+        // Ceramic break-point neck ring
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-1.1, -2.5, 2.2, 0.55);
+        ctx.fillStyle = '#0284c7';
+        ctx.beginPath();
+        ctx.arc(0, -3.4, 0.45, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 0.4;
+        ctx.beginPath();
+        ctx.roundRect(-2.5, -1.6, 5.0, 8.2, 1.4);
+        ctx.stroke();
+        drawGlossBand(ctx, -1.7, -1.0, 0.75, 6.8, 0.48);
         return true;
       }
 
-      ctx.fillStyle = '#f8fafc';
+      // Brushed Aluminum Medical Aerosol Canister
+      const cGrad = ctx.createLinearGradient(-4.0, -3.8, 4.0, 7.0);
+      cGrad.addColorStop(0.0, '#94a3b8');
+      cGrad.addColorStop(0.28, '#ffffff');
+      cGrad.addColorStop(0.65, '#e2e8f0');
+      cGrad.addColorStop(1.0, '#64748b');
+      ctx.fillStyle = cGrad;
       ctx.beginPath();
-      ctx.roundRect(-3.8, -3.5, 7.6, 10.5, 1.0);
+      ctx.roundRect(-4.0, -3.8, 8.0, 10.8, 1.2);
       ctx.fill();
-      ctx.fillStyle = customC || '#ea580c';
-      ctx.fillRect(-3.8, -0.5, 7.6, 4.0);
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-2.0, -6.5, 4.0, 3.0);
+
+      // Tapered aluminum dome shoulder
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.moveTo(-3.9, -3.4);
+      ctx.quadraticCurveTo(0, -5.6, 3.9, -3.4);
+      ctx.closePath();
+      ctx.fill();
+
+      drawStudioLabelPanel(ctx, -3.9, -1.6, 7.8, 6.8, {
+        paperColor: '#ffffff',
+        bandColor: customC || '#ea580c',
+        accentColor: '#0284c7',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'circle',
+        cylindrical: true
+      });
+      applyCylinderLightingOverlay(ctx, -4.0, -3.8, 8.0, 10.8, 0.28, 0.3);
+
+      // Spray actuator nozzle cap
+      drawScrewCap(ctx, 0, -6.9, 4.4, 2.8, '#f8fafc', false);
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(0.9, -5.8, 0.45, 0, Math.PI * 2);
+      ctx.fill();
       return true;
     }
 
@@ -4349,45 +4374,89 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'cup_plastic_dairy_medium_open': {
       const isMd = itemId.includes('medium');
       const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId.endsWith('_open'));
-      const topW = isMd ? 11.0 : 9.0;
+      const topW = isMd ? 11.2 : 9.2;
       const botW = isMd ? 8.4 : 6.8;
       const h = isMd ? 11.5 : 8.5;
       const topY = 7.0 - h;
       const botY = 7.0;
 
-      drawShadow(ctx, topW * 0.55, 2.4, botY + 0.6, 0.22);
+      drawShadow(ctx, topW * 0.56, 2.4, botY + 0.6, 0.24);
 
-      // White polypropylene tapered cup body
-      ctx.fillStyle = '#f8fafc';
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(-topW / 2, topY + 1.2);
-      ctx.lineTo(topW / 2, topY + 1.2);
-      ctx.lineTo(botW / 2, botY);
-      ctx.lineTo(-botW / 2, botY);
-      ctx.closePath();
+      // Tapered polypropylene cup body with cylinder shading
+      const cupGrad = ctx.createLinearGradient(-topW / 2, topY, topW / 2, botY);
+      cupGrad.addColorStop(0.0, '#cbd5e1');
+      cupGrad.addColorStop(0.28, '#ffffff');
+      cupGrad.addColorStop(0.75, '#f1f5f9');
+      cupGrad.addColorStop(1.0, '#94a3b8');
+
+      const traceCup = () => {
+        ctx.beginPath();
+        ctx.moveTo(-topW / 2, topY + 1.2);
+        ctx.lineTo(topW / 2, topY + 1.2);
+        ctx.lineTo(botW / 2, botY);
+        ctx.quadraticCurveTo(0, botY + 0.7, -botW / 2, botY);
+        ctx.closePath();
+      };
+
+      ctx.fillStyle = cupGrad;
+      traceCup();
       ctx.fill();
-      ctx.stroke();
 
-      // Colored stripe on cup body
-      const stripeC = item?.fluidStorage?.attributes?.customColor || '#38bdf8';
-      ctx.fillStyle = stripeC;
-      ctx.fillRect(-botW / 2, topY + h * 0.42, botW, 2.2);
+      const stripeC = item?.fluidStorage?.attributes?.customColor || '#0284c7';
+      ctx.save();
+      traceCup();
+      ctx.clip();
+      drawStudioLabelPanel(ctx, -topW * 0.46, topY + h * 0.30, topW * 0.92, h * 0.48, {
+        paperColor: '#f8fafc',
+        bandColor: stripeC,
+        accentColor: '#ca8a04',
+        inkColor: '#1e293b',
+        goldFoil: false,
+        hasBarcode: isMd,
+        emblem: 'leaf',
+        cylindrical: true
+      });
+      applyCylinderLightingOverlay(ctx, -topW / 2, topY, topW, h, 0.22, 0.26);
+      ctx.restore();
 
-      // Top foil lid or open creamy interior
-      ctx.fillStyle = isOpen ? (item?.fluidStorage?.currentMl ? '#fffbeb' : '#cbd5e1') : '#e2e8f0';
+      // Thermoformed lip flange
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.ellipse(0, topY + 1.2, topW / 2 + 0.4, 1.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, topY + 1.2, topW / 2 + 0.45, 1.55, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.45;
       ctx.stroke();
 
       if (isOpen) {
-        // Peeled back foil lid flap
-        ctx.fillStyle = '#cbd5e1';
+        const innerC = item?.fluidStorage?.currentMl ? '#fef9c3' : '#94a3b8';
+        ctx.fillStyle = innerC;
         ctx.beginPath();
-        ctx.ellipse(topW * 0.38, topY - 0.5, 2.2, 1.2, -0.4, 0, Math.PI * 2);
+        ctx.ellipse(0, topY + 1.2, topW / 2 - 0.5, 1.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Peeled back foil lid tab
+        const foilTabGrad = ctx.createLinearGradient(0, topY - 1.5, topW * 0.6, topY + 0.5);
+        foilTabGrad.addColorStop(0, '#f8fafc');
+        foilTabGrad.addColorStop(1, '#94a3b8');
+        ctx.fillStyle = foilTabGrad;
+        ctx.beginPath();
+        ctx.ellipse(topW * 0.36, topY - 0.55, 2.3, 1.15, -0.45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.3;
+        ctx.stroke();
+      } else {
+        const lidGrad = ctx.createLinearGradient(-topW / 2, topY, topW / 2, topY + 2);
+        lidGrad.addColorStop(0.0, '#cbd5e1');
+        lidGrad.addColorStop(0.4, '#ffffff');
+        lidGrad.addColorStop(1.0, '#94a3b8');
+        ctx.fillStyle = lidGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, topY + 1.15, topW / 2 + 0.1, 1.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = stripeC;
+        ctx.beginPath();
+        ctx.ellipse(0, topY + 1.15, topW * 0.25, 0.55, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       return true;
@@ -4396,19 +4465,54 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     // Small Tetra Pak (Тетрапак 0.25л)
     case 'tetra_pack_250':
     case 'tetra_pack_250_open': {
-      drawShadow(ctx, 4.5, 2.0, 7.5, 0.22);
-      ctx.fillStyle = item?.fluidStorage?.attributes?.customColor || '#ea580c';
+      drawShadow(ctx, 4.8, 2.0, 7.6, 0.24);
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'tetra_pack_250_open');
+      const mainC = item?.fluidStorage?.attributes?.customColor || '#ea580c';
+
+      // Front face
+      const fGrad = ctx.createLinearGradient(-4.0, -4.8, 3.0, 7.0);
+      fGrad.addColorStop(0, mainC);
+      fGrad.addColorStop(1, '#9a3412');
+      ctx.fillStyle = fGrad;
       ctx.beginPath();
-      ctx.roundRect(-3.8, -4.5, 7.6, 11.5, 1.0);
+      ctx.roundRect(-4.0, -4.6, 6.8, 11.6, 0.8);
       ctx.fill();
-      ctx.fillStyle = '#fef08a';
+
+      // Side bevel shadow face
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
       ctx.beginPath();
-      ctx.arc(0.5, 0.5, 1.8, 0, Math.PI * 2);
+      ctx.moveTo(2.4, -4.6);
+      ctx.lineTo(4.0, -3.9);
+      ctx.lineTo(4.0, 6.3);
+      ctx.lineTo(2.4, 7.0);
+      ctx.closePath();
       ctx.fill();
-      if (item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'tetra_pack_250_open') {
-        ctx.fillStyle = '#1e293b';
+
+      // Top foil heat crease
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+      ctx.fillRect(-3.8, -4.6, 6.4, 0.65);
+
+      drawStudioLabelPanel(ctx, -3.4, -2.4, 5.6, 7.6, {
+        paperColor: '#fffbeb',
+        bandColor: mainC,
+        accentColor: '#ca8a04',
+        inkColor: '#1e293b',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'circle',
+        cylindrical: false
+      });
+
+      if (isOpen) {
+        ctx.fillStyle = '#0f172a';
         ctx.beginPath();
-        ctx.ellipse(1.8, -4.2, 1.2, 0.7, 0, 0, Math.PI * 2);
+        ctx.ellipse(1.4, -4.2, 1.0, 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Folded foil straw pouch on side/top
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(-0.6, 1.1, 1.1, 0, Math.PI * 2);
         ctx.fill();
       }
       return true;
@@ -4417,74 +4521,69 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     // Seasoning Sachet (Пакетик-саше 100мл)
     case 'package_sachet':
     case 'package_sachet_open': {
-      drawShadow(ctx, 4.5, 2.2, 7.5, 0.18);
+      drawShadow(ctx, 4.6, 2.2, 7.5, 0.2);
       const customC = item?.fluidStorage?.attributes?.customColor || '#dc2626';
       const sLiqId = item?.fluidStorage?.liquidId;
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'package_sachet_open');
 
-      // Metallic foil body gradient
-      const foilGrad = ctx.createLinearGradient(-4.2, -5.5, 4.2, 6.5);
-      foilGrad.addColorStop(0, '#f8fafc');
-      foilGrad.addColorStop(0.55, '#e2e8f0');
-      foilGrad.addColorStop(1, '#cbd5e1');
+      const foilGrad = ctx.createLinearGradient(-4.3, -5.6, 4.3, 6.6);
+      foilGrad.addColorStop(0.0, '#ffffff');
+      foilGrad.addColorStop(0.45, '#e2e8f0');
+      foilGrad.addColorStop(1.0, '#94a3b8');
       ctx.fillStyle = foilGrad;
       ctx.beginPath();
-      ctx.roundRect(-4.2, -5.5, 8.4, 12.0, 1.0);
+      ctx.roundRect(-4.3, -5.6, 8.6, 12.2, 0.8);
       ctx.fill();
 
-      // Crimped seams
-      ctx.fillStyle = '#94a3b8';
-      if (item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'package_sachet_open') {
-        ctx.fillRect(-4.2, 5.1, 8.4, 1.4);
-        ctx.fillStyle = '#334155';
+      drawCrimpedSeal(ctx, -4.3, 5.1, 8.6, 1.5, '#cbd5e1', true, 0.65);
+      if (isOpen) {
+        ctx.fillStyle = '#0f172a';
         ctx.beginPath();
-        ctx.ellipse(0, -4.8, 3.0, 0.9, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, -4.9, 3.1, 0.9, 0, 0, Math.PI * 2);
         ctx.fill();
         if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
           const innerCol = (sLiqId && LIQUID_REGISTRY[sLiqId as LiquidId]?.color) || '#fef9c3';
           ctx.fillStyle = innerCol;
           ctx.beginPath();
-          ctx.ellipse(0, -4.7, 2.1, 0.55, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, -4.8, 2.1, 0.55, 0, 0, Math.PI * 2);
           ctx.fill();
         }
       } else {
-        ctx.fillRect(-4.2, -5.5, 8.4, 1.4);
-        ctx.fillRect(-4.2, 5.1, 8.4, 1.4);
-        // Serrated seam notches
-        ctx.fillStyle = '#cbd5e1';
-        for (let sx = -3.4; sx <= 3.4; sx += 1.7) {
-          ctx.fillRect(sx - 0.3, -5.5, 0.6, 0.45);
-          ctx.fillRect(sx - 0.3, 6.05, 0.6, 0.45);
-        }
+        drawCrimpedSeal(ctx, -4.3, -5.6, 8.6, 1.4, '#cbd5e1', true, 0.65);
       }
 
-      // Glossy color banner + ingredient emblem
-      ctx.fillStyle = customC;
-      ctx.beginPath();
-      ctx.roundRect(-3.1, -2.0, 6.2, 4.6, 0.7);
-      ctx.fill();
+      drawStudioLabelPanel(ctx, -3.5, -2.8, 7.0, 6.6, {
+        paperColor: '#f8fafc',
+        bandColor: customC,
+        accentColor: '#ca8a04',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'none',
+        cylindrical: false
+      });
 
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      // Crystal / gel / spice emblem
+      ctx.fillStyle = customC;
       if (sLiqId === 'citric_acid' || sLiqId === 'malic_acid' || sLiqId === 'tartaric_acid' || sLiqId === 'sodium_citrate') {
-        // Rhombus crystal icon
         ctx.beginPath();
-        ctx.moveTo(0, -1.2);
-        ctx.lineTo(1.2, 0.3);
-        ctx.lineTo(0, 1.8);
-        ctx.lineTo(-1.2, 0.3);
+        ctx.moveTo(0, -0.3);
+        ctx.lineTo(1.2, 1.0);
+        ctx.lineTo(0, 2.3);
+        ctx.lineTo(-1.2, 1.0);
         ctx.closePath();
         ctx.fill();
       } else if (sLiqId === 'gelatin' || sLiqId === 'pectin' || sLiqId === 'agar_agar') {
-        // Droplet/gel bead icon
         ctx.beginPath();
-        ctx.moveTo(0, -1.2);
-        ctx.bezierCurveTo(1.3, 0.3, 1.2, 1.7, 0, 1.7);
-        ctx.bezierCurveTo(-1.2, 1.7, -1.3, 0.3, 0, -1.2);
+        ctx.moveTo(0, -0.3);
+        ctx.bezierCurveTo(1.2, 1.0, 1.1, 2.2, 0, 2.2);
+        ctx.bezierCurveTo(-1.1, 2.2, -1.2, 1.0, 0, -0.3);
         ctx.fill();
       } else {
-        ctx.fillRect(-2.0, -0.3, 4.0, 1.0);
+        ctx.fillRect(-1.8, 0.6, 3.6, 0.75);
       }
 
-      drawGlossBand(ctx, -3.2, -4.0, 1.1, 8.8, 0.32);
+      drawPouchCrinkles(ctx, -3.8, -4.0, 7.6, 8.5, 29, 0.24);
       return true;
     }
 
@@ -4504,51 +4603,66 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.scale(scale, scale);
       drawShadow(ctx, 6.5, 2.8, 7.8, 0.28);
 
-      const clayGrad = ctx.createLinearGradient(-6, -4, 6, 7);
-      clayGrad.addColorStop(0, '#ea580c');
-      clayGrad.addColorStop(0.4, '#c2410c');
-      clayGrad.addColorStop(1, '#7c2d12');
+      const clayGrad = ctx.createLinearGradient(-6.5, -4, 6.5, 7);
+      clayGrad.addColorStop(0.0, '#f97316');
+      clayGrad.addColorStop(0.32, '#c2410c');
+      clayGrad.addColorStop(0.75, '#9a3412');
+      clayGrad.addColorStop(1.0, '#431407');
 
       ctx.fillStyle = clayGrad;
       ctx.beginPath();
       ctx.moveTo(-4.5, -3.5);
-      ctx.quadraticCurveTo(-7.5, 1.0, -5.5, 6.5);
-      ctx.quadraticCurveTo(0, 8.0, 5.5, 6.5);
-      ctx.quadraticCurveTo(7.5, 1.0, 4.5, -3.5);
+      ctx.quadraticCurveTo(-7.6, 1.0, -5.5, 6.5);
+      ctx.quadraticCurveTo(0, 8.1, 5.5, 6.5);
+      ctx.quadraticCurveTo(7.6, 1.0, 4.5, -3.5);
       ctx.closePath();
       ctx.fill();
 
-      // Wide flared ceramic lip
-      ctx.fillStyle = '#9a3412';
+      // Ceramic shoulder turnings
+      ctx.strokeStyle = 'rgba(67, 20, 7, 0.35)';
+      ctx.lineWidth = 0.35;
       ctx.beginPath();
-      ctx.ellipse(0, -3.8, 5.5, 1.8, 0, 0, Math.PI * 2);
+      ctx.moveTo(-5.8, 0.5);
+      ctx.quadraticCurveTo(0, 1.5, 5.8, 0.5);
+      ctx.stroke();
+
+      // Wide flared glazed lip
+      ctx.fillStyle = '#7c2d12';
+      ctx.beginPath();
+      ctx.ellipse(0, -3.8, 5.6, 1.85, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(253, 186, 116, 0.45)';
+      ctx.lineWidth = 0.35;
+      ctx.stroke();
 
       if (!isOpen) {
-        // Tied parchment cloth / ceramic cover on top
-        ctx.fillStyle = '#fef3c7';
+        // Tied waxed parchment cloth cover with twine
+        const clothGrad = ctx.createLinearGradient(-4.8, -6.0, 4.8, -3.2);
+        clothGrad.addColorStop(0.0, '#fef3c7');
+        clothGrad.addColorStop(0.6, '#fde68a');
+        clothGrad.addColorStop(1.0, '#d97706');
+        ctx.fillStyle = clothGrad;
         ctx.beginPath();
-        ctx.roundRect(-4.8, -5.8, 9.6, 2.4, 0.8);
+        ctx.roundRect(-4.9, -5.8, 9.8, 2.5, 0.8);
         ctx.fill();
         ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = 0.8;
+        ctx.lineWidth = 0.7;
         ctx.beginPath();
-        ctx.moveTo(-4.8, -3.8);
-        ctx.lineTo(4.8, -3.8);
+        ctx.moveTo(-4.8, -3.7);
+        ctx.lineTo(4.8, -3.7);
         ctx.stroke();
       } else {
-        // Open pot showing honey / fat / broth / empty dark interior
         const innerC =
           item?.fluidStorage && item.fluidStorage.currentMl > 0
             ? item.fluidStorage.attributes?.customColor || '#f59e0b'
-            : '#27272a';
+            : '#1c1917';
         ctx.fillStyle = innerC;
         ctx.beginPath();
-        ctx.ellipse(0, -3.8, 4.4, 1.3, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, -3.8, 4.5, 1.35, 0, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      drawGlossBand(ctx, -4.5, -1.0, 1.2, 6.5, 0.3);
+      drawGlossBand(ctx, -4.4, -1.0, 1.15, 6.4, 0.34);
       ctx.restore();
       return true;
     }
@@ -4556,22 +4670,38 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     // Pill Blister Pack (Блистер для таблеток 10 ячеек: целый, начатый или пустой)
     case 'blister_pack_10':
     case 'blister_pack_empty': {
-      drawShadow(ctx, 7.0, 3.5, 7.5, 0.2);
+      drawShadow(ctx, 7.0, 3.5, 7.6, 0.24);
       const hasContentsArray = Array.isArray(item?.contents);
       const isEmpty = itemId === 'blister_pack_empty' || (hasContentsArray && item!.contents!.length === 0);
 
-      // Silver aluminum blister sheet
-      ctx.fillStyle = item?.containerTintColor || '#cbd5e1';
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.6;
+      // Brushed aluminum backing sheet
+      const bGrad = ctx.createLinearGradient(-5.6, -7.6, 5.6, 7.6);
+      bGrad.addColorStop(0.0, '#f8fafc');
+      bGrad.addColorStop(0.4, item?.containerTintColor || '#cbd5e1');
+      bGrad.addColorStop(1.0, '#94a3b8');
+      ctx.fillStyle = bGrad;
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.roundRect(-5.5, -7.5, 11.0, 15.0, 1.2);
+      ctx.roundRect(-5.6, -7.6, 11.2, 15.2, 1.1);
       ctx.fill();
       ctx.stroke();
 
+      // Subtle cross-hatched foil score texture
+      ctx.strokeStyle = 'rgba(100, 116, 139, 0.16)';
+      ctx.lineWidth = 0.22;
+      for (let y = -6.2; y <= 6.2; y += 1.6) {
+        ctx.beginPath();
+        ctx.moveTo(-5.0, y);
+        ctx.lineTo(5.0, y);
+        ctx.stroke();
+      }
+
       if (item?.labelColor) {
         ctx.fillStyle = item.labelColor;
-        ctx.fillRect(-5.2, -7.2, 10.4, 1.3);
+        ctx.fillRect(-5.3, -7.3, 10.6, 1.25);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+        ctx.fillRect(-3.6, -6.9, 7.2, 0.38);
       }
 
       const firstPill = item?.contents?.[0]?.itemId || '';
@@ -4588,17 +4718,34 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 2; c++) {
           const px = c === 0 ? -2.4 : 2.4;
-          const py = -5.0 + r * 2.5;
+          const py = -4.8 + r * 2.45;
           if (idx < remCount) {
-            ctx.fillStyle = pillColor;
+            // Raised PVC blister pocket shadow
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
             ctx.beginPath();
-            ctx.ellipse(px, py, 1.5, 1.0, 0, 0, Math.PI * 2);
+            ctx.ellipse(px + 0.22, py + 0.28, 1.65, 1.08, 0, 0, Math.PI * 2);
             ctx.fill();
-          } else {
-            // Popped foil cavity
-            ctx.fillStyle = '#64748b';
+
+            // Lit tablet inside clear dome
+            drawLitEllipse(ctx, px, py, 1.48, 0.95, 0, '#ffffff', pillColor, '#334155', undefined, 0.3);
+            // Dome specular arc
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.78)';
+            ctx.lineWidth = 0.32;
             ctx.beginPath();
-            ctx.ellipse(px, py, 1.4, 0.9, 0, 0, Math.PI * 2);
+            ctx.ellipse(px - 0.35, py - 0.28, 0.85, 0.42, -0.2, Math.PI, Math.PI * 2);
+            ctx.stroke();
+          } else {
+            // Punctured dark foil cavity with torn silver burr
+            ctx.fillStyle = '#334155';
+            ctx.beginPath();
+            ctx.ellipse(px, py, 1.45, 0.92, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath();
+            ctx.moveTo(px + 0.1, py);
+            ctx.lineTo(px + 1.45, py - 0.55);
+            ctx.lineTo(px + 1.1, py + 0.85);
+            ctx.closePath();
             ctx.fill();
           }
           idx++;
@@ -4611,36 +4758,49 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'egg_carton_10':
     case 'egg_carton_10_open':
     case 'egg_carton_quail_18': {
-      drawShadow(ctx, 9.5, 4.0, 7.5, 0.25);
+      drawShadow(ctx, 9.6, 4.0, 7.6, 0.26);
       const isQuail = itemId === 'egg_carton_quail_18';
       const isOpen = Boolean(item?.isOpen) || itemId === 'egg_carton_10_open' || isQuail;
 
-      // Molded pulp carton base
-      ctx.fillStyle = item?.containerTintColor || (isQuail ? 'rgba(226, 232, 240, 0.65)' : '#d6d3d1');
-      ctx.strokeStyle = '#a8a29e';
-      ctx.lineWidth = 0.7;
+      const pulpGrad = ctx.createLinearGradient(-8.6, -5.2, 8.6, 5.2);
+      pulpGrad.addColorStop(0.0, item?.containerTintColor || (isQuail ? 'rgba(241, 245, 249, 0.82)' : '#e7e5e4'));
+      pulpGrad.addColorStop(0.55, isQuail ? 'rgba(203, 213, 225, 0.72)' : '#d6d3d1');
+      pulpGrad.addColorStop(1.0, isQuail ? 'rgba(148, 163, 184, 0.72)' : '#a8a29e');
+      ctx.fillStyle = pulpGrad;
+      ctx.strokeStyle = '#78716c';
+      ctx.lineWidth = 0.55;
       ctx.beginPath();
-      ctx.roundRect(-8.5, -5.0, 17.0, 10.0, 1.5);
+      ctx.roundRect(-8.6, -5.1, 17.2, 10.2, 1.4);
       ctx.fill();
       ctx.stroke();
 
       if (!isOpen) {
-        // Closed carton lid label
-        ctx.fillStyle = item?.labelColor || '#f59e0b';
-        ctx.fillRect(-5.5, -2.2, 11.0, 4.4);
+        // Molded carton clasp lugs along front edge
+        ctx.fillStyle = '#a8a29e';
+        ctx.fillRect(-5.0, 4.2, 2.2, 0.9);
+        ctx.fillRect(2.8, 4.2, 2.2, 0.9);
+
+        drawStudioLabelPanel(ctx, -6.2, -3.2, 12.4, 6.4, {
+          paperColor: '#fffbeb',
+          bandColor: item?.labelColor || '#b45309',
+          accentColor: '#ca8a04',
+          inkColor: '#1c1917',
+          goldFoil: false,
+          hasBarcode: true,
+          emblem: 'circle',
+          cylindrical: false
+        });
       } else {
-        // Draw recessed cells first
         for (let i = 0; i < 10; i++) {
           const c = i % 5;
           const r = Math.floor(i / 5);
           const ex = -6.0 + c * 3.0;
           const ey = r === 0 ? -2.2 : 2.2;
-          ctx.fillStyle = 'rgba(120, 113, 108, 0.35)';
+          ctx.fillStyle = 'rgba(68, 64, 60, 0.42)';
           ctx.beginPath();
-          ctx.ellipse(ex, ey, 1.2, 1.4, 0, 0, Math.PI * 2);
+          ctx.ellipse(ex, ey, 1.25, 1.45, 0, 0, Math.PI * 2);
           ctx.fill();
         }
-        // Draw remaining eggs inside cells
         const hasContentsArray = Array.isArray(item?.contents);
         const count = hasContentsArray ? Math.min(10, item!.contents!.length) : (itemId === 'egg_carton_10_open' ? 0 : 10);
         for (let i = 0; i < count; i++) {
@@ -4648,10 +4808,21 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           const r = Math.floor(i / 5);
           const ex = -6.0 + c * 3.0;
           const ey = r === 0 ? -2.2 : 2.2;
-          ctx.fillStyle = isQuail ? '#e7e5e4' : '#fed7aa';
-          ctx.beginPath();
-          ctx.ellipse(ex, ey, 1.3, 1.6, 0, 0, Math.PI * 2);
-          ctx.fill();
+          drawLitEllipse(
+            ctx, ex, ey, 1.25, 1.55, 0,
+            isQuail ? '#ffffff' : '#ffedd5',
+            isQuail ? '#e7e5e4' : '#fdba74',
+            isQuail ? '#a8a29e' : '#c2410c',
+            undefined, 0.25
+          );
+          if (isQuail) {
+            ctx.fillStyle = '#44403c';
+            ctx.fillRect(ex - 0.5, ey - 0.4, 0.55, 0.55);
+            ctx.fillRect(ex + 0.3, ey + 0.3, 0.5, 0.5);
+          }
+        }
+        if (isQuail) {
+          drawGlossBand(ctx, -7.2, -4.5, 2.2, 9.0, 0.24);
         }
       }
       return true;
@@ -4659,17 +4830,58 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
     // Takeout Cardboard Box (Коробочка WOK / попкорн)
     case 'takeout_box_wok': {
-      drawShadow(ctx, 7.0, 3.5, 7.5, 0.25);
+      drawShadow(ctx, 7.0, 3.5, 7.6, 0.26);
       const isOpen = Boolean(item?.isOpen);
-      ctx.fillStyle = item?.containerTintColor || '#b91c1c';
+      const baseHex = item?.containerTintColor || '#b91c1c';
+
+      const wGrad = ctx.createLinearGradient(-6.8, -5.5, 6.8, 6.8);
+      wGrad.addColorStop(0.0, baseHex);
+      wGrad.addColorStop(0.65, '#991b1b');
+      wGrad.addColorStop(1.0, '#450a0a');
+      ctx.fillStyle = wGrad;
       ctx.beginPath();
-      ctx.roundRect(-6.5, -5.5, 13.0, 12.0, 1.4);
+      ctx.moveTo(-6.8, -5.2);
+      ctx.lineTo(6.8, -5.2);
+      ctx.lineTo(5.4, 6.8);
+      ctx.lineTo(-5.4, 6.8);
+      ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = item?.labelColor || '#fef3c7';
-      ctx.fillRect(-4.5, -2.0, 9.0, 4.0);
+
+      // Origami side pleat crease lines
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+      ctx.lineWidth = 0.45;
+      ctx.beginPath();
+      ctx.moveTo(-6.8, -5.2);
+      ctx.lineTo(-4.6, 6.8);
+      ctx.moveTo(6.8, -5.2);
+      ctx.lineTo(4.6, 6.8);
+      ctx.stroke();
+
+      drawStudioLabelPanel(ctx, -4.4, -2.5, 8.8, 6.8, {
+        paperColor: item?.labelColor || '#fef3c7',
+        bandColor: baseHex,
+        accentColor: '#ca8a04',
+        inkColor: '#450a0a',
+        goldFoil: true,
+        hasBarcode: true,
+        emblem: 'circle',
+        cylindrical: false
+      });
+
       if (isOpen) {
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-5.2, -5.2, 10.4, 2.2);
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.roundRect(-5.6, -5.2, 11.2, 2.2, 0.5);
+        ctx.fill();
+      } else {
+        // Interlocking top pagoda flaps
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+        ctx.beginPath();
+        ctx.moveTo(-6.8, -5.2);
+        ctx.lineTo(0, -6.5);
+        ctx.lineTo(6.8, -5.2);
+        ctx.closePath();
+        ctx.fill();
       }
       return true;
     }
@@ -4687,11 +4899,12 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'vacuum_pack_large_torn': {
       const isLg = itemId.includes('large') || item?.packagingSize === 'large';
       const isMd = itemId.includes('medium') || itemId === 'pouch_vacuum_sealed' || item?.packagingSize === 'medium';
-      const w = isLg ? 11.0 : (isMd ? 9.0 : 7.5);
-      const h = isLg ? 15.0 : (isMd ? 12.5 : 10.5);
+      const isMesh = itemId.startsWith('mesh_bag');
+      const w = isLg ? 10.6 : (isMd ? 8.8 : 7.4);
+      const h = isLg ? 14.8 : (isMd ? 12.4 : 10.4);
       const isOpen = Boolean(item?.isOpen) || itemId.includes('_torn');
 
-      drawShadow(ctx, w, h * (isOpen ? 0.25 : 0.35), isOpen ? 5.5 : 8.0, isOpen ? 0.16 : 0.22);
+      drawShadow(ctx, w, h * (isOpen ? 0.25 : 0.35), isOpen ? 5.6 : 8.0, isOpen ? 0.18 : 0.24);
 
       const hasContents = Boolean(item?.contents && item.contents.length > 0);
       if (hasContents) {
@@ -4699,43 +4912,85 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         if (innerItem && innerItem.itemId !== itemId) {
           ctx.save();
           ctx.translate(0, 0.4);
-          drawItemModel2D(ctx, innerItem.itemId, 0, 0, 16, innerItem, true);
+          drawItemModel2D(ctx, innerItem.itemId, 0, 0, 15.5, innerItem, true);
           ctx.restore();
         }
       } else if (!isOpen) {
-        ctx.fillStyle = '#b91c1c';
+        ctx.fillStyle = '#991b1b';
         ctx.beginPath();
-        ctx.ellipse(0, 0.5, w * 0.62, h * 0.35, -0.15, 0, Math.PI * 2);
+        ctx.ellipse(0, 0.5, w * 0.58, h * 0.34, -0.15, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      ctx.fillStyle = itemId.startsWith('mesh_bag') ? 'rgba(234, 88, 12, 0.28)' : 'rgba(241, 245, 249, 0.35)';
-      ctx.strokeStyle = itemId.startsWith('mesh_bag') ? 'rgba(234, 88, 12, 0.65)' : 'rgba(148, 163, 184, 0.68)';
-      ctx.lineWidth = 0.8;
-
-      if (!isOpen) {
+      const traceBag = () => {
         ctx.beginPath();
-        ctx.roundRect(-w, -h / 2, w * 2, h, 1.2);
-        ctx.fill();
-        ctx.strokeRect(-w, -h / 2, w * 2, h);
+        if (!isOpen) {
+          ctx.roundRect(-w, -h / 2, w * 2, h, isMesh ? 2.2 : 1.0);
+        } else {
+          ctx.moveTo(-w, h / 2);
+          ctx.lineTo(-w + 0.8, -h / 2 + 2.8);
+          ctx.lineTo(-w * 0.4, -h / 2 + 1.0);
+          ctx.lineTo(0, -h / 2 + 2.2);
+          ctx.lineTo(w * 0.45, -h / 2 + 0.9);
+          ctx.lineTo(w - 0.8, -h / 2 + 2.4);
+          ctx.lineTo(w, h / 2);
+          ctx.closePath();
+        }
+      };
+
+      ctx.save();
+      traceBag();
+      ctx.clip();
+
+      if (isMesh) {
+        ctx.fillStyle = 'rgba(234, 88, 12, 0.16)';
+        ctx.fillRect(-w, -h / 2, w * 2, h);
+        // Diamond mesh weave
+        ctx.strokeStyle = 'rgba(234, 88, 12, 0.62)';
+        ctx.lineWidth = 0.38;
+        for (let d = -w - h; d <= w + h; d += 2.2) {
+          ctx.beginPath();
+          ctx.moveTo(d, -h / 2);
+          ctx.lineTo(d + h, h / 2);
+          ctx.moveTo(d + h, -h / 2);
+          ctx.lineTo(d, h / 2);
+          ctx.stroke();
+        }
       } else {
-        // Torn jagged top edge preserving package dimensions
-        ctx.beginPath();
-        ctx.moveTo(-w, h / 2);
-        ctx.lineTo(-w + 0.8, -h / 2 + 2.8);
-        ctx.lineTo(-w * 0.4, -h / 2 + 1.0);
-        ctx.lineTo(0, -h / 2 + 2.2);
-        ctx.lineTo(w * 0.45, -h / 2 + 0.9);
-        ctx.lineTo(w - 0.8, -h / 2 + 2.4);
-        ctx.lineTo(w, h / 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      }
+        // High-barrier clear vacuum PA/PE film sheen
+        const fGrad = ctx.createLinearGradient(-w, -h / 2, w, h / 2);
+        fGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.36)');
+        fGrad.addColorStop(0.35, 'rgba(226, 232, 240, 0.14)');
+        fGrad.addColorStop(0.65, 'rgba(255, 255, 255, 0.30)');
+        fGrad.addColorStop(1.0, 'rgba(148, 163, 184, 0.25)');
+        ctx.fillStyle = fGrad;
+        ctx.fillRect(-w, -h / 2, w * 2, h);
 
-      if (item?.labelColor) {
-        ctx.fillStyle = item.labelColor;
-        ctx.fillRect(-w * 0.45, h * 0.12, w * 0.9, 2.2);
+        // Micro-embossed vacuum heat-seal flange border
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 0.7;
+        ctx.strokeRect(-w + 0.55, -h / 2 + 0.55, w * 2 - 1.1, h - 1.1);
+        drawPouchCrinkles(ctx, -w * 0.8, -h * 0.4, w * 1.6, h * 0.8, 37, 0.22);
+      }
+      ctx.restore();
+
+      ctx.strokeStyle = isMesh ? 'rgba(234, 88, 12, 0.75)' : 'rgba(148, 163, 184, 0.72)';
+      ctx.lineWidth = 0.55;
+      traceBag();
+      ctx.stroke();
+
+      // Deli butcher sticker + barcode
+      if (item?.labelColor || !isMesh) {
+        drawStudioLabelPanel(ctx, -w * 0.55, h * 0.08, w * 1.1, Math.max(3.6, h * 0.28), {
+          paperColor: '#f8fafc',
+          bandColor: item?.labelColor || '#991b1b',
+          accentColor: '#ca8a04',
+          inkColor: '#0f172a',
+          goldFoil: false,
+          hasBarcode: true,
+          emblem: 'none',
+          cylindrical: false
+        });
       }
       return true;
     }
@@ -4746,17 +5001,39 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'tray_plastic_empty':
     case 'tray_sealed_food_torn': {
       const isOpen = Boolean(item?.isOpen) || itemId === 'tray_plastic_empty' || itemId === 'tray_sealed_food_torn';
-      drawShadow(ctx, 10.0, isOpen ? 4.5 : 5.0, isOpen ? 7.0 : 8.0, isOpen ? 0.22 : 0.28);
+      drawShadow(ctx, 10.0, isOpen ? 4.5 : 5.0, isOpen ? 7.0 : 8.0, isOpen ? 0.24 : 0.3);
 
-      ctx.fillStyle = item?.containerTintColor || '#18181b';
+      const trayHex = item?.containerTintColor || '#18181b';
+      const trayGrad = ctx.createLinearGradient(-9.5, -6.5, 9.5, 6.5);
+      trayGrad.addColorStop(0.0, '#3f3f46');
+      trayGrad.addColorStop(0.5, trayHex);
+      trayGrad.addColorStop(1.0, '#09090b');
+      ctx.fillStyle = trayGrad;
       ctx.beginPath();
       ctx.roundRect(-9.5, -6.5, 19.0, 13.0, 1.8);
       ctx.fill();
+
+      // Thermoformed rim highlight bevel
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 0.45;
+      ctx.beginPath();
+      ctx.roundRect(-9.1, -6.1, 18.2, 12.2, 1.5);
+      ctx.stroke();
 
       ctx.fillStyle = '#09090b';
       ctx.beginPath();
       ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
       ctx.fill();
+
+      // Floor stiffening ribs
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 0.45;
+      for (const rx of [-4.2, 0, 4.2]) {
+        ctx.beginPath();
+        ctx.moveTo(rx, -4.4);
+        ctx.lineTo(rx, 4.4);
+        ctx.stroke();
+      }
 
       const hasContents = Boolean(item?.contents && item.contents.length > 0);
       if (hasContents) {
@@ -4774,26 +5051,42 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       }
 
       if (!isOpen) {
-        // Intact heat-sealed barrier film
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        // Intact taut barrier film with crisp softbox gloss diagonal
+        const filmGrad = ctx.createLinearGradient(-8.2, -5.2, 8.2, 5.2);
+        filmGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.06)');
+        filmGrad.addColorStop(0.32, 'rgba(255, 255, 255, 0.28)');
+        filmGrad.addColorStop(0.45, 'rgba(255, 255, 255, 0.04)');
+        filmGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0.14)');
+        ctx.fillStyle = filmGrad;
         ctx.beginPath();
         ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
         ctx.fill();
       } else {
-        // Peeled-back corner of barrier film on opened tray
-        ctx.fillStyle = 'rgba(241, 245, 249, 0.22)';
+        // Curled peeled-back cellophane corner
+        ctx.fillStyle = 'rgba(241, 245, 249, 0.34)';
         ctx.beginPath();
-        ctx.moveTo(4.2, -5.2);
+        ctx.moveTo(3.6, -5.2);
         ctx.lineTo(8.2, -5.2);
-        ctx.lineTo(8.2, 1.5);
+        ctx.lineTo(8.2, 1.4);
+        ctx.quadraticCurveTo(5.8, -1.5, 3.6, -5.2);
         ctx.closePath();
         ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.lineWidth = 0.35;
+        ctx.stroke();
       }
 
-      if (item?.labelColor) {
-        ctx.fillStyle = item.labelColor;
-        ctx.fillRect(3.2, 2.2, 4.4, 2.4);
-      }
+      // Deli label sticker on tray corner
+      drawStudioLabelPanel(ctx, 2.0, 1.2, 5.8, 3.8, {
+        paperColor: '#f8fafc',
+        bandColor: item?.labelColor || '#991b1b',
+        accentColor: '#ca8a04',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'none',
+        cylindrical: false
+      });
       return true;
     }
 
@@ -4802,82 +5095,101 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'pouch_torn_snack':
     case 'pouch_sealed_snack_torn': {
       const isOpen = Boolean(item?.isOpen) || itemId === 'pouch_torn_snack' || itemId === 'pouch_sealed_snack_torn';
-      drawShadow(ctx, isOpen ? 7.5 : 8.0, isOpen ? 3.0 : 3.5, isOpen ? 6.0 : 7.5, isOpen ? 0.18 : 0.22);
+      const baseTint = item?.containerTintColor || '#b45309';
+      const bandColor = item?.labelColor || '#1e293b';
+      drawShadow(ctx, isOpen ? 7.5 : 8.0, isOpen ? 3.0 : 3.5, isOpen ? 6.0 : 7.5, isOpen ? 0.2 : 0.25);
+
+      const pouchGrad = ctx.createLinearGradient(-6.2, -7.5, 6.2, 7.5);
+      pouchGrad.addColorStop(0.0, '#f8fafc');
+      pouchGrad.addColorStop(0.25, baseTint);
+      pouchGrad.addColorStop(0.85, baseTint);
+      pouchGrad.addColorStop(1.0, '#475569');
 
       if (!isOpen) {
-        const pouchGrad = ctx.createLinearGradient(-6, -7, 6, 8);
-        pouchGrad.addColorStop(0, '#f1f5f9');
-        pouchGrad.addColorStop(0.5, item?.containerTintColor || '#cbd5e1');
-        pouchGrad.addColorStop(1, '#94a3b8');
-
         ctx.fillStyle = pouchGrad;
         ctx.beginPath();
-        ctx.roundRect(-6.0, -7.5, 12.0, 15.0, 1.5);
+        ctx.roundRect(-6.0, -7.5, 12.0, 15.0, 1.2);
         ctx.fill();
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        drawCrimpedSeal(ctx, -6.0, -7.5, 12.0, 1.5, bandColor, true, 0.72);
+        // Tear notch & zip-lock track
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = 0.3;
         ctx.beginPath();
-        ctx.ellipse(0, 0.5, 4.2, 3.2, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(-5.8, -5.5);
+        ctx.lineTo(5.8, -5.5);
+        ctx.stroke();
 
-        if (item?.contents && item.contents.length > 0) {
-          const inner = item.contents[0];
-          if (inner && inner.itemId !== itemId) {
-            ctx.save();
+        drawFilmWindow(
+          ctx,
+          () => {
             ctx.beginPath();
-            ctx.ellipse(0, 0.5, 4.0, 3.0, 0, 0, Math.PI * 2);
-            ctx.clip();
-            drawItemModel2D(ctx, inner.itemId, 0, 0.5, 14, inner, true);
-            ctx.restore();
-          }
-        } else {
-          ctx.fillStyle = '#d97706';
-          ctx.beginPath();
-          ctx.arc(-1.5, 0, 1.4, 0, Math.PI * 2);
-          ctx.arc(1.5, 0.5, 1.2, 0, Math.PI * 2);
-          ctx.fill();
-        }
+            ctx.ellipse(0, 0.6, 4.1, 3.0, 0, 0, Math.PI * 2);
+          },
+          () => {
+            if (item?.contents && item.contents.length > 0) {
+              const inner = item.contents[0];
+              if (inner && inner.itemId !== itemId) {
+                drawItemModel2D(ctx, inner.itemId, 0, 0.6, 13.5, inner, true);
+              }
+            } else {
+              drawLitEllipse(ctx, -1.2, 0.3, 1.2, 0.9, 0.2, '#fde68a', '#d97706', '#78350f');
+              drawLitEllipse(ctx, 1.3, 0.8, 1.1, 0.85, -0.3, '#fde68a', '#b45309', '#78350f');
+            }
+          },
+          'rgba(255, 255, 255, 0.65)',
+          '#0f172a'
+        );
 
-        ctx.fillStyle = item?.labelColor || '#64748b';
-        ctx.fillRect(-6.0, -7.5, 12.0, 1.8);
+        drawPouchCrinkles(ctx, -5.4, -5.0, 10.8, 11.5, 43, 0.2);
+        drawMicroBarcode(ctx, 1.8, 5.2, 3.4, 1.3);
         return true;
       }
 
-      // Opened / Torn Snack Doypack
-      ctx.fillStyle = item?.containerTintColor || '#cbd5e1';
+      // Opened / Torn Snack Doypack with inner silver metallized lining
+      ctx.fillStyle = pouchGrad;
       ctx.beginPath();
-      ctx.moveTo(-5.5, 7.0);
-      ctx.lineTo(-5.5, -5.0);
+      ctx.moveTo(-5.8, 7.2);
+      ctx.lineTo(-5.8, -5.0);
       ctx.lineTo(-3.0, -3.5);
-      ctx.lineTo(0, -5.5);
-      ctx.lineTo(3.0, -3.0);
-      ctx.lineTo(5.5, -5.0);
-      ctx.lineTo(5.5, 7.0);
+      ctx.lineTo(0, -5.4);
+      ctx.lineTo(3.0, -3.2);
+      ctx.lineTo(5.8, -5.0);
+      ctx.lineTo(5.8, 7.2);
       ctx.closePath();
       ctx.fill();
 
-      if (item?.labelColor) {
-        ctx.fillStyle = item.labelColor;
-        ctx.fillRect(-5.5, 3.8, 11.0, 2.0);
-      }
-
-      ctx.fillStyle = '#334155';
+      // Inner aluminum barrier rim
+      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.ellipse(0, -3.5, 3.8, 1.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -3.8, 4.1, 1.15, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 0.45;
+      ctx.stroke();
 
-      if (item?.contents && item.contents.length > 0) {
-        const inner = item.contents[0];
-        if (inner && inner.itemId !== itemId) {
-          ctx.save();
+      drawFilmWindow(
+        ctx,
+        () => {
           ctx.beginPath();
-          ctx.roundRect(-4.0, -2.0, 8.0, 7.5, 1.0);
-          ctx.clip();
-          drawItemModel2D(ctx, inner.itemId, 0, 1.5, 11, inner, true);
-          ctx.restore();
-        }
-      }
+          ctx.ellipse(0, 1.4, 3.8, 2.5, 0, 0, Math.PI * 2);
+        },
+        () => {
+          if (item?.contents && item.contents.length > 0) {
+            const inner = item.contents[0];
+            if (inner && inner.itemId !== itemId) {
+              drawItemModel2D(ctx, inner.itemId, 0, 1.4, 11, inner, true);
+            }
+          }
+        },
+        'rgba(255, 255, 255, 0.55)',
+        '#0f172a'
+      );
 
+      drawPouchCrinkles(ctx, -5.2, -3.0, 10.4, 9.2, 47, 0.22);
+      ctx.fillStyle = bandColor;
+      ctx.fillRect(-5.8, 4.6, 11.6, 1.6);
+      drawMicroBarcode(ctx, 1.8, 4.8, 3.2, 1.15);
       return true;
     }
 
@@ -4890,39 +5202,45 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       const sz = item?.packagingSize || (itemId.includes('small') ? 'small' : itemId.includes('large') ? 'large' : 'medium');
       const scale = sz === 'mini' ? 0.8 : sz === 'small' ? 0.9 : sz === 'large' ? 1.12 : 1.0;
       const isOpen = Boolean(item?.isOpen);
-      const labelColor = item?.labelColor || '#b91c1c';
+      const labelColor = item?.labelColor || '#991b1b';
       const bodyTint = item?.containerTintColor || (isBox ? '#fffbeb' : '#f8fafc');
       const hasContents = Boolean(item?.contents && item.contents.length > 0);
 
-      drawShadow(ctx, 7.8 * scale, 3.2 * scale, 7.8 * scale, 0.24);
+      drawShadow(ctx, 7.8 * scale, 3.2 * scale, 7.8 * scale, 0.25);
       ctx.save();
       ctx.scale(scale, scale);
 
       if (isBox) {
-        // Cardboard Pelmeni Box with viewing window and tear-strip flap
-        ctx.fillStyle = bodyTint;
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 0.7;
+        const bGrad = ctx.createLinearGradient(-6.4, -7.2, 6.4, 7.2);
+        bGrad.addColorStop(0.0, '#ffffff');
+        bGrad.addColorStop(0.6, bodyTint);
+        bGrad.addColorStop(1.0, '#e2e8f0');
+        ctx.fillStyle = bGrad;
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 0.55;
         ctx.beginPath();
-        ctx.roundRect(-6.4, -7.2, 12.8, 14.4, 1.1);
+        ctx.roundRect(-6.4, -7.2, 12.8, 14.4, 0.9);
         ctx.fill();
         ctx.stroke();
 
-        // Brand header band with traditional geometric pattern
-        ctx.fillStyle = labelColor;
-        ctx.fillRect(-6.1, -6.9, 12.2, 3.6);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-        for (let ox = -5.2; ox <= 4.8; ox += 2.0) {
-          ctx.fillRect(ox, -3.9, 1.0, 0.45);
-        }
+        // Editorial header band with gold trim
+        drawStudioLabelPanel(ctx, -6.1, -6.9, 12.2, 4.4, {
+          paperColor: '#fffbeb',
+          bandColor: labelColor,
+          accentColor: '#ca8a04',
+          inkColor: '#1e293b',
+          goldFoil: true,
+          hasBarcode: false,
+          emblem: 'crest',
+          cylindrical: false
+        });
 
         if (isOpen) {
-          // Opened top cardboard flap slot
-          ctx.fillStyle = '#1e293b';
-          ctx.fillRect(-5.4, -7.2, 10.8, 1.7);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-5.4, -7.2, 10.8, 1.5);
           ctx.fillStyle = bodyTint;
           ctx.strokeStyle = '#94a3b8';
-          ctx.lineWidth = 0.5;
+          ctx.lineWidth = 0.45;
           ctx.beginPath();
           ctx.moveTo(-5.4, -7.2);
           ctx.lineTo(-4.6, -8.8);
@@ -4933,48 +5251,44 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.stroke();
         }
 
-        // Clear viewing window showing inner pelmeni
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
-        ctx.beginPath();
-        ctx.roundRect(-4.6, -1.6, 9.2, 6.2, 1.6);
-        ctx.fill();
+        drawFilmWindow(
+          ctx,
+          () => {
+            ctx.beginPath();
+            ctx.roundRect(-4.7, -1.6, 9.4, 6.2, 1.5);
+          },
+          () => {
+            if (hasContents) {
+              const offsets: Array<[number, number]> = [[-2.0, 2.0], [2.0, 2.1], [0, 0.4]];
+              const countToShow = Math.min(3, item!.contents!.length);
+              for (let i = 0; i < countToShow; i++) {
+                const inner = item!.contents![i];
+                if (!inner || inner.itemId === itemId) continue;
+                const [ox, oy] = offsets[i];
+                drawItemModel2D(ctx, inner.itemId, ox, oy, 11, inner, true);
+              }
+            }
+          },
+          'rgba(255, 255, 255, 0.58)',
+          '#0f172a'
+        );
 
-        if (hasContents) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(-4.4, -1.4, 8.8, 5.8, 1.4);
-          ctx.clip();
-          const offsets: Array<[number, number]> = [[-2.0, 2.0], [2.0, 2.1], [0, 0.4]];
-          const countToShow = Math.min(3, item!.contents!.length);
-          for (let i = 0; i < countToShow; i++) {
-            const inner = item!.contents![i];
-            if (!inner || inner.itemId === itemId) continue;
-            const [ox, oy] = offsets[i];
-            drawItemModel2D(ctx, inner.itemId, ox, oy, 11, inner, true);
-          }
-          ctx.restore();
-        }
-
-        // Glossy window film highlight
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.roundRect(-4.6, -1.6, 9.2, 6.2, 1.6);
-        ctx.stroke();
-
-        // Footer accent bar
         ctx.fillStyle = labelColor;
-        ctx.fillRect(-6.1, 5.4, 12.2, 1.4);
+        ctx.fillRect(-6.1, 5.2, 12.2, 1.7);
+        drawMicroBarcode(ctx, 2.0, 5.4, 3.6, 1.25);
         ctx.restore();
         return true;
       }
 
-      // Classic Gathered Clip-Top Polymer Pelmeni Bag (Пакет с клипсой под пельмени)
+      // Classic Gathered Clip-Top Polymer Pelmeni Bag
       if (!isOpen) {
-        // Top fan-folded polymer crest above clip
-        ctx.fillStyle = bodyTint;
+        const topGrad = ctx.createLinearGradient(-3.4, -8.5, 3.4, -4.8);
+        topGrad.addColorStop(0.0, '#ffffff');
+        topGrad.addColorStop(0.5, bodyTint);
+        topGrad.addColorStop(1.0, '#94a3b8');
+        ctx.fillStyle = topGrad;
         ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 0.6;
+        ctx.lineWidth = 0.45;
         ctx.beginPath();
         ctx.moveTo(-1.4, -4.8);
         ctx.lineTo(-3.4, -8.2);
@@ -4986,18 +5300,25 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+
+        // Polymer pleat shadows
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.2)';
+        ctx.lineWidth = 0.3;
+        ctx.beginPath();
+        ctx.moveTo(-1.2, -7.6); ctx.lineTo(-0.5, -5.0);
+        ctx.moveTo(1.2, -7.6); ctx.lineTo(0.5, -5.0);
+        ctx.stroke();
       }
 
-      // Main plump pillow bag body
       const bagTop = isOpen ? -5.8 : -4.8;
       const bagGrad = ctx.createLinearGradient(-6.8, bagTop, 6.8, 7.4);
       bagGrad.addColorStop(0.0, '#ffffff');
-      bagGrad.addColorStop(0.5, bodyTint);
-      bagGrad.addColorStop(1.0, '#cbd5e1');
+      bagGrad.addColorStop(0.45, bodyTint);
+      bagGrad.addColorStop(1.0, '#94a3b8');
 
       ctx.fillStyle = bagGrad;
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
       if (!isOpen) {
         ctx.moveTo(-1.6, -4.8);
@@ -5006,7 +5327,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.bezierCurveTo(7.2, 2.5, 6.8, -4.2, 1.6, -4.8);
         ctx.closePath();
       } else {
-        // Opened unclipped bag mouth
         ctx.moveTo(-4.8, -5.6);
         ctx.lineTo(-2.4, -4.8);
         ctx.lineTo(0, -5.8);
@@ -5021,57 +5341,49 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.stroke();
 
       if (!isOpen) {
-        // Metallic / plastic neck clip clamping the gathered top
-        ctx.fillStyle = labelColor;
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 0.45;
-        ctx.beginPath();
-        ctx.roundRect(-2.3, -5.5, 4.6, 1.5, 0.4);
-        ctx.fill();
-        ctx.stroke();
+        drawCrimpedSeal(ctx, -2.3, -5.5, 4.6, 1.45, labelColor, true, 0.72);
       } else {
-        // Dark open interior mouth of unclipped pelmeni bag
-        ctx.fillStyle = '#1e293b';
+        ctx.fillStyle = '#0f172a';
         ctx.beginPath();
         ctx.ellipse(0, -5.1, 3.9, 1.1, 0, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Colored brand arch band across upper chest of the bag
-      ctx.fillStyle = labelColor;
-      ctx.beginPath();
-      ctx.roundRect(-5.6, -3.2, 11.2, 2.4, 0.8);
-      ctx.fill();
+      drawStudioLabelPanel(ctx, -5.3, -3.5, 10.6, 3.2, {
+        paperColor: '#fffbeb',
+        bandColor: labelColor,
+        accentColor: '#ca8a04',
+        inkColor: '#1e293b',
+        goldFoil: true,
+        hasBarcode: false,
+        emblem: 'crest',
+        cylindrical: true
+      });
 
-      // Clear oval viewing window showing pelmeni inside
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
-      ctx.beginPath();
-      ctx.ellipse(0, 2.4, 4.6, 3.2, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawFilmWindow(
+        ctx,
+        () => {
+          ctx.beginPath();
+          ctx.ellipse(0, 2.5, 4.6, 3.1, 0, 0, Math.PI * 2);
+        },
+        () => {
+          if (hasContents) {
+            const offsets: Array<[number, number]> = [[-1.9, 3.1], [1.9, 3.1], [0, 1.5]];
+            const countToShow = Math.min(3, item!.contents!.length);
+            for (let i = 0; i < countToShow; i++) {
+              const inner = item!.contents![i];
+              if (!inner || inner.itemId === itemId) continue;
+              const [ox, oy] = offsets[i];
+              drawItemModel2D(ctx, inner.itemId, ox, oy, 11, inner, true);
+            }
+          }
+        },
+        'rgba(255, 255, 255, 0.65)',
+        '#0f172a'
+      );
 
-      if (hasContents) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(0, 2.4, 4.4, 3.0, 0, 0, Math.PI * 2);
-        ctx.clip();
-        const offsets: Array<[number, number]> = [[-1.9, 3.0], [1.9, 3.0], [0, 1.4]];
-        const countToShow = Math.min(3, item!.contents!.length);
-        for (let i = 0; i < countToShow; i++) {
-          const inner = item!.contents![i];
-          if (!inner || inner.itemId === itemId) continue;
-          const [ox, oy] = offsets[i];
-          drawItemModel2D(ctx, inner.itemId, ox, oy, 11, inner, true);
-        }
-        ctx.restore();
-      }
-
-      // Window border & frost specks
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.ellipse(0, 2.4, 4.6, 3.2, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
+      drawPouchCrinkles(ctx, -5.6, -1.5, 11.2, 8.2, 53, 0.22);
+      drawMicroBarcode(ctx, 1.6, 5.5, 3.4, 1.15);
       ctx.restore();
       return true;
     }

@@ -1,860 +1,979 @@
-// Procedural 2D Canvas Models for Medical Items
-import { drawShadow, drawGlossBand, drawMedicalCross } from './itemGraphicShared';
+// Procedural 2D Canvas Studio Models for Medical Packaging, Vials, Tubes & Blisters
+import {
+  drawShadow,
+  drawMedicalCross,
+  drawLitSphere,
+  drawCrimpedSeal,
+  drawScrewCap,
+  drawStudioLabelPanel,
+  drawMicroBarcode,
+  applyCylinderLightingOverlay,
+  adjustHex,
+  hexToRgba
+} from './itemGraphicShared';
+
+function drawBlisterCard(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  bannerHex: string,
+  drawCell: (cx: number, cy: number, idx: number) => void,
+  coords: Array<[number, number]>
+) {
+  const hw = w * 0.5;
+  const hh = h * 0.5;
+
+  // Brushed matte aluminum lidding foil card with beveled perimeter
+  const foilGrad = ctx.createLinearGradient(-hw, -hh, hw, hh);
+  foilGrad.addColorStop(0.0, '#f1f5f9');
+  foilGrad.addColorStop(0.35, '#cbd5e1');
+  foilGrad.addColorStop(0.7, '#e2e8f0');
+  foilGrad.addColorStop(1.0, '#94a3b8');
+  ctx.fillStyle = foilGrad;
+  ctx.beginPath();
+  ctx.roundRect(-hw, -hh, w, h, 1.25);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(71, 85, 105, 0.45)';
+  ctx.lineWidth = 0.32;
+  ctx.stroke();
+
+  // Foil cross-hatch micro-texture + center perforation score line
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.14)';
+  ctx.lineWidth = 0.25;
+  ctx.setLineDash([0.65, 0.55]);
+  ctx.beginPath();
+  ctx.moveTo(0, -hh + 3.4);
+  ctx.lineTo(0, hh - 0.6);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Clinical pharmaceutical header strip + micro-barcode
+  ctx.fillStyle = bannerHex;
+  ctx.beginPath();
+  ctx.roundRect(-hw, -hh, w, 2.8, [1.25, 1.25, 0, 0]);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.fillRect(-hw + 1.1, -hh + 1.05, w * 0.45, 0.55);
+  drawMicroBarcode(ctx, hw - 3.6, -hh + 0.65, 2.6, 1.45, '#0f172a', 'rgba(255, 255, 255, 0.88)');
+
+  // Render thermoformed PVC blister domes & enclosed tablets/capsules
+  coords.forEach(([cx, cy], idx) => {
+    drawCell(cx, cy, idx);
+  });
+}
+
+function drawStudioPharmaBottle(
+  ctx: CanvasRenderingContext2D,
+  opts: {
+    w: number;
+    topY: number;
+    botY: number;
+    bodyHex: string;
+    liquidHex?: string;
+    translucent: boolean;
+    capColor: string;
+    labelBand: string;
+    labelAccent: string;
+    crossColor?: string;
+    hazardDiamond?: boolean;
+  }
+) {
+  const {
+    w,
+    topY,
+    botY,
+    bodyHex,
+    liquidHex,
+    translucent,
+    capColor,
+    labelBand,
+    labelAccent,
+    crossColor,
+    hazardDiamond
+  } = opts;
+  const hw = w * 0.5;
+  const neckW = Math.min(2.3, hw * 0.46);
+  const shY = topY + 2.2;
+
+  const traceBody = () => {
+    ctx.beginPath();
+    ctx.moveTo(-neckW, topY);
+    ctx.lineTo(neckW, topY);
+    ctx.lineTo(neckW, topY + 1.1);
+    ctx.quadraticCurveTo(hw, topY + 1.4, hw, shY + 0.8);
+    ctx.lineTo(hw, botY - 1.1);
+    ctx.quadraticCurveTo(hw, botY + 0.5, 0, botY + 0.5);
+    ctx.quadraticCurveTo(-hw, botY + 0.5, -hw, botY - 1.1);
+    ctx.lineTo(-hw, shY + 0.8);
+    ctx.quadraticCurveTo(-hw, topY + 1.4, -neckW, topY + 1.1);
+    ctx.closePath();
+  };
+
+  const bGrad = ctx.createLinearGradient(-hw, 0, hw, 0);
+  const alpha = translucent ? 0.9 : 1.0;
+  bGrad.addColorStop(0.0, hexToRgba(adjustHex(bodyHex, -0.32), alpha));
+  bGrad.addColorStop(0.26, hexToRgba(adjustHex(bodyHex, 0.25), alpha));
+  bGrad.addColorStop(0.58, hexToRgba(bodyHex, alpha * 0.94));
+  bGrad.addColorStop(0.88, hexToRgba(adjustHex(bodyHex, -0.28), alpha));
+  bGrad.addColorStop(1.0, hexToRgba(adjustHex(bodyHex, -0.45), alpha));
+  ctx.fillStyle = bGrad;
+  traceBody();
+  ctx.fill();
+
+  if (liquidHex) {
+    ctx.save();
+    traceBody();
+    ctx.clip();
+    const liqY = shY + 1.6;
+    const lGrad = ctx.createLinearGradient(-hw, liqY, hw, botY);
+    lGrad.addColorStop(0.0, adjustHex(liquidHex, -0.22));
+    lGrad.addColorStop(0.35, adjustHex(liquidHex, 0.16));
+    lGrad.addColorStop(1.0, adjustHex(liquidHex, -0.38));
+    ctx.fillStyle = lGrad;
+    ctx.fillRect(-hw, liqY, w, botY - liqY + 1);
+    ctx.fillStyle = hexToRgba(adjustHex(liquidHex, 0.4), 0.5);
+    ctx.beginPath();
+    ctx.ellipse(0, liqY, hw * 0.88, 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Cylindrical highlight & edge
+  ctx.save();
+  traceBody();
+  ctx.clip();
+  applyCylinderLightingOverlay(ctx, -hw, topY, w, botY - topY + 1, translucent ? 0.34 : 0.2, 0.3);
+  ctx.restore();
+
+  ctx.strokeStyle = hexToRgba(adjustHex(bodyHex, -0.5), 0.55);
+  ctx.lineWidth = 0.32;
+  traceBody();
+  ctx.stroke();
+
+  // Clinical wraparound label
+  const lblY = shY + 1.5;
+  const lblH = (botY - shY) * 0.56;
+  drawStudioLabelPanel(ctx, -hw * 0.94, lblY, w * 0.94, lblH, {
+    paperColor: '#f8fafc',
+    bandColor: labelBand,
+    accentColor: labelAccent,
+    inkColor: '#0f172a',
+    goldFoil: false,
+    hasBarcode: w >= 8.2,
+    emblem: 'none',
+    cylindrical: true
+  });
+
+  if (crossColor) {
+    drawMedicalCross(ctx, -hw * 0.32, lblY + lblH * 0.62, 2.2, crossColor);
+  }
+  if (hazardDiamond) {
+    ctx.save();
+    ctx.translate(0, lblY + lblH * 0.62);
+    ctx.fillStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.moveTo(0, -1.15);
+    ctx.lineTo(1.25, 0);
+    ctx.lineTo(0, 1.15);
+    ctx.lineTo(-1.25, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Child-resistant knurled screw cap
+  drawScrewCap(ctx, 0, topY - 2.0, neckW * 2.35, 2.35, capColor, true);
+}
+
+function drawStudioOintmentTube(
+  ctx: CanvasRenderingContext2D,
+  bodyHex: string,
+  bandHex: string,
+  accentHex: string,
+  crossHex: string,
+  capHex: string,
+  diagonalBand: boolean
+) {
+  // Tapered aluminum/laminate squeeze barrel
+  const traceTube = () => {
+    ctx.beginPath();
+    ctx.moveTo(-2.6, -7.2);
+    ctx.lineTo(2.6, -7.2);
+    ctx.quadraticCurveTo(5.2, -5.8, 5.4, -3.5);
+    ctx.lineTo(5.8, 6.2);
+    ctx.lineTo(-5.8, 6.2);
+    ctx.lineTo(-5.4, -3.5);
+    ctx.quadraticCurveTo(-5.2, -5.8, -2.6, -7.2);
+    ctx.closePath();
+  };
+
+  const bGrad = ctx.createLinearGradient(-5.8, 0, 5.8, 0);
+  bGrad.addColorStop(0.0, adjustHex(bodyHex, -0.3));
+  bGrad.addColorStop(0.28, adjustHex(bodyHex, 0.25));
+  bGrad.addColorStop(0.55, bodyHex);
+  bGrad.addColorStop(0.85, adjustHex(bodyHex, -0.25));
+  bGrad.addColorStop(1.0, adjustHex(bodyHex, -0.4));
+  ctx.fillStyle = bGrad;
+  traceTube();
+  ctx.fill();
+
+  ctx.save();
+  traceTube();
+  ctx.clip();
+
+  if (diagonalBand) {
+    ctx.fillStyle = bandHex;
+    ctx.beginPath();
+    ctx.moveTo(-6, -3.2);
+    ctx.lineTo(6, -5.6);
+    ctx.lineTo(6, 0.8);
+    ctx.lineTo(-6, 3.2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = accentHex;
+    ctx.beginPath();
+    ctx.moveTo(-6, 2.6);
+    ctx.lineTo(6, 0.2);
+    ctx.lineTo(6, 1.3);
+    ctx.lineTo(-6, 3.7);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.fillStyle = bandHex;
+    ctx.fillRect(-6, -4.0, 12, 4.8);
+    ctx.fillStyle = accentHex;
+    ctx.beginPath();
+    ctx.moveTo(-6, -1.0);
+    ctx.quadraticCurveTo(0, -2.8, 6, -1.0);
+    ctx.lineTo(6, 0.2);
+    ctx.quadraticCurveTo(0, -1.6, -6, 0.2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Clinical cross badge
+  ctx.fillStyle = '#dc2626';
+  ctx.beginPath();
+  ctx.arc(-2.0, -1.4, 1.75, 0, Math.PI * 2);
+  ctx.fill();
+  drawMedicalCross(ctx, -2.0, -1.4, 2.2, crossHex);
+
+  // Spec text bars & barcode
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+  ctx.fillRect(0.6, -2.2, 3.6, 0.45);
+  ctx.fillRect(0.6, -1.2, 2.8, 0.38);
+  drawMicroBarcode(ctx, -4.4, 3.6, 4.2, 1.4, '#0f172a', 'rgba(255,255,255,0.85)');
+
+  applyCylinderLightingOverlay(ctx, -6.0, -7.2, 12.0, 13.5, 0.28, 0.3);
+  ctx.restore();
+
+  // Sharp tube outline
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
+  ctx.lineWidth = 0.32;
+  traceTube();
+  ctx.stroke();
+
+  // Crimped metallic tail fold at bottom
+  drawCrimpedSeal(ctx, -5.9, 6.0, 11.8, 1.65, '#94a3b8', true, 0.78);
+
+  // Ribbed octagonal/cylindrical screw cap on nozzle top
+  drawScrewCap(ctx, 0, -9.8, 5.2, 2.8, capHex, false);
+}
 
 export function drawMedicalItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
   switch (itemId) {
     case 'medkit': {
-      drawShadow(ctx, 9.5, 3.5, 8, 0.28);
+      drawShadow(ctx, 9.2, 3.3, 8.0, 0.28);
 
-      // Authentic CIS Automobile First Aid Kit (Аптечка первой помощи автомобильная / ФЭСТ)
-      // Heavy-duty black polymer hardcase body with ribbed perimeter
+      // Molded black HDPE hardcase body with recessed perimeter frame
+      const caseGrad = ctx.createLinearGradient(-9, -6, 9, 7.5);
+      caseGrad.addColorStop(0.0, '#3f3f46');
+      caseGrad.addColorStop(0.25, '#27272a');
+      caseGrad.addColorStop(0.75, '#18181b');
+      caseGrad.addColorStop(1.0, '#09090b');
+      ctx.fillStyle = caseGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.0, -5.5, 18.0, 13.0, 2.0);
+      ctx.fill();
+
+      // Inner molded shell step line
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.lineWidth = 0.38;
+      ctx.beginPath();
+      ctx.roundRect(-8.3, -4.8, 16.6, 11.6, 1.5);
+      ctx.stroke();
+
+      // Molded integrated carrying handle
       ctx.fillStyle = '#18181b';
       ctx.beginPath();
-      ctx.roundRect(-9, -5.5, 18, 13, 2.2);
-      ctx.fill();
-
-      // Textured rim bevel
-      ctx.strokeStyle = '#3f3f46';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Top bevel highlight & bottom shadow
-      ctx.fillStyle = '#27272a';
-      ctx.fillRect(-8.5, -5, 17, 1.2);
-      ctx.fillStyle = '#09090b';
-      ctx.fillRect(-8.5, 6, 17, 1.2);
-
-      // Molded top carrying handle
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -8.5, 9, 3.5, 1.5);
+      ctx.roundRect(-4.5, -8.4, 9.0, 3.4, 1.35);
       ctx.fill();
       ctx.strokeStyle = '#3f3f46';
-      ctx.lineWidth = 0.8;
+      ctx.lineWidth = 0.45;
       ctx.stroke();
-      // Handle finger grip opening
       ctx.fillStyle = '#09090b';
       ctx.beginPath();
-      ctx.roundRect(-3, -7.2, 6, 2, 1);
+      ctx.roundRect(-3.0, -7.1, 6.0, 1.85, 0.85);
       ctx.fill();
 
-      // Dual red snap latches (Iconic CIS automotive kit latches)
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-6.5, -6, 2.4, 2.5, 0.6);
-      ctx.roundRect(4.1, -6, 2.4, 2.5, 0.6);
-      ctx.fill();
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(-6.5, -6, 2.4, 0.6);
-      ctx.fillRect(4.1, -6, 2.4, 0.6);
+      // Dual beveled red polycarbonate snap latches
+      for (const lx of [-6.5, 4.1]) {
+        const lGrad = ctx.createLinearGradient(lx, -6.1, lx + 2.4, -3.5);
+        lGrad.addColorStop(0, '#ef4444');
+        lGrad.addColorStop(0.5, '#dc2626');
+        lGrad.addColorStop(1, '#7f1d1d');
+        ctx.fillStyle = lGrad;
+        ctx.beginPath();
+        ctx.roundRect(lx, -6.0, 2.4, 2.5, 0.45);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fillRect(lx + 0.2, -5.85, 2.0, 0.35);
+      }
 
-      // White Information Label Plate (Минздрав / ГОСТ РСТ)
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.roundRect(-6.5, -3.2, 13, 9.5, 1.2);
-      ctx.fill();
+      // Clinical white specification plate with crisp emerald cross & barcode
+      drawStudioLabelPanel(ctx, -6.4, -3.2, 12.8, 9.2, {
+        paperColor: '#f8fafc',
+        bandColor: '#15803d',
+        accentColor: '#16a34a',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'none',
+        cylindrical: false
+      });
 
-      // Green safety border around label
-      ctx.strokeStyle = '#16a34a';
-      ctx.lineWidth = 0.7;
-      ctx.stroke();
-
-      // Header: "АПТЕЧКА" in crisp high-contrast dark green
-      ctx.fillStyle = '#15803d';
-      ctx.fillRect(-5.2, -2.4, 10.4, 1.4);
-      // Stenciled white text appearance
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 1.1px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('АПТЕЧКА', 0, -1.3);
-
-      // Official CIS Medical First Aid Green Cross (Зеленый крест первой помощи СНГ)
-      drawMedicalCross(ctx, 0, 1.5, 5.2, '#16a34a');
-
-      // Inner subtle contrast highlight in cross center
+      drawMedicalCross(ctx, 0, 1.35, 4.6, '#16a34a');
       ctx.fillStyle = '#22c55e';
-      ctx.fillRect(-0.7, 0.8, 1.4, 1.4);
-
-      // Sub-label text strip: "ПЕРВАЯ ПОМОЩЬ" / ГОСТ
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(-4.5, 4.5, 9, 0.7);
-
-      // Fine certification micro-markings
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-4, 5.4, 3.5, 0.4);
-      ctx.fillRect(0.5, 5.4, 3.5, 0.4);
-
-      // Subtle plastic surface gloss sheen
-      drawGlossBand(ctx, -7.5, -4, 2.5, 10);
+      ctx.fillRect(-0.55, 0.8, 1.1, 1.1);
       return true;
     }
 
     case 'bandage': {
-      drawShadow(ctx, 7.5, 2.8, 7.5, 0.2);
+      drawShadow(ctx, 7.2, 2.6, 7.5, 0.2);
 
-      // Rolled gauze cylinder
-      ctx.fillStyle = '#f1f5f9';
+      // Rolled sterile cotton gauze cylinder
+      const gGrad = ctx.createRadialGradient(-1.5, -1.5, 0.5, 0, 0, 6.5);
+      gGrad.addColorStop(0.0, '#ffffff');
+      gGrad.addColorStop(0.65, '#f1f5f9');
+      gGrad.addColorStop(1.0, '#cbd5e1');
+      ctx.fillStyle = gGrad;
       ctx.beginPath();
-      ctx.ellipse(0, 0, 6.5, 6.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, 6.2, 6.2, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Gauze spiral roll layers
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(0, 0, 5, 0, Math.PI * 1.8);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.2, 0.5, Math.PI * 2);
-      ctx.stroke();
-
-      // Core center
+      // Concentric woven gauze spiral layers
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
+      ctx.lineWidth = 0.55;
+      for (const r of [5.1, 3.9, 2.7]) {
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 1.85);
+        ctx.stroke();
+      }
       ctx.fillStyle = '#94a3b8';
       ctx.beginPath();
-      ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+      ctx.arc(0, 0, 1.25, 0, Math.PI * 2);
       ctx.fill();
 
-      // Trailing bandage cloth tail
+      // Trailing folded gauze strip
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(3, 4.5);
-      ctx.quadraticCurveTo(6, 6, 8.5, 5);
-      ctx.lineTo(8.5, 7.2);
-      ctx.quadraticCurveTo(5, 7.8, 2, 6.2);
+      ctx.moveTo(2.8, 4.2);
+      ctx.quadraticCurveTo(5.8, 5.8, 8.2, 4.8);
+      ctx.lineTo(8.2, 6.8);
+      ctx.quadraticCurveTo(4.8, 7.4, 1.8, 5.8);
       ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.7)';
+      ctx.lineWidth = 0.3;
+      ctx.stroke();
 
-      // Hospital blue cross sticker
-      drawMedicalCross(ctx, -2, -2, 2.5, '#0284c7');
+      drawMedicalCross(ctx, -2.0, -2.0, 2.3, '#0284c7');
       return true;
     }
 
     case 'painkillers': {
-      drawShadow(ctx, 7.5, 2.8, 7.5, 0.22);
-
-      // Silver foil blister card
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.roundRect(-7, -8, 14, 15.5, 1.5);
-      ctx.fill();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Blue clinical top banner
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-7, -8, 14, 3.2);
-
-      // 2x4 pill bubbles with white capsules
-      const rows = [-3, 0, 3, 6];
-      rows.forEach(ry => {
-        [-3.8, 3.8].forEach(rx => {
-          // Blister bubble dome
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      drawShadow(ctx, 7.0, 2.6, 7.5, 0.22);
+      drawBlisterCard(
+        ctx,
+        13.2,
+        15.2,
+        '#0284c7',
+        (rx, ry) => {
+          // Recessed PVC pocket rim
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.16)';
           ctx.beginPath();
-          ctx.ellipse(rx, ry, 2.2, 1.3, 0, 0, Math.PI * 2);
+          ctx.ellipse(rx + 0.15, ry + 0.25, 2.15, 1.28, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          // Capsule pill inside
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(rx - 1.5, ry - 0.8, 3, 1.6);
-          ctx.fillStyle = '#38bdf8';
-          ctx.fillRect(rx, ry - 0.8, 1.5, 1.6);
-        });
-      });
+          // Bicolored hard gelatin capsule
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(rx - 1.55, ry - 0.78, 3.1, 1.56, 0.78);
+          ctx.clip();
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(rx - 1.6, ry - 0.9, 1.65, 1.8);
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(rx, ry - 0.9, 1.65, 1.8);
+          // Gelcap specular glint
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+          ctx.fillRect(rx - 1.3, ry - 0.58, 2.5, 0.34);
+          ctx.restore();
+
+          // Glossy thermoformed PVC blister dome arc over capsule
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+          ctx.lineWidth = 0.35;
+          ctx.beginPath();
+          ctx.ellipse(rx, ry, 2.05, 1.18, 0, Math.PI * 1.1, Math.PI * 1.85);
+          ctx.stroke();
+        },
+        [
+          [-3.2, -2.8], [3.2, -2.8],
+          [-3.2, 0.0], [3.2, 0.0],
+          [-3.2, 2.8], [3.2, 2.8],
+          [-3.2, 5.6], [3.2, 5.6]
+        ]
+      );
       return true;
     }
 
     case 'vitamins': {
-      drawShadow(ctx, 6.8, 2.6, 7.8, 0.22);
-
-      // Translucent amber pill bottle body
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.roundRect(-5.5, -4, 11, 11.5, 2);
-      ctx.fill();
-
-      // Golden vitamin tablets visible inside
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(-2, 4.5, 1.4, 0, Math.PI * 2);
-      ctx.arc(2, 4.2, 1.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Clinical white & teal label
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-5.5, -2, 11, 5.5);
-      ctx.fillStyle = '#0d9488';
-      ctx.fillRect(-5.5, -0.5, 11, 2.5);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3, 0.2, 6, 1);
-
-      // Glass specular reflection
-      drawGlossBand(ctx, -4.5, -4, 1.4, 11.5, 0.35);
-
-      // White child-proof ribbed screw cap
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.roundRect(-4, -7.5, 8, 3.8, 0.8);
-      ctx.fill();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.6;
-      for (let x = -3; x <= 3; x += 1.2) {
-        ctx.beginPath();
-        ctx.moveTo(x, -7.5); ctx.lineTo(x, -4);
-        ctx.stroke();
-      }
-      return true;
-    }
-
-    case 'splint': {
-      drawShadow(ctx, 8.5, 3, 7.5, 0.22);
-
-      // Molded blue aluminum splint body (rolled shape)
-      ctx.fillStyle = '#1d4ed8';
-      ctx.beginPath();
-      ctx.roundRect(-7.5, -6.5, 15, 13.5, 2);
-      ctx.fill();
-
-      // Soft grey inner foam padding
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.roundRect(-6.5, -5.5, 13, 11.5, 1.5);
-      ctx.fill();
-
-      // Dual black securing velcro straps
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(-8, -3, 16, 2.4);
-      ctx.fillRect(-8, 2, 16, 2.4);
-
-      // Silver buckles
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(4, -3, 2, 2.4);
-      ctx.fillRect(4, 2, 2, 2.4);
-      return true;
-    }
-
-    case 'antiseptic': {
-      drawShadow(ctx, 6.5, 2.5, 7.8, 0.22);
-
-      // Emerald green translucent spray bottle body
-      ctx.fillStyle = '#059669';
-      ctx.beginPath();
-      ctx.roundRect(-4.8, -3.5, 9.6, 11, 2);
-      ctx.fill();
-
-      // Clinical white label with red cross
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-4.5, -0.5, 9, 5);
-      drawMedicalCross(ctx, 0, 2, 3.5, '#dc2626');
-
-      // Specular shine
-      drawGlossBand(ctx, -3.8, -3.5, 1.2, 11, 0.35);
-
-      // White spray pump neck & actuator
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(-2, -5.5, 4, 2);
-      ctx.beginPath();
-      ctx.roundRect(-2.8, -8.5, 5.6, 3.2, 0.8);
-      ctx.fill();
-
-      // Spray nozzle hole
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(2.2, -7.5, 1, 1.2);
-      return true;
-    }
-
-    case 'antipyretic': {
-      drawShadow(ctx, 7.2, 2.8, 7.5, 0.22);
-
-      // Paracetamol blister card
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(-6.5, -7, 13, 14, 1.5);
-      ctx.fill();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Green pharmaceutical banner
-      ctx.fillStyle = '#16a34a';
-      ctx.fillRect(-6.5, -7, 13, 3.2);
-
-      // 6 round white pressed tablets under blister domes
-      const tabs = [
-        [-3.2, -1.8], [3.2, -1.8],
-        [-3.2, 1.8], [3.2, 1.8],
-        [-3.2, 5.2], [3.2, 5.2]
-      ];
-      tabs.forEach(([tx, ty]) => {
-        ctx.fillStyle = '#f1f5f9';
-        ctx.beginPath();
-        ctx.arc(tx, ty, 2.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#e2e8f0';
-        ctx.beginPath();
-        ctx.arc(tx, ty, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        // Tablet score line
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(tx - 1.2, ty); ctx.lineTo(tx + 1.2, ty);
-        ctx.stroke();
+      drawShadow(ctx, 6.2, 2.4, 7.8, 0.22);
+      drawStudioPharmaBottle(ctx, {
+        w: 10.0,
+        topY: -4.2,
+        botY: 7.2,
+        bodyHex: '#b45309',
+        liquidHex: '#92400e',
+        translucent: true,
+        capColor: '#f8fafc',
+        labelBand: '#0d9488',
+        labelAccent: '#f59e0b',
+        crossColor: '#0d9488'
       });
       return true;
     }
 
-    case 'eye_drops': {
-      drawShadow(ctx, 5.5, 2.2, 7.8, 0.2);
+    case 'splint': {
+      drawShadow(ctx, 8.2, 2.9, 7.5, 0.22);
 
-      // Small squeeze dropper bottle
-      ctx.fillStyle = '#e0f2fe';
+      // Rolled blue aluminum & closed-cell foam SAM splint
+      const alGrad = ctx.createLinearGradient(-7.5, 0, 7.5, 0);
+      alGrad.addColorStop(0.0, '#1e3a8a');
+      alGrad.addColorStop(0.4, '#2563eb');
+      alGrad.addColorStop(1.0, '#172554');
+      ctx.fillStyle = alGrad;
       ctx.beginPath();
-      ctx.roundRect(-4, -2, 8, 9.5, 2);
+      ctx.roundRect(-7.5, -6.5, 15.0, 13.5, 1.8);
       ctx.fill();
 
-      // Blue label with eye graphic
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-3.8, 0, 7.6, 4.5);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#e2e8f0';
       ctx.beginPath();
-      ctx.ellipse(0, 2.2, 2.2, 1.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.arc(0, 2.2, 0.8, 0, Math.PI * 2);
+      ctx.roundRect(-6.5, -5.5, 13.0, 11.5, 1.3);
       ctx.fill();
 
-      // Tapered dropper neck
+      // Matte nylon compression straps & brushed steel D-buckles
+      for (const sy of [-3.0, 2.0]) {
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(-7.8, sy, 15.6, 2.2);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(3.8, sy - 0.1, 1.8, 2.4);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(4.3, sy + 0.35, 0.8, 1.5);
+      }
+      return true;
+    }
+
+    case 'antiseptic': {
+      drawShadow(ctx, 5.8, 2.4, 7.8, 0.22);
+      drawStudioPharmaBottle(ctx, {
+        w: 9.0,
+        topY: -3.6,
+        botY: 7.2,
+        bodyHex: '#059669',
+        liquidHex: '#10b981',
+        translucent: true,
+        capColor: '#f8fafc',
+        labelBand: '#047857',
+        labelAccent: '#dc2626',
+        crossColor: '#dc2626'
+      });
+
+      // White mist spray pump head + directional nozzle insert
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.moveTo(-2.5, -2);
-      ctx.lineTo(2.5, -2);
-      ctx.lineTo(1.2, -5.5);
-      ctx.lineTo(-1.2, -5.5);
-      ctx.closePath();
+      ctx.roundRect(-2.4, -8.5, 4.8, 3.0, 0.7);
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(1.8, -7.6, 0.85, 1.0);
+      return true;
+    }
+
+    case 'antipyretic': {
+      drawShadow(ctx, 6.8, 2.6, 7.5, 0.22);
+      drawBlisterCard(
+        ctx,
+        12.4,
+        14.0,
+        '#16a34a',
+        (tx, ty) => {
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.14)';
+          ctx.beginPath();
+          ctx.arc(tx + 0.15, ty + 0.2, 2.1, 0, Math.PI * 2);
+          ctx.fill();
+
+          drawLitSphere(ctx, tx, ty, 1.72, '#ffffff', '#f1f5f9', '#cbd5e1', undefined, 0.35);
+
+          // Precision scored break line across biconvex white tablet
+          ctx.strokeStyle = 'rgba(71, 85, 105, 0.55)';
+          ctx.lineWidth = 0.36;
+          ctx.beginPath();
+          ctx.moveTo(tx - 1.15, ty);
+          ctx.lineTo(tx + 1.15, ty);
+          ctx.stroke();
+
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.lineWidth = 0.32;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 2.0, Math.PI * 1.1, Math.PI * 1.85);
+          ctx.stroke();
+        },
+        [
+          [-3.0, -1.8], [3.0, -1.8],
+          [-3.0, 1.7], [3.0, 1.7],
+          [-3.0, 5.2], [3.0, 5.2]
+        ]
+      );
+      return true;
+    }
+
+    case 'eye_drops': {
+      drawShadow(ctx, 5.2, 2.1, 7.8, 0.2);
+
+      // Matte LDPE dropper vial
+      const bGrad = ctx.createLinearGradient(-4, 0, 4, 0);
+      bGrad.addColorStop(0.0, '#cbd5e1');
+      bGrad.addColorStop(0.32, '#ffffff');
+      bGrad.addColorStop(0.75, '#e0f2fe');
+      bGrad.addColorStop(1.0, '#94a3b8');
+      ctx.fillStyle = bGrad;
+      ctx.beginPath();
+      ctx.roundRect(-4.0, -2.0, 8.0, 9.4, 1.8);
       ctx.fill();
 
-      // Royal blue protective cap
-      ctx.fillStyle = '#1d4ed8';
+      drawStudioLabelPanel(ctx, -3.75, -0.2, 7.5, 5.0, {
+        paperColor: '#f8fafc',
+        bandColor: '#0284c7',
+        accentColor: '#38bdf8',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'circle',
+        cylindrical: true
+      });
+
+      // Tapered dropper shoulder + royal-blue ribbed sterile cap
+      ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.roundRect(-2.2, -8.5, 4.4, 3.8, 0.8);
+      ctx.moveTo(-2.4, -2.0);
+      ctx.lineTo(2.4, -2.0);
+      ctx.lineTo(1.1, -5.2);
+      ctx.lineTo(-1.1, -5.2);
+      ctx.closePath();
       ctx.fill();
+      drawScrewCap(ctx, 0, -8.2, 4.2, 3.2, '#1d4ed8', true);
       return true;
     }
 
     case 'medical_patch': {
-      drawShadow(ctx, 8, 3, 7.5, 0.2);
+      drawShadow(ctx, 7.8, 2.8, 7.5, 0.2);
 
-      // Tan flexible fabric plaster
-      ctx.fillStyle = '#fcd34d';
+      // Woven breathable micropore adhesive fabric plaster
+      const fGrad = ctx.createLinearGradient(-8, -4, 8, 4);
+      fGrad.addColorStop(0.0, '#fcd34d');
+      fGrad.addColorStop(0.5, '#f59e0b');
+      fGrad.addColorStop(1.0, '#d97706');
+      ctx.fillStyle = fGrad;
       ctx.beginPath();
-      ctx.roundRect(-8, -4, 16, 8, 3);
+      ctx.roundRect(-8.0, -3.8, 16.0, 7.6, 2.8);
       ctx.fill();
 
-      // Absorbent white wound pad in center
+      // Sterile non-adherent white gauze island in center
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.roundRect(-3.5, -3, 7, 6, 1);
+      ctx.roundRect(-3.4, -2.8, 6.8, 5.6, 0.8);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+      ctx.lineWidth = 0.28;
+      ctx.stroke();
 
-      // Aeration micro-pores
-      ctx.fillStyle = '#d97706';
-      for (let x = -7; x <= 7; x += 2) {
-        if (x >= -3 && x <= 3) continue;
-        ctx.fillRect(x, -2, 0.7, 0.7);
-        ctx.fillRect(x, 1.5, 0.7, 0.7);
+      // Micro-perforation aeration dots
+      ctx.fillStyle = 'rgba(120, 53, 15, 0.45)';
+      for (let x = -6.8; x <= 6.8; x += 1.4) {
+        if (x >= -3.6 && x <= 3.6) continue;
+        for (const y of [-1.8, 0, 1.8]) {
+          ctx.beginPath();
+          ctx.arc(x, y, 0.24, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       return true;
     }
 
     case 'thermometer': {
-      drawShadow(ctx, 8.5, 2.2, 7.5, 0.18);
+      drawShadow(ctx, 8.2, 2.1, 7.5, 0.18);
 
-      // Sleek digital thermometer body (angled)
-      ctx.fillStyle = '#f8fafc';
+      const tGrad = ctx.createLinearGradient(0, -2.4, 0, 2.4);
+      tGrad.addColorStop(0, '#ffffff');
+      tGrad.addColorStop(1, '#cbd5e1');
+      ctx.fillStyle = tGrad;
       ctx.beginPath();
-      ctx.roundRect(-8.5, -2.5, 17, 5, 2);
+      ctx.roundRect(-8.5, -2.4, 17.0, 4.8, 2.0);
       ctx.fill();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.4;
       ctx.stroke();
 
-      // Stainless steel probe tip
+      // Stainless steel thermistor tip
       ctx.fillStyle = '#94a3b8';
       ctx.beginPath();
-      ctx.roundRect(-9.5, -1.5, 3.5, 3, 1);
+      ctx.roundRect(-9.5, -1.4, 3.4, 2.8, 0.9);
       ctx.fill();
 
-      // LCD display window
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-3, -1.8, 6.5, 3.6);
+      // Recessed LCD glass display
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-3.0, -1.65, 6.4, 3.3);
       ctx.fillStyle = '#0f172a';
-      // "36.6" LCD readout hint
-      ctx.fillRect(-2, -1, 1.2, 2);
-      ctx.fillRect(-0.2, -1, 1.2, 2);
-      ctx.fillRect(1.6, -1, 1.2, 2);
-      ctx.fillRect(0.8, 0.8, 0.6, 0.6); // decimal dot
+      ctx.fillRect(-2.0, -0.9, 1.1, 1.8);
+      ctx.fillRect(-0.2, -0.9, 1.1, 1.8);
+      ctx.fillRect(1.6, -0.9, 1.1, 1.8);
+      ctx.fillRect(0.85, 0.7, 0.5, 0.5);
 
-      // Cyan power button
       ctx.fillStyle = '#06b6d4';
       ctx.beginPath();
-      ctx.arc(5.2, 0, 1.2, 0, Math.PI * 2);
+      ctx.arc(5.2, 0, 1.1, 0, Math.PI * 2);
       ctx.fill();
       return true;
     }
 
     case 'panthenol':
     case 'panthenol_spray': {
-      drawShadow(ctx, 6.8, 2.8, 8, 0.22);
+      drawShadow(ctx, 6.4, 2.6, 8.0, 0.24);
 
-      // White aluminum aerosol canister
-      ctx.fillStyle = '#ffffff';
+      // Pressurized aluminum aerosol canister
+      const canGrad = ctx.createLinearGradient(-5.2, 0, 5.2, 0);
+      canGrad.addColorStop(0.0, '#cbd5e1');
+      canGrad.addColorStop(0.26, '#ffffff');
+      canGrad.addColorStop(0.6, '#f8fafc');
+      canGrad.addColorStop(1.0, '#94a3b8');
+      ctx.fillStyle = canGrad;
       ctx.beginPath();
-      ctx.roundRect(-5.5, -8.5, 11, 16.5, 2.5);
+      ctx.roundRect(-5.2, -8.2, 10.4, 16.0, [2.4, 2.4, 1.4, 1.4]);
       ctx.fill();
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
 
-      // Signature Panthenol orange & red burn stripe
+      // Pharmaceutical orange-crimson burn band + barcode
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(-5.2, -8.2, 10.4, 16.0, [2.4, 2.4, 1.4, 1.4]);
+      ctx.clip();
+
       ctx.fillStyle = '#f97316';
-      ctx.fillRect(-5.5, -2, 11, 5);
+      ctx.fillRect(-5.4, -2.4, 10.8, 4.8);
       ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-5.5, 1.5, 11, 1.5);
-
-      // Blue clinical text accent band
+      ctx.fillRect(-5.4, 1.4, 10.8, 1.3);
       ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-5.5, 4.5, 11, 2);
+      ctx.fillRect(-5.4, 4.4, 10.8, 1.5);
 
-      // White cross emblem on orange background
-      drawMedicalCross(ctx, 0, 0.5, 3.2, '#ffffff');
+      drawMedicalCross(ctx, -1.8, -0.1, 2.8, '#ffffff');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0.5, -0.7, 3.6, 0.45);
+      ctx.fillRect(0.5, 0.2, 2.8, 0.4);
+      drawMicroBarcode(ctx, 1.8, 3.0, 2.6, 1.2, '#0f172a', 'rgba(255,255,255,0.88)');
 
-      // Specular metallic sheen
-      drawGlossBand(ctx, -4.5, -8.5, 1.5, 16.5, 0.35);
+      applyCylinderLightingOverlay(ctx, -5.2, -8.2, 10.4, 16.0, 0.34, 0.28);
+      ctx.restore();
 
-      // Metallic silver shoulder curve
-      ctx.fillStyle = '#cbd5e1';
+      // Rolled aluminum base rim + crimped valve cup collar
+      ctx.fillStyle = '#94a3b8';
       ctx.beginPath();
-      ctx.ellipse(0, -8.5, 4.5, 1.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -8.1, 4.4, 1.3, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // White spray dispenser nozzle
+      // Ergonomic contoured spray actuator dome + orange nozzle insert
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.roundRect(-2.8, -11.5, 5.6, 3.2, 1);
+      ctx.roundRect(-2.7, -11.4, 5.4, 3.2, 0.9);
       ctx.fill();
       ctx.fillStyle = '#ea580c';
-      ctx.fillRect(-1.2, -11.5, 2.4, 1.2);
+      ctx.fillRect(-1.1, -11.4, 2.2, 1.1);
       return true;
     }
 
     case 'spasatel_ointment': {
-      drawShadow(ctx, 7.5, 2.6, 7.5, 0.22);
-
-      // Green & yellow laminated aluminum tube
-      ctx.fillStyle = '#16a34a';
-      ctx.beginPath();
-      ctx.roundRect(-6, -7.5, 12, 15, 2);
-      ctx.fill();
-
-      // Bright yellow diagonal stripe
-      ctx.fillStyle = '#eab308';
-      ctx.beginPath();
-      ctx.moveTo(-6, -3);
-      ctx.lineTo(6, -6);
-      ctx.lineTo(6, 1);
-      ctx.lineTo(-6, 4);
-      ctx.closePath();
-      ctx.fill();
-
-      // Sea buckthorn oil gold badge with red cross
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.arc(0, -1, 3, 0, Math.PI * 2);
-      ctx.fill();
-      drawMedicalCross(ctx, 0, -1, 3.5, '#ffffff');
-
-      // Crimped metallic bottom end
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-6, 6.2, 12, 1.5);
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 0.5;
-      for (let x = -5; x <= 5; x += 1.5) {
-        ctx.beginPath();
-        ctx.moveTo(x, 6.2); ctx.lineTo(x, 7.7);
-        ctx.stroke();
-      }
-
-      // White hexagonal screw cap on top
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(-3, -9.8, 6, 2.6, 0.8);
-      ctx.fill();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.6;
-      ctx.stroke();
-      return true;
-    }
-
-    case 'zelenka': {
-      drawShadow(ctx, 6.2, 2.5, 7.5, 0.22);
-
-      // Dark emerald green glass bottle body
-      ctx.fillStyle = '#047857';
-      ctx.beginPath();
-      ctx.roundRect(-5, -4, 10, 11.5, 2);
-      ctx.fill();
-
-      // Rich emerald green liquid fill
-      ctx.fillStyle = '#10b981';
-      ctx.beginPath();
-      ctx.roundRect(-4.2, -2, 8.4, 9, 1.5);
-      ctx.fill();
-
-      // Off-white paper label
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(-4.5, -1, 9, 5.5);
-      ctx.fillStyle = '#059669';
-      ctx.fillRect(-4.5, 0.2, 9, 1.8);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-2, 0.6, 4, 1);
-
-      // Glass specular reflection
-      drawGlossBand(ctx, -4, -4, 1.2, 11.5, 0.4);
-
-      // Tapered glass bottle neck
-      ctx.fillStyle = '#065f46';
-      ctx.fillRect(-2.5, -6.5, 5, 2.8);
-
-      // Dark brown rubber cork / cap
-      ctx.fillStyle = '#451a03';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8.5, 4.4, 2.2, 0.6);
-      ctx.fill();
-      return true;
-    }
-
-    case 'iodine': {
-      drawShadow(ctx, 6.2, 2.5, 7.5, 0.22);
-
-      // Dark amber glass bottle body
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.roundRect(-5, -4, 10, 11.5, 2);
-      ctx.fill();
-
-      // Rich golden-brown iodine liquid inside
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.roundRect(-4.2, -2, 8.4, 9, 1.5);
-      ctx.fill();
-
-      // White label with iodine grid indicator
-      ctx.fillStyle = '#fff7ed';
-      ctx.fillRect(-4.5, -1, 9, 5.5);
-      ctx.fillStyle = '#ea580c';
-      ctx.fillRect(-4.5, -0.2, 9, 1.8);
-      drawMedicalCross(ctx, 0, 2.8, 2.5, '#c2410c');
-
-      // Glass specular reflection
-      drawGlossBand(ctx, -4, -4, 1.2, 11.5, 0.4);
-
-      // Bottle neck & orange-brown ribbed cap
-      ctx.fillStyle = '#92400e';
-      ctx.fillRect(-2.5, -6.5, 5, 2.8);
-      ctx.fillStyle = '#7c2d12';
-      ctx.beginPath();
-      ctx.roundRect(-2.5, -8.5, 5, 2.4, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 7.2, 2.5, 7.6, 0.22);
+      drawStudioOintmentTube(ctx, '#16a34a', '#eab308', '#ca8a04', '#ffffff', '#f8fafc', true);
       return true;
     }
 
     case 'diclofenac_gel': {
-      drawShadow(ctx, 7.5, 2.6, 7.5, 0.22);
+      drawShadow(ctx, 7.2, 2.5, 7.6, 0.22);
+      drawStudioOintmentTube(ctx, '#f8fafc', '#0284c7', '#38bdf8', '#ffffff', '#f8fafc', false);
+      return true;
+    }
 
-      // White aluminum gel tube
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(-6, -7.5, 12, 15, 2);
-      ctx.fill();
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
+    case 'zelenka': {
+      drawShadow(ctx, 5.8, 2.4, 7.5, 0.22);
+      drawStudioPharmaBottle(ctx, {
+        w: 9.2,
+        topY: -4.2,
+        botY: 7.2,
+        bodyHex: '#047857',
+        liquidHex: '#10b981',
+        translucent: true,
+        capColor: '#451a03',
+        labelBand: '#059669',
+        labelAccent: '#10b981',
+        crossColor: '#059669'
+      });
+      return true;
+    }
 
-      // Cyan / electric blue anti-inflammatory wave band
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-6, -4, 12, 5.5);
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.moveTo(-6, -1);
-      ctx.quadraticCurveTo(0, -3, 6, -1);
-      ctx.lineTo(6, 0.5);
-      ctx.quadraticCurveTo(0, -1.5, -6, 0.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Red cross badge
-      drawMedicalCross(ctx, -3, -1.5, 2.8, '#ffffff');
-
-      // Crimped metallic bottom end
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(-6, 6.2, 12, 1.5);
-
-      // White ribbed hex cap
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.roundRect(-3, -9.8, 6, 2.6, 0.8);
-      ctx.fill();
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.6;
-      ctx.stroke();
+    case 'iodine': {
+      drawShadow(ctx, 5.8, 2.4, 7.5, 0.22);
+      drawStudioPharmaBottle(ctx, {
+        w: 9.2,
+        topY: -4.2,
+        botY: 7.2,
+        bodyHex: '#78350f',
+        liquidHex: '#d97706',
+        translucent: true,
+        capColor: '#7c2d12',
+        labelBand: '#ea580c',
+        labelAccent: '#d97706',
+        crossColor: '#c2410c'
+      });
       return true;
     }
 
     case 'hydrogen_peroxide': {
-      drawShadow(ctx, 6.5, 2.6, 7.5, 0.22);
-
-      // Opaque white plastic bottle
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.roundRect(-5.5, -5, 11, 13.5, 2.5);
-      ctx.fill();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Medical blue label with red cross
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-5.5, -2, 11, 6);
-      drawMedicalCross(ctx, 0, 1, 3.5, '#ef4444');
-
-      // Peroxide oxygen bubbles graphic hint
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.beginPath();
-      ctx.arc(-3, -0.5, 0.8, 0, Math.PI * 2);
-      ctx.arc(3, 2.2, 0.9, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Bottle neck & white squeeze dropper cap
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-2.5, -7, 5, 2.2);
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(-2, -9.5, 4, 2.8, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 6.2, 2.5, 7.6, 0.22);
+      drawStudioPharmaBottle(ctx, {
+        w: 9.8,
+        topY: -4.8,
+        botY: 7.4,
+        bodyHex: '#f8fafc',
+        translucent: false,
+        capColor: '#ffffff',
+        labelBand: '#0284c7',
+        labelAccent: '#38bdf8',
+        crossColor: '#ef4444'
+      });
       return true;
     }
 
     case 'ammonia_spirit': {
-      drawShadow(ctx, 5.8, 2.4, 7.5, 0.22);
-
-      // Amber glass vial body
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -4, 9, 10.5, 2);
-      ctx.fill();
-
-      // Clear liquid inside
-      ctx.fillStyle = '#fef3c7';
-      ctx.beginPath();
-      ctx.roundRect(-3.8, -1.5, 7.6, 7.5, 1.2);
-      ctx.fill();
-
-      // White clinical label with red hazard diamond
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-4, -1, 8, 5);
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.moveTo(0, 0.2); ctx.lineTo(2, 1.5); ctx.lineTo(0, 2.8); ctx.lineTo(-2, 1.5);
-      ctx.closePath();
-      ctx.fill();
-
-      // Glass specular sheen
-      drawGlossBand(ctx, -3.5, -4, 1.2, 10.5, 0.4);
-
-      // Neck & white screw cap
-      ctx.fillStyle = '#92400e';
-      ctx.fillRect(-2, -6, 4, 2);
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.roundRect(-2.2, -8, 4.4, 2.2, 0.6);
-      ctx.fill();
+      drawShadow(ctx, 5.4, 2.2, 7.5, 0.22);
+      drawStudioPharmaBottle(ctx, {
+        w: 8.4,
+        topY: -4.2,
+        botY: 7.0,
+        bodyHex: '#78350f',
+        liquidHex: '#fef3c7',
+        translucent: true,
+        capColor: '#f8fafc',
+        labelBand: '#dc2626',
+        labelAccent: '#ef4444',
+        hazardDiamond: true
+      });
       return true;
     }
 
     case 'balm_star': {
-      drawShadow(ctx, 7, 3, 7.2, 0.25);
+      drawShadow(ctx, 6.8, 2.8, 7.2, 0.25);
 
-      // Iconic crimson red round tin compact
-      ctx.fillStyle = '#b91c1c';
+      // Rolled brass lower tin skirt + crimson enameled lid
+      const rimGrad = ctx.createLinearGradient(-7.2, 0, 7.2, 0);
+      rimGrad.addColorStop(0.0, '#78350f');
+      rimGrad.addColorStop(0.28, '#fde047');
+      rimGrad.addColorStop(0.68, '#d97706');
+      rimGrad.addColorStop(1.0, '#78350f');
+      ctx.fillStyle = rimGrad;
       ctx.beginPath();
-      ctx.ellipse(0, 0, 7.2, 6.8, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 1.0, 7.2, 6.6, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Golden metallic outer rim ring
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 1.2;
+      const lidGrad = ctx.createRadialGradient(-2.0, -2.0, 0.5, 0, 0, 7.2);
+      lidGrad.addColorStop(0.0, '#ef4444');
+      lidGrad.addColorStop(0.55, '#b91c1c');
+      lidGrad.addColorStop(1.0, '#7f1d1d');
+      ctx.fillStyle = lidGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, -0.2, 7.0, 6.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 0.9;
       ctx.stroke();
 
-      // Golden inner decorative ring
       ctx.strokeStyle = '#fef08a';
-      ctx.lineWidth = 0.6;
+      ctx.lineWidth = 0.42;
       ctx.beginPath();
-      ctx.ellipse(0, 0, 5.5, 5.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -0.2, 5.4, 4.9, 0, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Golden 5-pointed star embossed in center
-      ctx.fillStyle = '#f59e0b';
+      // Embossed faceted golden 5-pointed star
+      const sGrad = ctx.createLinearGradient(-3, -3.5, 3, 3.5);
+      sGrad.addColorStop(0, '#fef08a');
+      sGrad.addColorStop(0.5, '#f59e0b');
+      sGrad.addColorStop(1, '#b45309');
+      ctx.fillStyle = sGrad;
       ctx.beginPath();
-      const outerR = 3.8;
-      const innerR = 1.6;
       for (let i = 0; i < 10; i++) {
-        const r = i % 2 === 0 ? outerR : innerR;
-        const angle = (i * Math.PI) / 5 - Math.PI / 2;
-        const sx = Math.cos(angle) * r;
-        const sy = Math.sin(angle) * r * 0.92;
+        const r = i % 2 === 0 ? 3.5 : 1.45;
+        const a = (i * Math.PI) / 5 - Math.PI / 2;
+        const sx = Math.cos(a) * r;
+        const sy = -0.2 + Math.sin(a) * r * 0.92;
         if (i === 0) ctx.moveTo(sx, sy);
         else ctx.lineTo(sx, sy);
       }
       ctx.closePath();
       ctx.fill();
 
-      // Specular metallic reflection on red enamel
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      // Specular lacquer sheen arc
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
       ctx.beginPath();
-      ctx.ellipse(-2.5, -2.5, 3, 1.5, -Math.PI / 4, 0, Math.PI * 2);
+      ctx.ellipse(-2.4, -2.5, 2.7, 1.25, -Math.PI / 4, 0, Math.PI * 2);
       ctx.fill();
       return true;
     }
 
     case 'activated_charcoal': {
-      drawShadow(ctx, 7.5, 2.8, 7.5, 0.22);
-
-      // Silver foil blister card
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.roundRect(-7, -8, 14, 15.5, 1.5);
-      ctx.fill();
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Black pharmaceutical top banner
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(-7, -8, 14, 3.2);
-
-      // 2x5 grid of dark matte charcoal tablets under blister domes
-      const rows = [-4, -1.2, 1.6, 4.4];
-      rows.forEach(ry => {
-        [-3.8, 3.8].forEach(rx => {
-          // Blister bubble dome
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      drawShadow(ctx, 7.0, 2.6, 7.5, 0.22);
+      drawBlisterCard(
+        ctx,
+        13.2,
+        15.2,
+        '#18181b',
+        (rx, ry) => {
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.18)';
           ctx.beginPath();
-          ctx.arc(rx, ry, 2.1, 0, Math.PI * 2);
+          ctx.arc(rx + 0.15, ry + 0.2, 2.0, 0, Math.PI * 2);
           ctx.fill();
 
-          // Black charcoal tablet inside
-          ctx.fillStyle = '#27272a';
+          drawLitSphere(ctx, rx, ry, 1.55, '#52525b', '#27272a', '#09090b', undefined, 0.22);
+
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+          ctx.lineWidth = 0.3;
           ctx.beginPath();
-          ctx.arc(rx, ry, 1.6, 0, Math.PI * 2);
-          ctx.fill();
-        });
-      });
+          ctx.arc(rx, ry, 1.9, Math.PI * 1.1, Math.PI * 1.85);
+          ctx.stroke();
+        },
+        [
+          [-3.2, -3.6], [3.2, -3.6],
+          [-3.2, -0.9], [3.2, -0.9],
+          [-3.2, 1.8], [3.2, 1.8],
+          [-3.2, 4.5], [3.2, 4.5]
+        ]
+      );
       return true;
     }
 
     case 'valerian_drops': {
-      drawShadow(ctx, 6.2, 2.5, 7.5, 0.22);
+      drawShadow(ctx, 5.8, 2.4, 7.5, 0.22);
+      drawStudioPharmaBottle(ctx, {
+        w: 9.2,
+        topY: -3.2,
+        botY: 7.4,
+        bodyHex: '#78350f',
+        liquidHex: '#451a03',
+        translucent: true,
+        capColor: '#18181b',
+        labelBand: '#16a34a',
+        labelAccent: '#86efac'
+      });
 
-      // Dark amber glass bottle body
-      ctx.fillStyle = '#78350f';
+      // Molded black rubber pipette squeeze bulb cap
+      const bulbGrad = ctx.createRadialGradient(-0.7, -7.8, 0.3, 0, -7.2, 2.6);
+      bulbGrad.addColorStop(0, '#52525b');
+      bulbGrad.addColorStop(0.6, '#18181b');
+      bulbGrad.addColorStop(1, '#09090b');
+      ctx.fillStyle = bulbGrad;
       ctx.beginPath();
-      ctx.roundRect(-5, -3, 10, 11, 2);
-      ctx.fill();
-
-      // Herbal brown liquid fill
-      ctx.fillStyle = '#451a03';
-      ctx.beginPath();
-      ctx.roundRect(-4.2, -1, 8.4, 8.5, 1.5);
-      ctx.fill();
-
-      // Green herbal label
-      ctx.fillStyle = '#f0fdf4';
-      ctx.fillRect(-4.5, 0, 9, 5);
-      ctx.fillStyle = '#16a34a';
-      ctx.fillRect(-4.5, 1, 9, 1.8);
-
-      // Glass specular reflection
-      drawGlossBand(ctx, -4, -3, 1.2, 11, 0.4);
-
-      // Dropper neck stem & black rubber squeeze bulb cap
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(-1.5, -6, 3, 3);
-      ctx.beginPath();
-      ctx.arc(0, -7.5, 2.4, 0, Math.PI * 2);
+      ctx.arc(0, -7.2, 2.2, 0, Math.PI * 2);
       ctx.fill();
       return true;
     }
 
     case 'morphine': {
-      drawShadow(ctx, 6.5, 2.5, 7.5, 0.2);
+      drawShadow(ctx, 6.2, 2.4, 7.5, 0.2);
 
-      // Glass ampoule body outline
-      ctx.fillStyle = 'rgba(241, 245, 249, 0.85)';
-      ctx.beginPath();
-      ctx.roundRect(-4.5, -3, 9, 11, 2);
+      // Borosilicate clinical glass ampoule silhouette
+      const traceAmpoule = () => {
+        ctx.beginPath();
+        ctx.moveTo(-1.1, -5.8);
+        ctx.lineTo(-1.8, -7.4);
+        ctx.quadraticCurveTo(0, -9.2, 1.8, -7.4);
+        ctx.lineTo(1.1, -5.8);
+        ctx.lineTo(1.1, -5.4);
+        ctx.lineTo(2.4, -3.0);
+        ctx.lineTo(4.2, -2.0);
+        ctx.lineTo(4.2, 6.8);
+        ctx.quadraticCurveTo(4.2, 7.8, 0, 7.8);
+        ctx.quadraticCurveTo(-4.2, 7.8, -4.2, 6.8);
+        ctx.lineTo(-4.2, -2.0);
+        ctx.lineTo(-2.4, -3.0);
+        ctx.lineTo(-1.1, -5.4);
+        ctx.closePath();
+      };
+
+      const glassGrad = ctx.createLinearGradient(-4.2, 0, 4.2, 0);
+      glassGrad.addColorStop(0.0, 'rgba(203, 213, 225, 0.78)');
+      glassGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
+      glassGrad.addColorStop(0.75, 'rgba(226, 232, 240, 0.65)');
+      glassGrad.addColorStop(1.0, 'rgba(148, 163, 184, 0.8)');
+      ctx.fillStyle = glassGrad;
+      traceAmpoule();
       ctx.fill();
 
-      // Liquid chamber filled with amber analgesic solution
-      ctx.fillStyle = '#f59e0b';
+      // Amber analgesic solution inside lower chamber
+      ctx.save();
+      traceAmpoule();
+      ctx.clip();
+      const solGrad = ctx.createLinearGradient(-4, -1.5, 4, 7.6);
+      solGrad.addColorStop(0.0, '#fbbf24');
+      solGrad.addColorStop(0.5, '#f59e0b');
+      solGrad.addColorStop(1.0, '#b45309');
+      ctx.fillStyle = solGrad;
+      ctx.fillRect(-4.5, -1.6, 9.0, 9.6);
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.65)';
       ctx.beginPath();
-      ctx.roundRect(-3.8, -1.5, 7.6, 9, 1.2);
+      ctx.ellipse(0, -1.6, 3.8, 0.75, 0, 0, Math.PI * 2);
       ctx.fill();
+      applyCylinderLightingOverlay(ctx, -4.2, -9.0, 8.4, 17.0, 0.35, 0.28);
+      ctx.restore();
 
-      // Deeper golden meniscus curve at top of liquid
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.ellipse(0, -1.5, 3.8, 1, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // Ceramic cyan OPC snap-ring at constriction neck
+      ctx.fillStyle = '#0ea5e9';
+      ctx.fillRect(-1.35, -5.75, 2.7, 0.65);
 
-      // White pharmaceutical paper label
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-4, 0.5, 8, 5.5);
+      // Clinical wrap paper Rx label
+      drawStudioLabelPanel(ctx, -3.9, 0.2, 7.8, 5.4, {
+        paperColor: '#ffffff',
+        bandColor: '#dc2626',
+        accentColor: '#991b1b',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'none',
+        cylindrical: true
+      });
+      drawMedicalCross(ctx, -1.9, 3.6, 2.2, '#dc2626');
 
-      // Red Rx medical cross & dosage lines on label
-      drawMedicalCross(ctx, -2, 3.2, 2.6, '#dc2626');
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(0.5, 2.2, 2.8, 0.7);
-      ctx.fillRect(0.5, 3.6, 2.2, 0.6);
-
-      // Narrow tapered neck of ampoule
-      ctx.fillStyle = 'rgba(241, 245, 249, 0.9)';
-      ctx.beginPath();
-      ctx.moveTo(-2.5, -3);
-      ctx.lineTo(-1.2, -5.5);
-      ctx.lineTo(1.2, -5.5);
-      ctx.lineTo(2.5, -3);
-      ctx.closePath();
-      ctx.fill();
-
-      // Snap-off break ceramic score ring (white / cyan)
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(-1.5, -5.8, 3, 0.8);
-
-      // Melted sealed glass bulb tip on top
-      ctx.fillStyle = 'rgba(241, 245, 249, 0.95)';
-      ctx.beginPath();
-      ctx.moveTo(-1.2, -5.8);
-      ctx.lineTo(-2, -7.5);
-      ctx.quadraticCurveTo(0, -9.5, 2, -7.5);
-      ctx.lineTo(1.2, -5.8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Glass specular reflection band
-      drawGlossBand(ctx, -3.5, -2.5, 1.2, 10, 0.45);
+      ctx.strokeStyle = 'rgba(71, 85, 105, 0.5)';
+      ctx.lineWidth = 0.28;
+      traceAmpoule();
+      ctx.stroke();
       return true;
     }
 
