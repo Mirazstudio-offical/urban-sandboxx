@@ -6,6 +6,7 @@ import { sound } from '../audio';
 import { toggleTrailerHitch } from '../physics';
 import { getLiquidNameRu, hasRoadTrainLights, getVehicleDiffCapabilities, cycleVehicleDiffLock } from '../vehicleHelpers';
 import { isVehicleCraneTruck, isVehicleVacuumTruck, getVehicleVacuumBodyId } from '../truckChassisVariants';
+import { ensureExcavatorState, isExcavatorVehicle } from '../excavatorSystem';
 import { getVehicleControlTheme, VehicleControlTheme, CONTROL_THEME_META } from './vehicleControlStyles';
 import { Cell, Group, HwPush, HwRotary, HwSwitch, Lamp, Lcd, Screw, THEME_FAMILY } from './boardHardware';
 
@@ -322,7 +323,13 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
             {vehicleHasPto(veh) && (() => {
               const on = isPtoOn(veh);
               const drive = hasPtoDrive(veh);
-              const what = isVehicleCraneTruck(veh) ? 'гидронасос крана' : isVehicleVacuumTruck(veh) ? 'вакуум-насос' : 'водонасос';
+              const what = isVehicleCraneTruck(veh)
+                ? 'гидронасос крана'
+                : isExcavatorVehicle(veh)
+                ? 'гидронасос экскаватора'
+                : isVehicleVacuumTruck(veh)
+                ? 'вакуум-насос'
+                : 'водонасос';
               return (
                 <Cell label="КОМ" note={on && !drive ? 'заведите двигатель' : what} lamp={<Lamp on={drive} tone="green" />}>
                   <HwSwitch
@@ -457,6 +464,64 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
               </p>
             </Group>
           )}
+
+          {isExcavatorVehicle(veh) && (() => {
+            ensureExcavatorState(veh);
+            const mpa = (veh.exHydPressureMpa ?? 0).toFixed(1);
+            const hTemp = Math.round(veh.exHydTempC ?? 28);
+            const bucketVol = ((veh.exBucketLoad ?? 0) * 0.65).toFixed(2);
+            return (
+              <Group title="ГИДРОСИСТЕМА ТВЭКС ЕК-12">
+                <Cell label="Давление, МПа" note={hasPtoDrive(veh) ? 'номинал 25 МПа' : 'включите КОМ'}>
+                  <Lcd label="МАГИСТРАЛЬ" value={mpa} warn={(veh.exHydPressureMpa ?? 0) >= 30.5} />
+                </Cell>
+                <Cell label="Масло HLP-46, °C" note="бак 200 л">
+                  <Lcd label="ГС °C" value={String(hTemp)} warn={hTemp > 80} />
+                </Cell>
+                <Cell label="Ковш 0.65 м³" note={veh.exBucketMaterial === 'sand' ? 'песок' : veh.exBucketMaterial === 'mud' ? 'ил/грязь' : 'грунт'}>
+                  <Lcd label="ЗАГРУЗКА" value={bucketVol} />
+                </Cell>
+                <Cell label="Рабочий свет" note="кабина и стрела" lamp={<Lamp on={!!veh.exWorkLightOn} tone="amber" />}>
+                  <HwSwitch
+                    family={family}
+                    on={!!veh.exWorkLightOn}
+                    label="Фары рабочего света"
+                    onClick={() => {
+                      press();
+                      veh.exWorkLightOn = !veh.exWorkLightOn;
+                      setTick((t) => t + 1);
+                    }}
+                  />
+                </Cell>
+                <Cell label="Блок. балансира" note={veh.exAxleOscillationLocked ? 'заблокирован' : 'плавающий ход'} lamp={<Lamp on={!!veh.exAxleOscillationLocked} tone="red" />}>
+                  <HwSwitch
+                    family={family}
+                    on={!!veh.exAxleOscillationLocked}
+                    label="Блокировка качания переднего моста"
+                    lens="red"
+                    onClick={() => {
+                      press();
+                      veh.exAxleOscillationLocked = !veh.exAxleOscillationLocked;
+                      setTick((t) => t + 1);
+                    }}
+                  />
+                </Cell>
+                <Cell label="Режим работы" keyHint="G" note={veh.exOperatorMode ? 'джойстики активны' : 'транспортный ход'} lamp={<Lamp on={!!veh.exOperatorMode} tone="green" />}>
+                  <HwSwitch
+                    family={family}
+                    on={!!veh.exOperatorMode}
+                    label="Переключить Ход / Джойстики"
+                    lens="green"
+                    onClick={() => {
+                      press();
+                      veh.exOperatorMode = !veh.exOperatorMode;
+                      setTick((t) => t + 1);
+                    }}
+                  />
+                </Cell>
+              </Group>
+            );
+          })()}
         </div>
 
         <footer className="hw-foot">

@@ -6,6 +6,7 @@ import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
 import { isPtoOn, hasPtoDrive, getPtoWorkingRPM } from './ptoSystem';
 import { isVehicleVacuumTruck } from './truckChassisVariants';
+import { isExcavatorVehicle, isExcavatorRoadLocked, updateExcavatorSuperstructure } from './excavatorSystem';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
 import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight } from './items';
@@ -8494,7 +8495,20 @@ export function updateVehiclePhysics(
 ) {
   sanitizeVehicleKinematics(vehicle);
   updateTruckCraneSuperstructure(vehicle, input, world, dt);
-  if (input && isVehicleCraneTruck(vehicle) && (vehicle.craneControlMode || vehicle.craneOutriggersDeployed || (vehicle.craneOutriggerExt ?? 0) > 0.35)) {
+  if (isExcavatorVehicle(vehicle)) {
+    updateExcavatorSuperstructure(vehicle, input, world, dt, (wx, wy) => getSurfaceTypeAt(world, wx, wy), player);
+    if (!isExcavatorRoadLocked(vehicle) && (vehicle.exBladePos ?? 0) > 0.62) {
+      // Grading resistance while scraping earth with front 2500mm blade in travel mode
+      const maxCrawlPx = 9.5 * SPEED_KMH_TO_PX_S;
+      if (Math.abs(vehicle.speed) > maxCrawlPx) {
+        vehicle.speed *= Math.pow(0.68, dt * 10);
+      }
+    }
+  }
+  if (input && (
+    (isVehicleCraneTruck(vehicle) && (vehicle.craneControlMode || vehicle.craneOutriggersDeployed || (vehicle.craneOutriggerExt ?? 0) > 0.35)) ||
+    isExcavatorRoadLocked(vehicle)
+  )) {
     input = {
       ...input,
       forward: false,

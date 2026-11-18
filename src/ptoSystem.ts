@@ -14,6 +14,7 @@ export const PTO_MAX_ENGAGE_KMH = 5;
 export function vehicleHasPto(v: Vehicle | null | undefined): boolean {
   if (!v) return false;
   return (
+    v.type === 'excavator_ek12' ||
     v.type === 'truck_water' ||
     v.type === 'fire_engine' ||
     v.type.startsWith('tractor_') ||
@@ -34,6 +35,7 @@ export function hasPtoDrive(v: Vehicle | null | undefined): boolean {
 }
 
 function describe(v: Vehicle): string {
+  if (v.type === 'excavator_ek12') return 'сдвоенный гидронасос экскаватора';
   if (isVehicleCraneTruck(v)) return 'гидронасос крана';
   if (isVehicleVacuumTruck(v)) return 'вакуумный насос';
   if (v.type.startsWith('tractor_')) return 'вал отбора мощности (ВОМ)';
@@ -71,6 +73,7 @@ export function togglePto(v: Vehicle, player?: Player | null): boolean {
 /** Engine speed (rpm) held while the box drives a pump. On a real truck the idle is raised with the
     hand throttle or an automatic governor: hydraulics are happy near 1100, a vacuum or fire pump needs more. */
 export function getPtoWorkingRPM(v: Vehicle): number {
+  if (v.type === 'excavator_ek12') return 1250;
   if (isVehicleCraneTruck(v)) return 1100;
   if (isVehicleVacuumTruck(v)) return 1450;
   return 1300;

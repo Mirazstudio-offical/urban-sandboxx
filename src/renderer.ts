@@ -45,6 +45,7 @@ import {
   renderTruckFifthWheelCoupling
 } from './vehicleVisuals';
 import { resolveVehicleTruckFrameAndBody, isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
+import { isExcavatorVehicle, getExcavatorGeometry } from './excavatorSystem';
 import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
@@ -3868,6 +3869,44 @@ export class GameRenderer {
           ctx.fillRect(gx - grainSize / 2, gy - grainSize / 2, grainSize, grainSize);
         }
 
+      } else if (stain.type === 'soil') {
+        // Volumetric 3D mound of excavated soil / dark loam
+        const peakX = -rx * 0.25;
+        const peakY = -ry * 0.25;
+        const soilGrad = safeRadialGradient(ctx, peakX, peakY, rx * 0.05, 0, 0, rx);
+        soilGrad.addColorStop(0, `rgba(120, 84, 52, ${Math.min(1, stainAlpha * 1.05)})`);
+        soilGrad.addColorStop(0.45, `rgba(92, 62, 36, ${Math.min(1, stainAlpha * 0.96)})`);
+        soilGrad.addColorStop(0.82, `rgba(62, 41, 23, ${stainAlpha * 0.85})`);
+        soilGrad.addColorStop(1, `rgba(38, 25, 14, 0)`);
+
+        ctx.save();
+        ctx.translate(rx * 0.14, ry * 0.16);
+        ctx.fillStyle = `rgba(12, 8, 4, ${stainAlpha * 0.45})`;
+        this.drawOrganicBlob(ctx, rx * 0.96, ry * 0.96, seed, rough);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = soilGrad;
+        this.drawOrganicBlob(ctx, rx, ry, seed, rough);
+        ctx.fill();
+
+        const clodCount = Math.min(48, Math.max(8, Math.floor(rx * 1.8)));
+        for (let s = 0; s < clodCount; s++) {
+          const randAngle = (s * 2.39996) + seed;
+          const progress = Math.pow(Math.sin(s * 6.7 + seed) * 0.5 + 0.5, 1.35);
+          const rDist = progress * rx * 0.86;
+          const gx = Math.cos(randAngle) * rDist + (peakX * (1 - progress));
+          const gy = Math.sin(randAngle) * rDist + (peakY * (1 - progress));
+          const lightBias = gx < 0 && gy < 0;
+          ctx.fillStyle = lightBias
+            ? `rgba(146, 108, 70, ${stainAlpha * 0.78})`
+            : `rgba(45, 29, 15, ${stainAlpha * 0.82})`;
+          const clodR = s % 3 === 0 ? 1.8 : 1.2;
+          ctx.beginPath();
+          ctx.arc(gx, gy, clodR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
       } else if (stain.type === 'water') {
         if (isFreezing) {
           // Frozen glaze ice spot / rime crust (наледь на асфальте)
@@ -3925,7 +3964,7 @@ export class GameRenderer {
         ctx.fill();
       }
 
-      if (stain.type !== 'sand') {
+      if (stain.type !== 'sand' && stain.type !== 'soil') {
         this.drawLiquidSurfaceFx(ctx, rx, ry, seed, stainAlpha, { x: stain.x, y: stain.y, angle: filmAngle }, rough);
       }
 
@@ -8967,7 +9006,7 @@ export class GameRenderer {
       const stainStart = Math.max(0, world.stains.length - performanceConfig.stainsLimit);
       for (let si = stainStart; si < world.stains.length; si++) {
         const stain = world.stains[si];
-        if (stain.type === 'sand') continue; // Sand mounds are solid occluders handled in Step 11
+        if (stain.type === 'sand' || stain.type === 'soil') continue; // Solid granular mounds handled in Step 11
         const grow = stain.filmCap ? Math.min(1, stain.radius / stain.filmCap) : 0;
         const stretch = 1 + (stain.spreadElong ?? 0.6) * 0.8 * grow;
         const pad = 30 + stain.radius * 0.8 * grow;
@@ -9022,7 +9061,7 @@ export class GameRenderer {
       const stainStart = Math.max(0, world.stains.length - performanceConfig.stainsLimit);
       for (let si = stainStart; si < world.stains.length; si++) {
         const stain = world.stains[si];
-        if (stain.type !== 'sand') continue;
+        if (stain.type !== 'sand' && stain.type !== 'soil') continue;
         const grow = stain.filmCap ? Math.min(1, stain.radius / stain.filmCap) : 0;
         const stretch = 1 + (stain.spreadElong ?? 0.6) * 0.8 * grow;
         const pad = 30 + stain.radius * 0.8 * grow;
@@ -12329,7 +12368,8 @@ export class GameRenderer {
           drawDeformedRect,
           drawDeformedLine,
           drawDeformedCircle,
-          nightAlpha
+          nightAlpha,
+          renderLayer: 'chassis',
         });
       }
 
@@ -13757,6 +13797,7 @@ export class GameRenderer {
         drawDeformedLine,
         drawDeformedCircle,
         nightAlpha,
+        renderLayer: 'upper' as const,
       };
 
       const isTrailer = car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle';
@@ -13766,6 +13807,33 @@ export class GameRenderer {
         // Render specialized trailer attachments and machinery superstructure
         renderSpecializedVehicleAttachments(vCtx);
         ctx.restore();
+
+        // Ground digging / dumping reticle for player-controlled EK-12 excavator
+        if (isExcavatorVehicle(car) && car.isPlayerControlled && (car.exOperatorMode || (car.exBucketLoad ?? 0) > 0.04)) {
+          const exGeom = getExcavatorGeometry(car);
+          const gx = exGeom.worldBucketX;
+          const gy = exGeom.worldBucketY;
+          const onGrade = exGeom.isBucketGroundLevel;
+          ctx.save();
+          ctx.strokeStyle = onGrade ? 'rgba(245, 158, 11, 0.85)' : 'rgba(148, 163, 184, 0.55)';
+          ctx.lineWidth = onGrade ? 1.4 : 1.0;
+          if (!onGrade) ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.arc(gx, gy, onGrade ? 5.8 : 4.6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.moveTo(gx - 8, gy);
+          ctx.lineTo(gx - 3.5, gy);
+          ctx.moveTo(gx + 3.5, gy);
+          ctx.lineTo(gx + 8, gy);
+          ctx.moveTo(gx, gy - 8);
+          ctx.lineTo(gx, gy - 3.5);
+          ctx.moveTo(gx, gy + 3.5);
+          ctx.lineTo(gx, gy + 8);
+          ctx.stroke();
+          ctx.restore();
+        }
         continue;
       }
 
@@ -16853,23 +16921,46 @@ export class GameRenderer {
         lCtx.fill();
       }
 
+      // Excavator EK-12 Work Floodlights (Cab roof + Monoboom halogen beams)
+      if (isExcavatorVehicle(car) && car.exWorkLightOn) {
+        const exGeom = getExcavatorGeometry(car);
+        const cosArm = Math.cos(exGeom.worldArmAngle);
+        const sinArm = Math.sin(exGeom.worldArmAngle);
+        const cabLampX = exGeom.worldTurretX + cosArm * 4.0 - sinArm * -6.9;
+        const cabLampY = exGeom.worldTurretY + sinArm * 4.0 + cosArm * -6.9;
+        drawSmoothFlashlightCone(cabLampX, cabLampY, exGeom.worldArmAngle, 185 * fogFactor, 0.44, [255, 240, 198]);
+
+        const boomMidX = exGeom.worldBoomStartX + (exGeom.worldBoomTipX - exGeom.worldBoomStartX) * 0.52;
+        const boomMidY = exGeom.worldBoomStartY + (exGeom.worldBoomTipY - exGeom.worldBoomStartY) * 0.52;
+        drawSmoothFlashlightCone(boomMidX, boomMidY, exGeom.worldArmAngle, 130 * fogFactor, 0.36, [255, 244, 212]);
+      }
+
       // Heavy Machinery & Utility Amber Strobe Beacons (Environment-masked ground bounce)
       const isArticulated = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
       const isTractorMach = car.type.startsWith('tractor_');
       const isVehicleLit = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || getVehicleHeadlightOn(car));
-      if (isVehicleLit && (isArticulated || car.type === 'paver_asphalt_wheeled' || isTractorMach || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
+      if (isVehicleLit && (isArticulated || car.type === 'paver_asphalt_wheeled' || car.type === 'excavator_ek12' || isTractorMach || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
         const beaconPeriod = 0.35;
         const beaconPulse = Math.sin((Date.now() / 1000) / beaconPeriod * Math.PI * 2);
         if (beaconPulse > 0.1) {
-          let bX = halfL * 0.25;
-          if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
-          else if (car.type === 'roller_compact_sidewalk') bX = -halfL * 0.58;
-          else if (car.type === 'roller_pneumatic') bX = -halfL * 0.28;
-          else if (car.type === 'paver_asphalt_wheeled') bX = -halfL * 0.42;
-          else if (isTractorMach) bX = -halfL * 0.10;
-
-          const wx = car.x + cosA * bX;
-          const wy = car.y + sinA * bX;
+          let wx = car.x + cosA * (halfL * 0.25);
+          let wy = car.y + sinA * (halfL * 0.25);
+          if (car.type === 'excavator_ek12') {
+            const exGeom = getExcavatorGeometry(car);
+            const cosArm = Math.cos(exGeom.worldArmAngle);
+            const sinArm = Math.sin(exGeom.worldArmAngle);
+            wx = exGeom.worldTurretX + cosArm * -5.2 - sinArm * -8.8;
+            wy = exGeom.worldTurretY + sinArm * -5.2 + cosArm * -8.8;
+          } else {
+            let bX = halfL * 0.25;
+            if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
+            else if (car.type === 'roller_compact_sidewalk') bX = -halfL * 0.58;
+            else if (car.type === 'roller_pneumatic') bX = -halfL * 0.28;
+            else if (car.type === 'paver_asphalt_wheeled') bX = -halfL * 0.42;
+            else if (isTractorMach) bX = -halfL * 0.10;
+            wx = car.x + cosA * bX;
+            wy = car.y + sinA * bX;
+          }
           const bRadius = (18 + beaconPulse * 14) * fogFactor;
 
           const bCut = lCtx.createRadialGradient(wx, wy, 0.5, wx, wy, bRadius);
@@ -17473,19 +17564,28 @@ export class GameRenderer {
       }
 
       // Amber Strobe Beacons on Roof / ROPS Bar (Compact dome flare; ground amber spill is masked in Pass 1 cCtx)
-      if (isIgnitionOn && (isArticulated || car.type === 'paver_asphalt_wheeled' || isTractor || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
+      if (isIgnitionOn && (isArticulated || car.type === 'paver_asphalt_wheeled' || car.type === 'excavator_ek12' || isTractor || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
         const beaconPeriod = 0.35;
         const beaconPulse = Math.sin((Date.now() / 1000) / beaconPeriod * Math.PI * 2);
         if (beaconPulse > 0.1) {
-          let bX = halfL * 0.25;
-          if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
-          else if (car.type === 'roller_compact_sidewalk') bX = -halfL * 0.58;
-          else if (car.type === 'roller_pneumatic') bX = -halfL * 0.28;
-          else if (car.type === 'paver_asphalt_wheeled') bX = -halfL * 0.42;
-          else if (isTractor) bX = -halfL * 0.10;
-
-          const wx = car.x + cosA * bX;
-          const wy = car.y + sinA * bX;
+          let wx = car.x + cosA * (halfL * 0.25);
+          let wy = car.y + sinA * (halfL * 0.25);
+          if (car.type === 'excavator_ek12') {
+            const exGeom = getExcavatorGeometry(car);
+            const cosArm = Math.cos(exGeom.worldArmAngle);
+            const sinArm = Math.sin(exGeom.worldArmAngle);
+            wx = exGeom.worldTurretX + cosArm * -5.2 - sinArm * -8.8;
+            wy = exGeom.worldTurretY + sinArm * -5.2 + cosArm * -8.8;
+          } else {
+            let bX = halfL * 0.25;
+            if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
+            else if (car.type === 'roller_compact_sidewalk') bX = -halfL * 0.58;
+            else if (car.type === 'roller_pneumatic') bX = -halfL * 0.28;
+            else if (car.type === 'paver_asphalt_wheeled') bX = -halfL * 0.42;
+            else if (isTractor) bX = -halfL * 0.10;
+            wx = car.x + cosA * bX;
+            wy = car.y + sinA * bX;
+          }
           const domeRadius = 5.5 + beaconPulse * 2.5;
           const bGrad = ctx.createRadialGradient(wx, wy, 0.4, wx, wy, domeRadius);
           bGrad.addColorStop(0, `rgba(255, 230, 130, ${(0.90 * beaconPulse).toFixed(3)})`);

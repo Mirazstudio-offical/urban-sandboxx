@@ -2193,9 +2193,22 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
       ctx.fillRect(-3.2, -6.5, 6.4, 2);
 
-      // Translucent level view strip with ticks
+      // Translucent level view strip with dynamic fluid level & ticks
       ctx.fillStyle = 'rgba(241, 245, 249, 0.72)';
       ctx.fillRect(4.3, -3.2, 1.3, 9.2);
+      if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
+        const maxCap = item.fluidStorage.maxMl || item.fluidStorage.capacityMl || 10000;
+        const fillFrac = Math.min(1, Math.max(0.05, item.fluidStorage.currentMl / maxCap));
+        const liqDef = item.fluidStorage.liquidId
+          ? LIQUID_REGISTRY[item.fluidStorage.liquidId as LiquidId]
+          : undefined;
+        const fluidCol = item.fluidStorage.attributes?.customColor || liqDef?.color || '#38bdf8';
+        const fluidH = 9.2 * fillFrac;
+        ctx.fillStyle = fluidCol;
+        ctx.fillRect(4.3, 6.0 - fluidH, 1.3, fluidH);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.fillRect(4.3, 6.0 - fluidH, 1.3, 0.35);
+      }
       ctx.fillStyle = '#0369a1';
       for (let y = -2.2; y <= 5.2; y += 1.9) {
         ctx.fillRect(3.9, y, 0.75, 0.35);
@@ -2347,11 +2360,29 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.roundRect(-6.5, -4, 13, 11, 2.2);
       ctx.fill();
 
-      // Subtle cool water refraction inside translucent wall
-      ctx.fillStyle = 'rgba(186, 230, 253, 0.35)';
-      ctx.beginPath();
-      ctx.roundRect(-5.8, -1.2, 11.6, 7.6, 1.6);
-      ctx.fill();
+      // Dynamic liquid level inside translucent HDPE wall
+      if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
+        const maxCap = item.fluidStorage.maxMl || item.fluidStorage.capacityMl || 20000;
+        const fillFrac = Math.min(1, Math.max(0.05, item.fluidStorage.currentMl / maxCap));
+        const liqDef = item.fluidStorage.liquidId
+          ? LIQUID_REGISTRY[item.fluidStorage.liquidId as LiquidId]
+          : undefined;
+        const fluidCol = item.fluidStorage.attributes?.customColor || liqDef?.color || '#38bdf8';
+        const maxFluidH = 9.8;
+        const fluidH = maxFluidH * fillFrac;
+        const fluidTop = 6.4 - fluidH;
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(-5.8, -3.4, 11.6, maxFluidH, 1.6);
+        ctx.clip();
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = fluidCol;
+        ctx.fillRect(-5.8, fluidTop, 11.6, fluidH);
+        ctx.globalAlpha = 0.65;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-5.8, fluidTop, 11.6, 0.45);
+        ctx.restore();
+      }
 
       // Blue carry handle & screw cap
       ctx.fillStyle = '#0284c7';
@@ -3000,14 +3031,60 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'berries_basket': {
       drawShadow(ctx, 8, 3.5, 7.5, 0.26);
 
-      // Wicker handle arch
+      // Wicker handle arch (behind items)
       ctx.strokeStyle = '#92400e';
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.arc(0, -1, 6.5, Math.PI, 0);
       ctx.stroke();
 
-      // Woven Basket Body (birch bark / willow wicker)
+      // Dark woven interior cavity at top mouth
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.ellipse(0, -3, 7.3, 2.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Render actual items from item.contents nestled inside basket opening
+      const validContents = (Array.isArray(item?.contents) ? item.contents : []).filter(
+        (inner: any) =>
+          inner &&
+          inner.itemId &&
+          inner.itemId !== 'lukoshko' &&
+          inner.itemId !== 'basket_wicker' &&
+          inner.itemId !== 'berries_basket'
+      );
+      if (validContents.length > 0) {
+        const slots: Array<[number, number, number]> =
+          validContents.length === 1
+            ? [[0, -3.3, 8.2]]
+            : validContents.length === 2
+            ? [[-2.0, -3.2, 7.0], [2.0, -3.1, 7.0]]
+            : [
+                [-3.4, -3.6, 5.6],
+                [0, -4.0, 6.0],
+                [3.4, -3.5, 5.6],
+                [-1.8, -3.1, 5.6],
+                [1.8, -3.0, 5.6],
+                [-4.2, -2.8, 5.0],
+                [4.2, -2.8, 5.0],
+                [0, -2.7, 5.4],
+                [-2.4, -4.2, 5.0],
+                [2.4, -4.2, 5.0]
+              ];
+        const showCount = Math.min(slots.length, validContents.length);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-7.4, -9.2, 14.8, 6.8);
+        ctx.clip();
+        for (let i = 0; i < showCount; i++) {
+          const inner = validContents[i];
+          const [ix, iy, isz] = slots[i];
+          drawItemModel2D(ctx, inner.itemId, ix, iy, isz, inner, true);
+        }
+        ctx.restore();
+      }
+
+      // Woven Basket Body (front wall overlapping lower half of items)
       const wickerGrad = ctx.createLinearGradient(-7, -4, 7, 7);
       wickerGrad.addColorStop(0, '#d97706');
       wickerGrad.addColorStop(0.5, '#b45309');
@@ -3015,7 +3092,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.fillStyle = wickerGrad;
       ctx.beginPath();
       ctx.moveTo(-7.5, -3);
-      ctx.lineTo(7.5, -3);
+      ctx.quadraticCurveTo(0, -1.1, 7.5, -3);
       ctx.lineTo(5.5, 7.5);
       ctx.lineTo(-5.5, 7.5);
       ctx.closePath();
@@ -3025,7 +3102,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.strokeStyle = '#fef3c7';
       ctx.lineWidth = 0.5;
       ctx.beginPath();
-      for (let y = -2; y <= 6; y += 2) {
+      for (let y = -1; y <= 6; y += 2) {
         ctx.moveTo(-6.5 + (y > 0 ? 0.8 : 0), y);
         ctx.lineTo(6.5 - (y > 0 ? 0.8 : 0), y);
       }
@@ -3035,71 +3112,17 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.lineWidth = 0.6;
       for (let x = -5; x <= 5; x += 2.5) {
         ctx.beginPath();
-        ctx.moveTo(x, -3);
+        ctx.moveTo(x, -2.2);
         ctx.lineTo(x * 0.75, 7.5);
         ctx.stroke();
       }
 
-      // Top rim
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.ellipse(0, -3, 7.5, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // Front rim lip arc
       ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 0.7;
+      ctx.lineWidth = 0.95;
+      ctx.beginPath();
+      ctx.ellipse(0, -3, 7.45, 2.1, 0, 0.05, Math.PI - 0.05);
       ctx.stroke();
-
-      // Contents peek inside if item has contents or berries
-      const firstInnerId = item?.contents && item.contents.length > 0 ? item.contents[0].itemId : '';
-      if (firstInnerId.startsWith('mushroom_') || firstInnerId.includes('boletus') || firstInnerId.includes('chanterelle')) {
-        const capColor = firstInnerId.includes('chanterelle') ? '#f59e0b' : (firstInnerId.includes('honey') ? '#b45309' : '#78350f');
-        const caps = [
-          { x: -3.2, y: -3.4, r: 1.7 },
-          { x: 0, y: -3.8, r: 1.9 },
-          { x: 3.0, y: -3.2, r: 1.6 },
-          { x: -1.4, y: -2.5, r: 1.5 },
-          { x: 1.6, y: -2.6, r: 1.5 }
-        ];
-        caps.forEach(m => {
-          ctx.fillStyle = '#fef3c7';
-          ctx.fillRect(m.x - 0.5, m.y, 1.0, 1.4);
-          ctx.fillStyle = capColor;
-          ctx.beginPath();
-          ctx.ellipse(m.x, m.y, m.r, m.r * 0.65, 0, Math.PI, 0);
-          ctx.fill();
-        });
-      } else if (firstInnerId.startsWith('berry_') || firstInnerId.startsWith('berries_') || item?.fluidStorage?.liquidId === 'berries' || itemId === 'berries_basket') {
-        let primaryC = '#4338ca';
-        let secondaryC = '#dc2626';
-        if (firstInnerId.includes('blueberry')) { primaryC = '#1e1b4b'; secondaryC = '#312e81'; }
-        else if (firstInnerId.includes('lingonberry') || firstInnerId.includes('cranberry') || firstInnerId.includes('redcurrant')) { primaryC = '#dc2626'; secondaryC = '#991b1b'; }
-        else if (firstInnerId.includes('raspberry') || firstInnerId.includes('strawberry')) { primaryC = '#e11d48'; secondaryC = '#be123c'; }
-        else if (firstInnerId.includes('blackcurrant')) { primaryC = '#1e1b4b'; secondaryC = '#4c1d95'; }
-        else if (firstInnerId.includes('blackberry')) { primaryC = '#09090b'; secondaryC = '#312e81'; }
-        else if (firstInnerId.includes('sea_buckthorn')) { primaryC = '#f97316'; secondaryC = '#facc15'; }
-        else if (firstInnerId.includes('elderberry')) { primaryC = '#3b0764'; secondaryC = '#7e22ce'; }
-        else if (firstInnerId.includes('cherry')) { primaryC = '#881337'; secondaryC = '#9f1239'; }
-
-        const berries = [
-          { x: -3.5, y: -3.2, c: primaryC, r: 1.2 },
-          { x: -1.5, y: -3.8, c: secondaryC, r: 1.1 },
-          { x: 1.2, y: -3.5, c: primaryC, r: 1.3 },
-          { x: 3.5, y: -3.0, c: secondaryC, r: 1.1 },
-          { x: -0.2, y: -2.8, c: primaryC, r: 1.2 },
-          { x: 2.2, y: -2.7, c: secondaryC, r: 1.0 },
-          { x: -2.2, y: -2.4, c: primaryC, r: 1.1 }
-        ];
-        berries.forEach(b => {
-          ctx.fillStyle = b.c;
-          ctx.beginPath();
-          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = 'rgba(255,255,255,0.35)';
-          ctx.beginPath();
-          ctx.arc(b.x - 0.35, b.y - 0.35, 0.35, 0, Math.PI * 2);
-          ctx.fill();
-        });
-      }
       return true;
     }
 
@@ -3176,6 +3199,33 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
             emblem: 'none',
             cylindrical: false
           });
+        }
+      } else if (Array.isArray(item?.contents) && item.contents.length > 0) {
+        const validBagContents = item.contents.filter(
+          (inner: any) => inner && inner.itemId && inner.itemId !== 'package_bag'
+        );
+        if (validBagContents.length > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(-5.0, -5.8, 10, 12.6, 1.6);
+          ctx.clip();
+          const bagSlots: Array<[number, number, number]> =
+            validBagContents.length === 1
+              ? [[0, 1.4, 11.0]]
+              : [
+                  [-2.0, 2.8, 7.6],
+                  [2.0, 2.6, 7.6],
+                  [0, 0.2, 7.8],
+                  [-1.8, -1.8, 7.0],
+                  [1.8, -1.6, 7.0]
+                ];
+          const showBag = Math.min(bagSlots.length, validBagContents.length);
+          for (let i = 0; i < showBag; i++) {
+            const inner = validBagContents[i];
+            const [bx, by, bsz] = bagSlots[i];
+            drawItemModel2D(ctx, inner.itemId, bx, by, bsz, inner, true);
+          }
+          ctx.restore();
         }
       }
 
@@ -3262,7 +3312,8 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.ellipse(0, -2.2, 7.0, 2.6, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      if (item?.fluidStorage?.currentMl > 0 || itemId === 'soup_bowl') {
+      const hasSoup = item?.fluidStorage ? item.fluidStorage.currentMl > 0 : itemId === 'soup_bowl';
+      if (hasSoup) {
         const soupColor = item?.fluidStorage?.attributes?.customColor || (item?.fluidStorage?.liquidId === 'broth' ? '#b45309' : '#d97706');
         ctx.fillStyle = soupColor;
         ctx.beginPath();
@@ -4429,7 +4480,13 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.stroke();
 
       if (isOpen) {
-        const innerC = item?.fluidStorage?.currentMl ? '#fef9c3' : '#94a3b8';
+        const hasDairyFluid = Boolean(item?.fluidStorage && item.fluidStorage.currentMl > 0);
+        const liqDef = item?.fluidStorage?.liquidId
+          ? LIQUID_REGISTRY[item.fluidStorage.liquidId as LiquidId]
+          : undefined;
+        const innerC = hasDairyFluid
+          ? item?.fluidStorage?.attributes?.customColor || liqDef?.color || '#fef9c3'
+          : '#334155';
         ctx.fillStyle = innerC;
         ctx.beginPath();
         ctx.ellipse(0, topY + 1.2, topW / 2 - 0.5, 1.15, 0, 0, Math.PI * 2);
@@ -4704,30 +4761,47 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.fillRect(-3.6, -6.9, 7.2, 0.38);
       }
 
-      const firstPill = item?.contents?.[0]?.itemId || '';
-      const pillColor = firstPill.includes('charcoal')
-        ? '#18181b'
-        : firstPill.includes('vitamin')
-        ? '#f59e0b'
-        : firstPill.includes('antipyretic')
-        ? '#38bdf8'
-        : item?.labelColor || '#f8fafc';
-
-      const remCount = isEmpty ? 0 : hasContentsArray ? item!.contents!.length : 10;
+      const validPills = hasContentsArray
+        ? item!.contents!.filter((inner: any) => inner && inner.itemId && !inner.itemId.startsWith('blister_pack'))
+        : [];
+      const remCount = isEmpty ? 0 : Math.min(10, validPills.length);
       let idx = 0;
       for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 2; c++) {
           const px = c === 0 ? -2.4 : 2.4;
           const py = -4.8 + r * 2.45;
           if (idx < remCount) {
+            const inner = validPills[idx];
+            const innerId = inner?.itemId || '';
+
             // Raised PVC blister pocket shadow
             ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
             ctx.beginPath();
             ctx.ellipse(px + 0.22, py + 0.28, 1.65, 1.08, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // Lit tablet inside clear dome
-            drawLitEllipse(ctx, px, py, 1.48, 0.95, 0, '#ffffff', pillColor, '#334155', undefined, 0.3);
+            if (innerId.includes('patch')) {
+              ctx.fillStyle = '#fde68a';
+              ctx.beginPath();
+              ctx.roundRect(px - 1.5, py - 0.8, 3.0, 1.6, 0.45);
+              ctx.fill();
+              ctx.fillStyle = '#f8fafc';
+              ctx.fillRect(px - 0.6, py - 0.5, 1.2, 1.0);
+            } else if (innerId.includes('pill_') || innerId === 'painkillers' || innerId === 'antipyretic' || innerId === 'activated_charcoal' || innerId === 'vitamins') {
+              const slotColor = innerId.includes('charcoal')
+                ? '#18181b'
+                : innerId.includes('vitamin')
+                ? '#f59e0b'
+                : innerId.includes('antipyretic')
+                ? '#38bdf8'
+                : innerId.includes('painkiller')
+                ? '#ef4444'
+                : item?.labelColor || '#f8fafc';
+              drawLitEllipse(ctx, px, py, 1.48, 0.95, 0, '#ffffff', slotColor, '#334155', undefined, 0.3);
+            } else {
+              drawItemModel2D(ctx, innerId, px, py, 3.4, inner, true);
+            }
+
             // Dome specular arc
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.78)';
             ctx.lineWidth = 0.32;
@@ -4791,34 +4865,36 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           cylindrical: false
         });
       } else {
-        for (let i = 0; i < 10; i++) {
-          const c = i % 5;
-          const r = Math.floor(i / 5);
-          const ex = -6.0 + c * 3.0;
-          const ey = r === 0 ? -2.2 : 2.2;
+        const maxCells = isQuail ? 18 : 10;
+        for (let i = 0; i < maxCells; i++) {
+          const ex = isQuail ? -6.4 + (i % 6) * 2.56 : -6.0 + (i % 5) * 3.0;
+          const ey = isQuail ? -2.85 + Math.floor(i / 6) * 2.85 : Math.floor(i / 5) === 0 ? -2.2 : 2.2;
           ctx.fillStyle = 'rgba(68, 64, 60, 0.42)';
           ctx.beginPath();
-          ctx.ellipse(ex, ey, 1.25, 1.45, 0, 0, Math.PI * 2);
+          ctx.ellipse(ex, ey, isQuail ? 0.95 : 1.25, isQuail ? 1.12 : 1.45, 0, 0, Math.PI * 2);
           ctx.fill();
         }
-        const hasContentsArray = Array.isArray(item?.contents);
-        const count = hasContentsArray ? Math.min(10, item!.contents!.length) : (itemId === 'egg_carton_10_open' ? 0 : 10);
+        const validEggs = (Array.isArray(item?.contents) ? item.contents : []).filter(
+          (inner: any) => inner && inner.itemId && !inner.itemId.startsWith('egg_carton')
+        );
+        const count = Math.min(maxCells, validEggs.length);
         for (let i = 0; i < count; i++) {
-          const c = i % 5;
-          const r = Math.floor(i / 5);
-          const ex = -6.0 + c * 3.0;
-          const ey = r === 0 ? -2.2 : 2.2;
-          drawLitEllipse(
-            ctx, ex, ey, 1.25, 1.55, 0,
-            isQuail ? '#ffffff' : '#ffedd5',
-            isQuail ? '#e7e5e4' : '#fdba74',
-            isQuail ? '#a8a29e' : '#c2410c',
-            undefined, 0.25
-          );
-          if (isQuail) {
+          const inner = validEggs[i];
+          const innerId = inner.itemId;
+          const ex = isQuail ? -6.4 + (i % 6) * 2.56 : -6.0 + (i % 5) * 3.0;
+          const ey = isQuail ? -2.85 + Math.floor(i / 6) * 2.85 : Math.floor(i / 5) === 0 ? -2.2 : 2.2;
+          if (innerId === 'egg_quail_single' || innerId === 'eggs_quail') {
+            drawLitEllipse(ctx, ex, ey, 0.96, 1.18, 0, '#ffffff', '#e7e5e4', '#a8a29e', undefined, 0.25);
             ctx.fillStyle = '#44403c';
-            ctx.fillRect(ex - 0.5, ey - 0.4, 0.55, 0.55);
-            ctx.fillRect(ex + 0.3, ey + 0.3, 0.5, 0.5);
+            ctx.fillRect(ex - 0.38, ey - 0.32, 0.42, 0.42);
+            ctx.fillRect(ex + 0.18, ey + 0.22, 0.38, 0.38);
+          } else if (innerId === 'egg_chicken_single' || innerId === 'eggs_chicken' || innerId.includes('egg')) {
+            drawLitEllipse(
+              ctx, ex, ey, isQuail ? 1.0 : 1.25, isQuail ? 1.2 : 1.55, 0,
+              '#ffedd5', '#fdba74', '#c2410c', undefined, 0.25
+            );
+          } else {
+            drawItemModel2D(ctx, innerId, ex, ey, isQuail ? 3.0 : 3.8, inner, true);
           }
         }
         if (isQuail) {
@@ -4873,6 +4949,35 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.beginPath();
         ctx.roundRect(-5.6, -5.2, 11.2, 2.2, 0.5);
         ctx.fill();
+
+        const validWok = (Array.isArray(item?.contents) ? item.contents : []).filter(
+          (inner: any) => inner && inner.itemId && inner.itemId !== 'takeout_box_wok'
+        );
+        if (validWok.length > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(-5.6, -8.5, 11.2, 4.6);
+          ctx.clip();
+          const wokSlots: Array<[number, number, number]> =
+            validWok.length === 1
+              ? [[0, -5.3, 7.2]]
+              : validWok.length === 2
+              ? [[-2.0, -5.2, 6.2], [2.0, -5.2, 6.2]]
+              : [
+                  [-3.1, -5.2, 5.4],
+                  [0, -5.6, 5.8],
+                  [3.1, -5.1, 5.4],
+                  [-1.6, -6.1, 5.0],
+                  [1.6, -6.0, 5.0]
+                ];
+          const showWok = Math.min(wokSlots.length, validWok.length);
+          for (let i = 0; i < showWok; i++) {
+            const inner = validWok[i];
+            const [wx, wy, wsz] = wokSlots[i];
+            drawItemModel2D(ctx, inner.itemId, wx, wy, wsz, inner, true);
+          }
+          ctx.restore();
+        }
       } else {
         // Interlocking top pagoda flaps
         ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
@@ -4906,20 +5011,42 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       drawShadow(ctx, w, h * (isOpen ? 0.25 : 0.35), isOpen ? 5.6 : 8.0, isOpen ? 0.18 : 0.24);
 
-      const hasContents = Boolean(item?.contents && item.contents.length > 0);
-      if (hasContents) {
-        const innerItem = item!.contents![0];
-        if (innerItem && innerItem.itemId !== itemId) {
-          ctx.save();
-          ctx.translate(0, 0.4);
-          drawItemModel2D(ctx, innerItem.itemId, 0, 0, 15.5, innerItem, true);
-          ctx.restore();
-        }
-      } else if (!isOpen) {
-        ctx.fillStyle = '#991b1b';
+      const validVacuum = (Array.isArray(item?.contents) ? item.contents : []).filter(
+        (inner: any) =>
+          inner &&
+          inner.itemId &&
+          inner.itemId !== itemId &&
+          !inner.itemId.startsWith('vacuum_pack_') &&
+          !inner.itemId.startsWith('pouch_vacuum') &&
+          !inner.itemId.startsWith('mesh_bag')
+      );
+      if (validVacuum.length > 0) {
+        ctx.save();
         ctx.beginPath();
-        ctx.ellipse(0, 0.5, w * 0.58, h * 0.34, -0.15, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.roundRect(-w + 0.6, -h / 2 + (isOpen ? 2.2 : 0.8), w * 2 - 1.2, h - (isOpen ? 2.8 : 1.6), 1.0);
+        ctx.clip();
+        if (validVacuum.length === 1) {
+          drawItemModel2D(ctx, validVacuum[0].itemId, 0, 0.4, 15.5, validVacuum[0], true);
+        } else {
+          const vacSlots: Array<[number, number, number]> =
+            validVacuum.length === 2
+              ? [[-w * 0.28, -1.2, 10.2], [w * 0.28, 1.5, 10.2]]
+              : [
+                  [-w * 0.34, -h * 0.2, 7.8],
+                  [w * 0.34, -h * 0.18, 7.8],
+                  [-w * 0.32, h * 0.16, 7.8],
+                  [w * 0.32, h * 0.18, 7.8],
+                  [0, -h * 0.02, 7.6],
+                  [0, h * 0.28, 7.4]
+                ];
+          const showVac = Math.min(vacSlots.length, validVacuum.length);
+          for (let i = 0; i < showVac; i++) {
+            const inner = validVacuum[i];
+            const [vx, vy, vsz] = vacSlots[i];
+            drawItemModel2D(ctx, inner.itemId, vx, vy, vsz, inner, true);
+          }
+        }
+        ctx.restore();
       }
 
       const traceBag = () => {
@@ -5035,19 +5162,41 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.stroke();
       }
 
-      const hasContents = Boolean(item?.contents && item.contents.length > 0);
-      if (hasContents) {
-        const inner = item!.contents![0];
-        if (inner && inner.itemId !== itemId) {
-          ctx.save();
-          drawItemModel2D(ctx, inner.itemId, 0, 0, 15, inner, true);
-          ctx.restore();
-        }
-      } else if (!isOpen) {
-        ctx.fillStyle = '#991b1b';
+      const validTray = (Array.isArray(item?.contents) ? item.contents : []).filter(
+        (inner: any) =>
+          inner &&
+          inner.itemId &&
+          inner.itemId !== itemId &&
+          !inner.itemId.startsWith('tray_sealed') &&
+          !inner.itemId.startsWith('tray_plastic')
+      );
+      if (validTray.length > 0) {
+        ctx.save();
         ctx.beginPath();
-        ctx.roundRect(-6.5, -3.8, 13.0, 7.6, 2.0);
-        ctx.fill();
+        ctx.roundRect(-8.0, -5.0, 16.0, 10.0, 1.0);
+        ctx.clip();
+        if (validTray.length === 1) {
+          drawItemModel2D(ctx, validTray[0].itemId, 0, 0, 15, validTray[0], true);
+        } else {
+          const traySlots: Array<[number, number, number]> =
+            validTray.length === 2
+              ? [[-3.4, 0, 9.8], [3.4, 0, 9.8]]
+              : [
+                  [-4.4, -2.0, 6.8],
+                  [0, -2.1, 6.8],
+                  [4.4, -2.0, 6.8],
+                  [-4.4, 2.0, 6.8],
+                  [0, 2.1, 6.8],
+                  [4.4, 2.0, 6.8]
+                ];
+          const showTray = Math.min(traySlots.length, validTray.length);
+          for (let i = 0; i < showTray; i++) {
+            const inner = validTray[i];
+            const [tx, ty, tsz] = traySlots[i];
+            drawItemModel2D(ctx, inner.itemId, tx, ty, tsz, inner, true);
+          }
+        }
+        ctx.restore();
       }
 
       if (!isOpen) {
@@ -5127,14 +5276,33 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
             ctx.ellipse(0, 0.6, 4.1, 3.0, 0, 0, Math.PI * 2);
           },
           () => {
-            if (item?.contents && item.contents.length > 0) {
-              const inner = item.contents[0];
-              if (inner && inner.itemId !== itemId) {
-                drawItemModel2D(ctx, inner.itemId, 0, 0.6, 13.5, inner, true);
+            const validSnack = (Array.isArray(item?.contents) ? item.contents : []).filter(
+              (inner: any) =>
+                inner &&
+                inner.itemId &&
+                inner.itemId !== itemId &&
+                !inner.itemId.startsWith('pouch_sealed_snack') &&
+                !inner.itemId.startsWith('pouch_torn_snack')
+            );
+            if (validSnack.length === 1) {
+              drawItemModel2D(ctx, validSnack[0].itemId, 0, 0.6, 12.5, validSnack[0], true);
+            } else if (validSnack.length > 1) {
+              const snackSlots: Array<[number, number, number]> =
+                validSnack.length === 2
+                  ? [[-1.6, 0.5, 8.2], [1.6, 0.7, 8.2]]
+                  : [
+                      [-1.8, -0.3, 6.8],
+                      [1.8, -0.2, 6.8],
+                      [-1.5, 1.7, 6.8],
+                      [1.6, 1.6, 6.8],
+                      [0, 0.6, 7.0]
+                    ];
+              const showSnack = Math.min(snackSlots.length, validSnack.length);
+              for (let i = 0; i < showSnack; i++) {
+                const inner = validSnack[i];
+                const [sx, sy, ssz] = snackSlots[i];
+                drawItemModel2D(ctx, inner.itemId, sx, sy, ssz, inner, true);
               }
-            } else {
-              drawLitEllipse(ctx, -1.2, 0.3, 1.2, 0.9, 0.2, '#fde68a', '#d97706', '#78350f');
-              drawLitEllipse(ctx, 1.3, 0.8, 1.1, 0.85, -0.3, '#fde68a', '#b45309', '#78350f');
             }
           },
           'rgba(255, 255, 255, 0.65)',
@@ -5175,10 +5343,32 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           ctx.ellipse(0, 1.4, 3.8, 2.5, 0, 0, Math.PI * 2);
         },
         () => {
-          if (item?.contents && item.contents.length > 0) {
-            const inner = item.contents[0];
-            if (inner && inner.itemId !== itemId) {
-              drawItemModel2D(ctx, inner.itemId, 0, 1.4, 11, inner, true);
+          const validSnack = (Array.isArray(item?.contents) ? item.contents : []).filter(
+            (inner: any) =>
+              inner &&
+              inner.itemId &&
+              inner.itemId !== itemId &&
+              !inner.itemId.startsWith('pouch_sealed_snack') &&
+              !inner.itemId.startsWith('pouch_torn_snack')
+          );
+          if (validSnack.length === 1) {
+            drawItemModel2D(ctx, validSnack[0].itemId, 0, 1.4, 11, validSnack[0], true);
+          } else if (validSnack.length > 1) {
+            const snackSlots: Array<[number, number, number]> =
+              validSnack.length === 2
+                ? [[-1.5, 1.3, 7.4], [1.5, 1.5, 7.4]]
+                : [
+                    [-1.7, 0.6, 6.0],
+                    [1.7, 0.7, 6.0],
+                    [-1.4, 2.2, 6.0],
+                    [1.5, 2.1, 6.0],
+                    [0, 1.4, 6.2]
+                  ];
+            const showSnack = Math.min(snackSlots.length, validSnack.length);
+            for (let i = 0; i < showSnack; i++) {
+              const inner = validSnack[i];
+              const [sx, sy, ssz] = snackSlots[i];
+              drawItemModel2D(ctx, inner.itemId, sx, sy, ssz, inner, true);
             }
           }
         },
@@ -5259,13 +5449,16 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           },
           () => {
             if (hasContents) {
-              const offsets: Array<[number, number]> = [[-2.0, 2.0], [2.0, 2.1], [0, 0.4]];
-              const countToShow = Math.min(3, item!.contents!.length);
+              const validBoxPelmeni = item!.contents!.filter((inner: any) => inner && inner.itemId !== itemId);
+              const offsets: Array<[number, number, number]> =
+                validBoxPelmeni.length === 1
+                  ? [[0, 1.4, 11.5]]
+                  : [[-2.1, 2.1, 9.6], [2.1, 2.2, 9.6], [0, 0.3, 9.6], [-2.2, 0.1, 8.6], [2.2, 0.2, 8.6]];
+              const countToShow = Math.min(offsets.length, validBoxPelmeni.length);
               for (let i = 0; i < countToShow; i++) {
-                const inner = item!.contents![i];
-                if (!inner || inner.itemId === itemId) continue;
-                const [ox, oy] = offsets[i];
-                drawItemModel2D(ctx, inner.itemId, ox, oy, 11, inner, true);
+                const inner = validBoxPelmeni[i];
+                const [ox, oy, osz] = offsets[i];
+                drawItemModel2D(ctx, inner.itemId, ox, oy, osz, inner, true);
               }
             }
           },
@@ -5368,13 +5561,16 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         },
         () => {
           if (hasContents) {
-            const offsets: Array<[number, number]> = [[-1.9, 3.1], [1.9, 3.1], [0, 1.5]];
-            const countToShow = Math.min(3, item!.contents!.length);
+            const validBagPelmeni = item!.contents!.filter((inner: any) => inner && inner.itemId !== itemId);
+            const offsets: Array<[number, number, number]> =
+              validBagPelmeni.length === 1
+                ? [[0, 2.5, 11.5]]
+                : [[-2.0, 3.1, 9.6], [2.0, 3.1, 9.6], [0, 1.4, 9.6], [-2.1, 1.5, 8.6], [2.1, 1.5, 8.6]];
+            const countToShow = Math.min(offsets.length, validBagPelmeni.length);
             for (let i = 0; i < countToShow; i++) {
-              const inner = item!.contents![i];
-              if (!inner || inner.itemId === itemId) continue;
-              const [ox, oy] = offsets[i];
-              drawItemModel2D(ctx, inner.itemId, ox, oy, 11, inner, true);
+              const inner = validBagPelmeni[i];
+              const [ox, oy, osz] = offsets[i];
+              drawItemModel2D(ctx, inner.itemId, ox, oy, osz, inner, true);
             }
           }
         },

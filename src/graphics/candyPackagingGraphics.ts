@@ -130,58 +130,47 @@ function drawConfectioneryContents(
   cy: number,
   spreadX: number,
   spreadY: number,
-  labelColor: string,
+  _labelColor: string,
   seed: number = 23
 ) {
-  const contents: any[] = Array.isArray(item?.contents) ? item.contents : [];
-  if (contents.length > 0) {
-    const slots = Math.min(5, contents.length);
-    const coords: Array<[number, number, number, number]> = [
-      [-spreadX * 0.56, -spreadY * 0.25, 9.2, -0.22],
-      [spreadX * 0.54, -spreadY * 0.16, 9.0, 0.26],
-      [0, spreadY * 0.36, 9.5, 0.06],
-      [-spreadX * 0.36, spreadY * 0.48, 8.6, 0.35],
-      [spreadX * 0.38, spreadY * 0.44, 8.6, -0.28]
-    ];
-    for (let i = 0; i < slots; i++) {
-      const inner = contents[i];
-      if (!inner || !inner.itemId || inner.itemId.startsWith('candy_pouch')) continue;
-      const [ox, oy, sz, rot] = coords[i];
-      ctx.save();
-      ctx.translate(cx + ox, cy + oy);
-      ctx.rotate(rot);
-      drawItemModel2D(ctx, inner.itemId, 0, 0, sz, inner, true);
-      ctx.restore();
-    }
-  } else {
-    // Realistic sugar-dusted fruit pectin pastilles
-    const spots: Array<[number, number, number]> = [
-      [-spreadX * 0.45, -spreadY * 0.18, 1.35],
-      [spreadX * 0.38, -spreadY * 0.12, 1.28],
-      [-spreadX * 0.15, spreadY * 0.28, 1.4],
-      [spreadX * 0.48, spreadY * 0.34, 1.22],
-      [-spreadX * 0.52, spreadY * 0.38, 1.18]
-    ];
-    for (let i = 0; i < spots.length; i++) {
-      const [sx, sy, sr] = spots[i];
-      const tone = i % 2 === 0 ? adjustHex(labelColor, 0.25) : adjustHex(labelColor, -0.1);
-      const g = ctx.createRadialGradient(cx + sx - sr * 0.3, cy + sy - sr * 0.3, sr * 0.1, cx + sx, cy + sy, sr);
-      g.addColorStop(0, adjustHex(tone, 0.42));
-      g.addColorStop(0.6, tone);
-      g.addColorStop(1, adjustHex(tone, -0.45));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(cx + sx, cy + sy, sr, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Sugar crystal speckles
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
-      ctx.fillRect(cx + sx - 0.35, cy + sy - 0.25, 0.28, 0.28);
-      ctx.fillRect(cx + sx + 0.25, cy + sy + 0.18, 0.25, 0.25);
-    }
+  const rawContents: any[] = Array.isArray(item?.contents) ? item.contents : [];
+  const contents = rawContents.filter(
+    (inner) => inner && inner.itemId && !inner.itemId.startsWith('candy_pouch')
+  );
+  if (contents.length === 0) {
+    return;
   }
 
-  // Fine sugar / citric dust at bottom seam
+  const coords: Array<[number, number, number, number]> =
+    contents.length === 1
+      ? [[0, spreadY * 0.2, 10.5, 0.08]]
+      : contents.length === 2
+      ? [
+          [-spreadX * 0.34, spreadY * 0.24, 9.5, -0.18],
+          [spreadX * 0.34, spreadY * 0.18, 9.5, 0.2]
+        ]
+      : [
+          [-spreadX * 0.52, -spreadY * 0.22, 8.8, -0.22],
+          [spreadX * 0.5, -spreadY * 0.14, 8.8, 0.26],
+          [0, spreadY * 0.3, 9.2, 0.06],
+          [-spreadX * 0.38, spreadY * 0.48, 8.4, 0.35],
+          [spreadX * 0.38, spreadY * 0.44, 8.4, -0.28],
+          [0, -spreadY * 0.34, 8.4, -0.1],
+          [-spreadX * 0.04, spreadY * 0.04, 8.6, 0.14]
+        ];
+
+  const slots = Math.min(coords.length, contents.length);
+  for (let i = 0; i < slots; i++) {
+    const inner = contents[i];
+    const [ox, oy, sz, rot] = coords[i];
+    ctx.save();
+    ctx.translate(cx + ox, cy + oy);
+    ctx.rotate(rot);
+    drawItemModel2D(ctx, inner.itemId, 0, 0, sz, inner, true);
+    ctx.restore();
+  }
+
+  // Fine sugar / citric dust at bottom seam only when confectionery is inside
   ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
   for (let i = 0; i < 6; i++) {
     const dx = cx + (hash01(seed, i * 2) - 0.5) * spreadX * 1.4;

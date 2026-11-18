@@ -951,6 +951,34 @@ export const DEALERSHIP_CARS: DealershipCarModel[] = [
       { name: 'Highway Gray', hex: '#334155' }
     ],
     descriptionRu: 'Pneumatic tire roller with staggered 8-smooth-tire overlap for pristine finishing compaction on asphalt wearing courses.'
+  },
+  {
+    id: 'deal_excavator_ek12',
+    type: 'excavator_ek12',
+    name: 'TVEX EK-12-20',
+    nameRu: 'ТВЭКС ЕК-12-20',
+    brand: 'ТВЭКС',
+    classType: 'Колёсный полноповоротный экскаватор 13.2 т',
+    year: 2008,
+    engineSpec: 'ММЗ Д-245.12С 4.75 л Турбо (105 л.с.)',
+    powerHp: 105,
+    displacementL: 4.75,
+    fuelType: 'diesel',
+    fuelTypeLabel: 'Дизель',
+    topSpeedKmh: 24,
+    accelSec: 18.0,
+    weightKg: 13200,
+    tankCapacityL: 210,
+    dimensionsM: '6.85 × 2.50 м',
+    hasAutoTrans: false,
+    hasManualTrans: true,
+    priceRub: 2950000,
+    availableColors: [
+      { name: 'Оранжевый ТВЭКС', hex: '#d97706' },
+      { name: 'Жёлтый дорожный', hex: '#eab308' },
+      { name: 'Оливковый ПМК', hex: '#4d7c0f' }
+    ],
+    descriptionRu: 'Отечественный колёсный экскаватор с ковшом 0.65 м³, отвалом 2500 мм, двумя аутригерами и гидравликой 31.5 МПа.'
   }
 ];
 
@@ -1218,14 +1246,16 @@ export const CarDealershipModal: React.FC<Props> = ({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const config = CAR_CONFIGS[currentCar.type] || CAR_CONFIGS.sedan;
-    const scale = Math.min(canvas.width / (config.length * 1.65), canvas.height / (config.width * 2.8));
+    const isExcavator = currentCar.type === 'excavator_ek12';
+    const previewLen = isExcavator ? config.length * 2.15 : config.length * 1.65;
+    const scale = Math.min(canvas.width / previewLen, canvas.height / (config.width * 2.8));
     
     // UNSCALED logical game units for the graphics engine
     const halfL = config.length / 2;
     const halfW = config.width / 2;
 
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.translate(canvas.width / 2 - (isExcavator ? 12 * scale : 0), canvas.height / 2);
     ctx.scale(scale, scale);
 
     // Draw showroom rotating pedestal platform

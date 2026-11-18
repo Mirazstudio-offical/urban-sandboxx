@@ -78,7 +78,7 @@ export function drawItemModel2D(
         const origPkgId = effectiveId;
         effectiveId = legacyPkg.containerId;
         if (!effectiveItem || !effectiveItem.contents) {
-          const previewCount = Math.min(6, legacyPkg.countInside || 1);
+          const previewCount = Math.min(18, legacyPkg.countInside || 1);
           const previewContents = Array.from({ length: previewCount }, (_, idx) => {
             const preset = legacyPkg.innerGummyPresets && legacyPkg.innerGummyPresets.length > 0
               ? legacyPkg.innerGummyPresets[idx % legacyPkg.innerGummyPresets.length]

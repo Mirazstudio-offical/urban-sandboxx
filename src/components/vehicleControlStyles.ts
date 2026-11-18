@@ -18,10 +18,11 @@ export type VehicleControlTheme =
 export function getVehicleControlTheme(carType?: string): VehicleControlTheme {
   if (!carType) return 'standard';
 
-  // 1a. Road Construction Machinery (Rollers, Asphalt Paver - Hydrostatic Drive ГСТ)
+  // 1a. Road Construction Machinery (Rollers, Asphalt Paver, Wheeled Excavator - Hydrostatic Drive ГСТ)
   if (
     carType.startsWith('roller_') ||
-    carType.startsWith('paver_')
+    carType.startsWith('paver_') ||
+    carType.startsWith('excavator_')
   ) {
     return 'machinery';
   }

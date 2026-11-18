@@ -76,6 +76,7 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
     case 'tractor_mtz82':
     case 'tractor_mtz80':
     case 'tractor_mtz80_old':
+    case 'excavator_ek12':
       return 'truck';
 
     case 'retro_bubble':
@@ -323,7 +324,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   const tripOdoKm = (((vehicle.distanceTraveled ?? 0) / 1000) % 1000).toFixed(1);
 
   // Transmission & Gear display
-  const isMachinery = carType.startsWith('roller_') || carType.startsWith('paver_');
+  const isMachinery = carType.startsWith('roller_') || carType.startsWith('paver_') || carType.startsWith('excavator_');
   let currentGearLabel = String(gear);
   if (eng?.transmissionType === 'MANUAL') {
     if (eng.currentGear === -1) currentGearLabel = 'R';

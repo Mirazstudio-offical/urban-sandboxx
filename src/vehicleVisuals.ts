@@ -23,6 +23,7 @@ import {
   renderCompactSidewalkRoller,
   renderPneumaticRoller
 } from './roadMachineryVisuals';
+import { renderExcavatorEK12 } from './excavatorVisuals';
 import {
   renderMotoIzhJupiter,
   renderMotoUralSidecar,
@@ -36,6 +37,7 @@ export {
   renderHeavyTandemRoller,
   renderCompactSidewalkRoller,
   renderPneumaticRoller,
+  renderExcavatorEK12,
   renderMotoIzhJupiter,
   renderMotoUralSidecar,
   renderMotoJawa350,
@@ -1389,6 +1391,11 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   // --- PNEUMATIC TIRE ROAD ROLLER (ПНЕВМОКОЛЕСНЫЙ КАТОК С ЛОМАНАЙ РАМОЙ) ---
   else if (car.type === 'roller_pneumatic') {
     renderPneumaticRoller(vCtx);
+  }
+
+  // --- WHEELED EXCAVATOR (ТВЭКС ЕК-12-20) ---
+  else if (car.type === 'excavator_ek12') {
+    renderExcavatorEK12(vCtx);
   }
 
   // --- MINIBUS (МАРШРУТНОЕ ТАКСИ) ---

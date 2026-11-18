@@ -10954,6 +10954,163 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       }
     }
   },
+  "excavator_ek12": {
+    "id": "deal_excavator_ek12",
+    "type": "excavator_ek12",
+    "name": "TVEX EK-12-20 Wheeled Excavator",
+    "nameRu": "ТВЭКС ЕК-12-20 (Экскаватор)",
+    "brand": "ТВЭКС",
+    "category": "special",
+    "classType": "13.2T Wheeled Hydraulic Excavator",
+    "year": 2008,
+    "descriptionRu": "Полноповоротный колёсный экскаватор 4-й размерной группы ОАО «ТВЭКС». Дизель ММЗ Д-245.12С (105 л.с.), сдвоенный гидронасос 25 МПа, привод 4x4 ГСТ, отвал, задние аутригеры и ковш 0.65 м³.",
+    "priceRub": 4250000,
+    "width": 25,
+    "length": 49,
+    "wheelBase": 28,
+    "mass": 13200,
+    "maxSpeed": 24,
+    "reverseMaxSpeed": 18,
+    "acceleration": 16,
+    "brakingForce": 340,
+    "friction": 0.986,
+    "turnSpeed": 2.6,
+    "maxSteerAngle": 0.56,
+    "minSteerAngle": 0.32,
+    "grip": 0.995,
+    "driftGrip": 0.92,
+    "topSpeedKmh": 24,
+    "powerHp": 105,
+    "accelSec": 18,
+    "displacementL": 4.75,
+    "engineSpec": "ММЗ Д-245.12С 4.75L Turbo-Diesel (105 л.с.)",
+    "driveType": "AWD",
+    "transmission": "AUTO",
+    "gearRatios": [
+      -3.6,
+      0,
+      5.2,
+      2
+    ],
+    "finalDriveRatio": 6.2,
+    "hasTransferCase": false,
+    "powertrainCategory": "machinery",
+    "fuelType": "diesel",
+    "fuelTypeLabel": "Diesel",
+    "tankCapacity": 210,
+    "lpgCapacity": 55,
+    "fuelCapOffset": {
+      "localFFrac": -0.22,
+      "localRFrac": 0.44,
+      "isTrailer": false
+    },
+    "diffCapabilities": {
+      "supported": true,
+      "hasCenter": true,
+      "hasRear": true,
+      "hasFront": false,
+      "systemNameRu": "Блокировка 4x4 ГСТ + балансир",
+      "driveLayoutRu": "Постоянный полный привод 4x4 (9.00-20)"
+    },
+    "headlightConfig": {
+      "bulbType": "halogen_standard",
+      "riseTime": 0.16,
+      "decayTime": 0.24,
+      "colorTemp": "#fef3c7",
+      "hasIgnitionFlicker": false
+    },
+    "turnSignalConfig": {
+      "type": "incandescent_modern",
+      "baseFrequency": 1.48,
+      "dutyCycle": 0.5,
+      "sweepDuration": 0,
+      "hasSideMirrorRepeaters": false,
+      "hasFenderRepeaters": true,
+      "repeaterStyle": "fender_rect",
+      "soundType": "bcm_relay"
+    },
+    "hasRoadTrainLights": false,
+    "bodyPanels": {
+      "hasHood": false,
+      "hasFrontBumper": false,
+      "hasRearBumper": false,
+      "hasFenders": false,
+      "hasDoors": false,
+      "hasTrunk": false
+    },
+    "keyTier": "classic",
+    "requiredKeyType": null,
+    "availableColors": [
+      {
+        "name": "ТВЭКС Охра (Заводской)",
+        "hex": "#d99b1e",
+        "roofHex": "#f8fafc"
+      },
+      {
+        "name": "ТВЭКС Жёлтый Строй",
+        "hex": "#eab308",
+        "roofHex": "#334155"
+      },
+      {
+        "name": "Дорожный Оранжевый",
+        "hex": "#ea580c",
+        "roofHex": "#f8fafc"
+      },
+      {
+        "name": "Коммунальный Зелёный",
+        "hex": "#15803d",
+        "roofHex": "#e2e8f0"
+      }
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.34,
+      "xA": 0.22,
+      "xB": 0.04,
+      "xC": -0.18,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.28,
+      "xEngine": -0.24,
+      "xCore": -0.04,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.34,
+        "yFrac": -0.34
+      },
+      "headlightRight": {
+        "xFrac": 0.34,
+        "yFrac": 0.34
+      },
+      "taillightLeft": {
+        "xFrac": -0.44,
+        "yFrac": -0.36
+      },
+      "taillightRight": {
+        "xFrac": -0.44,
+        "yFrac": 0.36
+      },
+      "fogLightLeft": {
+        "xFrac": 0.36,
+        "yFrac": -0.28
+      },
+      "fogLightRight": {
+        "xFrac": 0.36,
+        "yFrac": 0.28
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
+  },
   "wagon_allroad": {
     "id": "deal_wagon_allroad",
     "type": "wagon_allroad",

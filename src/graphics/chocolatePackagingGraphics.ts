@@ -206,56 +206,34 @@ function drawTemperBarReveal(
   y: number,
   w: number,
   h: number,
-  cols: number,
-  rows: number,
+  _cols: number,
+  _rows: number,
   item?: any
 ) {
-  const firstInner = Array.isArray(item?.contents) && item.contents.length > 0 ? item.contents[0] : null;
-  if (firstInner && firstInner.itemId && !firstInner.itemId.startsWith('chocolate_pack')) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 0.5);
-    ctx.clip();
-    drawItemModel2D(ctx, firstInner.itemId, x + w * 0.5, y + h * 0.5, Math.min(w, h) * 1.35, firstInner, true);
-    ctx.restore();
+  const validContents = (Array.isArray(item?.contents) ? item.contents : []).filter(
+    (inner: any) => inner && inner.itemId && !inner.itemId.startsWith('chocolate_pack')
+  );
+  if (validContents.length === 0) {
     return;
   }
 
-  // Tempered rich Belgian dark-milk chocolate grid with chamfered beveled pips
-  const base = ctx.createLinearGradient(x, y, x + w, y + h);
-  base.addColorStop(0.0, '#451a03');
-  base.addColorStop(0.4, '#3b1806');
-  base.addColorStop(1.0, '#1f0b02');
-  ctx.fillStyle = base;
+  ctx.save();
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 0.45);
-  ctx.fill();
-
-  const pad = 0.4;
-  const cellW = (w - pad * (cols + 1)) / cols;
-  const cellH = (h - pad * (rows + 1)) / rows;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const px = x + pad + c * (cellW + pad);
-      const py = y + pad + r * (cellH + pad);
-      // Beveled square face
-      const pGrad = ctx.createLinearGradient(px, py, px + cellW, py + cellH);
-      pGrad.addColorStop(0.0, '#7c3f1d');
-      pGrad.addColorStop(0.45, '#4a200b');
-      pGrad.addColorStop(1.0, '#230d03');
-      ctx.fillStyle = pGrad;
-      ctx.fillRect(px, py, cellW, cellH);
-
-      // Top/left tempered satin sheen edge
-      ctx.strokeStyle = 'rgba(255, 237, 213, 0.24)';
-      ctx.lineWidth = 0.25;
-      ctx.beginPath();
-      ctx.moveTo(px, py + cellH);
-      ctx.lineTo(px, py);
-      ctx.lineTo(px + cellW, py);
-      ctx.stroke();
+  ctx.roundRect(x, y, w, h, 0.5);
+  ctx.clip();
+  if (validContents.length === 1) {
+    const firstInner = validContents[0];
+    drawItemModel2D(ctx, firstInner.itemId, x + w * 0.5, y + h * 0.5, Math.min(w, h) * 1.35, firstInner, true);
+  } else {
+    const showCount = Math.min(4, validContents.length);
+    const cellW = w / showCount;
+    const sz = Math.min(cellW * 1.25, h * 1.1);
+    for (let i = 0; i < showCount; i++) {
+      const inner = validContents[i];
+      drawItemModel2D(ctx, inner.itemId, x + cellW * (i + 0.5), y + h * 0.5, sz, inner, true);
     }
   }
+  ctx.restore();
 }
 
 function drawGoldRuleLabel(
@@ -341,7 +319,14 @@ function drawMiniFoilWrap(
     ctx.lineWidth = 0.34;
     ctx.strokeRect(-hw, -hh, hw * 2, hh * 2);
   } else {
-    // Open torn foil wings with chocolate square revealed
+    // Open torn foil wings: draw empty inner foil backplate first, then any real contents
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(-hw, -hh, hw * 2, hh * 2, 0.5);
+    ctx.clip();
+    drawFoilSurface(ctx, -hw, -hh, hw * 2, hh * 2, foilColor, 200);
+    ctx.restore();
+
     drawTemperBarReveal(ctx, -hw + 0.5, -hh + 0.4, (hw - 0.5) * 2, 4.4, 2, 1, item);
 
     // Lower paper sleeve & peeled aluminum foil pocket
@@ -917,24 +902,6 @@ function drawGiftBoxTrayContents(
       const inner = contents[idx];
       if (inner && inner.itemId && !inner.itemId.startsWith('chocolate_pack')) {
         drawItemModel2D(ctx, inner.itemId, cx, cy, 8.2, inner, true);
-      } else if (!Array.isArray(item?.contents) || contents.length === 0) {
-        // Artisanal piped ganache truffle pralines
-        const prGrad = ctx.createRadialGradient(cx - 0.5, cy - 0.5, 0.2, cx, cy, cellW * 0.32);
-        prGrad.addColorStop(0.0, idx % 2 === 0 ? '#a16207' : '#fef3c7');
-        prGrad.addColorStop(0.45, idx % 2 === 0 ? '#5c2d16' : '#92400e');
-        prGrad.addColorStop(1.0, '#1f0b02');
-        ctx.fillStyle = prGrad;
-        ctx.beginPath();
-        ctx.arc(cx, cy, Math.min(cellW, cellH) * 0.31, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Delicate tempered drizzle ribbon on top
-        ctx.strokeStyle = idx % 2 === 0 ? '#d97706' : '#291206';
-        ctx.lineWidth = 0.28;
-        ctx.beginPath();
-        ctx.moveTo(cx - 0.8, cy - 0.3);
-        ctx.quadraticCurveTo(cx, cy + 0.6, cx + 0.8, cy - 0.4);
-        ctx.stroke();
       }
       idx++;
     }

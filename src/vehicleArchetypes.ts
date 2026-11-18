@@ -24,6 +24,7 @@ export interface VehicleRenderContext {
   drawDeformedLine: (x1: number, y1: number, x2: number, y2: number, stroke: string, width?: number, isDotted?: boolean) => void;
   drawDeformedCircle: (cx: number, cy: number, r: number, fill: string, stroke?: string, lineWidth?: number) => void;
   nightAlpha: number;
+  renderLayer?: 'chassis' | 'upper' | 'both';
 }
 
 /**
@@ -481,6 +482,22 @@ function getVehicleBasePolygonRaw(
     return [...rotatedFront, ...rawRear, ...rotatedFrontLeft];
   }
 
+  // 9b. WHEELED EXCAVATOR (ТВЭКС ЕК-12-20)
+  if (type === 'excavator_ek12') {
+    const uL = halfL * 0.88;
+    const uW = halfW * 0.96;
+    return [
+      { x: uL, y: -uW * 0.72 },
+      { x: uL * 0.75, y: -uW },
+      { x: -uL * 0.78, y: -uW },
+      { x: -uL, y: -uW * 0.82 },
+      { x: -uL, y: uW * 0.82 },
+      { x: -uL * 0.78, y: uW },
+      { x: uL * 0.75, y: uW },
+      { x: uL, y: uW * 0.72 },
+    ];
+  }
+
   // 10. MOTORCYCLE WITH SIDECAR (Ural M-67)
   if (type === 'moto_ural_sidecar') {
     return [
@@ -757,6 +774,10 @@ export function getVehicleCabinDimensions(
     cabinL = car.length * 0.32;
     cabinW = car.width * 0.92;
     cabinX = -car.length * 0.18;
+  } else if (type === 'excavator_ek12') {
+    cabinL = 13.5;
+    cabinW = 9.4;
+    cabinX = -1.8;
   } else if (type === 'moto_ural_sidecar') {
     cabinL = car.length * 0.48;
     cabinW = car.width * 0.75;
@@ -2053,7 +2074,8 @@ export function isRoadMachinery(type?: string): boolean {
     type === 'paver_asphalt_wheeled' ||
     type === 'roller_heavy_tandem' ||
     type === 'roller_compact_sidewalk' ||
-    type === 'roller_pneumatic'
+    type === 'roller_pneumatic' ||
+    type === 'excavator_ek12'
   );
 }
 

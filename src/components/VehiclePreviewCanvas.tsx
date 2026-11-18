@@ -70,7 +70,8 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
 
     // Use a reference minimum bounding size (44x20 = standard sedan) so small vehicles
     // (mopeds, motorcycles, microcars) look proportionally smaller than sedans, SUVs, and trucks
-    const refLength = Math.max(effLength, 44);
+    const isExcavator = carType === 'excavator_ek12';
+    const refLength = Math.max(isExcavator ? effLength * 1.65 : effLength, 44);
     const refWidth = Math.max(effWidth, 20);
     const scaleX = (canvas.width * 0.78) / (refLength + 10);
     const scaleY = (canvas.height * 0.74) / (refWidth * 2 + 10);
@@ -81,6 +82,9 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       ctx.rotate(angle);
     }
     ctx.scale(scale, scale);
+    if (isExcavator) {
+      ctx.translate(-10, 0);
+    }
 
     // Showroom rotating pedestal platform
     if (showPedestal) {

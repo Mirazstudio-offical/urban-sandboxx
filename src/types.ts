@@ -102,7 +102,8 @@ export type CarType =
   | 'paver_asphalt_wheeled'
   | 'roller_heavy_tandem'
   | 'roller_compact_sidewalk'
-  | 'roller_pneumatic';
+  | 'roller_pneumatic'
+  | 'excavator_ek12';
 
 export type TurnSignalType = 
   | 'incandescent_classic'      // Classic bulb with filament thermal inertia (warm fade in/out, bimetal relay cadence)
@@ -977,6 +978,25 @@ export interface Vehicle {
   craneOperatorActive?: boolean;    // Operator is seated in revolving crane operator cab ("скворечник")
   craneSpotlightOn?: boolean;       // Work spotlight active on crane cab / boom
   craneOutriggersStationOpen?: boolean; // Ground outrigger station panel active
+  // ТВЭКС ЕК-12-20 Wheeled Excavator Hydraulics, Stabilizers, Blade & Arm State
+  exTurretAngle?: number;           // Upper platform yaw angle relative to undercarriage (radians, -PI..PI)
+  exBoomElev?: number;              // Main boom elevation (0.0 deepest dig .. 1.0 raised max height)
+  exStickExt?: number;              // Stick (рукоять) extension (0.0 tucked in .. 1.0 extended out)
+  exBucketCurl?: number;            // Bucket (ковш) curl (0.0 closed/curled .. 1.0 open/dumped)
+  exBladePos?: number;              // Front bulldozer blade position (0.0 raised .. 1.0 lowered/dug)
+  exOutriggersPos?: number;         // Rear hinged stabilizer outriggers (0.0 stowed .. 1.0 deployed on ground)
+  exOutriggersContact?: boolean[];  // [leftPadContact, rightPadContact, bladeContact]
+  exChassisRoll?: number;           // Chassis roll from terrain & stabilizers, radians
+  exChassisPitch?: number;          // Chassis pitch from terrain & stabilizers, radians
+  exAxleOscillationLocked?: boolean;// Front axle balancer hydraulic lock (блокировка качания переднего моста)
+  exHydPressureMpa?: number;        // Live main pump pressure (0..32 MPa; nominal 25 MPa, relief 31.5 MPa)
+  exHydTempC?: number;              // Hydraulic oil HLP-46 temperature in °C
+  exBucketLoad?: number;            // Excavated material volume ratio (0.0 empty .. 1.0 = 0.65 m3 full)
+  exBucketMaterial?: 'soil' | 'sand' | 'mud'; // Material currently inside the bucket
+  exOperatorMode?: boolean;         // false = Ход (driving undercarriage), true = Работа (excavator arm joysticks)
+  exWorkLightOn?: boolean;          // Boom & cab roof halogen work floodlights
+  _exReliefSoundTimer?: number;
+  _exDigCooldown?: number;
   _waterSpraySoundTimer?: number;
   _washSweepTimer?: number;
   _washParticleTimer?: number;
@@ -1601,7 +1621,7 @@ export interface SkidMark {
   treadPattern?: 'street' | 'offroad' | 'heavy_lug' | 'slick';
 }
 
-export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'water' | 'sewage';
+export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'soil' | 'water' | 'sewage';
 
 export interface FluidStain {
   id: string;
@@ -2919,4 +2939,17 @@ export interface InputState {
   craneHookDown?: boolean;
   craneHorn?: boolean;
   craneSpotlightToggle?: boolean;
+  // Excavator (ТВЭКС ЕК-12) operator controls (keyboard, console levers, mobile touch)
+  exSlewLeft?: boolean;
+  exSlewRight?: boolean;
+  exBoomUp?: boolean;
+  exBoomDown?: boolean;
+  exStickOut?: boolean;
+  exStickIn?: boolean;
+  exBucketCurl?: boolean;
+  exBucketDump?: boolean;
+  exBladeUp?: boolean;
+  exBladeDown?: boolean;
+  exStabilizersDown?: boolean;
+  exStabilizersUp?: boolean;
 }

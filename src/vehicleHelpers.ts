@@ -841,6 +841,9 @@ export function getVehicleAxleGeometry(car: { type: string; length?: number; fra
   } else if (isMoto) {
     rearAxleOffsetRatio = 0.68;
     frontAxleOffsetRatio = 0.70;
+  } else if (car.type === 'excavator_ek12') {
+    rearAxleOffsetRatio = 0.57; // 2750 mm symmetric wheelbase
+    frontAxleOffsetRatio = 0.57;
   } else if (isHeavyTruck) {
     rearAxleOffsetRatio = 0.65;
     frontAxleOffsetRatio = 0.72;

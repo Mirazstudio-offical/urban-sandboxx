@@ -1,4 +1,4 @@
-import { isPtoOn } from './ptoSystem';
+import { isPtoOn, togglePto, vehicleHasPto } from './ptoSystem';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { setDisplaySettings } from './displaySettings';
 import { 
@@ -109,9 +109,11 @@ import { Minimap } from './components/Minimap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { TruckSuperstructureHUD } from './components/TruckSuperstructureHUD';
+import { ExcavatorHUD } from './components/ExcavatorHUD';
 import { CraneOutriggersModal } from './components/CraneOutriggersModal';
 import { VacuumPumpModal } from './components/VacuumPumpModal';
 import { isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
+import { getExcavatorGeometry, isExcavatorVehicle } from './excavatorSystem';
 import { toggleCraneHookAttach } from './physics';
 import { MainMenu } from './components/MainMenu';
 import { GameLoadingScreen, type LoadingScreenState } from './components/GameLoadingScreen';
@@ -2452,7 +2454,9 @@ export default function App() {
       if (code === 'ShiftLeft'|| code === 'ShiftRight') inputRef.current.sprint = true;
       if (code === 'KeyH') {
         const p = playerRef.current;
-        if (p && p.isInVehicle && p.craneOperatorActive) {
+        const w = worldRef.current;
+        const curVeh = w?.vehicles.find(v => v.id === p?.currentVehicleId);
+        if (p && p.isInVehicle && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))) {
           sound.playCraneHorn();
           e.preventDefault();
           return;
@@ -2463,7 +2467,9 @@ export default function App() {
       // Turn Signals & Interaction / Consumption (Q = Left turn signal in car or Swap / Toggle Active Hand on foot, E = Interact / Use in active hand, Z = Hazard)
       if (code === 'KeyQ') {
         const p = playerRef.current;
-        if (p && p.isInVehicle && p.craneOperatorActive) {
+        const w = worldRef.current;
+        const curVeh = w?.vehicles.find(v => v.id === p?.currentVehicleId);
+        if (p && p.isInVehicle && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))) {
           inputRef.current.craneBoomRetract = true;
           sound.playHydraulicHiss(0.18);
           e.preventDefault();
@@ -2483,7 +2489,9 @@ export default function App() {
           return;
         }
         const p = playerRef.current;
-        if (p && p.isInVehicle && p.craneOperatorActive) {
+        const w = worldRef.current;
+        const curVeh = w?.vehicles.find(v => v.id === p?.currentVehicleId);
+        if (p && p.isInVehicle && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))) {
           inputRef.current.craneBoomExtend = true;
           sound.playHydraulicHiss(0.18);
           e.preventDefault();
@@ -2494,7 +2502,9 @@ export default function App() {
       if (code === 'KeyR') {
         if (e.repeat) return;
         const p = playerRef.current;
-        if (p && p.isInVehicle && p.craneOperatorActive) {
+        const w = worldRef.current;
+        const curVeh = w?.vehicles.find(v => v.id === p?.currentVehicleId);
+        if (p && p.isInVehicle && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))) {
           inputRef.current.craneHookUp = true;
           sound.playHydraulicHiss(0.18);
           e.preventDefault();
@@ -2513,6 +2523,19 @@ export default function App() {
       // Window Open / Close toggle (O key)
       if (code === 'KeyO') {
         handleToggleWindow();
+      }
+
+      // PTO / КОМ Toggle (P key)
+      if (code === 'KeyP' && !e.repeat) {
+        const p = playerRef.current;
+        const w = worldRef.current;
+        const currentVeh = w?.vehicles.find((v) => v.id === p?.currentVehicleId);
+        if (p && p.isInVehicle && currentVeh && vehicleHasPto(currentVeh)) {
+          togglePto(currentVeh, p);
+          setVitalsRefreshTick((t) => t + 1);
+          e.preventDefault();
+          return;
+        }
       }
 
 
@@ -2556,6 +2579,21 @@ export default function App() {
             p,
             msg,
             currentVeh.isWashingNozzlesActive ? 'info': 'warning');
+          e.preventDefault();
+          return;
+        }
+
+        if (code === 'KeyG' && p && p.isInVehicle && currentVeh && isExcavatorVehicle(currentVeh)) {
+          currentVeh.exOperatorMode = !currentVeh.exOperatorMode;
+          sound.playButtonPress();
+          addPlayerNotification(
+            p,
+            currentVeh.exOperatorMode
+              ? 'ТВЭКС ЕК-12: режим работы (джойстики: WASD / Q E / R Пробел)'
+              : 'ТВЭКС ЕК-12: транспортный режим (ход)',
+            'info',
+          );
+          setVitalsRefreshTick((t) => t + 1);
           e.preventDefault();
           return;
         }
@@ -3363,6 +3401,14 @@ export default function App() {
               camera.targetY = cGeom.worldTurretY + Math.sin(cGeom.worldBoomAngle) * camWorkDist;
               camera.targetAngle = veh.angle;
               camera.targetZoom = 1.25 * userZoomFactorRef.current;
+            } else if (isExcavatorVehicle(veh) && veh.exOperatorMode) {
+              const exGeom = getExcavatorGeometry(veh);
+              player.x = veh.x;
+              player.y = veh.y;
+              camera.targetX = exGeom.worldTurretX + (exGeom.worldBucketX - exGeom.worldTurretX) * 0.34;
+              camera.targetY = exGeom.worldTurretY + (exGeom.worldBucketY - exGeom.worldTurretY) * 0.34;
+              camera.targetAngle = veh.angle;
+              camera.targetZoom = 1.22 * userZoomFactorRef.current;
             } else {
               player.x = veh.x;
               player.y = veh.y;
@@ -4773,6 +4819,21 @@ export default function App() {
           }
           addPlayerNotification(player, 'Вы спустились из кабины крановщика на землю.', 'info');
         } else {
+          if (isExcavatorVehicle(veh)) {
+            veh.exOperatorMode = false;
+            inputRef.current.exSlewLeft = false;
+            inputRef.current.exSlewRight = false;
+            inputRef.current.exBoomUp = false;
+            inputRef.current.exBoomDown = false;
+            inputRef.current.exStickOut = false;
+            inputRef.current.exStickIn = false;
+            inputRef.current.exBucketCurl = false;
+            inputRef.current.exBucketDump = false;
+            inputRef.current.exBladeUp = false;
+            inputRef.current.exBladeDown = false;
+            inputRef.current.exStabilizersDown = false;
+            inputRef.current.exStabilizersUp = false;
+          }
           // Position player to driver-side door
           const doorAngle = veh.angle - Math.PI / 2;
           player.x = veh.x + Math.cos(doorAngle) * (veh.width / 2 + 18);
@@ -6475,11 +6536,14 @@ export default function App() {
         />
       </div>
 
-      {/* BOTTOM-CENTER DETAILED VEHICLE INSTRUMENT CLUSTER (phones: the crane cab levers take this spot) */}
-      {isInVehicle && !(isMobileTouch && playerRef.current?.craneOperatorActive) && (() => {
+      {/* BOTTOM-CENTER DETAILED VEHICLE INSTRUMENT CLUSTER (phones: cab levers take this spot) */}
+      {isInVehicle && (() => {
         const playerCar = worldRef.current && playerRef.current
           ? worldRef.current.vehicles.find((v) => v.id === playerRef.current.currentVehicleId) || null
           : null;
+        if (isMobileTouch && (playerRef.current?.craneOperatorActive || (playerCar && isExcavatorVehicle(playerCar) && playerCar.exOperatorMode))) {
+          return null;
+        }
         return (
           <SpeedometerHUD
             vehicle={playerCar}
@@ -6583,6 +6647,15 @@ export default function App() {
         }}
       />
 
+      {/* TVEX EK-12 WHEELED EXCAVATOR OPERATOR CONSOLE (DESKTOP + MOBILE) */}
+      <ExcavatorHUD
+        player={playerRef.current}
+        world={worldRef.current}
+        inputRef={inputRef}
+        isMobileTouch={isMobileTouch}
+        onForceUpdate={() => setVitalsRefreshTick((t) => t + 1)}
+      />
+
       {/* MOBILE ORIENTATION GUARD */}
       <LandscapeGuard />
 
@@ -6595,7 +6668,12 @@ export default function App() {
         return (
           <MobileTouchControls
             inputRef={inputRef}
-            hideDriveControls={Boolean(isInVehicle && (playerRef.current?.craneOperatorActive || playerCar?.craneOperatorActive))}
+            hideDriveControls={Boolean(
+              isInVehicle &&
+              (playerRef.current?.craneOperatorActive ||
+                playerCar?.craneOperatorActive ||
+                (playerCar && isExcavatorVehicle(playerCar) && playerCar.exOperatorMode))
+            )}
             isInVehicle={isInVehicle}
             isNearVehicle={Boolean(nearbyCarPrompt)}
             onEnterExitVehicle={handleInteract}

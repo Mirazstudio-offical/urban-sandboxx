@@ -334,24 +334,24 @@ function drawOpenPaperPackaging(
   ctx.fill();
   drawMicroBarcode(ctx, -1.4, 3.6, 2.8, 1.0);
 
-  // Render contents inside open paper (butter slab / cheese wedge / curds)
-  if (Array.isArray(item?.contents) && item.contents.length > 0) {
-    const inner = item.contents[0];
-    if (inner && inner.itemId && !inner.itemId.startsWith('paper_packaging')) {
-      drawItemModel2D(ctx, inner.itemId, 0, 0, 12.5, inner, true);
+  // Render contents inside open paper only when actual items exist
+  const validContents = (Array.isArray(item?.contents) ? item.contents : []).filter(
+    (inner: any) => inner && inner.itemId && !inner.itemId.startsWith('paper_packaging')
+  );
+  if (validContents.length === 1) {
+    const inner = validContents[0];
+    drawItemModel2D(ctx, inner.itemId, 0, 0, 12.5, inner, true);
+  } else if (validContents.length > 1) {
+    const slots: Array<[number, number]> =
+      validContents.length === 2
+        ? [[-2.4, -0.3], [2.4, 0.4]]
+        : [[-2.3, -1.0], [2.3, -0.8], [-1.8, 1.3], [2.1, 1.4]];
+    const count = Math.min(slots.length, validContents.length);
+    for (let i = 0; i < count; i++) {
+      const inner = validContents[i];
+      const [ox, oy] = slots[i];
+      drawItemModel2D(ctx, inner.itemId, ox, oy, 8.8, inner, true);
     }
-  } else {
-    // Rich golden butter pat left on open wrapper if no explicit contents array
-    const butterGrad = ctx.createLinearGradient(-3.0, -1.4, 3.0, 1.8);
-    butterGrad.addColorStop(0.0, '#fef9c3');
-    butterGrad.addColorStop(0.5, '#fde047');
-    butterGrad.addColorStop(1.0, '#eab308');
-    ctx.fillStyle = butterGrad;
-    ctx.beginPath();
-    ctx.roundRect(-2.8, -1.2, 5.6, 2.8, 0.4);
-    ctx.fill();
-    ctx.fillStyle = '#ca8a04';
-    ctx.fillRect(-2.8, 1.2, 5.6, 0.55);
   }
 
   ctx.restore();
