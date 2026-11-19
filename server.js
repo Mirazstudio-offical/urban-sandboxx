@@ -9,7 +9,19 @@ const distDir = path.join(__dirname, 'dist');
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
-app.use(express.static(distDir));
+app.use(express.static(distDir, {
+  etag: true,
+  lastModified: true,
+  setHeaders(res, filePath) {
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      // Hashed Vite chunks are immutable
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (filePath.endsWith(`${path.sep}map.json`)) {
+      // Allow browser + IndexedDB HEAD revalidation without re-downloading 11 MB unnecessarily
+      res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
+    }
+  }
+}));
 
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {

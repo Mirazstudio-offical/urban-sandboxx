@@ -202,35 +202,45 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
   }
 ];
 
+function cloneBaseCityApartments(): PropertyApartment[] {
+  return JSON.parse(JSON.stringify(CITY_APARTMENTS));
+}
+
 // In-memory active apartments storage
-let currentCityApartments: PropertyApartment[] = [...CITY_APARTMENTS];
+let currentCityApartments: PropertyApartment[] = cloneBaseCityApartments();
 
 export function getCityApartments(): PropertyApartment[] {
   return currentCityApartments;
 }
 
-export function initializeCityApartmentsFromWorld(world: GameWorld): void {
-  // Preserve any modified state (isLocked, isOwned, dynamicFurniture, etc.) from existing session
+export function resetCityApartmentsForWorld(world: GameWorld): void {
+  initializeCityApartmentsFromWorld(world, false);
+}
+
+export function initializeCityApartmentsFromWorld(world: GameWorld, preserveExisting: boolean = false): void {
+  // Only carry over existing apartment state when explicitly requested; by default each fresh map starts pristine
   const stateMap = new Map<string, Partial<PropertyApartment>>();
-  if (Array.isArray(currentCityApartments)) {
+  if (preserveExisting && Array.isArray(currentCityApartments)) {
     for (const a of currentCityApartments) {
       stateMap.set(a.id, {
         isLocked: a.isLocked,
         isOwned: a.isOwned,
         ownerName: a.ownerName,
         purchaseDate: a.purchaseDate,
-        dynamicFurniture: a.dynamicFurniture
+        dynamicFurniture: a.dynamicFurniture ? JSON.parse(JSON.stringify(a.dynamicFurniture)) : undefined
       });
     }
   }
 
-  const dynamicApartments: PropertyApartment[] = [...CITY_APARTMENTS];
+  const dynamicApartments: PropertyApartment[] = cloneBaseCityApartments();
 
-  // Apply saved state to base apartments
-  for (const apt of dynamicApartments) {
-    const saved = stateMap.get(apt.id);
-    if (saved) {
-      Object.assign(apt, saved);
+  // Apply saved state to base apartments only if preserving
+  if (preserveExisting) {
+    for (const apt of dynamicApartments) {
+      const saved = stateMap.get(apt.id);
+      if (saved) {
+        Object.assign(apt, saved);
+      }
     }
   }
 

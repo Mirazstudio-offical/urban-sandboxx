@@ -8,9 +8,9 @@ import { performanceConfig, savePerformanceConfig, DEFAULT_CONFIG, detectGraphic
 import { GFX_GROUPS, GFX_PRESET_OPTIONS, GfxItem, applyGfxPatch, applyGfxPreset } from '../graphicsSettings';
 import { sound } from '../audio';
 import { onlineManager } from '../onlineSystem';
+import { openHostSession } from '../hostSession';
 import {
   subscribeToP2PServers,
-  createP2PServerDoc,
   subscribeToFriends,
   fetchUserProfile,
   loginWithGoogle,
@@ -41,6 +41,11 @@ export interface SaveSlotData {
   mode?: 'career' | 'freeroam';
   vehicleType?: string;
   vehicleName?: string;
+  worldId?: string;
+  origin?: 'singleplayer' | 'server';
+  serverRoomCode?: string;
+  serverName?: string;
+  isAutosave?: boolean;
 }
 
 export interface MainMenuProps {
@@ -49,6 +54,7 @@ export interface MainMenuProps {
   onResume: () => void;
   saves: SaveSlotData[];
   onLoadSave: (saveId: string) => void;
+  onLoadSaveAsSingleplayer?: (saveId: string) => void;
   onDeleteSave: (saveId: string) => void;
   onNewGame: (options: {
     spawnId: string;
@@ -60,6 +66,26 @@ export interface MainMenuProps {
     vehicleColor?: string;
     powertrain?: PowertrainSelection;
   }) => void;
+  onJoinServer?: (options: {
+    roomCode: string;
+    nickname: string;
+    serverName?: string;
+    gameMode?: string;
+  }) => Promise<void> | void;
+  onCreateServer?: (options: {
+    roomCode: string;
+    serverName: string;
+    nickname: string;
+    gameMode: string;
+    maxPlayers: number;
+    trafficEnabled: boolean;
+    vehicleCount: number;
+    pedestrianCount: number;
+    passwordRequired: boolean;
+    password: string;
+    savePlayerData: boolean;
+    antiCheat: 'none' | 'moderate' | 'strict';
+  }) => Promise<void> | void;
   currentSettings: {
     fpsLimit: number;
     autoSaveInterval: number;
@@ -240,8 +266,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onResume,
   saves = [],
   onLoadSave,
+  onLoadSaveAsSingleplayer,
   onDeleteSave,
   onNewGame,
+  onJoinServer,
+  onCreateServer,
   currentSettings,
   onUpdateSettings,
   currentUser
@@ -329,7 +358,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const scrCls = 'scr on' + (back ? ' b' : '') + (out ? ' out' : '');
 
   /* ---------- saves ---------- */
-  const [saveModeFilter, setSaveModeFilter] = useState<'all' | 'career' | 'freeroam'>('all');
+  const [saveModeFilter, setSaveModeFilter] = useState<'all' | 'career' | 'freeroam' | 'server'>('all');
   const [selectedSaveId, setSelectedSaveId] = useState<string>(saves[0]?.id || '');
   useEffect(() => {
     if (saves.length > 0 && (!selectedSaveId || !saves.some(s => s.id === selectedSaveId))) setSelectedSaveId(saves[0].id);
@@ -337,11 +366,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   const filteredSaves = saves.filter(s => {
     if (saveModeFilter === 'all') return true;
+    if (saveModeFilter === 'server') return s.origin === 'server';
+    if (s.origin === 'server') return false;
     const m = s.mode || 'career';
     return m === saveModeFilter;
   });
-  const careerSavesCount = saves.filter(s => (s.mode || 'career') === 'career').length;
-  const freeroamSavesCount = saves.filter(s => s.mode === 'freeroam').length;
+  const careerSavesCount = saves.filter(s => s.origin !== 'server' && (s.mode || 'career') === 'career').length;
+  const freeroamSavesCount = saves.filter(s => s.origin !== 'server' && s.mode === 'freeroam').length;
+  const serverSavesCount = saves.filter(s => s.origin === 'server').length;
 
   const selectedSave = filteredSaves.find(s => s.id === selectedSaveId) || filteredSaves[0] || saves.find(s => s.id === selectedSaveId) || saves[0] || null;
   const lastSave = saves[0] || null;
@@ -376,9 +408,18 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   });
   const selectedServer = filteredServers.find(s => s.id === selectedServerId) || filteredServers[0] || null;
 
-  const connectTo = (code: string) => {
+  const connectTo = (code: string, meta?: { serverName?: string; gameMode?: string }) => {
     const clean = onlineManager.sanitizeRoomCode(code);
     if (!clean) return;
+    if (onJoinServer) {
+      void onJoinServer({
+        roomCode: clean,
+        nickname,
+        serverName: meta?.serverName,
+        gameMode: meta?.gameMode
+      });
+      return;
+    }
     onlineManager.joinOrCreateRoom(clean, nickname, false);
     onResume();
   };
@@ -402,7 +443,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     setCreating(true);
     try {
       const clean = onlineManager.sanitizeRoomCode(hostCode);
-      const settings = {
+      const serverPayload = {
+        roomCode: clean,
+        serverName: hostName.trim() || 'Сервер ' + nickname,
+        nickname,
+        gameMode: hostMode,
+        maxPlayers: hostMax,
         trafficEnabled,
         vehicleCount,
         pedestrianCount,
@@ -411,25 +457,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         savePlayerData,
         antiCheat
       };
-      await createP2PServerDoc({
-        name: hostName.trim() || 'Сервер ' + nickname,
-        peerId: clean,
-        hostUid: currentUser?.uid || 'guest_' + Date.now(),
-        hostName: nickname,
-        mapName: 'Flatbody 2D',
-        gameMode: hostMode,
-        isPrivate: passwordRequired,
-        currentPlayers: 1,
-        maxPlayers: hostMax,
-        status: 'active',
-        trafficEnabled,
-        vehicleCount,
-        pedestrianCount,
-        hasPassword: passwordRequired,
-        savePlayerData,
-        antiCheat
+      if (onCreateServer) {
+        await onCreateServer(serverPayload);
+        return;
+      }
+      await openHostSession({
+        access: 'all',
+        mapName: 'flatbody',
+        ...serverPayload
       });
-      onlineManager.joinOrCreateRoom(clean, nickname, true, passwordRequired ? password : undefined, settings);
       onResume();
     } catch (err) {
       console.error('Failed to create server', err);
@@ -625,7 +661,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   <button className="menu-i cn sl d2" onClick={() => go('new')} style={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <Ic><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></Ic>
-                      <span>Карьера (Carrier)</span>
+                      <span>Карьера (Career)</span>
                     </div>
                     <span className="mut" style={{ font: "400 12px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0, paddingLeft: 36 }}>Трафик, пешеходы, погода, экономика</span>
                   </button>
@@ -658,11 +694,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{lastSave ? lastSave.name : 'Flatbody'}</div>
+                    <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{lastSave ? lastSave.name : 'flatbody'}</div>
                     <div className="mut" style={{ display: 'flex', gap: 20, marginTop: 10, fontSize: 13 }}>
                       {lastSave ? (
                         <>
-                          <span>Локация: {lastSave.streetName || 'Flatbody'}</span>
+                          <span>Локация: {lastSave.streetName || 'flatbody'}</span>
                           <span>{lastSave.isInVehicle ? 'В автомобиле' : 'Пешком'}</span>
                           {lastSave.cash !== undefined && <span>{lastSave.cash.toLocaleString('ru-RU')} ₽</span>}
                         </>
@@ -709,38 +745,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     {authError && (
                       <div className="panel st" style={{ padding: '16px 20px', borderColor: 'rgba(224,171,69,.4)', background: 'rgba(224,171,69,.06)', marginTop: -6 }}>
                         <div style={{ color: '#e0ab45', fontWeight: 600, fontSize: 14 }}>{authError}</div>
-                        {(authError.includes('авторизованных доменов') || authError.includes('Authorized domains')) && (
-                          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <div className="mut" style={{ fontSize: 13 }}>
-                              Добавьте домен ниже в консоли Firebase (Authentication → Settings → Authorized domains):
-                            </div>
-                            <div className="row2" style={{ alignItems: 'center', gap: 10 }}>
-                              <span style={{ fontFamily: 'ui-monospace,monospace', background: 'rgba(0,0,0,.45)', padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,.12)', fontSize: 13, color: '#fff', userSelect: 'all' }}>
-                                {typeof window !== 'undefined' ? window.location.hostname : ''}
-                              </span>
-                              <button
-                                className="btn btn-s"
-                                style={{ height: 34, fontSize: 13 }}
-                                onClick={() => {
-                                  if (typeof window !== 'undefined') {
-                                    navigator.clipboard.writeText(window.location.hostname);
-                                  }
-                                }}
-                              >
-                                Копировать
-                              </button>
-                              <a
-                                href="https://console.firebase.google.com/project/gen-lang-client-0888101069/authentication/settings"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn btn-p"
-                                style={{ height: 34, fontSize: 13, textDecoration: 'none' }}
-                              >
-                                Открыть Firebase Console
-                              </a>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
                     <div style={{ display: 'flex', gap: 20 }}>
@@ -840,7 +844,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     ) : filteredServers.map(s => {
                       const cp = s.currentPlayers || 1, mp = s.maxPlayers || 8;
                       return (
-                        <button key={s.id} className={'row rw' + (selectedServer?.id === s.id ? ' row-on' : '')} onClick={() => setSelectedServerId(s.id || '')} onDoubleClick={() => connectTo(s.peerId)}>
+                        <button key={s.id} className={'row rw' + (selectedServer?.id === s.id ? ' row-on' : '')} onClick={() => setSelectedServerId(s.id || '')} onDoubleClick={() => connectTo(s.peerId, { serverName: s.name, gameMode: s.gameMode })}>
                           <span className="rowdot"><span className="dot" style={{ background: s.status === 'active' ? '#7fbf6a' : '#e0ab45' }} /></span>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
@@ -860,11 +864,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       <div style={{ padding: '18px 8px 0', flex: 1 }}>
                         <div className="cn mut" style={{ fontSize: 12 }}>Выбранный сервер</div>
                         <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4, lineHeight: 1.1 }}>{selectedServer.name}</div>
-                        <div className="mut" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.45 }}>Прямое P2P-подключение к хосту. Хост должен оставаться в игре, пока подключены игроки.</div>
+                        <div className="mut" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.45 }}>Отдельный мир сервера: прогресс изолирован от одиночных сохранений и синхронизируется с хостом.</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginTop: 20, fontSize: 14 }}>
                           <div><div className="mut" style={{ fontSize: 12 }}>Хост</div>{selectedServer.hostName}</div>
                           <div><div className="mut" style={{ fontSize: 12 }}>Код комнаты</div>{selectedServer.peerId}</div>
-                          <div><div className="mut" style={{ fontSize: 12 }}>Карта</div>{selectedServer.mapName || 'Flatbody'}</div>
+                          <div><div className="mut" style={{ fontSize: 12 }}>Карта</div>{selectedServer.mapName || 'flatbody'}</div>
                           <div><div className="mut" style={{ fontSize: 12 }}>Режим</div>{modeName(selectedServer.gameMode)}</div>
                         </div>
                         <div style={{ marginTop: 20 }}>
@@ -873,7 +877,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 12, padding: '0 8px 8px' }}>
-                        <button className="btn btn-p" style={{ flex: 1 }} onClick={() => connectTo(selectedServer.peerId)}>Подключиться</button>
+                        <button className="btn btn-p" style={{ flex: 1 }} onClick={() => connectTo(selectedServer.peerId, { serverName: selectedServer.name, gameMode: selectedServer.gameMode })}>Подключиться</button>
                       </div>
                     </>
                   ) : (
@@ -978,7 +982,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 <div className="tabs st d1">
                   <div className="row2" style={{ gap: 6 }}>
                     <button className={'tab cn' + (saveModeFilter === 'all' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('all')}>
-                      Все сохранения ({saves.length})
+                      Все миры ({saves.length})
                     </button>
                     <button className={'tab cn' + (saveModeFilter === 'career' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('career')}>
                       Карьера ({careerSavesCount})
@@ -986,21 +990,29 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <button className={'tab cn' + (saveModeFilter === 'freeroam' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('freeroam')}>
                       Freeroam ({freeroamSavesCount})
                     </button>
+                    <button className={'tab cn' + (saveModeFilter === 'server' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('server')}>
+                      Серверы ({serverSavesCount})
+                    </button>
                   </div>
                   <div className="mut" style={{ paddingBottom: 12, fontSize: 13 }}>Показано: {filteredSaves.length}</div>
                 </div>
                 <div className="a scroll mc-saves" style={{ left: 64, top: 182, width: 1312, height: 584, display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 280, gap: 20, alignContent: 'start' }}>
                   {filteredSaves.map((v, i) => (
                     <button key={v.id} className={'card st d' + Math.min(i + 1, 9) + (v.id === selectedSave?.id ? ' card-on' : '')} onClick={() => setSelectedSaveId(v.id)} onDoubleClick={() => onLoadSave(v.id)}>
-                      <div className={'th ' + thumbAt(v.mode === 'freeroam' ? 5 : i)} style={{ height: 166, position: 'relative' }}>
+                      <div className={'th ' + thumbAt(v.origin === 'server' ? 3 : v.mode === 'freeroam' ? 5 : i)} style={{ height: 166, position: 'relative' }}>
                         <span className={'mode-badge ' + (v.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')} style={{ position: 'absolute', top: 10, right: 10 }}>
-                          {v.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
+                          {v.origin === 'server' ? 'Сервер' : v.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
                         </span>
+                        {v.isAutosave && (
+                          <span className="mode-badge" style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(15,23,42,0.78)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.14)' }}>
+                            Авто
+                          </span>
+                        )}
                       </div>
                       <div style={{ padding: '14px 16px' }}>
                         <div className="cn" style={{ fontSize: 20, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</div>
                         <div className="meta">
-                          <span>{v.streetName || 'Flatbody'}</span>
+                          <span>{v.origin === 'server' && v.serverRoomCode ? 'Комната: ' + v.serverRoomCode : (v.streetName || 'flatbody')}</span>
                           <span>{v.isInVehicle ? 'В авто' : 'Пешком'}</span>
                         </div>
                         <div className="meta">
@@ -1026,13 +1038,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     Выбрано: <span style={{ color: '#e9e6df', fontWeight: 600 }}>{selectedSave ? selectedSave.name : '—'}</span>
                     {selectedSave && (
                       <span className={'mode-badge ' + (selectedSave.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')} style={{ marginLeft: 12 }}>
-                        {selectedSave.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
+                        {selectedSave.origin === 'server' ? 'Сервер' : selectedSave.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
                       </span>
                     )}
                   </div>
                   <div className="row2">
                     <button className="btn btn-s" style={{ color: '#e08a70' }} disabled={!selectedSave}
                       onClick={() => { if (selectedSave && window.confirm(`Удалить сохранение «${selectedSave.name}»?`)) onDeleteSave(selectedSave.id); }}>Удалить</button>
+                    {selectedSave?.origin === 'server' && onLoadSaveAsSingleplayer && (
+                      <button className="btn btn-s" onClick={() => onLoadSaveAsSingleplayer(selectedSave.id)}>В одиночный мир</button>
+                    )}
                     <button className="btn btn-p" disabled={!selectedSave} onClick={() => selectedSave && onLoadSave(selectedSave.id)}><PlayIcon />Загрузить</button>
                   </div>
                 </div>

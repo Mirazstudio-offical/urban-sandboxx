@@ -20,12 +20,10 @@ import { onlineManager, OnlineStatus } from '../onlineSystem';
 import { sound } from '../audio';
 import { ModalShell, Tabs } from './gameUi';
 import { CAR_CONFIGS } from '../vehicleHelpers';
+import { openHostSession, closeHostSession } from '../hostSession';
 import { 
   auth, 
   subscribeToP2PServers, 
-  createP2PServerDoc, 
-  updateP2PServerHeartbeat, 
-  removeP2PServerDoc, 
   P2PServerRoom 
 } from '../firebase';
 
@@ -44,7 +42,7 @@ const GAME_MODES = [
 ];
 
 const MAP_NAMES = [
-  { id: 'flatbody', name: 'Flatbody' },
+  { id: 'flatbody', name: 'flatbody' },
   { id: 'steppe_highway', name: 'Степное Шоссе' },
   { id: 'industrial', name: 'Промзона' }
 ];
@@ -69,8 +67,6 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
   const [selectedMap, setSelectedMap] = useState<string>('flatbody');
   const [selectedGameMode, setSelectedGameMode] = useState<string>('free_roam');
 
-  const activeDocIdRef = useRef<string | null>(null);
-
   useEffect(() => {
     const unsubOnline = onlineManager.subscribe(() => {
       setStatus(onlineManager.status);
@@ -87,18 +83,6 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
       unsubFirestore();
     };
   }, []);
-
-  // Update heartbeat when connected as host
-  useEffect(() => {
-    let interval: any;
-    if (status === 'connected' && onlineManager.isHost && activeDocIdRef.current) {
-      interval = setInterval(() => {
-        const count = onlineManager.getRemotePlayersArray().length + 1;
-        updateP2PServerHeartbeat(activeDocIdRef.current!, count, 'active');
-      }, 10000);
-    }
-    return () => clearInterval(interval);
-  }, [status]);
 
   if (!isOpen) return null;
 
@@ -125,27 +109,15 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
     const generatedCode = `room-${Math.floor(1000 + Math.random() * 9000)}`;
     setRoomCode(generatedCode);
 
-    // Join or create room locally in PeerJS
-    onlineManager.joinOrCreateRoom(generatedCode, nickname, true);
-
-    // Register P2P Server document in Firestore!
-    try {
-      const docId = await createP2PServerDoc({
-        hostUid: auth.currentUser?.uid || 'anon',
-        hostName: nickname,
-        name: serverName.trim() || 'P2P Сервер',
-        peerId: generatedCode,
-        maxPlayers,
-        currentPlayers: 1,
-        mapName: selectedMap,
-        gameMode: selectedGameMode,
-        isPrivate: false,
-        status: 'active'
-      });
-      activeDocIdRef.current = docId;
-    } catch (err) {
-      console.error('Failed to create Firestore server entry:', err);
-    }
+    await openHostSession({
+      access: 'all',
+      roomCode: generatedCode,
+      serverName: serverName.trim() || 'P2P Сервер',
+      mapName: selectedMap === 'flatbody' ? 'flatbody' : selectedMap,
+      gameMode: selectedGameMode,
+      maxPlayers,
+      nickname
+    });
   };
 
   const handleJoinServerFromList = (server: P2PServerRoom) => {
@@ -157,11 +129,7 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
 
   const handleLeaveRoom = () => {
     sound.playButtonPress();
-    if (activeDocIdRef.current) {
-      removeP2PServerDoc(activeDocIdRef.current);
-      activeDocIdRef.current = null;
-    }
-    onlineManager.leaveRoom();
+    void closeHostSession();
   };
 
   const handleCopyCode = () => {

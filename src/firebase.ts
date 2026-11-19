@@ -127,9 +127,10 @@ const sanitizeForFirestore = (obj: any): any => {
 
 export interface UserProfileData {
   uid: string;
-  email: string | null;
   displayName: string;
+  displayNameLower?: string;
   nickname: string;
+  nicknameLower?: string;
   avatarUrl: string;
   bio: string;
   status?: 'online' | 'offline' | 'in_game';
@@ -181,6 +182,22 @@ export interface PlayerCloudSave {
   updatedAt?: any;
 }
 
+const PUBLIC_PROFILES_COL = "public_profiles";
+const P2P_SERVER_STALE_MS = 45_000;
+
+const toLowerNormalized = (val: string | undefined | null, maxLen: number): string => {
+  return (val || "").trim().slice(0, maxLen).toLowerCase();
+};
+
+const getTimestampMillis = (ts: any): number | null => {
+  if (!ts) return null;
+  if (typeof ts === "number") return ts;
+  if (typeof ts.toMillis === "function") return ts.toMillis();
+  if (typeof ts.seconds === "number") return ts.seconds * 1000 + Math.floor((ts.nanoseconds || 0) / 1e6);
+  if (ts instanceof Date) return ts.getTime();
+  return null;
+};
+
 // Auth helpers
 export const loginWithGoogle = async () => {
   try {
@@ -189,13 +206,11 @@ export const loginWithGoogle = async () => {
     return result.user;
   } catch (err: any) {
     if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
-      const host = typeof window !== 'undefined' ? window.location.hostname : '';
       const customErr = new Error(
-        `Домен "${host}" не добавлен в список авторизованных доменов Firebase (Authorized domains).`
+        'Вход через Google временно недоступен на этом адресе. Вы можете продолжить игру с гостевым профилем.'
       );
       (customErr as any).code = 'auth/unauthorized-domain';
-      (customErr as any).unauthorizedDomain = host;
-      console.warn(`[Firebase Auth] Unauthorized domain error for host: ${host}`);
+      console.warn('[Firebase Auth] Google Sign-In unavailable on current host.');
       throw customErr;
     }
     console.error("Google Auth error:", err);
@@ -214,7 +229,7 @@ export const loginAnonymously = async (nickname?: string) => {
   } catch (err: any) {
     if (err?.code === 'auth/admin-restricted-operation' || err?.message?.includes('admin-restricted-operation')) {
       console.warn("Anonymous Authentication is disabled in Firebase console project settings.");
-      throw new Error("Анонимный вход отключен в настройках проекта Firebase. Пожалуйста, используйте вход через Google.");
+      throw new Error("Гостевой облачный вход сейчас отключен. Используйте вход через Google или играйте локально.");
     }
     console.error("Anonymous Auth error:", err);
     throw err;
@@ -284,51 +299,95 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   return errInfo;
 }
 
-// User Profile Helpers
+// User Profile Helpers (public non-PII profiles stored in `public_profiles/{uid}` without email)
 export const ensureUserProfileExists = async (user: User, fallbackName?: string) => {
   if (!user) return;
-  const userRef = doc(db, "users", user.uid);
-  let snap;
+  const pubRef = doc(db, PUBLIC_PROFILES_COL, user.uid);
+  let pubSnap;
   try {
-    snap = await getDoc(userRef);
+    pubSnap = await getDoc(pubRef);
   } catch (err) {
-    handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
+    handleFirestoreError(err, OperationType.GET, `${PUBLIC_PROFILES_COL}/${user.uid}`);
     return;
   }
 
-  if (!snap.exists()) {
+  if (!pubSnap.exists()) {
+    // Check own legacy private user doc to migrate existing nickname/bio/stats without exposing email
+    let legacy: any = null;
+    try {
+      const legacySnap = await getDoc(doc(db, "users", user.uid));
+      if (legacySnap.exists()) legacy = legacySnap.data();
+    } catch {
+      // Ignore if legacy doc does not exist
+    }
+
+    const displayName = String(legacy?.displayName || user.displayName || fallbackName || `Racer #${user.uid.slice(0, 5)}`).trim().slice(0, 64);
+    const nickname = String(legacy?.nickname || fallbackName || user.displayName || `Racer #${user.uid.slice(0, 5)}`).trim().slice(0, 32);
+    const bioRaw = typeof legacy?.bio === 'string' && legacy.bio.trim() ? legacy.bio : "Пилот flatbody";
+    const bio = bioRaw.replace(/Sandbox 2D/gi, "flatbody").slice(0, 300);
+
     const newProfile: UserProfileData = {
       uid: user.uid,
-      email: user.email || null,
-      displayName: user.displayName || fallbackName || `Racer #${user.uid.slice(0, 5)}`,
-      nickname: fallbackName || user.displayName || `Racer #${user.uid.slice(0, 5)}`,
-      avatarUrl: user.photoURL || "",
-      bio: "Пилот Sandbox 2D",
+      displayName,
+      displayNameLower: toLowerNormalized(displayName, 64),
+      nickname,
+      nicknameLower: toLowerNormalized(nickname, 32),
+      avatarUrl: String(legacy?.avatarUrl || user.photoURL || "").slice(0, 512),
+      bio,
+      status: 'online',
+      currentRoomCode: null,
       createdAt: serverTimestamp() as any,
       updatedAt: serverTimestamp() as any,
-      stats: {
+      lastSeen: serverTimestamp() as any,
+      stats: legacy?.stats || {
         gamesPlayed: 0,
         distanceDriven: 0,
         moneyEarned: 0
       }
     };
     try {
-      await setDoc(userRef, newProfile);
+      await setDoc(pubRef, newProfile);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+      handleFirestoreError(err, OperationType.WRITE, `${PUBLIC_PROFILES_COL}/${user.uid}`);
+    }
+  } else {
+    // Ensure lowercase search fields are populated for older docs
+    const data = pubSnap.data() as UserProfileData;
+    const expectedDispLower = toLowerNormalized(data.displayName, 64);
+    const expectedNickLower = toLowerNormalized(data.nickname, 32);
+    if (data.displayNameLower !== expectedDispLower || data.nicknameLower !== expectedNickLower) {
+      try {
+        await setDoc(pubRef, {
+          uid: user.uid,
+          displayNameLower: expectedDispLower,
+          nicknameLower: expectedNickLower,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `${PUBLIC_PROFILES_COL}/${user.uid}`);
+      }
     }
   }
 };
 
 export const fetchUserProfile = async (uid: string): Promise<UserProfileData | null> => {
   try {
-    const snap = await getDoc(doc(db, "users", uid));
+    const snap = await getDoc(doc(db, PUBLIC_PROFILES_COL, uid));
     if (snap.exists()) {
       return snap.data() as UserProfileData;
     }
+    // Fallback to own legacy doc if current user hasn't migrated yet
+    if (auth.currentUser?.uid === uid) {
+      const legacySnap = await getDoc(doc(db, "users", uid));
+      if (legacySnap.exists()) {
+        const legacy = legacySnap.data() as any;
+        const { email: _ignoredEmail, ...safeProfile } = legacy;
+        return safeProfile as UserProfileData;
+      }
+    }
     return null;
   } catch (err) {
-    handleFirestoreError(err, OperationType.GET, `users/${uid}`);
+    handleFirestoreError(err, OperationType.GET, `${PUBLIC_PROFILES_COL}/${uid}`);
     return null;
   }
 };
@@ -336,14 +395,32 @@ export const fetchUserProfile = async (uid: string): Promise<UserProfileData | n
 export const updateUserProfile = async (uid: string, updates: Partial<UserProfileData>) => {
   try {
     const sanitized = sanitizeForFirestore(updates);
-    const userRef = doc(db, "users", uid);
-    await setDoc(userRef, {
+    // Strictly strip any PII fields like email before writing to public_profiles
+    delete sanitized.email;
+
+    if (typeof sanitized.displayName === 'string') {
+      sanitized.displayName = sanitized.displayName.trim().slice(0, 64);
+      sanitized.displayNameLower = toLowerNormalized(sanitized.displayName, 64);
+    }
+    if (typeof sanitized.nickname === 'string') {
+      sanitized.nickname = sanitized.nickname.trim().slice(0, 32);
+      sanitized.nicknameLower = toLowerNormalized(sanitized.nickname, 32);
+    }
+    if (typeof sanitized.avatarUrl === 'string') {
+      sanitized.avatarUrl = sanitized.avatarUrl.trim().slice(0, 512);
+    }
+    if (typeof sanitized.bio === 'string') {
+      sanitized.bio = sanitized.bio.trim().slice(0, 300);
+    }
+
+    const pubRef = doc(db, PUBLIC_PROFILES_COL, uid);
+    await setDoc(pubRef, {
       uid,
       ...sanitized,
       updatedAt: serverTimestamp()
     }, { merge: true });
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
+    handleFirestoreError(err, OperationType.WRITE, `${PUBLIC_PROFILES_COL}/${uid}`);
   }
 };
 
@@ -399,11 +476,29 @@ export const removeP2PServerDoc = async (serverId: string) => {
   }
 };
 
+const filterLiveP2PServers = (rawServers: P2PServerRoom[]): P2PServerRoom[] => {
+  const now = Date.now();
+  const live = rawServers.filter((srv) => {
+    if (srv.status !== "active" && srv.status !== "in_game") return false;
+    const updatedMs = getTimestampMillis(srv.updatedAt) ?? getTimestampMillis(srv.createdAt);
+    // Pending local serverTimestamp() resolves to null briefly right after creation — keep it visible
+    if (updatedMs === null) return true;
+    return now - updatedMs <= P2P_SERVER_STALE_MS;
+  });
+  live.sort((a, b) => (getTimestampMillis(b.updatedAt) ?? getTimestampMillis(b.createdAt) ?? 0) - (getTimestampMillis(a.updatedAt) ?? getTimestampMillis(a.createdAt) ?? 0));
+  return live;
+};
+
 export const subscribeToP2PServers = (callback: (servers: P2PServerRoom[]) => void) => {
   const colRef = collection(db, "p2p_servers");
   const q = query(colRef, where("status", "in", ["active", "in_game"]));
 
-  return onSnapshot(q, (snapshot) => {
+  let latestRaw: P2PServerRoom[] = [];
+  const emitLive = () => {
+    callback(filterLiveP2PServers(latestRaw));
+  };
+
+  const unsubSnapshot = onSnapshot(q, (snapshot) => {
     const servers: P2PServerRoom[] = [];
     snapshot.forEach((docSnap) => {
       servers.push({
@@ -411,12 +506,23 @@ export const subscribeToP2PServers = (callback: (servers: P2PServerRoom[]) => vo
         ...docSnap.data()
       } as P2PServerRoom);
     });
-    // sort locally by updatedAt or createdAt
-    servers.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-    callback(servers);
+    latestRaw = servers;
+    emitLive();
   }, (err) => {
     handleFirestoreError(err, OperationType.LIST, "p2p_servers");
   });
+
+  // Periodically evict rooms whose hosts disconnected without closing cleanly
+  const sweepTimer = typeof window !== 'undefined'
+    ? window.setInterval(emitLive, 10_000)
+    : undefined;
+
+  return () => {
+    unsubSnapshot();
+    if (sweepTimer !== undefined) {
+      window.clearInterval(sweepTimer);
+    }
+  };
 };
 
 // Cloud Save Helpers
@@ -481,47 +587,74 @@ export interface WorldInviteData {
   updatedAt?: any;
 }
 
-// Update player's online status in Firestore
+// Update player's online status in Firestore (public_profiles only, no PII)
 export const updateUserOnlineStatus = async (
   uid: string, 
   status: 'online' | 'offline' | 'in_game', 
   currentRoomCode: string | null = null
 ) => {
   try {
-    const userRef = doc(db, "users", uid);
-    await setDoc(userRef, {
+    const pubRef = doc(db, PUBLIC_PROFILES_COL, uid);
+    await setDoc(pubRef, {
       uid,
       status,
-      currentRoomCode: currentRoomCode || null,
+      currentRoomCode: currentRoomCode ? currentRoomCode.slice(0, 64) : null,
       lastSeen: serverTimestamp(),
       updatedAt: serverTimestamp()
     }, { merge: true });
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
+    handleFirestoreError(err, OperationType.WRITE, `${PUBLIC_PROFILES_COL}/${uid}`);
   }
 };
 
-// Search users by nickname or displayName
+// Indexed prefix search across all players by nickname, displayName, or exact UID (scales beyond 50 users)
 export const searchUsers = async (searchTerm: string): Promise<UserProfileData[]> => {
-  if (!searchTerm.trim()) return [];
+  const raw = searchTerm.trim();
+  if (!raw) return [];
+  const term = raw.toLowerCase();
+  const termEnd = term + '\uf8ff';
+
   try {
-    const term = searchTerm.trim().toLowerCase();
-    const colRef = collection(db, "users");
-    const snap = await getDocs(query(colRef, limit(50)));
-    const results: UserProfileData[] = [];
-    
-    snap.forEach((d) => {
-      const data = d.data() as UserProfileData;
-      const nick = (data.nickname || "").toLowerCase();
-      const disp = (data.displayName || "").toLowerCase();
-      const uid = (data.uid || "").toLowerCase();
-      if (nick.includes(term) || disp.includes(term) || uid.includes(term)) {
-        results.push(data);
+    const colRef = collection(db, PUBLIC_PROFILES_COL);
+    const byNicknameQ = query(
+      colRef,
+      where("nicknameLower", ">=", term),
+      where("nicknameLower", "<=", termEnd),
+      limit(20)
+    );
+    const byDisplayNameQ = query(
+      colRef,
+      where("displayNameLower", ">=", term),
+      where("displayNameLower", "<=", termEnd),
+      limit(20)
+    );
+
+    const tasks: Promise<UserProfileData[]>[] = [
+      getDocs(byNicknameQ).then((snap) => snap.docs.map((d) => d.data() as UserProfileData)),
+      getDocs(byDisplayNameQ).then((snap) => snap.docs.map((d) => d.data() as UserProfileData)),
+    ];
+
+    // Also allow exact UID lookup if the query looks like a valid document ID
+    if (/^[a-zA-Z0-9_-]{6,128}$/.test(raw)) {
+      tasks.push(
+        getDoc(doc(db, PUBLIC_PROFILES_COL, raw))
+          .then((snap) => (snap.exists() ? [snap.data() as UserProfileData] : []))
+          .catch(() => [])
+      );
+    }
+
+    const batches = await Promise.all(tasks);
+    const dedup = new Map<string, UserProfileData>();
+    for (const batch of batches) {
+      for (const user of batch) {
+        if (user?.uid && !dedup.has(user.uid)) {
+          dedup.set(user.uid, user);
+        }
       }
-    });
-    return results;
+    }
+    return Array.from(dedup.values()).slice(0, 25);
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, "users");
+    handleFirestoreError(err, OperationType.LIST, PUBLIC_PROFILES_COL);
     return [];
   }
 };

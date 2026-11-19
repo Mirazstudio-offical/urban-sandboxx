@@ -219,6 +219,11 @@ export function loadFurnitureStoragesFromLocalStorage(): void {
   }
 }
 
+export function resetFurnitureStorages(): void {
+  furnitureStorageDb.clear();
+  saveFurnitureStoragesToLocalStorage();
+}
+
 export function exportFurnitureStorageData(): Record<string, FurnitureStorage> {
   const result: Record<string, FurnitureStorage> = {};
   furnitureStorageDb.forEach((val, key) => {
@@ -227,11 +232,14 @@ export function exportFurnitureStorageData(): Record<string, FurnitureStorage> {
   return result;
 }
 
-export function importFurnitureStorageData(data: Record<string, FurnitureStorage>): void {
-  if (!data || typeof data !== 'object') return;
-  for (const [key, val] of Object.entries(data)) {
-    if (key && val && Array.isArray((val as any).items)) {
-      furnitureStorageDb.set(key, JSON.parse(JSON.stringify(val)));
+export function importFurnitureStorageData(data?: Record<string, FurnitureStorage> | null): void {
+  // Strictly clear previous world's containers so saves never bleed into each other
+  furnitureStorageDb.clear();
+  if (data && typeof data === 'object') {
+    for (const [key, val] of Object.entries(data)) {
+      if (key && val && Array.isArray((val as any).items)) {
+        furnitureStorageDb.set(key, JSON.parse(JSON.stringify(val)));
+      }
     }
   }
   saveFurnitureStoragesToLocalStorage();

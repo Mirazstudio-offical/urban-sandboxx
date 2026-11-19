@@ -12,8 +12,6 @@ import {
   Heart,
   Package,
   AlertCircle,
-  Copy,
-  ExternalLink,
   Edit3,
   HardDrive
 } from 'lucide-react';
@@ -59,7 +57,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
-  const [authError, setAuthError] = useState<{ message: string; domain?: string } | null>(null);
+  const [authError, setAuthError] = useState<{ message: string } | null>(null);
 
   // Profile Form States
   const [displayName, setDisplayName] = useState<string>('');
@@ -112,11 +110,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setSaveSuccess('Успешный вход через Google!');
       setTimeout(() => setSaveSuccess(null), 3000);
     } catch (err: any) {
-      const host = typeof window !== 'undefined' ? window.location.hostname : '';
-      const isUnauthDomain = err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain') || err?.unauthorizedDomain;
       setAuthError({
-        message: err.message || 'Ошибка авторизации Google',
-        domain: isUnauthDomain ? (err.unauthorizedDomain || host) : undefined
+        message: err.message || 'Ошибка авторизации Google'
       });
     } finally {
       setLoading(false);
@@ -163,7 +158,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setTimeout(() => setSaveSuccess(null), 3000);
       await loadProfile(currentUser.uid);
     } catch (err: any) {
-      alert(`Ошибка сохранения: ${err.message || err}`);
+      setAuthError({ message: `Ошибка сохранения: ${err.message || err}` });
     } finally {
       setSaving(false);
     }
@@ -182,11 +177,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         needs: currentPlayerData.needs || {},
         version: '1.4'
       });
-      setSaveSuccess('Игровой прогресс сохранен в облако Firestore!');
+      setSaveSuccess('Игровой прогресс сохранен в облако!');
       setTimeout(() => setSaveSuccess(null), 3000);
       await handleFetchCloudSave();
     } catch (err: any) {
-      alert(`Не удалось сохранить прогресс: ${err.message || err}`);
+      setAuthError({ message: `Не удалось сохранить прогресс: ${err.message || err}` });
     } finally {
       setSaving(false);
     }
@@ -281,36 +276,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <AlertCircle width={18} height={18} style={{ flex: 'none', marginTop: 2 }} />
               <div className="gu-grow">{authError.message}</div>
             </div>
-            {authError.domain && (
-              <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.08)' }}>
-                <div>
-                  <div className="gu-lbl" style={{ marginBottom: 6 }}>Домен для авторизации в Firebase</div>
-                  <span className="gu-code">{authError.domain}</span>
-                </div>
-                <div className="gu-row2">
-                  <button
-                    type="button"
-                    className="gu-btn gu-btn-s gu-btn-sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(authError.domain || '');
-                      setSaveSuccess('Домен скопирован в буфер обмена');
-                      setTimeout(() => setSaveSuccess(null), 3000);
-                    }}
-                  >
-                    <Copy width={15} height={15} />Копировать
-                  </button>
-                  <a
-                    className="gu-btn gu-btn-p gu-btn-sm"
-                    href="https://console.firebase.google.com/project/gen-lang-client-0888101069/authentication/settings"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ textDecoration: 'none' }}
-                  >
-                    <ExternalLink width={15} height={15} />Открыть консоль
-                  </a>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -323,7 +288,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <div className="gu-grid gu-g3">
                   <div className="gu-stat"><span className="gu-lbl" style={{ margin: 0 }}>Сессий</span><span className="gu-num">{profile.stats.gamesPlayed || 0}</span></div>
                   <div className="gu-stat"><span className="gu-lbl" style={{ margin: 0 }}>Пройдено, км</span><span className="gu-num">{(profile.stats.distanceDriven || 0).toFixed(1)}</span></div>
-                  <div className="gu-stat"><span className="gu-lbl" style={{ margin: 0 }}>Доход</span><span className="gu-num">${profile.stats.moneyEarned || 0}</span></div>
+                  <div className="gu-stat"><span className="gu-lbl" style={{ margin: 0 }}>Доход</span><span className="gu-num">{Math.round(profile.stats.moneyEarned || 0).toLocaleString('ru-RU')} ₽</span></div>
                 </div>
               ) : (
                 <div className="gu-mut" style={{ fontSize: 14 }}>Статистика пока пуста. Совершите первые заезды.</div>
@@ -367,7 +332,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <div className="gu-mut" style={{ fontSize: 14, lineHeight: 1.45 }}>Позиция, баланс, инвентарь и здоровье сохраняются в облачный аккаунт.</div>
               {currentPlayerData && (
                 <div className="gu-stat" style={{ gap: 8, fontSize: 14 }}>
-                  <div className="gu-row2" style={{ gap: 10 }}><Coins width={16} height={16} color="#e0ab45" />Баланс: ${currentPlayerData.money}</div>
+                  <div className="gu-row2" style={{ gap: 10 }}><Coins width={16} height={16} color="#e0ab45" />Баланс: {Math.round(currentPlayerData.money).toLocaleString('ru-RU')} ₽</div>
                   <div className="gu-row2" style={{ gap: 10 }}><Heart width={16} height={16} color="#e0ab45" />Здоровье: {Math.round(currentPlayerData.health)}%</div>
                   <div className="gu-row2" style={{ gap: 10 }}><Package width={16} height={16} color="#e0ab45" />Предметов: {currentPlayerData.inventory?.length || 0}</div>
                 </div>
@@ -387,7 +352,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               ) : cloudSave ? (
                 <div className="gu-stat" style={{ gap: 8, fontSize: 14 }}>
                   <div className="gu-row2" style={{ gap: 10, color: '#9ac985', fontWeight: 600 }}><Check width={16} height={16} />Сохранение найдено</div>
-                  <div className="gu-row2" style={{ gap: 10 }}><Coins width={16} height={16} color="#e0ab45" />Деньги: ${cloudSave.money}</div>
+                  <div className="gu-row2" style={{ gap: 10 }}><Coins width={16} height={16} color="#e0ab45" />Деньги: {Math.round(cloudSave.money).toLocaleString('ru-RU')} ₽</div>
                   <div className="gu-row2" style={{ gap: 10 }}><Heart width={16} height={16} color="#e0ab45" />Здоровье: {Math.round(cloudSave.health)}%</div>
                   <div className="gu-mut" style={{ fontSize: 12 }}>Координаты: {Math.round(cloudSave.position.x)}, {Math.round(cloudSave.position.y)}</div>
                 </div>

@@ -1,4 +1,4 @@
-# Metropolis 2D: Open World City Simulator
+# flatbody
 
 **Демо (GitHub Pages):** [https://mirazstudio-offical.github.io/urban-sandboxx/](https://mirazstudio-offical.github.io/urban-sandboxx/)
 

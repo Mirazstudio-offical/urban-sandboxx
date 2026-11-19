@@ -47,6 +47,10 @@ export interface PauseSessionInfo {
   minutes: number;
   /** Epoch ms of the last save (manual or automatic); null when nothing was saved yet. */
   lastSaveAt: number | null;
+  /** Whether the active world is a singleplayer world or an isolated server world. */
+  worldOrigin?: 'singleplayer' | 'server';
+  worldName?: string;
+  serverRoomCode?: string;
 }
 
 export interface PauseSettings {
@@ -65,6 +69,8 @@ export interface PauseSettings {
 interface PauseMenuProps {
   onResume: () => void;
   onSave: () => void;
+  onSaveServerLocally?: () => void;
+  onConvertServerToSingleplayer?: () => void;
   onExitToMainMenu: () => void;
   /** Opens the in-game acceleration run tester. */
   onOpenPerformanceTest?: () => void;
@@ -164,7 +170,7 @@ const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'
 /* ------------------------------------------------------------------ */
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
-  onResume, onSave, onExitToMainMenu, onOpenPerformanceTest, onOpenCollisionTest, settings, onUpdateSettings, session, currentUser
+  onResume, onSave, onSaveServerLocally, onConvertServerToSingleplayer, onExitToMainMenu, onOpenPerformanceTest, onOpenCollisionTest, settings, onUpdateSettings, session, currentUser
 }) => {
   const [cur, setCur] = useState<'online' | 'settings' | null>(null);
   const [entered, setEntered] = useState(false);
@@ -452,7 +458,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                 )}
               </div>
               <div style={{ padding: '16px 8px 6px' }}>
-                <div className="cn mut" style={{ fontSize: 13 }}>Текущая сессия</div>
+                <div className="cn mut" style={{ fontSize: 13 }}>
+                  {session.worldOrigin === 'server' || connected
+                    ? `Серверный мир · ${session.serverRoomCode || onlineManager.roomCode || 'P2P'}`
+                    : 'Одиночный мир'}
+                </div>
                 <div className="cn" style={{ fontSize: 30, fontWeight: 700, marginTop: 4 }}>{where} · {phase}</div>
                 <div className="mut" style={{ display: 'flex', gap: 22, marginTop: 10, fontSize: 14 }}><span>Карта: {MAP_NAME}</span><span>Авто: {vehicleLabel}</span></div>
                 <div style={{ display: 'flex', gap: 34, marginTop: 20 }}>
@@ -479,6 +489,22 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                   </div>
                   <button className={'tg' + (sessionOn ? ' on' : '')} role="switch" aria-checked={sessionOn} aria-label="Открыть сессию" onClick={toggleSession} disabled={hostBusy} />
                 </div>
+                {(connected || session.worldOrigin === 'server') && (onSaveServerLocally || onConvertServerToSingleplayer) && (
+                  <div className="set" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Локальная копия и одиночный режим</div>
+                      <div className="mut" style={{ fontSize: 13 }}>Сохраните копию мира себе или переведите сессию в одиночную игру.</div>
+                    </div>
+                    <div className="row2" style={{ gap: 10 }}>
+                      {onSaveServerLocally && (
+                        <button className="btn btn-s btn-sm" onClick={onSaveServerLocally}>Сохранить локально</button>
+                      )}
+                      {onConvertServerToSingleplayer && (
+                        <button className="btn btn-p btn-sm" onClick={onConvertServerToSingleplayer}>В одиночный мир</button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               <div id="onBody" className={isHost ? '' : 'dim'} style={{ display: 'flex', gap: 20 }}>
                 <div className="panel" style={{ flex: 1, padding: '8px 0' }}>

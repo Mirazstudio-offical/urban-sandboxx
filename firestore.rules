@@ -2,85 +2,259 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAuthenticated() {
+    // Global default deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==================== PRIMITIVES ====================
+
+    function isSignedIn() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isValidUser() {
-      let data = request.resource.data;
-      return !('uid' in data) || data.uid == request.auth.uid;
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    function isValidFriendRequest() {
-      let data = request.resource.data;
-      return (data.senderUid == request.auth.uid || data.receiverUid == request.auth.uid);
+    function incoming() {
+      return request.resource.data;
     }
 
-    function isValidFriendship() {
-      let data = request.resource.data;
-      return request.auth.uid in data.users;
+    function existing() {
+      return resource.data;
     }
 
-    function isValidInvite() {
-      let data = request.resource.data;
-      return (data.senderUid == request.auth.uid || data.receiverUid == request.auth.uid);
+    function isValidOptionalString(data, field, maxLen) {
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].size() <= maxLen);
     }
 
-    function isValidServer() {
-      let data = request.resource.data;
-      return data.hostUid == request.auth.uid;
-    }
-    
-    function isValidSave() {
-      let data = request.resource.data;
-      return !('uid' in data) || data.uid == request.auth.uid;
+    function isValidStatus(val) {
+      return val in ['online', 'offline', 'in_game'];
     }
 
+    // ==================== VALIDATION BLUEPRINTS ====================
+
+    function isValidPrivateUser(data, userId) {
+      return data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'nickname', 'avatarUrl', 'bio',
+          'status', 'currentRoomCode', 'stats', 'createdAt', 'updatedAt', 'lastSeen'
+        ])
+        && (!('uid' in data) || data.uid == userId)
+        && isValidOptionalString(data, 'email', 254)
+        && isValidOptionalString(data, 'displayName', 64)
+        && isValidOptionalString(data, 'nickname', 32)
+        && isValidOptionalString(data, 'avatarUrl', 512)
+        && isValidOptionalString(data, 'bio', 300)
+        && isValidOptionalString(data, 'currentRoomCode', 64)
+        && (!('status' in data) || data.status == null || isValidStatus(data.status))
+        && (!('stats' in data) || data.stats is map);
+    }
+
+    // Strictly forbids PII (no 'email' key allowed)
+    function isValidPublicProfile(data, userId) {
+      return data.keys().hasOnly([
+          'uid', 'displayName', 'displayNameLower', 'nickname', 'nicknameLower',
+          'avatarUrl', 'bio', 'status', 'currentRoomCode', 'stats',
+          'createdAt', 'updatedAt', 'lastSeen'
+        ])
+        && !('email' in data)
+        && data.uid == userId
+        && isValidOptionalString(data, 'displayName', 64)
+        && isValidOptionalString(data, 'displayNameLower', 64)
+        && isValidOptionalString(data, 'nickname', 32)
+        && isValidOptionalString(data, 'nicknameLower', 32)
+        && isValidOptionalString(data, 'avatarUrl', 512)
+        && isValidOptionalString(data, 'bio', 300)
+        && isValidOptionalString(data, 'currentRoomCode', 64)
+        && (!('status' in data) || data.status == null || isValidStatus(data.status))
+        && (!('stats' in data) || data.stats is map);
+    }
+
+    function isValidP2PServer(data) {
+      return data.keys().hasAll([
+          'hostUid', 'hostName', 'name', 'peerId', 'maxPlayers',
+          'currentPlayers', 'mapName', 'gameMode', 'isPrivate', 'status'
+        ])
+        && data.keys().hasOnly([
+          'hostUid', 'hostName', 'name', 'peerId', 'maxPlayers', 'currentPlayers',
+          'mapName', 'gameMode', 'isPrivate', 'status', 'trafficEnabled',
+          'vehicleCount', 'pedestrianCount', 'hasPassword', 'savePlayerData',
+          'antiCheat', 'metadata', 'createdAt', 'updatedAt'
+        ])
+        && data.hostUid is string && data.hostUid == request.auth.uid && data.hostUid.size() <= 128
+        && data.hostName is string && data.hostName.size() >= 1 && data.hostName.size() <= 64
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && data.peerId is string && data.peerId.size() >= 1 && data.peerId.size() <= 64
+        && data.maxPlayers is number && data.maxPlayers >= 1 && data.maxPlayers <= 32
+        && data.currentPlayers is number && data.currentPlayers >= 1 && data.currentPlayers <= 32
+        && data.mapName is string && data.mapName.size() <= 64
+        && data.gameMode is string && data.gameMode.size() <= 32
+        && data.isPrivate is bool
+        && data.status in ['active', 'in_game', 'closed']
+        && (!('trafficEnabled' in data) || data.trafficEnabled is bool)
+        && (!('vehicleCount' in data) || (data.vehicleCount is number && data.vehicleCount >= 0 && data.vehicleCount <= 200))
+        && (!('pedestrianCount' in data) || (data.pedestrianCount is number && data.pedestrianCount >= 0 && data.pedestrianCount <= 200))
+        && (!('hasPassword' in data) || data.hasPassword is bool)
+        && (!('savePlayerData' in data) || data.savePlayerData is bool)
+        && (!('antiCheat' in data) || data.antiCheat in ['none', 'moderate', 'strict'])
+        && (!('metadata' in data) || data.metadata == null || data.metadata is map);
+    }
+
+    function isValidSave(data, userId) {
+      return data.keys().hasOnly([
+          'uid', 'money', 'health', 'position', 'inventory',
+          'needs', 'equippedItems', 'version', 'updatedAt'
+        ])
+        && data.uid == userId
+        && data.money is number
+        && data.health is number
+        && data.position is map
+        && (!('inventory' in data) || (data.inventory is list && data.inventory.size() <= 200))
+        && (!('needs' in data) || data.needs == null || data.needs is map)
+        && (!('equippedItems' in data) || data.equippedItems == null || data.equippedItems is map)
+        && isValidOptionalString(data, 'version', 32);
+    }
+
+    function isValidFriendRequest(data) {
+      return data.keys().hasAll(['senderUid', 'senderName', 'receiverUid', 'receiverName', 'status'])
+        && data.keys().hasOnly(['senderUid', 'senderName', 'receiverUid', 'receiverName', 'status', 'createdAt', 'updatedAt'])
+        && data.senderUid is string && data.senderUid.size() <= 128
+        && data.receiverUid is string && data.receiverUid.size() <= 128
+        && data.senderUid != data.receiverUid
+        && data.senderName is string && data.senderName.size() <= 64
+        && data.receiverName is string && data.receiverName.size() <= 64
+        && data.status in ['pending', 'accepted', 'rejected'];
+    }
+
+    function isValidFriendship(data) {
+      return data.keys().hasAll(['users', 'user1', 'user2'])
+        && data.keys().hasOnly(['users', 'user1', 'user2', 'createdAt'])
+        && data.users is list
+        && data.users.size() == 2
+        && data.users[0] is string && data.users[1] is string
+        && data.users[0] != data.users[1]
+        && request.auth.uid in data.users
+        && data.user1 is map
+        && data.user2 is map;
+    }
+
+    function isValidInvite(data) {
+      return data.keys().hasAll(['senderUid', 'senderName', 'receiverUid', 'roomCode', 'serverName', 'status'])
+        && data.keys().hasOnly(['senderUid', 'senderName', 'receiverUid', 'roomCode', 'serverName', 'status', 'createdAt', 'updatedAt'])
+        && data.senderUid is string && data.senderUid.size() <= 128
+        && data.receiverUid is string && data.receiverUid.size() <= 128
+        && data.senderUid != data.receiverUid
+        && data.senderName is string && data.senderName.size() <= 64
+        && data.roomCode is string && data.roomCode.size() >= 1 && data.roomCode.size() <= 64
+        && data.serverName is string && data.serverName.size() <= 80
+        && data.status in ['pending', 'accepted', 'declined'];
+    }
+
+    // ==================== COLLECTION RULES ====================
+
+    // Connectivity health check document
     match /test/{docId} {
-      allow read: if true;
+      allow get: if docId == 'connection';
     }
 
+    // Owner-only private user records (strictly prevents email / PII leaks!)
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if isOwner(userId) && isValidUser();
-      allow delete: if isOwner(userId);
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidPrivateUser(incoming(), userId);
+      allow update: if isValidId(userId) && isOwner(userId) && isValidPrivateUser(incoming(), userId);
+      allow delete: if isValidId(userId) && isOwner(userId);
     }
 
+    // Public non-PII player profiles for friend search & presence (no email allowed)
+    match /public_profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn() && resource.data.uid is string;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidPublicProfile(incoming(), userId);
+      allow update: if isValidId(userId) && isOwner(userId) && isValidPublicProfile(incoming(), userId)
+        && incoming().uid == existing().uid;
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    // P2P multiplayer server lobby
     match /p2p_servers/{serverId} {
-      allow read: if true;
-      allow create: if isAuthenticated() && isValidServer();
-      allow update: if isAuthenticated() && resource.data.hostUid == request.auth.uid && isValidServer();
-      allow delete: if isAuthenticated() && resource.data.hostUid == request.auth.uid;
+      allow get: if isValidId(serverId);
+      allow list: if resource.data.status in ['active', 'in_game'];
+      allow create: if isSignedIn() && isValidId(serverId) && isValidP2PServer(incoming());
+      allow update: if isSignedIn() && isValidId(serverId)
+        && existing().hostUid == request.auth.uid
+        && isValidP2PServer(incoming())
+        && incoming().hostUid == existing().hostUid;
+      allow delete: if isSignedIn() && isValidId(serverId) && existing().hostUid == request.auth.uid;
     }
 
+    // Owner-only cloud saves
     match /player_saves/{userId} {
-      allow read: if isOwner(userId);
-      allow create, update: if isOwner(userId) && isValidSave();
-      allow delete: if isOwner(userId);
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidSave(incoming(), userId);
+      allow update: if isValidId(userId) && isOwner(userId) && isValidSave(incoming(), userId)
+        && incoming().uid == existing().uid;
+      allow delete: if isValidId(userId) && isOwner(userId);
     }
 
+    // Friend requests (only sender or receiver)
     match /friend_requests/{reqId} {
-      allow read: if isAuthenticated() && (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid);
-      allow create: if isAuthenticated() && request.resource.data.senderUid == request.auth.uid && isValidFriendRequest();
-      allow update: if isAuthenticated() && (resource.data.receiverUid == request.auth.uid || resource.data.senderUid == request.auth.uid) && isValidFriendRequest();
-      allow delete: if isAuthenticated() && (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid);
+      allow get: if isSignedIn() && isValidId(reqId)
+        && (existing().senderUid == request.auth.uid || existing().receiverUid == request.auth.uid);
+      allow list: if isSignedIn()
+        && (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(reqId)
+        && isValidFriendRequest(incoming())
+        && incoming().senderUid == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isSignedIn() && isValidId(reqId)
+        && isValidFriendRequest(incoming())
+        && incoming().senderUid == existing().senderUid
+        && incoming().receiverUid == existing().receiverUid
+        && existing().status == 'pending'
+        && (
+          (existing().receiverUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && incoming().status in ['accepted', 'rejected'])
+        );
+      allow delete: if isSignedIn() && isValidId(reqId)
+        && (existing().senderUid == request.auth.uid || existing().receiverUid == request.auth.uid);
     }
 
+    // Friends list (only participants)
     match /friends/{friendId} {
-      allow read: if isAuthenticated() && (request.auth.uid in resource.data.users);
-      allow create: if isAuthenticated() && (request.auth.uid in request.resource.data.users) && isValidFriendship();
-      allow delete: if isAuthenticated() && (request.auth.uid in resource.data.users);
+      allow get: if isSignedIn() && isValidId(friendId) && (request.auth.uid in existing().users);
+      allow list: if isSignedIn() && (request.auth.uid in resource.data.users);
+      allow create: if isSignedIn() && isValidId(friendId) && isValidFriendship(incoming());
+      allow delete: if isSignedIn() && isValidId(friendId) && (request.auth.uid in existing().users);
     }
 
+    // World invites (only sender or receiver)
     match /invites/{inviteId} {
-      allow read: if isAuthenticated() && (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid);
-      allow create: if isAuthenticated() && request.resource.data.senderUid == request.auth.uid && isValidInvite();
-      allow update: if isAuthenticated() && (resource.data.receiverUid == request.auth.uid || resource.data.senderUid == request.auth.uid) && isValidInvite();
-      allow delete: if isAuthenticated() && (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid);
+      allow get: if isSignedIn() && isValidId(inviteId)
+        && (existing().senderUid == request.auth.uid || existing().receiverUid == request.auth.uid);
+      allow list: if isSignedIn()
+        && (resource.data.senderUid == request.auth.uid || resource.data.receiverUid == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(inviteId)
+        && isValidInvite(incoming())
+        && incoming().senderUid == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isSignedIn() && isValidId(inviteId)
+        && isValidInvite(incoming())
+        && incoming().senderUid == existing().senderUid
+        && incoming().receiverUid == existing().receiverUid
+        && existing().status == 'pending'
+        && existing().receiverUid == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && incoming().status in ['accepted', 'declined'];
+      allow delete: if isSignedIn() && isValidId(inviteId)
+        && (existing().senderUid == request.auth.uid || existing().receiverUid == request.auth.uid);
     }
   }
 }

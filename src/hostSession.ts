@@ -2,18 +2,18 @@ import { onlineManager, AntiCheatLevel } from './onlineSystem';
 import { auth, createP2PServerDoc, removeP2PServerDoc, updateP2PServerHeartbeat } from './firebase';
 
 /**
- * Host-side P2P session opened from the pause menu ("Открыть сессию для друзей").
+ * Host-side P2P session manager shared across MainMenu, PauseMenu, and OnlineModal.
  *
- * The room itself lives in onlineManager (PeerJS). This module additionally owns the optional entry in the
- * public server catalogue (Firestore `p2p_servers`) and its heartbeat, independent of any React component
- * lifetime, because the pause menu unmounts as soon as the player returns to the game.
+ * The room itself lives in onlineManager (PeerJS). This module owns the optional entry in the
+ * public server catalogue (Firestore `p2p_servers`) and its 10s heartbeat, independent of any React
+ * component lifetime, and cleans up on exit / tab close so stale rooms disappear promptly.
  *
  * access = 'all'  -> the room is listed in the server catalogue
  * access = 'code' -> the room is not listed; players need the room code (or an invite)
  */
 export type HostAccess = 'all' | 'code';
 
-export const MAP_NAME = 'Flatbody 2D';
+export const MAP_NAME = 'flatbody';
 export const DEFAULT_MAX_PLAYERS = 8;
 
 interface HostSession {
@@ -21,6 +21,8 @@ interface HostSession {
   maxPlayers: number;
   docId: string | null;
   serverName: string;
+  gameMode: string;
+  mapName: string;
 }
 
 let session: HostSession | null = null;
@@ -60,17 +62,35 @@ function startHeartbeat() {
   }, 10000);
 }
 
+// Best-effort cleanup when host closes the browser tab
+if (typeof window !== 'undefined') {
+  const cleanupOnUnload = () => {
+    if (session?.docId) {
+      const id = session.docId;
+      session.docId = null;
+      void removeP2PServerDoc(id);
+    }
+  };
+  window.addEventListener('beforeunload', cleanupOnUnload);
+  window.addEventListener('pagehide', cleanupOnUnload);
+}
+
 async function registerInCatalogue(s: HostSession, hostName: string, settings?: any): Promise<void> {
+  if (!auth.currentUser) {
+    // Only signed-in users can list public rooms in Firestore (enforced by firestore.rules)
+    s.docId = null;
+    return;
+  }
   try {
     s.docId = await createP2PServerDoc({
-      hostUid: auth.currentUser?.uid || 'guest_' + Date.now(),
-      hostName,
-      name: s.serverName,
-      peerId: onlineManager.roomCode,
+      hostUid: auth.currentUser.uid,
+      hostName: hostName.slice(0, 64),
+      name: s.serverName.slice(0, 80),
+      peerId: onlineManager.roomCode.slice(0, 64),
       maxPlayers: s.maxPlayers,
       currentPlayers: onlineManager.getRemotePlayersArray().length + 1,
-      mapName: MAP_NAME,
-      gameMode: 'free_roam',
+      mapName: s.mapName || MAP_NAME,
+      gameMode: s.gameMode || 'free_roam',
       isPrivate: settings?.passwordRequired || false,
       status: 'active',
       trafficEnabled: settings?.trafficEnabled ?? true,
@@ -100,6 +120,10 @@ async function unregisterFromCatalogue(s: HostSession): Promise<void> {
 /** Opens a new room as host. No-op when this client is already connected to a room. */
 export async function openHostSession(opts: {
   access: HostAccess;
+  roomCode?: string;
+  serverName?: string;
+  mapName?: string;
+  gameMode?: string;
   maxPlayers?: number;
   nickname?: string;
   trafficEnabled?: boolean;
@@ -109,18 +133,21 @@ export async function openHostSession(opts: {
   password?: string;
   savePlayerData?: boolean;
   antiCheat?: AntiCheatLevel;
-}): Promise<void> {
-  if (busy || onlineManager.status === 'connected' || onlineManager.status === 'connecting') return;
+}): Promise<string | null> {
+  if (busy || onlineManager.status === 'connected' || onlineManager.status === 'connecting') return onlineManager.roomCode || null;
   busy = true;
   notify();
   try {
     const nickname = (opts.nickname || onlineManager.localPlayerName || 'Игрок').trim();
-    const code = 'room-' + Math.floor(1000 + Math.random() * 9000);
+    const rawCode = opts.roomCode ? onlineManager.sanitizeRoomCode(opts.roomCode) : '';
+    const code = rawCode || ('room-' + Math.floor(1000 + Math.random() * 9000));
     const s: HostSession = {
       access: opts.access,
       maxPlayers: opts.maxPlayers ?? DEFAULT_MAX_PLAYERS,
       docId: null,
-      serverName: 'Сервер ' + nickname
+      serverName: (opts.serverName || ('Сервер ' + nickname)).trim(),
+      gameMode: opts.gameMode || 'free_roam',
+      mapName: opts.mapName || MAP_NAME
     };
     session = s;
     const settings = {
@@ -133,8 +160,9 @@ export async function openHostSession(opts: {
       antiCheat: opts.antiCheat ?? ('moderate' as AntiCheatLevel)
     };
     onlineManager.joinOrCreateRoom(code, nickname, true, opts.passwordRequired ? opts.password : undefined, settings);
-    if (s.access === 'all' && !opts.passwordRequired) await registerInCatalogue(s, nickname, settings);
+    if (s.access === 'all') await registerInCatalogue(s, nickname, settings);
     startHeartbeat();
+    return code;
   } finally {
     busy = false;
     notify();
@@ -148,7 +176,14 @@ export async function setHostAccess(access: HostAccess): Promise<void> {
   notify();
   try {
     if (!session) {
-      session = { access, maxPlayers: DEFAULT_MAX_PLAYERS, docId: null, serverName: 'Сервер ' + onlineManager.localPlayerName };
+      session = {
+        access,
+        maxPlayers: DEFAULT_MAX_PLAYERS,
+        docId: null,
+        serverName: 'Сервер ' + onlineManager.localPlayerName,
+        gameMode: 'free_roam',
+        mapName: MAP_NAME
+      };
     }
     const s = session;
     if (access === 'code') {

@@ -338,43 +338,35 @@ export function ensureTrailers(world: GameWorld): void {
   }
 }
 
-export function clearCustomMapStorage(): void {
-  localStorage.removeItem('flatbody_custom_map');
-  localStorage.removeItem('flatbody_custom_map_indexeddb');
-  try {
-    const req = indexedDB.open('FlatbodyDB', 1);
-    req.onsuccess = (e: any) => {
-      const db = e.target.result;
-      if (db.objectStoreNames.contains('maps')) {
-        const tx = db.transaction('maps', 'readwrite');
-        tx.objectStore('maps').delete('custom_map');
-      }
-    };
-  } catch {}
+const MAP_DB_NAME = 'FlatbodyDB';
+const MAP_DB_VERSION = 2;
+const MAP_CACHE_KEY = 'cached_map_json_v1';
+
+interface CachedMapEntry {
+  signature: string;
+  url: string;
+  data: any;
+  savedAt: number;
 }
 
-export function hasCustomSavedMap(): boolean {
-  return !!localStorage.getItem('flatbody_custom_map') || !!localStorage.getItem('flatbody_custom_map_indexeddb');
-}
+// In-memory raw map template so New Game / Load Save / Exit to Menu clones instantly without re-fetching 11 MB
+let inMemoryMapTemplate: any | null = null;
 
-function getMapFromIndexedDB(): Promise<any> {
+function openMapDB(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
   return new Promise((resolve) => {
     try {
-      const req = indexedDB.open('FlatbodyDB', 1);
+      const req = indexedDB.open(MAP_DB_NAME, MAP_DB_VERSION);
       req.onupgradeneeded = (e: any) => {
-        e.target.result.createObjectStore('maps');
-      };
-      req.onsuccess = (e: any) => {
-        const db = e.target.result;
+        const db: IDBDatabase = e.target.result;
         if (!db.objectStoreNames.contains('maps')) {
-          resolve(null);
-          return;
+          db.createObjectStore('maps');
         }
-        const tx = db.transaction('maps', 'readonly');
-        const getReq = tx.objectStore('maps').get('custom_map');
-        getReq.onsuccess = () => resolve(getReq.result || null);
-        getReq.onerror = () => resolve(null);
+        if (!db.objectStoreNames.contains('saves')) {
+          db.createObjectStore('saves');
+        }
       };
+      req.onsuccess = (e: any) => resolve(e.target.result);
       req.onerror = () => resolve(null);
     } catch {
       resolve(null);
@@ -382,17 +374,84 @@ function getMapFromIndexedDB(): Promise<any> {
   });
 }
 
+function cloneRawMapData(raw: any): any {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(raw);
+  }
+  return JSON.parse(JSON.stringify(raw));
+}
+
+export function invalidateMapCache(): void {
+  inMemoryMapTemplate = null;
+}
+
+export function clearCustomMapStorage(): void {
+  inMemoryMapTemplate = null;
+  localStorage.removeItem('flatbody_custom_map');
+  localStorage.removeItem('flatbody_custom_map_indexeddb');
+  openMapDB().then((db) => {
+    if (!db || !db.objectStoreNames.contains('maps')) return;
+    try {
+      const tx = db.transaction('maps', 'readwrite');
+      tx.objectStore('maps').delete('custom_map');
+    } catch {}
+  });
+}
+
+export function hasCustomSavedMap(): boolean {
+  return !!localStorage.getItem('flatbody_custom_map') || !!localStorage.getItem('flatbody_custom_map_indexeddb');
+}
+
+async function getMapRecordFromIndexedDB<T = any>(key: string): Promise<T | null> {
+  const db = await openMapDB();
+  if (!db || !db.objectStoreNames.contains('maps')) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction('maps', 'readonly');
+      const getReq = tx.objectStore('maps').get(key);
+      getReq.onsuccess = () => resolve((getReq.result as T) || null);
+      getReq.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function putMapRecordToIndexedDB(key: string, value: any): Promise<void> {
+  const db = await openMapDB();
+  if (!db || !db.objectStoreNames.contains('maps')) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction('maps', 'readwrite');
+      tx.objectStore('maps').put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+function getHeaderSignature(headers: Headers): string {
+  const etag = headers.get('etag') || '';
+  const lastMod = headers.get('last-modified') || '';
+  const len = headers.get('content-length') || '';
+  return `${etag}|${lastMod}|${len}`;
+}
+
 /**
  * Loads the game world from public/map.json (or custom map saved from the editor in localStorage/IndexedDB).
+ * Uses a two-tier cache (in-memory template + IndexedDB with ETag/Last-Modified validation) to avoid re-downloading 11 MB.
  */
 export async function loadMap(): Promise<GameWorld> {
-  // Check IndexedDB first if flagged
+  // Check IndexedDB first if custom editor map is flagged
   if (localStorage.getItem('flatbody_custom_map_indexeddb') === 'true') {
     try {
-      const idbMap = await getMapFromIndexedDB();
+      const idbMap = await getMapRecordFromIndexedDB<any>('custom_map');
       if (idbMap && Array.isArray(idbMap.roads) && idbMap.roads.length > 0) {
         console.log('[MapLoader] Загружена пользовательская карта из Редактора (IndexedDB)');
-        const world = normalizeWorld(idbMap);
+        const world = normalizeWorld(cloneRawMapData(idbMap));
         return sanitizeWorldVehicles(world);
       }
     } catch (e) {
@@ -417,16 +476,52 @@ export async function loadMap(): Promise<GameWorld> {
     }
   }
 
+  // Tier 1: Instant in-memory template clone (avoids network + JSON.parse on save load / new game)
+  if (inMemoryMapTemplate) {
+    const world = normalizeWorld(cloneRawMapData(inMemoryMapTemplate));
+    return sanitizeWorldVehicles(world);
+  }
+
   const baseUrl = (import.meta as any).env?.BASE_URL || '/';
   const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   const url = `${cleanBase}map.json?v=interiors_v2`;
 
+  // Tier 2: Check IndexedDB persistent cache and validate via lightweight HEAD request
+  const cachedEntry = await getMapRecordFromIndexedDB<CachedMapEntry>(MAP_CACHE_KEY);
+  if (cachedEntry?.data && Array.isArray(cachedEntry.data.roads) && cachedEntry.data.roads.length > 0) {
+    let isFresh = false;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      isFresh = true;
+    } else {
+      try {
+        const headRes = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+        if (headRes.ok) {
+          const remoteSig = getHeaderSignature(headRes.headers);
+          if (remoteSig !== '||' && remoteSig === cachedEntry.signature) {
+            isFresh = true;
+          } else if (remoteSig === '||' && Date.now() - cachedEntry.savedAt < 10 * 60 * 1000) {
+            isFresh = true;
+          }
+        }
+      } catch {
+        // Offline or transient network error — serve validated IndexedDB cache
+        isFresh = true;
+      }
+    }
+
+    if (isFresh) {
+      inMemoryMapTemplate = cachedEntry.data;
+      console.log(`[MapLoader] Карта загружена из кэша IndexedDB (Дорог: ${cachedEntry.data.roads.length}, Зданий: ${cachedEntry.data.buildings?.length || 0})`);
+      const world = normalizeWorld(cloneRawMapData(inMemoryMapTemplate));
+      return sanitizeWorldVehicles(world);
+    }
+  }
+
   try {
     const res = await fetch(url, {
-      cache: 'no-store',
+      cache: 'default',
       headers: {
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
+        'Accept': 'application/json'
       }
     });
 
@@ -439,20 +534,39 @@ export async function loadMap(): Promise<GameWorld> {
       throw new Error(`Файл "${url}" поврежден или не содержит дорог (roads).`);
     }
 
+    inMemoryMapTemplate = parsed;
+    const signature = getHeaderSignature(res.headers);
+    // Persist asynchronously to IndexedDB without blocking game startup
+    void putMapRecordToIndexedDB(MAP_CACHE_KEY, {
+      signature,
+      url,
+      data: parsed,
+      savedAt: Date.now()
+    } as CachedMapEntry);
+
     console.log(`[MapLoader] Карта успешно загружена из "${url}" (Дорог: ${parsed.roads.length}, Зданий: ${parsed.buildings?.length || 0})`);
-    const world = normalizeWorld(parsed);
+    const world = normalizeWorld(cloneRawMapData(parsed));
     return sanitizeWorldVehicles(world);
   } catch (err: any) {
+    if (cachedEntry?.data && Array.isArray(cachedEntry.data.roads) && cachedEntry.data.roads.length > 0) {
+      console.warn(`[MapLoader] Сетевая загрузка не удалась, использован кэш IndexedDB.`);
+      inMemoryMapTemplate = cachedEntry.data;
+      const world = normalizeWorld(cloneRawMapData(cachedEntry.data));
+      return sanitizeWorldVehicles(world);
+    }
+
     console.warn(`[MapLoader] Сетевая загрузка "${url}" не удалась (${err.message || err}). Повторная попытка загрузки map.json...`);
     const fallbackRes = await fetch(`${cleanBase}map.json`);
     if (fallbackRes.ok) {
       const parsed = await fallbackRes.json();
       if (parsed && Array.isArray(parsed.roads) && parsed.roads.length > 0) {
-        const world = normalizeWorld(parsed);
+        inMemoryMapTemplate = parsed;
+        const world = normalizeWorld(cloneRawMapData(parsed));
         return sanitizeWorldVehicles(world);
       }
     }
     throw new Error(`Ошибка загрузки карты из map.json: ${err.message || err}`);
   }
 }
+
 

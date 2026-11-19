@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Flatbody: 2D Softbody Simulator",
-  "short_name": "Flatbody",
-  "description": "Реалистичный 2D симулятор открытого мира с физикой автомобилей, трафиком ИИ, интерьерами зданий, выживанием и инвентарем.",
+  "name": "flatbody",
+  "short_name": "flatbody",
+  "description": "flatbody — реалистичный 2D симулятор открытого мира с физикой автомобилей, трафиком ИИ, интерьерами зданий, выживанием и инвентарем.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

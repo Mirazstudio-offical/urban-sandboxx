@@ -1,5 +1,6 @@
 import Peer, { DataConnection } from 'peerjs';
 import { 
+  GameCalendarState,
   CarType, 
   DeformVertex, 
   EquippedClothing, 
@@ -8,7 +9,8 @@ import {
   Player, 
   ScratchMark, 
   Vehicle, 
-  VehicleDamage 
+  VehicleDamage,
+  WeatherType
 } from './types';
 import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, ensureVehicleDamage } from './vehicleHelpers';
 import { applyPowertrain } from './powertrainVariants';
@@ -191,6 +193,15 @@ export interface SyncPedestrian {
   pantsColor: string;
 }
 
+export interface SyncWorldState {
+  timeHour: number;
+  calendar?: GameCalendarState;
+  weather: WeatherType;
+  gameMode: 'career' | 'freeroam';
+  savePlayerData: boolean;
+  updatedAt?: number;
+}
+
 export type NetworkPacket = 
   | { type: 'join'; packetId: string; peerId: string; name: string; password?: string }
   | { type: 'leave'; packetId: string; peerId: string; name: string }
@@ -200,6 +211,7 @@ export type NetworkPacket =
   | { type: 'auth_result'; packetId: string; success: boolean; reason?: string; settings?: ServerSettings }
   | { type: 'server_settings'; packetId: string; settings: ServerSettings }
   | { type: 'traffic_sync'; packetId: string; vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] }
+  | { type: 'world_state_sync'; packetId: string; worldState: SyncWorldState }
   | { type: 'kick'; packetId: string; reason: string };
 
 export type OnlineStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -227,9 +239,11 @@ class OnlineManager {
   public joinPassword?: string;
   private peerAntiCheatMap: Map<string, { lastX: number; lastY: number; lastTime: number; lastCash?: number; violations: number }> = new Map();
   public lastTrafficSync: { vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] } | null = null;
+  public lastWorldStateSync: SyncWorldState | null = null;
 
   private listeners: Set<() => void> = new Set();
   private syncTimer: number = 0;
+  private worldSyncTimer: number = 0;
   private lastHonkingVehicles: Set<string> = new Set();
 
   constructor() {
@@ -611,6 +625,19 @@ class OnlineManager {
         if (this.isHost && !this.connections.has(packet.peerId)) {
           this.connectToPeer(packet.peerId);
         }
+        if (this.isHost) {
+          this.worldSyncTimer = 99; // Trigger immediate world state broadcast to the new peer
+          const conn = senderPeerId ? this.connections.get(senderPeerId) : null;
+          if (conn && conn.open) {
+            try {
+              conn.send({
+                type: 'server_settings',
+                packetId: this.nextPacketId(),
+                settings: { ...this.serverSettings, password: '' }
+              });
+            } catch {}
+          }
+        }
         this.notify();
         break;
       }
@@ -634,6 +661,17 @@ class OnlineManager {
       case 'traffic_sync': {
         if (!this.isHost && packet.vehicles && packet.pedestrians) {
           this.lastTrafficSync = { vehicles: packet.vehicles, pedestrians: packet.pedestrians };
+        }
+        break;
+      }
+
+      case 'world_state_sync': {
+        if (!this.isHost && packet.worldState) {
+          this.lastWorldStateSync = { ...packet.worldState, updatedAt: Date.now() };
+          if (typeof packet.worldState.savePlayerData === 'boolean') {
+            this.serverSettings.savePlayerData = packet.worldState.savePlayerData;
+          }
+          this.notify();
         }
         break;
       }
@@ -811,11 +849,24 @@ class OnlineManager {
 
     this.remotePlayers.clear();
     this.speechBubbles.clear();
+    this.chatMessages = [];
+    this.lastTrafficSync = null;
+    this.lastWorldStateSync = null;
+    this.peerAntiCheatMap.clear();
     this.status = 'disconnected';
     this.roomCode = '';
     this.isHost = false;
     this.errorMessage = null;
     this.notify();
+  }
+
+  /**
+   * Removes remote players' ghost vehicles from the local world when exiting online mode
+   * or converting a server session into a standalone singleplayer world.
+   */
+  public clearRemoteVehiclesFromWorld(world: GameWorld | null) {
+    if (!world || !Array.isArray(world.vehicles)) return;
+    world.vehicles = world.vehicles.filter((v) => !(v as any).isRemoteControlled);
   }
 
   /**
@@ -985,6 +1036,25 @@ class OnlineManager {
     if (this.status !== 'connected') return;
 
     const now = Date.now();
+
+    // Host world atmosphere/time/mode broadcasting (~every 2.5s or immediately on peer join)
+    if (this.isHost) {
+      this.worldSyncTimer += dt;
+      if (this.worldSyncTimer >= 2.5) {
+        this.worldSyncTimer = 0;
+        this.broadcastPacket({
+          type: 'world_state_sync',
+          packetId: this.nextPacketId(),
+          worldState: {
+            timeHour: typeof world.timeHour === 'number' ? world.timeHour : 12,
+            calendar: world.calendar ? { ...world.calendar } : undefined,
+            weather: world.weather || 'clear',
+            gameMode: world.gameMode || 'career',
+            savePlayerData: this.serverSettings.savePlayerData
+          }
+        });
+      }
+    }
 
     // Host traffic broadcasting
     if (this.isHost && this.serverSettings.trafficEnabled) {

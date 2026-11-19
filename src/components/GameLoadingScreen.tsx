@@ -314,7 +314,7 @@ export const GameLoadingScreen: React.FC<{ state: LoadingScreenState }> = ({ sta
                         {state.vehicleType ? 'Конфигурация транспорта' : 'Параметры мира'}
                       </div>
                       <div className="cn" style={{ fontSize: 26, fontWeight: 700, marginTop: 4, lineHeight: 1.1 }}>
-                        {state.vehicleName || state.locationName || 'Flatbody'}
+                        {state.vehicleName || state.locationName || 'flatbody'}
                       </div>
                       <div className="mut" style={{ fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
                         {isFreeroam
@@ -345,7 +345,7 @@ export const GameLoadingScreen: React.FC<{ state: LoadingScreenState }> = ({ sta
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className="mut">Пожалуйста, подождите завершения загрузки</span>
               </div>
-              <div>Flatbody Simulator</div>
+              <div>flatbody</div>
             </div>
           </div>
         </div>

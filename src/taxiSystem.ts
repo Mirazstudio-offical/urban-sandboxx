@@ -302,6 +302,57 @@ export class TaxiFleetSystem {
     }
   }
 
+  private createDefaultProfile(): TaxiDriverProfile {
+    return {
+      isEmployed: true,
+      isShiftActive: false,
+      shiftStartTime: null,
+      rating: 4.95,
+      totalRidesCompleted: 2,
+      totalIncome: 770,
+      reviews: JSON.parse(JSON.stringify(INITIAL_REVIEWS))
+    };
+  }
+
+  public exportState(): TaxiDriverProfile {
+    return JSON.parse(JSON.stringify({
+      ...this.profile,
+      isShiftActive: false,
+      shiftStartTime: null
+    }));
+  }
+
+  public resetState(): void {
+    this.profile = this.createDefaultProfile();
+    this.pendingOffer = null;
+    this.activeOrder = null;
+    this.orderTimer = 18;
+    this.isProcessingCollision = false;
+    this.saveToStorage();
+  }
+
+  public importState(saved?: Partial<TaxiDriverProfile> | null): void {
+    this.pendingOffer = null;
+    this.activeOrder = null;
+    this.orderTimer = 18;
+    this.isProcessingCollision = false;
+    if (!saved || typeof saved !== 'object') {
+      this.profile = this.createDefaultProfile();
+    } else {
+      const base = this.createDefaultProfile();
+      this.profile = {
+        ...base,
+        ...JSON.parse(JSON.stringify(saved)),
+        isShiftActive: false,
+        shiftStartTime: null,
+        reviews: Array.isArray(saved.reviews) && saved.reviews.length > 0
+          ? JSON.parse(JSON.stringify(saved.reviews))
+          : base.reviews
+      };
+    }
+    this.saveToStorage();
+  }
+
   public setEmployed(employed: boolean) {
     this.profile.isEmployed = employed;
     if (!employed && this.profile.isShiftActive) {

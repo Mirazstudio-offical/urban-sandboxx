@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { InventoryItem, Player, PhoneSpecs, GameWorld } from '../types';
 import { sound } from '../audio';
+import { getActiveWorldPhoneNotes, setActiveWorldPhoneNotes } from '../saveStorage';
 import {
   formatGameDate,
   formatGameTime,
@@ -145,15 +146,14 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   });
   const [replyInput, setReplyInput] = useState<string>('');
 
-  // Notes App state
-  const [notes, setNotes] = useState<string>(() => {
-    try {
-      return localStorage.getItem('player_phone_notes') ||
-        'Мои заметки:\n· Проверить масло в двигателе\n· Купить канистру бензина АИ-95\n· Заехать в автосервис к Санычу\n· Проверить свечи зажигания';
-    } catch {
-      return 'Заметки';
+  // Notes App state (scoped to the active world/save)
+  const [notes, setNotes] = useState<string>(() => getActiveWorldPhoneNotes());
+
+  useEffect(() => {
+    if (item) {
+      setNotes(getActiveWorldPhoneNotes());
     }
-  });
+  }, [item, world]);
 
   // Camera state
   const [cameraShutterEffect, setCameraShutterEffect] = useState<boolean>(false);
@@ -340,7 +340,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
           id: `photo_${Date.now()}`,
           dataUrl: photoData,
           timestamp: currentTimeStr,
-          locationName: player ? `X: ${Math.round(player.x)} · Y: ${Math.round(player.y)}` : 'Flatbody'
+          locationName: player ? `X: ${Math.round(player.x)} · Y: ${Math.round(player.y)}` : 'flatbody'
         };
         setCapturedPhotos(prev => [newPhoto, ...prev]);
         setLiveCanvasSnapshot(photoData);
@@ -355,9 +355,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
 
   const handleSaveNotes = (text: string) => {
     setNotes(text);
-    try {
-      localStorage.setItem('player_phone_notes', text);
-    } catch {}
+    setActiveWorldPhoneNotes(text);
   };
 
   // Real Points of Interest calculation

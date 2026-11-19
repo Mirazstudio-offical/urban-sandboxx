@@ -104,15 +104,19 @@ import {
   playerHasKeyForVehicle
 } from './items';
 import { defaultBodyState } from './sensations';
-import { TrafficConsole } from './components/TrafficConsole';
-import { FullScreenMap } from './components/FullScreenMap';
+import {
+  DEFAULT_PHONE_NOTES,
+  getActiveWorldPhoneNotes,
+  loadSavesFromStorage,
+  resetActiveWorldPhoneNotes,
+  saveSavesToStorage,
+  setActiveWorldPhoneNotes
+} from './saveStorage';
 import { Minimap } from './components/Minimap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { TruckSuperstructureHUD } from './components/TruckSuperstructureHUD';
 import { ExcavatorHUD } from './components/ExcavatorHUD';
-import { CraneOutriggersModal } from './components/CraneOutriggersModal';
-import { VacuumPumpModal } from './components/VacuumPumpModal';
 import { isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
 import { getExcavatorGeometry, isExcavatorVehicle } from './excavatorSystem';
 import { toggleCraneHookAttach } from './physics';
@@ -121,38 +125,46 @@ import { GameLoadingScreen, type LoadingScreenState } from './components/GameLoa
 import { VehicleBoardMenu } from './components/VehicleBoardMenu';
 import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
 import { PauseMenu, type PauseSessionInfo } from './components/PauseMenu';
-import { PerformanceTest } from './components/PerformanceTest';
-import { CollisionTest } from './components/CollisionTest';
 import { getVehicleCatalogItem } from './vehicleCatalog';
 import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
-import { InventoryModal } from './components/InventoryModal';
-import { SelfInspectionModal } from './components/SelfInspectionModal';
-import { LimbTreatmentModal } from './components/LimbTreatmentModal';
-import { ShopModal, ShopItem, CITY_SHOPS, CityShop } from './components/ShopModal';
-import { CarDealershipModal } from './components/CarDealershipModal';
 import { RadialMenu } from './components/RadialMenu';
 import { SpeedometerHUD } from './components/SpeedometerHUD';
-import { PerformanceProfiler } from './components/PerformanceProfiler';
-import { PhoneModal } from './components/PhoneModal';
 import { performanceConfig, capNearest } from './performanceConfig';
 import { crashLogger, CrashReport } from './crashLogger';
-import { CrashDiagnosticsModal } from './components/CrashDiagnosticsModal';
 import { CrashAlertToast } from './components/CrashAlertToast';
-import { FuelNozzleSelectorModal } from './components/FuelNozzleSelectorModal';
-import { GasStationCashierModal } from './components/GasStationCashierModal';
-import { EngineBayModal } from './components/EngineBayModal';
 import { ContextInteractionHUD } from './components/ContextInteractionHUD';
 import { findActiveInteraction, InteractionTarget } from './interactionSystem';
-import { OnlineModal } from './components/OnlineModal';
-import { UserProfileModal } from './components/UserProfileModal';
-import { FriendsModal } from './components/FriendsModal';
 import { WorldInviteToast } from './components/WorldInviteToast';
-import { RealEstateAgencyModal } from './components/RealEstateAgencyModal';
-import { PropertyDocumentModal } from './components/PropertyDocumentModal';
-import { FurnitureStorageModal } from './components/FurnitureStorageModal';
 import { BedSleepOverlay } from './components/BedSleepOverlay';
-import { DateTimePickerModal } from './components/DateTimePickerModal';
-import { CreativeMenuModal, CreativePlacementHud } from './components/CreativeMenuModal';
+
+// Lazy-loaded on-demand modals for faster initial load (code-splitting)
+const TrafficConsole = React.lazy(() => import('./components/TrafficConsole').then((m) => ({ default: m.TrafficConsole })));
+const FullScreenMap = React.lazy(() => import('./components/FullScreenMap').then((m) => ({ default: m.FullScreenMap })));
+const CraneOutriggersModal = React.lazy(() => import('./components/CraneOutriggersModal').then((m) => ({ default: m.CraneOutriggersModal })));
+const VacuumPumpModal = React.lazy(() => import('./components/VacuumPumpModal').then((m) => ({ default: m.VacuumPumpModal })));
+const PerformanceTest = React.lazy(() => import('./components/PerformanceTest').then((m) => ({ default: m.PerformanceTest })));
+const CollisionTest = React.lazy(() => import('./components/CollisionTest').then((m) => ({ default: m.CollisionTest })));
+const InventoryModal = React.lazy(() => import('./components/InventoryModal').then((m) => ({ default: m.InventoryModal })));
+const SelfInspectionModal = React.lazy(() => import('./components/SelfInspectionModal').then((m) => ({ default: m.SelfInspectionModal })));
+const LimbTreatmentModal = React.lazy(() => import('./components/LimbTreatmentModal').then((m) => ({ default: m.LimbTreatmentModal })));
+import type { CityShop } from './components/ShopModal';
+const ShopModal = React.lazy(() => import('./components/ShopModal').then((m) => ({ default: m.ShopModal })));
+const CarDealershipModal = React.lazy(() => import('./components/CarDealershipModal').then((m) => ({ default: m.CarDealershipModal })));
+const PerformanceProfiler = React.lazy(() => import('./components/PerformanceProfiler').then((m) => ({ default: m.PerformanceProfiler })));
+const PhoneModal = React.lazy(() => import('./components/PhoneModal').then((m) => ({ default: m.PhoneModal })));
+const CrashDiagnosticsModal = React.lazy(() => import('./components/CrashDiagnosticsModal').then((m) => ({ default: m.CrashDiagnosticsModal })));
+const FuelNozzleSelectorModal = React.lazy(() => import('./components/FuelNozzleSelectorModal').then((m) => ({ default: m.FuelNozzleSelectorModal })));
+const GasStationCashierModal = React.lazy(() => import('./components/GasStationCashierModal').then((m) => ({ default: m.GasStationCashierModal })));
+const EngineBayModal = React.lazy(() => import('./components/EngineBayModal').then((m) => ({ default: m.EngineBayModal })));
+const OnlineModal = React.lazy(() => import('./components/OnlineModal').then((m) => ({ default: m.OnlineModal })));
+const UserProfileModal = React.lazy(() => import('./components/UserProfileModal').then((m) => ({ default: m.UserProfileModal })));
+const FriendsModal = React.lazy(() => import('./components/FriendsModal').then((m) => ({ default: m.FriendsModal })));
+const RealEstateAgencyModal = React.lazy(() => import('./components/RealEstateAgencyModal').then((m) => ({ default: m.RealEstateAgencyModal })));
+const PropertyDocumentModal = React.lazy(() => import('./components/PropertyDocumentModal').then((m) => ({ default: m.PropertyDocumentModal })));
+const FurnitureStorageModal = React.lazy(() => import('./components/FurnitureStorageModal').then((m) => ({ default: m.FurnitureStorageModal })));
+const DateTimePickerModal = React.lazy(() => import('./components/DateTimePickerModal').then((m) => ({ default: m.DateTimePickerModal })));
+const CreativeMenuModal = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativeMenuModal })));
+const CreativePlacementHud = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativePlacementHud })));
 import { 
   BedSleepState, 
   startLyingOnBed, 
@@ -161,7 +173,7 @@ import {
   updateBedSleepCycle, 
   finishSleep 
 } from './bedSleepSystem';
-import { toggleApartmentLock, getApartmentById, getCityApartments } from './propertySystem';
+import { toggleApartmentLock, getApartmentById, getCityApartments, resetCityApartmentsForWorld } from './propertySystem';
 import { 
   buildFurnitureStorageId, 
   getExistingFurnitureStorage, 
@@ -169,11 +181,12 @@ import {
   getFurnitureStorage,
   exportFurnitureStorageData,
   importFurnitureStorageData,
+  resetFurnitureStorages,
   saveFurnitureStoragesToLocalStorage
 } from './furnitureStorageSystem';
 import { ChatOverlay } from './components/ChatOverlay';
-import { onlineManager, OnlineStatus } from './onlineSystem';
-import { closeHostSession } from './hostSession';
+import { onlineManager, OnlineStatus, type AntiCheatLevel } from './onlineSystem';
+import { closeHostSession, openHostSession } from './hostSession';
 import { auth, onAuthStateChanged, ensureUserProfileExists, updateUserOnlineStatus, type User } from './firebase';
 import { 
   getNearbyGasPump, 
@@ -836,6 +849,7 @@ export default function App() {
       ? world.vehicles.find(v => v.id === player.currentVehicleId) || null
       : null;
     const cat = veh ? getVehicleCatalogItem(veh.type) : undefined;
+    const wm = activeWorldRef.current;
     return {
       locationName: world && player ? findStreetNameAtPosition(world, player.x, player.y) : '',
       timeHour: timeHourRef.current,
@@ -847,7 +861,10 @@ export default function App() {
       distanceKm: ss.distPx * 0.0625 / 1000,
       maxKmh: ss.maxKmh,
       minutes: Math.floor(ss.playMs / 60000),
-      lastSaveAt: ss.lastSaveAt
+      lastSaveAt: ss.lastSaveAt,
+      worldOrigin: wm.origin,
+      worldName: wm.worldName,
+      serverRoomCode: wm.serverRoomCode || (onlineManager.status === 'connected' ? onlineManager.roomCode : undefined)
     };
   };
 
@@ -938,43 +955,130 @@ export default function App() {
     return 'Ночь';
   };
 
-  // --- REAL SAVE & LOAD ENGINE ---
+  // --- REAL ISOLATED WORLD & SAVE/LOAD ENGINE ---
   const [saves, setSaves] = useState<any[]>([]);
   const savesRef = useRef<any[]>([]);
   savesRef.current = saves;
 
-  // Load saves list from storage on mount
+  const activeWorldRef = useRef<{
+    worldId: string;
+    worldName: string;
+    origin: 'singleplayer' | 'server';
+    serverRoomCode?: string;
+    serverName?: string;
+  }>({
+    worldId: `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    worldName: 'flatbody',
+    origin: 'singleplayer'
+  });
+
+  const lastAppliedWorldSyncRef = useRef<number>(0);
+
+  const createDefaultEquippedClothing = () => ({
+    torso: { shirt: createItem('sweater_blue', 1) },
+    legs: { shirt: createItem('jeans_blue', 1) },
+    feet: { outerwear: createItem('work_boots', 1) },
+    back: { outerwear: createItem('backpack', 1) }
+  });
+
+  const resetPlayerToFreshState = (player: Player, spawnLoc: { x: number; y: number }) => {
+    player.x = spawnLoc.x;
+    player.y = spawnLoc.y;
+    player.vx = 0;
+    player.vy = 0;
+    player.speed = 0;
+    player.angle = 0;
+    player.isInVehicle = false;
+    player.currentVehicleId = null;
+    player.isInsideBuilding = false;
+    player.insideBuildingId = null;
+    player.isInsideApartment = false;
+    player.insideApartmentId = null;
+    player.currentFloor = 0;
+    player.cash = 0;
+    player.selectedHotbarIndex = 0;
+    setSelectedHotbarIndex(0);
+    player.bodyState = defaultBodyState();
+    player.isFainting = false;
+    player.needsHospitalEvacuation = false;
+    player.needs = {
+      health: 100,
+      maxHealth: 100,
+      hunger: 100,
+      maxHunger: 100,
+      thirst: 100,
+      maxThirst: 100,
+      energy: 100,
+      maxEnergy: 100,
+      sleepiness: 0,
+      maxSleepiness: 100,
+      fullness: 50,
+      nausea: 0,
+      isSleeping: false
+    };
+    player.equippedClothing = createDefaultEquippedClothing();
+    player.leftHandItem = null;
+    player.rightHandItem = null;
+    player.activeHand = 'right';
+    player.inventory = createDefaultPlayerInventory();
+    player.notifications = [];
+  };
+
+  const resetAllWorldSingletons = (world: GameWorld) => {
+    resetCityApartmentsForWorld(world);
+    clearInteriorCanvasCache();
+    resetFurnitureStorages();
+    TaxiFleetSystem.getInstance().resetState();
+    resetActiveWorldPhoneNotes();
+  };
+
+  // Load saves list from IndexedDB (with automatic legacy localStorage migration) on mount
   useEffect(() => {
-    const rawSaves = localStorage.getItem('flatbody_saves');
-    if (rawSaves) {
-      try {
-        const parsed = JSON.parse(rawSaves);
-        setSaves(parsed);
-      } catch (e) {
-        console.error('Error parsing saves list', e);
-      }
-    }
+    let alive = true;
+    loadSavesFromStorage()
+      .then((loaded) => {
+        if (alive && Array.isArray(loaded)) {
+          setSaves(loaded);
+        }
+      })
+      .catch((e) => {
+        console.error('Error loading saves from IndexedDB', e);
+      });
+    return () => { alive = false; };
   }, []);
 
   const syncSavesToStorage = (updatedSaves: any[]) => {
     setSaves(updatedSaves);
-    try {
-      localStorage.setItem('flatbody_saves', JSON.stringify(updatedSaves));
-    } catch (e) {
-      console.warn('Failed to save to localStorage (quota exceeded), pruning old saves:', e);
-      try {
-        const pruned = updatedSaves.slice(-2);
-        localStorage.setItem('flatbody_saves', JSON.stringify(pruned));
-      } catch (err2) {
-        console.warn('Could not persist saves even after pruning:', err2);
-      }
-    }
+    void saveSavesToStorage(updatedSaves);
   };
 
-  const handleCreateSave = (customName?: string) => {
+  const handleCreateSave = (
+    customName?: string,
+    opts?: { forceSingleplayerCopy?: boolean; isAutosave?: boolean }
+  ) => {
     const world = worldRef.current;
     const player = playerRef.current;
     if (!world || !player) return;
+
+    const isAutosave = Boolean(opts?.isAutosave || customName === 'Автосохранение');
+
+    // Enforce server's savePlayerData setting for guests during autosave
+    if (
+      isAutosave &&
+      !opts?.forceSingleplayerCopy &&
+      onlineManager.status === 'connected' &&
+      !onlineManager.isHost &&
+      onlineManager.serverSettings.savePlayerData === false
+    ) {
+      return;
+    }
+
+    const activeMeta = activeWorldRef.current;
+    const isSingleplayerCopy = Boolean(opts?.forceSingleplayerCopy);
+    const targetOrigin: 'singleplayer' | 'server' = isSingleplayerCopy ? 'singleplayer' : activeMeta.origin;
+    const targetWorldId = isSingleplayerCopy
+      ? `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+      : activeMeta.worldId;
 
     // Get current street name
     const currentStreet = findStreetNameAtPosition(world, player.x, player.y);
@@ -982,8 +1086,16 @@ export default function App() {
     const currentCal = calendarRef.current;
     const timeString = formatGameTime(currentCal.timeHour);
     const dateString = formatGameDate(currentCal, 'short');
-    
-    const saveName = customName || `Улица: ${currentStreet}`;
+
+    const worldLabel = targetOrigin === 'server'
+      ? (activeMeta.serverName || activeMeta.worldName || `Сервер ${activeMeta.serverRoomCode || ''}`).trim()
+      : (activeMeta.worldName && activeMeta.worldName !== 'flatbody' ? activeMeta.worldName : currentStreet);
+
+    const saveName = isSingleplayerCopy
+      ? (customName || `Одиночный мир (из ${activeMeta.serverName || activeMeta.serverRoomCode || 'сервера'})`)
+      : isAutosave
+        ? `Авто · ${worldLabel}`
+        : (customName || (targetOrigin === 'server' ? `${worldLabel} · ${currentStreet}` : `Улица: ${currentStreet}`));
 
     // Collect all vehicle IDs that have a linked key in player possession or ownership
     const keyedVehicleIds = new Set<string>();
@@ -1011,19 +1123,21 @@ export default function App() {
       keyedVehicleIds.add(player.currentVehicleId);
     }
 
-    // Filter world vehicles to strictly save only vehicles with a linked key / player ownership / inserted key / hitched trailer
+    // Filter world vehicles to strictly save only local player's keyed/owned/hitched vehicles (never remote players' ghost cars)
     const savedVehicles = (world.vehicles || [])
-      .filter(v => 
-        keyedVehicleIds.has(v.id) || 
-        v.ownerId === 'player' || 
-        (v as any).playerOwned ||
-        (v as any).isSpawnedByPlayer ||
-        Boolean(v.keyId) || 
-        Boolean(v.insertedKeyType) || 
-        Boolean(v.insertedKeyId) || 
-        v.id === player.currentVehicleId ||
-        Boolean(v.trailerId) ||
-        Boolean(v.towedById)
+      .filter(v =>
+        !(v as any).isRemoteControlled && (
+          keyedVehicleIds.has(v.id) ||
+          v.ownerId === 'player' ||
+          (v as any).playerOwned ||
+          (v as any).isSpawnedByPlayer ||
+          Boolean(v.keyId) ||
+          Boolean(v.insertedKeyType) ||
+          Boolean(v.insertedKeyId) ||
+          v.id === player.currentVehicleId ||
+          Boolean(v.trailerId) ||
+          Boolean(v.towedById)
+        )
       )
       .map(v => ({
         id: v.id,
@@ -1067,7 +1181,12 @@ export default function App() {
       }));
 
     const newSave = {
-      id: Date.now().toString(),
+      id: Date.now().toString() + '_' + Math.random().toString(36).slice(2, 6),
+      worldId: targetWorldId,
+      origin: targetOrigin,
+      serverRoomCode: targetOrigin === 'server' ? activeMeta.serverRoomCode : undefined,
+      serverName: targetOrigin === 'server' ? activeMeta.serverName : undefined,
+      isAutosave,
       name: saveName,
       date: `${dateString} в ${timeString}`,
       mode: world.gameMode || 'career',
@@ -1089,7 +1208,7 @@ export default function App() {
       leftHandItem: player.leftHandItem ? JSON.parse(JSON.stringify(player.leftHandItem)) : null,
       rightHandItem: player.rightHandItem ? JSON.parse(JSON.stringify(player.rightHandItem)) : null,
       activeHand: player.activeHand || 'right',
-      cash: player.cash || 0,
+      cash: getPlayerCash(player),
       selectedHotbarIndex: player.selectedHotbarIndex || 0,
       vehicles: savedVehicles,
       towingRopes: world.towingRopes ? JSON.parse(JSON.stringify(world.towingRopes)) : [],
@@ -1108,12 +1227,17 @@ export default function App() {
         dynamicFurniture: a.dynamicFurniture ? JSON.parse(JSON.stringify(a.dynamicFurniture)) : [],
         layoutFurniture: a.layout?.furniture ? JSON.parse(JSON.stringify(a.layout.furniture)) : undefined
       })),
-      furnitureStorageState: exportFurnitureStorageData()
+      furnitureStorageState: exportFurnitureStorageData(),
+      taxiProfile: TaxiFleetSystem.getInstance().exportState(),
+      phoneNotes: getActiveWorldPhoneNotes()
     };
 
     let updated = [...savesRef.current];
-    if (customName === 'Автосохранение') {
-      updated = updated.filter(s => s.name !== 'Автосохранение');
+    if (isAutosave) {
+      // Only overwrite the autosave belonging to THIS specific worldId (never clobber other worlds!)
+      updated = updated.filter(
+        s => !((s.isAutosave || s.name === 'Автосохранение') && (s.worldId || 'legacy') === targetWorldId)
+      );
     }
     updated.unshift(newSave);
     syncSavesToStorage(updated);
@@ -1150,56 +1274,12 @@ export default function App() {
 
   const waitMs = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
 
-  const handleLoadSave = async (saveId: string) => {
-    const save = savesRef.current.find(s => s.id === saveId);
-    if (!save) return;
-
+  const applySavedStateToWorld = (save: any, world: GameWorld, player: Player, camera: Camera) => {
     const saveMode: 'career' | 'freeroam' = save.mode || 'career';
-    const playerSavedVeh = save.isInVehicle && save.currentVehicleId && Array.isArray(save.vehicles)
-      ? save.vehicles.find((sv: any) => sv.id === save.currentVehicleId)
-      : (Array.isArray(save.vehicles) && save.vehicles.length > 0 ? save.vehicles[0] : null);
-    const savedVehCfg = playerSavedVeh ? (CAR_CONFIGS[playerSavedVeh.type as CarType] || CAR_CONFIGS.sedan) : null;
 
-    setLoadingScreen({
-      isOpen: true,
-      actionType: 'load_save',
-      title: save.name || 'Загрузка сессии',
-      subtitle: saveMode === 'freeroam' ? 'Загрузка сохранения · Freeroam' : 'Загрузка сохранения · Карьера',
-      stepText: 'Чтение карты города и геометрии дорог...',
-      progress: 18,
-      mode: saveMode,
-      locationName: save.streetName || 'Центральный район',
-      timeHour: typeof save.timeHour === 'number' ? save.timeHour : 12,
-      weather: save.weather || 'clear',
-      vehicleType: playerSavedVeh?.type,
-      vehicleName: savedVehCfg?.name || (save.isInVehicle ? 'Автомобиль' : 'Пешком'),
-      vehicleColor: playerSavedVeh?.color,
-      vehicleRoofColor: playerSavedVeh?.roofColor,
-      saveName: save.name
-    });
-
-    await waitMs(60);
-
-    onlineManager.leaveRoom();
-    closeHostSession();
-    await reloadFreshMap();
-
-    setLoadingScreen(prev => ({
-      ...prev,
-      stepText: 'Восстановление транспорта, объектов и состояния мира...',
-      progress: 62
-    }));
-    await waitMs(90);
-
-    const world = worldRef.current;
-    const player = playerRef.current;
-    const camera = cameraRef.current;
-    if (!world || !player) {
-      setLoadingScreen(prev => ({ ...prev, isOpen: false }));
-      return;
-    }
-
-    resetSessionStats();
+    // 1. Cleanly reset ALL world singletons and player fields BEFORE restoring save data
+    resetAllWorldSingletons(world);
+    resetPlayerToFreshState(player, { x: save.playerX || 4400, y: save.playerY || 2800 });
 
     // Prevent stuck input keys
     inputRef.current.forward = false;
@@ -1209,7 +1289,7 @@ export default function App() {
     inputRef.current.handbrake = false;
     inputRef.current.sprint = false;
 
-    // Restore environmental state & calendar
+    // 2. Restore environmental state & calendar
     if (save.calendar) {
       calendarRef.current = { ...save.calendar };
       setCalendar({ ...save.calendar });
@@ -1219,21 +1299,29 @@ export default function App() {
       calendarRef.current = restored;
       setCalendar(restored);
     }
+    const targetWeather: WeatherType = save.weather || 'clear';
     setTimeHour(calendarRef.current.timeHour);
     timeHourRef.current = calendarRef.current.timeHour;
-    setWeather(save.weather || 'clear');
-    weatherRef.current = save.weather || 'clear';
-    handleSetGpsTarget(save.gpsDestination);
+    setWeather(targetWeather);
+    weatherRef.current = targetWeather;
+    world.calendar = { ...calendarRef.current };
+    world.season = calendarRef.current.season;
+    world.timeHour = calendarRef.current.timeHour;
+    world.weather = targetWeather;
+    world.previousWeather = targetWeather;
+    world.weatherTransition = 1.0;
+    Object.assign(world, getInitialSurfaceHydrologyForCalendar(calendarRef.current, targetWeather));
+    handleSetGpsTarget(save.gpsDestination ?? null);
 
-    // Restore player status & survival needs
+    // 3. Restore player status & survival needs
     player.x = save.playerX;
     player.y = save.playerY;
     player.angle = save.playerAngle || 0;
     player.vx = 0;
     player.vy = 0;
     player.speed = 0;
-    player.isInVehicle = save.isInVehicle;
-    player.currentVehicleId = save.currentVehicleId;
+    player.isInVehicle = Boolean(save.isInVehicle);
+    player.currentVehicleId = save.currentVehicleId || null;
     if (save.cash !== undefined) player.cash = save.cash;
     if (save.selectedHotbarIndex !== undefined) {
       player.selectedHotbarIndex = save.selectedHotbarIndex;
@@ -1263,6 +1351,7 @@ export default function App() {
       world.towingRopes = JSON.parse(JSON.stringify(save.towingRopes));
     }
 
+    // 4. Restore saved player-owned / keyed vehicles
     if (save.vehicles && Array.isArray(save.vehicles)) {
       save.vehicles.forEach((sv: any) => {
         let v = world.vehicles.find(item => item.id === sv.id);
@@ -1340,7 +1429,7 @@ export default function App() {
           v.insertedKeyId = sv.insertedKeyId;
           if (sv.ownerId) v.ownerId = sv.ownerId;
           (v as any).playerOwned = sv.playerOwned ?? (v.ownerId === 'player');
-          (v as any).isSpawnedByPlayer = sv.isSpawnedByPlayer ?? (sv.ownerId === 'player');
+          (v as any).isSpawnedByPlayer = sv.isSpawnedByPlayer ?? (v.ownerId === 'player');
           if (v.ownerId === 'player' || (v as any).playerOwned || (v as any).isSpawnedByPlayer || v.id === save.currentVehicleId || playerHasKeyForVehicle(player, v)) {
             v.isLocked = false;
           } else if (sv.isLocked !== undefined) {
@@ -1363,33 +1452,26 @@ export default function App() {
           if (sv.diffLock) v.diffLock = { ...sv.diffLock };
           if (sv.transferCaseMode !== undefined) v.transferCaseMode = sv.transferCaseMode;
           if (sv.isDerelict !== undefined) v.isDerelict = sv.isDerelict;
-          
-          const isPlayerCar = save.isInVehicle && save.currentVehicleId === v.id;
-          if (isPlayerCar) {
-            v.speed = 0;
-          } else {
-            v.speed = 0; // Zero speed on load
-          }
 
+          v.speed = 0;
           v.vx = 0;
           v.vy = 0;
           v.angularVelocity = 0;
           v.steerAngle = 0;
           if (sv.isParked !== undefined) v.isParked = sv.isParked;
-          v.aiState = v.isParked ? 'parked': 'driving';
+          v.aiState = v.isParked ? 'parked' : 'driving';
           v.targetWaypointIndex = 0;
           v.routeWaypoints = [];
           v.currentConnection = undefined;
           v.knockbackVx = 0;
           v.knockbackVy = 0;
           v.knockbackSpin = 0;
-          v.stunnedTimer = 2.0; // 2 seconds stabilization / collision grace period
-          v.ghostingAlpha = 1.0; // Restored vehicles are solid and fully visible
+          v.stunnedTimer = 2.0;
+          v.ghostingAlpha = 1.0;
 
           if (sv.color) v.color = sv.color;
           if (sv.roofColor) v.roofColor = sv.roofColor;
           if (sv.hasGBO !== undefined) v.hasGBO = sv.hasGBO;
-
           if (sv.hasHeavySuspension !== undefined) (v as any).hasHeavySuspension = sv.hasHeavySuspension;
           if (sv.hasChiptuning !== undefined) (v as any).hasChiptuning = sv.hasChiptuning;
 
@@ -1397,8 +1479,6 @@ export default function App() {
           if (sv.engineState) {
             v.engineState = { ...sv.engineState };
           } else {
-            // No persisted engine data (legacy save): deterministic pick seeded by
-            // vehicle id so every reload gives the same build, never a fresh reroll
             applyPowertrain(v, pickPowertrain(sv.type, makePowertrainRng(v.id)));
           }
           if (sv.damage) {
@@ -1429,7 +1509,7 @@ export default function App() {
       }
     }
 
-    setIsInVehicle(save.isInVehicle);
+    setIsInVehicle(Boolean(save.isInVehicle));
 
     if (save.isInVehicle && save.currentVehicleId) {
       const veh = world.vehicles.find(v => v.id === save.currentVehicleId);
@@ -1449,6 +1529,7 @@ export default function App() {
         player.currentVehicleId = null;
         setIsInVehicle(false);
         setActiveCarName('');
+        sound.stopEngine();
       }
     } else {
       setIsInVehicle(false);
@@ -1463,7 +1544,7 @@ export default function App() {
     camera.targetY = save.playerY;
     camera.targetZoom = 1.15;
 
-    // Restore real-estate & interior states
+    // 5. Restore real-estate, furniture storages, taxi profile, and phone notes (strictly isolated)
     player.isInsideBuilding = save.isInsideBuilding || false;
     player.insideBuildingId = save.insideBuildingId || null;
     player.isInsideApartment = save.isInsideApartment || false;
@@ -1479,11 +1560,9 @@ export default function App() {
           a.isLocked = sa.isLocked;
           a.ownerName = sa.ownerName;
           a.purchaseDate = sa.purchaseDate;
-          if (Array.isArray(sa.dynamicFurniture)) {
-            a.dynamicFurniture = JSON.parse(JSON.stringify(sa.dynamicFurniture));
-          } else {
-            a.dynamicFurniture = [];
-          }
+          a.dynamicFurniture = Array.isArray(sa.dynamicFurniture)
+            ? JSON.parse(JSON.stringify(sa.dynamicFurniture))
+            : [];
           if (Array.isArray(sa.layoutFurniture) && a.layout) {
             a.layout.furniture = JSON.parse(JSON.stringify(sa.layoutFurniture));
           }
@@ -1492,9 +1571,9 @@ export default function App() {
       clearInteriorCanvasCache();
     }
 
-    if ((save as any).furnitureStorageState) {
-      importFurnitureStorageData((save as any).furnitureStorageState);
-    }
+    importFurnitureStorageData((save as any).furnitureStorageState || null);
+    TaxiFleetSystem.getInstance().importState((save as any).taxiProfile || null);
+    setActiveWorldPhoneNotes(typeof (save as any).phoneNotes === 'string' ? (save as any).phoneNotes : DEFAULT_PHONE_NOTES);
 
     world.gameMode = saveMode;
     applyTrafficDefaultForMode(world.gameMode);
@@ -1506,6 +1585,86 @@ export default function App() {
     } else {
       setIsTimeAutoCycling(true);
       isTimeAutoCyclingRef.current = true;
+    }
+  };
+
+  const handleLoadSave = async (saveId: string, opts?: { asSingleplayerCopy?: boolean }) => {
+    const save = savesRef.current.find(s => s.id === saveId);
+    if (!save) return;
+
+    const saveMode: 'career' | 'freeroam' = save.mode || 'career';
+    const playerSavedVeh = save.isInVehicle && save.currentVehicleId && Array.isArray(save.vehicles)
+      ? save.vehicles.find((sv: any) => sv.id === save.currentVehicleId)
+      : (Array.isArray(save.vehicles) && save.vehicles.length > 0 ? save.vehicles[0] : null);
+    const savedVehCfg = playerSavedVeh ? (CAR_CONFIGS[playerSavedVeh.type as CarType] || CAR_CONFIGS.sedan) : null;
+
+    setLoadingScreen({
+      isOpen: true,
+      actionType: 'load_save',
+      title: save.name || 'Загрузка сессии',
+      subtitle: opts?.asSingleplayerCopy
+        ? 'Конвертация серверного сохранения в одиночный мир'
+        : (saveMode === 'freeroam' ? 'Загрузка сохранения · Freeroam' : 'Загрузка сохранения · Карьера'),
+      stepText: 'Чтение карты города и изоляция мира...',
+      progress: 18,
+      mode: saveMode,
+      locationName: save.streetName || 'Центральный район',
+      timeHour: typeof save.timeHour === 'number' ? save.timeHour : 12,
+      weather: save.weather || 'clear',
+      vehicleType: playerSavedVeh?.type,
+      vehicleName: savedVehCfg?.name || (save.isInVehicle ? 'Автомобиль' : 'Пешком'),
+      vehicleColor: playerSavedVeh?.color,
+      vehicleRoofColor: playerSavedVeh?.roofColor,
+      saveName: save.name
+    });
+
+    await waitMs(60);
+
+    onlineManager.leaveRoom();
+    await closeHostSession();
+    await reloadFreshMap();
+
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: 'Восстановление транспорта, объектов и состояния мира...',
+      progress: 62
+    }));
+    await waitMs(90);
+
+    const world = worldRef.current;
+    const player = playerRef.current;
+    const camera = cameraRef.current;
+    if (!world || !player) {
+      setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    resetSessionStats();
+    applySavedStateToWorld(save, world, player, camera);
+
+    // Loading any save from the Saves menu opens it cleanly as an offline world;
+    // converting a server save gives it a fresh singleplayer worldId so the server save stays untouched
+    if (opts?.asSingleplayerCopy || save.origin === 'server') {
+      const spWorldId = opts?.asSingleplayerCopy
+        ? `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+        : (save.worldId || `world_${save.id}`);
+      activeWorldRef.current = {
+        worldId: spWorldId,
+        worldName: opts?.asSingleplayerCopy
+          ? `Одиночный мир (${save.serverName || save.name})`
+          : (save.name || 'flatbody'),
+        origin: 'singleplayer'
+      };
+      if (opts?.asSingleplayerCopy) {
+        handleCreateSave(activeWorldRef.current.worldName, { forceSingleplayerCopy: false });
+        addPlayerNotification(player, 'Серверный мир перенесён в одиночную игру!', 'info');
+      }
+    } else {
+      activeWorldRef.current = {
+        worldId: save.worldId || `world_${save.id}`,
+        worldName: (save.name || 'flatbody').replace(/^Авто ·\s*/, ''),
+        origin: 'singleplayer'
+      };
     }
 
     setLoadingScreen(prev => ({
@@ -1546,7 +1705,7 @@ export default function App() {
       actionType: mode === 'freeroam' ? 'new_freeroam' : 'new_career',
       title: previewSpawnLoc.nameRu.split('(')[0].trim(),
       subtitle: mode === 'freeroam' ? 'Новая сессия · Свободная езда' : 'Новая сессия · Карьера',
-      stepText: 'Загрузка карты города и дорожного графа...',
+      stepText: 'Загрузка чистой карты города и сброс систем мира...',
       progress: 16,
       mode,
       locationName: previewSpawnLoc.nameRu.split('(')[0].trim(),
@@ -1565,7 +1724,7 @@ export default function App() {
     await waitMs(60);
 
     onlineManager.leaveRoom();
-    closeHostSession();
+    await closeHostSession();
     await reloadFreshMap();
 
     setLoadingScreen(prev => ({
@@ -1585,6 +1744,14 @@ export default function App() {
       return;
     }
     resetSessionStats();
+    resetAllWorldSingletons(world);
+
+    const newWorldId = `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    activeWorldRef.current = {
+      worldId: newWorldId,
+      worldName: opts.saveName || previewSpawnLoc.nameRu.split('(')[0].trim(),
+      origin: 'singleplayer'
+    };
 
     world.gameMode = mode;
     applyTrafficDefaultForMode(mode);
@@ -1600,51 +1767,7 @@ export default function App() {
     setCurrentSpawnId(spawnLoc.id);
     setIsSpawnMenuOpen(false);
 
-    if (player.currentVehicleId) {
-      const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
-      if (veh) {
-        veh.isPlayerControlled = false;
-        veh.isParked = true;
-        veh.turnSignal = 'none';
-        veh.speed = 0;
-        veh.vx = 0;
-        veh.vy = 0;
-      }
-    }
-
-    player.x = spawnLoc.x;
-    player.y = spawnLoc.y;
-    player.vx = 0;
-    player.vy = 0;
-    player.speed = 0;
-    player.angle = 0;
-    player.isInVehicle = false;
-    player.currentVehicleId = null;
-    player.isInsideBuilding = false;
-    player.insideBuildingId = null;
-    player.isInsideApartment = false;
-    player.insideApartmentId = null;
-    player.currentFloor = 0;
-    player.bodyState = defaultBodyState();
-    player.isFainting = false;
-    player.needsHospitalEvacuation = false;
-    player.needs = {
-      health: 100,
-      maxHealth: 100,
-      hunger: 100,
-      maxHunger: 100,
-      thirst: 100,
-      maxThirst: 100,
-      energy: 100,
-      maxEnergy: 100,
-      sleepiness: 0,
-      maxSleepiness: 100,
-      fullness: 50,
-      nausea: 0,
-      isSleeping: false
-    };
-    player.inventory = createDefaultPlayerInventory();
-    player.notifications = [];
+    resetPlayerToFreshState(player, spawnLoc);
 
     setIsInVehicle(false);
     setActiveCarName('');
@@ -1785,6 +1908,289 @@ export default function App() {
     setIsPauseMenuOpen(false);
     await waitMs(180);
     setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+  };
+
+  /**
+   * Connects to a multiplayer P2P server in its own completely isolated world (separate from singleplayer saves).
+   * Restores the player's own saved progress for this specific server if one exists locally, otherwise starts fresh.
+   */
+  const handleJoinServerWorld = async (opts: {
+    roomCode: string;
+    nickname?: string;
+    serverName?: string;
+    gameMode?: string;
+  }) => {
+    const cleanCode = onlineManager.sanitizeRoomCode(opts.roomCode);
+    if (!cleanCode) return;
+
+    const serverWorldId = `server_${cleanCode}`;
+    const existingServerSave = savesRef.current.find(
+      s => s.worldId === serverWorldId && s.origin === 'server'
+    );
+    const resolvedMode: 'career' | 'freeroam' =
+      existingServerSave?.mode || (opts.gameMode === 'free_roam' || opts.gameMode === 'drift' ? 'freeroam' : 'career');
+
+    setLoadingScreen({
+      isOpen: true,
+      actionType: 'load_save',
+      title: opts.serverName || `Сервер ${cleanCode}`,
+      subtitle: existingServerSave ? 'Вход в изолированный мир сервера (прогресс найден)' : 'Вход в новый мир сервера',
+      stepText: 'Изоляция локальных данных и загрузка карты сервера...',
+      progress: 22,
+      mode: resolvedMode,
+      locationName: existingServerSave?.streetName || 'Центр города',
+      timeHour: existingServerSave?.timeHour ?? 12,
+      weather: existingServerSave?.weather || 'clear'
+    });
+
+    await waitMs(60);
+
+    onlineManager.leaveRoom();
+    await closeHostSession();
+    await reloadFreshMap();
+
+    const world = worldRef.current;
+    const player = playerRef.current;
+    const camera = cameraRef.current;
+    if (!world || !player) {
+      setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    resetSessionStats();
+    lastAppliedWorldSyncRef.current = 0;
+
+    activeWorldRef.current = {
+      worldId: serverWorldId,
+      worldName: opts.serverName || `Сервер ${cleanCode}`,
+      origin: 'server',
+      serverRoomCode: cleanCode,
+      serverName: opts.serverName || `Сервер ${cleanCode}`
+    };
+
+    if (existingServerSave) {
+      applySavedStateToWorld(existingServerSave, world, player, camera);
+    } else {
+      resetAllWorldSingletons(world);
+      const spawnLoc = SPAWN_LOCATIONS[0];
+      resetPlayerToFreshState(player, spawnLoc);
+      setIsInVehicle(false);
+      setActiveCarName('');
+      sound.stopEngine();
+
+      const initialCal = createInitialCalendarState(2026, 10, 8, 12.0);
+      calendarRef.current = initialCal;
+      setCalendar(initialCal);
+      setTimeHour(12.0);
+      timeHourRef.current = 12.0;
+      setWeather('clear');
+      weatherRef.current = 'clear';
+      world.calendar = initialCal;
+      world.season = initialCal.season;
+      world.timeHour = 12.0;
+      world.weather = 'clear';
+      world.previousWeather = 'clear';
+      world.weatherTransition = 1.0;
+      Object.assign(world, getInitialSurfaceHydrologyForCalendar(initialCal, 'clear'));
+      handleSetGpsTarget(null);
+
+      world.gameMode = resolvedMode;
+      applyTrafficDefaultForMode(resolvedMode);
+      camera.x = spawnLoc.x;
+      camera.y = spawnLoc.y;
+      camera.targetX = spawnLoc.x;
+      camera.targetY = spawnLoc.y;
+      camera.targetZoom = 1.15;
+    }
+
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: `Подключение к комнате ${cleanCode}...`,
+      progress: 80
+    }));
+
+    const nick = (opts.nickname || onlineManager.localPlayerName || 'Игрок').trim();
+    onlineManager.joinOrCreateRoom(cleanCode, nick, false);
+    addPlayerNotification(
+      player,
+      existingServerSave
+        ? `Подключение к серверу ${cleanCode} (загружен ваш профиль сервера)`
+        : `Подключение к новому миру сервера ${cleanCode}`,
+      'info'
+    );
+
+    setIsMainMenuOpen(false);
+    setIsPauseMenuOpen(false);
+    await waitMs(160);
+    setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+  };
+
+  /**
+   * Creates and hosts a brand-new isolated server world from the Main Menu.
+   */
+  const handleCreateServerWorld = async (opts: {
+    roomCode: string;
+    serverName: string;
+    nickname: string;
+    gameMode: string;
+    maxPlayers: number;
+    trafficEnabled: boolean;
+    vehicleCount: number;
+    pedestrianCount: number;
+    passwordRequired: boolean;
+    password: string;
+    savePlayerData: boolean;
+    antiCheat: AntiCheatLevel;
+  }) => {
+    const cleanCode = onlineManager.sanitizeRoomCode(opts.roomCode) || ('room-' + Math.floor(1000 + Math.random() * 9000));
+    const resolvedMode: 'career' | 'freeroam' =
+      opts.gameMode === 'free_roam' || opts.gameMode === 'drift' ? 'freeroam' : 'career';
+    const serverWorldId = `server_${cleanCode}`;
+    const existingServerSave = opts.savePlayerData
+      ? savesRef.current.find(s => s.worldId === serverWorldId && s.origin === 'server')
+      : null;
+
+    setLoadingScreen({
+      isOpen: true,
+      actionType: resolvedMode === 'freeroam' ? 'new_freeroam' : 'new_career',
+      title: opts.serverName || `Сервер ${cleanCode}`,
+      subtitle: 'Создание отдельного мира сервера',
+      stepText: 'Инициализация чистого мира и сетевого хоста...',
+      progress: 25,
+      mode: resolvedMode,
+      locationName: 'Центр города',
+      timeHour: 12,
+      weather: 'clear'
+    });
+
+    await waitMs(60);
+
+    onlineManager.leaveRoom();
+    await closeHostSession();
+    await reloadFreshMap();
+
+    const world = worldRef.current;
+    const player = playerRef.current;
+    const camera = cameraRef.current;
+    if (!world || !player) {
+      setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    resetSessionStats();
+    lastAppliedWorldSyncRef.current = 0;
+
+    activeWorldRef.current = {
+      worldId: serverWorldId,
+      worldName: opts.serverName || `Сервер ${cleanCode}`,
+      origin: 'server',
+      serverRoomCode: cleanCode,
+      serverName: opts.serverName || `Сервер ${cleanCode}`
+    };
+
+    if (existingServerSave) {
+      applySavedStateToWorld(existingServerSave, world, player, camera);
+    } else {
+      resetAllWorldSingletons(world);
+      const spawnLoc = SPAWN_LOCATIONS[0];
+      resetPlayerToFreshState(player, spawnLoc);
+      setIsInVehicle(false);
+      setActiveCarName('');
+      sound.stopEngine();
+
+      const initialCal = createInitialCalendarState(2026, 10, 8, 12.0);
+      calendarRef.current = initialCal;
+      setCalendar(initialCal);
+      setTimeHour(12.0);
+      timeHourRef.current = 12.0;
+      setWeather('clear');
+      weatherRef.current = 'clear';
+      world.calendar = initialCal;
+      world.season = initialCal.season;
+      world.timeHour = 12.0;
+      world.weather = 'clear';
+      world.previousWeather = 'clear';
+      world.weatherTransition = 1.0;
+      Object.assign(world, getInitialSurfaceHydrologyForCalendar(initialCal, 'clear'));
+      handleSetGpsTarget(null);
+
+      world.gameMode = resolvedMode;
+      applyTrafficDefaultForMode(resolvedMode);
+      camera.x = spawnLoc.x;
+      camera.y = spawnLoc.y;
+      camera.targetX = spawnLoc.x;
+      camera.targetY = spawnLoc.y;
+      camera.targetZoom = 1.15;
+    }
+
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: 'Регистрация комнаты в каталоге серверов...',
+      progress: 80
+    }));
+
+    await openHostSession({
+      access: 'all',
+      roomCode: cleanCode,
+      serverName: opts.serverName,
+      mapName: 'flatbody',
+      gameMode: opts.gameMode,
+      maxPlayers: opts.maxPlayers,
+      nickname: opts.nickname,
+      trafficEnabled: opts.trafficEnabled,
+      vehicleCount: opts.vehicleCount,
+      pedestrianCount: opts.pedestrianCount,
+      passwordRequired: opts.passwordRequired,
+      password: opts.password,
+      savePlayerData: opts.savePlayerData,
+      antiCheat: opts.antiCheat
+    });
+
+    if (opts.savePlayerData && !existingServerSave) {
+      handleCreateSave(opts.serverName || `Сервер ${cleanCode}`);
+    }
+
+    addPlayerNotification(player, `Сервер «${opts.serverName}» запущен (код: ${cleanCode})`, 'info');
+    setIsMainMenuOpen(false);
+    setIsPauseMenuOpen(false);
+    await waitMs(160);
+    setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+  };
+
+  /**
+   * Saves a standalone local singleplayer copy of the current server world without disconnecting.
+   */
+  const handleSaveServerLocally = () => {
+    const meta = activeWorldRef.current;
+    const copyName = `Одиночный мир · ${meta.serverName || meta.serverRoomCode || 'копия сервера'}`;
+    handleCreateSave(copyName, { forceSingleplayerCopy: true });
+    const p = playerRef.current;
+    if (p) {
+      addPlayerNotification(p, 'Локальная одиночная копия сервера сохранена!', 'info');
+    }
+  };
+
+  /**
+   * Disconnects from P2P, drops remote ghost vehicles, converts the active session into an
+   * independent singleplayer world, and saves it locally so the player continues seamlessly offline.
+   */
+  const handleConvertServerToSingleplayer = async () => {
+    const prevMeta = activeWorldRef.current;
+    await closeHostSession();
+    onlineManager.leaveRoom();
+    onlineManager.clearRemoteVehiclesFromWorld(worldRef.current);
+
+    const spName = `Одиночный мир · ${prevMeta.serverName || prevMeta.serverRoomCode || 'flatbody'}`;
+    activeWorldRef.current = {
+      worldId: `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      worldName: spName,
+      origin: 'singleplayer'
+    };
+    handleCreateSave(spName);
+    const p = playerRef.current;
+    if (p) {
+      addPlayerNotification(p, 'Сервер переведён в одиночный мир и сохранён локально!', 'info');
+    }
   };
 
   const getMouseWorldPos = (sx: number, sy: number) => {
@@ -2056,16 +2462,23 @@ export default function App() {
     }
   };
 
-  // Periodic autosave based on settings.autoSaveInterval
+  // Periodic autosave based on settings.autoSaveInterval (scoped strictly to active worldId)
   useEffect(() => {
     if (settings.autoSaveInterval <= 0) return;
     const interval = setInterval(() => {
       if (worldRef.current && playerRef.current && !isMainMenuOpenRef.current && !isPauseMenuOpenRef.current) {
-        handleCreateSave('Автосохранение');
+        handleCreateSave('Автосохранение', { isAutosave: true });
       }
     }, settings.autoSaveInterval * 1000);
     return () => clearInterval(interval);
   }, [settings.autoSaveInterval]);
+
+  // Clean up remote players' ghost vehicles whenever online session disconnects
+  useEffect(() => {
+    if (onlineStatus === 'disconnected') {
+      onlineManager.clearRemoteVehiclesFromWorld(worldRef.current);
+    }
+  }, [onlineStatus]);
 
   const worldRef = useRef<GameWorld | null>(null);
   const playerRef = useRef<Player>({
@@ -2944,6 +3357,35 @@ export default function App() {
 
         // 0. Update Online Multiplayer Network State & Synchronize Entities
         onlineManager.update(dt, world);
+        if (
+          onlineManager.status === 'connected' &&
+          !onlineManager.isHost &&
+          onlineManager.lastWorldStateSync &&
+          (onlineManager.lastWorldStateSync.updatedAt || 0) > lastAppliedWorldSyncRef.current
+        ) {
+          const ws = onlineManager.lastWorldStateSync;
+          lastAppliedWorldSyncRef.current = ws.updatedAt || Date.now();
+          if (ws.calendar) {
+            calendarRef.current = { ...ws.calendar };
+            world.calendar = { ...ws.calendar };
+            world.season = ws.calendar.season;
+            setCalendar({ ...ws.calendar });
+          }
+          if (typeof ws.timeHour === 'number') {
+            timeHourRef.current = ws.timeHour;
+            world.timeHour = ws.timeHour;
+            setTimeHour(ws.timeHour);
+          }
+          if (ws.weather && ws.weather !== weatherRef.current) {
+            weatherRef.current = ws.weather;
+            world.weather = ws.weather;
+            setWeather(ws.weather);
+          }
+          if (ws.gameMode && ws.gameMode !== world.gameMode) {
+            world.gameMode = ws.gameMode;
+            applyTrafficDefaultForMode(ws.gameMode);
+          }
+        }
         onlineSyncTimerRef.current += dt;
         if (onlineSyncTimerRef.current >= 0.04) {
           onlineSyncTimerRef.current = 0;
@@ -6825,44 +7267,52 @@ export default function App() {
       )}
 
       {/* FULL-SCREEN INTERACTIVE MAP MODAL (M key) */}
-      <FullScreenMap
-        world={worldRef.current}
-        player={playerRef.current}
-        camera={cameraRef.current}
-        isOpen={isFullMapOpen}
-        onClose={() => setIsFullMapOpen(false)}
-        onTeleport={handleTeleportToLocation}
-        onSetGpsTarget={handleSetGpsTarget}
-        streetName={streetName}
-      />
+      <React.Suspense fallback={null}>
+        {isFullMapOpen && (
+          <FullScreenMap
+            world={worldRef.current}
+            player={playerRef.current}
+            camera={cameraRef.current}
+            isOpen={isFullMapOpen}
+            onClose={() => setIsFullMapOpen(false)}
+            onTeleport={handleTeleportToLocation}
+            onSetGpsTarget={handleSetGpsTarget}
+            streetName={streetName}
+          />
+        )}
 
-      {/* Traffic Diagnostics & AI Console */}
-      <TrafficConsole
-        world={worldRef.current}
-        isOpen={isConsoleOpen}
-        onClose={() => setIsConsoleOpen(false)}
-        onFocusVehicle={(car) => {
-          cameraRef.current.x = car.x;
-          cameraRef.current.y = car.y;
-          cameraRef.current.targetX = car.x;
-          cameraRef.current.targetY = car.y;
-          cameraRef.current.targetZoom = 1.25;
-          setIsConsoleOpen(false);
-        }}
-      />
+        {/* Traffic Diagnostics & AI Console */}
+        {isConsoleOpen && (
+          <TrafficConsole
+            world={worldRef.current}
+            isOpen={isConsoleOpen}
+            onClose={() => setIsConsoleOpen(false)}
+            onFocusVehicle={(car) => {
+              cameraRef.current.x = car.x;
+              cameraRef.current.y = car.y;
+              cameraRef.current.targetX = car.x;
+              cameraRef.current.targetY = car.y;
+              cameraRef.current.targetZoom = 1.25;
+              setIsConsoleOpen(false);
+            }}
+          />
+        )}
 
-      {/* Dynamic Performance Profiler Console */}
-      <PerformanceProfiler
-        isOpen={isPerfConsoleOpen}
-        onClose={() => setIsPerfConsoleOpen(false)}
-        stats={currentPerfStats}
-        history={perfHistoryRef.current}
-        onClearHistory={() => {
-          perfHistoryRef.current = [];
-        }}
-        isMuted={isMuted}
-        onToggleMute={toggleSoundMute}
-      />
+        {/* Dynamic Performance Profiler Console */}
+        {isPerfConsoleOpen && (
+          <PerformanceProfiler
+            isOpen={isPerfConsoleOpen}
+            onClose={() => setIsPerfConsoleOpen(false)}
+            stats={currentPerfStats}
+            history={perfHistoryRef.current}
+            onClearHistory={() => {
+              perfHistoryRef.current = [];
+            }}
+            isMuted={isMuted}
+            onToggleMute={toggleSoundMute}
+          />
+        )}
+      </React.Suspense>
 
       {/* SPAWN LOCATION SELECTION MODAL */}
       {isSpawnMenuOpen && (
@@ -7045,7 +7495,8 @@ export default function App() {
         selectedHotbarIndex={selectedHotbarIndex}
       />
 
-      {/* TARGETED LIMB TREATMENT MODAL */}
+      {/* TARGETED LIMB TREATMENT, INSPECTION, INVENTORY, PHONE, DEALERSHIP & SHOP MODALS */}
+      <React.Suspense fallback={null}>
       {treatmentModalItem && (
         <LimbTreatmentModal
           isOpen={!!treatmentModalItem}
@@ -7070,37 +7521,41 @@ export default function App() {
       )}
 
       {/* SELF INSPECTION & BODY SENSATIONS MODAL */}
-      <SelfInspectionModal
-        isOpen={isInspectionOpen}
-        onClose={() => setIsInspectionOpen(false)}
-        player={playerRef.current}
-      />
+      {isInspectionOpen && (
+        <SelfInspectionModal
+          isOpen={isInspectionOpen}
+          onClose={() => setIsInspectionOpen(false)}
+          player={playerRef.current}
+        />
+      )}
 
       {/* FULL INVENTORY & SURROUNDINGS MANAGEMENT MODAL */}
-      <InventoryModal
-        isOpen={isInventoryOpen}
-        onClose={() => setIsInventoryOpen(false)}
-        player={playerRef.current}
-        world={worldRef.current}
-        onInspectDocument={(item) => {
-          setSelectedPropertyDocItem(item);
-          setIsPropertyDocumentModalOpen(true);
-        }}
-        onRequestLimbTreatment={(idx, item) => {
-          setIsInventoryOpen(false);
-          setTreatmentModalItem({ index: idx, item });
-        }}
-        onSleepInBed={() => {
-          const p = playerRef.current;
-          if (p && p.needs) {
-            p.needs.isSleeping = true;
-            p.needs.sleepiness = 0;
-            p.needs.energy = 100;
-            p.needs.health = Math.min(100, p.needs.health + 20);
-            addPlayerNotification(p, 'Вы отдохнули и восстановили силы!', 'sleep');
-          }
-        }}
-      />
+      {isInventoryOpen && (
+        <InventoryModal
+          isOpen={isInventoryOpen}
+          onClose={() => setIsInventoryOpen(false)}
+          player={playerRef.current}
+          world={worldRef.current}
+          onInspectDocument={(item) => {
+            setSelectedPropertyDocItem(item);
+            setIsPropertyDocumentModalOpen(true);
+          }}
+          onRequestLimbTreatment={(idx, item) => {
+            setIsInventoryOpen(false);
+            setTreatmentModalItem({ index: idx, item });
+          }}
+          onSleepInBed={() => {
+            const p = playerRef.current;
+            if (p && p.needs) {
+              p.needs.isSleeping = true;
+              p.needs.sleepiness = 0;
+              p.needs.energy = 100;
+              p.needs.health = Math.min(100, p.needs.health + 20);
+              addPlayerNotification(p, 'Вы отдохнули и восстановили силы!', 'sleep');
+            }
+          }}
+        />
+      )}
 
       {/* INTERACTIVE SMARTPHONE MODAL */}
       {activePhoneItem && (
@@ -7114,16 +7569,19 @@ export default function App() {
       )}
 
       {/* CAR DEALERSHIP MODAL */}
-      <CarDealershipModal
-        isOpen={isDealershipOpen}
-        onClose={() => setIsDealershipOpen(false)}
-        player={playerRef.current}
-        world={worldRef.current}
-        dealershipX={252}
-        dealershipY={5916}
-      />
+      {isDealershipOpen && (
+        <CarDealershipModal
+          isOpen={isDealershipOpen}
+          onClose={() => setIsDealershipOpen(false)}
+          player={playerRef.current}
+          world={worldRef.current}
+          dealershipX={252}
+          dealershipY={5916}
+        />
+      )}
 
       {/* SHOP & AUTO REPAIR MODAL */}
+      {isShopOpen && (
       <ShopModal
         isOpen={isShopOpen}
         onClose={() => setIsShopOpen(false)}
@@ -7344,6 +7802,8 @@ export default function App() {
           }
         }}
       />
+      )}
+      </React.Suspense>
 
       {/* IN-CAR VEHICLE BOARD RADIAL (приборка) */}
       <VehicleBoardMenu
@@ -7412,7 +7872,9 @@ export default function App() {
         }}
       />
 
-      {/* GAS STATION: FUEL NOZZLE SELECTOR MODAL */}
+      {/* GAS STATION, ENGINE BAY, CRANE & VACUUM MODALS (lazy-loaded) */}
+      <React.Suspense fallback={null}>
+      {isFuelNozzleModalOpen && (
       <FuelNozzleSelectorModal
         isOpen={isFuelNozzleModalOpen}
         onClose={() => setIsFuelNozzleModalOpen(false)}
@@ -7431,9 +7893,10 @@ export default function App() {
           }
         }}
       />
+      )}
 
       {/* GAS STATION: CASHIER POS TERMINAL MODAL */}
-      {worldRef.current && playerRef.current && (
+      {isGasStationCashierModalOpen && worldRef.current && playerRef.current && (
         <GasStationCashierModal
           isOpen={isGasStationCashierModalOpen}
           onClose={() => setIsGasStationCashierModalOpen(false)}
@@ -7517,6 +7980,7 @@ export default function App() {
           onForceUpdate={() => setVitalsRefreshTick((t) => t + 1)}
         />
       )}
+      </React.Suspense>
 
       {/* UNIFIED CONTEXT INTERACTION HUD */}
       <ContextInteractionHUD
@@ -7796,7 +8260,9 @@ export default function App() {
         </div>
       )}
 
-      {/* MODERN CREATIVE MODE MODAL */}
+      {/* MODERN CREATIVE MODE MODAL (lazy-loaded) */}
+      <React.Suspense fallback={null}>
+      {isCreativeMode && !isMainMenuOpen && !activePlacement && (
       <CreativeMenuModal
         isOpen={isCreativeMode && !isMainMenuOpen && !activePlacement}
         onClose={() => {
@@ -7955,6 +8421,7 @@ export default function App() {
           }
         }}
       />
+      )}
 
       {/* PLACEMENT WORLD PREVIEW HUD */}
       {isCreativeMode && activePlacement && !isMainMenuOpen && (
@@ -7966,6 +8433,7 @@ export default function App() {
           }}
         />
       )}
+      </React.Suspense>
 
       {/* Pause Menu Overlay */}
       {isPauseMenuOpen && !isMainMenuOpen && (
@@ -7985,11 +8453,13 @@ export default function App() {
             const p = playerRef.current;
             if (p) addPlayerNotification(p, 'Игра успешно сохранена!', 'info');
           }}
+          onSaveServerLocally={handleSaveServerLocally}
+          onConvertServerToSingleplayer={handleConvertServerToSingleplayer}
 
           onExitToMainMenu={async () => {
             const p = playerRef.current;
             const w = worldRef.current;
-            const curStreet = w && p ? findStreetNameAtPosition(w, p.x, p.y) : 'Flatbody';
+            const curStreet = w && p ? findStreetNameAtPosition(w, p.x, p.y) : 'flatbody';
             setIsPauseMenuOpen(false);
             setLoadingScreen({
               isOpen: true,
@@ -8008,9 +8478,20 @@ export default function App() {
             sound.stopHorn();
             await waitMs(60);
             onlineManager.leaveRoom();
-            closeHostSession();
+            await closeHostSession();
             resetSessionStats();
             await reloadFreshMap();
+            if (worldRef.current) {
+              resetAllWorldSingletons(worldRef.current);
+            }
+            if (playerRef.current) {
+              resetPlayerToFreshState(playerRef.current, SPAWN_LOCATIONS[0]);
+            }
+            activeWorldRef.current = {
+              worldId: `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              worldName: 'flatbody',
+              origin: 'singleplayer'
+            };
             setLoadingScreen(prev => ({
               ...prev,
               stepText: 'Открытие главного меню...',
@@ -8038,11 +8519,14 @@ export default function App() {
           initialScreen={mainMenuInitialScreen}
           onResume={() => setIsMainMenuOpen(false)}
           saves={saves}
-          onLoadSave={handleLoadSave}
+          onLoadSave={(id) => handleLoadSave(id)}
+          onLoadSaveAsSingleplayer={(id) => handleLoadSave(id, { asSingleplayerCopy: true })}
           onDeleteSave={handleDeleteSave}
           onNewGame={({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor, powertrain }) => {
             handleNewGame({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor, powertrain });
           }}
+          onJoinServer={(opts) => handleJoinServerWorld(opts)}
+          onCreateServer={(opts) => handleCreateServerWorld(opts)}
           currentSettings={settings}
           onUpdateSettings={(newSettings) => {
             setSettings(newSettings);
@@ -8057,12 +8541,15 @@ export default function App() {
       {/* Fullscreen Loading / Saving Screen */}
       <GameLoadingScreen state={loadingScreen} />
 
-      {/* Online P2P Multiplayer Modal */}
-      <OnlineModal
-        isOpen={isOnlineModalOpen}
-        onClose={() => setIsOnlineModalOpen(false)}
-        onOpenFriends={() => setIsFriendsModalOpen(true)}
-      />
+      {/* Online, Diagnostics, Profile, Real Estate & Storage Modals (lazy-loaded) */}
+      <React.Suspense fallback={null}>
+      {isOnlineModalOpen && (
+        <OnlineModal
+          isOpen={isOnlineModalOpen}
+          onClose={() => setIsOnlineModalOpen(false)}
+          onOpenFriends={() => setIsFriendsModalOpen(true)}
+        />
+      )}
 
       {/* In-game acceleration run tester (time measurement + config + export) */}
       {isPerfTestOpen && worldRef.current && (
@@ -8083,53 +8570,58 @@ export default function App() {
       )}
 
       {/* Friends & Social System Modal */}
-      <FriendsModal
-        isOpen={isFriendsModalOpen}
-        onClose={() => setIsFriendsModalOpen(false)}
-        onJoinRoom={(code) => {
-          onlineManager.joinOrCreateRoom(code, onlineManager.localPlayerName, false);
-          setIsOnlineModalOpen(true);
-        }}
-      />
+      {isFriendsModalOpen && (
+        <FriendsModal
+          isOpen={isFriendsModalOpen}
+          onClose={() => setIsFriendsModalOpen(false)}
+          onJoinRoom={(code) => {
+            setIsFriendsModalOpen(false);
+            void handleJoinServerWorld({ roomCode: code, nickname: onlineManager.localPlayerName });
+          }}
+        />
+      )}
+      </React.Suspense>
 
       {/* Real-time World Invite Toast Notification */}
       <WorldInviteToast
         onJoinRoom={(code) => {
-          onlineManager.joinOrCreateRoom(code, onlineManager.localPlayerName, false);
-          setIsOnlineModalOpen(true);
+          void handleJoinServerWorld({ roomCode: code, nickname: onlineManager.localPlayerName });
         }}
       />
 
+      <React.Suspense fallback={null}>
       {/* Firebase User Profile & Cloud Saves Modal */}
-      <UserProfileModal
-        isOpen={isUserProfileModalOpen}
-        onClose={() => setIsUserProfileModalOpen(false)}
-        currentUser={currentUser}
-        currentPlayerData={playerRef.current ? {
-          money: getPlayerCash(playerRef.current),
-          health: playerRef.current.needs?.health || 100,
-          position: { x: playerRef.current.x, y: playerRef.current.y },
-          inventory: playerRef.current.inventory || [],
-          needs: playerRef.current.needs
-        } : undefined}
-        onLoadCloudSaveData={(cloudData) => {
-          const p = playerRef.current;
-          if (p) {
-            p.x = cloudData.position.x;
-            p.y = cloudData.position.y;
-            if (p.needs) p.needs.health = cloudData.health;
-            if (cloudData.inventory) p.inventory = cloudData.inventory;
-            if (cloudData.money !== undefined) {
-              p.cash = cloudData.money;
+      {isUserProfileModalOpen && (
+        <UserProfileModal
+          isOpen={isUserProfileModalOpen}
+          onClose={() => setIsUserProfileModalOpen(false)}
+          currentUser={currentUser}
+          currentPlayerData={playerRef.current ? {
+            money: getPlayerCash(playerRef.current),
+            health: playerRef.current.needs?.health || 100,
+            position: { x: playerRef.current.x, y: playerRef.current.y },
+            inventory: playerRef.current.inventory || [],
+            needs: playerRef.current.needs
+          } : undefined}
+          onLoadCloudSaveData={(cloudData) => {
+            const p = playerRef.current;
+            if (p) {
+              p.x = cloudData.position.x;
+              p.y = cloudData.position.y;
+              if (p.needs) p.needs.health = cloudData.health;
+              if (cloudData.inventory) p.inventory = cloudData.inventory;
+              if (cloudData.money !== undefined) {
+                p.cash = cloudData.money;
+              }
+              addPlayerNotification(p, 'Облачное сохранение успешно загружено!', 'pickup');
+              setVitalsRefreshTick(t => t + 1);
             }
-            addPlayerNotification(p, 'Облачное сохранение успешно загружено!', 'pickup');
-            setVitalsRefreshTick(t => t + 1);
-          }
-        }}
-      />
+          }}
+        />
+      )}
 
       {/* Real Estate Purchase & Agency Modal */}
-      {playerRef.current && (
+      {isRealEstateModalOpen && playerRef.current && (
         <RealEstateAgencyModal
           isOpen={isRealEstateModalOpen}
           onClose={() => setIsRealEstateModalOpen(false)}
@@ -8143,14 +8635,16 @@ export default function App() {
       )}
 
       {/* Property Official Legal Documents Inspection Modal */}
-      <PropertyDocumentModal
-        isOpen={isPropertyDocumentModalOpen}
-        onClose={() => {
-          setIsPropertyDocumentModalOpen(false);
-          setSelectedPropertyDocItem(null);
-        }}
-        documentItem={selectedPropertyDocItem}
-      />
+      {isPropertyDocumentModalOpen && (
+        <PropertyDocumentModal
+          isOpen={isPropertyDocumentModalOpen}
+          onClose={() => {
+            setIsPropertyDocumentModalOpen(false);
+            setSelectedPropertyDocItem(null);
+          }}
+          documentItem={selectedPropertyDocItem}
+        />
+      )}
 
       {/* Apartment Furniture Storage Modal */}
       {isFurnitureStorageOpen && furnitureStorageData && playerRef.current && (
@@ -8186,6 +8680,7 @@ export default function App() {
           }}
         />
       )}
+      </React.Suspense>
 
       {/* Bed Sleeping & Night Awakening Overlay */}
       {bedSleepState && bedSleepState.isActive && playerRef.current && (
@@ -8257,7 +8752,8 @@ export default function App() {
         />
       )}
 
-      {/* Crash Diagnostics & Flight Recorder Modal */}
+      {/* Crash Diagnostics & Date/Time Picker Modals (lazy-loaded) */}
+      <React.Suspense fallback={null}>
       {isCrashDiagnosticsOpen && (
         <CrashDiagnosticsModal
           isOpen={isCrashDiagnosticsOpen}
@@ -8316,6 +8812,7 @@ export default function App() {
           onClose={() => setIsDateTimePickerOpen(false)}
         />
       )}
+      </React.Suspense>
     </div>
   );
 }
