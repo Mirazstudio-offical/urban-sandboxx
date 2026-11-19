@@ -995,10 +995,14 @@ export class GameRenderer {
   private static readonly MAX_CHUNKS = 128;
   private getChunkCanvas(cx: number, cy: number, world: GameWorld): HTMLCanvasElement {
     const ww = getEffectiveWeatherWeights(world);
-    const isWet = ww.isWetSurface && !isWorldFreezing(world);
+    const snowTier = Math.round(Math.max(0, Math.min(1, ww.snowCover)) * 5);
+    const roadSnowTier = Math.round(Math.max(0, Math.min(1, ww.roadSnowCover)) * 4);
+    const soilWetTier = Math.round(Math.max(0, Math.min(1, ww.soilMoisture)) * 3);
+    const surfWetTier = Math.round(Math.max(0, Math.min(1, ww.surfaceWetness)) * 3);
+    const freezeTier = Math.round(Math.max(0, Math.min(1, ww.iceFreezeProgress)) * 2);
     const seasonKey = world.calendar
-      ? `${world.calendar.season}_${world.calendar.month}_${isWet ? 'wet' : 'dry'}_${isWorldFreezing(world) ? 'frz' : 'thw'}`
-      : `default_${isWet ? 'wet' : 'dry'}`;
+      ? `${world.calendar.season}_${world.calendar.month}_sn${snowTier}_rs${roadSnowTier}_sw${soilWetTier}_rw${surfWetTier}_fr${freezeTier}`
+      : `default_sn${snowTier}_sw${soilWetTier}_rw${surfWetTier}`;
     if (this.lastChunkSeasonKey !== seasonKey || this.lastChunkWorldRef !== world) {
       for (const oldCanvas of this.chunkCache.values()) {
         oldCanvas.width = 0;
@@ -1317,8 +1321,8 @@ export class GameRenderer {
             }
           }
 
-          const isMirrorFreezing = isWorldFreezing(world, timeHour);
-          this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY, isMirrorFreezing);
+          const mirrorFreezeProg = world.iceFreezeProgress ?? (isWorldFreezing(world, timeHour) ? 1 : 0);
+          this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY, mirrorFreezeProg);
           TerrainRenderer.renderDynamicFieldGrass(
             ctx,
             world,
@@ -1448,12 +1452,13 @@ export class GameRenderer {
     this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
 
     const isFreezing = isWorldFreezing(world, timeHour);
+    const freezeProg = world.iceFreezeProgress ?? (isFreezing ? 1 : 0);
 
     // 4c. River "Быстрица" (Flowing water, animated currents, riverbanks, ford, obstacles & logging bridge)
     renderRiverSystem(this.ctx, minX, minY, maxX, maxY, timeHour, nightAlpha, world.weather, visibleVehicles, isFreezing);
 
-    // 5. Puddles (Road wet spots)
-    this.renderPuddles(world.puddles, minX, minY, maxX, maxY, isFreezing);
+    // 5. Puddles (Road wet spots with continuous freeze/thaw crust)
+    this.renderPuddles(world.puddles, minX, minY, maxX, maxY, freezeProg);
 
     // 6. Skid Marks
     this.renderSkidMarks(world.skidMarks, minX, minY, maxX, maxY);
@@ -1723,13 +1728,22 @@ export class GameRenderer {
   ) {
     const roads = candidateRoads || world.roads;
     const { intersections } = world;
-    const isWinter = world.calendar?.season === 'winter';
+    const ww = getEffectiveWeatherWeights(world);
     const isAutumn = world.calendar?.season === 'autumn';
     const isSpring = world.calendar?.season === 'spring';
-    const isWet = getEffectiveWeatherWeights(world).isWetSurface && !isWorldFreezing(world);
+    const snowCover = ww.snowCover;
+    const roadSnow = ww.roadSnowCover;
+    const slush = ww.slushLevel;
+    const surfWet = ww.surfaceWetness;
+    const soilWet = ww.soilMoisture;
+    const isFrozenGround = ww.iceFreezeProgress >= 0.55;
+    const isSnowy = snowCover > 0.28;
+    const isWet = surfWet > 0.14 && !isFrozenGround;
+    const isMuddyDirt = (soilWet > 0.24 || isSpring) && !isFrozenGround && snowCover < 0.45;
+    const wetDarkAlpha = Math.min(0.34, surfWet * 0.34);
 
     // 1. First Pass: Country Road Shoulders (Широкие многослойные обочины загородных дорог и трасс)
-    const shoulderPattern = isWinter ? 'rgba(232, 238, 245, 0.88)' : GameRenderer.getShoulderPattern(ctx);
+    const shoulderPattern = GameRenderer.getShoulderPattern(ctx);
 
     for (const road of roads) {
       if (road.isRoundabout) continue;
@@ -1747,18 +1761,25 @@ export class GameRenderer {
         
         // 1a. Main wide crushed stone shoulder
         ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, road.width + shoulderW * 2);
-        if (isWet) {
-          ctx.fillStyle = 'rgba(14, 12, 9, 0.34)';
+        if (wetDarkAlpha > 0.03 && !isFrozenGround) {
+          ctx.fillStyle = `rgba(14, 12, 9, ${wetDarkAlpha.toFixed(3)})`;
+          ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, road.width + shoulderW * 2);
+        }
+        if (snowCover > 0.08) {
+          const sAlpha = Math.min(0.88, Math.pow(Math.min(1, (snowCover - 0.06) / 0.8), 0.9) * 0.88);
+          ctx.fillStyle = `rgba(232, 238, 245, ${sAlpha.toFixed(3)})`;
           ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, road.width + shoulderW * 2);
         }
 
         // 1b. Inner compacted dark edge strip adjacent to asphalt (прикромочная полоса 6px)
-        ctx.fillStyle = isWinter ? 'rgba(80, 90, 105, 0.40)' : (isWet ? 'rgba(22, 16, 10, 0.62)' : 'rgba(42, 36, 26, 0.45)');
+        ctx.fillStyle = isSnowy ? 'rgba(80, 90, 105, 0.40)' : (isWet ? 'rgba(22, 16, 10, 0.62)' : 'rgba(42, 36, 26, 0.45)');
         ctx.fillRect(road.x1, top - 6, road.x2 - road.x1, 6);
         ctx.fillRect(road.x1, top + road.width, road.x2 - road.x1, 6);
 
         // 1c. Outer verge transition to terrain grass (откос бровки кювета 8px)
-        ctx.fillStyle = isWinter ? 'rgba(241, 245, 249, 0.80)' : (isAutumn ? 'rgba(85, 75, 45, 0.45)' : 'rgba(55, 68, 36, 0.35)');
+        ctx.fillStyle = isSnowy
+          ? `rgba(241, 245, 249, ${Math.min(0.82, snowCover * 0.9).toFixed(3)})`
+          : (isAutumn ? 'rgba(85, 75, 45, 0.45)' : 'rgba(55, 68, 36, 0.35)');
         ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, 8);
         ctx.fillRect(road.x1, top + road.width + shoulderW - 8, road.x2 - road.x1, 8);
 
@@ -1769,18 +1790,25 @@ export class GameRenderer {
         
         // 1a. Main wide shoulder
         ctx.fillRect(left - shoulderW, road.y1, road.width + shoulderW * 2, road.y2 - road.y1);
-        if (isWet) {
-          ctx.fillStyle = 'rgba(14, 12, 9, 0.34)';
+        if (wetDarkAlpha > 0.03 && !isFrozenGround) {
+          ctx.fillStyle = `rgba(14, 12, 9, ${wetDarkAlpha.toFixed(3)})`;
+          ctx.fillRect(left - shoulderW, road.y1, road.width + shoulderW * 2, road.y2 - road.y1);
+        }
+        if (snowCover > 0.08) {
+          const sAlpha = Math.min(0.88, Math.pow(Math.min(1, (snowCover - 0.06) / 0.8), 0.9) * 0.88);
+          ctx.fillStyle = `rgba(232, 238, 245, ${sAlpha.toFixed(3)})`;
           ctx.fillRect(left - shoulderW, road.y1, road.width + shoulderW * 2, road.y2 - road.y1);
         }
 
         // 1b. Inner compacted edge strip (6px)
-        ctx.fillStyle = isWinter ? 'rgba(80, 90, 105, 0.40)' : (isWet ? 'rgba(22, 16, 10, 0.62)' : 'rgba(42, 36, 26, 0.45)');
+        ctx.fillStyle = isSnowy ? 'rgba(80, 90, 105, 0.40)' : (isWet ? 'rgba(22, 16, 10, 0.62)' : 'rgba(42, 36, 26, 0.45)');
         ctx.fillRect(left - 6, road.y1, 6, road.y2 - road.y1);
         ctx.fillRect(left + road.width, road.y1, 6, road.y2 - road.y1);
 
         // 1c. Outer verge transition (8px)
-        ctx.fillStyle = isWinter ? 'rgba(241, 245, 249, 0.80)' : (isAutumn ? 'rgba(85, 75, 45, 0.45)' : 'rgba(55, 68, 36, 0.35)');
+        ctx.fillStyle = isSnowy
+          ? `rgba(241, 245, 249, ${Math.min(0.82, snowCover * 0.9).toFixed(3)})`
+          : (isAutumn ? 'rgba(85, 75, 45, 0.45)' : 'rgba(55, 68, 36, 0.35)');
         ctx.fillRect(left - shoulderW, road.y1, 8, road.y2 - road.y1);
         ctx.fillRect(left + road.width + shoulderW - 8, road.y1, 8, road.y2 - road.y1);
 
@@ -1846,7 +1874,7 @@ export class GameRenderer {
       const isCountry = road.y1 > 3500 || road.y2 > 3500 || road.x1 > 5400 || road.x2 > 5400 || road.x1 < 1200 || road.x2 < 1200 || (road.curvePoints && road.curvePoints.some(p => p.y > 3500 || p.x > 5400 || p.x < 1200));
       
       if (road.isDirt) {
-        ctx.fillStyle = (isWet || isSpring) && !isWinter
+        ctx.fillStyle = isMuddyDirt
           ? GameRenderer.getWetDirtPattern(ctx)
           : GameRenderer.getDirtPattern(ctx);
       } else if (road.isGravel) {
@@ -1861,8 +1889,8 @@ export class GameRenderer {
         const top = road.y1 - road.width / 2;
         if (road.x2 < minX || road.x1 > maxX || top + road.width < minY || top > maxY) continue;
         ctx.fillRect(road.x1, top, road.x2 - road.x1, road.width);
-        if (isWet && !road.isDirt) {
-          ctx.fillStyle = 'rgba(10, 14, 20, 0.24)';
+        if (surfWet > 0.10 && !isFrozenGround && !road.isDirt) {
+          ctx.fillStyle = `rgba(10, 14, 20, ${(Math.min(0.26, surfWet * 0.26)).toFixed(3)})`;
           ctx.fillRect(road.x1, top, road.x2 - road.x1, road.width);
         }
 
@@ -1873,14 +1901,14 @@ export class GameRenderer {
           const rLen = road.x2 - road.x1;
 
           // 1. Raised outer soil berms squeezed beside each wheel rut
-          ctx.fillStyle = isWinter ? '#64748b' : ((isWet || isSpring) ? '#322013' : '#5e432f');
+          ctx.fillStyle = isSnowy ? '#64748b' : (isMuddyDirt ? '#322013' : '#5e432f');
           ctx.fillRect(road.x1, rutY1 - 2.2, rLen, 2.2);
           ctx.fillRect(road.x1, rutY1 + 7.0, rLen, 2.4);
           ctx.fillRect(road.x1, rutY2 - 2.2, rLen, 2.2);
           ctx.fillRect(road.x1, rutY2 + 7.0, rLen, 2.4);
 
           // 2. Sunken compacted wheel rut floor
-          ctx.fillStyle = isWinter ? '#334155' : ((isWet || isSpring) ? '#150c06' : '#312116');
+          ctx.fillStyle = isSnowy ? '#334155' : (isMuddyDirt ? '#150c06' : '#312116');
           ctx.fillRect(road.x1, rutY1, rLen, 7);
           ctx.fillRect(road.x1, rutY2, rLen, 7);
 
@@ -1890,12 +1918,12 @@ export class GameRenderer {
           ctx.fillRect(road.x1, rutY2, rLen, 2.2);
 
           // 4. Sunlit south-wall rim of the rut
-          ctx.fillStyle = (isWet || isSpring) ? 'rgba(186, 218, 244, 0.22)' : 'rgba(128, 94, 68, 0.32)';
+          ctx.fillStyle = isMuddyDirt ? 'rgba(186, 218, 244, 0.22)' : 'rgba(128, 94, 68, 0.32)';
           ctx.fillRect(road.x1, rutY1 + 5.6, rLen, 1.4);
           ctx.fillRect(road.x1, rutY2 + 5.6, rLen, 1.4);
 
           // 5. Standing turbid rainwater ribbons & glossy specular reflections inside ruts when wet
-          if ((isWet || isSpring) && !isWinter) {
+          if (isMuddyDirt) {
             for (let rx = road.x1 + 14; rx < road.x2 - 24; rx += 52) {
               const pSeed = GameRenderer.roadNoisePRNG(Math.floor(rx), Math.floor(road.y1), 4101);
               if (pSeed > 0.25) {
@@ -1916,9 +1944,9 @@ export class GameRenderer {
           }
 
           // 6. Organic broken center grass/soil crown between ruts (no longer a solid plastic rectangle)
-          const crownShadow = isWinter ? 'rgba(148, 163, 184, 0.5)' : 'rgba(20, 14, 8, 0.42)';
-          const crownBase = isWinter ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : ((isWet || isSpring) ? '#2f3f1b' : '#465929'));
-          const crownTop = isWinter ? '#f1f5f9' : (isAutumn ? '#876226' : ((isWet || isSpring) ? '#3c5023' : '#556c33'));
+          const crownShadow = isSnowy ? 'rgba(148, 163, 184, 0.5)' : 'rgba(20, 14, 8, 0.42)';
+          const crownBase = isSnowy ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : (isMuddyDirt ? '#2f3f1b' : '#465929'));
+          const crownTop = isSnowy ? '#f1f5f9' : (isAutumn ? '#876226' : (isMuddyDirt ? '#3c5023' : '#556c33'));
           for (let rx = road.x1 + 6; rx < road.x2 - 8; rx += 14) {
             const cRand = GameRenderer.roadNoisePRNG(Math.floor(rx), Math.floor(road.y1), 4202);
             if (cRand < 0.14) continue; // Natural bare-earth gaps where tires crossed the crown
@@ -1948,7 +1976,7 @@ export class GameRenderer {
             ctx.arc(rx + 14.8, top + road.width - 0.4, r1, 0, Math.PI * 2);
             ctx.fill();
 
-            ctx.fillStyle = isWinter ? '#e2e8f0' : (isAutumn ? '#78521a' : ((isWet || isSpring) ? '#33441e' : '#4a5e2c'));
+            ctx.fillStyle = isSnowy ? '#e2e8f0' : (isAutumn ? '#78521a' : (isMuddyDirt ? '#33441e' : '#4a5e2c'));
             ctx.beginPath();
             ctx.arc(rx, top + 0.5, r1, 0, Math.PI * 2);
             ctx.arc(rx + 14, top + road.width - 1, r1, 0, Math.PI * 2);
@@ -1958,14 +1986,14 @@ export class GameRenderer {
           // Feathered asphalt longitudinal tire wear tracks (колейность / накат колес в полосах движения)
           const lanes = road.lanes || 2;
           const laneH = road.width / lanes;
-          ctx.fillStyle = isWinter ? 'rgba(20, 24, 32, 0.18)' : 'rgba(16, 18, 22, 0.10)';
+          ctx.fillStyle = roadSnow > 0.15 ? 'rgba(20, 24, 32, 0.18)' : 'rgba(16, 18, 22, 0.10)';
           for (let l = 0; l < lanes; l++) {
             const laneCenterY = top + (l + 0.5) * laneH;
             const rutOffset = laneH * 0.22;
             ctx.fillRect(road.x1, laneCenterY - rutOffset - 5, road.x2 - road.x1, 10);
             ctx.fillRect(road.x1, laneCenterY + rutOffset - 5, road.x2 - road.x1, 10);
           }
-          ctx.fillStyle = isWinter ? 'rgba(20, 24, 32, 0.26)' : 'rgba(14, 16, 20, 0.15)';
+          ctx.fillStyle = roadSnow > 0.15 ? 'rgba(20, 24, 32, 0.26)' : 'rgba(14, 16, 20, 0.15)';
           for (let l = 0; l < lanes; l++) {
             const laneCenterY = top + (l + 0.5) * laneH;
             const rutOffset = laneH * 0.22;
@@ -1973,18 +2001,25 @@ export class GameRenderer {
             ctx.fillRect(road.x1, laneCenterY + rutOffset - 2.5, road.x2 - road.x1, 5);
           }
 
-          // Lighter aggregate / winter snow slush strip between wheel ruts
-          ctx.fillStyle = isWinter ? 'rgba(235, 242, 250, 0.30)' : 'rgba(80, 84, 94, 0.08)';
+          // Lighter aggregate / snow slush strip between wheel ruts (scales with roadSnow & slush)
+          const centerSnowMix = Math.max(roadSnow, slush * 0.75);
+          ctx.fillStyle = centerSnowMix > 0.08
+            ? (slush > roadSnow * 0.8
+              ? `rgba(176, 186, 198, ${(Math.min(0.32, centerSnowMix * 0.34)).toFixed(3)})`
+              : `rgba(235, 242, 250, ${(Math.min(0.36, centerSnowMix * 0.38)).toFixed(3)})`)
+            : 'rgba(80, 84, 94, 0.08)';
           for (let l = 0; l < lanes; l++) {
             const laneCenterY = top + (l + 0.5) * laneH;
             ctx.fillRect(road.x1, laneCenterY - 2, road.x2 - road.x1, 4);
           }
 
-          // Road edge snow berms in winter
-          if (isWinter) {
-            ctx.fillStyle = 'rgba(241, 245, 249, 0.55)';
-            ctx.fillRect(road.x1, top, road.x2 - road.x1, 3.5);
-            ctx.fillRect(road.x1, top + road.width - 3.5, road.x2 - road.x1, 3.5);
+          // Progressive road edge snow berms (accumulate before center asphalt whites out)
+          if (snowCover > 0.12 || roadSnow > 0.06) {
+            const bermAlpha = Math.min(0.62, Math.max(snowCover * 0.55, roadSnow * 0.72));
+            const bermH = 1.8 + Math.min(2.6, snowCover * 2.4);
+            ctx.fillStyle = `rgba(241, 245, 249, ${bermAlpha.toFixed(3)})`;
+            ctx.fillRect(road.x1, top, road.x2 - road.x1, bermH);
+            ctx.fillRect(road.x1, top + road.width - bermH, road.x2 - road.x1, bermH);
           } else {
             // Chipped edge micro-texture
             ctx.fillStyle = 'rgba(20, 22, 26, 0.35)';
@@ -1996,8 +2031,8 @@ export class GameRenderer {
         const left = road.x1 - road.width / 2;
         if (left + road.width < minX || left > maxX || road.y2 < minY || road.y1 > maxY) continue;
         ctx.fillRect(left, road.y1, road.width, road.y2 - road.y1);
-        if (isWet && !road.isDirt) {
-          ctx.fillStyle = 'rgba(10, 14, 20, 0.24)';
+        if (surfWet > 0.10 && !isFrozenGround && !road.isDirt) {
+          ctx.fillStyle = `rgba(10, 14, 20, ${(Math.min(0.26, surfWet * 0.26)).toFixed(3)})`;
           ctx.fillRect(left, road.y1, road.width, road.y2 - road.y1);
         }
 
@@ -2008,14 +2043,14 @@ export class GameRenderer {
           const rLen = road.y2 - road.y1;
 
           // 1. Raised outer soil berms squeezed beside each wheel rut
-          ctx.fillStyle = isWinter ? '#64748b' : ((isWet || isSpring) ? '#322013' : '#5e432f');
+          ctx.fillStyle = isSnowy ? '#64748b' : (isMuddyDirt ? '#322013' : '#5e432f');
           ctx.fillRect(rutX1 - 2.2, road.y1, 2.2, rLen);
           ctx.fillRect(rutX1 + 7.0, road.y1, 2.4, rLen);
           ctx.fillRect(rutX2 - 2.2, road.y1, 2.2, rLen);
           ctx.fillRect(rutX2 + 7.0, road.y1, 2.4, rLen);
 
           // 2. Sunken compacted wheel rut floor
-          ctx.fillStyle = isWinter ? '#334155' : ((isWet || isSpring) ? '#150c06' : '#312116');
+          ctx.fillStyle = isSnowy ? '#334155' : (isMuddyDirt ? '#150c06' : '#312116');
           ctx.fillRect(rutX1, road.y1, 7, rLen);
           ctx.fillRect(rutX2, road.y1, 7, rLen);
 
@@ -2025,12 +2060,12 @@ export class GameRenderer {
           ctx.fillRect(rutX2, road.y1, 2.2, rLen);
 
           // 4. Sunlit east-wall rim of the rut
-          ctx.fillStyle = (isWet || isSpring) ? 'rgba(186, 218, 244, 0.22)' : 'rgba(128, 94, 68, 0.32)';
+          ctx.fillStyle = isMuddyDirt ? 'rgba(186, 218, 244, 0.22)' : 'rgba(128, 94, 68, 0.32)';
           ctx.fillRect(rutX1 + 5.6, road.y1, 1.4, rLen);
           ctx.fillRect(rutX2 + 5.6, road.y1, 1.4, rLen);
 
           // 5. Standing turbid rainwater ribbons & glossy specular reflections inside ruts when wet
-          if ((isWet || isSpring) && !isWinter) {
+          if (isMuddyDirt) {
             for (let ry = road.y1 + 14; ry < road.y2 - 24; ry += 52) {
               const pSeed = GameRenderer.roadNoisePRNG(Math.floor(road.x1), Math.floor(ry), 4401);
               if (pSeed > 0.25) {
@@ -2049,9 +2084,9 @@ export class GameRenderer {
           }
 
           // 6. Organic broken center grass/soil crown between ruts
-          const crownShadow = isWinter ? 'rgba(148, 163, 184, 0.5)' : 'rgba(20, 14, 8, 0.42)';
-          const crownBase = isWinter ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : ((isWet || isSpring) ? '#2f3f1b' : '#465929'));
-          const crownTop = isWinter ? '#f1f5f9' : (isAutumn ? '#876226' : ((isWet || isSpring) ? '#3c5023' : '#556c33'));
+          const crownShadow = isSnowy ? 'rgba(148, 163, 184, 0.5)' : 'rgba(20, 14, 8, 0.42)';
+          const crownBase = isSnowy ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : (isMuddyDirt ? '#2f3f1b' : '#465929'));
+          const crownTop = isSnowy ? '#f1f5f9' : (isAutumn ? '#876226' : (isMuddyDirt ? '#3c5023' : '#556c33'));
           for (let ry = road.y1 + 6; ry < road.y2 - 8; ry += 14) {
             const cRand = GameRenderer.roadNoisePRNG(Math.floor(road.x1), Math.floor(ry), 4502);
             if (cRand < 0.14) continue;
@@ -2081,7 +2116,7 @@ export class GameRenderer {
             ctx.arc(left + road.width - 0.4, ry + 14.8, r1, 0, Math.PI * 2);
             ctx.fill();
 
-            ctx.fillStyle = isWinter ? '#e2e8f0' : (isAutumn ? '#78521a' : ((isWet || isSpring) ? '#33441e' : '#4a5e2c'));
+            ctx.fillStyle = isSnowy ? '#e2e8f0' : (isAutumn ? '#78521a' : (isMuddyDirt ? '#33441e' : '#4a5e2c'));
             ctx.beginPath();
             ctx.arc(left + 0.5, ry, r1, 0, Math.PI * 2);
             ctx.arc(left + road.width - 1, ry + 14, r1, 0, Math.PI * 2);
@@ -2091,14 +2126,14 @@ export class GameRenderer {
           // Feathered asphalt longitudinal tire wear tracks (vertical)
           const lanes = road.lanes || 2;
           const laneW = road.width / lanes;
-          ctx.fillStyle = isWinter ? 'rgba(20, 24, 32, 0.18)' : 'rgba(16, 18, 22, 0.10)';
+          ctx.fillStyle = roadSnow > 0.15 ? 'rgba(20, 24, 32, 0.18)' : 'rgba(16, 18, 22, 0.10)';
           for (let l = 0; l < lanes; l++) {
             const laneCenterX = left + (l + 0.5) * laneW;
             const rutOffset = laneW * 0.22;
             ctx.fillRect(laneCenterX - rutOffset - 5, road.y1, 10, road.y2 - road.y1);
             ctx.fillRect(laneCenterX + rutOffset - 5, road.y1, 10, road.y2 - road.y1);
           }
-          ctx.fillStyle = isWinter ? 'rgba(20, 24, 32, 0.26)' : 'rgba(14, 16, 20, 0.15)';
+          ctx.fillStyle = roadSnow > 0.15 ? 'rgba(20, 24, 32, 0.26)' : 'rgba(14, 16, 20, 0.15)';
           for (let l = 0; l < lanes; l++) {
             const laneCenterX = left + (l + 0.5) * laneW;
             const rutOffset = laneW * 0.22;
@@ -2106,18 +2141,25 @@ export class GameRenderer {
             ctx.fillRect(laneCenterX + rutOffset - 2.5, road.y1, 5, road.y2 - road.y1);
           }
 
-          // Lighter aggregate / winter snow slush strip
-          ctx.fillStyle = isWinter ? 'rgba(235, 242, 250, 0.30)' : 'rgba(80, 84, 94, 0.08)';
+          // Lighter aggregate / snow slush strip
+          const centerSnowMix = Math.max(roadSnow, slush * 0.75);
+          ctx.fillStyle = centerSnowMix > 0.08
+            ? (slush > roadSnow * 0.8
+              ? `rgba(176, 186, 198, ${(Math.min(0.32, centerSnowMix * 0.34)).toFixed(3)})`
+              : `rgba(235, 242, 250, ${(Math.min(0.36, centerSnowMix * 0.38)).toFixed(3)})`)
+            : 'rgba(80, 84, 94, 0.08)';
           for (let l = 0; l < lanes; l++) {
             const laneCenterX = left + (l + 0.5) * laneW;
             ctx.fillRect(laneCenterX - 2, road.y1, 4, road.y2 - road.y1);
           }
 
-          // Road edge snow berms in winter
-          if (isWinter) {
-            ctx.fillStyle = 'rgba(241, 245, 249, 0.55)';
-            ctx.fillRect(left, road.y1, 3.5, road.y2 - road.y1);
-            ctx.fillRect(left + road.width - 3.5, road.y1, 3.5, road.y2 - road.y1);
+          // Progressive road edge snow berms
+          if (snowCover > 0.12 || roadSnow > 0.06) {
+            const bermAlpha = Math.min(0.62, Math.max(snowCover * 0.55, roadSnow * 0.72));
+            const bermW = 1.8 + Math.min(2.6, snowCover * 2.4);
+            ctx.fillStyle = `rgba(241, 245, 249, ${bermAlpha.toFixed(3)})`;
+            ctx.fillRect(left, road.y1, bermW, road.y2 - road.y1);
+            ctx.fillRect(left + road.width - bermW, road.y1, bermW, road.y2 - road.y1);
           } else {
             // Chipped edge micro-texture
             ctx.fillStyle = 'rgba(20, 22, 26, 0.35)';
@@ -2186,7 +2228,7 @@ export class GameRenderer {
 
           if (road.isDirt) {
             // 1. Extruded outer soil berms along curved wheel ruts
-            ctx.strokeStyle = isWinter ? '#64748b' : ((isWet || isSpring) ? '#322013' : '#5e432f');
+            ctx.strokeStyle = isSnowy ? '#64748b' : (isMuddyDirt ? '#322013' : '#5e432f');
             ctx.lineWidth = 10.5;
             ctx.beginPath();
             for (let i = 0; i < n; i++) {
@@ -2209,7 +2251,7 @@ export class GameRenderer {
             ctx.stroke();
 
             // 2. Sunken dark mud/soil wheel ruts
-            ctx.strokeStyle = isWinter ? '#334155' : ((isWet || isSpring) ? '#150c06' : '#312116');
+            ctx.strokeStyle = isSnowy ? '#334155' : (isMuddyDirt ? '#150c06' : '#312116');
             ctx.lineWidth = 6.5;
             ctx.beginPath();
             for (let i = 0; i < n; i++) {
@@ -2232,7 +2274,7 @@ export class GameRenderer {
             ctx.stroke();
 
             // 3. Wet water sheen inside curved ruts
-            if ((isWet || isSpring) && !isWinter) {
+            if (isMuddyDirt) {
               ctx.strokeStyle = 'rgba(180, 218, 246, 0.28)';
               ctx.lineWidth = 2.0;
               ctx.setLineDash([14, 18]);
@@ -2258,7 +2300,7 @@ export class GameRenderer {
             }
 
             // 4. Organic broken center grass ridge
-            ctx.strokeStyle = isWinter ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : ((isWet || isSpring) ? '#2f3f1b' : '#465929'));
+            ctx.strokeStyle = isSnowy ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : (isMuddyDirt ? '#2f3f1b' : '#465929'));
             ctx.lineWidth = 6.5;
             ctx.setLineDash([12, 5]);
             ctx.beginPath();
@@ -2323,23 +2365,23 @@ export class GameRenderer {
         if (road.isDirt) {
           const rutY1 = -road.width * 0.26;
           const rutY2 = road.width * 0.16;
-          ctx.fillStyle = isWinter ? '#64748b' : ((isWet || isSpring) ? '#322013' : '#5e432f');
+          ctx.fillStyle = isSnowy ? '#64748b' : (isMuddyDirt ? '#322013' : '#5e432f');
           ctx.fillRect(0, rutY1 - 2.2, len, 11.4);
           ctx.fillRect(0, rutY2 - 2.2, len, 11.4);
-          ctx.fillStyle = isWinter ? '#334155' : ((isWet || isSpring) ? '#150c06' : '#312116');
+          ctx.fillStyle = isSnowy ? '#334155' : (isMuddyDirt ? '#150c06' : '#312116');
           ctx.fillRect(0, rutY1, len, 7);
           ctx.fillRect(0, rutY2, len, 7);
           ctx.fillStyle = 'rgba(6, 3, 1, 0.55)';
           ctx.fillRect(0, rutY1, len, 2.2);
           ctx.fillRect(0, rutY2, len, 2.2);
-          if ((isWet || isSpring) && !isWinter) {
+          if (isMuddyDirt) {
             ctx.fillStyle = 'rgba(180, 218, 246, 0.28)';
             ctx.fillRect(0, rutY1 + 2.5, len, 1.5);
             ctx.fillRect(0, rutY2 + 2.5, len, 1.5);
           }
-          ctx.fillStyle = isWinter ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : ((isWet || isSpring) ? '#2f3f1b' : '#465929'));
+          ctx.fillStyle = isSnowy ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : (isMuddyDirt ? '#2f3f1b' : '#465929'));
           ctx.fillRect(0, -3.5, len, 7);
-          ctx.fillStyle = isWinter ? '#f1f5f9' : (isAutumn ? '#876226' : ((isWet || isSpring) ? '#3c5023' : '#556c33'));
+          ctx.fillStyle = isSnowy ? '#f1f5f9' : (isAutumn ? '#876226' : (isMuddyDirt ? '#3c5023' : '#556c33'));
           ctx.fillRect(0, -1.8, len, 3.6);
         } else if (!road.isGravel) {
           ctx.fillStyle = 'rgba(16, 18, 22, 0.10)';
@@ -2409,7 +2451,7 @@ export class GameRenderer {
       }
 
       if (isDirt) {
-        ctx.fillStyle = (isWet || isSpring) && !isWinter
+        ctx.fillStyle = isMuddyDirt
           ? GameRenderer.getWetDirtPattern(ctx)
           : GameRenderer.getDirtPattern(ctx);
       } else if (isGravel) {
@@ -3962,9 +4004,33 @@ export class GameRenderer {
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, rx, ry, seed, rough);
         ctx.fill();
+      } else if (stain.type === 'snow_footprint') {
+        // Recessed boot impression in snow cover: cool blue-slate shadow cavity + crisp rim
+        const fpAngle = stain.spreadAngle ?? 0;
+        ctx.save();
+        if (filmAngle === 0 && fpAngle !== 0) ctx.rotate(fpAngle);
+        const fLen = Math.max(2.2, rOut * 1.15);
+        const fWid = Math.max(1.2, rOut * 0.52);
+        // Subtle sunlit outer snow ridge displaced by sole
+        ctx.fillStyle = `rgba(248, 250, 252, ${(stainAlpha * 0.55).toFixed(3)})`;
+        ctx.beginPath();
+        safeEllipse(ctx, 0.4, 0.4, fLen * 1.12, fWid * 1.14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Compacted sole & heel depression
+        ctx.fillStyle = `rgba(122, 146, 174, ${(stainAlpha * 0.62).toFixed(3)})`;
+        ctx.beginPath();
+        safeEllipse(ctx, fLen * 0.22, 0, fLen * 0.62, fWid * 0.88, 0, 0, Math.PI * 2);
+        safeEllipse(ctx, -fLen * 0.46, 0, fLen * 0.36, fWid * 0.72, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Deeper shadow crescent inside boot cavity
+        ctx.fillStyle = `rgba(71, 93, 122, ${(stainAlpha * 0.38).toFixed(3)})`;
+        ctx.beginPath();
+        safeEllipse(ctx, fLen * 0.14, -fWid * 0.16, fLen * 0.44, fWid * 0.52, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
 
-      if (stain.type !== 'sand' && stain.type !== 'soil') {
+      if (stain.type !== 'sand' && stain.type !== 'soil' && stain.type !== 'snow_footprint') {
         this.drawLiquidSurfaceFx(ctx, rx, ry, seed, stainAlpha, { x: stain.x, y: stain.y, angle: filmAngle }, rough);
       }
 
@@ -4013,7 +4079,10 @@ export class GameRenderer {
     maxY: number,
     world?: GameWorld
   ) {
-    const isWinter = world?.calendar?.season === 'winter';
+    const ww = world ? getEffectiveWeatherWeights(world) : null;
+    const snowCover = ww ? ww.snowCover : (world?.calendar?.season === 'winter' ? 0.85 : 0);
+    const surfWet = ww ? ww.surfaceWetness : 0;
+    const isFrozen = ww ? ww.iceFreezeProgress >= 0.55 : false;
     const season = world?.calendar?.season;
 
     for (const sw of sidewalks) {
@@ -4040,7 +4109,7 @@ export class GameRenderer {
         curbDark = '#374151';
       }
 
-      if (isWinter) {
+      if (snowCover > 0.35) {
         paveColor = '#94a3b8';
         curbHighlight = '#f8fafc';
       }
@@ -4056,9 +4125,22 @@ export class GameRenderer {
       }
       ctx.fill();
 
-      // Winter sidewalk snow crust & trampled walkway
-      if (isWinter) {
-        ctx.fillStyle = 'rgba(241, 245, 249, 0.72)';
+      // Continuous post-rain wet darkening on concrete slabs
+      if (surfWet > 0.10 && !isFrozen && snowCover < 0.55) {
+        ctx.fillStyle = `rgba(15, 23, 36, ${(Math.min(0.24, surfWet * 0.24) * (1 - snowCover)).toFixed(3)})`;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(sw.x, sw.y, sw.width, sw.height, swRadius);
+        } else {
+          ctx.rect(sw.x, sw.y, sw.width, sw.height);
+        }
+        ctx.fill();
+      }
+
+      // Progressive sidewalk snow crust & trampled walkway (driven by physical snowCover, not calendar snap)
+      if (snowCover > 0.08) {
+        const swSnowAlpha = Math.min(0.76, Math.pow(Math.min(1, (snowCover - 0.06) / 0.78), 0.9) * 0.76);
+        ctx.fillStyle = `rgba(241, 245, 249, ${swSnowAlpha.toFixed(3)})`;
         ctx.beginPath();
         if (ctx.roundRect) {
           ctx.roundRect(sw.x, sw.y, sw.width, sw.height, swRadius);
@@ -4067,13 +4149,16 @@ export class GameRenderer {
         }
         ctx.fill();
 
-        // Worn grey pedestrian trampled footpath in the middle
-        ctx.fillStyle = 'rgba(100, 116, 139, 0.42)';
-        const pathThickness = Math.max(16, sw.sidewalkWidth * 0.55);
-        if (sw.width > sw.height) {
-          ctx.fillRect(sw.x + 8, sw.y + sw.height / 2 - pathThickness / 2, sw.width - 16, pathThickness);
-        } else {
-          ctx.fillRect(sw.x + sw.width / 2 - pathThickness / 2, sw.y + 8, pathThickness, sw.height - 16);
+        // Worn grey pedestrian trampled footpath in the middle once snow sticks
+        if (snowCover > 0.22) {
+          const treadAlpha = Math.min(0.42, (snowCover - 0.20) * 0.65);
+          ctx.fillStyle = `rgba(100, 116, 139, ${treadAlpha.toFixed(3)})`;
+          const pathThickness = Math.max(16, sw.sidewalkWidth * 0.55);
+          if (sw.width > sw.height) {
+            ctx.fillRect(sw.x + 8, sw.y + sw.height / 2 - pathThickness / 2, sw.width - 16, pathThickness);
+          } else {
+            ctx.fillRect(sw.x + sw.width / 2 - pathThickness / 2, sw.y + 8, pathThickness, sw.height - 16);
+          }
         }
       }
 
@@ -4128,13 +4213,13 @@ export class GameRenderer {
 
       if (innerW > 0 && innerH > 0) {
         const innerRadius = Math.max(4, swRadius - sw.sidewalkWidth * 0.4);
-        // Inner seasonal lawn
-        if (isWinter) {
-          ctx.fillStyle = '#e2e8f0'; // Snowy courtyard lawn
-        } else if (season === 'autumn') {
+        // Inner seasonal lawn with continuous snow cover blending
+        if (season === 'autumn') {
           ctx.fillStyle = '#78541a'; // Autumn dry leaves lawn
         } else if (season === 'spring') {
           ctx.fillStyle = '#4d7c0f'; // Fresh tender lawn
+        } else if (season === 'winter') {
+          ctx.fillStyle = '#6c7a62'; // Dormant frost-dulled grass beneath snow
         } else {
           ctx.fillStyle = sw.innerLawnColor || '#15803d';
         }
@@ -4146,6 +4231,18 @@ export class GameRenderer {
         }
         ctx.fill();
 
+        if (snowCover > 0.05) {
+          const lawnSnowAlpha = Math.min(0.92, Math.pow(Math.min(1, snowCover), 0.78) * 0.94);
+          ctx.fillStyle = `rgba(232, 240, 248, ${lawnSnowAlpha.toFixed(3)})`;
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(innerX, innerY, innerW, innerH, innerRadius);
+          } else {
+            ctx.rect(innerX, innerY, innerW, innerH);
+          }
+          ctx.fill();
+        }
+
         // Rich micro-relief grass blades, clover patches & wildflowers on courtyard lawn
         TerrainRenderer.renderCourtyardLawnDetails(
           ctx,
@@ -4153,8 +4250,8 @@ export class GameRenderer {
           innerY,
           innerW,
           innerH,
-          season,
-          getEffectiveWeatherWeights(world).isWetSurface && !isWinter
+          snowCover > 0.55 ? 'winter' : (season === 'winter' ? 'autumn' : season),
+          (ww ? ww.soilMoisture > 0.22 : false) && snowCover < 0.45 && !isFrozen
         );
 
         // Lawn edging curb stone
@@ -6451,13 +6548,13 @@ export class GameRenderer {
         }
       }
 
-      // High-Fidelity First-Principles Roof Simulation:
+      // High-Fidelity First-Principles Roof Simulation (weather-aware puddles & early snow accumulation):
       if (bld.type === 'suburban') {
-        RoofRenderer.renderSuburbanGableRoof(ctx, bld, nightAlpha, now);
+        RoofRenderer.renderSuburbanGableRoof(ctx, bld, nightAlpha, now, world);
       } else if (bld.type === 'industrial') {
-        RoofRenderer.renderIndustrialRoof(ctx, bld, nightAlpha, now);
+        RoofRenderer.renderIndustrialRoof(ctx, bld, nightAlpha, now, world);
       } else {
-        RoofRenderer.renderFlatBuildingRoof(ctx, bld, nightAlpha, now);
+        RoofRenderer.renderFlatBuildingRoof(ctx, bld, nightAlpha, now, world);
       }
     }
   }
@@ -7007,6 +7104,10 @@ export class GameRenderer {
     const canUseOffscreenCache = typeof document !== 'undefined' && typeof document.createElement === 'function';
     const sunKeyX = Math.round(sunX * 16);
     const sunKeyY = Math.round(sunY * 16);
+    const snowCover = world
+      ? (world.snowCover ?? (season === 'winter' ? 0.85 : 0))
+      : (season === 'winter' ? 0.85 : 0);
+    const snowTier = Math.round(Math.max(0, Math.min(1, snowCover)) * 4);
 
     // Trees
     const nowSec = performance.now() * 0.001;
@@ -7033,7 +7134,7 @@ export class GameRenderer {
       if (canUseOffscreenCache) {
         const qSeed = seed & 63;
         const qRad = Math.round(r);
-        const cacheKey = `${species}_${qRad}_${tree.color || ''}_${qSeed}_${season || 'summer'}_${sunKeyX}_${sunKeyY}`;
+        const cacheKey = `${species}_${qRad}_${tree.color || ''}_${qSeed}_${season || 'summer'}_sn${snowTier}_${sunKeyX}_${sunKeyY}`;
         let cached = this.treeSpriteCache.get(cacheKey);
         if (!cached) {
           if (this.treeSpriteCache.size > 512) {
@@ -7045,7 +7146,7 @@ export class GameRenderer {
           offCanvas.height = half * 2;
           const offCtx = offCanvas.getContext('2d');
           if (offCtx) {
-            this.renderSingleTreeGeometry(offCtx, tree, half, half, qRad, species, qSeed * 199 + 17, sunState, sunX, sunY, season);
+            this.renderSingleTreeGeometry(offCtx, tree, half, half, qRad, species, qSeed * 199 + 17, sunState, sunX, sunY, season, snowCover);
             // Build binary alpha silhouette mask for crisp destination-out occluder masking in G-Buffer
             const maskCanvas = document.createElement('canvas');
             maskCanvas.width = offCanvas.width;
@@ -7076,7 +7177,7 @@ export class GameRenderer {
         }
       }
 
-      this.renderSingleTreeGeometry(ctx, tree, tree.x + sway.swayX, tree.y + sway.swayY, r, species, seed, sunState, sunX, sunY, season);
+      this.renderSingleTreeGeometry(ctx, tree, tree.x + sway.swayX, tree.y + sway.swayY, r, species, seed, sunState, sunX, sunY, season, snowCover);
     }
 
     // Tall Intact Lampposts & Power Poles
@@ -7102,7 +7203,8 @@ export class GameRenderer {
     sunState: ReturnType<typeof getCurrentSunShadowState>,
     sunX: number,
     sunY: number,
-    season?: Season
+    season?: Season,
+    snowCover: number = 0
   ) {
     {
       const tree = { x: treeX, y: treeY, radius: r, color: origTree.color };
@@ -7421,15 +7523,19 @@ export class GameRenderer {
             ctx.closePath();
             ctx.fill();
 
-            // Winter snow pillows resting on individual spruce boughs (leaving green needle tips exposed)
-            if (season === 'winter' && (bHash & 3) !== 0) {
-              ctx.fillStyle = sunDot >= 0 ? 'rgba(248, 250, 252, 0.90)' : 'rgba(203, 213, 225, 0.85)';
+            // Progressive snow pillows resting on individual spruce boughs (first snow sticks to evergreens early!)
+            if (snowCover > 0.14 && (bHash & 3) !== 0) {
+              const pillowStrength = Math.min(1, (snowCover - 0.12) / 0.65);
+              const pillowScale = 0.55 + 0.45 * pillowStrength;
+              ctx.fillStyle = sunDot >= 0
+                ? `rgba(248, 250, 252, ${(0.90 * pillowStrength).toFixed(3)})`
+                : `rgba(203, 213, 225, ${(0.85 * pillowStrength).toFixed(3)})`;
               this.fillBotanicalCluster(
                 ctx,
                 tierCx + bCos * (bLen * 0.52) + sunX * 0.8,
                 tierCy + bSin * (bLen * 0.52) + sunY * 0.8,
-                bLen * 0.28,
-                bWidth * 0.46,
+                bLen * 0.28 * pillowScale,
+                bWidth * 0.46 * pillowScale,
                 bAng,
                 bHash,
                 0.16,
@@ -7442,7 +7548,7 @@ export class GameRenderer {
         // 4. Apical Shoot Star-Tuft (молодая верхушечная мутовка, never a flat circle or brown dot!)
         const apexX = tree.x + sunX * (r * 0.07);
         const apexY = tree.y + sunY * (r * 0.07);
-        ctx.fillStyle = season === 'winter' ? '#f1f5f9' : '#52bf7f';
+        ctx.fillStyle = snowCover > 0.35 ? '#f1f5f9' : '#52bf7f';
         this.fillBotanicalCluster(ctx, apexX, apexY, r * 0.22, r * 0.20, seed * 0.3, seed + 99, 0.32, 10);
 
       } else if (species === 'birch') {
@@ -8463,9 +8569,10 @@ export class GameRenderer {
     }
   }
 
-  // --- PUDDLES ---
-  private renderPuddles(puddles: Puddle[], minX: number, minY: number, maxX: number, maxY: number, isFreezing: boolean = false) {
+  // --- PUDDLES (Continuous liquid -> brittle freezing crust -> solid cracked ice) ---
+  private renderPuddles(puddles: Puddle[], minX: number, minY: number, maxX: number, maxY: number, freezeProgress: number = 0) {
     const ctx = this.ctx;
+    const freeze = Math.max(0, Math.min(1, freezeProgress));
     const puddleStart = Math.max(0, puddles.length - performanceConfig.puddlesLimit);
     for (let pi = puddleStart; pi < puddles.length; pi++) {
       const p = puddles[pi];
@@ -8479,15 +8586,15 @@ export class GameRenderer {
       const rY = Math.max(0.5, p.radiusY);
       const seed = hashString(p.id);
 
-      if (isFreezing) {
+      if (freeze >= 0.75) {
         // =====================================================================
-        // FROZEN PUDDLE (НАЛЕДЬ / ТОНКИЙ ЛЁД НА ДОРОГЕ)
+        // SOLID FROZEN PUDDLE (НАЛЕДЬ / ТОНКИЙ ЛЁД НА ДОРОГЕ)
         // =====================================================================
-        // Solid frozen ice plate: frosted sky-blue/grey core with crystalline perimeter
+        const solidK = Math.min(1, 0.72 + (freeze - 0.75) * 1.12);
         const grad = safeRadialGradient(ctx, -rX * 0.1, -rY * 0.1, 0, 0, 0, rX);
-        grad.addColorStop(0, 'rgba(219, 234, 254, 0.68)'); // Dense milky cyan ice core
-        grad.addColorStop(0.55, 'rgba(186, 230, 253, 0.48)'); // Translucent ice body
-        grad.addColorStop(0.88, 'rgba(71, 85, 105, 0.45)'); // Dark cold asphalt rim
+        grad.addColorStop(0, `rgba(219, 234, 254, ${(0.68 * solidK).toFixed(3)})`);
+        grad.addColorStop(0.55, `rgba(186, 230, 253, ${(0.48 * solidK).toFixed(3)})`);
+        grad.addColorStop(0.88, `rgba(71, 85, 105, ${(0.45 * solidK).toFixed(3)})`);
         grad.addColorStop(1, 'rgba(71, 85, 105, 0)');
 
         ctx.fillStyle = grad;
@@ -8495,7 +8602,7 @@ export class GameRenderer {
         ctx.fill();
 
         // Crystalline stress fractures (паутина трещин на льду)
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(0.65 * solidK).toFixed(3)})`;
         ctx.lineWidth = 0.9;
         ctx.beginPath();
         for (let c = 0; c < 3; c++) {
@@ -8514,7 +8621,7 @@ export class GameRenderer {
         ctx.stroke();
 
         // Trapped frozen air bubbles
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.55 * solidK).toFixed(3)})`;
         for (let b = 0; b < 5; b++) {
           const bx = Math.sin(seed + b * 2.3) * rX * 0.6;
           const by = Math.cos(seed + b * 3.7) * rY * 0.6;
@@ -8525,13 +8632,13 @@ export class GameRenderer {
         }
 
         // Glaze ice glossy specular reflection
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.62)';
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.62 * solidK).toFixed(3)})`;
         ctx.beginPath();
         safeEllipse(ctx, -rX * 0.25, -rY * 0.2, rX * 0.35, rY * 0.14, -0.2, 0, Math.PI * 2);
         ctx.fill();
 
         // Frosted white perimeter ring
-        ctx.strokeStyle = 'rgba(241, 245, 249, 0.40)';
+        ctx.strokeStyle = 'rgba(241, 245, 249, 0.42)';
         ctx.lineWidth = 1.0;
         this.drawOrganicBlob(ctx, rX * 0.96, rY * 0.96, seed);
         ctx.stroke();
@@ -8539,6 +8646,8 @@ export class GameRenderer {
         // Natural shallow rainwater: darkened wet asphalt floor + subtle slate sky tint
         const sunState = getCurrentSunShadowState();
         const dayVis = Math.max(0.24, 1 - (sunState.isNight ? 0.85 : 0) * 0.72);
+        const crustT = freeze > 0.22 ? Math.min(1, (freeze - 0.22) / 0.53) : 0;
+
         ctx.save();
         ctx.scale(rX, rY);
         const grad = safeRadialGradient(ctx, -0.08 * sunState.sunDirX, -0.08 * sunState.sunDirY, 0, 0, 0, 1);
@@ -8552,7 +8661,25 @@ export class GameRenderer {
         ctx.fill();
         ctx.restore();
 
-        this.drawLiquidSurfaceFx(ctx, rX, rY, seed, 1, { x: p.x, y: p.y, angle: p.angle });
+        // Attenuate liquid ripples as thin ice crust stiffens the surface
+        this.drawLiquidSurfaceFx(ctx, rX, rY, seed, Math.max(0.18, 1 - crustT * 0.82), { x: p.x, y: p.y, angle: p.angle });
+
+        // Transitional freezing crust (0.22..0.75): frosted edge needles closing inward over liquid core
+        if (crustT > 0.01) {
+          const rimGrad = safeRadialGradient(ctx, 0, 0, rX * Math.max(0.08, 0.66 - crustT * 0.52), 0, 0, rX);
+          rimGrad.addColorStop(0, `rgba(203, 224, 245, ${(crustT * 0.22).toFixed(3)})`);
+          rimGrad.addColorStop(0.65, `rgba(219, 234, 254, ${(0.18 + crustT * 0.36).toFixed(3)})`);
+          rimGrad.addColorStop(0.92, `rgba(241, 245, 249, ${(0.22 + crustT * 0.34).toFixed(3)})`);
+          rimGrad.addColorStop(1, 'rgba(241, 245, 249, 0)');
+          ctx.fillStyle = rimGrad;
+          this.drawOrganicBlob(ctx, rX, rY, seed);
+          ctx.fill();
+
+          ctx.strokeStyle = `rgba(241, 245, 249, ${(0.16 + crustT * 0.28).toFixed(3)})`;
+          ctx.lineWidth = 0.8 + crustT * 0.5;
+          this.drawOrganicBlob(ctx, rX * 0.95, rY * 0.95, seed);
+          ctx.stroke();
+        }
       }
 
       ctx.restore();
@@ -9006,7 +9133,7 @@ export class GameRenderer {
       const stainStart = Math.max(0, world.stains.length - performanceConfig.stainsLimit);
       for (let si = stainStart; si < world.stains.length; si++) {
         const stain = world.stains[si];
-        if (stain.type === 'sand' || stain.type === 'soil') continue; // Solid granular mounds handled in Step 11
+        if (stain.type === 'sand' || stain.type === 'soil' || stain.type === 'snow_footprint') continue; // Solid mounds & snow impressions are not liquids
         const grow = stain.filmCap ? Math.min(1, stain.radius / stain.filmCap) : 0;
         const stretch = 1 + (stain.spreadElong ?? 0.6) * 0.8 * grow;
         const pad = 30 + stain.radius * 0.8 * grow;
@@ -9332,6 +9459,8 @@ export class GameRenderer {
 
     // 11h. Tree Canopies (Exact wind-swayed botanical silhouette matching renderTreesAndTallProps)
     const season = world.calendar?.season;
+    const gBufSnowCover = world.snowCover ?? (season === 'winter' ? 0.85 : 0);
+    const gBufSnowTier = Math.round(Math.max(0, Math.min(1, gBufSnowCover)) * 4);
     const sunState = getCurrentSunShadowState();
     const sunKeyX = Math.round(-sunState.shadowDirX * 16);
     const sunKeyY = Math.round(-sunState.shadowDirY * 16);
@@ -9343,7 +9472,7 @@ export class GameRenderer {
       const sway = ForestSystem.getTreeWindSway(t, world, treeNowSec);
       const species = classifyTreeSpecies(t);
       const seed = Math.abs(Math.floor(t.x * 12.9898 + t.y * 78.233));
-      const cacheKey = `${species}_${Math.round(r)}_${t.color || ''}_${seed & 63}_${season || 'summer'}_${sunKeyX}_${sunKeyY}`;
+      const cacheKey = `${species}_${Math.round(r)}_${t.color || ''}_${seed & 63}_${season || 'summer'}_sn${gBufSnowTier}_${sunKeyX}_${sunKeyY}`;
       const cached = this.treeSpriteCache.get(cacheKey);
       if (cached && cached.maskCanvas) {
         ctx.drawImage(cached.maskCanvas, t.x - cached.half + sway.swayX, t.y - cached.half + sway.swayY);
@@ -13602,6 +13731,27 @@ export class GameRenderer {
         sheenGrad.addColorStop(0.48, `rgba(255, 255, 255, ${(wetCoat * 0.20).toFixed(3)})`);
         sheenGrad.addColorStop(1, `rgba(15, 23, 42, ${(wetCoat * 0.18).toFixed(3)})`);
         ctx.fillStyle = sheenGrad;
+        ctx.fillRect(-halfL - 2, -halfW - 2, car.length + 4, car.width + 4);
+        ctx.restore();
+      }
+
+      // --- ACCUMULATED SNOW COAT ON PARKED / SLOW VEHICLE BODYWORK (warm hood melts faster) ---
+      const snowCoat = car.snowCoat ?? 0;
+      if (snowCoat > 0.05) {
+        ctx.save();
+        traceSoftbodyPath(ctx, basePoly, polyDvs);
+        ctx.clip();
+        const warmHoodFactor = Math.max(0, Math.min(1, ((car.engineTemp ?? 20) - 48) / 42));
+        const rearAlpha = Math.min(0.84, snowCoat * 0.82);
+        const midAlpha = Math.min(0.80, snowCoat * 0.76);
+        const hoodAlpha = Math.max(0, rearAlpha * (1 - warmHoodFactor * 0.92));
+        // Local +X is front (hood), -X is rear (trunk/roof)
+        const snowGrad = ctx.createLinearGradient(-halfL, 0, halfL, 0);
+        snowGrad.addColorStop(0, `rgba(241, 245, 249, ${rearAlpha.toFixed(3)})`);
+        snowGrad.addColorStop(0.52, `rgba(248, 250, 252, ${midAlpha.toFixed(3)})`);
+        snowGrad.addColorStop(0.74, `rgba(241, 245, 249, ${((midAlpha + hoodAlpha) * 0.5).toFixed(3)})`);
+        snowGrad.addColorStop(1, `rgba(236, 244, 252, ${hoodAlpha.toFixed(3)})`);
+        ctx.fillStyle = snowGrad;
         ctx.fillRect(-halfL - 2, -halfW - 2, car.length + 4, car.width + 4);
         ctx.restore();
       }

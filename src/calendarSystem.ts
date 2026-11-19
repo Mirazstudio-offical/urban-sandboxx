@@ -319,15 +319,15 @@ export function calculateClimateAtmosphere(
       break;
 
     case 'snow':
-      // Sub-zero precipitation
-      temp = Math.min(-0.5, temp - 2.0);
-      humidity = 88;
+      // Allow realistic wet first snow near 0..+1.5°C in autumn/spring, sub-zero in winter
+      temp = Math.min(1.5, temp - 1.5);
+      humidity = 90;
       pressureHpa = 1008.0;
       break;
 
     case 'blizzard':
       // Severe arctic gale
-      temp = Math.min(-4.0, temp - 6.5);
+      temp = Math.min(-3.5, temp - 6.0);
       humidity = 92;
       pressureHpa = 992.0;
       break;
@@ -354,7 +354,8 @@ export function calculateClimateAtmosphere(
     surfaceTemp -= 1.0;
   }
 
-  const isSnowCovered = calendar.season === 'winter' || (calendar.season === 'autumn' && calendar.month === 11 && roundedTemp < 1.0) || (calendar.season === 'spring' && calendar.month === 3 && roundedTemp < 1.0);
+  // Baseline seasonal snowpack only in winter when below melt threshold; autumn/spring snow comes from real accumulation (world.snowCover)
+  const isSnowCovered = calendar.season === 'winter' && roundedTemp < 2.0;
 
   return {
     temperature: roundedTemp,
@@ -378,6 +379,7 @@ export function getSeasonalWeatherProbabilities(
 ): { weather: WeatherType; weight: number }[] {
   const season = calendar.season;
   const isBelowFreezing = temperature <= 0.5;
+  const isWetSnowZone = temperature > 0.5 && temperature <= 2.4;
 
   if (isBelowFreezing) {
     // Sub-zero freezing regime: rain is physically impossible, only snow, blizzard, overcast, clear, or freezing fog
@@ -390,9 +392,20 @@ export function getSeasonalWeatherProbabilities(
     ];
   }
 
+  if (isWetSnowZone) {
+    // Near-freezing transitional regime: realistic wet first snow / sleet alongside overcast and cold drizzle
+    return [
+      { weather: 'overcast', weight: 34 },
+      { weather: 'snow', weight: 24 },
+      { weather: 'drizzle', weight: 18 },
+      { weather: 'fog', weight: 14 },
+      { weather: 'clear', weight: 10 }
+    ];
+  }
+
   switch (season) {
     case 'winter':
-      // Mild winter thaw above 0°C
+      // Mild winter thaw above 2.4°C
       return [
         { weather: 'overcast', weight: 40 },
         { weather: 'drizzle', weight: 25 },
@@ -426,6 +439,74 @@ export function getSeasonalWeatherProbabilities(
         { weather: 'clear', weight: 10 }
       ];
   }
+}
+
+/**
+ * Computes realistic initial ground hydrology & snowpack when starting a new game or jumping to a specific calendar date.
+ * Note: During continuous play, day-to-day evolution is driven physically by precipitation, temperature, sun, and wind.
+ */
+export function getInitialSurfaceHydrologyForCalendar(
+  calendar: GameCalendarState,
+  weather: WeatherType
+): {
+  surfaceWetness: number;
+  soilMoisture: number;
+  snowCover: number;
+  roadSnowCover: number;
+  slushLevel: number;
+  iceFreezeProgress: number;
+} {
+  const atmo = calculateClimateAtmosphere(calendar, weather);
+  const isRaining = weather === 'rain' || weather === 'storm' || weather === 'drizzle';
+  const isSnowing = weather === 'snow' || weather === 'blizzard';
+
+  let snowCover = 0;
+  let roadSnowCover = 0;
+  if (calendar.season === 'winter') {
+    // Early December has lighter initial cover; Jan-Feb have deep snowpack
+    if (calendar.month === 12 && calendar.day <= 10) {
+      snowCover = 0.25 + (calendar.day / 10) * 0.35;
+      roadSnowCover = snowCover * 0.45;
+    } else {
+      snowCover = atmo.temperature > 1.5 ? 0.55 : 0.85;
+      roadSnowCover = atmo.temperature > 1.0 ? 0.20 : 0.48;
+    }
+  } else if (calendar.month === 3 && calendar.day <= 15 && atmo.temperature < 3.0) {
+    snowCover = Math.max(0, 0.35 * (1 - calendar.day / 18));
+    roadSnowCover = snowCover * 0.25;
+  } else if (isSnowing) {
+    // Starting directly inside a first-snow event: light dusting on grass/roofs, mostly slush on asphalt
+    snowCover = atmo.surfaceTemp <= 0.5 ? 0.18 : 0.06;
+    roadSnowCover = atmo.surfaceTemp <= -1.0 ? 0.10 : 0.02;
+  }
+
+  let surfaceWetness = 0;
+  let soilMoisture = 0.12;
+  if (isRaining) {
+    surfaceWetness = weather === 'storm' ? 0.95 : weather === 'rain' ? 0.80 : 0.50;
+    soilMoisture = weather === 'storm' ? 0.95 : weather === 'rain' ? 0.85 : 0.60;
+  } else if (isSnowing && atmo.surfaceTemp > -1.0) {
+    surfaceWetness = 0.48;
+    soilMoisture = 0.55;
+  } else if (snowCover > 0.1 && atmo.surfaceTemp > 0.5) {
+    surfaceWetness = 0.38;
+    soilMoisture = 0.65;
+  }
+
+  const slushLevel = (isSnowing && atmo.surfaceTemp > -1.2 && atmo.surfaceTemp < 2.5)
+    ? 0.42
+    : (snowCover > 0.08 && atmo.surfaceTemp > 0.2 && atmo.surfaceTemp < 3.5 ? 0.30 : 0);
+
+  const iceFreezeProgress = atmo.isFreezing ? (atmo.temperature < -2.0 ? 1.0 : 0.55) : 0.0;
+
+  return {
+    surfaceWetness,
+    soilMoisture,
+    snowCover,
+    roadSnowCover,
+    slushLevel,
+    iceFreezeProgress
+  };
 }
 
 /**

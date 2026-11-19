@@ -2,6 +2,7 @@ import { Building, GameWorld, Player } from './types';
 import { performanceConfig } from './performanceConfig';
 import { getCityApartments } from './propertySystem';
 import { getCurrentSunShadowState } from './shadowSystem';
+import { getEffectiveWeatherWeights } from './weatherTransition';
 
 /**
  * High-Fidelity First-Principles Simulation Roof Renderer:
@@ -69,18 +70,18 @@ export class RoofRenderer {
 
       // 3. Render rural wooden izba gable roof
       if (bld.type === 'suburban') {
-        RoofRenderer.renderSuburbanGableRoof(ctx, bld, nightAlpha, now);
+        RoofRenderer.renderSuburbanGableRoof(ctx, bld, nightAlpha, now, world);
         continue;
       }
 
       // 4. Render industrial factory / warehouse corrugated roof
       if (bld.type === 'industrial') {
-        RoofRenderer.renderIndustrialRoof(ctx, bld, nightAlpha, now);
+        RoofRenderer.renderIndustrialRoof(ctx, bld, nightAlpha, now, world);
         continue;
       }
 
       // 5. Render urban flat roof (Residential, Offices, Commercial, Retail, Public)
-      RoofRenderer.renderFlatBuildingRoof(ctx, bld, nightAlpha, now);
+      RoofRenderer.renderFlatBuildingRoof(ctx, bld, nightAlpha, now, world);
     }
   }
 
@@ -91,7 +92,8 @@ export class RoofRenderer {
     ctx: CanvasRenderingContext2D,
     bld: Building,
     nightAlpha: number,
-    now: number
+    now: number,
+    world?: GameWorld
   ): void {
     const isAbandoned = bld.id ? bld.id.includes('abandoned') : false;
     const isBarn = bld.id ? bld.id.includes('barn') : false;
@@ -359,6 +361,14 @@ export class RoofRenderer {
         }
       }
     }
+
+    // Progressive first-snow & winter snow crust on gable roof slopes (roofs turn white early in snowfall)
+    if (world) {
+      const wwRoof = getEffectiveWeatherWeights(world);
+      if (wwRoof.snowCover > 0.04) {
+        RoofRenderer.renderRoofSnowOverlay(ctx, eX, eY, eW, eH, wwRoof.snowCover, true, bld);
+      }
+    }
   }
 
   // =========================================================================
@@ -368,7 +378,8 @@ export class RoofRenderer {
     ctx: CanvasRenderingContext2D,
     bld: Building,
     nightAlpha: number,
-    now: number
+    now: number,
+    world?: GameWorld
   ): void {
     const rx = bld.x;
     const ry = bld.y;
@@ -552,6 +563,12 @@ export class RoofRenderer {
       ctx.textBaseline = 'middle';
       ctx.fillText(bld.name.toUpperCase(), signX + signW / 2, signY + signH / 2);
     }
+    if (world) {
+      const wwInd = getEffectiveWeatherWeights(world);
+      if (wwInd.snowCover > 0.04) {
+        RoofRenderer.renderRoofSnowOverlay(ctx, rx, ry, rw, rh, wwInd.snowCover, false, bld);
+      }
+    }
   }
 
   // =========================================================================
@@ -561,7 +578,8 @@ export class RoofRenderer {
     ctx: CanvasRenderingContext2D,
     bld: Building,
     nightAlpha: number,
-    now: number
+    now: number,
+    world?: GameWorld
   ): void {
     const isCommercial = bld.shopBrand !== undefined || 
       ['commercial', 'shop', 'shopping_mall', 'car_dealership', 'supermarket_store', 'pharmacy_store', 'electronics_store', 'sports_store', 'fast_food_restaurant', 'pizzeria_restaurant'].includes(bld.type);
@@ -635,8 +653,14 @@ export class RoofRenderer {
       RoofRenderer.renderBitumenRollRoof(ctx, rx, ry, rw, rh, bld);
     }
 
-    // 3. Environmental Weathering: Rainwater Depressions, Puddles & Efflorescence
-    RoofRenderer.renderRooftopWeathering(ctx, rx, ry, rw, rh, bld);
+    // 3. Environmental Weathering: Weather-Driven Rainwater Puddles & Snowpack
+    RoofRenderer.renderRooftopWeathering(ctx, rx, ry, rw, rh, bld, world);
+    if (world) {
+      const wwFlat = getEffectiveWeatherWeights(world);
+      if (wwFlat.snowCover > 0.04) {
+        RoofRenderer.renderRoofSnowOverlay(ctx, rx, ry, rw, rh, wwFlat.snowCover, false, bld);
+      }
+    }
 
     // 4. Roof Access Structures: Penthouse, Ventilation Risers & Roof Hatches
     if (isCommercial) {
@@ -855,9 +879,15 @@ export class RoofRenderer {
     ry: number,
     rw: number,
     rh: number,
-    bld: Building
+    bld: Building,
+    world?: GameWorld
   ): void {
-    // Water pooling depressions & drying mud stains (застойные пятна в низинах)
+    const ww = world ? getEffectiveWeatherWeights(world) : null;
+    const wetness = ww ? Math.max(ww.surfaceWetness, ww.rain * 0.9) : 0;
+    const freezeProg = ww ? ww.iceFreezeProgress : 0;
+    const snowCover = ww ? ww.snowCover : 0;
+
+    // Water pooling depressions & drying mud stains (only holds standing water when wet / post-rain!)
     const seed = Math.abs(bld.x * 19 + bld.y * 37);
     const numPuddles = 1 + (seed % 3);
 
@@ -869,26 +899,92 @@ export class RoofRenderer {
 
       if (px - prx < rx || px + prx > rx + rw || py - pry < ry || py + pry > ry + rh) continue;
 
-      // Dark damp perimeter border (высохшая грязь по кромке лужи)
-      ctx.fillStyle = 'rgba(8, 10, 16, 0.42)';
+      // Subtle dry mineral/silt weathering stain remains even in dry weather
+      ctx.fillStyle = `rgba(12, 16, 22, ${(0.12 + wetness * 0.28).toFixed(3)})`;
       ctx.beginPath();
       ctx.ellipse(px, py, prx + 2, pry + 1.5, 0.15, 0, Math.PI * 2);
       ctx.fill();
 
-      // Clear dark rainwater body with sky reflection
-      ctx.fillStyle = 'rgba(15, 30, 48, 0.65)';
-      ctx.beginPath();
-      ctx.ellipse(px, py, prx, pry, 0.15, 0, Math.PI * 2);
-      ctx.fill();
+      // Standing rainwater (or frozen ice plate) ONLY appears during/after rain or snowmelt
+      if (wetness > 0.12 && snowCover < 0.65) {
+        const wAlpha = Math.min(1.0, (wetness - 0.10) / 0.55);
+        const scale = 0.55 + 0.45 * wAlpha;
+        if (freezeProg > 0.45) {
+          ctx.fillStyle = `rgba(203, 226, 248, ${(0.52 * wAlpha).toFixed(3)})`;
+        } else {
+          ctx.fillStyle = `rgba(15, 30, 48, ${(0.62 * wAlpha).toFixed(3)})`;
+        }
+        ctx.beginPath();
+        ctx.ellipse(px, py, prx * scale, pry * scale, 0.15, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Subtle water surface daylight gloss streak
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(px - prx * 0.5, py - pry * 0.3);
-      ctx.lineTo(px + prx * 0.4, py - pry * 0.3);
-      ctx.stroke();
+        // Subtle water/ice surface gloss streak
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(0.20 * wAlpha).toFixed(3)})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(px - prx * 0.45 * scale, py - pry * 0.28 * scale);
+        ctx.lineTo(px + prx * 0.38 * scale, py - pry * 0.28 * scale);
+        ctx.stroke();
+      }
     }
+  }
+
+  /**
+   * Renders realistic rooftop snow accumulation (roofs whiten early during first snow
+   * with thicker snowdrifts along parapets/eaves and melted dark patches near vents).
+   */
+  private static renderRoofSnowOverlay(
+    ctx: CanvasRenderingContext2D,
+    rx: number,
+    ry: number,
+    rw: number,
+    rh: number,
+    snowCover: number,
+    isGable: boolean,
+    bld: Building
+  ): void {
+    // Roofs cool faster than asphalt roads, catching ~20% stronger dusting on first snow
+    const roofSnow = Math.min(0.92, Math.pow(Math.min(1, snowCover * 1.18), 0.82) * 0.90);
+    if (roofSnow <= 0.02) return;
+
+    ctx.save();
+    // Main roof snow blanket
+    ctx.fillStyle = `rgba(238, 244, 252, ${roofSnow.toFixed(3)})`;
+    ctx.fillRect(rx, ry, rw, rh);
+
+    // Subtle wind-drifted parapet/eave snow banks (brighter along north/west edges)
+    const driftThick = Math.min(12, Math.max(3, Math.min(rw, rh) * 0.14)) * Math.min(1, snowCover * 1.2);
+    ctx.fillStyle = `rgba(248, 251, 255, ${(roofSnow * 0.65).toFixed(3)})`;
+    ctx.fillRect(rx, ry, rw, driftThick);
+    ctx.fillRect(rx, ry, driftThick, rh);
+
+    // Gable ridge highlight & shadowed lower slope
+    if (isGable) {
+      ctx.fillStyle = `rgba(186, 204, 224, ${(roofSnow * 0.26).toFixed(3)})`;
+      ctx.fillRect(rx, ry + rh * 0.5, rw, rh * 0.5);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${(roofSnow * 0.72).toFixed(3)})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(rx + 2, ry + rh * 0.5);
+      ctx.lineTo(rx + rw - 2, ry + rh * 0.5);
+      ctx.stroke();
+    } else if (snowCover < 0.75) {
+      // Partial first-snow melted dark roofing patches from building heat leakage
+      const seed = Math.abs(bld.x * 13 + bld.y * 29);
+      const meltAlpha = Math.max(0, (0.75 - snowCover) * 0.45);
+      ctx.fillStyle = `rgba(30, 38, 52, ${meltAlpha.toFixed(3)})`;
+      for (let i = 0; i < 2; i++) {
+        const mx = rx + rw * (0.25 + 0.45 * i) + (roofNoise(rx + i * 17, ry, seed) - 0.5) * rw * 0.12;
+        const my = ry + rh * (0.35 + 0.25 * (i & 1));
+        const mr = Math.min(rw, rh) * (0.10 + roofNoise(mx, my, 7) * 0.08);
+        if (mr > 3) {
+          ctx.beginPath();
+          ctx.ellipse(mx, my, mr, mr * 0.72, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
   }
 
   // -------------------------------------------------------------------------

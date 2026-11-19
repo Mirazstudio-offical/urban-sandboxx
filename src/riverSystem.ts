@@ -805,13 +805,20 @@ export function getRiverWaterAt(x: number, y: number): RiverWaterInfo {
  * Universal water depth query function across the entire world (River, Ponds, Roadside Puddles)
  */
 export function getUniversalWaterDepthAt(world: GameWorld | null | undefined, x: number, y: number): number {
-  if (world && isWorldFreezing(world)) {
+  const freezeProg = world && typeof world.iceFreezeProgress === 'number'
+    ? world.iceFreezeProgress
+    : (world && isWorldFreezing(world) ? 1.0 : 0.0);
+
+  if (freezeProg >= 0.75) {
     return 0;
   }
 
+  // During transitional thin ice crust (0.25..0.75), liquid water depth shrinks as ice thickens
+  const liquidScale = freezeProg > 0.25 ? Math.max(0, 1.0 - (freezeProg - 0.25) / 0.50) : 1.0;
+
   const river = getRiverWaterAt(x, y);
   if (river.inWater && !river.isBridge) {
-    return river.depth;
+    return river.depth * liquidScale;
   }
 
   if (world && world.puddles && world.puddles.length > 0) {
@@ -833,9 +840,9 @@ export function getUniversalWaterDepthAt(world: GameWorld | null | undefined, x:
       const distSq = (rx / p.radiusX) ** 2 + (ry / p.radiusY) ** 2;
       if (distSq <= 1.0) {
         if (p.isPond) {
-          return 0.85 * Math.max(0, Math.pow(1 - distSq, 1.35));
+          return 0.85 * Math.max(0, Math.pow(1 - distSq, 1.35)) * liquidScale;
         } else {
-          return 0.085 * (1 - Math.sqrt(distSq));
+          return 0.085 * (1 - Math.sqrt(distSq)) * liquidScale;
         }
       }
     }

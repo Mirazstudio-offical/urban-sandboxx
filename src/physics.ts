@@ -6233,11 +6233,50 @@ export function updatePlayerPedestrianPhysics(
       if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
       player.angle += angleDiff * Math.min(1.0, (player.isSwimming ? 8 : 25) * dt);
 
+      const prevWalkCycle = player.walkCycle;
       player.walkCycle += dt * (canSprint ? 18 : (hasLegInjury ? 7 : 10));
       player.speed = Math.hypot(player.vx, player.vy);
 
-      // Footstep dust particles when sprinting on dry ground
-      if (canSprint && pWaterDepth <= 0.03 && world && Math.random() < 0.18) {
+      // Step-cadence surface interaction: snow footprints, snow crunch & wet footsteps
+      if (world && !player.isInsideBuilding && !player.isSwimming && Math.floor(prevWalkCycle / Math.PI) !== Math.floor(player.walkCycle / Math.PI)) {
+        const stepSurf = getSurfaceTypeAt(world, player.x, player.y);
+        const isHardRoadStep = stepSurf.type === 'asphalt' || stepSurf.type === 'concrete' || stepSurf.type === 'rock';
+        const wwStep = getEffectiveWeatherWeights(world);
+        const localSnow = isHardRoadStep ? wwStep.roadSnowCover : wwStep.snowCover;
+        const stepTemp = typeof world.outsideTemp === 'number' ? world.outsideTemp : 5;
+        const stepParity = (Math.floor(player.walkCycle / Math.PI) & 1) === 0 ? -1 : 1;
+
+        if (localSnow > 0.10 && pWaterDepth <= 0.04) {
+          // Deposit realistic left/right indented snow boot footprint
+          const footLat = 3.2 * stepParity;
+          const fx = player.x - Math.sin(player.angle) * footLat;
+          const fy = player.y + Math.cos(player.angle) * footLat;
+          if (!world.stains) world.stains = [];
+          world.stains.push({
+            id: 'snow_step_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+            x: fx,
+            y: fy,
+            type: 'snow_footprint',
+            radius: 3.1,
+            maxRadius: 3.1,
+            alpha: Math.min(0.75, 0.30 + localSnow * 0.45),
+            life: 0,
+            maxLife: 95,
+            spreadAngle: player.angle,
+            spreadElong: 1.35,
+            onFire: false,
+            fireIntensity: 0
+          });
+          sound.playSnowFootstep(stepTemp, canSprint, wwStep.slushLevel > 0.22 && stepTemp > -1.2);
+        } else if (pWaterDepth > 0.02 || wwStep.surfaceWetness > 0.18 || wwStep.slushLevel > 0.15) {
+          sound.playWetFootstep(pWaterDepth > 0.02, canSprint);
+        }
+      }
+
+      // Footstep dust particles ONLY on dry non-snowy ground (wet/snowy ground suppresses dust)
+      const dustWw = world ? getEffectiveWeatherWeights(world) : null;
+      const isGroundDusty = !dustWw || (dustWw.surfaceWetness < 0.15 && dustWw.snowCover < 0.12 && dustWw.soilMoisture < 0.35);
+      if (canSprint && pWaterDepth <= 0.03 && world && isGroundDusty && Math.random() < 0.18) {
         world.particles.push({
           x: player.x,
           y: player.y,
@@ -6958,6 +6997,7 @@ export function updatePlayerNeedsAndVitals(
     }
     curVehicle.fogLevel = (typeof curVehicle.fogLevel === 'number'&& Number.isFinite(curVehicle.fogLevel)) ? curVehicle.fogLevel : 0.0;
     curVehicle.windshieldRainLevel = (typeof curVehicle.windshieldRainLevel === 'number'&& Number.isFinite(curVehicle.windshieldRainLevel)) ? curVehicle.windshieldRainLevel : 0;
+    curVehicle.windshieldSnowLevel = (typeof curVehicle.windshieldSnowLevel === 'number'&& Number.isFinite(curVehicle.windshieldSnowLevel)) ? curVehicle.windshieldSnowLevel : 0;
 
     // Sync engine temperature
     const engTemp = typeof curVehicle.engineTemp === 'number'? curVehicle.engineTemp
@@ -7020,17 +7060,20 @@ export function updatePlayerNeedsAndVitals(
 
     if (isFreeroam) {
       curVehicle.windshieldRainLevel = 0;
+      curVehicle.windshieldSnowLevel = 0;
       curVehicle.fogLevel = 0;
     } else {
+      const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
+      const isSnowingOnGlass = frozenPrecip > 0.05;
+
       // Wipers and windshield rain level (exterior water on the glass with aerodynamic airflow)
       if (isRaining) {
-        const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
         // Faster forward travel sweeps through more volumetric raindrops per second
         const speedAccFlux = 1.0 + Math.min(2.2, carSpeedKmh / 50.0);
 
         if (!curVehicle.wipersOn) {
           // Build up water on the screen
-          curVehicle.windshieldRainLevel = Math.min(100, curVehicle.windshieldRainLevel + 16 * speedAccFlux * dt);
+          curVehicle.windshieldRainLevel = Math.min(100, curVehicle.windshieldRainLevel + 16 * liquidPrecip * speedAccFlux * dt);
         } else {
           // Clear rain quickly with wipers
           curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - 45 * dt);
@@ -7044,9 +7087,43 @@ export function updatePlayerNeedsAndVitals(
         }
       } else {
         // Dry out gradually; ambient wind and forward travel accelerate drying
-        const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
         const windDryBonus = (world.wind ? (world.wind.speed * 0.05) : 0) + Math.min(25, carSpeedKmh * 0.25);
         curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - (15 + windDryBonus) * dt);
+      }
+
+      // Windshield snow / slush accumulation, wipers, aero blow-off & cabin heater defrosting
+      if (isSnowingOnGlass) {
+        const speedSnowFlux = 0.85 + Math.min(1.9, carSpeedKmh / 55.0);
+        if (!curVehicle.wipersOn) {
+          curVehicle.windshieldSnowLevel = Math.min(100, (curVehicle.windshieldSnowLevel || 0) + 12.5 * frozenPrecip * speedSnowFlux * dt);
+        } else {
+          // Wipers clear snow/slush from glass
+          curVehicle.windshieldSnowLevel = Math.max(0, (curVehicle.windshieldSnowLevel || 0) - 38 * dt);
+        }
+        // Loose powdery snow blows off windshield at speed
+        if (carSpeedKmh > 55) {
+          const snowBlowOff = Math.min(22, (carSpeedKmh - 55) * 0.35);
+          curVehicle.windshieldSnowLevel = Math.max(0, (curVehicle.windshieldSnowLevel || 0) - snowBlowOff * dt);
+        }
+      } else if ((curVehicle.windshieldSnowLevel || 0) > 0) {
+        if (curVehicle.wipersOn) {
+          curVehicle.windshieldSnowLevel = Math.max(0, (curVehicle.windshieldSnowLevel || 0) - 42 * dt);
+        } else {
+          const ambientMelt = Math.max(0, outsideTemp) * 1.8;
+          const speedBlow = carSpeedKmh > 40 ? (carSpeedKmh - 40) * 0.22 : 0;
+          curVehicle.windshieldSnowLevel = Math.max(0, (curVehicle.windshieldSnowLevel || 0) - (1.8 + ambientMelt + speedBlow) * dt);
+        }
+      }
+
+      // Warm cabin defroster melts snow on the windshield into liquid droplets
+      if ((curVehicle.windshieldSnowLevel || 0) > 0 && curVehicle.heaterMode !== 'off' && engTemp > 50) {
+        const fanBoost = curVehicle.heaterMode === 'high' ? 1.0 : curVehicle.heaterMode === 'med' ? 0.65 : 0.35;
+        const defrostMelt = fanBoost * Math.min(14, (engTemp - 45) * 0.28) * dt;
+        const melted = Math.min(curVehicle.windshieldSnowLevel || 0, defrostMelt);
+        curVehicle.windshieldSnowLevel = Math.max(0, (curVehicle.windshieldSnowLevel || 0) - melted);
+        if (!curVehicle.wipersOn) {
+          curVehicle.windshieldRainLevel = Math.min(100, curVehicle.windshieldRainLevel + melted * 0.35);
+        }
       }
 
       // Mathematical update of windshield fogging (moisture & temperature balance)
@@ -9692,20 +9769,21 @@ export function updateVehiclePhysics(
     const curCal = world.calendar || createInitialCalendarState(2026, 10, 8, typeof world.timeHour === 'number' ? world.timeHour : 12);
     const curAtmo = calculateClimateAtmosphere(curCal, world.weather || 'clear');
     const isFreezingAtStart = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
-    const isSnowCoveredAtStart = curAtmo.isSnowCovered;
-    const isRainingWeather = world.weather === 'rain' || world.weather === 'storm' || world.weather === 'drizzle';
-    const isStormWeather = world.weather === 'storm' || world.weather === 'blizzard';
-    const isSnowyWeather = world.weather === 'snow' || world.weather === 'blizzard' || isSnowCoveredAtStart;
+    const startWeatherWeights = getEffectiveWeatherWeights(world, isFreezingAtStart);
+    const isWetSoilOrRain = startWeatherWeights.soilMoisture > 0.28 || startWeatherWeights.rain > 0.10 || startWeatherWeights.slushLevel > 0.15;
+    const isStormWeather = world.weather === 'storm' || world.weather === 'blizzard' || startWeatherWeights.soilMoisture > 0.78;
+    const isSnowyOffroad = startWeatherWeights.snowCover > 0.18 || startWeatherWeights.snow > 0.15;
 
     const isOffroaderVeh = ['offroad_hardcore', 'suv', 'suv_luxury', 'suv_classic_box', 'pickup', 'pickup_heavy', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old', 'truck_armored', 'truck_dump'].includes(cfg.type);
     const isLowClearanceVeh = ['supercar', 'sports', 'coupe_gt', 'hatch_hot', 'micro_car', 'retro_bubble', 'sedan_compact', 'moto_sport'].includes(cfg.type);
     const clearanceFactor = isOffroaderVeh ? 0.50 : (isLowClearanceVeh ? 1.85 : 1.0);
 
-    const frontOffroad = getSurfaceOffroadProps(frontSurf.type, isRainingWeather, isStormWeather, isSnowyWeather);
-    const rearOffroad = getSurfaceOffroadProps(rearSurf.type, isRainingWeather, isStormWeather, isSnowyWeather);
+    const frontOffroad = getSurfaceOffroadProps(frontSurf.type, isWetSoilOrRain, isStormWeather, isSnowyOffroad);
+    const rearOffroad = getSurfaceOffroadProps(rearSurf.type, isWetSoilOrRain, isStormWeather, isSnowyOffroad);
 
-    // Wet washed-out offroad terrain adds heavy rolling resistance (размытая земля)
-    const wetOffroadDrag = ((frontOffroad.wetExtraDrag + rearOffroad.wetExtraDrag) / 2.0) * clearanceFactor * speedScaleFactor;
+    // Wet washed-out offroad terrain adds heavy rolling resistance scaled continuously by soilMoisture / snowCover
+    const mudScale = isSnowyOffroad ? Math.max(0.35, startWeatherWeights.snowCover) : (isWetSoilOrRain ? Math.max(0.35, startWeatherWeights.soilMoisture) : 1.0);
+    const wetOffroadDrag = ((frontOffroad.wetExtraDrag + rearOffroad.wetExtraDrag) / 2.0) * mudScale * clearanceFactor * speedScaleFactor;
     extraDrag += wetOffroadDrag;
 
     if (vehicle.trailerId) {
@@ -9794,15 +9872,15 @@ export function updateVehiclePhysics(
       const avgBrake = isTractor ? (brakeLeftVal + brakeRightVal) / 2 : brake;
       let bForce = cfg.brakingForce * speedScaleFactor * avgBrake;
 
-      // Surface adhesion and weather grip limit calculation
+      // Surface adhesion and weather grip limit calculation (driven by actual persistent wetness/snow/ice)
       const centerSurf = getSurfaceTypeAt(world, vehicle.x, vehicle.y);
       const isFreezingAtBrake = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
-      const isSnowCoveredAtBrake = curAtmo.isSnowCovered;
-
       const localWeatherWeights = getEffectiveWeatherWeights(world, isFreezingAtBrake);
       let localWeatherGrip = localWeatherWeights.effectiveGrip;
-      if (isSnowCoveredAtBrake) localWeatherGrip = Math.min(localWeatherGrip, 0.36);
-      else if (isFreezingAtBrake && curAtmo.surfaceTemp <= 0) localWeatherGrip = Math.min(localWeatherGrip, 0.45);
+      const isRoadBrake = centerSurf.type === 'asphalt' || centerSurf.type === 'concrete';
+      if (!isRoadBrake && localWeatherWeights.snowCover > 0.25) {
+        localWeatherGrip = Math.min(localWeatherGrip, 1.0 - Math.min(0.64, localWeatherWeights.snowCover * 0.72));
+      }
 
       const surfaceAdhesion = localWeatherGrip * centerSurf.grip;
       const maxAdhesionBrake = cfg.brakingForce * speedScaleFactor * surfaceAdhesion;
@@ -10042,23 +10120,17 @@ export function updateVehiclePhysics(
     const tRRX = isSoloMoto ? (vehicle.x - cosA * Lr) : (vehicle.x - cosA * Lr - sinA * halfTrack);
     const tRRY = isSoloMoto ? (vehicle.y - sinA * Lr) : (vehicle.y - sinA * Lr + cosA * halfTrack);
 
-    // Surface & Weather grip calculations
+    // Surface & Weather grip calculations (using real persistent hydrology, snowpack, slush & gradual ice)
     const isFreezing = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
-    const isSnowCovered = curAtmo.isSnowCovered;
-
     const weatherWeights = getEffectiveWeatherWeights(world, isFreezing);
+    const freezeProg = weatherWeights.iceFreezeProgress;
     let weatherGrip = weatherWeights.effectiveGrip;
     let isWetSurface = weatherWeights.isWetSurface;
-    let isSnowySurface = weatherWeights.snow > 0.1 || weatherWeights.blizzard > 0.1;
-    let isIcySurface = (isFreezing && isWetSurface) || weatherWeights.blizzard > 0.2;
+    let isSnowySurface = weatherWeights.roadSnowCover > 0.14 || weatherWeights.slushLevel > 0.15 || weatherWeights.snow > 0.1;
+    let isIcySurface = (freezeProg > 0.35 && (weatherWeights.surfaceWetness > 0.08 || weatherWeights.roadSnowCover > 0.15)) || weatherWeights.blizzard > 0.2;
 
-    if (isSnowCovered) {
-      weatherGrip = Math.min(weatherGrip, 0.36);
-      isSnowySurface = true;
-    } else if (isFreezing && curAtmo.surfaceTemp <= 0) {
-      weatherGrip = Math.min(weatherGrip, 0.45);
-      isIcySurface = true;
-    }
+    const isOffroadWet = weatherWeights.soilMoisture > 0.28 || weatherWeights.rain > 0.10 || weatherWeights.slushLevel > 0.15;
+    const isOffroadSnowy = weatherWeights.snowCover > 0.18 || weatherWeights.snow > 0.15;
 
     // Sample terrain surface under EACH individual wheel
     const surfFL = getSurfaceTypeAt(world, tFLX, tFLY);
@@ -10066,10 +10138,10 @@ export function updateVehiclePhysics(
     const surfRL = getSurfaceTypeAt(world, tRLX, tRLY);
     const surfRR = getSurfaceTypeAt(world, tRRX, tRRY);
 
-    const offroadFL = getSurfaceOffroadProps(surfFL.type, isWetSurface, isStormWeather, isSnowySurface);
-    const offroadFR = getSurfaceOffroadProps(surfFR.type, isWetSurface, isStormWeather, isSnowySurface);
-    const offroadRL = getSurfaceOffroadProps(surfRL.type, isWetSurface, isStormWeather, isSnowySurface);
-    const offroadRR = getSurfaceOffroadProps(surfRR.type, isWetSurface, isStormWeather, isSnowySurface);
+    const offroadFL = getSurfaceOffroadProps(surfFL.type, isOffroadWet, isStormWeather, isOffroadSnowy);
+    const offroadFR = getSurfaceOffroadProps(surfFR.type, isOffroadWet, isStormWeather, isOffroadSnowy);
+    const offroadRL = getSurfaceOffroadProps(surfRL.type, isOffroadWet, isStormWeather, isOffroadSnowy);
+    const offroadRR = getSurfaceOffroadProps(surfRR.type, isOffroadWet, isStormWeather, isOffroadSnowy);
 
     // Heavy mass load damping for commercial vehicles cutting through fluid films
     const heavyMassLoadDamping = Math.min(0.68, Math.max(0, (totalMass - 1500) / 22000));
@@ -10082,19 +10154,20 @@ export function updateVehiclePhysics(
     if (world.stains && world.stains.length > 0) {
       for (let i = 0; i < world.stains.length; i++) {
         const st = world.stains[i];
+        if (st.type === 'snow_footprint') continue;
         const rSt = st.radius || 15;
         let baseGripReduction = 0.35;
         if (st.type === 'oil' || st.type === 'fuel') baseGripReduction = 0.28;
         else if (st.type === 'coolant') baseGripReduction = 0.38;
-        else if (st.type === 'water') baseGripReduction = isFreezing ? 0.12 : 0.52;
+        else if (st.type === 'water') baseGripReduction = 0.52 - freezeProg * 0.40;
         else if (st.type === 'sand') baseGripReduction = 0.65;
 
         const effectiveGrip = baseGripReduction + (1.0 - baseGripReduction) * heavyMassLoadDamping;
 
-        if (Math.hypot(tFLX - st.x, tFLY - st.y) < rSt + 6) { stainFL = Math.min(stainFL, effectiveGrip); if (st.type === 'water') { if (isFreezing) isIcySurface = true; else isWetSurface = true; } }
-        if (Math.hypot(tFRX - st.x, tFRY - st.y) < rSt + 6) { stainFR = Math.min(stainFR, effectiveGrip); if (st.type === 'water') { if (isFreezing) isIcySurface = true; else isWetSurface = true; } }
-        if (Math.hypot(tRLX - st.x, tRLY - st.y) < rSt + 6) { stainRL = Math.min(stainRL, effectiveGrip); if (st.type === 'water') { if (isFreezing) isIcySurface = true; else isWetSurface = true; } }
-        if (Math.hypot(tRRX - st.x, tRRY - st.y) < rSt + 6) { stainRR = Math.min(stainRR, effectiveGrip); if (st.type === 'water') { if (isFreezing) isIcySurface = true; else isWetSurface = true; } }
+        if (Math.hypot(tFLX - st.x, tFLY - st.y) < rSt + 6) { stainFL = Math.min(stainFL, effectiveGrip); if (st.type === 'water') { if (freezeProg > 0.35) isIcySurface = true; else isWetSurface = true; } }
+        if (Math.hypot(tFRX - st.x, tFRY - st.y) < rSt + 6) { stainFR = Math.min(stainFR, effectiveGrip); if (st.type === 'water') { if (freezeProg > 0.35) isIcySurface = true; else isWetSurface = true; } }
+        if (Math.hypot(tRLX - st.x, tRLY - st.y) < rSt + 6) { stainRL = Math.min(stainRL, effectiveGrip); if (st.type === 'water') { if (freezeProg > 0.35) isIcySurface = true; else isWetSurface = true; } }
+        if (Math.hypot(tRRX - st.x, tRRY - st.y) < rSt + 6) { stainRR = Math.min(stainRR, effectiveGrip); if (st.type === 'water') { if (freezeProg > 0.35) isIcySurface = true; else isWetSurface = true; } }
       }
     }
 
@@ -10102,13 +10175,15 @@ export function updateVehiclePhysics(
       for (let i = 0; i < world.puddles.length; i++) {
         const pud = world.puddles[i];
         const rPud = Math.max(pud.radiusX, pud.radiusY);
-        const pudGripBase = isFreezing ? 0.12 : (isWetSurface ? 0.58 : 0.66);
+        const liquidPudGrip = isWetSurface ? 0.58 : 0.66;
+        // Smooth transition from wet puddle grip -> brittle ice crust -> solid sheet ice (0.12)
+        const pudGripBase = liquidPudGrip * (1 - freezeProg) + 0.12 * freezeProg;
         const effectivePudGrip = pudGripBase + (1.0 - pudGripBase) * heavyMassLoadDamping;
 
-        if (Math.hypot(tFLX - pud.x, tFLY - pud.y) < rPud + 4) { stainFL = Math.min(stainFL, effectivePudGrip); if (isFreezing) isIcySurface = true; else isWetSurface = true; }
-        if (Math.hypot(tFRX - pud.x, tFRY - pud.y) < rPud + 4) { stainFR = Math.min(stainFR, effectivePudGrip); if (isFreezing) isIcySurface = true; else isWetSurface = true; }
-        if (Math.hypot(tRLX - pud.x, tRLY - pud.y) < rPud + 4) { stainRL = Math.min(stainRL, effectivePudGrip); if (isFreezing) isIcySurface = true; else isWetSurface = true; }
-        if (Math.hypot(tRRX - pud.x, tRRY - pud.y) < rPud + 4) { stainRR = Math.min(stainRR, effectivePudGrip); if (isFreezing) isIcySurface = true; else isWetSurface = true; }
+        if (Math.hypot(tFLX - pud.x, tFLY - pud.y) < rPud + 4) { stainFL = Math.min(stainFL, effectivePudGrip); if (freezeProg > 0.35) isIcySurface = true; else isWetSurface = true; }
+        if (Math.hypot(tFRX - pud.x, tFRY - pud.y) < rPud + 4) { stainFR = Math.min(stainFR, effectivePudGrip); if (freezeProg > 0.35) isIcySurface = true; else isWetSurface = true; }
+        if (Math.hypot(tRLX - pud.x, tRLY - pud.y) < rPud + 4) { stainRL = Math.min(stainRL, effectivePudGrip); if (freezeProg > 0.35) isIcySurface = true; else isWetSurface = true; }
+        if (Math.hypot(tRRX - pud.x, tRRY - pud.y) < rPud + 4) { stainRR = Math.min(stainRR, effectivePudGrip); if (freezeProg > 0.35) isIcySurface = true; else isWetSurface = true; }
       }
     }
 
@@ -10992,6 +11067,36 @@ export function updateVehiclePhysics(
       // --- SITUATION A: ASPHALT & HARD PAVEMENT ---
       // ABSOLUTELY NEVER spawn mud clods or dirt on hard paved roads!
       if (isHardPavement) {
+        const wwRoad = getEffectiveWeatherWeights(world);
+        // Post-rain aerosol mist plume & first-snow slush spray at speed on wet/slushy asphalt
+        if (vSpeedKmh > 26.0 && wwRoad.iceFreezeProgress < 0.72 && (wwRoad.surfaceWetness > 0.24 || wwRoad.slushLevel > 0.16)) {
+          const isSlushSpray = wwRoad.slushLevel > 0.18;
+          const sprayStrength = Math.max(wwRoad.surfaceWetness, wwRoad.slushLevel);
+          const emitProb = Math.min(0.45, ((vSpeedKmh - 24) / 85) * sprayStrength * 0.42);
+          if (Math.random() < emitProb) {
+            const flingSpeed = (22 + vSpeedKmh * 0.52) * (0.85 + Math.random() * 0.30);
+            const sideSign = isLeftWheel ? -1 : 1;
+            const sprayVx = vehicle.vx * 0.38 + kickCos * flingSpeed + latCos * sideSign * (6 + Math.random() * 12);
+            const sprayVy = vehicle.vy * 0.38 + kickSin * flingSpeed + latSin * sideSign * (6 + Math.random() * 12);
+            world.particles.push({
+              x: tireX + kickCos * 2.5 + (Math.random() * 3 - 1.5),
+              y: tireY + kickSin * 2.5 + (Math.random() * 3 - 1.5),
+              vx: sprayVx,
+              vy: sprayVy,
+              radius: isSlushSpray ? (1.8 + Math.random() * 1.8) : (2.4 + Math.random() * 2.4),
+              color: isSlushSpray ? (Math.random() > 0.45 ? '#94a3b8' : '#cbd5e1') : '#e2e8f0',
+              alpha: Math.min(0.46, (0.14 + sprayStrength * 0.28) * Math.min(1.0, vSpeedKmh / 65)),
+              initialAlpha: Math.min(0.46, (0.14 + sprayStrength * 0.28) * Math.min(1.0, vSpeedKmh / 65)),
+              life: 0,
+              maxLife: isSlushSpray ? 0.24 : 0.34,
+              type: 'water_spray',
+              shapeSeed: (Math.random() * 1024) | 0,
+              angle: Math.atan2(sprayVy, sprayVx),
+              aspect: 1.4 + Math.random() * 0.4,
+              underVehicle: false
+            });
+          }
+        }
         if (isPowerWheelspin || (isScrubbing && vSpeedKmh > 18.0) || (isWheelLocked && vSpeedKmh > 22.0) || isBurnoutHolding) {
           if (!isWetSurface && Math.random() < 0.45) {
             const atmo = getAtmosphereState(world, world.timeHour);
@@ -12849,21 +12954,33 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         }
       }
     } else {
-      updateFluidSpread(st, dt);
+      if (st.type !== 'snow_footprint') {
+        updateFluidSpread(st, dt);
+      }
 
-      // Normal drying out (water evaporates faster on asphalt, especially in warm weather)
-      const dryMultiplier = st.type === 'water'? 1.5 : 1.0;
+      // Climate-aware drying & snow footprint infill
+      let dryMultiplier = 1.0;
+      if (st.type === 'water') {
+        const tDry = outsideTemp <= 0 ? 0.12 : Math.max(0.30, Math.min(2.2, 0.35 + outsideTemp * 0.06));
+        const wDry = 1.0 + Math.min(1.0, windSpeed * 0.01);
+        dryMultiplier = tDry * wDry;
+      } else if (st.type === 'snow_footprint') {
+        const wwFoot = getEffectiveWeatherWeights(world);
+        // Active snowfall fills in footprints; warm weather melts them away
+        const infillBoost = 1.0 + wwFoot.snow * 3.5 + wwFoot.blizzard * 5.0 + (wwFoot.snowCover < 0.08 ? 8.0 : 0);
+        dryMultiplier = 0.65 * infillBoost;
+      }
       st.life += dt * dryMultiplier;
     }
 
     if (typeof st.alpha !== 'number'|| !isFinite(st.alpha)) {
-      st.alpha = st.type === 'oil'? 0.75 : (st.type === 'coolant'? 0.65 : (st.type === 'water'? 0.60 : 0.45));
+      st.alpha = st.type === 'oil'? 0.75 : (st.type === 'coolant'? 0.65 : (st.type === 'water'? 0.60 : (st.type === 'snow_footprint' ? 0.55 : 0.45)));
     }
 
-    const fadeDuration = st.type === 'water'? 20 : 60;
+    const fadeDuration = st.type === 'water'? 20 : (st.type === 'snow_footprint' ? 28 : 60);
     const fadeStart = Math.max(0, st.maxLife - fadeDuration);
     if (st.life > fadeStart) {
-      st.alpha = Math.max(0, (1 - (st.life - fadeStart) / fadeDuration) * (st.type === 'oil'? 0.75 : (st.type === 'coolant'? 0.65 : (st.type === 'water'? 0.60 : 0.45))));
+      st.alpha = Math.max(0, (1 - (st.life - fadeStart) / fadeDuration) * (st.type === 'oil'? 0.75 : (st.type === 'coolant'? 0.65 : (st.type === 'water'? 0.60 : (st.type === 'snow_footprint' ? 0.55 : 0.45)))));
     }
 
     // In-place retention condition
@@ -13730,36 +13847,96 @@ let currentPropCellStampId = 1;
 export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number, vehGrid?: any) {
   const weatherWeights = getEffectiveWeatherWeights(world);
   const isRaining = weatherWeights.rain > 0.15;
+  const calPud = world.calendar || createInitialCalendarState(2026, 10, 8, typeof world.timeHour === 'number' ? world.timeHour : 12);
+  const atmoPud = calculateClimateAtmosphere(calPud, world.weather || 'clear');
+  const outsideTempPud = typeof world.outsideTemp === 'number' && Number.isFinite(world.outsideTemp) ? world.outsideTemp : atmoPud.temperature;
+  const isActiveSnowmelt = (weatherWeights.snowCover > 0.06 || weatherWeights.roadSnowCover > 0.04 || weatherWeights.slushLevel > 0.18) && atmoPud.surfaceTemp > 0.4;
 
-  // Spawn new puddles dynamically if it's raining
-  if (isRaining) {
+  // Spawn new puddles dynamically during rain OR active snowmelt/first-snow thaw,
+  // preferring terrain depressions & drainage zones and strictly excluding sheltered canopies/buildings/bridges!
+  if (isRaining || isActiveSnowmelt) {
     let nonPondCount = 0;
     for (let i = 0; i < world.puddles.length; i++) {
       if (!world.puddles[i].isPond) nonPondCount++;
     }
-    if (nonPondCount < 50 && Math.random() < 0.05 * weatherWeights.rain) {
+    const spawnChance = isRaining
+      ? (0.055 * weatherWeights.rain)
+      : (0.016 * Math.min(1.0, weatherWeights.slushLevel + Math.max(0, atmoPud.surfaceTemp * 0.15)));
+
+    if (nonPondCount < 55 && Math.random() < spawnChance) {
       const roads = world.roads || [];
+      const isShelteredSpot = (tx: number, ty: number): boolean => {
+        if (world.buildings) {
+          for (let bi = 0; bi < world.buildings.length; bi++) {
+            const b = world.buildings[bi];
+            if (tx >= b.x - 10 && tx <= b.x + b.width + 10 && ty >= b.y - 10 && ty <= b.y + b.height + 10) {
+              return true;
+            }
+          }
+        }
+        const riv = getRiverWaterAt(tx, ty);
+        if (riv.inWater || riv.isBridge) return true;
+        return false;
+      };
+
+      let bestX = 0;
+      let bestY = 0;
+      let bestScore = Infinity;
+      let foundCandidate = false;
+
       if (roads.length > 0) {
-        const road = roads[Math.floor(Math.random() * roads.length)];
-        const px = road.direction === 'horizontal'? (road.x1 + road.x2) / 2 + (Math.random() * 200 - 100) : road.x1 + (Math.random() * road.width - road.width / 2);
-        const py = road.direction === 'vertical'? (road.y1 + road.y2) / 2 + (Math.random() * 200 - 100) : road.y1 + (Math.random() * road.width - road.width / 2);
-        world.puddles.push({
-          id: `puddle_dynamic_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          x: px,
-          y: py,
-          radiusX: 18 + Math.random() * 14,
-          radiusY: 10 + Math.random() * 8,
-          angle: Math.random() * Math.PI,
-          rippleTimer: 0
-        });
+        // Evaluate 4 candidate road positions and pick the lowest elevation / drainage depression
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const road = roads[Math.floor(Math.random() * roads.length)];
+          // Bias puddle placement slightly toward road gutter / wheel-rut margins (not dead center crown)
+          const gutterBias = (Math.random() < 0.5 ? -1 : 1) * (0.18 + Math.random() * 0.26);
+          const halfW = (road.width || 60) * 0.5;
+          const cx = road.direction === 'horizontal'
+            ? (road.x1 + road.x2) * 0.5 + (Math.random() * 240 - 120)
+            : road.x1 + gutterBias * halfW * 2;
+          const cy = road.direction === 'vertical'
+            ? (road.y1 + road.y2) * 0.5 + (Math.random() * 240 - 120)
+            : road.y1 + gutterBias * halfW * 2;
+
+          if (isShelteredSpot(cx, cy)) continue;
+          const slopeInfo = getTerrainSlope(cx, cy);
+          // Lower elevation + flatter basin = better puddle pooling spot
+          let score = slopeInfo.elevation + (slopeInfo.gradient || 0) * 18;
+          // Bonus if near a street drain grate / low kerb
+          if (world.props) {
+            for (let pi = 0; pi < world.props.length; pi++) {
+              const pr = world.props[pi];
+              if (pr.type === 'drain_grate') {
+                const d = Math.hypot(pr.x - cx, pr.y - cy);
+                if (d < 85) { score -= 4.5; break; }
+              }
+            }
+          }
+          if (score < bestScore) {
+            bestScore = score;
+            bestX = cx;
+            bestY = cy;
+            foundCandidate = true;
+          }
+        }
       } else {
-        // Fallback spawn near player
+        const fx = player.x + (Math.random() * 800 - 400);
+        const fy = player.y + (Math.random() * 800 - 400);
+        if (!isShelteredSpot(fx, fy)) {
+          bestX = fx;
+          bestY = fy;
+          foundCandidate = true;
+        }
+      }
+
+      if (foundCandidate) {
+        const sizeScale = isRaining ? 1.0 : 0.72;
         world.puddles.push({
           id: `puddle_dynamic_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          x: player.x + (Math.random() * 800 - 400),
-          y: player.y + (Math.random() * 800 - 400),
-          radiusX: 18 + Math.random() * 14,
-          radiusY: 10 + Math.random() * 8,
+          x: bestX,
+          y: bestY,
+          radiusX: (18 + Math.random() * 16) * sizeScale,
+          radiusY: (10 + Math.random() * 9) * sizeScale,
           angle: Math.random() * Math.PI,
           rippleTimer: 0
         });
@@ -14549,30 +14726,59 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     }
   }
 
-  // 3. PUDDLE SPLASHES & EVAPORATION
-  const isFreezing = isWorldFreezing(world);
+  // 3. PUDDLE SPLASHES, GRADUAL FREEZE & CLIMATE-DRIVEN EVAPORATION
+  const freezeProg = weatherWeights.iceFreezeProgress;
+  const isSolidIce = freezeProg >= 0.75;
+  const isBrittleCrust = freezeProg >= 0.25 && freezeProg < 0.75;
+  const windSpdEvap = world.wind ? (world.wind.speed * (world.wind.gust ?? 1.0)) : 12;
+  const humEvap = typeof world.humidity === 'number' && Number.isFinite(world.humidity) ? world.humidity : atmoPud.humidity;
+
+  // Physically grounded puddle evaporation rate (px/sec):
+  //  - Hot sunny breezy (+28°C, sun=0.9, hum=40%): ~0.13 px/s (~2.5-3.5 min for typical puddle)
+  //  - Cool humid overcast (+5°C, sun=0.1, hum=90%): ~0.012 px/s (~15-25 min)
+  const tempEvapFactor = outsideTempPud <= 0 ? 0.04 : Math.max(0.15, Math.min(2.4, 0.22 + outsideTempPud * 0.068));
+  const humEvapFactor = Math.max(0.12, 1.0 - (humEvap / 110.0));
+  const windEvapFactor = 1.0 + Math.min(1.3, windSpdEvap * 0.012);
+  const baseSunFactor = 1.0 + atmoPud.solarIntensity * 1.65;
+  const baseEvapPxPerSec = 0.032 * tempEvapFactor * humEvapFactor * windEvapFactor;
+
   for (let i = world.puddles.length - 1; i >= 0; i--) {
     const puddle = world.puddles[i];
-    if (!isFreezing) {
-      puddle.rippleTimer += dt;
+    if (!isSolidIce) {
+      puddle.rippleTimer += dt * (isBrittleCrust ? 0.35 : 1.0);
     }
-    
-    // Evaporation if not raining, NOT freezing, and not a pond
-    if (!isRaining && !isFreezing && !puddle.isPond) {
-      puddle.radiusX -= dt * 0.5;
-      puddle.radiusY -= dt * 0.5;
-      if (puddle.radiusX <= 0 || puddle.radiusY <= 0) {
+
+    // Climate-driven evaporation when not raining, not frozen solid, and not a permanent pond
+    if (!isRaining && !isActiveSnowmelt && freezeProg < 0.65 && !puddle.isPond) {
+      // Check if puddle lies in building shade (reduces solar evaporation)
+      let inShade = false;
+      if (atmoPud.solarIntensity > 0.15 && world.buildings) {
+        for (let bi = 0; bi < world.buildings.length; bi++) {
+          const b = world.buildings[bi];
+          if (puddle.x >= b.x - 45 && puddle.x <= b.x + b.width + 45 && puddle.y >= b.y - 45 && puddle.y <= b.y + b.height + 45) {
+            inShade = true;
+            break;
+          }
+        }
+      }
+      const localSunFactor = inShade ? (1.0 + atmoPud.solarIntensity * 0.28) : baseSunFactor;
+      const evapStep = baseEvapPxPerSec * localSunFactor * (1.0 - freezeProg * 0.8) * dt;
+      // Preserve aspect ratio as puddle shrinks smoothly
+      const aspect = Math.max(0.35, Math.min(2.5, puddle.radiusY / Math.max(1, puddle.radiusX)));
+      puddle.radiusX -= evapStep;
+      puddle.radiusY -= evapStep * aspect;
+      if (puddle.radiusX <= 1.2 || puddle.radiusY <= 0.8) {
         world.puddles.splice(i, 1);
         continue;
       }
     }
-    
+
     for (const veh of world.vehicles) {
       if (Math.abs(veh.speed) > 25) {
         if (Math.hypot(veh.x - puddle.x, veh.y - puddle.y) < puddle.radiusX + 10) {
-          if (isFreezing) {
-            // Chipped ice particles & frost spray instead of liquid blue splashes
-            if (Math.random() < 0.25) {
+          if (isSolidIce || isBrittleCrust) {
+            // Chipped ice particles & frost spray (both on solid ice and cracking thin ice crust)
+            if (Math.random() < (isSolidIce ? 0.28 : 0.22)) {
               world.particles.push({
                 x: veh.x + (Math.random() * 12 - 6),
                 y: veh.y + (Math.random() * 12 - 6),
@@ -14580,21 +14786,23 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
                 vy: (Math.random() * 40 - 20),
                 radius: 1.5 + Math.random() * 1.5,
                 color: '#f8fafc',
-                alpha: 0.8,
+                alpha: 0.82,
                 life: 0,
-                maxLife: 0.25,
+                maxLife: 0.26,
                 type: 'dust'
               });
             }
-          } else {
-            // Emit real-time GPU water wake disturbance on the puddle surface (wheel spray is handled per-tire in emitDriveWheelParticles)
+          }
+          if (!isSolidIce) {
+            // Emit real-time GPU water wake disturbance (attenuated under brittle ice crust)
+            const wakeScale = isBrittleCrust ? 0.45 : 1.0;
             emitWaterDisturbance(
               veh.x,
               veh.y,
               veh.vx,
               veh.vy,
               10,
-              Math.min(0.85, 0.25 + Math.abs(veh.speed) * 0.006),
+              Math.min(0.85, (0.25 + Math.abs(veh.speed) * 0.006) * wakeScale),
               true,
               `pud_${veh.id}`,
               65
@@ -14942,9 +15150,11 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     }
   }
 
-  // 5. WIPERS ON VEHICLES
+  // 5. WIPERS & BODYWORK SNOW COAT ON VEHICLES
+  const isSnowingNow = weatherWeights.snow > 0.12;
+  const isAnyPrecip = isRaining || isSnowingNow;
   for (const veh of world.vehicles) {
-    const shouldSweep = veh.isPlayerControlled ? !!veh.wipersOn : (isRaining && !veh.isParked);
+    const shouldSweep = veh.isPlayerControlled ? !!veh.wipersOn : (isAnyPrecip && !veh.isParked);
     if (shouldSweep) {
       veh.wiperDir = veh.wiperDir || 1;
       veh.wiperAngle = (veh.wiperAngle || 0) + veh.wiperDir * dt * 5.0;
@@ -14962,6 +15172,35 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         if (veh.wiperAngle < -0.8) veh.wiperAngle = -0.8;
       }
     }
+
+    // Bodywork snow accumulation (parked cold cars catch first snow rapidly; driving blows powder off; warm engine melts hood)
+    const speedKmh = Math.abs(veh.speed || 0) * 3.6;
+    const engTemp = veh.engineTemp ?? veh.engineState?.temperature ?? 20;
+    let snowCoat = veh.snowCoat ?? 0;
+
+    if (isSnowingNow && outsideTempPud <= 2.2) {
+      const stickFactor = outsideTempPud <= 0 ? 1.0 : Math.max(0.25, (2.2 - outsideTempPud) / 2.2);
+      // Parked & slow vehicles accumulate snow; fast moving vehicles blow off most flakes
+      const speedRetention = Math.max(0.08, 1.0 - speedKmh / 48);
+      snowCoat = Math.min(1.0, snowCoat + (0.009 + weatherWeights.blizzard * 0.012) * weatherWeights.snow * stickFactor * speedRetention * dt);
+    }
+
+    // Blow off loose snow at driving speed, melt with engine warmth or positive ambient temperature
+    if (snowCoat > 0) {
+      let loss = 0;
+      if (speedKmh > 25) loss += Math.min(0.18, (speedKmh - 25) * 0.0038);
+      if (outsideTempPud > 0.3) loss += (outsideTempPud * 0.004 + atmoPud.solarIntensity * 0.012);
+      if (engTemp > 52) loss += Math.min(0.025, (engTemp - 52) * 0.0005);
+      if (isRaining) loss += 0.045 * weatherWeights.rain;
+      if (loss > 0) {
+        const melted = Math.min(snowCoat, loss * dt);
+        snowCoat -= melted;
+        if (outsideTempPud > 0.2 || engTemp > 55) {
+          veh.wetCoatTimer = Math.max(veh.wetCoatTimer || 0, 5.0);
+        }
+      }
+    }
+    veh.snowCoat = Math.max(0, Math.min(1, snowCoat));
   }
 
   // 5. STORM LIGHTNING & THUNDER

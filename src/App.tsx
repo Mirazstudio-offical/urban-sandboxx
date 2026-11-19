@@ -30,9 +30,10 @@ import {
   pickRandomSeasonalWeather, 
   calculateClimateAtmosphere,
   getRussianSeasonName,
+  getInitialSurfaceHydrologyForCalendar,
   GameCalendarState
 } from './calendarSystem';
-import { getEffectiveWeatherWeights } from './weatherTransition';
+import { getEffectiveWeatherWeights, updateSurfaceHydrologyAndSnow, ensureWorldSurfaceHydrology } from './weatherTransition';
 import { 
   CAR_CONFIGS, 
   createDefaultEngineState, 
@@ -878,12 +879,20 @@ export default function App() {
     const prev = weatherRef.current;
     previousWeatherRef.current = prev;
     if (worldRef.current) {
+      const prevMonth = worldRef.current.calendar?.month;
+      const prevSeason = worldRef.current.calendar?.season;
       worldRef.current.calendar = newCal;
       worldRef.current.season = newCal.season;
       worldRef.current.timeHour = newCal.timeHour;
       worldRef.current.previousWeather = prev;
       worldRef.current.weather = newWeather;
       worldRef.current.weatherTransition = 0.0;
+      // Re-seed surface hydrology when jumping across dates/months (natural midnight tick does NOT snap)
+      if (prevMonth !== newCal.month || prevSeason !== newCal.season) {
+        Object.assign(worldRef.current, getInitialSurfaceHydrologyForCalendar(newCal, newWeather));
+      } else {
+        ensureWorldSurfaceHydrology(worldRef.current);
+      }
     }
     
     setWeather(newWeather);
@@ -1648,7 +1657,13 @@ export default function App() {
     timeHourRef.current = targetTime;
     setWeather(targetWeather);
     weatherRef.current = targetWeather;
+    world.calendar = initialCal;
+    world.season = initialCal.season;
+    world.timeHour = targetTime;
     world.weather = targetWeather;
+    world.previousWeather = targetWeather;
+    world.weatherTransition = 1.0;
+    Object.assign(world, getInitialSurfaceHydrologyForCalendar(initialCal, targetWeather));
     handleSetGpsTarget(null);
 
     if (mode === 'freeroam') {
@@ -2159,6 +2174,7 @@ export default function App() {
       .then((world) => {
         if (!world) return;
         if (!isMounted) return;
+        ensureWorldSurfaceHydrology(world);
         worldRef.current = world;
 
       // Index static entities into spatial grids
@@ -3700,6 +3716,7 @@ export default function App() {
           }
         }
 
+        updateSurfaceHydrologyAndSnow(world, dt);
         updateSkidMarksAndParticles(world, player, dt);
         updateBreakablePropsAndLivingWorld(world, player, dt, vehGrid);
 
@@ -4106,9 +4123,10 @@ export default function App() {
           world.weatherTransition = weatherTransitionRef.current;
         }
 
-        // Continuously modulate rain volume with smooth weather weights
+        // Continuously modulate rain and wintry hush ambient volume with smooth weather weights
         const curWeatherWeights = getEffectiveWeatherWeights(world);
         sound.setRainVolume(curWeatherWeights.rain);
+        sound.setSnowAmbientVolume(curWeatherWeights.snow, curWeatherWeights.blizzard);
 
         // Calculate mouse world position for placement preview
         let currentMouseWorldPos = null;
@@ -4149,6 +4167,8 @@ export default function App() {
               const windGust = worldWind?.gust ?? 1.0;
               const camRiver = getRiverWaterAt(camera.x, camera.y);
               const camShake = rendererRef.current.getActiveCameraShake();
+              const fxWorld = worldRef.current;
+              const fxFreezeProg = fxWorld.iceFreezeProgress ?? 0;
               const ok = fx.render(
                 {
                   hour: displayTimeHourRef.current,
@@ -4157,7 +4177,13 @@ export default function App() {
                   cameraX: camera.x - camShake.x,
                   cameraY: camera.y - camShake.y,
                   cameraZoom: camera.zoom,
-                  isFreezing: ((calendarRef.current as any).ambientTempC ?? 15) <= -1.0,
+                  isFreezing: fxFreezeProg >= 0.5,
+                  freezeProgress: fxFreezeProg,
+                  surfaceWetness: fxWorld.surfaceWetness ?? 0,
+                  soilMoisture: fxWorld.soilMoisture ?? 0,
+                  snowCover: fxWorld.snowCover ?? 0,
+                  roadSnowCover: fxWorld.roadSnowCover ?? 0,
+                  slushLevel: fxWorld.slushLevel ?? 0,
                   windVx: worldWind ? worldWind.vx * windGust : 14,
                   windVy: worldWind ? worldWind.vy * windGust : 4,
                   riverFlowVx: camRiver.currentVx,
@@ -4167,7 +4193,7 @@ export default function App() {
                   sunrise: cal.sunriseHour,
                   sunset: cal.sunsetHour,
                   season: cal.season,
-                  hasResidualWetness: (worldRef.current.puddles?.length ?? 0) > 0,
+                  hasResidualWetness: (fxWorld.surfaceWetness ?? 0) > 0.05,
                   lightmap: rendererRef.current.getFxLightmap(),
                   lightColor: rendererRef.current.getFxLightColorMap(),
                   materialMap: rendererRef.current.getFxMaterialMap(),

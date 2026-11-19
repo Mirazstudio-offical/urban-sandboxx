@@ -554,7 +554,9 @@ export class TerrainRenderer {
     const chunkH = maxY - minY;
     const buf = this.getSharedBuffer();
     const weatherWeights = getEffectiveWeatherWeights(world);
-    const isWet = weatherWeights.isWetSurface;
+    const snowCover = weatherWeights.snowCover;
+    const soilMoisture = weatherWeights.soilMoisture;
+    const isWet = soilMoisture > 0.34;
     const season = world.calendar?.season;
 
     // 1. Continuous Ecological Biome Base with Smooth 3D Hillshading (zero yellow stripe artifacts)
@@ -601,27 +603,36 @@ export class TerrainRenderer {
             b *= 1.0 - dark * 0.72;
           }
 
-          // 3. Seasonal ecological ground transformation
-          if (season === 'winter') {
-            const snowRatio = 0.90;
-            r = r * (1 - snowRatio) + 240 * snowRatio;
-            g = g * (1 - snowRatio) + 245 * snowRatio;
-            b = b * (1 - snowRatio) + 253 * snowRatio;
-          } else if (season === 'autumn') {
-            r = Math.min(255, r * 1.16 + 10);
+          // 3. Seasonal vegetation hue shift (independent of snow accumulation)
+          if (season === 'autumn' || (season === 'winter' && snowCover < 0.35)) {
+            r = Math.min(255, r * 1.14 + 8);
             g = g * 0.90;
             b = b * 0.78;
           } else if (season === 'spring') {
             g = Math.min(255, g * 1.12 + 6);
           }
 
-          // 4. Physical Wet Ground Porosity Darkening
-          if (isWet && season !== 'winter') {
+          // 4. Continuous Physical Wet Ground Porosity Darkening (lingers after rain while soilMoisture is high)
+          const wetFactor = Math.max(0, Math.min(1.0, (soilMoisture - 0.18) / 0.65)) * (1.0 - snowCover * 0.85);
+          if (wetFactor > 0.01) {
             const soilFactor = Math.max(sample.clayWeight, sample.saltWeight, sample.steppeWeight * 0.8);
-            const darken = 0.74 - soilFactor * 0.10;
+            const targetDarken = 0.74 - soilFactor * 0.10;
+            const darken = 1.0 - (1.0 - targetDarken) * wetFactor;
             r *= darken;
-            g *= darken * 1.02;
-            b *= darken * 1.08;
+            g *= darken * (1.0 + 0.02 * wetFactor);
+            b *= darken * (1.0 + 0.08 * wetFactor);
+          }
+
+          // 5. Progressive First-Snow & Winter Snowpack Accumulation (organic patchy dusting -> full cover)
+          if (snowCover > 0.02) {
+            const patchNoise = 0.5 + 0.5 * Math.sin(wx * 0.017 + Math.cos(wy * 0.013) * 2.1) * Math.cos(wy * 0.019 - Math.sin(wx * 0.011) * 1.8);
+            // Low snowCover (first snow) settles in cool shaded/grassy patches first; full snowCover blankets up to 90%
+            const localSnow = Math.max(0, Math.min(0.90, (snowCover * 1.12 - (1.0 - snowCover) * (0.28 - patchNoise * 0.32)) * 0.90));
+            if (localSnow > 0.01) {
+              r = r * (1 - localSnow) + 240 * localSnow;
+              g = g * (1 - localSnow) + 245 * localSnow;
+              b = b * (1 - localSnow) + 253 * localSnow;
+            }
           }
 
           const pIdx = (iy * size + ix) * 4;
@@ -639,15 +650,16 @@ export class TerrainRenderer {
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(bufCanvas, 0, 0, size, size, minX, minY, chunkW, chunkH);
 
-      // Overlay dense botanical turf pattern
-      const reliefPat = this.getTerrainMicroReliefPattern(ctx, isWet, season);
+      // Overlay dense botanical turf pattern (switches to winter frost stalks only when real snowCover >= 0.45)
+      const effectiveTurfSeason = snowCover >= 0.45 ? 'winter' : (season === 'winter' ? 'autumn' : season);
+      const reliefPat = this.getTerrainMicroReliefPattern(ctx, isWet, effectiveTurfSeason);
       if (reliefPat) {
         ctx.fillStyle = reliefPat;
         ctx.fillRect(minX, minY, chunkW, chunkH);
       }
       ctx.restore();
     } else {
-      ctx.fillStyle = isWet ? '#103b1d' : '#18542a';
+      ctx.fillStyle = snowCover >= 0.5 ? '#e2e8f0' : (isWet ? '#103b1d' : '#18542a');
       ctx.fillRect(minX, minY, chunkW, chunkH);
     }
 

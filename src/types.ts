@@ -866,6 +866,8 @@ export interface Vehicle {
   isFloating?: boolean;        // Whether vehicle is bobbing/floating in deep water
   cabinWaterLevel?: number;    // 0 to 1 progressive water flooding inside vehicle cabin
   wetCoatTimer?: number;       // Remaining seconds of dripping wet hull & soaked tires after exiting water
+  snowCoat?: number;           // 0 to 1 accumulated snow crust on parked/cold bodywork (melts on warm hood, sheds at speed)
+  windshieldSnowLevel?: number;// 0 to 100 snow/slush accumulation on windshield glass
   aquaplaneFactor?: number;    // 0 to 1 dynamic hydroplaning intensity on water film
   targetSpeed: number;
   currentLaneId: string | null;
@@ -1621,7 +1623,7 @@ export interface SkidMark {
   treadPattern?: 'street' | 'offroad' | 'heavy_lug' | 'slick';
 }
 
-export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'soil' | 'water' | 'sewage';
+export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'soil' | 'water' | 'sewage' | 'snow_footprint';
 
 export interface FluidStain {
   id: string;
@@ -2856,6 +2858,13 @@ export interface GameWorld {
   outsideTemp?: number;
   humidity?: number;
   wind?: WorldWind;
+  // Persistent ground hydrology & snowpack simulation (0..1 continuous physical state)
+  surfaceWetness?: number;     // Asphalt / concrete moisture film (dries based on temp, sun, wind, humidity)
+  soilMoisture?: number;       // Offroad dirt / grass / mud saturation (dries ~3.5x slower than asphalt)
+  snowCover?: number;          // Ground / grass / roof snow depth (accumulates from snowfall, melts into water)
+  roadSnowCover?: number;      // Asphalt / pavement snow cover (melts/compacts faster than grass/roofs)
+  slushLevel?: number;         // Wet snow-water slush on roads near 0..+2°C
+  iceFreezeProgress?: number;  // 0 (liquid) -> 0.5 (brittle crust) -> 1 (solid ice) gradual freeze/thaw state
   gasPumps?: GasPumpDispenser[];
   lightningFlashTimer?: number;
   lightningStrike?: {

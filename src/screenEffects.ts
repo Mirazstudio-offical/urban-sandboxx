@@ -687,15 +687,18 @@ export class ScreenEffectsSystem {
       const veh = world.vehicles.find(v => v.id === player.currentVehicleId);
       if (veh) {
         const rainLevel = (typeof veh.windshieldRainLevel === 'number' && Number.isFinite(veh.windshieldRainLevel)) ? Math.max(0, veh.windshieldRainLevel) : 0;
+        const snowLevel = (typeof veh.windshieldSnowLevel === 'number' && Number.isFinite(veh.windshieldSnowLevel)) ? Math.max(0, veh.windshieldSnowLevel) : 0;
         const rawFog = (typeof veh.fogLevel === 'number' && Number.isFinite(veh.fogLevel)) ? Math.max(0, veh.fogLevel) : 0;
         const fogLevel = rawFog <= 1.0 ? rawFog * 100 : rawFog;
 
-        if (rainLevel > 5 || fogLevel > 5) {
+        if (rainLevel > 5 || snowLevel > 5 || fogLevel > 5) {
           ctx.save();
           const cx = width / 2;
           const cy = height / 2;
           
-          const maxLevel = Math.max(rainLevel, fogLevel);
+          const maxLevel = Math.max(rainLevel, snowLevel, fogLevel);
+          const isSnowDom = snowLevel >= rainLevel && snowLevel >= fogLevel;
+          const isFogDom = fogLevel > rainLevel && fogLevel > snowLevel;
           // Scale visible area so it completely closes in on the vehicle as maxLevel reaches 100%
           const levelFactor = Math.min(1.0, Math.max(0.0, maxLevel / 100));
           
@@ -706,7 +709,17 @@ export class ScreenEffectsSystem {
 
           const windshieldGrad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
           
-          if (fogLevel > rainLevel) {
+          if (isSnowDom) {
+            const snowAlpha = Math.min(1.0, Math.max(0.0, levelFactor * 1.18));
+            const a1 = (snowAlpha * 0.58).toFixed(3);
+            const a2 = (snowAlpha * 0.90).toFixed(3);
+            const a3 = snowAlpha.toFixed(3);
+            // Frosted snowy white-out rim on windshield
+            windshieldGrad.addColorStop(0, 'rgba(241, 245, 249, 0)');
+            windshieldGrad.addColorStop(0.35, `rgba(226, 236, 248, ${a1})`);
+            windshieldGrad.addColorStop(0.7, `rgba(241, 247, 255, ${a2})`);
+            windshieldGrad.addColorStop(1.0, `rgba(248, 250, 252, ${a3})`);
+          } else if (isFogDom) {
             const fogAlpha = Math.min(1.0, Math.max(0.0, levelFactor * 1.2));
             const a1 = (fogAlpha * 0.65).toFixed(3);
             const a2 = (fogAlpha * 0.95).toFixed(3);
@@ -735,21 +748,24 @@ export class ScreenEffectsSystem {
           if (maxLevel > 20) {
             const maskAlpha = Math.min(1.0, Math.max(0.0, (maxLevel - 20) / 75)).toFixed(3);
             ctx.strokeStyle = 'transparent';
-            // We can draw a full screen mask with a cutout circle of outerR
             ctx.beginPath();
             ctx.rect(0, 0, width, height);
             ctx.arc(cx, cy, outerR, 0, Math.PI * 2, true); // clockwise cutout
-            ctx.fillStyle = fogLevel > rainLevel 
-              ? `rgba(180, 196, 212, ${maskAlpha})`
-              : `rgba(0, 0, 0, ${maskAlpha})`;
+            ctx.fillStyle = isSnowDom
+              ? `rgba(241, 247, 255, ${maskAlpha})`
+              : isFogDom
+                ? `rgba(180, 196, 212, ${maskAlpha})`
+                : `rgba(0, 0, 0, ${maskAlpha})`;
             ctx.fill();
           }
 
           if (maxLevel > 40) {
-            ctx.fillStyle = fogLevel > rainLevel ? 'rgba(30, 41, 59, 0.9)' : 'rgba(241, 245, 249, 0.95)';
+            ctx.fillStyle = (isFogDom || isSnowDom) ? 'rgba(30, 41, 59, 0.92)' : 'rgba(241, 245, 249, 0.95)';
             ctx.font = 'bold 12px system-ui, sans-serif';
             ctx.textAlign = 'center';
-            if (fogLevel > rainLevel) {
+            if (isSnowDom) {
+              ctx.fillText('СНЕГ НА ЛОБОВОМ СТЕКЛЕ (ВКЛЮЧИТЕ ДВОРНИКИ И ОБДУВ)', width / 2, 45);
+            } else if (isFogDom) {
               ctx.fillText('СТЕКЛО ЗАПОТЕЛО (ПРОГРЕЙТЕ ПЕЧКУ / ОТКРОЙТЕ ОКНО)', width / 2, 45);
             } else {
               ctx.fillText('СИЛЬНЫЕ ОСАДКИ (ВКЛЮЧИТЕ ДВОРНИКИ ДЛЯ ОЧИСТКИ)', width / 2, 45);

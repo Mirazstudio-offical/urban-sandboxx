@@ -69,6 +69,7 @@ export interface PostFxFrame {
   cameraY?: number;         // world Y of camera center
   cameraZoom?: number;      // camera zoom factor
   isFreezing?: boolean;     // true when water is frozen into ice
+  freezeProgress?: number;  // 0 (liquid) -> 0.5 (thin crust) -> 1 (solid ice)
   windVx?: number;          // ambient wind X velocity (px/s)
   windVy?: number;          // ambient wind Y velocity (px/s)
   riverFlowVx?: number;     // local river flow X velocity near camera (px/s)
@@ -79,6 +80,11 @@ export interface PostFxFrame {
   sunset?: number;
   season?: string;
   hasResidualWetness?: boolean;
+  surfaceWetness?: number;  // 0..1 persistent asphalt wetness film
+  soilMoisture?: number;    // 0..1 persistent offroad dirt/mud saturation
+  snowCover?: number;       // 0..1 accumulated ground snow depth
+  roadSnowCover?: number;   // 0..1 accumulated road snow cover
+  slushLevel?: number;      // 0..1 first-snow wet slush on roads
   lightmap?: HTMLCanvasElement | null; // darkness layer (alpha = dark), null when the frame had none
   lightColor?: HTMLCanvasElement | null; // accumulated RGB light color map masked by D_env
   materialMap?: HTMLCanvasElement | null; // exact G-buffer material ID & fluid thickness map
@@ -156,7 +162,10 @@ uniform float uMatOn;
 uniform vec2 uMatSize;
 uniform float uGi;
 uniform float uWet;
+uniform float uSoilWet;
 uniform float uSnow;
+uniform float uRoadSnow;
+uniform float uSlush;
 uniform float uRain;
 uniform float uFogGlow;
 uniform vec2 uSrcSize;
@@ -1459,11 +1468,25 @@ void main() {
       }
     }
 
-    // B. SNOWY & ICY ROAD SHADER (Compacted snow shoulders, dark slush/glaze-ice wheel ruts, crystal sparkle)
-    if (uSnow > 0.01 || uFreezing > 0.5) {
+    // B. SNOWY, SLUSHY & ICY ROAD SHADER (First-snow slush tracks, compacted snow shoulders, glaze-ice wheel ruts, crystal sparkle)
+    if (uRoadSnow > 0.01 || uSlush > 0.01 || uFreezing > 0.15) {
       vec3 snNoise = noise2DAndGrad(worldPos * 0.08 + vec2(7.1, -19.3));
-      float snowCoverMask = clamp(uSnow * (1.0 - rutMask * 0.72 + (snNoise.x - 0.45) * 0.45), 0.0, 1.0);
-      float glazeIceMask = clamp((uFreezing * 0.65 + uSnow * 0.55) * (0.35 + 0.65 * rutMask), 0.0, 1.0);
+      // Snow accumulates on road shoulders/edges first while tire ruts stay darker and slushier
+      float snowCoverMask = clamp(uRoadSnow * (1.0 - rutMask * 0.78 + (snNoise.x - 0.45) * 0.45), 0.0, 1.0);
+      float slushMask = clamp(uSlush * (0.45 + 0.55 * rutMask + (snNoise.x - 0.45) * 0.35), 0.0, 1.0);
+      float glazeIceMask = clamp((uFreezing * (0.35 + 0.65 * max(uWet, uRoadSnow)) + uRoadSnow * 0.35) * (0.35 + 0.65 * rutMask), 0.0, 1.0);
+
+      // First-snow wet slush: dark murky grey-brown wheel tracks & slushy snow-water edges
+      if (slushMask > 0.02) {
+        vec3 slushTint = mix(vec3(0.46, 0.50, 0.56), vec3(0.20, 0.23, 0.28), rutMask);
+        c = mix(c, slushTint, slushMask * 0.42);
+      }
+
+      // Progressive compacted snow whitening on road shoulders & light-traffic lanes
+      if (snowCoverMask > 0.03) {
+        vec3 roadSnowCol = mix(vec3(0.76, 0.81, 0.87), vec3(0.92, 0.95, 0.99), uDay * 0.75 + 0.25);
+        c = mix(c, roadSnowCol, snowCoverMask * 0.58);
+      }
 
       vec2 iceReflUv = clamp(uv + matMicroN * 0.18, vec2(0.001), vec2(0.999));
       vec3 iceBloom = texture(uBloomWide, iceReflUv).rgb;
@@ -1569,11 +1592,11 @@ void main() {
       c += (sunGlintCol * rutGlint + rutBloom * mix(1.45, 0.22, uDay) + localLightCol * lampHere * 0.24 * wallSlope) * offroadRutMask * rutWetness;
     }
 
-    // A. WET EARTH & SLICK MUD SHADER
-    float effMudWet = max(uWet, bankMoisture * 0.65);
-    if (effMudWet > 0.01 && uFreezing < 0.5) {
+    // A. WET EARTH & SLICK MUD SHADER (driven by slower-drying soilMoisture so dirt/chernozem stays muddy after rain!)
+    float effMudWet = max(uSoilWet, bankMoisture * 0.65);
+    if (effMudWet > 0.01 && uFreezing < 0.75) {
       vec3 mudNoise = noise2DAndGrad(worldPos * 0.09 + vec2(-15.2, 9.4));
-      float mudPatch = clamp(effMudWet * (0.45 + 0.55 * max(isDirtTrackOrBank, isPlowedChernozem) + 0.40 * (mudNoise.x - 0.4)), 0.0, 1.0);
+      float mudPatch = clamp(effMudWet * (0.45 + 0.55 * max(isDirtTrackOrBank, isPlowedChernozem) + 0.40 * (mudNoise.x - 0.4)), 0.0, 1.0) * (1.0 - uFreezing * 0.65);
 
       // Waterlogged chernozem / loam darkening
       c *= 1.0 - 0.22 * mudPatch;
@@ -1585,8 +1608,14 @@ void main() {
       c += (sunGlintCol * mudSun + mudBloom * 1.10 * mix(1.4, 0.5, uDay)) * mudPatch * (0.45 + 0.55 * max(isDirtTrackOrBank, isPlowedChernozem));
     }
 
-    // B. SNOWY EARTH & WINTER SNOWDRIFT SHADER (Искрящийся снег и сугробы)
+    // B. SNOWY EARTH & FIRST-SNOW PATCHY ACCUMULATION SHADER (Искрящийся снег и сугробы)
     if (uSnow > 0.01) {
+      // Smooth patchy snow dusting overlay on grass/fields during real-time accumulation between chunk rebuilds
+      vec3 snPatch = noise2DAndGrad(worldPos * 0.025 + vec2(11.3, -6.7));
+      float earthSnowTintMask = clamp((uSnow - (1.0 - snPatch.x) * (1.0 - uSnow) * 0.65) * (1.0 - offroadRutMask * 0.55), 0.0, 1.0);
+      vec3 freshSnowCol = mix(vec3(0.74, 0.80, 0.88), vec3(0.93, 0.96, 0.99), uDay * 0.80 + 0.20);
+      c = mix(c, max(c, freshSnowCol), earthSnowTintMask * 0.34);
+
       // Cold azure-blue ambient scattering in snowdrift shadow troughs + warm sunlit crests
       float driftSlope = clamp(-dot(matMicroN * 10.0, uSun), -0.5, 0.5);
       vec3 snowShadowTint = vec3(-0.03, 0.00, 0.05) * max(0.0, -driftSlope) * uSnow * uDay;
@@ -1791,7 +1820,11 @@ export class GpuPostFx {
   private smoothWindVy = 4;
   private windPhaseAccum = 0;
   private smoothSnow = 0;
+  private smoothRoadSnow = 0;
+  private smoothSlush = 0;
   private smoothRain = 0;
+  private smoothSoilWet = 0;
+  private smoothFreeze = 0;
 
   constructor(source: HTMLCanvasElement, target: HTMLCanvasElement) {
     this.source = source;
@@ -1830,7 +1863,7 @@ export class GpuPostFx {
     this.pUp = this.makeProgram(VS, FS_UP, ['uTex', 'uTexel', 'uScale']);
     this.pComposite = this.makeProgram(VS, FS_COMPOSITE, [
       'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize', 'uLightCol', 'uLightColOn',
-      'uMat', 'uMatOn', 'uMatSize', 'uGi', 'uWet', 'uSnow', 'uRain', 'uFogGlow',
+      'uMat', 'uMatOn', 'uMatSize', 'uGi', 'uWet', 'uSoilWet', 'uSnow', 'uRoadSnow', 'uSlush', 'uRain', 'uFogGlow',
       'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun', 'uSunElev',
       'uCamPos', 'uCamZoom', 'uCamAngle', 'uFreezing',
       'uRelief', 'uClarity', 'uBloomStr',
@@ -2154,18 +2187,41 @@ export class GpuPostFx {
     gl.uniform2f(c.u.uMatSize, mm ? mm.width : 1, mm ? mm.height : 1);
     gl.uniform1f(c.u.uGi, bloomOn ? (s.gi / 100) * 0.55 : 0);
 
-    const effWetWeather = Math.max(g.wet, frame.hasResidualWetness ? 0.35 : 0);
-    gl.uniform1f(c.u.uWet, bloomOn ? (s.wet / 100) * effWetWeather : 0);
-
-    const targetSnow = (frame.season === 'winter' ? 0.90 : 0.0)
-      + (frame.weather === 'blizzard' ? 1.0 : frame.weather === 'snow' ? 0.75 : 0.0);
-    const targetRain = (!frame.isFreezing)
+    // Drive wet asphalt sheen directly from real persistent surfaceWetness (no global puddles.length artifact!)
+    const targetAsphaltWet = typeof frame.surfaceWetness === 'number'
+      ? frame.surfaceWetness
+      : Math.max(g.wet, frame.hasResidualWetness ? 0.35 : 0);
+    const targetSoilWet = typeof frame.soilMoisture === 'number'
+      ? Math.max(0, (frame.soilMoisture - 0.14) / 0.86)
+      : targetAsphaltWet;
+    const targetSnow = typeof frame.snowCover === 'number'
+      ? frame.snowCover
+      : ((frame.season === 'winter' ? 0.85 : 0.0) + (frame.weather === 'blizzard' ? 0.5 : frame.weather === 'snow' ? 0.25 : 0.0));
+    const targetRoadSnow = typeof frame.roadSnowCover === 'number'
+      ? frame.roadSnowCover
+      : targetSnow * 0.55;
+    const targetSlush = typeof frame.slushLevel === 'number' ? frame.slushLevel : 0;
+    const targetFreeze = typeof frame.freezeProgress === 'number'
+      ? frame.freezeProgress
+      : (frame.isFreezing ? 1.0 : 0.0);
+    const targetRain = (targetFreeze < 0.7)
       ? (frame.weather === 'storm' ? 1.0 : frame.weather === 'rain' ? 0.75 : frame.weather === 'drizzle' ? 0.40 : 0.0)
       : 0.0;
-    const wLerp = 1 - Math.exp(-Math.max(0.001, Math.min(0.25, frame.dt || 0.016)) * 2.0);
-    this.smoothSnow = lerp(this.smoothSnow, Math.min(1.0, targetSnow), wLerp);
-    this.smoothRain = lerp(this.smoothRain, Math.min(1.0, targetRain), wLerp);
+
+    const wLerp = 1 - Math.exp(-Math.max(0.001, Math.min(0.25, frame.dt || 0.016)) * 2.5);
+    this.smoothSnow = lerp(this.smoothSnow, Math.max(0, Math.min(1.0, targetSnow)), wLerp);
+    this.smoothRoadSnow = lerp(this.smoothRoadSnow, Math.max(0, Math.min(1.0, targetRoadSnow)), wLerp);
+    this.smoothSlush = lerp(this.smoothSlush, Math.max(0, Math.min(1.0, targetSlush)), wLerp);
+    this.smoothRain = lerp(this.smoothRain, Math.max(0, Math.min(1.0, targetRain)), wLerp);
+    this.smoothSoilWet = lerp(this.smoothSoilWet, Math.max(0, Math.min(1.0, targetSoilWet)), wLerp);
+    this.smoothFreeze = lerp(this.smoothFreeze, Math.max(0, Math.min(1.0, targetFreeze)), wLerp);
+
+    const effWetWeather = Math.max(targetAsphaltWet, g.wet * 0.35);
+    gl.uniform1f(c.u.uWet, bloomOn ? (s.wet / 100) * Math.min(1.0, effWetWeather) : 0);
+    gl.uniform1f(c.u.uSoilWet, bloomOn ? (s.wet / 100) * this.smoothSoilWet : 0);
     gl.uniform1f(c.u.uSnow, this.smoothSnow);
+    gl.uniform1f(c.u.uRoadSnow, this.smoothRoadSnow);
+    gl.uniform1f(c.u.uSlush, this.smoothSlush);
     gl.uniform1f(c.u.uRain, this.smoothRain);
 
     const fogScatMult = (s.fogScattering ?? 85) / 100;
@@ -2179,7 +2235,7 @@ export class GpuPostFx {
     gl.uniform2f(c.u.uCamPos, frame.cameraX ?? 0, frame.cameraY ?? 0);
     gl.uniform1f(c.u.uCamZoom, (frame.cameraZoom ?? 1) * dprScale);
     gl.uniform1f(c.u.uCamAngle, frame.cameraAngle);
-    gl.uniform1f(c.u.uFreezing, frame.isFreezing ? 1 : 0);
+    gl.uniform1f(c.u.uFreezing, this.smoothFreeze);
     gl.uniform1f(c.u.uWaterShader, Math.max(0, Math.min(1, (s.waterShader ?? 85) / 100)));
     gl.uniform1f(c.u.uWaterWakes, Math.max(0, Math.min(1, (s.waterWakes ?? 85) / 100)));
     gl.uniform1f(c.u.uHeatShimmer, Math.max(0, Math.min(1.8, (s.heatShimmer ?? 85) / 100)));

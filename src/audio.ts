@@ -871,6 +871,164 @@ class SoundEngine {
     }
   }
 
+  private snowNoiseSource: AudioBufferSourceNode | null = null;
+  private snowGain: GainNode | null = null;
+  private isSnowAudioPlaying: boolean = false;
+  private lastFootstepSoundMs: number = 0;
+
+  /**
+   * Subtle acoustic hush / soft wintry breeze during snowfall & blizzard.
+   */
+  public setSnowAmbientVolume(snowWeight: number, blizzardWeight: number = 0) {
+    if (!this.ctx || this.isMuted) return;
+    const level = Math.max(0, Math.min(1, snowWeight * 0.45 + blizzardWeight * 0.55));
+    if (level > 0.04 && !this.isSnowAudioPlaying) {
+      try {
+        const bufferSize = this.ctx.sampleRate * 2;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          // Soft brown/pinkish wintry air hush
+          last = (last + 0.04 * (Math.random() * 2 - 1)) / 1.04;
+          data[i] = last * 1.4;
+        }
+        this.snowNoiseSource = this.ctx.createBufferSource();
+        this.snowNoiseSource.buffer = buffer;
+        this.snowNoiseSource.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(340 + blizzardWeight * 280, this.ctx.currentTime);
+        filter.Q.setValueAtTime(0.8, this.ctx.currentTime);
+
+        this.snowGain = this.ctx.createGain();
+        this.snowGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+
+        this.snowNoiseSource.connect(filter);
+        filter.connect(this.snowGain);
+        this.snowGain.connect(this.ctx.destination);
+        this.snowNoiseSource.start();
+        this.isSnowAudioPlaying = true;
+      } catch {}
+    }
+
+    if (this.snowGain && this.isSnowAudioPlaying) {
+      const targetGain = 0.055 * level;
+      try {
+        this.snowGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.35);
+      } catch {}
+    }
+
+    if (level <= 0.04 && this.isSnowAudioPlaying) {
+      try {
+        if (this.snowGain) {
+          this.snowGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.25);
+        }
+        setTimeout(() => {
+          if (this.snowNoiseSource) {
+            try { this.snowNoiseSource.stop(); this.snowNoiseSource.disconnect(); } catch {}
+            this.snowNoiseSource = null;
+          }
+          this.isSnowAudioPlaying = false;
+        }, 280);
+      } catch {
+        this.isSnowAudioPlaying = false;
+      }
+    }
+  }
+
+  /**
+   * Procedural snow crunch footstep: crisp crystalline squeak in cold frost (<-3°C),
+   * softer damp slush squelch near 0..+2°C.
+   */
+  public playSnowFootstep(tempC: number = -2, isSprinting: boolean = false, isSlush: boolean = false) {
+    if (!this.ctx || this.isMuted) return;
+    const nowMs = performance.now();
+    const minInterval = isSprinting ? 230 : 370;
+    if (nowMs - this.lastFootstepSoundMs < minInterval) return;
+    this.lastFootstepSoundMs = nowMs;
+
+    try {
+      const now = this.ctx.currentTime;
+      const dur = isSlush ? 0.14 : (isSprinting ? 0.11 : 0.15);
+      const len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        // Granular double-compression envelope (heel strike + ball compression)
+        const env = Math.sin(t * Math.PI) * (0.65 + 0.35 * Math.sin(t * Math.PI * 5.0));
+        const grit = (Math.random() * 2 - 1);
+        ch[i] = grit * env;
+      }
+
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      // Cold dry snow crunches at higher crystalline frequencies; slush is lower & wetter
+      const crispFreq = isSlush
+        ? 950 + Math.random() * 250
+        : Math.min(3400, Math.max(1400, 1750 - tempC * 120)) + (Math.random() * 320 - 160);
+      bp.frequency.setValueAtTime(crispFreq, now);
+      bp.Q.setValueAtTime(isSlush ? 1.1 : 1.9, now);
+
+      const gain = this.ctx.createGain();
+      const vol = (isSprinting ? 0.065 : 0.042) * (isSlush ? 0.9 : 1.0);
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+      src.connect(bp);
+      bp.connect(gain);
+      gain.connect(this.ctx.destination);
+      src.start(now);
+    } catch {}
+  }
+
+  /**
+   * Procedural wet pavement / shallow puddle footstep splash.
+   */
+  public playWetFootstep(isPuddle: boolean = false, isSprinting: boolean = false) {
+    if (!this.ctx || this.isMuted) return;
+    const nowMs = performance.now();
+    const minInterval = isSprinting ? 230 : 370;
+    if (nowMs - this.lastFootstepSoundMs < minInterval) return;
+    this.lastFootstepSoundMs = nowMs;
+
+    try {
+      const now = this.ctx.currentTime;
+      const dur = isPuddle ? 0.16 : 0.09;
+      const len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        const env = Math.pow(1 - t, 1.8);
+        ch[i] = (Math.random() * 2 - 1) * env;
+      }
+
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'bandpass';
+      hp.frequency.setValueAtTime(isPuddle ? 1500 + Math.random() * 500 : 2100 + Math.random() * 400, now);
+      hp.Q.setValueAtTime(isPuddle ? 0.85 : 1.4, now);
+
+      const gain = this.ctx.createGain();
+      const vol = (isPuddle ? 0.068 : 0.030) * (isSprinting ? 1.25 : 1.0);
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+      src.connect(hp);
+      hp.connect(gain);
+      gain.connect(this.ctx.destination);
+      src.start(now);
+    } catch {}
+  }
+
   public playThunder() {
     if (!this.ctx || this.isMuted) return;
     try {
