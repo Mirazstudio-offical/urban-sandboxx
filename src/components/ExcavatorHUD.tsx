@@ -55,6 +55,30 @@ const setFlag = (inputRef: React.MutableRefObject<InputState>, key: InputFlag, v
   (inputRef.current as unknown as Record<string, boolean>)[key as string] = val;
 };
 
+const clearExcavatorInputFlags = (inputRef: React.MutableRefObject<InputState>) => {
+  const inp = inputRef.current;
+  inp.exSlewLeft = false;
+  inp.exSlewRight = false;
+  inp.exBoomUp = false;
+  inp.exBoomDown = false;
+  inp.exStickOut = false;
+  inp.exStickIn = false;
+  inp.exBucketCurl = false;
+  inp.exBucketDump = false;
+  inp.exBladeUp = false;
+  inp.exBladeDown = false;
+  inp.exStabilizersUp = false;
+  inp.exStabilizersDown = false;
+  inp.craneBoomExtend = false;
+  inp.craneBoomRetract = false;
+  inp.craneHookUp = false;
+  inp.forward = false;
+  inp.backward = false;
+  inp.left = false;
+  inp.right = false;
+  inp.handbrake = false;
+};
+
 interface HoldKeyProps {
   inputRef: React.MutableRefObject<InputState>;
   inputKey: InputFlag;
@@ -90,26 +114,60 @@ const HoldKey: React.FC<HoldKeyProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disabled]);
 
+  useEffect(() => {
+    if (!down) return;
+    const stop = () => set(false);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('blur', stop);
+    window.addEventListener('visibilitychange', stop);
+    return () => {
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+      window.removeEventListener('mouseup', stop);
+      window.removeEventListener('blur', stop);
+      window.removeEventListener('visibilitychange', stop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [down]);
+
   useEffect(() => () => setFlag(inputRef, inputKey, false), [inputRef, inputKey]);
 
   return (
     <button
       type="button"
+      tabIndex={-1}
       title={title}
       aria-label={title}
       disabled={disabled}
       onPointerDown={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        e.currentTarget.setPointerCapture?.(e.pointerId);
+        try {
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+        } catch {
+          // ignore if capture is unsupported
+        }
         set(true);
       }}
       onPointerUp={(e) => {
         e.stopPropagation();
+        try {
+          e.currentTarget.releasePointerCapture?.(e.pointerId);
+        } catch {
+          // ignore
+        }
         set(false);
+      }}
+      onPointerLeave={(e) => {
+        if (down && !e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+          set(false);
+        }
       }}
       onPointerCancel={() => set(false)}
       onLostPointerCapture={() => set(false)}
+      onBlur={() => set(false)}
       onContextMenu={(e) => e.preventDefault()}
       className={`tc-key${isIcon ? ' is-icon' : ''}${down ? ' is-down' : ''}`}
     >
@@ -202,9 +260,11 @@ const TapKey: React.FC<TapKeyProps> = ({
 }) => (
   <button
     type="button"
+    tabIndex={-1}
     title={title}
     aria-label={title}
     disabled={disabled}
+    onMouseDown={(e) => e.preventDefault()}
     onClick={onClick}
     className={`tc-key${isIcon ? ' is-icon' : ''}${tone ? ` is-${tone}` : ''}`}
   >
@@ -248,6 +308,7 @@ export const ExcavatorHUD: React.FC<ExcavatorHUDProps> = ({
 
   const toggleWorkMode = () => {
     sound.playButtonPress();
+    clearExcavatorInputFlags(inputRef);
     veh.exOperatorMode = !veh.exOperatorMode;
     addPlayerNotification(
       player,

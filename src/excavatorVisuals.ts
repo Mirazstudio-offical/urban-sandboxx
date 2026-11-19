@@ -1,8 +1,18 @@
 import type { VehicleRenderContext } from './vehicleArchetypes';
 import { ensureExcavatorState, getExcavatorGeometry } from './excavatorSystem';
 import { getVehicleTurnSignalDynamicState } from './vehicleHelpers';
+import { getCurrentSunShadowState } from './shadowSystem';
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+function shadeHex(hex: string, factor: number): string {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const r = Math.max(0, Math.min(255, Math.round(parseInt(clean.slice(0, 2), 16) * factor)));
+  const g = Math.max(0, Math.min(255, Math.round(parseInt(clean.slice(2, 4), 16) * factor)));
+  const b = Math.max(0, Math.min(255, Math.round(parseInt(clean.slice(4, 6), 16) * factor)));
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
 function drawAmberBeacon(ctx: CanvasRenderingContext2D, x: number, y: number, active: boolean, radius = 1.9): void {
   ctx.fillStyle = '#0f172a';
@@ -339,20 +349,137 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
   }
 
   // =========================================================================
-  // PASS 2: 360° REVOLVING UPPER HOUSE, CAB, ENGINE BAY & ARTICULATED BOOM/STICK/BUCKET
+  // PASS 2: 360° REVOLVING UPPER HOUSE, CAB, ENGINE BAY & 2.5D ARTICULATED ARM
   // =========================================================================
   if (drawUpper) {
     ctx.save();
     ctx.translate(geom.turretLocalX, geom.turretLocalY);
     ctx.rotate(geom.turretAngle);
 
-    // 1. Turntable House Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+    // 2.5D screen-UP unit vector & solar shadow vector transformed into turret-local frame
+    const relCam = (vCtx.cameraAngle ?? (car.angle || 0)) - geom.worldArmAngle;
+    const upX = Math.cos(relCam);
+    const upY = Math.sin(relCam);
+
+    const sun = getCurrentSunShadowState();
+    const cosA = Math.cos(geom.worldArmAngle);
+    const sinA = Math.sin(geom.worldArmAngle);
+    const shLocalX = cosA * sun.castX + sinA * sun.castY;
+    const shLocalY = -sinA * sun.castX + cosA * sun.castY;
+    const shadowHeightScale = 5.4; // Ground cast shadow offset px per meter of elevation
+
+    const PX_PER_M = 10.0;
+    const LIFT_PX_PER_M = 4.2; // Oblique 2.5D elevation shift toward screen-top
+    const armY = geom.armMountOffsetY;
+
+    const proj = (rM: number, latM: number, zM: number): { x: number; y: number; s: number; z: number } => {
+      const gx = rM * PX_PER_M;
+      const gy = armY + latM * PX_PER_M;
+      const s = Math.max(0.72, Math.min(1.48, 1.0 + zM * 0.068));
+      return {
+        x: gx + upX * (zM * LIFT_PX_PER_M),
+        y: gy + upY * (zM * LIFT_PX_PER_M),
+        s,
+        z: zM,
+      };
+    };
+
+    const projShadow = (rM: number, latM: number, zM: number): { x: number; y: number } => {
+      const h = Math.max(0, zM);
+      return {
+        x: rM * PX_PER_M + shLocalX * h * shadowHeightScale,
+        y: armY + latM * PX_PER_M + shLocalY * h * shadowHeightScale,
+      };
+    };
+
+    // -----------------------------------------------------------------------
+    // 0. GROUND-PLANE CAST SHADOWS FOR ARM & EXCAVATED TRENCH PIT DEPTH RING
+    // -----------------------------------------------------------------------
+    const shBase = projShadow(geom.boomBaseR_m, 0, geom.boomBaseZ_m);
+    const shKnee = projShadow(geom.boomKneeR_m, 0, geom.boomKneeZ_m);
+    const shTip = projShadow(geom.boomTipR_m, 0, geom.boomTipZ_m);
+    const shStick = projShadow(geom.stickTipR_m, 0, geom.stickTipZ_m);
+    const shBucket = projShadow(geom.bucketMidR_m, 0, geom.bucketMidZ_m);
+
+    // Excavated trench pit vignette on ground when bucket plunges below grade (z < -0.15m)
+    const bucketGroundX = geom.bucketMidR_m * PX_PER_M;
+    const bucketGroundY = armY;
+    if (geom.bucketHeightM < -0.15) {
+      const pitDepthNorm = Math.min(1, (-geom.bucketHeightM) / 3.8);
+      const pitR = 6.5 + pitDepthNorm * 5.2;
+      const pitGrad = ctx.createRadialGradient(
+        bucketGroundX,
+        bucketGroundY,
+        1.2,
+        bucketGroundX,
+        bucketGroundY,
+        pitR
+      );
+      pitGrad.addColorStop(0, `rgba(12, 8, 5, ${(0.62 + pitDepthNorm * 0.25).toFixed(2)})`);
+      pitGrad.addColorStop(0.6, `rgba(38, 25, 14, ${(0.38 + pitDepthNorm * 0.2).toFixed(2)})`);
+      pitGrad.addColorStop(1, 'rgba(38, 25, 14, 0)');
+      ctx.fillStyle = pitGrad;
+      ctx.beginPath();
+      ctx.arc(bucketGroundX, bucketGroundY, pitR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Crisp sun-projected ground shadow of boom, stick & bucket (separates clearly as arm rises!)
+    const shadowAlpha = Math.max(0.14, Math.min(0.36, 0.34 * (1 - sun.ambientNightAlpha * 0.65)));
+    ctx.save();
+    ctx.strokeStyle = `rgba(5, 10, 18, ${shadowAlpha.toFixed(3)})`;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 5.4;
     ctx.beginPath();
-    ctx.roundRect(-19.8, -11.4, 28.0, 23.8, 3.5);
+    ctx.moveTo(shBase.x, shBase.y);
+    ctx.lineTo(shKnee.x, shKnee.y);
+    ctx.lineTo(shTip.x, shTip.y);
+    ctx.stroke();
+
+    ctx.lineWidth = 3.8;
+    ctx.beginPath();
+    ctx.moveTo(shTip.x, shTip.y);
+    ctx.lineTo(shStick.x, shStick.y);
+    ctx.stroke();
+
+    // Bucket shadow blob on ground
+    const bShadowR = 4.2 + Math.max(0, geom.bucketHeightM) * 0.35;
+    ctx.fillStyle = `rgba(5, 10, 18, ${(shadowAlpha * (geom.bucketHeightM < 0 ? 0.55 : 0.95)).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(shBucket.x, shBucket.y, bShadowR * 1.15, bShadowR * 0.85, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // -----------------------------------------------------------------------
+    // 1. TURNTABLE HOUSE (with subtle 2.5D roof/body height lift)
+    // -----------------------------------------------------------------------
+    const bodyDark = shadeHex(bodyPaint, 0.68);
+    const bodyBright = shadeHex(bodyPaint, 1.12);
+    const houseLiftX = upX * 2.4;
+    const houseLiftY = upY * 2.4;
+
+    // Turntable House Ground Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
+    ctx.beginPath();
+    ctx.roundRect(-19.8 + shLocalX * 5.0, -11.2 + shLocalY * 5.0, 28.0, 23.0, 3.8);
     ctx.fill();
 
-    // 2. Main Upper Platform Deck + Cast Counterweight (Задний противовес 2150мм)
+    // Lower deck extrusion base (gives 2.5D side wall thickness to turntable & counterweight)
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.moveTo(7.4, -10.8);
+    ctx.lineTo(-14.2, -10.8);
+    ctx.quadraticCurveTo(-19.8, -10.2, -20.2, 0);
+    ctx.quadraticCurveTo(-19.8, 10.2, -14.2, 10.8);
+    ctx.lineTo(7.4, 10.8);
+    ctx.closePath();
+    ctx.fill();
+
+    // Elevated upper deck + cast counterweight (shifted along screen-UP)
+    ctx.save();
+    ctx.translate(houseLiftX, houseLiftY);
+
     ctx.fillStyle = bodyPaint;
     ctx.beginPath();
     ctx.moveTo(7.4, -10.8);
@@ -391,7 +518,6 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.fillRect(-15.5, 4.2, 1.8, 2.2);
 
     // 3. Engine Compartment Hood (ММЗ Д-245.12С) + Hydraulic Tank (Right Side / Rear Deck)
-    // Engine bay raised cowling (center-right: x = -12.4 .. +2.0, y = -0.2 .. +10.2)
     ctx.fillStyle = bodyPaint;
     ctx.beginPath();
     ctx.roundRect(-12.4, -0.4, 14.2, 10.4, 1.4);
@@ -412,7 +538,7 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       ctx.stroke();
     }
 
-    // Diesel Exhaust Stack + Rain Flapper & Air Cyclone Pre-Cleaner
+    // Diesel Exhaust Stack + Air Cyclone Pre-Cleaner
     const exhX = -8.4;
     const exhY = 2.8;
     ctx.fillStyle = '#0f172a';
@@ -423,7 +549,6 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.beginPath();
     ctx.arc(exhX, exhY, 0.8, 0, Math.PI * 2);
     ctx.fill();
-    // Cyclone air intake cap
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
     ctx.arc(-5.6, 5.6, 1.5, 0, Math.PI * 2);
@@ -435,7 +560,6 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 0.8;
     ctx.strokeRect(-3.6, 5.4, 8.8, 4.8);
-    // Hydraulic breather cap + sight strip
     ctx.fillStyle = '#cbd5e1';
     ctx.beginPath();
     ctx.arc(-1.8, 7.8, 0.85, 0, Math.PI * 2);
@@ -443,23 +567,23 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.fillStyle = '#f59e0b';
     ctx.fillRect(0.6, 9.3, 2.8, 0.5);
 
-    // 4. Panoramic Operator Cab (Left Side y < 0: x = -7.4 .. +7.2, y = -10.8 .. -1.4)
+    // 4. Panoramic Operator Cab (Left Side y < 0) with 2.5D roof lift
     const cabX = -7.2;
     const cabY = -10.8;
     const cabL = 14.4;
     const cabW = 9.4;
+    const cabRoofLiftX = upX * 2.2;
+    const cabRoofLiftY = upY * 2.2;
 
-    // Cab ROPS/FOPS outer steel frame
+    // Cab lower ROPS steel walls
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
     ctx.roundRect(cabX, cabY, cabL, cabW, 1.3);
     ctx.fill();
 
-    // Cab interior floor & pilot joysticks (visible through panoramic roof skylight & glass!)
+    // Cab interior floor & pilot joysticks
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(cabX + 0.9, cabY + 0.8, cabL - 2.4, cabW - 1.6);
-
-    // Driver seat + twin pilot joysticks (visible before/through glass tint)
     ctx.fillStyle = '#334155';
     ctx.fillRect(cabX + 2.4, cabY + 2.2, 4.6, 5.0);
     ctx.fillStyle = '#090d14';
@@ -467,7 +591,7 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.arc(cabX + 8.6, cabY + 2.5, 0.75, 0, Math.PI * 2);
     ctx.arc(cabX + 8.6, cabY + 6.9, 0.75, 0, Math.PI * 2);
     ctx.fill();
-    // Operator hard-hat / head when player is inside cab
+
     if (car.isPlayerControlled) {
       ctx.fillStyle = '#eab308';
       ctx.beginPath();
@@ -479,10 +603,9 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     }
 
     // Windshield & side glazing tint
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.24)';
-    ctx.fillRect(cabX + cabL - 3.6, cabY + 0.8, 2.9, cabW - 1.6); // Front glass
-    ctx.fillRect(cabX + 1.0, cabY + 0.5, cabL - 3.2, 1.2); // Left door glass
-    // Windshield wiper
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.26)';
+    ctx.fillRect(cabX + cabL - 3.6, cabY + 0.8, 2.9, cabW - 1.6);
+    ctx.fillRect(cabX + 1.0, cabY + 0.5, cabL - 3.2, 1.2);
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 0.8;
     ctx.beginPath();
@@ -490,7 +613,9 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.lineTo(cabX + cabL - 1.0, cabY + 5.8);
     ctx.stroke();
 
-    // Characteristic Light Cab Roof Panel with Skylight Hatch (Белая/серая крыша кабины ТВЭКС)
+    // Cab roof panel lifted slightly along 2.5D screen-UP for crisp greenhouse depth
+    ctx.save();
+    ctx.translate(cabRoofLiftX, cabRoofLiftY);
     ctx.fillStyle = roofPaint;
     ctx.beginPath();
     ctx.roundRect(cabX + 0.8, cabY + 1.4, cabL - 4.4, cabW - 2.6, 0.9);
@@ -498,11 +623,10 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 0.8;
     ctx.stroke();
-    // Panoramic roof skylight glass above joysticks
     ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
     ctx.fillRect(cabX + cabL - 7.4, cabY + 2.4, 3.2, cabW - 4.6);
 
-    // Left cab rear-view mirror & side grab rail
+    // Left cab rear-view mirror
     ctx.strokeStyle = '#1e293b';
     ctx.lineWidth = 1.0;
     ctx.beginPath();
@@ -512,7 +636,7 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(cabX + cabL - 2.0, cabY - 2.9, 2.2, 1.3);
 
-    // Cab Roof Twin Halogen Work Floodlights (Фара рабочего света на кабине)
+    // Cab Roof Twin Halogen Work Floodlights
     const workLampLit = !!car.exWorkLightOn;
     [cabY + 2.0, cabY + cabW - 3.6].forEach((ly) => {
       ctx.fillStyle = '#0f172a';
@@ -523,219 +647,373 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
 
     // Rotating Amber Beacon on cab rear-left roof corner
     drawAmberBeacon(ctx, cabX + 2.0, cabY + 2.0, isIgnitionOn, 1.75);
+    ctx.restore(); // end cabRoofLift
+    ctx.restore(); // end houseLift
 
     // =========================================================================
-    // 5. ARTICULATED DIGGING ARM (Monoboom 4.25m -> Stick 2.20m -> Bucket 0.65 m3)
+    // 5. 2.5D PERSPECTIVE ARTICULATED DIGGING ARM (Z-Sorted Painter's Order)
     // =========================================================================
-    const boomX0 = geom.boomStartLocalX; // +3.8
-    const armY = geom.armMountOffsetY;   // +1.4 (mounted beside left cab)
-    const boomX1 = boomX0 + geom.boomHorizPx;
-    const stickX1 = boomX1 + geom.stickHorizPx;
-    const bucketCurl = geom.bucketCurl;
+    const pBase = proj(geom.boomBaseR_m, 0, geom.boomBaseZ_m);
+    const pKnee = proj(geom.boomKneeR_m, 0, geom.boomKneeZ_m);
+    const pTip = proj(geom.boomTipR_m, 0, geom.boomTipZ_m);
+    const pStick = proj(geom.stickTipR_m, 0, geom.stickTipZ_m);
+    const pBucketMid = proj(geom.bucketMidR_m, 0, geom.bucketMidZ_m);
 
-    // Compute 2.5D arm drop shadow proportional to height above ground
-    const shBoomOff = Math.max(1.0, geom.boomTipHeightM * 0.75);
-    const shStickOff = Math.max(1.0, geom.stickTipHeightM * 0.75);
-    const shBucketOff = Math.max(0.6, Math.max(0, geom.bucketHeightM) * 0.75);
+    // Helper: draw an extruded 3D box-beam segment from A to B with side-wall thickness & perspective taper
+    const drawBoxBeam3D = (
+      a: { x: number; y: number; s: number; z: number },
+      b: { x: number; y: number; s: number; z: number },
+      halfWA: number,
+      halfWB: number,
+      depthPx: number,
+      topFill: string,
+      sideFill: string
+    ) => {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 0.001;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const wA = halfWA * a.s;
+      const wB = halfWB * b.s;
+      const dA = depthPx * a.s;
+      const dB = depthPx * b.s;
 
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
-    ctx.lineCap = 'round';
-    ctx.lineWidth = 4.2;
-    ctx.beginPath();
-    ctx.moveTo(boomX0 + 1.0, armY + 1.5);
-    ctx.lineTo(boomX1 + shBoomOff, armY + shBoomOff);
-    ctx.lineTo(stickX1 + shStickOff, armY + shStickOff);
-    ctx.lineTo(stickX1 + geom.bucketHorizPx + shBucketOff, armY + shBucketOff);
-    ctx.stroke();
-    ctx.lineCap = 'butt';
+      // Bottom/flank depth wall shifted opposite screen-UP so beam reads as thick 3D box section
+      const bxA = a.x - upX * dA;
+      const byA = a.y - upY * dA;
+      const bxB = b.x - upX * dB;
+      const byB = b.y - upY * dB;
 
-    // Boom Pivot Saddle & Twin Main Hoist Cylinders (Гидроцилиндры подъёма стрелы)
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(boomX0 - 3.2, armY - 2.6, 5.4, 5.2);
-    // Twin lift cylinder barrels flanking the boom foot
-    [-2.0, 2.0].forEach((cyOff) => {
-      const cylEndX = boomX0 + geom.boomHorizPx * 0.42;
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 2.0;
+      // Draw side wall silhouette connecting bottom face to top face
+      ctx.fillStyle = sideFill;
       ctx.beginPath();
-      ctx.moveTo(boomX0 - 1.2, armY + cyOff);
-      ctx.lineTo(boomX0 + (cylEndX - boomX0) * 0.55, armY + cyOff * 0.78);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#e2e8f0'; // Chrome piston rod
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(boomX0 + (cylEndX - boomX0) * 0.55, armY + cyOff * 0.78);
-      ctx.lineTo(cylEndX, armY + cyOff * 0.56);
-      ctx.stroke();
-    });
-
-    // Main Monoboom Box Weldment (Моноблочная изогнутая стрела)
-    const boomLen = geom.boomHorizPx;
-    ctx.fillStyle = bodyPaint;
-    ctx.beginPath();
-    ctx.moveTo(boomX0, armY - 1.9);
-    ctx.lineTo(boomX0 + boomLen * 0.45, armY - 2.2); // Goose-neck knuckle ridge
-    ctx.lineTo(boomX1, armY - 1.45);
-    ctx.lineTo(boomX1, armY + 1.45);
-    ctx.lineTo(boomX0 + boomLen * 0.45, armY + 2.2);
-    ctx.lineTo(boomX0, armY + 1.9);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.0;
-    ctx.stroke();
-
-    // Boom top hydraulic steel tubes & work floodlight
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(boomX0 + 1.5, armY - 0.6);
-    ctx.lineTo(boomX1 - 2.0, armY - 0.6);
-    ctx.moveTo(boomX0 + 1.5, armY + 0.6);
-    ctx.lineTo(boomX1 - 2.0, armY + 0.6);
-    ctx.stroke();
-
-    // Boom-mounted floodlight
-    const boomLampX = boomX0 + boomLen * 0.52;
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(boomLampX - 0.8, armY - 2.8, 1.5, 1.2);
-    if (workLampLit) {
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(boomLampX + 0.3, armY - 2.6, 0.6, 0.8);
-    }
-
-    // Stick Hydraulic Cylinder on top of boom (Гидроцилиндр рукояти)
-    const stickCylAnchorX = boomX0 + boomLen * 0.32;
-    const stickCylTipX = boomX1 + 1.4;
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 2.0;
-    ctx.beginPath();
-    ctx.moveTo(stickCylAnchorX, armY);
-    ctx.lineTo((stickCylAnchorX + stickCylTipX) * 0.55, armY);
-    ctx.stroke();
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1.15;
-    ctx.beginPath();
-    ctx.moveTo((stickCylAnchorX + stickCylTipX) * 0.55, armY);
-    ctx.lineTo(stickCylTipX, armY);
-    ctx.stroke();
-
-    // Boom-Stick Pivot Pin
-    ctx.fillStyle = '#cbd5e1';
-    ctx.beginPath();
-    ctx.arc(boomX1, armY, 1.35, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 0.7;
-    ctx.stroke();
-
-    // Stick / Dipper Arm (Рукоять 2.20 м)
-    ctx.fillStyle = bodyPaint;
-    ctx.beginPath();
-    ctx.moveTo(boomX1 - 1.0, armY - 1.3);
-    ctx.lineTo(stickX1, armY - 0.95);
-    ctx.lineTo(stickX1, armY + 0.95);
-    ctx.lineTo(boomX1 - 1.0, armY + 1.3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 0.9;
-    ctx.stroke();
-
-    // Bucket Cylinder along top of Stick (Гидроцилиндр ковша + трапеция тяг)
-    const bCylStart = boomX1 + geom.stickHorizPx * 0.14;
-    const bCylEnd = stickX1 - 1.6;
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.75;
-    ctx.beginPath();
-    ctx.moveTo(bCylStart, armY);
-    ctx.lineTo((bCylStart + bCylEnd) * 0.58, armY);
-    ctx.stroke();
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1.0;
-    ctx.beginPath();
-    ctx.moveTo((bCylStart + bCylEnd) * 0.58, armY);
-    ctx.lineTo(stickX1 - 0.2, armY);
-    ctx.stroke();
-
-    // Stick-Bucket Pivot Pin & H-link
-    ctx.fillStyle = '#cbd5e1';
-    ctx.beginPath();
-    ctx.arc(stickX1, armY, 1.15, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 6. Reinforced 5-Tooth Backhoe Bucket 0.65 m3 (Ковш ЕК-12 с 5 зубьями и грунтом внутри)
-    const bucketLen = geom.bucketHorizPx;
-    const bucketW = 6.2; // ~0.95m width bucket
-    const bucketVisualPitch = (bucketCurl - 0.4) * 0.35; // slight 2.5D yaw/extension feel
-    ctx.save();
-    ctx.translate(stickX1, armY);
-    ctx.rotate(bucketVisualPitch * 0.18);
-
-    // Bucket main steel shell
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    ctx.roundRect(0.2, -bucketW * 0.5, bucketLen * 0.85, bucketW, 1.2);
-    ctx.fill();
-    ctx.strokeStyle = '#090d14';
-    ctx.lineWidth = 0.95;
-    ctx.stroke();
-
-    // Wear-resistant side plates & rib strips
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(0.6, -bucketW * 0.5, bucketLen * 0.72, 1.0);
-    ctx.fillRect(0.6, bucketW * 0.5 - 1.0, bucketLen * 0.72, 1.0);
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(bucketLen * 0.35, -bucketW * 0.42);
-    ctx.lineTo(bucketLen * 0.35, bucketW * 0.42);
-    ctx.stroke();
-
-    // Excavated earth/sand payload visibly heaped inside bucket bowl!
-    const loadFrac = clamp01(car.exBucketLoad ?? 0);
-    if (loadFrac > 0.04) {
-      const matColor =
-        car.exBucketMaterial === 'sand'
-          ? '#eab308'
-          : car.exBucketMaterial === 'mud'
-          ? '#3b2b1a'
-          : '#5c3f24';
-      const matHighlight =
-        car.exBucketMaterial === 'sand'
-          ? '#fef08a'
-          : '#785636';
-      const fillR = (bucketW * 0.38) * (0.45 + 0.55 * loadFrac);
-      ctx.fillStyle = matColor;
-      ctx.beginPath();
-      ctx.ellipse(bucketLen * 0.45, 0, Math.min(bucketLen * 0.38, fillR * 1.15), fillR, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = matHighlight;
-      ctx.beginPath();
-      ctx.ellipse(bucketLen * 0.38, -fillR * 0.25, fillR * 0.45, fillR * 0.35, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Cutting lip & 5 Forged Steel Bucket Teeth (5 зубьев ковша)
-    const lipX = bucketLen * 0.82;
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(lipX - 0.6, -bucketW * 0.48, 1.0, bucketW * 0.96);
-
-    const teethCount = 5;
-    for (let t = 0; t < teethCount; t++) {
-      const ty = -bucketW * 0.40 + (t / (teethCount - 1)) * (bucketW * 0.80);
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.moveTo(lipX, ty - 0.52);
-      ctx.lineTo(lipX + 1.85, ty - 0.22);
-      ctx.lineTo(lipX + 1.85, ty + 0.22);
-      ctx.lineTo(lipX, ty + 0.52);
+      ctx.moveTo(bxA + nx * wA, byA + ny * wA);
+      ctx.lineTo(bxB + nx * wB, byB + ny * wB);
+      ctx.lineTo(bxB - nx * wB, byB - ny * wB);
+      ctx.lineTo(bxA - nx * wA, byA - ny * wA);
       ctx.closePath();
       ctx.fill();
+
+      // Side connecting quads (left & right flanks)
+      ctx.beginPath();
+      ctx.moveTo(a.x + nx * wA, a.y + ny * wA);
+      ctx.lineTo(b.x + nx * wB, b.y + ny * wB);
+      ctx.lineTo(bxB + nx * wB, byB + ny * wB);
+      ctx.lineTo(bxA + nx * wA, byA + ny * wA);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(a.x - nx * wA, a.y - ny * wA);
+      ctx.lineTo(b.x - nx * wB, b.y - ny * wB);
+      ctx.lineTo(bxB - nx * wB, byB - ny * wB);
+      ctx.lineTo(bxA - nx * wA, byA - ny * wA);
+      ctx.closePath();
+      ctx.fill();
+
+      // Top sunlit face of welded steel boom/stick box
+      ctx.fillStyle = topFill;
+      ctx.beginPath();
+      ctx.moveTo(a.x + nx * wA, a.y + ny * wA);
+      ctx.lineTo(b.x + nx * wB, b.y + ny * wB);
+      ctx.lineTo(b.x - nx * wB, b.y - ny * wB);
+      ctx.lineTo(a.x - nx * wA, a.y - ny * wA);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.95;
+      ctx.stroke();
+
+      // Center specular highlight / steel hydraulic piping along spine
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = Math.max(0.6, 0.7 * ((a.s + b.s) * 0.5));
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    };
+
+    const drawHydraulicCylinder3D = (
+      a: { x: number; y: number; s: number },
+      b: { x: number; y: number; s: number },
+      barrelRatio = 0.54,
+      barrelWidth = 2.0
+    ) => {
+      const mx = a.x + (b.x - a.x) * barrelRatio;
+      const my = a.y + (b.y - a.y) * barrelRatio;
+      const avgS = (a.s + b.s) * 0.5;
+      ctx.lineCap = 'round';
+      // Dark steel cylinder barrel
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = barrelWidth * avgS;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(mx, my);
+      ctx.stroke();
+      // Barrel top highlight
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = barrelWidth * 0.42 * avgS;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(mx, my);
+      ctx.stroke();
+      // Chrome piston rod
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = barrelWidth * 0.54 * avgS;
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    };
+
+    const drawPin3D = (p: { x: number; y: number; s: number }, r: number) => {
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * p.s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.75;
+      ctx.stroke();
+    };
+
+    // Vertical plumb guide connecting ground footprint (z=0) to elevated/sunken bucket
+    // Gives immediate, unambiguous 3D height perception at every turret angle
+    if (Math.abs(geom.bucketHeightM) > 0.35 && (car.isPlayerControlled || car.exOperatorMode)) {
+      ctx.save();
+      ctx.strokeStyle =
+        geom.bucketHeightM < 0 ? 'rgba(248, 113, 113, 0.55)' : 'rgba(226, 232, 240, 0.42)';
+      ctx.lineWidth = 1.0;
+      ctx.setLineDash([2.5, 2.5]);
+      ctx.beginPath();
+      ctx.moveTo(bucketGroundX, bucketGroundY);
+      ctx.lineTo(pBucketMid.x, pBucketMid.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Ground anchor dot directly beneath bucket
+      ctx.fillStyle = geom.bucketHeightM < 0 ? 'rgba(239, 68, 68, 0.75)' : 'rgba(226, 232, 240, 0.55)';
+      ctx.beginPath();
+      ctx.arc(bucketGroundX, bucketGroundY, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
-    ctx.restore();
+    // Segment draw routines for true Z-sorted painter's occlusion
+    const drawBoomLower = () => {
+      // Boom Pivot Saddle on turret deck
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(pBase.x, pBase.y, 3.0 * pBase.s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.85;
+      ctx.stroke();
+
+      // Twin Main Hoist Cylinders flanking boom foot up to gooseneck underside
+      const cylAttachR = geom.boomBaseR_m + (geom.boomKneeR_m - geom.boomBaseR_m) * 0.76;
+      const cylAttachZ = geom.boomBaseZ_m + (geom.boomKneeZ_m - geom.boomBaseZ_m) * 0.76 - 0.28;
+      [-0.22, 0.22].forEach((latOff) => {
+        const cA = proj(geom.boomBaseR_m - 0.14, latOff, geom.boomBaseZ_m - 0.25);
+        const cB = proj(cylAttachR, latOff * 0.85, cylAttachZ);
+        drawHydraulicCylinder3D(cA, cB, 0.52, 1.9);
+      });
+
+      const zShade = geom.boomKneeZ_m > 2.2 ? bodyBright : bodyPaint;
+      drawBoxBeam3D(pBase, pKnee, 2.1, 2.45, 2.8, zShade, bodyDark);
+      drawPin3D(pBase, 1.15);
+    };
+
+    const drawBoomUpper = () => {
+      const zShade = geom.boomTipZ_m > 2.8 ? bodyBright : geom.boomTipZ_m < 0.2 ? shadeHex(bodyPaint, 0.86) : bodyPaint;
+      drawBoxBeam3D(pKnee, pTip, 2.45, 1.55, 2.5, zShade, bodyDark);
+
+      // Boom-mounted halogen work floodlight on left flank of upper boom
+      const lampR = geom.boomKneeR_m + (geom.boomTipR_m - geom.boomKneeR_m) * 0.35;
+      const lampZ = geom.boomKneeZ_m + (geom.boomTipZ_m - geom.boomKneeZ_m) * 0.35 + 0.12;
+      const pLamp = proj(lampR, -0.26, lampZ);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(pLamp.x - 0.9, pLamp.y - 0.9, 1.8, 1.8);
+      if (workLampLit) {
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(pLamp.x - 0.4, pLamp.y - 0.4, 0.9, 0.9);
+      }
+
+      // Stick Hydraulic Cylinder perched above gooseneck arch -> stick heel lug
+      const stickCylA = proj(geom.boomKneeR_m - 0.18, 0, geom.boomKneeZ_m + 0.38);
+      const stickLugR = geom.boomTipR_m - Math.cos(geom.stickPitch) * 0.45;
+      const stickLugZ = geom.boomTipZ_m - Math.sin(geom.stickPitch) * 0.45;
+      const stickCylB = proj(stickLugR, 0, stickLugZ);
+      drawHydraulicCylinder3D(stickCylA, stickCylB, 0.56, 2.0);
+
+      drawPin3D(pTip, 1.3);
+    };
+
+    const drawStick = () => {
+      const avgZ = (geom.boomTipZ_m + geom.stickTipZ_m) * 0.5;
+      const stickDepthFactor = avgZ < 0 ? Math.max(0.68, 1.0 + avgZ * 0.1) : avgZ > 2.8 ? 1.1 : 0.98;
+      drawBoxBeam3D(pTip, pStick, 1.55, 1.05, 1.9, shadeHex(bodyPaint, stickDepthFactor), bodyDark);
+
+      // Bucket Hydraulic Cylinder along back of stick -> dogbone linkage near stick tip
+      const bCylA = proj(
+        geom.boomTipR_m + (geom.stickTipR_m - geom.boomTipR_m) * 0.16,
+        0,
+        geom.boomTipZ_m + (geom.stickTipZ_m - geom.boomTipZ_m) * 0.16 + 0.25
+      );
+      const bCylB = proj(
+        geom.boomTipR_m + (geom.stickTipR_m - geom.boomTipR_m) * 0.88,
+        0,
+        geom.boomTipZ_m + (geom.stickTipZ_m - geom.boomTipZ_m) * 0.88 + 0.15
+      );
+      drawHydraulicCylinder3D(bCylA, bCylB, 0.58, 1.65);
+
+      drawPin3D(pTip, 1.25);
+      drawPin3D(pStick, 1.15);
+    };
+
+    const drawBucket3D = () => {
+      // True 3D projected backhoe bucket (0.65 m3, 0.92m wide, 5 forged teeth)
+      const bp = geom.bucketPitch;
+      const cosB = Math.cos(bp);
+      const sinB = Math.sin(bp);
+      // Curved heel normal perpendicular to bucket pitch (outer/bottom curved back of backhoe scoop)
+      const heelCos = Math.cos(bp + Math.PI * 0.5);
+      const heelSin = Math.sin(bp + Math.PI * 0.5);
+
+      const halfWidthM = 0.44;
+      const L_B = 1.05;
+      // 3D vertices along bucket profile: wrist pin (0), curved back heel (1), cutting lip (2), tooth tips (3)
+      const rPin = geom.stickTipR_m;
+      const zPin = geom.stickTipZ_m;
+      const rHeel = rPin + cosB * 0.44 + heelCos * 0.52;
+      const zHeel = zPin + sinB * 0.44 + heelSin * 0.52;
+      const rLip = rPin + cosB * (L_B * 0.84);
+      const zLip = zPin + sinB * (L_B * 0.84);
+      const rTooth = rPin + cosB * (L_B * 1.08);
+      const zTooth = zPin + sinB * (L_B * 1.08);
+
+      const pPinL = proj(rPin, -halfWidthM, zPin);
+      const pPinR = proj(rPin, halfWidthM, zPin);
+      const pHeelL = proj(rHeel, -halfWidthM, zHeel);
+      const pHeelR = proj(rHeel, halfWidthM, zHeel);
+      const pLipL = proj(rLip, -halfWidthM, zLip);
+      const pLipR = proj(rLip, halfWidthM, zLip);
+
+      // Depth shading when bucket plunges into trench below grade
+      const trenchDark = geom.bucketHeightM < 0 ? Math.max(0.65, 1 + geom.bucketHeightM * 0.08) : 1.0;
+      const shellCol = shadeHex('#1e293b', trenchDark);
+      const cheekCol = shadeHex('#334155', trenchDark);
+      const lipCol = shadeHex('#475569', trenchDark);
+
+      // 1) Curved bucket back/bottom steel shell
+      ctx.fillStyle = shellCol;
+      ctx.beginPath();
+      ctx.moveTo(pPinL.x, pPinL.y);
+      ctx.lineTo(pHeelL.x, pHeelL.y);
+      ctx.lineTo(pLipL.x, pLipL.y);
+      ctx.lineTo(pLipR.x, pLipR.y);
+      ctx.lineTo(pHeelR.x, pHeelR.y);
+      ctx.lineTo(pPinR.x, pPinR.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#090d14';
+      ctx.lineWidth = 0.95;
+      ctx.stroke();
+
+      // 2) Bucket interior cavity shadow (between pin & cutting lip)
+      ctx.fillStyle = '#0b111c';
+      ctx.beginPath();
+      ctx.moveTo(pPinL.x, pPinL.y);
+      ctx.lineTo(pLipL.x, pLipL.y);
+      ctx.lineTo(pLipR.x, pLipR.y);
+      ctx.lineTo(pPinR.x, pPinR.y);
+      ctx.closePath();
+      ctx.fill();
+
+      // 3) Side wear plates / cheeks (left and right triangles)
+      ctx.fillStyle = cheekCol;
+      ctx.beginPath();
+      ctx.moveTo(pPinL.x, pPinL.y);
+      ctx.lineTo(pHeelL.x, pHeelL.y);
+      ctx.lineTo(pLipL.x, pLipL.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(pPinR.x, pPinR.y);
+      ctx.lineTo(pHeelR.x, pHeelR.y);
+      ctx.lineTo(pLipR.x, pLipR.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 4) Excavated earth / sand payload visibly heaped inside bucket bowl
+      const loadFrac = clamp01(car.exBucketLoad ?? 0);
+      if (loadFrac > 0.04) {
+        const matColor =
+          car.exBucketMaterial === 'sand'
+            ? '#eab308'
+            : car.exBucketMaterial === 'mud'
+            ? '#3b2b1a'
+            : '#5c3f24';
+        const matHighlight = car.exBucketMaterial === 'sand' ? '#fef08a' : '#7c5a38';
+        const pLoad = proj(
+          (rPin + rHeel + rLip) / 3,
+          0,
+          (zPin + zHeel + zLip) / 3 + 0.14 * loadFrac
+        );
+        const rad = (2.1 + 2.3 * loadFrac) * pLoad.s;
+        ctx.fillStyle = matColor;
+        ctx.beginPath();
+        ctx.ellipse(pLoad.x, pLoad.y, rad * 1.1, rad * 0.85, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = matHighlight;
+        ctx.beginPath();
+        ctx.ellipse(pLoad.x + upX * 0.6, pLoad.y + upY * 0.6, rad * 0.48, rad * 0.36, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 5) Hardened steel cutting lip & 5 Forged Steel Teeth
+      ctx.strokeStyle = lipCol;
+      ctx.lineWidth = 1.6 * pBucketMid.s;
+      ctx.beginPath();
+      ctx.moveTo(pLipL.x, pLipL.y);
+      ctx.lineTo(pLipR.x, pLipR.y);
+      ctx.stroke();
+
+      const teethCount = 5;
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = Math.max(0.9, 1.15 * pBucketMid.s);
+      ctx.lineCap = 'round';
+      for (let t = 0; t < teethCount; t++) {
+        const lat = -halfWidthM * 0.82 + (t / (teethCount - 1)) * (halfWidthM * 1.64);
+        const tBase = proj(rLip, lat, zLip);
+        const tEnd = proj(rTooth, lat, zTooth);
+        ctx.beginPath();
+        ctx.moveTo(tBase.x, tBase.y);
+        ctx.lineTo(tEnd.x, tEnd.y);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+
+      drawPin3D(pStick, 1.1);
+    };
+
+    // Sort the 4 articulated rigid assemblies by true average elevation (lowest Z first -> highest Z on top!)
+    const parts: { z: number; draw: () => void }[] = [
+      { z: (geom.boomBaseZ_m + geom.boomKneeZ_m) * 0.5, draw: drawBoomLower },
+      { z: (geom.boomKneeZ_m + geom.boomTipZ_m) * 0.5 + 0.05, draw: drawBoomUpper },
+      { z: (geom.boomTipZ_m + geom.stickTipZ_m) * 0.5, draw: drawStick },
+      { z: (geom.stickTipZ_m + geom.bucketMidZ_m) * 0.5, draw: drawBucket3D },
+    ];
+    parts.sort((a, b) => a.z - b.z);
+    for (const part of parts) {
+      part.draw();
+    }
+
     ctx.restore();
   }
 }

@@ -48,9 +48,9 @@ export function isExcavatorVehicle(car: Vehicle | { type?: string } | null | und
 export function ensureExcavatorState(v: Vehicle): void {
   if (!isExcavatorVehicle(v)) return;
   if (v.exTurretAngle === undefined) v.exTurretAngle = 0;
-  if (v.exBoomElev === undefined) v.exBoomElev = 0.62;
-  if (v.exStickExt === undefined) v.exStickExt = 0.22;
-  if (v.exBucketCurl === undefined) v.exBucketCurl = 0.18;
+  if (v.exBoomElev === undefined) v.exBoomElev = 0.56;
+  if (v.exStickExt === undefined) v.exStickExt = 0.18;
+  if (v.exBucketCurl === undefined) v.exBucketCurl = 0.16;
   if (v.exBladePos === undefined) v.exBladePos = 0.0;
   if (v.exOutriggersPos === undefined) v.exOutriggersPos = 0.0;
   if (!v.exOutriggersContact || v.exOutriggersContact.length !== 3) {
@@ -76,9 +76,26 @@ export interface ExcavatorGeometry {
   bucketCurl: number;
   bladePos: number;
   outriggersPos: number;
-  // Local turret-aligned arm distances (from turret center along turret forward axis)
+  // Local turret-aligned arm pivot & signed radial/vertical profile (meters, 1 m = 10 px)
   boomStartLocalX: number;
-  armMountOffsetY: number; // Boom is mounted slightly right of center (+1.4px) next to left cab
+  armMountOffsetY: number; // Boom is mounted slightly right of center (+1.6px) next to left cab
+  boomBaseR_m: number;
+  boomBaseZ_m: number;
+  boomKneeR_m: number;
+  boomKneeZ_m: number;
+  boomTipR_m: number;
+  boomTipZ_m: number;
+  stickTipR_m: number;
+  stickTipZ_m: number;
+  bucketMidR_m: number;
+  bucketMidZ_m: number;
+  bucketTipR_m: number;
+  bucketTipZ_m: number;
+  boomLowerPitch: number;
+  boomUpperPitch: number;
+  stickPitch: number;
+  bucketPitch: number;
+  // Legacy-friendly signed horizontal projections in px
   boomHorizPx: number;
   stickHorizPx: number;
   bucketHorizPx: number;
@@ -86,7 +103,7 @@ export interface ExcavatorGeometry {
   stickTipHeightM: number;
   bucketHeightM: number;
   reachMeters: number;
-  // World coordinates
+  // World coordinates (ground plane projection z=0)
   worldTurretX: number;
   worldTurretY: number;
   worldBoomStartX: number;
@@ -108,30 +125,61 @@ export function getExcavatorGeometry(v: Vehicle): ExcavatorGeometry {
   const turretLocalX = -1.8;
   const turretLocalY = 0;
   const turretAngle = v.exTurretAngle ?? 0;
-  const boomElev = clamp01(v.exBoomElev ?? 0.62);
-  const stickExt = clamp01(v.exStickExt ?? 0.22);
-  const bucketCurl = clamp01(v.exBucketCurl ?? 0.18);
+  const boomElev = clamp01(v.exBoomElev ?? 0.56);
+  const stickExt = clamp01(v.exStickExt ?? 0.18);
+  const bucketCurl = clamp01(v.exBucketCurl ?? 0.16);
   const bladePos = clamp01(v.exBladePos ?? 0);
   const outriggersPos = clamp01(v.exOutriggersPos ?? 0);
 
-  // Boom mounts ahead of counterweight (+3.8px) and slightly right (+1.4px) beside the left operator cab
-  const boomStartLocalX = 3.8;
-  const armMountOffsetY = 1.4;
+  // Scale: 1 meter = 10 world pixels (matches EK-12 2.5m width = 25px, 4.9m chassis = 49px)
+  const PX_PER_M = 10.0;
+  // Boom mounts ahead of counterweight (+3.8px = 0.38m) and slightly right (+1.6px) beside the left operator cab
+  const boomBaseR_m = 0.38;
+  const boomBaseZ_m = 1.65;
+  const boomStartLocalX = boomBaseR_m * PX_PER_M;
+  const armMountOffsetY = 1.6;
 
-  // Elevation & kinematics projected cleanly to 2.5D top-down + physical height (meters)
-  // boomElev: 0 = lowered deep into excavation (-45 deg), 1 = raised high (+66 deg)
-  const boomAngleRad = -0.78 + boomElev * 1.92;
-  const boomHorizPx = Math.max(15.0, 41.5 * Math.cos(boomAngleRad * 0.72));
-  const boomTipHeightM = 1.8 + Math.sin(boomAngleRad) * EK12_SPECS.boomLengthM;
+  // True rigid 2D side-plane kinematics (r = forward reach from turret center, z = elevation above ground):
+  // 1) Curved gooseneck monoboom (TVEX EK-12 4.25m chord: lower 2.15m + upper 2.25m with 32 deg gooseneck bend)
+  // boomElev = 0.0 -> lowered deep for trenching; boomElev = 1.0 -> raised high for truck loading
+  const boomBasePitch = -0.64 + boomElev * 1.62; // -36.7 deg .. +56.1 deg (strictly monotonic!)
+  const boomLowerPitch = boomBasePitch + 0.32;
+  const boomUpperPitch = boomBasePitch - 0.24;
 
-  // Stick angle relative to horizon depends on boom angle + stick extension
-  const stickWorldAngle = boomAngleRad - 1.95 + stickExt * 1.65;
-  const stickHorizPx = Math.max(7.5, Math.abs(Math.cos(stickWorldAngle)) * 22.0 + stickExt * 7.5);
-  const stickTipHeightM = boomTipHeightM + Math.sin(stickWorldAngle) * EK12_SPECS.stickLengthM;
+  const L_BOOM_LOWER = 2.15;
+  const L_BOOM_UPPER = 2.25;
+  const boomKneeR_m = boomBaseR_m + Math.cos(boomLowerPitch) * L_BOOM_LOWER;
+  const boomKneeZ_m = boomBaseZ_m + Math.sin(boomLowerPitch) * L_BOOM_LOWER;
+  const boomTipR_m = boomKneeR_m + Math.cos(boomUpperPitch) * L_BOOM_UPPER;
+  const boomTipZ_m = boomKneeZ_m + Math.sin(boomUpperPitch) * L_BOOM_UPPER;
 
-  // Bucket tip position and vertical depth relative to grade (0 = ground surface)
-  const bucketHorizPx = 4.8 + (1 - Math.abs(bucketCurl - 0.45) * 0.7) * 5.2;
-  const bucketHeightM = Math.max(-4.8, Math.min(7.8, stickTipHeightM - 1.15 - (1 - stickExt) * 0.45));
+  // 2) Stick / dipper arm (2.20 m), hinged at boom tip
+  // stickExt = 0.0 -> folded tightly inward under the boom; stickExt = 1.0 -> extended far outward
+  // Uses SIGNED Math.cos(stickPitch) so pulling stick IN genuinely tucks bucket back toward the cab!
+  const L_STICK = EK12_SPECS.stickLengthM; // 2.20 m
+  const stickRelAngle = -2.18 + stickExt * 1.72; // -125 deg (tucked) .. -26 deg (extended)
+  const stickPitch = boomUpperPitch + stickRelAngle;
+  const stickTipR_m = boomTipR_m + Math.cos(stickPitch) * L_STICK;
+  const stickTipZ_m = boomTipZ_m + Math.sin(stickPitch) * L_STICK;
+
+  // 3) Backhoe bucket (1.05 m pin-to-teeth), hinged at stick tip
+  // bucketCurl = 0.0 -> curled closed (scooping); bucketCurl = 1.0 -> swung open (dumping)
+  const L_BUCKET = 1.05;
+  const bucketRelAngle = -2.05 + bucketCurl * 2.20; // -117 deg (curled) .. +9 deg (dumped)
+  const bucketPitch = stickPitch + bucketRelAngle;
+  const bucketMidR_m = stickTipR_m + Math.cos(bucketPitch) * (L_BUCKET * 0.56);
+  const bucketMidZ_m = stickTipZ_m + Math.sin(bucketPitch) * (L_BUCKET * 0.56);
+  const bucketTipR_m = stickTipR_m + Math.cos(bucketPitch) * L_BUCKET;
+  const bucketTipZ_m = stickTipZ_m + Math.sin(bucketPitch) * L_BUCKET;
+
+  // Lowest cutting-edge height of bucket relative to grade (clamped to documented -4.8 m .. +6.4 m)
+  const rawBucketHeightM = Math.min(bucketMidZ_m, bucketTipZ_m);
+  const bucketHeightM = Math.max(-EK12_SPECS.maxDigDepthM, Math.min(6.4, rawBucketHeightM));
+
+  // Signed horizontal distances in px along turret forward axis
+  const boomHorizPx = (boomTipR_m - boomBaseR_m) * PX_PER_M;
+  const stickHorizPx = (stickTipR_m - boomTipR_m) * PX_PER_M;
+  const bucketHorizPx = (bucketMidR_m - stickTipR_m) * PX_PER_M;
 
   const cosV = Math.cos(v.angle || 0);
   const sinV = Math.sin(v.angle || 0);
@@ -142,25 +190,25 @@ export function getExcavatorGeometry(v: Vehicle): ExcavatorGeometry {
   const worldTurretX = v.x + cosV * turretLocalX - sinV * turretLocalY;
   const worldTurretY = v.y + sinV * turretLocalX + cosV * turretLocalY;
 
-  const worldBoomStartX = worldTurretX + cosA * boomStartLocalX - sinA * armMountOffsetY;
-  const worldBoomStartY = worldTurretY + sinA * boomStartLocalX + cosA * armMountOffsetY;
+  const toWorld = (rM: number): [number, number] => {
+    const lx = rM * PX_PER_M;
+    return [
+      worldTurretX + cosA * lx - sinA * armMountOffsetY,
+      worldTurretY + sinA * lx + cosA * armMountOffsetY,
+    ];
+  };
 
-  const worldBoomTipX = worldBoomStartX + cosA * boomHorizPx;
-  const worldBoomTipY = worldBoomStartY + sinA * boomHorizPx;
-
-  const worldStickTipX = worldBoomTipX + cosA * stickHorizPx;
-  const worldStickTipY = worldBoomTipY + sinA * stickHorizPx;
-
-  const worldBucketX = worldStickTipX + cosA * bucketHorizPx;
-  const worldBucketY = worldStickTipY + sinA * bucketHorizPx;
+  const [worldBoomStartX, worldBoomStartY] = toWorld(boomBaseR_m);
+  const [worldBoomTipX, worldBoomTipY] = toWorld(boomTipR_m);
+  const [worldStickTipX, worldStickTipY] = toWorld(stickTipR_m);
+  const [worldBucketX, worldBucketY] = toWorld(bucketMidR_m);
 
   // Blade sits ahead of front frame
   const bladeLocalX = halfL + 4.0;
   const worldBladeCenterX = v.x + cosV * bladeLocalX;
   const worldBladeCenterY = v.y + sinV * bladeLocalX;
 
-  const totalArmPx = boomStartLocalX + boomHorizPx + stickHorizPx + bucketHorizPx;
-  const reachMeters = +(Math.min(EK12_SPECS.maxDigRadiusM, Math.max(1.8, totalArmPx * 0.105))).toFixed(1);
+  const reachMeters = +(Math.min(EK12_SPECS.maxDigRadiusM, Math.max(1.2, Math.max(bucketMidR_m, bucketTipR_m)))).toFixed(1);
 
   return {
     turretLocalX,
@@ -173,11 +221,27 @@ export function getExcavatorGeometry(v: Vehicle): ExcavatorGeometry {
     outriggersPos,
     boomStartLocalX,
     armMountOffsetY,
+    boomBaseR_m,
+    boomBaseZ_m,
+    boomKneeR_m,
+    boomKneeZ_m,
+    boomTipR_m,
+    boomTipZ_m,
+    stickTipR_m,
+    stickTipZ_m,
+    bucketMidR_m,
+    bucketMidZ_m,
+    bucketTipR_m,
+    bucketTipZ_m,
+    boomLowerPitch,
+    boomUpperPitch,
+    stickPitch,
+    bucketPitch,
     boomHorizPx,
     stickHorizPx,
     bucketHorizPx,
-    boomTipHeightM,
-    stickTipHeightM,
+    boomTipHeightM: +boomTipZ_m.toFixed(1),
+    stickTipHeightM: +stickTipZ_m.toFixed(1),
     bucketHeightM: +bucketHeightM.toFixed(1),
     reachMeters,
     worldTurretX,
@@ -274,8 +338,8 @@ export function stowExcavatorForTransport(v: Vehicle, player?: Player | null): v
     return;
   }
   v.exTurretAngle = 0;
-  v.exBoomElev = 0.64;
-  v.exStickExt = 0.20;
+  v.exBoomElev = 0.56;
+  v.exStickExt = 0.18;
   v.exBucketCurl = 0.16;
   v.exBladePos = 0.0;
   v.exOutriggersPos = 0.0;

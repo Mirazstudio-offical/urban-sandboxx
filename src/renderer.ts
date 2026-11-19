@@ -12370,6 +12370,7 @@ export class GameRenderer {
           drawDeformedCircle,
           nightAlpha,
           renderLayer: 'chassis',
+          cameraAngle: this.currentParticleCamera.angle,
         });
       }
 
@@ -13798,6 +13799,7 @@ export class GameRenderer {
         drawDeformedCircle,
         nightAlpha,
         renderLayer: 'upper' as const,
+        cameraAngle: this.currentParticleCamera.angle,
       };
 
       const isTrailer = car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle';

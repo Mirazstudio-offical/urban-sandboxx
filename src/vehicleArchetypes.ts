@@ -25,6 +25,7 @@ export interface VehicleRenderContext {
   drawDeformedCircle: (cx: number, cy: number, r: number, fill: string, stroke?: string, lineWidth?: number) => void;
   nightAlpha: number;
   renderLayer?: 'chassis' | 'upper' | 'both';
+  cameraAngle?: number;
 }
 
 /**

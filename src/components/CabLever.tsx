@@ -20,6 +20,8 @@ export const CabLever: React.FC<CabLeverProps> = ({ name, title, disabled = fals
   const activeId = useRef<number | null>(null);
   const startY = useRef(0);
   const dir = useRef<-1 | 0 | 1>(0);
+  const onDirChangeRef = useRef(onDirChange);
+  onDirChangeRef.current = onDirChange;
   const [offset, setOffset] = useState(0); // px, positive = pushed away
   const [dragging, setDragging] = useState(false);
 
@@ -27,7 +29,7 @@ export const CabLever: React.FC<CabLeverProps> = ({ name, title, disabled = fals
     const next: -1 | 0 | 1 = v > ENGAGE ? 1 : v < -ENGAGE ? -1 : 0;
     if (next === dir.current) return;
     dir.current = next;
-    onDirChange(next);
+    onDirChangeRef.current(next);
   };
 
   const moveTo = (clientY: number) => {
@@ -40,13 +42,53 @@ export const CabLever: React.FC<CabLeverProps> = ({ name, title, disabled = fals
     activeId.current = null;
     setDragging(false);
     setOffset(0);
-    apply(0);
+    if (dir.current !== 0) {
+      dir.current = 0;
+      onDirChangeRef.current(0);
+    }
   };
 
   useEffect(() => {
-    if (disabled && activeId.current !== null) release();
+    if (disabled && (activeId.current !== null || dir.current !== 0)) release();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disabled]);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onGlobalPointerMove = (e: PointerEvent) => {
+      if (activeId.current === e.pointerId) moveTo(e.clientY);
+    };
+    const onGlobalPointerUp = (e: PointerEvent) => {
+      if (activeId.current === null || activeId.current === e.pointerId) release();
+    };
+    const onGlobalReset = () => release();
+    window.addEventListener('pointermove', onGlobalPointerMove);
+    window.addEventListener('pointerup', onGlobalPointerUp);
+    window.addEventListener('pointercancel', onGlobalPointerUp);
+    window.addEventListener('mouseup', onGlobalReset);
+    window.addEventListener('blur', onGlobalReset);
+    window.addEventListener('visibilitychange', onGlobalReset);
+    return () => {
+      window.removeEventListener('pointermove', onGlobalPointerMove);
+      window.removeEventListener('pointerup', onGlobalPointerUp);
+      window.removeEventListener('pointercancel', onGlobalPointerUp);
+      window.removeEventListener('mouseup', onGlobalReset);
+      window.removeEventListener('blur', onGlobalReset);
+      window.removeEventListener('visibilitychange', onGlobalReset);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragging]);
+
+  useEffect(
+    () => () => {
+      if (dir.current !== 0) {
+        dir.current = 0;
+        onDirChangeRef.current(0);
+      }
+      activeId.current = null;
+    },
+    [],
+  );
 
   const tilt = (offset / TRAVEL) * MAX_TILT;
 
@@ -61,20 +103,31 @@ export const CabLever: React.FC<CabLeverProps> = ({ name, title, disabled = fals
           e.stopPropagation();
           activeId.current = e.pointerId;
           startY.current = e.clientY;
-          e.currentTarget.setPointerCapture?.(e.pointerId);
+          try {
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+          } catch {
+            // Pointer capture may not be supported on all touch/iframe targets
+          }
           setDragging(true);
         }}
         onPointerMove={(e) => {
           if (activeId.current === e.pointerId) moveTo(e.clientY);
         }}
         onPointerUp={(e) => {
-          if (activeId.current === e.pointerId) release();
+          if (activeId.current === e.pointerId) {
+            try {
+              e.currentTarget.releasePointerCapture?.(e.pointerId);
+            } catch {
+              // ignore
+            }
+            release();
+          }
         }}
         onPointerCancel={(e) => {
           if (activeId.current === e.pointerId) release();
         }}
         onLostPointerCapture={() => {
-          if (activeId.current !== null) release();
+          if (activeId.current !== null || dir.current !== 0) release();
         }}
         onContextMenu={(e) => e.preventDefault()}
         role="slider"

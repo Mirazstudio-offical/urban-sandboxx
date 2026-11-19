@@ -2205,17 +2205,41 @@ export default function App() {
       let isWindowHibernated = false;
       let lastHibernationTick = 0;
 
+      const clearAllHeldInputs = () => {
+        const inp = inputRef.current;
+        inp.forward = false;
+        inp.backward = false;
+        inp.left = false;
+        inp.right = false;
+        inp.handbrake = false;
+        inp.sprint = false;
+        inp.hornH = false;
+        inp.isMouseDown = false;
+        inp.craneBoomExtend = false;
+        inp.craneBoomRetract = false;
+        inp.craneHookUp = false;
+        inp.craneHookDown = false;
+        inp.exSlewLeft = false;
+        inp.exSlewRight = false;
+        inp.exBoomUp = false;
+        inp.exBoomDown = false;
+        inp.exStickOut = false;
+        inp.exStickIn = false;
+        inp.exBucketCurl = false;
+        inp.exBucketDump = false;
+        inp.exBladeUp = false;
+        inp.exBladeDown = false;
+        inp.exStabilizersUp = false;
+        inp.exStabilizersDown = false;
+      };
+
       const handleVisibilityChange = () => {
         if (typeof document === 'undefined') return;
         if (document.hidden) {
           isWindowHibernated = true;
           sound.purgeAudioGraph();
-          // Release all active input keys so the player/car stops moving blindly
-          inputRef.current.forward = false;
-          inputRef.current.backward = false;
-          inputRef.current.left = false;
-          inputRef.current.right = false;
-          inputRef.current.isMouseDown = false;
+          // Release all active input keys so the player/car/excavator stops moving blindly
+          clearAllHeldInputs();
         } else {
           isWindowHibernated = false;
           lastTime = performance.now();
@@ -2227,7 +2251,7 @@ export default function App() {
         sound.stopEngine();
         sound.stopTireScreech();
         sound.stopHorn();
-        inputRef.current.isMouseDown = false;
+        clearAllHeldInputs();
       };
 
       window.addEventListener('visibilitychange', handleVisibilityChange);
@@ -2584,6 +2608,7 @@ export default function App() {
         }
 
         if (code === 'KeyG' && p && p.isInVehicle && currentVeh && isExcavatorVehicle(currentVeh)) {
+          clearAllHeldInputs();
           currentVeh.exOperatorMode = !currentVeh.exOperatorMode;
           sound.playButtonPress();
           addPlayerNotification(
@@ -2672,16 +2697,12 @@ export default function App() {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (
-        isChatFocusedRef.current ||
-        document.activeElement?.tagName === 'INPUT' ||
-        document.activeElement?.tagName === 'TEXTAREA' ||
-        !!document.activeElement?.closest('#chat-overlay-container')
-      ) {
-        return;
-      }
       const code = e.code;
-      if (code === 'ShiftLeft'|| code === 'ShiftRight') inputRef.current.shiftUp = false;
+      // Always release held movement/superstructure keys even if focus shifted to a button or chat mid-hold
+      if (code === 'ShiftLeft'|| code === 'ShiftRight') {
+        inputRef.current.shiftUp = false;
+        inputRef.current.sprint = false;
+      }
       if (code === 'ControlLeft'|| code === 'ControlRight') inputRef.current.shiftDown = false;
       if (code === 'KeyX') inputRef.current.transferCaseToggle = false;
       if (code === 'KeyV') inputRef.current.diffLockToggle = false;
@@ -2692,7 +2713,6 @@ export default function App() {
       if (code === 'Comma') inputRef.current.brakeLeft = false;
       if (code === 'Period') inputRef.current.brakeRight = false;
       if (code === 'Space') inputRef.current.handbrake = false;
-      if (code === 'ShiftLeft'|| code === 'ShiftRight') inputRef.current.sprint = false;
       if (code === 'KeyH') inputRef.current.hornH = false;
       if (code === 'KeyQ') inputRef.current.craneBoomRetract = false;
       if (code === 'KeyE') inputRef.current.craneBoomExtend = false;
