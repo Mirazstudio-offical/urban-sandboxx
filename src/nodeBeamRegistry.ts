@@ -10,7 +10,9 @@
  */
 export type NodeBeamBuilder = (car: any) => any;
 
-let _nodeBeamBuilder: NodeBeamBuilder | null = null;
+// Use `var` intentionally so registration can never hit a Temporal Dead Zone
+// even if bundler chunk ordering evaluates callers before this module body.
+var _nodeBeamBuilder: NodeBeamBuilder | null = null;
 
 export function registerNodeBeamBuilder(builder: NodeBeamBuilder): void {
   _nodeBeamBuilder = builder;
