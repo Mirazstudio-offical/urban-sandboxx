@@ -3131,6 +3131,22 @@ export default function App() {
   const hudUpdateTimerRef = useRef<number>(0);
   const perfUiTimerRef = useRef<number>(0);
   const telemetryTimerRef = useRef<number>(0);
+  const lastFpsUiRef = useRef<number>(60);
+  const lastTimeMinuteRef = useRef<number>(-1);
+  const lastWeatherTransStepRef = useRef<number>(-1);
+  const lastStreetPosRef = useRef<{ x: number; y: number }>({ x: -99999, y: -99999 });
+  const hudTickAccumRef = useRef<number>(0);
+  const prevCanExitBldRef = useRef<boolean>(false);
+  const prevCanEnterBldIdRef = useRef<string | null>(null);
+  const prevCanRepairRef = useRef<boolean>(false);
+  const prevNearShopSigRef = useRef<string>('');
+  const prevActiveElevSigRef = useRef<string>('');
+  const scratchVpBuildingsRef = useRef<Building[]>([]);
+  const scratchVpVehiclesRef = useRef<Vehicle[]>([]);
+  const scratchVpPedestriansRef = useRef<Pedestrian[]>([]);
+  const scratchVpTreesRef = useRef<Tree[]>([]);
+  const scratchVpPropsRef = useRef<StreetProp[]>([]);
+  const scratchVpSidewalksRef = useRef<SidewalkBlock[]>([]);
 
   // Initialize Game World (Runs ONCE on mount, NEVER resets when toggling day/night)
   useEffect(() => {
@@ -4014,11 +4030,15 @@ export default function App() {
       smoothTimeScaleRef.current = Math.abs(targetScale - smoothScale) < 0.003 ? targetScale : smoothScale;
       const dt = rawDt * smoothTimeScaleRef.current;
 
-      // FPS calculation
+      // FPS calculation (update React state only when rounded FPS actually changes)
       frameCount++;
-      fpsTimer += dt;
-      if (fpsTimer >= 0.5) {
-        setFps(Math.round(frameCount / fpsTimer));
+      fpsTimer += rawDt;
+      if (fpsTimer >= 0.75) {
+        const nextFps = Math.round(frameCount / fpsTimer);
+        if (nextFps !== lastFpsUiRef.current) {
+          lastFpsUiRef.current = nextFps;
+          setFps(nextFps);
+        }
         frameCount = 0;
         fpsTimer = 0;
       }
@@ -4062,8 +4082,21 @@ export default function App() {
             applyTrafficDefaultForMode(ws.gameMode);
           }
         }
-        onlineSyncTimerRef.current += dt;
-        if (onlineSyncTimerRef.current >= 0.04) {
+        onlineSyncTimerRef.current += rawDt;
+        const localVehForSync =
+          player.isInVehicle && player.currentVehicleId
+            ? world.vehicles.find((v) => v.id === player.currentVehicleId)
+            : null;
+        const isLocalActiveForSync = localVehForSync
+          ? Math.abs(localVehForSync.speed) > 1.5 ||
+            Math.abs(localVehForSync.vx || 0) > 1.5 ||
+            Math.abs(localVehForSync.vy || 0) > 1.5 ||
+            Math.abs(localVehForSync.angularVelocity || 0) > 0.05
+          : Math.abs(player.vx || 0) > 1.0 ||
+            Math.abs(player.vy || 0) > 1.0 ||
+            Boolean(player.actionAnim);
+        const onlineSyncInterval = isLocalActiveForSync ? 0.066 : 0.2;
+        if (onlineSyncTimerRef.current >= onlineSyncInterval) {
           onlineSyncTimerRef.current = 0;
           onlineManager.broadcastLocalState(player, world);
         }
@@ -4283,23 +4316,33 @@ export default function App() {
               const canGoUpOrDown = inElevator || inStairs;
 
               if (canGoUpOrDown) {
-                setActiveElevatorMenu(prev => {
-                  if (!prev || prev.bldId !== bld.id || prev.currentFloor !== currentFloor || prev.type !== (inElevator ? 'elevator': 'stairs')) {
-                    return {
-                      bldId: bld.id,
-                      bldName: bld.nameRu || (bld.type || 'BUILDING').toUpperCase().replace('_', ''),
-                      currentFloor: currentFloor,
-                      maxFloors: maxFloors,
-                      type: inElevator ? 'elevator': 'stairs'};
-                  }
-                  return prev;
-                });
+                const elevType = inElevator ? 'elevator' : 'stairs';
+                const elevSig = `${bld.id}_${currentFloor}_${elevType}`;
+                if (prevActiveElevSigRef.current !== elevSig) {
+                  prevActiveElevSigRef.current = elevSig;
+                  setActiveElevatorMenu({
+                    bldId: bld.id,
+                    bldName: bld.nameRu || (bld.type || 'BUILDING').toUpperCase().replace('_', ''),
+                    currentFloor: currentFloor,
+                    maxFloors: maxFloors,
+                    type: elevType
+                  });
+                }
               } else if (!nearElevator && !nearStairs) {
-                setActiveElevatorMenu(prev => (prev === null ? prev : null));
+                if (prevActiveElevSigRef.current !== '') {
+                  prevActiveElevSigRef.current = '';
+                  setActiveElevatorMenu(null);
+                }
               }
 
-              setCanExitBuilding(prev => (prev === inExit ? prev : inExit));
-              setCanEnterBuilding(prev => (prev === null ? prev : null));
+              if (prevCanExitBldRef.current !== inExit) {
+                prevCanExitBldRef.current = inExit;
+                setCanExitBuilding(inExit);
+              }
+              if (prevCanEnterBldIdRef.current !== null) {
+                prevCanEnterBldIdRef.current = null;
+                setCanEnterBuilding(null);
+              }
 
               // Check if player is inside a physical shop building or commercial room
               let currentRoomName = '';
@@ -4425,26 +4468,48 @@ export default function App() {
               }
 
               nearShopRef.current = shopFound;
-              setNearShop(prev => {
-                if (!prev && !shopFound) return prev;
-                if (prev && shopFound && prev.id === shopFound.id && prev.nameRu === shopFound.nameRu && prev.type === shopFound.type) {
-                  return prev;
-                }
-                return shopFound;
-              });
+              const nextShopSig = shopFound ? `${shopFound.id}|${shopFound.nameRu}|${shopFound.type}` : '';
+              if (prevNearShopSigRef.current !== nextShopSig) {
+                prevNearShopSigRef.current = nextShopSig;
+                setNearShop(shopFound);
+              }
               const canRepair = shopFound?.type === 'auto_shop';
-              setCanRepairVehicle(prev => (prev === canRepair ? prev : canRepair));
+              if (prevCanRepairRef.current !== canRepair) {
+                prevCanRepairRef.current = canRepair;
+                setCanRepairVehicle(canRepair);
+              }
             } else {
-              setActiveElevatorMenu(prev => (prev === null ? prev : null));
-              setCanExitBuilding(prev => (prev === false ? prev : false));
-              setCanEnterBuilding(prev => (prev === null ? prev : null));
+              if (prevActiveElevSigRef.current !== '') {
+                prevActiveElevSigRef.current = '';
+                setActiveElevatorMenu(null);
+              }
+              if (prevCanExitBldRef.current !== false) {
+                prevCanExitBldRef.current = false;
+                setCanExitBuilding(false);
+              }
+              if (prevCanEnterBldIdRef.current !== null) {
+                prevCanEnterBldIdRef.current = null;
+                setCanEnterBuilding(null);
+              }
               nearShopRef.current = null;
-              setNearShop(prev => (prev === null ? prev : null));
-              setCanRepairVehicle(prev => (prev === false ? prev : false));
+              if (prevNearShopSigRef.current !== '') {
+                prevNearShopSigRef.current = '';
+                setNearShop(null);
+              }
+              if (prevCanRepairRef.current !== false) {
+                prevCanRepairRef.current = false;
+                setCanRepairVehicle(false);
+              }
             }
           } else {
-            setActiveElevatorMenu(prev => (prev === null ? prev : null));
-            setCanExitBuilding(prev => (prev === false ? prev : false));
+            if (prevActiveElevSigRef.current !== '') {
+              prevActiveElevSigRef.current = '';
+              setActiveElevatorMenu(null);
+            }
+            if (prevCanExitBldRef.current !== false) {
+              prevCanExitBldRef.current = false;
+              setCanExitBuilding(false);
+            }
 
             // Check if player is near any building entrance outside (checking all entrances)
             let nearEntrance = false;
@@ -4463,22 +4528,37 @@ export default function App() {
               if (nearEntrance) break;
             }
 
-            if (nearEntrance && bldNear) {
-              setCanEnterBuilding(prev => (prev?.id === bldNear!.id ? prev : bldNear));
-            } else {
-              setCanEnterBuilding(prev => (prev === null ? prev : null));
+            const nextEnterId = nearEntrance && bldNear ? bldNear.id : null;
+            if (prevCanEnterBldIdRef.current !== nextEnterId) {
+              prevCanEnterBldIdRef.current = nextEnterId;
+              setCanEnterBuilding(nearEntrance && bldNear ? bldNear : null);
             }
 
             // Outside on roads/streets: no shop interaction prompt
             nearShopRef.current = null;
-            setNearShop(prev => (prev === null ? prev : null));
+            if (prevNearShopSigRef.current !== '') {
+              prevNearShopSigRef.current = '';
+              setNearShop(null);
+            }
             const inVeh = player.isInVehicle;
-            setCanRepairVehicle(prev => (prev === inVeh ? prev : inVeh));
+            if (prevCanRepairRef.current !== inVeh) {
+              prevCanRepairRef.current = inVeh;
+              setCanRepairVehicle(inVeh);
+            }
           }
         } else {
-          setActiveElevatorMenu(prev => (prev === null ? prev : null));
-          setCanExitBuilding(prev => (prev === false ? prev : false));
-          setCanEnterBuilding(prev => (prev === null ? prev : null));
+          if (prevActiveElevSigRef.current !== '') {
+            prevActiveElevSigRef.current = '';
+            setActiveElevatorMenu(null);
+          }
+          if (prevCanExitBldRef.current !== false) {
+            prevCanExitBldRef.current = false;
+            setCanExitBuilding(false);
+          }
+          if (prevCanEnterBldIdRef.current !== null) {
+            prevCanEnterBldIdRef.current = null;
+            setCanEnterBuilding(null);
+          }
         }
 
         // Update all vehicles (both AI and player car)
@@ -4692,13 +4772,18 @@ export default function App() {
         // 6. Throttled HUD State Updates (Run at ~12.5 Hz to prevent React re-render lag)
         // Use real frame time so HUD refresh rate does not drop in slow motion
         hudUpdateTimerRef.current += rawDt;
-        if (hudUpdateTimerRef.current >= 0.08) {
+        hudTickAccumRef.current += rawDt;
+        if (hudUpdateTimerRef.current >= 0.1) {
           hudUpdateTimerRef.current = 0;
 
           if (playerCar) {
             const currentSpeedKmh = Math.round(Math.abs(playerCar.speed) * PX_S_TO_SPEED_KMH);
             setSpeedKmh(currentSpeedKmh);
-            setHudTick((t) => (t + 1) % 1000000);
+            const carActive = Boolean(playerCar.engineState?.engineRunning) || Math.abs(playerCar.speed) > 0.5 || Boolean(playerCar.damage?.engineFire);
+            if (carActive && hudTickAccumRef.current >= 0.2) {
+              hudTickAccumRef.current = 0;
+              setHudTick((t) => (t + 1) % 1000000);
+            }
             setIsDrifting(playerCar.isDrifting);
             setPlayerTurnSignal(playerCar.turnSignal);
             if (playerCar.damage) {
@@ -4745,9 +4830,15 @@ export default function App() {
             }
           }
 
-          // Determine current street name
-          const currentStreet = findStreetNameAtPosition(world, player.x, player.y);
-          setStreetName(currentStreet);
+          // Determine current street name only when player actually moved > 24px
+          const sdx = player.x - lastStreetPosRef.current.x;
+          const sdy = player.y - lastStreetPosRef.current.y;
+          if (sdx * sdx + sdy * sdy > 576) {
+            lastStreetPosRef.current.x = player.x;
+            lastStreetPosRef.current.y = player.y;
+            const currentStreet = findStreetNameAtPosition(world, player.x, player.y);
+            setStreetName(currentStreet);
+          }
 
           // Physical Context Interaction System (cone of view + reach + mouse priority)
           const mouseWorld = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
@@ -4790,10 +4881,18 @@ export default function App() {
           setPedCount(world.pedestrians.length);
 
           if (isTimeAutoCyclingRef.current) {
-            setTimeHour(timeHourRef.current);
+            const curMinute = Math.floor(timeHourRef.current * 60);
+            if (curMinute !== lastTimeMinuteRef.current) {
+              lastTimeMinuteRef.current = curMinute;
+              setTimeHour(timeHourRef.current);
+            }
           }
           if (weatherTransitionRef.current < 1.0) {
-            setWeatherTransition(weatherTransitionRef.current);
+            const wtStep = Math.round(weatherTransitionRef.current * 40);
+            if (wtStep !== lastWeatherTransStepRef.current) {
+              lastWeatherTransStepRef.current = wtStep;
+              setWeatherTransition(weatherTransitionRef.current);
+            }
           }
         }
 
@@ -4836,7 +4935,7 @@ export default function App() {
 
         updateSurfaceHydrologyAndSnow(world, dt);
         updateSkidMarksAndParticles(world, player, dt);
-        updateBreakablePropsAndLivingWorld(world, player, dt, vehGrid);
+        updateBreakablePropsAndLivingWorld(world, player, dt, vehGrid, spatialGridPropsRef.current);
 
         // Taxi Fleet Driver System Simulation (Order dispatch, passenger boarding, comfort rating, physical cash)
         TaxiFleetSystem.getInstance().update(
@@ -5175,37 +5274,43 @@ export default function App() {
           camera.x - bldMargin,
           camera.y - bldMargin,
           bldMargin * 2,
-          bldMargin * 2
+          bldMargin * 2,
+          scratchVpBuildingsRef.current
         );
         const vpVehicles = capNearest(vehGrid.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
-          vpMargin * 2
+          vpMargin * 2,
+          scratchVpVehiclesRef.current
         ), performanceConfig.maxVisibleVehicles, camera.x, camera.y);
         const vpPedestrians = capNearest(pedGrid.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
-          vpMargin * 2
+          vpMargin * 2,
+          scratchVpPedestriansRef.current
         ), performanceConfig.maxVisiblePedestrians, camera.x, camera.y);
         const vpTrees = capNearest(spatialGridTreesRef.current.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
-          vpMargin * 2
+          vpMargin * 2,
+          scratchVpTreesRef.current
         ), performanceConfig.maxVisibleTrees, camera.x, camera.y);
         const vpProps = capNearest(spatialGridPropsRef.current.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
-          vpMargin * 2
+          vpMargin * 2,
+          scratchVpPropsRef.current
         ), performanceConfig.maxVisibleProps, camera.x, camera.y);
         const vpSidewalks = spatialGridSidewalksRef.current.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
-          vpMargin * 2
+          vpMargin * 2,
+          scratchVpSidewalksRef.current
         );
         const tVpEnd = performance.now();
 

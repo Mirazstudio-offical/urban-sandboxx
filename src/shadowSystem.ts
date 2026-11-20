@@ -2,7 +2,7 @@ import { GameWorld, Building, Vehicle, Pedestrian, Tree, StreetProp, Player, Vec
 import { getVehicleBasePolygon } from './vehicleVisuals';
 import { mapPolyToDeformVerts } from './softbodyPolyMap';
 import { getEffectiveWeatherWeights } from './weatherTransition';
-import { performanceConfig } from './performanceConfig';
+import { performanceConfig, isMobileOrLowEndDevice } from './performanceConfig';
 import { RemotePlayerState } from './onlineSystem';
 import { computeHumanPose, Vec3 } from './humanAnimationSystem';
 
@@ -2466,11 +2466,30 @@ function buildSunlitCrownClipPolygon(
  * - Pines cast serrated whorled coniferous cone shadows with radiating needle-bough tips.
  * - Broadleaf (oak, maple) & birch trees cast multi-lobed scalloped foliage shadows anchored by forked boughs.
  */
-const MAX_TREE_SHADOW_SPRITES = 768;
+const MAX_TREE_SHADOW_SPRITES = isMobileOrLowEndDevice() ? 128 : 256;
 const treeShadowSpriteCache = new Map<
   string,
   { canvas: HTMLCanvasElement; half: number }
 >();
+
+let cachedCloudLobeSprite: HTMLCanvasElement | null = null;
+function getCloudLobeSprite(): HTMLCanvasElement | null {
+  if (cachedCloudLobeSprite) return cachedCloudLobeSprite;
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  const grad = g.createRadialGradient(64, 64, 8, 64, 64, 64);
+  grad.addColorStop(0.0, 'rgba(4, 8, 22, 1.0)');
+  grad.addColorStop(0.55, 'rgba(4, 8, 22, 0.55)');
+  grad.addColorStop(1.0, 'rgba(4, 8, 22, 0.0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  cachedCloudLobeSprite = c;
+  return c;
+}
 
 function renderTreeShadow(
   sCtx: CanvasRenderingContext2D,
@@ -2479,14 +2498,30 @@ function renderTreeShadow(
   season: string = 'summer'
 ) {
   const r = Math.max(8, tree.radius || 16);
+
+  // Ultra-fast analytical tree shadow path on mobile / low-res shadow buffers
+  if (performanceConfig.lowQualityRendering || performanceConfig.shadowResolutionScale <= 0.5) {
+    const canopyH = r * 2.25;
+    const offX = sunState.castX * canopyH;
+    const offY = sunState.castY * canopyH;
+    const cx = tree.x + offX * 0.72;
+    const cy = tree.y + offY * 0.72;
+    const stretch = Math.min(2.1, 1.0 + Math.hypot(sunState.castX, sunState.castY) * 0.45);
+    const shAngle = Math.atan2(sunState.shadowDirY, sunState.shadowDirX);
+    sCtx.beginPath();
+    sCtx.ellipse(cx, cy, r * 0.92 * stretch, r * 0.84, shAngle, 0, Math.PI * 2);
+    sCtx.fill();
+    return;
+  }
+
   const species = classifyTreeSpecies(tree);
   const h = hashCoord(tree.x, tree.y);
 
   if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
-    const qRad = Math.round(r);
-    const qHash = h & 31;
-    const cxKey = Math.round(sunState.castX * 18);
-    const cyKey = Math.round(sunState.castY * 18);
+    const qRad = Math.max(8, Math.round(r / 2) * 2);
+    const qHash = h & 15;
+    const cxKey = Math.round(sunState.castX * 5);
+    const cyKey = Math.round(sunState.castY * 5);
     const cacheKey = `${species}_${qRad}_${qHash}_${season}_${cxKey}_${cyKey}`;
     let cached = treeShadowSpriteCache.get(cacheKey);
     if (!cached) {
@@ -2502,7 +2537,7 @@ function renderTreeShadow(
         }
       }
       const maxShadowReach = Math.ceil(qRad * 2.5 * Math.hypot(sunState.castX, sunState.castY) + qRad * 1.6 + 12);
-      const half = Math.max(48, Math.min(220, maxShadowReach));
+      const half = Math.max(48, Math.min(180, maxShadowReach));
       const dim = half * 2;
       if (!offCanvas) {
         offCanvas = document.createElement('canvas');
@@ -3147,18 +3182,8 @@ export function renderUnifiedWorldShadows(
           extrudeRectShadow(sCtx, fx, fy, fw, fh, bldH * 0.15, bldH * 0.92, sunState);
         }
       }
-      sCtx.restore();
-
-      // 2. Rooftop Structures (parapets, elevator penthouses, HVAC, skylights, chimneys, smokestacks)
-      // Drawn AFTER restoring the roof clip so they cast crisp 3D shadows right across the building's roof!
-      if (drawRooftops) {
-        renderBuildingRooftopShadows(sCtx, bld, sunState);
-      }
-
-      // 3. Soft Penumbra Outline along the projected building shadow boundary
+      // 3. Soft Penumbra Outline along the projected building shadow boundary (reuses active exterior clip!)
       if (softness > 0 && sunState.penumbraFactor > 0.05) {
-        sCtx.save();
-        clipOutsideRect(sCtx, bld.x, bld.y, bld.width, bld.height, bOff.dx, bOff.dy);
         sCtx.strokeStyle = penumbraStrokeColor;
         sCtx.lineWidth = Math.max(1.0, 3.2 * sunState.penumbraFactor);
         sCtx.strokeRect(bld.x + bOff.dx, bld.y + bOff.dy, bld.width, bld.height);
@@ -3167,9 +3192,17 @@ export function renderUnifiedWorldShadows(
           sCtx.lineWidth = Math.max(2.0, 6.8 * sunState.penumbraFactor);
           sCtx.strokeRect(bld.x + bOff.dx, bld.y + bOff.dy, bld.width, bld.height);
         }
-        sCtx.restore();
+      }
+      sCtx.restore();
+      if (softness > 0 && sunState.penumbraFactor > 0.05) {
         sCtx.fillStyle = shadowColor;
         sCtx.strokeStyle = shadowColor;
+      }
+
+      // 2. Rooftop Structures (parapets, elevator penthouses, HVAC, skylights, chimneys, smokestacks)
+      // Drawn AFTER restoring the roof clip so they cast crisp 3D shadows right across the building's roof!
+      if (drawRooftops) {
+        renderBuildingRooftopShadows(sCtx, bld, sunState);
       }
     }
   }
@@ -3234,6 +3267,8 @@ export function renderUnifiedWorldShadows(
       const MAP_H = 32000;
       const cloudOff = getShadowOffset(180, sunState);
 
+      const cloudSprite = getCloudLobeSprite();
+      const prevAlpha = sCtx.globalAlpha;
       for (const cluster of cloudShadows) {
         const maxRadius = cluster.baseScale * scaleMult * 1.25;
         const clusterX =
@@ -3259,18 +3294,24 @@ export function renderUnifiedWorldShadows(
             continue;
           }
           const lobeAlpha = Math.min(0.45, baseCloudAlpha * (lobe.opacityMultiplier || 1));
-          const peakA = lobeAlpha.toFixed(3);
-          const midA = (lobeAlpha * 0.55).toFixed(3);
-          const cGrad = sCtx.createRadialGradient(cx, cy, r * 0.12, cx, cy, r);
-          cGrad.addColorStop(0.0, `rgba(4, 8, 22, ${peakA})`);
-          cGrad.addColorStop(0.55, `rgba(4, 8, 22, ${midA})`);
-          cGrad.addColorStop(1.0, 'rgba(4, 8, 22, 0.0)');
-          sCtx.fillStyle = cGrad;
-          sCtx.beginPath();
-          sCtx.arc(cx, cy, r, 0, Math.PI * 2);
-          sCtx.fill();
+          if (cloudSprite) {
+            sCtx.globalAlpha = prevAlpha * lobeAlpha;
+            sCtx.drawImage(cloudSprite, cx - r, cy - r, r * 2, r * 2);
+          } else {
+            const peakA = lobeAlpha.toFixed(3);
+            const midA = (lobeAlpha * 0.55).toFixed(3);
+            const cGrad = sCtx.createRadialGradient(cx, cy, r * 0.12, cx, cy, r);
+            cGrad.addColorStop(0.0, `rgba(4, 8, 22, ${peakA})`);
+            cGrad.addColorStop(0.55, `rgba(4, 8, 22, ${midA})`);
+            cGrad.addColorStop(1.0, 'rgba(4, 8, 22, 0.0)');
+            sCtx.fillStyle = cGrad;
+            sCtx.beginPath();
+            sCtx.arc(cx, cy, r, 0, Math.PI * 2);
+            sCtx.fill();
+          }
         }
       }
+      sCtx.globalAlpha = prevAlpha;
       sCtx.fillStyle = shadowColor;
     }
   }

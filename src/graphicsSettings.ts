@@ -141,6 +141,7 @@ export const GFX_GROUPS: GfxGroup[] = [
   {
     title: 'Атмосфера и обратная связь',
     items: [
+      { kind: 'tg', key: 'enableDynamicGrass', label: 'Живая трава и цветы на ветру (высокая нагрузка)' },
       { kind: 'tg', key: 'enableRainDroplets', label: 'Капли дождя, круги на воде и снежинки' },
       { kind: 'tg', key: 'enableBirds', label: 'Птицы в небе и на земле' },
       { kind: 'tg', key: 'enableScreenShake', label: 'Инерционная тряска камеры при ударах' },

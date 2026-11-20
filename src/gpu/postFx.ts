@@ -16,6 +16,7 @@
  */
 
 import { getCurrentSunShadowState } from '../shadowSystem';
+import { isMobileOrLowEndDevice } from '../performanceConfig';
 
 export interface PostFxSettings {
   bloom: number;           // 0..100
@@ -1799,6 +1800,12 @@ export class GpuPostFx {
   private matTex: WebGLTexture | null = null;
   private srcW = 0;
   private srcH = 0;
+  private lightW = 0;
+  private lightH = 0;
+  private lightColW = 0;
+  private lightColH = 0;
+  private matW = 0;
+  private matH = 0;
   private scene: Target | null = null;
   private bloomChain: Target[] = [];
   private blurA: Target | null = null;
@@ -1856,8 +1863,8 @@ export class GpuPostFx {
       try { this.init(); } catch { this.available = false; }
     });
 
-    this.hdrFormat = !!gl.getExtension('EXT_color_buffer_float');
-    gl.getExtension('OES_texture_float_linear');
+    this.hdrFormat = !isMobileOrLowEndDevice() && !!gl.getExtension('EXT_color_buffer_float');
+    if (this.hdrFormat) gl.getExtension('OES_texture_float_linear');
 
     this.pDown = this.makeProgram(VS, FS_DOWN, ['uTex', 'uTexel', 'uThreshold', 'uKnee']);
     this.pUp = this.makeProgram(VS, FS_UP, ['uTex', 'uTexel', 'uScale']);
@@ -1898,6 +1905,12 @@ export class GpuPostFx {
     this.blurB = null;
     this.srcW = 0;
     this.srcH = 0;
+    this.lightW = 1;
+    this.lightH = 1;
+    this.lightColW = 1;
+    this.lightColH = 1;
+    this.matW = 1;
+    this.matH = 1;
     this.outW = 0;
     this.outH = 0;
     this.available = true;
@@ -1984,7 +1997,7 @@ export class GpuPostFx {
     this.scene = this.makeTarget(outW, outH, false);
     let w = outW;
     let h = outH;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       w = Math.max(2, w >> 1);
       h = Math.max(2, h >> 1);
       this.bloomChain.push(this.makeTarget(w, h, true));
@@ -2081,7 +2094,7 @@ export class GpuPostFx {
     this.easeGrade(this.computeGrade(frame.hour, frame.weather, sunrise, sunset), frame.dt);
     const g = this.grade;
 
-    // --- upload the 2D frame ---------------------------------------------------------------------------------
+    // --- upload the 2D frame (use texSubImage2D when dimensions are unchanged to avoid GPU reallocation) ---
     gl.disable(gl.BLEND);
     gl.bindVertexArray(this.vao);
     this.bindTex(0, this.srcTex);
@@ -2089,33 +2102,50 @@ export class GpuPostFx {
     if (sw !== this.srcW || sh !== this.srcH) {
       this.srcW = sw;
       this.srcH = sh;
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
+    } else {
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
     }
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, this.source);
 
     // --- lightmap (darkness layer & accumulated RGB light color) -----------------------------------------------
     const lm = frame.lightmap && frame.lightmap.width > 1 && frame.lightmap.height > 1 ? frame.lightmap : null;
     if (lm && this.lightTex) {
       this.bindTex(3, this.lightTex);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, lm);
+      if (lm.width !== this.lightW || lm.height !== this.lightH) {
+        this.lightW = lm.width;
+        this.lightH = lm.height;
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, lm);
+      } else {
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, lm);
+      }
     }
     const lcm = frame.lightColor && frame.lightColor.width > 1 && frame.lightColor.height > 1 ? frame.lightColor : null;
     if (lcm && this.lightColTex) {
       this.bindTex(6, this.lightColTex);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, lcm);
+      if (lcm.width !== this.lightColW || lcm.height !== this.lightColH) {
+        this.lightColW = lcm.width;
+        this.lightColH = lcm.height;
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, lcm);
+      } else {
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, lcm);
+      }
     }
 
     // --- material G-buffer (material IDs + fluid thickness) --------------------------------------------------
     const mm = frame.materialMap && frame.materialMap.width > 1 && frame.materialMap.height > 1 ? frame.materialMap : null;
     if (mm && this.matTex) {
       this.bindTex(5, this.matTex);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, mm);
+      if (mm.width !== this.matW || mm.height !== this.matH) {
+        this.matW = mm.width;
+        this.matH = mm.height;
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, mm);
+      } else {
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, mm);
+      }
     }
 
     // --- bloom chain -----------------------------------------------------------------------------------------
-    const bloomOn = s.bloom > 0 || s.gi > 0 || s.wet > 0 || (s.waterShader ?? 85) > 0;
+    const bloomOn = s.bloom > 0 || s.gi > 0 || s.wet > 0 || (s.waterShader ?? 0) > 0;
     const bloomRadMult = Math.max(0.5, Math.min(1.6, (s.bloomRadius ?? 100) / 100));
     if (bloomOn) {
       gl.useProgram(this.pDown.prog);

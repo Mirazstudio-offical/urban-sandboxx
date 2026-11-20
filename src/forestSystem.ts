@@ -11,6 +11,7 @@ import { getCurrentSunShadowState } from './shadowSystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
 import { getBiomeSampleAt } from './biomeSystem';
 import { sound } from './audio';
+import { performanceConfig } from './performanceConfig';
 
 export interface TreeShakeState {
   treeX: number;
@@ -362,6 +363,26 @@ export class ForestSystem {
    * - Swaying golden-emerald dappled sunlight patches ("солнечные зайчики") under tree crowns
    * - Interactive forest floor fauna (Red Squirrels, Woodland Hares, Roe Deer)
    */
+  private static mistSpriteCanvas: HTMLCanvasElement | null = null;
+
+  private static getMistSpriteCanvas(): HTMLCanvasElement | null {
+    if (this.mistSpriteCanvas) return this.mistSpriteCanvas;
+    if (typeof document === 'undefined') return null;
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const g = c.getContext('2d');
+    if (!g) return null;
+    const grad = g.createRadialGradient(64, 64, 6, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(226, 232, 240, 0.55)');
+    grad.addColorStop(0.55, 'rgba(203, 213, 225, 0.26)');
+    grad.addColorStop(1, 'rgba(203, 213, 225, 0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    this.mistSpriteCanvas = c;
+    return c;
+  }
+
   public static renderUnderCanopyAtmosphereAndFauna(
     ctx: CanvasRenderingContext2D,
     world: GameWorld,
@@ -376,6 +397,7 @@ export class ForestSystem {
     nightAlpha: number,
     cameraZoom: number
   ) {
+    if (performanceConfig.lowQualityRendering) return;
     if (vpTrees.length < 3) return;
 
     const nowSec = typeof performance !== 'undefined' ? performance.now() * 0.001 : 0;
@@ -389,6 +411,7 @@ export class ForestSystem {
     const sunState = getCurrentSunShadowState();
 
     // Check if vehicles brush closely past any visible trees to trigger physical branch shake
+    if (visibleVehicles.length > 0) {
     for (let vIdx = 0; vIdx < visibleVehicles.length; vIdx++) {
       const v = visibleVehicles[vIdx];
       const vSpeed = Math.hypot(v.vx || 0, v.vy || 0) || Math.abs(v.speed || 0);
@@ -414,6 +437,7 @@ export class ForestSystem {
         }
       }
     }
+    }
 
     ctx.save();
 
@@ -427,7 +451,7 @@ export class ForestSystem {
     if (sunStrength > 0.08 && cameraZoom > 0.35) {
       const dapplePath = new Path2D();
       const warmDapplePath = new Path2D();
-      const maxDappleTrees = Math.min(vpTrees.length, 95);
+      const maxDappleTrees = Math.min(vpTrees.length, 45);
 
       for (let i = 0; i < maxDappleTrees; i++) {
         const t = vpTrees[i];
@@ -483,20 +507,21 @@ export class ForestSystem {
     );
 
     if (mistIntensity > 0.03 && vpTrees.length >= 6) {
-      const mistStep = Math.min(22, vpTrees.length);
-      for (let i = 0; i < mistStep; i++) {
-        const t = vpTrees[(i * 3) % vpTrees.length];
-        const driftX = t.x + Math.sin(nowSec * 0.22 + i * 1.7) * 28;
-        const driftY = t.y + Math.cos(nowSec * 0.18 + i * 2.3) * 18;
-        const mistR = 54 + (i % 4) * 18;
-        const grad = ctx.createRadialGradient(driftX, driftY, 6, driftX, driftY, mistR);
-        grad.addColorStop(0, `rgba(226, 232, 240, ${(mistIntensity * 0.55).toFixed(3)})`);
-        grad.addColorStop(0.55, `rgba(203, 213, 225, ${(mistIntensity * 0.26).toFixed(3)})`);
-        grad.addColorStop(1, 'rgba(203, 213, 225, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.ellipse(driftX, driftY, mistR * 1.35, mistR * 0.78, 0.25, 0, Math.PI * 2);
-        ctx.fill();
+      const mistSprite = this.getMistSpriteCanvas();
+      if (mistSprite) {
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = prevAlpha * mistIntensity;
+        const mistStep = Math.min(18, vpTrees.length);
+        for (let i = 0; i < mistStep; i++) {
+          const t = vpTrees[(i * 3) % vpTrees.length];
+          const driftX = t.x + Math.sin(nowSec * 0.22 + i * 1.7) * 28;
+          const driftY = t.y + Math.cos(nowSec * 0.18 + i * 2.3) * 18;
+          const mistR = 54 + (i % 4) * 18;
+          const rx = mistR * 1.35;
+          const ry = mistR * 0.78;
+          ctx.drawImage(mistSprite, driftX - rx, driftY - ry, rx * 2, ry * 2);
+        }
+        ctx.globalAlpha = prevAlpha;
       }
     }
 
@@ -1023,6 +1048,7 @@ export class ForestSystem {
     timeHour: number,
     nightAlpha: number
   ) {
+    if (performanceConfig.lowQualityRendering) return;
     if (vpTrees.length === 0 && this.driftParticles.length === 0 && this.canopyFlock.length === 0) {
       return;
     }

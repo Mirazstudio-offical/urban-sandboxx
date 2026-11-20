@@ -927,13 +927,23 @@ export class IntersectionReservationManager {
   public waitingMap: Map<string, WaitingQueueEntry[]> = new Map();
   public electedPriority: Map<string, { vehicleId: string; expiry: number; reason: string }> = new Map();
   public activeDeadlocks: Map<string, DeadlockCycle> = new Map();
+  private cachedVehicleById: Map<string, Vehicle> = new Map();
+  private cachedInterById: Map<string, Intersection> = new Map();
 
   public update(dt: number, world: GameWorld) {
     const now = performance.now() / 1000;
-    const vehicleById = new Map<string, Vehicle>();
+    const vehicleById = this.cachedVehicleById;
+    vehicleById.clear();
     for (let i = 0, len = world.vehicles.length; i < len; i++) {
       const v = world.vehicles[i];
       vehicleById.set(v.id, v);
+    }
+    if (this.cachedInterById.size !== world.intersections.length) {
+      this.cachedInterById.clear();
+      for (let i = 0, len = world.intersections.length; i < len; i++) {
+        const inter = world.intersections[i];
+        this.cachedInterById.set(inter.id, inter);
+      }
     }
 
     // 1. Clean up expired / stale active reservations
@@ -1238,7 +1248,7 @@ export class IntersectionReservationManager {
 
     for (const otherRes of activeRes) {
       if (otherRes.vehicleId === car.id) continue;
-      const otherCar = world.vehicles.find((v) => v.id === otherRes.vehicleId);
+      const otherCar = this.cachedVehicleById.get(otherRes.vehicleId);
       const isOtherHeavy = otherCar ? (otherCar.length > 52 || (otherCar.wheelBase || 28) > 34) : false;
       const customMargin = (isCarHeavy || isOtherHeavy) ? 46 : 30;
 
@@ -1255,7 +1265,7 @@ export class IntersectionReservationManager {
     }
 
     // 3b. Physical Junction Occupancy, Player Trajectory & Unprotected Left-Turn Oncoming Check
-    const inter = world.intersections.find((i) => i.id === intersectionId);
+    const inter = this.cachedInterById.get(intersectionId) || world.intersections.find((i) => i.id === intersectionId);
     if (inter && conn.pathWaypoints && conn.pathWaypoints.length >= 2) {
       const halfW = inter.width * 0.5 + 14;
       const halfH = inter.height * 0.5 + 14;
@@ -1263,6 +1273,7 @@ export class IntersectionReservationManager {
         conn.pathWaypoints[1].y - conn.pathWaypoints[0].y,
         conn.pathWaypoints[1].x - conn.pathWaypoints[0].x
       );
+      const baseMaxScan = Math.max(inter.width, inter.height) * 0.5 + 280;
 
       for (const other of world.vehicles) {
         if (other.id === car.id || other.isParked) continue;
@@ -1270,8 +1281,9 @@ export class IntersectionReservationManager {
 
         const dxInter = other.x - inter.x;
         const dyInter = other.y - inter.y;
+        const maxScan = baseMaxScan + Math.abs(other.speed) * 1.4;
+        if (Math.abs(dxInter) > maxScan || Math.abs(dyInter) > maxScan) continue;
         const distToInter = Math.hypot(dxInter, dyInter);
-        const maxScan = Math.max(inter.width, inter.height) * 0.5 + 280 + Math.abs(other.speed) * 1.4;
         if (distToInter > maxScan) continue;
 
         const isPhysicallyInsideBox =
@@ -1351,7 +1363,7 @@ export class IntersectionReservationManager {
     // 4. Check Elected Priority / Deadlock Wave Leader
     const elected = this.electedPriority.get(intersectionId);
     if (elected && now < elected.expiry && elected.vehicleId !== car.id) {
-      const electedCar = world.vehicles.find((v) => v.id === elected.vehicleId);
+      const electedCar = this.cachedVehicleById.get(elected.vehicleId);
       if (electedCar && electedCar.aiState !== 'stopping_light') {
         const waitingList = this.waitingMap.get(intersectionId) || [];
         const electedEntry = waitingList.find((w) => w.vehicleId === elected.vehicleId);
@@ -2699,17 +2711,32 @@ export function isBypassCorridorClear(
   const normX = -carSin;
   const normY = carCos;
 
+  // Pre-filter buildings within probe envelope once instead of iterating all buildings 4 times
+  const nearBuildings = [];
+  if (world && world.buildings) {
+    const envR = 120 + Math.abs(lateralOffset);
+    const minBx = car.x - envR;
+    const maxBx = car.x + envR;
+    const minBy = car.y - envR;
+    const maxBy = car.y + envR;
+    for (let bi = 0; bi < world.buildings.length; bi++) {
+      const bld = world.buildings[bi];
+      if (bld.x + bld.width + 8 >= minBx && bld.x - 8 <= maxBx && bld.y + bld.height + 8 >= minBy && bld.y - 8 <= maxBy) {
+        nearBuildings.push(bld);
+      }
+    }
+  }
+
   const probeDistances = [12, 36, 68, 105];
   for (const forwardDist of probeDistances) {
     const px = car.x + carCos * forwardDist + normX * lateralOffset;
     const py = car.y + carSin * forwardDist + normY * lateralOffset;
 
-    if (world && world.buildings) {
-      for (const bld of world.buildings) {
-        if (px >= bld.x - 8 && px <= bld.x + bld.width + 8 &&
-            py >= bld.y - 8 && py <= bld.y + bld.height + 8) {
-          return false;
-        }
+    for (let bi = 0; bi < nearBuildings.length; bi++) {
+      const bld = nearBuildings[bi];
+      if (px >= bld.x - 8 && px <= bld.x + bld.width + 8 &&
+          py >= bld.y - 8 && py <= bld.y + bld.height + 8) {
+        return false;
       }
     }
 
@@ -3053,14 +3080,28 @@ export function updateAITraffic(
   const playerCar = world.vehicles.find((v) => v.isPlayerControlled);
   const targetPos: Vector2D = playerPos || (playerCar ? { x: playerCar.x, y: playerCar.y } : { x: 4400, y: 2800 });
 
-  // Filter active AI driving vehicles (excluding parked cars, player car, remote players, player-owned/spawned cars, and special evacuation ambulance)
-  const activeAICars = world.vehicles.filter((v) => !v.isPlayerControlled && !(v as any).isRemoteControlled && !v.isParked && v.id !== 'evac_ambulance_special' && !v.keyId && v.ownerId !== 'player' && !(v as any).playerOwned && !(v as any).isSpawnedByPlayer);
-  const totalActiveCount = activeAICars.length;
-
-  // Maintain natural vehicle density around the player dynamically (balanced ~8-12 nearby, ~28 max active)
-  const nearbyActiveCount = activeAICars.filter(
-    (v) => Math.hypot(v.x - targetPos.x, v.y - targetPos.y) < 1400
-  ).length;
+  // Count active AI driving vehicles in a single zero-allocation loop
+  let totalActiveCount = 0;
+  let nearbyActiveCount = 0;
+  const nearDistSq = 1400 * 1400;
+  for (let vi = 0; vi < world.vehicles.length; vi++) {
+    const v = world.vehicles[vi];
+    if (
+      !v.isPlayerControlled &&
+      !(v as any).isRemoteControlled &&
+      !v.isParked &&
+      v.id !== 'evac_ambulance_special' &&
+      !v.keyId &&
+      v.ownerId !== 'player' &&
+      !(v as any).playerOwned &&
+      !(v as any).isSpawnedByPlayer
+    ) {
+      totalActiveCount++;
+      const dx = v.x - targetPos.x;
+      const dy = v.y - targetPos.y;
+      if (dx * dx + dy * dy < nearDistSq) nearbyActiveCount++;
+    }
+  }
 
   if (nearbyActiveCount < performanceConfig.nearbyVehiclesTarget && totalActiveCount < performanceConfig.maxVehicles) {
     const toSpawn = Math.min(1, performanceConfig.nearbyVehiclesTarget - nearbyActiveCount);

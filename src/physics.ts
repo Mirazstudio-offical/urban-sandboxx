@@ -12798,7 +12798,7 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
   }
   smList.length = smWrite;
 
-  const maxMarks = 1500;
+  const maxMarks = Math.max(100, performanceConfig.skidMarksLimit || 1500);
   if (smList.length > maxMarks) {
     const dropCount = smList.length - maxMarks;
     for (let i = 0; i < maxMarks; i++) {
@@ -13843,8 +13843,16 @@ const PROP_CELL_SIZE = 120;
 const PROP_STAMP_MASK = 8191;
 const activeVehiclePropCellStamp = new Int32Array(PROP_STAMP_MASK + 1);
 let currentPropCellStampId = 1;
+const activeDynamicProps = new Set<StreetProp>();
+const propCandidateScratch: StreetProp[] = [];
+let propCandidateVisitId = 1;
+let lastDynamicPropsWorldRef: GameWorld | null = null;
 
-export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number, vehGrid?: any) {
+export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number, vehGrid?: any, propsGrid?: any) {
+  if (lastDynamicPropsWorldRef !== world) {
+    activeDynamicProps.clear();
+    lastDynamicPropsWorldRef = world;
+  }
   const weatherWeights = getEffectiveWeatherWeights(world);
   const isRaining = weatherWeights.rain > 0.15;
   const calPud = world.calendar || createInitialCalendarState(2026, 10, 8, typeof world.timeHour === 'number' ? world.timeHour : 12);
@@ -13903,7 +13911,13 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           // Lower elevation + flatter basin = better puddle pooling spot
           let score = slopeInfo.elevation + (slopeInfo.gradient || 0) * 18;
           // Bonus if near a street drain grate / low kerb
-          if (world.props) {
+          if (propsGrid && typeof propsGrid.queryCallback === 'function') {
+            propsGrid.queryCallback(cx - 85, cy - 85, 170, 170, (pr: StreetProp) => {
+              if (pr.type === 'drain_grate' && Math.hypot(pr.x - cx, pr.y - cy) < 85) {
+                score -= 4.5;
+              }
+            });
+          } else if (world.props) {
             for (let pi = 0; pi < world.props.length; pi++) {
               const pr = world.props[pi];
               if (pr.type === 'drain_grate') {
@@ -13944,38 +13958,87 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     }
   }
 
-  // Stamp 3x3 cells (120px grid) around all active/moving vehicles so stationary props far from vehicles
-  // can skip getPropHitbox() and vehGrid.queryRadius() in O(1)
+  // Stamp 3x3 cells (120px grid) around all active/moving vehicles and collect ONLY nearby + dynamic props
   currentPropCellStampId = (currentPropCellStampId + 1) & 0x3fffffff;
   if (currentPropCellStampId === 0) {
     activeVehiclePropCellStamp.fill(0);
     currentPropCellStampId = 1;
   }
   const stamp = currentPropCellStampId;
-  for (let vi = 0; vi < world.vehicles.length; vi++) {
-    const v = world.vehicles[vi];
-    if (
-      v.isParked &&
-      !v.isPlayerControlled &&
-      Math.abs(v.speed) < 0.2 &&
-      Math.abs(v.vx || 0) < 0.2 &&
-      Math.abs(v.vy || 0) < 0.2
-    ) {
-      continue;
+  const usePropsGrid = Boolean(propsGrid && typeof propsGrid.queryCallback === 'function');
+  let propsToProcess: StreetProp[] = world.props;
+
+  if (usePropsGrid) {
+    propCandidateScratch.length = 0;
+    propCandidateVisitId = (propCandidateVisitId + 1) & 0x3fffffff;
+    if (propCandidateVisitId === 0) propCandidateVisitId = 1;
+    const visitId = propCandidateVisitId;
+
+    activeDynamicProps.forEach((p) => {
+      (p as any)._propCandidateVisitId = visitId;
+      propCandidateScratch.push(p);
+    });
+
+    const addPropCandidate = (p: StreetProp) => {
+      if ((p as any)._propCandidateVisitId !== visitId) {
+        (p as any)._propCandidateVisitId = visitId;
+        propCandidateScratch.push(p);
+      }
+    };
+
+    // Always include props in immediate vicinity of the player
+    propsGrid.queryCallback(player.x - 160, player.y - 160, 320, 320, addPropCandidate);
+
+    for (let vi = 0; vi < world.vehicles.length; vi++) {
+      const v = world.vehicles[vi];
+      if (
+        v.isParked &&
+        !v.isPlayerControlled &&
+        Math.abs(v.speed) < 0.2 &&
+        Math.abs(v.vx || 0) < 0.2 &&
+        Math.abs(v.vy || 0) < 0.2
+      ) {
+        continue;
+      }
+      const vcx = Math.floor(v.x / PROP_CELL_SIZE);
+      const vcy = Math.floor(v.y / PROP_CELL_SIZE);
+      for (let dx = -1; dx <= 1; dx++) {
+        const hx = Math.imul(vcx + dx, 73856093);
+        for (let dy = -1; dy <= 1; dy++) {
+          const idx = (hx ^ Math.imul(vcy + dy, 19349663)) & PROP_STAMP_MASK;
+          activeVehiclePropCellStamp[idx] = stamp;
+        }
+      }
+      propsGrid.queryCallback(v.x - 130, v.y - 130, 260, 260, addPropCandidate);
     }
-    const vcx = Math.floor(v.x / PROP_CELL_SIZE);
-    const vcy = Math.floor(v.y / PROP_CELL_SIZE);
-    for (let dx = -1; dx <= 1; dx++) {
-      const hx = Math.imul(vcx + dx, 73856093);
-      for (let dy = -1; dy <= 1; dy++) {
-        const idx = (hx ^ Math.imul(vcy + dy, 19349663)) & PROP_STAMP_MASK;
-        activeVehiclePropCellStamp[idx] = stamp;
+    propsToProcess = propCandidateScratch;
+  } else {
+    for (let vi = 0; vi < world.vehicles.length; vi++) {
+      const v = world.vehicles[vi];
+      if (
+        v.isParked &&
+        !v.isPlayerControlled &&
+        Math.abs(v.speed) < 0.2 &&
+        Math.abs(v.vx || 0) < 0.2 &&
+        Math.abs(v.vy || 0) < 0.2
+      ) {
+        continue;
+      }
+      const vcx = Math.floor(v.x / PROP_CELL_SIZE);
+      const vcy = Math.floor(v.y / PROP_CELL_SIZE);
+      for (let dx = -1; dx <= 1; dx++) {
+        const hx = Math.imul(vcx + dx, 73856093);
+        for (let dy = -1; dy <= 1; dy++) {
+          const idx = (hx ^ Math.imul(vcy + dy, 19349663)) & PROP_STAMP_MASK;
+          activeVehiclePropCellStamp[idx] = stamp;
+        }
       }
     }
   }
 
   // 1. UPDATE PROPS, RIGID-BODY SLIDING, STRUCTURAL DEFORMATION & WATER FOUNTAINS
-  for (const prop of world.props) {
+  for (let propLoopIdx = 0; propLoopIdx < propsToProcess.length; propLoopIdx++) {
+    const prop = propsToProcess[propLoopIdx];
     // Capture original foundation coordinates once so foundations never slide with detached/pushed bodies
     if (prop.originX === undefined) prop.originX = prop.x;
     if (prop.originY === undefined) prop.originY = prop.y;
@@ -14632,6 +14695,15 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         }
       }
       break;
+    }
+  }
+
+  if (usePropsGrid) {
+    for (let pIdx = 0; pIdx < propCandidateScratch.length; pIdx++) {
+      const p = propCandidateScratch[pIdx];
+      const isDyn = Boolean(p.breakVX || p.breakVY || p.breakSpin) || (p.type === 'hydrant' && (p.waterFountainTimer ?? 0) > 0);
+      if (isDyn) activeDynamicProps.add(p);
+      else activeDynamicProps.delete(p);
     }
   }
 

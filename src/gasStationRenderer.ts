@@ -2,6 +2,7 @@ import { Camera, FuelType, GameWorld, GasPumpDispenser, Player, Vehicle } from '
 import { FUEL_GRADES, GAS_STATION_CONFIG } from './gasStationSystem';
 import { getVehicleFuelCapPosition } from './vehicleHelpers';
 import { getCurrentSunShadowState } from './shadowSystem';
+import { performanceConfig } from './performanceConfig';
 
 export class GasStationRenderer {
   /**
@@ -1325,10 +1326,12 @@ export class GasStationRenderer {
       ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0.28, roofAlpha).toFixed(3)})`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowColor = '#22c55e';
-      ctx.shadowBlur = 6;
+      if (performanceConfig.enableSoftShadowBlur) {
+        ctx.shadowColor = '#22c55e';
+        ctx.shadowBlur = 6;
+      }
       ctx.fillText('НЕФТЬ • МАГИСТРАЛЬ  24/7', x + w / 2, y + 18);
-      ctx.shadowBlur = 0;
+      if (performanceConfig.enableSoftShadowBlur) ctx.shadowBlur = 0;
     }
 
     // 4. Solid Roof Layers (Fading in with roofAlpha)
@@ -1392,11 +1395,13 @@ export class GasStationRenderer {
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowColor = '#22c55e';
-      ctx.shadowBlur = 10;
+      if (performanceConfig.enableSoftShadowBlur) {
+        ctx.shadowColor = '#22c55e';
+        ctx.shadowBlur = 10;
+      }
       ctx.fillText('НЕФТЬ • МАГИСТРАЛЬ  24/7', x + w / 2, y + 20);
       ctx.fillText('APEX PETROL • DRIVE-THRU', x + w / 2, y + h - 18);
-      ctx.shadowBlur = 0;
+      if (performanceConfig.enableSoftShadowBlur) ctx.shadowBlur = 0;
     }
 
     ctx.restore();
@@ -1619,11 +1624,13 @@ export class GasStationRenderer {
     ctx.fillStyle = `rgba(255, 255, 255, ${0.85 * nightAlpha})`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(34, 197, 94, 0.4)';
-    ctx.shadowBlur = 10;
+    if (performanceConfig.enableSoftShadowBlur) {
+      ctx.shadowColor = 'rgba(34, 197, 94, 0.4)';
+      ctx.shadowBlur = 10;
+    }
     ctx.fillText('НЕФТЬ • МАГИСТРАЛЬ  24/7', canopyX + canopyW / 2, canopyY + 20);
     ctx.fillText('APEX PETROL • DRIVE-THRU', canopyX + canopyW / 2, canopyY + canopyH - 18);
-    ctx.shadowBlur = 0;
+    if (performanceConfig.enableSoftShadowBlur) ctx.shadowBlur = 0;
 
     // 3. Price Totem Digital LED Lens Glow
     const totemX = GAS_STATION_CONFIG.priceTotemX;

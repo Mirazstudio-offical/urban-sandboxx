@@ -3087,8 +3087,6 @@ export class RailwaySignalingSystem {
 
         ctx.save();
         ctx.fillStyle = emberColor;
-        ctx.shadowColor = emberColor;
-        ctx.shadowBlur = 3.0 * Math.max(temp, coldPulse * 0.6);
         ctx.beginPath();
         ctx.arc(lx + 0.3, ly, radius * 0.35, 0, Math.PI * 2);
         ctx.fill();

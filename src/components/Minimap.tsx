@@ -79,7 +79,7 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({
     let cssW = 0, cssH = 0, dpr = 1;
 
     const fit = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, 2) : 1;
       cssW = frame.clientWidth; cssH = frame.clientHeight;
       const tw = Math.max(1, Math.round(cssW * dpr)), th = Math.max(1, Math.round(cssH * dpr));
       if (canvas.width !== tw || canvas.height !== th) {
@@ -91,10 +91,11 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({
     fit();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
     ro?.observe(frame);
+    window.addEventListener('resize', fit);
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
-      if (pausedRef.current) return;
+      if (pausedRef.current || (typeof document !== 'undefined' && document.hidden)) return;
       if (!performanceConfig.enableMinimap) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
       const every = performanceConfig.minimapUpdateMs;
       if (every > 0 && now - last < every) return;
@@ -273,7 +274,7 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({
       if (frameTimeRef) frameTimeRef.current = performance.now() - t0;
     };
     raf = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(raf); ro?.disconnect(); };
+    return () => { cancelAnimationFrame(raf); ro?.disconnect(); window.removeEventListener('resize', fit); };
   }, [collapsed, worldRef, playerRef, cameraRef, frameTimeRef]);
 
   if (collapsed) {

@@ -53,7 +53,7 @@ import {
   renderSaggingBumpers,
   renderTornBodyLining
 } from './softbodyVisuals';
-import { performanceConfig } from './performanceConfig';
+import { performanceConfig, isMobileOrLowEndDevice } from './performanceConfig';
 import { getBuildingLayout, renderBuildingInterior } from './buildingInteriors';
 import { drawItemModel2D } from './itemGraphic';
 import { screenEffectsSystem } from './screenEffects';
@@ -394,6 +394,12 @@ export class GameRenderer {
   private currentNightAlpha: number = 0;
 
   private cappedParticlesScratch: Particle[] = [];
+  private brokenPropsScratch: StreetProp[] = [];
+  private intactPropsScratch: StreetProp[] = [];
+  private groundBirdsScratch: Bird[] = [];
+  private flyingBirdsScratch: Bird[] = [];
+  private static readonly LIGHTMAP_SCALE = 0.5;
+  private static readonly MATERIAL_SCALE = 0.5;
 
   /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit` with zero heap allocation. */
   private capParticles(particles: GameWorld['particles']): GameWorld['particles'] {
@@ -992,7 +998,10 @@ export class GameRenderer {
     chunkCtx.restore();
   }
 
-  private static readonly MAX_CHUNKS = 128;
+  private static getMaxChunks(): number {
+    return isMobileOrLowEndDevice() ? 28 : 64;
+  }
+  private static readonly MAX_MATERIAL_CHUNKS = 24;
   private getChunkCanvas(cx: number, cy: number, world: GameWorld): HTMLCanvasElement {
     const ww = getEffectiveWeatherWeights(world);
     const snowTier = Math.round(Math.max(0, Math.min(1, ww.snowCover)) * 5);
@@ -1015,7 +1024,7 @@ export class GameRenderer {
     const key = `${cx},${cy}_${seasonKey}`;
     let canvas = this.chunkCache.get(key);
     if (!canvas) {
-      if (this.chunkCache.size >= GameRenderer.MAX_CHUNKS) {
+      if (this.chunkCache.size >= GameRenderer.getMaxChunks()) {
         const firstKey = this.chunkCache.keys().next().value;
         if (firstKey !== undefined) {
           const recycledCanvas = this.chunkCache.get(firstKey);
@@ -1052,8 +1061,9 @@ export class GameRenderer {
     }
     const key = `${cx},${cy}`;
     let canvas = this.materialChunkCache.get(key);
+    const matChunkPx = Math.max(128, Math.round(this.chunkSize * GameRenderer.MATERIAL_SCALE));
     if (!canvas) {
-      if (this.materialChunkCache.size >= GameRenderer.MAX_CHUNKS) {
+      if (this.materialChunkCache.size >= GameRenderer.MAX_MATERIAL_CHUNKS) {
         const firstKey = this.materialChunkCache.keys().next().value;
         if (firstKey !== undefined) {
           const recycledCanvas = this.materialChunkCache.get(firstKey);
@@ -1065,11 +1075,11 @@ export class GameRenderer {
       }
       if (!canvas) {
         canvas = document.createElement('canvas');
-        canvas.width = this.chunkSize;
-        canvas.height = this.chunkSize;
-      } else if (canvas.width !== this.chunkSize || canvas.height !== this.chunkSize) {
-        canvas.width = this.chunkSize;
-        canvas.height = this.chunkSize;
+        canvas.width = matChunkPx;
+        canvas.height = matChunkPx;
+      } else if (canvas.width !== matChunkPx || canvas.height !== matChunkPx) {
+        canvas.width = matChunkPx;
+        canvas.height = matChunkPx;
       }
       const chunkCtx = canvas.getContext('2d', { alpha: false })!;
       const chunkX = cx * this.chunkSize;
@@ -1082,7 +1092,8 @@ export class GameRenderer {
       chunkCtx.setTransform(1, 0, 0, 1, 0, 0);
       chunkCtx.imageSmoothingEnabled = false;
       chunkCtx.fillStyle = 'rgb(32, 128, 128)';
-      chunkCtx.fillRect(0, 0, this.chunkSize, this.chunkSize);
+      chunkCtx.fillRect(0, 0, matChunkPx, matChunkPx);
+      chunkCtx.scale(GameRenderer.MATERIAL_SCALE, GameRenderer.MATERIAL_SCALE);
       chunkCtx.translate(-chunkX, -chunkY);
       this.renderMaterialStaticRegion(chunkCtx, world, world.sidewalks || [], minX, minY, maxX, maxY);
       chunkCtx.restore();
@@ -1126,17 +1137,19 @@ export class GameRenderer {
     this.width = width;
     this.height = height;
     this.backingScale = backingScale > 0 ? backingScale : 1;
-    this.lightmapCanvas.width = width;
-    this.lightmapCanvas.height = height;
-    this.lightEnvCanvas.width = width;
-    this.lightEnvCanvas.height = height;
-    this.lightColorCanvas.width = width;
-    this.lightColorCanvas.height = height;
-    this.lightTintCanvas.width = width;
-    this.lightTintCanvas.height = height;
-    this.materialCanvas.width = Math.max(1, Math.round(width * this.backingScale));
-    this.materialCanvas.height = Math.max(1, Math.round(height * this.backingScale));
-    const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 1.0));
+    const lmW = Math.max(1, Math.ceil(width * GameRenderer.LIGHTMAP_SCALE));
+    const lmH = Math.max(1, Math.ceil(height * GameRenderer.LIGHTMAP_SCALE));
+    this.lightmapCanvas.width = lmW;
+    this.lightmapCanvas.height = lmH;
+    this.lightEnvCanvas.width = lmW;
+    this.lightEnvCanvas.height = lmH;
+    this.lightColorCanvas.width = lmW;
+    this.lightColorCanvas.height = lmH;
+    this.lightTintCanvas.width = lmW;
+    this.lightTintCanvas.height = lmH;
+    this.materialCanvas.width = Math.max(1, Math.ceil(width * GameRenderer.MATERIAL_SCALE));
+    this.materialCanvas.height = Math.max(1, Math.ceil(height * GameRenderer.MATERIAL_SCALE));
+    const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
     this.shadowCanvas.width = Math.max(1, Math.ceil(width * shadowScale));
     this.shadowCanvas.height = Math.max(1, Math.ceil(height * shadowScale));
   }
@@ -1498,8 +1511,31 @@ export class GameRenderer {
     );
     ForestSystem.updateForestAudioForPlayer(world, player, vpTrees, camera.x, camera.y, timeHour, 0.016);
 
-    // 8. Buildings Base Structure & Entrances
-    this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour);
+    // Pre-partition props, birds & capped particles once per frame (zero per-frame .filter() allocations)
+    const frameParticles = this.capParticles(world.particles);
+    const brokenProps = this.brokenPropsScratch;
+    const intactProps = this.intactPropsScratch;
+    brokenProps.length = 0;
+    intactProps.length = 0;
+    for (let i = 0; i < vpProps.length; i++) {
+      const p = vpProps[i];
+      if (p.isBroken) brokenProps.push(p);
+      else intactProps.push(p);
+    }
+    const groundBirds = this.groundBirdsScratch;
+    const flyingBirds = this.flyingBirdsScratch;
+    groundBirds.length = 0;
+    flyingBirds.length = 0;
+    if (performanceConfig.enableBirds && world.birds) {
+      for (let i = 0; i < world.birds.length; i++) {
+        const b = world.birds[i];
+        if (b.state === 'ground') groundBirds.push(b);
+        else if (b.state === 'flying') flyingBirds.push(b);
+      }
+    }
+
+    // 8. Buildings Base Structure & Entrances (viewport-culled against minX..maxY)
+    this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour, minX, minY, maxX, maxY);
 
     // 8b. Street Litter & Flying Paper / Wind Debris
     this.renderLitter(world.litter, minX, minY, maxX, maxY, nightAlpha);
@@ -1517,10 +1553,14 @@ export class GameRenderer {
     GasStationRenderer.renderGroundPumpsAndIslands(this.ctx, world, player, nightAlpha);
 
     // 9b. Broken Traffic Lights (lying flat on the ground!)
-    this.renderTrafficLights(world.intersections, vpProps.filter((p) => p.isBroken), minX, minY, maxX, maxY);
+    if (brokenProps.length > 0) {
+      this.renderTrafficLights(world.intersections, brokenProps, minX, minY, maxX, maxY);
+    }
 
     // 10. Birds on the ground
-    this.renderBirds(world.birds.filter((b) => b.state === 'ground'), minX, minY, maxX, maxY);
+    if (groundBirds.length > 0) {
+      this.renderBirds(groundBirds, minX, minY, maxX, maxY);
+    }
 
     // 12. Pedestrians (with Umbrellas during Rain)
     this.renderPedestrians(visiblePedestrians, world);
@@ -1540,7 +1580,7 @@ export class GameRenderer {
     }
 
     // 13c. Under-Vehicle Ground Exhaust Smoke (rendered UNDER car chassis on asphalt)
-    this.renderUnderVehicleParticles(this.capParticles(world.particles), world.cleanMode);
+    this.renderUnderVehicleParticles(frameParticles, world.cleanMode);
 
     // 14. Vehicles (Cars with dynamic wheels, lights & wipers)
     this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode, player);
@@ -1586,7 +1626,7 @@ export class GameRenderer {
 
     // 14e. Mid-Layer Wheel Ground Particles (flying mud clods, dust clouds, tire smoke & spray)
     // Rendered AFTER vehicle chassis, but BEFORE vehicle cabins, building roofs, and trees!
-    this.renderWheelGroundParticles(this.capParticles(world.particles), world.cleanMode);
+    this.renderWheelGroundParticles(frameParticles, world.cleanMode);
 
     const isRaining = world.weather === 'rain' || world.weather === 'storm';
     const isFog = world.weather === 'fog';
@@ -1595,8 +1635,8 @@ export class GameRenderer {
     // 15. Render Vehicle Cabins, Roofs, and Roof attachments
     this.renderVehicleCabins(visibleVehicles, effectiveAlpha, camera.gridMode, player);
 
-    // 16. Building Roofs, Canopies, Balconies & Fire Escapes
-    this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
+    // 16. Building Roofs, Canopies, Balconies & Fire Escapes (viewport-culled against minX..maxY)
+    this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world, minX, minY, maxX, maxY);
 
     // 16b. Tall Intact Props (Intact trees, and intact lampposts!)
     this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha, world.calendar?.season, world);
@@ -1611,10 +1651,12 @@ export class GameRenderer {
     RailwaySignalingSystem.renderAllSignals(this.ctx, world, minX, minY, maxX, maxY, nightAlpha, player.x, player.y);
 
     // 16c. Intact Traffic Light Posts
-    this.renderTrafficLights(world.intersections, vpProps.filter((p) => !p.isBroken), minX, minY, maxX, maxY, nightAlpha);
+    this.renderTrafficLights(world.intersections, intactProps, minX, minY, maxX, maxY, nightAlpha);
 
     // 16d. Flying Birds
-    this.renderBirds(world.birds.filter((b) => b.state === 'flying'), minX, minY, maxX, maxY, nightAlpha);
+    if (flyingBirds.length > 0) {
+      this.renderBirds(flyingBirds, minX, minY, maxX, maxY, nightAlpha);
+    }
 
     // 16e. Unified Night Shroud, Extruded 3D World Shadows & Physical Lighting (Покров ночи, тени и чистый свет)
     this.renderLightmap(
@@ -1678,7 +1720,7 @@ export class GameRenderer {
     );
 
     // 17. Overhead Particles (Tractor Stack Exhaust, Engine Bay Steam/Smoke, Sparks, Debris)
-    this.renderOverheadParticles(this.capParticles(world.particles), world.cleanMode);
+    this.renderOverheadParticles(frameParticles, world.cleanMode);
 
     // 18. Optional AI Telemetry & Debug Visualizer
     if (trafficDiagnostics.debugOverlayEnabled) {
@@ -4708,10 +4750,22 @@ export class GameRenderer {
   }
 
   // --- BUILDINGS: BASE & ROOF SPLIT ENGINE ---
-  private renderBuildingBases(buildings: Building[], nightAlpha: number = 0, player?: Player, timeHour: number = 12) {
+  private renderBuildingBases(
+    buildings: Building[],
+    nightAlpha: number = 0,
+    player?: Player,
+    timeHour: number = 12,
+    minX: number = -Infinity,
+    minY: number = -Infinity,
+    maxX: number = Infinity,
+    maxY: number = Infinity
+  ) {
     const ctx = this.ctx;
 
     for (const bld of buildings) {
+      if (bld.x + bld.width + 40 < minX || bld.x - 40 > maxX || bld.y + bld.height + 40 < minY || bld.y - 40 > maxY) {
+        continue;
+      }
       if (bld.type === 'gas_station_canopy' || bld.type === 'gas_station_island') {
         // Open drive-through canopy / custom gas island: no solid base walls (rendered by GasStationRenderer)
         continue;
@@ -5951,12 +6005,19 @@ export class GameRenderer {
     buildings: Building[],
     nightAlpha: number = 0,
     player?: Player,
-    world?: GameWorld
+    world?: GameWorld,
+    minX: number = -Infinity,
+    minY: number = -Infinity,
+    maxX: number = Infinity,
+    maxY: number = Infinity
   ) {
     const ctx = this.ctx;
     const now = Date.now();
 
     for (const bld of buildings) {
+      if (bld.x + bld.width + 60 < minX || bld.x - 60 > maxX || bld.y + bld.height + 60 < minY || bld.y - 60 > maxY) {
+        continue;
+      }
       if (bld.type === 'gas_station_canopy') {
         GasStationRenderer.renderCanopyRoof(ctx, nightAlpha, player, world);
         continue;
@@ -7102,12 +7163,14 @@ export class GameRenderer {
     const sunX = -sunState.shadowDirX;
     const sunY = -sunState.shadowDirY;
     const canUseOffscreenCache = typeof document !== 'undefined' && typeof document.createElement === 'function';
-    const sunKeyX = Math.round(sunX * 16);
-    const sunKeyY = Math.round(sunY * 16);
+    const sunKeyX = Math.round(sunX * 4);
+    const sunKeyY = Math.round(sunY * 4);
     const snowCover = world
       ? (world.snowCover ?? (season === 'winter' ? 0.85 : 0))
       : (season === 'winter' ? 0.85 : 0);
     const snowTier = Math.round(Math.max(0, Math.min(1, snowCover)) * 4);
+    const maxTreeSprites = isMobileOrLowEndDevice() ? 160 : 320;
+    const needMask = performanceConfig.enableGpuPostFx;
 
     // Trees
     const nowSec = performance.now() * 0.001;
@@ -7132,13 +7195,25 @@ export class GameRenderer {
       }
 
       if (canUseOffscreenCache) {
-        const qSeed = seed & 63;
-        const qRad = Math.round(r);
+        const qSeed = seed & 15;
+        const qRad = Math.max(8, Math.round(r / 3) * 3);
         const cacheKey = `${species}_${qRad}_${tree.color || ''}_${qSeed}_${season || 'summer'}_sn${snowTier}_${sunKeyX}_${sunKeyY}`;
         let cached = this.treeSpriteCache.get(cacheKey);
         if (!cached) {
-          if (this.treeSpriteCache.size > 512) {
-            this.treeSpriteCache.clear();
+          if (this.treeSpriteCache.size >= maxTreeSprites) {
+            const oldestKey = this.treeSpriteCache.keys().next().value;
+            if (oldestKey !== undefined) {
+              const evicted = this.treeSpriteCache.get(oldestKey);
+              this.treeSpriteCache.delete(oldestKey);
+              if (evicted) {
+                evicted.canvas.width = 0;
+                evicted.canvas.height = 0;
+                if (evicted.maskCanvas) {
+                  evicted.maskCanvas.width = 0;
+                  evicted.maskCanvas.height = 0;
+                }
+              }
+            }
           }
           const half = Math.ceil(qRad * 1.32 + 6);
           const offCanvas = document.createElement('canvas');
@@ -7147,28 +7222,41 @@ export class GameRenderer {
           const offCtx = offCanvas.getContext('2d');
           if (offCtx) {
             this.renderSingleTreeGeometry(offCtx, tree, half, half, qRad, species, qSeed * 199 + 17, sunState, sunX, sunY, season, snowCover);
-            // Build binary alpha silhouette mask for crisp destination-out occluder masking in G-Buffer
+            // GPU-only silhouette mask (no getImageData readback stall!), built lazily only when PostFX is active
+            let maskCanvas: HTMLCanvasElement | null = null;
+            if (needMask) {
+              maskCanvas = document.createElement('canvas');
+              maskCanvas.width = offCanvas.width;
+              maskCanvas.height = offCanvas.height;
+              const maskCtx = maskCanvas.getContext('2d');
+              if (maskCtx) {
+                maskCtx.drawImage(offCanvas, 0, 0);
+                maskCtx.globalCompositeOperation = 'source-in';
+                maskCtx.fillStyle = '#000000';
+                maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+              } else {
+                maskCanvas = null;
+              }
+            }
+            cached = { canvas: offCanvas, maskCanvas, half };
+            this.treeSpriteCache.set(cacheKey, cached);
+          }
+        } else {
+          // Promote to MRU
+          this.treeSpriteCache.delete(cacheKey);
+          this.treeSpriteCache.set(cacheKey, cached);
+          if (needMask && !cached.maskCanvas) {
             const maskCanvas = document.createElement('canvas');
-            maskCanvas.width = offCanvas.width;
-            maskCanvas.height = offCanvas.height;
+            maskCanvas.width = cached.canvas.width;
+            maskCanvas.height = cached.canvas.height;
             const maskCtx = maskCanvas.getContext('2d');
             if (maskCtx) {
-              const srcImg = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
-              const dstImg = maskCtx.createImageData(offCanvas.width, offCanvas.height);
-              const sd = srcImg.data;
-              const dd = dstImg.data;
-              for (let pIdx = 0; pIdx < sd.length; pIdx += 4) {
-                if (sd[pIdx + 3] >= 75) {
-                  dd[pIdx] = 0;
-                  dd[pIdx + 1] = 0;
-                  dd[pIdx + 2] = 0;
-                  dd[pIdx + 3] = 255;
-                }
-              }
-              maskCtx.putImageData(dstImg, 0, 0);
+              maskCtx.drawImage(cached.canvas, 0, 0);
+              maskCtx.globalCompositeOperation = 'source-in';
+              maskCtx.fillStyle = '#000000';
+              maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+              cached.maskCanvas = maskCanvas;
             }
-            cached = { canvas: offCanvas, maskCanvas: maskCtx ? maskCanvas : null, half };
-            this.treeSpriteCache.set(cacheKey, cached);
           }
         }
         if (cached) {
@@ -9041,9 +9129,9 @@ export class GameRenderer {
     maxY: number
   ) {
     const ctx = this.materialCtx;
-    const bs = this.backingScale;
+    const ms = GameRenderer.MATERIAL_SCALE;
 
-    ctx.setTransform(bs, 0, 0, bs, 0, 0);
+    ctx.setTransform(ms, 0, 0, ms, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.globalCompositeOperation = 'source-over';
 
@@ -9065,7 +9153,7 @@ export class GameRenderer {
     for (let cx = startChunkX; cx <= endChunkX; cx++) {
       for (let cy = startChunkY; cy <= endChunkY; cy++) {
         const matChunk = this.getMaterialChunkCanvas(cx, cy, world);
-        ctx.drawImage(matChunk, cx * this.chunkSize, cy * this.chunkSize);
+        ctx.drawImage(matChunk, cx * this.chunkSize, cy * this.chunkSize, this.chunkSize, this.chunkSize);
       }
     }
 
@@ -9462,8 +9550,8 @@ export class GameRenderer {
     const gBufSnowCover = world.snowCover ?? (season === 'winter' ? 0.85 : 0);
     const gBufSnowTier = Math.round(Math.max(0, Math.min(1, gBufSnowCover)) * 4);
     const sunState = getCurrentSunShadowState();
-    const sunKeyX = Math.round(-sunState.shadowDirX * 16);
-    const sunKeyY = Math.round(-sunState.shadowDirY * 16);
+    const sunKeyX = Math.round(-sunState.shadowDirX * 4);
+    const sunKeyY = Math.round(-sunState.shadowDirY * 4);
     const treeNowSec = this.lastTreeWindNowSec || performance.now() * 0.001;
     for (let i = 0; i < vpTrees.length; i++) {
       const t = vpTrees[i];
@@ -9472,7 +9560,8 @@ export class GameRenderer {
       const sway = ForestSystem.getTreeWindSway(t, world, treeNowSec);
       const species = classifyTreeSpecies(t);
       const seed = Math.abs(Math.floor(t.x * 12.9898 + t.y * 78.233));
-      const cacheKey = `${species}_${Math.round(r)}_${t.color || ''}_${seed & 63}_${season || 'summer'}_sn${gBufSnowTier}_${sunKeyX}_${sunKeyY}`;
+      const qRad = Math.max(8, Math.round(r / 3) * 3);
+      const cacheKey = `${species}_${qRad}_${t.color || ''}_${seed & 15}_${season || 'summer'}_sn${gBufSnowTier}_${sunKeyX}_${sunKeyY}`;
       const cached = this.treeSpriteCache.get(cacheKey);
       if (cached && cached.maskCanvas) {
         ctx.drawImage(cached.maskCanvas, t.x - cached.half + sway.swayX, t.y - cached.half + sway.swayY);
@@ -15892,25 +15981,77 @@ export class GameRenderer {
     const sunState = getCurrentSunShadowState();
     const hasActiveShadows = performanceConfig.enableShadows && sunState.shadowOpacity > 0.005;
     const hasDarknessShroud = effectiveAlpha > 0.003 || weights.rain > 0.02 || weights.snow > 0.02 || weights.fog > 0.02 || weights.overcast > 0.02 || (world.lightningFlashTimer ?? 0) > 0;
-    const useLightmap = hasDarknessShroud || hasActiveShadows;
 
-    this.lightmapUsedThisFrame = useLightmap;
-    this.lightColorUsedThisFrame = !!(useLightmap && performanceConfig.enableDynamicLighting !== false);
+    // Daytime Fast-Path: in clear bright daylight with shadows enabled and no darkness veil / flashlight,
+    // composite shadowCanvas directly onto main canvas in ONE drawImage — skipping all 4 offscreen lightmap
+    // buffers, light cutout loops, and full-screen multiply/screen blend passes!
+    const daytimeShadowFastPath = !hasDarknessShroud && hasActiveShadows && !isPlayerFlashlightOn && effectiveAlpha <= 0.003 && sunState.sunElevation >= 0.28;
+    const useLightmap = !daytimeShadowFastPath && (hasDarknessShroud || hasActiveShadows);
 
-    // --- PASS 1: Generate Unified Darkness Shroud & 3D World Shadows Offscreen ---
+    if (daytimeShadowFastPath) {
+      this.lightmapUsedThisFrame = false;
+      this.lightColorUsedThisFrame = false;
+      const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
+      const targetSW = Math.max(1, Math.ceil(this.width * shadowScale));
+      const targetSH = Math.max(1, Math.ceil(this.height * shadowScale));
+      if (this.shadowCanvas.width !== targetSW || this.shadowCanvas.height !== targetSH) {
+        this.shadowCanvas.width = targetSW;
+        this.shadowCanvas.height = targetSH;
+      }
+      renderUnifiedWorldShadows(
+        this.shadowCtx,
+        ctx,
+        this.width,
+        this.height,
+        this.backingScale,
+        world,
+        sunState,
+        visibleBuildings,
+        nearbyVehicles,
+        visiblePedestrians,
+        visibleTrees,
+        props,
+        minX, minY, maxX, maxY,
+        player,
+        remotePlayers,
+        this.cloudShadows
+      );
+      const shadowCompositeAlpha = Math.max(0.03, Math.min(0.92, sunState.shadowOpacity));
+      ctx.save();
+      ctx.setTransform(this.backingScale, 0, 0, this.backingScale, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = shadowCompositeAlpha;
+      ctx.drawImage(
+        this.shadowCanvas,
+        0, 0, this.shadowCanvas.width, this.shadowCanvas.height,
+        0, 0, this.width, this.height
+      );
+      ctx.restore();
+    } else {
+      this.lightmapUsedThisFrame = useLightmap;
+      this.lightColorUsedThisFrame = !!(useLightmap && performanceConfig.enableDynamicLighting !== false && (effectiveAlpha > 0.015 || isPlayerFlashlightOn || sunState.sunElevation < 0.28));
+    }
+
+    // --- PASS 1: Generate Unified Darkness Shroud & 3D World Shadows Offscreen (Half-Res Lightmap) ---
     if (useLightmap) {
-      lCtx.clearRect(0, 0, this.width, this.height);
+      const lmW = this.lightmapCanvas.width;
+      const lmH = this.lightmapCanvas.height;
+      const lmScaleX = lmW / Math.max(1, this.width);
+      const lmScaleY = lmH / Math.max(1, this.height);
+
+      lCtx.setTransform(1, 0, 0, 1, 0, 0);
+      lCtx.clearRect(0, 0, lmW, lmH);
       if (effectiveAlpha > 0.003) {
         // Ambient darkness veil (night, dusk, rain, fog, overcast)
         lCtx.fillStyle = `${baseColor}${effectiveAlpha * 0.95})`;
-        lCtx.fillRect(0, 0, this.width, this.height);
+        lCtx.fillRect(0, 0, lmW, lmH);
       }
 
       // Render Unified 3D World Shadows into shadowCanvas and composite onto lightmapCanvas
       // BEFORE destination-out light cutouts so every light source (headlights, flashlights,
       // streetlamps, fires, signals) physically illuminates and pierces through shadows!
       if (hasActiveShadows) {
-        const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 1.0));
+        const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
         const targetSW = Math.max(1, Math.ceil(this.width * shadowScale));
         const targetSH = Math.max(1, Math.ceil(this.height * shadowScale));
         if (this.shadowCanvas.width !== targetSW || this.shadowCanvas.height !== targetSH) {
@@ -15945,7 +16086,7 @@ export class GameRenderer {
         lCtx.drawImage(
           this.shadowCanvas,
           0, 0, this.shadowCanvas.width, this.shadowCanvas.height,
-          0, 0, this.width, this.height
+          0, 0, lmW, lmH
         );
         lCtx.restore();
       }
@@ -15955,28 +16096,29 @@ export class GameRenderer {
       const cCtx = this.lightColorCtx;
       eCtx.save();
       eCtx.setTransform(1, 0, 0, 1, 0, 0);
-      eCtx.clearRect(0, 0, this.width, this.height);
+      eCtx.clearRect(0, 0, lmW, lmH);
       const lowSunFloor = (!sunState.isNight && sunState.sunElevation < 0.28)
         ? (1.0 - sunState.sunElevation / 0.28) * 0.22
         : 0;
       if (lowSunFloor > 0.004) {
         eCtx.fillStyle = `rgba(0, 0, 0, ${lowSunFloor.toFixed(3)})`;
-        eCtx.fillRect(0, 0, this.width, this.height);
+        eCtx.fillRect(0, 0, lmW, lmH);
       }
       eCtx.drawImage(this.lightmapCanvas, 0, 0);
       eCtx.restore();
 
       cCtx.save();
       cCtx.setTransform(1, 0, 0, 1, 0, 0);
-      cCtx.clearRect(0, 0, this.width, this.height);
+      cCtx.clearRect(0, 0, lmW, lmH);
 
       lCtx.save();
-      // Synchronize offscreen lightmap & colored light buffers with main camera
+      // Synchronize half-res offscreen lightmap & colored light buffers with main camera
       {
         const t = ctx.getTransform();
-        const ik = 1 / this.backingScale;
-        lCtx.setTransform(t.a * ik, t.b * ik, t.c * ik, t.d * ik, t.e * ik, t.f * ik);
-        cCtx.setTransform(t.a * ik, t.b * ik, t.c * ik, t.d * ik, t.e * ik, t.f * ik);
+        const ikX = lmScaleX / this.backingScale;
+        const ikY = lmScaleY / this.backingScale;
+        lCtx.setTransform(t.a * ikX, t.b * ikY, t.c * ikX, t.d * ikY, t.e * ikX, t.f * ikY);
+        cCtx.setTransform(t.a * ikX, t.b * ikY, t.c * ikX, t.d * ikY, t.e * ikX, t.f * ikY);
       }
       lCtx.globalCompositeOperation = 'destination-out';
       cCtx.globalCompositeOperation = 'lighter';
@@ -17170,10 +17312,13 @@ export class GameRenderer {
     lCtx.restore();
     } // end enableDynamicLighting
 
-    // --- Apply Lightmap + Environment-Masked Colored Light to Main Canvas ---
+    // --- Apply Half-Res Lightmap + Environment-Masked Colored Light to Main Canvas ---
+    const lmWOut = this.lightmapCanvas.width;
+    const lmHOut = this.lightmapCanvas.height;
     ctx.save();
     ctx.setTransform(this.backingScale, 0, 0, this.backingScale, 0, 0); // Screen space (CSS px) mapped to backing store
-    ctx.drawImage(this.lightmapCanvas, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.lightmapCanvas, 0, 0, lmWOut, lmHOut, 0, 0, this.width, this.height);
 
     if (this.lightColorUsedThisFrame) {
       // 1. Spectral tint pass via multiply: neutral #ffffff everywhere unlit, true Kelvin hue on bright snow/concrete/markings
@@ -17183,19 +17328,19 @@ export class GameRenderer {
       tCtx.globalCompositeOperation = 'source-over';
       tCtx.globalAlpha = 1.0;
       tCtx.fillStyle = '#ffffff';
-      tCtx.fillRect(0, 0, this.width, this.height);
+      tCtx.fillRect(0, 0, lmWOut, lmHOut);
       tCtx.globalAlpha = 0.54;
       tCtx.drawImage(this.lightColorCanvas, 0, 0);
       tCtx.restore();
 
       ctx.globalCompositeOperation = 'multiply';
       ctx.globalAlpha = 1.0;
-      ctx.drawImage(this.lightTintCanvas, 0, 0);
+      ctx.drawImage(this.lightTintCanvas, 0, 0, lmWOut, lmHOut, 0, 0, this.width, this.height);
 
       // 2. Colored radiance pass via screen: gently illuminates asphalt, grass, and shadow troughs without HDR whiteout
       ctx.globalCompositeOperation = 'screen';
       ctx.globalAlpha = 0.48;
-      ctx.drawImage(this.lightColorCanvas, 0, 0);
+      ctx.drawImage(this.lightColorCanvas, 0, 0, lmWOut, lmHOut, 0, 0, this.width, this.height);
 
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1.0;

@@ -1,4 +1,5 @@
 import { Camera, Player, GameWorld } from './types';
+import { performanceConfig } from './performanceConfig';
 
 /**
  * ScreenEffectsSystem — High-fidelity Canvas 2D Post-Processing
@@ -589,8 +590,10 @@ export class ScreenEffectsSystem {
         ctx.beginPath();
         ctx.strokeStyle = '#10b981';
         ctx.lineWidth = 2.5;
-        ctx.shadowColor = '#10b981';
-        ctx.shadowBlur = 10;
+        if (performanceConfig.enableSoftShadowBlur) {
+          ctx.shadowColor = '#10b981';
+          ctx.shadowBlur = 10;
+        }
 
         const ekgY = cy - 20;
         const ekgSpeed = timeSec * 320;

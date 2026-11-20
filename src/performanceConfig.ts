@@ -52,7 +52,8 @@ export interface PerformanceConfig {
   // --- Visual effects toggles ---
   enableBirds: boolean;         // Birds on the ground and in flight (default true)
   enableCloudShadows: boolean;  // Moving cloud shadows on the ground (default true)
-  enableSoftShadowBlur: boolean;// shadowBlur glows on lights and markings (costly) (default true)
+  enableDynamicGrass: boolean;  // Animated wind-swaying field grass & wildflowers (costly on mobile)
+  enableSoftShadowBlur: boolean;// shadowBlur glows on lights and markings (costly) (default false)
   enableScreenShake: boolean;   // Camera shake from crashes and impacts (default true)
   enableCameraJitter: boolean;  // Physiological camera tremor (cold, shock) (default true)
   enableScreenEffects: boolean; // Full-screen vignette, frost, shock overlays (default true)
@@ -62,91 +63,116 @@ export interface PerformanceConfig {
   // --- Liquid surfaces (oil, coolant, fuel, water, puddles) ---
   enableLiquidReflections: boolean; // Sky / sun reflections and wet rim on liquid surfaces (default true)
   liquidReflectionStrength: number; // Reflection intensity in percent, 0..100 (default 60)
-  liquidReflectionLimit: number;    // Liquid surfaces that receive reflection & shadow effects per frame (default 200)
+  liquidReflectionLimit: number;    // Liquid surfaces that receive reflection & shadow effects per frame (default 120)
   enableLiquidShadows: boolean;     // Dynamic vehicle shadows falling across liquids, driven by time of day (default true)
   liquidShadowStrength: number;     // Shadow darkness in percent, 0..100 (default 50)
 
   // --- GPU post-processing & shader layer (WebGL2, see src/gpu/postFx.ts & src/gpu/fireShader.ts) ---
-  enableGpuPostFx: boolean;     // Run the frame through the GPU shader chain (default true)
-  gpuBloom: number;             // Natural optical glow around headlights, neon and fire, 0..100 (default 30)
-  gpuBloomRadius: number;       // Dual-Kawase HDR bloom spread radius in percent, 50..150 (default 100)
+  enableGpuPostFx: boolean;     // Run the frame through the GPU shader chain (default true on desktop, false on mobile)
+  gpuBloom: number;             // Natural optical glow around headlights, neon and fire, 0..100 (default 25)
+  gpuBloomRadius: number;       // Dual-Kawase HDR bloom spread radius in percent, 50..150 (default 95)
   gpuGrading: number;           // Subtle natural time-of-day / weather tone adaptation, 0..100 (default 15)
   gpuClarity: number;           // Local contrast and depth in dark gaps, 0..100 (default 0)
-  gpuRelief: number;            // Sun-lit micro relief on surfaces, 0..100 (default 35)
+  gpuRelief: number;            // Sun-lit micro relief on surfaces, 0..100 (default 30)
   gpuSharpness: number;         // Crispness compensation (AMD CAS), 0..100 (default 15)
   gpuVignette: number;          // Darkened screen edges, 0..100 (default 0)
   gpuGrain: number;             // Film grain, 0..100 (default 0)
   gpuChromatic: number;         // Lens colour fringing at the edges, 0..100 (default 0)
   gpuAntiAlias: boolean;        // FXAA edge smoothing (default true)
-  gpuBicubicUpscale: boolean;   // 5-tap Catmull-Rom bicubic upscale when renderScale < 1 (default true)
-  gpuGi: number;                // Bounce light: surfaces pick up the colour of nearby lights, 0..100 (default 45)
-  gpuWet: number;               // Wet asphalt sheen and light reflections in rain, 0..100 (default 60)
-  gpuWaterShader: number;       // GPU river/water optical refraction, Fresnel & sun glints, 0..100 (default 85)
-  gpuWaterWakes: number;        // GPU hydrodynamic Kelvin V-wakes & cellular whitewater foam, 0..100 (default 85)
-  gpuHeatShimmer: number;       // Thermal refractive heat haze above fires, 0..150 (default 85)
-  gpuFireLighting: number;      // Normal-mapped 3D surface relief & warm fire bounce lighting, 0..150 (default 90)
-  gpuFogScattering: number;     // Atmospheric Mie scattering & fog light glow, 0..150 (default 85)
+  gpuBicubicUpscale: boolean;   // 5-tap Catmull-Rom bicubic upscale when renderScale < 1 (default false)
+  gpuGi: number;                // Bounce light: surfaces pick up the colour of nearby lights, 0..100 (default 35)
+  gpuWet: number;               // Wet asphalt sheen and light reflections in rain, 0..100 (default 50)
+  gpuWaterShader: number;       // GPU river/water optical refraction, Fresnel & sun glints, 0..100 (default 75)
+  gpuWaterWakes: number;        // GPU hydrodynamic Kelvin V-wakes & cellular whitewater foam, 0..100 (default 70)
+  gpuHeatShimmer: number;       // Thermal refractive heat haze above fires, 0..150 (default 70)
+  gpuFireLighting: number;      // Normal-mapped 3D surface relief & warm fire bounce lighting, 0..150 (default 80)
+  gpuFogScattering: number;     // Atmospheric Mie scattering & fog light glow, 0..150 (default 75)
   gpuExposure: number;          // ACES Filmic exposure multiplier in percent, 50..150 (default 100)
   gpuContrast: number;          // Shader global contrast in percent, 50..150 (default 100)
   gpuSaturation: number;        // Shader color saturation in percent, 0..150 (default 100)
-  enableGpuFireShader: boolean; // WebGL2 volumetric blackbody combustion & pyrolysis fire shader (default true)
-  gpuFireScale: number;         // Volumetric fire FBO resolution scale: 0.5 | 0.75 | 1 (default 0.75)
-  gpuFireSmoke: number;         // Volumetric pyrolysis smoke crown density in fire shader, 0..150 (default 90)
+  enableGpuFireShader: boolean; // WebGL2 volumetric blackbody combustion & pyrolysis fire shader (default true on desktop, false on mobile)
+  gpuFireScale: number;         // Volumetric fire FBO resolution scale: 0.5 | 0.75 | 1 (default 0.5)
+  gpuFireSmoke: number;         // Volumetric pyrolysis smoke crown density in fire shader, 0..150 (default 75)
 }
 
 export type GraphicsPresetId = 'low' | 'medium' | 'high' | 'ultra';
 
-const STORAGE_KEY = 'city_sim_performance_config_v2';
+const STORAGE_KEY = 'city_sim_performance_config_v3';
+
+let _cachedIsMobile: boolean | null = null;
+/**
+ * Detects mobile/tablet browsers (including iOS Safari / iPhone 11 / iPadOS) and low-power touch devices
+ * so canvas caches, offscreen buffers, and default presets automatically stay smooth and within iOS VRAM limits.
+ */
+export function isMobileOrLowEndDevice(): boolean {
+  if (_cachedIsMobile !== null) return _cachedIsMobile;
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') {
+    _cachedIsMobile = false;
+    return false;
+  }
+  const ua = navigator.userAgent || '';
+  const isMobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  const isIpadOs = navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  const isCoarseSmall =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches &&
+    Math.min(window.screen?.width || window.innerWidth, window.screen?.height || window.innerHeight) <= 1024;
+  const lowCores = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4;
+  const lowMemory = typeof (navigator as any).deviceMemory === 'number' && (navigator as any).deviceMemory <= 4;
+  _cachedIsMobile = Boolean(isMobileUa || isIpadOs || isCoarseSmall || (lowCores && lowMemory));
+  return _cachedIsMobile;
+}
 
 export const DEFAULT_CONFIG: PerformanceConfig = {
-  maxVehicles: 28,
-  nearbyVehiclesTarget: 10,
-  maxActivePedestrians: 120,
+  maxVehicles: 22,
+  nearbyVehiclesTarget: 8,
+  maxActivePedestrians: 80,
   enableMinimap: true,
   enableRainDroplets: true,
   enableBalconyDetails: true,
   enableShadows: true,
-  particleLimit: 300,
+  particleLimit: 240,
   lowQualityRendering: false,
 
-  shadowResolutionScale: 1,
-  shadowIntensity: 100,
+  shadowResolutionScale: 0.75,
+  shadowIntensity: 95,
   shadowLengthScale: 100,
-  shadowSoftness: 60,
+  shadowSoftness: 30,
   enableBuildingShadows: true,
   enableRooftopShadows: true,
   enableTreeShadows: true,
   enableVehicleShadows: true,
-  enableVehicleDetailShadows: true,
+  enableVehicleDetailShadows: false,
   enablePedestrianShadows: true,
-  enablePropShadows: true,
-  enableMicroShadows: true,
+  enablePropShadows: false,
+  enableMicroShadows: false,
 
   enableDynamicLighting: true,
-  headlightQuality: 2,
+  headlightQuality: 1,
   enableAdditiveGlow: true,
-  enableHeadlightGlare: true,
+  enableHeadlightGlare: false,
 
   renderScale: 1,
   hiDpi: false,
   imageSmoothing: true,
-  minimapUpdateMs: 0,
+  minimapUpdateMs: 100,
 
-  drawDistance: 1,
-  maxVisiblePedestrians: 200,
-  maxVisibleVehicles: 150,
-  maxVisibleTrees: 3000,
-  maxVisibleProps: 3000,
-  skidMarksLimit: 5000,
-  stainsLimit: 2000,
-  puddlesLimit: 1000,
-  litterLimit: 500,
-  renderParticleLimit: 600,
-  rainDensity: 100,
+  drawDistance: 0.95,
+  maxVisiblePedestrians: 120,
+  maxVisibleVehicles: 90,
+  maxVisibleTrees: 900,
+  maxVisibleProps: 900,
+  skidMarksLimit: 1500,
+  stainsLimit: 600,
+  puddlesLimit: 300,
+  litterLimit: 180,
+  renderParticleLimit: 300,
+  rainDensity: 80,
 
   enableBirds: true,
   enableCloudShadows: true,
-  enableSoftShadowBlur: true,
+  enableDynamicGrass: true,
+  enableSoftShadowBlur: false,
   enableScreenShake: true,
   enableCameraJitter: true,
   enableScreenEffects: true,
@@ -154,54 +180,144 @@ export const DEFAULT_CONFIG: PerformanceConfig = {
   enableNameTags: true,
 
   enableLiquidReflections: true,
-  liquidReflectionStrength: 60,
-  liquidReflectionLimit: 200,
+  liquidReflectionStrength: 55,
+  liquidReflectionLimit: 120,
   enableLiquidShadows: true,
-  liquidShadowStrength: 50,
+  liquidShadowStrength: 45,
 
   enableGpuPostFx: true,
-  gpuBloom: 30,
-  gpuBloomRadius: 100,
+  gpuBloom: 25,
+  gpuBloomRadius: 95,
   gpuGrading: 15,
   gpuClarity: 0,
-  gpuRelief: 35,
+  gpuRelief: 30,
   gpuSharpness: 15,
   gpuVignette: 0,
   gpuGrain: 0,
   gpuChromatic: 0,
   gpuAntiAlias: true,
-  gpuBicubicUpscale: true,
-  gpuGi: 45,
-  gpuWet: 60,
-  gpuWaterShader: 85,
-  gpuWaterWakes: 85,
-  gpuHeatShimmer: 85,
-  gpuFireLighting: 90,
-  gpuFogScattering: 85,
+  gpuBicubicUpscale: false,
+  gpuGi: 35,
+  gpuWet: 50,
+  gpuWaterShader: 75,
+  gpuWaterWakes: 70,
+  gpuHeatShimmer: 70,
+  gpuFireLighting: 80,
+  gpuFogScattering: 75,
   gpuExposure: 100,
   gpuContrast: 100,
   gpuSaturation: 100,
   enableGpuFireShader: true,
-  gpuFireScale: 0.75,
-  gpuFireSmoke: 90,
+  gpuFireScale: 0.5,
+  gpuFireSmoke: 75,
+};
+
+/** Optimized default profile for iPhone / Android / low-end GPUs: crisp visuals without heavy WebGL2 multi-pass stalls. */
+export const MOBILE_DEFAULT_CONFIG: PerformanceConfig = {
+  ...DEFAULT_CONFIG,
+  maxVehicles: 14,
+  nearbyVehiclesTarget: 6,
+  maxActivePedestrians: 45,
+  enableRainDroplets: false,
+  enableBalconyDetails: false,
+  enableShadows: true,
+  particleLimit: 140,
+  lowQualityRendering: false,
+
+  shadowResolutionScale: 0.5,
+  shadowIntensity: 85,
+  shadowLengthScale: 100,
+  shadowSoftness: 0,
+  enableBuildingShadows: true,
+  enableRooftopShadows: false,
+  enableTreeShadows: true,
+  enableVehicleShadows: true,
+  enableVehicleDetailShadows: false,
+  enablePedestrianShadows: false,
+  enablePropShadows: false,
+  enableMicroShadows: false,
+
+  enableDynamicLighting: true,
+  headlightQuality: 1,
+  enableAdditiveGlow: false,
+  enableHeadlightGlare: false,
+
+  renderScale: 0.75,
+  hiDpi: false,
+  imageSmoothing: true,
+  minimapUpdateMs: 250,
+
+  drawDistance: 0.8,
+  maxVisiblePedestrians: 45,
+  maxVisibleVehicles: 35,
+  maxVisibleTrees: 350,
+  maxVisibleProps: 400,
+  skidMarksLimit: 600,
+  stainsLimit: 250,
+  puddlesLimit: 100,
+  litterLimit: 60,
+  renderParticleLimit: 140,
+  rainDensity: 45,
+
+  enableBirds: false,
+  enableCloudShadows: false,
+  enableDynamicGrass: false,
+  enableSoftShadowBlur: false,
+  enableScreenShake: true,
+  enableCameraJitter: false,
+  enableScreenEffects: true,
+  enableSpeechBubbles: true,
+  enableNameTags: true,
+
+  enableLiquidReflections: false,
+  liquidReflectionStrength: 0,
+  liquidReflectionLimit: 0,
+  enableLiquidShadows: false,
+  liquidShadowStrength: 0,
+
+  enableGpuPostFx: false,
+  gpuBloom: 0,
+  gpuBloomRadius: 75,
+  gpuGrading: 0,
+  gpuClarity: 0,
+  gpuRelief: 0,
+  gpuSharpness: 0,
+  gpuVignette: 0,
+  gpuGrain: 0,
+  gpuChromatic: 0,
+  gpuAntiAlias: false,
+  gpuBicubicUpscale: false,
+  gpuGi: 0,
+  gpuWet: 0,
+  gpuWaterShader: 0,
+  gpuWaterWakes: 0,
+  gpuHeatShimmer: 0,
+  gpuFireLighting: 0,
+  gpuFogScattering: 0,
+  gpuExposure: 100,
+  gpuContrast: 100,
+  gpuSaturation: 100,
+  enableGpuFireShader: false,
+  gpuFireScale: 0.5,
+  gpuFireSmoke: 40,
 };
 
 /** One-click presets. Each one overrides only the keys listed here. */
 export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfig>> = {
   low: {
-    maxVehicles: 14, nearbyVehiclesTarget: 6, maxActivePedestrians: 50,
+    maxVehicles: 12, nearbyVehiclesTarget: 5, maxActivePedestrians: 40,
     enableMinimap: true, enableRainDroplets: false, enableBalconyDetails: false,
-    enableShadows: false, particleLimit: 150, lowQualityRendering: true,
+    enableShadows: false, particleLimit: 120, lowQualityRendering: true,
     shadowResolutionScale: 0.5, shadowIntensity: 75, shadowLengthScale: 100, shadowSoftness: 0,
     enableBuildingShadows: true, enableRooftopShadows: false, enableTreeShadows: false,
     enableVehicleShadows: true, enableVehicleDetailShadows: false, enablePedestrianShadows: false,
     enablePropShadows: false, enableMicroShadows: false,
     enableDynamicLighting: true, headlightQuality: 1, enableAdditiveGlow: false, enableHeadlightGlare: false,
     renderScale: 0.67, hiDpi: false, imageSmoothing: false, minimapUpdateMs: 500,
-    drawDistance: 0.7, maxVisiblePedestrians: 40, maxVisibleVehicles: 30,
-    maxVisibleTrees: 300, maxVisibleProps: 400, skidMarksLimit: 600, stainsLimit: 300,
-    puddlesLimit: 120, litterLimit: 60, renderParticleLimit: 150, rainDensity: 40,
-    enableBirds: false, enableCloudShadows: false, enableSoftShadowBlur: false,
+    drawDistance: 0.7, maxVisiblePedestrians: 35, maxVisibleVehicles: 28,
+    maxVisibleTrees: 260, maxVisibleProps: 320, skidMarksLimit: 450, stainsLimit: 200,
+    puddlesLimit: 80, litterLimit: 50, renderParticleLimit: 120, rainDensity: 35,
+    enableBirds: false, enableCloudShadows: false, enableDynamicGrass: false, enableSoftShadowBlur: false,
     enableScreenShake: false, enableCameraJitter: false, enableScreenEffects: false,
     enableSpeechBubbles: true, enableNameTags: false,
     enableLiquidReflections: false, liquidReflectionStrength: 0, liquidReflectionLimit: 0,
@@ -213,47 +329,47 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableGpuFireShader: false, gpuFireScale: 0.5, gpuFireSmoke: 40,
   },
   medium: {
-    maxVehicles: 22, nearbyVehiclesTarget: 8, maxActivePedestrians: 90,
-    enableMinimap: true, enableRainDroplets: true, enableBalconyDetails: true,
-    enableShadows: true, particleLimit: 220, lowQualityRendering: false,
-    shadowResolutionScale: 0.75, shadowIntensity: 90, shadowLengthScale: 100, shadowSoftness: 30,
-    enableBuildingShadows: true, enableRooftopShadows: true, enableTreeShadows: true,
-    enableVehicleShadows: true, enableVehicleDetailShadows: false, enablePedestrianShadows: true,
+    maxVehicles: 18, nearbyVehiclesTarget: 7, maxActivePedestrians: 70,
+    enableMinimap: true, enableRainDroplets: true, enableBalconyDetails: false,
+    enableShadows: true, particleLimit: 180, lowQualityRendering: false,
+    shadowResolutionScale: 0.5, shadowIntensity: 90, shadowLengthScale: 100, shadowSoftness: 0,
+    enableBuildingShadows: true, enableRooftopShadows: false, enableTreeShadows: true,
+    enableVehicleShadows: true, enableVehicleDetailShadows: false, enablePedestrianShadows: false,
     enablePropShadows: false, enableMicroShadows: false,
     enableDynamicLighting: true, headlightQuality: 1, enableAdditiveGlow: true, enableHeadlightGlare: false,
     renderScale: 0.85, hiDpi: false, imageSmoothing: true, minimapUpdateMs: 250,
-    drawDistance: 0.85, maxVisiblePedestrians: 100, maxVisibleVehicles: 80,
-    maxVisibleTrees: 1000, maxVisibleProps: 1200, skidMarksLimit: 2000, stainsLimit: 1000,
-    puddlesLimit: 500, litterLimit: 200, renderParticleLimit: 350, rainDensity: 70,
-    enableBirds: true, enableCloudShadows: true, enableSoftShadowBlur: false,
+    drawDistance: 0.85, maxVisiblePedestrians: 80, maxVisibleVehicles: 65,
+    maxVisibleTrees: 650, maxVisibleProps: 700, skidMarksLimit: 1200, stainsLimit: 450,
+    puddlesLimit: 220, litterLimit: 120, renderParticleLimit: 240, rainDensity: 65,
+    enableBirds: true, enableCloudShadows: true, enableDynamicGrass: false, enableSoftShadowBlur: false,
     enableScreenShake: true, enableCameraJitter: true, enableScreenEffects: true,
     enableSpeechBubbles: true, enableNameTags: true,
-    enableLiquidReflections: true, liquidReflectionStrength: 50, liquidReflectionLimit: 100,
-    enableLiquidShadows: true, liquidShadowStrength: 35,
-    enableGpuPostFx: true, gpuBloom: 25, gpuBloomRadius: 90, gpuGrading: 15, gpuClarity: 0, gpuRelief: 25, gpuSharpness: 20,
-    gpuVignette: 0, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: true, gpuBicubicUpscale: false, gpuGi: 35, gpuWet: 50,
-    gpuWaterShader: 55, gpuWaterWakes: 50, gpuHeatShimmer: 50, gpuFireLighting: 55, gpuFogScattering: 55,
+    enableLiquidReflections: false, liquidReflectionStrength: 0, liquidReflectionLimit: 0,
+    enableLiquidShadows: false, liquidShadowStrength: 0,
+    enableGpuPostFx: false, gpuBloom: 0, gpuBloomRadius: 85, gpuGrading: 0, gpuClarity: 0, gpuRelief: 0, gpuSharpness: 0,
+    gpuVignette: 0, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: false, gpuBicubicUpscale: false, gpuGi: 0, gpuWet: 0,
+    gpuWaterShader: 0, gpuWaterWakes: 0, gpuHeatShimmer: 0, gpuFireLighting: 0, gpuFogScattering: 0,
     gpuExposure: 100, gpuContrast: 100, gpuSaturation: 100,
-    enableGpuFireShader: true, gpuFireScale: 0.5, gpuFireSmoke: 65,
+    enableGpuFireShader: false, gpuFireScale: 0.5, gpuFireSmoke: 55,
   },
   high: { ...DEFAULT_CONFIG },
   ultra: {
-    maxVehicles: 40, nearbyVehiclesTarget: 14, maxActivePedestrians: 180,
+    maxVehicles: 36, nearbyVehiclesTarget: 12, maxActivePedestrians: 150,
     enableMinimap: true, enableRainDroplets: true, enableBalconyDetails: true,
-    enableShadows: true, particleLimit: 500, lowQualityRendering: false,
-    shadowResolutionScale: 1, shadowIntensity: 110, shadowLengthScale: 105, shadowSoftness: 100,
+    enableShadows: true, particleLimit: 450, lowQualityRendering: false,
+    shadowResolutionScale: 1, shadowIntensity: 110, shadowLengthScale: 105, shadowSoftness: 80,
     enableBuildingShadows: true, enableRooftopShadows: true, enableTreeShadows: true,
     enableVehicleShadows: true, enableVehicleDetailShadows: true, enablePedestrianShadows: true,
     enablePropShadows: true, enableMicroShadows: true,
     enableDynamicLighting: true, headlightQuality: 2, enableAdditiveGlow: true, enableHeadlightGlare: true,
     renderScale: 1, hiDpi: true, imageSmoothing: true, minimapUpdateMs: 0,
-    drawDistance: 1.3, maxVisiblePedestrians: 200, maxVisibleVehicles: 150,
-    maxVisibleTrees: 3000, maxVisibleProps: 3000, skidMarksLimit: 5000, stainsLimit: 2000,
-    puddlesLimit: 1000, litterLimit: 500, renderParticleLimit: 600, rainDensity: 100,
-    enableBirds: true, enableCloudShadows: true, enableSoftShadowBlur: true,
+    drawDistance: 1.25, maxVisiblePedestrians: 180, maxVisibleVehicles: 130,
+    maxVisibleTrees: 2000, maxVisibleProps: 2000, skidMarksLimit: 3500, stainsLimit: 1500,
+    puddlesLimit: 800, litterLimit: 400, renderParticleLimit: 500, rainDensity: 100,
+    enableBirds: true, enableCloudShadows: true, enableDynamicGrass: true, enableSoftShadowBlur: true,
     enableScreenShake: true, enableCameraJitter: true, enableScreenEffects: true,
     enableSpeechBubbles: true, enableNameTags: true,
-    enableLiquidReflections: true, liquidReflectionStrength: 80, liquidReflectionLimit: 400,
+    enableLiquidReflections: true, liquidReflectionStrength: 80, liquidReflectionLimit: 350,
     enableLiquidShadows: true, liquidShadowStrength: 70,
     enableGpuPostFx: true, gpuBloom: 35, gpuBloomRadius: 120, gpuGrading: 15, gpuClarity: 0, gpuRelief: 45, gpuSharpness: 15,
     gpuVignette: 0, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: true, gpuBicubicUpscale: true, gpuGi: 55, gpuWet: 75,
@@ -262,6 +378,10 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableGpuFireShader: true, gpuFireScale: 1, gpuFireSmoke: 115,
   },
 };
+
+export function getRecommendedDefaultConfig(): PerformanceConfig {
+  return isMobileOrLowEndDevice() ? { ...MOBILE_DEFAULT_CONFIG } : { ...DEFAULT_CONFIG };
+}
 
 /** Returns the preset whose values all match the current config, or null for custom values. */
 export function detectGraphicsPreset(cfg: PerformanceConfig): GraphicsPresetId | null {
@@ -273,18 +393,19 @@ export function detectGraphicsPreset(cfg: PerformanceConfig): GraphicsPresetId |
 }
 
 export function loadPerformanceConfig(): PerformanceConfig {
+  const base = getRecommendedDefaultConfig();
   try {
     if (typeof localStorage !== 'undefined') {
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) {
         const parsed = JSON.parse(data);
-        return { ...DEFAULT_CONFIG, ...parsed };
+        return { ...base, ...parsed };
       }
     }
   } catch (e) {
     console.error('Failed to load performance config', e);
   }
-  return { ...DEFAULT_CONFIG };
+  return base;
 }
 
 export function savePerformanceConfig(config: PerformanceConfig) {

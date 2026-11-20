@@ -406,6 +406,11 @@ class OnlineManager {
   public localPlayerName: string = '';
 
   public remotePlayers: Map<string, RemotePlayerState> = new Map();
+  private cachedRemotePlayersArr: RemotePlayerState[] = [];
+  private remotePlayersDirty: boolean = true;
+  private lastSyncedDamageSig: string = '';
+  private lastFullDamageSentAt: number = 0;
+  private syncVehByIdMap: Map<string, Vehicle> = new Map();
   public chatMessages: ChatMessage[] = [];
   public speechBubbles: Map<string, SpeechBubble> = new Map();
 
@@ -723,6 +728,7 @@ class OnlineManager {
       if (player) {
         this.addSystemMessage(`${player.name} вышел из комнаты.`);
         this.remotePlayers.delete(conn.peer);
+        this.remotePlayersDirty = true;
         this.speechBubbles.delete(conn.peer);
       }
       this.notify();
@@ -919,6 +925,7 @@ class OnlineManager {
       targetPeerId: peerId
     });
     this.remotePlayers.delete(peerId);
+    this.remotePlayersDirty = true;
     this.speechBubbles.delete(peerId);
     this.authenticatedPeers.delete(peerId);
     this.pendingAuthPeers.delete(peerId);
@@ -1647,6 +1654,7 @@ class OnlineManager {
         if (player) {
           this.addSystemMessage(`${player.name} покинул комнату.`);
           this.remotePlayers.delete(packet.peerId);
+          this.remotePlayersDirty = true;
           this.speechBubbles.delete(packet.peerId);
         }
         this.notify();
@@ -1675,8 +1683,19 @@ class OnlineManager {
           }
         }
 
+        // Preserve previously synced heavy damage geometry arrays if omitted in a delta packet
+        const prevRemote = this.remotePlayers.get(p.peerId);
+        if (prevRemote?.vehicleState?.damage && p.vehicleState?.damage && prevRemote.vehicleState.id === p.vehicleState.id) {
+          if (!p.vehicleState.damage.scratches) {
+            p.vehicleState.damage.scratches = prevRemote.vehicleState.damage.scratches;
+          }
+          if (!p.vehicleState.damage.deformedVertices) {
+            p.vehicleState.damage.deformedVertices = prevRemote.vehicleState.damage.deformedVertices;
+          }
+        }
         p.lastUpdated = Date.now();
         this.remotePlayers.set(p.peerId, p);
+        this.remotePlayersDirty = true;
         break;
       }
 
@@ -1880,6 +1899,9 @@ class OnlineManager {
     }
 
     this.remotePlayers.clear();
+    this.remotePlayersDirty = true;
+    this.lastSyncedDamageSig = '';
+    this.lastFullDamageSentAt = 0;
     this.speechBubbles.clear();
     this.chatMessages = [];
     this.lastTrafficSync = null;
@@ -1921,19 +1943,30 @@ class OnlineManager {
     let vehicleState: RemoteVehicleState | null = null;
     let trailerState: RemoteVehicleState | null = null;
 
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    const r3 = (n: number) => Math.round(n * 1000) / 1000;
+    const nowMs = Date.now();
+
     if (player.isInVehicle && player.currentVehicleId) {
       const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
       if (veh) {
+        const dmg = veh.damage;
+        const dmgSig = `${veh.id}_${dmg.scratches?.length || 0}_${Math.round(dmg.frontCrumple * 10)}_${Math.round(dmg.rearCrumple * 10)}_${Math.round(dmg.leftDent * 10)}_${Math.round(dmg.rightDent * 10)}`;
+        const sendHeavyDamage = dmgSig !== this.lastSyncedDamageSig || nowMs - this.lastFullDamageSentAt > 1500;
+        if (sendHeavyDamage) {
+          this.lastSyncedDamageSig = dmgSig;
+          this.lastFullDamageSentAt = nowMs;
+        }
         vehicleState = {
           id: veh.id,
           type: veh.type,
-          x: veh.x,
-          y: veh.y,
-          vx: veh.vx,
-          vy: veh.vy,
-          angle: veh.angle,
-          steerAngle: veh.steerAngle,
-          speed: veh.speed,
+          x: r1(veh.x),
+          y: r1(veh.y),
+          vx: r1(veh.vx),
+          vy: r1(veh.vy),
+          angle: r3(veh.angle),
+          steerAngle: r3(veh.steerAngle),
+          speed: r1(veh.speed),
           color: veh.color,
           roofColor: veh.roofColor,
           headlightsOn: veh.headlightsOn,
@@ -1945,42 +1978,42 @@ class OnlineManager {
           sirenOn: veh.sirenOn,
           wipersOn: veh.wipersOn,
           engineRunning: veh.engineState?.engineRunning,
-          engineRPM: veh.engineState?.engineRPM,
-          engineTemperature: veh.engineState?.temperature,
+          engineRPM: veh.engineState?.engineRPM ? Math.round(veh.engineState.engineRPM) : undefined,
+          engineTemperature: veh.engineState?.temperature ? r1(veh.engineState.temperature) : undefined,
           damage: {
-            frontCrumple: veh.damage.frontCrumple,
-            rearCrumple: veh.damage.rearCrumple,
-            leftDent: veh.damage.leftDent,
-            rightDent: veh.damage.rightDent,
-            frontLeftDent: veh.damage.frontLeftDent,
-            frontRightDent: veh.damage.frontRightDent,
-            rearLeftDent: veh.damage.rearLeftDent,
-            rearRightDent: veh.damage.rearRightDent,
-            hoodBuckled: veh.damage.hoodBuckled,
-            windshieldCracked: veh.damage.windshieldCracked,
-            rearGlassCracked: veh.damage.rearGlassCracked,
-            leftHeadlightBroken: veh.damage.leftHeadlightBroken,
-            rightHeadlightBroken: veh.damage.rightHeadlightBroken,
-            leftTaillightBroken: veh.damage.leftTaillightBroken,
-            rightTaillightBroken: veh.damage.rightTaillightBroken,
-            engineSmoking: veh.damage.engineSmoking,
-            underHoodSmolder: veh.damage.underHoodSmolder,
-            engineFire: veh.damage.engineFire,
-            fuelTankFire: veh.damage.fuelTankFire,
-            cabinFire: veh.damage.cabinFire,
-            isFullyBurnt: veh.damage.isFullyBurnt,
-            scratches: veh.damage.scratches ? [...veh.damage.scratches] : [],
-            deformedVertices: veh.damage.deformedVertices ? [...veh.damage.deformedVertices] : [],
-            frameBentAngle: veh.damage.frameBentAngle,
-            hoodRaisedAmount: veh.damage.hoodRaisedAmount,
-            bumperSagLeft: veh.damage.bumperSagLeft,
-            bumperSagRight: veh.damage.bumperSagRight
+            frontCrumple: r1(dmg.frontCrumple),
+            rearCrumple: r1(dmg.rearCrumple),
+            leftDent: r1(dmg.leftDent),
+            rightDent: r1(dmg.rightDent),
+            frontLeftDent: r1(dmg.frontLeftDent),
+            frontRightDent: r1(dmg.frontRightDent),
+            rearLeftDent: r1(dmg.rearLeftDent),
+            rearRightDent: r1(dmg.rearRightDent),
+            hoodBuckled: dmg.hoodBuckled,
+            windshieldCracked: dmg.windshieldCracked,
+            rearGlassCracked: dmg.rearGlassCracked,
+            leftHeadlightBroken: dmg.leftHeadlightBroken,
+            rightHeadlightBroken: dmg.rightHeadlightBroken,
+            leftTaillightBroken: dmg.leftTaillightBroken,
+            rightTaillightBroken: dmg.rightTaillightBroken,
+            engineSmoking: dmg.engineSmoking,
+            underHoodSmolder: dmg.underHoodSmolder,
+            engineFire: dmg.engineFire,
+            fuelTankFire: dmg.fuelTankFire,
+            cabinFire: dmg.cabinFire,
+            isFullyBurnt: dmg.isFullyBurnt,
+            scratches: sendHeavyDamage ? (dmg.scratches ? [...dmg.scratches] : []) : undefined,
+            deformedVertices: sendHeavyDamage ? (dmg.deformedVertices ? [...dmg.deformedVertices] : []) : undefined,
+            frameBentAngle: dmg.frameBentAngle,
+            hoodRaisedAmount: dmg.hoodRaisedAmount,
+            bumperSagLeft: dmg.bumperSagLeft,
+            bumperSagRight: dmg.bumperSagRight
           },
           trailerId: veh.trailerId,
           towedById: veh.towedById,
-          trailerDollyAngle: veh.trailerDollyAngle,
-          trailerDollyX: veh.trailerDollyX,
-          trailerDollyY: veh.trailerDollyY
+          trailerDollyAngle: veh.trailerDollyAngle !== undefined ? r3(veh.trailerDollyAngle) : undefined,
+          trailerDollyX: veh.trailerDollyX !== undefined ? r1(veh.trailerDollyX) : undefined,
+          trailerDollyY: veh.trailerDollyY !== undefined ? r1(veh.trailerDollyY) : undefined
         };
 
         // If towing a trailer, serialize trailer vehicle as well
@@ -1990,13 +2023,13 @@ class OnlineManager {
             trailerState = {
               id: trailerVeh.id,
               type: trailerVeh.type,
-              x: trailerVeh.x,
-              y: trailerVeh.y,
-              vx: trailerVeh.vx,
-              vy: trailerVeh.vy,
-              angle: trailerVeh.angle,
-              steerAngle: trailerVeh.steerAngle,
-              speed: trailerVeh.speed,
+              x: r1(trailerVeh.x),
+              y: r1(trailerVeh.y),
+              vx: r1(trailerVeh.vx),
+              vy: r1(trailerVeh.vy),
+              angle: r3(trailerVeh.angle),
+              steerAngle: r3(trailerVeh.steerAngle),
+              speed: r1(trailerVeh.speed),
               color: trailerVeh.color,
               roofColor: trailerVeh.roofColor,
               headlightsOn: trailerVeh.headlightsOn,
@@ -2021,14 +2054,14 @@ class OnlineManager {
                 rightHeadlightBroken: false,
                 leftTaillightBroken: trailerVeh.damage?.leftTaillightBroken || false,
                 rightTaillightBroken: trailerVeh.damage?.rightTaillightBroken || false,
-                deformedVertices: trailerVeh.damage?.deformedVertices ? [...trailerVeh.damage.deformedVertices] : []
+                deformedVertices: sendHeavyDamage && trailerVeh.damage?.deformedVertices ? [...trailerVeh.damage.deformedVertices] : undefined
               },
               towedById: veh.id,
-              trailerDollyAngle: trailerVeh.trailerDollyAngle,
-              trailerDollyX: trailerVeh.trailerDollyX,
-              trailerDollyY: trailerVeh.trailerDollyY,
-              trailerRearX: trailerVeh.trailerRearX,
-              trailerRearY: trailerVeh.trailerRearY
+              trailerDollyAngle: trailerVeh.trailerDollyAngle !== undefined ? r3(trailerVeh.trailerDollyAngle) : undefined,
+              trailerDollyX: trailerVeh.trailerDollyX !== undefined ? r1(trailerVeh.trailerDollyX) : undefined,
+              trailerDollyY: trailerVeh.trailerDollyY !== undefined ? r1(trailerVeh.trailerDollyY) : undefined,
+              trailerRearX: trailerVeh.trailerRearX !== undefined ? r1(trailerVeh.trailerRearX) : undefined,
+              trailerRearY: trailerVeh.trailerRearY !== undefined ? r1(trailerVeh.trailerRearY) : undefined
             };
           }
         }
@@ -2038,13 +2071,13 @@ class OnlineManager {
     const state: RemotePlayerState = {
       peerId: this.localPeerId,
       name: this.localPlayerName,
-      x: player.x,
-      y: player.y,
-      vx: player.vx,
-      vy: player.vy,
-      angle: player.angle,
-      speed: player.speed,
-      walkCycle: player.walkCycle,
+      x: r1(player.x),
+      y: r1(player.y),
+      vx: r1(player.vx),
+      vy: r1(player.vy),
+      angle: r3(player.angle),
+      speed: r1(player.speed),
+      walkCycle: r3(player.walkCycle),
       isDashing: player.isDashing,
       isFlying: player.isFlying,
       skinColor: player.skinColor,
@@ -2060,7 +2093,7 @@ class OnlineManager {
       currentVehicleId: player.currentVehicleId,
       vehicleState,
       trailerState,
-      lastUpdated: Date.now()
+      lastUpdated: nowMs
     };
 
     this.broadcastPacket({
@@ -2098,70 +2131,109 @@ class OnlineManager {
       }
     }
 
-    // Host traffic broadcasting
-    if (this.isHost && this.serverSettings.trafficEnabled) {
+    // Host traffic broadcasting (skip completely when no remote guests are connected!)
+    if (this.isHost && this.serverSettings.trafficEnabled && this.remotePlayers.size > 0) {
       this.syncTimer += dt;
-      if (this.syncTimer >= 0.1) {
+      if (this.syncTimer >= 0.14) {
         this.syncTimer = 0;
-        const vehiclesToSync: SyncTrafficVehicle[] = world.vehicles
-          .filter(v => !v.isPlayerControlled && !(v as any).isRemoteControlled && !v.isParked && v.id !== 'evac_ambulance_special' && !v.keyId)
-          .slice(0, this.serverSettings.vehicleCount)
-          .map(v => ({
+        const r1 = (n: number) => Math.round(n * 10) / 10;
+        const r3 = (n: number) => Math.round(n * 1000) / 1000;
+        const remotes = this.getRemotePlayersArray();
+        const maxDistSq = 2400 * 2400;
+        const isNearAnyGuest = (x: number, y: number): boolean => {
+          for (let i = 0; i < remotes.length; i++) {
+            const dx = x - remotes[i].x;
+            const dy = y - remotes[i].y;
+            if (dx * dx + dy * dy <= maxDistSq) return true;
+          }
+          return false;
+        };
+
+        const vehiclesToSync: SyncTrafficVehicle[] = [];
+        const maxVeh = this.serverSettings.vehicleCount;
+        for (let i = 0; i < world.vehicles.length && vehiclesToSync.length < maxVeh; i++) {
+          const v = world.vehicles[i];
+          if (v.isPlayerControlled || (v as any).isRemoteControlled || v.isParked || v.id === 'evac_ambulance_special' || v.keyId) {
+            continue;
+          }
+          if (!isNearAnyGuest(v.x, v.y)) continue;
+          vehiclesToSync.push({
             id: v.id,
             type: v.type,
-            x: v.x,
-            y: v.y,
-            vx: v.vx,
-            vy: v.vy,
-            angle: v.angle,
-            speed: v.speed,
-            steerAngle: v.steerAngle,
+            x: r1(v.x),
+            y: r1(v.y),
+            vx: r1(v.vx),
+            vy: r1(v.vy),
+            angle: r3(v.angle),
+            speed: r1(v.speed),
+            steerAngle: r3(v.steerAngle),
             color: v.color,
             roofColor: v.roofColor,
             headlightsOn: v.headlightsOn,
             brakeLightsOn: v.brakeLightsOn,
             turnSignal: v.turnSignal,
             isParked: v.isParked
-          }));
+          });
+        }
 
-        const pedsToSync: SyncPedestrian[] = world.pedestrians
-          .slice(0, this.serverSettings.pedestrianCount)
-          .map(p => ({
+        const pedsToSync: SyncPedestrian[] = [];
+        const maxPeds = this.serverSettings.pedestrianCount;
+        for (let i = 0; i < world.pedestrians.length && pedsToSync.length < maxPeds; i++) {
+          const p = world.pedestrians[i];
+          if (!isNearAnyGuest(p.x, p.y)) continue;
+          pedsToSync.push({
             id: p.id,
-            x: p.x,
-            y: p.y,
-            vx: p.vx,
-            vy: p.vy,
-            angle: p.angle,
-            speed: p.speed,
-            walkCycle: p.walkCycle,
+            x: r1(p.x),
+            y: r1(p.y),
+            vx: r1(p.vx),
+            vy: r1(p.vy),
+            angle: r3(p.angle),
+            speed: r1(p.speed),
+            walkCycle: r3(p.walkCycle),
             skinColor: p.skinColor,
             shirtColor: p.shirtColor,
             pantsColor: p.pantsColor
-          }));
+          });
+        }
 
-        this.broadcastPacket({
-          type: 'traffic_sync',
-          packetId: this.nextPacketId(),
-          vehicles: vehiclesToSync,
-          pedestrians: pedsToSync
-        });
+        if (vehiclesToSync.length > 0 || pedsToSync.length > 0) {
+          this.broadcastPacket({
+            type: 'traffic_sync',
+            packetId: this.nextPacketId(),
+            vehicles: vehiclesToSync,
+            pedestrians: pedsToSync
+          });
+        }
       }
     }
 
-    // Client applying traffic sync
+    // Build reusable O(1) vehicle lookup map when syncing traffic or remote player vehicles
+    const needVehLookup = (!this.isHost && !!this.lastTrafficSync) || this.remotePlayers.size > 0;
+    const vehById = this.syncVehByIdMap;
+    if (needVehLookup) {
+      vehById.clear();
+      for (let i = 0, len = world.vehicles.length; i < len; i++) {
+        const v = world.vehicles[i];
+        vehById.set(v.id, v);
+      }
+    }
+
+    // Client applying traffic sync (O(1) lookup per synced vehicle)
     if (!this.isHost && this.lastTrafficSync) {
-      this.lastTrafficSync.vehicles.forEach(sv => {
-        let v = world.vehicles.find(item => item.id === sv.id);
+      const alpha = Math.min(1, dt * 10);
+      const list = this.lastTrafficSync.vehicles;
+      for (let i = 0; i < list.length; i++) {
+        const sv = list[i];
+        const v = vehById.get(sv.id);
         if (v && !v.isPlayerControlled) {
-          v.x += (sv.x - v.x) * Math.min(1, dt * 10);
-          v.y += (sv.y - v.y) * Math.min(1, dt * 10);
+          v.x += (sv.x - v.x) * alpha;
+          v.y += (sv.y - v.y) * alpha;
           v.vx = sv.vx;
           v.vy = sv.vy;
           v.angle = sv.angle;
           v.speed = sv.speed;
         }
-      });
+      }
     }
 
     // 1. Prune expired speech bubbles
@@ -2175,6 +2247,7 @@ class OnlineManager {
     this.remotePlayers.forEach((p, peerId) => {
       if (now - p.lastUpdated > 10000) {
         this.remotePlayers.delete(peerId);
+        this.remotePlayersDirty = true;
         this.speechBubbles.delete(peerId);
         this.notify();
       }
@@ -2184,7 +2257,7 @@ class OnlineManager {
     this.remotePlayers.forEach((p) => {
       if (p.isInVehicle && p.vehicleState) {
         const vs = p.vehicleState;
-        let veh = world.vehicles.find((v) => v.id === vs.id);
+        let veh = vehById.get(vs.id);
 
         if (!veh) {
           // Vehicle does not exist in local world; spawn it!
@@ -2303,7 +2376,7 @@ class OnlineManager {
         // Synchronize Trailer if present
         if (vs.trailerId && p.trailerState) {
           const ts = p.trailerState;
-          let trailer = world.vehicles.find((v) => v.id === ts.id);
+          let trailer = vehById.get(ts.id);
           if (!trailer) {
             const tCfg = CAR_CONFIGS[ts.type] || CAR_CONFIGS.trailer_barrel;
             trailer = {
@@ -2378,7 +2451,11 @@ class OnlineManager {
   }
 
   public getRemotePlayersArray(): RemotePlayerState[] {
-    return Array.from(this.remotePlayers.values());
+    if (this.remotePlayersDirty) {
+      this.cachedRemotePlayersArr = Array.from(this.remotePlayers.values());
+      this.remotePlayersDirty = false;
+    }
+    return this.cachedRemotePlayersArr;
   }
 
   public getSpeechBubbles(): Map<string, SpeechBubble> {

@@ -24,6 +24,7 @@ import { getBiomeSampleAt } from './biomeSystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
 import { getRiverWaterAt } from './riverSystem';
 import { ForestSystem } from './forestSystem';
+import { performanceConfig } from './performanceConfig';
 
 interface TrampledGrassCell {
   crush: number;      // 0.0 (upright) to 1.0 (completely flattened to the soil)
@@ -1407,6 +1408,18 @@ export class TerrainRenderer {
    */
   private static grassSurfaceCache = new Map<number, number>();
   private static grassSurfaceCacheWorldKey = '';
+  private static trampleCallbackRegistered = false;
+  private static exclCacheKey = '';
+  private static exclMinX = 0;
+  private static exclMinY = 0;
+  private static exclMaxX = 0;
+  private static exclMaxY = 0;
+  private static cachedActiveRoads: RoadSegment[] = [];
+  private static cachedActiveSidewalks: SidewalkBlock[] = [];
+  private static cachedActiveIntersections: GameWorld['intersections'] = [];
+  private static cachedActiveParkings: NonNullable<GameWorld['parkings']> = [];
+  private static cachedActiveDriveways: NonNullable<GameWorld['driveways']> = [];
+  private static cachedActiveTracks: NonNullable<GameWorld['railwayTracks']> = [];
 
   public static renderDynamicFieldGrass(
     ctx: CanvasRenderingContext2D,
@@ -1421,6 +1434,7 @@ export class TerrainRenderer {
     maxY: number,
     cameraZoom: number = 1.5
   ): void {
+    if (!performanceConfig.enableDynamicGrass || cameraZoom < 0.55) return;
     const season = world.calendar?.season || 'summer';
     if (season === 'winter') return;
 
@@ -1445,60 +1459,114 @@ export class TerrainRenderer {
     const baseWindPower = Math.min(1.65, Math.max(0.15, (windSpeed / 32) * (0.75 + windGust * 0.38)));
     const waveSpeed = 1.55 + windSpeed * 0.048;
 
-    // 3. Pre-cull non-grass geometry in current viewport for fast exclusion
-    const pad = 42;
-    const activeRoads: RoadSegment[] = [];
-    const allRoads = world.roads || [];
-    for (let i = 0; i < allRoads.length; i++) {
-      const r = allRoads[i];
-      const m = (r.width || 60) / 2 + 28;
-      const rx1 = (r._minX ?? Math.min(r.x1, r.x2)) - m;
-      const rx2 = (r._maxX ?? Math.max(r.x1, r.x2)) + m;
-      const ry1 = (r._minY ?? Math.min(r.y1, r.y2)) - m;
-      const ry2 = (r._maxY ?? Math.max(r.y1, r.y2)) + m;
-      if (rx2 >= minX - pad && rx1 <= maxX + pad && ry2 >= minY - pad && ry1 <= maxY + pad) {
-        activeRoads.push(r);
-      }
-    }
-
-    const activeSidewalks: SidewalkBlock[] = [];
-    const allSidewalks = world.sidewalks || [];
-    for (let i = 0; i < allSidewalks.length; i++) {
-      const sw = allSidewalks[i];
-      if (sw.x + sw.width >= minX && sw.x <= maxX && sw.y + sw.height >= minY && sw.y <= maxY) {
-        activeSidewalks.push(sw);
-      }
-    }
-
-    const activeIntersections = (world.intersections || []).filter(
-      (inter) =>
-        inter.x + inter.width / 2 + 10 >= minX &&
-        inter.x - inter.width / 2 - 10 <= maxX &&
-        inter.y + inter.height / 2 + 10 >= minY &&
-        inter.y - inter.height / 2 - 10 <= maxY
-    );
-
-    const activeParkings = (world.parkings || []).filter(
-      (pk) => pk.x + pk.width >= minX && pk.x <= maxX && pk.y + pk.height >= minY && pk.y <= maxY
-    );
-
-    const activeDriveways = (world.driveways || []).filter(
-      (dw) => dw.x + dw.width >= minX && dw.x <= maxX && dw.y + dw.height >= minY && dw.y <= maxY
-    );
-
-    const activeTracks = (world.railwayTracks || []).filter((tr) => {
-      const tx1 = Math.min(tr.x1, tr.x2) - 26;
-      const tx2 = Math.max(tr.x1, tr.x2) + 26;
-      const ty1 = Math.min(tr.y1, tr.y2) - 26;
-      const ty2 = Math.max(tr.y1, tr.y2) + 26;
-      return tx2 >= minX && tx1 <= maxX && ty2 >= minY && ty1 <= maxY;
-    });
-
+    // 3. Pre-cull non-grass geometry in current viewport with padded spatial cache (rebuilt only when camera shifts > 96px)
     const worldCacheKey = `${world.buildings.length}_${world.roads.length}_${world.sidewalks?.length || 0}_${world.parkings?.length || 0}`;
+    const cachePad = 140;
+    const needRebuildExcl =
+      this.exclCacheKey !== worldCacheKey ||
+      minX < this.exclMinX + 24 ||
+      maxX > this.exclMaxX - 24 ||
+      minY < this.exclMinY + 24 ||
+      maxY > this.exclMaxY - 24;
+
+    if (needRebuildExcl) {
+      this.exclCacheKey = worldCacheKey;
+      this.exclMinX = minX - cachePad;
+      this.exclMaxX = maxX + cachePad;
+      this.exclMinY = minY - cachePad;
+      this.exclMaxY = maxY + cachePad;
+      const eMinX = this.exclMinX;
+      const eMaxX = this.exclMaxX;
+      const eMinY = this.exclMinY;
+      const eMaxY = this.exclMaxY;
+      const pad = 42;
+
+      const nextRoads: RoadSegment[] = [];
+      const allRoads = world.roads || [];
+      for (let i = 0; i < allRoads.length; i++) {
+        const r = allRoads[i];
+        const m = (r.width || 60) / 2 + 28;
+        const rx1 = (r._minX ?? Math.min(r.x1, r.x2)) - m;
+        const rx2 = (r._maxX ?? Math.max(r.x1, r.x2)) + m;
+        const ry1 = (r._minY ?? Math.min(r.y1, r.y2)) - m;
+        const ry2 = (r._maxY ?? Math.max(r.y1, r.y2)) + m;
+        if (rx2 >= eMinX - pad && rx1 <= eMaxX + pad && ry2 >= eMinY - pad && ry1 <= eMaxY + pad) {
+          nextRoads.push(r);
+        }
+      }
+      this.cachedActiveRoads = nextRoads;
+
+      const nextSidewalks: SidewalkBlock[] = [];
+      const allSidewalks = world.sidewalks || [];
+      for (let i = 0; i < allSidewalks.length; i++) {
+        const sw = allSidewalks[i];
+        if (sw.x + sw.width >= eMinX && sw.x <= eMaxX && sw.y + sw.height >= eMinY && sw.y <= eMaxY) {
+          nextSidewalks.push(sw);
+        }
+      }
+      this.cachedActiveSidewalks = nextSidewalks;
+
+      const nextIntersections: GameWorld['intersections'] = [];
+      const allInter = world.intersections || [];
+      for (let i = 0; i < allInter.length; i++) {
+        const inter = allInter[i];
+        if (
+          inter.x + inter.width / 2 + 10 >= eMinX &&
+          inter.x - inter.width / 2 - 10 <= eMaxX &&
+          inter.y + inter.height / 2 + 10 >= eMinY &&
+          inter.y - inter.height / 2 - 10 <= eMaxY
+        ) {
+          nextIntersections.push(inter);
+        }
+      }
+      this.cachedActiveIntersections = nextIntersections;
+
+      const nextParkings: NonNullable<GameWorld['parkings']> = [];
+      const allParkings = world.parkings || [];
+      for (let i = 0; i < allParkings.length; i++) {
+        const pk = allParkings[i];
+        if (pk.x + pk.width >= eMinX && pk.x <= eMaxX && pk.y + pk.height >= eMinY && pk.y <= eMaxY) {
+          nextParkings.push(pk);
+        }
+      }
+      this.cachedActiveParkings = nextParkings;
+
+      const nextDriveways: NonNullable<GameWorld['driveways']> = [];
+      const allDriveways = world.driveways || [];
+      for (let i = 0; i < allDriveways.length; i++) {
+        const dw = allDriveways[i];
+        if (dw.x + dw.width >= eMinX && dw.x <= eMaxX && dw.y + dw.height >= eMinY && dw.y <= eMaxY) {
+          nextDriveways.push(dw);
+        }
+      }
+      this.cachedActiveDriveways = nextDriveways;
+
+      const nextTracks: NonNullable<GameWorld['railwayTracks']> = [];
+      const allTracks = world.railwayTracks || [];
+      for (let i = 0; i < allTracks.length; i++) {
+        const tr = allTracks[i];
+        const tx1 = Math.min(tr.x1, tr.x2) - 26;
+        const tx2 = Math.max(tr.x1, tr.x2) + 26;
+        const ty1 = Math.min(tr.y1, tr.y2) - 26;
+        const ty2 = Math.max(tr.y1, tr.y2) + 26;
+        if (tx2 >= eMinX && tx1 <= eMaxX && ty2 >= eMinY && ty1 <= eMaxY) {
+          nextTracks.push(tr);
+        }
+      }
+      this.cachedActiveTracks = nextTracks;
+    }
+
+    const activeRoads = this.cachedActiveRoads;
+    const activeSidewalks = this.cachedActiveSidewalks;
+    const activeIntersections = this.cachedActiveIntersections;
+    const activeParkings = this.cachedActiveParkings;
+    const activeDriveways = this.cachedActiveDriveways;
+    const activeTracks = this.cachedActiveTracks;
+
     if (this.grassSurfaceCacheWorldKey !== worldCacheKey) {
       this.grassSurfaceCache.clear();
       this.grassSurfaceCacheWorldKey = worldCacheKey;
-    } else if (this.grassSurfaceCache.size > 260000) {
+    } else if (this.grassSurfaceCache.size > 65536) {
       this.grassSurfaceCache.clear();
     }
 
@@ -1750,7 +1818,8 @@ export class TerrainRenderer {
 
     // --- PASS 2: High-Density Multi-Species Botanical Grass, Foliage & Wildflowers ---
     const viewSpan = Math.max(maxX - minX, maxY - minY);
-    const step = viewSpan > 1950 ? 34 : viewSpan > 1250 ? 25 : 19;
+    const baseStep = viewSpan > 1750 ? 48 : viewSpan > 1150 ? 36 : 26;
+    const step = performanceConfig.lowQualityRendering ? baseStep + 12 : baseStep;
     const startX = Math.floor(minX / step) * step;
     const startY = Math.floor(minY / step) * step;
 
@@ -1800,11 +1869,16 @@ export class TerrainRenderer {
     let hasForestUndergrowth = false;
     let hasForestMushrooms = false;
 
-    ForestSystem.registerTrampleCallback((wx, wy, r, dx, dy, tSec) => {
-      this.stampTrampleFromFauna(wx, wy, r, dx, dy, tSec);
-    });
+    if (!this.trampleCallbackRegistered) {
+      this.trampleCallbackRegistered = true;
+      ForestSystem.registerTrampleCallback((wx, wy, r, dx, dy, tSec) => {
+        this.stampTrampleFromFauna(wx, wy, r, dx, dy, tSec);
+      });
+    }
 
-    // Fast inline helper: adds a curved, tapered botanical grass blade into a Path2D
+    const useCurvedBlades = cameraZoom >= 1.35 && !performanceConfig.lowQualityRendering;
+
+    // Fast inline helper: adds a tapered botanical grass blade into a Path2D
     const addTaperedBlade = (
       path: Path2D,
       bx: number,
@@ -1821,8 +1895,13 @@ export class TerrainRenderer {
       const nx = (-dy / len) * baseHalfW;
       const ny = (dx / len) * baseHalfW;
       path.moveTo(bx - nx, by - ny);
-      path.quadraticCurveTo(ctrlX - nx * 0.42, ctrlY - ny * 0.42, tx, ty);
-      path.quadraticCurveTo(ctrlX + nx * 0.42, ctrlY + ny * 0.42, bx + nx, by + ny);
+      if (useCurvedBlades) {
+        path.quadraticCurveTo(ctrlX - nx * 0.42, ctrlY - ny * 0.42, tx, ty);
+        path.quadraticCurveTo(ctrlX + nx * 0.42, ctrlY + ny * 0.42, bx + nx, by + ny);
+      } else {
+        path.lineTo(tx, ty);
+        path.lineTo(bx + nx, by + ny);
+      }
       path.closePath();
     };
 
