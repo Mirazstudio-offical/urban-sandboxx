@@ -844,3 +844,291 @@ export const respondToWorldInvite = async (inviteId: string, status: 'accepted' 
   }
 };
 
+// ==================== HOSTED SERVER PERSISTENCE (DB + LOCAL FALLBACK) ====================
+
+export interface HostedServerBackup {
+  id?: string;
+  hostUid: string;
+  hostName?: string;
+  roomCode: string;
+  serverName: string;
+  mapName: string;
+  gameMode: string;
+  access: 'all' | 'code';
+  maxPlayers: number;
+  trafficEnabled: boolean;
+  vehicleCount: number;
+  pedestrianCount: number;
+  passwordRequired: boolean;
+  savePlayerData: boolean;
+  antiCheat: AntiCheatLevel;
+  accounts?: Record<string, any>;
+  bans?: Record<string, any>;
+  mutes?: Record<string, any>;
+  playerSaves?: Record<string, any>;
+  hostWorldState?: Record<string, any> | null;
+  accountsCount?: number;
+  bansCount?: number;
+  savedPlayersCount?: number;
+  lastSavedAt?: number;
+  createdAt?: any;
+  updatedAt?: any;
+  /** Client-only flag indicating whether this backup is synced in Firestore or local-only */
+  storageSource?: 'cloud' | 'local';
+}
+
+const HOSTED_SERVERS_COL = "hosted_servers";
+const LOCAL_HOSTED_SERVERS_KEY = "flatbody_hosted_servers_local_v1";
+const localHostedListeners = new Set<() => void>();
+
+const notifyLocalHostedListeners = () => {
+  localHostedListeners.forEach((cb) => {
+    try { cb(); } catch {}
+  });
+};
+
+export const buildHostedServerDocId = (hostUid: string, roomCode: string): string => {
+  const cleanUid = (hostUid || 'local').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60) || 'local';
+  const cleanRoom = (roomCode || 'room').toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60) || 'room';
+  return `${cleanUid}_${cleanRoom}`.slice(0, 128);
+};
+
+export const loadLocalHostedServers = (): HostedServerBackup[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_HOSTED_SERVERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return [];
+    return Object.values(parsed)
+      .filter((v): v is HostedServerBackup => Boolean(v && typeof v === 'object' && (v as any).roomCode))
+      .map((v) => ({ ...v, storageSource: v.storageSource || 'local' }))
+      .sort((a, b) => (b.lastSavedAt || 0) - (a.lastSavedAt || 0));
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalHostedServer = (backup: HostedServerBackup) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(LOCAL_HOSTED_SERVERS_KEY);
+    const map: Record<string, HostedServerBackup> = raw ? JSON.parse(raw) : {};
+    const key = backup.roomCode.toLowerCase();
+    map[key] = backup;
+    localStorage.setItem(LOCAL_HOSTED_SERVERS_KEY, JSON.stringify(map));
+    notifyLocalHostedListeners();
+  } catch (err) {
+    console.warn('[HostedServers] Failed to write local backup:', err);
+  }
+};
+
+const removeLocalHostedServer = (roomCode: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(LOCAL_HOSTED_SERVERS_KEY);
+    if (!raw) return;
+    const map: Record<string, HostedServerBackup> = JSON.parse(raw);
+    delete map[roomCode.toLowerCase()];
+    localStorage.setItem(LOCAL_HOSTED_SERVERS_KEY, JSON.stringify(map));
+    notifyLocalHostedListeners();
+  } catch {}
+};
+
+/**
+ * Ensures the serialized server backup fits safely under Firestore's 1MB document limit
+ * by trimming heavy non-essential mesh/prop arrays if needed while preserving accounts, bans, and player saves.
+ */
+const trimBackupForFirestore = (payload: Record<string, any>): Record<string, any> => {
+  const MAX_BYTES = 850_000;
+  try {
+    let serialized = JSON.stringify(payload);
+    if (serialized.length <= MAX_BYTES) return payload;
+
+    // Pass 1: drop groundItems and bulky vehicle deformation vertices from hostWorldState
+    if (payload.hostWorldState && typeof payload.hostWorldState === 'object') {
+      const hw = { ...payload.hostWorldState };
+      delete hw.groundItems;
+      if (Array.isArray(hw.vehicles)) {
+        hw.vehicles = hw.vehicles.slice(0, 25).map((v: any) => {
+          if (!v || typeof v !== 'object') return v;
+          const copy = { ...v };
+          if (copy.damage && typeof copy.damage === 'object') {
+            const dmg = { ...copy.damage };
+            delete dmg.deformedVertices;
+            delete dmg.scratches;
+            copy.damage = dmg;
+          }
+          return copy;
+        });
+      }
+      payload = { ...payload, hostWorldState: hw };
+      serialized = JSON.stringify(payload);
+      if (serialized.length <= MAX_BYTES) return payload;
+
+      // Pass 2: drop apartments furniture details if still large
+      const hw2 = { ...hw };
+      delete hw2.apartmentsState;
+      delete hw2.furnitureStorageState;
+      payload = { ...payload, hostWorldState: hw2 };
+    }
+  } catch {}
+  return payload;
+};
+
+/**
+ * Saves a hosted server's complete state (settings, password accounts, bans, mutes, player saves, host world state).
+ * Persists to Cloud Firestore (`hosted_servers/{hostUid}_{roomCode}`) when signed in, plus local cache.
+ */
+export const saveHostedServerBackup = async (
+  backup: Omit<HostedServerBackup, 'id' | 'createdAt' | 'updatedAt' | 'storageSource'>
+): Promise<{ savedToCloud: boolean; savedLocally: boolean; docId: string }> => {
+  const now = Date.now();
+  const cleanRoom = (backup.roomCode || 'room').trim().slice(0, 64);
+  const currentUid = auth.currentUser?.uid || '';
+  const accountsObj = backup.accounts && typeof backup.accounts === 'object' ? backup.accounts : {};
+  const bansObj = backup.bans && typeof backup.bans === 'object' ? backup.bans : {};
+  const mutesObj = backup.mutes && typeof backup.mutes === 'object' ? backup.mutes : {};
+  const playerSavesObj = backup.playerSaves && typeof backup.playerSaves === 'object' ? backup.playerSaves : {};
+
+  const docId = buildHostedServerDocId(currentUid || backup.hostUid || 'local', cleanRoom);
+
+  const basePayload: Record<string, any> = sanitizeForFirestore({
+    hostUid: (currentUid || backup.hostUid || 'local').slice(0, 128),
+    hostName: (backup.hostName || 'Хост').trim().slice(0, 64),
+    roomCode: cleanRoom,
+    serverName: (backup.serverName || `Сервер ${cleanRoom}`).trim().slice(0, 80),
+    mapName: (backup.mapName || 'flatbody').trim().slice(0, 64),
+    gameMode: (backup.gameMode || 'free_roam').trim().slice(0, 32),
+    access: backup.access === 'code' ? 'code' : 'all',
+    maxPlayers: Math.max(1, Math.min(32, Math.round(backup.maxPlayers || 8))),
+    trafficEnabled: Boolean(backup.trafficEnabled),
+    vehicleCount: Math.max(0, Math.min(200, Math.round(backup.vehicleCount ?? 15))),
+    pedestrianCount: Math.max(0, Math.min(200, Math.round(backup.pedestrianCount ?? 10))),
+    passwordRequired: Boolean(backup.passwordRequired),
+    savePlayerData: backup.savePlayerData !== false,
+    antiCheat: (backup.antiCheat === 'none' || backup.antiCheat === 'strict') ? backup.antiCheat : 'moderate',
+    accounts: accountsObj,
+    bans: bansObj,
+    mutes: mutesObj,
+    playerSaves: playerSavesObj,
+    hostWorldState: backup.hostWorldState || null,
+    accountsCount: Object.keys(accountsObj).length,
+    bansCount: Object.keys(bansObj).length,
+    savedPlayersCount: Object.keys(playerSavesObj).length,
+    lastSavedAt: now
+  });
+
+  // Always write local mirror synchronously so tab close / offline still preserves data
+  writeLocalHostedServer({
+    ...(basePayload as HostedServerBackup),
+    id: docId,
+    storageSource: currentUid ? 'cloud' : 'local'
+  });
+
+  if (!currentUid) {
+    return { savedToCloud: false, savedLocally: true, docId };
+  }
+
+  try {
+    const cloudPayload = trimBackupForFirestore({
+      ...basePayload,
+      hostUid: currentUid
+    });
+    const ref = doc(db, HOSTED_SERVERS_COL, docId);
+    const existingSnap = await getDoc(ref).catch(() => null);
+    if (existingSnap && existingSnap.exists()) {
+      await setDoc(ref, {
+        ...cloudPayload,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } else {
+      await setDoc(ref, {
+        ...cloudPayload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+    return { savedToCloud: true, savedLocally: true, docId };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${HOSTED_SERVERS_COL}/${docId}`);
+    return { savedToCloud: false, savedLocally: true, docId };
+  }
+};
+
+export const deleteHostedServerBackup = async (serverId: string | undefined, roomCode: string): Promise<void> => {
+  removeLocalHostedServer(roomCode);
+  const currentUid = auth.currentUser?.uid;
+  if (!currentUid) return;
+  const targetId = serverId || buildHostedServerDocId(currentUid, roomCode);
+  try {
+    await deleteDoc(doc(db, HOSTED_SERVERS_COL, targetId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${HOSTED_SERVERS_COL}/${targetId}`);
+  }
+};
+
+/**
+ * Subscribes to the signed-in host's saved servers in Firestore (and merges with local fallback backups).
+ */
+export const subscribeToHostedServers = (
+  hostUid: string | null | undefined,
+  callback: (servers: HostedServerBackup[]) => void
+) => {
+  let cloudServers: HostedServerBackup[] = [];
+
+  const emitMerged = () => {
+    const byRoom = new Map<string, HostedServerBackup>();
+    // Local backups first
+    for (const loc of loadLocalHostedServers()) {
+      if (!hostUid || !loc.hostUid || loc.hostUid === 'local' || loc.hostUid === hostUid) {
+        byRoom.set(loc.roomCode.toLowerCase(), { ...loc, storageSource: 'local' });
+      }
+    }
+    // Cloud backups override local if newer (or always preferred when synced)
+    for (const cld of cloudServers) {
+      const key = cld.roomCode.toLowerCase();
+      const localExisting = byRoom.get(key);
+      if (!localExisting || (cld.lastSavedAt || 0) >= (localExisting.lastSavedAt || 0)) {
+        byRoom.set(key, { ...cld, storageSource: 'cloud' });
+      } else {
+        byRoom.set(key, { ...localExisting, id: cld.id, storageSource: 'cloud' });
+      }
+    }
+    const merged = Array.from(byRoom.values()).sort(
+      (a, b) => (b.lastSavedAt || 0) - (a.lastSavedAt || 0)
+    );
+    callback(merged);
+  };
+
+  localHostedListeners.add(emitMerged);
+  emitMerged();
+
+  let unsubSnapshot: (() => void) | null = null;
+  if (hostUid) {
+    const colRef = collection(db, HOSTED_SERVERS_COL);
+    const q = query(colRef, where("hostUid", "==", hostUid));
+    unsubSnapshot = onSnapshot(q, (snap) => {
+      const list: HostedServerBackup[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as HostedServerBackup;
+        list.push({
+          ...data,
+          id: docSnap.id,
+          storageSource: 'cloud'
+        });
+      });
+      cloudServers = list;
+      emitMerged();
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, HOSTED_SERVERS_COL);
+    });
+  }
+
+  return () => {
+    localHostedListeners.delete(emitMerged);
+    if (unsubSnapshot) unsubSnapshot();
+  };
+};
+
+

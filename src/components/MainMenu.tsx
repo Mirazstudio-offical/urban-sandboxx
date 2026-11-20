@@ -11,11 +11,14 @@ import { onlineManager } from '../onlineSystem';
 import { openHostSession } from '../hostSession';
 import {
   subscribeToP2PServers,
+  subscribeToHostedServers,
+  deleteHostedServerBackup,
   subscribeToFriends,
   fetchUserProfile,
   loginWithGoogle,
   logoutUser,
   type P2PServerRoom,
+  type HostedServerBackup,
   type FriendshipData,
   type UserProfileData,
   type User as FirebaseUser
@@ -86,6 +89,7 @@ export interface MainMenuProps {
     gameMode?: string;
   }) => Promise<void> | void;
   onCreateServer?: (options: {
+    access: 'all' | 'code';
     roomCode: string;
     serverName: string;
     nickname: string;
@@ -95,10 +99,10 @@ export interface MainMenuProps {
     vehicleCount: number;
     pedestrianCount: number;
     passwordRequired: boolean;
-    password: string;
     savePlayerData: boolean;
     antiCheat: 'none' | 'moderate' | 'strict';
   }) => Promise<void> | void;
+  onStartSavedServer?: (backup: HostedServerBackup) => Promise<void> | void;
   currentSettings: {
     fpsLimit: number;
     autoSaveInterval: number;
@@ -283,6 +287,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onNewGame,
   onJoinServer,
   onCreateServer,
+  onStartSavedServer,
   currentSettings,
   onUpdateSettings,
   currentUser
@@ -432,13 +437,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   };
 
   /* ---------- online servers ---------- */
+  const [serversTab, setServersTab] = useState<'all' | 'mine'>('all');
   const [servers, setServers] = useState<P2PServerRoom[]>([]);
+  const [myServers, setMyServers] = useState<HostedServerBackup[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string>('');
+  const [selectedMyServerCode, setSelectedMyServerCode] = useState<string>('');
+  const [confirmDeleteServerCode, setConfirmDeleteServerCode] = useState<string | null>(null);
+  const [launchingSaved, setLaunchingSaved] = useState<boolean>(false);
   const [serverQuery, setServerQuery] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [modeFilter, setModeFilter] = useState<string>('all');
   const [onlyFree, setOnlyFree] = useState(false);
   useEffect(() => subscribeToP2PServers(setServers), []);
+  useEffect(() => subscribeToHostedServers(currentUser?.uid || null, setMyServers), [currentUser?.uid]);
   const filteredServers = servers.filter(s => {
     const q = serverQuery.trim().toLowerCase();
     if (q && !(s.name.toLowerCase().includes(q) || s.hostName.toLowerCase().includes(q) || (s.peerId || '').toLowerCase().includes(q))) return false;
@@ -446,7 +457,58 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     if (onlyFree && (s.currentPlayers || 1) >= (s.maxPlayers || 8)) return false;
     return true;
   });
+  const filteredMyServers = myServers.filter(s => {
+    const q = serverQuery.trim().toLowerCase();
+    if (q && !(s.serverName.toLowerCase().includes(q) || s.roomCode.toLowerCase().includes(q))) return false;
+    if (modeFilter !== 'all' && s.gameMode !== modeFilter) return false;
+    return true;
+  });
   const selectedServer = filteredServers.find(s => s.id === selectedServerId) || filteredServers[0] || null;
+  const selectedMyServer = filteredMyServers.find(s => s.roomCode === selectedMyServerCode) || filteredMyServers[0] || null;
+
+  const formatSavedDate = (ts?: number) => {
+    if (!ts) return '—';
+    try {
+      return new Date(ts).toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '—';
+    }
+  };
+
+  const launchSavedServer = async (backup: HostedServerBackup) => {
+    if (launchingSaved) return;
+    setLaunchingSaved(true);
+    try {
+      if (onStartSavedServer) {
+        await onStartSavedServer(backup);
+        return;
+      }
+      await openHostSession({
+        access: backup.access,
+        roomCode: backup.roomCode,
+        serverName: backup.serverName,
+        mapName: backup.mapName || 'flatbody',
+        gameMode: backup.gameMode,
+        maxPlayers: backup.maxPlayers,
+        nickname,
+        trafficEnabled: backup.trafficEnabled,
+        vehicleCount: backup.vehicleCount,
+        pedestrianCount: backup.pedestrianCount,
+        passwordRequired: backup.passwordRequired,
+        savePlayerData: backup.savePlayerData,
+        antiCheat: backup.antiCheat
+      });
+      onResume();
+    } finally {
+      setLaunchingSaved(false);
+    }
+  };
 
   const connectTo = (code: string, meta?: { serverName?: string; gameMode?: string }) => {
     const clean = onlineManager.sanitizeRoomCode(code);
@@ -460,11 +522,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       });
       return;
     }
-    onlineManager.joinOrCreateRoom(clean, nickname, false);
+    onlineManager.joinOrCreateRoom(clean, nickname, false, meta?.serverName);
     onResume();
   };
 
   /* ---------- create server ---------- */
+  const [hostAccess, setHostAccess] = useState<'all' | 'code'>('all');
   const [hostName, setHostName] = useState<string>('Сервер ' + onlineManager.localPlayerName);
   const [hostCode, setHostCode] = useState<string>('room-' + Math.floor(1000 + Math.random() * 9000));
   const [hostMax, setHostMax] = useState<number>(8);
@@ -473,10 +536,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [vehicleCount, setVehicleCount] = useState<number>(15);
   const [pedestrianCount, setPedestrianCount] = useState<number>(10);
   const [passwordRequired, setPasswordRequired] = useState<boolean>(false);
-  const [password, setPassword] = useState<string>('');
   const [savePlayerData, setSavePlayerData] = useState<boolean>(true);
   const [antiCheat, setAntiCheat] = useState<'none' | 'moderate' | 'strict'>('moderate');
   const [creating, setCreating] = useState(false);
+
+  const regenerateHostCode = () => {
+    setHostCode('room-' + Math.floor(1000 + Math.random() * 9000));
+  };
 
   const createServer = async () => {
     if (creating) return;
@@ -484,6 +550,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     try {
       const clean = onlineManager.sanitizeRoomCode(hostCode);
       const serverPayload = {
+        access: hostAccess,
         roomCode: clean,
         serverName: hostName.trim() || 'Сервер ' + nickname,
         nickname,
@@ -493,7 +560,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         vehicleCount,
         pedestrianCount,
         passwordRequired,
-        password: passwordRequired ? password : '',
         savePlayerData,
         antiCheat
       };
@@ -502,7 +568,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         return;
       }
       await openHostSession({
-        access: 'all',
         mapName: 'flatbody',
         ...serverPayload
       });
@@ -514,11 +579,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         vehicleCount,
         pedestrianCount,
         passwordRequired,
-        password: passwordRequired ? password : '',
         savePlayerData,
         antiCheat
       };
-      onlineManager.joinOrCreateRoom(hostCode, nickname, true, passwordRequired ? password : undefined, settings);
+      onlineManager.joinOrCreateRoom(hostCode, nickname, true, hostName.trim() || 'Сервер ' + nickname, settings);
       onResume();
     } finally {
       setCreating(false);
@@ -845,11 +909,26 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   </div>
                 ))}
                 <div className="tabs st d1">
-                  <div className="row2" style={{ gap: 6 }}><span className="tab tab-on cn">Все серверы</span></div>
+                  <div className="row2" style={{ gap: 18 }}>
+                    <button
+                      type="button"
+                      className={'tab cn' + (serversTab === 'all' ? ' tab-on' : '')}
+                      onClick={() => setServersTab('all')}
+                    >
+                      Все серверы
+                    </button>
+                    <button
+                      type="button"
+                      className={'tab cn' + (serversTab === 'mine' ? ' tab-on' : '')}
+                      onClick={() => { setServersTab('mine'); setConfirmDeleteServerCode(null); }}
+                    >
+                      Мои серверы{myServers.length > 0 ? ` (${myServers.length})` : ''}
+                    </button>
+                  </div>
                   <div className="row2" style={{ paddingBottom: 8 }}>
                     <div className="chip" style={{ width: 300, height: 40 }}>
                       <SearchIcon />
-                      <input value={serverQuery} onChange={e => setServerQuery(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="Поиск по названию или хосту" />
+                      <input value={serverQuery} onChange={e => setServerQuery(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder={serversTab === 'mine' ? 'Поиск среди моих серверов' : 'Поиск по названию или хосту'} />
                     </div>
                     <div className="chip" style={{ width: 250, height: 40 }}>
                       <input value={roomCode} onChange={e => setRoomCode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') connectTo(roomCode); e.stopPropagation(); }} placeholder="Код комнаты" style={{ fontFamily: 'ui-monospace,monospace' }} />
@@ -862,61 +941,199 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   {Object.keys(MODE_NAME).map(m => (
                     <button key={m} className={'pill' + (modeFilter === m ? ' pill-on' : '')} onClick={() => setModeFilter(m)}>{MODE_NAME[m]}</button>
                   ))}
-                  <button className={'pill' + (onlyFree ? ' pill-on' : '')} onClick={() => setOnlyFree(v => !v)}>Есть места</button>
-                </div>
-                <div className="panel a st d2 mc-list" style={{ left: 64, top: 232, width: 850, height: 610, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <div className="row hd cn" style={{ borderBottom: '1px solid rgba(255,255,255,.08)', flex: 'none' }}><span /><span>Название</span><span>Режим</span><span>Игроки</span></div>
-                  <div className="scroll" style={{ flex: 1 }}>
-                    {filteredServers.length === 0 ? (
-                      <div className="empty" style={{ height: '100%' }}>
-                        <div className="cn" style={{ fontSize: 22, fontWeight: 700 }}>Нет открытых серверов</div>
-                        <div className="mut" style={{ fontSize: 14, maxWidth: 380 }}>Создайте свой сервер или подключитесь к другу по коду комнаты.</div>
-                        <button className="btn btn-p" onClick={() => go('create')}>Создать сервер</button>
-                      </div>
-                    ) : filteredServers.map(s => {
-                      const cp = s.currentPlayers || 1, mp = s.maxPlayers || 8;
-                      return (
-                        <button key={s.id} className={'row rw' + (selectedServer?.id === s.id ? ' row-on' : '')} onClick={() => setSelectedServerId(s.id || '')} onDoubleClick={() => connectTo(s.peerId, { serverName: s.name, gameMode: s.gameMode })}>
-                          <span className="rowdot"><span className="dot" style={{ background: s.status === 'active' ? '#7fbf6a' : '#e0ab45' }} /></span>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
-                            <div className="mut" style={{ fontSize: 12 }}>Хост: {s.hostName}</div>
-                          </div>
-                          <span>{modeName(s.gameMode)}</span>
-                          <span className={fillClass(cp, mp)}>{cp} / {mp}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="panel a st d4 mc-side2" style={{ left: 938, top: 232, width: 438, height: 610, padding: 14, display: 'flex', flexDirection: 'column' }}>
-                  {selectedServer ? (
-                    <>
-                      <div className={'th ' + (MODE_THUMB[selectedServer.gameMode] || 'm5')} style={{ height: 200, borderRadius: 10, flex: 'none' }} />
-                      <div style={{ padding: '18px 8px 0', flex: 1 }}>
-                        <div className="cn mut" style={{ fontSize: 12 }}>Выбранный сервер</div>
-                        <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4, lineHeight: 1.1 }}>{selectedServer.name}</div>
-                        <div className="mut" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.45 }}>Отдельный мир сервера: прогресс изолирован от одиночных сохранений и синхронизируется с хостом.</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginTop: 20, fontSize: 14 }}>
-                          <div><div className="mut" style={{ fontSize: 12 }}>Хост</div>{selectedServer.hostName}</div>
-                          <div><div className="mut" style={{ fontSize: 12 }}>Код комнаты</div>{selectedServer.peerId}</div>
-                          <div><div className="mut" style={{ fontSize: 12 }}>Карта</div>{selectedServer.mapName || 'flatbody'}</div>
-                          <div><div className="mut" style={{ fontSize: 12 }}>Режим</div>{modeName(selectedServer.gameMode)}</div>
-                        </div>
-                        <div style={{ marginTop: 20 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}><span className="mut">Игроки</span><span>{selectedServer.currentPlayers || 1} / {selectedServer.maxPlayers || 8}</span></div>
-                          <div className="bar"><i style={{ width: Math.round(((selectedServer.currentPlayers || 1) / (selectedServer.maxPlayers || 8)) * 100) + '%' }} /></div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 12, padding: '0 8px 8px' }}>
-                        <button className="btn btn-p" style={{ flex: 1 }} onClick={() => connectTo(selectedServer.peerId, { serverName: selectedServer.name, gameMode: selectedServer.gameMode })}>Подключиться</button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="empty" style={{ flex: 1 }}><div className="cn" style={{ fontSize: 22, fontWeight: 700 }}>Выберите сервер</div><div className="mut" style={{ fontSize: 14 }}>Подробности появятся здесь.</div></div>
+                  {serversTab === 'all' && (
+                    <button className={'pill' + (onlyFree ? ' pill-on' : '')} onClick={() => setOnlyFree(v => !v)}>Есть места</button>
                   )}
                 </div>
-                {Hint([['Esc', 'Назад']], 'Найдено серверов: ' + filteredServers.length)}
+
+                {serversTab === 'all' ? (
+                  <>
+                    <div className="panel a st d2 mc-list" style={{ left: 64, top: 232, width: 850, height: 610, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <div className="row hd cn" style={{ borderBottom: '1px solid rgba(255,255,255,.08)', flex: 'none' }}><span /><span>Название</span><span>Режим</span><span>Игроки</span></div>
+                      <div className="scroll" style={{ flex: 1 }}>
+                        {filteredServers.length === 0 ? (
+                          <div className="empty" style={{ height: '100%' }}>
+                            <div className="cn" style={{ fontSize: 22, fontWeight: 700 }}>Нет открытых серверов</div>
+                            <div className="mut" style={{ fontSize: 14, maxWidth: 380 }}>Создайте свой сервер, запустите сохранённый во вкладке «Мои серверы» или подключитесь по коду комнаты.</div>
+                            <div className="row2" style={{ gap: 10 }}>
+                              <button className="btn btn-p" onClick={() => go('create')}>Создать сервер</button>
+                              {myServers.length > 0 && (
+                                <button className="btn btn-s" onClick={() => setServersTab('mine')}>Мои серверы ({myServers.length})</button>
+                              )}
+                            </div>
+                          </div>
+                        ) : filteredServers.map(s => {
+                          const cp = s.currentPlayers || 1, mp = s.maxPlayers || 8;
+                          return (
+                            <button key={s.id} className={'row rw' + (selectedServer?.id === s.id ? ' row-on' : '')} onClick={() => setSelectedServerId(s.id || '')} onDoubleClick={() => connectTo(s.peerId, { serverName: s.name, gameMode: s.gameMode })}>
+                              <span className="rowdot"><span className="dot" style={{ background: s.status === 'active' ? '#7fbf6a' : '#e0ab45' }} /></span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
+                                  {s.hasPassword && (
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: '#e0ab45', background: 'rgba(224,171,69,.14)', border: '1px solid rgba(224,171,69,.28)', borderRadius: 6, padding: '1px 6px', flex: 'none' }}>
+                                      Защита ников
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mut" style={{ fontSize: 12 }}>Хост: {s.hostName}</div>
+                              </div>
+                              <span>{modeName(s.gameMode)}</span>
+                              <span className={fillClass(cp, mp)}>{cp} / {mp}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="panel a st d4 mc-side2" style={{ left: 938, top: 232, width: 438, height: 610, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                      {selectedServer ? (
+                        <>
+                          <div className={'th ' + (MODE_THUMB[selectedServer.gameMode] || 'm5')} style={{ height: 200, borderRadius: 10, flex: 'none' }} />
+                          <div style={{ padding: '18px 8px 0', flex: 1 }}>
+                            <div className="cn mut" style={{ fontSize: 12 }}>Выбранный сервер</div>
+                            <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4, lineHeight: 1.1 }}>{selectedServer.name}</div>
+                            <div className="mut" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.45 }}>
+                              {selectedServer.hasPassword
+                                ? 'Включена защита ников: при первом входе нужно придумать личный пароль, чтобы никто не смог зайти под вашим именем.'
+                                : 'Отдельный мир сервера: прогресс изолирован от одиночных сохранений и синхронизируется с хостом.'}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginTop: 20, fontSize: 14 }}>
+                              <div><div className="mut" style={{ fontSize: 12 }}>Хост</div>{selectedServer.hostName}</div>
+                              <div><div className="mut" style={{ fontSize: 12 }}>Код комнаты</div>{selectedServer.peerId}</div>
+                              <div><div className="mut" style={{ fontSize: 12 }}>Карта</div>{selectedServer.mapName || 'flatbody'}</div>
+                              <div><div className="mut" style={{ fontSize: 12 }}>Режим</div>{modeName(selectedServer.gameMode)}</div>
+                              <div><div className="mut" style={{ fontSize: 12 }}>Аккаунты</div>{selectedServer.hasPassword ? 'Пароль на ник' : 'Свободный вход'}</div>
+                              <div><div className="mut" style={{ fontSize: 12 }}>Сохранения</div>{selectedServer.savePlayerData === false ? 'Отключены' : 'Включены'}</div>
+                            </div>
+                            <div style={{ marginTop: 18 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}><span className="mut">Игроки</span><span>{selectedServer.currentPlayers || 1} / {selectedServer.maxPlayers || 8}</span></div>
+                              <div className="bar"><i style={{ width: Math.round(((selectedServer.currentPlayers || 1) / (selectedServer.maxPlayers || 8)) * 100) + '%' }} /></div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 12, padding: '0 8px 8px' }}>
+                            <button className="btn btn-p" style={{ flex: 1 }} onClick={() => connectTo(selectedServer.peerId, { serverName: selectedServer.name, gameMode: selectedServer.gameMode })}>Подключиться</button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="empty" style={{ flex: 1 }}><div className="cn" style={{ fontSize: 22, fontWeight: 700 }}>Выберите сервер</div><div className="mut" style={{ fontSize: 14 }}>Подробности появятся здесь.</div></div>
+                      )}
+                    </div>
+                    {Hint([['Esc', 'Назад']], 'Найдено серверов: ' + filteredServers.length)}
+                  </>
+                ) : (
+                  <>
+                    <div className="panel a st d2 mc-list" style={{ left: 64, top: 232, width: 850, height: 610, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      {!currentUser && (
+                        <div style={{ padding: '10px 18px', background: 'rgba(224,171,69,.1)', borderBottom: '1px solid rgba(224,171,69,.22)', color: '#e6c278', fontSize: 13 }}>
+                          Войдите в Google-аккаунт, чтобы серверы, пароли и баны синхронизировались с облачной базой данных (сейчас используется локальное хранилище).
+                        </div>
+                      )}
+                      <div className="row hd cn" style={{ borderBottom: '1px solid rgba(255,255,255,.08)', flex: 'none' }}><span /><span>Сохранённый сервер</span><span>Режим</span><span>Данные</span></div>
+                      <div className="scroll" style={{ flex: 1 }}>
+                        {filteredMyServers.length === 0 ? (
+                          <div className="empty" style={{ height: '100%' }}>
+                            <div className="cn" style={{ fontSize: 22, fontWeight: 700 }}>Нет сохранённых серверов</div>
+                            <div className="mut" style={{ fontSize: 14, maxWidth: 420 }}>Создайте сервер — при остановке он автоматически сохранится в БД вместе с миром, аккаунтами, паролями, банами и сохранениями игроков.</div>
+                            <button className="btn btn-p" onClick={() => go('create')}>Создать сервер</button>
+                          </div>
+                        ) : filteredMyServers.map(s => {
+                          const accCount = s.accountsCount ?? Object.keys(s.accounts || {}).length;
+                          const banCount = s.bansCount ?? Object.keys(s.bans || {}).length;
+                          return (
+                            <button
+                              key={s.id || s.roomCode}
+                              className={'row rw' + (selectedMyServer?.roomCode === s.roomCode ? ' row-on' : '')}
+                              onClick={() => { setSelectedMyServerCode(s.roomCode); setConfirmDeleteServerCode(null); }}
+                              onDoubleClick={() => void launchSavedServer(s)}
+                            >
+                              <span className="rowdot"><span className="dot" style={{ background: s.storageSource === 'cloud' ? '#7fbf6a' : '#e0ab45' }} /></span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.serverName}</span>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: s.access === 'code' ? '#b8b4aa' : '#9ac985', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 6, padding: '1px 6px', flex: 'none' }}>
+                                    {s.access === 'code' ? 'По коду' : 'Публичный'}
+                                  </span>
+                                  {s.passwordRequired && (
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: '#e0ab45', background: 'rgba(224,171,69,.14)', border: '1px solid rgba(224,171,69,.28)', borderRadius: 6, padding: '1px 6px', flex: 'none' }}>
+                                      Пароли
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mut" style={{ fontSize: 12 }}>
+                                  Код: {s.roomCode} · {s.storageSource === 'cloud' ? 'Облачная БД' : 'Локально'} · {formatSavedDate(s.lastSavedAt)}
+                                </div>
+                              </div>
+                              <span>{modeName(s.gameMode)}</span>
+                              <span className="mut" style={{ fontSize: 12 }}>{accCount} акк · {banCount} бан</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="panel a st d4 mc-side2" style={{ left: 938, top: 232, width: 438, height: 610, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                      {selectedMyServer ? (
+                        <>
+                          <div className={'th ' + (MODE_THUMB[selectedMyServer.gameMode] || 'm5')} style={{ height: 175, borderRadius: 10, flex: 'none' }} />
+                          <div style={{ padding: '16px 8px 0', flex: 1 }}>
+                            <div className="cn mut" style={{ fontSize: 12 }}>
+                              Ваш сервер · {selectedMyServer.storageSource === 'cloud' ? 'Сохранён в БД' : 'Локальная копия'}
+                            </div>
+                            <div className="cn" style={{ fontSize: 26, fontWeight: 700, marginTop: 4, lineHeight: 1.1 }}>{selectedMyServer.serverName}</div>
+                            <div className="mut" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
+                              При запуске восстановятся мир хоста, все зарегистрированные аккаунты с паролями, список банов и профили игроков.
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 18px', marginTop: 18, fontSize: 13 }}>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Код комнаты</div><span style={{ fontFamily: 'ui-monospace,monospace' }}>{selectedMyServer.roomCode}</span></div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Доступ</div>{selectedMyServer.access === 'code' ? 'Только по коду' : 'Публичный'}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Режим</div>{modeName(selectedMyServer.gameMode)}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Защита ников</div>{selectedMyServer.passwordRequired ? 'Включена' : 'Отключена'}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Аккаунтов / Профилей</div>{selectedMyServer.accountsCount ?? Object.keys(selectedMyServer.accounts || {}).length} / {selectedMyServer.savedPlayersCount ?? Object.keys(selectedMyServer.playerSaves || {}).length}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Банов</div>{selectedMyServer.bansCount ?? Object.keys(selectedMyServer.bans || {}).length}</div>
+                            </div>
+                            <div className="mut" style={{ fontSize: 12, marginTop: 14 }}>
+                              Последнее сохранение: {formatSavedDate(selectedMyServer.lastSavedAt)}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, padding: '0 8px 8px' }}>
+                            <button
+                              className="btn btn-p"
+                              style={{ flex: 1 }}
+                              disabled={launchingSaved}
+                              onClick={() => void launchSavedServer(selectedMyServer)}
+                            >
+                              {launchingSaved ? 'Запуск...' : 'Включить сервер'}
+                            </button>
+                            {confirmDeleteServerCode === selectedMyServer.roomCode ? (
+                              <button
+                                className="btn btn-s"
+                                style={{ color: '#e08a70', borderColor: 'rgba(217,116,90,.4)' }}
+                                onClick={async () => {
+                                  await deleteHostedServerBackup(selectedMyServer.id, selectedMyServer.roomCode);
+                                  setConfirmDeleteServerCode(null);
+                                }}
+                              >
+                                Точно удалить?
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-s"
+                                onClick={() => setConfirmDeleteServerCode(selectedMyServer.roomCode)}
+                              >
+                                Удалить
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="empty" style={{ flex: 1 }}>
+                          <div className="cn" style={{ fontSize: 22, fontWeight: 700 }}>Мои серверы</div>
+                          <div className="mut" style={{ fontSize: 14 }}>Выберите сохранённый сервер слева, чтобы включить его снова.</div>
+                        </div>
+                      )}
+                    </div>
+                    {Hint([['Esc', 'Назад']], 'Сохранённых серверов: ' + filteredMyServers.length)}
+                  </>
+                )}
               </section>
             )}
 
@@ -1249,7 +1466,36 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 {Top('Создать сервер', () => go('servers', true))}
                 <div className="panel a stg st d2 scroll mc-form" style={{ left: 64, top: 112, width: 880, height: 740, padding: '28px 30px', display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div><div className="lbl">Название сервера</div><input className="inp" value={hostName} onChange={e => setHostName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
-                  <div><div className="lbl">Код комнаты (его вводят друзья, чтобы подключиться)</div><input className="inp" value={hostCode} onChange={e => setHostCode(e.target.value)} onKeyDown={e => e.stopPropagation()} style={{ fontFamily: 'ui-monospace,monospace', borderColor: 'rgba(255,255,255,.14)' }} /></div>
+
+                  <div>
+                    <div className="lbl">Доступ к серверу</div>
+                    <Seg
+                      value={hostAccess}
+                      onChange={v => setHostAccess(v as 'all' | 'code')}
+                      options={[
+                        { v: 'all', label: 'Публичный (в общем списке)' },
+                        { v: 'code', label: 'Приватный (только по коду)' }
+                      ]}
+                    />
+                    {hostAccess === 'all' && !currentUser && (
+                      <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: 'rgba(224,171,69,.1)', border: '1px solid rgba(224,171,69,.28)', color: '#e6c278', fontSize: 13, lineHeight: 1.45 }}>
+                        Без входа в Google-аккаунт сервер не сможет отображаться в публичном списке — игроки смогут подключиться только по коду комнаты.
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="lbl">
+                      {hostAccess === 'code'
+                        ? 'Код комнаты (только по нему друзья смогут подключиться)'
+                        : 'Код комнаты (можно передать друзьям для прямого входа)'}
+                    </div>
+                    <div className="row2" style={{ gap: 10 }}>
+                      <input className="inp" value={hostCode} onChange={e => setHostCode(e.target.value)} onKeyDown={e => e.stopPropagation()} style={{ flex: 1, fontFamily: 'ui-monospace,monospace', borderColor: 'rgba(255,255,255,.14)' }} />
+                      <button type="button" className="btn btn-s" style={{ flex: 'none', padding: '0 16px', height: 46 }} onClick={regenerateHostCode}>Обновить</button>
+                    </div>
+                  </div>
+
                   <div>
                     <div className="lbl">Режим</div>
                     <Seg value={hostMode} onChange={setHostMode} options={Object.keys(MODE_NAME).map(k => ({ v: k, label: MODE_NAME[k] }))} />
@@ -1277,14 +1523,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     </>
                   )}
 
-                  <div className="set" style={{ height: 60, padding: 0, border: 0 }}>
-                    <span>Требовать пароль (защита сохранения)</span>
-                    <Toggle on={passwordRequired} onChange={() => setPasswordRequired(!passwordRequired)} label="Пароль" />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div className="set" style={{ height: 48, padding: 0, border: 0 }}>
+                      <span>Защита ников паролем (регистрация / вход)</span>
+                      <Toggle on={passwordRequired} onChange={() => setPasswordRequired(!passwordRequired)} label="Защита ников паролем" />
+                    </div>
+                    <div className="mut" style={{ fontSize: 13, lineHeight: 1.45 }}>
+                      {passwordRequired
+                        ? 'При первом входе каждый игрок придумает свой личный пароль, а при следующих визитах должен будет его ввести — никто не сможет зайти под чужим ником или использовать чужое сохранение.'
+                        : 'Игроки заходят на сервер сразу без регистрации и пароля на ник.'}
+                    </div>
                   </div>
-
-                  {passwordRequired && (
-                    <div><div className="lbl">Пароль сервера</div><input className="inp" type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="Введите пароль" /></div>
-                  )}
 
                   <div className="set" style={{ height: 60, padding: 0, border: 0 }}>
                     <span>Сохранять данные игрока</span>
@@ -1298,7 +1547,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
                   <div className="row2" style={{ gap: 12, marginTop: 10, paddingBottom: 20 }}>
                     <button className="btn btn-s" style={{ flex: 1 }} onClick={() => go('servers', true)}>Отмена</button>
-                    <button className="btn btn-p" style={{ flex: 1 }} onClick={createServer} disabled={creating}>{creating ? 'Регистрация...' : 'Создать сервер'}</button>
+                    <button className="btn btn-p" style={{ flex: 1 }} onClick={createServer} disabled={creating}>{creating ? 'Запуск...' : 'Создать сервер'}</button>
                   </div>
                 </div>
                 <div className="panel a st d4 mc-side mc-auto" style={{ left: 976, top: 112, width: 400, padding: '24px 26px' }}>
@@ -1307,7 +1556,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     Сервер работает напрямую между игроками (P2P). Вы становитесь хостом и входите в игру сразу после создания.
                   </div>
                   <div className="mut" style={{ fontSize: 14, lineHeight: 1.55, marginTop: 12 }}>
-                    Пока вы в игре, сервер виден в списке. Если выйти, комната закроется для остальных игроков.
+                    <strong style={{ color: '#e6e2d8' }}>Доступ:</strong> публичный сервер виден в общем списке, приватный скрыт и открывается только по коду комнаты.
+                  </div>
+                  <div className="mut" style={{ fontSize: 14, lineHeight: 1.55, marginTop: 12 }}>
+                    <strong style={{ color: '#e6e2d8' }}>Защита ников:</strong> если включена, каждый игрок задаёт личный пароль для своего ника — это защищает аккаунт и серверное сохранение от подмены.
                   </div>
                 </div>
                 {Hint([['Esc', 'Назад']])}

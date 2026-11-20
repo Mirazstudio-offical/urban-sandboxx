@@ -145,8 +145,8 @@ export interface ServerSettings {
   trafficEnabled: boolean;
   vehicleCount: number;
   pedestrianCount: number;
+  /** When true, each player registers a personal password for their nickname on first join and logs in on subsequent joins. */
   passwordRequired: boolean;
-  password?: string;
   savePlayerData: boolean;
   antiCheat: AntiCheatLevel;
 }
@@ -156,10 +156,179 @@ export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
   vehicleCount: 15,
   pedestrianCount: 10,
   passwordRequired: false,
-  password: '',
   savePlayerData: true,
   antiCheat: 'moderate'
 };
+
+export type ServerAuthState = 'idle' | 'pending_register' | 'pending_login' | 'authenticated' | 'kicked';
+
+export interface ServerAuthChallenge {
+  mode: 'register' | 'login';
+  roomCode: string;
+  serverName: string;
+  nickname: string;
+  error?: string;
+  attemptsLeft?: number;
+  submitting?: boolean;
+}
+
+export interface StoredServerAccount {
+  displayName: string;
+  salt: string;
+  hash: string;
+  registeredAt: number;
+  lastLoginAt: number;
+}
+
+export interface ServerBanRecord {
+  nickname: string;
+  normNick: string;
+  reason: string;
+  bannedAt: number;
+  bannedBy: string;
+}
+
+export interface ServerMuteRecord {
+  nickname: string;
+  normNick: string;
+  reason: string;
+  mutedAt: number;
+}
+
+export interface ServerPlayerSaveRecord {
+  nickname: string;
+  normNick: string;
+  cash: number;
+  x: number;
+  y: number;
+  angle: number;
+  isInVehicle?: boolean;
+  vehicleType?: string | null;
+  vehicleColor?: string | null;
+  inventory?: any[];
+  equippedClothing?: any;
+  leftHandItem?: any;
+  rightHandItem?: any;
+  activeHand?: 'left' | 'right';
+  needs?: any;
+  bodyState?: any;
+  updatedAt: number;
+}
+
+export interface ServerPersistentState {
+  roomCode: string;
+  accounts: Record<string, StoredServerAccount>;
+  bans: Record<string, ServerBanRecord>;
+  mutes: Record<string, ServerMuteRecord>;
+  playerSaves: Record<string, ServerPlayerSaveRecord>;
+}
+
+function normalizeServerNick(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function serverAccountsStorageKey(roomCode: string): string {
+  return `flatbody_server_accounts_${roomCode.toLowerCase()}`;
+}
+
+function serverBansStorageKey(roomCode: string): string {
+  return `flatbody_server_bans_${roomCode.toLowerCase()}`;
+}
+
+function serverMutesStorageKey(roomCode: string): string {
+  return `flatbody_server_mutes_${roomCode.toLowerCase()}`;
+}
+
+function serverPlayerSavesStorageKey(roomCode: string): string {
+  return `flatbody_server_player_saves_${roomCode.toLowerCase()}`;
+}
+
+function loadJsonMap<T>(key: string): Record<string, T> {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveJsonMap<T>(key: string, data: Record<string, T>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+function loadServerAccounts(roomCode: string): Record<string, StoredServerAccount> {
+  return roomCode ? loadJsonMap<StoredServerAccount>(serverAccountsStorageKey(roomCode)) : {};
+}
+
+function saveServerAccounts(roomCode: string, accounts: Record<string, StoredServerAccount>): void {
+  if (!roomCode) return;
+  saveJsonMap(serverAccountsStorageKey(roomCode), accounts);
+}
+
+function loadServerBans(roomCode: string): Record<string, ServerBanRecord> {
+  return roomCode ? loadJsonMap<ServerBanRecord>(serverBansStorageKey(roomCode)) : {};
+}
+
+function saveServerBans(roomCode: string, bans: Record<string, ServerBanRecord>): void {
+  if (!roomCode) return;
+  saveJsonMap(serverBansStorageKey(roomCode), bans);
+}
+
+function loadServerMutes(roomCode: string): Record<string, ServerMuteRecord> {
+  return roomCode ? loadJsonMap<ServerMuteRecord>(serverMutesStorageKey(roomCode)) : {};
+}
+
+function saveServerMutes(roomCode: string, mutes: Record<string, ServerMuteRecord>): void {
+  if (!roomCode) return;
+  saveJsonMap(serverMutesStorageKey(roomCode), mutes);
+}
+
+function loadServerPlayerSaves(roomCode: string): Record<string, ServerPlayerSaveRecord> {
+  return roomCode ? loadJsonMap<ServerPlayerSaveRecord>(serverPlayerSavesStorageKey(roomCode)) : {};
+}
+
+function saveServerPlayerSaves(roomCode: string, saves: Record<string, ServerPlayerSaveRecord>): void {
+  if (!roomCode) return;
+  saveJsonMap(serverPlayerSavesStorageKey(roomCode), saves);
+}
+
+function generateSalt(): string {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const bytes = new Uint8Array(12);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {}
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+async function hashAccountPassword(salt: string, password: string): Promise<string> {
+  const input = `${salt}:${password}:flatbody_srv_auth_v1`;
+  try {
+    if (typeof crypto !== 'undefined' && crypto.subtle && typeof TextEncoder !== 'undefined') {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+      return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {}
+  // Deterministic fallback hash if SubtleCrypto is unavailable (e.g. non-HTTPS local LAN)
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9;
+  for (let i = 0; i < input.length; i++) {
+    const c = input.charCodeAt(i);
+    h1 ^= c;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= c + i;
+    h2 = Math.imul(h2, 0x85ebca6b);
+  }
+  return `${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
+}
 
 export interface SyncTrafficVehicle {
   id: string;
@@ -203,16 +372,21 @@ export interface SyncWorldState {
 }
 
 export type NetworkPacket = 
-  | { type: 'join'; packetId: string; peerId: string; name: string; password?: string }
+  | { type: 'join'; packetId: string; peerId: string; name: string }
   | { type: 'leave'; packetId: string; peerId: string; name: string }
   | { type: 'sync'; packetId: string; peerId: string; player: RemotePlayerState }
   | { type: 'chat'; packetId: string; message: ChatMessage }
-  | { type: 'room_info'; packetId: string; hostPeerId: string; players: { peerId: string; name: string }[]; settings?: ServerSettings }
-  | { type: 'auth_result'; packetId: string; success: boolean; reason?: string; settings?: ServerSettings }
-  | { type: 'server_settings'; packetId: string; settings: ServerSettings }
+  | { type: 'room_info'; packetId: string; hostPeerId: string; players: { peerId: string; name: string }[]; settings?: ServerSettings; targetPeerId?: string }
+  | { type: 'auth_challenge'; packetId: string; mode: 'register' | 'login'; roomCode: string; serverName: string; nickname: string; targetPeerId?: string }
+  | { type: 'auth_submit'; packetId: string; peerId: string; mode: 'register' | 'login'; nickname: string; password: string }
+  | { type: 'auth_result'; packetId: string; success: boolean; mode?: 'register' | 'login' | 'none'; retryable?: boolean; attemptsLeft?: number; reason?: string; authenticatedNick?: string; settings?: ServerSettings; targetPeerId?: string }
+  | { type: 'server_settings'; packetId: string; settings: ServerSettings; targetPeerId?: string }
   | { type: 'traffic_sync'; packetId: string; vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] }
   | { type: 'world_state_sync'; packetId: string; worldState: SyncWorldState }
-  | { type: 'kick'; packetId: string; reason: string };
+  | { type: 'kick'; packetId: string; reason: string; targetPeerId?: string }
+  | { type: 'teleport'; packetId: string; x: number; y: number; reason?: string; targetPeerId?: string }
+  | { type: 'player_save_upload'; packetId: string; peerId: string; nickname: string; save: ServerPlayerSaveRecord }
+  | { type: 'player_save_restore'; packetId: string; save: ServerPlayerSaveRecord; targetPeerId?: string };
 
 export type OnlineStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -226,6 +400,7 @@ class OnlineManager {
   public status: OnlineStatus = 'disconnected';
   public errorMessage: string | null = null;
   public roomCode: string = '';
+  public serverDisplayName: string = '';
   public isHost: boolean = false;
   public localPeerId: string = '';
   public localPlayerName: string = '';
@@ -234,9 +409,21 @@ class OnlineManager {
   public chatMessages: ChatMessage[] = [];
   public speechBubbles: Map<string, SpeechBubble> = new Map();
 
-  // Configurable server settings (traffic, password, save protection, anti-cheat)
+  // Configurable server settings (traffic, per-player nick password auth, save protection, anti-cheat)
   public serverSettings: ServerSettings = { ...DEFAULT_SERVER_SETTINGS };
-  public joinPassword?: string;
+  public authState: ServerAuthState = 'idle';
+  public authChallenge: ServerAuthChallenge | null = null;
+  public authKickReason: string | null = null;
+
+  // Host-side per-peer authentication, moderation & persistent save hooks
+  private authenticatedPeers: Set<string> = new Set();
+  private pendingAuthPeers: Map<string, { name: string; normNick: string; attempts: number }> = new Map();
+  private activeNickByPeer: Map<string, string> = new Map();
+  public onHostSaveRequested?: (reason: string) => Promise<boolean> | void;
+  public onHostTeleportSelf?: (x: number, y: number, targetName: string) => void;
+  public onGuestTeleported?: (x: number, y: number, reason?: string) => void;
+  public onGuestServerSaveReceived?: (save: ServerPlayerSaveRecord) => void;
+
   private peerAntiCheatMap: Map<string, { lastX: number; lastY: number; lastTime: number; lastCash?: number; violations: number }> = new Map();
   public lastTrafficSync: { vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] } | null = null;
   public lastWorldStateSync: SyncWorldState | null = null;
@@ -326,7 +513,7 @@ class OnlineManager {
     rawRoomCode: string,
     playerName?: string,
     asHost: boolean = true,
-    password?: string,
+    serverDisplayName?: string,
     initialSettings?: Partial<ServerSettings>
   ) {
     this.leaveRoom();
@@ -335,17 +522,20 @@ class OnlineManager {
       this.setPlayerName(playerName);
     }
 
-    if (password !== undefined) {
-      this.joinPassword = password;
-    }
     if (initialSettings) {
-      this.serverSettings = { ...this.serverSettings, ...initialSettings };
+      this.serverSettings = { ...DEFAULT_SERVER_SETTINGS, ...initialSettings };
+    } else if (!asHost) {
+      this.serverSettings = { ...DEFAULT_SERVER_SETTINGS };
     }
 
     const cleanCode = this.sanitizeRoomCode(rawRoomCode);
     this.roomCode = cleanCode;
+    this.serverDisplayName = (serverDisplayName || `Сервер ${cleanCode}`).trim();
     this.status = 'connecting';
     this.errorMessage = null;
+    this.authKickReason = null;
+    this.authChallenge = null;
+    this.authState = asHost ? 'authenticated' : 'idle';
     this.notify();
 
     // 1. Setup local BroadcastChannel (for instant zero-latency multi-tab connection on same machine)
@@ -368,6 +558,9 @@ class OnlineManager {
     this.isHost = asHost;
     const targetPeerId = asHost ? hostPeerId : clientPeerId;
     this.localPeerId = targetPeerId;
+    if (asHost) {
+      this.activeNickByPeer.set(hostPeerId, normalizeServerNick(this.localPlayerName));
+    }
 
     try {
       // PeerJS cloud broker (debug: 0 suppresses internal console error spam on normal discovery)
@@ -387,25 +580,24 @@ class OnlineManager {
         this.status = 'connected';
         this.errorMessage = null;
 
-        // Broadcast join packet
-        this.broadcastPacket({
-          type: 'join',
-          packetId: this.nextPacketId(),
-          peerId: this.localPeerId,
-          name: this.localPlayerName,
-          password: this.joinPassword
-        });
-
-        // Add local system message
-        this.addSystemMessage(
-          this.isHost 
-            ? `Вы подключились к комнате «${this.roomCode}» (Хост). Ожидание игроков...` 
-            : `Вы подключились к комнате «${this.roomCode}»!`
-        );
-
-        // If client, connect directly to host
-        if (!this.isHost) {
+        if (this.isHost) {
+          this.authState = 'authenticated';
+          this.activeNickByPeer.set(id, normalizeServerNick(this.localPlayerName));
+          this.addSystemMessage(`Вы создали комнату «${this.roomCode}» (Хост). Ожидание игроков...`);
+        } else {
+          // Connect directly to host and send join handshake over BroadcastChannel too (for multi-tab)
           this.connectToPeer(hostPeerId);
+          if (this.broadcastChannel) {
+            try {
+              this.broadcastChannel.postMessage({
+                type: 'join',
+                packetId: this.nextPacketId(),
+                peerId: this.localPeerId,
+                name: this.localPlayerName
+              } as NetworkPacket);
+            } catch {}
+          }
+          this.addSystemMessage(`Подключение к комнате «${this.roomCode}»...`);
         }
 
         this.notify();
@@ -420,18 +612,32 @@ class OnlineManager {
         const errType = err?.type;
         const errMsg = err?.message || String(err);
 
-        // 1. Host ID already taken -> Connect as client to the existing host
+        // 1. Host ID already taken -> Notify host instead of silently joining someone else's server
         if (errType === 'unavailable-id' && this.isHost) {
+          this.status = 'error';
+          this.errorMessage = `Код комнаты «${cleanCode}» уже занят другим сервером. Выберите другой код.`;
+          this.authState = 'kicked';
+          this.authKickReason = this.errorMessage;
           this.destroyPeerOnly();
-          this.joinOrCreateRoom(rawRoomCode, playerName, false);
+          this.notify();
           return;
         }
 
-        // 2. Client could not reach host (host offline or room newly formed) -> Take over as host!
+        // 2. Client could not reach host -> Never hijack as host; report server offline cleanly
         if (errType === 'peer-unavailable') {
           if (!this.isHost && errMsg.includes(hostPeerId)) {
+            // If BroadcastChannel already authenticated us (local multi-tab host), ignore PeerJS cloud miss
+            if (this.authState === 'authenticated' || this.authChallenge) {
+              return;
+            }
+            const reason = `Сервер «${cleanCode}» не найден или хост уже завершил сессию.`;
+            this.status = 'error';
+            this.errorMessage = reason;
+            this.authState = 'kicked';
+            this.authKickReason = reason;
+            this.authChallenge = null;
             this.destroyPeerOnly();
-            this.joinOrCreateRoom(rawRoomCode, playerName, true);
+            this.notify();
             return;
           }
           // Non-fatal: if another remote client disconnected, ignore
@@ -491,30 +697,14 @@ class OnlineManager {
     conn.on('open', () => {
       this.connections.set(conn.peer, conn);
 
-      // Send join announcement directly to this peer
-      conn.send({
-        type: 'join',
-        packetId: this.nextPacketId(),
-        peerId: this.localPeerId,
-        name: this.localPlayerName,
-        password: this.joinPassword
-      });
-
-      // If host, send room info with all existing peers and current settings
-      if (this.isHost) {
-        const playerList = Array.from(this.remotePlayers.values()).map((p) => ({
-          peerId: p.peerId,
-          name: p.name
-        }));
-        playerList.push({ peerId: this.localPeerId, name: this.localPlayerName });
-
+      // Guest initiates handshake with join packet; host waits for join before authorizing & sharing room_info
+      if (!this.isHost) {
         conn.send({
-          type: 'room_info',
+          type: 'join',
           packetId: this.nextPacketId(),
-          hostPeerId: this.localPeerId,
-          players: playerList,
-          settings: this.serverSettings
-        });
+          peerId: this.localPeerId,
+          name: this.localPlayerName
+        } as NetworkPacket);
       }
 
       this.notify();
@@ -526,6 +716,9 @@ class OnlineManager {
 
     conn.on('close', () => {
       this.connections.delete(conn.peer);
+      this.authenticatedPeers.delete(conn.peer);
+      this.pendingAuthPeers.delete(conn.peer);
+      this.activeNickByPeer.delete(conn.peer);
       const player = this.remotePlayers.get(conn.peer);
       if (player) {
         this.addSystemMessage(`${player.name} вышел из комнаты.`);
@@ -538,7 +731,560 @@ class OnlineManager {
     conn.on('error', (err) => {
       console.warn('[OnlineManager] Connection error with', conn.peer, err);
       this.connections.delete(conn.peer);
+      this.authenticatedPeers.delete(conn.peer);
+      this.pendingAuthPeers.delete(conn.peer);
+      this.activeNickByPeer.delete(conn.peer);
     });
+  }
+
+  private sendDirectPacket(targetPeerId: string | undefined, packet: NetworkPacket) {
+    const conn = targetPeerId ? this.connections.get(targetPeerId) : null;
+    if (conn && conn.open) {
+      try {
+        conn.send(packet);
+        return;
+      } catch {}
+    }
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage(packet);
+      } catch {}
+    }
+  }
+
+  private finalizeHostAuthorizePeer(peerId: string, displayName: string, normNick: string, authMode: 'register' | 'login' | 'none') {
+    this.pendingAuthPeers.delete(peerId);
+    this.authenticatedPeers.add(peerId);
+    this.activeNickByPeer.set(peerId, normNick);
+
+    this.sendDirectPacket(peerId, {
+      type: 'auth_result',
+      packetId: this.nextPacketId(),
+      success: true,
+      mode: authMode,
+      authenticatedNick: displayName,
+      settings: { ...this.serverSettings },
+      targetPeerId: peerId
+    });
+
+    const playerList = Array.from(this.remotePlayers.values()).map((p) => ({
+      peerId: p.peerId,
+      name: p.name
+    }));
+    playerList.push({ peerId: this.localPeerId, name: this.localPlayerName });
+
+    this.sendDirectPacket(peerId, {
+      type: 'room_info',
+      packetId: this.nextPacketId(),
+      hostPeerId: this.localPeerId,
+      players: playerList,
+      settings: { ...this.serverSettings },
+      targetPeerId: peerId
+    });
+
+    this.sendDirectPacket(peerId, {
+      type: 'server_settings',
+      packetId: this.nextPacketId(),
+      settings: { ...this.serverSettings },
+      targetPeerId: peerId
+    });
+
+    // If the host has a server-side saved profile for this nickname, push it directly to the authenticated player
+    if (this.serverSettings.savePlayerData !== false) {
+      const serverSaves = loadServerPlayerSaves(this.roomCode);
+      const savedProfile = serverSaves[normNick];
+      if (savedProfile) {
+        this.sendDirectPacket(peerId, {
+          type: 'player_save_restore',
+          packetId: this.nextPacketId(),
+          save: savedProfile,
+          targetPeerId: peerId
+        });
+      }
+    }
+
+    this.worldSyncTimer = 99;
+    this.addSystemMessage(
+      authMode === 'register'
+        ? `${displayName} зарегистрировал аккаунт и вошел в комнату.`
+        : `${displayName} вошел в комнату.`
+    );
+    if (authMode === 'register') {
+      void this.onHostSaveRequested?.('account_register');
+    }
+    this.notify();
+  }
+
+  /**
+   * Exports all persistent host-side server data (password accounts, bans, mutes, player saves)
+   * for storage in Cloud Firestore / local DB.
+   */
+  public exportServerState(targetRoomCode?: string): ServerPersistentState {
+    const code = this.sanitizeRoomCode(targetRoomCode || this.roomCode);
+    return {
+      roomCode: code,
+      accounts: loadServerAccounts(code),
+      bans: loadServerBans(code),
+      mutes: loadServerMutes(code),
+      playerSaves: loadServerPlayerSaves(code)
+    };
+  }
+
+  /**
+   * Imports persisted server data (from Firestore DB) into host storage before starting the server.
+   */
+  public importServerState(roomCode: string, state: Partial<ServerPersistentState>) {
+    const code = this.sanitizeRoomCode(roomCode);
+    if (!code) return;
+    if (state.accounts && typeof state.accounts === 'object') {
+      saveServerAccounts(code, state.accounts);
+    }
+    if (state.bans && typeof state.bans === 'object') {
+      saveServerBans(code, state.bans);
+    }
+    if (state.mutes && typeof state.mutes === 'object') {
+      saveServerMutes(code, state.mutes);
+    }
+    if (state.playerSaves && typeof state.playerSaves === 'object') {
+      saveServerPlayerSaves(code, state.playerSaves);
+    }
+  }
+
+  /**
+   * Guest uploads compact profile snapshot to the host so the server DB retains all players' progress.
+   */
+  public uploadLocalServerSave(save: Omit<ServerPlayerSaveRecord, 'normNick' | 'updatedAt'>) {
+    if (this.isHost || this.status !== 'connected' || this.authState !== 'authenticated') return;
+    if (this.serverSettings.savePlayerData === false) return;
+    const normNick = normalizeServerNick(save.nickname || this.localPlayerName);
+    if (!normNick) return;
+    const fullSave: ServerPlayerSaveRecord = {
+      ...save,
+      nickname: (save.nickname || this.localPlayerName).trim().slice(0, 24),
+      normNick,
+      updatedAt: Date.now()
+    };
+    const hostPeerId = `m2d_${this.roomCode}_host`;
+    this.sendDirectPacket(hostPeerId, {
+      type: 'player_save_upload',
+      packetId: this.nextPacketId(),
+      peerId: this.localPeerId,
+      nickname: fullSave.nickname,
+      save: fullSave
+    });
+  }
+
+  /**
+   * Broadcasts a server-wide system announcement from the host.
+   */
+  public broadcastSystemMessage(text: string) {
+    const message: ChatMessage = {
+      id: `sys_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      senderPeerId: 'system',
+      senderName: 'СЕРВЕР',
+      text,
+      timestamp: Date.now(),
+      isSystem: true
+    };
+    this.chatMessages.push(message);
+    if (this.chatMessages.length > 100) {
+      this.chatMessages.shift();
+    }
+    this.broadcastPacket({
+      type: 'chat',
+      packetId: this.nextPacketId(),
+      message
+    });
+    this.notify();
+  }
+
+  private findOnlineRemoteByQuery(query: string): RemotePlayerState | null {
+    const q = normalizeServerNick(query);
+    if (!q) return null;
+    const players = Array.from(this.remotePlayers.values());
+    const exact = players.find((p) => normalizeServerNick(p.name) === q || p.peerId === query);
+    if (exact) return exact;
+    const prefixMatches = players.filter((p) => normalizeServerNick(p.name).startsWith(q));
+    if (prefixMatches.length === 1) return prefixMatches[0];
+    const subMatches = players.filter((p) => normalizeServerNick(p.name).includes(q));
+    if (subMatches.length === 1) return subMatches[0];
+    return null;
+  }
+
+  private disconnectPeerWithReason(peerId: string, reason: string) {
+    this.sendDirectPacket(peerId, {
+      type: 'kick',
+      packetId: this.nextPacketId(),
+      reason,
+      targetPeerId: peerId
+    });
+    this.remotePlayers.delete(peerId);
+    this.speechBubbles.delete(peerId);
+    this.authenticatedPeers.delete(peerId);
+    this.pendingAuthPeers.delete(peerId);
+    this.activeNickByPeer.delete(peerId);
+    const conn = this.connections.get(peerId);
+    if (conn) {
+      setTimeout(() => {
+        try { conn.close(); } catch {}
+      }, 220);
+      this.connections.delete(peerId);
+    }
+    this.notify();
+  }
+
+  public kickPlayer(nickQuery: string, reason = 'Кикнут хостом сервера'): boolean {
+    if (!this.isHost) {
+      this.addSystemMessage('Команда доступна только хосту сервера.');
+      return false;
+    }
+    const target = this.findOnlineRemoteByQuery(nickQuery);
+    if (!target) {
+      this.addSystemMessage(`Игрок «${nickQuery}» не найден в сети.`);
+      return false;
+    }
+    const cleanReason = reason.trim() || 'Кикнут хостом сервера';
+    this.disconnectPeerWithReason(target.peerId, `Вы были кикнуты с сервера. Причина: ${cleanReason}`);
+    this.broadcastSystemMessage(`${target.name} кикнут хостом (${cleanReason}).`);
+    return true;
+  }
+
+  public banPlayer(nickQuery: string, reason = 'Нарушение правил сервера'): boolean {
+    if (!this.isHost) {
+      this.addSystemMessage('Команда доступна только хосту сервера.');
+      return false;
+    }
+    const targetOnline = this.findOnlineRemoteByQuery(nickQuery);
+    const displayName = (targetOnline?.name || nickQuery).trim().slice(0, 24);
+    const normNick = normalizeServerNick(displayName);
+    if (!normNick) return false;
+    if (normNick === normalizeServerNick(this.localPlayerName)) {
+      this.addSystemMessage('Нельзя забанить самого себя (хоста).');
+      return false;
+    }
+    const cleanReason = reason.trim() || 'Нарушение правил сервера';
+    const bans = loadServerBans(this.roomCode);
+    bans[normNick] = {
+      nickname: displayName,
+      normNick,
+      reason: cleanReason,
+      bannedAt: Date.now(),
+      bannedBy: this.localPlayerName
+    };
+    saveServerBans(this.roomCode, bans);
+
+    if (targetOnline) {
+      this.disconnectPeerWithReason(
+        targetOnline.peerId,
+        `Вы забанены на этом сервере. Причина: ${cleanReason}`
+      );
+    }
+    this.broadcastSystemMessage(`${displayName} забанен на сервере (${cleanReason}).`);
+    void this.onHostSaveRequested?.('ban');
+    return true;
+  }
+
+  public unbanPlayer(nickQuery: string): boolean {
+    if (!this.isHost) {
+      this.addSystemMessage('Команда доступна только хосту сервера.');
+      return false;
+    }
+    const norm = normalizeServerNick(nickQuery);
+    const bans = loadServerBans(this.roomCode);
+    const matchKey = Object.keys(bans).find((k) => k === norm || k.includes(norm));
+    if (!matchKey) {
+      this.addSystemMessage(`Игрок «${nickQuery}» не найден в списке банов.`);
+      return false;
+    }
+    const removed = bans[matchKey];
+    delete bans[matchKey];
+    saveServerBans(this.roomCode, bans);
+    this.broadcastSystemMessage(`${removed.nickname} разбанен хостом.`);
+    void this.onHostSaveRequested?.('unban');
+    return true;
+  }
+
+  public mutePlayer(nickQuery: string, reason = 'Нарушение правил чата'): boolean {
+    if (!this.isHost) {
+      this.addSystemMessage('Команда доступна только хосту сервера.');
+      return false;
+    }
+    const targetOnline = this.findOnlineRemoteByQuery(nickQuery);
+    const displayName = (targetOnline?.name || nickQuery).trim().slice(0, 24);
+    const normNick = normalizeServerNick(displayName);
+    if (!normNick || normNick === normalizeServerNick(this.localPlayerName)) {
+      this.addSystemMessage('Нельзя замутить самого себя.');
+      return false;
+    }
+    const cleanReason = reason.trim() || 'Нарушение правил чата';
+    const mutes = loadServerMutes(this.roomCode);
+    mutes[normNick] = {
+      nickname: displayName,
+      normNick,
+      reason: cleanReason,
+      mutedAt: Date.now()
+    };
+    saveServerMutes(this.roomCode, mutes);
+    this.broadcastSystemMessage(`${displayName} получил мут в чате (${cleanReason}).`);
+    void this.onHostSaveRequested?.('mute');
+    return true;
+  }
+
+  public unmutePlayer(nickQuery: string): boolean {
+    if (!this.isHost) {
+      this.addSystemMessage('Команда доступна только хосту сервера.');
+      return false;
+    }
+    const norm = normalizeServerNick(nickQuery);
+    const mutes = loadServerMutes(this.roomCode);
+    const matchKey = Object.keys(mutes).find((k) => k === norm || k.includes(norm));
+    if (!matchKey) {
+      this.addSystemMessage(`Игрок «${nickQuery}» не находится в муте.`);
+      return false;
+    }
+    const removed = mutes[matchKey];
+    delete mutes[matchKey];
+    saveServerMutes(this.roomCode, mutes);
+    this.broadcastSystemMessage(`С игрока ${removed.nickname} снят мут.`);
+    void this.onHostSaveRequested?.('unmute');
+    return true;
+  }
+
+  public resetPlayerPassword(nickQuery: string): boolean {
+    if (!this.isHost) {
+      this.addSystemMessage('Команда доступна только хосту сервера.');
+      return false;
+    }
+    const norm = normalizeServerNick(nickQuery);
+    const accounts = loadServerAccounts(this.roomCode);
+    const matchKey = Object.keys(accounts).find((k) => k === norm);
+    if (!matchKey) {
+      this.addSystemMessage(`Зарегистрированный аккаунт «${nickQuery}» не найден.`);
+      return false;
+    }
+    const name = accounts[matchKey].displayName;
+    delete accounts[matchKey];
+    saveServerAccounts(this.roomCode, accounts);
+    this.addSystemMessage(`Пароль аккаунта «${name}» сброшен. При следующем входе игрок сможет задать новый пароль.`);
+    void this.onHostSaveRequested?.('resetpass');
+    return true;
+  }
+
+  public getServerBans(): ServerBanRecord[] {
+    if (!this.roomCode) return [];
+    return Object.values(loadServerBans(this.roomCode)).sort((a, b) => b.bannedAt - a.bannedAt);
+  }
+
+  private executeChatCommand(rawText: string) {
+    const body = rawText.slice(1).trim();
+    if (!body) return;
+    const parts = body.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const arg1 = parts[1] || '';
+    const restAfterArg1 = parts.slice(2).join(' ').trim();
+    const allArgs = parts.slice(1).join(' ').trim();
+
+    if (cmd === 'help' || cmd === '?') {
+      this.addSystemMessage('Общие команды: /players (список игроков), /help (справка)');
+      if (this.isHost) {
+        this.addSystemMessage(
+          'Команды хоста: /kick <ник> [причина], /ban <ник> [причина], /unban <ник>, /bans, /mute <ник> [причина], /unmute <ник>, /tp <ник>, /tphere <ник>, /say <текст>, /resetpass <ник>, /save'
+        );
+      }
+      return;
+    }
+
+    if (cmd === 'players' || cmd === 'online' || cmd === 'list') {
+      const remotes = this.getRemotePlayersArray();
+      const names = [
+        `${this.localPlayerName}${this.isHost ? ' (Хост)' : ' (Вы)'}`,
+        ...remotes.map((p) => `${p.name}${p.isInVehicle ? ' [авто]' : ''}`)
+      ];
+      this.addSystemMessage(`Игроки онлайн (${names.length}): ${names.join(', ')}`);
+      return;
+    }
+
+    if (!this.isHost) {
+      this.addSystemMessage(`Команда /${cmd} доступна только хосту сервера. Введите /help для списка команд.`);
+      return;
+    }
+
+    switch (cmd) {
+      case 'kick': {
+        if (!arg1) {
+          this.addSystemMessage('Использование: /kick <ник> [причина]');
+          return;
+        }
+        this.kickPlayer(arg1, restAfterArg1 || 'Кикнут хостом сервера');
+        return;
+      }
+      case 'ban': {
+        if (!arg1) {
+          this.addSystemMessage('Использование: /ban <ник> [причина]');
+          return;
+        }
+        this.banPlayer(arg1, restAfterArg1 || 'Нарушение правил сервера');
+        return;
+      }
+      case 'unban': {
+        if (!arg1) {
+          this.addSystemMessage('Использование: /unban <ник>');
+          return;
+        }
+        this.unbanPlayer(arg1);
+        return;
+      }
+      case 'bans':
+      case 'banlist': {
+        const list = this.getServerBans();
+        if (list.length === 0) {
+          this.addSystemMessage('Список банов пуст.');
+        } else {
+          const summary = list.map((b) => `${b.nickname} (${b.reason})`).join('; ');
+          this.addSystemMessage(`Забаненные игроки (${list.length}): ${summary}`);
+        }
+        return;
+      }
+      case 'mute': {
+        if (!arg1) {
+          this.addSystemMessage('Использование: /mute <ник> [причина]');
+          return;
+        }
+        this.mutePlayer(arg1, restAfterArg1 || 'Нарушение правил чата');
+        return;
+      }
+      case 'unmute': {
+        if (!arg1) {
+          this.addSystemMessage('Использование: /unmute <ник>');
+          return;
+        }
+        this.unmutePlayer(arg1);
+        return;
+      }
+      case 'tp': {
+        if (!arg1) {
+          this.addSystemMessage('Использование: /tp <ник>');
+          return;
+        }
+        const target = this.findOnlineRemoteByQuery(arg1);
+        if (!target) {
+          this.addSystemMessage(`Игрок «${arg1}» не найден в сети.`);
+          return;
+        }
+        if (this.onHostTeleportSelf) {
+          this.onHostTeleportSelf(target.x, target.y, target.name);
+          this.addSystemMessage(`Вы телепортировались к игроку ${target.name}.`);
+        } else {
+          this.addSystemMessage('Телепортация недоступна в текущем состоянии.');
+        }
+        return;
+      }
+      case 'tphere': {
+        if (!arg1) {
+          this.addSystemMessage('Использование: /tphere <ник>');
+          return;
+        }
+        const target = this.findOnlineRemoteByQuery(arg1);
+        if (!target) {
+          this.addSystemMessage(`Игрок «${arg1}» не найден в сети.`);
+          return;
+        }
+        if (this.lastLocalHostPos) {
+          this.sendDirectPacket(target.peerId, {
+            type: 'teleport',
+            packetId: this.nextPacketId(),
+            x: this.lastLocalHostPos.x + 36,
+            y: this.lastLocalHostPos.y,
+            reason: `Хост ${this.localPlayerName} телепортировал вас к себе.`,
+            targetPeerId: target.peerId
+          });
+          this.broadcastSystemMessage(`Хост телепортировал игрока ${target.name} к себе.`);
+        } else {
+          this.addSystemMessage('Не удалось определить координаты хоста.');
+        }
+        return;
+      }
+      case 'say':
+      case 'bc':
+      case 'announce': {
+        if (!allArgs) {
+          this.addSystemMessage('Использование: /say <сообщение>');
+          return;
+        }
+        this.broadcastSystemMessage(`[Объявление] ${allArgs}`);
+        return;
+      }
+      case 'resetpass': {
+        if (!arg1) {
+          this.addSystemMessage('Использование: /resetpass <ник>');
+          return;
+        }
+        this.resetPlayerPassword(arg1);
+        return;
+      }
+      case 'save': {
+        if (!this.onHostSaveRequested) {
+          this.addSystemMessage('Сохранение сервера недоступно в этой сессии.');
+          return;
+        }
+        this.addSystemMessage('Сохранение сервера, аккаунтов, банов и профилей игроков в БД...');
+        Promise.resolve(this.onHostSaveRequested('manual_command')).then((ok) => {
+          if (ok) {
+            this.addSystemMessage('Сервер успешно сохранён в базу данных.');
+          } else {
+            this.addSystemMessage('Сервер сохранён локально (войдите в Google для облачной БД).');
+          }
+        });
+        return;
+      }
+      default: {
+        this.addSystemMessage(`Неизвестная команда /${cmd}. Введите /help для списка команд.`);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Client submits personal account password (register or login) to the host.
+   */
+  public submitServerAuth(password: string) {
+    if (this.isHost || !this.authChallenge) return;
+    const trimmed = password.trim();
+    if (trimmed.length < 4) {
+      this.authChallenge = {
+        ...this.authChallenge,
+        error: 'Пароль должен содержать минимум 4 символа.',
+        submitting: false
+      };
+      this.notify();
+      return;
+    }
+    this.authChallenge = {
+      ...this.authChallenge,
+      error: undefined,
+      submitting: true
+    };
+    this.notify();
+
+    const packet: NetworkPacket = {
+      type: 'auth_submit',
+      packetId: this.nextPacketId(),
+      peerId: this.localPeerId,
+      mode: this.authChallenge.mode,
+      nickname: this.authChallenge.nickname,
+      password: trimmed
+    };
+
+    const hostPeerId = `m2d_${this.roomCode}_host`;
+    this.sendDirectPacket(hostPeerId, packet);
+  }
+
+  public clearAuthKick() {
+    this.authKickReason = null;
+    if (this.authState === 'kicked') {
+      this.authState = 'idle';
+    }
+    this.notify();
   }
 
   private nextPacketId(): string {
@@ -589,10 +1335,59 @@ class OnlineManager {
       if (first) this.recentPacketIds.delete(first);
     }
 
-    // Host relay: If host receives packet from a client, broadcast to all other clients!
-    if (this.isHost && source === 'webrtc' && senderPeerId) {
+    // Ignore targeted packets addressed to a different peer
+    if ('targetPeerId' in packet && packet.targetPeerId && packet.targetPeerId !== this.localPeerId) {
+      return;
+    }
+
+    const effectiveSenderId = senderPeerId || ('peerId' in packet ? packet.peerId : undefined);
+
+    // Host firewall: block & do NOT relay any gameplay packets from peers that haven't completed auth
+    if (this.isHost && effectiveSenderId && packet.type !== 'join' && packet.type !== 'auth_submit' && packet.type !== 'leave') {
+      if (this.serverSettings.passwordRequired && !this.authenticatedPeers.has(effectiveSenderId)) {
+        return;
+      }
+    }
+
+    // Host relay: relay authenticated non-auth/non-admin packets to other authenticated clients
+    if (
+      this.isHost &&
+      source === 'webrtc' &&
+      senderPeerId &&
+      packet.type !== 'auth_submit' &&
+      packet.type !== 'auth_challenge' &&
+      packet.type !== 'auth_result' &&
+      packet.type !== 'join' &&
+      packet.type !== 'kick' &&
+      packet.type !== 'teleport' &&
+      packet.type !== 'player_save_upload' &&
+      packet.type !== 'player_save_restore'
+    ) {
+      // Drop chat packets from muted players before relaying to others
+      if (packet.type === 'chat') {
+        const senderNorm = this.activeNickByPeer.get(senderPeerId);
+        if (senderNorm) {
+          const mutes = loadServerMutes(this.roomCode);
+          if (mutes[senderNorm]) {
+            this.sendDirectPacket(senderPeerId, {
+              type: 'chat',
+              packetId: this.nextPacketId(),
+              message: {
+                id: `mute_warn_${Date.now()}`,
+                senderPeerId: 'system',
+                senderName: 'СЕРВЕР',
+                text: `Вы не можете писать в чат (мут: ${mutes[senderNorm].reason}).`,
+                timestamp: Date.now(),
+                isSystem: true
+              }
+            });
+            return;
+          }
+        }
+      }
       this.connections.forEach((conn, peer) => {
         if (peer !== senderPeerId && conn.open) {
+          if (this.serverSettings.passwordRequired && !this.authenticatedPeers.has(peer)) return;
           try {
             conn.send(packet);
           } catch {}
@@ -602,50 +1397,221 @@ class OnlineManager {
 
     switch (packet.type) {
       case 'join': {
-        if (this.isHost && this.serverSettings.passwordRequired && this.serverSettings.password) {
-          if (packet.password !== this.serverSettings.password) {
-            const conn = senderPeerId ? this.connections.get(senderPeerId) : null;
-            if (conn && conn.open) {
-              try {
-                conn.send({
-                  type: 'auth_result',
-                  packetId: this.nextPacketId(),
-                  success: false,
-                  reason: 'Неверный пароль сервера'
-                });
-              } catch {}
-            }
-            return;
+        if (!this.isHost) break;
+        const peerId = effectiveSenderId || packet.peerId;
+        const displayName = (packet.name || 'Игрок').trim().slice(0, 24) || 'Игрок';
+        const normNick = normalizeServerNick(displayName);
+
+        // Enforce persistent server ban list BEFORE auth
+        const bans = loadServerBans(this.roomCode);
+        const banRecord = bans[normNick];
+        if (banRecord) {
+          this.sendDirectPacket(peerId, {
+            type: 'auth_result',
+            packetId: this.nextPacketId(),
+            success: false,
+            retryable: false,
+            reason: `Вы забанены на этом сервере. Причина: ${banRecord.reason}`,
+            targetPeerId: peerId
+          });
+          const conn = this.connections.get(peerId);
+          if (conn) setTimeout(() => { try { conn.close(); } catch {} }, 180);
+          return;
+        }
+
+        // Reject if another connected player (or the host) is already online with this nickname
+        let duplicateOnline = false;
+        this.activeNickByPeer.forEach((activeNorm, existingPeer) => {
+          if (existingPeer !== peerId && activeNorm === normNick) {
+            duplicateOnline = true;
           }
+        });
+        if (duplicateOnline) {
+          this.sendDirectPacket(peerId, {
+            type: 'auth_result',
+            packetId: this.nextPacketId(),
+            success: false,
+            retryable: false,
+            reason: `Ник «${displayName}» уже используется игроком на сервере.`,
+            targetPeerId: peerId
+          });
+          const conn = this.connections.get(peerId);
+          if (conn) setTimeout(() => { try { conn.close(); } catch {} }, 180);
+          return;
         }
-        const existing = this.remotePlayers.get(packet.peerId);
-        if (!existing) {
-          this.addSystemMessage(`${packet.name} вошел в комнату.`);
+
+        // If per-player password protection is enabled, send register or login challenge
+        if (this.serverSettings.passwordRequired) {
+          const accounts = loadServerAccounts(this.roomCode);
+          const mode: 'register' | 'login' = accounts[normNick] ? 'login' : 'register';
+          this.pendingAuthPeers.set(peerId, { name: displayName, normNick, attempts: 0 });
+          this.sendDirectPacket(peerId, {
+            type: 'auth_challenge',
+            packetId: this.nextPacketId(),
+            mode,
+            roomCode: this.roomCode,
+            serverName: this.serverDisplayName || `Сервер ${this.roomCode}`,
+            nickname: displayName,
+            targetPeerId: peerId
+          });
+          return;
         }
-        if (this.isHost && !this.connections.has(packet.peerId)) {
-          this.connectToPeer(packet.peerId);
-        }
-        if (this.isHost) {
-          this.worldSyncTimer = 99; // Trigger immediate world state broadcast to the new peer
-          const conn = senderPeerId ? this.connections.get(senderPeerId) : null;
-          if (conn && conn.open) {
-            try {
-              conn.send({
-                type: 'server_settings',
-                packetId: this.nextPacketId(),
-                settings: { ...this.serverSettings, password: '' }
-              });
-            } catch {}
-          }
-        }
+
+        // Open server without per-nick password: authorize immediately
+        this.finalizeHostAuthorizePeer(peerId, displayName, normNick, 'none');
+        break;
+      }
+
+      case 'auth_challenge': {
+        if (this.isHost) break;
+        this.authState = packet.mode === 'register' ? 'pending_register' : 'pending_login';
+        this.authChallenge = {
+          mode: packet.mode,
+          roomCode: packet.roomCode,
+          serverName: packet.serverName,
+          nickname: packet.nickname,
+          attemptsLeft: packet.mode === 'login' ? 3 : undefined,
+          submitting: false
+        };
+        this.authKickReason = null;
         this.notify();
         break;
       }
 
+      case 'auth_submit': {
+        if (!this.isHost) break;
+        const peerId = effectiveSenderId || packet.peerId;
+        const pending = this.pendingAuthPeers.get(peerId);
+        if (!pending) return;
+
+        const rawPass = (packet.password || '').trim();
+        if (rawPass.length < 4) {
+          this.sendDirectPacket(peerId, {
+            type: 'auth_result',
+            packetId: this.nextPacketId(),
+            success: false,
+            retryable: true,
+            attemptsLeft: Math.max(1, 3 - pending.attempts),
+            reason: 'Пароль должен содержать минимум 4 символа.',
+            targetPeerId: peerId
+          });
+          return;
+        }
+
+        void (async () => {
+          const accounts = loadServerAccounts(this.roomCode);
+          const existing = accounts[pending.normNick];
+
+          if (packet.mode === 'register') {
+            if (existing) {
+              // Nick was registered concurrently; prompt login instead
+              this.sendDirectPacket(peerId, {
+                type: 'auth_challenge',
+                packetId: this.nextPacketId(),
+                mode: 'login',
+                roomCode: this.roomCode,
+                serverName: this.serverDisplayName || `Сервер ${this.roomCode}`,
+                nickname: pending.name,
+                targetPeerId: peerId
+              });
+              return;
+            }
+            const salt = generateSalt();
+            const hash = await hashAccountPassword(salt, rawPass);
+            const now = Date.now();
+            accounts[pending.normNick] = {
+              displayName: pending.name,
+              salt,
+              hash,
+              registeredAt: now,
+              lastLoginAt: now
+            };
+            saveServerAccounts(this.roomCode, accounts);
+            this.finalizeHostAuthorizePeer(peerId, pending.name, pending.normNick, 'register');
+            return;
+          }
+
+          // Login verification
+          if (!existing) {
+            this.sendDirectPacket(peerId, {
+              type: 'auth_challenge',
+              packetId: this.nextPacketId(),
+              mode: 'register',
+              roomCode: this.roomCode,
+              serverName: this.serverDisplayName || `Сервер ${this.roomCode}`,
+              nickname: pending.name,
+              targetPeerId: peerId
+            });
+            return;
+          }
+
+          const candidateHash = await hashAccountPassword(existing.salt, rawPass);
+          if (candidateHash === existing.hash) {
+            existing.lastLoginAt = Date.now();
+            saveServerAccounts(this.roomCode, accounts);
+            this.finalizeHostAuthorizePeer(peerId, pending.name, pending.normNick, 'login');
+          } else {
+            pending.attempts += 1;
+            const attemptsLeft = Math.max(0, 3 - pending.attempts);
+            if (attemptsLeft > 0) {
+              this.sendDirectPacket(peerId, {
+                type: 'auth_result',
+                packetId: this.nextPacketId(),
+                success: false,
+                retryable: true,
+                attemptsLeft,
+                reason: `Неверный пароль. Осталось попыток: ${attemptsLeft}.`,
+                targetPeerId: peerId
+              });
+            } else {
+              this.pendingAuthPeers.delete(peerId);
+              this.sendDirectPacket(peerId, {
+                type: 'auth_result',
+                packetId: this.nextPacketId(),
+                success: false,
+                retryable: false,
+                attemptsLeft: 0,
+                reason: 'Превышено число попыток ввода пароля. Доступ к аккаунту заблокирован.',
+                targetPeerId: peerId
+              });
+              const conn = this.connections.get(peerId);
+              if (conn) setTimeout(() => { try { conn.close(); } catch {} }, 180);
+            }
+          }
+        })();
+        break;
+      }
+
       case 'auth_result': {
-        if (!packet.success) {
-          this.addSystemMessage(`Ошибка подключения: ${packet.reason || 'Отказано в доступе'}`);
+        if (this.isHost) break;
+        if (packet.success) {
+          this.authState = 'authenticated';
+          this.authChallenge = null;
+          this.authKickReason = null;
+          if (packet.settings) {
+            this.serverSettings = { ...this.serverSettings, ...packet.settings };
+          }
+          if (packet.mode === 'register') {
+            this.addSystemMessage('Аккаунт зарегистрирован на сервере. Ваш ник и сохранение защищены паролем.');
+          } else if (packet.mode === 'login') {
+            this.addSystemMessage('Вход подтверждён. Профиль сервера разблокирован.');
+          }
+          this.notify();
+        } else if (packet.retryable && this.authChallenge) {
+          this.authChallenge = {
+            ...this.authChallenge,
+            error: packet.reason || 'Неверный пароль.',
+            attemptsLeft: packet.attemptsLeft,
+            submitting: false
+          };
+          this.notify();
+        } else {
+          const reason = packet.reason || 'Отказано в доступе к серверу.';
+          this.addSystemMessage(`Ошибка входа: ${reason}`);
           this.leaveRoom();
+          this.authState = 'kicked';
+          this.authKickReason = reason;
+          this.notify();
         }
         break;
       }
@@ -718,20 +1684,76 @@ class OnlineManager {
         const msg = packet.message;
         if (!msg) return;
 
+        // Also enforce mute for BroadcastChannel local tabs on host
+        if (this.isHost && !msg.isSystem) {
+          const senderNorm =
+            (effectiveSenderId && this.activeNickByPeer.get(effectiveSenderId)) ||
+            normalizeServerNick(msg.senderName || '');
+          if (senderNorm) {
+            const mutes = loadServerMutes(this.roomCode);
+            if (mutes[senderNorm]) return;
+          }
+        }
+
         this.chatMessages.push(msg);
         if (this.chatMessages.length > 100) {
           this.chatMessages.shift();
         }
 
         // Set speech bubble above remote player (or their car)
-        this.speechBubbles.set(msg.senderPeerId, {
-          text: msg.text,
-          expiresAt: Date.now() + 5000,
-          isVehicle: false
-        });
+        if (!msg.isSystem) {
+          this.speechBubbles.set(msg.senderPeerId, {
+            text: msg.text,
+            expiresAt: Date.now() + 5000,
+            isVehicle: false
+          });
+        }
 
         sound.playAlert(); // Subtle friendly notification sound
         this.notify();
+        break;
+      }
+
+      case 'kick': {
+        if (this.isHost) break;
+        const reason = packet.reason || 'Вы были отключены хостом сервера.';
+        this.leaveRoom();
+        this.authState = 'kicked';
+        this.authKickReason = reason;
+        this.notify();
+        break;
+      }
+
+      case 'teleport': {
+        if (this.isHost) break;
+        if (typeof packet.x === 'number' && typeof packet.y === 'number') {
+          this.onGuestTeleported?.(packet.x, packet.y, packet.reason);
+          if (packet.reason) {
+            this.addSystemMessage(packet.reason);
+          }
+        }
+        break;
+      }
+
+      case 'player_save_upload': {
+        if (!this.isHost) break;
+        if (this.serverSettings.savePlayerData === false) break;
+        const peerId = effectiveSenderId || packet.peerId;
+        const verifiedNorm = this.activeNickByPeer.get(peerId);
+        if (!verifiedNorm || !packet.save) break;
+        const saves = loadServerPlayerSaves(this.roomCode);
+        saves[verifiedNorm] = {
+          ...packet.save,
+          normNick: verifiedNorm,
+          updatedAt: Date.now()
+        };
+        saveServerPlayerSaves(this.roomCode, saves);
+        break;
+      }
+
+      case 'player_save_restore': {
+        if (this.isHost || !packet.save) break;
+        this.onGuestServerSaveReceived?.(packet.save);
         break;
       }
 
@@ -750,12 +1772,22 @@ class OnlineManager {
     }
   }
 
+  private lastLocalHostPos: { x: number; y: number } | null = null;
+
   /**
-   * Sends a chat message to everyone in the room.
+   * Sends a chat message to everyone in the room, or executes a `/` server command.
    */
   public sendChatMessage(text: string) {
+    if (!this.isHost && this.status === 'connected' && this.authState !== 'authenticated') {
+      return;
+    }
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    if (trimmed.startsWith('/')) {
+      this.executeChatCommand(trimmed);
+      return;
+    }
 
     // Safe cap to prevent WebRTC SCTP buffer overflow on huge prompts
     const safeText = trimmed.length > 4000 ? trimmed.slice(0, 4000) : trimmed;
@@ -853,8 +1885,14 @@ class OnlineManager {
     this.lastTrafficSync = null;
     this.lastWorldStateSync = null;
     this.peerAntiCheatMap.clear();
+    this.authenticatedPeers.clear();
+    this.pendingAuthPeers.clear();
+    this.activeNickByPeer.clear();
+    this.authChallenge = null;
+    this.authState = 'idle';
     this.status = 'disconnected';
     this.roomCode = '';
+    this.serverDisplayName = '';
     this.isHost = false;
     this.errorMessage = null;
     this.notify();
@@ -875,6 +1913,10 @@ class OnlineManager {
    */
   public broadcastLocalState(player: Player, world: GameWorld) {
     if (this.status !== 'connected') return;
+    if (!this.isHost && this.authState !== 'authenticated') return;
+    if (this.isHost) {
+      this.lastLocalHostPos = { x: player.x, y: player.y };
+    }
 
     let vehicleState: RemoteVehicleState | null = null;
     let trailerState: RemoteVehicleState | null = null;

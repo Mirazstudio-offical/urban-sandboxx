@@ -14,13 +14,20 @@ import {
   Search,
   Play,
   Crown,
-  Hash
+  Hash,
+  ShieldCheck,
+  Globe,
+  Lock,
+  Ban,
+  UserX,
+  Save,
+  RotateCcw
 } from 'lucide-react';
 import { onlineManager, OnlineStatus } from '../onlineSystem';
 import { sound } from '../audio';
 import { ModalShell, Tabs } from './gameUi';
 import { CAR_CONFIGS } from '../vehicleHelpers';
-import { openHostSession, closeHostSession } from '../hostSession';
+import { openHostSession, closeHostSession, type HostAccess } from '../hostSession';
 import { 
   auth, 
   subscribeToP2PServers, 
@@ -32,6 +39,27 @@ interface OnlineModalProps {
   onClose: () => void;
   currentVehicleId?: string | null;
   onOpenFriends?: () => void;
+  onJoinServer?: (options: {
+    roomCode: string;
+    nickname: string;
+    serverName?: string;
+    gameMode?: string;
+  }) => Promise<void> | void;
+  onCreateServer?: (options: {
+    access: HostAccess;
+    roomCode: string;
+    serverName: string;
+    nickname: string;
+    gameMode: string;
+    maxPlayers: number;
+    trafficEnabled: boolean;
+    vehicleCount: number;
+    pedestrianCount: number;
+    passwordRequired: boolean;
+    savePlayerData: boolean;
+    antiCheat: 'none' | 'moderate' | 'strict';
+  }) => Promise<void> | void;
+  onSaveHostedServer?: () => Promise<boolean> | void;
 }
 
 const GAME_MODES = [
@@ -47,12 +75,21 @@ const MAP_NAMES = [
   { id: 'industrial', name: 'Промзона' }
 ];
 
-export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpenFriends }) => {
+export const OnlineModal: React.FC<OnlineModalProps> = ({
+  isOpen,
+  onClose,
+  onOpenFriends,
+  onJoinServer,
+  onCreateServer,
+  onSaveHostedServer
+}) => {
   const [status, setStatus] = useState<OnlineStatus>(onlineManager.status);
   const [errorMessage, setErrorMessage] = useState<string | null>(onlineManager.errorMessage);
   const [roomCode, setRoomCode] = useState<string>(onlineManager.roomCode || 'flatbody-1');
   const [nickname, setNickname] = useState<string>(onlineManager.localPlayerName);
   const [copied, setCopied] = useState<boolean>(false);
+  const [savingServer, setSavingServer] = useState<boolean>(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [, setTick] = useState<number>(0);
 
   // Firestore P2P Server List States
@@ -62,10 +99,12 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
   const [filterMode, setFilterMode] = useState<string>('all');
   
   // Host Server Form States
+  const [serverAccess, setServerAccess] = useState<HostAccess>('all');
   const [serverName, setServerName] = useState<string>('Сервер ' + (auth.currentUser?.displayName || 'Пилота'));
   const [maxPlayers, setMaxPlayers] = useState<number>(8);
   const [selectedMap, setSelectedMap] = useState<string>('flatbody');
   const [selectedGameMode, setSelectedGameMode] = useState<string>('free_roam');
+  const [passwordRequired, setPasswordRequired] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubOnline = onlineManager.subscribe(() => {
@@ -108,23 +147,55 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
 
     const generatedCode = `room-${Math.floor(1000 + Math.random() * 9000)}`;
     setRoomCode(generatedCode);
+    const trimmedName = serverName.trim() || 'P2P Сервер';
+
+    if (onCreateServer) {
+      onClose();
+      await onCreateServer({
+        access: serverAccess,
+        roomCode: generatedCode,
+        serverName: trimmedName,
+        nickname,
+        gameMode: selectedGameMode,
+        maxPlayers,
+        trafficEnabled: true,
+        vehicleCount: 15,
+        pedestrianCount: 10,
+        passwordRequired,
+        savePlayerData: true,
+        antiCheat: 'moderate'
+      });
+      return;
+    }
 
     await openHostSession({
-      access: 'all',
+      access: serverAccess,
       roomCode: generatedCode,
-      serverName: serverName.trim() || 'P2P Сервер',
+      serverName: trimmedName,
       mapName: selectedMap === 'flatbody' ? 'flatbody' : selectedMap,
       gameMode: selectedGameMode,
       maxPlayers,
-      nickname
+      nickname,
+      passwordRequired
     });
   };
 
   const handleJoinServerFromList = (server: P2PServerRoom) => {
     sound.playButtonPress();
     handleSaveNick(nickname);
-    setRoomCode(server.peerId || server.name);
-    onlineManager.joinOrCreateRoom(server.peerId || server.name, nickname, false);
+    const targetCode = server.peerId || server.name;
+    setRoomCode(targetCode);
+    if (onJoinServer) {
+      onClose();
+      void onJoinServer({
+        roomCode: targetCode,
+        nickname,
+        serverName: server.name,
+        gameMode: server.gameMode
+      });
+      return;
+    }
+    onlineManager.joinOrCreateRoom(targetCode, nickname, false, server.name);
   };
 
   const handleLeaveRoom = () => {
@@ -252,7 +323,29 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
                   )}
                 </div>
               </div>
-              <div className="gu-row2">
+              <div className="gu-row2 gu-wrap">
+                {onlineManager.isHost && onSaveHostedServer && (
+                  <button
+                    type="button"
+                    className="gu-btn gu-btn-s"
+                    disabled={savingServer}
+                    onClick={async () => {
+                      sound.playButtonPress();
+                      setSavingServer(true);
+                      setSaveNotice(null);
+                      try {
+                        const ok = await onSaveHostedServer();
+                        setSaveNotice(ok ? 'Сервер сохранён в облачную БД' : 'Сервер сохранён локально');
+                        setTimeout(() => setSaveNotice(null), 3000);
+                      } finally {
+                        setSavingServer(false);
+                      }
+                    }}
+                  >
+                    <Save width={18} height={18} color="#e0ab45" />
+                    {savingServer ? 'Сохранение...' : 'Сохранить в БД'}
+                  </button>
+                )}
                 <button type="button" className="gu-btn gu-btn-s" onClick={handleCopyCode}>
                   {copied ? <Check width={18} height={18} color="#9ac985" /> : <Copy width={18} height={18} />}
                   {copied ? 'Скопировано' : 'Скопировать код'}
@@ -262,6 +355,13 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
                 </button>
               </div>
             </div>
+
+            {saveNotice && (
+              <div className="gu-note gu-row2" style={{ color: '#9ac985', borderColor: 'rgba(154,201,133,.3)', background: 'rgba(154,201,133,.08)' }}>
+                <Check width={16} height={16} />
+                <span>{saveNotice}</span>
+              </div>
+            )}
 
             <div>
               <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
@@ -288,12 +388,79 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
                         <div className="gu-rw-t">{player.name}</div>
                         <div className="gu-rw-d">{player.isInVehicle ? (carCfg?.name || 'В автомобиле') : 'Пешком'}</div>
                       </div>
-                      <div className="gu-rw-end"><span className="gu-dot gu-on" /></div>
+                      <div className="gu-rw-end" style={{ gap: 8 }}>
+                        {onlineManager.isHost && (
+                          <>
+                            <button
+                              type="button"
+                              className="gu-btn gu-btn-s gu-btn-sm"
+                              title="Кикнуть игрока"
+                              onClick={() => {
+                                sound.playButtonPress();
+                                onlineManager.kickPlayer(player.name, 'Кикнут хостом');
+                              }}
+                            >
+                              <UserX width={14} height={14} />Кик
+                            </button>
+                            <button
+                              type="button"
+                              className="gu-btn gu-btn-d gu-btn-sm"
+                              title="Забанить игрока на сервере"
+                              onClick={() => {
+                                sound.playButtonPress();
+                                onlineManager.banPlayer(player.name, 'Забанен хостом');
+                              }}
+                            >
+                              <Ban width={14} height={14} />Бан
+                            </button>
+                          </>
+                        )}
+                        <span className="gu-dot gu-on" />
+                      </div>
                     </div>
                   );
                 })}
               </div>
             </div>
+
+            {onlineManager.isHost && (() => {
+              const bans = onlineManager.getServerBans();
+              return (
+                <div>
+                  <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span className="gu-grp">Забаненные игроки ({bans.length})</span>
+                    <span className="gu-mut" style={{ fontSize: 12 }}>Команды в чате: /kick, /ban, /unban, /mute, /tp, /save, /help</span>
+                  </div>
+                  {bans.length > 0 && (
+                    <div className="gu-list">
+                      {bans.map((b) => (
+                        <div key={b.normNick} className="gu-rw">
+                          <span className="gu-ico gu-off" style={{ width: 34, height: 34, borderRadius: '50%', color: '#e08a70' }}>
+                            <Ban width={15} height={15} />
+                          </span>
+                          <div className="gu-grow">
+                            <div className="gu-rw-t">{b.nickname}</div>
+                            <div className="gu-rw-d">Причина: {b.reason}</div>
+                          </div>
+                          <div className="gu-rw-end">
+                            <button
+                              type="button"
+                              className="gu-btn gu-btn-s gu-btn-sm"
+                              onClick={() => {
+                                sound.playButtonPress();
+                                onlineManager.unbanPlayer(b.nickname);
+                              }}
+                            >
+                              <RotateCcw width={13} height={13} />Разбанить
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </>
         )}
 
@@ -330,7 +497,14 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
                     <div key={srv.id} className="gu-rw">
                       <span className="gu-dot gu-on" />
                       <div className="gu-grow">
-                        <div className="gu-rw-t">{srv.name}</div>
+                        <div className="gu-rw-t" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>{srv.name}</span>
+                          {srv.hasPassword && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#e0ab45', background: 'rgba(224,171,69,.14)', border: '1px solid rgba(224,171,69,.28)', borderRadius: 6, padding: '1px 6px' }}>
+                              <ShieldCheck width={12} height={12} />Защита ников
+                            </span>
+                          )}
+                        </div>
                         <div className="gu-rw-d">Хост: {srv.hostName} · {mapName(srv.mapName)} · {modeName(srv.gameMode)}</div>
                       </div>
                       <div className="gu-rw-end">
@@ -350,7 +524,34 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
         {/* ======================= CREATE SERVER ======================= */}
         {!connected && viewMode === 'create_server' && (
           <form onSubmit={handleCreateServerSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="gu-panel gu-pad">
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <div className="gu-lbl">Доступ к серверу</div>
+                <div className="gu-row2" style={{ gap: 8 }}>
+                  <button
+                    type="button"
+                    className={'gu-pill' + (serverAccess === 'all' ? ' on' : '')}
+                    style={{ flex: 1, justifyContent: 'center', height: 40 }}
+                    onClick={() => setServerAccess('all')}
+                  >
+                    <Globe width={15} height={15} />Публичный (в списке)
+                  </button>
+                  <button
+                    type="button"
+                    className={'gu-pill' + (serverAccess === 'code' ? ' on' : '')}
+                    style={{ flex: 1, justifyContent: 'center', height: 40 }}
+                    onClick={() => setServerAccess('code')}
+                  >
+                    <Lock width={15} height={15} />Приватный (только по коду)
+                  </button>
+                </div>
+                {serverAccess === 'all' && !auth.currentUser && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#e6c278', background: 'rgba(224,171,69,.1)', border: '1px solid rgba(224,171,69,.28)', borderRadius: 8, padding: '8px 10px' }}>
+                    Без входа в Google-аккаунт сервер не попадёт в публичный список — подключиться можно будет только по коду комнаты.
+                  </div>
+                )}
+              </div>
+
               <div className="gu-grid gu-g2" style={{ gap: 16 }}>
                 <div>
                   <div className="gu-lbl">Название сервера</div>
@@ -375,8 +576,39 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
                   </select>
                 </div>
               </div>
+
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,.03)',
+                  border: '1px solid rgba(255,255,255,.08)',
+                  cursor: 'pointer'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={passwordRequired}
+                  onChange={e => setPasswordRequired(e.target.checked)}
+                  style={{ marginTop: 3, accentColor: '#e0ab45' }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ShieldCheck width={15} height={15} color="#e0ab45" />Защита ников паролем (регистрация / вход)
+                  </div>
+                  <div className="gu-mut" style={{ fontSize: 12, marginTop: 3, lineHeight: 1.45 }}>
+                    Каждый игрок при первом входе задаст личный пароль для своего ника, чтобы защитить аккаунт и серверное сохранение.
+                  </div>
+                </div>
+              </label>
             </div>
-            <button type="submit" className="gu-btn gu-btn-p gu-btn-block"><Plus width={18} height={18} />Запустить и опубликовать</button>
+            <button type="submit" className="gu-btn gu-btn-p gu-btn-block">
+              <Plus width={18} height={18} />
+              {serverAccess === 'all' ? 'Создать и опубликовать сервер' : 'Создать приватный сервер'}
+            </button>
           </form>
         )}
 
@@ -402,6 +634,11 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
               onClick={() => {
                 sound.playButtonPress();
                 handleSaveNick(nickname);
+                if (onJoinServer) {
+                  onClose();
+                  void onJoinServer({ roomCode, nickname });
+                  return;
+                }
                 onlineManager.joinOrCreateRoom(roomCode, nickname, false);
               }}
             >

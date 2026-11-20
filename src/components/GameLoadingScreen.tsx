@@ -104,7 +104,10 @@ export const GameLoadingScreen: React.FC<{ state: LoadingScreenState }> = ({ sta
   const wrapRef = useRef<HTMLDivElement>(null);
   const gmRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
+  useLayoutEffect(() => {
+    if (!state.isOpen) return;
+    return attachStageFit(() => wrapRef.current, () => gmRef.current);
+  }, [state.isOpen]);
 
   if (!state.isOpen) return null;
 

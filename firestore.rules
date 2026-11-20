@@ -155,6 +155,45 @@ service cloud.firestore {
         && data.status in ['pending', 'accepted', 'declined'];
     }
 
+    function isValidHostedServer(data) {
+      return data.keys().hasAll([
+          'hostUid', 'roomCode', 'serverName', 'mapName', 'gameMode',
+          'access', 'maxPlayers', 'trafficEnabled', 'vehicleCount',
+          'pedestrianCount', 'passwordRequired', 'savePlayerData', 'antiCheat'
+        ])
+        && data.keys().hasOnly([
+          'hostUid', 'hostName', 'roomCode', 'serverName', 'mapName', 'gameMode',
+          'access', 'maxPlayers', 'trafficEnabled', 'vehicleCount', 'pedestrianCount',
+          'passwordRequired', 'savePlayerData', 'antiCheat',
+          'accounts', 'bans', 'mutes', 'playerSaves', 'hostWorldState',
+          'accountsCount', 'bansCount', 'savedPlayersCount', 'lastSavedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && data.hostUid is string && data.hostUid == request.auth.uid && data.hostUid.size() >= 1 && data.hostUid.size() <= 128
+        && isValidOptionalString(data, 'hostName', 64)
+        && data.roomCode is string && data.roomCode.size() >= 1 && data.roomCode.size() <= 64
+        && data.serverName is string && data.serverName.size() >= 1 && data.serverName.size() <= 80
+        && data.mapName is string && data.mapName.size() >= 1 && data.mapName.size() <= 64
+        && data.gameMode is string && data.gameMode.size() >= 1 && data.gameMode.size() <= 32
+        && data.access in ['all', 'code']
+        && data.maxPlayers is number && data.maxPlayers >= 1 && data.maxPlayers <= 32
+        && data.trafficEnabled is bool
+        && data.vehicleCount is number && data.vehicleCount >= 0 && data.vehicleCount <= 200
+        && data.pedestrianCount is number && data.pedestrianCount >= 0 && data.pedestrianCount <= 200
+        && data.passwordRequired is bool
+        && data.savePlayerData is bool
+        && data.antiCheat in ['none', 'moderate', 'strict']
+        && (!('accounts' in data) || data.accounts == null || data.accounts is map)
+        && (!('bans' in data) || data.bans == null || data.bans is map)
+        && (!('mutes' in data) || data.mutes == null || data.mutes is map)
+        && (!('playerSaves' in data) || data.playerSaves == null || data.playerSaves is map)
+        && (!('hostWorldState' in data) || data.hostWorldState == null || data.hostWorldState is map)
+        && (!('accountsCount' in data) || (data.accountsCount is number && data.accountsCount >= 0 && data.accountsCount <= 10000))
+        && (!('bansCount' in data) || (data.bansCount is number && data.bansCount >= 0 && data.bansCount <= 10000))
+        && (!('savedPlayersCount' in data) || (data.savedPlayersCount is number && data.savedPlayersCount >= 0 && data.savedPlayersCount <= 10000))
+        && (!('lastSavedAt' in data) || data.lastSavedAt is number);
+    }
+
     // ==================== COLLECTION RULES ====================
 
     // Connectivity health check document
@@ -255,6 +294,19 @@ service cloud.firestore {
         && incoming().status in ['accepted', 'declined'];
       allow delete: if isSignedIn() && isValidId(inviteId)
         && (existing().senderUid == request.auth.uid || existing().receiverUid == request.auth.uid);
+    }
+
+    // Owner-only persistent server backups (accounts, password hashes, bans, player saves, world snapshot)
+    match /hosted_servers/{serverId} {
+      allow get: if isSignedIn() && isValidId(serverId) && existing().hostUid == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.hostUid == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(serverId) && isValidHostedServer(incoming());
+      allow update: if isSignedIn() && isValidId(serverId)
+        && existing().hostUid == request.auth.uid
+        && isValidHostedServer(incoming())
+        && incoming().hostUid == existing().hostUid
+        && incoming().roomCode == existing().roomCode;
+      allow delete: if isSignedIn() && isValidId(serverId) && existing().hostUid == request.auth.uid;
     }
   }
 }

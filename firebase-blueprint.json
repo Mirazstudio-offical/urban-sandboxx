@@ -127,6 +127,39 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "money", "health", "position"]
+    },
+    "HostedServerBackup": {
+      "title": "Hosted Server Backup",
+      "description": "Owner-only persistent server snapshot containing settings, player accounts (salted password hashes), bans, mutes, player saves, and host world state",
+      "type": "object",
+      "properties": {
+        "hostUid": { "type": "string", "maxLength": 128 },
+        "hostName": { "type": "string", "maxLength": 64 },
+        "roomCode": { "type": "string", "maxLength": 64 },
+        "serverName": { "type": "string", "maxLength": 80 },
+        "mapName": { "type": "string", "maxLength": 64 },
+        "gameMode": { "type": "string", "maxLength": 32 },
+        "access": { "type": "string", "enum": ["all", "code"] },
+        "maxPlayers": { "type": "number" },
+        "trafficEnabled": { "type": "boolean" },
+        "vehicleCount": { "type": "number" },
+        "pedestrianCount": { "type": "number" },
+        "passwordRequired": { "type": "boolean" },
+        "savePlayerData": { "type": "boolean" },
+        "antiCheat": { "type": "string", "enum": ["none", "moderate", "strict"] },
+        "accounts": { "type": "object" },
+        "bans": { "type": "object" },
+        "mutes": { "type": "object" },
+        "playerSaves": { "type": "object" },
+        "hostWorldState": { "type": "object" },
+        "accountsCount": { "type": "number" },
+        "bansCount": { "type": "number" },
+        "savedPlayersCount": { "type": "number" },
+        "lastSavedAt": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hostUid", "roomCode", "serverName", "mapName", "gameMode", "access", "maxPlayers", "trafficEnabled", "vehicleCount", "pedestrianCount", "passwordRequired", "savePlayerData", "antiCheat"]
     }
   },
   "firestore": {
@@ -157,6 +190,10 @@
     "/player_saves/{userId}": {
       "schema": { "$ref": "#/entities/PlayerCloudSave" },
       "description": "Owner-only cloud save snapshots"
+    },
+    "/hosted_servers/{serverId}": {
+      "schema": { "$ref": "#/entities/HostedServerBackup" },
+      "description": "Owner-only persistent backups of hosted P2P servers (world, player saves, accounts, bans)"
     }
   }
 }

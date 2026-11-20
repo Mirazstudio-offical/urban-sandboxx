@@ -91,7 +91,7 @@ async function registerInCatalogue(s: HostSession, hostName: string, settings?: 
       currentPlayers: onlineManager.getRemotePlayersArray().length + 1,
       mapName: s.mapName || MAP_NAME,
       gameMode: s.gameMode || 'free_roam',
-      isPrivate: settings?.passwordRequired || false,
+      isPrivate: false,
       status: 'active',
       trafficEnabled: settings?.trafficEnabled ?? true,
       vehicleCount: settings?.vehicleCount ?? 15,
@@ -130,7 +130,6 @@ export async function openHostSession(opts: {
   vehicleCount?: number;
   pedestrianCount?: number;
   passwordRequired?: boolean;
-  password?: string;
   savePlayerData?: boolean;
   antiCheat?: AntiCheatLevel;
 }): Promise<string | null> {
@@ -155,11 +154,10 @@ export async function openHostSession(opts: {
       vehicleCount: opts.vehicleCount ?? 15,
       pedestrianCount: opts.pedestrianCount ?? 10,
       passwordRequired: opts.passwordRequired ?? false,
-      password: opts.password || '',
       savePlayerData: opts.savePlayerData ?? true,
       antiCheat: opts.antiCheat ?? ('moderate' as AntiCheatLevel)
     };
-    onlineManager.joinOrCreateRoom(code, nickname, true, opts.passwordRequired ? opts.password : undefined, settings);
+    onlineManager.joinOrCreateRoom(code, nickname, true, s.serverName, settings);
     if (s.access === 'all') await registerInCatalogue(s, nickname, settings);
     startHeartbeat();
     return code;
@@ -189,7 +187,7 @@ export async function setHostAccess(access: HostAccess): Promise<void> {
     if (access === 'code') {
       await unregisterFromCatalogue(s);
     } else if (!s.docId) {
-      await registerInCatalogue(s, onlineManager.localPlayerName);
+      await registerInCatalogue(s, onlineManager.localPlayerName, onlineManager.serverSettings);
     }
     s.access = access;
     startHeartbeat();

@@ -186,9 +186,18 @@ import {
   saveFurnitureStoragesToLocalStorage
 } from './furnitureStorageSystem';
 import { ChatOverlay } from './components/ChatOverlay';
-import { onlineManager, OnlineStatus, type AntiCheatLevel } from './onlineSystem';
-import { closeHostSession, openHostSession } from './hostSession';
-import { auth, onAuthStateChanged, ensureUserProfileExists, updateUserOnlineStatus, type User } from './firebase';
+import { ServerAuthModal } from './components/ServerAuthModal';
+import { onlineManager, OnlineStatus, type AntiCheatLevel, type ServerPlayerSaveRecord } from './onlineSystem';
+import { closeHostSession, openHostSession, getHostSession, type HostAccess } from './hostSession';
+import {
+  auth,
+  onAuthStateChanged,
+  ensureUserProfileExists,
+  updateUserOnlineStatus,
+  saveHostedServerBackup,
+  type HostedServerBackup,
+  type User
+} from './firebase';
 import { 
   getNearbyGasPump, 
   getNearbyVehicleForFueling, 
@@ -493,6 +502,11 @@ export default function App() {
 
   const [onlinePlayerCount, setOnlinePlayerCount] = useState<number>(0);
   const onlineSyncTimerRef = useRef<number>(0);
+  const pendingGuestServerSaveRef = useRef<{
+    roomCode: string;
+    serverWorldId: string;
+    legacyWorldId: string;
+  } | null>(null);
 
   useEffect(() => {
     const unsub = onlineManager.subscribe(() => {
@@ -1121,9 +1135,13 @@ export default function App() {
     const isAutosave = Boolean(opts?.isAutosave || customName === 'Автосохранение');
     const isConnectedGuest = onlineManager.status === 'connected' && !onlineManager.isHost;
 
-    // Guests on a foreign server cannot manually export/save it; autosave runs only if server allows savePlayerData
+    // Guests on a foreign server cannot manually export/save it; autosave runs only after authentication and if server allows savePlayerData
     if (isConnectedGuest) {
-      if (!isAutosave || onlineManager.serverSettings.savePlayerData === false) {
+      if (
+        !isAutosave ||
+        onlineManager.authState !== 'authenticated' ||
+        onlineManager.serverSettings.savePlayerData === false
+      ) {
         return;
       }
     }
@@ -1944,7 +1962,7 @@ export default function App() {
 
   /**
    * Connects to a multiplayer P2P server in its own completely isolated world (separate from singleplayer saves).
-   * Restores the player's own saved progress for this specific server if one exists locally, otherwise starts fresh.
+   * Restores the player's own saved progress for this specific server ONLY after host authentication completes.
    */
   const handleJoinServerWorld = async (opts: {
     roomCode: string;
@@ -1955,28 +1973,32 @@ export default function App() {
     const cleanCode = onlineManager.sanitizeRoomCode(opts.roomCode);
     if (!cleanCode) return;
 
-    const serverWorldId = `server_${cleanCode}`;
-    const existingServerSave = savesRef.current.find(
-      s => s.worldId === serverWorldId && s.origin === 'server'
+    const nick = (opts.nickname || onlineManager.localPlayerName || 'Игрок').trim() || 'Игрок';
+    const normNick = nick.toLowerCase().replace(/\s+/g, ' ');
+    const serverWorldId = `server_${cleanCode}_${normNick}`;
+    const legacyWorldId = `server_${cleanCode}`;
+    const previewSave = savesRef.current.find(
+      s => (s.worldId === serverWorldId || s.worldId === legacyWorldId) && s.origin === 'server'
     );
     const resolvedMode: 'career' | 'freeroam' =
-      existingServerSave?.mode || (opts.gameMode === 'free_roam' || opts.gameMode === 'drift' ? 'freeroam' : 'career');
+      previewSave?.mode || (opts.gameMode === 'free_roam' || opts.gameMode === 'drift' ? 'freeroam' : 'career');
 
     setLoadingScreen({
       isOpen: true,
       actionType: 'load_save',
       title: opts.serverName || `Сервер ${cleanCode}`,
-      subtitle: existingServerSave ? 'Вход в изолированный мир сервера (прогресс найден)' : 'Вход в новый мир сервера',
+      subtitle: 'Подключение к изолированному миру сервера',
       stepText: 'Изоляция локальных данных и загрузка карты сервера...',
       progress: 22,
       mode: resolvedMode,
-      locationName: existingServerSave?.streetName || 'Центр города',
-      timeHour: existingServerSave?.timeHour ?? 12,
-      weather: existingServerSave?.weather || 'clear'
+      locationName: 'Центр города',
+      timeHour: 12,
+      weather: 'clear'
     });
 
     await waitMs(60);
 
+    pendingGuestServerSaveRef.current = null;
     onlineManager.leaveRoom();
     await closeHostSession();
     await reloadFreshMap();
@@ -2000,40 +2022,43 @@ export default function App() {
       serverName: opts.serverName || `Сервер ${cleanCode}`
     };
 
-    if (existingServerSave) {
-      applySavedStateToWorld(existingServerSave, world, player, camera);
-    } else {
-      resetAllWorldSingletons(world);
-      const spawnLoc = SPAWN_LOCATIONS[0];
-      resetPlayerToFreshState(player, spawnLoc);
-      setIsInVehicle(false);
-      setActiveCarName('');
-      sound.stopEngine();
+    // Always start in a clean neutral world state; local server profile is applied ONLY after authState === 'authenticated'
+    resetAllWorldSingletons(world);
+    const spawnLoc = SPAWN_LOCATIONS[0];
+    resetPlayerToFreshState(player, spawnLoc);
+    setIsInVehicle(false);
+    setActiveCarName('');
+    sound.stopEngine();
 
-      const initialCal = createInitialCalendarState(2026, 10, 8, 12.0);
-      calendarRef.current = initialCal;
-      setCalendar(initialCal);
-      setTimeHour(12.0);
-      timeHourRef.current = 12.0;
-      setWeather('clear');
-      weatherRef.current = 'clear';
-      world.calendar = initialCal;
-      world.season = initialCal.season;
-      world.timeHour = 12.0;
-      world.weather = 'clear';
-      world.previousWeather = 'clear';
-      world.weatherTransition = 1.0;
-      Object.assign(world, getInitialSurfaceHydrologyForCalendar(initialCal, 'clear'));
-      handleSetGpsTarget(null);
+    const initialCal = createInitialCalendarState(2026, 10, 8, 12.0);
+    calendarRef.current = initialCal;
+    setCalendar(initialCal);
+    setTimeHour(12.0);
+    timeHourRef.current = 12.0;
+    setWeather('clear');
+    weatherRef.current = 'clear';
+    world.calendar = initialCal;
+    world.season = initialCal.season;
+    world.timeHour = 12.0;
+    world.weather = 'clear';
+    world.previousWeather = 'clear';
+    world.weatherTransition = 1.0;
+    Object.assign(world, getInitialSurfaceHydrologyForCalendar(initialCal, 'clear'));
+    handleSetGpsTarget(null);
 
-      world.gameMode = resolvedMode;
-      applyTrafficDefaultForMode(resolvedMode);
-      camera.x = spawnLoc.x;
-      camera.y = spawnLoc.y;
-      camera.targetX = spawnLoc.x;
-      camera.targetY = spawnLoc.y;
-      camera.targetZoom = 1.15;
-    }
+    world.gameMode = resolvedMode;
+    applyTrafficDefaultForMode(resolvedMode);
+    camera.x = spawnLoc.x;
+    camera.y = spawnLoc.y;
+    camera.targetX = spawnLoc.x;
+    camera.targetY = spawnLoc.y;
+    camera.targetZoom = 1.15;
+
+    pendingGuestServerSaveRef.current = {
+      roomCode: cleanCode,
+      serverWorldId,
+      legacyWorldId
+    };
 
     setLoadingScreen(prev => ({
       ...prev,
@@ -2041,13 +2066,10 @@ export default function App() {
       progress: 80
     }));
 
-    const nick = (opts.nickname || onlineManager.localPlayerName || 'Игрок').trim();
-    onlineManager.joinOrCreateRoom(cleanCode, nick, false);
+    onlineManager.joinOrCreateRoom(cleanCode, nick, false, opts.serverName);
     addPlayerNotification(
       player,
-      existingServerSave
-        ? `Подключение к серверу ${cleanCode} (загружен ваш профиль сервера)`
-        : `Подключение к новому миру сервера ${cleanCode}`,
+      `Подключение к серверу ${opts.serverName || cleanCode}...`,
       'info'
     );
 
@@ -2058,9 +2080,10 @@ export default function App() {
   };
 
   /**
-   * Creates and hosts a brand-new isolated server world from the Main Menu.
+   * Creates and hosts a brand-new isolated server world from the Main Menu or Online Modal.
    */
   const handleCreateServerWorld = async (opts: {
+    access?: HostAccess;
     roomCode: string;
     serverName: string;
     nickname: string;
@@ -2070,11 +2093,11 @@ export default function App() {
     vehicleCount: number;
     pedestrianCount: number;
     passwordRequired: boolean;
-    password: string;
     savePlayerData: boolean;
     antiCheat: AntiCheatLevel;
   }) => {
     const cleanCode = onlineManager.sanitizeRoomCode(opts.roomCode) || ('room-' + Math.floor(1000 + Math.random() * 9000));
+    const resolvedAccess: HostAccess = opts.access || 'all';
     const resolvedMode: 'career' | 'freeroam' =
       opts.gameMode === 'free_roam' || opts.gameMode === 'drift' ? 'freeroam' : 'career';
     const serverWorldId = `server_${cleanCode}`;
@@ -2086,7 +2109,7 @@ export default function App() {
       isOpen: true,
       actionType: resolvedMode === 'freeroam' ? 'new_freeroam' : 'new_career',
       title: opts.serverName || `Сервер ${cleanCode}`,
-      subtitle: 'Создание отдельного мира сервера',
+      subtitle: resolvedAccess === 'code' ? 'Создание приватного сервера (только по коду)' : 'Создание публичного мира сервера',
       stepText: 'Инициализация чистого мира и сетевого хоста...',
       progress: 25,
       mode: resolvedMode,
@@ -2097,6 +2120,7 @@ export default function App() {
 
     await waitMs(60);
 
+    pendingGuestServerSaveRef.current = null;
     onlineManager.leaveRoom();
     await closeHostSession();
     await reloadFreshMap();
@@ -2157,12 +2181,14 @@ export default function App() {
 
     setLoadingScreen(prev => ({
       ...prev,
-      stepText: 'Регистрация комнаты в каталоге серверов...',
+      stepText: resolvedAccess === 'code'
+        ? `Открытие приватной комнаты ${cleanCode}...`
+        : 'Регистрация комнаты в каталоге серверов...',
       progress: 80
     }));
 
     await openHostSession({
-      access: 'all',
+      access: resolvedAccess,
       roomCode: cleanCode,
       serverName: opts.serverName,
       mapName: 'flatbody',
@@ -2173,7 +2199,6 @@ export default function App() {
       vehicleCount: opts.vehicleCount,
       pedestrianCount: opts.pedestrianCount,
       passwordRequired: opts.passwordRequired,
-      password: opts.password,
       savePlayerData: opts.savePlayerData,
       antiCheat: opts.antiCheat
     });
@@ -2182,10 +2207,549 @@ export default function App() {
       handleCreateSave(opts.serverName || `Сервер ${cleanCode}`);
     }
 
-    addPlayerNotification(player, `Сервер «${opts.serverName}» запущен (код: ${cleanCode})`, 'info');
+    // Immediately register initial server backup in DB so the host can see & re-launch it later
+    void persistActiveHostedServer();
+
+    const authTag = opts.passwordRequired ? ' · защита ников вкл.' : '';
+    addPlayerNotification(player, `Сервер «${opts.serverName}» запущен (код: ${cleanCode}${authTag})`, 'info');
     setIsMainMenuOpen(false);
     setIsPauseMenuOpen(false);
     await waitMs(160);
+    setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+  };
+
+  /**
+   * Builds a compact, Firestore-friendly snapshot of the hosted world & host player state
+   * compatible with applySavedStateToWorld().
+   */
+  const buildHostWorldStateSnapshot = (): Record<string, any> | null => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    if (!world || !player) return null;
+
+    const currentStreet = findStreetNameAtPosition(world, player.x, player.y);
+    const currentCal = calendarRef.current;
+
+    const keyedVehicleIds = new Set<string>();
+    const scanKey = (item: any) => {
+      if (!item) return;
+      if (item.vehicleId) keyedVehicleIds.add(item.vehicleId);
+      if (Array.isArray(item.contents)) item.contents.forEach(scanKey);
+    };
+    player.inventory?.forEach(scanKey);
+    scanKey((player as any).leftHandItem);
+    scanKey((player as any).rightHandItem);
+    if (player.equippedClothing) {
+      Object.values(player.equippedClothing).forEach(scanKey);
+    }
+    if (player.currentVehicleId) keyedVehicleIds.add(player.currentVehicleId);
+
+    const savedVehicles = (world.vehicles || [])
+      .filter((v) =>
+        !(v as any).isRemoteControlled && (
+          keyedVehicleIds.has(v.id) ||
+          v.ownerId === 'player' ||
+          (v as any).playerOwned ||
+          (v as any).isSpawnedByPlayer ||
+          Boolean(v.keyId) ||
+          v.id === player.currentVehicleId ||
+          Boolean(v.trailerId) ||
+          Boolean(v.towedById)
+        )
+      )
+      .slice(0, 25)
+      .map((v) => ({
+        id: v.id,
+        keyId: v.keyId,
+        keyTier: v.keyTier,
+        insertedKeyType: v.insertedKeyType,
+        insertedKeyId: v.insertedKeyId,
+        ownerId: v.ownerId || 'player',
+        playerOwned: (v as any).playerOwned ?? (v.ownerId === 'player'),
+        isSpawnedByPlayer: (v as any).isSpawnedByPlayer ?? (v.ownerId === 'player'),
+        isLocked: Boolean(v.isLocked),
+        type: v.type,
+        x: v.x,
+        y: v.y,
+        angle: v.angle,
+        speed: 0,
+        color: v.color,
+        roofColor: v.roofColor,
+        hasGBO: v.hasGBO,
+        hasRearviewCamera: v.hasRearviewCamera,
+        hasHeavySuspension: (v as any).hasHeavySuspension,
+        hasChiptuning: (v as any).hasChiptuning,
+        fuelSystem: v.fuelSystem ? JSON.parse(JSON.stringify(v.fuelSystem)) : undefined,
+        engineState: v.engineState ? JSON.parse(JSON.stringify(v.engineState)) : undefined,
+        isParked: v.isParked,
+        isDerelict: v.isDerelict,
+        windowOpen: v.windowOpen,
+        headlightsOn: v.headlightsOn,
+        headlightMode: v.headlightMode,
+        trailerId: v.trailerId,
+        towedById: v.towedById
+      }));
+
+    return {
+      mode: world.gameMode || 'career',
+      playerX: player.x,
+      playerY: player.y,
+      playerAngle: player.angle,
+      isInVehicle: player.isInVehicle,
+      currentVehicleId: player.currentVehicleId,
+      timeHour: timeHourRef.current,
+      calendar: { ...currentCal },
+      season: currentCal.season,
+      weather: weatherRef.current,
+      streetName: currentStreet,
+      needs: player.needs ? JSON.parse(JSON.stringify(player.needs)) : undefined,
+      bodyState: player.bodyState ? JSON.parse(JSON.stringify(player.bodyState)) : undefined,
+      inventory: player.inventory ? JSON.parse(JSON.stringify(player.inventory)).slice(0, 120) : [],
+      equippedClothing: player.equippedClothing ? JSON.parse(JSON.stringify(player.equippedClothing)) : undefined,
+      leftHandItem: player.leftHandItem ? JSON.parse(JSON.stringify(player.leftHandItem)) : null,
+      rightHandItem: player.rightHandItem ? JSON.parse(JSON.stringify(player.rightHandItem)) : null,
+      activeHand: player.activeHand || 'right',
+      cash: getPlayerCash(player),
+      selectedHotbarIndex: player.selectedHotbarIndex || 0,
+      vehicles: savedVehicles,
+      isInsideBuilding: player.isInsideBuilding || false,
+      insideBuildingId: player.insideBuildingId || null,
+      isInsideApartment: player.isInsideApartment || false,
+      insideApartmentId: player.insideApartmentId || null,
+      currentFloor: player.currentFloor || 0
+    };
+  };
+
+  /**
+   * Saves the currently hosted dedicated server (world state, accounts + password hashes, bans, mutes, guest saves)
+   * to Firestore (`hosted_servers`) + local backup cache.
+   */
+  const persistActiveHostedServer = async (): Promise<boolean> => {
+    if (!onlineManager.isHost || !onlineManager.roomCode) return false;
+    if (activeWorldRef.current.origin !== 'server') return false;
+
+    const hs = getHostSession();
+    const cleanCode = onlineManager.roomCode;
+    const srvState = onlineManager.exportServerState(cleanCode);
+    const hostWorldState = buildHostWorldStateSnapshot();
+
+    const res = await saveHostedServerBackup({
+      hostUid: auth.currentUser?.uid || 'local',
+      hostName: onlineManager.localPlayerName || 'Хост',
+      roomCode: cleanCode,
+      serverName: hs?.serverName || onlineManager.serverDisplayName || activeWorldRef.current.serverName || `Сервер ${cleanCode}`,
+      mapName: hs?.mapName || 'flatbody',
+      gameMode: hs?.gameMode || (worldRef.current?.gameMode === 'freeroam' ? 'free_roam' : 'street_race'),
+      access: hs?.access || 'all',
+      maxPlayers: hs?.maxPlayers || 8,
+      trafficEnabled: onlineManager.serverSettings.trafficEnabled,
+      vehicleCount: onlineManager.serverSettings.vehicleCount,
+      pedestrianCount: onlineManager.serverSettings.pedestrianCount,
+      passwordRequired: onlineManager.serverSettings.passwordRequired,
+      savePlayerData: onlineManager.serverSettings.savePlayerData,
+      antiCheat: onlineManager.serverSettings.antiCheat,
+      accounts: srvState.accounts,
+      bans: srvState.bans,
+      mutes: srvState.mutes,
+      playerSaves: srvState.playerSaves,
+      hostWorldState
+    });
+    return res.savedToCloud;
+  };
+
+  /**
+   * Re-launches a previously saved server from the DB ("Мои серверы"),
+   * restoring its world, all registered player accounts/passwords, bans, mutes, and player saves.
+   */
+  const handleStartSavedServer = async (backup: HostedServerBackup) => {
+    const cleanCode = onlineManager.sanitizeRoomCode(backup.roomCode);
+    if (!cleanCode) return;
+
+    const resolvedAccess: HostAccess = backup.access === 'code' ? 'code' : 'all';
+    const resolvedMode: 'career' | 'freeroam' =
+      (backup.hostWorldState?.mode === 'freeroam' || backup.hostWorldState?.mode === 'career')
+        ? backup.hostWorldState.mode
+        : (backup.gameMode === 'free_roam' || backup.gameMode === 'drift' ? 'freeroam' : 'career');
+    const serverWorldId = `server_${cleanCode}`;
+
+    setLoadingScreen({
+      isOpen: true,
+      actionType: 'load_save',
+      title: backup.serverName || `Сервер ${cleanCode}`,
+      subtitle: 'Запуск сохранённого сервера из БД',
+      stepText: 'Восстановление мира, аккаунтов, паролей и банов...',
+      progress: 28,
+      mode: resolvedMode,
+      locationName: backup.hostWorldState?.streetName || 'Центр города',
+      timeHour: backup.hostWorldState?.timeHour ?? 12,
+      weather: backup.hostWorldState?.weather || 'clear'
+    });
+
+    await waitMs(60);
+
+    pendingGuestServerSaveRef.current = null;
+    onlineManager.leaveRoom();
+    await closeHostSession();
+    await reloadFreshMap();
+
+    const world = worldRef.current;
+    const player = playerRef.current;
+    const camera = cameraRef.current;
+    if (!world || !player) {
+      setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    resetSessionStats();
+    lastAppliedWorldSyncRef.current = 0;
+
+    activeWorldRef.current = {
+      worldId: serverWorldId,
+      worldName: backup.serverName || `Сервер ${cleanCode}`,
+      origin: 'server',
+      serverRoomCode: cleanCode,
+      serverName: backup.serverName || `Сервер ${cleanCode}`
+    };
+
+    // Import all persisted server accounts (salted hashes), bans, mutes, and guest saves BEFORE opening the room
+    onlineManager.importServerState(cleanCode, {
+      accounts: backup.accounts || {},
+      bans: backup.bans || {},
+      mutes: backup.mutes || {},
+      playerSaves: backup.playerSaves || {}
+    });
+
+    if (backup.hostWorldState) {
+      applySavedStateToWorld(backup.hostWorldState, world, player, camera);
+    } else {
+      const localExisting = savesRef.current.find(s => s.worldId === serverWorldId && s.origin === 'server');
+      if (localExisting) {
+        applySavedStateToWorld(localExisting, world, player, camera);
+      } else {
+        resetAllWorldSingletons(world);
+        const spawnLoc = SPAWN_LOCATIONS[0];
+        resetPlayerToFreshState(player, spawnLoc);
+        setIsInVehicle(false);
+        setActiveCarName('');
+        sound.stopEngine();
+        world.gameMode = resolvedMode;
+        applyTrafficDefaultForMode(resolvedMode);
+        camera.x = spawnLoc.x;
+        camera.y = spawnLoc.y;
+        camera.targetX = spawnLoc.x;
+        camera.targetY = spawnLoc.y;
+        camera.targetZoom = 1.15;
+      }
+    }
+
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: resolvedAccess === 'code'
+        ? `Включение приватного сервера ${cleanCode}...`
+        : 'Включение и публикация сервера...',
+      progress: 82
+    }));
+
+    await openHostSession({
+      access: resolvedAccess,
+      roomCode: cleanCode,
+      serverName: backup.serverName,
+      mapName: backup.mapName || 'flatbody',
+      gameMode: backup.gameMode || 'free_roam',
+      maxPlayers: backup.maxPlayers || 8,
+      nickname: onlineManager.localPlayerName || backup.hostName || 'Хост',
+      trafficEnabled: backup.trafficEnabled ?? true,
+      vehicleCount: backup.vehicleCount ?? 15,
+      pedestrianCount: backup.pedestrianCount ?? 10,
+      passwordRequired: Boolean(backup.passwordRequired),
+      savePlayerData: backup.savePlayerData !== false,
+      antiCheat: backup.antiCheat || 'moderate'
+    });
+
+    const accCount = Object.keys(backup.accounts || {}).length;
+    const banCount = Object.keys(backup.bans || {}).length;
+    addPlayerNotification(
+      player,
+      `Сервер «${backup.serverName}» включён (аккаунтов: ${accCount}, банов: ${banCount})`,
+      'info'
+    );
+    setIsMainMenuOpen(false);
+    setIsPauseMenuOpen(false);
+    await waitMs(160);
+    setLoadingScreen(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Wire OnlineManager callbacks for host /save, /tp, /tphere, and server-side guest save restoration
+  useEffect(() => {
+    onlineManager.onHostSaveRequested = async () => {
+      return await persistActiveHostedServer();
+    };
+    onlineManager.onHostTeleportSelf = (x: number, y: number) => {
+      const p = playerRef.current;
+      const w = worldRef.current;
+      const cam = cameraRef.current;
+      if (!p || !w) return;
+      if (p.isInVehicle && p.currentVehicleId) {
+        const veh = w.vehicles.find((v) => v.id === p.currentVehicleId);
+        if (veh) {
+          veh.x = x + 36;
+          veh.y = y;
+          veh.vx = 0;
+          veh.vy = 0;
+          veh.speed = 0;
+        }
+      }
+      p.x = x + 36;
+      p.y = y;
+      p.vx = 0;
+      p.vy = 0;
+      if (cam) {
+        cam.x = p.x;
+        cam.y = p.y;
+        cam.targetX = p.x;
+        cam.targetY = p.y;
+      }
+    };
+    onlineManager.onGuestTeleported = (x: number, y: number, reason?: string) => {
+      const p = playerRef.current;
+      const w = worldRef.current;
+      const cam = cameraRef.current;
+      if (!p || !w) return;
+      if (p.isInVehicle && p.currentVehicleId) {
+        const veh = w.vehicles.find((v) => v.id === p.currentVehicleId);
+        if (veh) {
+          veh.x = x;
+          veh.y = y;
+          veh.vx = 0;
+          veh.vy = 0;
+          veh.speed = 0;
+        }
+      }
+      p.x = x;
+      p.y = y;
+      p.vx = 0;
+      p.vy = 0;
+      if (cam) {
+        cam.x = p.x;
+        cam.y = p.y;
+        cam.targetX = p.x;
+        cam.targetY = p.y;
+      }
+      if (reason) addPlayerNotification(p, reason, 'info');
+    };
+    onlineManager.onGuestServerSaveReceived = (srvSave: ServerPlayerSaveRecord) => {
+      const p = playerRef.current;
+      const cam = cameraRef.current;
+      if (!p || !srvSave) return;
+      pendingGuestServerSaveRef.current = null;
+      if (typeof srvSave.x === 'number' && typeof srvSave.y === 'number') {
+        p.x = srvSave.x;
+        p.y = srvSave.y;
+        p.angle = srvSave.angle || 0;
+        p.vx = 0;
+        p.vy = 0;
+        if (cam) {
+          cam.x = p.x;
+          cam.y = p.y;
+          cam.targetX = p.x;
+          cam.targetY = p.y;
+        }
+      }
+      if (typeof srvSave.cash === 'number') p.cash = srvSave.cash;
+      if (Array.isArray(srvSave.inventory)) p.inventory = JSON.parse(JSON.stringify(srvSave.inventory));
+      if (srvSave.equippedClothing) p.equippedClothing = JSON.parse(JSON.stringify(srvSave.equippedClothing));
+      if (srvSave.leftHandItem !== undefined) p.leftHandItem = srvSave.leftHandItem ? JSON.parse(JSON.stringify(srvSave.leftHandItem)) : null;
+      if (srvSave.rightHandItem !== undefined) p.rightHandItem = srvSave.rightHandItem ? JSON.parse(JSON.stringify(srvSave.rightHandItem)) : null;
+      if (srvSave.activeHand) p.activeHand = srvSave.activeHand;
+      if (srvSave.needs && p.needs) p.needs = { ...p.needs, ...srvSave.needs };
+      if (srvSave.bodyState && p.bodyState) p.bodyState = JSON.parse(JSON.stringify(srvSave.bodyState));
+      setVitalsRefreshTick((t) => t + 1);
+      addPlayerNotification(p, 'Профиль игрока восстановлен из базы данных сервера', 'info');
+    };
+
+    const handleBeforeUnloadServerBackup = () => {
+      if (onlineManager.isHost && onlineManager.roomCode && activeWorldRef.current.origin === 'server') {
+        void persistActiveHostedServer();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnloadServerBackup);
+    window.addEventListener('pagehide', handleBeforeUnloadServerBackup);
+
+    // Periodic host DB autosave (every 60s) and guest profile upload to host (every 20s)
+    const hostSaveTimer = window.setInterval(() => {
+      if (onlineManager.status === 'connected' && onlineManager.isHost && activeWorldRef.current.origin === 'server') {
+        void persistActiveHostedServer();
+      }
+    }, 60_000);
+
+    const guestUploadTimer = window.setInterval(() => {
+      if (
+        onlineManager.status === 'connected' &&
+        !onlineManager.isHost &&
+        onlineManager.authState === 'authenticated' &&
+        onlineManager.serverSettings.savePlayerData !== false &&
+        playerRef.current
+      ) {
+        const p = playerRef.current;
+        const w = worldRef.current;
+        const curVeh = p.isInVehicle && p.currentVehicleId ? w?.vehicles.find((v) => v.id === p.currentVehicleId) : null;
+        onlineManager.uploadLocalServerSave({
+          nickname: onlineManager.localPlayerName,
+          cash: getPlayerCash(p),
+          x: p.x,
+          y: p.y,
+          angle: p.angle,
+          isInVehicle: p.isInVehicle,
+          vehicleType: curVeh?.type || null,
+          vehicleColor: curVeh?.color || null,
+          inventory: p.inventory ? JSON.parse(JSON.stringify(p.inventory)).slice(0, 80) : [],
+          equippedClothing: p.equippedClothing ? JSON.parse(JSON.stringify(p.equippedClothing)) : undefined,
+          leftHandItem: p.leftHandItem ? JSON.parse(JSON.stringify(p.leftHandItem)) : null,
+          rightHandItem: p.rightHandItem ? JSON.parse(JSON.stringify(p.rightHandItem)) : null,
+          activeHand: p.activeHand || 'right',
+          needs: p.needs ? JSON.parse(JSON.stringify(p.needs)) : undefined,
+          bodyState: p.bodyState ? JSON.parse(JSON.stringify(p.bodyState)) : undefined
+        });
+      }
+    }, 20_000);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnloadServerBackup);
+      window.removeEventListener('pagehide', handleBeforeUnloadServerBackup);
+      window.clearInterval(hostSaveTimer);
+      window.clearInterval(guestUploadTimer);
+    };
+  }, []);
+
+  // Apply the guest's local server save ONLY after the host confirms authentication
+  useEffect(() => {
+    const unsub = onlineManager.subscribe(() => {
+      const pending = pendingGuestServerSaveRef.current;
+      if (!pending) return;
+      if (onlineManager.isHost) {
+        pendingGuestServerSaveRef.current = null;
+        return;
+      }
+      if (onlineManager.authState === 'kicked') {
+        pendingGuestServerSaveRef.current = null;
+        return;
+      }
+      if (onlineManager.authState === 'authenticated' && onlineManager.roomCode === pending.roomCode) {
+        pendingGuestServerSaveRef.current = null;
+        if (onlineManager.serverSettings.savePlayerData === false) return;
+        const world = worldRef.current;
+        const player = playerRef.current;
+        const camera = cameraRef.current;
+        if (!world || !player || !camera) return;
+
+        let saved = savesRef.current.find(
+          s => s.worldId === pending.serverWorldId && s.origin === 'server'
+        );
+        // Only fall back to legacy un-scoped server save if server has no per-nick password protection
+        if (!saved && !onlineManager.serverSettings.passwordRequired) {
+          saved = savesRef.current.find(
+            s => s.worldId === pending.legacyWorldId && s.origin === 'server'
+          );
+        }
+        if (saved) {
+          applySavedStateToWorld(saved, world, player, camera);
+          addPlayerNotification(player, `Загружен ваш профиль на сервере ${pending.roomCode}`, 'info');
+        }
+      }
+    });
+    return () => { unsub(); };
+  }, []);
+
+  const handleExitToMainMenu = async () => {
+    const p = playerRef.current;
+    const w = worldRef.current;
+    const curStreet = w && p ? findStreetNameAtPosition(w, p.x, p.y) : 'flatbody';
+    const isStoppingHostedServer =
+      onlineManager.isHost && Boolean(onlineManager.roomCode) && activeWorldRef.current.origin === 'server';
+    const isAuthenticatedGuest =
+      !onlineManager.isHost &&
+      onlineManager.status === 'connected' &&
+      onlineManager.authState === 'authenticated';
+
+    pendingGuestServerSaveRef.current = null;
+    onlineManager.clearAuthKick();
+    setIsPauseMenuOpen(false);
+    setLoadingScreen({
+      isOpen: true,
+      actionType: 'exit_menu',
+      title: isStoppingHostedServer ? 'Остановка сервера' : 'Выход в главное меню',
+      subtitle: isStoppingHostedServer
+        ? 'Сохранение мира, аккаунтов, паролей, банов и профилей игроков в БД'
+        : 'Завершение текущей сессии',
+      stepText: isStoppingHostedServer
+        ? 'Сохранение данных сервера в базу данных...'
+        : 'Сохранение параметров и выгрузка сессии...',
+      progress: 30,
+      mode: w?.gameMode || 'career',
+      locationName: curStreet,
+      timeHour: timeHourRef.current,
+      weather: weatherRef.current
+    });
+    sound.stopEngine();
+    sound.stopTireScreech();
+    sound.stopHorn();
+
+    // If guest is leaving an online server, push one final profile snapshot to the host
+    if (isAuthenticatedGuest && p && onlineManager.serverSettings.savePlayerData !== false) {
+      const curVeh = p.isInVehicle && p.currentVehicleId ? w?.vehicles.find((v) => v.id === p.currentVehicleId) : null;
+      onlineManager.uploadLocalServerSave({
+        nickname: onlineManager.localPlayerName,
+        cash: getPlayerCash(p),
+        x: p.x,
+        y: p.y,
+        angle: p.angle,
+        isInVehicle: p.isInVehicle,
+        vehicleType: curVeh?.type || null,
+        vehicleColor: curVeh?.color || null,
+        inventory: p.inventory ? JSON.parse(JSON.stringify(p.inventory)).slice(0, 80) : [],
+        equippedClothing: p.equippedClothing ? JSON.parse(JSON.stringify(p.equippedClothing)) : undefined,
+        leftHandItem: p.leftHandItem ? JSON.parse(JSON.stringify(p.leftHandItem)) : null,
+        rightHandItem: p.rightHandItem ? JSON.parse(JSON.stringify(p.rightHandItem)) : null,
+        activeHand: p.activeHand || 'right',
+        needs: p.needs ? JSON.parse(JSON.stringify(p.needs)) : undefined,
+        bodyState: p.bodyState ? JSON.parse(JSON.stringify(p.bodyState)) : undefined
+      });
+    }
+
+    // If host is stopping a hosted server, persist all server data to Firestore DB BEFORE tearing down the room
+    if (isStoppingHostedServer) {
+      await persistActiveHostedServer();
+      setLoadingScreen(prev => ({
+        ...prev,
+        stepText: 'Сервер сохранён в БД. Закрытие комнаты...',
+        progress: 65
+      }));
+    }
+
+    await waitMs(60);
+    onlineManager.leaveRoom();
+    await closeHostSession();
+    resetSessionStats();
+    await reloadFreshMap();
+    if (worldRef.current) {
+      resetAllWorldSingletons(worldRef.current);
+    }
+    if (playerRef.current) {
+      resetPlayerToFreshState(playerRef.current, SPAWN_LOCATIONS[0]);
+    }
+    activeWorldRef.current = {
+      worldId: `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      worldName: 'flatbody',
+      origin: 'singleplayer'
+    };
+    setLoadingScreen(prev => ({
+      ...prev,
+      stepText: 'Открытие главного меню...',
+      progress: 100
+    }));
+    setMainMenuInitialScreen('main');
+    setIsMainMenuOpen(true);
+    await waitMs(140);
     setLoadingScreen(prev => ({ ...prev, isOpen: false }));
   };
 
@@ -2724,6 +3288,11 @@ export default function App() {
           setIsChatFocused(false);
           e.preventDefault();
         }
+        return;
+      }
+
+      // Block all gameplay and pause hotkeys while server nickname auth / kick modal is active
+      if (onlineManager.authChallenge || (onlineManager.authState === 'kicked' && onlineManager.authKickReason)) {
         return;
       }
 
@@ -8561,52 +9130,7 @@ export default function App() {
             if (p) addPlayerNotification(p, 'Игра успешно сохранена!', 'info');
           }}
 
-          onExitToMainMenu={async () => {
-            const p = playerRef.current;
-            const w = worldRef.current;
-            const curStreet = w && p ? findStreetNameAtPosition(w, p.x, p.y) : 'flatbody';
-            setIsPauseMenuOpen(false);
-            setLoadingScreen({
-              isOpen: true,
-              actionType: 'exit_menu',
-              title: 'Выход в главное меню',
-              subtitle: 'Завершение текущей сессии',
-              stepText: 'Сохранение параметров и выгрузка сессии...',
-              progress: 35,
-              mode: w?.gameMode || 'career',
-              locationName: curStreet,
-              timeHour: timeHourRef.current,
-              weather: weatherRef.current
-            });
-            sound.stopEngine();
-            sound.stopTireScreech();
-            sound.stopHorn();
-            await waitMs(60);
-            onlineManager.leaveRoom();
-            await closeHostSession();
-            resetSessionStats();
-            await reloadFreshMap();
-            if (worldRef.current) {
-              resetAllWorldSingletons(worldRef.current);
-            }
-            if (playerRef.current) {
-              resetPlayerToFreshState(playerRef.current, SPAWN_LOCATIONS[0]);
-            }
-            activeWorldRef.current = {
-              worldId: `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-              worldName: 'flatbody',
-              origin: 'singleplayer'
-            };
-            setLoadingScreen(prev => ({
-              ...prev,
-              stepText: 'Открытие главного меню...',
-              progress: 100
-            }));
-            setMainMenuInitialScreen('main');
-            setIsMainMenuOpen(true);
-            await waitMs(140);
-            setLoadingScreen(prev => ({ ...prev, isOpen: false }));
-          }}
+          onExitToMainMenu={handleExitToMainMenu}
           onOpenPerformanceTest={() => {
             setIsPauseMenuOpen(false);
             setIsPerfTestOpen(true);
@@ -8617,6 +9141,12 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Server Per-Player Nickname Auth & Rejection Modal */}
+      <ServerAuthModal
+        isMainMenuOpen={isMainMenuOpen}
+        onDisconnectToMenu={handleExitToMainMenu}
+      />
 
       {/* Main Menu Overlay */}
       {isMainMenuOpen && (
@@ -8631,6 +9161,7 @@ export default function App() {
           }}
           onJoinServer={(opts) => handleJoinServerWorld(opts)}
           onCreateServer={(opts) => handleCreateServerWorld(opts)}
+          onStartSavedServer={(backup) => handleStartSavedServer(backup)}
           currentSettings={settings}
           onUpdateSettings={(newSettings) => {
             setSettings(newSettings);
@@ -8652,6 +9183,9 @@ export default function App() {
           isOpen={isOnlineModalOpen}
           onClose={() => setIsOnlineModalOpen(false)}
           onOpenFriends={() => setIsFriendsModalOpen(true)}
+          onJoinServer={(opts) => handleJoinServerWorld(opts)}
+          onCreateServer={(opts) => handleCreateServerWorld(opts)}
+          onSaveHostedServer={() => persistActiveHostedServer()}
         />
       )}
 

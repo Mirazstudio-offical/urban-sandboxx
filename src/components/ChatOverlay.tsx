@@ -345,10 +345,14 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
                 isMobileTouch
-                  ? 'Сообщение...'
+                  ? (onlineManager.isHost && isOnline ? 'Сообщение или /help...' : 'Сообщение...')
                   : isChatFocused
-                  ? 'Сообщение (Enter — отправить, Shift+Enter — строка)'
-                  : 'Нажмите Enter для чата...'
+                  ? (onlineManager.isHost && isOnline
+                    ? 'Сообщение или команда (/help, /kick, /ban, /save)...'
+                    : 'Сообщение (Enter — отправить, Shift+Enter — строка)')
+                  : (onlineManager.isHost && isOnline
+                    ? 'Enter для чата или команд (/help, /kick, /ban)...'
+                    : 'Нажмите Enter для чата...')
               }
             />
             <button
