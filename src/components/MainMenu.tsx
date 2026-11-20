@@ -46,6 +46,8 @@ export interface SaveSlotData {
   serverRoomCode?: string;
   serverName?: string;
   isAutosave?: boolean;
+  mapId?: string;
+  modIds?: string[];
 }
 
 export interface MainMenuProps {
@@ -54,7 +56,6 @@ export interface MainMenuProps {
   onResume: () => void;
   saves: SaveSlotData[];
   onLoadSave: (saveId: string) => void;
-  onLoadSaveAsSingleplayer?: (saveId: string) => void;
   onDeleteSave: (saveId: string) => void;
   onNewGame: (options: {
     spawnId: string;
@@ -266,7 +267,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onResume,
   saves = [],
   onLoadSave,
-  onLoadSaveAsSingleplayer,
   onDeleteSave,
   onNewGame,
   onJoinServer,
@@ -357,26 +357,26 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   const scrCls = 'scr on' + (back ? ' b' : '') + (out ? ' out' : '');
 
-  /* ---------- saves ---------- */
-  const [saveModeFilter, setSaveModeFilter] = useState<'all' | 'career' | 'freeroam' | 'server'>('all');
-  const [selectedSaveId, setSelectedSaveId] = useState<string>(saves[0]?.id || '');
+  /* ---------- saves (strictly singleplayer worlds; server profiles are never loadable offline) ---------- */
+  const singleplayerSaves = saves.filter(s => s.origin !== 'server');
+  const [saveModeFilter, setSaveModeFilter] = useState<'all' | 'career' | 'freeroam'>('all');
+  const [selectedSaveId, setSelectedSaveId] = useState<string>(singleplayerSaves[0]?.id || '');
   useEffect(() => {
-    if (saves.length > 0 && (!selectedSaveId || !saves.some(s => s.id === selectedSaveId))) setSelectedSaveId(saves[0].id);
+    if (singleplayerSaves.length > 0 && (!selectedSaveId || !singleplayerSaves.some(s => s.id === selectedSaveId))) {
+      setSelectedSaveId(singleplayerSaves[0].id);
+    }
   }, [saves, selectedSaveId]);
 
-  const filteredSaves = saves.filter(s => {
+  const filteredSaves = singleplayerSaves.filter(s => {
     if (saveModeFilter === 'all') return true;
-    if (saveModeFilter === 'server') return s.origin === 'server';
-    if (s.origin === 'server') return false;
     const m = s.mode || 'career';
     return m === saveModeFilter;
   });
-  const careerSavesCount = saves.filter(s => s.origin !== 'server' && (s.mode || 'career') === 'career').length;
-  const freeroamSavesCount = saves.filter(s => s.origin !== 'server' && s.mode === 'freeroam').length;
-  const serverSavesCount = saves.filter(s => s.origin === 'server').length;
+  const careerSavesCount = singleplayerSaves.filter(s => (s.mode || 'career') === 'career').length;
+  const freeroamSavesCount = singleplayerSaves.filter(s => s.mode === 'freeroam').length;
 
-  const selectedSave = filteredSaves.find(s => s.id === selectedSaveId) || filteredSaves[0] || saves.find(s => s.id === selectedSaveId) || saves[0] || null;
-  const lastSave = saves[0] || null;
+  const selectedSave = filteredSaves.find(s => s.id === selectedSaveId) || filteredSaves[0] || singleplayerSaves.find(s => s.id === selectedSaveId) || singleplayerSaves[0] || null;
+  const lastSave = singleplayerSaves[0] || null;
 
   /* ---------- new session (career) ---------- */
   const [spawnCategory, setSpawnCategory] = useState<string>('all');
@@ -982,7 +982,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 <div className="tabs st d1">
                   <div className="row2" style={{ gap: 6 }}>
                     <button className={'tab cn' + (saveModeFilter === 'all' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('all')}>
-                      Все миры ({saves.length})
+                      Все миры ({singleplayerSaves.length})
                     </button>
                     <button className={'tab cn' + (saveModeFilter === 'career' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('career')}>
                       Карьера ({careerSavesCount})
@@ -990,18 +990,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <button className={'tab cn' + (saveModeFilter === 'freeroam' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('freeroam')}>
                       Freeroam ({freeroamSavesCount})
                     </button>
-                    <button className={'tab cn' + (saveModeFilter === 'server' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('server')}>
-                      Серверы ({serverSavesCount})
-                    </button>
                   </div>
                   <div className="mut" style={{ paddingBottom: 12, fontSize: 13 }}>Показано: {filteredSaves.length}</div>
                 </div>
                 <div className="a scroll mc-saves" style={{ left: 64, top: 182, width: 1312, height: 584, display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 280, gap: 20, alignContent: 'start' }}>
                   {filteredSaves.map((v, i) => (
                     <button key={v.id} className={'card st d' + Math.min(i + 1, 9) + (v.id === selectedSave?.id ? ' card-on' : '')} onClick={() => setSelectedSaveId(v.id)} onDoubleClick={() => onLoadSave(v.id)}>
-                      <div className={'th ' + thumbAt(v.origin === 'server' ? 3 : v.mode === 'freeroam' ? 5 : i)} style={{ height: 166, position: 'relative' }}>
+                      <div className={'th ' + thumbAt(v.mode === 'freeroam' ? 5 : i)} style={{ height: 166, position: 'relative' }}>
                         <span className={'mode-badge ' + (v.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')} style={{ position: 'absolute', top: 10, right: 10 }}>
-                          {v.origin === 'server' ? 'Сервер' : v.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
+                          {v.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
                         </span>
                         {v.isAutosave && (
                           <span className="mode-badge" style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(15,23,42,0.78)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.14)' }}>
@@ -1012,7 +1009,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       <div style={{ padding: '14px 16px' }}>
                         <div className="cn" style={{ fontSize: 20, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</div>
                         <div className="meta">
-                          <span>{v.origin === 'server' && v.serverRoomCode ? 'Комната: ' + v.serverRoomCode : (v.streetName || 'flatbody')}</span>
+                          <span>{v.streetName || 'flatbody'}</span>
                           <span>{v.isInVehicle ? 'В авто' : 'Пешком'}</span>
                         </div>
                         <div className="meta">
@@ -1038,16 +1035,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     Выбрано: <span style={{ color: '#e9e6df', fontWeight: 600 }}>{selectedSave ? selectedSave.name : '—'}</span>
                     {selectedSave && (
                       <span className={'mode-badge ' + (selectedSave.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')} style={{ marginLeft: 12 }}>
-                        {selectedSave.origin === 'server' ? 'Сервер' : selectedSave.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
+                        {selectedSave.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
                       </span>
                     )}
                   </div>
                   <div className="row2">
                     <button className="btn btn-s" style={{ color: '#e08a70' }} disabled={!selectedSave}
                       onClick={() => { if (selectedSave && window.confirm(`Удалить сохранение «${selectedSave.name}»?`)) onDeleteSave(selectedSave.id); }}>Удалить</button>
-                    {selectedSave?.origin === 'server' && onLoadSaveAsSingleplayer && (
-                      <button className="btn btn-s" onClick={() => onLoadSaveAsSingleplayer(selectedSave.id)}>В одиночный мир</button>
-                    )}
                     <button className="btn btn-p" disabled={!selectedSave} onClick={() => selectedSave && onLoadSave(selectedSave.id)}><PlayIcon />Загрузить</button>
                   </div>
                 </div>

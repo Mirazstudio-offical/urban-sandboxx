@@ -69,8 +69,6 @@ export interface PauseSettings {
 interface PauseMenuProps {
   onResume: () => void;
   onSave: () => void;
-  onSaveServerLocally?: () => void;
-  onConvertServerToSingleplayer?: () => void;
   onExitToMainMenu: () => void;
   /** Opens the in-game acceleration run tester. */
   onOpenPerformanceTest?: () => void;
@@ -170,7 +168,7 @@ const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'
 /* ------------------------------------------------------------------ */
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
-  onResume, onSave, onSaveServerLocally, onConvertServerToSingleplayer, onExitToMainMenu, onOpenPerformanceTest, onOpenCollisionTest, settings, onUpdateSettings, session, currentUser
+  onResume, onSave, onExitToMainMenu, onOpenPerformanceTest, onOpenCollisionTest, settings, onUpdateSettings, session, currentUser
 }) => {
   const [cur, setCur] = useState<'online' | 'settings' | null>(null);
   const [entered, setEntered] = useState(false);
@@ -320,18 +318,22 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const connected = st === 'connected';
   const hostBusy = isHostSessionBusy();
   const isHost = connected && onlineManager.isHost;
+  const isGuest = connected && !onlineManager.isHost;
+  const isServerWorld = session.worldOrigin === 'server';
+  const isCoopSingleplayer = !isServerWorld && !isGuest;
   const sessionOn = connected || st === 'connecting' || hostBusy;
   const access: HostAccess = isHost ? (hs?.access ?? 'all') : accessPref;
   const maxPlayers = hs?.maxPlayers ?? DEFAULT_MAX_PLAYERS;
   const players = connected ? onlineManager.getRemotePlayersArray().length + 1 : 1;
+  const roomDisplay = session.serverRoomCode || onlineManager.roomCode || 'P2P';
   const onSub =
     st === 'connecting' ? 'Подключение к сети…'
       : st === 'error' ? (onlineManager.errorMessage || 'Не удалось открыть сессию.')
         : isHost ? 'Сессия открыта. Друзья могут войти по приглашению.'
-          : connected ? 'Вы подключены к комнате ' + onlineManager.roomCode + '.'
+          : connected ? 'Вы подключены к серверу ' + roomDisplay + '.'
             : 'Сессия закрыта. Вы играете один.';
   const toggleSession = () => {
-    if (hostBusy) return;
+    if (hostBusy || !isCoopSingleplayer) return;
     if (sessionOn) closeHostSession();
     else openHostSession({ access: accessPref });
   };
@@ -459,9 +461,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
               </div>
               <div style={{ padding: '16px 8px 6px' }}>
                 <div className="cn mut" style={{ fontSize: 13 }}>
-                  {session.worldOrigin === 'server' || connected
-                    ? `Серверный мир · ${session.serverRoomCode || onlineManager.roomCode || 'P2P'}`
-                    : 'Одиночный мир'}
+                  {isServerWorld || isGuest
+                    ? `${isHost ? 'Сервер (хост)' : 'Сервер'} · ${roomDisplay}`
+                    : (isHost ? `Одиночный мир · открыт для друзей (${roomDisplay})` : 'Одиночный мир')}
                 </div>
                 <div className="cn" style={{ fontSize: 30, fontWeight: 700, marginTop: 4 }}>{where} · {phase}</div>
                 <div className="mut" style={{ display: 'flex', gap: 22, marginTop: 10, fontSize: 14 }}><span>Карта: {MAP_NAME}</span><span>Авто: {vehicleLabel}</span></div>
@@ -472,7 +474,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                 </div>
                 <div className="row2" style={{ marginTop: 22 }}>
                   <button className="btn btn-p" onClick={leave}><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="#1a1409" /></svg>Продолжить</button>
-                  <button className="btn btn-s" onClick={quickSave}>{qsDone ? 'Сохранено' : 'Быстрое сохранение'}</button>
+                  {isGuest ? (
+                    <button className="btn btn-s" onClick={onExitToMainMenu}>Отключиться</button>
+                  ) : (
+                    <button className="btn btn-s" onClick={quickSave}>{qsDone ? 'Сохранено' : (isServerWorld ? 'Сохранить сервер' : 'Быстрое сохранение')}</button>
+                  )}
                 </div>
               </div>
             </section>
@@ -482,27 +488,31 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
           {shown === 'online' && (
             <section className="pan fade" key="online" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="panel" style={{ padding: '8px 0' }}>
-                <div className="set">
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Открыть сессию для друзей</div>
-                    <div className={st === 'error' ? 'err' : 'mut'} style={{ fontSize: 13 }}>{onSub}</div>
-                  </div>
-                  <button className={'tg' + (sessionOn ? ' on' : '')} role="switch" aria-checked={sessionOn} aria-label="Открыть сессию" onClick={toggleSession} disabled={hostBusy} />
-                </div>
-                {(connected || session.worldOrigin === 'server') && (onSaveServerLocally || onConvertServerToSingleplayer) && (
-                  <div className="set" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                {isCoopSingleplayer ? (
+                  <div className="set">
                     <div>
-                      <div style={{ fontWeight: 600 }}>Локальная копия и одиночный режим</div>
-                      <div className="mut" style={{ fontSize: 13 }}>Сохраните копию мира себе или переведите сессию в одиночную игру.</div>
+                      <div style={{ fontWeight: 600 }}>Открыть сессию для друзей</div>
+                      <div className={st === 'error' ? 'err' : 'mut'} style={{ fontSize: 13 }}>{onSub}</div>
                     </div>
-                    <div className="row2" style={{ gap: 10 }}>
-                      {onSaveServerLocally && (
-                        <button className="btn btn-s btn-sm" onClick={onSaveServerLocally}>Сохранить локально</button>
-                      )}
-                      {onConvertServerToSingleplayer && (
-                        <button className="btn btn-p btn-sm" onClick={onConvertServerToSingleplayer}>В одиночный мир</button>
-                      )}
+                    <button className={'tg' + (sessionOn ? ' on' : '')} role="switch" aria-checked={sessionOn} aria-label="Открыть сессию" onClick={toggleSession} disabled={hostBusy} />
+                  </div>
+                ) : isServerWorld && isHost ? (
+                  <div className="set">
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Сервер запущен ({roomDisplay})</div>
+                      <div className="mut" style={{ fontSize: 13 }}>Отдельный серверный мир. Остановка завершит сессию и вернёт в главное меню.</div>
                     </div>
+                    <button className="btn btn-s btn-sm" style={{ color: '#e08a70' }} onClick={onExitToMainMenu}>Остановить сервер</button>
+                  </div>
+                ) : (
+                  <div className="set">
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Подключение к серверу ({roomDisplay})</div>
+                      <div className={st === 'error' ? 'err' : 'mut'} style={{ fontSize: 13 }}>
+                        {st === 'connecting' ? 'Подключение к серверу…' : 'Вы играете как гость на отдельном сервере.'}
+                      </div>
+                    </div>
+                    <button className="btn btn-s btn-sm" style={{ color: '#e08a70' }} onClick={onExitToMainMenu}>Отключиться от сервера</button>
                   </div>
                 )}
               </div>

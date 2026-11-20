@@ -1054,31 +1054,25 @@ export default function App() {
 
   const handleCreateSave = (
     customName?: string,
-    opts?: { forceSingleplayerCopy?: boolean; isAutosave?: boolean }
+    opts?: { isAutosave?: boolean }
   ) => {
     const world = worldRef.current;
     const player = playerRef.current;
     if (!world || !player) return;
 
     const isAutosave = Boolean(opts?.isAutosave || customName === 'Автосохранение');
+    const isConnectedGuest = onlineManager.status === 'connected' && !onlineManager.isHost;
 
-    // Enforce server's savePlayerData setting for guests during autosave
-    if (
-      isAutosave &&
-      !opts?.forceSingleplayerCopy &&
-      onlineManager.status === 'connected' &&
-      !onlineManager.isHost &&
-      onlineManager.serverSettings.savePlayerData === false
-    ) {
-      return;
+    // Guests on a foreign server cannot manually export/save it; autosave runs only if server allows savePlayerData
+    if (isConnectedGuest) {
+      if (!isAutosave || onlineManager.serverSettings.savePlayerData === false) {
+        return;
+      }
     }
 
     const activeMeta = activeWorldRef.current;
-    const isSingleplayerCopy = Boolean(opts?.forceSingleplayerCopy);
-    const targetOrigin: 'singleplayer' | 'server' = isSingleplayerCopy ? 'singleplayer' : activeMeta.origin;
-    const targetWorldId = isSingleplayerCopy
-      ? `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-      : activeMeta.worldId;
+    const targetOrigin: 'singleplayer' | 'server' = activeMeta.origin;
+    const targetWorldId = activeMeta.worldId;
 
     // Get current street name
     const currentStreet = findStreetNameAtPosition(world, player.x, player.y);
@@ -1091,11 +1085,9 @@ export default function App() {
       ? (activeMeta.serverName || activeMeta.worldName || `Сервер ${activeMeta.serverRoomCode || ''}`).trim()
       : (activeMeta.worldName && activeMeta.worldName !== 'flatbody' ? activeMeta.worldName : currentStreet);
 
-    const saveName = isSingleplayerCopy
-      ? (customName || `Одиночный мир (из ${activeMeta.serverName || activeMeta.serverRoomCode || 'сервера'})`)
-      : isAutosave
-        ? `Авто · ${worldLabel}`
-        : (customName || (targetOrigin === 'server' ? `${worldLabel} · ${currentStreet}` : `Улица: ${currentStreet}`));
+    const saveName = isAutosave
+      ? `Авто · ${worldLabel}`
+      : (customName || (targetOrigin === 'server' ? `${worldLabel} · ${currentStreet}` : `Улица: ${currentStreet}`));
 
     // Collect all vehicle IDs that have a linked key in player possession or ownership
     const keyedVehicleIds = new Set<string>();
@@ -1184,6 +1176,8 @@ export default function App() {
       id: Date.now().toString() + '_' + Math.random().toString(36).slice(2, 6),
       worldId: targetWorldId,
       origin: targetOrigin,
+      mapId: 'flatbody',
+      modIds: [] as string[],
       serverRoomCode: targetOrigin === 'server' ? activeMeta.serverRoomCode : undefined,
       serverName: targetOrigin === 'server' ? activeMeta.serverName : undefined,
       isAutosave,
@@ -1588,9 +1582,10 @@ export default function App() {
     }
   };
 
-  const handleLoadSave = async (saveId: string, opts?: { asSingleplayerCopy?: boolean }) => {
+  const handleLoadSave = async (saveId: string) => {
     const save = savesRef.current.find(s => s.id === saveId);
-    if (!save) return;
+    // Server profiles cannot be loaded offline or converted to singleplayer worlds
+    if (!save || save.origin === 'server') return;
 
     const saveMode: 'career' | 'freeroam' = save.mode || 'career';
     const playerSavedVeh = save.isInVehicle && save.currentVehicleId && Array.isArray(save.vehicles)
@@ -1602,9 +1597,7 @@ export default function App() {
       isOpen: true,
       actionType: 'load_save',
       title: save.name || 'Загрузка сессии',
-      subtitle: opts?.asSingleplayerCopy
-        ? 'Конвертация серверного сохранения в одиночный мир'
-        : (saveMode === 'freeroam' ? 'Загрузка сохранения · Freeroam' : 'Загрузка сохранения · Карьера'),
+      subtitle: saveMode === 'freeroam' ? 'Загрузка сохранения · Freeroam' : 'Загрузка сохранения · Карьера',
       stepText: 'Чтение карты города и изоляция мира...',
       progress: 18,
       mode: saveMode,
@@ -1642,30 +1635,11 @@ export default function App() {
     resetSessionStats();
     applySavedStateToWorld(save, world, player, camera);
 
-    // Loading any save from the Saves menu opens it cleanly as an offline world;
-    // converting a server save gives it a fresh singleplayer worldId so the server save stays untouched
-    if (opts?.asSingleplayerCopy || save.origin === 'server') {
-      const spWorldId = opts?.asSingleplayerCopy
-        ? `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-        : (save.worldId || `world_${save.id}`);
-      activeWorldRef.current = {
-        worldId: spWorldId,
-        worldName: opts?.asSingleplayerCopy
-          ? `Одиночный мир (${save.serverName || save.name})`
-          : (save.name || 'flatbody'),
-        origin: 'singleplayer'
-      };
-      if (opts?.asSingleplayerCopy) {
-        handleCreateSave(activeWorldRef.current.worldName, { forceSingleplayerCopy: false });
-        addPlayerNotification(player, 'Серверный мир перенесён в одиночную игру!', 'info');
-      }
-    } else {
-      activeWorldRef.current = {
-        worldId: save.worldId || `world_${save.id}`,
-        worldName: (save.name || 'flatbody').replace(/^Авто ·\s*/, ''),
-        origin: 'singleplayer'
-      };
-    }
+    activeWorldRef.current = {
+      worldId: save.worldId || `world_${save.id}`,
+      worldName: (save.name || 'flatbody').replace(/^Авто ·\s*/, ''),
+      origin: 'singleplayer'
+    };
 
     setLoadingScreen(prev => ({
       ...prev,
@@ -2155,42 +2129,6 @@ export default function App() {
     setIsPauseMenuOpen(false);
     await waitMs(160);
     setLoadingScreen(prev => ({ ...prev, isOpen: false }));
-  };
-
-  /**
-   * Saves a standalone local singleplayer copy of the current server world without disconnecting.
-   */
-  const handleSaveServerLocally = () => {
-    const meta = activeWorldRef.current;
-    const copyName = `Одиночный мир · ${meta.serverName || meta.serverRoomCode || 'копия сервера'}`;
-    handleCreateSave(copyName, { forceSingleplayerCopy: true });
-    const p = playerRef.current;
-    if (p) {
-      addPlayerNotification(p, 'Локальная одиночная копия сервера сохранена!', 'info');
-    }
-  };
-
-  /**
-   * Disconnects from P2P, drops remote ghost vehicles, converts the active session into an
-   * independent singleplayer world, and saves it locally so the player continues seamlessly offline.
-   */
-  const handleConvertServerToSingleplayer = async () => {
-    const prevMeta = activeWorldRef.current;
-    await closeHostSession();
-    onlineManager.leaveRoom();
-    onlineManager.clearRemoteVehiclesFromWorld(worldRef.current);
-
-    const spName = `Одиночный мир · ${prevMeta.serverName || prevMeta.serverRoomCode || 'flatbody'}`;
-    activeWorldRef.current = {
-      worldId: `world_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      worldName: spName,
-      origin: 'singleplayer'
-    };
-    handleCreateSave(spName);
-    const p = playerRef.current;
-    if (p) {
-      addPlayerNotification(p, 'Сервер переведён в одиночный мир и сохранён локально!', 'info');
-    }
   };
 
   const getMouseWorldPos = (sx: number, sy: number) => {
@@ -8453,8 +8391,6 @@ export default function App() {
             const p = playerRef.current;
             if (p) addPlayerNotification(p, 'Игра успешно сохранена!', 'info');
           }}
-          onSaveServerLocally={handleSaveServerLocally}
-          onConvertServerToSingleplayer={handleConvertServerToSingleplayer}
 
           onExitToMainMenu={async () => {
             const p = playerRef.current;
@@ -8520,7 +8456,6 @@ export default function App() {
           onResume={() => setIsMainMenuOpen(false)}
           saves={saves}
           onLoadSave={(id) => handleLoadSave(id)}
-          onLoadSaveAsSingleplayer={(id) => handleLoadSave(id, { asSingleplayerCopy: true })}
           onDeleteSave={handleDeleteSave}
           onNewGame={({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor, powertrain }) => {
             handleNewGame({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor, powertrain });
