@@ -22,6 +22,18 @@ import {
 } from '../firebase';
 import { WeatherType } from '../types';
 import { VehicleSelect, type PowertrainSelection } from './VehicleSelect';
+import {
+  KEYBIND_GROUPS,
+  KEYBIND_DEFINITIONS,
+  DEFAULT_KEYBINDS,
+  useKeybinds,
+  setKeybind,
+  resetKeybind,
+  resetAllKeybinds,
+  formatKeyCode,
+  isAnyKeybindCustomized,
+  type KeybindAction
+} from '../keybinds';
 
 export interface SaveSlotData {
   id: string;
@@ -310,11 +322,39 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
+  const keybinds = useKeybinds();
+  const [listeningAction, setListeningAction] = useState<KeybindAction | null>(null);
+  const [keybindNotice, setKeybindNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!listeningAction) return;
+    const onCapture = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === 'Escape') {
+        setListeningAction(null);
+        return;
+      }
+      const res = setKeybind(listeningAction, e.code);
+      setListeningAction(null);
+      if (res.warning) {
+        setKeybindNotice(res.warning);
+      } else if (res.swappedWith) {
+        setKeybindNotice(`Клавиша поменяна местами с «${res.swappedWith.label}».`);
+      } else {
+        setKeybindNotice(null);
+      }
+    };
+    window.addEventListener('keydown', onCapture, true);
+    return () => window.removeEventListener('keydown', onCapture, true);
+  }, [listeningAction]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (cur === 'main') onResume();
-      else if (cur === 'create') go('servers', true);
+      if (listeningAction) return;
+      if (cur === 'main') return;
+      if (cur === 'create') go('servers', true);
       else go('main', true);
     };
     window.addEventListener('keydown', onKey);
@@ -640,7 +680,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 </div>
 
                 <div className="a mc-mlist" style={{ left: 64, top: 156, width: 440, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {lastSave ? (
+                  {lastSave && (
                     <button className="menu-i cn sl d1" onClick={() => onLoadSave(lastSave.id)}
                       style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 78 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -651,14 +691,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       </div>
                       <span className="mut" style={{ font: "400 13px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0 }}>«{lastSave.name}» — {lastSave.date}</span>
                     </button>
-                  ) : (
-                    <button className="menu-i cn sl d1" onClick={onResume}
-                      style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 78 }}>
-                      <span>В игру</span>
-                      <span className="mut" style={{ font: "400 14px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0 }}>Свободная езда по открытому миру</span>
-                    </button>
                   )}
-                  <button className="menu-i cn sl d2" onClick={() => go('new')} style={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }}>
+                  <button className="menu-i cn sl d2" onClick={() => go('new')}
+                    style={!lastSave
+                      ? { background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 74 }
+                      : { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }
+                    }>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <Ic><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></Ic>
                       <span>Карьера (Career)</span>
@@ -676,11 +714,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   <button className="menu-i cn sl d5" onClick={() => go('servers')}><Ic><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" /></Ic>Онлайн</button>
                   <button className="menu-i cn sl d6" onClick={() => go('account')}><Ic><circle cx="12" cy="9" r="4" /><path d="M4 20c1-4 4-6 8-6s7 2 8 6" /></Ic>Аккаунт</button>
                   <button className="menu-i cn sl d7" onClick={() => go('settings')}><Gear />Настройки</button>
-                  {lastSave && (
-                    <button className="menu-i cn sl d8" onClick={onResume} style={{ marginTop: 6, color: '#a29e93', height: 48 }}>
-                      <Ic c="#a29e93"><path d="M9 4H5v16h4M15 8l4 4-4 4M19 12H9" /></Ic>Вернуться в игру
-                    </button>
-                  )}
                 </div>
 
                 <div className="panel a st d3 mc-mpanel" style={{ left: 880, top: 156, width: 496, padding: 14 }}>
@@ -716,7 +749,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     </div>
                   </div>
                 </div>
-                {Hint([['Esc', 'В игру']])}
               </section>
             )}
 
@@ -930,14 +962,51 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <>
                       <div className="grp cn" style={{ paddingTop: 18 }}>Мышь</div>
                       <div className="set"><span>Чувствительность</span><Slider label="Чувствительность мыши" value={local.mouseSensitivity} min={0.5} max={2.5} step={0.1} onChange={v => patchGame({ mouseSensitivity: v })} display={local.mouseSensitivity.toFixed(1) + '×'} /></div>
-                      <div className="grp cn">Автомобиль</div>
-                      {([['Газ / тормоз', ['W', 'S']], ['Руль', ['A', 'D']], ['Ручной тормоз', ['Пробел']], ['Фары', ['L']], ['Клаксон', ['H']], ['Поворотники', ['Q', 'Z']], ['Аварийка', ['X']]] as [string, string[]][]).map(([t, ks]) => (
-                        <div className="set" key={t}><span>{t}</span><span className="kv">{ks.map(k => <span className="key" key={k}>{k}</span>)}</span></div>
-                      ))}
-                      <div className="grp cn">Персонаж и мир</div>
-                      {([['Действие / сесть', ['E']], ['Инвентарь', ['Tab']], ['Осмотр тела', ['F']], ['Карта (GPS)', ['M']], ['Меню паузы', ['Esc']]] as [string, string[]][]).map(([t, ks]) => (
-                        <div className="set" key={t}><span>{t}</span><span className="kv">{ks.map(k => <span className="key" key={k}>{k}</span>)}</span></div>
-                      ))}
+                      {keybindNotice && <div className="kb-note">{keybindNotice}</div>}
+                      {KEYBIND_GROUPS.map(g => {
+                        const items = KEYBIND_DEFINITIONS.filter(d => d.group === g.id);
+                        return (
+                          <React.Fragment key={g.id}>
+                            <div className="grp cn">{g.title}</div>
+                            {items.map(def => {
+                              const code = keybinds[def.id];
+                              const isListening = listeningAction === def.id;
+                              const isCustom = code !== DEFAULT_KEYBINDS[def.id];
+                              return (
+                                <div className={'set' + (isListening ? ' set-on' : '')} key={def.id} title={def.hint || undefined}>
+                                  <span>{def.label}</span>
+                                  <span className="kv" style={{ alignItems: 'center' }}>
+                                    {isCustom && !isListening && (
+                                      <button
+                                        type="button"
+                                        className="key-reset"
+                                        title={`Сбросить на ${formatKeyCode(DEFAULT_KEYBINDS[def.id])}`}
+                                        onClick={() => { resetKeybind(def.id); setKeybindNotice(null); }}
+                                      >
+                                        Сброс
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className={'key key-bind' + (isListening ? ' key-listening' : '')}
+                                      onClick={() => {
+                                        setKeybindNotice(null);
+                                        setListeningAction(prev => (prev === def.id ? null : def.id));
+                                      }}
+                                    >
+                                      {isListening ? 'Нажмите клавишу…' : formatKeyCode(code)}
+                                    </button>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })}
+                      <div className="set">
+                        <span>Меню паузы / Закрыть окно</span>
+                        <span className="kv"><span className="key">Esc</span></span>
+                      </div>
                     </>
                   )}
                   {setTab === 'game' && (
@@ -961,7 +1030,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         {({
                           gfx: 'Изменения сохраняются сразу. Пресет меняет сразу несколько параметров. На слабых устройствах выберите «Низкие» или уменьшите масштаб рендера и дальность прорисовки.',
                           sound: 'Громкость меняется сразу. Звук двигателя синтезируется в реальном времени.',
-                          ctrl: 'Чувствительность мыши применяется сразу. Список клавиш приведён для справки.',
+                          ctrl: 'Нажмите на любую клавишу, чтобы переназначить её. Esc отменяет выбор. Конфликтующие клавиши в одном контексте автоматически меняются местами.',
                           game: 'Автосохранение и смена времени суток.'
                         })[setTab]}
                       </div>
@@ -969,6 +1038,18 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   </div>
                   {setTab === 'gfx' && (
                     <div className="st d5"><button className="btn btn-s" style={{ width: '100%' }} onClick={resetPerf}>Сбросить графику</button></div>
+                  )}
+                  {setTab === 'ctrl' && (
+                    <div className="st d5">
+                      <button
+                        className="btn btn-s"
+                        style={{ width: '100%' }}
+                        disabled={!isAnyKeybindCustomized()}
+                        onClick={() => { setListeningAction(null); resetAllKeybinds(); setKeybindNotice('Управление сброшено к значениям по умолчанию.'); }}
+                      >
+                        Сбросить управление
+                      </button>
+                    </div>
                   )}
                 </div>
                 {Hint([['Esc', 'Назад']])}

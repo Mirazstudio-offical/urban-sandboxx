@@ -8,6 +8,18 @@ import { sound } from '../audio';
 import { performanceConfig, DEFAULT_CONFIG, detectGraphicsPreset, PerformanceConfig, GraphicsPresetId } from '../performanceConfig';
 import { GFX_GROUPS, GFX_PRESET_OPTIONS, GfxItem, applyGfxPatch, applyGfxPreset } from '../graphicsSettings';
 import {
+  KEYBIND_GROUPS,
+  KEYBIND_DEFINITIONS,
+  DEFAULT_KEYBINDS,
+  useKeybinds,
+  setKeybind,
+  resetKeybind,
+  resetAllKeybinds,
+  formatKeyCode,
+  isAnyKeybindCustomized,
+  type KeybindAction
+} from '../keybinds';
+import {
   subscribeToFriends,
   fetchUserProfile,
   sendWorldInvite,
@@ -154,11 +166,13 @@ const EscWhileMounted: React.FC<{ onEscape: () => void }> = ({ onEscape }) => { 
 
 type Row =
   | { t: 'hdr'; l: string }
+  | { t: 'note'; l: string }
   | { t: 'tg'; l: string; v: boolean; set: (v: boolean) => void }
   | { t: 'seg'; l: string; v: any; o: { v: any; label: string }[]; set: (v: any) => void }
   | { t: 'sld'; l: string; v: number; min: number; max: number; step: number; fmt: (v: number) => string; set: (v: number) => void }
   | { t: 'keys'; l: string; k: string[] }
-  | { t: 'btn'; l: string; label: string; act: () => void };
+  | { t: 'bind'; l: string; action: KeybindAction; hint?: string }
+  | { t: 'btn'; l: string; label: string; act: () => void; disabled?: boolean };
 
 type TabId = 'gfx' | 'sound' | 'ctrl' | 'game';
 const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'], ['ctrl', 'Управление'], ['game', 'Игра']];
@@ -197,14 +211,48 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
     const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     later(onResume, reduce ? 0 : 380);
   };
-  useTopmostEscape(() => { if (confirmExit) setConfirmExit(false); else leave(); });
+  const keybinds = useKeybinds();
+  const [listeningAction, setListeningAction] = useState<KeybindAction | null>(null);
+  const [keybindNotice, setKeybindNotice] = useState<string | null>(null);
 
-  const show = (p: 'online' | 'settings') => setCur(c => (c === p ? null : p));
+  useEffect(() => {
+    if (!listeningAction) return;
+    const onCapture = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === 'Escape') {
+        setListeningAction(null);
+        return;
+      }
+      const res = setKeybind(listeningAction, e.code);
+      setListeningAction(null);
+      if (res.warning) {
+        setKeybindNotice(res.warning);
+      } else if (res.swappedWith) {
+        setKeybindNotice(`Клавиша поменяна местами с «${res.swappedWith.label}».`);
+      } else {
+        setKeybindNotice(null);
+      }
+    };
+    window.addEventListener('keydown', onCapture, true);
+    return () => window.removeEventListener('keydown', onCapture, true);
+  }, [listeningAction]);
+
+  useTopmostEscape(() => {
+    if (listeningAction) setListeningAction(null);
+    else if (confirmExit) setConfirmExit(false);
+    else leave();
+  });
+
+  const show = (p: 'online' | 'settings') => {
+    setListeningAction(null);
+    setCur(c => (c === p ? null : p));
+  };
 
   /* ---------- навигация стрелками по левому меню ---------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (confirmExit || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+      if (listeningAction || confirmExit || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
       const gm = gmRef.current;
       if (!gm) return;
       const items = Array.from(gm.querySelectorAll<HTMLButtonElement>('nav button'));
@@ -216,7 +264,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [confirmExit]);
+  }, [confirmExit, listeningAction]);
 
   /* ---------- сохранение ---------- */
   const quickSave = () => {
@@ -274,21 +322,35 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
       { t: 'sld', l: 'Общая громкость', v: masterVol, min: 0, max: 100, step: 1, fmt: v => v + '%', set: v => { setMasterVol(v); sound.setMasterVolume(v / 100); } },
       { t: 'sld', l: 'Двигатель', v: engineVol, min: 0, max: 100, step: 1, fmt: v => v + '%', set: v => { setEngineVol(v); sound.setEngineVolume(v / 100); } }
     ];
-    if (id === 'ctrl') return [
-      { t: 'sld', l: 'Чувствительность мыши', v: local.mouseSensitivity, min: 0.5, max: 2.5, step: 0.1, fmt: v => v.toFixed(1) + '×', set: v => patchGame({ mouseSensitivity: v }) },
-      { t: 'keys', l: 'Газ / тормоз', k: ['W', 'S'] },
-      { t: 'keys', l: 'Руль', k: ['A', 'D'] },
-      { t: 'keys', l: 'Ручной тормоз', k: ['Пробел'] },
-      { t: 'keys', l: 'Фары', k: ['L'] },
-      { t: 'keys', l: 'Клаксон', k: ['H'] },
-      { t: 'keys', l: 'Поворотники', k: ['Q', 'Z'] },
-      { t: 'keys', l: 'Аварийка', k: ['X'] },
-      { t: 'keys', l: 'Действие / сесть', k: ['E'] },
-      { t: 'keys', l: 'Инвентарь', k: ['Tab'] },
-      { t: 'keys', l: 'Осмотр тела', k: ['F'] },
-      { t: 'keys', l: 'Карта (GPS)', k: ['M'] },
-      { t: 'keys', l: 'Меню паузы', k: ['Esc'] }
-    ];
+    if (id === 'ctrl') {
+      const ctrlRows: Row[] = [
+        { t: 'sld', l: 'Чувствительность мыши', v: local.mouseSensitivity, min: 0.5, max: 2.5, step: 0.1, fmt: v => v.toFixed(1) + '×', set: v => patchGame({ mouseSensitivity: v }) },
+      ];
+      if (keybindNotice) {
+        ctrlRows.push({ t: 'note', l: keybindNotice });
+      }
+      for (const g of KEYBIND_GROUPS) {
+        ctrlRows.push({ t: 'hdr', l: g.title });
+        for (const def of KEYBIND_DEFINITIONS) {
+          if (def.group === g.id) {
+            ctrlRows.push({ t: 'bind', l: def.label, action: def.id, hint: def.hint });
+          }
+        }
+      }
+      ctrlRows.push({ t: 'keys', l: 'Меню паузы / Закрыть окно', k: ['Esc'] });
+      ctrlRows.push({
+        t: 'btn',
+        l: 'Сбросить все клавиши',
+        label: 'Сбросить',
+        disabled: !isAnyKeybindCustomized(),
+        act: () => {
+          setListeningAction(null);
+          resetAllKeybinds();
+          setKeybindNotice('Управление сброшено к значениям по умолчанию.');
+        }
+      });
+      return ctrlRows;
+    }
     return [
       { t: 'seg', l: 'КПП (переключения)', v: local.shiftMode,
         o: [{ v: 'manual', label: 'Ручная' }, { v: 'auto', label: 'Авто (сама)' }],
@@ -560,7 +622,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             <section className="pan fade" key="settings">
               <div className="tb">
                 {TABS.map(([id, label]) => (
-                  <button key={id} className={'tab cn' + (id === tab ? ' tab-on' : '')} onClick={() => setTab(id)}>{label}</button>
+                  <button key={id} className={'tab cn' + (id === tab ? ' tab-on' : '')} onClick={() => { setListeningAction(null); setTab(id); }}>{label}</button>
                 ))}
               </div>
               <div className="panel scroll" id="rows" style={{ padding: '8px 0' }}>
@@ -568,8 +630,10 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                   <div key={tab + i} className="cn" style={{ padding: '14px 22px 6px', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#e0ab45', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none', marginTop: i > 0 ? 6 : 0 }}>
                     {r.l}
                   </div>
+                ) : r.t === 'note' ? (
+                  <div key={tab + i} className="kb-note">{r.l}</div>
                 ) : (
-                  <div className="set" key={tab + i}>
+                  <div className="set" key={tab + i} title={r.t === 'bind' ? r.hint : undefined}>
                     <span>{r.l}</span>
                     {r.t === 'tg' && <button className={'tg' + (r.v ? ' on' : '')} role="switch" aria-checked={r.v} aria-label={r.l} onClick={() => r.set(!r.v)} />}
                     {r.t === 'seg' && <Seg value={r.v} onChange={r.set} options={r.o} />}
@@ -580,7 +644,36 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                       </div>
                     )}
                     {r.t === 'keys' && <span className="kv">{r.k.map(k => <span className="key" key={k}>{k}</span>)}</span>}
-                    {r.t === 'btn' && <button className="btn btn-s btn-sm" onClick={r.act}>{r.label}</button>}
+                    {r.t === 'bind' && (() => {
+                      const code = keybinds[r.action];
+                      const isListening = listeningAction === r.action;
+                      const isCustom = code !== DEFAULT_KEYBINDS[r.action];
+                      return (
+                        <span className="kv" style={{ alignItems: 'center' }}>
+                          {isCustom && !isListening && (
+                            <button
+                              type="button"
+                              className="key-reset"
+                              title={`Сбросить на ${formatKeyCode(DEFAULT_KEYBINDS[r.action])}`}
+                              onClick={() => { resetKeybind(r.action); setKeybindNotice(null); }}
+                            >
+                              Сброс
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className={'key key-bind' + (isListening ? ' key-listening' : '')}
+                            onClick={() => {
+                              setKeybindNotice(null);
+                              setListeningAction(prev => (prev === r.action ? null : r.action));
+                            }}
+                          >
+                            {isListening ? 'Нажмите клавишу…' : formatKeyCode(code)}
+                          </button>
+                        </span>
+                      );
+                    })()}
+                    {r.t === 'btn' && <button className="btn btn-s btn-sm" disabled={r.disabled} onClick={r.act}>{r.label}</button>}
                   </div>
                 ))}
               </div>

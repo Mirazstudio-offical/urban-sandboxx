@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Vehicle, CarType, WeatherType, GameCalendarState } from '../types';
 import { getVehicleRequiredKeyType } from '../items';
 import { formatGameDate, getRussianSeasonName } from '../calendarSystem';
+import { useKeybinds, formatKeyCode } from '../keybinds';
 import { 
   Fuel, 
   Thermometer, 
@@ -180,6 +181,8 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
     return false;
   });
   const [tripMode, setTripMode] = useState<TripComputerMode>('eco');
+  const kb = useKeybinds();
+  const kLbl = (a: keyof typeof kb) => formatKeyCode(kb[a]);
 
   if (!vehicle) return null;
 
@@ -666,7 +669,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               {eng?.hasTransferCase && (
                 <span
                   className={`text-[10px] font-black font-mono shrink-0 ${eng.transferCaseMode === 'LOW' ? 'text-[#c68a35]' : 'text-[#5a6272]'}`}
-                  title="Делитель [X]"
+                  title={`Делитель [${kLbl('transferCase')}]`}
                 >
                   {eng.transferCaseMode === 'LOW' ? 'LO' : 'HI'}
                 </span>
@@ -679,7 +682,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition cursor-pointer active:scale-95 ${
                     isDiffLocked ? 'bg-[#c68a35]/25 text-[#d99a41]' : 'text-[#5a6272] hover:text-[#f0f3f6]'
                   }`}
-                  title={`Блокировка дифференциала [V]: ${diffLockDesc}`}
+                  title={`Блокировка дифференциала [${kLbl('diffLock')}]: ${diffLockDesc}`}
                 >
                   <ShieldAlert className={`w-4 h-4 ${isDiffLocked ? 'animate-pulse' : ''}`} />
                 </button>
@@ -701,7 +704,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 className={`w-7 h-7 rounded-full border flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0 ${
                   isEngineRunning ? 'bg-[#c68a35]/20 border-[#c68a35] text-[#d99a41]' : 'bg-red-950/40 border-red-800/80 text-red-400'
                 }`}
-                title="Зажигание [J]"
+                title={`Зажигание [${kLbl('engineToggle')}]`}
               >
                 <Power className="w-3.5 h-3.5" />
               </button>
@@ -1494,13 +1497,13 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   ? 'bg-[#c68a35]/30 border-[#c68a35] text-[#d99a41] animate-pulse font-extrabold'
                   : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
-              title="Левый поворотник [Q]"
+              title={`Левый поворотник [${kLbl('turnSignalLeft')}]`}
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Q</span>
+              <span>{kLbl('turnSignalLeft')}</span>
             </button>
 
-            {/* Hazard (Z) */}
+            {/* Hazard */}
             <button
               type="button"
               onClick={() => onToggleTurnSignal?.('hazard')}
@@ -1509,13 +1512,13 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   ? 'bg-red-950/40 border-red-500 text-red-300 animate-pulse font-extrabold'
                   : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
-              title="Аварийка [Z]"
+              title={`Аварийка [${kLbl('hazardLights')}]`}
             >
               <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Z</span>
+              <span>{kLbl('hazardLights')}</span>
             </button>
 
-            {/* Right Signal (E) */}
+            {/* Right Signal */}
             <button
               type="button"
               onClick={() => onToggleTurnSignal?.('right')}
@@ -1524,15 +1527,15 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   ? 'bg-[#c68a35]/30 border-[#c68a35] text-[#d99a41] animate-pulse font-extrabold'
                   : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
-              title="Правый поворотник [E]"
+              title={`Правый поворотник [${kLbl('turnSignalRight')}]`}
             >
-              <span>E</span>
+              <span>{kLbl('turnSignalRight')}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
             <div className="h-5 w-px bg-[#2a2e38] mx-1" />
 
-            {/* Headlights Toggle (L) */}
+            {/* Headlights Toggle */}
             <button
               type="button"
               onClick={onToggleHeadlights}
@@ -1543,13 +1546,13 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   ? 'bg-[#c68a35]/20 border-[#c68a35]/60 text-[#d99a41] font-extrabold shadow-[0_0_8px_rgba(198,138,53,0.2)]'
                   : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
-              title="Фары: Ближний / Дальний / Выкл [L]"
+              title={`Фары: Ближний / Дальний / Выкл [${kLbl('headlights')}]`}
             >
               <Lightbulb className="w-3.5 h-3.5" />
-              <span>L</span>
+              <span>{kLbl('headlights')}</span>
             </button>
 
-            {/* Water Truck Washing Nozzles Button (G) */}
+            {/* Water Truck Washing Nozzles Button */}
             {vehicle?.type === 'truck_water' && (
               <button
                 type="button"
@@ -1566,14 +1569,14 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                       : 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
                     : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
                 }`}
-                title="Поливомоечные сопла: Смывать мусор [G / N]"
+                title={`Поливомоечные сопла: смывать мусор [${kLbl('specialMode')}]`}
               >
                 <Droplet className="w-3.5 h-3.5 text-cyan-400" />
-                <span>СОПЛА [G]: {vehicle.isWashingNozzlesActive ? (isPtoOn(vehicle) && isEngineRunning ? 'ВКЛ' : 'САМОТЁК') : 'ВЫКЛ'}</span>
+                <span>СОПЛА [{kLbl('specialMode')}]: {vehicle.isWashingNozzlesActive ? (isPtoOn(vehicle) && isEngineRunning ? 'ВКЛ' : 'САМОТЁК') : 'ВЫКЛ'}</span>
               </button>
             )}
 
-            {/* MTZ Tractor Split Brakes Latch Toggle (B) */}
+            {/* MTZ Tractor Split Brakes Latch Toggle */}
             {carType.startsWith('tractor_') && (
               <button
                 type="button"
@@ -1589,7 +1592,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                     ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.2)] font-extrabold'
                     : 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
                 }`}
-                title="Блокировка спаренных педалей тормоза МТЗ [B]"
+                title={`Блокировка спаренных педалей тормоза МТЗ [${kLbl('tractorBrakeLatch')}]`}
               >
                 {vehicle.tractorBrakeLatch !== false ? (
                   <Lock className="w-3.5 h-3.5 text-emerald-400" />
@@ -1597,7 +1600,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   <Unlock className="w-3.5 h-3.5 text-amber-400" />
                 )}
                 <span>
-                  ТОРМОЗА [B]: {vehicle.tractorBrakeLatch !== false ? 'СБЛОКИР.' : 'РАЗДЕЛЬН.'}
+                  ТОРМОЗА [{kLbl('tractorBrakeLatch')}]: {vehicle.tractorBrakeLatch !== false ? 'СБЛОКИР.' : 'РАЗДЕЛЬН.'}
                 </span>
               </button>
             )}
@@ -1607,15 +1610,15 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               <div className="flex items-center gap-1 bg-slate-950/60 border border-slate-800/80 px-2.5 py-1.5 rounded-xl text-[10px] font-bold font-mono text-slate-300">
                 <span className="text-slate-500 text-[8px] mr-1">ПЕДАЛИ:</span>
                 <span className={`px-1.5 py-0.5 rounded transition-all ${((vehicle as any)?._brakeLeftVal > 0.1) ? 'bg-rose-600 text-white font-extrabold scale-105' : 'bg-slate-900 text-slate-500'}`}>
-                  Л [,]
+                  Л [{kLbl('tractorBrakeLeft')}]
                 </span>
                 <span className={`px-1.5 py-0.5 rounded transition-all ${((vehicle as any)?._brakeRightVal > 0.1) ? 'bg-rose-600 text-white font-extrabold scale-105' : 'bg-slate-900 text-slate-500'}`}>
-                  П [.]
+                  П [{kLbl('tractorBrakeRight')}]
                 </span>
               </div>
             )}
 
-            {/* DIFFERENTIAL LOCK AXLE CONTROLS [V] */}
+            {/* DIFFERENTIAL LOCK AXLE CONTROLS */}
             {diffCaps.supported && (
               <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 rounded-xl px-2 py-1 shadow-inner">
                 {/* Main Differential Cycle Button */}
@@ -1627,10 +1630,10 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                       ? 'bg-amber-500/25 border border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.25)] font-extrabold'
                       : 'bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white'
                   }`}
-                  title="Циклическое переключение блокировок дифференциала [V]"
+                  title={`Циклическое переключение блокировок дифференциала [${kLbl('diffLock')}]`}
                 >
                   <ShieldAlert className={`w-3.5 h-3.5 ${isDiffLocked ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
-                  <span>ДИФФ [V]:</span>
+                  <span>ДИФФ [{kLbl('diffLock')}]:</span>
                   <span className={`font-black ${isDiffLocked ? 'text-amber-300' : 'text-slate-500'}`}>
                     {diffLockDesc}
                   </span>
@@ -1810,7 +1813,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   ? 'bg-amber-950/85 border-amber-500 text-amber-300 animate-pulse font-extrabold'
                   : 'bg-rose-950/85 border-rose-600 text-rose-300'
               }`}
-              title="Зажигание: Запустить / Заглушить двигатель [J]"
+              title={`Зажигание: Запустить / Заглушить двигатель [${kLbl('engineToggle')}]`}
             >
               <Power className="w-3.5 h-3.5" />
               <span>{isEngineRunning ? 'СТАРТ' : 'ЗАПУСК'}</span>
@@ -1822,7 +1825,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 type="button"
                 onClick={onOpenRadialMenu}
                 className="px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-300 hover:text-white text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                title="Панель приборов автомобиля"
+                title={`Бортовое меню автомобиля [${kLbl('vehicleBoard')}]`}
               >
                 <Gauge className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="hidden sm:inline">ПРИБОРЫ</span>

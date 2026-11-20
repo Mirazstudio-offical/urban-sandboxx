@@ -1,6 +1,7 @@
 import { isPtoOn, togglePto, vehicleHasPto } from './ptoSystem';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { setDisplaySettings } from './displaySettings';
+import { matchesKeybind, getKeybindLabel } from './keybinds';
 import { 
   Building, 
   Camera, 
@@ -766,6 +767,63 @@ export default function App() {
 
   const isMainMenuOpenRef = useRef<boolean>(true);
   isMainMenuOpenRef.current = isMainMenuOpen;
+
+  const modalStateRef = useRef({
+    isInventoryOpen: false,
+    isInspectionOpen: false,
+    isConsoleOpen: false,
+    isPerfConsoleOpen: false,
+    isFullMapOpen: false,
+    isSpawnMenuOpen: false,
+    isRadialMenuOpen: false,
+    isVehicleBoardOpen: false,
+    isCrashDiagnosticsOpen: false,
+    isCreativeMode: false,
+    isVacuumPumpModalOpen: false,
+    isCraneOutriggersModalOpen: false,
+    isEngineBayOpen: false,
+    isFuelNozzleModalOpen: false,
+    isGasStationCashierModalOpen: false,
+    isFurnitureStorageOpen: false,
+    isShopOpen: false,
+    isDealershipOpen: false,
+    isRealEstateModalOpen: false,
+    isPropertyDocumentModalOpen: false,
+    isUserProfileModalOpen: false,
+    isFriendsModalOpen: false,
+    isDateTimePickerOpen: false,
+    isPerfTestOpen: false,
+    isCollisionTestOpen: false,
+    hasActiveElevator: false,
+  });
+  modalStateRef.current = {
+    isInventoryOpen,
+    isInspectionOpen,
+    isConsoleOpen,
+    isPerfConsoleOpen,
+    isFullMapOpen,
+    isSpawnMenuOpen,
+    isRadialMenuOpen,
+    isVehicleBoardOpen,
+    isCrashDiagnosticsOpen,
+    isCreativeMode,
+    isVacuumPumpModalOpen,
+    isCraneOutriggersModalOpen,
+    isEngineBayOpen,
+    isFuelNozzleModalOpen,
+    isGasStationCashierModalOpen,
+    isFurnitureStorageOpen,
+    isShopOpen,
+    isDealershipOpen,
+    isRealEstateModalOpen,
+    isPropertyDocumentModalOpen,
+    isUserProfileModalOpen,
+    isFriendsModalOpen,
+    isDateTimePickerOpen,
+    isPerfTestOpen,
+    isCollisionTestOpen,
+    hasActiveElevator: Boolean(activeElevatorMenu),
+  };
 
   // Time and Weather cycling functions
   const cycleTimePreset = () => {
@@ -2654,7 +2712,7 @@ export default function App() {
       const code = e.code;
 
       // When typing in text input or textarea, or when chat is focused, skip game controls and allow Escape to blur
-      const isTypingOrChatting = 
+      const isTypingOrChatting =
         isChatFocusedRef.current ||
         document.activeElement?.tagName === 'INPUT' ||
         document.activeElement?.tagName === 'TEXTAREA' ||
@@ -2669,29 +2727,13 @@ export default function App() {
         return;
       }
 
-      if (code === 'KeyR'&& activePlacementRef.current) {
-        setActivePlacement((prev) => {
-          if (!prev) return null;
-          return { ...prev, angle: (prev.angle + Math.PI / 12) % (Math.PI * 2) };
-        });
-        e.preventDefault();
-        return;
-      }
-
-      if (code === 'KeyT') {
-        setTimeScale((prev) => (prev < 1.0 ? 1.0 : lastSlowScaleRef.current));
-        e.preventDefault();
-        return;
-      }
-
-      if (code === 'F2') {
-        setIsCrashDiagnosticsOpen((prev) => !prev);
-        e.preventDefault();
-        return;
-      }
+      const m = modalStateRef.current;
 
       if (code === 'Escape') {
-        if (isCrashDiagnosticsOpen) {
+        if (isMainMenuOpenRef.current || isLoadingRef.current) {
+          return;
+        }
+        if (m.isCrashDiagnosticsOpen) {
           setIsCrashDiagnosticsOpen(false);
           e.preventDefault();
           return;
@@ -2712,7 +2754,7 @@ export default function App() {
           e.preventDefault();
           return;
         }
-        if (isCreativeMode) {
+        if (m.isCreativeMode) {
           setIsCreativeMode(false);
           setIsFlying(false);
           setIsInvincible(false);
@@ -2721,370 +2763,497 @@ export default function App() {
           e.preventDefault();
           return;
         }
-        if (isInventoryOpen || isInspectionOpen || isConsoleOpen || isFullMapOpen || isSpawnMenuOpen || isRadialMenuOpen || isVehicleBoardOpen) {
+        if (
+          m.isInventoryOpen || m.isInspectionOpen || m.isConsoleOpen || m.isPerfConsoleOpen ||
+          m.isFullMapOpen || m.isSpawnMenuOpen || m.isRadialMenuOpen || m.isVehicleBoardOpen ||
+          m.isShopOpen || m.isDealershipOpen || m.isRealEstateModalOpen || m.isPropertyDocumentModalOpen ||
+          m.isUserProfileModalOpen || m.isFriendsModalOpen || m.isDateTimePickerOpen ||
+          m.isFurnitureStorageOpen || m.isGasStationCashierModalOpen || m.isEngineBayOpen ||
+          m.isFuelNozzleModalOpen || m.isCraneOutriggersModalOpen || m.isVacuumPumpModalOpen ||
+          m.hasActiveElevator
+        ) {
           setIsInventoryOpen(false);
           setIsInspectionOpen(false);
           setIsConsoleOpen(false);
+          setIsPerfConsoleOpen(false);
           setIsFullMapOpen(false);
           setIsSpawnMenuOpen(false);
           setIsRadialMenuOpen(false);
           setIsVehicleBoardOpen(false);
+          setIsShopOpen(false);
+          setIsDealershipOpen(false);
+          setIsRealEstateModalOpen(false);
+          setIsPropertyDocumentModalOpen(false);
+          setIsUserProfileModalOpen(false);
+          setIsFriendsModalOpen(false);
+          setIsDateTimePickerOpen(false);
+          setIsFurnitureStorageOpen(false);
+          setIsGasStationCashierModalOpen(false);
+          setIsEngineBayOpen(false);
+          setIsFuelNozzleModalOpen(false);
+          setIsCraneOutriggersModalOpen(false);
+          setIsVacuumPumpModalOpen(false);
+          setActiveElevatorMenu(null);
           e.preventDefault();
-          return;
-        }
-        if (isMainMenuOpenRef.current || isLoadingRef.current) {
           return;
         }
         const nextPause = !isPauseMenuOpenRef.current;
         setIsPauseMenuOpen(nextPause);
         if (nextPause) {
-          inputRef.current.forward = false;
-          inputRef.current.backward = false;
-          inputRef.current.left = false;
-          inputRef.current.right = false;
-          inputRef.current.handbrake = false;
-          inputRef.current.sprint = false;
+          clearAllHeldInputs();
         }
         e.preventDefault();
         return;
       }
 
+      // Block ALL gameplay & debug hotkeys while MainMenu, PauseMenu, or Loading screen is active
       if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current || isLoadingRef.current) return;
 
-      // Inventory Modal Toggle (I or Tab)
-      if (code === 'KeyI'|| code === 'Tab') {
-        if (isFurnitureStorageOpenRef.current) { e.preventDefault(); return; }
-        setIsInventoryOpen((prev) => !prev);
+      // Placement object rotation
+      if (matchesKeybind('resetVehicle', code) && activePlacementRef.current) {
+        setActivePlacement((prev) => {
+          if (!prev) return null;
+          return { ...prev, angle: (prev.angle + Math.PI / 12) % (Math.PI * 2) };
+        });
         e.preventDefault();
         return;
       }
 
-      // Online Multiplayer Room Modal (O)
-      if (code === 'KeyO') {
-        sound.playButtonPress();
-        setIsOnlineModalOpen((prev) => !prev);
-        e.preventDefault();
-        return;
-      }
+      // Check whether any gameplay modal is open — allow closing that modal with its own toggle key,
+      // but block all driving/world controls underneath so player doesn't accidentally drive or reset vehicle.
+      const hasBlockingModal =
+        m.isInventoryOpen || m.isInspectionOpen || m.isConsoleOpen || m.isPerfConsoleOpen ||
+        m.isFullMapOpen || m.isSpawnMenuOpen || m.isRadialMenuOpen || m.isVehicleBoardOpen ||
+        m.isCrashDiagnosticsOpen || m.isVacuumPumpModalOpen || m.isCraneOutriggersModalOpen ||
+        m.isEngineBayOpen || m.isFuelNozzleModalOpen || m.isGasStationCashierModalOpen ||
+        m.isFurnitureStorageOpen || m.isShopOpen || m.isDealershipOpen ||
+        m.isRealEstateModalOpen || m.isPropertyDocumentModalOpen || m.isUserProfileModalOpen ||
+        m.isFriendsModalOpen || m.isDateTimePickerOpen || m.isPerfTestOpen ||
+        m.isCollisionTestOpen || m.hasActiveElevator || isOnlineModalOpenRef.current ||
+        Boolean(activePhoneItemRef.current);
 
-      // In-game chat focus (Enter)
-      if (code === 'Enter') {
-        setIsChatFocused(true);
-        e.preventDefault();
-        return;
-      }
-
-      // Hand selection (1 = Left hand, 2 = Right hand)
-      if (code === 'Digit1'|| code === 'Numpad1') {
-        const p = playerRef.current;
-        if (p && !p.isInVehicle) {
-          p.activeHand = 'left';
-          sound.playUseItem();
-          setVitalsRefreshTick((t) => t + 1);
+      if (hasBlockingModal) {
+        if (!e.repeat) {
+          if (m.isInventoryOpen && matchesKeybind('inventory', code)) {
+            setIsInventoryOpen(false);
+            e.preventDefault();
+          } else if (m.isInspectionOpen && matchesKeybind('bodyInspection', code)) {
+            setIsInspectionOpen(false);
+            e.preventDefault();
+          } else if (m.isFullMapOpen && matchesKeybind('fullMap', code)) {
+            setIsFullMapOpen(false);
+            e.preventDefault();
+          } else if (isOnlineModalOpenRef.current && matchesKeybind('onlineMenu', code)) {
+            setIsOnlineModalOpen(false);
+            e.preventDefault();
+          } else if (m.isVehicleBoardOpen && matchesKeybind('vehicleBoard', code)) {
+            setIsVehicleBoardOpen(false);
+            e.preventDefault();
+          } else if (m.isConsoleOpen && matchesKeybind('aiConsole', code)) {
+            setIsConsoleOpen(false);
+            e.preventDefault();
+          } else if (m.isCrashDiagnosticsOpen && matchesKeybind('crashDiagnostics', code)) {
+            setIsCrashDiagnosticsOpen(false);
+            e.preventDefault();
+          } else if (m.isPerfConsoleOpen && matchesKeybind('perfProfiler', code)) {
+            setIsPerfConsoleOpen(false);
+            e.preventDefault();
+          }
         }
-      }
-      if (code === 'Digit2'|| code === 'Numpad2') {
-        const p = playerRef.current;
-        if (p && !p.isInVehicle) {
-          p.activeHand = 'right';
-          sound.playUseItem();
-          setVitalsRefreshTick((t) => t + 1);
-        }
+        return;
       }
 
-      if (code === 'ShiftLeft'|| code === 'ShiftRight') inputRef.current.shiftUp = true;
-      if (code === 'ControlLeft'|| code === 'ControlRight') inputRef.current.shiftDown = true;
-      if (code === 'KeyX') inputRef.current.transferCaseToggle = true;
-      if (code === 'KeyV') {
-        const p = playerRef.current;
-        if (p && p.isInVehicle) {
-          inputRef.current.diffLockToggle = true;
+      // --- GLOBAL IN-GAME TOGGLES (no auto-repeat) ---
+      if (!e.repeat) {
+        if (matchesKeybind('inventory', code)) {
+          if (isFurnitureStorageOpenRef.current) { e.preventDefault(); return; }
+          clearAllHeldInputs();
+          setIsInventoryOpen((prev) => !prev);
           e.preventDefault();
+          return;
         }
-      }
-      if (code === 'KeyW'|| code === 'ArrowUp') inputRef.current.forward = true;
-      if (code === 'KeyS'|| code === 'ArrowDown') inputRef.current.backward = true;
-      if (code === 'KeyA'|| code === 'ArrowLeft') inputRef.current.left = true;
-      if (code === 'KeyD'|| code === 'ArrowRight') inputRef.current.right = true;
-      if (code === 'Comma') inputRef.current.brakeLeft = true;
-      if (code === 'Period') inputRef.current.brakeRight = true;
-      
-      // MTZ split brakes latch toggle (B key)
-      if (code === 'KeyB') {
-        const p = playerRef.current;
-        const world = worldRef.current;
-        const currentVeh = world?.vehicles.find((v) => v.id === p?.currentVehicleId);
-        if (p && p.isInVehicle && currentVeh && currentVeh.type.startsWith('tractor_')) {
-          const nextLatch = currentVeh.tractorBrakeLatch === false; // toggle: if false -> true, if undefined/true -> false
-          currentVeh.tractorBrakeLatch = nextLatch;
+        if (matchesKeybind('bodyInspection', code)) {
+          clearAllHeldInputs();
+          setIsInspectionOpen((prev) => !prev);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('fullMap', code)) {
+          clearAllHeldInputs();
+          setIsFullMapOpen((prev) => !prev);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('onlineMenu', code)) {
           sound.playButtonPress();
-          
-          const msg = nextLatch 
-            ? "Тормоза МТЗ: СБЛОКИРОВАНЫ (Оба колеса тормозят вместе)"
-            : "Тормоза МТЗ: РАЗДЕЛЬНЫЕ (Левый тормоз [Запятая ,], Правый тормоз [Точка .])";
-          addPlayerNotification(p, msg, 'info');
+          clearAllHeldInputs();
+          setIsOnlineModalOpen((prev) => !prev);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('chat', code)) {
+          clearAllHeldInputs();
+          setIsChatFocused(true);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('slowMotion', code)) {
+          setTimeScale((prev) => (prev < 1.0 ? 1.0 : lastSlowScaleRef.current));
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('cycleTime', code)) {
+          cycleTimePreset();
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('aiConsole', code)) {
+          setIsConsoleOpen((prev) => !prev);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('crashDiagnostics', code)) {
+          setIsCrashDiagnosticsOpen((prev) => !prev);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('perfProfiler', code)) {
+          setIsPerfConsoleOpen((prev) => !prev);
           e.preventDefault();
           return;
         }
       }
-      if (code === 'Space') {
-        const p = playerRef.current;
-        const w = worldRef.current;
-        if (p && p.isInVehicle && p.craneOperatorActive && w && p.currentVehicleId) {
-          const veh = w.vehicles.find(v => v.id === p.currentVehicleId);
-          if (veh && isVehicleCraneTruck(veh)) {
-            toggleCraneHookAttach(veh, w, p);
+
+      // --- CONTINUOUS MOVEMENT KEYS (work on foot, in vehicle, and in crane/excavator mode) ---
+      if (matchesKeybind('moveForward', code)) inputRef.current.forward = true;
+      if (matchesKeybind('moveBackward', code)) inputRef.current.backward = true;
+      if (matchesKeybind('turnLeft', code)) inputRef.current.left = true;
+      if (matchesKeybind('turnRight', code)) inputRef.current.right = true;
+
+      const p = playerRef.current;
+      const world = worldRef.current;
+      const inVehicle = Boolean(p && p.isInVehicle);
+      const curVeh = inVehicle && world ? world.vehicles.find((v) => v.id === p?.currentVehicleId) : undefined;
+      const isOperator = Boolean(
+        inVehicle && p && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))
+      );
+
+      // --- 1. CRANE / EXCAVATOR OPERATOR MODE ---
+      if (isOperator && p && world) {
+        if (matchesKeybind('craneBoomRetract', code)) {
+          inputRef.current.craneBoomRetract = true;
+          if (!e.repeat) sound.playHydraulicHiss(0.18);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('craneBoomExtend', code)) {
+          inputRef.current.craneBoomExtend = true;
+          if (!e.repeat) sound.playHydraulicHiss(0.18);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('craneHookUp', code)) {
+          inputRef.current.craneHookUp = true;
+          if (!e.repeat) sound.playHydraulicHiss(0.18);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('craneHookDown', code)) {
+          inputRef.current.craneHookDown = true;
+          if (!e.repeat) sound.playHydraulicHiss(0.18);
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('handbrake', code) && !e.repeat) {
+          if (p.craneOperatorActive && curVeh && isVehicleCraneTruck(curVeh)) {
+            toggleCraneHookAttach(curVeh, world, p);
             setVitalsRefreshTick((t) => t + 1);
             e.preventDefault();
             return;
           }
-        }
-        inputRef.current.handbrake = true;
-        e.preventDefault();
-      }
-      if (code === 'ShiftLeft'|| code === 'ShiftRight') inputRef.current.sprint = true;
-      if (code === 'KeyH') {
-        const p = playerRef.current;
-        const w = worldRef.current;
-        const curVeh = w?.vehicles.find(v => v.id === p?.currentVehicleId);
-        if (p && p.isInVehicle && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))) {
-          sound.playCraneHorn();
+          inputRef.current.handbrake = true;
           e.preventDefault();
           return;
         }
-        inputRef.current.hornH = true;
+        if (matchesKeybind('horn', code)) {
+          if (!e.repeat) sound.playCraneHorn();
+          e.preventDefault();
+          return;
+        }
+        if (!e.repeat && matchesKeybind('specialMode', code) && curVeh && isExcavatorVehicle(curVeh)) {
+          clearAllHeldInputs();
+          curVeh.exOperatorMode = false;
+          sound.playButtonPress();
+          addPlayerNotification(p, 'ТВЭКС ЕК-12: транспортный режим (ход)', 'info');
+          setVitalsRefreshTick((t) => t + 1);
+          e.preventDefault();
+          return;
+        }
+        return;
       }
 
-      // Turn Signals & Interaction / Consumption (Q = Left turn signal in car or Swap / Toggle Active Hand on foot, E = Interact / Use in active hand, Z = Hazard)
-      if (code === 'KeyQ') {
-        const p = playerRef.current;
-        const w = worldRef.current;
-        const curVeh = w?.vehicles.find(v => v.id === p?.currentVehicleId);
-        if (p && p.isInVehicle && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))) {
-          inputRef.current.craneBoomRetract = true;
-          sound.playHydraulicHiss(0.18);
-          e.preventDefault();
-          return;
+      // --- 2. IN VEHICLE MODE ---
+      if (inVehicle && p && world) {
+        if (matchesKeybind('shiftUp', code)) {
+          inputRef.current.shiftUp = true;
+          if (code === 'AltLeft' || code === 'AltRight') e.preventDefault();
         }
-        if (p && p.isInVehicle) {
-          toggleTurnSignal('left');
-        } else if (p) {
-          p.activeHand = p.activeHand === 'left'? 'right': 'left';
+        if (matchesKeybind('shiftDown', code)) {
+          inputRef.current.shiftDown = true;
+          if (code === 'AltLeft' || code === 'AltRight') e.preventDefault();
+        }
+        if (matchesKeybind('handbrake', code)) {
+          inputRef.current.handbrake = true;
+          e.preventDefault();
+        }
+        if (matchesKeybind('horn', code)) {
+          inputRef.current.hornH = true;
+        }
+        if (matchesKeybind('tractorBrakeLeft', code)) inputRef.current.brakeLeft = true;
+        if (matchesKeybind('tractorBrakeRight', code)) inputRef.current.brakeRight = true;
+
+        if (!e.repeat) {
+          if (matchesKeybind('transferCase', code)) {
+            inputRef.current.transferCaseToggle = true;
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('diffLock', code)) {
+            inputRef.current.diffLockToggle = true;
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('turnSignalLeft', code)) {
+            toggleTurnSignal('left');
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('turnSignalRight', code)) {
+            toggleTurnSignal('right');
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('hazardLights', code)) {
+            toggleTurnSignal('hazard');
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('engineToggle', code)) {
+            handleToggleEngine();
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('vehicleBoard', code)) {
+            clearAllHeldInputs();
+            setIsVehicleBoardOpen((prev) => !prev);
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('toggleWindow', code)) {
+            handleToggleWindow();
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('headlights', code)) {
+            toggleHeadlights();
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('frontFogLights', code)) {
+            handleToggleFrontFogLights();
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('rearFogLights', code)) {
+            handleToggleRearFogLights();
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('roadTrainLights', code)) {
+            handleToggleRoadTrainLights();
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('ptoToggle', code) && curVeh && vehicleHasPto(curVeh)) {
+            togglePto(curVeh, p);
+            setVitalsRefreshTick((t) => t + 1);
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('gboToggle', code) && curVeh?.hasGBO && curVeh.fuelSystem) {
+            const nextActive = curVeh.fuelSystem.gboActive === false;
+            curVeh.fuelSystem.gboActive = nextActive;
+            sound.playButtonPress();
+            const isWarm = (curVeh.engineState?.temperature ?? 0) >= 40;
+            let msg = nextActive
+              ? 'ГБО ВКЛ: Переключено на пропан-бутан!'
+              : 'ГБО ВЫКЛ: Переключено на резервный бензин!';
+            if (nextActive && !isWarm) {
+              msg += ' (Режим прогрева: двигатель работает на бензине до 40°C)';
+            }
+            addPlayerNotification(p, msg, 'info');
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('tractorBrakeLatch', code) && curVeh && curVeh.type.startsWith('tractor_')) {
+            const nextLatch = curVeh.tractorBrakeLatch === false;
+            curVeh.tractorBrakeLatch = nextLatch;
+            sound.playButtonPress();
+            const lKey = getKeybindLabel('tractorBrakeLeft');
+            const rKey = getKeybindLabel('tractorBrakeRight');
+            const msg = nextLatch
+              ? 'Тормоза МТЗ: СБЛОКИРОВАНЫ (оба колеса тормозят вместе)'
+              : `Тормоза МТЗ: РАЗДЕЛЬНЫЕ (левый [${lKey}], правый [${rKey}])`;
+            addPlayerNotification(p, msg, 'info');
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('specialMode', code)) {
+            if (curVeh?.type === 'truck_water') {
+              curVeh.isWashingNozzlesActive = !curVeh.isWashingNozzlesActive;
+              sound.playButtonPress();
+              const isPto = isPtoOn(curVeh);
+              const isEng = !!curVeh.engineState?.engineRunning;
+              const ptoKey = getKeybindLabel('ptoToggle');
+              let msg = `Поливомоечные сопла: ${curVeh.isWashingNozzlesActive ? 'ВКЛЮЧЕНЫ' : 'ВЫКЛЮЧЕНЫ'}`;
+              if (curVeh.isWashingNozzlesActive && (!isPto || !isEng)) {
+                msg += ` (включите КОМ [${ptoKey}] и заведите двигатель для высокого давления)`;
+              }
+              addPlayerNotification(p, msg, curVeh.isWashingNozzlesActive ? 'info' : 'warning');
+              e.preventDefault();
+              return;
+            }
+            if (curVeh && isExcavatorVehicle(curVeh)) {
+              clearAllHeldInputs();
+              curVeh.exOperatorMode = true;
+              sound.playButtonPress();
+              const qK = getKeybindLabel('craneBoomRetract');
+              const eK = getKeybindLabel('craneBoomExtend');
+              const rK = getKeybindLabel('craneHookUp');
+              const fK = getKeybindLabel('craneHookDown');
+              addPlayerNotification(
+                p,
+                `ТВЭКС ЕК-12: режим работы (стрела: ${qK}/${eK}, ковш: ${rK}/${fK})`,
+                'info'
+              );
+              setVitalsRefreshTick((t) => t + 1);
+              e.preventDefault();
+              return;
+            }
+          }
+          if (matchesKeybind('gridMode', code)) {
+            const cam = cameraRef.current;
+            cam.gridMode = !cam.gridMode;
+            setIsGridMode(!!cam.gridMode);
+            addPlayerNotification(p, `Сетка кузова ${cam.gridMode ? 'ВКЛ' : 'ВЫКЛ'}`, 'info');
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('enterExit', code)) {
+            handleInteract();
+            e.preventDefault();
+            return;
+          }
+          if (matchesKeybind('resetVehicle', code)) {
+            handleResetVehicle();
+            e.preventDefault();
+            return;
+          }
+        }
+        return;
+      }
+
+      // --- 3. ON FOOT MODE ---
+      if (matchesKeybind('sprint', code)) {
+        inputRef.current.sprint = true;
+      }
+      if (!e.repeat && p) {
+        if (matchesKeybind('handLeft', code)) {
+          p.activeHand = 'left';
           sound.playUseItem();
           setVitalsRefreshTick((t) => t + 1);
-        }
-      }
-      if (code === 'KeyE') {
-        if (e.repeat) return;
-        if (isVacuumPumpModalOpen || isCraneOutriggersModalOpen || isEngineBayOpen || isFuelNozzleModalOpen || isVehicleBoardOpen) {
-          return;
-        }
-        const p = playerRef.current;
-        const w = worldRef.current;
-        const curVeh = w?.vehicles.find(v => v.id === p?.currentVehicleId);
-        if (p && p.isInVehicle && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))) {
-          inputRef.current.craneBoomExtend = true;
-          sound.playHydraulicHiss(0.18);
           e.preventDefault();
           return;
         }
-        handleInteractE();
-      }
-      if (code === 'KeyR') {
-        if (e.repeat) return;
-        const p = playerRef.current;
-        const w = worldRef.current;
-        const curVeh = w?.vehicles.find(v => v.id === p?.currentVehicleId);
-        if (p && p.isInVehicle && (p.craneOperatorActive || (curVeh && isExcavatorVehicle(curVeh) && curVeh.exOperatorMode))) {
-          inputRef.current.craneHookUp = true;
-          sound.playHydraulicHiss(0.18);
-          e.preventDefault();
-          return;
-        }
-      }
-      if (code === 'KeyZ') {
-        toggleTurnSignal('hazard');
-      }
-
-      // Engine Toggle (J key)
-      if (code === 'KeyJ') {
-        handleToggleEngine();
-      }
-
-      // Window Open / Close toggle (O key)
-      if (code === 'KeyO') {
-        handleToggleWindow();
-      }
-
-      // PTO / КОМ Toggle (P key)
-      if (code === 'KeyP' && !e.repeat) {
-        const p = playerRef.current;
-        const w = worldRef.current;
-        const currentVeh = w?.vehicles.find((v) => v.id === p?.currentVehicleId);
-        if (p && p.isInVehicle && currentVeh && vehicleHasPto(currentVeh)) {
-          togglePto(currentVeh, p);
+        if (matchesKeybind('handRight', code)) {
+          p.activeHand = 'right';
+          sound.playUseItem();
           setVitalsRefreshTick((t) => t + 1);
           e.preventDefault();
           return;
         }
-      }
-
-
-      // GBO/LPG Toggle (K key)
-      if (code === 'KeyK') {
-        const p = playerRef.current;
-        const world = worldRef.current;
-        const currentVeh = world?.vehicles.find((v) => v.id === p?.currentVehicleId);
-        if (p && p.isInVehicle && currentVeh?.hasGBO && currentVeh.fuelSystem) {
-          const nextActive = currentVeh.fuelSystem.gboActive === false; // toggle state
-          currentVeh.fuelSystem.gboActive = nextActive;
-          sound.playButtonPress();
-          
-          const isWarm = (currentVeh.engineState?.temperature ?? 0) >= 40;
-          let msg = nextActive 
-            ? "ГБО ВКЛ: Переключено на пропан-бутан!": "ГБО ВЫКЛ: Переключено на резервный бензин!";
-          if (nextActive && !isWarm) {
-            msg += "(Режим прогрева: двигатель работает на бензине до достижения 40°C)";
-          }
-          addPlayerNotification(p, msg, 'info');
-          e.preventDefault();
-          return;
-        }
-      }
-
-      // Grid Mode Toggle / Water Truck Washing Nozzles (G or N key)
-      if (code === 'KeyG'|| code === 'KeyN') {
-        const p = playerRef.current;
-        const world = worldRef.current;
-        const currentVeh = world?.vehicles.find((v) => v.id === p?.currentVehicleId);
-        if (p && p.isInVehicle && currentVeh?.type === 'truck_water') {
-          currentVeh.isWashingNozzlesActive = !currentVeh.isWashingNozzlesActive;
-          sound.playButtonPress();
-          const isPto = isPtoOn(currentVeh);
-          const isEng = !!currentVeh.engineState?.engineRunning;
-          let msg = `Поливомоечные сопла: ${currentVeh.isWashingNozzlesActive ? 'ВКЛЮЧЕНЫ': 'ВЫКЛЮЧЕНЫ'}`;
-          if (currentVeh.isWashingNozzlesActive && (!isPto || !isEng)) {
-            msg += '(Внимание: включите КОМ [P] и заведите двигатель для высокого давления)';
-          }
-          addPlayerNotification(
-            p,
-            msg,
-            currentVeh.isWashingNozzlesActive ? 'info': 'warning');
-          e.preventDefault();
-          return;
-        }
-
-        if (code === 'KeyG' && p && p.isInVehicle && currentVeh && isExcavatorVehicle(currentVeh)) {
-          clearAllHeldInputs();
-          currentVeh.exOperatorMode = !currentVeh.exOperatorMode;
-          sound.playButtonPress();
-          addPlayerNotification(
-            p,
-            currentVeh.exOperatorMode
-              ? 'ТВЭКС ЕК-12: режим работы (джойстики: WASD / Q E / R Пробел)'
-              : 'ТВЭКС ЕК-12: транспортный режим (ход)',
-            'info',
-          );
+        if (matchesKeybind('swapHand', code)) {
+          p.activeHand = p.activeHand === 'left' ? 'right' : 'left';
+          sound.playUseItem();
           setVitalsRefreshTick((t) => t + 1);
           e.preventDefault();
           return;
         }
-
-        if (code === 'KeyG') {
+        if (matchesKeybind('interact', code)) {
+          handleInteractE();
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('enterExit', code)) {
+          handleInteract();
+          e.preventDefault();
+          return;
+        }
+        if (matchesKeybind('gridMode', code)) {
           const cam = cameraRef.current;
           cam.gridMode = !cam.gridMode;
           setIsGridMode(!!cam.gridMode);
-          addPlayerNotification(playerRef.current, `Сетка кузова (G) ${cam.gridMode ? 'ВКЛ': 'ВЫКЛ'}`, 'info');
-        }
-      }
-
-      // Interact/Enter/Exit Vehicle or Building (F key)
-      if (code === 'KeyF' && !e.repeat) {
-        handleInteract();
-      }
-
-      // AI Telemetry Console toggle
-      if (code === 'F1') {
-        setIsConsoleOpen((prev) => !prev);
-        e.preventDefault();
-      }
-
-      // Performance Profiler Console toggle
-      if (code === 'Backquote'|| code === 'F2') {
-        setIsPerfConsoleOpen((prev) => !prev);
-        e.preventDefault();
-      }
-
-      // Time toggle (cycle presets)
-      if (code === 'KeyT') {
-        cycleTimePreset();
-      }
-      if (code === 'KeyC') {
-        setIsInspectionOpen((prev) => !prev);
-        e.preventDefault();
-      }
-      // Interactive Fullscreen Map toggle (M key)
-      if (code === 'KeyM') {
-        setIsFullMapOpen((prev) => !prev);
-      }
-      if (code === 'KeyR' && !e.repeat) {
-        if (isVacuumPumpModalOpen || isCraneOutriggersModalOpen || isEngineBayOpen || isFuelNozzleModalOpen || isVehicleBoardOpen) {
+          addPlayerNotification(p, `Сетка кузова ${cam.gridMode ? 'ВКЛ' : 'ВЫКЛ'}`, 'info');
+          e.preventDefault();
           return;
         }
-        const target = activeInteractionRef.current;
-        const rSubAction = target?.availableKeys?.find(k => k.key === 'R');
-        if (target && target.primaryKey === 'R') {
-          handleExecuteActiveInteraction(target);
-        } else if (rSubAction?.action) {
-          handleExecuteActiveInteraction(rSubAction.action);
-        } else if (playerRef.current && worldRef.current) {
-          const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
-          const rTarget = findActiveInteraction(playerRef.current, worldRef.current, mouseWorld, 'R');
-          if (rTarget) {
-            handleExecuteActiveInteraction(rTarget);
+        if (matchesKeybind('resetVehicle', code)) {
+          const target = activeInteractionRef.current;
+          const rSubAction = target?.availableKeys?.find((k) => k.key === 'R');
+          if (target && target.primaryKey === 'R') {
+            handleExecuteActiveInteraction(target);
+          } else if (rSubAction?.action) {
+            handleExecuteActiveInteraction(rSubAction.action);
+          } else if (world) {
+            const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
+            const rTarget = findActiveInteraction(p, world, mouseWorld, 'R');
+            if (rTarget) {
+              handleExecuteActiveInteraction(rTarget);
+            } else {
+              handleResetVehicle();
+            }
           } else {
             handleResetVehicle();
           }
-        } else {
-          handleResetVehicle();
+          e.preventDefault();
+          return;
         }
-      }
-      if (code === 'KeyL') {
-        toggleHeadlights();
-      }
-      if (code === 'KeyU') {
-        handleToggleFrontFogLights();
-      }
-      if (code === 'KeyY') {
-        handleToggleRearFogLights();
-      }
-      if (code === 'KeyN') {
-        handleToggleRoadTrainLights();
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const code = e.code;
       // Always release held movement/superstructure keys even if focus shifted to a button or chat mid-hold
-      if (code === 'ShiftLeft'|| code === 'ShiftRight') {
-        inputRef.current.shiftUp = false;
-        inputRef.current.sprint = false;
+      if (matchesKeybind('shiftUp', code)) inputRef.current.shiftUp = false;
+      if (matchesKeybind('sprint', code)) inputRef.current.sprint = false;
+      if (matchesKeybind('shiftDown', code)) {
+        inputRef.current.shiftDown = false;
+        if (code === 'AltLeft' || code === 'AltRight') e.preventDefault();
       }
-      if (code === 'ControlLeft'|| code === 'ControlRight') inputRef.current.shiftDown = false;
-      if (code === 'KeyX') inputRef.current.transferCaseToggle = false;
-      if (code === 'KeyV') inputRef.current.diffLockToggle = false;
-      if (code === 'KeyW'|| code === 'ArrowUp') inputRef.current.forward = false;
-      if (code === 'KeyS'|| code === 'ArrowDown') inputRef.current.backward = false;
-      if (code === 'KeyA'|| code === 'ArrowLeft') inputRef.current.left = false;
-      if (code === 'KeyD'|| code === 'ArrowRight') inputRef.current.right = false;
-      if (code === 'Comma') inputRef.current.brakeLeft = false;
-      if (code === 'Period') inputRef.current.brakeRight = false;
-      if (code === 'Space') inputRef.current.handbrake = false;
-      if (code === 'KeyH') inputRef.current.hornH = false;
-      if (code === 'KeyQ') inputRef.current.craneBoomRetract = false;
-      if (code === 'KeyE') inputRef.current.craneBoomExtend = false;
-      if (code === 'KeyR') inputRef.current.craneHookUp = false;
-      if (code === 'KeyF') inputRef.current.craneHookDown = false;
+      if (matchesKeybind('transferCase', code)) inputRef.current.transferCaseToggle = false;
+      if (matchesKeybind('diffLock', code)) inputRef.current.diffLockToggle = false;
+      if (matchesKeybind('moveForward', code)) inputRef.current.forward = false;
+      if (matchesKeybind('moveBackward', code)) inputRef.current.backward = false;
+      if (matchesKeybind('turnLeft', code)) inputRef.current.left = false;
+      if (matchesKeybind('turnRight', code)) inputRef.current.right = false;
+      if (matchesKeybind('tractorBrakeLeft', code)) inputRef.current.brakeLeft = false;
+      if (matchesKeybind('tractorBrakeRight', code)) inputRef.current.brakeRight = false;
+      if (matchesKeybind('handbrake', code)) inputRef.current.handbrake = false;
+      if (matchesKeybind('horn', code)) inputRef.current.hornH = false;
+      if (matchesKeybind('craneBoomRetract', code)) inputRef.current.craneBoomRetract = false;
+      if (matchesKeybind('craneBoomExtend', code)) inputRef.current.craneBoomExtend = false;
+      if (matchesKeybind('craneHookUp', code)) inputRef.current.craneHookUp = false;
+      if (matchesKeybind('craneHookDown', code)) inputRef.current.craneHookDown = false;
     };
 
     const handleMouseMove = (e: MouseEvent) => {

@@ -88,3 +88,10 @@ button:disabled{opacity:.45;pointer-events:none}
 .err{color:#e08a70;font-size:13px;margin-top:6px}
 .th .car{position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center}
 a.btn{text-decoration:none;color:inherit}
+.key-bind{cursor:pointer;background:rgba(255,255,255,.06);color:#e9e6df;min-width:46px;height:30px;padding:0 12px;transition:background .15s,border-color .15s,color .15s}
+.key-bind:hover{background:rgba(201,146,43,.18);border-color:rgba(201,146,43,.7);color:#fff}
+.key-listening{background:rgba(201,146,43,.28);border-color:#e0ab45;color:#f6d48a;min-width:136px}
+.key-reset{cursor:pointer;background:none;border:1px solid rgba(255,255,255,.14);border-radius:6px;color:#9b978c;height:30px;padding:0 9px;font-size:12px;transition:background .15s,color .15s,border-color .15s}
+.key-reset:hover{background:rgba(255,255,255,.08);color:#e9e6df;border-color:rgba(255,255,255,.3)}
+.kb-note{margin:8px 22px 6px;padding:9px 14px;border-radius:8px;background:rgba(201,146,43,.12);border:1px solid rgba(201,146,43,.35);color:#f0c264;font-size:13px;line-height:1.4}
+
