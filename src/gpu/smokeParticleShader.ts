@@ -1,4 +1,5 @@
 import type { Particle } from '../types';
+import { isSoftwareWebGL } from './webglUtils';
 
 /**
  * Physical Aerosol & Volumetric Particle Modes for WebGL2 Instanced Shader
@@ -419,7 +420,7 @@ export class GpuParticleShaderRenderer {
         stencil: false,
         preserveDrawingBuffer: false,
       });
-      if (!gl) {
+      if (!gl || isSoftwareWebGL(gl)) {
         this.failed = true;
         return false;
       }

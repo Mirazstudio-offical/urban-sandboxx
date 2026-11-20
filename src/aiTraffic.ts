@@ -5368,12 +5368,36 @@ function advanceCarRoute(car: Vehicle, world: GameWorld) {
           }
         }
         
-        const isLightBroken = inter.isSignalLost || world.props.some(
-          (p) => p.type === 'traffic_light'&&
-                 p.intersectionId === inter.id &&
-                 p.direction === selectedConn.stopLineDirection &&
-                 p.isBroken
-        );
+        let isLightBroken = !!inter.isSignalLost;
+        if (!isLightBroken) {
+          let tlCache: { len: number; byInter: Map<string, any[]> } | undefined = (world as any)._trafficLightPropIndex;
+          if (!tlCache || tlCache.len !== world.props.length) {
+            const byInter = new Map<string, any[]>();
+            for (let pi = 0; pi < world.props.length; pi++) {
+              const p = world.props[pi];
+              if (p.type === 'traffic_light' && p.intersectionId) {
+                let arr = byInter.get(p.intersectionId);
+                if (!arr) {
+                  arr = [];
+                  byInter.set(p.intersectionId, arr);
+                }
+                arr.push(p);
+              }
+            }
+            tlCache = { len: world.props.length, byInter };
+            (world as any)._trafficLightPropIndex = tlCache;
+          }
+          const lights = tlCache.byInter.get(inter.id);
+          if (lights) {
+            for (let li = 0; li < lights.length; li++) {
+              const p = lights[li];
+              if (p.direction === selectedConn.stopLineDirection && p.isBroken) {
+                isLightBroken = true;
+                break;
+              }
+            }
+          }
+        }
 
         // Honor Yellow-Light Dilemma Zone at connection entry so fast-moving cars at the line don't lock up abruptly
         const profile = ensureDriverProfile(car);

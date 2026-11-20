@@ -2193,6 +2193,39 @@ export class RailwaySignalingSystem {
   /**
    * Render all visible railway signals
    */
+  private static _sigPropCacheWorld: GameWorld | null = null;
+  private static _sigPropCachePropLen = -1;
+  private static _sigPropCacheSigLen = -1;
+  private static _sigPropMap: Map<string, any> = new Map();
+
+  private static getMatchedSignalProp(world: GameWorld, sig: RailwaySignal): any {
+    const props = world.props || [];
+    const signals = world.railwaySignals || [];
+    if (
+      this._sigPropCacheWorld !== world ||
+      this._sigPropCachePropLen !== props.length ||
+      this._sigPropCacheSigLen !== signals.length
+    ) {
+      this._sigPropCacheWorld = world;
+      this._sigPropCachePropLen = props.length;
+      this._sigPropCacheSigLen = signals.length;
+      this._sigPropMap.clear();
+      for (let si = 0; si < signals.length; si++) {
+        const s = signals[si];
+        let found: any = null;
+        for (let pi = 0; pi < props.length; pi++) {
+          const p = props[pi];
+          if (p.id === s.id || (p as any).railwaySignalId === s.id || (Math.abs(p.x - s.x) < 30 && Math.abs(p.y - s.y) < 20)) {
+            found = p;
+            break;
+          }
+        }
+        this._sigPropMap.set(s.id, found);
+      }
+    }
+    return this._sigPropMap.get(sig.id) || null;
+  }
+
   public static renderAllSignals(
     ctx: CanvasRenderingContext2D,
     world: GameWorld,
@@ -2206,15 +2239,14 @@ export class RailwaySignalingSystem {
   ): void {
     this.ensureInitialized(world);
     const signals = world.railwaySignals || [];
-    const props = world.props || [];
     const pad = 120;
 
     for (const sig of signals) {
       if (sig.x < minX - pad || sig.x > maxX + pad || sig.y < minY - pad || sig.y > maxY + pad) {
         continue;
       }
-      // Check if associated prop in world.props is broken
-      const matchedProp = props.find(p => p.id === sig.id || (p as any).railwaySignalId === sig.id || (Math.abs(p.x - sig.x) < 30 && Math.abs(p.y - sig.y) < 20));
+      // Check if associated prop in world.props is broken (O(1) cached lookup)
+      const matchedProp = this.getMatchedSignalProp(world, sig);
       if (matchedProp && matchedProp.isBroken) {
         sig.currentAspect = 'dark';
         sig.targetAspect = 'dark';

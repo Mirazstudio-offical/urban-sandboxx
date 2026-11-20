@@ -97,7 +97,7 @@ export interface PerformanceConfig {
 
 export type GraphicsPresetId = 'low' | 'medium' | 'high' | 'ultra';
 
-const STORAGE_KEY = 'city_sim_performance_config_v3';
+const STORAGE_KEY = 'city_sim_performance_config_v4';
 
 let _cachedIsMobile: boolean | null = null;
 /**
@@ -212,96 +212,6 @@ export const DEFAULT_CONFIG: PerformanceConfig = {
   gpuFireSmoke: 75,
 };
 
-/** Optimized default profile for iPhone / Android / low-end GPUs: crisp visuals without heavy WebGL2 multi-pass stalls. */
-export const MOBILE_DEFAULT_CONFIG: PerformanceConfig = {
-  ...DEFAULT_CONFIG,
-  maxVehicles: 14,
-  nearbyVehiclesTarget: 6,
-  maxActivePedestrians: 45,
-  enableRainDroplets: false,
-  enableBalconyDetails: false,
-  enableShadows: true,
-  particleLimit: 140,
-  lowQualityRendering: false,
-
-  shadowResolutionScale: 0.5,
-  shadowIntensity: 85,
-  shadowLengthScale: 100,
-  shadowSoftness: 0,
-  enableBuildingShadows: true,
-  enableRooftopShadows: false,
-  enableTreeShadows: true,
-  enableVehicleShadows: true,
-  enableVehicleDetailShadows: false,
-  enablePedestrianShadows: false,
-  enablePropShadows: false,
-  enableMicroShadows: false,
-
-  enableDynamicLighting: true,
-  headlightQuality: 1,
-  enableAdditiveGlow: false,
-  enableHeadlightGlare: false,
-
-  renderScale: 0.75,
-  hiDpi: false,
-  imageSmoothing: true,
-  minimapUpdateMs: 250,
-
-  drawDistance: 0.8,
-  maxVisiblePedestrians: 45,
-  maxVisibleVehicles: 35,
-  maxVisibleTrees: 350,
-  maxVisibleProps: 400,
-  skidMarksLimit: 600,
-  stainsLimit: 250,
-  puddlesLimit: 100,
-  litterLimit: 60,
-  renderParticleLimit: 140,
-  rainDensity: 45,
-
-  enableBirds: false,
-  enableCloudShadows: false,
-  enableDynamicGrass: false,
-  enableSoftShadowBlur: false,
-  enableScreenShake: true,
-  enableCameraJitter: false,
-  enableScreenEffects: true,
-  enableSpeechBubbles: true,
-  enableNameTags: true,
-
-  enableLiquidReflections: false,
-  liquidReflectionStrength: 0,
-  liquidReflectionLimit: 0,
-  enableLiquidShadows: false,
-  liquidShadowStrength: 0,
-
-  enableGpuPostFx: false,
-  gpuBloom: 0,
-  gpuBloomRadius: 75,
-  gpuGrading: 0,
-  gpuClarity: 0,
-  gpuRelief: 0,
-  gpuSharpness: 0,
-  gpuVignette: 0,
-  gpuGrain: 0,
-  gpuChromatic: 0,
-  gpuAntiAlias: false,
-  gpuBicubicUpscale: false,
-  gpuGi: 0,
-  gpuWet: 0,
-  gpuWaterShader: 0,
-  gpuWaterWakes: 0,
-  gpuHeatShimmer: 0,
-  gpuFireLighting: 0,
-  gpuFogScattering: 0,
-  gpuExposure: 100,
-  gpuContrast: 100,
-  gpuSaturation: 100,
-  enableGpuFireShader: false,
-  gpuFireScale: 0.5,
-  gpuFireSmoke: 40,
-};
-
 /** One-click presets. Each one overrides only the keys listed here. */
 export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfig>> = {
   low: {
@@ -380,7 +290,7 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
 };
 
 export function getRecommendedDefaultConfig(): PerformanceConfig {
-  return isMobileOrLowEndDevice() ? { ...MOBILE_DEFAULT_CONFIG } : { ...DEFAULT_CONFIG };
+  return { ...DEFAULT_CONFIG };
 }
 
 /** Returns the preset whose values all match the current config, or null for custom values. */

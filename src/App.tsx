@@ -3196,12 +3196,43 @@ export default function App() {
 
       rendererRef.current = new GameRenderer(ctx);
 
-      // GPU shader layer (bloom, grading, upscale, AA). Falls back silently to the plain 2D canvas.
+      // GPU shader layer (bloom, grading, upscale, AA) is initialized lazily only when enabled.
       const gpuCanvas = gpuCanvasRef.current;
-      if (gpuCanvas) {
+      let gpuFxUnavailable = false;
+      const syncGpuFxLifecycle = () => {
+        if (!gpuCanvas) return null;
+        if (!performanceConfig.enableGpuPostFx) {
+          if (gpuFxRef.current) {
+            gpuFxRef.current.dispose();
+            gpuFxRef.current = null;
+          }
+          gpuCanvas.style.display = 'none';
+          return null;
+        }
+        if (!gpuFxRef.current && !gpuFxUnavailable) {
+          const fx = new GpuPostFx(canvas, gpuCanvas);
+          if (fx.available) {
+            gpuFxRef.current = fx;
+            const cssW = window.innerWidth;
+            const cssH = window.innerHeight;
+            const dpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+            fx.resize(cssW * dpr, cssH * dpr);
+            gpuCanvas.style.width = cssW + 'px';
+            gpuCanvas.style.height = cssH + 'px';
+          } else {
+            fx.dispose();
+            gpuFxUnavailable = true;
+            gpuCanvas.style.display = 'none';
+          }
+        }
+        return gpuFxRef.current;
+      };
+      if (performanceConfig.enableGpuPostFx) {
+        syncGpuFxLifecycle();
+      } else if (gpuCanvas) {
         gpuFxRef.current?.dispose();
-        const fx = new GpuPostFx(canvas, gpuCanvas);
-        gpuFxRef.current = fx.available ? fx : null;
+        gpuFxRef.current = null;
+        gpuCanvas.style.display = 'none';
       }
 
       // --- HYPER-EFFICIENT BACKGROUND HIBERNATION ---
@@ -4188,7 +4219,7 @@ export default function App() {
           } else {
             const isLyingInBed = bedSleepStateRef.current && bedSleepStateRef.current.isActive;
             const effectiveInput = isLyingInBed ? { ...input, forward: false, backward: false, left: false, right: false, sprint: false } : input;
-            updatePlayerPedestrianPhysics(player, effectiveInput, playerNearbyBuildings, dt, camera.angle, world.width, world.height, world, vehGrid);
+            updatePlayerPedestrianPhysics(player, effectiveInput, playerNearbyBuildings, dt, camera.angle, world.width, world.height, world, vehGrid, spatialGridPropsRef.current);
             if (!player.needsHospitalEvacuation) {
               camera.targetX = player.x;
               camera.targetY = player.y;
@@ -4584,12 +4615,50 @@ export default function App() {
             }
           }
 
-          const distToPlayer = Math.hypot(veh.x - player.x, veh.y - player.y);
+          const dxP = veh.x - player.x;
+          const dyP = veh.y - player.y;
+          const distToPlayerSq = dxP * dxP + dyP * dyP;
           const isMoving = Math.abs(veh.speed) > 1 || Math.abs(veh.vx || 0) > 1 || Math.abs(veh.vy || 0) > 1;
 
           // Put stationary/parked non-player vehicles far outside the camera viewport to sleep
-          if (!veh.isPlayerControlled && !(veh as any).isRemoteControlled && !isMoving && distToPlayer > sleepMargin) {
+          if (!veh.isPlayerControlled && !(veh as any).isRemoteControlled && !isMoving && distToPlayerSq > sleepMargin * sleepMargin) {
             continue;
+          }
+
+          const vehNearbyCars = vehGrid.queryRadius(
+            veh.x,
+            veh.y,
+            180,
+            scratchVehNearbyCars
+          );
+
+          // Sleep completely dormant parked vehicles even inside viewport unless a moving vehicle is nearby
+          // (ticks once every 30 frames for slow cooling/state maintenance, wakes instantly on proximity/motion)
+          if (
+            !veh.isPlayerControlled &&
+            !(veh as any).isRemoteControlled &&
+            !isMoving &&
+            veh.isParked &&
+            !veh.engine?.isRunning &&
+            !veh.isOnFire &&
+            !veh.towedById &&
+            !veh.trailerId &&
+            veh.turnSignal === 'none' &&
+            !veh.craneControlMode &&
+            !veh.exOperatorMode &&
+            ((world as any)._physicsFrameId % 30 !== 0)
+          ) {
+            let hasMovingNeighbor = false;
+            for (let ni = 0; ni < vehNearbyCars.length; ni++) {
+              const nv = vehNearbyCars[ni];
+              if (nv !== veh && (nv.isPlayerControlled || Math.abs(nv.speed) > 1 || Math.abs(nv.vx || 0) > 1 || Math.abs(nv.vy || 0) > 1)) {
+                hasMovingNeighbor = true;
+                break;
+              }
+            }
+            if (!hasMovingNeighbor) {
+              continue;
+            }
           }
 
           const vehNearbyBuildings = bldGrid.queryRadius(
@@ -4597,12 +4666,6 @@ export default function App() {
             veh.y,
             250,
             scratchVehNearbyBuildings
-          );
-          const vehNearbyCars = vehGrid.queryRadius(
-            veh.x,
-            veh.y,
-            180,
-            scratchVehNearbyCars
           );
 
           updateVehiclePhysics(
@@ -4842,7 +4905,7 @@ export default function App() {
 
           // Physical Context Interaction System (cone of view + reach + mouse priority)
           const mouseWorld = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
-          const currentInteraction = findActiveInteraction(player, world, mouseWorld);
+          const currentInteraction = findActiveInteraction(player, world, mouseWorld, undefined, spatialGridPropsRef.current);
           activeInteractionRef.current = currentInteraction;
           const interactionKey = currentInteraction
             ? `${currentInteraction.type}_${currentInteraction.primaryKey}_${currentInteraction.actionTitle}_${Math.round(currentInteraction.x)}_${Math.round(currentInteraction.y)}`
@@ -5379,9 +5442,9 @@ export default function App() {
             activeInteractionRef.current
           );
         }
-        // GPU post-processing of the finished 2D frame
+        // GPU post-processing of the finished 2D frame (lazily created & disposed)
         {
-          const fx = gpuFxRef.current;
+          const fx = syncGpuFxLifecycle();
           const gpuCanvas = gpuCanvasRef.current;
           if (fx && gpuCanvas) {
             if (performanceConfig.enableGpuPostFx && !isFullMapOpenRef.current) {

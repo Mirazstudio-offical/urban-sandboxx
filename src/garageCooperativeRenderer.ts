@@ -13,6 +13,62 @@ import { getCurrentSunShadowState } from './shadowSystem';
  * - Sagging overhead electrical wires and warm night bulkhead lighting
  */
 export class GarageCooperativeRenderer {
+  private static _cacheWorld: GameWorld | null = null;
+  private static _cacheBldLen = -1;
+  private static _cachePropLen = -1;
+  private static _garageBuildings: Building[] = [];
+  private static _garageLightBuildings: Building[] = [];
+  private static _garageGlowBuildings: Building[] = [];
+  private static _powerPoles: any[] = [];
+  private static _visiblePolesScratch: any[] = [];
+
+  private static ensureCache(world: GameWorld) {
+    const bLen = world.buildings ? world.buildings.length : 0;
+    const pLen = world.props ? world.props.length : 0;
+    if (this._cacheWorld === world && this._cacheBldLen === bLen && this._cachePropLen === pLen) {
+      return;
+    }
+    this._cacheWorld = world;
+    this._cacheBldLen = bLen;
+    this._cachePropLen = pLen;
+
+    const gAll: Building[] = [];
+    const gLight: Building[] = [];
+    const gGlow: Building[] = [];
+    for (let i = 0; i < bLen; i++) {
+      const b = world.buildings[i];
+      if (
+        b.type === 'garage_cooperative' ||
+        b.type === 'garage_box' ||
+        b.type === 'garage_workshop' ||
+        b.type === 'garage_gatehouse' ||
+        b.type === 'garage_substation' ||
+        b.type === 'garage_ramp' ||
+        (b.id && b.id.startsWith('garage_gsk_'))
+      ) {
+        gAll.push(b);
+      }
+      if (b.type === 'garage_box' || b.type === 'garage_workshop' || b.type === 'garage_gatehouse') {
+        gLight.push(b);
+        if ((b.id && b.id.charCodeAt(b.id.length - 1) % 2 === 0) || b.type === 'garage_gatehouse') {
+          gGlow.push(b);
+        }
+      }
+    }
+    this._garageBuildings = gAll;
+    this._garageLightBuildings = gLight;
+    this._garageGlowBuildings = gGlow;
+
+    const poles: any[] = [];
+    for (let i = 0; i < pLen; i++) {
+      const p = world.props[i];
+      if (p.type === 'lamp_concrete' || p.type === 'power_pole') {
+        poles.push(p);
+      }
+    }
+    this._powerPoles = poles;
+  }
+
   /**
    * Render ground apron for garage cooperatives: concrete airfield slabs, gravel verges,
    * expansion joints, weeds, drive-in thresholds, and oil stains.
@@ -26,15 +82,8 @@ export class GarageCooperativeRenderer {
     maxY: number,
     nightAlpha: number = 0
   ) {
-    const garageBuildings = world.buildings.filter(b => 
-      b.type === 'garage_cooperative' || 
-      b.type === 'garage_box' || 
-      b.type === 'garage_workshop' || 
-      b.type === 'garage_gatehouse' ||
-      b.type === 'garage_substation' ||
-      b.type === 'garage_ramp' ||
-      (b.id && b.id.startsWith('garage_gsk_'))
-    );
+    this.ensureCache(world);
+    const garageBuildings = this._garageBuildings;
 
     if (garageBuildings.length === 0) return;
 
@@ -916,12 +965,20 @@ export class GarageCooperativeRenderer {
     maxX: number,
     maxY: number
   ) {
-    const poles = world.props.filter(p => 
-      (p.type === 'lamp_concrete' || p.type === 'power_pole') &&
-      !p.isBroken &&
-      p.x >= minX - 100 && p.x <= maxX + 100 &&
-      p.y >= minY - 100 && p.y <= maxY + 100
-    );
+    this.ensureCache(world);
+    const allPoles = this._powerPoles;
+    const poles = this._visiblePolesScratch;
+    poles.length = 0;
+    const minXP = minX - 100;
+    const maxXP = maxX + 100;
+    const minYP = minY - 100;
+    const maxYP = maxY + 100;
+    for (let i = 0; i < allPoles.length; i++) {
+      const p = allPoles[i];
+      if (!p.isBroken && p.x >= minXP && p.x <= maxXP && p.y >= minYP && p.y <= maxYP) {
+        poles.push(p);
+      }
+    }
 
     if (poles.length < 2) return;
 
@@ -929,24 +986,27 @@ export class GarageCooperativeRenderer {
     ctx.strokeStyle = 'rgba(15, 23, 42, 0.45)'; // Realistic dark wire silhouette
     ctx.lineWidth = 1.0;
 
-    // Connect poles that are within 80-220 px of each other
+    // Connect poles that are within 70-230 px of each other (single batched stroke)
+    ctx.beginPath();
     for (let i = 0; i < poles.length; i++) {
+      const p1 = poles[i];
       for (let j = i + 1; j < poles.length; j++) {
-        const p1 = poles[i];
         const p2 = poles[j];
-        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const distSq = dx * dx + dy * dy;
 
-        if (dist > 70 && dist < 230) {
-          const midX = (p1.x + p2.x) / 2;
-          const sagY = (p1.y + p2.y) / 2 + Math.min(8, dist * 0.05); // Natural gravitational catenary sag
+        if (distSq > 4900 && distSq < 52900) {
+          const dist = Math.sqrt(distSq);
+          const midX = (p1.x + p2.x) * 0.5;
+          const sagY = (p1.y + p2.y) * 0.5 + Math.min(8, dist * 0.05); // Natural gravitational catenary sag
 
-          ctx.beginPath();
           ctx.moveTo(p1.x, p1.y);
           ctx.quadraticCurveTo(midX, sagY, p2.x, p2.y);
-          ctx.stroke();
         }
       }
     }
+    ctx.stroke();
 
     ctx.restore();
   }
@@ -964,9 +1024,9 @@ export class GarageCooperativeRenderer {
   ) {
     if (nightAlpha < 0.25) return;
 
-    const garages = world.buildings.filter(b =>
-      (b.type === 'garage_box' || b.type === 'garage_workshop' || b.type === 'garage_gatehouse')
-    );
+    this.ensureCache(world);
+    const garages = this._garageLightBuildings;
+    if (garages.length === 0) return;
 
     lCtx.save();
     for (const bld of garages) {
@@ -1012,10 +1072,9 @@ export class GarageCooperativeRenderer {
   ) {
     if (nightAlpha < 0.3) return;
 
-    const garages = world.buildings.filter(b =>
-      (b.type === 'garage_box' || b.type === 'garage_workshop' || b.type === 'garage_gatehouse') &&
-      (b.id.charCodeAt(b.id.length - 1) % 2 === 0 || b.type === 'garage_gatehouse')
-    );
+    this.ensureCache(world);
+    const garages = this._garageGlowBuildings;
+    if (garages.length === 0) return;
 
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';

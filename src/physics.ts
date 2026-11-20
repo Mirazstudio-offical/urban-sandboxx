@@ -5597,6 +5597,29 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   // Rear suspension reduces lateral grip factor. This will be consumed in `updateVehiclePhysics`car.driftFactor = Math.min(1.0, (dmg.rearLeftSuspensionDamage + dmg.rearRightSuspensionDamage) / 2);
 }
 
+const _pedPropsScratch: StreetProp[] = [];
+let _firePropsCacheWorld: GameWorld | null = null;
+let _firePropsCacheLen = -1;
+let _firePropsCache: StreetProp[] = [];
+
+function getCachedFireProps(world: GameWorld): StreetProp[] {
+  const props = world.props;
+  if (!props) return _firePropsCache;
+  if (_firePropsCacheWorld !== world || _firePropsCacheLen !== props.length) {
+    _firePropsCacheWorld = world;
+    _firePropsCacheLen = props.length;
+    const list: StreetProp[] = [];
+    for (let i = 0; i < props.length; i++) {
+      const pType = props[i].type as string;
+      if (pType === 'camp_fire_pit' || pType === 'barrel_fire' || pType === 'wood_stove') {
+        list.push(props[i]);
+      }
+    }
+    _firePropsCache = list;
+  }
+  return _firePropsCache;
+}
+
 export function updatePlayerPedestrianPhysics(
   player: Player,
   input: InputState,
@@ -5606,7 +5629,8 @@ export function updatePlayerPedestrianPhysics(
   worldWidth: number = 52000,
   worldHeight: number = 30000,
   world?: GameWorld,
-  vehGrid?: any
+  vehGrid?: any,
+  propsGrid?: any
 ) {
   if (player.isInVehicle) return;
 
@@ -6412,7 +6436,12 @@ export function updatePlayerPedestrianPhysics(
 
   // Collision with props (streetlamps, trash cans, benches, kiosks, etc.)
   if (world) {
-    for (const prop of world.props) {
+    const propsToCheck: StreetProp[] = propsGrid
+      ? propsGrid.queryRadius(newX, newY, 85, _pedPropsScratch)
+      : world.props;
+    for (let pi = 0; pi < propsToCheck.length; pi++) {
+      const prop = propsToCheck[pi];
+      if (!propsGrid && (Math.abs(newX - prop.x) > 85 || Math.abs(newY - prop.y) > 85)) continue;
       const hitbox = getPropHitbox(prop);
       if (hitbox.shape === 'none') continue;
       if (prop.isBroken && hitbox.isWalkableWhenBroken) continue;
@@ -7276,15 +7305,17 @@ export function updatePlayerNeedsAndVitals(
 
     // Near campfire, barrel fire, or wood stove: rapid drying and cozy radiant heat
     if (world.props) {
-      for (const prop of world.props) {
-        const pType = prop.type as string;
-        if (pType === 'camp_fire_pit' || pType === 'barrel_fire' || pType === 'wood_stove') {
-          const dFire = Math.hypot(prop.x - player.x, prop.y - player.y);
-          if (dFire < 130) {
-            const fireProx = 1.0 - (dFire / 130);
-            ambientTemp = Math.max(ambientTemp, 22.0 + fireProx * 38.0);
-            bs.wetness = Math.max(0, bs.wetness - 1.2 * fireProx * dt);
-          }
+      const fireProps = getCachedFireProps(world);
+      for (let fi = 0; fi < fireProps.length; fi++) {
+        const prop = fireProps[fi];
+        const dxF = prop.x - player.x;
+        const dyF = prop.y - player.y;
+        const dFireSq = dxF * dxF + dyF * dyF;
+        if (dFireSq < 16900) { // 130^2
+          const dFire = Math.sqrt(dFireSq);
+          const fireProx = 1.0 - (dFire / 130);
+          ambientTemp = Math.max(ambientTemp, 22.0 + fireProx * 38.0);
+          bs.wetness = Math.max(0, bs.wetness - 1.2 * fireProx * dt);
         }
       }
     }
@@ -14822,16 +14853,22 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
     // Climate-driven evaporation when not raining, not frozen solid, and not a permanent pond
     if (!isRaining && !isActiveSnowmelt && freezeProg < 0.65 && !puddle.isPond) {
-      // Check if puddle lies in building shade (reduces solar evaporation)
+      // Check if puddle lies in building shade (cached once per puddle since buildings are static)
       let inShade = false;
       if (atmoPud.solarIntensity > 0.15 && world.buildings) {
-        for (let bi = 0; bi < world.buildings.length; bi++) {
-          const b = world.buildings[bi];
-          if (puddle.x >= b.x - 45 && puddle.x <= b.x + b.width + 45 && puddle.y >= b.y - 45 && puddle.y <= b.y + b.height + 45) {
-            inShade = true;
-            break;
+        let cachedShade = (puddle as any)._inShade as boolean | undefined;
+        if (cachedShade === undefined) {
+          cachedShade = false;
+          for (let bi = 0; bi < world.buildings.length; bi++) {
+            const b = world.buildings[bi];
+            if (puddle.x >= b.x - 45 && puddle.x <= b.x + b.width + 45 && puddle.y >= b.y - 45 && puddle.y <= b.y + b.height + 45) {
+              cachedShade = true;
+              break;
+            }
           }
+          (puddle as any)._inShade = cachedShade;
         }
+        inShade = cachedShade;
       }
       const localSunFactor = inShade ? (1.0 + atmoPud.solarIntensity * 0.28) : baseSunFactor;
       const evapStep = baseEvapPxPerSec * localSunFactor * (1.0 - freezeProg * 0.8) * dt;

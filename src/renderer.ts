@@ -398,6 +398,8 @@ export class GameRenderer {
   private intactPropsScratch: StreetProp[] = [];
   private groundBirdsScratch: Bird[] = [];
   private flyingBirdsScratch: Bird[] = [];
+  private intersectionSignCache = new WeakMap<object, { hName: string; vName: string }>();
+  private treeCanvasPool: HTMLCanvasElement[] = [];
   private static readonly LIGHTMAP_SCALE = 0.5;
   private static readonly MATERIAL_SCALE = 0.5;
 
@@ -3367,16 +3369,23 @@ export class GameRenderer {
       if (inter.x > 8000 || inter.y > 8000 || inter.type === 'turnaround' || inter.id.startsWith('inter_highway_') || inter.id.startsWith('inter_deadend_')) continue;
       if (inter.x < minX - 250 || inter.x > maxX + 250 || inter.y < minY - 250 || inter.y > maxY + 250) continue;
 
-      let hName = 'ул. Тенистая';
-      let vName = 'ул. Садовая';
-      for (const road of world.roads) {
-        if (road.direction === 'horizontal' && Math.abs(inter.y - road.y1) < 100) {
-          hName = road.name === 'Grand Boulevard' ? 'ул. Садовая' : (road.name === 'Central Avenue' ? 'ул. Космическая' : road.name);
+      let signNames = this.intersectionSignCache.get(inter);
+      if (!signNames) {
+        let hName = 'ул. Тенистая';
+        let vName = 'ул. Садовая';
+        for (let ri = 0; ri < world.roads.length; ri++) {
+          const road = world.roads[ri];
+          if (road.direction === 'horizontal' && Math.abs(inter.y - road.y1) < 100) {
+            hName = road.name === 'Grand Boulevard' ? 'ул. Садовая' : (road.name === 'Central Avenue' ? 'ул. Космическая' : road.name);
+          }
+          if (road.direction === 'vertical' && Math.abs(inter.x - road.x1) < 100) {
+            vName = road.name === 'Silicon Highway' ? 'шоссе Нова' : (road.name === 'Metro Avenue' ? 'ул. Строителей' : road.name);
+          }
         }
-        if (road.direction === 'vertical' && Math.abs(inter.x - road.x1) < 100) {
-          vName = road.name === 'Silicon Highway' ? 'шоссе Нова' : (road.name === 'Metro Avenue' ? 'ул. Строителей' : road.name);
-        }
+        signNames = { hName, vName };
+        this.intersectionSignCache.set(inter, signNames);
       }
+      const { hName, vName } = signNames;
 
       const signX = inter.x + inter.width / 2 + 16;
       const signY = inter.y - inter.height / 2 - 16;
@@ -7163,13 +7172,13 @@ export class GameRenderer {
     const sunX = -sunState.shadowDirX;
     const sunY = -sunState.shadowDirY;
     const canUseOffscreenCache = typeof document !== 'undefined' && typeof document.createElement === 'function';
-    const sunKeyX = Math.round(sunX * 4);
-    const sunKeyY = Math.round(sunY * 4);
+    const sunKeyX = Math.round(sunX * 2);
+    const sunKeyY = Math.round(sunY * 2);
     const snowCover = world
       ? (world.snowCover ?? (season === 'winter' ? 0.85 : 0))
       : (season === 'winter' ? 0.85 : 0);
     const snowTier = Math.round(Math.max(0, Math.min(1, snowCover)) * 4);
-    const maxTreeSprites = isMobileOrLowEndDevice() ? 160 : 320;
+    const maxTreeSprites = isMobileOrLowEndDevice() ? 384 : 512;
     const needMask = performanceConfig.enableGpuPostFx;
 
     // Trees
@@ -7195,8 +7204,8 @@ export class GameRenderer {
       }
 
       if (canUseOffscreenCache) {
-        const qSeed = seed & 15;
-        const qRad = Math.max(8, Math.round(r / 3) * 3);
+        const qSeed = seed & 7;
+        const qRad = Math.max(8, Math.round(r / 4) * 4);
         const cacheKey = `${species}_${qRad}_${tree.color || ''}_${qSeed}_${season || 'summer'}_sn${snowTier}_${sunKeyX}_${sunKeyY}`;
         let cached = this.treeSpriteCache.get(cacheKey);
         if (!cached) {
@@ -7206,34 +7215,50 @@ export class GameRenderer {
               const evicted = this.treeSpriteCache.get(oldestKey);
               this.treeSpriteCache.delete(oldestKey);
               if (evicted) {
-                evicted.canvas.width = 0;
-                evicted.canvas.height = 0;
+                if (this.treeCanvasPool.length < 32) {
+                  this.treeCanvasPool.push(evicted.canvas);
+                } else {
+                  evicted.canvas.width = 0;
+                  evicted.canvas.height = 0;
+                }
                 if (evicted.maskCanvas) {
-                  evicted.maskCanvas.width = 0;
-                  evicted.maskCanvas.height = 0;
+                  if (this.treeCanvasPool.length < 32) {
+                    this.treeCanvasPool.push(evicted.maskCanvas);
+                  } else {
+                    evicted.maskCanvas.width = 0;
+                    evicted.maskCanvas.height = 0;
+                  }
                 }
               }
             }
           }
           const half = Math.ceil(qRad * 1.32 + 6);
-          const offCanvas = document.createElement('canvas');
-          offCanvas.width = half * 2;
-          offCanvas.height = half * 2;
+          const dim = half * 2;
+          const offCanvas = this.treeCanvasPool.pop() || document.createElement('canvas');
+          if (offCanvas.width !== dim || offCanvas.height !== dim) {
+            offCanvas.width = dim;
+            offCanvas.height = dim;
+          }
           const offCtx = offCanvas.getContext('2d');
           if (offCtx) {
+            offCtx.clearRect(0, 0, dim, dim);
             this.renderSingleTreeGeometry(offCtx, tree, half, half, qRad, species, qSeed * 199 + 17, sunState, sunX, sunY, season, snowCover);
             // GPU-only silhouette mask (no getImageData readback stall!), built lazily only when PostFX is active
             let maskCanvas: HTMLCanvasElement | null = null;
             if (needMask) {
-              maskCanvas = document.createElement('canvas');
-              maskCanvas.width = offCanvas.width;
-              maskCanvas.height = offCanvas.height;
+              maskCanvas = this.treeCanvasPool.pop() || document.createElement('canvas');
+              if (maskCanvas.width !== dim || maskCanvas.height !== dim) {
+                maskCanvas.width = dim;
+                maskCanvas.height = dim;
+              }
               const maskCtx = maskCanvas.getContext('2d');
               if (maskCtx) {
+                maskCtx.globalCompositeOperation = 'source-over';
+                maskCtx.clearRect(0, 0, dim, dim);
                 maskCtx.drawImage(offCanvas, 0, 0);
                 maskCtx.globalCompositeOperation = 'source-in';
                 maskCtx.fillStyle = '#000000';
-                maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+                maskCtx.fillRect(0, 0, dim, dim);
               } else {
                 maskCanvas = null;
               }
@@ -11700,17 +11725,26 @@ export class GameRenderer {
   private renderVehicles(vehicles: Vehicle[], nightAlpha: number, gridMode?: boolean, player?: Player) {
     const ctx = this.ctx;
 
-    // Sort vehicles so towing vehicles (tractors) are rendered BEFORE their trailers,
-    // ensuring the trailer body sits cleanly on top of the tractor's fifth-wheel saddle plate!
-    const sortedVehicles = [...vehicles].sort((a, b) => {
-      if (a.trailerId === b.id || b.towedById === a.id) return -1;
-      if (b.trailerId === a.id || a.towedById === b.id) return 1;
-      const aIsTrailer = a.type.startsWith('trailer_') || a.isTrailer;
-      const bIsTrailer = b.type.startsWith('trailer_') || b.isTrailer;
-      if (!aIsTrailer && bIsTrailer) return -1;
-      if (aIsTrailer && !bIsTrailer) return 1;
-      return 0;
-    });
+    // Sort vehicles only when a trailer/towed vehicle is present so tractors draw before trailers
+    let needsTrailerSort = false;
+    for (let vi = 0; vi < vehicles.length; vi++) {
+      const v = vehicles[vi];
+      if (v.isTrailer || v.trailerId || v.towedById || v.type.startsWith('trailer_')) {
+        needsTrailerSort = true;
+        break;
+      }
+    }
+    const sortedVehicles = needsTrailerSort
+      ? [...vehicles].sort((a, b) => {
+          if (a.trailerId === b.id || b.towedById === a.id) return -1;
+          if (b.trailerId === a.id || a.towedById === b.id) return 1;
+          const aIsTrailer = a.type.startsWith('trailer_') || a.isTrailer;
+          const bIsTrailer = b.type.startsWith('trailer_') || b.isTrailer;
+          if (!aIsTrailer && bIsTrailer) return -1;
+          if (aIsTrailer && !bIsTrailer) return 1;
+          return 0;
+        })
+      : vehicles;
 
     for (const car of sortedVehicles) {
       if (player) {

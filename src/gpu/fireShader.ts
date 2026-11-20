@@ -14,6 +14,8 @@
  * sub-millisecond pass, with zero allocations and zero particle saturation when idle.
  */
 
+import { isSoftwareWebGL } from './webglUtils';
+
 export const enum FireEmitterKind {
   FuelPool = 0,
   OilPool = 1,
@@ -456,6 +458,7 @@ export class GpuFireRenderer {
   private uSmokeCrown: WebGLUniformLocation | null = null;
 
   private available = false;
+  private initialized = false;
   private lost = false;
   private scale = 0.75; // 0.75x CSS resolution: 44% fewer pixels, silky-smooth volumetric filtering
 
@@ -463,6 +466,11 @@ export class GpuFireRenderer {
     this.canvas = document.createElement('canvas');
     this.canvas.width = 2;
     this.canvas.height = 2;
+  }
+
+  private ensureInit() {
+    if (this.initialized) return;
+    this.initialized = true;
     try {
       this.init();
     } catch (e) {
@@ -482,6 +490,7 @@ export class GpuFireRenderer {
       powerPreference: 'high-performance',
     });
     if (!gl) throw new Error('webgl2 unavailable');
+    if (isSoftwareWebGL(gl)) throw new Error('software webgl detected');
     this.gl = gl;
 
     this.canvas.addEventListener('webglcontextlost', (e) => {
@@ -577,6 +586,9 @@ export class GpuFireRenderer {
     const count = Math.min(emitters.length, MAX_INSTANCES);
     if (count === 0 || viewWidth < 2 || viewHeight < 2) return;
 
+    if (enableGpu && !this.initialized) {
+      this.ensureInit();
+    }
     if (!enableGpu || !this.available || this.lost || !this.gl || !this.prog || !this.vao || !this.instanceBuf) {
       this.renderFallback2D(ctx, emitters, count, timeSec);
       return;

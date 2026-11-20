@@ -236,11 +236,14 @@ export function resolveBuildingShop(bld: Building, roomName: string = ''): { sho
 /**
  * Resolves the single most relevant physical world interaction in front of the player.
  */
+const _interactionPropsScratch: any[] = [];
+
 export function findActiveInteraction(
   player: Player,
   world: GameWorld,
   mouseWorldPos?: { x: number; y: number } | null,
-  filterKey?: 'E' | 'F' | 'R'
+  filterKey?: 'E' | 'F' | 'R',
+  propsGrid?: any
 ): InteractionTarget | null {
   if (!player) return null;
 
@@ -1671,7 +1674,12 @@ export function findActiveInteraction(
   // 7. TRASH BINS & ECO-FANDOMAT
   // ==========================================
   if (world.props) {
-    for (const prop of world.props) {
+    const propsToCheck = propsGrid
+      ? propsGrid.queryRadius(px, py, 100, _interactionPropsScratch)
+      : world.props;
+    for (let pi = 0; pi < propsToCheck.length; pi++) {
+      const prop = propsToCheck[pi];
+      if (!propsGrid && (Math.abs(prop.x - px) > 100 || Math.abs(prop.y - py) > 100)) continue;
       if (prop.type === 'dumpster') {
         const reach = isTargetInPhysicalReach(px, py, facing, prop.x, prop.y, 45, 1.35, mouseWorldPos);
         if (reach.inReach) {

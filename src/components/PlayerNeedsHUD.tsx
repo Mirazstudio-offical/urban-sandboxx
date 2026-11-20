@@ -284,10 +284,10 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                 onClick={() => handleHandClick('left')}
                 onDoubleClick={() => onUseActiveHandItem?.()}
                 title={leftItem ? `Левая рука: ${leftItem.nameRu} [Клик - выбрать, Даблклик - использовать]` : 'Левая рука (Свободна) [Клик для выбора]'}
-                className={`relative w-14 h-14 rounded-lg border backdrop-blur-sm flex flex-col items-center justify-center transition-colors cursor-pointer select-none ${
+                className={`relative w-14 h-14 rounded-lg border flex flex-col items-center justify-center transition-colors cursor-pointer select-none ${
                   activeHand === 'left'
-                    ? 'border-[#c9922b] bg-[#141416]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
-                    : 'border-white/12 bg-[#141416]/80 hover:bg-[#1e1e22]/90 hover:border-white/25'
+                    ? 'border-[#c9922b] bg-[#141416]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
+                    : 'border-white/12 bg-[#141416]/90 hover:bg-[#1e1e22]/95 hover:border-white/25'
                 }`}
               >
                 <div className={`absolute top-1 left-1.5 text-[9px] font-mono font-semibold uppercase ${activeHand === 'left' ? 'text-[#f0c264]' : 'text-white/55'}`}>
@@ -356,10 +356,10 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                 onClick={() => handleHandClick('right')}
                 onDoubleClick={() => onUseActiveHandItem?.()}
                 title={rightItem ? `Правая рука: ${rightItem.nameRu} [Клик - выбрать, Даблклик - использовать]` : 'Правая рука (Свободна) [Клик для выбора]'}
-                className={`relative w-14 h-14 rounded-lg border backdrop-blur-sm flex flex-col items-center justify-center transition-colors cursor-pointer select-none ${
+                className={`relative w-14 h-14 rounded-lg border flex flex-col items-center justify-center transition-colors cursor-pointer select-none ${
                   activeHand === 'right'
-                    ? 'border-[#c9922b] bg-[#141416]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
-                    : 'border-white/12 bg-[#141416]/80 hover:bg-[#1e1e22]/90 hover:border-white/25'
+                    ? 'border-[#c9922b] bg-[#141416]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
+                    : 'border-white/12 bg-[#141416]/90 hover:bg-[#1e1e22]/95 hover:border-white/25'
                 }`}
               >
                 <div className={`absolute top-1 left-1.5 text-[9px] font-mono font-semibold uppercase ${activeHand === 'right' ? 'text-[#f0c264]' : 'text-white/55'}`}>

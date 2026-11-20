@@ -7,8 +7,7 @@
 .mm-btn {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 32px; height: 32px; padding: 0; color: #e9e6df; cursor: pointer; pointer-events: auto;
-  background: rgba(110,110,115,.34); border: 1px solid rgba(255,255,255,.16); border-radius: 6px;
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  background: rgba(34,36,42,.82); border: 1px solid rgba(255,255,255,.16); border-radius: 6px;
   -webkit-tap-highlight-color: transparent; transition: background .15s, border-color .15s, color .15s, transform .1s;
 }
 .mm-btn:hover { background: rgba(140,140,146,.46); border-color: rgba(201,146,43,.6); color: #f0c264; }
@@ -17,8 +16,8 @@
 
 .mm-panel {
   width: 168px; overflow: hidden; pointer-events: auto;
-  background: rgba(20,20,22,.82); border: 1px solid rgba(255,255,255,.09); border-radius: 10px;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: 0 10px 30px rgba(0,0,0,.42);
+  background: rgba(20,20,22,.92); border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.42);
   transition: border-color .15s;
 }
 .mm-panel:hover { border-color: rgba(201,146,43,.5); }

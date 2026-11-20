@@ -9,7 +9,7 @@
   --tc-ink-2: #a29e93;
   --tc-line: rgba(255, 255, 255, 0.09);
   --tc-line-2: rgba(255, 255, 255, 0.18);
-  --tc-glass: rgba(20, 20, 22, 0.88);
+  --tc-glass: rgba(20, 20, 22, 0.94);
   --tc-key: rgba(255, 255, 255, 0.06);
   --tc-key-hi: rgba(255, 255, 255, 0.11);
   --tc-amber: #c9922b;
@@ -39,8 +39,6 @@
   background: var(--tc-glass);
   border: 1px solid var(--tc-line);
   border-radius: 12px;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
@@ -233,7 +231,7 @@
 /* ---------- phone strips: small, edge-pinned, never over the minimap or the lights row ---------- */
 /* column right of the F / E buttons, inside the left gutter (the swipe zone starts further right) */
 .tc-strip { left: calc(env(safe-area-inset-left, 0px) + 52px); top: 52px; display: flex; flex-direction: column; gap: 4px; width: 36px; }
-.tc-strip .tc-key { width: 36px; height: 36px; padding: 0; background: var(--tc-glass); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.tc-strip .tc-key { width: 36px; height: 36px; padding: 0; background: var(--tc-glass); }
 .tc-strip .tc-key svg { width: 18px; height: 18px; }
 /* crane cab: three small keys in the bottom-right corner, where the pedals were */
 .tc-strip.is-right { left: auto; top: auto; right: calc(env(safe-area-inset-right, 0px) + 8px); bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); flex-direction: row; width: auto; }

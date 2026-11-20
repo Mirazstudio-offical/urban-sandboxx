@@ -604,7 +604,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
       <button
         type="button"
         onClick={() => setIsMinimized((prev) => !prev)}
-        className={`mb-0.5 sm:mb-1 rounded-[2px] bg-[#14161a]/95 hover:bg-[#1c1f26] border border-[#2a2e38] text-[9px] sm:text-[10px] text-[#f0f3f6] font-mono flex items-center gap-2 shadow-lg active:scale-98 transition backdrop-blur-md cursor-pointer ${isMinimized ? 'px-3 py-0' : 'px-3 py-1'}`}
+        className={`mb-0.5 sm:mb-1 rounded-[2px] bg-[#14161a]/95 hover:bg-[#1c1f26] border border-[#2a2e38] text-[9px] sm:text-[10px] text-[#f0f3f6] font-mono flex items-center gap-2 shadow-lg active:scale-98 transition cursor-pointer ${isMinimized ? 'px-3 py-0' : 'px-3 py-1'}`}
         title="Свернуть / Развернуть приборную панель"
       >
         {!isMinimized && <span className="w-1.5 h-1.5 rounded-none bg-[#c68a35]" />}
@@ -622,7 +622,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
           const rSig = playerTurnSignal === 'right' || playerTurnSignal === 'hazard';
           return (
             <div
-              className="flex items-center gap-2 pl-3 pr-1.5 h-10 rounded-full border border-[#2a2e38] bg-[#14161a]/90 backdrop-blur-md shadow-xl text-[#f0f3f6] whitespace-nowrap max-w-full overflow-x-auto animate-in fade-in duration-100"
+              className="flex items-center gap-2 pl-3 pr-1.5 h-10 rounded-full border border-[#2a2e38] bg-[#14161a]/95 shadow-xl text-[#f0f3f6] whitespace-nowrap max-w-full overflow-x-auto animate-in fade-in duration-100"
             >
               {/* Speed */}
               <span
@@ -714,7 +714,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
       ) : (
         /* FULL ANALOG INSTRUMENT CLUSTER (BENTO PANEL DESIGN) */
         <div
-          className="relative bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] p-3 sm:p-4 md:p-5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-2.5 sm:gap-3.5 w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] scale-[0.75] sm:scale-[0.88] md:scale-100 origin-bottom select-none animate-in fade-in duration-150"
+          className="relative bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] p-3 sm:p-4 md:p-5 shadow-2xl flex flex-col items-center gap-2.5 sm:gap-3.5 w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] scale-[0.75] sm:scale-[0.88] md:scale-100 origin-bottom select-none animate-in fade-in duration-150"
         >
           {/* TOP ANNUNCIATOR STRIP & SHIFT LIGHTS */}
           <div className="w-full flex items-center justify-between text-[#9ba3af] text-[9px] font-mono font-bold uppercase tracking-wider border-b border-[#2a2e38] pb-2.5 gap-2">

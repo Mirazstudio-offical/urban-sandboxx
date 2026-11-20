@@ -16,7 +16,7 @@
  */
 
 import { getCurrentSunShadowState } from '../shadowSystem';
-import { isMobileOrLowEndDevice } from '../performanceConfig';
+import { isSoftwareWebGL } from './webglUtils';
 
 export interface PostFxSettings {
   bloom: number;           // 0..100
@@ -1855,6 +1855,7 @@ export class GpuPostFx {
       powerPreference: 'high-performance',
     });
     if (!gl) throw new Error('webgl2 unavailable');
+    if (isSoftwareWebGL(gl)) throw new Error('software webgl detected; using fast 2D fallback');
     this.gl = gl;
 
     this.target.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.lost = true; this.available = false; });
@@ -1863,7 +1864,7 @@ export class GpuPostFx {
       try { this.init(); } catch { this.available = false; }
     });
 
-    this.hdrFormat = !isMobileOrLowEndDevice() && !!gl.getExtension('EXT_color_buffer_float');
+    this.hdrFormat = !!gl.getExtension('EXT_color_buffer_float');
     if (this.hdrFormat) gl.getExtension('OES_texture_float_linear');
 
     this.pDown = this.makeProgram(VS, FS_DOWN, ['uTex', 'uTexel', 'uThreshold', 'uKnee']);
