@@ -1,5 +1,5 @@
 import type { VehicleRenderContext } from './vehicleArchetypes';
-import { ensureExcavatorState, getExcavatorGeometry } from './excavatorSystem';
+import { ensureExcavatorState, getExcavatorGeometry, EK12_EXHAUST_LOCAL } from './excavatorSystem';
 import { getVehicleTurnSignalDynamicState } from './vehicleHelpers';
 import { getCurrentSunShadowState } from './shadowSystem';
 
@@ -14,10 +14,11 @@ function shadeHex(hex: string, factor: number): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-function drawAmberBeacon(ctx: CanvasRenderingContext2D, x: number, y: number, active: boolean, radius = 1.9): void {
+// Beacon lens is ~0.2-0.25 m across on the real machine (1 m = 10 px), so radius stays ~1 px.
+function drawAmberBeacon(ctx: CanvasRenderingContext2D, x: number, y: number, active: boolean, radius = 0.95): void {
   ctx.fillStyle = '#0f172a';
   ctx.beginPath();
-  ctx.arc(x, y, radius + 0.65, 0, Math.PI * 2);
+  ctx.arc(x, y, radius + 0.35, 0, Math.PI * 2);
   ctx.fill();
 
   if (active) {
@@ -35,9 +36,9 @@ function drawAmberBeacon(ctx: CanvasRenderingContext2D, x: number, y: number, ac
 
   if (active) {
     const pulse = 0.45 + Math.sin(Date.now() * 0.012) * 0.55;
-    ctx.fillStyle = `rgba(245, 158, 11, ${(0.34 * pulse).toFixed(3)})`;
+    ctx.fillStyle = `rgba(245, 158, 11, ${(0.24 * pulse).toFixed(3)})`;
     ctx.beginPath();
-    ctx.arc(x, y, radius * 2.2, 0, Math.PI * 2);
+    ctx.arc(x, y, radius * 1.7, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -55,9 +56,9 @@ function drawDualTireAssembly(
     ctx.rotate(steerAngle);
   }
 
-  const rL = 5.0; // 9.00-20 wheel outer diameter ~10px (~1.0m)
-  const singleW = 2.45;
-  const dualGap = 0.55;
+  const rL = 5.5; // 10.00-20 wheel outer diameter ~11px (~1.1m)
+  const singleW = 2.8; // ~280 mm section width (10.00-20 / 12.00-20 range)
+  const dualGap = 0.4;
 
   const drawSingle = (yOff: number, isOuter: boolean) => {
     const y0 = yOff - singleW * 0.5;
@@ -186,18 +187,21 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.lineTo(frontAxleX - 2.0, 0);
     ctx.stroke();
 
-    // Heavy side undercarriage mudguards & boarding step rails
+    // Boarding steps / tool boxes sit BETWEEN the axles only, so they never cover the tires
+    const wheelHalfLen = 5.5;
+    const stepX0 = rearAxleX + wheelHalfLen + 1.0;
+    const stepLen = frontAxleX - rearAxleX - (wheelHalfLen + 1.0) * 2;
     [-1, 1].forEach((side) => {
-      const sy = side < 0 ? -halfW + 0.6 : halfW - 4.0;
+      const sy = side < 0 ? -halfW + 1.0 : halfW - 4.4;
       ctx.fillStyle = '#1e293b';
-      ctx.fillRect(-halfL + 4.5, sy, halfL * 1.45, 3.4);
+      ctx.fillRect(stepX0, sy, stepLen, 3.4);
       ctx.strokeStyle = '#334155';
       ctx.lineWidth = 0.8;
-      ctx.strokeRect(-halfL + 4.5, sy, halfL * 1.45, 3.4);
+      ctx.strokeRect(stepX0, sy, stepLen, 3.4);
     });
 
     // 4. Front 2500mm Hydraulic Bulldozer Blade (Отвал передний)
-    const bladeX = halfL + 4.1 - bladePos * 1.5; // Tuck closer/lower to grade when pressed down
+    const bladeX = halfL + 1.0 - bladePos * 0.8; // Blade hangs right off the frame end; pressed down it tucks in
     const bladeW = halfW * 2 + 1.0; // 2500mm full coverage (~26px)
     const bladeHalfW = bladeW * 0.5;
     const bladeElevOffset = (1 - bladePos) * 2.2;
@@ -206,27 +210,28 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.fillStyle = `rgba(0, 0, 0, ${(0.34 - bladePos * 0.14).toFixed(2)})`;
     ctx.fillRect(bladeX - 1.2 + bladeElevOffset, -bladeHalfW + 0.5, 3.4, bladeW - 1.0);
 
-    // Twin push-beams connecting front axle frame to blade back
-    [-6.6, 6.6].forEach((py) => {
+    // Short twin push-arms (inboard of the wheels) connecting the frame to the blade back
+    [-4.6, 4.6].forEach((py) => {
       ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 2.6;
+      ctx.lineWidth = 2.4;
       ctx.beginPath();
-      ctx.moveTo(frontAxleX - 1.0, py * 0.85);
-      ctx.lineTo(bladeX - 1.2, py);
+      ctx.moveTo(frontAxleX + 2.0, py);
+      ctx.lineTo(bladeX - 1.8, py);
       ctx.stroke();
 
-      // Blade lift hydraulic cylinder & chrome rod
+      // Blade lift hydraulic cylinder & chrome rod (short, parallel to the push-arm)
+      const cylY = py * 0.62;
       ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 1.7;
       ctx.beginPath();
-      ctx.moveTo(frontAxleX + 1.6, py * 0.68);
-      ctx.lineTo(bladeX - 3.6 + bladePos * 1.0, py * 0.72);
+      ctx.moveTo(frontAxleX + 2.8, cylY);
+      ctx.lineTo(bladeX - 3.6 + bladePos * 0.5, cylY);
       ctx.stroke();
       ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1.1;
+      ctx.lineWidth = 1.0;
       ctx.beginPath();
-      ctx.moveTo(bladeX - 3.6 + bladePos * 1.0, py * 0.72);
-      ctx.lineTo(bladeX - 0.8, py * 0.74);
+      ctx.moveTo(bladeX - 3.6 + bladePos * 0.5, cylY);
+      ctx.lineTo(bladeX - 1.6, cylY);
       ctx.stroke();
     });
 
@@ -279,52 +284,67 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       ctx.fillRect(-halfL + 0.8, ly + 1.3, 0.8, 0.7);
     });
 
+    // Outriggers move VERTICALLY: the arm stub and the cylinder stay put in plan view, only the
+    // foot pad drops to the ground. Height is shown through the pad lift, scale and ground shadow.
+    const chRelCam = (vCtx.cameraAngle ?? (car.angle || 0)) - (car.angle || 0);
+    const chUpX = Math.cos(chRelCam);
+    const chUpY = Math.sin(chRelCam);
+    const LIFT_PX_PER_M = 4.2;
+    const padHeightM = (1 - outPos) * 0.55; // stowed pad hangs ~0.55 m above grade
+    const padLiftPx = padHeightM * LIFT_PX_PER_M;
+    const padScale = 1 + padHeightM * 0.12;
+
     [-1, 1].forEach((side, idx) => {
       const hingeY = side * outMountY;
-      // Hinged outrigger arm unfolds rearward & outward smoothly with outPos (0..1)
-      const padX = outMountX - 3.6 - outPos * 2.8;
-      const padY = side * (8.4 + outPos * 4.4);
+      const padX = -halfL + 0.6;
+      const padY = side * 10.0;
       const isPlanted = contacts[idx];
 
-      // Ground pressure ring when planted
-      if (isPlanted) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
-        ctx.fillRect(padX - 2.6, padY - 2.3, 5.2, 4.6);
-      }
+      // Ground footprint of the pad: stays on the ground, darkens as the pad presses down
+      ctx.fillStyle = `rgba(0, 0, 0, ${(isPlanted ? 0.42 : 0.14 + outPos * 0.16).toFixed(2)})`;
+      ctx.fillRect(padX - 2.4, padY - 2.2, 4.8, 4.4);
 
-      // Stabilizer arm weldment
+      // Stabilizer arm weldment (fixed short stub from the rear cross-beam)
       ctx.strokeStyle = '#1e293b';
       ctx.lineWidth = 3.0;
       ctx.beginPath();
       ctx.moveTo(outMountX, hingeY);
-      ctx.lineTo(padX, padY);
+      ctx.lineTo(padX + 1.2, padY);
       ctx.stroke();
 
-      // Hydraulic ram cylinder
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1.9;
-      ctx.beginPath();
-      ctx.moveTo(outMountX + 1.4, hingeY * 0.72);
-      ctx.lineTo(outMountX + (padX - outMountX) * 0.55, hingeY * 0.72 + (padY - hingeY * 0.72) * 0.55);
-      ctx.stroke();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.moveTo(outMountX + (padX - outMountX) * 0.55, hingeY * 0.72 + (padY - hingeY * 0.72) * 0.55);
-      ctx.lineTo(padX, padY);
-      ctx.stroke();
-
-      // Wide hinged steel stabilizer pad
+      // Foot pad (drops straight down; lifted along screen-up while stowed)
+      const px = padX + chUpX * padLiftPx;
+      const py = padY + chUpY * padLiftPx;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.scale(padScale, padScale);
       ctx.fillStyle = isPlanted ? '#334155' : '#475569';
       ctx.beginPath();
-      ctx.roundRect(padX - 2.2, padY - 2.0, 4.4, 4.0, 0.6);
+      ctx.roundRect(-2.2, -2.0, 4.4, 4.0, 0.6);
       ctx.fill();
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 0.8;
       ctx.stroke();
       // Ribbed tread + warning yellow cap on footpad
       ctx.fillStyle = '#eab308';
-      ctx.fillRect(padX - 1.6, padY - 0.5, 3.2, 1.0);
+      ctx.fillRect(-1.6, -0.5, 3.2, 1.0);
+      ctx.restore();
+
+      // Vertical hydraulic cylinder seen from above: round barrel on the arm end, chrome rod inside
+      const cx = padX + 1.2 + chUpX * 0.7 * LIFT_PX_PER_M;
+      const cy = padY + chUpY * 0.7 * LIFT_PX_PER_M;
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 0.5, 0, Math.PI * 2);
+      ctx.fill();
     });
 
     // 6. Central Slewing Ring Bearing (ОПУ) at (geom.turretLocalX, 0)
@@ -369,16 +389,16 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     const shadowHeightScale = 5.4; // Ground cast shadow offset px per meter of elevation
 
     const PX_PER_M = 10.0;
-    const LIFT_PX_PER_M = 4.2; // Oblique 2.5D elevation shift toward screen-top
     const armY = geom.armMountOffsetY;
 
+    // TOP-DOWN plan projection: a point is drawn exactly above its ground footprint (r, lat).
+    // Height never shifts the sprite sideways (that read as a side view); it only gives a mild
+    // width/scale cue, while the cast shadow below carries the real height information.
     const proj = (rM: number, latM: number, zM: number): { x: number; y: number; s: number; z: number } => {
-      const gx = rM * PX_PER_M;
-      const gy = armY + latM * PX_PER_M;
-      const s = Math.max(0.72, Math.min(1.48, 1.0 + zM * 0.068));
+      const s = Math.max(0.9, Math.min(1.18, 1.0 + zM * 0.03));
       return {
-        x: gx + upX * (zM * LIFT_PX_PER_M),
-        y: gy + upY * (zM * LIFT_PX_PER_M),
+        x: rM * PX_PER_M,
+        y: armY + latM * PX_PER_M,
         s,
         z: zM,
       };
@@ -539,15 +559,30 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     }
 
     // Diesel Exhaust Stack + Air Cyclone Pre-Cleaner
-    const exhX = -8.4;
-    const exhY = 2.8;
+    // Vertical stack on the turret deck; its position is shared with the smoke emitter (EK12_EXHAUST_LOCAL)
+    const exhX = EK12_EXHAUST_LOCAL.x;
+    const exhY = EK12_EXHAUST_LOCAL.y;
+    const stackTopX = exhX + upX * 3.2;
+    const stackTopY = exhY + upY * 3.2;
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
     ctx.arc(exhX, exhY, 1.65, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 2.0;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(exhX, exhY);
+    ctx.lineTo(stackTopX, stackTopY);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(stackTopX, stackTopY, 1.4, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = '#475569';
     ctx.beginPath();
-    ctx.arc(exhX, exhY, 0.8, 0, Math.PI * 2);
+    ctx.arc(stackTopX, stackTopY, 0.7, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
@@ -646,7 +681,7 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     });
 
     // Rotating Amber Beacon on cab rear-left roof corner
-    drawAmberBeacon(ctx, cabX + 2.0, cabY + 2.0, isIgnitionOn, 1.75);
+    drawAmberBeacon(ctx, cabX + 2.0, cabY + 2.0, isIgnitionOn, 0.95);
     ctx.restore(); // end cabRoofLift
     ctx.restore(); // end houseLift
 
@@ -659,15 +694,15 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     const pStick = proj(geom.stickTipR_m, 0, geom.stickTipZ_m);
     const pBucketMid = proj(geom.bucketMidR_m, 0, geom.bucketMidZ_m);
 
-    // Helper: draw an extruded 3D box-beam segment from A to B with side-wall thickness & perspective taper
-    const drawBoxBeam3D = (
+    // Helper: draw a welded box-beam segment from A to B as seen from straight above
+    // (tapered top face, darker side rails, centre ridge highlight).
+    const drawBoxBeamPlan = (
       a: { x: number; y: number; s: number; z: number },
       b: { x: number; y: number; s: number; z: number },
       halfWA: number,
       halfWB: number,
-      depthPx: number,
       topFill: string,
-      sideFill: string
+      railFill: string
     ) => {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -676,43 +711,8 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       const ny = dx / len;
       const wA = halfWA * a.s;
       const wB = halfWB * b.s;
-      const dA = depthPx * a.s;
-      const dB = depthPx * b.s;
 
-      // Bottom/flank depth wall shifted opposite screen-UP so beam reads as thick 3D box section
-      const bxA = a.x - upX * dA;
-      const byA = a.y - upY * dA;
-      const bxB = b.x - upX * dB;
-      const byB = b.y - upY * dB;
-
-      // Draw side wall silhouette connecting bottom face to top face
-      ctx.fillStyle = sideFill;
-      ctx.beginPath();
-      ctx.moveTo(bxA + nx * wA, byA + ny * wA);
-      ctx.lineTo(bxB + nx * wB, byB + ny * wB);
-      ctx.lineTo(bxB - nx * wB, byB - ny * wB);
-      ctx.lineTo(bxA - nx * wA, byA - ny * wA);
-      ctx.closePath();
-      ctx.fill();
-
-      // Side connecting quads (left & right flanks)
-      ctx.beginPath();
-      ctx.moveTo(a.x + nx * wA, a.y + ny * wA);
-      ctx.lineTo(b.x + nx * wB, b.y + ny * wB);
-      ctx.lineTo(bxB + nx * wB, byB + ny * wB);
-      ctx.lineTo(bxA + nx * wA, byA + ny * wA);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.moveTo(a.x - nx * wA, a.y - ny * wA);
-      ctx.lineTo(b.x - nx * wB, b.y - ny * wB);
-      ctx.lineTo(bxB - nx * wB, byB - ny * wB);
-      ctx.lineTo(bxA - nx * wA, byA - ny * wA);
-      ctx.closePath();
-      ctx.fill();
-
-      // Top sunlit face of welded steel boom/stick box
+      // Top face
       ctx.fillStyle = topFill;
       ctx.beginPath();
       ctx.moveTo(a.x + nx * wA, a.y + ny * wA);
@@ -721,17 +721,79 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       ctx.lineTo(a.x - nx * wA, a.y - ny * wA);
       ctx.closePath();
       ctx.fill();
+
+      // Darker side rails along both edges (outer 22% of the width)
+      ctx.fillStyle = railFill;
+      [1, -1].forEach((sgn) => {
+        ctx.beginPath();
+        ctx.moveTo(a.x + sgn * nx * wA, a.y + sgn * ny * wA);
+        ctx.lineTo(b.x + sgn * nx * wB, b.y + sgn * ny * wB);
+        ctx.lineTo(b.x + sgn * nx * wB * 0.78, b.y + sgn * ny * wB * 0.78);
+        ctx.lineTo(a.x + sgn * nx * wA * 0.78, a.y + sgn * ny * wA * 0.78);
+        ctx.closePath();
+        ctx.fill();
+      });
+
+      // Outline
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 0.95;
+      ctx.beginPath();
+      ctx.moveTo(a.x + nx * wA, a.y + ny * wA);
+      ctx.lineTo(b.x + nx * wB, b.y + ny * wB);
+      ctx.lineTo(b.x - nx * wB, b.y - ny * wB);
+      ctx.lineTo(a.x - nx * wA, a.y - ny * wA);
+      ctx.closePath();
       ctx.stroke();
 
-      // Center specular highlight / steel hydraulic piping along spine
+      // Centre ridge highlight
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
       ctx.lineWidth = Math.max(0.6, 0.7 * ((a.s + b.s) * 0.5));
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
+    };
+
+    // Everything below grade is hidden: clip a part so the stretch of it that is underground
+    // is cut away and the ground (with the trench vignette drawn earlier) shows through.
+    // pts are the part's outline in (radius, height) metres; closed polygons close back to the first point.
+    const drawWithBuriedClip = (
+      pts: { r: number; z: number }[],
+      halfWidthPx: number,
+      closed: boolean,
+      draw: () => void
+    ) => {
+      const ZC = -0.02;
+      let rMin = Infinity;
+      let rMax = -Infinity;
+      const n = pts.length;
+      for (let i = 0; i < n; i++) {
+        if (pts[i].z < ZC) {
+          rMin = Math.min(rMin, pts[i].r);
+          rMax = Math.max(rMax, pts[i].r);
+        }
+      }
+      const edges = closed ? n : n - 1;
+      for (let i = 0; i < edges; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % n];
+        if ((a.z < ZC) !== (b.z < ZC)) {
+          const rc = a.r + ((b.r - a.r) * (ZC - a.z)) / (b.z - a.z);
+          rMin = Math.min(rMin, rc);
+          rMax = Math.max(rMax, rc);
+        }
+      }
+      if (rMax < rMin) {
+        draw();
+        return;
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(-400, -400, 800, 800);
+      ctx.rect(rMin * PX_PER_M - 0.4, armY - halfWidthPx, (rMax - rMin) * PX_PER_M + 0.8, halfWidthPx * 2);
+      ctx.clip('evenodd');
+      draw();
+      ctx.restore();
     };
 
     const drawHydraulicCylinder3D = (
@@ -778,27 +840,6 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       ctx.stroke();
     };
 
-    // Vertical plumb guide connecting ground footprint (z=0) to elevated/sunken bucket
-    // Gives immediate, unambiguous 3D height perception at every turret angle
-    if (Math.abs(geom.bucketHeightM) > 0.35 && (car.isPlayerControlled || car.exOperatorMode)) {
-      ctx.save();
-      ctx.strokeStyle =
-        geom.bucketHeightM < 0 ? 'rgba(248, 113, 113, 0.55)' : 'rgba(226, 232, 240, 0.42)';
-      ctx.lineWidth = 1.0;
-      ctx.setLineDash([2.5, 2.5]);
-      ctx.beginPath();
-      ctx.moveTo(bucketGroundX, bucketGroundY);
-      ctx.lineTo(pBucketMid.x, pBucketMid.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      // Ground anchor dot directly beneath bucket
-      ctx.fillStyle = geom.bucketHeightM < 0 ? 'rgba(239, 68, 68, 0.75)' : 'rgba(226, 232, 240, 0.55)';
-      ctx.beginPath();
-      ctx.arc(bucketGroundX, bucketGroundY, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
     // Segment draw routines for true Z-sorted painter's occlusion
     const drawBoomLower = () => {
       // Boom Pivot Saddle on turret deck
@@ -820,13 +861,13 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       });
 
       const zShade = geom.boomKneeZ_m > 2.2 ? bodyBright : bodyPaint;
-      drawBoxBeam3D(pBase, pKnee, 2.1, 2.45, 2.8, zShade, bodyDark);
+      drawBoxBeamPlan(pBase, pKnee, 2.1, 2.45, zShade, bodyDark);
       drawPin3D(pBase, 1.15);
     };
 
     const drawBoomUpper = () => {
       const zShade = geom.boomTipZ_m > 2.8 ? bodyBright : geom.boomTipZ_m < 0.2 ? shadeHex(bodyPaint, 0.86) : bodyPaint;
-      drawBoxBeam3D(pKnee, pTip, 2.45, 1.55, 2.5, zShade, bodyDark);
+      drawBoxBeamPlan(pKnee, pTip, 2.45, 1.55, zShade, bodyDark);
 
       // Boom-mounted halogen work floodlight on left flank of upper boom
       const lampR = geom.boomKneeR_m + (geom.boomTipR_m - geom.boomKneeR_m) * 0.35;
@@ -852,7 +893,7 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     const drawStick = () => {
       const avgZ = (geom.boomTipZ_m + geom.stickTipZ_m) * 0.5;
       const stickDepthFactor = avgZ < 0 ? Math.max(0.68, 1.0 + avgZ * 0.1) : avgZ > 2.8 ? 1.1 : 0.98;
-      drawBoxBeam3D(pTip, pStick, 1.55, 1.05, 1.9, shadeHex(bodyPaint, stickDepthFactor), bodyDark);
+      drawBoxBeamPlan(pTip, pStick, 1.55, 1.05, shadeHex(bodyPaint, stickDepthFactor), bodyDark);
 
       // Bucket Hydraulic Cylinder along back of stick -> dogbone linkage near stick tip
       const bCylA = proj(
@@ -1002,12 +1043,69 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       drawPin3D(pStick, 1.1);
     };
 
+    // Bucket outline in (radius, height): wrist pin, heel, cutting lip, tooth tips (same maths as drawBucket3D)
+    const bucketOutline = (() => {
+      const bp = geom.bucketPitch;
+      const cosB = Math.cos(bp);
+      const sinB = Math.sin(bp);
+      const hc = Math.cos(bp + Math.PI * 0.5);
+      const hs = Math.sin(bp + Math.PI * 0.5);
+      const rPin = geom.stickTipR_m;
+      const zPin = geom.stickTipZ_m;
+      return [
+        { r: rPin, z: zPin },
+        { r: rPin + cosB * 0.44 + hc * 0.52, z: zPin + sinB * 0.44 + hs * 0.52 },
+        { r: rPin + cosB * (1.05 * 0.84), z: zPin + sinB * (1.05 * 0.84) },
+        { r: rPin + cosB * (1.05 * 1.08), z: zPin + sinB * (1.05 * 1.08) },
+      ];
+    })();
+
     // Sort the 4 articulated rigid assemblies by true average elevation (lowest Z first -> highest Z on top!)
+    // Each part is clipped against the ground plane, so nothing below grade is drawn.
     const parts: { z: number; draw: () => void }[] = [
-      { z: (geom.boomBaseZ_m + geom.boomKneeZ_m) * 0.5, draw: drawBoomLower },
-      { z: (geom.boomKneeZ_m + geom.boomTipZ_m) * 0.5 + 0.05, draw: drawBoomUpper },
-      { z: (geom.boomTipZ_m + geom.stickTipZ_m) * 0.5, draw: drawStick },
-      { z: (geom.stickTipZ_m + geom.bucketMidZ_m) * 0.5, draw: drawBucket3D },
+      {
+        z: (geom.boomBaseZ_m + geom.boomKneeZ_m) * 0.5,
+        draw: () =>
+          drawWithBuriedClip(
+            [
+              { r: geom.boomBaseR_m, z: geom.boomBaseZ_m },
+              { r: geom.boomKneeR_m, z: geom.boomKneeZ_m },
+            ],
+            3.8,
+            false,
+            drawBoomLower
+          ),
+      },
+      {
+        z: (geom.boomKneeZ_m + geom.boomTipZ_m) * 0.5 + 0.05,
+        draw: () =>
+          drawWithBuriedClip(
+            [
+              { r: geom.boomKneeR_m, z: geom.boomKneeZ_m },
+              { r: geom.boomTipR_m, z: geom.boomTipZ_m },
+            ],
+            3.8,
+            false,
+            drawBoomUpper
+          ),
+      },
+      {
+        z: (geom.boomTipZ_m + geom.stickTipZ_m) * 0.5,
+        draw: () =>
+          drawWithBuriedClip(
+            [
+              { r: geom.boomTipR_m, z: geom.boomTipZ_m },
+              { r: geom.stickTipR_m, z: geom.stickTipZ_m },
+            ],
+            3.4,
+            false,
+            drawStick
+          ),
+      },
+      {
+        z: (geom.stickTipZ_m + geom.bucketMidZ_m) * 0.5,
+        draw: () => drawWithBuriedClip(bucketOutline, 5.6, true, drawBucket3D),
+      },
     ];
     parts.sort((a, b) => a.z - b.z);
     for (const part of parts) {

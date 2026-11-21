@@ -29,6 +29,12 @@ export const EK12_SPECS = {
   fuelTankL: 210,
 } as const;
 
+// Exhaust stack position in turret-local px (1 m = 10 px). Shared by the renderer (stack sprite)
+// and by the smoke emitter in physics.ts so the smoke leaves the pipe and follows the turret.
+export const EK12_EXHAUST_LOCAL = { x: -8.4, y: 2.8 } as const;
+// Turret slewing ring centre in vehicle-local px (must match getExcavatorGeometry).
+export const EK12_TURRET_LOCAL_X = -1.8;
+
 const TERRAIN_K = 2.5;
 const ATTITUDE_RATE = 4.0;
 const SLEW_SPEED_RAD_S = (EK12_SPECS.slewSpeedRpm * Math.PI * 2) / 60; // ~0.942 rad/s
@@ -122,7 +128,7 @@ export interface ExcavatorGeometry {
 
 export function getExcavatorGeometry(v: Vehicle): ExcavatorGeometry {
   const halfL = (v.length || 49) / 2;
-  const turretLocalX = -1.8;
+  const turretLocalX = EK12_TURRET_LOCAL_X;
   const turretLocalY = 0;
   const turretAngle = v.exTurretAngle ?? 0;
   const boomElev = clamp01(v.exBoomElev ?? 0.56);
@@ -204,7 +210,7 @@ export function getExcavatorGeometry(v: Vehicle): ExcavatorGeometry {
   const [worldBucketX, worldBucketY] = toWorld(bucketMidR_m);
 
   // Blade sits ahead of front frame
-  const bladeLocalX = halfL + 4.0;
+  const bladeLocalX = halfL + 1.0; // blade hangs right off the frame end (matches excavatorVisuals)
   const worldBladeCenterX = v.x + cosV * bladeLocalX;
   const worldBladeCenterY = v.y + sinV * bladeLocalX;
 

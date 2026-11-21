@@ -6,7 +6,7 @@ import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
 import { isPtoOn, hasPtoDrive, getPtoWorkingRPM } from './ptoSystem';
 import { isVehicleVacuumTruck } from './truckChassisVariants';
-import { isExcavatorVehicle, isExcavatorRoadLocked, updateExcavatorSuperstructure } from './excavatorSystem';
+import { isExcavatorVehicle, isExcavatorRoadLocked, updateExcavatorSuperstructure, EK12_EXHAUST_LOCAL, EK12_TURRET_LOCAL_X } from './excavatorSystem';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
 import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight } from './items';
@@ -3483,7 +3483,14 @@ export function getVehicleAnchor(
       r = 0.45 * W;
     }
   } else if (type === 'exhaust') {
-    if (isTractor) {
+    if (carType === 'excavator_ek12') {
+      // EK-12: the stack stands on the revolving turret deck, so the smoke follows the slewing angle
+      const ta = (car as Vehicle).exTurretAngle ?? 0;
+      const cosT = Math.cos(ta);
+      const sinT = Math.sin(ta);
+      f = EK12_TURRET_LOCAL_X + cosT * EK12_EXHAUST_LOCAL.x - sinT * EK12_EXHAUST_LOCAL.y;
+      r = sinT * EK12_EXHAUST_LOCAL.x + cosT * EK12_EXHAUST_LOCAL.y;
+    } else if (isTractor) {
       // MTZ Tractor: Vertical hood exhaust stack on front-right hood
       f = 0.22 * L;
       r = -0.38 * W;
