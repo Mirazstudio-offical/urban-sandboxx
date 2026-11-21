@@ -6,6 +6,7 @@ interface ShiftKnobModelProps {
   isAuto: boolean;
   isTractor: boolean;
   is6Speed: boolean;
+  isHydro2Range?: boolean;
   currentGearKey: string;
   localRange?: 1 | 2;
   tiltX: number;
@@ -17,13 +18,16 @@ export const ShiftKnobModel: React.FC<ShiftKnobModelProps> = ({
   isAuto,
   isTractor,
   is6Speed,
+  isHydro2Range = false,
   currentGearKey,
   localRange = 1,
   tiltX,
   tiltY,
 }) => {
   // Normalize current active gear label
-  const activeGear = currentGearKey;
+  const activeGear = isHydro2Range && theme !== 'machinery'
+    ? (currentGearKey === '2' ? 'Т' : currentGearKey === '1' ? 'Р' : currentGearKey === 'R' ? 'З' : 'Н')
+    : currentGearKey;
 
   return (
     <div
@@ -93,16 +97,26 @@ export const ShiftKnobModel: React.FC<ShiftKnobModelProps> = ({
           </div>
 
           {/* Hydrostatic Gate Display */}
-          <div className="w-11 h-9 mt-1 rounded-xl bg-stone-950 border border-amber-500/50 flex flex-col items-center justify-center shadow-inner p-0.5">
-            <div className="text-[7px] font-black font-mono text-amber-400 tracking-wider mb-0.5">
+          <div className="w-12 h-9 mt-1 rounded-xl bg-stone-950 border border-amber-500/50 flex flex-col items-center justify-center shadow-inner p-0.5">
+            <div className="text-[6.5px] font-black font-mono text-amber-400 tracking-wider mb-0.5">
               ГСТ · ХОД
             </div>
-            {/* 3-position hydrostatic gate: F (Drive), N (Stop), R (Reverse) */}
-            <div className="flex items-center gap-1 text-[8.5px] font-black font-mono">
-              <span className={activeGear === 'D' || activeGear === 'F' || activeGear === '1' ? 'text-emerald-400 bg-emerald-950/90 px-1 py-0.2 rounded border border-emerald-500 scale-110 shadow-xs' : 'text-stone-500'}>F</span>
-              <span className={activeGear === 'N' || activeGear === 'P' || activeGear === '0' ? 'text-amber-400 bg-amber-950/90 px-1 py-0.2 rounded border border-amber-500 scale-110 shadow-xs' : 'text-stone-500'}>N</span>
-              <span className={activeGear === 'R' || activeGear === '-1' ? 'text-rose-400 bg-rose-950/90 px-1 py-0.2 rounded border border-rose-500 scale-110 shadow-xs' : 'text-stone-500'}>R</span>
-            </div>
+            {isHydro2Range ? (
+              /* 4-position 2-range hydrostatic gate: Т (Transport 2), Р (Working 1), Н (Neutral), З (Reverse) */
+              <div className="flex items-center gap-0.5 text-[8px] font-black font-mono">
+                <span className={activeGear === '2' ? 'text-sky-300 bg-sky-950/95 px-0.5 rounded border border-sky-400 scale-110 shadow-xs' : 'text-stone-500'}>Т</span>
+                <span className={activeGear === '1' || activeGear === 'D' || activeGear === 'F' ? 'text-emerald-400 bg-emerald-950/95 px-0.5 rounded border border-emerald-500 scale-110 shadow-xs' : 'text-stone-500'}>Р</span>
+                <span className={activeGear === 'N' || activeGear === 'P' || activeGear === '0' ? 'text-amber-400 bg-amber-950/95 px-0.5 rounded border border-amber-500 scale-110 shadow-xs' : 'text-stone-500'}>Н</span>
+                <span className={activeGear === 'R' || activeGear === '-1' ? 'text-rose-400 bg-rose-950/95 px-0.5 rounded border border-rose-500 scale-110 shadow-xs' : 'text-stone-500'}>З</span>
+              </div>
+            ) : (
+              /* 3-position hydrostatic gate: F (Drive), N (Stop), R (Reverse) */
+              <div className="flex items-center gap-1 text-[8.5px] font-black font-mono">
+                <span className={activeGear === 'D' || activeGear === 'F' || activeGear === '1' ? 'text-emerald-400 bg-emerald-950/90 px-1 py-0.2 rounded border border-emerald-500 scale-110 shadow-xs' : 'text-stone-500'}>F</span>
+                <span className={activeGear === 'N' || activeGear === 'P' || activeGear === '0' ? 'text-amber-400 bg-amber-950/90 px-1 py-0.2 rounded border border-amber-500 scale-110 shadow-xs' : 'text-stone-500'}>N</span>
+                <span className={activeGear === 'R' || activeGear === '-1' ? 'text-rose-400 bg-rose-950/90 px-1 py-0.2 rounded border border-rose-500 scale-110 shadow-xs' : 'text-stone-500'}>R</span>
+              </div>
+            )}
           </div>
         </div>
       )}

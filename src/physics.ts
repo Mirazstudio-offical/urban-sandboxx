@@ -8965,101 +8965,153 @@ export function updateVehiclePhysics(
         input.diffLockToggle = false;
       }
       
-      // Auto transmission logic
+      // Auto & Hydrostatic transmission logic
       if (eng.transmissionType === 'AUTO') {
-        if (!eng.autoGearMode) eng.autoGearMode = 'D';
-
-        eng.shiftCooldown = Math.max(0, (eng.shiftCooldown || 0) - dt);
-        if (eng.shiftCooldown <= 0) {
-          if (input.shiftUp) {
-            // Shift selector ladder: P -> R -> N -> D
-            if (eng.autoGearMode === 'P') eng.autoGearMode = 'R';
-            else if (eng.autoGearMode === 'R') eng.autoGearMode = 'N';
-            else if (eng.autoGearMode === 'N') eng.autoGearMode = 'D';
-            eng.shiftCooldown = 0.25;
-            sound.playButtonPress();
-            input.shiftUp = false;
-          } else if (input.shiftDown) {
-            // Shift selector ladder: D -> N -> R -> P
-            const oldMode = eng.autoGearMode;
-            if (eng.autoGearMode === 'D') eng.autoGearMode = 'N';
-            else if (eng.autoGearMode === 'N') eng.autoGearMode = 'R';
-            else if (eng.autoGearMode === 'R') eng.autoGearMode = 'P';
-            eng.shiftCooldown = 0.25;
-            sound.playButtonPress();
-            input.shiftDown = false;
-
-            // Destructive shift into Park 'P'or Reverse 'R'at speed
-            if (eng.autoGearMode === 'P'&& Math.abs(vehicle.speed) > 10) {
-              eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - 45);
-              sound.playCollision(0.9);
-              vehicle.speed *= 0.15; // violent jerk / parking pawl snap
-              if (eng.transmissionHealth <= 20) eng.transmissionJammed = true;
-              if (player && player.vehicleId === vehicle.id) {
-                addPlayerNotification(player, 'СРЕЗАН ФИКСАТОР ПАРКИНГА (PARKING PAWL)! Переключение в "P"на ходу!', 'warning');
+        const isHydro = eng.transmissionKind === 'HYDRO' || isRoadMachinery(vehicle.type);
+        if (isHydro) {
+          // 2-range Hydrostatic drive (ГСТ): R (-1) <-> N (0) <-> 1 (Рабочая) <-> 2 (Транспортная)
+          // Single Neutral (no Park pawl 'P' on hydrostatic range lever); operator chooses Working vs Transport range directly.
+          if (!eng.autoGearMode || eng.autoGearMode === 'P') {
+            eng.autoGearMode = 'N';
+            eng.currentGear = 0;
+          }
+          const maxHydroForward = Math.max(1, (eng.gearRatios?.length || 4) - 2);
+          eng.shiftCooldown = Math.max(0, (eng.shiftCooldown || 0) - dt);
+          if (eng.shiftCooldown <= 0) {
+            if (input.shiftUp) {
+              if (eng.autoGearMode === 'R' || eng.currentGear === -1) {
+                eng.autoGearMode = 'N';
+                eng.currentGear = 0;
+              } else if (eng.autoGearMode === 'N' || eng.currentGear === 0) {
+                eng.autoGearMode = 'D';
+                eng.currentGear = 1;
+              } else if (eng.currentGear < maxHydroForward) {
+                eng.autoGearMode = 'D';
+                eng.currentGear++;
               }
-            } else if (oldMode === 'N'&& eng.autoGearMode === 'R'&& Math.abs(vehicle.speed) > 12) {
-              eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - 35);
-              sound.playCollision(0.8);
-              if (eng.transmissionHealth <= 20) eng.transmissionJammed = true;
-              if (player && player.vehicleId === vehicle.id) {
-                addPlayerNotification(player, 'УДАР ПО АКПП! Включение задней передачи "R"на ходу!', 'warning');
+              eng.shiftCooldown = 0.25;
+              sound.playGearShift();
+              input.shiftUp = false;
+            } else if (input.shiftDown) {
+              if (eng.autoGearMode === 'D' && eng.currentGear > 1) {
+                eng.currentGear--;
+              } else if (eng.autoGearMode === 'D') {
+                eng.autoGearMode = 'N';
+                eng.currentGear = 0;
+              } else if (eng.autoGearMode === 'N' || eng.currentGear === 0) {
+                eng.autoGearMode = 'R';
+                eng.currentGear = -1;
+              }
+              eng.shiftCooldown = 0.25;
+              sound.playGearShift();
+              input.shiftDown = false;
+            }
+          }
+
+          if (eng.autoGearMode === 'R') {
+            eng.currentGear = -1;
+          } else if (eng.autoGearMode === 'N') {
+            eng.currentGear = 0;
+          } else {
+            eng.autoGearMode = 'D';
+            eng.currentGear = Math.max(1, Math.min(maxHydroForward, eng.currentGear || 1));
+          }
+          eng.clutchPedal = 1.0;
+        } else {
+          if (!eng.autoGearMode) eng.autoGearMode = 'D';
+
+          eng.shiftCooldown = Math.max(0, (eng.shiftCooldown || 0) - dt);
+          if (eng.shiftCooldown <= 0) {
+            if (input.shiftUp) {
+              // Shift selector ladder: P -> R -> N -> D
+              if (eng.autoGearMode === 'P') eng.autoGearMode = 'R';
+              else if (eng.autoGearMode === 'R') eng.autoGearMode = 'N';
+              else if (eng.autoGearMode === 'N') eng.autoGearMode = 'D';
+              eng.shiftCooldown = 0.25;
+              sound.playButtonPress();
+              input.shiftUp = false;
+            } else if (input.shiftDown) {
+              // Shift selector ladder: D -> N -> R -> P
+              const oldMode = eng.autoGearMode;
+              if (eng.autoGearMode === 'D') eng.autoGearMode = 'N';
+              else if (eng.autoGearMode === 'N') eng.autoGearMode = 'R';
+              else if (eng.autoGearMode === 'R') eng.autoGearMode = 'P';
+              eng.shiftCooldown = 0.25;
+              sound.playButtonPress();
+              input.shiftDown = false;
+
+              // Destructive shift into Park 'P'or Reverse 'R'at speed
+              if (eng.autoGearMode === 'P'&& Math.abs(vehicle.speed) > 10) {
+                eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - 45);
+                sound.playCollision(0.9);
+                vehicle.speed *= 0.15; // violent jerk / parking pawl snap
+                if (eng.transmissionHealth <= 20) eng.transmissionJammed = true;
+                if (player && player.vehicleId === vehicle.id) {
+                  addPlayerNotification(player, 'СРЕЗАН ФИКСАТОР ПАРКИНГА (PARKING PAWL)! Переключение в "P"на ходу!', 'warning');
+                }
+              } else if (oldMode === 'N'&& eng.autoGearMode === 'R'&& Math.abs(vehicle.speed) > 12) {
+                eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - 35);
+                sound.playCollision(0.8);
+                if (eng.transmissionHealth <= 20) eng.transmissionJammed = true;
+                if (player && player.vehicleId === vehicle.id) {
+                  addPlayerNotification(player, 'УДАР ПО АКПП! Включение задней передачи "R"на ходу!', 'warning');
+                }
               }
             }
           }
-        }
 
-        // Apply physical gear based on autoGearMode
-        if (eng.autoGearMode === 'P') {
-          eng.currentGear = 0;
-          vehicle.speed = 0;
-          vehicle.vx = 0;
-          vehicle.vy = 0;
-        } else if (eng.autoGearMode === 'R') {
-          eng.currentGear = -1;
-        } else if (eng.autoGearMode === 'N') {
-          eng.currentGear = 0;
-        } else if (eng.autoGearMode === 'D') {
-          if (eng.currentGear <= 0) eng.currentGear = 1;
+          // Apply physical gear based on autoGearMode
+          if (eng.autoGearMode === 'P') {
+            eng.currentGear = 0;
+            vehicle.speed = 0;
+            vehicle.vx = 0;
+            vehicle.vy = 0;
+          } else if (eng.autoGearMode === 'R') {
+            eng.currentGear = -1;
+          } else if (eng.autoGearMode === 'N') {
+            eng.currentGear = 0;
+          } else if (eng.autoGearMode === 'D') {
+            if (eng.currentGear <= 0) eng.currentGear = 1;
 
-          // Smooth automatic upshifts & downshifts with cooldown (only if engine is running)
-          // CVT: continuously variable belt — no stepped shifts at all (pulley ratio varies)
-          if (eng.transmissionKind === 'CVT') {
-            eng.shiftCooldown = 0;
-            // keep virtual first gear; ratio behavior handled in RPM coupling below
-          } else if (eng.engineRunning && eng.shiftCooldown <= 0) {
-            const maxForwardGear = (eng.gearRatios?.length || 7) - 2;
-            
-            // Adaptive Shift Logic (Smart Automatic Transmission)
-            // If in kickdown mode (holding W for >0.6s or pressing Shift) or in diesel runaway, hold gears until redline
-            const upshiftRatio = (isKickdown || eng.isDieselRunaway) ? 0.94 : 0.62;
-            const upshiftRPM = idleRPM + (redlineRPM - idleRPM) * upshiftRatio;
-            
-            // Downshift early if braking hard (engine braking assist) or in runaway, otherwise wait until low RPM
-            let downshiftRatio = (isKickdown || eng.isDieselRunaway) ? 0.65 : 0.32;
-            if (brake > 0.5) downshiftRatio = Math.max(downshiftRatio, 0.48);
-            
-            const downshiftRPM = idleRPM + (redlineRPM - idleRPM) * downshiftRatio;
+            // Smooth automatic upshifts & downshifts with cooldown (only if engine is running)
+            // CVT: continuously variable belt — no stepped shifts at all (pulley ratio varies)
+            if (eng.transmissionKind === 'CVT') {
+              eng.shiftCooldown = 0;
+              // keep virtual first gear; ratio behavior handled in RPM coupling below
+            } else if (eng.engineRunning && eng.shiftCooldown <= 0) {
+              const maxForwardGear = (eng.gearRatios?.length || 7) - 2;
+              
+              // Adaptive Shift Logic (Smart Automatic Transmission)
+              // If in kickdown mode (holding W for >0.6s or pressing Shift) or in diesel runaway, hold gears until redline
+              const upshiftRatio = (isKickdown || eng.isDieselRunaway) ? 0.94 : 0.62;
+              const upshiftRPM = idleRPM + (redlineRPM - idleRPM) * upshiftRatio;
+              
+              // Downshift early if braking hard (engine braking assist) or in runaway, otherwise wait until low RPM
+              let downshiftRatio = (isKickdown || eng.isDieselRunaway) ? 0.65 : 0.32;
+              if (brake > 0.5) downshiftRatio = Math.max(downshiftRatio, 0.48);
+              
+              const downshiftRPM = idleRPM + (redlineRPM - idleRPM) * downshiftRatio;
 
-            if (eng.engineRPM > upshiftRPM && eng.currentGear < maxForwardGear) {
-              eng.currentGear++;
-              // DSG dual-clutch: nearly instant; AMT robot: slow and jerky; classic AT: torque-converter pace
-              eng.shiftCooldown = eng.transmissionKind === 'DSG' ? 0.11 : eng.transmissionKind === 'AMT' ? 0.8 : 0.35;
-              sound.playGearShift();
-              if (eng.transmissionKind === 'AMT') {
-                vehicle.speed *= 0.86; // characteristic robotized "clunk" jolt on engagement
-              }
-            } else if (eng.engineRPM < downshiftRPM && eng.currentGear > 1) {
-              eng.currentGear--;
-              eng.shiftCooldown = eng.transmissionKind === 'DSG' ? 0.11 : eng.transmissionKind === 'AMT' ? 0.8 : 0.35;
-              sound.playGearShift();
-              if (eng.transmissionKind === 'AMT') {
-                vehicle.speed *= 0.88;
+              if (eng.engineRPM > upshiftRPM && eng.currentGear < maxForwardGear) {
+                eng.currentGear++;
+                // DSG dual-clutch: nearly instant; AMT robot: slow and jerky; classic AT: torque-converter pace
+                eng.shiftCooldown = eng.transmissionKind === 'DSG' ? 0.11 : eng.transmissionKind === 'AMT' ? 0.8 : 0.35;
+                sound.playGearShift();
+                if (eng.transmissionKind === 'AMT') {
+                  vehicle.speed *= 0.86; // characteristic robotized "clunk" jolt on engagement
+                }
+              } else if (eng.engineRPM < downshiftRPM && eng.currentGear > 1) {
+                eng.currentGear--;
+                eng.shiftCooldown = eng.transmissionKind === 'DSG' ? 0.11 : eng.transmissionKind === 'AMT' ? 0.8 : 0.35;
+                sound.playGearShift();
+                if (eng.transmissionKind === 'AMT') {
+                  vehicle.speed *= 0.88;
+                }
               }
             }
           }
+          eng.clutchPedal = 1.0;
         }
-        eng.clutchPedal = 1.0;
       }
       
       // Powertrain & Transmission Thermodynamics Initialization

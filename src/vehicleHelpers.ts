@@ -219,10 +219,12 @@ export function ensureVehicleEngineState(veh: Vehicle): EngineState {
 
   const isMachinery = isRoadMachinery(veh.type);
   if (isMachinery) {
-    // Road machinery is strictly hydrostatic drive (ГСТ): AUTO, F/N/R, no manual clutch or stepped gears
+    // Road machinery is strictly 2-range hydrostatic drive (ГСТ): R / N / 1 (РАБ) / 2 (ТР), no Park pawl
     const hydroTrn = TRANSMISSION_VARIANTS.find(t => t.id === 'trn_hydro_2r');
     eng.transmissionType = 'AUTO';
-    if (!eng.autoGearMode) eng.autoGearMode = veh.isParked ? 'P' : 'D';
+    if (!eng.autoGearMode || eng.autoGearMode === 'P') {
+      eng.autoGearMode = veh.isParked ? 'N' : 'D';
+    }
     eng.gearRatios = hydroTrn ? hydroTrn.ratios.slice() : [-3.6, 0, 5.2, 2.0];
     eng.finalDriveRatio = hydroTrn ? hydroTrn.finalDrive : 6.2;
     eng.transmissionKind = 'HYDRO';

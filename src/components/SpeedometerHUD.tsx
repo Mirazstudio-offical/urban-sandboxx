@@ -328,13 +328,16 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
 
   // Transmission & Gear display
   const isMachinery = carType.startsWith('roller_') || carType.startsWith('paver_') || carType.startsWith('excavator_');
+  const isHydro = eng?.transmissionKind === 'HYDRO' || isMachinery;
   let currentGearLabel = String(gear);
-  if (eng?.transmissionType === 'MANUAL') {
+  if (isHydro) {
+    if (eng?.autoGearMode === 'R' || eng?.currentGear === -1) currentGearLabel = 'R';
+    else if (eng?.autoGearMode === 'N' || eng?.autoGearMode === 'P' || eng?.currentGear === 0) currentGearLabel = 'N';
+    else currentGearLabel = (eng?.currentGear ?? 1) >= 2 ? 'ТР' : 'РАБ';
+  } else if (eng?.transmissionType === 'MANUAL') {
     if (eng.currentGear === -1) currentGearLabel = 'R';
     else if (eng.currentGear === 0) currentGearLabel = 'N';
-    else if (isMachinery) {
-      currentGearLabel = eng.currentGear === 1 ? '1 (РАБ)' : '2 (ТР)';
-    } else currentGearLabel = String(eng.currentGear);
+    else currentGearLabel = String(eng.currentGear);
   } else {
     const autoMode = eng?.autoGearMode || (typeof gear === 'string' && ['P', 'R', 'N', 'D'].includes(gear) ? gear : 'D');
     if (autoMode === 'D') {
@@ -637,7 +640,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 className="w-6 h-6 rounded-md flex items-center justify-center text-[13px] font-black font-mono bg-[#0b0c0e] border border-[#2a2e38] text-[#c68a35] shrink-0"
                 title="Передача"
               >
-                {currentGearLabel.length > 2 ? currentGearLabel.charAt(0) : currentGearLabel}
+                {currentGearLabel === 'РАБ' ? 'Р' : currentGearLabel === 'ТР' ? 'Т' : currentGearLabel.length > 2 ? currentGearLabel.charAt(0) : currentGearLabel}
               </span>
 
               {/* RPM: thin bar, no text */}
@@ -882,7 +885,16 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 <g
                   className="cursor-pointer"
                   onClick={() => {
-                    if (eng?.transmissionType === 'AUTO') {
+                    if (isHydro) {
+                      const hydroLadder: Array<'R' | 'N' | number> = ['R', 'N', 1, 2];
+                      const curKey: 'R' | 'N' | number = (eng?.autoGearMode === 'R' || eng?.currentGear === -1)
+                        ? 'R'
+                        : (eng?.autoGearMode === 'N' || eng?.autoGearMode === 'P' || eng?.currentGear === 0)
+                        ? 'N'
+                        : ((eng?.currentGear ?? 1) >= 2 ? 2 : 1);
+                      const nextIdx = (hydroLadder.indexOf(curKey) + 1) % hydroLadder.length;
+                      onSelectGear?.(hydroLadder[nextIdx]);
+                    } else if (eng?.transmissionType === 'AUTO') {
                       const ladder = ['P', 'R', 'N', 'D'] as const;
                       const curMode = eng.autoGearMode || 'D';
                       const nextIdx = (ladder.indexOf(curMode as any) + 1) % ladder.length;
@@ -894,14 +906,23 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                     }
                   }}
                 >
-                  <rect x="58" y="44" width="24" height="16" rx="3" fill="#020617" stroke="#334155" strokeWidth="1" />
+                  <rect
+                    x={currentGearLabel.length > 2 ? 54 : 58}
+                    y="44"
+                    width={currentGearLabel.length > 2 ? 32 : 24}
+                    height="16"
+                    rx="3"
+                    fill="#020617"
+                    stroke="#334155"
+                    strokeWidth="1"
+                  />
                   <text
                     x="70"
-                    y="56"
+                    y={currentGearLabel.length > 2 ? 55 : 56}
                     textAnchor="middle"
-                    fontSize="11"
+                    fontSize={currentGearLabel.length > 2 ? 8.5 : 11}
                     fontWeight="900"
-                    fill={currentGearLabel.startsWith('R') ? '#f59e0b' : currentGearLabel === 'P' ? '#ef4444' : '#38bdf8'}
+                    fill={currentGearLabel.startsWith('R') ? '#f59e0b' : currentGearLabel === 'P' ? '#ef4444' : currentGearLabel === 'РАБ' ? '#34d399' : '#38bdf8'}
                     fontFamily="monospace"
                   >
                     {currentGearLabel}

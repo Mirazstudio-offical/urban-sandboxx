@@ -44,6 +44,7 @@ import {
   getVehicleFuelCapPosition, 
   getVehicleWaterHoseAnchor,
   isTrailerVehicle, 
+  isRoadMachinery,
   PX_S_TO_SPEED_KMH, 
   hasRoadTrainLights, 
   toggleAxleDiffLock, 
@@ -4981,7 +4982,12 @@ export default function App() {
 
             if (playerCar.engineState) {
               const eng = playerCar.engineState;
-              if (eng.transmissionType === 'AUTO') {
+              const isHydro = eng.transmissionKind === 'HYDRO' || isRoadMachinery(playerCar.type);
+              if (isHydro) {
+                if (eng.autoGearMode === 'R' || eng.currentGear === -1) setGear('R');
+                else if (eng.autoGearMode === 'N' || eng.autoGearMode === 'P' || eng.currentGear === 0) setGear('N');
+                else setGear((eng.currentGear ?? 1) >= 2 ? '2' : '1');
+              } else if (eng.transmissionType === 'AUTO') {
                 setGear(eng.autoGearMode || 'D');
               } else {
                 setGear(eng.currentGear === -1 ? 'R': eng.currentGear === 0 ? 'N': String(eng.currentGear));
@@ -5993,11 +5999,14 @@ export default function App() {
         if (!player.notifications) player.notifications = [];
         player.notifications.push({ id: 'eng_batt_'+ Date.now(), text: 'Аккумулятор разряжен в 0%!', color: '#ef4444', timer: 3.0 });
       } else if (eng.transmissionType === 'AUTO'&& eng.autoGearMode !== 'P'&& eng.autoGearMode !== 'N') {
+        const isHydro = eng.transmissionKind === 'HYDRO' || isRoadMachinery(veh.type);
         sound.playButtonPress();
         if (!player.notifications) player.notifications = [];
         player.notifications.push({
           id: 'eng_inhibitor_'+ Date.now(),
-          text: 'Блокиратор стартера (АКПП)! Запуск разрешён только в режиме P (Паркинг) или N (Нейтраль).',
+          text: isHydro
+            ? 'Блокиратор стартера (ГСТ)! Переведите рычаг хода в Нейтраль [Н].'
+            : 'Блокиратор стартера (АКПП)! Запуск разрешён только в режиме P (Паркинг) или N (Нейтраль).',
           color: '#f59e0b',
           timer: 3.5
         });
@@ -6155,6 +6164,64 @@ export default function App() {
         text: `МТЗ: Включен ${r === 1 ? 'I Диапазон (Медленный)': 'II Диапазон (Скоростной)'}`,
         color: r === 1 ? '#f59e0b': '#38bdf8',
         timer: 1.8,
+      });
+      setVitalsRefreshTick(t => t + 1);
+      return;
+    }
+
+    const isHydro = eng.transmissionKind === 'HYDRO' || isRoadMachinery(veh.type);
+    if (isHydro) {
+      const maxHydroForward = Math.max(1, (eng.gearRatios?.length || 4) - 2);
+      const raw = typeof newGear === 'string' ? newGear.toUpperCase() : newGear;
+      let targetMode: 'R' | 'N' | 'D' = 'N';
+      let targetGear = 0;
+      let uiGear = 'N';
+      let label = 'ГСТ: Нейтраль [Н]';
+      let color = '#f59e0b';
+
+      if (raw === 'R' || raw === 'З' || raw === -1) {
+        targetMode = 'R';
+        targetGear = -1;
+        uiGear = 'R';
+        label = 'ГСТ: Задний ход [З]';
+        color = '#f43f5e';
+      } else if (raw === 'N' || raw === 'P' || raw === 'Н' || raw === 0) {
+        targetMode = 'N';
+        targetGear = 0;
+        uiGear = 'N';
+        label = 'ГСТ: Нейтраль [Н]';
+        color = '#f59e0b';
+      } else if (raw === 2 || raw === '2' || raw === 'Т' || raw === 'ТР') {
+        targetMode = 'D';
+        targetGear = Math.min(maxHydroForward, 2);
+        uiGear = String(targetGear);
+        label = targetGear >= 2 ? 'ГСТ: Транспортная [Т / 2]' : 'ГСТ: Рабочая [Р / 1]';
+        color = '#38bdf8';
+      } else if (raw === 1 || raw === '1' || raw === 'Р' || raw === 'РАБ') {
+        targetMode = 'D';
+        targetGear = 1;
+        uiGear = '1';
+        label = 'ГСТ: Рабочая [Р / 1]';
+        color = '#34d399';
+      } else {
+        targetMode = 'D';
+        targetGear = Math.max(1, Math.min(maxHydroForward, eng.currentGear || 1));
+        uiGear = String(targetGear);
+        label = targetGear >= 2 ? 'ГСТ: Транспортная [Т / 2]' : 'ГСТ: Рабочая [Р / 1]';
+        color = targetGear >= 2 ? '#38bdf8' : '#34d399';
+      }
+
+      eng.autoGearMode = targetMode;
+      eng.currentGear = targetGear;
+      eng.shiftCooldown = 0.25;
+      setGear(uiGear);
+      sound.playGearShift();
+      if (!player.notifications) player.notifications = [];
+      player.notifications.push({
+        id: 'gear_' + Date.now(),
+        text: label,
+        color,
+        timer: 1.5,
       });
       setVitalsRefreshTick(t => t + 1);
       return;
@@ -6355,7 +6422,16 @@ export default function App() {
             sound.stopEngine();
           }
 
-          if (eng.transmissionType === 'AUTO') {
+          const isHydro = eng.transmissionKind === 'HYDRO' || isRoadMachinery(closestVeh.type);
+          if (isHydro) {
+            if (eng.autoGearMode === 'P') {
+              eng.autoGearMode = 'N';
+              eng.currentGear = 0;
+            }
+            if (eng.autoGearMode === 'R' || eng.currentGear === -1) setGear('R');
+            else if (eng.autoGearMode === 'N' || eng.currentGear === 0) setGear('N');
+            else setGear((eng.currentGear ?? 1) >= 2 ? '2' : '1');
+          } else if (eng.transmissionType === 'AUTO') {
             const mode = eng.autoGearMode || 'P';
             setGear(mode);
           } else {

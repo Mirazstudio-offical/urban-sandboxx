@@ -567,7 +567,8 @@ export function applyPowertrain(veh: Vehicle, forcedPick?: PowertrainPick): void
   eng.transmissionType = (transmission.kind === 'MT' || transmission.kind === 'RANGE') ? 'MANUAL' : 'AUTO';
   if (machinery) eng.transmissionType = 'AUTO';
   if (eng.transmissionType === 'AUTO') {
-    eng.autoGearMode = veh.isParked ? 'P' : 'D';
+    const isHydro = machinery || transmission.kind === 'HYDRO';
+    eng.autoGearMode = veh.isParked ? (isHydro ? 'N' : 'P') : 'D';
   } else {
     eng.autoGearMode = undefined;
   }

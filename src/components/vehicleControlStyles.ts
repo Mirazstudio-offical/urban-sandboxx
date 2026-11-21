@@ -124,7 +124,7 @@ export interface ControlThemeMeta {
 export const CONTROL_THEME_META: Record<VehicleControlTheme, ControlThemeMeta> = {
   machinery: {
     wheelName: 'Руль спецтехники с лентяйкой',
-    knobName: 'Джойстик хода ГСТ (Вперед/Стоп/Назад)',
+    knobName: 'Селектор ГСТ (Транспорт / Рабочая / Нейтраль / Задняя)',
     badgeText: 'ГСТ / СПЕЦТЕХНИКА',
     accentColor: '#eab308',
     dialBorderColor: '#854d0e',

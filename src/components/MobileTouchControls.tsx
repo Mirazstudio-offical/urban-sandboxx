@@ -345,8 +345,14 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
   const [dragX, setDragX] = useState<number>(0);
   const touchIdRef = useRef<number | null>(null);
 
-  const isMachinery = (carType?.startsWith('roller_') || carType?.startsWith('paver_')) || false;
-  const isAuto = !isMachinery && (transmissionType === 'AUTO' || ['CVT', 'DSG', 'AMT', 'HYDRO'].includes(transmissionKind || ''));
+  const isMachinery = (
+    carType?.startsWith('roller_') ||
+    carType?.startsWith('paver_') ||
+    carType?.startsWith('excavator_') ||
+    transmissionKind === 'HYDRO'
+  );
+  const isHydro2Range = isMachinery && (gearCount === undefined || gearCount >= 2);
+  const isAuto = !isMachinery && (transmissionType === 'AUTO' || ['CVT', 'DSG', 'AMT'].includes(transmissionKind || ''));
   const isTractor = !isAuto && !isMachinery && (carType?.startsWith('tractor_') || false);
 
   // Gate pattern follows the ACTUAL gearbox, not a fixed car-type list:
@@ -369,10 +375,15 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
     if (tractorRange) setLocalRange(tractorRange);
   }, [tractorRange]);
 
-  const rawGearStr = String(gear || (isAuto || isMachinery ? 'D' : '1')).toUpperCase();
+  const rawGearStr = String(gear || (isHydro2Range ? '1' : isAuto || isMachinery ? 'D' : '1')).toUpperCase();
 
-  let currentGearKey = isAuto || isMachinery ? 'D' : '1';
-  if (isMachinery) {
+  let currentGearKey = isHydro2Range ? '1' : isAuto || isMachinery ? 'D' : '1';
+  if (isHydro2Range) {
+    if (rawGearStr === 'R' || rawGearStr === '-1' || rawGearStr === 'З') currentGearKey = 'R';
+    else if (rawGearStr === 'N' || rawGearStr === 'P' || rawGearStr === '0' || rawGearStr === 'Н') currentGearKey = 'N';
+    else if (rawGearStr === '2' || rawGearStr === 'D2' || rawGearStr === 'Т' || rawGearStr.includes('ТР')) currentGearKey = '2';
+    else currentGearKey = '1';
+  } else if (isMachinery) {
     if (rawGearStr.startsWith('R') || rawGearStr === '-1') currentGearKey = 'R';
     else if (rawGearStr.startsWith('N') || rawGearStr.startsWith('P') || rawGearStr === '0') currentGearKey = 'N';
     else currentGearKey = 'D';
@@ -402,6 +413,11 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
   }
 
   const activeGearRef = useRef<string>(currentGearKey);
+  useEffect(() => {
+    if (!isDragging) {
+      activeGearRef.current = currentGearKey;
+    }
+  }, [currentGearKey, isDragging]);
 
   // Notch offsets along Y-axis for Automatic (strictly dx = 0)
   const AUTO_NOTCHES: Record<string, number> = {
@@ -411,7 +427,15 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
     D: 24,
   };
 
-  // Notch offsets along Y-axis for Industrial Hydrostatic Drive (F: Forward, N: Neutral, R: Reverse)
+  // Notch offsets along Y-axis for 2-range Industrial Hydrostatic Drive (Т: Transport 2, Р: Working 1, Н: Neutral, З: Reverse)
+  const HYDRO_2RANGE_NOTCHES: Record<string, number> = {
+    '2': -24,
+    '1': -8,
+    'N': 8,
+    'R': 24,
+  };
+
+  // Notch offsets along Y-axis for single-range Industrial Hydrostatic Drive (F: Forward, N: Neutral, R: Reverse)
   const MACHINERY_NOTCHES: Record<string, number> = {
     D: -22,
     N: 0,
@@ -460,6 +484,7 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
   };
 
   const getRestingOffset = () => {
+    if (isHydro2Range) return { x: 0, y: HYDRO_2RANGE_NOTCHES[currentGearKey] ?? 8 };
     if (isMachinery) return { x: 0, y: MACHINERY_NOTCHES[currentGearKey] ?? 0 };
     if (isAuto) return { x: 0, y: AUTO_NOTCHES[currentGearKey] ?? 24 };
     if (isTractor) return MANUAL_MTZ_NOTCHES[currentGearKey] ?? { x: 0, y: 0 };
@@ -483,7 +508,24 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
     const rawDY = clientY - centerY;
     const rawDX = clientX - centerX;
 
-    if (isMachinery) {
+    if (isHydro2Range) {
+      // 2-RANGE HYDROSTATIC LEVER (ГСТ): Т (2 - Transport) / Р (1 - Working) / Н (Neutral) / З (Reverse)
+      let detectedNotch: '2' | '1' | 'N' | 'R' = 'N';
+      if (rawDY < -16) detectedNotch = '2';
+      else if (rawDY < 0) detectedNotch = '1';
+      else if (rawDY < 16) detectedNotch = 'N';
+      else detectedNotch = 'R';
+
+      setDragX(0);
+      setDragY(HYDRO_2RANGE_NOTCHES[detectedNotch]);
+
+      if (detectedNotch !== activeGearRef.current) {
+        activeGearRef.current = detectedNotch;
+        triggerHaptic(25);
+        sound.playGearShift();
+        onSelectGear?.(detectedNotch === '2' ? 2 : detectedNotch === '1' ? 1 : detectedNotch);
+      }
+    } else if (isMachinery) {
       // HYDROSTATIC LEVER: 1-AXIS SMOOTH FORWARD (D/F) / NEUTRAL (N) / REVERSE (R)
       let detectedNotch = 'N';
       if (rawDY < -11) detectedNotch = 'D';
@@ -759,8 +801,19 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       )}
 
       {/* AUTOMATIC OR MANUAL FLOATING GUIDE SLOTS */}
-      {isMachinery ? (
-        /* INDUSTRIAL HYDROSTATIC LEVER VERTICAL SLOT */
+      {isHydro2Range ? (
+        /* 2-RANGE INDUSTRIAL HYDROSTATIC LEVER VERTICAL SLOT (Т / Р / Н / З) */
+        <div className="absolute inset-y-2 w-full flex items-center justify-center pointer-events-none">
+          <div className="h-full w-1 bg-stone-900/90 border border-amber-500/40 rounded-full" />
+          <div className="absolute inset-y-0.5 right-0.5 flex flex-col justify-between items-center py-0.5">
+            <span className={`text-[7px] font-black font-mono px-1 rounded leading-tight transition-all ${currentGearKey === '2' ? 'text-sky-300 bg-sky-950/95 border border-sky-400 scale-110 shadow-xs' : 'text-stone-500'}`}>Т</span>
+            <span className={`text-[7px] font-black font-mono px-1 rounded leading-tight transition-all ${currentGearKey === '1' ? 'text-emerald-400 bg-emerald-950/95 border border-emerald-500 scale-110 shadow-xs' : 'text-stone-500'}`}>Р</span>
+            <span className={`text-[7px] font-black font-mono px-1 rounded leading-tight transition-all ${currentGearKey === 'N' ? 'text-amber-400 bg-amber-950/95 border border-amber-500 scale-110 shadow-xs' : 'text-stone-500'}`}>Н</span>
+            <span className={`text-[7px] font-black font-mono px-1 rounded leading-tight transition-all ${currentGearKey === 'R' ? 'text-rose-400 bg-rose-950/95 border border-rose-500 scale-110 shadow-xs' : 'text-stone-500'}`}>З</span>
+          </div>
+        </div>
+      ) : isMachinery ? (
+        /* SINGLE-RANGE INDUSTRIAL HYDROSTATIC LEVER VERTICAL SLOT */
         <div className="absolute inset-y-2.5 w-1 bg-stone-900/90 border border-amber-500/40 rounded-full flex flex-col justify-between items-center py-2 pointer-events-none">
           <div className="flex items-center justify-center">
             <span className={`text-[7px] font-black font-mono px-1 rounded transition-all ${currentGearKey === 'D' ? 'text-emerald-400 bg-emerald-950/90 border border-emerald-500 scale-110 shadow-xs' : 'text-stone-600'}`}>F</span>
@@ -955,6 +1008,7 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
           isAuto={isAuto}
           isTractor={isTractor}
           is6Speed={is6Speed}
+          isHydro2Range={isHydro2Range}
           currentGearKey={currentGearKey}
           localRange={localRange}
           tiltX={tiltX}
@@ -1335,6 +1389,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   gear = 'D',
   transmissionType = 'AUTO',
   transmissionKind,
+  gearCount,
   onSelectGear,
   onToggleEngine,
   isEngineRunning = true,
@@ -1770,6 +1825,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               gear={gear}
               transmissionType={transmissionType}
               transmissionKind={transmissionKind}
+              gearCount={gearCount}
               carType={carType}
               tractorRange={tractorRange}
               onSelectGear={onSelectGear}
