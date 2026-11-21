@@ -6,6 +6,7 @@ import {
   EquippedClothing, 
   GameWorld, 
   InventoryItem, 
+  Pedestrian,
   Player, 
   ScratchMark, 
   Vehicle, 
@@ -360,6 +361,7 @@ export interface SyncPedestrian {
   skinColor: string;
   shirtColor: string;
   pantsColor: string;
+  hairColor?: string;
 }
 
 export interface SyncWorldState {
@@ -368,6 +370,9 @@ export interface SyncWorldState {
   weather: WeatherType;
   gameMode: 'career' | 'freeroam';
   savePlayerData: boolean;
+  trafficEnabled?: boolean;
+  vehicleCount?: number;
+  pedestrianCount?: number;
   updatedAt?: number;
 }
 
@@ -381,7 +386,7 @@ export type NetworkPacket =
   | { type: 'auth_submit'; packetId: string; peerId: string; mode: 'register' | 'login'; nickname: string; password: string }
   | { type: 'auth_result'; packetId: string; success: boolean; mode?: 'register' | 'login' | 'none'; retryable?: boolean; attemptsLeft?: number; reason?: string; authenticatedNick?: string; settings?: ServerSettings; targetPeerId?: string }
   | { type: 'server_settings'; packetId: string; settings: ServerSettings; targetPeerId?: string }
-  | { type: 'traffic_sync'; packetId: string; vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] }
+  | { type: 'traffic_sync'; packetId: string; trafficEnabled?: boolean; vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] }
   | { type: 'world_state_sync'; packetId: string; worldState: SyncWorldState }
   | { type: 'kick'; packetId: string; reason: string; targetPeerId?: string }
   | { type: 'teleport'; packetId: string; x: number; y: number; reason?: string; targetPeerId?: string }
@@ -411,6 +416,7 @@ class OnlineManager {
   private lastSyncedDamageSig: string = '';
   private lastFullDamageSentAt: number = 0;
   private syncVehByIdMap: Map<string, Vehicle> = new Map();
+  private syncPedByIdMap: Map<string, Pedestrian> = new Map();
   public chatMessages: ChatMessage[] = [];
   public speechBubbles: Map<string, SpeechBubble> = new Map();
 
@@ -430,7 +436,8 @@ class OnlineManager {
   public onGuestServerSaveReceived?: (save: ServerPlayerSaveRecord) => void;
 
   private peerAntiCheatMap: Map<string, { lastX: number; lastY: number; lastTime: number; lastCash?: number; violations: number }> = new Map();
-  public lastTrafficSync: { vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] } | null = null;
+  public lastTrafficSync: { trafficEnabled?: boolean; receivedAt?: number; seq?: number; vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] } | null = null;
+  private trafficSyncSeq: number = 0;
   public lastWorldStateSync: SyncWorldState | null = null;
 
   private listeners: Set<() => void> = new Set();
@@ -1633,7 +1640,17 @@ class OnlineManager {
 
       case 'traffic_sync': {
         if (!this.isHost && packet.vehicles && packet.pedestrians) {
-          this.lastTrafficSync = { vehicles: packet.vehicles, pedestrians: packet.pedestrians };
+          this.trafficSyncSeq = (this.trafficSyncSeq + 1) % 1000000;
+          if (typeof packet.trafficEnabled === 'boolean') {
+            this.serverSettings.trafficEnabled = packet.trafficEnabled;
+          }
+          this.lastTrafficSync = {
+            trafficEnabled: packet.trafficEnabled ?? this.serverSettings.trafficEnabled,
+            receivedAt: Date.now(),
+            seq: this.trafficSyncSeq,
+            vehicles: packet.vehicles,
+            pedestrians: packet.pedestrians
+          };
         }
         break;
       }
@@ -1643,6 +1660,15 @@ class OnlineManager {
           this.lastWorldStateSync = { ...packet.worldState, updatedAt: Date.now() };
           if (typeof packet.worldState.savePlayerData === 'boolean') {
             this.serverSettings.savePlayerData = packet.worldState.savePlayerData;
+          }
+          if (typeof packet.worldState.trafficEnabled === 'boolean') {
+            this.serverSettings.trafficEnabled = packet.worldState.trafficEnabled;
+          }
+          if (typeof packet.worldState.vehicleCount === 'number') {
+            this.serverSettings.vehicleCount = packet.worldState.vehicleCount;
+          }
+          if (typeof packet.worldState.pedestrianCount === 'number') {
+            this.serverSettings.pedestrianCount = packet.worldState.pedestrianCount;
           }
           this.notify();
         }
@@ -1930,6 +1956,34 @@ class OnlineManager {
   }
 
   /**
+   * Broadcasts updated server traffic settings immediately to all connected guests.
+   */
+  public broadcastTrafficSettingsUpdate(trafficEnabled: boolean, vehicleCount?: number, pedestrianCount?: number) {
+    this.serverSettings.trafficEnabled = trafficEnabled;
+    if (typeof vehicleCount === 'number') this.serverSettings.vehicleCount = vehicleCount;
+    if (typeof pedestrianCount === 'number') this.serverSettings.pedestrianCount = pedestrianCount;
+    if (this.status === 'connected' && this.isHost) {
+      this.broadcastPacket({
+        type: 'server_settings',
+        packetId: this.nextPacketId(),
+        settings: { ...this.serverSettings }
+      });
+      if (!trafficEnabled) {
+        this.broadcastPacket({
+          type: 'traffic_sync',
+          packetId: this.nextPacketId(),
+          trafficEnabled: false,
+          vehicles: [],
+          pedestrians: []
+        });
+      }
+      this.syncTimer = 0.2;
+      this.worldSyncTimer = 2.6;
+    }
+    this.notify();
+  }
+
+  /**
    * Synchronizes the local player's state (and their vehicle + trailer if driving)
    * to all other players in the room.
    */
@@ -2125,81 +2179,105 @@ class OnlineManager {
             calendar: world.calendar ? { ...world.calendar } : undefined,
             weather: world.weather || 'clear',
             gameMode: world.gameMode || 'career',
-            savePlayerData: this.serverSettings.savePlayerData
+            savePlayerData: this.serverSettings.savePlayerData,
+            trafficEnabled: this.serverSettings.trafficEnabled,
+            vehicleCount: this.serverSettings.vehicleCount,
+            pedestrianCount: this.serverSettings.pedestrianCount
           }
         });
       }
     }
 
     // Host traffic broadcasting (skip completely when no remote guests are connected!)
-    if (this.isHost && this.serverSettings.trafficEnabled && this.remotePlayers.size > 0) {
+    if (this.isHost && this.remotePlayers.size > 0) {
       this.syncTimer += dt;
       if (this.syncTimer >= 0.14) {
         this.syncTimer = 0;
-        const r1 = (n: number) => Math.round(n * 10) / 10;
-        const r3 = (n: number) => Math.round(n * 1000) / 1000;
-        const remotes = this.getRemotePlayersArray();
-        const maxDistSq = 2400 * 2400;
-        const isNearAnyGuest = (x: number, y: number): boolean => {
-          for (let i = 0; i < remotes.length; i++) {
-            const dx = x - remotes[i].x;
-            const dy = y - remotes[i].y;
-            if (dx * dx + dy * dy <= maxDistSq) return true;
-          }
-          return false;
-        };
-
-        const vehiclesToSync: SyncTrafficVehicle[] = [];
-        const maxVeh = this.serverSettings.vehicleCount;
-        for (let i = 0; i < world.vehicles.length && vehiclesToSync.length < maxVeh; i++) {
-          const v = world.vehicles[i];
-          if (v.isPlayerControlled || (v as any).isRemoteControlled || v.isParked || v.id === 'evac_ambulance_special' || v.keyId) {
-            continue;
-          }
-          if (!isNearAnyGuest(v.x, v.y)) continue;
-          vehiclesToSync.push({
-            id: v.id,
-            type: v.type,
-            x: r1(v.x),
-            y: r1(v.y),
-            vx: r1(v.vx),
-            vy: r1(v.vy),
-            angle: r3(v.angle),
-            speed: r1(v.speed),
-            steerAngle: r3(v.steerAngle),
-            color: v.color,
-            roofColor: v.roofColor,
-            headlightsOn: v.headlightsOn,
-            brakeLightsOn: v.brakeLightsOn,
-            turnSignal: v.turnSignal,
-            isParked: v.isParked
-          });
-        }
-
-        const pedsToSync: SyncPedestrian[] = [];
-        const maxPeds = this.serverSettings.pedestrianCount;
-        for (let i = 0; i < world.pedestrians.length && pedsToSync.length < maxPeds; i++) {
-          const p = world.pedestrians[i];
-          if (!isNearAnyGuest(p.x, p.y)) continue;
-          pedsToSync.push({
-            id: p.id,
-            x: r1(p.x),
-            y: r1(p.y),
-            vx: r1(p.vx),
-            vy: r1(p.vy),
-            angle: r3(p.angle),
-            speed: r1(p.speed),
-            walkCycle: r3(p.walkCycle),
-            skinColor: p.skinColor,
-            shirtColor: p.shirtColor,
-            pantsColor: p.pantsColor
-          });
-        }
-
-        if (vehiclesToSync.length > 0 || pedsToSync.length > 0) {
+        if (!this.serverSettings.trafficEnabled) {
           this.broadcastPacket({
             type: 'traffic_sync',
             packetId: this.nextPacketId(),
+            trafficEnabled: false,
+            vehicles: [],
+            pedestrians: []
+          });
+        } else {
+          const r1 = (n: number) => Math.round(n * 10) / 10;
+          const r3 = (n: number) => Math.round(n * 1000) / 1000;
+          const remotes = this.getRemotePlayersArray();
+          const maxDistSq = 2400 * 2400;
+          const isNearAnyGuest = (x: number, y: number): boolean => {
+            for (let i = 0; i < remotes.length; i++) {
+              const dx = x - remotes[i].x;
+              const dy = y - remotes[i].y;
+              if (dx * dx + dy * dy <= maxDistSq) return true;
+            }
+            return false;
+          };
+
+          const vehiclesToSync: SyncTrafficVehicle[] = [];
+          const maxVeh = Math.max(24, this.serverSettings.vehicleCount * Math.max(1, remotes.length));
+          for (let i = 0; i < world.vehicles.length && vehiclesToSync.length < maxVeh; i++) {
+            const v = world.vehicles[i];
+            if (
+              v.isPlayerControlled ||
+              (v as any).isRemoteControlled ||
+              v.isParked ||
+              v.isDerelict ||
+              v.id === 'evac_ambulance_special' ||
+              v.keyId ||
+              v.ownerId === 'player' ||
+              (v as any).playerOwned ||
+              (v as any).isSpawnedByPlayer ||
+              v.isTrailer
+            ) {
+              continue;
+            }
+            if (!isNearAnyGuest(v.x, v.y)) continue;
+            vehiclesToSync.push({
+              id: v.id,
+              type: v.type,
+              x: r1(v.x),
+              y: r1(v.y),
+              vx: r1(v.vx),
+              vy: r1(v.vy),
+              angle: r3(v.angle),
+              speed: r1(v.speed),
+              steerAngle: r3(v.steerAngle),
+              color: v.color,
+              roofColor: v.roofColor,
+              headlightsOn: v.headlightsOn,
+              brakeLightsOn: v.brakeLightsOn,
+              turnSignal: v.turnSignal,
+              isParked: v.isParked
+            });
+          }
+
+          const pedsToSync: SyncPedestrian[] = [];
+          const maxPeds = Math.max(36, this.serverSettings.pedestrianCount * Math.max(1, remotes.length));
+          for (let i = 0; i < world.pedestrians.length && pedsToSync.length < maxPeds; i++) {
+            const p = world.pedestrians[i];
+            if (!isNearAnyGuest(p.x, p.y)) continue;
+            pedsToSync.push({
+              id: p.id,
+              x: r1(p.x),
+              y: r1(p.y),
+              vx: r1(p.vx),
+              vy: r1(p.vy),
+              angle: r3(p.angle),
+              speed: r1(p.speed),
+              walkCycle: r3(p.walkCycle),
+              skinColor: p.skinColor,
+              shirtColor: p.shirtColor,
+              pantsColor: p.pantsColor,
+              hairColor: p.hairColor
+            });
+          }
+
+          this.broadcastPacket({
+            type: 'traffic_sync',
+            packetId: this.nextPacketId(),
+            trafficEnabled: true,
             vehicles: vehiclesToSync,
             pedestrians: pedsToSync
           });
@@ -2218,21 +2296,205 @@ class OnlineManager {
       }
     }
 
-    // Client applying traffic sync (O(1) lookup per synced vehicle)
+    // Client applying authoritative traffic & pedestrian sync from Host
     if (!this.isHost && this.lastTrafficSync) {
-      const alpha = Math.min(1, dt * 10);
-      const list = this.lastTrafficSync.vehicles;
-      for (let i = 0; i < list.length; i++) {
-        const sv = list[i];
-        const v = vehById.get(sv.id);
-        if (v && !v.isPlayerControlled) {
-          v.x += (sv.x - v.x) * alpha;
-          v.y += (sv.y - v.y) * alpha;
-          v.vx = sv.vx;
-          v.vy = sv.vy;
-          v.angle = sv.angle;
-          v.speed = sv.speed;
+      const syncData = this.lastTrafficSync;
+      const syncSeq = syncData.seq || 1;
+      const isTrafficOn = syncData.trafficEnabled !== false && this.serverSettings.trafficEnabled !== false;
+
+      if (!isTrafficOn) {
+        world.pedestrians = [];
+        world.vehicles = world.vehicles.filter((v) =>
+          v.isPlayerControlled ||
+          (v as any).isRemoteControlled ||
+          v.isParked ||
+          v.isDerelict ||
+          (v as any).playerOwned ||
+          (v as any).isSpawnedByPlayer ||
+          v.ownerId === 'player' ||
+          Boolean(v.keyId) ||
+          v.id === 'evac_ambulance_special' ||
+          v.isTrailer
+        );
+      } else {
+        const elapsedSec = Math.max(0, Math.min(0.22, ((now - (syncData.receivedAt || now)) * 0.001)));
+        const posAlpha = Math.min(1, dt * 12);
+        const angAlpha = Math.min(1, dt * 14);
+        const list = syncData.vehicles;
+
+        for (let i = 0; i < list.length; i++) {
+          const sv = list[i];
+          let v = vehById.get(sv.id);
+          const predX = sv.x + (sv.vx || 0) * elapsedSec;
+          const predY = sv.y + (sv.vy || 0) * elapsedSec;
+
+          if (!v) {
+            // Host dynamically spawned an AI traffic vehicle; create it on Guest
+            const cfg = CAR_CONFIGS[sv.type] || CAR_CONFIGS.sedan;
+            v = {
+              id: sv.id,
+              type: sv.type,
+              x: predX,
+              y: predY,
+              vx: sv.vx || 0,
+              vy: sv.vy || 0,
+              angle: sv.angle,
+              steerAngle: sv.steerAngle || 0,
+              targetSteerAngle: sv.steerAngle || 0,
+              speed: sv.speed || 0,
+              lateralVelocity: 0,
+              angularVelocity: 0,
+              isDrifting: false,
+              driftFactor: 0,
+              mass: cfg.mass,
+              width: cfg.width,
+              length: cfg.length,
+              wheelBase: cfg.wheelBase,
+              color: sv.color,
+              roofColor: sv.roofColor || sv.color,
+              headlightsOn: Boolean(sv.headlightsOn),
+              headlightMode: sv.headlightsOn ? 'low' : 'off',
+              brakeLightsOn: Boolean(sv.brakeLightsOn),
+              isReversing: false,
+              turnSignal: sv.turnSignal || 'none',
+              turnSignalTimer: 0,
+              requiredFuel: 'ai92',
+              engineState: createDefaultEngineState(sv.type),
+              fuelSystem: createDefaultFuelSystem(sv.type),
+              damage: ensureVehicleDamage({ length: cfg.length, width: cfg.width }),
+              isPlayerControlled: false,
+              isParked: Boolean(sv.isParked),
+              targetSpeed: sv.speed || 0,
+              currentLaneId: null,
+              targetWaypointIndex: 0
+            } as Vehicle;
+            (v as any).isSyncedTraffic = true;
+            (v as any)._lastTrafficSyncSeq = syncSeq;
+            world.vehicles.push(v);
+            vehById.set(v.id, v);
+          } else if (!v.isPlayerControlled && !(v as any).isRemoteControlled) {
+            const dx = predX - v.x;
+            const dy = predY - v.y;
+            if (dx * dx + dy * dy > 360 * 360) {
+              v.x = predX;
+              v.y = predY;
+              v.angle = sv.angle;
+            } else {
+              v.x += dx * posAlpha;
+              v.y += dy * posAlpha;
+              let dAng = sv.angle - v.angle;
+              while (dAng > Math.PI) dAng -= Math.PI * 2;
+              while (dAng < -Math.PI) dAng += Math.PI * 2;
+              v.angle += dAng * angAlpha;
+            }
+            v.vx = sv.vx;
+            v.vy = sv.vy;
+            v.speed = sv.speed;
+            if (typeof sv.steerAngle === 'number') v.steerAngle = sv.steerAngle;
+            if (typeof sv.headlightsOn === 'boolean') v.headlightsOn = sv.headlightsOn;
+            if (typeof sv.brakeLightsOn === 'boolean') v.brakeLightsOn = sv.brakeLightsOn;
+            if (sv.turnSignal) v.turnSignal = sv.turnSignal;
+            v.turnSignalTimer = (v.turnSignalTimer || 0) + dt;
+            if (typeof sv.isParked === 'boolean') v.isParked = sv.isParked;
+            (v as any).isSyncedTraffic = true;
+            (v as any)._lastTrafficSyncSeq = syncSeq;
+          }
         }
+
+        // Remove dynamic AI traffic vehicles that the Host despawned
+        world.vehicles = world.vehicles.filter((v) => {
+          if (
+            v.isPlayerControlled ||
+            (v as any).isRemoteControlled ||
+            v.isParked ||
+            v.isDerelict ||
+            (v as any).playerOwned ||
+            (v as any).isSpawnedByPlayer ||
+            v.ownerId === 'player' ||
+            Boolean(v.keyId) ||
+            v.id === 'evac_ambulance_special' ||
+            v.isTrailer
+          ) {
+            return true;
+          }
+          return (v as any)._lastTrafficSyncSeq === syncSeq;
+        });
+
+        // Synchronize pedestrians from Host
+        const pedById = this.syncPedByIdMap;
+        pedById.clear();
+        for (let i = 0; i < world.pedestrians.length; i++) {
+          const p = world.pedestrians[i];
+          pedById.set(p.id, p);
+        }
+
+        const pedList = syncData.pedestrians || [];
+        for (let i = 0; i < pedList.length; i++) {
+          const sp = pedList[i];
+          let ped = pedById.get(sp.id);
+          const predPX = sp.x + (sp.vx || 0) * elapsedSec;
+          const predPY = sp.y + (sp.vy || 0) * elapsedSec;
+
+          if (!ped) {
+            ped = {
+              id: sp.id,
+              x: predPX,
+              y: predPY,
+              vx: sp.vx || 0,
+              vy: sp.vy || 0,
+              angle: sp.angle || 0,
+              speed: sp.speed || 0,
+              targetSpeed: sp.speed || 0,
+              skinColor: sp.skinColor || '#f1c27d',
+              shirtColor: sp.shirtColor || '#3b82f6',
+              pantsColor: sp.pantsColor || '#1e293b',
+              hairColor: sp.hairColor || '#3f2e21',
+              walkCycle: sp.walkCycle || 0,
+              targetPathId: null,
+              targetWaypointIndex: 0,
+              routeWaypoints: [],
+              isCrossingRoad: false,
+              waitingAtCurb: false,
+              crosswalkWaitTimer: 0,
+              crosswalkCooldownTimer: 0,
+              state: (sp.speed || 0) > 1.5 ? 'walking' : 'waiting_light',
+              panicTimer: 0,
+              behaviorTimer: 0,
+              alertBubbleText: null,
+              alertBubbleTimer: 0
+            };
+            (ped as any)._lastTrafficSyncSeq = syncSeq;
+            world.pedestrians.push(ped);
+            pedById.set(ped.id, ped);
+          } else {
+            const dx = predPX - ped.x;
+            const dy = predPY - ped.y;
+            if (dx * dx + dy * dy > 240 * 240) {
+              ped.x = predPX;
+              ped.y = predPY;
+              ped.angle = sp.angle;
+            } else {
+              ped.x += dx * posAlpha;
+              ped.y += dy * posAlpha;
+              let dAng = sp.angle - ped.angle;
+              while (dAng > Math.PI) dAng -= Math.PI * 2;
+              while (dAng < -Math.PI) dAng += Math.PI * 2;
+              ped.angle += dAng * angAlpha;
+            }
+            ped.vx = sp.vx;
+            ped.vy = sp.vy;
+            ped.speed = sp.speed;
+            if ((ped.speed || 0) > 1.0) {
+              ped.walkCycle = (ped.walkCycle || 0) + dt * ped.speed * 0.16;
+              ped.state = 'walking';
+            } else {
+              ped.walkCycle = sp.walkCycle;
+            }
+            (ped as any)._lastTrafficSyncSeq = syncSeq;
+          }
+        }
+
+        world.pedestrians = world.pedestrians.filter((p) => (p as any)._lastTrafficSyncSeq === syncSeq);
       }
     }
 

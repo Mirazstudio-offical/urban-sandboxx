@@ -872,35 +872,41 @@ const PED_HAIR_COLORS = ['#18181b', '#451a03', '#78350f', '#ca8a04', '#71717a', 
 const JACKET_COLORS = ['#1e293b', '#334155', '#475569', '#78350f', '#0f172a', '#1e3a8a', '#14532d', '#701a75', '#312e81'];
 const INNER_SHIRT_COLORS = ['#ffffff', '#f8fafc', '#38bdf8', '#f43f5e', '#f59e0b', '#10b981', '#a855f7'];
 
-export function generateRandomPedestrianAppearance() {
+export function generateRandomPedestrianAppearance(tempC: number = 17) {
   const gender = Math.random() < 0.5 ? 'male' : 'female';
-  
+
   const ageRoll = Math.random();
   let ageGroup: 'child' | 'adult' | 'elderly' = 'adult';
-  if (ageRoll < 0.15) ageGroup = 'child';
-  else if (ageRoll < 0.25) ageGroup = 'elderly';
-  
-  const hairStylesMale = ['short', 'bald', 'spiky', 'curly', 'afro'];
-  const hairStylesFemale = ['short', 'long', 'bun', 'ponytail', 'curly', 'afro'];
-  const hairStyle = gender === 'male' 
-    ? hairStylesMale[Math.floor(Math.random() * hairStylesMale.length)] 
+  if (ageRoll < 0.14) ageGroup = 'child';
+  else if (ageRoll < 0.26) ageGroup = 'elderly';
+
+  const hairStylesMale = ['short', 'bald', 'spiky', 'curly', 'afro'] as const;
+  const hairStylesFemale = ['short', 'long', 'bun', 'ponytail', 'bob', 'curly'] as const;
+  const hairStyle = gender === 'male'
+    ? hairStylesMale[Math.floor(Math.random() * hairStylesMale.length)]
     : hairStylesFemale[Math.floor(Math.random() * hairStylesFemale.length)];
-  
-  const clothingTypes = ['tshirt', 'button_shirt', 'open_jacket', 'hoodie', 'suit', 'vest'];
-  if (gender === 'female') clothingTypes.push('dress');
-  const clothingType = clothingTypes[Math.floor(Math.random() * clothingTypes.length)] as 'tshirt' | 'button_shirt' | 'open_jacket' | 'hoodie' | 'dress' | 'suit' | 'vest';
+
+  const isCold = tempC <= 6;
+  const clothingTypes = isCold
+    ? (['parka', 'winter_coat', 'puffer', 'hoodie'] as const)
+    : gender === 'female'
+      ? (['tshirt', 'button_shirt', 'open_jacket', 'hoodie', 'dress', 'sweater'] as const)
+      : (['tshirt', 'button_shirt', 'open_jacket', 'hoodie', 'suit', 'vest'] as const);
+  const clothingType = clothingTypes[Math.floor(Math.random() * clothingTypes.length)];
 
   const jacketColor = JACKET_COLORS[Math.floor(Math.random() * JACKET_COLORS.length)];
   const innerShirtColor = INNER_SHIRT_COLORS[Math.floor(Math.random() * INNER_SHIRT_COLORS.length)];
 
-  const hasHat = Math.random() < 0.22;
-  const hatType = ['cap', 'beanie', 'sunhat', 'fedora'][Math.floor(Math.random() * 4)] as 'cap' | 'beanie' | 'sunhat' | 'fedora';
-  
-  const hasGlasses = Math.random() < 0.25;
-  const hasHeadphones = Math.random() < 0.18;
+  const hasHat = Math.random() < (isCold ? 0.65 : 0.2);
+  const hatType = isCold
+    ? (Math.random() < 0.35 ? 'ushanka' : 'beanie')
+    : (['cap', 'beanie', 'sunhat', 'fedora'][Math.floor(Math.random() * 4)] as 'cap' | 'beanie' | 'sunhat' | 'fedora');
 
-  const handheldProps = ['phone', 'coffee', 'bag', 'box', null, null];
-  const handheldProp = handheldProps[Math.floor(Math.random() * handheldProps.length)] as 'phone' | 'coffee' | 'bag' | 'box' | null;
+  const hasGlasses = Math.random() < 0.24;
+  const hasHeadphones = ageGroup !== 'elderly' && Math.random() < 0.18;
+
+  const handheldProps = ['phone', 'coffee', 'bag', 'box', null, null] as const;
+  const handheldProp = handheldProps[Math.floor(Math.random() * handheldProps.length)];
 
   return {
     gender: gender as 'male' | 'female',
@@ -911,8 +917,8 @@ export function generateRandomPedestrianAppearance() {
     skinColor: PED_SKIN_COLORS[Math.floor(Math.random() * PED_SKIN_COLORS.length)],
     shirtColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
     pantsColor: PED_PANTS_COLORS[Math.floor(Math.random() * PED_PANTS_COLORS.length)],
-    hairColor: PED_HAIR_COLORS[Math.floor(Math.random() * PED_HAIR_COLORS.length)],
-    hairStyle: hairStyle as 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail' | 'curly' | 'afro',
+    hairColor: ageGroup === 'elderly' ? '#cbd5e1' : PED_HAIR_COLORS[Math.floor(Math.random() * PED_HAIR_COLORS.length)],
+    hairStyle,
     hasHat,
     hatColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
     hatType,

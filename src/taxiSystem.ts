@@ -1,4 +1,6 @@
 import { GameWorld, Player, Vector2D, Pedestrian, Vehicle } from './types';
+import { generateWeatherAppropriateAppearance } from './pedestrianSystem';
+import { getOutsideTemperature } from './physics';
 import { calculateGpsRoute, getDistance } from './navigation';
 import { depositChangeToPlayer } from './items';
 import { sound } from './audio';
@@ -460,8 +462,16 @@ export class TaxiFleetSystem {
     const offer = this.pendingOffer;
     this.pendingOffer = null;
 
-    // Spawn passenger NPC in world at pickup point
+    // Spawn weather-dressed passenger NPC in world at pickup point
     const pedId = `ped_taxi_${offer.id}`;
+    const taxiTempC = getOutsideTemperature(world, world.timeHour ?? 12);
+    const taxiApp = generateWeatherAppropriateAppearance({
+      tempC: taxiTempC,
+      weather: world.weather || 'clear',
+      timeHour: world.timeHour ?? 12,
+      gender: offer.passengerGender,
+      ageGroup: 'adult',
+    });
     const newPed: Pedestrian = {
       id: pedId,
       x: offer.pickup.x + (Math.random() * 20 - 10),
@@ -471,13 +481,8 @@ export class TaxiFleetSystem {
       angle: Math.random() * Math.PI * 2,
       speed: 0,
       targetSpeed: 0,
-      skinColor: ['#f8d9b6', '#e0ac69', '#f3cbb3', '#deb887'][Math.floor(Math.random() * 4)],
-      shirtColor: ['#1e3a8a', '#b91c1c', '#047857', '#4b5563', '#9333ea', '#c2410c'][Math.floor(Math.random() * 6)],
-      pantsColor: ['#18181b', '#1e293b', '#374151', '#292524'][Math.floor(Math.random() * 4)],
-      hairColor: ['#1c1917', '#451a03', '#78350f', '#d97706'][Math.floor(Math.random() * 4)],
+      ...taxiApp,
       walkCycle: 0,
-      gender: offer.passengerGender,
-      ageGroup: 'adult',
       handheldProp: Math.random() > 0.4 ? 'phone' : 'bag',
       targetPathId: null,
       targetWaypointIndex: 0,
@@ -835,6 +840,14 @@ export class TaxiFleetSystem {
       const spawnX = currentVeh.x + Math.cos(doorAngle) * (currentVeh.width / 2 + 18);
       const spawnY = currentVeh.y + Math.sin(doorAngle) * (currentVeh.width / 2 + 18);
 
+      const exitTempC = getOutsideTemperature(world, world.timeHour ?? 12);
+      const exitApp = generateWeatherAppropriateAppearance({
+        tempC: exitTempC,
+        weather: world.weather || 'clear',
+        timeHour: world.timeHour ?? 12,
+        gender: order.passengerGender,
+        ageGroup: 'adult',
+      });
       const walkingPed: Pedestrian = {
         id: `ped_exited_${Date.now()}`,
         x: spawnX,
@@ -844,12 +857,8 @@ export class TaxiFleetSystem {
         angle: doorAngle,
         speed: 30,
         targetSpeed: 30,
-        skinColor: '#f8d9b6',
-        shirtColor: '#1e3a8a',
-        pantsColor: '#18181b',
-        hairColor: '#1c1917',
+        ...exitApp,
         walkCycle: 0,
-        gender: order.passengerGender,
         targetPathId: null,
         targetWaypointIndex: 0,
         routeWaypoints: [],

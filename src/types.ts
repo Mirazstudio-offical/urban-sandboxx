@@ -1075,6 +1075,84 @@ export interface DriverProfile {
   preferredLaneBias: number;    // -1 = prefers right lane, +1 = prefers left fast lane
 }
 
+export type PedestrianClothingType =
+  | 'tshirt'
+  | 'tank'
+  | 'button_shirt'
+  | 'sweater'
+  | 'hoodie'
+  | 'vest'
+  | 'open_jacket'
+  | 'suit'
+  | 'dress'
+  | 'trench'
+  | 'raincoat'
+  | 'puffer'
+  | 'winter_coat'
+  | 'parka';
+
+export type PedestrianWeatherTier = 'freezing' | 'cold' | 'cool' | 'mild' | 'hot';
+
+export interface PedestrianBiology {
+  heightScale: number;        // 0.68..1.09 individual stature multiplier
+  shoulderScale: number;      // 0.84..1.14 individual build multiplier
+  ageYears: number;           // 7..82
+  fitness: number;            // 0.35..1.0 affects stamina & max sprint speed
+  stamina: number;            // 0..100
+  coreTempC: number;          // ~36.0..38.2°C physiological thermal balance
+  wetness: number;            // 0..100 fabric & skin wetness
+  coldLevel: number;          // 0..1 perceived cold stress (triggers shiver/hunch/breath)
+  heatLevel: number;          // 0..1 perceived heat stress (slows gait, wiping brow)
+  clothingClo: number;        // 0.25..2.4 thermal insulation value of current outfit
+  injuryLevel: number;        // 0..100 impact trauma severity
+  knockdownTimer: number;     // >0 while fallen/recovering on ground
+  knockdownVelX: number;      // Sliding impact velocity X
+  knockdownVelY: number;      // Sliding impact velocity Y
+  limpSide: -1 | 1;           // Which leg is favoring
+  breathPhase: number;        // Respiratory cycle phase (drives chest heave & winter vapor)
+  lastHitTime: number;        // Cooldown against multi-frame impact stacking
+}
+
+export interface PedestrianPsychology {
+  // Stable personality traits (Big-Five inspired, 0..1)
+  bravery: number;            // Fight/help vs flight
+  sociability: number;        // Greeting likelihood & proxemics
+  conscientiousness: number;  // Traffic light compliance & patience
+  curiosity: number;          // Stopping to observe crashes/fires/sirens
+  neuroticism: number;        // Startle sensitivity & panic persistence
+  personalSpace: number;      // Preferred Hall proxemic radius in px (9..16)
+  reactionDelay: number;      // Psychomotor perception-reaction delay (0.18..0.68s)
+
+  // Dynamic emotional appraisal state (0..1)
+  fear: number;
+  arousal: number;
+  annoyance: number;
+  comfort: number;
+
+  // Attention & gaze tracking
+  lookTargetX: number | null;
+  lookTargetY: number | null;
+  lookTimer: number;
+  headYawCurrent: number;     // Smoothed relative head yaw in radians
+
+  // Delayed psychomotor reaction queue
+  pendingReactionType: 'dodge' | 'panic' | 'startle' | 'watch' | 'call_112' | null;
+  pendingReactionTimer: number;
+  pendingReactionAngle: number;
+  pendingReactionText: string | null;
+
+  // Cognitive scheduling & memory
+  lastThreatX: number;
+  lastThreatY: number;
+  nextThinkAt: number;        // Staggered LOD cognitive timestamp (seconds)
+  lastPosX: number;
+  lastPosY: number;
+  stuckAccum: number;
+  shelterBuildingId: string | null;
+  lastSpeechTime: number;
+  impatienceTimer: number;
+}
+
 export interface Pedestrian {
   id: string;
   x: number;
@@ -1092,15 +1170,24 @@ export interface Pedestrian {
   
   gender?: 'male' | 'female';
   ageGroup?: 'child' | 'adult' | 'elderly';
-  clothingType?: 'tshirt' | 'button_shirt' | 'open_jacket' | 'hoodie' | 'dress' | 'suit' | 'vest';
+  clothingType?: PedestrianClothingType;
   jacketColor?: string;
   innerShirtColor?: string;
-  hairStyle?: 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail' | 'curly' | 'afro';
+  hairStyle?: 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail' | 'curly' | 'afro' | 'bob';
   hasHat?: boolean;
   hatColor?: string;
-  hatType?: 'cap' | 'beanie' | 'sunhat' | 'fedora';
+  hatType?: 'cap' | 'beanie' | 'sunhat' | 'fedora' | 'ushanka';
   hasGlasses?: boolean;
+  glassesStyle?: 'optical' | 'sunglasses';
   hasHeadphones?: boolean;
+  hasShorts?: boolean;
+  footwearType?: 'sneakers' | 'boots' | 'winter_boots' | 'loafers' | 'sandals';
+  footwearColor?: string;
+  scarfColor?: string | null;
+  glovesColor?: string | null;
+  hoodUp?: boolean;
+  weatherTier?: PedestrianWeatherTier;
+  ownsUmbrella?: boolean;
   
   // Handheld props
   handheldProp?: 'phone' | 'coffee' | 'bag' | 'box' | 'extinguisher' | null;
@@ -1112,6 +1199,8 @@ export interface Pedestrian {
   isCyclist?: boolean;
   isScooter?: boolean;
   hasDog?: boolean;
+  dogBreed?: 'retriever' | 'husky' | 'shepherd' | 'corgi' | 'terrier';
+  dogColor?: string;
   hasUmbrella?: boolean;
   umbrellaColor?: string;
   
@@ -1128,7 +1217,28 @@ export interface Pedestrian {
   branchCooldownTimer?: number;
   
   // State & Panic
-  state: 'walking' | 'waiting_light' | 'waiting_traffic' | 'crossing' | 'panicking' | 'waiting_taxi' | 'entering_building' | 'exiting_building' | 'idle_phone' | 'idle_window' | 'greeting' | 'extinguishing_fire';
+  state:
+    | 'walking'
+    | 'waiting_light'
+    | 'waiting_traffic'
+    | 'crossing'
+    | 'panicking'
+    | 'waiting_taxi'
+    | 'entering_building'
+    | 'exiting_building'
+    | 'idle_phone'
+    | 'idle_window'
+    | 'greeting'
+    | 'extinguishing_fire'
+    | 'knocked_down'
+    | 'injured_limp'
+    | 'seeking_shelter'
+    | 'sheltering'
+    | 'watching_incident'
+    | 'calling_112'
+    | 'resting'
+    | 'startled'
+    | 'yielding_siren';
   idleSubAction?: 'phone' | 'window' | 'watch' | 'stretch' | 'wave' | 'coffee_sip';
   panicTimer: number;
   behaviorTimer: number; // For idle states
@@ -1152,6 +1262,10 @@ export interface Pedestrian {
   insideBuildingId?: string;
   enteringBuildingTimer?: number;
   exitingBuildingTimer?: number;
+
+  // Biopsychosocial Simulation Engine State
+  bio?: PedestrianBiology;
+  psy?: PedestrianPsychology;
 }
 
 export interface TrafficLightPhase {

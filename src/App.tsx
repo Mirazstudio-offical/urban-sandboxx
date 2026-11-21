@@ -598,8 +598,8 @@ export default function App() {
     aiTrafficOnRef.current = on;
     setIsAiTrafficOn(on);
     const w = worldRef.current;
-    if (w && w.gameMode === 'freeroam' && !on) {
-      // Freeroam: switching traffic off removes dynamic AI cars and pedestrians (they respawn when it is switched on again)
+    if (w && !on && (w.gameMode === 'freeroam' || activeWorldRef.current.origin === 'server')) {
+      // Freeroam or Dedicated Server: switching traffic off removes dynamic AI cars and pedestrians
       w.pedestrians = [];
       w.vehicles = w.vehicles.filter((v) =>
         v.isPlayerControlled || (v as any).isRemoteControlled || v.isParked || v.isDerelict ||
@@ -608,9 +608,46 @@ export default function App() {
       );
       setTrafficCount(w.vehicles.length);
     }
+    if (onlineManager.status === 'connected' && onlineManager.isHost) {
+      onlineManager.broadcastTrafficSettingsUpdate(
+        on,
+        performanceConfig.nearbyVehiclesTarget,
+        performanceConfig.maxActivePedestrians
+      );
+    }
     const pl = playerRef.current;
     if (pl) {
       addPlayerNotification(pl, on ? 'Трафик города ВКЛЮЧЁН' : 'Трафик города ОСТАНОВЛЕН', on ? 'info' : 'warning');
+    }
+  };
+
+  const handleUpdateTrafficCounts = (vehCount: number, pedCount: number) => {
+    performanceConfig.nearbyVehiclesTarget = vehCount;
+    performanceConfig.maxVehicles = Math.max(12, vehCount * 2);
+    performanceConfig.maxActivePedestrians = pedCount;
+    const w = worldRef.current;
+    if (w) {
+      if (w.pedestrians.length > pedCount) {
+        w.pedestrians = w.pedestrians.slice(0, pedCount);
+      }
+      const observersCount = onlineManager.status === 'connected' && onlineManager.isHost
+        ? Math.max(1, 1 + onlineManager.getRemotePlayersArray().length)
+        : 1;
+      const maxDynamic = Math.max(vehCount * observersCount, performanceConfig.maxVehicles);
+      let dynamicSeen = 0;
+      w.vehicles = w.vehicles.filter((v) => {
+        const isPersistent =
+          v.isPlayerControlled || (v as any).isRemoteControlled || v.isParked || v.isDerelict ||
+          (v as any).playerOwned || (v as any).isSpawnedByPlayer || v.ownerId === 'player' ||
+          Boolean(v.keyId) || v.id === 'evac_ambulance_special' || v.isTrailer;
+        if (isPersistent) return true;
+        dynamicSeen++;
+        return dynamicSeen <= maxDynamic;
+      });
+      setTrafficCount(w.vehicles.length);
+    }
+    if (onlineManager.status === 'connected' && onlineManager.isHost) {
+      onlineManager.broadcastTrafficSettingsUpdate(aiTrafficOnRef.current, vehCount, pedCount);
     }
   };
 
@@ -2048,6 +2085,11 @@ export default function App() {
 
     world.gameMode = resolvedMode;
     applyTrafficDefaultForMode(resolvedMode);
+    // Network guest receives all dynamic AI vehicles & pedestrians authoritatively from Host
+    world.pedestrians = [];
+    world.vehicles = world.vehicles.filter(
+      (v) => v.isParked || v.isDerelict || (v as any).playerOwned || v.ownerId === 'player' || Boolean(v.keyId)
+    );
     camera.x = spawnLoc.x;
     camera.y = spawnLoc.y;
     camera.targetX = spawnLoc.x;
@@ -2171,12 +2213,31 @@ export default function App() {
       handleSetGpsTarget(null);
 
       world.gameMode = resolvedMode;
-      applyTrafficDefaultForMode(resolvedMode);
       camera.x = spawnLoc.x;
       camera.y = spawnLoc.y;
       camera.targetX = spawnLoc.x;
       camera.targetY = spawnLoc.y;
       camera.targetZoom = 1.15;
+    }
+
+    // Apply dedicated server traffic settings chosen by Host
+    const serverTrafficOn = Boolean(opts.trafficEnabled);
+    const serverVehCount = Math.max(0, opts.vehicleCount ?? 15);
+    const serverPedCount = Math.max(0, opts.pedestrianCount ?? 10);
+    aiTrafficOnRef.current = serverTrafficOn;
+    setIsAiTrafficOn(serverTrafficOn);
+    performanceConfig.nearbyVehiclesTarget = serverVehCount;
+    performanceConfig.maxVehicles = Math.max(12, serverVehCount * 2);
+    performanceConfig.maxActivePedestrians = serverPedCount;
+    if (!serverTrafficOn) {
+      world.pedestrians = [];
+      world.vehicles = world.vehicles.filter(
+        (v) =>
+          v.isPlayerControlled || (v as any).isRemoteControlled || v.isParked || v.isDerelict ||
+          (v as any).playerOwned || (v as any).isSpawnedByPlayer || v.ownerId === 'player' ||
+          Boolean(v.keyId) || v.id === 'evac_ambulance_special'
+      );
+      setTrafficCount(world.vehicles.length);
     }
 
     setLoadingScreen(prev => ({
@@ -2433,13 +2494,32 @@ export default function App() {
         setActiveCarName('');
         sound.stopEngine();
         world.gameMode = resolvedMode;
-        applyTrafficDefaultForMode(resolvedMode);
         camera.x = spawnLoc.x;
         camera.y = spawnLoc.y;
         camera.targetX = spawnLoc.x;
         camera.targetY = spawnLoc.y;
         camera.targetZoom = 1.15;
       }
+    }
+
+    // Apply saved dedicated server traffic configuration
+    const restoredTrafficOn = backup.trafficEnabled ?? true;
+    const restoredVehCount = Math.max(0, backup.vehicleCount ?? 15);
+    const restoredPedCount = Math.max(0, backup.pedestrianCount ?? 10);
+    aiTrafficOnRef.current = restoredTrafficOn;
+    setIsAiTrafficOn(restoredTrafficOn);
+    performanceConfig.nearbyVehiclesTarget = restoredVehCount;
+    performanceConfig.maxVehicles = Math.max(12, restoredVehCount * 2);
+    performanceConfig.maxActivePedestrians = restoredPedCount;
+    if (!restoredTrafficOn) {
+      world.pedestrians = [];
+      world.vehicles = world.vehicles.filter(
+        (v) =>
+          v.isPlayerControlled || (v as any).isRemoteControlled || v.isParked || v.isDerelict ||
+          (v as any).playerOwned || (v as any).isSpawnedByPlayer || v.ownerId === 'player' ||
+          Boolean(v.keyId) || v.id === 'evac_ambulance_special'
+      );
+      setTrafficCount(world.vehicles.length);
     }
 
     setLoadingScreen(prev => ({
@@ -4110,7 +4190,20 @@ export default function App() {
           }
           if (ws.gameMode && ws.gameMode !== world.gameMode) {
             world.gameMode = ws.gameMode;
-            applyTrafficDefaultForMode(ws.gameMode);
+            if (typeof ws.trafficEnabled !== 'boolean') {
+              applyTrafficDefaultForMode(ws.gameMode);
+            }
+          }
+          if (typeof ws.trafficEnabled === 'boolean' && ws.trafficEnabled !== aiTrafficOnRef.current) {
+            aiTrafficOnRef.current = ws.trafficEnabled;
+            setIsAiTrafficOn(ws.trafficEnabled);
+          }
+          if (typeof ws.vehicleCount === 'number') {
+            performanceConfig.nearbyVehiclesTarget = ws.vehicleCount;
+            performanceConfig.maxVehicles = Math.max(12, ws.vehicleCount * 2);
+          }
+          if (typeof ws.pedestrianCount === 'number') {
+            performanceConfig.maxActivePedestrians = ws.pedestrianCount;
           }
         }
         onlineSyncTimerRef.current += rawDt;
@@ -4146,18 +4239,20 @@ export default function App() {
         const tGridEnd = performance.now();
 
         // 2 & 3. Update Traffic Lights, Moving Trains & Railway Signaling
+        // Network Guests do not run local AI traffic or pedestrian spawners; they receive authoritative traffic_sync from Host.
+        const isNetworkGuest = onlineManager.status === 'connected' && !onlineManager.isHost;
         const tAiStart = performance.now();
         updateTrafficLights(world.intersections, dt);
         TrainSystem.update(world, dt, player.x, player.y, player);
         RailwaySignalingSystem.update(world, dt);
-        if (aiTrafficOnRef.current) {
+        if (aiTrafficOnRef.current && !isNetworkGuest) {
           updateAITraffic(world, dt, vehGrid, pedGrid, { x: player.x, y: player.y }, player, spatialGridPropsRef.current);
         }
         const tAiEnd = performance.now();
 
         // 4. Update Pedestrians (using spatial grids and player position)
         const tPedStart = performance.now();
-        if (aiTrafficOnRef.current) {
+        if (aiTrafficOnRef.current && !isNetworkGuest) {
           updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y }, spatialGridPropsRef.current, player);
         }
         const tPedEnd = performance.now();
@@ -8686,6 +8781,12 @@ export default function App() {
         weather={weather}
         isTimeAutoCycling={isTimeAutoCycling}
         isTrafficEnabled={isAiTrafficOn}
+        canEditTraffic={
+          (activeWorldRef.current.origin !== 'server' &&
+            onlineManager.status === 'disconnected' &&
+            worldRef.current?.gameMode === 'freeroam') ||
+          (activeWorldRef.current.origin === 'server' && onlineManager.isHost)
+        }
         onSetTime={setTimeOfDay}
         onSetWeather={setWeatherType}
         onToggleTimeAuto={() => {
@@ -8696,6 +8797,7 @@ export default function App() {
           }
         }}
         onSetTrafficEnabled={handleSetAiTraffic}
+        onUpdateTrafficCounts={handleUpdateTrafficCounts}
         onApplyVehicleConfig={handleApplyVehicleConfig}
         onRepairAllVehicles={handleResetAllVehiclesDamage}
         onOpenSpawnMenu={() => {

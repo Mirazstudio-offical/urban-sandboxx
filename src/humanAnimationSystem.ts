@@ -44,7 +44,13 @@ export type HumanActionType =
   | 'talking_gesture'
   | 'panicking'
   | 'cycling'
-  | 'scooter';
+  | 'scooter'
+  | 'calling_112'
+  | 'watching_incident'
+  | 'startled'
+  | 'resting'
+  | 'shielding_rain'
+  | 'sheltering';
 
 export interface PlayerActionAnimState {
   type: HumanActionType;
@@ -336,13 +342,14 @@ export function computeHumanPose(
   const velMag = Math.max(rawSpeed, Math.hypot(vx, vy));
   const isMoving = velMag > 2.5 || (isPlayer && !!(entity as any).isMoving);
 
-  // Lying down / unconscious / sleeping
+  // Lying down / unconscious / sleeping / knocked down from impact
   const isLyingDown = Boolean(
     entity.isFainting ||
     entity.isSleeping ||
     entity.body?.isUnconscious ||
     entity.sleepState === 'asleep' ||
-    entity.sleepState === 'falling_asleep'
+    entity.sleepState === 'falling_asleep' ||
+    (!isPlayer && (entity.state === 'knocked_down' || (entity.bio && entity.bio.knockdownTimer > 0)))
   );
 
   // Seated posture
@@ -442,6 +449,16 @@ export function computeHumanPose(
       actionType = 'extinguisher_spray';
     } else if (ped.state === 'panicking') {
       actionType = 'panicking';
+    } else if (ped.state === 'startled') {
+      actionType = 'startled';
+    } else if (ped.state === 'calling_112') {
+      actionType = 'calling_112';
+    } else if (ped.state === 'watching_incident') {
+      actionType = 'watching_incident';
+    } else if (ped.state === 'resting') {
+      actionType = 'resting';
+    } else if (ped.state === 'sheltering') {
+      actionType = 'sheltering';
     } else if (ped.state === 'greeting') {
       actionType = 'waving';
     } else if (ped.state === 'waiting_taxi') {
@@ -456,23 +473,34 @@ export function computeHumanPose(
       actionType = 'carrying_box';
     } else if (ped.handheldProp === 'bag') {
       actionType = 'carrying_bag';
-    } else if (ped.state === 'waiting_light' || ped.state === 'waiting_traffic') {
+    } else if (ped.state === 'waiting_light' || ped.state === 'waiting_traffic' || ped.state === 'yielding_siren') {
       actionType = 'waiting_impatient';
+    } else if (ped.state === 'injured_limp' || (ped.bio && ped.bio.injuryLevel > 22 && isMoving)) {
+      actionType = 'limp';
     } else if (isMoving) {
-      actionType = velMag > 62 ? 'sprint' : 'walk';
+      if (ped.state === 'seeking_shelter' && !ped.hasUmbrella && !ped.hoodUp) {
+        actionType = 'shielding_rain';
+      } else {
+        actionType = velMag > 62 ? 'sprint' : 'walk';
+      }
     } else {
       // Idle micro-behaviors for stationary NPCs
       const idleCycle = (nowSec * 0.25 + seed * 10) % 1.0;
       if (idleCycle < 0.25) actionType = 'checking_watch';
-      else if (idleCycle < 0.50) actionType = 'stretching';
+      else if (idleCycle < 0.45) actionType = 'stretching';
       else actionType = 'idle';
     }
   }
 
-  // Baseline breathing & idle rhythm
-  const breathWave = Math.sin(nowSec * 2.4 + phaseOffset);
-  const breathScale = 1.0 + breathWave * 0.028;
-  const idleShift = isMoving ? 0 : Math.sin(nowSec * 1.15 + phaseOffset) * 0.45;
+  // Baseline breathing & physiological exertion rhythm
+  const pedBio = !isPlayer ? (entity as Pedestrian).bio : undefined;
+  const pedPsy = !isPlayer ? (entity as Pedestrian).psy : undefined;
+  const exertionFactor = pedBio ? clamp(1.0 + (100 - pedBio.stamina) * 0.015 + (pedPsy?.arousal || 0) * 0.7, 1.0, 2.3) : 1.0;
+  const breathRate = 2.35 * exertionFactor;
+  const breathWave = Math.sin(nowSec * breathRate + phaseOffset);
+  const breathAmp = pedBio && pedBio.stamina < 35 ? 0.055 : 0.028;
+  const breathScale = 1.0 + breathWave * breathAmp;
+  const idleShift = isMoving ? 0 : Math.sin(nowSec * 1.15 + phaseOffset) * 0.42;
 
   // Initialize default standing pose
   const pelvis = {
@@ -696,39 +724,44 @@ export function computeHumanPose(
 
     props.scooter = { pushPhase };
   } else if (isMoving) {
-    // Walking / Sprinting / Limping / Wading / Panicking gait
-    const isSprint = actionType === 'sprint' || actionType === 'panicking' || velMag > 110;
+    // Walking / Sprinting / Limping / Wading / Panicking / Rain-shielding gait
+    const isSprint = actionType === 'sprint' || actionType === 'panicking' || actionType === 'shielding_rain' || velMag > 110;
     const isLimp = actionType === 'limp';
+    const isElderly = !isPlayer && (entity as Pedestrian).ageGroup === 'elderly';
+    const isChildNpc = !isPlayer && ((entity as Pedestrian).isChild || (entity as Pedestrian).ageGroup === 'child');
     const wadeRatio = isWading ? clamp(waterDepth / 0.85, 0, 1) : 0;
 
-    const strideAmp = (isSprint ? 4.4 : isLimp ? 2.3 : 3.3) * (1 - wadeRatio * 0.38);
-    const kneeLiftAmp = isSprint ? 3.2 : isWading ? 2.8 : 1.6;
+    const ageStrideMul = isElderly ? 0.72 : isChildNpc ? 1.08 : 1.0;
+    const strideAmp = (isSprint ? 4.3 : isLimp ? 2.2 : 3.2) * ageStrideMul * (1 - wadeRatio * 0.38);
+    const kneeLiftAmp = (isSprint ? 3.1 : isWading ? 2.8 : isElderly ? 1.1 : 1.65);
     const sinW = Math.sin(walkCycle);
     const cosW = Math.cos(walkCycle);
 
     // Asymmetric hitch if limping
-    const limpAsymL = isLimp ? 0.55 : 1.0;
+    const limpSide = pedBio?.limpSide || -1;
+    const limpAsymL = isLimp && limpSide < 0 ? 0.52 : 1.0;
+    const limpAsymR = isLimp && limpSide > 0 ? 0.52 : 1.0;
     const strideL = sinW * strideAmp * limpAsymL;
-    const strideR = -sinW * strideAmp;
+    const strideR = -sinW * strideAmp * limpAsymR;
 
     // Vertical foot lift during forward swing phase (when cosW > 0 for L, cosW < 0 for R)
     const liftL = Math.max(0, cosW) * kneeLiftAmp * limpAsymL;
-    const liftR = Math.max(0, -cosW) * kneeLiftAmp;
+    const liftR = Math.max(0, -cosW) * kneeLiftAmp * limpAsymR;
 
     // Vertical double-frequency bounce of pelvis & torso during gait
-    const bobZ = Math.abs(sinW) * (isSprint ? 1.15 : 0.65) - (isLimp && sinW > 0 ? 0.9 : 0);
+    const bobZ = Math.abs(sinW) * (isSprint ? 1.15 : isChildNpc ? 0.85 : isElderly ? 0.35 : 0.62) - (isLimp && sinW * -limpSide > 0 ? 0.85 : 0);
     pelvis.z = 8.2 + bobZ;
-    pelvis.yaw = -sinW * (isSprint ? 0.22 : 0.14);
+    pelvis.yaw = -sinW * (isSprint ? 0.22 : isElderly ? 0.09 : 0.14);
 
-    torso.x = isSprint ? 1.15 : 0.35;
+    torso.x = (isSprint ? 1.15 : isElderly ? 0.85 : 0.35);
     torso.zBottom = 8.0 + bobZ;
-    torso.zTop = 14.6 + bobZ - (isSprint ? 0.5 : 0);
-    torso.yaw = sinW * (isSprint ? 0.26 : 0.16);
-    torso.pitch = isSprint ? 0.32 : 0.08;
-    torso.roll = isLimp ? Math.max(0, sinW) * 0.22 : sinW * 0.06;
+    torso.zTop = 14.6 + bobZ - (isSprint ? 0.5 : isElderly ? 0.6 : 0);
+    torso.yaw = sinW * (isSprint ? 0.26 : isElderly ? 0.10 : 0.16);
+    torso.pitch = isSprint ? 0.32 : isElderly ? 0.22 : 0.08;
+    torso.roll = isLimp ? Math.max(0, sinW * -limpSide) * 0.22 * -limpSide : sinW * 0.06;
 
-    head.x = 1.6 + (isSprint ? 0.85 : 0.25);
-    head.z = 16.8 + bobZ - (isSprint ? 0.4 : 0);
+    head.x = 1.6 + (isSprint ? 0.85 : isElderly ? 0.65 : 0.25);
+    head.z = 16.8 + bobZ - (isSprint ? 0.4 : isElderly ? 0.55 : 0);
     head.yaw = -torso.yaw * 0.35; // Head stabilizes forward
 
     // Left Leg (Hip -> Knee -> Foot)
@@ -1355,8 +1388,113 @@ export function computeHumanPose(
       break;
     }
 
+    case 'calling_112': {
+      // Holding smartphone pressed to right ear, left hand gesturing anxiously, glancing at incident
+      const gest = Math.sin(nowSec * 5.5 + phaseOffset);
+      head.pitch = 0.08;
+      armR.elbow = { x: 2.0, y: 5.2, z: 14.5 };
+      armR.hand = { x: 2.4, y: 3.1, z: 16.8 };
+      armL.elbow = { x: 1.8, y: -4.8, z: 11.4 };
+      armL.hand = { x: 3.8 + gest * 0.6, y: -2.8 + gest * 0.7, z: 11.6 };
+      props.phone = {
+        x: 2.6,
+        y: 3.3,
+        z: 16.8,
+        angle: 0.4,
+        tapPhase: 0,
+      };
+      break;
+    }
+
+    case 'watching_incident': {
+      // Stopped at safe perimeter watching crash/fire/siren: hands on hips or arms folded
+      const shift = Math.sin(nowSec * 1.4 + phaseOffset);
+      torso.yaw = shift * 0.06;
+      armL.elbow = { x: -0.4, y: -5.6, z: 11.2 };
+      armL.hand = { x: 1.2, y: -3.2, z: 9.8 };
+      armR.elbow = { x: -0.4, y: 5.6, z: 11.2 };
+      armR.hand = { x: 1.2, y: 3.2, z: 9.8 };
+      break;
+    }
+
+    case 'startled': {
+      // Sudden defensive flinch: torso pulled back, hands up shielding chest/face
+      torso.x = -0.8;
+      torso.pitch = -0.15;
+      armL.elbow = { x: 1.8, y: -5.4, z: 13.0 };
+      armL.hand = { x: 4.4, y: -2.8, z: 15.2 };
+      armR.elbow = { x: 1.8, y: 5.4, z: 13.0 };
+      armR.hand = { x: 4.4, y: 2.8, z: 15.2 };
+      break;
+    }
+
+    case 'resting': {
+      // Out of breath / exhausted after sprint: hunched forward, hands braced on knees/thighs, heavy panting
+      const pant = Math.sin(nowSec * 6.0 + phaseOffset);
+      torso.x = 1.4;
+      torso.pitch = 0.42;
+      torso.zTop = 13.2;
+      head.x = 2.8;
+      head.z = 15.0 + pant * 0.25;
+      head.pitch = 0.34;
+      armL.elbow = { x: 2.0, y: -4.4, z: 10.6 };
+      armL.hand = { x: 3.2, y: -2.4, z: 7.4 };
+      armR.elbow = { x: 2.0, y: 4.4, z: 10.6 };
+      armR.hand = { x: 3.2, y: 2.4, z: 7.4 };
+      break;
+    }
+
+    case 'shielding_rain': {
+      // Caught in rain without umbrella: hunched forward, right forearm raised over brow to shield eyes
+      torso.pitch = 0.26;
+      torso.x += 0.55;
+      head.pitch = 0.24;
+      armR.elbow = { x: 2.4, y: 4.8, z: 15.8 };
+      armR.hand = { x: 3.4, y: 1.0, z: 18.6 };
+      break;
+    }
+
+    case 'sheltering': {
+      // Standing under overhang/canopy checking sky and hugging torso for warmth
+      head.pitch = -0.15;
+      head.yaw = Math.sin(nowSec * 0.9 + phaseOffset) * 0.35;
+      armL.elbow = { x: 1.0, y: -4.6, z: 11.4 };
+      armL.hand = { x: 2.8, y: 1.2, z: 11.4 };
+      armR.elbow = { x: 1.2, y: 4.6, z: 11.2 };
+      armR.hand = { x: 2.6, y: -1.4, z: 11.0 };
+      break;
+    }
+
     default:
       break;
+  }
+
+  // =========================================================================
+  // 2b. BIOLOGICAL & PSYCHOLOGICAL MODULATORS (Cold Shiver, Pockets, Head Gaze)
+  // =========================================================================
+  if (!isPlayer && !isLyingDown && !isSwimming && actionType !== 'cycling' && actionType !== 'scooter') {
+    const pedRef = entity as Pedestrian;
+    // Cold stress posture: shoulders hunched in, subtle shiver tremor, hands tucked near coat pockets when walking/idle
+    if (pedBio && pedBio.coldLevel > 0.32 && actionType !== 'panicking' && actionType !== 'waving' && actionType !== 'calling_112' && actionType !== 'sweeping') {
+      const coldAmt = clamp((pedBio.coldLevel - 0.32) / 0.68, 0, 1);
+      const shiver = coldAmt > 0.25 ? Math.sin(nowSec * 31.0 + phaseOffset) * 0.24 * coldAmt : 0;
+      torso.pitch += 0.14 * coldAmt;
+      torso.y += shiver;
+      head.x -= 0.25 * coldAmt;
+      head.y += shiver * 0.8;
+      if ((actionType === 'walk' || actionType === 'idle' || actionType === 'waiting_impatient') && !pedRef.hasUmbrella && !pedRef.handheldProp) {
+        // Tuck hands close to coat pockets
+        armL.elbow = { x: lerp(armL.elbow.x, -0.4, coldAmt * 0.85), y: lerp(armL.elbow.y, -4.7, coldAmt * 0.85), z: 10.8 };
+        armL.hand = { x: lerp(armL.hand.x, 1.0, coldAmt * 0.85), y: lerp(armL.hand.y, -3.5, coldAmt * 0.85), z: 8.6 };
+        armR.elbow = { x: lerp(armR.elbow.x, -0.4, coldAmt * 0.85), y: lerp(armR.elbow.y, 4.7, coldAmt * 0.85), z: 10.8 };
+        armR.hand = { x: lerp(armR.hand.x, 1.0, coldAmt * 0.85), y: lerp(armR.hand.y, 3.5, coldAmt * 0.85), z: 8.6 };
+      }
+    }
+
+    // Psychological attention / stimulus head-tracking (overrides generic idle head turn)
+    if (pedPsy && Math.abs(pedPsy.headYawCurrent) > 0.01 && actionType !== 'panicking') {
+      head.yaw = clamp(head.yaw * 0.25 + pedPsy.headYawCurrent, -1.05, 1.05);
+    }
   }
 
   // =========================================================================

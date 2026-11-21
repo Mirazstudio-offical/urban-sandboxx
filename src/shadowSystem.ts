@@ -1,6 +1,6 @@
 import { GameWorld, Building, Vehicle, Pedestrian, Tree, StreetProp, Player, Vector2D } from './types';
 import { getVehicleBasePolygon } from './vehicleVisuals';
-import { mapPolyToDeformVerts } from './softbodyPolyMap';
+import { densifyBasePolyForSoftbody, mapPolyToDeformVerts } from './softbodyPolyMap';
 import { getEffectiveWeatherWeights } from './weatherTransition';
 import { performanceConfig, isMobileOrLowEndDevice } from './performanceConfig';
 import { RemotePlayerState } from './onlineSystem';
@@ -1669,7 +1669,7 @@ function renderVehicleShadow(
   const rrd = Math.min(halfL * 0.45, dmg.rearRightDent || 0);
 
   const hasSoftbody = !!(dmg.deformedVertices && dmg.deformedVertices.length >= 16);
-  const basePolyLocal = getVehicleBasePolygon(
+  const rawBasePolyLocal = getVehicleBasePolygon(
     car,
     halfL,
     halfW,
@@ -1682,13 +1682,17 @@ function renderVehicleShadow(
     hasSoftbody ? 0 : rld,
     hasSoftbody ? 0 : rrd
   );
+  const perimCount = dmg.nodeBeam?.perimeterCount ?? 0;
+  const basePolyLocal = hasSoftbody
+    ? densifyBasePolyForSoftbody(rawBasePolyLocal, dmg.deformedVertices, perimCount)
+    : rawBasePolyLocal;
 
   let deformedLocal = basePolyLocal;
   if (hasSoftbody) {
     const polyDvs = mapPolyToDeformVerts(
       basePolyLocal,
       dmg.deformedVertices,
-      dmg.nodeBeam?.perimeterCount ?? 0
+      perimCount
     );
     deformedLocal = basePolyLocal.map((bv, idx) => {
       const dv = polyDvs[idx] as any;

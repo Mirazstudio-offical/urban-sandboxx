@@ -86,10 +86,12 @@ interface RadialMenuProps {
   weather: WeatherType;
   isTimeAutoCycling: boolean;
   isTrafficEnabled: boolean;
+  canEditTraffic?: boolean;
   onSetTime: (hour: number) => void;
   onSetWeather: (w: WeatherType) => void;
   onToggleTimeAuto: () => void;
   onSetTrafficEnabled: (on: boolean) => void;
+  onUpdateTrafficCounts?: (vehicles: number, pedestrians: number) => void;
   onApplyVehicleConfig: (cfg: VehicleConfigSelection) => void;
   onRepairAllVehicles: () => void;
   onOpenSpawnMenu: () => void;
@@ -284,10 +286,12 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   weather,
   isTimeAutoCycling,
   isTrafficEnabled,
+  canEditTraffic,
   onSetTime,
   onSetWeather,
   onToggleTimeAuto,
   onSetTrafficEnabled,
+  onUpdateTrafficCounts,
   onApplyVehicleConfig,
   onRepairAllVehicles,
   onOpenSpawnMenu,
@@ -318,10 +322,12 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   useEffect(() => { const t = window.setTimeout(() => setPop(false), 500); return () => window.clearTimeout(t); }, []);
 
   /* Career is a realistic simulator: only the dashboard and car spawn are available there.
-     Vehicle configurator, environment, repair-all and traffic toggle are freeroam (sandbox) only. */
+     Vehicle configurator, environment and repair-all are freeroam (sandbox) only.
+     Traffic sector is available in singleplayer freeroam OR for the Host on a dedicated server. */
   const isSandbox = world.gameMode === 'freeroam';
+  const showTrafficSlot = canEditTraffic ?? isSandbox;
 
-  /* Clockwise from the top. Freeroam: 1 Приборка · 2 Авто · 3 Окружение · 4 Спавн · 5 Починить · 6 Трафик. Career: 1 Приборка · 2 Спавн */
+  /* Clockwise from the top. Freeroam: 1 Приборка · 2 Авто · 3 Окружение · 4 Спавн · 5 Починить · 6 Трафик. Career: 1 Приборка · 2 Спавн (+ Трафик for Server Host) */
   const SLOT = useMemo(() => {
     const slots = [
       { id: 'board', n: 'Приборка', desc: 'Борт-панели авто', Icon: Gauge, panel: 'board' },
@@ -331,12 +337,14 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
       ] : []),
       { id: 'spawn', n: 'Спавн', desc: 'Создать автомобиль', Icon: MapPin, panel: null },
       ...(isSandbox ? [
-        { id: 'repair', n: 'Починить', desc: 'Вся техника в мире', Icon: Wrench, panel: null },
+        { id: 'repair', n: 'Починить', desc: 'Вся техника в мире', Icon: Wrench, panel: null }
+      ] : []),
+      ...(showTrafficSlot ? [
         { id: 'traffic', n: 'Трафик', desc: 'Движение города', Icon: TrafficCone, panel: 'traffic' }
       ] : [])
     ] as { id: string; n: string; desc: string; Icon: LucideIcon; panel: PanelId }[];
     return slots;
-  }, [isSandbox]);
+  }, [isSandbox, showTrafficSlot]);
   const N = SLOT.length;
   const SPAN = 360 / N;
 
@@ -470,7 +478,11 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   const carLabel = veh ? (veh.nameRu || veh.type) : 'Пешком';
   const setTraffic = (key: 'nearbyVehiclesTarget' | 'maxActivePedestrians', v: number) => {
     performanceConfig[key] = v;
+    if (key === 'nearbyVehiclesTarget') {
+      performanceConfig.maxVehicles = Math.max(12, v * 2);
+    }
     savePerformanceConfig(performanceConfig);
+    onUpdateTrafficCounts?.(performanceConfig.nearbyVehiclesTarget, performanceConfig.maxActivePedestrians);
     setTick((t) => t + 1);
   };
 
@@ -661,9 +673,12 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                 <Sld label="Время суток" value={minutes} min={0} max={1439} step={15} onChange={(v) => onSetTime(v / 60)} />
               </div>
               <div className="grid4" style={{ marginTop: 16 }}>
-                {TIME_PRESETS.map(({ label, hour: h, Icon }) => {
-                  const ph = minutes >= 300 && minutes < 480 ? 6 : minutes >= 480 && minutes < 1020 ? 12 : minutes >= 1020 && minutes < 1260 ? 19 : 0;
-                  return <Tile key={label} Icon={Icon} label={label} on={ph === h} onClick={click(() => onSetTime(h))} />;
+                {TIME_PRESETS.map(({ label, hour: defaultH, Icon }) => {
+                  const sr = Math.round((world.calendar?.sunriseHour ?? 6) * 4) / 4;
+                  const ss = Math.round((world.calendar?.sunsetHour ?? 19) * 4) / 4;
+                  const h = label === 'Рассвет' ? sr : label === 'Закат' ? ss : defaultH;
+                  const isActive = Math.abs(((hour - h + 36) % 24) - 12) <= 1.25;
+                  return <Tile key={label} Icon={Icon} label={label} on={isActive} onClick={click(() => onSetTime(h))} />;
                 })}
               </div>
 

@@ -80,7 +80,7 @@ import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
 import { getCityApartments } from './propertySystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
-import { mapPolyToDeformVerts } from './softbodyPolyMap';
+import { densifyBasePolyForSoftbody, mapPolyToDeformVerts } from './softbodyPolyMap';
 import { renderSoftbodyMeshOverlay } from './softbodyOverlay';
 import { getDisplaySettings } from './displaySettings';
 import {
@@ -91,6 +91,12 @@ import {
   renderUnifiedWorldShadows
 } from './shadowSystem';
 import { computeHumanPose } from './humanAnimationSystem';
+import {
+  renderDetailedPedestrians,
+  renderDetailedPlayerStandingBody,
+  renderDetailedPlayerHead,
+} from './humanRenderer';
+import { getOutsideTemperature } from './physics';
 
 interface CloudShadowLobe {
   relX: number;
@@ -120,18 +126,42 @@ export interface AstronomicalAtmosphere {
 
 export function calculateAstronomicalAtmosphere(
   timeHour: number,
-  calendar?: { sunriseHour?: number; sunsetHour?: number }
+  calendar?: { sunriseHour?: number; sunsetHour?: number; season?: string }
 ): AstronomicalAtmosphere {
-  const sunrise = calendar?.sunriseHour ?? 6.0;
-  const sunset = calendar?.sunsetHour ?? 19.0;
+  const season = calendar?.season;
+  const fallbackSunrise =
+    season === 'winter' ? 8.8 : season === 'summer' ? 3.9 : season === 'autumn' ? 6.8 : 6.0;
+  const fallbackSunset =
+    season === 'winter' ? 16.2 : season === 'summer' ? 21.1 : season === 'autumn' ? 18.2 : 19.0;
+  const sunrise = calendar?.sunriseHour ?? fallbackSunrise;
+  const sunset = calendar?.sunsetHour ?? fallbackSunset;
+  const dayLen = Math.max(4.0, Math.min(20.0, sunset - sunrise));
 
-  // Dawn twilight window: starts ~2.2h before sunrise, completes ~1.2h after sunrise
-  const dawnStart = Math.max(0, sunrise - 2.2);
-  const dawnEnd = sunrise + 1.2;
+  // Latitude 55 deg N seasonal solar depression & twilight geometry:
+  // - In summer (dayLen ~ 17.2h, solar declination +23.4 deg), midnight solar altitude is only -11.6 deg
+  //   (nautical twilight / northern white nights: longer twilight ~2.25h, softer midnight navy darkness ~0.875).
+  // - In autumn/spring (dayLen ~ 9-13h, dark wet/dry ground without snow cover) and winter (dayLen ~ 7.1h,
+  //   midnight solar altitude -58.4 deg), deep astronomical night sets in with pitch-dark midnight ~0.935-0.955.
+  const summerness = Math.max(0, Math.min(1, (dayLen - 12.2) / 5.0));
+  const winterness = Math.max(0, Math.min(1, (11.5 - dayLen) / 4.4));
+  const isAutumnDark = season === 'autumn' || (!season && dayLen >= 9.0 && dayLen <= 12.2);
 
-  // Dusk twilight window: starts ~1.6h before sunset, completes ~2.0h after sunset
-  const duskStart = sunset - 1.6;
-  const duskEnd = Math.min(24, sunset + 2.0);
+  // Peak midnight darkness (at solar midnight ~00:30) and end-of-dusk darkness:
+  const maxNightAlpha = isAutumnDark
+    ? 0.952 - summerness * 0.075
+    : 0.942 - summerness * 0.067 - winterness * 0.008;
+  const duskEdgeAlpha = maxNightAlpha - 0.028;
+
+  // Seasonal twilight durations (sun crosses horizon at a shallow angle in summer, steeper near equinox/winter)
+  const dawnPreHours = 1.55 + summerness * 0.75;
+  const dawnPostHours = 0.85 + summerness * 0.30 + winterness * 0.15;
+  const duskPreHours = 1.25 + summerness * 0.35 + winterness * 0.15;
+  const duskPostHours = 1.45 + summerness * 0.80;
+
+  const dawnStart = Math.max(0, sunrise - dawnPreHours);
+  const dawnEnd = sunrise + dawnPostHours;
+  const duskStart = sunset - duskPreHours;
+  const duskEnd = Math.min(24, sunset + duskPostHours);
 
   let nightAlpha = 0;
   let goldenHourWeight = 0;
@@ -143,26 +173,31 @@ export function calculateAstronomicalAtmosphere(
     nightAlpha = 0;
   } else if (timeHour >= duskStart && timeHour < duskEnd) {
     // Sunset / Dusk progression with smooth Hermite/cosine ease:
-    const t = (timeHour - duskStart) / (duskEnd - duskStart);
+    const t = (timeHour - duskStart) / Math.max(0.1, duskEnd - duskStart);
     const smoothT = 0.5 - 0.5 * Math.cos(Math.PI * t);
-    nightAlpha = smoothT * 0.82;
+    nightAlpha = Math.pow(smoothT, 0.92) * duskEdgeAlpha;
 
-    // Golden hour peaks around sunset start (t ~ 0.15 - 0.50)
+    // Golden hour peaks around sunset start (t ~ 0.15 - 0.55)
     if (t < 0.60) {
       goldenHourWeight = Math.sin((t / 0.60) * Math.PI);
     }
-    // Deep crimson/violet twilight peaks in mid-dusk (t ~ 0.25 - 0.85)
+    // Deep crimson/violet twilight peaks in mid-dusk (t ~ 0.20 - 0.85)
     if (t > 0.20) {
       sunsetWeight = Math.sin(((t - 0.20) / 0.80) * Math.PI);
     }
   } else if (timeHour >= duskEnd || timeHour < dawnStart) {
-    // Pure Night (Starlight / Midnight)
-    nightAlpha = 0.82;
+    // Astronomical Night (Starlight / Midnight nadir curve):
+    // Deepens smoothly from duskEnd toward solar midnight (~00:30) and eases toward dawnStart
+    const nightSpan = Math.max(0.5, (24.0 - duskEnd) + dawnStart);
+    const nightElapsed = timeHour >= duskEnd ? (timeHour - duskEnd) : (24.0 - duskEnd + timeHour);
+    const nightFrac = Math.max(0, Math.min(1, nightElapsed / nightSpan));
+    const nadirArch = Math.sin(Math.PI * nightFrac);
+    nightAlpha = duskEdgeAlpha + (maxNightAlpha - duskEdgeAlpha) * nadirArch;
   } else {
     // Dawn progression with smooth cosine ease:
-    const t = (timeHour - dawnStart) / (dawnEnd - dawnStart);
+    const t = (timeHour - dawnStart) / Math.max(0.1, dawnEnd - dawnStart);
     const smoothT = 0.5 - 0.5 * Math.cos(Math.PI * t);
-    nightAlpha = (1.0 - smoothT) * 0.82;
+    nightAlpha = Math.pow(1.0 - smoothT, 0.92) * duskEdgeAlpha;
 
     // Soft peach/lavender morning glow
     dawnWeight = Math.sin(t * Math.PI);
@@ -171,22 +206,26 @@ export function calculateAstronomicalAtmosphere(
     }
   }
 
-  // Chromatic Atmospheric Scattering:
-  // Night: Deep Midnight Navy [5, 9, 22]
-  // Sunset: Deep Violet / Twilight Plum [28, 12, 36]
-  // Dawn: Cool Slate / Lavender [18, 16, 32]
-  let r = 5;
-  let g = 9;
-  let b = 22;
+  // Chromatic Atmospheric Scattering by Season:
+  // - Summer northern nautical twilight: deep twilight navy [4, 8, 22]
+  // - Autumn / Spring dark sky: pitch midnight [2, 4, 11]
+  // - Winter cold night sky: crisp frost-navy [3, 6, 15]
+  const nightR = Math.round(2 + summerness * 2 + winterness * 1);
+  const nightG = Math.round(4 + summerness * 4 + winterness * 2);
+  const nightB = Math.round(11 + summerness * 11 + winterness * 4);
+
+  let r = nightR;
+  let g = nightG;
+  let b = nightB;
 
   if (sunsetWeight > 0.05) {
-    r = Math.round(5 + sunsetWeight * 26);
-    g = Math.round(9 + sunsetWeight * 4);
-    b = Math.round(22 + sunsetWeight * 14);
+    r = Math.round(nightR + sunsetWeight * 26);
+    g = Math.round(nightG + sunsetWeight * 5);
+    b = Math.round(nightB + sunsetWeight * 16);
   } else if (dawnWeight > 0.05) {
-    r = Math.round(5 + dawnWeight * 16);
-    g = Math.round(9 + dawnWeight * 8);
-    b = Math.round(22 + dawnWeight * 12);
+    r = Math.round(nightR + dawnWeight * 16);
+    g = Math.round(nightG + dawnWeight * 8);
+    b = Math.round(nightB + dawnWeight * 14);
   }
 
   return {
@@ -1357,7 +1396,7 @@ export class GameRenderer {
             camera.zoom * heightScale
           );
           GuardrailRenderer.renderGuardrails(ctx, world, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
-          this.renderPedestrians(visiblePedestrians, world);
+          this.renderPedestrians(visiblePedestrians, world, camera.zoom * heightScale);
           this.updateParticleShaderFrameContext(
             world,
             player,
@@ -1398,7 +1437,7 @@ export class GameRenderer {
 
       // Render player pedestrian inside
       if (!player.isInVehicle) {
-        this.renderPlayerPedestrian(player);
+        this.renderPlayerPedestrian(player, false, 20);
       }
 
       // Disabled in favor of high-performance ContextInteractionHUD Lucide React overlay
@@ -1562,19 +1601,21 @@ export class GameRenderer {
       this.renderBirds(groundBirds, world, minX, minY, maxX, maxY, nightAlpha);
     }
 
-    // 12. Pedestrians (with Umbrellas during Rain)
-    this.renderPedestrians(visiblePedestrians, world);
+    // 12. Pedestrians (Detailed realistic textures, weather-adaptive wardrobe & umbrellas)
+    this.renderPedestrians(visiblePedestrians, world, camera.zoom);
+
+    const ambientTempC = getOutsideTemperature(world, timeHour);
 
     // 13. Player on Foot (if not inside vehicle and not inside train carriage or bus saloon)
     if (!player.isInVehicle && !player.insideCarId && !player.insideBusId) {
-      this.renderPlayerPedestrian(player);
+      this.renderPlayerPedestrian(player, false, ambientTempC);
     }
 
     // 13b. Remote Players on Foot
     if (remotePlayers && remotePlayers.length > 0) {
       for (const rp of remotePlayers) {
         if (!rp.isInVehicle && !(rp as any).insideCarId && !(rp as any).insideBusId) {
-          this.renderPlayerPedestrian(rp as unknown as Player, true);
+          this.renderPlayerPedestrian(rp as unknown as Player, true, ambientTempC);
         }
       }
     }
@@ -9355,951 +9396,17 @@ export class GameRenderer {
     BirdSystem.renderBirds(this.ctx, birds, world, minX, minY, maxX, maxY, nightAlpha);
   }
 
-  // --- PEDESTRIANS ---
-  private renderPedestrians(pedestrians: Pedestrian[], world?: GameWorld) {
-    const ctx = this.ctx;
-
-    for (const ped of pedestrians) {
-      if (ped.isInsideBuilding) continue;
-
-      // Draw fire hose from the truck to the firefighter in world coordinates!
-      if (world && (ped as any).isFirefighter && ['going_to_fire', 'extinguishing', 'returning_to_truck'].includes((ped as any).firefighterState || '')) {
-        const parentCar = world.vehicles.find(v => v.id === (ped as any).parentVehicleId);
-        if (parentCar) {
-          const rearX = parentCar.x - Math.cos(parentCar.angle) * (parentCar.length * 0.45);
-          const rearY = parentCar.y - Math.sin(parentCar.angle) * (parentCar.length * 0.45);
-
-          ctx.save();
-          // Shadow of the hose
-          ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-          ctx.lineWidth = 1.1;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.beginPath();
-          ctx.moveTo(rearX + 1.0, rearY + 1.2);
-          const midX = (rearX + ped.x) / 2;
-          const midY = (rearY + ped.y) / 2 + 12; // sag downwards slightly
-          ctx.quadraticCurveTo(midX, midY, ped.x + 1.0, ped.y + 1.2);
-          ctx.stroke();
-
-          // The main hose (thick protective gray-white)
-          ctx.strokeStyle = '#cbd5e1';
-          ctx.lineWidth = 1.1;
-          ctx.beginPath();
-          ctx.moveTo(rearX, rearY);
-          ctx.quadraticCurveTo(midX, midY - 1.5, ped.x, ped.y);
-          ctx.stroke();
-
-          // A bright red/orange line on the hose (water indicator/stripe)
-          ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = 0.35;
-          ctx.setLineDash([3, 3]);
-          ctx.beginPath();
-          ctx.moveTo(rearX, rearY);
-          ctx.quadraticCurveTo(midX, midY - 1.5, ped.x, ped.y);
-          ctx.stroke();
-          ctx.setLineDash([]); // Reset
-          ctx.restore();
-        }
-      }
-
-      ctx.save();
-      ctx.translate(ped.x, ped.y);
-
-      const isFirefighter = (ped as any).isFirefighter;
-      const pedScale = (ped.isChild ? 0.7 : 1.0) * 0.74;
-      const nowSec = performance.now() * 0.001;
-      const pose = computeHumanPose(ped, false, nowSec);
-
-      ctx.save();
-      ctx.rotate(ped.angle);
-      ctx.scale(pedScale, pedScale);
-
-      // Pedestrian 3D body shadow is projected in world space via unified shadow shroud (computeHumanPose)
-
-      // 0. Cyclist / Scooter base (synchronized with pose.props.bicycle / pose.props.scooter)
-      if (pose.props.bicycle) {
-        const bike = pose.props.bicycle;
-        ctx.save();
-        ctx.translate(0, bike.leanRoll * 2.0);
-        // Wheels
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-8.6, -0.85, 4.4, 1.7);
-        ctx.fillRect(4.2, -0.85, 4.4, 1.7);
-        // Rotating pedal cranks
-        const crankX = -0.5;
-        const pLx = crankX + Math.cos(bike.pedalAngle) * 2.0;
-        const pRx = crankX - Math.cos(bike.pedalAngle) * 2.0;
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(crankX, -1.6); ctx.lineTo(pLx, -2.5);
-        ctx.moveTo(crankX, 1.6); ctx.lineTo(pRx, 2.5);
-        ctx.stroke();
-        ctx.fillStyle = '#020617';
-        ctx.fillRect(pLx - 0.7, -3.0, 1.4, 0.9);
-        ctx.fillRect(pRx - 0.7, 2.1, 1.4, 0.9);
-        // Bicycle diamond frame & handlebars
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 1.45;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-6.2, 0); ctx.lineTo(5.6, 0);
-        ctx.moveTo(3.6, 0); ctx.lineTo(4.6, -3.8);
-        ctx.moveTo(3.6, 0); ctx.lineTo(4.6, 3.8);
-        ctx.stroke();
-        // Saddle
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        safeEllipse(ctx, -2.2, 0, 1.8, 1.1, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (pose.props.scooter) {
-        // Electric scooter base
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-7.8, -0.75, 2.6, 1.5);
-        ctx.fillRect(5.2, -0.75, 2.6, 1.5);
-        ctx.fillStyle = '#334155';
-        ctx.beginPath();
-        safeRoundRect(ctx, -6.5, -1.6, 12.5, 3.2, 1.0);
-        ctx.fill();
-        // Handlebar stem & grips
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(4.4, -0.6, 1.2, 1.2);
-        ctx.fillRect(4.8, -3.4, 0.85, 6.8);
-      }
-
-      // 1. Articulated 2-Segment Legs (Hip -> Knee -> Foot) & Footwear
-      const drawArticulatedPedLeg = (leg: typeof pose.legL) => {
-        // Foot / Shoe at ground contact or lifted stride
-        ctx.save();
-        ctx.translate(leg.foot.x, leg.foot.y);
-        ctx.rotate(leg.footAngle);
-        const shoeScale = 1.0 + Math.min(0.18, leg.foot.z * 0.04);
-        ctx.scale(shoeScale, shoeScale);
-        if (isFirefighter) {
-          ctx.fillStyle = '#020617';
-          ctx.beginPath();
-          safeRoundRect(ctx, -1.4, -1.4, 3.3, 2.8, 0.7);
-          ctx.fill();
-        } else {
-          ctx.fillStyle = '#0f172a';
-          ctx.beginPath();
-          safeRoundRect(ctx, -1.3, -1.25, 3.0, 2.5, 0.7);
-          ctx.fill();
-          // Sneaker toe cap accent
-          ctx.fillStyle = 'rgba(255,255,255,0.22)';
-          ctx.fillRect(1.0, -0.95, 0.55, 1.9);
-        }
-        ctx.restore();
-
-        // Thigh (hip -> knee) & Shin (knee -> foot)
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = isFirefighter ? '#0f172a' : ped.pantsColor;
-        ctx.lineWidth = isFirefighter ? 3.1 : 2.8;
-        ctx.beginPath();
-        ctx.moveTo(leg.hip.x, leg.hip.y);
-        ctx.lineTo(leg.knee.x, leg.knee.y);
-        ctx.lineTo(leg.foot.x, leg.foot.y);
-        ctx.stroke();
-
-        // Subtle knee cap highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.beginPath();
-        ctx.arc(leg.knee.x, leg.knee.y, 1.25, 0, Math.PI * 2);
-        ctx.fill();
-
-        if (isFirefighter) {
-          // High-vis reflective ankle bands
-          ctx.fillStyle = '#a3e635';
-          ctx.fillRect(leg.foot.x - 0.6, leg.foot.y - 1.35, 0.9, 2.7);
-          ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(leg.foot.x - 0.3, leg.foot.y - 1.35, 0.3, 2.7);
-        }
-        ctx.restore();
-      };
-      drawArticulatedPedLeg(pose.legL);
-      drawArticulatedPedLeg(pose.legR);
-
-      // 2. Torso & Detailed Clothing (with breathing expansion, pitch lean, and yaw counter-rotation)
-      const clothType = ped.clothingType || 'tshirt';
-      const mainShirtColor = ped.shirtColor || '#3b82f6';
-      const jacketCol = ped.jacketColor || '#1e293b';
-      const innerCol = ped.innerShirtColor || '#ffffff';
-
-      ctx.save();
-      ctx.translate(pose.torso.x, pose.torso.y);
-      ctx.rotate(pose.torso.yaw);
-      ctx.scale(pose.torso.breathScale, pose.torso.breathScale);
-
-      // Base shoulder width & torso shape
-      if (isFirefighter) {
-        // Heavy duty fire-resistant charcoal turnout coat
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 4.3, 5.9, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // High-vis lime-green reflective safety harness stripes across shoulders/chest
-        ctx.strokeStyle = '#a3e635';
-        ctx.lineWidth = 1.0;
-        ctx.beginPath();
-        ctx.moveTo(-1.2, -4.5); ctx.lineTo(-1.2, 4.5);
-        ctx.moveTo(1.4, -4.5); ctx.lineTo(1.4, 4.5);
-        ctx.moveTo(-3.5, -2.0); ctx.lineTo(3.5, -2.0);
-        ctx.moveTo(-3.5, 2.0); ctx.lineTo(3.5, 2.0);
-        ctx.stroke();
-
-        // Silver inner reflective core stripe
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 0.4;
-        ctx.beginPath();
-        ctx.moveTo(-1.2, -4.5); ctx.lineTo(-1.2, 4.5);
-        ctx.moveTo(1.4, -4.5); ctx.lineTo(1.4, 4.5);
-        ctx.moveTo(-3.5, -2.0); ctx.lineTo(3.5, -2.0);
-        ctx.moveTo(-3.5, 2.0); ctx.lineTo(3.5, 2.0);
-        ctx.stroke();
-      } else if (clothType === 'open_jacket' || clothType === 'suit') {
-        ctx.fillStyle = clothType === 'suit' ? '#0f172a' : jacketCol;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 4.2, 5.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = innerCol;
-        ctx.beginPath();
-        ctx.moveTo(3.5, 0);
-        ctx.lineTo(-2.0, -1.8);
-        ctx.lineTo(-2.0, 1.8);
-        ctx.closePath();
-        ctx.fill();
-
-        if (clothType === 'suit') {
-          ctx.fillStyle = '#ef4444';
-          ctx.beginPath();
-          ctx.moveTo(2.5, 0);
-          ctx.lineTo(0.5, -0.6);
-          ctx.lineTo(-1.5, 0);
-          ctx.lineTo(0.5, 0.6);
-          ctx.closePath();
-          ctx.fill();
-        } else {
-          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-          ctx.lineWidth = 0.6;
-          ctx.beginPath();
-          ctx.moveTo(2.5, -2.2); ctx.lineTo(-1.0, -1.8);
-          ctx.moveTo(2.5, 2.2); ctx.lineTo(-1.0, 1.8);
-          ctx.stroke();
-        }
-      } else if (clothType === 'hoodie') {
-        ctx.fillStyle = mainShirtColor;
-        ctx.beginPath();
-        ctx.ellipse(0.2, 0, 4.5, 5.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.beginPath();
-        ctx.arc(-2.6, 0, 2.6, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(1.2, -0.8); ctx.lineTo(2.8, -0.6);
-        ctx.moveTo(1.2, 0.8); ctx.lineTo(2.8, 0.6);
-        ctx.stroke();
-      } else if (clothType === 'dress') {
-        ctx.fillStyle = mainShirtColor;
-        ctx.beginPath();
-        ctx.moveTo(-3.5, -5.8);
-        ctx.quadraticCurveTo(1.5, -5.0, 4.0, -2.2);
-        ctx.lineTo(4.0, 2.2);
-        ctx.quadraticCurveTo(1.5, 5.0, -3.5, 5.8);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.fillRect(-0.8, -4.8, 1.2, 9.6);
-      } else if (clothType === 'button_shirt') {
-        ctx.fillStyle = mainShirtColor;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 4.0, 5.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(1.8, -1.8); ctx.lineTo(3.2, -0.8); ctx.lineTo(1.8, 0);
-        ctx.moveTo(1.8, 1.8); ctx.lineTo(3.2, 0.8); ctx.lineTo(1.8, 0);
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(-2.5, 0); ctx.lineTo(2.0, 0);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = ped.isJanitor ? '#ca8a04' : mainShirtColor;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 4.0, 5.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        if (ped.isJanitor) {
-          ctx.strokeStyle = '#f8fafc';
-          ctx.lineWidth = 1.0;
-          ctx.beginPath();
-          ctx.moveTo(-1.0, -4.5); ctx.lineTo(-1.0, 4.5);
-          ctx.moveTo(1.2, -4.5); ctx.lineTo(1.2, 4.5);
-          ctx.stroke();
-        } else {
-          ctx.fillStyle = ped.skinColor;
-          ctx.beginPath();
-          ctx.arc(1.8, 0, 1.4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      // Backpack (attached to torso so it twists and breathes naturally with the back)
-      if (ped.hasBackpack) {
-        ctx.fillStyle = ped.backpackColor || '#1e293b';
-        ctx.beginPath();
-        safeRoundRect(ctx, -5.2, -3.6, 3.8, 7.2, 0.8);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(-5.2, -3.6, 3.8, 7.2);
-
-        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(-1.5, -3.2); ctx.lineTo(1.5, -2.8);
-        ctx.moveTo(-1.5, 3.2); ctx.lineTo(1.5, 2.8);
-        ctx.stroke();
-      }
-      ctx.restore(); // end torso transform
-
-      // 2.5 Articulated 2-Segment Arms (Shoulder -> Elbow -> Hand)
-      const sleeveColor = isFirefighter
-        ? '#0f172a'
-        : ped.isJanitor
-          ? '#ca8a04'
-          : clothType === 'open_jacket'
-            ? jacketCol
-            : clothType === 'suit'
-              ? '#0f172a'
-              : mainShirtColor;
-      const handSkinColor = isFirefighter ? '#d97724' : ped.skinColor;
-
-      const drawArticulatedPedArm = (arm: typeof pose.armL, isLeft: boolean) => {
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        // Upper arm (shoulder -> elbow)
-        ctx.strokeStyle = sleeveColor;
-        ctx.lineWidth = 2.35;
-        ctx.beginPath();
-        ctx.moveTo(arm.shoulder.x, arm.shoulder.y);
-        ctx.lineTo(arm.elbow.x, arm.elbow.y);
-        ctx.stroke();
-
-        // Forearm (elbow -> hand)
-        const isShortSleeve = !isFirefighter && !ped.isJanitor && (clothType === 'tshirt' || clothType === 'dress');
-        ctx.strokeStyle = isShortSleeve ? ped.skinColor : sleeveColor;
-        ctx.lineWidth = 2.05;
-        ctx.beginPath();
-        ctx.moveTo(arm.elbow.x, arm.elbow.y);
-        ctx.lineTo(arm.hand.x, arm.hand.y);
-        ctx.stroke();
-
-        // Elbow crease highlight
-        ctx.fillStyle = 'rgba(0,0,0,0.12)';
-        ctx.beginPath();
-        ctx.arc(arm.elbow.x, arm.elbow.y, 0.95, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Wristwatch when checking watch on left wrist
-        if (isLeft && pose.actionType === 'checking_watch') {
-          const wx = arm.elbow.x * 0.25 + arm.hand.x * 0.75;
-          const wy = arm.elbow.y * 0.25 + arm.hand.y * 0.75;
-          ctx.fillStyle = '#0f172a';
-          ctx.beginPath();
-          ctx.arc(wx, wy, 1.15, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#38bdf8';
-          ctx.beginPath();
-          ctx.arc(wx, wy, 0.7, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Hand / Glove at wrist end
-        ctx.fillStyle = handSkinColor;
-        ctx.beginPath();
-        ctx.arc(arm.hand.x, arm.hand.y, 1.15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      };
-      drawArticulatedPedArm(pose.armL, true);
-      drawArticulatedPedArm(pose.armR, false);
-
-      // Firefighter Brass Nozzle (synchronized with pose.props.fireNozzle)
-      if (isFirefighter && pose.props.fireNozzle) {
-        const fn = pose.props.fireNozzle;
-        ctx.save();
-        ctx.translate(fn.x, fn.y);
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(-1.4, -1.2, 3.6, 2.4);
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(1.8, -0.6, 1.3, 1.2);
-        ctx.fillRect(-0.6, 0.8, 0.8, 1.5);
-        ctx.restore();
-      }
-
-      // 3. Synchronized Handheld Props & Sweeping Janitor Broom (drawn before head/umbrella so depth layering is natural)
-      if (pose.props.phone) {
-        const ph = pose.props.phone;
-        ctx.save();
-        ctx.translate(ph.x, ph.y);
-        ctx.rotate(ph.angle);
-
-        // Soft glowing screen cone projected on chest/face
-        const screenGlow = ctx.createRadialGradient(0.8, 0, 0.4, 0.8, 0, 6.8);
-        screenGlow.addColorStop(0, 'rgba(56, 189, 248, 0.38)');
-        screenGlow.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
-        ctx.fillStyle = screenGlow;
-        ctx.beginPath();
-        ctx.arc(0.8, 0, 6.8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Phone outer casing
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        safeRoundRect(ctx, -1.6, -1.4, 3.6, 2.8, 0.6);
-        ctx.fill();
-
-        // Illuminated glass screen
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillRect(-1.2, -1.0, 2.8, 2.0);
-
-        // Dynamic scrolling UI cards on screen
-        const scrollShift = (nowSec * 1.2) % 1.2;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(-0.8, -0.7 + scrollShift * 0.3, 1.4, 0.38);
-        ctx.fillRect(-0.8, -0.1, 2.0, 0.38);
-        ctx.fillRect(-0.8, 0.45 - scrollShift * 0.2, 1.1, 0.35);
-
-        // Thumbs gripping sides (right thumb taps screen)
-        const tapOffset = Math.max(0, Math.sin(nowSec * 7.5)) * 0.35;
-        ctx.fillStyle = ped.skinColor;
-        ctx.beginPath();
-        ctx.arc(-0.4, -1.35, 0.65, 0, Math.PI * 2);
-        ctx.arc(-0.3 + tapOffset, 1.35 - tapOffset * 0.8, 0.65, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (pose.props.extinguisher) {
-        const ext = pose.props.extinguisher;
-        ctx.save();
-        ctx.translate(ext.x, ext.y);
-        ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        safeRoundRect(ctx, -1.5, -2.5, 3.0, 5.0, 1.0);
-        ctx.fill();
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(-1.0, -2.8, 2.0, 0.8);
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(0, -3.2, 0.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (pose.props.coffee) {
-        const cf = pose.props.coffee;
-        ctx.save();
-        ctx.translate(cf.x, cf.y);
-
-        // White takeaway cup outer rim
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.arc(0, 0, 2.35, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Kraft brown heat sleeve ring
-        ctx.fillStyle = '#d97706';
-        ctx.beginPath();
-        ctx.arc(0, 0, 1.95, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Dark plastic dome lid circle
-        ctx.fillStyle = '#1e293b';
-        ctx.beginPath();
-        ctx.arc(0, 0, 1.45, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Sip hole spout dot
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(-0.85, 0, 0.38, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Delicate rising hot coffee steam wisps
-        const steamPhase = pose.props.coffee.steamPhase;
-        ctx.strokeStyle = 'rgba(248, 250, 252, 0.45)';
-        ctx.lineWidth = 0.55;
-        ctx.beginPath();
-        ctx.arc(Math.sin(steamPhase) * 0.6, Math.cos(steamPhase * 0.8) * 0.6, 0.9 + (steamPhase % 1) * 0.8, 0, Math.PI * 1.4);
-        ctx.stroke();
-
-        ctx.restore();
-      } else if (pose.props.box) {
-        const bx = pose.props.box;
-        ctx.save();
-        ctx.translate(bx.x, bx.y);
-        ctx.rotate(bx.angle);
-
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(-2.6, -3.6, 5.2, 7.2);
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = 0.8;
-        ctx.strokeRect(-2.6, -3.6, 5.2, 7.2);
-
-        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(0, -3.6);
-        ctx.lineTo(0, 3.6);
-        ctx.stroke();
-
-        ctx.fillStyle = '#fef3c7';
-        ctx.fillRect(-0.7, -3.6, 1.4, 7.2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(-2.0, -2.6, 1.4, 2.0);
-        ctx.restore();
-      } else if (pose.props.bag) {
-        const bg = pose.props.bag;
-        ctx.save();
-        ctx.translate(bg.x, bg.y);
-        ctx.rotate(bg.swingPitch * 0.45);
-
-        const bagColor = ped.propColor || '#e11d48';
-        ctx.fillStyle = bagColor;
-        ctx.beginPath();
-        safeRoundRect(ctx, -3.2, -1.8, 6.4, 3.6, 1.0);
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-        ctx.lineWidth = 0.6;
-        ctx.strokeRect(-3.2, -1.8, 6.4, 3.6);
-
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 2.4, 1.0, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(-1.8, -0.6); ctx.lineTo(-0.6, -2.0);
-        ctx.moveTo(1.8, -0.6); ctx.lineTo(0.6, -2.0);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // Janitor Broom (Synchronized with pose.props.broom sweeping arc!)
-      if (pose.props.broom) {
-        const br = pose.props.broom;
-        ctx.save();
-
-        // Subtle dust puff particles when sweeping bristles reach stroke extremes
-        const sweepVel = Math.abs(br.sweepNorm);
-        if (sweepVel > 0.75) {
-          ctx.fillStyle = 'rgba(203, 213, 225, 0.28)';
-          ctx.beginPath();
-          ctx.arc(br.shaftEnd.x + 2.8, br.shaftEnd.y + (br.headAngle > 0 ? 3.2 : -3.2), 2.2, 0, Math.PI * 2);
-          ctx.arc(br.shaftEnd.x + 4.2, br.shaftEnd.y, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Broom Shaft from left grip through right grip to broom head
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = 1.55;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(br.gripL.x - 1.2, br.gripL.y - 0.5);
-        ctx.lineTo(br.shaftEnd.x, br.shaftEnd.y);
-        ctx.stroke();
-
-        // Broom Head at shaftEnd rotated by br.headAngle
-        ctx.save();
-        ctx.translate(br.shaftEnd.x, br.shaftEnd.y);
-        ctx.rotate(br.headAngle);
-
-        // Metallic collar
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(-1.4, -0.7, 1.4, 1.4);
-
-        // Transverse wooden head bar
-        ctx.fillStyle = '#571c05';
-        ctx.fillRect(-0.8, -5.0, 2.2, 10.0);
-
-        // Dense broom bristles
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.moveTo(1.4, -5.0);
-        ctx.lineTo(6.0, -6.0);
-        ctx.lineTo(6.0, 6.0);
-        ctx.lineTo(1.4, 5.0);
-        ctx.fill();
-
-        ctx.strokeStyle = '#eab308';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        for (let y = -4.5; y <= 4.5; y += 1.5) {
-          ctx.moveTo(1.4, y);
-          ctx.lineTo(6.0, y * 1.15);
-        }
-        ctx.stroke();
-        ctx.restore();
-
-        // Hands gripping broom shaft
-        ctx.fillStyle = ped.skinColor;
-        ctx.beginPath();
-        ctx.arc(br.gripL.x, br.gripL.y, 1.05, 0, Math.PI * 2);
-        ctx.arc(br.gripR.x, br.gripR.y, 1.05, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-      }
-
-      // 4. Head, Facial Anatomy, Hairstyles & Hats (synchronized with pose.head yaw/pitch/position)
-      ctx.save();
-      ctx.translate(pose.head.x, pose.head.y);
-      ctx.rotate(pose.head.yaw);
-      const pitchShiftX = -pose.head.pitch * 1.35; // Looking down shifts crown forward, nose slightly under
-
-      // Ears on left and right side of head
-      ctx.fillStyle = ped.skinColor;
-      ctx.beginPath();
-      ctx.arc(-3.4 * Math.sin(pose.head.roll) * 0.2, -3.4, 0.9, 0, Math.PI * 2);
-      ctx.arc(3.4 * Math.sin(pose.head.roll) * 0.2, 3.4, 0.9, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Head Base
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Subtle nose bump at front of face (+X, tucked slightly when looking down at phone/watch)
-      ctx.beginPath();
-      ctx.arc(3.1 + pitchShiftX * 0.6, 0, 0.6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glasses / Sunglasses
-      if (ped.hasGlasses) {
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(1.7 + pitchShiftX * 0.4, -2.4, 1.0, 1.8);
-        ctx.fillRect(1.7 + pitchShiftX * 0.4, 0.6, 1.0, 1.8);
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(2.2 + pitchShiftX * 0.4, -0.6); ctx.lineTo(2.2 + pitchShiftX * 0.4, 0.6);
-        ctx.moveTo(2.2 + pitchShiftX * 0.4, -2.4); ctx.lineTo(0.3, -3.4);
-        ctx.moveTo(2.2 + pitchShiftX * 0.4, 2.4); ctx.lineTo(0.3, 3.4);
-        ctx.stroke();
-      }
-
-      // Hairstyles
-      if (isFirefighter) {
-        // Helmet drawn below
-      } else if (ped.hairStyle === 'bald') {
-        ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        ctx.beginPath();
-        ctx.arc(0.7, -0.8, 0.9, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (!ped.hasHat) {
-        ctx.fillStyle = ped.hairColor;
-        ctx.beginPath();
-        if (ped.hairStyle === 'short') {
-          ctx.arc(-1.1, 0, 3.2, Math.PI * 0.45, Math.PI * 1.55);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-          ctx.lineWidth = 0.6;
-          ctx.beginPath();
-          ctx.moveTo(-0.7, -1.5); ctx.lineTo(0.7, -0.2);
-          ctx.stroke();
-        } else if (ped.hairStyle === 'long') {
-          ctx.arc(-1.5, 0, 3.5, Math.PI * 0.35, Math.PI * 1.65);
-          ctx.ellipse(-3.3, -2.8, 3.2, 1.8, -Math.PI / 5, 0, Math.PI * 2);
-          ctx.ellipse(-3.3, 2.8, 3.2, 1.8, Math.PI / 5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-          ctx.lineWidth = 0.5;
-          ctx.beginPath();
-          ctx.moveTo(-2.5, -3.5); ctx.lineTo(-4.7, -2.5);
-          ctx.moveTo(-2.5, 3.5); ctx.lineTo(-4.7, 2.5);
-          ctx.stroke();
-        } else if (ped.hairStyle === 'bun') {
-          ctx.arc(-1.1, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
-          ctx.arc(-4.1, 0, 2.2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-          ctx.lineWidth = 0.6;
-          ctx.stroke();
-        } else if (ped.hairStyle === 'ponytail') {
-          const tailWag = Math.sin(ped.walkCycle || 0) * 0.16;
-          ctx.arc(-1.1, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
-          ctx.ellipse(-5.3, tailWag * 2.0, 3.4, 1.3, tailWag, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (ped.hairStyle === 'spiky') {
-          ctx.moveTo(-1.1, -3.2);
-          ctx.lineTo(0.7, -4.2); ctx.lineTo(-0.3, -2.2);
-          ctx.lineTo(1.7, -1.2); ctx.lineTo(0.3, 0);
-          ctx.lineTo(1.7, 1.2); ctx.lineTo(-0.3, 2.2);
-          ctx.lineTo(0.7, 4.2); ctx.lineTo(-1.1, 3.2);
-          ctx.arc(-1.1, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
-          ctx.fill();
-        } else if (ped.hairStyle === 'curly') {
-          for (let angle = 0.5; angle < Math.PI * 1.8; angle += 0.45) {
-            const hx = -0.5 + Math.cos(angle) * 3.2;
-            const hy = Math.sin(angle) * 3.2;
-            ctx.arc(hx, hy, 1.3, 0, Math.PI * 2);
-          }
-          ctx.fill();
-        } else if (ped.hairStyle === 'afro') {
-          ctx.arc(-1.3, 0, 4.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-          ctx.lineWidth = 0.5;
-          ctx.stroke();
-        }
-      }
-
-      // Headphones (Over-Ear)
-      if (ped.hasHeadphones && !ped.hasHat) {
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 1.0;
-        ctx.beginPath();
-        ctx.arc(0, 0, 3.6, -Math.PI * 0.4, Math.PI * 0.4);
-        ctx.stroke();
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillRect(-0.5, -4.2, 1.6, 1.2);
-        ctx.fillRect(-0.5, 3.0, 1.6, 1.2);
-      }
-
-      // Hats / Helmets
-      if (isFirefighter) {
-        ctx.fillStyle = '#f97316';
-        ctx.beginPath();
-        ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = '#020617';
-        ctx.lineWidth = 1.0;
-        ctx.beginPath();
-        ctx.arc(0, 0, 4.2, -Math.PI * 0.95, Math.PI * 0.95);
-        ctx.stroke();
-
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.arc(0, 0, 3.4, -Math.PI * 0.35, Math.PI * 0.35);
-        ctx.stroke();
-
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.moveTo(3.1, -1.0);
-        ctx.lineTo(4.3, 0);
-        ctx.lineTo(3.1, 1.0);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(-4.0, -0.6, 6.8, 1.2);
-
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.beginPath();
-        ctx.arc(0, 0, 4.4, -Math.PI * 0.22, Math.PI * 0.22);
-        ctx.lineTo(1.7, 0);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.strokeStyle = '#fbbf24';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      } else if (ped.hasHat) {
-        ctx.fillStyle = ped.hatColor || '#1e293b';
-        ctx.beginPath();
-        if (ped.hatType === 'cap') {
-          ctx.arc(-0.7, 0, 3.2, 0, Math.PI * 2);
-          ctx.fillRect(1.5, -2.0, 3.2, 4.0);
-        } else if (ped.hatType === 'beanie') {
-          ctx.arc(-0.9, 0, 3.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-          ctx.lineWidth = 0.6;
-          ctx.beginPath();
-          ctx.moveTo(-4.0, -2.0); ctx.lineTo(1.0, -2.0);
-          ctx.moveTo(-4.0, 0); ctx.lineTo(1.0, 0);
-          ctx.moveTo(-4.0, 2.0); ctx.lineTo(1.0, 2.0);
-          ctx.stroke();
-        } else if (ped.hatType === 'sunhat') {
-          ctx.arc(-0.5, 0, 5.8, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = 'rgba(0,0,0,0.2)';
-          ctx.beginPath();
-          ctx.arc(-0.5, 0, 3.2, 0, Math.PI * 2);
-        } else if (ped.hatType === 'fedora') {
-          ctx.arc(-0.5, 0, 4.8, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#0f172a';
-          ctx.beginPath();
-          ctx.arc(-0.5, 0, 3.2, 0, Math.PI * 2);
-        }
-        ctx.fill();
-      }
-      ctx.restore(); // end head transform
-
-      // 5. Rain Umbrella (synchronized with pose.props.umbrella)
-      if (pose.props.umbrella) {
-        const umb = pose.props.umbrella;
-        ctx.save();
-        ctx.translate(umb.x, umb.y);
-        ctx.fillStyle = ped.umbrellaColor || '#ef4444';
-        ctx.beginPath();
-        ctx.arc(0, 0, umb.radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 8-segmented canopy ribs & center ferrule cap
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.38)';
-        ctx.lineWidth = 0.75;
-        ctx.beginPath();
-        for (let a = 0; a < Math.PI; a += Math.PI / 4) {
-          ctx.moveTo(-Math.cos(a) * umb.radius, -Math.sin(a) * umb.radius);
-          ctx.lineTo(Math.cos(a) * umb.radius, Math.sin(a) * umb.radius);
-        }
-        ctx.stroke();
-        ctx.fillStyle = '#e2e8f0';
-        ctx.beginPath();
-        ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // 6. Animated 4-Paw Dog Companion & Sagging Leash (synchronized with pose.props.dog)
-      if (pose.props.dog) {
-        const dog = pose.props.dog;
-
-        // Curved slack leash from hand to collar
-        ctx.save();
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 0.65;
-        ctx.beginPath();
-        ctx.moveTo(dog.leashStart.x, dog.leashStart.y);
-        const midLx = (dog.leashStart.x + dog.leashEnd.x) * 0.5 - 0.8;
-        const midLy = (dog.leashStart.y + dog.leashEnd.y) * 0.5 + 1.2;
-        ctx.quadraticCurveTo(midLx, midLy, dog.leashEnd.x, dog.leashEnd.y);
-        ctx.stroke();
-
-        // Dog body & animated limbs
-        ctx.translate(dog.x, dog.y);
-        ctx.rotate(dog.angle);
-
-        const pawStride = Math.sin(dog.legPhase) * 2.1;
-        ctx.fillStyle = '#451a03';
-        // 4 trotting paws (FL, FR, BL, BR)
-        ctx.beginPath();
-        ctx.arc(2.6 + pawStride, -2.1, 0.95, 0, Math.PI * 2);
-        ctx.arc(2.6 - pawStride, 2.1, 0.95, 0, Math.PI * 2);
-        ctx.arc(-2.6 - pawStride, -2.1, 0.95, 0, Math.PI * 2);
-        ctx.arc(-2.6 + pawStride, 2.1, 0.95, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Wagging tail
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = 1.3;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-4.0, 0);
-        ctx.quadraticCurveTo(-5.8, dog.tailAngle * 2.2, -7.2, dog.tailAngle * 4.5);
-        ctx.stroke();
-
-        // Dog torso
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 4.5, 2.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Red collar
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 1.0;
-        ctx.beginPath();
-        ctx.moveTo(2.2, -2.1);
-        ctx.lineTo(2.2, 2.1);
-        ctx.stroke();
-
-        // Dog head & snout
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        ctx.arc(3.6, 0, 2.2, 0, Math.PI * 2);
-        ctx.ellipse(5.4, 0, 1.4, 1.05, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Black nose tip
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(6.5, 0, 0.55, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Floppy ears
-        ctx.fillStyle = '#451a03';
-        ctx.beginPath();
-        safeRoundRect(ctx, 2.1, -2.7, 1.6, 1.4, 0.5);
-        safeRoundRect(ctx, 2.1, 1.3, 1.6, 1.4, 0.5);
-        ctx.fill();
-
-        ctx.restore();
-      }
-
-      ctx.restore(); // end of rotated part
-
-      // Alert Bubble (drawn in screen-aligned coordinates relative to ped)
-      if (ped.alertBubbleText && ped.alertBubbleTimer > 0) {
-        const text = ped.alertBubbleText;
-        ctx.font = 'bold 10px sans-serif';
-        const tw = ctx.measureText(text).width;
-        const bw = tw + 10;
-        const bh = 16;
-
-        ctx.save();
-        ctx.translate(0, -11);
-
-        // Bubble tail
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(0, 5);
-        ctx.lineTo(-3, 0);
-        ctx.lineTo(3, 0);
-        ctx.fill();
-
-        // Bubble body
-        ctx.beginPath();
-        safeRoundRect(ctx, -bw / 2, -bh, bw, bh, 6);
-        ctx.fill();
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.fillStyle = '#000000';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, 0, -bh / 2);
-        ctx.restore();
-      }
-
-      ctx.restore();
-    }
+  // --- PEDESTRIANS (Redrawn Realistic Detailed Renderer with Zoom LOD) ---
+  private renderPedestrians(pedestrians: Pedestrian[], world?: GameWorld, cameraZoom: number = 1.0) {
+    renderDetailedPedestrians(this.ctx, pedestrians, world, cameraZoom);
   }
 
   // --- PLAYER ON FOOT ---
-  private renderPlayerPedestrian(player: Player | (RemotePlayerState & { insideBuildingId?: string | null }), isRemote: boolean = false) {
+  private renderPlayerPedestrian(
+    player: Player | (RemotePlayerState & { insideBuildingId?: string | null }),
+    isRemote: boolean = false,
+    outsideTempC: number = 18
+  ) {
     const ctx = this.ctx;
     ctx.save();
     ctx.translate(player.x, player.y);
@@ -10551,151 +9658,15 @@ export class GameRenderer {
       // =====================================================================
       const wadeRatio = isWading ? Math.min(1, waterDepth / 0.85) : 0;
 
-      // 1. Articulated 2-Segment Legs & Footwear (with water optical attenuation when wading)
-      ctx.save();
-      if (wadeRatio > 0.12) {
-        ctx.globalAlpha = Math.max(0.28, 1 - wadeRatio * 0.72);
-      }
-
-      const drawPlayerLeg = (leg: typeof pose.legL) => {
-        if (wadeRatio < 0.65) {
-          ctx.save();
-          ctx.globalAlpha = Math.max(0.15, (wadeRatio > 0.12 ? Math.max(0.28, 1 - wadeRatio * 0.72) : 1) * (1 - wadeRatio * 1.1));
-          ctx.translate(leg.foot.x, leg.foot.y);
-          ctx.rotate(leg.footAngle);
-          const shoeScale = 1.0 + Math.min(0.18, leg.foot.z * 0.04);
-          ctx.scale(shoeScale, shoeScale);
-          ctx.fillStyle = cShoes;
-          ctx.beginPath();
-          safeRoundRect(ctx, -1.4, -1.35, 3.2, 2.7, 0.7);
-          ctx.fill();
-          ctx.fillStyle = 'rgba(255,255,255,0.18)';
-          ctx.fillRect(1.1, -1.0, 0.55, 2.0);
-          ctx.restore();
-        }
-
-        ctx.strokeStyle = cPants;
-        ctx.lineWidth = 3.0;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(leg.hip.x, leg.hip.y);
-        ctx.lineTo(leg.knee.x, leg.knee.y);
-        ctx.lineTo(leg.foot.x, leg.foot.y);
-        ctx.stroke();
-
-        ctx.fillStyle = 'rgba(255,255,255,0.09)';
-        ctx.beginPath();
-        ctx.arc(leg.knee.x, leg.knee.y, 1.3, 0, Math.PI * 2);
-        ctx.fill();
-      };
-      drawPlayerLeg(pose.legL);
-      drawPlayerLeg(pose.legR);
-      ctx.restore();
-
-      // Subtle underwater refraction veil over submerged legs when wading
-      if (wadeRatio > 0.15) {
-        ctx.fillStyle = `rgba(14, 78, 96, ${(wadeRatio * 0.52).toFixed(3)})`;
-        ctx.beginPath();
-        safeEllipse(ctx, 0, 0, 4.8, 5.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // 2. Torso & Backpack (with breathing expansion, pitch lean, and yaw counter-rotation)
-      ctx.save();
-      ctx.translate(pose.torso.x, pose.torso.y);
-      ctx.rotate(pose.torso.yaw);
-      ctx.scale(pose.torso.breathScale, pose.torso.breathScale);
-
-      ctx.fillStyle = cShirt;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 4.5, 6.0, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Subtle shoulder seam & collar detail on player torso
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-      ctx.lineWidth = 0.65;
-      ctx.beginPath();
-      ctx.moveTo(0.4, -5.2); ctx.lineTo(0.4, 5.2);
-      ctx.stroke();
-      ctx.fillStyle = cSkin;
-      ctx.beginPath();
-      ctx.arc(1.9, 0, 1.35, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Waist-deep waterline foam ring around torso if wading deep
-      if (wadeRatio > 0.48) {
-        const waistAlpha = (wadeRatio - 0.48) * 0.75;
-        ctx.strokeStyle = `rgba(224, 245, 254, ${waistAlpha.toFixed(3)})`;
-        ctx.lineWidth = 1.1;
-        ctx.beginPath();
-        safeEllipse(ctx, 0, 0, 4.9, 6.4, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Backpack
-      if (cBack) {
-        ctx.fillStyle = cBack;
-        ctx.beginPath();
-        safeRoundRect(ctx, -5.0, -3.3, 3.6, 6.6, 0.8);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-        ctx.lineWidth = 0.6;
-        ctx.strokeRect(-5.0, -3.3, 3.6, 6.6);
-        // Backpack shoulder straps
-        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-        ctx.lineWidth = 0.85;
-        ctx.beginPath();
-        ctx.moveTo(-1.5, -3.0); ctx.lineTo(1.6, -2.7);
-        ctx.moveTo(-1.5, 3.0); ctx.lineTo(1.6, 2.7);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // 3. Articulated 2-Segment Arms (Shoulder -> Elbow -> Hand)
-      const drawPlayerArm = (arm: typeof pose.armL, isLeft: boolean) => {
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        // Upper arm & forearm sleeve
-        ctx.strokeStyle = cShirt;
-        ctx.lineWidth = 2.55;
-        ctx.beginPath();
-        ctx.moveTo(arm.shoulder.x, arm.shoulder.y);
-        ctx.lineTo(arm.elbow.x, arm.elbow.y);
-        ctx.lineTo(arm.hand.x, arm.hand.y);
-        ctx.stroke();
-
-        // Elbow joint shading
-        ctx.fillStyle = 'rgba(0,0,0,0.14)';
-        ctx.beginPath();
-        ctx.arc(arm.elbow.x, arm.elbow.y, 1.0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Wristwatch on left wrist when checking watch
-        if (isLeft && pose.actionType === 'checking_watch') {
-          const wx = arm.elbow.x * 0.25 + arm.hand.x * 0.75;
-          const wy = arm.elbow.y * 0.25 + arm.hand.y * 0.75;
-          ctx.fillStyle = '#0f172a';
-          ctx.beginPath();
-          ctx.arc(wx, wy, 1.2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#38bdf8';
-          ctx.beginPath();
-          ctx.arc(wx, wy, 0.75, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Hand / Glove
-        ctx.fillStyle = cHands;
-        ctx.beginPath();
-        ctx.arc(arm.hand.x, arm.hand.y, 1.25, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      };
-      drawPlayerArm(pose.armL, true);
-      drawPlayerArm(pose.armR, false);
+      // 1-3. Realistic Detailed Legs, Shaded Torso, Backpack & Articulated Arms (shared with NPCs!)
+      renderDetailedPlayerStandingBody(
+        ctx,
+        player,
+        pose,
+        { cSkin, cPants, cShirt, cHair, cShoes, cHat, cBack, cHands },
+        wadeRatio,
+        outsideTempC
+      );
 
       // 4. Held Hand Items & Active Consumption Item (positioned at exact articulated hand coordinates)
       const consItem = ((player as Player).consumption as any)?.item;
@@ -10827,42 +9798,8 @@ export class GameRenderer {
         ctx.restore();
       }
 
-      // 6. Head, Ears, Nose & Hair/Hat (synchronized with pose.head yaw/pitch/position)
-      ctx.save();
-      ctx.translate(pose.head.x, pose.head.y);
-      ctx.rotate(pose.head.yaw);
-      const pitchShiftX = -pose.head.pitch * 1.35;
-
-      // Ears
-      ctx.fillStyle = cSkin;
-      ctx.beginPath();
-      ctx.arc(0, -3.4, 0.85, 0, Math.PI * 2);
-      ctx.arc(0, 3.4, 0.85, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Head Base
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Nose bump
-      ctx.beginPath();
-      ctx.arc(3.15 + pitchShiftX * 0.6, 0, 0.6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Hair or Hat
-      if (cHat) {
-        ctx.fillStyle = cHat;
-        ctx.beginPath();
-        ctx.arc(-0.3, 0, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.fillStyle = cHair;
-        ctx.beginPath();
-        ctx.arc(-1.2, 0, 3.2, Math.PI * 0.5, Math.PI * 1.5);
-        ctx.fill();
-      }
-      ctx.restore();
+      // 6. Sculpted Realistic Head, Hair, Hat & Cold Breath Vapor
+      renderDetailedPlayerHead(ctx, player, pose, cSkin, cHair, cHat, outsideTempC);
     }
 
     ctx.restore(); // end rotated part
@@ -11464,11 +10401,15 @@ export class GameRenderer {
       const effRld = hasSoftbody ? 0 : rld;
       const effRrd = hasSoftbody ? 0 : rrd;
 
-      const basePoly = getVehicleBasePolygon(car, halfL, halfW, effFc, effRc, effLd, effRd, effFld, effFrd, effRld, effRrd);
+      const rawBasePoly = getVehicleBasePolygon(car, halfL, halfW, effFc, effRc, effLd, effRd, effFld, effFrd, effRld, effRrd);
+      const perimCount = dmg.nodeBeam?.perimeterCount ?? 0;
+      const basePoly = hasSoftbody
+        ? densifyBasePolyForSoftbody(rawBasePoly, dmg.deformedVertices!, perimCount)
+        : rawBasePoly;
 
-      // Вершины контура сопоставляются с узлами по геометрии, а не по индексу (плотная сетка сдвигает индексы)
+      // Вершины контура (углы + середины рёбер) сопоставляются с узлами по геометрии, а не по индексу
       const polyDvs = hasSoftbody
-        ? mapPolyToDeformVerts(basePoly, dmg.deformedVertices!, dmg.nodeBeam?.perimeterCount ?? 0)
+        ? mapPolyToDeformVerts(basePoly, dmg.deformedVertices!, perimCount)
         : dmg.deformedVertices;
 
       let bodyPoly = basePoly;
@@ -13604,11 +12545,15 @@ export class GameRenderer {
       const effRld = hasSoftbody ? 0 : rld;
       const effRrd = hasSoftbody ? 0 : rrd;
 
-      const basePoly = getVehicleBasePolygon(car, halfL, halfW, effFc, effRc, effLd, effRd, effFld, effFrd, effRld, effRrd);
+      const rawBasePoly = getVehicleBasePolygon(car, halfL, halfW, effFc, effRc, effLd, effRd, effFld, effFrd, effRld, effRrd);
+      const perimCount = dmg.nodeBeam?.perimeterCount ?? 0;
+      const basePoly = hasSoftbody
+        ? densifyBasePolyForSoftbody(rawBasePoly, dmg.deformedVertices!, perimCount)
+        : rawBasePoly;
 
-      // Вершины контура сопоставляются с узлами по геометрии, а не по индексу (плотная сетка сдвигает индексы)
+      // Вершины контура (углы + середины рёбер) сопоставляются с узлами по геометрии, а не по индексу
       const polyDvs = hasSoftbody
-        ? mapPolyToDeformVerts(basePoly, dmg.deformedVertices!, dmg.nodeBeam?.perimeterCount ?? 0)
+        ? mapPolyToDeformVerts(basePoly, dmg.deformedVertices!, perimCount)
         : dmg.deformedVertices;
 
       let bodyPoly = basePoly;
@@ -15583,23 +14528,32 @@ export class GameRenderer {
         p.inventory?.some(it => it && (it.phoneSpecs?.flashlightOn || (it.itemId === 'flashlight' && (it as any).isOn))))
     );
 
+    const calSeason = world.calendar?.season ?? world.season;
+    const calSunrise =
+      world.calendar?.sunriseHour ??
+      (calSeason === 'winter' ? 8.8 : calSeason === 'summer' ? 3.9 : calSeason === 'autumn' ? 6.8 : 6.0);
+    const calSunset =
+      world.calendar?.sunsetHour ??
+      (calSeason === 'winter' ? 16.2 : calSeason === 'summer' ? 21.1 : calSeason === 'autumn' ? 18.2 : 19.0);
+
     const getStreetLampOn = (prop: StreetProp) => {
       if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete') || prop.isBroken || prop.glassShattered) return false;
       const lampHash = Math.sin(prop.x * 12.9898 + prop.y * 78.233) * 43758.5453;
       const randVal = lampHash - Math.floor(lampHash);
-      
-      const sunsetHour = 17.2 + randVal * 1.8; // Turn on between 17:12 and 19:00
-      const sunriseHour = 5.0 + randVal * 1.8; // Turn off between 05:00 and 06:48
-      
+
+      // Municipal photoresistor relay tied to actual seasonal astronomical sunset/sunrise
+      const sunsetHour = (calSunset - 0.30) + randVal * 0.70;
+      const sunriseHour = (calSunrise - 0.35) + randVal * 0.65;
+
       let on = false;
-      if (timeHour >= sunsetHour || timeHour < sunriseHour) {
+      if (timeHour >= sunsetHour || timeHour < sunriseHour || effectiveAlpha > 0.38) {
         on = true;
       }
-      
+
       const isTransitioning = Math.abs(timeHour - sunsetHour) < 0.04 || Math.abs(timeHour - sunriseHour) < 0.04;
       if (isTransitioning && on) {
         if (Math.sin(Date.now() * 0.04 + randVal * 20) > 0.25) {
-          on = false; // Flickering effect
+          on = false; // Gas-discharge lamp ignition flicker
         }
       }
       return on;
@@ -15610,9 +14564,9 @@ export class GameRenderer {
       if (car.isPlayerControlled) return car.headlightsOn;
       if (car.headlightsOn) return true;
       if (car.isParked) return false;
-      if (isRaining || isFog || weights.overcast > 0.50) return true;
+      if (isRaining || isFog || isSnowing || weights.overcast > 0.45 || nightAlpha > 0.08) return true;
 
-      // Dynamic sunset/sunrise headlights (cache per-vehicle random hash)
+      // Dynamic seasonal sunset/sunrise headlights (cache per-vehicle random hash)
       let randVal = (car as any)._headlightRand as number | undefined;
       if (randVal === undefined) {
         const stringId = car.id || 'car';
@@ -15626,8 +14580,8 @@ export class GameRenderer {
       // European/Russian DRL standard: ~35% of daytime traffic runs with DRL / dipped headlights
       if (randVal < 0.35) return true;
 
-      const sunsetHour = 17.0 + randVal * 1.6; // Turn on between 17:00 and 18:36
-      const sunriseHour = 5.2 + randVal * 1.6; // Turn off between 05:12 and 06:48
+      const sunsetHour = (calSunset - 0.65) + randVal * 0.90;
+      const sunriseHour = (calSunrise - 0.15) + randVal * 0.85;
 
       return (timeHour >= sunsetHour || timeHour < sunriseHour);
     };
@@ -15779,8 +14733,8 @@ export class GameRenderer {
       lCtx.setTransform(1, 0, 0, 1, 0, 0);
       lCtx.clearRect(0, 0, lmW, lmH);
       if (effectiveAlpha > 0.003) {
-        // Ambient darkness veil (night, dusk, rain, fog, overcast)
-        lCtx.fillStyle = `${baseColor}${effectiveAlpha * 0.95})`;
+        // Ambient darkness veil (true seasonal night depth, dusk, rain, fog, overcast)
+        lCtx.fillStyle = `${baseColor}${Math.min(0.96, effectiveAlpha).toFixed(3)})`;
         lCtx.fillRect(0, 0, lmW, lmH);
       }
 
