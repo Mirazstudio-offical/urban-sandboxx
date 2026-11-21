@@ -47,7 +47,8 @@ import {
   renderTruckFifthWheelCoupling
 } from './vehicleVisuals';
 import { resolveVehicleTruckFrameAndBody, isVehicleCraneTruck, getVehicleCraneGeometry } from './truckChassisVariants';
-import { isExcavatorVehicle, getExcavatorGeometry } from './excavatorSystem';
+import { isExcavatorVehicle, getExcavatorGeometry, getExcavatorLightAnchors } from './excavatorSystem';
+import { traceExcavatorOccluderMask } from './excavatorVisuals';
 import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
@@ -9300,9 +9301,13 @@ export class GameRenderer {
       }
     }
 
-    // 11f. Vehicles (Cars, Trucks, Trailers, Buses & Slewing Crane Booms)
+    // 11f. Vehicles (Cars, Trucks, Trailers, Buses, Excavators & Slewing Crane Booms)
     for (let i = 0; i < visibleVehicles.length; i++) {
       const car = visibleVehicles[i];
+      if (isExcavatorVehicle(car)) {
+        traceExcavatorOccluderMask(ctx, car, camera.angle);
+        continue;
+      }
       const maxWDepth = Math.max(
         car.waterDepth || 0,
         car.frontWaterDepth || 0,
@@ -11801,7 +11806,7 @@ export class GameRenderer {
         }
       }
 
-      if (effectiveTurnSignal !== 'none') {
+      if (effectiveTurnSignal !== 'none' && !isExcavatorVehicle(car)) {
         const turnVehicleProxy = isTrailer 
           ? ({ ...car, type: 'sedan_logan', turnSignal: effectiveTurnSignal, turnSignalTimer: effectiveTurnSignalTimer } as Vehicle)
           : car;
@@ -12460,7 +12465,7 @@ export class GameRenderer {
 
       // --- WET BODYWORK CLEARCOAT SPECULAR SHEEN (after wading / rain / river splash) ---
       const wetCoat = Math.max(car.wetCoatTimer ? Math.min(1, car.wetCoatTimer / 12) : 0, (car.waterDepth || 0) > 0.04 ? 0.9 : 0);
-      if (wetCoat > 0.04) {
+      if (wetCoat > 0.04 && !isExcavatorVehicle(car)) {
         ctx.save();
         traceSoftbodyPath(ctx, basePoly, polyDvs);
         ctx.clip();
@@ -12475,7 +12480,7 @@ export class GameRenderer {
 
       // --- ACCUMULATED SNOW COAT ON PARKED / SLOW VEHICLE BODYWORK (warm hood melts faster) ---
       const snowCoat = car.snowCoat ?? 0;
-      if (snowCoat > 0.05) {
+      if (snowCoat > 0.05 && !isExcavatorVehicle(car)) {
         ctx.save();
         traceSoftbodyPath(ctx, basePoly, polyDvs);
         ctx.clip();
@@ -15356,7 +15361,7 @@ export class GameRenderer {
           cCtx.arc(bumperX + cosA * 12, bumperY + sinA * 12, apronRad, 0, Math.PI * 2);
           cCtx.fill();
         }
-      } else if (isIgnitionOn) {
+      } else if (isIgnitionOn && !isExcavatorVehicle(car)) {
         // Front position lights (габариты / ДХО) gentle soft clearance
         const cutPositionLight = (lxOffset: number, lyOffset: number) => {
           const px = car.x + cosA * lxOffset - sinA * lyOffset;
@@ -15381,7 +15386,7 @@ export class GameRenderer {
       }
 
       // Front Fog Lights (ПТФ передние - selective yellow contrast)
-      if (car.frontFogLightsOn) {
+      if (car.frontFogLightsOn && !isExcavatorVehicle(car)) {
         const fogLeftLX = car.length * (optics.fogLightLeft?.xFrac ?? 0.48) - fc;
         const fogLeftLY = car.width * (optics.fogLightLeft?.yFrac ?? -0.31);
         const fogRightLX = car.length * (optics.fogLightRight?.xFrac ?? 0.48) - fc;
@@ -15547,50 +15552,191 @@ export class GameRenderer {
       const isReversing = isVehicleReverseGearActive(car);
       const isBraking = !!car.brakeLightsOn;
 
-      // Rear Fog Lights (ECE R38 crimson warning lamp)
-      if (car.rearFogLightsOn) {
-        cutSmoothRearLight(rearLeftLX, rearLeftLY, 22, 0.85, [255, 28, 28], 0.65);
-        if (!isSoloMoto) cutSmoothRearLight(rearRightLX, rearRightLY, 22, 0.85, [255, 28, 28], 0.65);
-      }
+      if (isExcavatorVehicle(car)) {
+        // EK-12 rotating upper platform lighting (position markers, front fog, counterweight rear cluster, turn signals)
+        const exA = getExcavatorLightAnchors(car, this.currentParticleCamera.angle);
 
-      if (isReversing) {
-        cutRearBeamCone(rearLeftLX, rearLeftLY, 52, 36, 0.75, [236, 246, 255], 0.55);
-        cutRearBeamCone(rearRightLX, rearRightLY, 52, 36, 0.75, [236, 246, 255], 0.55);
-        if (isTractor) {
-          const cabFloodLX = -halfL * 0.26;
-          const cabFloodLY = halfW * 0.35;
-          cutRearBeamCone(cabFloodLX, -cabFloodLY, 58, 42, 0.75, [255, 238, 175], 0.56);
-          cutRearBeamCone(cabFloodLX, cabFloodLY, 58, 42, 0.75, [255, 238, 175], 0.56);
-        }
-      }
-      if (isBraking) {
-        cutRearBeamCone(rearLeftLX, rearLeftLY, 44, 32, 0.80, [255, 34, 30], 0.66);
-        if (!isSoloMoto) cutRearBeamCone(rearRightLX, rearRightLY, 44, 32, 0.80, [255, 34, 30], 0.66);
-        if (optics.thirdBrakeLight?.enabled) {
-          const tblLX = car.length * optics.thirdBrakeLight.xFrac + rc * 0.7;
-          const tblLY = car.width * optics.thirdBrakeLight.yFrac;
-          cutSmoothRearLight(tblLX, tblLY, 16, 0.65, [255, 34, 30], 0.58);
-        }
-      } else if (!isReversing && hasPositionLightsOn) {
-        cutSmoothRearLight(rearLeftLX, rearLeftLY, 10, 0.45, [228, 28, 28], 0.48);
-        cutSmoothRearLight(rearRightLX, rearRightLY, 10, 0.45, [228, 28, 28], 0.48);
-      }
+        const cutExRadial = (
+          wx: number,
+          wy: number,
+          radius: number,
+          peakAlpha: number,
+          rgb: readonly [number, number, number],
+          colorPeak: number
+        ) => {
+          const targetRadius = radius * fogFactor;
+          const rGrad = lCtx.createRadialGradient(wx, wy, 0, wx, wy, targetRadius);
+          rGrad.addColorStop(0.0, `rgba(0, 0, 0, ${peakAlpha})`);
+          rGrad.addColorStop(0.4, `rgba(0, 0, 0, ${(peakAlpha * 0.5).toFixed(3)})`);
+          rGrad.addColorStop(0.8, `rgba(0, 0, 0, ${(peakAlpha * 0.12).toFixed(3)})`);
+          rGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = rGrad;
+          lCtx.beginPath();
+          lCtx.arc(wx, wy, targetRadius, 0, Math.PI * 2);
+          lCtx.fill();
 
-      // Turn signal cutouts & amber glow
-      if (car.turnSignal !== 'none') {
-        const signalState = getVehicleTurnSignalDynamicState(car);
-        if (signalState.intensity > 0.05) {
-          const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
-          const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-          const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
-          const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
-          if (isLeft) {
-            cutSmoothRearLight(frontTurnLX, -frontTurnLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
-            cutSmoothRearLight(rearLeftLX, rearLeftLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+          const ca = peakAlpha * colorPeak;
+          if (ca > 0.005) {
+            const cGrad = cCtx.createRadialGradient(wx, wy, 0, wx, wy, targetRadius);
+            cGrad.addColorStop(0.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ca.toFixed(3)})`);
+            cGrad.addColorStop(0.4, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.50).toFixed(3)})`);
+            cGrad.addColorStop(0.8, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.14).toFixed(3)})`);
+            cGrad.addColorStop(1.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
+            cCtx.fillStyle = cGrad;
+            cCtx.beginPath();
+            cCtx.arc(wx, wy, targetRadius, 0, Math.PI * 2);
+            cCtx.fill();
           }
-          if (isRight) {
-            cutSmoothRearLight(frontTurnLX, frontTurnLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
-            cutSmoothRearLight(rearRightLX, rearRightLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+        };
+
+        const cutExCone = (
+          wx: number,
+          wy: number,
+          dirAngle: number,
+          beamLen: number,
+          beamSpread: number,
+          peakAlpha: number,
+          rgb: readonly [number, number, number],
+          colorPeak: number
+        ) => {
+          const effLen = beamLen * fogFactor;
+          const effSpread = beamSpread * fogFactor;
+          const traceCone = (tCtx: CanvasRenderingContext2D) => {
+            tCtx.beginPath();
+            tCtx.moveTo(0, -2.0);
+            tCtx.quadraticCurveTo(effLen * 0.42, -effSpread * 0.62, effLen, -effSpread * 0.72);
+            tCtx.quadraticCurveTo(effLen * 1.15, 0, effLen, effSpread * 0.72);
+            tCtx.quadraticCurveTo(effLen * 0.42, effSpread * 0.62, 0, 2.0);
+            tCtx.closePath();
+          };
+
+          lCtx.save();
+          lCtx.translate(wx, wy);
+          lCtx.rotate(dirAngle);
+          const beamGrad = lCtx.createRadialGradient(0, 0, 1, effLen * 0.42, 0, effLen * 1.05);
+          beamGrad.addColorStop(0.00, `rgba(0, 0, 0, ${peakAlpha})`);
+          beamGrad.addColorStop(0.35, `rgba(0, 0, 0, ${(peakAlpha * 0.55).toFixed(3)})`);
+          beamGrad.addColorStop(0.70, `rgba(0, 0, 0, ${(peakAlpha * 0.18).toFixed(3)})`);
+          beamGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = beamGrad;
+          traceCone(lCtx);
+          lCtx.fill();
+          lCtx.restore();
+
+          const ca = peakAlpha * colorPeak;
+          if (ca > 0.005) {
+            cCtx.save();
+            cCtx.translate(wx, wy);
+            cCtx.rotate(dirAngle);
+            const cGrad = cCtx.createRadialGradient(0, 0, 1, effLen * 0.42, 0, effLen * 1.05);
+            cGrad.addColorStop(0.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ca.toFixed(3)})`);
+            cGrad.addColorStop(0.36, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.54).toFixed(3)})`);
+            cGrad.addColorStop(0.74, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.16).toFixed(3)})`);
+            cGrad.addColorStop(1.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
+            cCtx.fillStyle = cGrad;
+            traceCone(cCtx);
+            cCtx.fill();
+            cCtx.restore();
+          }
+        };
+
+        // Front turret-corner position markers (only when headlights/work lights are off)
+        if (isIgnitionOn && !hasHeadlightsOn && !car.exWorkLightOn) {
+          cutExRadial(exA.frontLeftTurn.x, exA.frontLeftTurn.y, 9, 0.72, headCoreRgb, 0.44);
+          cutExRadial(exA.frontRightTurn.x, exA.frontRightTurn.y, 9, 0.72, headCoreRgb, 0.44);
+        }
+
+        // Front turret-mounted fog lamps (directed along rotating upper platform)
+        if (car.frontFogLightsOn) {
+          const fogBeamLen = 135 * (1.0 - 0.25 * weights.fog);
+          const fogSpread = 84 * (1.0 + 0.20 * weights.fog);
+          if (!dmg.leftHeadlightBroken) {
+            cutExCone(exA.frontLeftTurn.x, exA.frontLeftTurn.y, exA.angle, fogBeamLen, fogSpread, 0.80, [255, 214, 96], 0.52);
+          }
+          if (!dmg.rightHeadlightBroken) {
+            cutExCone(exA.frontRightTurn.x, exA.frontRightTurn.y, exA.angle, fogBeamLen, fogSpread, 0.80, [255, 214, 96], 0.52);
+          }
+        }
+
+        // Rear counterweight fog, reverse, brake & tail lights
+        if (car.rearFogLightsOn) {
+          cutExRadial(exA.rearLeftLamp.x, exA.rearLeftLamp.y, 22, 0.85, [255, 28, 28], 0.65);
+          cutExRadial(exA.rearRightLamp.x, exA.rearRightLamp.y, 22, 0.85, [255, 28, 28], 0.65);
+        }
+        if (isReversing) {
+          cutExCone(exA.rearLeftLamp.x, exA.rearLeftLamp.y, exA.rearAngle, 52, 36, 0.75, [236, 246, 255], 0.55);
+          cutExCone(exA.rearRightLamp.x, exA.rearRightLamp.y, exA.rearAngle, 52, 36, 0.75, [236, 246, 255], 0.55);
+        }
+        if (isBraking) {
+          cutExCone(exA.rearLeftLamp.x, exA.rearLeftLamp.y, exA.rearAngle, 44, 32, 0.80, [255, 34, 30], 0.66);
+          cutExCone(exA.rearRightLamp.x, exA.rearRightLamp.y, exA.rearAngle, 44, 32, 0.80, [255, 34, 30], 0.66);
+        } else if (!isReversing && hasPositionLightsOn) {
+          cutExRadial(exA.rearLeftLamp.x, exA.rearLeftLamp.y, 10, 0.45, [228, 28, 28], 0.48);
+          cutExRadial(exA.rearRightLamp.x, exA.rearRightLamp.y, 10, 0.45, [228, 28, 28], 0.48);
+        }
+
+        // Turret-mounted front & counterweight turn signal amber glow
+        if (car.turnSignal !== 'none') {
+          const signalState = getVehicleTurnSignalDynamicState(car);
+          if (signalState.intensity > 0.05) {
+            const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
+            const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
+            if (isLeft) {
+              cutExRadial(exA.frontLeftTurn.x, exA.frontLeftTurn.y, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+              cutExRadial(exA.rearLeftLamp.x, exA.rearLeftLamp.y, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+            }
+            if (isRight) {
+              cutExRadial(exA.frontRightTurn.x, exA.frontRightTurn.y, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+              cutExRadial(exA.rearRightLamp.x, exA.rearRightLamp.y, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+            }
+          }
+        }
+      } else {
+        // Rear Fog Lights (ECE R38 crimson warning lamp)
+        if (car.rearFogLightsOn) {
+          cutSmoothRearLight(rearLeftLX, rearLeftLY, 22, 0.85, [255, 28, 28], 0.65);
+          if (!isSoloMoto) cutSmoothRearLight(rearRightLX, rearRightLY, 22, 0.85, [255, 28, 28], 0.65);
+        }
+
+        if (isReversing) {
+          cutRearBeamCone(rearLeftLX, rearLeftLY, 52, 36, 0.75, [236, 246, 255], 0.55);
+          cutRearBeamCone(rearRightLX, rearRightLY, 52, 36, 0.75, [236, 246, 255], 0.55);
+          if (isTractor) {
+            const cabFloodLX = -halfL * 0.26;
+            const cabFloodLY = halfW * 0.35;
+            cutRearBeamCone(cabFloodLX, -cabFloodLY, 58, 42, 0.75, [255, 238, 175], 0.56);
+            cutRearBeamCone(cabFloodLX, cabFloodLY, 58, 42, 0.75, [255, 238, 175], 0.56);
+          }
+        }
+        if (isBraking) {
+          cutRearBeamCone(rearLeftLX, rearLeftLY, 44, 32, 0.80, [255, 34, 30], 0.66);
+          if (!isSoloMoto) cutRearBeamCone(rearRightLX, rearRightLY, 44, 32, 0.80, [255, 34, 30], 0.66);
+          if (optics.thirdBrakeLight?.enabled) {
+            const tblLX = car.length * optics.thirdBrakeLight.xFrac + rc * 0.7;
+            const tblLY = car.width * optics.thirdBrakeLight.yFrac;
+            cutSmoothRearLight(tblLX, tblLY, 16, 0.65, [255, 34, 30], 0.58);
+          }
+        } else if (!isReversing && hasPositionLightsOn) {
+          cutSmoothRearLight(rearLeftLX, rearLeftLY, 10, 0.45, [228, 28, 28], 0.48);
+          cutSmoothRearLight(rearRightLX, rearRightLY, 10, 0.45, [228, 28, 28], 0.48);
+        }
+
+        // Turn signal cutouts & amber glow
+        if (car.turnSignal !== 'none') {
+          const signalState = getVehicleTurnSignalDynamicState(car);
+          if (signalState.intensity > 0.05) {
+            const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
+            const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
+            const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
+            const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
+            if (isLeft) {
+              cutSmoothRearLight(frontTurnLX, -frontTurnLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+              cutSmoothRearLight(rearLeftLX, rearLeftLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+            }
+            if (isRight) {
+              cutSmoothRearLight(frontTurnLX, frontTurnLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+              cutSmoothRearLight(rearRightLX, rearRightLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity, [255, 162, 22], 0.60);
+            }
           }
         }
       }
@@ -15970,28 +16116,49 @@ export class GameRenderer {
         lCtx.fill();
       }
 
-      // Excavator EK-12 Work Floodlights (Cab roof + Monoboom halogen beams)
-      // The same cab-roof lamps also act as the headlights (they turn with the turret).
+      // Excavator EK-12 Cab-Roof Headlights & Work Floodlights (strictly turret & boom mounted)
       if (isExcavatorVehicle(car) && (car.exWorkLightOn || getVehicleHeadlightOn(car))) {
-        const exGeom = getExcavatorGeometry(car);
-        const cosArm = Math.cos(exGeom.worldArmAngle);
-        const sinArm = Math.sin(exGeom.worldArmAngle);
-        const cabLampX = exGeom.worldTurretX + cosArm * 4.0 - sinArm * -6.9;
-        const cabLampY = exGeom.worldTurretY + sinArm * 4.0 + cosArm * -6.9;
+        const exAnchors = getExcavatorLightAnchors(car, this.currentParticleCamera.angle);
         const exWorkOn = !!car.exWorkLightOn;
-        drawSmoothFlashlightCone(
-          cabLampX,
-          cabLampY,
-          exGeom.worldArmAngle,
-          (exWorkOn ? 185 : 150) * fogFactor,
-          exWorkOn ? 0.44 : 0.32,
-          [255, 240, 198]
-        );
+        const exHighBeam = getVehicleHeadlightOn(car) && car.headlightMode === 'high';
+        const exRange = (exHighBeam ? 275 : (exWorkOn ? 215 : 185)) * fogFactor;
+        const exSpread = exWorkOn ? 0.46 : (exHighBeam ? 0.34 : 0.36);
+        const exRgb: readonly [number, number, number] = exHighBeam ? [255, 246, 214] : [255, 238, 192];
+
+        const dmg = car.damage;
+        if (!dmg?.leftHeadlightBroken) {
+          drawSmoothFlashlightCone(exAnchors.frontLeftLamp.x, exAnchors.frontLeftLamp.y, exAnchors.angle, exRange, exSpread, exRgb);
+        }
+        if (!dmg?.rightHeadlightBroken) {
+          drawSmoothFlashlightCone(exAnchors.frontRightLamp.x, exAnchors.frontRightLamp.y, exAnchors.angle, exRange, exSpread, exRgb);
+        }
+
+        // Near-field soft apron directly ahead of cab roof lamps
+        const cosArm = Math.cos(exAnchors.angle);
+        const sinArm = Math.sin(exAnchors.angle);
+        const apronX = exAnchors.cabLampCenter.x + cosArm * 16;
+        const apronY = exAnchors.cabLampCenter.y + sinArm * 16;
+        const apronRad = (exWorkOn ? 58 : 46) * fogFactor;
+        const lApron = lCtx.createRadialGradient(exAnchors.cabLampCenter.x, exAnchors.cabLampCenter.y, 1, apronX, apronY, apronRad);
+        lApron.addColorStop(0.0, 'rgba(0, 0, 0, 0.84)');
+        lApron.addColorStop(0.5, 'rgba(0, 0, 0, 0.38)');
+        lApron.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = lApron;
+        lCtx.beginPath();
+        lCtx.arc(apronX, apronY, apronRad, 0, Math.PI * 2);
+        lCtx.fill();
+
+        const cApron = cCtx.createRadialGradient(exAnchors.cabLampCenter.x, exAnchors.cabLampCenter.y, 1, apronX, apronY, apronRad);
+        cApron.addColorStop(0.0, `rgba(${exRgb[0]}, ${exRgb[1]}, ${exRgb[2]}, 0.44)`);
+        cApron.addColorStop(0.45, `rgba(${exRgb[0]}, ${exRgb[1]}, ${exRgb[2]}, 0.18)`);
+        cApron.addColorStop(1.0, `rgba(${exRgb[0]}, ${exRgb[1]}, ${exRgb[2]}, 0)`);
+        cCtx.fillStyle = cApron;
+        cCtx.beginPath();
+        cCtx.arc(apronX, apronY, apronRad, 0, Math.PI * 2);
+        cCtx.fill();
 
         if (exWorkOn) {
-          const boomMidX = exGeom.worldBoomStartX + (exGeom.worldBoomTipX - exGeom.worldBoomStartX) * 0.52;
-          const boomMidY = exGeom.worldBoomStartY + (exGeom.worldBoomTipY - exGeom.worldBoomStartY) * 0.52;
-          drawSmoothFlashlightCone(boomMidX, boomMidY, exGeom.worldArmAngle, 130 * fogFactor, 0.36, [255, 244, 212]);
+          drawSmoothFlashlightCone(exAnchors.boomLamp.x, exAnchors.boomLamp.y, exAnchors.angle, 145 * fogFactor, 0.38, [255, 244, 212]);
         }
       }
 
@@ -16006,15 +16173,9 @@ export class GameRenderer {
           let wx = car.x + cosA * (halfL * 0.25);
           let wy = car.y + sinA * (halfL * 0.25);
           if (car.type === 'excavator_ek12') {
-            const exGeom = getExcavatorGeometry(car);
-            const cosArm = Math.cos(exGeom.worldArmAngle);
-            const sinArm = Math.sin(exGeom.worldArmAngle);
-            wx = exGeom.worldTurretX + cosArm * -5.2 - sinArm * -8.8;
-            wy = exGeom.worldTurretY + sinArm * -5.2 + cosArm * -8.8;
-            // The beacon sprite sits ~4.6 px up on the roof (house + cab roof lift): follow it
-            const exCamAng = this.currentParticleCamera.angle;
-            wx += Math.cos(exCamAng) * 4.6;
-            wy += Math.sin(exCamAng) * 4.6;
+            const exBeacon = getExcavatorLightAnchors(car, this.currentParticleCamera.angle).beacon;
+            wx = exBeacon.x;
+            wy = exBeacon.y;
           } else {
             let bX = halfL * 0.25;
             if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
@@ -16679,6 +16840,97 @@ export class GameRenderer {
             }
           }
         }
+      } else if (isExcavatorVehicle(car) && (hasHeadlightsOn || car.exWorkLightOn)) {
+        // EK-12 turret-mounted halogen lens blooms, near-field Fresnel reflection, wet sheen & fog scatter
+        const exA = getExcavatorLightAnchors(car, this.currentParticleCamera.angle);
+        const cosArm = Math.cos(exA.angle);
+        const sinArm = Math.sin(exA.angle);
+        const exHigh = hasHeadlightsOn && isHighBeam;
+        const exWork = !!car.exWorkLightOn;
+
+        const drawExLampAdd = (roofPt: { x: number; y: number }, groundPt: { x: number; y: number }, broken: boolean) => {
+          if (broken) return;
+          // Crisp forward-facing halogen lens bloom on the 2.5D cab roof
+          ctx.save();
+          ctx.translate(roofPt.x, roofPt.y);
+          ctx.rotate(exA.angle);
+          const forwardReach = (exHigh || exWork) ? 3.8 : 2.9;
+          const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, forwardReach);
+          lensBloom.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${(exHigh || exWork) ? 0.88 : 0.78})`);
+          lensBloom.addColorStop(0.4, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(exHigh || exWork) ? 0.36 : 0.26})`);
+          lensBloom.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+          ctx.fillStyle = lensBloom;
+          ctx.beginPath();
+          ctx.arc(0.4, 0, forwardReach, -Math.PI * 0.5, Math.PI * 0.5);
+          ctx.fill();
+          ctx.restore();
+
+          // Near-field grazing Fresnel road reflection aligned to turret angle
+          const nearLen = ((exHigh || exWork) ? 50 : 36) * fogFactor;
+          const nearW = ((exHigh || exWork) ? 9.0 : 7.0) * fogFactor;
+          const nearA = ((exHigh || exWork) ? 0.13 : 0.095) * (0.78 + 0.22 * nightAlpha);
+          const nearSheen = ctx.createRadialGradient(
+            groundPt.x + cosArm * 3, groundPt.y + sinArm * 3, 0.8,
+            groundPt.x + cosArm * (nearLen * 0.42), groundPt.y + sinArm * (nearLen * 0.42), nearLen
+          );
+          nearSheen.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${nearA.toFixed(3)})`);
+          nearSheen.addColorStop(0.36, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(nearA * 0.42).toFixed(3)})`);
+          nearSheen.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+          ctx.fillStyle = nearSheen;
+          ctx.beginPath();
+          ctx.ellipse(groundPt.x + cosArm * (nearLen * 0.46), groundPt.y + sinArm * (nearLen * 0.46), nearLen * 0.50, nearW, exA.angle, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Wet road specular reflection streak along turret heading
+          const wetDarkScale = Math.max(nightAlpha, sunState.shadowOpacity * 0.45, weights.rain * 0.35);
+          if (isRaining && wetDarkScale > 0.08) {
+            const wetLen = ((exHigh || exWork) ? 165 : 120) * fogFactor;
+            const wetA = Math.min(0.13, 0.11 * wetDarkScale);
+            const wetSheen = ctx.createRadialGradient(
+              groundPt.x + cosArm * (wetLen * 0.35), groundPt.y + sinArm * (wetLen * 0.35), 2,
+              groundPt.x + cosArm * (wetLen * 0.5), groundPt.y + sinArm * (wetLen * 0.5), wetLen * 0.65
+            );
+            wetSheen.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${wetA.toFixed(3)})`);
+            wetSheen.addColorStop(0.5, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(wetA * 0.35).toFixed(3)})`);
+            wetSheen.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+            ctx.fillStyle = wetSheen;
+            ctx.beginPath();
+            ctx.ellipse(groundPt.x + cosArm * (wetLen * 0.45), groundPt.y + sinArm * (wetLen * 0.45), wetLen * 0.45, 11 * fogFactor, exA.angle, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Fog Mie scatter cone along turret heading
+          if (isFog && weights.fog > 0.04) {
+            const exBeamLen = (exHigh ? 240 : 185) * (1.0 - 0.35 * weights.fog);
+            const exBeamSpread = 72 * (1.0 + 0.25 * weights.fog);
+            const mistAlpha = Math.min(0.28, (exHigh ? (0.12 + 0.16 * weights.fog) : (0.045 + 0.04 * weights.fog)) * weatherTransition);
+            const hGlow = ctx.createRadialGradient(
+              groundPt.x + cosArm * (exBeamLen * 0.3), groundPt.y + sinArm * (exBeamLen * 0.3), 2,
+              groundPt.x + cosArm * (exBeamLen * 0.4), groundPt.y + sinArm * (exBeamLen * 0.4), exBeamLen * 0.55
+            );
+            hGlow.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${mistAlpha.toFixed(3)})`);
+            hGlow.addColorStop(0.45, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(mistAlpha * 0.42).toFixed(3)})`);
+            hGlow.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+            ctx.fillStyle = hGlow;
+            ctx.beginPath();
+            ctx.ellipse(groundPt.x + cosArm * (exBeamLen * 0.42), groundPt.y + sinArm * (exBeamLen * 0.42), exBeamLen * 0.48, exBeamSpread * 0.55, exA.angle, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        };
+
+        drawExLampAdd(exA.frontLeftLampRoof, exA.frontLeftLamp, dmg.leftHeadlightBroken);
+        drawExLampAdd(exA.frontRightLampRoof, exA.frontRightLamp, dmg.rightHeadlightBroken);
+
+        if (exWork) {
+          const boomPip = ctx.createRadialGradient(exA.boomLamp.x, exA.boomLamp.y, 0.2, exA.boomLamp.x, exA.boomLamp.y, 3.2);
+          boomPip.addColorStop(0.0, 'rgba(255, 248, 210, 0.85)');
+          boomPip.addColorStop(0.5, 'rgba(254, 240, 138, 0.32)');
+          boomPip.addColorStop(1.0, 'rgba(254, 240, 138, 0)');
+          ctx.fillStyle = boomPip;
+          ctx.beginPath();
+          ctx.arc(exA.boomLamp.x, exA.boomLamp.y, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       // Amber Strobe Beacons on Roof / ROPS Bar (Compact dome flare; ground amber spill is masked in Pass 1 cCtx)
@@ -16689,15 +16941,9 @@ export class GameRenderer {
           let wx = car.x + cosA * (halfL * 0.25);
           let wy = car.y + sinA * (halfL * 0.25);
           if (car.type === 'excavator_ek12') {
-            const exGeom = getExcavatorGeometry(car);
-            const cosArm = Math.cos(exGeom.worldArmAngle);
-            const sinArm = Math.sin(exGeom.worldArmAngle);
-            wx = exGeom.worldTurretX + cosArm * -5.2 - sinArm * -8.8;
-            wy = exGeom.worldTurretY + sinArm * -5.2 + cosArm * -8.8;
-            // The beacon sprite sits ~4.6 px up on the roof (house + cab roof lift): follow it
-            const exCamAng = this.currentParticleCamera.angle;
-            wx += Math.cos(exCamAng) * 4.6;
-            wy += Math.sin(exCamAng) * 4.6;
+            const exBeacon = getExcavatorLightAnchors(car, this.currentParticleCamera.angle).beacon;
+            wx = exBeacon.x;
+            wy = exBeacon.y;
           } else {
             let bX = halfL * 0.25;
             if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
@@ -16727,121 +16973,270 @@ export class GameRenderer {
         }
       }
 
-      // Front Fog Lights (ПТФ передние) Fog Scattering Only
-      if (car.frontFogLightsOn) {
-        const fogLeftLX = car.length * (optics.fogLightLeft?.xFrac ?? 0.48) - fc;
-        const fogLeftLY = car.width * (optics.fogLightLeft?.yFrac ?? -0.31);
-        const fogRightLX = car.length * (optics.fogLightRight?.xFrac ?? 0.48) - fc;
-        const fogRightLY = car.width * (optics.fogLightRight?.yFrac ?? 0.31);
-
-        const drawFogAdd = (lxOffset: number, lyOffset: number, broken: boolean) => {
-          if (broken) return;
-          const lx = car.x + cosA * lxOffset - sinA * lyOffset;
-          const ly = car.y + sinA * lxOffset + cosA * lyOffset;
-
-          // Lens emitter pip
-          const lensPip = ctx.createRadialGradient(lx, ly, 0.2, lx, ly, 2.6);
-          lensPip.addColorStop(0, 'rgba(255, 240, 160, 0.80)');
-          lensPip.addColorStop(1, 'rgba(255, 210, 80, 0)');
-          ctx.fillStyle = lensPip;
-          ctx.beginPath(); ctx.arc(lx, ly, 2.6, 0, Math.PI * 2); ctx.fill();
-
-          if (isFog && weights.fog > 0.05) {
-            const fogSpreadMult = 1.0 + 0.20 * weights.fog;
-            const fogBeamLen = 130 * (1.0 - 0.25 * weights.fog);
-            const fogBeamSpread = 75 * fogSpreadMult;
-            const fogMistAlpha = (0.045 * weights.fog) * weatherTransition;
-
-            const fogGrad = ctx.createRadialGradient(
-              lx + cosA * (fogBeamLen * 0.3), ly + sinA * (fogBeamLen * 0.3), 2,
-              lx + cosA * (fogBeamLen * 0.45), ly + sinA * (fogBeamLen * 0.45), fogBeamLen * 0.55
-            );
-            fogGrad.addColorStop(0.00, `rgba(255, 235, 140, ${fogMistAlpha.toFixed(3)})`);
-            fogGrad.addColorStop(0.45, `rgba(255, 225, 100, ${(fogMistAlpha * 0.35).toFixed(3)})`);
-            fogGrad.addColorStop(0.85, `rgba(255, 215, 80, ${(fogMistAlpha * 0.06).toFixed(3)})`);
-            fogGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-
-            ctx.fillStyle = fogGrad;
-            ctx.beginPath();
-            ctx.ellipse(
-              lx + cosA * (fogBeamLen * 0.4),
-              ly + sinA * (fogBeamLen * 0.4),
-              fogBeamLen * 0.45,
-              fogBeamSpread * 0.55,
-              car.angle,
-              0,
-              Math.PI * 2
-            );
-            ctx.fill();
-          }
-        };
-
-        if (isSoloMoto) {
-          drawFogAdd(fogLeftLX, 0, dmg.leftHeadlightBroken);
-        } else {
-          drawFogAdd(fogLeftLX, fogLeftLY, dmg.leftHeadlightBroken);
-          drawFogAdd(fogRightLX, fogRightLY, dmg.rightHeadlightBroken);
-        }
-      }
-
-      const rc = Math.min(12, dmg.rearCrumple || 0);
-      const rld = Math.min(8, dmg.rearLeftDent || 0);
-      const rrd = Math.min(8, dmg.rearRightDent || 0);
-
-      const rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4;
-      const rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
-      const rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4;
-      const rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
-
       const isReversing = isVehicleReverseGearActive(car);
       const isBraking = !!car.brakeLightsOn;
 
-      if (car.rearFogLightsOn) {
-        drawRearLightAdditive(rearLeftLX, rearLeftLY, 4.0, 'rgba(255, 20, 20, 0.90)', true);
-        if (!isSoloMoto) drawRearLightAdditive(rearRightLX, rearRightLY, 4.0, 'rgba(255, 20, 20, 0.90)', true);
-      }
+      if (isExcavatorVehicle(car)) {
+        // EK-12 additive lens emitters strictly on rotating upper platform & counterweight
+        const exA = getExcavatorLightAnchors(car, this.currentParticleCamera.angle);
+        const cosArm = Math.cos(exA.angle);
+        const sinArm = Math.sin(exA.angle);
 
-      if (isReversing) {
-        drawRearLightAdditive(rearLeftLX, rearLeftLY, 3.2, 'rgba(240, 248, 255, 0.72)');
-        drawRearLightAdditive(rearRightLX, rearRightLY, 3.2, 'rgba(240, 248, 255, 0.72)');
-        if (isTractor) {
-          const cabFloodLX = -halfL * 0.26;
-          const cabFloodLY = halfW * 0.35;
-          drawRearLightAdditive(cabFloodLX, -cabFloodLY, 4.0, 'rgba(255, 244, 205, 0.75)');
-          drawRearLightAdditive(cabFloodLX, cabFloodLY, 4.0, 'rgba(255, 244, 205, 0.75)');
-        }
-      }
+        const drawExRearAdd = (
+          pt: { x: number; y: number },
+          lensRadius: number,
+          r: number,
+          g: number,
+          b: number,
+          baseA: number,
+          isFogWarningLamp: boolean = false
+        ) => {
+          ctx.save();
+          ctx.translate(pt.x, pt.y);
+          ctx.rotate(exA.rearAngle);
+          const lensGrad = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, lensRadius);
+          lensGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.85).toFixed(3)})`);
+          lensGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.28).toFixed(3)})`);
+          lensGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+          ctx.fillStyle = lensGrad;
+          ctx.beginPath();
+          ctx.arc(0.4, 0, lensRadius, 0, Math.PI * 2);
+          ctx.fill();
 
-      if (isBraking) {
-        drawRearLightAdditive(rearLeftLX, rearLeftLY, 3.8, 'rgba(255, 34, 30, 0.82)');
-        drawRearLightAdditive(rearRightLX, rearRightLY, 3.8, 'rgba(255, 34, 30, 0.82)');
-        if (optics.thirdBrakeLight?.enabled) {
-          const tblLX = car.length * optics.thirdBrakeLight.xFrac + rc * 0.7;
-          const tblLY = car.width * optics.thirdBrakeLight.yFrac;
-          drawRearLightAdditive(tblLX, tblLY, 3.6, 'rgba(255, 36, 36, 0.78)');
-        }
-      } else if (!isReversing && hasPositionLightsOn) {
-        drawRearLightAdditive(rearLeftLX, rearLeftLY, 2.8, 'rgba(220, 20, 20, 0.45)');
-        drawRearLightAdditive(rearRightLX, rearRightLY, 2.8, 'rgba(220, 20, 20, 0.45)');
-      }
-
-      if (car.turnSignal !== 'none') {
-        const signalState = getVehicleTurnSignalDynamicState(car);
-        if (signalState.intensity > 0.05) {
-          const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
-          const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-          const intensity = signalState.intensity;
-
-          const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
-          const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
-
-          if (isLeft) {
-            drawTurnSignalAdditive(frontTurnLX, -frontTurnLY, true, -1, intensity);
-            drawTurnSignalAdditive(rearLeftLX, rearLeftLY, false, -1, intensity);
+          if (lensRadius >= 3.0) {
+            const fresnelReach = (isFogWarningLamp ? 18 : lensRadius * 3.8) * fogFactor;
+            const fresnelSpread = lensRadius * 1.95 * fogFactor;
+            const fresnelPeak = Math.min(0.22, baseA * (0.11 + 0.08 * nightAlpha + (isRaining ? 0.06 : 0)));
+            const fGrad = ctx.createRadialGradient(1.2, 0, 0.3, fresnelReach * 0.42, 0, fresnelReach);
+            fGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${fresnelPeak.toFixed(3)})`);
+            fGrad.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${(fresnelPeak * 0.36).toFixed(3)})`);
+            fGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+            ctx.fillStyle = fGrad;
+            ctx.beginPath();
+            ctx.ellipse(fresnelReach * 0.42, 0, fresnelReach * 0.52, fresnelSpread, 0, 0, Math.PI * 2);
+            ctx.fill();
           }
-          if (isRight) {
-            drawTurnSignalAdditive(frontTurnLX, frontTurnLY, true, 1, intensity);
-            drawTurnSignalAdditive(rearRightLX, rearRightLY, false, 1, intensity);
+
+          if (isFog && weights.fog > 0.05) {
+            const fogMistAlpha = Math.min(0.25, (0.04 + 0.12 * weights.fog) * weatherTransition);
+            if (fogMistAlpha > 0.005) {
+              const haloRadius = isFogWarningLamp ? (14 + 18 * weights.fog) : (8 + 12 * weights.fog);
+              const haloGrad = ctx.createRadialGradient(0.4, 0, 0.5, 0.4, 0, haloRadius);
+              haloGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(fogMistAlpha * 0.9).toFixed(3)})`);
+              haloGrad.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${(fogMistAlpha * 0.3).toFixed(3)})`);
+              haloGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+              ctx.fillStyle = haloGrad;
+              ctx.beginPath();
+              ctx.arc(0.4, 0, haloRadius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          ctx.restore();
+        };
+
+        const drawExTurnAdd = (pt: { x: number; y: number }, isFront: boolean, sideSign: number, intensity: number) => {
+          const emitAngle = (isFront ? exA.angle : exA.rearAngle) + sideSign * 0.28;
+          ctx.save();
+          ctx.translate(pt.x, pt.y);
+          ctx.rotate(emitAngle);
+          const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, 3.2);
+          lensBloom.addColorStop(0.0, `rgba(255, 185, 40, ${(0.72 * intensity).toFixed(3)})`);
+          lensBloom.addColorStop(0.5, `rgba(255, 150, 0, ${(0.25 * intensity).toFixed(3)})`);
+          lensBloom.addColorStop(1.0, 'rgba(255, 150, 0, 0)');
+          ctx.fillStyle = lensBloom;
+          ctx.beginPath();
+          ctx.arc(0.4, 0, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (isFog && weights.fog > 0.08 && intensity > 0.15) {
+            const haloRad = 8 + 10 * weights.fog;
+            const fogA = Math.min(0.14, 0.10 * weights.fog * intensity * weatherTransition);
+            const fogHalo = ctx.createRadialGradient(0.4, 0, 0.4, 0.4, 0, haloRad);
+            fogHalo.addColorStop(0.0, `rgba(255, 170, 20, ${fogA.toFixed(3)})`);
+            fogHalo.addColorStop(1.0, 'rgba(255, 150, 0, 0)');
+            ctx.fillStyle = fogHalo;
+            ctx.beginPath();
+            ctx.arc(0.4, 0, haloRad, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        };
+
+        if (car.frontFogLightsOn) {
+          const drawExFogAdd = (pt: { x: number; y: number }, broken: boolean) => {
+            if (broken) return;
+            const lensPip = ctx.createRadialGradient(pt.x, pt.y, 0.2, pt.x, pt.y, 2.6);
+            lensPip.addColorStop(0, 'rgba(255, 240, 160, 0.80)');
+            lensPip.addColorStop(1, 'rgba(255, 210, 80, 0)');
+            ctx.fillStyle = lensPip;
+            ctx.beginPath(); ctx.arc(pt.x, pt.y, 2.6, 0, Math.PI * 2); ctx.fill();
+
+            if (isFog && weights.fog > 0.05) {
+              const fogBeamLen = 125 * (1.0 - 0.25 * weights.fog);
+              const fogBeamSpread = 72 * (1.0 + 0.20 * weights.fog);
+              const fogMistAlpha = (0.045 * weights.fog) * weatherTransition;
+              const fogGrad = ctx.createRadialGradient(
+                pt.x + cosArm * (fogBeamLen * 0.3), pt.y + sinArm * (fogBeamLen * 0.3), 2,
+                pt.x + cosArm * (fogBeamLen * 0.45), pt.y + sinArm * (fogBeamLen * 0.45), fogBeamLen * 0.55
+              );
+              fogGrad.addColorStop(0.00, `rgba(255, 235, 140, ${fogMistAlpha.toFixed(3)})`);
+              fogGrad.addColorStop(0.45, `rgba(255, 225, 100, ${(fogMistAlpha * 0.35).toFixed(3)})`);
+              fogGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = fogGrad;
+              ctx.beginPath();
+              ctx.ellipse(pt.x + cosArm * (fogBeamLen * 0.4), pt.y + sinArm * (fogBeamLen * 0.4), fogBeamLen * 0.45, fogBeamSpread * 0.55, exA.angle, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          };
+          drawExFogAdd(exA.frontLeftTurn, dmg.leftHeadlightBroken);
+          drawExFogAdd(exA.frontRightTurn, dmg.rightHeadlightBroken);
+        }
+
+        if (car.rearFogLightsOn) {
+          drawExRearAdd(exA.rearLeftLamp, 4.0, 255, 20, 20, 0.90, true);
+          drawExRearAdd(exA.rearRightLamp, 4.0, 255, 20, 20, 0.90, true);
+        }
+        if (isReversing) {
+          drawExRearAdd(exA.rearLeftLamp, 3.2, 240, 248, 255, 0.72);
+          drawExRearAdd(exA.rearRightLamp, 3.2, 240, 248, 255, 0.72);
+        }
+        if (isBraking) {
+          drawExRearAdd(exA.rearLeftLamp, 3.8, 255, 34, 30, 0.82);
+          drawExRearAdd(exA.rearRightLamp, 3.8, 255, 34, 30, 0.82);
+        } else if (!isReversing && hasPositionLightsOn) {
+          drawExRearAdd(exA.rearLeftLamp, 2.8, 220, 20, 20, 0.45);
+          drawExRearAdd(exA.rearRightLamp, 2.8, 220, 20, 20, 0.45);
+        }
+
+        if (car.turnSignal !== 'none') {
+          const signalState = getVehicleTurnSignalDynamicState(car);
+          if (signalState.intensity > 0.05) {
+            const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
+            const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
+            if (isLeft) {
+              drawExTurnAdd(exA.frontLeftTurn, true, -1, signalState.intensity);
+              drawExTurnAdd(exA.rearLeftLamp, false, -1, signalState.intensity);
+            }
+            if (isRight) {
+              drawExTurnAdd(exA.frontRightTurn, true, 1, signalState.intensity);
+              drawExTurnAdd(exA.rearRightLamp, false, 1, signalState.intensity);
+            }
+          }
+        }
+      } else {
+        // Front Fog Lights (ПТФ передние) Fog Scattering Only
+        if (car.frontFogLightsOn) {
+          const fogLeftLX = car.length * (optics.fogLightLeft?.xFrac ?? 0.48) - fc;
+          const fogLeftLY = car.width * (optics.fogLightLeft?.yFrac ?? -0.31);
+          const fogRightLX = car.length * (optics.fogLightRight?.xFrac ?? 0.48) - fc;
+          const fogRightLY = car.width * (optics.fogLightRight?.yFrac ?? 0.31);
+
+          const drawFogAdd = (lxOffset: number, lyOffset: number, broken: boolean) => {
+            if (broken) return;
+            const lx = car.x + cosA * lxOffset - sinA * lyOffset;
+            const ly = car.y + sinA * lxOffset + cosA * lyOffset;
+
+            // Lens emitter pip
+            const lensPip = ctx.createRadialGradient(lx, ly, 0.2, lx, ly, 2.6);
+            lensPip.addColorStop(0, 'rgba(255, 240, 160, 0.80)');
+            lensPip.addColorStop(1, 'rgba(255, 210, 80, 0)');
+            ctx.fillStyle = lensPip;
+            ctx.beginPath(); ctx.arc(lx, ly, 2.6, 0, Math.PI * 2); ctx.fill();
+
+            if (isFog && weights.fog > 0.05) {
+              const fogSpreadMult = 1.0 + 0.20 * weights.fog;
+              const fogBeamLen = 130 * (1.0 - 0.25 * weights.fog);
+              const fogBeamSpread = 75 * fogSpreadMult;
+              const fogMistAlpha = (0.045 * weights.fog) * weatherTransition;
+
+              const fogGrad = ctx.createRadialGradient(
+                lx + cosA * (fogBeamLen * 0.3), ly + sinA * (fogBeamLen * 0.3), 2,
+                lx + cosA * (fogBeamLen * 0.45), ly + sinA * (fogBeamLen * 0.45), fogBeamLen * 0.55
+              );
+              fogGrad.addColorStop(0.00, `rgba(255, 235, 140, ${fogMistAlpha.toFixed(3)})`);
+              fogGrad.addColorStop(0.45, `rgba(255, 225, 100, ${(fogMistAlpha * 0.35).toFixed(3)})`);
+              fogGrad.addColorStop(0.85, `rgba(255, 215, 80, ${(fogMistAlpha * 0.06).toFixed(3)})`);
+              fogGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+
+              ctx.fillStyle = fogGrad;
+              ctx.beginPath();
+              ctx.ellipse(
+                lx + cosA * (fogBeamLen * 0.4),
+                ly + sinA * (fogBeamLen * 0.4),
+                fogBeamLen * 0.45,
+                fogBeamSpread * 0.55,
+                car.angle,
+                0,
+                Math.PI * 2
+              );
+              ctx.fill();
+            }
+          };
+
+          if (isSoloMoto) {
+            drawFogAdd(fogLeftLX, 0, dmg.leftHeadlightBroken);
+          } else {
+            drawFogAdd(fogLeftLX, fogLeftLY, dmg.leftHeadlightBroken);
+            drawFogAdd(fogRightLX, fogRightLY, dmg.rightHeadlightBroken);
+          }
+        }
+
+        const rc = Math.min(12, dmg.rearCrumple || 0);
+        const rld = Math.min(8, dmg.rearLeftDent || 0);
+        const rrd = Math.min(8, dmg.rearRightDent || 0);
+
+        const rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4;
+        const rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
+        const rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4;
+        const rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
+
+        if (car.rearFogLightsOn) {
+          drawRearLightAdditive(rearLeftLX, rearLeftLY, 4.0, 'rgba(255, 20, 20, 0.90)', true);
+          if (!isSoloMoto) drawRearLightAdditive(rearRightLX, rearRightLY, 4.0, 'rgba(255, 20, 20, 0.90)', true);
+        }
+
+        if (isReversing) {
+          drawRearLightAdditive(rearLeftLX, rearLeftLY, 3.2, 'rgba(240, 248, 255, 0.72)');
+          drawRearLightAdditive(rearRightLX, rearRightLY, 3.2, 'rgba(240, 248, 255, 0.72)');
+          if (isTractor) {
+            const cabFloodLX = -halfL * 0.26;
+            const cabFloodLY = halfW * 0.35;
+            drawRearLightAdditive(cabFloodLX, -cabFloodLY, 4.0, 'rgba(255, 244, 205, 0.75)');
+            drawRearLightAdditive(cabFloodLX, cabFloodLY, 4.0, 'rgba(255, 244, 205, 0.75)');
+          }
+        }
+
+        if (isBraking) {
+          drawRearLightAdditive(rearLeftLX, rearLeftLY, 3.8, 'rgba(255, 34, 30, 0.82)');
+          drawRearLightAdditive(rearRightLX, rearRightLY, 3.8, 'rgba(255, 34, 30, 0.82)');
+          if (optics.thirdBrakeLight?.enabled) {
+            const tblLX = car.length * optics.thirdBrakeLight.xFrac + rc * 0.7;
+            const tblLY = car.width * optics.thirdBrakeLight.yFrac;
+            drawRearLightAdditive(tblLX, tblLY, 3.6, 'rgba(255, 36, 36, 0.78)');
+          }
+        } else if (!isReversing && hasPositionLightsOn) {
+          drawRearLightAdditive(rearLeftLX, rearLeftLY, 2.8, 'rgba(220, 20, 20, 0.45)');
+          drawRearLightAdditive(rearRightLX, rearRightLY, 2.8, 'rgba(220, 20, 20, 0.45)');
+        }
+
+        if (car.turnSignal !== 'none') {
+          const signalState = getVehicleTurnSignalDynamicState(car);
+          if (signalState.intensity > 0.05) {
+            const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
+            const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
+            const intensity = signalState.intensity;
+
+            const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
+            const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
+
+            if (isLeft) {
+              drawTurnSignalAdditive(frontTurnLX, -frontTurnLY, true, -1, intensity);
+              drawTurnSignalAdditive(rearLeftLX, rearLeftLY, false, -1, intensity);
+            }
+            if (isRight) {
+              drawTurnSignalAdditive(frontTurnLX, frontTurnLY, true, 1, intensity);
+              drawTurnSignalAdditive(rearRightLX, rearRightLY, false, 1, intensity);
+            }
           }
         }
       }
@@ -17269,6 +17664,20 @@ export class GameRenderer {
       const activeHeadlights: { x: number; y: number; angle: number; reach: number }[] = [];
       if (visibleVehicles && visibleVehicles.length > 0) {
         for (const veh of visibleVehicles) {
+          if (isExcavatorVehicle(veh)) {
+            const exA = getExcavatorLightAnchors(veh, camera.angle);
+            if (veh.headlightsOn || veh.exWorkLightOn) {
+              const isHigh = veh.headlightsOn && veh.headlightMode === 'high';
+              const reach = isHigh
+                ? (weights.fog > 0.1 ? 150 : 320)
+                : (weights.fog > 0.1 ? 165 : 230);
+              activeHeadlights.push({ x: exA.cabLampCenter.x, y: exA.cabLampCenter.y, angle: exA.angle, reach });
+            }
+            if (isVehicleReverseGearActive(veh)) {
+              activeHeadlights.push({ x: exA.rearCenter.x, y: exA.rearCenter.y, angle: exA.rearAngle, reach: 180 });
+            }
+            continue;
+          }
           if (veh.headlightsOn) {
             const isHigh = veh.headlightMode === 'high';
             const reach = isHigh
@@ -17482,6 +17891,21 @@ export class GameRenderer {
 
       // Headlight volumetric halos through fog
       for (const veh of visibleVehicles) {
+        if (isExcavatorVehicle(veh)) {
+          if (!veh.headlightsOn && !veh.exWorkLightOn) continue;
+          const exA = getExcavatorLightAnchors(veh, camera.angle);
+          const forwardX = exA.cabLampCenter.x + Math.cos(exA.angle) * 35;
+          const forwardY = exA.cabLampCenter.y + Math.sin(exA.angle) * 35;
+          const haloGrad = ctx.createRadialGradient(forwardX, forwardY, 5, forwardX, forwardY, 70);
+          haloGrad.addColorStop(0, `rgba(254, 243, 199, ${(0.24 * weights.fog).toFixed(3)})`);
+          haloGrad.addColorStop(0.6, `rgba(253, 230, 138, ${(0.08 * weights.fog).toFixed(3)})`);
+          haloGrad.addColorStop(1, 'rgba(253, 230, 138, 0)');
+          ctx.fillStyle = haloGrad;
+          ctx.beginPath();
+          ctx.arc(forwardX, forwardY, 70, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
         if (!veh.headlightsOn) continue;
         const forwardX = veh.x + Math.cos(veh.angle) * 35;
         const forwardY = veh.y + Math.sin(veh.angle) * 35;

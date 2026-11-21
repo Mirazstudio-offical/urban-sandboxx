@@ -3640,6 +3640,8 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
   }
 
   const isTractor = carType.startsWith('tractor_') || carType === 'tractor';
+  const isExcavator = carType === 'excavator_ek12';
+  const hasTopStack = isTractor || isExcavator;
   const isTruck = carType.startsWith('truck_') || carType === 'cement_mixer'|| carType === 'garbage_truck'||
     carType === 'pickup_heavy'|| carType === 'delivery_truck'|| carType === 'van_flatbed'|| carType.startsWith('fire_');
 
@@ -3654,7 +3656,7 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
   const isOldCar = carType === 'sedan_classic'|| carType === 'coupe_old'|| carType === 'pickup_old'||
     carType === 'muscle_classic'|| durability < 65 || engineHealth < 70;
 
-  const isDiesel = fuelTypeStr === 'diesel'|| isTractor || (isOldHeavyTruck && carType !== 'truck_zil_dump') || carType === 'pickup_heavy'|| carType === 'delivery_truck'|| carType === 'van_camper';
+  const isDiesel = fuelTypeStr === 'diesel'|| hasTopStack || (isOldHeavyTruck && carType !== 'truck_zil_dump') || carType === 'pickup_heavy'|| carType === 'delivery_truck'|| carType === 'van_camper';
   const isSports = carType === 'supercar'|| carType === 'sports'|| carType === 'moto_sport';
 
   const throttle = (car as any)._lastThrottle ?? 0.0;
@@ -3666,7 +3668,7 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
   // Balanced emission rate: modern cars produce subtle wisps; diesels/tractors produce rhythmic gas puffs
   let emissionChance = 0.035; // Base chance per frame at idle for standard modern warm car
   if (isOldHeavyTruck) emissionChance = 0.12;
-  else if (isTractor) emissionChance = 0.10; // Rhythmic diesel idle chug
+  else if (hasTopStack) emissionChance = 0.10; // Rhythmic diesel idle chug
   else if (isOldCar) emissionChance = 0.065;
   else if (isDiesel) emissionChance = 0.055;
   else if (isSports) emissionChance = 0.025;
@@ -3705,7 +3707,7 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
   let initialAlpha = 0.32 + throttle * 0.20;
   let isSteamPlume = false;
   let exhaustGasTemp = Math.max(55, temp * 0.85 + throttle * 35);
-  let buoyancyForce = isTractor ? 26 : (isCold ? 14 : 6);
+  let buoyancyForce = hasTopStack ? 26 : (isCold ? 14 : 6);
   let expansionBloomRate = 8.5;
 
   const isLpgActive = car.hasGBO && fuel && fuel.gboActive !== false && (fuel.gboLevel === undefined || fuel.gboLevel > 0) && temp >= 40;
@@ -3728,8 +3730,8 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
       initialRadius = 2.6 + cond * 1.5 + Math.random() * 1.2;
       expansionBloomRate = 12.0;
 
-      // Condensed water droplets dripping from exhaust onto asphalt
-      if (Math.random() < (0.18 + cond * 0.25) * dt * 60) {
+      // Condensed water droplets dripping from low tailpipe onto asphalt
+      if (!hasTopStack && Math.random() < (0.18 + cond * 0.25) * dt * 60) {
         if (Math.abs(car.speed) < 2.0 && Math.random() < 0.12) {
           addOrGrowFluidStain(world, exhaustAnchor.x, exhaustAnchor.y, 'water');
         }
@@ -3745,8 +3747,8 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
     initialRadius = 2.6 + cond * 1.4 + Math.random() * 1.2;
     expansionBloomRate = 11.5;
 
-    // Cold engine drops water condensate
-    if (Math.random() < 0.15 * dt * 60 && Math.abs(car.speed) < 2.5) {
+    // Cold engine drops water condensate from low tailpipe
+    if (!hasTopStack && Math.random() < 0.15 * dt * 60 && Math.abs(car.speed) < 2.5) {
       addOrGrowFluidStain(world, exhaustAnchor.x, exhaustAnchor.y, 'water');
     }
   } else if (engineHealth < 40 || oilLevel < 20) {
@@ -3768,8 +3770,8 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
     expansionBloomRate = 11.0;
     exhaustGasTemp = 120;
     buoyancyForce = 22;
-  } else if (isTractor) {
-    // Tractor MTZ: Dark charcoal / black diesel soot puffs with condensation plume in cold
+  } else if (hasTopStack) {
+    // Tractor MTZ & Excavator EK-12 (MMZ D-245): Dark charcoal diesel soot puffs rising from vertical top stack
     const tractorColors = isCold 
       ? ['#1e293b', '#334155', '#475569'] 
       : ['#0f172a', '#1e293b', '#111827'];
@@ -3836,12 +3838,15 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
   let pVx = 0;
   let pVy = 0;
 
-  if (isTractor) {
-    // TRACTOR EXHAUST PHYSICS (ABOVE HOOD / CAB)
-    // Pipe is vertical on front hood: gases shoot UPWARDS into 3D airspace (-y is up)
+  if (hasTopStack) {
+    // VERTICAL TOP-STACK EXHAUST PHYSICS (ABOVE HOOD / TURRET ROOF — TRACTORS & EK-12 EXCAVATOR)
+    // Vertical pipe shoots gases UPWARDS into 3D airspace (-y is up); excavator uses rotating turret orientation
+    const stackAngle = isExcavator ? (car.angle + (car.exTurretAngle ?? 0)) : car.angle;
+    const stackCos = Math.cos(stackAngle);
+    const stackSin = Math.sin(stackAngle);
     const ejectUpward = 24 + throttle * 30 + Math.random() * 12;
-    const ejectBack = -cosA * (6 + throttle * 10) + (Math.random() * 8 - 4);
-    const ejectSide = -sinA * (6 + throttle * 10) + (Math.random() * 8 - 4);
+    const ejectBack = -stackCos * (6 + throttle * 10) + (Math.random() * 8 - 4);
+    const ejectSide = -stackSin * (6 + throttle * 10) + (Math.random() * 8 - 4);
 
     pVx = car.vx * 0.25 + ejectBack;
     pVy = car.vy * 0.25 + ejectSide - ejectUpward;
@@ -3888,7 +3893,7 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
     life: 0,
     maxLife: maxLife,
     type: 'exhaust',
-    underVehicle: !isTractor,
+    underVehicle: !hasTopStack,
     isSteam: isSteamPlume,
     tempC: exhaustGasTemp,
     buoyancy: buoyancyForce,
@@ -4590,17 +4595,19 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
 
     // Emit dense black soot particles from exhaust
     if (Math.random() < 0.90) {
+      const isTopRunawayStack = car.type.startsWith('tractor_') || (car.type as string) === 'tractor' || car.type === 'excavator_ek12';
       world.particles.push({
         x: exhaustAnchor.x,
         y: exhaustAnchor.y,
-        vx: -cosA * (70 + Math.random() * 50) + (Math.random() * 20 - 10),
-        vy: -sinA * (70 + Math.random() * 50) + (Math.random() * 20 - 10),
+        vx: -cosA * (isTopRunawayStack ? (18 + Math.random() * 16) : (70 + Math.random() * 50)) + (Math.random() * 20 - 10),
+        vy: -sinA * (isTopRunawayStack ? (18 + Math.random() * 16) : (70 + Math.random() * 50)) + (Math.random() * 20 - 10) - (isTopRunawayStack ? 44 : 0),
         radius: 4.5 + Math.random() * 4.5,
         color: Math.random() < 0.8 ? '#090d16': '#1e293b',
         alpha: 0.95,
         life: 0,
         maxLife: 1.2,
-        type: 'exhaust'});
+        type: 'exhaust',
+        underVehicle: !isTopRunawayStack});
     }
 
     // Engine bay smoke & flame sparks escalating with heat
@@ -9523,15 +9530,16 @@ export function updateVehiclePhysics(
 
             // Authentic black diesel soot smoke puffs on diesel governor limit
             if (Math.random() < 0.22) {
-              const cosA = Math.cos(vehicle.angle);
-              const sinA = Math.sin(vehicle.angle);
+              const isTr = vehicle.type.startsWith('tractor_') || (vehicle.type as string) === 'tractor' || vehicle.type === 'excavator_ek12';
+              const govAngle = vehicle.type === 'excavator_ek12' ? (vehicle.angle + (vehicle.exTurretAngle ?? 0)) : vehicle.angle;
+              const cosA = Math.cos(govAngle);
+              const sinA = Math.sin(govAngle);
               const exhaustAnchor = getVehicleAnchor(vehicle, 'exhaust');
-              const isTr = vehicle.type.startsWith('tractor_') || (vehicle.type as string) === 'tractor';
               world.particles.push({
                 x: exhaustAnchor.x,
                 y: exhaustAnchor.y,
-                vx: -cosA * (22 + Math.random() * 14) + (Math.random() * 8 - 4),
-                vy: -sinA * (22 + Math.random() * 14) + (Math.random() * 8 - 4) - (isTr ? 22 : 0),
+                vx: -cosA * (isTr ? (10 + Math.random() * 8) : (22 + Math.random() * 14)) + (Math.random() * 8 - 4),
+                vy: -sinA * (isTr ? (10 + Math.random() * 8) : (22 + Math.random() * 14)) + (Math.random() * 8 - 4) - (isTr ? 26 : 0),
                 radius: 2.8 + Math.random() * 1.6,
                 color: Math.random() < 0.75 ? '#0f172a': '#1e293b',
                 alpha: 0.88,
@@ -9658,9 +9666,14 @@ export function updateVehiclePhysics(
           if (fuel.fuelQuality < 65) {
             if (Math.random() < 0.1) fuelFactor = 0;
             if (Math.random() < 0.05) {
+              const isTopBadFuel = vehicle.type.startsWith('tractor_') || (vehicle.type as string) === 'tractor' || vehicle.type === 'excavator_ek12';
+              const badExh = isTopBadFuel ? getVehicleAnchor(vehicle, 'exhaust') : { x: vehicle.x, y: vehicle.y };
               world.particles.push({
-                x: vehicle.x, y: vehicle.y, vx: -Math.cos(vehicle.angle)*20, vy: -Math.sin(vehicle.angle)*20,
-                radius: 3, color: '#111827', alpha: 0.8, life: 0, maxLife: 0.3, type: 'exhaust'});
+                x: badExh.x, y: badExh.y,
+                vx: -Math.cos(vehicle.angle) * (isTopBadFuel ? 8 : 20),
+                vy: -Math.sin(vehicle.angle) * (isTopBadFuel ? 8 : 20) - (isTopBadFuel ? 20 : 0),
+                radius: 3, color: '#111827', alpha: 0.8, life: 0, maxLife: 0.3, type: 'exhaust',
+                underVehicle: !isTopBadFuel});
             }
           }
         }

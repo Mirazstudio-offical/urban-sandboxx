@@ -267,6 +267,86 @@ export function getExcavatorGeometry(v: Vehicle): ExcavatorGeometry {
   };
 }
 
+export interface ExcavatorLightAnchors {
+  angle: number;
+  rearAngle: number;
+  // Ground-plane turret coordinates for lightmap cones & weather illumination
+  frontLeftLamp: { x: number; y: number };
+  frontRightLamp: { x: number; y: number };
+  cabLampCenter: { x: number; y: number };
+  // Roof-lifted coordinates matching the 2.5D cab roof sprites (houseLift 2.4 + cabRoofLift 2.2 = 4.6px)
+  frontLeftLampRoof: { x: number; y: number };
+  frontRightLampRoof: { x: number; y: number };
+  // Front corners of the rotating upper deck (turn indicators, position markers, front fog/work lamps)
+  frontLeftTurn: { x: number; y: number };
+  frontRightTurn: { x: number; y: number };
+  // Rear counterweight recessed light clusters (tail, brake, reverse, rear fog, rear turn signals)
+  rearLeftLamp: { x: number; y: number };
+  rearRightLamp: { x: number; y: number };
+  rearCenter: { x: number; y: number };
+  // Boom-mounted halogen work floodlight on left flank of upper boom
+  boomLamp: { x: number; y: number };
+  // Rotating amber strobe beacon on cab rear-left roof corner (lifted 4.6px)
+  beacon: { x: number; y: number };
+}
+
+// Computes exact world-space positions for every EK-12 light strictly on the rotating upper platform & boom.
+// Local coordinates match excavatorVisuals.ts so visual lamp sprites and emitted light cones stay 1:1 synced.
+export function getExcavatorLightAnchors(v: Vehicle, cameraAngle?: number): ExcavatorLightAnchors {
+  const geom = getExcavatorGeometry(v);
+  const angle = geom.worldArmAngle;
+  const cosArm = Math.cos(angle);
+  const sinArm = Math.sin(angle);
+  const camAng = cameraAngle ?? (v.angle || 0);
+  const upWX = Math.cos(camAng);
+  const upWY = Math.sin(camAng);
+
+  const turretToWorld = (lx: number, ly: number, liftPx = 0) => ({
+    x: geom.worldTurretX + cosArm * lx - sinArm * ly + upWX * liftPx,
+    y: geom.worldTurretY + sinArm * lx + cosArm * ly + upWY * liftPx,
+  });
+
+  // Cab roof twin halogen lamps: cabX=-7.2, cabL=14.4 -> lamp X = +4.0; cabY=-10.8, cabW=9.4 -> Y = -7.9 & -4.1
+  const frontLeftLamp = turretToWorld(4.0, -7.9, 0);
+  const frontRightLamp = turretToWorld(4.0, -4.1, 0);
+  const cabLampCenter = turretToWorld(4.0, -6.0, 0);
+  const frontLeftLampRoof = turretToWorld(4.0, -7.9, 4.6);
+  const frontRightLampRoof = turretToWorld(4.0, -4.1, 4.6);
+
+  // Front corners of the revolving turntable upper deck (lifted 2.4px with houseLift)
+  const frontLeftTurn = turretToWorld(7.0, -9.2, 2.4);
+  const frontRightTurn = turretToWorld(7.0, 8.6, 2.4);
+
+  // Rear counterweight recessed light clusters (lifted 2.4px with houseLift)
+  const rearLeftLamp = turretToWorld(-17.8, -6.4, 2.4);
+  const rearRightLamp = turretToWorld(-17.8, 6.4, 2.4);
+  const rearCenter = turretToWorld(-18.6, 0, 2.4);
+
+  // Boom flank work floodlight at 35% from knee to tip, lateral -0.26m (-2.6px) from arm centerline
+  const lampR = geom.boomKneeR_m + (geom.boomTipR_m - geom.boomKneeR_m) * 0.35;
+  const boomLamp = turretToWorld(lampR * 10.0, geom.armMountOffsetY - 2.6, 0);
+
+  // Rotating amber beacon at cab rear-left roof corner (-5.2, -8.8) lifted 4.6px
+  const beacon = turretToWorld(-5.2, -8.8, 4.6);
+
+  return {
+    angle,
+    rearAngle: angle + Math.PI,
+    frontLeftLamp,
+    frontRightLamp,
+    cabLampCenter,
+    frontLeftLampRoof,
+    frontRightLampRoof,
+    frontLeftTurn,
+    frontRightTurn,
+    rearLeftLamp,
+    rearRightLamp,
+    rearCenter,
+    boomLamp,
+    beacon,
+  };
+}
+
 // ============================================================================
 // TERRAIN ATTITUDE & STABILIZER CONTACT SOLVER (Blade + 2 Rear Outriggers)
 // ============================================================================

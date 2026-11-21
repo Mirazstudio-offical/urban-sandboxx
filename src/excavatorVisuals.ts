@@ -1,3 +1,4 @@
+import type { Vehicle } from './types';
 import type { VehicleRenderContext } from './vehicleArchetypes';
 import { ensureExcavatorState, getExcavatorGeometry, EK12_EXHAUST_LOCAL } from './excavatorSystem';
 import { getVehicleTurnSignalDynamicState } from './vehicleHelpers';
@@ -117,10 +118,19 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
   const bodyPaint = car.color || '#d99b1e';
   const roofPaint = car.roofColor || '#f1f5f9';
   const isEngineRunning = !!car.engineState?.engineRunning;
-  const isIgnitionOn = !!(isEngineRunning || car.engineState?.ignition || car.positionLightsOn || car.headlightsOn);
+  const hasHeadlightsOn = !!car.headlightsOn;
+  const isIgnitionOn = !!(isEngineRunning || car.engineState?.ignition || car.positionLightsOn || hasHeadlightsOn);
   const isBraking = !!car.brakeLightsOn;
-  const isTailOn = !!(car.headlightsOn || car.positionLightsOn);
+  const isReversing = !!(car.isReversing || car.engineState?.currentGear === -1 || car.engineState?.autoGearMode === 'R');
+  const isTailOn = !!(hasHeadlightsOn || car.positionLightsOn);
+  const isRearFogOn = !!(car.rearFogLightsOn && (hasHeadlightsOn || isTailOn));
+  const isFrontFogOn = !!car.frontFogLightsOn;
   const turnDyn = getVehicleTurnSignalDynamicState(car);
+  const leftTurnLit = turnDyn.intensity > 0.1 && (car.turnSignal === 'left' || car.turnSignal === 'hazard');
+  const rightTurnLit = turnDyn.intensity > 0.1 && (car.turnSignal === 'right' || car.turnSignal === 'hazard');
+  const snowCoat = car.snowCoat ?? 0;
+  const wetCoat = Math.max(car.wetCoatTimer ? Math.min(1, car.wetCoatTimer / 12) : 0, (car.waterDepth || 0) > 0.04 ? 0.9 : 0);
+  const warmHoodFactor = Math.max(0, Math.min(1, ((car.engineTemp ?? 20) - 48) / 42));
 
   const bladePos = clamp01(geom.bladePos);
   const outPos = clamp01(geom.outriggersPos);
@@ -262,27 +272,18 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       ctx.fillRect(bladeX - 1.0, wy + 0.5, 1.6, 0.8);
     });
 
+    // Subtle snow ridge accumulating along top of front bulldozer moldboard
+    if (snowCoat > 0.08) {
+      ctx.fillStyle = `rgba(241, 245, 249, ${Math.min(0.75, snowCoat * 0.72).toFixed(3)})`;
+      ctx.fillRect(bladeX - 1.5, -bladeHalfW + 1.0, 2.0, bladeW - 2.0);
+    }
+
     // 5. Rear Hinged Hydraulic Outrigger Stabilizers (Задние откидные опоры)
     const outMountX = -halfL + 3.8;
     const outMountY = 7.4;
-    // Rear undercarriage cross-beam carrying the outriggers & rear travel lights
+    // Rear undercarriage cross-beam carrying the outriggers (all lamps sit on the rotating upper house)
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(-halfL + 1.4, -outMountY - 1.6, 4.4, (outMountY + 1.6) * 2);
-
-    // Rear road travel lights (red tail/brake + amber turn) on undercarriage rear apron
-    const tailCol = isBraking ? '#ef4444' : isTailOn ? '#dc2626' : '#7f1d1d';
-    const leftTurnLit = turnDyn.intensity > 0.1 && (car.turnSignal === 'left' || car.turnSignal === 'hazard');
-    const rightTurnLit = turnDyn.intensity > 0.1 && (car.turnSignal === 'right' || car.turnSignal === 'hazard');
-    [-5.4, 3.6].forEach((ly, idx) => {
-      ctx.fillStyle = '#090d14';
-      ctx.fillRect(-halfL + 0.8, ly, 1.0, 2.2);
-      ctx.fillStyle = tailCol;
-      ctx.fillRect(-halfL + 0.8, ly + 0.2, 0.8, 1.0);
-      const isLeftSide = idx === 0;
-      const tLit = isLeftSide ? leftTurnLit : rightTurnLit;
-      ctx.fillStyle = tLit ? '#fbbf24' : '#78350f';
-      ctx.fillRect(-halfL + 0.8, ly + 1.3, 0.8, 0.7);
-    });
 
     // Outriggers move VERTICALLY: the arm stub and the cylinder stay put in plan view, only the
     // foot pad drops to the ground. Height is shown through the pad lift, scale and ground shadow.
@@ -537,6 +538,54 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.fillRect(-15.5, -6.4, 1.8, 2.2);
     ctx.fillRect(-15.5, 4.2, 1.8, 2.2);
 
+    // Rear Counterweight Recessed Light Clusters (tail, brake, reverse, rear fog, amber turn)
+    const rearTailCol = (isBraking || isRearFogOn) ? '#ef4444' : isTailOn ? '#dc2626' : '#7f1d1d';
+    [-6.4, 6.4].forEach((ly, idx) => {
+      const isLeftSide = idx === 0;
+      const tLit = isLeftSide ? leftTurnLit : rightTurnLit;
+      ctx.fillStyle = '#090d14';
+      ctx.fillRect(-19.0, ly - 1.8, 1.4, 3.6);
+      // Red tail / brake / rear-fog lens
+      ctx.fillStyle = rearTailCol;
+      ctx.fillRect(-18.8, ly - 1.5, 1.0, 1.3);
+      if (isBraking || isRearFogOn) {
+        ctx.fillStyle = '#fecaca';
+        ctx.fillRect(-18.7, ly - 1.2, 0.5, 0.7);
+      }
+      // White reverse lens
+      ctx.fillStyle = isReversing ? '#ffffff' : '#64748b';
+      ctx.fillRect(-18.8, ly - 0.1, 1.0, 0.8);
+      // Amber turn indicator
+      ctx.fillStyle = tLit ? '#fbbf24' : '#78350f';
+      ctx.fillRect(-18.8, ly + 0.8, 1.0, 0.8);
+      if (tLit) {
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(-18.7, ly + 1.0, 0.5, 0.4);
+      }
+    });
+
+    // Front Turntable Corner Marker / Fog / Turn Pods (rotate with upper platform)
+    [-9.2, 8.6].forEach((ly, idx) => {
+      const isLeftSide = idx === 0;
+      const tLit = isLeftSide ? leftTurnLit : rightTurnLit;
+      ctx.fillStyle = '#090d14';
+      ctx.fillRect(5.8, ly - 1.2, 1.6, 2.4);
+      // Turn indicator lens
+      ctx.fillStyle = tLit ? '#fbbf24' : '#78350f';
+      ctx.fillRect(6.2, ly - 0.9, 1.0, 0.9);
+      if (tLit) {
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(6.5, ly - 0.7, 0.5, 0.5);
+      }
+      // Front fog / position marker lens
+      ctx.fillStyle = isFrontFogOn ? '#fde047' : (isIgnitionOn ? '#f1f5f9' : '#64748b');
+      ctx.fillRect(6.2, ly + 0.1, 1.0, 0.9);
+      if (isFrontFogOn) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(6.6, ly + 0.3, 0.4, 0.5);
+      }
+    });
+
     // 3. Engine Compartment Hood (ММЗ Д-245.12С) + Hydraulic Tank (Right Side / Rear Deck)
     ctx.fillStyle = bodyPaint;
     ctx.beginPath();
@@ -671,18 +720,75 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(cabX + cabL - 2.0, cabY - 2.9, 2.2, 1.3);
 
-    // Cab Roof Twin Halogen Work Floodlights
+    // Cab Roof Twin Halogen Road & Work Floodlights (rotate with upper house)
     const workLampLit = !!car.exWorkLightOn;
+    const cabLampLit = workLampLit || hasHeadlightsOn;
+    const cabHighCore = workLampLit || (hasHeadlightsOn && car.headlightMode === 'high');
     [cabY + 2.0, cabY + cabW - 3.6].forEach((ly) => {
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(cabX + cabL - 4.1, ly, 1.4, 1.8);
-      ctx.fillStyle = workLampLit ? '#fef08a' : '#64748b';
+      ctx.fillStyle = cabLampLit ? (cabHighCore ? '#ffffff' : '#fef08a') : '#64748b';
       ctx.fillRect(cabX + cabL - 3.2, ly + 0.2, 0.7, 1.4);
+      if (cabHighCore) {
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(cabX + cabL - 3.6, ly + 0.4, 0.4, 1.0);
+      }
     });
+
+    // Accumulated snow / wet clearcoat on cab roof
+    if (wetCoat > 0.04) {
+      const cabSheen = ctx.createLinearGradient(cabX + 1, cabY + 1, cabX + cabL - 3, cabY + cabW - 1);
+      cabSheen.addColorStop(0, `rgba(186, 230, 253, ${(wetCoat * 0.16).toFixed(3)})`);
+      cabSheen.addColorStop(0.5, `rgba(255, 255, 255, ${(wetCoat * 0.22).toFixed(3)})`);
+      cabSheen.addColorStop(1, `rgba(15, 23, 42, ${(wetCoat * 0.14).toFixed(3)})`);
+      ctx.fillStyle = cabSheen;
+      ctx.beginPath();
+      ctx.roundRect(cabX + 0.8, cabY + 1.4, cabL - 4.4, cabW - 2.6, 0.9);
+      ctx.fill();
+    }
+    if (snowCoat > 0.05) {
+      ctx.fillStyle = `rgba(248, 250, 252, ${Math.min(0.84, snowCoat * 0.82).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.roundRect(cabX + 1.2, cabY + 1.8, cabL - 5.2, cabW - 3.4, 0.7);
+      ctx.fill();
+    }
 
     // Rotating Amber Beacon on cab rear-left roof corner
     drawAmberBeacon(ctx, cabX + 2.0, cabY + 2.0, isIgnitionOn, 0.95);
     ctx.restore(); // end cabRoofLift
+
+    // Accumulated snow & wet sheen on rotating counterweight & warm engine hood
+    if (wetCoat > 0.04) {
+      const deckSheen = ctx.createLinearGradient(-19, -10, 7, 10);
+      deckSheen.addColorStop(0, `rgba(186, 230, 253, ${(wetCoat * 0.14).toFixed(3)})`);
+      deckSheen.addColorStop(0.5, `rgba(255, 255, 255, ${(wetCoat * 0.18).toFixed(3)})`);
+      deckSheen.addColorStop(1, `rgba(15, 23, 42, ${(wetCoat * 0.16).toFixed(3)})`);
+      ctx.fillStyle = deckSheen;
+      ctx.beginPath();
+      ctx.roundRect(-12.4, -0.4, 14.2, 10.4, 1.4);
+      ctx.fill();
+    }
+    if (snowCoat > 0.05) {
+      const cwSnowA = Math.min(0.80, snowCoat * 0.78);
+      const hoodSnowA = Math.max(0, cwSnowA * (1 - warmHoodFactor * 0.92));
+      // Counterweight rear deck snow blanket
+      ctx.fillStyle = `rgba(241, 245, 249, ${cwSnowA.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(-13.0, -9.8);
+      ctx.lineTo(-14.3, -9.8);
+      ctx.quadraticCurveTo(-19.0, -9.2, -19.4, 0);
+      ctx.quadraticCurveTo(-19.0, 9.2, -14.3, 9.8);
+      ctx.lineTo(-13.0, 9.8);
+      ctx.closePath();
+      ctx.fill();
+      // Engine hood snow (melts cleanly as D-245 diesel warms up)
+      if (hoodSnowA > 0.03) {
+        ctx.fillStyle = `rgba(241, 245, 249, ${hoodSnowA.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.roundRect(-11.8, 0.2, 13.0, 9.2, 1.1);
+        ctx.fill();
+      }
+    }
     ctx.restore(); // end houseLift
 
     // =========================================================================
@@ -745,13 +851,24 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
       ctx.closePath();
       ctx.stroke();
 
-      // Centre ridge highlight
+      // Centre ridge highlight (or accumulated snow frosting along upper boom/stick face)
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
       ctx.lineWidth = Math.max(0.6, 0.7 * ((a.s + b.s) * 0.5));
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
+
+      if (snowCoat > 0.08) {
+        ctx.strokeStyle = `rgba(241, 245, 249, ${Math.min(0.68, snowCoat * 0.65).toFixed(3)})`;
+        ctx.lineWidth = Math.max(0.9, ((wA + wB) * 0.42));
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+      }
     };
 
     // Everything below grade is hidden: clip a part so the stretch of it that is underground
@@ -1114,4 +1231,251 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
 
     ctx.restore();
   }
+}
+
+/**
+ * Traces & fills the exact solid occluder silhouette of the TVEX EK-12 (undercarriage,
+ * front 2500mm dozer blade, rear outriggers, 360° revolving turntable house + cab roof,
+ * and above-grade articulated boom / stick / bucket) in world space.
+ * Used by renderMaterialGBuffer (destination-out) so PostFX ground snow, road snow,
+ * wetness, puddles, and rut relief shaders never bleed onto the rotating turret or arm.
+ */
+export function traceExcavatorOccluderMask(
+  ctx: CanvasRenderingContext2D,
+  car: Vehicle,
+  cameraAngle?: number
+): void {
+  ensureExcavatorState(car);
+  const geom = getExcavatorGeometry(car);
+  const halfL = (car.length || 49) / 2;
+  const halfW = (car.width || 25) / 2;
+  const bladePos = clamp01(geom.bladePos);
+  const outPos = clamp01(geom.outriggersPos);
+  const maxWDepth = Math.max(
+    car.waterDepth || 0,
+    car.frontWaterDepth || 0,
+    car.rearWaterDepth || 0,
+    car.cabinWaterLevel || 0
+  );
+
+  // 1. Undercarriage chassis, tires, front bulldozer blade & rear outriggers (vehicle-local space)
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.angle || 0);
+
+  if (maxWDepth < 0.78) {
+    // Undercarriage box & dual 9.00-20 tire footprint
+    ctx.fillRect(-halfL - 1.5, -halfW - 1.0, halfL * 2 + 3.0, halfW * 2 + 2.0);
+
+    // Front 2500mm bulldozer blade
+    const bladeX = halfL + 1.0 - bladePos * 0.8;
+    const bladeW = halfW * 2 + 2.4;
+    ctx.fillRect(bladeX - 2.4, -bladeW * 0.5, 4.8, bladeW);
+
+    // Rear outrigger foot pads (lifted along screen-up when stowed)
+    const chRelCam = (cameraAngle ?? (car.angle || 0)) - (car.angle || 0);
+    const chUpX = Math.cos(chRelCam);
+    const chUpY = Math.sin(chRelCam);
+    const padLiftPx = (1 - outPos) * 0.55 * 4.2;
+    [-1, 1].forEach((side) => {
+      const padX = -halfL + 0.6;
+      const padY = side * 10.0;
+      ctx.fillRect(padX - 3.0, padY - 2.8, 6.0, 5.6);
+      ctx.fillRect(padX + chUpX * padLiftPx - 2.8, padY + chUpY * padLiftPx - 2.6, 5.6, 5.2);
+    });
+  }
+
+  // 2. Revolving 360° Upper Turntable House, Counterweight, Cab & 2.5D Articulated Arm
+  ctx.translate(geom.turretLocalX, geom.turretLocalY);
+  ctx.rotate(geom.turretAngle);
+
+  const relCam = (cameraAngle ?? (car.angle || 0)) - geom.worldArmAngle;
+  const upX = Math.cos(relCam);
+  const upY = Math.sin(relCam);
+  const houseLiftX = upX * 2.4;
+  const houseLiftY = upY * 2.4;
+  const cabRoofLiftX = upX * 2.2;
+  const cabRoofLiftY = upY * 2.2;
+
+  const traceHouse = () => {
+    ctx.beginPath();
+    ctx.moveTo(8.2, -11.6);
+    ctx.lineTo(-14.4, -11.6);
+    ctx.quadraticCurveTo(-20.6, -10.8, -21.0, 0);
+    ctx.quadraticCurveTo(-20.6, 10.8, -14.4, 11.6);
+    ctx.lineTo(8.2, 11.6);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  // Base deck extrusion + elevated upper deck
+  traceHouse();
+  ctx.save();
+  ctx.translate(houseLiftX, houseLiftY);
+  traceHouse();
+
+  // Elevated cab roof + side mirror
+  ctx.translate(cabRoofLiftX, cabRoofLiftY);
+  const cabX = -7.2;
+  const cabY = -10.8;
+  const cabL = 14.4;
+  const cabW = 9.4;
+  ctx.fillRect(cabX - 0.6, cabY - 0.6, cabL + 1.2, cabW + 1.2);
+  ctx.fillRect(cabX + cabL - 2.6, cabY - 3.4, 3.2, 3.4);
+  ctx.restore();
+
+  // Articulated arm & bucket (plan projection matching renderExcavatorEK12, clipped above ground z >= -0.02)
+  const PX_PER_M = 10.0;
+  const armY = geom.armMountOffsetY;
+  const projPt = (rM: number, latM: number, zM: number) => ({
+    x: rM * PX_PER_M,
+    y: armY + latM * PX_PER_M,
+    s: Math.max(0.9, Math.min(1.18, 1.0 + zM * 0.03)),
+  });
+
+  const maskAboveGrade = (
+    pts: { r: number; z: number }[],
+    halfWidthPx: number,
+    closed: boolean,
+    draw: () => void
+  ) => {
+    const ZC = -0.02;
+    let rMin = Infinity;
+    let rMax = -Infinity;
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      if (pts[i].z < ZC) {
+        rMin = Math.min(rMin, pts[i].r);
+        rMax = Math.max(rMax, pts[i].r);
+      }
+    }
+    const edges = closed ? n : n - 1;
+    for (let i = 0; i < edges; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % n];
+      if ((a.z < ZC) !== (b.z < ZC)) {
+        const rc = a.r + ((b.r - a.r) * (ZC - a.z)) / (b.z - a.z);
+        rMin = Math.min(rMin, rc);
+        rMax = Math.max(rMax, rc);
+      }
+    }
+    if (rMax < rMin) {
+      draw();
+      return;
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-400, -400, 800, 800);
+    ctx.rect(rMin * PX_PER_M - 0.4, armY - halfWidthPx, (rMax - rMin) * PX_PER_M + 0.8, halfWidthPx * 2);
+    ctx.clip('evenodd');
+    draw();
+    ctx.restore();
+  };
+
+  const pBase = projPt(geom.boomBaseR_m, 0, geom.boomBaseZ_m);
+  const pKnee = projPt(geom.boomKneeR_m, 0, geom.boomKneeZ_m);
+  const pTip = projPt(geom.boomTipR_m, 0, geom.boomTipZ_m);
+  const pStick = projPt(geom.stickTipR_m, 0, geom.stickTipZ_m);
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Boom lower + twin hoist cylinders
+  maskAboveGrade(
+    [
+      { r: geom.boomBaseR_m, z: geom.boomBaseZ_m },
+      { r: geom.boomKneeR_m, z: geom.boomKneeZ_m },
+    ],
+    4.6,
+    false,
+    () => {
+      ctx.lineWidth = 6.8 * ((pBase.s + pKnee.s) * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(pBase.x, pBase.y);
+      ctx.lineTo(pKnee.x, pKnee.y);
+      ctx.stroke();
+    }
+  );
+
+  // Boom upper + work floodlight + stick cylinder
+  maskAboveGrade(
+    [
+      { r: geom.boomKneeR_m, z: geom.boomKneeZ_m },
+      { r: geom.boomTipR_m, z: geom.boomTipZ_m },
+    ],
+    4.6,
+    false,
+    () => {
+      ctx.lineWidth = 5.8 * ((pKnee.s + pTip.s) * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(pKnee.x, pKnee.y);
+      ctx.lineTo(pTip.x, pTip.y);
+      ctx.stroke();
+    }
+  );
+
+  // Stick / dipper arm
+  maskAboveGrade(
+    [
+      { r: geom.boomTipR_m, z: geom.boomTipZ_m },
+      { r: geom.stickTipR_m, z: geom.stickTipZ_m },
+    ],
+    4.0,
+    false,
+    () => {
+      ctx.lineWidth = 4.4 * ((pTip.s + pStick.s) * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(pTip.x, pTip.y);
+      ctx.lineTo(pStick.x, pStick.y);
+      ctx.stroke();
+    }
+  );
+
+  // 3D Backhoe Bucket hull + teeth
+  const bp = geom.bucketPitch;
+  const cosB = Math.cos(bp);
+  const sinB = Math.sin(bp);
+  const hc = Math.cos(bp + Math.PI * 0.5);
+  const hs = Math.sin(bp + Math.PI * 0.5);
+  const halfWidthM = 0.50;
+  const rPin = geom.stickTipR_m;
+  const zPin = geom.stickTipZ_m;
+  const rHeel = rPin + cosB * 0.44 + hc * 0.52;
+  const zHeel = zPin + sinB * 0.44 + hs * 0.52;
+  const rTooth = rPin + cosB * (1.05 * 1.08);
+  const zTooth = zPin + sinB * (1.05 * 1.08);
+
+  const pPinL = projPt(rPin, -halfWidthM, zPin);
+  const pPinR = projPt(rPin, halfWidthM, zPin);
+  const pHeelL = projPt(rHeel, -halfWidthM, zHeel);
+  const pHeelR = projPt(rHeel, halfWidthM, zHeel);
+  const pToothL = projPt(rTooth, -halfWidthM, zTooth);
+  const pToothR = projPt(rTooth, halfWidthM, zTooth);
+
+  maskAboveGrade(
+    [
+      { r: rPin, z: zPin },
+      { r: rHeel, z: zHeel },
+      { r: rTooth, z: zTooth },
+    ],
+    6.4,
+    true,
+    () => {
+      ctx.beginPath();
+      ctx.moveTo(pPinL.x, pPinL.y);
+      ctx.lineTo(pHeelL.x, pHeelL.y);
+      ctx.lineTo(pToothL.x, pToothL.y);
+      ctx.lineTo(pToothR.x, pToothR.y);
+      ctx.lineTo(pHeelR.x, pHeelR.y);
+      ctx.lineTo(pPinR.x, pPinR.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+    }
+  );
+
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'miter';
+  ctx.restore();
 }
