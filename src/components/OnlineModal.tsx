@@ -274,7 +274,7 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
       title="Онлайн"
       subtitle={subtitle}
       width={920}
-      tall={!connected}
+      tall={!connected && viewMode === 'server_browser'}
       onClose={() => { sound.playButtonPress(); onClose(); }}
       wipeKey={connected ? 'connected' : viewMode}
       bodyKey={connected ? 'connected' : viewMode}

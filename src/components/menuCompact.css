@@ -43,15 +43,16 @@
 .gm[data-mob] .opt{padding:12px 14px;font-size:15px}
 
 /* ---- main menu ---- */
-.gm[data-mob] .mc-mlist{left:28px!important;top:72px!important;width:480px!important;gap:4px!important}
-.gm[data-mob] .mc-mlist .menu-i{height:auto!important;min-height:54px;padding:6px 18px;font-size:24px;gap:14px}
-.gm[data-mob] .mc-mlist .menu-i:hover{padding-left:24px}
-.gm[data-mob] .mc-mpanel{left:auto!important;right:28px;top:72px!important;width:430px!important}
+.gm[data-mob] .mc-mlist{left:28px!important;top:68px!important;width:480px!important;gap:4px!important}
+.gm[data-mob] .mc-mlist .menu-i{height:auto!important;min-height:44px;padding:4px 16px;font-size:21px;gap:12px}
+.gm[data-mob] .mc-mlist .menu-i:hover{padding-left:22px}
+.gm[data-mob] .mc-mpanel{left:auto!important;right:28px;top:68px!important;width:430px!important}
 .gm[data-mob] .mc-mpanel .th{height:150px!important}
 
 /* ---- nav + content (account, settings) ---- */
 .gm[data-mob] .mc-nav{left:28px!important;top:72px!important;width:210px!important}
-.gm[data-mob] .mc-content{left:256px!important;top:72px!important;right:28px;width:auto!important;max-height:calc(var(--sh) - 86px)!important;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#3a352b transparent}
+.gm[data-mob] .mc-content{left:256px!important;top:72px!important;right:28px;width:auto!important;max-height:calc(var(--sh) - 86px)!important;overflow-y:hidden;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#3a352b transparent}
+.gm[data-mob] .mc-content.scroll{overflow-y:auto}
 .gm[data-mob] .mc-content.mc-has-aside{right:304px}
 .gm[data-mob] .mc-aside{left:auto!important;right:28px;top:72px!important;width:260px!important}
 .gm[data-mob] .mc-aside .th{display:none}
@@ -60,8 +61,8 @@
 .gm[data-mob] .tabs{left:28px;top:66px;width:calc(100% - 56px)}
 .gm[data-mob] .mc-pills{left:28px!important;top:118px!important}
 .gm[data-mob] .mc-list{left:28px!important;top:164px!important;width:calc(100% - 56px - 394px)!important;height:auto!important;bottom:12px}
-.gm[data-mob] .mc-side2{left:auto!important;right:28px;top:164px!important;width:380px!important;height:auto!important;bottom:12px}
-.gm[data-mob] .mc-side2 .th{height:100px!important}
+.gm[data-mob] .mc-side2{left:auto!important;right:28px;top:164px!important;width:380px!important;height:auto!important;bottom:12px;padding:10px 12px!important}
+.gm[data-mob] .mc-side2 .th{height:54px!important}
 .gm[data-mob] .row{height:58px}
 .gm[data-mob] .mc-saves{left:28px!important;top:118px!important;width:calc(100% - 56px)!important;height:calc(var(--sh) - 118px - 76px)!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-auto-rows:212px!important;gap:14px!important}
 .gm[data-mob] .mc-saves .th{height:100px!important}
@@ -77,7 +78,7 @@
 .gm[data-mob] .mc-side{left:auto!important;right:28px!important;top:68px!important;width:340px!important;height:auto!important;bottom:12px;padding:12px!important}
 .gm[data-mob] .mc-side.mc-auto{bottom:auto;padding:18px 20px!important}
 .gm[data-mob] .mc-sth{display:none}
-.gm[data-mob] .mc-form{left:28px!important;top:68px!important;width:calc(100% - 56px - 356px)!important;height:auto!important;bottom:12px;padding:18px 22px!important;gap:14px!important}
+.gm[data-mob] .mc-form{left:28px!important;top:68px!important;width:calc(100% - 56px - 356px)!important;height:auto!important;bottom:12px;padding:12px 18px!important;gap:8px!important}
 
 /* ---- refinements ---- */
 .gm[data-mob] .ttl{white-space:nowrap}
@@ -86,19 +87,19 @@
 .gm[data-mob] .mc-filters::-webkit-scrollbar{display:none}
 .gm[data-mob] .mc-filters .pill{flex:none}
 .gm[data-mob] .mc-mlist{width:520px!important}
-.gm[data-mob] .mc-mlist .menu-i{font-size:22px}
+.gm[data-mob] .mc-mlist .menu-i{font-size:20px}
 .gm[data-mob] .mc-side{width:360px!important}
 .gm[data-mob] .mc-main{width:calc(100% - 56px - 376px)!important}
 .gm[data-mob] .mc-form{width:calc(100% - 56px - 376px)!important}
-.gm[data-mob] .mc-name{font-size:22px!important;line-height:1.1!important}
-.gm[data-mob] .mc-desc{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin-top:6px!important}
+.gm[data-mob] .mc-name{font-size:20px!important;line-height:1.1!important}
+.gm[data-mob] .mc-desc{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin-top:4px!important}
 .gm[data-mob] .mc-note{display:none}
 .gm[data-mob] .mc-sbody{padding:4px 6px 0!important}
-.gm[data-mob] .mc-sbody>div:not(:first-child){margin-top:10px!important}
-.gm[data-mob] .mc-sbody .btn-p{margin-bottom:0!important;height:50px!important;white-space:nowrap;padding:0 10px}
+.gm[data-mob] .mc-sbody>div:not(:first-child){margin-top:8px!important}
+.gm[data-mob] .mc-sbody .btn-p{margin-bottom:0!important;height:46px!important;white-space:nowrap;padding:0 10px}
 .gm[data-mob] .mc-side .seg>span{padding:0 6px;font-size:14px}
-.gm[data-mob] input.inp{height:46px;font-size:17px}
-.gm[data-mob] #pvbox{height:96px!important}
+.gm[data-mob] input.inp{height:40px;font-size:16px}
+.gm[data-mob] #pvbox{height:76px!important}
 .gm[data-mob] #lh{height:40px!important}
 .gm[data-mob] .mc-side .btn{white-space:nowrap}
 

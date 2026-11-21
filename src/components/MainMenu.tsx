@@ -743,10 +743,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   <div className="row2">{AccountChip}</div>
                 </div>
 
-                <div className="a mc-mlist" style={{ left: 64, top: 156, width: 440, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="a mc-mlist" style={{ left: 64, top: 152, width: 440, display: 'flex', flexDirection: 'column', gap: 5 }}>
                   {lastSave && (
                     <button className="menu-i cn sl d1" onClick={() => onLoadSave(lastSave.id)}
-                      style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 78 }}>
+                      style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 70 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                         <span>Продолжить</span>
                         <span className={'mode-badge ' + (lastSave.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')}>
@@ -758,8 +758,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   )}
                   <button className="menu-i cn sl d2" onClick={() => go('new')}
                     style={!lastSave
-                      ? { background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 74 }
-                      : { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }
+                      ? { background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }
+                      : { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 62 }
                     }>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <Ic><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></Ic>
@@ -767,7 +767,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     </div>
                     <span className="mut" style={{ font: "400 12px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0, paddingLeft: 36 }}>Трафик, пешеходы, погода, экономика</span>
                   </button>
-                  <button className="menu-i cn sl d3" onClick={() => go('freeroam_map')} style={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }}>
+                  <button className="menu-i cn sl d3" onClick={() => go('freeroam_map')} style={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 62 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <Ic><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" /></Ic>
                       <span>Свободная езда (Freeroam)</span>
@@ -868,9 +868,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 )}
 
                 {accTab === 'friends' && (
-                  <div className="a sec mc-content" key="acc-friends" style={{ left: 394, top: 140, width: 982 }}>
-                    <div className="panel st d1" style={{ padding: '22px 24px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <div className="a sec mc-content" key="acc-friends" style={{ left: 394, top: 140, width: 982, maxHeight: 688 }}>
+                    <div className="panel st d1" style={{ padding: '22px 24px', maxHeight: 688, display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flex: 'none' }}>
                         <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья</span>
                         {currentUser && <span className="mut" style={{ fontSize: 13 }}>{friends.length}</span>}
                       </div>
@@ -879,7 +879,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       ) : friends.length === 0 ? (
                         <div className="empty"><div className="mut">Список друзей пуст. Добавить друзей можно в игре: Esc → Онлайн → Друзья.</div></div>
                       ) : (
-                        <div style={{ marginTop: 8 }}>
+                        <div className="scroll" style={{ marginTop: 8, flex: 1, minHeight: 0 }}>
                           {friends.map((f, i) => {
                             const other = f.user1.uid === currentUser.uid ? f.user2 : f.user1;
                             const name = other.nickname || other.name || 'Игрок';
@@ -936,7 +936,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     </div>
                   </div>
                 </div>
-                <div className="a st d2 mc-pills" style={{ left: 64, top: 182, display: 'flex', gap: 10 }}>
+                <div className="a st d2 mc-pills" style={{ left: 64, top: 180, display: 'flex', gap: 10 }}>
                   <button className={'pill' + (modeFilter === 'all' ? ' pill-on' : '')} onClick={() => setModeFilter('all')}>Все режимы</button>
                   {Object.keys(MODE_NAME).map(m => (
                     <button key={m} className={'pill' + (modeFilter === m ? ' pill-on' : '')} onClick={() => setModeFilter(m)}>{MODE_NAME[m]}</button>
@@ -948,7 +948,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
                 {serversTab === 'all' ? (
                   <>
-                    <div className="panel a st d2 mc-list" style={{ left: 64, top: 232, width: 850, height: 610, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div className="panel a st d2 mc-list" style={{ left: 64, top: 226, width: 850, height: 602, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                       <div className="row hd cn" style={{ borderBottom: '1px solid rgba(255,255,255,.08)', flex: 'none' }}><span /><span>Название</span><span>Режим</span><span>Игроки</span></div>
                       <div className="scroll" style={{ flex: 1 }}>
                         {filteredServers.length === 0 ? (
@@ -985,32 +985,32 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         })}
                       </div>
                     </div>
-                    <div className="panel a st d4 mc-side2" style={{ left: 938, top: 232, width: 438, height: 610, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                    <div className="panel a st d4 mc-side2" style={{ left: 938, top: 226, width: 438, height: 602, padding: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                       {selectedServer ? (
                         <>
-                          <div className={'th ' + (MODE_THUMB[selectedServer.gameMode] || 'm5')} style={{ height: 200, borderRadius: 10, flex: 'none' }} />
-                          <div style={{ padding: '18px 8px 0', flex: 1 }}>
+                          <div className={'th ' + (MODE_THUMB[selectedServer.gameMode] || 'm5')} style={{ height: 124, borderRadius: 10, flex: 'none' }} />
+                          <div style={{ padding: '12px 8px 0', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                             <div className="cn mut" style={{ fontSize: 12 }}>Выбранный сервер</div>
-                            <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4, lineHeight: 1.1 }}>{selectedServer.name}</div>
-                            <div className="mut" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.45 }}>
+                            <div className="cn mc-name" style={{ fontSize: 24, fontWeight: 700, marginTop: 2, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedServer.name}</div>
+                            <div className="mut mc-desc" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.38 }}>
                               {selectedServer.hasPassword
-                                ? 'Включена защита ников: при первом входе нужно придумать личный пароль, чтобы никто не смог зайти под вашим именем.'
+                                ? 'Включена защита ников: при первом входе нужно придумать личный пароль.'
                                 : 'Отдельный мир сервера: прогресс изолирован от одиночных сохранений и синхронизируется с хостом.'}
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginTop: 20, fontSize: 14 }}>
-                              <div><div className="mut" style={{ fontSize: 12 }}>Хост</div>{selectedServer.hostName}</div>
-                              <div><div className="mut" style={{ fontSize: 12 }}>Код комнаты</div>{selectedServer.peerId}</div>
-                              <div><div className="mut" style={{ fontSize: 12 }}>Карта</div>{selectedServer.mapName || 'flatbody'}</div>
-                              <div><div className="mut" style={{ fontSize: 12 }}>Режим</div>{modeName(selectedServer.gameMode)}</div>
-                              <div><div className="mut" style={{ fontSize: 12 }}>Аккаунты</div>{selectedServer.hasPassword ? 'Пароль на ник' : 'Свободный вход'}</div>
-                              <div><div className="mut" style={{ fontSize: 12 }}>Сохранения</div>{selectedServer.savePlayerData === false ? 'Отключены' : 'Включены'}</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: 12, fontSize: 13 }}>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Хост</div>{selectedServer.hostName}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Код комнаты</div>{selectedServer.peerId}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Карта</div>{selectedServer.mapName || 'flatbody'}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Режим</div>{modeName(selectedServer.gameMode)}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Аккаунты</div>{selectedServer.hasPassword ? 'Пароль на ник' : 'Свободный вход'}</div>
+                              <div><div className="mut" style={{ fontSize: 11 }}>Сохранения</div>{selectedServer.savePlayerData === false ? 'Отключены' : 'Включены'}</div>
                             </div>
-                            <div style={{ marginTop: 18 }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}><span className="mut">Игроки</span><span>{selectedServer.currentPlayers || 1} / {selectedServer.maxPlayers || 8}</span></div>
+                            <div style={{ marginTop: 12 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 6 }}><span className="mut">Игроки</span><span>{selectedServer.currentPlayers || 1} / {selectedServer.maxPlayers || 8}</span></div>
                               <div className="bar"><i style={{ width: Math.round(((selectedServer.currentPlayers || 1) / (selectedServer.maxPlayers || 8)) * 100) + '%' }} /></div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 12, padding: '0 8px 8px' }}>
+                          <div style={{ display: 'flex', gap: 12, padding: '8px 8px 2px', flex: 'none' }}>
                             <button className="btn btn-p" style={{ flex: 1 }} onClick={() => connectTo(selectedServer.peerId, { serverName: selectedServer.name, gameMode: selectedServer.gameMode })}>Подключиться</button>
                           </div>
                         </>
@@ -1022,7 +1022,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   </>
                 ) : (
                   <>
-                    <div className="panel a st d2 mc-list" style={{ left: 64, top: 232, width: 850, height: 610, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div className="panel a st d2 mc-list" style={{ left: 64, top: 226, width: 850, height: 602, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                       {!currentUser && (
                         <div style={{ padding: '10px 18px', background: 'rgba(224,171,69,.1)', borderBottom: '1px solid rgba(224,171,69,.22)', color: '#e6c278', fontSize: 13 }}>
                           Войдите в Google-аккаунт, чтобы серверы, пароли и баны синхронизировались с облачной базой данных (сейчас используется локальное хранилище).
@@ -1070,19 +1070,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         })}
                       </div>
                     </div>
-                    <div className="panel a st d4 mc-side2" style={{ left: 938, top: 232, width: 438, height: 610, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                    <div className="panel a st d4 mc-side2" style={{ left: 938, top: 226, width: 438, height: 602, padding: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                       {selectedMyServer ? (
                         <>
-                          <div className={'th ' + (MODE_THUMB[selectedMyServer.gameMode] || 'm5')} style={{ height: 175, borderRadius: 10, flex: 'none' }} />
-                          <div style={{ padding: '16px 8px 0', flex: 1 }}>
+                          <div className={'th ' + (MODE_THUMB[selectedMyServer.gameMode] || 'm5')} style={{ height: 114, borderRadius: 10, flex: 'none' }} />
+                          <div style={{ padding: '12px 8px 0', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                             <div className="cn mut" style={{ fontSize: 12 }}>
                               Ваш сервер · {selectedMyServer.storageSource === 'cloud' ? 'Сохранён в БД' : 'Локальная копия'}
                             </div>
-                            <div className="cn" style={{ fontSize: 26, fontWeight: 700, marginTop: 4, lineHeight: 1.1 }}>{selectedMyServer.serverName}</div>
-                            <div className="mut" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
-                              При запуске восстановятся мир хоста, все зарегистрированные аккаунты с паролями, список банов и профили игроков.
+                            <div className="cn mc-name" style={{ fontSize: 23, fontWeight: 700, marginTop: 2, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedMyServer.serverName}</div>
+                            <div className="mut mc-desc" style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.35 }}>
+                              При запуске восстановятся мир хоста, зарегистрированные аккаунты, список банов и профили игроков.
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 18px', marginTop: 18, fontSize: 13 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 14px', marginTop: 12, fontSize: 12.5 }}>
                               <div><div className="mut" style={{ fontSize: 11 }}>Код комнаты</div><span style={{ fontFamily: 'ui-monospace,monospace' }}>{selectedMyServer.roomCode}</span></div>
                               <div><div className="mut" style={{ fontSize: 11 }}>Доступ</div>{selectedMyServer.access === 'code' ? 'Только по коду' : 'Публичный'}</div>
                               <div><div className="mut" style={{ fontSize: 11 }}>Режим</div>{modeName(selectedMyServer.gameMode)}</div>
@@ -1090,11 +1090,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                               <div><div className="mut" style={{ fontSize: 11 }}>Аккаунтов / Профилей</div>{selectedMyServer.accountsCount ?? Object.keys(selectedMyServer.accounts || {}).length} / {selectedMyServer.savedPlayersCount ?? Object.keys(selectedMyServer.playerSaves || {}).length}</div>
                               <div><div className="mut" style={{ fontSize: 11 }}>Банов</div>{selectedMyServer.bansCount ?? Object.keys(selectedMyServer.bans || {}).length}</div>
                             </div>
-                            <div className="mut" style={{ fontSize: 12, marginTop: 14 }}>
-                              Последнее сохранение: {formatSavedDate(selectedMyServer.lastSavedAt)}
+                            <div className="mut" style={{ fontSize: 11.5, marginTop: 10 }}>
+                              Сохранено: {formatSavedDate(selectedMyServer.lastSavedAt)}
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 10, padding: '0 8px 8px' }}>
+                          <div style={{ display: 'flex', gap: 10, padding: '8px 8px 2px', flex: 'none' }}>
                             <button
                               className="btn btn-p"
                               style={{ flex: 1 }}
@@ -1147,7 +1147,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   ))}
                 </div>
 
-                <div className="panel a sec st d2 scroll mc-content mc-has-aside" key={'panel-' + setTab} style={{ left: 350, top: 128, width: 700, maxHeight: 714 }}>
+                <div className={'panel a sec st d2 mc-content mc-has-aside' + (setTab === 'gfx' || setTab === 'ctrl' ? ' scroll' : '')} key={'panel-' + setTab} style={{ left: 350, top: 128, width: 700, maxHeight: 700 }}>
                   {setTab === 'gfx' && (
                     <>
                       <div className="grp cn" style={{ paddingTop: 18 }}>Пресет</div>
@@ -1375,26 +1375,26 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     ))}
                   </div>
                 </div>
-                <div className="panel a st d3 mc-side" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
-                  <div className={'th mc-sth ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 150, borderRadius: 9, flex: 'none' }} />
-                  <div className="mc-sbody" style={{ padding: '16px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div className="panel a st d3 mc-side" style={{ left: 976, top: 112, width: 400, height: 716, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                  <div className={'th mc-sth ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 118, borderRadius: 9, flex: 'none' }} />
+                  <div className="mc-sbody" style={{ padding: '12px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     <div className="cn mut" style={{ fontSize: 12 }}>Точка старта</div>
-                    <div className="cn mc-name" style={{ fontSize: 26, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
-                    <div className="mut mc-desc" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{spawn.description}</div>
-                    <div style={{ marginTop: 16 }}><div className="lbl">Название сохранения</div><input className="inp" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
-                    <div style={{ marginTop: 16 }}>
+                    <div className="cn mc-name" style={{ fontSize: 24, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
+                    <div className="mut mc-desc" style={{ fontSize: 13, lineHeight: 1.4, marginTop: 6 }}>{spawn.description}</div>
+                    <div style={{ marginTop: 12 }}><div className="lbl">Название сохранения</div><input className="inp" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
+                    <div style={{ marginTop: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Время суток</span><span style={{ fontSize: 13, fontWeight: 600 }}>{fmtHour(newTime)}</span></div>
                       <div style={{ marginRight: 9 }}><Track label="Время суток" value={newTime} min={0} max={23.5} step={0.5} onChange={setNewTime} /></div>
                     </div>
-                    <div style={{ marginTop: 16 }}>
+                    <div style={{ marginTop: 12 }}>
                       <div className="lbl">Погода</div>
                       <Seg value={newWeather} onChange={setNewWeather} options={[{ v: 'clear', label: 'Ясно' }, { v: 'overcast', label: 'Пасмурно' }, { v: 'rain', label: 'Дождь' }, { v: 'fog', label: 'Туман' }]} />
                     </div>
-                    <div className="mc-note" style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(16,185,129,0.08)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.25)', fontSize: 12, color: '#34d399', lineHeight: 1.45 }}>
+                    <div className="mc-note" style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(16,185,129,0.08)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.25)', fontSize: 12, color: '#34d399', lineHeight: 1.4 }}>
                       Живой мир: активный трафик, пешеходы, смена дня/ночи и погоды, заработок и выживание.
                     </div>
                     <div style={{ flex: 1 }} />
-                    <button className="btn btn-p" style={{ width: '100%', height: 50, fontSize: 17, marginBottom: 10 }}
+                    <button className="btn btn-p" style={{ width: '100%', height: 50, fontSize: 17, marginBottom: 4 }}
                       onClick={() => onNewGame({ spawnId: spawn.id, saveName: newName.trim() || 'Карьера: ' + spawn.nameRu, timeHour: newTime, weather: newWeather, mode: 'career' })}>
                       <PlayIcon />Начать карьеру
                     </button>
@@ -1432,25 +1432,25 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     ))}
                   </div>
                 </div>
-                <div className="panel a st d3 mc-side" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
-                  <div className={'th mc-sth ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 150, borderRadius: 9, flex: 'none' }} />
-                  <div className="mc-sbody" style={{ padding: '16px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div className="panel a st d3 mc-side" style={{ left: 976, top: 112, width: 400, height: 716, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                  <div className={'th mc-sth ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 118, borderRadius: 9, flex: 'none' }} />
+                  <div className="mc-sbody" style={{ padding: '12px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     <div className="cn mut" style={{ fontSize: 12 }}>Точка старта</div>
-                    <div className="cn mc-name" style={{ fontSize: 26, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
-                    <div className="mut mc-desc" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{spawn.description}</div>
-                    <div style={{ marginTop: 16 }}>
+                    <div className="cn mc-name" style={{ fontSize: 24, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
+                    <div className="mut mc-desc" style={{ fontSize: 13, lineHeight: 1.4, marginTop: 6 }}>{spawn.description}</div>
+                    <div style={{ marginTop: 14 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Время суток</span><span style={{ fontSize: 13, fontWeight: 600 }}>{fmtHour(newTime)}</span></div>
                       <div style={{ marginRight: 9 }}><Track label="Время суток" value={newTime} min={0} max={23.5} step={0.5} onChange={setNewTime} /></div>
                     </div>
-                    <div style={{ marginTop: 16 }}>
+                    <div style={{ marginTop: 14 }}>
                       <div className="lbl">Погода</div>
                       <Seg value={newWeather} onChange={setNewWeather} options={[{ v: 'clear', label: 'Ясно' }, { v: 'overcast', label: 'Пасмурно' }, { v: 'rain', label: 'Дождь' }, { v: 'fog', label: 'Туман' }]} />
                     </div>
-                    <div className="mc-note" style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(201,146,43,0.08)', borderRadius: 8, border: '1px solid rgba(201,146,43,0.25)', fontSize: 12, color: '#e0ab45', lineHeight: 1.45 }}>
+                    <div className="mc-note" style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(201,146,43,0.08)', borderRadius: 8, border: '1px solid rgba(201,146,43,0.25)', fontSize: 12, color: '#e0ab45', lineHeight: 1.4 }}>
                       Свободная езда: без трафика и пешеходов. Выберите карту, затем настройте автомобиль.
                     </div>
                     <div style={{ flex: 1 }} />
-                    <button className="btn btn-p" style={{ width: '100%', height: 50, fontSize: 17, marginBottom: 10 }}
+                    <button className="btn btn-p" style={{ width: '100%', height: 50, fontSize: 17, marginBottom: 4 }}
                       onClick={() => go('freeroam_car')}>
                       <PlayIcon />Далее: Выбор автомобиля
                     </button>
@@ -1464,88 +1464,98 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             {cur === 'create' && (
               <section className={scrCls}>
                 {Top('Создать сервер', () => go('servers', true))}
-                <div className="panel a stg st d2 scroll mc-form" style={{ left: 64, top: 112, width: 880, height: 740, padding: '28px 30px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  <div><div className="lbl">Название сервера</div><input className="inp" value={hostName} onChange={e => setHostName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
+                <div className="panel a stg st d2 mc-form" style={{ left: 64, top: 112, width: 880, height: 716, padding: '20px 26px', display: 'flex', flexDirection: 'column', gap: 13 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 16 }}>
+                    <div>
+                      <div className="lbl">Название сервера</div>
+                      <input className="inp" value={hostName} onChange={e => setHostName(e.target.value)} onKeyDown={e => e.stopPropagation()} />
+                    </div>
+                    <div>
+                      <div className="lbl">{hostAccess === 'code' ? 'Код комнаты (для входа)' : 'Код комнаты (прямой вход)'}</div>
+                      <div className="row2" style={{ gap: 8 }}>
+                        <input className="inp" value={hostCode} onChange={e => setHostCode(e.target.value)} onKeyDown={e => e.stopPropagation()} style={{ flex: 1, fontFamily: 'ui-monospace,monospace', borderColor: 'rgba(255,255,255,.14)' }} />
+                        <button type="button" className="btn btn-s" style={{ flex: 'none', padding: '0 14px', height: 46 }} onClick={regenerateHostCode}>Обновить</button>
+                      </div>
+                    </div>
+                  </div>
 
-                  <div>
-                    <div className="lbl">Доступ к серверу</div>
-                    <Seg
-                      value={hostAccess}
-                      onChange={v => setHostAccess(v as 'all' | 'code')}
-                      options={[
-                        { v: 'all', label: 'Публичный (в общем списке)' },
-                        { v: 'code', label: 'Приватный (только по коду)' }
-                      ]}
-                    />
-                    {hostAccess === 'all' && !currentUser && (
-                      <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: 'rgba(224,171,69,.1)', border: '1px solid rgba(224,171,69,.28)', color: '#e6c278', fontSize: 13, lineHeight: 1.45 }}>
-                        Без входа в Google-аккаунт сервер не сможет отображаться в публичном списке — игроки смогут подключиться только по коду комнаты.
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 16 }}>
+                    <div>
+                      <div className="lbl">Доступ к серверу</div>
+                      <Seg
+                        value={hostAccess}
+                        onChange={v => setHostAccess(v as 'all' | 'code')}
+                        options={[
+                          { v: 'all', label: 'Публичный' },
+                          { v: 'code', label: 'Приватный (по коду)' }
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <div className="lbl">Режим</div>
+                      <Seg value={hostMode} onChange={setHostMode} options={Object.keys(MODE_NAME).map(k => ({ v: k, label: MODE_NAME[k] }))} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 16, alignItems: 'center' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Максимум игроков</span><span style={{ fontSize: 13, fontWeight: 600 }}>{hostMax}</span></div>
+                      <div style={{ marginRight: 9 }}><Track label="Максимум игроков" value={hostMax} min={2} max={16} step={1} onChange={setHostMax} /></div>
+                    </div>
+                    <div>
+                      <div className="lbl">Уровень античита</div>
+                      <Seg value={antiCheat} onChange={setAntiCheat} options={[{ v: 'none', label: 'Нет' }, { v: 'moderate', label: 'Умеренный' }, { v: 'strict', label: 'Строгий' }]} />
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 34 }}>
+                      <span style={{ fontWeight: 500 }}>Трафик (автомобили ИИ и пешеходы)</span>
+                      <Toggle on={trafficEnabled} onChange={() => setTrafficEnabled(!trafficEnabled)} label="Трафик" />
+                    </div>
+                    {trafficEnabled && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginTop: 8 }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Количество машин</span><span style={{ fontSize: 12.5, fontWeight: 600 }}>{vehicleCount}</span></div>
+                          <div style={{ marginRight: 9 }}><Track label="Машины" value={vehicleCount} min={2} max={35} step={1} onChange={setVehicleCount} /></div>
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Количество пешеходов</span><span style={{ fontSize: 12.5, fontWeight: 600 }}>{pedestrianCount}</span></div>
+                          <div style={{ marginRight: 9 }}><Track label="Пешеходы" value={pedestrianCount} min={0} max={25} step={1} onChange={setPedestrianCount} /></div>
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  <div>
-                    <div className="lbl">
-                      {hostAccess === 'code'
-                        ? 'Код комнаты (только по нему друзья смогут подключиться)'
-                        : 'Код комнаты (можно передать друзьям для прямого входа)'}
-                    </div>
-                    <div className="row2" style={{ gap: 10 }}>
-                      <input className="inp" value={hostCode} onChange={e => setHostCode(e.target.value)} onKeyDown={e => e.stopPropagation()} style={{ flex: 1, fontFamily: 'ui-monospace,monospace', borderColor: 'rgba(255,255,255,.14)' }} />
-                      <button type="button" className="btn btn-s" style={{ flex: 'none', padding: '0 16px', height: 46 }} onClick={regenerateHostCode}>Обновить</button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="lbl">Режим</div>
-                    <Seg value={hostMode} onChange={setHostMode} options={Object.keys(MODE_NAME).map(k => ({ v: k, label: MODE_NAME[k] }))} />
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Максимум игроков</span><span style={{ fontSize: 13, fontWeight: 600 }}>{hostMax}</span></div>
-                    <div style={{ marginRight: 9 }}><Track label="Максимум игроков" value={hostMax} min={2} max={16} step={1} onChange={setHostMax} /></div>
-                  </div>
-
-                  <div className="set" style={{ height: 60, padding: 0, border: 0 }}>
-                    <span>Трафик (машины и пешеходы)</span>
-                    <Toggle on={trafficEnabled} onChange={() => setTrafficEnabled(!trafficEnabled)} label="Трафик" />
-                  </div>
-
-                  {trafficEnabled && (
-                    <>
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Количество машин</span><span style={{ fontSize: 13, fontWeight: 600 }}>{vehicleCount}</span></div>
-                        <div style={{ marginRight: 9 }}><Track label="Машины" value={vehicleCount} min={2} max={35} step={1} onChange={setVehicleCount} /></div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 16 }}>
+                    <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: 500 }}>Защита ников паролем</span>
+                        <Toggle on={passwordRequired} onChange={() => setPasswordRequired(!passwordRequired)} label="Защита ников паролем" />
                       </div>
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Количество пешеходов</span><span style={{ fontSize: 13, fontWeight: 600 }}>{pedestrianCount}</span></div>
-                        <div style={{ marginRight: 9 }}><Track label="Пешеходы" value={pedestrianCount} min={0} max={25} step={1} onChange={setPedestrianCount} /></div>
+                      <div className="mut" style={{ fontSize: 11.5, lineHeight: 1.3 }}>
+                        {passwordRequired ? 'Личный пароль при первом входе защищает ник и профиль.' : 'Вход на сервер без регистрации и пароля.'}
                       </div>
-                    </>
+                    </div>
+
+                    <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: 500 }}>Сохранять данные игроков</span>
+                        <Toggle on={savePlayerData} onChange={() => setSavePlayerData(!savePlayerData)} label="Сохранять данные" />
+                      </div>
+                      <div className="mut" style={{ fontSize: 11.5, lineHeight: 1.3 }}>
+                        {savePlayerData ? 'Прогресс, деньги и авто игроков сохраняются у хоста.' : 'Сессионный режим без записи прогресса.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {hostAccess === 'all' && !currentUser && (
+                    <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(224,171,69,.1)', border: '1px solid rgba(224,171,69,.28)', color: '#e6c278', fontSize: 12, lineHeight: 1.35 }}>
+                      Без входа в Google-аккаунт сервер не отображается в публичном списке — подключение доступно по коду комнаты.
+                    </div>
                   )}
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div className="set" style={{ height: 48, padding: 0, border: 0 }}>
-                      <span>Защита ников паролем (регистрация / вход)</span>
-                      <Toggle on={passwordRequired} onChange={() => setPasswordRequired(!passwordRequired)} label="Защита ников паролем" />
-                    </div>
-                    <div className="mut" style={{ fontSize: 13, lineHeight: 1.45 }}>
-                      {passwordRequired
-                        ? 'При первом входе каждый игрок придумает свой личный пароль, а при следующих визитах должен будет его ввести — никто не сможет зайти под чужим ником или использовать чужое сохранение.'
-                        : 'Игроки заходят на сервер сразу без регистрации и пароля на ник.'}
-                    </div>
-                  </div>
-
-                  <div className="set" style={{ height: 60, padding: 0, border: 0 }}>
-                    <span>Сохранять данные игрока</span>
-                    <Toggle on={savePlayerData} onChange={() => setSavePlayerData(!savePlayerData)} label="Сохранять данные" />
-                  </div>
-
-                  <div>
-                    <div className="lbl">Уровень античита</div>
-                    <Seg value={antiCheat} onChange={setAntiCheat} options={[{ v: 'none', label: 'Нет' }, { v: 'moderate', label: 'Умеренный' }, { v: 'strict', label: 'Строгий' }]} />
-                  </div>
-
-                  <div className="row2" style={{ gap: 12, marginTop: 10, paddingBottom: 20 }}>
+                  <div className="row2" style={{ gap: 12, marginTop: 'auto', paddingTop: 4 }}>
                     <button className="btn btn-s" style={{ flex: 1 }} onClick={() => go('servers', true)}>Отмена</button>
                     <button className="btn btn-p" style={{ flex: 1 }} onClick={createServer} disabled={creating}>{creating ? 'Запуск...' : 'Создать сервер'}</button>
                   </div>

@@ -231,19 +231,20 @@ const Panel: React.FC<{
   HeaderIcon: LucideIcon;
   onClose: () => void;
   fl?: boolean;
+  noScroll?: boolean;
   foot?: React.ReactNode;
   children: React.ReactNode;
-}> = ({ title, sub, HeaderIcon, onClose, fl, foot, children }) => (
+}> = ({ title, sub, HeaderIcon, onClose, fl, noScroll, foot, children }) => (
   <aside className="panel side" data-radial-panel>
     <div className="ph">
-      <span className="pi"><HeaderIcon width={24} height={24} strokeWidth={2} /></span>
+      <span className="pi"><HeaderIcon width={22} height={22} strokeWidth={2} /></span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="cn" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.1 }}>{title}</div>
+        <div className="cn" style={{ fontSize: 23, fontWeight: 700, lineHeight: 1.1 }}>{title}</div>
         <div className="mut sub">{sub}</div>
       </div>
-      <button type="button" className="xb" aria-label="Закрыть" onClick={onClose}><X width={20} height={20} /></button>
+      <button type="button" className="xb" aria-label="Закрыть" onClick={onClose}><X width={18} height={18} /></button>
     </div>
-    <div className={'pb' + (fl ? ' fl' : '')}>{children}</div>
+    <div className={'pb' + (fl ? ' fl' : '') + (noScroll ? ' no-scroll' : '')}>{children}</div>
     {foot && <div className="pf">{foot}</div>}
   </aside>
 );
@@ -639,7 +640,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
             </Panel>
           )}
           {panel === 'board' && !veh && (
-            <Panel key="board0" title="Приборка" sub="Нет автомобиля" HeaderIcon={Gauge} onClose={() => setPanel(null)}>
+            <Panel key="board0" title="Приборка" sub="Нет автомобиля" HeaderIcon={Gauge} onClose={() => setPanel(null)} noScroll>
               <div className="note" style={{ marginTop: 24 }}>Сядьте в автомобиль, чтобы управлять бортовыми системами</div>
             </Panel>
           )}
@@ -654,14 +655,14 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
             />
           )}
           {panel === 'config' && !veh && (
-            <Panel key="config0" title="Авто · Конфигуратор" sub="Нет автомобиля" HeaderIcon={Palette} onClose={() => setPanel(null)}>
+            <Panel key="config0" title="Авто · Конфигуратор" sub="Нет автомобиля" HeaderIcon={Palette} onClose={() => setPanel(null)} noScroll>
               <div className="note" style={{ marginTop: 24 }}>Сядьте в автомобиль, чтобы изменить его конфигурацию</div>
             </Panel>
           )}
 
           {/* ================= PANEL: ОКРУЖЕНИЕ ================= */}
           {panel === 'world' && (
-            <Panel key="world" title="Окружение" sub="Погода и время суток мира" HeaderIcon={CloudSun} onClose={() => setPanel(null)}>
+            <Panel key="world" title="Окружение" sub="Погода и время суток мира" HeaderIcon={CloudSun} onClose={() => setPanel(null)} noScroll>
               <Sl>Время суток</Sl>
               <div className="trow">
                 <span className="cn tm">{formatGameTime(hour)}</span>
@@ -669,10 +670,10 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                 <Tile Icon={Pause} cls="row sm" label="Пауза" on={!isTimeAutoCycling} onClick={click(onToggleTimeAuto)} />
                 <Tile Icon={ChevronRight} cls="sq" onClick={click(() => onSetTime((hour + 1) % 24))} />
               </div>
-              <div style={{ marginTop: 16 }}>
+              <div style={{ marginTop: 12 }}>
                 <Sld label="Время суток" value={minutes} min={0} max={1439} step={15} onChange={(v) => onSetTime(v / 60)} />
               </div>
-              <div className="grid4" style={{ marginTop: 16 }}>
+              <div className="grid4" style={{ marginTop: 12 }}>
                 {TIME_PRESETS.map(({ label, hour: defaultH, Icon }) => {
                   const sr = Math.round((world.calendar?.sunriseHour ?? 6) * 4) / 4;
                   const ss = Math.round((world.calendar?.sunsetHour ?? 19) * 4) / 4;
@@ -688,41 +689,38 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                   <Tile key={id} Icon={Icon} label={label} on={weather === id} onClick={click(() => onSetWeather(id))} />
                 ))}
               </div>
-              <div className="note" style={{ marginTop: 14 }}>Переход погоды плавный, около 16 секунд</div>
+              <div className="note" style={{ marginTop: 10 }}>Переход погоды плавный, около 16 секунд</div>
             </Panel>
           )}
 
           {/* ================= PANEL: ТРАФИК ================= */}
           {panel === 'traffic' && (
-            <Panel key="traffic" title="Трафик" sub="Управление движением города" HeaderIcon={TrafficCone} onClose={() => setPanel(null)}>
-              <Sl>Симуляция движения</Sl>
-              <div className="set" style={{ borderTop: 0, paddingTop: 4 }}>
+            <Panel key="traffic" title="Трафик" sub="Управление движением города" HeaderIcon={TrafficCone} onClose={() => setPanel(null)} noScroll>
+              <div className="set" style={{ borderTop: 0, paddingTop: 6, paddingBottom: 6 }}>
                 <div>
                   <div style={{ fontWeight: 600 }}>Трафик на карте</div>
-                  <div className="mut" style={{ fontSize: 13 }}>{isTrafficEnabled ? `${tVehicles.length} машин · ${tPeds} пешеходов на карте` : 'Выключен'}</div>
+                  <div className="mut" style={{ fontSize: 12.5 }}>{isTrafficEnabled ? `${tVehicles.length} машин · ${tPeds} пешеходов` : 'Движение остановлено'}</div>
                 </div>
                 <Tg on={isTrafficEnabled} label="Трафик" onClick={click(() => onSetTrafficEnabled(!isTrafficEnabled))} />
               </div>
-              <div className="note" style={{ margin: '0 0 4px', textAlign: 'left' }}>{isTrafficEnabled ? 'AI-машины и пешеходы едут по городу' : 'Весь трафик остановлен и заморожен'}</div>
 
               <div className={isTrafficEnabled ? '' : 'dim'}>
                 <Sl>Количество машин</Sl>
                 <div className="bl"><span>Машин рядом</span><b className="cn">{performanceConfig.nearbyVehiclesTarget}</b></div>
                 <Sld label="Машин рядом" value={performanceConfig.nearbyVehiclesTarget} min={0} max={24} onChange={(v) => setTraffic('nearbyVehiclesTarget', v)} />
-                <div style={{ marginTop: 14 }}>
+                <div style={{ marginTop: 8 }}>
                   <Seg options={([[5, 'Мало'], [10, 'Обычно'], [18, 'Много']] as [number, string][]).map(([v, l]) => ({ label: l, on: performanceConfig.nearbyVehiclesTarget === v, onPick: click(() => setTraffic('nearbyVehiclesTarget', v)) }))} />
                 </div>
 
                 <Sl>Количество людей</Sl>
                 <div className="bl"><span>Пешеходов</span><b className="cn">{performanceConfig.maxActivePedestrians}</b></div>
                 <Sld label="Пешеходов" value={performanceConfig.maxActivePedestrians} min={0} max={200} step={5} onChange={(v) => setTraffic('maxActivePedestrians', v)} />
-                <div style={{ marginTop: 14 }}>
+                <div style={{ marginTop: 8 }}>
                   <Seg options={([[25, 'Пусто'], [90, 'Обычно'], [180, 'Много']] as [number, string][]).map(([v, l]) => ({ label: l, on: performanceConfig.maxActivePedestrians === v, onPick: click(() => setTraffic('maxActivePedestrians', v)) }))} />
                 </div>
 
                 <Sl>Респавн</Sl>
-                <Tile Icon={RefreshCw} cls="row" label="Респавн заторевших машин" onClick={click(() => { respawnStalledVehicles(world, { x: player.x, y: player.y }); })} />
-                <div className="note">Застрявшие дольше 6 секунд машины переставляются ближе к вам</div>
+                <Tile Icon={RefreshCw} cls="row sm" label="Респавн застрявших машин" onClick={click(() => { respawnStalledVehicles(world, { x: player.x, y: player.y }); })} />
               </div>
             </Panel>
           )}
@@ -739,16 +737,53 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
 };
 
 /* ------------------------------------------------------------------ */
-/* Vehicle configurator panel: side tree identical to the freeroam     */
-/* vehicle select (color + engine / gearbox / ECU / turbo / tires)     */
+/* Vehicle configurator panel: compact preview + accordion config tree */
 /* ------------------------------------------------------------------ */
+const TOP_GROUPS = ['chassis', 'paint', 'pt'] as const;
+const CHASSIS_SUBS = ['frame', 'body'] as const;
+const PT_SUBS = ['eng', 'trn', 'turbo', 'tune', 'tir'] as const;
+
 const Configurator: React.FC<{
   veh: Vehicle;
   onClose: () => void;
   onApply: (cfg: VehicleConfigSelection) => void;
 }> = ({ veh, onClose, onApply }) => {
-  const [openIds, setOpenIds] = useState<Record<string, boolean>>({ chassis: true, frame: true, body: true, paint: true, pt: false, eng: false, trn: false, turbo: false, tune: false, tir: false });
-  const toggle = (id: string) => setOpenIds((o) => ({ ...o, [id]: !o[id] }));
+  const isTruck = isConfigurableTruckType(veh.type);
+  const [openIds, setOpenIds] = useState<Record<string, boolean>>(() => ({
+    chassis: isTruck,
+    frame: true,
+    body: false,
+    paint: !isTruck,
+    pt: false,
+    eng: true,
+    trn: false,
+    turbo: false,
+    tune: false,
+    tir: false
+  }));
+
+  const toggle = (id: string) => {
+    setOpenIds((prev) => {
+      const nextOpen = !prev[id];
+      const next = { ...prev, [id]: nextOpen };
+      if (nextOpen) {
+        if ((TOP_GROUPS as readonly string[]).includes(id)) {
+          for (const g of TOP_GROUPS) {
+            if (g !== id) next[g] = false;
+          }
+        } else if ((CHASSIS_SUBS as readonly string[]).includes(id)) {
+          for (const s of CHASSIS_SUBS) {
+            if (s !== id) next[s] = false;
+          }
+        } else if ((PT_SUBS as readonly string[]).includes(id)) {
+          for (const s of PT_SUBS) {
+            if (s !== id) next[s] = false;
+          }
+        }
+      }
+      return next;
+    });
+  };
 
   const entry = VEHICLE_CATALOG.find((c) => c.type === veh.type);
   const colorList = entry?.colors ?? [];
@@ -757,6 +792,7 @@ const Configurator: React.FC<{
     const i = colorList.findIndex((c) => c.hex.toLowerCase() === cur.toLowerCase());
     return i >= 0 ? i : -1;
   });
+  const [customHex, setCustomHex] = useState<string | null>(null);
 
   const es = veh.engineState || ({} as Vehicle['engineState']);
   const [engId, setEngId] = useState<string>(es?.engineId ?? '');
@@ -767,7 +803,6 @@ const Configurator: React.FC<{
   const [frameId, setFrameId] = useState<string>(veh.frameId || es?.frameId || '');
   const [bodyId, setBodyId] = useState<string>(veh.bodyId || es?.bodyId || 'body_none');
 
-  const isTruck = isConfigurableTruckType(veh.type);
   const framePool = useMemo(() => getCompatibleFramesForTruck(veh.type), [veh.type]);
   const pickedFrame = useMemo(
     () => (isTruck ? (framePool.find((f) => f.id === frameId) || getDefaultFrameForTruck(veh.type)) : null),
@@ -809,12 +844,15 @@ const Configurator: React.FC<{
   const factoryTurbo = pickedEng?.turbo || null;
   const pickedTbo = TURBO_KITS.find((k) => k.id === tboId) || null;
 
-  const selColor = colorIdx >= 0 && colorIdx < colorList.length ? colorList[colorIdx] : null;
+  const selColor = customHex
+    ? { name: `Свой (${customHex.toUpperCase()})`, hex: customHex }
+    : (colorIdx >= 0 && colorIdx < colorList.length ? colorList[colorIdx] : null);
   const previewColor = selColor ? selColor.hex : (veh.color || '#c68a35');
 
   const initial = useRef({ colorIdx, engId, trnId, tuneId, tirId, tboId, frameId, bodyId });
   const reset = () => {
     const i = initial.current;
+    setCustomHex(null);
     setColorIdx(i.colorIdx); setEngId(i.engId); setTrnId(i.trnId); setTuneId(i.tuneId); setTirId(i.tirId); setTboId(i.tboId);
     setFrameId(i.frameId); setBodyId(i.bodyId);
   };
@@ -838,13 +876,10 @@ const Configurator: React.FC<{
   const name = entry ? entry.nameRu : (veh.nameRu || veh.type);
 
   const foot = isTrailerLike ? null : (
-    <>
-      <div className="row2">
-        <button type="button" className="btn btn-s" onClick={reset}><RotateCcw width={16} height={16} />Сбросить</button>
-        <button type="button" className="btn btn-p" style={{ flex: 1 }} onClick={apply}><Check width={18} height={18} strokeWidth={3} />Применить конфигурацию</button>
-      </div>
-      <div className="note" style={{ marginTop: 8 }}>Сборка устанавливается на борт сразу</div>
-    </>
+    <div className="row2">
+      <button type="button" className="btn btn-s" style={{ height: 40, padding: '0 14px', fontSize: 14 }} onClick={reset}><RotateCcw width={15} height={15} />Сброс</button>
+      <button type="button" className="btn btn-p" style={{ flex: 1, height: 40, fontSize: 15 }} onClick={apply}><Check width={16} height={16} strokeWidth={3} />Применить</button>
+    </div>
   );
 
   return (
@@ -853,25 +888,34 @@ const Configurator: React.FC<{
         <div className="note" style={{ marginTop: 24 }}>Прицеп не имеет силовой части</div>
       ) : (
         <>
-          <div className="cth" style={{ height: 118, borderRadius: 9, flex: 'none', marginTop: 12 }}>
-            <VehiclePreviewCanvas
-              carType={veh.type}
-              color={previewColor}
-              roofColor={selColor?.roofHex || undefined}
-              frameId={pickedFrame?.id}
-              bodyId={pickedBody?.id}
-              width={220}
-              height={118}
-              showPedestal={false}
-            />
-          </div>
-          <div style={{ padding: '12px 4px 0' }}>
-            <div className="cn" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>{name}</div>
-            <div className="mut" style={{ fontSize: 13, marginTop: 3 }}>
-              {selColor ? selColor.name : 'Текущая окраска'}
-              {pickedFrame ? ` · ${pickedFrame.wheelFormula}` : ''}
-              {pickedBody ? ` · ${pickedBody.id === 'body_none' ? 'Голая рама' : pickedBody.nameRu}` : ''}
-              {entry ? ` · ${entry.powerHp} л.с.` : ''}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, padding: 6, borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', flex: 'none' }}>
+            <div className="cth" style={{ width: 124, height: 58, borderRadius: 7, flex: 'none' }}>
+              <VehiclePreviewCanvas
+                carType={veh.type}
+                color={previewColor}
+                roofColor={selColor?.roofHex || undefined}
+                frameId={pickedFrame?.id}
+                bodyId={pickedBody?.id}
+                width={124}
+                height={58}
+                showPedestal={false}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: previewColor, border: '1px solid rgba(255,255,255,0.35)', flex: 'none' }} />
+                <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selColor ? selColor.name : 'Текущая окраска'}
+                </span>
+              </div>
+              <div className="mut" style={{ fontSize: 12, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {entry ? `${entry.powerHp} л.с.` : ''}
+                {pickedFrame ? ` · ${pickedFrame.wheelFormula}` : ''}
+                {pickedBody ? ` · ${pickedBody.id === 'body_none' ? 'Голая рама' : pickedBody.nameRu}` : ''}
+              </div>
+              <div className="mut" style={{ fontSize: 11.5, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {pickedEng ? pickedEng.nameRu : 'Штатный ДВС'} · {pickedTrn ? pickedTrn.nameRu : 'Штатная КПП'}
+              </div>
             </div>
           </div>
 
@@ -909,18 +953,35 @@ const Configurator: React.FC<{
               </Node>
             )}
             <Node id="paint" n="Окраска" v={selColor ? selColor.name : 'Текущая'} openIds={openIds} toggle={toggle}>
-              {colorList.length > 0 ? (
-                <div className="lf">
-                  <div className="lbl">Цвет</div>
+              <div className="lf">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span className="lbl" style={{ margin: 0 }}>Палитра ({colorList.length} цв.)</span>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#e0ab45', cursor: 'pointer', fontWeight: 600 }}>
+                    <span>Свой цвет</span>
+                    <input
+                      type="color"
+                      value={previewColor.startsWith('#') && previewColor.length === 7 ? previewColor : '#c68a35'}
+                      onChange={(e) => setCustomHex(e.target.value)}
+                      style={{ width: 22, height: 22, padding: 0, border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, background: 'none', cursor: 'pointer' }}
+                    />
+                  </label>
+                </div>
+                {colorList.length > 0 && (
                   <div className="sw">
                     {colorList.map((cl, i) => (
-                      <button key={cl.hex + i} type="button" className={colorIdx === i ? 'on' : ''} title={cl.name} aria-label={cl.name} style={{ background: cl.hex }} onClick={() => setColorIdx(i)} />
+                      <button
+                        key={cl.hex + i}
+                        type="button"
+                        className={!customHex && colorIdx === i ? 'on' : ''}
+                        title={cl.name}
+                        aria-label={cl.name}
+                        style={{ background: cl.hex }}
+                        onClick={() => { setCustomHex(null); setColorIdx(i); }}
+                      />
                     ))}
                   </div>
-                </div>
-              ) : (
-                <div className="lf mut" style={{ fontSize: 13 }}>У этого борта нет заводской палитры</div>
-              )}
+                )}
+              </div>
             </Node>
             <Node id="pt" n="Силовая часть" v={`${pickedEng ? pickedEng.nameRu : 'Заводской'} · ${pickedTrn ? pickedTrn.nameRu : 'заводская КПП'}`} openIds={openIds} toggle={toggle}>
               <Node id="eng" n="Двигатель" v={pickedEng ? pickedEng.nameRu : 'Текущий'} openIds={openIds} toggle={toggle}>

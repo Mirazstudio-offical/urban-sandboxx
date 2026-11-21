@@ -100,6 +100,7 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
   const [view, setView] = useState<'cars' | 'cfgs'>('cars');
   const [ci, setCi] = useState(0);        // index in VEHICLE_CATALOG
   const [color, setColor] = useState(0);  // index in the vehicle's colours
+  const [customHex, setCustomHex] = useState<string | null>(null);
   const [spawn, setSpawn] = useState(() => {
     if (defaultSpawnId) {
       const idx = SPAWN_LOCATIONS.findIndex(s => s.id === defaultSpawnId);
@@ -107,7 +108,7 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
     }
     return 0;
   });
-  const [open, setOpen] = useState<Record<string, boolean>>({ chassis: true, frame: true, body: true, look: true, paint: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({ look: true, paint: true });
   const [animate, setAnimate] = useState(true);
   // --- Powertrain & Chassis configurator selections ---
   const [pwEng, setPwEng] = useState<string | null>(null);
@@ -133,14 +134,15 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
 
   // keep the selection inside the filtered list (like the mock-up does)
   useEffect(() => {
-    if (view === 'cars' && vis.length > 0 && !vis.some(v => v.i === ci)) { setCi(vis[0].i); setColor(0); }
+    if (view === 'cars' && vis.length > 0 && !vis.some(v => v.i === ci)) { setCi(vis[0].i); setColor(0); setCustomHex(null); }
   }, [vis, view, ci]);
 
   const car = VEHICLE_CATALOG[ci];
   const colors = car.colors;
   const col = colors[Math.min(color, colors.length - 1)];
-  const colHex = col.hex;
-  const colRoof = col.roofHex || col.hex;
+  const colHex = customHex || col.hex;
+  const colRoof = customHex || col.roofHex || col.hex;
+  const colLabel = customHex ? `Свой (${customHex.toUpperCase()})` : col.name;
   const loc = SPAWN_LOCATIONS[spawn] || SPAWN_LOCATIONS[0];
   const trans = transmissionOf(car);
 
@@ -196,7 +198,7 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
   // выбор сбрасывается при смене автомобиля (каскад несовместим)
   useEffect(() => {
     setPwEng(null); setPwTrn(null); setPwTune(null); setPwTire(null); setPwTurbo(null);
-    setPwFrame(null); setPwBody(null);
+    setPwFrame(null); setPwBody(null); setCustomHex(null);
   }, [car.type]);
   // если у двигателя штатный наддув — ручной выбор турбо недоступен
   useEffect(() => {
@@ -213,14 +215,14 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
     bodyId: pickedBody?.id
   });
 
-  const setCar = (i: number) => { setCi(i); setColor(0); };
+  const setCar = (i: number) => { setCi(i); setColor(0); setCustomHex(null); };
   const drill = (i: number) => { setCar(i); setAnimate(true); setView('cfgs'); };
   const back = () => {
     if (view === 'cfgs') { setAnimate(true); setView('cars'); }
     else onBack();
   };
   const reset = () => {
-    setColor(0);
+    setColor(0); setCustomHex(null);
     setPwEng(null); setPwTrn(null); setPwTune(null); setPwTire(null); setPwTurbo(null);
     setPwFrame(null); setPwBody(null);
   };
@@ -253,10 +255,10 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
         e.preventDefault();
         if (L.view === 'cars') {
           const p = L.vis.findIndex(v => v.i === L.ci) + step;
-          if (p >= 0 && p < L.vis.length) { setCi(L.vis[p].i); setColor(0); }
+          if (p >= 0 && p < L.vis.length) { setCi(L.vis[p].i); setColor(0); setCustomHex(null); }
         } else {
           const q = L.color + (Math.abs(step) === 4 ? step / 4 : step);
-          if (q >= 0 && q < L.colors.length) setColor(q);
+          if (q >= 0 && q < L.colors.length) { setColor(q); setCustomHex(null); }
         }
       } else if (e.key === 'Enter' && !(active && active.closest('button'))) {
         if (L.view === 'cars') { if (L.vis.some(v => v.i === L.ci)) L.drill(L.ci); } else L.pick();
@@ -267,7 +269,23 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
   }, []);
 
   /* ---------- tree ---------- */
-  const toggle = (id: string) => setOpen(o => ({ ...o, [id]: !o[id] }));
+  const TOP_GROUPS = ['cfg', 'chassis', 'pt', 'look', 'spec', 'spawn'];
+  const CHASSIS_SUB = ['frame', 'body'];
+  const PT_SUB = ['eng', 'trn', 'tune', 'turbo', 'tire'];
+  const toggle = (id: string) => setOpen(o => {
+    const willOpen = !o[id];
+    const next = { ...o, [id]: willOpen };
+    if (willOpen) {
+      if (TOP_GROUPS.includes(id)) {
+        for (const k of TOP_GROUPS) if (k !== id) next[k] = false;
+      } else if (CHASSIS_SUB.includes(id)) {
+        for (const k of CHASSIS_SUB) if (k !== id) next[k] = false;
+      } else if (PT_SUB.includes(id)) {
+        for (const k of PT_SUB) if (k !== id) next[k] = false;
+      }
+    }
+    return next;
+  });
 
   const rz = animate ? ' rise' : '';
 
@@ -331,7 +349,7 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
                   </button>
                 ))
               ) : colors.map((cl, i) => (
-                <button key={cl.hex + i} className={'card' + rz + (i === color ? ' card-on' : '')} data-cfg={i} onClick={() => setColor(i)} style={{ animationDelay: Math.min(i, 12) * 40 + 'ms' }} title={cl.name}>
+                <button key={cl.hex + i} className={'card' + rz + (!customHex && i === color ? ' card-on' : '')} data-cfg={i} onClick={() => { setColor(i); setCustomHex(null); }} style={{ animationDelay: Math.min(i, 12) * 40 + 'ms' }} title={cl.name}>
                   <div className={'cth g' + (ci % 8)} style={{ height: 170 }}><div style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={cl.hex} roof={cl.roofHex} frameId={pickedFrame?.id} bodyId={pickedBody?.id} w={170} h={150} /></div></div>
                   <div style={{ padding: '12px 14px' }}>
                     <div className="cn nm2" style={{ fontSize: 18, fontWeight: 700 }}>{cl.name}</div>
@@ -342,23 +360,23 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
             </div>
           </div>
 
-          <aside className="panel a mc-side" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
-            <div className={'cth g' + (ci % 8)} id="pvbox" style={{ height: 150, borderRadius: 9, flex: 'none' }}>
-              <div id="pv" style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={colHex} roof={colRoof} frameId={pickedFrame?.id} bodyId={pickedBody?.id} w={340} h={200} /></div>
+          <aside className="panel a mc-side" style={{ left: 976, top: 112, width: 400, height: 716, padding: 14, display: 'flex', flexDirection: 'column' }}>
+            <div className={'cth g' + (ci % 8)} id="pvbox" style={{ height: 98, borderRadius: 9, flex: 'none' }}>
+              <div id="pv" style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={colHex} roof={colRoof} frameId={pickedFrame?.id} bodyId={pickedBody?.id} w={240} h={108} /></div>
             </div>
-            <div style={{ padding: '14px 10px 0' }}>
-              <div className="cn mut" style={{ fontSize: 12 }}>Выбранный автомобиль</div>
-              <div className="cn mc-name" id="cName" style={{ fontSize: 28, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{car.nameRu}</div>
-              <div className="mut" id="cSub" style={{ fontSize: 13, marginTop: 4 }}>
-                {col.name} · {car.powerHp} л.с. · {trans} · {drive}
+            <div style={{ padding: '10px 8px 0' }}>
+              <div className="cn mut" style={{ fontSize: 11 }}>Выбранный автомобиль</div>
+              <div className="cn mc-name" id="cName" style={{ fontSize: 22, fontWeight: 700, marginTop: 1, lineHeight: 1.1 }}>{car.nameRu}</div>
+              <div className="mut" id="cSub" style={{ fontSize: 12.5, marginTop: 3 }}>
+                {colLabel} · {car.powerHp} л.с. · {trans} · {drive}
                 {pickedFrame && pickedBody ? ` · ${pickedBody.id === 'body_none' ? 'Голая рама' : pickedBody.nameRu}` : ''}
               </div>
             </div>
             <div className="tree" id="tree">
-              <Node id="cfg" n="Комплектация" v={col.name}>
+              <Node id="cfg" n="Комплектация" v={colLabel}>
                 <div className="lf" id="cfgOpts">
                   {colors.map((cl, i) => (
-                    <button key={cl.hex + i} className={'opt' + (i === color ? ' on' : '')} onClick={() => setColor(i)}>
+                    <button key={cl.hex + i} className={'opt' + (!customHex && i === color ? ' on' : '')} onClick={() => { setColor(i); setCustomHex(null); }}>
                       <span style={{ fontWeight: 600 }}>{cl.name}</span><span className="sdot" style={{ background: cl.hex }} />
                     </button>
                   ))}
@@ -507,13 +525,24 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
                   </div>
                 </Node>
               </Node>
-              <Node id="look" n="Внешний вид" v={col.name}>
-                <Node id="paint" n="Окраска" v={col.name}>
+              <Node id="look" n="Внешний вид" v={colLabel}>
+                <Node id="paint" n="Окраска" v={colLabel}>
                   <div className="lf">
-                    <div className="lbl">Цвет</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <div className="lbl" style={{ marginBottom: 0 }}>Палитра ({colors.length} цв.)</div>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#e0ab45', cursor: 'pointer', fontWeight: 600 }}>
+                        <span>Свой цвет</span>
+                        <input
+                          type="color"
+                          value={colHex}
+                          onChange={e => setCustomHex(e.target.value)}
+                          style={{ width: 22, height: 22, padding: 0, border: '1px solid rgba(255,255,255,.25)', borderRadius: 6, background: 'transparent', cursor: 'pointer' }}
+                        />
+                      </label>
+                    </div>
                     <div className="sw">
                       {colors.map((cl, i) => (
-                        <button key={cl.hex + i} className={i === color ? 'on' : ''} onClick={() => setColor(i)} title={cl.name} aria-label={cl.name} style={{ background: cl.hex }} />
+                        <button key={cl.hex + i} className={!customHex && i === color ? 'on' : ''} onClick={() => { setColor(i); setCustomHex(null); }} title={cl.name} aria-label={cl.name} style={{ background: cl.hex }} />
                       ))}
                     </div>
                   </div>
@@ -547,7 +576,7 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
                 </div>
               </Node>
             </div>
-            <div className="row2" style={{ marginTop: 14, gap: 10 }}>
+            <div className="row2" style={{ marginTop: 10, gap: 10 }}>
               <button className="btn btn-s" onClick={reset}>Сбросить</button>
               <button className="btn btn-p" onClick={pick} style={{ flex: 1 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a1409" strokeWidth="3"><path d="M5 12l5 5 9-10" /></svg>Выбрать
