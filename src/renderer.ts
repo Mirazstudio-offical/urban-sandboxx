@@ -15044,7 +15044,9 @@ export class GameRenderer {
       const isIgnitionOn = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || hasHeadlightsOn);
 
       // Independent Dual-Beam Optical System with ECE R112 Asymmetric Cutoff & True Color Radiance
-      if (hasHeadlightsOn) {
+      // EK-12 has no chassis headlamps: its road/work lights sit on the revolving cab roof (see the
+      // turret-mounted cones further below), so the chassis-aligned beam is skipped for it.
+      if (hasHeadlightsOn && !isExcavatorVehicle(car)) {
         const leftActive = !dmg.leftHeadlightBroken;
         const rightActive = !isSoloMoto && !dmg.rightHeadlightBroken;
 
@@ -15969,17 +15971,28 @@ export class GameRenderer {
       }
 
       // Excavator EK-12 Work Floodlights (Cab roof + Monoboom halogen beams)
-      if (isExcavatorVehicle(car) && car.exWorkLightOn) {
+      // The same cab-roof lamps also act as the headlights (they turn with the turret).
+      if (isExcavatorVehicle(car) && (car.exWorkLightOn || getVehicleHeadlightOn(car))) {
         const exGeom = getExcavatorGeometry(car);
         const cosArm = Math.cos(exGeom.worldArmAngle);
         const sinArm = Math.sin(exGeom.worldArmAngle);
         const cabLampX = exGeom.worldTurretX + cosArm * 4.0 - sinArm * -6.9;
         const cabLampY = exGeom.worldTurretY + sinArm * 4.0 + cosArm * -6.9;
-        drawSmoothFlashlightCone(cabLampX, cabLampY, exGeom.worldArmAngle, 185 * fogFactor, 0.44, [255, 240, 198]);
+        const exWorkOn = !!car.exWorkLightOn;
+        drawSmoothFlashlightCone(
+          cabLampX,
+          cabLampY,
+          exGeom.worldArmAngle,
+          (exWorkOn ? 185 : 150) * fogFactor,
+          exWorkOn ? 0.44 : 0.32,
+          [255, 240, 198]
+        );
 
-        const boomMidX = exGeom.worldBoomStartX + (exGeom.worldBoomTipX - exGeom.worldBoomStartX) * 0.52;
-        const boomMidY = exGeom.worldBoomStartY + (exGeom.worldBoomTipY - exGeom.worldBoomStartY) * 0.52;
-        drawSmoothFlashlightCone(boomMidX, boomMidY, exGeom.worldArmAngle, 130 * fogFactor, 0.36, [255, 244, 212]);
+        if (exWorkOn) {
+          const boomMidX = exGeom.worldBoomStartX + (exGeom.worldBoomTipX - exGeom.worldBoomStartX) * 0.52;
+          const boomMidY = exGeom.worldBoomStartY + (exGeom.worldBoomTipY - exGeom.worldBoomStartY) * 0.52;
+          drawSmoothFlashlightCone(boomMidX, boomMidY, exGeom.worldArmAngle, 130 * fogFactor, 0.36, [255, 244, 212]);
+        }
       }
 
       // Heavy Machinery & Utility Amber Strobe Beacons (Environment-masked ground bounce)
@@ -15998,6 +16011,10 @@ export class GameRenderer {
             const sinArm = Math.sin(exGeom.worldArmAngle);
             wx = exGeom.worldTurretX + cosArm * -5.2 - sinArm * -8.8;
             wy = exGeom.worldTurretY + sinArm * -5.2 + cosArm * -8.8;
+            // The beacon sprite sits ~4.6 px up on the roof (house + cab roof lift): follow it
+            const exCamAng = this.currentParticleCamera.angle;
+            wx += Math.cos(exCamAng) * 4.6;
+            wy += Math.sin(exCamAng) * 4.6;
           } else {
             let bX = halfL * 0.25;
             if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
@@ -16008,7 +16025,8 @@ export class GameRenderer {
             wx = car.x + cosA * bX;
             wy = car.y + sinA * bX;
           }
-          const bRadius = (18 + beaconPulse * 14) * fogFactor;
+          // EK-12 beacon lens is small (~0.25 m): keep its light spill compact
+          const bRadius = (18 + beaconPulse * 14) * fogFactor * (car.type === 'excavator_ek12' ? 0.4 : 1);
 
           const bCut = lCtx.createRadialGradient(wx, wy, 0.5, wx, wy, bRadius);
           bCut.addColorStop(0, `rgba(0, 0, 0, ${(0.75 * beaconPulse).toFixed(3)})`);
@@ -16585,7 +16603,7 @@ export class GameRenderer {
         }
       };
 
-      if (hasHeadlightsOn) {
+      if (hasHeadlightsOn && !isExcavatorVehicle(car)) {
         const leftActive = !dmg.leftHeadlightBroken;
         const rightActive = !isSoloMoto && !dmg.rightHeadlightBroken;
 
@@ -16676,6 +16694,10 @@ export class GameRenderer {
             const sinArm = Math.sin(exGeom.worldArmAngle);
             wx = exGeom.worldTurretX + cosArm * -5.2 - sinArm * -8.8;
             wy = exGeom.worldTurretY + sinArm * -5.2 + cosArm * -8.8;
+            // The beacon sprite sits ~4.6 px up on the roof (house + cab roof lift): follow it
+            const exCamAng = this.currentParticleCamera.angle;
+            wx += Math.cos(exCamAng) * 4.6;
+            wy += Math.sin(exCamAng) * 4.6;
           } else {
             let bX = halfL * 0.25;
             if (car.type === 'roller_heavy_tandem') bX = -halfL * 0.09;
@@ -16686,7 +16708,7 @@ export class GameRenderer {
             wx = car.x + cosA * bX;
             wy = car.y + sinA * bX;
           }
-          const domeRadius = 5.5 + beaconPulse * 2.5;
+          const domeRadius = (5.5 + beaconPulse * 2.5) * (car.type === 'excavator_ek12' ? 0.4 : 1);
           const bGrad = ctx.createRadialGradient(wx, wy, 0.4, wx, wy, domeRadius);
           bGrad.addColorStop(0, `rgba(255, 230, 130, ${(0.90 * beaconPulse).toFixed(3)})`);
           bGrad.addColorStop(0.45, `rgba(245, 158, 11, ${(0.45 * beaconPulse).toFixed(3)})`);
@@ -16695,7 +16717,7 @@ export class GameRenderer {
           ctx.beginPath(); ctx.arc(wx, wy, domeRadius, 0, Math.PI * 2); ctx.fill();
 
           if (isFog && weights.fog > 0.08) {
-            const haloRad = (16 + beaconPulse * 12) * fogFactor;
+            const haloRad = (16 + beaconPulse * 12) * fogFactor * (car.type === 'excavator_ek12' ? 0.45 : 1);
             const haloGrad = ctx.createRadialGradient(wx, wy, 1, wx, wy, haloRad);
             haloGrad.addColorStop(0, `rgba(255, 195, 70, ${(0.18 * weights.fog * beaconPulse).toFixed(3)})`);
             haloGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
