@@ -12,6 +12,7 @@ import { getEffectiveWeatherWeights } from './weatherTransition';
 import { getBiomeSampleAt } from './biomeSystem';
 import { sound } from './audio';
 import { performanceConfig } from './performanceConfig';
+import { BirdSystem } from './birdSystem';
 
 export interface TreeShakeState {
   treeX: number;
@@ -71,28 +72,12 @@ interface ForestMammal {
   stridePhase: number;
 }
 
-interface CanopyFlockBird {
-  active: boolean;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  altitude: number;
-  targetX: number;
-  targetY: number;
-  species: 'jay' | 'woodpecker' | 'crow' | 'titmouse';
-  wingPhase: number;
-  life: number;
-}
-
 export class ForestSystem {
   private static treeShakes: Map<string, TreeShakeState> = new Map();
   private static driftParticles: CanopyDriftParticle[] = [];
   private static readonly MAX_DRIFT_PARTICLES = 140;
   private static squirrels: Map<number, ForestSquirrel> = new Map();
   private static mammals: Map<number, ForestMammal> = new Map();
-  private static canopyFlock: CanopyFlockBird[] = [];
-  private static readonly MAX_CANOPY_FLOCK = 36;
   private static lastUpdateSec = 0;
   private static lastSpawnParticleSec = 0;
   private static trampleCallback: ((wx: number, wy: number, r: number, dx: number, dy: number, nowSec: number) => void) | null = null;
@@ -111,7 +96,7 @@ export class ForestSystem {
 
   /**
    * Triggers a physical shudder on a tree when a vehicle or player impacts or brushes past it,
-   * bursting needles/leaves/snow from the crown and startling perched birds.
+   * bursting needles/leaves/snow from the crown and startling perched birds via the unified BirdSystem.
    */
   public static triggerTreeShake(
     treeId: string,
@@ -121,7 +106,8 @@ export class ForestSystem {
     intensity: number,
     dirX: number,
     dirY: number,
-    season: string = 'summer'
+    season: string = 'summer',
+    world?: GameWorld
   ) {
     const nowSec = typeof performance !== 'undefined' ? performance.now() * 0.001 : 0;
     const existing = this.treeShakes.get(treeId);
@@ -159,39 +145,9 @@ export class ForestSystem {
       );
     }
 
-    // Startle a small flock of forest birds out of the shaken crown
+    // Startle forest birds out of the shaken crown via the unified BirdSystem
     if (intensity > 0.35) {
-      this.spawnStartledCanopyBirds(treeX, treeY, 2 + Math.floor(Math.random() * 3));
-      sound.playBirdFlap();
-    }
-  }
-
-  public static spawnStartledCanopyBirds(originX: number, originY: number, count: number) {
-    const speciesList: CanopyFlockBird['species'][] = ['jay', 'titmouse', 'woodpecker', 'crow'];
-    for (let i = 0; i < count; i++) {
-      const flyAng = Math.random() * Math.PI * 2;
-      const speed = 95 + Math.random() * 55;
-      const dist = 260 + Math.random() * 340;
-      const bird: CanopyFlockBird = {
-        active: true,
-        x: originX + (Math.random() - 0.5) * 14,
-        y: originY + (Math.random() - 0.5) * 14,
-        vx: Math.cos(flyAng) * speed,
-        vy: Math.sin(flyAng) * speed,
-        altitude: 18 + Math.random() * 12,
-        targetX: originX + Math.cos(flyAng) * dist,
-        targetY: originY + Math.sin(flyAng) * dist,
-        species: speciesList[(Math.floor(Math.abs(originX + originY)) + i) % speciesList.length],
-        wingPhase: Math.random() * Math.PI * 2,
-        life: 0,
-      };
-      if (this.canopyFlock.length < this.MAX_CANOPY_FLOCK) {
-        this.canopyFlock.push(bird);
-      } else {
-        const inactiveIdx = this.canopyFlock.findIndex((b) => !b.active);
-        if (inactiveIdx >= 0) this.canopyFlock[inactiveIdx] = bird;
-        else this.canopyFlock[i % this.MAX_CANOPY_FLOCK] = bird;
-      }
+      BirdSystem.onTreeShaken(world, treeId, treeX, treeY, treeRadius, intensity);
     }
   }
 
@@ -432,7 +388,8 @@ export class ForestSystem {
             Math.min(1.2, vSpeed * 0.025),
             v.vx || Math.cos(v.angle),
             v.vy || Math.sin(v.angle),
-            season
+            season,
+            world
           );
         }
       }
@@ -1049,7 +1006,7 @@ export class ForestSystem {
     nightAlpha: number
   ) {
     if (performanceConfig.lowQualityRendering) return;
-    if (vpTrees.length === 0 && this.driftParticles.length === 0 && this.canopyFlock.length === 0) {
+    if (vpTrees.length === 0 && this.driftParticles.length === 0) {
       return;
     }
 
@@ -1079,12 +1036,6 @@ export class ForestSystem {
           season,
           false
         );
-      }
-
-      // Occasional spontaneous bird flight from one tree crown to another during daytime
-      if (nightAlpha < 0.55 && vpTrees.length >= 8 && Math.random() < 0.045) {
-        const srcTree = vpTrees[Math.floor(Math.random() * vpTrees.length)];
-        this.spawnStartledCanopyBirds(srcTree.x, srcTree.y, 1 + (Math.random() < 0.35 ? 1 : 0));
       }
     }
 
@@ -1171,91 +1122,8 @@ export class ForestSystem {
     }
 
     // =========================================================================
-    // 3. CANOPY BIRD FLOCKS (СОЙКИ, ДЯТЛЫ, СИНИЦЫ И ВОРОНЫ НАД КРОНАМИ)
-    // =========================================================================
-    for (let i = 0; i < this.canopyFlock.length; i++) {
-      const b = this.canopyFlock[i];
-      if (!b.active) continue;
-
-      b.life += dt;
-      b.x += b.vx * dt;
-      b.y += b.vy * dt;
-      b.wingPhase += dt * 24;
-
-      const distToTarget = Math.hypot(b.targetX - b.x, b.targetY - b.y);
-      if (distToTarget < 18 || b.life > 5.5) {
-        b.active = false;
-        continue;
-      }
-
-      if (b.x < minX - 80 || b.x > maxX + 80 || b.y < minY - 80 || b.y > maxY + 80) {
-        continue;
-      }
-
-      const flyAngle = Math.atan2(b.vy, b.vx);
-      const wingStroke = Math.sin(b.wingPhase);
-      const scale = b.species === 'crow' ? 1.25 : b.species === 'jay' ? 1.12 : 0.92;
-
-      ctx.save();
-      ctx.translate(b.x, b.y);
-      ctx.rotate(flyAngle);
-      ctx.scale(scale, scale);
-
-      // Soft shadow cast onto canopy below
-      ctx.fillStyle = 'rgba(8, 18, 12, 0.28)';
-      ctx.beginPath();
-      ctx.ellipse(-6, 8, 3.2, 1.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Species coloration
-      const bodyCol =
-        b.species === 'crow'
-          ? '#1e293b'
-          : b.species === 'jay'
-            ? '#9a6b56'
-            : b.species === 'woodpecker'
-              ? '#0f172a'
-              : '#eab308'; // titmouse yellow belly/back
-      const wingCol =
-        b.species === 'crow'
-          ? '#0f172a'
-          : b.species === 'jay'
-            ? '#38bdf8' // bright azure jay wing flash!
-            : b.species === 'woodpecker'
-              ? '#f8fafc' // pied black-and-white woodpecker wings
-              : '#334155';
-
-      // Flapping wings
-      const wSpan = 5.4 * (0.45 + 0.55 * Math.abs(wingStroke));
-      const wSweep = -wingStroke * 1.4;
-      ctx.fillStyle = wingCol;
-      ctx.beginPath();
-      ctx.moveTo(1.2, 0);
-      ctx.lineTo(wSweep, -wSpan);
-      ctx.lineTo(-2.4, -0.8);
-      ctx.lineTo(wSweep, wSpan);
-      ctx.closePath();
-      ctx.fill();
-
-      // Bird body & tail
-      ctx.fillStyle = bodyCol;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 2.8, 1.25, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (b.species === 'woodpecker') {
-        // Red crown cap of woodpecker (красная шапочка дятла)
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(2.3, 0, 0.85, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.restore();
-    }
-
-    // =========================================================================
-    // 4. BIOLUMINESCENT SUMMER NIGHT FIREFLIES (ЛЕСНЫЕ СВЕТЛЯЧКИ В СУМЕРКАХ И НОЧЬЮ)
+    // 3. BIOLUMINESCENT SUMMER NIGHT FIREFLIES (ЛЕСНЫЕ СВЕТЛЯЧКИ В СУМЕРКАХ И НОЧЬЮ)
+    // (Note: All canopy & woodland birds are unified into BirdSystem / world.birds!)
     // =========================================================================
     if (season !== 'winter' && season !== 'autumn' && nightAlpha > 0.22 && vpTrees.length >= 4) {
       const fireflyAlphaBase = Math.min(1.0, (nightAlpha - 0.22) / 0.45);

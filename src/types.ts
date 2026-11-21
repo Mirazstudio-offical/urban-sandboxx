@@ -1576,20 +1576,59 @@ export interface LitterItem {
   flutterPhase?: number;
 }
 
+export type BirdSpecies = 'pigeon' | 'sparrow' | 'jay' | 'woodpecker' | 'crow' | 'titmouse';
+export type BirdState = 'ground' | 'perched' | 'takeoff' | 'flying' | 'landing';
+export type BirdSubState = 'idle' | 'foraging' | 'pecking' | 'preening' | 'alert' | 'social' | 'drumming';
+export type BirdFlightMode = 'flapping' | 'gliding' | 'bounding' | 'flaring';
+
 export interface Bird {
   id: string;
   x: number;
   y: number;
-  type: 'pigeon' | 'sparrow' | 'jay' | 'woodpecker' | 'crow';
+  type: BirdSpecies;
   angle: number;
-  state: 'ground' | 'flying';
-  altitude: number; // 0 on ground, up to 100 in sky
+  state: BirdState;
+  altitude: number; // 0 on ground, ~24..48 when perched in tree canopy/trunk, up to ~115 in sky
   flyVX: number;
   flyVY: number;
   wingCycle: number;
   walkTimer?: number;
-  groupId?: string; // Birds sit in groups
+  groupId?: string; // Birds sit/forage/fly in social groups
   perchTreeId?: string;
+
+  // Unified Biological Ethology & Aerodynamic State
+  subState?: BirdSubState;
+  subStateTimer?: number;
+  flightMode?: BirdFlightMode;
+  flightModeTimer?: number;
+  flightTimer?: number;
+  vz?: number;
+  targetX?: number;
+  targetY?: number;
+  targetAltitude?: number;
+  homeX?: number;
+  homeY?: number;
+  alarmDelay?: number; // Staggered flock panic cascade timer (>0 means about to take off)
+  alertLevel?: number; // 0..1 vigilance level when watching approaching threats
+  threatX?: number;
+  threatY?: number;
+
+  // Skeletal / Procedural Animation Parameters
+  headYaw?: number;        // Current saccadic head rotation (-1.8 .. +1.8 rad relative to body)
+  targetHeadYaw?: number;  // Target head look angle
+  headScanTimer?: number;  // Time until next saccadic head turn
+  headBobPhase?: number;   // Walking head-bob phase (pigeons, crows)
+  hopPhase?: number;       // Bipedal hopping arc phase (0..1 for sparrows, titmice, jays)
+  hopHeight?: number;      // Current vertical hop elevation above ground/branch (px)
+  peckPhase?: number;      // Pecking / trunk-drumming strike phase
+  peckCount?: number;      // Remaining pecks in current burst
+  preenSide?: number;      // -1 (left wing) or +1 (right wing) during preening
+  bankAngle?: number;      // Aerodynamic roll angle into turns (-0.75 .. +0.75 rad)
+  pitchAngle?: number;     // Body pitch (-0.5 diving .. +0.6 climbing/flaring)
+  tailSpread?: number;     // 0 (folded sleek) .. 1 (fanned wide for takeoff/landing/banking)
+  tailFlickPhase?: number; // Post-hop or alert tail balance wag
+  trunkAngle?: number;     // Polar angle around tree trunk for woodpeckers
+  bioInitialized?: boolean;
 }
 
 export interface Puddle {

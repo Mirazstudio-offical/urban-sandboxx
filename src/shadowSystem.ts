@@ -5,6 +5,7 @@ import { getEffectiveWeatherWeights } from './weatherTransition';
 import { performanceConfig, isMobileOrLowEndDevice } from './performanceConfig';
 import { RemotePlayerState } from './onlineSystem';
 import { computeHumanPose, Vec3 } from './humanAnimationSystem';
+import { BirdSystem } from './birdSystem';
 
 export type Point = Vector2D;
 
@@ -3033,6 +3034,8 @@ export function renderUnifiedWorldShadows(
         sCtx.restore();
       }
     }
+    // 1A-birds. Ground, Foraging, Hopping & Low-Takeoff Bird Animated 3D Shadows
+    BirdSystem.renderUnifiedShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'low');
   }
 
   if (performanceConfig.enablePropShadows !== false) {
@@ -3224,30 +3227,8 @@ export function renderUnifiedWorldShadows(
     }
   }
 
-  // 2F. Flying Birds (high-altitude soaring silhouettes cast far along the solar vector)
-  if (world.birds && !sunState.isNight) {
-    for (const bird of world.birds) {
-      if (bird.state !== 'flying') continue;
-      const birdAlt = Math.max(45, bird.altitude || 75);
-      const birdOff = getShadowOffset(birdAlt, sunState);
-      const bx = bird.x + birdOff.dx;
-      const by = bird.y + birdOff.dy;
-      if (bx < minX - 40 || bx > maxX + 40 || by < minY - 40 || by > maxY + 40) continue;
-      const bAngle = Math.atan2(bird.flyVY || 0, bird.flyVX || 1);
-      const flap = Math.sin(bird.wingCycle || 0) * 2.5;
-      sCtx.save();
-      sCtx.translate(bx, by);
-      sCtx.rotate(bAngle);
-      sCtx.beginPath();
-      sCtx.moveTo(3.5, 0);
-      sCtx.lineTo(-1.5, -5.5 + flap);
-      sCtx.lineTo(-0.5, 0);
-      sCtx.lineTo(-1.5, 5.5 - flap);
-      sCtx.closePath();
-      sCtx.fill();
-      sCtx.restore();
-    }
-  }
+  // 2F. Canopy-Perched & Flying Birds (3D articulated wing, tail & head shadows projected along solar vector)
+  BirdSystem.renderUnifiedShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'high');
 
   // 2G. Drifting Overhead Cloud Shadows (soft atmospheric darkening patches across the world)
   if (

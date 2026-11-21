@@ -15,6 +15,7 @@ import { updateBodySystem, distributeImpactDamage, applyDriverVehicleCrashTrauma
 import { updateMedicineSystem } from './medicineSystem';
 import { updateWorldItemsThermodynamics } from './itemThermalSystem';
 import { GuardrailPhysics } from './guardrailPhysics';
+import { BirdSystem } from './birdSystem';
 import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
 import { stepOutriggers, isCraneStabilized } from './craneOutriggers';
 import { getRiverWaterAt, getUniversalWaterDepthAt, emitWaterDisturbance } from './riverSystem';
@@ -14741,93 +14742,8 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
   // 1b. SOFT GUARDRAILS & IMPACT ATTENUATORS PHYSICS
   GuardrailPhysics.updateVehicleGuardrailCollisions(world, player, dt);
 
-  // 2. BIRDS FAUNA PHYSICS & SCARED FLIGHT
-  for (const bird of world.birds) {
-    if (bird.state === 'ground') {
-      // Check proximity to player or any moving car
-      let scare = false;
-      const distToPlayer = Math.hypot(player.x - bird.x, player.y - bird.y);
-      if (distToPlayer < 65) scare = true;
-
-      if (!scare) {
-        const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(bird.x, bird.y, 80, scratchVehicleList) : world.vehicles;
-        for (const veh of vehiclesToCheck) {
-          if (Math.abs(veh.speed) > 10 && Math.hypot(veh.x - bird.x, veh.y - bird.y) < 80) {
-            scare = true;
-            break;
-          }
-        }
-      }
-
-      if (scare) {
-        bird.state = 'flying';
-        const escapeAngle = Math.random() * Math.PI * 2;
-        bird.flyVX = Math.cos(escapeAngle) * (80 + Math.random() * 40);
-        bird.flyVY = Math.sin(escapeAngle) * (80 + Math.random() * 40) - 30; // fly upward
-        sound.playBirdFlap();
-      } else {
-        // Occasional walking
-        if (bird.walkTimer === undefined) bird.walkTimer = Math.random() * 5;
-        bird.walkTimer -= dt;
-        
-        if (bird.walkTimer <= 0) {
-          if (Math.random() < 0.4) {
-            // Take a few steps
-            bird.flyVX = (Math.random() - 0.5) * 20;
-            bird.flyVY = (Math.random() - 0.5) * 20;
-            if (bird.groupId) {
-              // Bias movement towards group center
-              const group = world.birds.filter(b => b.groupId === bird.groupId && b.state === 'ground');
-              if (group.length > 1) {
-                const cx = group.reduce((sum, b) => sum + b.x, 0) / group.length;
-                const cy = group.reduce((sum, b) => sum + b.y, 0) / group.length;
-                const distToCenter = Math.hypot(cx - bird.x, cy - bird.y);
-                if (distToCenter > 30) {
-                  bird.flyVX += (cx - bird.x) * 0.5;
-                  bird.flyVY += (cy - bird.y) * 0.5;
-                }
-              }
-            }
-            bird.angle = Math.atan2(bird.flyVY, bird.flyVX);
-            bird.walkTimer = 0.5 + Math.random() * 1.5;
-          } else {
-            // Stop and rest
-            bird.flyVX = 0;
-            bird.flyVY = 0;
-            bird.walkTimer = 2 + Math.random() * 4;
-          }
-        }
-        
-        if (bird.flyVX !== 0 || bird.flyVY !== 0) {
-          bird.x += bird.flyVX * dt;
-          bird.y += bird.flyVY * dt;
-          bird.wingCycle += dt * 15; // Fast leg/bob cycle when walking
-          // Friction
-          bird.flyVX *= (1 - dt * 5);
-          bird.flyVY *= (1 - dt * 5);
-          if (Math.abs(bird.flyVX) < 1 && Math.abs(bird.flyVY) < 1) {
-            bird.flyVX = 0;
-            bird.flyVY = 0;
-          }
-        }
-      }
-    } else {
-      // Flying bird dynamics
-      bird.x += bird.flyVX * dt;
-      bird.y += bird.flyVY * dt;
-      bird.altitude = Math.min(120, bird.altitude + dt * 65);
-      bird.wingCycle += dt * 24;
-      bird.angle = Math.atan2(bird.flyVY, bird.flyVX);
-
-      // Despawn / wrap around bird far off map
-      if (bird.x < -100 || bird.x > world.width + 100 || bird.y < -100 || bird.y > world.height + 100) {
-        bird.x = player.x + (Math.random() * 600 - 300);
-        bird.y = player.y + (Math.random() * 600 - 300);
-        bird.state = 'ground';
-        bird.altitude = 0;
-      }
-    }
-  }
+  // 2. UNIFIED BIRDS FAUNA ETHOLOGY, AERODYNAMICS & FLOCKING PHYSICS
+  BirdSystem.updateBirds(world, player, dt, vehGrid);
 
   // 3. PUDDLE SPLASHES, GRADUAL FREEZE & CLIMATE-DRIVEN EVAPORATION
   const freezeProg = weatherWeights.iceFreezeProgress;

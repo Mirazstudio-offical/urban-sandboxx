@@ -4639,8 +4639,11 @@ export default function App() {
             !(veh as any).isRemoteControlled &&
             !isMoving &&
             veh.isParked &&
-            !veh.engine?.isRunning &&
-            !veh.isOnFire &&
+            !veh.engineState?.engineRunning &&
+            !veh.damage?.engineFire &&
+            !veh.damage?.fuelTankFire &&
+            !veh.damage?.cabinFire &&
+            !veh.damage?.engineSmoking &&
             !veh.towedById &&
             !veh.trailerId &&
             veh.turnSignal === 'none' &&

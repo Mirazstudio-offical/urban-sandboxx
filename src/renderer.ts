@@ -34,6 +34,7 @@ import {
 } from './vehicleHelpers';
 import { trafficDiagnostics } from './aiTraffic';
 import { ForestSystem } from './forestSystem';
+import { BirdSystem } from './birdSystem';
 import {
   renderSpecializedVehicleAttachments,
   getVehicleBasePolygon,
@@ -400,8 +401,10 @@ export class GameRenderer {
   private flyingBirdsScratch: Bird[] = [];
   private intersectionSignCache = new WeakMap<object, { hName: string; vName: string }>();
   private treeCanvasPool: HTMLCanvasElement[] = [];
-  private static readonly LIGHTMAP_SCALE = 0.5;
-  private static readonly MATERIAL_SCALE = 0.5;
+
+  private getLightmapScale(): number {
+    return Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
+  }
 
   /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit` with zero heap allocation. */
   private capParticles(particles: GameWorld['particles']): GameWorld['particles'] {
@@ -1063,7 +1066,7 @@ export class GameRenderer {
     }
     const key = `${cx},${cy}`;
     let canvas = this.materialChunkCache.get(key);
-    const matChunkPx = Math.max(128, Math.round(this.chunkSize * GameRenderer.MATERIAL_SCALE));
+    const matChunkPx = this.chunkSize;
     if (!canvas) {
       if (this.materialChunkCache.size >= GameRenderer.MAX_MATERIAL_CHUNKS) {
         const firstKey = this.materialChunkCache.keys().next().value;
@@ -1095,7 +1098,6 @@ export class GameRenderer {
       chunkCtx.imageSmoothingEnabled = false;
       chunkCtx.fillStyle = 'rgb(32, 128, 128)';
       chunkCtx.fillRect(0, 0, matChunkPx, matChunkPx);
-      chunkCtx.scale(GameRenderer.MATERIAL_SCALE, GameRenderer.MATERIAL_SCALE);
       chunkCtx.translate(-chunkX, -chunkY);
       this.renderMaterialStaticRegion(chunkCtx, world, world.sidewalks || [], minX, minY, maxX, maxY);
       chunkCtx.restore();
@@ -1139,8 +1141,9 @@ export class GameRenderer {
     this.width = width;
     this.height = height;
     this.backingScale = backingScale > 0 ? backingScale : 1;
-    const lmW = Math.max(1, Math.ceil(width * GameRenderer.LIGHTMAP_SCALE));
-    const lmH = Math.max(1, Math.ceil(height * GameRenderer.LIGHTMAP_SCALE));
+    const lmScale = this.getLightmapScale();
+    const lmW = Math.max(1, Math.ceil(width * lmScale));
+    const lmH = Math.max(1, Math.ceil(height * lmScale));
     this.lightmapCanvas.width = lmW;
     this.lightmapCanvas.height = lmH;
     this.lightEnvCanvas.width = lmW;
@@ -1149,8 +1152,9 @@ export class GameRenderer {
     this.lightColorCanvas.height = lmH;
     this.lightTintCanvas.width = lmW;
     this.lightTintCanvas.height = lmH;
-    this.materialCanvas.width = Math.max(1, Math.ceil(width * GameRenderer.MATERIAL_SCALE));
-    this.materialCanvas.height = Math.max(1, Math.ceil(height * GameRenderer.MATERIAL_SCALE));
+    // Match exact backing resolution of main 2D canvas so gl.NEAREST material lookup has crisp 1:1 edges on puddles & liquids
+    this.materialCanvas.width = Math.max(1, Math.round(width * this.backingScale));
+    this.materialCanvas.height = Math.max(1, Math.round(height * this.backingScale));
     const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
     this.shadowCanvas.width = Math.max(1, Math.ceil(width * shadowScale));
     this.shadowCanvas.height = Math.max(1, Math.ceil(height * shadowScale));
@@ -1526,15 +1530,7 @@ export class GameRenderer {
     }
     const groundBirds = this.groundBirdsScratch;
     const flyingBirds = this.flyingBirdsScratch;
-    groundBirds.length = 0;
-    flyingBirds.length = 0;
-    if (performanceConfig.enableBirds && world.birds) {
-      for (let i = 0; i < world.birds.length; i++) {
-        const b = world.birds[i];
-        if (b.state === 'ground') groundBirds.push(b);
-        else if (b.state === 'flying') flyingBirds.push(b);
-      }
-    }
+    BirdSystem.partitionBirdsForRender(world, groundBirds, flyingBirds);
 
     // 8. Buildings Base Structure & Entrances (viewport-culled against minX..maxY)
     this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour, minX, minY, maxX, maxY);
@@ -1561,7 +1557,7 @@ export class GameRenderer {
 
     // 10. Birds on the ground
     if (groundBirds.length > 0) {
-      this.renderBirds(groundBirds, minX, minY, maxX, maxY);
+      this.renderBirds(groundBirds, world, minX, minY, maxX, maxY, nightAlpha);
     }
 
     // 12. Pedestrians (with Umbrellas during Rain)
@@ -1655,9 +1651,9 @@ export class GameRenderer {
     // 16c. Intact Traffic Light Posts
     this.renderTrafficLights(world.intersections, intactProps, minX, minY, maxX, maxY, nightAlpha);
 
-    // 16d. Flying Birds
+    // 16d. Canopy-Perched & Flying Birds
     if (flyingBirds.length > 0) {
-      this.renderBirds(flyingBirds, minX, minY, maxX, maxY, nightAlpha);
+      this.renderBirds(flyingBirds, world, minX, minY, maxX, maxY, nightAlpha);
     }
 
     // 16e. Unified Night Shroud, Extruded 3D World Shadows & Physical Lighting (Покров ночи, тени и чистый свет)
@@ -9154,9 +9150,16 @@ export class GameRenderer {
     maxY: number
   ) {
     const ctx = this.materialCtx;
-    const ms = GameRenderer.MATERIAL_SCALE;
+    const targetMatW = Math.max(1, Math.round(this.width * this.backingScale));
+    const targetMatH = Math.max(1, Math.round(this.height * this.backingScale));
+    if (this.materialCanvas.width !== targetMatW || this.materialCanvas.height !== targetMatH) {
+      this.materialCanvas.width = targetMatW;
+      this.materialCanvas.height = targetMatH;
+    }
+    const msX = this.materialCanvas.width / Math.max(1, this.width);
+    const msY = this.materialCanvas.height / Math.max(1, this.height);
 
-    ctx.setTransform(ms, 0, 0, ms, 0, 0);
+    ctx.setTransform(msX, 0, 0, msY, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.globalCompositeOperation = 'source-over';
 
@@ -9600,85 +9603,17 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  // --- BIRDS FAUNA ---
-  private renderBirds(birds: Bird[], minX: number, minY: number, maxX: number, maxY: number, nightAlpha: number = 0) {
-    if (!performanceConfig.enableBirds) return;
-    const ctx = this.ctx;
-    for (const b of birds) {
-      if (b.x < minX || b.x > maxX || b.y < minY || b.y > maxY) continue;
-      ctx.save();
-
-      // Flying & ground bird shadows are projected dynamically in world space via unified shadow shroud
-      if (b.state === 'flying') {
-        // Position bird in sky
-        ctx.translate(b.x, b.y - b.altitude * 0.6);
-      } else {
-        ctx.translate(b.x, b.y);
-      }
-      ctx.rotate(b.angle);
-
-      // Bird body with species palette & night tint
-      const baseBirdColor =
-        b.type === 'pigeon' ? '#64748b' :
-        b.type === 'jay' ? '#9a7b69' :
-        b.type === 'woodpecker' ? '#1e293b' :
-        b.type === 'crow' ? '#18181b' : '#b45309';
-      if (nightAlpha > 0.1) {
-        ctx.fillStyle = '#0f172a';
-      } else {
-        ctx.fillStyle = baseBirdColor;
-      }
-      ctx.beginPath();
-      ctx.ellipse(0, 0, b.type === 'crow' ? 3.3 : 2.8, b.type === 'crow' ? 2.1 : 1.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Head
-      ctx.fillStyle =
-        b.type === 'pigeon' ? '#475569' :
-        b.type === 'woodpecker' ? '#dc2626' :
-        b.type === 'crow' ? '#09090b' :
-        b.type === 'jay' ? '#7c5e4d' : '#78350f';
-      ctx.beginPath();
-      ctx.arc(2.2, 0, 1.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Beak
-      ctx.fillStyle = b.type === 'crow' || b.type === 'woodpecker' ? '#52525b' : '#f59e0b';
-      ctx.beginPath();
-      ctx.moveTo(3.4, -0.6);
-      ctx.lineTo(4.6, 0);
-      ctx.lineTo(3.4, 0.6);
-      ctx.fill();
-
-      // Wings
-      const wingColor =
-        b.type === 'pigeon' ? '#334155' :
-        b.type === 'jay' ? '#38bdf8' :
-        b.type === 'woodpecker' ? '#f8fafc' :
-        b.type === 'crow' ? '#27272a' : '#451a03';
-      const isWalking = b.state === 'ground' && (Math.abs(b.flyVX) > 0.5 || Math.abs(b.flyVY) > 0.5);
-      if (b.state === 'flying' || isWalking) {
-        const wingSpan = b.state === 'flying' ? 4.4 + Math.sin(b.wingCycle) * 2.6 : 3.0 + Math.sin(b.wingCycle) * 1.0;
-        ctx.strokeStyle = wingColor;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(0, -wingSpan);
-        ctx.lineTo(0, wingSpan);
-        ctx.stroke();
-      } else {
-        // Folded wings
-        ctx.strokeStyle = wingColor;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(-1, -1.2);
-        ctx.lineTo(1.5, -0.5);
-        ctx.moveTo(-1, 1.2);
-        ctx.lineTo(1.5, 0.5);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
+  // --- UNIFIED BIRDS FAUNA ---
+  private renderBirds(
+    birds: Bird[],
+    world: GameWorld,
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    nightAlpha: number = 0
+  ) {
+    BirdSystem.renderBirds(this.ctx, birds, world, minX, minY, maxX, maxY, nightAlpha);
   }
 
   // --- PEDESTRIANS ---
@@ -16016,13 +15951,17 @@ export class GameRenderer {
     const hasActiveShadows = performanceConfig.enableShadows && sunState.shadowOpacity > 0.005;
     const hasDarknessShroud = effectiveAlpha > 0.003 || weights.rain > 0.02 || weights.snow > 0.02 || weights.fog > 0.02 || weights.overcast > 0.02 || (world.lightningFlashTimer ?? 0) > 0;
 
-    // Daytime Fast-Path: in clear bright daylight with shadows enabled and no darkness veil / flashlight,
-    // composite shadowCanvas directly onto main canvas in ONE drawImage — skipping all 4 offscreen lightmap
-    // buffers, light cutout loops, and full-screen multiply/screen blend passes!
-    const daytimeShadowFastPath = !hasDarknessShroud && hasActiveShadows && !isPlayerFlashlightOn && effectiveAlpha <= 0.003 && sunState.sunElevation >= 0.28;
-    const useLightmap = !daytimeShadowFastPath && (hasDarknessShroud || hasActiveShadows);
+    // Fast-path only when dynamic lighting is explicitly disabled in settings; otherwise always run
+    // the unified lightmap pass so headlights, fires, flashlights, beacons and lamps physically pierce
+    // and illuminate shadows both during the day and at night.
+    const shadowsOnlyFastPath =
+      performanceConfig.enableDynamicLighting === false &&
+      !hasDarknessShroud &&
+      hasActiveShadows &&
+      effectiveAlpha <= 0.003;
+    const useLightmap = !shadowsOnlyFastPath && (hasDarknessShroud || hasActiveShadows);
 
-    if (daytimeShadowFastPath) {
+    if (shadowsOnlyFastPath) {
       this.lightmapUsedThisFrame = false;
       this.lightColorUsedThisFrame = false;
       const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
@@ -16063,11 +16002,24 @@ export class GameRenderer {
       ctx.restore();
     } else {
       this.lightmapUsedThisFrame = useLightmap;
-      this.lightColorUsedThisFrame = !!(useLightmap && performanceConfig.enableDynamicLighting !== false && (effectiveAlpha > 0.015 || isPlayerFlashlightOn || sunState.sunElevation < 0.28));
+      this.lightColorUsedThisFrame = !!(useLightmap && performanceConfig.enableDynamicLighting !== false);
     }
 
-    // --- PASS 1: Generate Unified Darkness Shroud & 3D World Shadows Offscreen (Half-Res Lightmap) ---
+    // --- PASS 1: Generate Unified Darkness Shroud & 3D World Shadows Offscreen ---
     if (useLightmap) {
+      const lmScale = this.getLightmapScale();
+      const targetLmW = Math.max(1, Math.ceil(this.width * lmScale));
+      const targetLmH = Math.max(1, Math.ceil(this.height * lmScale));
+      if (this.lightmapCanvas.width !== targetLmW || this.lightmapCanvas.height !== targetLmH) {
+        this.lightmapCanvas.width = targetLmW;
+        this.lightmapCanvas.height = targetLmH;
+        this.lightEnvCanvas.width = targetLmW;
+        this.lightEnvCanvas.height = targetLmH;
+        this.lightColorCanvas.width = targetLmW;
+        this.lightColorCanvas.height = targetLmH;
+        this.lightTintCanvas.width = targetLmW;
+        this.lightTintCanvas.height = targetLmH;
+      }
       const lmW = this.lightmapCanvas.width;
       const lmH = this.lightmapCanvas.height;
       const lmScaleX = lmW / Math.max(1, this.width);
