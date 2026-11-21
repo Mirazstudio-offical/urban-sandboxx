@@ -16,6 +16,7 @@ import { updateMedicineSystem } from './medicineSystem';
 import { updateWorldItemsThermodynamics } from './itemThermalSystem';
 import { GuardrailPhysics } from './guardrailPhysics';
 import { BirdSystem } from './birdSystem';
+import { LitterSystem } from './litterSystem';
 import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
 import { stepOutriggers, isCraneStabilized } from './craneOutriggers';
 import { getRiverWaterAt, getUniversalWaterDepthAt, emitWaterDisturbance } from './riverSystem';
@@ -14658,8 +14659,14 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       if (prop.type === 'hydrant') { debrisColor = '#ef4444'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
       else if (prop.type === 'bench') { debrisColor = '#b45309'; debrisCount = 8; debrisSubtype = 'wood_splinter'; }
       else if (prop.type === 'bus_stop') { debrisColor = '#94a3b8'; debrisCount = 8; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'dumpster') { debrisColor = '#15803d'; debrisCount = 8; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'trash_can') { debrisColor = '#475569'; debrisCount = 6; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'dumpster') {
+        debrisColor = '#15803d'; debrisCount = 8; debrisSubtype = 'metal_flake';
+        LitterSystem.spawnTrashCanSpill(world, contactX, contactY, veh.vx, veh.vy, 7);
+      }
+      else if (prop.type === 'trash_can') {
+        debrisColor = '#475569'; debrisCount = 6; debrisSubtype = 'metal_flake';
+        LitterSystem.spawnTrashCanSpill(world, contactX, contactY, veh.vx, veh.vy, 5);
+      }
       else if (prop.type === 'kiosk') { debrisColor = '#0284c7'; debrisCount = 9; debrisSubtype = 'metal_flake'; }
       else if (prop.type === 'mailbox') { debrisColor = '#2563eb'; debrisCount = 6; debrisSubtype = 'metal_flake'; }
       else if (prop.type === 'flowerbed') { debrisColor = '#78350f'; debrisCount = 7; debrisSubtype = 'concrete_chip'; }
@@ -14838,200 +14845,12 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     }
   }
 
-  // 3b. JANITOR CLEANUP
-  if (world.litter && world.litter.length > 0) {
-    const janitors = world.pedestrians.filter(p => p.isJanitor && p.state === 'walking');
-    if (janitors.length > 0) {
-      for (let i = world.litter.length - 1; i >= 0; i--) {
-        const lit = world.litter[i];
-        for (const janitor of janitors) {
-          if (Math.hypot(janitor.x - lit.x, janitor.y - lit.y) < 30 && !lit.isAirborne) {
-            world.litter.splice(i, 1);
-            break; // Stop checking janitors for this litter piece
-          }
-        }
-      }
-    }
-  }
-
-  // 4. LITTER, DEBRIS & GROUND ITEMS — REAL-TIME WIND, PLAYER, PEDESTRIAN & VEHICLE PHYSICS
+  // 3b & 4. UNIFIED FOLIAGE, LEAVES & STREET LITTER — FIRST-PRINCIPLES 3D AERODYNAMICS, ROLLING, WALL EDDIES & HYDRODYNAMICS
   const atmoLitter = getAtmosphereState(world, world.timeHour);
   const wVec = atmoLitter.wind;
   const wSpd = wVec.speed * (wVec.gust ?? 1.0);
   const rainAmt = weatherWeights.rain;
-
-  if (world.litter) {
-    const pFootVx = !player.isInVehicle ? (player.vx || 0) : 0;
-    const pFootVy = !player.isInVehicle ? (player.vy || 0) : 0;
-    const pFootSpd = Math.hypot(pFootVx, pFootVy);
-
-    for (const lit of world.litter) {
-      // Skip distant grounded litter outside active simulation area
-      if (!lit.isAirborne) {
-        const dxL = lit.x - player.x;
-        const dyL = lit.y - player.y;
-        if (dxL * dxL + dyL * dyL > 2250000) continue; // > 1500px
-      }
-
-      // Surface wetness & mud adhesion
-      if (rainAmt > 0.05) {
-        lit.wetness = Math.min(1.0, (lit.wetness ?? 0) + dt * 0.12 * rainAmt);
-      } else {
-        lit.wetness = Math.max(0, (lit.wetness ?? 0) - dt * 0.025);
-      }
-
-      const isFeatherweight = lit.type === 'paper' || lit.type === 'newspaper' || lit.type === 'leaf' || lit.type === 'wrapper' || lit.type === 'bag' || lit.type === 'mask';
-      const isRollable = lit.type === 'cup' || lit.type === 'can' || lit.type === 'bottle' || lit.type === 'coffee';
-      const wetAnchor = 1.0 - Math.min(0.82, (lit.wetness ?? 0) * 0.85); // Wet paper/leaves stick to wet pavement via capillary tension
-
-      // 1. Atmospheric Wind Advection & Gust Lift (active even in gentle/moderate breeze for featherweight litter)
-      if (lit.isAirborne) {
-        const aeroSuscept = isFeatherweight ? 2.6 : 0.85;
-        lit.vx += (wVec.vx * 1.15 - lit.vx) * Math.min(1.0, aeroSuscept * dt);
-        lit.vy += (wVec.vy * 1.15 - lit.vy) * Math.min(1.0, aeroSuscept * dt);
-        lit.flutterPhase = (lit.flutterPhase ?? 0) + dt * (7.5 + wSpd * 0.06);
-        const flutterWave = Math.sin(lit.flutterPhase + lit.x * 0.03);
-        lit.vx += -Math.sin(wVec.angle) * flutterWave * 28 * dt;
-        lit.vy +=  Math.cos(wVec.angle) * flutterWave * 28 * dt;
-      } else if (wSpd > 8 && (isFeatherweight || isRollable)) {
-        lit.flutterPhase = (lit.flutterPhase ?? 0) + dt * (3.2 + wSpd * 0.08);
-        const threshold = isFeatherweight ? (10 / Math.max(0.25, wetAnchor)) : 36;
-        if (wSpd > threshold) {
-          const push = (wSpd - threshold) * (isFeatherweight ? 0.65 : 0.26) * wetAnchor;
-          lit.vx += Math.cos(wVec.angle) * push * dt;
-          lit.vy += Math.sin(wVec.angle) * push * dt;
-          lit.rotationSpeed += Math.sin(lit.x * 0.07 + lit.y * 0.05 + world.timeHour * 40) * 2.8 * dt;
-          // Wind gusts lift dry leaves, wrappers, plastic bags, and newspapers into the air
-          if (isFeatherweight && wetAnchor > 0.50 && wSpd > 28 && Math.random() < 0.35 * dt) {
-            lit.isAirborne = true;
-            lit.airborneTimer = 0.85 + Math.random() * 1.3;
-            lit.vz = 20 + Math.random() * 26;
-            lit.rotationSpeed = (Math.random() - 0.5) * 9.0;
-          }
-        }
-      }
-
-      // Integrate horizontal position & rotation
-      lit.x += lit.vx * dt;
-      lit.y += lit.vy * dt;
-      lit.angle += lit.rotationSpeed * dt;
-
-      // Ground vs airborne damping
-      const groundDrag = lit.isAirborne ? 1.15 : (isRollable ? 1.85 : (3.4 + (lit.wetness ?? 0) * 3.0));
-      lit.vx *= Math.max(0, 1 - dt * groundDrag);
-      lit.vy *= Math.max(0, 1 - dt * groundDrag);
-      lit.rotationSpeed *= Math.max(0, 1 - dt * (lit.isAirborne ? 0.9 : 2.6));
-
-      // 2. Vehicle Aerodynamic Bow-Wave, Slipstream Vortex & Tire Crushing
-      for (const veh of world.vehicles) {
-        const dx = lit.x - veh.x;
-        const dy = lit.y - veh.y;
-        const distSq = dx * dx + dy * dy;
-        if (distSq > 9000) continue; // > 95px
-        const dist = Math.sqrt(distSq);
-        const vSpd = Math.abs(veh.speed);
-
-        // Direct contact / tire crushing
-        if (dist < 26) {
-          const pushAngle = Math.atan2(dy, dx);
-          const pushForce = vSpd * 0.68 + 16;
-          lit.vx += Math.cos(pushAngle) * pushForce;
-          lit.vy += Math.sin(pushAngle) * pushForce;
-          lit.rotationSpeed = (Math.random() - 0.5) * 10;
-          if (vSpd > 8 && (isRollable || lit.type === 'box')) {
-            lit.crushed = Math.min(1.0, (lit.crushed ?? 0) + 0.55);
-          }
-        } else if (vSpd > 16 && dist < 85) {
-          // High-speed aerodynamic slipstream & trailing vortex suction
-          const falloff = 1.0 - dist / 85;
-          const vDirX = Math.cos(veh.angle) * (veh.speed >= 0 ? 1 : -1);
-          const vDirY = Math.sin(veh.angle) * (veh.speed >= 0 ? 1 : -1);
-          const along = (dx * vDirX + dy * vDirY) / Math.max(1, dist);
-          const side = dx * (-vDirY) + dy * vDirX;
-          const sideSign = side >= 0 ? 1 : -1;
-
-          if (isFeatherweight && wetAnchor > 0.35) {
-            lit.isAirborne = true;
-            lit.airborneTimer = Math.max(lit.airborneTimer || 0, 1.2 + Math.min(1.6, vSpd * 0.015));
-            lit.vz = Math.max(lit.vz ?? 0, 22 + vSpd * 0.38 * falloff);
-            const swirlForce = (vSpd * 0.75 + 24) * falloff * wetAnchor;
-            lit.vx += (vDirX * 0.75 + (-vDirY * sideSign) * (along > 0 ? 0.55 : -0.35)) * swirlForce * dt * 8.0;
-            lit.vy += (vDirY * 0.75 + ( vDirX * sideSign) * (along > 0 ? 0.55 : -0.35)) * swirlForce * dt * 8.0;
-            lit.rotationSpeed += sideSign * (6.0 + vSpd * 0.08) * falloff * dt * 5.0;
-          } else if (isRollable && vSpd > 32) {
-            const rollPush = (vSpd - 28) * 0.48 * falloff;
-            lit.vx += (vDirX * 0.5 + (dx / dist) * 0.5) * rollPush * dt * 6.0;
-            lit.vy += (vDirY * 0.5 + (dy / dist) * 0.5) * rollPush * dt * 6.0;
-            lit.rotationSpeed += sideSign * 4.5 * falloff * dt * 4.0;
-          }
-        }
-      }
-
-      // 3. Player On-Foot Kick & Sprint Draft Reaction
-      if (!player.isInVehicle) {
-        const dxP = lit.x - player.x;
-        const dyP = lit.y - player.y;
-        const dSqP = dxP * dxP + dyP * dyP;
-        if (dSqP < 256 && dSqP > 0.01) { // < 16px direct foot kick / rustle
-          const dP = Math.sqrt(dSqP);
-          const kickDirX = pFootSpd > 8 ? (pFootVx / pFootSpd) * 0.7 + (dxP / dP) * 0.3 : (dxP / dP);
-          const kickDirY = pFootSpd > 8 ? (pFootVy / pFootSpd) * 0.7 + (dyP / dP) * 0.3 : (dyP / dP);
-          const kickMag = (isRollable ? 1.15 : 0.85) * (28 + pFootSpd * 0.95);
-          lit.vx = kickDirX * kickMag;
-          lit.vy = kickDirY * kickMag;
-          lit.rotationSpeed = (Math.random() - 0.5) * 14;
-          if (isFeatherweight && wetAnchor > 0.4) {
-            lit.isAirborne = true;
-            lit.airborneTimer = 0.65 + Math.random() * 0.5;
-            lit.vz = 18 + Math.min(26, pFootSpd * 0.25);
-          }
-        } else if (isFeatherweight && pFootSpd > 45 && dSqP < 1296) { // < 36px sprint slipstream rustle
-          const dP = Math.sqrt(dSqP);
-          const draft = (1.0 - dP / 36) * pFootSpd * 0.45 * wetAnchor;
-          lit.vx += (pFootVx / pFootSpd * 0.6 + dxP / dP * 0.4) * draft * dt * 5.0;
-          lit.vy += (pFootVy / pFootSpd * 0.6 + dyP / dP * 0.4) * draft * dt * 5.0;
-          lit.rotationSpeed += (Math.random() - 0.5) * 8 * dt;
-        }
-      }
-
-      // 4. NPC Pedestrian Kicks & Rustling
-      for (const ped of world.pedestrians) {
-        const dxPed = lit.x - ped.x;
-        const dyPed = lit.y - ped.y;
-        const dSqPed = dxPed * dxPed + dyPed * dyPed;
-        if (dSqPed < 225 && dSqPed > 0.01) { // < 15px
-          const dPed = Math.sqrt(dSqPed);
-          const kickAngle = ped.angle + (Math.random() - 0.5) * 0.45;
-          const kickPower = isRollable ? 48 : (isFeatherweight ? 34 : 26);
-          lit.vx += Math.cos(kickAngle) * kickPower + (dxPed / dPed) * 12;
-          lit.vy += Math.sin(kickAngle) * kickPower + (dyPed / dPed) * 12;
-          lit.rotationSpeed += (Math.random() - 0.5) * 12;
-          if (isFeatherweight && wetAnchor > 0.45) {
-            lit.isAirborne = true;
-            lit.airborneTimer = 0.55;
-            lit.vz = 16;
-          }
-          break;
-        }
-      }
-
-      // 5. 3D Altitude & Ballistic Flutter Integration
-      if (lit.isAirborne) {
-        lit.airborneTimer = (lit.airborneTimer || 0) - dt;
-        const updraft = isFeatherweight ? (Math.sin((lit.flutterPhase ?? 0) * 1.3) * 14 + Math.min(22, wSpd * 0.25)) : 0;
-        lit.vz = (lit.vz ?? 18) + (updraft - 58) * dt;
-        lit.altitude = Math.max(0, Math.min(44, (lit.altitude || 0) + lit.vz * dt));
-        if ((lit.airborneTimer || 0) <= 0 && (lit.altitude || 0) <= 1.0) {
-          lit.isAirborne = false;
-          lit.altitude = 0;
-          lit.vz = 0;
-        }
-      } else if ((lit.altitude || 0) > 0) {
-        lit.altitude = Math.max(0, (lit.altitude || 0) - dt * 36);
-        lit.vz = 0;
-      }
-    }
-  }
+  LitterSystem.update(world, player, dt, wVec, rainAmt, vehGrid);
 
   // 4B. WORLD GROUND ITEMS — WIND DRIFT, PLAYER/NPC KICKS & VEHICLE SLIPSTREAM PHYSICS
   if (world.groundItems && world.groundItems.length > 0) {

@@ -1276,43 +1276,84 @@ export function drawLeftoverItem(ctx: CanvasRenderingContext2D, itemId: string):
       return true;
     }
 
-    // Litter / Street trash cluster
+    // Litter / Recyclable Street Trash Cluster (Crumpled paper, crushed aluminum can, and translucent PET bottle)
     case 'trash':
     case 'litter_trash': {
-      drawShadow(ctx, 8.5, 3.2, 7.8, 0.25);
+      drawShadow(ctx, 8.8, 3.4, 7.6, 0.28);
 
-      ctx.fillStyle = '#e2e8f0';
+      // 1. Multi-facet crumpled paper sheet at back-left
+      ctx.fillStyle = '#f1f5f9';
       ctx.beginPath();
-      ctx.moveTo(-7.5, 2);
-      ctx.lineTo(-4, -5);
-      ctx.lineTo(3, -4);
-      ctx.lineTo(7, 3);
-      ctx.lineTo(-2, 5.5);
+      ctx.moveTo(-8.0, 1.5);
+      ctx.lineTo(-5.2, -5.8);
+      ctx.lineTo(1.8, -4.6);
+      ctx.lineTo(3.4, 1.2);
+      ctx.lineTo(-2.5, 4.8);
+      ctx.closePath();
+      ctx.fill();
+      // Shaded paper facet
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.moveTo(-2.2, -1.2);
+      ctx.lineTo(1.8, -4.6);
+      ctx.lineTo(3.4, 1.2);
+      ctx.lineTo(-2.5, 4.8);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.55;
-      for (let y = -2.5; y <= 2.5; y += 1.2) {
-        ctx.beginPath();
-        ctx.moveTo(-3, y); ctx.lineTo(3, y);
-        ctx.stroke();
-      }
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-5.2, -5.8);
+      ctx.lineTo(-2.2, -1.2);
+      ctx.lineTo(3.4, 1.2);
+      ctx.stroke();
 
-      // Crushed red soda can in pile
-      ctx.fillStyle = '#b91c1c';
+      // 2. Translucent PET bottle at top-right
+      ctx.save();
+      ctx.translate(3.2, -1.8);
+      ctx.rotate(0.42);
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.82)';
       ctx.beginPath();
-      ctx.roundRect(-4.5, 0, 7, 4, 0.8);
+      ctx.roundRect(-2.4, -4.2, 4.8, 8.4, 1.2);
       ctx.fill();
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.ellipse(-4.5, 2, 1, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(-2.3, -1.2, 4.6, 2.6);
+      ctx.fillStyle = '#2563eb';
+      ctx.fillRect(-1.3, -5.6, 2.6, 1.5);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.fillRect(-1.2, -3.6, 0.8, 7.0);
+      ctx.restore();
 
-      // Discarded plastic coffee cup lid
-      ctx.fillStyle = '#18181b';
+      // 3. Crushed red aluminum soda can in foreground with stay-on-tab lid
+      ctx.save();
+      ctx.translate(-1.4, 2.2);
+      ctx.rotate(-0.18);
+      ctx.fillStyle = '#dc2626';
       ctx.beginPath();
-      ctx.ellipse(3, 1, 3, 1.8, 0.3, 0, Math.PI * 2);
+      ctx.moveTo(-4.4, -2.4);
+      ctx.lineTo(4.4, -2.4);
+      ctx.lineTo(3.8, 0);
+      ctx.lineTo(4.4, 2.4);
+      ctx.lineTo(-4.4, 2.4);
+      ctx.lineTo(-3.8, 0);
+      ctx.closePath();
       ctx.fill();
+      // White brand wave stripe
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-1.6, -2.2, 2.2, 4.4);
+      // Anisotropic aluminum highlight & buckle crease
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
+      ctx.fillRect(-3.8, -1.4, 7.6, 0.8);
+      // Silver aluminum lid & dark drink opening
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.ellipse(-4.4, 0, 1.1, 2.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(-4.4, 0.3, 0.45, 0.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
       return true;
     }
 

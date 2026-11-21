@@ -11177,15 +11177,16 @@ export function pickupNearbyLitter(player: Player, world: GameWorld): boolean {
   let minDist = 45;
   for (let i = 0; i < world.litter.length; i++) {
     const lit = world.litter[i];
+    if (lit.type === 'leaf' || lit.isAirborne || (lit.altitude || 0) > 1.5) continue;
     const dist = Math.hypot(player.x - lit.x, player.y - lit.y);
-    if (dist < minDist && !lit.isAirborne) {
+    if (dist < minDist) {
       minDist = dist;
       closestIdx = i;
     }
   }
 
   if (closestIdx !== -1) {
-    const removedLit = world.litter.splice(closestIdx, 1)[0];
+    world.litter.splice(closestIdx, 1);
     const trashItem = createItem('litter_trash', 1);
     const added = addItemToPlayer(player, trashItem);
     if (added) {

@@ -1554,6 +1554,38 @@ export interface StreetProp {
   lastImpactTime?: number;   // Timestamp (s) of last impact for sound/particle debounce
 }
 
+export type LitterType =
+  | 'paper'
+  | 'newspaper'
+  | 'cup'
+  | 'can'
+  | 'leaf'
+  | 'phone'
+  | 'coffee'
+  | 'box'
+  | 'bag'
+  | 'bottle'
+  | 'wrapper'
+  | 'mask'
+  | 'butt';
+
+export type LitterSubtype =
+  | 'leaf_birch'
+  | 'leaf_maple'
+  | 'leaf_oak'
+  | 'pine_needle'
+  | 'catkin'
+  | 'twig'
+  | 'bark_chip'
+  | 'can_cola'
+  | 'can_energy'
+  | 'can_citrus'
+  | 'can_gold'
+  | 'bottle_water'
+  | 'bottle_amber'
+  | 'bottle_emerald'
+  | 'bottle_cola';
+
 export interface LitterItem {
   id: string;
   x: number;
@@ -1562,8 +1594,10 @@ export interface LitterItem {
   vy: number;
   angle: number;
   rotationSpeed: number;
-  type: 'paper' | 'newspaper' | 'cup' | 'can' | 'leaf' | 'phone' | 'coffee' | 'box' | 'bag' | 'bottle' | 'wrapper' | 'mask' | 'butt';
+  type: LitterType;
+  subtype?: LitterSubtype;
   color: string;
+  secondaryColor?: string;
   size: number;
   isAirborne?: boolean;
   airborneTimer?: number;
@@ -1574,6 +1608,18 @@ export interface LitterItem {
   mudCoat?: number;
   crushed?: number;
   flutterPhase?: number;
+  // Unified 3D aerodynamics, rolling kinematics & hydrodynamics
+  seed?: number;
+  pitch?: number;
+  roll?: number;
+  pitchVel?: number;
+  rollVel?: number;
+  rollPhase?: number;
+  inWater?: boolean;
+  isDynamicFoliage?: boolean;
+  spawnTime?: number;
+  washDuration?: number;
+  sleeping?: boolean;
 }
 
 export type BirdSpecies = 'pigeon' | 'sparrow' | 'jay' | 'woodpecker' | 'crow' | 'titmouse';

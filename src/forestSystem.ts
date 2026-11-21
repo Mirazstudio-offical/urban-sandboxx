@@ -13,6 +13,7 @@ import { getBiomeSampleAt } from './biomeSystem';
 import { sound } from './audio';
 import { performanceConfig } from './performanceConfig';
 import { BirdSystem } from './birdSystem';
+import { LitterSystem } from './litterSystem';
 
 export interface TreeShakeState {
   treeX: number;
@@ -36,7 +37,7 @@ interface CanopyDriftParticle {
   size: number;
   color: string;
   secondaryColor: string;
-  kind: 'needle' | 'leaf_birch' | 'leaf_maple' | 'catkin' | 'snow_puff' | 'pollen';
+  kind: 'snow_puff' | 'pollen';
   life: number;
   maxLife: number;
 }
@@ -128,20 +129,33 @@ export class ForestSystem {
       startTime: nowSec,
     });
 
-    // Spawn a burst of falling leaves / pine needles / winter snow puffs from the shaken crown
-    const burstCount = Math.min(18, Math.floor(6 + intensity * 10));
-    for (let i = 0; i < burstCount; i++) {
-      const ang = Math.random() * Math.PI * 2;
-      const dist = Math.random() * treeRadius * 0.85;
-      const px = treeX + Math.cos(ang) * dist;
-      const py = treeY + Math.sin(ang) * dist;
-      this.spawnSingleDriftParticle(
-        px,
-        py,
-        ndx * (18 + Math.random() * 25) + (Math.random() - 0.5) * 24,
-        ndy * (18 + Math.random() * 25) + (Math.random() - 0.5) * 24,
-        season,
-        true
+    // Spawn physical falling leaves, pine needles, or twigs via the unified LitterSystem
+    if (season === 'winter') {
+      const burstCount = Math.min(14, Math.floor(5 + intensity * 8));
+      for (let i = 0; i < burstCount; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const dist = Math.random() * treeRadius * 0.85;
+        const px = treeX + Math.cos(ang) * dist;
+        const py = treeY + Math.sin(ang) * dist;
+        this.spawnSingleDriftParticle(
+          px,
+          py,
+          ndx * (18 + Math.random() * 25) + (Math.random() - 0.5) * 24,
+          ndy * (18 + Math.random() * 25) + (Math.random() - 0.5) * 24,
+          season,
+          true
+        );
+      }
+    } else {
+      LitterSystem.spawnTreeCrownBurst(
+        world,
+        treeX,
+        treeY,
+        treeRadius,
+        intensity,
+        ndx,
+        ndy,
+        season
       );
     }
 
@@ -221,69 +235,22 @@ export class ForestSystem {
     season: string = 'summer',
     fromBurst: boolean = false
   ) {
-    let kind: CanopyDriftParticle['kind'] = 'needle';
-    let color = '#2d6a4f';
-    let secondaryColor = '#1b4332';
-    let size = 2.6;
+    // Note: All physical leaves, pine needles, catkins, and twigs are now simulated in LitterSystem!
+    // ForestSystem.driftParticles is strictly for micro-atmospheric winter snow rime puffs & spring/summer pollen motes.
+    if (season === 'autumn') return;
 
-    const r = Math.random();
+    let kind: CanopyDriftParticle['kind'] = 'pollen';
+    let color = 'rgba(254, 240, 138, 0.72)';
+    let secondaryColor = 'rgba(190, 242, 100, 0.40)';
+    let size = 1.4 + Math.random() * 1.0;
+
     if (season === 'winter') {
-      kind = r < 0.78 ? 'snow_puff' : 'needle';
-      color = kind === 'snow_puff' ? 'rgba(241, 245, 249, 0.86)' : '#1e4620';
+      kind = 'snow_puff';
+      color = 'rgba(241, 245, 249, 0.86)';
       secondaryColor = '#cbd5e1';
-      size = kind === 'snow_puff' ? 3.8 + Math.random() * 3.2 : 2.4;
-    } else if (season === 'autumn') {
-      if (r < 0.52) {
-        kind = 'leaf_birch';
-        color = r < 0.26 ? '#f59e0b' : '#eab308';
-        secondaryColor = '#b45309';
-        size = 2.8 + Math.random() * 1.4;
-      } else if (r < 0.84) {
-        kind = 'leaf_maple';
-        color = r < 0.68 ? '#dc2626' : '#ea580c';
-        secondaryColor = '#991b1b';
-        size = 3.2 + Math.random() * 1.6;
-      } else {
-        kind = 'needle';
-        color = '#78350f';
-        secondaryColor = '#451a03';
-        size = 2.5;
-      }
-    } else if (season === 'spring') {
-      if (r < 0.45 && !fromBurst) {
-        kind = 'pollen';
-        color = 'rgba(253, 224, 71, 0.78)';
-        secondaryColor = 'rgba(254, 240, 138, 0.45)';
-        size = 1.4 + Math.random() * 1.1;
-      } else if (r < 0.78) {
-        kind = 'catkin';
-        color = '#a3e635';
-        secondaryColor = '#65a30d';
-        size = 2.6 + Math.random() * 1.0;
-      } else {
-        kind = 'leaf_birch';
-        color = '#84cc16';
-        secondaryColor = '#4d7c0f';
-        size = 2.4 + Math.random() * 1.0;
-      }
-    } else {
-      // Summer
-      if (r < 0.36 && !fromBurst) {
-        kind = 'pollen';
-        color = 'rgba(254, 240, 138, 0.72)';
-        secondaryColor = 'rgba(190, 242, 100, 0.40)';
-        size = 1.3 + Math.random() * 1.0;
-      } else if (r < 0.72) {
-        kind = 'needle';
-        color = r < 0.54 ? '#2d6a4f' : '#7c4a27';
-        secondaryColor = '#1b4332';
-        size = 2.6 + Math.random() * 1.0;
-      } else {
-        kind = 'leaf_birch';
-        color = r < 0.86 ? '#65a30d' : '#eab308';
-        secondaryColor = '#3f6212';
-        size = 2.5 + Math.random() * 1.1;
-      }
+      size = 3.6 + Math.random() * 3.0;
+    } else if (fromBurst) {
+      return;
     }
 
     const p: CanopyDriftParticle = {
@@ -1081,41 +1048,11 @@ export class ForestSystem {
         ctx.arc(0, 0, p.size, 0, Math.PI * 2);
         ctx.arc(p.size * 0.6, -p.size * 0.3, p.size * 0.7, 0, Math.PI * 2);
         ctx.fill();
-      } else if (p.kind === 'pollen') {
+      } else {
         ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(0, 0, p.size, 0, Math.PI * 2);
         ctx.fill();
-      } else if (p.kind === 'needle') {
-        // Pine needle V-pair (сдвоенная сосновая хвоинка)
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = 0.95;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-p.size, 0);
-        ctx.lineTo(p.size, -0.7);
-        ctx.moveTo(-p.size, 0);
-        ctx.lineTo(p.size * 0.9, 0.7);
-        ctx.stroke();
-      } else if (p.kind === 'catkin') {
-        // Birch catkin (берёзовая серёжка)
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, p.size * 1.15, p.size * 0.42, 0, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Tumbling birch or maple leaf
-        const flip = 0.45 + 0.55 * Math.abs(Math.cos(p.life * 6.0 + i));
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, p.size, p.size * 0.68 * flip, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = p.secondaryColor;
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(-p.size * 1.1, 0);
-        ctx.lineTo(p.size * 0.8, 0);
-        ctx.stroke();
       }
 
       ctx.restore();

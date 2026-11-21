@@ -35,6 +35,7 @@ import {
 import { trafficDiagnostics } from './aiTraffic';
 import { ForestSystem } from './forestSystem';
 import { BirdSystem } from './birdSystem';
+import { LitterSystem } from './litterSystem';
 import {
   renderSpecializedVehicleAttachments,
   getVehicleBasePolygon,
@@ -1531,12 +1532,13 @@ export class GameRenderer {
     const groundBirds = this.groundBirdsScratch;
     const flyingBirds = this.flyingBirdsScratch;
     BirdSystem.partitionBirdsForRender(world, groundBirds, flyingBirds);
+    const { groundLitter, canopyLitter } = LitterSystem.partitionForRender(world, minX, minY, maxX, maxY);
 
     // 8. Buildings Base Structure & Entrances (viewport-culled against minX..maxY)
     this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour, minX, minY, maxX, maxY);
 
-    // 8b. Street Litter & Flying Paper / Wind Debris
-    this.renderLitter(world.litter, minX, minY, maxX, maxY, nightAlpha);
+    // 8b. Street Litter, Fallen Leaves & Ground/Low-Fluttering Debris
+    this.renderLitter(groundLitter, minX, minY, maxX, maxY, nightAlpha);
 
     // 8c. Dropped / Collectible Ground Items
     this.renderGroundItems(world.groundItems, player, minX, minY, maxX, maxY);
@@ -1671,7 +1673,10 @@ export class GameRenderer {
       remotePlayers
     );
 
-    // 16e-forest. Over-Canopy Forest Effects (Falling pine needles, autumn leaves, birch catkins, canopy bird flocks, and night fireflies)
+    // 16e-forest. Over-Canopy Forest Effects (High-altitude falling leaves, pine needles, birch catkins, snow rime, and night fireflies)
+    if (canopyLitter.length > 0) {
+      LitterSystem.renderLitterBatch(this.ctx, canopyLitter, nightAlpha);
+    }
     ForestSystem.renderOverCanopyEffects(
       this.ctx,
       world,
@@ -6625,283 +6630,17 @@ export class GameRenderer {
     }
   }
 
-  // --- STREET LITTER & FLYING DEBRIS (3D Bevel, Wet Capillary Adhesion, Crushing & Airborne Flutter) ---
-  private renderLitter(litter: GameWorld['litter'], minX: number, minY: number, maxX: number, maxY: number, nightAlpha: number = 0) {
-    if (!litter) return;
-    const ctx = this.ctx;
-    const sunState = getCurrentSunShadowState();
-    const sunLx = sunState.sunDirX ?? 0.42;
-    const sunLy = sunState.sunDirY ?? 0.91;
-
-    const litterStart = Math.max(0, litter.length - performanceConfig.litterLimit);
-    for (let li = litterStart; li < litter.length; li++) {
-      const lit = litter[li];
-      if (lit.x < minX || lit.x > maxX || lit.y < minY || lit.y > maxY) continue;
-
-      const alt = lit.altitude || 0;
-      const renderY = lit.y - alt;
-      const wet = lit.wetness ?? 0;
-      const crushed = lit.crushed ?? 0;
-
-      ctx.save();
-      ctx.translate(lit.x, renderY);
-
-      // 1. Ground contact ambient occlusion & wet capillary water-film ring when resting on pavement
-      if (alt < 1.5) {
-        const aoR = lit.size * (0.58 + crushed * 0.14);
-        ctx.fillStyle = wet > 0.15
-          ? `rgba(8, 15, 26, ${0.28 + wet * 0.22})`
-          : 'rgba(10, 15, 24, 0.24)';
-        ctx.beginPath();
-        safeEllipse(ctx, -sunLx * 0.45, -sunLy * 0.45, aoR, aoR * 0.78, lit.angle, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.rotate(lit.angle);
-
-      // 2. 3D airborne flutter / tumble foreshortening or tire-crushed flattening
-      if (alt > 1.0) {
-        const flutterTilt = Math.max(0.38, Math.abs(Math.cos((lit.flutterPhase ?? (alt * 0.25)) + lit.angle * 0.7)));
-        const altScale = 1.0 + Math.min(0.28, alt * 0.006);
-        ctx.scale(altScale, altScale * flutterTilt);
-      } else if (crushed > 0.05) {
-        ctx.scale(1.0 + crushed * 0.22, Math.max(0.68, 1.0 - crushed * 0.18));
-      }
-
-      const cosA = Math.cos(lit.angle);
-      const sinA = Math.sin(lit.angle);
-      const localSunX = sunLx * cosA + sunLy * sinA;
-      const localSunY = -sunLx * sinA + sunLy * cosA;
-
-      if (lit.type === 'paper') {
-        const pw = lit.size;
-        const ph = lit.size * 0.72;
-        ctx.fillStyle = wet > 0.2 ? '#cbd5e1' : lit.color;
-        ctx.beginPath();
-        ctx.moveTo(-pw * 0.5, -ph * 0.48);
-        ctx.lineTo(pw * 0.48, -ph * 0.52);
-        ctx.lineTo(pw * 0.52, ph * 0.46);
-        ctx.lineTo(-pw * 0.46, ph * 0.50);
-        ctx.closePath();
-        ctx.fill();
-        // Crumple crease & sunlit bevel edge
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.22)';
-        ctx.lineWidth = 0.55;
-        ctx.beginPath();
-        ctx.moveTo(-pw * 0.35, -ph * 0.2);
-        ctx.lineTo(pw * 0.1, ph * 0.15);
-        ctx.lineTo(pw * 0.38, -ph * 0.1);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(-pw * 0.48, -ph * 0.48);
-        ctx.lineTo(pw * 0.46, -ph * 0.50);
-        ctx.stroke();
-      } else if (lit.type === 'newspaper') {
-        const nw = lit.size * 1.08;
-        const nh = lit.size * 0.84;
-        ctx.fillStyle = wet > 0.2 ? '#cbd5e1' : '#f1f5f9';
-        ctx.fillRect(-nw / 2, -nh / 2, nw, nh);
-        // Center fold shadow & header masthead
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.14)';
-        ctx.fillRect(-0.5, -nh / 2, 1.0, nh);
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(-nw / 2 + 1, -nh * 0.38, nw - 2, 1.3);
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(-nw / 2 + 1, -nh * 0.14, nw * 0.42, 0.9);
-        ctx.fillRect(0.6, -nh * 0.14, nw * 0.40, 0.9);
-        ctx.fillRect(-nw / 2 + 1, nh * 0.12, nw - 2, 0.9);
-      } else if (lit.type === 'cup') {
-        const cw = lit.size;
-        const ch = lit.size * 1.05;
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.moveTo(-cw * 0.38, ch * 0.48);
-        ctx.lineTo(-cw * 0.48, -ch * 0.46);
-        ctx.lineTo(cw * 0.48, -ch * 0.46);
-        ctx.lineTo(cw * 0.38, ch * 0.48);
-        ctx.closePath();
-        ctx.fill();
-        // Corrugated cardboard thermal sleeve
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(-cw * 0.44, -ch * 0.16, cw * 0.88, ch * 0.36);
-        // Sunlit cylindrical highlight
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-        ctx.fillRect(localSunX * cw * 0.15 - 0.6, -ch * 0.42, 1.2, ch * 0.84);
-        // Molded rim lid
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-cw * 0.52, -ch * 0.52, cw * 1.04, 1.6);
-      } else if (lit.type === 'can') {
-        const cw = lit.size * 0.78;
-        const ch = lit.size * 1.08;
-        ctx.fillStyle = lit.color;
-        safeRoundRect(ctx, -cw / 2, -ch / 2, cw, ch, 1.2);
-        ctx.fill();
-        // Anisotropic brushed aluminum specular streak
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.52)';
-        ctx.fillRect(localSunX * cw * 0.18 - 0.5, -ch * 0.44, 1.1, ch * 0.88);
-        // Silver aluminum top & pull tab
-        ctx.fillStyle = '#cbd5e1';
-        ctx.beginPath();
-        safeEllipse(ctx, 0, -ch * 0.46, cw * 0.46, cw * 0.24, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#334155';
-        ctx.beginPath();
-        safeArc(ctx, 0, -ch * 0.46, cw * 0.14, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (lit.type === 'leaf') {
-        const lr = lit.size * 0.58;
-        ctx.fillStyle = lit.color;
-        ctx.beginPath();
-        ctx.moveTo(-lr * 1.15, 0);
-        ctx.quadraticCurveTo(-lr * 0.15, -lr * 0.82, lr * 1.25, 0);
-        ctx.quadraticCurveTo(-lr * 0.15, lr * 0.82, -lr * 1.15, 0);
-        ctx.closePath();
-        ctx.fill();
-        // Botanical central midrib vein & sunlit edge
-        ctx.strokeStyle = 'rgba(20, 45, 18, 0.48)';
-        ctx.lineWidth = 0.55;
-        ctx.beginPath();
-        ctx.moveTo(-lr * 1.25, 0);
-        ctx.lineTo(lr * 1.05, 0);
-        ctx.stroke();
-      } else if (lit.type === 'box') {
-        const bs = lit.size;
-        ctx.fillStyle = lit.color || '#d97706';
-        ctx.fillRect(-bs / 2, -bs / 2, bs, bs);
-        // 3D top-left sunlit bevel & bottom-right shadow bevel
-        ctx.strokeStyle = 'rgba(254, 243, 199, 0.45)';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(-bs / 2, bs / 2);
-        ctx.lineTo(-bs / 2, -bs / 2);
-        ctx.lineTo(bs / 2, -bs / 2);
-        ctx.stroke();
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(-bs / 2, 0);
-        ctx.lineTo(bs / 2, 0);
-        ctx.stroke();
-      } else if (lit.type === 'bag') {
-        const bw = lit.size * 0.95;
-        const bh = lit.size * 1.18;
-        ctx.fillStyle = lit.color || '#e11d48';
-        ctx.beginPath();
-        ctx.moveTo(-bw * 0.46, -bh * 0.28);
-        ctx.lineTo(-bw * 0.46, -bh * 0.52);
-        ctx.lineTo(-bw * 0.22, -bh * 0.52);
-        ctx.lineTo(-bw * 0.18, -bh * 0.28);
-        ctx.lineTo(bw * 0.18, -bh * 0.28);
-        ctx.lineTo(bw * 0.22, -bh * 0.52);
-        ctx.lineTo(bw * 0.46, -bh * 0.52);
-        ctx.lineTo(bw * 0.46, -bh * 0.28);
-        ctx.lineTo(bw * 0.52, bh * 0.48);
-        ctx.lineTo(-bw * 0.52, bh * 0.48);
-        ctx.closePath();
-        ctx.fill();
-        // Plastic film specular crinkle highlight
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.48)';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(-bw * 0.25, -bh * 0.1);
-        ctx.lineTo(bw * 0.18, bh * 0.28);
-        ctx.stroke();
-      } else if (lit.type === 'coffee') {
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        safeArc(ctx, 0, 0, lit.size / 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        safeArc(ctx, 0, 0, lit.size / 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-        ctx.beginPath();
-        safeArc(ctx, localSunX * 0.9, localSunY * 0.9, lit.size * 0.14, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (lit.type === 'phone') {
-        ctx.fillStyle = '#1e293b';
-        safeRoundRect(ctx, -lit.size / 2, -lit.size * 0.8, lit.size, lit.size * 1.6, 1.0);
-        ctx.fill();
-        ctx.fillStyle = lit.isGlowing ? '#38bdf8' : '#0f172a';
-        ctx.fillRect(-lit.size / 2 + 0.5, -lit.size * 0.8 + 0.5, lit.size - 1, lit.size * 1.6 - 1);
-        // Gorilla-glass diagonal reflection glint
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
-        ctx.lineWidth = 0.55;
-        ctx.beginPath();
-        ctx.moveTo(-lit.size * 0.32, -lit.size * 0.55);
-        ctx.lineTo(lit.size * 0.28, lit.size * 0.45);
-        ctx.stroke();
-
-        if (lit.isGlowing && nightAlpha > 0.3) {
-          ctx.shadowColor = '#38bdf8';
-          ctx.shadowBlur = performanceConfig.enableSoftShadowBlur ? 15 : 0;
-          ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
-          ctx.fillRect(-lit.size / 2, -lit.size * 0.8, lit.size, lit.size * 1.6);
-          ctx.shadowBlur = 0;
-        }
-      } else if (lit.type === 'bottle') {
-        const bw = lit.size / 1.5;
-        const bh = lit.size * 1.1;
-        // Translucent PET/glass bottle body
-        ctx.fillStyle = 'rgba(148, 163, 184, 0.78)';
-        safeRoundRect(ctx, -bw / 2, -bh * 0.38, bw, bh * 0.88, 1.1);
-        ctx.fill();
-        // Bottle neck & cap
-        ctx.fillStyle = 'rgba(203, 213, 225, 0.85)';
-        ctx.fillRect(-bw * 0.26, -bh * 0.54, bw * 0.52, bh * 0.18);
-        ctx.fillStyle = '#2563eb';
-        ctx.fillRect(-bw * 0.30, -bh * 0.62, bw * 0.60, 1.6);
-        // Refractive glass highlight streak
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-        ctx.fillRect(localSunX * bw * 0.18 - 0.45, -bh * 0.32, 0.9, bh * 0.72);
-      } else if (lit.type === 'wrapper') {
-        ctx.fillStyle = lit.color || '#f8fafc';
-        ctx.beginPath();
-        ctx.moveTo(-lit.size / 2, -lit.size / 2);
-        ctx.lineTo(lit.size / 2, -lit.size / 4);
-        ctx.lineTo(lit.size / 4, lit.size / 2);
-        ctx.lineTo(-lit.size / 4, lit.size / 2);
-        ctx.closePath();
-        ctx.fill();
-        // Metallic foil wrapper specular facet
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.62)';
-        ctx.beginPath();
-        ctx.moveTo(-lit.size * 0.2, -lit.size * 0.25);
-        ctx.lineTo(lit.size * 0.28, -lit.size * 0.1);
-        ctx.lineTo(0, lit.size * 0.22);
-        ctx.closePath();
-        ctx.fill();
-      } else if (lit.type === 'mask') {
-        ctx.fillStyle = '#e0f2fe';
-        ctx.fillRect(-lit.size / 2, -lit.size / 4, lit.size, lit.size / 2);
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 0.55;
-        ctx.beginPath();
-        safeArc(ctx, -lit.size / 2, 0, lit.size / 3, Math.PI / 2, -Math.PI / 2);
-        ctx.stroke();
-        ctx.beginPath();
-        safeArc(ctx, lit.size / 2, 0, lit.size / 3, -Math.PI / 2, Math.PI / 2);
-        ctx.stroke();
-      } else if (lit.type === 'butt') {
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size, lit.size / 4);
-        ctx.fillStyle = '#d97706'; // Cork filter tip
-        ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size * 0.32, lit.size / 4);
-        ctx.fillStyle = '#1e293b'; // Charred ash tip
-        ctx.fillRect(lit.size * 0.38, -lit.size / 8, lit.size * 0.14, lit.size / 4);
-      }
-
-      // 3. Wet rain specular glint on damp street litter
-      if (wet > 0.25) {
-        ctx.fillStyle = `rgba(224, 242, 254, ${wet * 0.38})`;
-        ctx.fillRect(localSunX * lit.size * 0.15 - 0.5, -lit.size * 0.2, 1.1, 1.1);
-      }
-
-      ctx.restore();
-    }
+  // --- UNIFIED STREET LITTER, BOTANICAL LEAVES & FLYING DEBRIS ---
+  private renderLitter(
+    litter: GameWorld['litter'],
+    _minX: number,
+    _minY: number,
+    _maxX: number,
+    _maxY: number,
+    nightAlpha: number = 0
+  ) {
+    if (!litter || litter.length === 0) return;
+    LitterSystem.renderLitterBatch(this.ctx, litter, nightAlpha);
   }
 
   // --- DROPPED / COLLECTIBLE GROUND ITEMS (3D Relief, Contact AO, Wet Meniscus & Specular Glint) ---
@@ -15641,25 +15380,21 @@ export class GameRenderer {
       } else if (p.type === 'water_splash' || p.type === 'water_fountain') {
         waterShaderBatch.push(p);
       } else if (p.type === 'leaf') {
-        // Botanical pointed leaf blade with central midrib vein
-        const lr = Math.max(1.6, p.radius);
+        const lr = Math.max(2.2, p.radius * 1.45);
         const rot = p.angle ?? (p.life * 3.2);
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(rot);
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.moveTo(-lr * 1.25, 0);
-        ctx.quadraticCurveTo(0, -lr * 0.78, lr * 1.35, 0);
-        ctx.quadraticCurveTo(0, lr * 0.78, -lr * 1.25, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = p.secondaryColor || 'rgba(20, 83, 45, 0.65)';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(-lr * 1.35, 0);
-        ctx.lineTo(lr * 1.15, 0);
-        ctx.stroke();
+        LitterSystem.drawBotanicalFoliageModel(
+          ctx,
+          (p.shapeSeed ?? 0) % 2 === 0 ? 'leaf_birch' : 'leaf_maple',
+          lr,
+          p.color,
+          p.secondaryColor || '#3f6212',
+          0.4,
+          -0.8,
+          0
+        );
         ctx.restore();
       } else if (p.type === 'feather') {
         // Curved avian feather vane with central rachis quill
@@ -15993,7 +15728,23 @@ export class GameRenderer {
       ctx.save();
       ctx.setTransform(this.backingScale, 0, 0, this.backingScale, 0, 0);
       ctx.imageSmoothingEnabled = true;
-      ctx.globalAlpha = shadowCompositeAlpha;
+      const softness = performanceConfig.shadowSoftness ?? 60;
+      if (softness > 0 && sunState.penumbraFactor > 0.05) {
+        const penPx = Math.min(3.5, 0.9 + sunState.penumbraFactor * 1.15);
+        const sdx = sunState.shadowDirX * penPx;
+        const sdy = sunState.shadowDirY * penPx;
+        const pdx = -sunState.shadowDirY * (penPx * 0.72);
+        const pdy = sunState.shadowDirX * (penPx * 0.72);
+        const tapAlpha = shadowCompositeAlpha * 0.075;
+        ctx.globalAlpha = tapAlpha;
+        ctx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, sdx, sdy, this.width, this.height);
+        ctx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, -sdx, -sdy, this.width, this.height);
+        ctx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, pdx, pdy, this.width, this.height);
+        ctx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, -pdx, -pdy, this.width, this.height);
+        ctx.globalAlpha = shadowCompositeAlpha * 0.76;
+      } else {
+        ctx.globalAlpha = shadowCompositeAlpha;
+      }
       ctx.drawImage(
         this.shadowCanvas,
         0, 0, this.shadowCanvas.width, this.shadowCanvas.height,
@@ -16068,7 +15819,24 @@ export class GameRenderer {
         lCtx.imageSmoothingEnabled = true;
         // Scale shadow opacity inversely with existing ambient night shroud so shadows merge seamlessly into night
         const shadowCompositeAlpha = Math.max(0.03, Math.min(0.92, sunState.shadowOpacity * (1.0 - effectiveAlpha * 0.80)));
-        lCtx.globalAlpha = shadowCompositeAlpha;
+        const softness = performanceConfig.shadowSoftness ?? 60;
+        if (softness > 0 && sunState.penumbraFactor > 0.05) {
+          // Physical solar angular penumbra (~0.53 deg solar disc + circumsolar sky aureole)
+          const penLm = Math.min(2.8, (0.85 + sunState.penumbraFactor * 1.05) * lmScale);
+          const sdx = sunState.shadowDirX * penLm;
+          const sdy = sunState.shadowDirY * penLm;
+          const pdx = -sunState.shadowDirY * (penLm * 0.72);
+          const pdy = sunState.shadowDirX * (penLm * 0.72);
+          const tapAlpha = shadowCompositeAlpha * 0.075;
+          lCtx.globalAlpha = tapAlpha;
+          lCtx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, sdx, sdy, lmW, lmH);
+          lCtx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, -sdx, -sdy, lmW, lmH);
+          lCtx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, pdx, pdy, lmW, lmH);
+          lCtx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, -pdx, -pdy, lmW, lmH);
+          lCtx.globalAlpha = shadowCompositeAlpha * 0.76;
+        } else {
+          lCtx.globalAlpha = shadowCompositeAlpha;
+        }
         lCtx.drawImage(
           this.shadowCanvas,
           0, 0, this.shadowCanvas.width, this.shadowCanvas.height,
@@ -16080,16 +15848,44 @@ export class GameRenderer {
       if (performanceConfig.enableDynamicLighting !== false) {
       const eCtx = this.lightEnvCtx;
       const cCtx = this.lightColorCtx;
+      const cloudAtten = Math.min(
+        1.0,
+        weights.rain * 0.75 + weights.fog * 0.85 + weights.snow * 0.65 + weights.overcast * 0.55
+      );
+      // Weber-Fechner / Naka-Rushton continuous daytime photoreceptor baseline:
+      // Artificial light photons do not stop at shadow borders. Even on direct sunlit ground (80k-100k lux),
+      // high-candela near-field hotspots, grazing Fresnel reflections, and monochromatic emitters (brake/turn/siren/fire)
+      // retain finite contrast sensitivity (~0.30-0.44), while inside lower-lux shadows (8k lux sky light)
+      // relative contrast smoothly increases across the feathered penumbra transition zone.
+      const dayPhotometricFloor = sunState.isNight
+        ? 0.44
+        : Math.min(
+            0.58,
+            0.31 + (1.0 - Math.min(1.0, sunState.sunElevation)) * 0.18 + cloudAtten * 0.14
+          );
+
       eCtx.save();
       eCtx.setTransform(1, 0, 0, 1, 0, 0);
       eCtx.clearRect(0, 0, lmW, lmH);
-      const lowSunFloor = (!sunState.isNight && sunState.sunElevation < 0.28)
-        ? (1.0 - sunState.sunElevation / 0.28) * 0.22
-        : 0;
-      if (lowSunFloor > 0.004) {
-        eCtx.fillStyle = `rgba(0, 0, 0, ${lowSunFloor.toFixed(3)})`;
-        eCtx.fillRect(0, 0, lmW, lmH);
-      }
+      eCtx.fillStyle = `rgba(0, 0, 0, ${dayPhotometricFloor.toFixed(3)})`;
+      eCtx.fillRect(0, 0, lmW, lmH);
+
+      // Feathered photoreceptor adaptation transition across shadow boundaries so beams never clip
+      // along a razor-sharp polygon contour when crossing between shade and direct sunlight
+      const envShadowWeight = Math.min(1.0, 0.64 + effectiveAlpha * 0.36 + cloudAtten * 0.12);
+      const featherPx = Math.max(1.2, 2.6 * lmScale);
+      const featherOuterPx = featherPx * 2.1;
+      eCtx.globalAlpha = envShadowWeight * 0.08;
+      eCtx.drawImage(this.lightmapCanvas, -featherOuterPx, 0);
+      eCtx.drawImage(this.lightmapCanvas, featherOuterPx, 0);
+      eCtx.drawImage(this.lightmapCanvas, 0, -featherOuterPx);
+      eCtx.drawImage(this.lightmapCanvas, 0, featherOuterPx);
+      eCtx.globalAlpha = envShadowWeight * 0.11;
+      eCtx.drawImage(this.lightmapCanvas, -featherPx, -featherPx);
+      eCtx.drawImage(this.lightmapCanvas, featherPx, -featherPx);
+      eCtx.drawImage(this.lightmapCanvas, -featherPx, featherPx);
+      eCtx.drawImage(this.lightmapCanvas, featherPx, featherPx);
+      eCtx.globalAlpha = envShadowWeight * 0.46;
       eCtx.drawImage(this.lightmapCanvas, 0, 0);
       eCtx.restore();
 
@@ -16106,6 +15902,16 @@ export class GameRenderer {
         lCtx.setTransform(t.a * ikX, t.b * ikY, t.c * ikX, t.d * ikY, t.e * ikX, t.f * ikY);
         cCtx.setTransform(t.a * ikX, t.b * ikY, t.c * ikX, t.d * ikY, t.e * ikX, t.f * ikY);
       }
+      // Physical daytime shadow-fill calibration: in midday sun, artificial lamps add ΔE_lamp to E_sky inside shadows
+      // (strongly piercing near the inverse-square hotspot, and partially lightening the mid/far shadow without
+      // ever making shaded ground artificially brighter than direct 100,000-lux sunlight outside the shadow).
+      const dayCutoutScale = sunState.isNight
+        ? 1.0
+        : Math.min(
+            1.0,
+            0.56 + effectiveAlpha * 0.44 + cloudAtten * 0.18 + (1.0 - Math.min(1.0, sunState.sunElevation)) * 0.16
+          );
+      lCtx.globalAlpha = dayCutoutScale;
       lCtx.globalCompositeOperation = 'destination-out';
       cCtx.globalCompositeOperation = 'lighter';
 
@@ -16359,15 +16165,18 @@ export class GameRenderer {
               cCtx.save();
               traceOuterBeam(cCtx);
               const cBeamGrad = cCtx.createRadialGradient(
-                lx, ly, 2,
-                lx + cosA * (beamReach * 0.38) - sinA * focalOffsetSide,
-                ly + sinA * (beamReach * 0.38) + cosA * focalOffsetSide,
+                lx, ly, 1.5,
+                lx + cosA * (beamReach * 0.34) - sinA * focalOffsetSide,
+                ly + sinA * (beamReach * 0.34) + cosA * focalOffsetSide,
                 rightFlankReach
               );
-              cBeamGrad.addColorStop(0.00, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.52)`);
-              cBeamGrad.addColorStop(0.25, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.38)`);
-              cBeamGrad.addColorStop(0.55, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.18)`);
-              cBeamGrad.addColorStop(0.85, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.04)`);
+              // Inverse-square (1/r^2) flux profile: intense near-field core near bumper that survives
+              // daytime sunlight adaptation, tapering smoothly into the mid/far field
+              cBeamGrad.addColorStop(0.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.72)`);
+              cBeamGrad.addColorStop(0.14, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.50)`);
+              cBeamGrad.addColorStop(0.32, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.30)`);
+              cBeamGrad.addColorStop(0.58, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.14)`);
+              cBeamGrad.addColorStop(0.84, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.035)`);
               cBeamGrad.addColorStop(1.00, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
               cCtx.fillStyle = cBeamGrad;
               cCtx.fill();
@@ -16409,8 +16218,8 @@ export class GameRenderer {
                   ly + sinA * (hotReach * 0.4) + cosA * 4,
                   hotReach * 1.1
                 );
-                hotGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.85)');
-                hotGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.45)');
+                hotGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.90)');
+                hotGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.48)');
                 hotGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
                 lCtx.fillStyle = hotGrad;
                 lCtx.fill();
@@ -16418,12 +16227,13 @@ export class GameRenderer {
                 traceHotCore(cCtx);
                 const cHotGrad = cCtx.createRadialGradient(
                   lx, ly, 1,
-                  lx + cosA * (hotReach * 0.4) - sinA * 4,
-                  ly + sinA * (hotReach * 0.4) + cosA * 4,
-                  hotReach * 1.1
+                  lx + cosA * (hotReach * 0.36) - sinA * 4,
+                  ly + sinA * (hotReach * 0.36) + cosA * 4,
+                  hotReach * 1.05
                 );
-                cHotGrad.addColorStop(0.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.36)`);
-                cHotGrad.addColorStop(0.48, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.16)`);
+                cHotGrad.addColorStop(0.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.54)`);
+                cHotGrad.addColorStop(0.26, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.32)`);
+                cHotGrad.addColorStop(0.58, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.12)`);
                 cHotGrad.addColorStop(1.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0)`);
                 cCtx.fillStyle = cHotGrad;
                 cCtx.fill();
@@ -16487,15 +16297,16 @@ export class GameRenderer {
               cCtx.save();
               traceHighBeam(cCtx);
               const cHighGrad = cCtx.createRadialGradient(
-                lx, ly, 2,
-                lx + cosA * (beamReach * 0.40),
-                ly + sinA * (beamReach * 0.40),
+                lx, ly, 1.5,
+                lx + cosA * (beamReach * 0.36),
+                ly + sinA * (beamReach * 0.36),
                 beamReach
               );
-              cHighGrad.addColorStop(0.00, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.56)`);
-              cHighGrad.addColorStop(0.25, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.42)`);
-              cHighGrad.addColorStop(0.55, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.22)`);
-              cHighGrad.addColorStop(0.86, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.05)`);
+              cHighGrad.addColorStop(0.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.76)`);
+              cHighGrad.addColorStop(0.15, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.54)`);
+              cHighGrad.addColorStop(0.35, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.34)`);
+              cHighGrad.addColorStop(0.60, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.16)`);
+              cHighGrad.addColorStop(0.86, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.04)`);
               cHighGrad.addColorStop(1.00, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
               cCtx.fillStyle = cHighGrad;
               cCtx.fill();
@@ -16531,16 +16342,17 @@ export class GameRenderer {
 
               traceHighCore(lCtx);
               const coreGrad = lCtx.createRadialGradient(lx, ly, 1, lx + cosA * (coreReach * 0.5), ly + sinA * (coreReach * 0.5), coreReach);
-              coreGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.85)');
-              coreGrad.addColorStop(0.60, 'rgba(0, 0, 0, 0.35)');
+              coreGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.90)');
+              coreGrad.addColorStop(0.60, 'rgba(0, 0, 0, 0.38)');
               coreGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
               lCtx.fillStyle = coreGrad;
               lCtx.fill();
 
               traceHighCore(cCtx);
-              const cCoreGrad = cCtx.createRadialGradient(lx, ly, 1, lx + cosA * (coreReach * 0.5), ly + sinA * (coreReach * 0.5), coreReach);
-              cCoreGrad.addColorStop(0.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.38)`);
-              cCoreGrad.addColorStop(0.58, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.14)`);
+              const cCoreGrad = cCtx.createRadialGradient(lx, ly, 1, lx + cosA * (coreReach * 0.44), ly + sinA * (coreReach * 0.44), coreReach);
+              cCoreGrad.addColorStop(0.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.58)`);
+              cCoreGrad.addColorStop(0.28, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.34)`);
+              cCoreGrad.addColorStop(0.60, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.13)`);
               cCoreGrad.addColorStop(1.00, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0)`);
               cCtx.fillStyle = cCoreGrad;
               cCtx.fill();
@@ -16580,8 +16392,8 @@ export class GameRenderer {
           lCtx.fill();
 
           const cApron = cCtx.createRadialGradient(bumperX, bumperY, 1, bumperX + cosA * 15, bumperY + sinA * 15, apronRad);
-          cApron.addColorStop(0.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.36)`);
-          cApron.addColorStop(0.5, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.16)`);
+          cApron.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.52)`);
+          cApron.addColorStop(0.38, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.24)`);
           cApron.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
           cCtx.fillStyle = cApron;
           cCtx.beginPath();
@@ -16982,11 +16794,12 @@ export class GameRenderer {
       cCtx.save();
       cCtx.translate(ox, oy);
       cCtx.rotate(aimAngle);
-      const cConeGrad = cCtx.createRadialGradient(4, 0, 2, fRange * 0.34, 0, fRange * 1.05);
-      cConeGrad.addColorStop(0.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.56)`);
-      cConeGrad.addColorStop(0.28, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.40)`);
-      cConeGrad.addColorStop(0.60, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.18)`);
-      cConeGrad.addColorStop(0.86, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.05)`);
+      const cConeGrad = cCtx.createRadialGradient(4, 0, 1.5, fRange * 0.30, 0, fRange * 1.05);
+      cConeGrad.addColorStop(0.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.78)`);
+      cConeGrad.addColorStop(0.16, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.52)`);
+      cConeGrad.addColorStop(0.36, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.30)`);
+      cConeGrad.addColorStop(0.64, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.14)`);
+      cConeGrad.addColorStop(0.86, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.04)`);
       cConeGrad.addColorStop(1.00, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
       cCtx.fillStyle = cConeGrad;
       traceSmoothFlash(cCtx);
@@ -17571,7 +17384,7 @@ export class GameRenderer {
         const b = m ? m[3] : '255';
         const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
 
-        // Crisp physical tail/brake/reverse lens emitter bloom (ground illumination is handled in Pass 1 cCtx masked by D_env)
+        // Crisp physical tail/brake/reverse lens emitter bloom
         const lensGrad = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, lensRadius);
         lensGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.85).toFixed(3)})`);
         lensGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.28).toFixed(3)})`);
@@ -17580,6 +17393,21 @@ export class GameRenderer {
         ctx.beginPath();
         ctx.arc(0.4, 0, lensRadius, 0, Math.PI * 2);
         ctx.fill();
+
+        // Near-field grazing Fresnel road surface reflex (visible even on sunlit pavement right behind bumper)
+        if (lensRadius >= 3.0) {
+          const fresnelReach = (isFogWarningLamp ? 18 : lensRadius * 3.8) * fogFactor;
+          const fresnelSpread = lensRadius * 1.95 * fogFactor;
+          const fresnelPeak = Math.min(0.22, baseA * (0.11 + 0.08 * nightAlpha + (isRaining ? 0.06 : 0)));
+          const fGrad = ctx.createRadialGradient(1.2, 0, 0.3, fresnelReach * 0.42, 0, fresnelReach);
+          fGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${fresnelPeak.toFixed(3)})`);
+          fGrad.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${(fresnelPeak * 0.36).toFixed(3)})`);
+          fGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+          ctx.fillStyle = fGrad;
+          ctx.beginPath();
+          ctx.ellipse(fresnelReach * 0.42, 0, fresnelReach * 0.52, fresnelSpread, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         // Atmospheric Mie scattering in air ONLY during genuine dense particulate fog
         if (isFog && weights.fog > 0.05) {
@@ -17657,7 +17485,42 @@ export class GameRenderer {
 
         ctx.restore();
 
-        // Wet Road Specular Reflection (Glistening sheen on rain / wet asphalt)
+        // Physical Grazing-Angle Fresnel Road Micro-Facet Reflection:
+        // Headlamps strike the road at a shallow grazing angle (~83-87 deg from vertical).
+        // By Fresnel's equations + inverse-square flux (1/r^2), the near-field asphalt micro-aggregates
+        // right in front of the lens reflect a concentrated hotspot even in direct midday sun,
+        // while wet pavement stretches this reflection into a long specular streak.
+        {
+          const nearFresnelLen = (isHighBeam ? 54 : 38) * fogFactor;
+          const nearFresnelW = (isHighBeam ? 9.5 : 7.5) * fogFactor;
+          const nearFresnelA = (isHighBeam ? 0.14 : 0.105) * (0.78 + 0.22 * nightAlpha);
+          const nearSheen = ctx.createRadialGradient(
+            lx + cosFA * 3,
+            ly + sinFA * 3,
+            0.8,
+            lx + cosFA * (nearFresnelLen * 0.42),
+            ly + sinFA * (nearFresnelLen * 0.42),
+            nearFresnelLen
+          );
+          nearSheen.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, ${nearFresnelA.toFixed(3)})`);
+          nearSheen.addColorStop(0.36, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(nearFresnelA * 0.42).toFixed(3)})`);
+          nearSheen.addColorStop(0.75, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, ${(nearFresnelA * 0.10).toFixed(3)})`);
+          nearSheen.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
+          ctx.fillStyle = nearSheen;
+          ctx.beginPath();
+          ctx.ellipse(
+            lx + cosFA * (nearFresnelLen * 0.46),
+            ly + sinFA * (nearFresnelLen * 0.46),
+            nearFresnelLen * 0.50,
+            nearFresnelW,
+            frontAngle,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+
+        // Wet Road Extended Specular Reflection (Glistening water-film sheen on rain / wet asphalt)
         const wetDarkScale = Math.max(nightAlpha, sunState.shadowOpacity * 0.45, weights.rain * 0.35);
         if (isRaining && wetDarkScale > 0.08) {
           const wetLen = (isHighBeam ? 210 : 140) * fogFactor;

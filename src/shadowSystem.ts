@@ -6,6 +6,7 @@ import { performanceConfig, isMobileOrLowEndDevice } from './performanceConfig';
 import { RemotePlayerState } from './onlineSystem';
 import { computeHumanPose, Vec3 } from './humanAnimationSystem';
 import { BirdSystem } from './birdSystem';
+import { LitterSystem } from './litterSystem';
 
 export type Point = Vector2D;
 
@@ -3013,16 +3014,7 @@ export function renderUnifiedWorldShadows(
         sCtx.fill();
       }
     }
-    if (world.litter) {
-      for (const lit of world.litter) {
-        if (lit.x < minX - 20 || lit.x > maxX + 20 || lit.y < minY - 20 || lit.y > maxY + 20) continue;
-        const z = 1.6 + (lit.altitude || 0);
-        const lOff = getShadowOffset(z, sunState);
-        sCtx.beginPath();
-        sCtx.arc(lit.x + lOff.dx, lit.y + lOff.dy, Math.max(1.2, lit.size * 0.55), 0, Math.PI * 2);
-        sCtx.fill();
-      }
-    }
+    LitterSystem.renderUnifiedShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'low');
     if (world.stains) {
       for (const st of world.stains) {
         if (st.type !== 'sand') continue;
@@ -3227,8 +3219,11 @@ export function renderUnifiedWorldShadows(
     }
   }
 
-  // 2F. Canopy-Perched & Flying Birds (3D articulated wing, tail & head shadows projected along solar vector)
+  // 2F. Canopy-Perched & Flying Birds + High-Altitude Falling Canopy Leaves
   BirdSystem.renderUnifiedShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'high');
+  if (performanceConfig.enableMicroShadows !== false) {
+    LitterSystem.renderUnifiedShadows(sCtx, world, sunState, minX, minY, maxX, maxY, 'high');
+  }
 
   // 2G. Drifting Overhead Cloud Shadows (soft atmospheric darkening patches across the world)
   if (

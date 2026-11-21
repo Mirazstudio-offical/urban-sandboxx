@@ -1649,8 +1649,11 @@ export function findActiveInteraction(
       coffee: 'Стакан кофе',
       mask: 'Маска',
       butt: 'Окурок',
-      leaf: 'Листва'};
+      phone: 'Разбитый телефон',
+      leaf: 'Листва'
+    };
     for (const lit of world.litter) {
+      if (lit.isAirborne || (lit.altitude || 0) > 1.5 || lit.type === 'leaf') continue;
       const reach = isTargetInPhysicalReach(px, py, facing, lit.x, lit.y, 40, 1.3, mouseWorldPos);
       if (reach.inReach) {
         const litName = litterNames[lit.type] || 'Бытовой мусор';

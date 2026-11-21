@@ -9,6 +9,7 @@ import { getCurrentSunShadowState } from './shadowSystem';
 import { getVehicleBasePolygon } from './vehicleVisuals';
 import { traceSoftbodyPath } from './softbodyVisuals';
 import { RemotePlayerState } from './onlineSystem';
+import { LitterSystem } from './litterSystem';
 
 export interface RiverWaypoint {
   x: number;
@@ -2198,39 +2199,22 @@ function renderFloatingRiverDebris(
       }
 
       case 'twig': {
-        ctx.strokeStyle = '#4a2f1b';
-        ctx.lineWidth = 1.25;
-        ctx.beginPath();
-        ctx.moveTo(-d.size * 0.65, 0);
-        ctx.quadraticCurveTo(0, d.size * 0.18, d.size * 0.65, -0.2);
-        ctx.stroke();
+        LitterSystem.drawBotanicalFoliageModel(ctx, 'twig', d.size * 0.9, '#5c3a21', '#3b2313', 0.4, -0.8, 1.0);
         break;
       }
 
       case 'leaf_yellow':
       case 'leaf_red':
       case 'leaf_orange': {
-        const leafColor = d.type === 'leaf_yellow' ? '#ca8a04' : (d.type === 'leaf_red' ? '#b91c1c' : '#c2410c');
-        // Pointed birch/alder leaf silhouette floating flush on water surface
-        ctx.fillStyle = leafColor;
-        ctx.beginPath();
-        ctx.moveTo(-d.size * 0.6, 0);
-        ctx.quadraticCurveTo(0, -d.size * 0.42, d.size * 0.65, 0);
-        ctx.quadraticCurveTo(0, d.size * 0.42, -d.size * 0.6, 0);
-        ctx.closePath();
-        ctx.fill();
+        const leafColor = d.type === 'leaf_yellow' ? '#eab308' : (d.type === 'leaf_red' ? '#dc2626' : '#ea580c');
+        const veinColor = d.type === 'leaf_yellow' ? '#854d0e' : (d.type === 'leaf_red' ? '#7f1d1d' : '#7c2d12');
+        const subtype = d.type === 'leaf_red' ? 'leaf_maple' : (d.type === 'leaf_orange' ? 'leaf_oak' : 'leaf_birch');
+        LitterSystem.drawBotanicalFoliageModel(ctx, subtype, d.size * 0.88, leafColor, veinColor, 0.4, -0.8, 1.0);
         break;
       }
 
       case 'bark_chip': {
-        ctx.fillStyle = '#5c3419';
-        ctx.beginPath();
-        ctx.moveTo(-d.size * 0.5, -d.size * 0.2);
-        ctx.lineTo(d.size * 0.45, -d.size * 0.28);
-        ctx.lineTo(d.size * 0.55, d.size * 0.22);
-        ctx.lineTo(-d.size * 0.4, d.size * 0.3);
-        ctx.closePath();
-        ctx.fill();
+        LitterSystem.drawBotanicalFoliageModel(ctx, 'bark_chip', d.size * 0.85, '#784b2a', '#452714', 0.4, -0.8, 1.0);
         break;
       }
 
