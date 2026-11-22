@@ -1,25 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Building2,
-  X,
   FileText,
-  Key,
+  Key as KeyIcon,
   CheckCircle2,
   Coins,
   ShieldCheck,
-  Home,
-  Layers,
   MapPin,
-  Ruler,
-  Calendar,
-  Zap,
   Check,
-  Award,
-  Search
+  Search,
+  ChevronLeft,
+  Navigation
 } from 'lucide-react';
 import { Player } from '../types';
 import { PropertyApartment, getCityApartments, purchaseApartment } from '../propertySystem';
 import { getPlayerCash } from '../items';
+import { ModalShell, Seg } from './gameUi';
+import { sound } from '../audio';
 
 interface RealEstateAgencyModalProps {
   isOpen: boolean;
@@ -30,28 +26,43 @@ interface RealEstateAgencyModalProps {
   onPropertyPurchased?: () => void;
 }
 
+type PropertyFilter = 'all' | 'panel' | 'brick' | 'modern' | 'suburban' | 'owned';
+
+const PROPERTY_FILTERS: { id: PropertyFilter; label: string }[] = [
+  { id: 'all', label: 'Все' },
+  { id: 'panel', label: 'Панель' },
+  { id: 'brick', label: 'Сталинка' },
+  { id: 'modern', label: 'ЖК' },
+  { id: 'suburban', label: 'Коттедж' },
+  { id: 'owned', label: 'Мои' }
+];
+
 export const RealEstateAgencyModal: React.FC<RealEstateAgencyModalProps> = ({
   isOpen,
   onClose,
   player,
   onSetGpsDestination,
-  world
+  world,
+  onPropertyPurchased
 }) => {
   const apartments = getCityApartments();
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'panel' | 'brick' | 'modern' | 'suburban' | 'owned'>('all');
-  const [selectedAptId, setSelectedAptId] = useState<string>('');
+  const [activeFilter, setActiveFilter] = useState<PropertyFilter>('all');
+  const [selectedAptId, setSelectedAptId] = useState<string>(() => apartments[0]?.id || '');
   const [buyerName, setBuyerName] = useState<string>('Иванов Иван Иванович');
   const [purchaseStep, setPurchaseStep] = useState<'inspect' | 'contract' | 'success'>('inspect');
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [purchasedApt, setPurchasedApt] = useState<PropertyApartment | null>(null);
-
-  if (!isOpen) return null;
+  const [gpsPinnedId, setGpsPinnedId] = useState<string | null>(null);
+  const [narrowPane, setNarrowPane] = useState<'list' | 'detail'>('list');
 
   const filteredApartments = apartments.filter(apt => {
-    const matchesSearch = apt.address.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          apt.roomsLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          apt.buildingNameRu.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      apt.address.toLowerCase().includes(q) ||
+      apt.roomsLabel.toLowerCase().includes(q) ||
+      apt.buildingNameRu.toLowerCase().includes(q);
     if (!matchesSearch) return false;
 
     if (activeFilter === 'all') return true;
@@ -63,388 +74,427 @@ export const RealEstateAgencyModal: React.FC<RealEstateAgencyModalProps> = ({
     return true;
   });
 
-  // Ensure selectedAptId is valid and within filtered selection
-  const currentApt = filteredApartments.find(a => a.id === selectedAptId) || filteredApartments[0] || apartments[0];
-  
-  // Set selected if empty
-  if (!selectedAptId && currentApt) {
-    setSelectedAptId(currentApt.id);
-  }
+  const currentApt =
+    filteredApartments.find(a => a.id === selectedAptId) ||
+    filteredApartments[0] ||
+    apartments[0] ||
+    null;
+
+  useEffect(() => {
+    if (currentApt && currentApt.id !== selectedAptId) {
+      setSelectedAptId(currentApt.id);
+    }
+  }, [currentApt?.id, selectedAptId]);
+
+  if (!isOpen) return null;
+
   const playerCash = getPlayerCash(player);
-  const totalCost = currentApt ? currentApt.priceRub + currentApt.stateDutyRub + currentApt.notaryFeeRub : 0;
+  const feesTotal = currentApt ? currentApt.stateDutyRub + currentApt.notaryFeeRub : 0;
+  const totalCost = currentApt ? currentApt.priceRub + feesTotal : 0;
   const canAfford = playerCash >= totalCost;
+  const cashAfterDeal = playerCash - totalCost;
 
   const handleStartContract = () => {
-    if (!canAfford || currentApt.isOwned) return;
+    if (!currentApt || !canAfford || currentApt.isOwned) return;
+    sound.playUseItem();
+    setStatusMessage('');
     setPurchaseStep('contract');
   };
 
   const handleConfirmPurchase = () => {
     if (!currentApt || !canAfford) return;
-    const res = purchaseApartment(player, currentApt, buyerName.trim() || 'Иванов Иван Иванович', world);
+    const res = purchaseApartment(
+      player,
+      currentApt,
+      buyerName.trim() || 'Иванов Иван Иванович',
+      world
+    );
     if (res.success) {
+      sound.playUseItem();
       setPurchasedApt(currentApt);
       setPurchaseStep('success');
-      setStatusMessage(res.message);
+      setStatusMessage('');
+      onPropertyPurchased?.();
     } else {
       setStatusMessage(res.message);
     }
   };
 
-  const handleSetGps = () => {
-    if (!currentApt || !onSetGpsDestination) return;
-    const bld = world?.buildings?.find((b: any) => b.id === currentApt.buildingId);
+  const handleSetGps = (apt: PropertyApartment | null) => {
+    if (!apt || !onSetGpsDestination) return;
+    const bld = world?.buildings?.find((b: any) => b.id === apt.buildingId);
     if (bld) {
       onSetGpsDestination({
         x: bld.x + bld.width / 2,
         y: bld.y + bld.height / 2,
-        name: currentApt.address
+        name: apt.address
       });
-    } else if (currentApt.entranceWorldX && currentApt.entranceWorldY) {
+    } else if (apt.entranceWorldX && apt.entranceWorldY) {
       onSetGpsDestination({
-        x: currentApt.entranceWorldX,
-        y: currentApt.entranceWorldY,
-        name: currentApt.address
+        x: apt.entranceWorldX,
+        y: apt.entranceWorldY,
+        name: apt.address
       });
     } else {
-      // Fallback
       onSetGpsDestination({
         x: 4920,
         y: 4440,
-        name: currentApt.address
+        name: apt.address
       });
     }
+    sound.playUseItem();
+    setGpsPinnedId(apt.id);
   };
 
+  const handleResetAndClose = () => {
+    setPurchaseStep('inspect');
+    setStatusMessage('');
+    onClose();
+  };
+
+  const modalSubtitle =
+    purchaseStep === 'contract'
+      ? 'Нотариальное оформление договора купли-продажи'
+      : purchaseStep === 'success'
+      ? 'Регистрация права собственности в ЕГРН'
+      : 'Городской реестр недвижимости и оформление права собственности';
+
+  const footerHints: [string, string][] =
+    purchaseStep === 'inspect'
+      ? [
+          ['Клик', 'Выбрать объект'],
+          ['Esc', 'Закрыть']
+        ]
+      : [['Esc', 'Закрыть']];
+
   return (
-    <div
-      id="real-estate-modal-overlay"
-      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 bg-black/85 backdrop-blur-md animate-fade-in"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <ModalShell
+      id="real-estate-modal"
+      title="Агентство недвижимости"
+      subtitle={modalSubtitle}
+      width={1080}
+      tall
+      wipeKey={purchaseStep}
+      onClose={handleResetAndClose}
+      headRight={
+        <div className="gu-chip" title="Наличные средства">
+          <Coins size={15} strokeWidth={1.75} color="#e0ab45" />
+          <span
+            style={{
+              fontWeight: 700,
+              color: '#e9e6df',
+              fontVariantNumeric: 'tabular-nums'
+            }}
+          >
+            {playerCash.toLocaleString('ru-RU')} ₽
+          </span>
+        </div>
+      }
+      footerHints={footerHints}
+      footerRight={
+        purchaseStep === 'contract' ? (
+          <button
+            type="button"
+            onClick={() => {
+              setPurchaseStep('inspect');
+              setStatusMessage('');
+            }}
+            className="gu-btn gu-btn-s gu-btn-sm"
+          >
+            <ChevronLeft size={15} strokeWidth={1.75} />
+            <span>К списку объектов</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleResetAndClose}
+            className="gu-btn gu-btn-s gu-btn-sm"
+          >
+            Закрыть
+          </button>
+        )
+      }
     >
-      <div
-        id="real-estate-modal-container"
-        className="my-auto relative w-full max-w-5xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden text-zinc-100 flex flex-col max-h-[94vh] sm:max-h-[88vh]"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 sm:px-5 py-3 sm:py-4 bg-zinc-900 border-b border-zinc-800 shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 shrink-0">
-              <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
+      {/* ==================== STEP 3: SUCCESS ==================== */}
+      {purchaseStep === 'success' && purchasedApt ? (
+        <div className="gu-re-success">
+          <div className="gu-re-success-mark">
+            <ShieldCheck size={28} strokeWidth={1.75} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 560 }}>
+            <div className="gu-cn" style={{ fontSize: 28, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
+              Право собственности зарегистрировано
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-bold text-zinc-100 truncate">
-                  Агентство Недвижимости «ГлавНедвижимость»
-                </h2>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
-                  Гос. реестр Росреестра
-                </span>
-              </div>
-              <p className="text-xs text-zinc-400 truncate hidden sm:block">
-                Купля-продажа квартир с государственной регистрацией права и выдачей документов
-              </p>
+            <div style={{ fontSize: 13.5, color: 'var(--gu-mut)', fontVariantNumeric: 'tabular-nums' }}>
+              {purchasedApt.address} · ЕГРН {purchasedApt.cadastralNumber}
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">
-              <Coins className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm font-mono font-bold text-emerald-400">
-                {playerCash.toLocaleString('ru-RU')} ₽
+          <div className="gu-re-success-docs">
+            <div className="gu-row-between" style={{ paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
+              <span className="gu-grp">Переданные ключи и документы</span>
+              <span style={{ fontSize: 12, color: 'var(--gu-good)', fontWeight: 600 }}>
+                Добавлено в инвентарь
               </span>
             </div>
+            <ul className="gu-re-docs-grid">
+              <li className="gu-re-doc-item">
+                <KeyIcon size={15} strokeWidth={1.75} color="#e0ab45" style={{ flex: 'none' }} />
+                <span>Основной ключ · код {purchasedApt.lockCode}</span>
+              </li>
+              <li className="gu-re-doc-item">
+                <KeyIcon size={15} strokeWidth={1.75} color="#e0ab45" style={{ flex: 'none' }} />
+                <span>Дубликат ключа в опечатанном пенале</span>
+              </li>
+              <li className="gu-re-doc-item">
+                <FileText size={15} strokeWidth={1.75} color="#9ac985" style={{ flex: 'none' }} />
+                <span>Выписка из ЕГРН · {purchasedApt.cadastralNumber}</span>
+              </li>
+              <li className="gu-re-doc-item">
+                <FileText size={15} strokeWidth={1.75} color="#9ac985" style={{ flex: 'none' }} />
+                <span>Нотариальный договор купли-продажи</span>
+              </li>
+              <li className="gu-re-doc-item">
+                <FileText size={15} strokeWidth={1.75} color="#a29e93" style={{ flex: 'none' }} />
+                <span>Технический паспорт помещения БТИ</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="gu-row" style={{ gap: 10 }}>
+            {onSetGpsDestination && (
+              <button
+                type="button"
+                onClick={() => handleSetGps(purchasedApt)}
+                className="gu-btn gu-btn-s"
+              >
+                <Navigation size={15} strokeWidth={1.75} />
+                <span>{gpsPinnedId === purchasedApt.id ? 'Маршрут проложен' : 'Проложить GPS маршрут'}</span>
+              </button>
+            )}
             <button
-              id="btn-close-real-estate-modal"
-              onClick={onClose}
-              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+              type="button"
+              onClick={handleResetAndClose}
+              className="gu-btn gu-btn-p"
             >
-              <X className="w-5 h-5" />
+              Завершить оформление
             </button>
           </div>
         </div>
-
-        {/* Modal Body */}
-        {purchaseStep === 'success' && purchasedApt ? (
-          <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center space-y-6 overflow-y-auto">
-            <div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 animate-bounce">
-              <Award className="w-10 h-10" />
-            </div>
-
-            <div className="space-y-2 max-w-xl">
-              <h3 className="text-2xl font-bold text-zinc-100">
-                Сделка успешно зарегистрирована!
-              </h3>
-              <p className="text-zinc-300 text-sm">
-                Право собственности внесено в Единый Государственный Реестр Недвижимости (ЕГРН).
-              </p>
-            </div>
-
-            <div className="w-full max-w-2xl bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 text-left space-y-3">
-              <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <span className="font-bold text-sm text-zinc-200">Переданный пакет документов и ключей:</span>
+      ) : purchaseStep === 'contract' && currentApt ? (
+        /* ==================== STEP 2: CONTRACT ==================== */
+        <div className="gu-re-contract">
+          {/* Left Panel: Buyer & Object Details */}
+          <div className="gu-re-panel">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="gu-row-between" style={{ paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
+                <span className="gu-grp">Договор купли-продажи</span>
+                <span style={{ fontSize: 12, color: 'var(--gu-mut)', fontVariantNumeric: 'tabular-nums' }}>
+                  Кадастр {currentApt.cadastralNumber}
+                </span>
               </div>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-300">
-                <li className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Основной стальной ключ (Код: {purchasedApt.lockCode})</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Дубликат ключа в опечатанном латунном пенале</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Выписка из ЕГРН (Кадастр № {purchasedApt.cadastralNumber})</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Нотариальный Договор купли-продажи (ДКП)</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Технический паспорт помещения БТИ</span>
-                </li>
-              </ul>
-            </div>
 
-            <button
-              onClick={() => {
-                setPurchaseStep('inspect');
-                onClose();
-              }}
-              className="px-8 py-3.5 min-h-[48px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-all"
-            >
-              Завершить и осмотреть инвентарь
-            </button>
-          </div>
-        ) : purchaseStep === 'contract' && currentApt ? (
-          <div className="p-6 overflow-y-auto space-y-6">
-            <div className="border-b border-zinc-800 pb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-amber-400 flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Нотариальное оформление Договора купли-продажи (ДКП)
-                </h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Проверьте паспортные данные покупателя и суммы обязательных государственных сборов
-                </p>
+                <label className="gu-lbl" htmlFor="re-buyer-name" style={{ display: 'block' }}>
+                  ФИО собственника для внесения в ЕГРН
+                </label>
+                <input
+                  id="re-buyer-name"
+                  type="text"
+                  value={buyerName}
+                  maxLength={60}
+                  onChange={e => setBuyerName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key !== 'Escape') e.stopPropagation();
+                  }}
+                  className="gu-inp"
+                  style={{ height: 42, fontSize: 15 }}
+                  placeholder="Фамилия Имя Отчество"
+                />
+                <div style={{ fontSize: 12, color: 'var(--gu-mut)', marginTop: 6 }}>
+                  Указывается в выписке из реестра и нотариальном договоре
+                </div>
               </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span className="gu-grp">Сведения об объекте</span>
+              <div className="gu-kv-grid">
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Адрес</span>
+                  <span className="gu-kv-v" title={currentApt.address} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {currentApt.address}
+                  </span>
+                </div>
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Общая площадь</span>
+                  <span className="gu-kv-v">{currentApt.areaSqM} м² · {currentApt.roomsCount} комн.</span>
+                </div>
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Этаж</span>
+                  <span className="gu-kv-v">{currentApt.floor + 1} из {currentApt.totalBuildingFloors}</span>
+                </div>
+                <div className="gu-kv">
+                  <span className="gu-kv-k">Материал стен</span>
+                  <span className="gu-kv-v" title={currentApt.wallMaterial} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {currentApt.wallMaterial}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Panel: Financial Ledger & Sign CTA */}
+          <div className="gu-re-panel">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="gu-row-between" style={{ paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
+                <span className="gu-grp">Финансовая смета</span>
+                <span style={{ fontSize: 12, color: canAfford ? 'var(--gu-good)' : '#efa690', fontWeight: 600 }}>
+                  {canAfford ? 'Средств достаточно' : 'Недостаточно средств'}
+                </span>
+              </div>
+
+              <div className="gu-re-ledger">
+                <div className="gu-re-ledger-row">
+                  <span className="gu-mut">Стоимость объекта</span>
+                  <span style={{ fontWeight: 600, color: '#fff' }}>
+                    {currentApt.priceRub.toLocaleString('ru-RU')} ₽
+                  </span>
+                </div>
+                <div className="gu-re-ledger-row">
+                  <span className="gu-mut">Госпошлина Росреестра</span>
+                  <span style={{ color: 'var(--gu-ink-dim)' }}>
+                    {currentApt.stateDutyRub.toLocaleString('ru-RU')} ₽
+                  </span>
+                </div>
+                <div className="gu-re-ledger-row">
+                  <span className="gu-mut">Нотариальный тариф</span>
+                  <span style={{ color: 'var(--gu-ink-dim)' }}>
+                    {currentApt.notaryFeeRub.toLocaleString('ru-RU')} ₽
+                  </span>
+                </div>
+                <div className="gu-re-ledger-row is-total">
+                  <span style={{ fontWeight: 600, color: '#fff' }}>Итого к оплате</span>
+                  <span className="gu-re-total-val">{totalCost.toLocaleString('ru-RU')} ₽</span>
+                </div>
+                <div className="gu-re-ledger-row">
+                  <span className="gu-mut">Остаток после сделки</span>
+                  <span style={{ fontWeight: 600, color: cashAfterDeal >= 0 ? 'var(--gu-good)' : '#efa690' }}>
+                    {cashAfterDeal.toLocaleString('ru-RU')} ₽
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {statusMessage && (
+                <div className="gu-note gu-err" style={{ padding: '8px 12px', fontSize: 12.5 }}>
+                  {statusMessage}
+                </div>
+              )}
+
               <button
-                onClick={() => setPurchaseStep('inspect')}
-                className="text-xs text-zinc-400 hover:text-zinc-200 underline"
+                type="button"
+                onClick={handleConfirmPurchase}
+                disabled={!canAfford}
+                className="gu-btn gu-btn-p gu-btn-block"
               >
-                Вернуться к выбору
+                <ShieldCheck size={16} strokeWidth={1.75} />
+                <span>Подписать договор и оплатить</span>
               </button>
             </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Left column: Buyer info & terms */}
-              <div className="lg:col-span-7 space-y-4">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block">
-                    ФИО Покупателя (Собственника по ЕГРН)
-                  </label>
-                  <input
-                    type="text"
-                    value={buyerName}
-                    onChange={(e) => setBuyerName(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 font-mono"
-                    placeholder="Фамилия Имя Отчество"
-                  />
-                  <p className="text-[11px] text-zinc-400">
-                    На данное имя будет оформлена Выписка из ЕГРН и свидетельство о государственной регистрации.
-                  </p>
-                </div>
-
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2 text-xs text-zinc-300">
-                  <h4 className="font-bold text-zinc-200 text-sm mb-1">Объект недвижимости:</h4>
-                  <p><span className="text-zinc-400">Адрес:</span> {currentApt.address}</p>
-                  <p><span className="text-zinc-400">Кадастровый номер:</span> {currentApt.cadastralNumber}</p>
-                  <p><span className="text-zinc-400">Общая площадь:</span> {currentApt.areaSqM} м² ({currentApt.roomsLabel})</p>
-                  <p><span className="text-zinc-400">Материал стен:</span> {currentApt.wallMaterial}</p>
-                </div>
-              </div>
-
-              {/* Right column: Financial breakdown */}
-              <div className="lg:col-span-5 bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col justify-between space-y-4">
-                <div>
-                  <h4 className="font-bold text-sm text-zinc-200 mb-3 border-b border-zinc-800 pb-2">
-                    Финансовая смета сделки
-                  </h4>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between text-zinc-300">
-                      <span>Стоимость квартиры:</span>
-                      <span className="font-mono font-bold">{currentApt.priceRub.toLocaleString('ru-RU')} ₽</span>
-                    </div>
-                    <div className="flex justify-between text-zinc-400">
-                      <span>Госпошлина Росреестра:</span>
-                      <span className="font-mono">{currentApt.stateDutyRub.toLocaleString('ru-RU')} ₽</span>
-                    </div>
-                    <div className="flex justify-between text-zinc-400">
-                      <span>Нотариальный тариф:</span>
-                      <span className="font-mono">{currentApt.notaryFeeRub.toLocaleString('ru-RU')} ₽</span>
-                    </div>
-                    <div className="border-t border-zinc-800 pt-2 flex justify-between text-sm font-bold text-emerald-400">
-                      <span>Итого к оплате:</span>
-                      <span className="font-mono text-base">{totalCost.toLocaleString('ru-RU')} ₽</span>
-                    </div>
-                  </div>
-                </div>
-
-                {statusMessage && (
-                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-                    {statusMessage}
-                  </div>
-                )}
-
-                <button
-                  onClick={handleConfirmPurchase}
-                  disabled={!canAfford}
-                  className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                    canAfford
-                      ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg'
-                      : 'bg-zinc-800 text-zinc-500 opacity-50 cursor-not-allowed'
-                  }`}
-                >
-                  <ShieldCheck className="w-5 h-5" />
-                  Подписать ДКП и Подтвердить Оплату
-                </button>
-              </div>
-            </div>
           </div>
-        ) : (
-          /* Main Apartment Inspection View */
-          <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto">
-            {/* Left Column: Apartment Selection List */}
-            <div className="lg:col-span-5 space-y-3 flex flex-col max-h-[600px]">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 block">
-                Доступные квартиры в реестре ({filteredApartments.length})
-              </span>
+        </div>
+      ) : (
+        /* ==================== STEP 1: CATALOG & DOSSIER ==================== */
+        <>
+          <div className="gu-re-tabs-narrow">
+            <Seg
+              full
+              value={narrowPane}
+              onChange={setNarrowPane}
+              options={[
+                { v: 'list', label: `Каталог · ${filteredApartments.length}` },
+                { v: 'detail', label: 'Карточка объекта' }
+              ]}
+            />
+          </div>
 
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <div className="gu-re-layout">
+            {/* LEFT COLUMN: Filterable & Scrollable Property List (ONLY scrollable region) */}
+            <div className={`gu-re-side ${narrowPane !== 'list' ? 'is-narrow-hidden' : ''}`}>
+              <div className="gu-re-side-head">
+                <span className="gu-grp">Объекты в реестре</span>
+                <span style={{ fontSize: 12, color: 'var(--gu-mut)', fontVariantNumeric: 'tabular-nums' }}>
+                  {filteredApartments.length} из {apartments.length}
+                </span>
+              </div>
+
+              <div className="gu-search gu-re-search">
+                <Search size={15} strokeWidth={1.75} color="#a29e93" style={{ flex: 'none' }} />
                 <input
                   type="text"
-                  placeholder="Поиск по адресу, комнатам..."
+                  placeholder="Адрес, комнаты или дом"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500 font-medium"
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key !== 'Escape') e.stopPropagation();
+                  }}
                 />
               </div>
 
-              {/* Filter Tabs */}
-              <div className="flex flex-wrap gap-1 pb-1">
-                <button
-                  onClick={() => { setActiveFilter('all'); setSelectedAptId(''); }}
-                  className={`px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
-                    activeFilter === 'all'
-                      ? 'bg-amber-500/10 border-amber-500 text-amber-400'
-                      : 'bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  Все
-                </button>
-                <button
-                  onClick={() => { setActiveFilter('panel'); setSelectedAptId(''); }}
-                  className={`px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
-                    activeFilter === 'panel'
-                      ? 'bg-amber-500/10 border-amber-500 text-amber-400'
-                      : 'bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  Панель
-                </button>
-                <button
-                  onClick={() => { setActiveFilter('brick'); setSelectedAptId(''); }}
-                  className={`px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
-                    activeFilter === 'brick'
-                      ? 'bg-amber-500/10 border-amber-500 text-amber-400'
-                      : 'bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  Сталинка
-                </button>
-                <button
-                  onClick={() => { setActiveFilter('modern'); setSelectedAptId(''); }}
-                  className={`px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
-                    activeFilter === 'modern'
-                      ? 'bg-amber-500/10 border-amber-500 text-amber-400'
-                      : 'bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  ЖК
-                </button>
-                <button
-                  onClick={() => { setActiveFilter('suburban'); setSelectedAptId(''); }}
-                  className={`px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
-                    activeFilter === 'suburban'
-                      ? 'bg-amber-500/10 border-amber-500 text-amber-400'
-                      : 'bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  Коттедж
-                </button>
-                <button
-                  onClick={() => { setActiveFilter('owned'); setSelectedAptId(''); }}
-                  className={`px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
-                    activeFilter === 'owned'
-                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                      : 'bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  Мои
-                </button>
+              <div className="gu-re-filters">
+                {PROPERTY_FILTERS.map(f => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveFilter(f.id);
+                      setStatusMessage('');
+                    }}
+                    className={`gu-re-filter ${activeFilter === f.id ? 'on' : ''}`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
               </div>
 
-              {/* Apartment List Scroll */}
-              <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 max-h-[420px]">
+              <div className="gu-re-list">
                 {filteredApartments.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-zinc-500 font-medium">
-                    Ничего не найдено
+                  <div className="gu-empty" style={{ padding: '24px 12px', fontSize: 13 }}>
+                    По выбранному фильтру объектов нет
                   </div>
                 ) : (
-                  filteredApartments.map((apt) => {
-                    const isSelected = apt.id === selectedAptId;
+                  filteredApartments.map(apt => {
+                    const isSelected = currentApt?.id === apt.id;
                     return (
                       <button
                         key={apt.id}
+                        type="button"
                         onClick={() => {
                           setSelectedAptId(apt.id);
                           setStatusMessage('');
+                          setNarrowPane('detail');
                         }}
-                        className={`w-full text-left p-3.5 rounded-xl border transition-all ${
-                          isSelected
-                            ? 'bg-amber-500/10 border-amber-500 text-zinc-100 shadow-md'
-                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-850 hover:text-zinc-200'
-                        }`}
+                        className={`gu-re-item ${isSelected ? 'is-on' : ''}`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-sm text-zinc-100">{apt.roomsLabel}</span>
+                        <div className="gu-re-item-top">
+                          <span className="gu-re-item-title">{apt.roomsLabel}</span>
                           {apt.isOwned ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                              В собственности
-                            </span>
+                            <span className="gu-re-item-price is-owned">В собственности</span>
                           ) : (
-                            <span className="font-mono text-xs font-bold text-emerald-400">
+                            <span className="gu-re-item-price">
                               {apt.priceRub.toLocaleString('ru-RU')} ₽
                             </span>
                           )}
                         </div>
-
-                        <div className="text-xs text-zinc-400 mt-1 truncate">
-                          {apt.address}
-                        </div>
-
-                        <div className="flex items-center gap-3 mt-2 text-[11px] text-zinc-400 border-t border-zinc-800/60 pt-2">
+                        <div className="gu-re-item-addr">{apt.address}</div>
+                        <div className="gu-re-item-meta">
                           <span>{apt.areaSqM} м²</span>
-                          <span>•</span>
-                          <span>{apt.floor + 1}/{apt.totalBuildingFloors} этаж</span>
-                          <span>•</span>
+                          <span aria-hidden="true">·</span>
+                          <span>{apt.floor + 1}/{apt.totalBuildingFloors} эт.</span>
+                          <span aria-hidden="true">·</span>
                           <span>{apt.yearBuilt} г.</span>
                         </div>
                       </button>
@@ -454,117 +504,161 @@ export const RealEstateAgencyModal: React.FC<RealEstateAgencyModalProps> = ({
               </div>
             </div>
 
-            {/* Right Column: Detailed Apartment Dossier */}
-            <div className="lg:col-span-7 flex flex-col justify-between space-y-4 bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
-              <div className="space-y-4">
-                <div className="flex items-start justify-between border-b border-zinc-800 pb-3">
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100">
-                      {currentApt.buildingNameRu}
-                    </h3>
-                    <p className="text-xs text-amber-400 mt-0.5 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {currentApt.address}
-                    </p>
-                    {onSetGpsDestination && (
-                      <button
-                        onClick={handleSetGps}
-                        className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/20 hover:border-sky-500/40 text-[11px] font-bold text-sky-400 transition-all select-none"
+            {/* RIGHT COLUMN: Property Dossier — ZERO SCROLL, fits cleanly */}
+            <div className={`gu-re-detail ${narrowPane !== 'detail' ? 'is-narrow-hidden' : ''}`}>
+              {!currentApt ? (
+                <div className="gu-empty" style={{ flex: 1 }}>
+                  <div className="gu-empty-title">Объект не выбран</div>
+                  <div style={{ fontSize: 13 }}>Выберите квартиру из реестра слева</div>
+                </div>
+              ) : (
+                <>
+                  {/* Header */}
+                  <div className="gu-re-detail-head">
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="gu-re-building-title" title={currentApt.buildingNameRu}>
+                        {currentApt.buildingNameRu}
+                      </div>
+                      <div className="gu-re-address" title={currentApt.address}>
+                        <MapPin size={14} strokeWidth={1.75} style={{ flex: 'none' }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {currentApt.address}
+                        </span>
+                      </div>
+                      <div className="gu-re-meta-line">
+                        <span>{currentApt.roomsLabel}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>Кадастр {currentApt.cadastralNumber}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flex: 'none' }}>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: currentApt.isOwned
+                            ? 'var(--gu-good)'
+                            : canAfford
+                            ? 'var(--gu-amber-soft)'
+                            : '#efa690'
+                        }}
                       >
-                        <MapPin className="w-3.5 h-3.5 text-sky-400" />
-                        Проложить GPS маршрут к дому
+                        {currentApt.isOwned
+                          ? 'В собственности'
+                          : canAfford
+                          ? 'Доступна к покупке'
+                          : 'Недостаточно средств'}
+                      </span>
+                      {onSetGpsDestination && (
+                        <button
+                          type="button"
+                          onClick={() => handleSetGps(currentApt)}
+                          className="gu-btn gu-btn-s gu-btn-xs"
+                        >
+                          <Navigation size={13} strokeWidth={1.75} />
+                          <span>{gpsPinnedId === currentApt.id ? 'Маршрут задан' : 'Маршрут GPS'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Specs 3x2 Grid */}
+                  <div className="gu-re-specs">
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Общая площадь</span>
+                      <span className="gu-kv-v">{currentApt.areaSqM} м²</span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Этаж</span>
+                      <span className="gu-kv-v">
+                        {currentApt.floor + 1} из {currentApt.totalBuildingFloors}
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Потолки</span>
+                      <span className="gu-kv-v">{currentApt.ceilingHeightM} м</span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Год постройки</span>
+                      <span className="gu-kv-v">{currentApt.yearBuilt} г.</span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Коммунальные</span>
+                      <span className="gu-kv-v">
+                        {currentApt.monthlyUtilitiesRub.toLocaleString('ru-RU')} ₽/мес
+                      </span>
+                    </div>
+                    <div className="gu-kv">
+                      <span className="gu-kv-k">Стены</span>
+                      <span className="gu-kv-v" title={currentApt.wallMaterial}>
+                        {currentApt.wallMaterial}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Description & Features (compact, fits without scrolling) */}
+                  <div className="gu-re-middle">
+                    <div className="gu-re-desc" title={currentApt.descriptionRu}>
+                      {currentApt.descriptionRu}
+                    </div>
+
+                    <div className="gu-re-features-box">
+                      <span className="gu-grp">Планировка и оснащение</span>
+                      <ul className="gu-re-features">
+                        {currentApt.features.map((feat, idx) => (
+                          <li key={idx} className="gu-re-feature" title={feat}>
+                            <Check size={14} strokeWidth={2} color="#9ac985" style={{ flex: 'none' }} />
+                            <span>{feat}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Bottom Purchase Bar */}
+                  <div className="gu-re-buybar">
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--gu-mut)',
+                          fontVariantNumeric: 'tabular-nums',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                      >
+                        Итого с пошлинами · объект {currentApt.priceRub.toLocaleString('ru-RU')} ₽ + сборы {feesTotal.toLocaleString('ru-RU')} ₽
+                      </div>
+                      <div className="gu-re-total-val" style={{ marginTop: 4 }}>
+                        {totalCost.toLocaleString('ru-RU')} ₽
+                      </div>
+                    </div>
+
+                    {currentApt.isOwned ? (
+                      <button type="button" disabled className="gu-btn gu-btn-s">
+                        <CheckCircle2 size={16} strokeWidth={1.75} color="#9ac985" />
+                        <span>Квартира выкуплена</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleStartContract}
+                        disabled={!canAfford}
+                        className="gu-btn gu-btn-p"
+                      >
+                        <FileText size={16} strokeWidth={1.75} />
+                        <span>Оформить договор</span>
                       </button>
                     )}
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs text-zinc-400">Кадастровый номер:</div>
-                    <div className="text-xs font-mono font-bold text-zinc-200">{currentApt.cadastralNumber}</div>
-                  </div>
-                </div>
-
-                {/* Specs Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800">
-                    <span className="text-[10px] text-zinc-400 block">Площадь помещения</span>
-                    <span className="text-sm font-bold text-zinc-100 flex items-center gap-1">
-                      <Ruler className="w-3.5 h-3.5 text-amber-400" />
-                      {currentApt.areaSqM} м²
-                    </span>
-                  </div>
-
-                  <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800">
-                    <span className="text-[10px] text-zinc-400 block">Этаж / Этажность</span>
-                    <span className="text-sm font-bold text-zinc-100 flex items-center gap-1">
-                      <Layers className="w-3.5 h-3.5 text-amber-400" />
-                      {currentApt.floor + 1} из {currentApt.totalBuildingFloors}
-                    </span>
-                  </div>
-
-                  <div className="bg-zinc-900 p-2.5 rounded-lg border border-zinc-800">
-                    <span className="text-[10px] text-zinc-400 block">Высота потолков</span>
-                    <span className="text-sm font-bold text-zinc-100 flex items-center gap-1">
-                      <Home className="w-3.5 h-3.5 text-amber-400" />
-                      {currentApt.ceilingHeightM} м
-                    </span>
-                  </div>
-                </div>
-
-                {/* Description & Features */}
-                <div className="space-y-2">
-                  <p className="text-xs text-zinc-300 leading-relaxed bg-zinc-900/80 p-3 rounded-lg border border-zinc-800">
-                    {currentApt.descriptionRu}
-                  </p>
-
-                  <div className="space-y-1">
-                    <span className="text-xs font-bold text-zinc-300 block">Особенности и планировка:</span>
-                    <ul className="space-y-1 text-xs text-zinc-400">
-                      {currentApt.features.map((feat, idx) => (
-                        <li key={idx} className="flex items-center gap-1.5">
-                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span>{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Action Section */}
-              <div className="border-t border-zinc-800 pt-4 flex items-center justify-between gap-4">
-                <div>
-                  <span className="text-xs text-zinc-400 block">Полная стоимость (с учетом пошлин):</span>
-                  <span className="text-xl font-mono font-bold text-emerald-400">
-                    {totalCost.toLocaleString('ru-RU')} ₽
-                  </span>
-                </div>
-
-                {currentApt.isOwned ? (
-                  <button
-                    disabled
-                    className="px-6 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-sm flex items-center gap-2"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Квартира выкуплена
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleStartContract}
-                    disabled={!canAfford}
-                    className={`px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${
-                      canAfford
-                        ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg'
-                        : 'bg-zinc-800 text-zinc-500 opacity-50 cursor-not-allowed'
-                    }`}
-                  >
-                    <FileText className="w-4 h-4" />
-                    Оформить покупку
-                  </button>
-                )}
-              </div>
+                </>
+              )}
             </div>
           </div>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </ModalShell>
   );
 };
