@@ -32,8 +32,10 @@ import {
   getSlotCompartment,
   getCandyPackagingShapeNameRu,
   getChocolatePackagingShapeNameRu,
-  getUnifiedItemAttributes
+  getUnifiedItemAttributes,
+  createItem
 } from '../items';
+import { getAllFreeCatalogItems, FREE_CATALOG_CATEGORIES, getFreeCategoryLabelRu } from '../freeItemCatalog';
 import { getItemThermalDisplayInfo } from '../itemThermalSystem';
 import {
   isFluidContainerClosed,
@@ -96,6 +98,8 @@ import {
   Thermometer,
   Droplets,
   FlaskConical,
+  Search,
+  Wand2,
 } from 'lucide-react';
 
 interface InventoryModalProps {
@@ -119,7 +123,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [selectedHand, setSelectedHand] = useState<'left' | 'right' | null>(null);
-  const [activeTab, setActiveTab] = useState<'inventory' | 'interaction' | 'surroundings' | 'clothing'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'interaction' | 'surroundings' | 'clothing' | 'catalog'>('inventory');
   const [openContainer, setOpenContainer] = useState<InventoryItem | null>(null);
   const [selectedContainerItemIdx, setSelectedContainerItemIdx] = useState<number>(0);
   const [, forceRender] = useState(0);
@@ -160,7 +164,41 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     }
   }, [isOpen, player]);
 
+  // ---- Freeroam "free inventory" catalog tab: every item can be handed out instantly ----
+  const isFreeroam = world?.gameMode === 'freeroam';
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogCategory, setCatalogCategory] = useState<string>('all');
+  const [catalogSelectedKey, setCatalogSelectedKey] = useState<string | null>(null);
+  const [catalogLimit, setCatalogLimit] = useState(240);
+  const catalogAllItems = React.useMemo(() => (isFreeroam ? getAllFreeCatalogItems() : []), [isFreeroam]);
+  const catalogFiltered = React.useMemo(() => {
+    const q = catalogSearch.trim().toLowerCase();
+    const cat = FREE_CATALOG_CATEGORIES.find(c => c.id === catalogCategory) || FREE_CATALOG_CATEGORIES[0];
+    return catalogAllItems.filter(it => {
+      if (!cat.match(it.category)) return false;
+      if (!q) return true;
+      return it.nameRu.toLowerCase().includes(q) || it.name.toLowerCase().includes(q) || it.key.toLowerCase().includes(q);
+    });
+  }, [catalogAllItems, catalogSearch, catalogCategory]);
+  const catalogSelected = catalogFiltered.find(it => it.key === catalogSelectedKey) || null;
+  const catalogPreviewItem = React.useMemo(
+    () => (isFreeroam && catalogSelected ? createItem(catalogSelected.key, 1) : null),
+    [isFreeroam, catalogSelected?.key]
+  );
+
   if (!isOpen || !player) return null;
+
+  const handleGiveCatalogItem = (key: string, count: number) => {
+    const created = createItem(key, count);
+    const ok = addItemToPlayer(player, created);
+    if (ok) {
+      addPlayerNotification(player, `Получено: ${created.nameRu || created.name} x${count}`, 'pickup');
+      sound.playUseItem();
+    } else {
+      addPlayerNotification(player, 'Инвентарь заполнен!', 'warning');
+    }
+    forceRender(n => n + 1);
+  };
 
   const inventory = player.inventory || [];
   const compartments = getPlayerCompartments(player);
@@ -1599,7 +1637,15 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 id: 'clothing',
                 label: 'Одежда',
                 icon: <Shirt width={16} height={16} />
-              }
+              },
+              ...(isFreeroam
+                ? [{
+                    id: 'catalog' as const,
+                    label: 'Каталог',
+                    icon: <Wand2 width={16} height={16} />,
+                    badge: catalogAllItems.length
+                  }]
+                : [])
             ]}
           />
 
@@ -3177,6 +3223,156 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             </div>
           );
         })()}
+
+        {/* ==================== TAB: FREEROAM CATALOG (INSTANT GIVE-ANY-ITEM) ==================== */}
+        {activeTab === 'catalog' && isFreeroam && (
+          <div className="gu-st-split" style={{ flex: 1, minHeight: 0 }}>
+            {/* LEFT: SEARCH + FILTERS + SLOT GRID OF EVERY ITEM */}
+            <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px', gap: 8 }}>
+              <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between' }}>
+                <span className="gu-grp" style={{ fontSize: 11.5 }}>Все предметы ({catalogFiltered.length})</span>
+                <span className="gu-mut" style={{ fontSize: 11 }}>Клик: выдать 1 шт. · Shift+клик: полный стак</span>
+              </div>
+
+              <label className="gu-search" style={{ flex: 'none', height: 36 }}>
+                <Search width={15} height={15} color="#8b929e" />
+                <input
+                  id="catalog-search"
+                  type="text"
+                  value={catalogSearch}
+                  onChange={e => {
+                    setCatalogSearch(e.target.value);
+                    setCatalogLimit(240);
+                  }}
+                  placeholder="Поиск предметов..."
+                  autoComplete="off"
+                />
+              </label>
+
+              <div className="gu-pills" style={{ flex: 'none' }}>
+                {FREE_CATALOG_CATEGORIES.map(cat => {
+                  const on = catalogCategory === cat.id;
+                  return (
+                    <button
+                      type="button"
+                      key={cat.id}
+                      id={`catalog-cat-${cat.id}`}
+                      onClick={() => {
+                        setCatalogCategory(cat.id);
+                        setCatalogLimit(240);
+                      }}
+                      className={'gu-pill' + (on ? ' on' : '')}
+                    >
+                      <span>{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div
+                className="gu-st-scroll"
+                style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
+                onScroll={e => {
+                  const el = e.currentTarget;
+                  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 240 && catalogLimit < catalogFiltered.length) {
+                    setCatalogLimit(n => n + 240);
+                  }
+                }}
+              >
+                {catalogFiltered.length === 0 ? (
+                  <div className="gu-empty">
+                    <span className="gu-mut" style={{ fontSize: 13 }}>Предметы не найдены</span>
+                  </div>
+                ) : (
+                  <div className="gu-slots">
+                    {catalogFiltered.slice(0, catalogLimit).map(it => (
+                      <div
+                        key={it.key}
+                        role="button"
+                        tabIndex={0}
+                        data-catalog-slot={it.key}
+                        className={'gu-slot' + (catalogSelectedKey === it.key ? ' on' : '')}
+                        title={it.nameRu}
+                        onClick={e => {
+                          setCatalogSelectedKey(it.key);
+                          handleGiveCatalogItem(it.key, e.shiftKey ? it.maxStack : 1);
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setCatalogSelectedKey(it.key);
+                            handleGiveCatalogItem(it.key, e.shiftKey ? it.maxStack : 1);
+                          }
+                        }}
+                      >
+                        <ItemIconCanvas itemId={it.key} size={44} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT: SELECTED ITEM DETAILS + GIVE BUTTONS */}
+            <div className="gu-panel gu-inv-detail">
+              {catalogSelected ? (
+                <>
+                  <div className="gu-row2" style={{ flex: 'none', alignItems: 'flex-start', gap: 10, paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
+                    <div className="gu-ic gu-md" style={{ width: 48, height: 48, flexShrink: 0 }}>
+                      <ItemIconCanvas itemId={catalogSelected.key} item={catalogPreviewItem || undefined} size={44} />
+                    </div>
+                    <div className="gu-grow" style={{ minWidth: 0 }}>
+                      <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {catalogSelected.nameRu}
+                      </div>
+                      <div className="gu-mut gu-mono" style={{ fontSize: 11.5, marginTop: 3 }}>
+                        <span style={{ color: 'var(--gu-amber-hi)' }}>{getFreeCategoryLabelRu(catalogSelected.category)}</span>
+                        {' · '}
+                        {formatWeightRu(catalogSelected.weight)}
+                        {' · '}
+                        стак до {catalogSelected.maxStack}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="gu-inv-detail-scroll">
+                    <div className="gu-note" style={{ lineHeight: 1.4, padding: '7px 10px', fontSize: 12, color: 'var(--gu-ink-dim)' }}>
+                      {catalogSelected.descriptionRu || 'Описание отсутствует.'}
+                    </div>
+                  </div>
+
+                  <div className="gu-inv-detail-foot">
+                    <button
+                      type="button"
+                      id="catalog-give-one"
+                      className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                      onClick={() => handleGiveCatalogItem(catalogSelected.key, 1)}
+                    >
+                      Выдать 1 шт.
+                    </button>
+                    {catalogSelected.maxStack > 1 && (
+                      <button
+                        type="button"
+                        id="catalog-give-stack"
+                        className="gu-btn gu-btn-s gu-btn-sm gu-btn-block"
+                        onClick={() => handleGiveCatalogItem(catalogSelected.key, catalogSelected.maxStack)}
+                      >
+                        Выдать стак ({catalogSelected.maxStack} шт.)
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="gu-empty" style={{ flex: 1 }}>
+                  <Wand2 width={28} height={28} color="#8b929e" />
+                  <span className="gu-mut" style={{ fontSize: 13 }}>
+                    Выберите предмет слева. Он сразу появится в карманах.
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ==================== TAB 3: CLOTHING (BODY-PART EQUIPMENT LIST) ==================== */}
         {activeTab === 'clothing' && (() => {
