@@ -17,7 +17,6 @@ import {
   Tree,
   Vehicle,
   WeatherType,
-  ActivePlacement,
   FuelType,
   GasPumpDispenser,
   CarType,
@@ -166,8 +165,6 @@ const RealEstateAgencyModal = React.lazy(() => import('./components/RealEstateAg
 const PropertyDocumentModal = React.lazy(() => import('./components/PropertyDocumentModal').then((m) => ({ default: m.PropertyDocumentModal })));
 const FurnitureStorageModal = React.lazy(() => import('./components/FurnitureStorageModal').then((m) => ({ default: m.FurnitureStorageModal })));
 const DateTimePickerModal = React.lazy(() => import('./components/DateTimePickerModal').then((m) => ({ default: m.DateTimePickerModal })));
-const CreativeMenuModal = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativeMenuModal })));
-const CreativePlacementHud = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativePlacementHud })));
 import { 
   BedSleepState, 
   startLyingOnBed, 
@@ -770,34 +767,6 @@ export default function App() {
   const [isSpawnMenuOpen, setIsSpawnMenuOpen] = useState<boolean>(false);
   const [currentSpawnId, setCurrentSpawnId] = useState<string>('central_park');
 
-  // Creative Mode States & Refs
-  const [isCreativeMode, setIsCreativeMode] = useState<boolean>(false);
-  const isCreativeModeRef = useRef<boolean>(false);
-  isCreativeModeRef.current = isCreativeMode;
-
-  const [isFlying, setIsFlying] = useState<boolean>(false);
-  const isFlyingRef = useRef<boolean>(false);
-  isFlyingRef.current = isFlying;
-
-  const [isInvincible, setIsInvincible] = useState<boolean>(false);
-  const isInvincibleRef = useRef<boolean>(false);
-  isInvincibleRef.current = isInvincible;
-
-  const [isGridMode, setIsGridMode] = useState<boolean>(false);
-
-  const [isCleanMode, setIsCleanMode] = useState<boolean>(false);
-  const isCleanModeRef = useRef<boolean>(false);
-  isCleanModeRef.current = isCleanMode;
-
-  const [activePlacement, setActivePlacement] = useState<ActivePlacement | null>(null);
-  const activePlacementRef = useRef<ActivePlacement | null>(null);
-  activePlacementRef.current = activePlacement;
-
-  // Creative Sidebar UI states
-  const [creativeTab, setCreativeTab] = useState<'vehicles'| 'props'| 'items'| 'cheats'>('vehicles');
-  const [creativeItemSearch, setCreativeItemSearch] = useState<string>('');
-  const [creativeVehicleColor, setCreativeVehicleColor] = useState<string>('#38bdf8');
-
   // Engine Refs (persistent across renders)
   const calendarRef = useRef<GameCalendarState>(calendar);
   calendarRef.current = calendar;
@@ -831,7 +800,6 @@ export default function App() {
     isRadialMenuOpen: false,
     isVehicleBoardOpen: false,
     isCrashDiagnosticsOpen: false,
-    isCreativeMode: false,
     isVacuumPumpModalOpen: false,
     isCraneOutriggersModalOpen: false,
     isEngineBayOpen: false,
@@ -859,7 +827,6 @@ export default function App() {
     isRadialMenuOpen,
     isVehicleBoardOpen,
     isCrashDiagnosticsOpen,
-    isCreativeMode,
     isVacuumPumpModalOpen,
     isCraneOutriggersModalOpen,
     isEngineBayOpen,
@@ -1033,27 +1000,6 @@ export default function App() {
       addPlayerNotification(
         p, 
         `Установлено: ${formatGameDate(newCal, 'medium')} • ${formatGameTime(newCal.timeHour)} (${getRussianSeasonName(newCal.season)})`, 
-        'info'
-      );
-    }
-  };
-
-  const handleStepGameDay = (deltaDays: number) => {
-    const { calendar: nextCal } = advanceCalendar(calendarRef.current, deltaDays * 24.0);
-    calendarRef.current = nextCal;
-    timeHourRef.current = nextCal.timeHour;
-    setTimeHour(nextCal.timeHour);
-    setCalendar({ ...nextCal });
-    if (worldRef.current) {
-      worldRef.current.calendar = nextCal;
-      worldRef.current.season = nextCal.season;
-      worldRef.current.timeHour = nextCal.timeHour;
-    }
-    const p = playerRef.current;
-    if (p) {
-      addPlayerNotification(
-        p, 
-        `Дата: ${formatGameDate(nextCal, 'medium')} (${getRussianSeasonName(nextCal.season)})`, 
         'info'
       );
     }
@@ -2899,218 +2845,6 @@ export default function App() {
     };
   };
 
-  const handleExecutePlacement = () => {
-    const world = worldRef.current;
-    const player = playerRef.current;
-    const placement = activePlacementRef.current;
-    if (!world || !player || !placement) return;
-
-    const mouseWorldPos = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
-    if (!mouseWorldPos) return;
-
-    if (placement.type === 'vehicle') {
-      const config = CAR_CONFIGS[placement.id] || CAR_CONFIGS[placement.id.toLowerCase()] || CAR_CONFIGS.sedan;
-      const fs = createDefaultFuelSystem(placement.id as any, false);
-      const keyId = `key_spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      const newVehicle: Vehicle = {
-        id: `spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        type: (config.type || placement.id) as any,
-        x: mouseWorldPos.x,
-        y: mouseWorldPos.y,
-        vx: 0,
-        vy: 0,
-        angle: placement.angle,
-        steerAngle: 0,
-        targetSteerAngle: 0,
-        speed: 0,
-        lateralVelocity: 0,
-        angularVelocity: 0,
-        isDrifting: false,
-        driftFactor: 0,
-        mass: config.mass,
-        width: config.width,
-        length: config.length,
-        wheelBase: config.wheelBase,
-        color: placement.color || '#f43f5e',
-        roofColor: placement.color || '#f43f5e',
-        headlightsOn: false,
-        headlightMode: 'off',
-        brakeLightsOn: false,
-        isReversing: false,
-        turnSignal: 'none',
-        turnSignalTimer: 0,
-        requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
-        hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(placement.id) ? Math.random() < 0.4 : false,
-        engineState: createDefaultEngineState((config.type || placement.id) as any, false, false),
-        fuelSystem: fs,
-        damage: createDefaultVehicleDamage(config.length, config.width),
-        isPlayerControlled: false,
-        isParked: true,
-        isLocked: false,
-        ownerId: 'player',
-        keyId: keyId,
-        insertedKeyType: 'car_key',
-        insertedKeyId: keyId,
-        targetSpeed: 0,
-        currentLaneId: null,
-        targetWaypointIndex: 0,
-        routeWaypoints: [],
-        aiState: 'parked',
-        inIntersection: false,
-        plannedTurn: 'straight',
-        recentTurns: [],
-        justTurnedAround: false,
-        ghostingAlpha: 1.0,
-        stuckTimer: 0,
-        honkTimer: 0,
-        isHonking: false,
-        hornEffectTimer: 0
-      };
-      (newVehicle as any).isSpawnedByPlayer = true;
-      (newVehicle as any).playerOwned = true;
-      applyPowertrain(newVehicle);
-      world.vehicles.push(newVehicle);
-      spatialGridVehiclesRef.current.insert(newVehicle);
-
-      // Issue player a matching key
-      const carKeyItem = createItem('car_key', 1);
-      carKeyItem.nameRu = `Ключ (${config.name})`;
-      (carKeyItem as any).carKeyId = keyId;
-      (carKeyItem as any).vehicleId = newVehicle.id;
-      addItemToPlayer(player, carKeyItem);
-
-      sound.resume();
-      addPlayerNotification(player, `Автомобиль ${placement.nameRu} установлен! Ключ в инвентаре.`, 'info');
-      addPlayerNotification(player, newVehicle.powertrainLabel || describePowertrain(newVehicle), 'info');
-      setActivePlacement(null);
-      activePlacementRef.current = null;
-    } else if (placement.type === 'prop') {
-      const newProp: StreetProp = {
-        id: `spawn_prop_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        x: mouseWorldPos.x,
-        y: mouseWorldPos.y,
-        type: placement.id as any,
-        angle: placement.angle,
-        isBroken: false
-      };
-      world.props.push(newProp);
-      spatialGridPropsRef.current.insert(newProp);
-      addPlayerNotification(player, `Проп ${placement.nameRu} установлен!`, 'info');
-      setActivePlacement(null);
-      activePlacementRef.current = null;
-    }
-  };
-
-  const handleSpawnVehicleDirectly = (carType: string, color: string, autoEnter: boolean = false) => {
-    const world = worldRef.current;
-    const player = playerRef.current;
-    if (!world || !player) return;
-    const config = CAR_CONFIGS[carType] || CAR_CONFIGS[carType.toLowerCase()] || CAR_CONFIGS.sedan;
-
-    // Clear any active placement mode
-    setActivePlacement(null);
-    activePlacementRef.current = null;
-
-    const angle = player.isInVehicle ? (player.currentVehicleId ? (world.vehicles.find(v => v.id === player.currentVehicleId)?.angle || 0) : 0) : (player.angle || 0);
-    const spawnDist = autoEnter ? 0 : 110;
-    const spawnX = autoEnter ? player.x : player.x + Math.cos(angle) * spawnDist;
-    const spawnY = autoEnter ? player.y : player.y + Math.sin(angle) * spawnDist;
-
-    const fs = createDefaultFuelSystem((config.type || carType) as any, false);
-    const keyId = `key_spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const newVehicle: Vehicle = {
-      id: `spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      type: (config.type || carType) as any,
-      x: spawnX,
-      y: spawnY,
-      vx: 0,
-      vy: 0,
-      angle: angle,
-      steerAngle: 0,
-      targetSteerAngle: 0,
-      speed: 0,
-      lateralVelocity: 0,
-      angularVelocity: 0,
-      isDrifting: false,
-      driftFactor: 0,
-      mass: config.mass,
-      width: config.width,
-      length: config.length,
-      wheelBase: config.wheelBase,
-      color: color || '#c68a35',
-      roofColor: color || '#c68a35',
-      headlightsOn: false,
-      headlightMode: 'off',
-      brakeLightsOn: false,
-      isReversing: false,
-      turnSignal: 'none',
-      turnSignalTimer: 0,
-      requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
-      hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(carType) ? Math.random() < 0.4 : false,
-      engineState: createDefaultEngineState((config.type || carType) as any, autoEnter, false),
-      fuelSystem: fs,
-      damage: createDefaultVehicleDamage(config.length, config.width),
-      isPlayerControlled: autoEnter,
-      isParked: !autoEnter,
-      isLocked: false,
-      ownerId: 'player',
-      keyId: keyId,
-      insertedKeyType: 'car_key',
-      insertedKeyId: keyId,
-      targetSpeed: 0,
-      currentLaneId: null,
-      targetWaypointIndex: 0,
-      routeWaypoints: [],
-      aiState: 'parked',
-      inIntersection: false,
-      plannedTurn: 'straight',
-      recentTurns: [],
-      justTurnedAround: false,
-      ghostingAlpha: 1.0,
-      stuckTimer: 0,
-      honkTimer: 0,
-      isHonking: false,
-      hornEffectTimer: 0
-    };
-    (newVehicle as any).isSpawnedByPlayer = true;
-    (newVehicle as any).playerOwned = true;
-    applyPowertrain(newVehicle);
-
-    world.vehicles.push(newVehicle);
-    spatialGridVehiclesRef.current.insert(newVehicle);
-
-    // Give matching key to player
-    const carKeyItem = createItem('car_key', 1);
-    carKeyItem.nameRu = `Ключ (${config.name})`;
-    (carKeyItem as any).carKeyId = keyId;
-    (carKeyItem as any).vehicleId = newVehicle.id;
-    addItemToPlayer(player, carKeyItem);
-
-    if (autoEnter) {
-      if (player.isInVehicle && player.currentVehicleId) {
-        const oldV = world.vehicles.find(v => v.id === player.currentVehicleId);
-        if (oldV) {
-          oldV.isPlayerControlled = false;
-          oldV.isParked = true;
-        }
-      }
-      player.isInVehicle = true;
-      player.currentVehicleId = newVehicle.id;
-      player.x = newVehicle.x;
-      player.y = newVehicle.y;
-      player.angle = newVehicle.angle;
-      setIsInVehicle(true);
-      setActiveCarName(config.name);
-      sound.playCarDoor();
-      addPlayerNotification(player, `Вы сели за руль ${config.name}! Ключ в замке зажигания.`, 'pickup');
-      addPlayerNotification(player, newVehicle.powertrainLabel || describePowertrain(newVehicle), 'info');
-    } else {
-      sound.playHorn();
-      addPlayerNotification(player, `Транспорт ${config.name} заспавнен рядом! Ключ в инвентаре.`, 'pickup');
-      addPlayerNotification(player, newVehicle.powertrainLabel || describePowertrain(newVehicle), 'info');
-    }
-  };
-
   // Periodic autosave based on settings.autoSaveInterval (scoped strictly to active worldId)
   useEffect(() => {
     if (settings.autoSaveInterval <= 0) return;
@@ -3443,12 +3177,6 @@ export default function App() {
           e.preventDefault();
           return;
         }
-        if (activePlacementRef.current) {
-          setActivePlacement(null);
-          activePlacementRef.current = null;
-          e.preventDefault();
-          return;
-        }
         if (isOnlineModalOpenRef.current) {
           setIsOnlineModalOpen(false);
           e.preventDefault();
@@ -3456,15 +3184,6 @@ export default function App() {
         }
         if (activePhoneItemRef.current) {
           setActivePhoneItem(null);
-          e.preventDefault();
-          return;
-        }
-        if (m.isCreativeMode) {
-          setIsCreativeMode(false);
-          setIsFlying(false);
-          setIsInvincible(false);
-          setActivePlacement(null);
-          activePlacementRef.current = null;
           e.preventDefault();
           return;
         }
@@ -3513,16 +3232,6 @@ export default function App() {
 
       // Block ALL gameplay & debug hotkeys while MainMenu, PauseMenu, or Loading screen is active
       if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current || isLoadingRef.current) return;
-
-      // Placement object rotation
-      if (matchesKeybind('resetVehicle', code) && activePlacementRef.current) {
-        setActivePlacement((prev) => {
-          if (!prev) return null;
-          return { ...prev, angle: (prev.angle + Math.PI / 12) % (Math.PI * 2) };
-        });
-        e.preventDefault();
-        return;
-      }
 
       // Check whether any gameplay modal is open — allow closing that modal with its own toggle key,
       // but block all driving/world controls underneath so player doesn't accidentally drive or reset vehicle.
@@ -3849,7 +3558,6 @@ export default function App() {
           if (matchesKeybind('gridMode', code)) {
             const cam = cameraRef.current;
             cam.gridMode = !cam.gridMode;
-            setIsGridMode(!!cam.gridMode);
             addPlayerNotification(p, `Сетка кузова ${cam.gridMode ? 'ВКЛ' : 'ВЫКЛ'}`, 'info');
             e.preventDefault();
             return;
@@ -3907,7 +3615,6 @@ export default function App() {
         if (matchesKeybind('gridMode', code)) {
           const cam = cameraRef.current;
           cam.gridMode = !cam.gridMode;
-          setIsGridMode(!!cam.gridMode);
           addPlayerNotification(p, `Сетка кузова ${cam.gridMode ? 'ВКЛ' : 'ВЫКЛ'}`, 'info');
           e.preventDefault();
           return;
@@ -3994,15 +3701,6 @@ export default function App() {
     };
 
     const handleWheel = (e: WheelEvent) => {
-      if (activePlacementRef.current) {
-        const step = e.deltaY > 0 ? Math.PI / 12 : -Math.PI / 12;
-        setActivePlacement((prev) => {
-          if (!prev) return null;
-          return { ...prev, angle: (prev.angle + step + Math.PI * 2) % (Math.PI * 2) };
-        });
-        e.preventDefault();
-        return;
-      }
       // Zoom in or out depending on deltaY direction
       const zoomStep = 0.08;
       if (e.deltaY < 0) {
@@ -4016,16 +3714,7 @@ export default function App() {
       if (e.button === 0) {
         inputRef.current.isMouseDown = true;
       }
-      if (activePlacementRef.current) {
-        if (e.button === 0) {
-          handleExecutePlacement();
-          e.preventDefault();
-        } else if (e.button === 2) {
-          setActivePlacement(null);
-          activePlacementRef.current = null;
-          e.preventDefault();
-        }
-      } else if (e.button === 0 && e.target === canvas) {
+      if (e.button === 0 && e.target === canvas) {
         if (playerRef.current && worldRef.current && !playerRef.current.isInVehicle) {
           const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
           const latestTarget = findActiveInteraction(playerRef.current, worldRef.current, mouseWorld);
@@ -4046,12 +3735,6 @@ export default function App() {
     const handleMouseUp = (e: MouseEvent) => {
       if (e.button === 0) {
         inputRef.current.isMouseDown = false;
-      }
-    };
-
-    const handleContextMenu = (e: MouseEvent) => {
-      if (activePlacementRef.current) {
-        e.preventDefault();
       }
     };
 
@@ -4086,7 +3769,6 @@ export default function App() {
     window.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('open_phone_modal', handlePhoneModalEvent);
 
     cleanupListeners = () => {
@@ -4103,7 +3785,6 @@ export default function App() {
       window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('open_phone_modal', handlePhoneModalEvent);
     };
 
@@ -4275,64 +3956,17 @@ export default function App() {
         );
 
         if (!player.isInVehicle) {
-          if (isFlyingRef.current) {
-            // Noclip flying logic
-            const flySpeed = input.sprint ? 1400 : 550; // Shift to fly super fast!
-            let dx = 0;
-            let dy = 0;
-
-            const cosCam = Math.cos(camera.angle);
-            const sinCam = Math.sin(camera.angle);
-
-            if (input.forward) {
-              dx += cosCam;
-              dy += sinCam;
-            }
-            if (input.backward) {
-              dx -= cosCam;
-              dy -= sinCam;
-            }
-            if (input.left) {
-              dx -= -sinCam;
-              dy += cosCam;
-            }
-            if (input.right) {
-              dx += -sinCam;
-              dy -= cosCam;
-            }
-
-            const len = Math.hypot(dx, dy);
-            if (len > 0) {
-              player.x += (dx / len) * flySpeed * dt;
-              player.y += (dy / len) * flySpeed * dt;
-              player.angle = Math.atan2(dy, dx);
-            }
-
-            // Constraint boundaries (full open-world size including northern wilderness)
-            const minWorldX = -4000;
-            const maxWorldX = Math.max(52000, world.width || 52000) - 50;
-            const minWorldY = -5000;
-            const maxWorldY = Math.max(30000, world.height || 30000) - 50;
-            player.x = Math.max(minWorldX, Math.min(maxWorldX, player.x));
-            player.y = Math.max(minWorldY, Math.min(maxWorldY, player.y));
-
+          const isLyingInBed = bedSleepStateRef.current && bedSleepStateRef.current.isActive;
+          const effectiveInput = isLyingInBed ? { ...input, forward: false, backward: false, left: false, right: false, sprint: false } : input;
+          updatePlayerPedestrianPhysics(player, effectiveInput, playerNearbyBuildings, dt, camera.angle, world.width, world.height, world, vehGrid, spatialGridPropsRef.current);
+          if (!player.needsHospitalEvacuation) {
             camera.targetX = player.x;
             camera.targetY = player.y;
             camera.targetAngle = 0;
-            camera.targetZoom = 1.3 * userZoomFactorRef.current;
-          } else {
-            const isLyingInBed = bedSleepStateRef.current && bedSleepStateRef.current.isActive;
-            const effectiveInput = isLyingInBed ? { ...input, forward: false, backward: false, left: false, right: false, sprint: false } : input;
-            updatePlayerPedestrianPhysics(player, effectiveInput, playerNearbyBuildings, dt, camera.angle, world.width, world.height, world, vehGrid, spatialGridPropsRef.current);
-            if (!player.needsHospitalEvacuation) {
-              camera.targetX = player.x;
-              camera.targetY = player.y;
-              camera.targetAngle = 0;
-              if (player.insideCarId || player.insideBusId) {
-                camera.targetZoom = 2.4 * userZoomFactorRef.current;
-              } else {
-                camera.targetZoom = 1.3 * userZoomFactorRef.current;
-              }
+            if (player.insideCarId || player.insideBusId) {
+              camera.targetZoom = 2.4 * userZoomFactorRef.current;
+            } else {
+              camera.targetZoom = 1.3 * userZoomFactorRef.current;
             }
           }
 
@@ -4896,29 +4530,6 @@ export default function App() {
             addPlayerNotification(player, `Заправка на колонке №${pump.pumpNumber} завершена (${pump.displayLiters?.toFixed(1)} л)! Извлеките пистолет.`, 'info');
           }
         });
-
-        if (isInvincibleRef.current || isCreativeModeRef.current || isCleanModeRef.current) {
-          player.needs.health = 100;
-          player.needs.hunger = 100;
-          player.needs.thirst = 100;
-          player.needs.energy = 100;
-          player.needs.sleepiness = 0;
-          player.isCleanMode = isCleanModeRef.current;
-          if (player.bodyState) {
-            player.bodyState.painLevel = 0;
-            player.bodyState.bloodLoss = 0;
-            player.bodyState.shockLevel = 0;
-            Object.keys(player.bodyState.bodyParts).forEach((k) => {
-              const part = (player.bodyState!.bodyParts as any)[k] as any[];
-              if (Array.isArray(part)) {
-                part.forEach(inj => {
-                  inj.treated = true;
-                  inj.severity = 0;
-                });
-              }
-            });
-          }
-        }
 
         // Consumption timer (multi-step eating/drinking)
         updateConsumption(player, dt);
@@ -5526,12 +5137,6 @@ export default function App() {
         sound.setRainVolume(curWeatherWeights.rain);
         sound.setSnowAmbientVolume(curWeatherWeights.snow, curWeatherWeights.blizzard);
 
-        // Calculate mouse world position for placement preview
-        let currentMouseWorldPos = null;
-        if (activePlacementRef.current) {
-          currentMouseWorldPos = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
-        }
-
         // 10. Render Scene with pre-culled viewport entities (skipped when FullScreenMap covers entire screen)
         const tRenderStart = performance.now();
         if (!isFullMapOpenRef.current) {
@@ -5547,8 +5152,6 @@ export default function App() {
             vpTrees,
             vpProps,
             vpSidewalks,
-            activePlacementRef.current,
-            currentMouseWorldPos,
             onlineManager.getRemotePlayersArray(),
             onlineManager.getSpeechBubbles(),
             activeInteractionRef.current
@@ -6287,12 +5890,6 @@ export default function App() {
   const handleEnterExitVehicle = () => {
     const world = worldRef.current;
     const player = playerRef.current;
-    // Cancel any active placement mode on entering/exiting vehicle
-    if (activePlacementRef.current) {
-      setActivePlacement(null);
-      activePlacementRef.current = null;
-    }
-
     if (player.isInVehicle) {
       // Exit current vehicle
       const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
@@ -7463,12 +7060,6 @@ export default function App() {
     const world = worldRef.current;
     const player = playerRef.current;
     if (!world || !player) return;
-
-    // Disarm any active placement mode on interaction
-    if (activePlacementRef.current) {
-      setActivePlacement(null);
-      activePlacementRef.current = null;
-    }
 
     if (player.isInVehicle) {
       handleEnterExitVehicle();
@@ -9292,181 +8883,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* MODERN CREATIVE MODE MODAL (lazy-loaded) */}
-      <React.Suspense fallback={null}>
-      {isCreativeMode && !isMainMenuOpen && !activePlacement && (
-      <CreativeMenuModal
-        isOpen={isCreativeMode && !isMainMenuOpen && !activePlacement}
-        onClose={() => {
-          setIsCreativeMode(false);
-          setIsFlying(false);
-          setIsInvincible(false);
-          setActivePlacement(null);
-          activePlacementRef.current = null;
-          const p = playerRef.current;
-          if (p) {
-            addPlayerNotification(p, 'Режим Творчества выключен.', 'warning');
-          }
-        }}
-        creativeTab={creativeTab}
-        setCreativeTab={setCreativeTab}
-        creativeVehicleColor={creativeVehicleColor}
-        setCreativeVehicleColor={(col) => {
-          setCreativeVehicleColor(col);
-          if (activePlacement && activePlacement.type === 'vehicle') {
-            setActivePlacement({ ...activePlacement, color: col });
-          }
-        }}
-        onSelectVehicleForPlacement={(key, nameRu, color) => {
-          setActivePlacement({
-            type: 'vehicle',
-            id: key,
-            nameRu,
-            angle: 0,
-            color
-          });
-        }}
-        onSpawnVehicleNearPlayer={(key, color, autoEnter) => {
-          handleSpawnVehicleDirectly(key, color, autoEnter);
-        }}
-        activePlacement={activePlacement}
-        onSelectPropForPlacement={(propId, nameRu) => {
-          setActivePlacement({
-            type: 'prop',
-            id: propId,
-            nameRu,
-            angle: 0
-          });
-        }}
-        itemSearch={creativeItemSearch}
-        setItemSearch={setCreativeItemSearch}
-        onGiveItem={(key, count) => {
-          const p = playerRef.current;
-          if (!p) return;
-          const created = createItem(key, count);
-          const success = addItemToPlayer(p, created);
-          if (success) {
-            addPlayerNotification(p, `Получено: ${created.nameRu || created.name} x${count}`, 'pickup');
-            sound.playUseItem();
-          } else {
-            addPlayerNotification(p, 'Инвентарь заполнен!', 'warning');
-          }
-        }}
-        isFlying={isFlying}
-        onToggleFlying={() => {
-          const val = !isFlying;
-          setIsFlying(val);
-          const p = playerRef.current;
-          if (p) {
-            addPlayerNotification(p, val ? 'Полёт активирован!' : 'Режим ходьбы.', val ? 'info' : 'warning');
-          }
-        }}
-        isInvincible={isInvincible}
-        onToggleInvincible={() => {
-          const val = !isInvincible;
-          setIsInvincible(val);
-          const p = playerRef.current;
-          if (p) {
-            addPlayerNotification(p, val ? 'Вы бессмертны! Травмы очищены.' : 'Режим смертности включен.', val ? 'heal' : 'warning');
-          }
-        }}
-        isGridMode={isGridMode}
-        onToggleGridMode={() => {
-          const cam = cameraRef.current;
-          cam.gridMode = !cam.gridMode;
-          const val = !!cam.gridMode;
-          setIsGridMode(val);
-          const p = playerRef.current;
-          if (p) {
-            addPlayerNotification(p, `Режим сетки (Grid Mode) ${val ? 'ВКЛ' : 'ВЫКЛ'}`, val ? 'info' : 'warning');
-          }
-        }}
-        isCleanMode={isCleanMode}
-        onToggleCleanMode={() => {
-          const val = !isCleanMode;
-          setIsCleanMode(val);
-          isCleanModeRef.current = val;
-          const world = worldRef.current;
-          if (world) {
-            world.cleanMode = val;
-            if (val && world.particles) {
-              world.particles = world.particles.filter(p => p.type !== 'engine_smoke' && p.type !== 'tire_smoke' && p.type !== 'exhaust');
-            }
-          }
-          const p = playerRef.current;
-          if (p) {
-            p.isCleanMode = val;
-            if (val) {
-              p.needs.health = 100;
-              if (p.bodyState) {
-                p.bodyState.painLevel = 0;
-                p.bodyState.bloodLoss = 0;
-                p.bodyState.shockLevel = 0;
-              }
-            }
-            addPlayerNotification(p, val ? 'Чистый режим ВКЛ! Дым/пар убраны, урон отключен.' : 'Чистый режим ВЫКЛ.', val ? 'info' : 'warning');
-          }
-        }}
-        onGiveCash={(amount) => {
-          const p = playerRef.current;
-          if (p) {
-            addPlayerCash(p, amount);
-            addPlayerNotification(p, `Получено ₽${amount.toLocaleString('ru-RU')} из резерва!`, 'pickup');
-            sound.playTurnSignalTick(true);
-            setVitalsRefreshTick(t => t + 1);
-          }
-        }}
-        onOpenCalendar={() => {
-          sound.playButtonPress();
-          setIsDateTimePickerOpen(true);
-        }}
-        calendar={calendar}
-        timeHour={timeHour}
-        onStepDay={handleStepGameDay}
-        onRepairAllVehicles={() => {
-          handleResetAllVehiclesDamage();
-          const p = playerRef.current;
-          if (p) {
-            addPlayerNotification(p, 'Все повреждения транспорта устранены!', 'info');
-          }
-        }}
-        onClearCreatedSpawns={() => {
-          const world = worldRef.current;
-          if (!world) return;
-          world.vehicles = world.vehicles.filter(v => {
-            if (v.id.startsWith('spawn_')) {
-              spatialGridVehiclesRef.current.remove(v);
-              return false;
-            }
-            return true;
-          });
-          world.props = world.props.filter(p => {
-            if (p.id.startsWith('spawn_prop_')) {
-              spatialGridPropsRef.current.remove(p);
-              return false;
-            }
-            return true;
-          });
-          const p = playerRef.current;
-          if (p) {
-            addPlayerNotification(p, 'Все созданные объекты удалены!', 'info');
-          }
-        }}
-      />
-      )}
-
-      {/* PLACEMENT WORLD PREVIEW HUD */}
-      {isCreativeMode && activePlacement && !isMainMenuOpen && (
-        <CreativePlacementHud
-          placement={activePlacement}
-          onCancel={() => {
-            setActivePlacement(null);
-            activePlacementRef.current = null;
-          }}
-        />
-      )}
-      </React.Suspense>
 
       {/* Pause Menu Overlay */}
       {isPauseMenuOpen && !isMainMenuOpen && (

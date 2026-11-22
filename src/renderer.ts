@@ -1,5 +1,4 @@
 import { 
-  ActivePlacement,
   Bird,
   Building, 
   Camera, 
@@ -1213,8 +1212,6 @@ export class GameRenderer {
     visibleTrees?: Tree[],
     visibleProps?: StreetProp[],
     visibleSidewalks?: SidewalkBlock[],
-    activePlacement?: ActivePlacement | null,
-    mouseWorldPos?: { x: number; y: number } | null,
     remotePlayers: RemotePlayerState[] = [],
     speechBubbles?: Map<string, SpeechBubble>,
     activeInteraction?: InteractionTarget | null
@@ -1770,11 +1767,6 @@ export class GameRenderer {
     // 18. Optional AI Telemetry & Debug Visualizer
     if (trafficDiagnostics.debugOverlayEnabled) {
       this.renderAIDebugOverlay(world, visibleVehicles);
-    }
-
-    // 19. Creative Mode Active Placement Preview
-    if (activePlacement && mouseWorldPos) {
-      this.renderPlacementPreview(activePlacement, mouseWorldPos);
     }
 
     // 20. Multiplayer Overhead Nametags & Speech Bubbles (drawn above roofs/trees in world space)
@@ -10225,114 +10217,6 @@ export class GameRenderer {
       ctx.fillText(target.actionTitle, 0, keyY + 13);
       ctx.shadowBlur = 0;
     }
-
-    ctx.restore();
-  }
-
-  /**
-   * Renders the ghost/placement preview for Creative Mode object spawning.
-   */
-  private renderPlacementPreview(placement: ActivePlacement, pos: { x: number; y: number }) {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.translate(pos.x, pos.y);
-
-    const now = Date.now();
-    const pulse = Math.sin(now * 0.008) * 0.15 + 0.85;
-
-    // 1. Placement ring on ground
-    ctx.strokeStyle = '#22c55e'; // Vibrant Green
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 28, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Crosshair lines
-    ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-16, 0); ctx.lineTo(16, 0);
-    ctx.moveTo(0, -16); ctx.lineTo(0, 16);
-    ctx.stroke();
-
-    // 2. Rotated Entity Shape Preview
-    ctx.save();
-    ctx.rotate(placement.angle);
-
-    ctx.fillStyle = 'rgba(34, 197, 94, 0.28)';
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 2.5;
-
-    if (placement.type === 'vehicle') {
-      const w = 48;
-      const h = 24;
-      ctx.beginPath();
-      safeRoundRect(ctx, -w / 2, -h / 2, w, h, 6);
-      ctx.fill();
-      ctx.stroke();
-
-      // Front windshield & headlight direction marker
-      ctx.fillStyle = '#4ade80';
-      ctx.beginPath();
-      ctx.fillRect(w / 4, -h / 2 + 3, 6, h - 6);
-
-      // Direction arrow pointing forward (+X)
-      ctx.fillStyle = '#22c55e';
-      ctx.beginPath();
-      ctx.moveTo(w / 2 + 12, 0);
-      ctx.lineTo(w / 2 + 2, -8);
-      ctx.lineTo(w / 2 + 2, 8);
-      ctx.closePath();
-      ctx.fill();
-    } else if (placement.type === 'prop') {
-      const size = 22;
-      ctx.beginPath();
-      safeRoundRect(ctx, -size / 2, -size / 2, size, size, 4);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = '#22c55e';
-      ctx.beginPath();
-      ctx.moveTo(size / 2 + 10, 0);
-      ctx.lineTo(size / 2, -6);
-      ctx.lineTo(size / 2, 6);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.arc(0, 0, 14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    ctx.restore(); // end rotated entity preview
-
-    // 3. Name & Angle Badge
-    const deg = Math.round((((placement.angle * 180) / Math.PI) % 360 + 360) % 360);
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    const text = `${placement.nameRu} (${deg}°)`;
-    const tw = ctx.measureText(text).width;
-    const padW = tw + 20;
-
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-    safeRoundRect(ctx, -padW / 2, -48, padW, 22, 11);
-    ctx.fill();
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 1.2;
-    safeRoundRect(ctx, -padW / 2, -48, padW, 22, 11);
-    ctx.stroke();
-
-    ctx.fillStyle = '#4ade80';
-    ctx.fillText(text, 0, -37);
-
-    // Tip line
-    ctx.font = '10px sans-serif';
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillText('R — повернуть | Клик — спавн | Esc — отмена', 0, 42);
 
     ctx.restore();
   }

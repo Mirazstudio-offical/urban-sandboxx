@@ -1,5 +1,4 @@
 import { ITEM_CATALOG } from './items';
-import { EXTENDED_ITEM_PACKAGING_MAP } from './unifiedSubstanceCatalog';
 
 /** One row of the freeroam "give any item" catalog. */
 export interface FreeCatalogEntry {
@@ -15,13 +14,14 @@ export interface FreeCatalogEntry {
 let cachedEntries: FreeCatalogEntry[] | null = null;
 
 /**
- * Every item that can be instantly handed to the player: the base item catalog
- * plus the extended packaged variants (baskets of berries, trays, cartons...).
+ * Every base item that can be instantly handed to the player: exactly the
+ * entries of ITEM_CATALOG. Packaged goods are not listed as separate items;
+ * a package is built from its container plus the inner item's attributes.
  */
 export function getAllFreeCatalogItems(): FreeCatalogEntry[] {
   if (cachedEntries) return cachedEntries;
 
-  const entries: FreeCatalogEntry[] = Object.entries(ITEM_CATALOG).map(([key, def]) => ({
+  cachedEntries = Object.entries(ITEM_CATALOG).map(([key, def]) => ({
     key,
     nameRu: def.nameRu || def.name,
     name: def.name,
@@ -31,24 +31,7 @@ export function getAllFreeCatalogItems(): FreeCatalogEntry[] {
     weight: def.weight || 0
   }));
 
-  Object.entries(EXTENDED_ITEM_PACKAGING_MAP).forEach(([key, pkg]) => {
-    if (ITEM_CATALOG[key] || !pkg.customNameRu) return;
-    const containerDef = ITEM_CATALOG[pkg.containerId];
-    if (!containerDef) return;
-    const innerDef = pkg.innerItemId ? ITEM_CATALOG[pkg.innerItemId] : undefined;
-    entries.push({
-      key,
-      nameRu: pkg.customNameRu,
-      name: key,
-      descriptionRu: pkg.customDescriptionRu || containerDef.descriptionRu || containerDef.description || '',
-      category: innerDef?.category || 'food',
-      maxStack: 1,
-      weight: containerDef.weight || 0
-    });
-  });
-
-  cachedEntries = entries;
-  return entries;
+  return cachedEntries;
 }
 
 export const FREE_CATALOG_CATEGORIES: { id: string; label: string; match: (category: string) => boolean }[] = [

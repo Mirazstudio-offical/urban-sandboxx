@@ -2620,15 +2620,6 @@ export interface PlayerNotification {
   timer: number;
 }
 
-export interface ActivePlacement {
-  type: 'vehicle' | 'prop' | 'item';
-  id: string;        // vehicle type, prop type, or itemId
-  nameRu: string;
-  angle: number;     // in radians
-  color?: string;    // vehicle color hex
-  count?: number;    // item stack count
-}
-
 export interface PlayerSeatState {
   type: 'bus_seat' | 'train_seat' | 'furniture_seat';
   targetId?: string; // vehicle.id, car.id, or building.id
