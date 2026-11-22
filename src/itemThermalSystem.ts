@@ -3,6 +3,7 @@ import { sound } from './audio';
 import { ITEM_CATALOG, addPlayerNotification, getItemTotalWeight, takeItemFromHand, getSlotCompartment } from './items';
 import { addInjuryToPart } from './bodySystem';
 import { getOutsideTemperature } from './physics';
+import { updateHybridContainerInteraction } from './liquidSystem';
 
 export interface ItemThermalConfig {
   temperature?: number;        // Default core temperature in °C
@@ -391,9 +392,26 @@ export function updateItemThermodynamics(
   const retention = Math.max(0, Math.min(0.98, item.heatRetention ?? 0.35));
   item.ambientTemperature = ambientTemp;
 
-  // Optimization: If item is already at thermal equilibrium with the environment, skip math
+  // Optimization: If item is already at thermal equilibrium with the environment, skip cooling math
+  // (still run active fluid-solid mixing for hybrid containers holding both liquid and items!)
   const deltaFromEnv = Math.abs(core - ambientTemp);
   if (deltaFromEnv < 0.2 && item.isThermalStable) {
+    if (item.fluidStorage && item.contents && item.contents.length > 0) {
+      return updateHybridContainerInteraction(item, dt);
+    }
+    if (item.wetness !== undefined && item.wetness > 0) {
+      // Allow wet items to continue drying even at ambient temperature
+      const dryRate = ambientTemp > 22.0 ? 0.025 + (ambientTemp - 22.0) * 0.035 : (ambientTemp < 10.0 ? 0.01 : 0.025);
+      item.wetness = Math.round(Math.max(0, item.wetness - dryRate * dt) * 10) / 10;
+      if (item.wetness <= 0.1) {
+        item.wetness = 0;
+        item.soakedLiquidId = undefined;
+        item.soakedLiquidNameRu = undefined;
+        item.soakedColor = undefined;
+      }
+      if (item.clothingStats) item.clothingStats.wetness = item.wetness;
+      return true;
+    }
     return false;
   }
 
@@ -417,7 +435,7 @@ export function updateItemThermodynamics(
   item.lastThermalUpdate = Date.now() / 1000;
   item.isThermalStable = Math.abs(newCore - ambientTemp) < 0.2;
 
-  // Wetness drying & moisture dissipation on garments and fabrics
+  // Wetness drying & moisture dissipation on garments, fabrics, and extracted soaked items
   if (item.wetness !== undefined && item.wetness > 0) {
     // Base evaporation in ambient air (slow, physically realistic)
     let dryRate = 0.025; // ~0.025% per sec at 20°C (approx 40-50 min to fully dry)
@@ -431,12 +449,18 @@ export function updateItemThermodynamics(
     }
     const updatedWetness = Math.max(0, item.wetness - dryRate * dt);
     item.wetness = Math.round(updatedWetness * 10) / 10;
+    if (item.wetness <= 0.1) {
+      item.wetness = 0;
+      item.soakedLiquidId = undefined;
+      item.soakedLiquidNameRu = undefined;
+      item.soakedColor = undefined;
+    }
     if (item.clothingStats) {
       item.clothingStats.wetness = item.wetness;
     }
   }
 
-  // Recursively update contained items if container exists (e.g., bag in bag, box in bag)
+  // Recursively update contained items if container exists (e.g., bag in bag, jar with liquid & vegetables)
   if (item.contents && item.contents.length > 0) {
     // Each enclosing bag/container reduces heat exchange for inner items (trapped air layer + barrier)
     const nextInsulationMultiplier = parentInsulationMultiplier * Math.max(0.20, 1.0 - (retention * 0.65));
@@ -446,6 +470,10 @@ export function updateItemThermodynamics(
       if (child) {
         updateItemThermodynamics(child, internalAmbient, dt, nextInsulationMultiplier);
       }
+    }
+    // Run hybrid liquid-solid soaking, infusion, and boiling interaction
+    if (item.fluidStorage) {
+      updateHybridContainerInteraction(item, dt);
     }
   }
 

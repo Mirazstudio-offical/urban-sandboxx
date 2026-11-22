@@ -2819,6 +2819,21 @@ export function normalizeFluidStorageState(
   }
 }
 
+export interface FluidMixComponent {
+  liquidId: string;
+  ml: number;
+  labelRu?: string;
+  color?: string;
+}
+
+export interface InfusedSolidRecord {
+  itemId: string;
+  nameRu: string;
+  intensity: number; // 0.0..1.0
+  color?: string;
+  dissolved?: boolean;
+}
+
 export interface FluidContainerState {
   liquidId: LiquidId | null;
   currentMl: number;
@@ -2828,6 +2843,8 @@ export interface FluidContainerState {
   baseItemNameEn?: string;
   containerVisuals?: ContainerVisualAttributes;
   attributes?: FluidSubstanceAttributes;
+  components?: FluidMixComponent[];
+  infusedItems?: InfusedSolidRecord[];
 }
 
 export interface ContainerDefConfig {
@@ -2847,6 +2864,8 @@ export interface ContainerDefConfig {
   openedVariantId?: string;
   isSealedByDefault?: boolean;
   isGranularOnly?: boolean;
+  supportsHybridContents?: boolean;
+  maxItemVolumeL?: number;
   defaultVisuals?: ContainerVisualAttributes;
 }
 
@@ -3582,8 +3601,772 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     requiresOpening: true,
     isSealedByDefault: true,
     isGranularOnly: true
+  },
+  // === KITCHEN COOKWARE & TABLEWARE (HYBRID LIQUID + SOLID CONTAINERS) ===
+  kitchen_pot_enamel: {
+    itemId: 'kitchen_pot_enamel',
+    name: 'Enamel Pot (4.0L)',
+    nameRu: 'Эмалированная кастрюля 4.0л',
+    maxMl: 4000,
+    emptyWeightKg: 1.2,
+    emptyVolumeL: 4.5,
+    category: 'gear',
+    icon: 'Utensils',
+    descriptionRu: 'Эмалированная кастрюля на 4 литра. Вмещает и жидкости, и продукты в едином объёме — идеально для супов, варки и замачивания.',
+    descriptionEn: '4.0L enamel cooking pot supporting both liquids and solid ingredients in shared volume.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 2.5
+  },
+  kitchen_pot_steel: {
+    itemId: 'kitchen_pot_steel',
+    name: 'Stainless Steel Pot (4.5L)',
+    nameRu: 'Стальная кастрюля 4.5л',
+    maxMl: 4500,
+    emptyWeightKg: 1.5,
+    emptyVolumeL: 5.0,
+    category: 'gear',
+    icon: 'Utensils',
+    descriptionRu: 'Кастрюля из нержавеющей стали на 4.5 литра для варки, настаивания и хранения жидкостей с продуктами.',
+    descriptionEn: '4.5L stainless steel pot for liquids and solid ingredients.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 2.8
+  },
+  kitchen_pot_aluminum: {
+    itemId: 'kitchen_pot_aluminum',
+    name: 'Aluminum Pot (3.5L)',
+    nameRu: 'Алюминиевая кастрюля 3.5л',
+    maxMl: 3500,
+    emptyWeightKg: 0.8,
+    emptyVolumeL: 4.0,
+    category: 'gear',
+    icon: 'Utensils',
+    descriptionRu: 'Лёгкая алюминиевая кастрюля на 3.5 литра с общим объёмом под воду и продукты.',
+    descriptionEn: '3.5L aluminum pot for liquids and solid foods.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 2.2
+  },
+  kitchen_pot_cast_iron: {
+    itemId: 'kitchen_pot_cast_iron',
+    name: 'Cast Iron Cauldron (5.0L)',
+    nameRu: 'Чугунный казан 5.0л',
+    maxMl: 5000,
+    emptyWeightKg: 3.8,
+    emptyVolumeL: 5.6,
+    category: 'gear',
+    icon: 'Utensils',
+    descriptionRu: 'Толстостенный чугунный казан на 5 литров для тушения, плова, супов и длительного томления.',
+    descriptionEn: '5.0L thick-walled cast iron cauldron pot.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 3.2
+  },
+  kitchen_kettle_enamel: {
+    itemId: 'kitchen_kettle_enamel',
+    name: 'Enamel Kettle (2.5L)',
+    nameRu: 'Эмалированный чайник 2.5л',
+    maxMl: 2500,
+    emptyWeightKg: 1.1,
+    emptyVolumeL: 2.9,
+    category: 'gear',
+    icon: 'Coffee',
+    descriptionRu: 'Классический эмалированный чайник на 2.5 литра. Подходит для воды, чая и заваривания трав или ягод.',
+    descriptionEn: '2.5L stovetop enamel kettle.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.5
+  },
+  kitchen_kettle_steel: {
+    itemId: 'kitchen_kettle_steel',
+    name: 'Steel Kettle (2.2L)',
+    nameRu: 'Стальной чайник 2.2л',
+    maxMl: 2200,
+    emptyWeightKg: 1.3,
+    emptyVolumeL: 2.6,
+    category: 'gear',
+    icon: 'Coffee',
+    descriptionRu: 'Чайник из нержавеющей стали на 2.2 литра со свистком.',
+    descriptionEn: '2.2L steel whistling kettle.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.45
+  },
+  kitchen_kettle_electric: {
+    itemId: 'kitchen_kettle_electric',
+    name: 'Electric Kettle (1.7L)',
+    nameRu: 'Электрический чайник 1.7л',
+    maxMl: 1700,
+    emptyWeightKg: 1.2,
+    emptyVolumeL: 2.0,
+    category: 'gear',
+    icon: 'Coffee',
+    descriptionRu: 'Стеклянный электрочайник на 1.7 литра для быстрого кипячения воды и заваривания.',
+    descriptionEn: '1.7L glass electric kettle.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.45
+  },
+  kitchen_kettle_clay: {
+    itemId: 'kitchen_kettle_clay',
+    name: 'Clay Teapot (0.8L)',
+    nameRu: 'Глиняный заварочный чайник 0.8л',
+    maxMl: 800,
+    emptyWeightKg: 0.6,
+    emptyVolumeL: 0.95,
+    category: 'gear',
+    icon: 'Coffee',
+    descriptionRu: 'Глиняный заварочный чайник на 0.8 литра для заваривания чая, трав и ягод.',
+    descriptionEn: '0.8L terracotta teapot.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.35
+  },
+  kitchen_pan_cast_iron: {
+    itemId: 'kitchen_pan_cast_iron',
+    name: 'Cast Iron Skillet (1.8L)',
+    nameRu: 'Чугунная сковорода 1.8л',
+    maxMl: 1800,
+    emptyWeightKg: 2.5,
+    emptyVolumeL: 2.2,
+    category: 'gear',
+    icon: 'Utensils',
+    descriptionRu: 'Чугунная сковорода вместимостью 1.8 литра — вмещает масло, соус и продукты одновременно.',
+    descriptionEn: '1.8L cast iron skillet.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 1.4
+  },
+  kitchen_pan_teflon: {
+    itemId: 'kitchen_pan_teflon',
+    name: 'Teflon Skillet (1.5L)',
+    nameRu: 'Тефлоновая сковорода 1.5л',
+    maxMl: 1500,
+    emptyWeightKg: 0.9,
+    emptyVolumeL: 1.9,
+    category: 'gear',
+    icon: 'Utensils',
+    descriptionRu: 'Антипригарная сковорода вместимостью 1.5 литра для масла, соусов и продуктов.',
+    descriptionEn: '1.5L non-stick skillet.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 1.2
+  },
+  kitchen_plate_enamel: {
+    itemId: 'kitchen_plate_enamel',
+    name: 'Enamel Deep Bowl (0.7L)',
+    nameRu: 'Эмалированная миска 0.7л',
+    maxMl: 700,
+    emptyWeightKg: 0.25,
+    emptyVolumeL: 0.8,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Глубокая эмалированная миска на 0.7 литра для супов, салатов, овощей и замачивания продуктов.',
+    descriptionEn: '0.7L deep enamel bowl for soups and solid foods.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.65
+  },
+  kitchen_bowl_wooden: {
+    itemId: 'kitchen_bowl_wooden',
+    name: 'Wooden Bowl (0.6L)',
+    nameRu: 'Деревянная пиала 0.6л',
+    maxMl: 600,
+    emptyWeightKg: 0.2,
+    emptyVolumeL: 0.7,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Глубокая деревянная пиала на 0.6 литра для блюд, бульонов и овощей.',
+    descriptionEn: '0.6L carved wooden bowl.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.55
+  },
+  kitchen_mug_ceramic: {
+    itemId: 'kitchen_mug_ceramic',
+    name: 'Ceramic Mug (0.35L)',
+    nameRu: 'Керамическая кружка 0.35л',
+    maxMl: 350,
+    emptyWeightKg: 0.3,
+    emptyVolumeL: 0.4,
+    category: 'drink',
+    icon: 'Coffee',
+    descriptionRu: 'Керамическая кружка на 350 мл — можно налить напиток и добавить ягоды, лимон, мёд или кусочки продуктов.',
+    descriptionEn: '350ml ceramic mug.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.28
+  },
+  kitchen_mug_enamel: {
+    itemId: 'kitchen_mug_enamel',
+    name: 'Enamel Mug (0.4L)',
+    nameRu: 'Эмалированная кружка 0.4л',
+    maxMl: 400,
+    emptyWeightKg: 0.15,
+    emptyVolumeL: 0.45,
+    category: 'drink',
+    icon: 'Coffee',
+    descriptionRu: 'Походная эмалированная кружка на 400 мл для напитков, супа и заваривания.',
+    descriptionEn: '400ml camping enamel mug.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.32
+  },
+  kitchen_mug_glass: {
+    itemId: 'kitchen_mug_glass',
+    name: 'Glass Mug (0.35L)',
+    nameRu: 'Стеклянная кружка 0.35л',
+    maxMl: 350,
+    emptyWeightKg: 0.35,
+    emptyVolumeL: 0.4,
+    category: 'drink',
+    icon: 'Coffee',
+    descriptionRu: 'Толстостенная стеклянная кружка на 350 мл.',
+    descriptionEn: '350ml glass mug.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.28
+  },
+  kitchen_cup_porcelain: {
+    itemId: 'kitchen_cup_porcelain',
+    name: 'Porcelain Tea Cup (0.25L)',
+    nameRu: 'Фарфоровая чашка 0.25л',
+    maxMl: 250,
+    emptyWeightKg: 0.25,
+    emptyVolumeL: 0.3,
+    category: 'drink',
+    icon: 'Coffee',
+    descriptionRu: 'Тонкостенная чайная чашка на 250 мл.',
+    descriptionEn: '250ml porcelain cup.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.2
   }
 };
+
+// ============================================================================
+// HYBRID CONTAINER UNIFIED CAPACITY & FLUID-SOLID MIXING ENGINE
+// ============================================================================
+
+const NON_HYBRID_FLUID_CONTAINER_IDS = new Set([
+  'tube_ointment_small',
+  'ampoule_glass_small',
+  'aerosol_can_small',
+  'package_sachet',
+  'bottle_sauce_squeeze',
+  'bottle_plastic_100',
+  'tetra_pack_250',
+  'tetra_pack_1000',
+  'can_alu_330',
+  'sandbag',
+  'grain_pack_pouch',
+  'grain_pack_box',
+  'pasta_pack_bag',
+  'pasta_pack_long'
+]);
+
+/**
+ * Determines whether a fluid container itemId supports holding BOTH liquids and solid items
+ * inside one shared volume meter (jars, pots, bowls, mugs, cups, bottles, cans, canisters, kettles).
+ */
+export function canContainerHoldHybridContents(itemId: string | undefined | null): boolean {
+  if (!itemId) return false;
+  const cleanId = itemId.replace(/_open$/, '');
+  const cfg = getContainerConfig(cleanId);
+  if (!cfg) return false;
+  if (cfg.supportsHybridContents !== undefined) return cfg.supportsHybridContents;
+  if (cfg.isGranularOnly) return false;
+  if (NON_HYBRID_FLUID_CONTAINER_IDS.has(cleanId)) return false;
+  return true;
+}
+
+/**
+ * Computes realistic maximum single-item volume (mouth/opening width constraint) for a hybrid vessel.
+ */
+export function getHybridMaxItemVolumeL(itemId: string | undefined | null, maxMl: number): number {
+  const capL = Math.max(0.05, maxMl / 1000);
+  const cleanId = (itemId || '').replace(/_open$/, '');
+  const cfg = getContainerConfig(cleanId);
+  if (cfg?.maxItemVolumeL !== undefined) return cfg.maxItemVolumeL;
+
+  // Wide-mouth vessels (pots, bowls, jars, mugs, cups, open tin cans)
+  if (
+    cleanId.startsWith('pot_') ||
+    cleanId.startsWith('kitchen_pot_') ||
+    cleanId.startsWith('kitchen_pan_') ||
+    cleanId.startsWith('kitchen_bowl_') ||
+    cleanId.startsWith('kitchen_plate_') ||
+    cleanId === 'soup_bowl'
+  ) {
+    return Number(Math.min(capL, Math.max(0.35, capL * 0.85)).toFixed(3));
+  }
+  if (
+    cleanId.startsWith('jar_glass_') ||
+    cleanId.startsWith('can_metal_') ||
+    cleanId.startsWith('cup_plastic_') ||
+    cleanId.startsWith('kitchen_mug_') ||
+    cleanId.startsWith('kitchen_cup_') ||
+    cleanId === 'glass_mug' ||
+    cleanId === 'paper_cup' ||
+    cleanId === 'tin_round_mini'
+  ) {
+    return Number(Math.min(capL, Math.max(0.18, capL * 0.72)).toFixed(3));
+  }
+  if (cleanId === 'thermos' || cleanId.startsWith('canister_')) {
+    return Number(Math.min(capL, Math.max(0.25, capL * 0.35)).toFixed(3));
+  }
+  // Narrow-neck bottles / flasks: berries, herbs, diced pieces, small objects
+  if (cleanId.startsWith('bottle_') || cleanId === 'glass_bottle_500' || cleanId === 'camp_flask' || cleanId === 'jar_spice_small') {
+    return Number(Math.min(capL, Math.max(0.12, Math.min(0.28, capL * 0.35))).toFixed(3));
+  }
+  return Number(Math.min(capL, Math.max(0.15, capL * 0.65)).toFixed(3));
+}
+
+export function isHybridFluidContainer(item: InventoryItem | null | undefined): boolean {
+  if (!item) return false;
+  return Boolean(item.fluidStorage && item.isContainer);
+}
+
+/**
+ * Ensures any eligible fluid container (including items loaded from older saves) has
+ * unified hybrid container properties (`isContainer`, `contents`, `containerCapacityL`, `maxContainedItemVolumeL`).
+ */
+export function ensureHybridContainerProps(item: InventoryItem | null | undefined): void {
+  if (!item) return;
+  if (!item.fluidStorage) {
+    const directCfg = CONTAINER_CONFIGS[item.itemId];
+    if (directCfg && canContainerHoldHybridContents(item.itemId)) {
+      item.fluidStorage = {
+        maxMl: directCfg.maxMl,
+        currentMl: 0,
+        liquidId: null,
+        emptyWeightKg: directCfg.emptyWeightKg,
+        baseItemNameRu: directCfg.nameRu,
+        baseItemNameEn: directCfg.name,
+      };
+      item.usable = true;
+    } else {
+      return;
+    }
+  }
+  if (!canContainerHoldHybridContents(item.itemId)) return;
+  const maxMl = Math.max(50, item.fluidStorage.maxMl || 500);
+  const capL = Number((maxMl / 1000).toFixed(3));
+  item.isContainer = true;
+  if (!Array.isArray(item.contents)) {
+    item.contents = [];
+  }
+  item.containerCapacityL = capL;
+  if (!item.maxContainedItemVolumeL || item.maxContainedItemVolumeL > capL) {
+    item.maxContainedItemVolumeL = getHybridMaxItemVolumeL(item.itemId, maxMl);
+  }
+  if (!item.maxContainedWeightKg) {
+    item.maxContainedWeightKg = Number(Math.max(2.0, capL * 2.5).toFixed(2));
+  }
+}
+
+function estimateSingleSolidItemVolumeMl(child: InventoryItem): number {
+  const count = Math.max(1, child.count || 1);
+  let unitVolL = child.volume;
+  if (unitVolL === undefined || !Number.isFinite(unitVolL) || unitVolL <= 0) {
+    if (child.fluidStorage) {
+      unitVolL = getFluidContainerVolume(child);
+    } else {
+      unitVolL = Math.max(0.015, (child.weight || 0.1) * 1.0);
+    }
+  }
+  return unitVolL * count * 1000;
+}
+
+export function getContainerCapacityMl(container: InventoryItem | null | undefined): number {
+  if (!container) return 0;
+  if (container.fluidStorage && container.fluidStorage.maxMl > 0) {
+    return container.fluidStorage.maxMl;
+  }
+  if (container.containerCapacityL && container.containerCapacityL > 0) {
+    return Math.round(container.containerCapacityL * 1000);
+  }
+  return 0;
+}
+
+export function getContainerSolidVolumeMl(container: InventoryItem | null | undefined): number {
+  if (!container || !container.contents || container.contents.length === 0) return 0;
+  let totalMl = 0;
+  for (const child of container.contents) {
+    if (child) {
+      totalMl += estimateSingleSolidItemVolumeMl(child);
+    }
+  }
+  return Math.round(totalMl);
+}
+
+export function getContainerLiquidVolumeMl(container: InventoryItem | null | undefined): number {
+  if (!container || !container.fluidStorage) return 0;
+  return Math.max(0, Math.round(container.fluidStorage.currentMl || 0));
+}
+
+export function getContainerFreeVolumeMl(container: InventoryItem | null | undefined): number {
+  const capMl = getContainerCapacityMl(container);
+  if (capMl <= 0) return 0;
+  const usedMl = getContainerSolidVolumeMl(container) + getContainerLiquidVolumeMl(container);
+  return Math.max(0, capMl - usedMl);
+}
+
+export interface ContainerCapacityBreakdown {
+  totalCapacityMl: number;
+  solidMl: number;
+  liquidMl: number;
+  usedMl: number;
+  freeMl: number;
+  solidPct: number;
+  liquidPct: number;
+  totalPct: number;
+  liquidColor: string;
+}
+
+export function getContainerCapacityBreakdown(container: InventoryItem | null | undefined): ContainerCapacityBreakdown {
+  const totalCapacityMl = getContainerCapacityMl(container);
+  const solidMl = getContainerSolidVolumeMl(container);
+  const liquidMl = getContainerLiquidVolumeMl(container);
+  const usedMl = solidMl + liquidMl;
+  const freeMl = Math.max(0, totalCapacityMl - usedMl);
+  const denom = Math.max(1, totalCapacityMl);
+  const solidPct = Math.min(100, (solidMl / denom) * 100);
+  const liquidPct = Math.min(100 - solidPct, (liquidMl / denom) * 100);
+  const totalPct = Math.min(100, (usedMl / denom) * 100);
+  const liqDef = container?.fluidStorage?.liquidId
+    ? LIQUID_REGISTRY[container.fluidStorage.liquidId as LiquidId]
+    : undefined;
+  const liquidColor =
+    container?.fluidStorage?.attributes?.customColor ||
+    liqDef?.color ||
+    '#38bdf8';
+
+  return {
+    totalCapacityMl,
+    solidMl,
+    liquidMl,
+    usedMl,
+    freeMl,
+    solidPct,
+    liquidPct,
+    totalPct,
+    liquidColor
+  };
+}
+
+function parseSimpleHex(hex: string | undefined, fallback: [number, number, number] = [56, 189, 248]): [number, number, number] {
+  if (!hex || typeof hex !== 'string') return fallback;
+  const cleaned = hex.trim().replace(/^#/, '');
+  if (cleaned.length === 3) {
+    const r = parseInt(cleaned[0] + cleaned[0], 16);
+    const g = parseInt(cleaned[1] + cleaned[1], 16);
+    const b = parseInt(cleaned[2] + cleaned[2], 16);
+    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return [r, g, b];
+  } else if (cleaned.length >= 6) {
+    const r = parseInt(cleaned.slice(0, 2), 16);
+    const g = parseInt(cleaned.slice(2, 4), 16);
+    const b = parseInt(cleaned.slice(4, 6), 16);
+    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return [r, g, b];
+  }
+  return fallback;
+}
+
+function rgbToHexStr(r: number, g: number, b: number): string {
+  const c = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+function blendColorHex(hexA: string, weightA: number, hexB: string, weightB: number): string {
+  const total = weightA + weightB;
+  if (total <= 0) return hexA;
+  const a = parseSimpleHex(hexA);
+  const b = parseSimpleHex(hexB);
+  return rgbToHexStr(
+    (a[0] * weightA + b[0] * weightB) / total,
+    (a[1] * weightA + b[1] * weightB) / total,
+    (a[2] * weightA + b[2] * weightB) / total
+  );
+}
+
+function inferSolidInfusionTint(item: InventoryItem): string {
+  const explicit = item.attributes?.customColor || item.attributes?.visuals?.color;
+  if (explicit && explicit.startsWith('#')) return explicit;
+  const id = (item.originalCatalogId || item.itemId || '').toLowerCase();
+  const name = (item.nameRu || '').toLowerCase();
+  if (id.includes('carrot') || name.includes('морков')) return '#f97316';
+  if (id.includes('beet') || name.includes('свёкл') || name.includes('свекл')) return '#9f1239';
+  if (id.includes('tomato') || name.includes('томат') || name.includes('помидор')) return '#dc2626';
+  if (id.includes('potato') || name.includes('картоф') || name.includes('картош')) return '#fde68a';
+  if (id.includes('onion') || name.includes('лук')) return '#d97706';
+  if (id.includes('cucumber') || id.includes('cabbage') || id.includes('herb') || id.includes('dill') || id.includes('parsley') || name.includes('огур') || name.includes('капуст') || name.includes('зелен') || name.includes('укроп')) return '#65a30d';
+  if (id.includes('berry') || id.includes('strawberr') || id.includes('raspberr') || id.includes('cranberr') || id.includes('cherr') || name.includes('ягод') || name.includes('клубник') || name.includes('малин') || name.includes('вишн')) return '#be123c';
+  if (id.includes('blueberr') || id.includes('currant') || name.includes('черник') || name.includes('смородин')) return '#581c87';
+  if (id.includes('apple') || id.includes('pear') || id.includes('lemon') || name.includes('яблок') || name.includes('лимон')) return '#eab308';
+  if (id.includes('meat') || id.includes('beef') || id.includes('pork') || id.includes('chicken') || id.includes('pelmen') || id.includes('sausage') || name.includes('мяс') || name.includes('куриц') || name.includes('говяд') || name.includes('свинин') || name.includes('пельмен')) return '#b45309';
+  if (id.includes('mushroom') || name.includes('гриб')) return '#78350f';
+  if (id.includes('tea') || id.includes('coffee') || id.includes('chocolate') || name.includes('чай') || name.includes('кофе') || name.includes('шоколад')) return '#78350f';
+  if (id.includes('salt') || id.includes('sugar') || name.includes('соль') || name.includes('сахар')) return '#e2e8f0';
+  return '#d97706';
+}
+
+function isSolubleSolidItem(item: InventoryItem): boolean {
+  const id = (item.originalCatalogId || item.itemId || '').toLowerCase();
+  return (
+    id === 'salt' ||
+    id === 'salt_fine' ||
+    id === 'sugar' ||
+    id === 'sugar_cube' ||
+    id.includes('tea_bag') ||
+    id.includes('instant_coffee') ||
+    id.includes('bouillon_cube')
+  );
+}
+
+/**
+ * Simulates physical & culinary interaction between the liquid phase and submerged solid items
+ * inside a hybrid container: submersion, wetting/coating, heat exchange, steeping/infusion,
+ * color/nutrition transfer into the liquid, and hot boiling/cooking.
+ */
+export function updateHybridContainerInteraction(
+  container: InventoryItem | null | undefined,
+  dtSeconds: number = 0
+): boolean {
+  if (!container || !container.fluidStorage) return false;
+  ensureHybridContainerProps(container);
+
+  const storage = container.fluidStorage;
+  const contents = container.contents;
+  if (!contents || contents.length === 0) {
+    return false;
+  }
+
+  const liquidMl = Math.max(0, storage.currentMl || 0);
+  const liqDef = storage.liquidId ? LIQUID_REGISTRY[storage.liquidId as LiquidId] : undefined;
+  const hasRealLiquid = liquidMl > 0 && Boolean(storage.liquidId) && !liqDef?.isGranular;
+
+  let changed = false;
+
+  if (!hasRealLiquid) {
+    // Container is dry or holds only dry granular material -> clear submersion & slowly dry wet items if open
+    const isDryOpen = Boolean(container.isOpen || !getContainerConfig(container.itemId)?.requiresOpening);
+    for (const child of contents) {
+      if (!child) continue;
+      if (child.submersionLevel && child.submersionLevel > 0) {
+        child.submersionLevel = 0;
+        changed = true;
+      }
+      if (dtSeconds > 0 && isDryOpen && (child.wetness || 0) > 0) {
+        const tempC = container.temperature ?? 20;
+        const dryRate = Math.max(0.15, (tempC - 5) * 0.04);
+        child.wetness = Math.max(0, (child.wetness || 0) - dryRate * dtSeconds);
+        if (child.wetness <= 1) {
+          child.wetness = 0;
+          child.soakedLiquidId = undefined;
+          child.soakedLiquidNameRu = undefined;
+          child.soakedColor = undefined;
+        }
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  const solidMl = Math.max(1, getContainerSolidVolumeMl(container));
+  const submersion = Math.max(0.2, Math.min(1.0, liquidMl / (solidMl + liquidMl * 0.4)));
+  const fluidTemp = container.temperature ?? 20.0;
+  const fluidBaseColor = storage.attributes?.customColor || liqDef?.color || '#38bdf8';
+  const fluidDisplayName = storage.attributes?.varietyRu || liqDef?.nameRu || storage.liquidId || 'Жидкость';
+
+  if (!storage.infusedItems) {
+    storage.infusedItems = [];
+  }
+
+  let avgChildTempSum = 0;
+  let avgChildTempCount = 0;
+  const dissolvedIndices: number[] = [];
+
+  for (let idx = 0; idx < contents.length; idx++) {
+    const child = contents[idx];
+    if (!child) continue;
+
+    // 1. Submersion & Wetting / Coating
+    const prevWet = child.wetness || 0;
+    const wetGain = dtSeconds > 0 ? Math.min(100 - prevWet, (35 + 45 * submersion) * Math.min(dtSeconds, 2.0)) : Math.max(35, 65 * submersion);
+    const nextWet = Math.min(100, Math.max(prevWet, Math.round((prevWet + wetGain) * 10) / 10));
+    if (nextWet !== prevWet || child.soakedLiquidId !== storage.liquidId || child.submersionLevel !== submersion) {
+      child.wetness = nextWet;
+      child.soakedLiquidId = storage.liquidId || undefined;
+      child.soakedLiquidNameRu = liqDef?.nameRu || fluidDisplayName;
+      child.soakedColor = fluidBaseColor;
+      child.submersionLevel = Number(submersion.toFixed(2));
+      changed = true;
+    }
+
+    // 2. Rapid thermal conduction between liquid and submerged solid item
+    const childTemp = child.temperature ?? 20.0;
+    if (dtSeconds > 0 && Math.abs(fluidTemp - childTemp) > 0.25) {
+      const kLiquidCond = 0.28 * submersion; // Liquids conduct heat rapidly
+      const alpha = Math.min(0.65, kLiquidCond * dtSeconds);
+      const nextChildTemp = childTemp + (fluidTemp - childTemp) * alpha;
+      child.temperature = Math.round(nextChildTemp * 10) / 10;
+      child.surfaceTemperature = child.temperature;
+      child.isThermalStable = false;
+      changed = true;
+    }
+    avgChildTempSum += (child.temperature ?? fluidTemp);
+    avgChildTempCount++;
+
+    // 3. Steeping / Infusion / Mixing food & soluble solids into drinkable/culinary liquids
+    const isEdibleSolid = child.category === 'food' || child.category === 'drink' || isSolubleSolidItem(child);
+    const isCulinaryLiquid = Boolean(liqDef?.isDrinkable);
+
+    if (isEdibleSolid && isCulinaryLiquid) {
+      const heatBoost = fluidTemp >= 80 ? 3.5 : fluidTemp >= 55 ? 2.0 : fluidTemp >= 30 ? 1.0 : 0.45;
+      const baseInfuseStep = dtSeconds > 0 ? 0.018 * heatBoost * submersion * dtSeconds : 0.08 * submersion;
+      const prevInf = child.infusionProgress || 0;
+      const nextInf = Math.min(1.0, Number((prevInf + baseInfuseStep).toFixed(3)));
+      if (nextInf !== prevInf) {
+        child.infusionProgress = nextInf;
+        changed = true;
+      }
+
+      const cleanSolidName = child.nameRu.replace(/\s*\([^)]*\)\s*$/g, '').trim() || child.nameRu;
+      const tint = inferSolidInfusionTint(child);
+      let rec = storage.infusedItems.find(r => r.itemId === child.itemId && r.nameRu === cleanSolidName);
+      if (!rec) {
+        rec = {
+          itemId: child.itemId,
+          nameRu: cleanSolidName,
+          intensity: nextInf,
+          color: tint
+        };
+        storage.infusedItems.push(rec);
+        changed = true;
+      } else if (nextInf > rec.intensity) {
+        rec.intensity = nextInf;
+        changed = true;
+      }
+
+      // Hot boiling in water/broth cooks submerged food items smoothly
+      if (fluidTemp >= 85 && nextInf >= 0.45 && child.category === 'food') {
+        const curState = child.attributes?.stateNameRu;
+        if (curState !== 'Варёный') {
+          child.attributes = {
+            ...(child.attributes || {}),
+            state: 'boiled',
+            stateNameRu: 'Варёный',
+            preparationMethod: 'Сварено в жидкости'
+          };
+          if (child.effects && typeof child.effects.hunger === 'number') {
+            child.effects.hunger = Math.round(child.effects.hunger * 1.15);
+          }
+          changed = true;
+        }
+      }
+
+      // Soluble small solids (salt, sugar, bouillon cubes) can fully dissolve when warm & infused
+      if (isSolubleSolidItem(child) && nextInf >= 0.95 && fluidTemp >= 35) {
+        rec.dissolved = true;
+        rec.intensity = 1.0;
+        dissolvedIndices.push(idx);
+        changed = true;
+      }
+    }
+  }
+
+  // Remove fully dissolved soluble items from contents
+  if (dissolvedIndices.length > 0) {
+    for (let i = dissolvedIndices.length - 1; i >= 0; i--) {
+      contents.splice(dissolvedIndices[i], 1);
+    }
+  }
+
+  // Pull liquid temperature slightly toward average solid item temperature
+  if (dtSeconds > 0 && avgChildTempCount > 0) {
+    const avgSolidTemp = avgChildTempSum / avgChildTempCount;
+    const solidMassRatio = Math.min(0.45, solidMl / Math.max(1, solidMl + liquidMl));
+    if (Math.abs(avgSolidTemp - fluidTemp) > 0.3) {
+      const nextLiquidTemp = fluidTemp + (avgSolidTemp - fluidTemp) * Math.min(0.35, 0.12 * solidMassRatio * dtSeconds);
+      container.temperature = Math.round(nextLiquidTemp * 10) / 10;
+      container.surfaceTemperature = container.temperature;
+    }
+  }
+
+  // Update liquid color, ingredients, and nutrition from active infusions
+  if (storage.infusedItems.length > 0 && liqDef?.isDrinkable) {
+    let blendedColor = liqDef.color || '#38bdf8';
+    const infusedNames: string[] = [];
+    let bonusHunger = 0;
+    let bonusHealth = 0;
+    let bonusEnergy = 0;
+    let maxIntensity = 0;
+
+    for (const inf of storage.infusedItems) {
+      if (inf.intensity > maxIntensity) maxIntensity = inf.intensity;
+      if (!infusedNames.includes(inf.nameRu)) infusedNames.push(inf.nameRu);
+      if (inf.color && inf.intensity > 0.05) {
+        const tintWeight = Math.min(0.42, inf.intensity * 0.45);
+        blendedColor = blendColorHex(blendedColor, 1.0 - tintWeight, inf.color, tintWeight);
+      }
+      bonusHunger += Math.round(6 * inf.intensity);
+      bonusHealth += Math.round(3 * inf.intensity);
+      bonusEnergy += Math.round(3 * inf.intensity);
+    }
+
+    const baseEffects = liqDef.effects || {};
+    const existingAttrs = storage.attributes || {};
+    const baseIngs = Array.isArray(existingAttrs.ingredients)
+      ? existingAttrs.ingredients
+      : existingAttrs.ingredients
+      ? [existingAttrs.ingredients]
+      : [liqDef.nameRu];
+
+    const mergedIngs = Array.from(new Set([...baseIngs, ...infusedNames]));
+    const shortList = infusedNames.slice(0, 3).join(', ') + (infusedNames.length > 3 ? ` и ещё ${infusedNames.length - 3}` : '');
+    const isBrothLike = (storage.liquidId === 'water' || storage.liquidId === 'broth') && fluidTemp >= 75 && maxIntensity >= 0.45;
+    const infusionVariety = isBrothLike
+      ? `Отвар / Бульон (${shortList})`
+      : `${liqDef.nameRu} (${shortList})`;
+
+    storage.attributes = {
+      ...existingAttrs,
+      varietyRu: infusionVariety,
+      ingredients: mergedIngs,
+      customColor: blendedColor,
+      visuals: {
+        ...(existingAttrs.visuals || {}),
+        color: blendedColor
+      },
+      purpose: `Жидкость с погружёнными продуктами (${shortList})`,
+      customEffects: {
+        thirst: baseEffects.thirst ?? 25,
+        hunger: Math.min(65, (baseEffects.hunger || 0) + bonusHunger),
+        health: Math.min(35, (baseEffects.health || 0) + bonusHealth),
+        energy: Math.min(45, (baseEffects.energy || 0) + bonusEnergy),
+        sleepiness: baseEffects.sleepiness,
+        soothePanic: baseEffects.soothePanic
+      }
+    };
+  }
+
+  if (changed) {
+    syncItemContainerProperties(container);
+  }
+
+  return changed;
+}
+
+/**
+ * Drains ONLY the liquid phase from a hybrid container, leaving all solid items inside (still wet/coated!).
+ */
+export function drainLiquidFromContainer(
+  container: InventoryItem
+): { drainedMl: number; liquidNameRu: string } {
+  if (!container.fluidStorage) {
+    return { drainedMl: 0, liquidNameRu: '' };
+  }
+  const storage = container.fluidStorage;
+  const drainedMl = Math.round(storage.currentMl || 0);
+  const liqDef = storage.liquidId ? LIQUID_REGISTRY[storage.liquidId as LiquidId] : undefined;
+  const liquidNameRu = storage.attributes?.varietyRu || liqDef?.nameRu || storage.liquidId || 'Жидкость';
+
+  storage.currentMl = 0;
+  storage.liquidId = null;
+  storage.attributes = undefined;
+  storage.components = undefined;
+  storage.infusedItems = undefined;
+
+  updateHybridContainerInteraction(container, 0);
+  syncItemContainerProperties(container);
+
+  return { drainedMl, liquidNameRu };
+}
 
 export function isFluidContainer(item: InventoryItem | null | undefined): boolean {
   if (!item) return false;
@@ -3598,12 +4381,22 @@ export function getFluidContainerWeight(item: InventoryItem): number {
   if (!storage.liquidId || storage.currentMl <= 0) {
     return Math.round(emptyWeight * 100) / 100;
   }
+  if (storage.components && storage.components.length > 0) {
+    let mixWeight = 0;
+    for (const comp of storage.components) {
+      const lDef = LIQUID_REGISTRY[comp.liquidId as LiquidId] || LIQUID_REGISTRY.water;
+      mixWeight += (comp.ml / 1000) * (lDef.densityKgPerL || 1.0);
+    }
+    return Math.round((emptyWeight + mixWeight) * 100) / 100;
+  }
   const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
   const liquidWeight = (storage.currentMl / 1000) * (liquid.densityKgPerL || 1.0);
   return Math.round((emptyWeight + liquidWeight) * 100) / 100;
 }
 
 export function getFluidContainerVolume(item: InventoryItem): number {
+  const cfg = getContainerConfig(item.itemId);
+  if (cfg?.emptyVolumeL) return cfg.emptyVolumeL;
   if (item.volume !== undefined) return item.volume;
   if (!item.fluidStorage) return 0.5;
   return Math.max(0.05, Math.round((item.fluidStorage.maxMl / 1000) * 1.15 * 100) / 100);
@@ -3620,15 +4413,10 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
   const isOpened = Boolean(item.isOpen || storage.attributes?.isOpened || item.itemId.endsWith('_open'));
   const openedSuffix = cfg?.requiresOpening && isOpened ? ' (вскрыто)' : '';
 
-  if (!storage.liquidId || storage.currentMl <= 0) {
-    return `${cleanBaseName}${openedSuffix} (Пусто)`;
-  }
-
-  const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
-  const substanceLabel =
-    storage.liquidId === 'pasta' && storage.attributes?.varietyRu
-      ? storage.attributes.varietyRu
-      : liquid.nameRu;
+  const solidItems = item.contents || [];
+  const hasSolids = solidItems.length > 0;
+  const hasLiquid = Boolean(storage.liquidId && storage.currentMl > 0);
+  const breakdown = getContainerCapacityBreakdown(item);
 
   function formatLiters(ml: number): string {
     const liters = ml / 1000;
@@ -3636,15 +4424,48 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
     return parseFloat(liters.toFixed(2)).toString();
   }
 
-  let volLabel: string;
-  if (liquid.isGranular) {
-    const curGrams = Math.round((storage.currentMl / 1000) * (liquid.densityKgPerL || 1.0) * 1000);
-    const maxGrams = Math.round((storage.maxMl / 1000) * (liquid.densityKgPerL || 1.0) * 1000);
-    volLabel = `${curGrams}/${maxGrams} г`;
-  } else {
-    volLabel = storage.maxMl >= 1000
-      ? `${formatLiters(storage.currentMl)}/${formatLiters(storage.maxMl)} л`
-      : `${Math.round(storage.currentMl)}/${Math.round(storage.maxMl)} мл`;
+  function formatSharedVol(usedMl: number, maxMl: number, isGranular?: boolean, density?: number): string {
+    if (isGranular && !hasSolids) {
+      const curGrams = Math.round((usedMl / 1000) * (density || 1.0) * 1000);
+      const maxGrams = Math.round((maxMl / 1000) * (density || 1.0) * 1000);
+      return `${curGrams}/${maxGrams} г`;
+    }
+    return maxMl >= 1000
+      ? `${formatLiters(usedMl)}/${formatLiters(maxMl)} л`
+      : `${Math.round(usedMl)}/${Math.round(maxMl)} мл`;
+  }
+
+  if (!hasLiquid && !hasSolids) {
+    return `${cleanBaseName}${openedSuffix} (Пусто)`;
+  }
+
+  const solidSummary = hasSolids
+    ? (() => {
+        const names = Array.from(new Set(solidItems.map(c => c.nameRu.replace(/\s*\([^)]*\)\s*$/g, '').trim()).filter(Boolean)));
+        if (names.length === 1 && solidItems.length === 1) return names[0];
+        if (names.length === 1) return `${names[0]} ×${solidItems.length}`;
+        if (names.length === 2) return `${names[0]}, ${names[1]}`;
+        return `${names[0]} и ещё ${solidItems.length - 1}`;
+      })()
+    : '';
+
+  if (!hasLiquid && hasSolids) {
+    const volLabel = formatSharedVol(breakdown.usedMl, breakdown.totalCapacityMl);
+    return `${cleanBaseName}${openedSuffix} [${solidSummary}, ${volLabel}]`;
+  }
+
+  const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
+  const substanceLabel =
+    storage.liquidId === 'pasta' && storage.attributes?.varietyRu
+      ? storage.attributes.varietyRu
+      : (storage.attributes?.varietyRu && (storage.components?.length || 0) > 1
+        ? storage.attributes.varietyRu
+        : liquid.nameRu);
+
+  const volLabel = formatSharedVol(breakdown.usedMl, breakdown.totalCapacityMl, liquid.isGranular, liquid.densityKgPerL);
+
+  if (hasSolids) {
+    return `${cleanBaseName}${openedSuffix} [${substanceLabel} + ${solidSummary}, ${volLabel}]`;
   }
 
   return `${cleanBaseName}${openedSuffix} [${substanceLabel}, ${volLabel}]`;
@@ -4137,6 +4958,8 @@ export function syncItemContainerProperties(item: InventoryItem): void {
   if (!item.fluidStorage) return;
   const storage = item.fluidStorage;
   normalizeFluidStorageState(storage);
+  ensureHybridContainerProps(item);
+
   const cfg = getContainerConfig(item.itemId);
   if (cfg) {
     storage.baseItemNameRu = cfg.nameRu;
@@ -4173,6 +4996,13 @@ export function syncItemContainerProperties(item: InventoryItem): void {
   item.volume = getFluidContainerVolume(item);
   item.nameRu = getFluidContainerDisplayName(item);
 
+  const breakdown = getContainerCapacityBreakdown(item);
+  const solidItems = item.contents || [];
+  const hasSolids = solidItems.length > 0;
+  const solidNamesStr = hasSolids
+    ? solidItems.map(c => c.nameRu).join(', ')
+    : '';
+
   const vis = item.containerVisuals || storage.containerVisuals;
   const visBadge = vis
     ? ` Параметры модели тары: форма — ${vis.shapeNameRu || vis.shape}, материал — ${vis.materialNameRu || 'Стандарт'} (RGB: ${vis.materialRgb.join(', ')}), этикетка — ${vis.labelRgb ? `RGB(${vis.labelRgb.join(', ')})` : 'нет'}.`
@@ -4187,6 +5017,9 @@ export function syncItemContainerProperties(item: InventoryItem): void {
     if (liquid?.isDrinkable || storage.attributes?.medicalEffectId || cfg?.requiresOpening) {
       item.usable = true;
     }
+    const solidInfoPart = hasSolids
+      ? ` Погружённые предметы (${solidItems.length} шт., ${(breakdown.solidMl / 1000).toFixed(2)} л): ${solidNamesStr}. Общая заполненность: ${(breakdown.usedMl / 1000).toFixed(2)} / ${(breakdown.totalCapacityMl / 1000).toFixed(2)} л.`
+      : '';
     if (storage.attributes) {
       const a = storage.attributes;
       const openBadge = isOpened
@@ -4203,7 +5036,7 @@ export function syncItemContainerProperties(item: InventoryItem): void {
         : (rawIng || 'Не указаны');
       item.descriptionRu =
         `Унифицированная тара: ${cfg?.nameRu || storage.baseItemNameRu}${openBadge}.${visBadge} ` +
-        `Содержимое: ${liquid?.nameRu || storage.liquidId}${a.varietyRu ? ` (${a.varietyRu})` : ''} (${volText}). ` +
+        `Содержимое: ${liquid?.nameRu || storage.liquidId}${a.varietyRu ? ` (${a.varietyRu})` : ''} (${volText}).${solidInfoPart} ` +
         (a.productShapeRu ? `Форма: ${a.productShapeRu}. ` : '') +
         (a.grainGradeRu ? `Сорт/категория: ${a.grainGradeRu}. ` : '') +
         `Из чего: ${ingredientsText}. ` +
@@ -4235,10 +5068,22 @@ export function syncItemContainerProperties(item: InventoryItem): void {
           color: a.visuals?.color || a.customColor || liquid?.color
         }
       };
-    } else if (visBadge) {
+    } else {
       const baseDesc = cfg?.descriptionRu || 'Унифицированная ёмкость.';
-      item.descriptionRu = `${baseDesc}${visBadge}`;
+      item.descriptionRu = `${baseDesc}${visBadge}${solidInfoPart}`;
     }
+  } else if (hasSolids) {
+    const baseDesc = cfg?.descriptionRu || 'Унифицированная ёмкость.';
+    item.descriptionRu =
+      `${baseDesc}${visBadge} Внутри предметы (${solidItems.length} шт., ${(breakdown.solidMl / 1000).toFixed(2)} л): ${solidNamesStr}. ` +
+      `Жидкости нет — свободно ${(breakdown.freeMl / 1000).toFixed(2)} из ${(breakdown.totalCapacityMl / 1000).toFixed(2)} л.`;
+    item.attributes = {
+      ...(item.attributes || {}),
+      varietyRu: `${cfg?.nameRu || storage.baseItemNameRu}: ${solidNamesStr}`,
+      ingredients: solidItems.map(c => c.nameRu),
+      state: 'filled_solids',
+      stateNameRu: `${solidItems.length} предм. (без жидкости)`
+    };
   } else {
     const baseDesc = cfg?.descriptionRu || 'Пустая унифицированная ёмкость.';
     item.descriptionRu = `${baseDesc}${visBadge} Сейчас пуста (0 мл).`;
@@ -4246,7 +5091,7 @@ export function syncItemContainerProperties(item: InventoryItem): void {
       ...(item.attributes || {}),
       varietyRu: cfg?.nameRu || storage.baseItemNameRu || item.nameRu,
       preparationMethod: vis?.materialNameRu ? `Тара (${vis.materialNameRu})` : 'Унифицированная тара',
-      purpose: cfg?.descriptionRu || 'Хранение жидкостей и сыпучих веществ',
+      purpose: cfg?.descriptionRu || 'Хранение жидкостей и предметов в общем объёме',
       state: cfg?.requiresOpening ? (isOpened ? 'opened' : 'sealed') : 'empty',
       stateNameRu: 'Пусто',
       visuals: {
@@ -4309,6 +5154,9 @@ export function pourLiquidBetweenContainers(
     return { success: false, message: 'Один из предметов не является емкостью', transferredMl: 0 };
   }
 
+  ensureHybridContainerProps(source);
+  ensureHybridContainerProps(target);
+
   const srcStorage = source.fluidStorage;
   const tgtStorage = target.fluidStorage;
 
@@ -4316,25 +5164,15 @@ export function pourLiquidBetweenContainers(
     return { success: false, message: `${srcStorage.baseItemNameRu} пуста`, transferredMl: 0 };
   }
 
-  const sameSubstance =
-    tgtStorage.liquidId === srcStorage.liquidId &&
-    (!tgtStorage.attributes?.varietyRu ||
-      !srcStorage.attributes?.varietyRu ||
-      tgtStorage.attributes.varietyRu === srcStorage.attributes.varietyRu);
-
-  if (tgtStorage.currentMl > 0 && tgtStorage.liquidId && !sameSubstance) {
-    const srcLiquid = srcStorage.attributes?.varietyRu || LIQUID_REGISTRY[srcStorage.liquidId as LiquidId]?.nameRu || srcStorage.liquidId;
-    const tgtLiquid = tgtStorage.attributes?.varietyRu || LIQUID_REGISTRY[tgtStorage.liquidId as LiquidId]?.nameRu || tgtStorage.liquidId;
+  // Respect unified capacity: solid items inside target take up volume!
+  const availableSpace = getContainerFreeVolumeMl(target);
+  if (availableSpace <= 0) {
+    const bd = getContainerCapacityBreakdown(target);
     return {
       success: false,
-      message: `Нельзя смешивать разные вещества: в емкости уже есть «${tgtLiquid}», а переливается «${srcLiquid}»`,
+      message: `${tgtStorage.baseItemNameRu} уже заполнена (предметы ${Math.round(bd.solidMl)} мл + жидкость ${Math.round(bd.liquidMl)} мл)!`,
       transferredMl: 0
     };
-  }
-
-  const availableSpace = tgtStorage.maxMl - tgtStorage.currentMl;
-  if (availableSpace <= 0) {
-    return { success: false, message: `${tgtStorage.baseItemNameRu} уже заполнена до краев!`, transferredMl: 0 };
   }
 
   const transfer = Math.min(amountMl ?? srcStorage.currentMl, Math.min(srcStorage.currentMl, availableSpace));
@@ -4357,21 +5195,125 @@ export function pourLiquidBetweenContainers(
   // Realistic spillage waste: ~1.5% to 4% is spilled on walls or drips down the neck
   const spillRate = 0.015 + Math.random() * 0.025;
   const wasteMl = Math.max(1, Math.round(transfer * spillRate));
-  const actualReceived = Math.max(0, transfer - wasteMl);
+  const actualReceived = Math.max(1, transfer - wasteMl);
 
-  tgtStorage.liquidId = srcStorage.liquidId;
-  if (srcStorage.attributes) {
-    tgtStorage.attributes = { ...srcStorage.attributes, isOpened: true };
+  const prevTgtMl = tgtStorage.currentMl;
+  const srcSpec = LIQUID_REGISTRY[srcStorage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
+  const tgtSpec = tgtStorage.liquidId ? (LIQUID_REGISTRY[tgtStorage.liquidId as LiquidId] || LIQUID_REGISTRY.water) : srcSpec;
+
+  const sameSubstance =
+    prevTgtMl <= 0 ||
+    !tgtStorage.liquidId ||
+    (tgtStorage.liquidId === srcStorage.liquidId &&
+      (!tgtStorage.attributes?.varietyRu ||
+        !srcStorage.attributes?.varietyRu ||
+        tgtStorage.attributes.varietyRu === srcStorage.attributes.varietyRu));
+
+  if (prevTgtMl <= 0 || !tgtStorage.liquidId) {
+    tgtStorage.liquidId = srcStorage.liquidId;
+    if (srcStorage.attributes) {
+      tgtStorage.attributes = { ...srcStorage.attributes, isOpened: true };
+    }
+    tgtStorage.components = [{
+      liquidId: srcStorage.liquidId,
+      ml: actualReceived,
+      labelRu: srcStorage.attributes?.varietyRu || srcSpec.nameRu,
+      color: srcStorage.attributes?.customColor || srcSpec.color
+    }];
+    if (srcStorage.infusedItems && srcStorage.infusedItems.length > 0) {
+      tgtStorage.infusedItems = srcStorage.infusedItems.map(inf => ({ ...inf }));
+    }
+  } else if (sameSubstance) {
+    if (!tgtStorage.components || tgtStorage.components.length === 0) {
+      tgtStorage.components = [{
+        liquidId: tgtStorage.liquidId,
+        ml: prevTgtMl,
+        labelRu: tgtStorage.attributes?.varietyRu || tgtSpec.nameRu,
+        color: tgtStorage.attributes?.customColor || tgtSpec.color
+      }];
+    }
+    const existingComp = tgtStorage.components.find(c => c.liquidId === srcStorage.liquidId);
+    if (existingComp) existingComp.ml += actualReceived;
+    else tgtStorage.components.push({ liquidId: srcStorage.liquidId, ml: actualReceived, labelRu: srcSpec.nameRu, color: srcSpec.color });
+  } else {
+    // Mix the two different liquids smoothly into a unified mixture!
+    const totalMl = prevTgtMl + actualReceived;
+    const prevColor = tgtStorage.attributes?.customColor || tgtSpec.color || '#38bdf8';
+    const incColor = srcStorage.attributes?.customColor || srcSpec.color || '#38bdf8';
+    const mixedColor = blendColorHex(prevColor, prevTgtMl, incColor, actualReceived);
+
+    const tgtName = tgtStorage.attributes?.varietyRu || tgtSpec.nameRu;
+    const srcName = srcStorage.attributes?.varietyRu || srcSpec.nameRu;
+
+    if (!tgtStorage.components || tgtStorage.components.length === 0) {
+      tgtStorage.components = [{ liquidId: tgtStorage.liquidId, ml: prevTgtMl, labelRu: tgtName, color: prevColor }];
+    }
+    const existingComp = tgtStorage.components.find(c => c.liquidId === srcStorage.liquidId);
+    if (existingComp) existingComp.ml += actualReceived;
+    else tgtStorage.components.push({ liquidId: srcStorage.liquidId, ml: actualReceived, labelRu: srcName, color: incColor });
+
+    const dominantId: LiquidId = (
+      !tgtSpec.isDrinkable || tgtSpec.isFlammable
+        ? tgtStorage.liquidId
+        : !srcSpec.isDrinkable || srcSpec.isFlammable
+        ? srcStorage.liquidId
+        : prevTgtMl >= actualReceived
+        ? tgtStorage.liquidId
+        : srcStorage.liquidId
+    ) as LiquidId;
+
+    const bEff = tgtStorage.attributes?.customEffects || tgtSpec.effects || {};
+    const tEff = srcStorage.attributes?.customEffects || srcSpec.effects || {};
+    const mixLabel = tgtStorage.components
+      .map(c => `${c.labelRu || LIQUID_REGISTRY[c.liquidId as LiquidId]?.nameRu || c.liquidId} ${Math.round((c.ml / totalMl) * 100)}%`)
+      .join(' + ');
+
+    tgtStorage.liquidId = dominantId;
+    tgtStorage.attributes = {
+      ...(tgtStorage.attributes || {}),
+      varietyRu: `Смесь (${mixLabel})`,
+      ingredients: Array.from(new Set(tgtStorage.components.map(c => c.labelRu || c.liquidId))),
+      customColor: mixedColor,
+      visuals: { ...(tgtStorage.attributes?.visuals || {}), color: mixedColor },
+      isOpened: true,
+      customEffects: {
+        thirst: Math.round(((bEff.thirst || 0) * prevTgtMl + (tEff.thirst || 0) * actualReceived) / totalMl),
+        hunger: Math.round(((bEff.hunger || 0) * prevTgtMl + (tEff.hunger || 0) * actualReceived) / totalMl),
+        energy: Math.round(((bEff.energy || 0) * prevTgtMl + (tEff.energy || 0) * actualReceived) / totalMl),
+        health: Math.round(((bEff.health || 0) * prevTgtMl + (tEff.health || 0) * actualReceived) / totalMl),
+        sleepiness: Math.round(((bEff.sleepiness || 0) * prevTgtMl + (tEff.sleepiness || 0) * actualReceived) / totalMl),
+        soothePanic: Math.round(((bEff.soothePanic || 0) * prevTgtMl + (tEff.soothePanic || 0) * actualReceived) / totalMl)
+      }
+    };
   }
-  tgtStorage.currentMl += actualReceived;
+
+  // Blend liquid temperature
+  const srcTemp = source.temperature ?? 20;
+  const tgtTemp = target.temperature ?? 20;
+  const newTgtMl = prevTgtMl + actualReceived;
+  target.temperature = prevTgtMl > 0
+    ? Math.round(((tgtTemp * prevTgtMl + srcTemp * actualReceived) / newTgtMl) * 10) / 10
+    : srcTemp;
+  target.surfaceTemperature = target.temperature;
+
+  tgtStorage.currentMl = newTgtMl;
   srcStorage.currentMl -= transfer;
 
   if (srcStorage.currentMl <= 0) {
     srcStorage.currentMl = 0;
     srcStorage.liquidId = null;
     srcStorage.attributes = undefined;
+    srcStorage.components = undefined;
+    srcStorage.infusedItems = undefined;
+  } else if (srcStorage.components && srcStorage.components.length > 0) {
+    const keepRatio = srcStorage.currentMl / (srcStorage.currentMl + transfer);
+    for (const c of srcStorage.components) {
+      c.ml = Math.max(1, Math.round(c.ml * keepRatio));
+    }
   }
 
+  updateHybridContainerInteraction(source, 0);
+  updateHybridContainerInteraction(target, 1.0);
   syncItemContainerProperties(source);
   syncItemContainerProperties(target);
 
@@ -4393,32 +5335,71 @@ export function fillContainerWithLiquid(
     return { success: false, message: 'Предмет не может хранить жидкости', filledMl: 0 };
   }
 
+  ensureHybridContainerProps(container);
   const storage = container.fluidStorage;
-  if (storage.currentMl > 0 && storage.liquidId && storage.liquidId !== liquidId) {
-    const existing = storage.attributes?.varietyRu || LIQUID_REGISTRY[storage.liquidId as LiquidId]?.nameRu || storage.liquidId;
-    const incoming = LIQUID_REGISTRY[liquidId]?.nameRu || liquidId;
-    return {
-      success: false,
-      message: `В емкости уже налит(а) ${existing}! Сначала вылейте ее перед заполнением ${incoming}.`,
-      filledMl: 0
-    };
-  }
 
-  const space = storage.maxMl - storage.currentMl;
+  const space = getContainerFreeVolumeMl(container);
   if (space <= 0) {
-    return { success: false, message: 'Емкость уже полна!', filledMl: 0 };
+    return { success: false, message: 'В ёмкости больше нет свободного объёма!', filledMl: 0 };
   }
 
   const add = Math.min(amountMl ?? space, space);
-  storage.liquidId = liquidId;
-  storage.currentMl += add;
+  const prevMl = storage.currentMl || 0;
+  const incomingDef = LIQUID_REGISTRY[liquidId] || LIQUID_REGISTRY.water;
 
+  if (prevMl > 0 && storage.liquidId && storage.liquidId !== liquidId) {
+    // Mix incoming liquid with existing liquid
+    const prevDef = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
+    const totalMl = prevMl + add;
+    const mixedColor = blendColorHex(
+      storage.attributes?.customColor || prevDef.color || '#38bdf8',
+      prevMl,
+      incomingDef.color || '#38bdf8',
+      add
+    );
+    if (!storage.components || storage.components.length === 0) {
+      storage.components = [{ liquidId: storage.liquidId, ml: prevMl, labelRu: prevDef.nameRu, color: prevDef.color }];
+    }
+    const comp = storage.components.find(c => c.liquidId === liquidId);
+    if (comp) comp.ml += add;
+    else storage.components.push({ liquidId, ml: add, labelRu: incomingDef.nameRu, color: incomingDef.color });
+
+    const dominantId: LiquidId = (
+      !prevDef.isDrinkable || prevDef.isFlammable
+        ? storage.liquidId
+        : !incomingDef.isDrinkable || incomingDef.isFlammable
+        ? liquidId
+        : prevMl >= add
+        ? storage.liquidId
+        : liquidId
+    ) as LiquidId;
+
+    storage.liquidId = dominantId;
+    storage.currentMl = totalMl;
+    storage.attributes = {
+      ...(storage.attributes || {}),
+      varietyRu: `Смесь (${storage.components.map(c => c.labelRu || c.liquidId).join(' + ')})`,
+      customColor: mixedColor,
+      visuals: { ...(storage.attributes?.visuals || {}), color: mixedColor }
+    };
+  } else {
+    storage.liquidId = liquidId;
+    storage.currentMl = prevMl + add;
+    if (!storage.components || storage.components.length === 0) {
+      storage.components = [{ liquidId, ml: storage.currentMl, labelRu: incomingDef.nameRu, color: incomingDef.color }];
+    } else {
+      const comp = storage.components.find(c => c.liquidId === liquidId);
+      if (comp) comp.ml += add;
+      else storage.components.push({ liquidId, ml: add, labelRu: incomingDef.nameRu, color: incomingDef.color });
+    }
+  }
+
+  updateHybridContainerInteraction(container, 1.0);
   syncItemContainerProperties(container);
 
-  const liquid = LIQUID_REGISTRY[liquidId];
   return {
     success: true,
-    message: `Набрано ${Math.round(add)} мл (${liquid?.nameRu || liquidId})`,
+    message: `Набрано ${Math.round(add)} мл (${incomingDef.nameRu || liquidId})`,
     filledMl: add
   };
 }
@@ -4527,8 +5508,16 @@ export function handleConsumeFluid(
     storage.currentMl = 0;
     storage.liquidId = null;
     storage.attributes = undefined;
+    storage.components = undefined;
+    storage.infusedItems = undefined;
+  } else if (storage.components && storage.components.length > 0) {
+    const keepRatio = storage.currentMl / (storage.currentMl + sipMl);
+    for (const c of storage.components) {
+      c.ml = Math.max(1, Math.round(c.ml * keepRatio));
+    }
   }
 
+  updateHybridContainerInteraction(container, 0);
   syncItemContainerProperties(container);
 
   const liquidTemp = container.temperature ?? 20.0;
@@ -4540,8 +5529,11 @@ export function handleConsumeFluid(
     sound.playDrink();
   }
 
+  const remainingSolids = container.contents?.length || 0;
   const remainingInfo = storage.currentMl > 0
-    ? `(Осталось: ${Math.round(storage.currentMl)} мл)`
+    ? `(Осталось жидкости: ${Math.round(storage.currentMl)} мл${remainingSolids > 0 ? `, внутри предм.: ${remainingSolids}` : ''})`
+    : remainingSolids > 0
+    ? `(Жидкость выпита, внутри осталось предм.: ${remainingSolids})`
     : `(Тара опустела: ${container.nameRu})`;
   addPlayerNotification(player, `${taste || consumedDisplayName} ${remainingInfo}`, liquid.category === 'food' ? 'food' : 'drink');
 
@@ -4927,8 +5919,27 @@ export function tryFillOrUseFluidContainer(
     return handleConsumeFluid(player, container, world);
   }
 
-  // If container is empty -> try to fill from surrounding world sources!
+  // If container has no liquid -> try to fill remaining free volume from surrounding world sources!
+  const freeSpaceMl = getContainerFreeVolumeMl(container);
+  if (freeSpaceMl <= 0) {
+    addPlayerNotification(player, `${storage.baseItemNameRu} полностью заполнена предметами — нет места для жидкости!`, 'warning');
+    return { success: false, message: 'Нет свободного места' };
+  }
+
   if (world) {
+    // 0. Check nearby water source (river, fountain, sink, plumbed building)
+    if (isPlayerNearWaterSource(player, world)) {
+      const fillRes = fillContainerWithLiquid(container, 'water', freeSpaceMl);
+      if (fillRes.success) {
+        sound.playWaterSpray();
+        const solidNote = container.contents && container.contents.length > 0
+          ? ` (погружено предметов: ${container.contents.length})`
+          : '';
+        addPlayerNotification(player, `Набрано ${Math.round(fillRes.filledMl)} мл чистой воды${solidNote}!`, 'drink');
+        return { success: true, message: fillRes.message };
+      }
+    }
+
     // 1. Check nearby vehicle fluid tanks (cistern / tanker / water truck / barrel)
     for (const veh of world.vehicles) {
       const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
@@ -4936,18 +5947,16 @@ export function tryFillOrUseFluidContainer(
         if (veh.fluidTank && veh.fluidTank.currentVolume > 0.1) {
           const liquidType = (veh.fluidTank.liquidType === 'water' ? 'water' : (veh.fluidTank.liquidType === 'diesel' ? 'diesel' : 'gasoline_95')) as LiquidId;
           const availMl = veh.fluidTank.currentVolume * 1000;
-          const spaceMl = storage.maxMl - storage.currentMl;
-          const drawMl = Math.min(availMl, spaceMl);
-          veh.fluidTank.currentVolume = Math.max(0, veh.fluidTank.currentVolume - (drawMl / 1000));
-          
-          storage.liquidId = liquidType;
-          storage.currentMl = drawMl;
-          syncItemContainerProperties(container);
-          sound.playWaterSpray();
+          const drawMl = Math.min(availMl, freeSpaceMl);
+          if (drawMl > 0) {
+            veh.fluidTank.currentVolume = Math.max(0, veh.fluidTank.currentVolume - (drawMl / 1000));
+            fillContainerWithLiquid(container, liquidType, drawMl);
+            sound.playWaterSpray();
 
-          const lName = LIQUID_REGISTRY[liquidType]?.nameRu || liquidType;
-          addPlayerNotification(player, `Набрано ${Math.round(drawMl)} мл (${lName}) из цистерны!`, 'heal');
-          return { success: true, message: `Набрано ${lName}` };
+            const lName = LIQUID_REGISTRY[liquidType]?.nameRu || liquidType;
+            addPlayerNotification(player, `Набрано ${Math.round(drawMl)} мл (${lName}) из цистерны!`, 'heal');
+            return { success: true, message: `Набрано ${lName}` };
+          }
         }
 
         // Check vehicle fuel tank (siphon fuel)
@@ -4956,19 +5965,17 @@ export function tryFillOrUseFluidContainer(
           const curLiters = (veh.fuelSystem.tankLevel / 100) * cap;
           if (curLiters > 0.1) {
             const fuelLiquid: LiquidId = veh.requiredFuel === 'diesel' ? 'diesel' : 'gasoline_95';
-            const spaceMl = storage.maxMl - storage.currentMl;
-            const drawLiters = Math.min(curLiters, spaceMl / 1000);
+            const drawLiters = Math.min(curLiters, freeSpaceMl / 1000);
             const drawMl = Math.round(drawLiters * 1000);
-            
-            veh.fuelSystem.tankLevel = Math.max(0, ((curLiters - drawLiters) / cap) * 100);
-            storage.liquidId = fuelLiquid;
-            storage.currentMl = drawMl;
-            syncItemContainerProperties(container);
-            sound.playWaterSpray();
+            if (drawMl > 0) {
+              veh.fuelSystem.tankLevel = Math.max(0, ((curLiters - drawLiters) / cap) * 100);
+              fillContainerWithLiquid(container, fuelLiquid, drawMl);
+              sound.playWaterSpray();
 
-            const lName = LIQUID_REGISTRY[fuelLiquid]?.nameRu || fuelLiquid;
-            addPlayerNotification(player, `Слито ${drawMl} мл (${lName}) из бака автомобиля!`, 'heal');
-            return { success: true, message: `Слито топливо: ${lName}` };
+              const lName = LIQUID_REGISTRY[fuelLiquid]?.nameRu || fuelLiquid;
+              addPlayerNotification(player, `Слито ${drawMl} мл (${lName}) из бака автомобиля!`, 'heal');
+              return { success: true, message: `Слито топливо: ${lName}` };
+            }
           }
         }
       }
@@ -4981,9 +5988,8 @@ export function tryFillOrUseFluidContainer(
         const stain = world.stains[sandIndex];
         const pileVolumeMl = Math.round(Math.pow(stain.radius, 2.1) * 3);
         if (pileVolumeMl > 100) {
-          const spaceMl = storage.maxMl - storage.currentMl;
-          if (spaceMl > 0) {
-            const baseScoop = Math.min(spaceMl, 1500); // max scoop per click
+          if (freeSpaceMl > 0) {
+            const baseScoop = Math.min(freeSpaceMl, 1500); // max scoop per click
             const scoopMl = Math.min(pileVolumeMl, baseScoop);
             
             // Imperfection loss: ~10% to 18% is lost and falls back into the dirt/asphalt
@@ -5013,6 +6019,13 @@ export function tryFillOrUseFluidContainer(
     }
   }
 
-  addPlayerNotification(player, `${storage.baseItemNameRu} пуста!`, 'info');
+  const hasSolids = container.contents && container.contents.length > 0;
+  addPlayerNotification(
+    player,
+    hasSolids
+      ? `В ${storage.baseItemNameRu} нет жидкости (внутри предм.: ${container.contents!.length}). Подойдите к воде или откройте в инвентаре.`
+      : `${storage.baseItemNameRu} пуста! Можно набрать воду у источника или положить предметы внутрь.`,
+    'info'
+  );
   return { success: false, message: 'Емкость пуста' };
 }

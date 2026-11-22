@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Player, InventoryItem, ItemCategory, GameWorld, GroundItem, CandyPackagingShape, ChocolatePackagingShape } from '../types';
 import {
   useItemOnPlayer,
+  useHandItemOnPlayer,
   dropItemFromPlayer,
   addItemToPlayer,
   moveInventoryItem,
@@ -34,7 +35,16 @@ import {
   getUnifiedItemAttributes
 } from '../items';
 import { getItemThermalDisplayInfo } from '../itemThermalSystem';
-import { isFluidContainerClosed, openFluidContainerIfNeeded, LIQUID_REGISTRY, LiquidId } from '../liquidSystem';
+import {
+  isFluidContainerClosed,
+  openFluidContainerIfNeeded,
+  LIQUID_REGISTRY,
+  LiquidId,
+  ensureHybridContainerProps,
+  getContainerCapacityBreakdown,
+  drainLiquidFromContainer,
+  tryFillOrUseFluidContainer
+} from '../liquidSystem';
 import {
   InteractionSlotGrid4,
   evaluateInteractionGrid,
@@ -84,6 +94,8 @@ import {
   Footprints,
   Backpack,
   Thermometer,
+  Droplets,
+  FlaskConical,
 } from 'lucide-react';
 
 interface InventoryModalProps {
@@ -212,12 +224,14 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     forceRender(n => n + 1);
   };
 
-  const handleUseItem = (idx: number) => {
+  const handleUseItem = (idx: number, forceDirectUse: boolean = false) => {
     if (!player) return;
     const item = player.inventory?.[idx];
     if (!item) return;
 
-    if (item.isContainer && !item.singleUseContainer) {
+    ensureHybridContainerProps(item);
+
+    if (item.isContainer && !item.singleUseContainer && !item.fluidStorage && !forceDirectUse) {
       setOpenContainer(item);
       setSelectedContainerItemIdx(0);
       return;
@@ -556,6 +570,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     }
   };
 
+  // Ensure legacy saved fluid vessels & cookware are upgraded to hybrid containers
+  (player.inventory || []).forEach(it => { if (it) ensureHybridContainerProps(it); });
+  if (player.leftHandItem) ensureHybridContainerProps(player.leftHandItem);
+  if (player.rightHandItem) ensureHybridContainerProps(player.rightHandItem);
+
   const availableContainers = [
     ...(player.inventory || []).filter(i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId && !i.itemId.startsWith('paper_packaging')),
     ...(player.leftHandItem && player.leftHandItem.isContainer && !player.leftHandItem.singleUseContainer && !player.leftHandItem.tornItemId && !player.leftHandItem.itemId.startsWith('paper_packaging') ? [player.leftHandItem] : []),
@@ -716,31 +735,44 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
   const getSlotFillInfo = (item: InventoryItem | null | undefined) => {
     if (!item) return null;
+    ensureHybridContainerProps(item);
     const wrap = getEffectiveFluidWrapper(item);
     if (wrap) {
       const st = wrap.state;
       const liq = st.liquidId ? LIQUID_REGISTRY[st.liquidId as LiquidId] : undefined;
       const unit = liq?.isGranular || wrap.isGranularContainer ? 'г' : 'мл';
-      const pct = st.maxMl > 0 ? Math.max(0, Math.min(100, Math.round((st.currentMl / st.maxMl) * 100))) : 0;
+      const bd = getContainerCapacityBreakdown(item);
+      const hasSolids = Boolean(item.contents && item.contents.length > 0);
+      const pct = bd.totalCapacityMl > 0
+        ? Math.max(0, Math.min(100, Math.round(bd.totalPct)))
+        : (st.maxMl > 0 ? Math.max(0, Math.min(100, Math.round((st.currentMl / st.maxMl) * 100))) : 0);
       const subName =
         st.currentMl <= 0 || !st.liquidId
-          ? 'Пусто'
+          ? (hasSolids ? `Предметы (${item.contents!.length} шт.)` : 'Пусто')
           : st.attributes?.varietyRu || liq?.nameRu || st.liquidId;
-      const color = st.attributes?.customColor || liq?.color || '#38bdf8';
+      const color = st.currentMl > 0 && st.liquidId
+        ? (st.attributes?.customColor || liq?.color || '#38bdf8')
+        : (hasSolids ? '#f59e0b' : '#38bdf8');
+      const breakdownLine = hasSolids
+        ? `\nПредметы: ${Math.round(bd.solidMl)} мл (${item.contents!.length} шт.) + Жидкость: ${Math.round(bd.liquidMl)} мл / ${bd.totalCapacityMl} мл`
+        : `\n${subName}: ${Math.round(st.currentMl)} / ${st.maxMl} ${unit}`;
       return {
         pct,
         color,
-        tooltip: `${item.nameRu}\n${subName}: ${Math.round(st.currentMl)} / ${st.maxMl} ${unit}`,
+        tooltip: `${item.nameRu}${breakdownLine}`,
       };
     }
     const pct =
       item.maxPortions && item.maxPortions > 1
         ? Math.max(0, Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100))
         : null;
+    const soakNote = item.soakedLiquidNameRu && (item.wetness || 0) >= 10
+      ? `\nПропитка: ${item.soakedLiquidNameRu} (${Math.round(item.wetness || 0)}%)`
+      : '';
     return {
       pct,
       color: undefined,
-      tooltip: `${item.nameRu}\n${formatWeightRu(getItemTotalWeight(item))} · ${getItemTotalVolume(item)} л`,
+      tooltip: `${item.nameRu}\n${formatWeightRu(getItemTotalWeight(item))} · ${getItemTotalVolume(item)} л${soakNote}`,
     };
   };
 
@@ -767,15 +799,16 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       if (!fromItem) return;
 
       // If target slot contains a container (and isn't the same item), try putting inside the container
-      if (
-        toItem &&
-        toItem.isContainer &&
-        !toItem.singleUseContainer &&
-        toItem.id !== fromItem.id &&
-        canItemFitInContainer(toItem, fromItem).fits
-      ) {
-        handlePutIntoContainer(toItem, fromIdx);
-        return;
+      if (toItem && toItem.id !== fromItem.id) {
+        ensureHybridContainerProps(toItem);
+        if (
+          toItem.isContainer &&
+          !toItem.singleUseContainer &&
+          canItemFitInContainer(toItem, fromItem).fits
+        ) {
+          handlePutIntoContainer(toItem, fromIdx);
+          return;
+        }
       }
 
       if (moveInventoryItem(player, fromIdx, toIdx)) {
@@ -1713,10 +1746,14 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     {/* Unified Attributes (единый стандарт для всех предметов, продуктов, жидкостей, сыпучего и тары) */}
                     {(() => {
                       const it = selectedEntry.item;
+                      ensureHybridContainerProps(it);
                       const uAttrs = getUnifiedItemAttributes(it);
                       const fs = it.fluidStorage;
                       const liq = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
                       const hasFluid = Boolean(fs?.liquidId && fs.currentMl > 0);
+                      const hasHybridCapacity = Boolean(fs && it.isContainer);
+                      const capBreakdown = hasHybridCapacity ? getContainerCapacityBreakdown(it) : null;
+                      const hasSoakedCoating = Boolean(it.soakedLiquidId && (it.wetness || 0) >= 10);
                       const fluidUnit = liq?.isGranular ? 'г' : 'мл';
                       const fluidCurrentDisplay = fs
                         ? Math.round(liq?.isGranular ? fs.currentMl * (liq.densityKgPerL || 1) : fs.currentMl)
@@ -1761,12 +1798,16 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       const materialLabel = vis?.materialNameRu;
 
                       const stateBadge =
-                        hasFluid && fs
+                        hasHybridCapacity && capBreakdown
+                          ? `${Math.round(capBreakdown.usedMl)} / ${capBreakdown.totalCapacityMl} мл`
+                          : hasFluid && fs
                           ? (uAttrs.stateNameRu || `${fluidCurrentDisplay} / ${fluidMaxDisplay} ${fluidUnit}`)
                           : uAttrs.stateNameRu;
 
                       const hasAnySpec = Boolean(
                         hasFluid ||
+                        hasHybridCapacity ||
+                        hasSoakedCoating ||
                         shapeLabel ||
                         sizeLabel ||
                         materialLabel ||
@@ -1794,7 +1835,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                           <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
                             <span className="gu-grp" style={{ fontSize: 11 }}>
-                              {hasFluid
+                              {hasHybridCapacity
+                                ? `Общая ёмкость (жидкость + предметы)`
+                                : hasFluid
                                 ? `Содержимое (${liq?.nameRu || fs!.liquidId})`
                                 : innerFirst && (innerFirst.pelmenAttributes || innerFirst.gummyAttributes || innerFirst.chocolateAttributes || innerAttrs?.doughNameRu || innerAttrs?.outerMaterialRu)
                                 ? `Упаковка и состав (${it.contents!.length} шт.)`
@@ -1814,11 +1857,53 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             </div>
                           </div>
 
+                          {/* Segmented Shared Capacity Meter for Hybrid Fluid+Solid Containers */}
+                          {hasHybridCapacity && capBreakdown && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 8px', background: 'rgba(15,23,42,0.55)', border: '1px solid rgba(148,163,184,0.18)', borderRadius: 4 }}>
+                              <div style={{ height: 7, width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                                {capBreakdown.solidPct > 0 && (
+                                  <div style={{ width: `${capBreakdown.solidPct}%`, background: '#f59e0b', height: '100%' }} title={`Предметы: ${Math.round(capBreakdown.solidMl)} мл`} />
+                                )}
+                                {capBreakdown.liquidPct > 0 && (
+                                  <div style={{ width: `${capBreakdown.liquidPct}%`, background: capBreakdown.liquidColor, height: '100%' }} title={`Жидкость: ${Math.round(capBreakdown.liquidMl)} мл`} />
+                                )}
+                              </div>
+                              <div className="gu-row2 gu-mono" style={{ justifyContent: 'space-between', fontSize: 10.5, color: 'var(--gu-mut)' }}>
+                                <span>Предм.: <strong style={{ color: '#fbbf24' }}>{Math.round(capBreakdown.solidMl)} мл</strong> ({it.contents?.length || 0})</span>
+                                <span>Жидк.: <strong style={{ color: capBreakdown.liquidColor }}>{Math.round(capBreakdown.liquidMl)} мл</strong></span>
+                                <span>Своб.: <strong style={{ color: '#fff' }}>{Math.round(capBreakdown.freeMl)} мл</strong></span>
+                              </div>
+                            </div>
+                          )}
+
                           <div className="gu-kv-grid gu-g3 gu-kv-compact">
+                            {hasSoakedCoating && (
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Пропитка жидкостью</span>
+                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                  <span
+                                    style={{
+                                      width: 9,
+                                      height: 9,
+                                      borderRadius: 2,
+                                      backgroundColor: it.soakedColor || '#38bdf8',
+                                      border: '1px solid rgba(255,255,255,0.35)',
+                                      display: 'inline-block',
+                                      flexShrink: 0
+                                    }}
+                                  />
+                                  <span>
+                                    {it.soakedLiquidNameRu || it.soakedLiquidId} (влажн. {Math.round(it.wetness || 0)}%)
+                                    {it.infusionProgress && it.infusionProgress >= 0.45 ? ' · Настоялся' : ''}
+                                  </span>
+                                </span>
+                              </div>
+                            )}
+
                             {hasFluid && fs && (
                               <>
                                 <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
-                                  <span className="gu-kv-k">Базовое вещество</span>
+                                  <span className="gu-kv-k">Жидкая фаза</span>
                                   <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                     {swatchColor && (
                                       <span
@@ -1837,7 +1922,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                   </span>
                                 </div>
                                 <div className="gu-kv">
-                                  <span className="gu-kv-k">Количество</span>
+                                  <span className="gu-kv-k">Объём жидк.</span>
                                   <span className="gu-kv-v">
                                     {fluidCurrentDisplay} / {fluidMaxDisplay} {fluidUnit}
                                   </span>
@@ -2199,32 +2284,80 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             <span>Надеть из руки</span>
                           </button>
                         )}
-                        {selectedEntry.item.isContainer && (
-                          <button
-                            type="button"
-                            className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                            onClick={() => {
-                              setOpenContainer(selectedEntry.item);
-                              setSelectedContainerItemIdx(0);
-                            }}
-                          >
-                            <Package width={14} height={14} />
-                            <span>Открыть ({selectedEntry.item.contents?.length || 0} предм.)</span>
-                          </button>
-                        )}
-                        {isFluidContainerClosed(selectedEntry.item) && (
-                          <button
-                            type="button"
-                            className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                            onClick={() => {
-                              openFluidContainerIfNeeded(player, selectedEntry.item);
-                              sound.resume();
-                              forceRender(n => n + 1);
-                            }}
-                          >
-                            <Scissors width={14} height={14} />
-                            <span>Открыть крышку / упаковку</span>
-                          </button>
+                        {selectedEntry.item.isContainer && selectedEntry.item.fluidStorage ? (
+                          <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                            {isFluidContainerClosed(selectedEntry.item) ? (
+                              <button
+                                type="button"
+                                className="gu-btn gu-btn-p gu-btn-sm"
+                                style={{ gridColumn: '1 / -1' }}
+                                onClick={() => {
+                                  openFluidContainerIfNeeded(player, selectedEntry.item);
+                                  sound.resume();
+                                  forceRender(n => n + 1);
+                                }}
+                              >
+                                <Scissors width={14} height={14} />
+                                <span>Открыть крышку / упаковку</span>
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="gu-btn gu-btn-p gu-btn-sm"
+                                  onClick={() => {
+                                    setOpenContainer(selectedEntry.item);
+                                    setSelectedContainerItemIdx(0);
+                                  }}
+                                >
+                                  <Package width={14} height={14} />
+                                  <span>Открыть ({selectedEntry.item.contents?.length || 0})</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="gu-btn gu-btn-s gu-btn-sm"
+                                  onClick={() => {
+                                    useHandItemOnPlayer(player, selectedEntry.hand!, world || undefined);
+                                    sound.resume();
+                                    forceRender(n => n + 1);
+                                  }}
+                                >
+                                  <Droplets width={14} height={14} />
+                                  <span>{selectedEntry.item.fluidStorage.currentMl > 0 ? 'Выпить / Исп.' : 'Набрать'}</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {selectedEntry.item.isContainer && (
+                              <button
+                                type="button"
+                                className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                                onClick={() => {
+                                  setOpenContainer(selectedEntry.item);
+                                  setSelectedContainerItemIdx(0);
+                                }}
+                              >
+                                <Package width={14} height={14} />
+                                <span>Открыть ({selectedEntry.item.contents?.length || 0} предм.)</span>
+                              </button>
+                            )}
+                            {isFluidContainerClosed(selectedEntry.item) && (
+                              <button
+                                type="button"
+                                className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
+                                onClick={() => {
+                                  openFluidContainerIfNeeded(player, selectedEntry.item);
+                                  sound.resume();
+                                  forceRender(n => n + 1);
+                                }}
+                              >
+                                <Scissors width={14} height={14} />
+                                <span>Открыть крышку / упаковку</span>
+                              </button>
+                            )}
+                          </>
                         )}
                         <div className="gu-grid gu-g2" style={{ gap: 6 }}>
                           <button
@@ -2257,6 +2390,49 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             <Shirt width={14} height={14} />
                             <span>Надеть / Экипировать</span>
                           </button>
+                        ) : selectedEntry.item.isContainer && selectedEntry.item.fluidStorage ? (
+                          <div className="gu-grid gu-g2" style={{ gap: 6 }}>
+                            {isFluidContainerClosed(selectedEntry.item) ? (
+                              <button
+                                type="button"
+                                id="btn-open-fluid-container"
+                                className="gu-btn gu-btn-p gu-btn-sm"
+                                style={{ gridColumn: '1 / -1' }}
+                                onClick={() => {
+                                  openFluidContainerIfNeeded(player, selectedEntry.item);
+                                  sound.resume();
+                                  forceRender(n => n + 1);
+                                }}
+                              >
+                                <Scissors width={14} height={14} />
+                                <span>Открыть крышку / упаковку</span>
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  id="btn-open-selected-container"
+                                  className="gu-btn gu-btn-p gu-btn-sm"
+                                  onClick={() => {
+                                    setOpenContainer(selectedEntry.item);
+                                    setSelectedContainerItemIdx(0);
+                                  }}
+                                >
+                                  <Package width={14} height={14} />
+                                  <span>Открыть ({selectedEntry.item.contents?.length || 0})</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  id="btn-use-selected-item"
+                                  className="gu-btn gu-btn-s gu-btn-sm"
+                                  onClick={() => handleUseItem(selectedEntry.originalIndex, true)}
+                                >
+                                  <Droplets width={14} height={14} />
+                                  <span>{selectedEntry.item.fluidStorage.currentMl > 0 ? 'Выпить / Исп.' : 'Набрать'}</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
                         ) : selectedEntry.item.isContainer ? (
                           <div className="gu-grid gu-g2" style={{ gap: 6 }}>
                             {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
@@ -2595,45 +2771,94 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
         {/* ==================== SUB-INVENTORY: CONTAINER VIEW (2-COLUMN SLOT LAYOUT) ==================== */}
         {activeTab === 'inventory' && openContainer && (() => {
+          ensureHybridContainerProps(openContainer);
           const contItems = openContainer.contents || [];
           const totalContSlots = Math.max(18, contItems.length + 6);
           const selectedContItem = contItems[selectedContainerItemIdx] || null;
           const isContainerDropTarget = wbDragUi?.overKey === 'zone:container';
+          const bd = getContainerCapacityBreakdown(openContainer);
+          const fs = openContainer.fluidStorage;
+          const hasLiquid = Boolean(fs && fs.liquidId && fs.currentMl > 0);
+          const liqDef = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
+          const liquidDisplayName = fs?.attributes?.varietyRu || liqDef?.nameRu || fs?.liquidId || '';
 
           return (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* Compact Pinned Header */}
-              <div className="gu-panel gu-row2 gu-wrap" style={{ flex: 'none', justifyContent: 'space-between', padding: '8px 12px' }}>
-                <div className="gu-row2" style={{ gap: 10, minWidth: 0 }}>
-                  <button id="btn-close-container-view" type="button" className="gu-btn gu-btn-s gu-btn-xs" onClick={() => setOpenContainer(null)}>
-                    <ChevronLeft width={14} height={14} color="#c9922b" />
-                    <span>В карманы</span>
-                  </button>
-                  <div className="gu-ic" style={{ width: 34, height: 34, flexShrink: 0 }}>
-                    <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={30} />
+              <div className="gu-panel" style={{ flex: 'none', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
+                  <div className="gu-row2" style={{ gap: 10, minWidth: 0 }}>
+                    <button id="btn-close-container-view" type="button" className="gu-btn gu-btn-s gu-btn-xs" onClick={() => setOpenContainer(null)}>
+                      <ChevronLeft width={14} height={14} color="#c9922b" />
+                      <span>В карманы</span>
+                    </button>
+                    <div className="gu-ic" style={{ width: 34, height: 34, flexShrink: 0 }}>
+                      <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={30} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="gu-cn" style={{ fontSize: 17, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
+                        {openContainer.nameRu}
+                      </div>
+                      <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
+                        {fs
+                          ? 'Общий счётчик объёма: предметы и жидкость делят одну вместимость и смешиваются'
+                          : 'Перетаскивайте предметы из карманов и рук в слоты контейнера и обратно'}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="gu-cn" style={{ fontSize: 17, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
-                      {openContainer.nameRu}
-                    </div>
-                    <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
-                      Перетаскивайте предметы из карманов и рук в слоты контейнера и обратно
-                    </div>
+
+                  <div className="gu-row2 gu-mono" style={{ gap: 8, fontSize: 12, color: 'var(--gu-mut)' }}>
+                    <span><strong style={{ color: '#fff' }}>{contItems.length}</strong> предм.</span>
+                    <span>·</span>
+                    <span>
+                      <strong style={{ color: 'var(--gu-amber-hi)' }}>
+                        {(bd.usedMl / 1000).toFixed(2)}
+                      </strong> / {(bd.totalCapacityMl / 1000).toFixed(2)} л
+                    </span>
+                    <span>·</span>
+                    <span><strong style={{ color: '#fff' }}>{formatWeightRu(getItemTotalWeight(openContainer))}</strong></span>
                   </div>
                 </div>
 
-                <div className="gu-row2 gu-mono" style={{ gap: 8, fontSize: 12, color: 'var(--gu-mut)' }}>
-                  <span><strong style={{ color: '#fff' }}>{contItems.length}</strong> предм.</span>
-                  <span>·</span>
-                  <span><strong style={{ color: 'var(--gu-amber-hi)' }}>{getItemTotalVolume(openContainer)}</strong> / {openContainer.containerCapacityL} л</span>
-                  <span>·</span>
-                  <span><strong style={{ color: '#fff' }}>{formatWeightRu(getItemTotalWeight(openContainer))}</strong></span>
-                </div>
+                {/* Unified Segmented Capacity Bar (Solid + Liquid sharing 1 capacity meter) */}
+                {bd.totalCapacityMl > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ height: 8, width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden', display: 'flex' }}>
+                      {bd.solidPct > 0 && (
+                        <div
+                          style={{ width: `${bd.solidPct}%`, background: '#f59e0b', height: '100%', transition: 'width 0.2s ease' }}
+                          title={`Предметы: ${Math.round(bd.solidMl)} мл`}
+                        />
+                      )}
+                      {bd.liquidPct > 0 && (
+                        <div
+                          style={{ width: `${bd.liquidPct}%`, background: bd.liquidColor, height: '100%', transition: 'width 0.2s ease' }}
+                          title={`Жидкость: ${Math.round(bd.liquidMl)} мл`}
+                        />
+                      )}
+                    </div>
+                    <div className="gu-row2 gu-wrap gu-mono" style={{ justifyContent: 'space-between', fontSize: 11, color: 'var(--gu-mut)' }}>
+                      <div className="gu-row2" style={{ gap: 10 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b', display: 'inline-block' }} />
+                          Предметы: <strong style={{ color: '#fff' }}>{Math.round(bd.solidMl)} мл</strong>
+                        </span>
+                        {fs && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 2, background: bd.liquidColor, display: 'inline-block' }} />
+                            Жидкость: <strong style={{ color: '#fff' }}>{Math.round(bd.liquidMl)} мл</strong>
+                          </span>
+                        )}
+                      </div>
+                      <span>Свободно: <strong style={{ color: '#4ade80' }}>{Math.round(bd.freeMl)} мл</strong></span>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* 2-Column Slot Layout: Left = Container Slots | Right = Player Hands + Pocket Slots */}
+              {/* 2-Column Slot Layout: Left = Container Slots + Liquid Phase | Right = Player Hands + Pocket Slots */}
               <div className="gu-st-split" style={{ flex: 1, minHeight: 0 }}>
-                {/* LEFT COLUMN: CONTAINER SLOTS */}
+                {/* LEFT COLUMN: LIQUID PHASE + CONTAINER SLOTS */}
                 <div
                   className="gu-panel"
                   data-wb-drop-zone="zone:container"
@@ -2642,11 +2867,84 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     flexDirection: 'column',
                     minHeight: 0,
                     padding: '10px 12px',
+                    gap: 8,
                     borderColor: isContainerDropTarget ? 'var(--gu-amber-hi)' : undefined,
                   }}
                 >
-                  <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span className="gu-grp" style={{ fontSize: 11.5 }}>Слоты контейнера ({contItems.length})</span>
+                  {/* Liquid Phase Control Strip inside Hybrid Container */}
+                  {fs && (
+                    <div
+                      className="gu-card-sm"
+                      style={{
+                        flex: 'none',
+                        padding: '8px 10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        borderColor: hasLiquid ? `${bd.liquidColor}66` : undefined,
+                      }}
+                    >
+                      <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', gap: 6 }}>
+                        <div className="gu-row2" style={{ gap: 7, minWidth: 0 }}>
+                          <Droplets width={15} height={15} color={hasLiquid ? bd.liquidColor : '#64748b'} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 12.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {hasLiquid ? liquidDisplayName : 'Жидкость не налита'}
+                            </div>
+                            <div className="gu-mut gu-mono" style={{ fontSize: 10.5 }}>
+                              {hasLiquid
+                                ? `${Math.round(fs.currentMl)} мл · ${Math.round(openContainer.temperature ?? 20)}°C${contItems.length > 0 ? ` · Погружено предм.: ${contItems.length}` : ''}`
+                                : `Доступно для заливки: ${Math.round(bd.freeMl)} мл`}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="gu-row2" style={{ gap: 4 }}>
+                          {hasLiquid && (
+                            <>
+                              <button
+                                type="button"
+                                className="gu-btn gu-btn-p gu-btn-xs"
+                                onClick={() => {
+                                  tryFillOrUseFluidContainer(player, openContainer, world || undefined);
+                                  sound.resume();
+                                  forceRender(n => n + 1);
+                                }}
+                              >
+                                <FlaskConical width={12} height={12} />
+                                <span>Выпить / Исп.</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="gu-btn gu-btn-d gu-btn-xs"
+                                title="Слить только жидкость (предметы останутся внутри влажными)"
+                                onClick={() => {
+                                  const drained = drainLiquidFromContainer(openContainer);
+                                  if (drained.drainedMl > 0) {
+                                    sound.playWaterSpray();
+                                    addPlayerNotification(
+                                      player,
+                                      `Слито ${drained.drainedMl} мл (${drained.liquidNameRu}).${contItems.length > 0 ? ` Предметы (${contItems.length} шт.) остались внутри.` : ''}`,
+                                      'info'
+                                    );
+                                    forceRender(n => n + 1);
+                                  }
+                                }}
+                              >
+                                <Droplets width={12} height={12} />
+                                <span>Слить</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between' }}>
+                    <span className="gu-grp" style={{ fontSize: 11.5 }}>
+                      Предметы внутри ({contItems.length})
+                    </span>
                     <span className="gu-mut" style={{ fontSize: 11 }}>Перетащите сюда или 2× клик чтобы достать</span>
                   </div>
 
@@ -2677,6 +2975,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           );
                         }
 
+                        const isSubmerged = Boolean(cItem.soakedLiquidId && (cItem.submersionLevel || 0) > 0);
                         return (
                           <div
                             key={slotKey}
@@ -2694,12 +2993,32 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                               touchAction: 'none',
                               cursor: 'grab',
                               opacity: isBeingDragged ? 0.35 : 1,
-                              borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
+                              borderColor: isDropTarget ? 'var(--gu-amber-hi)' : (isSubmerged ? `${cItem.soakedColor || '#38bdf8'}99` : undefined),
+                              boxShadow: isSubmerged ? `inset 0 -10px 14px -8px ${cItem.soakedColor || '#38bdf8'}66` : undefined,
                             }}
                             title={info?.tooltip}
                           >
                             <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={44} />
                             {cItem.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{cItem.count}</span>}
+                            {isSubmerged && (
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  top: 2,
+                                  right: 2,
+                                  width: 14,
+                                  height: 14,
+                                  borderRadius: 3,
+                                  background: 'rgba(15,23,42,0.82)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  pointerEvents: 'none',
+                                }}
+                              >
+                                <Droplets width={9} height={9} color={cItem.soakedColor || '#38bdf8'} />
+                              </span>
+                            )}
                             {info && info.pct !== null && (
                               <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
                                 <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
@@ -2712,7 +3031,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   </div>
 
                   {selectedContItem && (
-                    <div className="gu-card-sm gu-row2 gu-wrap" style={{ flex: 'none', marginTop: 8, padding: '7px 10px', justifyContent: 'space-between', gap: 8 }}>
+                    <div className="gu-card-sm gu-row2 gu-wrap" style={{ flex: 'none', padding: '7px 10px', justifyContent: 'space-between', gap: 8 }}>
                       <div className="gu-row2" style={{ gap: 8, minWidth: 0 }}>
                         <ItemIconCanvas itemId={selectedContItem.itemId} item={selectedContItem} size={28} />
                         <div style={{ minWidth: 0 }}>
@@ -2720,7 +3039,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             {selectedContItem.nameRu}
                           </div>
                           <div className="gu-mut gu-mono" style={{ fontSize: 10.5 }}>
-                            {selectedContItem.count} шт. · {formatWeightRu(getItemTotalWeight(selectedContItem))} · {getItemTotalVolume(selectedContItem)} л
+                            {selectedContItem.count} шт. · {formatWeightRu(getItemTotalWeight(selectedContItem))} · {Math.round(getItemTotalVolume(selectedContItem) * 1000)} мл
+                            {selectedContItem.soakedLiquidNameRu && (selectedContItem.wetness || 0) >= 10
+                              ? ` · В жидкости: ${selectedContItem.soakedLiquidNameRu} (${Math.round(selectedContItem.wetness || 0)}%)`
+                              : ''}
                           </div>
                         </div>
                       </div>

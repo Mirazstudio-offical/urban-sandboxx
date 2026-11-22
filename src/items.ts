@@ -34,6 +34,7 @@ import {
   FluidSubstanceAttributes,
   LEGACY_LIQUID_TO_GENERIC_MAP,
   isFluidContainer,
+  isFluidContainerClosed,
   getFluidContainerWeight,
   getFluidContainerVolume,
   getFluidContainerDisplayName,
@@ -41,7 +42,14 @@ import {
   tryFillOrUseFluidContainer,
   handleConsumeFluid,
   pourLiquidBetweenContainers,
-  fillContainerWithLiquid
+  fillContainerWithLiquid,
+  canContainerHoldHybridContents,
+  getHybridMaxItemVolumeL,
+  ensureHybridContainerProps,
+  getContainerCapacityBreakdown,
+  getContainerFreeVolumeMl,
+  updateHybridContainerInteraction,
+  drainLiquidFromContainer
 } from './liquidSystem';
 import { EXTENDED_LEGACY_CONTAINER_MAP, EXTENDED_ITEM_PACKAGING_MAP, LEGACY_SUBSTANCE_ID_ALIASES } from './unifiedSubstanceCatalog';
 import { initItemThermalProperties, applyConsumptionThermodynamics, calculateSurfaceTemperature } from './itemThermalSystem';
@@ -5294,6 +5302,33 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
   // Keep sandbag itemId as 'sandbag' so sand pouring mechanics work directly
   const resolvedItemId = itemId === 'sandbag' ? 'sandbag' : (ITEM_CATALOG[effectiveContainerId] ? effectiveContainerId : (ITEM_CATALOG[itemId] ? def.itemId : itemId));
 
+  // Also attach unified hybrid fluidStorage to cookware / jars / mugs / pots registered directly in CONTAINER_CONFIGS
+  if (!fluidStorage && !isContainer) {
+    const directCfg = getContainerConfig(resolvedItemId);
+    if (directCfg && !directCfg.isGranularOnly) {
+      fluidStorage = {
+        liquidId: directCfg.defaultLiquidId ?? null,
+        currentMl: directCfg.defaultAmountMl ?? 0,
+        maxMl: directCfg.maxMl,
+        emptyWeightKg: directCfg.emptyWeightKg,
+        baseItemNameRu: directCfg.nameRu || def.nameRu,
+        baseItemNameEn: directCfg.name || def.name
+      };
+    }
+  }
+
+  const isHybridVessel = Boolean(fluidStorage && canContainerHoldHybridContents(resolvedItemId));
+  const finalIsContainer = isHybridVessel ? true : (fluidStorage && legacyMap?.liquidId ? false : isContainer);
+  const finalContainerCapL = isHybridVessel && fluidStorage
+    ? Number((fluidStorage.maxMl / 1000).toFixed(3))
+    : containerCap;
+  const finalMaxContainedVol = isHybridVessel && fluidStorage
+    ? getHybridMaxItemVolumeL(resolvedItemId, fluidStorage.maxMl)
+    : maxContainedVol;
+  const finalMaxContainedWt = isHybridVessel && fluidStorage
+    ? Number(Math.max(2.0, (fluidStorage.maxMl / 1000) * 2.5).toFixed(2))
+    : maxContainedWt;
+
   const createdItem: InventoryItem = {
     id: `item_${itemId}_${Date.now()}_${itemCounter}`,
     itemId: resolvedItemId,
@@ -5310,10 +5345,10 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
     weight: def.weight,
     volume: baseVolume,
     clothingStats: stats,
-    usable: def.singleUseContainer ? true : (isContainer && !fluidStorage ? false : (fluidStorage ? true : def.usable)),
+    usable: def.singleUseContainer ? true : (finalIsContainer && !fluidStorage ? false : (fluidStorage ? true : def.usable)),
     portions: fluidStorage ? undefined : portions,
     maxPortions: fluidStorage ? undefined : maxPortions,
-    isContainer: fluidStorage && legacyMap?.liquidId ? false : isContainer,
+    isContainer: finalIsContainer,
     singleUseContainer: discreteAlias?.isOpen ? false : def.singleUseContainer,
     isOpen: Boolean(discreteAlias?.isOpen || legacyMap?.isOpen || fluidStorage?.attributes?.isOpened),
     tornItemId: def.tornItemId,
@@ -5331,10 +5366,10 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
           ? getChocolatePackagingShapeNameRu(def.packagingShape as ChocolatePackagingShape)
           : getCandyPackagingShapeNameRu(def.packagingShape as CandyPackagingShape)
         : undefined),
-    contents: (isContainer && !(fluidStorage && legacyMap?.liquidId)) ? [] : undefined,
-    containerCapacityL: containerCap,
-    maxContainedItemVolumeL: maxContainedVol,
-    maxContainedWeightKg: maxContainedWt,
+    contents: finalIsContainer ? [] : undefined,
+    containerCapacityL: finalContainerCapL,
+    maxContainedItemVolumeL: finalMaxContainedVol,
+    maxContainedWeightKg: finalMaxContainedWt,
     allowedItemCategories: def.allowedItemCategories,
     fluidStorage,
     batteryCharge: def.itemId === 'car_battery'? 100 : undefined,
@@ -7276,10 +7311,11 @@ export function getItemTotalWeight(item: InventoryItem | null | undefined): numb
 export function getItemTotalVolume(item: InventoryItem | null | undefined): number {
   if (!item) return 0;
   const count = item.count || 1;
-  let baseVolume = item.volume !== undefined ? item.volume : Math.max(0.01, (item.weight || 0.1) * 1.0);
+  // Rigid liquid/hybrid vessels have a fixed outer shell volume regardless of what is inside
   if (item.fluidStorage) {
-    baseVolume = getFluidContainerVolume(item);
+    return Number((getFluidContainerVolume(item) * count).toFixed(4));
   }
+  const baseVolume = item.volume !== undefined ? item.volume : Math.max(0.01, (item.weight || 0.1) * 1.0);
   let total = baseVolume * count;
   if (item.contents && item.contents.length > 0) {
     for (const child of item.contents) {
@@ -7634,10 +7670,16 @@ export function canItemFitInPockets(player: Player, item: InventoryItem): { fits
   return { fits: true };
 }
 
-// Check if an item can fit inside a container
+// Check if an item can fit inside a container (enforcing unified volume across both liquids and solid items!)
 export function canItemFitInContainer(container: InventoryItem, item: InventoryItem): { fits: boolean; reason?: string } {
+  ensureHybridContainerProps(container);
+
   if (!container.isContainer) {
     return { fits: false, reason: 'Этот предмет не является контейнером'};
+  }
+
+  if (isFluidContainerClosed(container)) {
+    return { fits: false, reason: `${container.nameRu} закрыта крышкой — сначала откройте её.` };
   }
 
   if (container.allowedItemCategories && container.allowedItemCategories.length > 0) {
@@ -7650,7 +7692,9 @@ export function canItemFitInContainer(container: InventoryItem, item: InventoryI
     return { fits: false, reason: 'Нельзя поместить контейнер внутрь самого себя.'};
   }
 
-  const containerCapL = container.containerCapacityL || 5.0;
+  const containerCapL = container.fluidStorage
+    ? container.fluidStorage.maxMl / 1000
+    : (container.containerCapacityL || 5.0);
   const maxContainedVolL = container.maxContainedItemVolumeL || containerCapL;
   const maxContainedWtKg = container.maxContainedWeightKg || 25.0;
 
@@ -7658,38 +7702,51 @@ export function canItemFitInContainer(container: InventoryItem, item: InventoryI
   const itemTotalWt = getItemTotalWeight(item);
   const singleUnitVol = getItemTotalVolume({ ...item, count: 1 });
 
-  if (singleUnitVol > maxContainedVolL) {
+  if (singleUnitVol > maxContainedVolL + 0.001) {
     return {
       fits: false,
-      reason: `Предмет не помещается по габаритам в ${container.nameRu} (${singleUnitVol}л > макс. ${maxContainedVolL}л).`};
+      reason: `Предмет не пролезет по габаритам в ${container.nameRu} (${singleUnitVol.toFixed(2)} л > макс. ${maxContainedVolL.toFixed(2)} л).`
+    };
   }
 
-  let currentContentsVol = 0;
+  const breakdown = getContainerCapacityBreakdown(container);
+  const usedVolL = breakdown.usedMl / 1000;
+  const freeVolL = breakdown.freeMl / 1000;
+
   let currentContentsWt = 0;
   if (container.contents) {
     for (const c of container.contents) {
-      currentContentsVol += getItemTotalVolume(c);
       currentContentsWt += getItemTotalWeight(c);
     }
   }
-
-  if (currentContentsVol + itemTotalVol > containerCapL) {
-    return {
-      fits: false,
-      reason: `Недостаточно места в ${container.nameRu} (свободно ${(containerCapL - currentContentsVol).toFixed(1)}л, нужно ${itemTotalVol.toFixed(1)}л).`};
+  if (container.fluidStorage && container.fluidStorage.currentMl > 0 && container.fluidStorage.liquidId) {
+    const liqDef = LIQUID_REGISTRY[container.fluidStorage.liquidId as LiquidId];
+    currentContentsWt += (container.fluidStorage.currentMl / 1000) * (liqDef?.densityKgPerL || 1.0);
   }
 
-  if (currentContentsWt + itemTotalWt > maxContainedWtKg) {
+  if (usedVolL + itemTotalVol > containerCapL + 0.002) {
+    const detailText = breakdown.liquidMl > 0
+      ? `жидкость ${(breakdown.liquidMl / 1000).toFixed(2)} л + предм. ${(breakdown.solidMl / 1000).toFixed(2)} л, свободно ${freeVolL.toFixed(2)} л`
+      : `свободно ${freeVolL.toFixed(2)} л`;
     return {
       fits: false,
-      reason: `Перегрузка по весу в ${container.nameRu} (свободно ${(maxContainedWtKg - currentContentsWt).toFixed(1)}кг, нужно ${itemTotalWt.toFixed(1)}кг).`};
+      reason: `Недостаточно места в ${container.nameRu} (${detailText}, нужно ${itemTotalVol.toFixed(2)} л).`
+    };
+  }
+
+  if (currentContentsWt + itemTotalWt > maxContainedWtKg + 0.002) {
+    return {
+      fits: false,
+      reason: `Перегрузка по весу в ${container.nameRu} (свободно ${Math.max(0, maxContainedWtKg - currentContentsWt).toFixed(1)} кг, нужно ${itemTotalWt.toFixed(1)} кг).`
+    };
   }
 
   return { fits: true };
 }
 
-// Add item to container contents
+// Add item to container contents (shares unified capacity with liquids and triggers fluid-solid mixing!)
 export function addItemToContainer(container: InventoryItem, itemToAdd: InventoryItem): { success: boolean; message: string } {
+  ensureHybridContainerProps(container);
   const check = canItemFitInContainer(container, itemToAdd);
   if (!check.fits) {
     return { success: false, message: check.reason || 'Не помещается'};
@@ -7700,13 +7757,33 @@ export function addItemToContainer(container: InventoryItem, itemToAdd: Inventor
   itemToAdd.count = 1;
   itemToAdd.maxStack = 1;
   container.contents.push(itemToAdd);
+
+  if (container.fluidStorage) {
+    updateHybridContainerInteraction(container, 1.0);
+    syncItemContainerProperties(container);
+    const hasFluid = Boolean(container.fluidStorage.liquidId && container.fluidStorage.currentMl > 0);
+    if (hasFluid) {
+      const liqName = container.fluidStorage.attributes?.varietyRu ||
+        LIQUID_REGISTRY[container.fluidStorage.liquidId as LiquidId]?.nameRu ||
+        container.fluidStorage.liquidId;
+      return {
+        success: true,
+        message: `Погружено в ${container.fluidStorage.baseItemNameRu} (${liqName}): ${itemToAdd.nameRu}`
+      };
+    }
+    return {
+      success: true,
+      message: `Положено в ${container.fluidStorage.baseItemNameRu}: ${itemToAdd.nameRu}`
+    };
+  }
+
   if (isPackageContainerItem(container)) {
     syncPackageContainerState(container);
   }
   return { success: true, message: `Помещено в ${container.nameRu}: ${itemToAdd.nameRu}`};
 }
 
-// Remove item from container contents
+// Remove item from container contents (keeps wetness/soaked coating/infusion on extracted item!)
 export function removeItemFromContainer(container: InventoryItem, contentIndex: number, count: number = 1): InventoryItem | null {
   if (!container.contents || contentIndex < 0 || contentIndex >= container.contents.length) return null;
   const item = container.contents[contentIndex];
@@ -7714,13 +7791,23 @@ export function removeItemFromContainer(container: InventoryItem, contentIndex: 
 
   container.contents.splice(contentIndex, 1);
 
-  // If this was a package container, extracting an item marks the package as opened in-place while preserving its itemId and attributes!
-  if (isPackageContainerItem(container)) {
+  const extracted: InventoryItem = {
+    ...item,
+    count: 1,
+    maxStack: 1,
+    submersionLevel: 0
+  };
+
+  if (container.fluidStorage) {
+    updateHybridContainerInteraction(container, 0);
+    syncItemContainerProperties(container);
+  } else if (isPackageContainerItem(container)) {
+    // If this was a package container, extracting an item marks the package as opened in-place while preserving its itemId and attributes!
     container.isOpen = true;
     syncPackageContainerState(container);
   }
 
-  return { ...item, count: 1, maxStack: 1 };
+  return extracted;
 }
 
 // Put item into left or right hand
@@ -8825,6 +8912,44 @@ export function butcherItem(player: Player, item: InventoryItem, world?: GameWor
   return { success: false, message: 'Неподдерживаемый предмет для разделки' };
 }
 
+/**
+ * Applies secondary hydration, taste, or toxicity effects when consuming a solid item
+ * that was soaked/submerged inside a hybrid liquid container (e.g. carrot in water/broth, or contaminated by fuel).
+ */
+function applySoakedLiquidEffectsOnConsume(player: Player, item: InventoryItem, portionFactor: number): void {
+  if (!item.soakedLiquidId || (item.wetness || 0) < 15) return;
+  const liqDef = LIQUID_REGISTRY[item.soakedLiquidId as LiquidId];
+  if (!liqDef) return;
+  const soakStrength = Math.min(1, (item.wetness || 0) / 100) * Math.max(0.25, Math.min(1, portionFactor));
+
+  if (!liqDef.isDrinkable) {
+    const nauseaAdd = Math.round(28 * soakStrength);
+    const hpLoss = Math.round(12 * soakStrength);
+    player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + nauseaAdd);
+    player.needs.health = Math.max(0, player.needs.health - hpLoss);
+    addPlayerNotification(
+      player,
+      `Фу! ${item.nameRu} пропитан(а) технической жидкостью (${item.soakedLiquidNameRu || liqDef.nameRu}) — вас мутит!`,
+      'warning'
+    );
+    return;
+  }
+
+  if (liqDef.effects) {
+    if (liqDef.effects.thirst) {
+      const tAdd = Math.round(liqDef.effects.thirst * 0.22 * soakStrength * 10) / 10;
+      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + tAdd));
+      if (player.bodyState) {
+        player.bodyState.hydration = Math.min(100, player.bodyState.hydration + tAdd);
+      }
+    }
+    if (liqDef.effects.hunger) {
+      const hAdd = Math.round(liqDef.effects.hunger * 0.14 * soakStrength * 10) / 10;
+      player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hAdd));
+    }
+  }
+}
+
 export function useItemOnPlayer(
   player: Player,
   itemIndex: number,
@@ -9730,10 +9855,11 @@ export function useItemOnPlayer(
     else if (item.category === 'drink') soothePanic(player, 25);
     else soothePanic(player, 35);
 
-    // Apply oral/body temperature thermodynamics when eating or drinking
+    // Apply oral/body temperature thermodynamics & soaked liquid coating effects when eating or drinking
     if (item.category === 'food' || item.category === 'drink') {
       const itemTemp = item.temperature ?? 20.0;
       applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
+      applySoakedLiquidEffectsOnConsume(player, item, 1 / Math.max(1, maxPortions));
     }
 
     // Play sound & trigger synchronized 3D action animation
@@ -9880,10 +10006,11 @@ export function useItemOnPlayer(
   else if (item.category === 'drink') soothePanic(player, 40);
   else soothePanic(player, 50);
 
-  // Apply oral/body temperature thermodynamics when eating or drinking
+  // Apply oral/body temperature thermodynamics & soaked liquid coating effects when eating or drinking
   if (item.category === 'food' || item.category === 'drink') {
     const itemTemp = item.temperature ?? 20.0;
     applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
+    applySoakedLiquidEffectsOnConsume(player, item, 1.0);
   }
 
   // Play appropriate procedural sound & trigger synchronized 3D action animation
@@ -10924,10 +11051,11 @@ export function useHandItemOnPlayer(
     else if (item.category === 'drink') soothePanic(player, 25);
     else soothePanic(player, 35);
 
-    // Apply oral/body temperature thermodynamics when eating or drinking from hand
+    // Apply oral/body temperature thermodynamics & soaked liquid coating effects when eating or drinking from hand
     if (item.category === 'food' || item.category === 'drink') {
       const itemTemp = item.temperature ?? 20.0;
       applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
+      applySoakedLiquidEffectsOnConsume(player, item, 1 / Math.max(1, maxPortions));
     }
 
     if (item.category === 'food') {
@@ -11048,10 +11176,11 @@ export function useHandItemOnPlayer(
   else if (item.category === 'drink') soothePanic(player, 40);
   else soothePanic(player, 50);
 
-  // Apply oral/body temperature thermodynamics when eating or drinking from hand
+  // Apply oral/body temperature thermodynamics & soaked liquid coating effects when eating or drinking from hand
   if (item.category === 'food' || item.category === 'drink') {
     const itemTemp = item.temperature ?? 20.0;
     applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
+    applySoakedLiquidEffectsOnConsume(player, item, 1.0);
   }
 
   if (item.category === 'med') {

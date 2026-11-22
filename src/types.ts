@@ -2352,6 +2352,11 @@ export interface InventoryItem {
   temperature?: number;          // Core internal temperature in °C
   surfaceTemperature?: number;   // External surface temperature in °C (outer surface touching hands/pockets)
   wetness?: number;              // Moisture / soaked water percentage 0 to 100 (%)
+  soakedLiquidId?: string;       // Dominant liquid coating/soaking this solid item (e.g. 'water', 'broth', 'oil_culinary')
+  soakedLiquidNameRu?: string;   // Russian display name of the coating/soaking liquid
+  soakedColor?: string;          // Visual tint of the soaking liquid
+  submersionLevel?: number;      // 0.0..1.0 fraction submerged inside parent hybrid container liquid
+  infusionProgress?: number;     // 0.0..1.0 steeping/infusion/boiling exchange progress in liquid
   heatLossRate?: number;         // Heat loss / cooling coefficient per second (0.001 to 0.50)
   heatRetention?: number;        // Heat retention / insulation factor (0.0 bare metal, 1.0 vacuum thermos)
   ambientTemperature?: number;   // Surrounding ambient medium temperature in °C
@@ -2376,6 +2381,21 @@ export interface InventoryItem {
     baseItemNameEn?: string;
     containerVisuals?: ContainerVisualAttributes;
     attributes?: UnifiedAttributes;
+    /** Multi-liquid mixture components sharing the liquid phase */
+    components?: Array<{
+      liquidId: string;
+      ml: number;
+      labelRu?: string;
+      color?: string;
+    }>;
+    /** Solid items currently/previously steeped, infused or dissolved into this liquid */
+    infusedItems?: Array<{
+      itemId: string;
+      nameRu: string;
+      intensity: number; // 0.0..1.0
+      color?: string;
+      dissolved?: boolean;
+    }>;
   };
   culinaryData?: CulinaryItemData;
   /** Атрибуты мармеладки (цвет, форма, состав, посыпка) */

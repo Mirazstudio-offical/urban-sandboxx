@@ -8,6 +8,11 @@ import {
   getContainerConfig,
   syncItemContainerProperties,
   isFluidContainerClosed,
+  ensureHybridContainerProps,
+  getContainerFreeVolumeMl,
+  getContainerSolidVolumeMl,
+  getContainerCapacityBreakdown,
+  updateHybridContainerInteraction,
 } from './liquidSystem';
 import { isRegisteredItemId, createItem, canItemFitInContainer, getItemTotalWeight, resolveCanonicalSubstanceId } from './items';
 
@@ -586,6 +591,9 @@ export interface EffectiveFluidWrapper {
  */
 export function getEffectiveFluidWrapper(item: InventoryItem | null): EffectiveFluidWrapper | null {
   if (!item) return null;
+  if (!item.fluidStorage) {
+    ensureHybridContainerProps(item);
+  }
 
   if (item.fluidStorage) {
     const state: FluidContainerState = JSON.parse(JSON.stringify(item.fluidStorage));
@@ -773,7 +781,9 @@ export function tryPourOrMixTopToBottom(
     return null;
   }
 
-  const freeSpaceMl = bottomState.maxMl - bottomState.currentMl;
+  // Respect shared unified capacity: solid items inside bottomItem occupy part of maxMl!
+  const bottomSolidMl = getContainerSolidVolumeMl(bottomItem);
+  const freeSpaceMl = Math.max(0, bottomState.maxMl - bottomState.currentMl - bottomSolidMl);
   if (freeSpaceMl <= 0) {
     return null;
   }
@@ -954,14 +964,30 @@ export function tryPourOrMixTopToBottom(
     nextBottomTemperature
   );
 
+  // Immediately run liquid-solid immersion & infusion if either container also holds solid items
+  if (updatedTop.fluidStorage) {
+    updateHybridContainerInteraction(updatedTop, 0);
+    syncItemContainerProperties(updatedTop);
+  }
+  if (updatedBottom.fluidStorage) {
+    updateHybridContainerInteraction(updatedBottom, 1.0);
+    syncItemContainerProperties(updatedBottom);
+  }
+
   const remainingSourceLabel =
     nextTopState.currentMl > 0
       ? `Остаток в верхней таре: ${Math.round(nextTopState.currentMl)} / ${nextTopState.maxMl} ${unit}`
       : 'Верхняя тара полностью опустошена (0 мл)';
 
-  const resultingTargetLabel = `${getSubstanceDisplayName(nextBottomState)} (${Math.round(
-    nextBottomState.currentMl
-  )} / ${nextBottomState.maxMl} ${unit})`;
+  const bottomBreakdown = getContainerCapacityBreakdown(updatedBottom);
+  const hasBottomSolids = Boolean(updatedBottom.contents && updatedBottom.contents.length > 0);
+  const resultingTargetLabel = hasBottomSolids
+    ? `${getSubstanceDisplayName(nextBottomState)} + ${updatedBottom.contents!.length} предм. (${Math.round(
+        bottomBreakdown.usedMl
+      )} / ${bottomBreakdown.totalCapacityMl} мл)`
+    : `${getSubstanceDisplayName(nextBottomState)} (${Math.round(
+        nextBottomState.currentMl
+      )} / ${nextBottomState.maxMl} ${unit})`;
 
   return {
     updatedTop,
@@ -996,12 +1022,18 @@ export function tryTransferDiscreteTopToBottom(
   updatedBottom: InventoryItem;
   detail: InteractionTransferDetail;
 } | null {
-  if (!bottomItem.isContainer || bottomItem.singleUseContainer) return null;
+  const probeBottom = cloneInventoryItem(bottomItem);
+  ensureHybridContainerProps(probeBottom);
+  if (!probeBottom.isContainer || probeBottom.singleUseContainer) return null;
+  if (isFluidContainerClosed(probeBottom)) return null;
+
+  const probeTop = cloneInventoryItem(topItem);
+  ensureHybridContainerProps(probeTop);
 
   // Case A: Top item is also a container with items inside (`topItem.contents.length > 0`) -> pour items from top container into bottom container!
-  if (topItem.isContainer && topItem.contents && topItem.contents.length > 0) {
-    const nextTop = cloneInventoryItem(topItem);
-    const nextBottom = cloneInventoryItem(bottomItem);
+  if (probeTop.isContainer && probeTop.contents && probeTop.contents.length > 0) {
+    const nextTop = probeTop;
+    const nextBottom = probeBottom;
     nextBottom.contents = nextBottom.contents ? [...nextBottom.contents] : [];
     nextTop.contents = nextTop.contents ? [...nextTop.contents] : [];
 
@@ -1022,7 +1054,7 @@ export function tryTransferDiscreteTopToBottom(
         if (existingIdx >= 0) {
           nextBottom.contents[existingIdx].count += child.count;
         } else {
-          nextBottom.contents.push(child);
+          nextBottom.contents.push({ ...child, submersionLevel: 0 });
         }
         movedCount += child.count;
       } else {
@@ -1033,8 +1065,18 @@ export function tryTransferDiscreteTopToBottom(
     if (movedCount === 0) return null;
 
     nextTop.contents = remainingInTop;
-    recalculateContainerWeight(nextTop);
-    recalculateContainerWeight(nextBottom);
+    if (nextTop.fluidStorage) {
+      updateHybridContainerInteraction(nextTop, 0);
+      syncItemContainerProperties(nextTop);
+    } else {
+      recalculateContainerWeight(nextTop);
+    }
+    if (nextBottom.fluidStorage) {
+      updateHybridContainerInteraction(nextBottom, 1.0);
+      syncItemContainerProperties(nextBottom);
+    } else {
+      recalculateContainerWeight(nextBottom);
+    }
 
     return {
       updatedTop: nextTop,
@@ -1049,19 +1091,19 @@ export function tryTransferDiscreteTopToBottom(
           remainingInTop.length > 0
             ? `Осталось в верхней таре: ${remainingInTop.length} поз.`
             : 'Верхняя тара полностью опустошена',
-        resultingTargetLabel: `${nextBottom.nameRu} (${nextBottom.contents.length} поз.)`,
+        resultingTargetLabel: `${nextBottom.nameRu}`,
       },
     };
   }
 
-  // Case B: Top item is a regular item that fits inside bottom container
-  if (!topItem.isContainer) {
-    const nextBottom = cloneInventoryItem(bottomItem);
+  // Case B: Top item is a regular item (or empty small item) that fits inside bottom container
+  if (!probeTop.isContainer || (!probeTop.contents?.length && !probeTop.fluidStorage?.currentMl)) {
+    const nextBottom = probeBottom;
     nextBottom.contents = nextBottom.contents ? [...nextBottom.contents] : [];
-    const check = canItemFitInContainer(nextBottom, topItem);
+    const check = canItemFitInContainer(nextBottom, probeTop);
     if (!check.fits) return null;
 
-    const itemToInsert = cloneInventoryItem(topItem);
+    const itemToInsert = cloneInventoryItem(probeTop);
     const existingIdx = nextBottom.contents.findIndex(
       (c) =>
         c.itemId === itemToInsert.itemId &&
@@ -1074,7 +1116,14 @@ export function tryTransferDiscreteTopToBottom(
     } else {
       nextBottom.contents.push(itemToInsert);
     }
-    recalculateContainerWeight(nextBottom);
+
+    const submergedInLiquid = Boolean(nextBottom.fluidStorage && nextBottom.fluidStorage.currentMl > 0 && nextBottom.fluidStorage.liquidId);
+    if (nextBottom.fluidStorage) {
+      updateHybridContainerInteraction(nextBottom, 1.0);
+      syncItemContainerProperties(nextBottom);
+    } else {
+      recalculateContainerWeight(nextBottom);
+    }
 
     return {
       updatedTop: null,
@@ -1084,9 +1133,11 @@ export function tryTransferDiscreteTopToBottom(
         toSlot,
         sourceName: topItem.nameRu,
         targetName: bottomItem.nameRu,
-        transferredAmountLabel: `Уложено: ${topItem.nameRu} (${topItem.count} шт.)`,
-        remainingSourceLabel: 'Упаковано полностью',
-        resultingTargetLabel: `${nextBottom.nameRu} (${nextBottom.contents.length} поз.)`,
+        transferredAmountLabel: submergedInLiquid
+          ? `Погружено в жидкость: ${topItem.nameRu} (${topItem.count} шт.)`
+          : `Уложено: ${topItem.nameRu} (${topItem.count} шт.)`,
+        remainingSourceLabel: submergedInLiquid ? 'Смешано с жидкостью в таре' : 'Упаковано полностью',
+        resultingTargetLabel: `${nextBottom.nameRu}`,
       },
     };
   }
@@ -1891,14 +1942,17 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
           transferDetails: [],
         };
       }
-      if (bottomWrap.state.currentMl >= bottomWrap.state.maxMl) {
+      const bottomFreeMl = Math.max(
+        0,
+        bottomWrap.state.maxMl - bottomWrap.state.currentMl - getContainerSolidVolumeMl(bottomOccupied[0])
+      );
+      if (bottomFreeMl <= 0) {
+        const bd = getContainerCapacityBreakdown(bottomOccupied[0]);
         return {
           isValid: false,
           kind: 'none',
           title: 'Нижняя тара заполнена до краёв',
-          subtitle: `В нижней ёмкости (${bottomOccupied[0].nameRu}) нет свободного места (${Math.round(
-            bottomWrap.state.currentMl
-          )}/${bottomWrap.state.maxMl} мл).`,
+          subtitle: `В нижней ёмкости (${bottomOccupied[0].nameRu}) нет свободного места (предметы ${Math.round(bd.solidMl)} мл + жидкость ${Math.round(bd.liquidMl)} мл из ${bd.totalCapacityMl} мл).`,
           actionLabel: 'Нижняя тара полна',
           previewOutputs: [null, null, null, null],
           transferDetails: [],

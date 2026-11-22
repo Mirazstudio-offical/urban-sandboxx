@@ -7431,7 +7431,7 @@ export default function App() {
         }
 
         if (handItem) {
-          if (handItem.isContainer || handItem.itemId === 'wallet' || handItem.itemId === 'plastic_bag') {
+          if ((handItem.isContainer && !handItem.fluidStorage) || handItem.itemId === 'wallet' || handItem.itemId === 'plastic_bag') {
             setIsInventoryOpen(true);
             sound.playUseItem();
             addPlayerNotification(p, `Открыт контейнер: ${handItem.nameRu}`, 'info');
@@ -7651,7 +7651,7 @@ export default function App() {
 
     // 1. PRIMARY: If player has an item in hand, use or open it!
     if (handItem) {
-      if (handItem.isContainer || handItem.itemId === 'wallet'|| handItem.itemId === 'plastic_bag') {
+      if ((handItem.isContainer && !handItem.fluidStorage) || handItem.itemId === 'wallet'|| handItem.itemId === 'plastic_bag') {
         setIsInventoryOpen(true);
         sound.playUseItem();
         addPlayerNotification(p, `Открыт контейнер: ${handItem.nameRu}`, 'info');
@@ -7804,7 +7804,7 @@ export default function App() {
 
     // Check if wallet or container is in inventory
     if (p.inventory && p.inventory.length > 0) {
-      const containerItem = p.inventory.find(it => it && (it.isContainer || it.itemId === 'wallet'|| it.itemId === 'plastic_bag'));
+      const containerItem = p.inventory.find(it => it && ((it.isContainer && !it.fluidStorage) || it.itemId === 'wallet'|| it.itemId === 'plastic_bag'));
       if (containerItem) {
         setIsInventoryOpen(true);
         sound.playUseItem();
