@@ -9411,15 +9411,25 @@ export function updateVehiclePhysics(
         const reverseMaxSpeedPx = (cfg.reverseMaxSpeed || 35) * SPEED_KMH_TO_PX_S;
 
         // Speed corresponding to redline in current gear
+        const isHydroDrive = eng.transmissionKind === 'HYDRO' || isRoadMachinery(vehicle.type);
         let speedAtRedline = maxSpeedPx;
-        if (eng.currentGear === -1) {
+        if (isHydroDrive) {
+          // Hydrostatic 2-range drive (ГСТ): catalog maxSpeed IS the transport top speed (do not slash it by passenger fdSpeed = 3.9/6.2).
+          // Ratio scaling naturally sets Transport (2.0) = 100% maxSpeed, Reverse (-3.6) = ~55% maxSpeed, Working (5.2) = ~38% maxSpeed.
+          if (eng.currentGear === -1) {
+            const revScale = gearRatio > 0 ? Math.min(0.65, topGearRatio / gearRatio) : 0.55;
+            speedAtRedline = Math.min(reverseMaxSpeedPx, maxSpeedPx * revScale);
+          } else if (eng.currentGear > 0 && gearRatio > 0) {
+            speedAtRedline = maxSpeedPx * (topGearRatio / Math.max(0.2, gearRatio));
+          }
+        } else if (eng.currentGear === -1) {
           speedAtRedline = reverseMaxSpeedPx;
         } else if (eng.currentGear > 0 && gearRatio > 0) {
           speedAtRedline = maxSpeedPx * (topGearRatio / Math.max(0.2, gearRatio)) * fdSpeed;
         }
 
         // Mechanical top speed allowable in current gear with over-rev margin before rev limiter cutoff
-        const gearMaxSpeedPx = speedAtRedline * 1.08;
+        const gearMaxSpeedPx = speedAtRedline * (isHydroDrive ? 1.02 : 1.08);
 
         const wheelDrivenRPM = idleRPM + (v_speed / Math.max(1, speedAtRedline)) * (redlineRPM - idleRPM);
 
@@ -9652,7 +9662,18 @@ export function updateVehiclePhysics(
         
         // Gear acceleration multiplier: wheel thrust scales proportionally with gear ratio vs 1st gear
         gearAccelMult = 1.0;
-        if (eng.currentGear === -1) {
+        if (isHydroDrive) {
+          if (eng.currentGear === -1) {
+            // Hydrostatic reverse (З): controlled maneuvering thrust, gentler than transport & working
+            gearAccelMult = 0.95;
+          } else if (eng.currentGear === 1) {
+            // Hydrostatic working range (Р): maximum digging/blade/climbing torque at low speed
+            gearAccelMult = 1.65;
+          } else {
+            // Hydrostatic transport range (Т): strong, responsive road travel acceleration
+            gearAccelMult = 1.30;
+          }
+        } else if (eng.currentGear === -1) {
           // Reverse gear: High torque reduction for climbing/pulling out of mud
           gearAccelMult = 1.45;
         } else if (eng.currentGear === 1) {
