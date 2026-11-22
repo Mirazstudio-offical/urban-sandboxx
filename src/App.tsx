@@ -71,6 +71,7 @@ import {
   hitchTrailerToVehicle,
   unhitchTrailerFromVehicle,
   getOutsideTemperature,
+  updateWorldWind,
   getRoadsNearPoint,
   setManualAutoShiftPref
 } from './physics';
@@ -1412,12 +1413,19 @@ export default function App() {
     timeHourRef.current = calendarRef.current.timeHour;
     setWeather(targetWeather);
     weatherRef.current = targetWeather;
+    previousWeatherRef.current = targetWeather;
+    weatherTransitionRef.current = 1.0;
+    setWeatherTransition(1.0);
     world.calendar = { ...calendarRef.current };
     world.season = calendarRef.current.season;
     world.timeHour = calendarRef.current.timeHour;
     world.weather = targetWeather;
     world.previousWeather = targetWeather;
     world.weatherTransition = 1.0;
+    world.particles.length = 0;
+    world.wind = undefined;
+    updateWorldWind(world, 0.016);
+    world.outsideTemp = getOutsideTemperature(world, world.timeHour);
     Object.assign(world, getInitialSurfaceHydrologyForCalendar(calendarRef.current, targetWeather));
     handleSetGpsTarget(save.gpsDestination ?? null);
 

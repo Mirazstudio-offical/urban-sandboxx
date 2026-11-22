@@ -604,9 +604,233 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
 }
 .gu-inspect-grid {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 290px;
-  gap: 14px;
-  align-items: start;
+  grid-template-columns: 272px minmax(0, 1.25fr) 310px;
+  gap: 12px;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+
+#self-inspection-modal .gu-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px;
+  overflow: hidden;
+}
+#self-inspection-modal .gu-body > * + * {
+  margin-top: 0;
+}
+
+.gu-inspect-vitals {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  flex: none;
+}
+
+.gu-inspect-vital {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(20, 20, 22, 0.86);
+  border: 1px solid var(--gu-line);
+  min-width: 0;
+}
+
+.gu-inspect-vital-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--gu-mut);
+  white-space: nowrap;
+}
+
+.gu-inspect-vital-val {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gu-inspect-vital-sub {
+  font-size: 11.5px;
+  color: var(--gu-mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.gu-inspect-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(20, 20, 22, 0.86);
+  border: 1px solid var(--gu-line);
+}
+
+.gu-inspect-col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gu-line);
+  flex: none;
+}
+
+.gu-inspect-col-title {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gu-amber-hi);
+}
+
+.gu-inspect-col-meta {
+  font-size: 12px;
+  color: var(--gu-mut);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gu-inspect-figure-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 236px;
+  border-radius: 10px;
+  background: #0d0e10;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px;
+  flex: none;
+}
+
+.gu-inspect-zone-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  flex: none;
+}
+
+.gu-inspect-zone-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--gu-line);
+  transition: background 0.15s, border-color 0.15s;
+  min-width: 0;
+}
+.gu-inspect-zone-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--gu-line-2);
+}
+.gu-inspect-zone-btn.on {
+  background: rgba(201, 146, 43, 0.15);
+  border-color: var(--gu-amber);
+}
+
+.gu-inspect-zone-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.gu-inspect-zone-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gu-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gu-inspect-zone-state {
+  font-size: 11px;
+  color: var(--gu-mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.gu-inspect-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: #3a352b transparent;
+}
+.gu-inspect-list-scroll::-webkit-scrollbar { width: 4px; }
+.gu-inspect-list-scroll::-webkit-scrollbar-thumb { background: #3a352b; border-radius: 2px; }
+
+.gu-inspect-injury {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--gu-line);
+  transition: border-color 0.15s, background 0.15s;
+}
+.gu-inspect-injury.on {
+  background: rgba(201, 146, 43, 0.11);
+  border-color: rgba(201, 146, 43, 0.55);
+}
+
+.gu-inspect-med-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #0d0e10;
+  border: 1px solid var(--gu-line);
+  min-width: 0;
+}
+
+.gu-inspect-phases {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 4px;
+}
+.gu-inspect-phase {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.gu-inspect-phase.done {
+  background: rgba(201, 146, 43, 0.45);
+}
+.gu-inspect-phase.active {
+  background: var(--gu-amber-hi);
 }
 .gu-kitchen-grid {
   display: grid;
@@ -750,6 +974,15 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   display: none;
 }
 
+@media (max-width: 900px) {
+  .gu-inspect-vitals {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .gu-inspect-grid {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 720px) {
   .gu-kitchen-tabs {
     display: block;
@@ -757,10 +990,17 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   .gu-kitchen-col-hide {
     display: none !important;
   }
+  #self-inspection-modal .gu-body {
+    overflow-y: auto;
+  }
+  .gu-inspect-vitals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .gu-limb-split,
   .gu-inspect-grid,
   .gu-kitchen-grid {
     grid-template-columns: minmax(0, 1fr);
+    flex: none;
   }
 }
 
@@ -792,6 +1032,12 @@ select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
   .gu-btn-sm { height: 28px; padding: 0 10px; font-size: 12px; }
   .gu-btn-xs { height: 26px; padding: 0 8px; font-size: 11px; }
   .gu-foot { display: none; }
+  #self-inspection-modal .gu-body { padding: 8px 10px; gap: 8px; }
+  .gu-inspect-vital { padding: 6px 8px; gap: 4px; }
+  .gu-inspect-vital-val { font-size: 18px; }
+  .gu-inspect-col { padding: 8px 10px; gap: 6px; }
+  .gu-inspect-figure-stage { height: 156px; padding: 4px; }
+  .gu-inspect-zone-btn { padding: 4px 7px; }
 }
 
 
