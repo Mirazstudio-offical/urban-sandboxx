@@ -4,6 +4,12 @@
 
 import type { Vehicle } from './types';
 import { getTerrainSlope } from './terrainElevation';
+import {
+  computeEndStopCushion,
+  computeFlowShare,
+  computePumpFlowFactor,
+  stepHydraulicVelocity,
+} from './hydraulics';
 
 export type LegIndex = 0 | 1 | 2 | 3; // 0 front-left, 1 front-right, 2 rear-left, 3 rear-right
 export type OutriggerMode = 'beam' | 'jack';
@@ -38,6 +44,8 @@ type LegState = Pick<
   | 'craneChassisPitch'
   | 'craneOutriggerExt'
   | 'craneOutriggersDeployed'
+  | '_craneOutriggerVel'
+  | '_craneOutriggerVelMode'
 >;
 
 /* Leg state with sensible defaults, so a vehicle saved before this model existed still works. */
@@ -203,27 +211,72 @@ export function craneLockReason(v: LegState, hasPressure: boolean): string {
 
 /* One physics step: hydraulics move the legs the lever commands ask for, then the body settles. */
 export function stepOutriggers(v: Vehicle, dt: number, hasPressure: boolean): void {
-  const { beam, jack, cmd } = ensureLegs(v);
+  const { beam, jack, cmd, contact } = ensureLegs(v);
   const mode: OutriggerMode = v.craneOutriggerMode === 'jack' ? 'jack' : 'beam';
+  const safeDt = Math.max(0.0001, Math.min(0.05, dt));
 
+  if (!v._craneOutriggerVel || v._craneOutriggerVel.length !== LEG_COUNT) {
+    v._craneOutriggerVel = [0, 0, 0, 0];
+  }
+  // Reset cached leg velocities cleanly if operator flips between beam and jack selector valve
+  if (v._craneOutriggerVelMode !== mode) {
+    v._craneOutriggerVel = [0, 0, 0, 0];
+    v._craneOutriggerVelMode = mode;
+  }
+  const vel = v._craneOutriggerVel;
+
+  // Count how many unobstructed legs are actively commanded so pump flow divides realistically
+  let activeLegs = 0;
+  const effectiveCmd = [0, 0, 0, 0];
   if (hasPressure) {
     for (let i = 0; i < LEG_COUNT; i++) {
       const c = cmd[i];
       if (!c) continue;
       if (mode === 'beam') {
-        // a beam cannot slide back while its jack still holds the load
         if (c < 0 && jack[i] > 0.02) continue;
-        beam[i] = clamp01(beam[i] + c * BEAM_RATE * dt);
       } else {
-        // the jack only goes down when its beam is fully out
         if (c > 0 && beam[i] < BEAM_FULL) continue;
-        jack[i] = clamp01(jack[i] + c * JACK_RATE * dt);
       }
+      effectiveCmd[i] = Math.sign(c);
+      activeLegs++;
+    }
+  }
+
+  const pumpFlow = hasPressure ? computePumpFlowFactor(v.engineState?.engineRPM) : 0;
+  const flowShare = computeFlowShare(activeLegs, false);
+  const hydScale = pumpFlow * flowShare;
+
+  for (let i = 0; i < LEG_COUNT; i++) {
+    const dir = effectiveCmd[i];
+    if (mode === 'beam') {
+      const cur = beam[i];
+      const cushion = computeEndStopCushion(cur, dir, 0.065);
+      const targetVel = dir !== 0 ? dir * BEAM_RATE * hydScale * cushion : 0;
+      let nextVel = stepHydraulicVelocity(vel[i], targetVel, 5.2, 8.2, safeDt);
+      if (Math.abs(nextVel) > 1e-4) {
+        const next = clamp01(cur + nextVel * safeDt);
+        if ((next <= 0 && nextVel < 0) || (next >= 1 && nextVel > 0)) nextVel = 0;
+        beam[i] = next;
+      }
+      vel[i] = nextVel;
+    } else {
+      const cur = jack[i];
+      // Once the pad bears the truck's weight on the ground, jacking upward slows under real hydraulic load
+      const loadFactor = dir > 0 && contact[i] ? 0.66 : dir < 0 && contact[i] ? 1.08 : 1.0;
+      const cushion = computeEndStopCushion(cur, dir, 0.065);
+      const targetVel = dir !== 0 ? dir * JACK_RATE * hydScale * loadFactor * cushion : 0;
+      let nextVel = stepHydraulicVelocity(vel[i], targetVel, 4.8, 7.8, safeDt);
+      if (Math.abs(nextVel) > 1e-4) {
+        const next = clamp01(cur + nextVel * safeDt);
+        if ((next <= 0 && nextVel < 0) || (next >= 1 && nextVel > 0)) nextVel = 0;
+        jack[i] = next;
+      }
+      vel[i] = nextVel;
     }
   }
 
   const target = solveChassisAttitude(v);
-  const k = Math.min(1, ATTITUDE_RATE * dt);
+  const k = Math.min(1, ATTITUDE_RATE * safeDt);
   v.craneChassisRoll = (v.craneChassisRoll ?? 0) + (target.roll - (v.craneChassisRoll ?? 0)) * k;
   v.craneChassisPitch = (v.craneChassisPitch ?? 0) + (target.pitch - (v.craneChassisPitch ?? 0)) * k;
   v.craneOutriggerContact = target.contact;
@@ -234,6 +287,8 @@ export function stepOutriggers(v: Vehicle, dt: number, hasPressure: boolean): vo
 }
 
 export function isOutriggerMoving(v: LegState, hasPressure: boolean): boolean {
+  const velMoving = !!v._craneOutriggerVel && v._craneOutriggerVel.some((vel) => Math.abs(vel) > 0.015);
+  if (velMoving) return true;
   if (!hasPressure) return false;
   const { cmd } = ensureLegs(v);
   return cmd.some((c) => c !== 0);

@@ -980,6 +980,19 @@ export interface Vehicle {
   craneOperatorActive?: boolean;    // Operator is seated in revolving crane operator cab ("скворечник")
   craneSpotlightOn?: boolean;       // Work spotlight active on crane cab / boom
   craneOutriggersStationOpen?: boolean; // Ground outrigger station panel active
+  _craneTurretVel?: number;         // Transient turret slew angular velocity (rad/s)
+  _craneExtVel?: number;            // Transient telescopic boom extension velocity (1/s)
+  _craneHookVel?: number;           // Transient hook winch velocity (1/s)
+  _craneOutriggerVel?: number[];    // Per-leg outrigger actuator velocity (1/s)
+  _craneOutriggerVelMode?: 'beam' | 'jack'; // Mode for which _craneOutriggerVel was computed
+  _craneSlingVx?: number;           // Transient pendulum velocity X for slung vehicle (px/s)
+  _craneSlingVy?: number;           // Transient pendulum velocity Y for slung vehicle (px/s)
+  _craneSlingYawVel?: number;       // Transient torsional pendulum yaw velocity for slung vehicle (rad/s)
+  _cranePitchRecoil?: number;       // Transient crane chassis pitch deflection from boom/load dynamics (rad)
+  _cranePitchRecoilVel?: number;
+  _craneRollRecoil?: number;        // Transient crane chassis roll deflection from slew/load dynamics (rad)
+  _craneRollRecoilVel?: number;
+  _craneReliefSoundTimer?: number;
   // ТВЭКС ЕК-12-20 Wheeled Excavator Hydraulics, Stabilizers, Blade & Arm State
   exTurretAngle?: number;           // Upper platform yaw angle relative to undercarriage (radians, -PI..PI)
   exBoomElev?: number;              // Main boom elevation (0.0 deepest dig .. 1.0 raised max height)
@@ -997,6 +1010,17 @@ export interface Vehicle {
   exBucketMaterial?: 'soil' | 'sand' | 'mud'; // Material currently inside the bucket
   exOperatorMode?: boolean;         // false = Ход (driving undercarriage), true = Работа (excavator arm joysticks)
   exWorkLightOn?: boolean;          // Boom & cab roof halogen work floodlights
+  _exSlewVel?: number;              // Transient upper platform slew velocity (rad/s)
+  _exBoomVel?: number;              // Transient main boom hydraulic velocity (1/s)
+  _exStickVel?: number;             // Transient stick hydraulic velocity (1/s)
+  _exBucketVel?: number;            // Transient bucket hydraulic velocity (1/s)
+  _exBladeVel?: number;             // Transient front blade hydraulic velocity (1/s)
+  _exOutriggerVel?: number;         // Transient rear stabilizers hydraulic velocity (1/s)
+  _exDigEffort?: number;            // Smoothed excavation soil resistance (0..1)
+  _exPitchRecoil?: number;          // Transient chassis pitch rock from arm inertia/stops (rad)
+  _exPitchRecoilVel?: number;
+  _exRollRecoil?: number;           // Transient chassis roll rock from slew/arm inertia (rad)
+  _exRollRecoilVel?: number;
   _exReliefSoundTimer?: number;
   _exDigCooldown?: number;
   _waterSpraySoundTimer?: number;

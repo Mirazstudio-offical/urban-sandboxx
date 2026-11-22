@@ -3,6 +3,12 @@ import { getTerrainSlope } from './terrainElevation';
 import { hasPtoDrive } from './ptoSystem';
 import { sound } from './audio';
 import { addPlayerNotification } from './items';
+import {
+  computeEndStopCushion,
+  computeFlowShare,
+  computePumpFlowFactor,
+  stepHydraulicVelocity,
+} from './hydraulics';
 
 // ============================================================================
 // ТВЭКС ЕК-12-20 DOCUMENTED TECHNICAL DATA (ОАО «Тверской экскаватор»)
@@ -431,6 +437,17 @@ export function stowExcavatorForTransport(v: Vehicle, player?: Player | null): v
   v.exOutriggersPos = 0.0;
   v.exAxleOscillationLocked = false;
   v.exOperatorMode = false;
+  v._exSlewVel = 0;
+  v._exBoomVel = 0;
+  v._exStickVel = 0;
+  v._exBucketVel = 0;
+  v._exBladeVel = 0;
+  v._exOutriggerVel = 0;
+  v._exDigEffort = 0;
+  v._exPitchRecoil = 0;
+  v._exPitchRecoilVel = 0;
+  v._exRollRecoil = 0;
+  v._exRollRecoilVel = 0;
   sound.playHydraulicHiss(0.35);
   if (player) addPlayerNotification(player, 'ЕК-12 переведён в транспортное положение', 'info');
 }
@@ -531,51 +548,197 @@ export function updateExcavatorSuperstructure(
   bladeDir = Math.max(-1, Math.min(1, bladeDir));
   outriggerDir = Math.max(-1, Math.min(1, outriggerDir));
 
+  const safeDt = Math.max(0.0001, Math.min(0.05, dt));
+  const preGeom = getExcavatorGeometry(vehicle);
+  const bucketLoad = clamp01(vehicle.exBucketLoad ?? 0);
+  const prevDigEffort = clamp01(vehicle._exDigEffort ?? 0);
+
+  // Count how many distributor spools the operator is commanding simultaneously
+  const commandedCircuits =
+    (slewDir !== 0 ? 1 : 0) +
+    (boomDir !== 0 ? 1 : 0) +
+    (stickDir !== 0 ? 1 : 0) +
+    (bucketDir !== 0 ? 1 : 0) +
+    (bladeDir !== 0 ? 1 : 0) +
+    (outriggerDir !== 0 ? 1 : 0);
+
+  const pumpFlow = hasPressure
+    ? computePumpFlowFactor(vehicle.engineState?.engineRPM, vehicle.exHydTempC)
+    : 0;
+  // EK-12 uses twin variable-displacement axial-piston pumps (less severe split than single-pump cranes)
+  const flowShare = computeFlowShare(commandedCircuits, true);
+  const hydScale = pumpFlow * flowShare;
+
+  // Rotational inertia grows substantially as boom/stick extend further out and bucket fills with earth
+  const reachNorm = clamp01((preGeom.reachMeters - 2.6) / 5.0);
+  const slewInertia = 1.0 + reachNorm * 0.65 + bucketLoad * 0.35;
+
+  const prevSlewVel = vehicle._exSlewVel ?? 0;
+  const prevBoomVel = vehicle._exBoomVel ?? 0;
+  const prevStickVel = vehicle._exStickVel ?? 0;
+  const prevBucketVel = vehicle._exBucketVel ?? 0;
+  const prevBladeVel = vehicle._exBladeVel ?? 0;
+  const prevOutriggerVel = vehicle._exOutriggerVel ?? 0;
+
+  // Target hydraulic velocities (0 when PTO off or lever centered; inertial braking still runs every frame)
+  const slewMaxSpeed = (SLEW_SPEED_RAD_S * hydScale) / (1.0 + reachNorm * 0.08 + bucketLoad * 0.14);
+  const targetSlewVel = hasPressure && slewDir !== 0 ? slewDir * slewMaxSpeed : 0;
+
+  const curBoom = vehicle.exBoomElev ?? 0.56;
+  const boomLoadBias = boomDir > 0
+    ? 0.86 - bucketLoad * 0.24 // lifting heavy boom & full bucket against gravity
+    : boomDir < 0
+    ? 1.12 + bucketLoad * 0.12 // gravity-assisted lowering metered by counterbalance valve
+    : 1.0;
+  const boomCushion = computeEndStopCushion(curBoom, boomDir, 0.07);
+  const targetBoomVel = hasPressure && boomDir !== 0
+    ? boomDir * BOOM_RATE * hydScale * boomLoadBias * boomCushion
+    : 0;
+
+  const curStick = vehicle.exStickExt ?? 0.18;
+  const stickDigFactor = stickDir < 0 ? 1.0 - prevDigEffort * 0.34 : 1.0 - bucketLoad * 0.10;
+  const stickCushion = computeEndStopCushion(curStick, stickDir, 0.065);
+  const targetStickVel = hasPressure && stickDir !== 0
+    ? stickDir * STICK_RATE * hydScale * stickDigFactor * stickCushion
+    : 0;
+
+  const curBucket = vehicle.exBucketCurl ?? 0.16;
+  const bucketDigFactor = bucketDir < 0 ? 1.0 - prevDigEffort * 0.38 : 1.0 + bucketLoad * 0.06;
+  const bucketCushion = computeEndStopCushion(curBucket, bucketDir, 0.06);
+  const targetBucketVel = hasPressure && bucketDir !== 0
+    ? bucketDir * BUCKET_RATE * hydScale * bucketDigFactor * bucketCushion
+    : 0;
+
+  const curBlade = vehicle.exBladePos ?? 0;
+  const bladeGroundFactor = bladeDir > 0 && curBlade > 0.65 ? 0.68 : 1.0;
+  const bladeCushion = computeEndStopCushion(curBlade, bladeDir, 0.06);
+  const targetBladeVel = hasPressure && bladeDir !== 0
+    ? bladeDir * BLADE_RATE * hydScale * bladeGroundFactor * bladeCushion
+    : 0;
+
+  const curOut = vehicle.exOutriggersPos ?? 0;
+  const outGroundFactor = outriggerDir > 0 && curOut > 0.68 ? 0.66 : 1.0;
+  const outCushion = computeEndStopCushion(curOut, outriggerDir, 0.06);
+  const targetOutriggerVel = hasPressure && outriggerDir !== 0
+    ? outriggerDir * OUTRIGGER_RATE * hydScale * outGroundFactor * outCushion
+    : 0;
+
+  // Step proportional spool ramp-up & viscous hydraulic braking
+  let nextSlewVel = stepHydraulicVelocity(prevSlewVel, targetSlewVel, 3.8 / slewInertia, 4.6 / slewInertia, safeDt);
+  let nextBoomVel = stepHydraulicVelocity(prevBoomVel, targetBoomVel, 5.2, 6.8, safeDt);
+  let nextStickVel = stepHydraulicVelocity(prevStickVel, targetStickVel, 5.8, 7.4, safeDt);
+  let nextBucketVel = stepHydraulicVelocity(prevBucketVel, targetBucketVel, 7.4, 9.0, safeDt);
+  let nextBladeVel = stepHydraulicVelocity(prevBladeVel, targetBladeVel, 5.5, 8.0, safeDt);
+  let nextOutriggerVel = stepHydraulicVelocity(prevOutriggerVel, targetOutriggerVel, 5.2, 7.8, safeDt);
+
+  // Integrate turret angle (continuous 360 deg slewing)
+  if (Math.abs(nextSlewVel) > 1e-4) {
+    vehicle.exTurretAngle = normalizeAngle((vehicle.exTurretAngle ?? 0) + nextSlewVel * safeDt);
+  }
+  if (hasPressure && slewDir !== 0) activeCircuits++;
+
+  // Integrate linear hydraulic cylinders & detect active relief valve end-stops
+  if (hasPressure && boomDir !== 0) {
+    if ((boomDir > 0 && curBoom >= 0.999) || (boomDir < 0 && curBoom <= 0.001)) hittingEndStop = true;
+    activeCircuits++;
+  }
+  if (Math.abs(nextBoomVel) > 1e-4) {
+    const next = clamp01(curBoom + nextBoomVel * safeDt);
+    if ((next <= 0 && nextBoomVel < 0) || (next >= 1 && nextBoomVel > 0)) nextBoomVel = 0;
+    vehicle.exBoomElev = next;
+  }
+
+  if (hasPressure && stickDir !== 0) {
+    if ((stickDir > 0 && curStick >= 0.999) || (stickDir < 0 && curStick <= 0.001)) hittingEndStop = true;
+    activeCircuits++;
+  }
+  if (Math.abs(nextStickVel) > 1e-4) {
+    const next = clamp01(curStick + nextStickVel * safeDt);
+    if ((next <= 0 && nextStickVel < 0) || (next >= 1 && nextStickVel > 0)) nextStickVel = 0;
+    vehicle.exStickExt = next;
+  }
+
+  if (hasPressure && bucketDir !== 0) {
+    if ((bucketDir > 0 && curBucket >= 0.999) || (bucketDir < 0 && curBucket <= 0.001)) hittingEndStop = true;
+    activeCircuits++;
+  }
+  if (Math.abs(nextBucketVel) > 1e-4) {
+    const next = clamp01(curBucket + nextBucketVel * safeDt);
+    if ((next <= 0 && nextBucketVel < 0) || (next >= 1 && nextBucketVel > 0)) nextBucketVel = 0;
+    vehicle.exBucketCurl = next;
+  }
+
+  if (hasPressure && bladeDir !== 0) {
+    if ((bladeDir > 0 && curBlade >= 0.999) || (bladeDir < 0 && curBlade <= 0.001)) hittingEndStop = true;
+    activeCircuits++;
+  }
+  if (Math.abs(nextBladeVel) > 1e-4) {
+    const next = clamp01(curBlade + nextBladeVel * safeDt);
+    if ((next <= 0 && nextBladeVel < 0) || (next >= 1 && nextBladeVel > 0)) nextBladeVel = 0;
+    vehicle.exBladePos = next;
+  }
+
+  if (hasPressure && outriggerDir !== 0) {
+    if ((outriggerDir > 0 && curOut >= 0.999) || (outriggerDir < 0 && curOut <= 0.001)) hittingEndStop = true;
+    activeCircuits++;
+  }
+  if (Math.abs(nextOutriggerVel) > 1e-4) {
+    const next = clamp01(curOut + nextOutriggerVel * safeDt);
+    if (outriggerDir > 0 && curOut < 0.72 && next >= 0.72) {
+      sound.playOutriggerLock();
+    }
+    if ((next <= 0 && nextOutriggerVel < 0) || (next >= 1 && nextOutriggerVel > 0)) nextOutriggerVel = 0;
+    vehicle.exOutriggersPos = next;
+  }
+
+  vehicle._exSlewVel = nextSlewVel;
+  vehicle._exBoomVel = nextBoomVel;
+  vehicle._exStickVel = nextStickVel;
+  vehicle._exBucketVel = nextBucketVel;
+  vehicle._exBladeVel = nextBladeVel;
+  vehicle._exOutriggerVel = nextOutriggerVel;
+
+  // Dynamic chassis recoil from heavy boom/stick/slew acceleration & braking
+  // Noticeably softer and livelier on pneumatic tires; firm & damped when braced on stabilizers/blade
+  const stabilized = isExcavatorStabilized(vehicle);
+  const recoilGain = stabilized ? 0.34 : 1.0;
+  const turretAng = vehicle.exTurretAngle ?? 0;
+  const cosT = Math.cos(turretAng);
+  const sinT = Math.sin(turretAng);
+  const armAccelMoment =
+    ((nextBoomVel - prevBoomVel) * 0.24 + (nextStickVel - prevStickVel) * 0.12) *
+    (0.75 + reachNorm * 0.55 + bucketLoad * 0.45);
+  const slewBrakeMoment = (nextSlewVel - prevSlewVel) * 0.075 * slewInertia;
+
+  let pitchRecoil = vehicle._exPitchRecoil ?? 0;
+  let pitchRecoilVel = (vehicle._exPitchRecoilVel ?? 0) + (-armAccelMoment * cosT + slewBrakeMoment * sinT) * recoilGain;
+  let rollRecoil = vehicle._exRollRecoil ?? 0;
+  let rollRecoilVel = (vehicle._exRollRecoilVel ?? 0) + (-armAccelMoment * sinT - slewBrakeMoment * cosT) * recoilGain;
+
+  const springK = stabilized ? 48.0 : 22.0;
+  const dampC = stabilized ? 8.8 : 4.6;
+  pitchRecoilVel += (-springK * pitchRecoil - dampC * pitchRecoilVel) * safeDt;
+  rollRecoilVel += (-springK * rollRecoil - dampC * rollRecoilVel) * safeDt;
+  pitchRecoil = Math.max(-0.07, Math.min(0.07, pitchRecoil + pitchRecoilVel * safeDt));
+  rollRecoil = Math.max(-0.07, Math.min(0.07, rollRecoil + rollRecoilVel * safeDt));
+  if (Math.abs(pitchRecoil) < 1e-4 && Math.abs(pitchRecoilVel) < 1e-4) {
+    pitchRecoil = 0;
+    pitchRecoilVel = 0;
+  }
+  if (Math.abs(rollRecoil) < 1e-4 && Math.abs(rollRecoilVel) < 1e-4) {
+    rollRecoil = 0;
+    rollRecoilVel = 0;
+  }
+  vehicle._exPitchRecoil = pitchRecoil;
+  vehicle._exPitchRecoilVel = pitchRecoilVel;
+  vehicle._exRollRecoil = rollRecoil;
+  vehicle._exRollRecoilVel = rollRecoilVel;
+
+  // Superimpose dynamic chassis nod/rock on top of smoothed terrain attitude
+  vehicle.exChassisPitch = (vehicle.exChassisPitch ?? 0) + pitchRecoil * 0.35;
+  vehicle.exChassisRoll = (vehicle.exChassisRoll ?? 0) + rollRecoil * 0.35;
+
   if (hasPressure) {
-    const prevBucket = vehicle.exBucketCurl ?? 0.18;
-
-    if (slewDir !== 0) {
-      vehicle.exTurretAngle = normalizeAngle((vehicle.exTurretAngle ?? 0) + slewDir * SLEW_SPEED_RAD_S * dt);
-      activeCircuits++;
-    }
-    if (boomDir !== 0) {
-      const prev = vehicle.exBoomElev ?? 0.62;
-      const next = clamp01(prev + boomDir * BOOM_RATE * dt);
-      if ((boomDir > 0 && prev >= 0.999) || (boomDir < 0 && prev <= 0.001)) hittingEndStop = true;
-      vehicle.exBoomElev = next;
-      activeCircuits++;
-    }
-    if (stickDir !== 0) {
-      const prev = vehicle.exStickExt ?? 0.22;
-      const next = clamp01(prev + stickDir * STICK_RATE * dt);
-      if ((stickDir > 0 && prev >= 0.999) || (stickDir < 0 && prev <= 0.001)) hittingEndStop = true;
-      vehicle.exStickExt = next;
-      activeCircuits++;
-    }
-    if (bucketDir !== 0) {
-      const next = clamp01(prevBucket + bucketDir * BUCKET_RATE * dt);
-      if ((bucketDir > 0 && prevBucket >= 0.999) || (bucketDir < 0 && prevBucket <= 0.001)) hittingEndStop = true;
-      vehicle.exBucketCurl = next;
-      activeCircuits++;
-    }
-    if (bladeDir !== 0) {
-      const prev = vehicle.exBladePos ?? 0;
-      const next = clamp01(prev + bladeDir * BLADE_RATE * dt);
-      if ((bladeDir > 0 && prev >= 0.999) || (bladeDir < 0 && prev <= 0.001)) hittingEndStop = true;
-      vehicle.exBladePos = next;
-      activeCircuits++;
-    }
-    if (outriggerDir !== 0) {
-      const prev = vehicle.exOutriggersPos ?? 0;
-      const next = clamp01(prev + outriggerDir * OUTRIGGER_RATE * dt);
-      if ((outriggerDir > 0 && prev >= 0.999) || (outriggerDir < 0 && prev <= 0.001)) hittingEndStop = true;
-      vehicle.exOutriggersPos = next;
-      if (outriggerDir > 0 && prev < 0.72 && next >= 0.72) {
-        sound.playOutriggerLock();
-      }
-      activeCircuits++;
-    }
-
     // 3. Bucket Digging & Dumping Physics
     const geom = getExcavatorGeometry(vehicle);
     const curLoad = clamp01(vehicle.exBucketLoad ?? 0);
@@ -736,6 +899,10 @@ export function updateExcavatorSuperstructure(
       }
     }
   }
+
+  // Smooth digging resistance for next frame's stick/bucket load feedback
+  const digBlend = Math.min(1, safeDt * 10.0);
+  vehicle._exDigEffort = prevDigEffort + (digEffort - prevDigEffort) * digBlend;
 
   // 4. Bulldozer Blade Earth-Moving & Cleaning while crawling forward/reverse
   const bladePos = vehicle.exBladePos ?? 0;

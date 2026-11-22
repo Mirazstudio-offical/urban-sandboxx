@@ -374,7 +374,11 @@ export function renderExcavatorEK12(vCtx: VehicleRenderContext): void {
   // =========================================================================
   if (drawUpper) {
     ctx.save();
-    ctx.translate(geom.turretLocalX, geom.turretLocalY);
+    const recoilPitch = car._exPitchRecoil ?? 0;
+    const recoilRoll = car._exRollRecoil ?? 0;
+    const swayX = Math.max(-1.4, Math.min(1.4, -recoilPitch * 22.0));
+    const swayY = Math.max(-1.4, Math.min(1.4, recoilRoll * 22.0));
+    ctx.translate(geom.turretLocalX + swayX, geom.turretLocalY + swayY);
     ctx.rotate(geom.turretAngle);
 
     // 2.5D screen-UP unit vector & solar shadow vector transformed into turret-local frame

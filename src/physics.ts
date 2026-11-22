@@ -19,6 +19,12 @@ import { BirdSystem } from './birdSystem';
 import { LitterSystem } from './litterSystem';
 import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
 import { stepOutriggers, isCraneStabilized } from './craneOutriggers';
+import {
+  computeEndStopCushion,
+  computeFlowShare,
+  computePumpFlowFactor,
+  stepHydraulicVelocity,
+} from './hydraulics';
 import { getRiverWaterAt, getUniversalWaterDepthAt, emitWaterDisturbance } from './riverSystem';
 import { getBiomeSampleAt } from './biomeSystem';
 import { calculateClimateAtmosphere, createInitialCalendarState, isWorldFreezing } from './calendarSystem';
@@ -8456,6 +8462,9 @@ export function toggleCraneHookAttach(
       delete (prevHooked as any)._craneHookAngleOffset;
     }
     craneVehicle.craneHookedVehicleId = null;
+    craneVehicle._craneSlingVx = 0;
+    craneVehicle._craneSlingVy = 0;
+    craneVehicle._craneSlingYawVel = 0;
     if (player) {
       addPlayerNotification(player, 'Стропы отцеплены: груз освобождён с гака КС-3577', 'info');
     }
@@ -8478,6 +8487,9 @@ export function toggleCraneHookAttach(
 
   if (bestTarget) {
     craneVehicle.craneHookedVehicleId = bestTarget.id;
+    craneVehicle._craneSlingVx = bestTarget.vx || 0;
+    craneVehicle._craneSlingVy = bestTarget.vy || 0;
+    craneVehicle._craneSlingYawVel = bestTarget.angularVelocity || 0;
     (bestTarget as any)._craneHookAngleOffset = bestTarget.angle - (craneVehicle.angle + geom.turretAngle);
     if ((craneVehicle.craneHookHeight ?? 0.25) < 0.35) {
       craneVehicle.craneHookHeight = 0.45;
@@ -8533,8 +8545,30 @@ function updateTruckCraneSuperstructure(
 
   // 3. Operator turret & boom controls when player is actively in the crane operator cab ("скворечник")
   const isOperatorInCab = !!(vehicle.isPlayerControlled && (vehicle.craneOperatorActive || vehicle.craneControlMode));
+  const safeDt = Math.max(0.0001, Math.min(0.05, dt));
+  vehicle._craneReliefSoundTimer = Math.max(0, (vehicle._craneReliefSoundTimer ?? 0) - safeDt);
 
-  if (isOperatorInCab && input) {
+  const hookedVeh = vehicle.craneHookedVehicleId
+    ? world.vehicles.find(v => v.id === vehicle.craneHookedVehicleId) ?? null
+    : null;
+  if (vehicle.craneHookedVehicleId && !hookedVeh) {
+    vehicle.craneHookedVehicleId = null;
+    vehicle._craneSlingVx = 0;
+    vehicle._craneSlingVy = 0;
+    vehicle._craneSlingYawVel = 0;
+  }
+
+  // Slung load mass ratio (0 = empty hook, ~0.45 = compact car, ~0.85 = van/SUV, ~1.25 = heavy truck)
+  const hookedMassKg = hookedVeh
+    ? Math.max(400, (hookedVeh.mass || CAR_CONFIGS[hookedVeh.type]?.mass || 1400) + (hookedVeh.massBonusKg || 0))
+    : 0;
+  const loadNorm = hookedVeh ? Math.min(1.25, hookedMassKg / 3000) : 0;
+
+  let slewDir = 0;
+  let extDir = 0;
+  let hookDir = 0;
+
+  if (isOperatorInCab && input && canOperateBoom) {
     const rotLeft = !!input.craneTurretLeft || (input.left || (typeof input.steeringAxis === 'number' && input.steeringAxis < -0.15));
     const rotRight = !!input.craneTurretRight || (input.right || (typeof input.steeringAxis === 'number' && input.steeringAxis > 0.15));
     const boomExt = !!input.craneBoomExtend || (input.forward || !!input.craneBoomUp);
@@ -8542,66 +8576,186 @@ function updateTruckCraneSuperstructure(
     const hookUp = !!input.craneHookUp;
     const hookDown = !!input.craneHookDown;
 
-    if (canOperateBoom) {
-      const turretSpeed = 0.72; // rad/s (~41 deg/s smooth hydraulic slewing)
-      let curAngle = vehicle.craneTurretAngle ?? 0;
-      if (rotLeft) curAngle -= turretSpeed * dt;
-      if (rotRight) curAngle += turretSpeed * dt;
-      // Normalize within [-PI, PI]
-      curAngle = ((curAngle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
-      vehicle.craneTurretAngle = curAngle;
-
-      const extSpeed = 0.32; // full 21.7m telescope in ~3.1s
-      let curExt = vehicle.craneBoomExtension ?? 0;
-      if (boomExt) curExt = Math.min(1.0, curExt + extSpeed * dt);
-      if (boomRet) curExt = Math.max(0.0, curExt - extSpeed * dt);
-      vehicle.craneBoomExtension = curExt;
-
-      const hookSpeed = 0.45;
-      let curHook = vehicle.craneHookHeight ?? 0.25;
-      if (hookUp) curHook = Math.min(1.0, curHook + hookSpeed * dt);
-      if (hookDown) curHook = Math.max(0.0, curHook - hookSpeed * dt);
-      vehicle.craneHookHeight = curHook;
-      vehicle.craneBoomElevation = 0.15 + curHook * 0.65;
-    }
+    if (rotLeft) slewDir -= 1;
+    if (rotRight) slewDir += 1;
+    if (boomExt) extDir += 1;
+    if (boomRet) extDir -= 1;
+    if (hookUp) hookDir += 1;
+    if (hookDown) hookDir -= 1;
   }
 
-  // 3. Move & suspend hooked vehicle / trailer under the boom head
-  if (vehicle.craneHookedVehicleId) {
-    const hookedVeh = world.vehicles.find(v => v.id === vehicle.craneHookedVehicleId);
-    if (!hookedVeh) {
+  const activeCircuits = (slewDir !== 0 ? 1 : 0) + (extDir !== 0 ? 1 : 0) + (hookDir !== 0 ? 1 : 0);
+  const pumpFlow = canOperateBoom ? computePumpFlowFactor(vehicle.engineState?.engineRPM) : 0;
+  // Single PTO axial-piston pump on truck crane shares flow across simultaneous turret/boom/winch spools
+  const flowShare = computeFlowShare(activeCircuits, false);
+  const hydScale = pumpFlow * flowShare;
+
+  const curAngle = vehicle.craneTurretAngle ?? 0;
+  const curExt = vehicle.craneBoomExtension ?? 0;
+  const curHook = vehicle.craneHookHeight ?? 0.25;
+
+  // Heavy telescopic boom moment of inertia grows steeply with extension and slung load mass
+  const slewInertia = 1.0 + curExt * 1.15 + loadNorm * 0.85;
+  const baseTurretSpeed = 0.38; // rad/s (~21.8 deg/s, ~3.6 RPM retracted empty; ~1.8-2.3 RPM extended/loaded)
+  const maxTurretSpeed = (baseTurretSpeed * hydScale) / (1.0 + curExt * 0.32 + loadNorm * 0.26);
+  const targetTurretVel = canOperateBoom && slewDir !== 0 ? slewDir * maxTurretSpeed : 0;
+
+  const baseExtSpeed = 0.15; // ~6.7 s full 21.7 m telescope empty; slower extending under load
+  const extLoadBias = extDir > 0 ? Math.max(0.58, 0.92 - loadNorm * 0.20) : extDir < 0 ? 1.06 + loadNorm * 0.06 : 1.0;
+  const extCushion = computeEndStopCushion(curExt, extDir, 0.07);
+  const targetExtVel = canOperateBoom && extDir !== 0 ? extDir * baseExtSpeed * hydScale * extLoadBias * extCushion : 0;
+
+  const baseHookSpeed = 0.27; // weighty hydraulic winch
+  const hookLoadBias = hookDir > 0 ? Math.max(0.56, 0.94 - loadNorm * 0.24) : hookDir < 0 ? 1.06 + loadNorm * 0.06 : 1.0;
+  const hookCushion = computeEndStopCushion(curHook, hookDir, 0.065);
+  const targetHookVel = canOperateBoom && hookDir !== 0 ? hookDir * baseHookSpeed * hydScale * hookLoadBias * hookCushion : 0;
+
+  const prevTurretVel = vehicle._craneTurretVel ?? 0;
+  const prevExtVel = vehicle._craneExtVel ?? 0;
+  const prevHookVel = vehicle._craneHookVel ?? 0;
+
+  // Step inertial spool ramp-up and viscous hydraulic coasting (continues braking even after release)
+  const nextTurretVel = stepHydraulicVelocity(prevTurretVel, targetTurretVel, 2.6 / slewInertia, 3.2 / slewInertia, safeDt);
+  let nextExtVel = stepHydraulicVelocity(prevExtVel, targetExtVel, 3.4, 4.8, safeDt);
+  let nextHookVel = stepHydraulicVelocity(prevHookVel, targetHookVel, 4.0, 5.4, safeDt);
+
+  let hittingEndStop = false;
+  if (canOperateBoom && extDir !== 0 && ((extDir > 0 && curExt >= 0.999) || (extDir < 0 && curExt <= 0.001))) {
+    hittingEndStop = true;
+  }
+  if (canOperateBoom && hookDir !== 0 && ((hookDir > 0 && curHook >= 0.999) || (hookDir < 0 && curHook <= 0.001))) {
+    hittingEndStop = true;
+  }
+  if (hittingEndStop && (vehicle._craneReliefSoundTimer ?? 0) <= 0) {
+    vehicle._craneReliefSoundTimer = 0.65;
+    sound.playHydraulicHiss(0.22);
+  }
+
+  if (Math.abs(nextTurretVel) > 1e-4) {
+    const nextAngle = curAngle + nextTurretVel * safeDt;
+    vehicle.craneTurretAngle = ((nextAngle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  }
+
+  if (Math.abs(nextExtVel) > 1e-4) {
+    const nextExt = Math.max(0.0, Math.min(1.0, curExt + nextExtVel * safeDt));
+    if ((nextExt <= 0 && nextExtVel < 0) || (nextExt >= 1 && nextExtVel > 0)) nextExtVel = 0;
+    vehicle.craneBoomExtension = nextExt;
+  }
+
+  if (Math.abs(nextHookVel) > 1e-4) {
+    const nextHook = Math.max(0.0, Math.min(1.0, curHook + nextHookVel * safeDt));
+    if ((nextHook <= 0 && nextHookVel < 0) || (nextHook >= 1 && nextHookVel > 0)) nextHookVel = 0;
+    vehicle.craneHookHeight = nextHook;
+    vehicle.craneBoomElevation = 0.15 + nextHook * 0.65;
+  }
+
+  vehicle._craneTurretVel = nextTurretVel;
+  vehicle._craneExtVel = nextExtVel;
+  vehicle._craneHookVel = nextHookVel;
+
+  // Subtle chassis level-bubble recoil under heavy crane slewing / hoisting stops (bounded so OGP interlock stays stable)
+  const craneAng = vehicle.craneTurretAngle ?? 0;
+  const craneMoment = ((nextExtVel - prevExtVel) * 0.12 + (nextHookVel - prevHookVel) * 0.09) * (0.6 + loadNorm * 0.7);
+  const craneSlewKick = (nextTurretVel - prevTurretVel) * 0.045 * slewInertia;
+  let cPitchR = vehicle._cranePitchRecoil ?? 0;
+  let cPitchRV = (vehicle._cranePitchRecoilVel ?? 0) + (-craneMoment * Math.cos(craneAng) + craneSlewKick * Math.sin(craneAng));
+  let cRollR = vehicle._craneRollRecoil ?? 0;
+  let cRollRV = (vehicle._craneRollRecoilVel ?? 0) + (-craneMoment * Math.sin(craneAng) - craneSlewKick * Math.cos(craneAng));
+  cPitchRV += (-42.0 * cPitchR - 8.5 * cPitchRV) * safeDt;
+  cRollRV += (-42.0 * cRollR - 8.5 * cRollRV) * safeDt;
+  cPitchR = Math.max(-0.010, Math.min(0.010, cPitchR + cPitchRV * safeDt));
+  cRollR = Math.max(-0.010, Math.min(0.010, cRollR + cRollRV * safeDt));
+  if (Math.abs(cPitchR) < 1e-4 && Math.abs(cPitchRV) < 1e-4) { cPitchR = 0; cPitchRV = 0; }
+  if (Math.abs(cRollR) < 1e-4 && Math.abs(cRollRV) < 1e-4) { cRollR = 0; cRollRV = 0; }
+  vehicle._cranePitchRecoil = cPitchR;
+  vehicle._cranePitchRecoilVel = cPitchRV;
+  vehicle._craneRollRecoil = cRollR;
+  vehicle._craneRollRecoilVel = cRollRV;
+  vehicle.craneChassisPitch = (vehicle.craneChassisPitch ?? 0) + cPitchR * 0.18;
+  vehicle.craneChassisRoll = (vehicle.craneChassisRoll ?? 0) + cRollR * 0.18;
+
+  // 4. Move & suspend hooked vehicle / trailer under the boom head with damped 2D pendulum physics
+  if (hookedVeh) {
+    const geom = getVehicleCraneGeometry(vehicle);
+    const liftRatio = Math.max(0, Math.min(1, geom.hookHeight));
+    const targetX = geom.worldBoomTipX;
+    const targetY = geom.worldBoomTipY - liftRatio * 3.0; // subtle 2.5D vertical lift offset
+
+    const dx = targetX - hookedVeh.x;
+    const dy = targetY - hookedVeh.y;
+    const dist = Math.hypot(dx, dy);
+
+    // Break sling only if teleported absurdly far (> 220px)
+    if (dist > 220) {
+      hookedVeh.ghostingAlpha = 1.0;
       vehicle.craneHookedVehicleId = null;
+      vehicle._craneSlingVx = 0;
+      vehicle._craneSlingVy = 0;
+      vehicle._craneSlingYawVel = 0;
     } else {
-      const geom = getVehicleCraneGeometry(vehicle);
-      const liftRatio = Math.max(0, Math.min(1, geom.hookHeight));
-      const targetX = geom.worldBoomTipX;
-      const targetY = geom.worldBoomTipY - liftRatio * 3.0; // subtle 2.5D vertical lift offset
+      // Longer cable at lower liftRatio -> slower natural frequency & wider gentle swing
+      const cableNorm = 1.0 - liftRatio * 0.62;
+      const kPendulum = 12.0 + (1.0 - cableNorm) * 16.0;
+      const dampPendulum = 2.0 * 0.36 * Math.sqrt(kPendulum);
 
-      const dx = targetX - hookedVeh.x;
-      const dy = targetY - hookedVeh.y;
-      const dist = Math.hypot(dx, dy);
+      let svx = vehicle._craneSlingVx ?? hookedVeh.vx ?? 0;
+      let svy = vehicle._craneSlingVy ?? hookedVeh.vy ?? 0;
 
-      // Break sling only if teleported absurdly far (> 220px)
-      if (dist > 220) {
-        hookedVeh.ghostingAlpha = 1.0;
-        vehicle.craneHookedVehicleId = null;
-      } else {
-        const pullFactor = Math.min(1.0, dt * 14.0);
-        const prevX = hookedVeh.x;
-        const prevY = hookedVeh.y;
-        hookedVeh.x += dx * pullFactor;
-        hookedVeh.y += dy * pullFactor;
-        hookedVeh.vx = (hookedVeh.x - prevX) / Math.max(0.001, dt);
-        hookedVeh.vy = (hookedVeh.y - prevY) / Math.max(0.001, dt);
-        hookedVeh.speed = 0;
-        hookedVeh.isParked = false;
+      svx += (dx * kPendulum - svx * dampPendulum) * safeDt;
+      svy += (dy * kPendulum - svy * dampPendulum) * safeDt;
 
-        const targetAngle = vehicle.angle + geom.turretAngle + ((hookedVeh as any)._craneHookAngleOffset || 0);
-        const aDiff = angleDiff(targetAngle, hookedVeh.angle);
-        hookedVeh.angle = ((hookedVeh.angle + aDiff * Math.min(1.0, dt * 10.0) + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
-        hookedVeh.angularVelocity = 0;
-        hookedVeh.ghostingAlpha = liftRatio > 0.15 ? 0.92 : 1.0;
+      let nextX = hookedVeh.x + svx * safeDt;
+      let nextY = hookedVeh.y + svy * safeDt;
+
+      // Soft radial tether clamp so extreme jerk cannot stretch the sling unrealistically
+      const maxSwingPx = 14.0 + cableNorm * 14.0;
+      const ox = nextX - targetX;
+      const oy = nextY - targetY;
+      const oDist = Math.hypot(ox, oy);
+      if (oDist > maxSwingPx) {
+        const inv = maxSwingPx / oDist;
+        nextX = targetX + ox * inv;
+        nextY = targetY + oy * inv;
+        // Bleed outward radial velocity component at tether limit
+        const nx = ox / oDist;
+        const ny = oy / oDist;
+        const radialVel = svx * nx + svy * ny;
+        if (radialVel > 0) {
+          svx -= nx * radialVel * 0.85;
+          svy -= ny * radialVel * 0.85;
+        }
       }
+
+      if (oDist < 0.08 && Math.hypot(svx, svy) < 0.15) {
+        nextX = targetX;
+        nextY = targetY;
+        svx = 0;
+        svy = 0;
+      }
+
+      hookedVeh.x = nextX;
+      hookedVeh.y = nextY;
+      hookedVeh.vx = svx;
+      hookedVeh.vy = svy;
+      vehicle._craneSlingVx = svx;
+      vehicle._craneSlingVy = svy;
+      hookedVeh.speed = 0;
+      hookedVeh.isParked = false;
+
+      // Torsional pendulum for slung vehicle heading (rotates with inertia behind the boom)
+      const targetAngle = vehicle.angle + geom.turretAngle + ((hookedVeh as any)._craneHookAngleOffset || 0);
+      const aDiff = angleDiff(targetAngle, hookedVeh.angle);
+      let yawVel = vehicle._craneSlingYawVel ?? 0;
+      yawVel += (aDiff * 14.0 - yawVel * 4.6) * safeDt;
+      if (Math.abs(aDiff) < 1e-3 && Math.abs(yawVel) < 1e-3) {
+        yawVel = 0;
+        hookedVeh.angle = ((targetAngle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      } else {
+        hookedVeh.angle = ((hookedVeh.angle + yawVel * safeDt + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      }
+      vehicle._craneSlingYawVel = yawVel;
+      hookedVeh.angularVelocity = yawVel;
+      hookedVeh.ghostingAlpha = liftRatio > 0.15 ? 0.92 : 1.0;
     }
   }
 }
