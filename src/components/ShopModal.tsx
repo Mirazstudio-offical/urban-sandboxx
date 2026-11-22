@@ -49,10 +49,11 @@ import {
   calcOptimalTrayPayment,
   PlayerDenomInfo,
   createPackagedItem,
-  getItemTotalWeight
+  getItemTotalWeight,
+  getUnifiedItemAttributes
 } from '../items';
 import { InventoryItem } from '../types';
-import { SHAPE_NAMES_RU } from '../liquidSystem';
+import { SHAPE_NAMES_RU, LIQUID_REGISTRY, LiquidId } from '../liquidSystem';
 import { ModalShell, Tabs, Seg, TabItem } from './gameUi';
 
 const shopPreviewCache: Record<string, InventoryItem> = {};
@@ -583,8 +584,58 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_soy_sauce', itemId: 'soy_sauce_classic', nameRu: 'Соевый соус в бутылочке (0.25L)', price: 65, description: 'Соус натурального брожения в стеклянной бутылке.', category: 'food', effectText: 'Соевая заправка' },
     { id: 'sup_sugar', itemId: 'sugar', nameRu: 'Сахар-песок в пакете (1 кг)', price: 55, description: 'Пакет белоснежного сахара-песка.', category: 'food', effectText: 'Бакалея' },
     { id: 'sup_flour', itemId: 'flour_wheat', nameRu: 'Мука пшеничная в/с (1 кг)', price: 50, description: 'Пакет муки высшего сорта для выпечки.', category: 'food', effectText: 'Бакалея' },
+    { id: 'sup_flour_rye', itemId: 'flour_rye', nameRu: 'Мука ржаная обдирная (1 кг)', price: 55, description: 'Цельная обдирная ржаная мука для домашнего хлеба и закваски.', category: 'food', effectText: 'Бакалея' },
+    { id: 'sup_flour_corn', itemId: 'flour_corn', nameRu: 'Мука кукурузная жёлтая (0.5 кг)', price: 65, description: 'Солнечная кукурузная мука для лепёшек, мамалыги и выпечки без глютена.', category: 'food', effectText: 'Без глютена' },
+    { id: 'sup_flour_rice', itemId: 'flour_rice', nameRu: 'Мука рисовая белая (0.5 кг)', price: 75, description: 'Тонкая белоснежная рисовая мука для сырников, кляра темпура и моти.', category: 'food', effectText: 'Без глютена' },
     { id: 'sup_salt', itemId: 'salt_fine', nameRu: 'Соль поваренная в солонке (150г)', price: 30, description: 'Удобная кухонная солонка с мелкой солью.', category: 'food', effectText: 'Специя' },
     { id: 'sup_bread', itemId: 'bread_loaf', nameRu: 'Батон нарезной "Утренний"', price: 35, description: 'Свежий пшеничный хлеб в нарезке.', category: 'food', effectText: '+35% Сытость' },
+
+    // 6.05. КРУПЫ, ЗЕРНОВЫЕ КУЛЬТУРЫ И БОБОВЫЕ (В ПАЧКАХ С СЫПУЧИМ СОДЕРЖИМЫМ)
+    { id: 'sup_grain_buckwheat', itemId: 'buckwheat_roasted', nameRu: 'Гречка ядрица обжаренная (пачка ~720г)', price: 95, description: 'Заводская пачка-пакет с окошком: цельные пропаренные и обжаренные ядра гречихи 1 сорта.', category: 'food', effectText: 'Крупа · Варка 15–18 мин' },
+    { id: 'sup_grain_buckwheat_green', itemId: 'buckwheat_green', nameRu: 'Гречка зелёная живая (коробка ~580г)', price: 135, description: 'Картонная пачка: сырые необжаренные ядра зелёной гречихи для каши и проращивания.', category: 'food', effectText: 'Крупа · Без глютена' },
+    { id: 'sup_grain_rice_basmati', itemId: 'rice_basmati', nameRu: 'Рис Басмати длиннозёрный (пачка ~820г)', price: 145, description: 'Пачка выдержанного ароматного индийского риса Басмати для рассыпчатого плова.', category: 'food', effectText: 'Крупа · Варка 12–15 мин' },
+    { id: 'sup_grain_rice_arborio', itemId: 'rice_arborio', nameRu: 'Рис Арборио для ризотто (коробка ~615г)', price: 165, description: 'Картонная пачка итальянского круглозёрного риса Арборио с бархатистым крахмалом.', category: 'food', effectText: 'Крупа · Для ризотто' },
+    { id: 'sup_grain_rice_white', itemId: 'rice_white', nameRu: 'Рис круглозёрный японский (пачка ~820г)', price: 125, description: 'Пачка полированного клейкого риса Косихикари для суши, роллов и молочных каш.', category: 'food', effectText: 'Крупа · Для суши' },
+    { id: 'sup_grain_rice_brown', itemId: 'rice_brown_whole', nameRu: 'Рис бурый цельнозерновой (пачка ~740г)', price: 130, description: 'Нешлифованный длиннозёрный рис в природной отрубевой оболочке.', category: 'food', effectText: 'Крупа · Цельнозерновой' },
+    { id: 'sup_grain_rice_jasmine', itemId: 'rice_jasmine', nameRu: 'Рис Жасмин тайский ароматный (пачка ~740г)', price: 150, description: 'Тонкий белоснежный тайский рис Хом Мали с цветочным ароматом.', category: 'food', effectText: 'Крупа · Варка 12–15 мин' },
+    { id: 'sup_grain_rice_wild', itemId: 'rice_wild_black', nameRu: 'Рис дикий чёрный деликатесный (коробка ~490г)', price: 245, description: 'Картонная пачка отборных семян дикого чёрного водного злака Zizania.', category: 'food', effectText: 'Крупа · Белок 14.7г' },
+    { id: 'sup_grain_oats', itemId: 'grain_oats', nameRu: 'Хлопья овсяные «Геркулес» (коробка ~440г)', price: 68, description: 'Картонная пачка традиционных плющеных хлопьев из цельного овса №1.', category: 'food', effectText: 'Хлопья · Варка 15–20 мин' },
+    { id: 'sup_grain_wheat', itemId: 'grain_wheat_raw', nameRu: 'Зерно пшеницы цельное (пачка ~790г)', price: 72, description: 'Нешлифованные цельные зёрна твёрдой пшеницы для каши, проращивания и помола.', category: 'food', effectText: 'Культура · Цельное зерно' },
+    { id: 'sup_grain_rye', itemId: 'grain_rye_raw', nameRu: 'Зерно ржи озимой цельное (пачка ~740г)', price: 68, description: 'Очищенные цельные зёрна озимой ржи для солода, кваса и деревенских каш.', category: 'food', effectText: 'Культура · Цельное зерно' },
+    { id: 'sup_grain_spelt', itemId: 'spelt_whole_grain', nameRu: 'Полба цельнозерновая / Спельта (коробка ~570г)', price: 140, description: 'Картонная пачка древней пшеницы-полбы с ореховым вкусом и 14.6% белка.', category: 'food', effectText: 'Культура · Белок 14.6г' },
+    { id: 'sup_grain_barley_pearl', itemId: 'barley_pearl', nameRu: 'Крупа перловая шлифованная №1 (пачка ~780г)', price: 55, description: 'Шлифованные ячменные «жемчужины» для рассольника, перлотто и каши.', category: 'food', effectText: 'Крупа · Ячмень' },
+    { id: 'sup_grain_barley_yachka', itemId: 'barley_crushed_yachka', nameRu: 'Крупа ячневая дроблёная №2 (пачка ~650г)', price: 48, description: 'Нешлифованные дроблёные ядра ячменя — быстрая вязкая каша.', category: 'food', effectText: 'Крупа · Варка 15–20 мин' },
+    { id: 'sup_grain_millet', itemId: 'millet_yellow', nameRu: 'Пшено шлифованное золотистое (пачка ~700г)', price: 62, description: 'Очищенные круглые ядра культурного проса для тыквенной каши и кулеша.', category: 'food', effectText: 'Крупа · Без глютена' },
+    { id: 'sup_grain_semolina', itemId: 'semolina_wheat', nameRu: 'Крупа манная из твёрдой пшеницы (пачка ~590г)', price: 58, description: 'Сыпучая янтарная крупка марки Т для нежной каши и манника за 4 минуты.', category: 'food', effectText: 'Крупа · Варка 4–5 мин' },
+    { id: 'sup_grain_bulgur', itemId: 'bulgur_golden', nameRu: 'Булгур золотистый средний (пачка ~700г)', price: 115, description: 'Пропаренная и дроблёная твёрдая пшеница для турецкого плова и табуле.', category: 'food', effectText: 'Крупа · Варка 15–18 мин' },
+    { id: 'sup_grain_couscous', itemId: 'couscous_moroccan', nameRu: 'Кускус марокканский средний (коробка ~570г)', price: 128, description: 'Картонная пачка пропаренных гранул семолины — запаривается кипятком за 5 минут.', category: 'food', effectText: 'Крупа · Запарить 5 мин' },
+    { id: 'sup_grain_corn_polenta', itemId: 'corn_grits_polenta', nameRu: 'Крупа кукурузная для поленты (пачка ~675г)', price: 68, description: 'Солнечная дроблёная кукурузная крупка №4 для итальянской поленты и мамалыги.', category: 'food', effectText: 'Крупа · Без глютена' },
+    { id: 'sup_grain_quinoa', itemId: 'quinoa_white_tricolor', nameRu: 'Киноа трёхцветная перуанская (коробка ~525г)', price: 220, description: 'Картонная пачка микса белой, красной и чёрной киноа с полным аминокислотным профилем.', category: 'food', effectText: 'Суперфуд · Без глютена' },
+    { id: 'sup_grain_peas', itemId: 'peas_split_yellow', nameRu: 'Горох колотый жёлтый шлифованный (пачка ~760г)', price: 58, description: 'Отборные половинки жёлтого гороха для наваристого супа и горохового пюре.', category: 'food', effectText: 'Бобовые · Белок 23г' },
+    { id: 'sup_grain_beans_red', itemId: 'beans_red_kidney', nameRu: 'Фасоль красная сухая Кидни (пачка ~700г)', price: 110, description: 'Крупные бордовые почковидные бобы для лобио, чили и красного борща.', category: 'food', effectText: 'Бобовые · Белок 21.6г' },
+    { id: 'sup_grain_beans_white', itemId: 'beans_white_lima', nameRu: 'Фасоль белая крупная Лима (пачка ~700г)', price: 120, description: 'Крупные маслянистые белые бобы со сливочной сердцевиной.', category: 'food', effectText: 'Бобовые · Белок 21.5г' },
+    { id: 'sup_grain_lentils_red', itemId: 'lentils_red_dry', nameRu: 'Чечевица красная колотая (пачка ~650г)', price: 125, description: 'Оранжевая колотая чечевица — варится за 12 минут без замачивания.', category: 'food', effectText: 'Бобовые · Белок 24.6г' },
+    { id: 'sup_grain_lentils_green', itemId: 'lentils_green_dry', nameRu: 'Чечевица зелёная тарелочная (пачка ~650г)', price: 120, description: 'Цельные зелёные зёрна чечевицы, сохраняющие форму в гарнирах и салатах.', category: 'food', effectText: 'Бобовые · Белок 24г' },
+    { id: 'sup_grain_chickpeas', itemId: 'chickpeas_garbanzo_dry', nameRu: 'Нут крупный турецкий (пачка ~700г)', price: 130, description: 'Крупный бараний горох калибра 9 мм для узбекского плова, хумуса и фалафеля.', category: 'food', effectText: 'Бобовые · Белок 19.3г' },
+    { id: 'sup_grain_mung', itemId: 'mung_beans_green', nameRu: 'Маш зелёный отборный (пачка ~680г)', price: 135, description: 'Мелкие зелёные бобы мунг для машхурды, кичари и свежих проростков.', category: 'food', effectText: 'Бобовые · Белок 23.9г' },
+
+    // 6.06. МАКАРОННЫЕ ИЗДЕЛИЯ (СЫПУЧИЕ В ФИРМЕННЫХ УПАКОВКАХ)
+    { id: 'sup_pasta_spaghetti', itemId: 'pasta_spaghetti_durum', nameRu: 'Спагетти №5 Дурум (пачка ~475г)', price: 85, description: 'Удлинённая пачка длинных круглых спагетти из 100% твёрдой пшеницы группы А.', category: 'food', effectText: 'Нити · Дурум · 8–9 мин' },
+    { id: 'sup_pasta_penne', itemId: 'pasta_penne_rigate', nameRu: 'Пенне Ригате / Перья рифлёные (пачка ~475г)', price: 85, description: 'Полые рифлёные трубочки с косым срезом из твёрдой пшеницы — отлично держат густой соус.', category: 'food', effectText: 'Перья · Рифлёные · 10–11 мин' },
+    { id: 'sup_pasta_fusilli_tri', itemId: 'pasta_fusilli_tricolor', nameRu: 'Фузилли триколор со шпинатом и томатом (~475г)', price: 105, description: 'Разноцветные витые спиральки из дурума с натуральным шпинатом и томатом.', category: 'food', effectText: 'Спиральки · Триколор · 9–10 мин' },
+    { id: 'sup_pasta_farfalle', itemId: 'pasta_farfalle_bow', nameRu: 'Фарфалле / Бантики из дурума (пачка ~475г)', price: 95, description: 'Фигурные бантики с зубчатым краем и плотной серединкой для сливочных соусов.', category: 'food', effectText: 'Бантики · Дурум · 10–11 мин' },
+    { id: 'sup_pasta_conchiglie', itemId: 'pasta_conchiglie_shells', nameRu: 'Конкилье Ригате / Ракушки (пачка ~475г)', price: 90, description: 'Полые ребристые ракушки из твёрдой пшеницы — захватывают фарш и сырный соус.', category: 'food', effectText: 'Ракушки · Рифлёные · 10–12 мин' },
+    { id: 'sup_pasta_macaroni', itemId: 'pasta_macaroni_elbows', nameRu: 'Рожки классические Макарони (пачка ~500г)', price: 78, description: 'Изогнутые гладкие рожки из твёрдой пшеницы для макарон по-флотски и с сыром.', category: 'food', effectText: 'Рожки · Дурум · 7–8 мин' },
+    { id: 'sup_pasta_vermicelli', itemId: 'pasta_vermicelli_fine', nameRu: 'Вермишель тонкая яичная «Паутинка» (~450г)', price: 88, description: 'Тонкие короткие нити на свежих куриных яйцах (15%) для прозрачного бульона.', category: 'food', effectText: 'Паутинка · Яичная · 3–4 мин' },
+    { id: 'sup_pasta_tagliatelle', itemId: 'pasta_tagliatelle_nests', nameRu: 'Тальятелле яичные в гнёздах (коробка ~420г)', price: 165, description: 'Картонная пачка с окошком: широкие плоские ленты-гнёзда на 28% свежих яиц.', category: 'food', effectText: 'Гнёзда · 28% яиц · 6–7 мин' },
+    { id: 'sup_pasta_rigatoni', itemId: 'pasta_rigatoni_bronze', nameRu: 'Ригатони Al Bronzo крупные (пачка ~475г)', price: 145, description: 'Ремесленные крупные рифлёные цилиндры, отпрессованные через бронзовые матрицы.', category: 'food', effectText: 'Трубы · Бронзовая матрица' },
+    { id: 'sup_pasta_orzo', itemId: 'pasta_orzo_risoni', nameRu: 'Орзо / Ризони паста-рис (пачка ~475г)', price: 110, description: 'Мелкие макароны в форме рисовых зёрен из твёрдой пшеницы для супов и паста-ризотто.', category: 'food', effectText: 'Зёрнышки · Дурум · 8–9 мин' },
+    { id: 'sup_pasta_wholewheat', itemId: 'pasta_spaghetti_wholewheat', nameRu: 'Спагетти цельнозерновые Integrale (~475г)', price: 115, description: 'Удлинённая пачка тёмных спагетти из цельного зерна твёрдой пшеницы с отрубями.', category: 'food', effectText: 'Нити · Цельнозерновые' },
+    { id: 'sup_pasta_black_ink', itemId: 'pasta_spaghetti_black_ink', nameRu: 'Спагетти чёрные с чернилами каракатицы (~450г)', price: 215, description: 'Деликатесные угольно-чёрные спагетти Nero di Seppia для пасты с морепродуктами.', category: 'food', effectText: 'Нити · Чернила каракатицы' },
+    { id: 'sup_pasta_soba', itemId: 'pasta_soba_buckwheat', nameRu: 'Лапша гречневая Соба японская (~450г)', price: 135, description: 'Длинные плоские ленты лапши из 65% гречневой и 35% пшеничной муки.', category: 'food', effectText: 'Лапша · 65% гречки · 4–5 мин' },
+    { id: 'sup_pasta_red_lentil', itemId: 'pasta_fusilli_red_lentil', nameRu: 'Фузилли из красной чечевицы (пачка ~420г)', price: 175, description: 'Безглютеновые спиральки из 100% муки красной чечевицы — 25 г белка на 100 г.', category: 'food', effectText: 'Без глютена · Белок 25г' },
+    { id: 'sup_pasta_corn_rice', itemId: 'pasta_penne_corn_rice', nameRu: 'Пенне кукурузно-рисовые без глютена (~450г)', price: 155, description: 'Золотистые рифлёные перья из 70% кукурузной и 30% рисовой муки.', category: 'food', effectText: 'Перья · Без глютена' },
+    { id: 'sup_pasta_stelline', itemId: 'pasta_stelline_stars', nameRu: 'Стеллине / Звёздочки суповые (пачка ~450г)', price: 82, description: 'Миниатюрные звёздочки с отверстием из твёрдой пшеницы для супов и бульонов.', category: 'food', effectText: 'Звёздочки · Суповые · 5–6 мин' },
 
     // 6.1. БАЗОВЫЕ ЗАГУСТИТЕЛИ, СИРОПЫ И КУЛИНАРНЫЕ ДОБАВКИ
     { id: 'sup_gelatin_sachet', itemId: 'gelatin_powder', nameRu: 'Желатин пищевой (саше 50г)', price: 45, description: 'Быстрорастворимый пищевой желатин для мармелада и заливного.', category: 'food', effectText: 'Загуститель' },
@@ -636,6 +687,10 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_chips', itemId: 'chips', nameRu: 'Картофельные чипсы (дой-пак 8 шт.)', price: 55, description: 'Герметичный дой-пак хрустящих ломтиков картофеля с морской солью.', category: 'food', effectText: '+20% Сытость' },
     { id: 'sup_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка с ручками', price: 5, description: 'Вместительный прочный полиэтиленовый пакет 5.0L.', category: 'auto', effectText: 'Пакет 5.0L' },
     { id: 'sup_package_bag', itemId: 'package_bag', nameRu: 'Фасовочные пакеты (1.5L)', price: 3, description: 'Тонкий прозрачный полиэтиленовый пакетик.', category: 'auto', effectText: 'Пакет 1.5L' },
+    { id: 'sup_grain_pack_pouch', itemId: 'grain_pack_pouch', nameRu: 'Пачка-пакет для круп пустая (1.0L)', price: 6, description: 'Пустая пачка-пакет с прозрачным окном для пересыпания и хранения круп и бобовых.', category: 'auto', effectText: 'Тара сыпучих 1.0L' },
+    { id: 'sup_grain_pack_box', itemId: 'grain_pack_box', nameRu: 'Картонная пачка для круп пустая (0.8L)', price: 10, description: 'Пустая картонная пачка с окошком для хлопьев, киноа, кускуса и сыпучих продуктов.', category: 'auto', effectText: 'Тара сыпучих 0.8L' },
+    { id: 'sup_pasta_pack_bag', itemId: 'pasta_pack_bag', nameRu: 'Упаковка для макарон пустая (0.9L)', price: 7, description: 'Пустой прозрачный пакет с лентой-этикеткой для фигурных макаронных изделий.', category: 'auto', effectText: 'Тара макарон 0.9L' },
+    { id: 'sup_pasta_pack_long', itemId: 'pasta_pack_long', nameRu: 'Упаковка для спагетти пустая (0.85L)', price: 7, description: 'Пустая удлинённая пачка с окном для спагетти и длинной лапши.', category: 'auto', effectText: 'Тара спагетти 0.85L' },
     { id: 'sup_jar_empty', itemId: 'jar_glass_medium', nameRu: 'Банка стеклянная с крышкой (0.5L)', price: 35, description: 'Унифицированная чистая банка твист-офф для консервации.', category: 'auto', effectText: 'Емкость 0.5L' }
   ],
   fast_food: [
@@ -665,7 +720,8 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sush_miso_paste', itemId: 'miso_paste', nameRu: 'Мисо-паста ферментированная в банке (0.2L)', price: 110, description: 'Стеклянная баночка густой соевой пасты Ака-мисо для мисо-супа и бульонов.', category: 'food', effectText: 'Основа мисо-супа' },
     { id: 'sush_rice_vinegar', itemId: 'vinegar_rice', nameRu: 'Рисовый уксус Мицукан в бутылке (0.5L)', price: 90, description: 'Стеклянная бутылка мягкого японского рисового уксуса для заправки риса суши.', category: 'food', effectText: 'Для риса и маринадов' },
     { id: 'sush_sesame_oil', itemId: 'oil_sesame', nameRu: 'Кунжутное масло темное (0.25L)', price: 140, description: 'Стеклянная бутылочка ароматного масла из обжаренного кунжута.', category: 'food', effectText: 'Азиатская заправка' },
-    { id: 'sush_rice_bag', itemId: 'rice_white', nameRu: 'Рис круглозерный для суши (мешок 1 кг)', price: 95, description: 'Тканевый мешочек клейкого белого шлифованного риса для роллов.', category: 'food', effectText: 'Крупа / 1 кг' },
+    { id: 'sush_rice_bag', itemId: 'rice_white', nameRu: 'Рис круглозёрный для суши (пачка ~820г)', price: 95, description: 'Пачка клейкого белого японского риса Косихикари для суши и роллов.', category: 'food', effectText: 'Крупа · Для суши' },
+    { id: 'sush_soba_pack', itemId: 'pasta_soba_buckwheat', nameRu: 'Лапша гречневая Соба японская (~450г)', price: 130, description: 'Удлинённая пачка тонкой гречневой лапши Соба (65% гречки) для вока и супов.', category: 'food', effectText: 'Лапша · 65% гречки' },
     { id: 'sush_ginger', itemId: 'ginger_pickled', nameRu: 'Маринованный имбирь Гари в баночке (0.2L)', price: 35, description: 'Стеклянная баночка розовых лепестков маринованного имбиря в рисовом уксусе.', category: 'food', effectText: '+8% Сытость, свежесть' },
     { id: 'sush_shiitake', itemId: 'shiitake_fresh', nameRu: 'Грибы Шиитаке свежие (лоток 5 шт.)', price: 50, description: 'Пищевой лоток под пленкой с ароматными грибами шиитаке.', category: 'food', effectText: '+10% Сытость' },
     { id: 'sush_enoki', itemId: 'enoki_mushroom_bunch', nameRu: 'Грибы Эноки в лотке (2 пучка)', price: 60, description: 'Пищевой лоток под пленкой с пучками хрустящих грибов эноки.', category: 'food', effectText: '+12% Сытость' },
@@ -1835,6 +1891,22 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       if (isGasStation && (id.includes('oil') || id.includes('coolant') || id.includes('fluid') || id.includes('canister') || id.includes('tow') || id.includes('extinguisher') || id.includes('kit') || name.includes('масло') || name.includes('антифриз') || name.includes('тосол') || name.includes('канистр'))) {
         return { id: 'fluids', label: 'Автотовары и ГСМ' };
       }
+      if (id === 'grain_pack_pouch' || id === 'grain_pack_box' || id === 'pasta_pack_bag' || id === 'pasta_pack_long') {
+        return { id: 'household', label: 'Тара и сопутствующее' };
+      }
+      if (id.startsWith('pasta_')) {
+        return { id: 'pasta', label: 'Макаронные изделия' };
+      }
+      if (
+        id.startsWith('grain_') || id.startsWith('rice_') || id.startsWith('buckwheat_') ||
+        id.startsWith('barley_') || id.startsWith('millet_') || id.startsWith('semolina_') ||
+        id.startsWith('bulgur_') || id.startsWith('couscous_') || id.startsWith('corn_grits_') ||
+        id.startsWith('quinoa_') || id.startsWith('spelt_') || id.startsWith('peas_') ||
+        id.startsWith('beans_') || id.startsWith('lentils_') || id.startsWith('chickpeas_') ||
+        id.startsWith('mung_') || id.startsWith('flour_')
+      ) {
+        return { id: 'grains', label: 'Крупы и культуры' };
+      }
       if ((eff.includes('сытость') || id.includes('bread') || id.includes('meat') || id.includes('sausage') || id.includes('cheese') || id.includes('chips') || id.includes('choc') || id.includes('gummy') || id.includes('canned') || id.includes('burger') || id.includes('shawarma') || id.includes('pie') || id.includes('noodle') || id.includes('pelmeni') || id.includes('hotdog')) && !id.startsWith('chocolate_pack') && id !== 'pelmeni_pack') {
         return { id: 'food', label: 'Продукты и перекус' };
       }
@@ -1842,7 +1914,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
         return { id: 'drinks', label: 'Напитки и кофе' };
       }
       if (id.includes('bag') || id.includes('box') || id.includes('sack') || id.includes('pouch') || id.includes('crate') || id.includes('case') || id.includes('lock') || id.includes('cigarette') || id.includes('lighter') || id.includes('phone') || id.includes('watch') || id.startsWith('chocolate_pack') || id === 'pelmeni_pack') {
-        return { id: 'household', label: 'Табак и сопутствующее' };
+        return { id: 'household', label: 'Тара и сопутствующее' };
       }
       return { id: 'other', label: 'Разное' };
     }
@@ -2504,6 +2576,79 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     <div style={{ fontSize: 12, color: 'var(--gu-mut)', lineHeight: 1.4 }}>
                       {activeInspectedItem.description}
                     </div>
+
+                    {(() => {
+                      const uAttrs = getUnifiedItemAttributes(preview);
+                      const fs = preview.fluidStorage;
+                      const liq = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
+                      const rawIng = uAttrs.ingredients ?? uAttrs.sourceIngredients;
+                      const ingText = Array.isArray(rawIng) ? rawIng.filter(Boolean).join(', ') : rawIng;
+                      const hasSpecs = Boolean(
+                        liq ||
+                        uAttrs.productShapeRu ||
+                        uAttrs.grainGradeRu ||
+                        uAttrs.cookingTimeMin ||
+                        uAttrs.proteinPer100g !== undefined ||
+                        uAttrs.surfaceTextureRu ||
+                        uAttrs.glutenFree
+                      );
+                      if (!hasSpecs) return null;
+
+                      return (
+                        <div className="gu-kv-grid gu-g2 gu-kv-compact" style={{ marginTop: 2 }}>
+                          {liq && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Сыпучее / Вещество</span>
+                              <span className="gu-kv-v">{liq.nameRu}</span>
+                            </div>
+                          )}
+                          {uAttrs.cookingTimeMin && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Варка</span>
+                              <span className="gu-kv-v">{uAttrs.cookingTimeMin}</span>
+                            </div>
+                          )}
+                          {uAttrs.productShapeRu && (
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Форма</span>
+                              <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.productShapeRu}</span>
+                            </div>
+                          )}
+                          {uAttrs.grainGradeRu && (
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Сорт / Группа</span>
+                              <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.grainGradeRu}</span>
+                            </div>
+                          )}
+                          {uAttrs.proteinPer100g !== undefined && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Белок (100г)</span>
+                              <span className="gu-kv-v">{uAttrs.proteinPer100g} г</span>
+                            </div>
+                          )}
+                          {uAttrs.glutenFree !== undefined && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Глютен</span>
+                              <span className="gu-kv-v">{uAttrs.glutenFree ? 'Без глютена' : 'Содержит глютен'}</span>
+                            </div>
+                          )}
+                          {uAttrs.surfaceTextureRu && (
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Поверхность</span>
+                              <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.surfaceTextureRu}</span>
+                            </div>
+                          )}
+                          {ingText && (
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Из чего</span>
+                              <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
+                                {ingText}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <div className="gu-row-between" style={{ paddingTop: 2 }}>
                       {qtyInCart > 0 ? (

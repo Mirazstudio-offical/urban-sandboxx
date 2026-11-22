@@ -33,6 +33,26 @@ export type LiquidId =
   | 'syrup_sweet'
   | 'dry_mix'
   | 'grain'
+  | 'grain_wheat'
+  | 'grain_rye'
+  | 'grain_oats'
+  | 'grain_spelt'
+  | 'rice'
+  | 'buckwheat'
+  | 'barley_pearl'
+  | 'barley_crushed'
+  | 'millet'
+  | 'semolina'
+  | 'bulgur'
+  | 'couscous'
+  | 'corn_grits'
+  | 'quinoa'
+  | 'peas_dry'
+  | 'beans_dry'
+  | 'lentils'
+  | 'chickpeas'
+  | 'mung_beans'
+  | 'pasta'
   | 'spice_dry'
   | 'sugar'
   | 'flour'
@@ -420,6 +440,286 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     color: '#fde047',
     effects: { hunger: 22, thirst: -10 },
     tasteMessages: ['Отборная сухая крупа и зернобобовые для варки гарниров и супов.'],
+    stainType: 'sand'
+  },
+  grain_wheat: {
+    id: 'grain_wheat',
+    name: 'Whole Wheat Grain',
+    nameRu: 'Пшеница (зерно)',
+    category: 'food',
+    densityKgPerL: 0.78,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#d97706',
+    effects: { hunger: 20, thirst: -12 },
+    tasteMessages: ['Твёрдые цельные зёрна пшеницы с хлебным ароматом.'],
+    stainType: 'sand'
+  },
+  grain_rye: {
+    id: 'grain_rye',
+    name: 'Whole Rye Grain',
+    nameRu: 'Рожь (зерно)',
+    category: 'food',
+    densityKgPerL: 0.74,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#a16207',
+    effects: { hunger: 18, thirst: -12 },
+    tasteMessages: ['Сухие продолговатые зёрна северной ржи со слегка солодовым вкусом.'],
+    stainType: 'sand'
+  },
+  grain_oats: {
+    id: 'grain_oats',
+    name: 'Rolled Oats',
+    nameRu: 'Овсяные хлопья',
+    category: 'food',
+    densityKgPerL: 0.46,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fde68a',
+    effects: { hunger: 24, energy: 10, thirst: -8 },
+    tasteMessages: ['Нежные плющеные хлопья геркулеса с мягким молочно-злаковым вкусом.'],
+    stainType: 'sand'
+  },
+  grain_spelt: {
+    id: 'grain_spelt',
+    name: 'Spelt Grain',
+    nameRu: 'Полба (спельта)',
+    category: 'food',
+    densityKgPerL: 0.76,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#b45309',
+    effects: { hunger: 24, energy: 8, thirst: -10 },
+    tasteMessages: ['Древнее зерно полбы с выраженным орехово-зерновым привкусом.'],
+    stainType: 'sand'
+  },
+  rice: {
+    id: 'rice',
+    name: 'Rice',
+    nameRu: 'Рис',
+    category: 'food',
+    densityKgPerL: 0.85,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f8fafc',
+    effects: { hunger: 22, thirst: -10 },
+    tasteMessages: ['Отборные сухие рисовые зёрна — идеально для плова, ризотто и гарниров.'],
+    stainType: 'sand'
+  },
+  buckwheat: {
+    id: 'buckwheat',
+    name: 'Buckwheat',
+    nameRu: 'Гречневая крупа',
+    category: 'food',
+    densityKgPerL: 0.80,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#92400e',
+    effects: { hunger: 25, energy: 8, thirst: -10 },
+    tasteMessages: ['Душистая трёхгранная гречневая ядрица с насыщенным ореховым ароматом.'],
+    stainType: 'sand'
+  },
+  barley_pearl: {
+    id: 'barley_pearl',
+    name: 'Pearl Barley',
+    nameRu: 'Перловая крупа',
+    category: 'food',
+    densityKgPerL: 0.82,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#e7e5e4',
+    effects: { hunger: 22, thirst: -12 },
+    tasteMessages: ['Гладкие жемчужные ядра шлифованного ячменя.'],
+    stainType: 'sand'
+  },
+  barley_crushed: {
+    id: 'barley_crushed',
+    name: 'Crushed Barley Groats',
+    nameRu: 'Ячневая крупа',
+    category: 'food',
+    densityKgPerL: 0.72,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#d6d3d1',
+    effects: { hunger: 21, thirst: -11 },
+    tasteMessages: ['Дроблёная ячневая крупка из нешлифованного ячменя.'],
+    stainType: 'sand'
+  },
+  millet: {
+    id: 'millet',
+    name: 'Millet Groats',
+    nameRu: 'Пшено',
+    category: 'food',
+    densityKgPerL: 0.84,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#facc15',
+    effects: { hunger: 22, thirst: -10 },
+    tasteMessages: ['Ярко-золотистые круглые зёрнышки шлифованного проса.'],
+    stainType: 'sand'
+  },
+  semolina: {
+    id: 'semolina',
+    name: 'Semolina',
+    nameRu: 'Манная крупа',
+    category: 'food',
+    densityKgPerL: 0.70,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fef9c3',
+    effects: { hunger: 20, thirst: -14 },
+    tasteMessages: ['Мелкая светло-кремовая пшеничная крупка для молочной каши и выпечки.'],
+    stainType: 'sand'
+  },
+  bulgur: {
+    id: 'bulgur',
+    name: 'Bulgur',
+    nameRu: 'Булгур',
+    category: 'food',
+    densityKgPerL: 0.80,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#eab308',
+    effects: { hunger: 24, energy: 6, thirst: -9 },
+    tasteMessages: ['Янтарный пропаренный дроблёный булгур из твёрдой пшеницы.'],
+    stainType: 'sand'
+  },
+  couscous: {
+    id: 'couscous',
+    name: 'Couscous',
+    nameRu: 'Кускус',
+    category: 'food',
+    densityKgPerL: 0.72,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fde047',
+    effects: { hunger: 22, energy: 6, thirst: -9 },
+    tasteMessages: ['Рассыпчатые скатанные гранулы марокканского кускуса из семолины.'],
+    stainType: 'sand'
+  },
+  corn_grits: {
+    id: 'corn_grits',
+    name: 'Corn Grits (Polenta)',
+    nameRu: 'Кукурузная крупа',
+    category: 'food',
+    densityKgPerL: 0.75,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f59e0b',
+    effects: { hunger: 21, thirst: -10 },
+    tasteMessages: ['Солнечная дроблёная кукурузная крупа для поленты и мамалыги.'],
+    stainType: 'sand'
+  },
+  quinoa: {
+    id: 'quinoa',
+    name: 'Quinoa',
+    nameRu: 'Киноа',
+    category: 'food',
+    densityKgPerL: 0.76,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fef3c7',
+    effects: { hunger: 25, energy: 12, health: 4, thirst: -8 },
+    tasteMessages: ['Мелкие дискообразные семена киноа с ореховым вкусом и полным набором аминокислот.'],
+    stainType: 'sand'
+  },
+  peas_dry: {
+    id: 'peas_dry',
+    name: 'Split Dry Peas',
+    nameRu: 'Горох колотый',
+    category: 'food',
+    densityKgPerL: 0.82,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#eab308',
+    effects: { hunger: 24, thirst: -12 },
+    tasteMessages: ['Сухие колотые половинки жёлтого посевного гороха.'],
+    stainType: 'sand'
+  },
+  beans_dry: {
+    id: 'beans_dry',
+    name: 'Dry Beans',
+    nameRu: 'Фасоль зерновая',
+    category: 'food',
+    densityKgPerL: 0.80,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#7f1d1d',
+    effects: { hunger: 24, thirst: -12 },
+    tasteMessages: ['Плотные сухие бобы зерновой фасоли, богатые растительным белком.'],
+    stainType: 'sand'
+  },
+  lentils: {
+    id: 'lentils',
+    name: 'Lentils',
+    nameRu: 'Чечевица',
+    category: 'food',
+    densityKgPerL: 0.82,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#ea580c',
+    effects: { hunger: 25, energy: 8, thirst: -10 },
+    tasteMessages: ['Плоские линзовидные зёрна чечевицы для супов-пюре и пряных гарниров.'],
+    stainType: 'sand'
+  },
+  chickpeas: {
+    id: 'chickpeas',
+    name: 'Chickpeas',
+    nameRu: 'Нут',
+    category: 'food',
+    densityKgPerL: 0.78,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fcd34d',
+    effects: { hunger: 25, energy: 8, thirst: -11 },
+    tasteMessages: ['Крупные ореховые зёрна среднеазиатского нута.'],
+    stainType: 'sand'
+  },
+  mung_beans: {
+    id: 'mung_beans',
+    name: 'Mung Beans',
+    nameRu: 'Маш',
+    category: 'food',
+    densityKgPerL: 0.80,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#4d7c0f',
+    effects: { hunger: 24, energy: 10, health: 4, thirst: -9 },
+    tasteMessages: ['Мелкие изумрудно-зелёные бобы маш со сладковато-травяным послевкусием.'],
+    stainType: 'sand'
+  },
+  pasta: {
+    id: 'pasta',
+    name: 'Pasta',
+    nameRu: 'Макаронные изделия',
+    category: 'food',
+    densityKgPerL: 0.56,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fde047',
+    effects: { hunger: 24, energy: 10, thirst: -12 },
+    tasteMessages: ['Сухие макаронные изделия — похрустывают на зубах, требуют варки в подсоленной воде.'],
     stainType: 'sand'
   },
   spice_dry: {
@@ -837,6 +1137,238 @@ export const DEFAULT_GENERIC_LIQUID_ATTRIBUTES: Partial<Record<LiquidId, FluidSu
     preparationMethod: 'Шелушение семенной оболочки, шлифовка и калибровка зерна',
     purpose: 'Варка рассыпчатых гарниров, густых похлёбок, плова и каш',
     culinaryEquivalentId: 'rice'
+  },
+  grain_wheat: {
+    varietyRu: 'Пшеница цельнозерновая отборная',
+    ingredients: 'Цельное очищенное зерно яровой и озимой пшеницы твёрдых и мягких сортов',
+    preparationMethod: 'Обмолот колосьев, отвеивание и калибровка зерна',
+    purpose: 'Помол в муку, проращивание, варка кутьи и пшеничной каши',
+    productShapeRu: 'Цельные овальные зёрна с бороздкой',
+    grainGradeRu: 'Цельное зерно, 1 класс',
+    cookingTimeMin: '40–50 мин (с замачиванием)',
+    proteinPer100g: 13.0,
+    culinaryEquivalentId: 'grain_wheat_raw'
+  },
+  grain_rye: {
+    varietyRu: 'Рожь озимая цельнозерновая',
+    ingredients: 'Цельное зерно северной озимой ржи (Secale cereale)',
+    preparationMethod: 'Сушка в зерносушилке и очистка от половы',
+    purpose: 'Помол ржаной муки, приготовление солода и хлебного кваса',
+    productShapeRu: 'Удлинённые заострённые зёрна',
+    grainGradeRu: 'Цельнозерновая озимая рожь',
+    cookingTimeMin: '45–55 мин (с замачиванием)',
+    proteinPer100g: 10.3,
+    culinaryEquivalentId: 'grain_rye_raw'
+  },
+  grain_oats: {
+    varietyRu: 'Овсяные хлопья «Геркулес»',
+    ingredients: 'Цельное пропаренное и плющеное зерно голозёрного овса',
+    preparationMethod: 'Пропаривание овсяного ядра и плющение вальцами в лепестки',
+    purpose: 'Варка утренней овсяной каши, гранолы, овсяного печенья и киселя',
+    productShapeRu: 'Тонкие плющеные овальные хлопья-лепестки',
+    grainGradeRu: 'Традиционные хлопья №1 (долгого варения)',
+    cookingTimeMin: '12–15 мин',
+    proteinPer100g: 12.3,
+    culinaryEquivalentId: 'grain_oats'
+  },
+  grain_spelt: {
+    varietyRu: 'Полба дроблёная (древняя пшеница спельта)',
+    ingredients: 'Зерно полудикой пшеницы спельты (Triticum spelta)',
+    preparationMethod: 'Бережное шелушение твёрдой плёнки и крупное дробление',
+    purpose: 'Варка ароматной полбяной каши с маслом, грибами или тыквой',
+    productShapeRu: 'Крупнодроблёные янтарные зёрна с оболочкой',
+    grainGradeRu: 'Цельнозерновая дроблёная спельта',
+    cookingTimeMin: '25–30 мин',
+    proteinPer100g: 14.6,
+    culinaryEquivalentId: 'spelt_whole_grain'
+  },
+  rice: {
+    varietyRu: 'Рис шлифованный отборный',
+    ingredients: 'Очищенное и отшлифованное зерно посевного риса (Oryza sativa)',
+    preparationMethod: 'Шелушение шелухи и бережная шлифовка зерна',
+    purpose: 'Приготовление плова, ризотто, роллов, гарниров и молочной каши',
+    productShapeRu: 'Гладкие полупрозрачные зёрна',
+    grainGradeRu: 'Высший сорт',
+    cookingTimeMin: '15–18 мин',
+    glutenFree: true,
+    proteinPer100g: 7.3,
+    culinaryEquivalentId: 'rice_white'
+  },
+  buckwheat: {
+    varietyRu: 'Гречневая крупа ядрица',
+    ingredients: 'Цельное трёхгранное ядро плодов гречихи посевной (Fagopyrum esculentum)',
+    preparationMethod: 'Калибровка, пропаривание и обжарка до золотисто-коричневого цвета',
+    purpose: 'Варка рассыпчатой гречневой каши с маслом, грибами или тушёнкой',
+    productShapeRu: 'Цельные трёхгранные пирамидки-ядра',
+    grainGradeRu: 'Ядрица высшего сорта',
+    cookingTimeMin: '15–18 мин',
+    glutenFree: true,
+    proteinPer100g: 12.6,
+    culinaryEquivalentId: 'buckwheat_roasted'
+  },
+  barley_pearl: {
+    varietyRu: 'Перловая крупа шлифованная',
+    ingredients: 'Цельное зерно ячменя, очищенное от цветочных плёнок и отшлифованное',
+    preparationMethod: 'Шелушение и многоступенчатая круглая шлифовка ядра',
+    purpose: 'Варка классического рассольника, грибного супа и сытной каши',
+    productShapeRu: 'Округлые гладкие жемчужины-зёрна',
+    grainGradeRu: '№1, шлифованная высшего сорта',
+    cookingTimeMin: '45–50 мин',
+    proteinPer100g: 9.3,
+    culinaryEquivalentId: 'barley_pearl'
+  },
+  barley_crushed: {
+    varietyRu: 'Ячневая крупа дроблёная',
+    ingredients: 'Дроблёные частицы нешлифованного ядра ячменя',
+    preparationMethod: 'Очистка от цветочной плёнки и дробление без шлифовки',
+    purpose: 'Варка нежной вязкой ячневой каши и заправка домашних супов',
+    productShapeRu: 'Мелкие угловатые дроблёные крупинки №2',
+    grainGradeRu: 'Дроблёная нешлифованная №2',
+    cookingTimeMin: '15–20 мин',
+    proteinPer100g: 10.0,
+    culinaryEquivalentId: 'barley_crushed_yachka'
+  },
+  millet: {
+    varietyRu: 'Пшено шлифованное золотистое',
+    ingredients: 'Очищенные от оболочек зёрна культурного проса',
+    preparationMethod: 'Обрушивание плёнок проса и полировка ядра',
+    purpose: 'Варка полевого кулеша и сладкой тыквенно-пшённой каши на молоке',
+    productShapeRu: 'Мелкие круглые шарики ярко-жёлтого цвета',
+    grainGradeRu: 'Высший сорт, шлифованное',
+    cookingTimeMin: '20–25 мин',
+    glutenFree: true,
+    proteinPer100g: 11.5,
+    culinaryEquivalentId: 'millet_yellow'
+  },
+  semolina: {
+    varietyRu: 'Манная крупа пшеничная (марка Т)',
+    ingredients: 'Крупка из центральной части эндосперма твёрдой пшеницы (0.25–0.75 мм)',
+    preparationMethod: 'Сортовой помол пшеницы с ситовым отбором крупки',
+    purpose: 'Варка молочной манной каши, манника, запеканок, клёцек и панировки',
+    productShapeRu: 'Сверхмелкая однородная светло-кремовая крупка',
+    grainGradeRu: 'Марка Т (из твёрдой пшеницы)',
+    cookingTimeMin: '3–5 мин',
+    proteinPer100g: 10.3,
+    culinaryEquivalentId: 'semolina_wheat'
+  },
+  bulgur: {
+    varietyRu: 'Булгур золотистый крупный',
+    ingredients: 'Пропаренное, высушенное и дроблёное зерно твёрдой пшеницы (дурум)',
+    preparationMethod: 'Пропаривание цельного зерна, солнечная сушка и калиброванное дробление',
+    purpose: 'Восточный плов из булгура, салат табуле, фаршированные перцы и гарниры',
+    productShapeRu: 'Крупные янтарные дроблёные гранулы (Пилавлик)',
+    grainGradeRu: 'Крупный для плова (Pilavlik)',
+    cookingTimeMin: '12–15 мин',
+    proteinPer100g: 12.3,
+    culinaryEquivalentId: 'bulgur_golden'
+  },
+  couscous: {
+    varietyRu: 'Кускус марокканский пшеничный',
+    ingredients: 'Семолина (крупка твёрдой пшеницы), фильтрованная вода',
+    preparationMethod: 'Увлажнение семолины, скатывание в мелкие шарики, пропаривание и сушка',
+    purpose: 'Мгновенный рассыпчатый гарнир к мясу, овощам и тажинам (заваривается кипятком)',
+    productShapeRu: 'Мелкие равномерные золотистые шарики (Ø 1.2 мм)',
+    grainGradeRu: 'Средний калибр (Medium), быстрого приготовления',
+    cookingTimeMin: '5 мин (запаривание кипятком)',
+    proteinPer100g: 12.8,
+    culinaryEquivalentId: 'couscous_moroccan'
+  },
+  corn_grits: {
+    varietyRu: 'Кукурузная крупа шлифованная (Полента)',
+    ingredients: 'Дроблёный эндосперм спелых зёрен жёлтой кремнистой кукурузы',
+    preparationMethod: 'Отделение зародыша и оболочки, дробление и ситовая шлифовка',
+    purpose: 'Итальянская полента с сыром, молдавская мамалыга, каша банош и хрустящая панировка',
+    productShapeRu: 'Ярко-жёлтые шлифованные крупинки среднего помола',
+    grainGradeRu: 'Шлифованная №4, без глютена',
+    cookingTimeMin: '15–20 мин',
+    glutenFree: true,
+    proteinPer100g: 8.3,
+    culinaryEquivalentId: 'corn_grits_polenta'
+  },
+  quinoa: {
+    varietyRu: 'Киноа триколор отборная',
+    ingredients: 'Семена высокогорной псевдозлаковой культуры киноа (белая, красная, чёрная)',
+    preparationMethod: 'Промывка от природных сапонинов, сушка и купажирование трёх сортов',
+    purpose: 'Белковые гарниры, боулы, тёплые салаты и диетические каши',
+    productShapeRu: 'Крошечные плоские диски-семена с белым «хвостиком» при варке',
+    grainGradeRu: 'Премиум Триколор, без глютена',
+    cookingTimeMin: '15 мин',
+    glutenFree: true,
+    proteinPer100g: 14.1,
+    culinaryEquivalentId: 'quinoa_white_tricolor'
+  },
+  peas_dry: {
+    varietyRu: 'Горох колотый шлифованный жёлтый',
+    ingredients: 'Очищенные сушёные семядоли спелого посевного гороха',
+    preparationMethod: 'Шелушение кожуры, скалывание на половинки и полировка',
+    purpose: 'Наваристый гороховый суп с копчёностями и густая гороховая каша-пюре',
+    productShapeRu: 'Колотые гладкие полусферы жёлтого цвета',
+    grainGradeRu: 'Высший сорт, колотый шлифованный',
+    cookingTimeMin: '40–50 мин',
+    glutenFree: true,
+    proteinPer100g: 23.0,
+    culinaryEquivalentId: 'peas_split_yellow'
+  },
+  beans_dry: {
+    varietyRu: 'Фасоль зерновая сухая',
+    ingredients: 'Зрелые высушенные бобы пищевой фасоли (Phaseolus vulgaris)',
+    preparationMethod: 'Обмолот стручков, сушка и калибровка отборных бобов',
+    purpose: 'Борщ с фасолью, лобио, чили кон карне, рагу и белковые салаты',
+    productShapeRu: 'Крупные гладкие почковидные бобы',
+    grainGradeRu: 'Отборная калиброванная, без глютена',
+    cookingTimeMin: '60–75 мин (после замачивания)',
+    glutenFree: true,
+    proteinPer100g: 21.6,
+    culinaryEquivalentId: 'beans_red_kidney'
+  },
+  lentils: {
+    varietyRu: 'Чечевица пищевая отборная',
+    ingredients: 'Плоские сушёные семена чечевицы пищевой',
+    preparationMethod: 'Очистка, калибровка и бережная шлифовка',
+    purpose: 'Густые чечевичные супы-пюре, индийский дал и сытные гарниры',
+    productShapeRu: 'Плоские линзовидные зёрна',
+    grainGradeRu: 'Отборная, богата белком и железом',
+    cookingTimeMin: '15–25 мин',
+    glutenFree: true,
+    proteinPer100g: 24.2,
+    culinaryEquivalentId: 'lentils_red_dry'
+  },
+  chickpeas: {
+    varietyRu: 'Нут крупный турецкий (Гарбанзо)',
+    ingredients: 'Крупные зёрна бараньего гороха (Cicer arietinum)',
+    preparationMethod: 'Солнечная сушка и калибровка крупных зёрен (8–9 мм)',
+    purpose: 'Узбекский плов, шурпа, домашний хумус с тахини и фалафель',
+    productShapeRu: 'Крупные округлые бугристые зёрна с характерным «носиком»',
+    grainGradeRu: 'Крупнокалиберный (8–9 мм), без глютена',
+    cookingTimeMin: '60–80 мин (после замачивания)',
+    glutenFree: true,
+    proteinPer100g: 19.3,
+    culinaryEquivalentId: 'chickpeas_garbanzo_dry'
+  },
+  mung_beans: {
+    varietyRu: 'Маш зелёный отборный (бобы мунг)',
+    ingredients: 'Цельные мелкие семена золотистой фасоли (Vigna radiata)',
+    preparationMethod: 'Обмолот, очистка и естественная сушка бобов',
+    purpose: 'Среднеазиатский суп машхурда, плов машкичири, проращивание и овощные карри',
+    productShapeRu: 'Мелкие глянцевые бочонки насыщенного зелёного цвета',
+    grainGradeRu: 'Отборный цельный, без глютена',
+    cookingTimeMin: '30–35 мин (без замачивания)',
+    glutenFree: true,
+    proteinPer100g: 23.8,
+    culinaryEquivalentId: 'mung_beans_green'
+  },
+  pasta: {
+    varietyRu: 'Макаронные изделия из твёрдой пшеницы',
+    ingredients: 'Мука из твёрдых сортов пшеницы (дурум), очищенная питьевая вода',
+    preparationMethod: 'Замес крутого пресного теста, экструзия через матрицы и низкотемпературная сушка',
+    purpose: 'Варка гарниров аль денте, пасты с соусами, запеканок и домашних супов',
+    productShapeRu: 'Классическая формованная паста',
+    pastaShapeId: 'penne',
+    grainGradeRu: 'Группа А, высший сорт (дурум)',
+    surfaceTextureRu: 'Плотная упругая, не разваривается',
+    cookingTimeMin: '8–10 мин',
+    proteinPer100g: 13.0,
+    culinaryEquivalentId: 'pasta_penne_rigate'
   },
   spice_dry: {
     varietyRu: 'Молотая пряность и сушёные травы',
@@ -1977,124 +2509,34 @@ export const LEGACY_LIQUID_TO_GENERIC_MAP: Record<string, { liquidId: LiquidId; 
       culinaryEquivalentId: 'dye_lycopene'
     }
   },
-  grain_wheat: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Пшеница цельнозерновая отборная',
-      ingredients: 'Цельное очищенное зерно яровой и озимой пшеницы твёрдых и мягких сортов',
-      preparationMethod: 'Обмолот колосьев, отвеивание на ветру и калибровка на решётах',
-      purpose: 'Помол в домашнюю муку, проращивание, варка сытной кутьи и пшеничной каши',
-      culinaryEquivalentId: 'grain_wheat'
-    }
-  },
-  grain_rye: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Рожь озимая цельнозерновая',
-      ingredients: 'Продолговатое зерно северной озимой ржи (Secale cereale)',
-      preparationMethod: 'Сушка в зерносушилке и очистка от половы',
-      purpose: 'Помол ржаной муки для чёрного хлеба, приготовление солода и хлебного кваса',
-      culinaryEquivalentId: 'grain_rye'
-    }
-  },
-  grain_oats: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Овсяные хлопья «Геркулес»',
-      ingredients: 'Цельное пропаренное и плющеное зерно голозёрного овса',
-      preparationMethod: 'Пропаривание овсяной крупы, плющение гладкими вальцами и подсушивание',
-      purpose: 'Быстрая варка питательной утренней овсяной каши на молоке или воде, выпечка печенья',
-      culinaryEquivalentId: 'grain_oats'
-    }
-  },
-  rice: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Рис белый шлифованный (Длиннозёрный / Круглозёрный)',
-      ingredients: 'Очищенное и отшлифованное зерно посевного риса высшего сорта',
-      preparationMethod: 'Шелушение рисовой шелухи и бережная жемчужная шлифовка зерна',
-      purpose: 'Приготовление рассыпчатого плова, гарниров, голубцов, тефтелей и молочной рисовой каши',
-      culinaryEquivalentId: 'rice'
-    }
-  },
-  buckwheat: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Гречневая крупа ядрица обжаренная (Высший сорт)',
-      ingredients: 'Цельное трёхгранное ядро плодов гречихи посевной',
-      preparationMethod: 'Калибровка, обработка паром под давлением и золотистая обжарка для орехового аромата',
-      purpose: 'Варка душистой рассыпчатой гречневой каши с маслом, тушёнкой или белыми грибами',
-      culinaryEquivalentId: 'buckwheat'
-    }
-  },
   barley: {
-    liquidId: 'grain',
+    liquidId: 'barley_pearl',
     attributes: {
       varietyRu: 'Перловая ячменная крупа шлифованная',
       ingredients: 'Цельное зерно ячменя, очищенное от цветочных плёнок и отшлифованное до гладкости жемчуга',
       preparationMethod: 'Шелушение и многократная круглая шлифовка ячменного ядра',
       purpose: 'Варка классического рассольника, грибных супов и сытной армейской перловой каши с тушёнкой',
-      culinaryEquivalentId: 'barley'
-    }
-  },
-  millet: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Пшено шлифованное золотистое',
-      ingredients: 'Очищенные от оболочек ярко-жёлтые зёрна культурного проса',
-      preparationMethod: 'Обрушивание колосковых плёнок проса и полировка ядра',
-      purpose: 'Варка полевой кулеша-похлёбки с салом и сладкой тыквенно-пшённой молочной каши',
-      culinaryEquivalentId: 'millet'
-    }
-  },
-  semolina: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Манная крупа пшеничная (марка МТ)',
-      ingredients: 'Крупка из центральной части эндосперма пшеничного зерна (размер частиц 0.25–0.75 мм)',
-      preparationMethod: 'Сортовой помол пшеницы с отбором чистой светлой крупки на ситах',
-      purpose: 'Варка нежной молочной манной каши, выпечка манника, запеканок и панировка котлет',
-      culinaryEquivalentId: 'semolina'
+      culinaryEquivalentId: 'barley_pearl'
     }
   },
   peas: {
-    liquidId: 'grain',
+    liquidId: 'peas_dry',
     attributes: {
       varietyRu: 'Горох колотый лущёный жёлтый',
       ingredients: 'Сушёные очищенные семядоли спелого посевного гороха (100% растительный белок)',
       preparationMethod: 'Сушка гороха, скалывание семенной кожуры и разделение на половинки',
       purpose: 'Варка наваристого горохового супа с копчёностями и густой гороховой каши',
-      culinaryEquivalentId: 'peas'
+      culinaryEquivalentId: 'peas_split_yellow'
     }
   },
   beans: {
-    liquidId: 'grain',
+    liquidId: 'beans_dry',
     attributes: {
       varietyRu: 'Фасоль зерновая сухая (Красная Рубиновая)',
       ingredients: 'Крупные сухие семена кустовой красной фасоли',
       preparationMethod: 'Обмолот вызревших стручков, естественная сушка и ручная переборка',
       purpose: 'Варка сытного борща, лобио с орехами и чесноком, рагу и мясных похлёбок',
-      culinaryEquivalentId: 'beans'
-    }
-  },
-  lentils: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Чечевица красная и зелёная тарелочная',
-      ingredients: 'Плоские сушёные семена чечевицы пищевой (богаты белком и железом)',
-      preparationMethod: 'Очистка, калибровка и бережная шлифовка без потери зародыша',
-      purpose: 'Быстрая варка густых чечевичных супов-пюре, пряных похлёбок и гарниров без замачивания',
-      culinaryEquivalentId: 'lentils'
-    }
-  },
-  chickpeas: {
-    liquidId: 'grain',
-    attributes: {
-      varietyRu: 'Нут крупный сухой (Турецкий горох)',
-      ingredients: 'Крупные ребристые зёрна среднеазиатского нута с ореховым привкусом',
-      preparationMethod: 'Сушка на солнце и калибровка крупных зёрен',
-      purpose: 'Приготовление настоящего узбекского плова, шурпы, хумуса и фалафеля',
-      culinaryEquivalentId: 'chickpeas'
+      culinaryEquivalentId: 'beans_red_kidney'
     }
   },
   black_pepper_ground: {
@@ -2346,6 +2788,7 @@ export function normalizeFluidStorageState(
     else if (rawId.startsWith('sauce_')) storage.liquidId = 'sauce';
     else if (rawId.startsWith('wine_')) storage.liquidId = 'wine';
     else if (rawId.startsWith('grain_')) storage.liquidId = 'grain';
+    else if (rawId.startsWith('pasta_')) storage.liquidId = 'pasta';
     else if (rawId.startsWith('dye_')) storage.liquidId = 'food_dye';
     else storage.liquidId = 'water';
   }
@@ -2363,6 +2806,13 @@ export function normalizeFluidStorageState(
       if (!storage.attributes.ingredients && defAttrs.ingredients) storage.attributes.ingredients = defAttrs.ingredients;
       if (!storage.attributes.preparationMethod && defAttrs.preparationMethod) storage.attributes.preparationMethod = defAttrs.preparationMethod;
       if (!storage.attributes.purpose && defAttrs.purpose) storage.attributes.purpose = defAttrs.purpose;
+      if (!storage.attributes.productShapeRu && defAttrs.productShapeRu) storage.attributes.productShapeRu = defAttrs.productShapeRu;
+      if (!storage.attributes.pastaShapeId && defAttrs.pastaShapeId) storage.attributes.pastaShapeId = defAttrs.pastaShapeId;
+      if (!storage.attributes.grainGradeRu && defAttrs.grainGradeRu) storage.attributes.grainGradeRu = defAttrs.grainGradeRu;
+      if (!storage.attributes.surfaceTextureRu && defAttrs.surfaceTextureRu) storage.attributes.surfaceTextureRu = defAttrs.surfaceTextureRu;
+      if (!storage.attributes.cookingTimeMin && defAttrs.cookingTimeMin) storage.attributes.cookingTimeMin = defAttrs.cookingTimeMin;
+      if (storage.attributes.glutenFree === undefined && defAttrs.glutenFree !== undefined) storage.attributes.glutenFree = defAttrs.glutenFree;
+      if (storage.attributes.proteinPer100g === undefined && defAttrs.proteinPer100g !== undefined) storage.attributes.proteinPer100g = defAttrs.proteinPer100g;
       if (!storage.attributes.culinaryEquivalentId && defAttrs.culinaryEquivalentId) storage.attributes.culinaryEquivalentId = defAttrs.culinaryEquivalentId;
       if (!storage.attributes.medicalEffectId && defAttrs.medicalEffectId) storage.attributes.medicalEffectId = defAttrs.medicalEffectId;
     }
@@ -2396,6 +2846,7 @@ export interface ContainerDefConfig {
   requiresOpening?: boolean;
   openedVariantId?: string;
   isSealedByDefault?: boolean;
+  isGranularOnly?: boolean;
   defaultVisuals?: ContainerVisualAttributes;
 }
 
@@ -3063,6 +3514,74 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     descriptionEn: 'Deep ceramic soup bowl for hot broths, stews, and soups.',
     defaultLiquidId: null,
     defaultAmountMl: 0
+  },
+  grain_pack_pouch: {
+    itemId: 'grain_pack_pouch',
+    name: 'Grocery Grain Pouch (1.0L)',
+    nameRu: 'Упаковка для круп (пакет)',
+    maxMl: 1000,
+    emptyWeightKg: 0.012,
+    emptyVolumeL: 1.05,
+    category: 'food',
+    icon: 'Package',
+    descriptionRu: 'Заводской стоячий бакалейный пакет с прозрачным окном и герметичным швом для круп, зерновых культур и бобовых.',
+    descriptionEn: 'Retail stand-up grocery pouch with viewing window for grains, groats, and legumes.',
+    defaultLiquidId: null,
+    defaultAmountMl: 0,
+    requiresOpening: true,
+    isSealedByDefault: true,
+    isGranularOnly: true
+  },
+  grain_pack_box: {
+    itemId: 'grain_pack_box',
+    name: 'Grocery Grain Carton Box (0.8L)',
+    nameRu: 'Пачка для круп (картон)',
+    maxMl: 800,
+    emptyWeightKg: 0.032,
+    emptyVolumeL: 0.85,
+    category: 'food',
+    icon: 'Package',
+    descriptionRu: 'Плотная картонная бакалейная пачка с прозрачным окошком и клапаном для дозирования хлопьев, круп и гнёзд пасты.',
+    descriptionEn: 'Cardboard grocery carton with viewing window and pour spout for oats, grains, and pasta nests.',
+    defaultLiquidId: null,
+    defaultAmountMl: 0,
+    requiresOpening: true,
+    isSealedByDefault: true,
+    isGranularOnly: true
+  },
+  pasta_pack_bag: {
+    itemId: 'pasta_pack_bag',
+    name: 'Pasta Window Bag (0.9L)',
+    nameRu: 'Упаковка для макарон (пакет)',
+    maxMl: 900,
+    emptyWeightKg: 0.014,
+    emptyVolumeL: 0.95,
+    category: 'food',
+    icon: 'Package',
+    descriptionRu: 'Прочный заводской полипропиленовый пакет с панорамным окном для фигурных и коротких макаронных изделий.',
+    descriptionEn: 'Factory polypropylene bag with panoramic window for shaped and short pasta.',
+    defaultLiquidId: null,
+    defaultAmountMl: 0,
+    requiresOpening: true,
+    isSealedByDefault: true,
+    isGranularOnly: true
+  },
+  pasta_pack_long: {
+    itemId: 'pasta_pack_long',
+    name: 'Long Pasta Sleeve Pack (0.85L)',
+    nameRu: 'Упаковка для спагетти и лапши',
+    maxMl: 850,
+    emptyWeightKg: 0.015,
+    emptyVolumeL: 0.9,
+    category: 'food',
+    icon: 'Package',
+    descriptionRu: 'Вытянутая заводская упаковка с длинным прозрачным окном для спагетти, лапши соба и длинных макарон.',
+    descriptionEn: 'Elongated factory sleeve pack with clear vertical window for spaghetti and long noodles.',
+    defaultLiquidId: null,
+    defaultAmountMl: 0,
+    requiresOpening: true,
+    isSealedByDefault: true,
+    isGranularOnly: true
   }
 };
 
@@ -3106,7 +3625,10 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
   }
 
   const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
-  const substanceLabel = liquid.nameRu;
+  const substanceLabel =
+    storage.liquidId === 'pasta' && storage.attributes?.varietyRu
+      ? storage.attributes.varietyRu
+      : liquid.nameRu;
 
   function formatLiters(ml: number): string {
     const liters = ml / 1000;
@@ -3114,9 +3636,16 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
     return parseFloat(liters.toFixed(2)).toString();
   }
 
-  const volLabel = storage.maxMl >= 1000
-    ? `${formatLiters(storage.currentMl)}/${formatLiters(storage.maxMl)} л`
-    : `${Math.round(storage.currentMl)}/${Math.round(storage.maxMl)} мл`;
+  let volLabel: string;
+  if (liquid.isGranular) {
+    const curGrams = Math.round((storage.currentMl / 1000) * (liquid.densityKgPerL || 1.0) * 1000);
+    const maxGrams = Math.round((storage.maxMl / 1000) * (liquid.densityKgPerL || 1.0) * 1000);
+    volLabel = `${curGrams}/${maxGrams} г`;
+  } else {
+    volLabel = storage.maxMl >= 1000
+      ? `${formatLiters(storage.currentMl)}/${formatLiters(storage.maxMl)} л`
+      : `${Math.round(storage.currentMl)}/${Math.round(storage.maxMl)} мл`;
+  }
 
   return `${cleanBaseName}${openedSuffix} [${substanceLabel}, ${volLabel}]`;
 }
@@ -3663,9 +4192,11 @@ export function syncItemContainerProperties(item: InventoryItem): void {
       const openBadge = isOpened
         ? ' (Тара вскрыта)'
         : (cfg?.requiresOpening ? ' (Закрыто — нажмите [E] или Вскрыть, чтобы открыть тару)' : '');
-      const volText = storage.maxMl >= 1000
-        ? `${(storage.currentMl / 1000).toFixed(2)} л`
-        : `${Math.round(storage.currentMl)} мл`;
+      const volText = liquid?.isGranular
+        ? `${Math.round((storage.currentMl / 1000) * (liquid.densityKgPerL || 1.0) * 1000)} г`
+        : (storage.maxMl >= 1000
+          ? `${(storage.currentMl / 1000).toFixed(2)} л`
+          : `${Math.round(storage.currentMl)} мл`);
       const rawIng = a.ingredients ?? a.sourceIngredients;
       const ingredientsText = Array.isArray(rawIng)
         ? rawIng.join(', ')
@@ -3673,8 +4204,12 @@ export function syncItemContainerProperties(item: InventoryItem): void {
       item.descriptionRu =
         `Унифицированная тара: ${cfg?.nameRu || storage.baseItemNameRu}${openBadge}.${visBadge} ` +
         `Содержимое: ${liquid?.nameRu || storage.liquidId}${a.varietyRu ? ` (${a.varietyRu})` : ''} (${volText}). ` +
+        (a.productShapeRu ? `Форма: ${a.productShapeRu}. ` : '') +
+        (a.grainGradeRu ? `Сорт/категория: ${a.grainGradeRu}. ` : '') +
         `Из чего: ${ingredientsText}. ` +
-        (a.preparationMethod ? `Способ готовки: ${a.preparationMethod}. ` : '') +
+        (a.surfaceTextureRu ? `Текстура: ${a.surfaceTextureRu}. ` : '') +
+        (a.cookingTimeMin ? `Время варки: ${a.cookingTimeMin}. ` : '') +
+        (a.preparationMethod ? `Способ производства: ${a.preparationMethod}. ` : '') +
         (a.purpose ? `Назначение: ${a.purpose}.` : '');
 
       // Sync identical unified attributes structure to item.attributes

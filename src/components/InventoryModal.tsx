@@ -1718,6 +1718,12 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       const liq = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
                       const hasFluid = Boolean(fs?.liquidId && fs.currentMl > 0);
                       const fluidUnit = liq?.isGranular ? 'г' : 'мл';
+                      const fluidCurrentDisplay = fs
+                        ? Math.round(liq?.isGranular ? fs.currentMl * (liq.densityKgPerL || 1) : fs.currentMl)
+                        : 0;
+                      const fluidMaxDisplay = fs
+                        ? Math.round(liq?.isGranular ? fs.maxMl * (liq.densityKgPerL || 1) : fs.maxMl)
+                        : 0;
 
                       const innerFirst = it.contents && it.contents.length > 0 ? it.contents[0] : undefined;
                       const innerAttrs = innerFirst ? getUnifiedItemAttributes(innerFirst) : undefined;
@@ -1735,6 +1741,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         : rawIngredients;
 
                       const shapeLabel =
+                        uAttrs.productShapeRu ||
                         vis?.shapeNameRu ||
                         it.packagingShapeNameRu ||
                         (it.packagingShape
@@ -1755,7 +1762,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
                       const stateBadge =
                         hasFluid && fs
-                          ? (uAttrs.stateNameRu || `${Math.round(fs.currentMl)} / ${fs.maxMl} ${fluidUnit}`)
+                          ? (uAttrs.stateNameRu || `${fluidCurrentDisplay} / ${fluidMaxDisplay} ${fluidUnit}`)
                           : uAttrs.stateNameRu;
 
                       const hasAnySpec = Boolean(
@@ -1770,6 +1777,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         detailSource.fillingRu ||
                         detailSource.outerMaterialRu ||
                         detailSource.innerMaterialRu ||
+                        uAttrs.grainGradeRu ||
+                        uAttrs.surfaceTextureRu ||
+                        uAttrs.cookingTimeMin ||
+                        uAttrs.proteinPer100g !== undefined ||
+                        uAttrs.glutenFree !== undefined ||
                         ingText ||
                         uAttrs.preparationMethod ||
                         uAttrs.purpose ||
@@ -1827,7 +1839,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                 <div className="gu-kv">
                                   <span className="gu-kv-k">Количество</span>
                                   <span className="gu-kv-v">
-                                    {Math.round(fs.currentMl)} / {fs.maxMl} {fluidUnit}
+                                    {fluidCurrentDisplay} / {fluidMaxDisplay} {fluidUnit}
                                   </span>
                                 </div>
                               </>
@@ -1841,9 +1853,39 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             )}
 
                             {shapeLabel && (
-                              <div className="gu-kv">
+                              <div className="gu-kv" style={shapeLabel.length > 22 ? { gridColumn: '1 / -1' } : undefined}>
                                 <span className="gu-kv-k">Форма</span>
-                                <span className="gu-kv-v">{shapeLabel}</span>
+                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{shapeLabel}</span>
+                              </div>
+                            )}
+                            {uAttrs.grainGradeRu && (
+                              <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
+                                <span className="gu-kv-k">Сорт / Группа</span>
+                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.grainGradeRu}</span>
+                              </div>
+                            )}
+                            {uAttrs.cookingTimeMin && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Варка</span>
+                                <span className="gu-kv-v">{uAttrs.cookingTimeMin}</span>
+                              </div>
+                            )}
+                            {uAttrs.surfaceTextureRu && (
+                              <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
+                                <span className="gu-kv-k">Поверхность / Текстура</span>
+                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.surfaceTextureRu}</span>
+                              </div>
+                            )}
+                            {uAttrs.proteinPer100g !== undefined && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Белок (100г)</span>
+                                <span className="gu-kv-v">{uAttrs.proteinPer100g} г</span>
+                              </div>
+                            )}
+                            {uAttrs.glutenFree !== undefined && (
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Глютен</span>
+                                <span className="gu-kv-v">{uAttrs.glutenFree ? 'Без глютена' : 'Содержит глютен'}</span>
                               </div>
                             )}
                             {sizeLabel && (

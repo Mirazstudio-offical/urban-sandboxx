@@ -164,9 +164,13 @@ export const NUTRIENT_REFERENCE_PER_100G: Record<string, FoodNutrientRef> = {
   bell_pepper: { kcal: 31, p: 1.0, f: 0.3, c: 6.0, sugar: 4.2, fiber: 2.1, salt: 0.01, water: 92.0, type: 'veggie' },
   mushroom: { kcal: 22, p: 3.1, f: 0.3, c: 3.3, sugar: 2.0, fiber: 1.0, salt: 0.01, water: 92.0, type: 'veggie' },
 
-  // Grains, Pasta & Bakery
+  // Grains, Legumes, Pasta & Bakery
   rice: { kcal: 130, p: 2.7, f: 0.3, c: 28.0, sugar: 0.1, fiber: 0.4, salt: 0.01, water: 68.0, type: 'grain' },
-  pasta: { kcal: 158, p: 5.8, f: 0.9, c: 31.0, sugar: 0.6, fiber: 1.8, salt: 0.02, water: 61.0, type: 'grain' },
+  buckwheat: { kcal: 335, p: 12.6, f: 3.3, c: 64.0, sugar: 0.4, fiber: 10.0, salt: 0.01, water: 12.0, type: 'grain' },
+  oats: { kcal: 368, p: 12.5, f: 6.2, c: 61.0, sugar: 1.0, fiber: 8.5, salt: 0.01, water: 11.0, type: 'grain' },
+  quinoa: { kcal: 368, p: 14.1, f: 6.1, c: 64.2, sugar: 1.8, fiber: 7.0, salt: 0.01, water: 13.0, type: 'grain' },
+  legume: { kcal: 340, p: 22.5, f: 1.8, c: 58.0, sugar: 2.4, fiber: 12.5, salt: 0.02, water: 11.0, type: 'grain' },
+  pasta: { kcal: 350, p: 13.0, f: 1.5, c: 71.0, sugar: 2.5, fiber: 3.2, salt: 0.02, water: 11.0, type: 'grain' },
   bread: { kcal: 265, p: 9.0, f: 3.2, c: 49.0, sugar: 5.0, fiber: 2.7, salt: 1.2, water: 36.0, type: 'grain' },
   flour: { kcal: 364, p: 10.3, f: 1.0, c: 76.0, sugar: 0.3, fiber: 2.7, salt: 0.01, water: 11.0, type: 'grain' },
 
@@ -236,8 +240,20 @@ export function inferNutrientsFromItem(item: InventoryItem, massGrams?: number):
   else if (id.includes('beet') || id.includes('свекл')) ref = NUTRIENT_REFERENCE_PER_100G.beetroot;
   else if (id.includes('pepper') || id.includes('перец')) ref = NUTRIENT_REFERENCE_PER_100G.bell_pepper;
   else if (id.includes('mushroom') || id.includes('гриб')) ref = NUTRIENT_REFERENCE_PER_100G.mushroom;
-  else if (id.includes('rice') || id.includes('рис')) ref = NUTRIENT_REFERENCE_PER_100G.rice;
-  else if (id.includes('pasta') || id.includes('макарон')) ref = NUTRIENT_REFERENCE_PER_100G.pasta;
+  else if (id.includes('rice') || id.includes('рис') || liqId === 'rice') ref = NUTRIENT_REFERENCE_PER_100G.rice;
+  else if (id.includes('buckwheat') || id.includes('греч') || liqId === 'buckwheat') ref = NUTRIENT_REFERENCE_PER_100G.buckwheat;
+  else if (id.includes('oat') || id.includes('овс') || liqId === 'grain_oats') ref = NUTRIENT_REFERENCE_PER_100G.oats;
+  else if (id.includes('quinoa') || id.includes('киноа') || liqId === 'quinoa') ref = NUTRIENT_REFERENCE_PER_100G.quinoa;
+  else if (
+    id.includes('peas') || id.includes('bean') || id.includes('lentil') || id.includes('chickpea') || id.includes('mung') ||
+    liqId === 'peas_dry' || liqId === 'beans_dry' || liqId === 'lentils' || liqId === 'chickpeas' || liqId === 'mung_beans'
+  ) ref = NUTRIENT_REFERENCE_PER_100G.legume;
+  else if (id.includes('pasta') || id.includes('макарон') || id.includes('spaghetti') || id.includes('soba') || liqId === 'pasta') ref = NUTRIENT_REFERENCE_PER_100G.pasta;
+  else if (
+    liqId === 'grain_wheat' || liqId === 'grain_rye' || liqId === 'grain_spelt' || liqId === 'barley_pearl' ||
+    liqId === 'barley_crushed' || liqId === 'millet' || liqId === 'semolina' || liqId === 'bulgur' ||
+    liqId === 'couscous' || liqId === 'corn_grits' || liqId === 'grain'
+  ) ref = NUTRIENT_REFERENCE_PER_100G.buckwheat;
   else if (id.includes('bread') || id.includes('хлеб') || id.includes('булк') || id.includes('батон')) ref = NUTRIENT_REFERENCE_PER_100G.bread;
   else if (id.includes('egg') || id.includes('яйц')) ref = NUTRIENT_REFERENCE_PER_100G.egg;
   else if (id.includes('cheese') || id.includes('сыр')) ref = NUTRIENT_REFERENCE_PER_100G.cheese;

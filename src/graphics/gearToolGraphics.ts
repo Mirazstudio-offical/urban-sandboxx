@@ -5584,6 +5584,509 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
+    case 'grain_pack_pouch':
+    case 'grain_pack_pouch_open':
+    case 'grain_pack_box':
+    case 'grain_pack_box_open':
+    case 'pasta_pack_bag':
+    case 'pasta_pack_bag_open':
+    case 'pasta_pack_long':
+    case 'pasta_pack_long_open': {
+      ctx.save();
+      const basePkgId = itemId.replace(/_open$/, '');
+      const fs = item?.fluidStorage;
+      const isOpen =
+        itemId.endsWith('_open') ||
+        Boolean(item?.isOpen) ||
+        Boolean(fs?.attributes?.isOpened);
+      const hasFill = Boolean(fs && fs.liquidId && fs.currentMl > 0);
+      const liqId = fs?.liquidId as LiquidId | undefined;
+      const liqDef = liqId ? LIQUID_REGISTRY[liqId] : undefined;
+      const fillFrac = hasFill && fs ? Math.min(1, Math.max(0.16, fs.currentMl / (fs.maxMl || 1000))) : 0;
+      const primaryColor = fs?.attributes?.customColor || liqDef?.color || '#d6d3d1';
+      const secondaryColor = fs?.attributes?.secondaryColor;
+      const pastaShape = fs?.attributes?.pastaShapeId;
+      const isDarkContent = primaryColor === '#1e293b' || primaryColor === '#27272a' || primaryColor === '#7f1d1d';
+
+      // Choose authentic grocery retail accent color based on product category
+      const getRetailBandColor = (): string => {
+        if (!hasFill) {
+          if (basePkgId === 'pasta_pack_bag' || basePkgId === 'pasta_pack_long') return '#1d4ed8';
+          if (basePkgId === 'grain_pack_box') return '#b45309';
+          return '#15803d';
+        }
+        if (liqId === 'pasta') {
+          if (fs?.attributes?.glutenFree) return '#059669';
+          if (primaryColor === '#1e293b') return '#0f172a';
+          if (primaryColor === '#8d7055') return '#57534e';
+          if (primaryColor === '#a16207') return '#92400e';
+          return '#1d4ed8';
+        }
+        if (liqId === 'buckwheat') return '#78350f';
+        if (liqId === 'rice') return primaryColor === '#27272a' ? '#334155' : '#0284c7';
+        if (liqId === 'lentils' || liqId === 'peas_dry' || liqId === 'beans_dry' || liqId === 'chickpeas' || liqId === 'mung_beans') return '#c2410c';
+        if (liqId === 'quinoa' || liqId === 'grain_oats' || liqId === 'grain_spelt') return '#15803d';
+        return '#b45309';
+      };
+      const bandColor = getRetailBandColor();
+
+      // Helper to render realistic pasta or granular grains inside any clipped window region
+      const drawDryGoodsInsideWindow = (wx: number, wy: number, ww: number, wh: number) => {
+        if (!hasFill) {
+          // Subtle inner plastic/cardboard depth when empty
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
+          ctx.fillRect(wx, wy, ww, wh);
+          return;
+        }
+        const topY = wy + wh * (1 - fillFrac);
+
+        // Backdrop mound
+        ctx.fillStyle = isDarkContent ? '#0f172a' : 'rgba(120, 90, 40, 0.35)';
+        ctx.fillRect(wx, topY, ww, wy + wh - topY + 1);
+
+        if (liqId === 'pasta' && pastaShape === 'spaghetti') {
+          // Neat vertical bundle of spaghetti / soba strands
+          const strandCount = 13;
+          const step = ww / strandCount;
+          for (let i = 0; i < strandCount; i++) {
+            const sx = wx + (i + 0.5) * step;
+            ctx.strokeStyle = i % 2 === 0 ? primaryColor : (secondaryColor || primaryColor);
+            ctx.lineWidth = Math.max(0.45, step * 0.68);
+            ctx.beginPath();
+            ctx.moveTo(sx, topY);
+            ctx.lineTo(sx, wy + wh + 0.5);
+            ctx.stroke();
+
+            ctx.strokeStyle = isDarkContent ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.42)';
+            ctx.lineWidth = 0.22;
+            ctx.beginPath();
+            ctx.moveTo(sx - step * 0.16, topY);
+            ctx.lineTo(sx - step * 0.16, wy + wh);
+            ctx.stroke();
+          }
+          return;
+        }
+
+        if (liqId === 'pasta' && pastaShape === 'tagliatelle') {
+          // Coiled golden egg-pasta ribbon nests
+          const nests: Array<[number, number, number]> = [
+            [wx + ww * 0.30, wy + wh * 0.72, ww * 0.24],
+            [wx + ww * 0.70, wy + wh * 0.72, ww * 0.24],
+            [wx + ww * 0.50, wy + wh * 0.38, ww * 0.25]
+          ];
+          for (const [nx, ny, nr] of nests) {
+            if (ny + nr < topY) continue;
+            ctx.fillStyle = primaryColor;
+            ctx.beginPath();
+            ctx.ellipse(nx, ny, nr, nr * 0.76, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(120, 53, 15, 0.45)';
+            ctx.lineWidth = 0.35;
+            for (let r = nr * 0.32; r <= nr * 0.92; r += nr * 0.28) {
+              ctx.beginPath();
+              ctx.ellipse(nx, ny, r, r * 0.74, 0.2, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+          }
+          return;
+        }
+
+        if (liqId === 'pasta' && pastaShape) {
+          // Short-cut & shaped pasta scattered densely inside window
+          const cols = pastaShape === 'stelline' || pastaShape === 'orzo' ? 7 : 5;
+          const rows = pastaShape === 'stelline' || pastaShape === 'orzo' ? 6 : 4;
+          const cw = ww / cols;
+          const ch = wh / rows;
+          const tricolorPalette = secondaryColor ? [primaryColor, secondaryColor, '#ea580c'] : [primaryColor];
+
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const seed = r * 17 + c * 31 + 7;
+              const jx = ((seed % 7) - 3) * 0.18;
+              const jy = (((seed * 3) % 7) - 3) * 0.16;
+              const px = wx + (c + 0.5) * cw + jx;
+              const py = wy + (r + 0.5) * ch + jy;
+              if (py < topY - 0.3) continue;
+              const ang = ((seed * 47) % 360) * (Math.PI / 180);
+              const pieceColor = tricolorPalette[(r + c) % tricolorPalette.length];
+
+              ctx.save();
+              ctx.translate(px, py);
+              ctx.rotate(ang);
+              ctx.fillStyle = pieceColor;
+              ctx.strokeStyle = 'rgba(120, 53, 15, 0.42)';
+              ctx.lineWidth = 0.28;
+
+              if (pastaShape === 'penne' || pastaShape === 'rigatoni') {
+                const len = pastaShape === 'rigatoni' ? 2.4 : 2.6;
+                const rad = pastaShape === 'rigatoni' ? 0.95 : 0.65;
+                ctx.beginPath();
+                if (pastaShape === 'penne') {
+                  ctx.moveTo(-len * 0.5, -rad);
+                  ctx.lineTo(len * 0.35, -rad);
+                  ctx.lineTo(len * 0.5, rad);
+                  ctx.lineTo(-len * 0.35, rad);
+                } else {
+                  ctx.roundRect(-len * 0.5, -rad, len, rad * 2, 0.25);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                // Ridges
+                ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+                ctx.lineWidth = 0.2;
+                ctx.beginPath();
+                ctx.moveTo(-len * 0.35, 0);
+                ctx.lineTo(len * 0.35, 0);
+                ctx.stroke();
+              } else if (pastaShape === 'fusilli') {
+                // Twisted corkscrew spiral
+                ctx.strokeStyle = pieceColor;
+                ctx.lineWidth = 0.85;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(-1.3, 0);
+                ctx.bezierCurveTo(-0.7, -0.8, -0.2, 0.8, 0.3, -0.7);
+                ctx.bezierCurveTo(0.7, 0.7, 1.0, -0.5, 1.3, 0.1);
+                ctx.stroke();
+                ctx.strokeStyle = 'rgba(120, 53, 15, 0.35)';
+                ctx.lineWidth = 0.22;
+                ctx.stroke();
+              } else if (pastaShape === 'farfalle') {
+                // Bowtie shape
+                ctx.beginPath();
+                ctx.moveTo(-1.25, -0.85);
+                ctx.lineTo(0, -0.22);
+                ctx.lineTo(1.25, -0.85);
+                ctx.lineTo(1.25, 0.85);
+                ctx.lineTo(0, 0.22);
+                ctx.lineTo(-1.25, 0.85);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+              } else if (pastaShape === 'conchiglie') {
+                // Ribbed shell
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 1.2, 0.8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(120, 53, 15, 0.28)';
+                ctx.beginPath();
+                ctx.ellipse(0, 0.18, 0.78, 0.32, 0, 0, Math.PI * 2);
+                ctx.fill();
+              } else if (pastaShape === 'macaroni') {
+                // Curved elbow tube
+                ctx.strokeStyle = pieceColor;
+                ctx.lineWidth = 0.92;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.arc(0, 0.35, 1.0, Math.PI * 1.15, Math.PI * 1.85);
+                ctx.stroke();
+                ctx.strokeStyle = 'rgba(120, 53, 15, 0.32)';
+                ctx.lineWidth = 0.2;
+                ctx.stroke();
+              } else if (pastaShape === 'vermicelli') {
+                // Fine criss-cross soup threads
+                ctx.strokeStyle = pieceColor;
+                ctx.lineWidth = 0.35;
+                ctx.beginPath();
+                ctx.moveTo(-1.5, -0.35); ctx.lineTo(1.5, 0.35);
+                ctx.moveTo(-1.2, 0.45); ctx.lineTo(1.4, -0.4);
+                ctx.stroke();
+              } else if (pastaShape === 'orzo') {
+                // Rice-like oval
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 0.72, 0.32, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+              } else if (pastaShape === 'stelline') {
+                // Tiny 5-point star with center hole
+                ctx.beginPath();
+                for (let k = 0; k < 10; k++) {
+                  const rad = k % 2 === 0 ? 0.65 : 0.3;
+                  const a = (k * Math.PI) / 5;
+                  if (k === 0) ctx.moveTo(Math.cos(a) * rad, Math.sin(a) * rad);
+                  else ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = 'rgba(120, 53, 15, 0.45)';
+                ctx.beginPath();
+                ctx.arc(0, 0, 0.16, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              ctx.restore();
+            }
+          }
+          return;
+        }
+
+        // Granular crops, groats, cereals & dry legumes
+        ctx.fillStyle = primaryColor;
+        ctx.fillRect(wx, topY, ww, wy + wh - topY + 0.5);
+
+        const isLargeLegume = liqId === 'beans_dry' || liqId === 'chickpeas' || liqId === 'peas_dry';
+        const isFlake = liqId === 'grain_oats';
+        const isLongGrain = liqId === 'rice' || liqId === 'grain_wheat' || liqId === 'grain_rye' || liqId === 'grain_spelt';
+        const gCols = isLargeLegume ? 6 : isFlake ? 6 : 9;
+        const gRows = isLargeLegume ? 5 : isFlake ? 5 : 8;
+        const gW = ww / gCols;
+        const gH = wh / gRows;
+
+        for (let r = 0; r < gRows; r++) {
+          for (let c = 0; c < gCols; c++) {
+            const seed = r * 23 + c * 41 + 13;
+            const gx = wx + (c + 0.5) * gW + (((seed % 5) - 2) * 0.14);
+            const gy = wy + (r + 0.5) * gH + ((((seed * 3) % 5) - 2) * 0.14);
+            if (gy < topY) continue;
+
+            const useSecondary = secondaryColor && (seed % 4 === 0);
+            ctx.save();
+            ctx.translate(gx, gy);
+            ctx.rotate(((seed * 37) % 180) * (Math.PI / 180));
+
+            ctx.fillStyle = useSecondary ? secondaryColor! : primaryColor;
+            ctx.strokeStyle = isDarkContent ? 'rgba(255,255,255,0.22)' : 'rgba(60, 35, 10, 0.34)';
+            ctx.lineWidth = 0.24;
+
+            if (isLargeLegume) {
+              ctx.beginPath();
+              ctx.ellipse(0, 0, 0.85, 0.58, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+              // Specular highlight dot on glossy bean/pea
+              ctx.fillStyle = 'rgba(255,255,255,0.38)';
+              ctx.beginPath();
+              ctx.arc(-0.25, -0.15, 0.18, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (isFlake) {
+              ctx.beginPath();
+              ctx.ellipse(0, 0, 0.92, 0.52, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            } else if (isLongGrain) {
+              ctx.beginPath();
+              ctx.ellipse(0, 0, 0.68, 0.28, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            } else {
+              // Round/angular groats (buckwheat, millet, quinoa, lentils, bulgur, couscous, semolina)
+              const rad = liqId === 'semolina' || liqId === 'corn_grits' || liqId === 'couscous' ? 0.34 : 0.48;
+              ctx.beginPath();
+              ctx.arc(0, 0, rad, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+        }
+      };
+
+      if (basePkgId === 'pasta_pack_long') {
+        // Tall slender clear grocery sleeve for spaghetti / soba
+        drawShadow(ctx, 4.6, 2.0, 7.6, 0.22);
+        const w = 7.2;
+        const h = 15.2;
+        const left = -w / 2;
+        const top = -h / 2;
+
+        // Outer clear polypropylene sleeve
+        const sleeveGrad = ctx.createLinearGradient(left, top, left + w, top);
+        sleeveGrad.addColorStop(0.0, 'rgba(241, 245, 249, 0.72)');
+        sleeveGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.38)');
+        sleeveGrad.addColorStop(1.0, 'rgba(148, 163, 184, 0.68)');
+        ctx.fillStyle = sleeveGrad;
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.48;
+        ctx.beginPath();
+        ctx.roundRect(left, top + (isOpen ? 1.4 : 0.8), w, h - (isOpen ? 2.2 : 1.6), 0.7);
+        ctx.fill();
+        ctx.stroke();
+
+        // Full vertical viewing window showing long strands
+        drawFilmWindow(
+          ctx,
+          () => {
+            ctx.beginPath();
+            ctx.roundRect(left + 0.55, top + 1.4, w - 1.1, h - 2.6, 0.4);
+          },
+          () => drawDryGoodsInsideWindow(left + 0.55, top + 1.4, w - 1.1, h - 2.6),
+          'rgba(255, 255, 255, 0.55)',
+          '#1e293b'
+        );
+
+        // Top & bottom seals (or torn top if opened)
+        if (!isOpen) {
+          drawCrimpedSeal(ctx, left - 0.15, top, w + 0.3, 1.25, bandColor, true, 0.8);
+        } else {
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.ellipse(0, top + 1.5, w * 0.42, 0.65, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        drawCrimpedSeal(ctx, left - 0.15, top + h - 1.15, w + 0.3, 1.15, bandColor, true, 0.8);
+
+        // Center branded wrap-around sleeve label
+        drawStudioLabelPanel(ctx, left - 0.05, -2.6, w + 0.1, 4.9, {
+          paperColor: '#fffbeb',
+          bandColor,
+          accentColor: '#eab308',
+          inkColor: '#0f172a',
+          goldFoil: true,
+          hasBarcode: false,
+          emblem: 'crest',
+          cylindrical: true
+        });
+        drawMicroBarcode(ctx, -1.6, 0.9, 3.2, 0.95);
+      } else if (basePkgId === 'grain_pack_box') {
+        // Upright retail cardboard box with viewing window & pour flap
+        drawShadow(ctx, 6.2, 2.4, 7.2, 0.24);
+        const bw = 10.6;
+        const bh = 13.8;
+        const bx = -bw / 2;
+        const by = -bh / 2 + 0.2;
+
+        // Top open flap or sealed box lid
+        if (isOpen) {
+          ctx.fillStyle = '#e7d5b8';
+          ctx.strokeStyle = '#78350f';
+          ctx.lineWidth = 0.45;
+          ctx.beginPath();
+          ctx.moveTo(bx + 0.3, by);
+          ctx.lineTo(bx + 1.5, by - 2.1);
+          ctx.lineTo(bx + bw - 1.5, by - 2.1);
+          ctx.lineTo(bx + bw - 0.3, by);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(bx + 0.6, by - 0.35, bw - 1.2, 0.7);
+        }
+
+        // Main carton body
+        const boxGrad = ctx.createLinearGradient(bx, by, bx + bw, by);
+        boxGrad.addColorStop(0.0, '#f5ebdc');
+        boxGrad.addColorStop(0.76, '#efe1c6');
+        boxGrad.addColorStop(0.78, '#cbb694');
+        boxGrad.addColorStop(1.0, '#b09975');
+        ctx.fillStyle = boxGrad;
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bw, bh, 0.65);
+        ctx.fill();
+        ctx.stroke();
+
+        // Top branded header stripe
+        ctx.fillStyle = bandColor;
+        ctx.beginPath();
+        ctx.roundRect(bx + 0.25, by + 0.25, bw * 0.74, 3.4, [0.45, 0.1, 0, 0]);
+        ctx.fill();
+
+        // Gold foil hairline & wheat emblem on header
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(bx + 0.55, by + 3.1, bw * 0.68, 0.35);
+        ctx.fillStyle = '#fffbeb';
+        ctx.fillRect(bx + 1.1, by + 1.0, bw * 0.48, 0.65);
+        ctx.fillStyle = 'rgba(255,255,255,0.68)';
+        ctx.fillRect(bx + 1.1, by + 2.0, bw * 0.34, 0.45);
+
+        // Die-cut clear front viewing window showing grains/oats/quinoa/tagliatelle
+        const winX = bx + 0.9;
+        const winY = by + 4.3;
+        const winW = bw * 0.64;
+        const winH = 6.9;
+        drawFilmWindow(
+          ctx,
+          () => {
+            ctx.beginPath();
+            ctx.roundRect(winX, winY, winW, winH, 0.8);
+          },
+          () => drawDryGoodsInsideWindow(winX, winY, winW, winH),
+          'rgba(255, 255, 255, 0.62)',
+          '#44403c'
+        );
+
+        // Side panel detail & micro barcode at bottom
+        ctx.fillStyle = 'rgba(120, 53, 15, 0.18)';
+        ctx.fillRect(bx + bw * 0.79, by + 1.4, bw * 0.16, 4.5);
+        drawMicroBarcode(ctx, bx + 1.0, by + bh - 1.85, 3.5, 1.15);
+      } else {
+        // Retail pillow pouch (`grain_pack_pouch`) or pasta retail bag (`pasta_pack_bag`)
+        const isPastaBag = basePkgId === 'pasta_pack_bag';
+        drawShadow(ctx, 6.4, 2.5, 7.2, 0.22);
+        const pw = isPastaBag ? 11.4 : 10.8;
+        const ph = 14.2;
+        const px = -pw / 2;
+        const py = -ph / 2;
+
+        const bodyGrad = ctx.createLinearGradient(px, py, px + pw, py);
+        if (isPastaBag) {
+          bodyGrad.addColorStop(0.0, 'rgba(248, 250, 252, 0.82)');
+          bodyGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.48)');
+          bodyGrad.addColorStop(1.0, 'rgba(148, 163, 184, 0.72)');
+        } else {
+          bodyGrad.addColorStop(0.0, '#fffbeb');
+          bodyGrad.addColorStop(0.55, '#fef3c7');
+          bodyGrad.addColorStop(1.0, '#d6c3a5');
+        }
+        ctx.fillStyle = bodyGrad;
+        ctx.strokeStyle = isPastaBag ? '#64748b' : '#92400e';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.roundRect(px, py + (isOpen ? 1.5 : 0.9), pw, ph - (isOpen ? 2.4 : 1.8), 1.35);
+        ctx.fill();
+        ctx.stroke();
+
+        // Top & bottom crimped seals (or jagged open top)
+        if (!isOpen) {
+          drawCrimpedSeal(ctx, px + 0.1, py, pw - 0.2, 1.3, bandColor, true, 0.76);
+        } else {
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.ellipse(0, py + 1.65, pw * 0.41, 0.8, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        drawCrimpedSeal(ctx, px + 0.1, py + ph - 1.25, pw - 0.2, 1.25, bandColor, true, 0.76);
+
+        // Large transparent window showing grains or shaped pasta
+        const winX = px + 0.9;
+        const winY = isPastaBag ? py + 2.2 : py + 5.2;
+        const winW = pw - 1.8;
+        const winH = isPastaBag ? 9.6 : 6.9;
+
+        drawFilmWindow(
+          ctx,
+          () => {
+            ctx.beginPath();
+            ctx.roundRect(winX, winY, winW, winH, isPastaBag ? 1.1 : 1.8);
+          },
+          () => drawDryGoodsInsideWindow(winX, winY, winW, winH),
+          'rgba(255, 255, 255, 0.62)',
+          '#1e293b'
+        );
+
+        // Branded retail label band (upper header for grains, bold middle/top banner for pasta)
+        drawStudioLabelPanel(ctx, px + 0.5, isPastaBag ? py + 1.7 : py + 1.5, pw - 1.0, 3.3, {
+          paperColor: '#fffbeb',
+          bandColor,
+          accentColor: '#eab308',
+          inkColor: '#0f172a',
+          goldFoil: true,
+          hasBarcode: false,
+          emblem: isPastaBag ? 'crest' : 'leaf',
+          cylindrical: true
+        });
+
+        drawPouchCrinkles(ctx, px + 0.4, py + 1.6, pw - 0.8, ph - 3.2, isPastaBag ? 41 : 29, 0.22);
+        drawMicroBarcode(ctx, 1.1, py + ph - 2.65, 3.5, 1.1);
+      }
+
+      ctx.restore();
+      return true;
+    }
+
     default:
       return false;
   }

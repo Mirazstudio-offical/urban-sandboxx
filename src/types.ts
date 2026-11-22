@@ -2250,6 +2250,31 @@ export interface UnifiedAttributes {
   dishType?: string;
   cookingAttributes?: CookingAttributes;
   tasteNotes?: string[];
+  /** Форма зерна, хлопьев или макаронного изделия на русском языке */
+  productShapeRu?: string;
+  /** Идентификатор геометрической формы макаронных изделий для 2D-рендера в окне упаковки */
+  pastaShapeId?:
+    | 'spaghetti'
+    | 'penne'
+    | 'fusilli'
+    | 'farfalle'
+    | 'conchiglie'
+    | 'macaroni'
+    | 'vermicelli'
+    | 'tagliatelle'
+    | 'rigatoni'
+    | 'orzo'
+    | 'stelline';
+  /** Сорт, группа муки, категория зерна или класс помола */
+  grainGradeRu?: string;
+  /** Текстура поверхности и кулинарное поведение (рифлёная, бронзовая матрица, шлифованная и т.д.) */
+  surfaceTextureRu?: string;
+  /** Рекомендуемое время варки */
+  cookingTimeMin?: string;
+  /** Отсутствие глютена (безглютеновый продукт) */
+  glutenFree?: boolean;
+  /** Содержание белка на 100 г сухого продукта */
+  proteinPer100g?: number;
 }
 
 export interface CulinaryItemData {

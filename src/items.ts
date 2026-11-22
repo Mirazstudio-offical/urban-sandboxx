@@ -2474,6 +2474,64 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true
   },
 
+  // === DRY-GOODS PACKAGING CONTAINERS (УПАКОВКИ ДЛЯ КРУП, ЗЛАКОВ И МАКАРОННЫХ ИЗДЕЛИЙ) ===
+  grain_pack_pouch: {
+    itemId: 'grain_pack_pouch',
+    name: 'Grain Package Pouch (1L)',
+    nameRu: 'Пачка-пакет для круп (1 л)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Sealed grocery pillow-pouch with clear viewing window for grains, cereals, groats, and dry legumes.',
+    descriptionRu: 'Заводская пачка-пакет с прозрачным смотровым окошком и цветной этикеткой для фасовки круп, зерновых культур и бобовых. После вскрытия можно пересыпать и наполнять сыпучими продуктами.',
+    effects: {},
+    weight: 0.012,
+    volume: 0.14,
+    usable: true
+  },
+  grain_pack_box: {
+    itemId: 'grain_pack_box',
+    name: 'Grain Cardboard Box (0.8L)',
+    nameRu: 'Картонная пачка для круп (0.8 л)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Retail cardboard carton with viewing window and pour spout for oats, quinoa, wild rice, couscous, and pasta nests.',
+    descriptionRu: 'Плотная картонная пачка с окошком и отрывным носиком для хлопьев, киноа, кускуса, дикого риса и гнёзд тальятелле. Защищает сыпучие продукты от влаги и сминания.',
+    effects: {},
+    weight: 0.032,
+    volume: 0.18,
+    usable: true
+  },
+  pasta_pack_bag: {
+    itemId: 'pasta_pack_bag',
+    name: 'Pasta Retail Bag (0.9L)',
+    nameRu: 'Упаковка для макарон (0.9 л)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Crinkly clear polypropylene retail bag with branded label band for short-cut pasta (penne, fusilli, farfalle, shells, macaroni).',
+    descriptionRu: 'Прозрачная полипропиленовая упаковка с фирменной лентой-этикеткой для фигурных и коротких макаронных изделий (пенне, фузилли, фарфалле, ракушек, рожков, орзо, звёздочек).',
+    effects: {},
+    weight: 0.014,
+    volume: 0.16,
+    usable: true
+  },
+  pasta_pack_long: {
+    itemId: 'pasta_pack_long',
+    name: 'Long Pasta Pack (0.85L)',
+    nameRu: 'Упаковка для длинных макарон (0.85 л)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Elongated clear grocery sleeve pack designed for spaghetti, soba noodles, and other long pasta shapes.',
+    descriptionRu: 'Удлинённая герметичная пачка с прозрачным окном для длинных макаронных изделий — спагетти, цельнозерновой пасты и гречневой лапши соба.',
+    effects: {},
+    weight: 0.015,
+    volume: 0.17,
+    usable: true
+  },
+
   // === FACTORY WRAPPED PAPER PACKAGING (ЗАВОДСКАЯ БУМАЖНАЯ УПАКОВКА ДЛЯ МАСЛА, СЫРА И ПРОДУКТОВ) ===
   paper_packaging_mini: {
     itemId: 'paper_packaging_mini',
@@ -5079,6 +5137,14 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   package_bag: { containerId: 'package_bag', liquidId: null, amountMl: 0 },
   package_sachet: { containerId: 'package_sachet', liquidId: null, amountMl: 0 },
   package_sachet_open: { containerId: 'package_sachet', liquidId: null, amountMl: 0, isOpen: true },
+  grain_pack_pouch: { containerId: 'grain_pack_pouch', liquidId: null, amountMl: 0 },
+  grain_pack_pouch_open: { containerId: 'grain_pack_pouch', liquidId: null, amountMl: 0, isOpen: true },
+  grain_pack_box: { containerId: 'grain_pack_box', liquidId: null, amountMl: 0 },
+  grain_pack_box_open: { containerId: 'grain_pack_box', liquidId: null, amountMl: 0, isOpen: true },
+  pasta_pack_bag: { containerId: 'pasta_pack_bag', liquidId: null, amountMl: 0 },
+  pasta_pack_bag_open: { containerId: 'pasta_pack_bag', liquidId: null, amountMl: 0, isOpen: true },
+  pasta_pack_long: { containerId: 'pasta_pack_long', liquidId: null, amountMl: 0 },
+  pasta_pack_long_open: { containerId: 'pasta_pack_long', liquidId: null, amountMl: 0, isOpen: true },
   tetra_pack_1000_open: { containerId: 'tetra_pack_1000', liquidId: null, amountMl: 0, isOpen: true },
   tetra_pack_250_open: { containerId: 'tetra_pack_250', liquidId: null, amountMl: 0, isOpen: true },
   plastic_bag: { containerId: 'plastic_bag', liquidId: null, amountMl: 0 },
@@ -5426,7 +5492,10 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     (canonicalOrigId ? ITEM_CATALOG[canonicalOrigId] : undefined) ||
     ITEM_CATALOG[canonicalItemId] ||
     ITEM_CATALOG[item.itemId];
-  const prevAttrs: UnifiedAttributes = item.attributes ? { ...item.attributes } : {};
+  const prevAttrs: UnifiedAttributes = {
+    ...(item.fluidStorage?.attributes || {}),
+    ...(item.attributes || {})
+  };
   const defAttrs: UnifiedAttributes = catalogDef?.attributes ? { ...catalogDef.attributes } : {};
   const visuals: UnifiedVisualAttributes = {
     ...(defAttrs.visuals || {}),
