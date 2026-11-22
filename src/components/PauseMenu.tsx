@@ -86,6 +86,8 @@ interface PauseMenuProps {
   onOpenPerformanceTest?: () => void;
   /** Opens the collision and softbody physics telemetry analyzer. */
   onOpenCollisionTest?: () => void;
+  /** Opens the full Friends & Search modal from Esc -> Online. */
+  onOpenFriends?: () => void;
   settings: PauseSettings;
   onUpdateSettings: (next: PauseSettings) => void;
   session: PauseSessionInfo;
@@ -175,14 +177,14 @@ type Row =
   | { t: 'btn'; l: string; label: string; act: () => void; disabled?: boolean };
 
 type TabId = 'gfx' | 'sound' | 'ctrl' | 'game';
-const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'], ['ctrl', 'Управление'], ['game', 'Игра']];
+const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'], ['ctrl', 'Управление'], ['game', 'Геймплей']];
 
 /* ------------------------------------------------------------------ */
 /* component                                                           */
 /* ------------------------------------------------------------------ */
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
-  onResume, onSave, onExitToMainMenu, onOpenPerformanceTest, onOpenCollisionTest, settings, onUpdateSettings, session, currentUser
+  onResume, onSave, onExitToMainMenu, onOpenPerformanceTest, onOpenCollisionTest, onOpenFriends, settings, onUpdateSettings, session, currentUser
 }) => {
   const [cur, setCur] = useState<'online' | 'settings' | null>(null);
   const [entered, setEntered] = useState(false);
@@ -286,6 +288,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const [masterVol, setMasterVol] = useState<number>(() => Math.round(sound.getMasterVolume() * 100));
   const [engineVol, setEngineVol] = useState<number>(() => Math.round(sound.getEngineVolume() * 100));
   const [local, setLocal] = useState<PauseSettings>(() => ({ ...settings }));
+  useEffect(() => {
+    setLocal({ ...settings });
+  }, [settings]);
   const patchPerf = (patch: Partial<PerformanceConfig>) => {
     applyGfxPatch(patch);
     setPerf({ ...performanceConfig });
@@ -312,18 +317,23 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
 
   const rowsFor = (id: TabId): Row[] => {
     if (id === 'gfx') return [
-      { t: 'seg', l: 'Быстрая настройка (пресет)', v: detectGraphicsPreset(perf), o: GFX_PRESET_OPTIONS,
+      { t: 'hdr', l: 'Пресет' },
+      { t: 'seg', l: 'Быстрая настройка', v: detectGraphicsPreset(perf), o: GFX_PRESET_OPTIONS,
         set: v => { applyGfxPreset(v as GraphicsPresetId); setPerf({ ...performanceConfig }); } },
+      { t: 'seg', l: 'Лимит кадров', v: local.fpsLimit, set: v => patchGame({ fpsLimit: v }),
+        o: [{ v: 30, label: '30' }, { v: 60, label: '60' }, { v: 120, label: '120' }, { v: 0, label: 'Max' }] },
       ...GFX_GROUPS.flatMap(g => [{ t: 'hdr' as const, l: g.title }, ...g.items.map(gfxRow)]),
-      { t: 'btn', l: 'Параметры графики', label: 'Сбросить', act: resetPerf }
+      { t: 'btn', l: 'Параметры графики', label: 'Сбросить графику', act: resetPerf }
     ];
     if (id === 'sound') return [
+      { t: 'hdr', l: 'Громкость' },
       { t: 'tg', l: 'Звук включён', v: !muted, set: () => setMuted(sound.toggleMute()) },
       { t: 'sld', l: 'Общая громкость', v: masterVol, min: 0, max: 100, step: 1, fmt: v => v + '%', set: v => { setMasterVol(v); sound.setMasterVolume(v / 100); } },
       { t: 'sld', l: 'Двигатель', v: engineVol, min: 0, max: 100, step: 1, fmt: v => v + '%', set: v => { setEngineVol(v); sound.setEngineVolume(v / 100); } }
     ];
     if (id === 'ctrl') {
       const ctrlRows: Row[] = [
+        { t: 'hdr', l: 'Мышь' },
         { t: 'sld', l: 'Чувствительность мыши', v: local.mouseSensitivity, min: 0.5, max: 2.5, step: 0.1, fmt: v => v.toFixed(1) + '×', set: v => patchGame({ mouseSensitivity: v }) },
       ];
       if (keybindNotice) {
@@ -340,8 +350,8 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
       ctrlRows.push({ t: 'keys', l: 'Меню паузы / Закрыть окно', k: ['Esc'] });
       ctrlRows.push({
         t: 'btn',
-        l: 'Сбросить все клавиши',
-        label: 'Сбросить',
+        l: 'Сбросить управление',
+        label: 'Сбросить управление',
         disabled: !isAnyKeybindCustomized(),
         act: () => {
           setListeningAction(null);
@@ -352,17 +362,16 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
       return ctrlRows;
     }
     return [
-      { t: 'seg', l: 'КПП (переключения)', v: local.shiftMode,
+      { t: 'hdr', l: 'Геймплей' },
+      { t: 'seg', l: 'КПП (переключения)', v: local.shiftMode ?? 'auto',
         o: [{ v: 'manual', label: 'Ручная' }, { v: 'auto', label: 'Авто (сама)' }],
         set: v => patchGame({ shiftMode: v }) },
       { t: 'seg', l: 'Автосохранение', v: local.autoSaveInterval, set: v => patchGame({ autoSaveInterval: v }),
         o: [{ v: 0, label: 'Выкл' }, { v: 15, label: '15 с' }, { v: 25, label: '25 с' }, { v: 60, label: '1 мин' }, { v: 120, label: '2 мин' }] },
       { t: 'tg', l: 'Смена дня и ночи', v: local.timeAutoCycle, set: v => patchGame({ timeAutoCycle: v }) },
-      { t: 'tg', l: 'Показывать сетку кузова', v: !!local.showSoftbodyMesh, set: v => patchGame({ showSoftbodyMesh: v }) },
       { t: 'seg', l: 'Плотность дыма', v: local.smokeDensity ?? 100, set: v => patchGame({ smokeDensity: v }),
         o: [{ v: 0, label: 'Выкл' }, { v: 35, label: 'Низкая' }, { v: 70, label: 'Средняя' }, { v: 100, label: 'Полная' }] },
-      { t: 'seg', l: 'Лимит кадров', v: local.fpsLimit, set: v => patchGame({ fpsLimit: v }),
-        o: [{ v: 30, label: '30' }, { v: 60, label: '60' }, { v: 120, label: '120' }, { v: 0, label: 'Max' }] }
+      { t: 'tg', l: 'Показывать сетку кузова', v: !!local.showSoftbodyMesh, set: v => patchGame({ showSoftbodyMesh: v }) }
     ];
   };
 
@@ -578,8 +587,8 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                   </div>
                 )}
               </div>
-              <div id="onBody" className={isHost ? '' : 'dim'} style={{ display: 'flex', gap: 20 }}>
-                <div className="panel" style={{ flex: 1, padding: '8px 0' }}>
+              <div id="onBody" style={{ display: 'flex', gap: 20 }}>
+                <div className={'panel' + (isHost ? '' : ' dim')} style={{ flex: 1, padding: '8px 0' }}>
                   <div className="set"><span>Кто может войти</span><Seg value={access} onChange={changeAccess} options={[{ v: 'all', label: 'Все' }, { v: 'code', label: 'По коду' }]} /></div>
                   <div className="set">
                     <span>Код приглашения</span>
@@ -590,10 +599,17 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                   </div>
                   <div className="set"><span>Игроков в сессии</span><b>{players} / {maxPlayers}</b></div>
                 </div>
-                <div className="panel" style={{ flex: 1, padding: '16px 22px 8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья в сети</span>
-                    <span className="mut" style={{ fontSize: 13 }}>{currentUser ? onlineFriends.length : ''}</span>
+                <div className="panel" style={{ flex: 1, padding: '16px 22px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья в сети</span>
+                      <span className="mut" style={{ fontSize: 13 }}>{currentUser ? onlineFriends.length : ''}</span>
+                    </div>
+                    {onOpenFriends && (
+                      <button type="button" className="btn btn-s btn-sm" onClick={onOpenFriends}>
+                        Поиск и заявки
+                      </button>
+                    )}
                   </div>
                   <div id="frl" className="scroll" style={{ marginTop: 6 }}>
                     {!currentUser ? (
@@ -625,7 +641,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                   <button key={id} className={'tab cn' + (id === tab ? ' tab-on' : '')} onClick={() => { setListeningAction(null); setTab(id); }}>{label}</button>
                 ))}
               </div>
-              <div className="panel scroll" id="rows" style={{ padding: '8px 0' }}>
+              <div className={'panel' + (tab === 'gfx' || tab === 'ctrl' ? ' scroll' : '')} id="rows" style={{ padding: '8px 0' }}>
                 {rows.map((r, i) => r.t === 'hdr' ? (
                   <div key={tab + i} className="cn" style={{ padding: '14px 22px 6px', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#e0ab45', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none', marginTop: i > 0 ? 6 : 0 }}>
                     {r.l}

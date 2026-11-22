@@ -9488,6 +9488,10 @@ export default function App() {
             setIsPauseMenuOpen(false);
             setIsCollisionTestOpen(true);
           }}
+          onOpenFriends={() => {
+            setIsPauseMenuOpen(false);
+            setIsFriendsModalOpen(true);
+          }}
         />
       )}
 

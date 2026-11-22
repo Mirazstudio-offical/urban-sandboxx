@@ -42,6 +42,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({ isOpen, onClose, onJ
   
   // Status feedback
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   const currentUser = auth.currentUser;
 
@@ -101,11 +102,11 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({ isOpen, onClose, onJ
     if (!currentUser) return;
     sound.playButtonPress();
     try {
-      const senderName = currentUser.displayName || 'Пилот';
+      const senderName = currentUser.displayName || onlineManager.localPlayerName || 'Пилот';
       await sendFriendRequest(currentUser.uid, senderName, targetUser.uid, targetUser.displayName || targetUser.nickname || 'Пилот');
       showNotification(`Запрос отправлен игроку ${targetUser.displayName || targetUser.nickname}`);
     } catch (err: any) {
-      alert(`Ошибка отправки запроса: ${err.message || err}`);
+      showNotification(`Ошибка отправки запроса: ${err.message || err}`);
     }
   };
 
@@ -117,7 +118,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({ isOpen, onClose, onJ
       await acceptFriendRequest(req, currentProf);
       showNotification(`Запрос принят! ${req.senderName} теперь в вашем списке друзей.`);
     } catch (err: any) {
-      alert(`Ошибка принятия запроса: ${err.message || err}`);
+      showNotification(`Ошибка принятия запроса: ${err.message || err}`);
     }
   };
 
@@ -127,18 +128,22 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({ isOpen, onClose, onJ
       await rejectFriendRequest(reqId);
       showNotification('Запрос отклонен.');
     } catch (err: any) {
-      alert(`Ошибка: ${err.message || err}`);
+      showNotification(`Ошибка: ${err.message || err}`);
     }
   };
 
   const handleRemoveFriend = async (friendshipId: string, friendName: string) => {
-    if (!confirm(`Удалить ${friendName} из списка друзей?`)) return;
     sound.playButtonPress();
+    if (confirmRemoveId !== friendshipId) {
+      setConfirmRemoveId(friendshipId);
+      return;
+    }
     try {
       await removeFriend(friendshipId);
+      setConfirmRemoveId(null);
       showNotification(`${friendName} удален из друзей.`);
     } catch (err: any) {
-      alert(`Ошибка: ${err.message || err}`);
+      showNotification(`Ошибка: ${err.message || err}`);
     }
   };
 
@@ -147,12 +152,12 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({ isOpen, onClose, onJ
     sound.playButtonPress();
     const currentRoom = onlineManager.roomCode;
     if (!currentRoom) {
-      alert('Вы не находитесь в онлайн-комнате. Сначала создайте или войдите на сервер!');
+      showNotification('Вы не находитесь в онлайн-комнате. Сначала создайте или войдите на сервер.');
       return;
     }
 
     try {
-      const senderName = currentUser.displayName || 'Друг';
+      const senderName = currentUser.displayName || onlineManager.localPlayerName || 'Друг';
       await sendWorldInvite(
         currentUser.uid,
         senderName,
@@ -162,7 +167,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({ isOpen, onClose, onJ
       );
       showNotification(`Приглашение в мир [${currentRoom}] отправлено ${friendName}!`);
     } catch (err: any) {
-      alert(`Ошибка отправки приглашения: ${err.message || err}`);
+      showNotification(`Ошибка отправки приглашения: ${err.message || err}`);
     }
   };
 

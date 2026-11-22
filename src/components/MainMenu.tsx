@@ -14,12 +14,21 @@ import {
   subscribeToHostedServers,
   deleteHostedServerBackup,
   subscribeToFriends,
+  subscribeToIncomingRequests,
+  subscribeToOutgoingRequests,
+  searchUsers,
+  sendFriendRequest,
+  acceptFriendRequest,
+  rejectFriendRequest,
+  removeFriend,
   fetchUserProfile,
+  updateUserProfile,
   loginWithGoogle,
   logoutUser,
   type P2PServerRoom,
   type HostedServerBackup,
   type FriendshipData,
+  type FriendRequestData,
   type UserProfileData,
   type User as FirebaseUser
 } from '../firebase';
@@ -108,6 +117,9 @@ export interface MainMenuProps {
     autoSaveInterval: number;
     timeAutoCycle: boolean;
     mouseSensitivity: number;
+    shiftMode?: 'auto' | 'manual';
+    showSoftbodyMesh?: boolean;
+    smokeDensity?: number;
   };
   onUpdateSettings: (newSettings: any) => void;
   currentUser?: FirebaseUser | null;
@@ -597,6 +609,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [masterVol, setMasterVol] = useState<number>(() => Math.round(sound.getMasterVolume() * 100));
   const [engineVol, setEngineVol] = useState<number>(() => Math.round(sound.getEngineVolume() * 100));
   const [local, setLocal] = useState(() => ({ ...currentSettings }));
+  useEffect(() => {
+    setLocal({ ...currentSettings });
+  }, [currentSettings]);
 
   const patchPerf = (patch: Partial<PerformanceConfig>) => {
     applyGfxPatch(patch);
@@ -642,26 +657,161 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     onUpdateSettings(next);
   };
 
-  /* ---------- account ---------- */
+  /* ---------- account & friends ---------- */
   type AccTab = 'profile' | 'friends';
+  type FriendsSubTab = 'list' | 'search' | 'requests';
   const [accTab, setAccTab] = useState<AccTab>('profile');
+  const [friendsSubTab, setFriendsSubTab] = useState<FriendsSubTab>('list');
   const [nickname, setNickname] = useState<string>(onlineManager.localPlayerName);
   const [nickSaved, setNickSaved] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [profile, setProfile] = useState<UserProfileData | null>(null);
   const [friends, setFriends] = useState<FriendshipData[]>([]);
+  const [friendProfiles, setFriendProfiles] = useState<Record<string, UserProfileData>>({});
+  const [incomingReqs, setIncomingReqs] = useState<FriendRequestData[]>([]);
+  const [outgoingReqs, setOutgoingReqs] = useState<FriendRequestData[]>([]);
+  const [friendSearchQuery, setFriendSearchQuery] = useState('');
+  const [friendSearchResults, setFriendSearchResults] = useState<UserProfileData[]>([]);
+  const [friendSearching, setFriendSearching] = useState(false);
+  const [friendSearchSubmitted, setFriendSearchSubmitted] = useState(false);
+  const [friendNotice, setFriendNotice] = useState<string | null>(null);
+  const [confirmRemoveFriendId, setConfirmRemoveFriendId] = useState<string | null>(null);
+
+  const showFriendNotice = (msg: string) => {
+    setFriendNotice(msg);
+    window.setTimeout(() => setFriendNotice(prev => (prev === msg ? null : prev)), 3200);
+  };
 
   useEffect(() => {
-    if (!currentUser) { setProfile(null); setFriends([]); return; }
+    if (!currentUser) {
+      setProfile(null);
+      setFriends([]);
+      setFriendProfiles({});
+      setIncomingReqs([]);
+      setOutgoingReqs([]);
+      return;
+    }
     let alive = true;
-    fetchUserProfile(currentUser.uid).then(p => { if (alive) setProfile(p); }).catch(() => {});
-    const unsub = subscribeToFriends(currentUser.uid, list => { if (alive) setFriends(list); });
-    return () => { alive = false; unsub && unsub(); };
+    fetchUserProfile(currentUser.uid).then(p => {
+      if (!alive || !p) return;
+      setProfile(p);
+    }).catch(() => {});
+    const unsubFriends = subscribeToFriends(currentUser.uid, list => {
+      if (alive) setFriends(list);
+    });
+    const unsubIn = subscribeToIncomingRequests(currentUser.uid, reqs => {
+      if (alive) setIncomingReqs(reqs);
+    });
+    const unsubOut = subscribeToOutgoingRequests(currentUser.uid, reqs => {
+      if (alive) setOutgoingReqs(reqs);
+    });
+    return () => {
+      alive = false;
+      unsubFriends && unsubFriends();
+      unsubIn && unsubIn();
+      unsubOut && unsubOut();
+    };
   }, [currentUser?.uid]);
 
+  useEffect(() => {
+    if (!currentUser || friends.length === 0) {
+      setFriendProfiles({});
+      return;
+    }
+    let alive = true;
+    const loadFriendProfiles = async () => {
+      const map: Record<string, UserProfileData> = {};
+      await Promise.all(
+        friends.map(async f => {
+          const otherUid = f.users?.find(u => u !== currentUser.uid) || (f.user1.uid === currentUser.uid ? f.user2.uid : f.user1.uid);
+          if (!otherUid) return;
+          const prof = await fetchUserProfile(otherUid).catch(() => null);
+          if (prof) map[otherUid] = prof;
+        })
+      );
+      if (alive) setFriendProfiles(map);
+    };
+    void loadFriendProfiles();
+    const iv = window.setInterval(loadFriendProfiles, 20000);
+    return () => {
+      alive = false;
+      window.clearInterval(iv);
+    };
+  }, [currentUser?.uid, friends]);
+
+  const handleFriendSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const q = friendSearchQuery.trim();
+    if (!q) return;
+    setFriendSearching(true);
+    setFriendSearchSubmitted(true);
+    try {
+      const results = await searchUsers(q);
+      setFriendSearchResults(results.filter(u => u.uid !== currentUser?.uid));
+    } finally {
+      setFriendSearching(false);
+    }
+  };
+
+  const handleSendFriendReq = async (target: UserProfileData) => {
+    if (!currentUser) return;
+    try {
+      const senderName = nickname.trim() || currentUser.displayName || 'Пилот';
+      const receiverName = target.nickname || target.displayName || 'Пилот';
+      await sendFriendRequest(currentUser.uid, senderName, target.uid, receiverName);
+      showFriendNotice(`Заявка в друзья отправлена игроку ${receiverName}`);
+    } catch (err: any) {
+      showFriendNotice(`Не удалось отправить заявку: ${err?.message || 'ошибка сети'}`);
+    }
+  };
+
+  const handleAcceptFriendReq = async (req: FriendRequestData) => {
+    if (!currentUser) return;
+    try {
+      const currentProf = profile || await fetchUserProfile(currentUser.uid);
+      await acceptFriendRequest(req, currentProf);
+      showFriendNotice(`${req.senderName} добавлен в ваш список друзей`);
+    } catch (err: any) {
+      showFriendNotice(`Ошибка принятия заявки: ${err?.message || 'ошибка сети'}`);
+    }
+  };
+
+  const handleRejectFriendReq = async (reqId?: string) => {
+    if (!reqId) return;
+    try {
+      await rejectFriendRequest(reqId);
+      showFriendNotice('Заявка удалена');
+    } catch (err: any) {
+      showFriendNotice(`Ошибка: ${err?.message || 'ошибка сети'}`);
+    }
+  };
+
+  const handleRemoveFriendItem = async (friendshipId?: string, friendName?: string) => {
+    if (!friendshipId) return;
+    try {
+      await removeFriend(friendshipId);
+      setConfirmRemoveFriendId(null);
+      showFriendNotice(`${friendName || 'Игрок'} удалён из друзей`);
+    } catch (err: any) {
+      showFriendNotice(`Ошибка удаления: ${err?.message || 'ошибка сети'}`);
+    }
+  };
+
+  const isAlreadyFriend = (uid: string) =>
+    friends.some(f => (f.users && f.users.includes(uid)) || f.user1.uid === uid || f.user2.uid === uid);
+  const getIncomingReqFrom = (uid: string) =>
+    incomingReqs.find(r => r.senderUid === uid);
+  const isOutgoingPendingTo = (uid: string) =>
+    outgoingReqs.some(r => r.receiverUid === uid);
+
   const saveNickname = () => {
-    onlineManager.setPlayerName(nickname);
+    const clean = nickname.trim();
+    if (!clean) return;
+    onlineManager.setPlayerName(clean);
+    if (currentUser) {
+      void updateUserProfile(currentUser.uid, { nickname: clean, displayName: clean });
+    }
     setNickSaved(true);
     window.setTimeout(() => setNickSaved(false), 2000);
   };
@@ -822,7 +972,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 {Top('Аккаунт', () => go('main', true), <div className="chip"><span className="ava">{initial}</span><span style={{ fontWeight: 500 }}>{nickname}</span></div>)}
                 <div className="a mc-nav" style={{ left: 64, top: 140, width: 290, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <button className={'nav-i cn sl d1' + (accTab === 'profile' ? ' nav-on' : '')} onClick={() => switchSection(() => setAccTab('profile'))}>Профиль</button>
-                  <button className={'nav-i cn sl d2' + (accTab === 'friends' ? ' nav-on' : '')} onClick={() => switchSection(() => setAccTab('friends'))}>Друзья</button>
+                  <button className={'nav-i cn sl d2' + (accTab === 'friends' ? ' nav-on' : '')} onClick={() => switchSection(() => setAccTab('friends'))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>Друзья</span>
+                    {incomingReqs.length > 0 && (
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: '#e0ab45', color: '#1a1409' }}>
+                        +{incomingReqs.length}
+                      </span>
+                    )}
+                  </button>
                 </div>
 
                 {accTab === 'profile' && (
@@ -846,7 +1003,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <div style={{ display: 'flex', gap: 20 }}>
                       <div className="panel st d3" style={{ flex: 1.15, padding: '22px 24px' }}>
                         <div className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Позывной</div>
-                        <div className="lbl" style={{ marginTop: 16 }}>Имя, под которым вас видят в онлайне</div>
+                        <div className="lbl" style={{ marginTop: 16 }}>Имя, под которым вас видят в онлайне и по которому вас находят друзья</div>
                         <input className="inp" value={nickname} maxLength={20} onChange={e => setNickname(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveNickname(); e.stopPropagation(); }} />
                         <button className="btn btn-p" style={{ marginTop: 16 }} onClick={saveNickname} disabled={!nickname.trim()}>Сохранить</button>
                         {nickSaved && <div className="ok">Позывной сохранён</div>}
@@ -869,27 +1026,229 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
                 {accTab === 'friends' && (
                   <div className="a sec mc-content" key="acc-friends" style={{ left: 394, top: 140, width: 982, maxHeight: 688 }}>
-                    <div className="panel st d1" style={{ padding: '22px 24px', maxHeight: 688, display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flex: 'none' }}>
-                        <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья</span>
-                        {currentUser && <span className="mut" style={{ fontSize: 13 }}>{friends.length}</span>}
+                    <div className="panel st d1" style={{ padding: '20px 24px', maxHeight: 688, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, flex: 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                          <span className="cn" style={{ fontSize: 22, fontWeight: 700 }}>Друзья</span>
+                          {currentUser && <span className="mut" style={{ fontSize: 13 }}>{friends.length} в списке</span>}
+                        </div>
+                        {currentUser && (
+                          <div className="row2" style={{ gap: 8 }}>
+                            <button
+                              type="button"
+                              className={'pill' + (friendsSubTab === 'list' ? ' pill-on' : '')}
+                              onClick={() => { setFriendsSubTab('list'); setConfirmRemoveFriendId(null); }}
+                            >
+                              Мои друзья ({friends.length})
+                            </button>
+                            <button
+                              type="button"
+                              className={'pill' + (friendsSubTab === 'search' ? ' pill-on' : '')}
+                              onClick={() => setFriendsSubTab('search')}
+                            >
+                              Поиск игроков
+                            </button>
+                            <button
+                              type="button"
+                              className={'pill' + (friendsSubTab === 'requests' ? ' pill-on' : '')}
+                              onClick={() => setFriendsSubTab('requests')}
+                            >
+                              Заявки{incomingReqs.length > 0 ? ` (+${incomingReqs.length})` : outgoingReqs.length > 0 ? ` (${outgoingReqs.length})` : ''}
+                            </button>
+                          </div>
+                        )}
                       </div>
+
+                      {friendNotice && (
+                        <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(224,171,69,.12)', border: '1px solid rgba(224,171,69,.32)', color: '#e6c278', fontSize: 13, fontWeight: 500, flex: 'none' }}>
+                          {friendNotice}
+                        </div>
+                      )}
+
                       {!currentUser ? (
-                        <div className="empty"><div className="mut">Войдите через Google, чтобы видеть друзей.</div><button className="btn btn-p" onClick={signIn} disabled={authBusy}>Войти через Google</button></div>
-                      ) : friends.length === 0 ? (
-                        <div className="empty"><div className="mut">Список друзей пуст. Добавить друзей можно в игре: Esc → Онлайн → Друзья.</div></div>
-                      ) : (
-                        <div className="scroll" style={{ marginTop: 8, flex: 1, minHeight: 0 }}>
-                          {friends.map((f, i) => {
-                            const other = f.user1.uid === currentUser.uid ? f.user2 : f.user1;
-                            const name = other.nickname || other.name || 'Игрок';
-                            return (
-                              <div className="fr" key={f.id || i} style={i === friends.length - 1 ? { borderBottom: 0 } : undefined}>
-                                <span className="av" style={{ background: '#e0ab45' }}>{name.charAt(0).toUpperCase()}</span>
-                                <div style={{ flex: 1 }}><div style={{ fontWeight: 600 }}>{name}</div></div>
+                        <div className="empty">
+                          <div className="mut">Войдите через Google, чтобы искать игроков, отправлять заявки и видеть друзей в сети.</div>
+                          <button className="btn btn-p" onClick={signIn} disabled={authBusy}>Войти через Google</button>
+                        </div>
+                      ) : friendsSubTab === 'list' ? (
+                        friends.length === 0 ? (
+                          <div className="empty">
+                            <div className="cn" style={{ fontSize: 22, fontWeight: 700 }}>Список друзей пуст</div>
+                            <div className="mut" style={{ maxWidth: 420 }}>Найдите игроков по позывному, имени или UID во вкладке «Поиск игроков» и отправьте заявку в друзья.</div>
+                            <div className="row2" style={{ gap: 10 }}>
+                              <button className="btn btn-p" onClick={() => setFriendsSubTab('search')}>Найти игроков</button>
+                              {incomingReqs.length > 0 && (
+                                <button className="btn btn-s" onClick={() => setFriendsSubTab('requests')}>Входящие заявки ({incomingReqs.length})</button>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="scroll" style={{ flex: 1, minHeight: 0 }}>
+                            {friends.map((f, i) => {
+                              const other = f.user1.uid === currentUser.uid ? f.user2 : f.user1;
+                              const otherUid = f.users?.find(u => u !== currentUser.uid) || other.uid;
+                              const fProf = friendProfiles[otherUid];
+                              const name = fProf?.nickname || fProf?.displayName || other.nickname || other.name || 'Игрок';
+                              const status = fProf?.status || 'offline';
+                              const isOnline = status === 'online' || status === 'in_game';
+                              const isInGame = status === 'in_game' && !!fProf?.currentRoomCode;
+                              return (
+                                <div className="fr" key={f.id || i} style={i === friends.length - 1 ? { borderBottom: 0 } : undefined}>
+                                  <span className="av" style={{ background: isInGame ? '#e0ab45' : isOnline ? '#7fbf6a' : '#575248', color: '#1a1409' }}>
+                                    {name.charAt(0).toUpperCase()}
+                                  </span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+                                    <div className="mut" style={{ fontSize: 12.5, color: isInGame ? '#e0ab45' : isOnline ? '#9ac985' : undefined }}>
+                                      {isInGame ? `В игре · комната ${fProf.currentRoomCode}` : isOnline ? 'В сети' : 'Не в сети'}
+                                    </div>
+                                  </div>
+                                  <div className="row2" style={{ gap: 8 }}>
+                                    {isInGame && fProf?.currentRoomCode && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-p btn-sm"
+                                        onClick={() => connectTo(fProf.currentRoomCode!)}
+                                      >
+                                        Присоединиться
+                                      </button>
+                                    )}
+                                    {confirmRemoveFriendId === f.id ? (
+                                      <button
+                                        type="button"
+                                        className="btn btn-s btn-sm"
+                                        style={{ color: '#e08a70', borderColor: 'rgba(217,116,90,.4)' }}
+                                        onClick={() => void handleRemoveFriendItem(f.id, name)}
+                                      >
+                                        Точно удалить?
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="btn btn-s btn-sm"
+                                        onClick={() => setConfirmRemoveFriendId(f.id || null)}
+                                      >
+                                        Удалить
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )
+                      ) : friendsSubTab === 'search' ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1, minHeight: 0 }}>
+                          <form onSubmit={handleFriendSearch} className="row2" style={{ gap: 10, flex: 'none' }}>
+                            <div className="chip" style={{ flex: 1, height: 46, borderRadius: 9 }}>
+                              <SearchIcon />
+                              <input
+                                value={friendSearchQuery}
+                                onChange={e => setFriendSearchQuery(e.target.value)}
+                                onKeyDown={e => e.stopPropagation()}
+                                placeholder="Введите позывной, имя или UID игрока..."
+                                style={{ width: '100%', fontSize: 15 }}
+                              />
+                            </div>
+                            <button type="submit" className="btn btn-p" disabled={friendSearching || !friendSearchQuery.trim()}>
+                              {friendSearching ? 'Поиск...' : 'Найти'}
+                            </button>
+                          </form>
+
+                          {friendSearchResults.length > 0 ? (
+                            <div className="scroll" style={{ flex: 1, minHeight: 0 }}>
+                              {friendSearchResults.map((user, idx) => {
+                                const name = user.nickname || user.displayName || 'Игрок';
+                                const already = isAlreadyFriend(user.uid);
+                                const incReq = getIncomingReqFrom(user.uid);
+                                const pendingOut = isOutgoingPendingTo(user.uid);
+                                return (
+                                  <div className="fr" key={user.uid} style={idx === friendSearchResults.length - 1 ? { borderBottom: 0 } : undefined}>
+                                    <span className="av" style={{ background: '#e0ab45', color: '#1a1409' }}>{name.charAt(0).toUpperCase()}</span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+                                      <div className="mut" style={{ fontSize: 12.5 }}>
+                                        Позывной: {user.nickname || user.displayName || '—'}
+                                        {user.status === 'in_game' && user.currentRoomCode ? ` · В игре (${user.currentRoomCode})` : user.status === 'online' ? ' · В сети' : ''}
+                                      </div>
+                                    </div>
+                                    <div className="row2" style={{ gap: 8 }}>
+                                      {already ? (
+                                        <span className="pill pill-on" style={{ height: 34, fontSize: 13 }}>В друзьях</span>
+                                      ) : incReq ? (
+                                        <button type="button" className="btn btn-p btn-sm" onClick={() => void handleAcceptFriendReq(incReq)}>
+                                          Принять заявку
+                                        </button>
+                                      ) : pendingOut ? (
+                                        <span className="pill" style={{ height: 34, fontSize: 13 }}>Заявка отправлена</span>
+                                      ) : (
+                                        <button type="button" className="btn btn-p btn-sm" onClick={() => void handleSendFriendReq(user)}>
+                                          Добавить в друзья
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="empty" style={{ flex: 1 }}>
+                              <div className="mut">
+                                {friendSearching
+                                  ? 'Поиск игроков в базе данных...'
+                                  : friendSearchSubmitted && friendSearchQuery.trim()
+                                    ? `Игроков по запросу «${friendSearchQuery.trim()}» не найдено.`
+                                    : 'Введите позывной или имя игрока сверху и нажмите «Найти».'}
                               </div>
-                            );
-                          })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="scroll" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                              <span className="cn" style={{ fontSize: 15, fontWeight: 700, color: '#e0ab45', textTransform: 'uppercase' }}>Входящие заявки</span>
+                              <span className="mut" style={{ fontSize: 12.5 }}>{incomingReqs.length}</span>
+                            </div>
+                            {incomingReqs.length === 0 ? (
+                              <div className="mut" style={{ fontSize: 13.5, padding: '10px 0' }}>Новых входящих заявок нет.</div>
+                            ) : (
+                              incomingReqs.map((req, idx) => (
+                                <div className="fr" key={req.id || idx}>
+                                  <span className="av" style={{ background: '#e0ab45', color: '#1a1409' }}>{(req.senderName || '?').charAt(0).toUpperCase()}</span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600 }}>{req.senderName}</div>
+                                    <div className="mut" style={{ fontSize: 12.5 }}>Хочет добавить вас в друзья</div>
+                                  </div>
+                                  <div className="row2" style={{ gap: 8 }}>
+                                    <button type="button" className="btn btn-p btn-sm" onClick={() => void handleAcceptFriendReq(req)}>Принять</button>
+                                    <button type="button" className="btn btn-s btn-sm" onClick={() => void handleRejectFriendReq(req.id)}>Отклонить</button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                              <span className="cn" style={{ fontSize: 15, fontWeight: 700, color: '#a29e93', textTransform: 'uppercase' }}>Исходящие заявки</span>
+                              <span className="mut" style={{ fontSize: 12.5 }}>{outgoingReqs.length}</span>
+                            </div>
+                            {outgoingReqs.length === 0 ? (
+                              <div className="mut" style={{ fontSize: 13.5, padding: '10px 0' }}>Нет отправленных заявок, ожидающих ответа.</div>
+                            ) : (
+                              outgoingReqs.map((req, idx) => (
+                                <div className="fr" key={req.id || idx} style={idx === outgoingReqs.length - 1 ? { borderBottom: 0 } : undefined}>
+                                  <span className="av" style={{ background: '#575248', color: '#e9e6df' }}>{(req.receiverName || '?').charAt(0).toUpperCase()}</span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600 }}>{req.receiverName}</div>
+                                    <div className="mut" style={{ fontSize: 12.5 }}>Ожидает подтверждения</div>
+                                  </div>
+                                  <button type="button" className="btn btn-s btn-sm" onClick={() => void handleRejectFriendReq(req.id)}>Отменить</button>
+                                </div>
+                              ))
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1171,14 +1530,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <>
                       <div className="grp cn" style={{ paddingTop: 18 }}>Громкость</div>
                       <div className="set"><span>Звук включён</span><Toggle on={!muted} onChange={() => setMuted(sound.toggleMute())} label="Звук" /></div>
-                      <div className="set"><span>Общая</span><Slider label="Общая громкость" value={masterVol} min={0} max={100} step={1} onChange={v => { setMasterVol(v); sound.setMasterVolume(v / 100); }} display={String(masterVol)} /></div>
-                      <div className="set"><span>Двигатель</span><Slider label="Громкость двигателя" value={engineVol} min={0} max={100} step={1} onChange={v => { setEngineVol(v); sound.setEngineVolume(v / 100); }} display={String(engineVol)} /></div>
+                      <div className="set"><span>Общая громкость</span><Slider label="Общая громкость" value={masterVol} min={0} max={100} step={1} onChange={v => { setMasterVol(v); sound.setMasterVolume(v / 100); }} display={masterVol + '%'} /></div>
+                      <div className="set"><span>Двигатель</span><Slider label="Громкость двигателя" value={engineVol} min={0} max={100} step={1} onChange={v => { setEngineVol(v); sound.setEngineVolume(v / 100); }} display={engineVol + '%'} /></div>
                     </>
                   )}
                   {setTab === 'ctrl' && (
                     <>
                       <div className="grp cn" style={{ paddingTop: 18 }}>Мышь</div>
-                      <div className="set"><span>Чувствительность</span><Slider label="Чувствительность мыши" value={local.mouseSensitivity} min={0.5} max={2.5} step={0.1} onChange={v => patchGame({ mouseSensitivity: v })} display={local.mouseSensitivity.toFixed(1) + '×'} /></div>
+                      <div className="set"><span>Чувствительность мыши</span><Slider label="Чувствительность мыши" value={local.mouseSensitivity} min={0.5} max={2.5} step={0.1} onChange={v => patchGame({ mouseSensitivity: v })} display={local.mouseSensitivity.toFixed(1) + '×'} /></div>
                       {keybindNotice && <div className="kb-note">{keybindNotice}</div>}
                       {KEYBIND_GROUPS.map(g => {
                         const items = KEYBIND_DEFINITIONS.filter(d => d.group === g.id);
@@ -1228,12 +1587,21 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   )}
                   {setTab === 'game' && (
                     <>
-                      <div className="grp cn" style={{ paddingTop: 18 }}>Игра</div>
+                      <div className="grp cn" style={{ paddingTop: 18 }}>Геймплей</div>
+                      <div className="set" style={{ height: 70 }}>
+                        <span>КПП (переключения)</span>
+                        <Seg value={local.shiftMode ?? 'auto'} onChange={v => patchGame({ shiftMode: v })} options={[{ v: 'manual', label: 'Ручная' }, { v: 'auto', label: 'Авто (сама)' }]} />
+                      </div>
                       <div className="set" style={{ height: 70 }}>
                         <span>Автосохранение</span>
                         <Seg value={local.autoSaveInterval} onChange={v => patchGame({ autoSaveInterval: v })} options={[{ v: 0, label: 'Выкл' }, { v: 15, label: '15 с' }, { v: 25, label: '25 с' }, { v: 60, label: '1 мин' }, { v: 120, label: '2 мин' }]} />
                       </div>
                       <div className="set"><span>Смена дня и ночи</span><Toggle on={local.timeAutoCycle} onChange={() => patchGame({ timeAutoCycle: !local.timeAutoCycle })} label="Смена дня и ночи" /></div>
+                      <div className="set" style={{ height: 70 }}>
+                        <span>Плотность дыма</span>
+                        <Seg value={local.smokeDensity ?? 100} onChange={v => patchGame({ smokeDensity: v })} options={[{ v: 0, label: 'Выкл' }, { v: 35, label: 'Низкая' }, { v: 70, label: 'Средняя' }, { v: 100, label: 'Полная' }]} />
+                      </div>
+                      <div className="set"><span>Показывать сетку кузова</span><Toggle on={!!local.showSoftbodyMesh} onChange={() => patchGame({ showSoftbodyMesh: !local.showSoftbodyMesh })} label="Показывать сетку кузова" /></div>
                     </>
                   )}
                 </div>
@@ -1248,7 +1616,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                           gfx: 'Изменения сохраняются сразу. Пресет меняет сразу несколько параметров. На слабых устройствах выберите «Низкие» или уменьшите масштаб рендера и дальность прорисовки.',
                           sound: 'Громкость меняется сразу. Звук двигателя синтезируется в реальном времени.',
                           ctrl: 'Нажмите на любую клавишу, чтобы переназначить её. Esc отменяет выбор. Конфликтующие клавиши в одном контексте автоматически меняются местами.',
-                          game: 'Автосохранение и смена времени суток.'
+                          game: 'Режим коробки передач, автосохранение, смена дня и ночи, плотность дыма и отображение сетки деформации кузова.'
                         })[setTab]}
                       </div>
                     </div>
