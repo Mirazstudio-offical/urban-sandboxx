@@ -4,7 +4,6 @@
 import type { InteriorFurniture } from '../buildingInteriors';
 import {
   shade,
-  mix,
   isLightColor,
   rr,
   drawRectContactShadow,
