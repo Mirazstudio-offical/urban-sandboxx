@@ -2,6 +2,7 @@ import { Building, Player } from './types';
 import { sound } from './audio';
 import { renderInteriorFurniture } from './interiorFurnitureRenderer';
 import { getApartmentById, getCityApartments } from './propertySystem';
+import { drawOpticalBeamColor } from './opticalBeamTextures';
 
 export interface InteriorWall {
   x1: number;
@@ -2114,65 +2115,45 @@ export function renderBuildingInterior(
   // Render static floor & furniture directly to ctx with full native resolution (sharp vector graphics)
   renderStaticInteriorLayout(ctx, bld, layout, windows, isHospital);
 
-  // Dynamic Layer 1: Volumetric daylight beams from windows
+  // Dynamic Layer 1: Soft-penumbra volumetric daylight shafts from windows
   if (dayIntensity > 0) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
-    
+
     for (const win of windows) {
-      let x1 = win.x;
-      let y1 = win.y;
-      let x2 = win.x;
-      let y2 = win.y;
-      
-      const beamLength = 48;
-      const beamSpread = 14;
-      
-      let p1x = 0, p1y = 0, p2x = 0, p2y = 0, p3x = 0, p3y = 0, p4x = 0, p4y = 0;
-      
+      const beamLength = 58;
+      let dx = 0;
+      let dy = 0;
       if (win.side === 'top') {
-        y2 = win.y + beamLength;
-        x2 = win.x + 12;
-        p1x = win.x - 5; p1y = win.y;
-        p2x = win.x + 5; p2y = win.y;
-        p3x = x2 + beamSpread; p3y = y2;
-        p4x = x2 - beamSpread; p4y = y2;
+        dx = 12;
+        dy = beamLength;
       } else if (win.side === 'bottom') {
-        y2 = win.y - beamLength;
-        x2 = win.x - 12;
-        p1x = win.x - 5; p1y = win.y;
-        p2x = win.x + 5; p2y = win.y;
-        p3x = x2 + beamSpread; p3y = y2;
-        p4x = x2 - beamSpread; p4y = y2;
+        dx = -12;
+        dy = -beamLength;
       } else if (win.side === 'left') {
-        x2 = win.x + beamLength;
-        y2 = win.y + 12;
-        p1x = win.x; p1y = win.y - 5;
-        p2x = win.x + 5; p2y = win.y;
-        p3x = x2 + beamSpread; p3y = y2;
-        p4x = x2 - beamSpread; p4y = y2;
+        dx = beamLength;
+        dy = 12;
       } else if (win.side === 'right') {
-        x2 = win.x - beamLength;
-        y2 = win.y - 12;
-        p1x = win.x - 5; p1y = win.y;
-        p2x = win.x + 5; p2y = win.y;
-        p3x = x2 + beamSpread; p3y = y2;
-        p4x = x2 - beamSpread; p4y = y2;
+        dx = -beamLength;
+        dy = -12;
+      } else {
+        continue;
       }
-      
-      const grad = ctx.createLinearGradient(x1, y1, x2, y2);
-      grad.addColorStop(0, `rgba(254, 240, 138, ${0.32 * dayIntensity})`);
-      grad.addColorStop(0.3, `rgba(254, 240, 138, ${0.14 * dayIntensity})`);
-      grad.addColorStop(1, 'rgba(254, 240, 138, 0)');
-      
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(p1x, p1y);
-      ctx.lineTo(p2x, p2y);
-      ctx.lineTo(p3x, p3y);
-      ctx.lineTo(p4x, p4y);
-      ctx.closePath();
-      ctx.fill();
+
+      const shaftLen = Math.hypot(dx, dy);
+      const shaftAngle = Math.atan2(dy, dx);
+      drawOpticalBeamColor(
+        ctx,
+        'window_sun',
+        win.x,
+        win.y,
+        shaftAngle,
+        shaftLen,
+        shaftLen * 0.56,
+        0.34 * dayIntensity,
+        [255, 246, 178],
+        [254, 232, 122]
+      );
     }
     ctx.restore();
   }

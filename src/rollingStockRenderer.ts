@@ -10,6 +10,7 @@
 
 import { GameWorld, Player, RollingStockCar } from './types';
 import { TrainSystem } from './trainSystem';
+import { drawOpticalBeamCutout, drawOpticalBeamColor } from './opticalBeamTextures';
 
 export class RollingStockRenderer {
   /**
@@ -2346,54 +2347,25 @@ export class RollingStockRenderer {
         cCtx.rotate(car.angle);
       }
 
-      // A. Forward Projector & Headlight Beam Cutout (Прожектор локомотива)
+      // A. Forward Projector & Headlight Beam Cutout (Прожектор локомотива — smooth 2D IES profile)
       if (isLead) {
-        const beamLen = 540 * fogFactor;
-        const beamHalfW = 120 * fogFactor;
+        const beamLen = 600 * fogFactor;
+        const beamHalfW = 276 * fogFactor;
 
-        const traceBeamPath = (targetCtx: CanvasRenderingContext2D) => {
-          targetCtx.beginPath();
-          targetCtx.moveTo(0, -3.5);
-          targetCtx.quadraticCurveTo(beamLen * 0.45, -beamHalfW * 0.58, beamLen, -beamHalfW);
-          targetCtx.bezierCurveTo(
-            beamLen + 45, -beamHalfW * 0.5,
-            beamLen + 45, beamHalfW * 0.5,
-            beamLen, beamHalfW
-          );
-          targetCtx.quadraticCurveTo(beamLen * 0.45, beamHalfW * 0.58, 0, 3.5);
-          targetCtx.closePath();
-        };
-
-        // 1. Natural volumetric beam with curved parabolic boundary and penumbra
-        lCtx.save();
-        lCtx.translate(halfL, 0);
-
-        const coneGrad = lCtx.createRadialGradient(0, 0, 4, beamLen * 0.35, 0, beamLen);
-        coneGrad.addColorStop(0.00, 'rgba(0, 0, 0, 1.0)');
-        coneGrad.addColorStop(0.18, 'rgba(0, 0, 0, 0.90)');
-        coneGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.60)');
-        coneGrad.addColorStop(0.72, 'rgba(0, 0, 0, 0.25)');
-        coneGrad.addColorStop(0.90, 'rgba(0, 0, 0, 0.08)');
-        coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-
-        lCtx.fillStyle = coneGrad;
-        traceBeamPath(lCtx);
-        lCtx.fill();
-        lCtx.restore();
-
+        drawOpticalBeamCutout(lCtx, 'locomotive', halfL, 0, 0, beamLen, beamHalfW, 1.0);
         if (cCtx) {
-          cCtx.save();
-          cCtx.translate(halfL, 0);
-          const colBeamGrad = cCtx.createRadialGradient(0, 0, 4, beamLen * 0.35, 0, beamLen);
-          colBeamGrad.addColorStop(0.00, 'rgba(255, 240, 198, 0.48)');
-          colBeamGrad.addColorStop(0.22, 'rgba(255, 232, 172, 0.34)');
-          colBeamGrad.addColorStop(0.55, 'rgba(255, 222, 146, 0.16)');
-          colBeamGrad.addColorStop(0.82, 'rgba(255, 212, 128, 0.05)');
-          colBeamGrad.addColorStop(1.00, 'rgba(255, 212, 128, 0)');
-          cCtx.fillStyle = colBeamGrad;
-          traceBeamPath(cCtx);
-          cCtx.fill();
-          cCtx.restore();
+          drawOpticalBeamColor(
+            cCtx,
+            'locomotive',
+            halfL,
+            0,
+            0,
+            beamLen,
+            beamHalfW,
+            0.54,
+            [255, 246, 214],
+            [255, 218, 138]
+          );
         }
 
         // 2. High-intensity nose halo & dual buffer lights (diffuse ground illumination)

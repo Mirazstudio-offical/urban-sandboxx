@@ -1439,7 +1439,7 @@ export class GasStationRenderer {
 
     lCtx.fillStyle = cGrad;
     lCtx.beginPath();
-    lCtx.roundRect(canopyX - 50, canopyY - 50, canopyW + 100, canopyH + 100, 35);
+    lCtx.arc(cCenterX, cCenterY, canopyRadius, 0, Math.PI * 2);
     lCtx.fill();
 
     if (cCtx) {
@@ -1451,7 +1451,7 @@ export class GasStationRenderer {
       cColGrad.addColorStop(1.0, 'rgba(220, 238, 255, 0)');
       cCtx.fillStyle = cColGrad;
       cCtx.beginPath();
-      cCtx.roundRect(canopyX - 50, canopyY - 50, canopyW + 100, canopyH + 100, 35);
+      cCtx.arc(cCenterX, cCenterY, canopyRadius, 0, Math.PI * 2);
       cCtx.fill();
     }
 
@@ -1476,7 +1476,7 @@ export class GasStationRenderer {
 
     lCtx.fillStyle = shopGrad;
     lCtx.beginPath();
-    lCtx.roundRect(shopX - 20, shopY - 20, shopW + 40, shopH + 110, 25);
+    lCtx.arc(sCenterX, sCenterY, shopRadius, 0, Math.PI * 2);
     lCtx.fill();
 
     if (cCtx) {
@@ -1487,7 +1487,7 @@ export class GasStationRenderer {
       shopColGrad.addColorStop(1.0, 'rgba(251, 188, 82, 0)');
       cCtx.fillStyle = shopColGrad;
       cCtx.beginPath();
-      cCtx.roundRect(shopX - 20, shopY - 20, shopW + 40, shopH + 110, 25);
+      cCtx.arc(sCenterX, sCenterY, shopRadius, 0, Math.PI * 2);
       cCtx.fill();
     }
 

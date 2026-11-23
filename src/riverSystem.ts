@@ -10,6 +10,7 @@ import { getVehicleBasePolygon } from './vehicleVisuals';
 import { traceSoftbodyPath } from './softbodyVisuals';
 import { RemotePlayerState } from './onlineSystem';
 import { LitterSystem } from './litterSystem';
+import { drawOpticalBeamColor } from './opticalBeamTextures';
 
 export interface RiverWaypoint {
   x: number;
@@ -1436,23 +1437,23 @@ function renderVehicleHydrodynamicSubmersion(
 
   if (car.headlightsOn && dFront > 0.28) {
     const subLightFactor = Math.min(1.0, (dFront - 0.25) / 0.65);
-    const beamReach = (car.headlightMode === 'high' ? 95 : 65) * (1.0 - subLightFactor * 0.25);
-    const beamSpread = halfW * 1.45;
+    const beamReach = (car.headlightMode === 'high' ? 115 : 80) * (1.0 - subLightFactor * 0.25);
+    const beamHalfW = Math.max(halfW * 2.2, beamReach * 0.78);
     for (const sideY of [-halfW * 0.62, halfW * 0.62]) {
       const broken = sideY < 0 ? car.damage?.leftHeadlightBroken : car.damage?.rightHeadlightBroken;
       if (broken) continue;
-      const grad = ctx.createRadialGradient(halfL, sideY, 2, halfL + beamReach * 0.45, sideY, beamReach);
-      grad.addColorStop(0, `rgba(165, 243, 252, ${(0.52 * subLightFactor).toFixed(3)})`);
-      grad.addColorStop(0.45, `rgba(34, 211, 238, ${(0.28 * subLightFactor).toFixed(3)})`);
-      grad.addColorStop(1, 'rgba(6, 182, 212, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(halfL - 2, sideY - 3);
-      ctx.lineTo(halfL + beamReach, sideY - beamSpread);
-      ctx.arc(halfL + beamReach * 0.85, sideY, beamSpread, -Math.PI * 0.4, Math.PI * 0.4);
-      ctx.lineTo(halfL - 2, sideY + 3);
-      ctx.closePath();
-      ctx.fill();
+      drawOpticalBeamColor(
+        ctx,
+        'underwater',
+        halfL - 1,
+        sideY,
+        0,
+        beamReach,
+        beamHalfW,
+        0.54 * subLightFactor,
+        [165, 243, 252],
+        [24, 198, 228]
+      );
     }
   }
 

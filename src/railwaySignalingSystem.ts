@@ -21,6 +21,7 @@ import { GameWorld, RailwaySignal, RailwaySignalType, RailwaySignalAspect, Railw
 import { sound } from './audio';
 import { TrainSystem } from './trainSystem';
 import { getLevelCrossings, isCrossingApproachOccupied } from './levelCrossingSystem';
+import { drawOpticalBeamCutout, drawOpticalBeamColor, OpticalRgb } from './opticalBeamTextures';
 
 export class RailwaySignalingSystem {
   // Flash cycle timer (1.1 Hz for ISI standard flashes, 1.2 Hz for crossings)
@@ -2977,18 +2978,8 @@ export class RailwaySignalingSystem {
         ctx.arc(lx + 0.6, ly, lensRadius * 0.25, 0, Math.PI * 2);
         ctx.fill();
 
-        // Directional optical glow cone (+X)
-        const coneGrad = ctx.createRadialGradient(lx, ly, 1, lx + 22, ly, 30);
-        coneGrad.addColorStop(0, `rgba(239, 68, 68, ${0.55 * brightness})`);
-        coneGrad.addColorStop(0.45, `rgba(239, 68, 68, ${0.22 * brightness})`);
-        coneGrad.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
-
-        ctx.fillStyle = coneGrad;
-        ctx.beginPath();
-        ctx.moveTo(lx + 1.5, ly);
-        ctx.arc(lx + 1.5, ly, 30, -0.45, 0.45);
-        ctx.closePath();
-        ctx.fill();
+        // Smooth feathered directional optical glow (+X, zero hard pie-wedge edges)
+        drawOpticalBeamColor(ctx, 'signal_beam', lx + 1.2, ly, 0, 36, 22, 0.52 * brightness, [255, 110, 100], [239, 68, 68]);
       } else {
         // Lunar white glowing core
         ctx.fillStyle = '#e0f2fe';
@@ -3000,16 +2991,8 @@ export class RailwaySignalingSystem {
         ctx.arc(lx + 0.4, ly, lensRadius * 0.6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Soft forward glow
-        const coneGrad = ctx.createRadialGradient(lx, ly, 1, lx + 18, ly, 24);
-        coneGrad.addColorStop(0, `rgba(224, 242, 254, ${0.45 * brightness})`);
-        coneGrad.addColorStop(1, 'rgba(224, 242, 254, 0.0)');
-        ctx.fillStyle = coneGrad;
-        ctx.beginPath();
-        ctx.moveTo(lx + 1.5, ly);
-        ctx.arc(lx + 1.5, ly, 24, -0.4, 0.4);
-        ctx.closePath();
-        ctx.fill();
+        // Smooth feathered forward glow
+        drawOpticalBeamColor(ctx, 'signal_beam', lx + 1.2, ly, 0, 28, 17, 0.44 * brightness, [240, 249, 255], [204, 232, 255]);
       }
     }
 
@@ -3168,24 +3151,23 @@ export class RailwaySignalingSystem {
       ctx.arc(lx + 0.4, ly, radius * (0.35 + b * 0.35), 0, Math.PI * 2);
       ctx.fill();
 
-      // Directional Collimated Beam through Fresnel Lens
+      // Directional Collimated Beam through Fresnel Lens (smooth Gaussian angular falloff, zero sharp triangle)
       if (b > 0.15) {
-        const beamThrow = (28 + nightAlpha * 45) * b;
-        const beamSpread = (18 + nightAlpha * 14) * b;
-        const beamGrad = ctx.createRadialGradient(lx + 2, ly, radius, lx + beamThrow * 0.6, ly, beamThrow);
-        const beamOpacity = Math.min(0.85, Math.pow(b, 1.3) * (0.42 + nightAlpha * 0.45));
-        beamGrad.addColorStop(0, `rgba(${r}, ${g}, ${bCol}, ${beamOpacity})`);
-        beamGrad.addColorStop(0.35, `rgba(${r}, ${g}, ${bCol}, ${beamOpacity * 0.4})`);
-        beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        ctx.fillStyle = beamGrad;
-        ctx.beginPath();
-        ctx.moveTo(lx + visorLen, ly - radius);
-        ctx.lineTo(lx + beamThrow, ly - beamSpread / 2);
-        ctx.lineTo(lx + beamThrow, ly + beamSpread / 2);
-        ctx.lineTo(lx + visorLen, ly + radius);
-        ctx.closePath();
-        ctx.fill();
+        const beamThrow = (34 + nightAlpha * 52) * b;
+        const beamHalfW = Math.max(14, (14 + nightAlpha * 12) * b * 1.45);
+        const beamOpacity = Math.min(0.68, Math.pow(b, 1.3) * (0.36 + nightAlpha * 0.38));
+        drawOpticalBeamColor(
+          ctx,
+          'signal_beam',
+          lx + visorLen * 0.85,
+          ly,
+          0,
+          beamThrow,
+          beamHalfW,
+          beamOpacity,
+          [Math.min(255, r + 40), Math.min(255, g + 40), Math.min(255, bCol + 40)],
+          [r, g, bCol]
+        );
       }
     }
 
@@ -3504,10 +3486,11 @@ export class RailwaySignalingSystem {
       for (const idx of activeLenses) {
         const color = sig.lenses[idx];
         let rgb = '24, 215, 130';
-        if (color === 'red') rgb = '255, 52, 48';
-        else if (color === 'yellow') rgb = '255, 178, 24';
-        else if (color === 'blue') rgb = '52, 142, 255';
-        else if (color === 'white') rgb = '230, 242, 255';
+        let rgbTuple: OpticalRgb = [24, 215, 130];
+        if (color === 'red') { rgb = '255, 52, 48'; rgbTuple = [255, 52, 48]; }
+        else if (color === 'yellow') { rgb = '255, 178, 24'; rgbTuple = [255, 178, 24]; }
+        else if (color === 'blue') { rgb = '52, 142, 255'; rgbTuple = [52, 142, 255]; }
+        else if (color === 'white') { rgb = '230, 242, 255'; rgbTuple = [230, 242, 255]; }
 
         // 1. Local pole/trackside ground pool (destination-out + color)
         const groundGrad = lCtx.createRadialGradient(0, 0, 1, 0, 0, 32);
@@ -3530,40 +3513,12 @@ export class RailwaySignalingSystem {
           cCtx.fill();
         }
 
-        // 2. Smooth rounded-origin directional signal beam (no razor triangle apex)
-        const coneReach = 92;
-        const coneHalfW = 30;
-        const traceConePath = (targetCtx: CanvasRenderingContext2D) => {
-          targetCtx.beginPath();
-          targetCtx.moveTo(2, -1.8);
-          targetCtx.quadraticCurveTo(coneReach * 0.45, -coneHalfW * 0.65, coneReach, -coneHalfW);
-          targetCtx.bezierCurveTo(
-            coneReach + 18, -coneHalfW * 0.45,
-            coneReach + 18, coneHalfW * 0.45,
-            coneReach, coneHalfW
-          );
-          targetCtx.quadraticCurveTo(coneReach * 0.45, coneHalfW * 0.65, 2, 1.8);
-          targetCtx.closePath();
-        };
-
-        const coneCut = lCtx.createRadialGradient(2, 0, 1, coneReach * 0.42, 0, coneReach);
-        coneCut.addColorStop(0.00, 'rgba(0, 0, 0, 0.78)');
-        coneCut.addColorStop(0.35, 'rgba(0, 0, 0, 0.42)');
-        coneCut.addColorStop(0.75, 'rgba(0, 0, 0, 0.12)');
-        coneCut.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = coneCut;
-        traceConePath(lCtx);
-        lCtx.fill();
-
+        // 2. Physically feathered directional Fresnel lens beam (zero hard contour edges)
+        const coneReach = 112;
+        const coneHalfW = 62;
+        drawOpticalBeamCutout(lCtx, 'signal_beam', 2, 0, 0, coneReach, coneHalfW, 0.78);
         if (cCtx) {
-          const coneCol = cCtx.createRadialGradient(2, 0, 1, coneReach * 0.42, 0, coneReach);
-          coneCol.addColorStop(0.00, `rgba(${rgb}, 0.52)`);
-          coneCol.addColorStop(0.32, `rgba(${rgb}, 0.26)`);
-          coneCol.addColorStop(0.72, `rgba(${rgb}, 0.07)`);
-          coneCol.addColorStop(1.00, `rgba(${rgb}, 0)`);
-          cCtx.fillStyle = coneCol;
-          traceConePath(cCtx);
-          cCtx.fill();
+          drawOpticalBeamColor(cCtx, 'signal_beam', 2, 0, 0, coneReach, coneHalfW, 0.54, rgbTuple);
         }
       }
 
