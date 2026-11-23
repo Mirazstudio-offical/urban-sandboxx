@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Player, InventoryItem, ItemCategory, GameWorld, GroundItem, CandyPackagingShape, ChocolatePackagingShape } from '../types';
 import {
   useItemOnPlayer,
@@ -53,19 +53,10 @@ import {
   getEffectiveFluidWrapper,
 } from '../interactionCrafting';
 import { ItemIconCanvas } from './ItemIconCanvas';
-import { ModalShell, Tabs } from './gameUi';
+import { ShadowHost, attachStageFit } from './ShadowHost';
+import { useTopmostEscape } from './gameUi';
 import { sound } from '../audio';
-
-function formatWeightRu(weightKg: number): string {
-  if (!weightKg || weightKg <= 0) return '0 г';
-  if (weightKg < 1) {
-    const grams = weightKg < 0.01
-      ? Number((weightKg * 1000).toFixed(1))
-      : Math.round(weightKg * 1000);
-    return `${grams} г`;
-  }
-  return `${Number(weightKg.toFixed(2))} кг`;
-}
+import inventoryModalCss from './inventoryModal.css?inline';
 import {
   Package,
   Utensils,
@@ -100,7 +91,19 @@ import {
   FlaskConical,
   Search,
   Wand2,
+  X
 } from 'lucide-react';
+
+function formatWeightRu(weightKg: number): string {
+  if (!weightKg || weightKg <= 0) return '0 г';
+  if (weightKg < 1) {
+    const grams = weightKg < 0.01
+      ? Number((weightKg * 1000).toFixed(1))
+      : Math.round(weightKg * 1000);
+    return `${grams} г`;
+  }
+  return `${Number(weightKg.toFixed(2))} кг`;
+}
 
 interface InventoryModalProps {
   isOpen: boolean;
@@ -112,8 +115,13 @@ interface InventoryModalProps {
   onInspectDocument?: (item: InventoryItem) => void;
 }
 
-export const InventoryModal: React.FC<InventoryModalProps> = ({
-  isOpen,
+const InventoryModalContent: React.FC<{
+  onClose: () => void;
+  player: Player;
+  world: GameWorld | null;
+  onRequestLimbTreatment?: (itemIndex: number, item: InventoryItem) => void;
+  onInspectDocument?: (item: InventoryItem) => void;
+}> = ({
   onClose,
   player,
   world,
@@ -126,6 +134,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const [activeTab, setActiveTab] = useState<'inventory' | 'interaction' | 'surroundings' | 'clothing' | 'catalog'>('inventory');
   const [openContainer, setOpenContainer] = useState<InventoryItem | null>(null);
   const [selectedContainerItemIdx, setSelectedContainerItemIdx] = useState<number>(0);
+  const [entered, setEntered] = useState(false);
   const [, forceRender] = useState(0);
   const [selectedWbSlot, setSelectedWbSlot] = useState<string | null>(null);
   const [wbDragUi, setWbDragUi] = useState<{
@@ -135,7 +144,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     y: number;
     overKey: string | null;
   } | null>(null);
-  const wbDragRef = React.useRef<{
+
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const gmRef = useRef<HTMLDivElement>(null);
+
+  const wbDragRef = useRef<{
     pointerId: number;
     sourceKey: string;
     item: InventoryItem;
@@ -146,10 +159,24 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     active: boolean;
     overKey: string | null;
   } | null>(null);
-  const wbDropHandlerRef = React.useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
+  const wbDropHandlerRef = useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
+
+  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
 
   useEffect(() => {
-    if (!isOpen || !player) return;
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useTopmostEscape(() => {
+    if (openContainer) {
+      setOpenContainer(null);
+      return;
+    }
+    onClose();
+  });
+
+  useEffect(() => {
     const w =
       (player.inventory && player.inventory.some(i => i && i.itemId === 'wallet')) ||
       player.leftHandItem?.itemId === 'wallet' ||
@@ -162,9 +189,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       restoreStarterContainers(player);
       forceRender(n => n + 1);
     }
-  }, [isOpen, player]);
+  }, [player]);
 
-  // ---- Freeroam "free inventory" catalog tab: every item can be handed out instantly ----
+  // ---- Freeroam "free inventory" catalog tab ----
   const isFreeroam = world?.gameMode === 'freeroam';
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<string>('all');
@@ -186,7 +213,12 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     [isFreeroam, catalogSelected?.key]
   );
 
-  if (!isOpen || !player) return null;
+  const stopGameKeys = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Escape') {
+      e.stopPropagation();
+      e.nativeEvent.stopPropagation();
+    }
+  };
 
   const handleGiveCatalogItem = (key: string, count: number) => {
     const created = createItem(key, count);
@@ -195,7 +227,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       addPlayerNotification(player, `Получено: ${created.nameRu || created.name} x${count}`, 'pickup');
       sound.playUseItem();
     } else {
-      addPlayerNotification(player, 'Инвентарь заполнен!', 'warning');
+      addPlayerNotification(player, 'Инвентарь заполнен', 'warning');
     }
     forceRender(n => n + 1);
   };
@@ -251,19 +283,16 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       : null;
 
   const handleEquipItem = (idx: number) => {
-    if (!player) return;
     equipClothing(player, idx, world);
     forceRender(n => n + 1);
   };
 
   const handleUnequipItem = (slot: any, layer: any) => {
-    if (!player) return;
     unequipClothing(player, slot, layer, world);
     forceRender(n => n + 1);
   };
 
   const handleUseItem = (idx: number, forceDirectUse: boolean = false) => {
-    if (!player) return;
     const item = player.inventory?.[idx];
     if (!item) return;
 
@@ -299,18 +328,16 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const handleDropItem = (idx: number) => {
-    if (!player || !world) return;
+    if (!world) return;
     dropItemFromPlayer(player, idx, world, 1);
     forceRender(n => n + 1);
   };
 
   const handleTakeToHand = (hand: 'left' | 'right', invIdx: number) => {
-    if (!player) return;
     const item = player.inventory?.[invIdx];
     if (!item) return;
     const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
     if (handItem) {
-      // Try swapping if the current hand item fits in invIdx
       const fitCheck = canItemFitInCompartment(player, invIdx, handItem, { ignoreSlotIdx: invIdx });
       if (fitCheck.fits) {
         const displaced = takeItemFromHand(player, hand);
@@ -328,7 +355,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           return;
         }
       }
-      addPlayerNotification(player, `${hand === 'left' ? 'Левая' : 'Правая'} рука уже занята!`, 'warning');
+      addPlayerNotification(player, `${hand === 'left' ? 'Левая' : 'Правая'} рука уже занята`, 'warning');
       return;
     }
     player.inventory[invIdx] = null as any;
@@ -343,14 +370,12 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const handleStowHand = (hand: 'left' | 'right', targetSlotIdx?: number) => {
-    if (!player) return;
     const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
     if (!handItem) return;
 
     if (targetSlotIdx !== undefined && targetSlotIdx >= 0) {
       if (!player.inventory) player.inventory = [];
       const existing = player.inventory[targetSlotIdx];
-      // If dropping onto an openable container in that slot, try putting inside container first
       if (
         existing &&
         existing.isContainer &&
@@ -376,7 +401,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
         ignoreSlotIdx: existing ? targetSlotIdx : undefined,
       });
       if (!fit.fits) {
-        addPlayerNotification(player, fit.reason || 'Не помещается в этот отсек!', 'warning');
+        addPlayerNotification(player, fit.reason || 'Не помещается в этот отсек', 'warning');
         return;
       }
       const taken = takeItemFromHand(player, hand);
@@ -398,7 +423,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const handleDropFromHand = (hand: 'left' | 'right') => {
-    if (!player || !world) return;
+    if (!world) return;
     const item = takeItemFromHand(player, hand);
     if (item) {
       if (!world.groundItems) world.groundItems = [];
@@ -416,7 +441,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const handlePutIntoContainer = (container: InventoryItem, invIdx: number) => {
-    if (!player) return;
     const item = player.inventory?.[invIdx];
     if (!item || item.id === container.id) return;
     const res = addItemToContainer(container, item);
@@ -436,7 +460,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     target: 'pockets' | 'leftHand' | 'rightHand',
     exactPocketSlotIdx?: number
   ) => {
-    if (!player || !container.contents) return;
+    if (!container.contents) return;
     const item = container.contents[contentIdx];
     if (!item) return;
 
@@ -448,7 +472,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           ignoreSlotIdx: existing ? exactPocketSlotIdx : undefined,
         });
         if (!fit.fits) {
-          addPlayerNotification(player, fit.reason || 'Не помещается в этот отсек!', 'warning');
+          addPlayerNotification(player, fit.reason || 'Не помещается в этот отсек', 'warning');
           return;
         }
         if (!existing) {
@@ -473,7 +497,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
       const check = canItemFitInPockets(player, item);
       if (!check.fits) {
-        addPlayerNotification(player, check.reason || 'Не помещается в карманы!', 'warning');
+        addPlayerNotification(player, check.reason || 'Не помещается в карманы', 'warning');
         return;
       }
       const removed = removeItemFromContainer(container, contentIdx, item.count);
@@ -501,7 +525,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           }
           return;
         }
-        addPlayerNotification(player, `${hand === 'left' ? 'Левая' : 'Правая'} рука занята!`, 'warning');
+        addPlayerNotification(player, `${hand === 'left' ? 'Левая' : 'Правая'} рука занята`, 'warning');
         return;
       }
       const removed = removeItemFromContainer(container, contentIdx, item.count);
@@ -514,7 +538,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const handleEquipFromHand = (hand: 'left' | 'right') => {
-    if (!player) return;
     const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
     if (!item || !item.clothingStats) return;
 
@@ -547,7 +570,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const handleDropFromContainer = (container: InventoryItem, contentIdx: number) => {
-    if (!player || !world || !container.contents) return;
+    if (!world || !container.contents) return;
     const item = removeItemFromContainer(container, contentIdx, 1);
     if (item) {
       if (!world.groundItems) world.groundItems = [];
@@ -570,7 +593,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   });
 
   const handlePickupGroundItem = (gi: GroundItem, targetKey?: string) => {
-    if (!player || !world) return;
+    if (!world) return;
     if (targetKey === 'hand:left' || targetKey === 'hand:right') {
       const hand = targetKey === 'hand:left' ? 'left' : 'right';
       const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
@@ -620,7 +643,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     ...(player.equippedClothing?.back?.outerwear?.isContainer ? [player.equippedClothing.back.outerwear] : [])
   ];
 
-  // ==================== 10-SLOT INTERACTION WORKBENCH STATE & HELPERS ====================
+  // ==================== 10-SLOT INTERACTION WORKBENCH ====================
   const pAny = player as any;
   if (!pAny._interactionInputs) {
     pAny._interactionInputs = [null, null, null, null] as InteractionSlotGrid4;
@@ -679,7 +702,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       targetSlot = candidateIndices.find(idx => interactionInputs[idx] === null);
     }
     if (targetSlot === undefined || targetSlot < 0 || targetSlot > 3) {
-      addPlayerNotification(player, 'Все 4 слота ввода уже заняты!', 'warning');
+      addPlayerNotification(player, 'Все 4 слота ввода уже заняты', 'warning');
       return;
     }
 
@@ -753,7 +776,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const workbenchActiveCount =
     interactionInputs.filter(Boolean).length + interactionOutputs.filter(Boolean).length;
 
-  // ==================== UNIFIED CUSTOM POINTER DRAG-AND-DROP ENGINE ====================
+  // ==================== UNIFIED POINTER DRAG-AND-DROP ENGINE (SHADOW-DOM SAFE) ====================
   const ensureOutputsCommitted = (): boolean => {
     if (hasCommittedOutputs) return true;
     if (!evalResult.isValid) return false;
@@ -814,20 +837,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     };
   };
 
-  // Universal drop handler across all InventoryModal tabs & views:
-  // Slot keys:
-  // - 'hand:left' | 'hand:right'
-  // - 'inv:<slotIdx>'
-  // - 'cont:<cIdx>' | 'cont:empty-<idx>' | 'zone:container'
-  // - 'input:<0..3>' | 'output:<0..3>'
-  // - 'ground:<id>' | 'ground:empty-<idx>' | 'zone:ground'
-  // - 'cloth:<slot>:<layer>' | 'zone:clothing'
-  // - 'zone:pockets'
   const handleUnifiedSlotDrop = (targetKey: string, sourceKey: string) => {
     if (!sourceKey || sourceKey === targetKey) return;
     if (targetKey.startsWith('output:')) return;
 
-    // 1. Moving between two inventory slots ('inv:A' -> 'inv:B')
+    // 1. Moving between two inventory slots
     if (sourceKey.startsWith('inv:') && targetKey.startsWith('inv:')) {
       const fromIdx = parseInt(sourceKey.replace('inv:', ''), 10);
       const toIdx = parseInt(targetKey.replace('inv:', ''), 10);
@@ -836,7 +850,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       const toItem = player.inventory?.[toIdx];
       if (!fromItem) return;
 
-      // If target slot contains a container (and isn't the same item), try putting inside the container
       if (toItem && toItem.id !== fromItem.id) {
         ensureHybridContainerProps(toItem);
         if (
@@ -907,7 +920,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       return;
     }
 
-    // 4. Opened Container ('cont:*' or 'zone:container') <-> Hands / Pockets
+    // 4. Opened Container <-> Hands / Pockets
     if (openContainer) {
       const isTargetContainer = targetKey.startsWith('cont:') || targetKey === 'zone:container';
       const isSourceContainer = sourceKey.startsWith('cont:') && !sourceKey.startsWith('cont:empty-');
@@ -925,7 +938,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
         const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
         if (!handItem) return;
         if (handItem.id === openContainer.id) {
-          addPlayerNotification(player, 'Нельзя положить контейнер сам в себя!', 'warning');
+          addPlayerNotification(player, 'Нельзя положить контейнер сам в себя', 'warning');
           return;
         }
         const taken = takeItemFromHand(player, hand);
@@ -962,7 +975,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       }
     }
 
-    // 5. Ground ('ground:*' / 'zone:ground') <-> Hands / Pockets
+    // 5. Ground <-> Hands / Pockets
     if (sourceKey.startsWith('ground:') && !sourceKey.startsWith('ground:empty-')) {
       const groundId = sourceKey.replace('ground:', '');
       const gi = nearbyGroundItems.find(g => g.id === groundId);
@@ -984,7 +997,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       }
     }
 
-    // 6. Clothing ('cloth:*' / 'zone:clothing') <-> Hands / Pockets
+    // 6. Clothing <-> Hands / Pockets
     if (sourceKey.startsWith('cloth:')) {
       const parts = sourceKey.split(':');
       const slot = parts[1];
@@ -1009,7 +1022,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       }
     }
 
-    // 7. Interaction Workbench ('input:0..3' / 'output:0..3') <-> Hands / Input
+    // 7. Interaction Workbench <-> Hands / Input
     let draggedItem: InventoryItem | null = null;
     if (sourceKey.startsWith('output:')) {
       const outIdx = parseInt(sourceKey.replace('output:', ''), 10);
@@ -1083,7 +1096,9 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   wbDropHandlerRef.current = handleUnifiedSlotDrop;
 
   const findTargetWbSlotAt = (x: number, y: number, sourceKey: string): string | null => {
-    const nodes = document.querySelectorAll<HTMLElement>('[data-wb-slot]');
+    const scope = gmRef.current;
+    if (!scope) return null;
+    const nodes = scope.querySelectorAll<HTMLElement>('[data-wb-slot]');
     let bestKey: string | null = null;
     let bestDist = Infinity;
 
@@ -1108,7 +1123,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     });
 
     if (!bestKey) {
-      const inputGrid = document.querySelector<HTMLElement>('[data-wb-input-grid]');
+      const inputGrid = scope.querySelector<HTMLElement>('[data-wb-input-grid]');
       if (inputGrid) {
         const gRect = inputGrid.getBoundingClientRect();
         if (
@@ -1124,7 +1139,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
         }
       }
 
-      const zones = document.querySelectorAll<HTMLElement>('[data-wb-drop-zone]');
+      const zones = scope.querySelectorAll<HTMLElement>('[data-wb-drop-zone]');
       zones.forEach(zone => {
         if (bestKey) return;
         const zKey = zone.getAttribute('data-wb-drop-zone');
@@ -1140,9 +1155,15 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   };
 
   const findScrollableContainerAt = (x: number, y: number): HTMLElement | null => {
-    const hit = document.elementFromPoint(x, y) as HTMLElement | null;
+    const scope = gmRef.current;
+    if (!scope) return null;
+    const rn = scope.getRootNode() as ShadowRoot | Document;
+    const hit = (typeof (rn as ShadowRoot).elementFromPoint === 'function'
+      ? (rn as ShadowRoot).elementFromPoint(x, y)
+      : document.elementFromPoint(x, y)) as HTMLElement | null;
+
     let el: HTMLElement | null = hit;
-    while (el && el !== document.body) {
+    while (el && el !== scope && el !== document.body) {
       if (el.scrollHeight > el.clientHeight + 2) {
         const style = window.getComputedStyle(el);
         if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
@@ -1151,9 +1172,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       }
       el = el.parentElement;
     }
-    const scrollables = document.querySelectorAll<HTMLElement>(
-      '.gu-st-scroll, .gu-inv-left-scroll, .gu-inv-detail-scroll, .gu-cont-scroll, #inventory-modal .gu-body'
-    );
+
+    const scrollables = scope.querySelectorAll<HTMLElement>('.scroll');
     for (let i = 0; i < scrollables.length; i++) {
       const node = scrollables[i];
       const r = node.getBoundingClientRect();
@@ -1171,11 +1191,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     onSelectClick?: () => void
   ) => {
     if (e.button !== 0) return;
-    // If one finger is already holding/dragging an item, do not let a second finger hijack or cancel the drag
-    if (wbDragRef.current && wbDragRef.current.pointerId !== e.pointerId) {
-      return;
-    }
-    // Ignore clicks on nested action buttons
+    if (wbDragRef.current && wbDragRef.current.pointerId !== e.pointerId) return;
     if ((e.target as HTMLElement)?.closest('button')) return;
     e.stopPropagation();
 
@@ -1228,7 +1244,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     const onExtraPointerDown = (ev: PointerEvent) => {
       const st = wbDragRef.current;
       if (!st || ev.pointerId === st.pointerId) return;
-      // Second finger touched down while holding item with first finger: activate drag preview and start scrolling
       if (!st.active) {
         st.active = true;
         refreshHoverUnderDraggedItem();
@@ -1248,7 +1263,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       if (ev.pointerId === st.pointerId) {
         st.x = ev.clientX;
         st.y = ev.clientY;
-        if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 3) {
+        if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 4) {
           st.active = true;
         }
         if (st.active) {
@@ -1281,7 +1296,6 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       const st = wbDragRef.current;
       if (!st) return;
 
-      // If the second (scrolling) finger was lifted/cancelled, only end second-finger scroll
       if (ev.pointerId !== st.pointerId) {
         if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
           secondScrollPointer = null;
@@ -1327,7 +1341,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     window.addEventListener('wheel', onWheelWhileDragging, true);
   };
 
-  // Compact square Hand Slot (standard .gu-slot size, rendered inside the scrollable compartment list)
+  // Compact square Hand Slot
   const renderHandSquareSlot = (hand: 'left' | 'right', shortBadge: string, label: string, handItem: InventoryItem | null | undefined) => {
     const slotKey = `hand:${hand}`;
     const isBeingDragged = wbDragUi?.sourceKey === slotKey;
@@ -1360,38 +1374,37 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           }
         }}
         className={
-          'gu-slot' +
+          'inv-slot' +
           (!handItem ? ' empty' : '') +
           (isDropTarget || isSelected ? ' on' : '') +
           (isHot ? ' hot' : '') +
           (isCold ? ' cold' : '')
         }
         style={{
-          touchAction: 'none',
           cursor: handItem ? 'grab' : selectedWbSlot ? 'pointer' : 'default',
           opacity: isBeingDragged ? 0.35 : 1,
-          borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
+          borderColor: isDropTarget ? '#e0ab45' : undefined,
         }}
         title={info ? `${label}: ${info.tooltip}` : `${label} (пусто — перетащите предмет)`}
       >
-        <span className="gu-ic-hk" style={{ pointerEvents: 'none' }}>{shortBadge}</span>
+        <span className="inv-hk">{shortBadge}</span>
         {handItem ? (
           <>
-            <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={44} />
+            <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={42} />
             {handItem.count > 1 ? (
-              <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{handItem.count}</span>
+              <span className="inv-cnt">{handItem.count}</span>
             ) : handItem.isContainer ? (
-              <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{handItem.contents?.length || 0}</span>
+              <span className="inv-cnt">{handItem.contents?.length || 0}</span>
             ) : null}
-            {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(temp!)}°</span>}
-            {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(temp!)}°</span>}
+            {isHot && <span className="inv-temp">+{Math.round(temp!)}°</span>}
+            {isCold && <span className="inv-temp cold">{Math.round(temp!)}°</span>}
             {(handItem.wetness ?? 0) > 0 && (
-              <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
+              <span className="inv-wet">
                 <CloudRain width={11} height={11} />
               </span>
             )}
             {info && info.pct !== null && (
-              <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
+              <div className="inv-fill">
                 <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
               </div>
             )}
@@ -1403,7 +1416,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     );
   };
 
-  // Reusable Player Hand + Compartments Slot Grid (all inside the scroll block)
+  // Reusable Player Hands + Compartments Slot Grid
   const renderCompartmentsSlotGrid = () => {
     const getCompIcon = (type: string, size = 15) => {
       if (type === 'user') return <User width={size} height={size} />;
@@ -1418,45 +1431,50 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     };
 
     const handsCount = (player.leftHandItem ? 1 : 0) + (player.rightHandItem ? 1 : 0);
+    const handsSummary = [
+      player.leftHandItem ? `Л: ${player.leftHandItem.nameRu}` : null,
+      player.rightHandItem ? `П: ${player.rightHandItem.nameRu}` : null
+    ].filter(Boolean).join(' · ');
 
     return (
       <div data-wb-drop-zone="zone:pockets">
-        {/* Hands as the first compact slot group inside the scroll container */}
-        <div className="gu-group">
-          <div className="gu-group-h">
-            <span className="gu-group-t">
+        {/* Hands group — single-line header, never wraps or overflows */}
+        <div className="inv-group">
+          <div className="inv-group-h">
+            <span className="inv-group-t">
               <Hand width={15} height={15} />
               Активные руки
             </span>
-            <span className="gu-grp-meta gu-mono">
-              {handsCount}/2 слота · Лев: {player.leftHandItem ? player.leftHandItem.nameRu : 'пусто'} · Прав: {player.rightHandItem ? player.rightHandItem.nameRu : 'пусто'}
+            <span className="inv-group-meta mono" title={handsSummary || 'Руки свободны'}>
+              {handsCount}/2{handsSummary ? ` · ${handsSummary}` : ' · свободно'}
             </span>
           </div>
-          <div className="gu-slots">
+          <div className="inv-slots">
             {renderHandSquareSlot('left', 'Л', 'Левая рука', player.leftHandItem)}
             {renderHandSquareSlot('right', 'П', 'Правая рука', player.rightHandItem)}
           </div>
         </div>
+
         {compartments.map(comp => {
           const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
           const compVolumePct = Math.round((comp.usedVolumeL / comp.capacityL) * 100);
           const compWeightPct = Math.round((comp.usedWeightKg / comp.maxWeightKg) * 100);
 
           return (
-            <div key={comp.id} className="gu-group">
-              <div className="gu-group-h">
-                <span className="gu-group-t">
+            <div key={comp.id} className="inv-group">
+              <div className="inv-group-h">
+                <span className="inv-group-t">
                   {getCompIcon(comp.iconType)}
                   {comp.nameRu}
                 </span>
-                <span className="gu-grp-meta gu-mono">
+                <span className="inv-group-meta mono">
                   <span className={compVolumePct > 95 ? 'bad' : ''}>{comp.usedVolumeL}/{comp.capacityL} л</span>
                   {' · '}
                   <span className={compWeightPct > 95 ? 'bad' : ''}>{comp.usedWeightKg}/{comp.maxWeightKg} кг</span>
                 </span>
               </div>
 
-              <div className="gu-slots">
+              <div className="inv-slots">
                 {slots.map(slotIdx => {
                   const item = inventory[slotIdx];
                   const slotKey = `inv:${slotIdx}`;
@@ -1478,13 +1496,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             setSelectedIndex(slotIdx);
                           })
                         }
-                        className={'gu-slot empty' + (isDropTarget ? ' on' : '')}
-                        style={{
-                          touchAction: 'none',
-                          borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                        }}
+                        className={'inv-slot empty' + (isDropTarget ? ' on' : '')}
+                        style={{ borderColor: isDropTarget ? '#e0ab45' : undefined }}
                       >
-                        {slotIdx < 6 && <span className="gu-ic-hk">{slotIdx + 1}</span>}
+                        {slotIdx < 6 && <span className="inv-hk">{slotIdx + 1}</span>}
                       </div>
                     );
                   }
@@ -1533,36 +1548,35 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         }
                       }}
                       className={
-                        'gu-slot' +
+                        'inv-slot' +
                         (isSelected || isDropTarget ? ' on' : '') +
                         (matchesFilter(item) ? '' : ' dim') +
                         (isHot ? ' hot' : '') +
                         (isCold ? ' cold' : '')
                       }
                       style={{
-                        touchAction: 'none',
                         cursor: 'grab',
                         opacity: isBeingDragged ? 0.35 : 1,
-                        borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
+                        borderColor: isDropTarget ? '#e0ab45' : undefined,
                       }}
                       title={info?.tooltip}
                     >
-                      {slotIdx < 6 && <span className="gu-ic-hk" style={{ pointerEvents: 'none' }}>{slotIdx + 1}</span>}
-                      <ItemIconCanvas itemId={item.itemId} item={item} size={44} />
+                      {slotIdx < 6 && <span className="inv-hk">{slotIdx + 1}</span>}
+                      <ItemIconCanvas itemId={item.itemId} item={item} size={42} />
                       {item.count > 1 ? (
-                        <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{item.count}</span>
+                        <span className="inv-cnt">{item.count}</span>
                       ) : item.isContainer ? (
-                        <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{item.contents?.length || 0}</span>
+                        <span className="inv-cnt">{item.contents?.length || 0}</span>
                       ) : null}
-                      {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(temp!)}°</span>}
-                      {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(temp!)}°</span>}
+                      {isHot && <span className="inv-temp">+{Math.round(temp!)}°</span>}
+                      {isCold && <span className="inv-temp cold">{Math.round(temp!)}°</span>}
                       {(item.wetness ?? 0) > 0 && (
-                        <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
+                        <span className="inv-wet">
                           <CloudRain width={11} height={11} />
                         </span>
                       )}
                       {info && info.pct !== null && (
-                        <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
+                        <div className="inv-fill">
                           <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
                         </div>
                       )}
@@ -1577,1392 +1591,1287 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     );
   };
 
+  const tabItems: {
+    id: 'inventory' | 'interaction' | 'surroundings' | 'clothing' | 'catalog';
+    label: string;
+    icon: React.ReactNode;
+    badge?: number;
+  }[] = [
+    { id: 'inventory', label: 'Карманы', icon: <Package width={15} height={15} />, badge: inventory.filter(Boolean).length },
+    { id: 'interaction', label: 'Взаимодействие', icon: <Layers width={15} height={15} />, badge: workbenchActiveCount > 0 ? workbenchActiveCount : undefined },
+    { id: 'surroundings', label: 'Рядом', icon: <Sparkles width={15} height={15} />, badge: nearbyGroundItems.length },
+    { id: 'clothing', label: 'Одежда', icon: <Shirt width={15} height={15} /> },
+    ...(isFreeroam
+      ? [{ id: 'catalog' as const, label: 'Каталог', icon: <Wand2 width={15} height={15} />, badge: catalogAllItems.length }]
+      : [])
+  ];
+
+  const speedColor = weightSpeedPct >= 95 ? '#9ac985' : weightSpeedPct >= 70 ? '#f0c264' : '#f2b4a0';
+
   return (
-    <ModalShell
-      id="inventory-modal"
-      title="Инвентарь и нагрузка"
-      subtitle="Физический объём (л), вес (кг), карманы и активные руки"
-      width={1140}
-      tall={activeTab !== 'interaction'}
-      onClose={onClose}
-      wipeKey={activeTab + '-' + (openContainer?.id || 'root')}
-      headRight={
-        <div className="gu-row2 gu-hide-s" style={{ gap: 6 }}>
-          <div className="gu-chip">
-            <Weight width={14} height={14} color="#c9922b" />
-            <span className="gu-mut">Вес:</span>
-            <strong className="gu-mono" style={{ color: '#fff' }}>{carriedWeight} кг</strong>
-          </div>
-          <div className="gu-chip">
-            <span className="gu-mut">Скорость:</span>
-            <strong className="gu-mono" style={{ color: weightSpeedPct >= 95 ? '#9ac985' : weightSpeedPct >= 70 ? '#f0c264' : '#efa690' }}>
-              {weightSpeedPct}%{isBulkyHand ? ' (Груз)' : ''}
-            </strong>
-          </div>
-          <div className="gu-chip">
-            <span className="gu-mut">Карманы:</span>
-            <strong className="gu-mono" style={{ color: '#e0ab45' }}>{pocketCap.usedVolumeL} / {pocketCap.totalCapacityL} л</strong>
-          </div>
-        </div>
-      }
-      tabs={
-        <div className="gu-tabs-bar">
-          <Tabs
-            value={activeTab}
-            onChange={t => {
-              sound.playButtonPress();
-              setActiveTab(t);
-              setOpenContainer(null);
+    <ShadowHost css={inventoryModalCss} zIndex={50} background="transparent">
+      <div id="w" ref={wrapRef}>
+        <div className={'bd' + (!entered ? ' gone' : '')} />
+        <div id="inventory-modal" className={'gm' + (!entered ? ' gone' : '')} ref={gmRef}>
+          {/* Main Menu ambient glow & vignette */}
+          <div
+            className="a"
+            style={{
+              inset: 0,
+              background: 'radial-gradient(900px 520px at 72% 84%, rgba(201,146,43,.22), transparent 62%)'
             }}
-            items={[
-              {
-                id: 'inventory',
-                label: 'Карманы',
-                icon: <Package width={16} height={16} />,
-                badge: inventory.filter(Boolean).length
-              },
-              {
-                id: 'interaction',
-                label: 'Взаимодействие',
-                icon: <Layers width={16} height={16} />,
-                badge: workbenchActiveCount > 0 ? workbenchActiveCount : undefined
-              },
-              {
-                id: 'surroundings',
-                label: 'Рядом',
-                icon: <Sparkles width={16} height={16} />,
-                badge: nearbyGroundItems.length
-              },
-              {
-                id: 'clothing',
-                label: 'Одежда',
-                icon: <Shirt width={16} height={16} />
-              },
-              ...(isFreeroam
-                ? [{
-                    id: 'catalog' as const,
-                    label: 'Каталог',
-                    icon: <Wand2 width={16} height={16} />,
-                    badge: catalogAllItems.length
-                  }]
-                : [])
-            ]}
+          />
+          <div
+            className="a"
+            style={{
+              inset: 0,
+              background: 'linear-gradient(90deg, rgba(9,9,10,.88), rgba(9,9,10,.36) 50%, rgba(9,9,10,.6) 100%)'
+            }}
           />
 
-          {activeTab === 'inventory' && !openContainer && (
-            <div className="gu-pills">
-              {[
-                { id: 'all', label: 'Все' },
-                { id: 'food', label: 'Еда' },
-                { id: 'drink', label: 'Напитки' },
-                { id: 'med', label: 'Медицина' },
-                { id: 'tool', label: 'Инструменты' },
-                { id: 'valuable', label: 'Ценности' }
-              ].map(cat => {
-                const on = selectedCategory === cat.id;
-                return (
-                  <button
-                    type="button"
-                    key={cat.id}
-                    id={`filter-cat-${cat.id}`}
-                    onClick={() => setSelectedCategory(cat.id as any)}
-                    className={'gu-pill' + (on ? ' on' : '')}
-                  >
-                    <span>{cat.label}</span>
-                  </button>
-                );
-              })}
+          {/* Top Bar */}
+          <div className="top">
+            <div className="top-l">
+              <button
+                type="button"
+                className="chip back"
+                onClick={openContainer ? () => setOpenContainer(null) : onClose}
+                aria-label={openContainer ? 'Вернуться в карманы' : 'Закрыть инвентарь'}
+                title={openContainer ? 'В карманы' : 'Закрыть'}
+              >
+                {openContainer ? (
+                  <ChevronLeft size={21} strokeWidth={2} color="#e9e6df" />
+                ) : (
+                  <X size={20} strokeWidth={2} color="#e9e6df" />
+                )}
+              </button>
+              <span className="cn ttl">Инвентарь и нагрузка</span>
+              <span className="sub-top">Объём, вес, карманы и активные руки</span>
             </div>
-          )}
-        </div>
-      }
-      footerHints={[
-        ['Esc / I', 'Закрыть'],
-        ['2× Клик', 'Использовать'],
-        ['Перетаскивание', 'В любой слот / руку']
-      ]}
-      footerRight={
-        <span className="gu-mut" style={{ fontSize: 12 }}>
-          Лев: <strong style={{ color: '#e9e6df' }}>{player.leftHandItem ? player.leftHandItem.nameRu : 'Свободна'}</strong>
-          {' · '}
-          Прав: <strong style={{ color: '#e9e6df' }}>{player.rightHandItem ? player.rightHandItem.nameRu : 'Свободна'}</strong>
-        </span>
-      }
-    >
-      <div className="gu-stagger gu-inv-root">
-        {/* ==================== TAB 1: INVENTORY & POCKETS ==================== */}
-        {activeTab === 'inventory' && !openContainer && (
-          <div className="gu-inv-split">
-            {/* LEFT: PINNED HAND SLOTS + SCROLLABLE COMPARTMENTS & CONTAINERS */}
-            <div className="gu-inv-left">
-              {(!hasWallet || !hasBag) && (
-                <div className="gu-note gu-warn gu-row2" style={{ flex: 'none', justifyContent: 'space-between', padding: '7px 10px' }}>
-                  <div className="gu-row2" style={{ gap: 6, fontSize: 12 }}>
-                    <Sparkles width={14} height={14} />
-                    <span>
-                      {!hasWallet && !hasBag
-                        ? 'Кошелёк и пакет не найдены в инвентаре'
-                        : !hasWallet
-                        ? 'Кожаный бумажник не найден'
-                        : 'Пакет для покупок не найден'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    id="btn-restore-containers"
-                    className="gu-btn gu-btn-p gu-btn-xs"
-                    onClick={() => {
-                      restoreStarterContainers(player);
-                      forceRender(n => n + 1);
-                    }}
-                  >
-                    Восстановить
-                  </button>
-                </div>
-              )}
 
-              {/* Player Hands & Compartments Column (no side scrollbar) */}
-              <div className="gu-inv-left-scroll">
-                <div className="gu-panel" style={{ padding: '10px 12px', flex: 1 }}>
-                  {renderCompartmentsSlotGrid()}
-                </div>
+            <div className="top-r">
+              <div className="chip">
+                <Weight width={15} height={15} color="#c9922b" />
+                <span className="mut">Вес:</span>
+                <strong className="mono" style={{ color: '#fff' }}>{carriedWeight} кг</strong>
               </div>
+              <div className="chip">
+                <span className="mut">Скорость:</span>
+                <strong className="mono" style={{ color: speedColor }}>
+                  {weightSpeedPct}%{isBulkyHand ? ' (Груз)' : ''}
+                </strong>
+              </div>
+              <div className="chip">
+                <span className="mut">Карманы:</span>
+                <strong className="mono" style={{ color: '#e0ab45' }}>
+                  {pocketCap.usedVolumeL} / {pocketCap.totalCapacityL} л
+                </strong>
+              </div>
+              {openContainer && (
+                <button
+                  type="button"
+                  className="chip back"
+                  onClick={onClose}
+                  aria-label="Закрыть инвентарь"
+                  title="Закрыть"
+                >
+                  <X size={19} strokeWidth={2} color="#a29e93" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Main Menu Tabs + Single-Row Category Filter Pills */}
+          <div className="inv-tabbar">
+            <div className="inv-tabs" role="tablist">
+              {tabItems.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === t.id}
+                  className={'inv-tab' + (activeTab === t.id ? ' on' : '')}
+                  onClick={() => {
+                    sound.playButtonPress();
+                    setActiveTab(t.id);
+                    setOpenContainer(null);
+                  }}
+                >
+                  {t.icon}
+                  <span>{t.label}</span>
+                  {t.badge !== undefined && <span className="inv-tab-n">{t.badge}</span>}
+                </button>
+              ))}
             </div>
 
-            {/* RIGHT: PINNED HEADER + SCROLLABLE SPECS + PINNED ACTION FOOTER */}
-            <div className="gu-panel gu-inv-detail">
-              {selectedEntry && selectedEntry.item ? (
-                <>
-                  {/* Pinned Item Header */}
-                  <div className="gu-row2" style={{ flex: 'none', alignItems: 'flex-start', gap: 10, paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
-                    <div className="gu-ic gu-md" style={{ width: 48, height: 48, flexShrink: 0 }}>
-                      <ItemIconCanvas itemId={selectedEntry.item.itemId} item={selectedEntry.item} size={44} />
-                    </div>
-                    <div className="gu-grow" style={{ minWidth: 0 }}>
-                      <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {selectedEntry.item.nameRu}
-                      </div>
-                      <div className="gu-mut gu-mono" style={{ fontSize: 11.5, marginTop: 3 }}>
-                        <span style={{ color: 'var(--gu-amber-hi)' }}>
-                          {selectedEntry.item.category === 'food'
-                            ? 'Еда'
-                            : selectedEntry.item.category === 'drink'
-                            ? 'Напиток'
-                            : selectedEntry.item.category === 'med'
-                            ? 'Медицина'
-                            : selectedEntry.item.category === 'tool'
-                            ? 'Инструмент'
-                            : 'Предмет'}
+            {activeTab === 'inventory' && !openContainer && (
+              <div className="inv-pills">
+                {[
+                  { id: 'all', label: 'Все' },
+                  { id: 'food', label: 'Еда' },
+                  { id: 'drink', label: 'Напитки' },
+                  { id: 'med', label: 'Медицина' },
+                  { id: 'tool', label: 'Инструменты' },
+                  { id: 'valuable', label: 'Ценности' }
+                ].map(cat => {
+                  const on = selectedCategory === cat.id;
+                  return (
+                    <button
+                      type="button"
+                      key={cat.id}
+                      id={`filter-cat-${cat.id}`}
+                      onClick={() => setSelectedCategory(cat.id as any)}
+                      className={'inv-pill' + (on ? ' on' : '')}
+                    >
+                      {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Main Workspace */}
+          <div className="inv-body">
+            {/* ==================== TAB 1: INVENTORY & POCKETS ==================== */}
+            {activeTab === 'inventory' && !openContainer && (
+              <div className="inv-split">
+                {/* LEFT: Restore banner + Scrollable Hands & Compartments */}
+                <div className="inv-left-wrap">
+                  {(!hasWallet || !hasBag) && (
+                    <div
+                      className="note note-warn"
+                      style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '6px 12px' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                        <Sparkles width={14} height={14} style={{ flex: 'none' }} />
+                        <span>
+                          {!hasWallet && !hasBag
+                            ? 'Кошелёк и пакет не найдены в инвентаре'
+                            : !hasWallet
+                            ? 'Кожаный бумажник не найден'
+                            : 'Пакет для покупок не найден'}
                         </span>
-                        {' · '}
-                        {selectedEntry.item.count} шт.
-                        {' · '}
-                        {formatWeightRu(getItemTotalWeight(selectedEntry.item))}
-                        {' · '}
-                        <strong style={{ color: '#e9e6df' }}>{getItemTotalVolume(selectedEntry.item)} л</strong>
                       </div>
-                      {selectedEntry.hand ? (
-                        <div className="gu-mut" style={{ fontSize: 11, marginTop: 2 }}>
-                          <span style={{ color: 'var(--gu-amber-soft)' }}>
-                            {selectedEntry.hand === 'left' ? 'Левая рука' : 'Правая рука'}
-                          </span>
+                      <button
+                        type="button"
+                        id="btn-restore-containers"
+                        className="btn btn-p btn-xs"
+                        onClick={() => {
+                          restoreStarterContainers(player);
+                          forceRender(n => n + 1);
+                        }}
+                      >
+                        Восстановить
+                      </button>
+                    </div>
+                  )}
+
+                  <section className="panel inv-col" style={{ flex: 1 }}>
+                    <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                      {renderCompartmentsSlotGrid()}
+                    </div>
+                  </section>
+                </div>
+
+                {/* RIGHT: Selected Item Inspector */}
+                <section className="panel inv-col">
+                  {selectedEntry && selectedEntry.item ? (
+                    <>
+                      {/* Pinned Item Header */}
+                      <div className="inv-detail-head">
+                        <div className="inv-detail-ic">
+                          <ItemIconCanvas itemId={selectedEntry.item.itemId} item={selectedEntry.item} size={42} />
                         </div>
-                      ) : (() => {
-                        const slotComp = getSlotCompartment(player, selectedEntry.originalIndex);
-                        if (!slotComp) return null;
-                        return (
-                          <div className="gu-mut" style={{ fontSize: 11, marginTop: 2 }}>
-                            <span style={{ color: 'var(--gu-amber-soft)' }}>{slotComp.compartment.nameRu}</span>
-                            {slotComp.compartment.sourceItemNameRu && slotComp.compartment.id !== 'base' && (
-                              <span> ({slotComp.compartment.sourceItemNameRu})</span>
-                            )}
-                            <span> · Слот #{selectedEntry.originalIndex + 1}</span>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="cn inv-detail-title" title={selectedEntry.item.nameRu}>
+                            {selectedEntry.item.nameRu}
                           </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Middle Scrollable Specs */}
-                  <div className="gu-inv-detail-scroll">
-                    <div className="gu-note" style={{ lineHeight: 1.4, padding: '7px 10px', fontSize: 12, color: 'var(--gu-ink-dim)' }}>
-                      {selectedEntry.item.descriptionRu}
-                    </div>
-
-                    {/* Unified Attributes (единый стандарт для всех предметов, продуктов, жидкостей, сыпучего и тары) */}
-                    {(() => {
-                      const it = selectedEntry.item;
-                      ensureHybridContainerProps(it);
-                      const uAttrs = getUnifiedItemAttributes(it);
-                      const fs = it.fluidStorage;
-                      const liq = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
-                      const hasFluid = Boolean(fs?.liquidId && fs.currentMl > 0);
-                      const hasHybridCapacity = Boolean(fs && it.isContainer);
-                      const capBreakdown = hasHybridCapacity ? getContainerCapacityBreakdown(it) : null;
-                      const hasSoakedCoating = Boolean(it.soakedLiquidId && (it.wetness || 0) >= 10);
-                      const fluidUnit = liq?.isGranular ? 'г' : 'мл';
-                      const fluidCurrentDisplay = fs
-                        ? Math.round(liq?.isGranular ? fs.currentMl * (liq.densityKgPerL || 1) : fs.currentMl)
-                        : 0;
-                      const fluidMaxDisplay = fs
-                        ? Math.round(liq?.isGranular ? fs.maxMl * (liq.densityKgPerL || 1) : fs.maxMl)
-                        : 0;
-
-                      const innerFirst = it.contents && it.contents.length > 0 ? it.contents[0] : undefined;
-                      const innerAttrs = innerFirst ? getUnifiedItemAttributes(innerFirst) : undefined;
-                      const detailSource = (uAttrs.doughNameRu || uAttrs.fillingRu || uAttrs.outerMaterialRu || uAttrs.innerMaterialRu || uAttrs.flavorRu) ? uAttrs : (innerAttrs || uAttrs);
-
-                      const vis = uAttrs.visuals;
-                      const swatchColor =
-                        vis?.color ||
-                        uAttrs.customColor ||
-                        (hasFluid ? liq?.color : undefined);
-
-                      const rawIngredients = uAttrs.ingredients ?? uAttrs.sourceIngredients;
-                      const ingText = Array.isArray(rawIngredients)
-                        ? rawIngredients.filter(Boolean).join(', ')
-                        : rawIngredients;
-
-                      const shapeLabel =
-                        uAttrs.productShapeRu ||
-                        vis?.shapeNameRu ||
-                        it.packagingShapeNameRu ||
-                        (it.packagingShape
-                          ? (it.itemId.startsWith('chocolate_pack')
-                              ? getChocolatePackagingShapeNameRu(it.packagingShape as ChocolatePackagingShape)
-                              : getCandyPackagingShapeNameRu(it.packagingShape as CandyPackagingShape))
-                          : undefined);
-                      const innerShapeLabel =
-                        innerFirst && detailSource !== uAttrs
-                          ? detailSource.visuals?.shapeNameRu
-                          : undefined;
-                      const sizeLabel = vis?.sizeNameRu || uAttrs.sizeNameRu;
-                      const innerSizeLabel =
-                        innerFirst && detailSource !== uAttrs
-                          ? detailSource.visuals?.sizeNameRu || detailSource.sizeNameRu
-                          : undefined;
-                      const materialLabel = vis?.materialNameRu;
-
-                      const stateBadge =
-                        hasHybridCapacity && capBreakdown
-                          ? `${Math.round(capBreakdown.usedMl)} / ${capBreakdown.totalCapacityMl} мл`
-                          : hasFluid && fs
-                          ? (uAttrs.stateNameRu || `${fluidCurrentDisplay} / ${fluidMaxDisplay} ${fluidUnit}`)
-                          : uAttrs.stateNameRu;
-
-                      const hasAnySpec = Boolean(
-                        hasFluid ||
-                        hasHybridCapacity ||
-                        hasSoakedCoating ||
-                        shapeLabel ||
-                        sizeLabel ||
-                        materialLabel ||
-                        vis?.colorNameRu ||
-                        it.containerCapacityL ||
-                        detailSource.flavorRu ||
-                        detailSource.doughNameRu ||
-                        detailSource.fillingRu ||
-                        detailSource.outerMaterialRu ||
-                        detailSource.innerMaterialRu ||
-                        uAttrs.grainGradeRu ||
-                        uAttrs.surfaceTextureRu ||
-                        uAttrs.cookingTimeMin ||
-                        uAttrs.proteinPer100g !== undefined ||
-                        uAttrs.glutenFree !== undefined ||
-                        ingText ||
-                        uAttrs.preparationMethod ||
-                        uAttrs.purpose ||
-                        (uAttrs.varietyRu && uAttrs.varietyRu !== it.nameRu)
-                      );
-
-                      if (!hasAnySpec) return null;
-
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                            <span className="gu-grp" style={{ fontSize: 11 }}>
-                              {hasHybridCapacity
-                                ? `Общая ёмкость (жидкость + предметы)`
-                                : hasFluid
-                                ? `Содержимое (${liq?.nameRu || fs!.liquidId})`
-                                : innerFirst && (innerFirst.pelmenAttributes || innerFirst.gummyAttributes || innerFirst.chocolateAttributes || innerAttrs?.doughNameRu || innerAttrs?.outerMaterialRu)
-                                ? `Упаковка и состав (${it.contents!.length} шт.)`
-                                : 'Атрибуты и состав'}
+                          <div className="inv-detail-meta mono">
+                            <span style={{ color: '#e0ab45', fontWeight: 600 }}>
+                              {selectedEntry.item.category === 'food'
+                                ? 'Еда'
+                                : selectedEntry.item.category === 'drink'
+                                ? 'Напиток'
+                                : selectedEntry.item.category === 'med'
+                                ? 'Медицина'
+                                : selectedEntry.item.category === 'tool'
+                                ? 'Инструмент'
+                                : 'Предмет'}
                             </span>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              {detailSource.sourDust && (
-                                <span className="gu-mut" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
-                                  Кислая посыпка
-                                </span>
-                              )}
-                              {stateBadge && (
-                                <span className="gu-mut gu-mono" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
-                                  {stateBadge}
-                                </span>
-                              )}
-                            </div>
+                            {' · '}
+                            {selectedEntry.item.count} шт.
+                            {' · '}
+                            {formatWeightRu(getItemTotalWeight(selectedEntry.item))}
+                            {' · '}
+                            <strong style={{ color: '#f4f1ea' }}>{getItemTotalVolume(selectedEntry.item)} л</strong>
                           </div>
-
-                          {/* Segmented Shared Capacity Meter for Hybrid Fluid+Solid Containers */}
-                          {hasHybridCapacity && capBreakdown && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 8px', background: 'rgba(15,23,42,0.55)', border: '1px solid rgba(148,163,184,0.18)', borderRadius: 4 }}>
-                              <div style={{ height: 7, width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
-                                {capBreakdown.solidPct > 0 && (
-                                  <div style={{ width: `${capBreakdown.solidPct}%`, background: '#f59e0b', height: '100%' }} title={`Предметы: ${Math.round(capBreakdown.solidMl)} мл`} />
-                                )}
-                                {capBreakdown.liquidPct > 0 && (
-                                  <div style={{ width: `${capBreakdown.liquidPct}%`, background: capBreakdown.liquidColor, height: '100%' }} title={`Жидкость: ${Math.round(capBreakdown.liquidMl)} мл`} />
-                                )}
-                              </div>
-                              <div className="gu-row2 gu-mono" style={{ justifyContent: 'space-between', fontSize: 10.5, color: 'var(--gu-mut)' }}>
-                                <span>Предм.: <strong style={{ color: '#fbbf24' }}>{Math.round(capBreakdown.solidMl)} мл</strong> ({it.contents?.length || 0})</span>
-                                <span>Жидк.: <strong style={{ color: capBreakdown.liquidColor }}>{Math.round(capBreakdown.liquidMl)} мл</strong></span>
-                                <span>Своб.: <strong style={{ color: '#fff' }}>{Math.round(capBreakdown.freeMl)} мл</strong></span>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="gu-kv-grid gu-g3 gu-kv-compact">
-                            {hasSoakedCoating && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">Пропитка жидкостью</span>
-                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                  <span
-                                    style={{
-                                      width: 9,
-                                      height: 9,
-                                      borderRadius: 2,
-                                      backgroundColor: it.soakedColor || '#38bdf8',
-                                      border: '1px solid rgba(255,255,255,0.35)',
-                                      display: 'inline-block',
-                                      flexShrink: 0
-                                    }}
-                                  />
-                                  <span>
-                                    {it.soakedLiquidNameRu || it.soakedLiquidId} (влажн. {Math.round(it.wetness || 0)}%)
-                                    {it.infusionProgress && it.infusionProgress >= 0.45 ? ' · Настоялся' : ''}
-                                  </span>
-                                </span>
-                              </div>
-                            )}
-
-                            {hasFluid && fs && (
-                              <>
-                                <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
-                                  <span className="gu-kv-k">Жидкая фаза</span>
-                                  <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                    {swatchColor && (
-                                      <span
-                                        style={{
-                                          width: 9,
-                                          height: 9,
-                                          borderRadius: 2,
-                                          backgroundColor: swatchColor,
-                                          border: '1px solid rgba(255,255,255,0.35)',
-                                          display: 'inline-block',
-                                          flexShrink: 0
-                                        }}
-                                      />
-                                    )}
-                                    <span>{liq?.nameRu || fs.liquidId}</span>
-                                  </span>
-                                </div>
-                                <div className="gu-kv">
-                                  <span className="gu-kv-k">Объём жидк.</span>
-                                  <span className="gu-kv-v">
-                                    {fluidCurrentDisplay} / {fluidMaxDisplay} {fluidUnit}
-                                  </span>
-                                </div>
-                              </>
-                            )}
-
-                            {uAttrs.varietyRu && uAttrs.varietyRu !== it.nameRu && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">Вид / Сорт</span>
-                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.varietyRu}</span>
-                              </div>
-                            )}
-
-                            {shapeLabel && (
-                              <div className="gu-kv" style={shapeLabel.length > 22 ? { gridColumn: '1 / -1' } : undefined}>
-                                <span className="gu-kv-k">Форма</span>
-                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{shapeLabel}</span>
-                              </div>
-                            )}
-                            {uAttrs.grainGradeRu && (
-                              <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
-                                <span className="gu-kv-k">Сорт / Группа</span>
-                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.grainGradeRu}</span>
-                              </div>
-                            )}
-                            {uAttrs.cookingTimeMin && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Варка</span>
-                                <span className="gu-kv-v">{uAttrs.cookingTimeMin}</span>
-                              </div>
-                            )}
-                            {uAttrs.surfaceTextureRu && (
-                              <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
-                                <span className="gu-kv-k">Поверхность / Текстура</span>
-                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.surfaceTextureRu}</span>
-                              </div>
-                            )}
-                            {uAttrs.proteinPer100g !== undefined && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Белок (100г)</span>
-                                <span className="gu-kv-v">{uAttrs.proteinPer100g} г</span>
-                              </div>
-                            )}
-                            {uAttrs.glutenFree !== undefined && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Глютен</span>
-                                <span className="gu-kv-v">{uAttrs.glutenFree ? 'Без глютена' : 'Содержит глютен'}</span>
-                              </div>
-                            )}
-                            {sizeLabel && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Размер</span>
-                                <span className="gu-kv-v">{sizeLabel}</span>
-                              </div>
-                            )}
-                            {materialLabel && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Материал</span>
-                                <span className="gu-kv-v">{materialLabel}</span>
-                              </div>
-                            )}
-                            {!hasFluid && it.containerCapacityL && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Объём тары</span>
-                                <span className="gu-kv-v">{it.containerCapacityL} л</span>
-                              </div>
-                            )}
-                            {vis?.colorNameRu && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Цвет</span>
-                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                  {swatchColor && (
-                                    <span
-                                      style={{
-                                        width: 9,
-                                        height: 9,
-                                        borderRadius: 2,
-                                        backgroundColor: swatchColor,
-                                        border: '1px solid rgba(255,255,255,0.35)',
-                                        display: 'inline-block',
-                                        flexShrink: 0
-                                      }}
-                                    />
-                                  )}
-                                  <span>{vis.colorNameRu}</span>
-                                </span>
-                              </div>
-                            )}
-                            {detailSource.flavorRu && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Вкус</span>
-                                <span className="gu-kv-v">{detailSource.flavorRu}</span>
-                              </div>
-                            )}
-                            {detailSource.doughNameRu && (
-                              <>
-                                <div className="gu-kv" style={{ gridColumn: 'span 2' }}>
-                                  <span className="gu-kv-k">
-                                    Тесто{detailSource.doughThicknessMm ? ` (${detailSource.doughThicknessMm} мм)` : ''}
-                                  </span>
-                                  <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                    {detailSource.doughColor && (
-                                      <span
-                                        style={{
-                                          width: 9,
-                                          height: 9,
-                                          borderRadius: 2,
-                                          backgroundColor: detailSource.doughColor,
-                                          border: '1px solid rgba(255,255,255,0.35)',
-                                          display: 'inline-block',
-                                          flexShrink: 0
-                                        }}
-                                      />
-                                    )}
-                                    <span>{detailSource.doughNameRu}</span>
-                                  </span>
-                                </div>
-                                {detailSource.fillingRatioPercent !== undefined && (
-                                  <div className="gu-kv">
-                                    <span className="gu-kv-k">Доля начинки</span>
-                                    <span className="gu-kv-v">{detailSource.fillingRatioPercent}%</span>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                            {detailSource.fillingRu && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">Начинка</span>
-                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'normal' }}>
-                                  {detailSource.fillingColor && (
-                                    <span
-                                      style={{
-                                        width: 9,
-                                        height: 9,
-                                        borderRadius: 2,
-                                        backgroundColor: detailSource.fillingColor,
-                                        border: '1px solid rgba(255,255,255,0.35)',
-                                        display: 'inline-block',
-                                        flexShrink: 0
-                                      }}
-                                    />
-                                  )}
-                                  <span>{detailSource.fillingRu}</span>
-                                </span>
-                              </div>
-                            )}
-
-                            {innerShapeLabel && innerShapeLabel !== shapeLabel && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Форма внутри</span>
-                                <span className="gu-kv-v">{innerShapeLabel}</span>
-                              </div>
-                            )}
-                            {innerSizeLabel && innerSizeLabel !== sizeLabel && (
-                              <div className="gu-kv">
-                                <span className="gu-kv-k">Размер внутри</span>
-                                <span className="gu-kv-v">{innerSizeLabel}</span>
-                              </div>
-                            )}
-                            {detailSource.outerMaterialRu && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">
-                                  Внешняя часть{detailSource.cocoaPercent !== undefined ? ` (${detailSource.cocoaPercent}% какао)` : ''}
-                                </span>
-                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'normal' }}>
-                                  {detailSource.outerColor && (
-                                    <span
-                                      style={{
-                                        width: 9,
-                                        height: 9,
-                                        borderRadius: 2,
-                                        backgroundColor: detailSource.outerColor,
-                                        border: '1px solid rgba(255,255,255,0.35)',
-                                        display: 'inline-block',
-                                        flexShrink: 0
-                                      }}
-                                    />
-                                  )}
-                                  <span>
-                                    {detailSource.outerMaterialRu}
-                                    {detailSource.outerColorNameRu ? ` · Цвет: ${detailSource.outerColorNameRu}` : ''}
-                                  </span>
-                                </span>
-                              </div>
-                            )}
-                            {detailSource.innerMaterialRu && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">
-                                  Внутренняя часть{detailSource.hasFilling === false ? ' (однородная)' : ' (начинка)'}
-                                </span>
-                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'normal' }}>
-                                  {detailSource.innerColor && (
-                                    <span
-                                      style={{
-                                        width: 9,
-                                        height: 9,
-                                        borderRadius: 2,
-                                        backgroundColor: detailSource.innerColor,
-                                        border: '1px solid rgba(255,255,255,0.35)',
-                                        display: 'inline-block',
-                                        flexShrink: 0
-                                      }}
-                                    />
-                                  )}
-                                  <span>
-                                    {detailSource.innerMaterialRu}
-                                    {detailSource.innerColorNameRu ? ` · Цвет: ${detailSource.innerColorNameRu}` : ''}
-                                  </span>
-                                </span>
-                              </div>
-                            )}
-
-                            {ingText && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">Из чего (Состав)</span>
-                                <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
-                                  {ingText}
-                                </span>
-                              </div>
-                            )}
-                            {uAttrs.preparationMethod && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">Приготовление / Обработка</span>
-                                <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
-                                  {uAttrs.preparationMethod}
-                                </span>
-                              </div>
-                            )}
-                            {uAttrs.purpose && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">Назначение</span>
-                                <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
-                                  {uAttrs.purpose}
-                                </span>
-                              </div>
-                            )}
-                            {uAttrs.tasteNotes && uAttrs.tasteNotes.length > 0 && (
-                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
-                                <span className="gu-kv-k">Вкусовые ноты</span>
-                                <span className="gu-kv-v" style={{ fontSize: 11, lineHeight: 1.3, color: 'var(--gu-ink-soft)', whiteSpace: 'normal' }}>
-                                  {uAttrs.tasteNotes.join('; ')}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Thermodynamics */}
-                    {(() => {
-                      const thermalInfo = getItemThermalDisplayInfo(selectedEntry.item);
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                            <span className="gu-grp" style={{ fontSize: 11 }}>Термодинамика</span>
-                            {thermalInfo.hazardBadge && (
-                              <span className="gu-tag bad" style={{ height: 18, padding: '0 6px', fontSize: 10 }}>
-                                <Flame width={10} height={10} />
-                                {thermalInfo.hazardBadge.text}
+                          {selectedEntry.hand ? (
+                            <div className="inv-detail-loc">
+                              <span style={{ color: '#f0c264' }}>
+                                {selectedEntry.hand === 'left' ? 'Левая рука' : 'Правая рука'}
                               </span>
-                            )}
-                          </div>
-                          <div className="gu-kv-grid gu-g4 gu-kv-compact">
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Внутри</span>
-                              <span className="gu-kv-v">{thermalInfo.coreTempText}</span>
                             </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Снаружи</span>
-                              <span className="gu-kv-v">{thermalInfo.surfaceTempText}</span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Потеря</span>
-                              <span className="gu-kv-v">{thermalInfo.heatLossText}</span>
-                            </div>
-                            <div className="gu-kv">
-                              <span className="gu-kv-k">Удержание</span>
-                              <span className="gu-kv-v">{thermalInfo.retentionText}</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Nutritional Profile */}
-                    {selectedEntry.item.nutrients && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                          <span className="gu-grp" style={{ fontSize: 11 }}>Пищевая ценность (БЖУ)</span>
-                          <span className="gu-mut gu-mono" style={{ fontSize: 11, color: 'var(--gu-amber-hi)' }}>
-                            {selectedEntry.item.nutrients.calories} ккал
-                          </span>
-                        </div>
-                        <div className="gu-kv-grid gu-g4 gu-kv-compact">
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Белки</span>
-                            <span className="gu-kv-v">{selectedEntry.item.nutrients.proteins} г</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Жиры</span>
-                            <span className="gu-kv-v" style={{ color: '#f0c264' }}>{selectedEntry.item.nutrients.fats} г</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Углеводы</span>
-                            <span className="gu-kv-v">{selectedEntry.item.nutrients.carbs} г</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Сахар{selectedEntry.item.nutrients.salt !== undefined ? ' / Соль' : ''}</span>
-                            <span className="gu-kv-v">
-                              {selectedEntry.item.nutrients.sugars} г{selectedEntry.item.nutrients.salt !== undefined ? ` · ${selectedEntry.item.nutrients.salt} г` : ''}
-                            </span>
-                          </div>
+                          ) : (() => {
+                            const slotComp = getSlotCompartment(player, selectedEntry.originalIndex);
+                            if (!slotComp) return null;
+                            return (
+                              <div className="inv-detail-loc">
+                                <span style={{ color: '#f0c264' }}>{slotComp.compartment.nameRu}</span>
+                                {slotComp.compartment.sourceItemNameRu && slotComp.compartment.id !== 'base' && (
+                                  <span> ({slotComp.compartment.sourceItemNameRu})</span>
+                                )}
+                                <span> · Слот #{selectedEntry.originalIndex + 1}</span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
-                    )}
 
-                    {/* Smartphone Specs */}
-                    {selectedEntry.item.phoneSpecs && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                        <div className="gu-row2" style={{ justifyContent: 'space-between' }}>
-                          <span className="gu-grp" style={{ fontSize: 11 }}>{selectedEntry.item.phoneSpecs.modelName}</span>
-                          <span className="gu-mut gu-mono" style={{ fontSize: 11 }}>{selectedEntry.item.phoneSpecs.osName}</span>
+                      {/* Middle Scrollable Specs */}
+                      <div className="inv-detail-scroll scroll">
+                        <div className="note" style={{ fontSize: 12.5 }}>
+                          {selectedEntry.item.descriptionRu}
                         </div>
-                        <div className="gu-kv-grid gu-g4 gu-kv-compact">
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Экран</span>
-                            <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.screenSize} ({selectedEntry.item.phoneSpecs.refreshRateHz}Hz)</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Камера</span>
-                            <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.cameraMegaPixels} MP</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Память</span>
-                            <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.storageGb} GB</span>
-                          </div>
-                          <div className="gu-kv">
-                            <span className="gu-kv-k">Батарея</span>
-                            <span className="gu-kv-v">{selectedEntry.item.phoneSpecs.batteryCapacityMah} мАч</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Pinned Action Footer */}
-                  <div className="gu-inv-detail-foot">
-                    {selectedEntry.hand ? (
-                      <>
-                        {selectedEntry.item.clothingStats && (
-                          <button
-                            type="button"
-                            className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                            onClick={() => handleEquipFromHand(selectedEntry.hand!)}
-                          >
-                            <Shirt width={14} height={14} />
-                            <span>Надеть из руки</span>
-                          </button>
-                        )}
-                        {selectedEntry.item.isContainer && selectedEntry.item.fluidStorage ? (
-                          <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                            {isFluidContainerClosed(selectedEntry.item) ? (
-                              <button
-                                type="button"
-                                className="gu-btn gu-btn-p gu-btn-sm"
-                                style={{ gridColumn: '1 / -1' }}
-                                onClick={() => {
-                                  openFluidContainerIfNeeded(player, selectedEntry.item);
-                                  sound.resume();
-                                  forceRender(n => n + 1);
-                                }}
-                              >
-                                <Scissors width={14} height={14} />
-                                <span>Открыть крышку / упаковку</span>
-                              </button>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  className="gu-btn gu-btn-p gu-btn-sm"
-                                  onClick={() => {
-                                    setOpenContainer(selectedEntry.item);
-                                    setSelectedContainerItemIdx(0);
-                                  }}
-                                >
-                                  <Package width={14} height={14} />
-                                  <span>Открыть ({selectedEntry.item.contents?.length || 0})</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="gu-btn gu-btn-s gu-btn-sm"
-                                  onClick={() => {
-                                    useHandItemOnPlayer(player, selectedEntry.hand!, world || undefined);
-                                    sound.resume();
-                                    forceRender(n => n + 1);
-                                  }}
-                                >
-                                  <Droplets width={14} height={14} />
-                                  <span>{selectedEntry.item.fluidStorage.currentMl > 0 ? 'Выпить / Исп.' : 'Набрать'}</span>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          <>
-                            {selectedEntry.item.isContainer && (
-                              <button
-                                type="button"
-                                className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                                onClick={() => {
-                                  setOpenContainer(selectedEntry.item);
-                                  setSelectedContainerItemIdx(0);
-                                }}
-                              >
-                                <Package width={14} height={14} />
-                                <span>Открыть ({selectedEntry.item.contents?.length || 0} предм.)</span>
-                              </button>
-                            )}
-                            {isFluidContainerClosed(selectedEntry.item) && (
-                              <button
-                                type="button"
-                                className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                                onClick={() => {
-                                  openFluidContainerIfNeeded(player, selectedEntry.item);
-                                  sound.resume();
-                                  forceRender(n => n + 1);
-                                }}
-                              >
-                                <Scissors width={14} height={14} />
-                                <span>Открыть крышку / упаковку</span>
-                              </button>
-                            )}
-                          </>
-                        )}
-                        <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                          <button
-                            type="button"
-                            className="gu-btn gu-btn-s gu-btn-xs"
-                            onClick={() => handleStowHand(selectedEntry.hand!)}
-                          >
-                            <ArrowDownToLine width={12} height={12} />
-                            <span>Убрать в карман</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="gu-btn gu-btn-d gu-btn-xs"
-                            onClick={() => handleDropFromHand(selectedEntry.hand!)}
-                          >
-                            <Trash2 width={12} height={12} />
-                            <span>Бросить на землю</span>
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {selectedEntry.item.clothingStats ? (
-                          <button
-                            type="button"
-                            id="btn-equip-selected-item"
-                            className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                            onClick={() => handleEquipItem(selectedEntry.originalIndex)}
-                          >
-                            <Shirt width={14} height={14} />
-                            <span>Надеть / Экипировать</span>
-                          </button>
-                        ) : selectedEntry.item.isContainer && selectedEntry.item.fluidStorage ? (
-                          <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                            {isFluidContainerClosed(selectedEntry.item) ? (
-                              <button
-                                type="button"
-                                id="btn-open-fluid-container"
-                                className="gu-btn gu-btn-p gu-btn-sm"
-                                style={{ gridColumn: '1 / -1' }}
-                                onClick={() => {
-                                  openFluidContainerIfNeeded(player, selectedEntry.item);
-                                  sound.resume();
-                                  forceRender(n => n + 1);
-                                }}
-                              >
-                                <Scissors width={14} height={14} />
-                                <span>Открыть крышку / упаковку</span>
-                              </button>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  id="btn-open-selected-container"
-                                  className="gu-btn gu-btn-p gu-btn-sm"
-                                  onClick={() => {
-                                    setOpenContainer(selectedEntry.item);
-                                    setSelectedContainerItemIdx(0);
-                                  }}
-                                >
-                                  <Package width={14} height={14} />
-                                  <span>Открыть ({selectedEntry.item.contents?.length || 0})</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  id="btn-use-selected-item"
-                                  className="gu-btn gu-btn-s gu-btn-sm"
-                                  onClick={() => handleUseItem(selectedEntry.originalIndex, true)}
-                                >
-                                  <Droplets width={14} height={14} />
-                                  <span>{selectedEntry.item.fluidStorage.currentMl > 0 ? 'Выпить / Исп.' : 'Набрать'}</span>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        ) : selectedEntry.item.isContainer ? (
-                          <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                            {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
-                              !selectedEntry.item.isOpen && (
-                                <button
-                                  type="button"
-                                  id="btn-unpack-selected-container"
-                                  className="gu-btn gu-btn-p gu-btn-sm"
-                                  onClick={() => {
-                                    unpackSingleUseContainer(player, selectedEntry.item, world);
-                                    sound.resume();
-                                    forceRender(n => n + 1);
-                                  }}
-                                >
-                                  <Scissors width={14} height={14} />
-                                  <span>
-                                    Вскрыть
-                                    {selectedEntry.item.contents && selectedEntry.item.contents.length > 0
-                                      ? ` (${selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)})`
-                                      : ''}
-                                  </span>
-                                </button>
-                              )}
-                            {(selectedEntry.item.isOpen ||
-                              selectedEntry.item.itemId === 'pouch_sealed_snack_torn' ||
-                              selectedEntry.item.itemId === 'egg_carton_10_open' ||
-                              selectedEntry.item.itemId === 'lukoshko') &&
-                              selectedEntry.item.contents &&
-                              selectedEntry.item.contents.length > 0 && (
-                                <button
-                                  type="button"
-                                  id="btn-consume-from-opened-package"
-                                  className="gu-btn gu-btn-p gu-btn-sm"
-                                  onClick={() => {
-                                    useItemOnPlayer(player, selectedEntry.originalIndex, world || undefined);
-                                    sound.resume();
-                                    forceRender(n => n + 1);
-                                  }}
-                                >
-                                  <Utensils width={14} height={14} />
-                                  <span>
-                                    {selectedEntry.item.itemId.startsWith('egg_carton') ||
-                                    selectedEntry.item.itemId.startsWith('pelmeni_pack') ||
-                                    selectedEntry.item.itemId.startsWith('chocolate_pack') ||
-                                    selectedEntry.item.contents[0]?.itemId === 'pelmen' ||
-                                    selectedEntry.item.contents[0]?.itemId === 'chocolate'
-                                      ? 'Достать 1 шт.'
-                                      : selectedEntry.item.contents[0]?.category === 'med'
-                                      ? 'Применить 1 шт.'
-                                      : 'Съесть 1 шт.'}{' '}
-                                    ({selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)})
-                                  </span>
-                                </button>
-                              )}
-                            <button
-                              type="button"
-                              id="btn-open-selected-container"
-                              className={`gu-btn ${
-                                (selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) && !selectedEntry.item.isOpen
-                                  ? 'gu-btn-s'
-                                  : 'gu-btn-p'
-                              } gu-btn-sm`}
-                              style={{
-                                gridColumn:
-                                  !((selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) && !selectedEntry.item.isOpen) &&
-                                  !(
-                                    (selectedEntry.item.isOpen ||
-                                      selectedEntry.item.itemId === 'pouch_sealed_snack_torn' ||
-                                      selectedEntry.item.itemId === 'egg_carton_10_open' ||
-                                      selectedEntry.item.itemId === 'lukoshko') &&
-                                    selectedEntry.item.contents &&
-                                    selectedEntry.item.contents.length > 0
-                                  )
-                                    ? '1 / -1'
-                                    : undefined
-                              }}
-                              onClick={() => {
-                                setOpenContainer(selectedEntry.item);
-                                setSelectedContainerItemIdx(0);
-                              }}
-                            >
-                              <Package width={14} height={14} />
-                              <span>Открыть ({selectedEntry.item.contents?.length || 0} предм.)</span>
-                            </button>
-                          </div>
-                        ) : selectedEntry.item.phoneSpecs ||
-                          selectedEntry.item.itemId.startsWith('phone_') ||
-                          selectedEntry.item.itemId === 'smartphone' ? (
-                          <button
-                            type="button"
-                            id="btn-use-selected-phone"
-                            className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                            onClick={() => handleUseItem(selectedEntry.originalIndex)}
-                          >
-                            <Smartphone width={14} height={14} />
-                            <span>Включить экран телефона</span>
-                          </button>
-                        ) : selectedEntry.item.itemId.startsWith('car_key') ? (
-                          <div className="gu-note" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '7px 9px' }}>
-                            {(() => {
-                              const targetVeh = world ? getTargetVehicleForKey(player, selectedEntry.item, world) : null;
-                              const distM = targetVeh ? Math.round(Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y) / 10) : null;
-                              const isSmartOrDisplay = selectedEntry.item.keyTier === 'smart' || selectedEntry.item.keyTier === 'display';
+                        {/* Unified Attributes */}
+                        {(() => {
+                          const it = selectedEntry.item;
+                          ensureHybridContainerProps(it);
+                          const uAttrs = getUnifiedItemAttributes(it);
+                          const fs = it.fluidStorage;
+                          const liq = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
+                          const hasFluid = Boolean(fs?.liquidId && fs.currentMl > 0);
+                          const hasHybridCapacity = Boolean(fs && it.isContainer);
+                          const capBreakdown = hasHybridCapacity ? getContainerCapacityBreakdown(it) : null;
+                          const hasSoakedCoating = Boolean(it.soakedLiquidId && (it.wetness || 0) >= 10);
+                          const fluidUnit = liq?.isGranular ? 'г' : 'мл';
+                          const fluidCurrentDisplay = fs
+                            ? Math.round(liq?.isGranular ? fs.currentMl * (liq.densityKgPerL || 1) : fs.currentMl)
+                            : 0;
+                          const fluidMaxDisplay = fs
+                            ? Math.round(liq?.isGranular ? fs.maxMl * (liq.densityKgPerL || 1) : fs.maxMl)
+                            : 0;
 
-                              return (
-                                <>
-                                  <div className="gu-row2" style={{ justifyContent: 'space-between', fontSize: 11.5 }}>
-                                    <span className="gu-grp" style={{ fontSize: 11 }}>
-                                      {selectedEntry.item.keyTier === 'display'
-                                        ? 'Smart Display Key'
-                                        : selectedEntry.item.keyTier === 'smart'
-                                        ? 'Smart Keyless-Go'
-                                        : selectedEntry.item.keyTier === 'flip'
-                                        ? 'Выкидной брелок'
-                                        : 'Ключ зажигания'}
-                                      {targetVeh && (
-                                        <span className="gu-mut gu-mono" style={{ fontWeight: 400, marginLeft: 6 }}>
-                                          {targetVeh.isLocked ? 'ЦЗ закрыт' : 'ЦЗ открыт'} · ДВС {targetVeh.engineState?.engineRunning ? 'вкл' : 'выкл'}
-                                        </span>
-                                      )}
+                          const innerFirst = it.contents && it.contents.length > 0 ? it.contents[0] : undefined;
+                          const innerAttrs = innerFirst ? getUnifiedItemAttributes(innerFirst) : undefined;
+                          const detailSource = (uAttrs.doughNameRu || uAttrs.fillingRu || uAttrs.outerMaterialRu || uAttrs.innerMaterialRu || uAttrs.flavorRu) ? uAttrs : (innerAttrs || uAttrs);
+
+                          const vis = uAttrs.visuals;
+                          const swatchColor =
+                            vis?.color ||
+                            uAttrs.customColor ||
+                            (hasFluid ? liq?.color : undefined);
+
+                          const rawIngredients = uAttrs.ingredients ?? uAttrs.sourceIngredients;
+                          const ingText = Array.isArray(rawIngredients)
+                            ? rawIngredients.filter(Boolean).join(', ')
+                            : rawIngredients;
+
+                          const shapeLabel =
+                            uAttrs.productShapeRu ||
+                            vis?.shapeNameRu ||
+                            it.packagingShapeNameRu ||
+                            (it.packagingShape
+                              ? (it.itemId.startsWith('chocolate_pack')
+                                  ? getChocolatePackagingShapeNameRu(it.packagingShape as ChocolatePackagingShape)
+                                  : getCandyPackagingShapeNameRu(it.packagingShape as CandyPackagingShape))
+                              : undefined);
+                          const innerShapeLabel =
+                            innerFirst && detailSource !== uAttrs
+                              ? detailSource.visuals?.shapeNameRu
+                              : undefined;
+                          const sizeLabel = vis?.sizeNameRu || uAttrs.sizeNameRu;
+                          const innerSizeLabel =
+                            innerFirst && detailSource !== uAttrs
+                              ? detailSource.visuals?.sizeNameRu || detailSource.sizeNameRu
+                              : undefined;
+                          const materialLabel = vis?.materialNameRu;
+
+                          const stateBadge =
+                            hasHybridCapacity && capBreakdown
+                              ? `${Math.round(capBreakdown.usedMl)} / ${capBreakdown.totalCapacityMl} мл`
+                              : hasFluid && fs
+                              ? (uAttrs.stateNameRu || `${fluidCurrentDisplay} / ${fluidMaxDisplay} ${fluidUnit}`)
+                              : uAttrs.stateNameRu;
+
+                          const hasAnySpec = Boolean(
+                            hasFluid ||
+                            hasHybridCapacity ||
+                            hasSoakedCoating ||
+                            shapeLabel ||
+                            sizeLabel ||
+                            materialLabel ||
+                            vis?.colorNameRu ||
+                            it.containerCapacityL ||
+                            detailSource.flavorRu ||
+                            detailSource.doughNameRu ||
+                            detailSource.fillingRu ||
+                            detailSource.outerMaterialRu ||
+                            detailSource.innerMaterialRu ||
+                            uAttrs.grainGradeRu ||
+                            uAttrs.surfaceTextureRu ||
+                            uAttrs.cookingTimeMin ||
+                            uAttrs.proteinPer100g !== undefined ||
+                            uAttrs.glutenFree !== undefined ||
+                            ingText ||
+                            uAttrs.preparationMethod ||
+                            uAttrs.purpose ||
+                            (uAttrs.varietyRu && uAttrs.varietyRu !== it.nameRu)
+                          );
+
+                          if (!hasAnySpec) return null;
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div className="inv-sec-row">
+                                <span className="inv-grp-lbl">
+                                  {hasHybridCapacity
+                                    ? 'Общая ёмкость (жидкость + предметы)'
+                                    : hasFluid
+                                    ? `Содержимое (${liq?.nameRu || fs!.liquidId})`
+                                    : innerFirst && (innerFirst.pelmenAttributes || innerFirst.gummyAttributes || innerFirst.chocolateAttributes || innerAttrs?.doughNameRu || innerAttrs?.outerMaterialRu)
+                                    ? `Упаковка и состав (${it.contents!.length} шт.)`
+                                    : 'Атрибуты и состав'}
+                                </span>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  {detailSource.sourDust && (
+                                    <span style={{ fontSize: 11.5, color: '#e0ab45' }}>Кислая посыпка</span>
+                                  )}
+                                  {stateBadge && (
+                                    <span className="mono" style={{ fontSize: 11.5, color: '#e0ab45', fontWeight: 600 }}>
+                                      {stateBadge}
                                     </span>
-                                    <span className="gu-mut gu-mono" style={{ color: distM !== null ? 'var(--gu-amber-hi)' : undefined }}>
-                                      {distM !== null ? `${distM} м` : 'Вне зоны'}
+                                  )}
+                                </div>
+                              </div>
+
+                              {hasHybridCapacity && capBreakdown && (
+                                <div className="inv-meter-box">
+                                  <div className="inv-meter-track">
+                                    {capBreakdown.solidPct > 0 && (
+                                      <div style={{ width: `${capBreakdown.solidPct}%`, background: '#f59e0b', height: '100%' }} />
+                                    )}
+                                    {capBreakdown.liquidPct > 0 && (
+                                      <div style={{ width: `${capBreakdown.liquidPct}%`, background: capBreakdown.liquidColor, height: '100%' }} />
+                                    )}
+                                  </div>
+                                  <div className="inv-meter-legend mono">
+                                    <span>Предм.: <strong style={{ color: '#fbbf24' }}>{Math.round(capBreakdown.solidMl)} мл</strong> ({it.contents?.length || 0})</span>
+                                    <span>Жидк.: <strong style={{ color: capBreakdown.liquidColor }}>{Math.round(capBreakdown.liquidMl)} мл</strong></span>
+                                    <span>Своб.: <strong style={{ color: '#fff' }}>{Math.round(capBreakdown.freeMl)} мл</strong></span>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="inv-kv-grid inv-kv-g3">
+                                {hasSoakedCoating && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Пропитка жидкостью</span>
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                      <span className="inv-swatch" style={{ backgroundColor: it.soakedColor || '#38bdf8' }} />
+                                      <span>
+                                        {it.soakedLiquidNameRu || it.soakedLiquidId} (влажн. {Math.round(it.wetness || 0)}%)
+                                        {it.infusionProgress && it.infusionProgress >= 0.45 ? ' · Настоялся' : ''}
+                                      </span>
                                     </span>
                                   </div>
+                                )}
 
-                                  <div className="gu-grid gu-g2" style={{ gap: 5 }}>
+                                {hasFluid && fs && (
+                                  <>
+                                    <div className="inv-kv" style={{ gridColumn: 'span 2' }}>
+                                      <span className="inv-kv-k">Жидкая фаза</span>
+                                      <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                        {swatchColor && <span className="inv-swatch" style={{ backgroundColor: swatchColor }} />}
+                                        <span>{liq?.nameRu || fs.liquidId}</span>
+                                      </span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Объём жидк.</span>
+                                      <span className="inv-kv-v mono">{fluidCurrentDisplay} / {fluidMaxDisplay} {fluidUnit}</span>
+                                    </div>
+                                  </>
+                                )}
+
+                                {uAttrs.varietyRu && uAttrs.varietyRu !== it.nameRu && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Вид / Сорт</span>
+                                    <span className="inv-kv-v">{uAttrs.varietyRu}</span>
+                                  </div>
+                                )}
+
+                                {shapeLabel && (
+                                  <div className="inv-kv" style={shapeLabel.length > 22 ? { gridColumn: '1 / -1' } : undefined}>
+                                    <span className="inv-kv-k">Форма</span>
+                                    <span className="inv-kv-v">{shapeLabel}</span>
+                                  </div>
+                                )}
+                                {uAttrs.grainGradeRu && (
+                                  <div className="inv-kv" style={{ gridColumn: 'span 2' }}>
+                                    <span className="inv-kv-k">Сорт / Группа</span>
+                                    <span className="inv-kv-v">{uAttrs.grainGradeRu}</span>
+                                  </div>
+                                )}
+                                {uAttrs.cookingTimeMin && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Варка</span>
+                                    <span className="inv-kv-v">{uAttrs.cookingTimeMin}</span>
+                                  </div>
+                                )}
+                                {uAttrs.surfaceTextureRu && (
+                                  <div className="inv-kv" style={{ gridColumn: 'span 2' }}>
+                                    <span className="inv-kv-k">Поверхность</span>
+                                    <span className="inv-kv-v">{uAttrs.surfaceTextureRu}</span>
+                                  </div>
+                                )}
+                                {uAttrs.proteinPer100g !== undefined && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Белок (100г)</span>
+                                    <span className="inv-kv-v mono">{uAttrs.proteinPer100g} г</span>
+                                  </div>
+                                )}
+                                {uAttrs.glutenFree !== undefined && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Глютен</span>
+                                    <span className="inv-kv-v">{uAttrs.glutenFree ? 'Без глютена' : 'Содержит глютен'}</span>
+                                  </div>
+                                )}
+                                {sizeLabel && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Размер</span>
+                                    <span className="inv-kv-v">{sizeLabel}</span>
+                                  </div>
+                                )}
+                                {materialLabel && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Материал</span>
+                                    <span className="inv-kv-v">{materialLabel}</span>
+                                  </div>
+                                )}
+                                {!hasFluid && it.containerCapacityL && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Объём тары</span>
+                                    <span className="inv-kv-v mono">{it.containerCapacityL} л</span>
+                                  </div>
+                                )}
+                                {vis?.colorNameRu && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Цвет</span>
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                      {swatchColor && <span className="inv-swatch" style={{ backgroundColor: swatchColor }} />}
+                                      <span>{vis.colorNameRu}</span>
+                                    </span>
+                                  </div>
+                                )}
+                                {detailSource.flavorRu && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Вкус</span>
+                                    <span className="inv-kv-v">{detailSource.flavorRu}</span>
+                                  </div>
+                                )}
+                                {detailSource.doughNameRu && (
+                                  <>
+                                    <div className="inv-kv" style={{ gridColumn: 'span 2' }}>
+                                      <span className="inv-kv-k">
+                                        Тесто{detailSource.doughThicknessMm ? ` (${detailSource.doughThicknessMm} мм)` : ''}
+                                      </span>
+                                      <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                        {detailSource.doughColor && <span className="inv-swatch" style={{ backgroundColor: detailSource.doughColor }} />}
+                                        <span>{detailSource.doughNameRu}</span>
+                                      </span>
+                                    </div>
+                                    {detailSource.fillingRatioPercent !== undefined && (
+                                      <div className="inv-kv">
+                                        <span className="inv-kv-k">Доля начинки</span>
+                                        <span className="inv-kv-v mono">{detailSource.fillingRatioPercent}%</span>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                {detailSource.fillingRu && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Начинка</span>
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                      {detailSource.fillingColor && <span className="inv-swatch" style={{ backgroundColor: detailSource.fillingColor }} />}
+                                      <span>{detailSource.fillingRu}</span>
+                                    </span>
+                                  </div>
+                                )}
+                                {innerShapeLabel && innerShapeLabel !== shapeLabel && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Форма внутри</span>
+                                    <span className="inv-kv-v">{innerShapeLabel}</span>
+                                  </div>
+                                )}
+                                {innerSizeLabel && innerSizeLabel !== sizeLabel && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Размер внутри</span>
+                                    <span className="inv-kv-v">{innerSizeLabel}</span>
+                                  </div>
+                                )}
+                                {detailSource.outerMaterialRu && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">
+                                      Внешняя часть{detailSource.cocoaPercent !== undefined ? ` (${detailSource.cocoaPercent}% какао)` : ''}
+                                    </span>
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                      {detailSource.outerColor && <span className="inv-swatch" style={{ backgroundColor: detailSource.outerColor }} />}
+                                      <span>
+                                        {detailSource.outerMaterialRu}
+                                        {detailSource.outerColorNameRu ? ` · Цвет: ${detailSource.outerColorNameRu}` : ''}
+                                      </span>
+                                    </span>
+                                  </div>
+                                )}
+                                {detailSource.innerMaterialRu && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">
+                                      Внутренняя часть{detailSource.hasFilling === false ? ' (однородная)' : ' (начинка)'}
+                                    </span>
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                      {detailSource.innerColor && <span className="inv-swatch" style={{ backgroundColor: detailSource.innerColor }} />}
+                                      <span>
+                                        {detailSource.innerMaterialRu}
+                                        {detailSource.innerColorNameRu ? ` · Цвет: ${detailSource.innerColorNameRu}` : ''}
+                                      </span>
+                                    </span>
+                                  </div>
+                                )}
+                                {ingText && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Состав</span>
+                                    <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>{ingText}</span>
+                                  </div>
+                                )}
+                                {uAttrs.preparationMethod && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Приготовление</span>
+                                    <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>{uAttrs.preparationMethod}</span>
+                                  </div>
+                                )}
+                                {uAttrs.purpose && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Назначение</span>
+                                    <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>{uAttrs.purpose}</span>
+                                  </div>
+                                )}
+                                {uAttrs.tasteNotes && uAttrs.tasteNotes.length > 0 && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Вкусовые ноты</span>
+                                    <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>{uAttrs.tasteNotes.join('; ')}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Thermodynamics */}
+                        {(() => {
+                          const thermalInfo = getItemThermalDisplayInfo(selectedEntry.item);
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div className="inv-sec-row">
+                                <span className="inv-grp-lbl">Термодинамика</span>
+                                {thermalInfo.hazardBadge && (
+                                  <span className="inv-hazard">
+                                    <Flame width={11} height={11} />
+                                    {thermalInfo.hazardBadge.text}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="inv-kv-grid inv-kv-g4">
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Внутри</span>
+                                  <span className="inv-kv-v mono">{thermalInfo.coreTempText}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Снаружи</span>
+                                  <span className="inv-kv-v mono">{thermalInfo.surfaceTempText}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Потеря</span>
+                                  <span className="inv-kv-v mono">{thermalInfo.heatLossText}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Удержание</span>
+                                  <span className="inv-kv-v mono">{thermalInfo.retentionText}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Nutritional Profile */}
+                        {selectedEntry.item.nutrients && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div className="inv-sec-row">
+                              <span className="inv-grp-lbl">Пищевая ценность (БЖУ)</span>
+                              <span className="mono" style={{ fontSize: 12, color: '#e0ab45', fontWeight: 600 }}>
+                                {selectedEntry.item.nutrients.calories} ккал
+                              </span>
+                            </div>
+                            <div className="inv-kv-grid inv-kv-g4">
+                              <div className="inv-kv">
+                                <span className="inv-kv-k">Белки</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.nutrients.proteins} г</span>
+                              </div>
+                              <div className="inv-kv">
+                                <span className="inv-kv-k">Жиры</span>
+                                <span className="inv-kv-v mono" style={{ color: '#f0c264' }}>{selectedEntry.item.nutrients.fats} г</span>
+                              </div>
+                              <div className="inv-kv">
+                                <span className="inv-kv-k">Углеводы</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.nutrients.carbs} г</span>
+                              </div>
+                              <div className="inv-kv">
+                                <span className="inv-kv-k">Сахар{selectedEntry.item.nutrients.salt !== undefined ? ' / Соль' : ''}</span>
+                                <span className="inv-kv-v mono">
+                                  {selectedEntry.item.nutrients.sugars} г{selectedEntry.item.nutrients.salt !== undefined ? ` · ${selectedEntry.item.nutrients.salt} г` : ''}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Smartphone Specs */}
+                        {selectedEntry.item.phoneSpecs && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div className="inv-sec-row">
+                              <span className="inv-grp-lbl">{selectedEntry.item.phoneSpecs.modelName}</span>
+                              <span className="mut mono" style={{ fontSize: 11.5 }}>{selectedEntry.item.phoneSpecs.osName}</span>
+                            </div>
+                            <div className="inv-kv-grid inv-kv-g4">
+                              <div className="inv-kv">
+                                <span className="inv-kv-k">Экран</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.screenSize} ({selectedEntry.item.phoneSpecs.refreshRateHz}Hz)</span>
+                              </div>
+                              <div className="inv-kv">
+                                <span className="inv-kv-k">Камера</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.cameraMegaPixels} MP</span>
+                              </div>
+                              <div className="inv-kv">
+                                <span className="inv-kv-k">Память</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.storageGb} GB</span>
+                              </div>
+                              <div className="inv-kv">
+                                <span className="inv-kv-k">Батарея</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.batteryCapacityMah} мАч</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Pinned Action Footer */}
+                      <div className="inv-detail-foot">
+                        {selectedEntry.hand ? (
+                          <>
+                            {selectedEntry.item.clothingStats && (
+                              <button
+                                type="button"
+                                className="btn btn-p btn-sm btn-block"
+                                onClick={() => handleEquipFromHand(selectedEntry.hand!)}
+                              >
+                                <Shirt width={14} height={14} />
+                                <span>Надеть из руки</span>
+                              </button>
+                            )}
+                            {selectedEntry.item.isContainer && selectedEntry.item.fluidStorage ? (
+                              <div className="inv-btn-grid2">
+                                {isFluidContainerClosed(selectedEntry.item) ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-p btn-sm"
+                                    style={{ gridColumn: '1 / -1' }}
+                                    onClick={() => {
+                                      openFluidContainerIfNeeded(player, selectedEntry.item);
+                                      sound.resume();
+                                      forceRender(n => n + 1);
+                                    }}
+                                  >
+                                    <Scissors width={14} height={14} />
+                                    <span>Открыть крышку / упаковку</span>
+                                  </button>
+                                ) : (
+                                  <>
                                     <button
                                       type="button"
-                                      className="gu-btn gu-btn-s gu-btn-xs"
+                                      className="btn btn-p btn-sm"
                                       onClick={() => {
-                                        handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_lock');
+                                        setOpenContainer(selectedEntry.item);
+                                        setSelectedContainerItemIdx(0);
+                                      }}
+                                    >
+                                      <Package width={14} height={14} />
+                                      <span>Открыть ({selectedEntry.item.contents?.length || 0})</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn btn-s btn-sm"
+                                      onClick={() => {
+                                        useHandItemOnPlayer(player, selectedEntry.hand!, world || undefined);
+                                        sound.resume();
                                         forceRender(n => n + 1);
                                       }}
                                     >
-                                      {targetVeh?.isLocked ? <Unlock width={12} height={12} color="#c9922b" /> : <Lock width={12} height={12} color="#c9922b" />}
-                                      <span>{targetVeh?.isLocked ? 'Открыть ЦЗ' : 'Закрыть ЦЗ'}</span>
+                                      <Droplets width={14} height={14} />
+                                      <span>{selectedEntry.item.fluidStorage.currentMl > 0 ? 'Выпить / Исп.' : 'Набрать'}</span>
                                     </button>
-
-                                    {isSmartOrDisplay ? (
-                                      <button
-                                        type="button"
-                                        className="gu-btn gu-btn-p gu-btn-xs"
-                                        onClick={() => {
-                                          handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_engine');
-                                          forceRender(n => n + 1);
-                                        }}
-                                      >
-                                        <Zap width={12} height={12} />
-                                        <span>{targetVeh?.engineState?.engineRunning ? 'Заглушить' : 'Автозапуск'}</span>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        className="gu-btn gu-btn-s gu-btn-xs"
-                                        onClick={() => {
-                                          handleCarKeyActivation(player, selectedEntry.item, world, 'horn');
-                                          forceRender(n => n + 1);
-                                        }}
-                                      >
-                                        <Volume2 width={12} height={12} color="#c9922b" />
-                                        <span>Поиск авто</span>
-                                      </button>
-                                    )}
-
-                                    {isSmartOrDisplay && (
-                                      <button
-                                        type="button"
-                                        className="gu-btn gu-btn-s gu-btn-xs"
-                                        onClick={() => {
-                                          handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_headlights');
-                                          forceRender(n => n + 1);
-                                        }}
-                                      >
-                                        <Lightbulb width={12} height={12} color="#c9922b" />
-                                        <span>{targetVeh?.headlightsOn ? 'Выкл фары' : 'Вкл фары'}</span>
-                                      </button>
-                                    )}
-
-                                    {isSmartOrDisplay && (
-                                      <button
-                                        type="button"
-                                        className="gu-btn gu-btn-s gu-btn-xs"
-                                        onClick={() => {
-                                          handleCarKeyActivation(player, selectedEntry.item, world, 'horn');
-                                          forceRender(n => n + 1);
-                                        }}
-                                      >
-                                        <Volume2 width={12} height={12} color="#c9922b" />
-                                        <span>Сигнал</span>
-                                      </button>
-                                    )}
-                                  </div>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        ) : selectedEntry.item.itemId.startsWith('property_') ||
-                          selectedEntry.item.itemId === 'car_pts' ||
-                          selectedEntry.item.itemId === 'car_tech_passport' ||
-                          selectedEntry.item.itemId === 'car_contract_dkp' ? (
-                          <button
-                            type="button"
-                            id="btn-inspect-selected-document"
-                            className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                            onClick={() => onInspectDocument?.(selectedEntry.item)}
-                          >
-                            <FileText width={14} height={14} />
-                            <span>Просмотреть документ</span>
-                          </button>
-                        ) : isFluidContainerClosed(selectedEntry.item) ? (
-                          <button
-                            type="button"
-                            id="btn-open-fluid-container"
-                            className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                            onClick={() => {
-                              openFluidContainerIfNeeded(player, selectedEntry.item);
-                              sound.resume();
-                              forceRender(n => n + 1);
-                            }}
-                          >
-                            <Scissors width={14} height={14} />
-                            <span>
-                              {selectedEntry.item.itemId.startsWith('can_metal_')
-                                ? 'Вскрыть консервную банку'
-                                : selectedEntry.item.itemId === 'can_alu_330'
-                                ? 'Открыть банку (ключ-кольцо)'
-                                : selectedEntry.item.itemId.startsWith('cup_plastic_dairy') ||
-                                  selectedEntry.item.itemId.startsWith('tetra_pack_') ||
-                                  selectedEntry.item.itemId === 'package_sachet'
-                                ? 'Вскрыть упаковку'
-                                : 'Открыть крышку'}
-                            </span>
-                          </button>
-                        ) : selectedEntry.item.usable ? (
-                          <button
-                            type="button"
-                            id="btn-use-selected-item"
-                            className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                            onClick={() => handleUseItem(selectedEntry.originalIndex)}
-                          >
-                            <Utensils width={14} height={14} />
-                            <span>Использовать</span>
-                          </button>
-                        ) : null}
-
-                        <div className="gu-grid gu-g2" style={{ gap: 6 }}>
-                          <button
-                            type="button"
-                            className="gu-btn gu-btn-s gu-btn-xs"
-                            onClick={() => handleTakeToHand('left', selectedEntry.originalIndex)}
-                          >
-                            <Hand width={12} height={12} />
-                            <span>В левую руку</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="gu-btn gu-btn-s gu-btn-xs"
-                            onClick={() => handleTakeToHand('right', selectedEntry.originalIndex)}
-                          >
-                            <Hand width={12} height={12} />
-                            <span>В правую руку</span>
-                          </button>
-                        </div>
-
-                        {availableContainers.filter(cont => cont.id !== selectedEntry.item.id).length > 0 && (
-                          <div className="gu-row2 gu-wrap" style={{ gap: 4 }}>
-                            <span className="gu-mut" style={{ fontSize: 11, marginRight: 2 }}>Убрать в:</span>
-                            {availableContainers
-                              .filter(cont => cont.id !== selectedEntry.item.id)
-                              .map(cont => {
-                                const check = canItemFitInContainer(cont, selectedEntry.item);
-                                return (
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                {selectedEntry.item.isContainer && (
                                   <button
                                     type="button"
-                                    key={cont.id}
-                                    onClick={() => handlePutIntoContainer(cont, selectedEntry.originalIndex)}
-                                    disabled={!check.fits}
-                                    className="gu-btn gu-btn-s gu-btn-xs"
-                                    style={{ height: 24, padding: '0 7px', fontSize: 11 }}
-                                    title={check.fits ? `Положить ${selectedEntry.item.nameRu} в ${cont.nameRu}` : check.reason}
+                                    className="btn btn-p btn-sm btn-block"
+                                    onClick={() => {
+                                      setOpenContainer(selectedEntry.item);
+                                      setSelectedContainerItemIdx(0);
+                                    }}
                                   >
-                                    <ArrowDownToLine width={11} height={11} color="#c9922b" />
-                                    <span>{cont.nameRu}</span>
+                                    <Package width={14} height={14} />
+                                    <span>Открыть ({selectedEntry.item.contents?.length || 0} предм.)</span>
                                   </button>
-                                );
-                              })}
-                          </div>
-                        )}
-
-                        <div className={world && isPlayerNearTrashBin(player, world) ? 'gu-grid gu-g2' : 'gu-row2'} style={{ gap: 6 }}>
-                          <button
-                            type="button"
-                            id="btn-drop-selected-item"
-                            className="gu-btn gu-btn-d gu-btn-xs gu-btn-block"
-                            onClick={() => handleDropItem(selectedEntry.originalIndex)}
-                          >
-                            <Trash2 width={12} height={12} />
-                            <span>Выбросить 1 шт.</span>
-                          </button>
-
-                          {world && isPlayerNearTrashBin(player, world) && (
-                            <button
-                              type="button"
-                              id="btn-dispose-in-trash-bin"
-                              className="gu-btn gu-btn-s gu-btn-xs gu-btn-block"
-                              style={{ borderColor: 'rgba(201,146,43,0.55)', color: '#f0c264' }}
-                              onClick={() => {
-                                disposeTrashInBin(player, world, selectedEntry.originalIndex);
-                                forceRender(n => n + 1);
-                              }}
-                            >
-                              <Trash2 width={12} height={12} />
-                              <span>В урну</span>
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="gu-empty" style={{ flex: 1 }}>
-                  <Package width={38} height={38} color="#8f8b81" />
-                  <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>
-                    Выберите предмет в слоте
-                  </div>
-                  <div className="gu-mut" style={{ fontSize: 12.5, maxWidth: 260 }}>
-                    Перетаскивайте предметы между слотами карманов, рук и контейнеров.
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ==================== SUB-INVENTORY: CONTAINER VIEW (2-COLUMN SLOT LAYOUT) ==================== */}
-        {activeTab === 'inventory' && openContainer && (() => {
-          ensureHybridContainerProps(openContainer);
-          const contItems = openContainer.contents || [];
-          const totalContSlots = Math.max(18, contItems.length + 6);
-          const selectedContItem = contItems[selectedContainerItemIdx] || null;
-          const isContainerDropTarget = wbDragUi?.overKey === 'zone:container';
-          const bd = getContainerCapacityBreakdown(openContainer);
-          const fs = openContainer.fluidStorage;
-          const hasLiquid = Boolean(fs && fs.liquidId && fs.currentMl > 0);
-          const liqDef = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
-          const liquidDisplayName = fs?.attributes?.varietyRu || liqDef?.nameRu || fs?.liquidId || '';
-
-          return (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* Compact Pinned Header */}
-              <div className="gu-panel" style={{ flex: 'none', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-                <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
-                  <div className="gu-row2" style={{ gap: 10, minWidth: 0 }}>
-                    <button id="btn-close-container-view" type="button" className="gu-btn gu-btn-s gu-btn-xs" onClick={() => setOpenContainer(null)}>
-                      <ChevronLeft width={14} height={14} color="#c9922b" />
-                      <span>В карманы</span>
-                    </button>
-                    <div className="gu-ic" style={{ width: 34, height: 34, flexShrink: 0 }}>
-                      <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={30} />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="gu-cn" style={{ fontSize: 17, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
-                        {openContainer.nameRu}
-                      </div>
-                      <div className="gu-mut gu-mono" style={{ fontSize: 11 }}>
-                        {fs
-                          ? 'Общий счётчик объёма: предметы и жидкость делят одну вместимость и смешиваются'
-                          : 'Перетаскивайте предметы из карманов и рук в слоты контейнера и обратно'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="gu-row2 gu-mono" style={{ gap: 8, fontSize: 12, color: 'var(--gu-mut)' }}>
-                    <span><strong style={{ color: '#fff' }}>{contItems.length}</strong> предм.</span>
-                    <span>·</span>
-                    <span>
-                      <strong style={{ color: 'var(--gu-amber-hi)' }}>
-                        {(bd.usedMl / 1000).toFixed(2)}
-                      </strong> / {(bd.totalCapacityMl / 1000).toFixed(2)} л
-                    </span>
-                    <span>·</span>
-                    <span><strong style={{ color: '#fff' }}>{formatWeightRu(getItemTotalWeight(openContainer))}</strong></span>
-                  </div>
-                </div>
-
-                {/* Unified Segmented Capacity Bar (Solid + Liquid sharing 1 capacity meter) */}
-                {bd.totalCapacityMl > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ height: 8, width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden', display: 'flex' }}>
-                      {bd.solidPct > 0 && (
-                        <div
-                          style={{ width: `${bd.solidPct}%`, background: '#f59e0b', height: '100%', transition: 'width 0.2s ease' }}
-                          title={`Предметы: ${Math.round(bd.solidMl)} мл`}
-                        />
-                      )}
-                      {bd.liquidPct > 0 && (
-                        <div
-                          style={{ width: `${bd.liquidPct}%`, background: bd.liquidColor, height: '100%', transition: 'width 0.2s ease' }}
-                          title={`Жидкость: ${Math.round(bd.liquidMl)} мл`}
-                        />
-                      )}
-                    </div>
-                    <div className="gu-row2 gu-wrap gu-mono" style={{ justifyContent: 'space-between', fontSize: 11, color: 'var(--gu-mut)' }}>
-                      <div className="gu-row2" style={{ gap: 10 }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b', display: 'inline-block' }} />
-                          Предметы: <strong style={{ color: '#fff' }}>{Math.round(bd.solidMl)} мл</strong>
-                        </span>
-                        {fs && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: 2, background: bd.liquidColor, display: 'inline-block' }} />
-                            Жидкость: <strong style={{ color: '#fff' }}>{Math.round(bd.liquidMl)} мл</strong>
-                          </span>
-                        )}
-                      </div>
-                      <span>Свободно: <strong style={{ color: '#4ade80' }}>{Math.round(bd.freeMl)} мл</strong></span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 2-Column Slot Layout: Left = Container Slots + Liquid Phase | Right = Player Hands + Pocket Slots */}
-              <div className="gu-st-split" style={{ flex: 1, minHeight: 0 }}>
-                {/* LEFT COLUMN: LIQUID PHASE + CONTAINER SLOTS */}
-                <div
-                  className="gu-panel"
-                  data-wb-drop-zone="zone:container"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    minHeight: 0,
-                    padding: '10px 12px',
-                    gap: 8,
-                    borderColor: isContainerDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                  }}
-                >
-                  {/* Liquid Phase Control Strip inside Hybrid Container */}
-                  {fs && (
-                    <div
-                      className="gu-card-sm"
-                      style={{
-                        flex: 'none',
-                        padding: '8px 10px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                        borderColor: hasLiquid ? `${bd.liquidColor}66` : undefined,
-                      }}
-                    >
-                      <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', gap: 6 }}>
-                        <div className="gu-row2" style={{ gap: 7, minWidth: 0 }}>
-                          <Droplets width={15} height={15} color={hasLiquid ? bd.liquidColor : '#64748b'} />
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 12.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {hasLiquid ? liquidDisplayName : 'Жидкость не налита'}
-                            </div>
-                            <div className="gu-mut gu-mono" style={{ fontSize: 10.5 }}>
-                              {hasLiquid
-                                ? `${Math.round(fs.currentMl)} мл · ${Math.round(openContainer.temperature ?? 20)}°C${contItems.length > 0 ? ` · Погружено предм.: ${contItems.length}` : ''}`
-                                : `Доступно для заливки: ${Math.round(bd.freeMl)} мл`}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="gu-row2" style={{ gap: 4 }}>
-                          {hasLiquid && (
-                            <>
+                                )}
+                                {isFluidContainerClosed(selectedEntry.item) && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-p btn-sm btn-block"
+                                    onClick={() => {
+                                      openFluidContainerIfNeeded(player, selectedEntry.item);
+                                      sound.resume();
+                                      forceRender(n => n + 1);
+                                    }}
+                                  >
+                                    <Scissors width={14} height={14} />
+                                    <span>Открыть крышку / упаковку</span>
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            <div className="inv-btn-grid2">
                               <button
                                 type="button"
-                                className="gu-btn gu-btn-p gu-btn-xs"
+                                className="btn btn-s btn-xs"
+                                onClick={() => handleStowHand(selectedEntry.hand!)}
+                              >
+                                <ArrowDownToLine width={13} height={13} />
+                                <span>Убрать в карман</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-d btn-xs"
+                                onClick={() => handleDropFromHand(selectedEntry.hand!)}
+                              >
+                                <Trash2 width={13} height={13} />
+                                <span>Бросить на землю</span>
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {selectedEntry.item.clothingStats ? (
+                              <button
+                                type="button"
+                                id="btn-equip-selected-item"
+                                className="btn btn-p btn-sm btn-block"
+                                onClick={() => handleEquipItem(selectedEntry.originalIndex)}
+                              >
+                                <Shirt width={14} height={14} />
+                                <span>Надеть / Экипировать</span>
+                              </button>
+                            ) : selectedEntry.item.isContainer && selectedEntry.item.fluidStorage ? (
+                              <div className="inv-btn-grid2">
+                                {isFluidContainerClosed(selectedEntry.item) ? (
+                                  <button
+                                    type="button"
+                                    id="btn-open-fluid-container"
+                                    className="btn btn-p btn-sm"
+                                    style={{ gridColumn: '1 / -1' }}
+                                    onClick={() => {
+                                      openFluidContainerIfNeeded(player, selectedEntry.item);
+                                      sound.resume();
+                                      forceRender(n => n + 1);
+                                    }}
+                                  >
+                                    <Scissors width={14} height={14} />
+                                    <span>Открыть крышку / упаковку</span>
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      id="btn-open-selected-container"
+                                      className="btn btn-p btn-sm"
+                                      onClick={() => {
+                                        setOpenContainer(selectedEntry.item);
+                                        setSelectedContainerItemIdx(0);
+                                      }}
+                                    >
+                                      <Package width={14} height={14} />
+                                      <span>Открыть ({selectedEntry.item.contents?.length || 0})</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      id="btn-use-selected-item"
+                                      className="btn btn-s btn-sm"
+                                      onClick={() => handleUseItem(selectedEntry.originalIndex, true)}
+                                    >
+                                      <Droplets width={14} height={14} />
+                                      <span>{selectedEntry.item.fluidStorage.currentMl > 0 ? 'Выпить / Исп.' : 'Набрать'}</span>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            ) : selectedEntry.item.isContainer ? (
+                              <div className="inv-btn-grid2">
+                                {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) &&
+                                  !selectedEntry.item.isOpen && (
+                                    <button
+                                      type="button"
+                                      id="btn-unpack-selected-container"
+                                      className="btn btn-p btn-sm"
+                                      onClick={() => {
+                                        unpackSingleUseContainer(player, selectedEntry.item, world);
+                                        sound.resume();
+                                        forceRender(n => n + 1);
+                                      }}
+                                    >
+                                      <Scissors width={14} height={14} />
+                                      <span>
+                                        Вскрыть
+                                        {selectedEntry.item.contents && selectedEntry.item.contents.length > 0
+                                          ? ` (${selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)})`
+                                          : ''}
+                                      </span>
+                                    </button>
+                                  )}
+                                {(selectedEntry.item.isOpen ||
+                                  selectedEntry.item.itemId === 'pouch_sealed_snack_torn' ||
+                                  selectedEntry.item.itemId === 'egg_carton_10_open' ||
+                                  selectedEntry.item.itemId === 'lukoshko') &&
+                                  selectedEntry.item.contents &&
+                                  selectedEntry.item.contents.length > 0 && (
+                                    <button
+                                      type="button"
+                                      id="btn-consume-from-opened-package"
+                                      className="btn btn-p btn-sm"
+                                      onClick={() => {
+                                        useItemOnPlayer(player, selectedEntry.originalIndex, world || undefined);
+                                        sound.resume();
+                                        forceRender(n => n + 1);
+                                      }}
+                                    >
+                                      <Utensils width={14} height={14} />
+                                      <span>
+                                        {selectedEntry.item.itemId.startsWith('egg_carton') ||
+                                        selectedEntry.item.itemId.startsWith('pelmeni_pack') ||
+                                        selectedEntry.item.itemId.startsWith('chocolate_pack') ||
+                                        selectedEntry.item.contents[0]?.itemId === 'pelmen' ||
+                                        selectedEntry.item.contents[0]?.itemId === 'chocolate'
+                                          ? 'Достать 1 шт.'
+                                          : selectedEntry.item.contents[0]?.category === 'med'
+                                          ? 'Применить 1 шт.'
+                                          : 'Съесть 1 шт.'}{' '}
+                                        ({selectedEntry.item.contents.reduce((acc, it) => acc + (it.count || 1), 0)})
+                                      </span>
+                                    </button>
+                                  )}
+                                <button
+                                  type="button"
+                                  id="btn-open-selected-container"
+                                  className={`btn ${
+                                    (selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) && !selectedEntry.item.isOpen
+                                      ? 'btn-s'
+                                      : 'btn-p'
+                                  } btn-sm`}
+                                  style={{
+                                    gridColumn:
+                                      !((selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) && !selectedEntry.item.isOpen) &&
+                                      !(
+                                        (selectedEntry.item.isOpen ||
+                                          selectedEntry.item.itemId === 'pouch_sealed_snack_torn' ||
+                                          selectedEntry.item.itemId === 'egg_carton_10_open' ||
+                                          selectedEntry.item.itemId === 'lukoshko') &&
+                                        selectedEntry.item.contents &&
+                                        selectedEntry.item.contents.length > 0
+                                      )
+                                        ? '1 / -1'
+                                        : undefined
+                                  }}
+                                  onClick={() => {
+                                    setOpenContainer(selectedEntry.item);
+                                    setSelectedContainerItemIdx(0);
+                                  }}
+                                >
+                                  <Package width={14} height={14} />
+                                  <span>Открыть ({selectedEntry.item.contents?.length || 0} предм.)</span>
+                                </button>
+                              </div>
+                            ) : selectedEntry.item.phoneSpecs ||
+                              selectedEntry.item.itemId.startsWith('phone_') ||
+                              selectedEntry.item.itemId === 'smartphone' ? (
+                              <button
+                                type="button"
+                                id="btn-use-selected-phone"
+                                className="btn btn-p btn-sm btn-block"
+                                onClick={() => handleUseItem(selectedEntry.originalIndex)}
+                              >
+                                <Smartphone width={14} height={14} />
+                                <span>Включить экран телефона</span>
+                              </button>
+                            ) : selectedEntry.item.itemId.startsWith('car_key') ? (
+                              <div className="note" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px' }}>
+                                {(() => {
+                                  const targetVeh = world ? getTargetVehicleForKey(player, selectedEntry.item, world) : null;
+                                  const distM = targetVeh ? Math.round(Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y) / 10) : null;
+                                  const isSmartOrDisplay = selectedEntry.item.keyTier === 'smart' || selectedEntry.item.keyTier === 'display';
+
+                                  return (
+                                    <>
+                                      <div className="inv-sec-row" style={{ fontSize: 12 }}>
+                                        <span className="inv-grp-lbl" style={{ fontSize: 12 }}>
+                                          {selectedEntry.item.keyTier === 'display'
+                                            ? 'Smart Display Key'
+                                            : selectedEntry.item.keyTier === 'smart'
+                                            ? 'Smart Keyless-Go'
+                                            : selectedEntry.item.keyTier === 'flip'
+                                            ? 'Выкидной брелок'
+                                            : 'Ключ зажигания'}
+                                        </span>
+                                        <span className="mut mono" style={{ color: distM !== null ? '#e0ab45' : undefined }}>
+                                          {distM !== null ? `${distM} м` : 'Вне зоны'}
+                                        </span>
+                                      </div>
+
+                                      <div className="inv-btn-grid2" style={{ gap: 6 }}>
+                                        <button
+                                          type="button"
+                                          className="btn btn-s btn-xs"
+                                          onClick={() => {
+                                            handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_lock');
+                                            forceRender(n => n + 1);
+                                          }}
+                                        >
+                                          {targetVeh?.isLocked ? <Unlock width={12} height={12} color="#c9922b" /> : <Lock width={12} height={12} color="#c9922b" />}
+                                          <span>{targetVeh?.isLocked ? 'Открыть ЦЗ' : 'Закрыть ЦЗ'}</span>
+                                        </button>
+
+                                        {isSmartOrDisplay ? (
+                                          <button
+                                            type="button"
+                                            className="btn btn-p btn-xs"
+                                            onClick={() => {
+                                              handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_engine');
+                                              forceRender(n => n + 1);
+                                            }}
+                                          >
+                                            <Zap width={12} height={12} />
+                                            <span>{targetVeh?.engineState?.engineRunning ? 'Заглушить' : 'Автозапуск'}</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="btn btn-s btn-xs"
+                                            onClick={() => {
+                                              handleCarKeyActivation(player, selectedEntry.item, world, 'horn');
+                                              forceRender(n => n + 1);
+                                            }}
+                                          >
+                                            <Volume2 width={12} height={12} color="#c9922b" />
+                                            <span>Поиск авто</span>
+                                          </button>
+                                        )}
+
+                                        {isSmartOrDisplay && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              className="btn btn-s btn-xs"
+                                              onClick={() => {
+                                                handleCarKeyActivation(player, selectedEntry.item, world, 'toggle_headlights');
+                                                forceRender(n => n + 1);
+                                              }}
+                                            >
+                                              <Lightbulb width={12} height={12} color="#c9922b" />
+                                              <span>{targetVeh?.headlightsOn ? 'Выкл фары' : 'Вкл фары'}</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="btn btn-s btn-xs"
+                                              onClick={() => {
+                                                handleCarKeyActivation(player, selectedEntry.item, world, 'horn');
+                                                forceRender(n => n + 1);
+                                              }}
+                                            >
+                                              <Volume2 width={12} height={12} color="#c9922b" />
+                                              <span>Сигнал</span>
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            ) : selectedEntry.item.itemId.startsWith('property_') ||
+                              selectedEntry.item.itemId === 'car_pts' ||
+                              selectedEntry.item.itemId === 'car_tech_passport' ||
+                              selectedEntry.item.itemId === 'car_contract_dkp' ? (
+                              <button
+                                type="button"
+                                id="btn-inspect-selected-document"
+                                className="btn btn-p btn-sm btn-block"
+                                onClick={() => onInspectDocument?.(selectedEntry.item)}
+                              >
+                                <FileText width={14} height={14} />
+                                <span>Просмотреть документ</span>
+                              </button>
+                            ) : isFluidContainerClosed(selectedEntry.item) ? (
+                              <button
+                                type="button"
+                                id="btn-open-fluid-container"
+                                className="btn btn-p btn-sm btn-block"
+                                onClick={() => {
+                                  openFluidContainerIfNeeded(player, selectedEntry.item);
+                                  sound.resume();
+                                  forceRender(n => n + 1);
+                                }}
+                              >
+                                <Scissors width={14} height={14} />
+                                <span>
+                                  {selectedEntry.item.itemId.startsWith('can_metal_')
+                                    ? 'Вскрыть консервную банку'
+                                    : selectedEntry.item.itemId === 'can_alu_330'
+                                    ? 'Открыть банку (ключ-кольцо)'
+                                    : selectedEntry.item.itemId.startsWith('cup_plastic_dairy') ||
+                                      selectedEntry.item.itemId.startsWith('tetra_pack_') ||
+                                      selectedEntry.item.itemId === 'package_sachet'
+                                    ? 'Вскрыть упаковку'
+                                    : 'Открыть крышку'}
+                                </span>
+                              </button>
+                            ) : selectedEntry.item.usable ? (
+                              <button
+                                type="button"
+                                id="btn-use-selected-item"
+                                className="btn btn-p btn-sm btn-block"
+                                onClick={() => handleUseItem(selectedEntry.originalIndex)}
+                              >
+                                <Utensils width={14} height={14} />
+                                <span>Использовать</span>
+                              </button>
+                            ) : null}
+
+                            <div className="inv-btn-grid2">
+                              <button
+                                type="button"
+                                className="btn btn-s btn-xs"
+                                onClick={() => handleTakeToHand('left', selectedEntry.originalIndex)}
+                              >
+                                <Hand width={13} height={13} />
+                                <span>В левую руку</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-s btn-xs"
+                                onClick={() => handleTakeToHand('right', selectedEntry.originalIndex)}
+                              >
+                                <Hand width={13} height={13} />
+                                <span>В правую руку</span>
+                              </button>
+                            </div>
+
+                            {availableContainers.filter(cont => cont.id !== selectedEntry.item.id).length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 5 }}>
+                                <span className="mut" style={{ fontSize: 11.5 }}>Убрать в:</span>
+                                {availableContainers
+                                  .filter(cont => cont.id !== selectedEntry.item.id)
+                                  .map(cont => {
+                                    const check = canItemFitInContainer(cont, selectedEntry.item);
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={cont.id}
+                                        onClick={() => handlePutIntoContainer(cont, selectedEntry.originalIndex)}
+                                        disabled={!check.fits}
+                                        className="btn btn-s btn-xs"
+                                        style={{ height: 26, padding: '0 8px', fontSize: 11.5 }}
+                                        title={check.fits ? `Положить ${selectedEntry.item.nameRu} в ${cont.nameRu}` : check.reason}
+                                      >
+                                        <ArrowDownToLine width={11} height={11} color="#c9922b" />
+                                        <span>{cont.nameRu}</span>
+                                      </button>
+                                    );
+                                  })}
+                              </div>
+                            )}
+
+                            <div className={world && isPlayerNearTrashBin(player, world) ? 'inv-btn-grid2' : undefined}>
+                              <button
+                                type="button"
+                                id="btn-drop-selected-item"
+                                className="btn btn-d btn-xs btn-block"
+                                onClick={() => handleDropItem(selectedEntry.originalIndex)}
+                              >
+                                <Trash2 width={13} height={13} />
+                                <span>Выбросить 1 шт.</span>
+                              </button>
+
+                              {world && isPlayerNearTrashBin(player, world) && (
+                                <button
+                                  type="button"
+                                  id="btn-dispose-in-trash-bin"
+                                  className="btn btn-s btn-xs btn-block"
+                                  style={{ borderColor: 'rgba(201,146,43,.55)', color: '#f0c264' }}
+                                  onClick={() => {
+                                    disposeTrashInBin(player, world, selectedEntry.originalIndex);
+                                    forceRender(n => n + 1);
+                                  }}
+                                >
+                                  <Trash2 width={13} height={13} />
+                                  <span>В урну</span>
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="inv-empty">
+                      <Package width={38} height={38} color="#8f8b81" />
+                      <div className="cn" style={{ fontSize: 19, fontWeight: 700, color: '#fff' }}>
+                        Выберите предмет в слоте
+                      </div>
+                      <div style={{ fontSize: 13, maxWidth: 260 }}>
+                        Перетаскивайте предметы между слотами карманов, рук и контейнеров
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {/* ==================== SUB-INVENTORY: CONTAINER VIEW ==================== */}
+            {activeTab === 'inventory' && openContainer && (() => {
+              ensureHybridContainerProps(openContainer);
+              const contItems = openContainer.contents || [];
+              const totalContSlots = Math.max(18, contItems.length + 6);
+              const selectedContItem = contItems[selectedContainerItemIdx] || null;
+              const isContainerDropTarget = wbDragUi?.overKey === 'zone:container';
+              const bd = getContainerCapacityBreakdown(openContainer);
+              const fs = openContainer.fluidStorage;
+              const hasLiquid = Boolean(fs && fs.liquidId && fs.currentMl > 0);
+              const liqDef = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
+              const liquidDisplayName = fs?.attributes?.varietyRu || liqDef?.nameRu || fs?.liquidId || '';
+
+              return (
+                <div className="inv-cont-wrap">
+                  {/* Single-row Slim Container Header Strip */}
+                  <div className="panel inv-cont-bar">
+                    <div className="inv-cont-bar-l">
+                      <button
+                        id="btn-close-container-view"
+                        type="button"
+                        className="btn btn-s btn-xs"
+                        onClick={() => setOpenContainer(null)}
+                      >
+                        <ChevronLeft width={14} height={14} color="#c9922b" />
+                        <span>В карманы</span>
+                      </button>
+                      <div className="inv-cont-ic">
+                        <ItemIconCanvas itemId={openContainer.itemId} item={openContainer} size={30} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="cn inv-cont-name" title={openContainer.nameRu}>
+                          {openContainer.nameRu}
+                        </div>
+                        <div className="inv-cont-sub">
+                          {fs
+                            ? 'Предметы и жидкость делят общую вместимость и смешиваются'
+                            : 'Перетаскивайте предметы между контейнером, руками и карманами'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {bd.totalCapacityMl > 0 && (
+                      <div className="inv-cont-bar-r">
+                        <div className="inv-cont-stats mono">
+                          <span>
+                            <strong style={{ color: '#fff' }}>{contItems.length}</strong> предм. ·{' '}
+                            <strong style={{ color: '#e0ab45' }}>{(bd.usedMl / 1000).toFixed(2)}</strong> / {(bd.totalCapacityMl / 1000).toFixed(2)} л ·{' '}
+                            <strong style={{ color: '#fff' }}>{formatWeightRu(getItemTotalWeight(openContainer))}</strong>
+                          </span>
+                          <span>
+                            Своб.: <strong style={{ color: '#9ac985' }}>{Math.round(bd.freeMl)} мл</strong>
+                          </span>
+                        </div>
+                        <div className="inv-meter-track">
+                          {bd.solidPct > 0 && (
+                            <div
+                              style={{ width: `${bd.solidPct}%`, background: '#f59e0b', height: '100%' }}
+                              title={`Предметы: ${Math.round(bd.solidMl)} мл`}
+                            />
+                          )}
+                          {bd.liquidPct > 0 && (
+                            <div
+                              style={{ width: `${bd.liquidPct}%`, background: bd.liquidColor, height: '100%' }}
+                              title={`Жидкость: ${Math.round(bd.liquidMl)} мл`}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2-Column Split: Left = Liquid + Container Slots | Right = Hands + Pockets */}
+                  <div className="inv-split-even">
+                    <section
+                      className="panel inv-col"
+                      data-wb-drop-zone="zone:container"
+                      style={{ borderColor: isContainerDropTarget ? '#e0ab45' : undefined }}
+                    >
+                      {fs && (
+                        <div
+                          className="card-sm inv-liquid-strip"
+                          style={{ borderColor: hasLiquid ? `${bd.liquidColor}66` : undefined }}
+                        >
+                          <div className="inv-liquid-l">
+                            <Droplets width={16} height={16} color={hasLiquid ? bd.liquidColor : '#64748b'} style={{ flex: 'none' }} />
+                            <div style={{ minWidth: 0 }}>
+                              <div className="inv-liquid-name" title={hasLiquid ? liquidDisplayName : undefined}>
+                                {hasLiquid ? liquidDisplayName : 'Жидкость не налита'}
+                              </div>
+                              <div className="inv-liquid-meta mono">
+                                {hasLiquid
+                                  ? `${Math.round(fs.currentMl)} мл · ${Math.round(openContainer.temperature ?? 20)}°C${contItems.length > 0 ? ` · Внутри: ${contItems.length}` : ''}`
+                                  : `Свободно для заливки: ${Math.round(bd.freeMl)} мл`}
+                              </div>
+                            </div>
+                          </div>
+
+                          {hasLiquid && (
+                            <div className="inv-liquid-acts">
+                              <button
+                                type="button"
+                                className="btn btn-p btn-xs"
                                 onClick={() => {
                                   tryFillOrUseFluidContainer(player, openContainer, world || undefined);
                                   sound.resume();
                                   forceRender(n => n + 1);
                                 }}
                               >
-                                <FlaskConical width={12} height={12} />
+                                <FlaskConical width={13} height={13} />
                                 <span>Выпить / Исп.</span>
                               </button>
                               <button
                                 type="button"
-                                className="gu-btn gu-btn-d gu-btn-xs"
+                                className="btn btn-d btn-xs"
                                 title="Слить только жидкость (предметы останутся внутри влажными)"
                                 onClick={() => {
                                   const drained = drainLiquidFromContainer(openContainer);
@@ -2977,754 +2886,723 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                   }
                                 }}
                               >
-                                <Droplets width={12} height={12} />
+                                <Droplets width={13} height={13} />
                                 <span>Слить</span>
                               </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between' }}>
-                    <span className="gu-grp" style={{ fontSize: 11.5 }}>
-                      Предметы внутри ({contItems.length})
-                    </span>
-                    <span className="gu-mut" style={{ fontSize: 11 }}>Перетащите сюда или 2× клик чтобы достать</span>
-                  </div>
-
-                  <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                    <div className="gu-slots">
-                      {Array.from({ length: totalContSlots }).map((_, idx) => {
-                        const cItem = contItems[idx];
-                        const slotKey = cItem ? `cont:${idx}` : `cont:empty-${idx}`;
-                        const isBeingDragged = wbDragUi?.sourceKey === slotKey;
-                        const isDropTarget = wbDragUi?.overKey === slotKey;
-                        const isSelected = (cItem && selectedContainerItemIdx === idx) || selectedWbSlot === slotKey;
-                        const info = getSlotFillInfo(cItem);
-
-                        if (!cItem) {
-                          return (
-                            <div
-                              key={slotKey}
-                              data-wb-slot={slotKey}
-                              draggable={false}
-                              onDragStart={e => e.preventDefault()}
-                              onPointerDown={e => startSlotPointerDrag(e, slotKey, null)}
-                              className={'gu-slot empty' + (isDropTarget ? ' on' : '')}
-                              style={{
-                                touchAction: 'none',
-                                borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                              }}
-                            />
-                          );
-                        }
-
-                        const isSubmerged = Boolean(cItem.soakedLiquidId && (cItem.submersionLevel || 0) > 0);
-                        return (
-                          <div
-                            key={slotKey}
-                            data-wb-slot={slotKey}
-                            draggable={false}
-                            onDragStart={e => e.preventDefault()}
-                            onPointerDown={e =>
-                              startSlotPointerDrag(e, slotKey, cItem, () => {
-                                setSelectedContainerItemIdx(idx);
-                              })
-                            }
-                            onDoubleClick={() => handleExtractFromContainer(openContainer, idx, 'pockets')}
-                            className={'gu-slot' + (isSelected || isDropTarget ? ' on' : '')}
-                            style={{
-                              touchAction: 'none',
-                              cursor: 'grab',
-                              opacity: isBeingDragged ? 0.35 : 1,
-                              borderColor: isDropTarget ? 'var(--gu-amber-hi)' : (isSubmerged ? `${cItem.soakedColor || '#38bdf8'}99` : undefined),
-                              boxShadow: isSubmerged ? `inset 0 -10px 14px -8px ${cItem.soakedColor || '#38bdf8'}66` : undefined,
-                            }}
-                            title={info?.tooltip}
-                          >
-                            <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={44} />
-                            {cItem.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{cItem.count}</span>}
-                            {isSubmerged && (
-                              <span
-                                style={{
-                                  position: 'absolute',
-                                  top: 2,
-                                  right: 2,
-                                  width: 14,
-                                  height: 14,
-                                  borderRadius: 3,
-                                  background: 'rgba(15,23,42,0.82)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  pointerEvents: 'none',
-                                }}
-                              >
-                                <Droplets width={9} height={9} color={cItem.soakedColor || '#38bdf8'} />
-                              </span>
-                            )}
-                            {info && info.pct !== null && (
-                              <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
-                                <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {selectedContItem && (
-                    <div className="gu-card-sm gu-row2 gu-wrap" style={{ flex: 'none', padding: '7px 10px', justifyContent: 'space-between', gap: 8 }}>
-                      <div className="gu-row2" style={{ gap: 8, minWidth: 0 }}>
-                        <ItemIconCanvas itemId={selectedContItem.itemId} item={selectedContItem} size={28} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 12.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {selectedContItem.nameRu}
-                          </div>
-                          <div className="gu-mut gu-mono" style={{ fontSize: 10.5 }}>
-                            {selectedContItem.count} шт. · {formatWeightRu(getItemTotalWeight(selectedContItem))} · {Math.round(getItemTotalVolume(selectedContItem) * 1000)} мл
-                            {selectedContItem.soakedLiquidNameRu && (selectedContItem.wetness || 0) >= 10
-                              ? ` · В жидкости: ${selectedContItem.soakedLiquidNameRu} (${Math.round(selectedContItem.wetness || 0)}%)`
-                              : ''}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="gu-row2" style={{ gap: 4 }}>
-                        <button
-                          type="button"
-                          className="gu-btn gu-btn-p gu-btn-xs"
-                          onClick={() => handleExtractFromContainer(openContainer, selectedContainerItemIdx, 'pockets')}
-                        >
-                          <ArrowUpFromLine width={12} height={12} />
-                          <span>В карман</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="gu-btn gu-btn-s gu-btn-xs"
-                          onClick={() => handleExtractFromContainer(openContainer, selectedContainerItemIdx, 'rightHand')}
-                        >
-                          <Hand width={12} height={12} />
-                          <span>В руку</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="gu-btn gu-btn-d gu-btn-xs"
-                          onClick={() => handleDropFromContainer(openContainer, selectedContainerItemIdx)}
-                          title="Выбросить на землю"
-                        >
-                          <Trash2 width={12} height={12} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* RIGHT COLUMN: PLAYER HAND SLOTS + POCKET SLOTS */}
-                <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px' }}>
-                  <div className="gu-st-scroll gu-player-inv-scroll" style={{ flex: 1, minHeight: 0 }}>
-                    {renderCompartmentsSlotGrid()}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* ==================== TAB 2: SURROUNDINGS (2-COLUMN SLOT LAYOUT) ==================== */}
-        {activeTab === 'surroundings' && (() => {
-          const totalGroundSlots = Math.max(18, nearbyGroundItems.length + 6);
-          const isGroundZoneTarget = wbDragUi?.overKey === 'zone:ground';
-
-          return (
-            <div className="gu-st-split" style={{ flex: 1, minHeight: 0 }}>
-              {/* LEFT COLUMN: GROUND SLOTS */}
-              <div
-                className="gu-panel"
-                data-wb-drop-zone="zone:ground"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: 0,
-                  padding: '10px 12px',
-                  borderColor: isGroundZoneTarget ? 'var(--gu-amber-hi)' : undefined,
-                }}
-              >
-                <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span className="gu-grp" style={{ fontSize: 11.5 }}>Земля рядом ({nearbyGroundItems.length})</span>
-                  <span className="gu-mut" style={{ fontSize: 11 }}>Перетащите в карманы / руки или бросьте сюда</span>
-                </div>
-
-                <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                  <div className="gu-slots">
-                    {Array.from({ length: totalGroundSlots }).map((_, idx) => {
-                      const gi = nearbyGroundItems[idx];
-                      const slotKey = gi ? `ground:${gi.id}` : `ground:empty-${idx}`;
-                      const isBeingDragged = wbDragUi?.sourceKey === slotKey;
-                      const isDropTarget = wbDragUi?.overKey === slotKey;
-                      const info = getSlotFillInfo(gi?.item);
-
-                      if (!gi) {
-                        return (
-                          <div
-                            key={slotKey}
-                            data-wb-slot={slotKey}
-                            draggable={false}
-                            onDragStart={e => e.preventDefault()}
-                            onPointerDown={e => startSlotPointerDrag(e, slotKey, null)}
-                            className={'gu-slot empty' + (isDropTarget ? ' on' : '')}
-                            style={{
-                              touchAction: 'none',
-                              borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                            }}
-                          />
-                        );
-                      }
-
-                      return (
-                        <div
-                          key={slotKey}
-                          data-wb-slot={slotKey}
-                          draggable={false}
-                          onDragStart={e => e.preventDefault()}
-                          onPointerDown={e => startSlotPointerDrag(e, slotKey, gi.item)}
-                          onDoubleClick={() => handlePickupGroundItem(gi)}
-                          className={'gu-slot' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
-                          style={{
-                            touchAction: 'none',
-                            cursor: 'grab',
-                            opacity: isBeingDragged ? 0.35 : 1,
-                            borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                          }}
-                          title={info?.tooltip}
-                        >
-                          <ItemIconCanvas itemId={gi.item.itemId} item={gi.item} size={44} />
-                          {gi.item.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{gi.item.count}</span>}
-                          {info && info.pct !== null && (
-                            <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
-                              <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
                             </div>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+                      )}
 
-              {/* RIGHT COLUMN: SCROLLABLE PLAYER HAND SLOTS + POCKET SLOTS */}
-              <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px' }}>
-                <div className="gu-st-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                  {renderCompartmentsSlotGrid()}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* ==================== TAB: FREEROAM CATALOG (INSTANT GIVE-ANY-ITEM) ==================== */}
-        {activeTab === 'catalog' && isFreeroam && (
-          <div className="gu-st-split" style={{ flex: 1, minHeight: 0 }}>
-            {/* LEFT: SEARCH + FILTERS + SLOT GRID OF EVERY ITEM */}
-            <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px', gap: 8 }}>
-              <div className="gu-row2" style={{ flex: 'none', justifyContent: 'space-between' }}>
-                <span className="gu-grp" style={{ fontSize: 11.5 }}>Все предметы ({catalogFiltered.length})</span>
-                <span className="gu-mut" style={{ fontSize: 11 }}>Клик: выдать 1 шт. · Shift+клик: полный стак</span>
-              </div>
-
-              <label className="gu-search" style={{ flex: 'none', height: 36 }}>
-                <Search width={15} height={15} color="#8b929e" />
-                <input
-                  id="catalog-search"
-                  type="text"
-                  value={catalogSearch}
-                  onChange={e => {
-                    setCatalogSearch(e.target.value);
-                    setCatalogLimit(240);
-                  }}
-                  placeholder="Поиск предметов..."
-                  autoComplete="off"
-                />
-              </label>
-
-              <div className="gu-pills" style={{ flex: 'none' }}>
-                {FREE_CATALOG_CATEGORIES.map(cat => {
-                  const on = catalogCategory === cat.id;
-                  return (
-                    <button
-                      type="button"
-                      key={cat.id}
-                      id={`catalog-cat-${cat.id}`}
-                      onClick={() => {
-                        setCatalogCategory(cat.id);
-                        setCatalogLimit(240);
-                      }}
-                      className={'gu-pill' + (on ? ' on' : '')}
-                    >
-                      <span>{cat.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div
-                className="gu-st-scroll"
-                style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
-                onScroll={e => {
-                  const el = e.currentTarget;
-                  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 240 && catalogLimit < catalogFiltered.length) {
-                    setCatalogLimit(n => n + 240);
-                  }
-                }}
-              >
-                {catalogFiltered.length === 0 ? (
-                  <div className="gu-empty">
-                    <span className="gu-mut" style={{ fontSize: 13 }}>Предметы не найдены</span>
-                  </div>
-                ) : (
-                  <div className="gu-slots">
-                    {catalogFiltered.slice(0, catalogLimit).map(it => (
-                      <div
-                        key={it.key}
-                        role="button"
-                        tabIndex={0}
-                        data-catalog-slot={it.key}
-                        className={'gu-slot' + (catalogSelectedKey === it.key ? ' on' : '')}
-                        title={it.nameRu}
-                        onClick={e => {
-                          setCatalogSelectedKey(it.key);
-                          handleGiveCatalogItem(it.key, e.shiftKey ? it.maxStack : 1);
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setCatalogSelectedKey(it.key);
-                            handleGiveCatalogItem(it.key, e.shiftKey ? it.maxStack : 1);
-                          }
-                        }}
-                      >
-                        <ItemIconCanvas itemId={it.key} size={44} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* RIGHT: SELECTED ITEM DETAILS + GIVE BUTTONS */}
-            <div className="gu-panel gu-inv-detail">
-              {catalogSelected ? (
-                <>
-                  <div className="gu-row2" style={{ flex: 'none', alignItems: 'flex-start', gap: 10, paddingBottom: 8, borderBottom: '1px solid var(--gu-line)' }}>
-                    <div className="gu-ic gu-md" style={{ width: 48, height: 48, flexShrink: 0 }}>
-                      <ItemIconCanvas itemId={catalogSelected.key} item={catalogPreviewItem || undefined} size={44} />
-                    </div>
-                    <div className="gu-grow" style={{ minWidth: 0 }}>
-                      <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {catalogSelected.nameRu}
-                      </div>
-                      <div className="gu-mut gu-mono" style={{ fontSize: 11.5, marginTop: 3 }}>
-                        <span style={{ color: 'var(--gu-amber-hi)' }}>{getFreeCategoryLabelRu(catalogSelected.category)}</span>
-                        {' · '}
-                        {formatWeightRu(catalogSelected.weight)}
-                        {' · '}
-                        стак до {catalogSelected.maxStack}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="gu-inv-detail-scroll">
-                    <div className="gu-note" style={{ lineHeight: 1.4, padding: '7px 10px', fontSize: 12, color: 'var(--gu-ink-dim)' }}>
-                      {catalogSelected.descriptionRu || 'Описание отсутствует.'}
-                    </div>
-                  </div>
-
-                  <div className="gu-inv-detail-foot">
-                    <button
-                      type="button"
-                      id="catalog-give-one"
-                      className="gu-btn gu-btn-p gu-btn-sm gu-btn-block"
-                      onClick={() => handleGiveCatalogItem(catalogSelected.key, 1)}
-                    >
-                      Выдать 1 шт.
-                    </button>
-                    {catalogSelected.maxStack > 1 && (
-                      <button
-                        type="button"
-                        id="catalog-give-stack"
-                        className="gu-btn gu-btn-s gu-btn-sm gu-btn-block"
-                        onClick={() => handleGiveCatalogItem(catalogSelected.key, catalogSelected.maxStack)}
-                      >
-                        Выдать стак ({catalogSelected.maxStack} шт.)
-                      </button>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="gu-empty" style={{ flex: 1 }}>
-                  <Wand2 width={28} height={28} color="#8b929e" />
-                  <span className="gu-mut" style={{ fontSize: 13 }}>
-                    Выберите предмет слева. Он сразу появится в карманах.
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ==================== TAB 3: CLOTHING (BODY-PART EQUIPMENT LIST) ==================== */}
-        {activeTab === 'clothing' && (() => {
-          const SLOT_ORDER: { slot: string; label: string; icon: React.ReactNode }[] = [
-            { slot: 'head', label: 'Голова', icon: <HardHat width={16} height={16} /> },
-            { slot: 'face', label: 'Лицо', icon: <Glasses width={16} height={16} /> },
-            { slot: 'torso', label: 'Торс', icon: <Shirt width={16} height={16} /> },
-            {
-              slot: 'legs',
-              label: 'Ноги',
-              icon: (
-                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
-                </svg>
-              ),
-            },
-            { slot: 'hands', label: 'Кисти', icon: <Hand width={16} height={16} /> },
-            { slot: 'feet', label: 'Обувь', icon: <Footprints width={16} height={16} /> },
-            { slot: 'back', label: 'Спина', icon: <Backpack width={16} height={16} /> },
-          ];
-          const LAYER_ORDER = ['skin', 'underwear', 'shirt', 'jacket', 'outerwear'];
-          const LAYER_LABELS_RU: Record<string, string> = {
-            skin: 'Тело',
-            underwear: 'Бельё',
-            shirt: 'Рубашка',
-            jacket: 'Куртка',
-            outerwear: 'Верхний слой',
-          };
-
-          const worn = player.equippedClothing || {};
-          const knownSlots = new Set(SLOT_ORDER.map(r => r.slot));
-          const extraSlots = Object.keys(worn).filter(
-            sl => !knownSlots.has(sl) && Object.values((worn as any)[sl] || {}).some(Boolean)
-          );
-          const rows = [
-            ...SLOT_ORDER,
-            ...extraSlots.map(sl => ({ slot: sl, label: sl, icon: <Shirt width={16} height={16} /> })),
-          ].map(r => {
-            const layers = ((worn as any)[r.slot] || {}) as Record<string, InventoryItem | undefined>;
-            const keys = [
-              ...LAYER_ORDER.filter(l => layers[l]),
-              ...Object.keys(layers).filter(l => !LAYER_ORDER.includes(l) && layers[l]),
-            ];
-            return { ...r, entries: keys.map(layer => ({ layer, item: layers[layer] as InventoryItem })) };
-          });
-
-          let totalInsulation = 0;
-          let totalMobility = 0;
-          let totalPocketsL = 0;
-          let wornCount = 0;
-          rows.forEach(r =>
-            r.entries.forEach(({ item }) => {
-              wornCount += 1;
-              totalInsulation += item.clothingStats?.insulation || 0;
-              totalMobility += item.clothingStats?.mobilityPenalty || 0;
-              totalPocketsL += item.clothingStats?.pocketCapacityL || 0;
-            })
-          );
-          const coveredCount = rows.filter(r => r.entries.length > 0).length;
-          const isClothZoneTarget = wbDragUi?.overKey === 'zone:clothing';
-          const fmt = (n: number) => Number(n.toFixed(1)).toString();
-
-          return (
-            <div className="gu-st-split" style={{ flex: 1, minHeight: 0 }}>
-              {/* LEFT COLUMN: EQUIPMENT BY BODY PART */}
-              <div
-                className="gu-panel gu-eq-panel"
-                data-wb-drop-zone="zone:clothing"
-                style={{ borderColor: isClothZoneTarget ? 'var(--gu-amber-hi)' : undefined }}
-              >
-                <div className="gu-eq-summary">
-                  <div className="gu-eq-stat" title="Суммарная теплоизоляция всех надетых слоёв">
-                    <Thermometer width={16} height={16} />
-                    <span className="gu-eq-stat-k">Тепло</span>
-                    <b className="gu-eq-stat-v">{fmt(totalInsulation)}</b>
-                  </div>
-                  <div className="gu-eq-stat" title="Суммарный штраф к подвижности от одежды">
-                    <Weight width={16} height={16} />
-                    <span className="gu-eq-stat-k">Подвижность</span>
-                    <b className={'gu-eq-stat-v' + (totalMobility > 0 ? ' bad' : '')}>{totalMobility > 0 ? '−' : ''}{fmt(totalMobility)}</b>
-                  </div>
-                  <div className="gu-eq-stat" title="Объём карманов, который даёт одежда">
-                    <Package width={16} height={16} />
-                    <span className="gu-eq-stat-k">Карманы</span>
-                    <b className="gu-eq-stat-v">+{fmt(totalPocketsL)} л</b>
-                  </div>
-                  <span className="gu-eq-count gu-mono">{coveredCount}/{SLOT_ORDER.length} частей тела · {wornCount} предм.</span>
-                </div>
-
-                <div className="gu-eq-list gu-inv-left-scroll">
-                  {rows.map(row => (
-                    <div key={row.slot} className={'gu-eq-row' + (row.entries.length === 0 ? ' bare' : '')}>
-                      <div className="gu-eq-part">
-                        {row.icon}
-                        <span>{row.label}</span>
+                      <div className="inv-sec-row" style={{ flex: 'none' }}>
+                        <span className="inv-grp-lbl">Предметы внутри ({contItems.length})</span>
+                        <span className="mut" style={{ fontSize: 12 }}>Перетащите или 2× клик</span>
                       </div>
 
-                      <div className="gu-eq-items">
-                        {row.entries.length === 0 ? (
-                          (() => {
-                            const emptyKey = `cloth:empty:${row.slot}`;
-                            const isOver = wbDragUi?.overKey === emptyKey;
-                            return (
-                              <div
-                                data-wb-slot={emptyKey}
-                                draggable={false}
-                                onDragStart={e => e.preventDefault()}
-                                onPointerDown={e => startSlotPointerDrag(e, emptyKey, null)}
-                                className={'gu-eq-empty' + (isOver ? ' on' : '')}
-                                style={{ touchAction: 'none' }}
-                              >
-                                Ничего не надето
-                              </div>
-                            );
-                          })()
-                        ) : (
-                          row.entries.map(({ layer, item }) => {
-                            const slotKey = `cloth:${row.slot}:${layer}`;
+                      <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                        <div className="inv-slots">
+                          {Array.from({ length: totalContSlots }).map((_, idx) => {
+                            const cItem = contItems[idx];
+                            const slotKey = cItem ? `cont:${idx}` : `cont:empty-${idx}`;
                             const isBeingDragged = wbDragUi?.sourceKey === slotKey;
                             const isDropTarget = wbDragUi?.overKey === slotKey;
-                            const st = item.clothingStats;
-                            const wet = Math.round(item.wetness ?? st?.wetness ?? 0);
-                            const metaParts: string[] = [LAYER_LABELS_RU[layer] || layer];
-                            if (st) {
-                              metaParts.push(`Тепло ${Math.round(st.insulation)}`);
-                              if (st.waterResistance > 0) metaParts.push(`Вода ${Math.round(st.waterResistance)}%`);
-                              if (st.pocketCapacityL) metaParts.push(`+${st.pocketCapacityL} л`);
+                            const isSelected = (cItem && selectedContainerItemIdx === idx) || selectedWbSlot === slotKey;
+                            const info = getSlotFillInfo(cItem);
+
+                            if (!cItem) {
+                              return (
+                                <div
+                                  key={slotKey}
+                                  data-wb-slot={slotKey}
+                                  draggable={false}
+                                  onDragStart={e => e.preventDefault()}
+                                  onPointerDown={e => startSlotPointerDrag(e, slotKey, null)}
+                                  className={'inv-slot empty' + (isDropTarget ? ' on' : '')}
+                                  style={{ borderColor: isDropTarget ? '#e0ab45' : undefined }}
+                                />
+                              );
                             }
+
+                            const isSubmerged = Boolean(cItem.soakedLiquidId && (cItem.submersionLevel || 0) > 0);
                             return (
                               <div
                                 key={slotKey}
                                 data-wb-slot={slotKey}
                                 draggable={false}
                                 onDragStart={e => e.preventDefault()}
-                                onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
-                                onDoubleClick={() => handleUnequipItem(row.slot, layer)}
-                                className={'gu-eq-item' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
+                                onPointerDown={e =>
+                                  startSlotPointerDrag(e, slotKey, cItem, () => {
+                                    setSelectedContainerItemIdx(idx);
+                                  })
+                                }
+                                onDoubleClick={() => handleExtractFromContainer(openContainer, idx, 'pockets')}
+                                className={'inv-slot' + (isSelected || isDropTarget ? ' on' : '')}
                                 style={{
-                                  touchAction: 'none',
                                   cursor: 'grab',
                                   opacity: isBeingDragged ? 0.35 : 1,
+                                  borderColor: isDropTarget ? '#e0ab45' : (isSubmerged ? `${cItem.soakedColor || '#38bdf8'}99` : undefined),
+                                  boxShadow: isSubmerged ? `inset 0 -10px 14px -8px ${cItem.soakedColor || '#38bdf8'}66` : undefined,
                                 }}
-                                title="Двойной клик или перетащить в карман, чтобы снять"
+                                title={info?.tooltip}
                               >
-                                <span className="gu-eq-ic">
-                                  <ItemIconCanvas itemId={item.itemId} item={item} size={36} />
-                                </span>
-                                <span className="gu-eq-body">
-                                  <span className="gu-eq-name">{item.nameRu}</span>
-                                  <span className="gu-eq-sub gu-mono">{metaParts.join(' · ')}</span>
-                                </span>
-                                {wet > 0 && (
-                                  <span className="gu-eq-wet gu-mono" title="Влажность ткани">
-                                    <CloudRain width={12} height={12} />
-                                    {wet}%
+                                <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={42} />
+                                {cItem.count > 1 && <span className="inv-cnt">{cItem.count}</span>}
+                                {isSubmerged && (
+                                  <span className="inv-submerge">
+                                    <Droplets width={9} height={9} color={cItem.soakedColor || '#38bdf8'} />
                                   </span>
+                                )}
+                                {info && info.pct !== null && (
+                                  <div className="inv-fill">
+                                    <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
+                                  </div>
                                 )}
                               </div>
                             );
-                          })
-                        )}
+                          })}
+                        </div>
+                      </div>
+
+                      {selectedContItem && (
+                        <div className="card-sm inv-cont-foot">
+                          <div className="inv-liquid-l">
+                            <ItemIconCanvas itemId={selectedContItem.itemId} item={selectedContItem} size={28} />
+                            <div style={{ minWidth: 0 }}>
+                              <div className="inv-liquid-name">{selectedContItem.nameRu}</div>
+                              <div className="inv-liquid-meta mono">
+                                {selectedContItem.count} шт. · {formatWeightRu(getItemTotalWeight(selectedContItem))} · {Math.round(getItemTotalVolume(selectedContItem) * 1000)} мл
+                                {selectedContItem.soakedLiquidNameRu && (selectedContItem.wetness || 0) >= 10
+                                  ? ` · ${selectedContItem.soakedLiquidNameRu} (${Math.round(selectedContItem.wetness || 0)}%)`
+                                  : ''}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="inv-liquid-acts">
+                            <button
+                              type="button"
+                              className="btn btn-p btn-xs"
+                              onClick={() => handleExtractFromContainer(openContainer, selectedContainerItemIdx, 'pockets')}
+                            >
+                              <ArrowUpFromLine width={12} height={12} />
+                              <span>В карман</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-s btn-xs"
+                              onClick={() => handleExtractFromContainer(openContainer, selectedContainerItemIdx, 'rightHand')}
+                            >
+                              <Hand width={12} height={12} />
+                              <span>В руку</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-d btn-xs"
+                              onClick={() => handleDropFromContainer(openContainer, selectedContainerItemIdx)}
+                              title="Выбросить на землю"
+                              aria-label="Выбросить на землю"
+                            >
+                              <Trash2 width={13} height={13} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="panel inv-col">
+                      <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                        {renderCompartmentsSlotGrid()}
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ==================== TAB 2: SURROUNDINGS ==================== */}
+            {activeTab === 'surroundings' && (() => {
+              const totalGroundSlots = Math.max(18, nearbyGroundItems.length + 6);
+              const isGroundZoneTarget = wbDragUi?.overKey === 'zone:ground';
+
+              return (
+                <div className="inv-split-even">
+                  <section
+                    className="panel inv-col"
+                    data-wb-drop-zone="zone:ground"
+                    style={{ borderColor: isGroundZoneTarget ? '#e0ab45' : undefined }}
+                  >
+                    <div className="inv-sec-row" style={{ flex: 'none' }}>
+                      <span className="inv-grp-lbl">Земля рядом ({nearbyGroundItems.length})</span>
+                      <span className="mut" style={{ fontSize: 12 }}>Перетащите в карманы / руки или бросьте сюда</span>
+                    </div>
+
+                    <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                      <div className="inv-slots">
+                        {Array.from({ length: totalGroundSlots }).map((_, idx) => {
+                          const gi = nearbyGroundItems[idx];
+                          const slotKey = gi ? `ground:${gi.id}` : `ground:empty-${idx}`;
+                          const isBeingDragged = wbDragUi?.sourceKey === slotKey;
+                          const isDropTarget = wbDragUi?.overKey === slotKey;
+                          const info = getSlotFillInfo(gi?.item);
+
+                          if (!gi) {
+                            return (
+                              <div
+                                key={slotKey}
+                                data-wb-slot={slotKey}
+                                draggable={false}
+                                onDragStart={e => e.preventDefault()}
+                                onPointerDown={e => startSlotPointerDrag(e, slotKey, null)}
+                                className={'inv-slot empty' + (isDropTarget ? ' on' : '')}
+                                style={{ borderColor: isDropTarget ? '#e0ab45' : undefined }}
+                              />
+                            );
+                          }
+
+                          return (
+                            <div
+                              key={slotKey}
+                              data-wb-slot={slotKey}
+                              draggable={false}
+                              onDragStart={e => e.preventDefault()}
+                              onPointerDown={e => startSlotPointerDrag(e, slotKey, gi.item)}
+                              onDoubleClick={() => handlePickupGroundItem(gi)}
+                              className={'inv-slot' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
+                              style={{
+                                cursor: 'grab',
+                                opacity: isBeingDragged ? 0.35 : 1,
+                                borderColor: isDropTarget ? '#e0ab45' : undefined,
+                              }}
+                              title={info?.tooltip}
+                            >
+                              <ItemIconCanvas itemId={gi.item.itemId} item={gi.item} size={42} />
+                              {gi.item.count > 1 && <span className="inv-cnt">{gi.item.count}</span>}
+                              {info && info.pct !== null && (
+                                <div className="inv-fill">
+                                  <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
+                  </section>
+
+                  <section className="panel inv-col">
+                    <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                      {renderCompartmentsSlotGrid()}
+                    </div>
+                  </section>
                 </div>
-                <div className="gu-eq-hint">Перетащите одежду сюда, чтобы надеть, или в карман, чтобы снять</div>
-              </div>
+              );
+            })()}
 
-              {/* RIGHT COLUMN: HANDS + POCKETS (scrolls without a visible scrollbar) */}
-              <div className="gu-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, padding: '10px 12px' }}>
-                <div className="gu-inv-left-scroll">
-                  {renderCompartmentsSlotGrid()}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+            {/* ==================== TAB 5: FREEROAM CATALOG ==================== */}
+            {activeTab === 'catalog' && isFreeroam && (
+              <div className="inv-split">
+                <section className="panel inv-col">
+                  <div className="inv-cat-bar">
+                    <label className="inv-search">
+                      <Search width={15} height={15} color="#a29e93" style={{ flex: 'none' }} />
+                      <input
+                        id="catalog-search"
+                        type="text"
+                        value={catalogSearch}
+                        onChange={e => {
+                          setCatalogSearch(e.target.value);
+                          setCatalogLimit(240);
+                        }}
+                        onKeyDown={stopGameKeys}
+                        placeholder="Поиск предметов..."
+                        autoComplete="off"
+                      />
+                    </label>
 
-        {/* ==================== TAB 4: INTERACTION (10 SLOTS: 2 HANDS + 2x2 INPUT + 2x2 OUTPUT) ==================== */}
-        {activeTab === 'interaction' && (() => {
-          const renderSquareSlot = (
-            slotKey: string,
-            item: InventoryItem | null | undefined,
-            options?: {
-              isPreview?: boolean;
-              isHand?: boolean;
-              onDoubleClick?: () => void;
-            }
-          ) => {
-            const info = getSlotFillInfo(item);
-            const isPreview = Boolean(options?.isPreview);
-            const isBeingDragged = wbDragUi?.sourceKey === slotKey;
-            const isDropTarget = wbDragUi?.overKey === slotKey;
-            const isSelected = selectedWbSlot === slotKey;
+                    <div className="inv-pills" style={{ paddingBottom: 0, flex: 1 }}>
+                      {FREE_CATALOG_CATEGORIES.map(cat => {
+                        const on = catalogCategory === cat.id;
+                        return (
+                          <button
+                            type="button"
+                            key={cat.id}
+                            id={`catalog-cat-${cat.id}`}
+                            onClick={() => {
+                              setCatalogCategory(cat.id);
+                              setCatalogLimit(240);
+                            }}
+                            className={'inv-pill' + (on ? ' on' : '')}
+                          >
+                            {cat.label}
+                          </button>
+                        );
+                      })}
+                    </div>
 
-            return (
-              <div
-                key={slotKey}
-                id={`slot-${slotKey.replace(':', '-')}`}
-                data-wb-slot={slotKey}
-                draggable={false}
-                onDragStart={e => e.preventDefault()}
-                onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
-                onDoubleClick={options?.onDoubleClick}
-                className={
-                  'gu-slot' +
-                  (!item ? ' empty' : '') +
-                  (isDropTarget || isSelected ? ' on' : '')
-                }
-                style={{
-                  width: 72,
-                  height: 72,
-                  touchAction: 'none',
-                  cursor: item ? 'grab' : selectedWbSlot && !slotKey.startsWith('output:') ? 'pointer' : 'default',
-                  opacity: isBeingDragged ? 0.35 : isPreview ? 0.85 : 1,
-                  borderStyle: isPreview && !isDropTarget ? 'dashed' : undefined,
-                  borderColor: isDropTarget
-                    ? 'var(--gu-amber-hi)'
-                    : isPreview
-                    ? 'rgba(224, 171, 69, 0.65)'
-                    : undefined,
-                }}
-                title={info?.tooltip}
-              >
-                {item ? (
-                  <>
-                    <ItemIconCanvas itemId={item.itemId} item={item} size={48} />
-                    {item.count > 1 ? (
-                      <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{item.count}</span>
-                    ) : item.isContainer ? (
-                      <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{item.contents?.length || 0}</span>
-                    ) : null}
-                    {info && info.pct !== null && (
-                      <div className="gu-ic-fill" style={{ pointerEvents: 'none' }}>
-                        <i
-                          style={{
-                            width: `${info.pct}%`,
-                            background: info.color || undefined,
-                          }}
-                        />
+                    <span className="mut mono" style={{ fontSize: 12.5, flex: 'none' }}>
+                      {catalogFiltered.length}
+                    </span>
+                  </div>
+
+                  <div
+                    className="scroll"
+                    style={{ flex: 1, minHeight: 0, paddingRight: 4 }}
+                    onScroll={e => {
+                      const el = e.currentTarget;
+                      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 240 && catalogLimit < catalogFiltered.length) {
+                        setCatalogLimit(n => n + 240);
+                      }
+                    }}
+                  >
+                    {catalogFiltered.length === 0 ? (
+                      <div className="inv-empty">
+                        <span style={{ fontSize: 14 }}>Предметы не найдены</span>
+                      </div>
+                    ) : (
+                      <div className="inv-slots">
+                        {catalogFiltered.slice(0, catalogLimit).map(it => (
+                          <div
+                            key={it.key}
+                            role="button"
+                            tabIndex={0}
+                            data-catalog-slot={it.key}
+                            className={'inv-slot' + (catalogSelectedKey === it.key ? ' on' : '')}
+                            style={{ cursor: 'pointer' }}
+                            title={it.nameRu}
+                            onClick={e => {
+                              setCatalogSelectedKey(it.key);
+                              handleGiveCatalogItem(it.key, e.shiftKey ? it.maxStack : 1);
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setCatalogSelectedKey(it.key);
+                                handleGiveCatalogItem(it.key, e.shiftKey ? it.maxStack : 1);
+                              }
+                            }}
+                          >
+                            <ItemIconCanvas itemId={it.key} size={42} />
+                          </div>
+                        ))}
                       </div>
                     )}
-                  </>
-                ) : options?.isHand ? (
-                  <Hand width={22} height={22} color="#5e5b54" style={{ pointerEvents: 'none' }} />
-                ) : null}
-              </div>
-            );
-          };
+                  </div>
+                </section>
 
-          return (
-            <div
-              className="gu-panel gu-pad gu-interaction-board"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 32,
-                padding: '20px 24px',
-              }}
-            >
-              {/* 2 HAND SLOTS */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <span className="gu-grp">Руки</span>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 72px)', gap: 8 }}>
-                  {renderSquareSlot('hand:left', player.leftHandItem, {
-                    isHand: true,
-                    onDoubleClick: () => handlePlaceHandIntoInput('left', 'any'),
-                  })}
-                  {renderSquareSlot('hand:right', player.rightHandItem, {
-                    isHand: true,
-                    onDoubleClick: () => handlePlaceHandIntoInput('right', 'any'),
-                  })}
-                </div>
-              </div>
+                <section className="panel inv-col">
+                  {catalogSelected ? (
+                    <>
+                      <div className="inv-detail-head">
+                        <div className="inv-detail-ic">
+                          <ItemIconCanvas itemId={catalogSelected.key} item={catalogPreviewItem || undefined} size={42} />
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="cn inv-detail-title" title={catalogSelected.nameRu}>
+                            {catalogSelected.nameRu}
+                          </div>
+                          <div className="inv-detail-meta mono">
+                            <span style={{ color: '#e0ab45', fontWeight: 600 }}>{getFreeCategoryLabelRu(catalogSelected.category)}</span>
+                            {' · '}
+                            {formatWeightRu(catalogSelected.weight)}
+                            {' · '}
+                            стак до {catalogSelected.maxStack}
+                          </div>
+                        </div>
+                      </div>
 
-              {/* 2x2 INPUT SLOTS */}
-              <div
-                data-wb-input-grid="true"
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
-              >
-                <span className="gu-grp">Ввод</span>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 72px)', gap: 8 }}>
-                  {[0, 1, 2, 3].map(idx =>
-                    renderSquareSlot(`input:${idx}`, interactionInputs[idx], {
-                      onDoubleClick: () => handleRemoveInputSlot(idx),
-                    })
+                      <div className="inv-detail-scroll scroll">
+                        <div className="note" style={{ fontSize: 13 }}>
+                          {catalogSelected.descriptionRu || 'Описание отсутствует'}
+                        </div>
+                      </div>
+
+                      <div className="inv-detail-foot">
+                        <button
+                          type="button"
+                          id="catalog-give-one"
+                          className="btn btn-p btn-sm btn-block"
+                          onClick={() => handleGiveCatalogItem(catalogSelected.key, 1)}
+                        >
+                          Выдать 1 шт.
+                        </button>
+                        {catalogSelected.maxStack > 1 && (
+                          <button
+                            type="button"
+                            id="catalog-give-stack"
+                            className="btn btn-s btn-sm btn-block"
+                            onClick={() => handleGiveCatalogItem(catalogSelected.key, catalogSelected.maxStack)}
+                          >
+                            Выдать стак ({catalogSelected.maxStack} шт.)
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="inv-empty">
+                      <Wand2 width={34} height={34} color="#8f8b81" />
+                      <div style={{ fontSize: 14, maxWidth: 250 }}>
+                        Нажмите на предмет слева, чтобы выдать его в карманы. Shift + клик выдаёт полный стак
+                      </div>
+                    </div>
                   )}
-                </div>
+                </section>
               </div>
+            )}
 
-              {/* ARROW */}
-              <button
-                type="button"
-                id="btn-execute-interaction"
-                className={'gu-btn' + (evalResult.isValid ? ' gu-btn-p' : '')}
-                disabled={!evalResult.isValid}
-                onClick={handleExecuteInteraction}
-                style={{ padding: '10px 12px', marginTop: 22 }}
-                title={evalResult.isValid ? evalResult.title : undefined}
-              >
-                <ArrowRight width={20} height={20} />
-              </button>
+            {/* ==================== TAB 3: CLOTHING ==================== */}
+            {activeTab === 'clothing' && (() => {
+              const SLOT_ORDER: { slot: string; label: string; icon: React.ReactNode }[] = [
+                { slot: 'head', label: 'Голова', icon: <HardHat width={16} height={16} /> },
+                { slot: 'face', label: 'Лицо', icon: <Glasses width={16} height={16} /> },
+                { slot: 'torso', label: 'Торс', icon: <Shirt width={16} height={16} /> },
+                {
+                  slot: 'legs',
+                  label: 'Ноги',
+                  icon: (
+                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
+                    </svg>
+                  ),
+                },
+                { slot: 'hands', label: 'Кисти', icon: <Hand width={16} height={16} /> },
+                { slot: 'feet', label: 'Обувь', icon: <Footprints width={16} height={16} /> },
+                { slot: 'back', label: 'Спина', icon: <Backpack width={16} height={16} /> },
+              ];
+              const LAYER_ORDER = ['skin', 'underwear', 'shirt', 'jacket', 'outerwear'];
+              const LAYER_LABELS_RU: Record<string, string> = {
+                skin: 'Тело',
+                underwear: 'Бельё',
+                shirt: 'Рубашка',
+                jacket: 'Куртка',
+                outerwear: 'Верхний слой',
+              };
 
-              {/* 2x2 OUTPUT SLOTS */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <span className="gu-grp">Результат</span>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 72px)', gap: 8 }}>
-                  {[0, 1, 2, 3].map(idx => {
-                    const committed = interactionOutputs[idx];
-                    const preview = !hasCommittedOutputs && evalResult.isValid ? evalResult.previewOutputs[idx] : null;
-                    const displayItem = committed || preview;
-                    return renderSquareSlot(`output:${idx}`, displayItem, {
-                      isPreview: !committed && Boolean(preview),
-                      onDoubleClick: () => {
-                        if (ensureOutputsCommitted()) {
-                          handleClaimOutputSlot(idx);
-                        }
-                      },
-                    });
-                  })}
+              const worn = player.equippedClothing || {};
+              const knownSlots = new Set(SLOT_ORDER.map(r => r.slot));
+              const extraSlots = Object.keys(worn).filter(
+                sl => !knownSlots.has(sl) && Object.values((worn as any)[sl] || {}).some(Boolean)
+              );
+              const rows = [
+                ...SLOT_ORDER,
+                ...extraSlots.map(sl => ({ slot: sl, label: sl, icon: <Shirt width={16} height={16} /> })),
+              ].map(r => {
+                const layers = ((worn as any)[r.slot] || {}) as Record<string, InventoryItem | undefined>;
+                const keys = [
+                  ...LAYER_ORDER.filter(l => layers[l]),
+                  ...Object.keys(layers).filter(l => !LAYER_ORDER.includes(l) && layers[l]),
+                ];
+                return { ...r, entries: keys.map(layer => ({ layer, item: layers[layer] as InventoryItem })) };
+              });
+
+              let totalInsulation = 0;
+              let totalMobility = 0;
+              let totalPocketsL = 0;
+              let wornCount = 0;
+              rows.forEach(r =>
+                r.entries.forEach(({ item }) => {
+                  wornCount += 1;
+                  totalInsulation += item.clothingStats?.insulation || 0;
+                  totalMobility += item.clothingStats?.mobilityPenalty || 0;
+                  totalPocketsL += item.clothingStats?.pocketCapacityL || 0;
+                })
+              );
+              const coveredCount = rows.filter(r => r.entries.length > 0).length;
+              const isClothZoneTarget = wbDragUi?.overKey === 'zone:clothing';
+              const fmt = (n: number) => Number(n.toFixed(1)).toString();
+
+              return (
+                <div className="inv-split-cloth">
+                  <section
+                    className="panel inv-col"
+                    data-wb-drop-zone="zone:clothing"
+                    style={{ borderColor: isClothZoneTarget ? '#e0ab45' : undefined }}
+                  >
+                    <div className="inv-eq-summary">
+                      <div className="inv-eq-stats">
+                        <div className="inv-eq-stat" title="Суммарная теплоизоляция">
+                          <Thermometer width={15} height={15} color="#e0ab45" />
+                          <span>Тепло</span>
+                          <b>{fmt(totalInsulation)}</b>
+                        </div>
+                        <div className="inv-eq-stat" title="Штраф к подвижности">
+                          <Weight width={15} height={15} color="#a29e93" />
+                          <span>Подвижность</span>
+                          <b className={totalMobility > 0 ? 'bad' : ''}>{totalMobility > 0 ? '−' : ''}{fmt(totalMobility)}</b>
+                        </div>
+                        <div className="inv-eq-stat" title="Объём карманов от одежды">
+                          <Package width={15} height={15} color="#9ac985" />
+                          <span>Карманы</span>
+                          <b>+{fmt(totalPocketsL)} л</b>
+                        </div>
+                      </div>
+                      <span className="mut mono" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                        {coveredCount}/{SLOT_ORDER.length} · {wornCount} предм.
+                      </span>
+                    </div>
+
+                    <div className="inv-eq-list scroll">
+                      {rows.map(row => (
+                        <div key={row.slot} className={'inv-eq-row' + (row.entries.length === 0 ? ' bare' : '')}>
+                          <div className="inv-eq-part">
+                            {row.icon}
+                            <span>{row.label}</span>
+                          </div>
+
+                          <div className="inv-eq-items">
+                            {row.entries.length === 0 ? (
+                              (() => {
+                                const emptyKey = `cloth:empty:${row.slot}`;
+                                const isOver = wbDragUi?.overKey === emptyKey;
+                                return (
+                                  <div
+                                    data-wb-slot={emptyKey}
+                                    draggable={false}
+                                    onDragStart={e => e.preventDefault()}
+                                    onPointerDown={e => startSlotPointerDrag(e, emptyKey, null)}
+                                    className={'inv-eq-empty' + (isOver ? ' on' : '')}
+                                  >
+                                    Ничего не надето
+                                  </div>
+                                );
+                              })()
+                            ) : (
+                              row.entries.map(({ layer, item }) => {
+                                const slotKey = `cloth:${row.slot}:${layer}`;
+                                const isBeingDragged = wbDragUi?.sourceKey === slotKey;
+                                const isDropTarget = wbDragUi?.overKey === slotKey;
+                                const st = item.clothingStats;
+                                const wet = Math.round(item.wetness ?? st?.wetness ?? 0);
+                                const metaParts: string[] = [LAYER_LABELS_RU[layer] || layer];
+                                if (st) {
+                                  metaParts.push(`Тепло ${Math.round(st.insulation)}`);
+                                  if (st.waterResistance > 0) metaParts.push(`Вода ${Math.round(st.waterResistance)}%`);
+                                  if (st.pocketCapacityL) metaParts.push(`+${st.pocketCapacityL} л`);
+                                }
+                                return (
+                                  <div
+                                    key={slotKey}
+                                    data-wb-slot={slotKey}
+                                    draggable={false}
+                                    onDragStart={e => e.preventDefault()}
+                                    onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
+                                    onDoubleClick={() => handleUnequipItem(row.slot, layer)}
+                                    className={'inv-eq-item' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
+                                    style={{ opacity: isBeingDragged ? 0.35 : 1 }}
+                                    title="Двойной клик или перетащить в карман, чтобы снять"
+                                  >
+                                    <ItemIconCanvas itemId={item.itemId} item={item} size={34} />
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <span className="inv-eq-name">{item.nameRu}</span>
+                                      <span className="inv-eq-sub mono">{metaParts.join(' · ')}</span>
+                                    </div>
+                                    {wet > 0 && (
+                                      <span className="inv-eq-wet mono" title="Влажность ткани">
+                                        <CloudRain width={12} height={12} />
+                                        {wet}%
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="inv-eq-hint">
+                      Перетащите одежду сюда, чтобы надеть, или в карман, чтобы снять
+                    </div>
+                  </section>
+
+                  <section className="panel inv-col">
+                    <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                      {renderCompartmentsSlotGrid()}
+                    </div>
+                  </section>
                 </div>
-              </div>
+              );
+            })()}
+
+            {/* ==================== TAB 4: INTERACTION WORKBENCH ==================== */}
+            {activeTab === 'interaction' && (() => {
+              const renderSquareSlot = (
+                slotKey: string,
+                item: InventoryItem | null | undefined,
+                options?: {
+                  isPreview?: boolean;
+                  isHand?: boolean;
+                  onDoubleClick?: () => void;
+                }
+              ) => {
+                const info = getSlotFillInfo(item);
+                const isPreview = Boolean(options?.isPreview);
+                const isBeingDragged = wbDragUi?.sourceKey === slotKey;
+                const isDropTarget = wbDragUi?.overKey === slotKey;
+                const isSelected = selectedWbSlot === slotKey;
+
+                return (
+                  <div
+                    key={slotKey}
+                    id={`slot-${slotKey.replace(':', '-')}`}
+                    data-wb-slot={slotKey}
+                    draggable={false}
+                    onDragStart={e => e.preventDefault()}
+                    onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
+                    onDoubleClick={options?.onDoubleClick}
+                    className={
+                      'inv-slot inv-wb-slot' +
+                      (!item ? ' empty' : '') +
+                      (isDropTarget || isSelected ? ' on' : '')
+                    }
+                    style={{
+                      cursor: item ? 'grab' : selectedWbSlot && !slotKey.startsWith('output:') ? 'pointer' : 'default',
+                      opacity: isBeingDragged ? 0.35 : isPreview ? 0.85 : 1,
+                      borderStyle: isPreview && !isDropTarget ? 'dashed' : undefined,
+                      borderColor: isDropTarget
+                        ? '#e0ab45'
+                        : isPreview
+                        ? 'rgba(224, 171, 69, .65)'
+                        : undefined,
+                    }}
+                    title={info?.tooltip}
+                  >
+                    {item ? (
+                      <>
+                        <ItemIconCanvas itemId={item.itemId} item={item} size={46} />
+                        {item.count > 1 ? (
+                          <span className="inv-cnt">{item.count}</span>
+                        ) : item.isContainer ? (
+                          <span className="inv-cnt">{item.contents?.length || 0}</span>
+                        ) : null}
+                        {info && info.pct !== null && (
+                          <div className="inv-fill">
+                            <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
+                          </div>
+                        )}
+                      </>
+                    ) : options?.isHand ? (
+                      <Hand width={22} height={22} color="#5e5b54" style={{ pointerEvents: 'none' }} />
+                    ) : null}
+                  </div>
+                );
+              };
+
+              return (
+                <div className="inv-wb-wrap">
+                  <div className="panel inv-wb-board">
+                    <div className="inv-wb-row">
+                      {/* 2 HAND SLOTS */}
+                      <div className="inv-wb-col">
+                        <span className="inv-grp-lbl" style={{ fontSize: 15 }}>Руки</span>
+                        <div className="inv-wb-grid2">
+                          {renderSquareSlot('hand:left', player.leftHandItem, {
+                            isHand: true,
+                            onDoubleClick: () => handlePlaceHandIntoInput('left', 'any'),
+                          })}
+                          {renderSquareSlot('hand:right', player.rightHandItem, {
+                            isHand: true,
+                            onDoubleClick: () => handlePlaceHandIntoInput('right', 'any'),
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 2x2 INPUT SLOTS */}
+                      <div className="inv-wb-col" data-wb-input-grid="true">
+                        <span className="inv-grp-lbl" style={{ fontSize: 15 }}>Ввод</span>
+                        <div className="inv-wb-grid2">
+                          {[0, 1, 2, 3].map(idx =>
+                            renderSquareSlot(`input:${idx}`, interactionInputs[idx], {
+                              onDoubleClick: () => handleRemoveInputSlot(idx),
+                            })
+                          )}
+                        </div>
+                      </div>
+
+                      {/* EXECUTE ARROW */}
+                      <button
+                        type="button"
+                        id="btn-execute-interaction"
+                        className={'btn' + (evalResult.isValid ? ' btn-p' : ' btn-s')}
+                        disabled={!evalResult.isValid}
+                        onClick={handleExecuteInteraction}
+                        style={{ height: 48, padding: '0 18px', marginTop: 24 }}
+                        title={evalResult.isValid ? evalResult.title : undefined}
+                      >
+                        <ArrowRight width={22} height={22} />
+                      </button>
+
+                      {/* 2x2 OUTPUT SLOTS */}
+                      <div className="inv-wb-col">
+                        <span className="inv-grp-lbl" style={{ fontSize: 15 }}>Результат</span>
+                        <div className="inv-wb-grid2">
+                          {[0, 1, 2, 3].map(idx => {
+                            const committed = interactionOutputs[idx];
+                            const preview = !hasCommittedOutputs && evalResult.isValid ? evalResult.previewOutputs[idx] : null;
+                            const displayItem = committed || preview;
+                            return renderSquareSlot(`output:${idx}`, displayItem, {
+                              isPreview: !committed && Boolean(preview),
+                              onDoubleClick: () => {
+                                if (ensureOutputsCommitted()) {
+                                  handleClaimOutputSlot(idx);
+                                }
+                              },
+                            });
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={'inv-wb-status' + (evalResult.isValid ? ' valid' : '')}>
+                      {evalResult.isValid
+                        ? `${evalResult.title} — ${evalResult.subtitle}`
+                        : 'Перетащите предметы из рук в слоты ввода для переливания, смешивания или сборки'}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Bottom Keyboard Hints (auto-hidden on touch) */}
+          <div className="hint">
+            <div className="hint-g">
+              <span className="key">Esc / I</span>
+              <span>Закрыть</span>
+              <span className="key">2× Клик</span>
+              <span>Использовать</span>
+              <span className="key">Перетаскивание</span>
+              <span>В любой слот или руку</span>
             </div>
-          );
-        })()}
+            <div className="hint-r">
+              Лев: <strong style={{ color: '#e9e6df' }}>{player.leftHandItem ? player.leftHandItem.nameRu : 'Свободна'}</strong>
+              {' · '}
+              Прав: <strong style={{ color: '#e9e6df' }}>{player.rightHandItem ? player.rightHandItem.nameRu : 'Свободна'}</strong>
+            </div>
+          </div>
+        </div>
 
-        {/* GLOBAL FLOATING DRAG PREVIEW FOR ALL INVENTORY TABS */}
+        {/* GLOBAL FLOATING DRAG PREVIEW (outside scaled .gm so clientX/Y match 1:1) */}
         {wbDragUi && (
           <div
+            className="inv-drag-ghost"
             style={{
-              position: 'fixed',
               left: wbDragUi.x - 32,
               top: wbDragUi.y - 32,
-              width: 64,
-              height: 64,
-              borderRadius: 9,
-              background: 'rgba(20, 20, 22, 0.92)',
-              border: '1px solid var(--gu-amber-hi)',
-              boxShadow: '0 10px 28px rgba(0, 0, 0, 0.65)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'none',
-              zIndex: 9999,
             }}
           >
             <ItemIconCanvas itemId={wbDragUi.item.itemId} item={wbDragUi.item} size={46} />
           </div>
         )}
       </div>
-    </ModalShell>
+    </ShadowHost>
   );
 };
 
+export const InventoryModal: React.FC<InventoryModalProps> = ({
+  isOpen,
+  player,
+  ...rest
+}) => {
+  if (!isOpen || !player) return null;
+  return <InventoryModalContent player={player} {...rest} />;
+};
