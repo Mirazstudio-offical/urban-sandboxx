@@ -7,6 +7,7 @@ import {
   respawnStalledVehicles,
   intersectionArbiter
 } from '../aiTraffic';
+import { geminiTrafficController } from '../geminiTrafficDecisions';
 import { 
   Activity, 
   AlertOctagon, 
@@ -350,28 +351,78 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 {/* AI Controller Status Card */}
-                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-200 text-xs uppercase tracking-wider">AI Steering & Physics Engine</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
-                      Pure Pursuit Active
-                    </span>
-                  </div>
-                  <ul className="space-y-2 text-xs text-slate-400">
-                    <li className="flex items-start gap-2">
-                      <ChevronRight className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-                      <span><strong>Dynamic Lookahead:</strong> 38px–85px lookahead polyline curvature prevents any oscillations or snaking.</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <ChevronRight className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-                      <span><strong>Don't Block the Box:</strong> Vehicles proactively check target exit lanes before crossing green stop-lines.</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <ChevronRight className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-                      <span><strong>Anti-Deadlock Resolver:</strong> Autonomous reverse escape maneuver executes if stalled &gt; 2.2s.</span>
-                    </li>
-                  </ul>
-                </div>
+                {(() => {
+                  const gStatus = geminiTrafficController.getStatus();
+                  return (
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-200 text-xs uppercase tracking-wider">AI Steering & Physics Engine</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] border font-mono ${
+                          gStatus.enabled
+                            ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                            : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                        }`}>
+                          {gStatus.enabled ? `Gemini Decisions (${gStatus.model})` : 'Pure Pursuit Active'}
+                        </span>
+                      </div>
+                      {gStatus.enabled ? (
+                        <div className="space-y-2 text-xs text-slate-400">
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                              <div className="text-[10px] text-slate-400">Batch Latency</div>
+                              <div className="text-sm font-bold font-mono text-indigo-300">
+                                {gStatus.lastLatencyMs !== null ? `${gStatus.lastLatencyMs} ms` : '—'}
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                              <div className="text-[10px] text-slate-400">Vehicles / Qs</div>
+                              <div className="text-sm font-bold font-mono text-cyan-300">
+                                {gStatus.lastVehicleCount} / {gStatus.lastQuestionCount}
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                              <div className="text-[10px] text-slate-400">Batches</div>
+                              <div className="text-sm font-bold font-mono text-emerald-400">
+                                {gStatus.totalBatches}
+                              </div>
+                            </div>
+                          </div>
+                          {gStatus.lastError ? (
+                            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-center justify-between gap-2">
+                              <span className="text-[11px]">{gStatus.lastError}</span>
+                              <button
+                                type="button"
+                                onClick={() => geminiTrafficController.retryNow()}
+                                className="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-[11px] shrink-0"
+                              >
+                                Retry
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-400">
+                              Experimental mode active: maneuvers, speed rubric scores, intersection turns, and horn decisions are batched via <code className="text-indigo-300">ai.decisions.create</code> every {gStatus.intervalMs} ms.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <ul className="space-y-2 text-xs text-slate-400">
+                          <li className="flex items-start gap-2">
+                            <ChevronRight className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                            <span><strong>Dynamic Lookahead:</strong> 38px–85px lookahead polyline curvature prevents any oscillations or snaking.</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <ChevronRight className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                            <span><strong>Don't Block the Box:</strong> Vehicles proactively check target exit lanes before crossing green stop-lines.</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <ChevronRight className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                            <span><strong>Anti-Deadlock Resolver:</strong> Autonomous reverse escape maneuver executes if stalled &gt; 2.2s.</span>
+                          </li>
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Gridlock & Safety Status */}
                 <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">

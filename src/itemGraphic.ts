@@ -140,7 +140,7 @@ export function drawItemModel2D(
           drawDrinkItem(targetCtx, effectiveId) ||
           drawMedicalItem(targetCtx, effectiveId) ||
           drawFurnitureItem(targetCtx, effectiveId) ||
-          drawKitchenAndValuableItem(targetCtx, effectiveId) ||
+          drawKitchenAndValuableItem(targetCtx, effectiveId, effectiveItem) ||
           drawClothingItem(targetCtx, effectiveId) ||
           drawMeatAndPoultryItem(targetCtx, effectiveId) ||
           drawFishAndSeafoodItem(targetCtx, effectiveId) ||

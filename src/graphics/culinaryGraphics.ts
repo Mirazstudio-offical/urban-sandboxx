@@ -355,53 +355,144 @@ export function drawProceduralIngredient(
     }
 
     case 'poultry': {
-      drawOrganicBlobPath(ctx, 0, 0, 4.5, 2.9, 55, 0.08, 10);
-      const pGrad = ctx.createRadialGradient(-1.2, -1.0, 0.4, 0, 0, 4.8);
+      // 3D beveled poultry fillet medallion with skin/Maillard crust & delicate myofibril grain
+      ctx.save();
+      ctx.translate(0.15, 0.55);
+      drawOrganicBlobPath(ctx, 0, 0, 4.6, 3.0, 55, 0.08, 12);
+      ctx.fillStyle = isBurnt ? '#09090b' : (isFried || isBaked ? '#78350f' : (isBoiled ? '#a8a29e' : '#9f2a42'));
+      ctx.fill();
+      ctx.restore();
+
+      const drawPoultryPiece = () => drawOrganicBlobPath(ctx, 0, 0, 4.6, 3.0, 55, 0.08, 12);
+      const pGrad = ctx.createRadialGradient(-1.4, -1.1, 0.35, 0.2, 0.1, 5.0);
       if (isBurnt) {
-        pGrad.addColorStop(0, '#78350f'); pGrad.addColorStop(1, '#18181b');
+        pGrad.addColorStop(0, '#57270b'); pGrad.addColorStop(0.55, '#271307'); pGrad.addColorStop(1, '#09090b');
       } else if (isFried || isBaked) {
-        pGrad.addColorStop(0, '#fef08a'); pGrad.addColorStop(0.55, '#f59e0b'); pGrad.addColorStop(1, '#92400e');
+        pGrad.addColorStop(0, '#fef3c7'); pGrad.addColorStop(0.35, '#f59e0b'); pGrad.addColorStop(0.75, '#b45309'); pGrad.addColorStop(1, '#78350f');
       } else if (isBoiled) {
-        pGrad.addColorStop(0, '#ffffff'); pGrad.addColorStop(0.65, '#fef3c7'); pGrad.addColorStop(1, '#d6d3d1');
+        pGrad.addColorStop(0, '#ffffff'); pGrad.addColorStop(0.55, '#fef6e0'); pGrad.addColorStop(1, '#d6cfc2');
       } else {
-        pGrad.addColorStop(0, '#fce7f3'); pGrad.addColorStop(0.65, '#fbcfe8'); pGrad.addColorStop(1, '#db2777');
+        pGrad.addColorStop(0, '#fde2e7'); pGrad.addColorStop(0.55, '#f29ea9'); pGrad.addColorStop(1, '#be4759');
       }
       ctx.fillStyle = pGrad;
+      drawPoultryPiece();
       ctx.fill();
-      if (isFried) {
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = 0.5;
+
+      ctx.save();
+      drawPoultryPiece();
+      ctx.clip();
+
+      // Fine curved poultry breast grain striations
+      ctx.strokeStyle = isBurnt
+        ? 'rgba(255, 255, 255, 0.08)'
+        : (isBoiled ? 'rgba(168, 162, 158, 0.42)' : 'rgba(255, 245, 238, 0.42)');
+      ctx.lineWidth = 0.34;
+      ctx.lineCap = 'round';
+      for (const gy of [-1.4, -0.3, 0.8, 1.8]) {
         ctx.beginPath();
-        ctx.moveTo(-2.5, -1.2); ctx.lineTo(1.8, 1.5);
-        ctx.moveTo(-1.2, -1.8); ctx.lineTo(2.8, 0.6);
+        ctx.moveTo(-4.0, gy + 0.3);
+        ctx.quadraticCurveTo(0, gy - 0.55, 4.0, gy + 0.25);
         ctx.stroke();
       }
+
+      // Golden seared grill marks & roasted crust freckles
+      if (isFried || isBaked) {
+        ctx.strokeStyle = 'rgba(104, 38, 8, 0.72)';
+        ctx.lineWidth = 0.58;
+        ctx.beginPath();
+        ctx.moveTo(-2.8, -1.6); ctx.lineTo(1.6, 1.8);
+        ctx.moveTo(-0.8, -2.1); ctx.lineTo(3.2, 1.1);
+        ctx.moveTo(-3.4, 0.2); ctx.lineTo(-0.4, 2.4);
+        ctx.stroke();
+      }
+
+      // Juicy studio specular sheen
+      ctx.fillStyle = isBurnt ? 'rgba(255,255,255,0.08)' : 'rgba(255, 255, 255, 0.38)';
+      ctx.beginPath();
+      ctx.ellipse(-1.4, -1.1, 1.75, 0.65, -0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
       break;
     }
 
     case 'meat': {
-      // Marbled beef/pork medallion with Maillard sear lines when fried
-      drawOrganicBlobPath(ctx, 0, 0, 4.6, 3.1, 66, 0.08, 10);
-      const mGrad = ctx.createRadialGradient(-1.2, -1.0, 0.4, 0, 0, 5.0);
+      // 3D thick butcher's steak medallion with fat-cap rim, intramuscular marbling & Maillard sear crust
+      ctx.save();
+      ctx.translate(0.18, 0.65);
+      drawOrganicBlobPath(ctx, 0, 0, 4.7, 3.2, 66, 0.08, 12);
+      ctx.fillStyle = isBurnt ? '#09090b' : (isFried || isBaked ? '#331205' : (isBoiled ? '#57534e' : '#4a0711'));
+      ctx.fill();
+      ctx.restore();
+
+      const drawMeatPiece = () => drawOrganicBlobPath(ctx, 0, 0, 4.7, 3.2, 66, 0.08, 12);
+      const mGrad = ctx.createRadialGradient(-1.3, -1.1, 0.35, 0.2, 0.2, 5.2);
       if (isBurnt) {
-        mGrad.addColorStop(0, '#451a03'); mGrad.addColorStop(1, '#09090b');
+        mGrad.addColorStop(0, '#451a03'); mGrad.addColorStop(0.55, '#1c0a02'); mGrad.addColorStop(1, '#09090b');
       } else if (isFried || isBaked) {
-        mGrad.addColorStop(0, '#b45309'); mGrad.addColorStop(0.55, '#78350f'); mGrad.addColorStop(1, '#451a03');
+        mGrad.addColorStop(0, '#c25912'); mGrad.addColorStop(0.45, '#85330b'); mGrad.addColorStop(0.85, '#4f1b06'); mGrad.addColorStop(1, '#2b0d03');
       } else if (isBoiled) {
-        mGrad.addColorStop(0, '#d6d3d1'); mGrad.addColorStop(0.6, '#a8a29e'); mGrad.addColorStop(1, '#57534e');
+        mGrad.addColorStop(0, '#d6cfc7'); mGrad.addColorStop(0.55, '#9c938a'); mGrad.addColorStop(1, '#5c554e');
       } else {
-        mGrad.addColorStop(0, '#fb7185'); mGrad.addColorStop(0.5, '#e11d48'); mGrad.addColorStop(1, '#881337');
+        mGrad.addColorStop(0, '#ee4f5c'); mGrad.addColorStop(0.45, '#b91c28'); mGrad.addColorStop(0.85, '#7a1019'); mGrad.addColorStop(1, '#47080e');
       }
       ctx.fillStyle = mGrad;
+      drawMeatPiece();
       ctx.fill();
 
-      // Intramuscular fat marbling or sear grill marks
-      ctx.strokeStyle = isFried ? '#290f02' : 'rgba(255, 241, 242, 0.55)';
-      ctx.lineWidth = isFried ? 0.65 : 0.42;
+      ctx.save();
+      drawMeatPiece();
+      ctx.clip();
+
+      // Rendered or raw crescent fat-cap rim along upper edge
+      ctx.strokeStyle = isBurnt
+        ? '#29150a'
+        : (isFried || isBaked ? '#e7c07b' : (isBoiled ? '#ebe5d8' : '#fef3d0'));
+      ctx.lineWidth = 1.05;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(-2.5, -1.5); ctx.lineTo(1.5, 1.6);
-      ctx.moveTo(-0.5, -2.0); ctx.lineTo(3.0, 0.8);
+      ctx.moveTo(-4.0, -1.4);
+      ctx.quadraticCurveTo(-0.4, -3.3, 3.8, -1.3);
       ctx.stroke();
+
+      // Directional muscle fibers
+      ctx.strokeStyle = isBoiled ? 'rgba(68, 64, 60, 0.32)' : 'rgba(56, 8, 12, 0.35)';
+      ctx.lineWidth = 0.34;
+      for (const fy of [-1.2, -0.1, 1.0, 2.0]) {
+        ctx.beginPath();
+        ctx.moveTo(-4.2, fy - 0.3);
+        ctx.quadraticCurveTo(0, fy + 0.45, 4.2, fy - 0.25);
+        ctx.stroke();
+      }
+
+      if (isFried || isBaked) {
+        // Crosshatch Maillard grill marks
+        ctx.strokeStyle = 'rgba(28, 9, 2, 0.78)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-2.8, -1.8); ctx.lineTo(1.6, 2.0);
+        ctx.moveTo(-0.6, -2.2); ctx.lineTo(3.4, 1.2);
+        ctx.moveTo(-3.2, 0.2); ctx.lineTo(-0.4, 2.6);
+        ctx.stroke();
+      } else if (!isBurnt) {
+        // Branching intramuscular fat marbling
+        ctx.strokeStyle = isBoiled ? 'rgba(245, 240, 230, 0.5)' : 'rgba(254, 245, 218, 0.68)';
+        ctx.lineWidth = 0.36;
+        ctx.beginPath();
+        ctx.moveTo(-2.8, -0.8);
+        ctx.quadraticCurveTo(-0.4, 0.2, 1.8, -0.6);
+        ctx.moveTo(-0.6, 0.0);
+        ctx.quadraticCurveTo(0.8, 1.1, 2.8, 1.4);
+        ctx.moveTo(-2.0, 1.4);
+        ctx.quadraticCurveTo(-0.5, 0.8, 0.6, 1.9);
+        ctx.stroke();
+      }
+
+      // Juicy roasted / raw specular glaze
+      ctx.fillStyle = isBurnt ? 'rgba(255,255,255,0.08)' : 'rgba(255, 244, 240, 0.34)';
+      ctx.beginPath();
+      ctx.ellipse(-1.4, -0.9, 1.8, 0.62, -0.28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
       break;
     }
 

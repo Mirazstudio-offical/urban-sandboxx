@@ -9,6 +9,7 @@ import { isRoadSegmentBlocked, calculateGpsRoute } from './navigation';
 import { getLevelCrossings, isCrossingApproachOccupied } from './levelCrossingSystem';
 import { onlineManager } from './onlineSystem';
 import { spawnWeatherAwarePedestrianNear, updatePedestriansSystem } from './pedestrianSystem';
+import { geminiTrafficController, GeminiVehiclePerception } from './geminiTrafficDecisions';
 
 // Helper: angle difference normalized to [-PI, PI]
 export function angleDiff(a: number, b: number): number {
@@ -3076,8 +3077,16 @@ export function updateAITraffic(
   let movingCars = 0;
   let deadlockedCars = 0;
 
-  // Update intersection reservation arbiter (tokens, waiting queue, symmetry breaker)
-  intersectionArbiter.update(dt, world);
+  const useGeminiTraffic = geminiTrafficController.isEnabled();
+  const geminiBatchCandidates: Array<{ distToPlayer: number; perception: GeminiVehiclePerception }> = [];
+  const activeAiVehicleIds = new Set<string>();
+  let geminiHasUndecidedVehicle = false;
+  let geminiHasUrgentHazard = false;
+
+  // Update intersection reservation arbiter only in built-in AI mode
+  if (!useGeminiTraffic) {
+    intersectionArbiter.update(dt, world);
+  }
 
   const playerCar = world.vehicles.find((v) => v.isPlayerControlled);
   const targetPos: Vector2D = playerPos || (playerCar ? { x: playerCar.x, y: playerCar.y } : { x: 4400, y: 2800 });
@@ -3422,7 +3431,7 @@ export function updateAITraffic(
           }
         }
       }
-      if (isEmergencyYielding && nearbySirenCar) {
+      if (isEmergencyYielding && nearbySirenCar && !useGeminiTraffic) {
         if (car.inIntersection || car.currentConnection) {
           // ПДД: If already inside intersection, DO NOT stop! Proceed to clear the junction first!
           car.aiState = 'driving';
@@ -3989,6 +3998,44 @@ export function updateAITraffic(
       }
     } else {
       reacquireClosestLane(car, world);
+    }
+
+    // --- EXPERIMENTAL MODE: GEMINI DECISIONS API (gemini-decision-1) TRAFFIC AI ---
+    if (useGeminiTraffic && !(car as any).isFireDispatch) {
+      activeAiVehicleIds.add(car.id);
+      const perception = buildGeminiVehiclePerception(
+        car,
+        world,
+        profile,
+        isEmergencyYielding,
+        vehGrid,
+        pedGrid,
+        propGrid
+      );
+      geminiBatchCandidates.push({ distToPlayer, perception });
+
+      const decision = geminiTrafficController.getDecision(car.id);
+      if (!decision) {
+        geminiHasUndecidedVehicle = true;
+      }
+      if (
+        (perception.leadClosingTtcSec !== null && perception.leadClosingTtcSec < 2.2) ||
+        (perception.leadGapM !== null && perception.leadGapM <= perception.stoppingDistM * 1.05 && perception.speedKmh > 5) ||
+        (perception.pedestrianAheadM !== null && perception.pedestrianAheadM < 12) ||
+        perception.headOnConflict
+      ) {
+        geminiHasUrgentHazard = true;
+      }
+
+      applyGeminiDecisionToVehicle(car, world, profile, perception, decision, dt, vehGrid, propGrid);
+
+      if (Math.abs(car.speed) < 3.5 && car.aiState !== 'stopping_light' && car.aiState !== 'yielding') {
+        car.stuckTimer += dt;
+        deadlockedCars++;
+      } else {
+        car.stuckTimer = Math.max(0, car.stuckTimer - dt * 2.0);
+      }
+      continue;
     }
 
     // 3. Multi-Zone Intelligent Obstacle Perception, Lane Changing & Evasion
@@ -5113,9 +5160,598 @@ export function updateAITraffic(
     world.vehicles = world.vehicles.filter((v) => !despawnSet.has(v.id));
   }
 
+  if (useGeminiTraffic) {
+    geminiTrafficController.pruneVehicles(activeAiVehicleIds);
+    if (geminiBatchCandidates.length > 0) {
+      geminiBatchCandidates.sort((a, b) => a.distToPlayer - b.distToPlayer);
+      // Evaluate ALL active AI vehicles (up to 120) in ONE single batched Decisions API request over one shared snapshot
+      const allPerceptions = geminiBatchCandidates.slice(0, 120).map((c) => c.perception);
+      geminiTrafficController.maybeDispatchBatch(
+        allPerceptions,
+        (type, msg) => {
+          trafficDiagnostics.log(type, msg);
+        },
+        geminiHasUndecidedVehicle || geminiHasUrgentHazard
+      );
+    }
+    const newErr = geminiTrafficController.consumeNewErrorNotification();
+    if (newErr && player) {
+      if (!player.notifications) player.notifications = [];
+      player.notifications.push({
+        id: 'gemini_traffic_err_' + Date.now(),
+        text: `Gemini Decisions API: ${newErr}`,
+        color: '#ef4444',
+        timer: 5.5,
+      });
+    }
+  }
+
   // Update telemetry stats
   trafficDiagnostics.averageSpeed = movingCars > 0 ? (totalSpeed / movingCars) * PX_S_TO_SPEED_KMH : 0; // km/h
   trafficDiagnostics.gridlockCount = deadlockedCars;
+}
+
+// --- EXPERIMENTAL GEMINI DECISIONS API PERCEPTION & ACTUATOR BRIDGE ---
+function buildGeminiVehiclePerception(
+  car: Vehicle,
+  world: GameWorld,
+  profile: DriverProfile,
+  emergencySirenNearby: boolean,
+  vehGrid?: SpatialGrid<Vehicle>,
+  pedGrid?: SpatialGrid<Pedestrian>,
+  propGrid?: SpatialGrid<StreetProp>
+): GeminiVehiclePerception {
+  const carCos = Math.cos(car.angle);
+  const carSin = Math.sin(car.angle);
+  const road = findRoadByLaneId(world, car.currentLaneId || car.currentConnection?.targetLaneId || null);
+  const speedLimitKmh = getRoadSpeedLimitKmh(road);
+  const speedKmh = Math.max(0, car.speed) * PX_S_TO_SPEED_KMH;
+  const isHeavyCar =
+    car.length > 52 ||
+    (car.wheelBase || 28) > 34 ||
+    car.type.startsWith('truck_') ||
+    car.type.startsWith('tractor_') ||
+    car.type === 'bus';
+  const speedMs = speedKmh / 3.6;
+  const decelMs2 = isHeavyCar ? 4.8 : 6.5;
+  // Stopping distance including ~1.15s reaction/batch-roundtrip buffer + physical braking + safety margin
+  const stoppingDistM = Math.round((speedMs * 1.15 + (speedMs * speedMs) / (2 * decelMs2) + 4.5) * 10) / 10;
+
+  // 1. Forward obstacle / ALL lead vehicles radar (moving, braking, stopped, parked, and player vehicles)
+  const { leadObstacle, imminentHeadOnThreat, imminentForwardThreat } = scanTrafficObstacles(car, world, vehGrid, propGrid);
+  let leadObstacleType: 'vehicle' | 'prop' | 'none' = 'none';
+  let leadGapM: number | null = null;
+  let leadSpeedKmh: number | null = null;
+  let leadClosingTtcSec: number | null = null;
+
+  const updateLead = (
+    type: 'vehicle' | 'prop',
+    gapPx: number,
+    otherFwdSpeedPx: number,
+    explicitTtc?: number | null
+  ) => {
+    const gapM = Math.max(0.2, gapPx / 10);
+    if (leadGapM === null || gapM < leadGapM) {
+      leadObstacleType = type;
+      leadGapM = gapM;
+      leadSpeedKmh = Math.max(0, otherFwdSpeedPx) * PX_S_TO_SPEED_KMH;
+      const closingPxS = car.speed - otherFwdSpeedPx;
+      if (closingPxS > 3) {
+        leadClosingTtcSec = gapPx / closingPxS;
+      } else if (explicitTtc !== undefined && explicitTtc !== null && explicitTtc < 10) {
+        leadClosingTtcSec = explicitTtc;
+      } else {
+        leadClosingTtcSec = null;
+      }
+    }
+  };
+
+  if (leadObstacle) {
+    const rawGapPx = Math.max(2, leadObstacle.distLong - car.length * 0.5 - 12);
+    updateLead(leadObstacle.type === 'prop' ? 'prop' : 'vehicle', rawGapPx, Math.max(0, leadObstacle.speed));
+  }
+  if (imminentForwardThreat) {
+    const rawGapPx = Math.max(2, imminentForwardThreat.distLong - car.length * 0.5);
+    updateLead(
+      imminentForwardThreat.type === 'prop' ? 'prop' : 'vehicle',
+      rawGapPx,
+      Math.max(0, imminentForwardThreat.speed),
+      imminentForwardThreat.ttc ?? 1.0
+    );
+  }
+
+  // Direct forward-corridor scan over ALL nearby vehicles so normal-speed moving and freshly-braking cars are ALWAYS detected
+  const forwardLookaheadPx = Math.max(260, car.speed * 2.2 + 120);
+  const nearbyVehs = vehGrid ? vehGrid.queryRadius(car.x, car.y, forwardLookaheadPx + 40) : world.vehicles;
+  const hasRoutePoly = Boolean(car.routeWaypoints && car.routeWaypoints.length >= 2);
+  const carFrenet = hasRoutePoly
+    ? projectPointToFrenet(car.x, car.y, car.routeWaypoints, car.targetWaypointIndex)
+    : null;
+
+  let crossTrafficConflict = false;
+  let headOnConflict = Boolean(imminentHeadOnThreat);
+
+  for (const other of nearbyVehs) {
+    if (other.id === car.id) continue;
+    if (other.ghostingAlpha !== undefined && other.ghostingAlpha < 0.7) continue;
+
+    const relX = other.x - car.x;
+    const relY = other.y - car.y;
+    const distLong = relX * carCos + relY * carSin;
+    const distLat = Math.abs(relX * -carSin + relY * carCos);
+    const aDiff = Math.abs(angleDiff(other.angle, car.angle));
+
+    // Effective oriented bounding projection along our heading and lateral axis
+    const sinRel = Math.abs(Math.sin(other.angle - car.angle));
+    const cosRel = Math.abs(Math.cos(other.angle - car.angle));
+    const otherEffHalfW = (other.width * cosRel + other.length * sinRel) * 0.5;
+    const otherEffHalfL = (other.length * cosRel + other.width * sinRel) * 0.5;
+    const corridorHalfW = car.width * 0.5 + otherEffHalfW + 3.5;
+
+    const otherIsSlowOrStopped = other.isParked || Math.abs(other.speed) < 6;
+    const isSameDirOrBlocked = aDiff < 1.35 || otherIsSlowOrStopped;
+
+    if (isSameDirOrBlocked && distLong > 0 && distLong < forwardLookaheadPx) {
+      let inForwardCorridor = distLat < corridorHalfW;
+      let forwardCenterDistPx = distLong;
+
+      // On curved lanes/connections, also check Frenet along-route corridor so lead cars around bends are seen
+      if (!inForwardCorridor && carFrenet && !other.isParked && aDiff < 1.15) {
+        const otherFrenet = projectPointToFrenet(other.x, other.y, car.routeWaypoints, car.targetWaypointIndex);
+        const deltaS = otherFrenet.s - carFrenet.s;
+        if (deltaS > 2 && deltaS < forwardLookaheadPx && Math.abs(otherFrenet.d - carFrenet.d) < corridorHalfW) {
+          inForwardCorridor = true;
+          forwardCenterDistPx = deltaS;
+        }
+      }
+
+      if (inForwardCorridor) {
+        const bumperGapPx = Math.max(2, forwardCenterDistPx - car.length * 0.5 - otherEffHalfL);
+        const otherFwdSpeedPx = other.isParked ? 0 : Math.max(0, other.speed * Math.cos(other.angle - car.angle));
+        updateLead('vehicle', bumperGapPx, otherFwdSpeedPx);
+      }
+    }
+
+    if (!other.isParked) {
+      if (aDiff > 2.0 && Math.hypot(relX, relY) < 85 && distLong > -10 && distLat < (car.width + other.width) * 0.6) {
+        headOnConflict = true;
+      }
+      if (aDiff > 0.45 && aDiff < 2.5 && distLong > -5 && distLong < Math.max(110, car.speed * 1.3 + 45) && distLat < 68) {
+        if (other.inIntersection || Math.abs(other.speed) > 4) {
+          crossTrafficConflict = true;
+        }
+      }
+    }
+  }
+
+  // 2. Pedestrian ahead radar
+  let pedestrianAheadM: number | null = null;
+  const pedLookahead = Math.max(95, car.speed * 1.4 + 45);
+  const nearbyPeds = pedGrid ? pedGrid.queryRadius(car.x, car.y, pedLookahead + 25) : world.pedestrians;
+  for (const ped of nearbyPeds) {
+    const relX = ped.x - car.x;
+    const relY = ped.y - car.y;
+    const dLong = relX * carCos + relY * carSin;
+    const dLat = Math.abs(relX * -carSin + relY * carCos);
+    if (dLong > -4 && dLong < pedLookahead && dLat < 26) {
+      const m = Math.max(0.2, (dLong - car.length * 0.5) / 10);
+      if (pedestrianAheadM === null || m < pedestrianAheadM) {
+        pedestrianAheadM = m;
+      }
+    }
+  }
+
+  // 4. Intersection / traffic light / available turns / downstream spillback / yield rules
+  let distToStopLineM: number | null = null;
+  let trafficLight: GeminiVehiclePerception['trafficLight'] = 'none';
+  let mustYieldMainRoad = false;
+  let downstreamBlocked = false;
+  const availableTurns: string[] = [];
+  const blockedTurns: string[] = [];
+
+  if (!car.inIntersection && !car.currentConnection) {
+    const currentLane = findLaneById(world, car.currentLaneId);
+    if (currentLane && currentLane.connections && currentLane.connections.length > 0) {
+      for (const c of currentLane.connections) {
+        if (
+          c.targetLaneId &&
+          (c.targetLaneId.startsWith('road_village_') ||
+            c.targetLaneId.startsWith('road_forest_') ||
+            c.targetLaneId.startsWith('trail_'))
+        ) {
+          continue;
+        }
+        if (!availableTurns.includes(c.turnType)) {
+          availableTurns.push(c.turnType);
+        }
+        const tLane = findLaneById(world, c.targetLaneId);
+        if (tLane && tLane.waypoints.length >= 2) {
+          const w1 = tLane.waypoints[0];
+          const w2 = tLane.waypoints[tLane.waypoints.length - 1];
+          if (isRoadSegmentBlocked(world, w1.x, w1.y, w2.x, w2.y).isBlocked) {
+            if (!blockedTurns.includes(c.turnType)) blockedTurns.push(c.turnType);
+          }
+        }
+      }
+
+      const candidateConn =
+        currentLane.connections.find((c) => c.turnType === car.plannedTurn) || currentLane.connections[0];
+      if (candidateConn) {
+        downstreamBlocked = predictDownstreamSpillback(car, candidateConn.targetLaneId, world).willSpillback;
+        if (candidateConn.intersectionId && candidateConn.stopLineDirection) {
+          const inter = world.intersections.find((i) => i.id === candidateConn.intersectionId);
+          const stopLine = inter?.stopLines?.find((sl) => sl.direction === candidateConn.stopLineDirection);
+          if (inter && stopLine) {
+            const midX = (stopLine.x1 + stopLine.x2) / 2;
+            const midY = (stopLine.y1 + stopLine.y2) / 2;
+            const dx = midX - car.x;
+            const dy = midY - car.y;
+            const longitudinalDist = dx * carCos + dy * carSin;
+            const dLine = Math.hypot(dx, dy);
+            if (longitudinalDist >= -18 && dLine < 420) {
+              distToStopLineM = Math.max(0, (dLine - car.length * 0.5) / 10);
+              const nearbyLightProps = propGrid
+                ? propGrid.queryRadius(inter.x, inter.y, Math.max(inter.width, inter.height) + 60)
+                : world.props;
+              const isLightBroken =
+                inter.isSignalLost ||
+                nearbyLightProps.some(
+                  (p) =>
+                    p.type === 'traffic_light' &&
+                    p.intersectionId === inter.id &&
+                    p.direction === candidateConn.stopLineDirection &&
+                    p.isBroken
+                );
+              if (inter.hasLights && !isLightBroken && stopLine.lightState) {
+                const st = stopLine.lightState;
+                if (st === 'red' || st === 'yellow' || st === 'red_yellow' || st === 'green') {
+                  trafficLight = st;
+                }
+              }
+              if (
+                candidateConn.priority === 'yield' ||
+                candidateConn.priority === 'stop' ||
+                candidateConn.yieldRule === 'yield_to_main' ||
+                candidateConn.isSecondaryMerge
+              ) {
+                const nearInterCars = vehGrid
+                  ? vehGrid.queryRadius(inter.x, inter.y, inter.width / 2 + 320)
+                  : world.vehicles;
+                for (const mCar of nearInterCars) {
+                  if (mCar.id === car.id || mCar.isParked) continue;
+                  if (
+                    mCar.currentLaneId === candidateConn.targetLaneId ||
+                    mCar.currentLaneId === candidateConn.yieldToLaneId ||
+                    mCar.currentConnection?.targetLaneId === candidateConn.targetLaneId
+                  ) {
+                    if (Math.hypot(mCar.x - car.x, mCar.y - car.y) < Math.max(220, 80 + Math.abs(mCar.speed) * 2.0)) {
+                      mustYieldMainRoad = true;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 5. Railway level crossing sensor
+  let railwayCrossingClosed = false;
+  let distToCrossingM: number | null = null;
+  const crossings = getLevelCrossings(world);
+  for (const cross of crossings) {
+    const distToCenter = Math.hypot(car.x - cross.centerX, car.y - cross.centerY);
+    if (distToCenter > 420) continue;
+    const isClosed =
+      (world.railwaySignals &&
+        world.railwaySignals.some(
+          (s) =>
+            (s.id === cross.signalNorthId ||
+              s.id === cross.signalSouthId ||
+              (Math.hypot(s.x - cross.centerX, s.y - cross.centerY) < 220 && s.type === 'crossing')) &&
+            (s.currentAspect === 'red_alternating' ||
+              s.currentAspect === 'red_alternating_flashing' ||
+              s.currentAspect === 'red' ||
+              (s.barrierProgress !== undefined && s.barrierProgress > 0.05))
+        )) ||
+      isCrossingApproachOccupied(cross, world);
+    if (isClosed) {
+      const toCX = cross.centerX - car.x;
+      const toCY = cross.centerY - car.y;
+      const fwd = toCX * carCos + toCY * carSin;
+      if (fwd > -20) {
+        railwayCrossingClosed = true;
+        distToCrossingM = Math.max(0, (fwd - 110) / 10);
+        break;
+      }
+    }
+  }
+
+  // 6. Adjacent same-direction lane sensing & oncoming check
+  const { leftLane, rightLane } = getAdjacentSameDirectionLanes(world, car.currentLaneId);
+  const leftLaneClear = leftLane ? isLaneClearForMerge(car, leftLane, world, vehGrid, propGrid) : false;
+  const rightLaneClear = rightLane ? isLaneClearForMerge(car, rightLane, world, vehGrid, propGrid) : false;
+  const oncomingConflict = !leftLane ? isOncomingConflictWithOffset(car, 16, world, vehGrid) : false;
+
+  // 7. Front building contact & rear clearance
+  let frontWallBlocked = false;
+  const frontX = car.x + carCos * (car.length * 0.5 + 3);
+  const frontY = car.y + carSin * (car.length * 0.5 + 3);
+  for (const bld of world.buildings) {
+    if (
+      frontX >= bld.x - 2 &&
+      frontX <= bld.x + bld.width + 2 &&
+      frontY >= bld.y - 2 &&
+      frontY <= bld.y + bld.height + 2
+    ) {
+      frontWallBlocked = true;
+      break;
+    }
+  }
+  const rearClear = isVehicleRearPathClear(car, world, nearbyVehs, 30);
+
+  return {
+    vehId: car.id,
+    type: car.type,
+    archetype: profile.archetype,
+    speedKmh,
+    speedLimitKmh,
+    stoppingDistM,
+    inIntersection: Boolean(car.inIntersection),
+    distToStopLineM,
+    trafficLight,
+    railwayCrossingClosed,
+    distToCrossingM,
+    mustYieldMainRoad,
+    availableTurns,
+    blockedTurns,
+    currentPlannedTurn: car.plannedTurn || 'straight',
+    hasLeftSameDirLane: Boolean(leftLane),
+    leftLaneClear,
+    hasRightSameDirLane: Boolean(rightLane),
+    rightLaneClear,
+    downstreamBlocked,
+    leadObstacleType,
+    leadGapM,
+    leadSpeedKmh,
+    leadClosingTtcSec,
+    pedestrianAheadM,
+    crossTrafficConflict,
+    oncomingConflict,
+    emergencySirenNearby,
+    stuckSec: car.stuckTimer || 0,
+    headOnConflict,
+    rearClear,
+    frontWallBlocked,
+  };
+}
+
+function applyGeminiDecisionToVehicle(
+  car: Vehicle,
+  world: GameWorld,
+  profile: DriverProfile,
+  perception: GeminiVehiclePerception,
+  decision: ReturnType<typeof geminiTrafficController.getDecision>,
+  dt: number,
+  vehGrid?: SpatialGrid<Vehicle>,
+  propGrid?: SpatialGrid<StreetProp>
+) {
+  const road = findRoadByLaneId(world, car.currentLaneId || car.currentConnection?.targetLaneId || null);
+  const cruisePx = getVehicleCruiseSpeedPx(car, road);
+  const isHeavyCar =
+    car.length > 52 ||
+    (car.wheelBase || 28) > 34 ||
+    car.type.startsWith('truck_') ||
+    car.type.startsWith('tractor_') ||
+    car.type === 'bus';
+  const maxAccel = (isHeavyCar ? 90 : 145) * profile.accelFactor;
+
+  // Before the first real Gemini Decisions response arrives for a freshly spawned vehicle:
+  // hold its initial spawn momentum briefly while the urgent batch is in flight so it doesn't
+  // slam brakes to 0 in front of trailing traffic. If an API error occurred or timeout >= 2.5s,
+  // decelerate smoothly to a stop — NEVER silently substitute built-in AI heuristics.
+  if (!decision) {
+    const waitSec = ((car as any)._geminiSpawnWaitSec || 0) + dt;
+    (car as any)._geminiSpawnWaitSec = waitSec;
+
+    if (!geminiTrafficController.hasError() && waitSec < 2.5) {
+      if (
+        perception.leadGapM !== null &&
+        perception.leadGapM <= Math.max(8, perception.stoppingDistM * 0.9) &&
+        (perception.leadSpeedKmh === null || perception.leadSpeedKmh < perception.speedKmh - 3)
+      ) {
+        const leadPx = (perception.leadSpeedKmh ?? 0) * SPEED_KMH_TO_PX_S;
+        car.targetSpeed = Math.max(0, leadPx);
+        car.idmAcceleration = isHeavyCar ? -280 : -360;
+        car.aiState = 'stopping_obstacle';
+      } else {
+        car.targetSpeed = Math.max(0, car.speed);
+        car.idmAcceleration = 0;
+        car.aiState = 'driving';
+      }
+      return;
+    }
+
+    car.targetSpeed = 0;
+    car.idmAcceleration = car.speed > 1.5 ? -160 : 0;
+    if (car.speed < 1.5) {
+      car.speed = 0;
+      car.vx = 0;
+      car.vy = 0;
+    }
+    car.aiState = 'yielding';
+    return;
+  }
+
+  (car as any)._geminiSpawnWaitSec = 0;
+
+  // 1. Apply turn choice chosen by gemini-decision-1
+  if (decision.turnChoice && !car.inIntersection && !car.currentConnection) {
+    const mappedTurn: 'straight' | 'left' | 'right' =
+      decision.turnChoice === 'turnaround' ? 'left' : decision.turnChoice;
+    car.plannedTurn = mappedTurn;
+    if (mappedTurn === 'left') car.turnSignal = 'left';
+    else if (mappedTurn === 'right') car.turnSignal = 'right';
+    else if (car.aiState !== 'lane_changing' && car.aiState !== 'yielding') car.turnSignal = 'none';
+  }
+
+  // 2. Apply horn decision (noul)
+  if (decision.shouldHonk && (!car.honkTimer || car.honkTimer <= 0)) {
+    car.honkTimer = 0.65;
+    car.isHonking = true;
+  }
+
+  // 3. Translate Gemini maneuver + rubric speedRatio into longitudinal & lateral actuators
+  const isTurn = Boolean(car.inIntersection || car.currentConnection);
+  const maxAllowedSpeed = isTurn
+    ? getTurnSpeedPx(car, car.currentConnection?.turnType === 'right' || car.plannedTurn === 'right', car.currentConnection?.turnType === 'turnaround')
+    : cruisePx;
+  const desiredSpeedFromRubric = maxAllowedSpeed * Math.max(0, Math.min(1, decision.speedRatio));
+  const v = Math.max(0, car.speed);
+
+  switch (decision.maneuver) {
+    case 'stop_hold': {
+      car.targetSpeed = 0;
+      car.aiState = 'stopping_light';
+      if (v < 2.0) {
+        car.speed = 0;
+        car.vx = 0;
+        car.vy = 0;
+        car.idmAcceleration = 0;
+      } else {
+        car.idmAcceleration = -Math.min(380, Math.max(180, v * 3.8));
+      }
+      break;
+    }
+    case 'hard_brake': {
+      car.targetSpeed = 0;
+      car.aiState = 'stopping_obstacle';
+      if (v < 1.5) {
+        car.speed = 0;
+        car.vx = 0;
+        car.vy = 0;
+        car.idmAcceleration = 0;
+      } else {
+        car.idmAcceleration = isHeavyCar ? -480 : -620;
+      }
+      break;
+    }
+    case 'slow_down': {
+      let target = Math.min(desiredSpeedFromRubric, maxAllowedSpeed * 0.55);
+      if (
+        perception.leadGapM !== null &&
+        perception.leadSpeedKmh !== null &&
+        perception.leadGapM <= perception.stoppingDistM * 1.7
+      ) {
+        const leadPx = Math.max(0, perception.leadSpeedKmh) * SPEED_KMH_TO_PX_S;
+        const safeLeadTarget = perception.leadGapM <= perception.stoppingDistM ? Math.max(0, leadPx * 0.7) : leadPx;
+        target = Math.min(target, safeLeadTarget);
+      }
+      car.targetSpeed = target;
+      car.aiState = isTurn ? 'in_intersection' : (target < 4 ? 'stopping_obstacle' : 'driving');
+      const diff = target - v;
+      const maxDecel = perception.leadGapM !== null && perception.leadGapM <= perception.stoppingDistM ? -340 : -240;
+      car.idmAcceleration = Math.max(maxDecel, Math.min(maxAccel * 0.6, diff * 2.5));
+      break;
+    }
+    case 'cruise': {
+      const target = Math.max(Math.min(maxAllowedSpeed, 22), desiredSpeedFromRubric);
+      car.targetSpeed = target;
+      car.aiState = isTurn ? 'in_intersection' : 'driving';
+      const diff = target - v;
+      car.idmAcceleration = Math.max(-180, Math.min(maxAccel * 0.9, diff * 1.8));
+      break;
+    }
+    case 'accelerate': {
+      const target = Math.max(maxAllowedSpeed * 0.65, desiredSpeedFromRubric);
+      car.targetSpeed = target;
+      car.aiState = isTurn ? 'in_intersection' : 'driving';
+      const diff = target - v;
+      car.idmAcceleration = Math.max(-160, Math.min(maxAccel * 1.25, diff * 2.4 + 30));
+      break;
+    }
+    case 'yield_shoulder': {
+      const target = Math.min(desiredSpeedFromRubric, 24);
+      car.targetSpeed = target;
+      car.aiState = 'yielding';
+      car.turnSignal = 'right';
+      if (!car.inIntersection && !car.currentConnection && Math.abs((car.targetAvoidanceOffset || 0) - -12) > 2) {
+        startLateralSpline(car, -12, Math.max(45, v * 0.9 + 25));
+      }
+      const diff = target - v;
+      car.idmAcceleration = Math.max(-280, Math.min(maxAccel * 0.5, diff * 2.4));
+      break;
+    }
+    case 'lane_left': {
+      const target = Math.max(24, desiredSpeedFromRubric);
+      car.targetSpeed = target;
+      car.turnSignal = 'left';
+      if (!car.inIntersection && !car.currentConnection && (!car.laneChangeCooldown || car.laneChangeCooldown <= 0)) {
+        const { leftLane } = getAdjacentSameDirectionLanes(world, car.currentLaneId);
+        if (leftLane && isLaneClearForMerge(car, leftLane, world, vehGrid, propGrid)) {
+          executeLaneChange(car, leftLane, 'left');
+          car.aiState = 'lane_changing';
+        } else if (car.avoidancePhase === 'none' && !car.avoidanceSpline) {
+          car.avoidancePhase = 'swerving';
+          startLateralSpline(car, 14, Math.max(60, v * 1.1 + 30));
+          car.aiState = 'avoiding_obstacle';
+        }
+      }
+      const diff = target - v;
+      car.idmAcceleration = Math.max(-180, Math.min(maxAccel * 1.1, diff * 2.0));
+      break;
+    }
+    case 'lane_right': {
+      const target = Math.max(24, desiredSpeedFromRubric);
+      car.targetSpeed = target;
+      car.turnSignal = 'right';
+      if (!car.inIntersection && !car.currentConnection && (!car.laneChangeCooldown || car.laneChangeCooldown <= 0)) {
+        const { rightLane } = getAdjacentSameDirectionLanes(world, car.currentLaneId);
+        if (rightLane && isLaneClearForMerge(car, rightLane, world, vehGrid, propGrid)) {
+          executeLaneChange(car, rightLane, 'right');
+          car.aiState = 'lane_changing';
+        } else if (car.avoidancePhase === 'none' && !car.avoidanceSpline) {
+          car.avoidancePhase = 'swerving';
+          startLateralSpline(car, -14, Math.max(60, v * 1.1 + 30));
+          car.aiState = 'avoiding_obstacle';
+        }
+      }
+      const diff = target - v;
+      car.idmAcceleration = Math.max(-180, Math.min(maxAccel * 1.1, diff * 2.0));
+      break;
+    }
+    case 'reverse_recover': {
+      if (car.aiState !== 'reversing') {
+        car.aiState = 'reversing';
+        car.reverseTimer = 1.6;
+        const nextWp = car.routeWaypoints?.[car.targetWaypointIndex];
+        car.recoveryTargetAngle = nextWp
+          ? Math.atan2(nextWp.y - car.y, nextWp.x - car.x)
+          : car.angle + (Math.PI / 4);
+        car.targetSpeed = -30;
+        car.speed = Math.min(car.speed, -15);
+      }
+      break;
+    }
+  }
+
+  // Smoothly return lateral shoulder yield offset once Gemini resumes normal driving
+  if (
+    decision.maneuver !== 'yield_shoulder' &&
+    decision.maneuver !== 'lane_left' &&
+    decision.maneuver !== 'lane_right' &&
+    Math.abs(car.avoidanceOffset || 0) > 1.0 &&
+    !car.avoidanceSpline &&
+    car.avoidancePhase === 'none'
+  ) {
+    startLateralSpline(car, 0, Math.max(55, v * 1.1 + 20));
+  }
+
+  // Keep dt referenced cleanly if needed for future damping
+  void dt;
 }
 
 // Update turn signal indicator and pre-planned turn when approaching intersections or standing at red lights (ПДД)
@@ -5270,7 +5906,37 @@ function advanceCarRoute(car: Vehicle, world: GameWorld) {
 
     let selectedConn = currentLane.connections[0];
 
-    if (currentLane.connections.length > 1) {
+    if (geminiTrafficController.isEnabled()) {
+      const validConns = currentLane.connections.filter(
+        (c) =>
+          !c.targetLaneId ||
+          (!c.targetLaneId.startsWith('road_village_') &&
+            !c.targetLaneId.startsWith('road_forest_') &&
+            !c.targetLaneId.startsWith('trail_'))
+      );
+      const pool = validConns.length > 0 ? validConns : currentLane.connections;
+      const gDec = geminiTrafficController.getDecision(car.id);
+      const desiredTurn = gDec?.turnChoice || car.plannedTurn || 'straight';
+      selectedConn = pool.find((c) => c.turnType === desiredTurn) || pool[0];
+
+      // Gate entering intersection strictly by Gemini Decisions API directive
+      const isStoppingManeuver =
+        !gDec ||
+        gDec.maneuver === 'stop_hold' ||
+        gDec.maneuver === 'hard_brake' ||
+        gDec.maneuver === 'yield_shoulder' ||
+        gDec.maneuver === 'reverse_recover';
+
+      if (selectedConn.intersectionId && isStoppingManeuver) {
+        car.targetWaypointIndex = car.routeWaypoints.length - 1;
+        car.targetSpeed = 0;
+        car.aiState = gDec?.maneuver === 'yield_shoulder' ? 'yielding' : 'stopping_light';
+        if (car.speed < 4) {
+          car.speed = 0;
+        }
+        return;
+      }
+    } else if (currentLane.connections.length > 1) {
       // Score each available connection based on route variety, loop avoidance, and lane capacity
       const scored = currentLane.connections.map((conn) => {
         let weight = 1.0;
@@ -5386,8 +6052,8 @@ function advanceCarRoute(car: Vehicle, world: GameWorld) {
       }
     }
 
-    // Stop Line & Arbiter Verification before stepping onto intersection connection
-    if (selectedConn.intersectionId && selectedConn.stopLineDirection) {
+    // Stop Line & Arbiter Verification before stepping onto intersection connection (built-in AI only)
+    if (!geminiTrafficController.isEnabled() && selectedConn.intersectionId && selectedConn.stopLineDirection) {
       const inter = world.intersections.find((i) => i.id === selectedConn.intersectionId);
       if (inter) {
         const stopLine = inter.stopLines?.find((sl) => sl.direction === selectedConn.stopLineDirection);

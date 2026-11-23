@@ -9,6 +9,7 @@ import { GFX_GROUPS, GFX_PRESET_OPTIONS, GfxItem, applyGfxPatch, applyGfxPreset 
 import { sound } from '../audio';
 import { onlineManager } from '../onlineSystem';
 import { openHostSession } from '../hostSession';
+import { geminiTrafficController } from '../geminiTrafficDecisions';
 import {
   subscribeToP2PServers,
   subscribeToHostedServers,
@@ -120,6 +121,8 @@ export interface MainMenuProps {
     shiftMode?: 'auto' | 'manual';
     showSoftbodyMesh?: boolean;
     smokeDensity?: number;
+    useGeminiDecisionsTraffic?: boolean;
+    geminiTrafficIntervalMs?: number;
   };
   onUpdateSettings: (newSettings: any) => void;
   currentUser?: FirebaseUser | null;
@@ -609,9 +612,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [masterVol, setMasterVol] = useState<number>(() => Math.round(sound.getMasterVolume() * 100));
   const [engineVol, setEngineVol] = useState<number>(() => Math.round(sound.getEngineVolume() * 100));
   const [local, setLocal] = useState(() => ({ ...currentSettings }));
+  const [geminiTrafficStatus, setGeminiTrafficStatus] = useState(() => geminiTrafficController.getStatus());
   useEffect(() => {
     setLocal({ ...currentSettings });
   }, [currentSettings]);
+  useEffect(() => geminiTrafficController.subscribe(setGeminiTrafficStatus), []);
 
   const patchPerf = (patch: Partial<PerformanceConfig>) => {
     applyGfxPatch(patch);
@@ -1506,7 +1511,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   ))}
                 </div>
 
-                <div className={'panel a sec st d2 mc-content mc-has-aside' + (setTab === 'gfx' || setTab === 'ctrl' ? ' scroll' : '')} key={'panel-' + setTab} style={{ left: 350, top: 128, width: 700, maxHeight: 700 }}>
+                <div className={'panel a sec st d2 mc-content mc-has-aside' + (setTab === 'gfx' || setTab === 'ctrl' || setTab === 'game' ? ' scroll' : '')} key={'panel-' + setTab} style={{ left: 350, top: 128, width: 700, maxHeight: 700 }}>
                   {setTab === 'gfx' && (
                     <>
                       <div className="grp cn" style={{ paddingTop: 18 }}>Пресет</div>
@@ -1602,6 +1607,46 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         <Seg value={local.smokeDensity ?? 100} onChange={v => patchGame({ smokeDensity: v })} options={[{ v: 0, label: 'Выкл' }, { v: 35, label: 'Низкая' }, { v: 70, label: 'Средняя' }, { v: 100, label: 'Полная' }]} />
                       </div>
                       <div className="set"><span>Показывать сетку кузова</span><Toggle on={!!local.showSoftbodyMesh} onChange={() => patchGame({ showSoftbodyMesh: !local.showSoftbodyMesh })} label="Показывать сетку кузова" /></div>
+                      <div className="grp cn">Экспериментальные</div>
+                      <div className="set" style={{ height: 'auto', minHeight: 68, paddingTop: 10, paddingBottom: 10 }}>
+                        <div style={{ paddingRight: 16 }}>
+                          <div>Трафик: Gemini Decisions API</div>
+                          <div className="mut" style={{ fontSize: 12, marginTop: 3 }}>
+                            Использовать модель gemini-decision-1 вместо локального ИИ трафика
+                          </div>
+                        </div>
+                        <Toggle
+                          on={!!local.useGeminiDecisionsTraffic}
+                          onChange={() => patchGame({ useGeminiDecisionsTraffic: !local.useGeminiDecisionsTraffic })}
+                          label="Трафик: Gemini Decisions API"
+                        />
+                      </div>
+                      {local.useGeminiDecisionsTraffic && (
+                        <>
+                          <div className="set" style={{ height: 70 }}>
+                            <span>Интервал решений Gemini</span>
+                            <Seg
+                              value={local.geminiTrafficIntervalMs ?? 500}
+                              onChange={v => patchGame({ geminiTrafficIntervalMs: v })}
+                              options={[{ v: 250, label: '250 мс' }, { v: 500, label: '500 мс' }, { v: 1000, label: '1 с' }, { v: 2000, label: '2 с' }]}
+                            />
+                          </div>
+                          {geminiTrafficStatus.lastError && (
+                            <div className="set" style={{ height: 'auto', minHeight: 56, paddingTop: 8, paddingBottom: 8 }}>
+                              <div className="err" style={{ fontSize: 12, lineHeight: 1.4, paddingRight: 12 }}>
+                                Ошибка API: {geminiTrafficStatus.lastError}
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-s btn-sm"
+                                onClick={() => geminiTrafficController.retryNow()}
+                              >
+                                Повторить
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -1616,7 +1661,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                           gfx: 'Изменения сохраняются сразу. Пресет меняет сразу несколько параметров. На слабых устройствах выберите «Низкие» или уменьшите масштаб рендера и дальность прорисовки.',
                           sound: 'Громкость меняется сразу. Звук двигателя синтезируется в реальном времени.',
                           ctrl: 'Нажмите на любую клавишу, чтобы переназначить её. Esc отменяет выбор. Конфликтующие клавиши в одном контексте автоматически меняются местами.',
-                          game: 'Режим коробки передач, автосохранение, смена дня и ночи, плотность дыма и отображение сетки деформации кузова.'
+                          game: 'Режим коробки передач, автосохранение, смена дня и ночи, плотность дыма, отображение сетки кузова и экспериментальный трафик на базе Gemini Decisions API.'
                         })[setTab]}
                       </div>
                     </div>

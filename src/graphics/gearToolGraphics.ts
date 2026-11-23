@@ -21,8 +21,17 @@ import {
   LIQUID_REGISTRY,
   LiquidId
 } from '../liquidSystem';
+import { drawToolRedrawItem } from './toolsRedraw';
+import { drawKitchenwareRedrawItem } from './kitchenwareRedraw';
 
 export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, item?: any): boolean {
+  if (drawToolRedrawItem(ctx, itemId, item)) {
+    return true;
+  }
+  if (drawKitchenwareRedrawItem(ctx, itemId, item)) {
+    return true;
+  }
+
   switch (itemId) {
     case 'car_key':
     case 'car_key_classic':

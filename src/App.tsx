@@ -57,6 +57,7 @@ import { applyPowertrain, describePowertrain, buildPowertrainPick, pickPowertrai
 import { loadMap, sanitizeWorldVehicles } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
+import { geminiTrafficController } from './geminiTrafficDecisions';
 import { RailwaySignalingSystem } from './railwaySignalingSystem';
 import { TrainSystem } from './trainSystem';
 import { updateCameraPoles } from './cameraPoleSystem';
@@ -550,7 +551,17 @@ export default function App() {
   };
 
   const [settings, setSettings] = useState(() => {
-    const base = { fpsLimit: 60, autoSaveInterval: 25, timeAutoCycle: true, mouseSensitivity: 1.0, shiftMode: 'manual' as 'auto' | 'manual', showSoftbodyMesh: false, smokeDensity: 100 };
+    const base = {
+      fpsLimit: 60,
+      autoSaveInterval: 25,
+      timeAutoCycle: true,
+      mouseSensitivity: 1.0,
+      shiftMode: 'manual' as 'auto' | 'manual',
+      showSoftbodyMesh: false,
+      smokeDensity: 100,
+      useGeminiDecisionsTraffic: false,
+      geminiTrafficIntervalMs: 500,
+    };
     try {
       const raw = localStorage.getItem('city_sim_game_settings');
       if (raw) return { ...base, ...JSON.parse(raw) };
@@ -570,6 +581,14 @@ export default function App() {
   useEffect(() => {
     setManualAutoShiftPref(settings.shiftMode);
   }, [settings.shiftMode]);
+
+  // Experimental Gemini Decisions API traffic mode
+  useEffect(() => {
+    geminiTrafficController.configure({
+      enabled: !!settings.useGeminiDecisionsTraffic,
+      intervalMs: settings.geminiTrafficIntervalMs ?? 500,
+    });
+  }, [settings.useGeminiDecisionsTraffic, settings.geminiTrafficIntervalMs]);
 
   const [gpsDestination, setGpsDestination] = useState<{ x: number; y: number; name?: string } | null>(null);
 

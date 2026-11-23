@@ -7,6 +7,7 @@ import { onlineManager } from '../onlineSystem';
 import { sound } from '../audio';
 import { performanceConfig, DEFAULT_CONFIG, detectGraphicsPreset, PerformanceConfig, GraphicsPresetId } from '../performanceConfig';
 import { GFX_GROUPS, GFX_PRESET_OPTIONS, GfxItem, applyGfxPatch, applyGfxPreset } from '../graphicsSettings';
+import { geminiTrafficController } from '../geminiTrafficDecisions';
 import {
   KEYBIND_GROUPS,
   KEYBIND_DEFINITIONS,
@@ -76,6 +77,10 @@ export interface PauseSettings {
   showSoftbodyMesh: boolean;
   /** Smoke and exhaust density in percent (0 hides smoke so damage is visible). */
   smokeDensity: number;
+  /** Experimental: drive AI traffic via Gemini Decisions API (gemini-decision-1) instead of built-in AI. */
+  useGeminiDecisionsTraffic?: boolean;
+  /** Experimental: batch decision polling interval in milliseconds. */
+  geminiTrafficIntervalMs?: number;
 }
 
 interface PauseMenuProps {
@@ -288,9 +293,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const [masterVol, setMasterVol] = useState<number>(() => Math.round(sound.getMasterVolume() * 100));
   const [engineVol, setEngineVol] = useState<number>(() => Math.round(sound.getEngineVolume() * 100));
   const [local, setLocal] = useState<PauseSettings>(() => ({ ...settings }));
+  const [geminiTrafficStatus, setGeminiTrafficStatus] = useState(() => geminiTrafficController.getStatus());
   useEffect(() => {
     setLocal({ ...settings });
   }, [settings]);
+  useEffect(() => geminiTrafficController.subscribe(setGeminiTrafficStatus), []);
   const patchPerf = (patch: Partial<PerformanceConfig>) => {
     applyGfxPatch(patch);
     setPerf({ ...performanceConfig });
@@ -361,7 +368,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
       });
       return ctrlRows;
     }
-    return [
+    const gameRows: Row[] = [
       { t: 'hdr', l: 'Геймплей' },
       { t: 'seg', l: 'КПП (переключения)', v: local.shiftMode ?? 'auto',
         o: [{ v: 'manual', label: 'Ручная' }, { v: 'auto', label: 'Авто (сама)' }],
@@ -371,8 +378,34 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
       { t: 'tg', l: 'Смена дня и ночи', v: local.timeAutoCycle, set: v => patchGame({ timeAutoCycle: v }) },
       { t: 'seg', l: 'Плотность дыма', v: local.smokeDensity ?? 100, set: v => patchGame({ smokeDensity: v }),
         o: [{ v: 0, label: 'Выкл' }, { v: 35, label: 'Низкая' }, { v: 70, label: 'Средняя' }, { v: 100, label: 'Полная' }] },
-      { t: 'tg', l: 'Показывать сетку кузова', v: !!local.showSoftbodyMesh, set: v => patchGame({ showSoftbodyMesh: v }) }
+      { t: 'tg', l: 'Показывать сетку кузова', v: !!local.showSoftbodyMesh, set: v => patchGame({ showSoftbodyMesh: v }) },
+      { t: 'hdr', l: 'Экспериментальные' },
+      {
+        t: 'tg',
+        l: 'Трафик: Gemini Decisions API (gemini-decision-1)',
+        v: !!local.useGeminiDecisionsTraffic,
+        set: v => patchGame({ useGeminiDecisionsTraffic: v })
+      }
     ];
+    if (local.useGeminiDecisionsTraffic) {
+      gameRows.push({
+        t: 'seg',
+        l: 'Интервал решений Gemini',
+        v: local.geminiTrafficIntervalMs ?? 500,
+        o: [{ v: 250, label: '250 мс' }, { v: 500, label: '500 мс' }, { v: 1000, label: '1 с' }, { v: 2000, label: '2 с' }],
+        set: v => patchGame({ geminiTrafficIntervalMs: v })
+      });
+      if (geminiTrafficStatus.lastError) {
+        gameRows.push({ t: 'note', l: `Ошибка Gemini Decisions API: ${geminiTrafficStatus.lastError}` });
+        gameRows.push({
+          t: 'btn',
+          l: 'Повторить запрос к Gemini API',
+          label: 'Повторить',
+          act: () => geminiTrafficController.retryNow()
+        });
+      }
+    }
+    return gameRows;
   };
 
   /* ---------- онлайн ---------- */
@@ -641,7 +674,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                   <button key={id} className={'tab cn' + (id === tab ? ' tab-on' : '')} onClick={() => { setListeningAction(null); setTab(id); }}>{label}</button>
                 ))}
               </div>
-              <div className={'panel' + (tab === 'gfx' || tab === 'ctrl' ? ' scroll' : '')} id="rows" style={{ padding: '8px 0' }}>
+              <div className={'panel' + (tab === 'gfx' || tab === 'ctrl' || tab === 'game' ? ' scroll' : '')} id="rows" style={{ padding: '8px 0' }}>
                 {rows.map((r, i) => r.t === 'hdr' ? (
                   <div key={tab + i} className="cn" style={{ padding: '14px 22px 6px', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#e0ab45', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none', marginTop: i > 0 ? 6 : 0 }}>
                     {r.l}

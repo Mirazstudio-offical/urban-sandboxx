@@ -1,10 +1,16 @@
 // Procedural 2D Canvas Models for Valuables and Kitchenware (Pots, Kettles, Plates, Cutlery, Mugs)
 import { drawShadow, drawGlossBand } from './itemGraphicShared';
+import { drawKitchenwareRedrawItem } from './kitchenwareRedraw';
 
 export function drawKitchenAndValuableItem(
   ctx: CanvasRenderingContext2D,
-  itemId: string
+  itemId: string,
+  item?: any
 ): boolean {
+  if (drawKitchenwareRedrawItem(ctx, itemId, item)) {
+    return true;
+  }
+
   switch (itemId) {
     // ==========================================
     // === 0. BANKNOTES AND COINS (НАЛИЧНЫЕ ДЕНЬГИ И МОНЕТЫ) ===
