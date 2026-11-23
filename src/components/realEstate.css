@@ -1,0 +1,360 @@
+/* Real Estate Agency screen — Main Menu / Pause Menu design system inside ShadowHost.
+   Desktop stage: 1440x900 scaled cleanly.
+   Compact stage ([data-mob]): sw x 560 logical px (900..1350 x 560) — always 2-column
+   catalog + dossier with single-row filter bar, zero clipping, scroll ONLY on the list. */
+
+* { box-sizing: border-box; }
+#w { position: fixed; inset: 0; overflow: hidden; }
+.bd { position: fixed; inset: 0; background: rgba(9, 9, 10, .86); transition: opacity .28s ease; }
+.bd.gone { opacity: 0; }
+
+.gm {
+  position: absolute; left: 0; top: 0; width: 1440px; height: 900px;
+  transform-origin: 0 0; overflow: hidden; background: transparent;
+  font: 15px/1.4 'Barlow', system-ui, sans-serif; color: #e9e6df;
+  transition: opacity .28s ease;
+}
+.gm.gone { opacity: 0; pointer-events: none; }
+.a { position: absolute; pointer-events: none; }
+.cn { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; text-transform: uppercase; letter-spacing: .07em; }
+.mut { color: #a29e93; }
+.tab-num { font-variant-numeric: tabular-nums; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; text-align: left; }
+button:disabled { opacity: .45; pointer-events: none; }
+input { font: inherit; color: inherit; -webkit-user-select: text; user-select: text; }
+input::placeholder { color: #8f8b81; }
+:focus-visible { outline: 2px solid #e0ab45; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---- Top bar (Main Menu / Pause Menu chrome) ---- */
+.top {
+  position: absolute; left: 64px; right: 64px; top: 34px; height: 44px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.top-l, .top-r { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ttl { font-size: 26px; font-weight: 700; color: #fff; white-space: nowrap; }
+.sub-top { font-size: 14px; color: #8f8b81; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip {
+  display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px;
+  border-radius: 10px; background: rgba(22, 22, 24, .78); border: 1px solid rgba(255, 255, 255, .1);
+  transition: border-color .15s, background .15s;
+}
+button.chip:hover { border-color: rgba(201, 146, 43, .55); background: rgba(30, 30, 34, .92); }
+.back { width: 44px; padding: 0; justify-content: center; flex: none; }
+
+/* ---- Buttons, pills, inputs, keycaps ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 46px; padding: 0 22px; border-radius: 10px; font-weight: 600; font-size: 15px;
+  white-space: nowrap; transition: filter .15s, background .15s, border-color .15s;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn-p { background: #c9922b; color: #1a1409; font-weight: 700; font-size: 15.5px; }
+.btn-s { background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .14); color: #e9e6df; }
+.btn-sm { height: 36px; padding: 0 14px; font-size: 13.5px; border-radius: 9px; }
+.btn-block { width: 100%; }
+
+.pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 36px; padding: 0 16px; border-radius: 18px; flex: none;
+  background: rgba(255, 255, 255, .055); border: 1px solid rgba(255, 255, 255, .1);
+  font-size: 14px; font-weight: 600; color: #cfcbc1;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.pill:hover:not(.pill-on) { background: rgba(255, 255, 255, .11); color: #fff; }
+.pill-on { background: rgba(201, 146, 43, .22); border-color: rgba(201, 146, 43, .65); color: #f0c264; }
+
+input.inp {
+  display: block; width: 100%; height: 48px; padding: 0 16px; border-radius: 10px;
+  background: rgba(255, 255, 255, .06); border: 1.5px solid rgba(201, 146, 43, .55);
+  font-size: 16px; font-weight: 500; color: #fff; outline: 0;
+  transition: border-color .15s, background .15s;
+}
+input.inp:focus { border-color: #e0ab45; background: rgba(255, 255, 255, .08); }
+
+.key {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 26px; padding: 0 8px; border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .22); font-size: 12px; font-weight: 600;
+  color: #cfcbc1; margin-right: 8px;
+}
+.hint {
+  position: absolute; left: 64px; right: 64px; bottom: 26px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; color: #a29e93;
+}
+.hint-g { display: flex; align-items: center; }
+.hint-g .key + span + .key { margin-left: 22px; }
+
+.panel {
+  background: rgba(20, 20, 22, .94);
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 14px;
+}
+.scroll { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #3a352b transparent; }
+.scroll::-webkit-scrollbar { width: 5px; }
+.scroll::-webkit-scrollbar-thumb { background: #3a352b; border-radius: 3px; }
+
+/* ---- Main workspace frame ---- */
+.re-body {
+  position: absolute; left: 64px; right: 64px; top: 98px; bottom: 68px;
+  display: flex; flex-direction: column; min-height: 0;
+}
+
+/* ---- Step 1: Single-row toolbar + 2-column split ---- */
+.re-toolbar {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-bottom: 14px; height: 42px;
+}
+.re-search {
+  display: flex; align-items: center; gap: 9px;
+  width: 310px; height: 42px; padding: 0 14px; flex: none;
+  border-radius: 10px; background: rgba(20, 20, 22, .92);
+  border: 1px solid rgba(255, 255, 255, .12);
+  transition: border-color .15s;
+}
+.re-search:focus-within { border-color: rgba(201, 146, 43, .7); }
+.re-search input {
+  flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: 0;
+  font-size: 14.5px; color: #f4f1ea;
+}
+.re-clear {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 6px; color: #a29e93; flex: none;
+}
+.re-clear:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+
+.re-pills {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.re-pills::-webkit-scrollbar { display: none; }
+.re-count { font-size: 13.5px; color: #a29e93; white-space: nowrap; flex: none; }
+
+.re-split {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: minmax(380px, 43%) minmax(0, 1fr); gap: 18px;
+}
+
+/* Left Column: Scrollable Property List (ONLY scroll area) */
+.re-list-panel {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden;
+}
+.re-list {
+  flex: 1; min-height: 0; padding: 6px 0;
+}
+.re-row {
+  display: flex; flex-direction: column; gap: 3px; width: 100%;
+  padding: 11px 18px;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, .055);
+  transition: background .14s, border-color .14s;
+}
+.re-row:hover { background: rgba(255, 255, 255, .045); }
+.re-row-on {
+  background: rgba(201, 146, 43, .15);
+  border-left-color: #c9922b;
+}
+.re-row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.re-row-title {
+  font-size: 15px; font-weight: 600; color: #f4f1ea;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.re-row-price { font-size: 15px; font-weight: 700; color: #e0ab45; white-space: nowrap; flex: none; }
+.re-row-price.is-owned { color: #9ac985; font-size: 13.5px; }
+.re-row-bot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.re-row-addr { color: #a29e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.re-row-meta { color: #8f8b81; white-space: nowrap; flex: none; }
+.re-more-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: calc(100% - 24px); margin: 8px 12px 6px; height: 38px;
+  border-radius: 9px; background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .1); color: #cfcbc1; font-size: 13.5px; font-weight: 600;
+}
+.re-more-btn:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+.re-empty {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 28px; text-align: center; color: #a29e93;
+}
+
+/* Right Column: Property Dossier (ZERO scroll, mathematically sized to fit) */
+.re-detail {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
+  padding: 22px 26px; min-width: 0; min-height: 0; overflow: hidden;
+}
+.re-detail-head {
+  flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding-bottom: 14px; border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.re-bld-title {
+  font-size: 26px; font-weight: 700; color: #fff; line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.re-addr-line {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  font-size: 14px; color: #cfcbc1; min-width: 0;
+}
+.re-addr-line span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.re-cadastral {
+  display: flex; align-items: center; gap: 8px; margin-top: 4px;
+  font-size: 12.5px; color: #8f8b81;
+}
+
+.re-specs {
+  flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
+}
+.re-kv {
+  padding: 10px 14px; border-radius: 10px;
+  background: rgba(255, 255, 255, .035); border: 1px solid rgba(255, 255, 255, .07);
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+}
+.re-kv-k { font-size: 11.5px; color: #8f8b81; text-transform: uppercase; letter-spacing: .04em; }
+.re-kv-v {
+  font-size: 15px; font-weight: 600; color: #f4f1ea;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.re-info {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 14px;
+  overflow: hidden;
+}
+.re-desc {
+  font-size: 14.5px; color: #cfcbc1; line-height: 1.48;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.re-feat-wrap { display: flex; flex-direction: column; gap: 8px; }
+.re-grp { font-size: 13px; font-weight: 700; color: #e0ab45; }
+.re-feats {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px;
+}
+.re-feat {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  font-size: 13.5px; color: #e9e6df;
+}
+.re-feat span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.re-buybar {
+  flex: none; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .09);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.re-buy-sub { font-size: 12.5px; color: #a29e93; }
+.re-total { font-size: 34px; font-weight: 700; color: #e0ab45; line-height: 1.05; margin-top: 3px; }
+.re-status-inline { font-size: 12.5px; font-weight: 600; margin-left: 10px; }
+
+/* ---- Step 2: Contract (2-column balanced, ZERO scroll) ---- */
+.re-contract-wrap {
+  flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+}
+.re-contract {
+  width: 100%; max-width: 1120px;
+  display: grid; grid-template-columns: 1.08fr .92fr; gap: 20px; align-items: stretch;
+}
+.re-card-pad {
+  padding: 24px 26px; display: flex; flex-direction: column; justify-content: space-between; gap: 18px;
+}
+.re-sec-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.re-lbl { display: block; font-size: 13px; color: #a29e93; margin-bottom: 8px; }
+.re-kv2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.re-ledger { display: flex; flex-direction: column; gap: 10px; }
+.re-ledger-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 14.5px; }
+.re-ledger-row.is-total {
+  padding-top: 12px; margin-top: 4px; border-top: 1px solid rgba(255, 255, 255, .1);
+  align-items: center;
+}
+.re-err-box {
+  padding: 10px 14px; border-radius: 9px;
+  background: rgba(217, 116, 90, .14); border: 1px solid rgba(217, 116, 90, .4);
+  color: #f2b4a0; font-size: 13px;
+}
+.re-contract-acts { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---- Step 3: Success (centered card, ZERO scroll) ---- */
+.re-success-wrap {
+  flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+}
+.re-success {
+  width: 100%; max-width: 780px; padding: 28px 32px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.re-success-top { display: flex; align-items: center; gap: 16px; }
+.re-success-mark {
+  width: 52px; height: 52px; border-radius: 12px; flex: none;
+  background: rgba(154, 201, 133, .14); border: 1px solid rgba(154, 201, 133, .4);
+  color: #9ac985; display: flex; align-items: center; justify-content: center;
+}
+.re-docs-box {
+  padding: 16px 18px; border-radius: 11px;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(255, 255, 255, .08);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.re-docs-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 18px;
+}
+.re-doc-item { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: #e9e6df; }
+.re-success-acts { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+
+/* ---- Compact mode ([data-mob] — landscape phones & short windows, sh = 560px) ---- */
+.gm[data-mob] .re-body {
+  left: 28px; right: 28px; top: 64px; bottom: 34px;
+}
+@media (pointer: coarse) {
+  .gm[data-mob] .re-body { bottom: 14px; }
+}
+.gm[data-mob] .sub-top { display: none; }
+.gm[data-mob] .re-toolbar { height: 40px; margin-bottom: 10px; gap: 10px; }
+.gm[data-mob] .re-search { width: 230px; height: 40px; padding: 0 12px; }
+.gm[data-mob] .re-search input { font-size: 14px; }
+.gm[data-mob] .re-toolbar .pill { height: 36px; font-size: 14px; padding: 0 14px; }
+.gm[data-mob] .re-split { grid-template-columns: minmax(340px, 42%) minmax(0, 1fr); gap: 14px; }
+
+.gm[data-mob] .re-row { padding: 9px 14px; gap: 2px; }
+.gm[data-mob] .re-row-title { font-size: 14.5px; }
+.gm[data-mob] .re-row-price { font-size: 14.5px; }
+.gm[data-mob] .re-row-bot { font-size: 12px; }
+
+.gm[data-mob] .re-detail { padding: 11px 16px; gap: 7px; }
+.gm[data-mob] .re-detail-head { padding-bottom: 8px; gap: 12px; }
+.gm[data-mob] .re-bld-title { font-size: 20px; }
+.gm[data-mob] .re-addr-line { margin-top: 2px; font-size: 13px; }
+.gm[data-mob] .re-cadastral { margin-top: 2px; font-size: 12px; }
+.gm[data-mob] .re-specs { gap: 6px; }
+.gm[data-mob] .re-kv { padding: 6px 10px; gap: 1px; }
+.gm[data-mob] .re-kv-k { font-size: 10.5px; }
+.gm[data-mob] .re-kv-v { font-size: 13.5px; }
+.gm[data-mob] .re-info { gap: 6px; }
+.gm[data-mob] .re-desc { font-size: 13px; line-height: 1.32; -webkit-line-clamp: 2; }
+.gm[data-mob] .re-feat-wrap { gap: 4px; }
+.gm[data-mob] .re-feats { gap: 3px 14px; }
+.gm[data-mob] .re-feat { font-size: 12.5px; }
+.gm[data-mob] .re-buybar { padding-top: 8px; }
+.gm[data-mob] .re-buy-sub { font-size: 12px; }
+.gm[data-mob] .re-total { font-size: 26px; margin-top: 1px; }
+.gm[data-mob] .re-buybar .btn { height: 42px; font-size: 15px; padding: 0 18px; }
+.gm[data-mob] .re-detail-head .btn-sm { height: 34px; font-size: 13px; padding: 0 12px; }
+
+.gm[data-mob] .re-contract { gap: 14px; }
+.gm[data-mob] .re-card-pad { padding: 16px 18px; gap: 12px; }
+.gm[data-mob] .re-sec-head { padding-bottom: 8px; }
+.gm[data-mob] .re-ledger { gap: 7px; }
+.gm[data-mob] .re-ledger-row { font-size: 13.5px; }
+.gm[data-mob] .re-ledger-row.is-total { padding-top: 8px; }
+.gm[data-mob] .re-contract-acts .btn { height: 42px; font-size: 15px; }
+
+.gm[data-mob] .re-success { padding: 18px 22px; gap: 14px; }
+.gm[data-mob] .re-docs-box { padding: 12px 14px; gap: 8px; }
+.gm[data-mob] .re-docs-grid { gap: 6px 14px; }
+.gm[data-mob] .re-doc-item { font-size: 13px; }
+.gm[data-mob] .re-success-acts .btn { height: 42px; font-size: 14.5px; }
+
+@container (max-width: 1080px) {
+  .gm[data-mob] .re-search { width: 185px; }
+  .gm[data-mob] .re-toolbar .pill { padding: 0 11px; font-size: 13px; }
+  .gm[data-mob] .re-split { grid-template-columns: minmax(300px, 41%) minmax(0, 1fr); gap: 10px; }
+  .gm[data-mob] .re-detail { padding: 12px 14px; }
+  .gm[data-mob] .re-total { font-size: 24px; }
+}

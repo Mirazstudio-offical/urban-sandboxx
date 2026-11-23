@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Player, BodyPartsMap, Injury, InventoryItem } from '../types';
 import { getDetailedBodySensations, getBodyPartLabel, getBodyPartStatusText } from '../sensations';
 import { useItemOnPlayer, useHandItemOnPlayer } from '../items';
 import { ItemIconCanvas } from './ItemIconCanvas';
-import { ModalShell, Key, Seg } from './gameUi';
+import { ShadowHost, attachStageFit } from './ShadowHost';
+import { useTopmostEscape } from './gameUi';
 import { sound } from '../audio';
+import selfInspectionCss from './selfInspection.css?inline';
 import {
   Activity,
   Heart,
@@ -18,7 +20,8 @@ import {
   AlertCircle,
   Utensils,
   BatteryLow,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from 'lucide-react';
 
 interface SelfInspectionModalProps {
@@ -60,6 +63,7 @@ const ZONE_CENTERS: Record<keyof BodyPartsMap, { x: number; y: number }> = {
  * Clean human silhouette without text, numbers, letters, or badges on the body.
  * Visualizes physical state on each zone: bleeding cuts, fractures, contusions,
  * or wrapped bandage strips when treated.
+ * Exported for reuse in LimbTreatmentModal.
  */
 export const AnatomyFigureSvg: React.FC<{
   selectedPart: keyof BodyPartsMap;
@@ -70,7 +74,7 @@ export const AnatomyFigureSvg: React.FC<{
     const st = getZoneStyle(partKey);
     const isSelected = selectedPart === partKey;
     const strokeColor = isSelected ? '#f0c264' : st.stroke;
-    const strokeW = isSelected ? 2.2 : 1.35;
+    const strokeW = isSelected ? 2.4 : 1.4;
     const c = ZONE_CENTERS[partKey];
 
     return (
@@ -151,7 +155,7 @@ export const AnatomyFigureSvg: React.FC<{
 
   return (
     <svg
-      viewBox="0 0 200 310"
+      viewBox="30 8 140 294"
       preserveAspectRatio="xMidYMid meet"
       style={{ width: '100%', height: '100%', display: 'block' }}
     >
@@ -205,55 +209,41 @@ const SYSTEMIC_MED_INFO: Record<string, { roleRu: string; actionLabel: string }>
   pill_vitamin_single: { roleRu: 'Поддерживает тонус организма', actionLabel: 'Принять' }
 };
 
-type NarrowPane = 'body' | 'treatment' | 'sensations';
-
-export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
-  isOpen,
-  onClose,
-  player
-}) => {
-  const [selectedPart, setSelectedPart] = useState<keyof BodyPartsMap>('torso');
-  const [selectedInjuryId, setSelectedInjuryId] = useState<string | null>(null);
-  const [narrowPane, setNarrowPane] = useState<NarrowPane>('body');
-  const [, setTick] = useState(0);
-
-  // Focus injured body part automatically when opening
-  useEffect(() => {
-    if (!isOpen || !player?.bodyState) return;
-    const parts = player.bodyState.bodyParts;
-    const getInjList = (k: keyof BodyPartsMap): Injury[] => {
+const SelfInspectionContent: React.FC<{
+  player: Player;
+  onClose: () => void;
+}> = ({ player, onClose }) => {
+  const [selectedPart, setSelectedPart] = useState<keyof BodyPartsMap>(() => {
+    const parts = player.bodyState?.bodyParts;
+    if (!parts) return 'torso';
+    const getList = (k: keyof BodyPartsMap): Injury[] => {
       const raw = parts[k];
       return Array.isArray(raw) ? raw : ((raw as any)?.injuries || []);
     };
+    const untreated = BODY_ZONES.find(k => getList(k).some(i => !i.treated));
+    if (untreated) return untreated;
+    const anyInj = BODY_ZONES.find(k => getList(k).length > 0);
+    return anyInj || 'torso';
+  });
+  const [selectedInjuryId, setSelectedInjuryId] = useState<string | null>(null);
+  const [entered, setEntered] = useState(false);
+  const [, setTick] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const gmRef = useRef<HTMLDivElement>(null);
 
-    const currentInjs = getInjList(selectedPart);
-    if (currentInjs.some(i => !i.treated)) return;
-
-    const untreatedPart = BODY_ZONES.find(k => getInjList(k).some(i => !i.treated));
-    if (untreatedPart) {
-      setSelectedPart(untreatedPart);
-      setSelectedInjuryId(null);
-      return;
-    }
-
-    const anyInjuredPart = BODY_ZONES.find(k => getInjList(k).length > 0);
-    if (anyInjuredPart) {
-      setSelectedPart(anyInjuredPart);
-      setSelectedInjuryId(null);
-    }
-  }, [isOpen]);
+  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
+  useTopmostEscape(onClose);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const timer = window.setInterval(() => {
-      setTick(t => t + 1);
-    }, 800);
-    return () => window.clearInterval(timer);
-  }, [isOpen]);
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
+    const timer = window.setInterval(() => setTick(t => t + 1), 800);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearInterval(timer);
+    };
+  }, []);
 
-  if (!isOpen || !player || !player.bodyState) return null;
-
-  const bs = player.bodyState;
+  const bs = player.bodyState!;
   const detailed = getDetailedBodySensations(player);
 
   const getPartInjuries = (partKey: keyof BodyPartsMap): Injury[] => {
@@ -395,27 +385,22 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
     return item.originalCatalogId || item.itemId;
   };
 
-  const collectAvailableMedEntries = (): AvailableMedEntry[] => {
-    const list: AvailableMedEntry[] = [];
-    if (player.leftHandItem) {
-      const medId = getEffectiveMedId(player.leftHandItem);
-      if (medId) list.push({ source: 'leftHand', idx: -1, item: player.leftHandItem, medId });
-    }
-    if (player.rightHandItem) {
-      const medId = getEffectiveMedId(player.rightHandItem);
-      if (medId) list.push({ source: 'rightHand', idx: -2, item: player.rightHandItem, medId });
-    }
-    if (player.inventory) {
-      player.inventory.forEach((item, idx) => {
-        if (!item) return;
-        const medId = getEffectiveMedId(item);
-        if (medId) list.push({ source: 'inventory', idx, item, medId });
-      });
-    }
-    return list;
-  };
-
-  const allMedEntries = collectAvailableMedEntries();
+  const allMedEntries: AvailableMedEntry[] = [];
+  if (player.leftHandItem) {
+    const medId = getEffectiveMedId(player.leftHandItem);
+    if (medId) allMedEntries.push({ source: 'leftHand', idx: -1, item: player.leftHandItem, medId });
+  }
+  if (player.rightHandItem) {
+    const medId = getEffectiveMedId(player.rightHandItem);
+    if (medId) allMedEntries.push({ source: 'rightHand', idx: -2, item: player.rightHandItem, medId });
+  }
+  if (player.inventory) {
+    player.inventory.forEach((item, idx) => {
+      if (!item) return;
+      const medId = getEffectiveMedId(item);
+      if (medId) allMedEntries.push({ source: 'inventory', idx, item, medId });
+    });
+  }
 
   const isCompatibleWithInjury = (medId: string, injury: Injury): boolean => {
     if (injury.treated) return false;
@@ -484,7 +469,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
     k => k !== selectedPart && getPartInjuries(k).length > 0
   );
 
-  // Qualitative real-life sensations (no telemetry numbers/percentages)
+  // Qualitative natural sensations (no telemetry percentages or numbers)
   const hp = player.needs.health ?? 100;
   const pulse = detailed.heartRate;
   const temp = bs.temperature ?? 36.6;
@@ -579,592 +564,462 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
   const thermalTone = temp < 35.8 || wetness > 55 ? 'is-cold' : temp > 37.5 ? 'is-bad' : '';
   const needsTone = hunger < 25 || thirst < 25 || energy < 20 ? 'is-bad' : hunger < 50 || thirst < 50 || energy < 40 ? 'is-warn' : '';
 
+  const statusColor =
+    totalUntreatedCount > 0 ? '#e5484d' : allBodyInjuries.length > 0 ? '#e0ab45' : '#9ac985';
+  const statusLabel =
+    totalUntreatedCount > 0
+      ? 'Есть необработанные раны'
+      : allBodyInjuries.length > 0
+      ? 'Раны перевязаны и заживают'
+      : 'Цел и невредим';
+
   const selectZone = (part: keyof BodyPartsMap) => {
     setSelectedPart(part);
     setSelectedInjuryId(null);
   };
 
+  const hasExtraSensoryList = detailed.activeSymptoms.length > 0 || activeMeds.length > 0;
+
   return (
-    <ModalShell
-      id="self-inspection-modal"
-      title="Самоосмотр"
-      subtitle="Внешний осмотр тела, собственные ощущения и перевязка"
-      width={1080}
-      tall
-      onClose={onClose}
-      headRight={
-        <div className="gu-row" style={{ gap: 12 }}>
-          <span
+    <ShadowHost css={selfInspectionCss} zIndex={50} background="transparent">
+      <div id="w" ref={wrapRef}>
+        <div className={'bd' + (!entered ? ' gone' : '')} />
+        <div className={'gm' + (!entered ? ' gone' : '')} ref={gmRef}>
+          {/* Main Menu ambient glow & dark vignette */}
+          <div
+            className="a"
             style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color:
-                totalUntreatedCount > 0
-                  ? '#efa690'
-                  : allBodyInjuries.length > 0
-                  ? '#f0c264'
-                  : '#9ac985'
+              inset: 0,
+              background: 'radial-gradient(900px 520px at 72% 84%, rgba(201,146,43,.24), transparent 62%)'
             }}
-          >
-            {totalUntreatedCount > 0
-              ? 'Есть необработанные раны'
-              : allBodyInjuries.length > 0
-              ? 'Раны перевязаны и заживают'
-              : 'Цел и невредим'}
-          </span>
-          <Key>C</Key>
-        </div>
-      }
-      footerHints={[
-        ['Клик по силуэту', 'Осмотреть область'],
-        ['C / Esc', 'Закрыть']
-      ]}
-      footerRight={
-        <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
-          Закрыть
-        </button>
-      }
-    >
-      {/* 1. TOP SENSORY BAR (4 compact perception blocks, fixed height, no scroll) */}
-      <div className="gu-inspect-vitals">
-        <div className="gu-inspect-vital">
-          <div className="gu-inspect-vital-top">
-            <span>Общее состояние</span>
-            <Zap size={15} strokeWidth={1.75} color={painTone === 'is-bad' ? '#efa690' : '#a29e93'} />
-          </div>
-          <div className={`gu-inspect-vital-title ${painTone}`} title={getPainAndStateTitle()}>
-            {getPainAndStateTitle()}
-          </div>
-          <div className="gu-inspect-vital-sub" title={getPainAndStateSub()}>
-            {getPainAndStateSub()}
-          </div>
-        </div>
+          />
+          <div
+            className="a"
+            style={{
+              inset: 0,
+              background: 'linear-gradient(90deg, rgba(9,9,10,.88), rgba(9,9,10,.36) 50%, rgba(9,9,10,.6) 100%)'
+            }}
+          />
 
-        <div className="gu-inspect-vital">
-          <div className="gu-inspect-vital-top">
-            <span>Сердце и дыхание</span>
-            <Activity size={15} strokeWidth={1.75} color={heartTone === 'is-bad' ? '#efa690' : '#a29e93'} />
-          </div>
-          <div className={`gu-inspect-vital-title ${heartTone}`} title={getHeartAndBreathTitle()}>
-            {getHeartAndBreathTitle()}
-          </div>
-          <div className="gu-inspect-vital-sub" title={getHeartAndBreathSub()}>
-            {getHeartAndBreathSub()}
-          </div>
-        </div>
+          {/* Top Bar */}
+          <div className="top">
+            <div className="top-l">
+              <button
+                type="button"
+                className="chip back"
+                onClick={onClose}
+                aria-label="Закрыть самоосмотр"
+                title="Закрыть"
+              >
+                <X size={20} strokeWidth={2} color="#e9e6df" />
+              </button>
+              <span className="cn ttl">Самоосмотр</span>
+              <span className="sub-top">Внешний осмотр тела, ощущения и первая помощь</span>
+            </div>
 
-        <div className="gu-inspect-vital">
-          <div className="gu-inspect-vital-top">
-            <span>Тепло и одежда</span>
-            <Thermometer
-              size={15}
-              strokeWidth={1.75}
-              color={thermalTone === 'is-cold' ? '#93c5fd' : thermalTone === 'is-bad' ? '#efa690' : '#a29e93'}
-            />
-          </div>
-          <div className={`gu-inspect-vital-title ${thermalTone}`} title={getThermalTitle()}>
-            {getThermalTitle()}
-          </div>
-          <div className="gu-inspect-vital-sub" title={getThermalSub()}>
-            {getThermalSub()}
-          </div>
-        </div>
-
-        <div className="gu-inspect-vital">
-          <div className="gu-inspect-vital-top">
-            <span>Силы, голод и жажда</span>
-            <Utensils size={15} strokeWidth={1.75} color={needsTone === 'is-bad' ? '#efa690' : '#a29e93'} />
-          </div>
-          <div className={`gu-inspect-vital-title ${needsTone}`} title={getEnergyAndNeedsTitle()}>
-            {getEnergyAndNeedsTitle()}
-          </div>
-          <div className="gu-inspect-vital-sub" title={getEnergyAndNeedsSub()}>
-            {getEnergyAndNeedsSub()}
-          </div>
-        </div>
-      </div>
-
-      {/* Narrow-screen view switcher (prevents column clipping below 900px width) */}
-      <div className="gu-inspect-tabs-narrow">
-        <Seg
-          full
-          value={narrowPane}
-          onChange={setNarrowPane}
-          options={[
-            { v: 'body', label: 'Тело' },
-            { v: 'treatment', label: `Помощь · ${getBodyPartLabel(selectedPart)}` },
-            { v: 'sensations', label: 'Ощущения' }
-          ]}
-        />
-      </div>
-
-      {/* 2. MAIN 3-COLUMN WORKSPACE (fits 100% inside modal; ONLY explicit lists scroll) */}
-      <div className="gu-inspect-grid">
-        {/* COLUMN 1: Body Silhouette & 6 Zone Selectors — NEVER scrolls */}
-        <div className={`gu-inspect-col ${narrowPane !== 'body' ? 'is-narrow-hidden' : ''}`}>
-          <div className="gu-inspect-col-head">
-            <span className="gu-inspect-col-title">Осмотр тела</span>
-            <span className="gu-inspect-col-meta">6 областей</span>
-          </div>
-
-          <div className="gu-inspect-figure-stage">
-            <AnatomyFigureSvg
-              selectedPart={selectedPart}
-              onSelectPart={part => {
-                selectZone(part);
-              }}
-              getZoneStyle={getZoneStyle}
-            />
-          </div>
-
-          <div className="gu-inspect-zone-list">
-            {BODY_ZONES.map(partKey => {
-              const st = getZoneStyle(partKey);
-              const injs = getPartInjuries(partKey);
-              const isSelected = selectedPart === partKey;
-              const dotColor =
-                st.severity === 'severe'
-                  ? '#e5484d'
-                  : st.severity === 'minor'
-                  ? '#e0ab45'
-                  : st.severity === 'treated'
-                  ? '#c9922b'
-                  : '#9ac985';
-
-              return (
-                <button
-                  key={partKey}
-                  type="button"
-                  onClick={() => selectZone(partKey)}
-                  className={`gu-inspect-zone-btn ${isSelected ? 'on' : ''}`}
-                >
-                  <div className="gu-inspect-zone-top">
-                    <span className="gu-inspect-zone-name">{getBodyPartLabel(partKey)}</span>
-                    <span
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: '50%',
-                        background: dotColor,
-                        flex: 'none'
-                      }}
-                    />
-                  </div>
-                  <div
-                    className="gu-inspect-zone-state"
-                    style={{
-                      color:
-                        st.severity === 'severe'
-                          ? '#efa690'
-                          : st.severity === 'minor'
-                          ? '#f0c264'
-                          : undefined
-                    }}
-                  >
-                    {injs.length === 0 ? 'В порядке' : getBodyPartStatusText(injs)}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* COLUMN 2: Selected Body Part Injuries & Systemic Medicines */}
-        <div className={`gu-inspect-col ${narrowPane !== 'treatment' ? 'is-narrow-hidden' : ''}`}>
-          <div className="gu-inspect-col-head">
-            <div style={{ minWidth: 0 }}>
-              <div className="gu-inspect-col-title">{getBodyPartLabel(selectedPart)}</div>
-              <div className="gu-inspect-col-sub" title={currentPartSensation?.description || 'Ничего не беспокоит'}>
-                {currentPartSensation?.description || 'Ничего не беспокоит'}
+            <div className="top-r">
+              <div className="chip">
+                <span className="dot" style={{ background: statusColor }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: statusColor }}>{statusLabel}</span>
               </div>
             </div>
-            <div className="gu-inspect-col-meta">
-              <span
-                style={{
-                  color: currentInjuries.some(i => !i.treated)
-                    ? '#efa690'
-                    : currentInjuries.length > 0
-                    ? '#f0c264'
-                    : '#9ac985',
-                  fontWeight: 600
-                }}
-              >
-                {currentInjuries.length === 0 ? 'Не повреждено' : getBodyPartStatusText(currentInjuries)}
-              </span>
-            </div>
           </div>
 
-          {/* Section 2A: Injuries list */}
-          <div className="gu-inspect-section is-grow">
-            {currentInjuries.length === 0 ? (
-              <div className="gu-card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
-                <div className="gu-row" style={{ gap: 10 }}>
-                  <ShieldCheck size={18} strokeWidth={1.75} color="#9ac985" style={{ flex: 'none' }} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--gu-ink)' }}>
-                      Видимых повреждений и боли нет
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--gu-mut)', marginTop: 2 }}>
-                      Кожа чистая, движения свободные и безболезненные
-                    </div>
-                  </div>
+          {/* 3-Column Horizontal Workspace (never collapses into 1-col tabs) */}
+          <div className="si-body">
+            {/* COLUMN 1: Silhouette + 6 Zone Buttons (ZERO scroll) */}
+            <section className="panel si-col">
+              <div className="si-col-head">
+                <span className="cn si-col-title">Осмотр тела</span>
+                <span className="si-col-meta">6 областей</span>
+              </div>
+
+              <div className="si-body-split">
+                <div className="si-figure">
+                  <AnatomyFigureSvg
+                    selectedPart={selectedPart}
+                    onSelectPart={selectZone}
+                    getZoneStyle={getZoneStyle}
+                  />
                 </div>
 
-                {otherInjuredParts.length > 0 && (
-                  <div
-                    style={{
-                      paddingTop: 8,
-                      borderTop: '1px solid var(--gu-line)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6
-                    }}
-                  >
-                    <div style={{ fontSize: 12, color: '#f0c264', fontWeight: 600 }}>
-                      Беспокоит боль в других областях
-                    </div>
-                    <div className="gu-row gu-wrap" style={{ gap: 6 }}>
-                      {otherInjuredParts.map(pk => {
-                        const hasUntr = getPartInjuries(pk).some(i => !i.treated);
-                        return (
-                          <button
-                            key={pk}
-                            type="button"
-                            onClick={() => selectZone(pk)}
-                            className={`gu-btn gu-btn-xs ${hasUntr ? 'gu-btn-danger' : 'gu-btn-s'}`}
-                          >
-                            {getBodyPartLabel(pk)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="gu-inspect-list-scroll">
-                {currentInjuries.map(injury => {
-                  const compatibleEntries = getCompatibleItemsForInjury(injury);
-                  const isSelected = selectedInjuryId === injury.id;
+                <div className="si-zones">
+                  {BODY_ZONES.map(partKey => {
+                    const st = getZoneStyle(partKey);
+                    const injs = getPartInjuries(partKey);
+                    const isSelected = selectedPart === partKey;
+                    const dotColor =
+                      st.severity === 'severe'
+                        ? '#e5484d'
+                        : st.severity === 'minor'
+                        ? '#e0ab45'
+                        : st.severity === 'treated'
+                        ? '#c9922b'
+                        : '#9ac985';
 
-                  return (
-                    <div
-                      key={injury.id}
-                      onClick={() => setSelectedInjuryId(injury.id)}
-                      className={`gu-inspect-injury ${isSelected ? 'on' : ''}`}
-                    >
-                      <div className="gu-row-between">
-                        <div className="gu-row" style={{ gap: 8, minWidth: 0 }}>
-                          {injury.treated ? (
-                            <CheckCircle2 size={16} strokeWidth={1.75} color="#9ac985" style={{ flex: 'none' }} />
-                          ) : (
-                            <AlertTriangle size={16} strokeWidth={1.75} color="#efa690" style={{ flex: 'none' }} />
-                          )}
+                    return (
+                      <button
+                        key={partKey}
+                        type="button"
+                        onClick={() => selectZone(partKey)}
+                        className={`si-zone-btn${isSelected ? ' on' : ''}`}
+                      >
+                        <div className="si-zone-top">
+                          <span className="si-zone-name">{getBodyPartLabel(partKey)}</span>
+                          <span className="dot" style={{ width: 8, height: 8, background: dotColor }} />
+                        </div>
+                        <div
+                          className="si-zone-state"
+                          style={{
+                            color:
+                              st.severity === 'severe'
+                                ? '#f2b4a0'
+                                : st.severity === 'minor'
+                                ? '#f0c264'
+                                : undefined
+                          }}
+                        >
+                          {injs.length === 0 ? 'В порядке' : getBodyPartStatusText(injs)}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+
+            {/* COLUMN 2: Selected Body Part Treatment + Systemic Medicines */}
+            <section className="panel si-col">
+              <div className="si-col-head">
+                <div style={{ minWidth: 0 }}>
+                  <div className="cn si-col-title">{getBodyPartLabel(selectedPart)}</div>
+                  <div className="si-col-sub" title={currentPartSensation?.description || 'Ничего не беспокоит'}>
+                    {currentPartSensation?.description || 'Без повреждений, неприятных ощущений нет'}
+                  </div>
+                </div>
+                <span
+                  className="si-col-meta"
+                  style={{
+                    fontWeight: 600,
+                    color: currentInjuries.some(i => !i.treated)
+                      ? '#f2b4a0'
+                      : currentInjuries.length > 0
+                      ? '#f0c264'
+                      : '#9ac985'
+                  }}
+                >
+                  {currentInjuries.length === 0 ? 'Не повреждено' : getBodyPartStatusText(currentInjuries)}
+                </span>
+              </div>
+
+              <div className={`si-mid-top${currentInjuries.length > 0 ? ' scroll' : ''}`}>
+                {currentInjuries.length === 0 ? (
+                  <div className="si-healthy-box">
+                    <div className="si-healthy-row">
+                      <ShieldCheck size={20} strokeWidth={1.8} color="#9ac985" style={{ flex: 'none', marginTop: 1 }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="si-healthy-title">Видимых повреждений и боли нет</div>
+                        <div className="si-healthy-sub">
+                          Кожа чистая, движения свободные и безболезненные
+                        </div>
+                      </div>
+                    </div>
+
+                    {otherInjuredParts.length > 0 && (
+                      <div className="si-other-parts">
+                        <div className="si-other-lbl">Беспокоит боль в других областях</div>
+                        <div className="si-other-btns">
+                          {otherInjuredParts.map(pk => {
+                            const hasUntr = getPartInjuries(pk).some(i => !i.treated);
+                            return (
+                              <button
+                                key={pk}
+                                type="button"
+                                onClick={() => selectZone(pk)}
+                                className={`btn btn-xs ${hasUntr ? 'btn-danger' : 'btn-s'}`}
+                              >
+                                {getBodyPartLabel(pk)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  currentInjuries.map(injury => {
+                    const compatibleEntries = getCompatibleItemsForInjury(injury);
+                    const isSelected = selectedInjuryId === injury.id;
+                    return (
+                      <div
+                        key={injury.id}
+                        onClick={() => setSelectedInjuryId(injury.id)}
+                        className={`si-injury${injury.treated ? ' is-treated' : ''}${isSelected ? ' on' : ''}`}
+                      >
+                        <div className="si-injury-top">
+                          <div className="si-injury-name">
+                            {injury.treated ? (
+                              <CheckCircle2 size={16} strokeWidth={1.8} color="#9ac985" style={{ flex: 'none' }} />
+                            ) : (
+                              <AlertTriangle size={16} strokeWidth={1.8} color="#f2b4a0" style={{ flex: 'none' }} />
+                            )}
+                            <span>{getInjuryHumanName(injury)}</span>
+                          </div>
                           <span
-                            style={{
-                              fontWeight: 600,
-                              fontSize: 14,
-                              color: '#fff',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}
+                            className="si-injury-sev"
+                            style={{ color: injury.treated ? '#9ac985' : '#f2b4a0' }}
                           >
-                            {getInjuryHumanName(injury)}
+                            {getInjurySeverityLabel(injury)}
                           </span>
                         </div>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: injury.treated ? '#9ac985' : '#efa690',
-                            whiteSpace: 'nowrap',
-                            flex: 'none'
-                          }}
-                        >
-                          {getInjurySeverityLabel(injury)}
-                        </span>
-                      </div>
 
-                      <div style={{ fontSize: 12.5, color: 'var(--gu-ink-dim)', lineHeight: 1.4 }}>
-                        {getInjurySensoryFeeling(injury)}
-                      </div>
+                        <div className="si-injury-desc">{getInjurySensoryFeeling(injury)}</div>
 
-                      {!injury.treated && (
-                        <div
-                          style={{
-                            paddingTop: 8,
-                            borderTop: '1px solid var(--gu-line)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 6
-                          }}
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <div style={{ fontSize: 12, color: 'var(--gu-mut)' }}>
-                            Подходящие средства при себе
-                          </div>
-                          {compatibleEntries.length === 0 ? (
-                            <div style={{ fontSize: 12, color: '#efa690' }}>
-                              Нет подходящего бинта, шины или мази
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {compatibleEntries.map(entry => {
+                        {!injury.treated && (
+                          <div className="si-injury-meds" onClick={e => e.stopPropagation()}>
+                            <div className="si-injury-meds-lbl">Подходящие средства при себе</div>
+                            {compatibleEntries.length === 0 ? (
+                              <div style={{ fontSize: 12.5, color: '#f2b4a0' }}>
+                                Нет подходящего бинта, шины или мази
+                              </div>
+                            ) : (
+                              compatibleEntries.map(entry => {
                                 const isSealedPack =
                                   Boolean(entry.item.singleUseContainer) && !entry.item.isOpen;
                                 return (
                                   <div
                                     key={`${entry.source}_${entry.idx}_${entry.item.itemId}`}
-                                    className="gu-inspect-med-row"
+                                    className="si-med-row"
                                   >
-                                    <div className="gu-row" style={{ gap: 8, minWidth: 0 }}>
-                                      <ItemIconCanvas
-                                        itemId={entry.item.itemId}
-                                        item={entry.item}
-                                        size={24}
-                                      />
+                                    <div className="si-med-l">
+                                      <ItemIconCanvas itemId={entry.item.itemId} item={entry.item} size={24} />
                                       <div style={{ minWidth: 0 }}>
-                                        <div
-                                          style={{
-                                            fontSize: 13,
-                                            fontWeight: 600,
-                                            color: '#fff',
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis'
-                                          }}
-                                        >
-                                          {entry.item.nameRu}
-                                        </div>
-                                        <div style={{ fontSize: 11, color: 'var(--gu-mut)' }}>
-                                          {formatItemWhere(entry)}
-                                        </div>
+                                        <div className="si-med-name">{entry.item.nameRu}</div>
+                                        <div className="si-med-where">{formatItemWhere(entry)}</div>
                                       </div>
                                     </div>
                                     <button
                                       type="button"
                                       onClick={() => handleUseEntry(entry, injury.id)}
-                                      className="gu-btn gu-btn-p gu-btn-xs"
+                                      className="btn btn-p btn-xs"
                                     >
                                       {isSealedPack ? 'Вскрыть' : 'Обработать'}
                                     </button>
                                   </div>
                                 );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Section 2B: Systemic medicines on person (list scrolls only when populated) */}
-          <div
-            className={`gu-inspect-section gu-inspect-section-div ${
-              systemicMedEntries.length > 0 ? 'is-half' : 'is-fixed'
-            }`}
-          >
-            <div className="gu-row-between" style={{ flex: 'none' }}>
-              <span className="gu-inspect-col-title" style={{ fontSize: 14 }}>
-                Лекарства при себе
-              </span>
-              <span className="gu-inspect-col-meta">{systemicMedEntries.length}</span>
-            </div>
-
-            {systemicMedEntries.length === 0 ? (
-              <div className="gu-card-sm" style={{ fontSize: 12, color: 'var(--gu-mut)', padding: '8px 12px' }}>
-                С собой нет таблеток, капель, нашатыря или аптечки
-              </div>
-            ) : (
-              <div className="gu-inspect-list-scroll" style={{ gap: 6 }}>
-                {systemicMedEntries.map(entry => {
-                  const info = SYSTEMIC_MED_INFO[entry.medId] || {
-                    roleRu: 'Лекарственное средство',
-                    actionLabel: 'Принять'
-                  };
-                  const isSealedPack =
-                    Boolean(entry.item.singleUseContainer) && !entry.item.isOpen;
-                  return (
-                    <div
-                      key={`sys_${entry.source}_${entry.idx}_${entry.item.itemId}`}
-                      className="gu-inspect-med-row"
-                    >
-                      <div className="gu-row" style={{ gap: 8, minWidth: 0 }}>
-                        <ItemIconCanvas
-                          itemId={entry.item.itemId}
-                          item={entry.item}
-                          size={24}
-                        />
-                        <div style={{ minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: '#fff',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis'
-                            }}
-                          >
-                            {entry.item.nameRu}
+                              })
+                            )}
                           </div>
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: 'var(--gu-mut)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis'
-                            }}
-                          >
-                            {formatItemWhere(entry)} · {info.roleRu}
-                          </div>
-                        </div>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleUseEntry(entry)}
-                        className="gu-btn gu-btn-s gu-btn-xs"
-                      >
-                        {isSealedPack ? 'Вскрыть' : info.actionLabel}
-                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Bottom Systemic Medicines Strip */}
+              <div className="si-med-section">
+                <div className="si-subhead">
+                  <span className="cn si-subhead-t">Лекарства при себе</span>
+                  <span className="si-col-meta">{systemicMedEntries.length}</span>
+                </div>
+
+                <div className={`si-med-list${systemicMedEntries.length > 0 ? ' scroll' : ''}`}>
+                  {systemicMedEntries.length === 0 ? (
+                    <div className="si-med-empty">
+                      С собой нет таблеток, капель, нашатыря или аптечки
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* COLUMN 3: Active Sensations & Active Medications */}
-        <div className={`gu-inspect-col ${narrowPane !== 'sensations' ? 'is-narrow-hidden' : ''}`}>
-          <div className="gu-inspect-col-head">
-            <span className="gu-inspect-col-title">Что я чувствую</span>
-            <span className="gu-inspect-col-meta">
-              {detailed.activeSymptoms.length > 0 ? `${detailed.activeSymptoms.length}` : 'Спокойно'}
-            </span>
-          </div>
-
-          {/* Section 3A: Active symptoms list */}
-          <div className="gu-inspect-section is-grow">
-            {detailed.activeSymptoms.length === 0 ? (
-              <div className="gu-card-sm" style={{ fontSize: 12.5, lineHeight: 1.45, padding: 12 }}>
-                <div style={{ fontWeight: 600, color: '#9ac985', marginBottom: 4 }}>
-                  {cleanSensoryText(detailed.healthText)}
+                  ) : (
+                    systemicMedEntries.map(entry => {
+                      const info = SYSTEMIC_MED_INFO[entry.medId] || {
+                        roleRu: 'Лекарственное средство',
+                        actionLabel: 'Принять'
+                      };
+                      const isSealedPack =
+                        Boolean(entry.item.singleUseContainer) && !entry.item.isOpen;
+                      return (
+                        <div
+                          key={`sys_${entry.source}_${entry.idx}_${entry.item.itemId}`}
+                          className="si-med-row"
+                        >
+                          <div className="si-med-l">
+                            <ItemIconCanvas itemId={entry.item.itemId} item={entry.item} size={24} />
+                            <div style={{ minWidth: 0 }}>
+                              <div className="si-med-name">{entry.item.nameRu}</div>
+                              <div className="si-med-where">
+                                {formatItemWhere(entry)} · {info.roleRu}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleUseEntry(entry)}
+                            className="btn btn-s btn-xs"
+                          >
+                            {isSealedPack ? 'Вскрыть' : info.actionLabel}
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-                <div style={{ color: 'var(--gu-ink-dim)' }}>
-                  {cleanSensoryText(detailed.comfortText)}. {cleanSensoryText(detailed.temperatureText)}.
-                </div>
               </div>
-            ) : (
-              <div className="gu-inspect-list-scroll" style={{ gap: 6 }}>
+            </section>
+
+            {/* COLUMN 3: Full Natural Sensations & Active Medications */}
+            <section className="panel si-col">
+              <div className="si-col-head">
+                <span className="cn si-col-title">Что я чувствую</span>
+                <span className="si-col-meta">
+                  {detailed.activeSymptoms.length > 0 ? `${detailed.activeSymptoms.length} симпт.` : 'Спокойно'}
+                </span>
+              </div>
+
+              <div className={`si-sense-body${hasExtraSensoryList ? ' scroll' : ''}`}>
+                {/* Acute symptoms list when present */}
                 {detailed.activeSymptoms.map(sym => {
                   const isDanger = sym.severity === 'danger';
-                  const toneColor = isDanger ? '#efa690' : '#f0c264';
+                  const toneColor = isDanger ? '#f2b4a0' : '#f0c264';
                   return (
+                    <div key={sym.id} className={`si-sym-card${isDanger ? ' is-danger' : ''}`}>
+                      <div className="si-sym-head" style={{ color: toneColor }}>
+                        {sym.iconType === 'leg' && <AlertCircle size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        {sym.iconType === 'drop' && <Droplet size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        {sym.iconType === 'cold' && <Thermometer size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        {sym.iconType === 'wet' && <CloudRain size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        {sym.iconType === 'pain' && <Zap size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        {sym.iconType === 'energy' && <BatteryLow size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        {sym.iconType === 'heart' && <Heart size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        {sym.iconType === 'pill' && <Pill size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        {sym.iconType === 'cough' && <AlertCircle size={15} strokeWidth={1.8} style={{ flex: 'none' }} />}
+                        <span>{cleanSensoryText(sym.label)}</span>
+                      </div>
+                      <div className="si-sym-desc">{cleanSensoryText(sym.description)}</div>
+                    </div>
+                  );
+                })}
+
+                {/* Core 4 natural sensory cards — full readable text, zero truncation */}
+                <div className={`si-sense-card ${painTone}`}>
+                  <div className="si-sense-head">
+                    <span>Общее состояние</span>
+                    <Zap size={14} strokeWidth={1.8} color={painTone === 'is-bad' ? '#f2b4a0' : '#a29e93'} />
+                  </div>
+                  <div className={`si-sense-title ${painTone}`}>{getPainAndStateTitle()}</div>
+                  <div className="si-sense-sub">{cleanSensoryText(getPainAndStateSub())}</div>
+                </div>
+
+                <div className={`si-sense-card ${heartTone}`}>
+                  <div className="si-sense-head">
+                    <span>Сердце и дыхание</span>
+                    <Activity size={14} strokeWidth={1.8} color={heartTone === 'is-bad' ? '#f2b4a0' : '#a29e93'} />
+                  </div>
+                  <div className={`si-sense-title ${heartTone}`}>{getHeartAndBreathTitle()}</div>
+                  <div className="si-sense-sub">{cleanSensoryText(getHeartAndBreathSub())}</div>
+                </div>
+
+                <div className={`si-sense-card ${thermalTone}`}>
+                  <div className="si-sense-head">
+                    <span>Тепло и одежда</span>
+                    <Thermometer
+                      size={14}
+                      strokeWidth={1.8}
+                      color={thermalTone === 'is-cold' ? '#a5d3ff' : thermalTone === 'is-bad' ? '#f2b4a0' : '#a29e93'}
+                    />
+                  </div>
+                  <div className={`si-sense-title ${thermalTone}`}>{getThermalTitle()}</div>
+                  <div className="si-sense-sub">{cleanSensoryText(getThermalSub())}</div>
+                </div>
+
+                <div className={`si-sense-card ${needsTone}`}>
+                  <div className="si-sense-head">
+                    <span>Силы, голод и жажда</span>
+                    <Utensils size={14} strokeWidth={1.8} color={needsTone === 'is-bad' ? '#f2b4a0' : '#a29e93'} />
+                  </div>
+                  <div className={`si-sense-title ${needsTone}`}>{getEnergyAndNeedsTitle()}</div>
+                  <div className="si-sense-sub">{cleanSensoryText(getEnergyAndNeedsSub())}</div>
+                </div>
+
+                {/* Active medication effects when active */}
+                {activeMeds.length > 0 && (
+                  <>
                     <div
-                      key={sym.id}
-                      className="gu-card-sm"
                       style={{
-                        padding: '8px 12px',
-                        borderColor: isDanger
-                          ? 'rgba(217, 116, 90, 0.42)'
-                          : 'rgba(201, 146, 43, 0.32)',
-                        flex: 'none'
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingTop: 6,
+                        borderTop: '1px solid rgba(255,255,255,.08)'
                       }}
                     >
-                      <div
-                        className="gu-row"
-                        style={{ gap: 6, fontSize: 13, fontWeight: 600, color: toneColor, marginBottom: 2 }}
-                      >
-                        {sym.iconType === 'leg' && <AlertCircle size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        {sym.iconType === 'drop' && <Droplet size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        {sym.iconType === 'cold' && <Thermometer size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        {sym.iconType === 'wet' && <CloudRain size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        {sym.iconType === 'pain' && <Zap size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        {sym.iconType === 'energy' && <BatteryLow size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        {sym.iconType === 'heart' && <Heart size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        {sym.iconType === 'pill' && <Pill size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        {sym.iconType === 'cough' && <AlertCircle size={14} strokeWidth={1.75} style={{ flex: 'none' }} />}
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {cleanSensoryText(sym.label)}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--gu-ink-dim)', lineHeight: 1.4 }}>
-                        {cleanSensoryText(sym.description)}
-                      </div>
+                      <span className="cn si-subhead-t">Действие лекарств</span>
+                      <span className="si-col-meta">{activeMeds.length}</span>
                     </div>
-                  );
-                })}
+                    {activeMeds.map(med => {
+                      const phaseOrder = ['absorption', 'peak', 'action', 'decay'];
+                      const phaseIdx = phaseOrder.indexOf(med.phase);
+                      const feelingDesc =
+                        med.phase === 'absorption'
+                          ? 'Только принято — усваивается, эффект ещё слабый'
+                          : med.phase === 'peak'
+                          ? 'Начинает действовать — боль и неприятные ощущения отступают'
+                          : med.phase === 'action'
+                          ? 'Действует в полную силу — боль заметно притуплена'
+                          : 'Действие постепенно проходит — ощущения возвращаются';
+
+                      return (
+                        <div key={med.id} className="si-sense-card">
+                          <div className="si-sym-head" style={{ color: '#fff' }}>
+                            <Pill size={14} strokeWidth={1.8} color="#e0ab45" style={{ flex: 'none' }} />
+                            <span>{med.nameRu}</span>
+                          </div>
+                          <div className="si-sense-sub">{feelingDesc}</div>
+                          <div className="si-phases">
+                            {phaseOrder.map((p, idx) => (
+                              <div
+                                key={p}
+                                className={`si-phase${idx < phaseIdx ? ' done' : idx === phaseIdx ? ' active' : ''}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
-            )}
+
+              {activeMeds.length === 0 && (
+                <div className="si-active-meds-bar">
+                  <span>Активных препаратов в организме нет</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>0</span>
+                </div>
+              )}
+            </section>
           </div>
 
-          {/* Section 3B: Effect of taken medicines */}
-          <div
-            className={`gu-inspect-section gu-inspect-section-div ${
-              activeMeds.length > 0 ? 'is-half' : 'is-fixed'
-            }`}
-          >
-            <div className="gu-row-between" style={{ flex: 'none' }}>
-              <span className="gu-inspect-col-title" style={{ fontSize: 14 }}>
-                Действие лекарств
-              </span>
-              <span className="gu-inspect-col-meta">{activeMeds.length}</span>
+          {/* Bottom Keyboard Hints (auto-hidden on touch via menuCompact.css) */}
+          <div className="hint">
+            <div className="hint-g">
+              <span className="key">ЛКМ</span>
+              <span>Осмотреть область</span>
+              <span className="key">C</span>
+              <span className="key" style={{ marginLeft: 0 }}>Esc</span>
+              <span>Закрыть</span>
             </div>
-
-            {activeMeds.length === 0 ? (
-              <div className="gu-card-sm" style={{ fontSize: 12, color: 'var(--gu-mut)', padding: '8px 12px' }}>
-                Активных препаратов в организме нет
-              </div>
-            ) : (
-              <div className="gu-inspect-list-scroll" style={{ gap: 6 }}>
-                {activeMeds.map(med => {
-                  const phaseOrder = ['absorption', 'peak', 'action', 'decay'];
-                  const phaseIdx = phaseOrder.indexOf(med.phase);
-                  const feelingDesc =
-                    med.phase === 'absorption'
-                      ? 'Только принято — лекарство усваивается, эффект ещё слабый'
-                      : med.phase === 'peak'
-                      ? 'Начинает действовать — боль и неприятные ощущения отступают'
-                      : med.phase === 'action'
-                      ? 'Действует в полную силу — боль заметно притуплена'
-                      : 'Действие постепенно проходит — ощущения возвращаются';
-
-                  return (
-                    <div key={med.id} className="gu-card-sm" style={{ padding: '8px 12px', flex: 'none' }}>
-                      <div className="gu-row" style={{ gap: 6, fontSize: 13, fontWeight: 600, color: '#fff' }}>
-                        <Pill size={14} strokeWidth={1.75} color="#e0ab45" style={{ flex: 'none' }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {med.nameRu}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--gu-ink-dim)', marginTop: 4, lineHeight: 1.35 }}>
-                        {feelingDesc}
-                      </div>
-                      <div className="gu-inspect-phases">
-                        {phaseOrder.map((p, idx) => (
-                          <div
-                            key={p}
-                            className={`gu-inspect-phase ${
-                              idx < phaseIdx ? 'done' : idx === phaseIdx ? 'active' : ''
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div>{statusLabel}</div>
           </div>
         </div>
       </div>
-    </ModalShell>
+    </ShadowHost>
   );
+};
+
+export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
+  isOpen,
+  onClose,
+  player
+}) => {
+  if (!isOpen || !player || !player.bodyState) return null;
+  return <SelfInspectionContent player={player} onClose={onClose} />;
 };

@@ -1,0 +1,292 @@
+/* Self-Inspection screen — Main Menu / Pause Menu design system inside ShadowHost.
+   Desktop stage: 1440x900 scaled cleanly.
+   Compact stage ([data-mob]): sw x 560 logical px (900..1350 x 560) — zero 1-col collapse,
+   zero clipping, zero scrollbars on non-list blocks. */
+
+* { box-sizing: border-box; }
+#w { position: fixed; inset: 0; overflow: hidden; }
+.bd { position: fixed; inset: 0; background: rgba(9, 9, 10, .86); transition: opacity .28s ease; }
+.bd.gone { opacity: 0; }
+
+.gm {
+  position: absolute; left: 0; top: 0; width: 1440px; height: 900px;
+  transform-origin: 0 0; overflow: hidden; background: transparent;
+  font: 15px/1.4 'Barlow', system-ui, sans-serif; color: #e9e6df;
+  transition: opacity .28s ease;
+}
+.gm.gone { opacity: 0; pointer-events: none; }
+.a { position: absolute; pointer-events: none; }
+.cn { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; text-transform: uppercase; letter-spacing: .07em; }
+.mut { color: #a29e93; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; text-align: left; }
+button:disabled { opacity: .45; pointer-events: none; }
+:focus-visible { outline: 2px solid #e0ab45; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---- Top bar (matches MainMenu / PauseMenu .top) ---- */
+.top {
+  position: absolute; left: 64px; right: 64px; top: 34px; height: 44px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.top-l, .top-r { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ttl { font-size: 26px; font-weight: 700; color: #fff; white-space: nowrap; }
+.sub-top { font-size: 14px; color: #8f8b81; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip {
+  display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px;
+  border-radius: 10px; background: rgba(22, 22, 24, .78); border: 1px solid rgba(255, 255, 255, .1);
+  transition: border-color .15s, background .15s;
+}
+button.chip:hover { border-color: rgba(201, 146, 43, .55); background: rgba(30, 30, 34, .92); }
+.back { width: 44px; padding: 0; justify-content: center; flex: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+/* ---- Buttons & keycaps (matches MainMenu / PauseMenu) ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 20px; border-radius: 10px; font-weight: 600; font-size: 14.5px;
+  white-space: nowrap; transition: filter .15s, background .15s, border-color .15s;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn-p { background: #c9922b; color: #1a1409; font-weight: 700; }
+.btn-s { background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .14); color: #e9e6df; }
+.btn-danger { background: rgba(217, 116, 90, .16); border: 1px solid rgba(217, 116, 90, .45); color: #f2b4a0; }
+.btn-xs { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
+.key {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 26px; padding: 0 8px; border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .22); font-size: 12px; font-weight: 600;
+  color: #cfcbc1; margin-right: 8px;
+}
+.hint {
+  position: absolute; left: 64px; right: 64px; bottom: 26px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; color: #a29e93;
+}
+.hint-g { display: flex; align-items: center; }
+.hint-g .key + span + .key { margin-left: 22px; }
+
+/* ---- Scrollable list helper (ONLY used on real lists) ---- */
+.scroll { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #3a352b transparent; }
+.scroll::-webkit-scrollbar { width: 5px; }
+.scroll::-webkit-scrollbar-thumb { background: #3a352b; border-radius: 3px; }
+
+/* ---- Main 3-column workspace ---- */
+.panel {
+  background: rgba(20, 20, 22, .94);
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 14px;
+}
+.si-body {
+  position: absolute; left: 64px; right: 64px; top: 100px; bottom: 68px;
+  display: grid;
+  grid-template-columns: 376px minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 18px;
+}
+.si-col {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden;
+}
+.si-col-head {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 20px 12px; border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.si-col-title { font-size: 17px; font-weight: 700; color: #e0ab45; line-height: 1.1; }
+.si-col-meta { font-size: 13px; color: #a29e93; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.si-col-sub {
+  font-size: 13px; color: #a29e93; margin-top: 3px; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- Column 1: Anatomy Figure + 6 Zone Rows (ZERO scroll) ---- */
+.si-body-split {
+  flex: 1; min-height: 0; padding: 14px;
+  display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px;
+}
+.si-figure {
+  height: 100%; min-height: 0;
+  border-radius: 10px; background: rgba(9, 9, 10, .62);
+  border: 1px solid rgba(255, 255, 255, .07);
+  padding: 16px 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.si-zones {
+  height: 100%; min-height: 0;
+  display: grid; grid-template-rows: repeat(6, minmax(0, 1fr)); gap: 7px;
+}
+.si-zone-btn {
+  display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  width: 100%; height: 100%; padding: 6px 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-left: 3px solid transparent;
+  transition: background .15s, border-color .15s;
+}
+.si-zone-btn:hover { background: rgba(255, 255, 255, .07); border-color: rgba(255, 255, 255, .14); }
+.si-zone-btn.on {
+  background: rgba(201, 146, 43, .16);
+  border-color: rgba(201, 146, 43, .45);
+  border-left-color: #c9922b;
+}
+.si-zone-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.si-zone-name { font-size: 14.5px; font-weight: 600; color: #f4f1ea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.si-zone-state { font-size: 12px; color: #a29e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- Column 2: Injuries + Medicines on person ---- */
+.si-mid-top {
+  flex: 1; min-height: 0; padding: 14px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.si-healthy-box {
+  border-radius: 10px; padding: 14px 16px;
+  background: rgba(154, 201, 133, .06);
+  border: 1px solid rgba(154, 201, 133, .22);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.si-healthy-row { display: flex; align-items: flex-start; gap: 12px; }
+.si-healthy-title { font-size: 15px; font-weight: 600; color: #f4f1ea; line-height: 1.25; }
+.si-healthy-sub { font-size: 13px; color: #a29e93; margin-top: 4px; line-height: 1.4; }
+.si-other-parts {
+  padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .08);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.si-other-lbl { font-size: 12.5px; font-weight: 600; color: #f0c264; }
+.si-other-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.si-injury {
+  flex: none; border-radius: 10px; padding: 12px 14px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-left: 3px solid rgba(217, 116, 90, .65);
+  display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.si-injury.is-treated { border-left-color: #9ac985; }
+.si-injury.on { background: rgba(201, 146, 43, .12); border-color: rgba(201, 146, 43, .45); }
+.si-injury-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.si-injury-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14.5px; font-weight: 600; color: #fff; }
+.si-injury-name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.si-injury-sev { font-size: 12px; font-weight: 600; white-space: nowrap; flex: none; }
+.si-injury-desc { font-size: 13px; color: #cfcbc1; line-height: 1.4; }
+.si-injury-meds {
+  padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .08);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.si-injury-meds-lbl { font-size: 12px; color: #a29e93; }
+
+.si-med-section {
+  flex: none; max-height: 44%;
+  display: flex; flex-direction: column; min-height: 0;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(12, 12, 14, .45);
+}
+.si-subhead {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 18px 8px;
+}
+.si-subhead-t { font-size: 14px; font-weight: 700; color: #e0ab45; }
+.si-med-list {
+  flex: 1; min-height: 0; padding: 0 18px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.si-med-empty {
+  padding: 9px 12px; border-radius: 8px;
+  background: rgba(255, 255, 255, .025); border: 1px solid rgba(255, 255, 255, .06);
+  font-size: 13px; color: #8f8b81;
+}
+.si-med-row {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; border-radius: 8px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08);
+}
+.si-med-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.si-med-name { font-size: 13.5px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.si-med-where { font-size: 11.5px; color: #a29e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- Column 3: Natural Sensations & Active Medications ---- */
+.si-sense-body {
+  flex: 1; min-height: 0; padding: 14px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.si-sense-card {
+  flex: none; border-radius: 10px; padding: 11px 14px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .08);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.si-sense-card.is-bad { border-color: rgba(217, 116, 90, .42); background: rgba(217, 116, 90, .07); }
+.si-sense-card.is-warn { border-color: rgba(224, 171, 69, .36); background: rgba(201, 146, 43, .06); }
+.si-sense-card.is-cold { border-color: rgba(147, 197, 253, .36); background: rgba(147, 197, 253, .06); }
+.si-sense-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: #a29e93; }
+.si-sense-title { font-size: 15px; font-weight: 600; color: #f4f1ea; line-height: 1.25; }
+.si-sense-title.is-bad { color: #f2b4a0; }
+.si-sense-title.is-warn { color: #f0c264; }
+.si-sense-title.is-cold { color: #a5d3ff; }
+.si-sense-sub { font-size: 12.5px; color: #a29e93; line-height: 1.35; }
+
+.si-sym-card {
+  flex: none; border-radius: 10px; padding: 10px 12px;
+  background: rgba(201, 146, 43, .08); border: 1px solid rgba(201, 146, 43, .35);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.si-sym-card.is-danger { background: rgba(217, 116, 90, .1); border-color: rgba(217, 116, 90, .45); }
+.si-sym-head { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; }
+.si-sym-desc { font-size: 12px; color: #cfcbc1; line-height: 1.35; }
+
+.si-active-meds-bar {
+  flex: none; padding: 10px 18px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(12, 12, 14, .45);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 12.5px; color: #8f8b81;
+}
+.si-phases { display: flex; gap: 4px; margin-top: 6px; }
+.si-phase { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .1); }
+.si-phase.done { background: rgba(201, 146, 43, .45); }
+.si-phase.active { background: #e0ab45; }
+
+/* ---- Compact mode ([data-mob] — landscape phones & short windows, sh = 560px) ---- */
+.gm[data-mob] .si-body {
+  left: 28px; right: 28px; top: 66px; bottom: 34px;
+  grid-template-columns: 332px minmax(0, 1.12fr) minmax(0, 1fr);
+  gap: 14px;
+}
+@media (pointer: coarse) {
+  .gm[data-mob] .si-body { bottom: 14px; }
+}
+.gm[data-mob] .si-col-head { padding: 10px 14px 9px; }
+.gm[data-mob] .si-col-title { font-size: 15.5px; }
+.gm[data-mob] .si-col-sub { font-size: 12px; margin-top: 2px; }
+.gm[data-mob] .si-body-split { padding: 10px; grid-template-columns: 140px minmax(0, 1fr); gap: 10px; }
+.gm[data-mob] .si-figure { padding: 10px 6px; }
+.gm[data-mob] .si-zones { gap: 5px; }
+.gm[data-mob] .si-zone-btn { padding: 4px 10px; gap: 1px; }
+.gm[data-mob] .si-zone-name { font-size: 13.5px; }
+.gm[data-mob] .si-zone-state { font-size: 11.5px; }
+
+.gm[data-mob] .si-mid-top { padding: 10px 14px; gap: 8px; }
+.gm[data-mob] .si-healthy-box { padding: 11px 13px; gap: 8px; }
+.gm[data-mob] .si-healthy-title { font-size: 14.5px; }
+.gm[data-mob] .si-healthy-sub { font-size: 12.5px; }
+.gm[data-mob] .si-subhead { padding: 8px 14px 6px; }
+.gm[data-mob] .si-med-list { padding: 0 14px 10px; }
+.gm[data-mob] .si-med-empty { padding: 7px 10px; font-size: 12.5px; }
+
+.gm[data-mob] .si-sense-body { padding: 10px 14px; gap: 7px; }
+.gm[data-mob] .si-sense-card { padding: 8px 12px; gap: 2px; }
+.gm[data-mob] .si-sense-head { font-size: 11.5px; }
+.gm[data-mob] .si-sense-title { font-size: 14px; }
+.gm[data-mob] .si-sense-sub { font-size: 12px; line-height: 1.28; }
+.gm[data-mob] .si-active-meds-bar { padding: 8px 14px; font-size: 12px; }
+.gm[data-mob] .btn.btn-xs { height: 34px; padding: 0 12px; font-size: 13px; }
+.gm[data-mob] .sub-top { display: none; }
+
+@container (max-width: 1080px) {
+  .gm[data-mob] .si-body {
+    grid-template-columns: 286px minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .gm[data-mob] .si-body-split { grid-template-columns: 118px minmax(0, 1fr); gap: 8px; padding: 8px; }
+  .gm[data-mob] .si-zone-btn { padding: 3px 8px; }
+  .gm[data-mob] .si-zone-name { font-size: 13px; }
+  .gm[data-mob] .si-sense-card { padding: 7px 10px; }
+}

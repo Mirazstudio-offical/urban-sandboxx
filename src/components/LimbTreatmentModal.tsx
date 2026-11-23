@@ -234,68 +234,70 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
       }
     >
       <div className="gu-limb-split">
-        {/* LEFT: Body Silhouette */}
+        {/* LEFT: Body Silhouette + 6 Stacked Zones side-by-side */}
         <div className="gu-inspect-col">
           <div className="gu-inspect-col-head">
             <span className="gu-inspect-col-title">Осмотр тела</span>
-            <span className="gu-inspect-col-meta">выберите область</span>
+            <span className="gu-inspect-col-meta">6 областей</span>
           </div>
 
-          <div className="gu-inspect-figure-stage">
-            <AnatomyFigureSvg
-              selectedPart={selectedPart}
-              onSelectPart={part => {
-                setSelectedPart(part);
-                const firstComp = getPartInjuries(part).find(i => isInjuryCompatible(i));
-                setSelectedInjuryId(firstComp ? firstComp.id : null);
-              }}
-              getZoneStyle={getZoneStyle}
-            />
-          </div>
+          <div className="gu-inspect-body-layout">
+            <div className="gu-inspect-figure-stage">
+              <AnatomyFigureSvg
+                selectedPart={selectedPart}
+                onSelectPart={part => {
+                  setSelectedPart(part);
+                  const firstComp = getPartInjuries(part).find(i => isInjuryCompatible(i));
+                  setSelectedInjuryId(firstComp ? firstComp.id : null);
+                }}
+                getZoneStyle={getZoneStyle}
+              />
+            </div>
 
-          <div className="gu-inspect-zone-list">
-            {BODY_ZONES.map(partKey => {
-              const st = getZoneStyle(partKey);
-              const injs = getPartInjuries(partKey);
-              const isSelected = selectedPart === partKey;
-              const dotColor =
-                st.severity === 'severe'
-                  ? '#e5484d'
-                  : st.severity === 'minor'
-                  ? '#e0ab45'
-                  : st.severity === 'treated'
-                  ? '#c9922b'
-                  : '#9ac985';
+            <div className="gu-inspect-zone-list">
+              {BODY_ZONES.map(partKey => {
+                const st = getZoneStyle(partKey);
+                const injs = getPartInjuries(partKey);
+                const isSelected = selectedPart === partKey;
+                const dotColor =
+                  st.severity === 'severe'
+                    ? '#e5484d'
+                    : st.severity === 'minor'
+                    ? '#e0ab45'
+                    : st.severity === 'treated'
+                    ? '#c9922b'
+                    : '#9ac985';
 
-              return (
-                <button
-                  key={partKey}
-                  type="button"
-                  onClick={() => {
-                    setSelectedPart(partKey);
-                    const firstComp = getPartInjuries(partKey).find(i => isInjuryCompatible(i));
-                    setSelectedInjuryId(firstComp ? firstComp.id : null);
-                  }}
-                  className={`gu-inspect-zone-btn ${isSelected ? 'on' : ''}`}
-                >
-                  <div className="gu-inspect-zone-top">
-                    <span className="gu-inspect-zone-name">{getBodyPartLabel(partKey)}</span>
-                    <span
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: '50%',
-                        background: dotColor,
-                        flex: 'none'
-                      }}
-                    />
-                  </div>
-                  <div className="gu-inspect-zone-state">
-                    {injs.length === 0 ? 'В порядке' : getBodyPartStatusText(injs)}
-                  </div>
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={partKey}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPart(partKey);
+                      const firstComp = getPartInjuries(partKey).find(i => isInjuryCompatible(i));
+                      setSelectedInjuryId(firstComp ? firstComp.id : null);
+                    }}
+                    className={`gu-inspect-zone-btn ${isSelected ? 'on' : ''}`}
+                  >
+                    <div className="gu-inspect-zone-top">
+                      <span className="gu-inspect-zone-name">{getBodyPartLabel(partKey)}</span>
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          background: dotColor,
+                          flex: 'none'
+                        }}
+                      />
+                    </div>
+                    <div className="gu-inspect-zone-state">
+                      {injs.length === 0 ? 'В порядке' : getBodyPartStatusText(injs)}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -339,7 +341,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
                     }}
                   >
                     <div className="gu-row-between">
-                      <div className="gu-row" style={{ gap: 8 }}>
+                      <div className="gu-row" style={{ gap: 8, minWidth: 0 }}>
                         {injury.treated ? (
                           <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: '#9ac985' }} />
                         ) : (
@@ -349,23 +351,31 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
                           {getInjuryHumanName(injury)}
                         </span>
                       </div>
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: injury.treated
-                            ? '#9ac985'
-                            : compatible
-                            ? '#f0c264'
-                            : 'var(--gu-mut)'
-                        }}
-                      >
-                        {injury.treated
-                          ? 'Уже обработано'
-                          : compatible
-                          ? 'Можно обработать'
-                          : 'Не подходит'}
-                      </span>
+                      {compatible ? (
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (itemIndex >= 0) {
+                              onApplyTreatment(itemIndex, injury.id);
+                              onClose();
+                            }
+                          }}
+                          className="gu-btn gu-btn-p gu-btn-xs"
+                        >
+                          Обработать
+                        </button>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: injury.treated ? '#9ac985' : 'var(--gu-mut)'
+                          }}
+                        >
+                          {injury.treated ? 'Уже обработано' : 'Не подходит'}
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--gu-ink-dim)' }}>
                       {getInjurySensoryDesc(injury)}
