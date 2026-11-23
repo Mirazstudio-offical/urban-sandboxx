@@ -6191,73 +6191,145 @@ export function renderPropGarageSofa(ctx: CanvasRenderingContext2D, prop: Street
   let hash = 0;
   for (let i = 0; i < prop.id.length; i++) hash = (hash * 31 + prop.id.charCodeAt(i)) >>> 0;
   const isMaroon = (hash % 2) === 0;
+  const baseHex = isMaroon ? '#5c201c' : '#4a2e1a';
+  const darkHex = isMaroon ? '#36120f' : '#29170b';
+  const lightHex = isMaroon ? '#7a2d27' : '#664026';
 
-  // Ground drop shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  // Soft two-pass ground ambient contact shadow
+  ctx.fillStyle = 'rgba(7, 11, 22, 0.16)';
   ctx.beginPath();
-  ctx.ellipse(1.5, 2, 11, 7, 0.05, 0, Math.PI * 2);
+  ctx.roundRect(-9.2, -4.8, 20.4, 12.4, 2.4);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(7, 11, 22, 0.28)';
+  ctx.beginPath();
+  ctx.roundRect(-9.2, -5.0, 19.6, 11.6, 2.1);
   ctx.fill();
 
-  // Brick/wooden support blocks under feet
+  // Brick/wooden support blocks subtly peeking under sofa corners
   ctx.fillStyle = '#78350f';
-  ctx.fillRect(-9, -5, 2.5, 2);
-  ctx.fillRect(6.5, -5, 2.5, 2);
-  ctx.fillRect(-9, 4, 2.5, 2);
-  ctx.fillRect(6.5, 4, 2.5, 2);
+  ctx.fillRect(-9.4, -5.2, 2.2, 1.8);
+  ctx.fillRect(7.2, -5.2, 2.2, 1.8);
+  ctx.fillRect(-9.4, 3.8, 2.2, 1.8);
+  ctx.fillRect(7.2, 3.8, 2.2, 1.8);
 
-  // Main sofa body frame (faded brown or maroon leatherette)
-  ctx.fillStyle = isMaroon ? '#4c1d1a' : '#3d2516';
+  // Main sofa outer frame (exact top-down view)
+  ctx.fillStyle = darkHex;
   ctx.beginPath();
-  ctx.roundRect(-9.5, -5.5, 19, 11, 2);
+  ctx.roundRect(-9.5, -5.5, 19, 11, 1.9);
+  ctx.fill();
+
+  // Twin worn leatherette seat cushions with radial dome shading & piping
+  for (const cx of [-8.0, 0.2]) {
+    const cg = ctx.createRadialGradient(cx + 3.4, 1.2, 0.6, cx + 3.9, 1.8, 5.2);
+    cg.addColorStop(0, lightHex);
+    cg.addColorStop(0.65, baseHex);
+    cg.addColorStop(1, darkHex);
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.roundRect(cx, -1.6, 7.8, 6.8, 1.2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.lineWidth = 0.55;
+    ctx.stroke();
+    // Stitched inner piping
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 0.3;
+    ctx.beginPath();
+    ctx.roundRect(cx + 0.55, -1.05, 6.7, 5.7, 0.85);
+    ctx.stroke();
+  }
+
+  // Tufted padded backrest bolster along top edge (-5.5)
+  const bg = ctx.createLinearGradient(0, -5.5, 0, -1.8);
+  bg.addColorStop(0, lightHex);
+  bg.addColorStop(0.55, baseHex);
+  bg.addColorStop(1, darkHex);
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.roundRect(-8.4, -5.4, 16.8, 3.6, 1.1);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+
+  // Backrest tufted dimples
+  for (const tx of [-5.2, 0, 5.2]) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
+    ctx.beginPath();
+    ctx.arc(tx, -3.6, 0.75, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = darkHex;
+    ctx.beginPath();
+    ctx.arc(tx, -3.6, 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Rolled armrests left & right
+  for (const ax of [-9.5, 7.3]) {
+    const ag = ctx.createLinearGradient(ax, 0, ax + 2.2, 0);
+    ag.addColorStop(0, darkHex);
+    ag.addColorStop(0.45, lightHex);
+    ag.addColorStop(1, darkHex);
+    ctx.fillStyle = ag;
+    ctx.beginPath();
+    ctx.roundRect(ax, -5.4, 2.2, 10.8, 1.0);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 0.45;
+    ctx.stroke();
+  }
+
+  // Split leatherette tear exposing yellow upholstery foam on right seat cushion
+  ctx.fillStyle = '#ca8a04';
+  ctx.beginPath();
+  ctx.ellipse(3.6, 2.3, 1.8, 0.9, 0.18, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = '#1c1917';
-  ctx.lineWidth = 0.8;
+  ctx.lineWidth = 0.45;
   ctx.stroke();
 
-  // Backrest cushion (darker, button-tufted)
-  ctx.fillStyle = isMaroon ? '#361412' : '#27170c';
-  ctx.fillRect(-9, -5, 18, 3.5);
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.lineWidth = 0.6;
-  ctx.beginPath();
-  ctx.moveTo(-6, -5); ctx.lineTo(-6, -1.5);
-  ctx.moveTo(0, -5); ctx.lineTo(0, -1.5);
-  ctx.moveTo(6, -5); ctx.lineTo(6, -1.5);
-  ctx.stroke();
+  // Reinforced silver duct tape repair patch across left cushion seam
+  ctx.save();
+  ctx.translate(-4.0, 1.2);
+  ctx.rotate(-0.12);
+  const tapeG = ctx.createLinearGradient(-2.4, -0.6, 2.4, 0.6);
+  tapeG.addColorStop(0, '#94a3b8');
+  tapeG.addColorStop(0.5, '#cbd5e1');
+  tapeG.addColorStop(1, '#64748b');
+  ctx.fillStyle = tapeG;
+  ctx.fillRect(-2.4, -0.65, 4.8, 1.3);
+  ctx.restore();
 
-  // Seat cushions (left & right)
-  ctx.fillStyle = isMaroon ? '#5c221e' : '#4a2f1b';
-  ctx.fillRect(-8.5, -1, 8, 6);
-  ctx.fillRect(0.5, -1, 8, 6);
-  ctx.strokeStyle = '#291c13';
-  ctx.lineWidth = 0.6;
-  ctx.strokeRect(-8.5, -1, 8, 6);
-  ctx.strokeRect(0.5, -1, 8, 6);
-
-  // Split cushion tear with yellow sponge foam showing
-  ctx.fillStyle = '#ca8a04';
-  ctx.fillRect(2, 1.5, 3.5, 2);
-
-  // Silver repair tape (серый армированный скотч) across a seam
-  ctx.fillStyle = '#94a3b8';
-  ctx.fillRect(-6, 0.5, 4.5, 1.4);
-
-  // Makeshift side table (wooden fruit crate / cable spool cutoff)
-  ctx.fillStyle = '#854d0e';
-  ctx.fillRect(10.5, -2, 5, 5);
+  // Makeshift wooden fruit crate side table (exact top-down slatted planks)
+  ctx.fillStyle = 'rgba(7, 11, 22, 0.25)';
+  ctx.fillRect(10.8, -1.7, 5.2, 5.2);
+  ctx.fillStyle = '#78350f';
+  ctx.fillRect(10.5, -2.0, 5.0, 5.0);
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = i % 2 === 0 ? '#a16207' : '#854d0e';
+    ctx.fillRect(10.7, -1.8 + i * 1.62, 4.6, 1.32);
+  }
   ctx.strokeStyle = '#451a03';
-  ctx.lineWidth = 0.6;
-  ctx.strokeRect(10.5, -2, 5, 5);
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(10.5, -2.0, 5.0, 5.0);
 
-  // Tin can ashtray with cigarette butts on the crate
-  ctx.fillStyle = '#e2e8f0';
+  // Tin can ashtray with ash & cigarette butt on the crate
+  const ashG = ctx.createRadialGradient(12.7, 0.2, 0.2, 13.0, 0.5, 1.3);
+  ashG.addColorStop(0, '#94a3b8');
+  ashG.addColorStop(0.7, '#e2e8f0');
+  ashG.addColorStop(1, '#475569');
+  ctx.fillStyle = ashG;
   ctx.beginPath();
-  ctx.arc(13, 0.5, 1.3, 0, Math.PI * 2);
+  ctx.arc(13, 0.5, 1.25, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#1c1917';
-  ctx.fillRect(12.7, 0.2, 0.6, 0.6); // ash
+  ctx.fillStyle = '#334155';
+  ctx.beginPath();
+  ctx.arc(13, 0.5, 0.85, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = '#ea580c';
-  ctx.fillRect(13.4, 0.8, 0.5, 0.5); // orange filter butt
+  ctx.fillRect(13.2, 0.65, 0.65, 0.35);
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(12.6, 0.65, 0.6, 0.35);
 }
 
 /**

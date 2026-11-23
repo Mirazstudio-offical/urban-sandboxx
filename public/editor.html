@@ -9206,60 +9206,210 @@ function isDrawFurniture(ctx, f, isSelected) {
   ctx.translate(cx, cy);
   if (f.angle) ctx.rotate(f.angle);
 
-  const hw = f.width / 2;
-  const hh = f.height / 2;
+  const w = Math.max(1, f.width);
+  const h = Math.max(1, f.height);
+  const hw = w / 2;
+  const hh = h / 2;
+  const minD = Math.min(w, h);
+  const col = f.color || '#475569';
 
-  // Render furniture body
-  ctx.fillStyle = f.color || '#475569';
-  ctx.fillRect(-hw, -hh, f.width, f.height);
+  // Soft top-down contact shadow (except flush carpets)
+  if (f.type !== 'carpet') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    if (f.type === 'plant' || f.type === 'trash_can' || f.type === 'coat_rack' || f.type === 'floor_lamp' || f.type === 'bean_bag' || f.type === 'kids_table') {
+      ctx.beginPath();
+      ctx.ellipse(0.7, 0.9, hw * 0.95, hh * 0.95, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(-hw + 0.7, -hh + 0.9, w, h);
+    }
+  }
+
+  // Exact top-down architectural drawing per furniture type
+  if (f.type === 'bed' || f.type === 'kids_bed' || f.type === 'bed_hospital' || f.type === 'jail_cot') {
+    const isHoriz = f.type === 'bed_hospital' && w > h;
+    ctx.save();
+    if (isHoriz) ctx.rotate(-Math.PI / 2);
+    const bw = isHoriz ? h : w;
+    const bl = isHoriz ? w : h;
+    const bhw = bw / 2, bhl = bl / 2;
+    ctx.fillStyle = f.type === 'bed_hospital' ? '#cbd5e1' : (f.type === 'jail_cot' ? '#334155' : '#4a2c18');
+    ctx.fillRect(-bhw, -bhl, bw, bl);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(-bhw + 1, -bhl + 2, bw - 2, bl - 3);
+    // Pillows at head (-bhl)
+    const pH = Math.max(2.2, bl * 0.2);
+    ctx.fillStyle = '#e2e8f0';
+    if (f.type === 'bed') {
+      ctx.fillRect(-bhw + 1.8, -bhl + 2.6, bw / 2 - 2.4, pH);
+      ctx.fillRect(0.6, -bhl + 2.6, bw / 2 - 2.4, pH);
+    } else {
+      ctx.fillRect(-bhw + 2, -bhl + 2.6, bw - 4, pH);
+    }
+    // Comforter / blanket
+    ctx.fillStyle = col;
+    ctx.fillRect(-bhw + 1, -bhl + 3.2 + pH, bw - 2, bl - pH - 4.2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-bhw + 1, -bhl + 3.2 + pH, bw - 2, Math.max(1.2, bl * 0.07));
+    ctx.restore();
+  } else if (f.type === 'sofa') {
+    const armW = Math.max(1.8, w * 0.12);
+    const backH = Math.max(2.0, h * 0.28);
+    ctx.fillStyle = col;
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(-hw, -hh, w, backH);
+    ctx.fillRect(-hw, -hh, armW, h);
+    ctx.fillRect(hw - armW, -hh, armW, h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.38)';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(0, -hh + backH);
+    ctx.lineTo(0, hh);
+    ctx.stroke();
+  } else if (f.type === 'chair') {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.roundRect(-hw * 0.8, -hh * 0.5, w * 0.8, h * 0.85, 1.2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.roundRect(-hw * 0.88, -hh * 0.9, w * 0.88, Math.max(1.1, h * 0.28), 0.7);
+    ctx.fill();
+  } else if (f.type === 'plant') {
+    const r = minD / 2;
+    ctx.fillStyle = '#c2410c';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.68, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#291d16';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2); ctx.fill();
+    for (let i = 0; i < 6; i++) {
+      ctx.save();
+      ctx.rotate((i * Math.PI * 2) / 6);
+      ctx.fillStyle = i % 2 === 0 ? '#15803d' : '#22c55e';
+      ctx.beginPath();
+      ctx.ellipse(r * 0.48, 0, r * 0.46, r * 0.22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  } else if (f.type === 'bath') {
+    ctx.fillStyle = '#f1f5f9';
+    ctx.beginPath(); ctx.roundRect(-hw, -hh, w, h, 2); ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.roundRect(-hw + 1.8, -hh + 1.8, w - 3.6, h - 3.6, 1.5); ctx.fill();
+  } else if (f.type === 'sink') {
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath(); ctx.ellipse(0, hh * 0.14, hw * 0.72, hh * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-0.5, -hh + 0.5, 1, hh * 0.5);
+  } else if (f.type === 'toilet') {
+    const tH = Math.max(1.8, h * 0.32);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(-hw + 0.4, -hh, w - 0.8, tH);
+    ctx.beginPath();
+    ctx.ellipse(0, -hh + tH + (h - tH) * 0.5, hw * 0.82, (h - tH) * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.ellipse(0, -hh + tH + (h - tH) * 0.55, hw * 0.38, (h - tH) * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (f.type === 'stove') {
+    ctx.fillStyle = col;
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(-hw + 0.9, -hh + 0.9, w - 1.8, h - 2.0);
+    ctx.strokeStyle = '#f97316';
+    ctx.lineWidth = 0.7;
+    const br = minD * 0.16;
+    for (const [bx, by] of [[-w * 0.22, -h * 0.2], [w * 0.22, -h * 0.2], [-w * 0.22, h * 0.18], [w * 0.22, h * 0.18]]) {
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.stroke();
+    }
+  } else if (f.type === 'kitchen_counter') {
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(-hw + 1, -hh + 1.2, Math.min(w * 0.34, h * 0.95), h - 2.4);
+    if (w > 16) {
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(hw - w * 0.28 - 0.8, -hh + 1.2, w * 0.28, h - 2.4);
+    }
+  } else if (f.type === 'fridge' || f.type === 'washing_machine' || f.type === 'wardrobe' || f.type === 'dresser' || f.type === 'safe') {
+    ctx.fillStyle = col;
+    ctx.fillRect(-hw, -hh, w, h);
+    // Front door / lid thickness line at +hh
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(-hw, hh - Math.max(0.8, h * 0.15), w, Math.max(0.8, h * 0.15));
+    // Front handle / porthole rim hint at +hh
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(-w * 0.24, hh - 0.15, w * 0.48, 0.55);
+  } else if (f.type === 'tv' || f.type === 'mirror' || f.type === 'blackboard' || f.type === 'whiteboard') {
+    ctx.fillStyle = col;
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = f.type === 'tv' ? '#38bdf8' : (f.type === 'mirror' ? '#e0f2fe' : '#fef08a');
+    ctx.fillRect(-hw + 0.5, hh - 0.5, w - 1, 0.5);
+  } else if (f.type === 'computer') {
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-hw, -hh + 0.2, w, Math.max(0.9, h * 0.26));
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(-hw + 0.3, -hh + Math.max(0.9, h * 0.26), w - 0.6, 0.35);
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(-hw + 0.3, hh - h * 0.4, w * 0.68, h * 0.35);
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath(); ctx.arc(hw - 0.8, hh - h * 0.22, 0.6, 0, Math.PI * 2); ctx.fill();
+  } else if (f.type === 'cooler') {
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.arc(0, 0, minD * 0.38, 0, Math.PI * 2); ctx.fill();
+  } else if (f.type === 'trash_can' || f.type === 'floor_lamp' || f.type === 'coat_rack' || f.type === 'bean_bag' || f.type === 'kids_table') {
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2); ctx.fill();
+    if (f.type === 'trash_can') {
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath(); ctx.arc(0, 0, minD * 0.38, 0, Math.PI * 2); ctx.fill();
+    } else if (f.type === 'floor_lamp') {
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath(); ctx.arc(0, 0, minD * 0.22, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (f.type === 'server_rack') {
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.arc(-w * 0.2, 0, minD * 0.2, 0, Math.PI * 2);
+    ctx.arc(w * 0.2, 0, minD * 0.2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(-hw + 1, hh - 0.5, 1.5, 0.5);
+  } else if (f.type === 'carpet') {
+    ctx.fillStyle = col;
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.strokeStyle = '#eab308';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(-hw + 1.5, -hh + 1.5, w - 3, h - 3);
+  } else {
+    ctx.fillStyle = col;
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 0.6;
+    ctx.strokeRect(-hw + 0.5, -hh + 0.5, w - 1, h - 1);
+  }
 
   // Border
-  ctx.strokeStyle = isSelected ? '#38bdf8' : 'rgba(0,0,0,0.4)';
-  ctx.lineWidth = isSelected ? 2 : 1;
-  ctx.strokeRect(-hw, -hh, f.width, f.height);
-
-  // Detail decoration
-  if (f.type.includes('bed')) {
-    // Pillows & blanket
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(-hw + 2, -hh + 2, f.width - 4, hh - 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.fillRect(-hw + 2, 0, f.width - 4, hh - 2);
-  } else if (f.type === 'sofa') {
-    // Backrest & armrests
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.fillRect(-hw, -hh, f.width, 3);
-    ctx.fillRect(-hw, -hh, 3, f.height);
-    ctx.fillRect(hw - 3, -hh, 3, f.height);
-  } else if (f.type === 'desk') {
-    // Keyboard & monitor
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-4, -hh + 1, 8, 2);
-  } else if (f.type === 'plant') {
-    // Green circle foliage
-    ctx.fillStyle = '#15803d';
-    ctx.beginPath();
-    ctx.arc(0, 0, Math.min(hw, hh) - 1, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (f.type === 'bath') {
-    // Tub interior curve
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(-hw + 2, -hh + 2, f.width - 4, f.height - 4);
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(-hw + 4, -hh + 4, f.width - 8, f.height - 8);
-  } else if (f.type === 'sink') {
-    // Sink basin
-    ctx.fillStyle = '#f8fafc';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, hw - 2, hh - 2, 0, 0, Math.PI * 2);
-    ctx.fill();
+  ctx.strokeStyle = isSelected ? '#38bdf8' : 'rgba(0,0,0,0.42)';
+  ctx.lineWidth = isSelected ? 1.8 : 0.7;
+  if (f.type !== 'plant' && f.type !== 'trash_can' && f.type !== 'floor_lamp' && f.type !== 'coat_rack' && f.type !== 'bean_bag' && f.type !== 'kids_table') {
+    ctx.strokeRect(-hw, -hh, w, h);
   }
 
   if (isSelected) {
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([3, 3]);
-    ctx.strokeRect(-hw - 3, -hh - 3, f.width + 6, f.height + 6);
+    ctx.strokeRect(-hw - 3, -hh - 3, w + 6, h + 6);
+    ctx.setLineDash([]);
     // Angle indicator handle
     ctx.fillStyle = '#38bdf8';
     ctx.beginPath();

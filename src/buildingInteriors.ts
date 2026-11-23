@@ -1772,7 +1772,8 @@ function renderStaticInteriorLayout(
   bld: Building,
   layout: BuildingLayout,
   windows: { x: number; y: number; side: 'top' | 'bottom' | 'left' | 'right' }[],
-  isHospital: boolean
+  isHospital: boolean,
+  timeHour: number
 ) {
   // Base background floor of the building
   if (isHospital) {
@@ -1959,34 +1960,25 @@ function renderStaticInteriorLayout(
     ctx.fillText('ВЫХОД', ex.x + ex.width / 2, ex.y + ex.height / 2);
   }
 
-  // Draw Furniture with high-fidelity vector textures
+  // Draw Furniture with high-fidelity exact top-down vector models
   // 1. Base floor textiles (carpets, rugs) drawn first
   for (const f of layout.furniture) {
     if (f.type === 'carpet') {
       ctx.save();
       ctx.translate(f.x + f.width / 2, f.y + f.height / 2);
       ctx.rotate(f.angle);
-      renderInteriorFurniture(ctx, f, 12);
+      renderInteriorFurniture(ctx, f, timeHour);
       ctx.restore();
     }
   }
 
-  // 2. Physical furniture items with realistic depth & lightweight contact shadows
+  // 2. Physical furniture items (each model renders its own shape-matched ambient contact shadow)
   for (const f of layout.furniture) {
     if (f.type !== 'carpet') {
       ctx.save();
       ctx.translate(f.x + f.width / 2, f.y + f.height / 2);
       ctx.rotate(f.angle);
-
-      // Lightweight crisp ambient contact shadow (Zero GPU Gaussian blur overhead)
-      if (f.type !== 'blackboard' && f.type !== 'whiteboard') {
-        const halfW = f.width / 2;
-        const halfH = f.height / 2;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
-        ctx.fillRect(-halfW + 0.8, -halfH + 0.8, f.width, f.height);
-      }
-
-      renderInteriorFurniture(ctx, f, 12);
+      renderInteriorFurniture(ctx, f, timeHour);
       ctx.restore();
     }
   }
@@ -2113,7 +2105,7 @@ export function renderBuildingInterior(
   const isHospital = bld.type === 'hospital';
 
   // Render static floor & furniture directly to ctx with full native resolution (sharp vector graphics)
-  renderStaticInteriorLayout(ctx, bld, layout, windows, isHospital);
+  renderStaticInteriorLayout(ctx, bld, layout, windows, isHospital, timeHour);
 
   // Dynamic Layer 1: Soft-penumbra volumetric daylight shafts from windows
   if (dayIntensity > 0) {
