@@ -1,5 +1,12 @@
 import { StreetProp, RailwaySignal } from './types';
 import { RailwaySignalingSystem } from './railwaySignalingSystem';
+import {
+  getBulbSpectralColor,
+  getCameraBaseAngle,
+  getCameraCurrentAngle,
+  getPropEffectiveAngle,
+  hasPoleCamera
+} from './cameraPoleSystem';
 
 /**
  * High-fidelity vector rendering for all street props (intact & broken states).
@@ -1228,161 +1235,267 @@ export function renderPropMailbox(ctx: CanvasRenderingContext2D, prop: StreetPro
   }
 }
 
-// --- 16. BROKEN LAMP / HIGHWAY LAMP / CONCRETE LAMP (НА ЗЕМЛЕ) ---
+// --- 16. BROKEN LAMP / HIGHWAY LAMP / CONCRETE LAMP / CCTV POLE (НА ЗЕМЛЕ) ---
 export function renderPropBrokenLamp(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  if (prop.type === 'lamp_highway') {
-    // Sheared base stump with severed anchor bolts
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(-1.5, -1.5, 3, 3);
+  const fallAngle = prop.breakAngle ?? prop.tiltAngle ?? getPropEffectiveAngle(prop);
+  const wear = prop.wearLevel ?? 0.25;
 
-    // Galvanized anchor studs
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillRect(-2.5, -2.5, 1.2, 1.2);
-    ctx.fillRect(1.3, -2.5, 1.2, 1.2);
-    ctx.fillRect(-2.5, 1.3, 1.2, 1.2);
-    ctx.fillRect(1.3, 1.3, 1.2, 1.2);
-
-    // Buckled galvanized steel pole lying on asphalt
-    ctx.save();
-    ctx.rotate(prop.breakAngle ?? prop.tiltAngle ?? prop.angle ?? 0);
-
-    // Ground shadow of buckled pole
+  if (prop.type === 'lamp_concrete') {
+    // Fractured reinforced precast concrete footing with bent rusted rebar rods
     ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
     ctx.beginPath();
-    ctx.moveTo(3, 2);
-    ctx.lineTo(14, 5);
-    ctx.lineTo(24, 11);
-    ctx.lineTo(36, 13);
-    ctx.lineTo(34, 16);
-    ctx.lineTo(22, 14);
-    ctx.lineTo(12, 7);
+    ctx.arc(1.2, 1.4, 6.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Concrete collar & crumbled mortar skirt
+    ctx.fillStyle = '#57534e';
+    ctx.fillRect(-5.2, -5.2, 10.4, 10.4);
+    ctx.strokeStyle = '#292524';
+    ctx.lineWidth = 0.9;
+    ctx.strokeRect(-5.2, -5.2, 10.4, 10.4);
+
+    // Jagged fractured cement core
+    ctx.fillStyle = '#a8a29e';
+    ctx.beginPath();
+    ctx.moveTo(-3.4, -3.2);
+    ctx.lineTo(1.2, -3.8);
+    ctx.lineTo(3.6, -1.0);
+    ctx.lineTo(2.8, 3.3);
+    ctx.lineTo(-2.6, 3.6);
+    ctx.lineTo(-3.8, 0.4);
     ctx.closePath();
     ctx.fill();
 
-    // Kinked crumpled zinc pole (multi-segment severe buckle)
-    ctx.strokeStyle = '#64748b';
-    ctx.lineWidth = 3.2;
+    // Exposed twisted rusted rebar bars
+    ctx.strokeStyle = '#7c2d12';
+    ctx.lineWidth = 1.1;
     ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(2, 0);
-    ctx.lineTo(13, 3);
-    ctx.lineTo(22, -4);
-    ctx.lineTo(34, 2);
+    ctx.moveTo(-2.1, -2.0); ctx.lineTo(-3.6, -5.0);
+    ctx.moveTo(1.9, -1.8); ctx.lineTo(4.0, -4.4);
+    ctx.moveTo(-1.2, 2.2); ctx.lineTo(-2.6, 4.9);
+    ctx.moveTo(2.0, 2.0); ctx.lineTo(3.5, 4.5);
     ctx.stroke();
 
-    // Specular highlight strip along crumpled metal
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(2, -0.6);
-    ctx.lineTo(13, 2.2);
-    ctx.lineTo(22, -4.6);
-    ctx.lineTo(34, 1.4);
-    ctx.stroke();
+    // Spalled concrete rubble chunks
+    ctx.fillStyle = '#78716c';
+    ctx.fillRect(-6.8, 3.5, 2.2, 1.8);
+    ctx.fillRect(4.8, 4.2, 2.5, 1.7);
+    ctx.fillStyle = '#d6d3d1';
+    ctx.fillRect(5.2, -4.5, 1.6, 1.4);
+    return;
+  }
 
-    // Crease shadows
+  const isHighway = prop.type === 'lamp_highway';
+  const isCctv = prop.type === 'cctv_pole';
+  const isStreetLamp = prop.type === 'street_lamp';
+  const isDarkSteel =
+    prop.lampStyle === 'painted_dark_steel' ||
+    prop.lampStyle === 'cast_iron_classic' ||
+    prop.lampStyle === 'modern_bollard_tall' ||
+    prop.type === 'lamp';
+
+  // Ground contact AO & concrete plinth ring
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+  ctx.beginPath();
+  ctx.arc(0.8, 1.0, isHighway ? 6.4 : 5.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Poured concrete base collar
+  ctx.fillStyle = '#6b7280';
+  ctx.beginPath();
+  ctx.arc(0, 0, isHighway ? 5.6 : 4.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#374151';
+  ctx.lineWidth = 0.7;
+  ctx.stroke();
+
+  // Sheared steel mounting flange
+  ctx.fillStyle = isDarkSteel ? '#1e293b' : '#475569';
+  ctx.beginPath();
+  ctx.arc(0, 0, isHighway ? 4.3 : 3.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4 sheared anchor studs
+  ctx.fillStyle = '#e2e8f0';
+  const boltOff = isHighway ? 2.4 : 1.9;
+  ctx.fillRect(-boltOff - 0.5, -boltOff - 0.5, 1.1, 1.1);
+  ctx.fillRect(boltOff - 0.6, -boltOff - 0.5, 1.1, 1.1);
+  ctx.fillRect(-boltOff - 0.5, boltOff - 0.6, 1.1, 1.1);
+  ctx.fillRect(boltOff - 0.6, boltOff - 0.6, 1.1, 1.1);
+
+  // Exposed internal conduit & snapped live wires from plinth
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(2.4, -2.5, 4.2, -1.1);
+  ctx.stroke();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(-1.8, 2.6, 1.5, 3.6);
+  ctx.stroke();
+
+  // Fallen / buckled pole shaft lying on pavement
+  ctx.save();
+  ctx.rotate(fallAngle);
+
+  const shaftLen = isHighway ? 36 : isCctv ? 28 : isStreetLamp ? 30 : 24;
+  const k1 = shaftLen * 0.36;
+  const k2 = shaftLen * 0.68;
+
+  // Ground drop shadow of buckled shaft
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.30)';
+  ctx.lineWidth = isHighway ? 4.6 : 3.8;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(2.5, 2.2);
+  ctx.lineTo(k1 + 1.5, 4.5);
+  ctx.lineTo(k2 + 1.5, -1.2);
+  ctx.lineTo(shaftLen + 1.5, 3.5);
+  ctx.stroke();
+
+  // Base shaft dark metal underside
+  ctx.strokeStyle = isDarkSteel ? '#0f172a' : '#334155';
+  ctx.lineWidth = isHighway ? 3.8 : 3.0;
+  ctx.beginPath();
+  ctx.moveTo(2, 0);
+  ctx.lineTo(k1, 2.6);
+  ctx.lineTo(k2, -3.2);
+  ctx.lineTo(shaftLen, 1.6);
+  ctx.stroke();
+
+  // Midtone shaft body
+  ctx.strokeStyle = isDarkSteel ? '#273449' : '#7c8ea3';
+  ctx.lineWidth = isHighway ? 2.6 : 2.0;
+  ctx.beginPath();
+  ctx.moveTo(2, -0.3);
+  ctx.lineTo(k1, 2.3);
+  ctx.lineTo(k2, -3.5);
+  ctx.lineTo(shaftLen, 1.3);
+  ctx.stroke();
+
+  // Specular metallic ridge
+  ctx.strokeStyle = isDarkSteel ? '#64748b' : '#cbd5e1';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(2.5, -0.8);
+  ctx.lineTo(k1, 1.7);
+  ctx.lineTo(k2, -4.0);
+  ctx.lineTo(shaftLen, 0.8);
+  ctx.stroke();
+
+  // Buckle crease marks
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(k1 - 0.8, 0.6); ctx.lineTo(k1 + 1.0, 4.2);
+  ctx.moveTo(k2 - 0.9, -5.0); ctx.lineTo(k2 + 0.9, -1.4);
+  ctx.stroke();
+
+  // Optional reflective stripes still visible on fallen lower shaft
+  if (prop.hasReflectiveStripes) {
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(5.5, 0.6); ctx.lineTo(7.4, 1.0);
+    ctx.stroke();
+    ctx.strokeStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.moveTo(7.4, 1.0); ctx.lineTo(9.1, 1.4);
+    ctx.stroke();
+  }
+
+  // Smashed junction box if present
+  if (prop.hasJunctionBox) {
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(6.5, -3.4, 4.2, 2.6);
     ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1.0;
+    ctx.lineWidth = 0.6;
+    ctx.strokeRect(6.5, -3.4, 4.2, 2.6);
+  }
+
+  // Tip hardware: either smashed luminaire OR smashed CCTV dome/bullet housing
+  if (!isCctv) {
+    ctx.save();
+    ctx.translate(shaftLen, 1.6);
+    ctx.rotate(0.32);
+    // Crushed luminaire housing
+    ctx.fillStyle = isDarkSteel ? '#1e293b' : '#334155';
     ctx.beginPath();
-    ctx.moveTo(12, -1); ctx.lineTo(14, 4);
-    ctx.moveTo(21, -6); ctx.lineTo(23, -2);
+    if (ctx.roundRect) ctx.roundRect(-2.5, -3.4, 9.5, 6.8, 2);
+    else ctx.rect(-2.5, -3.4, 9.5, 6.8);
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 0.7;
     ctx.stroke();
 
-    // Smashed cobra-head luminaire fixture at the crumpled tip
+    // Shattered optical cavity & cracked polycarbonate shards
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0.5, -2.2, 5.2, 4.4);
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(0.8, -1.8); ctx.lineTo(4.8, 1.9);
+    ctx.moveTo(1.5, 1.8); ctx.lineTo(5.2, -1.6);
+    ctx.stroke();
+    // Loose copper wire
+    ctx.strokeStyle = '#ea580c';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(6.8, 0.2);
+    ctx.quadraticCurveTo(9.0, -2.5, 11.2, -0.8);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Dangling smashed CCTV camera & floodlight if pole had a camera
+  if (hasPoleCamera(prop)) {
     ctx.save();
-    ctx.translate(34, 2);
-    ctx.rotate(0.35);
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(-2, -3, 8, 6);
-    // Cracked lens and exposed yellow LED diodes
-    ctx.fillStyle = '#fef08a';
-    ctx.fillRect(1, -2, 4, 4);
+    ctx.translate(isCctv ? shaftLen : shaftLen * 0.72, isCctv ? 1.6 : -2.6);
+    ctx.rotate(-0.45);
+    // Snapped bracket & coiled black cable
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 0.8;
     ctx.beginPath();
-    ctx.moveTo(1, -1); ctx.lineTo(4, 2);
-    ctx.moveTo(2, 2); ctx.lineTo(5, -1);
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(2.5, -3.2, 5.2, -1.4);
     ctx.stroke();
-    // Severed copper electrical wire
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 0.9;
-    ctx.beginPath();
-    ctx.moveTo(6, 0);
-    ctx.quadraticCurveTo(8, -3, 10, -1);
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.restore();
-
-  } else if (prop.type === 'lamp_concrete') {
-    // Chipped concrete base with exposed rebar
-    ctx.fillStyle = '#57534e';
-    ctx.fillRect(-4.5, -4.5, 9, 9);
-    ctx.strokeStyle = '#292524';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-4.5, -4.5, 9, 9);
-
-    // Exposed rusted rebar steel
-    ctx.strokeStyle = '#92400e';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-2, -4.5); ctx.lineTo(-2, -1);
-    ctx.moveTo(2, -4.5); ctx.lineTo(2, 0);
-    ctx.stroke();
-
-    // Concrete debris crumbs
-    ctx.fillStyle = '#a8a29e';
-    ctx.fillRect(-5, 5, 2, 2);
-    ctx.fillRect(4, 4, 2, 2);
-
-  } else {
-    // Standard Park Lamp (Парковый фонарь) broken on ground
-    // Sheared base with severed bolts
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(-1.5, -1.5, 3, 3);
-
-    ctx.save();
-    ctx.rotate(prop.breakAngle ?? prop.tiltAngle ?? prop.angle ?? 0);
-
-    // Drop shadow of fallen iron post
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.fillRect(2, 1, 24, 4);
-
-    // Tapered cast-iron column
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(1, 0, 22, 3);
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.8;
-    ctx.strokeRect(1, 0, 22, 3);
-
-    // Smashed glass lantern head with crystal shards
-    ctx.save();
-    ctx.translate(22, 1);
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, -2.5, 5, 5);
-
-    // Glowing broken filament & glass shards
-    ctx.fillStyle = '#fef08a';
-    ctx.fillRect(2, -1.5, 2.5, 3);
-    ctx.strokeStyle = '#f8fafc';
+    // White smashed camera shell
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(3.2, -2.8, 4.6, 2.8);
+    ctx.strokeStyle = '#475569';
     ctx.lineWidth = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(1, -2); ctx.lineTo(4, 2);
-    ctx.moveTo(1, 2); ctx.lineTo(4, -2);
-    ctx.stroke();
-    ctx.restore();
-
+    ctx.strokeRect(3.2, -2.8, 4.6, 2.8);
+    // Cracked dark lens
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(7.4, -2.3, 1.0, 1.8);
+    // Black floodlight housing next to it
+    if (prop.hasCameraFloodlight !== false) {
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(2.4, 0.6, 3.6, 2.6);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(2.8, 1.0, 2.8, 1.8);
+    }
     ctx.restore();
   }
+
+  // Subtle rust dust around sheared joints if worn
+  if (wear > 0.45) {
+    ctx.fillStyle = 'rgba(124, 45, 18, 0.35)';
+    ctx.beginPath();
+    ctx.arc(k1, 2.2, 2.0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }
 
 export function renderPropSandbox(ctx: CanvasRenderingContext2D, prop: StreetProp) {
@@ -1579,6 +1692,8 @@ export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp
     case 'lamp':
     case 'lamp_highway':
     case 'lamp_concrete':
+    case 'street_lamp':
+    case 'cctv_pole':
       if (prop.isBroken) {
         renderPropBrokenLamp(ctx, prop);
       }
@@ -3813,284 +3928,1393 @@ export function renderPropPowerPoleBase(ctx: CanvasRenderingContext2D, prop: Str
   ctx.stroke();
 }
 
-// --- TALL PROPS (INTACT & BENT LAMPS) ---
-export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+// --- HELPER: REALISTIC POLE ACCESSORIES (JUNCTION BOX, STRIPES, SIGNAGE, SPEAKER) ---
+function renderPoleAccessories(
+  ctx: CanvasRenderingContext2D,
+  prop: StreetProp,
+  baseAngle: number,
+  leanX: number,
+  leanY: number,
+  mastRadius: number
+) {
+  const perp = baseAngle + Math.PI / 2;
+  const px = Math.cos(perp);
+  const py = Math.sin(perp);
+  const bx = Math.cos(baseAngle);
+  const by = Math.sin(baseAngle);
+
+  // 1. Reflective high-visibility safety collar around mast base (red/white or yellow/black)
+  if (prop.hasReflectiveStripes) {
+    ctx.save();
+    ctx.lineWidth = 1.35;
+    ctx.strokeStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.arc(0, 0, mastRadius + 1.0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = prop.type === 'cctv_pole' ? '#eab308' : '#dc2626';
+    ctx.beginPath();
+    ctx.arc(0, 0, mastRadius + 1.0, 0, Math.PI * 0.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, mastRadius + 1.0, Math.PI, Math.PI * 1.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 2. Electrical service junction cabinet / IP65 telemetry box mounted on mast side
+  if (prop.hasJunctionBox) {
+    const jx = leanX * 0.35 - px * (mastRadius + 2.2);
+    const jy = leanY * 0.35 - py * (mastRadius + 2.2);
+    ctx.save();
+    ctx.translate(jx, jy);
+    ctx.rotate(baseAngle);
+
+    // Box contact shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+    ctx.fillRect(-1.8, -2.0, 4.4, 4.6);
+
+    // Steel NEMA enclosure body
+    const boxGrad = ctx.createLinearGradient(-2.1, -2.3, 2.1, 2.3);
+    boxGrad.addColorStop(0, '#cbd5e1');
+    boxGrad.addColorStop(0.55, '#94a3b8');
+    boxGrad.addColorStop(1, '#475569');
+    ctx.fillStyle = boxGrad;
+    ctx.fillRect(-2.1, -2.3, 4.2, 4.4);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.65;
+    ctx.strokeRect(-2.1, -2.3, 4.2, 4.4);
+
+    // Door seam & quarter-turn lock
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 0.45;
+    ctx.strokeRect(-1.5, -1.7, 3.0, 3.2);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0.8, -0.35, 0.7, 0.7);
+
+    // Telemetry status dot on CCTV poles
+    if (hasPoleCamera(prop)) {
+      ctx.fillStyle = prop.cameraMotionDetected ? '#f97316' : '#22c55e';
+      ctx.fillRect(-1.1, -1.2, 0.85, 0.85);
+    }
+    ctx.restore();
+  }
+
+  // 3. Yellow high-voltage warning triangle plaque (classic on concrete/utility poles)
+  if (prop.hasWarningSign) {
+    const wx = leanX * 0.45 + px * (mastRadius + 1.8);
+    const wy = leanY * 0.45 + py * (mastRadius + 1.8);
+    ctx.save();
+    ctx.translate(wx, wy);
+    ctx.rotate(baseAngle);
+    ctx.fillStyle = '#facc15';
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(1.7, 0);
+    ctx.lineTo(-1.2, -1.6);
+    ctx.lineTo(-1.2, 1.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 4. Side street-sign / municipal banner bracket
+  if (prop.hasBannerBracket) {
+    const bLen = 8.5;
+    ctx.save();
+    ctx.translate(leanX * 0.75, leanY * 0.75);
+    ctx.rotate(perp);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(mastRadius * 0.5, 0);
+    ctx.lineTo(bLen, 0);
+    ctx.stroke();
+
+    // Small municipal console plaque/flag
+    ctx.fillStyle = '#1d4ed8';
+    ctx.fillRect(2.5, -1.35, 5.4, 2.7);
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(2.5, -1.35, 5.4, 2.7);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(3.4, -0.45, 3.6, 0.9);
+    ctx.restore();
+  }
+
+  // 5. Civil defense / PA loudspeaker horn (рупор оповещения)
+  if (prop.hasSpeaker) {
+    const sx = leanX * 0.88 - bx * 2.2 + px * 3.4;
+    const sy = leanY * 0.88 - by * 2.2 + py * 3.4;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(baseAngle + 0.55);
+    ctx.fillStyle = '#94a3b8';
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(-1.2, -0.7);
+    ctx.lineTo(2.4, -2.0);
+    ctx.lineTo(2.4, 2.0);
+    ctx.lineTo(-1.2, 0.7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(1.8, -1.5, 0.7, 3.0);
+    ctx.restore();
+  }
+
+  // 6. Stenciled municipal pole inventory number plate (micro-tag)
+  if (prop.poleNumber) {
+    const nx = -bx * (mastRadius + 1.5);
+    const ny = -by * (mastRadius + 1.5);
+    ctx.save();
+    ctx.translate(nx, ny);
+    ctx.rotate(baseAngle + Math.PI / 2);
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(-2.4, -0.9, 4.8, 1.8);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.4;
+    ctx.strokeRect(-2.4, -0.9, 4.8, 1.8);
+    // Micro-stencil ticks representing digits
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-1.7, -0.35, 0.9, 0.7);
+    ctx.fillRect(-0.4, -0.35, 0.9, 0.7);
+    ctx.fillRect(0.9, -0.35, 0.9, 0.7);
+    ctx.restore();
+  }
+}
+
+// --- HELPER: REALISTIC MOUNTED CCTV CAMERA + NIGHT MOTION LED FLOODLIGHT ---
+function renderMountedCameraAssembly(
+  ctx: CanvasRenderingContext2D,
+  prop: StreetProp,
+  leanX: number,
+  leanY: number,
+  nowMs: number
+) {
+  const baseCamAngle = getCameraBaseAngle(prop);
+  const aimAngle = getCameraCurrentAngle(prop);
+  const camType = prop.cameraType ?? (prop.type === 'cctv_pole' ? 'bullet_ir' : 'dome_ptz');
+  const hasFloodlight = prop.hasCameraFloodlight !== false;
+  const floodIntensity = prop.cameraLightIntensity ?? 0;
+  const motion = Boolean(prop.cameraMotionDetected);
+  const armDist = prop.type === 'cctv_pole' ? 6.5 : prop.type === 'lamp_highway' ? 7.5 : 6.2;
+
+  const blinkPeriod = motion ? 260 : 1200;
+  const ledBlinkOn = Math.floor(nowMs / blinkPeriod) % 2 === 0;
+
+  // 1. Galvanized pole band clamp (хомут камеры)
+  ctx.save();
+  ctx.translate(leanX * 0.85, leanY * 0.85);
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.arc(0, 0, 3.1, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Coiled armored PoE conduit cable loop
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(Math.cos(baseCamAngle + 0.55) * 2.5, Math.sin(baseCamAngle + 0.55) * 2.5);
+  ctx.quadraticCurveTo(
+    Math.cos(baseCamAngle + 0.35) * (armDist * 0.65),
+    Math.sin(baseCamAngle + 0.35) * (armDist * 0.65),
+    Math.cos(baseCamAngle) * (armDist - 0.8),
+    Math.sin(baseCamAngle) * (armDist - 0.8)
+  );
+  ctx.stroke();
+
+  // Rigid steel L-bracket extending from pole
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 1.9;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(Math.cos(baseCamAngle) * armDist, Math.sin(baseCamAngle) * armDist);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(Math.cos(baseCamAngle) * (armDist - 0.6), Math.sin(baseCamAngle) * (armDist - 0.6));
+  ctx.stroke();
+
+  // Move to bracket tip
+  ctx.translate(Math.cos(baseCamAngle) * armDist, Math.sin(baseCamAngle) * armDist);
+
+  // Integrated Night Motion-Activated LED Floodlight Housing + PIR Dome Sensor
+  const drawFloodlightUnit = (offsetX: number, offsetY: number, rotAngle: number, scale: number = 1) => {
+    if (!hasFloodlight) return;
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.rotate(rotAngle);
+    ctx.scale(scale, scale);
+
+    // Die-cast black aluminum body with heatsink ribs
+    ctx.fillStyle = '#18181b';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-2.1, -2.5, 4.0, 5.0, 0.8);
+    else ctx.rect(-2.1, -2.5, 4.0, 5.0);
+    ctx.fill();
+    ctx.strokeStyle = '#3f3f46';
+    ctx.lineWidth = 0.55;
+    ctx.stroke();
+
+    // Rear heatsink cooling fins
+    ctx.strokeStyle = '#52525b';
+    ctx.lineWidth = 0.45;
+    ctx.beginPath();
+    ctx.moveTo(-1.4, -2.1); ctx.lineTo(-1.4, 2.1);
+    ctx.moveTo(-0.5, -2.1); ctx.lineTo(-0.5, 2.1);
+    ctx.stroke();
+
+    // Parabolic reflector face & LED emitter window
+    if (floodIntensity > 0.03) {
+      ctx.fillStyle = `rgba(224, 242, 254, ${(0.55 + floodIntensity * 0.45).toFixed(2)})`;
+      ctx.fillRect(0.9, -2.0, 1.35, 4.0);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(1.15, -1.5, 0.9, 3.0);
+    } else {
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(0.9, -1.9, 1.2, 3.8);
+      // Individual dormant SMD LED chips
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(1.15, -1.3, 0.65, 0.8);
+      ctx.fillRect(1.15, -0.35, 0.65, 0.8);
+      ctx.fillRect(1.15, 0.6, 0.65, 0.8);
+    }
+
+    // Miniature white Fresnel PIR motion sensor dome on side of floodlight
+    ctx.fillStyle = motion ? '#fde68a' : '#f1f5f9';
+    ctx.beginPath();
+    ctx.arc(0.4, 2.75, 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 0.35;
+    ctx.stroke();
+
+    ctx.restore();
+  };
+
+  if (camType === 'dome_ptz') {
+    // White gooseneck dome mount + smoked hemisphere + rotating optical turret
+    ctx.save();
+    ctx.rotate(aimAngle);
+
+    // White aluminum upper shroud ring
+    const shroudGrad = ctx.createRadialGradient(-0.8, -0.8, 0.4, 0, 0, 3.4);
+    shroudGrad.addColorStop(0, '#f8fafc');
+    shroudGrad.addColorStop(0.65, '#cbd5e1');
+    shroudGrad.addColorStop(1, '#64748b');
+    ctx.fillStyle = shroudGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 0.65;
+    ctx.stroke();
+
+    // Smoked optical polycarbonate hemisphere dome
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(0.55, 0, 2.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Visible internal camera lens aperture aimed along aimAngle (+X)
+    ctx.fillStyle = '#1e3a5f';
+    ctx.beginPath();
+    ctx.arc(1.55, 0, 1.0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(1.85, -0.25, 0.38, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Specular curved glass highlight on dome
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.55)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.arc(0.3, -0.2, 1.7, -Math.PI * 0.78, -Math.PI * 0.25);
+    ctx.stroke();
+
+    // Active telemetry/recording LED
+    ctx.fillStyle = motion ? '#ff2a2a' : ledBlinkOn ? '#ef4444' : '#450a0a';
+    ctx.beginPath();
+    ctx.arc(-1.4, -1.2, 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Side-mounted night motion floodlight synced with PTZ aim
+    drawFloodlightUnit(
+      Math.cos(baseCamAngle + Math.PI / 2) * 3.8,
+      Math.sin(baseCamAngle + Math.PI / 2) * 3.8,
+      aimAngle,
+      0.88
+    );
+  } else if (camType === 'traffic_enforcement') {
+    // Road radar + ANPR speed/surveillance enforcement complex ("Кордон" / "Стрелка")
+    ctx.save();
+    ctx.rotate(baseCamAngle);
+
+    // Crossbar mounting plate
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(-1.2, -5.0, 2.4, 10.0);
+
+    // Weatherproof white/silver enforcement housing
+    const bodyGrad = ctx.createLinearGradient(-1.8, -4.4, 3.5, 4.4);
+    bodyGrad.addColorStop(0, '#f8fafc');
+    bodyGrad.addColorStop(0.55, '#cbd5e1');
+    bodyGrad.addColorStop(1, '#64748b');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-1.5, -4.4, 5.2, 8.8, 1.0);
+    else ctx.rect(-1.5, -4.4, 5.2, 8.8);
+    ctx.fill();
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+
+    // Black front sun-hood & optical bezel
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(2.7, -3.9, 1.3, 7.8);
+
+    // Primary telephoto ANPR lens + overview lens
+    ctx.fillStyle = '#0ea5e9';
+    ctx.beginPath();
+    ctx.arc(3.3, -1.9, 0.75, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(3.3, 1.7, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Integrated IR / night LED flash array bar in middle
+    ctx.fillStyle = floodIntensity > 0.03 ? '#ffffff' : '#7f1d1d';
+    ctx.fillRect(2.9, -0.75, 0.9, 1.5);
+
+    // Red active recording / radar status indicator
+    ctx.fillStyle = motion ? '#ff2a2a' : ledBlinkOn ? '#ef4444' : '#450a0a';
+    ctx.beginPath();
+    ctx.arc(0.4, -3.1, 0.55, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+    // High-power floodlight module directly over the enforcement box
+    drawFloodlightUnit(
+      Math.cos(baseCamAngle) * 0.5,
+      Math.sin(baseCamAngle) * 0.5,
+      baseCamAngle,
+      0.85
+    );
+  } else if (camType === 'dual_security') {
+    // Dual angled perimeter bullet cameras + central heavy LED floodlight
+    const drawMiniBullet = (localRot: number, sideOffset: number) => {
+      ctx.save();
+      ctx.rotate(baseCamAngle);
+      ctx.translate(0, sideOffset);
+      ctx.rotate(localRot);
+
+      // White aluminum bullet housing
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-2.0, -1.45, 5.2, 2.9, 0.7);
+      else ctx.rect(-2.0, -1.45, 5.2, 2.9);
+      ctx.fill();
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 0.55;
+      ctx.stroke();
+
+      // Dark sun-hood visor
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(2.1, -1.55, 1.5, 3.1);
+
+      // Multi-coated glass lens glint
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(3.2, 0, 0.48, 0, Math.PI * 2);
+      ctx.fill();
+
+      // IR / REC status LED
+      ctx.fillStyle = motion ? '#ff2a2a' : ledBlinkOn ? '#ef4444' : '#450a0a';
+      ctx.beginPath();
+      ctx.arc(2.5, -0.8, 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    // Mounting T-bar
+    ctx.save();
+    ctx.rotate(baseCamAngle);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(0, -4.4);
+    ctx.lineTo(0, 4.4);
+    ctx.stroke();
+    ctx.restore();
+
+    drawMiniBullet(-0.46, -3.5);
+    drawMiniBullet(0.46, 3.5);
+    drawFloodlightUnit(Math.cos(baseCamAngle) * 1.4, Math.sin(baseCamAngle) * 1.4, baseCamAngle, 1.05);
+  } else {
+    // 'bullet_ir': classic weatherproof cylindrical bullet CCTV camera with sunshield + motion floodlight
+    ctx.save();
+    ctx.rotate(baseCamAngle);
+
+    // Camera swivel knuckle
+    ctx.fillStyle = '#475569';
+    ctx.beginPath();
+    ctx.arc(-1.8, 0, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cylindrical weatherproof off-white housing
+    const bulletGrad = ctx.createLinearGradient(0, -2.0, 0, 2.0);
+    bulletGrad.addColorStop(0, '#f8fafc');
+    bulletGrad.addColorStop(0.5, '#cbd5e1');
+    bulletGrad.addColorStop(1, '#64748b');
+    ctx.fillStyle = bulletGrad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-1.8, -1.85, 6.0, 3.7, 0.9);
+    else ctx.rect(-1.8, -1.85, 6.0, 3.7);
+    ctx.fill();
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Black front sunshield hood & optical ring
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(3.0, -1.95, 1.75, 3.9);
+
+    // Recessed dark glass lens with cyan optical reflection
+    ctx.fillStyle = '#1e3a8a';
+    ctx.beginPath();
+    ctx.arc(4.2, 0, 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#7dd3fc';
+    ctx.beginPath();
+    ctx.arc(4.4, -0.25, 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Red IR / recording indicator LED
+    ctx.fillStyle = motion ? '#ff2a2a' : ledBlinkOn ? '#ef4444' : '#450a0a';
+    ctx.beginPath();
+    ctx.arc(3.55, -1.05, 0.45, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    // Compact LED motion-activated night floodlight mounted beside bullet camera
+    drawFloodlightUnit(
+      Math.cos(baseCamAngle + Math.PI / 2) * 3.5,
+      Math.sin(baseCamAngle + Math.PI / 2) * 3.5,
+      baseCamAngle,
+      0.92
+    );
+  }
+
+  ctx.restore();
+}
+
+// --- HELPER: REALISTIC LUMINAIRE HEAD (DAY GLASS vs NIGHT EMISSION) ---
+function renderHighwayLuminaireHead(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  prop: StreetProp,
+  isLit: boolean,
+  litIntensity: number
+) {
+  const isLed = prop.bulbType === 'led_cool' || prop.bulbType === 'led_neutral';
+  const spectral = getBulbSpectralColor(prop.bulbType, prop.type);
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  // Subtle shadow directly beneath luminaire head
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+  ctx.beginPath();
+  ctx.ellipse(2.6, 0.9, 6.2, 3.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (isLed) {
+    // Sleek die-cast aluminum aerodynamic LED cobra-head fixture
+    const casingGrad = ctx.createLinearGradient(-2.5, -3.4, 8.5, 3.4);
+    casingGrad.addColorStop(0, '#64748b');
+    casingGrad.addColorStop(0.45, '#94a3b8');
+    casingGrad.addColorStop(1, '#334155');
+    ctx.fillStyle = casingGrad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-2.5, -3.3, 10.6, 6.6, [1.8, 3.2, 3.2, 1.8]);
+    else ctx.rect(-2.5, -3.3, 10.6, 6.6);
+    ctx.fill();
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+
+    // Ribbed aluminum heatsink fins
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    for (let fx = -0.8; fx <= 2.4; fx += 0.95) {
+      ctx.moveTo(fx, -2.7);
+      ctx.lineTo(fx, 2.7);
+    }
+    ctx.stroke();
+
+    // NEMA photocell dusk-to-dawn sensor dome on rear collar
+    ctx.fillStyle = '#0284c7';
+    ctx.beginPath();
+    ctx.arc(-1.1, 0, 0.95, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 0.4;
+    ctx.stroke();
+
+    // Recessed LED optical chamber
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(2.7, -2.4, 4.7, 4.8, 1.2);
+    else ctx.rect(2.7, -2.4, 4.7, 4.8);
+    ctx.fill();
+
+    if (prop.glassShattered) {
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(3.0, -1.8); ctx.lineTo(6.8, 1.8);
+      ctx.moveTo(3.2, 1.8); ctx.lineTo(6.6, -1.7);
+      ctx.stroke();
+    } else if (isLit && litIntensity > 0.05) {
+      ctx.globalAlpha = Math.min(1, 0.5 + litIntensity * 0.5);
+      ctx.fillStyle = spectral.lensOnOuter;
+      ctx.beginPath();
+      ctx.ellipse(5.0, 0, 2.1, 1.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = spectral.lensOnCore;
+      ctx.beginPath();
+      ctx.ellipse(5.0, 0, 1.4, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      // Realistic daytime polycarbonate optical lens & visible LED matrix cells
+      const lensGrad = ctx.createLinearGradient(2.8, -2.0, 7.2, 2.0);
+      lensGrad.addColorStop(0, '#cbd5e1');
+      lensGrad.addColorStop(0.5, '#64748b');
+      lensGrad.addColorStop(1, '#334155');
+      ctx.fillStyle = lensGrad;
+      ctx.fillRect(3.0, -2.0, 4.1, 4.0);
+      // Micro SMD LED emitters inside lens
+      ctx.fillStyle = '#fef3c7';
+      for (const lx of [3.8, 5.2, 6.3]) {
+        ctx.fillRect(lx - 0.35, -1.35, 0.65, 0.75);
+        ctx.fillRect(lx - 0.35, 0.55, 0.65, 0.75);
+      }
+      // Subtle daytime glass reflection streak
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(3.3, -1.4); ctx.lineTo(6.6, -1.4);
+      ctx.stroke();
+    }
+  } else {
+    // Classic contoured aluminum ЖКУ / РКУ cobra hood with curved borosilicate diffuser bowl
+    const hoodGrad = ctx.createLinearGradient(-2.5, -3.6, 8.2, 3.6);
+    hoodGrad.addColorStop(0, '#94a3b8');
+    hoodGrad.addColorStop(0.45, '#64748b');
+    hoodGrad.addColorStop(1, '#334155');
+    ctx.fillStyle = hoodGrad;
+    ctx.beginPath();
+    ctx.moveTo(-2.8, -1.7);
+    ctx.quadraticCurveTo(0.8, -3.9, 5.6, -3.4);
+    ctx.quadraticCurveTo(8.6, -2.8, 8.6, 0);
+    ctx.quadraticCurveTo(8.6, 2.8, 5.6, 3.4);
+    ctx.quadraticCurveTo(0.8, 3.9, -2.8, 1.7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.75;
+    ctx.stroke();
+
+    // Central stamped hood ridge & stainless steel clamp clips
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 0.75;
+    ctx.beginPath();
+    ctx.moveTo(-1.8, 0);
+    ctx.lineTo(2.4, 0);
+    ctx.stroke();
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(1.5, -3.5, 1.2, 0.7);
+    ctx.fillRect(1.5, 2.8, 1.2, 0.7);
+
+    // Optical diffuser glass bowl
+    if (prop.glassShattered) {
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.ellipse(4.4, 0, 3.1, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(2.2, -1.3); ctx.lineTo(6.4, 1.2);
+      ctx.moveTo(2.6, 1.4); ctx.lineTo(6.1, -1.3);
+      ctx.stroke();
+    } else if (isLit && litIntensity > 0.05) {
+      ctx.globalAlpha = Math.min(1, 0.5 + litIntensity * 0.5);
+      ctx.fillStyle = spectral.lensOnOuter;
+      ctx.beginPath();
+      ctx.ellipse(4.4, 0, 3.2, 2.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = spectral.lensOnMid;
+      ctx.beginPath();
+      ctx.ellipse(4.4, 0, 2.2, 1.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = spectral.lensOnCore;
+      ctx.beginPath();
+      ctx.ellipse(4.4, 0, 1.2, 0.75, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      // Realistic daytime fluted glass bowl with subtle reflective specular sheen
+      const glassGrad = ctx.createRadialGradient(3.6, -0.7, 0.4, 4.4, 0, 3.3);
+      glassGrad.addColorStop(0, '#e2e8f0');
+      glassGrad.addColorStop(0.55, '#94a3b8');
+      glassGrad.addColorStop(1, '#475569');
+      ctx.fillStyle = glassGrad;
+      ctx.beginPath();
+      ctx.ellipse(4.4, 0, 3.1, 2.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 0.55;
+      ctx.stroke();
+
+      // Inner tubular arc lamp silhouette visible through clear glass
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.45)';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(2.6, 0);
+      ctx.lineTo(6.0, 0);
+      ctx.stroke();
+
+      // Specular daylight glint
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.beginPath();
+      ctx.ellipse(3.6, -0.8, 1.3, 0.45, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+}
+
+export interface TallPropRenderContext {
+  isLit?: boolean;
+  litIntensity?: number;
+  nowMs?: number;
+}
+
+// --- TALL PROPS (INTACT & BENT LAMPS, CCTV MASTS & POWER POLES) ---
+export function renderTallStreetProp(
+  ctx: CanvasRenderingContext2D,
+  prop: StreetProp,
+  renderCtx?: TallPropRenderContext
+) {
+  const isLit = Boolean(renderCtx?.isLit);
+  const litIntensity = renderCtx?.litIntensity ?? (isLit ? 1 : 0);
+  const nowMs = renderCtx?.nowMs ?? Date.now();
+
   const tilt = prop.tiltAmount ?? 0;
   const tiltDir = prop.tiltAngle ?? 0;
-  // Convertworld-space tiltAngle into local offset if needed; renderTallStreetProp is called with ctx at (prop.x, prop.y) and unrotated
   const leanX = Math.cos(tiltDir) * tilt * 10;
   const leanY = Math.sin(tiltDir) * tilt * 10;
+  const baseAngle = getPropEffectiveAngle(prop);
+  const wear = prop.wearLevel ?? 0.22;
 
-  if (prop.type === 'lamp_highway') {
-    // 1. АВТОМОБИЛЬНЫЙ ФОНАРЬ (С ВЫНОСОМ ЛАМПЫ НАД ПРОЕЗЖЕЙ ЧАСТЬЮ)
-    const angle = (prop.angle || 0) + tilt * 0.18;
+  if (prop.type === 'lamp_highway' || prop.type === 'street_lamp') {
+    // 1. АВТОМОБИЛЬНЫЙ МАГИСТРАЛЬНЫЙ ФОНАРЬ (ОГК / ТРУБЧАТАЯ СТАЛЬНАЯ ОПОРА С ВЫНОСОМ)
+    const angle = baseAngle + tilt * 0.18;
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
-    const reach = 22;
-    const armTipX = leanX + cosA * reach;
-    const armTipY = leanY + sinA * reach;
+    const isTwin = prop.armType === 'double' || prop.lampStyle === 'twin_mast';
+    const reach = prop.armLength ?? (prop.type === 'street_lamp' ? 14 : isTwin ? 20 : 22);
+    const isDarkSteel = prop.lampStyle === 'painted_dark_steel';
 
-    // Heavy steel base plate with 4 galvanized anchor bolts at ground (0,0)
-    ctx.fillStyle = '#1e293b';
+    // Ambient occlusion & poured concrete foundation apron
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
-    ctx.arc(0, 0, 4.6, 0, Math.PI * 2);
+    ctx.arc(0.8, 1.0, 6.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // 4 zinc anchor bolt heads
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillRect(-2.5, -2.5, 1.2, 1.2);
-    ctx.fillRect(1.3, -2.5, 1.2, 1.2);
-    ctx.fillRect(-2.5, 1.3, 1.2, 1.2);
-    ctx.fillRect(1.3, 1.3, 1.2, 1.2);
-
-    // Flange collar ring
-    ctx.fillStyle = '#334155';
+    // Concrete foundation collar pad
+    const padGrad = ctx.createRadialGradient(-1.5, -1.5, 1.0, 0, 0, 5.8);
+    padGrad.addColorStop(0, '#9ca3af');
+    padGrad.addColorStop(0.7, '#6b7280');
+    padGrad.addColorStop(1, '#374151');
+    ctx.fillStyle = padGrad;
     ctx.beginPath();
-    ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+    ctx.arc(0, 0, 5.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Heavy octagonal steel anchor flange plate
+    ctx.fillStyle = isDarkSteel ? '#1e293b' : '#475569';
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4 + Math.PI / 8;
+      const px = Math.cos(a) * 4.5;
+      const py = Math.sin(a) * 4.5;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 0.65;
+    ctx.stroke();
+
+    // 4 galvanized hex anchor bolts with washers & subtle weathering
+    for (let b = 0; b < 4; b++) {
+      const ba = (b * Math.PI) / 2 + Math.PI / 4;
+      const bx = Math.cos(ba) * 3.15;
+      const by = Math.sin(ba) * 3.15;
+      ctx.fillStyle = wear > 0.5 ? '#9a3412' : '#334155';
+      ctx.beginPath();
+      ctx.arc(bx, by, 0.95, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.arc(bx - 0.15, by - 0.15, 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Welded base collar sleeve
+    const sleeveGrad = ctx.createRadialGradient(-0.8, -0.8, 0.5, 0, 0, 3.2);
+    sleeveGrad.addColorStop(0, isDarkSteel ? '#475569' : '#cbd5e1');
+    sleeveGrad.addColorStop(0.6, isDarkSteel ? '#1e293b' : '#64748b');
+    sleeveGrad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = sleeveGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.1, 0, Math.PI * 2);
     ctx.fill();
 
-    // If bent by vehicle impact, draw the leaning vertical mast stem from (0,0) to (leanX, leanY)
+    // Pole accessories (reflective stripes, junction box, banner, speaker, pole ID)
+    renderPoleAccessories(ctx, prop, angle, leanX, leanY, 3.1);
+
+    // Leaning mast shaft when plastically bent by collision
     if (tilt > 0.04) {
-      ctx.strokeStyle = '#64748b';
+      ctx.strokeStyle = isDarkSteel ? '#1e293b' : '#64748b';
       ctx.lineWidth = 4.2;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(leanX, leanY);
       ctx.stroke();
-    }
 
-    // Vertical mast stem top
-    ctx.fillStyle = '#64748b';
-    ctx.beginPath();
-    ctx.arc(leanX, leanY, 2.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Cantilever arched mast arm ("вынос консоли над дорогой")
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 2.6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(leanX, leanY);
-    ctx.lineTo(armTipX, armTipY);
-    ctx.stroke();
-
-    // Galvanized zinc top highlight
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(leanX - sinA * 0.6, leanY + cosA * 0.6);
-    ctx.lineTo(armTipX - sinA * 0.6, armTipY + cosA * 0.6);
-    ctx.stroke();
-
-    // Strengthening gusset / triangular bracket at base of cantilever arm
-    ctx.fillStyle = '#334155';
-    ctx.beginPath();
-    ctx.moveTo(leanX, leanY);
-    ctx.lineTo(leanX + cosA * 5, leanY + sinA * 5);
-    ctx.lineTo(leanX + cosA * 2 - sinA * 2, leanY + sinA * 2 + cosA * 2);
-    ctx.closePath();
-    ctx.fill();
-
-    // Modern aerodynamic LED cobra-head luminaire fixture at arm tip
-    ctx.save();
-    ctx.translate(armTipX, armTipY);
-    ctx.rotate(angle);
-
-    // Luminaire housing casing
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(-2, -3, 9, 6, [2, 3, 3, 2]);
-    } else {
-      ctx.rect(-2, -3, 9, 6);
-    }
-    ctx.fill();
-
-    // Casing heat sink cooling fins
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(1, -2.5); ctx.lineTo(1, 2.5);
-    ctx.moveTo(3.5, -2.5); ctx.lineTo(3.5, 2.5);
-    ctx.stroke();
-
-    // Photocell dusk-to-dawn sensor
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(-1, -1, 1.2, 1.2);
-
-    // Downward-facing LED luminescent emitter lens (dark if glass shattered)
-    ctx.fillStyle = prop.glassShattered ? '#334155' : '#fef08a';
-    ctx.beginPath();
-    ctx.ellipse(3, 0, 3, 1.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (!prop.glassShattered) {
-      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = isDarkSteel ? '#475569' : '#cbd5e1';
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.ellipse(3, 0, 1.8, 1.0, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(0, -0.5);
+      ctx.lineTo(leanX, leanY - 0.5);
+      ctx.stroke();
     }
 
-    ctx.restore();
+    // Helper to draw a realistic cantilever bracket arm + luminaire head
+    const drawArmAndHead = (dirSign: 1 | -1) => {
+      const armAngle = dirSign === 1 ? angle : angle + Math.PI;
+      const dCos = cosA * dirSign;
+      const dSin = sinA * dirSign;
+      const armTipX = leanX + dCos * reach;
+      const armTipY = leanY + dSin * reach;
+
+      // Triangular welded steel gusset reinforcement plate
+      ctx.fillStyle = isDarkSteel ? '#1e293b' : '#475569';
+      ctx.beginPath();
+      ctx.moveTo(leanX - dSin * 1.4, leanY + dCos * 1.4);
+      ctx.lineTo(leanX + dCos * 6.5, leanY + dSin * 6.5);
+      ctx.lineTo(leanX + dSin * 1.4, leanY - dCos * 1.4);
+      ctx.closePath();
+      ctx.fill();
+
+      // Tubular cantilever arm underside shadow
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(leanX, leanY);
+      ctx.lineTo(armTipX, armTipY);
+      ctx.stroke();
+
+      // Main galvanized / graphite steel arm tube
+      ctx.strokeStyle = isDarkSteel ? '#334155' : '#8596a8';
+      ctx.lineWidth = 2.35;
+      ctx.beginPath();
+      ctx.moveTo(leanX, leanY);
+      ctx.lineTo(armTipX, armTipY);
+      ctx.stroke();
+
+      // Cylindrical top specular zinc highlight strip
+      ctx.strokeStyle = isDarkSteel ? '#64748b' : '#e2e8f0';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(leanX - dSin * 0.55, leanY + dCos * 0.55);
+      ctx.lineTo(armTipX - dSin * 0.55, armTipY + dCos * 0.55);
+      ctx.stroke();
+
+      // Slip-fitter mounting collar band near luminaire head
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2.9;
+      ctx.beginPath();
+      ctx.moveTo(leanX + dCos * (reach - 3.6), leanY + dSin * (reach - 3.6));
+      ctx.lineTo(leanX + dCos * (reach - 1.9), leanY + dSin * (reach - 1.9));
+      ctx.stroke();
+
+      renderHighwayLuminaireHead(ctx, armTipX, armTipY, armAngle, prop, isLit, litIntensity);
+    };
+
+    drawArmAndHead(1);
+    if (isTwin) {
+      drawArmAndHead(-1);
+    }
+
+    // Octagonal tapered mast top cap with metallic highlight
+    const capGrad = ctx.createRadialGradient(leanX - 0.8, leanY - 0.8, 0.3, leanX, leanY, 2.7);
+    capGrad.addColorStop(0, isDarkSteel ? '#64748b' : '#f1f5f9');
+    capGrad.addColorStop(0.55, isDarkSteel ? '#334155' : '#94a3b8');
+    capGrad.addColorStop(1, '#1e293b');
+    ctx.fillStyle = capGrad;
+    ctx.beginPath();
+    ctx.arc(leanX, leanY, 2.65, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 0.65;
+    ctx.stroke();
+
+    // Mounted surveillance camera & night motion floodlight if equipped
+    if (hasPoleCamera(prop)) {
+      renderMountedCameraAssembly(ctx, prop, leanX, leanY, nowMs);
+    }
 
   } else if (prop.type === 'lamp_concrete') {
-    // 2. СТАРЫЙ БЕТОННЫЙ ФОНАРЬ (НЕСБИВАЕМЫЙ, ДЛЯ СТАРЫХ РАЙОНОВ)
-    const angle = prop.angle || 0;
+    // 2. БЕТОННАЯ ОПОРА ОСВЕЩЕНИЯ (СВ-95 / ЦЕНТРИФУГИРОВАННАЯ СК С ТРАВЕРСОЙ И ГУСАКОМ)
+    const angle = baseAngle;
     const perpAngle = angle + Math.PI / 2;
     const tx = Math.cos(perpAngle);
     const ty = Math.sin(perpAngle);
+    const isRound = prop.lampStyle === 'centrifuged_round';
+    const isRusty = prop.lampStyle === 'weathered_rusty' || wear > 0.55;
+    const isDouble = prop.armType === 'double';
+    const reach = prop.armLength ?? 10.5;
+    const spectral = getBulbSpectralColor(prop.bulbType, prop.type);
 
-    // Stepped reinforced concrete foundation footing pad (3D pole shadow cast in unified shadow lightmap)
-    ctx.fillStyle = '#57534e';
-    ctx.fillRect(-4.5, -4.5, 9, 9);
-    ctx.strokeStyle = '#44403c';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-4.5, -4.5, 9, 9);
-
-    // Solid textured concrete pole body (classic Soviet СВ-95/110 profile)
-    ctx.fillStyle = '#78716c';
-    ctx.fillRect(-3.2, -3.2, 6.4, 6.4);
-
-    // Weathered lighter concrete face
-    ctx.fillStyle = '#a8a29e';
-    ctx.fillRect(-2.7, -2.7, 5.4, 2.7);
-
-    // Surface pitting & concrete aggregate flecks
-    ctx.fillStyle = '#44403c';
-    ctx.fillRect(-1.5, -1, 1.2, 1.2);
-    ctx.fillRect(1, 1, 1.1, 1.1);
-
-    // Dark iron mounting band clamp (хомут)
-    ctx.fillStyle = '#292524';
-    ctx.fillRect(-3.8, -0.9, 7.6, 1.8);
-
-    // Steel traverse cross-arm (траверса) perpendicular to road/path
-    ctx.strokeStyle = '#374151';
-    ctx.lineWidth = 2.4;
-    ctx.lineCap = 'square';
+    // Ground contact AO & cracked asphalt foundation skirt
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
     ctx.beginPath();
-    ctx.moveTo(-tx * 7, -ty * 7);
-    ctx.lineTo(tx * 7, ty * 7);
-    ctx.stroke();
+    ctx.arc(0.9, 1.1, 6.4, 0, Math.PI * 2);
+    ctx.fill();
 
-    // 2 Ceramic white insulators (фарфоровые изоляторы ЛЭП)
-    for (const sign of [-1, 1]) {
-      const ix = sign * tx * 6;
-      const iy = sign * ty * 6;
-      ctx.fillStyle = '#f8fafc';
+    // Reinforced stepped concrete footing pad
+    const footGrad = ctx.createLinearGradient(-5, -5, 5, 5);
+    footGrad.addColorStop(0, '#a8a29e');
+    footGrad.addColorStop(0.55, '#78716c');
+    footGrad.addColorStop(1, '#44403c');
+    ctx.fillStyle = footGrad;
+    if (isRound) {
       ctx.beginPath();
-      ctx.arc(ix, iy, 1.8, 0, Math.PI * 2);
+      ctx.arc(0, 0, 5.2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = '#292524';
+      ctx.lineWidth = 0.75;
       ctx.stroke();
-      // Power wire hook dot
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(ix - 0.5, iy - 0.5, 1, 1);
+    } else {
+      ctx.fillRect(-4.8, -4.8, 9.6, 9.6);
+      ctx.strokeStyle = '#292524';
+      ctx.lineWidth = 0.85;
+      ctx.strokeRect(-4.8, -4.8, 9.6, 9.6);
     }
 
-    // Curved steel pipe bracket reaching out ~9px towards street
-    const bx = Math.cos(angle) * 9;
-    const by = Math.sin(angle) * 9;
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = 1.8;
+    // Subtle moss/weathering flecks at weathered concrete base
+    if (wear > 0.35) {
+      ctx.fillStyle = 'rgba(77, 124, 15, 0.32)';
+      ctx.fillRect(-4.4, 2.2, 2.2, 1.8);
+      ctx.fillRect(2.1, -4.1, 1.8, 1.4);
+    }
+
+    // Pole accessories (reflective band, warning triangle, junction box, pole ID)
+    renderPoleAccessories(ctx, prop, angle, 0, 0, 3.6);
+
+    // Precast concrete pole shaft cross-section (chamfered SV-95 or cylindrical SK)
+    const bodyGrad = ctx.createLinearGradient(-3.4, -3.4, 3.4, 3.4);
+    bodyGrad.addColorStop(0, '#d6d3d1');
+    bodyGrad.addColorStop(0.45, '#a8a29e');
+    bodyGrad.addColorStop(1, '#57534e');
+    ctx.fillStyle = bodyGrad;
+    if (isRound) {
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#44403c';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(-2.7, -3.4);
+      ctx.lineTo(2.7, -3.4);
+      ctx.lineTo(3.4, -2.7);
+      ctx.lineTo(3.4, 2.7);
+      ctx.lineTo(2.7, 3.4);
+      ctx.lineTo(-2.7, 3.4);
+      ctx.lineTo(-3.4, 2.7);
+      ctx.lineTo(-3.4, -2.7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#44403c';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+    }
+
+    // Concrete micro-aggregate speckles & hairline weathering crack
+    ctx.fillStyle = '#57534e';
+    ctx.fillRect(-1.6, -1.2, 0.9, 0.9);
+    ctx.fillRect(1.1, 0.9, 1.0, 0.9);
+    ctx.fillStyle = '#e7e5e4';
+    ctx.fillRect(0.6, -1.7, 0.8, 0.8);
+    if (wear > 0.4) {
+      ctx.strokeStyle = 'rgba(41, 37, 36, 0.55)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-2.6, 0.5);
+      ctx.lineTo(-0.4, 1.2);
+      ctx.lineTo(1.5, 2.6);
+      ctx.stroke();
+    }
+
+    // Steel angle-iron traverse crossarm (траверса ЛЭП)
+    ctx.strokeStyle = isRusty ? '#5c2d16' : '#1f2937';
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'square';
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(bx, by);
+    ctx.moveTo(-tx * 7.5, -ty * 7.5);
+    ctx.lineTo(tx * 7.5, ty * 7.5);
     ctx.stroke();
 
-    // Classic vintage bell/conical enamel luminaire (СПО-200 / РКУ «колокольчик»)
+    ctx.strokeStyle = isRusty ? '#9a3412' : '#64748b';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(-tx * 7.2, -ty * 7.2);
+    ctx.lineTo(tx * 7.2, ty * 7.2);
+    ctx.stroke();
+
+    // 2 Glazed porcelain pin insulators (фарфоровые изоляторы ШФ-10)
+    for (const sign of [-1, 1]) {
+      const ix = sign * tx * 6.4;
+      const iy = sign * ty * 6.4;
+      const insGrad = ctx.createRadialGradient(ix - 0.5, iy - 0.5, 0.2, ix, iy, 1.9);
+      insGrad.addColorStop(0, '#ffffff');
+      insGrad.addColorStop(0.65, '#e2e8f0');
+      insGrad.addColorStop(1, '#94a3b8');
+      ctx.fillStyle = insGrad;
+      ctx.beginPath();
+      ctx.arc(ix, iy, 1.85, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+      // Tie-wire & top cap
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.arc(ix, iy, 0.65, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Rusted galvanized iron clamping band (хомут) with bolt ears
     ctx.save();
-    ctx.translate(bx, by);
-    ctx.fillStyle = '#374151';
-    ctx.beginPath();
-    ctx.arc(0, 0, 3.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#111827';
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-
-    // Glowing incandescent / sodium lamp bulb (warm golden-amber light)
-    ctx.fillStyle = '#f59e0b';
-    ctx.beginPath();
-    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#fef08a';
-    ctx.beginPath();
-    ctx.arc(0, 0, 1.1, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.rotate(angle);
+    ctx.fillStyle = isRusty ? '#7c2d12' : '#292524';
+    ctx.fillRect(-1.2, -4.1, 2.4, 8.2);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(-0.5, -4.5, 1.0, 0.8);
+    ctx.fillRect(-0.5, 3.7, 1.0, 0.8);
     ctx.restore();
 
+    // Curved gooseneck steel bracket(s) + Soviet РКУ / СПО-200 / ЖКУ luminaire head
+    const drawConcreteBracketAndHead = (dirSign: 1 | -1) => {
+      const bx = Math.cos(angle) * reach * dirSign;
+      const by = Math.sin(angle) * reach * dirSign;
+      const dCos = Math.cos(angle) * dirSign;
+      const dSin = Math.sin(angle) * dirSign;
+
+      // Steel bracket pipe with metallic highlight
+      ctx.strokeStyle = isRusty ? '#431407' : '#1f2937';
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+
+      ctx.strokeStyle = isRusty ? '#9a3412' : '#94a3b8';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(-dSin * 0.45, dCos * 0.45);
+      ctx.lineTo(bx - dSin * 0.45, by + dCos * 0.45);
+      ctx.stroke();
+
+      // Vintage conical/oval Soviet luminaire hood (РКУ / СПО-200)
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(dirSign === 1 ? angle : angle + Math.PI);
+
+      const hoodGrad = ctx.createRadialGradient(-0.8, -0.8, 0.5, 0.5, 0, 4.4);
+      hoodGrad.addColorStop(0, isRusty ? '#78716c' : '#64748b');
+      hoodGrad.addColorStop(0.65, isRusty ? '#44403c' : '#334155');
+      hoodGrad.addColorStop(1, '#111827');
+      ctx.fillStyle = hoodGrad;
+      ctx.beginPath();
+      ctx.ellipse(0.6, 0, 4.2, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.75;
+      ctx.stroke();
+
+      // Optical bowl inside hood (reflective enamel/glass by day, glowing sodium/DRL by night)
+      if (prop.glassShattered) {
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0.7, 0, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (isLit && litIntensity > 0.05) {
+        ctx.globalAlpha = Math.min(1, 0.48 + litIntensity * 0.52);
+        ctx.fillStyle = spectral.lensOnOuter;
+        ctx.beginPath();
+        ctx.ellipse(0.7, 0, 2.5, 2.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = spectral.lensOnMid;
+        ctx.beginPath();
+        ctx.ellipse(0.7, 0, 1.65, 1.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = spectral.lensOnCore;
+        ctx.beginPath();
+        ctx.ellipse(0.7, 0, 0.85, 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        // Daytime dusty borosilicate bowl & white enamel reflector ring
+        const dayLens = ctx.createRadialGradient(0.1, -0.6, 0.3, 0.7, 0, 2.5);
+        dayLens.addColorStop(0, '#f1f5f9');
+        dayLens.addColorStop(0.55, '#94a3b8');
+        dayLens.addColorStop(1, '#475569');
+        ctx.fillStyle = dayLens;
+        ctx.beginPath();
+        ctx.ellipse(0.7, 0, 2.4, 2.0, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.beginPath();
+        ctx.arc(0.0, -0.7, 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    };
+
+    drawConcreteBracketAndHead(1);
+    if (isDouble) {
+      drawConcreteBracketAndHead(-1);
+    }
+
+    if (hasPoleCamera(prop)) {
+      renderMountedCameraAssembly(ctx, prop, 0, 0, nowMs);
+    }
+
   } else if (prop.type === 'lamp') {
-    // 3. СТАНДАРТНЫЙ ПАРКОВЫЙ ФОНАРЬ (VICTORIAN ORNATE LANTERN)
-    // Fluted stepped octagonal cast iron base at ground (0,0)
-    ctx.fillStyle = '#1e293b';
+    // 3. ПАРКОВЫЙ / ДВОРОВЫЙ ФОНАРЬ (3 СТИЛЯ: ЧУГУННЫЙ КЛАССИЧЕСКИЙ, РЕТРО-ШАР, СОВРЕМЕННЫЙ ТОРШЕР)
+    const style = prop.lampStyle ?? 'cast_iron_classic';
+    const spectral = getBulbSpectralColor(prop.bulbType, prop.type);
+
+    // Ground contact AO
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
     ctx.beginPath();
-    ctx.arc(0, 0, 4.8, 0, Math.PI * 2);
+    ctx.arc(0.8, 1.0, 5.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // 4 perimeter anchor bolt nuts
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(-2.4, -2.4, 1.1, 1.1);
-    ctx.fillRect(1.3, -2.4, 1.1, 1.1);
-    ctx.fillRect(-2.4, 1.3, 1.1, 1.1);
-    ctx.fillRect(1.3, 1.3, 1.1, 1.1);
-
-    // Decorative fluted cylindrical collar
-    ctx.fillStyle = '#334155';
+    // Fluted cast-iron / anthracite pedestal base at ground (0,0)
+    const baseGrad = ctx.createRadialGradient(-1.2, -1.2, 0.6, 0, 0, 5.0);
+    if (style === 'modern_bollard_tall') {
+      baseGrad.addColorStop(0, '#64748b');
+      baseGrad.addColorStop(0.55, '#334155');
+      baseGrad.addColorStop(1, '#0f172a');
+    } else {
+      baseGrad.addColorStop(0, '#3f4f5f');
+      baseGrad.addColorStop(0.55, '#1e293b');
+      baseGrad.addColorStop(1, '#090d16');
+    }
+    ctx.fillStyle = baseGrad;
     ctx.beginPath();
-    ctx.arc(0, 0, 3.4, 0, Math.PI * 2);
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      const r = i % 2 === 0 ? 4.9 : 4.55;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 0.65;
+    ctx.stroke();
 
-    // If bent by vehicle impact, draw the leaning cast-iron column from (0,0) to (leanX, leanY)
+    // Perimeter flange bolts
+    ctx.fillStyle = '#94a3b8';
+    for (let b = 0; b < 4; b++) {
+      const ba = (b * Math.PI) / 2 + Math.PI / 4;
+      ctx.fillRect(Math.cos(ba) * 3.1 - 0.45, Math.sin(ba) * 3.1 - 0.45, 0.9, 0.9);
+    }
+
+    // Pole accessories if present
+    renderPoleAccessories(ctx, prop, baseAngle, leanX, leanY, 3.2);
+
+    // Leaning iron shaft when bent by vehicle impact
     if (tilt > 0.04) {
       ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 3.6;
+      ctx.lineWidth = 3.5;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(leanX, leanY);
       ctx.stroke();
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(0, -0.4);
+      ctx.lineTo(leanX, leanY - 0.4);
+      ctx.stroke();
     }
 
-    // Symmetrical cast-iron curved filigree scrollwork brackets at top
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.0;
-    ctx.beginPath();
-    ctx.arc(leanX, leanY, 4.0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Faceted glass lantern carriage with bronze ribs
-    ctx.fillStyle = '#475569';
-    ctx.beginPath();
-    ctx.arc(leanX, leanY, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (!prop.glassShattered) {
-      // Warm luminous core with golden filament bloom
-      ctx.fillStyle = '#f59e0b';
+    if (style === 'retro_globe') {
+      // Frosted opal glass globe on dark steel collar
+      ctx.fillStyle = '#1e293b';
       ctx.beginPath();
-      ctx.arc(leanX, leanY, 2.0, 0, Math.PI * 2);
+      ctx.arc(leanX, leanY, 3.8, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = '#fef08a';
+      if (prop.glassShattered) {
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(leanX, leanY, 2.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(leanX - 1.6, leanY - 1.4); ctx.lineTo(leanX + 1.5, leanY + 1.5);
+        ctx.stroke();
+      } else if (isLit && litIntensity > 0.05) {
+        ctx.globalAlpha = Math.min(1, 0.55 + litIntensity * 0.45);
+        const glowGrad = ctx.createRadialGradient(leanX - 0.6, leanY - 0.6, 0.3, leanX, leanY, 3.3);
+        glowGrad.addColorStop(0, spectral.lensOnCore);
+        glowGrad.addColorStop(0.6, spectral.lensOnMid);
+        glowGrad.addColorStop(1, spectral.lensOnOuter);
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(leanX, leanY, 3.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        // Milky frosted opal glass sphere with sky specular highlight
+        const opalGrad = ctx.createRadialGradient(leanX - 1.0, leanY - 1.0, 0.4, leanX, leanY, 3.25);
+        opalGrad.addColorStop(0, '#ffffff');
+        opalGrad.addColorStop(0.55, '#e2e8f0');
+        opalGrad.addColorStop(1, '#94a3b8');
+        ctx.fillStyle = opalGrad;
+        ctx.beginPath();
+        ctx.arc(leanX, leanY, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    } else if (style === 'modern_bollard_tall') {
+      // Sleek architectural anthracite aluminum column with annular LED diffuser ring
+      ctx.fillStyle = '#1e293b';
       ctx.beginPath();
-      ctx.arc(leanX, leanY, 1.2, 0, Math.PI * 2);
+      ctx.arc(leanX, leanY, 4.1, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
 
-      ctx.fillStyle = '#ffffff';
+      // Annular optical ring
+      if (!prop.glassShattered) {
+        ctx.strokeStyle = isLit && litIntensity > 0.05 ? spectral.lensOnMid : '#94a3b8';
+        ctx.lineWidth = 1.45;
+        ctx.beginPath();
+        ctx.arc(leanX, leanY, 2.75, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Brushed metallic center cap disc
+      const topCap = ctx.createRadialGradient(leanX - 0.6, leanY - 0.6, 0.2, leanX, leanY, 1.9);
+      topCap.addColorStop(0, '#94a3b8');
+      topCap.addColorStop(0.65, '#334155');
+      topCap.addColorStop(1, '#0f172a');
+      ctx.fillStyle = topCap;
       ctx.beginPath();
-      ctx.arc(leanX, leanY, 0.6, 0, Math.PI * 2);
+      ctx.arc(leanX, leanY, 1.85, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Shattered dark lantern head
-      ctx.fillStyle = '#0f172a';
+      // 'cast_iron_classic': Ornate hexagonal cast-iron carriage lantern with bronze ribs & finial
+      // Decorative scrolled iron brackets
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.1;
       ctx.beginPath();
-      ctx.arc(leanX, leanY, 1.6, 0, Math.PI * 2);
+      ctx.arc(leanX, leanY, 4.2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Hexagonal glass carriage
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        const hx = leanX + Math.cos(a) * 3.45;
+        const hy = leanY + Math.sin(a) * 3.45;
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+
+      if (prop.glassShattered) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fill();
+      } else if (isLit && litIntensity > 0.05) {
+        ctx.globalAlpha = Math.min(1, 0.55 + litIntensity * 0.45);
+        const litGrad = ctx.createRadialGradient(leanX, leanY, 0.3, leanX, leanY, 3.4);
+        litGrad.addColorStop(0, spectral.lensOnCore);
+        litGrad.addColorStop(0.55, spectral.lensOnMid);
+        litGrad.addColorStop(1, spectral.lensOnOuter);
+        ctx.fillStyle = litGrad;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        // Faceted transparent lantern glass by day
+        const glassDay = ctx.createRadialGradient(leanX - 0.8, leanY - 0.8, 0.4, leanX, leanY, 3.5);
+        glassDay.addColorStop(0, '#e2e8f0');
+        glassDay.addColorStop(0.55, '#94a3b8');
+        glassDay.addColorStop(1, '#334155');
+        ctx.fillStyle = glassDay;
+        ctx.fill();
+      }
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Cast-iron hexagonal roof ribs meeting at bronze finial spire
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        ctx.moveTo(leanX, leanY);
+        ctx.lineTo(leanX + Math.cos(a) * 3.3, leanY + Math.sin(a) * 3.3);
+      }
+      ctx.stroke();
+
+      // Cast-iron / verdigris bronze finial cap at very top
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(leanX, leanY, 1.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath();
+      ctx.arc(leanX - 0.2, leanY - 0.2, 0.55, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    if (hasPoleCamera(prop)) {
+      renderMountedCameraAssembly(ctx, prop, leanX, leanY, nowMs);
+    }
+
+  } else if (prop.type === 'cctv_pole') {
+    // 4. ОТДЕЛЬНАЯ ОПОРА ВИДЕОНАБЛЮДЕНИЯ С НОЧНОЙ ПОДСВЕТКОЙ ПО ДАТЧИКУ ДВИЖЕНИЯ
+    // Ground contact AO
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.beginPath();
+    ctx.arc(0.8, 1.0, 5.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Poured concrete plinth
+    const plinthGrad = ctx.createRadialGradient(-1.2, -1.2, 0.6, 0, 0, 5.0);
+    plinthGrad.addColorStop(0, '#9ca3af');
+    plinthGrad.addColorStop(0.7, '#6b7280');
+    plinthGrad.addColorStop(1, '#374151');
+    ctx.fillStyle = plinthGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = 0.65;
+    ctx.stroke();
+
+    // Square galvanized anchor flange with 4 bolts
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-3.4, -3.4, 6.8, 6.8);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.65;
+    ctx.strokeRect(-3.4, -3.4, 6.8, 6.8);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(-2.7, -2.7, 1.0, 1.0);
+    ctx.fillRect(1.7, -2.7, 1.0, 1.0);
+    ctx.fillRect(-2.7, 1.7, 1.0, 1.0);
+    ctx.fillRect(1.7, 1.7, 1.0, 1.0);
+
+    // Pole accessories (reflective stripes, telemetry cabinet, warning sign, pole ID)
+    renderPoleAccessories(ctx, prop, baseAngle, leanX, leanY, 2.8);
+
+    // Leaning galvanized steel mast if bent
+    if (tilt > 0.04) {
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 3.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(leanX, leanY);
+      ctx.stroke();
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(0, -0.4);
+      ctx.lineTo(leanX, leanY - 0.4);
+      ctx.stroke();
+    }
+
+    // Galvanized octagonal mast top cap + lightning finial / telemetry antenna stub
+    const mastGrad = ctx.createRadialGradient(leanX - 0.7, leanY - 0.7, 0.3, leanX, leanY, 2.7);
+    mastGrad.addColorStop(0, '#f1f5f9');
+    mastGrad.addColorStop(0.55, '#94a3b8');
+    mastGrad.addColorStop(1, '#334155');
+    ctx.fillStyle = mastGrad;
+    ctx.beginPath();
+    ctx.arc(leanX, leanY, 2.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 0.65;
+    ctx.stroke();
+
+    // Small top lightning arrestor pin
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.arc(leanX, leanY, 0.75, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Mounted surveillance camera & motion-activated night floodlight assembly
+    renderMountedCameraAssembly(ctx, prop, leanX, leanY, nowMs);
+
   } else if (prop.type === 'power_pole') {
     // RURAL WOODEN TELEGRAPH / POWER TRANSMISSION POLE
     const angle = prop.angle || 0;

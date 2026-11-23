@@ -1188,7 +1188,9 @@ function renderStreetPropShadows(
   for (const prop of props) {
     if (prop.x < minX - 150 || prop.x > maxX + 150 || prop.y < minY - 150 || prop.y > maxY + 150) continue;
 
-    const angle = prop.angle || 0;
+    const angle = typeof prop.angle === 'number' && Number.isFinite(prop.angle)
+      ? prop.angle
+      : (typeof (prop as any).rotation === 'number' && Number.isFinite((prop as any).rotation) ? (prop as any).rotation : 0);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
@@ -1198,6 +1200,8 @@ function renderStreetPropShadows(
       prop.isBroken &&
       (prop.type === 'lamp' ||
         prop.type === 'lamp_highway' ||
+        prop.type === 'street_lamp' ||
+        prop.type === 'cctv_pole' ||
         prop.type === 'traffic_light' ||
         prop.type === 'bollard' ||
         prop.type === 'railway_signal' ||
@@ -1227,6 +1231,8 @@ function renderStreetPropShadows(
       prop.type === 'lamp' ||
       prop.type === 'lamp_concrete' ||
       prop.type === 'lamp_highway' ||
+      prop.type === 'street_lamp' ||
+      prop.type === 'cctv_pole' ||
       prop.type === 'power_pole' ||
       prop.type === 'traffic_light' ||
       prop.type === 'kiosk' ||
@@ -1241,48 +1247,89 @@ function renderStreetPropShadows(
     if (tier === 'low' && isTallProp) continue;
     if (tier === 'high' && !isTallProp) continue;
 
+    const castCameraBracketShadow = (zCam: number) => {
+      if (!prop.hasCamera && prop.type !== 'cctv_pole') return;
+      const camA = typeof prop.cameraAngle === 'number' ? prop.cameraAngle : angle;
+      const camOff = getShadowOffset(zCam, sunState);
+      const camX = prop.x + Math.cos(camA) * 7.0;
+      const camY = prop.y + Math.sin(camA) * 7.0;
+      sCtx.beginPath();
+      sCtx.moveTo(prop.x + camOff.dx, prop.y + camOff.dy);
+      sCtx.lineTo(camX + camOff.dx, camY + camOff.dy);
+      sCtx.lineWidth = 2.0;
+      sCtx.stroke();
+      extrudeCylinderShadow(sCtx, camX, camY, 2.8, zCam - 3, zCam + 1, sunState);
+    };
+
     switch (prop.type) {
       case 'lamp': {
-        // Tall street lamp pole (z = 0..76px) + luminaire bracket arm at top
-        extrudeCylinderShadow(sCtx, prop.x, prop.y, 1.8, 0, 76, sunState);
-        const armEndX = prop.x + cos * 11;
-        const armEndY = prop.y + sin * 11;
-        const topOff = getShadowOffset(76, sunState);
+        // Park / courtyard lamp post (z = 0..64px) + lantern top
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 1.9, 0, 64, sunState);
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 3.6, 58, 66, sunState);
+        castCameraBracketShadow(52);
+        break;
+      }
+      case 'street_lamp': {
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.0, 0, 78, sunState);
+        const reach = prop.armLength ?? 14;
+        const armEndX = prop.x + cos * reach;
+        const armEndY = prop.y + sin * reach;
+        const topOff = getShadowOffset(78, sunState);
         sCtx.beginPath();
         sCtx.moveTo(prop.x + topOff.dx, prop.y + topOff.dy);
         sCtx.lineTo(armEndX + topOff.dx, armEndY + topOff.dy);
         sCtx.lineWidth = 2.6;
         sCtx.stroke();
-        extrudeCylinderShadow(sCtx, armEndX, armEndY, 3.2, 73, 76, sunState);
+        extrudeCylinderShadow(sCtx, armEndX, armEndY, 3.4, 75, 78, sunState);
+        castCameraBracketShadow(64);
         break;
       }
       case 'lamp_concrete': {
-        // Post-Soviet octagonal concrete pole (z = 0..82px) + angled bracket
-        extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.1, 0, 82, sunState);
-        const armEndX = prop.x + cos * 10;
-        const armEndY = prop.y + sin * 10;
+        // Post-Soviet concrete pole SV-95 (z = 0..82px) + crossarm + gooseneck bracket(s)
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.2, 0, 82, sunState);
+        const reach = prop.armLength ?? 10.5;
         const topOff = getShadowOffset(82, sunState);
-        sCtx.beginPath();
-        sCtx.moveTo(prop.x + topOff.dx, prop.y + topOff.dy);
-        sCtx.lineTo(armEndX + topOff.dx, armEndY + topOff.dy);
-        sCtx.lineWidth = 2.8;
-        sCtx.stroke();
-        extrudeCylinderShadow(sCtx, armEndX, armEndY, 3.0, 79, 82, sunState);
+        const drawArm = (sign: 1 | -1) => {
+          const armEndX = prop.x + cos * reach * sign;
+          const armEndY = prop.y + sin * reach * sign;
+          sCtx.beginPath();
+          sCtx.moveTo(prop.x + topOff.dx, prop.y + topOff.dy);
+          sCtx.lineTo(armEndX + topOff.dx, armEndY + topOff.dy);
+          sCtx.lineWidth = 2.6;
+          sCtx.stroke();
+          extrudeCylinderShadow(sCtx, armEndX, armEndY, 3.1, 79, 82, sunState);
+        };
+        drawArm(1);
+        if (prop.armType === 'double') drawArm(-1);
+        castCameraBracketShadow(66);
         break;
       }
       case 'lamp_highway':
       case 'industrial_floodlight': {
-        // Heavy highway cobra-head mast / floodlight tower (z = 0..105px) + long truss arm
+        // Heavy highway cobra-head mast / floodlight tower (z = 0..105px) + single or twin arm
         extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.4, 0, 105, sunState);
-        const armEndX = prop.x + cos * 22;
-        const armEndY = prop.y + sin * 22;
+        const isTwin = prop.armType === 'double' || prop.lampStyle === 'twin_mast';
+        const reach = prop.armLength ?? (isTwin ? 20 : 22);
         const topOff = getShadowOffset(105, sunState);
-        sCtx.beginPath();
-        sCtx.moveTo(prop.x + topOff.dx, prop.y + topOff.dy);
-        sCtx.lineTo(armEndX + topOff.dx, armEndY + topOff.dy);
-        sCtx.lineWidth = 3.0;
-        sCtx.stroke();
-        extrudeCylinderShadow(sCtx, armEndX, armEndY, 3.8, 101, 105, sunState);
+        const drawArm = (sign: 1 | -1) => {
+          const armEndX = prop.x + cos * reach * sign;
+          const armEndY = prop.y + sin * reach * sign;
+          sCtx.beginPath();
+          sCtx.moveTo(prop.x + topOff.dx, prop.y + topOff.dy);
+          sCtx.lineTo(armEndX + topOff.dx, armEndY + topOff.dy);
+          sCtx.lineWidth = 3.0;
+          sCtx.stroke();
+          extrudeCylinderShadow(sCtx, armEndX, armEndY, 3.8, 101, 105, sunState);
+        };
+        drawArm(1);
+        if (isTwin) drawArm(-1);
+        castCameraBracketShadow(80);
+        break;
+      }
+      case 'cctv_pole': {
+        // Dedicated surveillance mast (z = 0..72px) + camera & LED floodlight head
+        extrudeCylinderShadow(sCtx, prop.x, prop.y, 2.1, 0, 72, sunState);
+        castCameraBracketShadow(68);
         break;
       }
       case 'power_pole':

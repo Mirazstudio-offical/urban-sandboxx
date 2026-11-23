@@ -1676,12 +1676,22 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
         isWalkableWhenBroken: true
       };
     case 'lamp_highway':
+    case 'street_lamp':
       return {
         shape: 'circle', radius: prop.isBroken ? 2.8 : 3.8, resistance: 0.28, displayNameRu: 'автодорожный фонарь',
         anchorType: 'ground_anchored',
         postBreakMode: 'topple_pole',
         massKg: 260, frictionStatic: 0.85, frictionKinetic: 0.80,
         yieldEnergy: 2.6e6, breakEnergy: 9.8e6,
+        isWalkableWhenBroken: true
+      };
+    case 'cctv_pole':
+      return {
+        shape: 'circle', radius: prop.isBroken ? 2.6 : 3.5, resistance: 0.25, displayNameRu: 'опора видеонаблюдения',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'topple_pole',
+        massKg: 195, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 2.1e6, breakEnergy: 7.8e6,
         isWalkableWhenBroken: true
       };
     case 'lamp_concrete':
@@ -14759,7 +14769,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         const hadGlass = !prop.glassShattered;
         if (
           hadGlass &&
-          (prop.type === 'bus_stop' || prop.type === 'kiosk' || prop.type === 'lamp' || prop.type === 'lamp_highway' || prop.type === 'traffic_light') &&
+          (prop.type === 'bus_stop' || prop.type === 'kiosk' || prop.type === 'lamp' || prop.type === 'lamp_highway' || prop.type === 'street_lamp' || prop.type === 'cctv_pole' || prop.type === 'traffic_light') &&
           normalEnergy > hitbox.yieldEnergy * 1.15
         ) {
           prop.glassShattered = true;
@@ -14928,7 +14938,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       else if (prop.type === 'cone') { debrisColor = '#ea580c'; debrisCount = 5; debrisSubtype = 'plastic_chunk'; }
       else if (prop.type === 'bollard') { debrisColor = '#334155'; debrisCount = 5; debrisSubtype = 'metal_flake'; }
       else if (prop.type === 'traffic_light') { debrisColor = '#eab308'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'lamp_highway' || prop.type === 'lamp') { debrisColor = '#94a3b8'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'lamp_highway' || prop.type === 'lamp' || prop.type === 'street_lamp' || prop.type === 'cctv_pole') { debrisColor = '#94a3b8'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
       else if (prop.type === 'fallen_log') { debrisColor = '#78350f'; debrisCount = 9; debrisSubtype = 'wood_splinter'; }
       else if (prop.type === 'anthill') { debrisColor = '#5c4028'; debrisCount = 10; debrisSubtype = 'wood_splinter'; }
 
@@ -14959,7 +14969,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         });
       }
 
-      if (prop.type === 'lamp_highway' || prop.type === 'lamp' || prop.type === 'traffic_light') {
+      if (prop.type === 'lamp_highway' || prop.type === 'lamp' || prop.type === 'street_lamp' || prop.type === 'cctv_pole' || prop.type === 'traffic_light') {
         prop.glassShattered = true;
         for (let g = 0; g < 6; g++) {
           const gAngle = Math.random() * Math.PI * 2;

@@ -1593,6 +1593,8 @@ export interface StreetProp {
     | 'lamp' 
     | 'lamp_highway'
     | 'lamp_concrete'
+    | 'street_lamp'
+    | 'cctv_pole'
     | 'hydrant' 
     | 'trash_can' 
     | 'bus_stop' 
@@ -1660,6 +1662,7 @@ export interface StreetProp {
     | 'moss_boulder'
     | 'anthill';
   angle: number;
+  rotation?: number;
   intersectionId?: string;
   direction?: 'north' | 'south' | 'east' | 'west';
 
@@ -1670,6 +1673,44 @@ export interface StreetProp {
   isLocked?: boolean;
   plotId?: string;
   lockCode?: string;
+
+  // Streetlamp & Municipal Pole Attributes
+  lampStyle?:
+    | 'galvanized_octagonal'
+    | 'painted_dark_steel'
+    | 'twin_mast'
+    | 'sv95_soviet'
+    | 'centrifuged_round'
+    | 'weathered_rusty'
+    | 'cast_iron_classic'
+    | 'modern_bollard_tall'
+    | 'retro_globe';
+  bulbType?: 'sodium_dnat' | 'led_cool' | 'led_neutral' | 'mercury_drl' | 'tungsten_warm';
+  armType?: 'single' | 'double' | 'curved_gooseneck' | 'top_mounted';
+  armLength?: number;               // Custom cantilever arm reach in px
+  poleNumber?: string;              // Stenciled municipal inventory number (e.g. "М-104", "К-12")
+  hasJunctionBox?: boolean;         // Electrical service hatch / junction cabinet mounted on mast
+  hasReflectiveStripes?: boolean;   // High-visibility safety chevrons / reflective bands at base
+  hasBannerBracket?: boolean;       // Side street sign / flag bracket on shaft
+  hasSpeaker?: boolean;             // Public address horn speaker (ГОЧС) on pole
+  hasWarningSign?: boolean;         // Yellow high-voltage warning triangle plaque
+  wearLevel?: number;               // 0.0 (factory new) to 1.0 (weathered/rusted/chipped)
+  lampFault?: 'none' | 'flicker' | 'dim' | 'dead';
+
+  // Surveillance Camera & Motion-Activated Night Floodlight Attributes
+  hasCamera?: boolean;              // Pole equipped with CCTV / traffic surveillance camera
+  cameraType?: 'bullet_ir' | 'dome_ptz' | 'traffic_enforcement' | 'dual_security';
+  cameraAngle?: number;             // Base surveillance direction (radians)
+  cameraFov?: number;               // Horizontal detection sector angle (radians, default ~1.25)
+  cameraRange?: number;             // Motion detection & floodlight range in px (default ~205)
+  hasCameraFloodlight?: boolean;    // Equipped with motion-activated night LED floodlight
+  cameraFloodlightHoldSec?: number; // Seconds floodlight remains ON after object leaves (default 60)
+
+  // Runtime Surveillance State (transient, not persisted in map.json)
+  cameraLightTimer?: number;        // Remaining seconds of night floodlight hold (0..60)
+  cameraLightIntensity?: number;    // Smoothed 0..1 optical output for realistic snap-on / fade-off
+  cameraMotionDetected?: boolean;   // True while any moving target is currently inside FOV
+  cameraCurrentAimAngle?: number;   // Active PTZ pan heading (radians)
 
   // Breakable & Physical Props Simulation State
   isBroken?: boolean;

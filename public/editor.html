@@ -5441,6 +5441,8 @@ function updateSubtoolBar() {
         <select onchange="toolConfigs.prop.type=this.value;">
           <option value="bench">Скамейка</option>
           <option value="lamp_highway">Автомобильный фонарь (с выносом)</option>
+          <option value="lamp_highway_camera">Фонарь с камерой и ночной подсветкой</option>
+          <option value="cctv_pole">Опора видеонаблюдения (подсветка 60 сек)</option>
           <option value="lamp_concrete">Старый бетонный столб (несбиваемый)</option>
           <option value="lamp">Парковый фонарь</option>
           <option value="bus_stop">Автобусная остановка</option>
@@ -5803,13 +5805,32 @@ canvas.addEventListener('mousedown', (e) => {
   }
 
   else if (currentTool === 'prop') {
+    const rawType = toolConfigs.prop.type;
+    const isHighwayCam = rawType === 'lamp_highway_camera';
+    const isCctv = rawType === 'cctv_pole';
+    const propAngle = toolConfigs.prop.angle || 0;
     const newProp = {
       id: generateUniqueId('prop'),
       x: snapped.x,
       y: snapped.y,
-      type: toolConfigs.prop.type,
-      angle: toolConfigs.prop.angle || 0
+      type: isHighwayCam ? 'lamp_highway' : rawType,
+      angle: propAngle
     };
+    if (isHighwayCam || isCctv) {
+      newProp.hasCamera = true;
+      newProp.cameraType = isHighwayCam ? 'dome_ptz' : 'bullet_ir';
+      newProp.cameraAngle = propAngle;
+      newProp.cameraFov = isHighwayCam ? 1.55 : 1.25;
+      newProp.cameraRange = isHighwayCam ? 225 : 210;
+      newProp.hasCameraFloodlight = true;
+      newProp.cameraFloodlightHoldSec = 60;
+      newProp.hasJunctionBox = true;
+      newProp.hasReflectiveStripes = true;
+      if (isHighwayCam) {
+        newProp.lampStyle = 'galvanized_octagonal';
+        newProp.bulbType = 'led_cool';
+      }
+    }
     mapData.props.push(newProp);
     pushHistory('Add Prop');
     showToast(`Объект добавлен: ${newProp.type}`);
@@ -7232,13 +7253,121 @@ function renderBuildingInspectorExtended(b) {
 }
 
 function renderPropInspectorExtended(p) {
-  const rotDeg = Math.round(((p.angle || 0) * 180 / Math.PI) % 360);
+  const rotDeg = Math.round(((p.angle || 0) * 180 / Math.PI + 360) % 360);
+  const camDeg = Math.round((((p.cameraAngle ?? p.angle ?? 0) * 180 / Math.PI) + 360) % 360);
+  const isPoleProp = ['lamp', 'lamp_highway', 'lamp_concrete', 'street_lamp', 'cctv_pole'].includes(p.type);
+  const poleAttrsHtml = isPoleProp ? `
+      <div class="prop-field">
+        <label>Инвентарный номер опоры:</label>
+        <input type="text" value="${p.poleNumber || ''}" placeholder="М-001 / К-01" onchange="updateEntityProp('poleNumber', this.value)">
+      </div>
+      ${p.type !== 'cctv_pole' ? `
+      <div class="prop-field">
+        <label>Стиль опоры:</label>
+        <select onchange="updateEntityProp('lampStyle', this.value)">
+          <option value="galvanized_octagonal" ${p.lampStyle === 'galvanized_octagonal' ? 'selected' : ''}>Оцинкованная ОГК</option>
+          <option value="painted_dark_steel" ${p.lampStyle === 'painted_dark_steel' ? 'selected' : ''}>Тёмно-графитовая сталь</option>
+          <option value="twin_mast" ${p.lampStyle === 'twin_mast' ? 'selected' : ''}>Двухрожковая магистральная</option>
+          <option value="sv95_soviet" ${p.lampStyle === 'sv95_soviet' ? 'selected' : ''}>Бетонная СВ-95</option>
+          <option value="centrifuged_round" ${p.lampStyle === 'centrifuged_round' ? 'selected' : ''}>Бетонная круглая СК</option>
+          <option value="weathered_rusty" ${p.lampStyle === 'weathered_rusty' ? 'selected' : ''}>Старая потёртая с ржавчиной</option>
+          <option value="cast_iron_classic" ${p.lampStyle === 'cast_iron_classic' ? 'selected' : ''}>Чугунный парковый</option>
+          <option value="retro_globe" ${p.lampStyle === 'retro_globe' ? 'selected' : ''}>Ретро шар-плафон</option>
+          <option value="modern_bollard_tall" ${p.lampStyle === 'modern_bollard_tall' ? 'selected' : ''}>Современный торшер LED</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <label>Тип лампы (спектр):</label>
+        <select onchange="updateEntityProp('bulbType', this.value)">
+          <option value="sodium_dnat" ${p.bulbType === 'sodium_dnat' ? 'selected' : ''}>ДНаТ (янтарная натриевая)</option>
+          <option value="led_cool" ${p.bulbType === 'led_cool' ? 'selected' : ''}>LED 5000K (холодный белый)</option>
+          <option value="led_neutral" ${p.bulbType === 'led_neutral' ? 'selected' : ''}>LED 4000K (нейтральный)</option>
+          <option value="mercury_drl" ${p.bulbType === 'mercury_drl' ? 'selected' : ''}>ДРЛ (холодно-голубая ртутная)</option>
+          <option value="tungsten_warm" ${p.bulbType === 'tungsten_warm' ? 'selected' : ''}>Тёплый парковый 2700K</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <label>Консоль / Неисправность:</label>
+        <div class="prop-grid-2">
+          <select onchange="updateEntityProp('armType', this.value)">
+            <option value="single" ${(p.armType || 'single') === 'single' ? 'selected' : ''}>1 консоль</option>
+            <option value="double" ${p.armType === 'double' ? 'selected' : ''}>2 консоли</option>
+            <option value="top_mounted" ${p.armType === 'top_mounted' ? 'selected' : ''}>Торшер</option>
+          </select>
+          <select onchange="updateEntityProp('lampFault', this.value)">
+            <option value="none" ${(p.lampFault || 'none') === 'none' ? 'selected' : ''}>Исправна</option>
+            <option value="flicker" ${p.lampFault === 'flicker' ? 'selected' : ''}>Мерцает</option>
+            <option value="dim" ${p.lampFault === 'dim' ? 'selected' : ''}>Тусклая</option>
+            <option value="dead" ${p.lampFault === 'dead' ? 'selected' : ''}>Не горит</option>
+          </select>
+        </div>
+      </div>` : ''}
+      <div class="prop-field">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" ${p.hasJunctionBox ? 'checked' : ''} onchange="updateEntityProp('hasJunctionBox', this.checked)">
+          <span>Электрощиток / Телеметрия</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;">
+          <input type="checkbox" ${p.hasReflectiveStripes ? 'checked' : ''} onchange="updateEntityProp('hasReflectiveStripes', this.checked)">
+          <span>Светоотражающая разметка</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;">
+          <input type="checkbox" ${p.hasWarningSign ? 'checked' : ''} onchange="updateEntityProp('hasWarningSign', this.checked)">
+          <span>Знак высокого напряжения</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;">
+          <input type="checkbox" ${p.hasSpeaker ? 'checked' : ''} onchange="updateEntityProp('hasSpeaker', this.checked)">
+          <span>Громкоговоритель ГОЧС</span>
+        </label>
+      </div>
+      <div class="prop-field" style="border-top:1px solid rgba(148,163,184,0.2);padding-top:8px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;">
+          <input type="checkbox" ${(p.hasCamera || p.type === 'cctv_pole') ? 'checked' : ''} onchange="updateEntityProp('hasCamera', this.checked)">
+          <span>Камера видеонаблюдения</span>
+        </label>
+        ${(p.hasCamera || p.type === 'cctv_pole') ? `
+        <div style="margin-top:6px;">
+          <label>Тип камеры:</label>
+          <select onchange="updateEntityProp('cameraType', this.value)">
+            <option value="bullet_ir" ${(p.cameraType || 'bullet_ir') === 'bullet_ir' ? 'selected' : ''}>Цилиндрическая ИК</option>
+            <option value="dome_ptz" ${p.cameraType === 'dome_ptz' ? 'selected' : ''}>Поворотная купольная PTZ</option>
+            <option value="traffic_enforcement" ${p.cameraType === 'traffic_enforcement' ? 'selected' : ''}>Комплекс фотофиксации</option>
+            <option value="dual_security" ${p.cameraType === 'dual_security' ? 'selected' : ''}>Спаренные камеры охраны</option>
+          </select>
+        </div>
+        <div style="margin-top:6px;">
+          <label>Направление камеры (°): ${camDeg}°</label>
+          <input type="range" min="0" max="360" value="${camDeg}" oninput="updateEntityProp('cameraAngle', parseFloat(this.value) * Math.PI / 180)">
+        </div>
+        <div style="margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" ${p.hasCameraFloodlight !== false ? 'checked' : ''} onchange="updateEntityProp('hasCameraFloodlight', this.checked)">
+            <span>Ночная подсветка по движению</span>
+          </label>
+        </div>
+        <div class="prop-grid-2" style="margin-top:6px;">
+          <div>
+            <label>Дальность (px):</label>
+            <input type="number" min="80" max="360" value="${Math.round(p.cameraRange || 215)}" onchange="updateEntityProp('cameraRange', parseFloat(this.value))">
+          </div>
+          <div>
+            <label>Удержание (сек):</label>
+            <input type="number" min="5" max="180" value="${Math.round(p.cameraFloodlightHoldSec || 60)}" onchange="updateEntityProp('cameraFloodlightHoldSec', parseFloat(this.value))">
+          </div>
+        </div>` : ''}
+      </div>
+  ` : '';
   return `
     <div class="prop-card">
       <div style="font-weight:700;font-size:13px;color:var(--accent);">ДЕКОР / ПРОП: ${p.id || ''}</div>
       <div class="prop-field">
         <label>Тип объекта:</label>
         <select onchange="updateEntityProp('type', this.value)">
+          <option value="lamp_highway" ${p.type === 'lamp_highway' ? 'selected' : ''}>Автомобильный фонарь (с выносом)</option>
+          <option value="lamp_concrete" ${p.type === 'lamp_concrete' ? 'selected' : ''}>Бетонный столб СВ-95</option>
+          <option value="lamp" ${p.type === 'lamp' ? 'selected' : ''}>Парковый / дворовый фонарь</option>
+          <option value="street_lamp" ${p.type === 'street_lamp' ? 'selected' : ''}>Уличный фонарь</option>
+          <option value="cctv_pole" ${p.type === 'cctv_pole' ? 'selected' : ''}>Опора видеонаблюдения (подсветка 60 сек)</option>
           <option value="trash_can" ${p.type === 'trash_can' ? 'selected' : ''}>Мусорный бак</option>
           <option value="hydrant" ${p.type === 'hydrant' ? 'selected' : ''}>Пожарный гидрант</option>
           <option value="cone" ${p.type === 'cone' ? 'selected' : ''}>Дорожный конус</option>
@@ -7263,6 +7392,7 @@ function renderPropInspectorExtended(p) {
         <label>Угол поворота (°): ${rotDeg}°</label>
         <input type="range" min="0" max="360" value="${rotDeg}" oninput="updateEntityProp('angle', parseFloat(this.value) * Math.PI / 180)">
       </div>
+      ${poleAttrsHtml}
       <div class="prop-field">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
           <input type="checkbox" ${p.isBroken ? 'checked' : ''} onchange="updateEntityProp('isBroken', this.checked)">

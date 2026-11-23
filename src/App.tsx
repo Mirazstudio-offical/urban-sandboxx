@@ -59,6 +59,7 @@ import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
 import { RailwaySignalingSystem } from './railwaySignalingSystem';
 import { TrainSystem } from './trainSystem';
+import { updateCameraPoles } from './cameraPoleSystem';
 import { triggerPlayerActionAnim } from './humanAnimationSystem';
 import { 
   getAllBuildingEntrances,
@@ -2985,13 +2986,56 @@ export default function App() {
       setActivePlacement(null);
       activePlacementRef.current = null;
     } else if (placement.type === 'prop') {
+      const isHighwayCam = placement.id === 'lamp_highway_camera';
+      const isCctvPole = placement.id === 'cctv_pole';
+      const actualType = isHighwayCam ? 'lamp_highway' : placement.id;
       const newProp: StreetProp = {
         id: `spawn_prop_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         x: mouseWorldPos.x,
         y: mouseWorldPos.y,
-        type: placement.id as any,
+        type: actualType as any,
         angle: placement.angle,
-        isBroken: false
+        isBroken: false,
+        ...(actualType === 'lamp_highway'
+          ? {
+              lampStyle: 'galvanized_octagonal' as const,
+              bulbType: 'led_cool' as const,
+              armType: 'single' as const,
+              hasJunctionBox: true,
+              hasReflectiveStripes: true,
+              poleNumber: `М-${Math.floor(100 + Math.random() * 899)}`
+            }
+          : {}),
+        ...(actualType === 'lamp_concrete'
+          ? {
+              lampStyle: 'sv95_soviet' as const,
+              bulbType: 'sodium_dnat' as const,
+              hasWarningSign: true,
+              wearLevel: 0.45,
+              poleNumber: `Б-${Math.floor(100 + Math.random() * 899)}`
+            }
+          : {}),
+        ...(actualType === 'lamp'
+          ? {
+              lampStyle: 'cast_iron_classic' as const,
+              bulbType: 'tungsten_warm' as const,
+              poleNumber: `П-${Math.floor(100 + Math.random() * 899)}`
+            }
+          : {}),
+        ...(isHighwayCam || isCctvPole
+          ? {
+              hasCamera: true,
+              cameraType: isHighwayCam ? ('dome_ptz' as const) : ('bullet_ir' as const),
+              cameraAngle: placement.angle,
+              cameraFov: isHighwayCam ? 1.55 : 1.25,
+              cameraRange: isHighwayCam ? 225 : 210,
+              hasCameraFloodlight: true,
+              cameraFloodlightHoldSec: 60,
+              hasJunctionBox: true,
+              hasReflectiveStripes: true,
+              poleNumber: `К-${Math.floor(10 + Math.random() * 89)}`
+            }
+          : {})
       };
       world.props.push(newProp);
       spatialGridPropsRef.current.insert(newProp);
@@ -5111,6 +5155,7 @@ export default function App() {
         updateSurfaceHydrologyAndSnow(world, dt);
         updateSkidMarksAndParticles(world, player, dt);
         updateBreakablePropsAndLivingWorld(world, player, dt, vehGrid, spatialGridPropsRef.current);
+        updateCameraPoles(world, dt, player, onlineManager.getRemotePlayersArray(), timeHourRef.current);
 
         // Taxi Fleet Driver System Simulation (Order dispatch, passenger boarding, comfort rating, physical cash)
         TaxiFleetSystem.getInstance().update(

@@ -1095,8 +1095,8 @@ class SoundEngine {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
-      const isMetal = type === 'hydrant' || type === 'trash_can' || type === 'dumpster' || type === 'bollard' || type === 'lamp_highway';
-      const isGlass = type === 'bus_stop' || type === 'traffic_light' || type === 'lamp' || type === 'kiosk';
+      const isMetal = type === 'hydrant' || type === 'trash_can' || type === 'dumpster' || type === 'bollard' || type === 'lamp_highway' || type === 'street_lamp' || type === 'cctv_pole';
+      const isGlass = type === 'bus_stop' || type === 'traffic_light' || type === 'lamp' || type === 'kiosk' || type === 'cctv_pole';
       const isWood = type === 'bench';
 
       osc.type = isMetal ? 'square' : (isWood ? 'sawtooth' : 'triangle');

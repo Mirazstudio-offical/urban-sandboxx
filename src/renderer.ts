@@ -61,6 +61,13 @@ import { getBuildingLayout, renderBuildingInterior } from './buildingInteriors';
 import { drawItemModel2D } from './itemGraphic';
 import { screenEffectsSystem } from './screenEffects';
 import { renderStreetProp, renderStreetPropFoundation, renderTallStreetProp } from './propRenderer';
+import {
+  getCameraMountLocalOffset,
+  getStreetLampEmissionInfo,
+  hasPoleCamera,
+  isStreetLampProp,
+  isTallLampOrCameraProp
+} from './cameraPoleSystem';
 import { GasStationRenderer } from './gasStationRenderer';
 import { GAS_STATION_CONFIG } from './gasStationSystem';
 import { GarageCooperativeRenderer } from './garageCooperativeRenderer';
@@ -6801,7 +6808,7 @@ export class GameRenderer {
 
     // Pass 2: Street Prop Bodies (High-Detail Vector Rendering & Progressive Structural Deformation)
     for (const prop of props) {
-      if ((prop.type === 'lamp' || prop.type === 'lamp_highway' || prop.type === 'lamp_concrete') && !prop.isBroken) continue;
+      if ((isStreetLampProp(prop) || prop.type === 'cctv_pole') && !prop.isBroken) continue;
       if (prop.type === 'traffic_light' || prop.type === 'railway_signal') continue;
 
       if (prop.x < minX - 120 || prop.x > maxX + 120 || prop.y < minY - 120 || prop.y > maxY + 120) continue;
@@ -6809,7 +6816,7 @@ export class GameRenderer {
       ctx.save();
       ctx.translate(prop.x, prop.y);
 
-      if (prop.type !== 'lamp_highway' && prop.type !== 'lamp' && prop.type !== 'lamp_concrete') {
+      if (!isStreetLampProp(prop) && prop.type !== 'cctv_pole') {
         const bodyAngle = prop.angle ?? 0;
         if (bodyAngle) {
           ctx.rotate(bodyAngle);
@@ -7070,14 +7077,32 @@ export class GameRenderer {
       this.renderSingleTreeGeometry(ctx, tree, tree.x + sway.swayX, tree.y + sway.swayY, r, species, seed, sunState, sunX, sunY, season, snowCover);
     }
 
-    // Tall Intact Lampposts & Power Poles
+    // Tall Intact Lampposts, Surveillance Camera Masts & Power Poles
+    const lampNowMs = Date.now();
+    const lampTimeHour = world?.timeHour ?? (nightAlpha > 0.25 ? 23 : 12);
+    const lampCalSeason = world?.calendar?.season ?? world?.season ?? season;
+    const lampSunrise =
+      world?.calendar?.sunriseHour ??
+      (lampCalSeason === 'winter' ? 8.8 : lampCalSeason === 'summer' ? 3.9 : lampCalSeason === 'autumn' ? 6.8 : 6.0);
+    const lampSunset =
+      world?.calendar?.sunsetHour ??
+      (lampCalSeason === 'winter' ? 16.2 : lampCalSeason === 'summer' ? 21.1 : lampCalSeason === 'autumn' ? 18.2 : 19.0);
+
     for (const prop of props) {
-      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete' && prop.type !== 'power_pole') || prop.isBroken) continue;
-      if (prop.x < minX - 30 || prop.x > maxX + 30 || prop.y < minY - 30 || prop.y > maxY + 30) continue;
+      if (!isTallLampOrCameraProp(prop) || prop.isBroken) continue;
+      if (prop.x < minX - 42 || prop.x > maxX + 42 || prop.y < minY - 42 || prop.y > maxY + 42) continue;
+
+      const emission = isStreetLampProp(prop)
+        ? getStreetLampEmissionInfo(prop, lampTimeHour, nightAlpha, lampSunrise, lampSunset, 1, lampNowMs)
+        : null;
 
       ctx.save();
       ctx.translate(prop.x, prop.y);
-      renderTallStreetProp(ctx, prop);
+      renderTallStreetProp(ctx, prop, {
+        isLit: Boolean(emission?.isOn),
+        litIntensity: emission?.intensity ?? 0,
+        nowMs: lampNowMs
+      });
       ctx.restore();
     }
   }
@@ -14541,28 +14566,9 @@ export class GameRenderer {
       world.calendar?.sunsetHour ??
       (calSeason === 'winter' ? 16.2 : calSeason === 'summer' ? 21.1 : calSeason === 'autumn' ? 18.2 : 19.0);
 
-    const getStreetLampOn = (prop: StreetProp) => {
-      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete') || prop.isBroken || prop.glassShattered) return false;
-      const lampHash = Math.sin(prop.x * 12.9898 + prop.y * 78.233) * 43758.5453;
-      const randVal = lampHash - Math.floor(lampHash);
-
-      // Municipal photoresistor relay tied to actual seasonal astronomical sunset/sunrise
-      const sunsetHour = (calSunset - 0.30) + randVal * 0.70;
-      const sunriseHour = (calSunrise - 0.35) + randVal * 0.65;
-
-      let on = false;
-      if (timeHour >= sunsetHour || timeHour < sunriseHour || effectiveAlpha > 0.38) {
-        on = true;
-      }
-
-      const isTransitioning = Math.abs(timeHour - sunsetHour) < 0.04 || Math.abs(timeHour - sunriseHour) < 0.04;
-      if (isTransitioning && on) {
-        if (Math.sin(Date.now() * 0.04 + randVal * 20) > 0.25) {
-          on = false; // Gas-discharge lamp ignition flicker
-        }
-      }
-      return on;
-    };
+    const nowMsForLamps = Date.now();
+    const getStreetLampEmission = (prop: StreetProp) =>
+      getStreetLampEmissionInfo(prop, timeHour, effectiveAlpha, calSunrise, calSunset, fogFactor, nowMsForLamps);
 
     const getVehicleHeadlightOn = (car: Vehicle) => {
       if (car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle') return false;
@@ -15777,55 +15783,127 @@ export class GameRenderer {
       }
     }
 
-    // C. Street Lamp Cutouts & Sodium / Tungsten Radiance
+    // C. Street Lamp Cutouts & True Spectral Radiance (ДНаТ / LED / ДРЛ / Tungsten + Dual Arms)
     for (const prop of props) {
-      if (getStreetLampOn(prop) && prop.x >= minX - 60 && prop.x <= maxX + 60 && prop.y >= minY - 60 && prop.y <= maxY + 60) {
-        let lx = prop.x;
-        let ly = prop.y;
-        let lampRadius = 110 * fogFactor;
-        let peakCut = 0.92;
-        let lampRgb: readonly [number, number, number] = [255, 222, 146]; // courtyard/park warm cream-gold
-        let colorPeak = 0.56;
+      if (prop.x < minX - 180 || prop.x > maxX + 180 || prop.y < minY - 180 || prop.y > maxY + 180) continue;
 
-        if (prop.type === 'lamp_highway') {
-          const angle = prop.angle || 0;
-          lx = prop.x + Math.cos(angle) * 22;
-          ly = prop.y + Math.sin(angle) * 22;
-          lampRadius = 145 * fogFactor;
-          peakCut = 0.95;
-          lampRgb = [255, 174, 68]; // ДНаТ high-pressure sodium amber-orange
-          colorPeak = 0.64;
-        } else if (prop.type === 'lamp_concrete') {
-          const angle = prop.angle || 0;
-          lx = prop.x + Math.cos(angle) * 9;
-          ly = prop.y + Math.sin(angle) * 9;
-          lampRadius = 120 * fogFactor;
-          peakCut = 0.92;
-          lampRgb = [255, 186, 86];
-          colorPeak = 0.60;
+      const emission = getStreetLampEmission(prop);
+      if (emission) {
+        const lampRadius = emission.radius;
+        const peakCut = emission.peakCut;
+        const lampRgb = emission.rgb;
+        const colorPeak = emission.colorPeak;
+
+        for (let ei = 0; ei < emission.emitters.length; ei++) {
+          const lx = emission.emitters[ei].x;
+          const ly = emission.emitters[ei].y;
+
+          const lampGrad = lCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
+          lampGrad.addColorStop(0.00, `rgba(0, 0, 0, ${peakCut.toFixed(2)})`);
+          lampGrad.addColorStop(0.24, `rgba(0, 0, 0, ${(peakCut * 0.74).toFixed(2)})`);
+          lampGrad.addColorStop(0.52, `rgba(0, 0, 0, ${(peakCut * 0.40).toFixed(2)})`);
+          lampGrad.addColorStop(0.80, `rgba(0, 0, 0, ${(peakCut * 0.12).toFixed(2)})`);
+          lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = lampGrad;
+          lCtx.beginPath();
+          lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
+          lCtx.fill();
+
+          const cLampGrad = cCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
+          cLampGrad.addColorStop(0.00, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${colorPeak.toFixed(2)})`);
+          cLampGrad.addColorStop(0.28, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.66).toFixed(2)})`);
+          cLampGrad.addColorStop(0.58, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.28).toFixed(2)})`);
+          cLampGrad.addColorStop(0.85, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.07).toFixed(2)})`);
+          cLampGrad.addColorStop(1.00, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, 0)`);
+          cCtx.fillStyle = cLampGrad;
+          cCtx.beginPath();
+          cCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
+          cCtx.fill();
         }
+      }
 
-        const lampGrad = lCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
-        lampGrad.addColorStop(0.00, `rgba(0, 0, 0, ${peakCut})`);
-        lampGrad.addColorStop(0.24, `rgba(0, 0, 0, ${(peakCut * 0.74).toFixed(2)})`);
-        lampGrad.addColorStop(0.52, `rgba(0, 0, 0, ${(peakCut * 0.40).toFixed(2)})`);
-        lampGrad.addColorStop(0.80, `rgba(0, 0, 0, ${(peakCut * 0.12).toFixed(2)})`);
-        lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = lampGrad;
-        lCtx.beginPath();
-        lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
-        lCtx.fill();
+      // C2. Surveillance Camera Motion-Activated Night LED Floodlight (holds 60s after object disappears)
+      if (hasPoleCamera(prop) && prop.hasCameraFloodlight !== false && !prop.isBroken) {
+        const floodInt = prop.cameraLightIntensity ?? 0;
+        if (floodInt > 0.01) {
+          const mount = getCameraMountLocalOffset(prop);
+          const fx = prop.x + mount.x;
+          const fy = prop.y + mount.y;
+          const camType = prop.cameraType ?? (prop.type === 'cctv_pole' ? 'bullet_ir' : 'dome_ptz');
+          const range = (prop.cameraRange ?? 205) * fogFactor;
+          const beamHalfAngle =
+            camType === 'dual_security'
+              ? 0.92
+              : camType === 'traffic_enforcement'
+              ? 0.44
+              : 0.58;
 
-        const cLampGrad = cCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
-        cLampGrad.addColorStop(0.00, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${colorPeak.toFixed(2)})`);
-        cLampGrad.addColorStop(0.28, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.66).toFixed(2)})`);
-        cLampGrad.addColorStop(0.58, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.28).toFixed(2)})`);
-        cLampGrad.addColorStop(0.85, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.07).toFixed(2)})`);
-        cLampGrad.addColorStop(1.00, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, 0)`);
-        cCtx.fillStyle = cLampGrad;
-        cCtx.beginPath();
-        cCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
-        cCtx.fill();
+          const drawFloodBeam = (beamAngle: number, beamRange: number, halfSpread: number) => {
+            const cutPeak = Math.min(0.98, 0.96 * floodInt);
+            const colPeak = 0.68 * floodInt;
+
+            // Directional crisp LED security floodlight cone on darkness mask
+            lCtx.save();
+            lCtx.translate(fx, fy);
+            lCtx.rotate(beamAngle);
+            const cutGrad = lCtx.createRadialGradient(0, 0, 4, 0, 0, beamRange);
+            cutGrad.addColorStop(0.00, `rgba(0, 0, 0, ${cutPeak.toFixed(2)})`);
+            cutGrad.addColorStop(0.35, `rgba(0, 0, 0, ${(cutPeak * 0.86).toFixed(2)})`);
+            cutGrad.addColorStop(0.72, `rgba(0, 0, 0, ${(cutPeak * 0.42).toFixed(2)})`);
+            cutGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+            lCtx.fillStyle = cutGrad;
+            lCtx.beginPath();
+            lCtx.moveTo(0, 0);
+            lCtx.arc(0, 0, beamRange, -halfSpread, halfSpread);
+            lCtx.closePath();
+            lCtx.fill();
+            lCtx.restore();
+
+            // Crisp cool-white 5800K LED radiance on color lightmap
+            cCtx.save();
+            cCtx.translate(fx, fy);
+            cCtx.rotate(beamAngle);
+            const colGrad = cCtx.createRadialGradient(0, 0, 4, 0, 0, beamRange);
+            colGrad.addColorStop(0.00, `rgba(228, 244, 255, ${colPeak.toFixed(2)})`);
+            colGrad.addColorStop(0.38, `rgba(216, 238, 255, ${(colPeak * 0.68).toFixed(2)})`);
+            colGrad.addColorStop(0.75, `rgba(196, 226, 255, ${(colPeak * 0.26).toFixed(2)})`);
+            colGrad.addColorStop(1.00, 'rgba(186, 220, 255, 0)');
+            cCtx.fillStyle = colGrad;
+            cCtx.beginPath();
+            cCtx.moveTo(0, 0);
+            cCtx.arc(0, 0, beamRange, -halfSpread, halfSpread);
+            cCtx.closePath();
+            cCtx.fill();
+            cCtx.restore();
+          };
+
+          if (camType === 'dual_security') {
+            drawFloodBeam(mount.aimAngle - 0.44, range * 0.96, 0.56);
+            drawFloodBeam(mount.aimAngle + 0.44, range * 0.96, 0.56);
+          } else {
+            drawFloodBeam(mount.aimAngle, range, beamHalfAngle);
+          }
+
+          // Tight near-pole downward apron spill right beneath the floodlight
+          const spillR = 44 * fogFactor;
+          const spillCut = lCtx.createRadialGradient(fx, fy, 1, fx, fy, spillR);
+          spillCut.addColorStop(0, `rgba(0, 0, 0, ${(0.88 * floodInt).toFixed(2)})`);
+          spillCut.addColorStop(0.6, `rgba(0, 0, 0, ${(0.34 * floodInt).toFixed(2)})`);
+          spillCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = spillCut;
+          lCtx.beginPath();
+          lCtx.arc(fx, fy, spillR, 0, Math.PI * 2);
+          lCtx.fill();
+
+          const spillCol = cCtx.createRadialGradient(fx, fy, 1, fx, fy, spillR);
+          spillCol.addColorStop(0, `rgba(232, 246, 255, ${(0.52 * floodInt).toFixed(2)})`);
+          spillCol.addColorStop(0.6, `rgba(210, 235, 255, ${(0.18 * floodInt).toFixed(2)})`);
+          spillCol.addColorStop(1, 'rgba(200, 230, 255, 0)');
+          cCtx.fillStyle = spillCol;
+          cCtx.beginPath();
+          cCtx.arc(fx, fy, spillR, 0, Math.PI * 2);
+          cCtx.fill();
+        }
       }
     }
 
@@ -16290,47 +16368,101 @@ export class GameRenderer {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
-    // A. Street Lamp Fixture Pinpoints & Fog Halo
+    // A. Street Lamp Fixture Pinpoints, Fog Halo & Surveillance Camera Optics
     for (const prop of props) {
-      if (getStreetLampOn(prop) && prop.x >= minX - 60 && prop.x <= maxX + 60 && prop.y >= minY - 60 && prop.y <= maxY + 60) {
-        let lx = prop.x;
-        let ly = prop.y;
-        let isSodium = false;
-        if (prop.type === 'lamp_highway') {
-          const angle = prop.angle || 0;
-          lx = prop.x + Math.cos(angle) * 22;
-          ly = prop.y + Math.sin(angle) * 22;
-          isSodium = true;
-        } else if (prop.type === 'lamp_concrete') {
-          const angle = prop.angle || 0;
-          lx = prop.x + Math.cos(angle) * 9;
-          ly = prop.y + Math.sin(angle) * 9;
-          isSodium = true;
-        }
+      if (prop.x < minX - 100 || prop.x > maxX + 100 || prop.y < minY - 100 || prop.y > maxY + 100) continue;
 
-        // Atmospheric scatter around luminaire ONLY in genuine fog
-        if (isFog && weights.fog > 0.08) {
-          const haloRad = (prop.type === 'lamp_highway' ? 44 : 32) * fogFactor;
-          const haloA = Math.min(0.16, (0.04 + 0.12 * weights.fog) * weatherTransition);
-          const haloGrad = ctx.createRadialGradient(lx, ly, 1, lx, ly, haloRad);
-          haloGrad.addColorStop(0.0, isSodium ? `rgba(255, 195, 95, ${haloA.toFixed(3)})` : `rgba(255, 235, 175, ${haloA.toFixed(3)})`);
-          haloGrad.addColorStop(0.5, isSodium ? `rgba(255, 165, 60, ${(haloA * 0.35).toFixed(3)})` : `rgba(255, 215, 130, ${(haloA * 0.35).toFixed(3)})`);
-          haloGrad.addColorStop(1.0, 'rgba(255, 180, 70, 0)');
-          ctx.fillStyle = haloGrad;
+      const emission = getStreetLampEmission(prop);
+      if (emission) {
+        const [r, g, b] = emission.rgb;
+        const int = emission.intensity;
+        for (let ei = 0; ei < emission.emitters.length; ei++) {
+          const lx = emission.emitters[ei].x;
+          const ly = emission.emitters[ei].y;
+
+          // Atmospheric scatter around luminaire ONLY in genuine fog
+          if (isFog && weights.fog > 0.08) {
+            const haloRad = (prop.type === 'lamp_highway' ? 44 : 32) * fogFactor;
+            const haloA = Math.min(0.16, (0.04 + 0.12 * weights.fog) * weatherTransition) * int;
+            const haloGrad = ctx.createRadialGradient(lx, ly, 1, lx, ly, haloRad);
+            haloGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${haloA.toFixed(3)})`);
+            haloGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(haloA * 0.35).toFixed(3)})`);
+            haloGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+            ctx.fillStyle = haloGrad;
+            ctx.beginPath();
+            ctx.arc(lx, ly, haloRad, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Tiny physical bulb fixture emitter
+          const bulbGlow = ctx.createRadialGradient(lx, ly, 0, lx, ly, 4.2);
+          bulbGlow.addColorStop(0, `rgba(255, 255, 245, ${(0.90 * int).toFixed(2)})`);
+          bulbGlow.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${(0.48 * int).toFixed(2)})`);
+          bulbGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+          ctx.fillStyle = bulbGlow;
           ctx.beginPath();
-          ctx.arc(lx, ly, haloRad, 0, Math.PI * 2);
+          ctx.arc(lx, ly, 4.2, 0, Math.PI * 2);
           ctx.fill();
         }
+      }
 
-        // Tiny physical bulb fixture emitter
-        const bulbGlow = ctx.createRadialGradient(lx, ly, 0, lx, ly, 4.0);
-        bulbGlow.addColorStop(0, isSodium ? 'rgba(255, 240, 200, 0.90)' : 'rgba(255, 255, 240, 0.88)');
-        bulbGlow.addColorStop(0.45, isSodium ? 'rgba(255, 185, 78, 0.45)' : 'rgba(255, 225, 145, 0.45)');
-        bulbGlow.addColorStop(1, 'rgba(255, 190, 70, 0)');
-        ctx.fillStyle = bulbGlow;
-        ctx.beginPath();
-        ctx.arc(lx, ly, 4.0, 0, Math.PI * 2);
-        ctx.fill();
+      // A2. Surveillance Camera IR / REC LED & Motion-Activated Night Floodlight Glare
+      if (hasPoleCamera(prop) && !prop.isBroken) {
+        const mount = getCameraMountLocalOffset(prop);
+        const cx = prop.x + mount.x;
+        const cy = prop.y + mount.y;
+        const motion = Boolean(prop.cameraMotionDetected);
+        const floodInt = prop.cameraLightIntensity ?? 0;
+
+        // Subtle red IR / recording LED visible at dusk/night
+        if (effectiveAlpha > 0.08 || motion) {
+          const blinkPeriod = motion ? 260 : 1200;
+          const ledOn = motion || Math.floor(nowMsForLamps / blinkPeriod) % 2 === 0;
+          if (ledOn) {
+            const ledRad = motion ? 4.2 : 2.8;
+            const ledGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, ledRad);
+            ledGrad.addColorStop(0, motion ? 'rgba(255, 70, 70, 0.92)' : 'rgba(255, 45, 45, 0.72)');
+            ledGrad.addColorStop(0.5, 'rgba(220, 38, 38, 0.28)');
+            ledGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+            ctx.fillStyle = ledGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, ledRad, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Crisp cool-white LED lens glare & atmospheric cone scatter when floodlight is ON
+        if (prop.hasCameraFloodlight !== false && floodInt > 0.01) {
+          const glareRad = 7.5 * (0.7 + 0.3 * floodInt);
+          const glare = ctx.createRadialGradient(cx, cy, 0, cx, cy, glareRad);
+          glare.addColorStop(0, `rgba(255, 255, 255, ${(0.95 * floodInt).toFixed(2)})`);
+          glare.addColorStop(0.35, `rgba(216, 240, 255, ${(0.55 * floodInt).toFixed(2)})`);
+          glare.addColorStop(1, 'rgba(186, 224, 255, 0)');
+          ctx.fillStyle = glare;
+          ctx.beginPath();
+          ctx.arc(cx, cy, glareRad, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Subtle atmospheric Mie cone scatter in fog / rain / humid night air
+          if (isFog || isRaining || nightAlpha > 0.35) {
+            const scatterA = Math.min(0.14, (0.035 + weights.fog * 0.09 + weights.rain * 0.04) * floodInt);
+            const scatterLen = (prop.cameraRange ?? 205) * 0.55 * fogFactor;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(mount.aimAngle);
+            const coneGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, scatterLen);
+            coneGrad.addColorStop(0, `rgba(224, 242, 255, ${scatterA.toFixed(3)})`);
+            coneGrad.addColorStop(0.55, `rgba(204, 232, 255, ${(scatterA * 0.38).toFixed(3)})`);
+            coneGrad.addColorStop(1, 'rgba(190, 225, 255, 0)');
+            ctx.fillStyle = coneGrad;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, scatterLen, -0.42, 0.42);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
+        }
       }
     }
 
