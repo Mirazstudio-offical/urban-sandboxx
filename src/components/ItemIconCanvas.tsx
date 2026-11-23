@@ -6,13 +6,15 @@ interface ItemIconCanvasProps {
   item?: any;
   size?: number; // Canvas width and height in px
   className?: string;
+  rawBase?: boolean;
 }
 
 export const ItemIconCanvas: React.FC<ItemIconCanvasProps> = ({
   itemId,
   item,
   size = 32,
-  className = ''
+  className = '',
+  rawBase = false
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -29,9 +31,9 @@ export const ItemIconCanvas: React.FC<ItemIconCanvasProps> = ({
     ctx.save();
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, size, size);
-    drawItemModel2D(ctx, itemId, size / 2, size / 2, size * 0.78, item);
+    drawItemModel2D(ctx, itemId, size / 2, size / 2, size * 0.78, item, false, rawBase);
     ctx.restore();
-  }, [itemId, item, size]);
+  }, [itemId, item, size, rawBase]);
 
   return (
     <canvas

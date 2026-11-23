@@ -29,7 +29,8 @@ export function drawItemModel2D(
   centerY: number = 0,
   size: number = 24,
   item?: any,
-  isInnerContentRender: boolean = false
+  isInnerContentRender: boolean = false,
+  rawCatalogOnly: boolean = false
 ) {
   if (currentRenderDepth >= 2) return;
   const isInner = isInnerContentRender || currentRenderDepth > 0;
@@ -43,10 +44,10 @@ export function drawItemModel2D(
     ctx.scale(scale, scale);
 
     // If called with a catalog ID that maps to a unified fluid container or packaged container,
-    // synthesize the unified container ID and attributes so shop/catalog previews match the unified container
+    // synthesize the unified container ID and attributes unless rawCatalogOnly is requested
     let effectiveId = item?.itemId || itemId;
     let effectiveItem = item;
-    const legacyFluid = !isInner ? getResolvedFluidContainerConfig(effectiveId) : null;
+    const legacyFluid = !isInner && !rawCatalogOnly ? getResolvedFluidContainerConfig(effectiveId) : null;
     if (legacyFluid) {
       const origId = effectiveItem?.originalCatalogId || effectiveId;
       effectiveId = legacyFluid.containerId;
@@ -72,7 +73,7 @@ export function drawItemModel2D(
         };
       }
     } else {
-      const shouldResolvePkg = !isInner && (!effectiveItem || !ITEM_CATALOG[effectiveId]);
+      const shouldResolvePkg = !isInner && !rawCatalogOnly && (!effectiveItem || !ITEM_CATALOG[effectiveId]);
       const legacyPkg = shouldResolvePkg ? getResolvedPackagingConfig(effectiveId) : null;
       if (legacyPkg) {
         const origPkgId = effectiveId;

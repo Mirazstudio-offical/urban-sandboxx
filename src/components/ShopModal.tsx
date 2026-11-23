@@ -48,20 +48,27 @@ import {
   getPlayerDenominations, 
   calcOptimalTrayPayment,
   PlayerDenomInfo,
-  createPackagedItem,
+  createItemFromShopEntry,
   getItemTotalWeight,
   getUnifiedItemAttributes
 } from '../items';
-import { InventoryItem } from '../types';
+import { InventoryItem, GameWorld, MapShopCatalogEntry, ShopCatalogOverrideConfig } from '../types';
 import { SHAPE_NAMES_RU, LIQUID_REGISTRY, LiquidId } from '../liquidSystem';
 import { ModalShell, Tabs, Seg, TabItem } from './gameUi';
 
 const shopPreviewCache: Record<string, InventoryItem> = {};
-function getShopPreviewItem(itemId: string): InventoryItem {
-  if (!shopPreviewCache[itemId]) {
-    shopPreviewCache[itemId] = createPackagedItem(itemId, 1);
+function getShopPreviewCacheKey(item: ShopItem): string {
+  const firstInner = item.contents?.[0]?.itemId || '';
+  const innerCount = item.contents ? item.contents.reduce((s, c) => s + (c.count ?? 1), 0) : 0;
+  const fl = item.fluidStorage ? `${item.fluidStorage.liquidId || ''}:${item.fluidStorage.currentMl || 0}` : '';
+  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
+}
+function getShopPreviewItem(item: ShopItem): InventoryItem {
+  const cacheKey = getShopPreviewCacheKey(item);
+  if (!shopPreviewCache[cacheKey]) {
+    shopPreviewCache[cacheKey] = createItemFromShopEntry(item);
   }
-  return shopPreviewCache[itemId];
+  return shopPreviewCache[cacheKey];
 }
 
 function formatShopWeight(weightKg: number): string {
@@ -77,17 +84,9 @@ function formatShopWeight(weightKg: number): string {
 import { FUEL_GRADES } from '../gasStationSystem';
 import { createDefaultVehicleDamage, isTrailerVehicle } from '../vehicleHelpers';
 
-export interface ShopItem {
-  id: string;
-  itemId: string;
-  nameRu: string;
-  price: number;
+export interface ShopItem extends MapShopCatalogEntry {
   description: string;
-  category: 'food' | 'medical' | 'auto';
   effectText: string;
-  fuelPumpId?: string;
-  fuelLiters?: number;
-  fuelType?: FuelType;
 }
 
 export interface CityShop {
@@ -908,50 +907,141 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
   ]
 };
 
-/**
- * Resolves the shop catalog dynamically against ITEM_CATALOG (Single Source of Truth):
- * 1. Filters out any ShopItem whose itemId was removed from ITEM_CATALOG / packaging / fluid maps.
- * 2. Auto-populates nameRu, description, and effectText from ITEM_CATALOG when not overridden.
- * 3. Appends any items in ITEM_CATALOG that declare `shopListings` for this shopType.
- */
-export function getResolvedShopCatalog(shopType: string): ShopItem[] {
-  const baseList = SHOP_CATALOGS[shopType] || SHOP_CATALOGS.supermarket || [];
-  const seenItemIds = new Set<string>();
-  const resolved: ShopItem[] = [];
+function normalizeShopEntry(entry: MapShopCatalogEntry, priceMultiplier: number = 1): ShopItem | null {
+  if (!entry || !entry.itemId) return null;
+  const hasExplicitComposite = Boolean((entry.contents && entry.contents.length > 0) || entry.fluidStorage);
+  if (!hasExplicitComposite && !isRegisteredItemId(entry.itemId)) return null;
+  if (hasExplicitComposite && !ITEM_CATALOG[entry.itemId]) return null;
 
-  for (const entry of baseList) {
-    if (!isRegisteredItemId(entry.itemId)) continue;
-    seenItemIds.add(entry.itemId);
-    const catDef = ITEM_CATALOG[entry.itemId];
-    resolved.push({
-      ...entry,
-      nameRu: entry.nameRu || catDef?.nameRu || entry.itemId,
-      description: entry.description || catDef?.descriptionRu || '',
-      effectText: entry.effectText || formatItemEffectSummary(entry.itemId)
-    });
+  const catDef = ITEM_CATALOG[entry.itemId];
+  const innerId = entry.contents?.[0]?.itemId;
+  const innerDef = innerId ? ITEM_CATALOG[innerId] : undefined;
+  const adjustedPrice = priceMultiplier !== 1
+    ? Math.max(1, Math.round(entry.price * priceMultiplier))
+    : entry.price;
+
+  let autoEffect = entry.effectText || '';
+  if (!autoEffect) {
+    if (entry.contents && entry.contents.length > 0) {
+      const totalInner = entry.contents.reduce((acc, c) => acc + Math.max(1, c.count ?? 1), 0);
+      autoEffect = innerDef
+        ? `${innerDef.nameRu}${totalInner > 1 ? ` (${totalInner} шт.)` : ''}`
+        : formatItemEffectSummary(entry.originalCatalogId || entry.itemId);
+    } else if (entry.fluidStorage?.liquidId && LIQUID_REGISTRY[entry.fluidStorage.liquidId as LiquidId]) {
+      const liq = LIQUID_REGISTRY[entry.fluidStorage.liquidId as LiquidId];
+      autoEffect = `${liq.nameRu} (${entry.fluidStorage.currentMl} мл)`;
+    } else {
+      autoEffect = formatItemEffectSummary(entry.originalCatalogId || entry.itemId);
+    }
   }
 
-  for (const def of Object.values(ITEM_CATALOG)) {
-    if (!def.shopListings || seenItemIds.has(def.itemId)) continue;
-    for (const listing of def.shopListings) {
-      if (listing.shopType !== shopType) continue;
-      seenItemIds.add(def.itemId);
-      const shopCat: 'food' | 'medical' | 'auto' =
-        listing.category ||
-        (def.category === 'food' || def.category === 'drink'
-          ? 'food'
-          : def.category === 'med' || def.category === 'medical'
-          ? 'medical'
-          : 'auto');
-      resolved.push({
-        id: `auto_${shopType}_${def.itemId}`,
-        itemId: def.itemId,
-        nameRu: def.nameRu,
-        price: listing.price,
-        description: def.descriptionRu,
-        category: shopCat,
-        effectText: listing.effectText || formatItemEffectSummary(def.itemId)
-      });
+  return {
+    ...entry,
+    price: adjustedPrice,
+    nameRu: entry.nameRu || catDef?.nameRu || entry.itemId,
+    description: entry.description || catDef?.descriptionRu || '',
+    effectText: autoEffect
+  };
+}
+
+/**
+ * Resolves the shop catalog from the map (per-building `building.shopConfig` + `world.shopCatalogPresets`),
+ * falling back to built-in `SHOP_CATALOGS` only when a custom/legacy map lacks `shopCatalogPresets`.
+ */
+export function getResolvedShopCatalog(
+  shopType: string,
+  world?: GameWorld | null,
+  buildingId?: string | null,
+  roomName?: string | null
+): ShopItem[] {
+  const presets = world?.shopCatalogPresets;
+  const bld = buildingId && world?.buildings
+    ? world.buildings.find(b => b.id === buildingId)
+    : undefined;
+
+  let activeConfig: ShopCatalogOverrideConfig | undefined = bld?.shopConfig;
+  if (bld?.shopConfig?.roomCatalogs && roomName) {
+    const rmLower = roomName.toLowerCase();
+    const matchedRoomKey = Object.keys(bld.shopConfig.roomCatalogs).find(
+      k => k.toLowerCase() === rmLower || rmLower.includes(k.toLowerCase()) || k.toLowerCase().includes(rmLower)
+    );
+    if (matchedRoomKey) {
+      activeConfig = bld.shopConfig.roomCatalogs[matchedRoomKey];
+    }
+  }
+
+  const presetKey = activeConfig?.catalogPreset || shopType;
+  const priceMult = typeof activeConfig?.priceMultiplier === 'number' && Number.isFinite(activeConfig.priceMultiplier)
+    ? activeConfig.priceMultiplier
+    : 1;
+  const removeSet = new Set(activeConfig?.removeIds || []);
+
+  // 1. Choose source list: explicit per-building catalog -> map.json preset -> built-in fallback
+  let sourceList: MapShopCatalogEntry[] = [];
+  let usedMapData = false;
+
+  if (activeConfig?.catalog && activeConfig.catalog.length > 0) {
+    sourceList = activeConfig.catalog;
+    usedMapData = true;
+  } else if (presets && presets[presetKey] && presets[presetKey].length > 0) {
+    sourceList = presets[presetKey];
+    usedMapData = true;
+  } else if (presets && presets[shopType] && presets[shopType].length > 0) {
+    sourceList = presets[shopType];
+    usedMapData = true;
+  } else {
+    sourceList = SHOP_CATALOGS[presetKey] || SHOP_CATALOGS[shopType] || SHOP_CATALOGS.supermarket || [];
+  }
+
+  const seenEntryIds = new Set<string>();
+  const seenFallbackItemIds = new Set<string>();
+  const resolved: ShopItem[] = [];
+
+  for (const rawEntry of sourceList) {
+    if (removeSet.has(rawEntry.id)) continue;
+    if (seenEntryIds.has(rawEntry.id)) continue;
+    const norm = normalizeShopEntry(rawEntry, priceMult);
+    if (!norm) continue;
+    seenEntryIds.add(norm.id);
+    seenFallbackItemIds.add(norm.originalCatalogId || norm.itemId);
+    resolved.push(norm);
+  }
+
+  if (activeConfig?.addItems && activeConfig.addItems.length > 0) {
+    for (const extra of activeConfig.addItems) {
+      if (removeSet.has(extra.id) || seenEntryIds.has(extra.id)) continue;
+      const norm = normalizeShopEntry(extra, priceMult);
+      if (!norm) continue;
+      seenEntryIds.add(norm.id);
+      seenFallbackItemIds.add(norm.originalCatalogId || norm.itemId);
+      resolved.push(norm);
+    }
+  }
+
+  // Only append legacy ITEM_CATALOG.shopListings when running on a map without map.json presets
+  if (!usedMapData) {
+    for (const def of Object.values(ITEM_CATALOG)) {
+      if (!def.shopListings || seenFallbackItemIds.has(def.itemId)) continue;
+      for (const listing of def.shopListings) {
+        if (listing.shopType !== shopType) continue;
+        seenFallbackItemIds.add(def.itemId);
+        const shopCat: 'food' | 'medical' | 'auto' =
+          listing.category ||
+          (def.category === 'food' || def.category === 'drink'
+            ? 'food'
+            : def.category === 'med' || def.category === 'medical'
+            ? 'medical'
+            : 'auto');
+        resolved.push({
+          id: `auto_${shopType}_${def.itemId}`,
+          itemId: def.itemId,
+          nameRu: def.nameRu,
+          price: Math.max(1, Math.round(listing.price * priceMult)),
+          description: def.descriptionRu,
+          category: shopCat,
+          effectText: listing.effectText || formatItemEffectSummary(def.itemId)
+        });
+      }
     }
   }
 
@@ -1063,8 +1153,10 @@ export interface ShopModalProps {
   shop?: CityShop | null;
   shopTitle?: string;
   shopType?: CityShop['type'];
+  shopBuildingId?: string | null;
+  shopRoomName?: string | null;
   player: Player | null;
-  world?: any;
+  world?: GameWorld | null;
   onBuyItem?: (item: ShopItem, count?: number) => void;
   onBuyItems?: (items: ShopItem[], totalCost: number) => void;
   onRepairVehicle?: (alreadyPaid?: boolean, customCost?: number) => void;
@@ -1227,7 +1319,12 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   if (!isOpen || !shop || !player) return null;
 
   const playerCash = getPlayerCash(player);
-  const catalog = getResolvedShopCatalog(shop.type);
+  const catalog = getResolvedShopCatalog(
+    shop.type,
+    props.world,
+    props.shopBuildingId,
+    props.shopRoomName || shop.nameRu
+  );
 
   const cartTotal = cart.reduce((acc, entry) => acc + entry.item.price * entry.count, 0);
   const totalCartItemsCount = cart.reduce((acc, entry) => acc + entry.count, 0);
@@ -1873,7 +1970,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   };
 
   const getItemDept = (item: ShopItem): { id: string; label: string } => {
-    const id = item.itemId.toLowerCase();
+    const rawContainerId = item.itemId.toLowerCase();
+    const hasFill = Boolean(
+      (item.contents && item.contents.length > 0) ||
+      (item.fluidStorage && item.fluidStorage.liquidId && (item.fluidStorage.currentMl || 0) > 0)
+    );
+    const id = hasFill
+      ? (item.originalCatalogId || item.contents?.[0]?.itemId || item.fluidStorage?.liquidId || item.itemId).toLowerCase()
+      : rawContainerId;
     const name = item.nameRu.toLowerCase();
     if (isAutoShop) {
       if (id.includes('oil') || id.includes('coolant') || id.includes('fluid') || id.includes('canister') || id.includes('water') || name.includes('масло') || name.includes('антифриз') || name.includes('тосол') || name.includes('тормозн')) {
@@ -1891,7 +1995,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       if (isGasStation && (id.includes('oil') || id.includes('coolant') || id.includes('fluid') || id.includes('canister') || id.includes('tow') || id.includes('extinguisher') || id.includes('kit') || name.includes('масло') || name.includes('антифриз') || name.includes('тосол') || name.includes('канистр'))) {
         return { id: 'fluids', label: 'Автотовары и ГСМ' };
       }
-      if (id === 'grain_pack_pouch' || id === 'grain_pack_box' || id === 'pasta_pack_bag' || id === 'pasta_pack_long') {
+      if (!hasFill && (rawContainerId === 'grain_pack_pouch' || rawContainerId === 'grain_pack_box' || rawContainerId === 'pasta_pack_bag' || rawContainerId === 'pasta_pack_long')) {
         return { id: 'household', label: 'Тара и сопутствующее' };
       }
       if (id.startsWith('pasta_')) {
@@ -1907,13 +2011,13 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       ) {
         return { id: 'grains', label: 'Крупы и культуры' };
       }
-      if ((eff.includes('сытость') || id.includes('bread') || id.includes('meat') || id.includes('sausage') || id.includes('cheese') || id.includes('chips') || id.includes('choc') || id.includes('gummy') || id.includes('canned') || id.includes('burger') || id.includes('shawarma') || id.includes('pie') || id.includes('noodle') || id.includes('pelmeni') || id.includes('hotdog')) && !id.startsWith('chocolate_pack') && id !== 'pelmeni_pack') {
+      if ((eff.includes('сытость') || id.includes('bread') || id.includes('meat') || id.includes('minced') || id.includes('beef') || id.includes('pork') || id.includes('chicken') || id.includes('turkey') || id.includes('sausage') || id.includes('cheese') || id.includes('chips') || id.includes('choc') || id.includes('gummy') || id.includes('canned') || id.includes('burger') || id.includes('shawarma') || id.includes('pie') || id.includes('noodle') || id.includes('pelmen') || id.includes('hotdog')) && (hasFill || (!rawContainerId.startsWith('chocolate_pack') && !rawContainerId.startsWith('pelmeni_pack')))) {
         return { id: 'food', label: 'Продукты и перекус' };
       }
-      if (eff.includes('жажд') ||eff.includes('бодрость') || id.includes('water') || id.includes('cola') || id.includes('soda') || id.includes('juice') || id.includes('energy') || id.includes('milk') || id.includes('tea') || id.includes('coffee') || id.includes('kvass') || id.includes('beer')) {
+      if (eff.includes('жажд') || eff.includes('бодрость') || id.includes('water') || id.includes('cola') || id.includes('soda') || id.includes('juice') || id.includes('energy') || id.includes('milk') || id.includes('tea') || id.includes('coffee') || id.includes('kvass') || id.includes('beer')) {
         return { id: 'drinks', label: 'Напитки и кофе' };
       }
-      if (id.includes('bag') || id.includes('box') || id.includes('sack') || id.includes('pouch') || id.includes('crate') || id.includes('case') || id.includes('lock') || id.includes('cigarette') || id.includes('lighter') || id.includes('phone') || id.includes('watch') || id.startsWith('chocolate_pack') || id === 'pelmeni_pack') {
+      if (!hasFill && (rawContainerId.includes('bag') || rawContainerId.includes('box') || rawContainerId.includes('sack') || rawContainerId.includes('pouch') || rawContainerId.includes('crate') || rawContainerId.includes('case') || rawContainerId.includes('lock') || rawContainerId.includes('cigarette') || rawContainerId.includes('lighter') || rawContainerId.includes('phone') || rawContainerId.includes('watch') || rawContainerId.startsWith('chocolate_pack') || rawContainerId.startsWith('pelmeni_pack') || rawContainerId.startsWith('candy_pouch') || rawContainerId.startsWith('paper_packaging') || rawContainerId.startsWith('vacuum_pack') || rawContainerId === 'tray_sealed_food')) {
         return { id: 'household', label: 'Тара и сопутствующее' };
       }
       return { id: 'other', label: 'Разное' };
@@ -1944,7 +2048,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   const activeInspectedItem = catalog.find(i => i.id === selectedItemId) || filteredCatalog[0] || catalog[0] || null;
 
   const totalCartWeightKg = cart.reduce((sum, entry) => {
-    const pItem = getShopPreviewItem(entry.item.itemId);
+    const pItem = getShopPreviewItem(entry.item);
     return sum + getItemTotalWeight(pItem) * entry.count;
   }, 0);
 
@@ -2459,7 +2563,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   {filteredCatalog.map((item) => {
                     const inCart = cart.find((i) => i.item.id === item.id);
                     const countInCart = inCart ? inCart.count : 0;
-                    const previewItem = getShopPreviewItem(item.itemId);
+                    const previewItem = getShopPreviewItem(item);
                     const totalWeightKg = getItemTotalWeight(previewItem);
                     const weightLabel = formatShopWeight(totalWeightKg);
                     const isSelected = activeInspectedItem?.id === item.id;
@@ -2539,7 +2643,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
             {/* Right Column (Desktop > 920px & > 620px height): Inspector + Live Receipt */}
             <aside className="gu-shop-side">
               {activeInspectedItem && (() => {
-                const preview = getShopPreviewItem(activeInspectedItem.itemId);
+                const preview = getShopPreviewItem(activeInspectedItem);
                 const weightKg = getItemTotalWeight(preview);
                 const weightStr = formatShopWeight(weightKg);
                 const inCartEntry = cart.find((c) => c.item.id === activeInspectedItem.id);
@@ -2583,7 +2687,23 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       const liq = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId as LiquidId] : undefined;
                       const rawIng = uAttrs.ingredients ?? uAttrs.sourceIngredients;
                       const ingText = Array.isArray(rawIng) ? rawIng.filter(Boolean).join(', ') : rawIng;
+                      const containerDef = ITEM_CATALOG[preview.itemId];
+                      const innerItems = preview.contents && preview.contents.length > 0 ? preview.contents : null;
+                      const innerSummary = innerItems
+                        ? (() => {
+                            const counts = new Map<string, number>();
+                            innerItems.forEach((it) => {
+                              const label = it.nameRu || ITEM_CATALOG[it.itemId]?.nameRu || it.itemId;
+                              counts.set(label, (counts.get(label) || 0) + 1);
+                            });
+                            return Array.from(counts.entries())
+                              .slice(0, 3)
+                              .map(([label, qty]) => (qty > 1 ? `${label} ×${qty}` : label))
+                              .join(', ');
+                          })()
+                        : '';
                       const hasSpecs = Boolean(
+                        innerItems ||
                         liq ||
                         uAttrs.productShapeRu ||
                         uAttrs.grainGradeRu ||
@@ -2596,6 +2716,18 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
                       return (
                         <div className="gu-kv-grid gu-g2 gu-kv-compact" style={{ marginTop: 2 }}>
+                          {innerItems && (
+                            <>
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Упаковка</span>
+                                <span className="gu-kv-v">{containerDef?.nameRu || preview.itemId}</span>
+                              </div>
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Внутри</span>
+                                <span className="gu-kv-v">{innerSummary}</span>
+                              </div>
+                            </>
+                          )}
                           {liq && (
                             <div className="gu-kv">
                               <span className="gu-kv-k">Сыпучее / Вещество</span>
@@ -3545,7 +3677,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               {/* Left Column: Selected Cart Items */}
               <div className="gu-shop-cart-list">
                 {cart.map((entry) => {
-                  const cartPreview = getShopPreviewItem(entry.item.itemId);
+                  const cartPreview = getShopPreviewItem(entry.item);
                   const unitWeight = getItemTotalWeight(cartPreview);
                   const lineWeightStr = formatShopWeight(unitWeight * entry.count);
 

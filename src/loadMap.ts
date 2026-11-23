@@ -162,6 +162,10 @@ export function normalizeWorld(parsed: any): GameWorld {
     trainSchedules: Array.isArray(parsed.trainSchedules) ? parsed.trainSchedules : [],
     minimapMarkers: Array.isArray(parsed.minimapMarkers) ? parsed.minimapMarkers : [],
     spawnPoints: Array.isArray(parsed.spawnPoints) ? parsed.spawnPoints : [],
+    shopCatalogPresets:
+      parsed.shopCatalogPresets && typeof parsed.shopCatalogPresets === 'object'
+        ? parsed.shopCatalogPresets
+        : undefined,
   };
 
   ensureWorldGasStation(world);

@@ -209,7 +209,7 @@ const InventoryModalContent: React.FC<{
   }, [catalogAllItems, catalogSearch, catalogCategory]);
   const catalogSelected = catalogFiltered.find(it => it.key === catalogSelectedKey) || null;
   const catalogPreviewItem = React.useMemo(
-    () => (isFreeroam && catalogSelected ? createItem(catalogSelected.key, 1) : null),
+    () => (isFreeroam && catalogSelected ? createItem(catalogSelected.key, 1, undefined, true) : null),
     [isFreeroam, catalogSelected?.key]
   );
 
@@ -221,7 +221,7 @@ const InventoryModalContent: React.FC<{
   };
 
   const handleGiveCatalogItem = (key: string, count: number) => {
-    const created = createItem(key, count);
+    const created = createItem(key, count, undefined, true);
     const ok = addItemToPlayer(player, created);
     if (ok) {
       addPlayerNotification(player, `Получено: ${created.nameRu || created.name} x${count}`, 'pickup');
@@ -3180,7 +3180,7 @@ const InventoryModalContent: React.FC<{
                               }
                             }}
                           >
-                            <ItemIconCanvas itemId={it.key} size={42} />
+                            <ItemIconCanvas itemId={it.key} size={42} rawBase />
                           </div>
                         ))}
                       </div>
@@ -3193,7 +3193,7 @@ const InventoryModalContent: React.FC<{
                     <>
                       <div className="inv-detail-head">
                         <div className="inv-detail-ic">
-                          <ItemIconCanvas itemId={catalogSelected.key} item={catalogPreviewItem || undefined} size={42} />
+                          <ItemIconCanvas itemId={catalogSelected.key} item={catalogPreviewItem || undefined} size={42} rawBase />
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div className="cn inv-detail-title" title={catalogSelected.nameRu}>

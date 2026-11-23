@@ -89,7 +89,7 @@ import {
   cancelConsumption,
   createDefaultPlayerInventory, 
   createItem,
-  createPackagedItem,
+  createItemFromShopEntry,
   deductPlayerCash,
   getPlayerCash,
   pickupGroundItem, 
@@ -740,6 +740,8 @@ export default function App() {
   const [isDealershipOpen, setIsDealershipOpen] = useState<boolean>(false);
   const [shopTitle, setShopTitle] = useState<string>('СУПЕРМАРКЕТ 24/7');
   const [shopType, setShopType] = useState<CityShop['type']>('supermarket');
+  const [shopBuildingId, setShopBuildingId] = useState<string | null>(null);
+  const [shopRoomName, setShopRoomName] = useState<string | null>(null);
   const [nearShop, setNearShop] = useState<CityShop | null>(null);
   const nearShopRef = useRef<CityShop | null>(null);
   const [canRepairVehicle, setCanRepairVehicle] = useState<boolean>(false);
@@ -6925,8 +6927,13 @@ export default function App() {
       }
 
       case 'gas_cashier': {
+        const gasBld = world.buildings.find(
+          (b) => b.shopBrand === 'gas_station_shop' || b.type === 'gas_station_shop' || b.id === 'bld_gas_station_shop_se'
+        );
         setShopType('gas_station_shop');
-        setShopTitle('АЗС «НЕФТЬМАГИСТРАЛЬ» 24/7');
+        setShopTitle(gasBld?.nameRu || 'АЗС «НЕФТЬМАГИСТРАЛЬ» 24/7');
+        setShopBuildingId(gasBld?.id || 'bld_gas_station_shop_se');
+        setShopRoomName(null);
         setIsShopOpen(true);
         sound.playUseItem();
         break;
@@ -7072,9 +7079,11 @@ export default function App() {
           return;
         }
         let resolvedType: CityShop['type'] = zone.shopType || 'supermarket';
-        let resolvedTitle = bld.nameRu || 'Магазин';
+        let resolvedTitle = target.data.shopTitle || bld.nameRu || 'Магазин';
         setShopType(resolvedType);
         setShopTitle(resolvedTitle);
+        setShopBuildingId(bld.id || null);
+        setShopRoomName(target.data.shopTitle || null);
         setIsShopOpen(true);
         sound.playUseItem();
         break;
@@ -7666,8 +7675,13 @@ export default function App() {
 
       // 0d. Near Gas Station Cashier Terminal / Counter
       if (isPlayerNearGasStationCashier(p, world)) {
+        const gasBld = world.buildings.find(
+          (b) => b.shopBrand === 'gas_station_shop' || b.type === 'gas_station_shop' || b.id === 'bld_gas_station_shop_se'
+        );
         setShopType('gas_station_shop');
-        setShopTitle('АЗС «НЕФТЬМАГИСТРАЛЬ» 24/7');
+        setShopTitle(gasBld?.nameRu || 'АЗС «НЕФТЬМАГИСТРАЛЬ» 24/7');
+        setShopBuildingId(gasBld?.id || 'bld_gas_station_shop_se');
+        setShopRoomName(null);
         setIsShopOpen(true);
         sound.playUseItem();
         return;
@@ -7844,6 +7858,8 @@ export default function App() {
     if (hasStandaloneShop) {
       setShopTitle(resolvedTitle);
       setShopType(resolvedType);
+      setShopBuildingId(p.isInsideBuilding ? (p.insideBuildingId || null) : null);
+      setShopRoomName(nearShopRef.current?.nameRu || resolvedTitle || null);
       setIsShopOpen(true);
       sound.playUseItem();
       return;
@@ -8676,6 +8692,9 @@ export default function App() {
         isOpen={isShopOpen}
         onClose={() => setIsShopOpen(false)}
         player={playerRef.current}
+        world={worldRef.current}
+        shopBuildingId={shopBuildingId}
+        shopRoomName={shopRoomName}
         shopTitle={shopTitle}
         shopType={shopType}
         gasPumps={worldRef.current?.gasPumps || []}
@@ -8707,7 +8726,7 @@ export default function App() {
                   }
                 } else {
                   regularItemsCount++;
-                  const boughtItem = createPackagedItem(item.itemId, 1);
+                  const boughtItem = createItemFromShopEntry(item);
                   const angle = (p.angle || 0) + (Math.random() * 0.9 - 0.45);
                   const dist = 28 + (idx * 14) % 40;
                   w.groundItems.push({
@@ -9408,7 +9427,7 @@ export default function App() {
         onGiveItem={(key, count) => {
           const p = playerRef.current;
           if (!p) return;
-          const created = createItem(key, count);
+          const created = createItem(key, count, undefined, true);
           const success = addItemToPlayer(p, created);
           if (success) {
             addPlayerNotification(p, `Получено: ${created.nameRu || created.name} x${count}`, 'pickup');

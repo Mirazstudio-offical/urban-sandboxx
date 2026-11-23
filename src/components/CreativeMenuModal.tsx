@@ -41,7 +41,6 @@ import { GameCalendarState, formatGameDate, formatGameTime } from '../calendarSy
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { VEHICLE_CATALOG, VehicleCatalogEntry, getVehicleCatalogItem } from '../vehicleCatalog';
 import { ITEM_CATALOG, getCandyPackagingShapeNameRu, getChocolatePackagingShapeNameRu } from '../items';
-import { EXTENDED_ITEM_PACKAGING_MAP } from '../unifiedSubstanceCatalog';
 
 export interface CreativeMenuModalProps {
   isOpen: boolean;
@@ -184,7 +183,7 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
   });
 
   const allCreativeItems = useMemo(() => {
-    const entries: Array<[string, {
+    return Object.entries(ITEM_CATALOG) as Array<[string, {
       name: string;
       nameRu?: string;
       description: string;
@@ -195,30 +194,7 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
       packagingShape?: CandyPackagingShape | ChocolatePackagingShape;
       packagingShapeNameRu?: string;
       packagingSize?: string;
-    }]> = Object.entries(ITEM_CATALOG);
-
-    Object.entries(EXTENDED_ITEM_PACKAGING_MAP).forEach(([key, pkg]) => {
-      if (ITEM_CATALOG[key] || !pkg.customNameRu) return;
-      const containerDef = ITEM_CATALOG[pkg.containerId];
-      const innerDef = pkg.innerItemId ? ITEM_CATALOG[pkg.innerItemId] : undefined;
-      if (!containerDef) return;
-      entries.push([
-        key,
-        {
-          name: key,
-          nameRu: pkg.customNameRu,
-          description: pkg.customDescriptionRu || containerDef.description,
-          descriptionRu: pkg.customDescriptionRu || containerDef.descriptionRu,
-          category: innerDef?.category || 'food',
-          maxStack: 1,
-          weight: containerDef.weight,
-          packagingShape: containerDef.packagingShape,
-          packagingShapeNameRu: containerDef.packagingShapeNameRu,
-          packagingSize: containerDef.packagingSize
-        }
-      ]);
-    });
-    return entries;
+    }]>;
   }, []);
 
   const filteredItems = allCreativeItems.filter(([key, item]) => {

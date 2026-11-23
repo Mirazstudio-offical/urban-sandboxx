@@ -1,5 +1,4 @@
 import { ITEM_CATALOG } from './items';
-import { EXTENDED_ITEM_PACKAGING_MAP } from './unifiedSubstanceCatalog';
 
 /** One row of the freeroam "give any item" catalog. */
 export interface FreeCatalogEntry {
@@ -15,8 +14,9 @@ export interface FreeCatalogEntry {
 let cachedEntries: FreeCatalogEntry[] | null = null;
 
 /**
- * Every item that can be instantly handed to the player: the base item catalog
- * plus the extended packaged variants (baskets of berries, trays, cartons...).
+ * Every real base item defined in ITEM_CATALOG (unpackaged raw products,
+ * standalone ingredients, empty containers/packaging, tools, clothing, etc.).
+ * Packaged store products are composed per-shop in map.json rather than duplicated here.
  */
 export function getAllFreeCatalogItems(): FreeCatalogEntry[] {
   if (cachedEntries) return cachedEntries;
@@ -30,22 +30,6 @@ export function getAllFreeCatalogItems(): FreeCatalogEntry[] {
     maxStack: Math.max(1, def.maxStack || 1),
     weight: def.weight || 0
   }));
-
-  Object.entries(EXTENDED_ITEM_PACKAGING_MAP).forEach(([key, pkg]) => {
-    if (ITEM_CATALOG[key] || !pkg.customNameRu) return;
-    const containerDef = ITEM_CATALOG[pkg.containerId];
-    if (!containerDef) return;
-    const innerDef = pkg.innerItemId ? ITEM_CATALOG[pkg.innerItemId] : undefined;
-    entries.push({
-      key,
-      nameRu: pkg.customNameRu,
-      name: key,
-      descriptionRu: pkg.customDescriptionRu || containerDef.descriptionRu || containerDef.description || '',
-      category: innerDef?.category || 'food',
-      maxStack: 1,
-      weight: containerDef.weight || 0
-    });
-  });
 
   cachedEntries = entries;
   return entries;

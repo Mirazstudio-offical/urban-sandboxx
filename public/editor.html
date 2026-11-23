@@ -4895,6 +4895,7 @@ function ensureMapDataDefaults(md) {
   if (!md.trainSchedules) md.trainSchedules = [];
   if (!md.minimapMarkers) md.minimapMarkers = [];
   if (!md.spawnPoints) md.spawnPoints = [];
+  if (!md.shopCatalogPresets || typeof md.shopCatalogPresets !== 'object') md.shopCatalogPresets = {};
 }
 
 function getDefaultMapData() {
@@ -7239,6 +7240,25 @@ function renderBuildingInspectorExtended(b) {
           <input type="number" value="${Math.round(b.height)}" onchange="updateEntityProp('height', parseFloat(this.value))">
         </div>
       </div>
+      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);">
+        <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">Каталог магазина (map.json)</div>
+        <div class="prop-field">
+          <label>Пресет каталога:</label>
+          <select onchange="updateBuildingShopPreset(this.value)">
+            <option value="" ${!b.shopConfig?.catalogPreset ? 'selected' : ''}>Нет (по типу здания)</option>
+            ${['supermarket', 'pharmacy', 'auto_shop', 'gas_station_shop', 'cafe', 'pizzeria', 'fast_food', 'sushi_asian', 'cinema_bar', 'electronics', 'clothing', 'bookstore', 'sports_shop', 'gear_shop', 'furniture_shop'].map(p => `<option value="${p}" ${b.shopConfig?.catalogPreset === p ? 'selected' : ''}>${p}</option>`).join('')}
+          </select>
+        </div>
+        <div class="prop-field">
+          <label>Множитель цен:</label>
+          <input type="number" step="0.05" min="0.1" max="5" value="${b.shopConfig?.priceMultiplier ?? 1}" onchange="updateBuildingShopPriceMult(parseFloat(this.value))">
+        </div>
+        <div class="prop-field">
+          <label>Индивидуальный shopConfig (JSON):</label>
+          <textarea id="bld-shop-config-json" rows="5" style="width:100%;font-family:monospace;font-size:11px;background:#0b1020;color:#e2e8f0;border:1px solid var(--border);border-radius:6px;padding:6px;resize:vertical;">${b.shopConfig ? JSON.stringify(b.shopConfig, null, 2).replace(/</g, '&lt;') : ''}</textarea>
+          <button class="btn" style="width:100%;margin-top:6px;justify-content:center;" onclick="applyBuildingShopConfigJson()">Применить shopConfig JSON</button>
+        </div>
+      </div>
       <div style="margin-top: 12px; margin-bottom: 8px;">
         <button class="btn primary" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; font-weight: 600; gap: 8px;" onclick="openInteriorStudioForBuilding('${b.id}')">
           Редактор интерьера (${floors} эт.)
@@ -7560,6 +7580,60 @@ function updateEntityProp(prop, val) {
   if (selectedEntities.length !== 1) return;
   selectedEntities[0].entity[prop] = val;
   pushHistory(`Edit ${prop}`);
+}
+
+function updateBuildingShopPreset(preset) {
+  if (selectedEntities.length !== 1) return;
+  const b = selectedEntities[0].entity;
+  if (!preset) {
+    if (b.shopConfig) {
+      delete b.shopConfig.catalogPreset;
+      if (Object.keys(b.shopConfig).length === 0) delete b.shopConfig;
+    }
+  } else {
+    if (!b.shopConfig || typeof b.shopConfig !== 'object') b.shopConfig = {};
+    b.shopConfig.catalogPreset = preset;
+  }
+  pushHistory('Edit shopConfig.catalogPreset');
+  updateInspector();
+}
+
+function updateBuildingShopPriceMult(mult) {
+  if (selectedEntities.length !== 1) return;
+  const b = selectedEntities[0].entity;
+  if (!Number.isFinite(mult) || mult <= 0) return;
+  if (!b.shopConfig || typeof b.shopConfig !== 'object') b.shopConfig = {};
+  b.shopConfig.priceMultiplier = mult;
+  pushHistory('Edit shopConfig.priceMultiplier');
+  updateInspector();
+}
+
+function applyBuildingShopConfigJson() {
+  if (selectedEntities.length !== 1) return;
+  const b = selectedEntities[0].entity;
+  const el = document.getElementById('bld-shop-config-json');
+  if (!el) return;
+  const raw = el.value.trim();
+  if (!raw) {
+    delete b.shopConfig;
+    pushHistory('Clear shopConfig');
+    updateInspector();
+    showToast('shopConfig очищен');
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      showToast('Ошибка: shopConfig должен быть JSON-объектом');
+      return;
+    }
+    b.shopConfig = parsed;
+    pushHistory('Edit shopConfig JSON');
+    updateInspector();
+    showToast('Каталог магазина сохранён');
+  } catch (err) {
+    showToast('Ошибка синтаксиса JSON: ' + err.message);
+  }
 }
 
 function deleteSelected() {

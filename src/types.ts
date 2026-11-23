@@ -1433,6 +1433,55 @@ export interface BuildingBalcony {
   floorsCount?: number;
 }
 
+export interface ShopInnerItemSpec {
+  itemId: string;
+  count?: number;
+  gummyAttributes?: any;
+  pelmenAttributes?: any;
+  chocolateAttributes?: any;
+  attributes?: UnifiedAttributes;
+}
+
+export interface ShopFluidStorageSpec {
+  liquidId: string | null;
+  currentMl: number;
+  maxMl?: number;
+  attributes?: Record<string, any>;
+}
+
+export interface MapShopCatalogEntry {
+  id: string;
+  itemId: string;
+  nameRu: string;
+  price: number;
+  description?: string;
+  category: 'food' | 'medical' | 'auto';
+  effectText?: string;
+  contents?: ShopInnerItemSpec[];
+  fluidStorage?: ShopFluidStorageSpec;
+  isOpen?: boolean;
+  labelColor?: string;
+  containerTintColor?: string;
+  packagingSize?: 'mini' | 'small' | 'medium' | 'large' | 'king';
+  packagingShape?: CandyPackagingShape | ChocolatePackagingShape;
+  originalCatalogId?: string;
+  fuelPumpId?: string;
+  fuelLiters?: number;
+  fuelType?: FuelType;
+}
+
+export interface ShopCatalogOverrideConfig {
+  catalogPreset?: string;
+  priceMultiplier?: number;
+  catalog?: MapShopCatalogEntry[];
+  addItems?: MapShopCatalogEntry[];
+  removeIds?: string[];
+}
+
+export interface BuildingShopConfig extends ShopCatalogOverrideConfig {
+  roomCatalogs?: Record<string, ShopCatalogOverrideConfig>;
+}
+
 export interface Building {
   id: string;
   name?: string;
@@ -1450,6 +1499,7 @@ export interface Building {
     | 'splav_gear' 
     | 'pitstop_service'
     | 'gas_station_shop';
+  shopConfig?: BuildingShopConfig;
   x: number;
   y: number;
   width: number;
@@ -3139,6 +3189,7 @@ export interface GameWorld {
   trainSchedules?: TrainSchedule[];
   minimapMarkers?: MinimapMarker[];
   spawnPoints?: MapSpawnPoint[];
+  shopCatalogPresets?: Record<string, MapShopCatalogEntry[]>;
   intersections: Intersection[];
   roundabouts?: Roundabout[];
   sidewalks?: SidewalkBlock[];

@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, UnifiedAttributes, UnifiedVisualAttributes } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
 import { sound } from './audio';
 import { getPhoneSpecsForItemId } from './phoneData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
@@ -6456,6 +6456,115 @@ export function createPackagedItem(rawItemId: string, count: number = 1): Invent
     });
   }
   return createItem(itemId, count, undefined, true);
+}
+
+/**
+ * Instantiates a real InventoryItem directly from an explicit map-driven shop entry:
+ * - If `entry.contents` is specified -> builds the container (`entry.itemId`) with those raw inner items inside.
+ * - If `entry.fluidStorage` is specified -> builds the raw container (`entry.itemId`) and fills its `fluidStorage`.
+ * - Otherwise -> builds the raw base item (`entry.itemId`) directly from ITEM_CATALOG (or falls back to legacy packaging only for non-catalog alias IDs).
+ */
+export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryItem {
+  if (entry.contents && entry.contents.length > 0) {
+    const innerItems: InventoryItem[] = [];
+    for (const spec of entry.contents) {
+      const qty = Math.max(1, Math.round(spec.count ?? 1));
+      for (let i = 0; i < qty; i++) {
+        let inner: InventoryItem;
+        if (spec.itemId === 'gummy_candy') {
+          inner = createGummyCandy(spec.gummyAttributes);
+        } else if (spec.itemId === 'pelmen') {
+          inner = createPelmen(spec.pelmenAttributes);
+        } else if (spec.itemId === 'chocolate') {
+          inner = createChocolate(spec.chocolateAttributes);
+        } else {
+          inner = createItem(spec.itemId, 1, undefined, true);
+          if (spec.attributes) {
+            inner.attributes = { ...(inner.attributes || {}), ...spec.attributes };
+            normalizeItemAttributes(inner);
+          }
+        }
+        innerItems.push(inner);
+      }
+    }
+    return createFilledPackage(entry.itemId, innerItems, {
+      isOpen: Boolean(entry.isOpen),
+      labelColor: entry.labelColor,
+      containerTintColor: entry.containerTintColor,
+      packagingSize: entry.packagingSize,
+      packagingShape: entry.packagingShape,
+      customNameRu: entry.nameRu,
+      customDescriptionRu: entry.description,
+      originalCatalogId: entry.originalCatalogId
+    });
+  }
+
+  if (entry.fluidStorage) {
+    const container = createItem(entry.itemId, 1, undefined, true);
+    const cfg = getContainerConfig(entry.itemId);
+    const maxMl = entry.fluidStorage.maxMl ?? cfg?.maxMl ?? Math.max(500, entry.fluidStorage.currentMl || 500);
+    const attrs = entry.fluidStorage.attributes ? { ...entry.fluidStorage.attributes } : undefined;
+    container.fluidStorage = {
+      liquidId: (entry.fluidStorage.liquidId as LiquidId | null) ?? null,
+      currentMl: Math.max(0, entry.fluidStorage.currentMl || 0),
+      maxMl,
+      emptyWeightKg: cfg?.emptyWeightKg ?? container.weight,
+      baseItemNameRu: cfg?.nameRu || container.nameRu,
+      baseItemNameEn: cfg?.name || container.name,
+      attributes: attrs as FluidSubstanceAttributes | undefined
+    };
+    if (entry.originalCatalogId) {
+      container.originalCatalogId = entry.originalCatalogId;
+    }
+    if (entry.isOpen !== undefined) {
+      container.isOpen = entry.isOpen;
+    }
+    if (entry.labelColor) {
+      container.labelColor = entry.labelColor;
+    }
+    if (entry.containerTintColor) {
+      container.containerTintColor = entry.containerTintColor;
+    }
+    container.maxStack = 1;
+    container.usable = true;
+    container.portions = undefined;
+    container.maxPortions = undefined;
+    if (attrs?.medicalEffectId) {
+      container.category = 'med';
+    }
+    if (container.fluidStorage.liquidId === 'antifreeze') {
+      container.fluidLiters = 5.0;
+      container.maxFluidLiters = 5.0;
+      container.fluidType = 'coolant';
+    } else if (container.fluidStorage.liquidId === 'motor_oil') {
+      container.fluidLiters = 4.0;
+      container.maxFluidLiters = 4.0;
+      container.fluidType = 'oil';
+    }
+    const isHybrid = canContainerHoldHybridContents(entry.itemId);
+    container.isContainer = isHybrid ? true : !container.fluidStorage.liquidId && Boolean(ITEM_CATALOG[entry.itemId]?.isContainer);
+    if (isHybrid) {
+      container.contents = container.contents || [];
+      container.containerCapacityL = Number((maxMl / 1000).toFixed(3));
+      container.maxContainedItemVolumeL = getHybridMaxItemVolumeL(entry.itemId, maxMl);
+      container.maxContainedWeightKg = Number(Math.max(2.0, (maxMl / 1000) * 2.5).toFixed(2));
+    }
+    syncItemContainerProperties(container);
+    initItemThermalProperties(container, 20.0);
+    return normalizeItemAttributes(container);
+  }
+
+  // Standalone item in ITEM_CATALOG -> spawn strictly raw (no surprise auto-packaging!)
+  if (ITEM_CATALOG[entry.itemId]) {
+    const raw = createItem(entry.itemId, 1, undefined, true);
+    if (entry.labelColor) raw.labelColor = entry.labelColor;
+    if (entry.containerTintColor) raw.containerTintColor = entry.containerTintColor;
+    if (entry.isOpen !== undefined) raw.isOpen = entry.isOpen;
+    return raw;
+  }
+
+  // Fallback for legacy alias entries from old custom maps
+  return createPackagedItem(entry.itemId, 1);
 }
 
 export function applyMedicalEffectById(
