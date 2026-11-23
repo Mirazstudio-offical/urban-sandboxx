@@ -15884,24 +15884,26 @@ export class GameRenderer {
             drawFloodBeam(mount.aimAngle, range, beamHalfAngle);
           }
 
-          // Tight near-pole downward apron spill right beneath the floodlight
-          const spillR = 44 * fogFactor;
-          const spillCut = lCtx.createRadialGradient(fx, fy, 1, fx, fy, spillR);
-          spillCut.addColorStop(0, `rgba(0, 0, 0, ${(0.88 * floodInt).toFixed(2)})`);
-          spillCut.addColorStop(0.6, `rgba(0, 0, 0, ${(0.34 * floodInt).toFixed(2)})`);
+          // Near-field downward apron spill slightly ahead of the floodlight front glass
+          const apronX = fx + Math.cos(mount.aimAngle) * 14;
+          const apronY = fy + Math.sin(mount.aimAngle) * 14;
+          const spillR = 38 * fogFactor;
+          const spillCut = lCtx.createRadialGradient(apronX, apronY, 2, apronX, apronY, spillR);
+          spillCut.addColorStop(0, `rgba(0, 0, 0, ${(0.84 * floodInt).toFixed(2)})`);
+          spillCut.addColorStop(0.6, `rgba(0, 0, 0, ${(0.32 * floodInt).toFixed(2)})`);
           spillCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
           lCtx.fillStyle = spillCut;
           lCtx.beginPath();
-          lCtx.arc(fx, fy, spillR, 0, Math.PI * 2);
+          lCtx.arc(apronX, apronY, spillR, 0, Math.PI * 2);
           lCtx.fill();
 
-          const spillCol = cCtx.createRadialGradient(fx, fy, 1, fx, fy, spillR);
-          spillCol.addColorStop(0, `rgba(232, 246, 255, ${(0.52 * floodInt).toFixed(2)})`);
-          spillCol.addColorStop(0.6, `rgba(210, 235, 255, ${(0.18 * floodInt).toFixed(2)})`);
+          const spillCol = cCtx.createRadialGradient(apronX, apronY, 2, apronX, apronY, spillR);
+          spillCol.addColorStop(0, `rgba(232, 246, 255, ${(0.48 * floodInt).toFixed(2)})`);
+          spillCol.addColorStop(0.6, `rgba(210, 235, 255, ${(0.16 * floodInt).toFixed(2)})`);
           spillCol.addColorStop(1, 'rgba(200, 230, 255, 0)');
           cCtx.fillStyle = spillCol;
           cCtx.beginPath();
-          cCtx.arc(fx, fy, spillR, 0, Math.PI * 2);
+          cCtx.arc(apronX, apronY, spillR, 0, Math.PI * 2);
           cCtx.fill();
         }
       }
@@ -16368,7 +16370,7 @@ export class GameRenderer {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
-    // A. Street Lamp Fixture Pinpoints, Fog Halo & Surveillance Camera Optics
+    // A. Street Lamp Atmospheric Fog Scatter (Downward-Shining Opaque Roofs) & Camera Optics
     for (const prop of props) {
       if (prop.x < minX - 100 || prop.x > maxX + 100 || prop.y < minY - 100 || prop.y > maxY + 100) continue;
 
@@ -16376,15 +16378,17 @@ export class GameRenderer {
       if (emission) {
         const [r, g, b] = emission.rgb;
         const int = emission.intensity;
+        const isTranslucentGlobe = prop.type === 'lamp' && prop.lampStyle === 'retro_globe';
+
         for (let ei = 0; ei < emission.emitters.length; ei++) {
           const lx = emission.emitters[ei].x;
           const ly = emission.emitters[ei].y;
 
-          // Atmospheric scatter around luminaire ONLY in genuine fog
+          // Atmospheric Mie scatter illuminated below the luminaire ONLY in genuine fog
           if (isFog && weights.fog > 0.08) {
-            const haloRad = (prop.type === 'lamp_highway' ? 44 : 32) * fogFactor;
-            const haloA = Math.min(0.16, (0.04 + 0.12 * weights.fog) * weatherTransition) * int;
-            const haloGrad = ctx.createRadialGradient(lx, ly, 1, lx, ly, haloRad);
+            const haloRad = (prop.type === 'lamp_highway' ? 42 : 30) * fogFactor;
+            const haloA = Math.min(0.14, (0.035 + 0.105 * weights.fog) * weatherTransition) * int;
+            const haloGrad = ctx.createRadialGradient(lx, ly, 3, lx, ly, haloRad);
             haloGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${haloA.toFixed(3)})`);
             haloGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(haloA * 0.35).toFixed(3)})`);
             haloGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
@@ -16394,19 +16398,21 @@ export class GameRenderer {
             ctx.fill();
           }
 
-          // Tiny physical bulb fixture emitter
-          const bulbGlow = ctx.createRadialGradient(lx, ly, 0, lx, ly, 4.2);
-          bulbGlow.addColorStop(0, `rgba(255, 255, 245, ${(0.90 * int).toFixed(2)})`);
-          bulbGlow.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${(0.48 * int).toFixed(2)})`);
-          bulbGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-          ctx.fillStyle = bulbGlow;
-          ctx.beginPath();
-          ctx.arc(lx, ly, 4.2, 0, Math.PI * 2);
-          ctx.fill();
+          // Only frosted opal glass globes diffuse soft light upward; hooded streetlamps have opaque metal roofs!
+          if (isTranslucentGlobe) {
+            const globeGlow = ctx.createRadialGradient(lx, ly, 1.0, lx, ly, 5.2);
+            globeGlow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.40 * int).toFixed(2)})`);
+            globeGlow.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, ${(0.18 * int).toFixed(2)})`);
+            globeGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+            ctx.fillStyle = globeGlow;
+            ctx.beginPath();
+            ctx.arc(lx, ly, 5.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
 
-      // A2. Surveillance Camera IR / REC LED & Motion-Activated Night Floodlight Glare
+      // A2. Surveillance Camera IR / REC LED & Motion-Activated Night Floodlight Forward Scatter
       if (hasPoleCamera(prop) && !prop.isBroken) {
         const mount = getCameraMountLocalOffset(prop);
         const cx = prop.x + mount.x;
@@ -16419,10 +16425,10 @@ export class GameRenderer {
           const blinkPeriod = motion ? 260 : 1200;
           const ledOn = motion || Math.floor(nowMsForLamps / blinkPeriod) % 2 === 0;
           if (ledOn) {
-            const ledRad = motion ? 4.2 : 2.8;
+            const ledRad = motion ? 3.4 : 2.3;
             const ledGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, ledRad);
-            ledGrad.addColorStop(0, motion ? 'rgba(255, 70, 70, 0.92)' : 'rgba(255, 45, 45, 0.72)');
-            ledGrad.addColorStop(0.5, 'rgba(220, 38, 38, 0.28)');
+            ledGrad.addColorStop(0, motion ? 'rgba(255, 70, 70, 0.85)' : 'rgba(255, 45, 45, 0.65)');
+            ledGrad.addColorStop(0.5, 'rgba(220, 38, 38, 0.24)');
             ledGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
             ctx.fillStyle = ledGrad;
             ctx.beginPath();
@@ -16431,33 +16437,36 @@ export class GameRenderer {
           }
         }
 
-        // Crisp cool-white LED lens glare & atmospheric cone scatter when floodlight is ON
+        // Directional forward glass-edge shimmer & atmospheric cone scatter (never a giant dot on the metal heatsink)
         if (prop.hasCameraFloodlight !== false && floodInt > 0.01) {
-          const glareRad = 7.5 * (0.7 + 0.3 * floodInt);
-          const glare = ctx.createRadialGradient(cx, cy, 0, cx, cy, glareRad);
-          glare.addColorStop(0, `rgba(255, 255, 255, ${(0.95 * floodInt).toFixed(2)})`);
-          glare.addColorStop(0.35, `rgba(216, 240, 255, ${(0.55 * floodInt).toFixed(2)})`);
+          const fwdX = cx + Math.cos(mount.aimAngle) * 3.6;
+          const fwdY = cy + Math.sin(mount.aimAngle) * 3.6;
+          const glareRad = 4.2 * (0.75 + 0.25 * floodInt);
+          const glare = ctx.createRadialGradient(fwdX, fwdY, 0.3, fwdX, fwdY, glareRad);
+          glare.addColorStop(0, `rgba(236, 248, 255, ${(0.52 * floodInt).toFixed(2)})`);
+          glare.addColorStop(0.45, `rgba(196, 232, 255, ${(0.22 * floodInt).toFixed(2)})`);
           glare.addColorStop(1, 'rgba(186, 224, 255, 0)');
           ctx.fillStyle = glare;
           ctx.beginPath();
-          ctx.arc(cx, cy, glareRad, 0, Math.PI * 2);
+          ctx.arc(fwdX, fwdY, glareRad, 0, Math.PI * 2);
           ctx.fill();
 
-          // Subtle atmospheric Mie cone scatter in fog / rain / humid night air
+          // Subtle atmospheric Mie cone scatter in fog / rain / humid night air starting ahead of the glass face
           if (isFog || isRaining || nightAlpha > 0.35) {
-            const scatterA = Math.min(0.14, (0.035 + weights.fog * 0.09 + weights.rain * 0.04) * floodInt);
-            const scatterLen = (prop.cameraRange ?? 205) * 0.55 * fogFactor;
+            const scatterA = Math.min(0.12, (0.028 + weights.fog * 0.08 + weights.rain * 0.035) * floodInt);
+            const scatterLen = (prop.cameraRange ?? 205) * 0.52 * fogFactor;
             ctx.save();
             ctx.translate(cx, cy);
             ctx.rotate(mount.aimAngle);
-            const coneGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, scatterLen);
+            const coneGrad = ctx.createRadialGradient(3, 0, 2, 3, 0, scatterLen);
             coneGrad.addColorStop(0, `rgba(224, 242, 255, ${scatterA.toFixed(3)})`);
-            coneGrad.addColorStop(0.55, `rgba(204, 232, 255, ${(scatterA * 0.38).toFixed(3)})`);
+            coneGrad.addColorStop(0.55, `rgba(204, 232, 255, ${(scatterA * 0.36).toFixed(3)})`);
             coneGrad.addColorStop(1, 'rgba(190, 225, 255, 0)');
             ctx.fillStyle = coneGrad;
             ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.arc(0, 0, scatterLen, -0.42, 0.42);
+            ctx.moveTo(2.2, -1.6);
+            ctx.arc(2.2, 0, scatterLen, -0.42, 0.42);
+            ctx.lineTo(2.2, 1.6);
             ctx.closePath();
             ctx.fill();
             ctx.restore();

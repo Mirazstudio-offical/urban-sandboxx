@@ -4148,7 +4148,7 @@ function renderMountedCameraAssembly(
   // Move to bracket tip
   ctx.translate(Math.cos(baseCamAngle) * armDist, Math.sin(baseCamAngle) * armDist);
 
-  // Integrated Night Motion-Activated LED Floodlight Housing + PIR Dome Sensor
+  // Integrated Night Motion-Activated LED Floodlight Housing + PIR Dome Sensor (Top-Down View)
   const drawFloodlightUnit = (offsetX: number, offsetY: number, rotAngle: number, scale: number = 1) => {
     if (!hasFloodlight) return;
     ctx.save();
@@ -4156,44 +4156,66 @@ function renderMountedCameraAssembly(
     ctx.rotate(rotAngle);
     ctx.scale(scale, scale);
 
-    // Die-cast black aluminum body with heatsink ribs
-    ctx.fillStyle = '#18181b';
+    // Subtle forward downward light spill exiting the front glass face (+X) when active
+    if (floodIntensity > 0.03) {
+      const fwdGrad = ctx.createRadialGradient(2.2, 0, 0.3, 4.2, 0, 4.6);
+      fwdGrad.addColorStop(0, `rgba(232, 246, 255, ${(0.52 * floodIntensity).toFixed(2)})`);
+      fwdGrad.addColorStop(0.55, `rgba(196, 232, 255, ${(0.22 * floodIntensity).toFixed(2)})`);
+      fwdGrad.addColorStop(1, 'rgba(186, 224, 255, 0)');
+      ctx.fillStyle = fwdGrad;
+      ctx.beginPath();
+      ctx.moveTo(1.7, -2.2);
+      ctx.arc(1.7, 0, 4.8, -0.78, 0.78);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Steel U-bracket swivel yoke behind floodlight
+    ctx.strokeStyle = '#3f3f46';
+    ctx.lineWidth = 0.85;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(-2.1, -2.5, 4.0, 5.0, 0.8);
-    else ctx.rect(-2.1, -2.5, 4.0, 5.0);
+    ctx.moveTo(-2.5, -1.6);
+    ctx.lineTo(-1.8, -2.3);
+    ctx.moveTo(-2.5, 1.6);
+    ctx.lineTo(-1.8, 2.3);
+    ctx.stroke();
+
+    // Opaque die-cast black aluminum top/back housing with heatsink ribs (seen from above)
+    const bodyGrad = ctx.createLinearGradient(-2.1, -2.5, 1.9, 2.5);
+    bodyGrad.addColorStop(0, '#27272a');
+    bodyGrad.addColorStop(0.5, '#18181b');
+    bodyGrad.addColorStop(1, '#09090b');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(-2.1, -2.5, 3.9, 5.0, 0.7);
+    else ctx.rect(-2.1, -2.5, 3.9, 5.0);
     ctx.fill();
     ctx.strokeStyle = '#3f3f46';
     ctx.lineWidth = 0.55;
     ctx.stroke();
 
-    // Rear heatsink cooling fins
+    // Dorsal aluminum cooling fins on top of the tilted housing
     ctx.strokeStyle = '#52525b';
     ctx.lineWidth = 0.45;
     ctx.beginPath();
     ctx.moveTo(-1.4, -2.1); ctx.lineTo(-1.4, 2.1);
-    ctx.moveTo(-0.5, -2.1); ctx.lineTo(-0.5, 2.1);
+    ctx.moveTo(-0.55, -2.1); ctx.lineTo(-0.55, 2.1);
+    ctx.moveTo(0.3, -2.1); ctx.lineTo(0.3, 2.1);
     ctx.stroke();
 
-    // Parabolic reflector face & LED emitter window
+    // Narrow front tempered glass visor edge visible only along the forward +X rim
     if (floodIntensity > 0.03) {
-      ctx.fillStyle = `rgba(224, 242, 254, ${(0.55 + floodIntensity * 0.45).toFixed(2)})`;
-      ctx.fillRect(0.9, -2.0, 1.35, 4.0);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(1.15, -1.5, 0.9, 3.0);
+      ctx.fillStyle = `rgba(240, 249, 255, ${(0.72 + floodIntensity * 0.28).toFixed(2)})`;
+      ctx.fillRect(1.55, -2.0, 0.55, 4.0);
     } else {
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(0.9, -1.9, 1.2, 3.8);
-      // Individual dormant SMD LED chips
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(1.15, -1.3, 0.65, 0.8);
-      ctx.fillRect(1.15, -0.35, 0.65, 0.8);
-      ctx.fillRect(1.15, 0.6, 0.65, 0.8);
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(1.55, -1.9, 0.45, 3.8);
     }
 
     // Miniature white Fresnel PIR motion sensor dome on side of floodlight
-    ctx.fillStyle = motion ? '#fde68a' : '#f1f5f9';
+    ctx.fillStyle = motion ? '#fde68a' : '#e2e8f0';
     ctx.beginPath();
-    ctx.arc(0.4, 2.75, 0.9, 0, Math.PI * 2);
+    ctx.arc(0.3, 2.75, 0.85, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#64748b';
     ctx.lineWidth = 0.35;
@@ -4421,7 +4443,7 @@ function renderMountedCameraAssembly(
   ctx.restore();
 }
 
-// --- HELPER: REALISTIC LUMINAIRE HEAD (DAY GLASS vs NIGHT EMISSION) ---
+// --- HELPER: REALISTIC TOP-DOWN OPAQUE LUMINAIRE HEAD (LIGHT SHINES DOWNWARD, NEVER UP) ---
 function renderHighwayLuminaireHead(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -4433,181 +4455,174 @@ function renderHighwayLuminaireHead(
 ) {
   const isLed = prop.bulbType === 'led_cool' || prop.bulbType === 'led_neutral';
   const spectral = getBulbSpectralColor(prop.bulbType, prop.type);
+  const wear = prop.wearLevel ?? 0.22;
 
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
 
-  // Subtle shadow directly beneath luminaire head
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-  ctx.beginPath();
-  ctx.ellipse(2.6, 0.9, 6.2, 3.6, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Subtle under-rim downward light spill peeking out ONLY beneath the opaque hood edge at night
+  if (isLit && litIntensity > 0.05 && !prop.glassShattered) {
+    const [r, g, b] = spectral.rgb;
+    const rimGrad = ctx.createRadialGradient(4.2, 0, 2.2, 4.2, 0, 8.2);
+    rimGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.42 * litIntensity).toFixed(2)})`);
+    rimGrad.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, ${(0.18 * litIntensity).toFixed(2)})`);
+    rimGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    ctx.fillStyle = rimGrad;
+    ctx.beginPath();
+    ctx.ellipse(4.2, 0, 7.8, 5.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Subtle ambient occlusion shadow directly beneath luminaire head by day
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(2.8, 0.8, 6.2, 3.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   if (isLed) {
-    // Sleek die-cast aluminum aerodynamic LED cobra-head fixture
-    const casingGrad = ctx.createLinearGradient(-2.5, -3.4, 8.5, 3.4);
+    // 100% OPAQUE top view of die-cast aluminum aerodynamic LED cobra-head fixture (light emits downward)
+    const casingGrad = ctx.createLinearGradient(-2.6, -3.5, 8.4, 3.5);
     casingGrad.addColorStop(0, '#64748b');
-    casingGrad.addColorStop(0.45, '#94a3b8');
-    casingGrad.addColorStop(1, '#334155');
+    casingGrad.addColorStop(0.35, '#94a3b8');
+    casingGrad.addColorStop(0.7, '#475569');
+    casingGrad.addColorStop(1, '#1e293b');
     ctx.fillStyle = casingGrad;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(-2.5, -3.3, 10.6, 6.6, [1.8, 3.2, 3.2, 1.8]);
-    else ctx.rect(-2.5, -3.3, 10.6, 6.6);
+    if (ctx.roundRect) ctx.roundRect(-2.6, -3.3, 10.9, 6.6, [1.6, 3.2, 3.2, 1.6]);
+    else ctx.rect(-2.6, -3.3, 10.9, 6.6);
     ctx.fill();
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 0.7;
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 0.75;
     ctx.stroke();
 
-    // Ribbed aluminum heatsink fins
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 0.6;
+    // Recessed dorsal cooling heatsink plate on top of LED fixture
+    ctx.fillStyle = '#334155';
     ctx.beginPath();
-    for (let fx = -0.8; fx <= 2.4; fx += 0.95) {
-      ctx.moveTo(fx, -2.7);
-      ctx.lineTo(fx, 2.7);
+    if (ctx.roundRect) ctx.roundRect(1.2, -2.55, 6.2, 5.1, 1.4);
+    else ctx.rect(1.2, -2.55, 6.2, 5.1);
+    ctx.fill();
+
+    // Longitudinal cast-aluminum cooling fins (dissipating heat upward while LEDs point down)
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    for (const fy of [-1.85, -0.95, 0, 0.95, 1.85]) {
+      ctx.moveTo(1.5, fy);
+      ctx.lineTo(7.1, fy);
     }
     ctx.stroke();
 
-    // NEMA photocell dusk-to-dawn sensor dome on rear collar
-    ctx.fillStyle = '#0284c7';
+    // Subtle metallic highlight ridges between cooling fins
+    ctx.strokeStyle = 'rgba(203, 213, 225, 0.45)';
+    ctx.lineWidth = 0.35;
     ctx.beginPath();
-    ctx.arc(-1.1, 0, 0.95, 0, Math.PI * 2);
+    for (const fy of [-1.4, -0.48, 0.48, 1.4]) {
+      ctx.moveTo(1.6, fy);
+      ctx.lineTo(6.9, fy);
+    }
+    ctx.stroke();
+
+    // Rear driver compartment hatch seam & two stainless hex clamp bolts
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(0.8, -3.1);
+    ctx.lineTo(0.8, 3.1);
+    ctx.stroke();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(-1.8, -2.3, 0.75, 0.75);
+    ctx.fillRect(-1.8, 1.55, 0.75, 0.75);
+
+    // NEMA dusk-to-dawn photocell twist-lock sensor dome on rear collar
+    ctx.fillStyle = '#0369a1';
+    ctx.beginPath();
+    ctx.arc(-0.5, 0, 1.0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 0.4;
     ctx.stroke();
-
-    // Recessed LED optical chamber
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.6)';
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(2.7, -2.4, 4.7, 4.8, 1.2);
-    else ctx.rect(2.7, -2.4, 4.7, 4.8);
+    ctx.arc(-0.8, -0.3, 0.32, 0, Math.PI * 2);
     ctx.fill();
 
+    // Slight scorch/dent mark on top shell if luminaire is damaged
     if (prop.glassShattered) {
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.65;
       ctx.beginPath();
-      ctx.moveTo(3.0, -1.8); ctx.lineTo(6.8, 1.8);
-      ctx.moveTo(3.2, 1.8); ctx.lineTo(6.6, -1.7);
-      ctx.stroke();
-    } else if (isLit && litIntensity > 0.05) {
-      ctx.globalAlpha = Math.min(1, 0.5 + litIntensity * 0.5);
-      ctx.fillStyle = spectral.lensOnOuter;
-      ctx.beginPath();
-      ctx.ellipse(5.0, 0, 2.1, 1.85, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = spectral.lensOnCore;
-      ctx.beginPath();
-      ctx.ellipse(5.0, 0, 1.4, 1.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    } else {
-      // Realistic daytime polycarbonate optical lens & visible LED matrix cells
-      const lensGrad = ctx.createLinearGradient(2.8, -2.0, 7.2, 2.0);
-      lensGrad.addColorStop(0, '#cbd5e1');
-      lensGrad.addColorStop(0.5, '#64748b');
-      lensGrad.addColorStop(1, '#334155');
-      ctx.fillStyle = lensGrad;
-      ctx.fillRect(3.0, -2.0, 4.1, 4.0);
-      // Micro SMD LED emitters inside lens
-      ctx.fillStyle = '#fef3c7';
-      for (const lx of [3.8, 5.2, 6.3]) {
-        ctx.fillRect(lx - 0.35, -1.35, 0.65, 0.75);
-        ctx.fillRect(lx - 0.35, 0.55, 0.65, 0.75);
-      }
-      // Subtle daytime glass reflection streak
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-      ctx.lineWidth = 0.55;
-      ctx.beginPath();
-      ctx.moveTo(3.3, -1.4); ctx.lineTo(6.6, -1.4);
+      ctx.moveTo(3.2, -1.6); ctx.lineTo(5.8, 1.4);
       ctx.stroke();
     }
   } else {
-    // Classic contoured aluminum ЖКУ / РКУ cobra hood with curved borosilicate diffuser bowl
-    const hoodGrad = ctx.createLinearGradient(-2.5, -3.6, 8.2, 3.6);
-    hoodGrad.addColorStop(0, '#94a3b8');
-    hoodGrad.addColorStop(0.45, '#64748b');
-    hoodGrad.addColorStop(1, '#334155');
+    // 100% OPAQUE top view of classic stamped aluminum ЖКУ / РКУ cobra hood (bowl faces DOWN)
+    const hoodGrad = ctx.createLinearGradient(-2.8, -3.6, 8.6, 3.6);
+    hoodGrad.addColorStop(0, wear > 0.5 ? '#78716c' : '#94a3b8');
+    hoodGrad.addColorStop(0.38, wear > 0.5 ? '#a8a29e' : '#cbd5e1');
+    hoodGrad.addColorStop(0.72, wear > 0.5 ? '#57534e' : '#64748b');
+    hoodGrad.addColorStop(1, '#1e293b');
     ctx.fillStyle = hoodGrad;
     ctx.beginPath();
     ctx.moveTo(-2.8, -1.7);
     ctx.quadraticCurveTo(0.8, -3.9, 5.6, -3.4);
-    ctx.quadraticCurveTo(8.6, -2.8, 8.6, 0);
-    ctx.quadraticCurveTo(8.6, 2.8, 5.6, 3.4);
+    ctx.quadraticCurveTo(8.7, -2.7, 8.7, 0);
+    ctx.quadraticCurveTo(8.7, 2.7, 5.6, 3.4);
     ctx.quadraticCurveTo(0.8, 3.9, -2.8, 1.7);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = '#1e293b';
+    ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 0.75;
     ctx.stroke();
 
-    // Central stamped hood ridge & stainless steel clamp clips
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 0.75;
+    // Raised dorsal crown contour over the internal downward reflector
+    const crownGrad = ctx.createRadialGradient(4.1, -0.8, 0.4, 4.4, 0, 3.4);
+    crownGrad.addColorStop(0, wear > 0.5 ? '#d6d3d1' : '#e2e8f0');
+    crownGrad.addColorStop(0.55, wear > 0.5 ? '#78716c' : '#94a3b8');
+    crownGrad.addColorStop(1, '#334155');
+    ctx.fillStyle = crownGrad;
+    ctx.beginPath();
+    ctx.ellipse(4.4, 0, 3.3, 2.15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.55)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    // Central stamped aluminum dorsal ridge spine & rear ballast hump
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.lineWidth = 0.7;
     ctx.beginPath();
     ctx.moveTo(-1.8, 0);
-    ctx.lineTo(2.4, 0);
+    ctx.lineTo(6.8, 0);
     ctx.stroke();
+
+    // Rear ballast inspection cover & ventilation louvers
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(-0.8, -1.6); ctx.lineTo(-0.8, 1.6);
+    ctx.moveTo(0.1, -1.9); ctx.lineTo(0.1, 1.9);
+    ctx.stroke();
+
+    // Stainless steel side bowl-latch clips
     ctx.fillStyle = '#e2e8f0';
-    ctx.fillRect(1.5, -3.5, 1.2, 0.7);
-    ctx.fillRect(1.5, 2.8, 1.2, 0.7);
+    ctx.fillRect(1.7, -3.55, 1.15, 0.65);
+    ctx.fillRect(1.7, 2.9, 1.15, 0.65);
 
-    // Optical diffuser glass bowl
+    // Subtle rust/oxide weathering on aged housings
+    if (wear > 0.45) {
+      ctx.fillStyle = 'rgba(124, 45, 18, 0.42)';
+      ctx.beginPath();
+      ctx.arc(2.5, 1.2, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     if (prop.glassShattered) {
-      ctx.fillStyle = '#1e293b';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.65;
       ctx.beginPath();
-      ctx.ellipse(4.4, 0, 3.1, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(2.2, -1.3); ctx.lineTo(6.4, 1.2);
-      ctx.moveTo(2.6, 1.4); ctx.lineTo(6.1, -1.3);
+      ctx.moveTo(3.4, -1.3); ctx.lineTo(5.6, 1.2);
       ctx.stroke();
-    } else if (isLit && litIntensity > 0.05) {
-      ctx.globalAlpha = Math.min(1, 0.5 + litIntensity * 0.5);
-      ctx.fillStyle = spectral.lensOnOuter;
-      ctx.beginPath();
-      ctx.ellipse(4.4, 0, 3.2, 2.15, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = spectral.lensOnMid;
-      ctx.beginPath();
-      ctx.ellipse(4.4, 0, 2.2, 1.45, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = spectral.lensOnCore;
-      ctx.beginPath();
-      ctx.ellipse(4.4, 0, 1.2, 0.75, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    } else {
-      // Realistic daytime fluted glass bowl with subtle reflective specular sheen
-      const glassGrad = ctx.createRadialGradient(3.6, -0.7, 0.4, 4.4, 0, 3.3);
-      glassGrad.addColorStop(0, '#e2e8f0');
-      glassGrad.addColorStop(0.55, '#94a3b8');
-      glassGrad.addColorStop(1, '#475569');
-      ctx.fillStyle = glassGrad;
-      ctx.beginPath();
-      ctx.ellipse(4.4, 0, 3.1, 2.1, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 0.55;
-      ctx.stroke();
-
-      // Inner tubular arc lamp silhouette visible through clear glass
-      ctx.strokeStyle = 'rgba(254, 240, 138, 0.45)';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.moveTo(2.6, 0);
-      ctx.lineTo(6.0, 0);
-      ctx.stroke();
-
-      // Specular daylight glint
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-      ctx.beginPath();
-      ctx.ellipse(3.6, -0.8, 1.3, 0.45, -0.2, 0, Math.PI * 2);
-      ctx.fill();
     }
   }
 
@@ -4968,57 +4983,64 @@ export function renderTallStreetProp(
       ctx.lineTo(bx - dSin * 0.45, by + dCos * 0.45);
       ctx.stroke();
 
-      // Vintage conical/oval Soviet luminaire hood (РКУ / СПО-200)
+      // Vintage opaque Soviet enameled conical bell hood (РКУ / СПО-200) — light shines strictly DOWNWARD
       ctx.save();
       ctx.translate(bx, by);
       ctx.rotate(dirSign === 1 ? angle : angle + Math.PI);
 
-      const hoodGrad = ctx.createRadialGradient(-0.8, -0.8, 0.5, 0.5, 0, 4.4);
-      hoodGrad.addColorStop(0, isRusty ? '#78716c' : '#64748b');
-      hoodGrad.addColorStop(0.65, isRusty ? '#44403c' : '#334155');
-      hoodGrad.addColorStop(1, '#111827');
+      // Subtle downward light spill peeking ONLY around the outer rim under the opaque hood at night
+      if (isLit && litIntensity > 0.05 && !prop.glassShattered) {
+        const [r, g, b] = spectral.rgb;
+        const underGlow = ctx.createRadialGradient(0.6, 0, 2.6, 0.6, 0, 6.4);
+        underGlow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.44 * litIntensity).toFixed(2)})`);
+        underGlow.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, ${(0.18 * litIntensity).toFixed(2)})`);
+        underGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        ctx.fillStyle = underGlow;
+        ctx.beginPath();
+        ctx.ellipse(0.6, 0, 6.2, 5.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 100% Opaque enameled steel top dome seen from above
+      const hoodGrad = ctx.createRadialGradient(-0.8, -1.0, 0.4, 0.6, 0, 4.4);
+      hoodGrad.addColorStop(0, isRusty ? '#a8a29e' : '#94a3b8');
+      hoodGrad.addColorStop(0.42, isRusty ? '#57534e' : '#475569');
+      hoodGrad.addColorStop(0.85, isRusty ? '#292524' : '#1e293b');
+      hoodGrad.addColorStop(1, '#0f172a');
       ctx.fillStyle = hoodGrad;
       ctx.beginPath();
-      ctx.ellipse(0.6, 0, 4.2, 3.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(0.6, 0, 4.2, 3.6, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 0.75;
       ctx.stroke();
 
-      // Optical bowl inside hood (reflective enamel/glass by day, glowing sodium/DRL by night)
-      if (prop.glassShattered) {
-        ctx.fillStyle = '#0f172a';
+      // Stepped upper enameled crown ring
+      ctx.strokeStyle = isRusty ? 'rgba(214, 211, 209, 0.35)' : 'rgba(203, 213, 225, 0.42)';
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.ellipse(0.6, 0, 2.5, 2.1, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Top cast-iron socket collar & gooseneck entry locknut
+      ctx.fillStyle = isRusty ? '#7c2d12' : '#334155';
+      ctx.beginPath();
+      ctx.arc(0.4, 0, 1.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.45;
+      ctx.stroke();
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(0.2, -0.25, 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Weathered rust chips on aged Soviet enameled domes
+      if (isRusty || wear > 0.48) {
+        ctx.fillStyle = 'rgba(154, 52, 18, 0.55)';
         ctx.beginPath();
-        ctx.arc(0.7, 0, 2.2, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (isLit && litIntensity > 0.05) {
-        ctx.globalAlpha = Math.min(1, 0.48 + litIntensity * 0.52);
-        ctx.fillStyle = spectral.lensOnOuter;
-        ctx.beginPath();
-        ctx.ellipse(0.7, 0, 2.5, 2.1, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = spectral.lensOnMid;
-        ctx.beginPath();
-        ctx.ellipse(0.7, 0, 1.65, 1.4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = spectral.lensOnCore;
-        ctx.beginPath();
-        ctx.ellipse(0.7, 0, 0.85, 0.7, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      } else {
-        // Daytime dusty borosilicate bowl & white enamel reflector ring
-        const dayLens = ctx.createRadialGradient(0.1, -0.6, 0.3, 0.7, 0, 2.5);
-        dayLens.addColorStop(0, '#f1f5f9');
-        dayLens.addColorStop(0.55, '#94a3b8');
-        dayLens.addColorStop(1, '#475569');
-        ctx.fillStyle = dayLens;
-        ctx.beginPath();
-        ctx.ellipse(0.7, 0, 2.4, 2.0, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-        ctx.beginPath();
-        ctx.arc(0.0, -0.7, 0.7, 0, Math.PI * 2);
+        ctx.arc(2.4, 1.3, 0.85, 0, Math.PI * 2);
+        ctx.arc(-1.2, -1.6, 0.6, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -5100,7 +5122,7 @@ export function renderTallStreetProp(
     }
 
     if (style === 'retro_globe') {
-      // Frosted opal glass globe on dark steel collar
+      // Frosted opal glass globe on dark steel collar (genuinely diffuses soft light through frosted glass + opaque top cap)
       ctx.fillStyle = '#1e293b';
       ctx.beginPath();
       ctx.arc(leanX, leanY, 3.8, 0, Math.PI * 2);
@@ -5117,14 +5139,14 @@ export function renderTallStreetProp(
         ctx.moveTo(leanX - 1.6, leanY - 1.4); ctx.lineTo(leanX + 1.5, leanY + 1.5);
         ctx.stroke();
       } else if (isLit && litIntensity > 0.05) {
-        ctx.globalAlpha = Math.min(1, 0.55 + litIntensity * 0.45);
-        const glowGrad = ctx.createRadialGradient(leanX - 0.6, leanY - 0.6, 0.3, leanX, leanY, 3.3);
-        glowGrad.addColorStop(0, spectral.lensOnCore);
-        glowGrad.addColorStop(0.6, spectral.lensOnMid);
-        glowGrad.addColorStop(1, spectral.lensOnOuter);
+        ctx.globalAlpha = Math.min(1, 0.45 + litIntensity * 0.45);
+        const glowGrad = ctx.createRadialGradient(leanX - 0.6, leanY - 0.6, 0.3, leanX, leanY, 3.25);
+        glowGrad.addColorStop(0, spectral.lensOnMid);
+        glowGrad.addColorStop(0.65, spectral.lensOnOuter);
+        glowGrad.addColorStop(1, '#94a3b8');
         ctx.fillStyle = glowGrad;
         ctx.beginPath();
-        ctx.arc(leanX, leanY, 3.25, 0, Math.PI * 2);
+        ctx.arc(leanX, leanY, 3.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
       } else {
@@ -5141,98 +5163,115 @@ export function renderTallStreetProp(
         ctx.lineWidth = 0.5;
         ctx.stroke();
       }
-    } else if (style === 'modern_bollard_tall') {
-      // Sleek architectural anthracite aluminum column with annular LED diffuser ring
+
+      // Small opaque dark cast-iron top vent/finial cap at apex of globe
       ctx.fillStyle = '#1e293b';
       ctx.beginPath();
-      ctx.arc(leanX, leanY, 4.1, 0, Math.PI * 2);
+      ctx.arc(leanX, leanY, 1.1, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 0.6;
-      ctx.stroke();
-
-      // Annular optical ring
-      if (!prop.glassShattered) {
-        ctx.strokeStyle = isLit && litIntensity > 0.05 ? spectral.lensOnMid : '#94a3b8';
-        ctx.lineWidth = 1.45;
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.arc(leanX - 0.25, leanY - 0.25, 0.38, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (style === 'modern_bollard_tall') {
+      // Sleek architectural dark-sky anthracite lantern: opaque circular roof cap, light spills ONLY under the eaves
+      if (isLit && litIntensity > 0.05 && !prop.glassShattered) {
+        const [r, g, b] = spectral.rgb;
+        const eaveGrad = ctx.createRadialGradient(leanX, leanY, 3.2, leanX, leanY, 5.9);
+        eaveGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.45 * litIntensity).toFixed(2)})`);
+        eaveGrad.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, ${(0.18 * litIntensity).toFixed(2)})`);
+        eaveGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        ctx.fillStyle = eaveGrad;
         ctx.beginPath();
-        ctx.arc(leanX, leanY, 2.75, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.arc(leanX, leanY, 5.9, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      // Brushed metallic center cap disc
-      const topCap = ctx.createRadialGradient(leanX - 0.6, leanY - 0.6, 0.2, leanX, leanY, 1.9);
-      topCap.addColorStop(0, '#94a3b8');
-      topCap.addColorStop(0.65, '#334155');
-      topCap.addColorStop(1, '#0f172a');
-      ctx.fillStyle = topCap;
+      // 100% Opaque brushed anthracite top reflector disc
+      const topRoof = ctx.createRadialGradient(leanX - 1.1, leanY - 1.1, 0.3, leanX, leanY, 4.1);
+      topRoof.addColorStop(0, '#64748b');
+      topRoof.addColorStop(0.5, '#334155');
+      topRoof.addColorStop(1, '#0f172a');
+      ctx.fillStyle = topRoof;
       ctx.beginPath();
-      ctx.arc(leanX, leanY, 1.85, 0, Math.PI * 2);
+      ctx.arc(leanX, leanY, 4.05, 0, Math.PI * 2);
       ctx.fill();
-    } else {
-      // 'cast_iron_classic': Ornate hexagonal cast-iron carriage lantern with bronze ribs & finial
-      // Decorative scrolled iron brackets
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.arc(leanX, leanY, 4.2, 0, Math.PI * 2);
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 0.65;
       ctx.stroke();
 
-      // Hexagonal glass carriage
+      // Chamfered inner ring & central stainless hex screw
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.arc(leanX, leanY, 2.7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(leanX, leanY, 0.65, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // 'cast_iron_classic': Ornate hexagonal cast-iron carriage lantern with OPAQUE pitched iron roof
+      // Warm light spills ONLY out from underneath the hexagonal eaves around the side glass panes
+      if (isLit && litIntensity > 0.05 && !prop.glassShattered) {
+        const [r, g, b] = spectral.rgb;
+        const eaveGlow = ctx.createRadialGradient(leanX, leanY, 2.6, leanX, leanY, 6.2);
+        eaveGlow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.48 * litIntensity).toFixed(2)})`);
+        eaveGlow.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, ${(0.20 * litIntensity).toFixed(2)})`);
+        eaveGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        ctx.fillStyle = eaveGlow;
+        ctx.beginPath();
+        ctx.arc(leanX, leanY, 6.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 100% Opaque cast-iron hexagonal pitched roof (6 faceted metal roof panels)
+      const facetShades = ['#334155', '#475569', '#273449', '#1e293b', '#172033', '#293548'];
+      for (let i = 0; i < 6; i++) {
+        const a1 = (i * Math.PI) / 3;
+        const a2 = ((i + 1) * Math.PI) / 3;
+        ctx.fillStyle = facetShades[i];
+        ctx.beginPath();
+        ctx.moveTo(leanX, leanY);
+        ctx.lineTo(leanX + Math.cos(a1) * 3.85, leanY + Math.sin(a1) * 3.85);
+        ctx.lineTo(leanX + Math.cos(a2) * 3.85, leanY + Math.sin(a2) * 3.85);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Outer hexagonal cast-iron eave border
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
         const a = (i * Math.PI) / 3;
-        const hx = leanX + Math.cos(a) * 3.45;
-        const hy = leanY + Math.sin(a) * 3.45;
+        const hx = leanX + Math.cos(a) * 3.85;
+        const hy = leanY + Math.sin(a) * 3.85;
         if (i === 0) ctx.moveTo(hx, hy);
         else ctx.lineTo(hx, hy);
       }
       ctx.closePath();
-
-      if (prop.glassShattered) {
-        ctx.fillStyle = '#0f172a';
-        ctx.fill();
-      } else if (isLit && litIntensity > 0.05) {
-        ctx.globalAlpha = Math.min(1, 0.55 + litIntensity * 0.45);
-        const litGrad = ctx.createRadialGradient(leanX, leanY, 0.3, leanX, leanY, 3.4);
-        litGrad.addColorStop(0, spectral.lensOnCore);
-        litGrad.addColorStop(0.55, spectral.lensOnMid);
-        litGrad.addColorStop(1, spectral.lensOnOuter);
-        ctx.fillStyle = litGrad;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      } else {
-        // Faceted transparent lantern glass by day
-        const glassDay = ctx.createRadialGradient(leanX - 0.8, leanY - 0.8, 0.4, leanX, leanY, 3.5);
-        glassDay.addColorStop(0, '#e2e8f0');
-        glassDay.addColorStop(0.55, '#94a3b8');
-        glassDay.addColorStop(1, '#334155');
-        ctx.fillStyle = glassDay;
-        ctx.fill();
-      }
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = '#090d16';
+      ctx.lineWidth = 0.75;
       ctx.stroke();
 
       // Cast-iron hexagonal roof ribs meeting at bronze finial spire
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 0.65;
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.55;
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
         const a = (i * Math.PI) / 3;
         ctx.moveTo(leanX, leanY);
-        ctx.lineTo(leanX + Math.cos(a) * 3.3, leanY + Math.sin(a) * 3.3);
+        ctx.lineTo(leanX + Math.cos(a) * 3.7, leanY + Math.sin(a) * 3.7);
       }
       ctx.stroke();
 
-      // Cast-iron / verdigris bronze finial cap at very top
-      ctx.fillStyle = '#1e293b';
+      // Cast-iron / aged bronze finial cap at very top
+      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.arc(leanX, leanY, 1.35, 0, Math.PI * 2);
+      ctx.arc(leanX, leanY, 1.3, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#92400e';
+      ctx.fillStyle = '#b45309';
       ctx.beginPath();
-      ctx.arc(leanX - 0.2, leanY - 0.2, 0.55, 0, Math.PI * 2);
+      ctx.arc(leanX - 0.2, leanY - 0.2, 0.52, 0, Math.PI * 2);
       ctx.fill();
     }
 
