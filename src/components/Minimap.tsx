@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Map as MapIcon, Minus, Plus, ZoomIn, ZoomOut, ChevronUp, Navigation } from 'lucide-react';
 import type { Camera, GameWorld, Player } from '../types';
-import { performanceConfig } from '../performanceConfig';
+import { performanceConfig, isMobileOrLowEndDevice } from '../performanceConfig';
 import { MAP_COLORS as C, MAP_FONT, GROUP_COLORS, formatDistance } from '../map/mapTheme';
 import { collectLandmarks } from '../map/landmarks';
 import {
@@ -79,7 +79,8 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({
     let cssW = 0, cssH = 0, dpr = 1;
 
     const fit = () => {
-      dpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+      const mobile = isMobileOrLowEndDevice();
+      dpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, mobile ? 1 : 1.25) : 1;
       cssW = frame.clientWidth; cssH = frame.clientHeight;
       const tw = Math.max(1, Math.round(cssW * dpr)), th = Math.max(1, Math.round(cssH * dpr));
       if (canvas.width !== tw || canvas.height !== th) {
@@ -97,8 +98,9 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({
       raf = requestAnimationFrame(draw);
       if (pausedRef.current || (typeof document !== 'undefined' && document.hidden)) return;
       if (!performanceConfig.enableMinimap) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
-      const every = performanceConfig.minimapUpdateMs;
-      if (every > 0 && now - last < every) return;
+      const minEvery = isMobileOrLowEndDevice() ? 80 : 33;
+      const every = Math.max(performanceConfig.minimapUpdateMs || 0, minEvery);
+      if (now - last < every) return;
       last = now;
       const world = worldRef.current, player = playerRef.current, camera = cameraRef.current;
       if (!world || !player || !camera || !cssW) return;
@@ -151,7 +153,7 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({
           staticCacheRef.current = sCache;
         }
         const pixelScale = scale * dpr;
-        const cw = Math.min(2048, Math.max(64, Math.ceil(cacheHalfSpan * 2 * pixelScale)));
+        const cw = Math.min(1024, Math.max(64, Math.ceil(cacheHalfSpan * 2 * pixelScale)));
         const ch = cw;
         const effScale = cw / (cacheHalfSpan * 2);
         if (sCache.canvas.width !== cw || sCache.canvas.height !== ch) {

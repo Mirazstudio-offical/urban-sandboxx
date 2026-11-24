@@ -134,7 +134,7 @@ import { getVehicleCatalogItem } from './vehicleCatalog';
 import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
 import { RadialMenu } from './components/RadialMenu';
 import { SpeedometerHUD } from './components/SpeedometerHUD';
-import { performanceConfig, capNearest } from './performanceConfig';
+import { performanceConfig, capNearest, isMobileOrLowEndDevice } from './performanceConfig';
 import { crashLogger, CrashReport } from './crashLogger';
 import { CrashAlertToast } from './components/CrashAlertToast';
 import { findPointedInteraction, canUseActiveHandItem, InteractionTarget } from './interactionSystem';
@@ -3384,7 +3384,8 @@ export default function App() {
             gpuFxRef.current = fx;
             const cssW = window.innerWidth;
             const cssH = window.innerHeight;
-            const dpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+            const mobile = isMobileOrLowEndDevice();
+            const dpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2) : 1;
             fx.resize(cssW * dpr, cssH * dpr);
             gpuCanvas.style.width = cssW + 'px';
             gpuCanvas.style.height = cssH + 'px';
@@ -3466,8 +3467,15 @@ export default function App() {
         if (!canvas || !rendererRef.current) return;
         const cssW = window.innerWidth;
         const cssH = window.innerHeight;
-        const dpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-        const scale = Math.min(1, Math.max(0.5, performanceConfig.renderScale)) * dpr;
+        const mobile = isMobileOrLowEndDevice();
+        const outDpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2) : 1;
+        // When GPU PostFX is active, it upscales the 2D backing store via Catmull-Rom bicubic + AMD CAS sharpening.
+        // Cap the intermediate 2D canvas DPR (1.0 on mobile, 1.25 on desktop) to slash Canvas2D rasterization & GPU upload cost
+        // while keeping the final WebGL2 output crisp at full display DPR.
+        const canvasDpr = performanceConfig.enableGpuPostFx
+          ? Math.min(outDpr, mobile ? 1.0 : 1.25)
+          : outDpr;
+        const scale = Math.min(1, Math.max(0.5, performanceConfig.renderScale)) * canvasDpr;
         canvas.width = Math.max(1, Math.round(cssW * scale));
         canvas.height = Math.max(1, Math.round(cssH * scale));
         canvas.style.width = cssW + 'px';
@@ -3477,7 +3485,7 @@ export default function App() {
         const fx = gpuFxRef.current;
         const gpuCanvas = gpuCanvasRef.current;
         if (fx && gpuCanvas) {
-          fx.resize(cssW * dpr, cssH * dpr);
+          fx.resize(cssW * outDpr, cssH * outDpr);
           gpuCanvas.style.width = cssW + 'px';
           gpuCanvas.style.height = cssH + 'px';
         }
@@ -5653,48 +5661,95 @@ export default function App() {
         camera.angle += angleDiff * Math.min(1.0, rotSpeed * dt);
         const tPhysEnd = performance.now();
 
-        // 9. Query objects in Camera Viewport for high-performance rendering
+        // 9. Query objects in Camera Viewport with rotated-screen OBB culling for high-performance rendering
         const tVpStart = performance.now();
-        const vpMargin = (Math.hypot(window.innerWidth, window.innerHeight) / (2 * Math.max(0.4, camera.zoom)) + 150) * performanceConfig.drawDistance;
+        const invZoom = 1 / Math.max(0.4, camera.zoom);
+        const drawDist = performanceConfig.drawDistance;
+        const vpMargin = (Math.hypot(window.innerWidth, window.innerHeight) * 0.5 * invZoom + 150) * drawDist;
         const bldMargin = vpMargin + 600;
-        const vpBuildings = bldGrid.queryRect(
-          camera.x - bldMargin,
-          camera.y - bldMargin,
+        const obbHalfW = window.innerWidth * 0.5 * invZoom * drawDist;
+        const obbHalfH = window.innerHeight * 0.5 * invZoom * drawDist;
+        const camRot = -camera.angle - Math.PI * 0.5;
+        const camCos = Math.cos(camRot);
+        const camSin = Math.sin(camRot);
+        const cxCam = camera.x;
+        const cyCam = camera.y;
+
+        const filterPointObbInPlace = <T extends { x: number; y: number }>(arr: T[], pad: number): T[] => {
+          const limX = obbHalfW + pad;
+          const limY = obbHalfH + pad;
+          let write = 0;
+          for (let i = 0; i < arr.length; i++) {
+            const item = arr[i];
+            const dx = item.x - cxCam;
+            const dy = item.y - cyCam;
+            const lx = dx * camCos - dy * camSin;
+            const ly = dx * camSin + dy * camCos;
+            if (lx >= -limX && lx <= limX && ly >= -limY && ly <= limY) {
+              arr[write++] = item;
+            }
+          }
+          arr.length = write;
+          return arr;
+        };
+
+        const rawBuildings = bldGrid.queryRect(
+          cxCam - bldMargin,
+          cyCam - bldMargin,
           bldMargin * 2,
           bldMargin * 2,
           scratchVpBuildingsRef.current
         );
-        const vpVehicles = capNearest(vehGrid.queryRect(
-          camera.x - vpMargin,
-          camera.y - vpMargin,
+        {
+          let bw = 0;
+          for (let i = 0; i < rawBuildings.length; i++) {
+            const b = rawBuildings[i];
+            const bCx = b.x + b.width * 0.5;
+            const bCy = b.y + b.height * 0.5;
+            const bRad = Math.hypot(b.width, b.height) * 0.5 + 480;
+            const dx = bCx - cxCam;
+            const dy = bCy - cyCam;
+            const lx = dx * camCos - dy * camSin;
+            const ly = dx * camSin + dy * camCos;
+            if (lx >= -(obbHalfW + bRad) && lx <= obbHalfW + bRad && ly >= -(obbHalfH + bRad) && ly <= obbHalfH + bRad) {
+              rawBuildings[bw++] = b;
+            }
+          }
+          rawBuildings.length = bw;
+        }
+        const vpBuildings = rawBuildings;
+
+        const vpVehicles = capNearest(filterPointObbInPlace(vehGrid.queryRect(
+          cxCam - vpMargin,
+          cyCam - vpMargin,
           vpMargin * 2,
           vpMargin * 2,
           scratchVpVehiclesRef.current
-        ), performanceConfig.maxVisibleVehicles, camera.x, camera.y);
-        const vpPedestrians = capNearest(pedGrid.queryRect(
-          camera.x - vpMargin,
-          camera.y - vpMargin,
+        ), 360), performanceConfig.maxVisibleVehicles, cxCam, cyCam);
+        const vpPedestrians = capNearest(filterPointObbInPlace(pedGrid.queryRect(
+          cxCam - vpMargin,
+          cyCam - vpMargin,
           vpMargin * 2,
           vpMargin * 2,
           scratchVpPedestriansRef.current
-        ), performanceConfig.maxVisiblePedestrians, camera.x, camera.y);
-        const vpTrees = capNearest(spatialGridTreesRef.current.queryRect(
-          camera.x - vpMargin,
-          camera.y - vpMargin,
+        ), 160), performanceConfig.maxVisiblePedestrians, cxCam, cyCam);
+        const vpTrees = capNearest(filterPointObbInPlace(spatialGridTreesRef.current.queryRect(
+          cxCam - vpMargin,
+          cyCam - vpMargin,
           vpMargin * 2,
           vpMargin * 2,
           scratchVpTreesRef.current
-        ), performanceConfig.maxVisibleTrees, camera.x, camera.y);
-        const vpProps = capNearest(spatialGridPropsRef.current.queryRect(
-          camera.x - vpMargin,
-          camera.y - vpMargin,
+        ), 220), performanceConfig.maxVisibleTrees, cxCam, cyCam);
+        const vpProps = capNearest(filterPointObbInPlace(spatialGridPropsRef.current.queryRect(
+          cxCam - vpMargin,
+          cyCam - vpMargin,
           vpMargin * 2,
           vpMargin * 2,
           scratchVpPropsRef.current
-        ), performanceConfig.maxVisibleProps, camera.x, camera.y);
+        ), 160), performanceConfig.maxVisibleProps, cxCam, cyCam);
         const vpSidewalks = spatialGridSidewalksRef.current.queryRect(
-          camera.x - vpMargin,
-          camera.y - vpMargin,
+          cxCam - vpMargin,
+          cyCam - vpMargin,
           vpMargin * 2,
           vpMargin * 2,
           scratchVpSidewalksRef.current

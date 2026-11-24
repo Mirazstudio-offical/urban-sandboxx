@@ -144,6 +144,49 @@ void main() {
   o = vec4(s / 12.0 * uScale, 1.0);
 }`;
 
+const FS_FOG_LIGHT = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 o;
+uniform sampler2D uLight;
+uniform sampler2D uLightCol;
+uniform float uLightColOn;
+uniform vec2 uLightSize;
+void main() {
+  vec2 uv = vUv;
+  vec2 r1 = vec2(20.0) / max(uLightSize, vec2(1.0));
+  vec2 r2 = vec2(46.0) / max(uLightSize, vec2(1.0));
+  vec2 uvR  = clamp(uv + vec2( r1.x, 0.0), vec2(0.001), vec2(0.999));
+  vec2 uvL  = clamp(uv + vec2(-r1.x, 0.0), vec2(0.001), vec2(0.999));
+  vec2 uvU  = clamp(uv + vec2(0.0,  r1.y), vec2(0.001), vec2(0.999));
+  vec2 uvD  = clamp(uv + vec2(0.0, -r1.y), vec2(0.001), vec2(0.999));
+  vec2 uvTR = clamp(uv + vec2( r2.x,  r2.y), vec2(0.001), vec2(0.999));
+  vec2 uvTL = clamp(uv + vec2(-r2.x,  r2.y), vec2(0.001), vec2(0.999));
+  vec2 uvBR = clamp(uv + vec2( r2.x, -r2.y), vec2(0.001), vec2(0.999));
+  vec2 uvBL = clamp(uv + vec2(-r2.x, -r2.y), vec2(0.001), vec2(0.999));
+  float g0 = 1.0 - texture(uLight, uv).a;
+  float gR = 1.0 - texture(uLight, uvR).a;
+  float gL = 1.0 - texture(uLight, uvL).a;
+  float gU = 1.0 - texture(uLight, uvU).a;
+  float gD = 1.0 - texture(uLight, uvD).a;
+  float gTR = 1.0 - texture(uLight, uvTR).a;
+  float gTL = 1.0 - texture(uLight, uvTL).a;
+  float gBR = 1.0 - texture(uLight, uvBR).a;
+  float gBL = 1.0 - texture(uLight, uvBL).a;
+  float gl = g0 * 0.25 + (gR + gL + gU + gD) * 0.125 + (gTR + gTL + gBR + gBL) * 0.0625;
+  vec3 fogTint = vec3(1.0, 0.92, 0.76);
+  if (uLightColOn > 0.5) {
+    vec3 glCol = texture(uLightCol, uv).rgb * 0.25
+      + (texture(uLightCol, uvR).rgb + texture(uLightCol, uvL).rgb + texture(uLightCol, uvU).rgb + texture(uLightCol, uvD).rgb) * 0.125
+      + (texture(uLightCol, uvTR).rgb + texture(uLightCol, uvTL).rgb + texture(uLightCol, uvBR).rgb + texture(uLightCol, uvBL).rgb) * 0.0625;
+    float glColMax = max(glCol.r, max(glCol.g, glCol.b));
+    if (glColMax > 0.008) {
+      fogTint = mix(fogTint, glCol / glColMax, smoothstep(0.01, 0.14, glColMax));
+    }
+  }
+  o = vec4(fogTint, smoothstep(0.25, 0.95, gl));
+}`;
+
 const FS_COMPOSITE = `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -158,6 +201,8 @@ uniform float uLightOn;
 uniform vec2 uLightSize;
 uniform sampler2D uLightCol;
 uniform float uLightColOn;
+uniform sampler2D uFogLight;
+uniform sampler2D uNoise;
 uniform sampler2D uMat;
 uniform float uMatOn;
 uniform vec2 uMatSize;
@@ -178,6 +223,7 @@ uniform float uSunElev;     // sun / moon elevation, 0 (horizon) .. 1 (zenith)
 uniform vec2 uCamPos;       // camera world position (px)
 uniform float uCamZoom;     // camera zoom
 uniform float uCamAngle;    // camera angle (rad)
+uniform vec2 uCamCosSin;    // precomputed vec2(cos(uCamAngle + PI/2), sin(uCamAngle + PI/2))
 uniform float uFreezing;    // 1 when frozen ice, 0 when liquid water
 uniform float uRelief;
 uniform float uClarity;
@@ -259,42 +305,24 @@ float hash(vec2 p) {
   return fract((p3.x + p3.y) * p3.z);
 }
 
-// 2D smooth value noise returningvec3(value, dValue/dx, dValue/dy)
+// Hardware-filtered 2D smooth value noise + analytical gradient LUT (64x64 periodic lattice in 256x256 RGBA8)
 vec3 noise2DAndGrad(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-  vec2 du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
-
-  float a = hash(i + vec2(0.0, 0.0));
-  float b = hash(i + vec2(1.0, 0.0));
-  float c = hash(i + vec2(0.0, 1.0));
-  float d = hash(i + vec2(1.0, 1.0));
-
-  float k0 = a;
-  float k1 = b - a;
-  float k2 = c - a;
-  float k3 = a - b - c + d;
-
-  float val = k0 + k1 * u.x + k2 * u.y + k3 * u.x * u.y;
-  vec2 grad = du * (vec2(k1, k2) + k3 * u.yx);
-  return vec3(val, grad);
+  vec4 n = texture(uNoise, p * (1.0 / 64.0));
+  return vec3(n.r, (n.gb - 0.5) * 4.0);
 }
 
 // Reconstruct world-space position (in game pixels) from screen UV
 vec2 screenUvToWorld(vec2 uv) {
   vec2 screenPx = (vec2(uv.x, 1.0 - uv.y) - 0.5) * uOutSize / max(uCamZoom, 0.05);
-  float rot = uCamAngle + 1.57079632679;
-  float ca = cos(rot);
-  float sa = sin(rot);
+  float ca = uCamCosSin.x;
+  float sa = uCamCosSin.y;
   return uCamPos + vec2(screenPx.x * ca - screenPx.y * sa, screenPx.x * sa + screenPx.y * ca);
 }
 
 // Rotate world-space direction vector into screen UV space (X right, Y up)
 vec2 worldDirToScreenUv(vec2 worldDir) {
-  float a = -uCamAngle - 1.57079632679;
-  float ca = cos(a);
-  float sa = sin(a);
+  float ca = uCamCosSin.x;
+  float sa = -uCamCosSin.y;
   return vec2(worldDir.x * ca - worldDir.y * sa, -(worldDir.x * sa + worldDir.y * ca));
 }
 
@@ -1646,39 +1674,10 @@ void main() {
     c += wide * (c * 0.85 + 0.08) * uGi * mix(1.4, 0.45, uDay);
   }
 
-  // --- lights glowing in fog / rain / snow ------------------------------------------------------------------
+  // --- lights glowing in fog / rain / snow (pre-filtered 1/8-res lookup: 1 tap instead of 18) ---------------
   if (uLightOn > 0.5 && uFogGlow > 0.001) {
-    vec2 r1 = vec2(20.0) / uLightSize;
-    vec2 r2 = vec2(46.0) / uLightSize;
-    vec2 uvR = clamp(uv + vec2( r1.x, 0.0), vec2(0.001), vec2(0.999));
-    vec2 uvL = clamp(uv + vec2(-r1.x, 0.0), vec2(0.001), vec2(0.999));
-    vec2 uvU = clamp(uv + vec2(0.0,  r1.y), vec2(0.001), vec2(0.999));
-    vec2 uvD = clamp(uv + vec2(0.0, -r1.y), vec2(0.001), vec2(0.999));
-    vec2 uvTR = clamp(uv + vec2( r2.x,  r2.y), vec2(0.001), vec2(0.999));
-    vec2 uvTL = clamp(uv + vec2(-r2.x,  r2.y), vec2(0.001), vec2(0.999));
-    vec2 uvBR = clamp(uv + vec2( r2.x, -r2.y), vec2(0.001), vec2(0.999));
-    vec2 uvBL = clamp(uv + vec2(-r2.x, -r2.y), vec2(0.001), vec2(0.999));
-    float g0 = 1.0 - texture(uLight, uv).a;
-    float gR = 1.0 - texture(uLight, uvR).a;
-    float gL = 1.0 - texture(uLight, uvL).a;
-    float gU = 1.0 - texture(uLight, uvU).a;
-    float gD = 1.0 - texture(uLight, uvD).a;
-    float gTR = 1.0 - texture(uLight, uvTR).a;
-    float gTL = 1.0 - texture(uLight, uvTL).a;
-    float gBR = 1.0 - texture(uLight, uvBR).a;
-    float gBL = 1.0 - texture(uLight, uvBL).a;
-    float gl = g0 * 0.25 + (gR + gL + gU + gD) * 0.125 + (gTR + gTL + gBR + gBL) * 0.0625;
-    vec3 fogTint = vec3(1.0, 0.92, 0.76);
-    if (uLightColOn > 0.5) {
-      vec3 glCol = texture(uLightCol, uv).rgb * 0.25
-        + (texture(uLightCol, uvR).rgb + texture(uLightCol, uvL).rgb + texture(uLightCol, uvU).rgb + texture(uLightCol, uvD).rgb) * 0.125
-        + (texture(uLightCol, uvTR).rgb + texture(uLightCol, uvTL).rgb + texture(uLightCol, uvBR).rgb + texture(uLightCol, uvBL).rgb) * 0.0625;
-      float glColMax = max(glCol.r, max(glCol.g, glCol.b));
-      if (glColMax > 0.008) {
-        fogTint = mix(fogTint, glCol / glColMax, smoothstep(0.01, 0.14, glColMax));
-      }
-    }
-    c += fogTint * smoothstep(0.25, 0.95, gl) * uFogGlow * (0.25 + 0.75 * (1.0 - uDay)) * 0.5;
+    vec4 fl = texture(uFogLight, uv);
+    c += fl.rgb * fl.a * uFogGlow * (0.25 + 0.75 * (1.0 - uDay)) * 0.5;
   }
 
   // --- bloom ------------------------------------------------------------------------------------------------
@@ -1790,6 +1789,7 @@ export class GpuPostFx {
 
   private pDown!: Program;
   private pUp!: Program;
+  private pFogLight!: Program;
   private pComposite!: Program;
   private pFinal!: Program;
   private vao: WebGLVertexArrayObject | null = null;
@@ -1798,6 +1798,7 @@ export class GpuPostFx {
   private lightTex: WebGLTexture | null = null;
   private lightColTex: WebGLTexture | null = null;
   private matTex: WebGLTexture | null = null;
+  private noiseTex: WebGLTexture | null = null;
   private srcW = 0;
   private srcH = 0;
   private lightW = 0;
@@ -1810,6 +1811,7 @@ export class GpuPostFx {
   private bloomChain: Target[] = [];
   private blurA: Target | null = null;
   private blurB: Target | null = null;
+  private fogLight: Target | null = null;
   private hdrFormat = false;
   private outW = 0;
   private outH = 0;
@@ -1869,11 +1871,13 @@ export class GpuPostFx {
 
     this.pDown = this.makeProgram(VS, FS_DOWN, ['uTex', 'uTexel', 'uThreshold', 'uKnee']);
     this.pUp = this.makeProgram(VS, FS_UP, ['uTex', 'uTexel', 'uScale']);
+    this.pFogLight = this.makeProgram(VS, FS_FOG_LIGHT, ['uLight', 'uLightCol', 'uLightColOn', 'uLightSize']);
     this.pComposite = this.makeProgram(VS, FS_COMPOSITE, [
       'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize', 'uLightCol', 'uLightColOn',
+      'uFogLight', 'uNoise',
       'uMat', 'uMatOn', 'uMatSize', 'uGi', 'uWet', 'uSoilWet', 'uSnow', 'uRoadSnow', 'uSlush', 'uRain', 'uFogGlow',
       'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun', 'uSunElev',
-      'uCamPos', 'uCamZoom', 'uCamAngle', 'uFreezing',
+      'uCamPos', 'uCamZoom', 'uCamAngle', 'uCamCosSin', 'uFreezing',
       'uRelief', 'uClarity', 'uBloomStr',
       'uSharp', 'uTone', 'uExposure', 'uContrast', 'uSat', 'uShadowTint', 'uHighTint', 'uHaze', 'uVig', 'uGrain', 'uChroma', 'uDay',
       'uFireCount', 'uFirePosRad[0]', 'uFireWind[0]',
@@ -1900,10 +1904,14 @@ export class GpuPostFx {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     this.setTexParams(false); // gl.NEAREST so discrete material IDs in R are never blurred across edges!
 
+    // Precompute 256x256 seamless periodic value noise + analytical gradient LUT (64x64 lattice)
+    this.noiseTex = this.createNoiseLutTexture();
+
     this.scene = null;
     this.bloomChain = [];
     this.blurA = null;
     this.blurB = null;
+    this.fogLight = null;
     this.srcW = 0;
     this.srcH = 0;
     this.lightW = 1;
@@ -1915,6 +1923,63 @@ export class GpuPostFx {
     this.outW = 0;
     this.outH = 0;
     this.available = true;
+  }
+
+  private createNoiseLutTexture(): WebGLTexture {
+    const gl = this.gl!;
+    const N = 256;
+    const GRID = 64;
+    const lattice = new Float32Array(GRID * GRID);
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        // Deterministic hash matching GLSL hash21 spirit
+        const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+        lattice[y * GRID + x] = s - Math.floor(s);
+      }
+    }
+    const pixels = new Uint8Array(N * N * 4);
+    for (let py = 0; py < N; py++) {
+      const gy = (py + 0.5) * (GRID / N);
+      const iy0 = Math.floor(gy) & (GRID - 1);
+      const iy1 = (iy0 + 1) & (GRID - 1);
+      const fy = gy - Math.floor(gy);
+      const uy = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+      const duy = 30 * fy * fy * (fy * (fy - 2) + 1);
+      for (let px = 0; px < N; px++) {
+        const gx = (px + 0.5) * (GRID / N);
+        const ix0 = Math.floor(gx) & (GRID - 1);
+        const ix1 = (ix0 + 1) & (GRID - 1);
+        const fx = gx - Math.floor(gx);
+        const ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
+        const dux = 30 * fx * fx * (fx * (fx - 2) + 1);
+
+        const a = lattice[iy0 * GRID + ix0];
+        const b = lattice[iy0 * GRID + ix1];
+        const c = lattice[iy1 * GRID + ix0];
+        const d = lattice[iy1 * GRID + ix1];
+        const k1 = b - a;
+        const k2 = c - a;
+        const k3 = a - b - c + d;
+        const val = a + k1 * ux + k2 * uy + k3 * ux * uy;
+        const dx = dux * (k1 + k3 * uy);
+        const dy = duy * (k2 + k3 * ux);
+
+        const idx = (py * N + px) * 4;
+        pixels[idx] = Math.max(0, Math.min(255, Math.round(val * 255)));
+        pixels[idx + 1] = Math.max(0, Math.min(255, Math.round((dx * 0.25 + 0.5) * 255)));
+        pixels[idx + 2] = Math.max(0, Math.min(255, Math.round((dy * 0.25 + 0.5) * 255)));
+        pixels[idx + 3] = 255;
+      }
+    }
+    const tex = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, N, N, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    return tex;
   }
 
   private compile(type: number, src: string): WebGLShader {
@@ -1978,10 +2043,12 @@ export class GpuPostFx {
     this.bloomChain.forEach((t) => this.freeTarget(t));
     this.freeTarget(this.blurA);
     this.freeTarget(this.blurB);
+    this.freeTarget(this.fogLight);
     this.scene = null;
     this.bloomChain = [];
     this.blurA = null;
     this.blurB = null;
+    this.fogLight = null;
   }
 
   /** Size the output canvas (device pixels) and rebuild the intermediate targets. */
@@ -2005,6 +2072,7 @@ export class GpuPostFx {
     }
     this.blurA = this.makeTarget(Math.max(2, outW >> 2), Math.max(2, outH >> 2), false);
     this.blurB = this.makeTarget(Math.max(2, outW >> 3), Math.max(2, outH >> 3), false);
+    this.fogLight = this.makeTarget(Math.max(2, outW >> 3), Math.max(2, outH >> 3), false);
   }
 
   /** Target colour grade for the time of day and weather; eased each frame so changes never pop. */
@@ -2194,6 +2262,22 @@ export class GpuPostFx {
       this.pass(this.blurB!, this.blurB!.w, this.blurB!.h);
     }
 
+    // --- low-res atmospheric fog-light scattering pass (replaces 18 full-res lightmap fetches in FS_COMPOSITE) ---
+    const fogScatMult = (s.fogScattering ?? 85) / 100;
+    const fogGlowVal = fogScatMult * g.fogGlow;
+    const fogLightActive = !!(lm && fogGlowVal > 0.001 && this.fogLight);
+    if (fogLightActive && this.fogLight) {
+      const fl = this.pFogLight;
+      gl.useProgram(fl.prog);
+      this.bindTex(3, this.lightTex);
+      this.bindTex(6, this.lightColTex);
+      gl.uniform1i(fl.u.uLight, 3);
+      gl.uniform1i(fl.u.uLightCol, 6);
+      gl.uniform1f(fl.u.uLightColOn, lcm ? 1 : 0);
+      gl.uniform2f(fl.u.uLightSize, lm!.width, lm!.height);
+      this.pass(this.fogLight, this.fogLight.w, this.fogLight.h);
+    }
+
     // --- composite -------------------------------------------------------------------------------------------
     const c = this.pComposite;
     gl.useProgram(c.prog);
@@ -2204,6 +2288,8 @@ export class GpuPostFx {
     this.bindTex(4, bloomOn ? this.bloomChain[2].tex : this.srcTex);
     this.bindTex(5, this.matTex);
     this.bindTex(6, this.lightColTex);
+    this.bindTex(7, fogLightActive && this.fogLight ? this.fogLight.tex : this.lightTex);
+    this.bindTex(8, this.noiseTex);
     gl.uniform1i(c.u.uSrc, 0);
     gl.uniform1i(c.u.uBloom, 1);
     gl.uniform1i(c.u.uBlur, 2);
@@ -2211,6 +2297,8 @@ export class GpuPostFx {
     gl.uniform1i(c.u.uBloomWide, 4);
     gl.uniform1i(c.u.uMat, 5);
     gl.uniform1i(c.u.uLightCol, 6);
+    gl.uniform1i(c.u.uFogLight, 7);
+    gl.uniform1i(c.u.uNoise, 8);
     gl.uniform1f(c.u.uLightOn, lm ? 1 : 0);
     gl.uniform2f(c.u.uLightSize, lm ? lm.width : 1, lm ? lm.height : 1);
     gl.uniform1f(c.u.uLightColOn, lcm ? 1 : 0);
@@ -2255,8 +2343,7 @@ export class GpuPostFx {
     gl.uniform1f(c.u.uSlush, this.smoothSlush);
     gl.uniform1f(c.u.uRain, this.smoothRain);
 
-    const fogScatMult = (s.fogScattering ?? 85) / 100;
-    gl.uniform1f(c.u.uFogGlow, fogScatMult * g.fogGlow);
+    gl.uniform1f(c.u.uFogGlow, fogLightActive ? fogGlowVal : 0);
     gl.uniform2f(c.u.uSrcSize, sw, sh);
     gl.uniform2f(c.u.uOutSize, this.outW, this.outH);
     const needUpscale = (s.bicubicUpscale !== false) && (sw < this.outW * 0.98 || sh < this.outH * 0.98);
@@ -2266,6 +2353,8 @@ export class GpuPostFx {
     gl.uniform2f(c.u.uCamPos, frame.cameraX ?? 0, frame.cameraY ?? 0);
     gl.uniform1f(c.u.uCamZoom, (frame.cameraZoom ?? 1) * dprScale);
     gl.uniform1f(c.u.uCamAngle, frame.cameraAngle);
+    const camRot = frame.cameraAngle + Math.PI * 0.5;
+    gl.uniform2f(c.u.uCamCosSin, Math.cos(camRot), Math.sin(camRot));
     gl.uniform1f(c.u.uFreezing, this.smoothFreeze);
     gl.uniform1f(c.u.uWaterShader, Math.max(0, Math.min(1, (s.waterShader ?? 85) / 100)));
     gl.uniform1f(c.u.uWaterWakes, Math.max(0, Math.min(1, (s.waterWakes ?? 85) / 100)));
@@ -2359,16 +2448,22 @@ export class GpuPostFx {
     gl.uniform1f(c.u.uGrain, s.grain / 100);
     gl.uniform1f(c.u.uChroma, s.chromatic / 100);
     gl.uniform1f(c.u.uDay, g.day);
-    this.pass(this.scene, this.outW, this.outH);
 
-    // --- final (FXAA / copy) ---------------------------------------------------------------------------------
-    const f = this.pFinal;
-    gl.useProgram(f.prog);
-    this.bindTex(0, this.scene.tex);
-    gl.uniform1i(f.u.uTex, 0);
-    gl.uniform2f(f.u.uTexel, 1 / this.outW, 1 / this.outH);
-    gl.uniform1f(f.u.uFxaa, s.antiAlias ? 1 : 0);
-    this.pass(null, this.outW, this.outH);
+    if (s.antiAlias) {
+      this.pass(this.scene, this.outW, this.outH);
+
+      // --- final (FXAA) --------------------------------------------------------------------------------------
+      const f = this.pFinal;
+      gl.useProgram(f.prog);
+      this.bindTex(0, this.scene.tex);
+      gl.uniform1i(f.u.uTex, 0);
+      gl.uniform2f(f.u.uTexel, 1 / this.outW, 1 / this.outH);
+      gl.uniform1f(f.u.uFxaa, 1);
+      this.pass(null, this.outW, this.outH);
+    } else {
+      // Bypass intermediate full-res FBO & copy pass when FXAA is disabled
+      this.pass(null, this.outW, this.outH);
+    }
     return true;
   }
 
@@ -2380,8 +2475,9 @@ export class GpuPostFx {
       if (this.lightTex) gl.deleteTexture(this.lightTex);
       if (this.lightColTex) gl.deleteTexture(this.lightColTex);
       if (this.matTex) gl.deleteTexture(this.matTex);
+      if (this.noiseTex) gl.deleteTexture(this.noiseTex);
       if (this.vao) gl.deleteVertexArray(this.vao);
-      [this.pDown, this.pUp, this.pComposite, this.pFinal].forEach((p) => p && gl.deleteProgram(p.prog));
+      [this.pDown, this.pUp, this.pFogLight, this.pComposite, this.pFinal].forEach((p) => p && gl.deleteProgram(p.prog));
     }
     this.available = false;
   }

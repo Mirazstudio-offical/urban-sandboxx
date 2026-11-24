@@ -427,6 +427,7 @@ export class GameRenderer {
   // Offscreen buffers for the Lightmap & Colored Illumination (prevents punching holes without color)
   private lightmapCanvas: HTMLCanvasElement;
   private lightEnvCanvas: HTMLCanvasElement;
+  private lightEnvBlurCanvas: HTMLCanvasElement;
   private lightColorCanvas: HTMLCanvasElement;
   private lightTintCanvas: HTMLCanvasElement;
   private shadowCanvas: HTMLCanvasElement;
@@ -455,9 +456,18 @@ export class GameRenderer {
   private flyingBirdsScratch: Bird[] = [];
   private intersectionSignCache = new WeakMap<object, { hName: string; vName: string }>();
   private treeCanvasPool: HTMLCanvasElement[] = [];
+  private matPuddleGrad: CanvasGradient | null = null;
+  private matStainGradCache = new Map<string, CanvasGradient>();
+  private chunksRebuiltThisFrame: number = 0;
+  private chunkSeasonKeys = new Map<string, string>();
 
   private getLightmapScale(): number {
-    return Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
+    const base = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
+    return Math.max(0.35, Math.min(0.55, base * 0.62));
+  }
+
+  private getMaterialBufferScale(): number {
+    return isMobileOrLowEndDevice() ? 0.5 : 0.65;
   }
 
   /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit` with zero heap allocation. */
@@ -483,6 +493,7 @@ export class GameRenderer {
   }
   private lightmapCtx: CanvasRenderingContext2D;
   private lightEnvCtx: CanvasRenderingContext2D;
+  private lightEnvBlurCtx: CanvasRenderingContext2D;
   private lightColorCtx: CanvasRenderingContext2D;
   private lightTintCtx: CanvasRenderingContext2D;
   private shadowCtx: CanvasRenderingContext2D;
@@ -941,6 +952,8 @@ export class GameRenderer {
     this.lightmapCtx = this.lightmapCanvas.getContext('2d')!;
     this.lightEnvCanvas = document.createElement('canvas');
     this.lightEnvCtx = this.lightEnvCanvas.getContext('2d')!;
+    this.lightEnvBlurCanvas = document.createElement('canvas');
+    this.lightEnvBlurCtx = this.lightEnvBlurCanvas.getContext('2d')!;
     this.lightColorCanvas = document.createElement('canvas');
     this.lightColorCtx = this.lightColorCanvas.getContext('2d')!;
     this.lightTintCanvas = document.createElement('canvas');
@@ -1071,16 +1084,20 @@ export class GameRenderer {
     const seasonKey = world.calendar
       ? `${world.calendar.season}_${world.calendar.month}_sn${snowTier}_rs${roadSnowTier}_sw${soilWetTier}_rw${surfWetTier}_fr${freezeTier}`
       : `default_sn${snowTier}_sw${soilWetTier}_rw${surfWetTier}`;
-    if (this.lastChunkSeasonKey !== seasonKey || this.lastChunkWorldRef !== world) {
+    if (this.lastChunkWorldRef !== world) {
       for (const oldCanvas of this.chunkCache.values()) {
         oldCanvas.width = 0;
         oldCanvas.height = 0;
       }
       this.chunkCache.clear();
+      this.chunkSeasonKeys.clear();
       this.lastChunkSeasonKey = seasonKey;
       this.lastChunkWorldRef = world;
+    } else if (this.lastChunkSeasonKey !== seasonKey) {
+      // Progressive weather/snow transition: keep existing chunk canvases and lazily refresh at most 1 stale chunk per frame
+      this.lastChunkSeasonKey = seasonKey;
     }
-    const key = `${cx},${cy}_${seasonKey}`;
+    const key = `${cx},${cy}`;
     let canvas = this.chunkCache.get(key);
     if (!canvas) {
       if (this.chunkCache.size >= GameRenderer.getMaxChunks()) {
@@ -1088,6 +1105,7 @@ export class GameRenderer {
         if (firstKey !== undefined) {
           const recycledCanvas = this.chunkCache.get(firstKey);
           this.chunkCache.delete(firstKey);
+          this.chunkSeasonKeys.delete(firstKey);
           if (recycledCanvas) {
             canvas = recycledCanvas;
           }
@@ -1101,7 +1119,16 @@ export class GameRenderer {
       const chunkCtx = canvas.getContext('2d', { alpha: false })!;
       this.renderChunkStatic(chunkCtx, cx, cy, world);
       this.chunkCache.set(key, canvas);
+      this.chunkSeasonKeys.set(key, seasonKey);
+      this.chunksRebuiltThisFrame++;
     } else {
+      // Refresh stale weather/snow chunks progressively (max 1 per frame) to eliminate blizzard stutter spikes
+      if (this.chunkSeasonKeys.get(key) !== seasonKey && this.chunksRebuiltThisFrame < 1) {
+        const chunkCtx = canvas.getContext('2d', { alpha: false })!;
+        this.renderChunkStatic(chunkCtx, cx, cy, world);
+        this.chunkSeasonKeys.set(key, seasonKey);
+        this.chunksRebuiltThisFrame++;
+      }
       // Move to back for LRU
       this.chunkCache.delete(key);
       this.chunkCache.set(key, canvas);
@@ -1206,9 +1233,9 @@ export class GameRenderer {
     this.lightColorCanvas.height = lmH;
     this.lightTintCanvas.width = lmW;
     this.lightTintCanvas.height = lmH;
-    // Match exact backing resolution of main 2D canvas so gl.NEAREST material lookup has crisp 1:1 edges on puddles & liquids
-    this.materialCanvas.width = Math.max(1, Math.round(width * this.backingScale));
-    this.materialCanvas.height = Math.max(1, Math.round(height * this.backingScale));
+    const matScale = this.getMaterialBufferScale();
+    this.materialCanvas.width = Math.max(1, Math.round(width * matScale));
+    this.materialCanvas.height = Math.max(1, Math.round(height * matScale));
     const shadowScale = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
     this.shadowCanvas.width = Math.max(1, Math.ceil(width * shadowScale));
     this.shadowCanvas.height = Math.max(1, Math.ceil(height * shadowScale));
@@ -1234,6 +1261,7 @@ export class GameRenderer {
   ) {
     const ctx = this.ctx;
     this.activePostFxFires.length = 0;
+    this.chunksRebuiltThisFrame = 0;
 
     // Base transform: map logical CSS-pixel space onto the (possibly scaled) backing store
     const k = this.backingScale;
@@ -3485,8 +3513,12 @@ export class GameRenderer {
     const sunDirX = sunState.sunDirX ?? 0.42;
     const sunDirY = sunState.sunDirY ?? 0.91;
 
-    for (let i = Math.max(0, skidMarks.length - performanceConfig.skidMarksLimit); i < skidMarks.length; i++) {
+    const smStart = Math.max(0, skidMarks.length - performanceConfig.skidMarksLimit);
+    const highDetailCutoff = skidMarks.length - (isMobileOrLowEndDevice() ? 220 : 450);
+
+    for (let i = smStart; i < skidMarks.length; i++) {
       const sm = skidMarks[i];
+      if (sm.alpha < 0.04) continue;
       if (Math.max(sm.x1, sm.x2) < minX || Math.min(sm.x1, sm.x2) > maxX ||
           Math.max(sm.y1, sm.y2) < minY || Math.min(sm.y1, sm.y2) > maxY) continue;
 
@@ -3508,6 +3540,7 @@ export class GameRenderer {
       const y2 = sm.y2 + ty * 0.45;
       const tread = sm.treadPattern || 'street';
       const surfType = sm.surfaceType || 'asphalt';
+      const isFreshDetail = i >= highDetailCutoff;
 
       if (sm.depth && sm.depth > 0.04) {
         const depth = Math.max(0.05, Math.min(1.5, sm.depth));
@@ -3519,16 +3552,18 @@ export class GameRenderer {
         const bermOffset = w * (isSandRut ? 0.64 : 0.56) + depth * (isSandRut ? 1.05 : 0.85);
         const bermWidth = Math.max(1.2, w * ((isSandRut ? 0.34 : 0.24) + depth * 0.18));
 
-        // 1. Two distinct lateral extruded soil/sand/turf berms (выдавленные боковые валики грунта по краям колеи)
-        ctx.strokeStyle = isSandRut ? 'rgba(68, 48, 22, 0.38)' : 'rgba(8, 4, 1, 0.52)';
-        ctx.globalAlpha = Math.max(0, Math.min(0.85, sm.alpha * (0.45 + depth * 0.35)));
-        ctx.lineWidth = bermWidth * 1.18;
-        ctx.beginPath();
-        ctx.moveTo(x1 - nx * bermOffset - sunDirX * 0.65, y1 - ny * bermOffset - sunDirY * 0.65);
-        ctx.lineTo(x2 - nx * bermOffset - sunDirX * 0.65, y2 - ny * bermOffset - sunDirY * 0.65);
-        ctx.moveTo(x1 + nx * bermOffset - sunDirX * 0.65, y1 + ny * bermOffset - sunDirY * 0.65);
-        ctx.lineTo(x2 + nx * bermOffset - sunDirX * 0.65, y2 + ny * bermOffset - sunDirY * 0.65);
-        ctx.stroke();
+        // 1. Two distinct lateral extruded soil/sand/turf berms
+        if (isFreshDetail) {
+          ctx.strokeStyle = isSandRut ? 'rgba(68, 48, 22, 0.38)' : 'rgba(8, 4, 1, 0.52)';
+          ctx.globalAlpha = Math.max(0, Math.min(0.85, sm.alpha * (0.45 + depth * 0.35)));
+          ctx.lineWidth = bermWidth * 1.18;
+          ctx.beginPath();
+          ctx.moveTo(x1 - nx * bermOffset - sunDirX * 0.65, y1 - ny * bermOffset - sunDirY * 0.65);
+          ctx.lineTo(x2 - nx * bermOffset - sunDirX * 0.65, y2 - ny * bermOffset - sunDirY * 0.65);
+          ctx.moveTo(x1 + nx * bermOffset - sunDirX * 0.65, y1 + ny * bermOffset - sunDirY * 0.65);
+          ctx.lineTo(x2 + nx * bermOffset - sunDirX * 0.65, y2 + ny * bermOffset - sunDirY * 0.65);
+          ctx.stroke();
+        }
 
         // Main extruded soil berm ridges (left & right)
         ctx.strokeStyle = sm.bermColor || (isSandRut ? '#c2a36b' : isGrassRut ? '#364221' : (sm.isWet ? '#2b1a0e' : '#4a301d'));
@@ -3541,24 +3576,26 @@ export class GameRenderer {
         ctx.lineTo(x2 + nx * bermOffset, y2 + ny * bermOffset);
         ctx.stroke();
 
-        // Sunlit crest or wet specular rim on the berm ridges
-        ctx.strokeStyle = sm.isWet
-          ? 'rgba(195, 222, 245, 0.34)'
-          : isSandRut
-            ? 'rgba(245, 228, 188, 0.45)'
-            : isGravelRut
-              ? 'rgba(195, 198, 206, 0.38)'
-              : 'rgba(145, 108, 78, 0.34)';
-        ctx.globalAlpha = Math.max(0, Math.min(0.75, sm.alpha * (0.40 + depth * 0.25)));
-        ctx.lineWidth = Math.max(0.7, bermWidth * 0.42);
-        ctx.beginPath();
-        ctx.moveTo(x1 - nx * bermOffset + sunDirX * 0.4, y1 - ny * bermOffset + sunDirY * 0.4);
-        ctx.lineTo(x2 - nx * bermOffset + sunDirX * 0.4, y2 - ny * bermOffset + sunDirY * 0.4);
-        ctx.moveTo(x1 + nx * bermOffset + sunDirX * 0.4, y1 + ny * bermOffset + sunDirY * 0.4);
-        ctx.lineTo(x2 + nx * bermOffset + sunDirX * 0.4, y2 + ny * bermOffset + sunDirY * 0.4);
-        ctx.stroke();
+        // Sunlit crest or wet specular rim on the berm ridges (fresh segments only)
+        if (isFreshDetail) {
+          ctx.strokeStyle = sm.isWet
+            ? 'rgba(195, 222, 245, 0.34)'
+            : isSandRut
+              ? 'rgba(245, 228, 188, 0.45)'
+              : isGravelRut
+                ? 'rgba(195, 198, 206, 0.38)'
+                : 'rgba(145, 108, 78, 0.34)';
+          ctx.globalAlpha = Math.max(0, Math.min(0.75, sm.alpha * (0.40 + depth * 0.25)));
+          ctx.lineWidth = Math.max(0.7, bermWidth * 0.42);
+          ctx.beginPath();
+          ctx.moveTo(x1 - nx * bermOffset + sunDirX * 0.4, y1 - ny * bermOffset + sunDirY * 0.4);
+          ctx.lineTo(x2 - nx * bermOffset + sunDirX * 0.4, y2 - ny * bermOffset + sunDirY * 0.4);
+          ctx.moveTo(x1 + nx * bermOffset + sunDirX * 0.4, y1 + ny * bermOffset + sunDirY * 0.4);
+          ctx.lineTo(x2 + nx * bermOffset + sunDirX * 0.4, y2 + ny * bermOffset + sunDirY * 0.4);
+          ctx.stroke();
+        }
 
-        // 2. Compacted depressed rut trench floor (вдавленное дно колеи)
+        // 2. Compacted depressed rut trench floor
         ctx.strokeStyle = sm.grooveColor || sm.color;
         ctx.globalAlpha = Math.max(0, Math.min(0.96, sm.alpha * (0.78 + depth * 0.22)));
         ctx.lineWidth = w;
@@ -3567,7 +3604,7 @@ export class GameRenderer {
         ctx.lineTo(x2, y2);
         ctx.stroke();
 
-        // 3. Directional 3D inner trench wall shadow (падающая тень от стенки колеи внутрь желоба по солнцу)
+        // 3. Directional 3D inner trench wall shadow
         const wallShadowOff = w * 0.26;
         const sunSideSign = (nx * sunDirX + ny * sunDirY) >= 0 ? 1 : -1;
         ctx.strokeStyle = isSandRut ? '#3d2912' : '#070402';
@@ -3578,8 +3615,8 @@ export class GameRenderer {
         ctx.lineTo(x2 + nx * sunSideSign * wallShadowOff, y2 + ny * sunSideSign * wallShadowOff);
         ctx.stroke();
 
-        // 4. Phase-continuous vehicle-class tire tread lug imprints inside the rut
-        if (depth > 0.10 && w >= 3.8 && tread !== 'slick') {
+        // 4. Phase-continuous vehicle-class tire tread lug imprints inside the rut (fresh segments)
+        if (isFreshDetail && depth > 0.10 && w >= 3.8 && tread !== 'slick') {
           const lugSpacing = tread === 'heavy_lug' ? 6.4 : (tread === 'offroad' ? 5.2 : 4.2);
           const baseArc = sm.arcDist !== undefined ? sm.arcDist : (Math.abs(sm.x1 * 0.7 + sm.y1 * 0.7));
           const firstLug = Math.ceil((baseArc - segLen) / lugSpacing) * lugSpacing;
@@ -3602,18 +3639,15 @@ export class GameRenderer {
             const lx = sm.x1 + dx * t;
             const ly = sm.y1 + dy * t;
             if (tread === 'heavy_lug') {
-              // Heavy tractor / truck herringbone V-bar lugs
               ctx.moveTo(lx - nx * halfLugW - chevBack, ly - ny * halfLugW - chevBackY);
               ctx.lineTo(lx + chevBack * 0.35, ly + chevBackY * 0.35);
               ctx.lineTo(lx + nx * halfLugW - chevBack, ly + ny * halfLugW - chevBackY);
             } else if (tread === 'offroad') {
-              // Alternating mud-terrain block lugs
               ctx.moveTo(lx - nx * halfLugW, ly - ny * halfLugW);
               ctx.lineTo(lx - nx * 0.08 + chevBack * 0.4, ly - ny * 0.08 + chevBackY * 0.4);
               ctx.moveTo(lx + nx * 0.08 - chevBack * 0.4, ly + ny * 0.08 - chevBackY * 0.4);
               ctx.lineTo(lx + nx * halfLugW, ly + ny * halfLugW);
             } else {
-              // Street radial transverse sipes + center rib
               ctx.moveTo(lx - nx * halfLugW, ly - ny * halfLugW);
               ctx.lineTo(lx + nx * halfLugW, ly + ny * halfLugW);
             }
@@ -8956,8 +8990,9 @@ export class GameRenderer {
     maxY: number
   ) {
     const ctx = this.materialCtx;
-    const targetMatW = Math.max(1, Math.round(this.width * this.backingScale));
-    const targetMatH = Math.max(1, Math.round(this.height * this.backingScale));
+    const matScale = this.getMaterialBufferScale();
+    const targetMatW = Math.max(1, Math.round(this.width * matScale));
+    const targetMatH = Math.max(1, Math.round(this.height * matScale));
     if (this.materialCanvas.width !== targetMatW || this.materialCanvas.height !== targetMatH) {
       this.materialCanvas.width = targetMatW;
       this.materialCanvas.height = targetMatH;
@@ -8992,40 +9027,49 @@ export class GameRenderer {
     }
 
     // 8b. Tire SkidMarks & 3D Offroad Wheel Ruts encoded into uMat.b (> 134 -> 0.525..1.0)
+    // Batched into 4 representative material paths instead of up to 3,500 individual beginPath/stroke calls!
     if (world.skidMarks && world.skidMarks.length > 0) {
       const smStart = Math.max(0, world.skidMarks.length - performanceConfig.skidMarksLimit);
       ctx.lineCap = 'butt';
-      for (let i = smStart; i < world.skidMarks.length; i++) {
-        const sm = world.skidMarks[i];
-        if (Math.max(sm.x1, sm.x2) < minX || Math.min(sm.x1, sm.x2) > maxX ||
-            Math.max(sm.y1, sm.y2) < minY || Math.min(sm.y1, sm.y2) > maxY) continue;
-        if (sm.alpha < 0.08) continue;
-
-        if (sm.depth && sm.depth > 0.04) {
-          const matR = (sm.surfaceType === 'dirt_road' || sm.surfaceType === 'mud' || sm.surfaceType === 'gravel_road') ? 64 : 32;
-          const matG = sm.isWet ? 210 : (sm.surfaceType === 'sand' ? 84 : 135);
-          const rutB = Math.min(255, Math.max(140, Math.round(136 + Math.min(1.0, sm.depth * 0.75 * sm.alpha) * 119)));
-          ctx.strokeStyle = `rgb(${matR}, ${matG}, ${rutB})`;
-          ctx.lineWidth = sm.width;
-          ctx.beginPath();
+      ctx.lineWidth = 4.5;
+      const drawBatchedBucket = (
+        style: string,
+        predicate: (sm: GameWorld['skidMarks'][number]) => boolean
+      ) => {
+        let count = 0;
+        ctx.beginPath();
+        for (let i = smStart; i < world.skidMarks.length; i++) {
+          const sm = world.skidMarks[i];
+          if (sm.alpha < 0.08) continue;
+          if (Math.max(sm.x1, sm.x2) < minX || Math.min(sm.x1, sm.x2) > maxX ||
+              Math.max(sm.y1, sm.y2) < minY || Math.min(sm.y1, sm.y2) > maxY) continue;
+          if (!predicate(sm)) continue;
           ctx.moveTo(sm.x1, sm.y1);
           ctx.lineTo(sm.x2, sm.y2);
-          ctx.stroke();
-        } else {
-          const matR = sm.surfaceType === 'concrete' ? 96 : 128;
-          const skidB = Math.min(255, Math.max(138, Math.round(135 + Math.min(1.0, sm.alpha * 1.25) * 118)));
-          ctx.strokeStyle = `rgb(${matR}, 235, ${skidB})`;
-          ctx.lineWidth = sm.width;
-          ctx.beginPath();
-          ctx.moveTo(sm.x1, sm.y1);
-          ctx.lineTo(sm.x2, sm.y2);
+          count++;
+        }
+        if (count > 0) {
+          ctx.strokeStyle = style;
           ctx.stroke();
         }
-      }
+      };
+      drawBatchedBucket('rgb(64, 135, 196)', (sm) => !!(sm.depth && sm.depth > 0.04 && !sm.isWet));
+      drawBatchedBucket('rgb(64, 210, 210)', (sm) => !!(sm.depth && sm.depth > 0.04 && sm.isWet));
+      drawBatchedBucket('rgb(128, 235, 198)', (sm) => !(sm.depth && sm.depth > 0.04) && sm.surfaceType !== 'concrete');
+      drawBatchedBucket('rgb(96, 235, 198)', (sm) => !(sm.depth && sm.depth > 0.04) && sm.surfaceType === 'concrete');
     }
 
     // 9. Road & Ground Puddles (MAT_PUDDLE_WATER = 192, G = radial depth/meniscus 255->10, B = alpha)
     if (world.puddles && world.puddles.length > 0) {
+      if (!this.matPuddleGrad) {
+        const grad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, 1);
+        grad.addColorStop(0.0, 'rgb(192, 255, 235)');
+        grad.addColorStop(0.62, 'rgb(192, 170, 235)');
+        grad.addColorStop(0.86, 'rgb(192, 38, 235)');
+        grad.addColorStop(1.0, 'rgb(192, 10, 235)');
+        this.matPuddleGrad = grad;
+      }
+      ctx.fillStyle = this.matPuddleGrad;
       const puddleStart = Math.max(0, world.puddles.length - performanceConfig.puddlesLimit);
       for (let pi = puddleStart; pi < world.puddles.length; pi++) {
         const p = world.puddles[pi];
@@ -9038,12 +9082,6 @@ export class GameRenderer {
         ctx.translate(p.x, p.y);
         ctx.rotate(p.angle);
         ctx.scale(rX, rY);
-        const grad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, 1);
-        grad.addColorStop(0.0, 'rgb(192, 255, 235)');
-        grad.addColorStop(0.62, 'rgb(192, 170, 235)');
-        grad.addColorStop(0.86, 'rgb(192, 38, 235)');
-        grad.addColorStop(1.0, 'rgb(192, 10, 235)');
-        ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, 1, 1, seed);
         ctx.fill();
         ctx.restore();
@@ -9084,12 +9122,19 @@ export class GameRenderer {
             : stain.type === 'oil'
               ? 240
               : 255; // 'coolant'
-        const alphaB = Math.max(16, Math.min(255, Math.round(stainAlpha * 255)));
-        const grad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, 1);
-        grad.addColorStop(0.0, `rgb(${matR}, 255, ${alphaB})`);
-        grad.addColorStop(0.55, `rgb(${matR}, 180, ${alphaB})`);
-        grad.addColorStop(0.84, `rgb(${matR}, 75, ${alphaB})`);
-        grad.addColorStop(1.0, `rgb(${matR}, 14, ${alphaB})`);
+        // Quantize alpha into 8 cached unit-radius radial gradients to avoid 1,500 createRadialGradient allocations per frame
+        const alphaStep = Math.max(1, Math.min(8, Math.round(stainAlpha * 8)));
+        const gradKey = `${matR}_${alphaStep}`;
+        let grad = this.matStainGradCache.get(gradKey);
+        if (!grad) {
+          const alphaB = Math.max(16, Math.min(255, alphaStep * 32 - 1));
+          grad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, 1);
+          grad.addColorStop(0.0, `rgb(${matR}, 255, ${alphaB})`);
+          grad.addColorStop(0.55, `rgb(${matR}, 180, ${alphaB})`);
+          grad.addColorStop(0.84, `rgb(${matR}, 75, ${alphaB})`);
+          grad.addColorStop(1.0, `rgb(${matR}, 14, ${alphaB})`);
+          this.matStainGradCache.set(gradKey, grad);
+        }
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, 1, 1, seed, rough);
         ctx.fill();
@@ -14547,18 +14592,13 @@ export class GameRenderer {
       ctx.imageSmoothingEnabled = true;
       const softness = performanceConfig.shadowSoftness ?? 60;
       if (softness > 0 && sunState.penumbraFactor > 0.05) {
-        const penPx = Math.min(3.5, 0.9 + sunState.penumbraFactor * 1.15);
+        // Fast 2-tap directional penumbra instead of 5 full-screen blits
+        const penPx = Math.min(3.0, 0.9 + sunState.penumbraFactor * 1.1);
         const sdx = sunState.shadowDirX * penPx;
         const sdy = sunState.shadowDirY * penPx;
-        const pdx = -sunState.shadowDirY * (penPx * 0.72);
-        const pdy = sunState.shadowDirX * (penPx * 0.72);
-        const tapAlpha = shadowCompositeAlpha * 0.075;
-        ctx.globalAlpha = tapAlpha;
+        ctx.globalAlpha = shadowCompositeAlpha * 0.24;
         ctx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, sdx, sdy, this.width, this.height);
-        ctx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, -sdx, -sdy, this.width, this.height);
-        ctx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, pdx, pdy, this.width, this.height);
-        ctx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, -pdx, -pdy, this.width, this.height);
-        ctx.globalAlpha = shadowCompositeAlpha * 0.76;
+        ctx.globalAlpha = shadowCompositeAlpha * 0.82;
       } else {
         ctx.globalAlpha = shadowCompositeAlpha;
       }
@@ -14637,20 +14677,14 @@ export class GameRenderer {
         // Scale shadow opacity inversely with existing ambient night shroud so shadows merge seamlessly into night
         const shadowCompositeAlpha = Math.max(0.03, Math.min(0.92, sunState.shadowOpacity * (1.0 - effectiveAlpha * 0.80)));
         const softness = performanceConfig.shadowSoftness ?? 60;
-        if (softness > 0 && sunState.penumbraFactor > 0.05) {
-          // Physical solar angular penumbra (~0.53 deg solar disc + circumsolar sky aureole)
-          const penLm = Math.min(2.8, (0.85 + sunState.penumbraFactor * 1.05) * lmScale);
+        if (softness >= 40 && sunState.penumbraFactor > 0.05) {
+          // Fast 2-tap directional solar penumbra (replaces 5 full-screen blits)
+          const penLm = Math.min(2.6, (0.85 + sunState.penumbraFactor * 1.05) * lmScale);
           const sdx = sunState.shadowDirX * penLm;
           const sdy = sunState.shadowDirY * penLm;
-          const pdx = -sunState.shadowDirY * (penLm * 0.72);
-          const pdy = sunState.shadowDirX * (penLm * 0.72);
-          const tapAlpha = shadowCompositeAlpha * 0.075;
-          lCtx.globalAlpha = tapAlpha;
+          lCtx.globalAlpha = shadowCompositeAlpha * 0.24;
           lCtx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, sdx, sdy, lmW, lmH);
-          lCtx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, -sdx, -sdy, lmW, lmH);
-          lCtx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, pdx, pdy, lmW, lmH);
-          lCtx.drawImage(this.shadowCanvas, 0, 0, this.shadowCanvas.width, this.shadowCanvas.height, -pdx, -pdy, lmW, lmH);
-          lCtx.globalAlpha = shadowCompositeAlpha * 0.76;
+          lCtx.globalAlpha = shadowCompositeAlpha * 0.82;
         } else {
           lCtx.globalAlpha = shadowCompositeAlpha;
         }
@@ -14670,10 +14704,6 @@ export class GameRenderer {
         weights.rain * 0.75 + weights.fog * 0.85 + weights.snow * 0.65 + weights.overcast * 0.55
       );
       // Weber-Fechner / Naka-Rushton continuous daytime photoreceptor baseline:
-      // Artificial light photons do not stop at shadow borders. Even on direct sunlit ground (80k-100k lux),
-      // high-candela near-field hotspots, grazing Fresnel reflections, and monochromatic emitters (brake/turn/siren/fire)
-      // retain finite contrast sensitivity (~0.30-0.44), while inside lower-lux shadows (8k lux sky light)
-      // relative contrast smoothly increases across the feathered penumbra transition zone.
       const dayPhotometricFloor = sunState.isNight
         ? 0.44
         : Math.min(
@@ -14687,22 +14717,25 @@ export class GameRenderer {
       eCtx.fillStyle = `rgba(0, 0, 0, ${dayPhotometricFloor.toFixed(3)})`;
       eCtx.fillRect(0, 0, lmW, lmH);
 
-      // Feathered photoreceptor adaptation transition across shadow boundaries so beams never clip
-      // along a razor-sharp polygon contour when crossing between shade and direct sunlight
+      // Feathered photoreceptor adaptation via tiny quarter-res downsample + bilinear upscale
+      // (replaces 9 full-res drawImage blits with 1 tiny + 2 smooth blits!)
       const envShadowWeight = Math.min(1.0, 0.64 + effectiveAlpha * 0.36 + cloudAtten * 0.12);
-      const featherPx = Math.max(1.2, 2.6 * lmScale);
-      const featherOuterPx = featherPx * 2.1;
-      eCtx.globalAlpha = envShadowWeight * 0.08;
-      eCtx.drawImage(this.lightmapCanvas, -featherOuterPx, 0);
-      eCtx.drawImage(this.lightmapCanvas, featherOuterPx, 0);
-      eCtx.drawImage(this.lightmapCanvas, 0, -featherOuterPx);
-      eCtx.drawImage(this.lightmapCanvas, 0, featherOuterPx);
-      eCtx.globalAlpha = envShadowWeight * 0.11;
-      eCtx.drawImage(this.lightmapCanvas, -featherPx, -featherPx);
-      eCtx.drawImage(this.lightmapCanvas, featherPx, -featherPx);
-      eCtx.drawImage(this.lightmapCanvas, -featherPx, featherPx);
-      eCtx.drawImage(this.lightmapCanvas, featherPx, featherPx);
-      eCtx.globalAlpha = envShadowWeight * 0.46;
+      const blurW = Math.max(1, lmW >> 2);
+      const blurH = Math.max(1, lmH >> 2);
+      if (this.lightEnvBlurCanvas.width !== blurW || this.lightEnvBlurCanvas.height !== blurH) {
+        this.lightEnvBlurCanvas.width = blurW;
+        this.lightEnvBlurCanvas.height = blurH;
+      }
+      const bCtx = this.lightEnvBlurCtx;
+      bCtx.setTransform(1, 0, 0, 1, 0, 0);
+      bCtx.clearRect(0, 0, blurW, blurH);
+      bCtx.imageSmoothingEnabled = true;
+      bCtx.drawImage(this.lightmapCanvas, 0, 0, lmW, lmH, 0, 0, blurW, blurH);
+
+      eCtx.imageSmoothingEnabled = true;
+      eCtx.globalAlpha = envShadowWeight * 0.56;
+      eCtx.drawImage(this.lightEnvBlurCanvas, 0, 0, blurW, blurH, 0, 0, lmW, lmH);
+      eCtx.globalAlpha = envShadowWeight * 0.44;
       eCtx.drawImage(this.lightmapCanvas, 0, 0);
       eCtx.restore();
 
@@ -17254,8 +17287,11 @@ export class GameRenderer {
       const pVx = playerVeh ? (playerVeh.vx || 0) : ((world.player && world.player.vx) || 0);
       const pVy = playerVeh ? (playerVeh.vy || 0) : ((world.player && world.player.vy) || 0);
 
-      // Pre-calculate active vehicle headlights for dynamic beam illumination
-      const activeHeadlights: { x: number; y: number; angle: number; reach: number }[] = [];
+      // Pre-calculate active vehicle headlights with cos/sin & AABB bounds (eliminates per-drop Math.atan2)
+      const activeHeadlights: { x: number; y: number; cos: number; sin: number; reach: number; reachSq: number }[] = [];
+      const pushHeadlight = (hx: number, hy: number, angle: number, reach: number) => {
+        activeHeadlights.push({ x: hx, y: hy, cos: Math.cos(angle), sin: Math.sin(angle), reach, reachSq: reach * reach });
+      };
       if (visibleVehicles && visibleVehicles.length > 0) {
         for (const veh of visibleVehicles) {
           if (isExcavatorVehicle(veh)) {
@@ -17265,10 +17301,10 @@ export class GameRenderer {
               const reach = isHigh
                 ? (weights.fog > 0.1 ? 150 : 320)
                 : (weights.fog > 0.1 ? 165 : 230);
-              activeHeadlights.push({ x: exA.cabLampCenter.x, y: exA.cabLampCenter.y, angle: exA.angle, reach });
+              pushHeadlight(exA.cabLampCenter.x, exA.cabLampCenter.y, exA.angle, reach);
             }
             if (isVehicleReverseGearActive(veh)) {
-              activeHeadlights.push({ x: exA.rearCenter.x, y: exA.rearCenter.y, angle: exA.rearAngle, reach: 180 });
+              pushHeadlight(exA.rearCenter.x, exA.rearCenter.y, exA.rearAngle, 180);
             }
             continue;
           }
@@ -17277,28 +17313,46 @@ export class GameRenderer {
             const reach = isHigh
               ? (weights.fog > 0.1 ? 160 : 420)
               : (weights.fog > 0.1 ? 190 : 280);
-            activeHeadlights.push({ x: veh.x, y: veh.y, angle: veh.angle, reach });
+            pushHeadlight(veh.x, veh.y, veh.angle, reach);
           }
           if (isVehicleReverseGearActive(veh)) {
-            activeHeadlights.push({ x: veh.x, y: veh.y, angle: veh.angle + Math.PI, reach: 180 });
+            pushHeadlight(veh.x, veh.y, veh.angle + Math.PI, 180);
           }
         }
       }
+      // cos(0.65)^2 ~= 0.6337: dot-product cone test with zero atan2 and zero sqrt
+      const HL_COS_SQ = 0.6337;
+      const numHl = activeHeadlights.length;
+      const isPointInHeadlight = (px: number, py: number): boolean => {
+        for (let h = 0; h < numHl; h++) {
+          const hl = activeHeadlights[h];
+          const hdx = px - hl.x;
+          if (hdx > hl.reach || hdx < -hl.reach) continue;
+          const hdy = py - hl.y;
+          if (hdy > hl.reach || hdy < -hl.reach) continue;
+          const distSq = hdx * hdx + hdy * hdy;
+          if (distSq < hl.reachSq) {
+            const dot = hdx * hl.cos + hdy * hl.sin;
+            if (dot > 0 && dot * dot > distSq * HL_COS_SQ) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
 
       if (weights.rain > 0.02) {
-        // Multi-depth rain layers:
-        // Layer 0: Background distant drops (lighter drag, lower perspective speed)
-        // Layer 1: Midground standard drops
-        // Layer 2: Foreground close-range fast streaks (full drag, dramatic stretch)
         const rainLayers = [
           { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (70 + weights.storm * 190) * weights.rain)), perspectiveFall: 340, len: 7, lw: 0.8, alpha: 0.20 * Math.min(1.0, weights.rain * 1.5), windMult: 0.70 },
           { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (55 + weights.storm * 145) * weights.rain)), perspectiveFall: 520, len: 12, lw: 1.2, alpha: 0.35 * Math.min(1.0, weights.rain * 1.5), windMult: 0.88 },
           { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (22 + weights.storm * 58) * weights.rain)), perspectiveFall: 750, len: 18, lw: 1.6, alpha: 0.50 * Math.min(1.0, weights.rain * 1.5), windMult: 1.00 }
         ];
 
+        const litDropsX: number[] = [];
+        const litDropsY: number[] = [];
+
         for (let l = 0; l < rainLayers.length; l++) {
           const layer = rainLayers[l];
-          // True 2D relative aerodynamic streak vector (horizontal wind + perspective fall - observer speed)
           const streakVx = (windVx * layer.windMult) - (pVx * 0.45);
           const streakVy = (windVy * layer.windMult + layer.perspectiveFall) - (pVy * 0.45);
           const streakMag = Math.hypot(streakVx, streakVy) || 1;
@@ -17307,50 +17361,58 @@ export class GameRenderer {
           const dx = dynamicStreakLen * (streakVx / streakMag);
           const dy = dynamicStreakLen * (streakVy / streakMag);
 
+          litDropsX.length = 0;
+          litDropsY.length = 0;
+
+          // Batch all unlit raindrops in this depth layer into ONE single stroke() call
+          ctx.lineWidth = layer.lw;
+          ctx.strokeStyle = isFreezing
+            ? `rgba(214, 230, 248, ${(layer.alpha * 0.9).toFixed(3)})`
+            : `rgba(219, 234, 254, ${layer.alpha.toFixed(3)})`;
+          ctx.beginPath();
+          let unlitCount = 0;
+          const wOffX = windVx * layer.windMult * timeSec;
+          const wOffY = (windVy * layer.windMult + layer.perspectiveFall) * timeSec;
+
           for (let i = 0; i < layer.count; i++) {
             const seed = (i * 157.61 + l * 73.19);
             const sX = (seed % 1) * WORLD_CELL;
             const sY = ((seed * 1.618) % 1) * WORLD_CELL;
 
-            // Pure world coordinates advancing with physical 2D wind vector and perspective descent:
-            const localX = (((sX + windVx * layer.windMult * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
-            const localY = (((sY + (windVy * layer.windMult + layer.perspectiveFall) * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localX = (((sX + wOffX) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localY = (((sY + wOffY) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
 
             let dropX = baseTileX + localX;
             if (dropX < minX - 100) dropX += WORLD_CELL;
             let dropY = baseTileY + localY;
             if (dropY < minY - 100) dropY += WORLD_CELL;
 
-            // Test if drop falls inside active vehicle headlight cone
-            let inHeadlight = false;
-            for (let h = 0; h < activeHeadlights.length; h++) {
-              const hl = activeHeadlights[h];
-              const hdx = dropX - hl.x;
-              const hdy = dropY - hl.y;
-              const distSq = hdx * hdx + hdy * hdy;
-              if (distSq < hl.reach * hl.reach) {
-                const angleToDrop = Math.atan2(hdy, hdx);
-                let diff = Math.abs(angleToDrop - hl.angle);
-                if (diff > Math.PI) diff = Math.PI * 2 - diff;
-                if (diff < 0.65) {
-                  inHeadlight = true;
-                  break;
-                }
-              }
+            if (dropX < minX - 28 || dropX > maxX + 28 || dropY < minY - 28 || dropY > maxY + 28) {
+              continue;
             }
 
-            const dropAlpha = inHeadlight ? Math.min(1.0, layer.alpha * 2.4) : layer.alpha;
-            const dropWidth = inHeadlight ? layer.lw * 1.4 : layer.lw;
+            if (numHl > 0 && isPointInHeadlight(dropX, dropY)) {
+              litDropsX.push(dropX);
+              litDropsY.push(dropY);
+            } else {
+              ctx.moveTo(dropX, dropY);
+              ctx.lineTo(dropX - dx, dropY - dy);
+              unlitCount++;
+            }
+          }
+          if (unlitCount > 0) ctx.stroke();
 
-            ctx.lineWidth = dropWidth;
-
-            // Aerodynamic liquid rain streak oriented along true relative velocity vector
-            ctx.strokeStyle = inHeadlight
-              ? 'rgba(255, 255, 255, 0.95)'
-              : (isFreezing ? `rgba(214, 230, 248, ${(dropAlpha * 0.9).toFixed(3)})` : `rgba(219, 234, 254, ${dropAlpha.toFixed(3)})`);
+          // Batch all headlight-illuminated drops in this layer into ONE single stroke() call
+          if (litDropsX.length > 0) {
+            ctx.lineWidth = layer.lw * 1.4;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
             ctx.beginPath();
-            ctx.moveTo(dropX, dropY);
-            ctx.lineTo(dropX - dx, dropY - dy);
+            for (let k = 0; k < litDropsX.length; k++) {
+              const lx = litDropsX[k];
+              const ly = litDropsY[k];
+              ctx.moveTo(lx, ly);
+              ctx.lineTo(lx - dx, ly - dy);
+            }
             ctx.stroke();
           }
         }
@@ -17372,7 +17434,7 @@ export class GameRenderer {
       }
 
       if (weights.snow > 0.02) {
-        // Multi-depth crystalline snowflake layers (reduced loop count + viewport culling, dendritic crystal sprites)
+        // Multi-depth crystalline snowflake layers (batched alpha + single-stroke blizzard wind streaks)
         const snowLayers = [
           { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (105 + weights.blizzard * 95) * weights.snow)), fallSpeed: 45 + weights.blizzard * 40, r: 1.5, swayAmp: 8, swayFreq: 1.8, alpha: 0.42 * weights.snow, windMult: 0.85 },
           { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (72 + weights.blizzard * 68) * weights.snow)), fallSpeed: 65 + weights.blizzard * 55, r: 2.2, swayAmp: 16, swayFreq: 2.3, alpha: 0.58 * weights.snow, windMult: 0.95 },
@@ -17381,9 +17443,33 @@ export class GameRenderer {
 
         const crystal0 = GameRenderer.getSnowCrystalSprite(0);
         const crystal1 = GameRenderer.getSnowCrystalSprite(1);
+        const doBlizzardStreaks = weights.blizzard > 0.15;
+        const blizzardStreakLen = doBlizzardStreaks ? (12 + Math.min(38, windSpeed * 0.22)) * weights.blizzard : 0;
+        const streakDx = normWx * blizzardStreakLen;
+        const streakDy = normWy * blizzardStreakLen;
+        const litFlakesX: number[] = [];
+        const litFlakesY: number[] = [];
+        const litFlakesSprite: number[] = [];
+        const streakX: number[] = [];
+        const streakY: number[] = [];
 
         for (let l = 0; l < snowLayers.length; l++) {
           const layer = snowLayers[l];
+          const baseFlakeR = layer.r * 1.45;
+          const baseFlakeD = baseFlakeR * 2;
+          const litFlakeR = layer.r * 1.3 * 1.45;
+          const litFlakeD = litFlakeR * 2;
+          const wOffX = (windVx * layer.windMult) * timeSec;
+          const wOffY = (windVy * layer.windMult + layer.fallSpeed) * timeSec;
+
+          litFlakesX.length = 0;
+          litFlakesY.length = 0;
+          litFlakesSprite.length = 0;
+          streakX.length = 0;
+          streakY.length = 0;
+
+          // Draw all unlit flakes in this layer with a single globalAlpha state
+          ctx.globalAlpha = layer.alpha;
           for (let s = 0; s < layer.count; s++) {
             const seed = (s * 137.49 + l * 83.71);
             const sX = (seed % 1) * WORLD_CELL;
@@ -17392,54 +17478,55 @@ export class GameRenderer {
             const swayX = perpWx * sway;
             const swayY = perpWy * sway;
 
-            const localX = (((sX + (windVx * layer.windMult) * timeSec + swayX) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
-            const localY = (((sY + (windVy * layer.windMult + layer.fallSpeed) * timeSec + swayY) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localX = (((sX + wOffX + swayX) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localY = (((sY + wOffY + swayY) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
 
             let flakeX = baseTileX + localX;
             if (flakeX < minX - 100) flakeX += WORLD_CELL;
             let flakeY = baseTileY + localY;
             if (flakeY < minY - 100) flakeY += WORLD_CELL;
 
-            // Fast viewport frustum cull to avoid drawing off-camera crystals
             if (flakeX < minX - 24 || flakeX > maxX + 24 || flakeY < minY - 24 || flakeY > maxY + 24) {
               continue;
             }
 
-            let inHeadlight = false;
-            for (let h = 0; h < activeHeadlights.length; h++) {
-              const hl = activeHeadlights[h];
-              const hdx = flakeX - hl.x;
-              const hdy = flakeY - hl.y;
-              const distSq = hdx * hdx + hdy * hdy;
-              if (distSq < hl.reach * hl.reach) {
-                const angleToFlake = Math.atan2(hdy, hdx);
-                let diff = Math.abs(angleToFlake - hl.angle);
-                if (diff > Math.PI) diff = Math.PI * 2 - diff;
-                if (diff < 0.65) {
-                  inHeadlight = true;
-                  break;
-                }
-              }
+            if (doBlizzardStreaks && (s % 3 === 0)) {
+              streakX.push(flakeX);
+              streakY.push(flakeY);
             }
 
-            const flakeAlpha = inHeadlight ? 0.96 : layer.alpha;
-            const flakeR = (inHeadlight ? layer.r * 1.3 : layer.r) * 1.45;
-            const sprite = (s & 1) === 0 ? crystal0 : crystal1;
-
-            ctx.globalAlpha = flakeAlpha;
-            ctx.drawImage(sprite, flakeX - flakeR, flakeY - flakeR, flakeR * 2, flakeR * 2);
-
-            // Blizzard horizontal snow wind streaks (tail streaming strictly downwind)
-            if (weights.blizzard > 0.15 && (s % 3 === 0)) {
-              const blizzardStreakLen = (12 + Math.min(38, windSpeed * 0.22)) * weights.blizzard;
-              ctx.strokeStyle = 'rgba(240, 249, 255, 0.65)';
-              ctx.globalAlpha = flakeAlpha * 0.55 * weights.blizzard;
-              ctx.lineWidth = 0.9;
-              ctx.beginPath();
-              ctx.moveTo(flakeX, flakeY);
-              ctx.lineTo(flakeX - normWx * blizzardStreakLen, flakeY - normWy * blizzardStreakLen);
-              ctx.stroke();
+            if (numHl > 0 && isPointInHeadlight(flakeX, flakeY)) {
+              litFlakesX.push(flakeX);
+              litFlakesY.push(flakeY);
+              litFlakesSprite.push(s & 1);
+            } else {
+              const sprite = (s & 1) === 0 ? crystal0 : crystal1;
+              ctx.drawImage(sprite, flakeX - baseFlakeR, flakeY - baseFlakeR, baseFlakeD, baseFlakeD);
             }
+          }
+
+          // Draw headlight-illuminated flakes in one globalAlpha batch
+          if (litFlakesX.length > 0) {
+            ctx.globalAlpha = 0.96;
+            for (let k = 0; k < litFlakesX.length; k++) {
+              const sprite = litFlakesSprite[k] === 0 ? crystal0 : crystal1;
+              ctx.drawImage(sprite, litFlakesX[k] - litFlakeR, litFlakesY[k] - litFlakeR, litFlakeD, litFlakeD);
+            }
+          }
+
+          // Batch all blizzard horizontal wind streaks for this layer into ONE stroke() call
+          if (streakX.length > 0) {
+            ctx.strokeStyle = 'rgba(240, 249, 255, 0.65)';
+            ctx.globalAlpha = layer.alpha * 0.55 * weights.blizzard;
+            ctx.lineWidth = 0.9;
+            ctx.beginPath();
+            for (let k = 0; k < streakX.length; k++) {
+              const sx = streakX[k];
+              const sy = streakY[k];
+              ctx.moveTo(sx, sy);
+              ctx.lineTo(sx - streakDx, sy - streakDy);
+            }
+            ctx.stroke();
           }
         }
         ctx.globalAlpha = 1.0;
