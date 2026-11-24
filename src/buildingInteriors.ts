@@ -1413,7 +1413,12 @@ export function getBuildingLayout(bld: Building, floor: number, aptId?: string |
       return apt.layout;
     }
   }
-  if (bld.type === 'suburban') {
+  let raw: any = null;
+  if (bld.interiors) {
+    if (bld.interiors[floor]) raw = bld.interiors[floor];
+    else if (bld.interiors[String(floor)]) raw = bld.interiors[String(floor)];
+  }
+  if (!raw && bld.type === 'suburban') {
     if (floor === 1) {
       return createCottageFloor1Layout(bld.id, bld.width, bld.height);
     }
@@ -1444,16 +1449,11 @@ export function getBuildingLayout(bld: Building, floor: number, aptId?: string |
     }
     return createCottageFloor0Layout(bld.id, bld.width, bld.height);
   }
-  if (bld.type === 'real_estate_agency') {
+  if (!raw && bld.type === 'real_estate_agency') {
     return createRealEstateAgencyLayout();
   }
-  if (bld.type === 'railway_station') {
+  if (!raw && bld.type === 'railway_station') {
     return createRailwayStationLayout(bld, floor);
-  }
-  let raw: any = null;
-  if (bld.interiors) {
-    if (bld.interiors[floor]) raw = bld.interiors[floor];
-    else if (bld.interiors[String(floor)]) raw = bld.interiors[String(floor)];
   }
   if (!raw) {
     if (bld.type === 'supermarket_store') return createSupermarketStoreLayout(bld, floor);
