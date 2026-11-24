@@ -2390,6 +2390,12 @@ export interface UnifiedAttributes {
   glutenFree?: boolean;
   /** Содержание белка на 100 г сухого продукта */
   proteinPer100g?: number;
+  /** Агрегатное состояние / форма средства ('dry' | 'liquid') */
+  physicalForm?: 'dry' | 'liquid';
+  /** Локализованное описание формы вещества (сухой порошок, жидкий гель и т.д.) */
+  physicalFormRu?: string;
+  /** Локализованное название цвета вещества */
+  substanceColorRu?: string;
 }
 
 export interface CulinaryItemData {

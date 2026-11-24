@@ -1239,6 +1239,13 @@ export interface WashingMachineThermalStateLike {
   waterTempC: number;
   waterLevelPct: number;
   hasDetergent: boolean;
+  detergentMl?: number;
+  detergentMaxMl?: number;
+  detergentForm?: 'dry' | 'liquid';
+  detergentColor?: string;
+  detergentColorNameRu?: string;
+  detergentIngredients?: string;
+  detergentVarietyRu?: string;
   spinRpm: number;
   lastUpdatedSec?: number;
 }
@@ -1322,6 +1329,7 @@ export function tickWashingMachineThermodynamics(
     const rate = st.phase === 'wash' ? 0.22 : 0.12;
     st.waterTempC = Math.round((targetTemp + (st.waterTempC - targetTemp) * Math.exp(-rate * step)) * 10) / 10;
 
+    const hasActiveDetergent = Boolean(st.hasDetergent || (st.detergentMl ?? 0) > 0);
     for (const item of storage.items) {
       if (!item) continue;
       if (st.phase === 'fill' || st.phase === 'wash' || st.phase === 'rinse') {
@@ -1329,8 +1337,10 @@ export function tickWashingMachineThermodynamics(
         const nextWet = Math.min(100, Math.round(((item.wetness || 0) + 55 * step) * 10) / 10);
         item.wetness = nextWet;
         item.soakedLiquidId = 'water';
-        item.soakedLiquidNameRu = st.phase === 'wash' && st.hasDetergent ? 'Мыльная вода' : 'Вода';
-        item.soakedColor = st.phase === 'wash' && st.hasDetergent ? '#bae6fd' : '#60a5fa';
+        item.soakedLiquidNameRu =
+          st.phase === 'wash' && hasActiveDetergent ? 'Мыльный раствор' : 'Вода';
+        item.soakedColor =
+          st.phase === 'wash' && hasActiveDetergent ? st.detergentColor || '#bae6fd' : '#60a5fa';
         if (item.clothingStats) {
           item.clothingStats.wetness = nextWet;
         }
@@ -1356,6 +1366,12 @@ export function tickWashingMachineThermodynamics(
       st.spinRpm = 0;
       if (st.program !== 'spin') {
         st.hasDetergent = false;
+        st.detergentMl = 0;
+        st.detergentForm = undefined;
+        st.detergentColor = undefined;
+        st.detergentColorNameRu = undefined;
+        st.detergentIngredients = undefined;
+        st.detergentVarietyRu = undefined;
       }
     }
     changed = true;

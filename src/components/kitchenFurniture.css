@@ -807,6 +807,149 @@
   transition: width .25s;
 }
 
+/* ---- Washing Machine Detergent Dispenser Slot (Отсек СМС) ---- */
+.kf-det-tray {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(13, 14, 16, .92);
+  border: 1.5px dashed rgba(255, 255, 255, .15);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.kf-det-tray.filled {
+  border-style: solid;
+  border-color: rgba(125, 211, 252, .35);
+  background: rgba(18, 22, 26, .92);
+}
+.kf-det-tray.ready {
+  border-color: rgba(224, 171, 69, .7);
+  background: rgba(201, 146, 43, .08);
+}
+.kf-det-tray.drop {
+  border-style: solid;
+  border-color: #e0ab45;
+  background: rgba(201, 146, 43, .16);
+}
+.kf-det-cup {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 8px;
+  background: #0a0b0d;
+  border: 1px solid rgba(255, 255, 255, .12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.kf-det-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: .88;
+  transition: height .22s, background-color .22s;
+  pointer-events: none;
+}
+.kf-det-cup-ico {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kf-det-cup-lbl {
+  position: relative;
+  z-index: 2;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #cfcbc1;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .85);
+}
+.kf-det-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.kf-det-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.kf-det-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #f4f1ea;
+  white-space: nowrap;
+  min-width: 0;
+}
+.kf-det-form {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(255, 255, 255, .11);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #cfcbc1;
+  white-space: nowrap;
+}
+.kf-det-qty {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e0ab45;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: none;
+}
+.kf-det-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #9c988e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kf-det-sub > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kf-det-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, .28);
+  flex: none;
+}
+.kf-det-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .08);
+  overflow: hidden;
+}
+.kf-det-bar > i {
+  display: block;
+  height: 100%;
+  transition: width .22s, background-color .22s;
+}
+
 /* ---- Microwave Chamber & Controls ---- */
 .kf-mw-box {
   flex: none;
@@ -958,6 +1101,10 @@
 .gm[data-mob] .kf-cool-viz { height: 96px; }
 .gm[data-mob] .kf-wash-ring { width: 58px; height: 58px; }
 .gm[data-mob] .kf-mw-timer-readout { font-size: 20px; }
+.gm[data-mob] .kf-det-tray { padding: 5px 8px; gap: 8px; }
+.gm[data-mob] .kf-det-cup { width: 36px; height: 36px; }
+.gm[data-mob] .kf-det-title { font-size: 12px; }
+.gm[data-mob] .kf-det-sub { font-size: 11px; }
 
 @container (max-width: 1060px) {
   .gm[data-mob] .kf-wb-grid4 { grid-template-columns: repeat(4, 44px); gap: 4px; }

@@ -23,6 +23,8 @@ import {
   syncItemContainerProperties,
   ensureHybridContainerProps,
   updateHybridContainerInteraction,
+  isFluidStorageDryForm,
+  LIQUID_REGISTRY,
 } from './liquidSystem';
 
 export interface FurnitureStorageConfig {
@@ -1317,6 +1319,8 @@ export function takeBathWashPlayer(
   return { success: true, message: `Бодрящий прохладный душ (+${Math.round(waterTemp)}°C) освежил и прибавил сил` };
 }
 
+export const WASHING_DETERGENT_MAX_ML = 250;
+
 function createDefaultWashingState(): WashingMachineState {
   const quick = WASHING_PROGRAMS.find(p => p.id === 'quick') || WASHING_PROGRAMS[0];
   return {
@@ -1327,7 +1331,9 @@ function createDefaultWashingState(): WashingMachineState {
     totalDurationSec: quick.durationSec,
     waterTempC: 21.0,
     waterLevelPct: 0,
-    hasDetergent: true,
+    hasDetergent: false,
+    detergentMl: 0,
+    detergentMaxMl: WASHING_DETERGENT_MAX_ML,
     spinRpm: 0,
     lastUpdatedSec: Date.now() / 1000,
   };
@@ -1345,7 +1351,16 @@ export function ensureWashingState(storage: FurnitureStorage): WashingMachineSta
     storage.washingState.remainingSec = Math.max(0, Number(storage.washingState.remainingSec ?? def.durationSec));
     storage.washingState.waterTempC = Number(storage.washingState.waterTempC ?? 21.0);
     storage.washingState.waterLevelPct = Math.max(0, Math.min(100, Number(storage.washingState.waterLevelPct ?? 0)));
-    storage.washingState.hasDetergent = Boolean(storage.washingState.hasDetergent);
+    const maxMl = Math.max(100, Number(storage.washingState.detergentMaxMl ?? WASHING_DETERGENT_MAX_ML));
+    const curMl =
+      typeof storage.washingState.detergentMl === 'number'
+        ? Math.max(0, Math.min(maxMl, storage.washingState.detergentMl))
+        : storage.washingState.hasDetergent
+        ? 100
+        : 0;
+    storage.washingState.detergentMaxMl = maxMl;
+    storage.washingState.detergentMl = curMl;
+    storage.washingState.hasDetergent = curMl > 0;
     storage.washingState.spinRpm = Number(storage.washingState.spinRpm ?? 0);
     if (typeof storage.washingState.lastUpdatedSec !== 'number') {
       storage.washingState.lastUpdatedSec = Date.now() / 1000;
@@ -1375,12 +1390,92 @@ export function setWashingProgram(
   return { success: true, message: `Выбран режим: ${def.nameRu}` };
 }
 
-export function toggleWashingDetergent(storage: FurnitureStorage): boolean {
+export function pourDetergentIntoWashingMachine(
+  storage: FurnitureStorage,
+  item: InventoryItem | null | undefined
+): { success: boolean; pouredMl?: number; isDry?: boolean; message: string } {
   const st = ensureWashingState(storage);
-  st.hasDetergent = !st.hasDetergent;
+  if (st.isRunning) {
+    return { success: false, message: 'Остановите стирку перед закладкой средства в отсек' };
+  }
+  if (!item?.fluidStorage || item.fluidStorage.liquidId !== 'detergent') {
+    return { success: false, message: 'В отсек СМС можно добавить только стиральный порошок или гель' };
+  }
+  const curSrcMl = item.fluidStorage.currentMl || 0;
+  if (curSrcMl <= 0) {
+    return { success: false, message: 'Упаковка со средством пуста' };
+  }
+  const maxCompMl = st.detergentMaxMl ?? WASHING_DETERGENT_MAX_ML;
+  const curCompMl = st.detergentMl ?? 0;
+  const freeCompMl = Math.max(0, maxCompMl - curCompMl);
+  if (freeCompMl <= 0) {
+    return { success: false, message: 'Отсек СМС уже полностью заполнен' };
+  }
+
+  if (isFluidContainerClosed(item)) {
+    openFluidContainerIfNeeded(item);
+  }
+
+  const doseMl = Math.min(curSrcMl, 100, freeCompMl);
+  const isDry = isFluidStorageDryForm(item.fluidStorage);
+  const attrs = item.fluidStorage.attributes || item.attributes;
+  const color =
+    attrs?.customColor ||
+    attrs?.visuals?.color ||
+    (isDry ? '#f8fafc' : '#38bdf8');
+  const colorNameRu =
+    attrs?.visuals?.colorNameRu ||
+    attrs?.substanceColorRu ||
+    (isDry ? 'Белый порошок' : 'Голубой гель');
+  const rawIng = attrs?.ingredients ?? attrs?.sourceIngredients;
+  const ingText = Array.isArray(rawIng) ? rawIng.filter(Boolean).join(', ') : rawIng;
+  const varietyRu = attrs?.varietyRu || item.nameRu;
+
+  st.detergentMl = Math.round((curCompMl + doseMl) * 10) / 10;
+  st.detergentMaxMl = maxCompMl;
+  st.hasDetergent = st.detergentMl > 0;
+  st.detergentForm = isDry ? 'dry' : 'liquid';
+  st.detergentColor = color;
+  st.detergentColorNameRu = colorNameRu;
+  st.detergentIngredients = ingText || st.detergentIngredients;
+  st.detergentVarietyRu = varietyRu;
+  st.lastUpdatedSec = Date.now() / 1000;
+
+  item.fluidStorage.currentMl = Math.max(0, Math.round((curSrcMl - doseMl) * 10) / 10);
+  if (item.fluidStorage.currentMl <= 0) {
+    item.fluidStorage.liquidId = null;
+    item.fluidStorage.attributes = undefined;
+  }
+  syncItemContainerProperties(item);
+  saveFurnitureStoragesToLocalStorage();
+
+  const density = LIQUID_REGISTRY.detergent?.densityKgPerL || 0.92;
+  const displayQty = Math.round(isDry ? doseMl * density : doseMl);
+  return {
+    success: true,
+    pouredMl: doseMl,
+    isDry,
+    message: `${isDry ? 'Засыпано' : 'Залито'} ${displayQty} ${isDry ? 'г' : 'мл'} — ${varietyRu}`,
+  };
+}
+
+export function clearWashingDetergent(
+  storage: FurnitureStorage
+): { success: boolean; message: string } {
+  const st = ensureWashingState(storage);
+  if (st.isRunning) {
+    return { success: false, message: 'Нельзя очистить отсек СМС во время стирки' };
+  }
+  st.detergentMl = 0;
+  st.hasDetergent = false;
+  st.detergentForm = undefined;
+  st.detergentColor = undefined;
+  st.detergentColorNameRu = undefined;
+  st.detergentIngredients = undefined;
+  st.detergentVarietyRu = undefined;
   st.lastUpdatedSec = Date.now() / 1000;
   saveFurnitureStoragesToLocalStorage();
-  return st.hasDetergent;
+  return { success: true, message: 'Отсек для моющего средства очищен' };
 }
 
 export function startPauseWashingMachine(

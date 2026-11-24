@@ -518,7 +518,15 @@ function renderWashingMachineOverlay(
   if (ws.isRunning) {
     // Active foam & drum shimmer inside protruding porthole at front (+hh)
     const swirl = Math.sin(nowSec * (ws.spinRpm >= 800 ? 22 : 6)) * 0.5 + 0.5;
-    ctx.fillStyle = `rgba(125, 211, 252, ${(0.35 + swirl * 0.32).toFixed(2)})`;
+    let foamRgb = '125, 211, 252';
+    if (ws.hasDetergent && ws.detergentColor && /^#?[0-9a-fA-F]{6}$/.test(ws.detergentColor)) {
+      const hex = ws.detergentColor.startsWith('#') ? ws.detergentColor.slice(1) : ws.detergentColor;
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      foamRgb = `${r}, ${g}, ${b}`;
+    }
+    ctx.fillStyle = `rgba(${foamRgb}, ${(0.35 + swirl * 0.32).toFixed(2)})`;
     ctx.beginPath();
     ctx.ellipse(0, hh - 0.02, portW * 0.42, portDepth * 0.85, 0, 0, Math.PI);
     ctx.fill();

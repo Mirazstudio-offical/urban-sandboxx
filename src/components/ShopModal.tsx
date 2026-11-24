@@ -53,7 +53,7 @@ import {
   getUnifiedItemAttributes
 } from '../items';
 import { InventoryItem, GameWorld, MapShopCatalogEntry, ShopCatalogOverrideConfig } from '../types';
-import { SHAPE_NAMES_RU, LIQUID_REGISTRY, LiquidId } from '../liquidSystem';
+import { SHAPE_NAMES_RU, LIQUID_REGISTRY, LiquidId, isFluidStorageDryForm } from '../liquidSystem';
 import { ModalShell, Tabs, Seg, TabItem } from './gameUi';
 
 const shopPreviewCache: Record<string, InventoryItem> = {};
@@ -460,6 +460,8 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'gas_gummy_rings', itemId: 'gummy_pack_doypack_rings', nameRu: 'Мармелад «Фруктовые колечки» (дой-пак 28 шт., 196г)', price: 155, description: 'Стоячий дой-пак с зип-локом и двухслойными персиковыми, арбузными и яблочными колечками.', category: 'food', effectText: '196г · +78% Сытость, зип-лок' },
     { id: 'gas_gummy_sour_mix', itemId: 'gummy_pack_doypack_sour_mix', nameRu: 'Мармелад «Ультра-кислый микс» (дой-пак 40 шт., 195г)', price: 165, description: 'Бодрящий дой-пак для долгой дороги: 40 кислых мармеладок разных форм.', category: 'food', effectText: '195г · +78% Сытость, +90% Энергия' },
     { id: 'gas_canned', itemId: 'stew_meat', nameRu: 'Армейская тушёнка в банке (0.4L)', price: 110, description: 'Мясные консервы в жестяной банке 0.4л с ключом открытия.', category: 'food', effectText: '+70% Сытость' },
+    { id: 'gas_detergent_sachet', itemId: 'detergent_sachet_120', nameRu: 'Порошок «Свежесть 2-в-1» (саше 100г)', price: 38, description: 'Порционное саше сухого мелкодисперсного стирального порошка на 1 стирку.', category: 'auto', effectText: '100 г · Сухой порошок' },
+    { id: 'gas_detergent_box', itemId: 'detergent_powder_box_450', nameRu: 'Порошок «Морозный Бриз Автомат» (450г)', price: 165, description: 'Коробка гранулированного порошка с активным кислородом и энзимами против масляных пятен.', category: 'auto', effectText: '450 г · Сухой порошок' },
     { id: 'gas_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка АЗС', price: 5, description: 'Пластиковый пакет с ручками для покупок.', category: 'auto', effectText: 'Пакет 5.0L' }
   ],
   supermarket: [
@@ -690,7 +692,15 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_grain_pack_box', itemId: 'grain_pack_box', nameRu: 'Картонная пачка для круп пустая (0.8L)', price: 10, description: 'Пустая картонная пачка с окошком для хлопьев, киноа, кускуса и сыпучих продуктов.', category: 'auto', effectText: 'Тара сыпучих 0.8L' },
     { id: 'sup_pasta_pack_bag', itemId: 'pasta_pack_bag', nameRu: 'Упаковка для макарон пустая (0.9L)', price: 7, description: 'Пустой прозрачный пакет с лентой-этикеткой для фигурных макаронных изделий.', category: 'auto', effectText: 'Тара макарон 0.9L' },
     { id: 'sup_pasta_pack_long', itemId: 'pasta_pack_long', nameRu: 'Упаковка для спагетти пустая (0.85L)', price: 7, description: 'Пустая удлинённая пачка с окном для спагетти и длинной лапши.', category: 'auto', effectText: 'Тара спагетти 0.85L' },
-    { id: 'sup_jar_empty', itemId: 'jar_glass_medium', nameRu: 'Банка стеклянная с крышкой (0.5L)', price: 35, description: 'Унифицированная чистая банка твист-офф для консервации.', category: 'auto', effectText: 'Емкость 0.5L' }
+    { id: 'sup_jar_empty', itemId: 'jar_glass_medium', nameRu: 'Банка стеклянная с крышкой (0.5L)', price: 35, description: 'Унифицированная чистая банка твист-офф для консервации.', category: 'auto', effectText: 'Емкость 0.5L' },
+
+    // 7. БЫТОВАЯ ХИМИЯ И СРЕДСТВА ДЛЯ СТИРКИ
+    { id: 'sup_detergent_sachet', itemId: 'detergent_sachet_120', nameRu: 'Порошок «Свежесть 2-в-1» (саше 100г)', price: 35, description: 'Порционное герметичное саше сухого мелкодисперсного стирального порошка на одну закладку.', category: 'auto', effectText: '100 г · Сухой порошок' },
+    { id: 'sup_detergent_box_450', itemId: 'detergent_powder_box_450', nameRu: 'Порошок «Морозный Бриз Автомат» (коробка 450г)', price: 155, description: 'Картонная коробка с перфорированным носиком: белый гранулированный порошок с бирюзовыми кислородными активаторами.', category: 'auto', effectText: '450 г · Сухой порошок' },
+    { id: 'sup_detergent_eco_900', itemId: 'detergent_powder_eco_900', nameRu: 'Эко-порошок «Мыльный Орех и Сода» (коробка 900г)', price: 295, description: 'Натуральный безфосфатный порошок на мыльной стружке, соде и сапиндусе без синтетических красителей.', category: 'auto', effectText: '900 г · Эко-порошок' },
+    { id: 'sup_detergent_bag_3000', itemId: 'detergent_powder_color_3000', nameRu: 'Порошок «Колор-Защита Семейный» (пакет 3000г)', price: 680, description: 'Большой 3-литровый пакет с прорезной ручкой: сухой порошок с розовыми и изумрудными био-энзимами для цветных тканей.', category: 'auto', effectText: '3000 г · Для цветного' },
+    { id: 'sup_detergent_gel_1500', itemId: 'detergent_gel_aqua_1500', nameRu: 'Гель-концентрат «Аква-Сила» (канистра 1.5L)', price: 420, description: 'Эргономичная канистра HDPE с боковой ручкой и мерным колпачком: концентрированный бирюзовый жидкий гель с энзимами.', category: 'auto', effectText: '1500 мл · Жидкий гель' },
+    { id: 'sup_detergent_lavender_1000', itemId: 'detergent_gel_lavender_1000', nameRu: 'Бальзам-гель «Лаванда Шерсть и Шёлк» (флакон 1.0L)', price: 340, description: 'Фигурный флакон 1.0л с колпачком-дозатором: мягкий перламутровый лавандовый гель с ланолином для деликатных тканей.', category: 'auto', effectText: '1000 мл · Бальзам-гель' }
   ],
   fast_food: [
     { id: 'ff_jalapeno', itemId: 'jalapeno_pickled', nameRu: 'Маринованный халапеньо в баночке (0.2L)', price: 45, description: 'Стеклянная баночка острых маринованных колечек халапеньо в уксусном маринаде.', category: 'food', effectText: '+10% Энергия, капсаицин' },
@@ -929,7 +939,8 @@ function normalizeShopEntry(entry: MapShopCatalogEntry, priceMultiplier: number 
         : formatItemEffectSummary(entry.originalCatalogId || entry.itemId);
     } else if (entry.fluidStorage?.liquidId && LIQUID_REGISTRY[entry.fluidStorage.liquidId as LiquidId]) {
       const liq = LIQUID_REGISTRY[entry.fluidStorage.liquidId as LiquidId];
-      autoEffect = `${liq.nameRu} (${entry.fluidStorage.currentMl} мл)`;
+      const unit = isFluidStorageDryForm(entry.fluidStorage) ? 'г' : 'мл';
+      autoEffect = `${liq.nameRu} (${entry.fluidStorage.currentMl} ${unit})`;
     } else {
       autoEffect = formatItemEffectSummary(entry.originalCatalogId || entry.itemId);
     }
@@ -1992,6 +2003,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       return { id: 'misc', label: 'Сопутствующие товары' };
     } else {
       const eff = (item.effectText || '').toLowerCase();
+      if (item.fluidStorage?.liquidId === 'detergent' || id.startsWith('detergent_') || rawContainerId.startsWith('detergent_')) {
+        return { id: 'chemistry', label: 'Бытовая химия' };
+      }
       if (isGasStation && (id.includes('oil') || id.includes('coolant') || id.includes('fluid') || id.includes('canister') || id.includes('tow') || id.includes('extinguisher') || id.includes('kit') || name.includes('масло') || name.includes('антифриз') || name.includes('тосол') || name.includes('канистр'))) {
         return { id: 'fluids', label: 'Автотовары и ГСМ' };
       }
@@ -2702,15 +2716,21 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                               .join(', ');
                           })()
                         : '';
+                      const isDryFluid = fs ? isFluidStorageDryForm(fs) : false;
+                      const colorName = uAttrs.visuals?.colorNameRu || uAttrs.substanceColorRu;
+                      const colorHex = uAttrs.visuals?.color || uAttrs.customColor || liq?.color;
                       const hasSpecs = Boolean(
                         innerItems ||
                         liq ||
+                        uAttrs.physicalFormRu ||
+                        colorName ||
                         uAttrs.productShapeRu ||
                         uAttrs.grainGradeRu ||
                         uAttrs.cookingTimeMin ||
                         uAttrs.proteinPer100g !== undefined ||
                         uAttrs.surfaceTextureRu ||
-                        uAttrs.glutenFree
+                        uAttrs.glutenFree ||
+                        ingText
                       );
                       if (!hasSpecs) return null;
 
@@ -2730,8 +2750,38 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                           )}
                           {liq && (
                             <div className="gu-kv">
-                              <span className="gu-kv-k">Сыпучее / Вещество</span>
-                              <span className="gu-kv-v">{liq.nameRu}</span>
+                              <span className="gu-kv-k">
+                                {fs?.liquidId === 'detergent'
+                                  ? (isDryFluid ? 'Сыпучее средство' : 'Жидкое средство')
+                                  : 'Сыпучее / Вещество'}
+                              </span>
+                              <span className="gu-kv-v">{uAttrs.varietyRu || liq.nameRu}</span>
+                            </div>
+                          )}
+                          {uAttrs.physicalFormRu && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Форма средства</span>
+                              <span className="gu-kv-v">{uAttrs.physicalFormRu}</span>
+                            </div>
+                          )}
+                          {colorName && (
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Цвет</span>
+                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'normal' }}>
+                                {colorHex && (
+                                  <span
+                                    style={{
+                                      width: 10,
+                                      height: 10,
+                                      borderRadius: 3,
+                                      backgroundColor: colorHex,
+                                      border: '1px solid rgba(255,255,255,0.28)',
+                                      flexShrink: 0
+                                    }}
+                                  />
+                                )}
+                                <span>{colorName}</span>
+                              </span>
                             </div>
                           )}
                           {uAttrs.cookingTimeMin && (

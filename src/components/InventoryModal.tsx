@@ -45,7 +45,8 @@ import {
   ensureHybridContainerProps,
   getContainerCapacityBreakdown,
   drainLiquidFromContainer,
-  tryFillOrUseFluidContainer
+  tryFillOrUseFluidContainer,
+  isFluidStorageDryForm
 } from '../liquidSystem';
 import {
   InteractionSlotGrid4,
@@ -801,7 +802,7 @@ const InventoryModalContent: React.FC<{
     if (wrap) {
       const st = wrap.state;
       const liq = st.liquidId ? LIQUID_REGISTRY[st.liquidId as LiquidId] : undefined;
-      const unit = liq?.isGranular || wrap.isGranularContainer ? 'г' : 'мл';
+      const unit = isFluidStorageDryForm(st) || wrap.isGranularContainer ? 'г' : 'мл';
       const bd = getContainerCapacityBreakdown(item);
       const hasSolids = Boolean(item.contents && item.contents.length > 0);
       const pct = bd.totalCapacityMl > 0
@@ -1845,12 +1846,13 @@ const InventoryModalContent: React.FC<{
                           const hasHybridCapacity = Boolean(fs && it.isContainer);
                           const capBreakdown = hasHybridCapacity ? getContainerCapacityBreakdown(it) : null;
                           const hasSoakedCoating = Boolean(it.soakedLiquidId && (it.wetness || 0) >= 10);
-                          const fluidUnit = liq?.isGranular ? 'г' : 'мл';
+                          const isDryFluid = fs ? isFluidStorageDryForm(fs) : Boolean(liq?.isGranular);
+                          const fluidUnit = isDryFluid ? 'г' : 'мл';
                           const fluidCurrentDisplay = fs
-                            ? Math.round(liq?.isGranular ? fs.currentMl * (liq.densityKgPerL || 1) : fs.currentMl)
+                            ? Math.round(isDryFluid ? fs.currentMl * (liq?.densityKgPerL || 1) : fs.currentMl)
                             : 0;
                           const fluidMaxDisplay = fs
-                            ? Math.round(liq?.isGranular ? fs.maxMl * (liq.densityKgPerL || 1) : fs.maxMl)
+                            ? Math.round(isDryFluid ? fs.maxMl * (liq?.densityKgPerL || 1) : fs.maxMl)
                             : 0;
 
                           const innerFirst = it.contents && it.contents.length > 0 ? it.contents[0] : undefined;
@@ -1895,6 +1897,7 @@ const InventoryModalContent: React.FC<{
                               ? (uAttrs.stateNameRu || `${fluidCurrentDisplay} / ${fluidMaxDisplay} ${fluidUnit}`)
                               : uAttrs.stateNameRu;
 
+                          const colorLabel = vis?.colorNameRu || uAttrs.substanceColorRu;
                           const hasAnySpec = Boolean(
                             hasFluid ||
                             hasHybridCapacity ||
@@ -1902,7 +1905,8 @@ const InventoryModalContent: React.FC<{
                             shapeLabel ||
                             sizeLabel ||
                             materialLabel ||
-                            vis?.colorNameRu ||
+                            colorLabel ||
+                            uAttrs.physicalFormRu ||
                             it.containerCapacityL ||
                             detailSource.flavorRu ||
                             detailSource.doughNameRu ||
@@ -1981,17 +1985,28 @@ const InventoryModalContent: React.FC<{
                                 {hasFluid && fs && (
                                   <>
                                     <div className="inv-kv" style={{ gridColumn: 'span 2' }}>
-                                      <span className="inv-kv-k">Жидкая фаза</span>
+                                      <span className="inv-kv-k">
+                                        {fs.liquidId === 'detergent'
+                                          ? (isDryFluid ? 'Сыпучее средство' : 'Жидкое средство')
+                                          : (isDryFluid ? 'Сыпучая фаза' : 'Жидкая фаза')}
+                                      </span>
                                       <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                         {swatchColor && <span className="inv-swatch" style={{ backgroundColor: swatchColor }} />}
                                         <span>{liq?.nameRu || fs.liquidId}</span>
                                       </span>
                                     </div>
                                     <div className="inv-kv">
-                                      <span className="inv-kv-k">Объём жидк.</span>
+                                      <span className="inv-kv-k">{isDryFluid ? 'Масса / Запас' : 'Объём жидк.'}</span>
                                       <span className="inv-kv-v mono">{fluidCurrentDisplay} / {fluidMaxDisplay} {fluidUnit}</span>
                                     </div>
                                   </>
+                                )}
+
+                                {uAttrs.physicalFormRu && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Форма средства</span>
+                                    <span className="inv-kv-v">{uAttrs.physicalFormRu}</span>
+                                  </div>
                                 )}
 
                                 {uAttrs.varietyRu && uAttrs.varietyRu !== it.nameRu && (
@@ -2055,12 +2070,12 @@ const InventoryModalContent: React.FC<{
                                     <span className="inv-kv-v mono">{it.containerCapacityL} л</span>
                                   </div>
                                 )}
-                                {vis?.colorNameRu && (
-                                  <div className="inv-kv">
+                                {colorLabel && (
+                                  <div className="inv-kv" style={colorLabel.length > 20 ? { gridColumn: '1 / -1' } : undefined}>
                                     <span className="inv-kv-k">Цвет</span>
                                     <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                                       {swatchColor && <span className="inv-swatch" style={{ backgroundColor: swatchColor }} />}
-                                      <span>{vis.colorNameRu}</span>
+                                      <span>{colorLabel}</span>
                                     </span>
                                   </div>
                                 )}

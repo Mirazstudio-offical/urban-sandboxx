@@ -49,7 +49,8 @@ import {
   getContainerCapacityBreakdown,
   getContainerFreeVolumeMl,
   updateHybridContainerInteraction,
-  drainLiquidFromContainer
+  drainLiquidFromContainer,
+  isFluidStorageDryForm
 } from './liquidSystem';
 import { EXTENDED_LEGACY_CONTAINER_MAP, EXTENDED_ITEM_PACKAGING_MAP, LEGACY_SUBSTANCE_ID_ALIASES } from './unifiedSubstanceCatalog';
 import { initItemThermalProperties, applyConsumptionThermodynamics, calculateSurfaceTemperature } from './itemThermalSystem';
@@ -2537,6 +2538,62 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: {},
     weight: 0.015,
     volume: 0.17,
+    usable: true
+  },
+  detergent_box: {
+    itemId: 'detergent_box',
+    name: 'Detergent Cardboard Box (0.9L)',
+    nameRu: 'Картонная коробка порошка (0.9 л)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Moisture-resistant cardboard laundry detergent carton with perforated pour spout.',
+    descriptionRu: 'Плотная картонная коробка с перфорированным носиком для сухого стирального порошка.',
+    effects: {},
+    weight: 0.045,
+    volume: 0.22,
+    usable: true
+  },
+  detergent_bag_3l: {
+    itemId: 'detergent_bag_3l',
+    name: 'Large Detergent Bag (3.0L)',
+    nameRu: 'Семейный пакет порошка (3 кг)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Heavy-duty 3L polymer bag with die-cut carry handle for family-size laundry powder.',
+    descriptionRu: 'Большой полимерный пакет с прорезной ручкой для стирального порошка (до 3 кг).',
+    effects: {},
+    weight: 0.035,
+    volume: 0.45,
+    usable: true
+  },
+  detergent_jug_1500: {
+    itemId: 'detergent_jug_1500',
+    name: 'Detergent Gel Jug (1.5L)',
+    nameRu: 'Канистра-кувшин для геля (1.5 л)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Ergonomic HDPE jug with side handle, dosing spout, and measuring cap for liquid detergent.',
+    descriptionRu: 'Эргономичный кувшин с боковой ручкой и мерным колпачком для жидкого геля для стирки.',
+    effects: {},
+    weight: 0.085,
+    volume: 0.35,
+    usable: true
+  },
+  detergent_bottle_1000: {
+    itemId: 'detergent_bottle_1000',
+    name: 'Detergent Balm Bottle (1.0L)',
+    nameRu: 'Флакон для жидкого средства (1.0 л)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Contoured 1.0L bottle with measuring cap for delicate wool & silk liquid detergent.',
+    descriptionRu: 'Узкий флакон с мерным колпачком для деликатного жидкого бальзама для стирки.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.25,
     usable: true
   },
 
@@ -5153,6 +5210,14 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   pasta_pack_bag_open: { containerId: 'pasta_pack_bag', liquidId: null, amountMl: 0, isOpen: true },
   pasta_pack_long: { containerId: 'pasta_pack_long', liquidId: null, amountMl: 0 },
   pasta_pack_long_open: { containerId: 'pasta_pack_long', liquidId: null, amountMl: 0, isOpen: true },
+  detergent_box: { containerId: 'detergent_box', liquidId: null, amountMl: 0 },
+  detergent_box_open: { containerId: 'detergent_box', liquidId: null, amountMl: 0, isOpen: true },
+  detergent_bag_3l: { containerId: 'detergent_bag_3l', liquidId: null, amountMl: 0 },
+  detergent_bag_3l_open: { containerId: 'detergent_bag_3l', liquidId: null, amountMl: 0, isOpen: true },
+  detergent_jug_1500: { containerId: 'detergent_jug_1500', liquidId: null, amountMl: 0 },
+  detergent_jug_1500_open: { containerId: 'detergent_jug_1500', liquidId: null, amountMl: 0, isOpen: true },
+  detergent_bottle_1000: { containerId: 'detergent_bottle_1000', liquidId: null, amountMl: 0 },
+  detergent_bottle_1000_open: { containerId: 'detergent_bottle_1000', liquidId: null, amountMl: 0, isOpen: true },
   tetra_pack_1000_open: { containerId: 'tetra_pack_1000', liquidId: null, amountMl: 0, isOpen: true },
   tetra_pack_250_open: { containerId: 'tetra_pack_250', liquidId: null, amountMl: 0, isOpen: true },
   plastic_bag: { containerId: 'plastic_bag', liquidId: null, amountMl: 0 },
@@ -5796,6 +5861,9 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     ...(dishType ? { dishType } : {}),
     ...(tasteNotes ? { tasteNotes } : {}),
     ...(cookingAttributes ? { cookingAttributes } : {}),
+    ...(prevAttrs.physicalForm ? { physicalForm: prevAttrs.physicalForm } : {}),
+    ...(prevAttrs.physicalFormRu ? { physicalFormRu: prevAttrs.physicalFormRu } : {}),
+    ...(prevAttrs.substanceColorRu ? { substanceColorRu: prevAttrs.substanceColorRu } : {}),
     ...(Object.keys(visuals).length > 0 ? { visuals } : {})
   };
   delete unified.sourceIngredients;
@@ -6192,7 +6260,8 @@ export function formatItemEffectSummary(rawItemId: string): string {
   }
   const fluid = getResolvedFluidContainerConfig(itemId);
   if (fluid && fluid.liquidId && LIQUID_REGISTRY[fluid.liquidId]) {
-    return `${LIQUID_REGISTRY[fluid.liquidId].nameRu} (${fluid.amountMl} мл)`;
+    const isDry = isFluidStorageDryForm({ liquidId: fluid.liquidId, attributes: fluid.attributes });
+    return `${LIQUID_REGISTRY[fluid.liquidId].nameRu} (${fluid.amountMl} ${isDry ? 'г' : 'мл'})`;
   }
   return def?.category === 'med' ? 'Медикамент' : def?.category === 'tool' ? 'Инструмент' : 'Предмет';
 }
@@ -6503,7 +6572,11 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
     const container = createItem(entry.itemId, 1, undefined, true);
     const cfg = getContainerConfig(entry.itemId);
     const maxMl = entry.fluidStorage.maxMl ?? cfg?.maxMl ?? Math.max(500, entry.fluidStorage.currentMl || 500);
-    const attrs = entry.fluidStorage.attributes ? { ...entry.fluidStorage.attributes } : undefined;
+    const catalogFluid = entry.originalCatalogId ? getResolvedFluidContainerConfig(entry.originalCatalogId) : null;
+    const attrs =
+      catalogFluid?.attributes || entry.fluidStorage.attributes
+        ? { ...(catalogFluid?.attributes || {}), ...(entry.fluidStorage.attributes || {}) }
+        : undefined;
     container.fluidStorage = {
       liquidId: (entry.fluidStorage.liquidId as LiquidId | null) ?? null,
       currentMl: Math.max(0, entry.fluidStorage.currentMl || 0),

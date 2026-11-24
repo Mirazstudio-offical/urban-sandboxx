@@ -71,6 +71,7 @@ export type LiquidId =
   | 'antifreeze'
   | 'brake_fluid'
   | 'washer_fluid'
+  | 'detergent'
   | 'sand';
 
 export type FluidSubstanceAttributes = UnifiedAttributes;
@@ -953,6 +954,19 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     toxicWarning: 'Незамерзающая жидкость со спиртом и ПАВ! Пить нельзя.',
     stainType: 'water'
   },
+  detergent: {
+    id: 'detergent',
+    name: 'Laundry Detergent',
+    nameRu: 'Стиральный порошок / гель',
+    category: 'chemical',
+    densityKgPerL: 0.92,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#e0f2fe',
+    toxicWarning: 'Бытовое моющее средство. Предназначено для стиральной машины.',
+    stainType: 'water'
+  },
   sand: {
     id: 'sand',
     name: 'Silica Sand',
@@ -967,7 +981,34 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     stainType: 'sand'
   }
 };
+
+export function isFluidStorageDryForm(
+  storage: { liquidId?: string | null; attributes?: FluidSubstanceAttributes } | null | undefined
+): boolean {
+  if (!storage || !storage.liquidId) return false;
+  if (storage.attributes?.physicalForm === 'liquid') return false;
+  if (storage.attributes?.physicalForm === 'dry') return true;
+  const liq = LIQUID_REGISTRY[storage.liquidId as LiquidId];
+  return Boolean(liq?.isGranular);
+}
+
 export const DEFAULT_GENERIC_LIQUID_ATTRIBUTES: Partial<Record<LiquidId, FluidSubstanceAttributes>> = {
+  detergent: {
+    varietyRu: 'Универсальный стиральный порошок',
+    ingredients: 'Анионные ПАВ 5–15%, неионогенные ПАВ <5%, карбонат натрия, цеолиты, кислородный отбеливатель, энзимы',
+    preparationMethod: 'Смешивание и распылительная сушка гранулированного моющего концентрата',
+    purpose: 'Машинная и ручная стирка тканей — растворяет масляные, топливные и бытовые загрязнения',
+    customColor: '#f8fafc',
+    secondaryColor: '#38bdf8',
+    physicalForm: 'dry',
+    physicalFormRu: 'Сухой гранулированный порошок',
+    substanceColorRu: 'Белый с голубыми гранулами',
+    visuals: {
+      color: '#f8fafc',
+      secondaryColor: '#38bdf8',
+      colorNameRu: 'Белый с голубыми гранулами'
+    }
+  },
   water: {
     varietyRu: 'Пресная питьевая',
     ingredients: 'Природная родниковая или очищенная артезианская вода',
@@ -2790,6 +2831,7 @@ export function normalizeFluidStorageState(
     else if (rawId.startsWith('grain_')) storage.liquidId = 'grain';
     else if (rawId.startsWith('pasta_')) storage.liquidId = 'pasta';
     else if (rawId.startsWith('dye_')) storage.liquidId = 'food_dye';
+    else if (rawId.startsWith('detergent_')) storage.liquidId = 'detergent';
     else storage.liquidId = 'water';
   }
 
@@ -2813,6 +2855,11 @@ export function normalizeFluidStorageState(
       if (!storage.attributes.cookingTimeMin && defAttrs.cookingTimeMin) storage.attributes.cookingTimeMin = defAttrs.cookingTimeMin;
       if (storage.attributes.glutenFree === undefined && defAttrs.glutenFree !== undefined) storage.attributes.glutenFree = defAttrs.glutenFree;
       if (storage.attributes.proteinPer100g === undefined && defAttrs.proteinPer100g !== undefined) storage.attributes.proteinPer100g = defAttrs.proteinPer100g;
+      if (storage.attributes.physicalForm === undefined && defAttrs.physicalForm !== undefined) storage.attributes.physicalForm = defAttrs.physicalForm;
+      if (!storage.attributes.physicalFormRu && defAttrs.physicalFormRu) storage.attributes.physicalFormRu = defAttrs.physicalFormRu;
+      if (!storage.attributes.substanceColorRu && defAttrs.substanceColorRu) storage.attributes.substanceColorRu = defAttrs.substanceColorRu;
+      if (!storage.attributes.customColor && defAttrs.customColor) storage.attributes.customColor = defAttrs.customColor;
+      if (!storage.attributes.secondaryColor && defAttrs.secondaryColor) storage.attributes.secondaryColor = defAttrs.secondaryColor;
       if (!storage.attributes.culinaryEquivalentId && defAttrs.culinaryEquivalentId) storage.attributes.culinaryEquivalentId = defAttrs.culinaryEquivalentId;
       if (!storage.attributes.medicalEffectId && defAttrs.medicalEffectId) storage.attributes.medicalEffectId = defAttrs.medicalEffectId;
     }
@@ -3602,6 +3649,72 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     isSealedByDefault: true,
     isGranularOnly: true
   },
+  detergent_box: {
+    itemId: 'detergent_box',
+    name: 'Detergent Cardboard Box (0.9L)',
+    nameRu: 'Картонная коробка порошка',
+    maxMl: 900,
+    emptyWeightKg: 0.045,
+    emptyVolumeL: 0.95,
+    category: 'gear',
+    icon: 'Box',
+    descriptionRu: 'Плотная влагостойкая картонная коробка с перфорированным носиком для сухого стирального порошка.',
+    descriptionEn: 'Moisture-resistant cardboard laundry detergent carton with pour spout.',
+    defaultLiquidId: null,
+    defaultAmountMl: 0,
+    requiresOpening: true,
+    isSealedByDefault: true,
+    isGranularOnly: true
+  },
+  detergent_bag_3l: {
+    itemId: 'detergent_bag_3l',
+    name: 'Large Detergent Bag (3.0L)',
+    nameRu: 'Семейный пакет порошка',
+    maxMl: 3000,
+    emptyWeightKg: 0.035,
+    emptyVolumeL: 3.1,
+    category: 'gear',
+    icon: 'ShoppingBag',
+    descriptionRu: 'Большой прочный полимерный пакет с прорезной ручкой для хранения 3 кг стирального порошка.',
+    descriptionEn: 'Large heavy-duty 3L retail carry bag for laundry powder.',
+    defaultLiquidId: null,
+    defaultAmountMl: 0,
+    requiresOpening: true,
+    isSealedByDefault: true,
+    isGranularOnly: true
+  },
+  detergent_jug_1500: {
+    itemId: 'detergent_jug_1500',
+    name: 'Detergent Gel Jug (1.5L)',
+    nameRu: 'Канистра-кувшин для геля (1.5л)',
+    maxMl: 1500,
+    emptyWeightKg: 0.085,
+    emptyVolumeL: 1.65,
+    category: 'gear',
+    icon: 'FlaskConical',
+    descriptionRu: 'Эргономичный кувшин с боковой ручкой, носиком-дозатором и мерным колпачком для жидкого геля для стирки.',
+    descriptionEn: 'Ergonomic 1.5L HDPE jug with integrated handle and measuring cap for liquid detergent.',
+    defaultLiquidId: null,
+    defaultAmountMl: 0,
+    requiresOpening: true,
+    isSealedByDefault: true
+  },
+  detergent_bottle_1000: {
+    itemId: 'detergent_bottle_1000',
+    name: 'Detergent Balm Bottle (1.0L)',
+    nameRu: 'Флакон для жидкого средства (1.0л)',
+    maxMl: 1000,
+    emptyWeightKg: 0.06,
+    emptyVolumeL: 1.1,
+    category: 'gear',
+    icon: 'FlaskConical',
+    descriptionRu: 'Узкий флакон с мерным колпачком и окошком уровня для деликатного бальзама и жидкого порошка.',
+    descriptionEn: 'Contoured 1.0L bottle with measuring cap for liquid laundry balm.',
+    defaultLiquidId: null,
+    defaultAmountMl: 0,
+    requiresOpening: true,
+    isSealedByDefault: true
+  },
   // === KITCHEN COOKWARE & TABLEWARE (HYBRID LIQUID + SOLID CONTAINERS) ===
   kitchen_pot_enamel: {
     itemId: 'kitchen_pot_enamel',
@@ -3847,7 +3960,11 @@ const NON_HYBRID_FLUID_CONTAINER_IDS = new Set([
   'grain_pack_pouch',
   'grain_pack_box',
   'pasta_pack_bag',
-  'pasta_pack_long'
+  'pasta_pack_long',
+  'detergent_box',
+  'detergent_bag_3l',
+  'detergent_jug_1500',
+  'detergent_bottle_1000'
 ]);
 
 /**
@@ -4455,14 +4572,15 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
   }
 
   const liquid = LIQUID_REGISTRY[storage.liquidId as LiquidId] || LIQUID_REGISTRY.water;
+  const isDry = isFluidStorageDryForm(storage);
   const substanceLabel =
-    storage.liquidId === 'pasta' && storage.attributes?.varietyRu
+    (storage.liquidId === 'pasta' || storage.liquidId === 'detergent') && storage.attributes?.varietyRu
       ? storage.attributes.varietyRu
       : (storage.attributes?.varietyRu && (storage.components?.length || 0) > 1
         ? storage.attributes.varietyRu
         : liquid.nameRu);
 
-  const volLabel = formatSharedVol(breakdown.usedMl, breakdown.totalCapacityMl, liquid.isGranular, liquid.densityKgPerL);
+  const volLabel = formatSharedVol(breakdown.usedMl, breakdown.totalCapacityMl, isDry, liquid.densityKgPerL);
 
   if (hasSolids) {
     return `${cleanBaseName}${openedSuffix} [${substanceLabel} + ${solidSummary}, ${volLabel}]`;
@@ -4535,6 +4653,8 @@ export function isJarCanOrBottleContainer(containerId: string): boolean {
     containerId.startsWith('tin_round_') ||
     containerId.startsWith('bottle_plastic_') ||
     containerId.startsWith('bottle_glass_') ||
+    containerId === 'detergent_jug_1500' ||
+    containerId === 'detergent_bottle_1000' ||
     containerId === 'glass_bottle_500' ||
     containerId === 'bottle_sauce_squeeze' ||
     containerId === 'bottle_med_glass_brown'
@@ -4765,12 +4885,25 @@ export function resolveContainerVisualAttributes(
   else if (
     containerId.startsWith('bottle_plastic_') ||
     containerId.startsWith('bottle_glass_') ||
+    containerId === 'detergent_jug_1500' ||
+    containerId === 'detergent_bottle_1000' ||
     containerId === 'glass_bottle_500' ||
     containerId === 'bottle_sauce_squeeze' ||
     containerId === 'bottle_med_glass_brown'
   ) {
-    const isPlastic = containerId.startsWith('bottle_plastic_') || containerId === 'bottle_sauce_squeeze';
-    if (containerId === 'bottle_sauce_squeeze') {
+    const isPlastic =
+      containerId.startsWith('bottle_plastic_') ||
+      containerId === 'bottle_sauce_squeeze' ||
+      containerId === 'detergent_jug_1500' ||
+      containerId === 'detergent_bottle_1000';
+    if (containerId === 'detergent_jug_1500' || containerId === 'detergent_bottle_1000' || liquidId === 'detergent') {
+      shape = containerId === 'detergent_jug_1500' ? 'flask' : 'pinched';
+      materialRgb = [241, 245, 249];
+      materialNameRu = 'Плотный матовый полиэтилен HDPE';
+      if (!labelRgb) labelRgb = [6, 182, 212];
+      labelAccentRgb = labelAccentRgb || [255, 255, 255];
+      capRgb = labelAccentRgb || labelRgb;
+    } else if (containerId === 'bottle_sauce_squeeze') {
       shape = 'pinched';
       materialRgb = labelRgb || [220, 38, 38];
       materialNameRu = 'Мягкий пищевой полиэтилен';
@@ -5025,8 +5158,9 @@ export function syncItemContainerProperties(item: InventoryItem): void {
       const openBadge = isOpened
         ? ' (Тара вскрыта)'
         : (cfg?.requiresOpening ? ' (Закрыто — нажмите [E] или Вскрыть, чтобы открыть тару)' : '');
-      const volText = liquid?.isGranular
-        ? `${Math.round((storage.currentMl / 1000) * (liquid.densityKgPerL || 1.0) * 1000)} г`
+      const isDry = isFluidStorageDryForm(storage);
+      const volText = isDry
+        ? `${Math.round((storage.currentMl / 1000) * (liquid?.densityKgPerL || 1.0) * 1000)} г`
         : (storage.maxMl >= 1000
           ? `${(storage.currentMl / 1000).toFixed(2)} л`
           : `${Math.round(storage.currentMl)} мл`);
@@ -5037,6 +5171,10 @@ export function syncItemContainerProperties(item: InventoryItem): void {
       item.descriptionRu =
         `Унифицированная тара: ${cfg?.nameRu || storage.baseItemNameRu}${openBadge}.${visBadge} ` +
         `Содержимое: ${liquid?.nameRu || storage.liquidId}${a.varietyRu ? ` (${a.varietyRu})` : ''} (${volText}).${solidInfoPart} ` +
+        (a.physicalFormRu ? `Форма средства: ${a.physicalFormRu}. ` : '') +
+        ((vis as any)?.colorNameRu || a.visuals?.colorNameRu || a.substanceColorRu
+          ? `Цвет: ${a.visuals?.colorNameRu || a.substanceColorRu}. `
+          : '') +
         (a.productShapeRu ? `Форма: ${a.productShapeRu}. ` : '') +
         (a.grainGradeRu ? `Сорт/категория: ${a.grainGradeRu}. ` : '') +
         `Из чего: ${ingredientsText}. ` +
@@ -5434,11 +5572,17 @@ export function handleConsumeFluid(
     return handlePourSandFromContainer(player, container, world);
   }
 
-  // 2. Toxic or Flammable substances or raw dry cooking ingredients (Gasoline, Diesel, Oil, Antifreeze, Sugar, Flour, Salt, Dry Mix, Grain, Spice)
+  // 2. Toxic or Flammable substances or raw dry cooking ingredients (Detergent, Gasoline, Diesel, Oil, Antifreeze, Sugar, Flour, Salt, Dry Mix, Grain, Spice)
   if (!liquid.isDrinkable && !attrs?.customEffects) {
+    if (storage.liquidId === 'detergent') {
+      const formLabel = attrs?.physicalForm === 'liquid' ? 'Гель для стирки' : 'Стиральный порошок';
+      const msg = `${attrs?.varietyRu || formLabel}: засыпьте или залейте средство в отсек стиральной машины`;
+      addPlayerNotification(player, msg, 'info');
+      return { success: false, message: msg };
+    }
     if (liquid.toxicWarning) {
       const warnMsg = attrs
-        ? `${attrs.varietyRu}: ${attrs.purpose} (${attrs.preparationMethod}). Употреблять в сухом/сыром виде напрямую нельзя!`
+        ? `${attrs.varietyRu}: ${attrs.purpose} (${attrs.preparationMethod}). Употреблять в сухом/сыром виде напрямую нельзя.`
         : liquid.toxicWarning;
       addPlayerNotification(player, warnMsg, 'warning');
       return { success: false, message: warnMsg };

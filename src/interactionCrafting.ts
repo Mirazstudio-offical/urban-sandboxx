@@ -13,6 +13,7 @@ import {
   getContainerSolidVolumeMl,
   getContainerCapacityBreakdown,
   updateHybridContainerInteraction,
+  isFluidStorageDryForm,
 } from './liquidSystem';
 import { isRegisteredItemId, createItem, canItemFitInContainer, getItemTotalWeight, resolveCanonicalSubstanceId } from './items';
 
@@ -703,7 +704,7 @@ export function applyEffectiveFluidToItem(
     } else {
       const liqSpec = LIQUID_REGISTRY[nextState.liquidId as LiquidId];
       const subName = nextState.attributes?.varietyRu || liqSpec?.nameRu || nextState.liquidId;
-      const unit = liqSpec?.isGranular ? 'г' : 'мл';
+      const unit = isFluidStorageDryForm(nextState) ? 'г' : 'мл';
       item.nameRu = `${baseName}: ${subName} (${Math.round(nextState.currentMl)}/${nextState.maxMl} ${unit})`;
       const density = liqSpec?.densityKgPerL || 1.0;
       item.weight = Number(
@@ -792,7 +793,8 @@ export function tryPourOrMixTopToBottom(
   if (!topSpec) return null;
 
   // Check if target container is a soft dry sack (`isGranularContainer`) trying to hold pure liquid when empty
-  if (bottomWrap.isGranularContainer && !topSpec.isGranular && bottomState.currentMl === 0) {
+  const topIsDry = isFluidStorageDryForm(topState);
+  if (bottomWrap.isGranularContainer && !topIsDry && bottomState.currentMl === 0) {
     return null;
   }
 
@@ -801,7 +803,7 @@ export function tryPourOrMixTopToBottom(
 
   const topNameBefore = getSubstanceDisplayName(topState);
   const bottomNameBefore = getSubstanceDisplayName(bottomState);
-  const unit = topSpec.isGranular ? 'г' : 'мл';
+  const unit = topIsDry ? 'г' : 'мл';
 
   // Update top state
   const nextTopState: FluidContainerState = {

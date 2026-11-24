@@ -4,9 +4,11 @@ import {
   FurnitureStorage,
   FURNITURE_STORAGE_CONFIGS,
   WASHING_PROGRAMS,
+  WASHING_DETERGENT_MAX_ML,
   ensureWashingState,
   setWashingProgram,
-  toggleWashingDetergent,
+  pourDetergentIntoWashingMachine,
+  clearWashingDetergent,
   startPauseWashingMachine,
   resetWashingMachine,
   getFurnitureStorageTotalVolume,
@@ -31,6 +33,7 @@ import {
   stowItemFromHandToPockets,
 } from '../items';
 import { getEffectiveFluidWrapper } from '../interactionCrafting';
+import { isFluidStorageDryForm, LIQUID_REGISTRY, LiquidId } from '../liquidSystem';
 import { tickWashingMachineThermodynamics } from '../itemThermalSystem';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
@@ -43,6 +46,8 @@ import {
   Pause,
   RotateCcw,
   Sparkles,
+  Droplets,
+  Trash2,
   Lock,
   Hand,
   User,
@@ -84,7 +89,9 @@ function getSlotFillInfo(item: InventoryItem | null | undefined): { pct: number 
   const wrapper = getEffectiveFluidWrapper(item);
   if (wrapper && wrapper.state.maxMl > 0) {
     const pct = Math.max(0, Math.min(100, Math.round((wrapper.state.currentMl / wrapper.state.maxMl) * 100)));
-    return { pct, color: wrapper.state.currentMl > 0 ? '#68a490' : undefined };
+    const liq = wrapper.state.liquidId ? LIQUID_REGISTRY[wrapper.state.liquidId as LiquidId] : undefined;
+    const fillColor = wrapper.state.attributes?.customColor || liq?.color || '#68a490';
+    return { pct, color: wrapper.state.currentMl > 0 ? fillColor : undefined };
   }
   if (item.isContainer && item.containerCapacityL) {
     const used = (item.contents || []).reduce((s, c) => s + (c ? getItemTotalVolume(c) : 0), 0);
@@ -204,10 +211,28 @@ const WashingMachineModalContent: React.FC<{
     notifyChanged();
   };
 
-  const handleToggleDetergent = () => {
-    toggleWashingDetergent(storage);
-    sound.playUseItem();
-    notifyChanged();
+  const pourDetergentFromSource = (sourceKey: string) => {
+    let srcItem: InventoryItem | null | undefined = null;
+    if (sourceKey === 'hand:left') srcItem = player.leftHandItem;
+    else if (sourceKey === 'hand:right') srcItem = player.rightHandItem;
+    else if (sourceKey.startsWith('inv:')) srcItem = player.inventory[parseInt(sourceKey.slice(4), 10)];
+    if (!srcItem) return;
+
+    const res = pourDetergentIntoWashingMachine(storage, srcItem);
+    showToast(res.message);
+    if (res.success) {
+      sound.playUseItem();
+      notifyChanged();
+    }
+  };
+
+  const handleClearDetergent = () => {
+    const res = clearWashingDetergent(storage);
+    showToast(res.message);
+    if (res.success) {
+      sound.playUseItem();
+      notifyChanged();
+    }
   };
 
   const handleStartPause = () => {
@@ -332,10 +357,20 @@ const WashingMachineModalContent: React.FC<{
     const srcIsInv = sourceKey.startsWith('inv:');
     const srcIsHand = sourceKey.startsWith('hand:');
 
+    const dstIsDispenser = targetKey === 'dispenser';
     const dstIsDrum = targetKey.startsWith('drum:') || targetKey === 'zone:drum';
     const dstIsInv = targetKey.startsWith('inv:');
     const dstIsHand = targetKey.startsWith('hand:');
     const dstIsPlayerZone = targetKey === 'zone:player';
+
+    if (dstIsDispenser) {
+      if (srcIsInv || srcIsHand) {
+        pourDetergentFromSource(sourceKey);
+      } else {
+        showToast('Перетащите упаковку порошка или геля из инвентаря или рук');
+      }
+      return;
+    }
 
     if (srcIsDrum && dstIsHand) {
       moveDrumItemToHand(parseInt(sourceKey.slice(5), 10), targetKey === 'hand:left' ? 'left' : 'right');
@@ -560,6 +595,19 @@ const WashingMachineModalContent: React.FC<{
   const renderDrumColumn = () => {
     const slotCount = Math.max(16, storage.items.length + 6);
     const isDropZone = dragUi?.overKey === 'zone:drum';
+    const detMaxMl = wash.detergentMaxMl ?? WASHING_DETERGENT_MAX_ML;
+    const detMl = wash.detergentMl ?? (wash.hasDetergent ? 100 : 0);
+    const detPct = detMaxMl > 0 ? Math.max(0, Math.min(100, Math.round((detMl / detMaxMl) * 100))) : 0;
+    const detIsDry = wash.detergentForm ? wash.detergentForm === 'dry' : true;
+    const detDensity = detIsDry ? (LIQUID_REGISTRY.detergent?.densityKgPerL || 0.92) : 1;
+    const detDisplayQty = Math.round(detMl * detDensity);
+    const detMaxDisplayQty = Math.round(detMaxMl * detDensity);
+    const detUnit = detMl > 0 ? (detIsDry ? 'г' : 'мл') : 'мл';
+    const detColor = wash.detergentColor || '#e0f2fe';
+    const selectedIsDetergent =
+      selectedPlayerItem?.fluidStorage?.liquidId === 'detergent' &&
+      (selectedPlayerItem.fluidStorage.currentMl || 0) > 0;
+    const isDetDropOver = dragUi?.overKey === 'dispenser';
 
     return (
       <section
@@ -580,7 +628,13 @@ const WashingMachineModalContent: React.FC<{
         <div className="kf-wash-box">
           <div className="kf-wash-drum">
             <div className={'kf-wash-ring' + (wash.isRunning ? ' locked' : '')}>
-              <div className="kf-wash-water" style={{ height: `${wash.waterLevelPct}%` }} />
+              <div
+                className="kf-wash-water"
+                style={{
+                  height: `${wash.waterLevelPct}%`,
+                  background: wash.hasDetergent && wash.detergentColor ? `${wash.detergentColor}70` : undefined,
+                }}
+              />
               <div className={'kf-wash-rotor' + (wash.isRunning ? ' spinning' : '')}>
                 <RotateCw width={28} height={28} color={wash.isRunning ? '#7dd3fc' : '#8d939e'} />
               </div>
@@ -629,16 +683,6 @@ const WashingMachineModalContent: React.FC<{
                 <RotateCcw width={13} height={13} />
                 <span>Сброс</span>
               </button>
-
-              <button
-                type="button"
-                className={'btn btn-xs ' + (wash.hasDetergent ? 'btn-water-on' : 'btn-s')}
-                onClick={handleToggleDetergent}
-                title="Добавляет моющее средство для снятия пятен масла и топлива"
-              >
-                <Sparkles width={13} height={13} />
-                <span>{wash.hasDetergent ? 'Порошок: Есть' : 'Без порошка'}</span>
-              </button>
             </div>
 
             <div className="kf-sink-stats">
@@ -655,6 +699,101 @@ const WashingMachineModalContent: React.FC<{
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Dedicated Detergent Dispenser Tray Slot (Отсек СМС) */}
+        <div
+          data-kf-slot="dispenser"
+          className={
+            'kf-det-tray' +
+            (detMl > 0 ? ' filled' : '') +
+            (selectedIsDetergent ? ' ready' : '') +
+            (isDetDropOver ? ' drop' : '')
+          }
+          onClick={() => {
+            if (selectedIsDetergent && selectedKey) {
+              pourDetergentFromSource(selectedKey);
+            } else if (detMl <= 0) {
+              showToast('Выберите порошок или гель в инвентаре и нажмите «Насыпать в отсек», либо перетащите его сюда');
+            }
+          }}
+          title={
+            detMl > 0
+              ? `${wash.detergentVarietyRu || 'Моющее средство'}${wash.detergentIngredients ? `\nСостав: ${wash.detergentIngredients}` : ''}`
+              : 'Отсек для стирального порошка и жидкого геля (до 250 мл / ~230 г)'
+          }
+        >
+          <div className="kf-det-cup">
+            {detMl > 0 && (
+              <div
+                className="kf-det-fill"
+                style={{ height: `${detPct}%`, backgroundColor: detColor }}
+              />
+            )}
+            <span className="kf-det-cup-ico">
+              {detMl > 0 && !detIsDry ? (
+                <Droplets width={16} height={16} color={detPct > 55 ? '#0f172a' : detColor} />
+              ) : (
+                <Sparkles width={16} height={16} color={detMl > 0 ? (detPct > 55 ? '#0f172a' : detColor) : '#7a776f'} />
+              )}
+            </span>
+            <span className="kf-det-cup-lbl" style={{ color: detPct > 70 ? '#0f172a' : '#cfcbc1' }}>
+              СМС
+            </span>
+          </div>
+
+          <div className="kf-det-info">
+            <div className="kf-det-head">
+              <span className="kf-det-title">
+                <span>Отсек СМС</span>
+                {detMl > 0 && (
+                  <span className="kf-det-form">
+                    {detIsDry ? 'Сухой порошок' : 'Жидкий гель'}
+                  </span>
+                )}
+              </span>
+              <span className="kf-det-qty">
+                {detDisplayQty} / {detMaxDisplayQty} {detUnit}
+              </span>
+            </div>
+
+            <div className="kf-det-sub">
+              {detMl > 0 ? (
+                <>
+                  <i className="kf-det-swatch" style={{ backgroundColor: detColor }} />
+                  <span>
+                    {wash.detergentVarietyRu || 'Моющее средство'}
+                    {wash.detergentColorNameRu ? ` · ${wash.detergentColorNameRu}` : ''}
+                  </span>
+                </>
+              ) : selectedIsDetergent ? (
+                <span style={{ color: '#e0ab45' }}>
+                  Нажмите на отсек, чтобы {isFluidStorageDryForm(selectedPlayerItem!.fluidStorage!) ? 'насыпать порошок' : 'залить гель'}
+                </span>
+              ) : (
+                <span>Перетащите порошок или гель из инвентаря в этот слот</span>
+              )}
+            </div>
+
+            <div className="kf-det-bar">
+              <i style={{ width: `${detPct}%`, backgroundColor: detMl > 0 ? detColor : 'transparent' }} />
+            </div>
+          </div>
+
+          {detMl > 0 && !wash.isRunning && (
+            <button
+              type="button"
+              className="btn btn-d btn-xs"
+              onPointerDown={e => e.stopPropagation()}
+              onClick={e => {
+                e.stopPropagation();
+                handleClearDetergent();
+              }}
+              title="Очистить отсек СМС"
+            >
+              <Trash2 width={13} height={13} />
+            </button>
+          )}
         </div>
 
         {/* Capacity Bars */}
@@ -918,9 +1057,30 @@ const WashingMachineModalContent: React.FC<{
                 </div>
               </div>
               <div className="kf-foot-acts">
+                {selectedPlayerItem.fluidStorage?.liquidId === 'detergent' &&
+                  (selectedPlayerItem.fluidStorage.currentMl || 0) > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-p btn-xs"
+                      onClick={() => pourDetergentFromSource(selectedKey)}
+                    >
+                      <Sparkles width={13} height={13} />
+                      <span>
+                        {isFluidStorageDryForm(selectedPlayerItem.fluidStorage)
+                          ? 'Насыпать в отсек'
+                          : 'Залить в отсек'}
+                      </span>
+                    </button>
+                  )}
                 <button
                   type="button"
-                  className="btn btn-p btn-xs"
+                  className={
+                    'btn btn-xs ' +
+                    (selectedPlayerItem.fluidStorage?.liquidId === 'detergent' &&
+                    (selectedPlayerItem.fluidStorage.currentMl || 0) > 0
+                      ? 'btn-s'
+                      : 'btn-p')
+                  }
                   onClick={() => {
                     if (selectedKey === 'hand:left') movePlayerHandToDrum('left');
                     else if (selectedKey === 'hand:right') movePlayerHandToDrum('right');

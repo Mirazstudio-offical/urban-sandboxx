@@ -4584,12 +4584,14 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    // Seasoning Sachet (Пакетик-саше 100мл)
+    // Seasoning Sachet / Detergent Sachet (Пакетик-саше 100мл)
     case 'package_sachet':
     case 'package_sachet_open': {
       drawShadow(ctx, 4.6, 2.2, 7.5, 0.2);
       const customC = item?.fluidStorage?.attributes?.customColor || '#dc2626';
+      const secC = item?.fluidStorage?.attributes?.secondaryColor;
       const sLiqId = item?.fluidStorage?.liquidId;
+      const bandCol = sLiqId === 'detergent' ? (secC || '#0284c7') : customC;
       const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'package_sachet_open');
 
       const foilGrad = ctx.createLinearGradient(-4.3, -5.6, 4.3, 6.6);
@@ -4608,7 +4610,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.ellipse(0, -4.9, 3.1, 0.9, 0, 0, Math.PI * 2);
         ctx.fill();
         if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
-          const innerCol = (sLiqId && LIQUID_REGISTRY[sLiqId as LiquidId]?.color) || '#fef9c3';
+          const innerCol = customC || (sLiqId && LIQUID_REGISTRY[sLiqId as LiquidId]?.color) || '#fef9c3';
           ctx.fillStyle = innerCol;
           ctx.beginPath();
           ctx.ellipse(0, -4.8, 2.1, 0.55, 0, 0, Math.PI * 2);
@@ -4620,8 +4622,8 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       drawStudioLabelPanel(ctx, -3.5, -2.8, 7.0, 6.6, {
         paperColor: '#f8fafc',
-        bandColor: customC,
-        accentColor: '#ca8a04',
+        bandColor: bandCol,
+        accentColor: sLiqId === 'detergent' ? '#38bdf8' : '#ca8a04',
         inkColor: '#0f172a',
         goldFoil: false,
         hasBarcode: true,
@@ -4629,9 +4631,24 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         cylindrical: false
       });
 
-      // Crystal / gel / spice emblem
-      ctx.fillStyle = customC;
-      if (sLiqId === 'citric_acid' || sLiqId === 'malic_acid' || sLiqId === 'tartaric_acid' || sLiqId === 'sodium_citrate') {
+      // Crystal / gel / spice / detergent emblem
+      ctx.fillStyle = bandCol;
+      if (sLiqId === 'detergent') {
+        // Stylized washing drum & soap bubble emblem
+        ctx.strokeStyle = bandCol;
+        ctx.lineWidth = 0.55;
+        ctx.beginPath();
+        ctx.arc(0, 1.0, 1.25, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = customC;
+        ctx.beginPath();
+        ctx.arc(0, 1.0, 0.72, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(1.15, -0.1, 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (sLiqId === 'citric_acid' || sLiqId === 'malic_acid' || sLiqId === 'tartaric_acid' || sLiqId === 'sodium_citrate') {
         ctx.beginPath();
         ctx.moveTo(0, -0.3);
         ctx.lineTo(1.2, 1.0);
@@ -6090,6 +6107,387 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
         drawPouchCrinkles(ctx, px + 0.4, py + 1.6, pw - 0.8, ph - 3.2, isPastaBag ? 41 : 29, 0.22);
         drawMicroBarcode(ctx, 1.1, py + ph - 2.65, 3.5, 1.1);
+      }
+
+      ctx.restore();
+      return true;
+    }
+
+    // =========================================================================
+    // === LAUNDRY DETERGENT RETAIL PACKAGING (BOX, 3KG BAG, JUG, BOTTLE) ===
+    // =========================================================================
+    case 'detergent_box':
+    case 'detergent_box_open': {
+      ctx.save();
+      const fs = item?.fluidStorage;
+      const isOpen = Boolean(itemId.endsWith('_open') || item?.isOpen || fs?.attributes?.isOpened);
+      const hasFill = Boolean(fs && fs.liquidId && fs.currentMl > 0);
+      const fillFrac = hasFill && fs ? Math.min(1, Math.max(0.14, fs.currentMl / (fs.maxMl || 900))) : 0;
+      const primaryColor = fs?.attributes?.customColor || '#eff6ff';
+      const brandColor = fs?.attributes?.secondaryColor || '#0284c7';
+      const isEco = brandColor === '#65a30d';
+
+      drawShadow(ctx, 6.4, 2.4, 7.6, 0.24);
+      const bw = 11.4;
+      const bh = 14.2;
+      const bx = -bw / 2;
+      const by = -bh / 2 + 0.3;
+
+      // Top open spout flap when opened
+      if (isOpen) {
+        ctx.fillStyle = '#e2e8f0';
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 0.45;
+        ctx.beginPath();
+        ctx.moveTo(bx + bw * 0.62, by + 0.2);
+        ctx.lineTo(bx + bw + 1.1, by - 1.5);
+        ctx.lineTo(bx + bw + 0.3, by + 2.0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Main carton body (front + side depth face)
+      const frontGrad = ctx.createLinearGradient(bx, by, bx + bw * 0.76, by + bh);
+      frontGrad.addColorStop(0.0, isEco ? '#fefce8' : '#f8fafc');
+      frontGrad.addColorStop(1.0, isEco ? '#ecfccb' : '#e0f2fe');
+      ctx.fillStyle = frontGrad;
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 0.65);
+      ctx.fill();
+      ctx.stroke();
+
+      // Side bevel
+      ctx.fillStyle = brandColor;
+      ctx.globalAlpha = 0.22;
+      ctx.fillRect(bx + bw * 0.76, by + 0.2, bw * 0.23, bh - 0.4);
+      ctx.globalAlpha = 1;
+
+      // Bold branded wave banner
+      ctx.fillStyle = brandColor;
+      ctx.beginPath();
+      ctx.roundRect(bx + 0.25, by + 0.25, bw * 0.74, 4.4, [0.45, 0, 0, 0]);
+      ctx.fill();
+
+      // Die-cut top carry slot
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(-1.8, by + 0.85, 3.6, 0.9, 0.45);
+      ctx.fill();
+
+      // Brand header stripe
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(bx + 1.0, by + 2.4, bw * 0.52, 0.85);
+      ctx.fillStyle = 'rgba(255,255,255,0.68)';
+      ctx.fillRect(bx + 1.0, by + 3.5, bw * 0.36, 0.55);
+
+      // Center washing drum swirl emblem & active powder window
+      const cx = bx + bw * 0.38;
+      const cy = by + 7.9;
+      ctx.fillStyle = brandColor;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = hasFill ? primaryColor : '#334155';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (hasFill) {
+        // Powder level & colored enzyme speckles inside emblem
+        const dots: Array<[number, number, string]> = [
+          [-0.7, 0.3, brandColor],
+          [0.6, 0.6, '#38bdf8'],
+          [-0.1, -0.5, brandColor],
+          [0.8, -0.3, '#f8fafc'],
+        ];
+        dots.forEach(([dx, dy, col]) => {
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.arc(cx + dx, cy + dy, 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      // Fill level gauge strip on side panel
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
+      ctx.fillRect(bx + bw * 0.82, by + 2.4, 1.1, 8.8);
+      if (hasFill) {
+        const fh = 8.8 * fillFrac;
+        ctx.fillStyle = primaryColor;
+        ctx.fillRect(bx + bw * 0.82, by + 2.4 + (8.8 - fh), 1.1, fh);
+        ctx.fillStyle = brandColor;
+        ctx.fillRect(bx + bw * 0.82, by + 2.4 + (8.8 - fh), 1.1, 0.45);
+      }
+
+      drawMicroBarcode(ctx, bx + 1.0, by + bh - 1.9, 3.8, 1.1);
+      ctx.restore();
+      return true;
+    }
+
+    case 'detergent_bag_3l':
+    case 'detergent_bag_3l_open': {
+      ctx.save();
+      const fs = item?.fluidStorage;
+      const isOpen = Boolean(itemId.endsWith('_open') || item?.isOpen || fs?.attributes?.isOpened);
+      const hasFill = Boolean(fs && fs.liquidId && fs.currentMl > 0);
+      const fillFrac = hasFill && fs ? Math.min(1, Math.max(0.16, fs.currentMl / (fs.maxMl || 3000))) : 0;
+      const primaryColor = fs?.attributes?.customColor || '#fdf2f8';
+      const brandColor = fs?.attributes?.secondaryColor || '#ec4899';
+
+      drawShadow(ctx, 7.2, 2.6, 8.0, 0.26);
+      const pw = 12.6;
+      const ph = 15.6;
+      const px = -pw / 2;
+      const py = -ph / 2;
+
+      // Gusseted polymer pouch body
+      const bagGrad = ctx.createLinearGradient(px, py, px + pw, py + ph);
+      bagGrad.addColorStop(0.0, '#ffffff');
+      bagGrad.addColorStop(0.55, '#fce7f3');
+      bagGrad.addColorStop(1.0, '#cbd5e1');
+      ctx.fillStyle = bagGrad;
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.roundRect(px, py + (isOpen ? 1.1 : 0.4), pw, ph - (isOpen ? 1.4 : 0.7), 1.2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Top carry handle cutout zone
+      ctx.fillStyle = brandColor;
+      ctx.beginPath();
+      ctx.roundRect(px + 0.3, py + (isOpen ? 1.3 : 0.6), pw - 0.6, 3.6, [0.9, 0.9, 0.2, 0.2]);
+      ctx.fill();
+
+      if (isOpen) {
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.ellipse(0, py + 1.35, pw * 0.36, 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Die-cut handle hole
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.roundRect(-2.4, py + 1.5, 4.8, 1.1, 0.55);
+        ctx.fill();
+      }
+
+      // Colorful powder viewing window showing white powder + pink/emerald granules
+      const wx = px + 1.2;
+      const wy = py + 5.2;
+      const ww = pw - 2.4;
+      const wh = 7.4;
+      drawFilmWindow(
+        ctx,
+        () => {
+          ctx.beginPath();
+          ctx.roundRect(wx, wy, ww, wh, 1.0);
+        },
+        () => {
+          if (!hasFill) {
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
+            ctx.fillRect(wx, wy, ww, wh);
+            return;
+          }
+          const topY = wy + wh * (1 - fillFrac);
+          ctx.fillStyle = primaryColor;
+          ctx.fillRect(wx, topY, ww, wy + wh - topY + 1);
+          // Bio-enzyme colored speckles
+          for (let r = 0; r < 5; r++) {
+            for (let c = 0; c < 6; c++) {
+              const gy = wy + 0.8 + r * 1.4;
+              const gx = wx + 0.9 + c * 1.7 + (r % 2) * 0.4;
+              if (gy < topY + 0.3) continue;
+              ctx.fillStyle = (r + c) % 3 === 0 ? brandColor : (r + c) % 3 === 1 ? '#10b981' : '#cbd5e1';
+              ctx.beginPath();
+              ctx.arc(gx, gy, 0.36, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        },
+        'rgba(255, 255, 255, 0.6)',
+        '#334155'
+      );
+
+      // Center ribbon badge across window
+      drawStudioLabelPanel(ctx, px + 0.6, -1.6, pw - 1.2, 3.6, {
+        paperColor: '#ffffff',
+        bandColor: brandColor,
+        accentColor: '#10b981',
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: false,
+        emblem: 'none',
+        cylindrical: true
+      });
+      drawMicroBarcode(ctx, px + 1.5, py + ph - 2.3, 4.0, 1.1);
+      drawPouchCrinkles(ctx, px + 0.4, py + 4.4, pw - 0.8, ph - 5.2, 37, 0.22);
+      ctx.restore();
+      return true;
+    }
+
+    case 'detergent_jug_1500':
+    case 'detergent_jug_1500_open': {
+      ctx.save();
+      const fs = item?.fluidStorage;
+      const isOpen = Boolean(itemId.endsWith('_open') || item?.isOpen || fs?.attributes?.isOpened);
+      const hasFill = Boolean(fs && fs.liquidId && fs.currentMl > 0);
+      const fillFrac = hasFill && fs ? Math.min(1, Math.max(0.14, fs.currentMl / (fs.maxMl || 1500))) : 0;
+      const gelColor = fs?.attributes?.customColor || '#06b6d4';
+      const capColor = fs?.attributes?.secondaryColor || '#0284c7';
+
+      drawShadow(ctx, 6.8, 2.6, 8.2, 0.25);
+
+      // HDPE jug contour (-6.2..+6.2, -9..+8.2)
+      const traceJug = () => {
+        ctx.beginPath();
+        ctx.moveTo(-2.6, -6.8);
+        ctx.lineTo(0.8, -6.8);
+        ctx.quadraticCurveTo(5.8, -5.8, 5.8, -2.2);
+        ctx.lineTo(5.6, 7.4);
+        ctx.quadraticCurveTo(5.6, 8.2, 4.4, 8.2);
+        ctx.lineTo(-4.8, 8.2);
+        ctx.quadraticCurveTo(-5.8, 8.2, -5.8, 7.2);
+        ctx.lineTo(-5.4, -3.2);
+        ctx.quadraticCurveTo(-5.2, -5.8, -2.6, -6.8);
+        ctx.closePath();
+      };
+
+      const jugGrad = ctx.createLinearGradient(-5.8, -6.8, 5.8, 8.2);
+      jugGrad.addColorStop(0.0, '#f8fafc');
+      jugGrad.addColorStop(0.65, '#e2e8f0');
+      jugGrad.addColorStop(1.0, '#94a3b8');
+      ctx.fillStyle = jugGrad;
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 0.55;
+      traceJug();
+      ctx.fill();
+      ctx.stroke();
+
+      // Ergonomic handle cutout on right upper side
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(2.1, -3.6, 2.0, 4.8, 0.85);
+      ctx.fill();
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.45;
+      ctx.stroke();
+
+      // Translucent side level gauge showing gel liquid
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+      ctx.beginPath();
+      ctx.roundRect(-4.7, -3.0, 1.3, 9.6, 0.5);
+      ctx.fill();
+      if (hasFill) {
+        const gh = 9.4 * fillFrac;
+        ctx.fillStyle = gelColor;
+        ctx.beginPath();
+        ctx.roundRect(-4.6, -2.9 + (9.4 - gh), 1.1, gh, 0.4);
+        ctx.fill();
+      }
+
+      // Branded waterproof front label
+      drawStudioLabelPanel(ctx, -2.9, -1.6, 4.7, 7.8, {
+        paperColor: '#ffffff',
+        bandColor: gelColor,
+        accentColor: capColor,
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'crest',
+        cylindrical: false
+      });
+
+      // Spout & measuring cup cap
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-2.1, -8.3, 2.4, 1.6);
+      if (!isOpen) {
+        drawScrewCap(ctx, -0.9, -9.2, 3.2, 2.4, capColor, true);
+      } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.ellipse(-0.9, -8.3, 0.9, 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return true;
+    }
+
+    case 'detergent_bottle_1000':
+    case 'detergent_bottle_1000_open': {
+      ctx.save();
+      const fs = item?.fluidStorage;
+      const isOpen = Boolean(itemId.endsWith('_open') || item?.isOpen || fs?.attributes?.isOpened);
+      const hasFill = Boolean(fs && fs.liquidId && fs.currentMl > 0);
+      const fillFrac = hasFill && fs ? Math.min(1, Math.max(0.14, fs.currentMl / (fs.maxMl || 1000))) : 0;
+      const gelColor = fs?.attributes?.customColor || '#c084fc';
+      const capColor = fs?.attributes?.secondaryColor || '#7e22ce';
+
+      drawShadow(ctx, 5.2, 2.4, 8.0, 0.24);
+
+      const traceBottle = () => {
+        ctx.beginPath();
+        ctx.moveTo(-1.8, -7.2);
+        ctx.lineTo(1.8, -7.2);
+        ctx.quadraticCurveTo(4.6, -5.2, 4.3, -1.8);
+        ctx.quadraticCurveTo(3.4, 1.4, 4.5, 5.2);
+        ctx.lineTo(4.3, 7.6);
+        ctx.quadraticCurveTo(0, 8.3, -4.3, 7.6);
+        ctx.lineTo(-4.5, 5.2);
+        ctx.quadraticCurveTo(-3.4, 1.4, -4.3, -1.8);
+        ctx.quadraticCurveTo(-4.6, -5.2, -1.8, -7.2);
+        ctx.closePath();
+      };
+
+      const bodyGrad = ctx.createLinearGradient(-4.5, -7.2, 4.5, 8.0);
+      bodyGrad.addColorStop(0.0, '#faf5ff');
+      bodyGrad.addColorStop(0.55, '#f3e8ff');
+      bodyGrad.addColorStop(1.0, '#cbd5e1');
+      ctx.fillStyle = bodyGrad;
+      ctx.strokeStyle = '#4c1d95';
+      ctx.lineWidth = 0.5;
+      traceBottle();
+      ctx.fill();
+      ctx.stroke();
+
+      // Dynamic gel level clipped inside lower translucent section
+      if (hasFill) {
+        ctx.save();
+        traceBottle();
+        ctx.clip();
+        const totalH = 13.5;
+        const fh = totalH * fillFrac;
+        ctx.fillStyle = gelColor;
+        ctx.globalAlpha = 0.72;
+        ctx.fillRect(-5.0, 8.0 - fh, 10.0, fh + 1.0);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      drawStudioLabelPanel(ctx, -3.5, -2.5, 7.0, 7.4, {
+        paperColor: '#ffffff',
+        bandColor: gelColor,
+        accentColor: capColor,
+        inkColor: '#0f172a',
+        goldFoil: false,
+        hasBarcode: true,
+        emblem: 'leaf',
+        cylindrical: true
+      });
+
+      drawGlossBand(ctx, -3.2, -4.8, 1.0, 11.4, 0.42);
+      if (!isOpen) {
+        drawScrewCap(ctx, 0, -9.2, 3.8, 2.4, capColor, true);
+      } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.ellipse(0, -7.2, 1.4, 0.45, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       ctx.restore();
