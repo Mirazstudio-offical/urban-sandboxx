@@ -322,12 +322,13 @@ export function buildFurnitureStorageId(
   buildingId: string,
   floor: number,
   furnitureIndex: number,
-  aptId?: string
+  aptId?: string,
+  subSlot?: string
 ): string {
-  if (aptId) {
-    return `storage_apt_${aptId}_${furnitureIndex}`;
-  }
-  return `storage_bld_${buildingId}_f${floor}_${furnitureIndex}`;
+  const base = aptId
+    ? `storage_apt_${aptId}_${furnitureIndex}`
+    : `storage_bld_${buildingId}_f${floor}_${furnitureIndex}`;
+  return subSlot ? `${base}_${subSlot}` : base;
 }
 
 /**
@@ -427,9 +428,10 @@ export function getFurnitureStorage(
   furnitureIndex: number,
   furnitureType: string,
   aptId?: string,
-  customTitle?: string
+  customTitle?: string,
+  subSlot?: string
 ): FurnitureStorage {
-  const id = buildFurnitureStorageId(buildingId, floor, furnitureIndex, aptId);
+  const id = buildFurnitureStorageId(buildingId, floor, furnitureIndex, aptId, subSlot);
   let storage = furnitureStorageDb.get(id);
 
   if (!storage) {

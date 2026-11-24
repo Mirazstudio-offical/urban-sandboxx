@@ -1263,39 +1263,80 @@ export function findActiveInteraction(
               const isRadiator = furn.type === 'radiator';
               const isStoveFurn = furn.type === 'stove';
               const isSinkFurn = furn.type === 'sink';
-              const isKitchenTable = furn.type === 'kitchen_counter' || furn.type === 'table';
+              const isKitchenCounter = furn.type === 'kitchen_counter';
+              const isKitchenTable = isKitchenCounter || furn.type === 'table';
+
+              let resolvedFurnType = furn.type;
+              let resolvedSubSlot: string | undefined;
+              let resolvedTitle = isRadiator
+                ? 'Положить вещи на батарею'
+                : isStoveFurn
+                ? 'Открыть плиту'
+                : isSinkFurn
+                ? 'Открыть раковину'
+                : `Открыть ${storageCfg.nameRu.split(' / ')[0]}`;
+              let resolvedDetail = isRadiator
+                ? 'Сушка сырой одежды и прогрев вещей (+65°C)'
+                : isStoveFurn
+                ? '4 газовые конфорки и духовка'
+                : isSinkFurn
+                ? 'Смеситель горячей/холодной воды, набор и замачивание'
+                : isKitchenTable
+                ? `Хранилище стола (${storageCfg.capacityL} л) и взаимодействие`
+                : `Хранилище предметов (${storageCfg.capacityL} л / ${storageCfg.maxWeightKg} кг)`;
+              let resolvedX = furnWorldX;
+              let resolvedY = furnWorldY;
+              let resolvedReach = reach;
+              let resolvedCustomTitle = storageCfg.nameRu;
+
+              // Kitchen counter visually integrates a stainless steel sink on its left side
+              if (isKitchenCounter) {
+                const angle = furn.angle || 0;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const sinkW = Math.min(fw * 0.34, Math.max(4.5, fh * 1.05));
+                const sinkLocalX = -fw / 2 + Math.max(1.0, fw * 0.055) + sinkW * 0.5;
+                const sinkWorldX = furnWorldX + sinkLocalX * cosA;
+                const sinkWorldY = furnWorldY + sinkLocalX * sinA;
+                const counterLocalX = Math.max(2, fw * 0.14);
+                const counterWorldX = furnWorldX + counterLocalX * cosA;
+                const counterWorldY = furnWorldY + counterLocalX * sinA;
+
+                const reachSink = isTargetInPhysicalReach(px, py, facing, sinkWorldX, sinkWorldY, 44, 1.45, mouseWorldPos);
+                const reachCounter = isTargetInPhysicalReach(px, py, facing, counterWorldX, counterWorldY, 44, 1.45, mouseWorldPos);
+
+                if (reachSink.inReach && (!reachCounter.inReach || reachSink.score + 1.5 < reachCounter.score)) {
+                  resolvedFurnType = 'sink';
+                  resolvedSubSlot = 'sink';
+                  resolvedTitle = 'Открыть раковину гарнитура';
+                  resolvedDetail = 'Смеситель горячей/холодной воды, набор и замачивание';
+                  resolvedX = sinkWorldX;
+                  resolvedY = sinkWorldY;
+                  resolvedReach = reachSink;
+                  resolvedCustomTitle = 'Раковина кухонного гарнитура';
+                }
+              }
+
               candidates.push({
                 type: 'furniture_storage',
                 primaryKey: 'E',
-                actionTitle: isRadiator
-                  ? 'Положить вещи на батарею'
-                  : isStoveFurn
-                  ? 'Открыть плиту'
-                  : isSinkFurn
-                  ? 'Открыть раковину'
-                  : `Открыть ${storageCfg.nameRu.split(' / ')[0]}`,
-                detail: isRadiator
-                  ? 'Сушка сырой одежды и прогрев вещей (+65°C)'
-                  : isStoveFurn
-                  ? '4 газовые конфорки и духовка'
-                  : isSinkFurn
-                  ? 'Смеситель горячей/холодной воды, набор и замачивание'
-                  : isKitchenTable
-                  ? `Хранилище стола (${storageCfg.capacityL} л) и взаимодействие`
-                  : `Хранилище предметов (${storageCfg.capacityL} л / ${storageCfg.maxWeightKg} кг)`,
-                x: furnWorldX,
-                y: furnWorldY,
-                dist: reach.dist,
-                angleDiff: reach.angleDiff,
-                score: reach.score - 14,
+                actionTitle: resolvedTitle,
+                detail: resolvedDetail,
+                x: resolvedX,
+                y: resolvedY,
+                dist: resolvedReach.dist,
+                angleDiff: resolvedReach.angleDiff,
+                score: resolvedReach.score - 14,
                 data: {
                   bld,
                   currentFloor,
                   furn,
                   furnitureIndex: fIdx,
-                  furnitureType: furn.type,
+                  furnitureType: resolvedFurnType,
+                  subSlot: resolvedSubSlot,
+                  hasBuiltInSink: isKitchenCounter,
                   aptId: player.insideApartmentId,
-                  customTitle: storageCfg.nameRu
+                  customTitle: resolvedCustomTitle
                 }
               });
             }

@@ -49,6 +49,7 @@ import {
   ArrowLeftRight,
   RotateCcw,
   Check,
+  Droplets,
   X,
 } from 'lucide-react';
 
@@ -60,6 +61,7 @@ export interface KitchenTableModalProps {
   world?: GameWorld | null;
   onInventoryUpdated?: () => void;
   onVitalsChange?: () => void;
+  onOpenBuiltInSink?: () => void;
 }
 
 function formatWeightRu(weightKg: number): string {
@@ -106,7 +108,8 @@ const KitchenTableModalContent: React.FC<{
   player: Player;
   onInventoryUpdated?: () => void;
   onVitalsChange?: () => void;
-}> = ({ onClose, storage, player, onInventoryUpdated, onVitalsChange }) => {
+  onOpenBuiltInSink?: () => void;
+}> = ({ onClose, storage, player, onInventoryUpdated, onVitalsChange, onOpenBuiltInSink }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const gmRef = useRef<HTMLDivElement>(null);
 
@@ -1248,6 +1251,21 @@ const KitchenTableModalContent: React.FC<{
                 <span>Объём</span>
                 <b>{storageVol.toFixed(1)} / {cfg.capacityL.toFixed(0)} л</b>
               </div>
+              {onOpenBuiltInSink && (
+                <button
+                  type="button"
+                  id="btn-counter-open-sink"
+                  className="chip chip-sink"
+                  onClick={() => {
+                    returnAllWorkbenchItems();
+                    onOpenBuiltInSink();
+                  }}
+                  title="Открыть встроенную раковину кухонного гарнитура"
+                >
+                  <Droplets width={15} height={15} color="#6cb4e8" />
+                  <span>Раковина</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="chip back"

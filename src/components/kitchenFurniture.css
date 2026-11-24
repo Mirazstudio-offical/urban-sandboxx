@@ -66,7 +66,7 @@
 }
 .top-l { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .top-r { display: flex; align-items: center; gap: 8px; flex: none; }
-.ttl { font-size: 30px; font-weight: 700; color: #fff; line-height: 1; white-space: nowrap; }
+.ttl { font-size: 30px; font-weight: 700; color: #fff; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub-top { font-size: 13px; color: #9c988e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
 
 .chip {
@@ -75,6 +75,16 @@
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 13.5px; color: #cfcbc1; white-space: nowrap;
 }
+.chip.chip-sink {
+  cursor: pointer; border-color: rgba(108, 180, 232, .45); color: #d6ecfb;
+  transition: background .15s, border-color .15s;
+}
+.chip.chip-sink:hover { background: rgba(94, 163, 214, .22); border-color: rgba(108, 180, 232, .75); }
+.chip.chip-counter {
+  cursor: pointer; border-color: rgba(201, 146, 43, .45); color: #f4f1ea;
+  transition: background .15s, border-color .15s;
+}
+.chip.chip-counter:hover { background: rgba(201, 146, 43, .2); border-color: rgba(224, 171, 69, .75); }
 .chip b { color: #f4f1ea; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chip b.warn { color: #e0ab45; }
 .chip b.hot { color: #f0884a; }

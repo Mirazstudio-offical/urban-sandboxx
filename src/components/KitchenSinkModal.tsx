@@ -53,6 +53,7 @@ import {
   Power,
   Waves,
   Trash2,
+  Utensils,
   X,
 } from 'lucide-react';
 
@@ -64,6 +65,7 @@ export interface KitchenSinkModalProps {
   world?: GameWorld | null;
   onInventoryUpdated?: () => void;
   onVitalsChange?: () => void;
+  onOpenParentCounter?: () => void;
 }
 
 function formatWeightRu(weightKg: number): string {
@@ -227,7 +229,8 @@ const KitchenSinkModalContent: React.FC<{
   player: Player;
   onInventoryUpdated?: () => void;
   onVitalsChange?: () => void;
-}> = ({ onClose, storage, player, onInventoryUpdated, onVitalsChange }) => {
+  onOpenParentCounter?: () => void;
+}> = ({ onClose, storage, player, onInventoryUpdated, onVitalsChange, onOpenParentCounter }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const gmRef = useRef<HTMLDivElement>(null);
 
@@ -1199,7 +1202,7 @@ const KitchenSinkModalContent: React.FC<{
           <header className="top">
             <div className="top-l">
               <Droplets width={24} height={24} color={metrics.flowing ? '#6cb4e8' : '#c9922b'} style={{ flex: 'none' }} />
-              <div className="cn ttl">Раковина</div>
+              <div className="cn ttl">{onOpenParentCounter ? 'Раковина гарнитура' : 'Раковина'}</div>
               <span className="sub-top">Водопровод, смеситель и промывка</span>
             </div>
             <div className="top-r">
@@ -1213,6 +1216,18 @@ const KitchenSinkModalContent: React.FC<{
                 <span>Вместимость</span>
                 <b>{storageVol.toFixed(1)} / {SINK_CONFIG.capacityL.toFixed(0)} л</b>
               </div>
+              {onOpenParentCounter && (
+                <button
+                  type="button"
+                  id="btn-sink-open-counter"
+                  className="chip chip-counter"
+                  onClick={onOpenParentCounter}
+                  title="Перейти к столешнице и шкафам гарнитура"
+                >
+                  <Utensils width={15} height={15} color="#e0ab45" />
+                  <span>Гарнитур</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="chip back"

@@ -727,6 +727,8 @@ export default function App() {
     floor: number;
     furnitureIndex: number;
     furnitureType: string;
+    subSlot?: string;
+    hasBuiltInSink?: boolean;
     aptId?: string;
     customTitle?: string;
   } | null>(null);
@@ -7332,13 +7334,15 @@ export default function App() {
 
 
       case 'furniture_storage': {
-        const { bld, currentFloor, furnitureIndex, furnitureType, aptId, customTitle } = target.data || {};
+        const { bld, currentFloor, furnitureIndex, furnitureType, subSlot, hasBuiltInSink, aptId, customTitle } = target.data || {};
         if (bld && furnitureType) {
           setFurnitureStorageData({
             buildingId: bld.id,
             floor: currentFloor ?? 0,
             furnitureIndex: furnitureIndex ?? 0,
             furnitureType,
+            subSlot,
+            hasBuiltInSink,
             aptId,
             customTitle
           });
@@ -7383,33 +7387,34 @@ export default function App() {
             if (removedType) {
               clearInteriorCanvasCache();
 
-              // Evacuate any stored items from furniture storage container
-              const storageId = buildFurnitureStorageId(
-                target.data?.bld?.id || apt.buildingId, 
-                target.data?.currentFloor ?? apt.floor ?? 0, 
-                furnitureIndex, 
-                apt.id
-              );
-              const storage = getExistingFurnitureStorage(storageId);
-              if (storage && storage.items && storage.items.length > 0) {
-                for (const storedItem of storage.items) {
-                  if (storedItem) {
-                    const added = addItemToPlayer(p, storedItem);
-                    if (!added) {
-                      if (!world.groundItems) world.groundItems = [];
-                      world.groundItems.push({
-                        id: `ground_storage_drop_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                        x: p.x,
-                        y: p.y,
-                        item: storedItem,
-                        spawnTime: Date.now()
-                      });
+              // Evacuate any stored items from furniture storage container (and built-in sink sub-container if any)
+              const baseBldId = target.data?.bld?.id || apt.buildingId;
+              const baseFloor = target.data?.currentFloor ?? apt.floor ?? 0;
+              for (const sId of [
+                buildFurnitureStorageId(baseBldId, baseFloor, furnitureIndex, apt.id),
+                buildFurnitureStorageId(baseBldId, baseFloor, furnitureIndex, apt.id, 'sink'),
+              ]) {
+                const stEvac = getExistingFurnitureStorage(sId);
+                if (stEvac && stEvac.items && stEvac.items.length > 0) {
+                  for (const storedItem of stEvac.items) {
+                    if (storedItem) {
+                      const added = addItemToPlayer(p, storedItem);
+                      if (!added) {
+                        if (!world.groundItems) world.groundItems = [];
+                        world.groundItems.push({
+                          id: `ground_storage_drop_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                          x: p.x,
+                          y: p.y,
+                          item: storedItem,
+                          spawnTime: Date.now()
+                        });
+                      }
                     }
                   }
+                  stEvac.items = [];
                 }
-                storage.items = [];
+                deleteFurnitureStorage(sId);
               }
-              deleteFurnitureStorage(storageId);
 
               const itemMap: Record<string, string> = {
                 chair: 'furn_chair',
@@ -9739,7 +9744,8 @@ export default function App() {
           furnitureStorageData.furnitureIndex,
           furnitureStorageData.furnitureType,
           furnitureStorageData.aptId,
-          furnitureStorageData.customTitle
+          furnitureStorageData.customTitle,
+          furnitureStorageData.subSlot
         );
         const handleCloseFurn = () => {
           setIsFurnitureStorageOpen(false);
@@ -9774,6 +9780,24 @@ export default function App() {
               world={worldRef.current}
               onInventoryUpdated={handleFurnChanged}
               onVitalsChange={handleFurnChanged}
+              onOpenParentCounter={
+                furnitureStorageData.subSlot === 'sink'
+                  ? () => {
+                      sound.playUseItem();
+                      setFurnitureStorageData(prev =>
+                        prev
+                          ? {
+                              ...prev,
+                              furnitureType: 'kitchen_counter',
+                              subSlot: undefined,
+                              hasBuiltInSink: true,
+                              customTitle: 'Кухонный гарнитур',
+                            }
+                          : null
+                      );
+                    }
+                  : undefined
+              }
             />
           );
         }
@@ -9791,6 +9815,24 @@ export default function App() {
               world={worldRef.current}
               onInventoryUpdated={handleFurnChanged}
               onVitalsChange={handleFurnChanged}
+              onOpenBuiltInSink={
+                furnitureStorageData.furnitureType === 'kitchen_counter'
+                  ? () => {
+                      sound.playUseItem();
+                      setFurnitureStorageData(prev =>
+                        prev
+                          ? {
+                              ...prev,
+                              furnitureType: 'sink',
+                              subSlot: 'sink',
+                              hasBuiltInSink: true,
+                              customTitle: 'Раковина кухонного гарнитура',
+                            }
+                          : null
+                      );
+                    }
+                  : undefined
+              }
             />
           );
         }
