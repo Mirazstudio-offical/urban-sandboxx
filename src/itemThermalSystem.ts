@@ -902,17 +902,156 @@ export function getItemThermalDisplayInfo(item: InventoryItem | null | undefined
   };
 }
 
+function applyDryCookingIfHot(item: InventoryItem, mode: 'burner' | 'oven'): void {
+  if (!item) return;
+  // Recurse into dry containers (e.g. pan or baking tray without water)
+  const hasLiquid = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 10);
+  if (item.contents && item.contents.length > 0 && !hasLiquid) {
+    for (const child of item.contents) {
+      if (child) applyDryCookingIfHot(child, mode);
+    }
+  }
+  if (item.category !== 'food') return;
+  const temp = item.temperature ?? 20;
+  if (temp < 85.0) return;
+
+  const curState = item.attributes?.stateNameRu;
+  const alreadyCooked =
+    curState === 'Варёный' ||
+    curState === 'Жареный' ||
+    curState === 'Запечённый' ||
+    item.attributes?.state === 'boiled' ||
+    item.attributes?.state === 'fried' ||
+    item.attributes?.state === 'baked';
+  if (alreadyCooked) return;
+
+  const isOven = mode === 'oven';
+  item.attributes = {
+    ...(item.attributes || {}),
+    state: isOven ? 'baked' : 'fried',
+    stateNameRu: isOven ? 'Запечённый' : 'Жареный',
+    preparationMethod: isOven ? 'Запечено в духовке' : 'Обжарено на плите',
+  };
+  if (item.effects && typeof item.effects.hunger === 'number') {
+    item.effects.hunger = Math.round(item.effects.hunger * 1.18);
+  }
+}
+
+/**
+ * Advances thermodynamics for a single gas stove (4 independent burners + 1 unified oven chamber)
+ * over `dt` seconds. Handles heating when gas is ON, cooling when gas is OFF, boiling liquid
+ * vessels around 100°C, and dry baking/frying raw foods at >= 85°C.
+ */
+export function tickStoveStateThermodynamics(
+  stoveState: {
+    burners: Array<{ item: InventoryItem | null; gasOn: boolean; temperature: number; lastUpdatedSec?: number }>;
+    oven: { items: InventoryItem[]; gasOn: boolean; temperature: number; lastUpdatedSec?: number };
+  },
+  dt: number,
+  nowSec: number = Date.now() / 1000
+): boolean {
+  if (!stoveState || dt <= 0) return false;
+  const clampedDt = Math.min(dt, 3600);
+  const ambientRoom = 21.0;
+  let changed = false;
+
+  // 1. Four independent gas burners
+  for (let i = 0; i < stoveState.burners.length; i++) {
+    const b = stoveState.burners[i];
+    if (!b) continue;
+    const targetTemp = b.gasOn ? 215.0 : ambientRoom;
+    const rate = b.gasOn ? 0.085 : 0.025; // Heats up briskly under open gas flame, cools steadily
+    const prevTemp = typeof b.temperature === 'number' ? b.temperature : ambientRoom;
+    const nextTemp = targetTemp + (prevTemp - targetTemp) * Math.exp(-rate * clampedDt);
+    const roundedTemp = Math.round(nextTemp * 10) / 10;
+    if (Math.abs(roundedTemp - prevTemp) >= 0.1) {
+      b.temperature = roundedTemp;
+      changed = true;
+    }
+    b.lastUpdatedSec = nowSec;
+
+    if (b.item) {
+      const hasWater = Boolean(b.item.fluidStorage && (b.item.fluidStorage.currentMl || 0) > 10);
+      // Liquid-filled pots/kettles plateau smoothly near boiling (~100°C); dry cookware/food heats higher
+      const effectiveTarget = hasWater ? Math.min(b.temperature, 102.0) : Math.min(b.temperature, 185.0);
+      // Direct flame contact transfers heat faster than passive room air
+      const contactMultiplier = b.gasOn ? 2.6 : 1.0;
+      if (updateItemThermodynamics(b.item, effectiveTarget, clampedDt * contactMultiplier)) {
+        changed = true;
+      }
+      if (b.gasOn && b.temperature >= 90) {
+        applyDryCookingIfHot(b.item, 'burner');
+      }
+    }
+  }
+
+  // 2. Unified gas oven chamber
+  const oven = stoveState.oven;
+  if (oven) {
+    const targetOven = oven.gasOn ? 195.0 : ambientRoom;
+    const ovenRate = oven.gasOn ? 0.045 : 0.015; // Insulated oven heats slightly slower & holds heat longer
+    const prevOven = typeof oven.temperature === 'number' ? oven.temperature : ambientRoom;
+    const nextOven = targetOven + (prevOven - targetOven) * Math.exp(-ovenRate * clampedDt);
+    const roundedOven = Math.round(nextOven * 10) / 10;
+    if (Math.abs(roundedOven - prevOven) >= 0.1) {
+      oven.temperature = roundedOven;
+      changed = true;
+    }
+    oven.lastUpdatedSec = nowSec;
+
+    if (oven.items && oven.items.length > 0) {
+      for (const item of oven.items) {
+        if (!item) continue;
+        const hasWater = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 10);
+        const effectiveTarget = hasWater ? Math.min(oven.temperature, 100.0) : oven.temperature;
+        const ovenTransfer = oven.gasOn ? 1.8 : 1.0;
+        if (updateItemThermodynamics(item, effectiveTarget, clampedDt * ovenTransfer)) {
+          changed = true;
+        }
+        if (oven.gasOn && oven.temperature >= 90) {
+          applyDryCookingIfHot(item, 'oven');
+        }
+      }
+    }
+  }
+
+  return changed;
+}
+
 /**
  * Synchronizes thermodynamics for all items stored inside a furniture container
- * (e.g. refrigerator at +4°C, pantry counter at +21°C).
+ * (e.g. refrigerator at +4°C, pantry counter at +21°C, gas stove with 4 burners & oven).
  * Uses exact analytical time-delta catching up so when a player returns after a long walk,
  * items inside have cooled or heated realistically according to the exact elapsed time!
  */
 export function syncFurnitureStorageThermodynamics(
-  storage: { furnitureType: string; items: InventoryItem[] },
+  storage: {
+    furnitureType: string;
+    items: InventoryItem[];
+    stoveState?: {
+      burners: Array<{ item: InventoryItem | null; gasOn: boolean; temperature: number; lastUpdatedSec?: number }>;
+      oven: { items: InventoryItem[]; gasOn: boolean; temperature: number; lastUpdatedSec?: number };
+    };
+  },
   currentTimeSec: number = Date.now() / 1000
 ): void {
-  if (!storage || !storage.items || storage.items.length === 0) return;
+  if (!storage) return;
+
+  // Gas stove uses per-burner and oven gas states instead of a fixed ambient temperature
+  if (storage.furnitureType === 'stove' && storage.stoveState) {
+    const st = storage.stoveState;
+    const refSec =
+      st.oven?.lastUpdatedSec ??
+      st.burners.find(b => typeof b?.lastUpdatedSec === 'number')?.lastUpdatedSec ??
+      currentTimeSec;
+    const elapsedDt = Math.max(0, currentTimeSec - refSec);
+    if (elapsedDt > 0.1) {
+      tickStoveStateThermodynamics(st, elapsedDt, currentTimeSec);
+    }
+    return;
+  }
+
+  if (!storage.items || storage.items.length === 0) return;
 
   // Determine internal temperature of the furniture container
   let containerAmbient = 21.0; // Standard room temperature
@@ -922,8 +1061,6 @@ export function syncFurnitureStorageThermodynamics(
     containerAmbient = -18.0; // Deep freeze chamber (-18°C)
   } else if (storage.furnitureType === 'radiator') {
     containerAmbient = 65.0; // Hot heating radiator surface (+65°C)
-  } else if (storage.furnitureType === 'stove') {
-    containerAmbient = 95.0; // Cooking stovetop / oven surface (+95°C)
   }
 
   for (const item of storage.items) {

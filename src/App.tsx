@@ -167,6 +167,8 @@ const FriendsModal = React.lazy(() => import('./components/FriendsModal').then((
 const RealEstateAgencyModal = React.lazy(() => import('./components/RealEstateAgencyModal').then((m) => ({ default: m.RealEstateAgencyModal })));
 const PropertyDocumentModal = React.lazy(() => import('./components/PropertyDocumentModal').then((m) => ({ default: m.PropertyDocumentModal })));
 const FurnitureStorageModal = React.lazy(() => import('./components/FurnitureStorageModal').then((m) => ({ default: m.FurnitureStorageModal })));
+const KitchenTableModal = React.lazy(() => import('./components/KitchenTableModal').then((m) => ({ default: m.KitchenTableModal })));
+const KitchenStoveModal = React.lazy(() => import('./components/KitchenStoveModal').then((m) => ({ default: m.KitchenStoveModal })));
 const DateTimePickerModal = React.lazy(() => import('./components/DateTimePickerModal').then((m) => ({ default: m.DateTimePickerModal })));
 const CreativeMenuModal = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativeMenuModal })));
 const CreativePlacementHud = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativePlacementHud })));
@@ -9728,40 +9730,74 @@ export default function App() {
         />
       )}
 
-      {/* Apartment Furniture Storage Modal */}
-      {isFurnitureStorageOpen && furnitureStorageData && playerRef.current && (
-        <FurnitureStorageModal
-          isOpen={isFurnitureStorageOpen}
-          onClose={() => {
-            setIsFurnitureStorageOpen(false);
-            setFurnitureStorageData(null);
-          }}
-          storage={getFurnitureStorage(
-            furnitureStorageData.buildingId,
-            furnitureStorageData.floor,
-            furnitureStorageData.furnitureIndex,
-            furnitureStorageData.furnitureType,
-            furnitureStorageData.aptId,
-            furnitureStorageData.customTitle
-          )}
-          player={playerRef.current}
-          world={worldRef.current}
-          buildingId={furnitureStorageData.buildingId}
-          floor={furnitureStorageData.floor}
-          furnitureIndex={furnitureStorageData.furnitureIndex}
-          furnitureType={furnitureStorageData.furnitureType}
-          aptId={furnitureStorageData.aptId}
-          customTitle={furnitureStorageData.customTitle}
-          onInventoryUpdated={() => {
-            setVitalsRefreshTick(t => t + 1);
-            saveFurnitureStoragesToLocalStorage();
-          }}
-          onVitalsChange={() => {
-            setVitalsRefreshTick(t => t + 1);
-            saveFurnitureStoragesToLocalStorage();
-          }}
-        />
-      )}
+      {/* Apartment Furniture Storage / Kitchen Table / Kitchen Stove Modals */}
+      {isFurnitureStorageOpen && furnitureStorageData && playerRef.current && (() => {
+        const activeStorage = getFurnitureStorage(
+          furnitureStorageData.buildingId,
+          furnitureStorageData.floor,
+          furnitureStorageData.furnitureIndex,
+          furnitureStorageData.furnitureType,
+          furnitureStorageData.aptId,
+          furnitureStorageData.customTitle
+        );
+        const handleCloseFurn = () => {
+          setIsFurnitureStorageOpen(false);
+          setFurnitureStorageData(null);
+        };
+        const handleFurnChanged = () => {
+          setVitalsRefreshTick(t => t + 1);
+          saveFurnitureStoragesToLocalStorage();
+        };
+
+        if (furnitureStorageData.furnitureType === 'stove') {
+          return (
+            <KitchenStoveModal
+              isOpen={isFurnitureStorageOpen}
+              onClose={handleCloseFurn}
+              storage={activeStorage}
+              player={playerRef.current}
+              world={worldRef.current}
+              onInventoryUpdated={handleFurnChanged}
+              onVitalsChange={handleFurnChanged}
+            />
+          );
+        }
+
+        if (
+          furnitureStorageData.furnitureType === 'kitchen_counter' ||
+          furnitureStorageData.furnitureType === 'table'
+        ) {
+          return (
+            <KitchenTableModal
+              isOpen={isFurnitureStorageOpen}
+              onClose={handleCloseFurn}
+              storage={activeStorage}
+              player={playerRef.current}
+              world={worldRef.current}
+              onInventoryUpdated={handleFurnChanged}
+              onVitalsChange={handleFurnChanged}
+            />
+          );
+        }
+
+        return (
+          <FurnitureStorageModal
+            isOpen={isFurnitureStorageOpen}
+            onClose={handleCloseFurn}
+            storage={activeStorage}
+            player={playerRef.current}
+            world={worldRef.current}
+            buildingId={furnitureStorageData.buildingId}
+            floor={furnitureStorageData.floor}
+            furnitureIndex={furnitureStorageData.furnitureIndex}
+            furnitureType={furnitureStorageData.furnitureType}
+            aptId={furnitureStorageData.aptId}
+            customTitle={furnitureStorageData.customTitle}
+            onInventoryUpdated={handleFurnChanged}
+            onVitalsChange={handleFurnChanged}
+          />
+        );
+      })()}
       </React.Suspense>
 
       {/* Bed Sleeping & Night Awakening Overlay */}

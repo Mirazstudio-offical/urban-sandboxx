@@ -1,0 +1,536 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap');
+
+:host {
+  all: initial;
+  display: block;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 660;
+}
+:host * { box-sizing: border-box; margin: 0; padding: 0; }
+
+#w {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  overflow: clip;
+  background: rgba(8, 9, 11, .78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.gm {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--sw, 1440px);
+  height: var(--sh, 900px);
+  background: #0c0d0f;
+  color: #f4f1ea;
+  font-family: 'Barlow', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  transform: translate(-50%, -50%) scale(var(--k, 1));
+  transform-origin: center center;
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  box-shadow: 0 32px 110px rgba(0, 0, 0, .82);
+  border: 1px solid rgba(255, 255, 255, .07);
+}
+.gm button, .gm input { font-family: inherit; color: inherit; }
+.gm button { background: none; border: 0; cursor: pointer; }
+.gm .cn { font-family: 'Barlow Condensed', 'Barlow', sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+.gm .mono { font-variant-numeric: tabular-nums; }
+
+/* ---- Background ambience (matches Main Menu / Inventory) ---- */
+.kf-bg {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 68% 58% at 14% 12%, rgba(201, 146, 43, .11), transparent 62%),
+    radial-gradient(ellipse 52% 48% at 88% 88%, rgba(42, 46, 54, .22), transparent 60%),
+    linear-gradient(180deg, rgba(16, 17, 20, .96) 0%, rgba(11, 12, 14, .98) 100%);
+}
+.kf-bg::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(201, 146, 43, .04) 0%, transparent 18%, transparent 82%, rgba(201, 146, 43, .03) 100%);
+}
+
+/* ---- Top Bar ---- */
+.top {
+  position: absolute; left: 48px; right: 48px; top: 24px; height: 52px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  z-index: 6;
+}
+.top-l { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.top-r { display: flex; align-items: center; gap: 8px; flex: none; }
+.ttl { font-size: 30px; font-weight: 700; color: #fff; line-height: 1; white-space: nowrap; }
+.sub-top { font-size: 13px; color: #9c988e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+
+.chip {
+  height: 40px; padding: 0 14px; border-radius: 10px;
+  background: rgba(20, 20, 22, .82); border: 1px solid rgba(255, 255, 255, .1);
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13.5px; color: #cfcbc1; white-space: nowrap;
+}
+.chip b { color: #f4f1ea; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip b.warn { color: #e0ab45; }
+.chip b.hot { color: #f0884a; }
+.chip b.bad { color: #f2b4a0; }
+
+.back {
+  width: 40px; height: 40px; padding: 0; justify-content: center;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.back:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .28); color: #fff; }
+
+/* ---- Tabs Row ---- */
+.kf-tabbar {
+  position: absolute; left: 48px; right: 48px; top: 86px; height: 42px;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+  z-index: 5;
+}
+.kf-tabs { display: flex; align-items: flex-end; gap: 4px; flex: none; }
+.kf-tab {
+  height: 42px; padding: 0 18px; position: relative;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-size: 18px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: #a29e93; white-space: nowrap;
+  transition: color .15s;
+}
+.kf-tab:hover { color: #fff; }
+.kf-tab.on { color: #fff; }
+.kf-tab.on::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: #c9922b;
+}
+.kf-tab-cnt {
+  font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
+  color: #8f8b81; font-variant-numeric: tabular-nums;
+}
+.kf-tab.on .kf-tab-cnt { color: #e0ab45; }
+
+.kf-tab-meta {
+  display: flex; align-items: center; gap: 10px; padding-bottom: 7px;
+  font-size: 12.5px; color: #9c988e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- Main Body ---- */
+.kf-body {
+  position: absolute; left: 48px; right: 48px; top: 140px; bottom: 48px;
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  z-index: 4;
+}
+
+/* ---- Shared Panels & Surfaces ---- */
+.panel {
+  background: rgba(20, 20, 22, .84);
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 14px;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .42);
+}
+.note {
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .07);
+  color: #cfcbc1; font-size: 13px; line-height: 1.4;
+}
+.scroll {
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: #3a352b transparent;
+}
+.scroll::-webkit-scrollbar { width: 6px; }
+.scroll::-webkit-scrollbar-thumb { background: #3a352b; border-radius: 3px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- Buttons ---- */
+.btn {
+  height: 42px; padding: 0 18px; border-radius: 10px;
+  font-size: 14px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  white-space: nowrap; flex: none;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s;
+}
+.btn-p { background: #c9922b; color: #111; }
+.btn-p:hover { background: #e0ab45; }
+.btn-s { background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .14); color: #f4f1ea; }
+.btn-s:hover { background: rgba(255, 255, 255, .13); border-color: rgba(255, 255, 255, .26); }
+.btn-d { background: rgba(217, 83, 63, .16); border: 1px solid rgba(217, 83, 63, .45); color: #f5b9af; }
+.btn-d:hover { background: rgba(217, 83, 63, .28); }
+.btn-gas-on {
+  background: rgba(234, 114, 42, .22);
+  border: 1px solid rgba(240, 136, 74, .65);
+  color: #ffd3b3;
+}
+.btn-gas-on:hover { background: rgba(234, 114, 42, .34); }
+.btn-sm { height: 36px; padding: 0 14px; font-size: 13.5px; border-radius: 9px; }
+.btn-xs { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; }
+.btn:disabled { opacity: .38; pointer-events: none; }
+
+/* ---- Two-Column Splits ---- */
+.kf-split {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px;
+}
+.kf-split-wb {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1.32fr) minmax(0, 0.68fr); gap: 16px;
+}
+.kf-split-stove {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr); gap: 16px;
+}
+.kf-col {
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px;
+  overflow: hidden;
+  transition: border-color .15s;
+}
+.kf-col.drop-on { border-color: rgba(224, 171, 69, .85); }
+
+.kf-col-head {
+  flex: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.kf-col-title {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-size: 17px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: #e0ab45; white-space: nowrap; flex: none;
+}
+.kf-col-meta {
+  font-size: 12.5px; color: #a29e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Capacity Bars ---- */
+.kf-meters {
+  flex: none;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.kf-meter { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kf-meter-r {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px; color: #9c988e; white-space: nowrap;
+}
+.kf-meter-r b { color: #f4f1ea; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kf-bar {
+  height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden;
+}
+.kf-bar > i {
+  display: block; height: 100%; background: #c9922b; transition: width .2s;
+}
+.kf-bar > i.ok { background: #7fbf6a; }
+.kf-bar > i.hot { background: #e87a38; }
+
+/* ---- Compartment Groups & Item Slots ---- */
+.kf-group + .kf-group { margin-top: 12px; }
+.kf-group-h {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 7px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+.kf-group-t {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-size: 15px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: #e0ab45; white-space: nowrap; flex: none;
+}
+.kf-group-meta {
+  font-size: 12px; color: #9c988e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.kf-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 62px);
+  gap: 8px;
+  align-content: start;
+}
+.kf-slot {
+  position: relative; width: 62px; height: 62px; border-radius: 10px;
+  background: rgba(13, 14, 16, .86);
+  border: 1px solid rgba(255, 255, 255, .1);
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none;
+  transition: border-color .14s, background .14s;
+}
+.kf-slot:hover { border-color: rgba(255, 255, 255, .28); background: rgba(255, 255, 255, .05); }
+.kf-slot.empty { background: rgba(255, 255, 255, .02); border-color: rgba(255, 255, 255, .06); }
+.kf-slot.on { border-color: #c9922b; background: rgba(201, 146, 43, .16); }
+.kf-slot.drop { border-color: #e0ab45; background: rgba(224, 171, 69, .22); }
+.kf-slot.hot { border-color: rgba(232, 122, 56, .65); }
+
+.kf-badge {
+  position: absolute; top: 3px; left: 4px;
+  font-size: 10px; font-weight: 700; color: #a29e93;
+  line-height: 1; pointer-events: none;
+}
+.kf-temp {
+  position: absolute; top: 3px; right: 4px;
+  font-size: 10px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.kf-cnt {
+  position: absolute; bottom: 3px; right: 4px;
+  font-size: 10.5px; font-weight: 700; color: #f4f1ea;
+  text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums;
+  line-height: 1; pointer-events: none;
+}
+.kf-fill {
+  position: absolute; left: 4px; right: 4px; bottom: 3px; height: 3px;
+  border-radius: 2px; background: rgba(0, 0, 0, .65); overflow: hidden; pointer-events: none;
+}
+.kf-fill > i { display: block; height: 100%; background: #c9922b; }
+
+/* ---- Selected Item Action Strip (bottom of a column) ---- */
+.kf-foot-bar {
+  flex: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border-radius: 10px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .08);
+  min-height: 48px;
+}
+.kf-foot-item { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.kf-foot-name {
+  font-size: 13.5px; font-weight: 600; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kf-foot-sub {
+  font-size: 12px; color: #9c988e;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.kf-foot-acts { display: flex; align-items: center; gap: 6px; flex: none; }
+
+/* ---- Kitchen Table Tab 2: 4x4-in -> 4x4-out Workbench ---- */
+.kf-wb-body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+}
+.kf-wb-row {
+  display: flex; align-items: center; justify-content: center; gap: 18px;
+}
+.kf-wb-block {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.kf-wb-lbl {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-size: 15px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: #e0ab45; white-space: nowrap;
+}
+.kf-wb-grid4 {
+  display: grid; grid-template-columns: repeat(4, 62px); gap: 7px;
+}
+.kf-wb-slot {
+  width: 62px; height: 62px; border-radius: 10px;
+}
+.kf-wb-arrow {
+  height: 48px; padding: 0 15px; margin-top: 22px;
+}
+.kf-wb-status {
+  width: 100%; max-width: 640px;
+  padding: 8px 14px; border-radius: 10px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .08);
+  font-size: 13px; color: #a29e93; text-align: center; line-height: 1.35;
+}
+.kf-wb-status.valid {
+  background: rgba(201, 146, 43, .14);
+  border-color: rgba(201, 146, 43, .45);
+  color: #f0c264;
+}
+.kf-wb-actions {
+  display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: nowrap;
+}
+
+/* ---- Stove Tab 1: 4 Gas Burners (2x2 zero-scroll cooktop) ---- */
+.kf-cooktop {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.kf-burner {
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+  padding: 12px 14px; border-radius: 12px;
+  background: rgba(13, 14, 16, .88);
+  border: 1px solid rgba(255, 255, 255, .1);
+  transition: border-color .15s, background .15s;
+}
+.kf-burner.selected { border-color: rgba(201, 146, 43, .75); background: rgba(201, 146, 43, .06); }
+.kf-burner.gas-on { border-color: rgba(240, 136, 74, .65); }
+.kf-burner.drop-on { border-color: #e0ab45; background: rgba(224, 171, 69, .14); }
+
+.kf-burner-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.kf-burner-lbl {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-size: 15px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: #cfcbc1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kf-burner-temp {
+  font-size: 13px; font-weight: 700; color: #9c988e;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.kf-burner-temp.hot { color: #f0884a; }
+.kf-burner-temp.warm { color: #e0ab45; }
+
+.kf-burner-mid {
+  flex: 1; min-height: 0;
+  display: flex; align-items: center; gap: 12px;
+}
+.kf-burner-ring {
+  position: relative; width: 82px; height: 82px; flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, .04) 0%, rgba(9, 10, 12, .95) 68%);
+  border: 2px solid rgba(255, 255, 255, .14);
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.kf-burner-ring.gas-on {
+  border-color: #e87a38;
+  background: radial-gradient(circle, rgba(232, 122, 56, .22) 0%, rgba(72, 136, 232, .14) 55%, rgba(12, 13, 16, .96) 76%);
+}
+.kf-burner-ring.drop-on { border-color: #e0ab45; }
+
+.kf-burner-info {
+  min-width: 0; flex: 1;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.kf-burner-item {
+  font-size: 14px; font-weight: 600; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kf-burner-item.empty { color: #7e7a70; font-weight: 500; }
+.kf-burner-sub {
+  font-size: 12px; color: #9c988e;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.kf-burner-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+
+/* ---- Stove Tab 2: Unified Oven Chamber ---- */
+.kf-oven-head {
+  flex: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(13, 14, 16, .88);
+  border: 1px solid rgba(255, 255, 255, .1);
+}
+.kf-oven-head.gas-on {
+  border-color: rgba(240, 136, 74, .65);
+  background: rgba(232, 122, 56, .1);
+}
+.kf-oven-chamber {
+  flex: 1; min-height: 0;
+  padding: 12px; border-radius: 12px;
+  background: rgba(10, 11, 13, .92);
+  border: 1px solid rgba(255, 255, 255, .1);
+  display: flex; flex-direction: column; gap: 8px;
+  transition: border-color .15s;
+}
+.kf-oven-chamber.gas-on { border-color: rgba(240, 136, 74, .48); }
+.kf-oven-chamber.drop-on { border-color: #e0ab45; }
+
+/* ---- Error / Notice Toast inside Stage ---- */
+.kf-toast {
+  position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%);
+  padding: 8px 16px; border-radius: 10px;
+  background: rgba(28, 22, 18, .96); border: 1px solid rgba(224, 171, 69, .6);
+  color: #f4f1ea; font-size: 13px; font-weight: 500;
+  white-space: nowrap; max-width: 80%; overflow: hidden; text-overflow: ellipsis;
+  z-index: 20; pointer-events: none;
+}
+
+/* ---- Bottom Keyboard Hints ---- */
+.hint {
+  position: absolute; left: 48px; right: 48px; bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 12.5px; color: #8f8b81; z-index: 5;
+}
+.hint-g { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; }
+.hint-r { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.key {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 22px; padding: 0 7px; border-radius: 5px;
+  background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .15);
+  font-size: 11px; font-weight: 600; color: #e9e6df;
+}
+
+/* ---- Floating Drag Ghost (sibling of .gm inside #w) ---- */
+.kf-drag-ghost {
+  position: fixed; width: 64px; height: 64px; border-radius: 10px;
+  background: rgba(20, 20, 22, .94); border: 1.5px solid #e0ab45;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .7);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 9999;
+}
+
+/* ---- Compact Mode ([data-mob] — landscape phones & short windows, sh = 560px) ---- */
+/* Harmonized with menuCompact.css (.top: left/right 28px, top 12px, height 46px -> bottom 58px) */
+.gm[data-mob] .sub-top { display: none; }
+.gm[data-mob] .top .chip { padding: 0 12px; font-size: 13px; white-space: nowrap; }
+
+.gm[data-mob] .kf-tabbar { left: 28px; right: 28px; top: 62px; height: 38px; gap: 10px; }
+.gm[data-mob] .kf-tab { height: 38px; padding: 0 12px; font-size: 16.5px; gap: 6px; }
+
+.gm[data-mob] .kf-body { left: 28px; right: 28px; top: 108px; bottom: 32px; }
+@media (pointer: coarse) {
+  .gm[data-mob] .kf-body { bottom: 12px; }
+}
+
+.gm[data-mob] .kf-split,
+.gm[data-mob] .kf-split-stove { gap: 12px; }
+.gm[data-mob] .kf-split-wb { grid-template-columns: minmax(0, 1.42fr) minmax(0, 0.78fr); gap: 10px; }
+.gm[data-mob] .kf-col { padding: 10px 12px; gap: 8px; }
+.gm[data-mob] .kf-col-head { padding-bottom: 6px; }
+.gm[data-mob] .kf-col-title { font-size: 15.5px; }
+
+.gm[data-mob] .kf-slots { grid-template-columns: repeat(auto-fill, 54px); gap: 6px; }
+.gm[data-mob] .kf-slot { width: 54px; height: 54px; border-radius: 9px; }
+.gm[data-mob] .kf-foot-bar { padding: 6px 8px; min-height: 40px; }
+
+.gm[data-mob] .btn.btn-sm { height: 34px; font-size: 13px; padding: 0 12px; }
+.gm[data-mob] .btn.btn-xs { height: 30px; font-size: 12px; padding: 0 10px; }
+
+.gm[data-mob] .kf-wb-body { gap: 8px; }
+.gm[data-mob] .kf-wb-row { gap: 12px; }
+.gm[data-mob] .kf-wb-block { gap: 4px; }
+.gm[data-mob] .kf-wb-lbl { font-size: 13.5px; }
+.gm[data-mob] .kf-wb-grid4 { grid-template-columns: repeat(4, 48px); gap: 5px; }
+.gm[data-mob] .kf-wb-slot { width: 48px; height: 48px; border-radius: 8px; }
+.gm[data-mob] .kf-wb-arrow { height: 42px; padding: 0 11px; margin-top: 18px; }
+.gm[data-mob] .kf-wb-status { padding: 6px 10px; font-size: 12px; line-height: 1.28; }
+
+.gm[data-mob] .kf-cooktop { gap: 8px; }
+.gm[data-mob] .kf-burner { padding: 8px 10px; gap: 6px; }
+.gm[data-mob] .kf-burner-ring { width: 64px; height: 64px; }
+.gm[data-mob] .kf-burner-item { font-size: 13px; }
+.gm[data-mob] .kf-oven-head { padding: 8px 10px; }
+.gm[data-mob] .kf-oven-chamber { padding: 8px 10px; }
+
+@container (max-width: 1060px) {
+  .gm[data-mob] .kf-wb-grid4 { grid-template-columns: repeat(4, 44px); gap: 4px; }
+  .gm[data-mob] .kf-wb-slot { width: 44px; height: 44px; }
+  .gm[data-mob] .kf-wb-row { gap: 8px; }
+  .gm[data-mob] .kf-wb-arrow { height: 38px; padding: 0 9px; }
+  .gm[data-mob] .kf-burner-ring { width: 56px; height: 56px; }
+}

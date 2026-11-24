@@ -1972,3 +1972,242 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
     transferDetails: [],
   };
 }
+
+export type InteractionSlotGrid16 = (InventoryItem | null)[];
+
+export interface InteractionEvaluationResult16 {
+  isValid: boolean;
+  kind: 'none' | 'pour_liquid' | 'mix_liquid' | 'transfer_items' | 'craft_recipe';
+  title: string;
+  subtitle: string;
+  actionLabel: string;
+  previewOutputs: InteractionSlotGrid16;
+  transferDetails: InteractionTransferDetail[];
+  matchedRecipeId?: string;
+}
+
+export function createEmptyInteractionGrid16(): InteractionSlotGrid16 {
+  return Array.from({ length: 16 }, () => null);
+}
+
+/**
+ * Evaluates a 4x4 (16-slot) input grid (`row * 4 + col`) for the Kitchen Table workbench
+ * and returns a 4x4 (16-slot) previewOutputs grid plus transfer/recipe metadata.
+ */
+export function evaluateInteractionGrid4x4(inputs: InteractionSlotGrid16): InteractionEvaluationResult16 {
+  const occupiedIndices: number[] = [];
+  for (let i = 0; i < 16; i++) {
+    if (inputs[i]) occupiedIndices.push(i);
+  }
+
+  if (occupiedIndices.length === 0) {
+    return {
+      isValid: false,
+      kind: 'none',
+      title: 'Сетка ввода пуста',
+      subtitle:
+        'Положите предметы в сетку ввода (4×4). Верхние строки — источник, нижние строки — приёмная тара.',
+      actionLabel: 'Ожидание предметов',
+      previewOutputs: createEmptyInteractionGrid16(),
+      transferDetails: [],
+    };
+  }
+
+  // 1. Check concrete crafting/tool recipes when 1..4 items are placed anywhere on the 4x4 grid
+  if (occupiedIndices.length <= 4) {
+    const packed4: InteractionSlotGrid4 = [
+      inputs[occupiedIndices[0]] || null,
+      occupiedIndices[1] !== undefined ? inputs[occupiedIndices[1]] : null,
+      occupiedIndices[2] !== undefined ? inputs[occupiedIndices[2]] : null,
+      occupiedIndices[3] !== undefined ? inputs[occupiedIndices[3]] : null,
+    ];
+    for (const recipe of getActiveInteractionCraftRecipes()) {
+      if (recipe.matchAndPreview) {
+        const matched = recipe.matchAndPreview(packed4);
+        if (matched && matched.isValid) {
+          const previewOutputs = createEmptyInteractionGrid16();
+          for (let k = 0; k < 4; k++) {
+            previewOutputs[k] = matched.previewOutputs[k] ? cloneInventoryItem(matched.previewOutputs[k]!) : null;
+          }
+          return {
+            isValid: true,
+            kind: matched.kind,
+            title: matched.title,
+            subtitle: matched.subtitle,
+            actionLabel: matched.actionLabel,
+            previewOutputs,
+            transferDetails: matched.transferDetails,
+            matchedRecipeId: matched.matchedRecipeId,
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Column-aligned top-to-bottom pouring/mixing/discrete transfers across 4 rows × 4 columns
+  const pairsToEvaluate: [number, number][] = [];
+  for (let col = 0; col < 4; col++) {
+    const colIndices: number[] = [];
+    for (let row = 0; row < 4; row++) {
+      const idx = row * 4 + col;
+      if (inputs[idx]) colIndices.push(idx);
+    }
+    for (let k = 0; k < colIndices.length - 1; k++) {
+      pairsToEvaluate.push([colIndices[k], colIndices[k + 1]]);
+    }
+  }
+
+  // Cross-column fallback: pair upper rows (0..1) with lower rows (2..3), or single upper item with single lower item
+  if (pairsToEvaluate.length === 0) {
+    if (occupiedIndices.length === 2) {
+      const [a, b] = occupiedIndices;
+      if (Math.floor(a / 4) < Math.floor(b / 4)) {
+        pairsToEvaluate.push([a, b]);
+      }
+    } else {
+      const upper = occupiedIndices.filter((i) => Math.floor(i / 4) < 2);
+      const lower = occupiedIndices.filter((i) => Math.floor(i / 4) >= 2);
+      const pairCount = Math.min(upper.length, lower.length);
+      for (let k = 0; k < pairCount; k++) {
+        pairsToEvaluate.push([upper[k], lower[k]]);
+      }
+    }
+  }
+
+  if (pairsToEvaluate.length > 0) {
+    const previewOutputs: InteractionSlotGrid16 = Array.from({ length: 16 }, (_, i) =>
+      inputs[i] ? cloneInventoryItem(inputs[i]!) : null
+    );
+    const details: InteractionTransferDetail[] = [];
+    let anyMixture = false;
+    let anyLiquidPour = false;
+    let anyDiscreteTransfer = false;
+
+    for (const [topIdx, bottomIdx] of pairsToEvaluate) {
+      const topItem = previewOutputs[topIdx];
+      const bottomItem = previewOutputs[bottomIdx];
+      if (!topItem || !bottomItem) continue;
+
+      const pourRes = tryPourOrMixTopToBottom(topItem, bottomItem, topIdx, bottomIdx);
+      if (pourRes) {
+        previewOutputs[topIdx] = pourRes.updatedTop;
+        previewOutputs[bottomIdx] = pourRes.updatedBottom;
+        details.push(pourRes.detail);
+        anyLiquidPour = true;
+        if (pourRes.isMixture) anyMixture = true;
+        continue;
+      }
+
+      const discreteRes = tryTransferDiscreteTopToBottom(topItem, bottomItem, topIdx, bottomIdx);
+      if (discreteRes) {
+        previewOutputs[topIdx] = discreteRes.updatedTop;
+        previewOutputs[bottomIdx] = discreteRes.updatedBottom;
+        details.push(discreteRes.detail);
+        anyDiscreteTransfer = true;
+      }
+    }
+
+    if (details.length > 0) {
+      const firstDetail = details[0];
+      if (anyMixture) {
+        return {
+          isValid: true,
+          kind: 'mix_liquid',
+          title: firstDetail.mixtureName
+            ? `Смешивание: ${firstDetail.mixtureName}`
+            : 'Смешивание жидкостей / сыпучих веществ',
+          subtitle: `${firstDetail.transferredAmountLabel} → ${firstDetail.resultingTargetLabel}`,
+          actionLabel: 'Перелить и смешать',
+          previewOutputs,
+          transferDetails: details,
+        };
+      }
+      if (anyLiquidPour) {
+        return {
+          isValid: true,
+          kind: 'pour_liquid',
+          title: 'Переливание / пересыпание из верхней тары в нижнюю',
+          subtitle: `${firstDetail.transferredAmountLabel} · ${firstDetail.remainingSourceLabel}`,
+          actionLabel: 'Перелить / Пересыпать',
+          previewOutputs,
+          transferDetails: details,
+        };
+      }
+      if (anyDiscreteTransfer) {
+        return {
+          isValid: true,
+          kind: 'transfer_items',
+          title: 'Пересыпание / укладка предметов в нижнюю тару',
+          subtitle: `${firstDetail.transferredAmountLabel} → ${firstDetail.resultingTargetLabel}`,
+          actionLabel: 'Пересыпать в тару',
+          previewOutputs,
+          transferDetails: details,
+        };
+      }
+    }
+  }
+
+  // Diagnostic hint for closed/empty/full containers when placed upper & lower
+  if (occupiedIndices.length >= 2) {
+    const sorted = [...occupiedIndices].sort((a, b) => a - b);
+    const first = inputs[sorted[0]];
+    const last = inputs[sorted[sorted.length - 1]];
+    if (first && last && Math.floor(sorted[0] / 4) < Math.floor(sorted[sorted.length - 1] / 4)) {
+      const topWrap = getEffectiveFluidWrapper(first);
+      const bottomWrap = getEffectiveFluidWrapper(last);
+      if (topWrap && bottomWrap) {
+        if (!topWrap.isOpened || !bottomWrap.isOpened) {
+          return {
+            isValid: false,
+            kind: 'none',
+            title: 'Тара герметично закрыта',
+            subtitle:
+              'Одна из ёмкостей закрыта крышкой или запаяна. Откройте тару или положите рядом нож для вскрытия.',
+            actionLabel: 'Тара закрыта',
+            previewOutputs: createEmptyInteractionGrid16(),
+            transferDetails: [],
+          };
+        }
+        if (topWrap.state.currentMl <= 0) {
+          return {
+            isValid: false,
+            kind: 'none',
+            title: 'Верхняя тара пуста',
+            subtitle: 'В верхней ёмкости нет жидкости или сыпучего вещества.',
+            actionLabel: 'Верхняя тара пуста',
+            previewOutputs: createEmptyInteractionGrid16(),
+            transferDetails: [],
+          };
+        }
+        const bottomFreeMl = Math.max(
+          0,
+          bottomWrap.state.maxMl - bottomWrap.state.currentMl - getContainerSolidVolumeMl(last)
+        );
+        if (bottomFreeMl <= 0) {
+          const bd = getContainerCapacityBreakdown(last);
+          return {
+            isValid: false,
+            kind: 'none',
+            title: 'Нижняя тара заполнена до краёв',
+            subtitle: `В нижней ёмкости (${last.nameRu}) нет свободного места (${Math.round(bd.solidMl + bd.liquidMl)} / ${bd.totalCapacityMl} мл).`,
+            actionLabel: 'Нижняя тара полна',
+            previewOutputs: createEmptyInteractionGrid16(),
+            transferDetails: [],
+          };
+        }
+      }
+    }
+  }
+
+  return {
+    isValid: false,
+    kind: 'none',
+    title: 'Комбинация не распознана',
+    subtitle:
+      'Для переливания поставьте полную тару выше, а приёмную — ниже в том же столбце (4×4), либо совместите подходящие предметы.',
+    actionLabel: 'Нет доступного действия',
+    previewOutputs: createEmptyInteractionGrid16(),
+    transferDetails: [],
+  };
+}
+
