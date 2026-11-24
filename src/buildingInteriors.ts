@@ -1877,13 +1877,24 @@ function renderStaticInteriorLayout(
     ctx.strokeRect(rm.x + 0.5, rm.y + 0.5, rm.width - 1, rm.height - 1);
     ctx.restore();
 
-    // Cyrillic room label
-    const isLightFloor = isHospital || roomColor.startsWith('#f') || roomColor.startsWith('#e') || roomColor.startsWith('#d') || roomColor.startsWith('#c');
-    ctx.fillStyle = isLightFloor ? 'rgba(15, 23, 42, 0.65)' : 'rgba(255, 255, 255, 0.28)';
-    ctx.font = 'bold 5px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(rm.name, rm.x + rm.width / 2, rm.y + rm.height / 2);
+    const hasSubRooms = rm.name.startsWith('Кв.') && (layout.rooms || []).some(sub =>
+      sub !== rm &&
+      !sub.name.startsWith('Кв.') &&
+      !sub.name.startsWith('Подъезд') &&
+      sub.x >= rm.x - 0.5 &&
+      sub.x + sub.width <= rm.x + rm.width + 0.5 &&
+      sub.y >= rm.y - 0.5 &&
+      sub.y + sub.height <= rm.y + rm.height + 0.5
+    );
+    if (!hasSubRooms) {
+      // Cyrillic room label
+      const isLightFloor = isHospital || roomColor.startsWith('#f') || roomColor.startsWith('#e') || roomColor.startsWith('#d') || roomColor.startsWith('#c');
+      ctx.fillStyle = isLightFloor ? 'rgba(15, 23, 42, 0.65)' : 'rgba(255, 255, 255, 0.28)';
+      ctx.font = 'bold 5px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(rm.name, rm.x + rm.width / 2, rm.y + rm.height / 2);
+    }
   }
 
   // Draw all elevator zones (Лифты)
@@ -2157,6 +2168,17 @@ export function renderBuildingInterior(
     const lights: { x: number; y: number; radius: number }[] = [];
     
     for (const rm of layout.rooms) {
+      const hasSubRooms = rm.name.startsWith('Кв.') && layout.rooms.some(sub =>
+        sub !== rm &&
+        !sub.name.startsWith('Кв.') &&
+        !sub.name.startsWith('Подъезд') &&
+        sub.x >= rm.x - 0.5 &&
+        sub.x + sub.width <= rm.x + rm.width + 0.5 &&
+        sub.y >= rm.y - 0.5 &&
+        sub.y + sub.height <= rm.y + rm.height + 0.5
+      );
+      if (hasSubRooms) continue;
+
       const rx = rm.x;
       const ry = rm.y;
       const rw = rm.width;

@@ -64,30 +64,30 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
     floor: 3, // Floor 3 in court_bld_w_5_2 has Kv. 14
     totalBuildingFloors: 9,
     apartmentNumber: 14,
-    roomsCount: 1,
-    roomsLabel: '1-комнатная квартира (Евро-однушка)',
-    areaSqM: 38.5,
+    roomsCount: 3,
+    roomsLabel: '3-комнатная квартира (Семейная)',
+    areaSqM: 66.3,
     ceilingHeightM: 2.65,
     wallMaterial: 'Железобетонные утепленные панели',
     yearBuilt: 2018,
-    priceRub: 1850000,
+    priceRub: 2950000,
     stateDutyRub: 2000,
     notaryFeeRub: 12000,
-    monthlyUtilitiesRub: 3400,
-    descriptionRu: 'Уютная светлая однокомнатная квартира на 4-м этаже типового 9-этажного дома. Выполнен свежий косметический ремонт: ламинат, стеклопакеты, новая сантехника. Окна выходят в тихий зеленый двор.',
+    monthlyUtilitiesRub: 4400,
+    descriptionRu: 'Просторная светлая трехкомнатная квартира на 4-м этаже типового 9-этажного дома. Раздельные гостиная, спальня и детская, отдельная кухня, совмещенный санузел и прихожая.',
     features: [
-      'Гостиная-спальня с двуспальной кроватью и ТВ',
-      'Оборудованная кухня с холодильником и обеденным столом',
-      'Раздельный санузел и стиральная машина',
-      'Застекленный балкон',
-      'Центральное отопление и водоснабжение'
+      'Спальня с двуспальной кроватью и шкафом',
+      'Детская комната с рабочим столом и компьютером',
+      'Гостиная с диваном, ТВ и книжным стеллажом',
+      'Кухня с плитой, холодильником и обеденным столом',
+      'Санузел со стиральной машиной и прихожая'
     ],
     keyId: 'key_sovetskaya_14',
     lockCode: 'LC-SOV14-2018',
     isLocked: true,
     isOwned: false,
-    entranceWorldX: 4184,
-    entranceWorldY: 2042,
+    entranceWorldX: 4239,
+    entranceWorldY: 1953,
     layout: null
   },
   {
@@ -102,7 +102,7 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
     apartmentNumber: 27,
     roomsCount: 2,
     roomsLabel: '2-комнатная квартира с высокими потолками',
-    areaSqM: 56.4,
+    areaSqM: 46.2,
     ceilingHeightM: 3.20,
     wallMaterial: 'Красный полнотелый кирпич (толщина 64 см)',
     yearBuilt: 1958,
@@ -110,20 +110,20 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
     stateDutyRub: 2000,
     notaryFeeRub: 15000,
     monthlyUtilitiesRub: 4200,
-    descriptionRu: 'Престижная 2-комнатная квартира в историческом центре. Толстые кирпичные стены гарантируют идеальную шумоизоляцию и тепло зимой. Высокие потолки 3.2 м, дубовый паркет, лепнина на потолке.',
+    descriptionRu: 'Уютная 2-комнатная квартира в историческом центре. Толстые кирпичные стены, высокие потолки 3.2 м, раздельные спальня и гостиная, отдельная кухня, санузел и прихожая.',
     features: [
-      'Просторная спальня с премиальной кроватью King-Size',
-      'Большая гостиная с угловым диваном, домашним кинотеатром и библиотекой',
-      'Кухня 12 м² с полным набором встроенной техники и вытяжкой',
-      'Ванная комната с чугунной ванной и биде',
-      'Кованый балкон с видом на проспект'
+      'Спальня с двуспальной кроватью, шкафом и комодом',
+      'Гостиная с диваном и ТВ-тумбой',
+      'Отдельная кухня с плитой, холодильником и обеденным столом',
+      'Ванная комната с ванной, раковиной и туалетом',
+      'Прихожая с вешалкой и зеркалом'
     ],
     keyId: 'key_lenina_27',
     lockCode: 'LC-LEN27-1958',
     isLocked: true,
     isOwned: false,
     entranceWorldX: 4375,
-    entranceWorldY: 1754,
+    entranceWorldY: 1809,
     layout: null
   },
   {
@@ -131,14 +131,14 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
     buildingId: 'urb_l0_w_6_0',
     buildingNameRu: 'ЖК «Горизонт» (Бизнес-класс)',
     buildingType: 'modern_residential',
-    address: 'ул. Набережная, д. 40, 7-й этаж, кв. 14',
+    address: 'ул. Набережная, д. 40, 7-й этаж, кв. 26',
     cadastralNumber: '77:02:0005040:8819',
-    floor: 6, // 7th floor in urb_l0_w_6_0 has Kv. 14
+    floor: 6, // 7th floor in urb_l0_w_6_0 has Kv. 25..28
     totalBuildingFloors: 12,
-    apartmentNumber: 14,
+    apartmentNumber: 26,
     roomsCount: 2,
     roomsLabel: '2-комнатные апартаменты с панорамными окнами',
-    areaSqM: 64.0,
+    areaSqM: 76.0,
     ceilingHeightM: 3.00,
     wallMaterial: 'Монолитный железобетон с вентилируемым керамогранитным фасадом',
     yearBuilt: 2021,
@@ -146,19 +146,19 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
     stateDutyRub: 2000,
     notaryFeeRub: 20000,
     monthlyUtilitiesRub: 5200,
-    descriptionRu: 'Элитные видовые апартаменты в современном жилом комплексе премиум-класса «Горизонт». Панорамное остекление, дизайнерская отделка, охраняемая территория, скоростные бесшумные лифты.',
+    descriptionRu: 'Видовые апартаменты в современном жилом комплексе бизнес-класса «Горизонт». Просторная гостиная, отдельная спальня, оборудованная кухня, ванная комната со стиральной машиной и прихожая.',
     features: [
-      'Мастер-спальня с гардеробной зоной',
-      'Кухня-гостиная с барной стойкой и панорамным остеклением',
-      'Система кондиционирования и теплые полы',
-      'Подземный паркинг и консьерж-сервис'
+      'Просторная спальня с кроватью, шкафом и комодом',
+      'Гостиная с диваном, библиотекой и ТВ-зоной',
+      'Кухня со встроенной техникой и обеденным столом',
+      'Санузел с ванной и стиральной машиной'
     ],
     keyId: 'key_horizon_14',
     lockCode: 'LC-HOR14-2021',
     isLocked: true,
     isOwned: false,
-    entranceWorldX: 4956,
-    entranceWorldY: 446,
+    entranceWorldX: 5011,
+    entranceWorldY: 326,
     layout: null
   },
   {
@@ -369,26 +369,32 @@ export function initializeCityApartmentsFromWorld(world: GameWorld, preserveExis
               const address = `${street}, д. ${houseNum}, ${floorNum + 1}-й этаж, кв. ${aptNum}`;
               const cadastralNumber = `77:0${Math.floor(bld.x / 1000) % 9 + 1}:000${Math.floor(bld.y / 1000) % 9 + 1}00${houseNum}:${aptNum}`;
 
+              const subRooms = floorLayout.rooms.filter(sub =>
+                sub && sub !== rm && !sub.name.startsWith('Кв.') && !sub.name.startsWith('Подъезд') &&
+                sub.x >= rm.x - 0.5 && sub.x + sub.width <= rm.x + rm.width + 0.5 &&
+                sub.y >= rm.y - 0.5 && sub.y + sub.height <= rm.y + rm.height + 0.5
+              );
+              const livingSubRooms = subRooms.filter(sub =>
+                ['Гостиная', 'Спальня', 'Кабинет', 'Детская', 'Кухня-гостиная'].includes(sub.name)
+              );
+              const computedArea = (rm.width && rm.height)
+                ? Math.round((rm.width * rm.height / 121) * 10) / 10
+                : 46;
+
               let price = 1500000;
-              let rooms = 1;
-              let roomsLabel = '1-комнатная квартира';
-              let area = 35;
+              const rooms = livingSubRooms.length > 0 ? livingSubRooms.length : ((aptNum % 2) + 1);
+              let roomsLabel = `${rooms}-комнатная квартира`;
+              const area = computedArea;
 
               if (bld.type === 'panel_apartment') {
-                price = 1400000 + (aptNum % 3) * 300000;
-                rooms = (aptNum % 3) + 1;
-                roomsLabel = `${rooms}-комнатная квартира (Панель)`;
-                area = 35 + rooms * 15;
+                price = Math.round((1400000 + area * 28000) / 50000) * 50000;
+                roomsLabel = rooms === 1 ? '1-комнатная квартира (Евро-планировка, Панель)' : `${rooms}-комнатная квартира (Панель)`;
               } else if (bld.type === 'brick_residential') {
-                price = 2200000 + (aptNum % 2) * 500000;
-                rooms = (aptNum % 2) + 2;
-                roomsLabel = `${rooms}-комнатная квартира (Сталинка)`;
-                area = 50 + rooms * 18;
+                price = Math.round((1900000 + area * 36000) / 50000) * 50000;
+                roomsLabel = rooms === 1 ? '1-комнатная квартира (Евро-планировка, Сталинка)' : `${rooms}-комнатная квартира (Сталинка)`;
               } else if (bld.type === 'modern_residential') {
-                price = 3500000 + (aptNum % 3) * 800000;
-                rooms = (aptNum % 3) + 1;
-                roomsLabel = `${rooms}-комнатная квартира (ЖК Бизнес)`;
-                area = 45 + rooms * 20;
+                price = Math.round((2600000 + area * 48000) / 50000) * 50000;
+                roomsLabel = rooms === 1 ? '1-комнатные апартаменты (Евро-2, ЖК Бизнес)' : `${rooms}-комнатная квартира (ЖК Бизнес)`;
               }
 
               const aptObj: PropertyApartment = {
