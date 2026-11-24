@@ -5,6 +5,14 @@ import {
   syncFurnitureStorageThermodynamics,
   tickStoveStateThermodynamics,
   tickSinkStateThermodynamics,
+  WashingMachineThermalStateLike,
+  tickWashingMachineThermodynamics,
+  MicrowaveThermalStateLike,
+  isMetallicItemForMicrowave,
+  tickMicrowaveThermodynamics,
+  CoolerThermalStateLike,
+  tickCoolerThermodynamics,
+  applyConsumptionThermodynamics,
 } from './itemThermalSystem';
 import {
   fillContainerWithLiquid,
@@ -186,6 +194,22 @@ export const FURNITURE_STORAGE_CONFIGS: Record<string, FurnitureStorageConfig> =
     maxWeightKg: 15.0,
     maxItemVolumeL: 12.0,
     iconName: 'Zap'
+  },
+  bath: {
+    type: 'bath',
+    nameRu: 'Ванна и смеситель',
+    capacityL: 180.0,
+    maxWeightKg: 140.0,
+    maxItemVolumeL: 65.0,
+    iconName: 'Bath'
+  },
+  cooler: {
+    type: 'cooler',
+    nameRu: 'Кулер для воды (19 л)',
+    capacityL: 24.0,
+    maxWeightKg: 18.0,
+    maxItemVolumeL: 10.0,
+    iconName: 'Droplets'
   }
 };
 
@@ -238,6 +262,49 @@ export const SINK_CONFIG = {
   maxFlowMlPerSec: 280.0,
 };
 
+export const BATH_CONFIG = {
+  capacityL: 180.0,
+  maxWeightKg: 140.0,
+  maxItemVolumeL: 65.0,
+  basinMaxMl: 160000,
+  coldTempC: 8.0,
+  hotTempC: 68.0,
+  maxFlowMlPerSec: 950.0,
+};
+
+export type WashingProgramId = WashingMachineThermalStateLike['program'];
+
+export interface WashingProgramDef {
+  id: WashingProgramId;
+  nameRu: string;
+  tempC: number;
+  durationSec: number;
+  rpm: number;
+  descRu: string;
+}
+
+export const WASHING_PROGRAMS: WashingProgramDef[] = [
+  { id: 'cold', nameRu: 'Холодная 20°', tempC: 20, durationSec: 28, rpm: 800, descRu: 'Деликатная стирка в холодной воде' },
+  { id: 'quick', nameRu: 'Быстрая 40°', tempC: 40, durationSec: 24, rpm: 1000, descRu: 'Ежедневная стирка за 24 сек' },
+  { id: 'cotton', nameRu: 'Хлопок 60°', tempC: 60, durationSec: 36, rpm: 1200, descRu: 'Глубокая отстирка плотных тканей' },
+  { id: 'boil', nameRu: 'Кипячение 90°', tempC: 90, durationSec: 44, rpm: 1200, descRu: 'Дезинфекция кипятком и отжим' },
+  { id: 'rinse', nameRu: 'Полоскание', tempC: 18, durationSec: 16, rpm: 1000, descRu: 'Смыв загрязнений чистой водой' },
+  { id: 'spin', nameRu: 'Отжим', tempC: 21, durationSec: 14, rpm: 1400, descRu: 'Удаление влаги до ~22%' },
+];
+
+export type WashingMachineState = WashingMachineThermalStateLike;
+export type MicrowaveState = MicrowaveThermalStateLike;
+export type CoolerState = CoolerThermalStateLike;
+
+export const COOLER_CONFIG = {
+  capacityL: 24.0,
+  maxWeightKg: 18.0,
+  bottleMaxMl: 19000,
+  coldTempC: 6.0,
+  hotTempC: 88.0,
+  cupServeMl: 250,
+};
+
 export interface FurnitureStorage {
   id: string;
   buildingId: string;
@@ -249,6 +316,9 @@ export interface FurnitureStorage {
   items: InventoryItem[];
   stoveState?: StoveState;
   sinkState?: SinkState;
+  washingState?: WashingMachineState;
+  microwaveState?: MicrowaveState;
+  coolerState?: CoolerState;
 }
 
 // Persistent database of all apartment & building furniture storage containers
@@ -392,6 +462,10 @@ function seedApartmentFurnitureItems(
   } else if (furnitureType === 'sink') {
     pushValid('rag', 2);
     pushValid('bandage');
+  } else if (furnitureType === 'bath') {
+    pushValid('rag');
+  } else if (furnitureType === 'washing_machine') {
+    pushValid('tshirt_white');
   }
 
   // Also include any items in ITEM_CATALOG that declare furnitureSpawns for this furnitureType
@@ -446,7 +520,13 @@ export function getFurnitureStorage(
       apartmentId: aptId,
       items: initialItems,
       stoveState: furnitureType === 'stove' ? createDefaultStoveState() : undefined,
-      sinkState: furnitureType === 'sink' ? createDefaultSinkState() : undefined,
+      sinkState:
+        furnitureType === 'sink' || furnitureType === 'bath'
+          ? createDefaultSinkState(furnitureType === 'bath')
+          : undefined,
+      washingState: furnitureType === 'washing_machine' ? createDefaultWashingState() : undefined,
+      microwaveState: furnitureType === 'microwave' ? createDefaultMicrowaveState() : undefined,
+      coolerState: furnitureType === 'cooler' ? createDefaultCoolerState() : undefined,
     };
     furnitureStorageDb.set(id, storage);
     saveFurnitureStoragesToLocalStorage();
@@ -454,8 +534,14 @@ export function getFurnitureStorage(
 
   if (furnitureType === 'stove') {
     ensureStoveState(storage);
-  } else if (furnitureType === 'sink') {
+  } else if (furnitureType === 'sink' || furnitureType === 'bath') {
     ensureSinkState(storage);
+  } else if (furnitureType === 'washing_machine') {
+    ensureWashingState(storage);
+  } else if (furnitureType === 'microwave') {
+    ensureMicrowaveState(storage);
+  } else if (furnitureType === 'cooler') {
+    ensureCoolerState(storage);
   }
 
   // Synchronize thermodynamics based on elapsed time since last inspection
@@ -464,29 +550,32 @@ export function getFurnitureStorage(
   return storage;
 }
 
-function createDefaultSinkState(): SinkState {
+function createDefaultSinkState(isBath: boolean = false): SinkState {
+  const cfg = isBath ? BATH_CONFIG : SINK_CONFIG;
   return {
     waterOn: false,
     coldValve: 50,
     hotValve: 50,
     plugClosed: false,
     basinWaterMl: 0,
-    basinMaxMl: SINK_CONFIG.basinMaxMl,
+    basinMaxMl: cfg.basinMaxMl,
     waterTemperature: 21.0,
     lastUpdatedSec: Date.now() / 1000,
   };
 }
 
 export function ensureSinkState(storage: FurnitureStorage): SinkState {
+  const isBath = storage.furnitureType === 'bath';
+  const cfg = isBath ? BATH_CONFIG : SINK_CONFIG;
   if (!storage.sinkState) {
-    storage.sinkState = createDefaultSinkState();
+    storage.sinkState = createDefaultSinkState(isBath);
     saveFurnitureStoragesToLocalStorage();
   } else {
     storage.sinkState.waterOn = Boolean(storage.sinkState.waterOn);
     storage.sinkState.coldValve = Math.max(0, Math.min(100, Number(storage.sinkState.coldValve ?? 50)));
     storage.sinkState.hotValve = Math.max(0, Math.min(100, Number(storage.sinkState.hotValve ?? 50)));
     storage.sinkState.plugClosed = Boolean(storage.sinkState.plugClosed);
-    storage.sinkState.basinMaxMl = storage.sinkState.basinMaxMl || SINK_CONFIG.basinMaxMl;
+    storage.sinkState.basinMaxMl = storage.sinkState.basinMaxMl || cfg.basinMaxMl;
     storage.sinkState.basinWaterMl = Math.max(
       0,
       Math.min(storage.sinkState.basinMaxMl, Number(storage.sinkState.basinWaterMl ?? 0))
@@ -502,32 +591,40 @@ export function ensureSinkState(storage: FurnitureStorage): SinkState {
   return storage.sinkState;
 }
 
-export function getSinkStreamMetrics(st: SinkState): {
+export function getSinkStreamMetrics(
+  st: SinkState,
+  isBath: boolean = false
+): {
   flowing: boolean;
   flowMlPerSec: number;
   streamTempC: number;
   coldSharePct: number;
   hotSharePct: number;
 } {
+  const cfg = isBath ? BATH_CONFIG : SINK_CONFIG;
   const cold = Math.max(0, Math.min(100, st.coldValve));
   const hot = Math.max(0, Math.min(100, st.hotValve));
   const sum = cold + hot;
   const flowing = Boolean(st.waterOn && sum > 0);
   const flowFactor = Math.min(1.5, sum / 100);
-  const flowMlPerSec = flowing ? Math.round(SINK_CONFIG.maxFlowMlPerSec * flowFactor) : 0;
+  const flowMlPerSec = flowing ? Math.round(cfg.maxFlowMlPerSec * flowFactor) : 0;
   const streamTempC =
     sum > 0
-      ? Number(((cold * SINK_CONFIG.coldTempC + hot * SINK_CONFIG.hotTempC) / sum).toFixed(1))
+      ? Number(((cold * cfg.coldTempC + hot * cfg.hotTempC) / sum).toFixed(1))
       : 21.0;
   const coldSharePct = sum > 0 ? Math.round((cold / sum) * 100) : 50;
   const hotSharePct = sum > 0 ? 100 - coldSharePct : 50;
   return { flowing, flowMlPerSec, streamTempC, coldSharePct, hotSharePct };
 }
 
+export function getBathStreamMetrics(st: SinkState) {
+  return getSinkStreamMetrics(st, true);
+}
+
 export function getAllActiveSinkStorages(): FurnitureStorage[] {
   const result: FurnitureStorage[] = [];
   furnitureStorageDb.forEach(st => {
-    if (st.furnitureType === 'sink' && st.sinkState) {
+    if ((st.furnitureType === 'sink' || st.furnitureType === 'bath') && st.sinkState) {
       const active =
         st.sinkState.waterOn ||
         st.sinkState.basinWaterMl > 0 ||
@@ -545,24 +642,61 @@ let sinkBgAccum = 0;
 let sinkSaveAccum = 0;
 
 /**
- * Ticks all active sinks in the background (water running, basin filling/draining, items soaking/filling).
+ * Ticks all active sinks, bathtubs, washing machines, microwaves, and water coolers in the background.
  */
-export function tickActiveSinksInBackground(dt: number): void {
+export function tickActiveAppliancesInBackground(dt: number): void {
   sinkBgAccum += dt;
   if (sinkBgAccum < 0.5) return;
   const stepDt = sinkBgAccum;
   sinkBgAccum = 0;
 
-  const active = getAllActiveSinkStorages();
-  if (active.length === 0) return;
-
   const nowSec = Date.now() / 1000;
   let anyChanged = false;
-  for (const st of active) {
-    if (tickSinkStateThermodynamics(st, stepDt, nowSec)) {
-      anyChanged = true;
+
+  furnitureStorageDb.forEach(st => {
+    if ((st.furnitureType === 'sink' || st.furnitureType === 'bath') && st.sinkState) {
+      const active =
+        st.sinkState.waterOn ||
+        st.sinkState.basinWaterMl > 0 ||
+        st.items.length > 0 ||
+        Math.abs(st.sinkState.waterTemperature - 21.0) > 0.5;
+      if (active && tickSinkStateThermodynamics(st, stepDt, nowSec)) {
+        anyChanged = true;
+      }
+    } else if (st.furnitureType === 'washing_machine' && st.washingState) {
+      if (
+        st.washingState.isRunning ||
+        st.washingState.waterTempC > 22 ||
+        st.items.some(i => i && (i.wetness || 0) > 0)
+      ) {
+        if (tickWashingMachineThermodynamics(st, stepDt, nowSec)) {
+          anyChanged = true;
+        }
+      }
+    } else if (st.furnitureType === 'microwave' && st.microwaveState) {
+      if (
+        st.microwaveState.isRunning ||
+        st.microwaveState.chamberTempC > 22 ||
+        st.items.length > 0
+      ) {
+        if (tickMicrowaveThermodynamics(st, stepDt, nowSec)) {
+          anyChanged = true;
+        }
+      }
+    } else if (st.furnitureType === 'cooler' && st.coolerState) {
+      if (
+        st.coolerState.coldOn ||
+        st.coolerState.hotOn ||
+        Math.abs(st.coolerState.coldTempC - 21) > 0.4 ||
+        Math.abs(st.coolerState.hotTempC - 21) > 0.4
+      ) {
+        if (tickCoolerThermodynamics(st, stepDt, nowSec)) {
+          anyChanged = true;
+        }
+      }
     }
-  }
+  });
+
   if (anyChanged) {
     sinkSaveAccum += stepDt;
     if (sinkSaveAccum >= 4.0) {
@@ -570,6 +704,10 @@ export function tickActiveSinksInBackground(dt: number): void {
       saveFurnitureStoragesToLocalStorage();
     }
   }
+}
+
+export function tickActiveSinksInBackground(dt: number): void {
+  tickActiveAppliancesInBackground(dt);
 }
 
 export function toggleSinkWater(storage: FurnitureStorage): boolean {
@@ -620,12 +758,14 @@ export function fillItemAtSink(
   player?: Player
 ): { success: boolean; message: string; filledMl: number } {
   const st = ensureSinkState(storage);
-  const metrics = getSinkStreamMetrics(st);
+  const metrics = getSinkStreamMetrics(st, storage.furnitureType === 'bath');
   const hasWaterSource = metrics.flowing || st.basinWaterMl >= 25;
   if (!hasWaterSource) {
     return {
       success: false,
-      message: 'Сначала включите воду или наберите воду в чашу раковины',
+      message: storage.furnitureType === 'bath'
+        ? 'Сначала включите кран или наберите воду в ванну'
+        : 'Сначала включите воду или наберите воду в чашу раковины',
       filledMl: 0,
     };
   }
@@ -644,7 +784,7 @@ export function fillItemAtSink(
   }
 
   if (isFluidContainerClosed(item)) {
-    if (cfg?.requiresKnife || cfg?.requiresCanOpener) {
+    if ((cfg as any)?.requiresKnife || (cfg as any)?.requiresCanOpener) {
       return { success: false, message: `Тара «${item.nameRu}» запаяна — нужен нож или открывашка`, filledMl: 0 };
     }
     if (player) {
@@ -692,12 +832,14 @@ export function wetOrRinseItemAtSink(
   item: InventoryItem
 ): { success: boolean; message: string } {
   const st = ensureSinkState(storage);
-  const metrics = getSinkStreamMetrics(st);
+  const metrics = getSinkStreamMetrics(st, storage.furnitureType === 'bath');
   const hasWaterSource = metrics.flowing || st.basinWaterMl >= 25;
   if (!hasWaterSource) {
     return {
       success: false,
-      message: 'Сначала включите воду или наберите воду в чашу раковины',
+      message: storage.furnitureType === 'bath'
+        ? 'Сначала включите кран или наберите воду в ванну'
+        : 'Сначала включите воду или наберите воду в чашу раковины',
     };
   }
 
@@ -1120,4 +1262,420 @@ export function removeItemFromFurnitureStorage(
   storage.items.splice(itemIndex, 1);
   saveFurnitureStoragesToLocalStorage();
   return { ...target, count: 1, maxStack: 1 };
+}
+
+export function takeBathWashPlayer(
+  storage: FurnitureStorage,
+  player: Player
+): { success: boolean; message: string } {
+  const st = ensureSinkState(storage);
+  const metrics = getBathStreamMetrics(st);
+  const hasWater = metrics.flowing || st.basinWaterMl >= 15000;
+  if (!hasWater) {
+    return {
+      success: false,
+      message: 'Наберите минимум 15 л воды в ванну или включите кран',
+    };
+  }
+
+  const waterTemp = metrics.flowing ? metrics.streamTempC : st.waterTemperature;
+  if (!metrics.flowing && st.basinWaterMl >= 4000) {
+    st.basinWaterMl = Math.max(0, Math.round(st.basinWaterMl - 4000));
+  }
+
+  const bs = player.bodyState;
+  if (bs) {
+    bs.wetness = Math.max(bs.wetness || 0, 45);
+    if (waterTemp >= 54) {
+      bs.temperature = Math.min(39.0, Number((bs.temperature + 0.45).toFixed(2)));
+      bs.comfort = Math.max(0, (bs.comfort || 50) - 18);
+      bs.painLevel = Math.min(100, (bs.painLevel || 0) + 12);
+    } else if (waterTemp >= 33) {
+      const targetTemp = Math.min(36.9, Math.max(bs.temperature, 36.7));
+      bs.temperature = Number((bs.temperature * 0.4 + targetTemp * 0.6).toFixed(2));
+      bs.comfort = Math.min(100, (bs.comfort || 50) + 28);
+      bs.panicLevel = Math.max(0, (bs.panicLevel || 0) - 22);
+      bs.shiverIntensity = 0;
+      player.needs.energy = Math.min(100, player.needs.energy + 12);
+    } else {
+      const targetTemp = Math.max(35.8, Math.min(bs.temperature, 36.3));
+      bs.temperature = Number((bs.temperature * 0.55 + targetTemp * 0.45).toFixed(2));
+      bs.comfort = Math.min(100, (bs.comfort || 50) + 8);
+      player.needs.energy = Math.min(100, player.needs.energy + 16);
+    }
+  }
+
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+
+  if (waterTemp >= 54) {
+    return { success: true, message: `Кипяток обжигает кожу (+${Math.round(waterTemp)}°C) — добавьте холодной воды` };
+  }
+  if (waterTemp >= 33) {
+    return { success: true, message: `Тёплая ванна (+${Math.round(waterTemp)}°C) сняла усталость и согрела` };
+  }
+  return { success: true, message: `Бодрящий прохладный душ (+${Math.round(waterTemp)}°C) освежил и прибавил сил` };
+}
+
+function createDefaultWashingState(): WashingMachineState {
+  const quick = WASHING_PROGRAMS.find(p => p.id === 'quick') || WASHING_PROGRAMS[0];
+  return {
+    program: quick.id,
+    isRunning: false,
+    phase: 'idle',
+    remainingSec: quick.durationSec,
+    totalDurationSec: quick.durationSec,
+    waterTempC: 21.0,
+    waterLevelPct: 0,
+    hasDetergent: true,
+    spinRpm: 0,
+    lastUpdatedSec: Date.now() / 1000,
+  };
+}
+
+export function ensureWashingState(storage: FurnitureStorage): WashingMachineState {
+  if (!storage.washingState) {
+    storage.washingState = createDefaultWashingState();
+    saveFurnitureStoragesToLocalStorage();
+  } else {
+    const def = WASHING_PROGRAMS.find(p => p.id === storage.washingState!.program) || WASHING_PROGRAMS[1];
+    storage.washingState.program = def.id;
+    storage.washingState.isRunning = Boolean(storage.washingState.isRunning);
+    storage.washingState.totalDurationSec = storage.washingState.totalDurationSec || def.durationSec;
+    storage.washingState.remainingSec = Math.max(0, Number(storage.washingState.remainingSec ?? def.durationSec));
+    storage.washingState.waterTempC = Number(storage.washingState.waterTempC ?? 21.0);
+    storage.washingState.waterLevelPct = Math.max(0, Math.min(100, Number(storage.washingState.waterLevelPct ?? 0)));
+    storage.washingState.hasDetergent = Boolean(storage.washingState.hasDetergent);
+    storage.washingState.spinRpm = Number(storage.washingState.spinRpm ?? 0);
+    if (typeof storage.washingState.lastUpdatedSec !== 'number') {
+      storage.washingState.lastUpdatedSec = Date.now() / 1000;
+    }
+  }
+  return storage.washingState;
+}
+
+export function setWashingProgram(
+  storage: FurnitureStorage,
+  programId: WashingProgramId
+): { success: boolean; message: string } {
+  const st = ensureWashingState(storage);
+  if (st.isRunning) {
+    return { success: false, message: 'Поставьте стирку на паузу или сбросьте цикл' };
+  }
+  const def = WASHING_PROGRAMS.find(p => p.id === programId);
+  if (!def) return { success: false, message: 'Неизвестная программа стирки' };
+  st.program = def.id;
+  st.phase = 'idle';
+  st.totalDurationSec = def.durationSec;
+  st.remainingSec = def.durationSec;
+  st.waterLevelPct = 0;
+  st.spinRpm = 0;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return { success: true, message: `Выбран режим: ${def.nameRu}` };
+}
+
+export function toggleWashingDetergent(storage: FurnitureStorage): boolean {
+  const st = ensureWashingState(storage);
+  st.hasDetergent = !st.hasDetergent;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return st.hasDetergent;
+}
+
+export function startPauseWashingMachine(
+  storage: FurnitureStorage
+): { success: boolean; isRunning: boolean; message: string } {
+  const st = ensureWashingState(storage);
+  if (st.isRunning) {
+    st.isRunning = false;
+    st.spinRpm = 0;
+    st.lastUpdatedSec = Date.now() / 1000;
+    saveFurnitureStoragesToLocalStorage();
+    return { success: true, isRunning: false, message: 'Стирка поставлена на паузу' };
+  }
+  if (st.phase === 'done' || st.remainingSec <= 0) {
+    const def = WASHING_PROGRAMS.find(p => p.id === st.program) || WASHING_PROGRAMS[1];
+    st.remainingSec = def.durationSec;
+    st.totalDurationSec = def.durationSec;
+    st.phase = 'fill';
+  }
+  st.isRunning = true;
+  if (st.phase === 'idle') {
+    st.phase = st.program === 'spin' ? 'spin' : 'fill';
+  }
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return { success: true, isRunning: true, message: 'Стирка запущена — люк заблокирован' };
+}
+
+export function resetWashingMachine(storage: FurnitureStorage): void {
+  const st = ensureWashingState(storage);
+  const def = WASHING_PROGRAMS.find(p => p.id === st.program) || WASHING_PROGRAMS[1];
+  st.isRunning = false;
+  st.phase = 'idle';
+  st.remainingSec = def.durationSec;
+  st.totalDurationSec = def.durationSec;
+  st.waterLevelPct = 0;
+  st.spinRpm = 0;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+}
+
+function createDefaultMicrowaveState(): MicrowaveState {
+  return {
+    powerWatts: 600,
+    isRunning: false,
+    remainingSec: 30,
+    totalDurationSec: 30,
+    chamberTempC: 21.0,
+    hasMetalWarning: false,
+    lastUpdatedSec: Date.now() / 1000,
+  };
+}
+
+export function ensureMicrowaveState(storage: FurnitureStorage): MicrowaveState {
+  if (!storage.microwaveState) {
+    storage.microwaveState = createDefaultMicrowaveState();
+    saveFurnitureStoragesToLocalStorage();
+  } else {
+    const pw = storage.microwaveState.powerWatts;
+    storage.microwaveState.powerWatts = pw === 300 || pw === 600 || pw === 900 ? pw : 600;
+    storage.microwaveState.isRunning = Boolean(storage.microwaveState.isRunning);
+    storage.microwaveState.remainingSec = Math.max(0, Number(storage.microwaveState.remainingSec ?? 0));
+    storage.microwaveState.totalDurationSec = Math.max(1, Number(storage.microwaveState.totalDurationSec ?? 30));
+    storage.microwaveState.chamberTempC = Number(storage.microwaveState.chamberTempC ?? 21.0);
+    storage.microwaveState.hasMetalWarning = (storage.items || []).some(it => isMetallicItemForMicrowave(it));
+    if (typeof storage.microwaveState.lastUpdatedSec !== 'number') {
+      storage.microwaveState.lastUpdatedSec = Date.now() / 1000;
+    }
+  }
+  return storage.microwaveState;
+}
+
+export function setMicrowavePower(storage: FurnitureStorage, watts: 300 | 600 | 900): void {
+  const st = ensureMicrowaveState(storage);
+  st.powerWatts = watts;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+}
+
+export function addMicrowaveTimer(storage: FurnitureStorage, addSec: number): number {
+  const st = ensureMicrowaveState(storage);
+  st.remainingSec = Math.min(300, Math.max(0, Math.round(st.remainingSec + addSec)));
+  st.totalDurationSec = Math.max(st.totalDurationSec, st.remainingSec, 15);
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return st.remainingSec;
+}
+
+export function resetMicrowaveTimer(storage: FurnitureStorage): void {
+  const st = ensureMicrowaveState(storage);
+  st.isRunning = false;
+  st.remainingSec = 0;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+}
+
+export function startStopMicrowave(
+  storage: FurnitureStorage
+): { success: boolean; isRunning: boolean; message: string } {
+  const st = ensureMicrowaveState(storage);
+  if (st.isRunning) {
+    st.isRunning = false;
+    st.lastUpdatedSec = Date.now() / 1000;
+    saveFurnitureStoragesToLocalStorage();
+    return { success: true, isRunning: false, message: 'Микроволновка остановлена' };
+  }
+  st.hasMetalWarning = (storage.items || []).some(it => isMetallicItemForMicrowave(it));
+  if (st.hasMetalWarning) {
+    return {
+      success: false,
+      isRunning: false,
+      message: 'Внутри металлический предмет — достаньте металл перед запуском',
+    };
+  }
+  if (st.remainingSec <= 0) {
+    st.remainingSec = 30;
+    st.totalDurationSec = 30;
+  }
+  st.isRunning = true;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return { success: true, isRunning: true, message: `Разогрев запущен (${st.powerWatts} Вт)` };
+}
+
+function createDefaultCoolerState(): CoolerState {
+  return {
+    bottleWaterMl: COOLER_CONFIG.bottleMaxMl,
+    bottleMaxMl: COOLER_CONFIG.bottleMaxMl,
+    coldOn: true,
+    hotOn: true,
+    coldTempC: 7.0,
+    hotTempC: 85.0,
+    lastUpdatedSec: Date.now() / 1000,
+  };
+}
+
+export function ensureCoolerState(storage: FurnitureStorage): CoolerState {
+  if (!storage.coolerState) {
+    storage.coolerState = createDefaultCoolerState();
+    saveFurnitureStoragesToLocalStorage();
+  } else {
+    storage.coolerState.bottleMaxMl = storage.coolerState.bottleMaxMl || COOLER_CONFIG.bottleMaxMl;
+    storage.coolerState.bottleWaterMl = Math.max(
+      0,
+      Math.min(storage.coolerState.bottleMaxMl, Number(storage.coolerState.bottleWaterMl ?? 0))
+    );
+    storage.coolerState.coldOn = Boolean(storage.coolerState.coldOn);
+    storage.coolerState.hotOn = Boolean(storage.coolerState.hotOn);
+    storage.coolerState.coldTempC = Number(storage.coolerState.coldTempC ?? 7.0);
+    storage.coolerState.hotTempC = Number(storage.coolerState.hotTempC ?? 85.0);
+    if (typeof storage.coolerState.lastUpdatedSec !== 'number') {
+      storage.coolerState.lastUpdatedSec = Date.now() / 1000;
+    }
+  }
+  return storage.coolerState;
+}
+
+export function toggleCoolerCold(storage: FurnitureStorage): boolean {
+  const st = ensureCoolerState(storage);
+  st.coldOn = !st.coldOn;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return st.coldOn;
+}
+
+export function toggleCoolerHot(storage: FurnitureStorage): boolean {
+  const st = ensureCoolerState(storage);
+  st.hotOn = !st.hotOn;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return st.hotOn;
+}
+
+export function dispenseCoolerIntoItem(
+  storage: FurnitureStorage,
+  item: InventoryItem,
+  tap: 'cold' | 'hot',
+  player?: Player
+): { success: boolean; message: string; filledMl: number } {
+  const st = ensureCoolerState(storage);
+  if (st.bottleWaterMl < 25) {
+    return { success: false, message: 'В 19-литровой бутыли кулера закончилась вода', filledMl: 0 };
+  }
+  if (!item.fluidStorage) {
+    return { success: false, message: `«${item.nameRu}» не является ёмкостью для воды`, filledMl: 0 };
+  }
+  const cfg = getContainerConfig(item.itemId);
+  const isGranularOnly = Boolean(
+    (cfg as any)?.isGranularOnly ||
+      item.itemId.startsWith('sack_') ||
+      item.itemId === 'sandbag' ||
+      item.itemId === 'package_bag'
+  );
+  if (isGranularOnly) {
+    return { success: false, message: `«${item.nameRu}» не подходит для жидкостей`, filledMl: 0 };
+  }
+  if (isFluidContainerClosed(item)) {
+    if ((cfg as any)?.requiresKnife || (cfg as any)?.requiresCanOpener) {
+      return { success: false, message: `Тара «${item.nameRu}» запаяна — откройте перед наливом`, filledMl: 0 };
+    }
+    if (player) {
+      openFluidContainerIfNeeded(player, item);
+    } else {
+      item.isOpen = true;
+      if (item.fluidStorage.attributes) item.fluidStorage.attributes.isOpened = true;
+      syncItemContainerProperties(item);
+    }
+  }
+  ensureHybridContainerProps(item);
+  const freeMl = getContainerFreeVolumeMl(item);
+  if (freeMl <= 0) {
+    return { success: false, message: `Ёмкость «${item.nameRu}» уже заполнена`, filledMl: 0 };
+  }
+
+  const maxPour = Math.min(freeMl, st.bottleWaterMl);
+  const prevMl = item.fluidStorage.currentMl || 0;
+  const prevTemp = item.temperature ?? 21.0;
+  const tapTemp = tap === 'hot' ? st.hotTempC : st.coldTempC;
+
+  const res = fillContainerWithLiquid(item, 'water', maxPour);
+  if (!res.success || res.filledMl <= 0) {
+    return { success: false, message: res.message, filledMl: 0 };
+  }
+
+  st.bottleWaterMl = Math.max(0, Math.round(st.bottleWaterMl - res.filledMl));
+  const mixedTemp = (prevMl * prevTemp + res.filledMl * tapTemp) / Math.max(1, prevMl + res.filledMl);
+  item.temperature = Math.round(mixedTemp * 10) / 10;
+  item.surfaceTemperature = item.temperature;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+
+  return {
+    success: true,
+    message: `Налито ${Math.round(res.filledMl)} мл из ${tap === 'hot' ? 'горячего' : 'холодного'} крана (${Math.round(item.temperature)}°C)`,
+    filledMl: res.filledMl,
+  };
+}
+
+export function drinkFromCooler(
+  storage: FurnitureStorage,
+  player: Player,
+  tap: 'cold' | 'hot'
+): { success: boolean; message: string } {
+  const st = ensureCoolerState(storage);
+  if (st.bottleWaterMl < COOLER_CONFIG.cupServeMl) {
+    return { success: false, message: 'В бутыли кулера недостаточно воды для стакана' };
+  }
+  const tapTemp = tap === 'hot' ? st.hotTempC : st.coldTempC;
+  st.bottleWaterMl = Math.max(0, st.bottleWaterMl - COOLER_CONFIG.cupServeMl);
+
+  player.needs.thirst = Math.min(100, player.needs.thirst + 18);
+  applyConsumptionThermodynamics(player, tapTemp, 'вода из кулера', true);
+
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return {
+    success: true,
+    message: `Выпито 250 мл ${tap === 'hot' ? 'горячей' : 'охлаждённой'} воды (+${Math.round(tapTemp)}°C)`,
+  };
+}
+
+export function replaceCoolerBottle(storage: FurnitureStorage): void {
+  const st = ensureCoolerState(storage);
+  st.bottleWaterMl = st.bottleMaxMl;
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+}
+
+export function refillCoolerBottleFromItem(
+  storage: FurnitureStorage,
+  item: InventoryItem
+): { success: boolean; message: string } {
+  const st = ensureCoolerState(storage);
+  if (!item.fluidStorage || (item.fluidStorage.currentMl || 0) <= 0) {
+    return { success: false, message: 'В этой таре нет жидкости' };
+  }
+  if (item.fluidStorage.liquidId && item.fluidStorage.liquidId !== 'water') {
+    return { success: false, message: 'В бутыль кулера можно заливать только чистую воду' };
+  }
+  const freeMl = Math.max(0, st.bottleMaxMl - st.bottleWaterMl);
+  if (freeMl <= 0) {
+    return { success: false, message: 'Бутыль кулера уже полная (19 л)' };
+  }
+  const pourMl = Math.min(freeMl, item.fluidStorage.currentMl);
+  item.fluidStorage.currentMl = Math.max(0, Math.round(item.fluidStorage.currentMl - pourMl));
+  if (item.fluidStorage.currentMl <= 0) {
+    item.fluidStorage.liquidId = null;
+  }
+  st.bottleWaterMl = Math.min(st.bottleMaxMl, Math.round(st.bottleWaterMl + pourMl));
+  updateHybridContainerInteraction(item, 0);
+  syncItemContainerProperties(item);
+  st.lastUpdatedSec = Date.now() / 1000;
+  saveFurnitureStoragesToLocalStorage();
+  return {
+    success: true,
+    message: `Долито в бутыль кулера: ${Math.round(pourMl)} мл`,
+  };
 }

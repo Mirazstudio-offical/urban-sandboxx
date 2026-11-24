@@ -1,6 +1,7 @@
 import { Building, Player } from './types';
 import { sound } from './audio';
 import { renderInteriorFurniture } from './interiorFurnitureRenderer';
+import { renderDynamicInteriorFurnitureOverlays } from './graphics/furnitureLiveOverlay';
 import { getApartmentById, getCityApartments } from './propertySystem';
 import { drawOpticalBeamColor } from './opticalBeamTextures';
 
@@ -2117,6 +2118,9 @@ export function renderBuildingInterior(
 
   // Render static floor & furniture directly to ctx with full native resolution (sharp vector graphics)
   renderStaticInteriorLayout(ctx, bld, layout, windows, isHospital, timeHour);
+
+  // Dynamic Layer 0.5: Live placed items, burner flames, running water jets/fill, and active appliance glows
+  renderDynamicInteriorFurnitureOverlays(ctx, bld, layout, player);
 
   // Dynamic Layer 1: Soft-penumbra volumetric daylight shafts from windows
   if (dayIntensity > 0) {

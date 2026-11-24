@@ -1263,6 +1263,10 @@ export function findActiveInteraction(
               const isRadiator = furn.type === 'radiator';
               const isStoveFurn = furn.type === 'stove';
               const isSinkFurn = furn.type === 'sink';
+              const isBathFurn = furn.type === 'bath';
+              const isWashFurn = furn.type === 'washing_machine';
+              const isMicroFurn = furn.type === 'microwave';
+              const isCoolerFurn = furn.type === 'cooler';
               const isKitchenCounter = furn.type === 'kitchen_counter';
               const isKitchenTable = isKitchenCounter || furn.type === 'table';
 
@@ -1274,6 +1278,14 @@ export function findActiveInteraction(
                 ? 'Открыть плиту'
                 : isSinkFurn
                 ? 'Открыть раковину'
+                : isBathFurn
+                ? 'Открыть ванну'
+                : isWashFurn
+                ? 'Открыть стиральную машину'
+                : isMicroFurn
+                ? 'Открыть микроволновку'
+                : isCoolerFurn
+                ? 'Подойти к кулеру'
                 : `Открыть ${storageCfg.nameRu.split(' / ')[0]}`;
               let resolvedDetail = isRadiator
                 ? 'Сушка сырой одежды и прогрев вещей (+65°C)'
@@ -1281,6 +1293,14 @@ export function findActiveInteraction(
                 ? '4 газовые конфорки и духовка'
                 : isSinkFurn
                 ? 'Смеситель горячей/холодной воды, набор и замачивание'
+                : isBathFurn
+                ? 'Смеситель, набор воды, замачивание вещей и купание'
+                : isWashFurn
+                ? 'Программы стирки (20–90°C), полоскание и отжим'
+                : isMicroFurn
+                ? 'Быстрый разогрев (300/600/900 Вт) и таймер'
+                : isCoolerFurn
+                ? 'Холодная (+6°C) и горячая (+88°C) вода из бутыли 19 л'
                 : isKitchenTable
                 ? `Хранилище стола (${storageCfg.capacityL} л) и взаимодействие`
                 : `Хранилище предметов (${storageCfg.capacityL} л / ${storageCfg.maxWeightKg} кг)`;

@@ -88,9 +88,9 @@ function getSlotFillInfo(item: InventoryItem | null | undefined): { pct: number 
           : 'Пусто',
     };
   }
-  if (item.isContainer && item.capacityL) {
+  if (item.isContainer && item.containerCapacityL) {
     const used = (item.contents || []).reduce((s, c) => s + (c ? getItemTotalVolume(c) : 0), 0);
-    const pct = Math.max(0, Math.min(100, Math.round((used / item.capacityL) * 100)));
+    const pct = Math.max(0, Math.min(100, Math.round((used / item.containerCapacityL) * 100)));
     return { pct, label: `${item.contents?.length || 0} предм.` };
   }
   return { pct: null };
@@ -302,27 +302,18 @@ const KitchenStoveModalContent: React.FC<{
     if (!taken) return;
 
     if (hand) {
-      const curHand = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-      if (curHand) {
-        // Put item back if hand is occupied and cannot swap cleanly
-        const res = putItemInHand(player, hand, taken);
-        if (res.success) {
-          if (res.displaced && !addItemToPlayer(player, res.displaced)) {
-            placeItemOnStoveBurner(storage, burnerIdx, res.displaced);
-          }
-          sound.playPickup();
-          if (selectedKey === `burner:${burnerIdx}`) setSelectedKey(null);
-          notifyChanged();
-          return;
+      const prevHand = takeItemFromHand(player, hand);
+      const res = putItemInHand(player, hand, taken);
+      if (res.success) {
+        if (prevHand && !addItemToPlayer(player, prevHand)) {
+          placeItemOnStoveBurner(storage, burnerIdx, prevHand);
         }
-      } else {
-        const res = putItemInHand(player, hand, taken);
-        if (res.success) {
-          sound.playPickup();
-          if (selectedKey === `burner:${burnerIdx}`) setSelectedKey(null);
-          notifyChanged();
-          return;
-        }
+        sound.playPickup();
+        if (selectedKey === `burner:${burnerIdx}`) setSelectedKey(null);
+        notifyChanged();
+        return;
+      } else if (prevHand) {
+        putItemInHand(player, hand, prevHand);
       }
     }
 
@@ -395,15 +386,18 @@ const KitchenStoveModalContent: React.FC<{
     if (!taken) return;
 
     if (hand) {
+      const prevHand = takeItemFromHand(player, hand);
       const res = putItemInHand(player, hand, taken);
       if (res.success) {
-        if (res.displaced && !addItemToPlayer(player, res.displaced)) {
-          addItemToStoveOven(storage, res.displaced);
+        if (prevHand && !addItemToPlayer(player, prevHand)) {
+          addItemToStoveOven(storage, prevHand);
         }
         sound.playPickup();
         if (selectedKey === `oven:${ovenIdx}`) setSelectedKey(null);
         notifyChanged();
         return;
+      } else if (prevHand) {
+        putItemInHand(player, hand, prevHand);
       }
     }
 
@@ -476,12 +470,14 @@ const KitchenStoveModalContent: React.FC<{
       const hand = targetKey === 'hand:left' ? 'left' : 'right';
       const removed = removeItemFromPlayer(player, from, 1);
       if (removed) {
+        const prevHand = takeItemFromHand(player, hand);
         const res = putItemInHand(player, hand, removed);
         if (res.success) {
-          if (res.displaced) addItemToPlayer(player, res.displaced);
+          if (prevHand) addItemToPlayer(player, prevHand);
           sound.playPickup();
           notifyChanged();
         } else {
+          if (prevHand) putItemInHand(player, hand, prevHand);
           addItemToPlayer(player, removed);
         }
       }
@@ -489,7 +485,8 @@ const KitchenStoveModalContent: React.FC<{
     }
     if (sourceKey.startsWith('hand:') && (dstIsInv || dstIsPlayerZone)) {
       const hand = sourceKey === 'hand:left' ? 'left' : 'right';
-      if (stowItemFromHandToPockets(player, hand)) {
+      const stowRes = stowItemFromHandToPockets(player, hand);
+      if (stowRes.success) {
         sound.playUseItem();
         notifyChanged();
       } else {

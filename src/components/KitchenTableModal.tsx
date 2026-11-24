@@ -87,9 +87,9 @@ function getSlotFillInfo(item: InventoryItem | null | undefined): { pct: number 
           : 'Пусто',
     };
   }
-  if (item.isContainer && item.capacityL) {
+  if (item.isContainer && item.containerCapacityL) {
     const used = (item.contents || []).reduce((s, c) => s + (c ? getItemTotalVolume(c) : 0), 0);
-    const pct = Math.max(0, Math.min(100, Math.round((used / item.capacityL) * 100)));
+    const pct = Math.max(0, Math.min(100, Math.round((used / item.containerCapacityL) * 100)));
     return { pct, label: `${item.contents?.length || 0} предм.` };
   }
   return { pct: null };
@@ -276,15 +276,17 @@ const KitchenTableModalContent: React.FC<{
     }
     const removed = removeItemFromFurnitureStorage(storage, tableIdx, 1);
     if (!removed) return;
+    const prevHand = curHand ? takeItemFromHand(player, hand) : null;
     const res = putItemInHand(player, hand, removed);
     if (res.success) {
-      if (res.displaced) {
-        addItemToFurnitureStorage(storage, res.displaced, 1);
+      if (prevHand) {
+        addItemToFurnitureStorage(storage, prevHand, 1);
       }
       sound.playPickup();
       if (selectedKey === `table:${tableIdx}`) setSelectedKey(null);
       notifyChanged();
     } else {
+      if (prevHand) putItemInHand(player, hand, prevHand);
       storage.items.splice(Math.min(tableIdx, storage.items.length), 0, removed);
       showToast('Не удалось взять предмет в руку');
     }
@@ -514,12 +516,14 @@ const KitchenTableModalContent: React.FC<{
       const hand = targetKey === 'hand:left' ? 'left' : 'right';
       const removed = removeItemFromPlayer(player, from, 1);
       if (removed) {
+        const prevHand = takeItemFromHand(player, hand);
         const res = putItemInHand(player, hand, removed);
         if (res.success) {
-          if (res.displaced) addItemToPlayer(player, res.displaced);
+          if (prevHand) addItemToPlayer(player, prevHand);
           sound.playPickup();
           notifyChanged();
         } else {
+          if (prevHand) putItemInHand(player, hand, prevHand);
           addItemToPlayer(player, removed);
         }
       }
@@ -527,7 +531,7 @@ const KitchenTableModalContent: React.FC<{
     }
     if (srcIsHand && (dstIsInv || dstIsPlayerZone)) {
       const hand = sourceKey === 'hand:left' ? 'left' : 'right';
-      const ok = stowItemFromHandToPockets(player, hand);
+      const ok = stowItemFromHandToPockets(player, hand).success;
       if (ok) {
         sound.playUseItem();
         notifyChanged();

@@ -1046,6 +1046,7 @@ const SINK_MAX_STREAM_ML_PER_SEC = 280.0;
  */
 export function tickSinkStateThermodynamics(
   storage: {
+    furnitureType?: string;
     items: InventoryItem[];
     sinkState?: SinkThermalStateLike;
   },
@@ -1054,6 +1055,7 @@ export function tickSinkStateThermodynamics(
 ): boolean {
   if (!storage || !storage.sinkState || dt <= 0) return false;
   const st = storage.sinkState;
+  const isBath = storage.furnitureType === 'bath';
   const clampedDt = Math.min(dt, 3600);
   const ambientRoom = 21.0;
   let changed = false;
@@ -1063,13 +1065,18 @@ export function tickSinkStateThermodynamics(
   const valveSum = cold + hot;
   const flowing = Boolean(st.waterOn && valveSum > 0);
   const flowFactor = Math.min(1.5, valveSum / 100);
-  const flowMlPerSec = flowing ? SINK_MAX_STREAM_ML_PER_SEC * flowFactor : 0;
+  const maxStreamMlPerSec = isBath ? 950.0 : SINK_MAX_STREAM_ML_PER_SEC;
+  const coldWaterTempC = SINK_COLD_WATER_TEMP_C;
+  const hotWaterTempC = isBath ? 68.0 : SINK_HOT_WATER_TEMP_C;
+  const drainRateMlPerSec = isBath ? 2800.0 : 1400.0;
+
+  const flowMlPerSec = flowing ? maxStreamMlPerSec * flowFactor : 0;
   const streamTemp =
     valveSum > 0
-      ? (cold * SINK_COLD_WATER_TEMP_C + hot * SINK_HOT_WATER_TEMP_C) / valveSum
+      ? (cold * coldWaterTempC + hot * hotWaterTempC) / valveSum
       : ambientRoom;
 
-  const basinMax = Math.max(1000, st.basinMaxMl || 18000);
+  const basinMax = Math.max(1000, st.basinMaxMl || (isBath ? 160000 : 18000));
   const prevBasinMl = Math.max(0, st.basinWaterMl || 0);
   const prevWaterTemp = typeof st.waterTemperature === 'number' ? st.waterTemperature : ambientRoom;
 
@@ -1091,8 +1098,9 @@ export function tickSinkStateThermodynamics(
         changed = true;
       }
     } else if (prevBasinMl > 0) {
-      // Standing water cools/warms gently toward room temperature
-      const nextTemp = ambientRoom + (prevWaterTemp - ambientRoom) * Math.exp(-0.008 * clampedDt);
+      // Standing water cools/warms gently toward room temperature (large tub retains heat longer)
+      const coolingK = isBath ? 0.003 : 0.008;
+      const nextTemp = ambientRoom + (prevWaterTemp - ambientRoom) * Math.exp(-coolingK * clampedDt);
       const rounded = Math.round(nextTemp * 10) / 10;
       if (Math.abs(rounded - prevWaterTemp) >= 0.1) {
         st.waterTemperature = rounded;
@@ -1102,7 +1110,7 @@ export function tickSinkStateThermodynamics(
   } else {
     // Drain is open: standing water drains quickly
     if (prevBasinMl > 0) {
-      const drained = Math.max(0, prevBasinMl - 1400 * clampedDt);
+      const drained = Math.max(0, prevBasinMl - drainRateMlPerSec * clampedDt);
       st.basinWaterMl = Math.round(drained * 10) / 10;
       changed = true;
     }
@@ -1122,7 +1130,7 @@ export function tickSinkStateThermodynamics(
   const waterActive = flowing || hasStandingWater;
   const activeWaterTemp = flowing ? streamTemp : st.waterTemperature;
 
-  // 2. Process all items currently placed in the sink
+  // 2. Process all items currently placed in the sink/tub
   if (storage.items && storage.items.length > 0) {
     let incomingBudgetMl = flowing ? flowMlPerSec * clampedDt : 0;
 
@@ -1170,7 +1178,7 @@ export function tickSinkStateThermodynamics(
           }
         }
 
-        // Auto-fill open fluid containers placed in the sink
+        // Auto-fill open fluid containers placed in the sink/tub
         if (item.fluidStorage && !isFluidContainerClosed(item)) {
           ensureHybridContainerProps(item);
           const cfg = getContainerConfig(item.itemId);
@@ -1186,7 +1194,7 @@ export function tickSinkStateThermodynamics(
               const drawFromStream = flowing && incomingBudgetMl > 0 ? Math.min(freeMl, incomingBudgetMl) : 0;
               const drawFromBasin =
                 drawFromStream <= 0 && !flowing && (st.basinWaterMl || 0) > 20
-                  ? Math.min(freeMl, Math.min(st.basinWaterMl, 220 * clampedDt))
+                  ? Math.min(freeMl, Math.min(st.basinWaterMl, 280 * clampedDt))
                   : 0;
               const addMl = drawFromStream > 0 ? drawFromStream : drawFromBasin;
               if (addMl > 0.5) {
@@ -1211,7 +1219,7 @@ export function tickSinkStateThermodynamics(
           }
         }
       } else {
-        // Sink is dry -> normal room temperature equilibration & gradual drying
+        // Basin is dry -> normal room temperature equilibration & gradual drying
         if (updateItemThermodynamics(item, ambientRoom, clampedDt)) {
           changed = true;
         }
@@ -1222,11 +1230,305 @@ export function tickSinkStateThermodynamics(
   return changed;
 }
 
+export interface WashingMachineThermalStateLike {
+  program: 'cold' | 'quick' | 'cotton' | 'boil' | 'rinse' | 'spin';
+  isRunning: boolean;
+  phase: 'idle' | 'fill' | 'wash' | 'rinse' | 'spin' | 'done';
+  remainingSec: number;
+  totalDurationSec: number;
+  waterTempC: number;
+  waterLevelPct: number;
+  hasDetergent: boolean;
+  spinRpm: number;
+  lastUpdatedSec?: number;
+}
+
+const WASHING_PROGRAM_TARGETS: Record<
+  WashingMachineThermalStateLike['program'],
+  { targetTempC: number; maxRpm: number }
+> = {
+  cold: { targetTempC: 20, maxRpm: 800 },
+  quick: { targetTempC: 40, maxRpm: 1000 },
+  cotton: { targetTempC: 60, maxRpm: 1200 },
+  boil: { targetTempC: 90, maxRpm: 1200 },
+  rinse: { targetTempC: 18, maxRpm: 1000 },
+  spin: { targetTempC: 21, maxRpm: 1400 },
+};
+
+/**
+ * Advances a washing machine cycle: fill, heated wash + detergent cleaning, rinse, and centrifugal spin.
+ */
+export function tickWashingMachineThermodynamics(
+  storage: {
+    items: InventoryItem[];
+    washingState?: WashingMachineThermalStateLike;
+  },
+  dt: number,
+  nowSec: number = Date.now() / 1000
+): boolean {
+  if (!storage || !storage.washingState || dt <= 0) return false;
+  const st = storage.washingState;
+  const clampedDt = Math.min(dt, 3600);
+  const ambientRoom = 21.0;
+  let changed = false;
+
+  const preset = WASHING_PROGRAM_TARGETS[st.program] || WASHING_PROGRAM_TARGETS.quick;
+
+  if (st.isRunning && st.remainingSec > 0) {
+    const step = Math.min(clampedDt, st.remainingSec);
+    st.remainingSec = Math.max(0, Math.round((st.remainingSec - step) * 10) / 10);
+    const total = Math.max(1, st.totalDurationSec || 30);
+    const progress = Math.max(0, Math.min(1, 1 - st.remainingSec / total));
+
+    if (st.program === 'spin') {
+      st.phase = st.remainingSec <= 0 ? 'done' : 'spin';
+      st.waterLevelPct = Math.max(0, Math.round(st.waterLevelPct - 55 * step));
+      st.spinRpm = st.remainingSec <= 0 ? 0 : preset.maxRpm;
+    } else if (st.program === 'rinse') {
+      if (progress < 0.25) {
+        st.phase = 'fill';
+        st.waterLevelPct = Math.min(72, Math.round(st.waterLevelPct + 36 * step));
+        st.spinRpm = 45;
+      } else if (progress < 0.72) {
+        st.phase = 'rinse';
+        st.waterLevelPct = 72;
+        st.spinRpm = 55;
+      } else {
+        st.phase = st.remainingSec <= 0 ? 'done' : 'spin';
+        st.waterLevelPct = Math.max(0, Math.round(st.waterLevelPct - 45 * step));
+        st.spinRpm = st.remainingSec <= 0 ? 0 : preset.maxRpm;
+      }
+    } else {
+      if (progress < 0.14) {
+        st.phase = 'fill';
+        st.waterLevelPct = Math.min(78, Math.round(st.waterLevelPct + 42 * step));
+        st.spinRpm = 45;
+      } else if (progress < 0.64) {
+        st.phase = 'wash';
+        st.waterLevelPct = 78;
+        st.spinRpm = 55;
+      } else if (progress < 0.84) {
+        st.phase = 'rinse';
+        st.waterLevelPct = 64;
+        st.spinRpm = 60;
+      } else {
+        st.phase = st.remainingSec <= 0 ? 'done' : 'spin';
+        st.waterLevelPct = Math.max(0, Math.round(st.waterLevelPct - 45 * step));
+        st.spinRpm = st.remainingSec <= 0 ? 0 : preset.maxRpm;
+      }
+    }
+
+    const targetTemp = st.phase === 'wash' ? preset.targetTempC : st.phase === 'rinse' ? 18.0 : ambientRoom;
+    const rate = st.phase === 'wash' ? 0.22 : 0.12;
+    st.waterTempC = Math.round((targetTemp + (st.waterTempC - targetTemp) * Math.exp(-rate * step)) * 10) / 10;
+
+    for (const item of storage.items) {
+      if (!item) continue;
+      if (st.phase === 'fill' || st.phase === 'wash' || st.phase === 'rinse') {
+        updateItemThermodynamics(item, st.waterTempC, step * 2.2);
+        const nextWet = Math.min(100, Math.round(((item.wetness || 0) + 55 * step) * 10) / 10);
+        item.wetness = nextWet;
+        item.soakedLiquidId = 'water';
+        item.soakedLiquidNameRu = st.phase === 'wash' && st.hasDetergent ? 'Мыльная вода' : 'Вода';
+        item.soakedColor = st.phase === 'wash' && st.hasDetergent ? '#bae6fd' : '#60a5fa';
+        if (item.clothingStats) {
+          item.clothingStats.wetness = nextWet;
+        }
+      } else if (st.phase === 'spin') {
+        updateItemThermodynamics(item, ambientRoom, step * 1.4);
+        const curWet = item.wetness || 0;
+        const spinFloor = preset.maxRpm >= 1200 ? 22 : 30;
+        const nextWet = curWet > spinFloor ? Math.max(spinFloor, Math.round((curWet - 24 * step) * 10) / 10) : curWet;
+        item.wetness = nextWet;
+        item.soakedLiquidId = 'water';
+        item.soakedLiquidNameRu = 'Вода';
+        item.soakedColor = '#60a5fa';
+        if (item.clothingStats) {
+          item.clothingStats.wetness = nextWet;
+        }
+      }
+    }
+
+    if (st.remainingSec <= 0) {
+      st.isRunning = false;
+      st.phase = 'done';
+      st.waterLevelPct = 0;
+      st.spinRpm = 0;
+      if (st.program !== 'spin') {
+        st.hasDetergent = false;
+      }
+    }
+    changed = true;
+  } else {
+    if (Math.abs(st.waterTempC - ambientRoom) >= 0.2) {
+      st.waterTempC = Math.round((ambientRoom + (st.waterTempC - ambientRoom) * Math.exp(-0.02 * clampedDt)) * 10) / 10;
+      changed = true;
+    }
+    for (const item of storage.items) {
+      if (!item) continue;
+      if (updateItemThermodynamics(item, ambientRoom, clampedDt)) {
+        changed = true;
+      }
+    }
+  }
+
+  st.lastUpdatedSec = nowSec;
+  return changed;
+}
+
+export interface MicrowaveThermalStateLike {
+  powerWatts: 300 | 600 | 900;
+  isRunning: boolean;
+  remainingSec: number;
+  totalDurationSec: number;
+  chamberTempC: number;
+  hasMetalWarning: boolean;
+  lastUpdatedSec?: number;
+}
+
+export function isMetallicItemForMicrowave(item: InventoryItem | null | undefined): boolean {
+  if (!item) return false;
+  const id = item.itemId || '';
+  if (
+    id.includes('_steel') ||
+    id.includes('_aluminum') ||
+    id.includes('_cast_iron') ||
+    id.includes('_silver') ||
+    id.includes('knife') ||
+    id.includes('fork') ||
+    id.includes('spoon') ||
+    id.includes('wrench') ||
+    id.includes('crowbar') ||
+    id.includes('hammer') ||
+    id.includes('pliers') ||
+    id.includes('screwdriver') ||
+    id.includes('axe') ||
+    id === 'can_tin' ||
+    id === 'flask_steel' ||
+    id === 'camp_flask'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Advances dielectric microwave heating & rapid defrosting for items in the chamber.
+ */
+export function tickMicrowaveThermodynamics(
+  storage: {
+    items: InventoryItem[];
+    microwaveState?: MicrowaveThermalStateLike;
+  },
+  dt: number,
+  nowSec: number = Date.now() / 1000
+): boolean {
+  if (!storage || !storage.microwaveState || dt <= 0) return false;
+  const st = storage.microwaveState;
+  const clampedDt = Math.min(dt, 3600);
+  const ambientRoom = 21.0;
+  let changed = false;
+
+  const hasMetal = (storage.items || []).some(it => isMetallicItemForMicrowave(it));
+  if (st.hasMetalWarning !== hasMetal) {
+    st.hasMetalWarning = hasMetal;
+    changed = true;
+  }
+
+  if (st.isRunning && st.remainingSec > 0) {
+    const step = Math.min(clampedDt, st.remainingSec);
+    st.remainingSec = Math.max(0, Math.round((st.remainingSec - step) * 10) / 10);
+
+    const targetTemp = st.powerWatts === 900 ? 116 : st.powerWatts === 600 ? 96 : 64;
+    const heatMult = st.powerWatts === 900 ? 5.2 : st.powerWatts === 600 ? 3.5 : 2.1;
+    st.chamberTempC = Math.round((Math.min(72, targetTemp * 0.62) + (st.chamberTempC - Math.min(72, targetTemp * 0.62)) * Math.exp(-0.08 * step)) * 10) / 10;
+
+    for (const item of storage.items) {
+      if (!item) continue;
+      if (updateItemThermodynamics(item, targetTemp, step * heatMult)) {
+        changed = true;
+      }
+      if (typeof item.temperature === 'number' && item.temperature < targetTemp - 2) {
+        const coreBoost = (targetTemp - item.temperature) * (1 - Math.exp(-0.035 * (st.powerWatts / 600) * step));
+        item.temperature = Math.round((item.temperature + coreBoost) * 10) / 10;
+        item.surfaceTemperature = Math.round(((item.surfaceTemperature ?? item.temperature) * 0.7 + item.temperature * 0.3) * 10) / 10;
+      }
+    }
+
+    if (st.remainingSec <= 0) {
+      st.isRunning = false;
+      st.remainingSec = 0;
+    }
+    changed = true;
+  } else {
+    if (Math.abs(st.chamberTempC - ambientRoom) >= 0.2) {
+      st.chamberTempC = Math.round((ambientRoom + (st.chamberTempC - ambientRoom) * Math.exp(-0.03 * clampedDt)) * 10) / 10;
+      changed = true;
+    }
+    for (const item of storage.items) {
+      if (!item) continue;
+      if (updateItemThermodynamics(item, ambientRoom, clampedDt)) {
+        changed = true;
+      }
+    }
+  }
+
+  st.lastUpdatedSec = nowSec;
+  return changed;
+}
+
+export interface CoolerThermalStateLike {
+  bottleWaterMl: number;
+  bottleMaxMl: number;
+  coldOn: boolean;
+  hotOn: boolean;
+  coldTempC: number;
+  hotTempC: number;
+  lastUpdatedSec?: number;
+}
+
+export function tickCoolerThermodynamics(
+  storage: {
+    items: InventoryItem[];
+    coolerState?: CoolerThermalStateLike;
+  },
+  dt: number,
+  nowSec: number = Date.now() / 1000
+): boolean {
+  if (!storage || !storage.coolerState || dt <= 0) return false;
+  const st = storage.coolerState;
+  const clampedDt = Math.min(dt, 3600);
+  const ambientRoom = 21.0;
+  let changed = false;
+
+  const targetCold = st.coldOn && st.bottleWaterMl > 50 ? 6.0 : ambientRoom;
+  const targetHot = st.hotOn && st.bottleWaterMl > 50 ? 88.0 : ambientRoom;
+  const nextCold = Math.round((targetCold + (st.coldTempC - targetCold) * Math.exp(-0.04 * clampedDt)) * 10) / 10;
+  const nextHot = Math.round((targetHot + (st.hotTempC - targetHot) * Math.exp(-0.045 * clampedDt)) * 10) / 10;
+
+  if (Math.abs(nextCold - st.coldTempC) >= 0.1) {
+    st.coldTempC = nextCold;
+    changed = true;
+  }
+  if (Math.abs(nextHot - st.hotTempC) >= 0.1) {
+    st.hotTempC = nextHot;
+    changed = true;
+  }
+
+  for (const item of storage.items || []) {
+    if (!item) continue;
+    if (updateItemThermodynamics(item, ambientRoom, clampedDt)) {
+      changed = true;
+    }
+  }
+
+  st.lastUpdatedSec = nowSec;
+  return changed;
+}
+
 /**
  * Synchronizes thermodynamics for all items stored inside a furniture container
- * (e.g. refrigerator at +4°C, pantry counter at +21°C, gas stove with 4 burners & oven, sink).
- * Uses exact analytical time-delta catching up so when a player returns after a long walk,
- * items inside have cooled or heated realistically according to the exact elapsed time!
+ * (e.g. refrigerator at +4°C, pantry counter at +21°C, gas stove, sink, bath, washing machine, microwave, cooler).
  */
 export function syncFurnitureStorageThermodynamics(
   storage: {
@@ -1237,12 +1539,14 @@ export function syncFurnitureStorageThermodynamics(
       oven: { items: InventoryItem[]; gasOn: boolean; temperature: number; lastUpdatedSec?: number };
     };
     sinkState?: SinkThermalStateLike;
+    washingState?: WashingMachineThermalStateLike;
+    microwaveState?: MicrowaveThermalStateLike;
+    coolerState?: CoolerThermalStateLike;
   },
   currentTimeSec: number = Date.now() / 1000
 ): void {
   if (!storage) return;
 
-  // Gas stove uses per-burner and oven gas states instead of a fixed ambient temperature
   if (storage.furnitureType === 'stove' && storage.stoveState) {
     const st = storage.stoveState;
     const refSec =
@@ -1256,12 +1560,38 @@ export function syncFurnitureStorageThermodynamics(
     return;
   }
 
-  // Sink uses tap/valve water flow, basin standing water, and hot/cold mixing
-  if (storage.furnitureType === 'sink' && storage.sinkState) {
+  if ((storage.furnitureType === 'sink' || storage.furnitureType === 'bath') && storage.sinkState) {
     const refSec = storage.sinkState.lastUpdatedSec ?? currentTimeSec;
     const elapsedDt = Math.max(0, currentTimeSec - refSec);
     if (elapsedDt > 0.1) {
       tickSinkStateThermodynamics(storage, elapsedDt, currentTimeSec);
+    }
+    return;
+  }
+
+  if (storage.furnitureType === 'washing_machine' && storage.washingState) {
+    const refSec = storage.washingState.lastUpdatedSec ?? currentTimeSec;
+    const elapsedDt = Math.max(0, currentTimeSec - refSec);
+    if (elapsedDt > 0.1) {
+      tickWashingMachineThermodynamics(storage, elapsedDt, currentTimeSec);
+    }
+    return;
+  }
+
+  if (storage.furnitureType === 'microwave' && storage.microwaveState) {
+    const refSec = storage.microwaveState.lastUpdatedSec ?? currentTimeSec;
+    const elapsedDt = Math.max(0, currentTimeSec - refSec);
+    if (elapsedDt > 0.1) {
+      tickMicrowaveThermodynamics(storage, elapsedDt, currentTimeSec);
+    }
+    return;
+  }
+
+  if (storage.furnitureType === 'cooler' && storage.coolerState) {
+    const refSec = storage.coolerState.lastUpdatedSec ?? currentTimeSec;
+    const elapsedDt = Math.max(0, currentTimeSec - refSec);
+    if (elapsedDt > 0.1) {
+      tickCoolerThermodynamics(storage, elapsedDt, currentTimeSec);
     }
     return;
   }

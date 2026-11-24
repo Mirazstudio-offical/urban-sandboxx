@@ -170,6 +170,10 @@ const FurnitureStorageModal = React.lazy(() => import('./components/FurnitureSto
 const KitchenTableModal = React.lazy(() => import('./components/KitchenTableModal').then((m) => ({ default: m.KitchenTableModal })));
 const KitchenStoveModal = React.lazy(() => import('./components/KitchenStoveModal').then((m) => ({ default: m.KitchenStoveModal })));
 const KitchenSinkModal = React.lazy(() => import('./components/KitchenSinkModal').then((m) => ({ default: m.KitchenSinkModal })));
+const BathtubModal = React.lazy(() => import('./components/BathtubModal').then((m) => ({ default: m.BathtubModal })));
+const WashingMachineModal = React.lazy(() => import('./components/WashingMachineModal').then((m) => ({ default: m.WashingMachineModal })));
+const MicrowaveModal = React.lazy(() => import('./components/MicrowaveModal').then((m) => ({ default: m.MicrowaveModal })));
+const WaterCoolerModal = React.lazy(() => import('./components/WaterCoolerModal').then((m) => ({ default: m.WaterCoolerModal })));
 const DateTimePickerModal = React.lazy(() => import('./components/DateTimePickerModal').then((m) => ({ default: m.DateTimePickerModal })));
 const CreativeMenuModal = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativeMenuModal })));
 const CreativePlacementHud = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativePlacementHud })));
@@ -9798,6 +9802,62 @@ export default function App() {
                     }
                   : undefined
               }
+            />
+          );
+        }
+
+        if (furnitureStorageData.furnitureType === 'bath') {
+          return (
+            <BathtubModal
+              isOpen={isFurnitureStorageOpen}
+              onClose={handleCloseFurn}
+              storage={activeStorage}
+              player={playerRef.current}
+              world={worldRef.current}
+              onInventoryUpdated={handleFurnChanged}
+              onVitalsChange={handleFurnChanged}
+            />
+          );
+        }
+
+        if (furnitureStorageData.furnitureType === 'washing_machine') {
+          return (
+            <WashingMachineModal
+              isOpen={isFurnitureStorageOpen}
+              onClose={handleCloseFurn}
+              storage={activeStorage}
+              player={playerRef.current}
+              world={worldRef.current}
+              onInventoryUpdated={handleFurnChanged}
+              onVitalsChange={handleFurnChanged}
+            />
+          );
+        }
+
+        if (furnitureStorageData.furnitureType === 'microwave') {
+          return (
+            <MicrowaveModal
+              isOpen={isFurnitureStorageOpen}
+              onClose={handleCloseFurn}
+              storage={activeStorage}
+              player={playerRef.current}
+              world={worldRef.current}
+              onInventoryUpdated={handleFurnChanged}
+              onVitalsChange={handleFurnChanged}
+            />
+          );
+        }
+
+        if (furnitureStorageData.furnitureType === 'cooler') {
+          return (
+            <WaterCoolerModal
+              isOpen={isFurnitureStorageOpen}
+              onClose={handleCloseFurn}
+              storage={activeStorage}
+              player={playerRef.current}
+              world={worldRef.current}
+              onInventoryUpdated={handleFurnChanged}
+              onVitalsChange={handleFurnChanged}
             />
           );
         }

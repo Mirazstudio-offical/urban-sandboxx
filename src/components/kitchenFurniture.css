@@ -686,8 +686,278 @@
 .gm[data-mob] .kf-sink-viz { height: 96px; }
 .gm[data-mob] .kf-valve-row { grid-template-columns: 68px 26px minmax(0, 1fr) 26px 38px; gap: 4px; }
 .gm[data-mob] .kf-valve-step { width: 26px; height: 24px; }
-.gm[data-mob] .kf-sink-toggles { gap: 5px; }
+.gm[data-mob] .kf-sink-toggles { gap: 5px; flex-wrap: wrap; }
 .gm[data-mob] .kf-sink-toggles .btn.btn-xs { padding: 0 8px; font-size: 11.5px; gap: 4px; }
+
+/* ---- Washing Machine Drum & Program Grid ---- */
+.kf-wash-box {
+  flex: none;
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(13, 14, 16, .9);
+  border: 1px solid rgba(255, 255, 255, .09);
+}
+.kf-wash-drum {
+  position: relative;
+  height: 118px;
+  border-radius: 10px;
+  background: #0b0c0e;
+  border: 1px solid rgba(255, 255, 255, .08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  overflow: hidden;
+}
+.kf-wash-ring {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 3px solid rgba(148, 163, 184, .35);
+  background: radial-gradient(circle, rgba(255, 255, 255, .04) 20%, rgba(12, 13, 16, .96) 80%);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.kf-wash-ring.locked { border-color: rgba(108, 180, 232, .7); }
+.kf-wash-water {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(94, 163, 214, .4);
+  transition: height .3s;
+}
+.kf-wash-rotor {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kf-wash-rotor.spinning {
+  animation: kf-drum-spin 1.1s linear infinite;
+}
+@keyframes kf-drum-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.kf-wash-phase {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a29e93;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.kf-wash-ctrl {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 7px;
+}
+.kf-wash-progs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.kf-wash-prog {
+  height: 28px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .1);
+  color: #cfcbc1;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background .14s, border-color .14s, color .14s;
+}
+.kf-wash-prog:hover { background: rgba(255, 255, 255, .11); }
+.kf-wash-prog.on {
+  background: rgba(201, 146, 43, .2);
+  border-color: #c9922b;
+  color: #fff;
+}
+.kf-wash-prog:disabled { opacity: .45; pointer-events: none; }
+.kf-wash-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.kf-prog-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .08);
+  overflow: hidden;
+}
+.kf-prog-bar > i {
+  display: block;
+  height: 100%;
+  background: #6cb4e8;
+  transition: width .25s;
+}
+
+/* ---- Microwave Chamber & Controls ---- */
+.kf-mw-box {
+  flex: none;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(13, 14, 16, .9);
+  border: 1px solid rgba(255, 255, 255, .09);
+}
+.kf-mw-win {
+  position: relative;
+  height: 112px;
+  border-radius: 10px;
+  background: #0b0c0e;
+  border: 1px solid rgba(255, 255, 255, .1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  transition: border-color .2s, background .2s;
+}
+.kf-mw-win.active {
+  border-color: rgba(224, 171, 69, .75);
+  background: radial-gradient(circle, rgba(224, 171, 69, .24) 0%, rgba(16, 13, 10, .96) 78%);
+}
+.kf-mw-win.warn {
+  border-color: rgba(217, 83, 63, .75);
+  background: radial-gradient(circle, rgba(217, 83, 63, .2) 0%, rgba(16, 11, 11, .96) 78%);
+}
+.kf-mw-plate {
+  width: 78px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  background: rgba(255, 255, 255, .06);
+}
+.kf-mw-timer-readout {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: #f4f1ea;
+  font-variant-numeric: tabular-nums;
+}
+.kf-mw-ctrl {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 7px;
+}
+.kf-mw-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.kf-mw-pill {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .11);
+  color: #cfcbc1;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kf-mw-pill:hover { background: rgba(255, 255, 255, .12); }
+.kf-mw-pill.on {
+  background: rgba(201, 146, 43, .2);
+  border-color: #c9922b;
+  color: #fff;
+}
+
+/* ---- Water Cooler Bottle & Taps ---- */
+.kf-cool-box {
+  flex: none;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(13, 14, 16, .9);
+  border: 1px solid rgba(255, 255, 255, .09);
+}
+.kf-cool-viz {
+  position: relative;
+  height: 118px;
+  border-radius: 10px;
+  background: #0b0c0e;
+  border: 1px solid rgba(255, 255, 255, .08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.kf-cool-ctrl {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 7px;
+}
+.kf-cool-taps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.kf-cool-tap-card {
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .09);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.kf-cool-tap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kf-cool-tap-acts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.gm[data-mob] .kf-wash-box,
+.gm[data-mob] .kf-mw-box,
+.gm[data-mob] .kf-cool-box {
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 9px;
+  padding: 8px 10px;
+}
+.gm[data-mob] .kf-wash-drum,
+.gm[data-mob] .kf-mw-win,
+.gm[data-mob] .kf-cool-viz { height: 96px; }
+.gm[data-mob] .kf-wash-ring { width: 58px; height: 58px; }
+.gm[data-mob] .kf-mw-timer-readout { font-size: 20px; }
 
 @container (max-width: 1060px) {
   .gm[data-mob] .kf-wb-grid4 { grid-template-columns: repeat(4, 44px); gap: 4px; }
@@ -695,7 +965,14 @@
   .gm[data-mob] .kf-wb-row { gap: 8px; }
   .gm[data-mob] .kf-wb-arrow { height: 38px; padding: 0 9px; }
   .gm[data-mob] .kf-burner-ring { width: 56px; height: 56px; }
-  .gm[data-mob] .kf-sink-mixer { grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
-  .gm[data-mob] .kf-sink-viz { height: 88px; }
+  .gm[data-mob] .kf-sink-mixer,
+  .gm[data-mob] .kf-wash-box,
+  .gm[data-mob] .kf-mw-box,
+  .gm[data-mob] .kf-cool-box { grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+  .gm[data-mob] .kf-sink-viz,
+  .gm[data-mob] .kf-wash-drum,
+  .gm[data-mob] .kf-mw-win,
+  .gm[data-mob] .kf-cool-viz { height: 88px; }
   .gm[data-mob] .kf-sink-stats { font-size: 11px; gap: 5px; }
+  .gm[data-mob] .kf-wash-prog { font-size: 11px; height: 26px; padding: 0 5px; }
 }

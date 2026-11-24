@@ -1363,7 +1363,7 @@ export function renderDomesticFurniture(
         const y1 = hobY + hobH * 0.3;
         const y2 = hobY + hobH * 0.72;
         for (const [cy, r, hot] of [
-          [y1, r1, true],
+          [y1, r1, false],
           [y2, r2, false],
         ] as [number, number, boolean][]) {
           ctx.strokeStyle = hot ? 'rgba(239, 68, 68, 0.8)' : 'rgba(148, 163, 184, 0.5)';
@@ -1421,7 +1421,7 @@ export function renderDomesticFurniture(
           ctx.beginPath();
           ctx.arc(sx, hh * 0.05 + hobH * 0.5, r, 0, Math.PI * 2);
           ctx.stroke();
-          ctx.strokeStyle = 'rgba(249, 115, 22, 0.5)';
+          ctx.strokeStyle = 'rgba(100, 116, 139, 0.35)';
           ctx.beginPath();
           ctx.arc(sx, hh * 0.05 + hobH * 0.5, r * 0.55, 0, Math.PI * 2);
           ctx.stroke();
@@ -1455,10 +1455,10 @@ export function renderDomesticFurniture(
 
       // 4 Cast-iron spider pan-support grates & brass gas burner crowns
       const burners = [
-        { cx: -deckW * 0.25, cy: deckY + deckH * 0.28, r: Math.min(deckW, deckH) * 0.2, hot: true },
+        { cx: -deckW * 0.25, cy: deckY + deckH * 0.28, r: Math.min(deckW, deckH) * 0.2, hot: false },
         { cx: deckW * 0.25, cy: deckY + deckH * 0.28, r: Math.min(deckW, deckH) * 0.15, hot: false },
         { cx: -deckW * 0.25, cy: deckY + deckH * 0.73, r: Math.min(deckW, deckH) * 0.16, hot: false },
-        { cx: deckW * 0.25, cy: deckY + deckH * 0.73, r: Math.min(deckW, deckH) * 0.21, hot: true },
+        { cx: deckW * 0.25, cy: deckY + deckH * 0.73, r: Math.min(deckW, deckH) * 0.21, hot: false },
       ];
       for (const b of burners) {
         // Cast iron 4-prong spider grate
@@ -1703,29 +1703,9 @@ export function renderDomesticFurniture(
       ctx.lineWidth = 0.45;
       ctx.stroke();
 
-      // Crystal-clear translucent aqua bathwater fill with depth shading
+      // Chrome pop-up drain ring (left side under faucet — water & steam rendered dynamically when filled)
       const wPad = rim + Math.max(0.45, bh * 0.055);
       const watW = bw - wPad * 2;
-      const watH = bh - wPad * 2;
-      const watG = ctx.createRadialGradient(-bhw * 0.2, -bhh * 0.1, watH * 0.1, 0, 0, watW * 0.68);
-      watG.addColorStop(0, '#e0f2fe');
-      watG.addColorStop(0.45, '#7dd3fc');
-      watG.addColorStop(1, '#0284c7');
-      ctx.fillStyle = watG;
-      rr(ctx, -bhw + wPad, -bhh + wPad, watW, watH, Math.max(0.8, inR - 0.5));
-      ctx.fill();
-
-      // Subtle translucent water caustic shimmer arcs
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
-      ctx.lineWidth = Math.max(0.32, bh * 0.032);
-      ctx.beginPath();
-      ctx.moveTo(-bhw + wPad + watW * 0.18, -watH * 0.18);
-      ctx.quadraticCurveTo(0, -watH * 0.28, bhw - wPad - watW * 0.22, -watH * 0.12);
-      ctx.moveTo(-bhw + wPad + watW * 0.28, watH * 0.16);
-      ctx.quadraticCurveTo(watW * 0.05, watH * 0.08, bhw - wPad - watW * 0.3, watH * 0.22);
-      ctx.stroke();
-
-      // Chrome pop-up drain ring (left side under faucet)
       const drainX = -bhw + wPad + watW * 0.16;
       ctx.fillStyle = '#475569';
       ctx.beginPath();
