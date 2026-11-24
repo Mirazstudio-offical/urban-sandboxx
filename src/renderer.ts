@@ -1454,12 +1454,9 @@ export class GameRenderer {
         this.renderPlayerPedestrian(player, false, 20);
       }
 
-      // Disabled in favor of high-performance ContextInteractionHUD Lucide React overlay
-      /*
       if (activeInteraction) {
-        this.renderInteractionReticle(activeInteraction, camera);
+        this.renderInteractionOutline(activeInteraction, camera);
       }
-      */
 
       ctx.restore();
 
@@ -1798,12 +1795,9 @@ export class GameRenderer {
       renderSoftbodyMeshOverlay(ctx, visibleVehicles, camera.zoom);
     }
 
-    // Disabled in favor of high-performance ContextInteractionHUD Lucide React overlay
-    /*
     if (activeInteraction) {
-      this.renderInteractionReticle(activeInteraction, camera);
+      this.renderInteractionOutline(activeInteraction, camera);
     }
-    */
 
     ctx.restore();
 
@@ -10041,221 +10035,73 @@ export class GameRenderer {
   }
 
   /**
-   * Renders a sleek, realistic physical interaction reticle in the world at the focused object.
+   * Renders a crisp white world-space contour around the hovered (PC) or held (mobile long-tap)
+   * interactive object or vehicle sub-zone (hood, roof, vacuum pump bay, crane cab, furniture, etc.).
+   * Contains strictly geometry — no text, no key badges, no floating labels.
    */
-  private renderInteractionVectorIcon(
-    ctx: CanvasRenderingContext2D,
-    type: string,
-    color: string
-  ) {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = 1.4;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    switch (type) {
-      case 'enter_vehicle':
-      case 'exit_vehicle': {
-        ctx.beginPath();
-        ctx.rect(-5, -4, 10, 8);
-        ctx.moveTo(-2, -4); ctx.lineTo(-2, 4);
-        ctx.moveTo(2, -1); ctx.arc(2, -1, 0.8, 0, Math.PI * 2);
-        ctx.stroke();
-        break;
-      }
-      case 'open_hood': {
-        ctx.beginPath();
-        ctx.moveTo(-5, 3); ctx.lineTo(5, 3);
-        ctx.lineTo(4, -3); ctx.lineTo(-4, -3); ctx.closePath();
-        ctx.moveTo(0, -3); ctx.lineTo(0, 3);
-        ctx.stroke();
-        break;
-      }
-      case 'fuel_insert':
-      case 'pump_take_nozzle':
-      case 'pump_return_nozzle': {
-        ctx.beginPath();
-        ctx.rect(-4, -3, 5, 7);
-        ctx.moveTo(1, -1); ctx.lineTo(5, -1); ctx.lineTo(5, 3);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(-1.5, 0.5, 1, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      }
-      case 'water_hose_take':
-      case 'water_hose_stow': {
-        ctx.beginPath();
-        ctx.moveTo(0, -5);
-        ctx.bezierCurveTo(-4, -1, -4, 4, 0, 5);
-        ctx.bezierCurveTo(4, 4, 4, -1, 0, -5);
-        ctx.closePath();
-        ctx.fill();
-        break;
-      }
-      case 'enter_building':
-      case 'exit_building': {
-        ctx.beginPath();
-        ctx.rect(-4, -5, 8, 10);
-        ctx.moveTo(1, 0); ctx.arc(1, 0, 0.8, 0, Math.PI * 2);
-        ctx.stroke();
-        break;
-      }
-      case 'building_elevator': {
-        ctx.beginPath();
-        ctx.moveTo(-3, 0); ctx.lineTo(0, -4); ctx.lineTo(3, 0);
-        ctx.moveTo(-3, 1); ctx.lineTo(0, 5); ctx.lineTo(3, 1);
-        ctx.stroke();
-        break;
-      }
-      case 'building_shop':
-      case 'gas_cashier': {
-        ctx.beginPath();
-        ctx.rect(-4, -2, 8, 7);
-        ctx.moveTo(-2, -2); ctx.arc(0, -2, 2, Math.PI, 0);
-        ctx.stroke();
-        break;
-      }
-      case 'pickup_item':
-      case 'pickup_litter': {
-        ctx.beginPath();
-        ctx.rect(-4, -4, 8, 8);
-        ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
-        ctx.moveTo(0, -4); ctx.lineTo(0, 4);
-        ctx.stroke();
-        break;
-      }
-      case 'trailer_hitch':
-      case 'trailer_unhitch':
-      case 'trailer_connect_plug':
-      case 'trailer_connect_brakes':
-      case 'trailer_toggle_handbrake': {
-        ctx.beginPath();
-        ctx.arc(-2.5, 0, 2.5, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(2.5, 0, 2.5, 0, Math.PI * 2);
-        ctx.stroke();
-        break;
-      }
-      case 'eco_recycle':
-      case 'trash_throw': {
-        ctx.beginPath();
-        ctx.moveTo(-5, -3); ctx.lineTo(5, -3);
-        ctx.moveTo(-3, -3); ctx.lineTo(-2, 4); ctx.lineTo(2, 4); ctx.lineTo(3, -3);
-        ctx.stroke();
-        break;
-      }
-      default: {
-        ctx.beginPath();
-        ctx.arc(0, 0, 3, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(-5, 0); ctx.lineTo(-3, 0);
-        ctx.moveTo(3, 0); ctx.lineTo(5, 0);
-        ctx.moveTo(0, -5); ctx.lineTo(0, -3);
-        ctx.moveTo(0, 3); ctx.lineTo(0, 5);
-        ctx.stroke();
-        break;
-      }
-    }
-    ctx.restore();
-  }
-
-  private renderInteractionReticle(
+  private renderInteractionOutline(
     target: InteractionTarget,
     camera: Camera
   ) {
-    if (!target || target.type === 'hand_item' || target.type === 'exit_vehicle') return;
+    if (!target || !target.outline || target.type === 'hand_item') return;
 
     const ctx = this.ctx;
+    const outline = target.outline;
+    const z = Math.max(0.4, camera.zoom || 1);
+    const lw = Math.max(0.85, Math.min(2.2, 1.85 / z));
+
     ctx.save();
-    ctx.translate(target.x, target.y);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    // Counter-rotate to keep reticle and label text upright on screen
-    ctx.rotate(camera.angle + Math.PI / 2);
+    const buildPath = () => {
+      ctx.beginPath();
+      if (outline.kind === 'rect') {
+        const hw = outline.width / 2;
+        const hh = outline.height / 2;
+        const r = Math.min(outline.radius ?? 2, hw, hh);
+        if (r > 0.25) {
+          safeRoundRect(ctx, -hw, -hh, outline.width, outline.height, r);
+        } else {
+          ctx.rect(-hw, -hh, outline.width, outline.height);
+        }
+      } else if (outline.kind === 'circle') {
+        ctx.arc(outline.cx, outline.cy, outline.radius, 0, Math.PI * 2);
+      } else if (outline.kind === 'polygon' && outline.points.length >= 3) {
+        ctx.moveTo(outline.points[0].x, outline.points[0].y);
+        for (let i = 1; i < outline.points.length; i++) {
+          ctx.lineTo(outline.points[i].x, outline.points[i].y);
+        }
+        ctx.closePath();
+      }
+    };
 
-    const nowSec = performance.now() * 0.001;
-    const isF = target.primaryKey === 'F';
-    const mainColor = isF ? '#34d399' : '#38bdf8';
-    const accentColor = isF ? '#059669' : '#0284c7';
-    const glowColor = isF ? 'rgba(52, 211, 153, 0.22)' : 'rgba(56, 189, 248, 0.22)';
-
-    // 1. Ground Radial Halo Glow
-    const pulseRad = 20 + Math.sin(nowSec * 3.5) * 2;
-    const haloGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, pulseRad);
-    haloGrad.addColorStop(0, glowColor);
-    haloGrad.addColorStop(0.6, isF ? 'rgba(52, 211, 153, 0.08)' : 'rgba(56, 189, 248, 0.08)');
-    haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = haloGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, pulseRad, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 2. Intricate Rotating Outer Lace Ring ("Кружево")
-    ctx.save();
-    ctx.rotate(nowSec * 0.75); // Continuous rotation for visual lace pattern
-    ctx.strokeStyle = mainColor;
-    ctx.lineWidth = 1.3;
-    ctx.setLineDash([5, 3, 2, 3]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 18, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inner secondary lace ring
-    ctx.rotate(-nowSec * 1.5);
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 1.0;
-    ctx.setLineDash([2, 3]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 15, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-
-    // 3. Central Dark Disc Badge with Glassmorphism
-    ctx.beginPath();
-    ctx.arc(0, 0, 12.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-    ctx.fill();
-    ctx.strokeStyle = mainColor;
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
-
-    // 4. Render Vector Action Icon inside Central Disc
-    this.renderInteractionVectorIcon(ctx, target.type, '#ffffff');
-
-    // 5. Key Badge Pill Attached Below Disc ([E] or [F])
-    const keyLabel = `[${target.primaryKey}]`;
-    ctx.font = 'bold 9px monospace, sans-serif';
-    const keyW = ctx.measureText(keyLabel).width + 8;
-    const keyH = 13;
-    const keyY = 20;
-
-    ctx.fillStyle = isF ? 'rgba(6, 78, 59, 0.94)' : 'rgba(12, 74, 110, 0.94)';
-    ctx.beginPath();
-    safeRoundRect(ctx, -keyW / 2, keyY - keyH / 2, keyW, keyH, 4);
-    ctx.fill();
-    ctx.strokeStyle = mainColor;
-    ctx.lineWidth = 1.0;
-    ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(keyLabel, 0, keyY);
-
-    // 6. Action Title Below Key Badge
-    if (target.actionTitle) {
-      ctx.font = 'bold 9px sans-serif';
-      ctx.fillStyle = 'rgba(248, 250, 252, 0.95)';
-      ctx.shadowColor = '#000000';
-      ctx.shadowBlur = performanceConfig.enableSoftShadowBlur ? 4 : 0;
-      ctx.fillText(target.actionTitle, 0, keyY + 13);
-      ctx.shadowBlur = 0;
+    if (outline.kind === 'rect') {
+      ctx.translate(outline.cx, outline.cy);
+      ctx.rotate(outline.angle);
     }
+
+    // 1. Subtle inner white sheen
+    buildPath();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.fill();
+
+    // 2. Subtle dark contrast backing stroke so white contour pops against snow & bright paint
+    buildPath();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.lineWidth = lw + 1.4 / z;
+    ctx.stroke();
+
+    // 3. Crisp pure-white outer contour
+    buildPath();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.96)';
+    ctx.lineWidth = lw;
+    if (performanceConfig.enableSoftShadowBlur) {
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+      ctx.shadowBlur = 5;
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
 
     ctx.restore();
   }

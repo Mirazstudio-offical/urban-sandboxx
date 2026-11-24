@@ -16099,7 +16099,7 @@ export function unhitchTrailerFromVehicle(vehicle: Vehicle, world: GameWorld): b
 
 export function toggleTrailerHitch(vehicle: Vehicle, world: GameWorld, playerNotifications?: any): boolean {
   if (playerNotifications && typeof playerNotifications.add === 'function') {
-    playerNotifications.add('Для сцепки/расцепки прицепа выйдите из машины и выполните её вручную на [E]!', 'warning');
+    playerNotifications.add('Для сцепки/расцепки прицепа выйдите из машины и нажмите ПКМ или удерживайте палец на сцепке.', 'warning');
   }
   return false;
 }

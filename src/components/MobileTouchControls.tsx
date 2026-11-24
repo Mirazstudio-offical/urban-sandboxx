@@ -32,14 +32,14 @@ import {
   Compass,
   Square,
   Truck,
-  Eye
+  Eye,
+  Droplet
 } from 'lucide-react';
 
 interface MobileTouchControlsProps {
   inputRef: React.MutableRefObject<InputState>;
   isInVehicle: boolean;
-  isNearVehicle?: boolean;
-  onEnterExitVehicle: () => void;
+  hasHeldWaterHose?: boolean;
   onResetVehicle: () => void;
   onOpenMap: () => void;
   onOpenSpawnMenu: () => void;
@@ -58,9 +58,6 @@ interface MobileTouchControlsProps {
   onSelectGear?: (gear: 'P' | 'R' | 'N' | 'D' | number | string) => void;
   onToggleEngine?: () => void;
   isEngineRunning?: boolean;
-  onInteractE?: () => void;
-  canInteractF?: boolean;
-  canInteractE?: boolean;
   hasTransferCase?: boolean;
   transferCaseMode?: 'HIGH' | 'LOW';
   onToggleTransferCase?: () => void;
@@ -80,9 +77,6 @@ interface MobileTouchControlsProps {
   onCycleUiScale?: () => void;
   /** Crane operator cab: wheel and pedals are not used, the truck console owns the screen edges. */
   hideDriveControls?: boolean;
-  activeInteraction?: import('../interactionSystem').InteractionTarget | null;
-  onInteractR?: () => void;
-  onInteractKey?: (key: 'E' | 'F' | 'R') => void;
 }
 
 const triggerHaptic = (ms: number = 10) => {
@@ -1373,8 +1367,7 @@ const VirtualSteeringWheel: React.FC<VirtualSteeringWheelProps> = ({
 export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   inputRef,
   isInVehicle,
-  isNearVehicle,
-  onEnterExitVehicle,
+  hasHeldWaterHose = false,
   onResetVehicle,
   onOpenMap,
   onOpenSpawnMenu,
@@ -1393,9 +1386,6 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   onSelectGear,
   onToggleEngine,
   isEngineRunning = true,
-  onInteractE,
-  canInteractF = false,
-  canInteractE = false,
   hasTransferCase,
   transferCaseMode,
   onToggleTransferCase,
@@ -1414,9 +1404,6 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   uiScale = 0.75,
   onCycleUiScale,
   hideDriveControls = false,
-  activeInteraction = null,
-  onInteractR,
-  onInteractKey,
 }) => {
   // Joystick State (Used for Pedestrian Walking)
   const [joystickActive, setJoystickActive] = useState<boolean>(false);
@@ -1498,97 +1485,36 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   return (
     <div id="mobile-touch-overlay" className="fixed inset-0 pointer-events-none z-30 select-none overflow-hidden touch-none font-mono">
       
-      {/* LEFT SIDE ACTION BUTTONS (F & E) SAFELY BELOW TOP-LEFT HUD */}
-      <div 
-        className="absolute top-[52px] left-2.5 flex flex-col gap-1.5 pointer-events-auto z-30 origin-top-left"
-        style={uiScale ? { transform: `scale(${uiScale})` } : undefined}
-      >
-        {/* Unified F Button (Enter/Exit/Doors) */}
-        <button
-          type="button"
-          onClick={() => {
-            triggerHaptic(20);
-            onEnterExitVehicle();
-          }}
-          className={`w-9.5 h-9.5 rounded-xl border flex items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer ${
-            canInteractF
-              ? 'bg-white/30 text-white border-white/50'
-              : 'bg-[rgba(34,36,42,0.72)] text-slate-200 border-white/15 hover:border-white/30'
-          }`}
-          title="Действие F (Вход/Выход из транспорта)"
+      {/* CONDITIONAL HOSE SPRAY / SUCTION HOLD BUTTON (ONLY WHILE HOLDING WATER / VACUUM HOSE) */}
+      {hasHeldWaterHose && !isInVehicle && (
+        <div
+          className="absolute top-[52px] left-2.5 flex flex-col gap-1.5 pointer-events-auto z-30 origin-top-left"
+          style={uiScale ? { transform: `scale(${uiScale})` } : undefined}
         >
-          {isInVehicle ? <LogOut className="w-4.5 h-4.5 text-slate-200" /> : <Car className="w-4.5 h-4.5 text-slate-200" />}
-        </button>
-
-        {/* Unified E Button (Use/Interact/Pickup/Shop) */}
-        <button
-          type="button"
-          onPointerDown={() => {
-            triggerHaptic(15);
-            inputRef.current.actionE = true;
-            onInteractE?.();
-          }}
-          onPointerUp={() => {
-            inputRef.current.actionE = false;
-          }}
-          onPointerCancel={() => {
-            inputRef.current.actionE = false;
-          }}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            inputRef.current.actionE = false;
-          }}
-          className={`w-9.5 h-9.5 rounded-xl border flex items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer ${
-            canInteractE
-              ? 'bg-white/30 text-white border-white/50'
-              : 'bg-[rgba(34,36,42,0.72)] text-slate-200 border-white/15 hover:border-white/30'
-          }`}
-          title="Действие E (Взаимодействие / Использовать)"
-        >
-          <Hand className="w-4.5 h-4.5 text-slate-200" />
-        </button>
-
-        {/* Dynamic Context Buttons: If the active interaction has another key like R or secondary actions */}
-        {(() => {
-          if (!activeInteraction) return null;
-          // Collect keys that are neither primary F nor E
-          const extraButtons: { key: 'E' | 'F' | 'R'; title: string }[] = [];
-          
-          if (activeInteraction.primaryKey === 'R') {
-            extraButtons.push({ key: 'R', title: activeInteraction.actionTitle });
-          }
-          if (activeInteraction.availableKeys) {
-            for (const ak of activeInteraction.availableKeys) {
-              if (ak.key === 'R' && !extraButtons.some(b => b.key === 'R')) {
-                extraButtons.push(ak);
-              }
-            }
-          }
-
-          return extraButtons.map(btn => (
-            <button
-              key={btn.key}
-              type="button"
-              onClick={() => {
-                triggerHaptic(18);
-                if (btn.key === 'R') {
-                  onInteractR?.();
-                } else {
-                  onInteractKey?.(btn.key);
-                }
-              }}
-              className="w-9.5 h-9.5 rounded-xl border border-amber-500/60 bg-amber-500/25 text-amber-200 flex flex-col items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
-              title={`Действие [${btn.key}]: ${btn.title}`}
-            >
-              <span className="text-[12px] font-black font-mono leading-none">{btn.key}</span>
-              <span className="text-[7.5px] font-bold truncate max-w-[34px] leading-none mt-0.5 opacity-90">
-                {btn.title.split(' ')[0]}
-              </span>
-            </button>
-          ));
-        })()}
-      </div>
+          <button
+            type="button"
+            onPointerDown={() => {
+              triggerHaptic(15);
+              inputRef.current.actionE = true;
+            }}
+            onPointerUp={() => {
+              inputRef.current.actionE = false;
+            }}
+            onPointerCancel={() => {
+              inputRef.current.actionE = false;
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              inputRef.current.actionE = false;
+            }}
+            className="w-11 h-11 rounded-xl border bg-[#c9922b]/40 text-white border-[#c9922b]/80 flex items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer"
+            title="Подача / всасывание"
+          >
+            <Droplet className="w-5 h-5 text-white" />
+          </button>
+        </div>
+      )}
 
       {/* IN-VEHICLE WINDSHIELD GLANCE ZONE (Swipe road area to glance ahead/sideways with elastic return) */}
       {isInVehicle && <VehicleWindshieldGlanceZone inputRef={inputRef} />}

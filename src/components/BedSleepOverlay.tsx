@@ -118,21 +118,13 @@ export const BedSleepOverlay: React.FC<BedSleepOverlayProps> = ({
       const code = e.code;
 
       if (isLying) {
-        if (code === 'KeyE') {
-          e.preventDefault();
-          e.stopPropagation();
-          onSleep();
-        } else if (code === 'Space') {
+        if (code === 'Space') {
           e.preventDefault();
           e.stopPropagation();
           onStandUp();
         }
       } else if (isNightAwake) {
-        if (code === 'KeyE') {
-          e.preventDefault();
-          e.stopPropagation();
-          onFallBackAsleep();
-        } else if (code === 'Space') {
+        if (code === 'Space') {
           e.preventDefault();
           e.stopPropagation();
           onStandUp();
@@ -237,7 +229,7 @@ export const BedSleepOverlay: React.FC<BedSleepOverlayProps> = ({
                 onClick={onSleep}
                 className="w-full py-2.5 bg-[#c68a35] hover:bg-[#d99a41] text-[#0b0c0e] rounded-[2px] text-xs font-bold tracking-wide flex items-center justify-center gap-2 transition-all cursor-pointer uppercase"
               >
-                Закрыть глаза и уснуть [E]
+                Закрыть глаза и уснуть
               </button>
               <button
                 onClick={onStandUp}
@@ -332,7 +324,7 @@ export const BedSleepOverlay: React.FC<BedSleepOverlayProps> = ({
                 onClick={onFallBackAsleep}
                 className="w-full py-2.5 bg-[#c68a35] hover:bg-[#d99a41] text-[#0b0c0e] rounded-[2px] text-xs font-bold tracking-wide flex items-center justify-center gap-2 transition-all cursor-pointer uppercase"
               >
-                Повернуться на другой бок и спать дальше [E]
+                Повернуться на другой бок и спать дальше
               </button>
               <button
                 onClick={onStandUp}

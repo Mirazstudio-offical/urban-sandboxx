@@ -894,7 +894,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Remote key fob for locking and unlocking your personal vehicle. Press E while holding in hands or use from inventory near car.',
-    descriptionRu: 'Электронный ключ с пультом сигнализации. Нажмите [E] с ключом в руках или активируйте из инвентаря для управления замками и системами авто.',
+    descriptionRu: 'Электронный ключ с пультом сигнализации. Активируйте в активной руке (ПКМ / удержание) или из инвентаря для управления замками и системами авто.',
     effects: {},
     weight: 0.08,
     usable: true
@@ -2606,7 +2606,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Factory-wrapped miniature parchment paper block with sealed envelope folds and branded color label.',
-    descriptionRu: 'Заводская пергаментная упаковка (мини-брикет 0.4L) с конвертными складками и цветной этикеткой-пломбой. Отлично подходит для порционного масла, деликатесов и сырков. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Заводская пергаментная упаковка (мини-брикет 0.4L) с конвертными складками и цветной этикеткой-пломбой. Отлично подходит для порционного масла, деликатесов и сырков. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.01,
     volume: 0.08,
@@ -2630,7 +2630,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Standard factory greaseproof butter wrapper (0.8L) with authentic envelope tuck folds and branded label band.',
-    descriptionRu: 'Классическая заводская бумажная упаковка (брикет 0.8L) из подпергамента с аккуратными складками-конвертом и цветной этикеткой. Стандарт для сливочного масла и сыра. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Классическая заводская бумажная упаковка (брикет 0.8L) из подпергамента с аккуратными складками-конвертом и цветной этикеткой. Стандарт для сливочного масла и сыра. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.015,
     volume: 0.14,
@@ -2654,7 +2654,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Factory-wrapped rectangular brick in durable greaseproof food paper. Sealed with folded side envelope corners and a printed brand label band.',
-    descriptionRu: 'Заводская бумажная упаковка (пергаментная обертка брикета) со сложенными конвертом краями и фирменной цветной этикеткой-лентой. Надежно защищает масло и сыр. Нажмите [E] в руках или используйте для вскрытия.',
+    descriptionRu: 'Заводская бумажная упаковка (пергаментная обертка брикета) со сложенными конвертом краями и фирменной цветной этикеткой-лентой. Надежно защищает масло и сыр. Активируйте в активной руке (ПКМ / удержание) или используйте в инвентаре для вскрытия.',
     effects: {},
     weight: 0.02,
     volume: 0.2,
@@ -2678,7 +2678,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Large factory-wrapped deli block (2.4L) in heavy-duty food parchment with double-sealed envelope folds and premium brand label band.',
-    descriptionRu: 'Большая заводская бумажная упаковка (крупный брус 2.4L) из плотного подпергамента с двойными складками и широкой цветной этикеткой. Для цельных сырных блоков. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Большая заводская бумажная упаковка (крупный брус 2.4L) из плотного подпергамента с двойными складками и широкой цветной этикеткой. Для цельных сырных блоков. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.035,
     volume: 0.42,
@@ -2704,7 +2704,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Compact 4-side heat-sealed glossy BOPP plastic sachet from fruit gummies with V-tear notches and clear front window.',
-    descriptionRu: 'Компактный запаянный пластиковый мини-пакет (форма: плоский 4-шовный саше) из-под фруктовых мармеладок с надсечками для отрыва и прозрачным окошком. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Компактный запаянный пластиковый мини-пакет (форма: плоский 4-шовный саше) из-под фруктовых мармеладок с надсечками для отрыва и прозрачным окошком. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.003,
     volume: 0.02,
@@ -2728,7 +2728,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Puffy pillow-shaped polypropylene flow-pack wrapper with sawtooth crimped top/bottom weld fins and oval viewing window.',
-    descriptionRu: 'Запаянный пластиковый пакет из-под желейных конфет (форма: пакет-подушечка / флоу-пак) с зубчатыми термошвами и овальным окошком. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Запаянный пластиковый пакет из-под желейных конфет (форма: пакет-подушечка / флоу-пак) с зубчатыми термошвами и овальным окошком. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.005,
     volume: 0.04,
@@ -2752,7 +2752,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Clear retail polypropylene candy bag topped with a stiff printed header card and sombrero euroslot hang punch.',
-    descriptionRu: 'Прозрачный витринный пакет из-под мармеладок (форма: евро-пакет с хедером-подвесом) с плотной цветной шапкой и еврослотом. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Прозрачный витринный пакет из-под мармеладок (форма: евро-пакет с хедером-подвесом) с плотной цветной шапкой и еврослотом. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.008,
     volume: 0.06,
@@ -2776,7 +2776,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Glossy stand-up doypack plastic candy pouch with bottom gusset fold, double zip-lock track, tear notches, and clear oval window.',
-    descriptionRu: 'Плотный глянцевый пакет из-под мармеладных мишек (форма: стоячий дой-пак с зип-локом и донной складкой). Удобно закрывается повторно. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Плотный глянцевый пакет из-под мармеладных мишек (форма: стоячий дой-пак с зип-локом и донной складкой). Удобно закрывается повторно. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.012,
     volume: 0.08,
@@ -2800,7 +2800,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Family-size plastic candy bag with wide 3D side gusset pleats, flat block bottom, crimped clip band, and arched window.',
-    descriptionRu: 'Семейная большая пачка от конфет и мармелада (форма: объёмный пакет с боковыми фальцами и плоским дном). Нажмите [E] для вскрытия.',
+    descriptionRu: 'Семейная большая пачка от конфет и мармелада (форма: объёмный пакет с боковыми фальцами и плоским дном). Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.022,
     volume: 0.14,
@@ -2826,7 +2826,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Compact metallized foil bonbon wrap with paper belly band for mini chocolate squares and truffles.',
-    descriptionRu: 'Компактная фольгированная мини-обёртка с бумажной манжетой (форма: мини-обёртка с крылышками) для порционных долек, трюфелей и шоколадных конфет. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Компактная фольгированная мини-обёртка с бумажной манжетой (форма: мини-обёртка с крылышками) для порционных долек, трюфелей и шоколадных конфет. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.002,
     volume: 0.015,
@@ -2850,7 +2850,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Sleek elongated heat-sealed flow-pack wrapper with crimped ends for chocolate snack bars.',
-    descriptionRu: 'Узкий герметичный флоу-пак с зубчатыми торцевыми швами (форма: вытянутый батончик) для шоколадных и вафельных батончиков. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Узкий герметичный флоу-пак с зубчатыми торцевыми швами (форма: вытянутый батончик) для шоколадных и вафельных батончиков. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.004,
     volume: 0.035,
@@ -2874,7 +2874,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Traditional two-layer chocolate bar wrapper: embossed silver/gold foil inside a printed paper sleeve.',
-    descriptionRu: 'Традиционная двухслойная упаковка плитки шоколада: внутренняя тиснёная фольга и наружная бумажная манжета-этикетка. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Традиционная двухслойная упаковка плитки шоколада: внутренняя тиснёная фольга и наружная бумажная манжета-этикетка. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.007,
     volume: 0.05,
@@ -2898,7 +2898,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Square heat-sealed barrier wrapper with snap-open rear crease for square chocolate tiles.',
-    descriptionRu: 'Квадратная герметичная упаковка с линией разлома (форма: квадратный кник-пак) для квадратных плиток с начинкой. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Квадратная герметичная упаковка с линией разлома (форма: квадратный кник-пак) для квадратных плиток с начинкой. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.006,
     volume: 0.05,
@@ -2922,7 +2922,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Distinctive triangular cardboard prism box with golden foil inner wrap for peaked nougat chocolate.',
-    descriptionRu: 'Фирменная трёхгранная картонная коробочка-призма с торцевым клапаном и золотистой фольгой для треугольного шоколада с нугой. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Фирменная трёхгранная картонная коробочка-призма с торцевым клапаном и золотистой фольгой для треугольного шоколада с нугой. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.015,
     volume: 0.075,
@@ -2946,7 +2946,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Oversized thick kraft-paper and gold-foil chocolate envelope with tear-strip perforation for 180-300g bars.',
-    descriptionRu: 'Крупный плотный крафт-конверт с отрывной перфорацией и золочёной фольгой внутри для больших семейных плиток шоколада (180–300 г). Нажмите [E] для вскрытия.',
+    descriptionRu: 'Крупный плотный крафт-конверт с отрывной перфорацией и золочёной фольгой внутри для больших семейных плиток шоколада (180–300 г). Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.018,
     volume: 0.11,
@@ -2970,7 +2970,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Presentation cardboard gift box with molded gold blister tray, satin ribbon accent, and clear display window.',
-    descriptionRu: 'Презентабельная картонная коробка с золотистым коррексом, атласным бантом и прозрачным смотровым окном для набора шоколадных конфет-пралине. Нажмите [E] для вскрытия.',
+    descriptionRu: 'Презентабельная картонная коробка с золотистым коррексом, атласным бантом и прозрачным смотровым окном для набора шоколадных конфет-пралине. Активируйте в активной руке (ПКМ / удержание) для вскрытия.',
     effects: {},
     weight: 0.042,
     volume: 0.18,
@@ -6381,7 +6381,7 @@ export function syncPackageContainerState(
           ? 'Шоколад'
           : innerTitle;
       container.nameRu = `${openedBaseTitle} (${shortInnerLabel}: ${numInside} шт)`;
-      container.descriptionRu = `Вскрытая упаковка (${baseDef?.nameRu || openedBaseTitle}). Внутри: ${shortInnerLabel} (${numInside} шт.). Нажмите [E] или откройте контейнер в инвентаре, чтобы достать содержимое.`;
+      container.descriptionRu = `Вскрытая упаковка (${baseDef?.nameRu || openedBaseTitle}). Внутри: ${shortInnerLabel} (${numInside} шт.). Активируйте в активной руке (ПКМ / удержание) или откройте контейнер в инвентаре, чтобы достать содержимое.`;
     } else {
       container.nameRu = openedBaseTitle;
       container.descriptionRu = `Вскрытая пустая упаковка (${baseDef?.nameRu || openedBaseTitle}). Сохранила все атрибуты упаковки; можно положить предметы внутрь или утилизировать.`;
@@ -6395,8 +6395,8 @@ export function syncPackageContainerState(
       container.nameRu =
         customSealedNameRu || `${baseTitle} (${innerTitle}${numInside > 1 ? ` x${numInside}` : ''})`;
       const actionHint = container.singleUseContainer
-        ? 'Нажмите [E] в руках или используйте в инвентаре, чтобы вскрыть упаковку и достать содержимое.'
-        : 'Откройте контейнер в инвентаре или используйте [E], чтобы достать содержимое поштучно.';
+        ? 'Активируйте в активной руке (ПКМ / удержание) или используйте в инвентаре, чтобы вскрыть упаковку и достать содержимое.'
+        : 'Откройте контейнер в инвентаре или активируйте в активной руке (ПКМ / удержание), чтобы достать содержимое поштучно.';
       const baseDesc = customSealedDescRu || baseDef?.descriptionRu || container.descriptionRu;
       if (firstInner.itemId === 'gummy_candy') {
         const shapeSummary = Array.from(
@@ -8941,7 +8941,7 @@ export function activateTowRopeItem(
   sound.playPickup(); // Clank sound
   addPlayerNotification(
     player,
-    `Буксировочный трос натянут между машинами! Чтобы отцепить трос, подойдите к любому крюку и нажмите [E] при появлении подсказки.`,
+    `Буксировочный трос натянут между машинами. Чтобы отцепить трос, наведите на крюк и нажмите ПКМ или удерживайте палец.`,
     'info'
   );
 
@@ -9225,7 +9225,7 @@ export function useItemOnPlayer(
         player.rightHandItem = itemToHold;
       }
       sound.playPickup();
-      addPlayerNotification(player, `${itemToHold.nameRu} взят в руки! Подойдите к месту в своей квартире и нажмите [E], чтобы установить.`, 'info');
+      addPlayerNotification(player, `${itemToHold.nameRu} взят в руки. Подойдите к месту в своей квартире и активируйте (ПКМ / удержание), чтобы установить.`, 'info');
       return { success: true, message: `${itemToHold.nameRu} взят в руки` };
     }
   }
@@ -9279,7 +9279,7 @@ export function useItemOnPlayer(
   if (item.itemId === 'kitchen_knife_chef') {
     triggerPlayerActionAnim(player, 'knife_slash', 0.75, item.itemId);
     sound.playUseItem();
-    addPlayerNotification(player, `Острый кухонный нож шеф-повара. Нажмите [E] с ножом в руке для взмаха.`, 'info');
+    addPlayerNotification(player, `Острый кухонный нож шеф-повара. Активируйте в активной руке (ПКМ / удержание) для взмаха.`, 'info');
     return { success: true, message: 'Кухонный нож осмотрен' };
   }
 

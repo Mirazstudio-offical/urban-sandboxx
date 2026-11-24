@@ -112,43 +112,76 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
 
   const wipeRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
-  const [stageScale, setStageScale] = useState<number>(1);
-  const [hideHints, setHideHints] = useState<boolean>(false);
 
-  // Proportionally scale the 372x760 smartphone chassis so it NEVER squishes into a square on short/landscape viewports
+  const computePhoneStage = (W: number, H: number, padX = 16, padY = 16) => {
+    const availW = Math.max(120, W - padX - 16);
+    const availH = Math.max(120, H - padY - 16);
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    const compactHints = coarse || availH <= 560;
+    const stageW = 372 + 108;
+    const stageH = compactHints ? 760 : 796;
+    const scale = Math.min(1, Math.max(0.2, Math.min(availW / stageW, availH / stageH)));
+    return { scale, compactHints };
+  };
+
+  const [stageScale, setStageScale] = useState<number>(() => {
+    const w = window.visualViewport?.width || window.innerWidth || 1280;
+    const h = window.visualViewport?.height || window.innerHeight || 720;
+    return computePhoneStage(w, h).scale;
+  });
+  const [hideHints, setHideHints] = useState<boolean>(() => {
+    const w = window.visualViewport?.width || window.innerWidth || 1280;
+    const h = window.visualViewport?.height || window.innerHeight || 720;
+    return computePhoneStage(w, h).compactHints;
+  });
+
+  // Proportionally scale the 372x760 smartphone chassis after ShadowHost portal mounts so it always fits inside the viewport
   useLayoutEffect(() => {
-    const el = backdropRef.current;
-    if (!el) return;
-    const fit = () => {
-      const W = el.clientWidth;
-      const H = el.clientHeight;
-      if (!W || !H) return;
-      const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
-      const compactHints = coarse || H <= 540;
-      setHideHints(compactHints);
-      const stageW = 372 + 108;
-      const stageH = 760 + (compactHints ? 16 : 48);
-      const k = Math.min(1, Math.max(0.32, Math.min((W - 16) / stageW, (H - 16) / stageH)));
-      setStageScale(k);
-    };
-    fit();
+    let ro: ResizeObserver | null = null;
     let rafId = 0;
-    const scheduleFit = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(fit);
-    };
-    if (window.ResizeObserver) {
-      const ro = new ResizeObserver(scheduleFit);
-      ro.observe(el);
-      return () => {
-        cancelAnimationFrame(rafId);
-        ro.disconnect();
+    let roRafId = 0;
+    let onResize: (() => void) | null = null;
+
+    const attach = () => {
+      const el = backdropRef.current;
+      if (!el) {
+        rafId = requestAnimationFrame(attach);
+        return;
+      }
+      const fit = () => {
+        const W = el.clientWidth;
+        const H = el.clientHeight;
+        if (!W || !H) return;
+        const cs = getComputedStyle(el);
+        const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+        const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+        const next = computePhoneStage(W, H, padX, padY);
+        setHideHints(next.compactHints);
+        setStageScale(next.scale);
       };
-    }
-    window.addEventListener('resize', scheduleFit);
+      const scheduleFit = () => {
+        cancelAnimationFrame(roRafId);
+        roRafId = requestAnimationFrame(fit);
+      };
+      fit();
+      if (window.ResizeObserver) {
+        ro = new ResizeObserver(scheduleFit);
+        ro.observe(el);
+      }
+      onResize = scheduleFit;
+      window.addEventListener('resize', scheduleFit);
+      window.visualViewport?.addEventListener('resize', scheduleFit);
+    };
+
+    attach();
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', scheduleFit);
+      cancelAnimationFrame(roRafId);
+      ro?.disconnect();
+      if (onResize) {
+        window.removeEventListener('resize', onResize);
+        window.visualViewport?.removeEventListener('resize', onResize);
+      }
     };
   }, []);
 

@@ -41,7 +41,7 @@ export const CraneOutriggersModal: React.FC<CraneOutriggersModalProps> = ({ isOp
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') {
+      if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       }
@@ -108,7 +108,7 @@ export const CraneOutriggersModal: React.FC<CraneOutriggersModalProps> = ({ isOp
 
   return (
     <div className="op-layer" onPointerDown={stop} onMouseDown={stop} onTouchStart={stop} onClick={onClose}>
-      <button type="button" className="op-close" onClick={onClose} title="Закрыть пульт [Esc / E]" aria-label="Закрыть пульт">
+      <button type="button" className="op-close" onClick={onClose} title="Закрыть пульт" aria-label="Закрыть пульт">
         <X />
       </button>
 

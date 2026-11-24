@@ -20,7 +20,6 @@ export type KeybindAction =
   | 'transferCase'
   | 'diffLock'
   | 'gboToggle'
-  | 'resetVehicle'
   // Lights & Signals
   | 'headlights'
   | 'turnSignalLeft'
@@ -41,8 +40,6 @@ export type KeybindAction =
   | 'tractorBrakeRight'
   // Player on foot
   | 'sprint'
-  | 'enterExit'
-  | 'interact'
   | 'swapHand'
   | 'handLeft'
   | 'handRight'
@@ -99,7 +96,6 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
   { id: 'transferCase', label: 'Раздатка (2WD / 4WD / 4L)', group: 'vehicle', context: 'vehicle', defaultCode: 'KeyX' },
   { id: 'diffLock', label: 'Блокировка дифференциала', group: 'vehicle', context: 'vehicle', defaultCode: 'KeyV' },
   { id: 'gboToggle', label: 'ГБО (газ / бензин)', group: 'vehicle', context: 'vehicle', defaultCode: 'KeyK' },
-  { id: 'resetVehicle', label: 'Сброс авто / действие R', group: 'vehicle', context: 'vehicle', defaultCode: 'KeyR' },
 
   // Lights & Signals
   { id: 'headlights', label: 'Фары (ближний / дальний)', group: 'lights', context: 'vehicle', defaultCode: 'KeyL' },
@@ -123,8 +119,6 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
 
   // Player on foot
   { id: 'sprint', label: 'Бег пешком', group: 'player', context: 'foot', defaultCode: 'ShiftLeft' },
-  { id: 'enterExit', label: 'Сесть / выйти из авто (F)', group: 'player', context: 'global', defaultCode: 'KeyF' },
-  { id: 'interact', label: 'Действие / предмет в руке', group: 'player', context: 'foot', defaultCode: 'KeyE' },
   { id: 'swapHand', label: 'Сменить активную руку', group: 'player', context: 'foot', defaultCode: 'KeyQ' },
   { id: 'handLeft', label: 'Выбрать левую руку', group: 'player', context: 'foot', defaultCode: 'Digit1' },
   { id: 'handRight', label: 'Выбрать правую руку', group: 'player', context: 'foot', defaultCode: 'Digit2' },
@@ -219,13 +213,9 @@ export function useKeybinds(): KeybindMap {
 
 /**
  * Contexts conflict when both actions can trigger in the same player state.
- * Note: `crane` overrides `vehicle` while operating a crane/excavator,
- * and `enterExit` (`KeyF` global) is intentionally overridden by `craneHookDown` (`KeyF` crane).
+ * Note: `crane` overrides `vehicle` while operating a crane/excavator.
  */
-export function contextsConflict(a: KeybindContext, b: KeybindContext, idA?: KeybindAction, idB?: KeybindAction): boolean {
-  if ((idA === 'enterExit' && idB === 'craneHookDown') || (idB === 'enterExit' && idA === 'craneHookDown')) {
-    return false;
-  }
+export function contextsConflict(a: KeybindContext, b: KeybindContext): boolean {
   if (a === 'global' || b === 'global') return true;
   return a === b;
 }
@@ -248,7 +238,7 @@ export function setKeybind(action: KeybindAction, newCode: string): RebindResult
   for (const other of KEYBIND_DEFINITIONS) {
     if (other.id === action) continue;
     if (currentKeybinds[other.id] !== newCode) continue;
-    if (contextsConflict(targetDef.context, other.context, targetDef.id, other.id)) {
+    if (contextsConflict(targetDef.context, other.context)) {
       swappedWith = other;
       break;
     }

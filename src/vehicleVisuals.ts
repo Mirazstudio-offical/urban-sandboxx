@@ -3461,7 +3461,12 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawKo505Tray(rTrayY, true, false);
 
     // Rear lower discharge gate valve & brass intake snout
-    drawDeformedRect(tankRear + doorShift - 3.6, -1.35, 1.8, 2.7, '#1e293b');
+    const isSludgeGateOpen = !!car.fluidTank?.drainValveOpen;
+    const sludgeGateX = tankRear + doorShift - 3.6;
+    drawDeformedRect(sludgeGateX, -1.35, 1.8, 2.7, '#1e293b');
+    const sludgeHandleY = isSludgeGateOpen ? 3.0 : -3.2;
+    drawDeformedLine(sludgeGateX + 0.9, -0.5, sludgeGateX + 2.4, sludgeHandleY, '#64748b', 0.9);
+    drawDeformedCircle(sludgeGateX + 2.4, sludgeHandleY, 0.58, isSludgeGateOpen ? '#22c55e' : '#dc2626');
     drawDeformedRect(tankRear + doorShift - 4.8, -0.9, 1.2, 1.8, '#b45309');
 
     // 5. Top Revolving Hydraulic Suction Boom (Поворотная всасывающая стрела d=100 мм на крыше илососа)
@@ -3708,7 +3713,11 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedCircle(reelX - 0.1, 4.8, 0.35, isJetterActive ? '#22c55e' : '#f59e0b');
 
     // Lower ANM-53 vacuum intake valve & brass snout offset cleanly at y = -1.2
+    const isKombiGateOpen = !!car.fluidTank?.drainValveOpen;
     drawDeformedRect(tankRear - 4.2, -2.05, 1.5, 1.7, '#1e293b');
+    const kombiHandleY = isKombiGateOpen ? -0.1 : -3.4;
+    drawDeformedLine(tankRear - 3.45, -1.4, tankRear - 2.3, kombiHandleY, '#64748b', 0.85);
+    drawDeformedCircle(tankRear - 2.3, kombiHandleY, 0.52, isKombiGateOpen ? '#22c55e' : '#dc2626');
     drawDeformedRect(tankRear - 5.3, -1.75, 1.1, 1.1, '#b45309');
     drawDeformedCircle(tankRear - 5.4, -1.2, 0.7, isHoseOut ? '#94a3b8' : '#d97706');
 
@@ -5587,9 +5596,10 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedRect(slotX, -2.2, 0.6, 4.4, '#0f172a'); // Slide slot
 
     // Long hand-operated control lever (рукоятка шибера) extending at an angle in top-down view
-    // Starts from the slide slot at y = -1.0, angled forward-left for ergonomic handle
-    drawDeformedLine(slotX + 0.3, -1.0, slotX + 3.2, -4.8, '#4b5563', 1.2); // Steel lever arm
-    drawDeformedCircle(slotX + 3.2, -4.8, 0.75, '#dc2626'); // Red round control knob
+    const isTrailerGateOpen = !!car.fluidTank?.drainValveOpen;
+    const trailerLeverTipY = isTrailerGateOpen ? 4.6 : -4.8;
+    drawDeformedLine(slotX + 0.3, isTrailerGateOpen ? 1.0 : -1.0, slotX + 3.2, trailerLeverTipY, '#4b5563', 1.2); // Steel lever arm
+    drawDeformedCircle(slotX + 3.2, trailerLeverTipY, 0.75, isTrailerGateOpen ? '#22c55e' : '#dc2626'); // Green open / Red closed knob
 
     // Flange connector lip on the outer snout end
     drawDeformedRect(valveX - 0.4, -1.4, 0.4, 2.8, '#475569');

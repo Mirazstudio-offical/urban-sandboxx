@@ -137,8 +137,7 @@ import { SpeedometerHUD } from './components/SpeedometerHUD';
 import { performanceConfig, capNearest } from './performanceConfig';
 import { crashLogger, CrashReport } from './crashLogger';
 import { CrashAlertToast } from './components/CrashAlertToast';
-import { ContextInteractionHUD } from './components/ContextInteractionHUD';
-import { findActiveInteraction, InteractionTarget } from './interactionSystem';
+import { findPointedInteraction, canUseActiveHandItem, InteractionTarget } from './interactionSystem';
 import { WorldInviteToast } from './components/WorldInviteToast';
 import { BedSleepOverlay } from './components/BedSleepOverlay';
 
@@ -437,7 +436,6 @@ export default function App() {
   const [playerHeadlightMode, setPlayerHeadlightMode] = useState<'off'| 'low'| 'high'>('low');
   const [fps, setFps] = useState<number>(60);
   const [streetName, setStreetName] = useState<string>('Grand Boulevard');
-  const [nearbyCarPrompt, setNearbyCarPrompt] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
   // Gas Station System States
@@ -451,9 +449,17 @@ export default function App() {
   const [isVacuumPumpModalOpen, setIsVacuumPumpModalOpen] = useState<boolean>(false);
   const [vacuumPumpVehicle, setVacuumPumpVehicle] = useState<Vehicle | null>(null);
   const [gasStationPrompt, setGasStationPrompt] = useState<string | null>(null);
-  const [activeInteraction, setActiveInteraction] = useState<InteractionTarget | null>(null);
   const activeInteractionRef = useRef<InteractionTarget | null>(null);
-  const prevInteractionKeyRef = useRef<string>('');
+  const [longTapVisual, setLongTapVisual] = useState<{ id: number; x: number; y: number } | null>(null);
+  const longTapRef = useRef<{
+    active: boolean;
+    touchId: number;
+    startX: number;
+    startY: number;
+    clientX: number;
+    clientY: number;
+    timerId: number | null;
+  }>({ active: false, touchId: -1, startX: 0, startY: 0, clientX: 0, clientY: 0, timerId: null });
   const [isDrifting, setIsDrifting] = useState<boolean>(false);
   const [trafficCount, setTrafficCount] = useState<number>(0);
   const [pedCount, setPedCount] = useState<number>(0);
@@ -3588,16 +3594,6 @@ export default function App() {
       // Block ALL gameplay & debug hotkeys while MainMenu, PauseMenu, or Loading screen is active
       if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current || isLoadingRef.current) return;
 
-      // Placement object rotation
-      if (matchesKeybind('resetVehicle', code) && activePlacementRef.current) {
-        setActivePlacement((prev) => {
-          if (!prev) return null;
-          return { ...prev, angle: (prev.angle + Math.PI / 12) % (Math.PI * 2) };
-        });
-        e.preventDefault();
-        return;
-      }
-
       // Check whether any gameplay modal is open — allow closing that modal with its own toggle key,
       // but block all driving/world controls underneath so player doesn't accidentally drive or reset vehicle.
       const hasBlockingModal =
@@ -3928,16 +3924,6 @@ export default function App() {
             e.preventDefault();
             return;
           }
-          if (matchesKeybind('enterExit', code)) {
-            handleInteract();
-            e.preventDefault();
-            return;
-          }
-          if (matchesKeybind('resetVehicle', code)) {
-            handleResetVehicle();
-            e.preventDefault();
-            return;
-          }
         }
         return;
       }
@@ -3968,42 +3954,11 @@ export default function App() {
           e.preventDefault();
           return;
         }
-        if (matchesKeybind('interact', code)) {
-          handleInteractE();
-          e.preventDefault();
-          return;
-        }
-        if (matchesKeybind('enterExit', code)) {
-          handleInteract();
-          e.preventDefault();
-          return;
-        }
         if (matchesKeybind('gridMode', code)) {
           const cam = cameraRef.current;
           cam.gridMode = !cam.gridMode;
           setIsGridMode(!!cam.gridMode);
           addPlayerNotification(p, `Сетка кузова ${cam.gridMode ? 'ВКЛ' : 'ВЫКЛ'}`, 'info');
-          e.preventDefault();
-          return;
-        }
-        if (matchesKeybind('resetVehicle', code)) {
-          const target = activeInteractionRef.current;
-          const rSubAction = target?.availableKeys?.find((k) => k.key === 'R');
-          if (target && target.primaryKey === 'R') {
-            handleExecuteActiveInteraction(target);
-          } else if (rSubAction?.action) {
-            handleExecuteActiveInteraction(rSubAction.action);
-          } else if (world) {
-            const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
-            const rTarget = findActiveInteraction(p, world, mouseWorld, 'R');
-            if (rTarget) {
-              handleExecuteActiveInteraction(rTarget);
-            } else {
-              handleResetVehicle();
-            }
-          } else {
-            handleResetVehicle();
-          }
           e.preventDefault();
           return;
         }
@@ -4035,35 +3990,73 @@ export default function App() {
       if (matchesKeybind('craneHookDown', code)) inputRef.current.craneHookDown = false;
     };
 
+    const isWorldPointerBlocked = (): boolean => {
+      if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current || isLoadingRef.current) return true;
+      const m = modalStateRef.current;
+      if (
+        m.isInventoryOpen || m.isInspectionOpen || m.isConsoleOpen || m.isPerfConsoleOpen ||
+        m.isFullMapOpen || m.isSpawnMenuOpen || m.isRadialMenuOpen || m.isVehicleBoardOpen ||
+        m.isCrashDiagnosticsOpen || m.isVacuumPumpModalOpen || m.isCraneOutriggersModalOpen ||
+        m.isEngineBayOpen || m.isFuelNozzleModalOpen || m.isGasStationCashierModalOpen ||
+        m.isFurnitureStorageOpen || m.isShopOpen || m.isDealershipOpen ||
+        m.isRealEstateModalOpen || m.isPropertyDocumentModalOpen || m.isUserProfileModalOpen ||
+        m.isFriendsModalOpen || m.isDateTimePickerOpen || m.isPerfTestOpen ||
+        m.isCollisionTestOpen || m.hasActiveElevator || isOnlineModalOpenRef.current ||
+        Boolean(activePhoneItemRef.current)
+      ) {
+        return true;
+      }
+      if (playerRef.current?.sleepState?.isLyingDown) return true;
+      return false;
+    };
+
+    const isCanvasOrGlanceTarget = (el: EventTarget | null): boolean => {
+      return el === canvas || (el instanceof HTMLElement && el.id === 'touch-windshield-glance-zone');
+    };
+
+    const cancelLongTap = () => {
+      const lt = longTapRef.current;
+      if (lt.timerId !== null) {
+        window.clearTimeout(lt.timerId);
+        lt.timerId = null;
+      }
+      if (lt.active) {
+        lt.active = false;
+        lt.touchId = -1;
+        setLongTapVisual(null);
+      }
+      if (inputRef.current.lastPointerType === 'touch') {
+        activeInteractionRef.current = null;
+      }
+    };
+
     const handleMouseMove = (e: MouseEvent) => {
       inputRef.current.mouseX = e.clientX;
       inputRef.current.mouseY = e.clientY;
       inputRef.current.lastPointerType = 'mouse';
 
-      // Update pedestrian aim angle if walking (accounting for camera rotation)
-      // Only update when mouse is moving directly over the world canvas, not UI buttons!
       const player = playerRef.current;
-      if (!player.isInVehicle && canvas && e.target === canvas) {
-        const screenCenterX = window.innerWidth / 2;
-        const screenCenterY = window.innerHeight / 2;
-        const screenDx = e.clientX - screenCenterX;
-        const screenDy = e.clientY - screenCenterY;
-        const camAngle = cameraRef.current.angle;
-        player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
-
-        // Immediately refresh active interaction target on mouse move so cursor aiming is instantaneous
-        if (worldRef.current) {
-          const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
-          const nextInteraction = findActiveInteraction(player, worldRef.current, mouseWorld);
-          activeInteractionRef.current = nextInteraction;
-          const interactionKey = nextInteraction
-            ? `${nextInteraction.type}_${nextInteraction.primaryKey}_${nextInteraction.actionTitle}_${Math.round(nextInteraction.x)}_${Math.round(nextInteraction.y)}`
-            : '';
-          if (interactionKey !== prevInteractionKeyRef.current) {
-            prevInteractionKeyRef.current = interactionKey;
-            setActiveInteraction(nextInteraction);
-          }
+      if (canvas && e.target === canvas && !isWorldPointerBlocked()) {
+        if (!player.isInVehicle) {
+          const screenCenterX = window.innerWidth / 2;
+          const screenCenterY = window.innerHeight / 2;
+          const screenDx = e.clientX - screenCenterX;
+          const screenDy = e.clientY - screenCenterY;
+          const camAngle = cameraRef.current.angle;
+          player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
         }
+
+        if (worldRef.current && !activePlacementRef.current) {
+          const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
+          const nextInteraction = findPointedInteraction(player, worldRef.current, mouseWorld, false, spatialGridPropsRef.current);
+          activeInteractionRef.current = nextInteraction;
+          canvas.style.cursor = nextInteraction ? 'pointer' : 'crosshair';
+        } else {
+          activeInteractionRef.current = null;
+          canvas.style.cursor = 'crosshair';
+        }
+      } else if (canvas && e.target !== canvas) {
+        activeInteractionRef.current = null;
       }
     };
 
@@ -4099,20 +4092,21 @@ export default function App() {
           activePlacementRef.current = null;
           e.preventDefault();
         }
-      } else if (e.button === 0 && e.target === canvas) {
-        if (playerRef.current && worldRef.current && !playerRef.current.isInVehicle) {
-          const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
-          const latestTarget = findActiveInteraction(playerRef.current, worldRef.current, mouseWorld);
-          activeInteractionRef.current = latestTarget;
-        }
-        const target = activeInteractionRef.current;
-        if (target && target.type !== 'hand_item' && target.type !== 'exit_vehicle') {
-          // Only trigger world interaction on direct canvas click if cursor is reasonably near the marker
-          const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
-          const distToTarget = Math.hypot(mouseWorld.x - target.x, mouseWorld.y - target.y);
-          if (distToTarget < 48) {
-            handleExecuteActiveInteraction(target);
-          }
+        return;
+      }
+      // PC Right Mouse Button (RMB): interact with pointed world object/zone, or activate usable item in active hand
+      if (e.button === 2 && canvas && e.target === canvas && !isWorldPointerBlocked()) {
+        e.preventDefault();
+        const p = playerRef.current;
+        const w = worldRef.current;
+        if (!p || !w) return;
+        const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
+        const pointedTarget = findPointedInteraction(p, w, mouseWorld, false, spatialGridPropsRef.current);
+        activeInteractionRef.current = pointedTarget;
+        if (pointedTarget) {
+          handleExecuteActiveInteraction(pointedTarget);
+        } else {
+          executeActiveHandItem();
         }
       }
     };
@@ -4124,9 +4118,110 @@ export default function App() {
     };
 
     const handleContextMenu = (e: MouseEvent) => {
-      if (activePlacementRef.current) {
+      if (activePlacementRef.current || (canvas && e.target === canvas)) {
         e.preventDefault();
       }
+    };
+
+    const LONG_TAP_MS = 380;
+    const LONG_TAP_MOVE_CANCEL_PX = 14;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      inputRef.current.lastPointerType = 'touch';
+      if (e.touches.length !== 1) {
+        cancelLongTap();
+        return;
+      }
+      const touch = e.touches[0];
+      const player = playerRef.current;
+      if (player && !player.isInVehicle && canvas && e.target === canvas) {
+        const screenCenterX = window.innerWidth / 2;
+        const screenCenterY = window.innerHeight / 2;
+        const screenDx = touch.clientX - screenCenterX;
+        const screenDy = touch.clientY - screenCenterY;
+        const camAngle = cameraRef.current.angle;
+        player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
+      }
+
+      if (!isCanvasOrGlanceTarget(e.target) || isWorldPointerBlocked() || activePlacementRef.current) {
+        cancelLongTap();
+        return;
+      }
+
+      const world = worldRef.current;
+      if (!player || !world) return;
+
+      const touchWorld = getMouseWorldPos(touch.clientX, touch.clientY);
+      const pointedTarget = findPointedInteraction(player, world, touchWorld, true, spatialGridPropsRef.current);
+      const hasUsableHand = canUseActiveHandItem(player);
+
+      if (pointedTarget) {
+        activeInteractionRef.current = pointedTarget;
+      } else {
+        activeInteractionRef.current = null;
+      }
+
+      if (!pointedTarget && !hasUsableHand) {
+        cancelLongTap();
+        return;
+      }
+
+      cancelLongTap();
+      // Re-apply highlighted target after cancelLongTap cleared it
+      if (pointedTarget) {
+        activeInteractionRef.current = pointedTarget;
+      }
+
+      const lt = longTapRef.current;
+      lt.active = true;
+      lt.touchId = touch.identifier;
+      lt.startX = touch.clientX;
+      lt.startY = touch.clientY;
+      lt.clientX = touch.clientX;
+      lt.clientY = touch.clientY;
+
+      setLongTapVisual({ id: Date.now() + Math.random(), x: touch.clientX, y: touch.clientY });
+
+      lt.timerId = window.setTimeout(() => {
+        if (!lt.active) return;
+        lt.active = false;
+        lt.timerId = null;
+        lt.touchId = -1;
+        setLongTapVisual(null);
+
+        if (isWorldPointerBlocked()) {
+          activeInteractionRef.current = null;
+          return;
+        }
+        const curP = playerRef.current;
+        const curW = worldRef.current;
+        if (!curP || !curW) {
+          activeInteractionRef.current = null;
+          return;
+        }
+
+        // Cancel any windshield glance-look camera drift started during hold
+        inputRef.current.lookOffsetX = 0;
+        inputRef.current.lookOffsetY = 0;
+        inputRef.current.isTouchLookActive = false;
+
+        try {
+          if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+            navigator.vibrate(22);
+          }
+        } catch {
+          // ignore vibration errors on unsupported browsers
+        }
+
+        const worldPt = getMouseWorldPos(lt.clientX, lt.clientY);
+        const freshTarget = findPointedInteraction(curP, curW, worldPt, true, spatialGridPropsRef.current);
+        activeInteractionRef.current = null;
+        if (freshTarget) {
+          handleExecuteActiveInteraction(freshTarget);
+        } else {
+          executeActiveHandItem();
+        }
+      }, LONG_TAP_MS);
     };
 
     const handleTouchMove = (e: TouchEvent) => {
@@ -4134,7 +4229,7 @@ export default function App() {
       if (e.touches.length > 0 && canvas && e.target === canvas) {
         const touch = e.touches[0];
         const player = playerRef.current;
-        if (!player.isInVehicle) {
+        if (player && !player.isInVehicle) {
           const screenCenterX = window.innerWidth / 2;
           const screenCenterY = window.innerHeight / 2;
           const screenDx = touch.clientX - screenCenterX;
@@ -4142,6 +4237,43 @@ export default function App() {
           const camAngle = cameraRef.current.angle;
           player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
         }
+      }
+
+      const lt = longTapRef.current;
+      if (lt.active) {
+        let tracked: Touch | null = null;
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].identifier === lt.touchId) {
+            tracked = e.touches[i];
+            break;
+          }
+        }
+        if (!tracked) {
+          cancelLongTap();
+          return;
+        }
+        const moved = Math.hypot(tracked.clientX - lt.startX, tracked.clientY - lt.startY);
+        if (moved > LONG_TAP_MOVE_CANCEL_PX) {
+          cancelLongTap();
+        } else {
+          lt.clientX = tracked.clientX;
+          lt.clientY = tracked.clientY;
+        }
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const lt = longTapRef.current;
+      if (!lt.active) return;
+      let stillActive = false;
+      for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].identifier === lt.touchId) {
+          stillActive = true;
+          break;
+        }
+      }
+      if (!stillActive) {
+        cancelLongTap();
       }
     };
 
@@ -4155,8 +4287,10 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
-    window.addEventListener('touchstart', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', handleTouchEnd, { passive: true });
     window.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
@@ -4164,6 +4298,7 @@ export default function App() {
     window.addEventListener('open_phone_modal', handlePhoneModalEvent);
 
     cleanupListeners = () => {
+      cancelLongTap();
       gpuFxRef.current?.dispose();
       gpuFxRef.current = null;
       window.removeEventListener('resize', handleResize);
@@ -4172,8 +4307,10 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchstart', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchEnd);
       window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
@@ -4673,7 +4810,7 @@ export default function App() {
                   y: bld.y + relY,
                   icon: shopIcon,
                   badgeColor: badgeColor,
-                  description: `Отдел: ${shopName}. Нажмите [E] для открытия каталога.`};
+                  description: `Отдел: ${shopName}.`};
               }
 
               nearShopRef.current = shopFound;
@@ -5089,21 +5226,21 @@ export default function App() {
             setStreetName(currentStreet);
           }
 
-          // Physical Context Interaction System (cone of view + reach + mouse priority)
-          const mouseWorld = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
-          const currentInteraction = findActiveInteraction(player, world, mouseWorld, undefined, spatialGridPropsRef.current);
-          activeInteractionRef.current = currentInteraction;
-          const interactionKey = currentInteraction
-            ? `${currentInteraction.type}_${currentInteraction.primaryKey}_${currentInteraction.actionTitle}_${Math.round(currentInteraction.x)}_${Math.round(currentInteraction.y)}`
-            : '';
-          if (interactionKey !== prevInteractionKeyRef.current) {
-            prevInteractionKeyRef.current = interactionKey;
-            setActiveInteraction(currentInteraction);
-          }
-          if (currentInteraction?.type === 'enter_vehicle') {
-            setNearbyCarPrompt(currentInteraction.actionTitle);
+          // World-space pointer interaction outline refresh (PC hover or active Mobile Long-Tap)
+          if (isWorldPointerBlocked() || activePlacementRef.current) {
+            activeInteractionRef.current = null;
+          } else if (input.lastPointerType !== 'touch') {
+            const mouseWorld = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
+            const currentInteraction = findPointedInteraction(player, world, mouseWorld, false, spatialGridPropsRef.current);
+            activeInteractionRef.current = currentInteraction;
+            if (canvas) {
+              canvas.style.cursor = currentInteraction ? 'pointer' : 'crosshair';
+            }
+          } else if (longTapRef.current.active) {
+            const touchWorld = getMouseWorldPos(longTapRef.current.clientX, longTapRef.current.clientY);
+            activeInteractionRef.current = findPointedInteraction(player, world, touchWorld, true, spatialGridPropsRef.current);
           } else {
-            setNearbyCarPrompt(null);
+            activeInteractionRef.current = null;
           }
 
           // GPS Navigation Route recalculation & Arrival check
@@ -5705,26 +5842,6 @@ export default function App() {
         }
         const tRenderEnd = performance.now();
 
-        // Update DOM overlay position for ContextInteractionHUD with high performance
-        const hudEl = document.getElementById('context-interaction-hud-overlay');
-        if (hudEl) {
-          const target = activeInteractionRef.current;
-          if (target && !target.isSelfAction && target.type !== 'hand_item' && target.type !== 'exit_vehicle') {
-            const screenPos = worldToScreen(target.x, target.y);
-            if (screenPos) {
-              hudEl.style.display = 'flex';
-              hudEl.style.transform = `translate3d(${screenPos.x}px, ${screenPos.y}px, 0)`;
-              hudEl.style.opacity = '1';
-            } else {
-              hudEl.style.display = 'none';
-              hudEl.style.opacity = '0';
-            }
-          } else {
-            hudEl.style.display = 'none';
-            hudEl.style.opacity = '0';
-          }
-        }
-
         // 11. Mini-map draws itself (see components/Minimap.tsx); only its last frame time is read here
         const tMinimapStart = 0;
         const tMinimapEnd = minimapFrameMsRef.current;
@@ -6044,7 +6161,7 @@ export default function App() {
         const keyName = requiredKey === 'gold'? 'Золотой ключ зажигания': 'Железный ключ зажигания';
         player.notifications.push({
           id: 'eng_no_key_'+ Date.now(),
-          text: `В замке зажигания пусто! Возьмите ${keyName} в руку и нажмите [E] или используйте из инвентаря.`,
+          text: `В замке зажигания пусто. Возьмите ${keyName} в активную руку и активируйте его (ПКМ / удержание) или используйте из инвентаря.`,
           color: '#ef4444',
           timer: 4.5
         });
@@ -6359,7 +6476,7 @@ export default function App() {
   };
 
   // --- ENTER / EXIT VEHICLE HANDLER ---
-  const handleEnterExitVehicle = () => {
+  const handleEnterExitVehicle = (targetVehicle?: Vehicle) => {
     const world = worldRef.current;
     const player = playerRef.current;
     // Cancel any active placement mode on entering/exiting vehicle
@@ -6435,22 +6552,26 @@ export default function App() {
         sound.playCarDoor();
       }
     } else {
-      // Find closest vehicle within interaction radius
-      let closestVeh: Vehicle | null = null;
-      let minDist = 85;
+      // Prefer explicitly pointed vehicle; fallback to closest within radius
+      let closestVeh: Vehicle | null = targetVehicle
+        ? (world.vehicles.find((v) => v.id === targetVehicle.id) || targetVehicle)
+        : null;
 
-      for (const veh of world.vehicles) {
-        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
-        if (dist < minDist) {
-          minDist = dist;
-          closestVeh = veh;
+      if (!closestVeh) {
+        let minDist = 85;
+        for (const veh of world.vehicles) {
+          const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+          if (dist < minDist) {
+            minDist = dist;
+            closestVeh = veh;
+          }
         }
       }
 
       if (closestVeh) {
         if (closestVeh.type.startsWith('trailer_') || closestVeh.isTrailer) {
           sound.playAlert();
-          addPlayerNotification(player, 'Прицеп не имеет двигателя или кабины! Подцепите его к трактору или фаркопу машины.', 'warning');
+          addPlayerNotification(player, 'Прицеп не имеет двигателя или кабины. Подцепите его к трактору или фаркопу машины.', 'warning');
           return;
         }
 
@@ -6460,10 +6581,10 @@ export default function App() {
             closestVeh.isLocked = false;
             sound.playCarDoor();
             const cfg = CAR_CONFIGS[closestVeh.type] || CAR_CONFIGS.sedan;
-            addPlayerNotification(player, `Двери (${cfg.name}) отперты ключом!`, 'pickup');
+            addPlayerNotification(player, `Двери (${cfg.name}) отперты ключом.`, 'pickup');
           } else {
             sound.playAlert();
-            addPlayerNotification(player, 'Двери автомобиля заперты! Используйте ключ от машины [E] или отмычку.', 'warning');
+            addPlayerNotification(player, 'Двери автомобиля заперты. Возьмите ключ в активную руку (ПКМ / удержание) или используйте отмычку.', 'warning');
             return;
           }
         }
@@ -6735,6 +6856,9 @@ export default function App() {
       }
 
       case 'enter_vehicle':
+        handleEnterExitVehicle(target.data as Vehicle | undefined);
+        break;
+
       case 'exit_vehicle':
         handleEnterExitVehicle();
         break;
@@ -6949,7 +7073,12 @@ export default function App() {
       }
 
       case 'water_hose_take': {
-        const veh = target.data as Vehicle;
+        const rawData = target.data as Vehicle | { veh: Vehicle; hoseMode?: 'vacuum' | 'jetter' };
+        const veh = rawData && 'veh' in rawData ? rawData.veh : rawData;
+        const requestedMode = rawData && 'hoseMode' in rawData ? rawData.hoseMode : undefined;
+        if (requestedMode && veh?.fluidTank) {
+          veh.fluidTank.activeHoseMode = requestedMode;
+        }
         triggerPlayerActionAnim(p, 'water_hose_use', 0.9);
         takeWaterHose(p, veh, world);
         const isVac = !!veh.fluidTank?.isVacuumTank || veh.type === 'trailer_vacuum';
@@ -6957,11 +7086,11 @@ export default function App() {
         if (isJetter) {
           addPlayerNotification(p, 'Каналопромывочный рукав РВД размотан с барабана КО-560. Включите КОМ и насос ВД для промывки.', 'info');
         } else if (isVac) {
-          const gateState = veh.fluidTank?.drainValveOpen ? 'Шибер АНМ-53 открыт.' : 'Не забудьте открыть шиберную задвижку АНМ-53 и создать вакуум насосом!';
+          const gateState = veh.fluidTank?.drainValveOpen ? 'Шибер АНМ-53 открыт.' : 'Откройте заднюю шиберную задвижку АНМ-53 и создайте вакуум насосом.';
           addPlayerNotification(p, `Заборный вакуумный рукав d=100 мм снят с пенала. ${gateState}`, 'info');
         } else {
           const sourceName = veh.type === 'truck_water' ? 'насосной станции водовоза' : 'крана бочки-цистерны';
-          addPlayerNotification(p, `Шланг размотан с ${sourceName}! Зажмите ЛКМ для подачи воды.`, 'info');
+          addPlayerNotification(p, `Шланг размотан с ${sourceName}. Зажмите ЛКМ для подачи воды.`, 'info');
         }
         sound.playUseItem();
         setVitalsRefreshTick(t => t + 1);
@@ -7501,407 +7630,41 @@ export default function App() {
       }
 
       case 'hand_item': {
-        const activeHand = p.activeHand || 'right';
-        let currentHand = activeHand;
-        let handItem = currentHand === 'left' ? p.leftHandItem : p.rightHandItem;
-
-        if (!handItem) {
-          const otherHand = activeHand === 'left' ? 'right' : 'left';
-          const otherHandItem = otherHand === 'left' ? p.leftHandItem : p.rightHandItem;
-          if (otherHandItem) {
-            currentHand = otherHand;
-            handItem = otherHandItem;
-            p.activeHand = otherHand;
-          }
-        }
-
-        if (handItem) {
-          if ((handItem.isContainer && !handItem.fluidStorage) || handItem.itemId === 'wallet' || handItem.itemId === 'plastic_bag') {
-            setIsInventoryOpen(true);
-            sound.playUseItem();
-            addPlayerNotification(p, `Открыт контейнер: ${handItem.nameRu}`, 'info');
-            break;
-          }
-
-          const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
-          const handMedId = handItem.fluidStorage?.attributes?.medicalEffectId || handItem.originalCatalogId || handItem.itemId;
-          if ((handItem.category === 'med' && (TOPICAL_ITEMS.includes(handMedId) || TOPICAL_ITEMS.includes(handItem.itemId))) || (handItem as any).requiresLimbSelection) {
-            setTreatmentModalItem({ index: -1, item: handItem });
-            sound.playUseItem();
-            break;
-          }
-
-          if (handItem.usable) {
-            useHandItemOnPlayer(p, currentHand, world || undefined);
-            sound.resume();
-            setVitalsRefreshTick(t => t + 1);
-            break;
-          }
-        }
+        executeActiveHandItem();
         break;
       }
     }
   };
 
-  // --- INTERACT HANDLER (ENTER / EXIT VEHICLE OR BUILDING / PICKUP / ACTION) ---
-  const handleInteract = () => {
-    const world = worldRef.current;
-    const player = playerRef.current;
-    if (!world || !player) return;
-
-    // Disarm any active placement mode on interaction
-    if (activePlacementRef.current) {
-      setActivePlacement(null);
-      activePlacementRef.current = null;
-    }
-
-    if (player.isInVehicle) {
-      handleEnterExitVehicle();
-      return;
-    }
-
-    // Check if there is an active contextual interaction with primaryKey 'F'
-    const target = activeInteractionRef.current;
-    if (target && target.primaryKey === 'F') {
-      handleExecuteActiveInteraction(target);
-      return;
-    }
-
-    // Query candidate specifically for key 'F'
-    const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
-    const fTarget = findActiveInteraction(player, world, mouseWorld, 'F');
-    if (fTarget) {
-      handleExecuteActiveInteraction(fTarget);
-      return;
-    }
-
-    // Proximity fallback: If player is near any vehicle, enter it directly
-    let nearbyVeh: Vehicle | null = null;
-    let minDist = 85;
-    for (const veh of (world.vehicles || [])) {
-      if (veh.type.startsWith('trailer_') || veh.isTrailer) continue;
-      const d = Math.hypot(veh.x - player.x, veh.y - player.y);
-      if (d < minDist) {
-        minDist = d;
-        nearbyVeh = veh;
-      }
-    }
-    if (nearbyVeh) {
-      handleEnterExitVehicle();
-      return;
-    }
-  };
-
-  const handleInteractE = () => {
+  // --- ACTIVE HAND ITEM ACTIVATION (RMB on PC / Long-Tap on mobile when not pointing at a world target) ---
+  const executeActiveHandItem = () => {
     const p = playerRef.current;
     const world = worldRef.current;
     if (!p || !world) return;
 
-    if (p.isInVehicle) {
-      setIsVehicleBoardOpen(prev => !prev);
-      return;
-    }
-
-    // Check if currently active target has primaryKey 'E'
-    const target = activeInteractionRef.current;
-    if (target && target.primaryKey === 'E') {
-      handleExecuteActiveInteraction(target);
-      return;
-    }
-
-    // Query candidate specifically for key 'E' (e.g. storage, bed, cashier, in-hand item)
-    const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
-    const eTarget = findActiveInteraction(p, world, mouseWorld, 'E');
-    if (eTarget) {
-      handleExecuteActiveInteraction(eTarget);
-      return;
-    }
-
-    // 0. HIGH-DETAIL GAS STATION MECHANICS (Nozzle pickup, Vehicle insert, Cashier payment)
-    if (world) {
-      // 0a. Player holding a fuel nozzle
-      if (p.heldFuelNozzle) {
-        const nearbyVeh = getNearbyVehicleForFueling(p.x, p.y, world);
-        const pump = world.gasPumps?.find(gp => gp.id === p.heldFuelNozzle?.pumpId);
-        if (nearbyVeh && pump) {
-          const nozzleFuelType = p.heldFuelNozzle.fuelType;
-          const success = insertNozzleIntoVehicle(p, nearbyVeh, pump, world);
-          if (success) {
-            const grade = FUEL_GRADES[nozzleFuelType];
-            const vehName = CAR_CONFIGS[nearbyVeh.type]?.name || nearbyVeh.type;
-            addPlayerNotification(p, `Топливный пистолет [${grade?.nameRu || ''}] вставлен в бак (${vehName}). Пройдите в кассу АЗС для оплаты.`, 'info');
-            sound.playUseItem();
-            setVitalsRefreshTick(t => t + 1);
-            return;
-          }
-        }
-
-        if (pump) {
-          const nearPump = getNearbyGasPump(p.x, p.y, world);
-          if (nearPump && nearPump.id === pump.id) {
-            returnNozzleToPump(p, pump);
-            addPlayerNotification(p, `Топливный пистолет возвращен на колонку №${pump.pumpNumber}.`, 'info');
-            sound.playUseItem();
-            setVitalsRefreshTick(t => t + 1);
-            return;
-          }
-        }
-      }
-
-      // 0b. Near a vehicle that has an inserted nozzle
-      if (world.vehicles) {
-        for (const v of world.vehicles) {
-          if (v.fuelingState?.nozzleInTank) {
-            const capPos = getVehicleFuelCapPosition(v);
-            const d = Math.hypot(capPos.x - p.x, capPos.y - p.y);
-            if (d < 75) {
-              const pump = world.gasPumps?.find(gp => gp.id === v.fuelingState?.pumpId);
-              if (pump) {
-                if (pump.isPumping) {
-                  addPlayerNotification(p, 'Идет процесс подачи топлива! Дождитесь окончания заправки.', 'warning');
-                  return;
-                }
-                removeNozzleFromVehicle(p, v, pump, world);
-                addPlayerNotification(p, `Топливный пистолет извлечен из бака. Повесьте его обратно на колонку №${pump.pumpNumber}.`, 'info');
-                sound.playUseItem();
-                setVitalsRefreshTick(t => t + 1);
-                return;
-              }
-            }
-          }
-        }
-      }
-
-      // 0c. Near a Gas Pump Dispenser
-      const nearPump = getNearbyGasPump(p.x, p.y, world);
-      if (nearPump) {
-        if (nearPump.isPumping) {
-          addPlayerNotification(p, `Колонка №${nearPump.pumpNumber} в процессе подачи топлива.`, 'info');
-          return;
-        }
-        setActiveGasPump(nearPump);
-        setIsFuelNozzleModalOpen(true);
-        sound.playUseItem();
-        return;
-      }
-
-      // 0d. Near Gas Station Cashier Terminal / Counter
-      if (isPlayerNearGasStationCashier(p, world)) {
-        const gasBld = world.buildings.find(
-          (b) => b.shopBrand === 'gas_station_shop' || b.type === 'gas_station_shop' || b.id === 'bld_gas_station_shop_se'
-        );
-        setShopType('gas_station_shop');
-        setShopTitle(gasBld?.nameRu || 'АЗС «НЕФТЬМАГИСТРАЛЬ» 24/7');
-        setShopBuildingId(gasBld?.id || 'bld_gas_station_shop_se');
-        setShopRoomName(null);
-        setIsShopOpen(true);
-        sound.playUseItem();
-        return;
-      }
-
-      // Note: Taking and stowing the water/vacuum hose is handled strictly through the targeted
-      // interaction markers ('water_hose_take' / 'water_hose_stow') so pressing E while holding
-      // the hose never stows it when not looking at the marker.
-
-      // 0e. Near Front Hood of a Vehicle
-      if (world.vehicles) {
-        for (const v of world.vehicles) {
-          const cfg = CAR_CONFIGS[v.type] || CAR_CONFIGS.sedan;
-          const frontX = v.x + Math.cos(v.angle) * (cfg.length * 0.42);
-          const frontY = v.y + Math.sin(v.angle) * (cfg.length * 0.42);
-          const distToFront = Math.hypot(p.x - frontX, p.y - frontY);
-
-          if (distToFront < 55 && !isTrailerVehicle(v)) {
-            v.engineState.hoodOpen = true;
-            setEngineBayVehicle(v);
-            setIsEngineBayOpen(true);
-            sound.playUseItem();
-            addPlayerNotification(p, `Открыт капот (${cfg.name})`, 'info');
-            setVitalsRefreshTick(t => t + 1);
-            return;
-          }
-        }
-      }
-    }
-
     const activeHand = p.activeHand || 'right';
-    let currentHand = activeHand;
-    let handItem = currentHand === 'left'? p.leftHandItem : p.rightHandItem;
+    const handItem = activeHand === 'left' ? p.leftHandItem : p.rightHandItem;
+    if (!handItem) return;
 
-    // If active hand is empty, check if other hand holds something
-    if (!handItem) {
-      const otherHand = activeHand === 'left'? 'right': 'left';
-      const otherHandItem = otherHand === 'left'? p.leftHandItem : p.rightHandItem;
-      if (otherHandItem) {
-        currentHand = otherHand;
-        handItem = otherHandItem;
-        p.activeHand = otherHand;
-      }
-    }
-
-    // 1. PRIMARY: If player has an item in hand, use or open it!
-    if (handItem) {
-      if ((handItem.isContainer && !handItem.fluidStorage) || handItem.itemId === 'wallet'|| handItem.itemId === 'plastic_bag') {
-        setIsInventoryOpen(true);
-        sound.playUseItem();
-        addPlayerNotification(p, `Открыт контейнер: ${handItem.nameRu}`, 'info');
-        return;
-      }
-
-      const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
-      const handMedId = handItem.fluidStorage?.attributes?.medicalEffectId || handItem.originalCatalogId || handItem.itemId;
-      if ((handItem.category === 'med'&& (TOPICAL_ITEMS.includes(handMedId) || TOPICAL_ITEMS.includes(handItem.itemId))) || handItem.requiresLimbSelection) {
-        setTreatmentModalItem({ index: -1, item: handItem });
-        sound.playUseItem();
-        return;
-      }
-
-      if (handItem.usable) {
-        useHandItemOnPlayer(p, currentHand, world || undefined);
-        sound.resume();
-        setVitalsRefreshTick(t => t + 1);
-        return;
-      }
-
-      addPlayerNotification(p, `Предмет "${handItem.nameRu}"в руке нельзя активировать напрямую`, 'info');
+    if ((handItem.isContainer && !handItem.fluidStorage) || handItem.itemId === 'wallet' || handItem.itemId === 'plastic_bag') {
+      setIsInventoryOpen(true);
+      sound.playUseItem();
+      addPlayerNotification(p, `Открыт контейнер: ${handItem.nameRu}`, 'info');
       return;
     }
 
-    // 2. SECONDARY: Pick up nearby ground items if any within reaching distance (~65px)
-    if (world && world.groundItems && world.groundItems.length > 0) {
-      let closestGI: GroundItem | null = null;
-      let minDist = 65;
-      for (const gi of world.groundItems) {
-        const d = Math.hypot(p.x - gi.x, p.y - gi.y);
-        if (d < minDist) {
-          minDist = d;
-          closestGI = gi;
-        }
-      }
-      if (closestGI) {
-        pickupGroundItem(p, world, closestGI);
-        setVitalsRefreshTick(t => t + 1);
-        return;
-      }
-    }
-
-    // 3. Pick up nearby litter
-    if (pickupNearbyLitter(p, world)) {
-      setVitalsRefreshTick(t => t + 1);
-      return;
-    }
-
-    // 4. Shop Interaction (when near a shop zone or inside a store)
-    let hasStandaloneShop = false;
-    let resolvedType: CityShop['type'] = 'supermarket';
-    let resolvedTitle = 'Супермаркет "Регуляр 24/7"';
-
-    if (p.isInsideBuilding && p.insideBuildingId) {
-      const bld = world?.buildings.find(b => b.id === p.insideBuildingId);
-      if (bld) {
-        if (bld.shopBrand === 'pharmacy_36_6'|| bld.type === 'hospital') {
-          resolvedType = 'pharmacy';
-          resolvedTitle = bld.nameRu || 'Аптека "Панацея"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'cofix_bakery') {
-          resolvedType = 'cafe';
-          resolvedTitle = bld.nameRu || 'Кафе & Пекарня "Урбан & Бейкери"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'bean_bistro') {
-          resolvedType = 'cafe';
-          resolvedTitle = bld.nameRu || 'Кафе & Кофейня "Bean & Bistro"';
-          hasStandaloneShop = true;
-        } else if (bld.type === 'car_dealership'|| (bld.shopBrand as any) === 'car_dealership') {
-          setIsDealershipOpen(true);
-          sound.playUseItem();
-          return;
-        } else if (bld.shopBrand === 'pitstop_service') {
-          resolvedType = 'auto_shop';
-          resolvedTitle = bld.nameRu || 'Автомастерская & Сервис "PIT-STOP"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'splav_gear') {
-          resolvedType = 'gear_shop';
-          resolvedTitle = bld.nameRu || 'Магазин "Охота & Туризм Тракт"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'dodo_pizza') {
-          resolvedType = 'pizzeria';
-          resolvedTitle = bld.nameRu || 'Пиццерия "Пицца-Империя"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'perekrestok') {
-          resolvedType = 'supermarket';
-          resolvedTitle = bld.nameRu || 'Супермаркет "Азимут 24/7"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'pyaterochka') {
-          resolvedType = 'supermarket';
-          resolvedTitle = bld.nameRu || 'Супермаркет "Регуляр 24/7"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'vkusno_tochka') {
-          resolvedType = 'fast_food';
-          resolvedTitle = bld.nameRu || 'Ресторан "Бургер-Клаб"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'mvideo') {
-          resolvedType = 'electronics';
-          resolvedTitle = bld.nameRu || 'Гипермаркет электроники "Электро-Маркет"';
-          hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'sportmaster') {
-          resolvedType = 'sports_shop';
-          resolvedTitle = bld.nameRu || 'Спортивный гипермаркет "Спорт-Олимп"';
-          hasStandaloneShop = true;
-        } else if (bld.type === 'police_station') {
-          resolvedType = 'gear_shop';
-          resolvedTitle = 'Арсенал & Снаряжение полиции';
-          hasStandaloneShop = true;
-        } else if (nearShopRef.current) {
-          resolvedType = nearShopRef.current.type;
-          resolvedTitle = nearShopRef.current.nameRu;
-          hasStandaloneShop = true;
-        }
-      } else if (nearShopRef.current) {
-        resolvedType = nearShopRef.current.type;
-        resolvedTitle = nearShopRef.current.nameRu;
-        hasStandaloneShop = true;
-      }
-    } else if (nearShopRef.current) {
-      resolvedType = nearShopRef.current.type;
-      resolvedTitle = nearShopRef.current.nameRu;
-      hasStandaloneShop = true;
-    }
-
-    if (hasStandaloneShop) {
-      setShopTitle(resolvedTitle);
-      setShopType(resolvedType);
-      setShopBuildingId(p.isInsideBuilding ? (p.insideBuildingId || null) : null);
-      setShopRoomName(nearShopRef.current?.nameRu || resolvedTitle || null);
-      setIsShopOpen(true);
+    const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+    const handMedId = handItem.fluidStorage?.attributes?.medicalEffectId || handItem.originalCatalogId || handItem.itemId;
+    if ((handItem.category === 'med' && (TOPICAL_ITEMS.includes(handMedId) || TOPICAL_ITEMS.includes(handItem.itemId))) || (handItem as any).requiresLimbSelection) {
+      setTreatmentModalItem({ index: -1, item: handItem });
       sound.playUseItem();
       return;
     }
 
-    // 5. Pocket Consumables: Use selected slot or first usable item in pockets
-    const currentSlot = selectedHotbarIndexRef.current ?? 0;
-    const selectedPocketItem = p?.inventory?.[currentSlot];
-
-    if (selectedPocketItem && selectedPocketItem.usable) {
-      const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
-      const pocketMedId = selectedPocketItem.fluidStorage?.attributes?.medicalEffectId || selectedPocketItem.originalCatalogId || selectedPocketItem.itemId;
-      if (selectedPocketItem.category === 'med'&& (TOPICAL_ITEMS.includes(pocketMedId) || TOPICAL_ITEMS.includes(selectedPocketItem.itemId))) {
-        setTreatmentModalItem({ index: currentSlot, item: selectedPocketItem });
-        return;
-      }
-      useItemOnPlayer(p, currentSlot, world || undefined);
+    if (handItem.usable) {
+      useHandItemOnPlayer(p, activeHand, world || undefined);
       sound.resume();
       setVitalsRefreshTick(t => t + 1);
-      return;
-    }
-
-    // Check if wallet or container is in inventory
-    if (p.inventory && p.inventory.length > 0) {
-      const containerItem = p.inventory.find(it => it && ((it.isContainer && !it.fluidStorage) || it.itemId === 'wallet'|| it.itemId === 'plastic_bag'));
-      if (containerItem) {
-        setIsInventoryOpen(true);
-        sound.playUseItem();
-        return;
-      }
     }
   };
 
@@ -8281,8 +8044,7 @@ export default function App() {
                 (playerCar && isExcavatorVehicle(playerCar) && playerCar.exOperatorMode))
             )}
             isInVehicle={isInVehicle}
-            isNearVehicle={Boolean(nearbyCarPrompt)}
-            onEnterExitVehicle={handleInteract}
+            hasHeldWaterHose={Boolean(playerRef.current?.heldWaterHose)}
             onResetVehicle={handleResetVehicle}
             onOpenMap={() => setIsFullMapOpen(true)}
             onOpenSpawnMenu={() => setIsSpawnMenuOpen(true)}
@@ -8305,9 +8067,6 @@ export default function App() {
             onSelectGear={handleSelectGear}
             onToggleEngine={handleToggleEngine}
             isEngineRunning={eng ? !!eng.engineRunning : true}
-            onInteractE={handleInteractE}
-            canInteractF={Boolean(isInVehicle || nearbyCarPrompt || canEnterBuilding || canExitBuilding || (playerRef.current?.isInsideBuilding === true))}
-            canInteractE={isInVehicle || (!!nearShop && playerRef.current?.isInsideBuilding === true) || !!playerRef.current?.inventory?.[selectedHotbarIndex]?.usable || true}
             hasTransferCase={eng?.hasTransferCase}
             transferCaseMode={eng?.transferCaseMode}
             carType={playerCar?.type}
@@ -8326,33 +8085,6 @@ export default function App() {
             onCycleUiScale={handleCycleTouchScale}
             onToggleTransferCase={() => {
               inputRef.current.transferCaseToggle = true;
-            }}
-            activeInteraction={activeInteraction}
-            onInteractR={() => {
-              const target = activeInteractionRef.current;
-              const rSubAction = target?.availableKeys?.find(k => k.key === 'R');
-              if (target && target.primaryKey === 'R') {
-                handleExecuteActiveInteraction(target);
-              } else if (rSubAction?.action) {
-                handleExecuteActiveInteraction(rSubAction.action);
-              } else if (playerRef.current && worldRef.current) {
-                const mouseWorld = getMouseWorldPos(inputRef.current.mouseX || 0, inputRef.current.mouseY || 0);
-                const rTarget = findActiveInteraction(playerRef.current, worldRef.current, mouseWorld, 'R');
-                if (rTarget) {
-                  handleExecuteActiveInteraction(rTarget);
-                } else {
-                  handleResetVehicle();
-                }
-              }
-            }}
-            onInteractKey={(key) => {
-              const target = activeInteractionRef.current;
-              const subAction = target?.availableKeys?.find(k => k.key === key);
-              if (target && target.primaryKey === key) {
-                handleExecuteActiveInteraction(target);
-              } else if (subAction?.action) {
-                handleExecuteActiveInteraction(subAction.action);
-              }
             }}
           />
         );
@@ -8575,7 +8307,7 @@ export default function App() {
           }
         }}
         onUseActiveHandItem={() => {
-          handleInteractE();
+          executeActiveHandItem();
         }}
         onSelectHotbarItem={(idx) => {
           setSelectedHotbarIndex(idx);
@@ -9014,7 +8746,7 @@ export default function App() {
             const grade = FUEL_GRADES[fuelType];
             addPlayerNotification(
               p,
-              `Взят пистолет [${grade.nameRu}]. Подойдите к лючку бензобака автомобиля и нажмите [E].`,
+              `Взят пистолет (${grade.nameRu}). Подойдите к лючку бензобака и нажмите ПКМ или удерживайте палец на горловине.`,
               'info');
             setIsFuelNozzleModalOpen(false);
             setVitalsRefreshTick((t) => t + 1);
@@ -9110,11 +8842,39 @@ export default function App() {
       )}
       </React.Suspense>
 
-      {/* UNIFIED CONTEXT INTERACTION HUD */}
-      <ContextInteractionHUD
-        target={activeInteraction}
-        onExecute={handleExecuteActiveInteraction}
-      />
+      {/* MOBILE LONG-TAP MINIMAL WHITE PROGRESS RING (NO TEXT) */}
+      {longTapVisual && (
+        <div
+          key={longTapVisual.id}
+          className="fixed pointer-events-none z-[60] -translate-x-1/2 -translate-y-1/2"
+          style={{ left: longTapVisual.x, top: longTapVisual.y }}
+        >
+          <svg width="56" height="56" viewBox="0 0 56 56" className="drop-shadow-[0_0_6px_rgba(255,255,255,0.45)]">
+            <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,0,0,0.42)" strokeWidth="4" />
+            <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="2.4" />
+            <circle
+              cx="28"
+              cy="28"
+              r="22"
+              fill="none"
+              stroke="rgba(255,255,255,0.96)"
+              strokeWidth="2.8"
+              strokeLinecap="round"
+              strokeDasharray="138.23"
+              strokeDashoffset="138.23"
+              transform="rotate(-90 28 28)"
+            >
+              <animate
+                attributeName="stroke-dashoffset"
+                from="138.23"
+                to="0"
+                dur="0.38s"
+                fill="freeze"
+              />
+            </circle>
+          </svg>
+        </div>
+      )}
 
       {/* FAINTING & CONCUSSION OVERLAY (Only for non-evacuation faints) */}
       {playerRef.current?.isFainting && !playerRef.current?.needsHospitalEvacuation && (

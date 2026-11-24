@@ -342,7 +342,7 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
               </div>
             ) : (
               <div style={{ fontSize: 11.5, color: 'var(--gu-mut)' }}>
-                На ТРК №{selectedPump?.pumpNumber} пистолет не вставлен в горловину. Вставьте пистолет на улице <b>[E]</b>.
+                На ТРК №{selectedPump?.pumpNumber} пистолет не вставлен в горловину. Вставьте пистолет на улице (ПКМ / удержание).
               </div>
             )}
           </div>

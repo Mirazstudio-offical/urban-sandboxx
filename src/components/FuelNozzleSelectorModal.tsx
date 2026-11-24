@@ -148,7 +148,7 @@ export const FuelNozzleSelectorModal: React.FC<FuelNozzleSelectorModalProps> = (
         >
           <Info className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--gu-amber-hi)' }} />
           <span>
-            Снимите пистолет, вставьте его в горловину бака <b>[E]</b>, затем оплатите подачу на кассе АЗС.
+            Снимите пистолет, вставьте его в горловину бака (ПКМ / удержание), затем оплатите подачу на кассе АЗС.
           </span>
         </div>
       </div>

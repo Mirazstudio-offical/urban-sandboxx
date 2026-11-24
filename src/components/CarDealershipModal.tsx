@@ -1705,23 +1705,23 @@ export const CarDealershipModal: React.FC<Props> = ({
 
     if (requiredKeyType === 'gold') {
       keyItem.nameRu = `Золотой ключ зажигания (${currentCar.nameRu})`;
-      keyItem.descriptionRu = `Механический "золотой"ключ зажигания от Вашего ретро-автомобиля «${currentCar.nameRu}» (${currentColor.name}). Вставьте в замок зажигания [E], чтобы завести мотор.`;
+      keyItem.descriptionRu = `Механический золотой ключ зажигания от Вашего ретро-автомобиля «${currentCar.nameRu}» (${currentColor.name}). Возьмите в активную руку и активируйте (ПКМ / удержание), чтобы вставить в замок зажигания.`;
       keyItem.icon = '';
     } else if (requiredKeyType === 'iron') {
       keyItem.nameRu = `Железный ключ зажигания (${currentCar.nameRu})`;
-      keyItem.descriptionRu = `Механический железный ключ зажигания от Вашего трактора/грузовика «${currentCar.nameRu}» (${currentColor.name}). Вставьте в замок зажигания [E], чтобы завести мотор.`;
+      keyItem.descriptionRu = `Механический железный ключ зажигания от Вашего трактора/грузовика «${currentCar.nameRu}» (${currentColor.name}). Возьмите в активную руку и активируйте (ПКМ / удержание), чтобы вставить в замок зажигания.`;
       keyItem.icon = '';
     } else if (keyTier === 'display') {
       keyItem.nameRu = `Smart Display Key (${currentCar.nameRu})`;
-      keyItem.descriptionRu = `Интерактивный цифровой смарт-ключ с цветным дисплеем от «${currentCar.nameRu}» (${currentColor.name}). Поддерживает дистанционный автозапуск ДВС [], управление фарами [], центральный замок [] и телеметрию.`;
+      keyItem.descriptionRu = `Интерактивный цифровой смарт-ключ с цветным дисплеем от «${currentCar.nameRu}» (${currentColor.name}). Поддерживает дистанционный автозапуск ДВС, управление фарами, центральный замок и телеметрию.`;
       keyItem.icon = '';
     } else if (keyTier === 'smart') {
       keyItem.nameRu = `Смарт-ключ (${currentCar.nameRu})`;
-      keyItem.descriptionRu = `Премиальный электронный смарт-ключ Keyless-Go от «${currentCar.nameRu}» (${currentColor.name}). Поддерживает дистанционный автозапуск [], управление фарами [] и ЦЗ [].`;
+      keyItem.descriptionRu = `Премиальный электронный смарт-ключ Keyless-Go от «${currentCar.nameRu}» (${currentColor.name}). Поддерживает дистанционный автозапуск, управление фарами и ЦЗ.`;
       keyItem.icon = '';
     } else if (keyTier === 'flip') {
       keyItem.nameRu = `Выкидной ключ (${currentCar.nameRu})`;
-      keyItem.descriptionRu = `Складной выкидной ключ с радиопультом ЦЗ от «${currentCar.nameRu}» (${currentColor.name}). Нажмите [E] в руках или используйте из инвентаря для отпирания/запирания.`;
+      keyItem.descriptionRu = `Складной выкидной ключ с радиопультом ЦЗ от «${currentCar.nameRu}» (${currentColor.name}). Активируйте в активной руке (ПКМ / удержание) или используйте из инвентаря для отпирания/запирания.`;
       keyItem.icon = '';
     } else {
       keyItem.nameRu = `Ключ зажигания (${currentCar.nameRu})`;

@@ -18,16 +18,15 @@ interface VacuumPumpModalProps {
 
 const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
-/* Pump control post on the side of the body: a compound gauge and the four-way cock.
-   Left stop draws the air out of the tank (suction), right stop pumps it in (discharge).
-   The tank pressure builds in the physics loop, so the needle follows the real cistern. */
+/* Pump control post on the side of the body: a compound gauge and a four-way cock, nothing else.
+   The rear gate valve ANM-53 and side hose trays are operated directly on their physical assemblies. */
 export const VacuumPumpModal: React.FC<VacuumPumpModalProps> = ({ isOpen, onClose, vehicle, world, onForceUpdate }) => {
   const [, setTick] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') {
+      if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       }
@@ -64,7 +63,7 @@ export const VacuumPumpModal: React.FC<VacuumPumpModalProps> = ({ isOpen, onClos
 
   return (
     <div className="op-layer" onPointerDown={stop} onMouseDown={stop} onTouchStart={stop} onClick={onClose}>
-      <button type="button" className="op-close" onClick={onClose} title="Закрыть пульт [Esc / E]" aria-label="Закрыть пульт">
+      <button type="button" className="op-close" onClick={onClose} title="Закрыть пульт" aria-label="Закрыть пульт">
         <X />
       </button>
 

@@ -906,7 +906,7 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'gea_pack', itemId: 'backpack_travel', nameRu: 'Тактический рюкзак (35L)', price: 6500, description: 'Рюкзак из плотной ткани Cordura с системой крепления итогов.', category: 'auto', effectText: '+Слоты инвентаря' }
   ],
   furniture_shop: [
-    { id: 'furn_item_chair', itemId: 'furn_chair', nameRu: 'Деревянный стул со спинкой', price: 1800, description: 'Удобный деревянный стул. Устанавливается в собственной квартире на [E].', category: 'auto', effectText: 'Мебель / Интерьер' },
+    { id: 'furn_item_chair', itemId: 'furn_chair', nameRu: 'Деревянный стул со спинкой', price: 1800, description: 'Удобный деревянный стул. Устанавливается в собственной квартире.', category: 'auto', effectText: 'Мебель / Интерьер' },
     { id: 'furn_item_table', itemId: 'furn_table', nameRu: 'Обеденный стол', price: 4500, description: 'Деревянный обеденный стол для кухни или гостиной.', category: 'auto', effectText: 'Мебель / Интерьер' },
     { id: 'furn_item_sofa', itemId: 'furn_sofa', nameRu: 'Мягкий диван-кровать', price: 16500, description: 'Уютный двухместный мягкий диван для гостиной и отдыха.', category: 'auto', effectText: 'Мебель / Отдых' },
     { id: 'furn_item_bed', itemId: 'furn_bed', nameRu: 'Двуспальная кровать с матрасом', price: 24000, description: 'Комфортная кровать с ортопедическим матрасом.', category: 'auto', effectText: 'Мебель / Сон и отдых' },
@@ -2444,7 +2444,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   </div>
                 ) : (
                   <div style={{ fontSize: 11.5, color: 'var(--gu-mut)' }}>
-                    На колонке №{selectedPump?.pumpNumber || 1} пистолет еще не вставлен в бак автомобиля. Оплатите заранее или вставьте пистолет на улице <b>[E]</b>.
+                    На колонке №{selectedPump?.pumpNumber || 1} пистолет еще не вставлен в бак автомобиля. Оплатите заранее или вставьте пистолет на улице (ПКМ / удержание).
                   </div>
                 )}
               </div>

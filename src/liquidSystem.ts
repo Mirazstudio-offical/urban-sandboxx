@@ -5157,7 +5157,7 @@ export function syncItemContainerProperties(item: InventoryItem): void {
       const a = storage.attributes;
       const openBadge = isOpened
         ? ' (Тара вскрыта)'
-        : (cfg?.requiresOpening ? ' (Закрыто — нажмите [E] или Вскрыть, чтобы открыть тару)' : '');
+        : (cfg?.requiresOpening ? ' (Закрыто — активируйте в активной руке или нажмите «Вскрыть»)' : '');
       const isDry = isFluidStorageDryForm(storage);
       const volText = isDry
         ? `${Math.round((storage.currentMl / 1000) * (liquid?.densityKgPerL || 1.0) * 1000)} г`
