@@ -3,7 +3,14 @@ import { sound } from './audio';
 import { ITEM_CATALOG, addPlayerNotification, getItemTotalWeight, takeItemFromHand, getSlotCompartment } from './items';
 import { addInjuryToPart } from './bodySystem';
 import { getOutsideTemperature } from './physics';
-import { updateHybridContainerInteraction } from './liquidSystem';
+import {
+  updateHybridContainerInteraction,
+  fillContainerWithLiquid,
+  isFluidContainerClosed,
+  getContainerConfig,
+  getContainerFreeVolumeMl,
+  ensureHybridContainerProps,
+} from './liquidSystem';
 
 export interface ItemThermalConfig {
   temperature?: number;        // Default core temperature in °C
@@ -1018,9 +1025,206 @@ export function tickStoveStateThermodynamics(
   return changed;
 }
 
+export interface SinkThermalStateLike {
+  waterOn: boolean;
+  coldValve: number;
+  hotValve: number;
+  plugClosed: boolean;
+  basinWaterMl: number;
+  basinMaxMl: number;
+  waterTemperature: number;
+  lastUpdatedSec?: number;
+}
+
+const SINK_COLD_WATER_TEMP_C = 8.0;
+const SINK_HOT_WATER_TEMP_C = 66.0;
+const SINK_MAX_STREAM_ML_PER_SEC = 280.0;
+
+/**
+ * Advances thermodynamics, basin water accumulation/drainage, container filling,
+ * item wetting/rinsing, and hot/cold heat transfer for a sink over `dt` seconds.
+ */
+export function tickSinkStateThermodynamics(
+  storage: {
+    items: InventoryItem[];
+    sinkState?: SinkThermalStateLike;
+  },
+  dt: number,
+  nowSec: number = Date.now() / 1000
+): boolean {
+  if (!storage || !storage.sinkState || dt <= 0) return false;
+  const st = storage.sinkState;
+  const clampedDt = Math.min(dt, 3600);
+  const ambientRoom = 21.0;
+  let changed = false;
+
+  const cold = Math.max(0, Math.min(100, st.coldValve ?? 50));
+  const hot = Math.max(0, Math.min(100, st.hotValve ?? 50));
+  const valveSum = cold + hot;
+  const flowing = Boolean(st.waterOn && valveSum > 0);
+  const flowFactor = Math.min(1.5, valveSum / 100);
+  const flowMlPerSec = flowing ? SINK_MAX_STREAM_ML_PER_SEC * flowFactor : 0;
+  const streamTemp =
+    valveSum > 0
+      ? (cold * SINK_COLD_WATER_TEMP_C + hot * SINK_HOT_WATER_TEMP_C) / valveSum
+      : ambientRoom;
+
+  const basinMax = Math.max(1000, st.basinMaxMl || 18000);
+  const prevBasinMl = Math.max(0, st.basinWaterMl || 0);
+  const prevWaterTemp = typeof st.waterTemperature === 'number' ? st.waterTemperature : ambientRoom;
+
+  // 1. Update basin water level & water temperature
+  if (st.plugClosed) {
+    if (flowing && flowMlPerSec > 0) {
+      const addedMl = Math.min(basinMax - prevBasinMl, flowMlPerSec * clampedDt);
+      if (addedMl > 0.05) {
+        const nextBasinMl = Math.min(basinMax, prevBasinMl + addedMl);
+        const mixedTemp =
+          (prevBasinMl * prevWaterTemp + addedMl * streamTemp) / Math.max(1, prevBasinMl + addedMl);
+        st.basinWaterMl = Math.round(nextBasinMl * 10) / 10;
+        st.waterTemperature = Math.round(mixedTemp * 10) / 10;
+        changed = true;
+      } else if (Math.abs(streamTemp - prevWaterTemp) >= 0.2) {
+        // Overflowing full basin approaches incoming tap temperature
+        const alpha = Math.min(1, 0.25 * clampedDt);
+        st.waterTemperature = Math.round((prevWaterTemp + (streamTemp - prevWaterTemp) * alpha) * 10) / 10;
+        changed = true;
+      }
+    } else if (prevBasinMl > 0) {
+      // Standing water cools/warms gently toward room temperature
+      const nextTemp = ambientRoom + (prevWaterTemp - ambientRoom) * Math.exp(-0.008 * clampedDt);
+      const rounded = Math.round(nextTemp * 10) / 10;
+      if (Math.abs(rounded - prevWaterTemp) >= 0.1) {
+        st.waterTemperature = rounded;
+        changed = true;
+      }
+    }
+  } else {
+    // Drain is open: standing water drains quickly
+    if (prevBasinMl > 0) {
+      const drained = Math.max(0, prevBasinMl - 1400 * clampedDt);
+      st.basinWaterMl = Math.round(drained * 10) / 10;
+      changed = true;
+    }
+    const targetTemp = flowing ? streamTemp : ambientRoom;
+    const rate = flowing ? 0.45 : 0.03;
+    const nextTemp = targetTemp + (prevWaterTemp - targetTemp) * Math.exp(-rate * clampedDt);
+    const rounded = Math.round(nextTemp * 10) / 10;
+    if (Math.abs(rounded - prevWaterTemp) >= 0.1) {
+      st.waterTemperature = rounded;
+      changed = true;
+    }
+  }
+
+  st.lastUpdatedSec = nowSec;
+
+  const hasStandingWater = (st.basinWaterMl || 0) >= 80;
+  const waterActive = flowing || hasStandingWater;
+  const activeWaterTemp = flowing ? streamTemp : st.waterTemperature;
+
+  // 2. Process all items currently placed in the sink
+  if (storage.items && storage.items.length > 0) {
+    let incomingBudgetMl = flowing ? flowMlPerSec * clampedDt : 0;
+
+    for (const item of storage.items) {
+      if (!item) continue;
+
+      if (waterActive) {
+        // Thermal conduction in water is fast (~2.4x air)
+        if (updateItemThermodynamics(item, activeWaterTemp, clampedDt * 2.4)) {
+          changed = true;
+        }
+
+        // Wet / soak & rinse off non-water residues
+        const prevWet = item.wetness || 0;
+        const wetGain = flowing ? 48 * clampedDt : 35 * clampedDt;
+        const nextWet = Math.min(100, Math.round((prevWet + wetGain) * 10) / 10);
+        if (
+          nextWet !== prevWet ||
+          item.soakedLiquidId !== 'water' ||
+          item.soakedLiquidNameRu !== 'Вода'
+        ) {
+          item.wetness = nextWet;
+          item.soakedLiquidId = 'water';
+          item.soakedLiquidNameRu = 'Вода';
+          item.soakedColor = '#60a5fa';
+          if (item.clothingStats) {
+            item.clothingStats.wetness = nextWet;
+          }
+          changed = true;
+        }
+
+        // Wet any exposed contents inside open dry containers
+        if (item.contents && item.contents.length > 0 && !isFluidContainerClosed(item)) {
+          for (const child of item.contents) {
+            if (!child) continue;
+            const cPrev = child.wetness || 0;
+            const cNext = Math.min(100, Math.round((cPrev + wetGain * 0.7) * 10) / 10);
+            if (cNext !== cPrev || child.soakedLiquidId !== 'water') {
+              child.wetness = cNext;
+              child.soakedLiquidId = 'water';
+              child.soakedLiquidNameRu = 'Вода';
+              child.soakedColor = '#60a5fa';
+              changed = true;
+            }
+          }
+        }
+
+        // Auto-fill open fluid containers placed in the sink
+        if (item.fluidStorage && !isFluidContainerClosed(item)) {
+          ensureHybridContainerProps(item);
+          const cfg = getContainerConfig(item.itemId);
+          const isGranularOnly = Boolean(
+            (cfg as any)?.isGranularOnly ||
+              item.itemId.startsWith('sack_') ||
+              item.itemId === 'sandbag' ||
+              item.itemId === 'package_bag'
+          );
+          if (!isGranularOnly) {
+            const freeMl = getContainerFreeVolumeMl(item);
+            if (freeMl > 0) {
+              const drawFromStream = flowing && incomingBudgetMl > 0 ? Math.min(freeMl, incomingBudgetMl) : 0;
+              const drawFromBasin =
+                drawFromStream <= 0 && !flowing && (st.basinWaterMl || 0) > 20
+                  ? Math.min(freeMl, Math.min(st.basinWaterMl, 220 * clampedDt))
+                  : 0;
+              const addMl = drawFromStream > 0 ? drawFromStream : drawFromBasin;
+              if (addMl > 0.5) {
+                const prevLiquidMl = item.fluidStorage.currentMl || 0;
+                const prevItemTemp = item.temperature ?? ambientRoom;
+                const fillRes = fillContainerWithLiquid(item, 'water', addMl);
+                if (fillRes.success && fillRes.filledMl > 0) {
+                  if (drawFromStream > 0) {
+                    incomingBudgetMl = Math.max(0, incomingBudgetMl - fillRes.filledMl);
+                  } else if (drawFromBasin > 0) {
+                    st.basinWaterMl = Math.max(0, Math.round((st.basinWaterMl - fillRes.filledMl) * 10) / 10);
+                  }
+                  const mixedTemp =
+                    (prevLiquidMl * prevItemTemp + fillRes.filledMl * activeWaterTemp) /
+                    Math.max(1, prevLiquidMl + fillRes.filledMl);
+                  item.temperature = Math.round(mixedTemp * 10) / 10;
+                  item.surfaceTemperature = item.temperature;
+                  changed = true;
+                }
+              }
+            }
+          }
+        }
+      } else {
+        // Sink is dry -> normal room temperature equilibration & gradual drying
+        if (updateItemThermodynamics(item, ambientRoom, clampedDt)) {
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return changed;
+}
+
 /**
  * Synchronizes thermodynamics for all items stored inside a furniture container
- * (e.g. refrigerator at +4°C, pantry counter at +21°C, gas stove with 4 burners & oven).
+ * (e.g. refrigerator at +4°C, pantry counter at +21°C, gas stove with 4 burners & oven, sink).
  * Uses exact analytical time-delta catching up so when a player returns after a long walk,
  * items inside have cooled or heated realistically according to the exact elapsed time!
  */
@@ -1032,6 +1236,7 @@ export function syncFurnitureStorageThermodynamics(
       burners: Array<{ item: InventoryItem | null; gasOn: boolean; temperature: number; lastUpdatedSec?: number }>;
       oven: { items: InventoryItem[]; gasOn: boolean; temperature: number; lastUpdatedSec?: number };
     };
+    sinkState?: SinkThermalStateLike;
   },
   currentTimeSec: number = Date.now() / 1000
 ): void {
@@ -1047,6 +1252,16 @@ export function syncFurnitureStorageThermodynamics(
     const elapsedDt = Math.max(0, currentTimeSec - refSec);
     if (elapsedDt > 0.1) {
       tickStoveStateThermodynamics(st, elapsedDt, currentTimeSec);
+    }
+    return;
+  }
+
+  // Sink uses tap/valve water flow, basin standing water, and hot/cold mixing
+  if (storage.furnitureType === 'sink' && storage.sinkState) {
+    const refSec = storage.sinkState.lastUpdatedSec ?? currentTimeSec;
+    const elapsedDt = Math.max(0, currentTimeSec - refSec);
+    if (elapsedDt > 0.1) {
+      tickSinkStateThermodynamics(storage, elapsedDt, currentTimeSec);
     }
     return;
   }

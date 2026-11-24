@@ -125,6 +125,7 @@
   display: flex; flex-direction: column; min-height: 0; overflow: hidden;
   z-index: 4;
 }
+.kf-body.kf-body-notab { top: 90px; }
 
 /* ---- Shared Panels & Surfaces ---- */
 .panel {
@@ -293,13 +294,14 @@
 /* ---- Selected Item Action Strip (bottom of a column) ---- */
 .kf-foot-bar {
   flex: none;
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px 10px;
+  flex-wrap: wrap;
   padding: 8px 10px; border-radius: 10px;
   background: rgba(255, 255, 255, .035);
   border: 1px solid rgba(255, 255, 255, .08);
   min-height: 48px;
 }
-.kf-foot-item { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.kf-foot-item { display: flex; align-items: center; gap: 10px; min-width: 140px; flex: 1 1 140px; }
 .kf-foot-name {
   font-size: 13.5px; font-weight: 600; color: #fff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -309,7 +311,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.kf-foot-acts { display: flex; align-items: center; gap: 6px; flex: none; }
+.kf-foot-acts { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
 
 /* ---- Kitchen Table Tab 2: 4x4-in -> 4x4-out Workbench ---- */
 .kf-wb-body {
@@ -491,6 +493,7 @@
 .gm[data-mob] .kf-tab { height: 38px; padding: 0 12px; font-size: 16.5px; gap: 6px; }
 
 .gm[data-mob] .kf-body { left: 28px; right: 28px; top: 108px; bottom: 32px; }
+.gm[data-mob] .kf-body.kf-body-notab { top: 68px; }
 @media (pointer: coarse) {
   .gm[data-mob] .kf-body { bottom: 12px; }
 }
@@ -525,10 +528,164 @@
 .gm[data-mob] .kf-oven-head { padding: 8px 10px; }
 .gm[data-mob] .kf-oven-chamber { padding: 8px 10px; }
 
+/* ---- Sink Mixer, Valves & Basin ---- */
+.kf-sink-mixer {
+  flex: none;
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(13, 14, 16, .9);
+  border: 1px solid rgba(255, 255, 255, .09);
+}
+.kf-sink-viz {
+  position: relative;
+  height: 112px;
+  border-radius: 10px;
+  background: #0b0c0e;
+  border: 1px solid rgba(255, 255, 255, .08);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kf-sink-controls {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kf-sink-toggles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.btn-water-on {
+  background: rgba(94, 163, 214, .2);
+  border: 1px solid rgba(94, 163, 214, .65);
+  color: #d6ecfb;
+}
+.btn-water-on:hover { background: rgba(94, 163, 214, .3); }
+
+.kf-valves {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kf-valve-row {
+  display: grid;
+  grid-template-columns: 76px 28px minmax(0, 1fr) 28px 42px;
+  align-items: center;
+  gap: 6px;
+}
+.kf-valve-lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #cfcbc1;
+  white-space: nowrap;
+}
+.kf-valve-step {
+  width: 28px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #e9e6df;
+  transition: background .14s, border-color .14s;
+}
+.kf-valve-step:hover { background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .26); }
+.kf-valve-pct {
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #f4f1ea;
+  white-space: nowrap;
+}
+.kf-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .1);
+  outline: none;
+  cursor: pointer;
+}
+.kf-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f4f1ea;
+  border: 2px solid #0c0d0f;
+  cursor: pointer;
+}
+.kf-range.cold::-webkit-slider-thumb { background: #6cb4e8; }
+.kf-range.hot::-webkit-slider-thumb { background: #f0884a; }
+.kf-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f4f1ea;
+  border: 2px solid #0c0d0f;
+  cursor: pointer;
+}
+.kf-range.cold::-moz-range-thumb { background: #6cb4e8; }
+.kf-range.hot::-moz-range-thumb { background: #f0884a; }
+
+.kf-sink-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #a29e93;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kf-sink-stats b { color: #f4f1ea; font-weight: 600; }
+
+.kf-wet-badge {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #7dd3fc;
+  line-height: 1;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.gm[data-mob] .kf-sink-mixer {
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 10px;
+}
+.gm[data-mob] .kf-sink-viz { height: 96px; }
+.gm[data-mob] .kf-valve-row { grid-template-columns: 68px 26px minmax(0, 1fr) 26px 38px; gap: 4px; }
+.gm[data-mob] .kf-valve-step { width: 26px; height: 24px; }
+.gm[data-mob] .kf-sink-toggles { gap: 5px; }
+.gm[data-mob] .kf-sink-toggles .btn.btn-xs { padding: 0 8px; font-size: 11.5px; gap: 4px; }
+
 @container (max-width: 1060px) {
   .gm[data-mob] .kf-wb-grid4 { grid-template-columns: repeat(4, 44px); gap: 4px; }
   .gm[data-mob] .kf-wb-slot { width: 44px; height: 44px; }
   .gm[data-mob] .kf-wb-row { gap: 8px; }
   .gm[data-mob] .kf-wb-arrow { height: 38px; padding: 0 9px; }
   .gm[data-mob] .kf-burner-ring { width: 56px; height: 56px; }
+  .gm[data-mob] .kf-sink-mixer { grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+  .gm[data-mob] .kf-sink-viz { height: 88px; }
+  .gm[data-mob] .kf-sink-stats { font-size: 11px; gap: 5px; }
 }

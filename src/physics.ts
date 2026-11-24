@@ -14,7 +14,7 @@ import { defaultBodyState } from './sensations';
 import { updateBodySystem, distributeImpactDamage, applyDriverVehicleCrashTrauma, addInjuryToPart } from './bodySystem';
 import { updateMedicineSystem } from './medicineSystem';
 import { updateWorldItemsThermodynamics } from './itemThermalSystem';
-import { tickActiveStovesInBackground } from './furnitureStorageSystem';
+import { tickActiveStovesInBackground, tickActiveSinksInBackground } from './furnitureStorageSystem';
 import { GuardrailPhysics } from './guardrailPhysics';
 import { BirdSystem } from './birdSystem';
 import { LitterSystem } from './litterSystem';
@@ -7678,6 +7678,7 @@ export function updatePlayerNeedsAndVitals(
   // 4.1. Update Item Thermodynamics & Thermal Contact Burns
   updateWorldItemsThermodynamics(world, player, dt);
   tickActiveStovesInBackground(dt);
+  tickActiveSinksInBackground(dt);
 
   // 5. Audio symptom triggers & timers
   // Cold Teeth Chattering & Shivering

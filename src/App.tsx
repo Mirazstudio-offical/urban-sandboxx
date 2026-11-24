@@ -169,6 +169,7 @@ const PropertyDocumentModal = React.lazy(() => import('./components/PropertyDocu
 const FurnitureStorageModal = React.lazy(() => import('./components/FurnitureStorageModal').then((m) => ({ default: m.FurnitureStorageModal })));
 const KitchenTableModal = React.lazy(() => import('./components/KitchenTableModal').then((m) => ({ default: m.KitchenTableModal })));
 const KitchenStoveModal = React.lazy(() => import('./components/KitchenStoveModal').then((m) => ({ default: m.KitchenStoveModal })));
+const KitchenSinkModal = React.lazy(() => import('./components/KitchenSinkModal').then((m) => ({ default: m.KitchenSinkModal })));
 const DateTimePickerModal = React.lazy(() => import('./components/DateTimePickerModal').then((m) => ({ default: m.DateTimePickerModal })));
 const CreativeMenuModal = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativeMenuModal })));
 const CreativePlacementHud = React.lazy(() => import('./components/CreativeMenuModal').then((m) => ({ default: m.CreativePlacementHud })));
@@ -9752,6 +9753,20 @@ export default function App() {
         if (furnitureStorageData.furnitureType === 'stove') {
           return (
             <KitchenStoveModal
+              isOpen={isFurnitureStorageOpen}
+              onClose={handleCloseFurn}
+              storage={activeStorage}
+              player={playerRef.current}
+              world={worldRef.current}
+              onInventoryUpdated={handleFurnChanged}
+              onVitalsChange={handleFurnChanged}
+            />
+          );
+        }
+
+        if (furnitureStorageData.furnitureType === 'sink') {
+          return (
+            <KitchenSinkModal
               isOpen={isFurnitureStorageOpen}
               onClose={handleCloseFurn}
               storage={activeStorage}

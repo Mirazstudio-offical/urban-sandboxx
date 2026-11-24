@@ -1262,6 +1262,7 @@ export function findActiveInteraction(
             if (storageCfg) {
               const isRadiator = furn.type === 'radiator';
               const isStoveFurn = furn.type === 'stove';
+              const isSinkFurn = furn.type === 'sink';
               const isKitchenTable = furn.type === 'kitchen_counter' || furn.type === 'table';
               candidates.push({
                 type: 'furniture_storage',
@@ -1270,11 +1271,15 @@ export function findActiveInteraction(
                   ? 'Положить вещи на батарею'
                   : isStoveFurn
                   ? 'Открыть плиту'
+                  : isSinkFurn
+                  ? 'Открыть раковину'
                   : `Открыть ${storageCfg.nameRu.split(' / ')[0]}`,
                 detail: isRadiator
                   ? 'Сушка сырой одежды и прогрев вещей (+65°C)'
                   : isStoveFurn
                   ? '4 газовые конфорки и духовка'
+                  : isSinkFurn
+                  ? 'Смеситель горячей/холодной воды, набор и замачивание'
                   : isKitchenTable
                   ? `Хранилище стола (${storageCfg.capacityL} л) и взаимодействие`
                   : `Хранилище предметов (${storageCfg.capacityL} л / ${storageCfg.maxWeightKg} кг)`,
