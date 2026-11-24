@@ -99,6 +99,7 @@ export function applyCompactState(gm: HTMLElement, m: StageMetrics): void {
 export function attachStageFit(getWrap: () => HTMLElement | null, getStage: () => HTMLElement | null): () => void {
   let ro: ResizeObserver | null = null;
   let raf = 0;
+  let roRaf = 0;
   let onResize: (() => void) | null = null;
   const attach = () => {
     const w = getWrap();
@@ -115,13 +116,23 @@ export function attachStageFit(getWrap: () => HTMLElement | null, getStage: () =
         gm.style.transform = 'translate(' + (W - 1440 * m.k) / 2 + 'px,' + (H - 900 * m.k) / 2 + 'px) scale(' + m.k + ')';
       }
     };
+    const scheduleFit = () => {
+      cancelAnimationFrame(roRaf);
+      roRaf = requestAnimationFrame(fit);
+    };
     fit();
-    if (window.ResizeObserver) { ro = new ResizeObserver(fit); ro.observe(w); }
-    else { onResize = fit; window.addEventListener('resize', fit); }
+    if (window.ResizeObserver) {
+      ro = new ResizeObserver(scheduleFit);
+      ro.observe(w);
+    } else {
+      onResize = scheduleFit;
+      window.addEventListener('resize', scheduleFit);
+    }
   };
   attach();
   return () => {
     cancelAnimationFrame(raf);
+    cancelAnimationFrame(roRaf);
     ro?.disconnect();
     if (onResize) window.removeEventListener('resize', onResize);
   };

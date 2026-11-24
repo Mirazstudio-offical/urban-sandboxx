@@ -1,12 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap');
+
 /* ==========================================================================
-   Phone UI stylesheet (inside ShadowHost or scoped to .ph-stage).
-   Matches the visual DNA of MainMenu (mainMenu.css) & gameUi.css:
-   - Fonts: Barlow & Barlow Condensed
-   - Colors: #c9922b (amber), #e0ab45 (amber-hi), #f0c264 (amber-soft),
-     #e9e6df (ink), #a29e93 (mut), #121315 / #141416 (surfaces)
+   Phone UI stylesheet (inside ShadowHost).
+   Locked smartphone proportions (~9:18.5) scaled uniformly to fit any screen,
+   4-column home app icon grid + 4-icon bottom dock, zero vertical scroll on Home.
    ========================================================================== */
 
-:root {
+:host {
+  all: initial;
+  display: block;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 55;
   --ph-amber: #c9922b;
   --ph-amber-hi: #e0ab45;
   --ph-amber-soft: #f0c264;
@@ -23,35 +31,39 @@
   --ph-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+:host *,
+:host *::before,
+:host *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 .ph-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 55;
+  position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  overflow: hidden;
   background:
-    radial-gradient(900px 520px at 50% 85%, rgba(201, 146, 43, 0.26), transparent 65%),
+    radial-gradient(880px 520px at 50% 85%, rgba(201, 146, 43, 0.2), transparent 65%),
     rgba(9, 9, 10, 0.82);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  font-family: 'Barlow', system-ui, sans-serif;
+  font-family: 'Barlow', system-ui, -apple-system, sans-serif;
   color: var(--ph-ink);
   user-select: none;
   -webkit-user-select: none;
-  animation: ph-fade 0.22s ease both;
-}
-
-.ph-backdrop *,
-.ph-backdrop *::before,
-.ph-backdrop *::after {
-  box-sizing: border-box;
+  animation: ph-fade 0.2s ease both;
 }
 
 .ph-backdrop button {
   font: inherit;
   color: inherit;
+  background: none;
+  border: 0;
   cursor: pointer;
   text-align: left;
 }
@@ -75,46 +87,39 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-@keyframes ph-rise {
-  from { opacity: 0; transform: translateY(16px) scale(0.98); }
-  to { opacity: 1; transform: none; }
-}
 @keyframes ph-in-f {
-  from { opacity: 0; transform: translateX(32px); }
+  from { opacity: 0; transform: translateX(28px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes ph-in-b {
-  from { opacity: 0; transform: translateX(-32px); }
+  from { opacity: 0; transform: translateX(-28px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes ph-sweep {
   0% { opacity: 1; transform: translateX(-100%); }
   100% { opacity: 1; transform: translateX(100%); }
 }
-@keyframes ph-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
 
-/* ---------- outer wrapper with side hints ---------- */
+/* ---------- Uniformly scaled phone stage (locked smartphone proportions) ---------- */
 .ph-stage {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  max-height: 100%;
-  animation: ph-rise 0.38s var(--ph-ease) both;
+  gap: 10px;
+  flex: none;
+  transform-origin: center center;
+  will-change: transform;
 }
 
-/* ---------- physical phone chassis ---------- */
+/* ---------- Physical phone chassis (fixed 372x760 -> ~1:2.04 smartphone) ---------- */
 .ph-chassis {
   position: relative;
-  width: 404px;
-  max-width: 95vw;
-  height: min(780px, 87vh);
+  width: 372px;
+  height: 760px;
+  flex: none;
   border-radius: 44px;
-  padding: 10px;
+  padding: 9px;
   background: linear-gradient(145deg, #282623, #151412);
   border: 2px solid var(--ph-chassis-accent, rgba(201, 146, 43, 0.55));
   box-shadow:
@@ -134,56 +139,55 @@
 }
 .ph-hw-pwr {
   right: -4px;
-  top: 128px;
+  top: 132px;
   height: 54px;
   border-radius: 0 3px 3px 0;
 }
 .ph-hw-vol1 {
   left: -4px;
-  top: 108px;
+  top: 112px;
   height: 38px;
   border-radius: 3px 0 0 3px;
 }
 .ph-hw-vol2 {
   left: -4px;
-  top: 156px;
+  top: 160px;
   height: 38px;
   border-radius: 3px 0 0 3px;
 }
 
-/* Power / lock button floating top-right */
+/* Lock / close button next to phone top-right */
 .ph-backdrop .ph-close-btn {
   position: absolute;
   top: 14px;
-  right: -52px;
+  right: -50px;
   z-index: 40;
   width: 38px;
   height: 38px;
   padding: 0;
   border-radius: 10px;
-  background: rgba(20, 20, 22, 0.92);
+  background: rgba(20, 20, 22, 0.94);
   border: 1px solid rgba(201, 146, 43, 0.55);
   color: var(--ph-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .ph-backdrop .ph-close-btn:hover {
-  background: rgba(201, 146, 43, 0.2);
+  background: rgba(201, 146, 43, 0.22);
   border-color: var(--ph-amber-hi);
   color: #fff;
-  transform: translateY(-1px);
 }
 
-/* ---------- inner bezel & AMOLED screen ---------- */
+/* ---------- Inner bezel & AMOLED screen ---------- */
 .ph-bezel {
   position: relative;
   flex: 1;
   width: 100%;
   height: 100%;
-  border-radius: 34px;
+  border-radius: 35px;
   background: #09090a;
   padding: 4px;
   display: flex;
@@ -197,7 +201,7 @@
   flex: 1;
   width: 100%;
   height: 100%;
-  border-radius: 30px;
+  border-radius: 31px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -205,7 +209,7 @@
   color: var(--ph-ink);
 }
 
-/* Main Menu style layered scene inside phone screen */
+/* Layered landscape scene wallpaper inside phone screen */
 .ph-bg-scene {
   position: absolute;
   inset: 0;
@@ -216,7 +220,7 @@
 .ph-bg-glow {
   position: absolute;
   inset: -40px;
-  background: radial-gradient(360px 280px at 72% 78%, rgba(201, 146, 43, 0.36), transparent 65%);
+  background: radial-gradient(340px 260px at 72% 76%, rgba(201, 146, 43, 0.34), transparent 65%);
   transition: transform 0.6s var(--ph-ease);
 }
 .ph-bg-mtn1,
@@ -233,10 +237,10 @@
 .ph-bg-scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(9, 9, 10, 0.45) 0%, rgba(9, 9, 10, 0.35) 50%, rgba(9, 9, 10, 0.78) 100%);
+  background: linear-gradient(180deg, rgba(9, 9, 10, 0.42) 0%, rgba(9, 9, 10, 0.28) 52%, rgba(9, 9, 10, 0.76) 100%);
 }
 .ph-bg-scrim.app-open {
-  background: rgba(13, 13, 15, 0.92);
+  background: rgba(13, 13, 15, 0.94);
 }
 
 /* Top amber wipe bar on screen change */
@@ -245,17 +249,17 @@
   left: 0;
   top: 0;
   width: 100%;
-  height: 2.5px;
+  height: 2px;
   z-index: 35;
   opacity: 0;
   pointer-events: none;
   background: linear-gradient(90deg, transparent, var(--ph-amber-hi) 50%, transparent);
 }
 .ph-wipe.on {
-  animation: ph-sweep 0.28s linear;
+  animation: ph-sweep 0.26s linear;
 }
 
-/* ---------- status bar & dynamic island ---------- */
+/* ---------- Status bar & Dynamic Island ---------- */
 .ph-statusbar {
   position: relative;
   z-index: 30;
@@ -268,7 +272,8 @@
   font-weight: 600;
   color: var(--ph-ink);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(12, 12, 14, 0.55);
+  background: rgba(12, 12, 14, 0.52);
+  flex: none;
 }
 
 .ph-clock {
@@ -291,17 +296,16 @@
   background: #070708;
   border: 1px solid rgba(255, 255, 255, 0.12);
   cursor: pointer;
-  transition: all 0.22s var(--ph-ease);
+  transition: border-color 0.2s var(--ph-ease), background 0.2s var(--ph-ease), padding 0.2s var(--ph-ease);
 }
 .ph-backdrop .ph-island:hover {
   border-color: rgba(201, 146, 43, 0.6);
 }
 .ph-backdrop .ph-island.expanded {
-  height: 28px;
+  height: 26px;
   padding: 0 12px;
   border-color: var(--ph-amber);
   background: #12100d;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
 }
 .ph-lens {
   width: 7px;
@@ -320,7 +324,7 @@
 .ph-status-r {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -328,11 +332,11 @@
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: var(--ph-amber-hi);
 }
 
-/* ---------- main content viewport ---------- */
+/* ---------- Main viewport ---------- */
 .ph-viewport {
   position: relative;
   z-index: 10;
@@ -349,7 +353,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: ph-in-f 0.26s var(--ph-ease) both;
+  animation: ph-in-f 0.24s var(--ph-ease) both;
 }
 .ph-view.back {
   animation-name: ph-in-b;
@@ -360,7 +364,7 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 14px;
+  padding: 12px 14px;
   scrollbar-width: thin;
   scrollbar-color: #3a352b transparent;
 }
@@ -376,7 +380,7 @@
 .ph-cn {
   font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 .ph-mut {
   color: var(--ph-mut);
@@ -391,7 +395,7 @@
 .ph-grp {
   font-family: 'Barlow Condensed', sans-serif;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   font-size: 12px;
   font-weight: 700;
   color: var(--ph-amber-hi);
@@ -401,7 +405,7 @@
   margin-top: 0;
 }
 
-/* ---------- App Sub-Header (like MainMenu .top) ---------- */
+/* ---------- App Sub-Header ---------- */
 .ph-app-top {
   display: flex;
   align-items: center;
@@ -419,8 +423,8 @@
   min-width: 0;
 }
 .ph-backdrop .ph-back {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.05);
@@ -439,8 +443,8 @@
 .ph-app-ttl {
   font-family: 'Barlow Condensed', sans-serif;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  font-size: 19px;
+  letter-spacing: 0.06em;
+  font-size: 18px;
   font-weight: 700;
   color: #fff;
   line-height: 1.05;
@@ -464,24 +468,35 @@
   padding: 12px 14px;
 }
 
-/* ---------- Home Screen ---------- */
+/* ---------- Home Screen (ZERO vertical scroll, authentic smartphone layout) ---------- */
 .ph-home {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   padding: 12px 14px 10px;
-  gap: 10px;
-  overflow-y: auto;
+  gap: 12px;
+  overflow: hidden;
 }
 
-/* Weather & Telemetry Hero Panel */
+.ph-home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  flex: none;
+}
+
+/* Weather & Telemetry Widget */
 .ph-hero {
   position: relative;
-  border-radius: 13px;
-  background: rgba(18, 18, 20, 0.86);
+  border-radius: 16px;
+  background: rgba(18, 18, 21, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
+  flex: none;
 }
 .ph-hero-banner {
   position: relative;
@@ -498,7 +513,7 @@
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 38px;
   font-weight: 700;
-  line-height: 0.95;
+  line-height: 0.94;
   letter-spacing: 0.03em;
   color: #fff;
   font-variant-numeric: tabular-nums;
@@ -537,129 +552,146 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 14px;
+  padding: 6px 14px;
   background: rgba(0, 0, 0, 0.28);
   font-size: 11px;
   color: var(--ph-mut);
   font-variant-numeric: tabular-nums;
 }
 
-/* Home App Grid (Bento / Menu style tiles) */
-.ph-app-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+/* Home Wallpaper Spacer (keeps dock pinned to bottom like a real smartphone) */
+.ph-home-spacer {
+  flex: 1;
+  min-height: 0;
 }
 
-.ph-backdrop .ph-app-tile {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  height: 58px;
-  padding: 0 10px;
-  border-radius: 11px;
-  background: rgba(20, 20, 22, 0.86);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-left: 3px solid transparent;
-  transition: background 0.16s, border-color 0.16s, transform 0.16s;
-}
-.ph-backdrop .ph-app-tile:hover {
-  background: rgba(30, 28, 24, 0.94);
-  border-color: rgba(201, 146, 43, 0.45);
-  border-left-color: var(--ph-amber);
-  transform: translateY(-1px);
-}
-.ph-backdrop .ph-app-tile.active-tile {
-  background: rgba(201, 146, 43, 0.16);
-  border-color: rgba(201, 146, 43, 0.6);
-  border-left-color: var(--ph-amber);
-}
-.ph-tile-ico {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: rgba(201, 146, 43, 0.12);
-  border: 1px solid rgba(201, 146, 43, 0.4);
-  color: var(--ph-amber-hi);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* Real Smartphone 4-Column App Icon Grid */
+.ph-app-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: 10px;
+  row-gap: 14px;
+  padding: 0 2px;
   flex: none;
 }
-.ph-backdrop .ph-app-tile.active-tile .ph-tile-ico {
-  background: var(--ph-amber);
-  color: #1a1409;
-  border-color: var(--ph-amber-soft);
-}
-.ph-tile-txt {
+
+.ph-backdrop .ph-app-icon {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  text-align: center;
   min-width: 0;
-  flex: 1;
 }
-.ph-tile-ttl {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 15px;
-  font-weight: 700;
+
+.ph-app-squircle {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border-radius: 15px;
+  background: rgba(24, 24, 28, 0.84);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: var(--ph-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.14s var(--ph-ease), background 0.15s, border-color 0.15s;
+}
+.ph-backdrop .ph-app-icon:hover .ph-app-squircle {
+  background: rgba(34, 32, 28, 0.94);
+  border-color: rgba(224, 171, 69, 0.55);
   color: #fff;
-  line-height: 1.1;
-  white-space: nowrap;
+  transform: translateY(-2px);
 }
-.ph-tile-sub {
-  font-size: 11px;
-  color: var(--ph-mut);
-  margin-top: 2px;
+.ph-backdrop .ph-app-icon:active .ph-app-squircle {
+  transform: scale(0.93);
+}
+.ph-backdrop .ph-app-icon.active-tile .ph-app-squircle {
+  background: var(--ph-amber);
+  border-color: var(--ph-amber-soft);
+  color: #161108;
+}
+
+/* Quiet accent indicator dot or corner count badge on app icon */
+.ph-app-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--ph-amber);
+  border: 1.5px solid #12100d;
+  color: #161108;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.ph-app-dot.live {
+  background: var(--ph-good);
+  min-width: 10px;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  top: -2px;
+  right: -2px;
+}
+
+.ph-app-lbl {
+  width: 100%;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.15;
+  color: #f4f1ea;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ph-tile-cnt {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ph-amber-soft);
-  font-variant-numeric: tabular-nums;
-}
 
-/* Bottom Dock */
+/* Bottom Frosted Smartphone Dock (4 primary pinned apps) */
 .ph-dock {
+  flex: none;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  padding: 8px;
-  border-radius: 13px;
-  background: rgba(16, 16, 18, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 10px 8px;
+  border-radius: 20px;
+  background: rgba(18, 18, 22, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
 }
-.ph-backdrop .ph-dock-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  height: 50px;
-  padding: 0;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid transparent;
+.ph-dock .ph-app-squircle {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+.ph-dock .ph-app-icon {
+  gap: 4px;
+}
+.ph-dock .ph-app-lbl {
+  font-size: 11px;
   color: var(--ph-ink-dim);
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.ph-backdrop .ph-dock-btn:hover {
-  background: rgba(201, 146, 43, 0.14);
-  border-color: rgba(201, 146, 43, 0.45);
+.ph-dock .ph-app-icon:hover .ph-app-lbl {
   color: #fff;
 }
-.ph-dock-btn span {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 11px;
-  font-weight: 600;
-}
 
-/* ---------- Tabs inside apps (like MainMenu .tabs / .tab) ---------- */
+/* ---------- Tabs inside apps ---------- */
 .ph-tabs {
   display: flex;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -671,8 +703,6 @@
   flex: 1;
   height: 40px;
   padding: 0 6px;
-  background: none;
-  border: 0;
   border-bottom: 2.5px solid transparent;
   display: inline-flex;
   align-items: center;
@@ -695,7 +725,7 @@
   border-bottom-color: var(--ph-amber);
 }
 
-/* ---------- Rows & Settings (.set / .row style) ---------- */
+/* ---------- Rows & Settings ---------- */
 .ph-list {
   border-radius: 12px;
   overflow: hidden;
@@ -707,10 +737,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 52px;
+  min-height: 50px;
   padding: 8px 12px;
-  background: none;
-  border: 0;
   border-left: 3px solid transparent;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   transition: background 0.15s, border-color 0.15s;
@@ -746,11 +774,10 @@
   transition: filter 0.15s, transform 0.15s, background 0.15s;
 }
 .ph-backdrop .ph-btn:hover {
-  filter: brightness(1.12);
-  transform: translateY(-1px);
+  filter: brightness(1.1);
 }
 .ph-backdrop .ph-btn:active {
-  transform: none;
+  transform: scale(0.98);
 }
 .ph-backdrop .ph-btn-p {
   background: var(--ph-amber);
@@ -777,13 +804,12 @@
   width: 100%;
 }
 
-/* ---------- Toggle switch (same as MainMenu .tg) ---------- */
+/* ---------- Toggle switch ---------- */
 .ph-backdrop .ph-tg {
   position: relative;
   width: 44px;
   height: 24px;
   padding: 0;
-  border: 0;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.14);
   transition: background 0.25s;
@@ -808,7 +834,7 @@
   background: #1a1409;
 }
 
-/* ---------- Progress bar (same as MainMenu .bar) ---------- */
+/* ---------- Progress bar ---------- */
 .ph-bar {
   height: 5px;
   border-radius: 3px;
@@ -844,7 +870,7 @@
 .ph-home-bar-wrap {
   position: relative;
   z-index: 30;
-  height: 24px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -853,17 +879,16 @@
   flex: none;
 }
 .ph-backdrop .ph-home-bar {
-  width: 116px;
+  width: 112px;
   height: 4px;
   padding: 0;
-  border: 0;
   border-radius: 2px;
   background: rgba(233, 230, 223, 0.45);
   transition: background 0.15s, width 0.15s;
 }
 .ph-backdrop .ph-home-bar:hover {
   background: var(--ph-amber-hi);
-  width: 132px;
+  width: 128px;
 }
 
 /* ---------- Key Hints below phone ---------- */
@@ -874,6 +899,7 @@
   gap: 16px;
   font-size: 12px;
   color: var(--ph-mut);
+  white-space: nowrap;
 }
 .ph-key {
   display: inline-flex;
@@ -888,4 +914,10 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--ph-ink);
+}
+
+@media (pointer: coarse) {
+  .ph-hint-strip {
+    display: none;
+  }
 }

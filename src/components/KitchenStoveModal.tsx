@@ -77,12 +77,15 @@ function formatWeightRu(weightKg: number): string {
 function getSlotFillInfo(item: InventoryItem | null | undefined): { pct: number | null; color?: string; label?: string } {
   if (!item) return { pct: null };
   const wrapper = getEffectiveFluidWrapper(item);
-  if (wrapper && wrapper.maxMl > 0) {
-    const pct = Math.max(0, Math.min(100, Math.round((wrapper.currentMl / wrapper.maxMl) * 100)));
+  if (wrapper && wrapper.state.maxMl > 0) {
+    const pct = Math.max(0, Math.min(100, Math.round((wrapper.state.currentMl / wrapper.state.maxMl) * 100)));
     return {
       pct,
-      color: wrapper.currentMl > 0 ? '#68a490' : undefined,
-      label: wrapper.currentMl > 0 ? `${Math.round(wrapper.currentMl)}/${Math.round(wrapper.maxMl)} мл` : 'Пусто',
+      color: wrapper.state.currentMl > 0 ? '#68a490' : undefined,
+      label:
+        wrapper.state.currentMl > 0
+          ? `${Math.round(wrapper.state.currentMl)}/${Math.round(wrapper.state.maxMl)} мл`
+          : 'Пусто',
     };
   }
   if (item.isContainer && item.capacityL) {
@@ -108,8 +111,8 @@ function describeCookedItemSub(item: InventoryItem): string {
     parts.push(item.attributes.stateNameRu);
   }
   const wrapper = getEffectiveFluidWrapper(item);
-  if (wrapper && wrapper.currentMl > 0) {
-    parts.push(`${Math.round(wrapper.currentMl)} мл`);
+  if (wrapper && wrapper.state.currentMl > 0) {
+    parts.push(`${Math.round(wrapper.state.currentMl)} мл`);
   } else if (item.isContainer && item.contents && item.contents.length > 0) {
     parts.push(`внутри ${item.contents.length}`);
   } else {
@@ -191,12 +194,9 @@ const KitchenStoveModalContent: React.FC<{
   } | null>(null);
   const dropHandlerRef = useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
 
-  useLayoutEffect(() => {
-    if (!hostRef.current || !gmRef.current) return;
-    return attachStageFit(hostRef.current, gmRef.current);
-  }, []);
+  useLayoutEffect(() => attachStageFit(() => hostRef.current, () => gmRef.current), []);
 
-  useTopmostEscape(true, onClose);
+  useTopmostEscape(onClose);
 
   const stove = ensureStoveState(storage);
 
@@ -684,7 +684,7 @@ const KitchenStoveModalContent: React.FC<{
             <span>Инвентарь игрока</span>
           </span>
           <span className="kf-col-meta">
-            {pocketCap.usedL.toFixed(1)}/{pocketCap.maxL.toFixed(1)} л · {playerWt.toFixed(1)} кг
+            {pocketCap.usedVolumeL.toFixed(1)}/{pocketCap.totalCapacityL.toFixed(1)} л · {playerWt.toFixed(1)} кг
           </span>
         </div>
 
@@ -745,7 +745,7 @@ const KitchenStoveModalContent: React.FC<{
 
           {/* Compartments */}
           {compartments.map(comp => {
-            const slotIndices = Array.from({ length: comp.slotCount }, (_, i) => comp.startSlot + i);
+            const slotIndices = Array.from({ length: comp.slotCount }, (_, i) => comp.startIndex + i);
             return (
               <div key={comp.id} className="kf-group">
                 <div className="kf-group-h">
@@ -754,7 +754,7 @@ const KitchenStoveModalContent: React.FC<{
                     <span>{comp.nameRu}</span>
                   </span>
                   <span className="kf-group-meta">
-                    {comp.usedVolumeL.toFixed(1)}/{comp.maxVolumeL.toFixed(1)} л
+                    {comp.usedVolumeL.toFixed(1)}/{comp.capacityL.toFixed(1)} л
                   </span>
                 </div>
                 <div className="kf-slots">

@@ -13,9 +13,8 @@
 :host * { box-sizing: border-box; margin: 0; padding: 0; }
 
 #w {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
+  position: fixed;
+  inset: 0;
   overflow: hidden;
   overflow: clip;
   background: rgba(8, 9, 11, .78);
@@ -25,17 +24,16 @@
 
 .gm {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: var(--sw, 1440px);
-  height: var(--sh, 900px);
+  left: 0;
+  top: 0;
+  width: 1440px;
+  height: 900px;
   background: #0c0d0f;
   color: #f4f1ea;
   font-family: 'Barlow', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.4;
-  transform: translate(-50%, -50%) scale(var(--k, 1));
-  transform-origin: center center;
+  transform-origin: 0 0;
   overflow: hidden;
   user-select: none;
   -webkit-font-smoothing: antialiased;

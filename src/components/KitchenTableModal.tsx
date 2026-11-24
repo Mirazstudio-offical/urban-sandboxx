@@ -143,10 +143,7 @@ const KitchenTableModalContent: React.FC<{
   } | null>(null);
   const dropHandlerRef = useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
 
-  useLayoutEffect(() => {
-    if (!hostRef.current || !gmRef.current) return;
-    return attachStageFit(hostRef.current, gmRef.current);
-  }, []);
+  useLayoutEffect(() => attachStageFit(() => hostRef.current, () => gmRef.current), []);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -231,7 +228,7 @@ const KitchenTableModalContent: React.FC<{
     onClose();
   };
 
-  useTopmostEscape(true, handleClose);
+  useTopmostEscape(handleClose);
 
   const cfg = FURNITURE_STORAGE_CONFIGS[storage.furnitureType] || FURNITURE_STORAGE_CONFIGS.kitchen_counter;
   const storageVol = getFurnitureStorageTotalVolume(storage);
@@ -913,7 +910,7 @@ const KitchenTableModalContent: React.FC<{
             <span>Инвентарь игрока</span>
           </span>
           <span className="kf-col-meta">
-            {pocketCap.usedL.toFixed(1)}/{pocketCap.maxL.toFixed(1)} л · {playerWt.toFixed(1)} кг
+            {pocketCap.usedVolumeL.toFixed(1)}/{pocketCap.totalCapacityL.toFixed(1)} л · {playerWt.toFixed(1)} кг
           </span>
         </div>
 
@@ -970,7 +967,7 @@ const KitchenTableModalContent: React.FC<{
 
           {/* Compartments */}
           {compartments.map(comp => {
-            const slotIndices = Array.from({ length: comp.slotCount }, (_, i) => comp.startSlot + i);
+            const slotIndices = Array.from({ length: comp.slotCount }, (_, i) => comp.startIndex + i);
             return (
               <div key={comp.id} className="kf-group">
                 <div className="kf-group-h">
@@ -979,7 +976,7 @@ const KitchenTableModalContent: React.FC<{
                     <span>{comp.nameRu}</span>
                   </span>
                   <span className="kf-group-meta">
-                    {comp.usedVolumeL.toFixed(1)}/{comp.maxVolumeL.toFixed(1)} л · {comp.usedWeightKg.toFixed(1)}/{comp.maxWeightKg.toFixed(1)} кг
+                    {comp.usedVolumeL.toFixed(1)}/{comp.capacityL.toFixed(1)} л · {comp.usedWeightKg.toFixed(1)}/{comp.maxWeightKg.toFixed(1)} кг
                   </span>
                 </div>
                 <div className="kf-slots">

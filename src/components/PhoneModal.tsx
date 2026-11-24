@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   X,
   Battery,
@@ -10,7 +10,6 @@ import {
   Layers,
   Zap,
   Phone as PhoneIcon,
-  MessageSquare,
   Camera,
   Compass,
   FileText,
@@ -20,7 +19,6 @@ import {
   Send,
   Smartphone,
   ShieldCheck,
-  MapPin,
   Navigation,
   CloudRain,
   CloudLightning,
@@ -57,7 +55,8 @@ import { addPlayerNotification } from '../items';
 import { PhoneTaxiApp } from './PhoneTaxiApp';
 import { TaxiFleetSystem } from '../taxiSystem';
 import { useTopmostEscape } from './gameUi';
-import './phoneMenu.css';
+import { ShadowHost } from './ShadowHost';
+import phoneMenuCss from './phoneMenu.css?inline';
 
 interface PhoneModalProps {
   item: InventoryItem | null;
@@ -112,6 +111,46 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   const [batteryLevel, setBatteryLevel] = useState<number>(() => specs.batteryLevelPct ?? 88);
 
   const wipeRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const [stageScale, setStageScale] = useState<number>(1);
+  const [hideHints, setHideHints] = useState<boolean>(false);
+
+  // Proportionally scale the 372x760 smartphone chassis so it NEVER squishes into a square on short/landscape viewports
+  useLayoutEffect(() => {
+    const el = backdropRef.current;
+    if (!el) return;
+    const fit = () => {
+      const W = el.clientWidth;
+      const H = el.clientHeight;
+      if (!W || !H) return;
+      const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+      const compactHints = coarse || H <= 540;
+      setHideHints(compactHints);
+      const stageW = 372 + 108;
+      const stageH = 760 + (compactHints ? 16 : 48);
+      const k = Math.min(1, Math.max(0.32, Math.min((W - 16) / stageW, (H - 16) / stageH)));
+      setStageScale(k);
+    };
+    fit();
+    let rafId = 0;
+    const scheduleFit = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(fit);
+    };
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(scheduleFit);
+      ro.observe(el);
+      return () => {
+        cancelAnimationFrame(rafId);
+        ro.disconnect();
+      };
+    }
+    window.addEventListener('resize', scheduleFit);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', scheduleFit);
+    };
+  }, []);
 
   const triggerWipe = () => {
     const w = wipeRef.current;
@@ -138,7 +177,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
         id: 'msg_mchs_init',
         contactId: 'contact_mchs',
         sender: 'contact',
-        text: 'МЧС 112: Внимание! Соблюдайте скоростной режим и дистанцию на трассе. При задымлении заглушите двигатель.',
+        text: 'МЧС 112: Соблюдайте скоростной режим и дистанцию на трассе. При задымлении заглушите двигатель.',
         timestamp: '09:00',
         read: true
       }
@@ -290,8 +329,8 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
 
       if (selectedContact.id === 'contact_hospital') {
         if (player && player.needs && player.needs.health < 60) {
-          responseText = 'Бригада скорой помощи выехала по вашим GPS координатам! Ожидайте на месте.';
-          if (player) addPlayerNotification(player, 'Скорая помощь приняла ваш экстренный вызов!', 'heal');
+          responseText = 'Бригада скорой помощи выехала по вашим GPS координатам. Ожидайте на месте.';
+          if (player) addPlayerNotification(player, 'Скорая помощь приняла ваш экстренный вызов', 'heal');
         } else {
           responseText = 'Диспетчер Скорой: Если нет открытых переломов и артериального кровотечения, используйте бинты и анальгетики из аптечки.';
         }
@@ -303,7 +342,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
         if (player) addPlayerNotification(player, 'Такси «Вираж»: заказ принят в обработку.', 'info');
       } else if (selectedContact.id === 'contact_mchs') {
         const weatherDesc = world?.weather === 'storm'
-          ? 'Штормовое предупреждение! Сильный ветер и гроза.'
+          ? 'Штормовое предупреждение: сильный ветер и гроза.'
           : world?.weather === 'rain'
           ? 'Дождь на трассе, снижение сцепления шин с дорогой.'
           : world?.weather === 'fog'
@@ -409,23 +448,22 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   const poiList = getPOIDistances();
   const posIdx = APP_POS[activeApp] || 0;
   const taxiSys = TaxiFleetSystem.getInstance();
-  const taxiStatusText = taxiSys.activeOrder
-    ? 'Активный заказ'
-    : taxiSys.pendingOffer
-    ? 'Новый вызов!'
-    : taxiSys.profile.isShiftActive
-    ? 'На линии'
-    : 'Смена и заказы';
+  const hasTaxiAttention = Boolean(taxiSys.pendingOffer || taxiSys.activeOrder || taxiSys.profile.isShiftActive);
 
   return (
-    <div
-      id="phone-modal-backdrop"
-      className="ph-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="ph-stage">
+    <ShadowHost css={phoneMenuCss} background="transparent" zIndex={55}>
+      <div
+        id="phone-modal-backdrop"
+        ref={backdropRef}
+        className="ph-backdrop"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <div
+          className="ph-stage"
+          style={{ transform: `scale(${stageScale})` }}
+        >
         {/* Physical Smartphone Chassis */}
         <div
           id="phone-chassis"
@@ -551,14 +589,14 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                 {activeApp === 'home' && (
                   <div className={'ph-view' + (isBackNav ? ' back' : '')} key="home">
                     <div className="ph-home">
-                      {/* Top Brand & Device Header */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+                      {/* Brand Header */}
+                      <div className="ph-home-top">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <svg width="22" height="22" viewBox="0 0 36 36" aria-hidden="true">
+                          <svg width="20" height="20" viewBox="0 0 36 36" aria-hidden="true">
                             <path d="M18 2 32 10v16L18 34 4 26V10z" fill="none" stroke="#c9922b" strokeWidth="2.8" />
                             <path d="M11 22 18 11l7 11z" fill="#c9922b" />
                           </svg>
-                          <span className="ph-cn" style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
+                          <span className="ph-cn" style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>
                             {specs.seriesName}
                           </span>
                         </div>
@@ -567,7 +605,7 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                         </span>
                       </div>
 
-                      {/* Weather & Astronomical Telemetry Panel */}
+                      {/* Weather & Astronomical Widget */}
                       <div className="ph-hero">
                         <div className="ph-hero-banner">
                           <div className="ph-hero-top">
@@ -602,104 +640,34 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                         </div>
                       </div>
 
-                      {/* 2-Column MainMenu-styled App Tiles */}
+                      <div className="ph-home-spacer" />
+
+                      {/* 4-Column Real Smartphone App Icon Grid (zero scroll, zero duplicates) */}
                       <div className="ph-app-grid">
-                        {/* Экстренные службы */}
-                        <button
-                          id="app-messages"
-                          type="button"
-                          onClick={() => handleAppOpen('messages')}
-                          className="ph-app-tile"
-                        >
-                          <span className="ph-tile-ico">
-                            <MessageSquare width={18} height={18} />
-                          </span>
-                          <div className="ph-tile-txt">
-                            <div className="ph-tile-ttl">Службы</div>
-                            <div className="ph-tile-sub">Диспетчеры · {contacts.length}</div>
-                          </div>
-                        </button>
-
-                        {/* Таксопарк */}
-                        <button
-                          id="app-taxi"
-                          type="button"
-                          onClick={() => handleAppOpen('taxi')}
-                          className={'ph-app-tile' + (taxiSys.profile.isShiftActive || taxiSys.pendingOffer ? ' active-tile' : '')}
-                        >
-                          <span className="ph-tile-ico">
-                            <Car width={18} height={18} />
-                          </span>
-                          <div className="ph-tile-txt">
-                            <div className="ph-tile-ttl">Таксопарк</div>
-                            <div className="ph-tile-sub">{taxiStatusText}</div>
-                          </div>
-                        </button>
-
-                        {/* Навигатор */}
-                        <button
-                          id="app-gps"
-                          type="button"
-                          onClick={() => handleAppOpen('gps')}
-                          className="ph-app-tile"
-                        >
-                          <span className="ph-tile-ico">
-                            <Compass width={18} height={18} />
-                          </span>
-                          <div className="ph-tile-txt">
-                            <div className="ph-tile-ttl">Навигатор</div>
-                            <div className="ph-tile-sub">
-                              {player ? `X:${Math.round(player.x)} Y:${Math.round(player.y)}` : 'Точки карты'}
-                            </div>
-                          </div>
-                        </button>
-
-                        {/* Камера */}
-                        <button
-                          id="app-camera"
-                          type="button"
-                          onClick={() => handleAppOpen('camera')}
-                          className="ph-app-tile"
-                        >
-                          <span className="ph-tile-ico">
-                            <Camera width={18} height={18} />
-                          </span>
-                          <div className="ph-tile-txt">
-                            <div className="ph-tile-ttl">Камера</div>
-                            <div className="ph-tile-sub">Снимки · {capturedPhotos.length}</div>
-                          </div>
-                        </button>
-
                         {/* Блокнот */}
                         <button
                           id="app-notes"
                           type="button"
                           onClick={() => handleAppOpen('notes')}
-                          className="ph-app-tile"
+                          className="ph-app-icon"
                         >
-                          <span className="ph-tile-ico">
-                            <FileText width={18} height={18} />
+                          <span className="ph-app-squircle">
+                            <FileText width={23} height={23} strokeWidth={1.75} color="#e0ab45" />
                           </span>
-                          <div className="ph-tile-txt">
-                            <div className="ph-tile-ttl">Блокнот</div>
-                            <div className="ph-tile-sub">Заметки и план</div>
-                          </div>
+                          <span className="ph-app-lbl">Блокнот</span>
                         </button>
 
-                        {/* Система / Характеристики */}
+                        {/* Система */}
                         <button
                           id="app-specs"
                           type="button"
                           onClick={() => handleAppOpen('specs')}
-                          className="ph-app-tile"
+                          className="ph-app-icon"
                         >
-                          <span className="ph-tile-ico">
-                            <Cpu width={18} height={18} />
+                          <span className="ph-app-squircle">
+                            <Cpu width={23} height={23} strokeWidth={1.75} color="#e0ab45" />
                           </span>
-                          <div className="ph-tile-txt">
-                            <div className="ph-tile-ttl">Система</div>
-                            <div className="ph-tile-sub">{specs.ramGb} ГБ · {specs.storageGb} ГБ</div>
-                          </div>
+                          <span className="ph-app-lbl">Система</span>
                         </button>
 
                         {/* Фонарик */}
@@ -707,15 +675,12 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                           id="app-flashlight"
                           type="button"
                           onClick={toggleTorch}
-                          className={'ph-app-tile' + (flashlightOn ? ' active-tile' : '')}
+                          className={'ph-app-icon' + (flashlightOn ? ' active-tile' : '')}
                         >
-                          <span className="ph-tile-ico">
-                            <Flashlight width={18} height={18} />
+                          <span className="ph-app-squircle">
+                            <Flashlight width={23} height={23} strokeWidth={1.75} color={flashlightOn ? '#161108' : '#e0ab45'} />
                           </span>
-                          <div className="ph-tile-txt">
-                            <div className="ph-tile-ttl">Фонарик</div>
-                            <div className="ph-tile-sub">{flashlightOn ? 'Включён · Луч' : 'Выключен'}</div>
-                          </div>
+                          <span className="ph-app-lbl">{flashlightOn ? 'Луч вкл.' : 'Фонарик'}</span>
                         </button>
 
                         {/* Опции */}
@@ -723,55 +688,71 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                           id="app-settings"
                           type="button"
                           onClick={() => handleAppOpen('settings')}
-                          className="ph-app-tile"
+                          className="ph-app-icon"
                         >
-                          <span className="ph-tile-ico">
-                            <Settings width={18} height={18} />
+                          <span className="ph-app-squircle">
+                            <Settings width={23} height={23} strokeWidth={1.75} color="#e0ab45" />
                           </span>
-                          <div className="ph-tile-txt">
-                            <div className="ph-tile-ttl">Опции</div>
-                            <div className="ph-tile-sub">Обои и звук</div>
-                          </div>
+                          <span className="ph-app-lbl">Опции</span>
                         </button>
                       </div>
 
-                      {/* Quick Access Dock */}
+                      {/* Bottom Frosted Dock (4 pinned core apps) */}
                       <div className="ph-dock">
                         <button
+                          id="app-messages"
                           type="button"
                           onClick={() => handleAppOpen('messages')}
-                          className="ph-dock-btn"
+                          className="ph-app-icon"
                           title="Службы и связь"
                         >
-                          <PhoneIcon width={17} height={17} color="#e0ab45" />
-                          <span>Связь</span>
+                          <span className="ph-app-squircle">
+                            <PhoneIcon width={22} height={22} strokeWidth={1.75} color="#e0ab45" />
+                          </span>
+                          <span className="ph-app-lbl">Службы</span>
                         </button>
+
                         <button
+                          id="app-taxi"
                           type="button"
                           onClick={() => handleAppOpen('taxi')}
-                          className="ph-dock-btn"
+                          className={'ph-app-icon' + (hasTaxiAttention ? ' active-tile' : '')}
                           title="Таксопарк"
                         >
-                          <Car width={17} height={17} color="#e0ab45" />
-                          <span>Такси</span>
+                          <span className="ph-app-squircle">
+                            <Car width={22} height={22} strokeWidth={1.75} color={hasTaxiAttention ? '#161108' : '#e0ab45'} />
+                            {taxiSys.pendingOffer && <span className="ph-app-dot live" />}
+                          </span>
+                          <span className="ph-app-lbl">Такси</span>
                         </button>
+
                         <button
+                          id="app-gps"
                           type="button"
                           onClick={() => handleAppOpen('gps')}
-                          className="ph-dock-btn"
+                          className="ph-app-icon"
                           title="Навигатор"
                         >
-                          <Compass width={17} height={17} color="#e0ab45" />
-                          <span>Карта</span>
+                          <span className="ph-app-squircle">
+                            <Compass width={22} height={22} strokeWidth={1.75} color="#e0ab45" />
+                          </span>
+                          <span className="ph-app-lbl">Навигатор</span>
                         </button>
+
                         <button
+                          id="app-camera"
                           type="button"
                           onClick={() => handleAppOpen('camera')}
-                          className="ph-dock-btn"
+                          className="ph-app-icon"
                           title="Камера"
                         >
-                          <Camera width={17} height={17} color="#e0ab45" />
-                          <span>Камера</span>
+                          <span className="ph-app-squircle">
+                            <Camera width={22} height={22} strokeWidth={1.75} color="#e0ab45" />
+                            {capturedPhotos.length > 0 && (
+                              <span className="ph-app-dot">{capturedPhotos.length}</span>
+                            )}
+                          </span>
+                          <span className="ph-app-lbl">Камера</span>
                         </button>
                       </div>
                     </div>
@@ -1001,7 +982,9 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                             value={replyInput}
                             onChange={(e) => setReplyInput(e.target.value)}
                             onKeyDown={(e) => {
+                              if (e.key === 'Escape') return;
                               e.stopPropagation();
+                              e.nativeEvent.stopPropagation();
                               if (e.key === 'Enter') handleSendMessage();
                             }}
                             placeholder="Сообщение диспетчеру..."
@@ -1297,7 +1280,11 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                         id="phone-notes-area"
                         value={notes}
                         onChange={(e) => handleSaveNotes(e.target.value)}
-                        onKeyDown={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') return;
+                          e.stopPropagation();
+                          e.nativeEvent.stopPropagation();
+                        }}
                         placeholder="Запишите важные задачи, координаты или список запчастей..."
                         className="ph-inp"
                         style={{
@@ -1557,17 +1544,20 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
         </div>
 
         {/* MainMenu-styled Keyboard Hints Strip below Phone */}
-        <div className="ph-hint-strip">
-          <span>
-            <span className="ph-key">Esc</span>
-            {activeApp === 'home' ? 'Убрать телефон' : 'Назад'}
-          </span>
-          <span>
-            <span className="ph-key">Клик</span>
-            Выбрать раздел
-          </span>
+        {!hideHints && (
+          <div className="ph-hint-strip">
+            <span>
+              <span className="ph-key">Esc</span>
+              {activeApp === 'home' ? 'Убрать телефон' : 'Назад'}
+            </span>
+            <span>
+              <span className="ph-key">Клик</span>
+              Выбрать раздел
+            </span>
+          </div>
+        )}
         </div>
       </div>
-    </div>
+    </ShadowHost>
   );
 };
