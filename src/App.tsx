@@ -21,7 +21,8 @@ import {
   FuelType,
   GasPumpDispenser,
   CarType,
-  RollingStockCar
+  RollingStockCar,
+  MapShopCatalogEntry
 } from './types';
 import { 
   advanceCalendar, 
@@ -90,6 +91,7 @@ import {
   createDefaultPlayerInventory, 
   createItem,
   createItemFromShopEntry,
+  packagePurchasedShopItems,
   deductPlayerCash,
   getPlayerCash,
   pickupGroundItem, 
@@ -8504,8 +8506,9 @@ export default function App() {
               if (!w.groundItems) w.groundItems = [];
 
               let regularItemsCount = 0;
+              const nonFuelEntries: MapShopCatalogEntry[] = [];
 
-              items.forEach((item, idx) => {
+              items.forEach((item) => {
                 if (item.fuelPumpId || item.itemId === 'fuel_order') {
                   const pump = w.gasPumps?.find((gp) => gp.id === item.fuelPumpId) || w.gasPumps?.[0];
                   if (pump) {
@@ -8519,22 +8522,40 @@ export default function App() {
                   }
                 } else {
                   regularItemsCount++;
-                  const boughtItem = createItemFromShopEntry(item);
-                  const angle = (p.angle || 0) + (Math.random() * 0.9 - 0.45);
-                  const dist = 28 + (idx * 14) % 40;
-                  w.groundItems.push({
-                    id: `ground_bought_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
-                    x: p.x + Math.cos(angle) * dist,
-                    y: p.y + Math.sin(angle) * dist,
-                    item: boughtItem,
-                    spawnTime: Date.now()
-                  });
+                  nonFuelEntries.push(item);
                 }
+              });
+
+              const packed = packagePurchasedShopItems(nonFuelEntries);
+              packed.outputItems.forEach((boughtItem, idx) => {
+                const angle = (p.angle || 0) + (Math.random() * 0.9 - 0.45);
+                const dist = 28 + (idx * 14) % 40;
+                w.groundItems.push({
+                  id: `ground_bought_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+                  x: p.x + Math.cos(angle) * dist,
+                  y: p.y + Math.sin(angle) * dist,
+                  item: boughtItem,
+                  spawnTime: Date.now()
+                });
               });
 
               sound.playUseItem();
               if (regularItemsCount > 0) {
-                addPlayerNotification(p, `Куплено: ${regularItemsCount} поз. (-$${totalCost}). Товары выложены на прилавок!`, 'pickup');
+                if (packed.carrierBagsCount > 0 && packed.packedIntoCarrierCount > 0) {
+                  addPlayerNotification(
+                    p,
+                    `Куплено: ${regularItemsCount} поз. (-${totalCost} ₽). Товар уложен в пакеты (${packed.carrierBagsCount} шт.) на прилавке.`,
+                    'pickup'
+                  );
+                } else if (packed.produceBagsCount > 0) {
+                  addPlayerNotification(
+                    p,
+                    `Куплено: ${regularItemsCount} поз. (-${totalCost} ₽). Штучные продукты расфасованы по мешочкам (${packed.produceBagsCount} шт.).`,
+                    'pickup'
+                  );
+                } else {
+                  addPlayerNotification(p, `Куплено: ${regularItemsCount} поз. (-${totalCost} ₽). Товары выложены на прилавок.`, 'pickup');
+                }
               }
               setVitalsRefreshTick((t) => t + 1);
             }

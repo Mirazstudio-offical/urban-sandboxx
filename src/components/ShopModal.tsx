@@ -80,13 +80,15 @@ function getShopPreviewCacheKey(item: ShopItem): string {
   const mt = item.meatAttributes
     ? `${item.meatAttributes.cutForm || ''}:${item.meatAttributes.weightGrams || 0}:${item.meatAttributes.hasBone ? 1 : 0}:${item.meatAttributes.hasSkin ? 1 : 0}`
     : '';
-  const dg = item.doughAttributes
-    ? `${item.doughAttributes.doughType || ''}:${item.doughAttributes.shape || ''}:${item.doughAttributes.color || ''}:${item.doughAttributes.weightGrams || 0}`
+  const innerDg = item.contents?.[0]?.doughAttributes;
+  const dg = item.doughAttributes || innerDg;
+  const dgKey = dg
+    ? `${dg.doughType || ''}:${dg.shape || ''}:${dg.color || ''}:${dg.weightGrams || 0}`
     : '';
   const rp = item.rollingPinAttributes
     ? `${item.rollingPinAttributes.modelId || ''}:${item.rollingPinAttributes.shape || ''}:${item.rollingPinAttributes.material || ''}:${item.rollingPinAttributes.pattern || ''}:${item.rollingPinAttributes.color || ''}`
     : '';
-  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${pr}|${br}|${mt}|${dg}|${rp}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
+  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${pr}|${br}|${mt}|${dgKey}|${rp}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
 }
 function getShopPreviewItem(item: ShopItem): InventoryItem {
   const cacheKey = getShopPreviewCacheKey(item);
@@ -487,7 +489,7 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'gas_canned', itemId: 'stew_meat', nameRu: 'Армейская тушёнка в банке (0.4L)', price: 110, description: 'Мясные консервы в жестяной банке 0.4л с ключом открытия.', category: 'food', effectText: '+70% Сытость' },
     { id: 'gas_detergent_sachet', itemId: 'detergent_sachet_120', nameRu: 'Порошок «Свежесть 2-в-1» (саше 100г)', price: 38, description: 'Порционное саше сухого мелкодисперсного стирального порошка на 1 стирку.', category: 'auto', effectText: '100 г · Сухой порошок' },
     { id: 'gas_detergent_box', itemId: 'detergent_powder_box_450', nameRu: 'Порошок «Морозный Бриз Автомат» (450г)', price: 165, description: 'Коробка гранулированного порошка с активным кислородом и энзимами против масляных пятен.', category: 'auto', effectText: '450 г · Сухой порошок' },
-    { id: 'gas_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка АЗС', price: 5, description: 'Пластиковый пакет с ручками для покупок.', category: 'auto', effectText: 'Пакет 5.0L' }
+    { id: 'gas_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка АЗС', price: 5, description: 'Пластиковый пакет с ручками для покупок.', category: 'auto', effectText: 'Пакет 12.0L' }
   ],
   supermarket: [
     // 1. НАПИТКИ И ВОДА В БУТЫЛКАХ И БАНКАХ
@@ -711,8 +713,8 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_choc_gift_box', itemId: 'choc_gift_box_assorted', nameRu: 'Коробка конфет «Ассорти Гранд Пралине» (16 шт., 192г)', price: 460, description: 'Подарочная коробка с окном и золотым коррексом: 16 фигурных конфет (ракушки, ромбы, медальоны, сердечки, трюфели).', category: 'food', effectText: '192г · 16 конфет пралине' },
     { id: 'sup_cookies', itemId: 'cookies', nameRu: 'Печенье с шоколадными каплями (дой-пак)', price: 50, description: 'Герметичный дой-пак рассыпчатого песочного печенья (6 шт.).', category: 'food', effectText: '+25% Сытость' },
     { id: 'sup_chips', itemId: 'chips', nameRu: 'Картофельные чипсы (дой-пак 8 шт.)', price: 55, description: 'Герметичный дой-пак хрустящих ломтиков картофеля с морской солью.', category: 'food', effectText: '+20% Сытость' },
-    { id: 'sup_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка с ручками', price: 5, description: 'Вместительный прочный полиэтиленовый пакет 5.0L.', category: 'auto', effectText: 'Пакет 5.0L' },
-    { id: 'sup_package_bag', itemId: 'package_bag', nameRu: 'Фасовочные пакеты (1.5L)', price: 3, description: 'Тонкий прозрачный полиэтиленовый пакетик.', category: 'auto', effectText: 'Пакет 1.5L' },
+    { id: 'sup_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка с ручками', price: 5, description: 'Вместительный прочный полиэтиленовый пакет 12.0L.', category: 'auto', effectText: 'Пакет 12.0L' },
+    { id: 'sup_package_bag', itemId: 'package_bag', nameRu: 'Фасовочные пакеты (2.5L)', price: 3, description: 'Тонкий прозрачный полиэтиленовый пакетик.', category: 'auto', effectText: 'Пакет 2.5L' },
     { id: 'sup_grain_pack_pouch', itemId: 'grain_pack_pouch', nameRu: 'Пачка-пакет для круп пустая (1.0L)', price: 6, description: 'Пустая пачка-пакет с прозрачным окном для пересыпания и хранения круп и бобовых.', category: 'auto', effectText: 'Тара сыпучих 1.0L' },
     { id: 'sup_grain_pack_box', itemId: 'grain_pack_box', nameRu: 'Картонная пачка для круп пустая (0.8L)', price: 10, description: 'Пустая картонная пачка с окошком для хлопьев, киноа, кускуса и сыпучих продуктов.', category: 'auto', effectText: 'Тара сыпучих 0.8L' },
     { id: 'sup_pasta_pack_bag', itemId: 'pasta_pack_bag', nameRu: 'Упаковка для макарон пустая (0.9L)', price: 7, description: 'Пустой прозрачный пакет с лентой-этикеткой для фигурных макаронных изделий.', category: 'auto', effectText: 'Тара макарон 0.9L' },
@@ -777,6 +779,231 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
       category: 'auto',
       effectText: 'Дуб · Резной оттиск на тесте',
       rollingPinAttributes: { modelId: 'textured_carved' }
+    },
+
+    // 9. ОХЛАЖДЁННОЕ ГОТОВОЕ ТЕСТО В УПАКОВКЕ
+    {
+      id: 'sup_dough_puff_yeast',
+      itemId: 'vacuum_pack_medium',
+      nameRu: 'Тесто слоёное дрожжевое (пласт 500г)',
+      price: 145,
+      description: 'Охлаждённый квадратный пласт слоёного дрожжевого теста на сливочном масле в вакуумном пакете — для круассанов, слоек и пирогов.',
+      category: 'food',
+      effectText: '500 г · Квадратный пласт, дрожжевое',
+      labelColor: '#e11d48',
+      contents: [
+        {
+          itemId: 'dough',
+          count: 1,
+          doughAttributes: {
+            doughType: 'puff_pastry',
+            doughTypeRu: 'Слоёное дрожжевое тесто',
+            shape: 'square_sheet',
+            rolledPasses: 2,
+            thicknessMm: 5.5,
+            ingredients: [
+              { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 255, role: 'flour', colorHex: '#f6eedb' },
+              { itemId: 'water', nameRu: 'Вода', grams: 105, role: 'liquid', colorHex: '#f8fafc' },
+              { itemId: 'butter_brick_salted', nameRu: 'Сливочное масло', grams: 105, role: 'fat', colorHex: '#fde047' },
+              { itemId: 'sourdough', nameRu: 'Закваска / дрожжи', grams: 22, role: 'leavening', colorHex: '#efe6d0' },
+              { itemId: 'sugar', nameRu: 'Сахар', grams: 12, role: 'sugar', colorHex: '#ffffff' },
+              { itemId: 'salt', nameRu: 'Соль', grams: 4, role: 'salt', colorHex: '#f8fafc' }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      id: 'sup_dough_puff_plain',
+      itemId: 'vacuum_pack_medium',
+      nameRu: 'Тесто слоёное бездрожжевое (пласт 450г)',
+      price: 135,
+      description: 'Хрустящее слоёное бездрожжевое тесто на сливочном масле в вакуумной упаковке для наполеона, язычков и открытых тартов.',
+      category: 'food',
+      effectText: '450 г · Квадратный пласт, бездрожжевое',
+      labelColor: '#0284c7',
+      contents: [
+        {
+          itemId: 'dough',
+          count: 1,
+          doughAttributes: {
+            doughType: 'puff_pastry',
+            doughTypeRu: 'Слоёное бездрожжевое тесто',
+            shape: 'square_sheet',
+            rolledPasses: 2,
+            thicknessMm: 5.0,
+            ingredients: [
+              { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 230, role: 'flour', colorHex: '#f6eedb' },
+              { itemId: 'butter_brick_salted', nameRu: 'Сливочное масло', grams: 125, role: 'fat', colorHex: '#fde047' },
+              { itemId: 'water', nameRu: 'Вода', grams: 92, role: 'liquid', colorHex: '#f8fafc' },
+              { itemId: 'salt', nameRu: 'Соль', grams: 4, role: 'salt', colorHex: '#f8fafc' }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      id: 'sup_dough_yeast_rich',
+      itemId: 'vacuum_pack_medium',
+      nameRu: 'Тесто сдобное дрожжевое для пирогов (500г)',
+      price: 120,
+      description: 'Мягкое сдобное тесто на молоке, яйцах и масле для домашних пирожков, булочек, рогаликов и ватрушек.',
+      category: 'food',
+      effectText: '500 г · Пышное сдобное для выпечки',
+      labelColor: '#d97706',
+      contents: [
+        {
+          itemId: 'dough',
+          count: 1,
+          doughAttributes: {
+            shape: 'lump',
+            ingredients: [
+              { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 265, role: 'flour', colorHex: '#f6eedb' },
+              { itemId: 'milk', nameRu: 'Молоко', grams: 125, role: 'dairy', colorHex: '#fffbeb' },
+              { itemId: 'egg_raw', nameRu: 'Куриное яйцо', grams: 50, role: 'egg', colorHex: '#f59e0b' },
+              { itemId: 'butter_brick_salted', nameRu: 'Сливочное масло', grams: 35, role: 'fat', colorHex: '#fde047' },
+              { itemId: 'sugar', nameRu: 'Сахар', grams: 38, role: 'sugar', colorHex: '#ffffff' },
+              { itemId: 'sourdough', nameRu: 'Дрожжевая опара', grams: 30, role: 'leavening', colorHex: '#efe6d0' },
+              { itemId: 'salt', nameRu: 'Соль', grams: 4, role: 'salt', colorHex: '#f8fafc' }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      id: 'sup_dough_pizza',
+      itemId: 'tray_sealed_food',
+      nameRu: 'Основа-тесто для пиццы на оливковом масле (350г)',
+      price: 115,
+      description: 'Тонко раскатанный круг дрожжевого теста с оливковым маслом Extra Virgin в запаянном лотке — выложите начинку и запекайте.',
+      category: 'food',
+      effectText: '350 г · Тонкий пласт Ø26 см',
+      labelColor: '#16a34a',
+      contents: [
+        {
+          itemId: 'dough',
+          count: 1,
+          doughAttributes: {
+            doughType: 'classic_soft',
+            doughTypeRu: 'Дрожжевое тесто для пиццы',
+            shape: 'sheet',
+            rolledPasses: 2,
+            thicknessMm: 4.0,
+            ingredients: [
+              { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 205, role: 'flour', colorHex: '#f6eedb' },
+              { itemId: 'water', nameRu: 'Вода', grams: 118, role: 'liquid', colorHex: '#f8fafc' },
+              { itemId: 'oil_olive', nameRu: 'Оливковое масло', grams: 20, role: 'fat', colorHex: '#a3e635' },
+              { itemId: 'sourdough', nameRu: 'Закваска', grams: 18, role: 'leavening', colorHex: '#efe6d0' },
+              { itemId: 'salt', nameRu: 'Соль', grams: 5, role: 'salt', colorHex: '#f8fafc' }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      id: 'sup_dough_shortcrust',
+      itemId: 'paper_packaging',
+      nameRu: 'Тесто песочное сливочное (брикет 400г)',
+      price: 140,
+      description: 'Золотистое рассыпчатое песочное тесто в пергаментной обёртке — для домашнего печенья, тартов и сладких коржей.',
+      category: 'food',
+      effectText: '400 г · Сладкое песочное',
+      labelColor: '#f59e0b',
+      contents: [
+        {
+          itemId: 'dough',
+          count: 1,
+          doughAttributes: {
+            doughType: 'shortcrust',
+            doughTypeRu: 'Песочное сливочное тесто',
+            shape: 'ball',
+            ingredients: [
+              { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 195, role: 'flour', colorHex: '#f6eedb' },
+              { itemId: 'butter_brick_salted', nameRu: 'Сливочное масло', grams: 110, role: 'fat', colorHex: '#fde047' },
+              { itemId: 'sugar', nameRu: 'Сахар', grams: 68, role: 'sugar', colorHex: '#ffffff' },
+              { itemId: 'egg_raw', nameRu: 'Куриное яйцо', grams: 52, role: 'egg', colorHex: '#f59e0b' },
+              { itemId: 'salt', nameRu: 'Соль', grams: 2, role: 'salt', colorHex: '#f8fafc' }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      id: 'sup_dough_chocolate',
+      itemId: 'paper_packaging',
+      nameRu: 'Тесто шоколадное с какао (брикет 400г)',
+      price: 155,
+      description: 'Ароматное тёмно-шоколадное тесто на сливочном масле и какао в пергаменте — для шоколадного печенья, брауни и рогаликов.',
+      category: 'food',
+      effectText: '400 г · Шоколадное сладкое',
+      labelColor: '#78350f',
+      contents: [
+        {
+          itemId: 'dough',
+          count: 1,
+          doughAttributes: {
+            shape: 'ball',
+            ingredients: [
+              { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 175, role: 'flour', colorHex: '#f6eedb' },
+              { itemId: 'butter_brick_salted', nameRu: 'Сливочное масло', grams: 98, role: 'fat', colorHex: '#fde047' },
+              { itemId: 'sugar', nameRu: 'Сахар', grams: 76, role: 'sugar', colorHex: '#ffffff' },
+              { itemId: 'cocoa', nameRu: 'Какао-порошок', grams: 35, role: 'colorant', colorHex: '#4a2511' },
+              { itemId: 'egg_raw', nameRu: 'Куриное яйцо', grams: 50, role: 'egg', colorHex: '#f59e0b' }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      id: 'sup_dough_dumpling',
+      itemId: 'vacuum_pack_medium',
+      nameRu: 'Тесто пельменно-вареничное крутое (500г)',
+      price: 105,
+      description: 'Плотный эластичный ком крутого теста на яйце в вакуумном пакете — для лепки пельменей, вареников, мантов и домашней лапши.',
+      category: 'food',
+      effectText: '500 г · Крутое, для варки и лапши',
+      labelColor: '#475569',
+      contents: [
+        {
+          itemId: 'dough',
+          count: 1,
+          doughAttributes: {
+            shape: 'lump',
+            ingredients: [
+              { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 320, role: 'flour', colorHex: '#f6eedb' },
+              { itemId: 'water', nameRu: 'Вода', grams: 122, role: 'liquid', colorHex: '#f8fafc' },
+              { itemId: 'egg_raw', nameRu: 'Куриное яйцо', grams: 52, role: 'egg', colorHex: '#f59e0b' },
+              { itemId: 'salt', nameRu: 'Соль', grams: 6, role: 'salt', colorHex: '#f8fafc' }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      id: 'sup_dough_rye',
+      itemId: 'vacuum_pack_medium',
+      nameRu: 'Тесто ржано-пшеничное на закваске (550г)',
+      price: 125,
+      description: 'Тёмное ароматное хлебное тесто из обдирной ржаной и пшеничной муки на живой закваске в вакууме — готово к формовке и выпечке хлеба.',
+      category: 'food',
+      effectText: '550 г · Ржаное на закваске',
+      labelColor: '#92400e',
+      contents: [
+        {
+          itemId: 'dough',
+          count: 1,
+          doughAttributes: {
+            shape: 'lump',
+            ingredients: [
+              { itemId: 'flour_rye', nameRu: 'Мука ржаная обдирная', grams: 190, role: 'flour', colorHex: '#a18262' },
+              { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 120, role: 'flour', colorHex: '#f6eedb' },
+              { itemId: 'water', nameRu: 'Вода', grams: 185, role: 'liquid', colorHex: '#f8fafc' },
+              { itemId: 'sourdough', nameRu: 'Ржаная закваска', grams: 52, role: 'leavening', colorHex: '#efe6d0' },
+              { itemId: 'salt', nameRu: 'Соль', grams: 7, role: 'salt', colorHex: '#f8fafc' }
+            ]
+          }
+        }
+      ]
     }
   ],
   fast_food: [
@@ -4153,6 +4380,55 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     <span className="gu-kv-v">{formatShopWeight(totalCartWeightKg) || '—'}</span>
                   </div>
                 </div>
+
+                {(() => {
+                  const carrierBagItem = catalog.find(
+                    (it) => it.itemId === 'plastic_bag' && !(it.contents && it.contents.length > 0)
+                  );
+                  const carrierBagsCount = cart.reduce(
+                    (sum, entry) =>
+                      entry.item.itemId === 'plastic_bag' && !(entry.item.contents && entry.item.contents.length > 0)
+                        ? sum + entry.count
+                        : sum,
+                    0
+                  );
+                  if (!carrierBagItem) return null;
+                  return (
+                    <div
+                      className="gu-panel-inset"
+                      style={{
+                        padding: '8px 10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        border: carrierBagsCount > 0 ? '1px solid rgba(201, 146, 43, 0.4)' : undefined,
+                      }}
+                    >
+                      <div className="gu-row-between" style={{ gap: 8 }}>
+                        <div className="gu-row" style={{ gap: 6, minWidth: 0 }}>
+                          <ShoppingBag className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--gu-accent)' }} />
+                          <span style={{ fontSize: 11.5, color: 'var(--gu-fg-1)', fontWeight: 600 }}>
+                            {carrierBagsCount > 0
+                              ? `Пакеты: ${carrierBagsCount} шт. (товар внутрь)`
+                              : 'Упаковка покупок'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddToCart(carrierBagItem)}
+                          className="gu-btn gu-btn-s gu-btn-xs"
+                          style={{ whiteSpace: 'nowrap' }}
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Пакет ({carrierBagItem.price} ₽)</span>
+                        </button>
+                      </div>
+                      <span style={{ fontSize: 10.5, color: 'var(--gu-mut)', lineHeight: 1.3 }}>
+                        Штучные овощи, фрукты, ягоды и грибы фасуются по мешочкам. Взятые пакеты-майки заполнятся товаром автоматически.
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <div
                   className="gu-row-between"

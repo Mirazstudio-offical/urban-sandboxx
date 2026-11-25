@@ -42,8 +42,11 @@ function buildItemVisualStateKey(item: any): string {
     for (let i = 0; i < limit; i++) {
       const ch = item.contents[i];
       if (!ch) continue;
+      const chDa = ch.doughAttributes
+        ? `:${ch.doughAttributes.shape}:${ch.doughAttributes.color}:${ch.doughAttributes.cookState}:${ch.doughAttributes.fillings?.length || 0}`
+        : '';
       parts.push(
-        `${ch.itemId}:${Math.round((ch.brownLevel || 0) * 10)}:${Math.round((ch.charLevel || 0) * 10)}:${Math.round((ch.cookProgress || 0) * 10)}:${Math.round((ch.wetness || 0) / 10)}:${ch.attributes?.state || ''}`
+        `${ch.itemId}:${Math.round((ch.brownLevel || 0) * 10)}:${Math.round((ch.charLevel || 0) * 10)}:${Math.round((ch.cookProgress || 0) * 10)}:${Math.round((ch.wetness || 0) / 10)}:${ch.attributes?.state || ''}${chDa}`
       );
     }
     childKey = parts.join(';');
@@ -56,7 +59,8 @@ function buildItemVisualStateKey(item: any): string {
   const rpKey = rp
     ? `${rp.modelId}:${rp.shape}:${rp.color}:${rp.pattern}`
     : '';
-  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${cdKey}|${fsKey}|${childKey}|${daKey}|${rpKey}`;
+  const lbl = item.labelColor || '';
+  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${cdKey}|${fsKey}|${childKey}|${daKey}|${rpKey}|${lbl}`;
 }
 
 export const ItemIconCanvas: React.FC<ItemIconCanvasProps> = ({

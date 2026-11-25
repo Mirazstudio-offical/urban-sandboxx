@@ -2633,6 +2633,44 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.fill();
       ctx.stroke();
 
+      if (Array.isArray(item?.contents) && item.contents.length > 0) {
+        const validContents = item.contents.filter(
+          (inner: any) => inner && inner.itemId && inner.itemId !== 'plastic_bag'
+        );
+        if (validContents.length > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(-6.1, -3.0);
+          ctx.lineTo(6.1, -3.0);
+          ctx.quadraticCurveTo(7.0, 3.6, 6.2, 7.2);
+          ctx.quadraticCurveTo(0, 8.1, -6.2, 7.2);
+          ctx.quadraticCurveTo(-7.0, 3.6, -6.1, -3.0);
+          ctx.closePath();
+          ctx.clip();
+          const bagSlots: Array<[number, number, number]> =
+            validContents.length === 1
+              ? [[0, 1.5, 10.2]]
+              : [
+                  [-2.4, 2.5, 7.4],
+                  [2.4, 2.3, 7.4],
+                  [0, -0.4, 7.6],
+                  [-2.1, -1.8, 6.6],
+                  [2.1, -1.6, 6.6],
+                ];
+          const showCount = Math.min(bagSlots.length, validContents.length);
+          ctx.globalAlpha = 0.68;
+          for (let i = 0; i < showCount; i++) {
+            const inner = validContents[i];
+            const [bx, by, bsz] = bagSlots[i];
+            drawItemModel2D(ctx, inner.itemId, bx, by, bsz, inner, true);
+          }
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = 'rgba(241, 245, 249, 0.34)';
+          ctx.fillRect(-8, -9, 16, 18);
+          ctx.restore();
+        }
+      }
+
       drawPouchCrinkles(ctx, -5.6, -2.5, 11.2, 9.2, 12, 0.25);
 
       // Minimalist cobalt market monogram print

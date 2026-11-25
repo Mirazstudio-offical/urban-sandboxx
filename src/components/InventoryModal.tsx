@@ -2932,7 +2932,14 @@ const InventoryModalContent: React.FC<{
                                       }}
                                     >
                                       <Droplets width={14} height={14} />
-                                      <span>{selectedEntry.item.fluidStorage.currentMl > 0 ? 'Выпить / Исп.' : 'Набрать'}</span>
+                                      <span>
+                                        {selectedEntry.item.fluidStorage.currentMl > 0
+                                          ? 'Выпить / Исп.'
+                                          : (selectedEntry.item.itemId === 'package_bag' || selectedEntry.item.itemId === 'plastic_bag') &&
+                                            (selectedEntry.item.contents?.length || 0) > 0
+                                          ? 'Достать 1 шт.'
+                                          : 'Набрать'}
+                                      </span>
                                     </button>
                                   </>
                                 )}
@@ -3055,7 +3062,14 @@ const InventoryModalContent: React.FC<{
                                       onClick={() => handleUseItem(selectedEntry.originalIndex, true)}
                                     >
                                       <Droplets width={14} height={14} />
-                                      <span>{selectedEntry.item.fluidStorage.currentMl > 0 ? 'Выпить / Исп.' : 'Набрать'}</span>
+                                      <span>
+                                        {selectedEntry.item.fluidStorage.currentMl > 0
+                                          ? 'Выпить / Исп.'
+                                          : (selectedEntry.item.itemId === 'package_bag' || selectedEntry.item.itemId === 'plastic_bag') &&
+                                            (selectedEntry.item.contents?.length || 0) > 0
+                                          ? 'Достать 1 шт.'
+                                          : 'Набрать'}
+                                      </span>
                                     </button>
                                   </>
                                 )}

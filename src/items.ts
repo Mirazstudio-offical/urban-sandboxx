@@ -735,8 +735,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.08,
     usable: false,
     isContainer: true,
-    containerCapacityL: 18.0,
-    maxContainedItemVolumeL: 14.0,
+    containerCapacityL: 12.0,
+    maxContainedItemVolumeL: 10.0,
     maxContainedWeightKg: 12.0
   },
   cash: {
@@ -2186,12 +2186,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Прозрачный полиэтиленовый фасовочный пакет. Позволяет хранить и переносить продукты, медикаменты, овощи, фрукты и мелкие предметы.',
     effects: {},
     weight: 0.005,
-    volume: 0.05,
+    volume: 0.03,
     usable: false,
     isContainer: true,
     containerCapacityL: 2.5,
-    maxContainedItemVolumeL: 2.0,
-    maxContainedWeightKg: 4.0
+    maxContainedItemVolumeL: 2.2,
+    maxContainedWeightKg: 4.5
   },
 
   // === SINGLE-USE VACUUM PACKAGING & DISPOSABLE CONTAINERS ===
@@ -7821,6 +7821,147 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
   return createPackagedItem(entry.itemId, 1);
 }
 
+export interface PackagedShopPurchaseResult {
+  outputItems: InventoryItem[];
+  produceBagsCount: number;
+  packedProduceCount: number;
+  carrierBagsCount: number;
+  packedIntoCarrierCount: number;
+}
+
+/**
+ * Packages bought shop items for checkout:
+ * 1) Loose piece produce (vegetables, fruits, citrus, berries, mushrooms, herbs, bunches)
+ *    are grouped by species/form and packed into transparent cellophane bags (`package_bag`)
+ *    instead of dropping 1 by 1 onto the counter.
+ * 2) If the buyer purchased one or more shopping bags (`plastic_bag`), all goods
+ *    (including cellophane produce bags) are packed into those carrier bags up to capacity.
+ */
+export function packagePurchasedShopItems(entries: MapShopCatalogEntry[]): PackagedShopPurchaseResult {
+  const carrierBags: InventoryItem[] = [];
+  const otherGoods: InventoryItem[] = [];
+  const produceOrder: string[] = [];
+  const produceGroups = new Map<string, InventoryItem[]>();
+
+  for (const entry of entries) {
+    if (!entry || entry.itemId === 'fuel_order' || entry.fuelPumpId) continue;
+    const item = createItemFromShopEntry(entry);
+
+    const isEmptyCarrierBag =
+      item.itemId === 'plastic_bag' &&
+      !(item.contents && item.contents.length > 0) &&
+      !(item.fluidStorage && item.fluidStorage.currentMl > 0);
+    if (isEmptyCarrierBag) {
+      carrierBags.push(item);
+      continue;
+    }
+
+    const isLooseProduce =
+      !item.isContainer &&
+      !item.fluidStorage &&
+      !(item.contents && item.contents.length > 0) &&
+      Boolean(item.produceAttributes || item.branchAttributes);
+
+    if (isLooseProduce) {
+      const groupKey = item.produceAttributes
+        ? `p:${item.produceAttributes.speciesId}:${item.produceAttributes.cutForm || 'whole'}`
+        : `b:${item.branchAttributes?.attachedFruit?.fruitAttributes?.speciesId || item.itemId}`;
+      let group = produceGroups.get(groupKey);
+      if (!group) {
+        group = [];
+        produceGroups.set(groupKey, group);
+        produceOrder.push(groupKey);
+      }
+      group.push(item);
+      continue;
+    }
+
+    otherGoods.push(item);
+  }
+
+  // 1. Pack loose produce into cellophane bags (`package_bag`)
+  const produceOutput: InventoryItem[] = [];
+  let produceBagsCount = 0;
+  let packedProduceCount = 0;
+
+  for (const key of produceOrder) {
+    const pieces = produceGroups.get(key) || [];
+    let currentBag: InventoryItem | null = null;
+
+    for (const piece of pieces) {
+      if (!currentBag) {
+        currentBag = createItem('package_bag', 1, undefined, true);
+      }
+      const res = addItemToContainer(currentBag, piece);
+      if (res.success) {
+        packedProduceCount++;
+      } else {
+        if (currentBag.contents && currentBag.contents.length > 0) {
+          produceOutput.push(currentBag);
+          produceBagsCount++;
+          const nextBag = createItem('package_bag', 1, undefined, true);
+          const retry = addItemToContainer(nextBag, piece);
+          if (retry.success) {
+            currentBag = nextBag;
+            packedProduceCount++;
+          } else {
+            currentBag = null;
+            produceOutput.push(piece);
+          }
+        } else {
+          // Oversized item (e.g. giant whole watermelon) stays unbagged
+          currentBag = null;
+          produceOutput.push(piece);
+        }
+      }
+    }
+
+    if (currentBag && currentBag.contents && currentBag.contents.length > 0) {
+      produceOutput.push(currentBag);
+      produceBagsCount++;
+    }
+  }
+
+  const goodsToPack = [...otherGoods, ...produceOutput];
+
+  // 2. If carrier bags (`plastic_bag`) were purchased, pack goods inside them
+  if (carrierBags.length === 0) {
+    return {
+      outputItems: goodsToPack,
+      produceBagsCount,
+      packedProduceCount,
+      carrierBagsCount: 0,
+      packedIntoCarrierCount: 0
+    };
+  }
+
+  const overflowItems: InventoryItem[] = [];
+  let packedIntoCarrierCount = 0;
+
+  for (const good of goodsToPack) {
+    let placed = false;
+    for (const bag of carrierBags) {
+      const res = addItemToContainer(bag, good);
+      if (res.success) {
+        placed = true;
+        packedIntoCarrierCount++;
+        break;
+      }
+    }
+    if (!placed) {
+      overflowItems.push(good);
+    }
+  }
+
+  return {
+    outputItems: [...carrierBags, ...overflowItems],
+    produceBagsCount,
+    packedProduceCount,
+    carrierBagsCount: carrierBags.length,
+    packedIntoCarrierCount
+  };
+}
+
 export function applyMedicalEffectById(
   player: Player,
   medId: string,
@@ -8111,18 +8252,49 @@ export function unpackSingleUseContainer(
 function handleReusableFilledContainerAction(
   player: Player,
   container: InventoryItem,
-  world?: GameWorld
+  world?: GameWorld,
+  hand?: 'left' | 'right'
 ): { success: boolean; message: string } | null {
   if (!container.isContainer || !container.contents || container.contents.length === 0) {
     return null;
   }
+  const isDryBag =
+    (container.itemId === 'package_bag' || container.itemId === 'plastic_bag') &&
+    (!container.fluidStorage?.liquidId || (container.fluidStorage.currentMl || 0) <= 0);
   if (
+    !isDryBag &&
     container.itemId !== 'lukoshko' &&
     container.itemId !== 'egg_carton_10' &&
     container.itemId !== 'egg_carton_10_open' &&
     container.itemId !== 'egg_carton_quail_18'
   ) {
     return null;
+  }
+
+  if (isDryBag) {
+    const extracted = removeItemFromContainer(container, container.contents.length - 1, 1);
+    if (!extracted) return null;
+    triggerPlayerActionAnim(player, 'unpacking', 0.65, extracted.itemId, hand);
+    const added = addItemToPlayer(player, extracted);
+    if (!added && world) {
+      if (!world.groundItems) world.groundItems = [];
+      const angle = player.angle || 0;
+      world.groundItems.push({
+        id: `ground_${extracted.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        x: player.x + Math.cos(angle) * 20,
+        y: player.y + Math.sin(angle) * 20,
+        item: extracted,
+        spawnTime: Date.now()
+      });
+    }
+    sound.playPickup();
+    const rem = container.contents ? container.contents.length : 0;
+    const msg =
+      rem > 0
+        ? `Достали из пакета: ${extracted.nameRu} (осталось ${rem} шт.)`
+        : `Достали последнее из пакета: ${extracted.nameRu}`;
+    addPlayerNotification(player, msg, 'pickup');
+    return { success: true, message: msg };
   }
 
   const inner = container.contents[container.contents.length - 1];
@@ -11583,8 +11755,8 @@ export function useHandItemOnPlayer(
     return { success: false, message: 'Развёрнутая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
-  // Reusable filled containers held in hand (e.g. lukoshko with berries/mushrooms, open egg carton with eggs)
-  const reusableHandRes = handleReusableFilledContainerAction(player, item, world);
+  // Reusable filled containers held in hand (e.g. lukoshko, open egg carton, or dry package_bag/plastic_bag with goods)
+  const reusableHandRes = handleReusableFilledContainerAction(player, item, world, hand);
   if (reusableHandRes) {
     return reusableHandRes;
   }

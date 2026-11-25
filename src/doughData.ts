@@ -170,10 +170,16 @@ export function applyRollingPinAttributesToItem(
   item: InventoryItem,
   overrides?: Partial<RollingPinAttributes>
 ): InventoryItem {
-  const attrs = buildRollingPinAttributes({
-    ...(item.rollingPinAttributes || {}),
-    ...(overrides || {}),
-  });
+  const switchingModel = Boolean(
+    overrides?.modelId &&
+      ROLLING_PIN_PRESETS[overrides.modelId] &&
+      item.rollingPinAttributes?.modelId !== overrides.modelId
+  );
+  const attrs = buildRollingPinAttributes(
+    switchingModel
+      ? { ...(overrides || {}) }
+      : { ...(item.rollingPinAttributes || {}), ...(overrides || {}) }
+  );
   item.rollingPinAttributes = attrs;
   item.nameRu = `Скалка (${attrs.modelNameRu.toLowerCase()})`;
   item.descriptionRu = `${attrs.modelNameRu}. Материал: ${attrs.materialRu}, форма: ${attrs.shapeNameRu.toLowerCase()}, длина ${attrs.lengthCm} см, диаметр ${attrs.diameterMm} мм. Узор: ${attrs.patternNameRu.toLowerCase()}. Положите рядом с тестом в сетке взаимодействия для раскатки.`;
@@ -576,7 +582,7 @@ export function getSolidDoughProfile(item: InventoryItem | null | undefined): Do
   if (id.includes('dill') || id.includes('basil') || id.includes('mint') || id.includes('greens') || id.includes('tarragon') || id.includes('spinach') || id.includes('parsley') || name.includes('зелен') || name.includes('укроп') || name.includes('базилик') || name.includes('мят') || name.includes('шпинат')) {
     return { role: 'colorant', waterPct: 35, flourPct: 0, fatPct: 0, sugarPct: 0, saltPct: 0, eggPct: 0, leaveningPower: 0, glutenFactor: 0, colorHex: '#4d7c0f', pigmentStrength: 2.4, fleckColor: '#365314', flavorNoteRu: 'с зеленью' };
   }
-  if (item.produceAttributes?.category === 'berry' || id.includes('berr') || id.includes('strawberr') || id.includes('raspberr') || id.includes('blueberr')) {
+  if (item.produceAttributes?.produceCategory === 'berry' || id.includes('berr') || id.includes('strawberr') || id.includes('raspberr') || id.includes('blueberr')) {
     const col = item.produceAttributes?.color || '#be123c';
     return { role: 'colorant', waterPct: 85, flourPct: 0, fatPct: 0, sugarPct: 10, saltPct: 0, eggPct: 0, leaveningPower: 0, glutenFactor: -2, colorHex: col, pigmentStrength: 2.2, fleckColor: col, flavorNoteRu: 'ягодное' };
   }
@@ -1019,11 +1025,25 @@ export function synthesizeDoughAttributes(
 export function buildDefaultDoughAttributes(
   overrides?: Partial<DoughAttributes>
 ): DoughAttributes {
-  const base = synthesizeDoughAttributes([
-    { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 250, role: 'flour', colorHex: '#f6eedb' },
-    { itemId: 'water', nameRu: 'Вода', grams: 145, role: 'liquid', colorHex: '#f8fafc' },
-    { itemId: 'salt', nameRu: 'Соль', grams: 5, role: 'salt', colorHex: '#f8fafc' },
-  ]);
+  const ings =
+    overrides?.ingredients && overrides.ingredients.length > 0
+      ? overrides.ingredients
+      : [
+          { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 250, role: 'flour' as const, colorHex: '#f6eedb' },
+          { itemId: 'water', nameRu: 'Вода', grams: 145, role: 'liquid' as const, colorHex: '#f8fafc' },
+          { itemId: 'salt', nameRu: 'Соль', grams: 5, role: 'salt' as const, colorHex: '#f8fafc' },
+        ];
+  const base = synthesizeDoughAttributes(ings, {
+    shape: overrides?.shape,
+    rolledPasses: overrides?.rolledPasses,
+    overrideThicknessMm: overrides?.thicknessMm,
+    embossedPattern: overrides?.embossedPattern,
+    embossedPatternRu: overrides?.embossedPatternRu,
+    fillings: overrides?.fillings,
+    cookState: overrides?.cookState,
+    riseFactor: overrides?.riseFactor,
+    baseMassGrams: overrides?.baseMassGrams,
+  });
   return {
     ...base,
     ...(overrides || {}),
@@ -1044,9 +1064,11 @@ export function buildDoughDisplayNameRu(attrs: DoughAttributes): string {
       : '';
 
   if (attrs.cookState === 'raw') {
-    const typeShort = attrs.doughTypeRu.replace(/\s*тесто$/i, '').trim();
+    const baseLabel = /(?:^|\s)тест[оауеы]?(?=\s|$)/i.test(attrs.doughTypeRu)
+      ? attrs.doughTypeRu.trim()
+      : `${attrs.doughTypeRu.trim()} тесто`;
     const shapeLabel = DOUGH_SHAPE_NAMES_RU[attrs.shape].toLowerCase();
-    return `${typeShort} тесто (${shapeLabel})${fillingShort}`;
+    return `${baseLabel} (${shapeLabel})${fillingShort}`;
   }
 
   const statePrefix =
@@ -1203,8 +1225,12 @@ export function applyDoughAttributesToItem(
   item.attributes = {
     ...(item.attributes || {}),
     varietyRu: attrs.doughTypeRu,
-    color: attrs.color,
-    colorNameRu: attrs.colorNameRu,
+    visuals: {
+      ...(item.attributes?.visuals || {}),
+      color: attrs.color,
+      colorNameRu: attrs.colorNameRu,
+      ...(attrs.embossedPatternRu ? { patternNameRu: attrs.embossedPatternRu } : {}),
+    },
     isHomemade: true,
     state: attrs.cookState === 'raw' ? 'raw' : attrs.cookState === 'deep_fried' ? 'fried' : attrs.cookState,
     stateNameRu: attrs.cookStateRu,
@@ -1560,7 +1586,7 @@ export function buildFillingEntryFromItem(
     item.meatAttributes?.color ||
     item.chocolateAttributes?.outerColor ||
     item.fluidStorage?.attributes?.customColor ||
-    item.attributes?.color ||
+    item.attributes?.visuals?.color ||
     '#d97706';
 
   const isRawMeat = Boolean(

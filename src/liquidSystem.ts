@@ -3738,31 +3738,35 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
   },
   package_bag: {
     itemId: 'package_bag',
-    name: 'Plastic Bag (1.5L)',
+    name: 'Plastic Bag (2.5L)',
     nameRu: 'Фасовочный пакет',
-    maxMl: 1500,
+    maxMl: 2500,
     emptyWeightKg: 0.005,
-    emptyVolumeL: 1.5,
+    emptyVolumeL: 0.03,
     category: 'gear',
     icon: 'ShoppingBag',
-    descriptionRu: 'Прозрачный тонкий полиэтиленовый фасовочный пакет для сыпучих продуктов, круп и сахара.',
-    descriptionEn: 'Transparent thin polyethylene bag for granular products, grains, and sugar.',
+    descriptionRu: 'Прозрачный тонкий полиэтиленовый фасовочный пакет для овощей, фруктов, ягод, грибов и сыпучих продуктов.',
+    descriptionEn: 'Transparent thin polyethylene bag for produce, berries, mushrooms, and granular products.',
     defaultLiquidId: null,
-    defaultAmountMl: 0
+    defaultAmountMl: 0,
+    supportsHybridContents: true,
+    maxItemVolumeL: 2.2
   },
   plastic_bag: {
     itemId: 'plastic_bag',
-    name: 'Carrier Bag (5.0L)',
+    name: 'Carrier Bag (12.0L)',
     nameRu: 'Пакет-майка',
-    maxMl: 5000,
-    emptyWeightKg: 0.015,
-    emptyVolumeL: 5.0,
+    maxMl: 12000,
+    emptyWeightKg: 0.02,
+    emptyVolumeL: 0.08,
     category: 'gear',
     icon: 'ShoppingBag',
-    descriptionRu: 'Универсальный пластиковый пакет-майка с ручками для переноски продуктов и предметов.',
-    descriptionEn: 'Universal plastic grocery shopping bag with handles.',
+    descriptionRu: 'Универсальный вместительный пластиковый пакет-майка с ручками для переноски покупок и предметов.',
+    descriptionEn: 'Universal spacious plastic grocery shopping bag with handles.',
     defaultLiquidId: null,
-    defaultAmountMl: 0
+    defaultAmountMl: 0,
+    supportsHybridContents: true,
+    maxItemVolumeL: 10.0
   },
   bottle_glass_small: {
     itemId: 'bottle_glass_small',
@@ -4878,6 +4882,12 @@ export function getFluidContainerWeight(item: InventoryItem): number {
 }
 
 export function getFluidContainerVolume(item: InventoryItem): number {
+  if (item.itemId === 'plastic_bag' || item.itemId === 'package_bag') {
+    const baseShell = item.itemId === 'plastic_bag' ? 0.08 : 0.03;
+    const liquidVolL = Math.max(0, (item.fluidStorage?.currentMl || 0) / 1000);
+    const solidVolL = getContainerSolidVolumeMl(item) / 1000;
+    return Number((baseShell + liquidVolL + solidVolL).toFixed(4));
+  }
   const cfg = getContainerConfig(item.itemId);
   if (cfg?.emptyVolumeL) return cfg.emptyVolumeL;
   if (item.volume !== undefined) return item.volume;
@@ -5509,6 +5519,8 @@ export function syncItemContainerProperties(item: InventoryItem): void {
 
   if (cfg?.requiresOpening && !isOpened) {
     item.usable = true;
+  } else if ((item.itemId === 'package_bag' || item.itemId === 'plastic_bag') && (!storage.liquidId || storage.currentMl <= 0)) {
+    item.usable = hasSolids;
   }
 
   if (storage.currentMl > 0 && storage.liquidId) {

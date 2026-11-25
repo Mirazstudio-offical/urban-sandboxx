@@ -2519,6 +2519,8 @@ export interface UnifiedVisualAttributes {
   size?: string;
   /** Название размера на русском языке */
   sizeNameRu?: string;
+  /** Название узора / рельефа на русском языке */
+  patternNameRu?: string;
 }
 
 export interface UnifiedAttributes {
@@ -2915,6 +2917,7 @@ export type DoughType =
   | 'cocoa_chocolate'
   | 'cottage_cheese'
   | 'potato_gnocchi'
+  | 'puff_pastry'
   | 'classic_soft';
 
 export type DoughConsistency = 'batter' | 'soft' | 'elastic' | 'stiff' | 'crumbly';
