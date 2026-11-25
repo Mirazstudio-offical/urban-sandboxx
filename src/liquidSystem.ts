@@ -5,6 +5,8 @@ import { addPlayerNotification } from './items';
 import { soothePanic } from './bodySystem';
 import { getBuildingLayout } from './buildingInteriors';
 import { applyConsumptionThermodynamics } from './itemThermalSystem';
+import { tickHomemadeLiquidTransformations } from './homemadeLiquids';
+import { syncDoughCookedState } from './doughData';
 
 export type LiquidId =
   | 'water'
@@ -3157,6 +3159,8 @@ export interface FluidContainerState {
   attributes?: FluidSubstanceAttributes;
   components?: FluidMixComponent[];
   infusedItems?: InfusedSolidRecord[];
+  homemadeProgress?: number;
+  homemadeRecipeId?: string;
 }
 
 export interface ContainerDefConfig {
@@ -4439,6 +4443,10 @@ export function updateHybridContainerInteraction(
   const storage = container.fluidStorage;
   const contents = container.contents;
   if (!contents || contents.length === 0) {
+    if (dtSeconds > 0 && tickHomemadeLiquidTransformations(container, dtSeconds)) {
+      syncItemContainerProperties(container);
+      return true;
+    }
     return false;
   }
 
@@ -4471,6 +4479,13 @@ export function updateHybridContainerInteraction(
         }
         changed = true;
       }
+    }
+    // Still allow dry-vessel homemade transformations (butter -> ghee, tallow -> rendered_fat, cabbage+salt -> sauerkraut, fruit+sugar -> jam, tomato/zucchini stewing, etc.)
+    if (dtSeconds > 0 && tickHomemadeLiquidTransformations(container, dtSeconds)) {
+      changed = true;
+    }
+    if (changed) {
+      syncItemContainerProperties(container);
     }
     return changed;
   }
@@ -4604,6 +4619,9 @@ export function updateHybridContainerInteraction(
             if (!alreadyAnyCooked && child.effects && typeof child.effects.hunger === 'number') {
               child.effects.hunger = Math.round(child.effects.hunger * 1.24);
             }
+            if (child.doughAttributes) {
+              syncDoughCookedState(child, 'fried', { isDeepOil: submersion >= 0.72 });
+            }
             changed = true;
           }
 
@@ -4625,6 +4643,9 @@ export function updateHybridContainerInteraction(
                 stateNameRu: 'Подгорелый',
                 preparationMethod: 'Пережарено в раскалённом масле',
               };
+              if (child.doughAttributes) {
+                syncDoughCookedState(child, 'burnt');
+              }
               changed = true;
             }
           }
@@ -4671,7 +4692,12 @@ export function updateHybridContainerInteraction(
         }
         if (fluidTemp >= boilDoneTemp && (nextInf >= 0.45 || (child.cookProgress || 0) >= 0.65)) {
           const curState = child.attributes?.stateNameRu;
-          if (curState !== 'Варёный' && child.attributes?.state !== 'boiled') {
+          if (
+            storage.liquidId !== 'pickles' &&
+            child.attributes?.state !== 'pickled' &&
+            curState !== 'Варёный' &&
+            child.attributes?.state !== 'boiled'
+          ) {
             child.cookProgress = Math.max(child.cookProgress || 0, 0.85);
             child.cookMethod = 'boiled';
             child.attributes = {
@@ -4682,6 +4708,9 @@ export function updateHybridContainerInteraction(
             };
             if (child.effects && typeof child.effects.hunger === 'number') {
               child.effects.hunger = Math.round(child.effects.hunger * 1.15);
+            }
+            if (child.doughAttributes) {
+              syncDoughCookedState(child, 'boiled');
             }
             changed = true;
           }
@@ -4746,31 +4775,45 @@ export function updateHybridContainerInteraction(
       : [liqDef.nameRu];
 
     const mergedIngs = Array.from(new Set([...baseIngs, ...infusedNames]));
-    const shortList = infusedNames.slice(0, 3).join(', ') + (infusedNames.length > 3 ? ` и ещё ${infusedNames.length - 3}` : '');
-    const isBrothLike = (storage.liquidId === 'water' || storage.liquidId === 'broth') && fluidTemp >= 75 && maxIntensity >= 0.45;
-    const infusionVariety = isBrothLike
-      ? `Отвар / Бульон (${shortList})`
-      : `${liqDef.nameRu} (${shortList})`;
+    if (existingAttrs.isHomemade) {
+      // Preserve authentic homemade varietyRu, preparationMethod, purpose & reasonAndOrigin; only append any newly added infused solids
+      storage.attributes = {
+        ...existingAttrs,
+        ingredients: mergedIngs,
+        sourceIngredients: mergedIngs,
+      };
+    } else {
+      const shortList = infusedNames.slice(0, 3).join(', ') + (infusedNames.length > 3 ? ` и ещё ${infusedNames.length - 3}` : '');
+      const isBrothLike = (storage.liquidId === 'water' || storage.liquidId === 'broth') && fluidTemp >= 75 && maxIntensity >= 0.45;
+      const infusionVariety = isBrothLike
+        ? `Отвар / Бульон (${shortList})`
+        : `${liqDef.nameRu} (${shortList})`;
 
-    storage.attributes = {
-      ...existingAttrs,
-      varietyRu: infusionVariety,
-      ingredients: mergedIngs,
-      customColor: blendedColor,
-      visuals: {
-        ...(existingAttrs.visuals || {}),
-        color: blendedColor
-      },
-      purpose: `Жидкость с погружёнными продуктами (${shortList})`,
-      customEffects: {
-        thirst: baseEffects.thirst ?? 25,
-        hunger: Math.min(65, (baseEffects.hunger || 0) + bonusHunger),
-        health: Math.min(35, (baseEffects.health || 0) + bonusHealth),
-        energy: Math.min(45, (baseEffects.energy || 0) + bonusEnergy),
-        sleepiness: baseEffects.sleepiness,
-        soothePanic: baseEffects.soothePanic
-      }
-    };
+      storage.attributes = {
+        ...existingAttrs,
+        varietyRu: infusionVariety,
+        ingredients: mergedIngs,
+        customColor: blendedColor,
+        visuals: {
+          ...(existingAttrs.visuals || {}),
+          color: blendedColor
+        },
+        purpose: `Жидкость с погружёнными продуктами (${shortList})`,
+        customEffects: {
+          thirst: baseEffects.thirst ?? 25,
+          hunger: Math.min(65, (baseEffects.hunger || 0) + bonusHunger),
+          health: Math.min(35, (baseEffects.health || 0) + bonusHealth),
+          energy: Math.min(45, (baseEffects.energy || 0) + bonusEnergy),
+          sleepiness: baseEffects.sleepiness,
+          soothePanic: baseEffects.soothePanic
+        }
+      };
+    }
+  }
+
+  // Advance homemade liquid cooking / steeping / pickling / fermentation transformations
+  if (dtSeconds > 0 && tickHomemadeLiquidTransformations(container, dtSeconds)) {
+    changed = true;
   }
 
   if (changed) {
@@ -4799,6 +4842,8 @@ export function drainLiquidFromContainer(
   storage.attributes = undefined;
   storage.components = undefined;
   storage.infusedItems = undefined;
+  storage.homemadeProgress = undefined;
+  storage.homemadeRecipeId = undefined;
 
   updateHybridContainerInteraction(container, 0);
   syncItemContainerProperties(container);

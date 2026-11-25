@@ -17,6 +17,7 @@ import { drawPaperPackagingItem } from './graphics/paperPackagingGraphics';
 import { drawCandyPackagingItem } from './graphics/candyPackagingGraphics';
 import { drawChocolatePackagingItem } from './graphics/chocolatePackagingGraphics';
 import { drawCulinaryDishItem } from './graphics/culinaryGraphics';
+import { drawDoughItem, drawRollingPinItem } from './graphics/doughGraphics';
 import { drawShadow, drawItemWithDynamicState, hasActiveItemVisualState, drawMicroBarcode } from './graphics/itemGraphicShared';
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
 import { ITEM_CATALOG, LEGACY_KITCHENWARE_PRESETS, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
@@ -202,6 +203,10 @@ export function drawItemModel2D(
           (prodAttrs && (prodAttrs.cutForm !== 'whole' || resolvedProdModel !== effectiveId))
         ) {
           drawn = drawProduceAndMushroomItem(targetCtx, effectiveId, effectiveItem);
+        } else if (effectiveId === 'dough' || effectiveItem?.doughAttributes) {
+          drawn = drawDoughItem(targetCtx, effectiveItem);
+        } else if (effectiveId === 'rolling_pin' || effectiveItem?.rollingPinAttributes) {
+          drawn = drawRollingPinItem(targetCtx, effectiveItem);
         } else if (
           meatAttrs &&
           meatAttrs.cutForm !== 'whole' &&

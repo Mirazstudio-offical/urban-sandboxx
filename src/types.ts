@@ -1446,6 +1446,8 @@ export interface ShopInnerItemSpec {
   produceAttributes?: Partial<ProduceAttributes>;
   branchAttributes?: Partial<PlantBranchAttributes>;
   meatAttributes?: Partial<MeatAttributes>;
+  doughAttributes?: Partial<DoughAttributes>;
+  rollingPinAttributes?: Partial<RollingPinAttributes>;
   attributes?: UnifiedAttributes;
 }
 
@@ -1473,6 +1475,8 @@ export interface MapShopCatalogEntry {
   produceAttributes?: Partial<ProduceAttributes>;
   branchAttributes?: Partial<PlantBranchAttributes>;
   meatAttributes?: Partial<MeatAttributes>;
+  doughAttributes?: Partial<DoughAttributes>;
+  rollingPinAttributes?: Partial<RollingPinAttributes>;
   isOpen?: boolean;
   labelColor?: string;
   containerTintColor?: string;
@@ -2547,6 +2551,8 @@ export interface UnifiedAttributes {
   secondaryColor?: string;
   /** Открыта/вскрыта ли тара или упаковка */
   isOpened?: boolean;
+  /** Приготовлено дома без фабричного оборудования (сохраняет реальный домашний состав) */
+  isHomemade?: boolean;
   /** Идентификатор кулинарного эквивалента или медицинского эффекта */
   culinaryEquivalentId?: string;
   medicalEffectId?: string;
@@ -2838,6 +2844,200 @@ export interface MeatAttributes {
   cuttable?: boolean;
 }
 
+export type RollingPinModel =
+  | 'classic_handles'
+  | 'french_tapered'
+  | 'straight_dowel'
+  | 'marble_heavy'
+  | 'silicone_nonstick'
+  | 'textured_carved'
+  | 'mini_pastry';
+
+export type RollingPinShape =
+  | 'cylindrical_handles'
+  | 'tapered_french'
+  | 'straight_cylinder'
+  | 'stepped_rings'
+  | 'mini_dowel';
+
+export type RollingPinMaterial =
+  | 'beech_wood'
+  | 'oak_wood'
+  | 'birch_wood'
+  | 'walnut_wood'
+  | 'marble'
+  | 'stainless_steel'
+  | 'silicone'
+  | 'ceramic';
+
+export type RollingPinPattern =
+  | 'none'
+  | 'wood_grain'
+  | 'carved_floral'
+  | 'carved_lattice'
+  | 'carved_waves'
+  | 'carved_folklore'
+  | 'marble_veins'
+  | 'brushed_metal'
+  | 'pastel_speckle';
+
+export interface RollingPinAttributes {
+  modelId: RollingPinModel;
+  modelNameRu: string;
+  shape: RollingPinShape;
+  shapeNameRu: string;
+  material: RollingPinMaterial;
+  materialRu: string;
+  color: string;
+  colorNameRu: string;
+  accentColor: string;
+  pattern: RollingPinPattern;
+  patternNameRu: string;
+  patternColor?: string;
+  embossPatternOnDough?: boolean;
+  lengthCm: number;
+  diameterMm: number;
+  handleStyleRu: string;
+  rollingEfficiency: number;
+}
+
+export type DoughType =
+  | 'liquid_batter'
+  | 'pancake_batter'
+  | 'unleavened_stiff'
+  | 'egg_pasta'
+  | 'shortcrust'
+  | 'rich_sweet'
+  | 'sourdough_bread'
+  | 'rye_bread'
+  | 'corn_dough'
+  | 'rice_mochi'
+  | 'cocoa_chocolate'
+  | 'cottage_cheese'
+  | 'potato_gnocchi'
+  | 'classic_soft';
+
+export type DoughConsistency = 'batter' | 'soft' | 'elastic' | 'stiff' | 'crumbly';
+
+export type DoughShape =
+  | 'lump'
+  | 'ball'
+  | 'flatbread'
+  | 'sheet'
+  | 'square_sheet'
+  | 'strip'
+  | 'rope'
+  | 'loaf'
+  | 'bun'
+  | 'bagel_ring'
+  | 'braid'
+  | 'croissant_crescent'
+  | 'pocket_pirozhok'
+  | 'dumpling_crescent'
+  | 'pouch_khinkali'
+  | 'roll_strudel'
+  | 'open_pie'
+  | 'noodles'
+  | 'cubes_pieces';
+
+export type DoughCookState =
+  | 'raw'
+  | 'boiled'
+  | 'steamed'
+  | 'fried'
+  | 'deep_fried'
+  | 'baked'
+  | 'burnt';
+
+export interface DoughIngredientEntry {
+  itemId: string;
+  nameRu: string;
+  grams: number;
+  role: 'flour' | 'liquid' | 'fat' | 'egg' | 'sugar' | 'salt' | 'leavening' | 'dairy' | 'flavor' | 'colorant' | 'starch';
+  colorHex: string;
+}
+
+export interface DoughFillingEntry {
+  itemId: string;
+  nameRu: string;
+  weightGrams: number;
+  colorHex: string;
+  stateRu?: string;
+  hunger: number;
+  energy: number;
+  health: number;
+  isRawMeat?: boolean;
+  isCooked?: boolean;
+}
+
+export interface DoughAttributes {
+  /** Выведенный по пропорциям тип теста */
+  doughType: DoughType;
+  /** Название типа теста по-русски */
+  doughTypeRu: string;
+  /** Консистенция */
+  consistency: DoughConsistency;
+  consistencyRu: string;
+  /** Текущая форма изделия/заготовки */
+  shape: DoughShape;
+  shapeNameRu: string;
+  /** Основной цвет теста (смешанный по пропорциям ингредиентов) */
+  color: string;
+  colorNameRu: string;
+  /** Цвет вкраплений (зелень, отруби, какао, ягоды, специи) */
+  fleckColor?: string;
+  /** Рельефный узор от узорной скалки */
+  embossedPattern?: RollingPinPattern;
+  embossedPatternRu?: string;
+  /** Вес самого теста в граммах (без начинки) */
+  weightGrams: number;
+  /** Исходный вес до нарезки */
+  baseMassGrams: number;
+  /** Толщина пласта/изделия в мм */
+  thicknessMm: number;
+  /** Характерный диаметр / длина в см */
+  diameterCm: number;
+  /** Сколько раз раскатано скалкой */
+  rolledPasses: number;
+  /** Свёрнуто / запечатано ли изделие */
+  isFolded: boolean;
+  /** Открытый верх (пицца / открытый пирог / ватрушка) */
+  isOpenTop: boolean;
+  /** Пропорции в граммах */
+  flourGrams: number;
+  liquidGrams: number;
+  fatGrams: number;
+  eggGrams: number;
+  sugarGrams: number;
+  saltGrams: number;
+  /** Расчётные кулинарные коэффициенты */
+  hydrationPct: number;
+  fatPct: number;
+  sugarPct: number;
+  eggPct: number;
+  elasticity: number;       // 0..100
+  richness: number;         // 0..100
+  sweetness: number;        // 0..100
+  saltiness: number;        // 0..100
+  leaveningLevel: number;   // 0..100
+  leaveningRu: string;
+  /** Коэффициент подъёма при выпечке/варке (1.0..1.75) */
+  riseFactor: number;
+  /** Вместимость начинки для текущей формы/веса (г) */
+  maxFillingGrams: number;
+  /** Текущий вес уложенной начинки (г) */
+  fillingGrams: number;
+  /** Состав начинок */
+  fillings: DoughFillingEntry[];
+  /** Точный состав ингредиентов самого теста */
+  ingredients: DoughIngredientEntry[];
+  /** Состояние термообработки */
+  cookState: DoughCookState;
+  cookStateRu: string;
+  /** Дополнительные вкусовые акценты (например «с какао», «с зеленью», «со свёклой») */
+  flavorNotesRu?: string[];
+}
+
 export interface CulinaryItemData {
   isPreparedDish?: boolean;
   isWorkpiece?: boolean;
@@ -2938,6 +3138,9 @@ export interface InventoryItem {
       color?: string;
       dissolved?: boolean;
     }>;
+    /** Progress (0..1) and active recipe ID for homemade liquid cooking / fermentation */
+    homemadeProgress?: number;
+    homemadeRecipeId?: string;
   };
   culinaryData?: CulinaryItemData;
   /** Атрибуты мармеладки (цвет, форма, состав, посыпка) */
@@ -2954,6 +3157,10 @@ export interface InventoryItem {
   branchAttributes?: PlantBranchAttributes;
   /** Атрибуты мяса, птицы, рыбы и морепродуктов (вид, отруб, нарезка, вес, размер, сочность, жирность, кость/кожа) */
   meatAttributes?: MeatAttributes;
+  /** Атрибуты теста (тип, пропорции, цвет, форма, толщина, вес, узор, начинка и состояние готовки) */
+  doughAttributes?: DoughAttributes;
+  /** Атрибуты скалки (модель, форма, материал, цвет, узор, габариты, ручки) */
+  rollingPinAttributes?: RollingPinAttributes;
   // Nutrition & Biochemical Culinary Simulation
   nutrients?: {
     calories: number; // kcal

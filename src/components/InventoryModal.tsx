@@ -2685,6 +2685,152 @@ const InventoryModalContent: React.FC<{
                           );
                         })()}
 
+                        {selectedEntry.item.doughAttributes && (() => {
+                          const dg = selectedEntry.item.doughAttributes!;
+                          const totalMass = dg.weightGrams + dg.fillingGrams;
+                          const formatMass = (g: number) =>
+                            g >= 1000 ? `${Number((g / 1000).toFixed(2))} кг` : `${Math.round(g)} г`;
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div className="inv-sec-row">
+                                <span className="inv-grp-lbl">Свойства теста</span>
+                                <span className="inv-cnt-meta mono">{dg.shapeNameRu} · {formatMass(totalMass)}</span>
+                              </div>
+                              <div className="inv-kv-grid inv-kv-g2">
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Тип теста</span>
+                                  <span className="inv-kv-v" style={{ color: '#e6b85c' }}>{dg.doughTypeRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Консистенция</span>
+                                  <span className="inv-kv-v">{dg.consistencyRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Форма и габариты</span>
+                                  <span className="inv-kv-v mono">
+                                    {dg.shapeNameRu} · {dg.thicknessMm} мм · Ø{dg.diameterCm} см
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Вес (тесто / начинка)</span>
+                                  <span className="inv-kv-v mono">
+                                    {formatMass(dg.weightGrams)} / {formatMass(dg.fillingGrams)}
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Гидратация / жир / сахар</span>
+                                  <span className="inv-kv-v mono">
+                                    {dg.hydrationPct}% · {dg.fatPct}% · {dg.sugarPct}%
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Эластичность / подъём</span>
+                                  <span className="inv-kv-v mono">
+                                    {dg.elasticity}% · ×{dg.riseFactor.toFixed(2)}
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Разрыхление</span>
+                                  <span className="inv-kv-v">{dg.leaveningRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Готовность</span>
+                                  <span className="inv-kv-v" style={{ color: dg.cookState === 'burnt' ? '#ef4444' : dg.cookState !== 'raw' ? '#7fd19a' : '#cfcbc1' }}>
+                                    {dg.cookStateRu}
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Цвет теста</span>
+                                  <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: dg.color, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    {dg.fleckColor && (
+                                      <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: dg.fleckColor, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    )}
+                                    <span>{dg.colorNameRu}</span>
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Вместимость начинки</span>
+                                  <span className="inv-kv-v mono">
+                                    {Math.round(dg.fillingGrams)} / {Math.round(dg.maxFillingGrams)} г
+                                  </span>
+                                </div>
+                                {dg.embossedPatternRu && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Оттиск скалки</span>
+                                    <span className="inv-kv-v" style={{ color: '#e6b85c' }}>{dg.embossedPatternRu}</span>
+                                  </div>
+                                )}
+                                {dg.fillings.length > 0 && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Начинка внутри</span>
+                                    <span className="inv-kv-v" style={{ fontWeight: 400, color: '#e6b85c' }}>
+                                      {dg.fillings.map(f => `${f.nameRu} (${Math.round(f.weightGrams)} г)`).join(', ')}
+                                    </span>
+                                  </div>
+                                )}
+                                {dg.ingredients.length > 0 && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Состав теста</span>
+                                    <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>
+                                      {dg.ingredients.slice(0, 8).map(ing => `${ing.nameRu} (${Math.round(ing.grams)} г)`).join(', ')}
+                                      {dg.ingredients.length > 8 ? ` и ещё ${dg.ingredients.length - 8}` : ''}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {selectedEntry.item.rollingPinAttributes && (() => {
+                          const rp = selectedEntry.item.rollingPinAttributes!;
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div className="inv-sec-row">
+                                <span className="inv-grp-lbl">Свойства скалки</span>
+                                <span className="inv-cnt-meta mono">{rp.lengthCm} см · Ø{rp.diameterMm} мм</span>
+                              </div>
+                              <div className="inv-kv-grid inv-kv-g2">
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Модель</span>
+                                  <span className="inv-kv-v" style={{ color: '#e6b85c' }}>{rp.modelNameRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Форма</span>
+                                  <span className="inv-kv-v">{rp.shapeNameRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Материал</span>
+                                  <span className="inv-kv-v">{rp.materialRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Цвет</span>
+                                  <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: rp.color, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: rp.accentColor, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    <span>{rp.colorNameRu}</span>
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Узор / поверхность</span>
+                                  <span className="inv-kv-v">
+                                    {rp.patternNameRu}{rp.embossPatternOnDough ? ' (оттиск на тесте)' : ''}
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Эффективность раскатки</span>
+                                  <span className="inv-kv-v mono">×{rp.rollingEfficiency.toFixed(2)}</span>
+                                </div>
+                                <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                  <span className="inv-kv-k">Ручки / конструкция</span>
+                                  <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>{rp.handleStyleRu}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {selectedEntry.item.branchAttributes && (() => {
                           const br = selectedEntry.item.branchAttributes!;
                           const att = br.attachedFruit;

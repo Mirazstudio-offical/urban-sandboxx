@@ -13,6 +13,7 @@ import {
   getContainerLiquidThermalProfile,
   tickContainerLiquidBoilOff,
 } from './liquidSystem';
+import { syncDoughCookedState } from './doughData';
 
 export interface ItemThermalConfig {
   temperature?: number;        // Default core temperature in °C
@@ -423,8 +424,10 @@ export function updateItemThermodynamics(
   // (still run active fluid-solid mixing for hybrid containers holding both liquid and items!)
   const deltaFromEnv = Math.abs(core - ambientTemp);
   if (deltaFromEnv < 0.2 && item.isThermalStable) {
-    if (item.fluidStorage && item.contents && item.contents.length > 0) {
-      return updateHybridContainerInteraction(item, dt);
+    if (item.fluidStorage) {
+      if (updateHybridContainerInteraction(item, dt)) {
+        return true;
+      }
     }
     if (item.wetness !== undefined && item.wetness > 0) {
       // Allow wet items to continue drying even at ambient temperature
@@ -502,10 +505,10 @@ export function updateItemThermodynamics(
         updateItemThermodynamics(child, internalAmbient, dt, nextInsulationMultiplier);
       }
     }
-    // Run hybrid liquid-solid soaking, infusion, and boiling interaction
-    if (item.fluidStorage) {
-      updateHybridContainerInteraction(item, dt);
-    }
+  }
+  // Run hybrid liquid-solid soaking, infusion, boiling, and homemade liquid synthesis (even for liquid-only mixes like milk+sugar, tea, sourdough, etc.)
+  if (item.fluidStorage) {
+    updateHybridContainerInteraction(item, dt);
   }
 
   return true;
@@ -1066,6 +1069,9 @@ function applyDryCookingIfHot(item: InventoryItem, mode: 'burner' | 'oven', dt: 
     if (!alreadyAnyCooked && item.effects && typeof item.effects.hunger === 'number') {
       item.effects.hunger = Math.round(item.effects.hunger * (isOilCoated ? 1.24 : 1.18));
     }
+    if (item.doughAttributes) {
+      syncDoughCookedState(item, isOven ? 'baked' : 'fried');
+    }
     changed = true;
   }
 
@@ -1086,6 +1092,9 @@ function applyDryCookingIfHot(item: InventoryItem, mode: 'burner' | 'oven', dt: 
         stateNameRu: 'Подгорелый',
         preparationMethod: isOven ? 'Подгорело в духовке' : 'Подгорело на плите',
       };
+      if (item.doughAttributes) {
+        syncDoughCookedState(item, 'burnt');
+      }
       changed = true;
     }
   }
@@ -1145,8 +1154,8 @@ export function tickStoveStateThermodynamics(
       if (tickContainerLiquidBoilOff(b.item, clampedDt)) {
         changed = true;
       }
-      // Always advance liquid-solid cooking (oil frying, boiling, caramelizing) even on thermal plateau
-      if (b.item.fluidStorage && b.item.contents && b.item.contents.length > 0) {
+      // Always advance liquid-solid cooking & homemade liquid transformations (broths, jams, ghee, condensed milk, sauces, etc.)
+      if (b.item.fluidStorage) {
         if (updateHybridContainerInteraction(b.item, clampedDt)) {
           changed = true;
         }
@@ -1189,7 +1198,7 @@ export function tickStoveStateThermodynamics(
         if (tickContainerLiquidBoilOff(item, clampedDt)) {
           changed = true;
         }
-        if (item.fluidStorage && item.contents && item.contents.length > 0) {
+        if (item.fluidStorage) {
           if (updateHybridContainerInteraction(item, clampedDt)) {
             changed = true;
           }
@@ -1686,7 +1695,7 @@ export function tickMicrowaveThermodynamics(
       if (tickContainerLiquidBoilOff(item, step)) {
         changed = true;
       }
-      if (item.fluidStorage && item.contents && item.contents.length > 0) {
+      if (item.fluidStorage) {
         if (updateHybridContainerInteraction(item, step)) {
           changed = true;
         }
@@ -1723,6 +1732,9 @@ export function tickMicrowaveThermodynamics(
             stateNameRu: 'Приготовленный',
             preparationMethod: 'Приготовлено в микроволновке',
           };
+          if (targetItem.doughAttributes) {
+            syncDoughCookedState(targetItem, 'steamed');
+          }
         }
         // Extended high-power (900W) dry microwaving gently browns & dries edges
         if (st.powerWatts >= 900 && (targetItem.cookProgress || 0) >= 0.92 && t >= 100 && (targetItem.wetness || 0) < 15) {

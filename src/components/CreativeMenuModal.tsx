@@ -45,7 +45,9 @@ import {
   HardwareComponentAttributes,
   ProduceAttributes,
   PlantBranchAttributes,
-  MeatAttributes
+  MeatAttributes,
+  DoughAttributes,
+  RollingPinAttributes
 } from '../types';
 import { GameCalendarState, formatGameDate, formatGameTime } from '../calendarSystem';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
@@ -211,6 +213,8 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
       produceAttributes?: ProduceAttributes;
       branchAttributes?: PlantBranchAttributes;
       meatAttributes?: MeatAttributes;
+      doughAttributes?: DoughAttributes;
+      rollingPinAttributes?: RollingPinAttributes;
     }]>;
   }, []);
 
@@ -797,6 +801,36 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                               {item.meatAttributes.weightGrams >= 1000
                                 ? `${Number((item.meatAttributes.weightGrams / 1000).toFixed(2))} кг`
                                 : `${item.meatAttributes.weightGrams} г`} · {item.meatAttributes.dimensionCm} см
+                            </span>
+                          </div>
+                        )}
+                        {item.doughAttributes && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                              {item.doughAttributes.doughTypeRu} · {item.doughAttributes.shapeNameRu}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono">
+                              <span
+                                className="w-2 h-2 rounded-sm shrink-0 border border-white/30"
+                                style={{ backgroundColor: item.doughAttributes.color }}
+                              />
+                              {item.doughAttributes.colorNameRu}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                              {item.doughAttributes.weightGrams} г · {item.doughAttributes.thicknessMm} мм
+                            </span>
+                          </div>
+                        )}
+                        {item.rollingPinAttributes && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                              {item.rollingPinAttributes.modelNameRu}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono">
+                              {item.rollingPinAttributes.materialRu}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                              {item.rollingPinAttributes.lengthCm} см · Ø{item.rollingPinAttributes.diameterMm} мм
                             </span>
                           </div>
                         )}

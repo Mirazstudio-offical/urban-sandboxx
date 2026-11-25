@@ -80,7 +80,13 @@ function getShopPreviewCacheKey(item: ShopItem): string {
   const mt = item.meatAttributes
     ? `${item.meatAttributes.cutForm || ''}:${item.meatAttributes.weightGrams || 0}:${item.meatAttributes.hasBone ? 1 : 0}:${item.meatAttributes.hasSkin ? 1 : 0}`
     : '';
-  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${pr}|${br}|${mt}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
+  const dg = item.doughAttributes
+    ? `${item.doughAttributes.doughType || ''}:${item.doughAttributes.shape || ''}:${item.doughAttributes.color || ''}:${item.doughAttributes.weightGrams || 0}`
+    : '';
+  const rp = item.rollingPinAttributes
+    ? `${item.rollingPinAttributes.modelId || ''}:${item.rollingPinAttributes.shape || ''}:${item.rollingPinAttributes.material || ''}:${item.rollingPinAttributes.pattern || ''}:${item.rollingPinAttributes.color || ''}`
+    : '';
+  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${pr}|${br}|${mt}|${dg}|${rp}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
 }
 function getShopPreviewItem(item: ShopItem): InventoryItem {
   const cacheKey = getShopPreviewCacheKey(item);
@@ -719,7 +725,59 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_detergent_eco_900', itemId: 'detergent_powder_eco_900', nameRu: 'Эко-порошок «Мыльный Орех и Сода» (коробка 900г)', price: 295, description: 'Натуральный безфосфатный порошок на мыльной стружке, соде и сапиндусе без синтетических красителей.', category: 'auto', effectText: '900 г · Эко-порошок' },
     { id: 'sup_detergent_bag_3000', itemId: 'detergent_powder_color_3000', nameRu: 'Порошок «Колор-Защита Семейный» (пакет 3000г)', price: 680, description: 'Большой 3-литровый пакет с прорезной ручкой: сухой порошок с розовыми и изумрудными био-энзимами для цветных тканей.', category: 'auto', effectText: '3000 г · Для цветного' },
     { id: 'sup_detergent_gel_1500', itemId: 'detergent_gel_aqua_1500', nameRu: 'Гель-концентрат «Аква-Сила» (канистра 1.5L)', price: 420, description: 'Эргономичная канистра HDPE с боковой ручкой и мерным колпачком: концентрированный бирюзовый жидкий гель с энзимами.', category: 'auto', effectText: '1500 мл · Жидкий гель' },
-    { id: 'sup_detergent_lavender_1000', itemId: 'detergent_gel_lavender_1000', nameRu: 'Бальзам-гель «Лаванда Шерсть и Шёлк» (флакон 1.0L)', price: 340, description: 'Фигурный флакон 1.0л с колпачком-дозатором: мягкий перламутровый лавандовый гель с ланолином для деликатных тканей.', category: 'auto', effectText: '1000 мл · Бальзам-гель' }
+    { id: 'sup_detergent_lavender_1000', itemId: 'detergent_gel_lavender_1000', nameRu: 'Бальзам-гель «Лаванда Шерсть и Шёлк» (флакон 1.0L)', price: 340, description: 'Фигурный флакон 1.0л с колпачком-дозатором: мягкий перламутровый лавандовый гель с ланолином для деликатных тканей.', category: 'auto', effectText: '1000 мл · Бальзам-гель' },
+
+    // 8. КУХОННЫЙ ИНВЕНТАРЬ ДЛЯ ВЫПЕЧКИ (СКАЛКИ)
+    {
+      id: 'sup_rolling_pin_classic',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка деревянная классическая (бук, 44 см)',
+      price: 390,
+      description: 'Точёная скалка из массива бука с вращающимися ручками на стальной оси для раскатки любого теста.',
+      category: 'auto',
+      effectText: 'Бук · 44 см · Раскатка теста',
+      rollingPinAttributes: { modelId: 'classic_handles' }
+    },
+    {
+      id: 'sup_rolling_pin_french',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка французская конусная (тёмный орех, 48 см)',
+      price: 540,
+      description: 'Цельная конусная скалка из тёмного ореха без ручек — идеально чувствует толщину пласта.',
+      category: 'auto',
+      effectText: 'Орех · 48 см · Точная раскатка ×1.12',
+      rollingPinAttributes: { modelId: 'french_tapered' }
+    },
+    {
+      id: 'sup_rolling_pin_marble',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка мраморная кондитерская (тяжёлая, 46 см)',
+      price: 1150,
+      description: 'Тяжёлая скалка из натурального мрамора на подшипниках — сама раскатывает слоёное и песочное тесто без усилий.',
+      category: 'auto',
+      effectText: 'Мрамор · 46 см · Тяжёлая ×1.32',
+      rollingPinAttributes: { modelId: 'marble_heavy' }
+    },
+    {
+      id: 'sup_rolling_pin_silicone',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка силиконовая с кольцами толщины (42 см)',
+      price: 680,
+      description: 'Антипригарная скалка из пищевого силикона со съёмными кольцами-ограничителями.',
+      category: 'auto',
+      effectText: 'Силикон · 42 см · Антипригарная',
+      rollingPinAttributes: { modelId: 'silicone_nonstick' }
+    },
+    {
+      id: 'sup_rolling_pin_carved',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка резная узорная «Цветочный орнамент» (дуб, 38 см)',
+      price: 890,
+      description: 'Дубовая скалка с глубокой лазерной резьбой: оставляет декоративный цветочный оттиск на пряниках, печенье и пирогах.',
+      category: 'auto',
+      effectText: 'Дуб · Резной оттиск на тесте',
+      rollingPinAttributes: { modelId: 'textured_carved' }
+    }
   ],
   fast_food: [
     { id: 'ff_jalapeno', itemId: 'jalapeno_pickled', nameRu: 'Маринованный халапеньо в баночке (0.2L)', price: 45, description: 'Стеклянная баночка острых маринованных колечек халапеньо в уксусном маринаде.', category: 'food', effectText: '+10% Энергия, капсаицин' },
@@ -968,7 +1026,57 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'furn_item_fridge', itemId: 'furn_fridge', nameRu: 'Двухкамерный холодильник', price: 32000, description: 'Вместительный бытовой холодильник для хранения продуктов.', category: 'auto', effectText: 'Мебель / Хранилище' },
     { id: 'furn_item_tv', itemId: 'furn_tv', nameRu: 'ЖК-Телевизор 55" 4K', price: 42000, description: 'Большая настенная/напольная плазменная панель.', category: 'auto', effectText: 'Мебель / Техника' },
     { id: 'furn_item_shelf', itemId: 'furn_shelf', nameRu: 'Книжный стеллаж', price: 6500, description: 'Вместительный открытый стеллаж для вещей и книг.', category: 'auto', effectText: 'Мебель / Хранилище' },
-    { id: 'furn_item_plant', itemId: 'furn_plant', nameRu: 'Комнатный фикус в горшке', price: 1200, description: 'Декоративное комнатное растение для уюта.', category: 'auto', effectText: 'Декор / Уют' }
+    { id: 'furn_item_plant', itemId: 'furn_plant', nameRu: 'Комнатный фикус в горшке', price: 1200, description: 'Декоративное комнатное растение для уюта.', category: 'auto', effectText: 'Декор / Уют' },
+    {
+      id: 'furn_rolling_pin_classic',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка классическая из бука (44 см)',
+      price: 390,
+      description: 'Классическая деревянная скалка с вращающимися ручками для домашней кухни.',
+      category: 'auto',
+      effectText: 'Кухня · Бук 44 см',
+      rollingPinAttributes: { modelId: 'classic_handles' }
+    },
+    {
+      id: 'furn_rolling_pin_french',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка французская из ореха (48 см)',
+      price: 540,
+      description: 'Конусная скалка ручной полировки из массива тёмного ореха.',
+      category: 'auto',
+      effectText: 'Кухня · Орех 48 см',
+      rollingPinAttributes: { modelId: 'french_tapered' }
+    },
+    {
+      id: 'furn_rolling_pin_marble',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка кондитерская мраморная (46 см)',
+      price: 1150,
+      description: 'Тяжёлая скалка из натурального белого мрамора на подшипниках.',
+      category: 'auto',
+      effectText: 'Кухня · Мрамор ×1.32',
+      rollingPinAttributes: { modelId: 'marble_heavy' }
+    },
+    {
+      id: 'furn_rolling_pin_silicone',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка силиконовая с кольцами толщины (42 см)',
+      price: 680,
+      description: 'Антипригарная скалка с регулировочными кольцами для ровных коржей.',
+      category: 'auto',
+      effectText: 'Кухня · Силикон 42 см',
+      rollingPinAttributes: { modelId: 'silicone_nonstick' }
+    },
+    {
+      id: 'furn_rolling_pin_carved',
+      itemId: 'rolling_pin',
+      nameRu: 'Скалка резная узорная (дуб, 38 см)',
+      price: 890,
+      description: 'Дубовая скалка с рельефным цветочным орнаментом для оттиска на тесте.',
+      category: 'auto',
+      effectText: 'Кухня · Оттиск узора',
+      rollingPinAttributes: { modelId: 'textured_carved' }
+    }
   ]
 };
 

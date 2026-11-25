@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, PhoneAttributes, HardwareComponentKind, HardwareComponentAttributes, ProduceAttributes, PlantBranchAttributes, MeatAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, PhoneAttributes, HardwareComponentKind, HardwareComponentAttributes, ProduceAttributes, PlantBranchAttributes, MeatAttributes, DoughAttributes, RollingPinAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
 import { sound } from './audio';
 import {
   getPhoneSpecsForItemId,
@@ -26,6 +26,12 @@ import {
   buildMeatAttributes,
   applyMeatAttributesToItem,
 } from './meatData';
+import {
+  buildDefaultDoughAttributes,
+  applyDoughAttributesToItem,
+  buildRollingPinAttributes,
+  applyRollingPinAttributesToItem,
+} from './doughData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
 import {
   administerMedication,
@@ -162,6 +168,8 @@ export interface ItemDefinition {
   produceAttributes?: ProduceAttributes;
   branchAttributes?: PlantBranchAttributes;
   meatAttributes?: MeatAttributes;
+  doughAttributes?: DoughAttributes;
+  rollingPinAttributes?: RollingPinAttributes;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -3884,6 +3892,39 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
       dimensionCm: 32
     }
   },
+  rolling_pin: {
+    itemId: 'rolling_pin',
+    name: 'Rolling Pin',
+    nameRu: 'Скалка (классическая с вращающимися ручками)',
+    category: 'tool',
+    maxStack: 1,
+    icon: '',
+    description: 'Kitchen rolling pin for flattening dough into sheets and flatbreads. Model, shape, material, color, and embossed pattern are defined in attributes.',
+    descriptionRu: 'Кухонная скалка для раскатки теста в лепёшки и тонкие пласты. Модель, форма, материал, цвет и рельефный узор задаются в атрибутах.',
+    effects: {},
+    weight: 0.42,
+    volume: 0.45,
+    usable: false,
+    rollingPinAttributes: buildRollingPinAttributes({ modelId: 'classic_handles' }),
+  },
+  dough: {
+    itemId: 'dough',
+    name: 'Homemade Dough',
+    nameRu: 'Универсальное домашнее тесто (комок)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Hand-kneaded culinary dough with dynamic proportions, color, shape, thickness, fillings, and cooking state.',
+    descriptionRu: 'Домашнее тесто с реальными пропорциями, цветом, формой, толщиной, начинками и термообработкой. Можно раскатывать скалкой, резать ножом, формовать в разных слотах сетки, начинять, сворачивать, варить, жарить и печь.',
+    effects: { hunger: 16 },
+    weight: 0.40,
+    volume: 0.42,
+    usable: true,
+    portions: 4,
+    maxPortions: 4,
+    fullnessPerBite: 5,
+    doughAttributes: buildDefaultDoughAttributes(),
+  },
 
   // === UNIFIED STORAGE BOXES (УНИФИЦИРОВАННЫЕ КОРОБКИ) ===
   box_cardboard_large: {
@@ -6205,6 +6246,16 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
     applyBranchAttributesToItem(createdItem);
   } else if (isMeatOrFishItemId(resolvedItemId) && !createdItem.meatAttributes) {
     applyMeatAttributesToItem(createdItem);
+  } else if (resolvedItemId === 'dough') {
+    applyDoughAttributesToItem(
+      createdItem,
+      buildDefaultDoughAttributes(createdItem.doughAttributes || originalDef?.doughAttributes || def.doughAttributes)
+    );
+  } else if (resolvedItemId === 'rolling_pin') {
+    applyRollingPinAttributesToItem(
+      createdItem,
+      createdItem.rollingPinAttributes || originalDef?.rollingPinAttributes || def.rollingPinAttributes
+    );
   }
 
   initItemThermalProperties(createdItem, 20.0);
@@ -6322,6 +6373,10 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     applyBranchAttributesToItem(item);
   } else if (isMeatOrFishItemId(item.itemId) && !item.meatAttributes) {
     applyMeatAttributesToItem(item);
+  } else if (item.itemId === 'dough' && !item.doughAttributes) {
+    applyDoughAttributesToItem(item, buildDefaultDoughAttributes());
+  } else if (item.itemId === 'rolling_pin' && !item.rollingPinAttributes) {
+    applyRollingPinAttributesToItem(item);
   }
 
   if (item.originalCatalogId && LEGACY_SUBSTANCE_ID_ALIASES[item.originalCatalogId]) {
@@ -6755,6 +6810,42 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
       purpose = mt.cuttable === false
         ? 'Костный / рыбный остов для наваристых бульонов и супов'
         : 'Сырой или готовый мясной/рыбный продукт: можно нарезать ножом по процентным клеткам и готовить';
+    }
+  } else if (item.doughAttributes) {
+    const da = item.doughAttributes;
+    varietyRu = `${da.doughTypeRu} · ${da.shapeNameRu}`;
+    weightGrams = da.weightGrams + da.fillingGrams;
+    dimensionCm = da.diameterCm;
+    visuals.color = da.color;
+    visuals.colorNameRu = da.colorNameRu;
+    visuals.shapeNameRu = `${da.shapeNameRu} (${da.thicknessMm} мм)`;
+    if (da.embossedPatternRu) {
+      visuals.patternNameRu = da.embossedPatternRu;
+    }
+    resolvedIngredients = [
+      ...da.ingredients.map((i) => `${i.nameRu} (${Math.round(i.grams)} г)`),
+      ...da.fillings.map((f) => `Начинка: ${f.nameRu} (${Math.round(f.weightGrams)} г)`),
+    ];
+    if (!purpose) {
+      purpose =
+        da.cookState === 'raw'
+          ? 'Сырое домашнее тесто: раскатывайте скалкой, режьте ножом, формуйте в слотах сетки, добавляйте начинку, варите, жарьте или пеките'
+          : `Готовая домашняя выпечка / блюдо (${da.cookStateRu.toLowerCase()})`;
+    }
+  } else if (item.rollingPinAttributes) {
+    const rp = item.rollingPinAttributes;
+    varietyRu = rp.modelNameRu;
+    dimensionCm = rp.lengthCm;
+    visuals.color = rp.color;
+    visuals.colorNameRu = rp.colorNameRu;
+    visuals.secondaryColor = rp.accentColor;
+    visuals.shapeNameRu = rp.shapeNameRu;
+    visuals.materialNameRu = rp.materialRu;
+    visuals.patternNameRu = rp.patternNameRu;
+    if (!purpose) {
+      purpose = rp.embossPatternOnDough
+        ? 'Узорная скалка: раскатывает тесто и отпечатывает рельефный орнамент'
+        : 'Кухонная скалка: раскатывает тесто в лепёшки и тонкие пласты в сетке взаимодействия';
     }
   }
 
@@ -7588,6 +7679,14 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
             applyMeatAttributesToItem(inner, spec.meatAttributes);
             normalizeItemAttributes(inner);
           }
+          if (spec.doughAttributes) {
+            applyDoughAttributesToItem(inner, buildDefaultDoughAttributes(spec.doughAttributes));
+            normalizeItemAttributes(inner);
+          }
+          if (spec.rollingPinAttributes) {
+            applyRollingPinAttributesToItem(inner, spec.rollingPinAttributes);
+            normalizeItemAttributes(inner);
+          }
           if (spec.attributes) {
             inner.attributes = { ...(inner.attributes || {}), ...spec.attributes };
             normalizeItemAttributes(inner);
@@ -7702,6 +7801,14 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
     }
     if (entry.meatAttributes) {
       applyMeatAttributesToItem(raw, entry.meatAttributes);
+      normalizeItemAttributes(raw);
+    }
+    if (entry.doughAttributes) {
+      applyDoughAttributesToItem(raw, buildDefaultDoughAttributes(entry.doughAttributes));
+      normalizeItemAttributes(raw);
+    }
+    if (entry.rollingPinAttributes) {
+      applyRollingPinAttributesToItem(raw, entry.rollingPinAttributes);
       normalizeItemAttributes(raw);
     }
     if (entry.labelColor) raw.labelColor = entry.labelColor;
@@ -11199,7 +11306,27 @@ export function useItemOnPlayer(
     item.maxPortions = maxPortions;
 
     let taste = '';
-    if (item.chocolateAttributes) {
+    if (item.doughAttributes) {
+      const da = item.doughAttributes;
+      if (da.cookState === 'raw') {
+        const hasRawMeat = da.fillings.some((f) => f.isRawMeat);
+        player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + (hasRawMeat ? 14 : 4));
+        taste = hasRawMeat
+          ? 'Сырое тесто с сырым мясом внутри — неприятно и тяжело для желудка. Лучше сварить, пожарить или испечь.'
+          : 'Вязкое сырое тесто липнет к зубам — лучше испечь, пожарить или сварить.';
+      } else if (da.cookState === 'burnt') {
+        taste = 'Горьковатая пригорелая корочка, но есть можно.';
+      } else {
+        const fillTxt = da.fillings.length > 0
+          ? ` и сочная начинка (${da.fillings.slice(0, 2).map((f) => f.nameRu.toLowerCase()).join(', ')})`
+          : '';
+        taste = da.cookState === 'baked'
+          ? `Ароматная румяная домашняя выпечка (${da.doughTypeRu.toLowerCase()})${fillTxt}.`
+          : da.cookState === 'boiled' || da.cookState === 'steamed'
+          ? `Мягкое нежное отварное тесто${fillTxt}.`
+          : `Хрустящая золотистая корочка с пышным мякишем${fillTxt}.`;
+      }
+    } else if (item.chocolateAttributes) {
       const ch = item.chocolateAttributes;
       taste = ch.hasFilling
         ? `Отламываете кусочек: ${ch.outerMaterialRu.toLowerCase()} и нежная начинка (${ch.innerMaterialRu.toLowerCase()})...`
@@ -12445,7 +12572,27 @@ export function useHandItemOnPlayer(
     item.maxPortions = maxPortions;
 
     let taste = '';
-    if (item.chocolateAttributes) {
+    if (item.doughAttributes) {
+      const da = item.doughAttributes;
+      if (da.cookState === 'raw') {
+        const hasRawMeat = da.fillings.some((f) => f.isRawMeat);
+        player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + (hasRawMeat ? 14 : 4));
+        taste = hasRawMeat
+          ? 'Сырое тесто с сырым мясом внутри — неприятно и тяжело для желудка. Лучше сварить, пожарить или испечь.'
+          : 'Вязкое сырое тесто липнет к зубам — лучше испечь, пожарить или сварить.';
+      } else if (da.cookState === 'burnt') {
+        taste = 'Горьковатая пригорелая корочка, но есть можно.';
+      } else {
+        const fillTxt = da.fillings.length > 0
+          ? ` и сочная начинка (${da.fillings.slice(0, 2).map((f) => f.nameRu.toLowerCase()).join(', ')})`
+          : '';
+        taste = da.cookState === 'baked'
+          ? `Ароматная румяная домашняя выпечка (${da.doughTypeRu.toLowerCase()})${fillTxt}.`
+          : da.cookState === 'boiled' || da.cookState === 'steamed'
+          ? `Мягкое нежное отварное тесто${fillTxt}.`
+          : `Хрустящая золотистая корочка с пышным мякишем${fillTxt}.`;
+      }
+    } else if (item.chocolateAttributes) {
       const ch = item.chocolateAttributes;
       taste = ch.hasFilling
         ? `Отламываете кусочек: ${ch.outerMaterialRu.toLowerCase()} и нежная начинка (${ch.innerMaterialRu.toLowerCase()})...`

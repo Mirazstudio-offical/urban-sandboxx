@@ -3,6 +3,7 @@ import {
   LIQUID_REGISTRY,
   LiquidId,
   FluidContainerState,
+  FluidMixComponent,
   FluidSubstanceAttributes,
   CONTAINER_CONFIGS,
   getContainerConfig,
@@ -16,8 +17,21 @@ import {
   isFluidStorageDryForm,
 } from './liquidSystem';
 import { isRegisteredItemId, createItem, createProduceItem, canItemFitInContainer, getItemTotalWeight, resolveCanonicalSubstanceId } from './items';
-import { computeKnifeCutForProduce, computeBranchPluck } from './produceData';
+import { computeKnifeCutForProduce, computeBranchPluck, PRODUCE_SPECIES_SPECS } from './produceData';
 import { isCuttableMeatItem, computeKnifeCutForMeat } from './meatData';
+import {
+  applyDoughAttributesToItem,
+  buildFillingEntryFromItem,
+  cutDoughWithKnife,
+  getFluidDoughProfile,
+  getSolidDoughProfile,
+  isOpenReceivableShape,
+  isRollingPinItem,
+  rollDoughWithPin,
+  shapeDoughBySlot,
+  synthesizeDoughAttributes,
+} from './doughData';
+import { DoughFillingEntry, DoughIngredientEntry } from './types';
 
 function recalculateContainerWeight(container: InventoryItem): void {
   if (!container.isContainer) return;
@@ -406,6 +420,9 @@ interface NamedMixtureRule {
   nameRu: string;
   colorHex: string;
   descriptionRu: string;
+  resultLiquidId?: LiquidId;
+  culinaryEquivalentId?: string;
+  isHomemade?: boolean;
   bonusEffects?: {
     hunger?: number;
     thirst?: number;
@@ -590,6 +607,56 @@ export const NAMED_MIXTURE_RULES: NamedMixtureRule[] = [
     colorHex: '#a16207',
     descriptionRu: 'Сытный рис на крепком мясном бульоне.',
     bonusEffects: { hunger: 18, energy: 8 },
+  },
+  {
+    id: 'mix_oil_vinegar_dressing',
+    liquids: ['oil_culinary', 'vinegar'],
+    nameRu: 'Домашняя салатная заправка (Винегрет)',
+    colorHex: '#eab308',
+    descriptionRu: 'Домашняя эмульсия из растительного масла и уксуса без промышленных стабилизаторов.',
+    resultLiquidId: 'sauce',
+    isHomemade: true,
+    bonusEffects: { hunger: 10, health: 4 },
+  },
+  {
+    id: 'mix_water_vinegar_marinade',
+    liquids: ['water', 'vinegar'],
+    nameRu: 'Домашний уксусный маринад (база)',
+    colorHex: '#d9f99d',
+    descriptionRu: 'Домашняя маринадная заливка на воде и уксусе. Добавьте соль, специи и овощи или грибы для солений.',
+    bonusEffects: { thirst: -4 },
+  },
+  {
+    id: 'mix_milk_sugar_base',
+    liquids: ['milk', 'sugar'],
+    nameRu: 'Сладкое молоко (база для домашней сгущёнки)',
+    colorHex: '#fef9c3',
+    descriptionRu: 'Молоко с сахаром. Поставьте кастрюлю на плиту и уварите — получится домашнее сгущённое молоко.',
+    bonusEffects: { hunger: 12, energy: 10, soothePanic: 6 },
+  },
+  {
+    id: 'mix_water_sugar_base',
+    liquids: ['water', 'sugar'],
+    nameRu: 'Сладкая вода (база для сиропа / варенья)',
+    colorHex: '#fef08a',
+    descriptionRu: 'Вода с растворённым сахаром. Уварите на плите для домашнего сиропа или добавьте ягоды для варенья.',
+    bonusEffects: { energy: 8, thirst: 6 },
+  },
+  {
+    id: 'mix_soy_sugar_teriyaki_base',
+    liquids: ['sauce_soy', 'sugar'],
+    nameRu: 'Соево-сахарная основа для Терияки',
+    colorHex: '#451a03',
+    descriptionRu: 'Соевый соус с сахаром. Прогрейте на плите (можно добавить имбирь и чеснок) — выйдет домашний Терияки.',
+    bonusEffects: { hunger: 8, energy: 6 },
+  },
+  {
+    id: 'mix_soy_honey_teriyaki_base',
+    liquids: ['sauce_soy', 'honey'],
+    nameRu: 'Соево-медовая основа для Терияки',
+    colorHex: '#5c2606',
+    descriptionRu: 'Соевый соус с натуральным мёдом. Уварите на плите до домашнего соуса Терияки.',
+    bonusEffects: { hunger: 10, energy: 8 },
   },
 ];
 
@@ -869,15 +936,45 @@ export function tryPourOrMixTopToBottom(
   const bottomNameBefore = getSubstanceDisplayName(bottomState);
   const unit = topIsDry ? 'г' : 'мл';
 
+  // Build proportional FluidMixComponent slices from source so thermal & homemade cooking know exact composition
+  const sourceBaseComponents: FluidMixComponent[] =
+    Array.isArray(topState.components) && topState.components.length > 0
+      ? topState.components.filter((c) => c && c.ml > 0.1)
+      : [
+          {
+            liquidId: topState.liquidId,
+            ml: topState.currentMl,
+            labelRu: topNameBefore,
+            color: getSubstanceColor(topState),
+          },
+        ];
+  const transferRatio = topState.currentMl > 0 ? Math.min(1, transferMl / topState.currentMl) : 1;
+  const movedComponents: FluidMixComponent[] = sourceBaseComponents
+    .map((c) => ({
+      ...c,
+      ml: Math.max(0.1, Number((c.ml * transferRatio).toFixed(1))),
+    }))
+    .filter((c) => c.ml > 0.1);
+
   // Update top state
+  const remainRatio = Math.max(0, 1 - transferRatio);
   const nextTopState: FluidContainerState = {
     ...topState,
     currentMl: topState.currentMl - transferMl,
+    components:
+      topState.currentMl - transferMl > 0
+        ? sourceBaseComponents
+            .map((c) => ({ ...c, ml: Number((c.ml * remainRatio).toFixed(1)) }))
+            .filter((c) => c.ml > 0.1)
+        : undefined,
   };
   if (nextTopState.currentMl <= 0) {
     nextTopState.currentMl = 0;
     nextTopState.liquidId = null;
     nextTopState.attributes = undefined;
+    nextTopState.components = undefined;
+    nextTopState.homemadeProgress = undefined;
+    nextTopState.homemadeRecipeId = undefined;
   }
 
   // Update bottom state
@@ -895,6 +992,24 @@ export function tryPourOrMixTopToBottom(
   let mixtureName: string | undefined;
   let mixtureColor: string | undefined;
 
+  const mergeComponents = (
+    existing: FluidMixComponent[],
+    incoming: FluidMixComponent[]
+  ): FluidMixComponent[] => {
+    const out: FluidMixComponent[] = existing.map((c) => ({ ...c }));
+    for (const inc of incoming) {
+      const found = out.find(
+        (c) => c.liquidId === inc.liquidId && (c.labelRu || '') === (inc.labelRu || '')
+      );
+      if (found) {
+        found.ml = Number((found.ml + inc.ml).toFixed(1));
+      } else {
+        out.push({ ...inc });
+      }
+    }
+    return out;
+  };
+
   const nextBottomState: FluidContainerState = {
     ...bottomState,
     currentMl: newBottomMl,
@@ -906,15 +1021,30 @@ export function tryPourOrMixTopToBottom(
     nextBottomState.attributes = topState.attributes
       ? { ...JSON.parse(JSON.stringify(topState.attributes)), isOpened: true }
       : undefined;
+    nextBottomState.components = movedComponents;
+    nextBottomState.homemadeProgress = undefined;
+    nextBottomState.homemadeRecipeId = topState.homemadeRecipeId;
   } else {
     // Receiver already has substance! Check if identical or different
     const sameLiquidId = bottomState.liquidId === topState.liquidId;
     const sameVariety =
       (bottomState.attributes?.varietyRu || '') === (topState.attributes?.varietyRu || '');
+    const bottomBaseComponents: FluidMixComponent[] =
+      Array.isArray(bottomState.components) && bottomState.components.length > 0
+        ? bottomState.components.filter((c) => c && c.ml > 0.1)
+        : [
+            {
+              liquidId: bottomState.liquidId,
+              ml: prevBottomMl,
+              labelRu: bottomNameBefore,
+              color: getSubstanceColor(bottomState),
+            },
+          ];
 
     if (sameLiquidId && sameVariety) {
       // Same substance -> volume + temperature merge
       nextBottomState.liquidId = bottomState.liquidId;
+      nextBottomState.components = mergeComponents(bottomBaseComponents, movedComponents);
     } else {
       // MIXING TWO DIFFERENT SUBSTANCES!
       isMixture = true;
@@ -985,25 +1115,48 @@ export function tryPourOrMixTopToBottom(
       mixtureName = computedVarietyRu;
       mixtureColor = computedColor;
 
-      // Dominant base liquid ID for mechanics (keep toxic/flammable if either is dangerous)
+      const bottomIsDry = isFluidStorageDryForm(bottomState);
+      const hasLiquidPhase = !bottomIsDry || !topIsDry;
+
+      // Dominant base liquid ID for mechanics (keep toxic/flammable if either is dangerous, prefer liquid over dry granular!)
       const dominantLiquidId: LiquidId = (
-        !bottomSpec.isDrinkable || bottomSpec.isFlammable
+        namedRule?.resultLiquidId
+          ? namedRule.resultLiquidId
+          : !bottomSpec.isDrinkable || bottomSpec.isFlammable
           ? bottomState.liquidId
           : !topSpec.isDrinkable || topSpec.isFlammable
+          ? topState.liquidId
+          : !bottomIsDry && topIsDry
+          ? bottomState.liquidId
+          : bottomIsDry && !topIsDry
           ? topState.liquidId
           : prevBottomMl >= transferMl
           ? bottomState.liquidId
           : topState.liquidId
       ) as LiquidId;
 
+      const mergedComponents = mergeComponents(bottomBaseComponents, movedComponents);
+
       const customAttr: FluidSubstanceAttributes = {
         varietyRu: computedVarietyRu,
         ingredients: uniqueIngredients,
-        preparationMethod: 'Смешивание в сетке взаимодействия (Верх → Низ)',
+        sourceIngredients: uniqueIngredients,
+        preparationMethod: namedRule?.isHomemade
+          ? 'Домашнее смешивание в кухонной посуде'
+          : 'Смешивание в сетке взаимодействия (Верх → Низ)',
         purpose: namedRule
           ? namedRule.descriptionRu
           : `Смешанный состав (${uniqueIngredients.join(' + ')})`,
-        reasonAndOrigin: 'Приготовлено игроком путём переливания и смешивания компонентов.',
+        reasonAndOrigin: namedRule?.isHomemade
+          ? 'Приготовлено дома вручную без фабричных стабилизаторов и консервантов.'
+          : 'Приготовлено игроком путём переливания и смешивания компонентов.',
+        culinaryEquivalentId:
+          namedRule?.culinaryEquivalentId ||
+          (dominantLiquidId === bottomState.liquidId
+            ? bottomState.attributes?.culinaryEquivalentId
+            : topState.attributes?.culinaryEquivalentId),
+        physicalForm: hasLiquidPhase ? 'liquid' : 'dry',
+        isHomemade: namedRule?.isHomemade || undefined,
         customColor: computedColor,
         visuals: {
           ...(bottomState.attributes?.visuals || {}),
@@ -1022,6 +1175,9 @@ export function tryPourOrMixTopToBottom(
 
       nextBottomState.liquidId = dominantLiquidId;
       nextBottomState.attributes = customAttr;
+      nextBottomState.components = mergedComponents;
+      nextBottomState.homemadeProgress = 0;
+      nextBottomState.homemadeRecipeId = namedRule?.isHomemade ? namedRule.id : undefined;
     }
   }
 
@@ -1832,6 +1988,379 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
       };
     },
   },
+  {
+    id: 'craft_homemade_mayo',
+    title: 'Домашний майонез (взбивание яйца и масла)',
+    category: 'cooking',
+    description:
+      'Взбейте свежее яйцо с растительным маслом в миске, банке или кружке (или в любой посуде с ложкой). По желанию добавьте лимон, уксус, соль или горчицу — состав майонеза точно отразит добавленные продукты.',
+    actionLabel: 'Взбить домашний майонез',
+    ingredients: [
+      {
+        itemIds: ['bowl', 'jar_glass_medium', 'jar_glass_large', 'mug', 'cup'],
+        liquidIds: ['oil_culinary'],
+        label: 'Ёмкость с растительным маслом (от 40 мл)',
+      },
+      {
+        itemIds: ['egg_chicken_single', 'egg_quail_single'],
+        label: 'Свежее сырое яйцо (куриное или перепелиное)',
+      },
+    ],
+    resultsSummary: ['Домашний майонез (состав строго из ваших продуктов, без консервантов)'],
+    matchAndPreview: (inputs) => {
+      const present = inputs.filter((x): x is InventoryItem => x !== null);
+      if (present.length < 2 || present.length > 4) return null;
+
+      const isEgg = (x: InventoryItem) =>
+        (x.itemId === 'egg_chicken_single' || x.itemId === 'egg_quail_single') &&
+        x.attributes?.state !== 'boiled' &&
+        x.attributes?.state !== 'fried' &&
+        x.attributes?.state !== 'burnt';
+
+      const eggs = present.filter(isEgg);
+      if (eggs.length === 0) return null;
+
+      const whiskTool = present.find((x) =>
+        itemMatchesAnyId(x, ['spoon', 'kitchen_spoon_steel', 'kitchen_spoon_wooden', 'fork'])
+      );
+
+      const oilVessel = present.find((x) => {
+        const w = getEffectiveFluidWrapper(x);
+        if (!w || !w.isOpened || w.state.liquidId !== 'oil_culinary' || w.state.currentMl < 40) return false;
+        // Avoid colliding with placing an egg into a frying pan for frying unless a spoon/whisk is also placed
+        const isFryingPan = x.itemId.includes('pan') || x.itemId === 'frying_pan';
+        if (isFryingPan && !whiskTool) return false;
+        return true;
+      });
+      if (!oilVessel) return null;
+
+      const usedSet = new Set<InventoryItem>([oilVessel, ...eggs]);
+      if (whiskTool) usedSet.add(whiskTool);
+
+      const extras = present.filter((x) => !usedSet.has(x));
+      const extraIngredients: string[] = [];
+      const preservedOutputs: InventoryItem[] = [];
+      let extraMl = 0;
+
+      for (const ex of extras) {
+        const exWrap = getEffectiveFluidWrapper(ex);
+        const exId = (ex.itemId || '').toLowerCase();
+        const exSpecies = (ex.produceAttributes?.speciesId || exId).toLowerCase();
+        if (
+          exSpecies === 'lemon_whole' ||
+          exSpecies === 'lime_whole' ||
+          exId.includes('lemon') ||
+          exId.includes('lime')
+        ) {
+          extraIngredients.push(ex.nameRu.replace(/\s*\([^)]*\)\s*/g, '').trim());
+          extraMl += 15;
+          continue;
+        }
+        if (
+          exWrap &&
+          exWrap.isOpened &&
+          exWrap.state.currentMl >= 5 &&
+          (exWrap.state.liquidId === 'salt' ||
+            exWrap.state.liquidId === 'vinegar' ||
+            exWrap.state.liquidId === 'food_acid' ||
+            exWrap.state.liquidId === 'sugar' ||
+            exWrap.state.liquidId === 'spice_dry' ||
+            (exWrap.state.liquidId === 'sauce' &&
+              (exWrap.state.attributes?.culinaryEquivalentId === 'mustard_dijon' ||
+                (exWrap.state.attributes?.varietyRu || '').toLowerCase().includes('горчиц'))))
+        ) {
+          const takeMl = Math.min(exWrap.state.currentMl, exWrap.state.liquidId === 'salt' ? 8 : 20);
+          const nextEx = cloneInventoryItem(ex);
+          const nextExWrap = getEffectiveFluidWrapper(nextEx)!;
+          nextExWrap.state.currentMl = Math.max(0, nextExWrap.state.currentMl - takeMl);
+          if (nextExWrap.state.currentMl <= 0) {
+            nextExWrap.state.liquidId = null;
+            nextExWrap.state.attributes = undefined;
+            nextExWrap.state.components = undefined;
+          }
+          const updatedEx = applyEffectiveFluidToItem(nextEx, nextExWrap.state, nextExWrap.temperatureC);
+          if (updatedEx.fluidStorage) syncItemContainerProperties(updatedEx);
+          preservedOutputs.push(updatedEx);
+          extraIngredients.push(
+            exWrap.state.attributes?.varietyRu ||
+              LIQUID_REGISTRY[exWrap.state.liquidId as LiquidId]?.nameRu ||
+              ex.nameRu
+          );
+          extraMl += takeMl;
+          continue;
+        }
+        // Unrelated extra item -> do not trigger mayo craft
+        return null;
+      }
+
+      const oilWrap = getEffectiveFluidWrapper(oilVessel)!;
+      const oilBaseLabel =
+        oilWrap.state.attributes?.varietyRu ||
+        LIQUID_REGISTRY.oil_culinary?.nameRu ||
+        'Растительное масло';
+      const eggLabels = Array.from(
+        new Set(eggs.map((e) => e.nameRu.replace(/\s*\([^)]*\)\s*/g, '').trim()))
+      );
+      const ingredients = Array.from(new Set([oilBaseLabel, ...eggLabels, ...extraIngredients]));
+      const eggMl = eggs.reduce((s, e) => s + (e.itemId === 'egg_quail_single' ? 14 : 52), 0);
+      const finalMl = Math.min(oilWrap.state.maxMl, Math.round(oilWrap.state.currentMl + eggMl + extraMl));
+
+      const nextVesselState: FluidContainerState = {
+        ...oilWrap.state,
+        liquidId: 'sauce',
+        currentMl: finalMl,
+        components: [{ liquidId: 'sauce', ml: finalMl, labelRu: 'Домашний майонез', color: '#fef9c3' }],
+        homemadeRecipeId: 'homemade_mayo',
+        homemadeProgress: 1,
+        attributes: {
+          varietyRu: 'Домашний майонез',
+          ingredients,
+          sourceIngredients: ingredients,
+          preparationMethod: 'Домашнее ручное эмульгирование яиц с растительным маслом',
+          purpose: 'Заправка салатов, подача к пельменям, бутербродам и запеканию',
+          reasonAndOrigin: 'Взбито дома из свежих яиц и масла без фабричных загустителей, крахмала и консервантов.',
+          culinaryEquivalentId: 'sauce_mayo',
+          physicalForm: 'liquid',
+          physicalFormRu: 'Домашнее приготовление',
+          isHomemade: true,
+          customColor: '#fef9c3',
+          visuals: {
+            ...(oilWrap.state.attributes?.visuals || {}),
+            color: '#fef9c3',
+          },
+          isOpened: true,
+          customEffects: { hunger: 40, energy: 18, soothePanic: 18 },
+          customTasteMessages: ['Нежный густой домашний майонез из свежих яиц и масла.'],
+        },
+      };
+
+      const updatedVessel = applyEffectiveFluidToItem(oilVessel, nextVesselState, oilWrap.temperatureC);
+      if (updatedVessel.fluidStorage) syncItemContainerProperties(updatedVessel);
+
+      const outs: InteractionSlotGrid4 = [updatedVessel, null, null, null];
+      let slotPtr = 1;
+      if (whiskTool && slotPtr < 4) {
+        outs[slotPtr++] = cloneInventoryItem(whiskTool);
+      }
+      for (const p of preservedOutputs) {
+        if (slotPtr < 4) outs[slotPtr++] = p;
+      }
+
+      return {
+        isValid: true,
+        kind: 'craft_recipe',
+        title: 'Взбивание домашнего майонеза',
+        subtitle: `Состав: ${ingredients.join(', ')} (${finalMl} мл)`,
+        actionLabel: 'Взбить домашний майонез',
+        previewOutputs: outs,
+        transferDetails: [],
+        matchedRecipeId: 'craft_homemade_mayo',
+      };
+    },
+  },
+  {
+    id: 'craft_homemade_fresh_juice',
+    title: 'Домашний свежевыжатый сок (ручной отжим)',
+    category: 'cooking',
+    description:
+      'Выжмите сочные цитрусовые, ягоды, гранат или фрукты в стакан, кружку или бутылку (либо в любую ёмкость с помощью ножа/ложки). Состав и цвет сока зависят строго от отжатых плодов.',
+    actionLabel: 'Отжать свежий сок',
+    ingredients: [
+      {
+        itemIds: ['cup', 'mug', 'cup_disposable', 'paper_cup', 'bottle_plastic_500', 'bottle_glass_large'],
+        label: 'Пустая (или с соком) кружка / стакан / бутылка',
+      },
+      {
+        itemIds: ['orange_whole', 'lemon_whole', 'apple_whole', 'pomegranate_whole', 'watermelon_whole', 'tomato_whole'],
+        label: 'Сочный свежий плод (цитрус, ягода, фрукт, томат)',
+      },
+    ],
+    resultsSummary: ['Домашний свежевыжатый сок (100% прямой ручной отжим без сахара и концентрата)'],
+    matchAndPreview: (inputs) => {
+      const present = inputs.filter((x): x is InventoryItem => x !== null);
+      if (present.length < 2 || present.length > 4) return null;
+
+      const pressTool = present.find((x) =>
+        itemMatchesAnyId(x, ['kitchen_knife', 'knife_hunting', 'spoon', 'kitchen_spoon_steel', 'kitchen_spoon_wooden'])
+      );
+
+      const isDrinkCupOrBottle = (id: string) =>
+        id === 'cup' ||
+        id === 'mug' ||
+        id === 'cup_disposable' ||
+        id === 'paper_cup' ||
+        id.includes('mug') ||
+        id.includes('cup') ||
+        id.includes('bottle');
+
+      const vessel = present.find((x) => {
+        const w = getEffectiveFluidWrapper(x);
+        if (!w || !w.isOpened || w.isGranularContainer) return false;
+        if (w.state.currentMl > 0 && w.state.liquidId !== 'juice') return false;
+        const freeMl = w.state.maxMl - w.state.currentMl - getContainerSolidVolumeMl(x);
+        if (freeMl < 15) return false;
+        // Without a pressing tool, only squeeze directly into drinking vessels (cups/mugs/bottles)
+        // so placing apples/berries into a pot or jar still lets you boil compote/jam/puree!
+        if (!pressTool && !isDrinkCupOrBottle(x.itemId)) return false;
+        return true;
+      });
+      if (!vessel) return null;
+
+      const juicyFruits: InventoryItem[] = [];
+      for (const item of present) {
+        if (item === vessel || item === pressTool) continue;
+        if (item.fluidStorage) return null;
+        const prod = item.produceAttributes;
+        const speciesId = (prod?.speciesId || item.itemId || '').toLowerCase();
+        const spec = PRODUCE_SPECIES_SPECS[speciesId];
+        const juiciness = prod?.juiciness ?? spec?.defaultJuiciness ?? 0;
+        const cat = prod?.produceCategory || spec?.produceCategory;
+        const isJuicyAllowed =
+          juiciness >= 45 &&
+          !prod?.isDried &&
+          (cat === 'citrus' ||
+            cat === 'berry' ||
+            cat === 'fruit' ||
+            speciesId === 'tomato_whole' ||
+            speciesId === 'tomato_cherry_single' ||
+            speciesId === 'carrot_whole');
+        if (!isJuicyAllowed) return null;
+        juicyFruits.push(item);
+      }
+
+      if (juicyFruits.length === 0) return null;
+
+      const wrap = getEffectiveFluidWrapper(vessel)!;
+      const freeMl = Math.max(0, wrap.state.maxMl - wrap.state.currentMl - getContainerSolidVolumeMl(vessel));
+      let yieldMl = 0;
+      const fruitNames: string[] = [];
+      let juiceColor = wrap.state.attributes?.customColor || '#f59e0b';
+      let colorPicked = wrap.state.currentMl > 0;
+
+      for (const f of juicyFruits) {
+        const prod = f.produceAttributes;
+        const speciesId = (prod?.speciesId || f.itemId || '').toLowerCase();
+        const spec = PRODUCE_SPECIES_SPECS[speciesId];
+        const grams = prod?.weightGrams || Math.round((f.weight || 0.12) * 1000);
+        const juiciness = prod?.juiciness ?? spec?.defaultJuiciness ?? 65;
+        yieldMl += Math.max(12, Math.round(grams * (juiciness / 100) * 0.62));
+        const clean = f.nameRu.replace(/\s*\([^)]*\)\s*/g, '').trim();
+        fruitNames.push(clean);
+        if (!colorPicked) {
+          const c = prod?.color || spec?.fleshColor || spec?.color || f.attributes?.customColor;
+          if (c) {
+            juiceColor = c;
+            colorPicked = true;
+          }
+        }
+      }
+
+      const addedMl = Math.min(freeMl, Math.max(12, yieldMl));
+      const finalMl = wrap.state.currentMl + addedMl;
+      const uniqueFruits = Array.from(new Set(fruitNames));
+      const prevIngs = Array.isArray(wrap.state.attributes?.ingredients)
+        ? wrap.state.attributes!.ingredients!
+        : [];
+      const allIngs = Array.from(
+        new Set([...prevIngs, ...uniqueFruits.map((n) => `${n} (прямой ручной отжим)`)])
+      );
+      const varietyRu = `Домашний свежевыжатый сок (${uniqueFruits.slice(0, 2).join(', ')})`;
+
+      const nextState: FluidContainerState = {
+        ...wrap.state,
+        liquidId: 'juice',
+        currentMl: finalMl,
+        components: [{ liquidId: 'juice', ml: finalMl, labelRu: varietyRu, color: juiceColor }],
+        homemadeRecipeId: 'homemade_fresh_juice',
+        homemadeProgress: 1,
+        attributes: {
+          varietyRu,
+          ingredients: allIngs,
+          sourceIngredients: allIngs,
+          preparationMethod: 'Домашний ручной холодный отжим свежих плодов',
+          purpose: 'Натуральный витаминный напиток прямого отжима',
+          reasonAndOrigin: 'Отжато дома вручную из свежих плодов без сахара, воды, пастеризации и концентратов.',
+          physicalForm: 'liquid',
+          physicalFormRu: 'Свежевыжатый домашний сок',
+          isHomemade: true,
+          customColor: juiceColor,
+          visuals: {
+            ...(wrap.state.attributes?.visuals || {}),
+            color: juiceColor,
+          },
+          isOpened: true,
+          customEffects: { thirst: 48, hunger: 12, health: 14, energy: 16, soothePanic: 22 },
+          customTasteMessages: [`Яркий свежий вкус натурального домашнего сока (${uniqueFruits.join(', ')}).`],
+        },
+      };
+
+      const updatedVessel = applyEffectiveFluidToItem(vessel, nextState, wrap.temperatureC);
+      if (updatedVessel.fluidStorage) syncItemContainerProperties(updatedVessel);
+
+      return {
+        isValid: true,
+        kind: 'craft_recipe',
+        title: 'Ручной отжим свежего сока',
+        subtitle: `${uniqueFruits.join(' + ')} → ${varietyRu} (+${addedMl} мл)`,
+        actionLabel: 'Отжать свежий сок',
+        previewOutputs: [updatedVessel, pressTool ? cloneInventoryItem(pressTool) : null, null, null],
+        transferDetails: [],
+        matchedRecipeId: 'craft_homemade_fresh_juice',
+      };
+    },
+  },
+  {
+    id: 'guide_homemade_stove_liquids',
+    title: 'Домашняя варка жидкостей на плите (бульоны, варенье, сгущёнка, гхи, соусы)',
+    category: 'cooking',
+    description:
+      'Соберите продукты в кастрюле или сковороде и поставьте на плиту: вода + мясо/кости/рыба/грибы/овощи → домашний бульон; ягоды/фрукты + сахар → варенье; молоко + сахар → домашняя сгущёнка; сливочное масло или жир на сухой сковороде → топлёное масло Гхи / смалец; кабачки или баклажаны → овощная икра; томаты + специи → домашний кетчуп или томатная паста; соевый соус + сахар/мёд → Терияки; вода + ягоды/фрукты → компот/морс; вода + чай/травы/кофе → заваренный чай и кофе.',
+    actionLabel: 'Варить на плите',
+    ingredients: [
+      { itemIds: ['pot', 'frying_pan', 'kettle'], label: 'Кастрюля / Сковорода / Чайник' },
+      { itemIds: ['drinking_water', 'milk', 'sugar', 'butter_brick_salted'], label: 'Натуральные продукты без фабричных добавок' },
+    ],
+    resultsSummary: ['Домашняя жидкость с составом строго из ваших продуктов'],
+  },
+  {
+    id: 'guide_homemade_ferment_pickles',
+    title: 'Домашние соленья, квашения, квас, простокваша и закваска',
+    category: 'cooking',
+    description:
+      'Без плиты или в тепле: капуста + соль → квашеная капуста в собственном соку; вода + соль/уксус + огурцы/грибы/овощи → домашние соленья и маринады; вода + хлеб + сахар/мёд → домашний хлебный квас; молоко + сметана/кефир/лимон → простокваша (а её подогрев до 65–80°C даёт домашний творог); мука + вода в тепле → живая хлебная закваска.',
+    actionLabel: 'Настаивать в таре',
+    ingredients: [
+      { itemIds: ['jar_glass_large', 'jar_glass_medium', 'pot', 'bowl'], label: 'Банка / Кастрюля / Миска' },
+      { itemIds: ['drinking_water', 'salt', 'vinegar_table', 'bread_loaf'], label: 'Вода, соль, уксус, хлеб, молоко или овощи' },
+    ],
+    resultsSummary: ['Домашние заготовки и ферментированные напитки с натуральным составом'],
+  },
+  {
+    id: 'guide_dough_kneading',
+    title: 'Замес домашнего теста из любых продуктов и пропорций',
+    category: 'cooking',
+    description:
+      'Положите в сетку муку (пшеничную, ржаную, кукурузную, рисовую, овсянку, манку, крахмал, творог или отварной картофель) + любую жидкость/связку (воду, молоко, кефир, простоквашу, сметану, закваску, яйца, масло, бульон, пиво, квас, сок) и любые добавки (сахар, соль, шоколад/какао, ягоды, свёклу, морковь, зелень, сыр). От пропорций и слотов дозировки напрямую зависят тип теста (блинное, крутое пельменное, яичное, песочное, сдобное, ржаное, творожное), цвет, гидратация, эластичность и подъём. Можно также замесить из миски с уже налитой смесью или вмесить добавки в готовый комок.',
+    actionLabel: 'Замесить тесто',
+    ingredients: [
+      { itemIds: ['flour_wheat', 'flour_rye', 'flour_corn', 'flour_rice'], label: 'Мука / основа (в любом количестве)' },
+      { itemIds: ['drinking_water', 'milk', 'eggs_chicken', 'butter_brick_salted'], label: 'Вода, молоко, яйца, масло, закваска и добавки' },
+    ],
+    resultsSummary: ['Домашнее тесто с реальным составом, цветом, весом и характеристиками'],
+  },
+  {
+    id: 'guide_dough_rolling_shaping_filling',
+    title: 'Скалка, формовка по слотам, нарезка, начинка и выпечка',
+    category: 'cooking',
+    description:
+      '1) Скалка + тесто — раскатывает пласт тоньше и шире (узорная скалка отпечатывает орнамент) и увеличивает вместимость начинки. 2) Нож + тесто — режет по процентным клеткам (тонкий пласт в слоте «Всё» → домашняя лапша). 3) Положите сырое тесто одно в разные слоты сетки 2×2 или 4×4, чтобы вылепить нужную форму (колобок, лепёшка, пласт, булочка, буханка, косичка, бублик, рогалик, открытый пирог, рулет, пирожок, вареник, хинкали, клёцки). 4) Положите начинку к раскатанному тесту (если вместится по весу), затем переложите в слот сворачивания и сварите, пожарьте или испеките в духовке.',
+    actionLabel: 'Формовать и готовить',
+    ingredients: [
+      { itemIds: ['dough'], label: 'Домашнее тесто' },
+      { itemIds: ['rolling_pin', 'kitchen_knife'], label: 'Скалка / Нож / Начинка' },
+    ],
+    resultsSummary: ['Готовые пирожки, вареники, хлеб, пицца, лапша, блины, рулеты и булочки'],
+  },
 ];
 
 export function getActiveInteractionCraftRecipes(): InteractionCraftRecipe[] {
@@ -2023,6 +2552,10 @@ function packOutputsIntoSlots(items: InventoryItem[], gridSize: 4 | 16): (Invent
   return result;
 }
 
+function isCuttableDoughItem(item: InventoryItem | null): boolean {
+  return Boolean(item && item.itemId === 'dough' && item.doughAttributes && item.doughAttributes.weightGrams >= 25);
+}
+
 function tryEvaluateKnifeCuttingAndBranchPlucking(
   inputs: (InventoryItem | null)[],
   gridSize: 4 | 16,
@@ -2047,10 +2580,14 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
   const knives = entries.filter((e) => isKnifeTool(e.item));
   const others = entries.filter((e) => !isKnifeTool(e.item));
 
-  // Case 1: Knife + 1 or more produce items, meat/poultry/fish/seafood cuts, or pluckable plant_branches
+  // Case 1: Knife + 1 or more produce items, meat/poultry/fish/seafood cuts, dough items, or pluckable plant_branches
   if (knives.length === 1 && others.length >= 1) {
     const allTargetsValid = others.every(
-      (e) => isCuttableProduceItem(e.item) || isPluckableBranchItem(e.item) || isCuttableMeatItem(e.item)
+      (e) =>
+        isCuttableProduceItem(e.item) ||
+        isPluckableBranchItem(e.item) ||
+        isCuttableMeatItem(e.item) ||
+        isCuttableDoughItem(e.item)
     );
     if (!allTargetsValid) return null;
 
@@ -2060,6 +2597,7 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
     const cutDetails: InteractionTransferDetail[] = [];
     let singleRes: ReturnType<typeof computeKnifeCutForProduce> = null;
     let hasMeatTarget = false;
+    let hasDoughTarget = false;
 
     for (const target of others) {
       const activeDosageSlot =
@@ -2073,7 +2611,9 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
 
       const isBranch = isPluckableBranchItem(target.item);
       const isMeat = !isBranch && isCuttableMeatItem(target.item);
+      const isDough = !isBranch && !isMeat && isCuttableDoughItem(target.item);
       if (isMeat) hasMeatTarget = true;
+      if (isDough) hasDoughTarget = true;
 
       const cutRes = isBranch
         ? computeBranchPluck(target.item, dosageFraction, applyPourJitter, true, (spId, attrs) =>
@@ -2083,6 +2623,8 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
         ? computeKnifeCutForMeat(target.item, dosageFraction, applyPourJitter, (id) =>
             createItem(id, 1, undefined, true)
           )
+        : isDough
+        ? cutDoughWithKnife(target.item, dosageFraction, applyPourJitter)
         : computeKnifeCutForProduce(target.item, dosageFraction, applyPourJitter);
 
       if (!cutRes) return null;
@@ -2117,6 +2659,8 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
         transferDetails: cutDetails,
         matchedRecipeId: isPluckableBranchItem(others[0].item)
           ? 'craft_pluck_plant_branch'
+          : hasDoughTarget
+          ? 'craft_knife_cut_dough'
           : hasMeatTarget
           ? 'craft_knife_cut_meat'
           : 'craft_knife_cut_produce',
@@ -2131,7 +2675,11 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
       actionLabel: `Нарезать всё (${others.length})`,
       previewOutputs,
       transferDetails: cutDetails,
-      matchedRecipeId: hasMeatTarget ? 'craft_knife_cut_meat' : 'craft_knife_cut_produce',
+      matchedRecipeId: hasDoughTarget
+        ? 'craft_knife_cut_dough'
+        : hasMeatTarget
+        ? 'craft_knife_cut_meat'
+        : 'craft_knife_cut_produce',
     };
   }
 
@@ -2197,6 +2745,703 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
   return null;
 }
 
+const DOUGH_MIXING_VESSEL_IDS = new Set([
+  'bowl',
+  'pot',
+  'saute_pan',
+  'frying_pan',
+  'plate',
+  'mug',
+  'cup',
+  'pot_clay_small',
+  'pot_clay_medium',
+  'pot_clay_large',
+  'jar_glass_small',
+  'jar_glass_medium',
+  'jar_glass_large',
+  'bottle_empty',
+  'soup_bowl_empty',
+]);
+
+function isRawDoughItem(item: InventoryItem | null | undefined): boolean {
+  return Boolean(item && item.itemId === 'dough' && item.doughAttributes && item.doughAttributes.cookState === 'raw');
+}
+
+function getKneadingSlotFraction(slot: number, gridSize: 4 | 16): number {
+  const dosageLimit = gridSize === 4 ? 2 : 12;
+  if (slot < dosageLimit) {
+    return getSlotPourDosageFraction(slot, gridSize);
+  }
+  return gridSize === 4 ? 0.5 : 0.25;
+}
+
+/**
+ * Extracts dough ingredient contributions from a single grid entry (container/bottle/pack/egg-carton or solid item).
+ * Returns `null` if the item is not a valid dough kneading ingredient (or is sealed/empty).
+ */
+function extractDoughIngredientFromEntry(
+  item: InventoryItem,
+  slot: number,
+  gridSize: 4 | 16,
+  applyPourJitter: boolean
+): {
+  entries: DoughIngredientEntry[];
+  leftoverItem: InventoryItem | null;
+  hasFlourBase: boolean;
+  hasWetBinder: boolean;
+  summaryLabel: string;
+} | null {
+  // Open egg carton -> take 1 egg (or 2 in slot 0)
+  if (item.itemId === 'egg_carton_10' || item.itemId === 'egg_carton_10_open') {
+    if (!item.isOpen && item.itemId !== 'egg_carton_10_open') return null;
+    if (!item.contents || item.contents.length === 0) return null;
+    const copy = cloneInventoryItem(item);
+    const takeCount = slot === 0 && copy.contents!.length >= 2 ? 2 : 1;
+    copy.contents!.splice(0, takeCount);
+    recalculateContainerWeight(copy);
+    return {
+      entries: [
+        {
+          itemId: 'egg_raw',
+          nameRu: 'Куриное яйцо',
+          grams: takeCount * 55,
+          role: 'egg',
+          colorHex: '#f59e0b',
+        },
+      ],
+      leftoverItem: copy,
+      hasFlourBase: false,
+      hasWetBinder: true,
+      summaryLabel: `Яйцо ×${takeCount} (${takeCount * 55} г)`,
+    };
+  }
+
+  // Fluid or dry granular container (flour bag, milk carton, water bottle, oil bottle, sugar pack, salt shaker, sourdough jar, etc.)
+  const wrap = getEffectiveFluidWrapper(item);
+  if (wrap && wrap.state.currentMl >= 3 && wrap.state.liquidId) {
+    if (!wrap.isOpened) return null;
+    const frac = getKneadingSlotFraction(slot, gridSize);
+    const { amountMl } = computeDosedPourMl(wrap.state.currentMl, frac, applyPourJitter);
+    if (amountMl < 3) return null;
+
+    const comps =
+      wrap.state.components && wrap.state.components.length > 0
+        ? wrap.state.components
+        : [
+            {
+              liquidId: wrap.state.liquidId,
+              ml: wrap.state.currentMl,
+              labelRu:
+                wrap.state.attributes?.varietyRu ||
+                LIQUID_REGISTRY[wrap.state.liquidId as LiquidId]?.nameRu ||
+                item.nameRu,
+              color:
+                wrap.state.attributes?.customColor ||
+                LIQUID_REGISTRY[wrap.state.liquidId as LiquidId]?.color ||
+                '#f6eedb',
+            },
+          ];
+
+    const totalCompMl = Math.max(1, comps.reduce((s, c) => s + Math.max(0, c.ml), 0));
+    const entries: DoughIngredientEntry[] = [];
+    let hasFlourBase = false;
+    let hasWetBinder = false;
+
+    for (const c of comps) {
+      if (c.ml <= 0) continue;
+      const portionMl = (amountMl * c.ml) / totalCompMl;
+      if (portionMl < 1) continue;
+      const singleOrigId =
+        wrap.state.attributes?.culinaryEquivalentId || item.originalCatalogId || item.itemId;
+      const prof = getFluidDoughProfile(
+        c.liquidId,
+        comps.length === 1 ? singleOrigId : c.liquidId,
+        c.color,
+        c.labelRu
+      );
+      if (!prof) return null;
+      const isDry = isFluidStorageDryForm(wrap.state) || prof.role === 'flour' || prof.role === 'starch' || prof.role === 'sugar' || prof.role === 'salt';
+      const grams = Math.max(1, Math.round(portionMl * (isDry ? 0.72 : 1.0)));
+      if (prof.flourPct >= 30) hasFlourBase = true;
+      if (prof.waterPct >= 15 || prof.fatPct >= 40 || prof.eggPct >= 50) hasWetBinder = true;
+      entries.push({
+        itemId: comps.length === 1 ? singleOrigId : c.liquidId,
+        nameRu: (c.labelRu || LIQUID_REGISTRY[c.liquidId as LiquidId]?.nameRu || c.liquidId).replace(/\s*\([^)]*\)\s*$/g, '').trim(),
+        grams,
+        role: prof.role,
+        colorHex: prof.colorHex,
+      });
+    }
+
+    if (entries.length === 0) return null;
+
+    const nextState: FluidContainerState = JSON.parse(JSON.stringify(wrap.state));
+    const remMl = Math.max(0, Math.round(wrap.state.currentMl - amountMl));
+    if (remMl <= 1) {
+      nextState.currentMl = 0;
+      nextState.liquidId = null;
+      nextState.components = undefined;
+      nextState.attributes = undefined;
+    } else {
+      const remRatio = remMl / Math.max(1, wrap.state.currentMl);
+      nextState.currentMl = remMl;
+      if (nextState.components) {
+        nextState.components = nextState.components
+          .map((c) => ({ ...c, ml: Math.max(0, Math.round(c.ml * remRatio)) }))
+          .filter((c) => c.ml > 0);
+      }
+    }
+
+    const updatedContainer = applyEffectiveFluidToItem(item, nextState, wrap.temperatureC);
+    const totalUsedG = Math.round(entries.reduce((s, e) => s + e.grams, 0));
+    return {
+      entries,
+      leftoverItem: updatedContainer,
+      hasFlourBase,
+      hasWetBinder,
+      summaryLabel: `${entries[0].nameRu} (~${totalUsedG} г)`,
+    };
+  }
+
+  // Opened wrapper/pack containing solid dough ingredients (e.g. opened butter pack, cheese wrap, chocolate foil)
+  if (item.isContainer && item.isOpen && item.contents && item.contents.length > 0 && !item.fluidStorage) {
+    const inner = item.contents[0];
+    const innerProf = getSolidDoughProfile(inner);
+    if (innerProf) {
+      const frac = getKneadingSlotFraction(slot, gridSize);
+      const takeCount = Math.max(1, Math.min(item.contents.length, Math.round(item.contents.length * frac)));
+      const copy = cloneInventoryItem(item);
+      const taken = copy.contents!.splice(0, takeCount);
+      recalculateContainerWeight(copy);
+      const totalG = taken.reduce(
+        (sum, ch) =>
+          sum +
+          Math.max(
+            10,
+            Math.round(ch.produceAttributes?.weightGrams ?? (ch.weight ? ch.weight * 1000 : 100))
+          ),
+        0
+      );
+      const cleanName = inner.nameRu.replace(/\s*\([^)]*\)\s*$/g, '').trim() || inner.nameRu;
+      return {
+        entries: [
+          {
+            itemId: inner.originalCatalogId || inner.itemId,
+            nameRu: cleanName,
+            grams: totalG,
+            role: innerProf.role,
+            colorHex: innerProf.colorHex,
+          },
+        ],
+        leftoverItem: copy.contents && copy.contents.length > 0 ? copy : null,
+        hasFlourBase: innerProf.flourPct >= 25,
+        hasWetBinder: innerProf.waterPct >= 15 || innerProf.fatPct >= 40 || innerProf.eggPct >= 50,
+        summaryLabel: `${cleanName} (${totalG} г)`,
+      };
+    }
+  }
+
+  // Discrete solid ingredient (egg, butter, cottage cheese, chocolate, cheese, berries, beet, carrot, boiled potato, herbs, etc.)
+  const solidProf = getSolidDoughProfile(item);
+  if (!solidProf) return null;
+  if (item.isContainer && !item.isOpen && item.singleUseContainer) return null;
+
+  const baseG = Math.max(
+    10,
+    Math.round(
+      item.produceAttributes?.weightGrams ??
+        (item.weight ? item.weight * 1000 : solidProf.role === 'egg' ? 55 : 100)
+    )
+  );
+  const cleanName = item.nameRu.replace(/\s*\([^)]*\)\s*$/g, '').trim() || item.nameRu;
+  return {
+    entries: [
+      {
+        itemId: item.originalCatalogId || item.itemId,
+        nameRu: cleanName,
+        grams: baseG,
+        role: solidProf.role,
+        colorHex: solidProf.colorHex,
+      },
+    ],
+    leftoverItem: null,
+    hasFlourBase: solidProf.flourPct >= 25,
+    hasWetBinder: solidProf.waterPct >= 15 || solidProf.fatPct >= 40 || solidProf.eggPct >= 50,
+    summaryLabel: `${cleanName} (${baseG} г)`,
+  };
+}
+
+function tryEvaluateDoughSystem(
+  inputs: (InventoryItem | null)[],
+  gridSize: 4 | 16,
+  applyPourJitter: boolean
+): {
+  isValid: boolean;
+  kind: 'none' | 'craft_recipe';
+  title: string;
+  subtitle: string;
+  actionLabel: string;
+  previewOutputs: (InventoryItem | null)[];
+  transferDetails: InteractionTransferDetail[];
+  matchedRecipeId?: string;
+} | null {
+  const dosageLimit = gridSize === 4 ? 2 : 12;
+  const entries: { slot: number; item: InventoryItem }[] = [];
+  for (let i = 0; i < gridSize; i++) {
+    if (inputs[i]) entries.push({ slot: i, item: inputs[i]! });
+  }
+  if (entries.length === 0) return null;
+
+  // Never hijack knife cutting
+  if (entries.some((e) => isKnifeTool(e.item))) return null;
+
+  const pins = entries.filter((e) => isRollingPinItem(e.item));
+  const doughs = entries.filter((e) => e.item.itemId === 'dough' && Boolean(e.item.doughAttributes));
+  const others = entries.filter((e) => !isRollingPinItem(e.item) && !(e.item.itemId === 'dough' && Boolean(e.item.doughAttributes)));
+
+  // 1. ROLLING PIN + DOUGH (Раскатка скалкой по процентным слотам + узор!)
+  if (pins.length === 1 && doughs.length >= 1 && others.length === 0) {
+    const pinEntry = pins[0];
+    const produced: InventoryItem[] = [cloneInventoryItem(pinEntry.item)];
+    const subtitles: string[] = [];
+    let singleRes: ReturnType<typeof rollDoughWithPin> = null;
+
+    for (const d of doughs) {
+      if (d.item.doughAttributes!.cookState !== 'raw') {
+        return {
+          isValid: false,
+          kind: 'none',
+          title: 'Готовую выпечку нельзя раскатать',
+          subtitle: 'Скалка работает только с сырым незапечатанным тестом.',
+          actionLabel: 'Нельзя раскатать',
+          previewOutputs: Array.from({ length: gridSize }, () => null),
+          transferDetails: [],
+        };
+      }
+      if (d.item.doughAttributes!.consistency === 'batter') {
+        return {
+          isValid: false,
+          kind: 'none',
+          title: 'Тесто слишком жидкое для скалки',
+          subtitle: `Гидратация ${d.item.doughAttributes!.hydrationPct}% — вмешайте больше муки или сразу жарьте на сковороде как блины/оладьи.`,
+          actionLabel: 'Слишком жидкое',
+          previewOutputs: Array.from({ length: gridSize }, () => null),
+          transferDetails: [],
+        };
+      }
+      if (d.item.doughAttributes!.isFolded) {
+        return {
+          isValid: false,
+          kind: 'none',
+          title: 'Свёрнутое изделие нельзя раскатать',
+          subtitle: 'Изделие уже запечатано. Чтобы изменить заготовку, переформуйте или разрежьте ножом.',
+          actionLabel: 'Уже свёрнуто',
+          previewOutputs: Array.from({ length: gridSize }, () => null),
+          transferDetails: [],
+        };
+      }
+      const activeSlot = d.slot < dosageLimit ? d.slot : pinEntry.slot < dosageLimit ? pinEntry.slot : null;
+      const frac = activeSlot !== null ? getSlotPourDosageFraction(activeSlot, gridSize) : 0.65;
+      const res = rollDoughWithPin(d.item, pinEntry.item, frac, applyPourJitter);
+      if (!res) return null;
+      singleRes = res;
+      produced.push(res.result);
+      subtitles.push(res.subtitle);
+    }
+
+    return {
+      isValid: true,
+      kind: 'craft_recipe',
+      title: doughs.length === 1 && singleRes ? singleRes.title : `Раскатка теста скалкой (${doughs.length} шт.)`,
+      subtitle: subtitles.slice(0, 2).join(' · '),
+      actionLabel: doughs.length === 1 && singleRes ? singleRes.actionLabel : 'Раскатать всё',
+      previewOutputs: packOutputsIntoSlots(produced, gridSize),
+      transferDetails: [],
+      matchedRecipeId: 'craft_roll_dough_pin',
+    };
+  }
+
+  // 2. SOLO RAW DOUGH -> SHAPE OR FOLD ACCORDING TO SLOT INDEX!
+  if (entries.length === 1 && doughs.length === 1 && isRawDoughItem(doughs[0].item)) {
+    const shaped = shapeDoughBySlot(doughs[0].item, doughs[0].slot, gridSize);
+    if (shaped) {
+      return {
+        isValid: true,
+        kind: 'craft_recipe',
+        title: shaped.title,
+        subtitle: shaped.subtitle,
+        actionLabel: shaped.actionLabel,
+        previewOutputs: packOutputsIntoSlots([shaped.result], gridSize),
+        transferDetails: [],
+        matchedRecipeId: 'craft_shape_dough_slot',
+      };
+    }
+    return null;
+  }
+
+  // 3. SOLO BOWL / POT ALREADY CONTAINING MIXED FLOUR + LIQUID -> KNEAD DOUGH OUT OF VESSEL!
+  if (entries.length === 1 && doughs.length === 0 && pins.length === 0) {
+    const vessel = entries[0].item;
+    const wrap = getEffectiveFluidWrapper(vessel);
+    if (
+      wrap &&
+      wrap.isOpened &&
+      DOUGH_MIXING_VESSEL_IDS.has(vessel.itemId) &&
+      (wrap.state.currentMl >= 30 || (vessel.contents && vessel.contents.length > 0))
+    ) {
+      const ingList: DoughIngredientEntry[] = [];
+      let hasFlour = false;
+      let hasWet = false;
+      let validAll = true;
+
+      if (wrap.state.currentMl >= 5 && wrap.state.liquidId) {
+        const comps =
+          wrap.state.components && wrap.state.components.length > 0
+            ? wrap.state.components
+            : [
+                {
+                  liquidId: wrap.state.liquidId,
+                  ml: wrap.state.currentMl,
+                  labelRu: wrap.state.attributes?.varietyRu || LIQUID_REGISTRY[wrap.state.liquidId as LiquidId]?.nameRu || wrap.state.liquidId,
+                  color: wrap.state.attributes?.customColor || LIQUID_REGISTRY[wrap.state.liquidId as LiquidId]?.color || '#f6eedb',
+                },
+              ];
+        for (const c of comps) {
+          if (c.ml <= 0) continue;
+          const prof = getFluidDoughProfile(c.liquidId, c.liquidId, c.color, c.labelRu);
+          if (!prof) {
+            validAll = false;
+            break;
+          }
+          const isDry = prof.role === 'flour' || prof.role === 'starch' || prof.role === 'sugar' || prof.role === 'salt';
+          const grams = Math.max(1, Math.round(c.ml * (isDry ? 0.72 : 1.0)));
+          if (prof.flourPct >= 30) hasFlour = true;
+          if (prof.waterPct >= 15 || prof.fatPct >= 40 || prof.eggPct >= 50) hasWet = true;
+          ingList.push({
+            itemId: c.liquidId,
+            nameRu: (c.labelRu || c.liquidId).replace(/\s*\([^)]*\)\s*$/g, '').trim(),
+            grams,
+            role: prof.role,
+            colorHex: prof.colorHex,
+          });
+        }
+      }
+
+      if (validAll && vessel.contents && vessel.contents.length > 0) {
+        for (const ch of vessel.contents) {
+          const sp = getSolidDoughProfile(ch);
+          if (!sp) {
+            validAll = false;
+            break;
+          }
+          const g = Math.max(10, Math.round(ch.produceAttributes?.weightGrams ?? (ch.weight ? ch.weight * 1000 : 60)));
+          if (sp.flourPct >= 25) hasFlour = true;
+          if (sp.waterPct >= 15 || sp.fatPct >= 40 || sp.eggPct >= 50) hasWet = true;
+          ingList.push({
+            itemId: ch.originalCatalogId || ch.itemId,
+            nameRu: ch.nameRu.replace(/\s*\([^)]*\)\s*$/g, '').trim(),
+            grams: g,
+            role: sp.role,
+            colorHex: sp.colorHex,
+          });
+        }
+      }
+
+      if (validAll && hasFlour && hasWet && ingList.length >= 2) {
+        const cleanVessel = cloneInventoryItem(vessel);
+        if (cleanVessel.fluidStorage) {
+          cleanVessel.fluidStorage.currentMl = 0;
+          cleanVessel.fluidStorage.liquidId = null;
+          cleanVessel.fluidStorage.components = undefined;
+          cleanVessel.fluidStorage.attributes = undefined;
+          cleanVessel.fluidStorage.infusedItems = undefined;
+        }
+        if (cleanVessel.contents) cleanVessel.contents = [];
+        syncItemContainerProperties(cleanVessel);
+
+        const newDough = createItem('dough', 1, undefined, true);
+        const attrs = synthesizeDoughAttributes(ingList);
+        applyDoughAttributesToItem(newDough, attrs);
+
+        return {
+          isValid: true,
+          kind: 'craft_recipe',
+          title: `Замесить: ${attrs.doughTypeRu}`,
+          subtitle: `${attrs.weightGrams} г · гидратация ${attrs.hydrationPct}% · ${attrs.colorNameRu.toLowerCase()} · ${attrs.consistencyRu.toLowerCase()}`,
+          actionLabel: 'Замесить из посуды',
+          previewOutputs: packOutputsIntoSlots([newDough, cleanVessel], gridSize),
+          transferDetails: [],
+          matchedRecipeId: 'craft_knead_dough_bowl',
+        };
+      }
+    }
+  }
+
+  // 4. MERGING 2+ RAW DOUGH PIECES TOGETHER
+  if (doughs.length >= 2 && others.length === 0 && pins.length === 0 && doughs.every((d) => isRawDoughItem(d.item))) {
+    const combinedIngs: DoughIngredientEntry[] = [];
+    const combinedFillings: DoughFillingEntry[] = [];
+    for (const d of doughs) {
+      combinedIngs.push(...d.item.doughAttributes!.ingredients);
+      combinedFillings.push(...d.item.doughAttributes!.fillings);
+    }
+    const merged = createItem('dough', 1, undefined, true);
+    const attrs = synthesizeDoughAttributes(combinedIngs, {
+      shape: combinedFillings.length > 0 ? 'flatbread' : 'lump',
+      fillings: combinedFillings,
+    });
+    applyDoughAttributesToItem(merged, attrs);
+    return {
+      isValid: true,
+      kind: 'craft_recipe',
+      title: `Слепить тесто вместе (${doughs.length} куска)`,
+      subtitle: `${attrs.doughTypeRu} · ${attrs.weightGrams + attrs.fillingGrams} г · ${attrs.colorNameRu.toLowerCase()}`,
+      actionLabel: 'Слепить в один ком',
+      previewOutputs: packOutputsIntoSlots([merged], gridSize),
+      transferDetails: [],
+      matchedRecipeId: 'craft_merge_dough',
+    };
+  }
+
+  // 5. EXISTING RAW DOUGH + FILLINGS OR EXTRA KNEADING INGREDIENTS
+  if (doughs.length === 1 && others.length >= 1 && pins.length === 0 && isRawDoughItem(doughs[0].item)) {
+    const baseDough = doughs[0].item;
+    const da = baseDough.doughAttributes!;
+
+    // Check if ALL other items are pure core kneading adjustments (flour, water, milk, oil, butter, salt, sugar, sourdough, cocoa, egg)
+    // AND either dough is still unrolled (`lump`/`ball`) OR an ingredient is flour/water/sourdough/salt!
+    const extractedAll = others.map((o) => extractDoughIngredientFromEntry(o.item, o.slot, gridSize, applyPourJitter));
+    const allExtractableForKnead = extractedAll.every((x) => x !== null);
+    const hasCoreDoughModifier = extractedAll.some(
+      (x) =>
+        x &&
+        x.entries.some(
+          (e) => e.role === 'flour' || e.role === 'starch' || e.role === 'liquid' || e.role === 'leavening' || e.role === 'salt'
+        )
+    );
+    const preferKneadIntoDough =
+      allExtractableForKnead &&
+      da.fillings.length === 0 &&
+      (!isOpenReceivableShape(da.shape) || hasCoreDoughModifier);
+
+    if (preferKneadIntoDough) {
+      const nextIngs: DoughIngredientEntry[] = [...da.ingredients];
+      const leftovers: InventoryItem[] = [];
+      const addedLabels: string[] = [];
+      for (const ext of extractedAll) {
+        if (!ext) continue;
+        nextIngs.push(...ext.entries);
+        if (ext.leftoverItem) leftovers.push(ext.leftoverItem);
+        addedLabels.push(ext.summaryLabel);
+      }
+      const updated = cloneInventoryItem(baseDough);
+      const attrs = synthesizeDoughAttributes(nextIngs, {
+        shape: da.shape,
+        rolledPasses: da.rolledPasses,
+        embossedPattern: da.embossedPattern,
+        embossedPatternRu: da.embossedPatternRu,
+        fillings: da.fillings,
+      });
+      applyDoughAttributesToItem(updated, attrs);
+      return {
+        isValid: true,
+        kind: 'craft_recipe',
+        title: `Вмесить в тесто: ${attrs.doughTypeRu}`,
+        subtitle: `Добавлено: ${addedLabels.slice(0, 2).join(', ')} · вес ${attrs.weightGrams} г, гидратация ${attrs.hydrationPct}%, цвет: ${attrs.colorNameRu.toLowerCase()}`,
+        actionLabel: 'Вмесить в тесто',
+        previewOutputs: packOutputsIntoSlots([updated, ...leftovers], gridSize),
+        transferDetails: [],
+        matchedRecipeId: 'craft_knead_add_to_dough',
+      };
+    }
+
+    // Otherwise: try placing edible items / spreads as FILLING inside the dough (with strict capacity check!)
+    const allFoodOrSpread = others.every(
+      (o) =>
+        (o.item.category === 'food' || o.item.category === 'drink') &&
+        o.item.produceAttributes?.edible !== false &&
+        !DOUGH_MIXING_VESSEL_IDS.has(o.item.itemId)
+    );
+
+    if (allFoodOrSpread) {
+      if (da.isFolded) {
+        return {
+          isValid: false,
+          kind: 'none',
+          title: 'Изделие уже свёрнуто',
+          subtitle: 'В запечатанный пирожок/вареник нельзя доложить начинку — положите начинку на лепёшку, пласт или открытый пирог.',
+          actionLabel: 'Тесто закрыто',
+          previewOutputs: Array.from({ length: gridSize }, () => null),
+          transferDetails: [],
+        };
+      }
+      const availCap = Math.max(0, da.maxFillingGrams - da.fillingGrams);
+      if (availCap <= 0) {
+        return {
+          isValid: false,
+          kind: 'none',
+          title: 'Начинка не вместится в эту форму',
+          subtitle:
+            da.maxFillingGrams === 0
+              ? `В форму «${da.shapeNameRu}» нельзя положить начинку — разомните в лепёшку или раскатайте скалкой.`
+              : `Тесто уже заполнено начинкой (${da.fillingGrams}/${da.maxFillingGrams} г). Раскатайте пласт шире или сверните изделие.`,
+          actionLabel: 'Нет места под начинку',
+          previewOutputs: Array.from({ length: gridSize }, () => null),
+          transferDetails: [],
+        };
+      }
+
+      let remainingCap = availCap;
+      const newFillings: DoughFillingEntry[] = [...da.fillings];
+      const leftovers: InventoryItem[] = [];
+      const addedNames: string[] = [];
+
+      for (const o of others) {
+        const wrap = getEffectiveFluidWrapper(o.item);
+        // Spread / sauce / jam / honey / sour cream / condensed milk container -> dose what fits!
+        if (wrap && wrap.state.currentMl >= 5 && wrap.state.liquidId) {
+          if (!wrap.isOpened) {
+            return {
+              isValid: false,
+              kind: 'none',
+              title: 'Банка с начинкой закрыта',
+              subtitle: `Сначала откройте «${o.item.nameRu}», чтобы выложить начинку на тесто.`,
+              actionLabel: 'Тара закрыта',
+              previewOutputs: Array.from({ length: gridSize }, () => null),
+              transferDetails: [],
+            };
+          }
+          const frac = getKneadingSlotFraction(o.slot, gridSize);
+          const desired = computeDosedPourMl(wrap.state.currentMl, frac, applyPourJitter).amountMl;
+          const takeG = Math.min(remainingCap, desired);
+          if (takeG < 5) {
+            return {
+              isValid: false,
+              kind: 'none',
+              title: 'Начинка не помещается',
+              subtitle: `Осталось места всего ${remainingCap} г из ${da.maxFillingGrams} г. Раскатайте тесто шире или добавьте больше теста.`,
+              actionLabel: 'Не вмещается',
+              previewOutputs: Array.from({ length: gridSize }, () => null),
+              transferDetails: [],
+            };
+          }
+          const fillEntry = buildFillingEntryFromItem(o.item, takeG);
+          if (!fillEntry) return null;
+          newFillings.push(fillEntry);
+          addedNames.push(`${fillEntry.nameRu} (${takeG} г)`);
+          remainingCap -= takeG;
+
+          const nextSt: FluidContainerState = JSON.parse(JSON.stringify(wrap.state));
+          nextSt.currentMl = Math.max(0, Math.round(wrap.state.currentMl - takeG));
+          if (nextSt.currentMl <= 1) {
+            nextSt.currentMl = 0;
+            nextSt.liquidId = null;
+            nextSt.components = undefined;
+          }
+          leftovers.push(applyEffectiveFluidToItem(o.item, nextSt, wrap.temperatureC));
+          continue;
+        }
+
+        // Discrete solid filling (meat cut, minced meat, cheese, sliced produce, mushrooms, berries, etc.)
+        const itemGrams = Math.max(
+          5,
+          Math.round(o.item.produceAttributes?.weightGrams ?? o.item.meatAttributes?.weightGrams ?? (o.item.weight ? o.item.weight * 1000 : 60))
+        );
+        if (itemGrams > remainingCap) {
+          return {
+            isValid: false,
+            kind: 'none',
+            title: `Начинка слишком велика (${itemGrams} г > ${remainingCap} г)`,
+            subtitle: `В «${da.shapeNameRu}» (Ø${da.diameterCm} см) помещается ещё ${remainingCap} г начинки. Нарежьте «${o.item.nameRu}» ножом помельче или раскатайте тесто шире скалкой.`,
+            actionLabel: 'Не вмещается',
+            previewOutputs: Array.from({ length: gridSize }, () => null),
+            transferDetails: [],
+          };
+        }
+
+        const fillEntry = buildFillingEntryFromItem(o.item, itemGrams);
+        if (!fillEntry) return null;
+        newFillings.push(fillEntry);
+        addedNames.push(`${fillEntry.nameRu} (${itemGrams} г)`);
+        remainingCap -= itemGrams;
+      }
+
+      const updated = cloneInventoryItem(baseDough);
+      const nextShape = da.shape === 'lump' || da.shape === 'ball' ? 'flatbread' : da.shape;
+      const attrs = synthesizeDoughAttributes(da.ingredients, {
+        shape: nextShape,
+        rolledPasses: da.rolledPasses,
+        overrideThicknessMm: nextShape === da.shape ? da.thicknessMm : undefined,
+        embossedPattern: da.embossedPattern,
+        embossedPatternRu: da.embossedPatternRu,
+        fillings: newFillings,
+        baseMassGrams: da.baseMassGrams,
+      });
+      applyDoughAttributesToItem(updated, attrs);
+
+      return {
+        isValid: true,
+        kind: 'craft_recipe',
+        title: `Уложить начинку в тесто (${attrs.fillingGrams}/${attrs.maxFillingGrams} г)`,
+        subtitle: `Начинка: ${addedNames.slice(0, 2).join(', ')}. После укладки можно запечь открытым или свернуть в слоте сетки.`,
+        actionLabel: 'Положить начинку',
+        previewOutputs: packOutputsIntoSlots([updated, ...leftovers], gridSize),
+        transferDetails: [],
+        matchedRecipeId: 'craft_fill_dough',
+      };
+    }
+  }
+
+  // 6. FRESH DOUGH KNEADING FROM ANY SUITABLE INGREDIENTS IN ANY PROPORTION!
+  if (doughs.length === 0 && pins.length === 0 && entries.length >= 2) {
+    // Non-collision guard: if user put an empty/open mixing bowl/pot/cup in the bottom row specifically to pour into it, let pouring run!
+    const cols = gridSize === 16 ? 4 : 2;
+    const rows = gridSize === 16 ? 4 : 2;
+    const bottomRowStart = (rows - 1) * cols;
+    const hasBottomMixingVessel = entries.some(
+      (e) => e.slot >= bottomRowStart && DOUGH_MIXING_VESSEL_IDS.has(e.item.itemId) && canItemActAsTargetReceiver(e.item)
+    );
+    if (hasBottomMixingVessel) {
+      return null;
+    }
+
+    const allIngs: DoughIngredientEntry[] = [];
+    const leftovers: InventoryItem[] = [];
+    const labels: string[] = [];
+    let hasFlourBase = false;
+    let hasWetBinder = false;
+
+    for (const e of entries) {
+      const ext = extractDoughIngredientFromEntry(e.item, e.slot, gridSize, applyPourJitter);
+      if (!ext) return null;
+      allIngs.push(...ext.entries);
+      if (ext.leftoverItem) leftovers.push(ext.leftoverItem);
+      labels.push(ext.summaryLabel);
+      if (ext.hasFlourBase) hasFlourBase = true;
+      if (ext.hasWetBinder) hasWetBinder = true;
+    }
+
+    if (hasFlourBase && hasWetBinder && allIngs.length >= 2) {
+      const freshDough = createItem('dough', 1, undefined, true);
+      const attrs = synthesizeDoughAttributes(allIngs);
+      applyDoughAttributesToItem(freshDough, attrs);
+
+      return {
+        isValid: true,
+        kind: 'craft_recipe',
+        title: `Замесить: ${attrs.doughTypeRu}`,
+        subtitle: `${labels.slice(0, 3).join(' + ')} → ${attrs.weightGrams} г, гидратация ${attrs.hydrationPct}%, ${attrs.colorNameRu.toLowerCase()}`,
+        actionLabel: 'Замесить тесто',
+        previewOutputs: packOutputsIntoSlots([freshDough, ...leftovers], gridSize),
+        transferDetails: [],
+        matchedRecipeId: 'craft_knead_dough_free',
+      };
+    }
+  }
+
+  return null;
+}
+
 /**
  * Evaluates the 4 input slots (`[0, 1]` = Top Row, `[2, 3]` = Bottom Row) and returns
  * the resulting 4 output slots (`previewOutputs`) along with detailed transfer/craft info.
@@ -2240,6 +3485,20 @@ export function evaluateInteractionGrid(
         cutOrPluck.previewOutputs[1] || null,
         cutOrPluck.previewOutputs[2] || null,
         cutOrPluck.previewOutputs[3] || null,
+      ],
+    };
+  }
+
+  // 1.6. Universal Dough System (kneading in any proportion, rolling pin, slot shaping/folding, capacity-checked filling)
+  const doughRes = tryEvaluateDoughSystem(inputs, 4, applyPourJitter);
+  if (doughRes) {
+    return {
+      ...doughRes,
+      previewOutputs: [
+        doughRes.previewOutputs[0] || null,
+        doughRes.previewOutputs[1] || null,
+        doughRes.previewOutputs[2] || null,
+        doughRes.previewOutputs[3] || null,
       ],
     };
   }
@@ -2472,6 +3731,12 @@ export function evaluateInteractionGrid4x4(
   const cutOrPluck16 = tryEvaluateKnifeCuttingAndBranchPlucking(inputs, 16, applyPourJitter);
   if (cutOrPluck16) {
     return cutOrPluck16;
+  }
+
+  // 1.6. Universal Dough System across 4x4 (kneading, rolling pin, 16-slot artisan shaping/folding, fillings)
+  const doughRes16 = tryEvaluateDoughSystem(inputs, 16, applyPourJitter);
+  if (doughRes16) {
+    return doughRes16;
   }
 
   // 2. Multi-source top-to-bottom pouring / mixing / discrete transfers across 4x4 with slot dosage

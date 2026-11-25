@@ -48,7 +48,15 @@ function buildItemVisualStateKey(item: any): string {
     }
     childKey = parts.join(';');
   }
-  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${cdKey}|${fsKey}|${childKey}`;
+  const da = item.doughAttributes;
+  const daKey = da
+    ? `${da.shape}:${da.color}:${da.cookState}:${da.embossedPattern || ''}:${da.fillings?.length || 0}:${Math.round(da.thicknessMm || 0)}:${Math.round((da.riseFactor || 1) * 10)}`
+    : '';
+  const rp = item.rollingPinAttributes;
+  const rpKey = rp
+    ? `${rp.modelId}:${rp.shape}:${rp.color}:${rp.pattern}`
+    : '';
+  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${cdKey}|${fsKey}|${childKey}|${daKey}|${rpKey}`;
 }
 
 export const ItemIconCanvas: React.FC<ItemIconCanvasProps> = ({
