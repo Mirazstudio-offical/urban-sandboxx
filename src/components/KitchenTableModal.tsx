@@ -1173,7 +1173,7 @@ const KitchenTableModalContent: React.FC<{
             <Layers width={16} height={16} />
             <span>Взаимодействие на столе</span>
           </span>
-          <span className="kf-col-meta">Дозировка: 1-й слот всё → ~8% на глаз</span>
+          <span className="kf-col-meta">Слив и нарезка: 1-й слот всё → ~8% на глаз</span>
         </div>
 
         <div className="kf-wb-body">

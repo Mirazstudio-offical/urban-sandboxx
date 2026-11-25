@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, PhoneAttributes, HardwareComponentKind, HardwareComponentAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, PhoneAttributes, HardwareComponentKind, HardwareComponentAttributes, ProduceAttributes, PlantBranchAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
 import { sound } from './audio';
 import {
   getPhoneSpecsForItemId,
@@ -10,6 +10,17 @@ import {
   getDefaultHardwareAttributes,
   hexToRgb
 } from './phoneData';
+import {
+  PRODUCE_SPECIES_SPECS,
+  LEGACY_PRODUCE_PRESETS,
+  LEGACY_BRANCH_PRESETS,
+  isProduceSpeciesId,
+  buildProduceAttributes,
+  applyProduceAttributesToItem,
+  buildBranchAttributes,
+  applyBranchAttributesToItem,
+  computeBranchTotalWeightKg,
+} from './produceData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
 import {
   administerMedication,
@@ -75,6 +86,7 @@ export interface ItemPackagingConfig {
   innerGummyPresets?: Partial<GummyCandyAttributes>[];
   innerPelmenPresets?: Partial<PelmenAttributes>[];
   innerChocolatePresets?: Partial<ChocolateAttributes>[];
+  innerProduceOverrides?: Partial<ProduceAttributes>;
 }
 
 export interface ItemFluidContainerConfig {
@@ -142,6 +154,8 @@ export interface ItemDefinition {
   kitchenwareAttributes?: KitchenwareAttributes;
   phoneAttributes?: PhoneAttributes;
   hardwareAttributes?: HardwareComponentAttributes;
+  produceAttributes?: ProduceAttributes;
+  branchAttributes?: PlantBranchAttributes;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -613,38 +627,21 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     biteDuration: 1.0,
     fullnessPerBite: 4
   },
-  // === FRESH PRODUCE (СВЕЖИЕ ОВОЩИ И КОРНЕПЛОДЫ) ===
-  carrot_fresh: {
-    itemId: 'carrot_fresh',
-    name: 'Fresh Orange Carrot',
-    nameRu: 'Морковь свежая',
-    category: 'food',
-    maxStack: 5,
+  // === UNIFIED PLANT BRANCH / CLUSTER / BUNCH (ВЕТКА / ГРОЗДЬ / ПУЧОК) ===
+  plant_branch: {
+    itemId: 'plant_branch',
+    name: 'Plant Branch',
+    nameRu: 'Ветка',
+    category: 'misc',
+    maxStack: 1,
     icon: '',
-    description: 'Crisp juicy fresh orange carrot.',
-    descriptionRu: 'Сочная мытая сладкая морковь. Источник каротина.',
-    effects: { hunger: 12, health: 3 },
-    weight: 0.15,
-    volume: 0.15,
-    usable: true,
-    biteCount: 4,
-    biteDuration: 0.8
-  },
-  beet_fresh: {
-    itemId: 'beet_fresh',
-    name: 'Fresh Red Beetroot',
-    nameRu: 'Свекла',
-    category: 'food',
-    maxStack: 5,
-    icon: '',
-    description: 'Fresh red beetroot for soups, salads, and cooking.',
-    descriptionRu: 'Плотный сладковатый корнеплод бордовой свеклы для борща и салатов.',
-    effects: { hunger: 15, health: 4 },
-    weight: 0.25,
-    volume: 0.25,
-    usable: true,
-    biteCount: 5,
-    biteDuration: 0.8
+    description: 'Natural plant branch, twig, vine, or cluster that can carry fruits, berries, vegetables, or mushrooms.',
+    descriptionRu: 'Растительная ветка, веточка или гроздь с размером, материалом и прикреплёнными плодами. Плоды можно срывать или срезать ножом.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.02,
+    usable: false,
+    branchAttributes: buildBranchAttributes()
   },
   medkit: {
     itemId: 'medkit',
@@ -1681,32 +1678,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
 
   // === LEFTOVERS (ОСТАТКИ ПОСЛЕ ЕДЫ) ===
-  banana_peel: {
-    itemId: 'banana_peel',
-    name: 'Banana Peel',
-    nameRu: 'Банановая кожура',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Slippery yellow banana peel. Throw into trash bin.',
-    descriptionRu: 'Скользкая банановая кожура. Выбросьте в урну.',
-    effects: {},
-    weight: 0.03,
-    usable: false
-  },
-  apple_core: {
-    itemId: 'apple_core',
-    name: 'Apple Core',
-    nameRu: 'Огрызок яблока',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Brown oxidized apple core. Throw in trash.',
-    descriptionRu: 'Бурый окислившийся огрызок. Выбросьте в урну.',
-    effects: {},
-    weight: 0.02,
-    usable: false
-  },
   medkit_empty: {
     itemId: 'medkit_empty',
     name: 'Empty First Aid Box',
@@ -4355,16 +4326,16 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
   berry_redcurrant_single: {
     itemId: 'berry_redcurrant_single',
-    name: 'Redcurrant Sprig',
-    nameRu: 'Гроздь красной смородины',
+    name: 'Redcurrant Berry',
+    nameRu: 'Ягода красной смородины',
     category: 'food',
     maxStack: 30,
     icon: '',
-    description: 'Translucent ruby redcurrant sprig.',
-    descriptionRu: 'Прозрачно-рубиновая веточка красной смородины с освежающей кислинкой.',
+    description: 'Translucent ruby redcurrant berry.',
+    descriptionRu: 'Прозрачно-рубиновая ягода красной смородины с освежающей кислинкой.',
     effects: { hunger: 3, thirst: 4, health: 2 },
-    weight: 0.015,
-    volume: 0.02,
+    weight: 0.006,
+    volume: 0.01,
     usable: true,
     biteCount: 1,
     fullnessPerBite: 1
@@ -4419,16 +4390,16 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
   berry_elderberry_single: {
     itemId: 'berry_elderberry_single',
-    name: 'Black Elderberry Sprig',
+    name: 'Black Elderberry',
     nameRu: 'Ягода чёрной бузины',
     category: 'food',
     maxStack: 35,
     icon: '',
-    description: 'Tiny glossy dark purple elderberry cluster.',
-    descriptionRu: 'Блестящие тёмно-бордовые ягодки чёрной бузины на красных веточках.',
+    description: 'Tiny glossy dark purple elderberry.',
+    descriptionRu: 'Блестящая тёмно-бордовая ягода чёрной бузины.',
     effects: { hunger: 2, thirst: 2, health: 3 },
-    weight: 0.01,
-    volume: 0.012,
+    weight: 0.005,
+    volume: 0.008,
     usable: true,
     biteCount: 1,
     fullnessPerBite: 1
@@ -4899,6 +4870,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
   ...COOKING_INGREDIENTS_CATALOG
 };
+
+for (const speciesId of Object.keys(PRODUCE_SPECIES_SPECS)) {
+  const def = ITEM_CATALOG[speciesId];
+  if (def && !def.produceAttributes) {
+    def.produceAttributes = buildProduceAttributes(speciesId);
+  }
+}
 
 let itemCounter = 100;
 
@@ -5922,6 +5900,32 @@ export function getResolvedFluidContainerConfig(rawItemId: string): ItemFluidCon
   return fromMap;
 }
 
+export {
+  PRODUCE_SPECIES_SPECS,
+  LEGACY_PRODUCE_PRESETS,
+  LEGACY_BRANCH_PRESETS,
+  applyProduceAttributesToItem,
+  applyBranchAttributesToItem,
+};
+
+export function createProduceItem(
+  speciesId: string,
+  overrides?: Partial<ProduceAttributes>
+): InventoryItem {
+  const item = createItem(speciesId, 1, undefined, true);
+  applyProduceAttributesToItem(item, overrides);
+  return normalizeItemAttributes(item);
+}
+
+export function createPlantBranch(
+  presetId?: string,
+  overrides?: Partial<PlantBranchAttributes>
+): InventoryItem {
+  const item = createItem('plant_branch', 1, undefined, true);
+  applyBranchAttributesToItem(item, overrides, presetId);
+  return normalizeItemAttributes(item);
+}
+
 export function createItem(rawItemId: string, count: number = 1, initialPortions?: number, rawCatalogOnly?: boolean): InventoryItem {
   const legacyKw = LEGACY_KITCHENWARE_PRESETS[rawItemId];
   if (legacyKw) {
@@ -5944,6 +5948,24 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
   // instantiate the unified container holding the standalone inner items unless rawCatalogOnly is requested.
   if (!rawCatalogOnly && getResolvedPackagingConfig(itemId)) {
     return createPackagedItem(itemId, count);
+  }
+
+  // Unified Produce Legacy Presets (all cut/peeled/grated/diced/color/peel/core variants -> single species + produceAttributes)
+  const legacyProduce = LEGACY_PRODUCE_PRESETS[rawItemId] || LEGACY_PRODUCE_PRESETS[itemId];
+  if (legacyProduce) {
+    const prodItem = createItem(legacyProduce.speciesId, count, initialPortions, true);
+    applyProduceAttributesToItem(prodItem, legacyProduce.overrides);
+    prodItem.originalCatalogId = rawItemId;
+    return normalizeItemAttributes(prodItem);
+  }
+
+  // Unified Plant Branch Legacy Presets (bunches, clusters, vines, sprigs -> plant_branch + branchAttributes)
+  const legacyBranchKey = LEGACY_BRANCH_PRESETS[rawItemId] ? rawItemId : (LEGACY_BRANCH_PRESETS[itemId] ? itemId : null);
+  if (legacyBranchKey) {
+    const brItem = createItem('plant_branch', count, undefined, true);
+    applyBranchAttributesToItem(brItem, undefined, legacyBranchKey);
+    brItem.originalCatalogId = rawItemId;
+    return normalizeItemAttributes(brItem);
   }
 
   const discreteAlias = LEGACY_DISCRETE_CONTAINER_ALIASES[itemId] || LEGACY_DISCRETE_CONTAINER_ALIASES[rawItemId];
@@ -6163,6 +6185,12 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
   if (tempSource.surfaceTemperature !== undefined) {
     createdItem.surfaceTemperature = tempSource.surfaceTemperature;
   }
+  if (isProduceSpeciesId(resolvedItemId) && !createdItem.produceAttributes) {
+    applyProduceAttributesToItem(createdItem);
+  } else if (resolvedItemId === 'plant_branch' && !createdItem.branchAttributes) {
+    applyBranchAttributesToItem(createdItem);
+  }
+
   initItemThermalProperties(createdItem, 20.0);
 
   return normalizeItemAttributes(createdItem, originalDef || def);
@@ -6257,6 +6285,25 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     }
   } else if (HARDWARE_COMPONENT_KIND_SET.has(item.itemId) && !item.hardwareAttributes) {
     item.hardwareAttributes = getDefaultHardwareAttributes(item.itemId as HardwareComponentKind);
+  }
+
+  // Seamless migration of legacy produce items & bunches from older saves into unified species / plant_branch
+  const legacyProdPreset = LEGACY_PRODUCE_PRESETS[item.itemId];
+  if (legacyProdPreset) {
+    item.originalCatalogId = item.originalCatalogId || item.itemId;
+    item.itemId = legacyProdPreset.speciesId;
+    applyProduceAttributesToItem(item, legacyProdPreset.overrides);
+  } else if (LEGACY_BRANCH_PRESETS[item.itemId]) {
+    const legacyBrId = item.itemId;
+    item.originalCatalogId = item.originalCatalogId || legacyBrId;
+    item.itemId = 'plant_branch';
+    if (!item.branchAttributes) {
+      applyBranchAttributesToItem(item, undefined, legacyBrId);
+    }
+  } else if (isProduceSpeciesId(item.itemId) && !item.produceAttributes) {
+    applyProduceAttributesToItem(item);
+  } else if (item.itemId === 'plant_branch' && !item.branchAttributes) {
+    applyBranchAttributesToItem(item);
   }
 
   if (item.originalCatalogId && LEGACY_SUBSTANCE_ID_ALIASES[item.originalCatalogId]) {
@@ -6597,6 +6644,80 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     }
   }
 
+  // 4.7. Unified Produce & Plant Branch Attributes (сочность, вес, размер, нарезка, часть/модель, плоды на ветке)
+  let juiciness = prevAttrs.juiciness ?? defAttrs.juiciness;
+  let weightGrams = prevAttrs.weightGrams ?? defAttrs.weightGrams;
+  let cutForm = prevAttrs.cutForm || defAttrs.cutForm;
+  let cutFormRu = prevAttrs.cutFormRu || defAttrs.cutFormRu;
+  let part = prevAttrs.part || defAttrs.part;
+  let partNameRu = prevAttrs.partNameRu || defAttrs.partNameRu;
+  let isPeeled = prevAttrs.isPeeled ?? defAttrs.isPeeled;
+  let isDried = prevAttrs.isDried ?? defAttrs.isDried;
+  let branchKindRu = prevAttrs.branchKindRu || defAttrs.branchKindRu;
+  let attachedFruitNameRu = prevAttrs.attachedFruitNameRu || defAttrs.attachedFruitNameRu;
+  let attachedFruitCount = prevAttrs.attachedFruitCount ?? defAttrs.attachedFruitCount;
+
+  if (item.produceAttributes) {
+    const pr = item.produceAttributes;
+    varietyRu = pr.varietyRu;
+    juiciness = pr.juiciness;
+    weightGrams = pr.weightGrams;
+    cutForm = pr.cutForm;
+    cutFormRu = pr.cutFormRu;
+    part = pr.part;
+    partNameRu = pr.partNameRu;
+    isPeeled = pr.isPeeled;
+    isDried = pr.isDried;
+    size = pr.size;
+    sizeNameRu = pr.sizeNameRu;
+    dimensionCm = pr.dimensionCm;
+    visuals.color = pr.color;
+    visuals.colorNameRu = pr.colorNameRu;
+    visuals.secondaryColor = pr.fleshColor;
+    visuals.size = pr.size;
+    visuals.sizeNameRu = pr.sizeNameRu;
+    visuals.shapeNameRu = `${pr.cutFormRu} · ${pr.partNameRu}`;
+    if (!stateNameRu) {
+      stateNameRu = pr.isDried
+        ? 'Сушёный'
+        : pr.isBoiled
+        ? 'Отварной'
+        : pr.isPeeled
+        ? 'Очищенный свежий'
+        : 'Свежий';
+    }
+    if (!purpose) {
+      purpose = pr.edible === false
+        ? 'Несъедобный растительный остаток (кожура / огрызок)'
+        : 'Свежий продукт для еды, салатов, нарезки ножом и готовки';
+    }
+  } else if (item.branchAttributes) {
+    const br = item.branchAttributes;
+    branchKindRu = br.branchKindRu;
+    size = br.size;
+    sizeNameRu = br.sizeNameRu;
+    dimensionCm = br.lengthCm;
+    weightGrams = Math.round(computeBranchTotalWeightKg(br) * 1000);
+    visuals.color = br.color;
+    visuals.colorNameRu = br.colorNameRu;
+    visuals.materialNameRu = br.materialRu;
+    visuals.size = br.size;
+    visuals.sizeNameRu = br.sizeNameRu;
+    visuals.shapeNameRu = br.branchKindRu;
+    if (br.attachedFruit && br.attachedFruit.count > 0) {
+      attachedFruitNameRu = br.attachedFruit.nameRu;
+      attachedFruitCount = br.attachedFruit.count;
+      varietyRu = `${br.branchKindRu} (${br.attachedFruit.nameRu} ×${br.attachedFruit.count})`;
+      juiciness = br.attachedFruit.fruitAttributes.juiciness;
+      purpose = 'Растительная ветка с плодами: срывайте или срезайте плоды в сетке крафта';
+    } else {
+      attachedFruitNameRu = undefined;
+      attachedFruitCount = 0;
+      varietyRu = `Пустая ${br.branchKindRu.toLowerCase()}`;
+      purpose = 'Пустая растительная ветка / веточка';
+    }
+  }
+
   // 5. Fallback defaults for standard items so every InventoryItem has a coherent JSON schema
   if (!varietyRu) {
     varietyRu = catalogDef?.nameRu || item.nameRu;
@@ -6670,6 +6791,17 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     ...(hardwareSpecs ? { hardwareSpecs } : {}),
     ...(compatibilityRu ? { compatibilityRu } : {}),
     ...(installedComponentsCount !== undefined ? { installedComponentsCount } : {}),
+    ...(juiciness !== undefined ? { juiciness } : {}),
+    ...(weightGrams !== undefined ? { weightGrams } : {}),
+    ...(cutForm ? { cutForm } : {}),
+    ...(cutFormRu ? { cutFormRu } : {}),
+    ...(part ? { part } : {}),
+    ...(partNameRu ? { partNameRu } : {}),
+    ...(isPeeled !== undefined ? { isPeeled } : {}),
+    ...(isDried !== undefined ? { isDried } : {}),
+    ...(branchKindRu ? { branchKindRu } : {}),
+    ...(attachedFruitNameRu ? { attachedFruitNameRu } : {}),
+    ...(attachedFruitCount !== undefined ? { attachedFruitCount } : {}),
     ...(prevAttrs.physicalForm ? { physicalForm: prevAttrs.physicalForm } : {}),
     ...(prevAttrs.physicalFormRu ? { physicalFormRu: prevAttrs.physicalFormRu } : {}),
     ...(prevAttrs.substanceColorRu ? { substanceColorRu: prevAttrs.substanceColorRu } : {}),
@@ -6924,6 +7056,7 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   innerGummyPresets?: Partial<GummyCandyAttributes>[];
   innerPelmenPresets?: Partial<PelmenAttributes>[];
   innerChocolatePresets?: Partial<ChocolateAttributes>[];
+  innerProduceOverrides?: Partial<ProduceAttributes>;
 }> = {
   // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
   carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2, innerItemId: 'carrot_peeled' },
@@ -6943,7 +7076,7 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   champignon_white_whole: { containerId: 'tray_sealed_food', countInside: 6 },
   champignon_brown_whole: { containerId: 'tray_sealed_food', countInside: 6 },
   champignon_sliced: { containerId: 'tray_sealed_food', countInside: 6 },
-  oyster_mushroom_cluster: { containerId: 'tray_sealed_food', countInside: 3 },
+  oyster_mushroom_cluster: { containerId: 'tray_sealed_food', countInside: 2 },
   shiitake_fresh: { containerId: 'tray_sealed_food', countInside: 5 },
   cep_mushroom_whole: { containerId: 'tray_sealed_food', countInside: 3 },
   boletus_mushroom_whole: { containerId: 'tray_sealed_food', countInside: 4 },
@@ -6962,12 +7095,32 @@ export const ITEM_PACKAGING_MAP: Record<string, {
   orange_segments: { containerId: 'tray_sealed_food', innerItemId: 'orange_segments', countInside: 6 },
   lemon_slices: { containerId: 'tray_sealed_food', innerItemId: 'lemon_slice', countInside: 6 },
   kiwi_sliced: { containerId: 'tray_sealed_food', innerItemId: 'kiwi_sliced', countInside: 6 },
-  watermelon_cubes: { containerId: 'tray_sealed_food', innerItemId: 'watermelon_slice', countInside: 4 },
+  watermelon_cubes: {
+    containerId: 'tray_sealed_food',
+    innerItemId: 'watermelon_whole',
+    countInside: 4,
+    innerProduceOverrides: { cutForm: 'diced', cutFormRu: 'Кубики', part: 'piece', partNameRu: 'Кубики мякоти арбуза', isPeeled: true, weightGrams: 75, remainingFraction: 0.02 }
+  },
   melon_slices: { containerId: 'tray_sealed_food', innerItemId: 'melon_slice', countInside: 4 },
-  melon_diced: { containerId: 'tray_sealed_food', innerItemId: 'melon_slice', countInside: 4 },
-  watermelon_diced: { containerId: 'tray_sealed_food', innerItemId: 'watermelon_slice', countInside: 4 },
-  pomegranate_seeds: { containerId: 'tray_sealed_food', innerItemId: 'pomegranate_whole', countInside: 2 },
-  grapes_berries: { containerId: 'tray_sealed_food', innerItemId: 'grapes_green_bunch', countInside: 2 },
+  melon_diced: {
+    containerId: 'tray_sealed_food',
+    innerItemId: 'melon_cantaloupe',
+    countInside: 4,
+    innerProduceOverrides: { cutForm: 'diced', cutFormRu: 'Кубики', part: 'piece', partNameRu: 'Кубики мякоти дыни', isPeeled: true, weightGrams: 65, remainingFraction: 0.03 }
+  },
+  watermelon_diced: {
+    containerId: 'tray_sealed_food',
+    innerItemId: 'watermelon_whole',
+    countInside: 4,
+    innerProduceOverrides: { cutForm: 'diced', cutFormRu: 'Кубики', part: 'piece', partNameRu: 'Кубики мякоти арбуза', isPeeled: true, weightGrams: 75, remainingFraction: 0.02 }
+  },
+  pomegranate_seeds: {
+    containerId: 'tray_sealed_food',
+    innerItemId: 'pomegranate_whole',
+    countInside: 2,
+    innerProduceOverrides: { cutForm: 'part', cutFormRu: 'Зёрна', part: 'seeds', partNameRu: 'Рубиновые зёрна граната', isPeeled: true, weightGrams: 80, remainingFraction: 0.2 }
+  },
+  grapes_berries: { containerId: 'tray_sealed_food', innerItemId: 'grape_single', countInside: 14 },
 
   // 4. Fresh Raw Meats & Poultry in Trays / Vacuum
   beef_steak: { containerId: 'tray_sealed_food', innerItemId: 'beef_rump_large' },
@@ -7035,7 +7188,7 @@ export function getResolvedPackagingConfig(rawItemId: string): ItemPackagingConf
   if (!pkg) return null;
   if (!ITEM_CATALOG[pkg.containerId]) return null;
   const innerId = pkg.innerItemId || itemId;
-  if (!ITEM_CATALOG[innerId]) return null;
+  if (!ITEM_CATALOG[innerId] && !LEGACY_PRODUCE_PRESETS[innerId] && !LEGACY_BRANCH_PRESETS[innerId]) return null;
   return pkg;
 }
 
@@ -7043,7 +7196,9 @@ export function isRegisteredItemId(rawItemId: string): boolean {
   if (!rawItemId) return false;
   if (LEGACY_KITCHENWARE_PRESETS[rawItemId]) return true;
   if (LEGACY_PHONE_PRESETS[rawItemId]) return true;
+  if (LEGACY_PRODUCE_PRESETS[rawItemId] || LEGACY_BRANCH_PRESETS[rawItemId]) return true;
   const itemId = resolveCanonicalSubstanceId(rawItemId);
+  if (LEGACY_PRODUCE_PRESETS[itemId] || LEGACY_BRANCH_PRESETS[itemId]) return true;
   if (Boolean(ITEM_CATALOG[itemId] || ITEM_CATALOG[rawItemId])) return true;
   if (Boolean(LEGACY_DISCRETE_CONTAINER_ALIASES[itemId] || LEGACY_DISCRETE_CONTAINER_ALIASES[rawItemId])) return true;
   if (Boolean(getResolvedPackagingConfig(itemId))) return true;
@@ -7053,7 +7208,8 @@ export function isRegisteredItemId(rawItemId: string): boolean {
 
 export function formatItemEffectSummary(rawItemId: string): string {
   const itemId = resolveCanonicalSubstanceId(rawItemId);
-  const def = ITEM_CATALOG[itemId];
+  const legacyProd = LEGACY_PRODUCE_PRESETS[rawItemId] || LEGACY_PRODUCE_PRESETS[itemId];
+  const def = ITEM_CATALOG[legacyProd ? legacyProd.speciesId : itemId];
   if (def?.effects) {
     const parts: string[] = [];
     if (def.effects.hunger) parts.push(`${def.effects.hunger > 0 ? '+' : ''}${def.effects.hunger} сытость`);
@@ -7062,9 +7218,16 @@ export function formatItemEffectSummary(rawItemId: string): string {
     if (def.effects.energy) parts.push(`${def.effects.energy > 0 ? '+' : ''}${def.effects.energy} бодрость`);
     if (parts.length > 0) return parts.join(', ');
   }
+  const legacyBranch = LEGACY_BRANCH_PRESETS[rawItemId] || LEGACY_BRANCH_PRESETS[itemId];
+  if (legacyBranch && legacyBranch.fruitSpeciesId) {
+    const sp = PRODUCE_SPECIES_SPECS[legacyBranch.fruitSpeciesId];
+    return `${legacyBranch.branchKindRu}: ${sp?.baseNameRu || legacyBranch.fruitSpeciesId} (${legacyBranch.fruitCount || 1} шт.)`;
+  }
   const pkg = getResolvedPackagingConfig(itemId);
   if (pkg) {
-    const innerDef = ITEM_CATALOG[pkg.innerItemId || itemId];
+    const innerId = pkg.innerItemId || itemId;
+    const innerLegacy = LEGACY_PRODUCE_PRESETS[innerId];
+    const innerDef = ITEM_CATALOG[innerLegacy ? innerLegacy.speciesId : innerId];
     if (innerDef) {
       return `${innerDef.nameRu}${pkg.countInside && pkg.countInside > 1 ? ` (${pkg.countInside} шт.)` : ''}`;
     }
@@ -7323,7 +7486,12 @@ export function createPackagedItem(rawItemId: string, count: number = 1): Invent
             : undefined;
         innerItems.push(createChocolate(chocoPreset));
       } else {
-        innerItems.push(createItem(innerId, 1, undefined, true));
+        const inner = createItem(innerId, 1, undefined, true);
+        if (packInfo.innerProduceOverrides) {
+          applyProduceAttributesToItem(inner, packInfo.innerProduceOverrides);
+          normalizeItemAttributes(inner);
+        }
+        innerItems.push(inner);
       }
     }
     return createFilledPackage(packInfo.containerId, innerItems, {
@@ -7367,6 +7535,14 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
           }
           if (spec.hardwareAttributes) {
             applyHardwareAttributesToItem(inner, spec.hardwareAttributes);
+          }
+          if (spec.produceAttributes) {
+            applyProduceAttributesToItem(inner, spec.produceAttributes);
+            normalizeItemAttributes(inner);
+          }
+          if (spec.branchAttributes) {
+            applyBranchAttributesToItem(inner, spec.branchAttributes);
+            normalizeItemAttributes(inner);
           }
           if (spec.attributes) {
             inner.attributes = { ...(inner.attributes || {}), ...spec.attributes };
@@ -7451,8 +7627,14 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
     return normalizeItemAttributes(container);
   }
 
-  // Standalone item in ITEM_CATALOG or legacy kitchenware/phone preset -> spawn strictly raw (no surprise auto-packaging!)
-  if (ITEM_CATALOG[entry.itemId] || LEGACY_KITCHENWARE_PRESETS[entry.itemId] || LEGACY_PHONE_PRESETS[entry.itemId]) {
+  // Standalone item in ITEM_CATALOG or legacy kitchenware/phone/produce/branch preset -> spawn strictly raw (no surprise auto-packaging!)
+  if (
+    ITEM_CATALOG[entry.itemId] ||
+    LEGACY_KITCHENWARE_PRESETS[entry.itemId] ||
+    LEGACY_PHONE_PRESETS[entry.itemId] ||
+    LEGACY_PRODUCE_PRESETS[entry.itemId] ||
+    LEGACY_BRANCH_PRESETS[entry.itemId]
+  ) {
     const raw = createItem(entry.itemId, 1, undefined, true);
     if (entry.kitchenwareAttributes) {
       applyKitchenwareAttributesToItem(raw, entry.kitchenwareAttributes);
@@ -7464,6 +7646,14 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
     }
     if (entry.hardwareAttributes) {
       applyHardwareAttributesToItem(raw, entry.hardwareAttributes);
+      normalizeItemAttributes(raw);
+    }
+    if (entry.produceAttributes) {
+      applyProduceAttributesToItem(raw, entry.produceAttributes);
+      normalizeItemAttributes(raw);
+    }
+    if (entry.branchAttributes) {
+      applyBranchAttributesToItem(raw, entry.branchAttributes);
       normalizeItemAttributes(raw);
     }
     if (entry.labelColor) raw.labelColor = entry.labelColor;
@@ -9012,11 +9202,25 @@ export function addItemToPlayer(
     itemToAdd.maxStack = 1;
     let anySuccess = addItemToPlayer(player, itemToAdd, options);
     for (let i = 1; i < totalCount; i++) {
-      const singleCopy = {
+      const singleCopy: InventoryItem = {
         ...itemToAdd,
         id: `item_${itemToAdd.itemId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         count: 1,
-        maxStack: 1
+        maxStack: 1,
+        ...(itemToAdd.produceAttributes ? { produceAttributes: { ...itemToAdd.produceAttributes } } : {}),
+        ...(itemToAdd.branchAttributes
+          ? {
+              branchAttributes: {
+                ...itemToAdd.branchAttributes,
+                attachedFruit: itemToAdd.branchAttributes.attachedFruit
+                  ? {
+                      ...itemToAdd.branchAttributes.attachedFruit,
+                      fruitAttributes: { ...itemToAdd.branchAttributes.attachedFruit.fruitAttributes }
+                    }
+                  : null
+              }
+            }
+          : {})
       };
       addItemToPlayer(player, singleCopy, options);
     }
@@ -9980,8 +10184,49 @@ export function useItemOnPlayer(
   }
 
   const item = player.inventory[itemIndex];
-  if (!item || !item.usable) {
+  if (!item || !item.usable || item.produceAttributes?.edible === false) {
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
+  }
+
+  // Eating fruits directly off a plant_branch (decrements attachedFruit.count, leaves empty branch when 0)
+  if (item.itemId === 'plant_branch') {
+    const br = item.branchAttributes;
+    if (!br || !br.attachedFruit || br.attachedFruit.count <= 0) {
+      return { success: false, message: 'На этой ветке нет плодов' };
+    }
+    if ((player.needs.fullness || 0) >= 98) {
+      addPlayerNotification(player, 'Вы слишком сыты. Подождите, пока переварится.', 'warning');
+      return { success: false, message: 'Слишком сытно' };
+    }
+    if ((player.needs.nausea || 0) >= 65) {
+      addPlayerNotification(player, 'Вас тошнит. Сейчас нельзя есть.', 'warning');
+      return { success: false, message: 'Тошнит' };
+    }
+    const f = br.attachedFruit;
+    const hGain = Math.max(2, Math.round(f.fruitAttributes.weightGrams * 0.08));
+    const tGain = Math.max(1, Math.round((f.fruitAttributes.juiciness / 100) * 5));
+    player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hGain));
+    player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + tGain));
+    if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + tGain);
+    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + 2);
+    soothePanic(player, 15);
+    applyConsumptionThermodynamics(player, item.temperature ?? 20.0, f.nameRu, false);
+    triggerPlayerActionAnim(player, 'eating', 0.9, f.itemId);
+    sound.playEat();
+    const nextCount = f.count - 1;
+    applyBranchAttributesToItem(item, {
+      ...br,
+      attachedFruit: nextCount > 0 ? { ...f, count: nextCount } : null
+    });
+    normalizeItemAttributes(item);
+    addPlayerNotification(
+      player,
+      nextCount > 0
+        ? `Съеден плод с ветки: ${f.nameRu} (осталось ${nextCount} шт.)`
+        : `Вы съели последний плод (${f.nameRu}). Осталась пустая ветка.`,
+      'food'
+    );
+    return { success: true, message: `Съедено с ветки: ${f.nameRu}` };
   }
 
   // Single-use vacuum bags, kraft paper packaging, candy pouches, chocolate wrappers & disposable packaging unpack / tear open or consume piece
@@ -10948,12 +11193,16 @@ export function useItemOnPlayer(
         removeItemFromPlayer(player, itemIndex, 1);
       }
 
-      if (def?.leftoverId) {
+      const shouldSpawnLeftover = Boolean(
+        def?.leftoverId &&
+        (!item.produceAttributes || item.produceAttributes.cutForm === 'whole')
+      );
+      if (shouldSpawnLeftover && def?.leftoverId) {
         const leftover = createItem(def.leftoverId, 1);
         addItemToPlayer(player, leftover);
-        addPlayerNotification(player, `Вы закончили ${item.nameRu}. Осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+        addPlayerNotification(player, `Вы закончили ${item.nameRu}. Осталось: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
       } else {
-        addPlayerNotification(player, `${item.nameRu} полностью закончен!`, 'food');
+        addPlayerNotification(player, `${item.nameRu} полностью съедено.`, 'food');
       }
     } else {
       // Throttle notifications for high-charge rapid items (e.g. extinguisher)
@@ -11055,10 +11304,14 @@ export function useItemOnPlayer(
   // Consume 1 item from stack
   removeItemFromPlayer(player, itemIndex, 1);
 
-  if (def?.leftoverId) {
+  const shouldSpawnSingleLeftover = Boolean(
+    def?.leftoverId &&
+    (!item.produceAttributes || item.produceAttributes.cutForm === 'whole')
+  );
+  if (shouldSpawnSingleLeftover && def?.leftoverId) {
     const leftover = createItem(def.leftoverId, 1);
     addItemToPlayer(player, leftover);
-    addPlayerNotification(player, `Вы закончили ${item.nameRu}. Осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+    addPlayerNotification(player, `Вы закончили ${item.nameRu}. Осталось: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
   }
 
   return { success: true, message: `Использовано: ${item.nameRu}`};
@@ -11075,8 +11328,49 @@ export function useHandItemOnPlayer(
     return { success: false, message: 'В выбранной руке ничего нет'};
   }
 
-  if (!item.usable) {
+  if (!item.usable || item.produceAttributes?.edible === false) {
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
+  }
+
+  // Eating fruits directly off a plant_branch held in hand (decrements attachedFruit.count, leaves empty branch in hand when 0)
+  if (item.itemId === 'plant_branch') {
+    const br = item.branchAttributes;
+    if (!br || !br.attachedFruit || br.attachedFruit.count <= 0) {
+      return { success: false, message: 'На этой ветке нет плодов' };
+    }
+    if ((player.needs.fullness || 0) >= 98) {
+      addPlayerNotification(player, 'Вы слишком сыты. Подождите, пока переварится.', 'warning');
+      return { success: false, message: 'Слишком сытно' };
+    }
+    if ((player.needs.nausea || 0) >= 65) {
+      addPlayerNotification(player, 'Вас тошнит. Сейчас нельзя есть.', 'warning');
+      return { success: false, message: 'Тошнит' };
+    }
+    const f = br.attachedFruit;
+    const hGain = Math.max(2, Math.round(f.fruitAttributes.weightGrams * 0.08));
+    const tGain = Math.max(1, Math.round((f.fruitAttributes.juiciness / 100) * 5));
+    player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hGain));
+    player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + tGain));
+    if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + tGain);
+    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + 2);
+    soothePanic(player, 15);
+    applyConsumptionThermodynamics(player, item.temperature ?? 20.0, f.nameRu, false);
+    triggerPlayerActionAnim(player, 'eating', 0.9, f.itemId, hand);
+    sound.playEat();
+    const nextCount = f.count - 1;
+    applyBranchAttributesToItem(item, {
+      ...br,
+      attachedFruit: nextCount > 0 ? { ...f, count: nextCount } : null
+    });
+    normalizeItemAttributes(item);
+    addPlayerNotification(
+      player,
+      nextCount > 0
+        ? `Съеден плод с ветки: ${f.nameRu} (осталось ${nextCount} шт.)`
+        : `Вы съели последний плод (${f.nameRu}). В руке осталась пустая ветка.`,
+      'food'
+    );
+    return { success: true, message: `Съедено с ветки: ${f.nameRu}` };
   }
 
   // Single-use vacuum bags, kraft paper packaging, candy pouches, chocolate wrappers & disposable packaging unpack / tear open from hand
@@ -12144,7 +12438,11 @@ export function useHandItemOnPlayer(
         takeItemFromHand(player, hand);
       }
 
-      if (def?.leftoverId) {
+      const shouldSpawnHandLeftover = Boolean(
+        def?.leftoverId &&
+        (!item.produceAttributes || item.produceAttributes.cutForm === 'whole')
+      );
+      if (shouldSpawnHandLeftover && def?.leftoverId) {
         const leftover = createItem(def.leftoverId, 1);
         if (hand === 'left'&& !player.leftHandItem) {
           player.leftHandItem = leftover;
@@ -12153,9 +12451,9 @@ export function useHandItemOnPlayer(
         } else {
           stowItemFromHandToPockets(player, hand);
         }
-        addPlayerNotification(player, `Вы закончили ${item.nameRu}. В руке осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+        addPlayerNotification(player, `Вы закончили ${item.nameRu}. В руке осталось: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
       } else {
-        addPlayerNotification(player, `${item.nameRu} полностью закончен!`, 'food');
+        addPlayerNotification(player, `${item.nameRu} полностью съедено.`, 'food');
       }
     } else {
       addPlayerNotification(
@@ -12229,7 +12527,11 @@ export function useHandItemOnPlayer(
     takeItemFromHand(player, hand);
   }
 
-  if (def?.leftoverId) {
+  const shouldSpawnHandSingleLeftover = Boolean(
+    def?.leftoverId &&
+    (!item.produceAttributes || item.produceAttributes.cutForm === 'whole')
+  );
+  if (shouldSpawnHandSingleLeftover && def?.leftoverId) {
     const leftover = createItem(def.leftoverId, 1);
     if (hand === 'left' && !player.leftHandItem) {
       player.leftHandItem = leftover;
@@ -12238,7 +12540,7 @@ export function useHandItemOnPlayer(
     } else {
       addItemToPlayer(player, leftover);
     }
-    addPlayerNotification(player, `Вы закончили ${item.nameRu}. В руке осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+    addPlayerNotification(player, `Вы закончили ${item.nameRu}. В руке осталось: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
   }
 
   return { success: true, message: `Использовано: ${item.nameRu}`};

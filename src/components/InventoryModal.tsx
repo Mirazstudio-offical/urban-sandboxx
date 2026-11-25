@@ -2575,6 +2575,106 @@ const InventoryModalContent: React.FC<{
                             </div>
                           );
                         })()}
+
+                        {selectedEntry.item.produceAttributes && (() => {
+                          const pr = selectedEntry.item.produceAttributes!;
+                          const pctWhole = Math.round(pr.remainingFraction * 100);
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div className="inv-sec-row">
+                                <span className="inv-grp-lbl">Свойства продукта</span>
+                                <span className="inv-cnt-meta mono">{pr.cutFormRu} · {pr.weightGrams} г</span>
+                              </div>
+                              <div className="inv-kv-grid inv-kv-g2">
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Сорт / вид</span>
+                                  <span className="inv-kv-v">{pr.varietyRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Сочность</span>
+                                  <span className="inv-kv-v mono">{pr.juiciness}%</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Вес / доля</span>
+                                  <span className="inv-kv-v mono">{pr.weightGrams} г ({pctWhole}%)</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Размер</span>
+                                  <span className="inv-kv-v mono">{pr.sizeNameRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Нарезка</span>
+                                  <span className="inv-kv-v" style={{ color: '#e6b85c' }}>{pr.cutFormRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Модель / часть</span>
+                                  <span className="inv-kv-v">{pr.partNameRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Кожура / вид</span>
+                                  <span className="inv-kv-v">
+                                    {pr.isDried ? 'Сушёный' : pr.isBoiled ? 'Отварной' : pr.isPeeled ? 'Очищен' : 'В кожуре'}
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Цвет</span>
+                                  <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: pr.color, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: pr.fleshColor, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    <span>{pr.colorNameRu}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {selectedEntry.item.branchAttributes && (() => {
+                          const br = selectedEntry.item.branchAttributes!;
+                          const att = br.attachedFruit;
+                          const totalG = Math.round((selectedEntry.item.weight || 0) * 1000);
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div className="inv-sec-row">
+                                <span className="inv-grp-lbl">Свойства ветки</span>
+                                <span className="inv-cnt-meta mono">{br.branchKindRu} · {br.lengthCm} см</span>
+                              </div>
+                              <div className="inv-kv-grid inv-kv-g2">
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Тип ветки</span>
+                                  <span className="inv-kv-v">{br.branchKindRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Размер</span>
+                                  <span className="inv-kv-v mono">{br.sizeNameRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Вес общий / ветка</span>
+                                  <span className="inv-kv-v mono">{totalG} г / {br.branchWeightGrams} г</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Свежесть</span>
+                                  <span className="inv-kv-v mono">{br.freshness}%</span>
+                                </div>
+                                <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                  <span className="inv-kv-k">Материал</span>
+                                  <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>{br.materialRu}</span>
+                                </div>
+                                <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                  <span className="inv-kv-k">Плод на ветке</span>
+                                  {att && att.count > 0 ? (
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#e6b85c' }}>
+                                      <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: att.fruitAttributes.color, border: '1px solid rgba(255,255,255,0.3)', flexShrink: 0 }} />
+                                      <span>{att.nameRu} ({att.fruitAttributes.varietyRu}) · {att.count} / {att.maxCount} шт. · сочность {att.fruitAttributes.juiciness}%</span>
+                                    </span>
+                                  ) : (
+                                    <span className="inv-kv-v" style={{ color: '#9c9689' }}>Пустая ветка (без плодов)</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Pinned Action Footer */}

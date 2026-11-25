@@ -17,6 +17,8 @@ import {
   applyCylinderLightingOverlay,
   hash01
 } from './itemGraphicShared';
+import { PlantBranchAttributes, ProduceAttributes } from '../types';
+import { resolveProduceModelKey } from '../produceData';
 
 function drawWovenBasketBase(ctx: CanvasRenderingContext2D, seed: string) {
   // Rim interior dark cavity
@@ -203,8 +205,650 @@ function drawRealisticMushroomCapAndStem(
   ctx.fill();
 }
 
-export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
+function drawPlantBranchModel(ctx: CanvasRenderingContext2D, br?: PlantBranchAttributes) {
+  const lengthCm = br?.lengthCm ?? 14;
+  const scaleFactor = Math.max(0.84, Math.min(1.12, 0.86 + (lengthCm / 26) * 0.24));
+  const branchColor = br?.color || '#65a30d';
+  const branchDark = adjustHex(branchColor, -0.35);
+  const branchLight = adjustHex(branchColor, 0.22);
+  const attached = br?.attachedFruit && br.attachedFruit.count > 0 ? br.attachedFruit : null;
+
+  ctx.save();
+  ctx.scale(scaleFactor, scaleFactor);
+  drawShadow(ctx, 7.6, 2.6, 6.8, 0.24);
+
+  // Specialized mycelium cluster for mushrooms (oyster / enoki)
+  if (br?.branchKind === 'mycelium') {
+    // Pale cream mycelium base
+    drawLitEllipse(ctx, 0, 5.2, 4.4, 1.8, 0, '#fefce8', '#e7e5e4', '#a8a29e', undefined, 0.15);
+    if (attached && attached.itemId === 'enoki_mushroom_whole') {
+      const cnt = Math.min(10, Math.max(2, Math.round((attached.count / Math.max(1, attached.maxCount)) * 10)));
+      for (let i = 0; i < cnt; i++) {
+        const t = cnt === 1 ? 0 : (i / (cnt - 1)) * 2 - 1;
+        const sx = t * 4.4;
+        const topY = -4.8 + Math.abs(t) * 2.2 + (i % 2) * 0.6;
+        ctx.strokeStyle = '#f5f5f4';
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(t * 1.8, 4.8);
+        ctx.quadraticCurveTo(sx * 0.85, 0.4, sx, topY);
+        ctx.stroke();
+        drawLitSphere(ctx, sx, topY, 1.05, '#ffffff', '#fefce8', '#d6d3d1', undefined, 0.35);
+      }
+      ctx.restore();
+      return;
+    }
+    if (attached) {
+      const cnt = Math.min(6, Math.max(1, attached.count));
+      const baseCol = attached.fruitAttributes.color || '#d6d3d1';
+      for (let i = 0; i < cnt; i++) {
+        const ang = -1.1 + (i / Math.max(1, cnt - 1 || 1)) * 2.2;
+        const cx = Math.sin(ang) * 4.0;
+        const cy = 1.6 - Math.cos(ang) * 4.2 + (i % 2) * 0.9;
+        ctx.strokeStyle = '#e7e5e4';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, 4.8);
+        ctx.quadraticCurveTo(cx * 0.5, cy + 2.0, cx, cy);
+        ctx.stroke();
+        drawLitEllipse(
+          ctx,
+          cx,
+          cy,
+          3.1,
+          1.9,
+          ang * 0.35,
+          adjustHex(baseCol, 0.2),
+          baseCol,
+          adjustHex(baseCol, -0.35),
+          undefined,
+          0.2
+        );
+      }
+    }
+    ctx.restore();
+    return;
+  }
+
+  // Specialized banana hand crown
+  if (attached && attached.itemId === 'banana') {
+    const cnt = Math.min(5, Math.max(1, attached.count));
+    for (let i = 0; i < cnt; i++) {
+      const offset = (i - (cnt - 1) / 2) * 1.75;
+      ctx.save();
+      ctx.translate(offset * 0.8, 0.4);
+      ctx.rotate(offset * 0.14);
+      const bGrad = ctx.createLinearGradient(-2.0, -5.0, 2.0, 5.0);
+      bGrad.addColorStop(0.0, '#fef08a');
+      bGrad.addColorStop(0.5, '#facc15');
+      bGrad.addColorStop(1.0, '#ca8a04');
+      ctx.fillStyle = bGrad;
+      ctx.beginPath();
+      ctx.moveTo(-0.7, -4.8);
+      ctx.quadraticCurveTo(2.4, 0.2, 0.4, 5.2);
+      ctx.quadraticCurveTo(-0.4, 5.6, -1.0, 4.8);
+      ctx.quadraticCurveTo(0.6, 0.4, -1.5, -4.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(-0.5, 4.8, 0.8, 0.6);
+      ctx.restore();
+    }
+    // Woody green crown stalk holding the bananas
+    ctx.fillStyle = '#4d7c0f';
+    ctx.beginPath();
+    ctx.roundRect(-3.6, -6.2, 7.2, 2.0, 0.8);
+    ctx.fill();
+    ctx.fillStyle = '#365314';
+    ctx.fillRect(-1.1, -7.4, 2.2, 1.5);
+    ctx.restore();
+    return;
+  }
+
+  // Specialized radish / shallot tied bunch
+  if (br?.branchKind === 'bunch' && attached && (attached.itemId === 'radish_single' || attached.itemId === 'shallot_bulb')) {
+    const cnt = Math.min(5, Math.max(1, attached.count));
+    // Lush leafy stems or papery tops
+    for (let i = 0; i < cnt; i++) {
+      const t = cnt === 1 ? 0 : (i / (cnt - 1)) * 2 - 1;
+      const sx = t * 3.4;
+      drawBotanicalLeaf(
+        ctx,
+        sx * 0.5,
+        -1.2,
+        4.4,
+        1.25,
+        -1.57 + t * 0.55,
+        attached.itemId === 'radish_single' ? '#4ade80' : '#d97706',
+        attached.itemId === 'radish_single' ? '#15803d' : '#92400e'
+      );
+    }
+    // Twine band
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 1.15;
+    ctx.beginPath();
+    ctx.moveTo(-2.6, -0.8);
+    ctx.lineTo(2.6, -0.8);
+    ctx.stroke();
+
+    const col = attached.fruitAttributes.color;
+    for (let i = 0; i < cnt; i++) {
+      const t = cnt === 1 ? 0 : (i / (cnt - 1)) * 2 - 1;
+      const bx = t * 3.8;
+      const by = 3.0 + (i % 2) * 1.1;
+      drawLitSphere(ctx, bx, by, 2.25, adjustHex(col, 0.25), col, adjustHex(col, -0.38), undefined, 0.32);
+      if (attached.itemId === 'radish_single') {
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(bx, by + 1.55, 0.72, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+    return;
+  }
+
+  // Generic realistic curved plant branch / twig / grapevine / cherry-tomato vine
+  const stemGrad = ctx.createLinearGradient(-6, -6, 6, 6);
+  stemGrad.addColorStop(0.0, branchLight);
+  stemGrad.addColorStop(0.5, branchColor);
+  stemGrad.addColorStop(1.0, branchDark);
+  ctx.strokeStyle = stemGrad;
+  ctx.lineWidth = attached ? 1.45 : 1.75;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Main curved woody/green branch spine
+  ctx.beginPath();
+  ctx.moveTo(-6.2, -5.6);
+  ctx.bezierCurveTo(-2.4, -3.2, 2.2, 0.8, 5.6, 5.2);
+  ctx.stroke();
+
+  // Secondary side forks / twigs
+  ctx.lineWidth = 1.05;
+  const twigs: [number, number, number, number][] = [
+    [-3.6, -3.8, -5.8, -0.6],
+    [-1.4, -2.0, 2.8, -4.6],
+    [0.6, -0.2, -3.6, 3.2],
+    [2.6, 1.8, 5.8, -0.8],
+    [3.8, 3.2, 1.2, 5.8],
+  ];
+  for (const [x1, y1, x2, y2] of twigs) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo((x1 + x2) * 0.5, (y1 + y2) * 0.5 - 0.6, x2, y2);
+    ctx.stroke();
+  }
+
+  // Two fresh botanical leaves near top of stem
+  drawBotanicalLeaf(ctx, -4.4, -4.6, 3.0, 1.15, -2.3, '#84cc16', '#15803d');
+  drawBotanicalLeaf(ctx, -2.6, -3.5, 2.6, 1.0, -0.6, '#4ade80', '#166534');
+
+  // If branch has attached fruits/berries/grapes/tomatoes -> draw proportional cluster
+  if (attached && attached.count > 0) {
+    const fCol = attached.fruitAttributes.color || '#ef4444';
+    const fLight = adjustHex(fCol, 0.28);
+    const fDark = adjustHex(fCol, -0.38);
+    const isTomato = attached.itemId === 'tomato_cherry_single';
+    const isGrape = attached.itemId === 'grape_single';
+    const maxDraw = isGrape ? 13 : isTomato ? 7 : 10;
+    const drawCount = Math.max(1, Math.min(maxDraw, Math.round((attached.count / Math.max(1, attached.maxCount)) * maxDraw)));
+    const radius = isTomato ? 2.25 : isGrape ? 1.85 : 1.55;
+
+    const slots: [number, number][] = isGrape
+      ? [
+          [-2.2, -2.2], [0.8, -2.4], [3.2, -1.6],
+          [-3.4, 0.2], [-0.8, -0.2], [1.8, 0.2], [4.0, 0.8],
+          [-2.2, 2.2], [0.2, 2.0], [2.6, 2.4],
+          [-0.8, 4.0], [1.4, 4.1], [0.2, 5.6],
+        ]
+      : isTomato
+      ? [
+          [-4.2, -1.0], [2.4, -3.6], [-2.2, 2.4], [4.6, -0.2], [0.6, 3.8], [3.4, 3.4], [-0.4, -0.4],
+        ]
+      : [
+          [-4.6, -0.8], [2.4, -4.0], [-2.8, 2.6], [4.8, -0.6], [1.4, 5.2],
+          [-0.8, -1.4], [1.6, 1.0], [-1.4, 4.0], [3.6, 2.6], [0.2, 2.4],
+        ];
+
+    for (let i = 0; i < drawCount && i < slots.length; i++) {
+      const [fx, fy] = slots[i];
+      drawLitSphere(ctx, fx, fy, radius, fLight, fCol, fDark, undefined, isTomato ? 0.55 : 0.42);
+      if (isTomato) {
+        // Tiny green star calyx on cherry tomato
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath();
+        ctx.arc(fx, fy - radius + 0.4, 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  } else {
+    // Empty branch: small twig buds / cut pedicel stubs so it clearly reads as a bare branch
+    ctx.fillStyle = branchDark;
+    for (const [, , x2, y2] of twigs) {
+      ctx.beginPath();
+      ctx.arc(x2, y2, 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawProceduralProduceCutForm(ctx: CanvasRenderingContext2D, attrs: ProduceAttributes) {
+  const skin = attrs.color || '#22c55e';
+  const skinLight = adjustHex(skin, 0.24);
+  const skinDark = adjustHex(skin, -0.35);
+  const flesh = attrs.fleshColor || '#fefce8';
+  const fleshLight = adjustHex(flesh, 0.22);
+  const fleshDark = adjustHex(flesh, -0.22);
+  const juicyAlpha = 0.22 + (attrs.juiciness / 100) * 0.35;
+  const scale = Math.max(0.84, Math.min(1.06, 0.84 + Math.cbrt(Math.max(0.05, attrs.remainingFraction)) * 0.22));
+
+  ctx.save();
+  ctx.scale(scale, scale);
+  drawShadow(ctx, 7.0, 2.5, 6.2, 0.23);
+
+  switch (attrs.cutForm) {
+    case 'peeled': {
+      drawOrganicBlobPath(ctx, 0, 0.2, 6.2, 4.6, hash01(attrs.speciesId, 1) * 100, 0.05, 12);
+      const grad = ctx.createRadialGradient(-2.0, -1.6, 0.5, 0.4, 0.4, 7.0);
+      grad.addColorStop(0.0, fleshLight);
+      grad.addColorStop(0.55, flesh);
+      grad.addColorStop(1.0, fleshDark);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.fillStyle = `rgba(255, 255, 255, ${juicyAlpha.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(-1.8, -1.4, 2.2, 0.85, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    case 'half':
+    case 'chunk': {
+      // Curved outer skin shell
+      ctx.fillStyle = skinDark;
+      ctx.beginPath();
+      ctx.arc(0, 1.0, 6.0, 0, Math.PI);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = skin;
+      ctx.beginPath();
+      ctx.arc(0, 0.4, 6.0, 0, Math.PI);
+      ctx.closePath();
+      ctx.fill();
+      // Exposed flat flesh face
+      const fGrad = ctx.createRadialGradient(-1.5, -0.4, 0.4, 0, 0.2, 5.8);
+      fGrad.addColorStop(0.0, fleshLight);
+      fGrad.addColorStop(0.75, flesh);
+      fGrad.addColorStop(1.0, fleshDark);
+      ctx.fillStyle = fGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.2, 5.6, 3.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = skin;
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+      // Juicy sheen & subtle seeds/core
+      ctx.fillStyle = `rgba(255, 255, 255, ${juicyAlpha.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(-1.8, -0.6, 1.8, 0.65, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      if (attrs.produceCategory === 'fruit' || attrs.produceCategory === 'large_berry' || attrs.produceCategory === 'citrus') {
+        ctx.fillStyle = adjustHex(fleshDark, -0.35);
+        for (const [sx, sy] of [[-1.2, 0.5], [1.2, 0.5], [0, 1.1]]) {
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, 0.42, 0.25, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+
+    case 'quarter':
+    case 'wedge': {
+      for (const [wx, wy, rot] of [[-1.8, -0.8, -0.35], [1.6, 1.2, 0.25]]) {
+        ctx.save();
+        ctx.translate(wx, wy);
+        ctx.rotate(rot);
+        // Outer curved peel arc
+        ctx.fillStyle = skin;
+        ctx.beginPath();
+        ctx.arc(0, 0, 5.2, 0.15, Math.PI - 0.15);
+        ctx.closePath();
+        ctx.fill();
+        // Inner juicy flesh crescent
+        const wGrad = ctx.createLinearGradient(0, 0, 0, 4.6);
+        wGrad.addColorStop(0.0, fleshLight);
+        wGrad.addColorStop(0.7, flesh);
+        wGrad.addColorStop(1.0, fleshDark);
+        ctx.fillStyle = wGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 4.3, 0.18, Math.PI - 0.18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 255, 255, ${(juicyAlpha * 0.85).toFixed(2)})`;
+        ctx.fillRect(-2.4, 0.5, 4.2, 0.55);
+        ctx.restore();
+      }
+      break;
+    }
+
+    case 'ring': {
+      for (const [rx, ry] of [[-2.0, -0.8], [2.0, 1.0]]) {
+        ctx.strokeStyle = attrs.isPeeled ? flesh : skin;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.arc(rx, ry, 3.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = fleshLight;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.arc(rx, ry, 3.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'slice': {
+      for (const [sx, sy] of [[-2.2, -0.8], [2.1, 1.0]]) {
+        ctx.fillStyle = attrs.isPeeled ? fleshDark : skinDark;
+        ctx.beginPath();
+        ctx.arc(sx, sy + 0.45, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = attrs.isPeeled ? flesh : skin;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+        const sGrad = ctx.createRadialGradient(sx - 1.0, sy - 1.0, 0.3, sx, sy, 3.6);
+        sGrad.addColorStop(0.0, fleshLight);
+        sGrad.addColorStop(0.75, flesh);
+        sGrad.addColorStop(1.0, fleshDark);
+        ctx.fillStyle = sGrad;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 255, 255, ${juicyAlpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.ellipse(sx - 1.1, sy - 1.2, 1.0, 0.4, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+
+    case 'strips': {
+      for (let i = 0; i < 5; i++) {
+        const ang = -0.35 + i * 0.17;
+        const ox = (i - 2) * 1.4;
+        const oy = (i % 2) * 0.8 - 0.3;
+        ctx.save();
+        ctx.translate(ox, oy);
+        ctx.rotate(ang);
+        ctx.fillStyle = fleshDark;
+        ctx.beginPath();
+        ctx.roundRect(-1.0, -4.6, 2.0, 9.2, 0.55);
+        ctx.fill();
+        ctx.fillStyle = flesh;
+        ctx.beginPath();
+        ctx.roundRect(-0.85, -4.5, 1.6, 8.8, 0.45);
+        ctx.fill();
+        if (!attrs.isPeeled) {
+          ctx.fillStyle = skin;
+          ctx.fillRect(-0.85, -4.5, 0.45, 8.8);
+        }
+        ctx.restore();
+      }
+      break;
+    }
+
+    case 'diced': {
+      const cubes: [number, number][] = [
+        [-3.6, -1.6], [0.2, -2.4], [3.4, -1.2],
+        [-2.4, 1.4], [0.8, 0.6], [3.6, 2.0], [-0.4, 3.0],
+      ];
+      for (const [cx, cy] of cubes) {
+        // Top lit face
+        ctx.fillStyle = fleshLight;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 1.6);
+        ctx.lineTo(cx + 1.8, cy - 0.7);
+        ctx.lineTo(cx, cy + 0.2);
+        ctx.lineTo(cx - 1.8, cy - 0.7);
+        ctx.closePath();
+        ctx.fill();
+        // Left face
+        ctx.fillStyle = flesh;
+        ctx.beginPath();
+        ctx.moveTo(cx - 1.8, cy - 0.7);
+        ctx.lineTo(cx, cy + 0.2);
+        ctx.lineTo(cx, cy + 1.9);
+        ctx.lineTo(cx - 1.8, cy + 1.0);
+        ctx.closePath();
+        ctx.fill();
+        // Right shaded face
+        ctx.fillStyle = fleshDark;
+        ctx.beginPath();
+        ctx.moveTo(cx + 1.8, cy - 0.7);
+        ctx.lineTo(cx, cy + 0.2);
+        ctx.lineTo(cx, cy + 1.9);
+        ctx.lineTo(cx + 1.8, cy + 1.0);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+
+    case 'shredded':
+    case 'grated': {
+      const strands = attrs.cutForm === 'grated' ? 28 : 20;
+      for (let i = 0; i < strands; i++) {
+        const ang = (hash01(attrs.speciesId, i * 3 + 11) - 0.5) * 2.5;
+        const px = (hash01(attrs.speciesId, i * 3 + 12) - 0.5) * 9.2;
+        const py = (hash01(attrs.speciesId, i * 3 + 13) - 0.5) * 6.0;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(ang);
+        ctx.fillStyle = i % 3 === 0 ? fleshLight : i % 3 === 1 ? flesh : fleshDark;
+        ctx.beginPath();
+        ctx.roundRect(-2.1, -0.38, 4.2, 0.76, 0.3);
+        ctx.fill();
+        ctx.restore();
+      }
+      break;
+    }
+
+    case 'crushed': {
+      drawOrganicBlobPath(ctx, 0, 0.6, 5.8, 4.2, 33, 0.14, 14);
+      const pGrad = ctx.createRadialGradient(-1.8, -1.0, 0.4, 0, 0.6, 6.0);
+      pGrad.addColorStop(0.0, fleshLight);
+      pGrad.addColorStop(0.65, flesh);
+      pGrad.addColorStop(1.0, fleshDark);
+      ctx.fillStyle = pGrad;
+      ctx.fill();
+      ctx.fillStyle = `rgba(255, 255, 255, ${(juicyAlpha + 0.1).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(-1.4, -0.6, 1.9, 0.7, -0.25, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    case 'part': {
+      if (attrs.part === 'seeds') {
+        for (let i = 0; i < 16; i++) {
+          const sx = (hash01(attrs.speciesId, i * 2 + 5) - 0.5) * 8.6;
+          const sy = (hash01(attrs.speciesId, i * 2 + 6) - 0.5) * 6.2;
+          drawLitSphere(ctx, sx, sy, 1.25, fleshLight, flesh, fleshDark, undefined, 0.55);
+        }
+      } else if (attrs.part === 'segment') {
+        for (const [gx, gy, rot] of [[-2.2, -1.2, -0.4], [0.2, 0.2, 0.05], [2.4, 1.4, 0.45]]) {
+          ctx.save();
+          ctx.translate(gx, gy);
+          ctx.rotate(rot);
+          ctx.fillStyle = flesh;
+          ctx.beginPath();
+          ctx.arc(0, 0, 3.6, 0.2, Math.PI - 0.2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+          ctx.lineWidth = 0.45;
+          ctx.stroke();
+          ctx.restore();
+        }
+      } else {
+        drawLitEllipse(ctx, 0, 0.2, 4.8, 3.6, -0.15, skinLight, skin, skinDark, undefined, 0.3);
+      }
+      break;
+    }
+
+    case 'peel': {
+      ctx.strokeStyle = skin;
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-5.0, 2.2);
+      ctx.bezierCurveTo(-2.4, -4.2, 2.4, -3.6, 5.2, 2.4);
+      ctx.stroke();
+      ctx.strokeStyle = fleshLight;
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(-4.4, 2.5);
+      ctx.bezierCurveTo(-2.0, -3.2, 2.0, -2.6, 4.6, 2.6);
+      ctx.stroke();
+      break;
+    }
+
+    default: {
+      drawLitSphere(ctx, 0, 0.2, 4.6, fleshLight, flesh, fleshDark, undefined, 0.3);
+      break;
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawProduceModelSwitch(ctx: CanvasRenderingContext2D, itemId: string): boolean {
   switch (itemId) {
+    // =========================================================================
+    // === UNIFIED SINGLE-PIECE NEW BASE SPECIES ===
+    // =========================================================================
+    case 'grape_single': {
+      drawShadow(ctx, 4.6, 1.8, 4.6, 0.22);
+      drawLitSphere(ctx, 0, 0.3, 4.3, '#d9f99d', '#84cc16', '#3f6212', undefined, 0.48);
+      // Soft powdery grape bloom + tiny pedicel dimple
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.24)';
+      ctx.beginPath();
+      ctx.ellipse(-1.4, -1.2, 1.6, 0.85, -0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#365314';
+      ctx.beginPath();
+      ctx.arc(0, -3.9, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'radish_single': {
+      drawShadow(ctx, 5.4, 2.1, 5.4, 0.24);
+      // Two crisp green top leaves
+      drawBotanicalLeaf(ctx, -0.4, -3.8, 3.6, 1.3, -2.0, '#4ade80', '#15803d');
+      drawBotanicalLeaf(ctx, 0.5, -3.8, 3.4, 1.2, -1.1, '#84cc16', '#166534');
+      // Fine white root tail
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(0, 4.4);
+      ctx.quadraticCurveTo(0.7, 5.8, -0.2, 6.8);
+      ctx.stroke();
+      // Ruby-red round radish bulb with snowy white tip
+      drawLitSphere(ctx, 0, 0.4, 4.4, '#fb7185', '#e11d48', '#881337', undefined, 0.42);
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.ellipse(0, 3.7, 1.6, 0.9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'shallot_bulb': {
+      drawShadow(ctx, 5.4, 2.2, 5.4, 0.24);
+      // Teardrop copper-violet shallot silhouette
+      const shGrad = ctx.createRadialGradient(-1.4, -0.8, 0.4, 0.4, 1.0, 5.8);
+      shGrad.addColorStop(0.0, '#fdba74');
+      shGrad.addColorStop(0.45, '#b45309');
+      shGrad.addColorStop(0.85, '#7c2d12');
+      shGrad.addColorStop(1.0, '#451a03');
+      ctx.fillStyle = shGrad;
+      ctx.beginPath();
+      ctx.moveTo(0, -6.2);
+      ctx.bezierCurveTo(3.8, -2.2, 5.0, 2.8, 0, 5.4);
+      ctx.bezierCurveTo(-5.0, 2.8, -3.8, -2.2, 0, -6.2);
+      ctx.closePath();
+      ctx.fill();
+      // Delicate vertical papery veins
+      ctx.strokeStyle = 'rgba(254, 215, 170, 0.38)';
+      ctx.lineWidth = 0.45;
+      for (const offset of [-1.8, 0, 1.8]) {
+        ctx.beginPath();
+        ctx.moveTo(0, -5.6);
+        ctx.quadraticCurveTo(offset * 1.4, 0.5, offset * 0.4, 4.8);
+        ctx.stroke();
+      }
+      return true;
+    }
+
+    case 'oyster_mushroom_whole': {
+      drawShadow(ctx, 6.2, 2.2, 5.4, 0.22);
+      // Short lateral creamy stem
+      ctx.fillStyle = '#f5f5f4';
+      ctx.beginPath();
+      ctx.roundRect(-1.4, 1.0, 2.8, 4.4, 0.8);
+      ctx.fill();
+      // Scalloped oyster fan cap
+      drawLitEllipse(ctx, 0.4, -0.8, 5.8, 3.4, -0.18, '#e7e5e4', '#a8a29e', '#57534e', undefined, 0.24);
+      // Subtle radiating gill ridges underneath
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = 0.4;
+      for (let i = -3; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 1.6);
+        ctx.lineTo(i * 1.5, -0.4);
+        ctx.stroke();
+      }
+      return true;
+    }
+
+    case 'enoki_mushroom_whole': {
+      drawShadow(ctx, 3.8, 1.5, 5.8, 0.18);
+      // Long delicate snowy stem
+      ctx.strokeStyle = '#fafaf9';
+      ctx.lineWidth = 1.65;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-0.4, 5.6);
+      ctx.quadraticCurveTo(0.8, 0.6, 0.1, -4.0);
+      ctx.stroke();
+      // Glossy tiny button dome cap
+      drawLitSphere(ctx, 0.1, -4.4, 2.2, '#ffffff', '#fefce8', '#d6d3d1', undefined, 0.48);
+      return true;
+    }
+
+    case 'lychee_single': {
+      drawShadow(ctx, 5.0, 2.0, 5.2, 0.24);
+      drawLitSphere(ctx, 0, 0.4, 4.6, '#fda4af', '#e11d48', '#881337', undefined, 0.28);
+      // Characteristic bumpy ruby shell tubercles
+      for (let i = 0; i < 16; i++) {
+        const a = hash01('lychee_single', i * 3 + 1) * Math.PI * 2;
+        const d = Math.sqrt(hash01('lychee_single', i * 3 + 2)) * 3.5;
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255, 228, 230, 0.45)' : 'rgba(136, 19, 55, 0.35)';
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * d, 0.4 + Math.sin(a) * d, 0.42, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Tiny woody stem nub
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-0.5, -4.7, 1.0, 1.1);
+      return true;
+    }
+
     // =========================================================================
     // === ROOT VEGETABLES & ALLIUMS ===
     // =========================================================================
@@ -3791,4 +4435,45 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
     default:
       return false;
   }
+}
+
+export function drawProduceAndMushroomItem(
+  ctx: CanvasRenderingContext2D,
+  itemId: string,
+  item?: any
+): boolean {
+  if (itemId === 'plant_branch') {
+    drawPlantBranchModel(ctx, item?.branchAttributes);
+    return true;
+  }
+
+  const pa: ProduceAttributes | undefined = item?.produceAttributes;
+  if (pa) {
+    const modelKey = resolveProduceModelKey(pa);
+    // Keep whole red apple & whole unpeeled banana on their dedicated drawFoodItem artwork
+    if (pa.cutForm === 'whole' && (modelKey === 'apple' || modelKey === 'banana')) {
+      return false;
+    }
+    // If modelKey maps to a dedicated studio model (e.g. potato_sliced, apple_green, banana_peeled, carrot_diced, orange_segments...)
+    if (modelKey !== pa.speciesId || pa.cutForm === 'whole') {
+      const hasScale = pa.cutForm !== 'whole' && pa.remainingFraction < 0.75;
+      if (hasScale) {
+        const sc = Math.max(0.82, Math.min(1.0, 0.8 + Math.cbrt(pa.remainingFraction) * 0.22));
+        ctx.save();
+        ctx.scale(sc, sc);
+        const ok = drawProduceModelSwitch(ctx, modelKey);
+        ctx.restore();
+        if (ok) return true;
+      } else if (drawProduceModelSwitch(ctx, modelKey)) {
+        return true;
+      }
+    }
+    // Procedural studio cut-form model for ANY cut vegetable, fruit, citrus, large berry, mushroom, or berry
+    if (pa.cutForm !== 'whole') {
+      drawProceduralProduceCutForm(ctx, pa);
+      return true;
+    }
+  }
+
+  return drawProduceModelSwitch(ctx, itemId);
 }

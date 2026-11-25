@@ -15,7 +15,8 @@ import {
   updateHybridContainerInteraction,
   isFluidStorageDryForm,
 } from './liquidSystem';
-import { isRegisteredItemId, createItem, canItemFitInContainer, getItemTotalWeight, resolveCanonicalSubstanceId } from './items';
+import { isRegisteredItemId, createItem, createProduceItem, canItemFitInContainer, getItemTotalWeight, resolveCanonicalSubstanceId } from './items';
+import { computeKnifeCutForProduce, computeBranchPluck } from './produceData';
 
 function recalculateContainerWeight(container: InventoryItem): void {
   if (!container.isContainer) return;
@@ -1216,6 +1217,7 @@ export function tryTransferDiscreteTopToBottom(
 }
 
 const KNIFE_IDS = [
+  'knife',
   'pocket_knife',
   'kitchen_knife',
   'kitchen_knife_chef',
@@ -1224,6 +1226,15 @@ const KNIFE_IDS = [
   'kitchen_cleaver',
   'multitool_leatherman',
 ];
+
+function isKnifeTool(item: InventoryItem | null): boolean {
+  if (!item) return false;
+  return (
+    item.itemId === 'kitchen_knife' ||
+    item.kitchenwareAttributes?.kind === 'kitchen_knife' ||
+    itemMatchesAnyId(item, KNIFE_IDS)
+  );
+}
 
 function getItemCatalogKeys(item: InventoryItem | null): string[] {
   if (!item) return [];
@@ -1460,66 +1471,29 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     },
   },
   {
-    id: 'craft_slice_apple',
-    title: 'Нарезка яблока дольками',
+    id: 'craft_knife_cut_produce',
+    title: 'Нарезка и очистка продуктов ножом (по процентным клеткам)',
     category: 'cooking',
-    description: 'Нарежьте свежее яблоко ножом на аккуратные дольки.',
-    actionLabel: 'Нарезать яблоко',
+    description:
+      'Положите любой нож и один или несколько овощей, фруктов, цитрусов, ягод, грибов или веток с плодами. Процентная клетка задаёт степень нарезки: слот «Всё» очищает или разделяет плод целиком, а клетки от ~92% до ~8% режут от крупных кусков и половинок до долек, кружков, кубиков и тонкой шинковки.',
+    actionLabel: 'Нарезать ножом',
     ingredients: [
       { itemIds: KNIFE_IDS, label: 'Любой нож', isTool: true },
-      { itemIds: ['apple'], label: 'Свежее яблоко' },
+      { itemIds: ['apple', 'potato_whole', 'tomato_whole', 'champignon_white_whole'], label: 'Любой овощ, фрукт, гриб, ягода или ветка с плодами' },
     ],
-    resultsSummary: ['Нож (сохраняется)', 'Дольки яблока (2 порции)'],
-    matchAndPreview: (inputs) => {
-      const present = inputs.filter((x): x is InventoryItem => x !== null);
-      if (present.length !== 2) return null;
-      const knife = present.find((x) => itemMatchesAnyId(x, KNIFE_IDS));
-      const apple = present.find((x) => itemMatchesAnyId(x, ['apple']));
-      if (!knife || !apple) return null;
-
-      const sliced = createItem('apple_sliced', 2);
-      return {
-        isValid: true,
-        kind: 'craft_recipe',
-        title: 'Нарезка яблока дольками',
-        subtitle: `${knife.nameRu} + ${apple.nameRu} → 2 порции яблочных долек`,
-        actionLabel: 'Нарезать яблоко',
-        previewOutputs: [cloneInventoryItem(knife), sliced, null, null],
-        transferDetails: [],
-        matchedRecipeId: 'craft_slice_apple',
-      };
-    },
+    resultsSummary: ['Нож (сохраняется)', 'Нарезанные / очищенные части с обновлённым весом, размером и формой'],
   },
   {
-    id: 'craft_peel_carrot',
-    title: 'Очистка свежей моркови',
+    id: 'craft_pluck_plant_branch',
+    title: 'Снятие плодов с ветки, грозди или пучка',
     category: 'cooking',
-    description: 'Очистите свежую морковь ножом перед готовкой или едой.',
-    actionLabel: 'Очистить морковь',
+    description:
+      'Положите ветку с плодами (виноград, томаты черри, редис, бананы, смородина, вешенки и др.) в процентную клетку сетки (с ножом или руками), чтобы снять все плоды или нужную часть — остаток останется на ветке.',
+    actionLabel: 'Снять плоды с ветки',
     ingredients: [
-      { itemIds: KNIFE_IDS, label: 'Любой нож', isTool: true },
-      { itemIds: ['carrot_fresh'], label: 'Свежая морковь' },
+      { itemIds: ['plant_branch'], label: 'Ветка / гроздь / пучок с плодами' },
     ],
-    resultsSummary: ['Нож (сохраняется)', 'Очищенная морковь'],
-    matchAndPreview: (inputs) => {
-      const present = inputs.filter((x): x is InventoryItem => x !== null);
-      if (present.length !== 2) return null;
-      const knife = present.find((x) => itemMatchesAnyId(x, KNIFE_IDS));
-      const carrot = present.find((x) => itemMatchesAnyId(x, ['carrot_fresh']));
-      if (!knife || !carrot) return null;
-
-      const peeled = createItem('carrot_peeled', 1);
-      return {
-        isValid: true,
-        kind: 'craft_recipe',
-        title: 'Очистка свежей моркови',
-        subtitle: `${knife.nameRu} + ${carrot.nameRu} → Очищенная морковь`,
-        actionLabel: 'Очистить морковь',
-        previewOutputs: [cloneInventoryItem(knife), peeled, null, null],
-        transferDetails: [],
-        matchedRecipeId: 'craft_peel_carrot',
-      };
-    },
+    resultsSummary: ['Отдельные штучные плоды', 'Ветка с оставшимися плодами или пустая ветка'],
   },
   {
     id: 'craft_refill_zippo',
@@ -1978,6 +1952,214 @@ function summarizeBatchTransfers(
   };
 }
 
+function isCuttableProduceItem(item: InventoryItem | null): boolean {
+  if (!item?.produceAttributes) return false;
+  if (item.produceAttributes.edible === false) return false;
+  return item.produceAttributes.cutForm !== 'peel' && item.produceAttributes.cutForm !== 'core';
+}
+
+function isPluckableBranchItem(item: InventoryItem | null): boolean {
+  return Boolean(
+    item &&
+      item.itemId === 'plant_branch' &&
+      item.branchAttributes?.attachedFruit &&
+      item.branchAttributes.attachedFruit.count > 0
+  );
+}
+
+function packOutputsIntoSlots(items: InventoryItem[], gridSize: 4 | 16): (InventoryItem | null)[] {
+  const result: (InventoryItem | null)[] = Array.from({ length: gridSize }, () => null);
+  let list = items;
+  if (list.length > gridSize) {
+    // Merge identical cut pieces into grouped counts so nothing is lost when output count exceeds grid slots;
+    // addItemToPlayer automatically unstacks count > 1 into standalone items with cloned produceAttributes.
+    const compacted: InventoryItem[] = [];
+    for (const it of list) {
+      const existing = it.produceAttributes
+        ? compacted.find(
+            (c) =>
+              c.itemId === it.itemId &&
+              c.produceAttributes?.cutForm === it.produceAttributes?.cutForm &&
+              c.produceAttributes?.part === it.produceAttributes?.part &&
+              c.produceAttributes?.varietyRu === it.produceAttributes?.varietyRu
+          )
+        : undefined;
+      if (existing) {
+        existing.count = (existing.count || 1) + (it.count || 1);
+        existing.maxStack = Math.max(existing.maxStack || 1, existing.count);
+      } else {
+        compacted.push(it);
+      }
+    }
+    list = compacted;
+  }
+  for (let i = 0; i < Math.min(gridSize, list.length); i++) {
+    result[i] = list[i];
+  }
+  return result;
+}
+
+function tryEvaluateKnifeCuttingAndBranchPlucking(
+  inputs: (InventoryItem | null)[],
+  gridSize: 4 | 16,
+  applyPourJitter: boolean
+): {
+  isValid: true;
+  kind: 'craft_recipe';
+  title: string;
+  subtitle: string;
+  actionLabel: string;
+  previewOutputs: (InventoryItem | null)[];
+  transferDetails: InteractionTransferDetail[];
+  matchedRecipeId: string;
+} | null {
+  const dosageLimit = gridSize === 4 ? 2 : 12;
+  const entries: { slot: number; item: InventoryItem }[] = [];
+  for (let i = 0; i < gridSize; i++) {
+    if (inputs[i]) entries.push({ slot: i, item: inputs[i]! });
+  }
+  if (entries.length === 0) return null;
+
+  const knives = entries.filter((e) => isKnifeTool(e.item));
+  const others = entries.filter((e) => !isKnifeTool(e.item));
+
+  // Case 1: Knife + 1 or more produce items / pluckable plant_branches
+  if (knives.length === 1 && others.length >= 1) {
+    const allTargetsValid = others.every((e) => isCuttableProduceItem(e.item) || isPluckableBranchItem(e.item));
+    if (!allTargetsValid) return null;
+
+    const knifeEntry = knives[0];
+    const produced: InventoryItem[] = [cloneInventoryItem(knifeEntry.item)];
+    const subtitles: string[] = [];
+    const cutDetails: InteractionTransferDetail[] = [];
+    let singleRes: ReturnType<typeof computeKnifeCutForProduce> = null;
+
+    for (const target of others) {
+      const activeDosageSlot =
+        target.slot < dosageLimit
+          ? target.slot
+          : knifeEntry.slot < dosageLimit
+          ? knifeEntry.slot
+          : null;
+      const dosageFraction =
+        activeDosageSlot !== null ? getSlotPourDosageFraction(activeDosageSlot, gridSize) : 0.5;
+
+      const cutRes = isPluckableBranchItem(target.item)
+        ? computeBranchPluck(target.item, dosageFraction, applyPourJitter, true, (spId, attrs) =>
+            createProduceItem(spId, attrs)
+          )
+        : computeKnifeCutForProduce(target.item, dosageFraction, applyPourJitter);
+
+      if (!cutRes) return null;
+      singleRes = cutRes;
+      produced.push(...cutRes.outputs);
+      subtitles.push(cutRes.subtitle);
+      if (activeDosageSlot !== null) {
+        const pctVal = Math.round(dosageFraction * 100);
+        cutDetails.push({
+          fromSlot: activeDosageSlot,
+          toSlot: target.slot,
+          sourceName: target.item.nameRu,
+          targetName: knifeEntry.item.nameRu,
+          transferredAmountLabel: dosageFraction >= 0.999 ? 'Всё' : `~${pctVal}%`,
+          remainingSourceLabel: cutRes.actionLabel,
+          resultingTargetLabel: cutRes.subtitle,
+          dosagePct: pctVal,
+          isApproximate: dosageFraction < 0.999,
+        });
+      }
+    }
+
+    const previewOutputs = packOutputsIntoSlots(produced, gridSize);
+    if (others.length === 1 && singleRes) {
+      return {
+        isValid: true,
+        kind: 'craft_recipe',
+        title: singleRes.title,
+        subtitle: singleRes.subtitle,
+        actionLabel: singleRes.actionLabel,
+        previewOutputs,
+        transferDetails: cutDetails,
+        matchedRecipeId: isPluckableBranchItem(others[0].item)
+          ? 'craft_pluck_plant_branch'
+          : 'craft_knife_cut_produce',
+      };
+    }
+
+    return {
+      isValid: true,
+      kind: 'craft_recipe',
+      title: `Массовая нарезка ножом (${others.length} шт.)`,
+      subtitle: subtitles.slice(0, 2).join(' · ') + (subtitles.length > 2 ? ` · ещё ${subtitles.length - 2}` : ''),
+      actionLabel: `Нарезать всё (${others.length})`,
+      previewOutputs,
+      transferDetails: cutDetails,
+      matchedRecipeId: 'craft_knife_cut_produce',
+    };
+  }
+
+  // Case 2: Bare-hand plucking of plant_branch(es) without a knife
+  if (knives.length === 0 && entries.length >= 1 && entries.every((e) => isPluckableBranchItem(e.item))) {
+    const produced: InventoryItem[] = [];
+    const subtitles: string[] = [];
+    const pluckDetails: InteractionTransferDetail[] = [];
+    let singleRes: ReturnType<typeof computeBranchPluck> = null;
+
+    for (const target of entries) {
+      const hasDosageSlot = target.slot < dosageLimit;
+      const dosageFraction = hasDosageSlot ? getSlotPourDosageFraction(target.slot, gridSize) : 1.0;
+      const pluckRes = computeBranchPluck(target.item, dosageFraction, applyPourJitter, false, (spId, attrs) =>
+        createProduceItem(spId, attrs)
+      );
+      if (!pluckRes) return null;
+      singleRes = pluckRes;
+      produced.push(...pluckRes.outputs);
+      subtitles.push(pluckRes.subtitle);
+      if (hasDosageSlot) {
+        const pctVal = Math.round(dosageFraction * 100);
+        pluckDetails.push({
+          fromSlot: target.slot,
+          toSlot: target.slot,
+          sourceName: target.item.nameRu,
+          targetName: target.item.nameRu,
+          transferredAmountLabel: dosageFraction >= 0.999 ? 'Всё' : `~${pctVal}%`,
+          remainingSourceLabel: pluckRes.actionLabel,
+          resultingTargetLabel: pluckRes.subtitle,
+          dosagePct: pctVal,
+          isApproximate: dosageFraction < 0.999,
+        });
+      }
+    }
+
+    const previewOutputs = packOutputsIntoSlots(produced, gridSize);
+    if (entries.length === 1 && singleRes) {
+      return {
+        isValid: true,
+        kind: 'craft_recipe',
+        title: singleRes.title,
+        subtitle: singleRes.subtitle,
+        actionLabel: singleRes.actionLabel,
+        previewOutputs,
+        transferDetails: pluckDetails,
+        matchedRecipeId: 'craft_pluck_plant_branch',
+      };
+    }
+
+    return {
+      isValid: true,
+      kind: 'craft_recipe',
+      title: `Снятие плодов с веток (${entries.length} шт.)`,
+      subtitle: subtitles.slice(0, 2).join(' · '),
+      actionLabel: 'Сорвать плоды',
+      previewOutputs,
+      transferDetails: pluckDetails,
+      matchedRecipeId: 'craft_pluck_plant_branch',
+    };
+  }
+
+  return null;
+}
+
 /**
  * Evaluates the 4 input slots (`[0, 1]` = Top Row, `[2, 3]` = Bottom Row) and returns
  * the resulting 4 output slots (`previewOutputs`) along with detailed transfer/craft info.
@@ -1994,7 +2176,7 @@ export function evaluateInteractionGrid(
       kind: 'none',
       title: 'Сетка ввода пуста',
       subtitle:
-        'Положите предметы в сетку (2×2). Верхний левый слот выливает всё, верхний правый — примерно половину (на глаз).',
+        'Положите предметы в сетку (2×2). Слот «Всё» выливает или очищает/разделывает целиком, слот «~50%» — делит или сливает примерно пополам.',
       actionLabel: 'Ожидание предметов',
       previewOutputs: [null, null, null, null],
       transferDetails: [],
@@ -2009,6 +2191,20 @@ export function evaluateInteractionGrid(
         return matched;
       }
     }
+  }
+
+  // 1.5. Universal slot-percentage knife cutting & branch plucking
+  const cutOrPluck = tryEvaluateKnifeCuttingAndBranchPlucking(inputs, 4, applyPourJitter);
+  if (cutOrPluck) {
+    return {
+      ...cutOrPluck,
+      previewOutputs: [
+        cutOrPluck.previewOutputs[0] || null,
+        cutOrPluck.previewOutputs[1] || null,
+        cutOrPluck.previewOutputs[2] || null,
+        cutOrPluck.previewOutputs[3] || null,
+      ],
+    };
   }
 
   // 2. Multi-source top-to-bottom pouring / mixing / discrete transfer with slot dosage
@@ -2233,6 +2429,12 @@ export function evaluateInteractionGrid4x4(
         }
       }
     }
+  }
+
+  // 1.5. Universal slot-percentage knife cutting & branch plucking across 4x4 (supports multi-produce batch cutting)
+  const cutOrPluck16 = tryEvaluateKnifeCuttingAndBranchPlucking(inputs, 16, applyPourJitter);
+  if (cutOrPluck16) {
+    return cutOrPluck16;
   }
 
   // 2. Multi-source top-to-bottom pouring / mixing / discrete transfers across 4x4 with slot dosage

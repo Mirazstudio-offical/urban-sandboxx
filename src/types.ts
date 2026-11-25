@@ -1443,6 +1443,8 @@ export interface ShopInnerItemSpec {
   phoneAttributes?: Partial<PhoneAttributes>;
   phonePresetId?: string;
   hardwareAttributes?: Partial<HardwareComponentAttributes>;
+  produceAttributes?: Partial<ProduceAttributes>;
+  branchAttributes?: Partial<PlantBranchAttributes>;
   attributes?: UnifiedAttributes;
 }
 
@@ -1467,6 +1469,8 @@ export interface MapShopCatalogEntry {
   phoneAttributes?: Partial<PhoneAttributes>;
   phonePresetId?: string;
   hardwareAttributes?: Partial<HardwareComponentAttributes>;
+  produceAttributes?: Partial<ProduceAttributes>;
+  branchAttributes?: Partial<PlantBranchAttributes>;
   isOpen?: boolean;
   labelColor?: string;
   containerTintColor?: string;
@@ -2629,6 +2633,148 @@ export interface UnifiedAttributes {
   hardwareSpecs?: Record<string, string | number>;
   compatibilityRu?: string;
   installedComponentsCount?: number;
+  /** Атрибуты плодоовощной продукции (овощи, фрукты, цитрусы, ягоды, грибы) и веток с плодами */
+  juiciness?: number;
+  weightGrams?: number;
+  cutForm?: ProduceCutForm;
+  cutFormRu?: string;
+  part?: ProducePartKind;
+  partNameRu?: string;
+  isPeeled?: boolean;
+  isDried?: boolean;
+  branchKindRu?: string;
+  attachedFruitNameRu?: string;
+  attachedFruitCount?: number;
+}
+
+export type ProduceCategory =
+  | 'vegetable'
+  | 'fruit'
+  | 'citrus'
+  | 'large_berry'
+  | 'berry'
+  | 'mushroom'
+  | 'herb';
+
+export type ProduceCutForm =
+  | 'whole'
+  | 'peeled'
+  | 'half'
+  | 'quarter'
+  | 'chunk'
+  | 'wedge'
+  | 'slice'
+  | 'ring'
+  | 'strips'
+  | 'diced'
+  | 'shredded'
+  | 'grated'
+  | 'crushed'
+  | 'part'
+  | 'peel'
+  | 'core';
+
+export type ProducePartKind =
+  | 'whole_fruit'
+  | 'flesh'
+  | 'piece'
+  | 'clove'
+  | 'leaf'
+  | 'floret'
+  | 'cap'
+  | 'stem'
+  | 'segment'
+  | 'seeds'
+  | 'peel'
+  | 'core';
+
+export type ProduceSizeTier = 'tiny' | 'small' | 'medium' | 'large' | 'giant';
+
+export interface ProduceAttributes {
+  /** Базовый идентификатор вида (единый штучный предмет) */
+  speciesId: string;
+  /** Группа продукции */
+  produceCategory: ProduceCategory;
+  /** Сорт / разновидность */
+  varietyRu: string;
+  /** Сочность (0..100%) */
+  juiciness: number;
+  /** Вес текущего плода / кусочка в граммах */
+  weightGrams: number;
+  /** Вес исходного целого плода в граммах */
+  baseWholeWeightGrams: number;
+  /** Доля от целого плода (0.02..1.0) */
+  remainingFraction: number;
+  /** Типоразмер */
+  size: ProduceSizeTier;
+  /** Размер по-русски (напр. «Средний · 7.5 см») */
+  sizeNameRu: string;
+  /** Характерный линейный размер кусочка в см */
+  dimensionCm: number;
+  /** Форма нарезки */
+  cutForm: ProduceCutForm;
+  /** Название формы нарезки по-русски */
+  cutFormRu: string;
+  /** Модель / анатомическая часть плода */
+  part: ProducePartKind;
+  /** Название модели / части по-русски */
+  partNameRu: string;
+  /** Ключ 2D-модели для рендера */
+  modelKey: string;
+  /** Основной цвет кожицы / плода */
+  color: string;
+  /** Название цвета по-русски */
+  colorNameRu: string;
+  /** Цвет мякоти / среза */
+  fleshColor: string;
+  /** Очищен ли от кожуры / шелухи */
+  isPeeled: boolean;
+  /** Сушёный / вяленый */
+  isDried?: boolean;
+  /** Отварной */
+  isBoiled?: boolean;
+  /** Съедобна ли данная часть (false для кожуры/огрызка) */
+  edible?: boolean;
+}
+
+export type PlantBranchKind = 'twig' | 'cluster' | 'bunch' | 'mycelium';
+
+export interface PlantBranchAttachedFruit {
+  /** Базовый itemId штучного плода */
+  itemId: string;
+  /** Название плода по-русски */
+  nameRu: string;
+  /** Текущее количество плодов на ветке */
+  count: number;
+  /** Изначальное (максимальное) количество плодов на ветке */
+  maxCount: number;
+  /** Атрибуты каждого плода на ветке */
+  fruitAttributes: ProduceAttributes;
+}
+
+export interface PlantBranchAttributes {
+  /** Тип ветки / кисти / связки */
+  branchKind: PlantBranchKind;
+  /** Название типа по-русски */
+  branchKindRu: string;
+  /** Типоразмер ветки */
+  size: ProduceSizeTier;
+  /** Описание размера по-русски */
+  sizeNameRu: string;
+  /** Длина ветки в см */
+  lengthCm: number;
+  /** Вес самой ветки/стебля без плодов (г) */
+  branchWeightGrams: number;
+  /** Цвет ветки / стебля */
+  color: string;
+  /** Название цвета ветки по-русски */
+  colorNameRu: string;
+  /** Материал / текстура ветки */
+  materialRu: string;
+  /** Свежесть / упругость (0..100%) */
+  freshness: number;
+  /** Прикреплённый плод на ветке (null — пустая голая ветка) */
+  attachedFruit: PlantBranchAttachedFruit | null;
 }
 
 export interface CulinaryItemData {
@@ -2741,6 +2887,10 @@ export interface InventoryItem {
   chocolateAttributes?: ChocolateAttributes;
   /** Атрибуты посуды и столовых приборов (материал, объём, форма, цвет, узор) */
   kitchenwareAttributes?: KitchenwareAttributes;
+  /** Атрибуты штучного овоща, фрукта, цитруса, ягоды или гриба (сочность, вес, размер, нарезка, модель/часть) */
+  produceAttributes?: ProduceAttributes;
+  /** Атрибуты ветки/грозди/пучка с прикреплёнными плодами */
+  branchAttributes?: PlantBranchAttributes;
   // Nutrition & Biochemical Culinary Simulation
   nutrients?: {
     calories: number; // kcal

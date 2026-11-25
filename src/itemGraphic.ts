@@ -21,6 +21,13 @@ import { drawShadow, drawItemWithDynamicState, hasActiveItemVisualState, drawMic
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
 import { ITEM_CATALOG, LEGACY_KITCHENWARE_PRESETS, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
 import { LEGACY_PHONE_PRESETS, buildPhoneAttributes } from './phoneData';
+import {
+  LEGACY_PRODUCE_PRESETS,
+  LEGACY_BRANCH_PRESETS,
+  buildProduceAttributes,
+  buildBranchAttributes,
+  resolveProduceModelKey
+} from './produceData';
 
 let currentRenderDepth = 0;
 
@@ -68,6 +75,28 @@ export function drawItemModel2D(
         itemId: 'phone',
         phoneAttributes: effectiveItem?.phoneAttributes || buildPhoneAttributes(legacyId)
       };
+    } else if (
+      LEGACY_PRODUCE_PRESETS[effectiveId] &&
+      (isInner || rawCatalogOnly || !getResolvedPackagingConfig(effectiveId))
+    ) {
+      const lp = LEGACY_PRODUCE_PRESETS[effectiveId];
+      effectiveId = lp.speciesId;
+      effectiveItem = {
+        ...effectiveItem,
+        itemId: lp.speciesId,
+        produceAttributes: effectiveItem?.produceAttributes || buildProduceAttributes(lp.speciesId, lp.overrides)
+      };
+    } else if (
+      LEGACY_BRANCH_PRESETS[effectiveId] &&
+      (isInner || rawCatalogOnly || !getResolvedPackagingConfig(effectiveId))
+    ) {
+      const lbId = effectiveId;
+      effectiveId = 'plant_branch';
+      effectiveItem = {
+        ...effectiveItem,
+        itemId: 'plant_branch',
+        branchAttributes: effectiveItem?.branchAttributes || buildBranchAttributes(lbId)
+      };
     }
     const legacyFluid = !isInner && !rawCatalogOnly ? getResolvedFluidContainerConfig(effectiveId) : null;
     if (legacyFluid) {
@@ -112,11 +141,22 @@ export function drawItemModel2D(
             const chocoPreset = legacyPkg.innerChocolatePresets && legacyPkg.innerChocolatePresets.length > 0
               ? legacyPkg.innerChocolatePresets[idx % legacyPkg.innerChocolatePresets.length]
               : undefined;
+            const innerTargetId = legacyPkg.innerItemId || origPkgId;
+            const producePreset = legacyPkg.innerProduceOverrides
+              ? buildProduceAttributes(
+                  LEGACY_PRODUCE_PRESETS[innerTargetId]?.speciesId || innerTargetId,
+                  {
+                    ...(LEGACY_PRODUCE_PRESETS[innerTargetId]?.overrides || {}),
+                    ...legacyPkg.innerProduceOverrides
+                  }
+                )
+              : undefined;
             return {
-              itemId: legacyPkg.innerItemId || origPkgId,
+              itemId: innerTargetId,
               ...(preset ? { gummyAttributes: preset } : {}),
               ...(pelmenPreset ? { pelmenAttributes: pelmenPreset } : {}),
-              ...(chocoPreset ? { chocolateAttributes: chocoPreset } : {})
+              ...(chocoPreset ? { chocolateAttributes: chocoPreset } : {}),
+              ...(producePreset ? { produceAttributes: producePreset } : {})
             };
           });
           effectiveItem = {
@@ -152,25 +192,37 @@ export function drawItemModel2D(
         customRender(targetCtx, effectiveItem);
         drawn = true;
       } else {
-        drawn =
-          drawPaperPackagingItem(targetCtx, effectiveId, effectiveItem) ||
-          drawCandyPackagingItem(targetCtx, effectiveId, effectiveItem) ||
-          drawChocolatePackagingItem(targetCtx, effectiveId, effectiveItem) ||
-          drawCulinaryDishItem(targetCtx, effectiveId, effectiveItem) ||
-          drawGearToolItem(targetCtx, effectiveId, effectiveItem) ||
-          drawSmartphoneItem(targetCtx, effectiveId, effectiveItem) ||
-          drawHardwareComponentItem(targetCtx, effectiveId, effectiveItem) ||
-          drawFoodItem(targetCtx, effectiveId, effectiveItem) ||
-          drawDrinkItem(targetCtx, effectiveId) ||
-          drawMedicalItem(targetCtx, effectiveId) ||
-          drawFurnitureItem(targetCtx, effectiveId) ||
-          drawKitchenAndValuableItem(targetCtx, effectiveId, effectiveItem) ||
-          drawClothingItem(targetCtx, effectiveId) ||
-          drawMeatAndPoultryItem(targetCtx, effectiveId) ||
-          drawFishAndSeafoodItem(targetCtx, effectiveId) ||
-          drawProduceAndMushroomItem(targetCtx, effectiveId) ||
-          drawPantryAndDairyItem(targetCtx, effectiveId) ||
-          drawLeftoverItem(targetCtx, effectiveId);
+        const prodAttrs = effectiveItem?.produceAttributes;
+        const resolvedProdModel = prodAttrs ? resolveProduceModelKey(prodAttrs) : null;
+        if (resolvedProdModel === 'apple_core' || resolvedProdModel === 'banana_peel') {
+          drawn = drawLeftoverItem(targetCtx, resolvedProdModel);
+        } else if (
+          effectiveId === 'plant_branch' ||
+          (prodAttrs && (prodAttrs.cutForm !== 'whole' || resolvedProdModel !== effectiveId))
+        ) {
+          drawn = drawProduceAndMushroomItem(targetCtx, effectiveId, effectiveItem);
+        }
+        if (!drawn) {
+          drawn =
+            drawPaperPackagingItem(targetCtx, effectiveId, effectiveItem) ||
+            drawCandyPackagingItem(targetCtx, effectiveId, effectiveItem) ||
+            drawChocolatePackagingItem(targetCtx, effectiveId, effectiveItem) ||
+            drawCulinaryDishItem(targetCtx, effectiveId, effectiveItem) ||
+            drawGearToolItem(targetCtx, effectiveId, effectiveItem) ||
+            drawSmartphoneItem(targetCtx, effectiveId, effectiveItem) ||
+            drawHardwareComponentItem(targetCtx, effectiveId, effectiveItem) ||
+            drawFoodItem(targetCtx, effectiveId, effectiveItem) ||
+            drawDrinkItem(targetCtx, effectiveId) ||
+            drawMedicalItem(targetCtx, effectiveId) ||
+            drawFurnitureItem(targetCtx, effectiveId) ||
+            drawKitchenAndValuableItem(targetCtx, effectiveId, effectiveItem) ||
+            drawClothingItem(targetCtx, effectiveId) ||
+            drawMeatAndPoultryItem(targetCtx, effectiveId) ||
+            drawFishAndSeafoodItem(targetCtx, effectiveId) ||
+            drawProduceAndMushroomItem(targetCtx, effectiveId, effectiveItem) ||
+            drawPantryAndDairyItem(targetCtx, effectiveId) ||
+            drawLeftoverItem(targetCtx, effectiveId);
+        }
       }
 
       if (!drawn) {

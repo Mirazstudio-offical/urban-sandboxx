@@ -42,7 +42,9 @@ import {
   ChocolatePackagingShape,
   KitchenwareAttributes,
   PhoneAttributes,
-  HardwareComponentAttributes
+  HardwareComponentAttributes,
+  ProduceAttributes,
+  PlantBranchAttributes
 } from '../types';
 import { GameCalendarState, formatGameDate, formatGameTime } from '../calendarSystem';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
@@ -205,6 +207,8 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
       kitchenwareAttributes?: KitchenwareAttributes;
       phoneAttributes?: PhoneAttributes;
       hardwareAttributes?: HardwareComponentAttributes;
+      produceAttributes?: ProduceAttributes;
+      branchAttributes?: PlantBranchAttributes;
     }]>;
   }, []);
 
@@ -763,6 +767,31 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                             </span>
                             <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#94a3b8] text-[10px] font-mono tabular-nums">
                               {item.hardwareAttributes.dimensionsRu}
+                            </span>
+                          </div>
+                        )}
+                        {item.produceAttributes && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                              {item.produceAttributes.cutFormRu} · {item.produceAttributes.partNameRu}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                              Сочность {item.produceAttributes.juiciness}%
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                              {item.produceAttributes.weightGrams} г · {item.produceAttributes.dimensionCm} см
+                            </span>
+                          </div>
+                        )}
+                        {item.branchAttributes && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                              {item.branchAttributes.branchKindRu} · {item.branchAttributes.lengthCm} см
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono">
+                              {item.branchAttributes.attachedFruit
+                                ? `${item.branchAttributes.attachedFruit.nameRu} (${item.branchAttributes.attachedFruit.count} шт.)`
+                                : 'Без плодов'}
                             </span>
                           </div>
                         )}

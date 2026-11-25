@@ -3609,9 +3609,8 @@ export const EXTENDED_ITEM_PACKAGING_MAP: Record<string, UnifiedPackagingMapping
   raspberry_fresh: { containerId: 'tray_sealed_food', countInside: 12, innerItemId: 'berry_raspberry_single' },
   blueberry_fresh: { containerId: 'tray_sealed_food', countInside: 15, innerItemId: 'berry_blueberry_single' },
   cherry_fresh: { containerId: 'tray_sealed_food', countInside: 10, innerItemId: 'berry_cherry_single' },
-  tomato_cherry_bunch: { containerId: 'tray_sealed_food', countInside: 12, innerItemId: 'tomato_cherry_single' },
-  melon_diced: { containerId: 'tray_sealed_food', countInside: 4, innerItemId: 'melon_slice' },
-  lychee_fruit: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'berry_cherry_single' },
+  tomato_cherry_bunch: { containerId: 'tray_sealed_food', countInside: 1, innerItemId: 'tomato_cherry_vine' },
+  lychee_fruit: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'lychee_single' },
 
   // === 3. EGG CARTONS -> STANDALONE SINGLE EGGS ===
   eggs_chicken: { containerId: 'egg_carton_10', countInside: 10, innerItemId: 'egg_chicken_single' },

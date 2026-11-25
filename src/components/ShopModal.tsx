@@ -71,7 +71,13 @@ function getShopPreviewCacheKey(item: ShopItem): string {
   const hw = item.hardwareAttributes
     ? `${item.hardwareAttributes.kind || ''}:${item.hardwareAttributes.model || ''}:${item.hardwareAttributes.colorHex || ''}`
     : '';
-  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
+  const pr = item.produceAttributes
+    ? `${item.produceAttributes.cutForm || ''}:${item.produceAttributes.part || ''}:${item.produceAttributes.varietyRu || ''}:${item.produceAttributes.color || ''}`
+    : '';
+  const br = item.branchAttributes
+    ? `${item.branchAttributes.branchKind || ''}:${item.branchAttributes.attachedFruit?.itemId || ''}:${item.branchAttributes.attachedFruit?.count || 0}`
+    : '';
+  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${pr}|${br}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
 }
 function getShopPreviewItem(item: ShopItem): InventoryItem {
   const cacheKey = getShopPreviewCacheKey(item);
