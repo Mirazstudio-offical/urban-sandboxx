@@ -2629,6 +2629,62 @@ const InventoryModalContent: React.FC<{
                           );
                         })()}
 
+                        {selectedEntry.item.meatAttributes && (() => {
+                          const mt = selectedEntry.item.meatAttributes!;
+                          const pctWhole = Math.round(mt.remainingFraction * 100);
+                          const wLabel = mt.weightGrams >= 1000
+                            ? `${Number((mt.weightGrams / 1000).toFixed(2))} кг`
+                            : `${mt.weightGrams} г`;
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div className="inv-sec-row">
+                                <span className="inv-grp-lbl">Свойства мяса / рыбы</span>
+                                <span className="inv-cnt-meta mono">{mt.cutFormRu} · {wLabel}</span>
+                              </div>
+                              <div className="inv-kv-grid inv-kv-g2">
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Вид / отруб</span>
+                                  <span className="inv-kv-v">{mt.speciesNameRu} · {mt.anatomicalPartRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Нарезка</span>
+                                  <span className="inv-kv-v" style={{ color: '#e6b85c' }}>{mt.cutFormRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Вес / доля</span>
+                                  <span className="inv-kv-v mono">{wLabel} ({pctWhole}%)</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Размер</span>
+                                  <span className="inv-kv-v mono">{mt.sizeNameRu}</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Сочность</span>
+                                  <span className="inv-kv-v mono">{mt.juiciness}%</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Жирность</span>
+                                  <span className="inv-kv-v mono">{mt.fatContent}%</span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Кость / кожа</span>
+                                  <span className="inv-kv-v">
+                                    {mt.hasBone ? 'На кости' : 'Без кости'}{mt.hasSkin ? ', с кожей/панцирем' : ''}
+                                  </span>
+                                </div>
+                                <div className="inv-kv">
+                                  <span className="inv-kv-k">Цвет</span>
+                                  <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                    <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: mt.color, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: mt.fatColor, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    <span>{mt.colorNameRu}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {selectedEntry.item.branchAttributes && (() => {
                           const br = selectedEntry.item.branchAttributes!;
                           const att = br.attachedFruit;

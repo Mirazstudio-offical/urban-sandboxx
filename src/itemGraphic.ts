@@ -9,7 +9,7 @@ import { drawSmartphoneItem } from './graphics/smartphoneGraphics';
 import { drawHardwareComponentItem } from './graphics/hardwareComponentGraphics';
 import { drawFurnitureItem } from './graphics/furnitureGraphics';
 import { drawKitchenAndValuableItem } from './graphics/kitchenAndValuablesGraphics';
-import { drawMeatAndPoultryItem } from './graphics/meatAndPoultryGraphics';
+import { drawMeatAndPoultryItem, drawMeatCutForm } from './graphics/meatAndPoultryGraphics';
 import { drawFishAndSeafoodItem } from './graphics/fishAndSeafoodGraphics';
 import { drawProduceAndMushroomItem } from './graphics/produceAndMushroomGraphics';
 import { drawPantryAndDairyItem } from './graphics/pantryAndDairyGraphics';
@@ -193,6 +193,7 @@ export function drawItemModel2D(
         drawn = true;
       } else {
         const prodAttrs = effectiveItem?.produceAttributes;
+        const meatAttrs = effectiveItem?.meatAttributes;
         const resolvedProdModel = prodAttrs ? resolveProduceModelKey(prodAttrs) : null;
         if (resolvedProdModel === 'apple_core' || resolvedProdModel === 'banana_peel') {
           drawn = drawLeftoverItem(targetCtx, resolvedProdModel);
@@ -201,6 +202,13 @@ export function drawItemModel2D(
           (prodAttrs && (prodAttrs.cutForm !== 'whole' || resolvedProdModel !== effectiveId))
         ) {
           drawn = drawProduceAndMushroomItem(targetCtx, effectiveId, effectiveItem);
+        } else if (
+          meatAttrs &&
+          meatAttrs.cutForm !== 'whole' &&
+          !(meatAttrs.cutForm === 'minced' && effectiveId.includes('minced')) &&
+          !(meatAttrs.cutForm === 'steak' && effectiveId.endsWith('_steak') && meatAttrs.remainingFraction >= 0.99)
+        ) {
+          drawn = drawMeatCutForm(targetCtx, meatAttrs);
         }
         if (!drawn) {
           drawn =

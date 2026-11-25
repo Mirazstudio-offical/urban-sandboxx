@@ -77,7 +77,10 @@ function getShopPreviewCacheKey(item: ShopItem): string {
   const br = item.branchAttributes
     ? `${item.branchAttributes.branchKind || ''}:${item.branchAttributes.attachedFruit?.itemId || ''}:${item.branchAttributes.attachedFruit?.count || 0}`
     : '';
-  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${pr}|${br}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
+  const mt = item.meatAttributes
+    ? `${item.meatAttributes.cutForm || ''}:${item.meatAttributes.weightGrams || 0}:${item.meatAttributes.hasBone ? 1 : 0}:${item.meatAttributes.hasSkin ? 1 : 0}`
+    : '';
+  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${pr}|${br}|${mt}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
 }
 function getShopPreviewItem(item: ShopItem): InventoryItem {
   const cacheKey = getShopPreviewCacheKey(item);

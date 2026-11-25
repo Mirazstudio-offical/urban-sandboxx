@@ -17,6 +17,7 @@ import {
 } from './liquidSystem';
 import { isRegisteredItemId, createItem, createProduceItem, canItemFitInContainer, getItemTotalWeight, resolveCanonicalSubstanceId } from './items';
 import { computeKnifeCutForProduce, computeBranchPluck } from './produceData';
+import { isCuttableMeatItem, computeKnifeCutForMeat } from './meatData';
 
 function recalculateContainerWeight(container: InventoryItem): void {
   if (!container.isContainer) return;
@@ -1475,13 +1476,26 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     title: 'Нарезка и очистка продуктов ножом (по процентным клеткам)',
     category: 'cooking',
     description:
-      'Положите любой нож и один или несколько овощей, фруктов, цитрусов, ягод, грибов или веток с плодами. Процентная клетка задаёт степень нарезки: слот «Всё» очищает или разделяет плод целиком, а клетки от ~92% до ~8% режут от крупных кусков и половинок до долек, кружков, кубиков и тонкой шинковки.',
+      'Положите любой нож и один или несколько овощей, фруктов, цитрусов, ягод, грибов, веток с плодами или кусков мяса, птицы и рыбы. Процентная клетка задаёт степень нарезки: слот «Всё» очищает или разделяет продукт целиком, а клетки от ~92% до ~8% режут от крупных кусков и половинок до стейков, ломтиков, соломки, кубиков и рубки.',
     actionLabel: 'Нарезать ножом',
     ingredients: [
       { itemIds: KNIFE_IDS, label: 'Любой нож', isTool: true },
-      { itemIds: ['apple', 'potato_whole', 'tomato_whole', 'champignon_white_whole'], label: 'Любой овощ, фрукт, гриб, ягода или ветка с плодами' },
+      { itemIds: ['apple', 'potato_whole', 'tomato_whole', 'champignon_white_whole'], label: 'Любой овощ, фрукт, гриб, ягода, ветка, мясо, птица или рыба' },
     ],
     resultsSummary: ['Нож (сохраняется)', 'Нарезанные / очищенные части с обновлённым весом, размером и формой'],
+  },
+  {
+    id: 'craft_knife_cut_meat',
+    title: 'Нарезка и разделка мяса, птицы и рыбы ножом',
+    category: 'cooking',
+    description:
+      'Положите нож и любой отруб мяса, птицы, рыбы, морепродуктов или фарша в сетку 2×2 или 4×4. Слот «Всё» разделывает тушу/рыбу, обваливает с кости или режет на стейки; ~92%..~67% отрезает нужную долю; ~58%..~45% делит пополам; ~42%..~33% режет на стейки; ~25% — на ломтики/медальоны; ~17% — на соломку или кубики; ~8% — рубит в фарш/тартар.',
+    actionLabel: 'Нарезать мясо',
+    ingredients: [
+      { itemIds: KNIFE_IDS, label: 'Любой нож', isTool: true },
+      { itemIds: ['beef_rump_large', 'chicken_breast_large', 'salmon_fillet', 'pork_ribs_medium'], label: 'Любое мясо, птица, рыба, морепродукты или фарш' },
+    ],
+    resultsSummary: ['Нож (сохраняется)', 'Отрезанные куски, стейки, ломтики, соломка, кубики или рубленый фарш с сохранением прожарки и температуры'],
   },
   {
     id: 'craft_pluck_plant_branch',
@@ -1983,6 +1997,16 @@ function packOutputsIntoSlots(items: InventoryItem[], gridSize: 4 | 16): (Invent
               c.produceAttributes?.part === it.produceAttributes?.part &&
               c.produceAttributes?.varietyRu === it.produceAttributes?.varietyRu
           )
+        : it.meatAttributes
+        ? compacted.find(
+            (c) =>
+              c.itemId === it.itemId &&
+              c.meatAttributes?.cutForm === it.meatAttributes?.cutForm &&
+              c.meatAttributes?.hasBone === it.meatAttributes?.hasBone &&
+              c.meatAttributes?.hasSkin === it.meatAttributes?.hasSkin &&
+              Math.abs((c.meatAttributes?.weightGrams || 0) - (it.meatAttributes?.weightGrams || 0)) <=
+                Math.max(25, Math.round((it.meatAttributes?.weightGrams || 0) * 0.2))
+          )
         : undefined;
       if (existing) {
         existing.count = (existing.count || 1) + (it.count || 1);
@@ -2023,9 +2047,11 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
   const knives = entries.filter((e) => isKnifeTool(e.item));
   const others = entries.filter((e) => !isKnifeTool(e.item));
 
-  // Case 1: Knife + 1 or more produce items / pluckable plant_branches
+  // Case 1: Knife + 1 or more produce items, meat/poultry/fish/seafood cuts, or pluckable plant_branches
   if (knives.length === 1 && others.length >= 1) {
-    const allTargetsValid = others.every((e) => isCuttableProduceItem(e.item) || isPluckableBranchItem(e.item));
+    const allTargetsValid = others.every(
+      (e) => isCuttableProduceItem(e.item) || isPluckableBranchItem(e.item) || isCuttableMeatItem(e.item)
+    );
     if (!allTargetsValid) return null;
 
     const knifeEntry = knives[0];
@@ -2033,6 +2059,7 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
     const subtitles: string[] = [];
     const cutDetails: InteractionTransferDetail[] = [];
     let singleRes: ReturnType<typeof computeKnifeCutForProduce> = null;
+    let hasMeatTarget = false;
 
     for (const target of others) {
       const activeDosageSlot =
@@ -2044,9 +2071,17 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
       const dosageFraction =
         activeDosageSlot !== null ? getSlotPourDosageFraction(activeDosageSlot, gridSize) : 0.5;
 
-      const cutRes = isPluckableBranchItem(target.item)
+      const isBranch = isPluckableBranchItem(target.item);
+      const isMeat = !isBranch && isCuttableMeatItem(target.item);
+      if (isMeat) hasMeatTarget = true;
+
+      const cutRes = isBranch
         ? computeBranchPluck(target.item, dosageFraction, applyPourJitter, true, (spId, attrs) =>
             createProduceItem(spId, attrs)
+          )
+        : isMeat
+        ? computeKnifeCutForMeat(target.item, dosageFraction, applyPourJitter, (id) =>
+            createItem(id, 1, undefined, true)
           )
         : computeKnifeCutForProduce(target.item, dosageFraction, applyPourJitter);
 
@@ -2082,6 +2117,8 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
         transferDetails: cutDetails,
         matchedRecipeId: isPluckableBranchItem(others[0].item)
           ? 'craft_pluck_plant_branch'
+          : hasMeatTarget
+          ? 'craft_knife_cut_meat'
           : 'craft_knife_cut_produce',
       };
     }
@@ -2094,7 +2131,7 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
       actionLabel: `Нарезать всё (${others.length})`,
       previewOutputs,
       transferDetails: cutDetails,
-      matchedRecipeId: 'craft_knife_cut_produce',
+      matchedRecipeId: hasMeatTarget ? 'craft_knife_cut_meat' : 'craft_knife_cut_produce',
     };
   }
 

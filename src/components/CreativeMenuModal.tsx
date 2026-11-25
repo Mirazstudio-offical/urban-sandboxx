@@ -44,7 +44,8 @@ import {
   PhoneAttributes,
   HardwareComponentAttributes,
   ProduceAttributes,
-  PlantBranchAttributes
+  PlantBranchAttributes,
+  MeatAttributes
 } from '../types';
 import { GameCalendarState, formatGameDate, formatGameTime } from '../calendarSystem';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
@@ -209,6 +210,7 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
       hardwareAttributes?: HardwareComponentAttributes;
       produceAttributes?: ProduceAttributes;
       branchAttributes?: PlantBranchAttributes;
+      meatAttributes?: MeatAttributes;
     }]>;
   }, []);
 
@@ -780,6 +782,21 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                             </span>
                             <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
                               {item.produceAttributes.weightGrams} г · {item.produceAttributes.dimensionCm} см
+                            </span>
+                          </div>
+                        )}
+                        {item.meatAttributes && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                              {item.meatAttributes.cutFormRu} · {item.meatAttributes.anatomicalPartRu}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                              Жир {item.meatAttributes.fatContent}% · {item.meatAttributes.hasBone ? 'на кости' : 'без кости'}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                              {item.meatAttributes.weightGrams >= 1000
+                                ? `${Number((item.meatAttributes.weightGrams / 1000).toFixed(2))} кг`
+                                : `${item.meatAttributes.weightGrams} г`} · {item.meatAttributes.dimensionCm} см
                             </span>
                           </div>
                         )}

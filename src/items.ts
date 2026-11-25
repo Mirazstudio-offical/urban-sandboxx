@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, PhoneAttributes, HardwareComponentKind, HardwareComponentAttributes, ProduceAttributes, PlantBranchAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, PhoneAttributes, HardwareComponentKind, HardwareComponentAttributes, ProduceAttributes, PlantBranchAttributes, MeatAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
 import { sound } from './audio';
 import {
   getPhoneSpecsForItemId,
@@ -21,6 +21,11 @@ import {
   applyBranchAttributesToItem,
   computeBranchTotalWeightKg,
 } from './produceData';
+import {
+  isMeatOrFishItemId,
+  buildMeatAttributes,
+  applyMeatAttributesToItem,
+} from './meatData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
 import {
   administerMedication,
@@ -156,6 +161,7 @@ export interface ItemDefinition {
   hardwareAttributes?: HardwareComponentAttributes;
   produceAttributes?: ProduceAttributes;
   branchAttributes?: PlantBranchAttributes;
+  meatAttributes?: MeatAttributes;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -4878,6 +4884,14 @@ for (const speciesId of Object.keys(PRODUCE_SPECIES_SPECS)) {
   }
 }
 
+for (const itemId of Object.keys(ITEM_CATALOG)) {
+  const def = ITEM_CATALOG[itemId];
+  if (def && !def.meatAttributes && isMeatOrFishItemId(itemId)) {
+    const built = buildMeatAttributes(itemId, def.weight);
+    if (built) def.meatAttributes = built;
+  }
+}
+
 let itemCounter = 100;
 
 
@@ -6189,6 +6203,8 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
     applyProduceAttributesToItem(createdItem);
   } else if (resolvedItemId === 'plant_branch' && !createdItem.branchAttributes) {
     applyBranchAttributesToItem(createdItem);
+  } else if (isMeatOrFishItemId(resolvedItemId) && !createdItem.meatAttributes) {
+    applyMeatAttributesToItem(createdItem);
   }
 
   initItemThermalProperties(createdItem, 20.0);
@@ -6304,6 +6320,8 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     applyProduceAttributesToItem(item);
   } else if (item.itemId === 'plant_branch' && !item.branchAttributes) {
     applyBranchAttributesToItem(item);
+  } else if (isMeatOrFishItemId(item.itemId) && !item.meatAttributes) {
+    applyMeatAttributesToItem(item);
   }
 
   if (item.originalCatalogId && LEGACY_SUBSTANCE_ID_ALIASES[item.originalCatalogId]) {
@@ -6715,6 +6733,28 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
       attachedFruitCount = 0;
       varietyRu = `Пустая ${br.branchKindRu.toLowerCase()}`;
       purpose = 'Пустая растительная ветка / веточка';
+    }
+  } else if (item.meatAttributes) {
+    const mt = item.meatAttributes;
+    varietyRu = `${mt.speciesNameRu} · ${mt.anatomicalPartRu}`;
+    juiciness = mt.juiciness;
+    weightGrams = mt.weightGrams;
+    cutForm = mt.cutForm;
+    cutFormRu = mt.cutFormRu;
+    partNameRu = mt.anatomicalPartRu;
+    size = mt.size;
+    sizeNameRu = mt.sizeNameRu;
+    dimensionCm = mt.dimensionCm;
+    visuals.color = mt.color;
+    visuals.colorNameRu = mt.colorNameRu;
+    visuals.secondaryColor = mt.fatColor;
+    visuals.size = mt.size;
+    visuals.sizeNameRu = mt.sizeNameRu;
+    visuals.shapeNameRu = `${mt.cutFormRu} · ${mt.anatomicalPartRu}`;
+    if (!purpose) {
+      purpose = mt.cuttable === false
+        ? 'Костный / рыбный остов для наваристых бульонов и супов'
+        : 'Сырой или готовый мясной/рыбный продукт: можно нарезать ножом по процентным клеткам и готовить';
     }
   }
 
@@ -7544,6 +7584,10 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
             applyBranchAttributesToItem(inner, spec.branchAttributes);
             normalizeItemAttributes(inner);
           }
+          if (spec.meatAttributes) {
+            applyMeatAttributesToItem(inner, spec.meatAttributes);
+            normalizeItemAttributes(inner);
+          }
           if (spec.attributes) {
             inner.attributes = { ...(inner.attributes || {}), ...spec.attributes };
             normalizeItemAttributes(inner);
@@ -7654,6 +7698,10 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
     }
     if (entry.branchAttributes) {
       applyBranchAttributesToItem(raw, entry.branchAttributes);
+      normalizeItemAttributes(raw);
+    }
+    if (entry.meatAttributes) {
+      applyMeatAttributesToItem(raw, entry.meatAttributes);
       normalizeItemAttributes(raw);
     }
     if (entry.labelColor) raw.labelColor = entry.labelColor;
@@ -9208,6 +9256,7 @@ export function addItemToPlayer(
         count: 1,
         maxStack: 1,
         ...(itemToAdd.produceAttributes ? { produceAttributes: { ...itemToAdd.produceAttributes } } : {}),
+        ...(itemToAdd.meatAttributes ? { meatAttributes: { ...itemToAdd.meatAttributes } } : {}),
         ...(itemToAdd.branchAttributes
           ? {
               branchAttributes: {

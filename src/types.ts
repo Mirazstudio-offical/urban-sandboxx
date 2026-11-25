@@ -1445,6 +1445,7 @@ export interface ShopInnerItemSpec {
   hardwareAttributes?: Partial<HardwareComponentAttributes>;
   produceAttributes?: Partial<ProduceAttributes>;
   branchAttributes?: Partial<PlantBranchAttributes>;
+  meatAttributes?: Partial<MeatAttributes>;
   attributes?: UnifiedAttributes;
 }
 
@@ -1471,6 +1472,7 @@ export interface MapShopCatalogEntry {
   hardwareAttributes?: Partial<HardwareComponentAttributes>;
   produceAttributes?: Partial<ProduceAttributes>;
   branchAttributes?: Partial<PlantBranchAttributes>;
+  meatAttributes?: Partial<MeatAttributes>;
   isOpen?: boolean;
   labelColor?: string;
   containerTintColor?: string;
@@ -2636,7 +2638,7 @@ export interface UnifiedAttributes {
   /** Атрибуты плодоовощной продукции (овощи, фрукты, цитрусы, ягоды, грибы) и веток с плодами */
   juiciness?: number;
   weightGrams?: number;
-  cutForm?: ProduceCutForm;
+  cutForm?: ProduceCutForm | MeatCutForm;
   cutFormRu?: string;
   part?: ProducePartKind;
   partNameRu?: string;
@@ -2777,6 +2779,65 @@ export interface PlantBranchAttributes {
   attachedFruit: PlantBranchAttachedFruit | null;
 }
 
+export type MeatCategory = 'meat' | 'poultry' | 'fish' | 'seafood' | 'offal';
+
+export type MeatCutForm =
+  | 'whole'
+  | 'chunk'
+  | 'half'
+  | 'steak'
+  | 'medallion'
+  | 'strips'
+  | 'cubes'
+  | 'minced'
+  | 'fillet'
+  | 'separated';
+
+export interface MeatAttributes {
+  /** Базовый itemId исходного отруба / куска */
+  baseItemId: string;
+  /** Идентификатор вида (beef, pork, chicken, salmon, squid и др.) */
+  speciesId: string;
+  /** Название вида по-русски */
+  speciesNameRu: string;
+  /** Категория (мясо, птица, рыба, морепродукты, субпродукты) */
+  meatCategory: MeatCategory;
+  /** Исходный анатомический отруб / часть по-русски */
+  anatomicalPartRu: string;
+  /** Сочность (0..100%) */
+  juiciness: number;
+  /** Жирность / мраморность (0..100%) */
+  fatContent: number;
+  /** Текущий вес куска в граммах */
+  weightGrams: number;
+  /** Исходный вес целого куска / отруба в граммах */
+  baseWholeWeightGrams: number;
+  /** Доля от исходного куска (0.01..1.0) */
+  remainingFraction: number;
+  /** Типоразмер */
+  size: ProduceSizeTier;
+  /** Размер по-русски (напр. «Средний · ~12 см») */
+  sizeNameRu: string;
+  /** Характерный линейный размер кусочка в см */
+  dimensionCm: number;
+  /** Форма нарезки */
+  cutForm: MeatCutForm;
+  /** Название формы нарезки по-русски */
+  cutFormRu: string;
+  /** Есть ли кость в куске */
+  hasBone: boolean;
+  /** Есть ли кожа / панцирь / раковина */
+  hasSkin: boolean;
+  /** Основной цвет мяса (hex) */
+  color: string;
+  /** Название цвета по-русски */
+  colorNameRu: string;
+  /** Цвет жира / прожилок / шкурки (hex) */
+  fatColor: string;
+  /** Можно ли резать ножом (false для голых костей, головы, хребта) */
+  cuttable?: boolean;
+}
+
 export interface CulinaryItemData {
   isPreparedDish?: boolean;
   isWorkpiece?: boolean;
@@ -2891,6 +2952,8 @@ export interface InventoryItem {
   produceAttributes?: ProduceAttributes;
   /** Атрибуты ветки/грозди/пучка с прикреплёнными плодами */
   branchAttributes?: PlantBranchAttributes;
+  /** Атрибуты мяса, птицы, рыбы и морепродуктов (вид, отруб, нарезка, вес, размер, сочность, жирность, кость/кожа) */
+  meatAttributes?: MeatAttributes;
   // Nutrition & Biochemical Culinary Simulation
   nutrients?: {
     calories: number; // kcal
