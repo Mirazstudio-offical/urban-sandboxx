@@ -30,6 +30,7 @@ import {
   createEmptyInteractionGrid16,
   evaluateInteractionGrid4x4,
   getEffectiveFluidWrapper,
+  getSlotPourDosageLabel,
 } from '../interactionCrafting';
 import { syncFurnitureStorageThermodynamics } from '../itemThermalSystem';
 import { ItemIconCanvas } from './ItemIconCanvas';
@@ -383,10 +384,12 @@ const KitchenTableModalContent: React.FC<{
   const ensureOutputsCommitted = (): boolean => {
     if (hasCommittedOutputs) return true;
     if (!evalResult.isValid) return false;
-    setWbOutputs([...evalResult.previewOutputs]);
+    const committedResult = evaluateInteractionGrid4x4(wbInputs, { applyPourJitter: true });
+    if (!committedResult.isValid) return false;
+    setWbOutputs([...committedResult.previewOutputs]);
     setWbInputs(createEmptyInteractionGrid16());
     sound.playUseItem();
-    addPlayerNotification(player, evalResult.title, 'info');
+    addPlayerNotification(player, `${committedResult.title}: ${committedResult.subtitle}`, 'info');
     return true;
   };
 
@@ -398,7 +401,9 @@ const KitchenTableModalContent: React.FC<{
   const claimWbOutputToTable = (outputIdx: number) => {
     if (!hasCommittedOutputs) {
       if (!evalResult.isValid) return;
-      const committed = [...evalResult.previewOutputs];
+      const committedResult = evaluateInteractionGrid4x4(wbInputs, { applyPourJitter: true });
+      if (!committedResult.isValid) return;
+      const committed = [...committedResult.previewOutputs];
       const target = committed[outputIdx];
       if (!target) return;
       const res = addItemToFurnitureStorage(storage, target, 1);
@@ -410,6 +415,7 @@ const KitchenTableModalContent: React.FC<{
       setWbInputs(createEmptyInteractionGrid16());
       setWbOutputs(committed);
       sound.playPickup();
+      addPlayerNotification(player, `${committedResult.title}: ${committedResult.subtitle}`, 'info');
       notifyChanged();
       return;
     }
@@ -430,10 +436,14 @@ const KitchenTableModalContent: React.FC<{
   };
 
   const claimAllWbOutputsToTable = () => {
+    let committedResult: ReturnType<typeof evaluateInteractionGrid4x4> | null = null;
     const sourceList: InteractionSlotGrid16 = hasCommittedOutputs
       ? [...wbOutputs]
       : evalResult.isValid
-      ? [...evalResult.previewOutputs]
+      ? (() => {
+          committedResult = evaluateInteractionGrid4x4(wbInputs, { applyPourJitter: true });
+          return committedResult.isValid ? [...committedResult.previewOutputs] : createEmptyInteractionGrid16();
+        })()
       : createEmptyInteractionGrid16();
 
     let anyClaimed = false;
@@ -451,6 +461,9 @@ const KitchenTableModalContent: React.FC<{
     if (anyClaimed) {
       if (!hasCommittedOutputs) {
         setWbInputs(createEmptyInteractionGrid16());
+        if (committedResult) {
+          addPlayerNotification(player, `${committedResult.title}: ${committedResult.subtitle}`, 'info');
+        }
       }
       setWbOutputs(remaining);
       sound.playPickup();
@@ -1079,16 +1092,29 @@ const KitchenTableModalContent: React.FC<{
     const hasAnyOutputOrPreview = hasCommittedOutputs || evalResult.isValid;
     const isDropZone = dragUi?.overKey === 'zone:wb-in';
 
+    const activePourSourceSlots = new Set<number>(
+      evalResult.isValid
+        ? evalResult.transferDetails
+            .filter(d => d.dosagePct !== undefined)
+            .map(d => d.fromSlot)
+        : []
+    );
+
     const renderWbSlot = (
       slotKey: string,
       item: InventoryItem | null | undefined,
       isPreview: boolean,
-      onDoubleClick: () => void
+      onDoubleClick: () => void,
+      dosageLabel?: string | null,
+      isActivePour?: boolean
     ) => {
       const fill = getSlotFillInfo(item);
       const isDragging = dragUi?.sourceKey === slotKey;
       const isOver = dragUi?.overKey === slotKey;
       const isSel = selectedKey === slotKey;
+      const slotHint = dosageLabel
+        ? (item ? `${item.nameRu} · Дозировка: ${dosageLabel}` : `Дозировка слива: ${dosageLabel}`)
+        : item?.nameRu;
       return (
         <div
           key={slotKey}
@@ -1109,8 +1135,13 @@ const KitchenTableModalContent: React.FC<{
             borderColor: isPreview && !isOver ? 'rgba(224, 171, 69, .65)' : undefined,
             cursor: item ? 'grab' : 'default',
           }}
-          title={item ? item.nameRu : undefined}
+          title={slotHint}
         >
+          {dosageLabel && (
+            <span className={'kf-dose' + (isActivePour ? ' act' : '') + (item ? ' occ' : '')}>
+              {dosageLabel}
+            </span>
+          )}
           {item && (
             <>
               <ItemIconCanvas itemId={item.itemId} item={item} size={34} />
@@ -1142,7 +1173,7 @@ const KitchenTableModalContent: React.FC<{
             <Layers width={16} height={16} />
             <span>Взаимодействие на столе</span>
           </span>
-          <span className="kf-col-meta">4×4 вход · 4×4 выход</span>
+          <span className="kf-col-meta">Дозировка: 1-й слот всё → ~8% на глаз</span>
         </div>
 
         <div className="kf-wb-body">
@@ -1152,7 +1183,14 @@ const KitchenTableModalContent: React.FC<{
               <span className="kf-wb-lbl">Ввод (4×4)</span>
               <div className="kf-wb-grid4">
                 {gridIndices.map(idx =>
-                  renderWbSlot(`input:${idx}`, wbInputs[idx], false, () => removeWbInputToTable(idx))
+                  renderWbSlot(
+                    `input:${idx}`,
+                    wbInputs[idx],
+                    false,
+                    () => removeWbInputToTable(idx),
+                    getSlotPourDosageLabel(idx, 16),
+                    activePourSourceSlots.has(idx)
+                  )
                 )}
               </div>
             </div>

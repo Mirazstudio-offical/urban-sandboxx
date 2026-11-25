@@ -3202,7 +3202,9 @@ const LEGACY_KITCHENWARE_CONTAINER_ALIASES: Record<string, string> = {
   kitchen_mug_enamel: 'mug',
   kitchen_mug_glass: 'mug',
   glass_mug: 'mug',
-  kitchen_cup_porcelain: 'cup'
+  kitchen_cup_porcelain: 'cup',
+  kitchen_spoon_steel: 'spoon',
+  kitchen_spoon_wooden: 'spoon'
 };
 
 export function getContainerConfig(itemId: string | undefined | null): ContainerDefConfig | undefined {
@@ -4092,6 +4094,20 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     descriptionEn: 'Delicate tea or coffee cup.',
     supportsHybridContents: true,
     maxItemVolumeL: 0.18
+  },
+  spoon: {
+    itemId: 'spoon',
+    name: 'Spoon',
+    nameRu: 'Ложка',
+    maxMl: 20,
+    emptyWeightKg: 0.06,
+    emptyVolumeL: 0.05,
+    category: 'misc',
+    icon: 'Utensils',
+    descriptionRu: 'Столовая или кухонная ложка — вмещает жидкости, сыпучие продукты (сахар, соль, порошок) и мелкие кусочки еды.',
+    descriptionEn: 'Table or kitchen spoon holding liquids, powders, spices, or tiny food pieces.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.025
   }
 };
 
@@ -4139,7 +4155,7 @@ export function canContainerHoldHybridContents(itemId: string | undefined | null
  * Computes realistic maximum single-item volume (mouth/opening width constraint) for a hybrid vessel.
  */
 export function getHybridMaxItemVolumeL(itemId: string | undefined | null, maxMl: number): number {
-  const capL = Math.max(0.05, maxMl / 1000);
+  const capL = Math.max(0.01, maxMl / 1000);
   const cleanId = (itemId || '').replace(/_open$/, '');
   const cfg = getContainerConfig(cleanId);
   if (cfg?.maxItemVolumeL !== undefined) return cfg.maxItemVolumeL;
@@ -4196,11 +4212,32 @@ export function isHybridFluidContainer(item: InventoryItem | null | undefined): 
  */
 export function ensureHybridContainerProps(item: InventoryItem | null | undefined): void {
   if (!item) return;
+
+  // Forks can hold a bite-sized solid food morsel on their tines (no liquids)
+  const isForkUtensil =
+    item.itemId === 'fork' ||
+    item.itemId === 'kitchen_fork_steel' ||
+    item.itemId === 'kitchen_fork_silver' ||
+    item.kitchenwareAttributes?.kind === 'fork';
+  if (isForkUtensil) {
+    item.isContainer = true;
+    if (!Array.isArray(item.contents)) item.contents = [];
+    if (!item.containerCapacityL) item.containerCapacityL = 0.08;
+    if (!item.maxContainedItemVolumeL) item.maxContainedItemVolumeL = 0.08;
+    if (!item.maxContainedWeightKg) item.maxContainedWeightKg = 0.35;
+    if (!item.allowedItemCategories || item.allowedItemCategories.length === 0) {
+      item.allowedItemCategories = ['food'];
+    }
+    return;
+  }
+
   if (!item.fluidStorage) {
-    const directCfg = CONTAINER_CONFIGS[item.itemId];
+    const directCfg = getContainerConfig(item.itemId);
     if (directCfg && canContainerHoldHybridContents(item.itemId)) {
+      const kwCapMl = item.kitchenwareAttributes?.capacityMl;
+      const resolvedMaxMl = kwCapMl && kwCapMl > 0 ? kwCapMl : directCfg.maxMl;
       item.fluidStorage = {
-        maxMl: directCfg.maxMl,
+        maxMl: resolvedMaxMl,
         currentMl: 0,
         liquidId: null,
         emptyWeightKg: directCfg.emptyWeightKg,
@@ -4213,18 +4250,19 @@ export function ensureHybridContainerProps(item: InventoryItem | null | undefine
     }
   }
   if (!canContainerHoldHybridContents(item.itemId)) return;
-  const maxMl = Math.max(50, item.fluidStorage.maxMl || 500);
+  const maxMl = Math.max(10, item.fluidStorage.maxMl || 500);
   const capL = Number((maxMl / 1000).toFixed(3));
   item.isContainer = true;
   if (!Array.isArray(item.contents)) {
     item.contents = [];
   }
   item.containerCapacityL = capL;
-  if (!item.maxContainedItemVolumeL || item.maxContainedItemVolumeL > capL) {
-    item.maxContainedItemVolumeL = getHybridMaxItemVolumeL(item.itemId, maxMl);
+  const maxItemVol = getHybridMaxItemVolumeL(item.itemId, maxMl);
+  if (!item.maxContainedItemVolumeL || (capL >= 0.05 && item.maxContainedItemVolumeL > capL)) {
+    item.maxContainedItemVolumeL = maxItemVol;
   }
   if (!item.maxContainedWeightKg) {
-    item.maxContainedWeightKg = Number(Math.max(2.0, capL * 2.5).toFixed(2));
+    item.maxContainedWeightKg = Number(Math.max(0.5, capL * 2.5).toFixed(2));
   }
 }
 

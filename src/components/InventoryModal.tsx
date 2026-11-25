@@ -54,6 +54,7 @@ import {
   InteractionSlotGrid4,
   evaluateInteractionGrid,
   getEffectiveFluidWrapper,
+  getSlotPourDosageLabel,
 } from '../interactionCrafting';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
@@ -746,19 +747,22 @@ const InventoryModalContent: React.FC<{
       }
     }
 
+    const finalResult = evaluateInteractionGrid(interactionInputs, { applyPourJitter: true });
+    if (!finalResult.isValid) return;
+
     for (let i = 0; i < 4; i++) {
       interactionInputs[i] = null;
-      interactionOutputs[i] = evalResult.previewOutputs[i]
-        ? JSON.parse(JSON.stringify(evalResult.previewOutputs[i]))
+      interactionOutputs[i] = finalResult.previewOutputs[i]
+        ? JSON.parse(JSON.stringify(finalResult.previewOutputs[i]))
         : null;
     }
 
-    if (evalResult.kind === 'pour_liquid' || evalResult.kind === 'mix_liquid') {
+    if (finalResult.kind === 'pour_liquid' || finalResult.kind === 'mix_liquid') {
       sound.playWaterSpray();
     } else {
       sound.playUseItem();
     }
-    addPlayerNotification(player, `${evalResult.title}: ${evalResult.subtitle}`, 'heal');
+    addPlayerNotification(player, `${finalResult.title}: ${finalResult.subtitle}`, 'heal');
     forceRender(n => n + 1);
   };
 
@@ -783,13 +787,15 @@ const InventoryModalContent: React.FC<{
   const ensureOutputsCommitted = (): boolean => {
     if (hasCommittedOutputs) return true;
     if (!evalResult.isValid) return false;
+    const finalResult = evaluateInteractionGrid(interactionInputs, { applyPourJitter: true });
+    if (!finalResult.isValid) return false;
     for (let i = 0; i < 4; i++) {
       interactionInputs[i] = null;
-      interactionOutputs[i] = evalResult.previewOutputs[i]
-        ? JSON.parse(JSON.stringify(evalResult.previewOutputs[i]))
+      interactionOutputs[i] = finalResult.previewOutputs[i]
+        ? JSON.parse(JSON.stringify(finalResult.previewOutputs[i]))
         : null;
     }
-    if (evalResult.kind === 'pour_liquid' || evalResult.kind === 'mix_liquid') {
+    if (finalResult.kind === 'pour_liquid' || finalResult.kind === 'mix_liquid') {
       sound.playWaterSpray();
     } else {
       sound.playUseItem();
@@ -3547,6 +3553,8 @@ const InventoryModalContent: React.FC<{
                 options?: {
                   isPreview?: boolean;
                   isHand?: boolean;
+                  dosageLabel?: string | null;
+                  isActivePour?: boolean;
                   onDoubleClick?: () => void;
                 }
               ) => {
@@ -3555,6 +3563,7 @@ const InventoryModalContent: React.FC<{
                 const isBeingDragged = wbDragUi?.sourceKey === slotKey;
                 const isDropTarget = wbDragUi?.overKey === slotKey;
                 const isSelected = selectedWbSlot === slotKey;
+                const doseLabel = options?.dosageLabel || null;
 
                 return (
                   <div
@@ -3580,8 +3589,17 @@ const InventoryModalContent: React.FC<{
                         ? 'rgba(224, 171, 69, .65)'
                         : undefined,
                     }}
-                    title={info?.tooltip}
+                    title={
+                      doseLabel
+                        ? (info?.tooltip ? `${info.tooltip} · Дозировка: ${doseLabel}` : `Дозировка слива: ${doseLabel}`)
+                        : info?.tooltip
+                    }
                   >
+                    {doseLabel && (
+                      <span className={'inv-dose' + (options?.isActivePour ? ' act' : '') + (item ? ' occ' : '')}>
+                        {doseLabel}
+                      </span>
+                    )}
                     {item ? (
                       <>
                         <ItemIconCanvas itemId={item.itemId} item={item} size={46} />
@@ -3602,6 +3620,14 @@ const InventoryModalContent: React.FC<{
                   </div>
                 );
               };
+
+              const activePourSourceSlots = new Set<number>(
+                evalResult.isValid
+                  ? evalResult.transferDetails
+                      .filter(d => d.dosagePct !== undefined)
+                      .map(d => d.fromSlot)
+                  : []
+              );
 
               return (
                 <div className="inv-wb-wrap">
@@ -3628,6 +3654,8 @@ const InventoryModalContent: React.FC<{
                         <div className="inv-wb-grid2">
                           {[0, 1, 2, 3].map(idx =>
                             renderSquareSlot(`input:${idx}`, interactionInputs[idx], {
+                              dosageLabel: getSlotPourDosageLabel(idx, 4),
+                              isActivePour: activePourSourceSlots.has(idx),
                               onDoubleClick: () => handleRemoveInputSlot(idx),
                             })
                           )}

@@ -76,6 +76,13 @@ export interface InteractionTransferDetail {
   isMixture?: boolean;
   mixtureName?: string;
   mixtureColor?: string;
+  dosagePct?: number;
+  isApproximate?: boolean;
+}
+
+export interface InteractionEvalOptions {
+  /** When true (at commit/execution time), applies realistic human hand-pour imprecision to partial-dosage pours. */
+  applyPourJitter?: boolean;
 }
 
 export interface InteractionEvaluationResult {
@@ -87,6 +94,60 @@ export interface InteractionEvaluationResult {
   previewOutputs: InteractionSlotGrid4;
   transferDetails: InteractionTransferDetail[];
   matchedRecipeId?: string;
+}
+
+/**
+ * Returns the nominal pour dosage fraction in (0, 1] based on source slot index.
+ * Top-left slot (0) always pours 100% (everything that fits).
+ * Each subsequent slot left-to-right, top-to-bottom down to the penultimate row rightmost slot steps down evenly.
+ */
+export function getSlotPourDosageFraction(slotIndex: number, gridSize: 4 | 16): number {
+  const sourceSlotCount = gridSize === 16 ? 12 : 2;
+  if (slotIndex <= 0) return 1.0;
+  const clamped = Math.min(sourceSlotCount - 1, slotIndex);
+  return (sourceSlotCount - clamped) / sourceSlotCount;
+}
+
+/**
+ * Compact UI badge label for a source slot's nominal dosage ("Всё" for slot 0, "~92%".."~8%" for partial slots).
+ */
+export function getSlotPourDosageLabel(slotIndex: number, gridSize: 4 | 16): string | null {
+  const sourceSlotCount = gridSize === 16 ? 12 : 2;
+  if (slotIndex < 0 || slotIndex >= sourceSlotCount) return null;
+  if (slotIndex === 0) return 'Всё';
+  const pct = Math.round(getSlotPourDosageFraction(slotIndex, gridSize) * 100);
+  return `~${pct}%`;
+}
+
+function computeDosedPourMl(
+  maxPossibleMl: number,
+  dosageFraction: number,
+  applyJitter: boolean
+): { amountMl: number; isApproximate: boolean } {
+  if (maxPossibleMl <= 0) return { amountMl: 0, isApproximate: false };
+  if (dosageFraction >= 0.999) {
+    return { amountMl: maxPossibleMl, isApproximate: false };
+  }
+
+  const nominal = Math.max(1, Math.min(maxPossibleMl, Math.round(maxPossibleMl * dosageFraction)));
+  if (!applyJitter) {
+    return { amountMl: nominal, isApproximate: true };
+  }
+
+  // Organic human hand-pour imprecision: triangular noise (~ +/-13%) + small splash wobble
+  const tri = Math.random() + Math.random() - 1;
+  const relDelta = nominal * tri * 0.13;
+  const splashDelta = (Math.random() * 2 - 1) * (maxPossibleMl <= 40 ? 1.8 : 3.5);
+  let actual = Math.round(nominal + relDelta + splashDelta);
+
+  // Avoid sterile exact multiples of 5 ml when eyeballing partial pours from larger vessels
+  if (maxPossibleMl >= 25 && actual > 3 && actual < maxPossibleMl - 2 && actual % 5 === 0) {
+    actual += Math.random() < 0.5 ? -1 : 1;
+  }
+
+  actual = Math.max(1, Math.min(maxPossibleMl, actual));
+  if (maxPossibleMl - actual < 1) actual = maxPossibleMl;
+  return { amountMl: actual, isApproximate: false };
 }
 
 /**
@@ -316,6 +377,24 @@ const LEGACY_CONTAINER_BRIDGES: Record<string, LegacyContainerBridge> = {
     emptyWeightKg: 0.06,
     baseItemNameRu: 'Жестяная банка (0.4 л)',
     emptyItemId: 'tin_can_empty',
+  },
+  spoon: {
+    maxMl: 20,
+    emptyWeightKg: 0.06,
+    baseItemNameRu: 'Ложка',
+    emptyItemId: 'spoon',
+  },
+  kitchen_spoon_steel: {
+    maxMl: 20,
+    emptyWeightKg: 0.06,
+    baseItemNameRu: 'Ложка',
+    emptyItemId: 'spoon',
+  },
+  kitchen_spoon_wooden: {
+    maxMl: 25,
+    emptyWeightKg: 0.04,
+    baseItemNameRu: 'Деревянная ложка',
+    emptyItemId: 'spoon',
   },
 };
 
@@ -732,7 +811,9 @@ export function tryPourOrMixTopToBottom(
   topItem: InventoryItem,
   bottomItem: InventoryItem,
   fromSlot: number,
-  toSlot: number
+  toSlot: number,
+  dosageFraction: number = 1.0,
+  applyPourJitter: boolean = false
 ): {
   updatedTop: InventoryItem;
   updatedBottom: InventoryItem;
@@ -771,9 +852,17 @@ export function tryPourOrMixTopToBottom(
     return null;
   }
 
-  const transferMl = Math.min(topState.currentMl, freeSpaceMl);
+  const maxPossibleMl = Math.min(topState.currentMl, freeSpaceMl);
+  if (maxPossibleMl <= 0) return null;
+
+  const { amountMl: transferMl, isApproximate } = computeDosedPourMl(
+    maxPossibleMl,
+    dosageFraction,
+    applyPourJitter
+  );
   if (transferMl <= 0) return null;
 
+  const dosagePct = Math.round(Math.max(0, Math.min(1, dosageFraction)) * 100);
   const topNameBefore = getSubstanceDisplayName(topState);
   const bottomNameBefore = getSubstanceDisplayName(bottomState);
   const unit = topIsDry ? 'г' : 'мл';
@@ -865,11 +954,29 @@ export function tryPourOrMixTopToBottom(
           (namedRule?.bonusEffects?.soothePanic || 0)
       );
 
+      const rawBIngs = bottomState.attributes?.ingredients ?? bottomState.attributes?.sourceIngredients;
+      const bIngs = Array.isArray(rawBIngs)
+        ? rawBIngs
+        : rawBIngs
+        ? [rawBIngs]
+        : [bottomNameBefore];
+
+      const rawTIngs = topState.attributes?.ingredients ?? topState.attributes?.sourceIngredients;
+      const tIngs = Array.isArray(rawTIngs)
+        ? rawTIngs
+        : rawTIngs
+        ? [rawTIngs]
+        : [topNameBefore];
+
+      const uniqueIngredients = Array.from(new Set([...bIngs, ...tIngs]));
+
       const pctBottom = Math.round((prevBottomMl / newBottomMl) * 100);
       const pctTop = Math.max(1, 100 - pctBottom);
 
       const computedVarietyRu = namedRule
         ? namedRule.nameRu
+        : uniqueIngredients.length >= 3 || bottomNameBefore.startsWith('Смесь')
+        ? `Смесь: ${uniqueIngredients.slice(0, 3).join(' + ')}${uniqueIngredients.length > 3 ? ` (+${uniqueIngredients.length - 3})` : ''}`
         : `Смесь: ${bottomNameBefore} (${pctBottom}%) + ${topNameBefore} (${pctTop}%)`;
 
       const computedColor = namedRule ? namedRule.colorHex : blendedColor;
@@ -886,22 +993,6 @@ export function tryPourOrMixTopToBottom(
           ? bottomState.liquidId
           : topState.liquidId
       ) as LiquidId;
-
-      const rawBIngs = bottomState.attributes?.ingredients ?? bottomState.attributes?.sourceIngredients;
-      const bIngs = Array.isArray(rawBIngs)
-        ? rawBIngs
-        : rawBIngs
-        ? [rawBIngs]
-        : [bottomNameBefore];
-
-      const rawTIngs = topState.attributes?.ingredients ?? topState.attributes?.sourceIngredients;
-      const tIngs = Array.isArray(rawTIngs)
-        ? rawTIngs
-        : rawTIngs
-        ? [rawTIngs]
-        : [topNameBefore];
-
-      const uniqueIngredients = Array.from(new Set([...bIngs, ...tIngs]));
 
       const customAttr: FluidSubstanceAttributes = {
         varietyRu: computedVarietyRu,
@@ -949,18 +1040,20 @@ export function tryPourOrMixTopToBottom(
     syncItemContainerProperties(updatedBottom);
   }
 
+  const approxPrefix = isApproximate ? '~' : '';
+  const doseTag = dosageFraction < 0.999 ? (isApproximate ? `, ~${dosagePct}%` : `, на глаз`) : '';
   const remainingSourceLabel =
     nextTopState.currentMl > 0
-      ? `Остаток в верхней таре: ${Math.round(nextTopState.currentMl)} / ${nextTopState.maxMl} ${unit}`
-      : 'Верхняя тара полностью опустошена (0 мл)';
+      ? `Остаток: ${approxPrefix}${Math.round(nextTopState.currentMl)} / ${nextTopState.maxMl} ${unit}`
+      : 'Верхняя тара опустошена (0 мл)';
 
   const bottomBreakdown = getContainerCapacityBreakdown(updatedBottom);
   const hasBottomSolids = Boolean(updatedBottom.contents && updatedBottom.contents.length > 0);
   const resultingTargetLabel = hasBottomSolids
-    ? `${getSubstanceDisplayName(nextBottomState)} + ${updatedBottom.contents!.length} предм. (${Math.round(
+    ? `${getSubstanceDisplayName(nextBottomState)} + ${updatedBottom.contents!.length} предм. (${approxPrefix}${Math.round(
         bottomBreakdown.usedMl
       )} / ${bottomBreakdown.totalCapacityMl} мл)`
-    : `${getSubstanceDisplayName(nextBottomState)} (${Math.round(
+    : `${getSubstanceDisplayName(nextBottomState)} (${approxPrefix}${Math.round(
         nextBottomState.currentMl
       )} / ${nextBottomState.maxMl} ${unit})`;
 
@@ -973,12 +1066,14 @@ export function tryPourOrMixTopToBottom(
       toSlot,
       sourceName: topItem.nameRu,
       targetName: bottomItem.nameRu,
-      transferredAmountLabel: `${Math.round(transferMl)} ${unit} (${topNameBefore})`,
+      transferredAmountLabel: `${approxPrefix}${Math.round(transferMl)} ${unit} (${topNameBefore}${doseTag})`,
       remainingSourceLabel,
       resultingTargetLabel,
       isMixture,
       mixtureName,
       mixtureColor,
+      dosagePct,
+      isApproximate,
     },
   };
 }
@@ -1759,11 +1854,139 @@ export function getActiveInteractionCraftRecipes(): InteractionCraftRecipe[] {
   );
 }
 
+function canItemActAsTargetReceiver(item: InventoryItem | null): boolean {
+  if (!item) return false;
+  const fluidWrap = getEffectiveFluidWrapper(item);
+  if (fluidWrap && fluidWrap.isOpened) return true;
+  const probe = cloneInventoryItem(item);
+  ensureHybridContainerProps(probe);
+  return Boolean(probe.isContainer && !probe.singleUseContainer && !isFluidContainerClosed(probe));
+}
+
+/**
+ * Pairs ALL occupied source slots strictly above the bottom-most receiver row
+ * with their matching target container (same column first, otherwise nearest receiver).
+ * When a single receiver sits below multiple items/containers, EVERY upper source transfers into it in one action.
+ */
+function buildTransferPairsForGrid(
+  inputs: (InventoryItem | null)[],
+  cols: number,
+  rows: number
+): [number, number][] {
+  const occupied: number[] = [];
+  for (let i = 0; i < cols * rows; i++) {
+    if (inputs[i]) occupied.push(i);
+  }
+  if (occupied.length < 2) return [];
+
+  let targetRow = -1;
+  let targetSlots: number[] = [];
+  for (let r = rows - 1; r >= 1; r--) {
+    const rowReceivers: number[] = [];
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      if (inputs[idx] && canItemActAsTargetReceiver(inputs[idx])) {
+        rowReceivers.push(idx);
+      }
+    }
+    if (rowReceivers.length > 0 && occupied.some((idx) => Math.floor(idx / cols) < r)) {
+      targetRow = r;
+      targetSlots = rowReceivers;
+      break;
+    }
+  }
+  if (targetRow < 1 || targetSlots.length === 0) return [];
+
+  const pairs: [number, number][] = [];
+  for (const srcIdx of occupied) {
+    const srcRow = Math.floor(srcIdx / cols);
+    if (srcRow >= targetRow) continue;
+    const srcCol = srcIdx % cols;
+
+    let bestTarget = targetSlots.find((tIdx) => tIdx % cols === srcCol);
+    if (bestTarget === undefined) {
+      bestTarget = targetSlots.reduce((best, cand) => {
+        const dCand = Math.abs((cand % cols) - srcCol);
+        const dBest = Math.abs((best % cols) - srcCol);
+        return dCand < dBest ? cand : best;
+      }, targetSlots[0]);
+    }
+    pairs.push([srcIdx, bestTarget]);
+  }
+  return pairs;
+}
+
+function summarizeBatchTransfers(
+  details: InteractionTransferDetail[],
+  anyMixture: boolean,
+  anyLiquidPour: boolean,
+  anyDiscreteTransfer: boolean
+): {
+  kind: 'pour_liquid' | 'mix_liquid' | 'transfer_items';
+  title: string;
+  subtitle: string;
+  actionLabel: string;
+} {
+  const firstDetail = details[0];
+  const lastDetail = details[details.length - 1];
+  const multi = details.length > 1;
+  const shownAmounts = details
+    .slice(0, 3)
+    .map((d) => d.transferredAmountLabel)
+    .join(' · ');
+  const moreSuffix = details.length > 3 ? ` (+${details.length - 3})` : '';
+
+  if (anyMixture) {
+    return {
+      kind: 'mix_liquid',
+      title: multi
+        ? `Смешивание и наполнение (${details.length})`
+        : lastDetail.mixtureName
+        ? `Смешивание: ${lastDetail.mixtureName}`
+        : 'Смешивание жидкостей / сыпучих веществ',
+      subtitle: `${shownAmounts}${moreSuffix} → ${lastDetail.resultingTargetLabel}`,
+      actionLabel: 'Перелить и смешать',
+    };
+  }
+  if (anyLiquidPour && anyDiscreteTransfer) {
+    return {
+      kind: 'pour_liquid',
+      title: `Переливание и укладка в тару (${details.length})`,
+      subtitle: `${shownAmounts}${moreSuffix} → ${lastDetail.resultingTargetLabel}`,
+      actionLabel: 'Перелить и уложить',
+    };
+  }
+  if (anyLiquidPour) {
+    return {
+      kind: 'pour_liquid',
+      title: multi
+        ? `Переливание из ${details.length} ёмкостей`
+        : 'Переливание / пересыпание из верхней тары в нижнюю',
+      subtitle: multi
+        ? `${shownAmounts}${moreSuffix} → ${lastDetail.resultingTargetLabel}`
+        : `${firstDetail.transferredAmountLabel} · ${firstDetail.remainingSourceLabel}`,
+      actionLabel: 'Перелить / Пересыпать',
+    };
+  }
+  return {
+    kind: 'transfer_items',
+    title: multi
+      ? `Укладка в тару (${details.length} поз.)`
+      : 'Пересыпание / укладка предметов в нижнюю тару',
+    subtitle: `${shownAmounts}${moreSuffix} → ${lastDetail.resultingTargetLabel}`,
+    actionLabel: 'Пересыпать в тару',
+  };
+}
+
 /**
  * Evaluates the 4 input slots (`[0, 1]` = Top Row, `[2, 3]` = Bottom Row) and returns
  * the resulting 4 output slots (`previewOutputs`) along with detailed transfer/craft info.
  */
-export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): InteractionEvaluationResult {
+export function evaluateInteractionGrid(
+  inputs: InteractionSlotGrid4,
+  options?: InteractionEvalOptions
+): InteractionEvaluationResult {
+  const applyPourJitter = Boolean(options?.applyPourJitter);
   const hasAnyInput = inputs.some((item) => item !== null);
   if (!hasAnyInput) {
     return {
@@ -1771,7 +1994,7 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
       kind: 'none',
       title: 'Сетка ввода пуста',
       subtitle:
-        'Положите 2 предмета из рук или карманов в сетку ввода (2×2). Верхний ряд — источник, нижний ряд — приёмная тара.',
+        'Положите предметы в сетку (2×2). Верхний левый слот выливает всё, верхний правый — примерно половину (на глаз).',
       actionLabel: 'Ожидание предметов',
       previewOutputs: [null, null, null, null],
       transferDetails: [],
@@ -1788,25 +2011,8 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
     }
   }
 
-  // 2. Check Top-to-Bottom Pouring / Mixing / Discrete Transfer!
-  // Primary pairs: Left Column (0 -> 2), Right Column (1 -> 3).
-  // Cross-column fallback: if only ONE top slot is occupied and ONE bottom slot is occupied in diagonal (0 -> 3 or 1 -> 2), pair them automatically!
-  const pairsToEvaluate: [number, number][] = [];
-
-  if (inputs[0] && inputs[2]) {
-    pairsToEvaluate.push([0, 2]);
-  }
-  if (inputs[1] && inputs[3]) {
-    pairsToEvaluate.push([1, 3]);
-  }
-
-  if (pairsToEvaluate.length === 0) {
-    const topIndices = [0, 1].filter((i) => inputs[i] !== null);
-    const bottomIndices = [2, 3].filter((i) => inputs[i] !== null);
-    if (topIndices.length === 1 && bottomIndices.length === 1) {
-      pairsToEvaluate.push([topIndices[0], bottomIndices[0]]);
-    }
-  }
+  // 2. Multi-source top-to-bottom pouring / mixing / discrete transfer with slot dosage
+  const pairsToEvaluate = buildTransferPairsForGrid(inputs, 2, 2);
 
   if (pairsToEvaluate.length > 0) {
     const previewOutputs: InteractionSlotGrid4 = [
@@ -1825,18 +2031,46 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
       const bottomItem = previewOutputs[bottomIdx];
       if (!topItem || !bottomItem) continue;
 
-      // Try liquid / granular pouring & mixing first
-      const pourRes = tryPourOrMixTopToBottom(topItem, bottomItem, topIdx, bottomIdx);
+      const dosageFraction = getSlotPourDosageFraction(topIdx, 4);
+
+      const pourRes = tryPourOrMixTopToBottom(
+        topItem,
+        bottomItem,
+        topIdx,
+        bottomIdx,
+        dosageFraction,
+        applyPourJitter
+      );
       if (pourRes) {
         previewOutputs[topIdx] = pourRes.updatedTop;
         previewOutputs[bottomIdx] = pourRes.updatedBottom;
         details.push(pourRes.detail);
         anyLiquidPour = true;
         if (pourRes.isMixture) anyMixture = true;
+
+        // If full dump (slot 0) and top hybrid container also holds solid contents, tip them out too
+        if (
+          dosageFraction >= 0.999 &&
+          previewOutputs[topIdx]?.contents &&
+          previewOutputs[topIdx]!.contents!.length > 0 &&
+          previewOutputs[bottomIdx]
+        ) {
+          const extraDiscrete = tryTransferDiscreteTopToBottom(
+            previewOutputs[topIdx]!,
+            previewOutputs[bottomIdx]!,
+            topIdx,
+            bottomIdx
+          );
+          if (extraDiscrete) {
+            previewOutputs[topIdx] = extraDiscrete.updatedTop;
+            previewOutputs[bottomIdx] = extraDiscrete.updatedBottom;
+            details.push(extraDiscrete.detail);
+            anyDiscreteTransfer = true;
+          }
+        }
         continue;
       }
 
-      // Otherwise try discrete item/container pouring (e.g. pouring candies/items from top bag into bottom box/bag)
       const discreteRes = tryTransferDiscreteTopToBottom(topItem, bottomItem, topIdx, bottomIdx);
       if (discreteRes) {
         previewOutputs[topIdx] = discreteRes.updatedTop;
@@ -1847,42 +2081,16 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
     }
 
     if (details.length > 0) {
-      const firstDetail = details[0];
-      if (anyMixture) {
-        return {
-          isValid: true,
-          kind: 'mix_liquid',
-          title: firstDetail.mixtureName
-            ? `Смешивание: ${firstDetail.mixtureName}`
-            : 'Смешивание жидкостей / сыпучих веществ',
-          subtitle: `${firstDetail.transferredAmountLabel} → ${firstDetail.resultingTargetLabel}`,
-          actionLabel: 'Перелить и смешать',
-          previewOutputs,
-          transferDetails: details,
-        };
-      }
-      if (anyLiquidPour) {
-        return {
-          isValid: true,
-          kind: 'pour_liquid',
-          title: 'Переливание / пересыпание из верхней тары в нижнюю',
-          subtitle: `${firstDetail.transferredAmountLabel} · ${firstDetail.remainingSourceLabel}`,
-          actionLabel: 'Перелить / Пересыпать',
-          previewOutputs,
-          transferDetails: details,
-        };
-      }
-      if (anyDiscreteTransfer) {
-        return {
-          isValid: true,
-          kind: 'transfer_items',
-          title: 'Пересыпание / укладка предметов в нижнюю тару',
-          subtitle: `${firstDetail.transferredAmountLabel} → ${firstDetail.resultingTargetLabel}`,
-          actionLabel: 'Пересыпать в тару',
-          previewOutputs,
-          transferDetails: details,
-        };
-      }
+      const summary = summarizeBatchTransfers(details, anyMixture, anyLiquidPour, anyDiscreteTransfer);
+      return {
+        isValid: true,
+        kind: summary.kind,
+        title: summary.title,
+        subtitle: summary.subtitle,
+        actionLabel: summary.actionLabel,
+        previewOutputs,
+        transferDetails: details,
+      };
     }
   }
 
@@ -1912,7 +2120,7 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
           kind: 'none',
           title: 'Верхняя тара пуста',
           subtitle:
-            'В верхней ёмкости нет жидкости или сыпучего вещества. Нажмите «Поменять верх и низ», если полная тара стоит снизу.',
+            'В верхней ёмкости нет жидкости или сыпучего вещества. Поменяйте верх и низ местами, если полная тара стоит снизу.',
           actionLabel: 'Верхняя тара пуста',
           previewOutputs: [null, null, null, null],
           transferDetails: [],
@@ -1942,7 +2150,7 @@ export function evaluateInteractionGrid(inputs: InteractionSlotGrid4): Interacti
     kind: 'none',
     title: 'Комбинация не распознана',
     subtitle:
-      'Для переливания поставьте полную тару в верхний ряд, а приёмную — под неё в нижний ряд, либо совместите подходящие предметы в слотах ввода.',
+      'Поставьте приёмную тару в нижний ряд, а один или несколько источников выше — они перельются или уложатся вместе.',
     actionLabel: 'Нет доступного действия',
     previewOutputs: [null, null, null, null],
     transferDetails: [],
@@ -1969,8 +2177,15 @@ export function createEmptyInteractionGrid16(): InteractionSlotGrid16 {
 /**
  * Evaluates a 4x4 (16-slot) input grid (`row * 4 + col`) for the Kitchen Table workbench
  * and returns a 4x4 (16-slot) previewOutputs grid plus transfer/recipe metadata.
+ * Supports:
+ * - Slot-position pouring dosage (slot 0 = 100%, stepping down evenly to slot 11 = ~8%, with natural hand jitter on commit)
+ * - Multi-source batch transfers (multiple containers and/or solid items above a target container all pour/place together)
  */
-export function evaluateInteractionGrid4x4(inputs: InteractionSlotGrid16): InteractionEvaluationResult16 {
+export function evaluateInteractionGrid4x4(
+  inputs: InteractionSlotGrid16,
+  options?: InteractionEvalOptions
+): InteractionEvaluationResult16 {
+  const applyPourJitter = Boolean(options?.applyPourJitter);
   const occupiedIndices: number[] = [];
   for (let i = 0; i < 16; i++) {
     if (inputs[i]) occupiedIndices.push(i);
@@ -1982,7 +2197,7 @@ export function evaluateInteractionGrid4x4(inputs: InteractionSlotGrid16): Inter
       kind: 'none',
       title: 'Сетка ввода пуста',
       subtitle:
-        'Положите предметы в сетку ввода (4×4). Верхние строки — источник, нижние строки — приёмная тара.',
+        'Положите приёмную тару вниз, а источники выше. Дозировка слива убывает от верхнего левого слота (всё) к правому краю предпоследнего ряда (~8%).',
       actionLabel: 'Ожидание предметов',
       previewOutputs: createEmptyInteractionGrid16(),
       transferDetails: [],
@@ -2020,35 +2235,8 @@ export function evaluateInteractionGrid4x4(inputs: InteractionSlotGrid16): Inter
     }
   }
 
-  // 2. Column-aligned top-to-bottom pouring/mixing/discrete transfers across 4 rows × 4 columns
-  const pairsToEvaluate: [number, number][] = [];
-  for (let col = 0; col < 4; col++) {
-    const colIndices: number[] = [];
-    for (let row = 0; row < 4; row++) {
-      const idx = row * 4 + col;
-      if (inputs[idx]) colIndices.push(idx);
-    }
-    for (let k = 0; k < colIndices.length - 1; k++) {
-      pairsToEvaluate.push([colIndices[k], colIndices[k + 1]]);
-    }
-  }
-
-  // Cross-column fallback: pair upper rows (0..1) with lower rows (2..3), or single upper item with single lower item
-  if (pairsToEvaluate.length === 0) {
-    if (occupiedIndices.length === 2) {
-      const [a, b] = occupiedIndices;
-      if (Math.floor(a / 4) < Math.floor(b / 4)) {
-        pairsToEvaluate.push([a, b]);
-      }
-    } else {
-      const upper = occupiedIndices.filter((i) => Math.floor(i / 4) < 2);
-      const lower = occupiedIndices.filter((i) => Math.floor(i / 4) >= 2);
-      const pairCount = Math.min(upper.length, lower.length);
-      for (let k = 0; k < pairCount; k++) {
-        pairsToEvaluate.push([upper[k], lower[k]]);
-      }
-    }
-  }
+  // 2. Multi-source top-to-bottom pouring / mixing / discrete transfers across 4x4 with slot dosage
+  const pairsToEvaluate = buildTransferPairsForGrid(inputs, 4, 4);
 
   if (pairsToEvaluate.length > 0) {
     const previewOutputs: InteractionSlotGrid16 = Array.from({ length: 16 }, (_, i) =>
@@ -2064,13 +2252,43 @@ export function evaluateInteractionGrid4x4(inputs: InteractionSlotGrid16): Inter
       const bottomItem = previewOutputs[bottomIdx];
       if (!topItem || !bottomItem) continue;
 
-      const pourRes = tryPourOrMixTopToBottom(topItem, bottomItem, topIdx, bottomIdx);
+      const dosageFraction = getSlotPourDosageFraction(topIdx, 16);
+
+      const pourRes = tryPourOrMixTopToBottom(
+        topItem,
+        bottomItem,
+        topIdx,
+        bottomIdx,
+        dosageFraction,
+        applyPourJitter
+      );
       if (pourRes) {
         previewOutputs[topIdx] = pourRes.updatedTop;
         previewOutputs[bottomIdx] = pourRes.updatedBottom;
         details.push(pourRes.detail);
         anyLiquidPour = true;
         if (pourRes.isMixture) anyMixture = true;
+
+        // If full dump (slot 0) and top hybrid container also holds solid contents, tip them out too
+        if (
+          dosageFraction >= 0.999 &&
+          previewOutputs[topIdx]?.contents &&
+          previewOutputs[topIdx]!.contents!.length > 0 &&
+          previewOutputs[bottomIdx]
+        ) {
+          const extraDiscrete = tryTransferDiscreteTopToBottom(
+            previewOutputs[topIdx]!,
+            previewOutputs[bottomIdx]!,
+            topIdx,
+            bottomIdx
+          );
+          if (extraDiscrete) {
+            previewOutputs[topIdx] = extraDiscrete.updatedTop;
+            previewOutputs[bottomIdx] = extraDiscrete.updatedBottom;
+            details.push(extraDiscrete.detail);
+            anyDiscreteTransfer = true;
+          }
+        }
         continue;
       }
 
@@ -2084,42 +2302,16 @@ export function evaluateInteractionGrid4x4(inputs: InteractionSlotGrid16): Inter
     }
 
     if (details.length > 0) {
-      const firstDetail = details[0];
-      if (anyMixture) {
-        return {
-          isValid: true,
-          kind: 'mix_liquid',
-          title: firstDetail.mixtureName
-            ? `Смешивание: ${firstDetail.mixtureName}`
-            : 'Смешивание жидкостей / сыпучих веществ',
-          subtitle: `${firstDetail.transferredAmountLabel} → ${firstDetail.resultingTargetLabel}`,
-          actionLabel: 'Перелить и смешать',
-          previewOutputs,
-          transferDetails: details,
-        };
-      }
-      if (anyLiquidPour) {
-        return {
-          isValid: true,
-          kind: 'pour_liquid',
-          title: 'Переливание / пересыпание из верхней тары в нижнюю',
-          subtitle: `${firstDetail.transferredAmountLabel} · ${firstDetail.remainingSourceLabel}`,
-          actionLabel: 'Перелить / Пересыпать',
-          previewOutputs,
-          transferDetails: details,
-        };
-      }
-      if (anyDiscreteTransfer) {
-        return {
-          isValid: true,
-          kind: 'transfer_items',
-          title: 'Пересыпание / укладка предметов в нижнюю тару',
-          subtitle: `${firstDetail.transferredAmountLabel} → ${firstDetail.resultingTargetLabel}`,
-          actionLabel: 'Пересыпать в тару',
-          previewOutputs,
-          transferDetails: details,
-        };
-      }
+      const summary = summarizeBatchTransfers(details, anyMixture, anyLiquidPour, anyDiscreteTransfer);
+      return {
+        isValid: true,
+        kind: summary.kind,
+        title: summary.title,
+        subtitle: summary.subtitle,
+        actionLabel: summary.actionLabel,
+        previewOutputs,
+        transferDetails: details,
+      };
     }
   }
 
@@ -2180,7 +2372,7 @@ export function evaluateInteractionGrid4x4(inputs: InteractionSlotGrid16): Inter
     kind: 'none',
     title: 'Комбинация не распознана',
     subtitle:
-      'Для переливания поставьте полную тару выше, а приёмную — ниже в том же столбце (4×4), либо совместите подходящие предметы.',
+      'Поставьте приёмную тару в нижний ряд (4×4), а один или несколько источников выше — дозировка убывает от слота 1 (всё) к правому краю 3-го ряда (~8%).',
     actionLabel: 'Нет доступного действия',
     previewOutputs: createEmptyInteractionGrid16(),
     transferDetails: [],

@@ -404,6 +404,22 @@ button.chip:hover { border-color: rgba(201, 146, 43, .55); background: rgba(30, 
 .inv-wb-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .inv-wb-grid2 { display: grid; grid-template-columns: repeat(2, 76px); gap: 10px; }
 .inv-wb-slot { width: 76px; height: 76px; border-radius: 12px; }
+.inv-dose {
+  position: absolute; top: 3px; left: 4px;
+  font-size: 9.5px; font-weight: 700; line-height: 1;
+  color: rgba(162, 158, 147, .55);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none; z-index: 2;
+  padding: 1px 4px; border-radius: 4px;
+}
+.inv-dose.occ {
+  background: rgba(12, 13, 15, .74);
+  color: #b8b3a8;
+}
+.inv-dose.act {
+  background: rgba(201, 146, 43, .22);
+  color: #f0c264;
+}
 .inv-wb-status {
   padding: 9px 16px; border-radius: 10px;
   background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08);

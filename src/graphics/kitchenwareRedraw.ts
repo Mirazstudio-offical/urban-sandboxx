@@ -1063,6 +1063,8 @@ export function drawKitchenwareRedrawItem(
       ctx.stroke();
 
       // Inner concave shadow or Khokhloma / engraved pattern
+      const spoonLiqColor = getLiquidColorFromItem(item);
+      const spoonHasSolids = Boolean(item?.contents && item.contents.length > 0);
       if (isKhokhloma) {
         ctx.fillStyle = '#facc15';
         ctx.beginPath();
@@ -1086,12 +1088,57 @@ export function drawKitchenwareRedrawItem(
         ctx.moveTo(-9.0, 0);
         ctx.lineTo(-1.5, 0);
         ctx.stroke();
-      } else {
+      } else if (!spoonLiqColor) {
         ctx.fillStyle = 'rgba(255,255,255,0.34)';
         ctx.beginPath();
         ctx.ellipse(5.2, -1.0, 2.2, 0.75, -0.15, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      // Render liquid or dry powder pool inside spoon scoop
+      if (spoonLiqColor) {
+        const fs = item?.fluidStorage;
+        const fillRatio = fs && fs.maxMl > 0
+          ? Math.max(0.28, Math.min(1, fs.currentMl / fs.maxMl))
+          : 0.7;
+        const rx = 2.0 + fillRatio * 1.85;
+        const ry = 1.15 + fillRatio * 1.15;
+        const isDry = fs?.attributes?.physicalForm === 'dry' || fs?.liquidId === 'sand' || fs?.liquidId === 'sugar' || fs?.liquidId === 'salt' || fs?.liquidId === 'flour';
+        ctx.fillStyle = spoonLiqColor;
+        ctx.beginPath();
+        ctx.ellipse(5.85, 0.05, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        if (isDry) {
+          ctx.fillStyle = 'rgba(255,255,255,0.28)';
+          ctx.beginPath();
+          ctx.arc(5.1, -0.35, 0.45, 0, Math.PI * 2);
+          ctx.arc(6.4, 0.25, 0.38, 0, Math.PI * 2);
+          ctx.arc(5.85, -0.1, 0.32, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = 'rgba(255,255,255,0.38)';
+          ctx.beginPath();
+          ctx.ellipse(5.3, -ry * 0.42, rx * 0.46, Math.max(0.3, ry * 0.24), -0.12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Render tiny solid morsel(s) resting in the spoon bowl
+      if (spoonHasSolids) {
+        const count = Math.min(3, item!.contents!.length);
+        const offsets = count === 1 ? [[5.9, 0.0]] : count === 2 ? [[5.1, -0.4], [6.6, 0.35]] : [[5.0, -0.45], [6.7, -0.1], [5.8, 0.6]];
+        for (const [ox, oy] of offsets) {
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.arc(ox, oy, 1.05, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.28)';
+          ctx.beginPath();
+          ctx.arc(ox - 0.3, oy - 0.3, 0.32, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
       ctx.restore();
       return true;
     }
@@ -1156,6 +1203,22 @@ export function drawKitchenwareRedrawItem(
         ctx.lineTo(-1.0, 0);
         ctx.stroke();
       }
+
+      // Render speared food morsel on tines if fork holds an item
+      if (item?.contents && item.contents.length > 0) {
+        ctx.fillStyle = '#c26a3b';
+        ctx.beginPath();
+        ctx.ellipse(7.6, 0, 2.2, 1.65, 0.12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#7c2d12';
+        ctx.lineWidth = 0.35;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(7.1, -0.55, 0.9, 0.42, -0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       ctx.restore();
       return true;
     }

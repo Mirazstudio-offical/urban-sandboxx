@@ -345,6 +345,22 @@
 .kf-wb-slot {
   width: 62px; height: 62px; border-radius: 10px;
 }
+.kf-dose {
+  position: absolute; top: 2px; left: 3px;
+  font-size: 9px; font-weight: 700; line-height: 1;
+  color: rgba(162, 158, 147, .52);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none; z-index: 2;
+  padding: 1px 3px; border-radius: 3px;
+}
+.kf-dose.occ {
+  background: rgba(12, 13, 15, .74);
+  color: #b8b3a8;
+}
+.kf-dose.act {
+  background: rgba(201, 146, 43, .22);
+  color: #f0c264;
+}
 .kf-wb-arrow {
   height: 48px; padding: 0 15px; margin-top: 22px;
 }
