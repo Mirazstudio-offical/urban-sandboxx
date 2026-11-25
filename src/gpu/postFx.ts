@@ -789,21 +789,27 @@ void sampleMaterial(
   if (uMatOn < 0.5) return;
 
   vec4 mC = texture(uMat, uv);
+  float rC = mC.r * 255.0;
+
+  // Strict Occluder Guard fast-path: skip 4 neighbor fetches on solid occluders (roofs, cars, trees, props, humans)
+  if (mC.a < 0.94 || rC < 16.0) {
+    matId = 0;
+    return;
+  }
+
   vec4 mL = texture(uMat, clamp(uv - vec2(matTexel.x, 0.0), vec2(0.001), vec2(0.999)));
   vec4 mR = texture(uMat, clamp(uv + vec2(matTexel.x, 0.0), vec2(0.001), vec2(0.999)));
   vec4 mD = texture(uMat, clamp(uv - vec2(0.0, matTexel.y), vec2(0.001), vec2(0.999)));
   vec4 mU = texture(uMat, clamp(uv + vec2(0.0, matTexel.y), vec2(0.001), vec2(0.999)));
 
-  float rC = mC.r * 255.0;
   float rL = mL.r * 255.0;
   float rR = mR.r * 255.0;
   float rD = mD.r * 255.0;
   float rU = mU.r * 255.0;
 
-  // Strict Occluder Guard: destination-out erases alpha to 0 on solid occluders (cars, trains, trees, buildings, props).
-  // Any pixel with reduced alpha or touching an erased occluder edge immediately classifies as MAT_OCCLUDER (0).
+  // Border AA guard: any pixel touching an erased occluder edge immediately classifies as MAT_OCCLUDER (0).
   float aMin = min(mL.a, min(mR.a, min(mD.a, mU.a)));
-  if (mC.a < 0.94 || rC < 16.0 || (mC.a < 0.99 && aMin < 0.50)) {
+  if (mC.a < 0.99 && aMin < 0.50) {
     matId = 0;
     return;
   }
@@ -915,15 +921,17 @@ void main() {
     for (int i = 0; i < 16; i++) {
       if (i >= uFireCount) break;
       vec4 fp = uFirePosRad[i];
+      float heatRad = max(20.0, fp.z * 2.85);
+      vec2 rel = worldPos - fp.xy;
+      float maxBox = heatRad * 1.85;
+      if (abs(rel.x) > maxBox || abs(rel.y) > maxBox) continue;
       vec2 fw = uFireWind[i];
       float windLen = length(fw);
       vec2 windDir = windLen > 0.001 ? (fw / windLen) : vec2(1.0, 0.0);
-      vec2 rel = worldPos - fp.xy;
       float along = dot(rel, windDir);
       vec2 perp = rel - windDir * along;
       float effAlong = along > 0.0 ? along / (1.0 + min(0.85, windLen * 0.015)) : along * 1.08;
       float dist = length(perp + windDir * effAlong);
-      float heatRad = max(20.0, fp.z * 2.85);
       if (dist < heatRad) {
         float coreSuppress = smoothstep(fp.z * 0.20, fp.z * 0.80, dist);
         float falloff = 1.0 - smoothstep(fp.z * 0.40, heatRad, dist);
@@ -1012,11 +1020,15 @@ void main() {
   }
 
   // --- CAS-style sharpening (restores crispness after render-scale upscale) ---------------------------------
+  bool hasCasTaps = false;
+  vec2 casLumaGrad = vec2(0.0);
   if (uSharp > 0.001) {
     vec3 b = texture(uSrc, uv + vec2(0.0,  texel.y)).rgb;
     vec3 d = texture(uSrc, uv + vec2(-texel.x, 0.0)).rgb;
     vec3 f = texture(uSrc, uv + vec2( texel.x, 0.0)).rgb;
     vec3 h = texture(uSrc, uv + vec2(0.0, -texel.y)).rgb;
+    hasCasTaps = true;
+    casLumaGrad = vec2(luma(f) - luma(d), luma(b) - luma(h)) * 1.15;
     vec3 mn = min(min(min(d, c), min(f, b)), h);
     vec3 mx = max(max(max(d, c), max(f, b)), h);
     vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0));
@@ -1029,6 +1041,7 @@ void main() {
 
   // --- Procedural Material Micro-Normals (Asphalt Aggregate, Concrete Grain, Soil Biomes, Tire Ruts, Snowdrifts) --------
   vec2 matMicroN = vec2(0.0);
+  vec2 cachedRutGrad = vec2(0.0);
   float roadSkidMask = isRoad ? clamp((matAlpha - 0.52) * 2.15, 0.0, 1.0) : 0.0;
   float offroadRutMask = isEarthOrDirt ? clamp((matAlpha - 0.52) * 2.15, 0.0, 1.0) : 0.0;
 
@@ -1073,7 +1086,8 @@ void main() {
       float rR = (mRR.a >= 0.94 && classifyMatCode(mRR.r * 255.0) == matId) ? clamp((mRR.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
       float rD = (mRD.a >= 0.94 && classifyMatCode(mRD.r * 255.0) == matId) ? clamp((mRD.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
       float rU = (mRU.a >= 0.94 && classifyMatCode(mRU.r * 255.0) == matId) ? clamp((mRU.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
-      vec2 rutWallN = vec2(rL - rR, rD - rU) * 0.18;
+      cachedRutGrad = vec2(rR - rL, rU - rD);
+      vec2 rutWallN = -cachedRutGrad * 0.18;
       matMicroN = mix(matMicroN, matMicroN * 0.45 + rutWallN, min(1.0, offroadRutMask * 1.35));
     }
 
@@ -1088,23 +1102,33 @@ void main() {
     waveN = meniscusN * 0.75 + computePuddleWaveNormal(worldPos, uTime * 0.80, matParam) * 0.32;
   }
 
+  // Pre-fetch single center lightmap & wide bloom samples once and reuse across all material/GI blocks
+  float lampHere = (uLightOn > 0.5) ? (1.0 - texture(uLight, uv).a) : 0.0;
+  vec3 wide = (uGi > 0.001 || isRoad || isEarthOrDirt || isCoolant) ? texture(uBloomWide, uv).rgb : vec3(0.0);
+
   // --- micro relief: luminance read as height + material micro-normals, lit by sun, lamps, and fires --------
   vec2 g = vec2(0.0);
   if (uRelief > 0.001 || uFireCount > 0) {
-    float hl = luma(texture(uSrc, uv + vec2(-texel.x * 1.5, 0.0)).rgb);
-    float hr = luma(texture(uSrc, uv + vec2( texel.x * 1.5, 0.0)).rgb);
-    float hd = luma(texture(uSrc, uv + vec2(0.0, -texel.y * 1.5)).rgb);
-    float hu = luma(texture(uSrc, uv + vec2(0.0,  texel.y * 1.5)).rgb);
+    vec2 lumaGrad;
+    if (hasCasTaps) {
+      lumaGrad = casLumaGrad;
+    } else {
+      float hl = luma(texture(uSrc, uv + vec2(-texel.x * 1.5, 0.0)).rgb);
+      float hr = luma(texture(uSrc, uv + vec2( texel.x * 1.5, 0.0)).rgb);
+      float hd = luma(texture(uSrc, uv + vec2(0.0, -texel.y * 1.5)).rgb);
+      float hu = luma(texture(uSrc, uv + vec2(0.0,  texel.y * 1.5)).rgb);
+      lumaGrad = vec2(hr - hl, hu - hd);
+    }
     // Painted vehicle/building/prop colors should NOT be heavily embossed as height bumps; preserve full relief on terrain/roads
     float lumaBumpGain = (matId == 0) ? 0.16 : 0.75;
     float subRoughSuppress = isOil ? (1.0 - smoothstep(0.15, 0.65, matParam) * matAlpha * 0.85) : 1.0;
-    g = (vec2(hr - hl, hu - hd) * lumaBumpGain + matMicroN) * subRoughSuppress + waveN * max(waterMask, puddleBasinMask) * 0.14;
+    g = (lumaGrad * lumaBumpGain + matMicroN) * subRoughSuppress + waveN * max(waterMask, puddleBasinMask) * 0.14;
     float shade = 1.0 - l0 * 0.55;
 
     if (uRelief > 0.001) {
       float sunLit = clamp(-dot(g, uSun) * 3.0, -0.32, 0.32);
       c *= 1.0 + sunLit * uRelief * mix(0.5, 1.0, uDay) * shade;
-      if (uLightOn > 0.5) {
+      if (uLightOn > 0.5 && lampHere > 0.05) {
         vec2 lt = vec2(12.0) / uLightSize;
         float lL = 1.0 - texture(uLight, uv + vec2(-lt.x, 0.0)).a;
         float lR = 1.0 - texture(uLight, uv + vec2( lt.x, 0.0)).a;
@@ -1112,10 +1136,9 @@ void main() {
         float lU = 1.0 - texture(uLight, uv + vec2(0.0,  lt.y)).a;
         vec2 lg = vec2(lR - lL, lU - lD);
         float lm = length(lg);
-        float here = 1.0 - texture(uLight, uv).a;
         vec2 toLight = lg / max(lm, 1e-4);
         float lampLit = clamp(-dot(g, toLight) * 4.0, -0.5, 0.5);
-        c *= 1.0 + lampLit * uRelief * smoothstep(0.0, 0.05, lm) * smoothstep(0.05, 0.5, here) * (0.4 + 0.6 * (1.0 - uDay)) * shade;
+        c *= 1.0 + lampLit * uRelief * smoothstep(0.0, 0.05, lm) * smoothstep(0.05, 0.5, lampHere) * (0.4 + 0.6 * (1.0 - uDay)) * shade;
       }
     }
 
@@ -1127,10 +1150,12 @@ void main() {
       for (int i = 0; i < 16; i++) {
         if (i >= uFireCount) break;
         vec4 fp = uFirePosRad[i];
-        vec2 toFireWorld = fp.xy - worldPos;
-        float dist = length(toFireWorld);
         float lightReach = max(65.0, fp.z * 5.2);
-        if (dist < lightReach && dist > 0.5) {
+        vec2 toFireWorld = fp.xy - worldPos;
+        if (abs(toFireWorld.x) > lightReach || abs(toFireWorld.y) > lightReach) continue;
+        float distSq = dot(toFireWorld, toFireWorld);
+        if (distSq < lightReach * lightReach && distSq > 0.25) {
+          float dist = sqrt(distSq);
           float fi = float(i);
           float flick = 1.0
             + 0.09 * sin(uTime * 13.7 + fi * 2.31 + fp.x * 0.05)
@@ -1161,11 +1186,10 @@ void main() {
   vec3 nightSkyCol = vec3(0.05, 0.09, 0.16);
   vec3 skyCol = mix(nightSkyCol, daySkyCol, uDay);
   vec3 sunGlintCol = mix(vec3(0.55, 0.72, 0.96) * 0.38, vec3(1.0, 0.96, 0.84), uDay);
-  float lampHere = (uLightOn > 0.5) ? (1.0 - texture(uLight, uv).a) : 0.0;
-  vec3 rawLightCol = (uLightColOn > 0.5) ? texture(uLightCol, uv).rgb : vec3(0.0);
+  vec3 rawLightCol = (uLightColOn > 0.5 && lampHere > 0.01) ? texture(uLightCol, uv).rgb : vec3(0.0);
   float lcMax = max(rawLightCol.r, max(rawLightCol.g, rawLightCol.b));
   vec3 normLightCol = (lcMax > 0.008) ? (rawLightCol / lcMax) : vec3(1.0, 0.92, 0.76);
-  vec3 localLightCol = (uLightColOn > 0.5)
+  vec3 localLightCol = (uLightColOn > 0.5 && lcMax > 0.008)
     ? mix(vec3(1.0, 0.92, 0.76), normLightCol, smoothstep(0.01, 0.14, lcMax))
     : vec3(1.0, 0.92, 0.76);
   float dayBloomDamp = mix(1.0, 0.18, uDay); // Prevents sunny white cars/paint from blooming onto puddles & roads in daylight
@@ -1388,8 +1412,7 @@ void main() {
 
     // 2. Internal fluorescent ethylene-glycol dye subsurface scattering & luminescence
     // Glows with rich emerald-chartreuse radiance when illuminated by sunlight, streetlamps, or vehicle headlights
-    vec3 cBloomHere = texture(uBloomWide, uv).rgb;
-    float incidentLight = clamp(uDay * 0.92 + lampHere * 0.85 + luma(cBloomHere) * 1.65, 0.18, 1.45);
+    float incidentLight = clamp(uDay * 0.92 + lampHere * 0.85 + luma(wide) * 1.65, 0.18, 1.45);
     float poolDepth = smoothstep(0.06, 0.68, matParam);
     vec3 glycolDeep = vec3(0.04, 0.52, 0.28);
     vec3 glycolFluoro = vec3(0.14, 0.94, 0.46);
@@ -1418,7 +1441,6 @@ void main() {
 
     // 0. 3D MINERAL AGGREGATE MICRO-RELIEF & TIRE-POLISHED WHEEL LANES
     if (uSnow < 0.65) {
-      vec3 roadBloomHere = texture(uBloomWide, uv).rgb;
       // Direct 3D normal-mapped aggregate & concrete grain lighting from sun (subtle matte grain, no harsh speckles)
       float aggSlope = clamp(-dot(matMicroN * (isConcrete > 0.5 ? 12.0 : 16.0), uSun), -0.26, 0.26);
       c *= 1.0 + aggSlope * (isConcrete > 0.5 ? 0.14 : 0.20) * (0.45 + 0.55 * uDay);
@@ -1430,7 +1452,7 @@ void main() {
       // Subtle tire-polished wheel-rut compaction (slightly smoother aggregate & night lamp grazing sheen)
       if (rutMask > 0.02 && roadSkidMask < 0.25) {
         c *= 1.0 - rutMask * 0.032 * (1.0 - isConcrete * 0.5);
-        c += roadBloomHere * dayBloomDamp * 0.24 * rutMask;
+        c += wide * dayBloomDamp * 0.24 * rutMask;
       }
     }
 
@@ -1551,10 +1573,9 @@ void main() {
 
     // 0A. SILICA SAND & SALT FLATS QUARTZ SCINTILLATION + WIND RIPPLE SHADING
     if (isSandOrSalt > 0.5 && uSnow < 0.5) {
-      vec3 sandBloom = texture(uBloomWide, uv).rgb;
       vec2 quartzCell = floor(worldPos * 3.0);
       float qHash = hash(quartzCell + floor((uCamPos + uSun * 110.0) * 0.03));
-      float quartzGlint = smoothstep(0.945, 0.995, qHash) * (0.60 * uDay + 0.70 * lampHere + luma(sandBloom) * 1.4);
+      float quartzGlint = smoothstep(0.945, 0.995, qHash) * (0.60 * uDay + 0.70 * lampHere + luma(wide) * 1.4);
       float duneLit = clamp(-dot(matMicroN * 16.0, uSun), -0.40, 0.40);
       c *= 1.0 + duneLit * 0.26 * uDay;
       c += mix(vec3(1.0, 0.93, 0.76), sunGlintCol, 0.5) * quartzGlint * 0.62;
@@ -1598,17 +1619,9 @@ void main() {
       c *= 0.92 + 0.08 * mossN.x;
     }
 
-    // 0F. 3D OFFROAD TIRE RUT SHADER (Sunken Trench Walls, Lateral Soil Berms & Wet Rut Mirror, material-guarded)
+    // 0F. 3D OFFROAD TIRE RUT SHADER (Sunken Trench Walls, Lateral Soil Berms & Wet Rut Mirror, reusing cachedRutGrad)
     if (offroadRutMask > 0.01) {
-      vec4 mRL = texture(uMat, clamp(uv + vec2(-matTexel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
-      vec4 mRR = texture(uMat, clamp(uv + vec2( matTexel.x * 1.5, 0.0), vec2(0.001), vec2(0.999)));
-      vec4 mRD = texture(uMat, clamp(uv + vec2(0.0, -matTexel.y * 1.5), vec2(0.001), vec2(0.999)));
-      vec4 mRU = texture(uMat, clamp(uv + vec2(0.0,  matTexel.y * 1.5), vec2(0.001), vec2(0.999)));
-      float rL = (mRL.a >= 0.94 && classifyMatCode(mRL.r * 255.0) == matId) ? clamp((mRL.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
-      float rR = (mRR.a >= 0.94 && classifyMatCode(mRR.r * 255.0) == matId) ? clamp((mRR.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
-      float rD = (mRD.a >= 0.94 && classifyMatCode(mRD.r * 255.0) == matId) ? clamp((mRD.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
-      float rU = (mRU.a >= 0.94 && classifyMatCode(mRU.r * 255.0) == matId) ? clamp((mRU.b - 0.52) * 2.15, 0.0, 1.0) : offroadRutMask;
-      vec2 rutGrad = vec2(rR - rL, rU - rD);
+      vec2 rutGrad = cachedRutGrad;
       float wallSlope = length(rutGrad);
       float rutSunLit = clamp(dot(rutGrad, uSun) * 3.4, -0.44, 0.48);
       c *= 1.0 - offroadRutMask * 0.22 + rutSunLit * (0.38 + 0.62 * uDay);
@@ -1652,10 +1665,9 @@ void main() {
       c += snowShadowTint + snowCrestTint;
 
       // Crystalline snow-crust scintillation (тысячи искрящихся снежинок на солнце и в свете фар)
-      vec3 snowBloom = texture(uBloomWide, uv).rgb;
       vec2 snowCell = floor(worldPos * 3.1);
       float sHash = hash(snowCell + floor((uCamPos + uSun * 150.0) * 0.035));
-      float snowSparkle = smoothstep(0.964, 0.995, sHash) * uSnow * (0.65 * uDay + 0.85 * lampHere + luma(snowBloom) * 1.8);
+      float snowSparkle = smoothstep(0.964, 0.995, sHash) * uSnow * (0.65 * uDay + 0.85 * lampHere + luma(wide) * 1.8);
       c += vec3(0.94, 0.98, 1.0) * snowSparkle * 0.72;
     }
   }
@@ -1669,7 +1681,6 @@ void main() {
   }
 
   // --- bounce light: nearby bright lights tint the surfaces they fall on (scaled by the surface colour) ----------
-  vec3 wide = texture(uBloomWide, uv).rgb;
   if (uGi > 0.001) {
     c += wide * (c * 0.85 + 0.08) * uGi * mix(1.4, 0.45, uDay);
   }
@@ -1681,21 +1692,27 @@ void main() {
   }
 
   // --- bloom ------------------------------------------------------------------------------------------------
-  vec3 bloom = texture(uBloom, uv).rgb;
-  c += bloom * uBloomStr * mix(1.0, 1.35, 1.0 - uDay);
+  if (uBloomStr > 0.001) {
+    vec3 bloom = texture(uBloom, uv).rgb;
+    c += bloom * uBloomStr * mix(1.0, 1.35, 1.0 - uDay);
+  }
 
   // --- tone curve + grading + user color calibration --------------------------------------------------------
-  vec3 graded = c * uExposure;
-  float lg = luma(graded);
-  float sw = 1.0 - smoothstep(0.0, 0.55, lg);
-  float hw = smoothstep(0.35, 1.0, lg);
-  graded += uShadowTint * sw + uHighTint * hw;
-  graded = (graded - 0.45) * uContrast + 0.45;
-  float lg2 = luma(graded);
-  graded = mix(vec3(lg2), graded, uSat);
-  graded = mix(graded, uHaze.rgb, uHaze.a);
-  vec3 toned = sCurve(shoulder(max(graded, 0.0)));
-  c = mix(shoulder(max(c, 0.0)), toned, uTone);
+  if (uTone > 0.001) {
+    vec3 graded = c * uExposure;
+    float lg = luma(graded);
+    float sw = 1.0 - smoothstep(0.0, 0.55, lg);
+    float hw = smoothstep(0.35, 1.0, lg);
+    graded += uShadowTint * sw + uHighTint * hw;
+    graded = (graded - 0.45) * uContrast + 0.45;
+    float lg2 = luma(graded);
+    graded = mix(vec3(lg2), graded, uSat);
+    graded = mix(graded, uHaze.rgb, uHaze.a);
+    vec3 toned = sCurve(shoulder(max(graded, 0.0)));
+    c = mix(shoulder(max(c, 0.0)), toned, uTone);
+  } else {
+    c = shoulder(max(c, 0.0));
+  }
 
   // Apply explicit user Exposure / Contrast / Saturation adjustments
   c *= uUserExposure;
@@ -1704,8 +1721,10 @@ void main() {
   c = clamp(mix(vec3(lUser), c, uUserSat), 0.0, 1.0);
 
   // --- vignette ---------------------------------------------------------------------------------------------
-  float v = smoothstep(0.95, 0.30, sqrt(r2));
-  c *= mix(1.0 - uVig, 1.0, v);
+  if (uVig > 0.001) {
+    float v = smoothstep(0.95, 0.30, sqrt(r2));
+    c *= mix(1.0 - uVig, 1.0, v);
+  }
 
   // --- film grain -------------------------------------------------------------------------------------------
   if (uGrain > 0.001) {
@@ -1736,6 +1755,7 @@ void main() {
   float lM = luma(rgbM), lNW = luma(rgbNW), lNE = luma(rgbNE), lSW = luma(rgbSW), lSE = luma(rgbSE);
   float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
   float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+  if ((lMax - lMin) < max(0.0312, lMax * 0.125)) { o = vec4(rgbM, 1.0); return; }
   vec2 dir;
   dir.x = -((lNW + lNE) - (lSW + lSE));
   dir.y =  ((lNW + lSW) - (lNE + lSE));
@@ -2427,8 +2447,10 @@ export class GpuPostFx {
     const wx = sunState.sunDirX;
     const wy = sunState.sunDirY;
     const a = -frame.cameraAngle - Math.PI / 2;
-    const sx = wx * Math.cos(a) - wy * Math.sin(a);
-    const sy = wx * Math.sin(a) + wy * Math.cos(a);
+    const cosA = Math.cos(a);
+    const sinA = Math.sin(a);
+    const sx = wx * cosA - wy * sinA;
+    const sy = wx * sinA + wy * cosA;
     gl.uniform2f(c.u.uSun, sx, -sy); // UV space has Y pointing up
     gl.uniform1f(c.u.uSunElev, Math.max(0.05, Math.min(1, sunState.sunElevation)));
 

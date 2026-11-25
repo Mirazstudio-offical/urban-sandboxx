@@ -689,6 +689,35 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                         <p className="text-[11px] font-mono text-[#8b929e] mt-1 line-clamp-2">
                           {item.descriptionRu || item.description}
                         </p>
+                        {item.kitchenwareAttributes && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                              {item.kitchenwareAttributes.materialRu}
+                            </span>
+                            {item.kitchenwareAttributes.capacityMl > 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                                {item.kitchenwareAttributes.capacityMl >= 1000
+                                  ? `${Number((item.kitchenwareAttributes.capacityMl / 1000).toFixed(2))} л`
+                                  : `${item.kitchenwareAttributes.capacityMl} мл`}
+                              </span>
+                            )}
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono">
+                              {item.kitchenwareAttributes.shapeNameRu}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono">
+                              <span
+                                className="w-2 h-2 rounded-sm shrink-0 border border-white/30"
+                                style={{ backgroundColor: item.kitchenwareAttributes.color }}
+                              />
+                              {item.kitchenwareAttributes.colorNameRu}
+                            </span>
+                            {item.kitchenwareAttributes.patternNameRu && (
+                              <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#94a3b8] text-[10px] font-mono">
+                                {item.kitchenwareAttributes.patternNameRu}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {(item.packagingShape || item.packagingShapeNameRu || item.packagingSize) && (
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                             {(item.packagingShapeNameRu || item.packagingShape) && (

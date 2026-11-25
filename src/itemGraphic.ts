@@ -18,7 +18,7 @@ import { drawChocolatePackagingItem } from './graphics/chocolatePackagingGraphic
 import { drawCulinaryDishItem } from './graphics/culinaryGraphics';
 import { drawShadow, drawFrostAndThermalOverlay, drawMicroBarcode } from './graphics/itemGraphicShared';
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
-import { ITEM_CATALOG, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
+import { ITEM_CATALOG, LEGACY_KITCHENWARE_PRESETS, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
 
 let currentRenderDepth = 0;
 
@@ -47,6 +47,18 @@ export function drawItemModel2D(
     // synthesize the unified container ID and attributes unless rawCatalogOnly is requested
     let effectiveId = item?.itemId || itemId;
     let effectiveItem = item;
+    const legacyKitchenware = LEGACY_KITCHENWARE_PRESETS[effectiveId];
+    if (legacyKitchenware) {
+      effectiveId = legacyKitchenware.kind;
+      effectiveItem = {
+        ...effectiveItem,
+        itemId: legacyKitchenware.kind,
+        kitchenwareAttributes: {
+          ...legacyKitchenware,
+          ...(effectiveItem?.kitchenwareAttributes || {})
+        }
+      };
+    }
     const legacyFluid = !isInner && !rawCatalogOnly ? getResolvedFluidContainerConfig(effectiveId) : null;
     if (legacyFluid) {
       const origId = effectiveItem?.originalCatalogId || effectiveId;

@@ -3469,13 +3469,7 @@ export default function App() {
         const cssH = window.innerHeight;
         const mobile = isMobileOrLowEndDevice();
         const outDpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2) : 1;
-        // When GPU PostFX is active, it upscales the 2D backing store via Catmull-Rom bicubic + AMD CAS sharpening.
-        // Cap the intermediate 2D canvas DPR (1.0 on mobile, 1.25 on desktop) to slash Canvas2D rasterization & GPU upload cost
-        // while keeping the final WebGL2 output crisp at full display DPR.
-        const canvasDpr = performanceConfig.enableGpuPostFx
-          ? Math.min(outDpr, mobile ? 1.0 : 1.25)
-          : outDpr;
-        const scale = Math.min(1, Math.max(0.5, performanceConfig.renderScale)) * canvasDpr;
+        const scale = Math.min(1, Math.max(0.5, performanceConfig.renderScale)) * outDpr;
         canvas.width = Math.max(1, Math.round(cssW * scale));
         canvas.height = Math.max(1, Math.round(cssH * scale));
         canvas.style.width = cssW + 'px';

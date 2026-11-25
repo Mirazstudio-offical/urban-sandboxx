@@ -932,6 +932,11 @@ export class IntersectionReservationManager {
   public activeDeadlocks: Map<string, DeadlockCycle> = new Map();
   private cachedVehicleById: Map<string, Vehicle> = new Map();
   private cachedInterById: Map<string, Intersection> = new Map();
+  private scratchReadyWait: WaitingQueueEntry[] = [];
+  private scratchValidWaitIds: Set<string> = new Set();
+  private scratchJunctionVehicles: Vehicle[] = [];
+  private scratchWaitById: Map<string, WaitingQueueEntry> = new Map();
+  private scratchActiveVehicles: Vehicle[] = [];
 
   public update(dt: number, world: GameWorld) {
     const now = performance.now() / 1000;
@@ -991,23 +996,33 @@ export class IntersectionReservationManager {
       if (validWait.length > 0) {
         const elected = this.electedPriority.get(interId);
         if (!elected || now > elected.expiry || !vehicleById.has(elected.vehicleId)) {
-          const readyWait = validWait.filter((w) => {
+          const readyWait = this.scratchReadyWait;
+          readyWait.length = 0;
+          for (let wi = 0; wi < validWait.length; wi++) {
+            const w = validWait[wi];
             const v = vehicleById.get(w.vehicleId);
-            return v && v.aiState !== 'stopping_light' && !w.spillbackBlocked;
-          });
+            if (v && v.aiState !== 'stopping_light' && !w.spillbackBlocked) {
+              readyWait.push(w);
+            }
+          }
 
           if (readyWait.length > 0) {
             let topCandidate = readyWait[0];
             let topCandidateScore = -Infinity;
 
-            const validWaitIds = new Set<string>();
+            const validWaitIds = this.scratchValidWaitIds;
+            validWaitIds.clear();
             for (let wi = 0; wi < validWait.length; wi++) validWaitIds.add(validWait[wi].vehicleId);
 
-            const junctionVehicles = world.vehicles.filter((v) => {
-              if (v.isParked) return false;
-              return (v.inIntersection && v.intersectionReservationId === interId) ||
-                     validWaitIds.has(v.id);
-            });
+            const junctionVehicles = this.scratchJunctionVehicles;
+            junctionVehicles.length = 0;
+            for (let vi = 0, vlen = world.vehicles.length; vi < vlen; vi++) {
+              const v = world.vehicles[vi];
+              if (v.isParked) continue;
+              if ((v.inIntersection && v.intersectionReservationId === interId) || validWaitIds.has(v.id)) {
+                junctionVehicles.push(v);
+              }
+            }
 
             for (let i = 0; i < readyWait.length; i++) {
               const candEntry = readyWait[i];
@@ -1016,10 +1031,16 @@ export class IntersectionReservationManager {
 
               // Physical forward clearance check: does candCar have an open path ahead?
               if (candCar) {
-                const isForwardBlocked = junctionVehicles.some((other) => {
-                  if (other.id === candCar.id) return false;
-                  return isVehicleForwardPathBlocked(candCar, other, Math.max(35, candCar.length * 0.8));
-                });
+                const fwdClearance = Math.max(35, candCar.length * 0.8);
+                let isForwardBlocked = false;
+                for (let j = 0, jlen = junctionVehicles.length; j < jlen; j++) {
+                  const other = junctionVehicles[j];
+                  if (other.id === candCar.id) continue;
+                  if (isVehicleForwardPathBlocked(candCar, other, fwdClearance)) {
+                    isForwardBlocked = true;
+                    break;
+                  }
+                }
                 if (!isForwardBlocked) {
                   score += 40.0; // Substantial bonus for having an open path to roll forward!
                 } else {
@@ -1063,17 +1084,22 @@ export class IntersectionReservationManager {
   ) {
     if (waitList.length < 2) return;
 
-    const waitById = new Map<string, WaitingQueueEntry>();
+    const waitById = this.scratchWaitById;
+    waitById.clear();
     for (let i = 0; i < waitList.length; i++) {
       waitById.set(waitList[i].vehicleId, waitList[i]);
     }
 
     // Filter vehicles involved at this intersection (waiting + inside junction)
-    const activeVehicles = world.vehicles.filter((v) => {
-      if (v.isParked || v.isPlayerControlled) return false;
-      return (v.inIntersection && v.intersectionReservationId === interId) ||
-             waitById.has(v.id);
-    });
+    const activeVehicles = this.scratchActiveVehicles;
+    activeVehicles.length = 0;
+    for (let vi = 0, vlen = world.vehicles.length; vi < vlen; vi++) {
+      const v = world.vehicles[vi];
+      if (v.isParked || v.isPlayerControlled) continue;
+      if ((v.inIntersection && v.intersectionReservationId === interId) || waitById.has(v.id)) {
+        activeVehicles.push(v);
+      }
+    }
 
     if (activeVehicles.length < 2) return;
 
@@ -3162,14 +3188,16 @@ export function updateAITraffic(
 
     for (const car of world.vehicles) {
       if (car.type === 'police') {
-        const distToPlayer = Math.hypot(car.x - playerCar.x, car.y - playerCar.y);
-        if (isPlayerReckless && distToPlayer < 450) {
+        const pdx = car.x - playerCar.x;
+        const pdy = car.y - playerCar.y;
+        const distSqToPlayer = pdx * pdx + pdy * pdy;
+        if (isPlayerReckless && distSqToPlayer < 450 * 450) {
           car.sirenOn = true;
           car.emergencyState = 'chase';
           car.targetChaseVehicleId = playerCar.id;
           const maxS = CAR_CONFIGS[car.type]?.maxSpeed || 400;
           car.targetSpeed = Math.min(maxS, Math.abs(playerCar.speed) + 50);
-        } else if (car.emergencyState === 'chase'&& distToPlayer > 850) {
+        } else if (car.emergencyState === 'chase' && distSqToPlayer > 850 * 850) {
           car.sirenOn = false;
           car.emergencyState = 'patrol';
         }
@@ -3213,17 +3241,21 @@ export function updateAITraffic(
   }
 
   for (const car of world.vehicles) {
-    let distToPlayer = Math.hypot(car.x - targetPos.x, car.y - targetPos.y);
+    const tdx = car.x - targetPos.x;
+    const tdy = car.y - targetPos.y;
+    let distSqToPlayer = tdx * tdx + tdy * tdy;
     for (let oi = 1; oi < observers.length; oi++) {
-      const d = Math.hypot(car.x - observers[oi].x, car.y - observers[oi].y);
-      if (d < distToPlayer) distToPlayer = d;
+      const odx = car.x - observers[oi].x;
+      const ody = car.y - observers[oi].y;
+      const d2 = odx * odx + ody * ody;
+      if (d2 < distSqToPlayer) distSqToPlayer = d2;
     }
     const isPlayerOrSpecial = car.isPlayerControlled || (car as any).isRemoteControlled || car.id === 'evac_ambulance_special' || (car as any).isFireDispatch;
     const isOwnedOrKeyed = Boolean(car.keyId || car.ownerId === 'player' || (car as any).playerOwned || (car as any).isSpawnedByPlayer);
 
     // AI dynamic traffic vehicle that moved beyond field of view of all active observers: DESPAWN IMMEDIATELY!
     if (!car.isParked && !isPlayerOrSpecial && !isOwnedOrKeyed && !car.isTrailer) {
-      if (distToPlayer > 1500 || (totalActiveCount > effectiveMaxVehicles && distToPlayer > 850)) {
+      if (distSqToPlayer > 1500 * 1500 || (totalActiveCount > effectiveMaxVehicles && distSqToPlayer > 850 * 850)) {
         intersectionArbiter.releaseReservation(car.id);
         car.intersectionReservationId = null;
         vehiclesToDespawn.push(car.id);
@@ -3232,7 +3264,7 @@ export function updateAITraffic(
     }
 
     // Distant parked or stationary cars: SLEEP (skip AI, turn signal tick, fire spotting, yielding)
-    if ((car.isParked || Math.abs(car.speed) < 1) && !isPlayerOrSpecial && distToPlayer > 1500) {
+    if ((car.isParked || Math.abs(car.speed) < 1) && !isPlayerOrSpecial && distSqToPlayer > 1500 * 1500) {
       continue;
     }
 
@@ -3250,8 +3282,9 @@ export function updateAITraffic(
         if (otherCar.damage && !otherCar.damage.isFullyBurnt) {
           const hasFire = otherCar.damage.engineFire || otherCar.damage.fuelTankFire || otherCar.damage.cabinFire || otherCar.damage.underHoodSmolder || (otherCar.damage.fireIntensity || 0) > 0;
           if (hasFire) {
-            const dist = Math.hypot(otherCar.x - car.x, otherCar.y - car.y);
-            if (dist < 350) {
+            const fdx = otherCar.x - car.x;
+            const fdy = otherCar.y - car.y;
+            if (fdx * fdx + fdy * fdy < 350 * 350) {
               nearestFirePos = { x: otherCar.x, y: otherCar.y };
               break;
             }
@@ -3263,8 +3296,9 @@ export function updateAITraffic(
       if (!nearestFirePos && world.stains) {
         for (const st of world.stains) {
           if (st.onFire && (st.fireIntensity || 0) > 0) {
-            const dist = Math.hypot(st.x - car.x, st.y - car.y);
-            if (dist < 350) {
+            const fdx = st.x - car.x;
+            const fdy = st.y - car.y;
+            if (fdx * fdx + fdy * fdy < 350 * 350) {
               nearestFirePos = { x: st.x, y: st.y };
               break;
             }

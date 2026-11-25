@@ -3290,65 +3290,6 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    // Soup Bowl (Суповая пиала)
-    case 'soup_bowl':
-    case 'soup_bowl_empty': {
-      drawShadow(ctx, 8, 3.5, 7.5, 0.28);
-
-      const bowlGrad = ctx.createLinearGradient(-7, -4, 7, 6);
-      bowlGrad.addColorStop(0.0, '#ffffff');
-      bowlGrad.addColorStop(0.55, '#e2e8f0');
-      bowlGrad.addColorStop(1.0, '#94a3b8');
-      ctx.fillStyle = bowlGrad;
-      ctx.beginPath();
-      ctx.moveTo(-7.5, -2);
-      ctx.quadraticCurveTo(-6.5, 6.5, 0, 7);
-      ctx.quadraticCurveTo(6.5, 6.5, 7.5, -2);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = '#2563eb';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.ellipse(0, -1.8, 7.4, 2.3, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      const cavGrad = ctx.createRadialGradient(-1, -2.5, 0.5, 0, -2.2, 7.0);
-      cavGrad.addColorStop(0, '#cbd5e1');
-      cavGrad.addColorStop(1, '#334155');
-      ctx.fillStyle = cavGrad;
-      ctx.beginPath();
-      ctx.ellipse(0, -2.2, 7.0, 2.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const hasSoup = item?.fluidStorage ? item.fluidStorage.currentMl > 0 : itemId === 'soup_bowl';
-      if (hasSoup) {
-        const soupColor = item?.fluidStorage?.attributes?.customColor || (item?.fluidStorage?.liquidId === 'broth' ? '#b45309' : '#d97706');
-        ctx.fillStyle = soupColor;
-        ctx.beginPath();
-        ctx.ellipse(0, -2.2, 6.2, 2.1, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(254, 240, 138, 0.5)';
-        ctx.beginPath();
-        ctx.ellipse(-1.8, -2.4, 0.75, 0.35, 0, 0, Math.PI * 2);
-        ctx.ellipse(1.6, -1.9, 0.65, 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        drawBotanicalLeaf(ctx, -2.2, -2.3, 1.6, 0.5, -0.3, '#4ade80', '#14532d');
-        drawBotanicalLeaf(ctx, 1.5, -2.0, 1.5, 0.45, 0.4, '#22c55e', '#14532d');
-      }
-
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.moveTo(3.5, 0.5);
-      ctx.lineTo(8.5, -6.5);
-      ctx.lineTo(9.5, -5.8);
-      ctx.lineTo(4.5, 1.2);
-      ctx.closePath();
-      ctx.fill();
-      return true;
-    }
-
     // ==============================================================
     // === UNIFIED GLASS PRESERVATION JARS (Стеклянные банки) ===
     // ==============================================================

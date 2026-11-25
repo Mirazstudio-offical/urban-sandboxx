@@ -1,4 +1,4 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
 import { sound } from './audio';
 import { getPhoneSpecsForItemId } from './phoneData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
@@ -130,6 +130,7 @@ export interface ItemDefinition {
   gummyAttributes?: GummyCandyAttributes;
   pelmenAttributes?: PelmenAttributes;
   chocolateAttributes?: ChocolateAttributes;
+  kitchenwareAttributes?: KitchenwareAttributes;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -2150,20 +2151,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.28,
     usable: true
   },
-  glass_mug: {
-    itemId: 'glass_mug',
-    name: 'Glass Mug (0.35L)',
-    nameRu: 'Стеклянная кружка 0.35л',
-    category: 'gear',
-    maxStack: 1,
-    icon: '',
-    description: 'Heavy glass mug for tea and beverages (350 ml).',
-    descriptionRu: 'Увесистая стеклянная чайная кружка объемом 350 мл.',
-    effects: {},
-    weight: 0.28,
-    volume: 0.4,
-    usable: true
-  },
   can_alu_330: {
     itemId: 'can_alu_330',
     name: 'Aluminum Can (0.33L)',
@@ -2467,20 +2454,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     containerCapacityL: 0.8,
     maxContainedItemVolumeL: 0.7,
     maxContainedWeightKg: 2.0
-  },
-  soup_bowl: {
-    itemId: 'soup_bowl',
-    name: 'Soup Bowl (0.5L)',
-    nameRu: 'Суповая пиала',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Deep ceramic soup bowl for hot broths, stews, and soups.',
-    descriptionRu: 'Глубокая керамическая суповая тарелка-пиала для горячего бульона, рагу и ухи.',
-    effects: {},
-    weight: 0.20,
-    volume: 0.6,
-    usable: true
   },
 
   // === DRY-GOODS PACKAGING CONTAINERS (УПАКОВКИ ДЛЯ КРУП, ЗЛАКОВ И МАКАРОННЫХ ИЗДЕЛИЙ) ===
@@ -3731,305 +3704,348 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: false
   },
 
-  // === KITCHENWARE (КУХОННАЯ УТВАРЬ) ===
-  kitchen_pot_enamel: {
-    itemId: 'kitchen_pot_enamel',
-    name: 'Enamel Pot',
-    nameRu: 'Эмалированная кастрюля',
+  // === UNIFIED KITCHENWARE & TABLEWARE (ЕДИНАЯ КУХОННАЯ УТВАРЬ И ПОСУДА С АТРИБУТАМИ) ===
+  pot: {
+    itemId: 'pot',
+    name: 'Pot',
+    nameRu: 'Кастрюля',
     category: 'tool',
     maxStack: 1,
     icon: '',
-    description: 'Red enamel steel cooking pot with lid and bakelite handles.',
-    descriptionRu: 'Эмалированная стальная кастрюля с орнаментом и крышкой.',
+    description: 'Kitchen cooking pot with lid. Material, capacity, shape, color, and pattern are defined in attributes.',
+    descriptionRu: 'Кухонная кастрюля для варки и тушения. Материал, вместимость, форма, цвет и узор заданы в атрибутах.',
     effects: {},
-    weight: 1.2,
-    usable: false
+    weight: 1.35,
+    volume: 4.0,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'pot',
+      material: 'stainless_steel',
+      materialRu: 'Нержавеющая сталь',
+      coatingRu: 'Зеркальная полировка',
+      capacityMl: 3500,
+      shape: 'cylindrical',
+      shapeNameRu: 'Цилиндрическая с крышкой',
+      color: '#cbd5e1',
+      colorNameRu: 'Серебристый',
+      accentColor: '#64748b',
+      pattern: 'none',
+      patternNameRu: 'Без узора',
+      lidRu: 'Стеклянная с пароотводом',
+      handleRu: 'Две боковые стальные',
+      dimensionCm: 22
+    }
   },
-  kitchen_pot_steel: {
-    itemId: 'kitchen_pot_steel',
-    name: 'Stainless Steel Pot',
-    nameRu: 'Стальная кастрюля из нержавейки',
+  saute_pan: {
+    itemId: 'saute_pan',
+    name: 'Sauté Pan',
+    nameRu: 'Сотейник',
     category: 'tool',
     maxStack: 1,
     icon: '',
-    description: 'Polished stainless steel pot with heat-resistant glass lid.',
-    descriptionRu: 'Кастрюля из нержавеющей стали с прозрачной стеклянной крышкой.',
+    description: 'Deep straight-walled sauté pan with long handle and lid. Material, volume, shape, color, and pattern are stored in attributes.',
+    descriptionRu: 'Глубокий сотейник с высокими прямыми бортами и длинной ручкой для тушения, соусов и пассерования.',
     effects: {},
-    weight: 1.5,
-    usable: false
+    weight: 1.15,
+    volume: 2.8,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'saute_pan',
+      material: 'nonstick_aluminum',
+      materialRu: 'Литой алюминий',
+      coatingRu: 'Антипригарное мраморное',
+      capacityMl: 2400,
+      shape: 'deep_straight',
+      shapeNameRu: 'Глубокий с прямыми бортами',
+      color: '#334155',
+      colorNameRu: 'Графитовый',
+      accentColor: '#1e293b',
+      pattern: 'marbled',
+      patternNameRu: 'Мраморная крошка',
+      patternColor: '#cbd5e1',
+      lidRu: 'Стеклянная со стальным ободком',
+      handleRu: 'Длинная термостойкая бакелитовая',
+      dimensionCm: 24
+    }
   },
-  kitchen_pot_aluminum: {
-    itemId: 'kitchen_pot_aluminum',
-    name: 'Aluminum Pot',
-    nameRu: 'Алюминиевая кастрюля',
+  frying_pan: {
+    itemId: 'frying_pan',
+    name: 'Frying Pan',
+    nameRu: 'Сковорода',
     category: 'tool',
     maxStack: 1,
     icon: '',
-    description: 'Lightweight brushed aluminum cooking pot.',
-    descriptionRu: 'Легкая советская алюминиевая кастрюля с крышкой.',
+    description: 'Round frying skillet with long handle. Material, volume, shape, color, and pattern are defined in attributes.',
+    descriptionRu: 'Кухонная сковорода для жарки и обжаривания. Материал, объём, форма, цвет и узор заданы в атрибутах.',
     effects: {},
-    weight: 0.8,
-    usable: false
+    weight: 1.6,
+    volume: 2.2,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'frying_pan',
+      material: 'cast_iron',
+      materialRu: 'Чугун',
+      coatingRu: 'Природный промасленный слой',
+      capacityMl: 1800,
+      shape: 'round_shallow',
+      shapeNameRu: 'Круглая классическая',
+      color: '#1e293b',
+      colorNameRu: 'Чёрный матовый',
+      accentColor: '#78350f',
+      pattern: 'none',
+      patternNameRu: 'Без узора',
+      handleRu: 'Длинная деревянная съёмная',
+      dimensionCm: 26
+    }
   },
-  kitchen_pot_cast_iron: {
-    itemId: 'kitchen_pot_cast_iron',
-    name: 'Cast Iron Dutch Pot',
-    nameRu: 'Чугунный казан / кастрюля',
+  kettle: {
+    itemId: 'kettle',
+    name: 'Kettle',
+    nameRu: 'Чайник',
     category: 'tool',
     maxStack: 1,
     icon: '',
-    description: 'Heavy thick-walled cast iron cauldron pot with brass lid knob.',
-    descriptionRu: 'Тяжелая кастрюля-казан из толстостенного черного чугуна.',
+    description: 'Kitchen kettle for boiling water and brewing tea. Material, volume, shape, color, pattern, and type are defined in attributes.',
+    descriptionRu: 'Кухонный чайник для кипячения воды и заваривания. Материал, объём, форма, цвет и узор заданы в атрибутах.',
     effects: {},
-    weight: 3.8,
-    usable: false
+    weight: 1.15,
+    volume: 2.6,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'kettle',
+      material: 'stainless_steel',
+      materialRu: 'Нержавеющая сталь',
+      coatingRu: 'Сатинированный металл',
+      capacityMl: 2200,
+      shape: 'conical',
+      shapeNameRu: 'Конический наплитный',
+      color: '#cbd5e1',
+      colorNameRu: 'Хромированный стальной',
+      accentColor: '#1e293b',
+      pattern: 'brushed',
+      patternNameRu: 'Сатинированная полировка',
+      lidRu: 'Съёмная металлическая',
+      handleRu: 'Дугообразная термостойкая',
+      featureRu: 'Откидной свисток на носике',
+      hasWhistle: true,
+      dimensionCm: 20
+    }
   },
-  kitchen_kettle_enamel: {
-    itemId: 'kitchen_kettle_enamel',
-    name: 'Enamel Tea Kettle',
-    nameRu: 'Эмалированный чайник',
-    category: 'tool',
-    maxStack: 1,
-    icon: '',
-    description: 'Classic stovetop enamel kettle with arching overhead handle.',
-    descriptionRu: 'Классический эмалированный чайник для плиты с ручкой.',
-    effects: {},
-    weight: 1.1,
-    usable: false
-  },
-  kitchen_kettle_steel: {
-    itemId: 'kitchen_kettle_steel',
-    name: 'Steel Whistling Kettle',
-    nameRu: 'Стальной чайник со свистком',
-    category: 'tool',
-    maxStack: 1,
-    icon: '',
-    description: 'Chrome stainless steel kettle with flip-up spout whistle.',
-    descriptionRu: 'Чайник из нержавеющей стали с откидным свистком.',
-    effects: {},
-    weight: 1.3,
-    usable: false
-  },
-  kitchen_kettle_electric: {
-    itemId: 'kitchen_kettle_electric',
-    name: 'Electric Glass Kettle',
-    nameRu: 'Электрический чайник',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Glass electric kettle with LED illumination and stainless base.',
-    descriptionRu: 'Электрочайник из термостекла со светодиодной подсветкой.',
-    effects: {},
-    weight: 1.2,
-    usable: true
-  },
-  kitchen_kettle_clay: {
-    itemId: 'kitchen_kettle_clay',
-    name: 'Clay Teapot',
-    nameRu: 'Глиняный заварочный чайник',
-    category: 'tool',
-    maxStack: 1,
-    icon: '',
-    description: 'Handcrafted terracotta clay teapot for aromatic tea brewing.',
-    descriptionRu: 'Керамический глиняный заварочный чайник ручной работы.',
-    effects: {},
-    weight: 0.6,
-    usable: false
-  },
-  kitchen_pan_cast_iron: {
-    itemId: 'kitchen_pan_cast_iron',
-    name: 'Cast Iron Skillet',
-    nameRu: 'Чугунная сковорода',
-    category: 'tool',
-    maxStack: 1,
-    icon: '',
-    description: 'Heavy black cast iron frying pan with carved wooden handle.',
-    descriptionRu: 'Массивная чугунная сковорода с деревянной съёмной ручкой.',
-    effects: {},
-    weight: 2.5,
-    usable: false
-  },
-  kitchen_pan_teflon: {
-    itemId: 'kitchen_pan_teflon',
-    name: 'Non-Stick Teflon Pan',
-    nameRu: 'Тефлоновая сковорода',
-    category: 'tool',
-    maxStack: 1,
-    icon: '',
-    description: 'Aluminum skillet with black non-stick coating and bakelite handle.',
-    descriptionRu: 'Сковорода с антипригарным тефлоновым покрытием.',
-    effects: {},
-    weight: 0.9,
-    usable: false
-  },
-  kitchen_plate_ceramic: {
-    itemId: 'kitchen_plate_ceramic',
-    name: 'Glazed Ceramic Plate',
-    nameRu: 'Керамическая тарелка',
+  plate: {
+    itemId: 'plate',
+    name: 'Plate',
+    nameRu: 'Тарелка',
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Smooth glazed off-white ceramic dinner plate.',
-    descriptionRu: 'Столовая керамическая тарелка с глазурованным покрытием.',
+    description: 'Dinner plate for serving food. Material, volume, shape, color, and pattern are stored in attributes.',
+    descriptionRu: 'Столовая тарелка для подачи блюд. Материал, вместимость, форма, цвет и узор заданы в атрибутах.',
     effects: {},
-    weight: 0.4,
-    usable: false
+    weight: 0.38,
+    volume: 0.55,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'plate',
+      material: 'ceramic',
+      materialRu: 'Керамика',
+      coatingRu: 'Белая глазурь',
+      capacityMl: 450,
+      shape: 'round_flat',
+      shapeNameRu: 'Круглая столовая',
+      color: '#f8fafc',
+      colorNameRu: 'Молочно-белый',
+      accentColor: '#eab308',
+      pattern: 'gold_rim',
+      patternNameRu: 'Тонкая золотая кайма',
+      patternColor: '#eab308',
+      dimensionCm: 24
+    }
   },
-  kitchen_plate_porcelain: {
-    itemId: 'kitchen_plate_porcelain',
-    name: 'Fine Porcelain Plate',
-    nameRu: 'Фарфоровая тарелка',
+  bowl: {
+    itemId: 'bowl',
+    name: 'Bowl',
+    nameRu: 'Миска',
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Fine porcelain plate with Gzhel blue pattern and gold rim.',
-    descriptionRu: 'Фарфоровая тарелка с расписным узором и золоченым кантиком.',
-    effects: {},
-    weight: 0.35,
-    usable: false
-  },
-  kitchen_plate_enamel: {
-    itemId: 'kitchen_plate_enamel',
-    name: 'Enamel Deep Bowl',
-    nameRu: 'Эмалированная глубокая миска',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Durable Soviet enamel deep bowl with dark blue rim line.',
-    descriptionRu: 'Советская эмалированная миска глубокой формы.',
+    description: 'Deep bowl for soups, broths, salads, and mixing. Material, volume, shape, color, and pattern are defined in attributes.',
+    descriptionRu: 'Глубокая миска для супов, бульонов, салатов и смешивания. Материал, объём, форма, цвет и узор заданы в атрибутах.',
     effects: {},
     weight: 0.25,
-    usable: false
+    volume: 0.75,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'bowl',
+      material: 'ceramic',
+      materialRu: 'Керамика',
+      coatingRu: 'Глянцевая глазурь',
+      capacityMl: 650,
+      shape: 'deep_round',
+      shapeNameRu: 'Глубокая округлая пиала',
+      color: '#f5f0e6',
+      colorNameRu: 'Кремовый',
+      accentColor: '#1d4ed8',
+      pattern: 'blue_rim',
+      patternNameRu: 'Синяя кайма по ободку',
+      patternColor: '#1d4ed8',
+      dimensionCm: 16
+    }
   },
-  kitchen_bowl_wooden: {
-    itemId: 'kitchen_bowl_wooden',
-    name: 'Carved Wooden Bowl',
-    nameRu: 'Деревянная резная пиала',
+  mug: {
+    itemId: 'mug',
+    name: 'Mug',
+    nameRu: 'Кружка',
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Carved solid wood bowl with visible concentric grain pattern.',
-    descriptionRu: 'Глубокая пиала, выточенная из цельного массива дерева.',
+    description: 'Beverage mug for tea, coffee, or water. Material, volume, shape, color, and pattern are defined in attributes.',
+    descriptionRu: 'Кружка для горячих и холодных напитков. Материал, объём, форма, цвет и узор заданы в атрибутах.',
     effects: {},
-    weight: 0.2,
-    usable: false
+    weight: 0.28,
+    volume: 0.4,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'mug',
+      material: 'ceramic',
+      materialRu: 'Керамика',
+      coatingRu: 'Глянцевая глазурь',
+      capacityMl: 350,
+      shape: 'cylindrical',
+      shapeNameRu: 'Цилиндрическая с ручкой',
+      color: '#e7dcc8',
+      colorNameRu: 'Тёплый бежевый',
+      accentColor: '#92400e',
+      pattern: 'glaze_drip',
+      patternNameRu: 'Глазурь с подтёками',
+      patternColor: '#b45309',
+      handleRu: 'Боковая петлевая',
+      dimensionCm: 10
+    }
   },
-  kitchen_mug_ceramic: {
-    itemId: 'kitchen_mug_ceramic',
-    name: 'Ceramic Coffee Mug',
-    nameRu: 'Керамическая кружка',
+  cup: {
+    itemId: 'cup',
+    name: 'Cup',
+    nameRu: 'Чашка',
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Sturdy glazed ceramic mug for coffee or tea.',
-    descriptionRu: 'Удобная керамическая кружка для чая и кофе.',
+    description: 'Tea or coffee cup with optional saucer. Material, volume, shape, color, and pattern are stored in attributes.',
+    descriptionRu: 'Чайная или кофейная чашка. Материал, объём, форма, цвет и узор заданы в атрибутах.',
     effects: {},
-    weight: 0.3,
-    usable: false
+    weight: 0.22,
+    volume: 0.28,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'cup',
+      material: 'porcelain',
+      materialRu: 'Тонкий фарфор',
+      coatingRu: 'Фарфоровая глазурь',
+      capacityMl: 220,
+      shape: 'teacup_saucer',
+      shapeNameRu: 'Чайная чашка с блюдцем',
+      color: '#ffffff',
+      colorNameRu: 'Белоснежный',
+      accentColor: '#eab308',
+      pattern: 'gzhel',
+      patternNameRu: 'Кобальтовая роспись и золотой кант',
+      patternColor: '#2563eb',
+      handleRu: 'Изящная узорная',
+      featureRu: 'В комплекте с блюдцем',
+      hasSaucer: true,
+      dimensionCm: 9
+    }
   },
-  kitchen_mug_enamel: {
-    itemId: 'kitchen_mug_enamel',
-    name: 'Enamel Camping Mug',
-    nameRu: 'Эмалированная кружка',
+  spoon: {
+    itemId: 'spoon',
+    name: 'Spoon',
+    nameRu: 'Ложка',
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Lightweight enamel mug with blue rim accent.',
-    descriptionRu: 'Походная эмалированная кружка с синей каемкой.',
-    effects: {},
-    weight: 0.15,
-    usable: false
-  },
-  kitchen_mug_glass: {
-    itemId: 'kitchen_mug_glass',
-    name: 'Faceted Glass Mug',
-    nameRu: 'Стеклянная граненая кружка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Thick clear faceted glass tea mug with handle.',
-    descriptionRu: 'Толстостенная прозрачная стеклянная кружка.',
-    effects: {},
-    weight: 0.35,
-    usable: false
-  },
-  kitchen_cup_porcelain: {
-    itemId: 'kitchen_cup_porcelain',
-    name: 'Porcelain Tea Cup',
-    nameRu: 'Фарфоровая чайная чашка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Delicate fine porcelain tea cup with saucer.',
-    descriptionRu: 'Тонкостенная чайная чашка из белого фарфора.',
-    effects: {},
-    weight: 0.25,
-    usable: false
-  },
-  kitchen_knife_chef: {
-    itemId: 'kitchen_knife_chef',
-    name: "Chef's Kitchen Knife",
-    nameRu: 'Кухонный нож шеф-повара',
-    category: 'tool',
-    maxStack: 1,
-    icon: '',
-    description: "Sharp forged steel chef's knife with full tang wooden handle.",
-    descriptionRu: 'Острый кухонный нож шеф-повара с широким стальным лезвием.',
-    effects: {},
-    weight: 0.3,
-    usable: true
-  },
-  kitchen_fork_steel: {
-    itemId: 'kitchen_fork_steel',
-    name: 'Stainless Steel Fork',
-    nameRu: 'Стальная вилка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Standard 4-tine stainless steel dinner fork.',
-    descriptionRu: 'Столовая вилка из нержавеющей стали.',
-    effects: {},
-    weight: 0.05,
-    usable: false
-  },
-  kitchen_fork_silver: {
-    itemId: 'kitchen_fork_silver',
-    name: 'Sterling Silver Fork',
-    nameRu: 'Серебряная вилка',
-    category: 'valuable',
-    maxStack: 1,
-    icon: '',
-    description: 'Heavy sterling silver dinner fork with ornate engraving.',
-    descriptionRu: 'Тяжелая серебряная вилка с изящной узорчатой гравировкой.',
-    effects: {},
-    weight: 0.08,
-    usable: false
-  },
-  kitchen_spoon_steel: {
-    itemId: 'kitchen_spoon_steel',
-    name: 'Stainless Steel Spoon',
-    nameRu: 'Стальная ложка',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Polished stainless steel soup spoon.',
-    descriptionRu: 'Столовая ложка из нержавеющей стали.',
+    description: 'Table or kitchen spoon. Material, scoop volume, shape, color, and pattern are stored in attributes.',
+    descriptionRu: 'Ложка для еды и готовки. Материал, объём черпала, форма, цвет и узор заданы в атрибутах.',
     effects: {},
     weight: 0.06,
-    usable: false
+    volume: 0.05,
+    usable: false,
+    kitchenwareAttributes: {
+      kind: 'spoon',
+      material: 'stainless_steel',
+      materialRu: 'Нержавеющая сталь',
+      coatingRu: 'Зеркальная полировка',
+      capacityMl: 15,
+      shape: 'tablespoon_oval',
+      shapeNameRu: 'Столовая овальная',
+      color: '#cbd5e1',
+      colorNameRu: 'Серебристый',
+      accentColor: '#94a3b8',
+      pattern: 'none',
+      patternNameRu: 'Гладкая полировка',
+      handleRu: 'Плоская эргономичная',
+      dimensionCm: 20
+    }
   },
-  kitchen_spoon_wooden: {
-    itemId: 'kitchen_spoon_wooden',
-    name: 'Khokhloma Wooden Spoon',
-    nameRu: 'Деревянная хохломская ложка',
+  fork: {
+    itemId: 'fork',
+    name: 'Fork',
+    nameRu: 'Вилка',
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Traditional Russian wooden spoon painted in Khokhloma style.',
-    descriptionRu: 'Традиционная русская деревянная ложка с яркой росписью.',
+    description: 'Dinner fork. Material, shape, color, and pattern are defined in attributes.',
+    descriptionRu: 'Столовая вилка. Материал, форма, цвет и узор заданы в атрибутах.',
     effects: {},
-    weight: 0.04,
-    usable: false
+    weight: 0.05,
+    volume: 0.04,
+    usable: false,
+    kitchenwareAttributes: {
+      kind: 'fork',
+      material: 'stainless_steel',
+      materialRu: 'Нержавеющая сталь',
+      coatingRu: 'Зеркальная полировка',
+      capacityMl: 0,
+      shape: 'dinner_4_tine',
+      shapeNameRu: 'Столовая четырёхзубцовая',
+      color: '#cbd5e1',
+      colorNameRu: 'Серебристый',
+      accentColor: '#94a3b8',
+      pattern: 'none',
+      patternNameRu: 'Гладкая полировка',
+      handleRu: 'Классическая стальная',
+      featureRu: '4 зубца',
+      dimensionCm: 20
+    }
+  },
+  kitchen_knife: {
+    itemId: 'kitchen_knife',
+    name: 'Kitchen Knife',
+    nameRu: 'Кухонный нож',
+    category: 'tool',
+    maxStack: 1,
+    icon: '',
+    description: 'Kitchen knife for slicing and food prep. Blade material, shape, color, and handle are defined in attributes.',
+    descriptionRu: 'Кухонный нож для нарезки и разделки продуктов. Материал клинка, форма, цвет и отделка заданы в атрибутах.',
+    effects: {},
+    weight: 0.28,
+    volume: 0.14,
+    usable: true,
+    kitchenwareAttributes: {
+      kind: 'kitchen_knife',
+      material: 'stainless_steel',
+      materialRu: 'Кованая нержавеющая сталь',
+      coatingRu: 'Сатинированная шлифовка',
+      capacityMl: 0,
+      shape: 'chef_blade',
+      shapeNameRu: 'Шеф-нож с широким клинком',
+      color: '#cbd5e1',
+      colorNameRu: 'Сталь и тёмный орех',
+      accentColor: '#5c3a21',
+      pattern: 'brushed',
+      patternNameRu: 'Сатинированная полировка',
+      handleRu: 'Накладки из массива ореха на заклёпках',
+      featureRu: 'Прямая заточка клинка',
+      dimensionCm: 32
+    }
   },
 
   // === UNIFIED STORAGE BOXES (УНИФИЦИРОВАННЫЕ КОРОБКИ) ===
@@ -5132,7 +5148,6 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   tea: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250 },
   tea_green: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.tea_green.attributes },
   cappuccino: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
-  glass_mug: { containerId: 'glass_mug', liquidId: null, amountMl: 0 },
 
   // Aluminum Cans
   can_alu_330: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
@@ -5191,12 +5206,12 @@ export const LEGACY_CONTAINER_MAP: Record<string, ItemFluidContainerConfig> = {
   cup_plastic_dairy_medium_open: { containerId: 'cup_plastic_dairy_medium', liquidId: null, amountMl: 0, isOpen: true },
   bottle_sauce_squeeze: { containerId: 'bottle_sauce_squeeze', liquidId: null, amountMl: 0 },
 
-  // Bowls & Broths
-  soup_bowl: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
-  soup_bowl_empty: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
-  soup: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_beef.attributes },
-  broth: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500 },
-  broth_mushroom: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_mushroom.attributes },
+  // Bowls & Broths (mapped to unified 'bowl')
+  soup_bowl: { containerId: 'bowl', liquidId: null, amountMl: 0 },
+  soup_bowl_empty: { containerId: 'bowl', liquidId: null, amountMl: 0 },
+  soup: { containerId: 'bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_beef.attributes },
+  broth: { containerId: 'bowl', liquidId: 'broth', amountMl: 500 },
+  broth_mushroom: { containerId: 'bowl', liquidId: 'broth', amountMl: 500, attributes: LEGACY_LIQUID_TO_GENERIC_MAP.broth_mushroom.attributes },
 
   // Plastic Bags & Sacks
   package_bag: { containerId: 'package_bag', liquidId: null, amountMl: 0 },
@@ -5278,6 +5293,655 @@ const LEGACY_DISCRETE_CONTAINER_ALIASES: Record<string, { baseId: string; isOpen
   egg_carton_10_open: { baseId: 'egg_carton_10', isOpen: true }
 };
 
+export const KITCHENWARE_KINDS: ReadonlySet<string> = new Set<KitchenwareKind>([
+  'pot',
+  'saute_pan',
+  'frying_pan',
+  'kettle',
+  'plate',
+  'bowl',
+  'mug',
+  'cup',
+  'spoon',
+  'fork',
+  'kitchen_knife'
+]);
+
+export const KITCHENWARE_MATERIAL_NAMES_RU: Record<KitchenwareMaterial, string> = {
+  stainless_steel: 'Нержавеющая сталь',
+  enamel_steel: 'Эмалированная сталь',
+  aluminum: 'Алюминий',
+  nonstick_aluminum: 'Литой алюминий',
+  cast_iron: 'Чугун',
+  ceramic: 'Керамика',
+  porcelain: 'Тонкий фарфор',
+  terracotta_clay: 'Терракотовая глина',
+  glass: 'Закалённое стекло',
+  wood: 'Массив дерева',
+  silver: 'Стерлинговое серебро 925°',
+  copper: 'Медь'
+};
+
+export const KITCHENWARE_PATTERN_NAMES_RU: Record<KitchenwarePattern, string> = {
+  none: 'Без узора',
+  daisies: 'Белые ромашки',
+  gzhel: 'Гжель (синий кобальт)',
+  khokhloma: 'Хохломская роспись',
+  gold_rim: 'Тонкая золотая кайма',
+  blue_rim: 'Синяя кайма по ободку',
+  polka_dots: 'Горошек',
+  stripes: 'Декоративные полосы',
+  floral: 'Цветочный орнамент',
+  wood_grain: 'Природные кольца дерева',
+  engraved: 'Винтажная гравировка',
+  faceted: 'Гранёные стенки',
+  marbled: 'Мраморная крошка',
+  brushed: 'Сатинированная полировка',
+  glaze_drip: 'Глазурь с подтёками'
+};
+
+export interface LegacyKitchenwarePreset {
+  kind: KitchenwareKind;
+  weight?: number;
+  category?: ItemCategory;
+  attrs: Partial<KitchenwareAttributes>;
+}
+
+/**
+ * Автоматическая миграция старых разрозненных ID посуды в единые базовые предметы
+ * (pot, saute_pan, frying_pan, kettle, plate, bowl, mug, cup, spoon, fork, kitchen_knife)
+ * с сохранением материала, объёма, формы, цвета и узора в атрибутах.
+ */
+export const LEGACY_KITCHENWARE_PRESETS: Record<string, LegacyKitchenwarePreset> = {
+  kitchen_pot_enamel: {
+    kind: 'pot',
+    weight: 1.2,
+    attrs: {
+      material: 'enamel_steel',
+      materialRu: 'Эмалированная сталь',
+      coatingRu: 'Стеклоэмаль',
+      capacityMl: 4000,
+      shape: 'cylindrical',
+      shapeNameRu: 'Цилиндрическая с крышкой',
+      color: '#dc2626',
+      colorNameRu: 'Вишнёво-красный',
+      accentColor: '#18181b',
+      pattern: 'daisies',
+      patternNameRu: 'Белые ромашки',
+      patternColor: '#ffffff',
+      lidRu: 'Эмалированная купольная',
+      handleRu: 'Две бакелитовые петлевые',
+      dimensionCm: 24
+    }
+  },
+  kitchen_pot_steel: {
+    kind: 'pot',
+    weight: 1.5,
+    attrs: {
+      material: 'stainless_steel',
+      materialRu: 'Нержавеющая сталь',
+      coatingRu: 'Зеркальная полировка',
+      capacityMl: 4500,
+      shape: 'cylindrical',
+      shapeNameRu: 'Цилиндрическая с крышкой',
+      color: '#cbd5e1',
+      colorNameRu: 'Серебристый',
+      accentColor: '#64748b',
+      pattern: 'none',
+      patternNameRu: 'Без узора',
+      lidRu: 'Стеклянная жаропрочная',
+      handleRu: 'Боковые из нержавейки',
+      dimensionCm: 24
+    }
+  },
+  kitchen_pot_aluminum: {
+    kind: 'pot',
+    weight: 0.8,
+    attrs: {
+      material: 'aluminum',
+      materialRu: 'Алюминий',
+      coatingRu: 'Матовое шлифование',
+      capacityMl: 3500,
+      shape: 'cylindrical',
+      shapeNameRu: 'Классическая цилиндрическая',
+      color: '#d1d5db',
+      colorNameRu: 'Светло-серый металл',
+      accentColor: '#9ca3af',
+      pattern: 'brushed',
+      patternNameRu: 'Матовая шлифовка',
+      lidRu: 'Алюминиевая с ручкой',
+      handleRu: 'Клёпаные боковые ушки',
+      dimensionCm: 22
+    }
+  },
+  kitchen_pot_cast_iron: {
+    kind: 'pot',
+    weight: 3.8,
+    attrs: {
+      material: 'cast_iron',
+      materialRu: 'Толстостенный чугун',
+      coatingRu: 'Природный промасленный слой',
+      capacityMl: 5000,
+      shape: 'kazan_round',
+      shapeNameRu: 'Казан с округлым дном',
+      color: '#1e293b',
+      colorNameRu: 'Чёрный матовый',
+      accentColor: '#ca8a04',
+      pattern: 'none',
+      patternNameRu: 'Без узора',
+      lidRu: 'Тяжёлая чугунная с латунной ручкой',
+      handleRu: 'Литые боковые ушки',
+      dimensionCm: 28
+    }
+  },
+  kitchen_kettle_enamel: {
+    kind: 'kettle',
+    weight: 1.1,
+    attrs: {
+      material: 'enamel_steel',
+      materialRu: 'Эмалированная сталь',
+      coatingRu: 'Стеклоэмаль',
+      capacityMl: 2500,
+      shape: 'dome_classic',
+      shapeNameRu: 'Классический купольный наплитный',
+      color: '#2563eb',
+      colorNameRu: 'Синий',
+      accentColor: '#1e293b',
+      pattern: 'floral',
+      patternNameRu: 'Цветочный орнамент',
+      patternColor: '#fef08a',
+      lidRu: 'Эмалированная съёмная',
+      handleRu: 'Дугообразная верхняя',
+      dimensionCm: 21
+    }
+  },
+  kitchen_kettle_steel: {
+    kind: 'kettle',
+    weight: 1.3,
+    attrs: {
+      material: 'stainless_steel',
+      materialRu: 'Нержавеющая сталь',
+      coatingRu: 'Хромированная полировка',
+      capacityMl: 2200,
+      shape: 'conical',
+      shapeNameRu: 'Конический наплитный',
+      color: '#cbd5e1',
+      colorNameRu: 'Хром',
+      accentColor: '#18181b',
+      pattern: 'brushed',
+      patternNameRu: 'Сатинированная полировка',
+      featureRu: 'Откидной свисток на носике',
+      hasWhistle: true,
+      dimensionCm: 20
+    }
+  },
+  kitchen_kettle_electric: {
+    kind: 'kettle',
+    weight: 1.2,
+    category: 'electronics',
+    attrs: {
+      material: 'glass',
+      materialRu: 'Термостекло и сталь',
+      coatingRu: 'Прозрачная колба',
+      capacityMl: 1700,
+      shape: 'electric_cylinder',
+      shapeNameRu: 'Электрический цилиндрический',
+      color: '#e0f2fe',
+      colorNameRu: 'Прозрачное стекло и сталь',
+      accentColor: '#38bdf8',
+      pattern: 'none',
+      patternNameRu: 'Мерная шкала уровня воды',
+      featureRu: 'Электрический 220В с синей LED-подсветкой',
+      isElectric: true,
+      dimensionCm: 23
+    }
+  },
+  kitchen_kettle_clay: {
+    kind: 'kettle',
+    weight: 0.6,
+    attrs: {
+      material: 'terracotta_clay',
+      materialRu: 'Терракотовая глина',
+      coatingRu: 'Обжиг без глазури',
+      capacityMl: 800,
+      shape: 'teapot_round',
+      shapeNameRu: 'Округлый заварочный',
+      color: '#b45309',
+      colorNameRu: 'Терракотово-коричневый',
+      accentColor: '#78350f',
+      pattern: 'stripes',
+      patternNameRu: 'Резной поясок ручной работы',
+      patternColor: '#fcd34d',
+      lidRu: 'Глиняная с паровым отверстием',
+      handleRu: 'Боковая глиняная',
+      featureRu: 'Заварочный чайник',
+      dimensionCm: 14
+    }
+  },
+  kitchen_pan_cast_iron: {
+    kind: 'frying_pan',
+    weight: 2.5,
+    attrs: {
+      material: 'cast_iron',
+      materialRu: 'Чугун',
+      coatingRu: 'Промасленный чугун',
+      capacityMl: 1800,
+      shape: 'round_shallow',
+      shapeNameRu: 'Круглая толстостенная',
+      color: '#1e293b',
+      colorNameRu: 'Чёрный матовый',
+      accentColor: '#78350f',
+      pattern: 'none',
+      patternNameRu: 'Без узора',
+      handleRu: 'Длинная деревянная съёмная',
+      dimensionCm: 26
+    }
+  },
+  kitchen_pan_teflon: {
+    kind: 'frying_pan',
+    weight: 0.9,
+    attrs: {
+      material: 'nonstick_aluminum',
+      materialRu: 'Алюминий с тефлоном',
+      coatingRu: 'Антипригарное тефлоновое',
+      capacityMl: 1500,
+      shape: 'round_shallow',
+      shapeNameRu: 'Круглая антипригарная',
+      color: '#334155',
+      colorNameRu: 'Тёмно-графитовый',
+      accentColor: '#0f172a',
+      pattern: 'marbled',
+      patternNameRu: 'Мелкое антипригарное напыление',
+      patternColor: '#94a3b8',
+      handleRu: 'Бакелитовая термостойкая',
+      dimensionCm: 24
+    }
+  },
+  kitchen_plate_ceramic: {
+    kind: 'plate',
+    weight: 0.4,
+    attrs: {
+      material: 'ceramic',
+      materialRu: 'Керамика',
+      coatingRu: 'Глянцевая глазурь',
+      capacityMl: 450,
+      shape: 'round_flat',
+      shapeNameRu: 'Круглая столовая',
+      color: '#f8fafc',
+      colorNameRu: 'Молочно-белый',
+      accentColor: '#e2e8f0',
+      pattern: 'none',
+      patternNameRu: 'Без узора',
+      dimensionCm: 24
+    }
+  },
+  kitchen_plate_porcelain: {
+    kind: 'plate',
+    weight: 0.35,
+    attrs: {
+      material: 'porcelain',
+      materialRu: 'Тонкий фарфор',
+      coatingRu: 'Фарфоровая глазурь',
+      capacityMl: 420,
+      shape: 'round_flat',
+      shapeNameRu: 'Круглая парадная',
+      color: '#ffffff',
+      colorNameRu: 'Белоснежный',
+      accentColor: '#eab308',
+      pattern: 'gzhel',
+      patternNameRu: 'Гжель и золотой кант',
+      patternColor: '#2563eb',
+      dimensionCm: 24
+    }
+  },
+  kitchen_plate_enamel: {
+    kind: 'bowl',
+    weight: 0.25,
+    attrs: {
+      material: 'enamel_steel',
+      materialRu: 'Эмалированная сталь',
+      coatingRu: 'Стеклоэмаль',
+      capacityMl: 700,
+      shape: 'deep_round',
+      shapeNameRu: 'Глубокая советская миска',
+      color: '#f8fafc',
+      colorNameRu: 'Белый с синим ободком',
+      accentColor: '#1d4ed8',
+      pattern: 'blue_rim',
+      patternNameRu: 'Тёмно-синяя кайма по краю',
+      patternColor: '#1d4ed8',
+      dimensionCm: 18
+    }
+  },
+  kitchen_bowl_wooden: {
+    kind: 'bowl',
+    weight: 0.2,
+    attrs: {
+      material: 'wood',
+      materialRu: 'Резной массив дерева',
+      coatingRu: 'Льняное масло',
+      capacityMl: 600,
+      shape: 'deep_round',
+      shapeNameRu: 'Глубокая резная пиала',
+      color: '#a16207',
+      colorNameRu: 'Тёплый дуб',
+      accentColor: '#713f12',
+      pattern: 'wood_grain',
+      patternNameRu: 'Концентрические кольца дерева',
+      patternColor: '#713f12',
+      dimensionCm: 15
+    }
+  },
+  soup_bowl: {
+    kind: 'bowl',
+    weight: 0.22,
+    attrs: {
+      material: 'ceramic',
+      materialRu: 'Керамика',
+      coatingRu: 'Глянцевая глазурь',
+      capacityMl: 500,
+      shape: 'deep_round',
+      shapeNameRu: 'Глубокая суповая пиала',
+      color: '#f5f0e6',
+      colorNameRu: 'Кремовый',
+      accentColor: '#b45309',
+      pattern: 'stripes',
+      patternNameRu: 'Тонкая кайма по ободку',
+      patternColor: '#b45309',
+      dimensionCm: 15
+    }
+  },
+  soup_bowl_empty: {
+    kind: 'bowl',
+    weight: 0.22,
+    attrs: {
+      material: 'ceramic',
+      materialRu: 'Керамика',
+      coatingRu: 'Глянцевая глазурь',
+      capacityMl: 500,
+      shape: 'deep_round',
+      shapeNameRu: 'Глубокая суповая пиала',
+      color: '#f5f0e6',
+      colorNameRu: 'Кремовый',
+      accentColor: '#b45309',
+      pattern: 'stripes',
+      patternNameRu: 'Тонкая кайма по ободку',
+      patternColor: '#b45309',
+      dimensionCm: 15
+    }
+  },
+  kitchen_mug_ceramic: {
+    kind: 'mug',
+    weight: 0.3,
+    attrs: {
+      material: 'ceramic',
+      materialRu: 'Керамика',
+      coatingRu: 'Глянцевая глазурь',
+      capacityMl: 350,
+      shape: 'cylindrical',
+      shapeNameRu: 'Цилиндрическая с ручкой',
+      color: '#e7dcc8',
+      colorNameRu: 'Тёплый бежевый',
+      accentColor: '#92400e',
+      pattern: 'glaze_drip',
+      patternNameRu: 'Глазурь с подтёками',
+      patternColor: '#b45309',
+      dimensionCm: 10
+    }
+  },
+  kitchen_mug_enamel: {
+    kind: 'mug',
+    weight: 0.15,
+    attrs: {
+      material: 'enamel_steel',
+      materialRu: 'Эмалированная сталь',
+      coatingRu: 'Стеклоэмаль',
+      capacityMl: 400,
+      shape: 'camping_mug',
+      shapeNameRu: 'Походная цилиндрическая',
+      color: '#f8fafc',
+      colorNameRu: 'Белый с синим ободком',
+      accentColor: '#1d4ed8',
+      pattern: 'blue_rim',
+      patternNameRu: 'Синяя каёмка по ободку',
+      patternColor: '#1d4ed8',
+      dimensionCm: 9
+    }
+  },
+  kitchen_mug_glass: {
+    kind: 'mug',
+    weight: 0.35,
+    attrs: {
+      material: 'glass',
+      materialRu: 'Толстостенное стекло',
+      coatingRu: 'Прозрачное гранёное',
+      capacityMl: 350,
+      shape: 'faceted',
+      shapeNameRu: 'Гранёная с ручкой',
+      color: '#e0f2fe',
+      colorNameRu: 'Прозрачное стекло',
+      accentColor: '#bae6fd',
+      pattern: 'faceted',
+      patternNameRu: 'Гранёные стенки',
+      patternColor: '#ffffff',
+      dimensionCm: 10
+    }
+  },
+  glass_mug: {
+    kind: 'mug',
+    weight: 0.28,
+    attrs: {
+      material: 'glass',
+      materialRu: 'Толстостенное стекло',
+      coatingRu: 'Прозрачное',
+      capacityMl: 350,
+      shape: 'faceted',
+      shapeNameRu: 'Гранёная с ручкой',
+      color: '#e0f2fe',
+      colorNameRu: 'Прозрачное стекло',
+      accentColor: '#bae6fd',
+      pattern: 'faceted',
+      patternNameRu: 'Гранёные стенки',
+      patternColor: '#ffffff',
+      dimensionCm: 10
+    }
+  },
+  kitchen_cup_porcelain: {
+    kind: 'cup',
+    weight: 0.25,
+    attrs: {
+      material: 'porcelain',
+      materialRu: 'Тонкий фарфор',
+      coatingRu: 'Фарфоровая глазурь',
+      capacityMl: 220,
+      shape: 'teacup_saucer',
+      shapeNameRu: 'Чайная чашка с блюдцем',
+      color: '#ffffff',
+      colorNameRu: 'Белоснежный',
+      accentColor: '#eab308',
+      pattern: 'gzhel',
+      patternNameRu: 'Кобальтовая роспись и золотой кант',
+      patternColor: '#2563eb',
+      featureRu: 'В комплекте с блюдцем',
+      hasSaucer: true,
+      dimensionCm: 9
+    }
+  },
+  kitchen_knife_chef: {
+    kind: 'kitchen_knife',
+    weight: 0.3,
+    attrs: {
+      material: 'stainless_steel',
+      materialRu: 'Кованая нержавеющая сталь',
+      coatingRu: 'Сатинированная шлифовка',
+      capacityMl: 0,
+      shape: 'chef_blade',
+      shapeNameRu: 'Шеф-нож с широким клинком',
+      color: '#cbd5e1',
+      colorNameRu: 'Сталь и тёмный орех',
+      accentColor: '#5c3a21',
+      pattern: 'brushed',
+      patternNameRu: 'Сатинированная полировка',
+      handleRu: 'Накладки из массива ореха на заклёпках',
+      dimensionCm: 32
+    }
+  },
+  kitchen_fork_steel: {
+    kind: 'fork',
+    weight: 0.05,
+    attrs: {
+      material: 'stainless_steel',
+      materialRu: 'Нержавеющая сталь',
+      coatingRu: 'Зеркальная полировка',
+      capacityMl: 0,
+      shape: 'dinner_4_tine',
+      shapeNameRu: 'Столовая четырёхзубцовая',
+      color: '#cbd5e1',
+      colorNameRu: 'Серебристый',
+      accentColor: '#94a3b8',
+      pattern: 'none',
+      patternNameRu: 'Гладкая полировка',
+      featureRu: '4 зубца',
+      dimensionCm: 20
+    }
+  },
+  kitchen_fork_silver: {
+    kind: 'fork',
+    weight: 0.08,
+    category: 'valuable',
+    attrs: {
+      material: 'silver',
+      materialRu: 'Стерлинговое серебро 925°',
+      coatingRu: 'Чернёная полировка',
+      capacityMl: 0,
+      shape: 'dinner_4_tine',
+      shapeNameRu: 'Столовая старинная',
+      color: '#e2e8f0',
+      colorNameRu: 'Светлое серебро',
+      accentColor: '#64748b',
+      pattern: 'engraved',
+      patternNameRu: 'Изящная узорчатая гравировка',
+      patternColor: '#475569',
+      featureRu: '4 зубца, антикварное клеймо 925°',
+      dimensionCm: 21
+    }
+  },
+  kitchen_spoon_steel: {
+    kind: 'spoon',
+    weight: 0.06,
+    attrs: {
+      material: 'stainless_steel',
+      materialRu: 'Нержавеющая сталь',
+      coatingRu: 'Зеркальная полировка',
+      capacityMl: 15,
+      shape: 'tablespoon_oval',
+      shapeNameRu: 'Столовая овальная',
+      color: '#cbd5e1',
+      colorNameRu: 'Серебристый',
+      accentColor: '#94a3b8',
+      pattern: 'none',
+      patternNameRu: 'Гладкая полировка',
+      dimensionCm: 20
+    }
+  },
+  kitchen_spoon_wooden: {
+    kind: 'spoon',
+    weight: 0.04,
+    attrs: {
+      material: 'wood',
+      materialRu: 'Липовое дерево',
+      coatingRu: 'Глянцевый пищевой лак',
+      capacityMl: 18,
+      shape: 'wooden_deep',
+      shapeNameRu: 'Глубокая расписная деревянная',
+      color: '#dc2626',
+      colorNameRu: 'Красно-золотой с чёрным',
+      accentColor: '#18181b',
+      pattern: 'khokhloma',
+      patternNameRu: 'Хохломская роспись (золото и ягоды)',
+      patternColor: '#facc15',
+      dimensionCm: 19
+    }
+  }
+};
+
+export function isKitchenwareItemId(itemId?: string | null): boolean {
+  if (!itemId) return false;
+  return KITCHENWARE_KINDS.has(itemId) || Boolean(LEGACY_KITCHENWARE_PRESETS[itemId]);
+}
+
+export function getDefaultKitchenwareAttributes(kind: KitchenwareKind): KitchenwareAttributes {
+  const defAttrs = ITEM_CATALOG[kind]?.kitchenwareAttributes;
+  if (defAttrs) return { ...defAttrs };
+  return {
+    kind,
+    material: 'stainless_steel',
+    materialRu: 'Нержавеющая сталь',
+    capacityMl: 500,
+    shape: 'classic',
+    shapeNameRu: 'Классическая',
+    color: '#cbd5e1',
+    colorNameRu: 'Серебристый',
+    pattern: 'none',
+    patternNameRu: 'Без узора'
+  };
+}
+
+export function applyKitchenwareAttributesToItem(
+  item: InventoryItem,
+  overrides?: Partial<KitchenwareAttributes>
+): InventoryItem {
+  const kind = (overrides?.kind || item.kitchenwareAttributes?.kind || item.itemId) as KitchenwareKind;
+  if (!KITCHENWARE_KINDS.has(kind)) return item;
+  const base = getDefaultKitchenwareAttributes(kind);
+  const merged: KitchenwareAttributes = {
+    ...base,
+    ...(item.kitchenwareAttributes || {}),
+    ...(overrides || {}),
+    kind
+  };
+  if (!merged.materialRu && merged.material) {
+    merged.materialRu = KITCHENWARE_MATERIAL_NAMES_RU[merged.material] || merged.material;
+  }
+  if (!merged.patternNameRu && merged.pattern) {
+    merged.patternNameRu = KITCHENWARE_PATTERN_NAMES_RU[merged.pattern] || merged.pattern;
+  }
+  item.kitchenwareAttributes = merged;
+
+  // Sync fluidStorage & hybrid container capacity with attribute capacityMl
+  if (item.fluidStorage && merged.capacityMl > 0) {
+    item.fluidStorage.maxMl = merged.capacityMl;
+    item.fluidStorage.baseItemNameRu = ITEM_CATALOG[kind]?.nameRu || item.nameRu;
+    item.fluidStorage.baseItemNameEn = ITEM_CATALOG[kind]?.name || item.name;
+    if (item.isContainer) {
+      item.containerCapacityL = Number((merged.capacityMl / 1000).toFixed(3));
+      item.maxContainedItemVolumeL = getHybridMaxItemVolumeL(kind, merged.capacityMl);
+      item.maxContainedWeightKg = Number(Math.max(2.0, (merged.capacityMl / 1000) * 2.5).toFixed(2));
+    }
+    syncItemContainerProperties(item);
+  }
+  if (merged.isElectric) {
+    item.category = 'electronics';
+    item.usable = true;
+  }
+  if (merged.material === 'silver') {
+    item.category = 'valuable';
+  }
+  return item;
+}
+
+export function createKitchenware(
+  kind: KitchenwareKind,
+  overrides?: Partial<KitchenwareAttributes>,
+  options?: { weight?: number; category?: ItemCategory }
+): InventoryItem {
+  const item = createItem(kind, 1, undefined, true);
+  if (options?.weight !== undefined) item.weight = options.weight;
+  if (options?.category) item.category = options.category;
+  applyKitchenwareAttributesToItem(item, overrides);
+  return normalizeItemAttributes(item);
+}
+
 export function resolveCanonicalSubstanceId(itemId: string): string {
   return LEGACY_SUBSTANCE_ID_ALIASES[itemId] || itemId;
 }
@@ -5301,6 +5965,16 @@ export function getResolvedFluidContainerConfig(rawItemId: string): ItemFluidCon
 }
 
 export function createItem(rawItemId: string, count: number = 1, initialPortions?: number, rawCatalogOnly?: boolean): InventoryItem {
+  const legacyKw = LEGACY_KITCHENWARE_PRESETS[rawItemId];
+  if (legacyKw) {
+    const kwItem = createKitchenware(legacyKw.kind, legacyKw.attrs, {
+      weight: legacyKw.weight,
+      category: legacyKw.category
+    });
+    kwItem.count = Math.max(1, count);
+    return kwItem;
+  }
+
   const itemId = resolveCanonicalSubstanceId(rawItemId);
   // If this item is a packaged discrete item container (lukoshko with berries/mushrooms, egg carton, blister pack, tray, pouch, box),
   // instantiate the unified container holding the standalone inner items unless rawCatalogOnly is requested.
@@ -5464,6 +6138,9 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
           ingredients: [...((originalDef?.chocolateAttributes || def.chocolateAttributes)!.ingredients || [])]
         }
       : undefined,
+    kitchenwareAttributes: (originalDef?.kitchenwareAttributes || def.kitchenwareAttributes)
+      ? { ...(originalDef?.kitchenwareAttributes || def.kitchenwareAttributes)! }
+      : undefined,
     fullnessPerBite: def.fullnessPerBite,
     nutrients:
       resolvedItemId === 'gummy_candy'
@@ -5575,6 +6252,22 @@ function inferPackageMaterialRu(item: InventoryItem): string | undefined {
  * блюдо, полуфабрикат, упаковка, инструмент, медикамент) к единому JSON-стандарту UnifiedAttributes.
  */
 export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinition): InventoryItem {
+  // Seamless migration of legacy kitchenware items from older saves into unified base items
+  const legacyKwPreset = LEGACY_KITCHENWARE_PRESETS[item.itemId];
+  if (legacyKwPreset) {
+    item.itemId = legacyKwPreset.kind;
+    const baseDef = ITEM_CATALOG[legacyKwPreset.kind];
+    if (baseDef) {
+      item.name = baseDef.name;
+      item.nameRu = baseDef.nameRu;
+    }
+    if (!item.kitchenwareAttributes) {
+      applyKitchenwareAttributesToItem(item, legacyKwPreset.attrs);
+    }
+  } else if (KITCHENWARE_KINDS.has(item.itemId) && !item.kitchenwareAttributes) {
+    item.kitchenwareAttributes = getDefaultKitchenwareAttributes(item.itemId as KitchenwareKind);
+  }
+
   if (item.originalCatalogId && LEGACY_SUBSTANCE_ID_ALIASES[item.originalCatalogId]) {
     item.originalCatalogId = LEGACY_SUBSTANCE_ID_ALIASES[item.originalCatalogId];
   }
@@ -5808,6 +6501,51 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     }
   }
 
+  // 4.5. Unified Kitchenware & Tableware Attributes (из чего, вместимость, форма, цвет, узор, крышка/ручка)
+  let patternRu = prevAttrs.patternRu || defAttrs.patternRu;
+  let patternColor = prevAttrs.patternColor || defAttrs.patternColor;
+  let coatingRu = prevAttrs.coatingRu || defAttrs.coatingRu;
+  let capacityMl = prevAttrs.capacityMl ?? defAttrs.capacityMl;
+  let lidRu = prevAttrs.lidRu || defAttrs.lidRu;
+  let handleRu = prevAttrs.handleRu || defAttrs.handleRu;
+  let featureRu = prevAttrs.featureRu || defAttrs.featureRu;
+  let dimensionCm = prevAttrs.dimensionCm ?? defAttrs.dimensionCm;
+
+  if (item.kitchenwareAttributes) {
+    const kw = item.kitchenwareAttributes;
+    visuals.materialNameRu = kw.materialRu;
+    visuals.shape = kw.shape;
+    visuals.shapeNameRu = kw.shapeNameRu;
+    visuals.color = kw.color;
+    visuals.colorNameRu = kw.colorNameRu;
+    if (kw.accentColor) visuals.secondaryColor = kw.accentColor;
+    patternRu = kw.patternNameRu;
+    patternColor = kw.patternColor;
+    coatingRu = kw.coatingRu;
+    capacityMl = kw.capacityMl;
+    lidRu = kw.lidRu;
+    handleRu = kw.handleRu;
+    featureRu = kw.featureRu;
+    dimensionCm = kw.dimensionCm;
+    if (!resolvedIngredients) {
+      resolvedIngredients = kw.coatingRu ? [kw.materialRu, kw.coatingRu] : [kw.materialRu];
+    }
+    if (!purpose) {
+      purpose =
+        kw.kind === 'pot' ? 'Варка супов, бульонов, гарниров и тушение' :
+        kw.kind === 'saute_pan' ? 'Тушение, пассерование и приготовление соусов' :
+        kw.kind === 'frying_pan' ? 'Жарка и обжаривание продуктов на плите' :
+        kw.kind === 'kettle' ? (kw.isElectric ? 'Быстрое кипячение воды от сети' : 'Кипячение воды и заваривание чая') :
+        kw.kind === 'plate' ? 'Подача готовых блюд и гарниров' :
+        kw.kind === 'bowl' ? 'Подача супов, каш, салатов и смешивание ингредиентов' :
+        kw.kind === 'mug' ? 'Горячие и холодные напитки' :
+        kw.kind === 'cup' ? 'Подача чая и кофе' :
+        kw.kind === 'spoon' ? 'Приём первых блюд и перемешивание' :
+        kw.kind === 'fork' ? 'Приём вторых блюд' :
+        'Нарезка и разделка продуктов на кухне';
+    }
+  }
+
   // 5. Fallback defaults for standard items so every InventoryItem has a coherent JSON schema
   if (!varietyRu) {
     varietyRu = catalogDef?.nameRu || item.nameRu;
@@ -5861,6 +6599,14 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     ...(dishType ? { dishType } : {}),
     ...(tasteNotes ? { tasteNotes } : {}),
     ...(cookingAttributes ? { cookingAttributes } : {}),
+    ...(patternRu ? { patternRu } : {}),
+    ...(patternColor ? { patternColor } : {}),
+    ...(coatingRu ? { coatingRu } : {}),
+    ...(capacityMl !== undefined ? { capacityMl } : {}),
+    ...(lidRu ? { lidRu } : {}),
+    ...(handleRu ? { handleRu } : {}),
+    ...(featureRu ? { featureRu } : {}),
+    ...(dimensionCm !== undefined ? { dimensionCm } : {}),
     ...(prevAttrs.physicalForm ? { physicalForm: prevAttrs.physicalForm } : {}),
     ...(prevAttrs.physicalFormRu ? { physicalFormRu: prevAttrs.physicalFormRu } : {}),
     ...(prevAttrs.substanceColorRu ? { substanceColorRu: prevAttrs.substanceColorRu } : {}),
@@ -6232,6 +6978,7 @@ export function getResolvedPackagingConfig(rawItemId: string): ItemPackagingConf
 
 export function isRegisteredItemId(rawItemId: string): boolean {
   if (!rawItemId) return false;
+  if (LEGACY_KITCHENWARE_PRESETS[rawItemId]) return true;
   const itemId = resolveCanonicalSubstanceId(rawItemId);
   if (Boolean(ITEM_CATALOG[itemId] || ITEM_CATALOG[rawItemId])) return true;
   if (Boolean(LEGACY_DISCRETE_CONTAINER_ALIASES[itemId] || LEGACY_DISCRETE_CONTAINER_ALIASES[rawItemId])) return true;
@@ -6548,6 +7295,9 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
           inner = createChocolate(spec.chocolateAttributes);
         } else {
           inner = createItem(spec.itemId, 1, undefined, true);
+          if (spec.kitchenwareAttributes) {
+            applyKitchenwareAttributesToItem(inner, spec.kitchenwareAttributes);
+          }
           if (spec.attributes) {
             inner.attributes = { ...(inner.attributes || {}), ...spec.attributes };
             normalizeItemAttributes(inner);
@@ -6614,22 +7364,30 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
       container.maxFluidLiters = 4.0;
       container.fluidType = 'oil';
     }
-    const isHybrid = canContainerHoldHybridContents(entry.itemId);
-    container.isContainer = isHybrid ? true : !container.fluidStorage.liquidId && Boolean(ITEM_CATALOG[entry.itemId]?.isContainer);
+    if (entry.kitchenwareAttributes) {
+      applyKitchenwareAttributesToItem(container, entry.kitchenwareAttributes);
+    }
+    const isHybrid = canContainerHoldHybridContents(container.itemId);
+    container.isContainer = isHybrid ? true : !container.fluidStorage.liquidId && Boolean(ITEM_CATALOG[container.itemId]?.isContainer);
     if (isHybrid) {
+      const effectiveMaxMl = container.fluidStorage.maxMl || maxMl;
       container.contents = container.contents || [];
-      container.containerCapacityL = Number((maxMl / 1000).toFixed(3));
-      container.maxContainedItemVolumeL = getHybridMaxItemVolumeL(entry.itemId, maxMl);
-      container.maxContainedWeightKg = Number(Math.max(2.0, (maxMl / 1000) * 2.5).toFixed(2));
+      container.containerCapacityL = Number((effectiveMaxMl / 1000).toFixed(3));
+      container.maxContainedItemVolumeL = getHybridMaxItemVolumeL(container.itemId, effectiveMaxMl);
+      container.maxContainedWeightKg = Number(Math.max(2.0, (effectiveMaxMl / 1000) * 2.5).toFixed(2));
     }
     syncItemContainerProperties(container);
     initItemThermalProperties(container, 20.0);
     return normalizeItemAttributes(container);
   }
 
-  // Standalone item in ITEM_CATALOG -> spawn strictly raw (no surprise auto-packaging!)
-  if (ITEM_CATALOG[entry.itemId]) {
+  // Standalone item in ITEM_CATALOG or legacy kitchenware preset -> spawn strictly raw (no surprise auto-packaging!)
+  if (ITEM_CATALOG[entry.itemId] || LEGACY_KITCHENWARE_PRESETS[entry.itemId]) {
     const raw = createItem(entry.itemId, 1, undefined, true);
+    if (entry.kitchenwareAttributes) {
+      applyKitchenwareAttributesToItem(raw, entry.kitchenwareAttributes);
+      normalizeItemAttributes(raw);
+    }
     if (entry.labelColor) raw.labelColor = entry.labelColor;
     if (entry.containerTintColor) raw.containerTintColor = entry.containerTintColor;
     if (entry.isOpen !== undefined) raw.isOpen = entry.isOpen;
@@ -8972,15 +9730,16 @@ export function isButcherableItem(itemId: string): boolean {
 }
 
 export function hasKnife(player: Player): boolean {
-  if (player.leftHandItem && (player.leftHandItem.itemId === 'kitchen_knife_chef' || player.leftHandItem.itemId === 'pocket_knife')) {
+  const isKnifeId = (id?: string) => id === 'kitchen_knife' || id === 'kitchen_knife_chef' || id === 'pocket_knife';
+  if (player.leftHandItem && isKnifeId(player.leftHandItem.itemId)) {
     return true;
   }
-  if (player.rightHandItem && (player.rightHandItem.itemId === 'kitchen_knife_chef' || player.rightHandItem.itemId === 'pocket_knife')) {
+  if (player.rightHandItem && isKnifeId(player.rightHandItem.itemId)) {
     return true;
   }
   if (player.inventory) {
     for (const item of player.inventory) {
-      if (item && (item.itemId === 'kitchen_knife_chef' || item.itemId === 'pocket_knife')) {
+      if (item && isKnifeId(item.itemId)) {
         return true;
       }
     }
@@ -9006,7 +9765,7 @@ export function butcherItem(player: Player, item: InventoryItem, world?: GameWor
   const birdIds = ['chicken', 'duck', 'goose', 'turkey', 'pheasant', 'quail'];
   const fishIds = ['salmon', 'tuna', 'cod', 'perch', 'herring', 'pike', 'eel', 'catfish'];
 
-  triggerPlayerActionAnim(player, 'knife_slash', 0.85, 'kitchen_knife_chef');
+  triggerPlayerActionAnim(player, 'knife_slash', 0.85, 'kitchen_knife');
   sound.playPropBreak('metal'); // Slicing sound
 
   const spawnOrGive = (id: string) => {
@@ -9275,18 +10034,18 @@ export function useItemOnPlayer(
     return { success: true, message: `Время проверено по ${item.nameRu}` };
   }
 
-  // Chef knife inspection from inventory
-  if (item.itemId === 'kitchen_knife_chef') {
-    triggerPlayerActionAnim(player, 'knife_slash', 0.75, item.itemId);
+  // Kitchen knife inspection from inventory
+  if (item.itemId === 'kitchen_knife' || item.itemId === 'kitchen_knife_chef') {
+    triggerPlayerActionAnim(player, 'knife_slash', 0.75, 'kitchen_knife');
     sound.playUseItem();
-    addPlayerNotification(player, `Острый кухонный нож шеф-повара. Активируйте в активной руке (ПКМ / удержание) для взмаха.`, 'info');
+    addPlayerNotification(player, `Острый кухонный нож. Активируйте в активной руке (ПКМ / удержание) для взмаха.`, 'info');
     return { success: true, message: 'Кухонный нож осмотрен' };
   }
 
-  // Electric kettle inspection from inventory
-  if (item.itemId === 'kitchen_kettle_electric') {
+  // Electric kettle inspection from inventory (when empty)
+  if ((item.itemId === 'kettle' && item.kitchenwareAttributes?.isElectric && (!item.fluidStorage || item.fluidStorage.currentMl <= 0)) || item.itemId === 'kitchen_kettle_electric') {
     sound.playUseItem();
-    addPlayerNotification(player, `Электрочайник с подсветкой. Возьмите в руки или поставьте на кухонный стол.`, 'info');
+    addPlayerNotification(player, `Электрочайник с подсветкой. Налейте воды или поставьте на кухонный стол.`, 'info');
     return { success: true, message: 'Электрочайник проверен' };
   }
 
@@ -10081,6 +10840,7 @@ export function useItemOnPlayer(
     if (remaining <= 0) {
       // Cookware preservation: pots, pans, and tableware must NEVER be destroyed when eaten empty!
       const isCookware = Boolean(
+        KITCHENWARE_KINDS.has(item.itemId) ||
         item.itemId.startsWith('kitchen_pot_') ||
         item.itemId.startsWith('kitchen_pan_') ||
         item.itemId.startsWith('kitchen_plate_') ||
@@ -10308,19 +11068,19 @@ export function useHandItemOnPlayer(
     return { success: true, message: `Тиканье ${item.nameRu}` };
   }
 
-  // Chef knife held in hand
-  if (item.itemId === 'kitchen_knife_chef') {
-    triggerPlayerActionAnim(player, 'knife_slash', 0.75, item.itemId, hand);
+  // Kitchen knife held in hand
+  if (item.itemId === 'kitchen_knife' || item.itemId === 'kitchen_knife_chef') {
+    triggerPlayerActionAnim(player, 'knife_slash', 0.75, 'kitchen_knife', hand);
     sound.playPropBreak('metal');
-    addPlayerNotification(player, `Вы рассекаете воздух кухонным ножом шеф-повара!`, 'warning');
+    addPlayerNotification(player, `Вы рассекаете воздух кухонным ножом.`, 'warning');
     return { success: true, message: 'Взмах ножом' };
   }
 
-  // Electric kettle held in hand
-  if (item.itemId === 'kitchen_kettle_electric') {
+  // Electric kettle held in hand (when empty)
+  if ((item.itemId === 'kettle' && item.kitchenwareAttributes?.isElectric && (!item.fluidStorage || item.fluidStorage.currentMl <= 0)) || item.itemId === 'kitchen_kettle_electric') {
     sound.playUseItem();
-    addPlayerNotification(player, `Электрочайник включен: внутри вспыхнула синяя диодная подсветка!`, 'heal');
-    return { success: true, message: 'Включен чайник' };
+    addPlayerNotification(player, `Электрочайник включён: внутри вспыхнула синяя диодная подсветка.`, 'heal');
+    return { success: true, message: 'Включён чайник' };
   }
 
   // Furniture item placement from hand (activated with E)
@@ -11276,6 +12036,7 @@ export function useHandItemOnPlayer(
     if (remaining <= 0) {
       // Cookware preservation: pots, pans, and tableware must NEVER be destroyed when eaten empty from hands!
       const isCookware = Boolean(
+        KITCHENWARE_KINDS.has(item.itemId) ||
         item.itemId.startsWith('kitchen_pot_') ||
         item.itemId.startsWith('kitchen_pan_') ||
         item.itemId.startsWith('kitchen_plate_') ||

@@ -458,16 +458,139 @@ export class GameRenderer {
   private treeCanvasPool: HTMLCanvasElement[] = [];
   private matPuddleGrad: CanvasGradient | null = null;
   private matStainGradCache = new Map<string, CanvasGradient>();
+  private radialCutoutSprites = new Map<string, HTMLCanvasElement>();
+  private radialColorSprites = new Map<string, HTMLCanvasElement>();
   private chunksRebuiltThisFrame: number = 0;
   private chunkSeasonKeys = new Map<string, string>();
 
   private getLightmapScale(): number {
-    const base = Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
-    return Math.max(0.35, Math.min(0.55, base * 0.62));
+    return Math.max(0.5, Math.min(1.0, performanceConfig.shadowResolutionScale ?? 0.75));
   }
 
   private getMaterialBufferScale(): number {
-    return isMobileOrLowEndDevice() ? 0.5 : 0.65;
+    return this.backingScale > 0 ? this.backingScale : 1;
+  }
+
+  /** Pre-baked 64x64 black-alpha radial sprite for zero-allocation lightmap darkness cutouts. */
+  private getRadialCutoutSprite(profile: 'std' | 'lamp' | 'fire' | 'soft' | 'tight'): HTMLCanvasElement {
+    let spr = this.radialCutoutSprites.get(profile);
+    if (!spr) {
+      spr = document.createElement('canvas');
+      spr.width = 64;
+      spr.height = 64;
+      const sctx = spr.getContext('2d')!;
+      const g = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      if (profile === 'lamp') {
+        g.addColorStop(0.00, 'rgba(0,0,0,1)');
+        g.addColorStop(0.24, 'rgba(0,0,0,0.74)');
+        g.addColorStop(0.52, 'rgba(0,0,0,0.40)');
+        g.addColorStop(0.80, 'rgba(0,0,0,0.12)');
+        g.addColorStop(1.00, 'rgba(0,0,0,0)');
+      } else if (profile === 'fire') {
+        g.addColorStop(0.00, 'rgba(0,0,0,1)');
+        g.addColorStop(0.34, 'rgba(0,0,0,0.82)');
+        g.addColorStop(0.70, 'rgba(0,0,0,0.34)');
+        g.addColorStop(1.00, 'rgba(0,0,0,0)');
+      } else if (profile === 'tight') {
+        g.addColorStop(0.00, 'rgba(0,0,0,1)');
+        g.addColorStop(1.00, 'rgba(0,0,0,0)');
+      } else if (profile === 'soft') {
+        g.addColorStop(0.00, 'rgba(0,0,0,1)');
+        g.addColorStop(0.50, 'rgba(0,0,0,0.42)');
+        g.addColorStop(1.00, 'rgba(0,0,0,0)');
+      } else {
+        g.addColorStop(0.00, 'rgba(0,0,0,1)');
+        g.addColorStop(0.40, 'rgba(0,0,0,0.50)');
+        g.addColorStop(0.80, 'rgba(0,0,0,0.12)');
+        g.addColorStop(1.00, 'rgba(0,0,0,0)');
+      }
+      sctx.fillStyle = g;
+      sctx.fillRect(0, 0, 64, 64);
+      this.radialCutoutSprites.set(profile, spr);
+    }
+    return spr;
+  }
+
+  /** Pre-baked 64x64 colored radial sprite for colored lightmap accumulation & Pass 2 additive glows. */
+  private getRadialColorSprite(
+    profile: 'std' | 'lamp' | 'fire' | 'soft' | 'tight',
+    rgb: readonly [number, number, number],
+    outerRgb?: readonly [number, number, number]
+  ): HTMLCanvasElement {
+    const r0 = rgb[0] | 0, g0 = rgb[1] | 0, b0 = rgb[2] | 0;
+    const or = outerRgb ? (outerRgb[0] | 0) : r0;
+    const og = outerRgb ? (outerRgb[1] | 0) : g0;
+    const ob = outerRgb ? (outerRgb[2] | 0) : b0;
+    const key = `${profile}_${r0}_${g0}_${b0}_${or}_${og}_${ob}`;
+    let spr = this.radialColorSprites.get(key);
+    if (!spr) {
+      if (this.radialColorSprites.size > 160) this.radialColorSprites.clear();
+      spr = document.createElement('canvas');
+      spr.width = 64;
+      spr.height = 64;
+      const sctx = spr.getContext('2d')!;
+      const g = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      if (profile === 'lamp') {
+        g.addColorStop(0.00, `rgba(${r0},${g0},${b0},1)`);
+        g.addColorStop(0.28, `rgba(${r0},${g0},${b0},0.66)`);
+        g.addColorStop(0.58, `rgba(${or},${og},${ob},0.28)`);
+        g.addColorStop(0.85, `rgba(${or},${og},${ob},0.07)`);
+        g.addColorStop(1.00, `rgba(${or},${og},${ob},0)`);
+      } else if (profile === 'fire') {
+        g.addColorStop(0.00, 'rgba(255,212,112,1)');
+        g.addColorStop(0.32, 'rgba(255,134,34,0.66)');
+        g.addColorStop(0.70, 'rgba(220,58,12,0.24)');
+        g.addColorStop(1.00, 'rgba(180,32,6,0)');
+      } else if (profile === 'tight') {
+        g.addColorStop(0.00, `rgba(${r0},${g0},${b0},1)`);
+        g.addColorStop(1.00, `rgba(${or},${og},${ob},0)`);
+      } else if (profile === 'soft') {
+        g.addColorStop(0.00, `rgba(${r0},${g0},${b0},1)`);
+        g.addColorStop(0.50, `rgba(${or},${og},${ob},0.36)`);
+        g.addColorStop(1.00, `rgba(${or},${og},${ob},0)`);
+      } else {
+        g.addColorStop(0.00, `rgba(${r0},${g0},${b0},1)`);
+        g.addColorStop(0.40, `rgba(${or},${og},${ob},0.50)`);
+        g.addColorStop(0.80, `rgba(${or},${og},${ob},0.14)`);
+        g.addColorStop(1.00, `rgba(${or},${og},${ob},0)`);
+      }
+      sctx.fillStyle = g;
+      sctx.fillRect(0, 0, 64, 64);
+      this.radialColorSprites.set(key, spr);
+    }
+    return spr;
+  }
+
+  private drawRadialCutout(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    radius: number,
+    alpha: number,
+    profile: 'std' | 'lamp' | 'fire' | 'soft' | 'tight' = 'std'
+  ) {
+    if (radius <= 0.1 || alpha <= 0.004) return;
+    const prevA = ctx.globalAlpha;
+    ctx.globalAlpha = prevA * Math.min(1, alpha);
+    ctx.drawImage(this.getRadialCutoutSprite(profile), x - radius, y - radius, radius * 2, radius * 2);
+    ctx.globalAlpha = prevA;
+  }
+
+  private drawRadialColorGlow(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    radius: number,
+    rgb: readonly [number, number, number],
+    alpha: number,
+    profile: 'std' | 'lamp' | 'fire' | 'soft' | 'tight' = 'std',
+    outerRgb?: readonly [number, number, number]
+  ) {
+    if (radius <= 0.1 || alpha <= 0.004) return;
+    const prevA = ctx.globalAlpha;
+    ctx.globalAlpha = prevA * Math.min(1, alpha);
+    ctx.drawImage(this.getRadialColorSprite(profile, rgb, outerRgb), x - radius, y - radius, radius * 2, radius * 2);
+    ctx.globalAlpha = prevA;
   }
 
   /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit` with zero heap allocation. */
@@ -9077,7 +9200,7 @@ export class GameRenderer {
         const rY = Math.max(0.5, p.radiusY);
         const cullMargin = Math.max(rX, rY) + 24;
         if (p.x + cullMargin < minX || p.x - cullMargin > maxX || p.y + cullMargin < minY || p.y - cullMargin > maxY) continue;
-        const seed = hashString(p.id);
+        const seed = (p as any)._matSeed ?? ((p as any)._matSeed = hashString(p.id));
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.angle);
@@ -9107,7 +9230,7 @@ export class GameRenderer {
         const rOut = Math.max(0.5, stain.radius);
         const rx = Math.max(0.5, rOut * Math.sqrt(stretch));
         const ry = Math.max(0.5, rOut * 0.85 / Math.sqrt(stretch));
-        const seed = hashString(stain.id);
+        const seed = (stain as any)._matSeed ?? ((stain as any)._matSeed = hashString(stain.id));
 
         ctx.save();
         ctx.translate(stain.x, stain.y);
@@ -9274,37 +9397,42 @@ export class GameRenderer {
         ctx.fillRect(gp.x - 16, gp.y - 10, 32, 20);
       }
     }
-    if (world.guardrails) {
+    if (world.guardrails && world.guardrails.length > 0) {
       ctx.lineCap = 'round';
+      let currentW = -1;
+      let pathOpen = false;
       for (let i = 0; i < world.guardrails.length; i++) {
         const rail = world.guardrails[i];
         if (Math.max(rail.x1, rail.x2) < minX - 20 || Math.min(rail.x1, rail.x2) > maxX + 20 ||
             Math.max(rail.y1, rail.y2) < minY - 20 || Math.min(rail.y1, rail.y2) > maxY + 20) continue;
-        ctx.lineWidth = (rail.width || 6) + 3;
-        ctx.beginPath();
+        const w = (rail.width || 6) + 3;
+        if (w !== currentW) {
+          if (pathOpen) ctx.stroke();
+          currentW = w;
+          ctx.lineWidth = w;
+          ctx.beginPath();
+          pathOpen = true;
+        }
         ctx.moveTo(rail.x1, rail.y1);
         ctx.lineTo(rail.x2, rail.y2);
-        ctx.stroke();
       }
+      if (pathOpen) ctx.stroke();
       ctx.lineCap = 'butt';
     }
 
-    // 11d. Street Props & Collectible Ground Items
+    // 11d & 11e. Street Props, Ground Items, Pedestrians & Players (batched circles + transform-free axis-aligned rects!)
+    let hasBatchedCircles = false;
+    ctx.beginPath();
     for (let i = 0; i < vpProps.length; i++) {
       const p = vpProps[i];
       const pt = p.type as string;
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      if (p.angle) ctx.rotate(p.angle);
-      if (pt === 'bench') {
-        ctx.fillRect(-8, -4, 16, 8);
-      } else if (pt === 'dumpster') {
-        ctx.fillRect(-8, -5.5, 16, 11);
-      } else if (pt === 'kiosk') {
-        ctx.fillRect(-10, -10, 20, 20);
-      } else if (pt === 'bus_stop') {
-        ctx.fillRect(-15, -9, 30, 18);
-      } else if (pt === 'shipping_container') {
+      let hw = 0;
+      let hh = 0;
+      if (pt === 'bench') { hw = 8; hh = 4; }
+      else if (pt === 'dumpster') { hw = 8; hh = 5.5; }
+      else if (pt === 'kiosk') { hw = 10; hh = 10; }
+      else if (pt === 'bus_stop') { hw = 15; hh = 9; }
+      else if (pt === 'shipping_container') {
         let cLen = (p as any)._cLen as number | undefined;
         if (cLen === undefined) {
           let ph = 0;
@@ -9312,63 +9440,69 @@ export class GameRenderer {
           cLen = (ph % 3) === 0 ? 94 : 58;
           (p as any)._cLen = cLen;
         }
-        ctx.fillRect(-cLen * 0.5, -13, cLen, 26);
-      } else if (pt === 'industrial_tank') {
-        ctx.fillRect(-23, -12, 46, 24);
-      } else if (pt === 'concrete_barrier') {
-        ctx.fillRect(-17, -8, 34, 16);
-      } else if (pt === 'rustic_car_wreck') {
-        ctx.fillRect(-20, -10, 40, 20);
-      } else if (pt === 'sandbox') {
-        ctx.fillRect(-10.5, -10.5, 21, 21);
-      } else if (pt === 'woodpile') {
-        ctx.fillRect(-10.5, -5.5, 21, 11);
-      } else if (pt === 'silo_tank' || pt === 'yard_rotunda' || pt === 'haystack') {
-        ctx.beginPath();
-        ctx.arc(0, 0, 16, 0, Math.PI * 2);
-        ctx.fill();
+        hw = cLen * 0.5;
+        hh = 13;
+      } else if (pt === 'industrial_tank') { hw = 23; hh = 12; }
+      else if (pt === 'concrete_barrier') { hw = 17; hh = 8; }
+      else if (pt === 'rustic_car_wreck') { hw = 20; hh = 10; }
+      else if (pt === 'sandbox') { hw = 10.5; hh = 10.5; }
+      else if (pt === 'woodpile') { hw = 10.5; hh = 5.5; }
+
+      if (hw > 0) {
+        if (p.angle) {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.angle);
+          ctx.fillRect(-hw, -hh, hw * 2, hh * 2);
+          ctx.restore();
+        } else {
+          ctx.fillRect(p.x - hw, p.y - hh, hw * 2, hh * 2);
+        }
       } else {
-        ctx.beginPath();
-        ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
-        ctx.fill();
+        const rad = (pt === 'silo_tank' || pt === 'yard_rotunda' || pt === 'haystack') ? 16 : 4.2;
+        ctx.moveTo(p.x + rad, p.y);
+        ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
+        hasBatchedCircles = true;
       }
-      ctx.restore();
     }
     if (world.groundItems) {
       for (let i = 0; i < world.groundItems.length; i++) {
         const gi = world.groundItems[i];
         if (gi.x < minX - 20 || gi.x > maxX + 20 || gi.y < minY - 20 || gi.y > maxY + 30) continue;
-        ctx.beginPath();
+        ctx.moveTo(gi.x + 5.2, gi.y);
         ctx.arc(gi.x, gi.y, 5.2, 0, Math.PI * 2);
-        ctx.fill();
+        hasBatchedCircles = true;
       }
     }
-
-    // 11e. Pedestrians, Player & Remote Players
     for (let i = 0; i < visiblePedestrians.length; i++) {
       const ped = visiblePedestrians[i];
       if (((ped as any).waterDepth || 0) > 0.35) continue;
-      ctx.beginPath();
-      ctx.arc(ped.x, ped.y, ((ped as any).radius || 4.6) + 1.2, 0, Math.PI * 2);
-      ctx.fill();
+      const rad = ((ped as any).radius || 4.6) + 1.2;
+      ctx.moveTo(ped.x + rad, ped.y);
+      ctx.arc(ped.x, ped.y, rad, 0, Math.PI * 2);
+      hasBatchedCircles = true;
     }
     if (!player.isInVehicle && !player.insideCarId && !player.insideBusId) {
       const pDepth = player.waterDepth || 0;
       if (pDepth < 0.55) {
-        ctx.beginPath();
-        ctx.arc(player.x, player.y, ((player as any).radius || 4.8) + (pDepth > 0.12 ? -0.5 : 1.2), 0, Math.PI * 2);
-        ctx.fill();
+        const rad = ((player as any).radius || 4.8) + (pDepth > 0.12 ? -0.5 : 1.2);
+        ctx.moveTo(player.x + rad, player.y);
+        ctx.arc(player.x, player.y, rad, 0, Math.PI * 2);
+        hasBatchedCircles = true;
       }
     }
     if (remotePlayers && remotePlayers.length > 0) {
       for (let i = 0; i < remotePlayers.length; i++) {
         const rp = remotePlayers[i];
         if (!rp.isInVehicle && !(rp as any).insideCarId && !(rp as any).insideBusId) {
-          ctx.beginPath();
+          ctx.moveTo(rp.x + 5.6, rp.y);
           ctx.arc(rp.x, rp.y, 5.6, 0, Math.PI * 2);
-          ctx.fill();
+          hasBatchedCircles = true;
         }
       }
+    }
+    if (hasBatchedCircles) {
+      ctx.fill();
     }
 
     // 11f. Vehicles (Cars, Trucks, Trailers, Buses, Excavators & Slewing Crane Booms)
@@ -9436,6 +9570,8 @@ export class GameRenderer {
     const sunKeyX = Math.round(-sunState.shadowDirX * 4);
     const sunKeyY = Math.round(-sunState.shadowDirY * 4);
     const treeNowSec = this.lastTreeWindNowSec || performance.now() * 0.001;
+    let hasFallbackTrees = false;
+    ctx.beginPath();
     for (let i = 0; i < vpTrees.length; i++) {
       const t = vpTrees[i];
       if ((t as any).isStump) continue;
@@ -9449,10 +9585,16 @@ export class GameRenderer {
       if (cached && cached.maskCanvas) {
         ctx.drawImage(cached.maskCanvas, t.x - cached.half + sway.swayX, t.y - cached.half + sway.swayY);
       } else {
-        ctx.beginPath();
-        ctx.arc(t.x + sway.swayX, t.y + sway.swayY, r * 1.05, 0, Math.PI * 2);
-        ctx.fill();
+        const tx = t.x + sway.swayX;
+        const ty = t.y + sway.swayY;
+        const tr = r * 1.05;
+        ctx.moveTo(tx + tr, ty);
+        ctx.arc(tx, ty, tr, 0, Math.PI * 2);
+        hasFallbackTrees = true;
       }
+    }
+    if (hasFallbackTrees) {
+      ctx.fill();
     }
 
     ctx.restore();
@@ -14808,27 +14950,10 @@ export class GameRenderer {
           const rx = car.x + cosA * rxOffset - sinA * ryOffset;
           const ry = car.y + sinA * rxOffset + cosA * ryOffset;
           const targetRadius = radius * fogFactor;
-          const rGrad = lCtx.createRadialGradient(rx, ry, 0, rx, ry, targetRadius);
-          rGrad.addColorStop(0.0, `rgba(0, 0, 0, ${peakAlpha})`);
-          rGrad.addColorStop(0.4, `rgba(0, 0, 0, ${peakAlpha * 0.5})`);
-          rGrad.addColorStop(0.8, `rgba(0, 0, 0, ${peakAlpha * 0.12})`);
-          rGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = rGrad;
-          lCtx.beginPath();
-          lCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
-          lCtx.fill();
-
+          this.drawRadialCutout(lCtx, rx, ry, targetRadius, peakAlpha, 'std');
           const ca = peakAlpha * colorPeak;
           if (ca > 0.005) {
-            const cGrad = cCtx.createRadialGradient(rx, ry, 0, rx, ry, targetRadius);
-            cGrad.addColorStop(0.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ca.toFixed(3)})`);
-            cGrad.addColorStop(0.4, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.50).toFixed(3)})`);
-            cGrad.addColorStop(0.8, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.14).toFixed(3)})`);
-            cGrad.addColorStop(1.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
-            cCtx.fillStyle = cGrad;
-            cCtx.beginPath();
-            cCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
-            cCtx.fill();
+            this.drawRadialColorGlow(cCtx, rx, ry, targetRadius, rgb, ca, 'std');
           }
         };
 
@@ -14980,43 +15105,19 @@ export class GameRenderer {
             drawOpticalBeamColor(cCtx, beamProfile, lx, ly, headAngle, optReach, optHalfW, colAlpha, headCoreRgb, headOuterRgb);
 
             // Crisp physical bulb emission cut & tint on the glass
-            const bulbCut = lCtx.createRadialGradient(lx, ly, 0, lx, ly, 4.5);
-            bulbCut.addColorStop(0, 'rgba(0, 0, 0, 1.00)');
-            bulbCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            lCtx.fillStyle = bulbCut;
-            lCtx.beginPath(); lCtx.arc(lx, ly, 4.5, 0, Math.PI * 2); lCtx.fill();
-
-            const cBulb = cCtx.createRadialGradient(lx, ly, 0, lx, ly, 5.5);
-            cBulb.addColorStop(0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.55)`);
-            cBulb.addColorStop(1, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0)`);
-            cCtx.fillStyle = cBulb;
-            cCtx.beginPath(); cCtx.arc(lx, ly, 5.5, 0, Math.PI * 2); cCtx.fill();
+            this.drawRadialCutout(lCtx, lx, ly, 4.5, 1.0, 'tight');
+            this.drawRadialColorGlow(cCtx, lx, ly, 5.5, headCoreRgb, 0.55, 'tight');
           };
 
           if (leftActive) renderHeadlampBeam(leftLampLX, leftLampLY, true);
           if (rightActive) renderHeadlampBeam(rightLampLX, rightLampLY, false);
 
           // Smooth near-field bumper apron (fills ground directly in front of radiator grille)
-          const bumperX = car.x + cosA * (halfL - fc);
-          const bumperY = car.y + sinA * (halfL - fc);
+          const bumperX = car.x + cosA * (halfL - fc + 10);
+          const bumperY = car.y + sinA * (halfL - fc + 10);
           const apronRad = Math.max(28, halfW * 1.4) * fogFactor;
-          const apronGrad = lCtx.createRadialGradient(bumperX, bumperY, 1, bumperX + cosA * 15, bumperY + sinA * 15, apronRad);
-          apronGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.92)');
-          apronGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
-          apronGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.00)');
-          lCtx.fillStyle = apronGrad;
-          lCtx.beginPath();
-          lCtx.arc(bumperX + cosA * 12, bumperY + sinA * 12, apronRad, 0, Math.PI * 2);
-          lCtx.fill();
-
-          const cApron = cCtx.createRadialGradient(bumperX, bumperY, 1, bumperX + cosA * 15, bumperY + sinA * 15, apronRad);
-          cApron.addColorStop(0.0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.52)`);
-          cApron.addColorStop(0.38, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.24)`);
-          cApron.addColorStop(1.0, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
-          cCtx.fillStyle = cApron;
-          cCtx.beginPath();
-          cCtx.arc(bumperX + cosA * 12, bumperY + sinA * 12, apronRad, 0, Math.PI * 2);
-          cCtx.fill();
+          this.drawRadialCutout(lCtx, bumperX, bumperY, apronRad, 0.92, 'soft');
+          this.drawRadialColorGlow(cCtx, bumperX, bumperY, apronRad, headCoreRgb, 0.52, 'std', headOuterRgb);
         }
       } else if (isIgnitionOn && !isExcavatorVehicle(car)) {
         // Front position lights (габариты / ДХО) gentle soft clearance
@@ -15024,19 +15125,8 @@ export class GameRenderer {
           const px = car.x + cosA * lxOffset - sinA * lyOffset;
           const py = car.y + sinA * lxOffset + cosA * lyOffset;
           const rPos = 9 * fogFactor;
-          const pGrad = lCtx.createRadialGradient(px, py, 0, px, py, rPos);
-          pGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
-          pGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)');
-          pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = pGrad;
-          lCtx.beginPath(); lCtx.arc(px, py, rPos, 0, Math.PI * 2); lCtx.fill();
-
-          const cPos = cCtx.createRadialGradient(px, py, 0, px, py, rPos);
-          cPos.addColorStop(0, `rgba(${headCoreRgb[0]}, ${headCoreRgb[1]}, ${headCoreRgb[2]}, 0.48)`);
-          cPos.addColorStop(0.5, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0.18)`);
-          cPos.addColorStop(1, `rgba(${headOuterRgb[0]}, ${headOuterRgb[1]}, ${headOuterRgb[2]}, 0)`);
-          cCtx.fillStyle = cPos;
-          cCtx.beginPath(); cCtx.arc(px, py, rPos, 0, Math.PI * 2); cCtx.fill();
+          this.drawRadialCutout(lCtx, px, py, rPos, 0.85, 'soft');
+          this.drawRadialColorGlow(cCtx, px, py, rPos, headCoreRgb, 0.48, 'soft', headOuterRgb);
         };
         if (!dmg.leftHeadlightBroken) cutPositionLight(leftLampLX, leftLampLY);
         if (!isSoloMoto && !dmg.rightHeadlightBroken) cutPositionLight(rightLampLX, rightLampLY);
@@ -15090,27 +15180,10 @@ export class GameRenderer {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
         const ry = car.y + sinA * rxOffset + cosA * ryOffset;
         const targetRadius = radius * fogFactor;
-        const rGrad = lCtx.createRadialGradient(rx, ry, 0, rx, ry, targetRadius);
-        rGrad.addColorStop(0.0, `rgba(0, 0, 0, ${peakAlpha})`);
-        rGrad.addColorStop(0.4, `rgba(0, 0, 0, ${peakAlpha * 0.5})`);
-        rGrad.addColorStop(0.8, `rgba(0, 0, 0, ${peakAlpha * 0.12})`);
-        rGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = rGrad;
-        lCtx.beginPath();
-        lCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
-        lCtx.fill();
-
+        this.drawRadialCutout(lCtx, rx, ry, targetRadius, peakAlpha, 'std');
         const ca = peakAlpha * colorPeak;
         if (ca > 0.005) {
-          const cGrad = cCtx.createRadialGradient(rx, ry, 0, rx, ry, targetRadius);
-          cGrad.addColorStop(0.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ca.toFixed(3)})`);
-          cGrad.addColorStop(0.4, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.50).toFixed(3)})`);
-          cGrad.addColorStop(0.8, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.14).toFixed(3)})`);
-          cGrad.addColorStop(1.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
-          cCtx.fillStyle = cGrad;
-          cCtx.beginPath();
-          cCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
-          cCtx.fill();
+          this.drawRadialColorGlow(cCtx, rx, ry, targetRadius, rgb, ca, 'std');
         }
       };
 
@@ -15153,27 +15226,10 @@ export class GameRenderer {
           colorPeak: number
         ) => {
           const targetRadius = radius * fogFactor;
-          const rGrad = lCtx.createRadialGradient(wx, wy, 0, wx, wy, targetRadius);
-          rGrad.addColorStop(0.0, `rgba(0, 0, 0, ${peakAlpha})`);
-          rGrad.addColorStop(0.4, `rgba(0, 0, 0, ${(peakAlpha * 0.5).toFixed(3)})`);
-          rGrad.addColorStop(0.8, `rgba(0, 0, 0, ${(peakAlpha * 0.12).toFixed(3)})`);
-          rGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = rGrad;
-          lCtx.beginPath();
-          lCtx.arc(wx, wy, targetRadius, 0, Math.PI * 2);
-          lCtx.fill();
-
+          this.drawRadialCutout(lCtx, wx, wy, targetRadius, peakAlpha, 'std');
           const ca = peakAlpha * colorPeak;
           if (ca > 0.005) {
-            const cGrad = cCtx.createRadialGradient(wx, wy, 0, wx, wy, targetRadius);
-            cGrad.addColorStop(0.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ca.toFixed(3)})`);
-            cGrad.addColorStop(0.4, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.50).toFixed(3)})`);
-            cGrad.addColorStop(0.8, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(ca * 0.14).toFixed(3)})`);
-            cGrad.addColorStop(1.0, `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`);
-            cCtx.fillStyle = cGrad;
-            cCtx.beginPath();
-            cCtx.arc(wx, wy, targetRadius, 0, Math.PI * 2);
-            cCtx.fill();
+            this.drawRadialColorGlow(cCtx, wx, wy, targetRadius, rgb, ca, 'std');
           }
         };
 
@@ -15315,24 +15371,8 @@ export class GameRenderer {
         const mWorldX = car.x + cosA * mRoofX;
         const mWorldY = car.y + sinA * mRoofX;
         const trainCutRadius = 24 * fogFactor;
-        const trainGrad = lCtx.createRadialGradient(mWorldX, mWorldY, 0, mWorldX, mWorldY, trainCutRadius);
-        trainGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.65)');
-        trainGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.35)');
-        trainGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.08)');
-        trainGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = trainGrad;
-        lCtx.beginPath();
-        lCtx.arc(mWorldX, mWorldY, trainCutRadius, 0, Math.PI * 2);
-        lCtx.fill();
-
-        const cTrain = cCtx.createRadialGradient(mWorldX, mWorldY, 0, mWorldX, mWorldY, trainCutRadius);
-        cTrain.addColorStop(0.0, 'rgba(255, 174, 42, 0.38)');
-        cTrain.addColorStop(0.45, 'rgba(255, 158, 24, 0.16)');
-        cTrain.addColorStop(1.0, 'rgba(255, 148, 12, 0)');
-        cCtx.fillStyle = cTrain;
-        cCtx.beginPath();
-        cCtx.arc(mWorldX, mWorldY, trainCutRadius, 0, Math.PI * 2);
-        cCtx.fill();
+        this.drawRadialCutout(lCtx, mWorldX, mWorldY, trainCutRadius, 0.65, 'std');
+        this.drawRadialColorGlow(cCtx, mWorldX, mWorldY, trainCutRadius, [255, 174, 42], 0.38, 'soft', [255, 152, 18]);
       }
     }
 
@@ -15350,28 +15390,8 @@ export class GameRenderer {
         for (let ei = 0; ei < emission.emitters.length; ei++) {
           const lx = emission.emitters[ei].x;
           const ly = emission.emitters[ei].y;
-
-          const lampGrad = lCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
-          lampGrad.addColorStop(0.00, `rgba(0, 0, 0, ${peakCut.toFixed(2)})`);
-          lampGrad.addColorStop(0.24, `rgba(0, 0, 0, ${(peakCut * 0.74).toFixed(2)})`);
-          lampGrad.addColorStop(0.52, `rgba(0, 0, 0, ${(peakCut * 0.40).toFixed(2)})`);
-          lampGrad.addColorStop(0.80, `rgba(0, 0, 0, ${(peakCut * 0.12).toFixed(2)})`);
-          lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = lampGrad;
-          lCtx.beginPath();
-          lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
-          lCtx.fill();
-
-          const cLampGrad = cCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
-          cLampGrad.addColorStop(0.00, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${colorPeak.toFixed(2)})`);
-          cLampGrad.addColorStop(0.28, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.66).toFixed(2)})`);
-          cLampGrad.addColorStop(0.58, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.28).toFixed(2)})`);
-          cLampGrad.addColorStop(0.85, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, ${(colorPeak * 0.07).toFixed(2)})`);
-          cLampGrad.addColorStop(1.00, `rgba(${lampRgb[0]}, ${lampRgb[1]}, ${lampRgb[2]}, 0)`);
-          cCtx.fillStyle = cLampGrad;
-          cCtx.beginPath();
-          cCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
-          cCtx.fill();
+          this.drawRadialCutout(lCtx, lx, ly, lampRadius, peakCut, 'lamp');
+          this.drawRadialColorGlow(cCtx, lx, ly, lampRadius, lampRgb, colorPeak, 'lamp');
         }
       }
 
@@ -15413,23 +15433,8 @@ export class GameRenderer {
           const apronX = fx + Math.cos(mount.aimAngle) * 14;
           const apronY = fy + Math.sin(mount.aimAngle) * 14;
           const spillR = 38 * fogFactor;
-          const spillCut = lCtx.createRadialGradient(apronX, apronY, 2, apronX, apronY, spillR);
-          spillCut.addColorStop(0, `rgba(0, 0, 0, ${(0.84 * floodInt).toFixed(2)})`);
-          spillCut.addColorStop(0.6, `rgba(0, 0, 0, ${(0.32 * floodInt).toFixed(2)})`);
-          spillCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = spillCut;
-          lCtx.beginPath();
-          lCtx.arc(apronX, apronY, spillR, 0, Math.PI * 2);
-          lCtx.fill();
-
-          const spillCol = cCtx.createRadialGradient(apronX, apronY, 2, apronX, apronY, spillR);
-          spillCol.addColorStop(0, `rgba(232, 246, 255, ${(0.48 * floodInt).toFixed(2)})`);
-          spillCol.addColorStop(0.6, `rgba(210, 235, 255, ${(0.16 * floodInt).toFixed(2)})`);
-          spillCol.addColorStop(1, 'rgba(200, 230, 255, 0)');
-          cCtx.fillStyle = spillCol;
-          cCtx.beginPath();
-          cCtx.arc(apronX, apronY, spillR, 0, Math.PI * 2);
-          cCtx.fill();
+          this.drawRadialCutout(lCtx, apronX, apronY, spillR, 0.84 * floodInt, 'soft');
+          this.drawRadialColorGlow(cCtx, apronX, apronY, spillR, [232, 246, 255], 0.48 * floodInt, 'soft', [205, 232, 255]);
         }
       }
     }
@@ -15440,23 +15445,8 @@ export class GameRenderer {
         const tfRgb = getTrafficLightRgb(prop);
         if (!tfRgb) continue;
         const tfRadius = 24 * fogFactor;
-        const tfGrad = lCtx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, tfRadius);
-        tfGrad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
-        tfGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.28)');
-        tfGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = tfGrad;
-        lCtx.beginPath();
-        lCtx.arc(prop.x, prop.y, tfRadius, 0, Math.PI * 2);
-        lCtx.fill();
-
-        const cTfGrad = cCtx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, tfRadius);
-        cTfGrad.addColorStop(0, `rgba(${tfRgb[0]}, ${tfRgb[1]}, ${tfRgb[2]}, 0.42)`);
-        cTfGrad.addColorStop(0.5, `rgba(${tfRgb[0]}, ${tfRgb[1]}, ${tfRgb[2]}, 0.16)`);
-        cTfGrad.addColorStop(1, `rgba(${tfRgb[0]}, ${tfRgb[1]}, ${tfRgb[2]}, 0)`);
-        cCtx.fillStyle = cTfGrad;
-        cCtx.beginPath();
-        cCtx.arc(prop.x, prop.y, tfRadius, 0, Math.PI * 2);
-        cCtx.fill();
+        this.drawRadialCutout(lCtx, prop.x, prop.y, tfRadius, 0.70, 'soft');
+        this.drawRadialColorGlow(cCtx, prop.x, prop.y, tfRadius, tfRgb, 0.42, 'soft');
       }
     }
 
@@ -15501,23 +15491,8 @@ export class GameRenderer {
 
       // 1. Ambient soft circle around player's hands/body
       const bodyHaloRad = (isHandheld ? 24 : 30) * fogFactor;
-      const bodyGrad = lCtx.createRadialGradient(p.x, p.y, 1, p.x, p.y, bodyHaloRad);
-      bodyGrad.addColorStop(0, 'rgba(0, 0, 0, 0.90)');
-      bodyGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.40)');
-      bodyGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      lCtx.fillStyle = bodyGrad;
-      lCtx.beginPath();
-      lCtx.arc(p.x, p.y, bodyHaloRad, 0, Math.PI * 2);
-      lCtx.fill();
-
-      const cBodyGrad = cCtx.createRadialGradient(p.x, p.y, 1, p.x, p.y, bodyHaloRad);
-      cBodyGrad.addColorStop(0, `rgba(${fRgb[0]}, ${fRgb[1]}, ${fRgb[2]}, 0.34)`);
-      cBodyGrad.addColorStop(0.5, `rgba(${fRgb[0]}, ${fRgb[1]}, ${fRgb[2]}, 0.12)`);
-      cBodyGrad.addColorStop(1, `rgba(${fRgb[0]}, ${fRgb[1]}, ${fRgb[2]}, 0)`);
-      cCtx.fillStyle = cBodyGrad;
-      cCtx.beginPath();
-      cCtx.arc(p.x, p.y, bodyHaloRad, 0, Math.PI * 2);
-      cCtx.fill();
+      this.drawRadialCutout(lCtx, p.x, p.y, bodyHaloRad, 0.90, 'soft');
+      this.drawRadialColorGlow(cCtx, p.x, p.y, bodyHaloRad, fRgb, 0.34, 'soft');
 
       // 2. Physically feathered forward optical beam (hotspot+corona+spill for flashlight, wide cosine flood for phone)
       drawSmoothFlashlightCone(p.x, p.y, aimAngle, fRange, fSpread, fRgb, isHandheld ? 'flashlight' : 'phone_flash', fOuterRgb);
@@ -15565,25 +15540,8 @@ export class GameRenderer {
         const fx = st.x + jx;
         const fy = st.y + jy;
 
-        const fGrad = lCtx.createRadialGradient(fx, fy, 2, fx, fy, fireRad);
-        fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.98)');
-        fGrad.addColorStop(0.32, 'rgba(0, 0, 0, 0.80)');
-        fGrad.addColorStop(0.68, 'rgba(0, 0, 0, 0.34)');
-        fGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = fGrad;
-        lCtx.beginPath();
-        lCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
-        lCtx.fill();
-
-        const cFire = cCtx.createRadialGradient(fx, fy, 2, fx, fy, fireRad);
-        cFire.addColorStop(0.0, 'rgba(255, 210, 108, 0.66)');
-        cFire.addColorStop(0.30, 'rgba(255, 134, 34, 0.44)');
-        cFire.addColorStop(0.68, 'rgba(220, 58, 12, 0.16)');
-        cFire.addColorStop(1.0, 'rgba(180, 32, 6, 0)');
-        cCtx.fillStyle = cFire;
-        cCtx.beginPath();
-        cCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
-        cCtx.fill();
+        this.drawRadialCutout(lCtx, fx, fy, fireRad, 0.98, 'fire');
+        this.drawRadialColorGlow(cCtx, fx, fy, fireRad, [255, 210, 108], 0.66, 'fire');
       }
     }
     for (const car of nearbyVehicles) {
@@ -15611,25 +15569,8 @@ export class GameRenderer {
         const fy = car.y + sinA * offsetL + jy;
         const fireIntensity = Math.max(0.45, dmg.fireIntensity || 0.78);
         const fireRad = (95 + fireIntensity * 75 + (dmg.cabinFire ? 25 : 0)) * cFlicker * fogFactor;
-        const fGrad = lCtx.createRadialGradient(fx, fy, 4, fx, fy, fireRad);
-        fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.99)');
-        fGrad.addColorStop(0.36, 'rgba(0, 0, 0, 0.82)');
-        fGrad.addColorStop(0.72, 'rgba(0, 0, 0, 0.34)');
-        fGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = fGrad;
-        lCtx.beginPath();
-        lCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
-        lCtx.fill();
-
-        const cCarFire = cCtx.createRadialGradient(fx, fy, 4, fx, fy, fireRad);
-        cCarFire.addColorStop(0.0, 'rgba(255, 212, 112, 0.70)');
-        cCarFire.addColorStop(0.34, 'rgba(255, 132, 34, 0.46)');
-        cCarFire.addColorStop(0.72, 'rgba(218, 56, 12, 0.17)');
-        cCarFire.addColorStop(1.0, 'rgba(180, 32, 6, 0)');
-        cCtx.fillStyle = cCarFire;
-        cCtx.beginPath();
-        cCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
-        cCtx.fill();
+        this.drawRadialCutout(lCtx, fx, fy, fireRad, 0.99, 'fire');
+        this.drawRadialColorGlow(cCtx, fx, fy, fireRad, [255, 212, 112], 0.70, 'fire');
       }
 
       // Emergency Vehicle Rotating Red/Blue Siren Lobes (Smooth parabolic lobes, ZERO sharp triangles!)
@@ -15655,16 +15596,9 @@ export class GameRenderer {
         drawSirenLobe(barBX, barBY, blueAngle, [48, 128, 255]);
 
         // Ambient roof halo around vehicle
-        const strobePhase = Math.sin(Date.now() * 0.018 + car.x);
+        const strobePhase = Math.sin(nowFireSec * 18 + car.x);
         const strobeRad = (48 + Math.abs(strobePhase) * 28) * fogFactor;
-        const sGrad = lCtx.createRadialGradient(car.x, car.y, 2, car.x, car.y, strobeRad);
-        sGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.85)');
-        sGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.40)');
-        sGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = sGrad;
-        lCtx.beginPath();
-        lCtx.arc(car.x, car.y, strobeRad, 0, Math.PI * 2);
-        lCtx.fill();
+        this.drawRadialCutout(lCtx, car.x, car.y, strobeRad, 0.85, 'soft');
       }
 
       // Excavator EK-12 Cab-Roof Headlights & Work Floodlights (strictly turret & boom mounted)
@@ -15689,26 +15623,11 @@ export class GameRenderer {
         // Near-field soft apron directly ahead of cab roof lamps
         const cosArm = Math.cos(exAnchors.angle);
         const sinArm = Math.sin(exAnchors.angle);
-        const apronX = exAnchors.cabLampCenter.x + cosArm * 16;
-        const apronY = exAnchors.cabLampCenter.y + sinArm * 16;
+        const apronX = exAnchors.cabLampCenter.x + cosArm * 14;
+        const apronY = exAnchors.cabLampCenter.y + sinArm * 14;
         const apronRad = (exWorkOn ? 58 : 46) * fogFactor;
-        const lApron = lCtx.createRadialGradient(exAnchors.cabLampCenter.x, exAnchors.cabLampCenter.y, 1, apronX, apronY, apronRad);
-        lApron.addColorStop(0.0, 'rgba(0, 0, 0, 0.84)');
-        lApron.addColorStop(0.5, 'rgba(0, 0, 0, 0.38)');
-        lApron.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = lApron;
-        lCtx.beginPath();
-        lCtx.arc(apronX, apronY, apronRad, 0, Math.PI * 2);
-        lCtx.fill();
-
-        const cApron = cCtx.createRadialGradient(exAnchors.cabLampCenter.x, exAnchors.cabLampCenter.y, 1, apronX, apronY, apronRad);
-        cApron.addColorStop(0.0, `rgba(${exRgb[0]}, ${exRgb[1]}, ${exRgb[2]}, 0.44)`);
-        cApron.addColorStop(0.45, `rgba(${exRgb[0]}, ${exRgb[1]}, ${exRgb[2]}, 0.18)`);
-        cApron.addColorStop(1.0, `rgba(${exRgb[0]}, ${exRgb[1]}, ${exRgb[2]}, 0)`);
-        cCtx.fillStyle = cApron;
-        cCtx.beginPath();
-        cCtx.arc(apronX, apronY, apronRad, 0, Math.PI * 2);
-        cCtx.fill();
+        this.drawRadialCutout(lCtx, apronX, apronY, apronRad, 0.84, 'soft');
+        this.drawRadialColorGlow(cCtx, apronX, apronY, apronRad, exRgb, 0.44, 'soft');
 
         if (exWorkOn) {
           drawSmoothFlashlightCone(exAnchors.boomLamp.x, exAnchors.boomLamp.y, exAnchors.angle, 155 * fogFactor, 0.44, [255, 244, 212], 'flashlight', exOuterRgb);
@@ -15721,7 +15640,7 @@ export class GameRenderer {
       const isVehicleLit = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || getVehicleHeadlightOn(car));
       if (isVehicleLit && (isArticulated || car.type === 'paver_asphalt_wheeled' || car.type === 'excavator_ek12' || isTractorMach || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
         const beaconPeriod = 0.35;
-        const beaconPulse = Math.sin((Date.now() / 1000) / beaconPeriod * Math.PI * 2);
+        const beaconPulse = Math.sin(nowFireSec / beaconPeriod * Math.PI * 2);
         if (beaconPulse > 0.1) {
           let wx = car.x + cosA * (halfL * 0.25);
           let wy = car.y + sinA * (halfL * 0.25);
@@ -15741,20 +15660,8 @@ export class GameRenderer {
           }
           // EK-12 beacon lens is small (~0.25 m): keep its light spill compact
           const bRadius = (18 + beaconPulse * 14) * fogFactor * (car.type === 'excavator_ek12' ? 0.4 : 1);
-
-          const bCut = lCtx.createRadialGradient(wx, wy, 0.5, wx, wy, bRadius);
-          bCut.addColorStop(0, `rgba(0, 0, 0, ${(0.75 * beaconPulse).toFixed(3)})`);
-          bCut.addColorStop(0.5, `rgba(0, 0, 0, ${(0.32 * beaconPulse).toFixed(3)})`);
-          bCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = bCut;
-          lCtx.beginPath(); lCtx.arc(wx, wy, bRadius, 0, Math.PI * 2); lCtx.fill();
-
-          const bCol = cCtx.createRadialGradient(wx, wy, 0.5, wx, wy, bRadius);
-          bCol.addColorStop(0, `rgba(255, 184, 38, ${(0.60 * beaconPulse).toFixed(3)})`);
-          bCol.addColorStop(0.5, `rgba(245, 152, 16, ${(0.28 * beaconPulse).toFixed(3)})`);
-          bCol.addColorStop(1, 'rgba(245, 152, 16, 0)');
-          cCtx.fillStyle = bCol;
-          cCtx.beginPath(); cCtx.arc(wx, wy, bRadius, 0, Math.PI * 2); cCtx.fill();
+          this.drawRadialCutout(lCtx, wx, wy, bRadius, 0.75 * beaconPulse, 'soft');
+          this.drawRadialColorGlow(cCtx, wx, wy, bRadius, [255, 184, 38], 0.60 * beaconPulse, 'soft', [245, 152, 16]);
         }
       }
     }
@@ -15766,23 +15673,8 @@ export class GameRenderer {
         const px = ped.x + Math.cos(ped.angle) * 4.4;
         const py = ped.y + Math.sin(ped.angle) * 4.4;
         const pRad = 10 * fogFactor;
-        const pGrad = lCtx.createRadialGradient(px, py, 0.4, px, py, pRad);
-        pGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.65)');
-        pGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
-        pGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = pGrad;
-        lCtx.beginPath();
-        lCtx.arc(px, py, pRad, 0, Math.PI * 2);
-        lCtx.fill();
-
-        const cPhone = cCtx.createRadialGradient(px, py, 0.4, px, py, pRad);
-        cPhone.addColorStop(0.0, 'rgba(165, 208, 255, 0.42)');
-        cPhone.addColorStop(0.5, 'rgba(140, 190, 255, 0.16)');
-        cPhone.addColorStop(1.0, 'rgba(140, 190, 255, 0)');
-        cCtx.fillStyle = cPhone;
-        cCtx.beginPath();
-        cCtx.arc(px, py, pRad, 0, Math.PI * 2);
-        cCtx.fill();
+        this.drawRadialCutout(lCtx, px, py, pRad, 0.65, 'soft');
+        this.drawRadialColorGlow(cCtx, px, py, pRad, [165, 208, 255], 0.42, 'soft', [140, 190, 255]);
       }
     }
 
@@ -15861,26 +15753,12 @@ export class GameRenderer {
           if (isFog && weights.fog > 0.08) {
             const haloRad = (prop.type === 'lamp_highway' ? 42 : 30) * fogFactor;
             const haloA = Math.min(0.14, (0.035 + 0.105 * weights.fog) * weatherTransition) * int;
-            const haloGrad = ctx.createRadialGradient(lx, ly, 3, lx, ly, haloRad);
-            haloGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${haloA.toFixed(3)})`);
-            haloGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(haloA * 0.35).toFixed(3)})`);
-            haloGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
-            ctx.fillStyle = haloGrad;
-            ctx.beginPath();
-            ctx.arc(lx, ly, haloRad, 0, Math.PI * 2);
-            ctx.fill();
+            this.drawRadialColorGlow(ctx, lx, ly, haloRad, emission.rgb, haloA, 'soft');
           }
 
           // Only frosted opal glass globes diffuse soft light upward; hooded streetlamps have opaque metal roofs!
           if (isTranslucentGlobe) {
-            const globeGlow = ctx.createRadialGradient(lx, ly, 1.0, lx, ly, 5.2);
-            globeGlow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.40 * int).toFixed(2)})`);
-            globeGlow.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, ${(0.18 * int).toFixed(2)})`);
-            globeGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-            ctx.fillStyle = globeGlow;
-            ctx.beginPath();
-            ctx.arc(lx, ly, 5.2, 0, Math.PI * 2);
-            ctx.fill();
+            this.drawRadialColorGlow(ctx, lx, ly, 5.2, emission.rgb, 0.40 * int, 'soft');
           }
         }
       }
@@ -15899,14 +15777,7 @@ export class GameRenderer {
           const ledOn = motion || Math.floor(nowMsForLamps / blinkPeriod) % 2 === 0;
           if (ledOn) {
             const ledRad = motion ? 3.4 : 2.3;
-            const ledGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, ledRad);
-            ledGrad.addColorStop(0, motion ? 'rgba(255, 70, 70, 0.85)' : 'rgba(255, 45, 45, 0.65)');
-            ledGrad.addColorStop(0.5, 'rgba(220, 38, 38, 0.24)');
-            ledGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
-            ctx.fillStyle = ledGrad;
-            ctx.beginPath();
-            ctx.arc(cx, cy, ledRad, 0, Math.PI * 2);
-            ctx.fill();
+            this.drawRadialColorGlow(ctx, cx, cy, ledRad, motion ? [255, 70, 70] : [255, 45, 45], motion ? 0.85 : 0.65, 'soft', [220, 38, 38]);
           }
         }
 
@@ -15915,14 +15786,7 @@ export class GameRenderer {
           const fwdX = cx + Math.cos(mount.aimAngle) * 3.6;
           const fwdY = cy + Math.sin(mount.aimAngle) * 3.6;
           const glareRad = 4.2 * (0.75 + 0.25 * floodInt);
-          const glare = ctx.createRadialGradient(fwdX, fwdY, 0.3, fwdX, fwdY, glareRad);
-          glare.addColorStop(0, `rgba(236, 248, 255, ${(0.52 * floodInt).toFixed(2)})`);
-          glare.addColorStop(0.45, `rgba(196, 232, 255, ${(0.22 * floodInt).toFixed(2)})`);
-          glare.addColorStop(1, 'rgba(186, 224, 255, 0)');
-          ctx.fillStyle = glare;
-          ctx.beginPath();
-          ctx.arc(fwdX, fwdY, glareRad, 0, Math.PI * 2);
-          ctx.fill();
+          this.drawRadialColorGlow(ctx, fwdX, fwdY, glareRad, [236, 248, 255], 0.52 * floodInt, 'soft', [190, 228, 255]);
 
           // Subtle atmospheric Mie cone scatter in fog / rain / humid night air (smooth feathered optical profile)
           if (isFog || isRaining || nightAlpha > 0.35) {
@@ -15961,46 +15825,21 @@ export class GameRenderer {
         const drawTrailerRearEmitter = (lxOffset: number, lyOffset: number, lensRadius: number, color: string) => {
           const lx = car.x + cosA * lxOffset - sinA * lyOffset;
           const ly = car.y + sinA * lxOffset + cosA * lyOffset;
-          const rearAngle = car.angle + Math.PI;
-
-          ctx.save();
-          ctx.translate(lx, ly);
-          ctx.rotate(rearAngle);
-
           const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
-          const r = m ? m[1] : '255';
-          const g = m ? m[2] : '255';
-          const b = m ? m[3] : '255';
+          const rgb: [number, number, number] = m ? [+m[1], +m[2], +m[3]] : [255, 255, 255];
           const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
 
-          // Physical lens face bloom
-          const lensGrad = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, lensRadius);
-          lensGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.85).toFixed(3)})`);
-          lensGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.30).toFixed(3)})`);
-          lensGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
-          ctx.fillStyle = lensGrad;
-          ctx.beginPath();
-          ctx.arc(0.4, 0, lensRadius, 0, Math.PI * 2);
-          ctx.fill();
+          // Physical lens face bloom (zero save/restore/gradient allocation)
+          this.drawRadialColorGlow(ctx, lx - cosA * 0.4, ly - sinA * 0.4, lensRadius, rgb, baseA * 0.85, 'soft');
 
           // Atmospheric scattering in genuine dense particulate fog ONLY
           if (isFog && weights.fog > 0.05) {
             const mistAlpha = Math.min(0.20, (0.03 + 0.07 * weights.fog) * weatherTransition);
             if (mistAlpha > 0.005) {
               const haloRadius = 10 + 14 * weights.fog;
-              const mistGrad = ctx.createRadialGradient(0.4, 0, 0.4, 0.4, 0, haloRadius);
-              mistGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(mistAlpha * 0.9).toFixed(3)})`);
-              mistGrad.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${(mistAlpha * 0.3).toFixed(3)})`);
-              mistGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
-
-              ctx.fillStyle = mistGrad;
-              ctx.beginPath();
-              ctx.arc(0.4, 0, haloRadius, 0, Math.PI * 2);
-              ctx.fill();
+              this.drawRadialColorGlow(ctx, lx - cosA * 0.4, ly - sinA * 0.4, haloRadius, rgb, mistAlpha * 0.9, 'soft');
             }
           }
-
-          ctx.restore();
         };
 
         const drawTrailerSideMarker = (lxOffset: number, sideY: number) => {
@@ -16116,41 +15955,27 @@ export class GameRenderer {
       ) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
         const ry = car.y + sinA * rxOffset + cosA * ryOffset;
-        const rearAngle = car.angle + Math.PI;
-
-        ctx.save();
-        ctx.translate(rx, ry);
-        ctx.rotate(rearAngle);
-
         const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
-        const r = m ? m[1] : '255';
-        const g = m ? m[2] : '255';
-        const b = m ? m[3] : '255';
+        const rgb: [number, number, number] = m ? [+m[1], +m[2], +m[3]] : [255, 255, 255];
         const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
 
         // Crisp physical tail/brake/reverse lens emitter bloom
-        const lensGrad = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, lensRadius);
-        lensGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.85).toFixed(3)})`);
-        lensGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.28).toFixed(3)})`);
-        lensGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
-        ctx.fillStyle = lensGrad;
-        ctx.beginPath();
-        ctx.arc(0.4, 0, lensRadius, 0, Math.PI * 2);
-        ctx.fill();
+        this.drawRadialColorGlow(ctx, rx - cosA * 0.4, ry - sinA * 0.4, lensRadius, rgb, baseA * 0.85, 'soft');
 
         // Near-field grazing Fresnel road surface reflex (visible even on sunlit pavement right behind bumper)
         if (lensRadius >= 3.0) {
           const fresnelReach = (isFogWarningLamp ? 18 : lensRadius * 3.8) * fogFactor;
           const fresnelSpread = lensRadius * 1.95 * fogFactor;
           const fresnelPeak = Math.min(0.22, baseA * (0.11 + 0.08 * nightAlpha + (isRaining ? 0.06 : 0)));
-          const fGrad = ctx.createRadialGradient(1.2, 0, 0.3, fresnelReach * 0.42, 0, fresnelReach);
-          fGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${fresnelPeak.toFixed(3)})`);
-          fGrad.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${(fresnelPeak * 0.36).toFixed(3)})`);
-          fGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
-          ctx.fillStyle = fGrad;
-          ctx.beginPath();
-          ctx.ellipse(fresnelReach * 0.42, 0, fresnelReach * 0.52, fresnelSpread, 0, 0, Math.PI * 2);
-          ctx.fill();
+          const spr = this.getRadialColorSprite('soft', rgb);
+          ctx.save();
+          ctx.translate(rx - cosA * (fresnelReach * 0.42), ry - sinA * (fresnelReach * 0.42));
+          ctx.rotate(car.angle + Math.PI);
+          const prevA = ctx.globalAlpha;
+          ctx.globalAlpha = prevA * fresnelPeak;
+          ctx.drawImage(spr, -fresnelReach * 0.52, -fresnelSpread, fresnelReach * 1.04, fresnelSpread * 2);
+          ctx.globalAlpha = prevA;
+          ctx.restore();
         }
 
         // Atmospheric Mie scattering in air ONLY during genuine dense particulate fog
@@ -16158,18 +15983,9 @@ export class GameRenderer {
           const fogMistAlpha = Math.min(0.25, (0.04 + 0.12 * weights.fog) * weatherTransition);
           if (fogMistAlpha > 0.005) {
             const haloRadius = isFogWarningLamp ? (14 + 18 * weights.fog) : (8 + 12 * weights.fog);
-            const haloGrad = ctx.createRadialGradient(0.4, 0, 0.5, 0.4, 0, haloRadius);
-            haloGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(fogMistAlpha * 0.9).toFixed(3)})`);
-            haloGrad.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${(fogMistAlpha * 0.3).toFixed(3)})`);
-            haloGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
-            ctx.fillStyle = haloGrad;
-            ctx.beginPath();
-            ctx.arc(0.4, 0, haloRadius, 0, Math.PI * 2);
-            ctx.fill();
+            this.drawRadialColorGlow(ctx, rx - cosA * 0.4, ry - sinA * 0.4, haloRadius, rgb, fogMistAlpha * 0.9, 'soft');
           }
         }
-
-        ctx.restore();
       };
 
       const drawTurnSignalAdditive = (xOffset: number, yOffset: number, isFront: boolean, sideSign: number, intensity: number) => {
@@ -16177,34 +15993,17 @@ export class GameRenderer {
         const wy = car.y + sinA * xOffset + cosA * yOffset;
         const baseAngle = isFront ? car.angle : (car.angle + Math.PI);
         const emitAngle = baseAngle + sideSign * 0.28;
-
-        ctx.save();
-        ctx.translate(wx, wy);
-        ctx.rotate(emitAngle);
+        const ex = wx + Math.cos(emitAngle) * 0.4;
+        const ey = wy + Math.sin(emitAngle) * 0.4;
 
         // Tight micro-bloom at the amber glass face
-        const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, 3.2);
-        lensBloom.addColorStop(0.0, `rgba(255, 185, 40, ${(0.72 * intensity).toFixed(3)})`);
-        lensBloom.addColorStop(0.5, `rgba(255, 150, 0, ${(0.25 * intensity).toFixed(3)})`);
-        lensBloom.addColorStop(1.0, 'rgba(255, 150, 0, 0)');
-        ctx.fillStyle = lensBloom;
-        ctx.beginPath();
-        ctx.arc(0.4, 0, 3.2, 0, Math.PI * 2);
-        ctx.fill();
+        this.drawRadialColorGlow(ctx, ex, ey, 3.2, [255, 185, 40], 0.72 * intensity, 'soft', [255, 150, 0]);
 
         if (isFog && weights.fog > 0.08 && intensity > 0.15) {
           const haloRad = 8 + 10 * weights.fog;
           const fogA = Math.min(0.14, 0.10 * weights.fog * intensity * weatherTransition);
-          const fogHalo = ctx.createRadialGradient(0.4, 0, 0.4, 0.4, 0, haloRad);
-          fogHalo.addColorStop(0.0, `rgba(255, 170, 20, ${fogA.toFixed(3)})`);
-          fogHalo.addColorStop(1.0, 'rgba(255, 150, 0, 0)');
-          ctx.fillStyle = fogHalo;
-          ctx.beginPath();
-          ctx.arc(0.4, 0, haloRad, 0, Math.PI * 2);
-          ctx.fill();
+          this.drawRadialColorGlow(ctx, ex, ey, haloRad, [255, 170, 20], fogA, 'tight', [255, 150, 0]);
         }
-
-        ctx.restore();
       };
 
       const drawHeadlightAdd = (lxOffset: number, lyOffset: number, broken: boolean, _isLeftHeadlamp: boolean) => {
@@ -17223,51 +17022,76 @@ export class GameRenderer {
       const maxSampled = Math.max(12, Math.round((75 + weights.storm * 145) * weights.rain * (performanceConfig.rainDensity / 100)));
       const stride = Math.max(1, Math.floor(Math.sqrt(totalCells / maxSampled)));
 
+      const speed = 1.1 + weights.storm * 0.5;
+      const maxR = 6 + weights.storm * 8;
+      const baseRippleAlpha = (0.16 + weights.storm * 0.22) * Math.min(1.0, weights.rain * 1.5);
+      const windShearR = Math.min(0.35, (windSpeed / 180) * 0.35);
+      const rxScale = 1.15 + windShearR;
+      const ryScale = 0.85 - windShearR * 0.5;
+      const rippleAngle = Math.atan2(normWy, normWx);
+      const cosRip = Math.cos(rippleAngle);
+      const sinRip = Math.sin(rippleAngle);
+
+      // Quantize rain impact ripples into 4 alpha buckets so hundreds of ripples draw in 4 strokes
+      const ripBuckets: number[][] = [[], [], [], []];
+      const splashCoords: number[] = [];
+
       for (let cy = cMinY; cy <= cMaxY; cy += stride) {
         for (let cx = cMinX; cx <= cMaxX; cx += stride) {
           const seed = Math.abs(((cx * 73856093) ^ (cy * 19349663) ^ 83492791) | 0);
           const hx = ((seed * 48271) % 10000) / 10000;
           const hy = (((seed ^ 0x5bf03635) * 16807) % 10000) / 10000;
-          const speed = 1.1 + weights.storm * 0.5;
           const phase = (timeSec * speed + hy) % 1.0;
 
           const wx = cx * cellS + hx * cellS;
           const wy = cy * cellS + hy * cellS;
-
-          // Expanding rain impact ripples on the ground (wind shears ripples slightly downwind)
-          const maxR = 6 + weights.storm * 8;
           const r = 1.5 + phase * maxR;
-          const baseRippleAlpha = 0.16 + weights.storm * 0.22;
-          const alpha = Math.max(0, (1.0 - phase) * baseRippleAlpha * Math.min(1.0, weights.rain * 1.5));
-
-          ctx.strokeStyle = isFreezing
-            ? `rgba(203, 226, 245, ${(alpha * 0.75).toFixed(3)})`
-            : `rgba(224, 242, 254, ${alpha.toFixed(3)})`;
-          ctx.lineWidth = isFreezing ? 0.8 : 1.0;
-          ctx.beginPath();
-          // Downwind elongated ripple geometry under wind surface shear
-          const windShearR = Math.min(0.35, (windSpeed / 180) * 0.35);
-          ctx.ellipse(wx, wy, r * (1.15 + windShearR), r * (0.85 - windShearR * 0.5), Math.atan2(normWy, normWx), 0, Math.PI * 2);
-          ctx.stroke();
+          const bIdx = Math.min(3, Math.floor((1.0 - phase) * 4));
+          ripBuckets[bIdx].push(wx, wy, r);
 
           if (isFreezing) {
-            // Supercooled rain glazing over the cold ground
-            if (phase < 0.25) {
-              const glazeAlpha = (1.0 - phase / 0.25) * 0.20 * weights.rain;
-              ctx.fillStyle = `rgba(224, 242, 254, ${glazeAlpha.toFixed(3)})`;
-              ctx.beginPath();
-              ctx.ellipse(wx, wy, 2.5, 1.5, 0, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          } else {
-            // Warm liquid micro-droplet splash
-            if (phase < 0.22 && weights.drizzle < 0.6) {
-              const splashAlpha = (1.0 - phase / 0.22) * 0.55 * weights.rain;
-              ctx.fillStyle = `rgba(240, 249, 255, ${splashAlpha.toFixed(3)})`;
-              const sparkDist = phase * 6.5;
-              ctx.fillRect(wx - sparkDist, wy - sparkDist * 0.6, 1.2, 1.2);
-              ctx.fillRect(wx + sparkDist, wy - sparkDist * 0.4, 1.2, 1.2);
-            }
+            if (phase < 0.25) splashCoords.push(wx, wy, 0);
+          } else if (phase < 0.22 && weights.drizzle < 0.6) {
+            splashCoords.push(wx, wy, phase * 6.5);
+          }
+        }
+      }
+
+      ctx.lineWidth = isFreezing ? 0.8 : 1.0;
+      const ripRgb = isFreezing ? '203, 226, 245' : '224, 242, 254';
+      const ripMult = isFreezing ? 0.75 : 1.0;
+      for (let bi = 0; bi < 4; bi++) {
+        const arr = ripBuckets[bi];
+        if (arr.length === 0) continue;
+        const alpha = ((bi + 0.5) / 4) * baseRippleAlpha * ripMult;
+        ctx.strokeStyle = `rgba(${ripRgb}, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        for (let i = 0; i < arr.length; i += 3) {
+          const wx = arr[i], wy = arr[i + 1], r = arr[i + 2];
+          const rx = r * rxScale;
+          const ry = r * ryScale;
+          ctx.moveTo(wx + rx * cosRip, wy + rx * sinRip);
+          ctx.ellipse(wx, wy, rx, ry, rippleAngle, 0, Math.PI * 2);
+        }
+        ctx.stroke();
+      }
+
+      if (splashCoords.length > 0) {
+        if (isFreezing) {
+          ctx.fillStyle = `rgba(224, 242, 254, ${(0.12 * weights.rain).toFixed(3)})`;
+          ctx.beginPath();
+          for (let i = 0; i < splashCoords.length; i += 3) {
+            const wx = splashCoords[i], wy = splashCoords[i + 1];
+            ctx.moveTo(wx + 2.5, wy);
+            ctx.ellipse(wx, wy, 2.5, 1.5, 0, 0, Math.PI * 2);
+          }
+          ctx.fill();
+        } else {
+          ctx.fillStyle = `rgba(240, 249, 255, ${(0.34 * weights.rain).toFixed(3)})`;
+          for (let i = 0; i < splashCoords.length; i += 3) {
+            const wx = splashCoords[i], wy = splashCoords[i + 1], sparkDist = splashCoords[i + 2];
+            ctx.fillRect(wx - sparkDist, wy - sparkDist * 0.6, 1.2, 1.2);
+            ctx.fillRect(wx + sparkDist, wy - sparkDist * 0.4, 1.2, 1.2);
           }
         }
       }
@@ -17280,10 +17104,21 @@ export class GameRenderer {
       const baseTileX = Math.floor((minX - 250) / WORLD_CELL) * WORLD_CELL;
       const baseTileY = Math.floor((minY - 250) / WORLD_CELL) * WORLD_CELL;
 
-      // Player vehicle velocity for relative aerodynamic streaking
-      const playerVeh = (world.player && world.player.isInVehicle && world.player.currentVehicleId)
-        ? world.vehicles.find(v => v.id === world.player?.currentVehicleId)
-        : null;
+      // Player vehicle velocity for relative aerodynamic streaking (check visibleVehicles first)
+      let playerVeh: Vehicle | null = null;
+      if (world.player && world.player.isInVehicle && world.player.currentVehicleId) {
+        const pid = world.player.currentVehicleId;
+        if (visibleVehicles) {
+          for (let i = 0; i < visibleVehicles.length; i++) {
+            if (visibleVehicles[i].id === pid) { playerVeh = visibleVehicles[i]; break; }
+          }
+        }
+        if (!playerVeh) {
+          for (let i = 0; i < world.vehicles.length; i++) {
+            if (world.vehicles[i].id === pid) { playerVeh = world.vehicles[i]; break; }
+          }
+        }
+      }
       const pVx = playerVeh ? (playerVeh.vx || 0) : ((world.player && world.player.vx) || 0);
       const pVy = playerVeh ? (playerVeh.vy || 0) : ((world.player && world.player.vy) || 0);
 

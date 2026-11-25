@@ -34,6 +34,10 @@ const _pedScratch: Pedestrian[] = [];
 const _bldScratch: Building[] = [];
 const _propScratch: StreetProp[] = [];
 const _groupsMap = new Map<string, Pedestrian[]>();
+const _buildingById = new Map<string, Building>();
+let _buildingByIdSource: Building[] | null = null;
+let _buildingByIdLen = -1;
+const _pedsToDespawn = new Set<string>();
 
 // ============================================================================
 // REALISTIC NATURAL COLOR PALETTES (Clothing, Skin, Hair, Accessories)
@@ -1350,7 +1354,19 @@ export function updatePedestriansSystem(
     }
   }
 
-  const pedsToDespawn = new Set<string>();
+  // Cached O(1) building lookup by ID (rebuilt only if world.buildings array changes)
+  if (_buildingByIdSource !== world.buildings || _buildingByIdLen !== world.buildings.length) {
+    _buildingById.clear();
+    for (let bi = 0, blen = world.buildings.length; bi < blen; bi++) {
+      const b = world.buildings[bi];
+      _buildingById.set(b.id, b);
+    }
+    _buildingByIdSource = world.buildings;
+    _buildingByIdLen = world.buildings.length;
+  }
+
+  const pedsToDespawn = _pedsToDespawn;
+  pedsToDespawn.clear();
   let updatedPedCount = 0;
 
   for (let idx = 0; idx < world.pedestrians.length; idx++) {
@@ -1423,7 +1439,7 @@ export function updatePedestriansSystem(
         // Re-adapt outerwear cleanly when stepping outside!
         adaptPedestrianClothingToWeather(ped, tempC, weather, timeHour);
 
-        const bld = world.buildings.find((b) => b.id === ped.insideBuildingId);
+        const bld = ped.insideBuildingId ? _buildingById.get(ped.insideBuildingId) : undefined;
         if (bld) {
           const entPos = getBuildingEntrancePos(bld);
           ped.x = entPos.x;
@@ -1618,15 +1634,15 @@ export function updatePedestriansSystem(
 
     if (ped.state === 'entering_building' || ped.state === 'seeking_shelter') {
       const targetBldId = ped.state === 'seeking_shelter' ? psy.shelterBuildingId : ped.insideBuildingId;
-      const bld = targetBldId ? world.buildings.find((b) => b.id === targetBldId) : null;
+      const bld = targetBldId ? _buildingById.get(targetBldId) : undefined;
       if (bld) {
         const entPos = getBuildingEntrancePos(bld);
         const dx = entPos.x - ped.x;
         const dy = entPos.y - ped.y;
-        const dist = Math.hypot(dx, dy);
+        const distSq = dx * dx + dy * dy;
         ped.angle = Math.atan2(dy, dx);
 
-        if (dist < 14) {
+        if (distSq < 14 * 14) {
           if (ped.state === 'seeking_shelter' && !isRainLike && !isStormOrBlizzard) {
             ped.state = 'walking';
             psy.shelterBuildingId = null;

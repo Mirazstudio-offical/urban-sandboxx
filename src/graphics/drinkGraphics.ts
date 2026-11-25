@@ -981,11 +981,10 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
       return true;
     }
 
-    // Borosilicate Double-Wall Tea Glass Mug
+    // Borosilicate Double-Wall Tea Glass
     case 'tea_green':
     case 'tea_cup':
-    case 'tea':
-    case 'glass_mug': {
+    case 'tea': {
       drawShadow(ctx, 6.2, 2.5, 7.8, 0.22);
 
       // Curved glass C-handle with bright catchlight

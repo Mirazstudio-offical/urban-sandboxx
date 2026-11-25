@@ -386,50 +386,6 @@ export function drawLeftoverItem(ctx: CanvasRenderingContext2D, itemId: string):
       return true;
     }
 
-    // Empty red ceramic soup bowl (matches soup)
-    case 'soup_bowl_empty': {
-      drawShadow(ctx, 8.5, 3, 7.5, 0.25);
-      const bGrad = ctx.createLinearGradient(-8.5, -3, 8.5, 6.2);
-      bGrad.addColorStop(0.0, '#e11d48');
-      bGrad.addColorStop(0.5, '#9f1239');
-      bGrad.addColorStop(1.0, '#4c0519');
-      ctx.fillStyle = bGrad;
-      ctx.beginPath();
-      ctx.ellipse(0, 1.5, 8.5, 4.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillRect(-8.5, -3, 17, 5);
-
-      ctx.fillStyle = '#be123c';
-      ctx.beginPath();
-      ctx.ellipse(0, -3, 8.5, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
-      const cavGrad = ctx.createRadialGradient(-2, -3.2, 0.5, 0, -2.8, 7.5);
-      cavGrad.addColorStop(0, '#881337');
-      cavGrad.addColorStop(1, '#2e0210');
-      ctx.fillStyle = cavGrad;
-      ctx.beginPath();
-      ctx.ellipse(0, -2.8, 7.5, 2.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = 'rgba(234, 179, 8, 0.42)';
-      ctx.beginPath();
-      ctx.ellipse(-1, -2.8, 3.8, 1.1, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#15803d';
-      ctx.fillRect(-2, -3, 0.8, 0.8);
-      ctx.fillRect(1.5, -2.5, 0.8, 0.8);
-
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.moveTo(-6, -6);
-      ctx.lineTo(2, -2.5);
-      ctx.lineTo(3.5, -2);
-      ctx.lineTo(-5.5, -6.5);
-      ctx.closePath();
-      ctx.fill();
-      return true;
-    }
-
     // Empty cinema popcorn bucket (matches popcorn_caramel)
     case 'popcorn_bucket': {
       drawShadow(ctx, 7.2, 2.6, 7.5, 0.25);

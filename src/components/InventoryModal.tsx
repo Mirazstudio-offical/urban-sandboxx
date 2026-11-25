@@ -1898,6 +1898,13 @@ const InventoryModalContent: React.FC<{
                               : uAttrs.stateNameRu;
 
                           const colorLabel = vis?.colorNameRu || uAttrs.substanceColorRu;
+                          const capacityMlVal = uAttrs.capacityMl;
+                          const capacityLabel =
+                            capacityMlVal !== undefined && capacityMlVal > 0
+                              ? (capacityMlVal >= 1000
+                                  ? `${Number((capacityMlVal / 1000).toFixed(2))} л (${capacityMlVal} мл)`
+                                  : `${capacityMlVal} мл`)
+                              : undefined;
                           const hasAnySpec = Boolean(
                             hasFluid ||
                             hasHybridCapacity ||
@@ -1906,6 +1913,13 @@ const InventoryModalContent: React.FC<{
                             sizeLabel ||
                             materialLabel ||
                             colorLabel ||
+                            uAttrs.patternRu ||
+                            uAttrs.coatingRu ||
+                            capacityLabel ||
+                            uAttrs.lidRu ||
+                            uAttrs.handleRu ||
+                            uAttrs.featureRu ||
+                            uAttrs.dimensionCm ||
                             uAttrs.physicalFormRu ||
                             it.containerCapacityL ||
                             detailSource.flavorRu ||
@@ -2064,7 +2078,25 @@ const InventoryModalContent: React.FC<{
                                     <span className="inv-kv-v">{materialLabel}</span>
                                   </div>
                                 )}
-                                {!hasFluid && it.containerCapacityL && (
+                                {uAttrs.coatingRu && (
+                                  <div className="inv-kv" style={uAttrs.coatingRu.length > 20 ? { gridColumn: 'span 2' } : undefined}>
+                                    <span className="inv-kv-k">Покрытие</span>
+                                    <span className="inv-kv-v">{uAttrs.coatingRu}</span>
+                                  </div>
+                                )}
+                                {capacityLabel && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Вмещает объём</span>
+                                    <span className="inv-kv-v mono">{capacityLabel}</span>
+                                  </div>
+                                )}
+                                {uAttrs.dimensionCm && (
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Габарит</span>
+                                    <span className="inv-kv-v mono">{uAttrs.dimensionCm} см</span>
+                                  </div>
+                                )}
+                                {!hasFluid && !capacityLabel && it.containerCapacityL && (
                                   <div className="inv-kv">
                                     <span className="inv-kv-k">Объём тары</span>
                                     <span className="inv-kv-v mono">{it.containerCapacityL} л</span>
@@ -2077,6 +2109,33 @@ const InventoryModalContent: React.FC<{
                                       {swatchColor && <span className="inv-swatch" style={{ backgroundColor: swatchColor }} />}
                                       <span>{colorLabel}</span>
                                     </span>
+                                  </div>
+                                )}
+                                {uAttrs.patternRu && (
+                                  <div className="inv-kv" style={uAttrs.patternRu.length > 20 ? { gridColumn: 'span 2' } : undefined}>
+                                    <span className="inv-kv-k">Узор</span>
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                      {uAttrs.patternColor && <span className="inv-swatch" style={{ backgroundColor: uAttrs.patternColor }} />}
+                                      <span>{uAttrs.patternRu}</span>
+                                    </span>
+                                  </div>
+                                )}
+                                {uAttrs.lidRu && (
+                                  <div className="inv-kv" style={uAttrs.lidRu.length > 20 ? { gridColumn: 'span 2' } : undefined}>
+                                    <span className="inv-kv-k">Крышка</span>
+                                    <span className="inv-kv-v">{uAttrs.lidRu}</span>
+                                  </div>
+                                )}
+                                {uAttrs.handleRu && (
+                                  <div className="inv-kv" style={uAttrs.handleRu.length > 20 ? { gridColumn: 'span 2' } : undefined}>
+                                    <span className="inv-kv-k">Ручка</span>
+                                    <span className="inv-kv-v">{uAttrs.handleRu}</span>
+                                  </div>
+                                )}
+                                {uAttrs.featureRu && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Особенности</span>
+                                    <span className="inv-kv-v">{uAttrs.featureRu}</span>
                                   </div>
                                 )}
                                 {detailSource.flavorRu && (

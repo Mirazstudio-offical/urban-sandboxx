@@ -61,7 +61,10 @@ function getShopPreviewCacheKey(item: ShopItem): string {
   const firstInner = item.contents?.[0]?.itemId || '';
   const innerCount = item.contents ? item.contents.reduce((s, c) => s + (c.count ?? 1), 0) : 0;
   const fl = item.fluidStorage ? `${item.fluidStorage.liquidId || ''}:${item.fluidStorage.currentMl || 0}` : '';
-  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
+  const kw = item.kitchenwareAttributes
+    ? `${item.kitchenwareAttributes.material || ''}:${item.kitchenwareAttributes.color || ''}:${item.kitchenwareAttributes.pattern || ''}:${item.kitchenwareAttributes.capacityMl || ''}:${item.kitchenwareAttributes.shape || ''}`
+    : '';
+  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
 }
 function getShopPreviewItem(item: ShopItem): InventoryItem {
   const cacheKey = getShopPreviewCacheKey(item);
@@ -889,7 +892,32 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'gea_chanterelle_basket', itemId: 'mushrooms_chanterelle', nameRu: 'Лукошко свежих лисичек (1.5L)', price: 210, description: 'Отборные рыжие лесные лисички в плетёном лукошке.', category: 'food', effectText: 'Свежие лесные грибы' },
     { id: 'gea_wild_honey', itemId: 'honey_wild', nameRu: 'Дикий таёжный мёд (0.35L)', price: 240, description: 'Баночка концентрированного темного таежного бортевого меда.', category: 'food', effectText: '+50% Сытость, иммунитет' },
     { id: 'gea_thermos', itemId: 'thermos', nameRu: 'Походный термос с чаем (1.0L)', price: 260, description: 'Вакуумный термос из нержавеющей стали с горячим чаем.', category: 'food', effectText: '+50% Гидратация, +8°C Тепло' },
-    { id: 'gea_soup_bowl', itemId: 'soup_bowl', nameRu: 'Походная суповая пиала с ложкой', price: 60, description: 'Глубокая походная миска для горячих супов и бульонов.', category: 'food', effectText: 'Тара для супа (0.5L)' },
+    {
+      id: 'gea_soup_bowl',
+      itemId: 'bowl',
+      nameRu: 'Миска',
+      price: 60,
+      description: 'Походная глубокая эмалированная миска для горячих супов и бульонов.',
+      category: 'food',
+      effectText: '0.5 л · Эмаль',
+      kitchenwareAttributes: {
+        kind: 'bowl',
+        material: 'enamel_steel',
+        materialRu: 'Эмалированная сталь',
+        coatingRu: 'Белая стеклоэмаль',
+        capacityMl: 500,
+        dimensionCm: 16,
+        shape: 'deep_round',
+        shapeNameRu: 'Глубокая походная',
+        color: '#f8fafc',
+        colorNameRu: 'Белый с синим ободком',
+        accentColor: '#1d4ed8',
+        pattern: 'blue_rim',
+        patternNameRu: 'Синяя кайма по краю',
+        patternColor: '#1d4ed8',
+        featureRu: 'Устойчива к костру и походным условиям'
+      }
+    },
     { id: 'gea_flask', itemId: 'camp_flask', nameRu: 'Стальная фляга (0.75L)', price: 90, description: 'Окрашенная в хаки металлическая походная бутылка с чехлом.', category: 'food', effectText: '+50% Гидратация' },
     { id: 'gea_flashlight', itemId: 'flashlight', nameRu: 'Яркий LED-фонарь', price: 1800, description: 'Алюминиевый герметичный фонарь с зубчатой короной линзы.', category: 'auto', effectText: 'Освещение в темноте' },
     { id: 'gea_knife', itemId: 'pocket_knife', nameRu: 'Туристический нож', price: 2000, description: 'Черная рукоять со стеклобоем, клинок с серрейтором.', category: 'auto', effectText: 'Инструмент' },
@@ -2719,12 +2747,29 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       const isDryFluid = fs ? isFluidStorageDryForm(fs) : false;
                       const colorName = uAttrs.visuals?.colorNameRu || uAttrs.substanceColorRu;
                       const colorHex = uAttrs.visuals?.color || uAttrs.customColor || liq?.color;
+                      const materialName = uAttrs.visuals?.materialNameRu;
+                      const shapeName = uAttrs.productShapeRu || uAttrs.visuals?.shapeNameRu;
+                      const capacityMlVal = uAttrs.capacityMl;
+                      const capacityLabel =
+                        capacityMlVal !== undefined && capacityMlVal > 0
+                          ? (capacityMlVal >= 1000
+                              ? `${Number((capacityMlVal / 1000).toFixed(2))} л (${capacityMlVal} мл)`
+                              : `${capacityMlVal} мл`)
+                          : undefined;
                       const hasSpecs = Boolean(
                         innerItems ||
                         liq ||
                         uAttrs.physicalFormRu ||
+                        materialName ||
+                        uAttrs.coatingRu ||
+                        capacityLabel ||
                         colorName ||
-                        uAttrs.productShapeRu ||
+                        uAttrs.patternRu ||
+                        shapeName ||
+                        uAttrs.dimensionCm ||
+                        uAttrs.lidRu ||
+                        uAttrs.handleRu ||
+                        uAttrs.featureRu ||
                         uAttrs.grainGradeRu ||
                         uAttrs.cookingTimeMin ||
                         uAttrs.proteinPer100g !== undefined ||
@@ -2764,6 +2809,30 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                               <span className="gu-kv-v">{uAttrs.physicalFormRu}</span>
                             </div>
                           )}
+                          {materialName && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Материал</span>
+                              <span className="gu-kv-v">{materialName}</span>
+                            </div>
+                          )}
+                          {capacityLabel && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Вмещает объём</span>
+                              <span className="gu-kv-v gu-num">{capacityLabel}</span>
+                            </div>
+                          )}
+                          {uAttrs.coatingRu && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Покрытие</span>
+                              <span className="gu-kv-v">{uAttrs.coatingRu}</span>
+                            </div>
+                          )}
+                          {uAttrs.dimensionCm && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Габарит</span>
+                              <span className="gu-kv-v gu-num">{uAttrs.dimensionCm} см</span>
+                            </div>
+                          )}
                           {colorName && (
                             <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
                               <span className="gu-kv-k">Цвет</span>
@@ -2784,16 +2853,54 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                               </span>
                             </div>
                           )}
+                          {uAttrs.patternRu && (
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Узор</span>
+                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'normal' }}>
+                                {uAttrs.patternColor && (
+                                  <span
+                                    style={{
+                                      width: 10,
+                                      height: 10,
+                                      borderRadius: 3,
+                                      backgroundColor: uAttrs.patternColor,
+                                      border: '1px solid rgba(255,255,255,0.28)',
+                                      flexShrink: 0
+                                    }}
+                                  />
+                                )}
+                                <span>{uAttrs.patternRu}</span>
+                              </span>
+                            </div>
+                          )}
                           {uAttrs.cookingTimeMin && (
                             <div className="gu-kv">
                               <span className="gu-kv-k">Варка</span>
                               <span className="gu-kv-v">{uAttrs.cookingTimeMin}</span>
                             </div>
                           )}
-                          {uAttrs.productShapeRu && (
+                          {shapeName && (
                             <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
                               <span className="gu-kv-k">Форма</span>
-                              <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.productShapeRu}</span>
+                              <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{shapeName}</span>
+                            </div>
+                          )}
+                          {uAttrs.lidRu && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Крышка</span>
+                              <span className="gu-kv-v">{uAttrs.lidRu}</span>
+                            </div>
+                          )}
+                          {uAttrs.handleRu && (
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Ручка</span>
+                              <span className="gu-kv-v">{uAttrs.handleRu}</span>
+                            </div>
+                          )}
+                          {uAttrs.featureRu && (
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Особенности</span>
+                              <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{uAttrs.featureRu}</span>
                             </div>
                           )}
                           {uAttrs.grainGradeRu && (

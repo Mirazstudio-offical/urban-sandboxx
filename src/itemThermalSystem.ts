@@ -60,12 +60,6 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
     heatRetention: 0.42,
     surfaceTemperature: 54.0
   },
-  soup_bowl: {
-    temperature: 78.0,
-    heatLossRate: 0.0025,
-    heatRetention: 0.42,
-    surfaceTemperature: 54.0
-  },
   popcorn_caramel: {
     temperature: 46.0,
     heatLossRate: 0.0040,
@@ -260,12 +254,6 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
     heatRetention: 0.35,
     surfaceTemperature: 20.0
   },
-  glass_mug: {
-    temperature: 20.0,
-    heatLossRate: 0.0030,
-    heatRetention: 0.40,
-    surfaceTemperature: 20.0
-  },
   can_alu_330: {
     temperature: 20.0,
     heatLossRate: 0.0050,
@@ -273,23 +261,53 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
     surfaceTemperature: 20.0
   },
 
-  // === HEATED METAL / COOKWARE ===
-  kitchen_kettle_steel: {
+  // === UNIFIED KITCHENWARE / COOKWARE ===
+  pot: {
     temperature: 20.0,
-    heatLossRate: 0.0050,
-    heatRetention: 0.20,
+    heatLossRate: 0.0042,
+    heatRetention: 0.28,
     surfaceTemperature: 20.0
   },
-  kitchen_kettle_enamel: {
+  saute_pan: {
     temperature: 20.0,
-    heatLossRate: 0.0040,
-    heatRetention: 0.25,
+    heatLossRate: 0.0044,
+    heatRetention: 0.26,
     surfaceTemperature: 20.0
   },
-  kitchen_kettle_electric: {
+  frying_pan: {
+    temperature: 20.0,
+    heatLossRate: 0.0048,
+    heatRetention: 0.24,
+    surfaceTemperature: 20.0
+  },
+  kettle: {
+    temperature: 20.0,
+    heatLossRate: 0.0038,
+    heatRetention: 0.28,
+    surfaceTemperature: 20.0
+  },
+  plate: {
+    temperature: 20.0,
+    heatLossRate: 0.0032,
+    heatRetention: 0.38,
+    surfaceTemperature: 20.0
+  },
+  bowl: {
+    temperature: 20.0,
+    heatLossRate: 0.0028,
+    heatRetention: 0.42,
+    surfaceTemperature: 20.0
+  },
+  mug: {
     temperature: 20.0,
     heatLossRate: 0.0030,
-    heatRetention: 0.35,
+    heatRetention: 0.40,
+    surfaceTemperature: 20.0
+  },
+  cup: {
+    temperature: 20.0,
+    heatLossRate: 0.0034,
+    heatRetention: 0.36,
     surfaceTemperature: 20.0
   }
 };

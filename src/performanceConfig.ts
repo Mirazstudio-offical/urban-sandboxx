@@ -267,7 +267,7 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     maxVehicles: 36, nearbyVehiclesTarget: 12, maxActivePedestrians: 150,
     enableMinimap: true, enableRainDroplets: true, enableBalconyDetails: true,
     enableShadows: true, particleLimit: 450, lowQualityRendering: false,
-    shadowResolutionScale: 0.75, shadowIntensity: 110, shadowLengthScale: 105, shadowSoftness: 80,
+    shadowResolutionScale: 1, shadowIntensity: 110, shadowLengthScale: 105, shadowSoftness: 80,
     enableBuildingShadows: true, enableRooftopShadows: true, enableTreeShadows: true,
     enableVehicleShadows: true, enableVehicleDetailShadows: true, enablePedestrianShadows: true,
     enablePropShadows: true, enableMicroShadows: true,
@@ -285,7 +285,7 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     gpuVignette: 0, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: true, gpuBicubicUpscale: true, gpuGi: 55, gpuWet: 75,
     gpuWaterShader: 100, gpuWaterWakes: 100, gpuHeatShimmer: 115, gpuFireLighting: 115, gpuFogScattering: 110,
     gpuExposure: 100, gpuContrast: 100, gpuSaturation: 105,
-    enableGpuFireShader: true, gpuFireScale: 0.75, gpuFireSmoke: 115,
+    enableGpuFireShader: true, gpuFireScale: 1, gpuFireSmoke: 115,
   },
 };
 

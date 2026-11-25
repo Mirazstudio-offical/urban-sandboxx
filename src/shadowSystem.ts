@@ -988,23 +988,18 @@ function renderGasStationShadows(
     // 1. Concrete Pump Islands (z = 0 .. 3.5)
     const islandXs = [5110, 5200];
     for (const ix of islandXs) {
-      const off = getShadowOffset(3.5, sunState);
-      sCtx.save();
-      clipOutsideRect(sCtx, ix - 9, 5025, 18, 170, off.dx, off.dy);
       extrudeRectShadow(sCtx, ix - 9, 5025, 18, 170, 0, 3.5, sunState);
-      sCtx.restore();
+      queueEraseRect(ix - 9, 5025, 18, 170);
     }
 
     // 2. Fuel Dispensers / Gas Pumps (z = 1 .. 22px)
     const pumps = world.gasPumps || [];
     for (const pump of pumps) {
       if (pump.x < minX - 100 || pump.x > maxX + 100 || pump.y < minY - 100 || pump.y > maxY + 100) continue;
-      const off = getShadowOffset(22, sunState);
-      sCtx.save();
-      clipOutsideRotatedRect(sCtx, pump.x, pump.y, 10, 18, pump.angle || 0, off.dx, off.dy);
       extrudeRotatedRectShadow(sCtx, pump.x, pump.y, 10, 18, pump.angle || 0, 1, 22, sunState);
-      sCtx.restore();
+      queueEraseRotRect(pump.x, pump.y, 10, 18, pump.angle || 0);
     }
+    flushEraseMasks(sCtx);
   } else {
     // Tier 2 (Tall structures that cast shadows over vehicles and islands):
     // 3. Canopy Support Columns (z = 0 .. 52px)
@@ -1020,11 +1015,8 @@ function renderGasStationShadows(
     {
       const tx = 5055 - 9;
       const ty = 5000 - 4;
-      const off = getShadowOffset(54, sunState);
-      sCtx.save();
-      clipOutsideRect(sCtx, tx, ty, 18, 8, off.dx, off.dy);
       extrudeRectShadow(sCtx, tx, ty, 18, 8, 0, 54, sunState);
-      sCtx.restore();
+      queueEraseRect(tx, ty, 18, 8);
     }
 
     // 5. Perimeter Floodlight Poles (height 58px)
@@ -1040,11 +1032,9 @@ function renderGasStationShadows(
 
     // 6. Elevated Forecourt Canopy Roof (x: 5075..5235, y: 5010..5210, z = 48 .. 56px)
     // Because zBottom = 48px, the shadow detaches from the canopy columns and projects onto the forecourt and cars!
-    const cOffTop = getShadowOffset(56, sunState);
-    sCtx.save();
-    clipOutsideRect(sCtx, 5075, 5010, 160, 200, cOffTop.dx, cOffTop.dy);
     extrudeRectShadow(sCtx, 5075, 5010, 160, 200, 48, 56, sunState);
-    sCtx.restore();
+    queueEraseRect(5075, 5010, 160, 200);
+    flushEraseMasks(sCtx);
   }
 }
 
@@ -1073,12 +1063,10 @@ function renderRailwayShadows(
         ) {
           continue;
         }
-        const pOff = getShadowOffset(6, sunState);
-        sCtx.save();
-        clipOutsideRect(sCtx, plat.x, plat.y, plat.width, plat.height, pOff.dx, pOff.dy);
         extrudeRectShadow(sCtx, plat.x, plat.y, plat.width, plat.height, 0, 6, sunState);
-        sCtx.restore();
+        queueEraseRect(plat.x, plat.y, plat.width, plat.height);
       }
+      flushEraseMasks(sCtx);
     }
 
     // 2. Rolling Stock (Trains: Locomotives & Wagons in world.rollingStock)
@@ -1087,27 +1075,27 @@ function renderRailwayShadows(
         if (car.x < minX - 180 || car.x > maxX + 180 || car.y < minY - 180 || car.y > maxY + 180) continue;
         const length = car.length || 140;
         const width = car.width || 30;
-        const off = getShadowOffset(19, sunState);
 
-        // Main carbody shadow (clipped outside the sunlit carbody top)
-        sCtx.save();
-        clipOutsideRotatedRect(sCtx, car.x, car.y, length - 2, width - 2, car.angle, off.dx, off.dy);
+        // Main carbody shadow (erased over the sunlit carbody top)
         extrudeRotatedRectShadow(sCtx, car.x, car.y, length, width, car.angle, 2, 19, sunState);
-        sCtx.restore();
+        queueEraseRotRect(car.x, car.y, length - 2, width - 2, car.angle);
+      }
+      flushEraseMasks(sCtx);
 
+      for (const car of world.rollingStock) {
+        if (car.x < minX - 180 || car.x > maxX + 180 || car.y < minY - 180 || car.y > maxY + 180) continue;
+        const length = car.length || 140;
         // Rooftop pantograph / air reservoir equipment shadow cast across the train roof
-        const eqOff = getShadowOffset(4.5, sunState);
         const cos = Math.cos(car.angle);
         const sin = Math.sin(car.angle);
         for (const xFrac of [-0.28, 0.28]) {
           const ex = car.x + cos * (length * xFrac);
           const ey = car.y + sin * (length * xFrac);
-          sCtx.save();
-          clipOutsideRotatedRect(sCtx, ex, ey, 6, 5, car.angle, eqOff.dx, eqOff.dy);
           extrudeRotatedRectShadow(sCtx, ex, ey, 6, 5, car.angle, 0, 4.5, sunState);
-          sCtx.restore();
+          queueEraseRotRect(ex, ey, 6, 5, car.angle);
         }
       }
+      flushEraseMasks(sCtx);
     }
     return;
   }
@@ -1139,12 +1127,10 @@ function renderRailwayShadows(
         extrudeCylinderShadow(sCtx, cx, cy, 1.4, 6, 19, sunState);
       }
 
-      const cOff = getShadowOffset(20, sunState);
-      sCtx.save();
-      clipOutsideRect(sCtx, canopyX, canopyY, canopyW, canopyH, cOff.dx, cOff.dy);
       extrudeRectShadow(sCtx, canopyX, canopyY, canopyW, canopyH, 16, 20, sunState);
-      sCtx.restore();
+      queueEraseRect(canopyX, canopyY, canopyW, canopyH);
     }
+    flushEraseMasks(sCtx);
   }
 
   // 4. Railway Signals & Level Crossing Barriers (world.railwaySignals)
@@ -1209,27 +1195,21 @@ function renderIntersectionSignsAndFountainsShadows(
     const outerR = bld.width * 0.5;
 
     // Outer granite basin rim (z = 0 .. 9px)
-    const off1 = getShadowOffset(9, sunState);
-    sCtx.save();
-    clipOutsideCircle(sCtx, cx, cy, outerR, off1.dx, off1.dy);
     extrudeCylinderShadow(sCtx, cx, cy, outerR + 1.5, 0, 9, sunState);
-    sCtx.restore();
+    queueEraseCircle(cx, cy, outerR);
+    flushEraseMasks(sCtx);
 
     // Middle carved chalice bowl (z = 6 .. 20px) casting shadow onto the lower water pool
     const midR = 17;
-    const off2 = getShadowOffset(20, sunState);
-    sCtx.save();
-    clipOutsideCircle(sCtx, cx, cy, midR, off2.dx, off2.dy);
     extrudeCylinderShadow(sCtx, cx, cy, midR, 6, 20, sunState);
-    sCtx.restore();
+    queueEraseCircle(cx, cy, midR);
+    flushEraseMasks(sCtx);
 
     // Central bronze spire / water column (z = 16 .. 34px)
     const topR = 6;
-    const off3 = getShadowOffset(34, sunState);
-    sCtx.save();
-    clipOutsideCircle(sCtx, cx, cy, topR, off3.dx, off3.dy);
     extrudeCylinderShadow(sCtx, cx, cy, topR, 16, 34, sunState);
-    sCtx.restore();
+    queueEraseCircle(cx, cy, topR);
+    flushEraseMasks(sCtx);
   }
 }
 

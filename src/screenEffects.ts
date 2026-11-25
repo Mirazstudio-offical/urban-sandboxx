@@ -15,6 +15,39 @@ export class ScreenEffectsSystem {
   private breathTimer: number = 0;
   private dizzinessTimer: number = 0;
   private nauseaTimer: number = 0;
+  private cachedGradCtx: CanvasRenderingContext2D | null = null;
+  private cachedGradW: number = 0;
+  private cachedGradH: number = 0;
+  private gradCache: Map<string, CanvasGradient> = new Map();
+
+  private getCachedRadial(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    key: string,
+    innerR: number,
+    outerR: number,
+    stops: ReadonlyArray<readonly [number, string]>
+  ): CanvasGradient {
+    if (this.cachedGradCtx !== ctx || this.cachedGradW !== width || this.cachedGradH !== height) {
+      this.cachedGradCtx = ctx;
+      this.cachedGradW = width;
+      this.cachedGradH = height;
+      this.gradCache.clear();
+    }
+    let g = this.gradCache.get(key);
+    if (!g) {
+      if (this.gradCache.size > 64) this.gradCache.clear();
+      const cx = width * 0.5;
+      const cy = height * 0.5;
+      g = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+      for (let i = 0; i < stops.length; i++) {
+        g.addColorStop(stops[i][0], stops[i][1]);
+      }
+      this.gradCache.set(key, g);
+    }
+    return g;
+  }
 
   /**
    * Applies pre-render camera modifications (e.g. from cold shivering or panic hyperventilation)
@@ -108,6 +141,18 @@ export class ScreenEffectsSystem {
     // Guarantee screen (CSS px) coordinate space, mapped onto the backing store if it is scaled
     const backingK = width > 0 ? ctx.canvas.width / width : 1;
     ctx.setTransform(backingK, 0, 0, backingK, 0, 0);
+
+    // Resolve player's current vehicle once per frame (avoid duplicate linear scans across sections)
+    let playerVeh: GameWorld['vehicles'][number] | null = null;
+    if (world && player.isInVehicle && player.currentVehicleId) {
+      const vehicles = world.vehicles;
+      for (let vi = 0; vi < vehicles.length; vi++) {
+        if (vehicles[vi].id === player.currentVehicleId) {
+          playerVeh = vehicles[vi];
+          break;
+        }
+      }
+    }
 
     // =========================================================================
     // 1. SHOCK & BLOOD LOSS DESATURATION / CONTRAST DARKENING
@@ -226,15 +271,16 @@ export class ScreenEffectsSystem {
     const isCold = coldSeverity > 0.05;
     if (isCold) {
       ctx.save();
-      const cx = width / 2;
-      const cy = height / 2;
       const maxR = Math.hypot(width, height) * 0.6;
-      const innerR = Math.max(20, maxR * (0.85 - coldSeverity * 0.5)); // brings vignette closer to center
+      const qCold = Math.round(coldSeverity * 40);
+      const qVal = qCold / 40;
+      const innerR = Math.max(20, maxR * (0.85 - qVal * 0.5)); // brings vignette closer to center
 
-      const frostGrad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, maxR);
-      frostGrad.addColorStop(0, 'rgba(56, 189, 248, 0)');
-      frostGrad.addColorStop(0.4, `rgba(14, 165, 233, ${Math.min(1.0, coldSeverity * 0.7)})`);
-      frostGrad.addColorStop(1, `rgba(2, 132, 199, ${Math.min(1.0, coldSeverity * 1.2)})`);
+      const frostGrad = this.getCachedRadial(ctx, width, height, `frost_${qCold}`, innerR, maxR, [
+        [0, 'rgba(56, 189, 248, 0)'],
+        [0.4, `rgba(14, 165, 233, ${Math.min(1.0, qVal * 0.7).toFixed(3)})`],
+        [1, `rgba(2, 132, 199, ${Math.min(1.0, qVal * 1.2).toFixed(3)})`],
+      ]);
 
       ctx.fillStyle = frostGrad;
       ctx.fillRect(0, 0, width, height);
@@ -253,14 +299,15 @@ export class ScreenEffectsSystem {
       const dropCount = Math.floor(8 + wetProgress * 16);
 
       // Peripheral damp vignette (cold blurred rain mist around outer rim)
-      const cx = width / 2;
-      const cy = height / 2;
       const maxR = Math.hypot(width, height) * 0.65;
-      const innerR = Math.max(30, maxR * (0.88 - wetProgress * 0.35));
-      const rainMistGrad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, maxR);
-      rainMistGrad.addColorStop(0, 'rgba(203, 213, 225, 0)');
-      rainMistGrad.addColorStop(0.65, `rgba(186, 230, 253, ${(0.14 * wetProgress).toFixed(3)})`);
-      rainMistGrad.addColorStop(1.0, `rgba(148, 163, 184, ${(0.32 * wetProgress).toFixed(3)})`);
+      const qWet = Math.round(wetProgress * 40);
+      const qWetVal = qWet / 40;
+      const innerR = Math.max(30, maxR * (0.88 - qWetVal * 0.35));
+      const rainMistGrad = this.getCachedRadial(ctx, width, height, `rainmist_${qWet}`, innerR, maxR, [
+        [0, 'rgba(203, 213, 225, 0)'],
+        [0.65, `rgba(186, 230, 253, ${(0.14 * qWetVal).toFixed(3)})`],
+        [1.0, `rgba(148, 163, 184, ${(0.32 * qWetVal).toFixed(3)})`],
+      ]);
       ctx.fillStyle = rainMistGrad;
       ctx.fillRect(0, 0, width, height);
 
@@ -399,13 +446,14 @@ export class ScreenEffectsSystem {
     if (comfort > 55 && !player.isFainting && hp > 50) {
       ctx.save();
       const comfortNorm = Math.min(1.0, (comfort - 55) / 45);
-      const cx = width / 2;
-      const cy = height / 2;
+      const qComf = Math.round(comfortNorm * 30);
+      const qComfVal = qComf / 30;
       const maxR = Math.hypot(width, height) * 0.7;
-      const comfGrad = ctx.createRadialGradient(cx, cy, maxR * 0.55, cx, cy, maxR);
-      comfGrad.addColorStop(0, 'rgba(251, 191, 36, 0)');
-      comfGrad.addColorStop(0.7, `rgba(245, 158, 11, ${comfortNorm * 0.045})`);
-      comfGrad.addColorStop(1.0, `rgba(217, 119, 6, ${comfortNorm * 0.085})`);
+      const comfGrad = this.getCachedRadial(ctx, width, height, `comf_${qComf}`, maxR * 0.55, maxR, [
+        [0, 'rgba(251, 191, 36, 0)'],
+        [0.7, `rgba(245, 158, 11, ${(qComfVal * 0.045).toFixed(4)})`],
+        [1.0, `rgba(217, 119, 6, ${(qComfVal * 0.085).toFixed(4)})`],
+      ]);
       ctx.fillStyle = comfGrad;
       ctx.fillRect(0, 0, width, height);
       ctx.restore();
@@ -460,15 +508,12 @@ export class ScreenEffectsSystem {
     let cabinTemp = 20;
     let vehicleDamage: any = null;
 
-    if (world && player.isInVehicle && player.currentVehicleId) {
-      const v = world.vehicles.find(veh => veh.id === player.currentVehicleId);
-      if (v) {
-        cabinTemp = v.heaterTemp ?? 20;
-        vehicleDamage = v.damage;
-        fireProgress = v.damage?.fireProgress || ((v.damage?.engineFire || v.damage?.fuelTankFire) ? 0.2 : (v.damage?.underHoodSmolder ? 0.05 : 0));
-        if (v.damage?.engineFire || v.damage?.fuelTankFire || v.damage?.cabinFire || cabinTemp > 45) {
-          inFireVehicle = true;
-        }
+    if (playerVeh) {
+      cabinTemp = playerVeh.heaterTemp ?? 20;
+      vehicleDamage = playerVeh.damage;
+      fireProgress = playerVeh.damage?.fireProgress || ((playerVeh.damage?.engineFire || playerVeh.damage?.fuelTankFire) ? 0.2 : (playerVeh.damage?.underHoodSmolder ? 0.05 : 0));
+      if (playerVeh.damage?.engineFire || playerVeh.damage?.fuelTankFire || playerVeh.damage?.cabinFire || cabinTemp > 45) {
+        inFireVehicle = true;
       }
     }
 
@@ -568,22 +613,20 @@ export class ScreenEffectsSystem {
         ctx.fillStyle = '#020617';
         ctx.fillRect(0, 0, width, height);
 
-        // Subtle medical monitor grid pattern
+        // Subtle medical monitor grid pattern (batched into 1 path stroke)
         ctx.strokeStyle = 'rgba(30, 41, 59, 0.4)';
         ctx.lineWidth = 1;
         const gridSize = 40;
+        ctx.beginPath();
         for (let gx = 0; gx < width; gx += gridSize) {
-          ctx.beginPath();
           ctx.moveTo(gx, 0);
           ctx.lineTo(gx, height);
-          ctx.stroke();
         }
         for (let gy = 0; gy < height; gy += gridSize) {
-          ctx.beginPath();
           ctx.moveTo(0, gy);
           ctx.lineTo(width, gy);
-          ctx.stroke();
         }
+        ctx.stroke();
 
         // Dynamic EKG waveform in center
         ctx.save();
@@ -686,9 +729,9 @@ export class ScreenEffectsSystem {
     // =========================================================================
     // 6. VEHICLE WINDSHIELD RAIN & FOG VIGNETTE (FIELD OF VIEW NARROWING)
     // =========================================================================
-    if (world && player.isInVehicle && player.currentVehicleId) {
-      const veh = world.vehicles.find(v => v.id === player.currentVehicleId);
-      if (veh) {
+    if (playerVeh) {
+      const veh = playerVeh;
+      {
         const rainLevel = (typeof veh.windshieldRainLevel === 'number' && Number.isFinite(veh.windshieldRainLevel)) ? Math.max(0, veh.windshieldRainLevel) : 0;
         const snowLevel = (typeof veh.windshieldSnowLevel === 'number' && Number.isFinite(veh.windshieldSnowLevel)) ? Math.max(0, veh.windshieldSnowLevel) : 0;
         const rawFog = (typeof veh.fogLevel === 'number' && Number.isFinite(veh.fogLevel)) ? Math.max(0, veh.fogLevel) : 0;
@@ -702,47 +745,53 @@ export class ScreenEffectsSystem {
           const maxLevel = Math.max(rainLevel, snowLevel, fogLevel);
           const isSnowDom = snowLevel >= rainLevel && snowLevel >= fogLevel;
           const isFogDom = fogLevel > rainLevel && fogLevel > snowLevel;
-          // Scale visible area so it completely closes in on the vehicle as maxLevel reaches 100%
-          const levelFactor = Math.min(1.0, Math.max(0.0, maxLevel / 100));
+          // Quantize to 0.5% steps so cached radial gradient is reused across frames during rain/blizzards
+          const qLevel = Math.round(Math.min(100, Math.max(0, maxLevel)) * 2);
+          const levelFactor = qLevel / 200;
           
           // Outer radius of the transition zone (fully opaque beyond this)
           const outerR = Math.max(85, 550 * (1.0 - levelFactor * 0.85));
           // Inner radius where visibility starts to fade
           const innerR = Math.max(40, outerR * 0.45);
 
-          const windshieldGrad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
-          
-          if (isSnowDom) {
-            const snowAlpha = Math.min(1.0, Math.max(0.0, levelFactor * 1.18));
-            const a1 = (snowAlpha * 0.58).toFixed(3);
-            const a2 = (snowAlpha * 0.90).toFixed(3);
-            const a3 = snowAlpha.toFixed(3);
-            // Frosted snowy white-out rim on windshield
-            windshieldGrad.addColorStop(0, 'rgba(241, 245, 249, 0)');
-            windshieldGrad.addColorStop(0.35, `rgba(226, 236, 248, ${a1})`);
-            windshieldGrad.addColorStop(0.7, `rgba(241, 247, 255, ${a2})`);
-            windshieldGrad.addColorStop(1.0, `rgba(248, 250, 252, ${a3})`);
-          } else if (isFogDom) {
-            const fogAlpha = Math.min(1.0, Math.max(0.0, levelFactor * 1.2));
-            const a1 = (fogAlpha * 0.65).toFixed(3);
-            const a2 = (fogAlpha * 0.95).toFixed(3);
-            const a3 = fogAlpha.toFixed(3);
-            // Dynamic white-out/gray-out fog
-            windshieldGrad.addColorStop(0, 'rgba(235, 244, 255, 0)');
-            windshieldGrad.addColorStop(0.35, `rgba(215, 228, 242, ${a1})`);
-            windshieldGrad.addColorStop(0.7, `rgba(195, 210, 226, ${a2})`);
-            windshieldGrad.addColorStop(1.0, `rgba(180, 196, 212, ${a3})`);
-          } else {
-            const rainAlpha = Math.min(1.0, Math.max(0.0, levelFactor * 1.25));
-            const a1 = (rainAlpha * 0.65).toFixed(3);
-            const a2 = (rainAlpha * 0.95).toFixed(3);
-            const a3 = rainAlpha.toFixed(3);
-            // Pitch-black storm blackout
-            windshieldGrad.addColorStop(0, 'rgba(15, 23, 42, 0)');
-            windshieldGrad.addColorStop(0.3, `rgba(10, 15, 28, ${a1})`);
-            windshieldGrad.addColorStop(0.65, `rgba(4, 6, 12, ${a2})`);
-            windshieldGrad.addColorStop(1.0, `rgba(0, 0, 0, ${a3})`);
-          }
+          const wsMode = isSnowDom ? 's' : isFogDom ? 'f' : 'r';
+          const windshieldGrad = this.getCachedRadial(
+            ctx,
+            width,
+            height,
+            `ws_${wsMode}_${qLevel}`,
+            innerR,
+            outerR,
+            isSnowDom
+              ? (() => {
+                  const snowAlpha = Math.min(1.0, Math.max(0.0, levelFactor * 1.18));
+                  return [
+                    [0, 'rgba(241, 245, 249, 0)'],
+                    [0.35, `rgba(226, 236, 248, ${(snowAlpha * 0.58).toFixed(3)})`],
+                    [0.7, `rgba(241, 247, 255, ${(snowAlpha * 0.90).toFixed(3)})`],
+                    [1.0, `rgba(248, 250, 252, ${snowAlpha.toFixed(3)})`],
+                  ] as const;
+                })()
+              : isFogDom
+                ? (() => {
+                    const fogAlpha = Math.min(1.0, Math.max(0.0, levelFactor * 1.2));
+                    return [
+                      [0, 'rgba(235, 244, 255, 0)'],
+                      [0.35, `rgba(215, 228, 242, ${(fogAlpha * 0.65).toFixed(3)})`],
+                      [0.7, `rgba(195, 210, 226, ${(fogAlpha * 0.95).toFixed(3)})`],
+                      [1.0, `rgba(180, 196, 212, ${fogAlpha.toFixed(3)})`],
+                    ] as const;
+                  })()
+                : (() => {
+                    const rainAlpha = Math.min(1.0, Math.max(0.0, levelFactor * 1.25));
+                    return [
+                      [0, 'rgba(15, 23, 42, 0)'],
+                      [0.3, `rgba(10, 15, 28, ${(rainAlpha * 0.65).toFixed(3)})`],
+                      [0.65, `rgba(4, 6, 12, ${(rainAlpha * 0.95).toFixed(3)})`],
+                      [1.0, `rgba(0, 0, 0, ${rainAlpha.toFixed(3)})`],
+                    ] as const;
+                  })()
+          );
 
           ctx.fillStyle = windshieldGrad;
           ctx.fillRect(0, 0, width, height);

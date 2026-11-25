@@ -553,10 +553,10 @@ export function drawCulinaryDishItem(
 
   let containerType = data.containerType;
   if (!containerType) {
-    if (itemId.startsWith('kitchen_pot_') || itemId === 'pot_clay_medium') containerType = 'pot';
-    else if (itemId.startsWith('kitchen_pan_')) containerType = 'pan';
-    else if (itemId.startsWith('kitchen_bowl_') || itemId === 'soup_bowl_empty') containerType = 'bowl';
-    else if (itemId.startsWith('kitchen_plate_')) containerType = 'plate';
+    if (itemId === 'pot' || itemId.startsWith('kitchen_pot_') || itemId === 'pot_clay_medium') containerType = 'pot';
+    else if (itemId === 'frying_pan' || itemId === 'saute_pan' || itemId.startsWith('kitchen_pan_')) containerType = 'pan';
+    else if (itemId === 'bowl' || itemId.startsWith('kitchen_bowl_') || itemId === 'soup_bowl_empty') containerType = 'bowl';
+    else if (itemId === 'plate' || itemId.startsWith('kitchen_plate_')) containerType = 'plate';
     else if (isMix) containerType = 'bowl';
     else if (isWorkpiece) containerType = 'board';
     else if (dishType === 'soup') containerType = 'pot';

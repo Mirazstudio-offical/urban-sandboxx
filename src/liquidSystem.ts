@@ -2916,9 +2916,35 @@ export interface ContainerDefConfig {
   defaultVisuals?: ContainerVisualAttributes;
 }
 
+const LEGACY_KITCHENWARE_CONTAINER_ALIASES: Record<string, string> = {
+  kitchen_pot_enamel: 'pot',
+  kitchen_pot_steel: 'pot',
+  kitchen_pot_aluminum: 'pot',
+  kitchen_pot_cast_iron: 'pot',
+  kitchen_kettle_enamel: 'kettle',
+  kitchen_kettle_steel: 'kettle',
+  kitchen_kettle_electric: 'kettle',
+  kitchen_kettle_clay: 'kettle',
+  kitchen_pan_cast_iron: 'frying_pan',
+  kitchen_pan_teflon: 'frying_pan',
+  kitchen_plate_ceramic: 'plate',
+  kitchen_plate_porcelain: 'plate',
+  kitchen_plate_enamel: 'bowl',
+  kitchen_bowl_wooden: 'bowl',
+  soup_bowl: 'bowl',
+  soup_bowl_empty: 'bowl',
+  kitchen_mug_ceramic: 'mug',
+  kitchen_mug_enamel: 'mug',
+  kitchen_mug_glass: 'mug',
+  glass_mug: 'mug',
+  kitchen_cup_porcelain: 'cup'
+};
+
 export function getContainerConfig(itemId: string | undefined | null): ContainerDefConfig | undefined {
   if (!itemId) return undefined;
-  return CONTAINER_CONFIGS[itemId] || CONTAINER_CONFIGS[itemId.replace(/_open$/, '')];
+  const clean = itemId.replace(/_open$/, '');
+  const canonical = LEGACY_KITCHENWARE_CONTAINER_ALIASES[clean] || clean;
+  return CONTAINER_CONFIGS[itemId] || CONTAINER_CONFIGS[clean] || CONTAINER_CONFIGS[canonical];
 }
 
 export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
@@ -3029,18 +3055,6 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'CupSoda',
     descriptionRu: 'Одноразовый бумажный стаканчик для кофе, чая или воды.',
     descriptionEn: 'Disposable paper cup for beverages (250 ml).'
-  },
-  glass_mug: {
-    itemId: 'glass_mug',
-    name: 'Glass Mug (0.35L)',
-    nameRu: 'Стеклянная кружка 0.35л',
-    maxMl: 350,
-    emptyWeightKg: 0.28,
-    emptyVolumeL: 0.4,
-    category: 'gear',
-    icon: 'Coffee',
-    descriptionRu: 'Увесистая стеклянная чайная кружка объемом 350 мл.',
-    descriptionEn: 'Heavy glass mug for tea and beverages (350 ml).'
   },
   can_alu_330: {
     itemId: 'can_alu_330',
@@ -3567,20 +3581,6 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     descriptionRu: 'Компактная картонная коробочка на 1 литр для мелких предметов, чая или выпечки.',
     descriptionEn: 'Small 1L cardboard box for small items, tea, or meals.'
   },
-  soup_bowl: {
-    itemId: 'soup_bowl',
-    name: 'Soup Bowl (0.5L)',
-    nameRu: 'Суповая пиала',
-    maxMl: 500,
-    emptyWeightKg: 0.20,
-    emptyVolumeL: 0.6,
-    category: 'food',
-    icon: 'Utensils',
-    descriptionRu: 'Глубокая керамическая суповая тарелка-пиала для горячего бульона, рагу и ухи.',
-    descriptionEn: 'Deep ceramic soup bowl for hot broths, stews, and soups.',
-    defaultLiquidId: null,
-    defaultAmountMl: 0
-  },
   grain_pack_pouch: {
     itemId: 'grain_pack_pouch',
     name: 'Grocery Grain Pouch (1.0L)',
@@ -3715,230 +3715,118 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     requiresOpening: true,
     isSealedByDefault: true
   },
-  // === KITCHEN COOKWARE & TABLEWARE (HYBRID LIQUID + SOLID CONTAINERS) ===
-  kitchen_pot_enamel: {
-    itemId: 'kitchen_pot_enamel',
-    name: 'Enamel Pot (4.0L)',
-    nameRu: 'Эмалированная кастрюля 4.0л',
-    maxMl: 4000,
-    emptyWeightKg: 1.2,
-    emptyVolumeL: 4.5,
-    category: 'gear',
-    icon: 'Utensils',
-    descriptionRu: 'Эмалированная кастрюля на 4 литра. Вмещает и жидкости, и продукты в едином объёме — идеально для супов, варки и замачивания.',
-    descriptionEn: '4.0L enamel cooking pot supporting both liquids and solid ingredients in shared volume.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 2.5
-  },
-  kitchen_pot_steel: {
-    itemId: 'kitchen_pot_steel',
-    name: 'Stainless Steel Pot (4.5L)',
-    nameRu: 'Стальная кастрюля 4.5л',
-    maxMl: 4500,
-    emptyWeightKg: 1.5,
-    emptyVolumeL: 5.0,
-    category: 'gear',
-    icon: 'Utensils',
-    descriptionRu: 'Кастрюля из нержавеющей стали на 4.5 литра для варки, настаивания и хранения жидкостей с продуктами.',
-    descriptionEn: '4.5L stainless steel pot for liquids and solid ingredients.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 2.8
-  },
-  kitchen_pot_aluminum: {
-    itemId: 'kitchen_pot_aluminum',
-    name: 'Aluminum Pot (3.5L)',
-    nameRu: 'Алюминиевая кастрюля 3.5л',
+  // === UNIFIED KITCHENWARE & TABLEWARE (HYBRID LIQUID + SOLID CONTAINERS) ===
+  pot: {
+    itemId: 'pot',
+    name: 'Pot',
+    nameRu: 'Кастрюля',
     maxMl: 3500,
-    emptyWeightKg: 0.8,
+    emptyWeightKg: 1.35,
     emptyVolumeL: 4.0,
     category: 'gear',
     icon: 'Utensils',
-    descriptionRu: 'Лёгкая алюминиевая кастрюля на 3.5 литра с общим объёмом под воду и продукты.',
-    descriptionEn: '3.5L aluminum pot for liquids and solid foods.',
+    descriptionRu: 'Кухонная кастрюля для варки, тушения и хранения жидкостей и продуктов в едином объёме.',
+    descriptionEn: 'Cooking pot supporting both liquids and solid ingredients in shared volume.',
     supportsHybridContents: true,
-    maxItemVolumeL: 2.2
+    maxItemVolumeL: 2.5
   },
-  kitchen_pot_cast_iron: {
-    itemId: 'kitchen_pot_cast_iron',
-    name: 'Cast Iron Cauldron (5.0L)',
-    nameRu: 'Чугунный казан 5.0л',
-    maxMl: 5000,
-    emptyWeightKg: 3.8,
-    emptyVolumeL: 5.6,
+  saute_pan: {
+    itemId: 'saute_pan',
+    name: 'Sauté Pan',
+    nameRu: 'Сотейник',
+    maxMl: 2400,
+    emptyWeightKg: 1.15,
+    emptyVolumeL: 2.8,
     category: 'gear',
     icon: 'Utensils',
-    descriptionRu: 'Толстостенный чугунный казан на 5 литров для тушения, плова, супов и длительного томления.',
-    descriptionEn: '5.0L thick-walled cast iron cauldron pot.',
+    descriptionRu: 'Глубокий сотейник с высокими прямыми бортами и длинной ручкой для пассерования, тушения и соусов.',
+    descriptionEn: 'Deep straight-walled sauté pan for searing, braising, and sauces.',
     supportsHybridContents: true,
-    maxItemVolumeL: 3.2
+    maxItemVolumeL: 1.8
   },
-  kitchen_kettle_enamel: {
-    itemId: 'kitchen_kettle_enamel',
-    name: 'Enamel Kettle (2.5L)',
-    nameRu: 'Эмалированный чайник 2.5л',
-    maxMl: 2500,
-    emptyWeightKg: 1.1,
-    emptyVolumeL: 2.9,
-    category: 'gear',
-    icon: 'Coffee',
-    descriptionRu: 'Классический эмалированный чайник на 2.5 литра. Подходит для воды, чая и заваривания трав или ягод.',
-    descriptionEn: '2.5L stovetop enamel kettle.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 0.5
-  },
-  kitchen_kettle_steel: {
-    itemId: 'kitchen_kettle_steel',
-    name: 'Steel Kettle (2.2L)',
-    nameRu: 'Стальной чайник 2.2л',
-    maxMl: 2200,
-    emptyWeightKg: 1.3,
-    emptyVolumeL: 2.6,
-    category: 'gear',
-    icon: 'Coffee',
-    descriptionRu: 'Чайник из нержавеющей стали на 2.2 литра со свистком.',
-    descriptionEn: '2.2L steel whistling kettle.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 0.45
-  },
-  kitchen_kettle_electric: {
-    itemId: 'kitchen_kettle_electric',
-    name: 'Electric Kettle (1.7L)',
-    nameRu: 'Электрический чайник 1.7л',
-    maxMl: 1700,
-    emptyWeightKg: 1.2,
-    emptyVolumeL: 2.0,
-    category: 'gear',
-    icon: 'Coffee',
-    descriptionRu: 'Стеклянный электрочайник на 1.7 литра для быстрого кипячения воды и заваривания.',
-    descriptionEn: '1.7L glass electric kettle.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 0.45
-  },
-  kitchen_kettle_clay: {
-    itemId: 'kitchen_kettle_clay',
-    name: 'Clay Teapot (0.8L)',
-    nameRu: 'Глиняный заварочный чайник 0.8л',
-    maxMl: 800,
-    emptyWeightKg: 0.6,
-    emptyVolumeL: 0.95,
-    category: 'gear',
-    icon: 'Coffee',
-    descriptionRu: 'Глиняный заварочный чайник на 0.8 литра для заваривания чая, трав и ягод.',
-    descriptionEn: '0.8L terracotta teapot.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 0.35
-  },
-  kitchen_pan_cast_iron: {
-    itemId: 'kitchen_pan_cast_iron',
-    name: 'Cast Iron Skillet (1.8L)',
-    nameRu: 'Чугунная сковорода 1.8л',
+  frying_pan: {
+    itemId: 'frying_pan',
+    name: 'Frying Pan',
+    nameRu: 'Сковорода',
     maxMl: 1800,
-    emptyWeightKg: 2.5,
+    emptyWeightKg: 1.6,
     emptyVolumeL: 2.2,
     category: 'gear',
     icon: 'Utensils',
-    descriptionRu: 'Чугунная сковорода вместимостью 1.8 литра — вмещает масло, соус и продукты одновременно.',
-    descriptionEn: '1.8L cast iron skillet.',
+    descriptionRu: 'Кухонная сковорода для жарки и тушения — вмещает масло, соус и продукты одновременно.',
+    descriptionEn: 'Frying skillet supporting oils, sauces, and solid ingredients.',
     supportsHybridContents: true,
     maxItemVolumeL: 1.4
   },
-  kitchen_pan_teflon: {
-    itemId: 'kitchen_pan_teflon',
-    name: 'Teflon Skillet (1.5L)',
-    nameRu: 'Тефлоновая сковорода 1.5л',
-    maxMl: 1500,
-    emptyWeightKg: 0.9,
-    emptyVolumeL: 1.9,
+  kettle: {
+    itemId: 'kettle',
+    name: 'Kettle',
+    nameRu: 'Чайник',
+    maxMl: 2200,
+    emptyWeightKg: 1.15,
+    emptyVolumeL: 2.6,
     category: 'gear',
-    icon: 'Utensils',
-    descriptionRu: 'Антипригарная сковорода вместимостью 1.5 литра для масла, соусов и продуктов.',
-    descriptionEn: '1.5L non-stick skillet.',
+    icon: 'Coffee',
+    descriptionRu: 'Кухонный чайник для кипячения воды и заваривания чая, трав или ягод.',
+    descriptionEn: 'Kitchen kettle for boiling water and brewing tea.',
     supportsHybridContents: true,
-    maxItemVolumeL: 1.2
+    maxItemVolumeL: 0.45
   },
-  kitchen_plate_enamel: {
-    itemId: 'kitchen_plate_enamel',
-    name: 'Enamel Deep Bowl (0.7L)',
-    nameRu: 'Эмалированная миска 0.7л',
-    maxMl: 700,
+  plate: {
+    itemId: 'plate',
+    name: 'Plate',
+    nameRu: 'Тарелка',
+    maxMl: 450,
+    emptyWeightKg: 0.38,
+    emptyVolumeL: 0.55,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Столовая тарелка для подачи готовых блюд, гарниров, салатов и соусов.',
+    descriptionEn: 'Dinner plate for serving dishes and meals.',
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.4
+  },
+  bowl: {
+    itemId: 'bowl',
+    name: 'Bowl',
+    nameRu: 'Миска',
+    maxMl: 650,
     emptyWeightKg: 0.25,
-    emptyVolumeL: 0.8,
+    emptyVolumeL: 0.75,
     category: 'food',
     icon: 'Utensils',
-    descriptionRu: 'Глубокая эмалированная миска на 0.7 литра для супов, салатов, овощей и замачивания продуктов.',
-    descriptionEn: '0.7L deep enamel bowl for soups and solid foods.',
+    descriptionRu: 'Глубокая миска для супов, бульонов, салатов, каш и смешивания продуктов.',
+    descriptionEn: 'Deep bowl for soups, broths, salads, and mixing.',
     supportsHybridContents: true,
-    maxItemVolumeL: 0.65
+    maxItemVolumeL: 0.6
   },
-  kitchen_bowl_wooden: {
-    itemId: 'kitchen_bowl_wooden',
-    name: 'Wooden Bowl (0.6L)',
-    nameRu: 'Деревянная пиала 0.6л',
-    maxMl: 600,
-    emptyWeightKg: 0.2,
-    emptyVolumeL: 0.7,
-    category: 'food',
-    icon: 'Utensils',
-    descriptionRu: 'Глубокая деревянная пиала на 0.6 литра для блюд, бульонов и овощей.',
-    descriptionEn: '0.6L carved wooden bowl.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 0.55
-  },
-  kitchen_mug_ceramic: {
-    itemId: 'kitchen_mug_ceramic',
-    name: 'Ceramic Mug (0.35L)',
-    nameRu: 'Керамическая кружка 0.35л',
+  mug: {
+    itemId: 'mug',
+    name: 'Mug',
+    nameRu: 'Кружка',
     maxMl: 350,
-    emptyWeightKg: 0.3,
+    emptyWeightKg: 0.28,
     emptyVolumeL: 0.4,
     category: 'drink',
     icon: 'Coffee',
-    descriptionRu: 'Керамическая кружка на 350 мл — можно налить напиток и добавить ягоды, лимон, мёд или кусочки продуктов.',
-    descriptionEn: '350ml ceramic mug.',
+    descriptionRu: 'Кружка для горячих и холодных напитков, чая, кофе и заваривания.',
+    descriptionEn: 'Everyday mug for tea, coffee, and drinks.',
     supportsHybridContents: true,
     maxItemVolumeL: 0.28
   },
-  kitchen_mug_enamel: {
-    itemId: 'kitchen_mug_enamel',
-    name: 'Enamel Mug (0.4L)',
-    nameRu: 'Эмалированная кружка 0.4л',
-    maxMl: 400,
-    emptyWeightKg: 0.15,
-    emptyVolumeL: 0.45,
+  cup: {
+    itemId: 'cup',
+    name: 'Cup',
+    nameRu: 'Чашка',
+    maxMl: 220,
+    emptyWeightKg: 0.22,
+    emptyVolumeL: 0.28,
     category: 'drink',
     icon: 'Coffee',
-    descriptionRu: 'Походная эмалированная кружка на 400 мл для напитков, супа и заваривания.',
-    descriptionEn: '400ml camping enamel mug.',
+    descriptionRu: 'Изящная чашка для чая, эспрессо и ароматных напитков.',
+    descriptionEn: 'Delicate tea or coffee cup.',
     supportsHybridContents: true,
-    maxItemVolumeL: 0.32
-  },
-  kitchen_mug_glass: {
-    itemId: 'kitchen_mug_glass',
-    name: 'Glass Mug (0.35L)',
-    nameRu: 'Стеклянная кружка 0.35л',
-    maxMl: 350,
-    emptyWeightKg: 0.35,
-    emptyVolumeL: 0.4,
-    category: 'drink',
-    icon: 'Coffee',
-    descriptionRu: 'Толстостенная стеклянная кружка на 350 мл.',
-    descriptionEn: '350ml glass mug.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 0.28
-  },
-  kitchen_cup_porcelain: {
-    itemId: 'kitchen_cup_porcelain',
-    name: 'Porcelain Tea Cup (0.25L)',
-    nameRu: 'Фарфоровая чашка 0.25л',
-    maxMl: 250,
-    emptyWeightKg: 0.25,
-    emptyVolumeL: 0.3,
-    category: 'drink',
-    icon: 'Coffee',
-    descriptionRu: 'Тонкостенная чайная чашка на 250 мл.',
-    descriptionEn: '250ml porcelain cup.',
-    supportsHybridContents: true,
-    maxItemVolumeL: 0.2
+    maxItemVolumeL: 0.18
   }
 };
 
@@ -3991,8 +3879,13 @@ export function getHybridMaxItemVolumeL(itemId: string | undefined | null, maxMl
   const cfg = getContainerConfig(cleanId);
   if (cfg?.maxItemVolumeL !== undefined) return cfg.maxItemVolumeL;
 
-  // Wide-mouth vessels (pots, bowls, jars, mugs, cups, open tin cans)
+  // Wide-mouth vessels (pots, sauté pans, frying pans, bowls, plates)
   if (
+    cleanId === 'pot' ||
+    cleanId === 'saute_pan' ||
+    cleanId === 'frying_pan' ||
+    cleanId === 'bowl' ||
+    cleanId === 'plate' ||
     cleanId.startsWith('pot_') ||
     cleanId.startsWith('kitchen_pot_') ||
     cleanId.startsWith('kitchen_pan_') ||
@@ -4003,6 +3896,9 @@ export function getHybridMaxItemVolumeL(itemId: string | undefined | null, maxMl
     return Number(Math.min(capL, Math.max(0.35, capL * 0.85)).toFixed(3));
   }
   if (
+    cleanId === 'mug' ||
+    cleanId === 'cup' ||
+    cleanId === 'kettle' ||
     cleanId.startsWith('jar_glass_') ||
     cleanId.startsWith('can_metal_') ||
     cleanId.startsWith('cup_plastic_') ||

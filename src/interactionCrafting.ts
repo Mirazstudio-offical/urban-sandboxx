@@ -222,20 +222,17 @@ const LEGACY_CONTAINER_BRIDGES: Record<string, LegacyContainerBridge> = {
     baseItemNameRu: 'Походная фляга (0.75 л)',
     emptyItemId: 'camp_flask_empty',
   },
-  soup_bowl: {
-    maxMl: 500,
+  bowl: {
+    maxMl: 650,
     emptyWeightKg: 0.25,
-    baseItemNameRu: 'Суповая миска (0.5 л)',
-    emptyItemId: 'soup_bowl_empty',
-    defaultLiquidId: 'broth',
-    defaultCurrentMl: 450,
-    defaultTemperatureC: 65,
+    baseItemNameRu: 'Миска',
+    emptyItemId: 'bowl',
   },
-  soup_bowl_empty: {
-    maxMl: 500,
-    emptyWeightKg: 0.25,
-    baseItemNameRu: 'Суповая миска (0.5 л)',
-    emptyItemId: 'soup_bowl_empty',
+  plate: {
+    maxMl: 450,
+    emptyWeightKg: 0.38,
+    baseItemNameRu: 'Тарелка',
+    emptyItemId: 'plate',
   },
   gasoline_95: {
     maxMl: 20000,
@@ -278,65 +275,41 @@ const LEGACY_CONTAINER_BRIDGES: Record<string, LegacyContainerBridge> = {
     isGranular: true,
     emptyItemId: 'sack_empty',
   },
-  kitchen_mug_ceramic: {
+  mug: {
     maxMl: 350,
     emptyWeightKg: 0.28,
-    baseItemNameRu: 'Керамическая кружка (0.35 л)',
-    emptyItemId: 'kitchen_mug_ceramic',
+    baseItemNameRu: 'Кружка',
+    emptyItemId: 'mug',
   },
-  kitchen_mug_enamel: {
-    maxMl: 400,
-    emptyWeightKg: 0.2,
-    baseItemNameRu: 'Эмалированная кружка (0.4 л)',
-    emptyItemId: 'kitchen_mug_enamel',
-  },
-  kitchen_mug_glass: {
-    maxMl: 350,
-    emptyWeightKg: 0.25,
-    baseItemNameRu: 'Стеклянная кружка (0.35 л)',
-    emptyItemId: 'kitchen_mug_glass',
-  },
-  kitchen_cup_porcelain: {
+  cup: {
     maxMl: 220,
-    emptyWeightKg: 0.16,
-    baseItemNameRu: 'Фарфоровая чашка (0.22 л)',
-    emptyItemId: 'kitchen_cup_porcelain',
+    emptyWeightKg: 0.22,
+    baseItemNameRu: 'Чашка',
+    emptyItemId: 'cup',
   },
-  kitchen_pot_enamel: {
-    maxMl: 3000,
-    emptyWeightKg: 1.1,
-    baseItemNameRu: 'Эмалированная кастрюля (3 л)',
-    emptyItemId: 'kitchen_pot_enamel',
-  },
-  kitchen_pot_steel: {
+  pot: {
     maxMl: 3500,
-    emptyWeightKg: 1.2,
-    baseItemNameRu: 'Стальная кастрюля (3.5 л)',
-    emptyItemId: 'kitchen_pot_steel',
+    emptyWeightKg: 1.35,
+    baseItemNameRu: 'Кастрюля',
+    emptyItemId: 'pot',
   },
-  kitchen_pot_aluminum: {
-    maxMl: 2500,
-    emptyWeightKg: 0.7,
-    baseItemNameRu: 'Алюминиевая кастрюля (2.5 л)',
-    emptyItemId: 'kitchen_pot_aluminum',
+  saute_pan: {
+    maxMl: 2400,
+    emptyWeightKg: 1.15,
+    baseItemNameRu: 'Сотейник',
+    emptyItemId: 'saute_pan',
   },
-  kitchen_pot_cast_iron: {
-    maxMl: 4000,
-    emptyWeightKg: 3.2,
-    baseItemNameRu: 'Чугунный котелок (4 л)',
-    emptyItemId: 'kitchen_pot_cast_iron',
+  frying_pan: {
+    maxMl: 1800,
+    emptyWeightKg: 1.6,
+    baseItemNameRu: 'Сковорода',
+    emptyItemId: 'frying_pan',
   },
-  kitchen_kettle_enamel: {
-    maxMl: 2000,
-    emptyWeightKg: 0.85,
-    baseItemNameRu: 'Эмалированный чайник (2 л)',
-    emptyItemId: 'kitchen_kettle_enamel',
-  },
-  kitchen_kettle_electric: {
-    maxMl: 1700,
-    emptyWeightKg: 0.9,
-    baseItemNameRu: 'Электрочайник (1.7 л)',
-    emptyItemId: 'kitchen_kettle_electric',
+  kettle: {
+    maxMl: 2200,
+    emptyWeightKg: 1.15,
+    baseItemNameRu: 'Чайник',
+    emptyItemId: 'kettle',
   },
   tin_can_empty: {
     maxMl: 400,
@@ -1149,6 +1122,7 @@ export function tryTransferDiscreteTopToBottom(
 
 const KNIFE_IDS = [
   'pocket_knife',
+  'kitchen_knife',
   'kitchen_knife_chef',
   'kitchen_knife_bread',
   'kitchen_knife_paring',
@@ -1199,7 +1173,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
         rowHint: 'top',
       },
       {
-        itemIds: ['cup_disposable', 'bottle_empty', 'glass_mug', 'sack_empty', 'canister_empty'],
+        itemIds: ['cup_disposable', 'bottle_empty', 'mug', 'sack_empty', 'canister_empty'],
         label: 'Нижний ряд: Приёмная тара (стакан, кружка, пустая бутылка, мешок)',
         rowHint: 'bottom',
       },
@@ -1218,13 +1192,13 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     actionLabel: 'Смешать напиток',
     ingredients: [
       {
-        itemIds: ['coffee', 'thermos', 'glass_mug', 'paper_cup'],
+        itemIds: ['coffee', 'thermos', 'mug', 'paper_cup'],
         liquidIds: ['coffee'],
         label: 'Верх: Тара с кофе',
         rowHint: 'top',
       },
       {
-        itemIds: ['bottle_glass_large', 'glass_mug', 'paper_cup', 'can_metal_medium_open'],
+        itemIds: ['bottle_glass_large', 'mug', 'paper_cup', 'can_metal_medium_open'],
         liquidIds: ['milk', 'cream_heavy', 'condensed_milk'],
         label: 'Низ: Ёмкость с молоком / сливками / сгущёнкой',
         rowHint: 'bottom',
@@ -1244,13 +1218,13 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     actionLabel: 'Смешать чай',
     ingredients: [
       {
-        itemIds: ['jar_glass_medium', 'jar_glass_large', 'paper_cup', 'glass_mug'],
+        itemIds: ['jar_glass_medium', 'jar_glass_large', 'paper_cup', 'mug'],
         liquidIds: ['honey', 'jam', 'sugar'],
         label: 'Верх: Мёд / Варенье / Сахар',
         rowHint: 'top',
       },
       {
-        itemIds: ['thermos', 'glass_mug', 'paper_cup', 'kitchen_mug_ceramic'],
+        itemIds: ['thermos', 'mug', 'cup', 'paper_cup'],
         liquidIds: ['tea'],
         label: 'Низ: Кружка или термос с чаем',
         rowHint: 'bottom',

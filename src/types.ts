@@ -1439,6 +1439,7 @@ export interface ShopInnerItemSpec {
   gummyAttributes?: any;
   pelmenAttributes?: any;
   chocolateAttributes?: any;
+  kitchenwareAttributes?: Partial<KitchenwareAttributes>;
   attributes?: UnifiedAttributes;
 }
 
@@ -1459,6 +1460,7 @@ export interface MapShopCatalogEntry {
   effectText?: string;
   contents?: ShopInnerItemSpec[];
   fluidStorage?: ShopFluidStorageSpec;
+  kitchenwareAttributes?: Partial<KitchenwareAttributes>;
   isOpen?: boolean;
   labelColor?: string;
   containerTintColor?: string;
@@ -2250,6 +2252,93 @@ export interface PelmenAttributes {
   butterGlaze?: boolean;
 }
 
+export type KitchenwareKind =
+  | 'pot'
+  | 'saute_pan'
+  | 'frying_pan'
+  | 'kettle'
+  | 'plate'
+  | 'bowl'
+  | 'mug'
+  | 'cup'
+  | 'spoon'
+  | 'fork'
+  | 'kitchen_knife';
+
+export type KitchenwareMaterial =
+  | 'stainless_steel'
+  | 'enamel_steel'
+  | 'aluminum'
+  | 'nonstick_aluminum'
+  | 'cast_iron'
+  | 'ceramic'
+  | 'porcelain'
+  | 'terracotta_clay'
+  | 'glass'
+  | 'wood'
+  | 'silver'
+  | 'copper';
+
+export type KitchenwarePattern =
+  | 'none'
+  | 'daisies'
+  | 'gzhel'
+  | 'khokhloma'
+  | 'gold_rim'
+  | 'blue_rim'
+  | 'polka_dots'
+  | 'stripes'
+  | 'floral'
+  | 'wood_grain'
+  | 'engraved'
+  | 'faceted'
+  | 'marbled'
+  | 'brushed'
+  | 'glaze_drip';
+
+export interface KitchenwareAttributes {
+  /** Базовый вид посуды или столового прибора */
+  kind: KitchenwareKind;
+  /** Материал изготовления (код) */
+  material: KitchenwareMaterial;
+  /** Из чего сделана посуда (на русском языке) */
+  materialRu: string;
+  /** Покрытие поверхности (эмаль, тефлон, глазурь, без покрытия и т.д.) */
+  coatingRu?: string;
+  /** Вмещаемый объём в миллилитрах (0 для приборов без ёмкости, например вилка/нож) */
+  capacityMl: number;
+  /** Код геометрической формы для 2D-рендера */
+  shape: string;
+  /** Название формы на русском языке */
+  shapeNameRu: string;
+  /** Основной цвет в hex */
+  color: string;
+  /** Название цвета на русском языке */
+  colorNameRu: string;
+  /** Дополнительный акцентный цвет (ручки, ободок, крышка) в hex */
+  accentColor?: string;
+  /** Узор / орнамент (код) */
+  pattern: KitchenwarePattern;
+  /** Название узора на русском языке */
+  patternNameRu: string;
+  /** Цвет узора в hex */
+  patternColor?: string;
+  /** Описание крышки (если есть) */
+  lidRu?: string;
+  /** Описание ручки / рукояти */
+  handleRu?: string;
+  /** Дополнительные особенности (со свистком, электрический, с блюдцем, 4 зубца и т.д.) */
+  featureRu?: string;
+  /** Электрический прибор (например электрочайник) */
+  isElectric?: boolean;
+  /** Наличие свистка (для чайника) */
+  hasWhistle?: boolean;
+  /** Наличие блюдца (для чашки) */
+  hasSaucer?: boolean;
+  /** Габарит (диаметр или длина в см) */
+  dimensionCm?: number;
+}
+
 export interface ContainerVisualAttributes {
   /** Визуальная форма корпуса банки или бутылки (не меняет объём, вес и характеристики) */
   shape: ContainerVisualShape;
@@ -2396,6 +2485,15 @@ export interface UnifiedAttributes {
   physicalFormRu?: string;
   /** Локализованное название цвета вещества */
   substanceColorRu?: string;
+  /** Атрибуты посуды и столовых приборов (материал, объём, форма, цвет, узор, крышка, ручка) */
+  patternRu?: string;
+  patternColor?: string;
+  coatingRu?: string;
+  capacityMl?: number;
+  lidRu?: string;
+  handleRu?: string;
+  featureRu?: string;
+  dimensionCm?: number;
 }
 
 export interface CulinaryItemData {
@@ -2501,6 +2599,8 @@ export interface InventoryItem {
   pelmenAttributes?: PelmenAttributes;
   /** Атрибуты шоколадки (форма, размер, материал и цвет внешней/внутренней части, состав) */
   chocolateAttributes?: ChocolateAttributes;
+  /** Атрибуты посуды и столовых приборов (материал, объём, форма, цвет, узор) */
+  kitchenwareAttributes?: KitchenwareAttributes;
   // Nutrition & Biochemical Culinary Simulation
   nutrients?: {
     calories: number; // kcal

@@ -106,9 +106,9 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const carriedCookwareList = safeInventory.filter(i => isCookwareItem(i.itemId));
   const foodItems = safeInventory.filter(i => (i.category === 'food' || i.category === 'drink' || i.itemId === 'prep_workpiece' || i.itemId === 'food_mix') && !i.itemId.startsWith('paper_packaging'));
 
-  const availablePans = carriedCookwareList.filter(c => c.itemId.startsWith('kitchen_pan_'));
-  const availablePots = carriedCookwareList.filter(c => c.itemId.startsWith('kitchen_pot_') || c.itemId === 'pot_clay_medium');
-  const availableBowls = carriedPlates.filter(c => c.itemId.startsWith('kitchen_bowl_') || c.itemId === 'soup_bowl_empty');
+  const availablePans = carriedCookwareList.filter(c => c.itemId === 'frying_pan' || c.itemId === 'saute_pan' || c.itemId.startsWith('kitchen_pan_'));
+  const availablePots = carriedCookwareList.filter(c => c.itemId === 'pot' || c.itemId.startsWith('kitchen_pot_') || c.itemId === 'pot_clay_medium');
+  const availableBowls = carriedPlates.filter(c => c.itemId === 'bowl' || c.itemId.startsWith('kitchen_bowl_') || c.itemId === 'soup_bowl_empty');
 
   let hasNearbySink = false;
   if (player.insideBuildingId && world?.buildings) {

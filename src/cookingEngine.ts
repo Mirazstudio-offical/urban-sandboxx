@@ -79,6 +79,11 @@ export interface CookwareVessel {
 export function isCookwareItem(itemId?: string | null): boolean {
   if (!itemId) return false;
   return (
+    itemId === 'frying_pan' ||
+    itemId === 'saute_pan' ||
+    itemId === 'pot' ||
+    itemId === 'kettle' ||
+    itemId === 'bowl' ||
     itemId.startsWith('kitchen_pan_') ||
     itemId.startsWith('kitchen_pot_') ||
     itemId.startsWith('kitchen_kettle_') ||
@@ -91,7 +96,7 @@ export function isCookwareItem(itemId?: string | null): boolean {
 
 export function isKnifeItem(itemId?: string | null): boolean {
   if (!itemId) return false;
-  return itemId === 'kitchen_knife_chef' || itemId === 'pocket_knife';
+  return itemId === 'kitchen_knife' || itemId === 'kitchen_knife_chef' || itemId === 'pocket_knife';
 }
 
 export function isSaltItem(itemId?: string | null): boolean {
@@ -115,6 +120,8 @@ export function isOilOrFatItem(itemId?: string | null): boolean {
 export function isPlateOrBowlItem(itemId?: string | null): boolean {
   if (!itemId) return false;
   return (
+    itemId === 'plate' ||
+    itemId === 'bowl' ||
     itemId.startsWith('kitchen_plate_') ||
     itemId.startsWith('kitchen_bowl_') ||
     itemId === 'soup_bowl_empty' ||
@@ -291,21 +298,22 @@ export function createStoveCookwareVessel(placedCookwareItem?: InventoryItem): C
   let capacityMl = 0;
 
   if (placedCookwareItem) {
-    if (placedCookwareItem.itemId.startsWith('kitchen_pan_')) {
+    const attrCap = placedCookwareItem.kitchenwareAttributes?.capacityMl || placedCookwareItem.fluidStorage?.maxMl;
+    if (placedCookwareItem.itemId === 'frying_pan' || placedCookwareItem.itemId === 'saute_pan' || placedCookwareItem.itemId.startsWith('kitchen_pan_')) {
       vesselType = 'pan';
-      capacityMl = 2500;
+      capacityMl = attrCap || (placedCookwareItem.itemId === 'saute_pan' ? 2400 : 1800);
       nameRu = placedCookwareItem.nameRu;
-    } else if (placedCookwareItem.itemId.startsWith('kitchen_pot_')) {
+    } else if (placedCookwareItem.itemId === 'pot' || placedCookwareItem.itemId.startsWith('kitchen_pot_') || placedCookwareItem.itemId.startsWith('pot_clay_')) {
       vesselType = 'pot';
-      capacityMl = 4500;
+      capacityMl = attrCap || 3500;
       nameRu = placedCookwareItem.nameRu;
-    } else if (placedCookwareItem.itemId.startsWith('kitchen_kettle_')) {
+    } else if (placedCookwareItem.itemId === 'kettle' || placedCookwareItem.itemId.startsWith('kitchen_kettle_')) {
       vesselType = 'kettle';
-      capacityMl = 2200;
+      capacityMl = attrCap || 2200;
       nameRu = placedCookwareItem.nameRu;
-    } else if (placedCookwareItem.itemId.includes('bowl')) {
+    } else if (placedCookwareItem.itemId === 'bowl' || placedCookwareItem.itemId.includes('bowl')) {
       vesselType = 'bowl';
-      capacityMl = 2000;
+      capacityMl = attrCap || 650;
       nameRu = placedCookwareItem.nameRu;
     }
   }
@@ -429,7 +437,7 @@ export function cutIngredientAction(
   if (!hasKnife) {
     return {
       success: false,
-      message: 'У вас нет ножа! Для нарезки нужен кухонный нож шеф-повара или складной нож в инвентаре.'
+      message: 'У вас нет ножа. Для нарезки нужен кухонный нож или складной нож в инвентаре.'
     };
   }
 
@@ -921,7 +929,13 @@ export function finishCookwareToInventoryItem(
   }
 
   const containerType = platingItem 
-    ? (platingItem.itemId.startsWith('kitchen_pan_') ? 'pan' : (platingItem.itemId.startsWith('kitchen_pot_') || platingItem.itemId === 'pot_clay_medium' ? 'pot' : (platingItem.itemId.startsWith('kitchen_bowl_') || platingItem.itemId === 'soup_bowl_empty' ? 'bowl' : 'plate')))
+    ? (platingItem.itemId === 'frying_pan' || platingItem.itemId === 'saute_pan' || platingItem.itemId.startsWith('kitchen_pan_')
+        ? 'pan'
+        : (platingItem.itemId === 'pot' || platingItem.itemId.startsWith('kitchen_pot_') || platingItem.itemId === 'pot_clay_medium'
+            ? 'pot'
+            : (platingItem.itemId === 'bowl' || platingItem.itemId.startsWith('kitchen_bowl_') || platingItem.itemId === 'soup_bowl_empty'
+                ? 'bowl'
+                : 'plate')))
     : (vessel.vesselType === 'pan' ? 'pan' : (vessel.vesselType === 'pot' ? 'pot' : (vessel.vesselType === 'bowl' ? 'bowl' : 'plate')));
 
   const dishItem: InventoryItem = {
