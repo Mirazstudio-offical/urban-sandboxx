@@ -46,7 +46,9 @@ import {
   getContainerCapacityBreakdown,
   drainLiquidFromContainer,
   tryFillOrUseFluidContainer,
-  isFluidStorageDryForm
+  isFluidStorageDryForm,
+  getContainerLiquidThermalProfile,
+  getLiquidThermalPhaseLabelRu
 } from '../liquidSystem';
 import {
   InteractionSlotGrid4,
@@ -2273,6 +2275,46 @@ const InventoryModalContent: React.FC<{
                                   <span className="inv-kv-v mono">{thermalInfo.retentionText}</span>
                                 </div>
                               </div>
+                              {(() => {
+                                const liqProf = getContainerLiquidThermalProfile(selectedEntry.item);
+                                if (!liqProf) return null;
+                                const phaseRu = getLiquidThermalPhaseLabelRu(
+                                  selectedEntry.item.temperature ?? 20,
+                                  liqProf,
+                                  liqProf.liquidId
+                                );
+                                return (
+                                  <div className="inv-kv-grid inv-kv-g4">
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Кипение</span>
+                                      <span className="inv-kv-v mono">+{liqProf.boilingPointC}°C</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">{liqProf.liquidId === 'rendered_fat' ? 'Застыв.' : 'Замерз.'}</span>
+                                      <span className="inv-kv-v mono">
+                                        {liqProf.freezingPointC > 0 ? '+' : ''}
+                                        {liqProf.freezingPointC}°C
+                                      </span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">
+                                        {typeof liqProf.smokePointC === 'number' ? 'Дымление' : 'Нагрев'}
+                                      </span>
+                                      <span className="inv-kv-v mono">
+                                        {typeof liqProf.smokePointC === 'number'
+                                          ? `+${liqProf.smokePointC}°C`
+                                          : `×${(1 / Math.max(0.4, liqProf.specificHeatFactor)).toFixed(1)}`}
+                                      </span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">{phaseRu ? 'Фаза' : 'Испарение'}</span>
+                                      <span className="inv-kv-v mono">
+                                        {phaseRu || `${Math.round(liqProf.evaporationRate * 100)}%`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })()}

@@ -516,13 +516,38 @@ export function drawProceduralIngredient(
     }
   }
 
-  if (isBurnt) {
-    ctx.fillStyle = '#09090b';
-    for (let i = 0; i < 4; i++) {
+  const maillardLvl = Math.max(
+    ing.bioState?.maillard ?? 0,
+    isFried ? 0.55 : 0,
+    isBaked ? 0.5 : 0
+  );
+  const charLvl = Math.max(
+    ing.cookingAttributes?.charring ?? 0,
+    ing.bioState?.charring ?? 0
+  );
+
+  if (maillardLvl > 0.12 && charLvl < 0.75) {
+    const mAlpha = Math.min(0.45, (maillardLvl - 0.1) * 0.45);
+    ctx.fillStyle = `rgba(120, 53, 15, ${mAlpha.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 3.8, 2.8, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (charLvl > 0.18 || isBurnt) {
+    const cAlpha = Math.min(0.72, Math.max(isBurnt ? 0.42 : 0, (charLvl - 0.12) * 0.75));
+    ctx.fillStyle = `rgba(18, 14, 12, ${cAlpha.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 3.9, 2.9, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(9, 9, 11, ${Math.min(0.9, cAlpha + 0.25).toFixed(3)})`;
+    const spots = 3 + Math.floor(charLvl * 4);
+    for (let i = 0; i < spots; i++) {
       const cx = (hash01(seed, i * 2 + 30) - 0.5) * 4.5;
       const cy = (hash01(seed, i * 2 + 31) - 0.5) * 3.0;
       ctx.beginPath();
-      ctx.arc(cx, cy, 0.55, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 0.45 + charLvl * 0.35, 0, Math.PI * 2);
       ctx.fill();
     }
   }

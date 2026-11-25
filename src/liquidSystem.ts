@@ -101,6 +101,18 @@ export interface LiquidDef {
   stainType?: 'fuel' | 'oil' | 'sand' | 'water' | 'antifreeze';
 }
 
+export type LiquidCookingMedium = 'water' | 'oil' | 'alcohol' | 'sugar' | 'acid' | 'non_culinary' | 'granular';
+
+export interface LiquidThermalProfile {
+  boilingPointC: number;      // Boiling / vaporization plateau temperature (°C)
+  freezingPointC: number;     // Freezing / solidification point (°C)
+  smokePointC?: number;       // Smoke / thermal degradation point (°C) for oils, fats, sugars, fuels
+  specificHeatFactor: number; // Heat capacity relative to water (1.0 = water; ~0.48 = oil heats ~2x faster)
+  evaporationRate: number;    // Relative boil-off speed at/above boilingPointC (1.0 = water, 0.06 = oil, 2.1 = vodka)
+  microwaveFactor: number;    // Dielectric microwave heating efficiency (1.0 = water, 0.55 = oil)
+  cookingMedium: LiquidCookingMedium;
+}
+
 export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
   water: {
     id: 'water',
@@ -990,6 +1002,259 @@ export function isFluidStorageDryForm(
   if (storage.attributes?.physicalForm === 'dry') return true;
   const liq = LIQUID_REGISTRY[storage.liquidId as LiquidId];
   return Boolean(liq?.isGranular);
+}
+
+const GRANULAR_THERMAL_PROFILE: LiquidThermalProfile = {
+  boilingPointC: 260,
+  freezingPointC: -50,
+  specificHeatFactor: 0.45,
+  evaporationRate: 0,
+  microwaveFactor: 0.35,
+  cookingMedium: 'granular',
+};
+
+const DEFAULT_WATER_THERMAL_PROFILE: LiquidThermalProfile = {
+  boilingPointC: 100.0,
+  freezingPointC: 0.0,
+  specificHeatFactor: 1.0,
+  evaporationRate: 1.0,
+  microwaveFactor: 1.0,
+  cookingMedium: 'water',
+};
+
+export const LIQUID_THERMAL_PROFILES: Partial<Record<LiquidId, LiquidThermalProfile>> = {
+  // Water & water-based beverages
+  water:            { boilingPointC: 100.0, freezingPointC: 0.0,   specificHeatFactor: 1.00, evaporationRate: 1.00, microwaveFactor: 1.00, cookingMedium: 'water' },
+  tea:              { boilingPointC: 100.2, freezingPointC: -0.3,  specificHeatFactor: 0.99, evaporationRate: 1.00, microwaveFactor: 1.00, cookingMedium: 'water' },
+  coffee:           { boilingPointC: 100.3, freezingPointC: -0.4,  specificHeatFactor: 0.99, evaporationRate: 1.00, microwaveFactor: 1.00, cookingMedium: 'water' },
+  energy_drink:     { boilingPointC: 100.8, freezingPointC: -1.6,  specificHeatFactor: 0.95, evaporationRate: 1.04, microwaveFactor: 1.00, cookingMedium: 'water' },
+  cola:             { boilingPointC: 101.0, freezingPointC: -1.8,  specificHeatFactor: 0.95, evaporationRate: 1.05, microwaveFactor: 1.00, cookingMedium: 'water' },
+  juice:            { boilingPointC: 101.2, freezingPointC: -2.0,  specificHeatFactor: 0.94, evaporationRate: 0.96, microwaveFactor: 0.98, cookingMedium: 'water' },
+  kvas:             { boilingPointC: 99.0,  freezingPointC: -2.2,  specificHeatFactor: 0.96, evaporationRate: 1.08, microwaveFactor: 0.98, cookingMedium: 'water' },
+  milk:             { boilingPointC: 100.5, freezingPointC: -0.5,  smokePointC: 106, specificHeatFactor: 0.93, evaporationRate: 0.92, microwaveFactor: 0.96, cookingMedium: 'water' },
+  dairy_fermented:  { boilingPointC: 100.6, freezingPointC: -0.8,  smokePointC: 108, specificHeatFactor: 0.91, evaporationRate: 0.85, microwaveFactor: 0.94, cookingMedium: 'water' },
+
+  // Alcohols (lower boiling point, lower freezing point, faster evaporation)
+  beer:             { boilingPointC: 95.0,  freezingPointC: -2.5,  specificHeatFactor: 0.94, evaporationRate: 1.25, microwaveFactor: 0.95, cookingMedium: 'alcohol' },
+  wine:             { boilingPointC: 91.0,  freezingPointC: -5.5,  specificHeatFactor: 0.88, evaporationRate: 1.48, microwaveFactor: 0.92, cookingMedium: 'alcohol' },
+  vodka:            { boilingPointC: 83.5,  freezingPointC: -27.0, smokePointC: 82,  specificHeatFactor: 0.78, evaporationRate: 2.15, microwaveFactor: 0.86, cookingMedium: 'alcohol' },
+
+  // Culinary oils & fats (high boiling/smoke point, low heat capacity -> rapid hot frying!)
+  oil_culinary:     { boilingPointC: 245.0, freezingPointC: -10.0, smokePointC: 205, specificHeatFactor: 0.48, evaporationRate: 0.06, microwaveFactor: 0.52, cookingMedium: 'oil' },
+  rendered_fat:     { boilingPointC: 235.0, freezingPointC: 26.0,  smokePointC: 195, specificHeatFactor: 0.50, evaporationRate: 0.07, microwaveFactor: 0.54, cookingMedium: 'oil' },
+
+  // Broths, sauces, preserves, acid
+  broth:            { boilingPointC: 101.2, freezingPointC: -1.2,  specificHeatFactor: 0.96, evaporationRate: 0.94, microwaveFactor: 1.00, cookingMedium: 'water' },
+  pickles:          { boilingPointC: 102.5, freezingPointC: -4.5,  specificHeatFactor: 0.93, evaporationRate: 0.90, microwaveFactor: 1.02, cookingMedium: 'water' },
+  sauce:            { boilingPointC: 103.0, freezingPointC: -3.0,  smokePointC: 135, specificHeatFactor: 0.84, evaporationRate: 0.68, microwaveFactor: 0.95, cookingMedium: 'water' },
+  puree:            { boilingPointC: 102.5, freezingPointC: -2.0,  smokePointC: 130, specificHeatFactor: 0.86, evaporationRate: 0.62, microwaveFactor: 0.94, cookingMedium: 'water' },
+  canned_preserve:  { boilingPointC: 102.0, freezingPointC: -2.2,  specificHeatFactor: 0.88, evaporationRate: 0.72, microwaveFactor: 0.95, cookingMedium: 'water' },
+  caviar:           { boilingPointC: 101.5, freezingPointC: -3.5,  specificHeatFactor: 0.84, evaporationRate: 0.55, microwaveFactor: 0.90, cookingMedium: 'water' },
+  vinegar:          { boilingPointC: 100.8, freezingPointC: -2.0,  specificHeatFactor: 0.94, evaporationRate: 1.15, microwaveFactor: 0.98, cookingMedium: 'acid' },
+
+  // Sugars, honey, syrups & jams (higher boil point, caramelize above ~105°C)
+  honey:            { boilingPointC: 108.0, freezingPointC: -12.0, smokePointC: 155, specificHeatFactor: 0.60, evaporationRate: 0.34, microwaveFactor: 0.88, cookingMedium: 'sugar' },
+  syrup_sweet:      { boilingPointC: 106.0, freezingPointC: -9.0,  smokePointC: 150, specificHeatFactor: 0.68, evaporationRate: 0.45, microwaveFactor: 0.90, cookingMedium: 'sugar' },
+  jam:              { boilingPointC: 105.0, freezingPointC: -7.0,  smokePointC: 148, specificHeatFactor: 0.72, evaporationRate: 0.48, microwaveFactor: 0.92, cookingMedium: 'sugar' },
+
+  // Extracts, acids, dyes, essential oil, medical
+  food_acid:        { boilingPointC: 102.0, freezingPointC: -3.0,  specificHeatFactor: 0.90, evaporationRate: 0.95, microwaveFactor: 0.96, cookingMedium: 'acid' },
+  food_dye:         { boilingPointC: 100.5, freezingPointC: -1.0,  specificHeatFactor: 0.98, evaporationRate: 1.00, microwaveFactor: 1.00, cookingMedium: 'water' },
+  botanical_extract:{ boilingPointC: 86.0,  freezingPointC: -18.0, specificHeatFactor: 0.74, evaporationRate: 1.75, microwaveFactor: 0.85, cookingMedium: 'alcohol' },
+  essential_oil:    { boilingPointC: 185.0, freezingPointC: -14.0, smokePointC: 145, specificHeatFactor: 0.52, evaporationRate: 0.42, microwaveFactor: 0.55, cookingMedium: 'non_culinary' },
+  medical_solution: { boilingPointC: 82.0,  freezingPointC: -24.0, specificHeatFactor: 0.76, evaporationRate: 1.90, microwaveFactor: 0.86, cookingMedium: 'non_culinary' },
+
+  // Fuels, automotive lubricants & chemicals
+  gasoline_92:      { boilingPointC: 68.0,  freezingPointC: -60.0, smokePointC: 65,  specificHeatFactor: 0.50, evaporationRate: 3.20, microwaveFactor: 0.40, cookingMedium: 'non_culinary' },
+  gasoline_95:      { boilingPointC: 70.0,  freezingPointC: -60.0, smokePointC: 68,  specificHeatFactor: 0.50, evaporationRate: 3.10, microwaveFactor: 0.40, cookingMedium: 'non_culinary' },
+  gasoline_98:      { boilingPointC: 72.0,  freezingPointC: -60.0, smokePointC: 70,  specificHeatFactor: 0.50, evaporationRate: 3.00, microwaveFactor: 0.40, cookingMedium: 'non_culinary' },
+  gasoline_100:     { boilingPointC: 74.0,  freezingPointC: -60.0, smokePointC: 72,  specificHeatFactor: 0.50, evaporationRate: 2.90, microwaveFactor: 0.40, cookingMedium: 'non_culinary' },
+  diesel:           { boilingPointC: 185.0, freezingPointC: -22.0, smokePointC: 160, specificHeatFactor: 0.49, evaporationRate: 0.45, microwaveFactor: 0.42, cookingMedium: 'non_culinary' },
+  motor_oil:        { boilingPointC: 290.0, freezingPointC: -38.0, smokePointC: 225, specificHeatFactor: 0.46, evaporationRate: 0.04, microwaveFactor: 0.42, cookingMedium: 'non_culinary' },
+  antifreeze:       { boilingPointC: 108.0, freezingPointC: -40.0, specificHeatFactor: 0.82, evaporationRate: 0.62, microwaveFactor: 0.90, cookingMedium: 'non_culinary' },
+  brake_fluid:      { boilingPointC: 230.0, freezingPointC: -50.0, smokePointC: 205, specificHeatFactor: 0.56, evaporationRate: 0.08, microwaveFactor: 0.65, cookingMedium: 'non_culinary' },
+  washer_fluid:     { boilingPointC: 86.0,  freezingPointC: -25.0, specificHeatFactor: 0.82, evaporationRate: 1.55, microwaveFactor: 0.92, cookingMedium: 'non_culinary' },
+  detergent:        { boilingPointC: 101.5, freezingPointC: -4.0,  specificHeatFactor: 0.92, evaporationRate: 0.85, microwaveFactor: 0.95, cookingMedium: 'non_culinary' },
+};
+
+export function getLiquidThermalProfile(
+  liquidId: string | null | undefined,
+  storage?: { liquidId?: string | null; attributes?: FluidSubstanceAttributes } | null
+): LiquidThermalProfile {
+  if (!liquidId) return DEFAULT_WATER_THERMAL_PROFILE;
+  if (storage && isFluidStorageDryForm(storage)) return GRANULAR_THERMAL_PROFILE;
+  const exact = LIQUID_THERMAL_PROFILES[liquidId as LiquidId];
+  if (exact) return exact;
+  const def = LIQUID_REGISTRY[liquidId as LiquidId];
+  if (def?.isGranular) return GRANULAR_THERMAL_PROFILE;
+  return DEFAULT_WATER_THERMAL_PROFILE;
+}
+
+export interface ResolvedContainerThermalLiquid extends LiquidThermalProfile {
+  liquidId: string;
+  currentMl: number;
+  nameRu: string;
+}
+
+/**
+ * Resolves the effective thermodynamic profile of liquid inside a container,
+ * supporting both single liquids and volume-weighted multi-liquid mixtures.
+ * Returns null if the container is dry or holds only dry granular material.
+ */
+export function getContainerLiquidThermalProfile(
+  container: InventoryItem | null | undefined
+): ResolvedContainerThermalLiquid | null {
+  if (!container || !container.fluidStorage) return null;
+  const st = container.fluidStorage;
+  const currentMl = Math.max(0, st.currentMl || 0);
+  if (currentMl < 3 || !st.liquidId) return null;
+  if (isFluidStorageDryForm(st)) return null;
+
+  const baseDef = LIQUID_REGISTRY[st.liquidId as LiquidId];
+  const comps = Array.isArray(st.components) ? st.components.filter(c => c && c.ml > 0.5 && c.liquidId) : [];
+
+  if (comps.length <= 1) {
+    const prof = getLiquidThermalProfile(st.liquidId, st);
+    if (prof.cookingMedium === 'granular') return null;
+    return {
+      ...prof,
+      liquidId: st.liquidId,
+      currentMl,
+      nameRu: st.attributes?.varietyRu || baseDef?.nameRu || st.liquidId,
+    };
+  }
+
+  // Volume-weighted mixture properties
+  let totalMl = 0;
+  let boilSum = 0;
+  let freezeSum = 0;
+  let shSum = 0;
+  let evapSum = 0;
+  let mwSum = 0;
+  let smokeMin: number | undefined = undefined;
+  let waterLikeMl = 0;
+  let oilMl = 0;
+  let alcoholMl = 0;
+  let sugarMl = 0;
+  let nonCulMl = 0;
+
+  for (const c of comps) {
+    const p = getLiquidThermalProfile(c.liquidId);
+    if (p.cookingMedium === 'granular') continue;
+    totalMl += c.ml;
+    boilSum += p.boilingPointC * c.ml;
+    freezeSum += p.freezingPointC * c.ml;
+    shSum += p.specificHeatFactor * c.ml;
+    evapSum += p.evaporationRate * c.ml;
+    mwSum += p.microwaveFactor * c.ml;
+    if (typeof p.smokePointC === 'number') {
+      smokeMin = smokeMin === undefined ? p.smokePointC : Math.min(smokeMin, p.smokePointC);
+    }
+    if (p.cookingMedium === 'oil') oilMl += c.ml;
+    else if (p.cookingMedium === 'alcohol') alcoholMl += c.ml;
+    else if (p.cookingMedium === 'sugar') sugarMl += c.ml;
+    else if (p.cookingMedium === 'non_culinary') nonCulMl += c.ml;
+    else waterLikeMl += c.ml;
+  }
+
+  if (totalMl <= 0) return null;
+
+  let cookingMedium: LiquidCookingMedium = 'water';
+  if (nonCulMl / totalMl >= 0.2) cookingMedium = 'non_culinary';
+  else if (oilMl / totalMl >= 0.65 && waterLikeMl < 15) cookingMedium = 'oil';
+  else if (sugarMl / totalMl >= 0.55) cookingMedium = 'sugar';
+  else if (alcoholMl / totalMl >= 0.5) cookingMedium = 'alcohol';
+
+  // If significant water is mixed with oil, boiling point stays capped near water until water boils off
+  const blendedBoil =
+    waterLikeMl >= 15 && oilMl > 0
+      ? Math.min(104, boilSum / totalMl)
+      : Number((boilSum / totalMl).toFixed(1));
+
+  return {
+    boilingPointC: blendedBoil,
+    freezingPointC: Number((freezeSum / totalMl).toFixed(1)),
+    smokePointC: cookingMedium === 'oil' || cookingMedium === 'sugar' ? smokeMin : undefined,
+    specificHeatFactor: Number((shSum / totalMl).toFixed(2)),
+    evaporationRate: Number((evapSum / totalMl).toFixed(2)),
+    microwaveFactor: Number((mwSum / totalMl).toFixed(2)),
+    cookingMedium,
+    liquidId: st.liquidId,
+    currentMl,
+    nameRu: st.attributes?.varietyRu || baseDef?.nameRu || st.liquidId,
+  };
+}
+
+/**
+ * Returns a concise Russian thermal phase label for a liquid at the given temperature.
+ */
+export function getLiquidThermalPhaseLabelRu(
+  tempC: number,
+  profile: ResolvedContainerThermalLiquid | LiquidThermalProfile | null | undefined,
+  liquidId?: string | null
+): string | null {
+  if (!profile) return null;
+  if (tempC <= profile.freezingPointC) {
+    return liquidId === 'rendered_fat' ? 'Застыло' : 'Замёрзло';
+  }
+  if (typeof profile.smokePointC === 'number' && tempC >= profile.smokePointC) {
+    return 'Дымится';
+  }
+  if (tempC >= profile.boilingPointC - 1.5) {
+    return 'Кипит';
+  }
+  if (profile.cookingMedium === 'oil' && tempC >= 120) {
+    return 'Жарка в масле';
+  }
+  if (profile.cookingMedium === 'sugar' && tempC >= 102) {
+    return 'Карамелизация';
+  }
+  if (profile.cookingMedium !== 'oil' && tempC >= profile.boilingPointC - 14) {
+    return 'Закипает';
+  }
+  return null;
+}
+
+/**
+ * Simulates gradual boil-off evaporation for an open heated container based on the
+ * liquid's specific boiling point and evaporation rate.
+ */
+export function tickContainerLiquidBoilOff(
+  container: InventoryItem | null | undefined,
+  dtSeconds: number
+): boolean {
+  if (!container || !container.fluidStorage || dtSeconds <= 0) return false;
+  const prof = getContainerLiquidThermalProfile(container);
+  if (!prof || prof.evaporationRate <= 0) return false;
+
+  const isOpen = Boolean(container.isOpen || !getContainerConfig(container.itemId)?.requiresOpening);
+  if (!isOpen) return false;
+
+  const tempC = container.temperature ?? 20;
+  if (tempC < prof.boilingPointC - 2.0) return false;
+
+  const excess = Math.max(0, tempC - (prof.boilingPointC - 2.0));
+  const boilOffMl = (0.85 + excess * 0.22) * prof.evaporationRate * Math.min(dtSeconds, 60);
+  if (boilOffMl <= 0.05) return false;
+
+  const st = container.fluidStorage;
+  const prevMl = Math.max(0, st.currentMl || 0);
+  const nextMl = Math.max(0, Number((prevMl - boilOffMl).toFixed(1)));
+  if (nextMl === prevMl) return false;
+
+  st.currentMl = nextMl;
+  if (Array.isArray(st.components) && st.components.length > 0 && prevMl > 0) {
+    const ratio = nextMl / prevMl;
+    st.components = st.components
+      .map(c => ({ ...c, ml: Math.max(0, Number((c.ml * ratio).toFixed(1))) }))
+      .filter(c => c.ml > 0.2);
+  }
+  if (nextMl <= 0.5) {
+    st.currentMl = 0;
+    st.liquidId = null;
+    st.components = [];
+  }
+  return true;
 }
 
 export const DEFAULT_GENERIC_LIQUID_ATTRIBUTES: Partial<Record<LiquidId, FluidSubstanceAttributes>> = {
@@ -4141,7 +4406,8 @@ export function updateHybridContainerInteraction(
 
   const liquidMl = Math.max(0, storage.currentMl || 0);
   const liqDef = storage.liquidId ? LIQUID_REGISTRY[storage.liquidId as LiquidId] : undefined;
-  const hasRealLiquid = liquidMl > 0 && Boolean(storage.liquidId) && !liqDef?.isGranular;
+  const hasRealLiquid = liquidMl >= 3 && Boolean(storage.liquidId) && !isFluidStorageDryForm(storage);
+  const thermalProf = hasRealLiquid ? getContainerLiquidThermalProfile(container) : null;
 
   let changed = false;
 
@@ -4160,6 +4426,7 @@ export function updateHybridContainerInteraction(
         child.wetness = Math.max(0, (child.wetness || 0) - dryRate * dtSeconds);
         if (child.wetness <= 1) {
           child.wetness = 0;
+          child.soapyLevel = 0;
           child.soakedLiquidId = undefined;
           child.soakedLiquidNameRu = undefined;
           child.soakedColor = undefined;
@@ -4175,6 +4442,10 @@ export function updateHybridContainerInteraction(
   const fluidTemp = container.temperature ?? 20.0;
   const fluidBaseColor = storage.attributes?.customColor || liqDef?.color || '#38bdf8';
   const fluidDisplayName = storage.attributes?.varietyRu || liqDef?.nameRu || storage.liquidId || 'Жидкость';
+  const cookingMedium: LiquidCookingMedium = thermalProf?.cookingMedium || 'water';
+  const isOilMedium = cookingMedium === 'oil';
+  const isSugarMedium = cookingMedium === 'sugar';
+  const isCulinaryMedium = cookingMedium !== 'non_culinary' && cookingMedium !== 'granular';
 
   if (!storage.infusedItems) {
     storage.infusedItems = [];
@@ -4192,20 +4463,27 @@ export function updateHybridContainerInteraction(
     const prevWet = child.wetness || 0;
     const wetGain = dtSeconds > 0 ? Math.min(100 - prevWet, (35 + 45 * submersion) * Math.min(dtSeconds, 2.0)) : Math.max(35, 65 * submersion);
     const nextWet = Math.min(100, Math.max(prevWet, Math.round((prevWet + wetGain) * 10) / 10));
+    const isDetergentFluid = storage.liquidId === 'detergent';
     if (nextWet !== prevWet || child.soakedLiquidId !== storage.liquidId || child.submersionLevel !== submersion) {
       child.wetness = nextWet;
       child.soakedLiquidId = storage.liquidId || undefined;
       child.soakedLiquidNameRu = liqDef?.nameRu || fluidDisplayName;
       child.soakedColor = fluidBaseColor;
       child.submersionLevel = Number(submersion.toFixed(2));
+      if (isDetergentFluid) {
+        child.soapyLevel = Math.min(1, Math.max(child.soapyLevel || 0, nextWet / 100));
+      } else if (storage.liquidId === 'water' && (child.soapyLevel || 0) > 0 && dtSeconds > 0) {
+        child.soapyLevel = Math.max(0, Number(((child.soapyLevel || 0) - 0.3 * dtSeconds).toFixed(2)));
+      }
       changed = true;
     }
 
-    // 2. Rapid thermal conduction between liquid and submerged solid item
+    // 2. Rapid thermal conduction between liquid and submerged/coated solid item
     const childTemp = child.temperature ?? 20.0;
     if (dtSeconds > 0 && Math.abs(fluidTemp - childTemp) > 0.25) {
-      const kLiquidCond = 0.28 * submersion; // Liquids conduct heat rapidly
-      const alpha = Math.min(0.65, kLiquidCond * dtSeconds);
+      // Hot oil transfers surface searing heat even faster than standing water
+      const kLiquidCond = (isOilMedium ? 0.38 : 0.28) * Math.max(0.45, submersion);
+      const alpha = Math.min(0.7, kLiquidCond * dtSeconds);
       const nextChildTemp = childTemp + (fluidTemp - childTemp) * alpha;
       child.temperature = Math.round(nextChildTemp * 10) / 10;
       child.surfaceTemperature = child.temperature;
@@ -4215,12 +4493,13 @@ export function updateHybridContainerInteraction(
     avgChildTempSum += (child.temperature ?? fluidTemp);
     avgChildTempCount++;
 
-    // 3. Steeping / Infusion / Mixing food & soluble solids into drinkable/culinary liquids
+    // 3. Steeping / Infusion / Thermal Cooking inside culinary liquids
     const isEdibleSolid = child.category === 'food' || child.category === 'drink' || isSolubleSolidItem(child);
-    const isCulinaryLiquid = Boolean(liqDef?.isDrinkable);
+    const isCulinaryLiquid = Boolean(liqDef?.isDrinkable) && isCulinaryMedium;
+    const isSealedPack = Boolean(child.fluidStorage || (child.containerVisuals && !child.isOpen));
 
     if (isEdibleSolid && isCulinaryLiquid) {
-      const heatBoost = fluidTemp >= 80 ? 3.5 : fluidTemp >= 55 ? 2.0 : fluidTemp >= 30 ? 1.0 : 0.45;
+      const heatBoost = fluidTemp >= 120 ? 4.0 : fluidTemp >= 80 ? 3.5 : fluidTemp >= 55 ? 2.0 : fluidTemp >= 30 ? 1.0 : 0.45;
       const baseInfuseStep = dtSeconds > 0 ? 0.018 * heatBoost * submersion * dtSeconds : 0.08 * submersion;
       const prevInf = child.infusionProgress || 0;
       const nextInf = Math.min(1.0, Number((prevInf + baseInfuseStep).toFixed(3)));
@@ -4246,25 +4525,133 @@ export function updateHybridContainerInteraction(
         changed = true;
       }
 
-      // Hot boiling in water/broth cooks submerged food items smoothly
-      if (fluidTemp >= 85 && nextInf >= 0.45 && child.category === 'food') {
-        const curState = child.attributes?.stateNameRu;
-        if (curState !== 'Варёный') {
-          child.attributes = {
-            ...(child.attributes || {}),
-            state: 'boiled',
-            stateNameRu: 'Варёный',
-            preparationMethod: 'Сварено в жидкости'
-          };
-          if (child.effects && typeof child.effects.hunger === 'number') {
-            child.effects.hunger = Math.round(child.effects.hunger * 1.15);
+      // 3A. OIL & RENDERED FAT FRYING (Жарка в масле / жире — до ~205°C, золотистая корочка и защита от подгорания!)
+      if (isOilMedium && child.category === 'food' && !isSealedPack && dtSeconds > 0) {
+        const effTemp = Math.max(child.surfaceTemperature ?? child.temperature ?? 20, fluidTemp);
+        if (effTemp >= 65) {
+          const cookRate = Math.max(0.018, ((effTemp - 55) / 80) * 0.085);
+          const prevCook = child.cookProgress || 0;
+          const nextCook = Math.min(1.0, Number((prevCook + cookRate * dtSeconds).toFixed(3)));
+          if (nextCook !== prevCook) {
+            child.cookProgress = nextCook;
+            child.cookMethod = 'fried';
+            changed = true;
+          }
+
+          // Rich even Maillard browning in hot oil (>= 95°C)
+          if (effTemp >= 95) {
+            const prevBrown = child.brownLevel || 0;
+            const brownRate = ((effTemp - 85) / 85) * 0.075;
+            const nextBrown = Math.min(1.0, Number((prevBrown + brownRate * dtSeconds).toFixed(3)));
+            if (nextBrown !== prevBrown) {
+              child.brownLevel = nextBrown;
+              changed = true;
+            }
+          }
+
+          const curState = child.attributes?.state;
+          const isBurnt = curState === 'burnt' || (child.charLevel || 0) >= 0.55;
+          const alreadyFried = curState === 'fried' && child.attributes?.stateNameRu === 'Жареный в масле';
+          const alreadyAnyCooked =
+            curState === 'fried' || curState === 'baked' || curState === 'boiled' || curState === 'cooked';
+
+          if (!isBurnt && !alreadyFried && ((child.cookProgress || 0) >= 0.42 || (child.brownLevel || 0) >= 0.28)) {
+            child.cookMethod = 'fried';
+            child.attributes = {
+              ...(child.attributes || {}),
+              state: 'fried',
+              stateNameRu: 'Жареный в масле',
+              preparationMethod: 'Обжарено в горячем масле',
+            };
+            if (!alreadyAnyCooked && child.effects && typeof child.effects.hunger === 'number') {
+              child.effects.hunger = Math.round(child.effects.hunger * 1.24);
+            }
+            changed = true;
+          }
+
+          // Oil protects from premature burning up to ~182°C (vs 132°C dry); above smokePoint chars faster
+          const oilCharThreshold = Math.max(175, (thermalProf?.smokePointC ?? 205) - 22);
+          if ((child.cookProgress || 0) >= 0.94 && (child.brownLevel || 0) >= 0.78 && effTemp >= oilCharThreshold) {
+            const overSmoke = effTemp >= (thermalProf?.smokePointC ?? 205);
+            const charRate = ((effTemp - (oilCharThreshold - 10)) / 70) * (overSmoke ? 0.032 : 0.016);
+            const prevChar = child.charLevel || 0;
+            const nextChar = Math.min(1.0, Number((prevChar + charRate * dtSeconds).toFixed(3)));
+            if (nextChar !== prevChar) {
+              child.charLevel = nextChar;
+              changed = true;
+            }
+            if (nextChar >= 0.55 && child.attributes?.state !== 'burnt') {
+              child.attributes = {
+                ...(child.attributes || {}),
+                state: 'burnt',
+                stateNameRu: 'Подгорелый',
+                preparationMethod: 'Пережарено в раскалённом масле',
+              };
+              changed = true;
+            }
+          }
+        }
+      }
+      // 3B. SUGAR / HONEY / SYRUP CARAMELIZING (Карамелизация)
+      else if (isSugarMedium && child.category === 'food' && !isSealedPack && dtSeconds > 0) {
+        if (fluidTemp >= 78) {
+          const rate = ((fluidTemp - 70) / 38) * 0.055 * submersion;
+          child.cookProgress = Math.min(1.0, Number(((child.cookProgress || 0) + rate * dtSeconds).toFixed(3)));
+          child.cookMethod = 'baked';
+          if (fluidTemp >= 100) {
+            child.brownLevel = Math.min(0.85, Number(((child.brownLevel || 0) + 0.042 * dtSeconds).toFixed(3)));
+          }
+          if ((child.cookProgress || 0) >= 0.6 && child.attributes?.state !== 'baked' && child.attributes?.state !== 'burnt') {
+            child.attributes = {
+              ...(child.attributes || {}),
+              state: 'baked',
+              stateNameRu: 'Карамелизированный',
+              preparationMethod: 'Томление и карамелизация в сиропе / мёде',
+            };
+            if (child.effects && typeof child.effects.hunger === 'number') {
+              child.effects.hunger = Math.round(child.effects.hunger * 1.18);
+            }
           }
           changed = true;
         }
       }
+      // 3C. WATER / BROTH / ALCOHOL / ACID BOILING (Варка / томление)
+      else if (child.category === 'food' && !isSealedPack) {
+        const boilStartTemp = Math.min(72, (thermalProf?.boilingPointC ?? 100) - 18);
+        const boilDoneTemp = Math.min(85, (thermalProf?.boilingPointC ?? 100) - 8);
+        if (fluidTemp >= boilStartTemp && dtSeconds > 0) {
+          const boilRate = ((fluidTemp - (boilStartTemp - 8)) / 35) * 0.055 * submersion;
+          const prevCook = child.cookProgress || 0;
+          const nextCook = Math.min(1.0, Number((prevCook + boilRate * dtSeconds).toFixed(3)));
+          if (nextCook !== prevCook) {
+            child.cookProgress = nextCook;
+            if (!child.cookMethod || child.cookMethod === 'boiled') {
+              child.cookMethod = 'boiled';
+            }
+            changed = true;
+          }
+        }
+        if (fluidTemp >= boilDoneTemp && (nextInf >= 0.45 || (child.cookProgress || 0) >= 0.65)) {
+          const curState = child.attributes?.stateNameRu;
+          if (curState !== 'Варёный' && child.attributes?.state !== 'boiled') {
+            child.cookProgress = Math.max(child.cookProgress || 0, 0.85);
+            child.cookMethod = 'boiled';
+            child.attributes = {
+              ...(child.attributes || {}),
+              state: 'boiled',
+              stateNameRu: 'Варёный',
+              preparationMethod: 'Сварено в жидкости'
+            };
+            if (child.effects && typeof child.effects.hunger === 'number') {
+              child.effects.hunger = Math.round(child.effects.hunger * 1.15);
+            }
+            changed = true;
+          }
+        }
+      }
 
       // Soluble small solids (salt, sugar, bouillon cubes) can fully dissolve when warm & infused
-      if (isSolubleSolidItem(child) && nextInf >= 0.95 && fluidTemp >= 35) {
+      if (!isOilMedium && isSolubleSolidItem(child) && nextInf >= 0.95 && fluidTemp >= 35) {
         rec.dissolved = true;
         rec.intensity = 1.0;
         dissolvedIndices.push(idx);

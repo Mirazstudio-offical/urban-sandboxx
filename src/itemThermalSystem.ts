@@ -10,6 +10,8 @@ import {
   getContainerConfig,
   getContainerFreeVolumeMl,
   ensureHybridContainerProps,
+  getContainerLiquidThermalProfile,
+  tickContainerLiquidBoilOff,
 } from './liquidSystem';
 
 export interface ItemThermalConfig {
@@ -430,6 +432,7 @@ export function updateItemThermodynamics(
       item.wetness = Math.round(Math.max(0, item.wetness - dryRate * dt) * 10) / 10;
       if (item.wetness <= 0.1) {
         item.wetness = 0;
+        item.soapyLevel = 0;
         item.soakedLiquidId = undefined;
         item.soakedLiquidNameRu = undefined;
         item.soakedColor = undefined;
@@ -441,9 +444,11 @@ export function updateItemThermodynamics(
   }
 
   // Thermal mass scaling: heavier objects (e.g. 1kg brick of meat vs 30g snack) heat up & cool down much slower
-  // Reference mass is 0.25 kg. Heavier items have greater thermal inertia.
+  // Reference mass is 0.25 kg. Liquid specificHeatFactor modulates thermal inertia (oil ~0.48 heats ~2x faster than water 1.0).
   const weightKg = Math.max(0.04, item.weight ?? 0.25);
-  const massScaling = Math.max(0.12, Math.min(3.0, 0.25 / weightKg));
+  const liqProf = getContainerLiquidThermalProfile(item);
+  const heatCapMult = liqProf ? Math.max(0.45, Math.min(1.25, liqProf.specificHeatFactor)) : 1.0;
+  const massScaling = Math.max(0.12, Math.min(3.0, 0.25 / (weightKg * heatCapMult)));
 
   // Effective cooling speed: retention slows down core heat loss.
   // Each enclosing packaging layer (parentInsulationMultiplier) provides additional thermal barrier.
@@ -476,6 +481,7 @@ export function updateItemThermodynamics(
     item.wetness = Math.round(updatedWetness * 10) / 10;
     if (item.wetness <= 0.1) {
       item.wetness = 0;
+      item.soapyLevel = 0;
       item.soakedLiquidId = undefined;
       item.soakedLiquidNameRu = undefined;
       item.soakedColor = undefined;
@@ -927,45 +933,170 @@ export function getItemThermalDisplayInfo(item: InventoryItem | null | undefined
   };
 }
 
-function applyDryCookingIfHot(item: InventoryItem, mode: 'burner' | 'oven'): void {
-  if (!item) return;
-  // Recurse into dry containers (e.g. pan or baking tray without water)
-  const hasLiquid = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 10);
-  if (item.contents && item.contents.length > 0 && !hasLiquid) {
+function isSealedContainerForCooking(item: InventoryItem): boolean {
+  if (!item) return false;
+  if (item.fluidStorage) return true;
+  if (item.containerVisuals && !item.isOpen) return true;
+  const id = (item.itemId || '').toLowerCase();
+  if (
+    id.startsWith('bottle_') ||
+    id.startsWith('jar_') ||
+    id.startsWith('can_') ||
+    id.startsWith('tin_') ||
+    id.startsWith('jug_') ||
+    id.startsWith('canister_') ||
+    id.startsWith('carton_') ||
+    id.includes('_bottle') ||
+    id.includes('_jar') ||
+    id.includes('_can') ||
+    id.includes('_pack') ||
+    id.includes('_box') ||
+    id.includes('tetra')
+  ) {
+    return !item.isOpen;
+  }
+  return false;
+}
+
+function isScorchableDryMaterial(item: InventoryItem): boolean {
+  if (!item) return false;
+  if (item.category === 'clothing' || Boolean(item.clothingStats)) return true;
+  const id = (item.itemId || '').toLowerCase();
+  return (
+    id.includes('sack') ||
+    id.includes('paper') ||
+    id.includes('box') ||
+    id.includes('carton') ||
+    id.includes('book') ||
+    id.includes('note') ||
+    id.includes('wood') ||
+    id.includes('cloth') ||
+    id.includes('towel') ||
+    id.includes('rag')
+  );
+}
+
+function applyDryCookingIfHot(item: InventoryItem, mode: 'burner' | 'oven', dt: number = 0.5): boolean {
+  if (!item || dt <= 0) return false;
+  let changed = false;
+
+  // Recurse into dry containers (containers with real liquid are handled by updateHybridContainerInteraction,
+  // which differentiates oil frying vs water boiling vs sugar caramelizing!)
+  const liqProf = getContainerLiquidThermalProfile(item);
+  const hasRealLiquid = Boolean(liqProf);
+  if (item.contents && item.contents.length > 0 && !hasRealLiquid) {
     for (const child of item.contents) {
-      if (child) applyDryCookingIfHot(child, mode);
+      if (child && applyDryCookingIfHot(child, mode, dt)) {
+        changed = true;
+      }
     }
   }
-  if (item.category !== 'food') return;
-  const temp = item.temperature ?? 20;
-  if (temp < 85.0) return;
 
-  const curState = item.attributes?.stateNameRu;
-  const alreadyCooked =
-    curState === 'Варёный' ||
-    curState === 'Жареный' ||
-    curState === 'Запечённый' ||
-    item.attributes?.state === 'boiled' ||
-    item.attributes?.state === 'fried' ||
-    item.attributes?.state === 'baked';
-  if (alreadyCooked) return;
-
+  const temp = item.surfaceTemperature ?? item.temperature ?? 20;
+  const wet = item.wetness ?? 0;
+  const isOilCoated = item.soakedLiquidId === 'oil_culinary' || item.soakedLiquidId === 'rendered_fat';
   const isOven = mode === 'oven';
-  item.attributes = {
-    ...(item.attributes || {}),
-    state: isOven ? 'baked' : 'fried',
-    stateNameRu: isOven ? 'Запечённый' : 'Жареный',
-    preparationMethod: isOven ? 'Запечено в духовке' : 'Обжарено на плите',
-  };
-  if (item.effects && typeof item.effects.hunger === 'number') {
-    item.effects.hunger = Math.round(item.effects.hunger * 1.18);
+
+  // Dry fabric/paper/wood left directly on scorching hot stove/oven gradually singes
+  if (item.category !== 'food') {
+    if (isScorchableDryMaterial(item) && !hasRealLiquid && wet < 12 && temp >= 145.0) {
+      const prevChar = item.charLevel || 0;
+      const rate = ((temp - 140) / 60) * 0.022;
+      const nextChar = Math.min(0.82, Number((prevChar + rate * dt).toFixed(3)));
+      if (nextChar !== prevChar) {
+        item.charLevel = nextChar;
+        changed = true;
+      }
+    }
+    return changed;
   }
+
+  // Sealed jars/cans/bottles do not brown like unwrapped food
+  if (isSealedContainerForCooking(item)) return changed;
+  if (temp < 65.0) return changed;
+
+  // 1. Continuous cooking progress (65°C+)
+  const prevCook = item.cookProgress || 0;
+  const cookRate = Math.max(0.012, ((temp - 55) / 85) * (isOven ? 0.055 : 0.072) * (isOilCoated ? 1.15 : 1.0));
+  const nextCook = Math.min(1.0, Number((prevCook + cookRate * dt).toFixed(3)));
+  if (nextCook !== prevCook) {
+    item.cookProgress = nextCook;
+    changed = true;
+  }
+
+  // 2. Maillard browning / caramelization when hot and surface is dry or oil-coated (90°C+)
+  if (temp >= 90.0 && (wet < 30 || isOilCoated)) {
+    const prevBrown = item.brownLevel || 0;
+    const brownRate = ((temp - 82) / 95) * (isOven ? 0.044 : 0.062) * (isOilCoated ? 1.2 : 1.0);
+    const nextBrown = Math.min(1.0, Number((prevBrown + brownRate * dt).toFixed(3)));
+    if (nextBrown !== prevBrown) {
+      item.brownLevel = nextBrown;
+      changed = true;
+    }
+  }
+
+  // 3. Transition state to fried/baked once meaningfully cooked
+  const curState = item.attributes?.state;
+  const curStateRu = item.attributes?.stateNameRu;
+  const isBurnt = curState === 'burnt' || (item.charLevel || 0) >= 0.55;
+  const alreadyDryCooked =
+    curState === 'fried' ||
+    curState === 'baked' ||
+    curStateRu === 'Жареный' ||
+    curStateRu === 'Жареный в масле' ||
+    curStateRu === 'Запечённый';
+  const alreadyAnyCooked =
+    alreadyDryCooked ||
+    curState === 'boiled' ||
+    curState === 'cooked' ||
+    curStateRu === 'Варёный';
+
+  if (!isBurnt && !alreadyDryCooked && (nextCook >= 0.45 || (item.brownLevel || 0) >= 0.3)) {
+    item.cookMethod = isOven ? 'baked' : 'fried';
+    item.attributes = {
+      ...(item.attributes || {}),
+      state: isOven ? 'baked' : 'fried',
+      stateNameRu: isOven ? 'Запечённый' : isOilCoated ? 'Жареный в масле' : 'Жареный',
+      preparationMethod: isOven
+        ? 'Запечено в духовке'
+        : isOilCoated
+        ? 'Обжарено с маслом на плите'
+        : 'Обжарено на сухой сковороде',
+    };
+    if (!alreadyAnyCooked && item.effects && typeof item.effects.hunger === 'number') {
+      item.effects.hunger = Math.round(item.effects.hunger * (isOilCoated ? 1.24 : 1.18));
+    }
+    changed = true;
+  }
+
+  // 4. Overcooking / charring if left at high heat after already cooked & browned
+  const charThreshold = isOilCoated ? 168.0 : 132.0;
+  if (nextCook >= 0.92 && (item.brownLevel || 0) >= 0.72 && temp >= charThreshold && (wet < 15 || isOilCoated)) {
+    const prevChar = item.charLevel || 0;
+    const charRate = ((temp - (charThreshold - 7)) / 75) * (isOven ? 0.026 : 0.036) * (isOilCoated ? 0.65 : 1.0);
+    const nextChar = Math.min(1.0, Number((prevChar + charRate * dt).toFixed(3)));
+    if (nextChar !== prevChar) {
+      item.charLevel = nextChar;
+      changed = true;
+    }
+    if (nextChar >= 0.55 && item.attributes?.state !== 'burnt') {
+      item.attributes = {
+        ...(item.attributes || {}),
+        state: 'burnt',
+        stateNameRu: 'Подгорелый',
+        preparationMethod: isOven ? 'Подгорело в духовке' : 'Подгорело на плите',
+      };
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 /**
  * Advances thermodynamics for a single gas stove (4 independent burners + 1 unified oven chamber)
- * over `dt` seconds. Handles heating when gas is ON, cooling when gas is OFF, boiling liquid
- * vessels around 100°C, and dry baking/frying raw foods at >= 85°C.
+ * over `dt` seconds. Respects each liquid's specific boiling point, smoke point, heat capacity,
+ * evaporation rate, and cooking medium (water boiling, oil frying, sugar caramelizing, alcohol).
  */
 export function tickStoveStateThermodynamics(
   stoveState: {
@@ -996,16 +1127,34 @@ export function tickStoveStateThermodynamics(
     b.lastUpdatedSec = nowSec;
 
     if (b.item) {
-      const hasWater = Boolean(b.item.fluidStorage && (b.item.fluidStorage.currentMl || 0) > 10);
-      // Liquid-filled pots/kettles plateau smoothly near boiling (~100°C); dry cookware/food heats higher
-      const effectiveTarget = hasWater ? Math.min(b.temperature, 102.0) : Math.min(b.temperature, 185.0);
+      const liqProf = getContainerLiquidThermalProfile(b.item);
+      // Each liquid plateaus near its own boiling point (water ~100°C, vodka ~83.5°C, honey ~108°C,
+      // gasoline ~70°C), while frying oils/fats heat all the way to smoking/frying range (~205-215°C)!
+      const effectiveTarget = liqProf
+        ? liqProf.cookingMedium === 'oil'
+          ? Math.min(b.temperature, (liqProf.smokePointC ?? 205) + 8.0)
+          : Math.min(b.temperature, liqProf.boilingPointC + 2.0)
+        : Math.min(b.temperature, 195.0);
+
       // Direct flame contact transfers heat faster than passive room air
       const contactMultiplier = b.gasOn ? 2.6 : 1.0;
       if (updateItemThermodynamics(b.item, effectiveTarget, clampedDt * contactMultiplier)) {
         changed = true;
       }
-      if (b.gasOn && b.temperature >= 90) {
-        applyDryCookingIfHot(b.item, 'burner');
+      // Boil-off evaporation for open heated vessels according to liquid boilingPointC & evaporationRate
+      if (tickContainerLiquidBoilOff(b.item, clampedDt)) {
+        changed = true;
+      }
+      // Always advance liquid-solid cooking (oil frying, boiling, caramelizing) even on thermal plateau
+      if (b.item.fluidStorage && b.item.contents && b.item.contents.length > 0) {
+        if (updateHybridContainerInteraction(b.item, clampedDt)) {
+          changed = true;
+        }
+      }
+      if (b.temperature >= 75) {
+        if (applyDryCookingIfHot(b.item, 'burner', clampedDt)) {
+          changed = true;
+        }
       }
     }
   }
@@ -1027,14 +1176,28 @@ export function tickStoveStateThermodynamics(
     if (oven.items && oven.items.length > 0) {
       for (const item of oven.items) {
         if (!item) continue;
-        const hasWater = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 10);
-        const effectiveTarget = hasWater ? Math.min(oven.temperature, 100.0) : oven.temperature;
+        const liqProf = getContainerLiquidThermalProfile(item);
+        const effectiveTarget = liqProf
+          ? liqProf.cookingMedium === 'oil'
+            ? Math.min(oven.temperature, (liqProf.smokePointC ?? 205) + 4.0)
+            : Math.min(oven.temperature, liqProf.boilingPointC + 1.5)
+          : oven.temperature;
         const ovenTransfer = oven.gasOn ? 1.8 : 1.0;
         if (updateItemThermodynamics(item, effectiveTarget, clampedDt * ovenTransfer)) {
           changed = true;
         }
-        if (oven.gasOn && oven.temperature >= 90) {
-          applyDryCookingIfHot(item, 'oven');
+        if (tickContainerLiquidBoilOff(item, clampedDt)) {
+          changed = true;
+        }
+        if (item.fluidStorage && item.contents && item.contents.length > 0) {
+          if (updateHybridContainerInteraction(item, clampedDt)) {
+            changed = true;
+          }
+        }
+        if (oven.temperature >= 75) {
+          if (applyDryCookingIfHot(item, 'oven', clampedDt)) {
+            changed = true;
+          }
         }
       }
     }
@@ -1168,12 +1331,16 @@ export function tickSinkStateThermodynamics(
         if (
           nextWet !== prevWet ||
           item.soakedLiquidId !== 'water' ||
-          item.soakedLiquidNameRu !== 'Вода'
+          item.soakedLiquidNameRu !== 'Вода' ||
+          (item.soapyLevel || 0) > 0
         ) {
           item.wetness = nextWet;
           item.soakedLiquidId = 'water';
           item.soakedLiquidNameRu = 'Вода';
           item.soakedColor = '#60a5fa';
+          if ((item.soapyLevel || 0) > 0) {
+            item.soapyLevel = Math.max(0, Number(((item.soapyLevel || 0) - 0.35 * clampedDt).toFixed(2)));
+          }
           if (item.clothingStats) {
             item.clothingStats.wetness = nextWet;
           }
@@ -1354,11 +1521,34 @@ export function tickWashingMachineThermodynamics(
         updateItemThermodynamics(item, st.waterTempC, step * 2.2);
         const nextWet = Math.min(100, Math.round(((item.wetness || 0) + 55 * step) * 10) / 10);
         item.wetness = nextWet;
-        item.soakedLiquidId = 'water';
-        item.soakedLiquidNameRu =
-          st.phase === 'wash' && hasActiveDetergent ? 'Мыльный раствор' : 'Вода';
-        item.soakedColor =
-          st.phase === 'wash' && hasActiveDetergent ? st.detergentColor || '#bae6fd' : '#60a5fa';
+        const isSoapyWash = (st.phase === 'wash' || st.phase === 'fill') && hasActiveDetergent;
+        if (isSoapyWash) {
+          const soapGain = st.phase === 'wash' ? 0.24 * step : 0.1 * step;
+          item.soapyLevel = Math.min(1.0, Number(((item.soapyLevel || 0) + soapGain).toFixed(2)));
+          item.soakedLiquidId = 'laundry_detergent';
+          item.soakedLiquidNameRu = 'Мыльный раствор';
+          item.soakedColor = st.detergentColor || '#bae6fd';
+        } else {
+          const nextSoap = Math.max(0, Number(((item.soapyLevel || 0) - 0.32 * step).toFixed(2)));
+          item.soapyLevel = nextSoap;
+          item.soakedLiquidId = nextSoap > 0.15 ? 'laundry_detergent' : 'water';
+          item.soakedLiquidNameRu = nextSoap > 0.15 ? 'Мыльный раствор' : 'Вода';
+          item.soakedColor = nextSoap > 0.15 ? (st.detergentColor || '#bae6fd') : '#60a5fa';
+        }
+        // Boiling wash program (90°C) will also gently boil unwrapped food placed in the drum
+        if (st.waterTempC >= 74 && item.category === 'food' && !isSealedContainerForCooking(item)) {
+          const boilStep = ((st.waterTempC - 68) / 30) * 0.045 * step;
+          item.cookProgress = Math.min(1.0, Number(((item.cookProgress || 0) + boilStep).toFixed(3)));
+          if (!item.cookMethod) item.cookMethod = 'boiled';
+          if ((item.cookProgress || 0) >= 0.7 && item.attributes?.state !== 'boiled') {
+            item.attributes = {
+              ...(item.attributes || {}),
+              state: 'boiled',
+              stateNameRu: 'Варёный',
+              preparationMethod: 'Сварено в горячей воде',
+            };
+          }
+        }
         if (item.clothingStats) {
           item.clothingStats.wetness = nextWet;
         }
@@ -1368,6 +1558,7 @@ export function tickWashingMachineThermodynamics(
         const spinFloor = preset.maxRpm >= 1200 ? 22 : 30;
         const nextWet = curWet > spinFloor ? Math.max(spinFloor, Math.round((curWet - 24 * step) * 10) / 10) : curWet;
         item.wetness = nextWet;
+        item.soapyLevel = Math.max(0, Number(((item.soapyLevel || 0) - 0.45 * step).toFixed(2)));
         item.soakedLiquidId = 'water';
         item.soakedLiquidNameRu = 'Вода';
         item.soakedColor = '#60a5fa';
@@ -1479,14 +1670,69 @@ export function tickMicrowaveThermodynamics(
 
     for (const item of storage.items) {
       if (!item) continue;
-      if (updateItemThermodynamics(item, targetTemp, step * heatMult)) {
+      const liqProf = getContainerLiquidThermalProfile(item);
+      const itemTarget = liqProf
+        ? Math.min(targetTemp, liqProf.boilingPointC + 1.0)
+        : targetTemp;
+      const mwFactor = liqProf ? liqProf.microwaveFactor : 1.0;
+      if (updateItemThermodynamics(item, itemTarget, step * heatMult * mwFactor)) {
         changed = true;
       }
-      if (typeof item.temperature === 'number' && item.temperature < targetTemp - 2) {
-        const coreBoost = (targetTemp - item.temperature) * (1 - Math.exp(-0.035 * (st.powerWatts / 600) * step));
+      if (typeof item.temperature === 'number' && item.temperature < itemTarget - 2) {
+        const coreBoost = (itemTarget - item.temperature) * (1 - Math.exp(-0.035 * (st.powerWatts / 600) * mwFactor * step));
         item.temperature = Math.round((item.temperature + coreBoost) * 10) / 10;
         item.surfaceTemperature = Math.round(((item.surfaceTemperature ?? item.temperature) * 0.7 + item.temperature * 0.3) * 10) / 10;
       }
+      if (tickContainerLiquidBoilOff(item, step)) {
+        changed = true;
+      }
+      if (item.fluidStorage && item.contents && item.contents.length > 0) {
+        if (updateHybridContainerInteraction(item, step)) {
+          changed = true;
+        }
+      }
+
+      // Microwave dielectric cooking / steaming for unwrapped food items & open container contents
+      const applyMicrowaveCook = (targetItem: InventoryItem) => {
+        if (!targetItem) return;
+        const hasChildLiquid = Boolean(getContainerLiquidThermalProfile(targetItem));
+        if (targetItem.contents && targetItem.contents.length > 0 && !hasChildLiquid) {
+          for (const ch of targetItem.contents) {
+            if (ch) applyMicrowaveCook(ch);
+          }
+        }
+        if (targetItem.category !== 'food' || isSealedContainerForCooking(targetItem)) return;
+        const t = targetItem.temperature ?? 20;
+        if (t < 58) return;
+        const rate = ((t - 52) / 55) * (st.powerWatts / 600) * 0.055;
+        targetItem.cookProgress = Math.min(1.0, Number(((targetItem.cookProgress || 0) + rate * step).toFixed(3)));
+        if (!targetItem.cookMethod) targetItem.cookMethod = 'microwaved';
+
+        const stCur = targetItem.attributes?.state;
+        if (
+          (targetItem.cookProgress || 0) >= 0.5 &&
+          stCur !== 'boiled' &&
+          stCur !== 'fried' &&
+          stCur !== 'baked' &&
+          stCur !== 'cooked' &&
+          stCur !== 'burnt'
+        ) {
+          targetItem.attributes = {
+            ...(targetItem.attributes || {}),
+            state: 'cooked',
+            stateNameRu: 'Приготовленный',
+            preparationMethod: 'Приготовлено в микроволновке',
+          };
+        }
+        // Extended high-power (900W) dry microwaving gently browns & dries edges
+        if (st.powerWatts >= 900 && (targetItem.cookProgress || 0) >= 0.92 && t >= 100 && (targetItem.wetness || 0) < 15) {
+          targetItem.brownLevel = Math.min(0.65, Number(((targetItem.brownLevel || 0) + 0.025 * step).toFixed(3)));
+          if ((targetItem.brownLevel || 0) >= 0.55) {
+            targetItem.charLevel = Math.min(0.65, Number(((targetItem.charLevel || 0) + 0.015 * step).toFixed(3)));
+          }
+        }
+      };
+      applyMicrowaveCook(item);
     }
 
     if (st.remainingSec <= 0) {

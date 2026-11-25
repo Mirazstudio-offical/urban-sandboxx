@@ -16,7 +16,7 @@ import { drawPaperPackagingItem } from './graphics/paperPackagingGraphics';
 import { drawCandyPackagingItem } from './graphics/candyPackagingGraphics';
 import { drawChocolatePackagingItem } from './graphics/chocolatePackagingGraphics';
 import { drawCulinaryDishItem } from './graphics/culinaryGraphics';
-import { drawShadow, drawFrostAndThermalOverlay, drawMicroBarcode } from './graphics/itemGraphicShared';
+import { drawShadow, drawItemWithDynamicState, hasActiveItemVisualState, drawMicroBarcode } from './graphics/itemGraphicShared';
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
 import { ITEM_CATALOG, LEGACY_KITCHENWARE_PRESETS, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
 
@@ -196,11 +196,12 @@ export function drawItemModel2D(
       }
     };
 
-    renderResolvedModel(ctx);
-
-    // Procedural thermal overlay (model-conforming frost rime, condensation droplets, steam wisps)
-    if (effectiveItem && !isInner) {
-      drawFrostAndThermalOverlay(ctx, effectiveItem, 8.5, renderResolvedModel);
+    // Procedural dynamic visual state (cooking/browning/charring, wet/soapy/soaked tint, thermal glow, frost & steam)
+    if (effectiveItem && !rawCatalogOnly && hasActiveItemVisualState(effectiveItem, isInner)) {
+      const poolDepth = Math.max(0, currentRenderDepth - 1);
+      drawItemWithDynamicState(ctx, effectiveItem, 8.5, renderResolvedModel, isInner, poolDepth);
+    } else {
+      renderResolvedModel(ctx);
     }
   } finally {
     ctx.restore();

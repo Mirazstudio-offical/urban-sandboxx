@@ -29,6 +29,7 @@ import {
   stowItemFromHandToPockets,
 } from '../items';
 import { getEffectiveFluidWrapper } from '../interactionCrafting';
+import { getContainerLiquidThermalProfile, getLiquidThermalPhaseLabelRu } from '../liquidSystem';
 import { tickStoveStateThermodynamics } from '../itemThermalSystem';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
@@ -107,15 +108,28 @@ function describeCookedItemSub(item: InventoryItem): string {
   const parts: string[] = [];
   const temp = Math.round(item.temperature ?? 20);
   parts.push(`${temp > 0 ? '+' : ''}${temp}°C`);
-  if (item.attributes?.stateNameRu) {
+
+  const liqProf = getContainerLiquidThermalProfile(item);
+  const phaseLabel = liqProf ? getLiquidThermalPhaseLabelRu(item.temperature ?? 20, liqProf, liqProf.liquidId) : null;
+  if (phaseLabel) {
+    parts.push(phaseLabel);
+  } else if (item.attributes?.stateNameRu) {
     parts.push(item.attributes.stateNameRu);
   }
+
   const wrapper = getEffectiveFluidWrapper(item);
   if (wrapper && wrapper.state.currentMl > 0) {
     parts.push(`${Math.round(wrapper.state.currentMl)} мл`);
-  } else if (item.isContainer && item.contents && item.contents.length > 0) {
-    parts.push(`внутри ${item.contents.length}`);
-  } else {
+  }
+  if (item.isContainer && item.contents && item.contents.length > 0) {
+    const firstFood = item.contents.find(c => c && c.category === 'food');
+    const foodState = firstFood?.attributes?.stateNameRu;
+    if (foodState) {
+      parts.push(`${foodState} (${item.contents.length})`);
+    } else {
+      parts.push(`внутри ${item.contents.length}`);
+    }
+  } else if (!wrapper || wrapper.state.currentMl <= 0) {
     parts.push(formatWeightRu(getItemTotalWeight(item)));
   }
   return parts.join(' · ');

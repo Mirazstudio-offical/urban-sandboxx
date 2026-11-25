@@ -880,35 +880,460 @@ export function drawFilmWindow(
   ctx.restore();
 }
 
-const FROST_CANVAS_SIZE = 96;
-const FROST_WORLD_SPAN = 26;
+const EFFECT_CANVAS_SIZE = 112;
+const EFFECT_WORLD_SPAN = 28;
 
-interface FrostScratchBuffers {
+interface EffectScratchBuffers {
   silhouette: HTMLCanvasElement;
+  composed: HTMLCanvasElement;
   eroded: HTMLCanvasElement;
   edge: HTMLCanvasElement;
-  frost: HTMLCanvasElement;
+  overlay: HTMLCanvasElement;
 }
 
-let scratchBuffers: FrostScratchBuffers | null = null;
+const effectScratchPool: Array<EffectScratchBuffers | null> = [null, null, null];
 
-function getFrostScratchBuffers(): FrostScratchBuffers | null {
+function getEffectScratchBuffers(depth: number = 0): EffectScratchBuffers | null {
   if (typeof document === 'undefined') return null;
-  if (!scratchBuffers) {
+  const idx = Math.max(0, Math.min(effectScratchPool.length - 1, depth));
+  if (!effectScratchPool[idx]) {
     const createBuf = () => {
       const c = document.createElement('canvas');
-      c.width = FROST_CANVAS_SIZE;
-      c.height = FROST_CANVAS_SIZE;
+      c.width = EFFECT_CANVAS_SIZE;
+      c.height = EFFECT_CANVAS_SIZE;
       return c;
     };
-    scratchBuffers = {
+    effectScratchPool[idx] = {
       silhouette: createBuf(),
+      composed: createBuf(),
       eroded: createBuf(),
       edge: createBuf(),
-      frost: createBuf()
+      overlay: createBuf(),
     };
   }
-  return scratchBuffers;
+  return effectScratchPool[idx];
+}
+
+export type ItemVisualMaterial =
+  | 'food_meat'
+  | 'food_produce'
+  | 'food_bakery'
+  | 'fabric'
+  | 'paper_wood'
+  | 'metal'
+  | 'glass_plastic'
+  | 'ceramic_stone';
+
+function parseHexColorRgb(hex?: string): { r: number; g: number; b: number } | null {
+  if (!hex || typeof hex !== 'string') return null;
+  const clean = hex.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{6}$/.test(clean)) {
+    return {
+      r: parseInt(clean.slice(0, 2), 16),
+      g: parseInt(clean.slice(2, 4), 16),
+      b: parseInt(clean.slice(4, 6), 16),
+    };
+  }
+  if (/^[0-9a-fA-F]{3}$/.test(clean)) {
+    return {
+      r: parseInt(clean[0] + clean[0], 16),
+      g: parseInt(clean[1] + clean[1], 16),
+      b: parseInt(clean[2] + clean[2], 16),
+    };
+  }
+  return null;
+}
+
+/**
+ * Classifies an item's physical surface material so cooking, heating, washing,
+ * soaking, and freezing apply realistic material-appropriate color/finish shifts.
+ */
+export function classifyItemVisualMaterial(item: any): ItemVisualMaterial {
+  if (!item) return 'glass_plastic';
+  const id = String(item.itemId || '').toLowerCase();
+  const cat = String(item.category || '').toLowerCase();
+
+  // 1. Fabric / clothing / burlap / towels / soft wearables
+  if (
+    cat === 'clothing' ||
+    Boolean(item.clothingStats) ||
+    id.startsWith('sack_') ||
+    id === 'sandbag' ||
+    id.includes('towel') ||
+    id.includes('rag') ||
+    id.includes('cloth') ||
+    id.includes('gloves') ||
+    id.includes('backpack') ||
+    id.includes('apron') ||
+    id.includes('bandage')
+  ) {
+    return 'fabric';
+  }
+
+  // 2. Kitchenware & fluid containers — classify by vessel material
+  const kwMat = String(item.kitchenwareAttributes?.material || '').toLowerCase();
+  const cvMat = String(item.containerVisuals?.material || '').toLowerCase();
+  const matHint = kwMat || cvMat;
+  const isContainerLike =
+    Boolean(item.fluidStorage) ||
+    Boolean(item.kitchenwareAttributes) ||
+    Boolean(item.containerVisuals && !item.isOpen) ||
+    id.startsWith('bottle_') ||
+    id.startsWith('jar_') ||
+    id.startsWith('can_') ||
+    id.startsWith('tin_') ||
+    id.startsWith('jug_') ||
+    id.startsWith('canister_') ||
+    id.startsWith('carton_') ||
+    id.startsWith('detergent_') ||
+    id.includes('_bottle') ||
+    id.includes('_jar') ||
+    id.includes('_can') ||
+    id.includes('_pack') ||
+    id.includes('_box') ||
+    id.includes('tetra') ||
+    id.includes('thermos') ||
+    id.includes('flask') ||
+    id.includes('bucket');
+
+  if (isContainerLike && !item.culinaryData?.isPreparedDish) {
+    if (
+      matHint.includes('steel') ||
+      matHint.includes('iron') ||
+      matHint.includes('alum') ||
+      matHint.includes('metal') ||
+      matHint.includes('copper') ||
+      matHint.includes('tin') ||
+      matHint.includes('enamel') ||
+      id.includes('pot') ||
+      id.includes('pan') ||
+      id.includes('kettle') ||
+      id.includes('ladle') ||
+      id.includes('can_') ||
+      id.includes('_can') ||
+      id.includes('tin_') ||
+      id.includes('flask') ||
+      id.includes('thermos') ||
+      id.includes('_steel') ||
+      id.includes('_aluminum') ||
+      id.includes('_cast_iron')
+    ) {
+      return 'metal';
+    }
+    if (
+      matHint.includes('ceramic') ||
+      matHint.includes('porcelain') ||
+      matHint.includes('clay') ||
+      matHint.includes('stone') ||
+      id.includes('plate') ||
+      id.includes('bowl') ||
+      id.includes('mug') ||
+      id.includes('cup_ceramic')
+    ) {
+      return 'ceramic_stone';
+    }
+    if (
+      matHint.includes('paper') ||
+      matHint.includes('cardboard') ||
+      matHint.includes('wood') ||
+      id.includes('box') ||
+      id.includes('carton') ||
+      id.includes('tetra') ||
+      id.includes('paper') ||
+      id.includes('detergent_box') ||
+      id.includes('detergent_pack')
+    ) {
+      return 'paper_wood';
+    }
+    return 'glass_plastic';
+  }
+
+  // 3. Tools, cutlery, auto metal hardware
+  if (
+    cat === 'tool' ||
+    cat === 'auto' ||
+    id.includes('knife') ||
+    id.includes('fork') ||
+    id.includes('spoon') ||
+    id.includes('wrench') ||
+    id.includes('hammer') ||
+    id.includes('pliers') ||
+    id.includes('crowbar') ||
+    id.includes('screwdriver') ||
+    id.includes('axe') ||
+    id.includes('saw') ||
+    id.includes('nail') ||
+    id.includes('bolt') ||
+    id.includes('key') ||
+    id.includes('coin')
+  ) {
+    if (id.includes('tire') || id.includes('battery') || id.includes('canister') || id.includes('plastic')) {
+      return 'glass_plastic';
+    }
+    if (id.includes('wood')) return 'paper_wood';
+    return 'metal';
+  }
+
+  // 4. Electronics / glass / plastic non-food
+  if (
+    id.includes('phone') ||
+    id.includes('smartphone') ||
+    id.includes('radio') ||
+    id.includes('flashlight') ||
+    id.includes('charger') ||
+    id.includes('plastic') ||
+    id.includes('glass') ||
+    cat === 'drink'
+  ) {
+    return 'glass_plastic';
+  }
+
+  // 5. Paper / cardboard / wood non-food
+  if (
+    id.includes('paper') ||
+    id.includes('book') ||
+    id.includes('note') ||
+    id.includes('letter') ||
+    id.includes('newspaper') ||
+    id.includes('money') ||
+    id.includes('cash') ||
+    id.includes('rubl') ||
+    id.includes('cardboard') ||
+    id.includes('wood') ||
+    id.includes('board') ||
+    id.includes('log') ||
+    id.includes('match') ||
+    id.includes('cigarette')
+  ) {
+    return 'paper_wood';
+  }
+
+  // 6. Food items — split by biological browning/boiling character
+  if (cat === 'food' || Boolean(item.culinaryData) || Boolean(item.pelmenAttributes)) {
+    if (
+      id.includes('meat') ||
+      id.includes('beef') ||
+      id.includes('pork') ||
+      id.includes('lamb') ||
+      id.includes('chicken') ||
+      id.includes('poultry') ||
+      id.includes('turkey') ||
+      id.includes('duck') ||
+      id.includes('fish') ||
+      id.includes('salmon') ||
+      id.includes('cod') ||
+      id.includes('herring') ||
+      id.includes('shrimp') ||
+      id.includes('sausage') ||
+      id.includes('bacon') ||
+      id.includes('ham') ||
+      id.includes('steak') ||
+      id.includes('cutlet') ||
+      id.includes('minced') ||
+      id.includes('liver') ||
+      id.includes('egg') ||
+      id.includes('fillet')
+    ) {
+      return 'food_meat';
+    }
+    if (
+      id.includes('potato') ||
+      id.includes('carrot') ||
+      id.includes('onion') ||
+      id.includes('garlic') ||
+      id.includes('cabbage') ||
+      id.includes('tomato') ||
+      id.includes('cucumber') ||
+      id.includes('pepper') ||
+      id.includes('beet') ||
+      id.includes('radish') ||
+      id.includes('mushroom') ||
+      id.includes('apple') ||
+      id.includes('pear') ||
+      id.includes('banana') ||
+      id.includes('orange') ||
+      id.includes('lemon') ||
+      id.includes('berry') ||
+      id.includes('strawberry') ||
+      id.includes('grape') ||
+      id.includes('herb') ||
+      id.includes('dill') ||
+      id.includes('parsley') ||
+      id.includes('lettuce') ||
+      id.includes('salad') ||
+      id.includes('zucchini') ||
+      id.includes('eggplant') ||
+      id.includes('pumpkin') ||
+      id.includes('corn') ||
+      id.includes('pea')
+    ) {
+      return 'food_produce';
+    }
+    return 'food_bakery';
+  }
+
+  return 'glass_plastic';
+}
+
+interface ComputedItemVisualMetrics {
+  material: ItemVisualMaterial;
+  isFood: boolean;
+  isPreparedDish: boolean;
+  temp: number;
+  wet: number;      // 0..1
+  soap: number;     // 0..1
+  infusion: number; // 0..1
+  boilLvl: number;  // 0..1
+  brownLvl: number; // 0..1
+  charLvl: number;  // 0..1
+  heatLvl: number;  // 0..1
+  frostLvl: number; // 0..1
+  isFreezing: boolean;
+  isDeepFreeze: boolean;
+  hasPigmentedSoak: boolean;
+  soakRgb: { r: number; g: number; b: number } | null;
+  hasAnySurfaceEffect: boolean;
+  hasSteam: boolean;
+}
+
+function computeItemVisualMetrics(item: any, isInner: boolean): ComputedItemVisualMetrics {
+  const material = classifyItemVisualMaterial(item);
+  const isFood = material === 'food_meat' || material === 'food_produce' || material === 'food_bakery';
+  const isPreparedDish = Boolean(
+    item?.culinaryData?.isPreparedDish ||
+    item?.itemId === 'cooked_dish' ||
+    item?.itemId === 'custom_cooked_dish'
+  );
+
+  const temp =
+    typeof item?.surfaceTemperature === 'number'
+      ? item.surfaceTemperature
+      : typeof item?.temperature === 'number'
+      ? item.temperature
+      : 20.0;
+
+  const wet = Math.max(0, Math.min(1, (item?.wetness || 0) / 100));
+  const isSoapyByName =
+    item?.soakedLiquidNameRu === 'Мыльный раствор' ||
+    item?.soakedLiquidId === 'detergent' ||
+    item?.soakedLiquidId === 'laundry_detergent';
+  const soap = Math.max(
+    0,
+    Math.min(1, Math.max(item?.soapyLevel || 0, isSoapyByName && wet > 0.08 ? Math.min(0.95, wet * 0.9) : 0))
+  );
+  const infusion = Math.max(0, Math.min(1, item?.infusionProgress || 0));
+
+  const state = String(item?.attributes?.state || '').toLowerCase();
+  const stateRu = String(item?.attributes?.stateNameRu || '').toLowerCase();
+  const cd = item?.culinaryData;
+  const ca = cd?.cookingAttributes;
+
+  let boilLvl = 0;
+  let brownLvl = 0;
+  let charLvl = 0;
+
+  // Extract continuous cooking/browning/charring values
+  if (isFood) {
+    const cookProg = Math.max(0, Math.min(1, item?.cookProgress || 0));
+    const method = item?.cookMethod;
+    boilLvl = Math.max(
+      ca?.boiled || 0,
+      method === 'boiled' || method === 'steamed' || method === 'microwaved' ? cookProg : 0,
+      state === 'boiled' || state === 'steamed' || stateRu.includes('варён') || stateRu.includes('варен') ? 0.85 : 0,
+      state === 'cooked' || stateRu.includes('приготовл') || stateRu.includes('разогрет') ? 0.58 : 0
+    );
+    brownLvl = Math.max(
+      item?.brownLevel || 0,
+      cd?.maillard || 0,
+      (ca?.fried || 0) * 0.88,
+      (ca?.baked || 0) * 0.8,
+      method === 'fried' ? cookProg * 0.78 : 0,
+      method === 'baked' ? cookProg * 0.72 : 0,
+      state === 'fried' || stateRu.includes('жарен') ? 0.74 : 0,
+      state === 'baked' || stateRu.includes('запеч') ? 0.66 : 0
+    );
+    charLvl = Math.max(
+      item?.charLevel || 0,
+      cd?.charring || 0,
+      ca?.charring || 0,
+      state === 'burnt' || stateRu.includes('подгор') || stateRu.includes('сгор') || stateRu.includes('обугл') ? 0.82 : 0
+    );
+
+    // Prepared dishes already render cooked ingredient tones inside culinaryGraphics;
+    // scale down redundant base cooking tint while keeping extra stove browning/charring visible.
+    if (isPreparedDish) {
+      boilLvl = 0;
+      brownLvl = Math.max(0, (item?.brownLevel || 0) * 0.65);
+      charLvl = Math.max(0, (item?.charLevel || 0) * 0.85);
+    }
+  } else if (material === 'fabric' || material === 'paper_wood') {
+    charLvl = Math.max(0, Math.min(1, item?.charLevel || 0));
+  }
+
+  boilLvl = Math.max(0, Math.min(1, boilLvl));
+  brownLvl = Math.max(0, Math.min(1, brownLvl));
+  charLvl = Math.max(0, Math.min(1, charLvl));
+
+  // Heat radiance threshold depends on material
+  let heatLvl = 0;
+  if (material === 'metal' && temp >= 75) {
+    heatLvl = Math.max(0, Math.min(1, (temp - 75) / 135));
+  } else if (isFood && temp >= 48) {
+    heatLvl = Math.max(0, Math.min(1, (temp - 48) / 85));
+  } else if ((material === 'ceramic_stone' || material === 'glass_plastic') && temp >= 78) {
+    heatLvl = Math.max(0, Math.min(1, (temp - 78) / 110));
+  }
+
+  const frostLvl = temp <= 5.0 ? Math.min(1.0, Math.max(0.12, (5.0 - temp) / 15.0)) : 0;
+  const isFreezing = temp <= 0.0;
+  const isDeepFreeze = temp <= -8.0;
+
+  const soakRgb = parseHexColorRgb(item?.soakedColor);
+  const isPlainWater = item?.soakedLiquidId === 'water' && !isSoapyByName && soap < 0.04;
+  const hasPigmentedSoak = Boolean(soakRgb && (!isPlainWater || soap >= 0.04) && (wet >= 0.06 || infusion >= 0.08));
+
+  const hasAnySurfaceEffect =
+    boilLvl > 0.03 ||
+    brownLvl > 0.03 ||
+    charLvl > 0.03 ||
+    wet >= 0.06 ||
+    soap >= 0.04 ||
+    hasPigmentedSoak ||
+    heatLvl > 0.04 ||
+    frostLvl > 0;
+
+  const hasSteam = !isInner && temp >= 56.0;
+
+  return {
+    material,
+    isFood,
+    isPreparedDish,
+    temp,
+    wet,
+    soap,
+    infusion,
+    boilLvl,
+    brownLvl,
+    charLvl,
+    heatLvl,
+    frostLvl,
+    isFreezing,
+    isDeepFreeze,
+    hasPigmentedSoak,
+    soakRgb,
+    hasAnySurfaceEffect,
+    hasSteam,
+  };
+}
+
+/**
+ * Fast O(1) check whether an item requires dynamic visual color/surface rendering
+ * (cooking, browning, charring, wetness, soapy foam, heating glow, frost, or steam).
+ */
+export function hasActiveItemVisualState(item?: any, isInner: boolean = false): boolean {
+  if (!item) return false;
+  const m = computeItemVisualMetrics(item, isInner);
+  return m.hasAnySurfaceEffect || m.hasSteam;
 }
 
 /**
@@ -935,7 +1360,7 @@ function drawDendriticBranch(
   ctx.moveTo(x, y);
   ctx.lineTo(endX, endY);
 
-  const barbAngleOffset = Math.PI / 3; // 60-degree hexagonal ice crystal lattice angle
+  const barbAngleOffset = Math.PI / 3;
   for (let b = 1; b <= barbs; b++) {
     const t = b / (barbs + 0.6);
     const bx = x + cos * (length * t);
@@ -975,7 +1400,6 @@ function drawHexIceCrystal(
     ctx.moveTo(cx - dx, cy - dy);
     ctx.lineTo(cx + dx, cy + dy);
 
-    // Chevron tips on both ends of the axis
     for (const dir of [-1, 1]) {
       const tipX = cx + dx * dir * 0.62;
       const tipY = cy + dy * dir * 0.62;
@@ -991,11 +1415,620 @@ function drawHexIceCrystal(
   ctx.stroke();
 }
 
+function drawHotSteamWisps(
+  ctx: CanvasRenderingContext2D,
+  temp: number,
+  boundsRadius: number
+) {
+  if (temp < 56.0) return;
+  ctx.save();
+  const heatFactor = Math.min(1.0, (temp - 56.0) / 40.0);
+  const steamAlpha = 0.28 + heatFactor * 0.44;
+  ctx.strokeStyle = `rgba(248, 250, 252, ${steamAlpha.toFixed(2)})`;
+  ctx.lineWidth = 0.9 + heatFactor * 0.25;
+  ctx.lineCap = 'round';
+
+  for (let s = -1; s <= 1; s++) {
+    const sx = s * 3.4;
+    const sy = -boundsRadius * 0.5;
+    const h = 8.5 + heatFactor * 3.2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.bezierCurveTo(
+      sx + (s === 0 ? 1.5 : -1.5),
+      sy - h * 0.34,
+      sx - (s === 0 ? 1.5 : -1.5),
+      sy - h * 0.68,
+      sx + s * 0.8,
+      sy - h
+    );
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /**
- * Procedural Frost & Thermal overlay for items.
- * Renders shape-hugging crystalline ice rime, contour hoarfrost crust, dendritic veins,
- * and micro-crystals strictly conforming to the exact 2D model silhouette for cold/freezing items (T <= 5°C),
- * as well as delicate steam wisps for hot items (T >= 60°C).
+ * Renders an item model with full material-aware, silhouette-conforming dynamic color
+ * and surface transformations:
+ *  - Cooking progression: boiling/steaming, Maillard golden-brown frying/baking crust, charring/burning
+ *  - Wetness & washing: optical fabric/paper wet darkening, colored liquid staining, soapy detergent suds,
+ *    water droplets & specular wet gloss on hard non-porous surfaces
+ *  - Heating: realistic heated metal thermal glow, warm food radiance, rising steam wisps
+ *  - Chilling & freezing: cool icy color shift, shape-hugging hoarfrost rime, dendritic veins & condensation
+ */
+export function drawItemWithDynamicState(
+  ctx: CanvasRenderingContext2D,
+  item: any,
+  boundsRadius: number,
+  renderModel: (targetCtx: CanvasRenderingContext2D) => void,
+  isInner: boolean = false,
+  renderDepth: number = 0
+): void {
+  if (!item) {
+    renderModel(ctx);
+    return;
+  }
+
+  const m = computeItemVisualMetrics(item, isInner);
+  if (!m.hasAnySurfaceEffect) {
+    renderModel(ctx);
+    if (m.hasSteam) {
+      drawHotSteamWisps(ctx, m.temp, boundsRadius);
+    }
+    return;
+  }
+
+  const buffers = getEffectScratchBuffers(renderDepth);
+  if (!buffers) {
+    renderModel(ctx);
+    if (m.hasSteam) {
+      drawHotSteamWisps(ctx, m.temp, boundsRadius);
+    }
+    return;
+  }
+
+  const { silhouette, composed, eroded, edge, overlay } = buffers;
+  const sCtx = silhouette.getContext('2d');
+  const cCtx = composed.getContext('2d');
+  const erCtx = eroded.getContext('2d');
+  const edCtx = edge.getContext('2d');
+  const oCtx = overlay.getContext('2d');
+
+  if (!sCtx || !cCtx || !erCtx || !edCtx || !oCtx) {
+    renderModel(ctx);
+    if (m.hasSteam) {
+      drawHotSteamWisps(ctx, m.temp, boundsRadius);
+    }
+    return;
+  }
+
+  const pxScale = EFFECT_CANVAS_SIZE / EFFECT_WORLD_SPAN;
+  const halfSpan = EFFECT_WORLD_SPAN / 2;
+
+  // Deterministic PRNG seeded by item identity
+  const seedStr = String(item.id || item.itemId || 'item_state');
+  let hash = 2166136261 >>> 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    hash ^= seedStr.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  const pseudoRand = (offset: number) => {
+    const x = Math.sin(hash * 0.0001 + offset * 12.9898) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  // 1. Render pure item model ONCE into silhouette buffer (with ground shadow suppressed)
+  const prevSuppress = suppressShadow;
+  sCtx.setTransform(1, 0, 0, 1, 0, 0);
+  sCtx.globalCompositeOperation = 'source-over';
+  sCtx.globalAlpha = 1.0;
+  sCtx.clearRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+  sCtx.save();
+  sCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
+  sCtx.scale(pxScale, pxScale);
+  setSuppressItemShadow(true);
+  try {
+    renderModel(sCtx);
+  } finally {
+    setSuppressItemShadow(prevSuppress);
+    sCtx.restore();
+  }
+
+  // 2. Copy base item pixels into composed buffer
+  cCtx.setTransform(1, 0, 0, 1, 0, 0);
+  cCtx.globalCompositeOperation = 'source-over';
+  cCtx.globalAlpha = 1.0;
+  cCtx.clearRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+  cCtx.drawImage(silhouette, 0, 0);
+
+  // Lazy morphological edge contour builder (hugs exact perimeter of any arbitrary shape)
+  const buildErodedMask = (radiusPx: number) => {
+    erCtx.setTransform(1, 0, 0, 1, 0, 0);
+    erCtx.globalCompositeOperation = 'source-over';
+    erCtx.globalAlpha = 1.0;
+    erCtx.clearRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    erCtx.drawImage(silhouette, 0, 0);
+
+    erCtx.globalCompositeOperation = 'destination-in';
+    const d = radiusPx * 0.7071;
+    const offsets: Array<[number, number]> = [
+      [-radiusPx, 0], [radiusPx, 0], [0, -radiusPx], [0, radiusPx],
+      [-d, -d], [d, -d], [-d, d], [d, d],
+    ];
+    for (const [ox, oy] of offsets) {
+      erCtx.drawImage(silhouette, ox, oy);
+    }
+  };
+
+  const buildColoredContour = (outerR: number, innerR: number, outerCut: number, innerCut: number, fillStyle: string | CanvasGradient) => {
+    edCtx.setTransform(1, 0, 0, 1, 0, 0);
+    edCtx.globalCompositeOperation = 'source-over';
+    edCtx.globalAlpha = 1.0;
+    edCtx.clearRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    edCtx.drawImage(silhouette, 0, 0);
+
+    buildErodedMask(outerR);
+    edCtx.globalCompositeOperation = 'destination-out';
+    edCtx.globalAlpha = outerCut;
+    edCtx.drawImage(eroded, 0, 0);
+
+    if (innerR > 0) {
+      buildErodedMask(innerR);
+      edCtx.globalAlpha = innerCut;
+      edCtx.drawImage(eroded, 0, 0);
+    }
+
+    edCtx.globalAlpha = 1.0;
+    edCtx.globalCompositeOperation = 'source-in';
+    edCtx.fillStyle = fillStyle;
+    edCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+  };
+
+  // =========================================================================
+  // LAYER A: COOKING — BOILING / MAILLARD BROWNING / CHARRING
+  // =========================================================================
+  if (m.isFood && m.boilLvl > 0.03 && m.brownLvl < 0.65) {
+    const bStr = m.boilLvl * (1 - m.brownLvl * 0.7);
+    if (m.material === 'food_meat') {
+      // Raw pink/red meat -> tender pale taupe-gray cooked meat
+      cCtx.globalCompositeOperation = 'source-atop';
+      cCtx.fillStyle = `rgba(178, 160, 140, ${(bStr * 0.56).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+      cCtx.globalCompositeOperation = 'multiply';
+      cCtx.fillStyle = `rgba(218, 206, 194, ${(bStr * 0.48).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    } else if (m.material === 'food_produce') {
+      // Boiled vegetables soften toward warm cooked tone
+      cCtx.globalCompositeOperation = 'source-atop';
+      cCtx.fillStyle = `rgba(212, 194, 146, ${(bStr * 0.34).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+      cCtx.globalCompositeOperation = 'multiply';
+      cCtx.fillStyle = `rgba(232, 224, 196, ${(bStr * 0.36).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    } else {
+      // Boiled dough/pelmeni/pasta turns slightly warm creamy ivory with soft sheen
+      cCtx.globalCompositeOperation = 'source-atop';
+      cCtx.fillStyle = `rgba(246, 236, 206, ${(bStr * 0.32).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    }
+  }
+
+  if (m.isFood && m.brownLvl > 0.03) {
+    const br = m.brownLvl;
+    // 1. Rich Maillard golden-amber to roasted mahogany multiply pass
+    cCtx.globalCompositeOperation = 'multiply';
+    if (m.material === 'food_meat') {
+      cCtx.fillStyle = `rgba(142, 78, 32, ${(0.24 + br * 0.52).toFixed(3)})`;
+    } else if (m.material === 'food_bakery') {
+      cCtx.fillStyle = `rgba(186, 114, 34, ${(0.2 + br * 0.52).toFixed(3)})`;
+    } else {
+      cCtx.fillStyle = `rgba(164, 98, 30, ${(0.18 + br * 0.46).toFixed(3)})`;
+    }
+    cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+    // 2. Warm caramel wash so even pale/bright raw pixels take roasted tone
+    cCtx.globalCompositeOperation = 'source-atop';
+    cCtx.fillStyle = `rgba(128, 62, 18, ${(br * 0.3).toFixed(3)})`;
+    cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+    // 3. Crisp browned crust hugging the perimeter contour
+    buildColoredContour(3.6, 1.5, 0.72, 0.55, `rgba(76, 34, 10, ${(0.28 + br * 0.48).toFixed(3)})`);
+    cCtx.globalCompositeOperation = 'source-atop';
+    cCtx.drawImage(edge, 0, 0);
+
+    // 4. Organic seared Maillard spots & pan-fry caramel flecks
+    cCtx.save();
+    cCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
+    cCtx.scale(pxScale, pxScale);
+    cCtx.globalCompositeOperation = 'source-atop';
+    const searCount = 5 + Math.floor(br * 7);
+    for (let i = 0; i < searCount; i++) {
+      const sx = (pseudoRand(i * 4 + 11) - 0.5) * boundsRadius * 1.45;
+      const sy = (pseudoRand(i * 4 + 12) - 0.5) * boundsRadius * 1.45;
+      const sr = (0.7 + pseudoRand(i * 4 + 13) * 1.7) * (0.65 + br * 0.45);
+      const sa = (0.18 + pseudoRand(i * 4 + 14) * 0.24) * br;
+      const sg = cCtx.createRadialGradient(sx, sy, sr * 0.1, sx, sy, sr);
+      sg.addColorStop(0, `rgba(68, 28, 8, ${sa.toFixed(3)})`);
+      sg.addColorStop(1, 'rgba(110, 48, 12, 0)');
+      cCtx.fillStyle = sg;
+      cCtx.beginPath();
+      cCtx.arc(sx, sy, sr, 0, Math.PI * 2);
+      cCtx.fill();
+    }
+    // Subtle warm fried oil sheen on upper highlight
+    if (br > 0.25 && m.charLvl < 0.4) {
+      const oilGrad = cCtx.createRadialGradient(-boundsRadius * 0.25, -boundsRadius * 0.3, 0.4, -boundsRadius * 0.2, -boundsRadius * 0.2, boundsRadius * 0.85);
+      oilGrad.addColorStop(0, `rgba(255, 232, 175, ${(0.18 * br * (1 - m.charLvl)).toFixed(3)})`);
+      oilGrad.addColorStop(1, 'rgba(255, 220, 140, 0)');
+      cCtx.fillStyle = oilGrad;
+      cCtx.beginPath();
+      cCtx.arc(0, 0, boundsRadius * 1.2, 0, Math.PI * 2);
+      cCtx.fill();
+    }
+    cCtx.restore();
+  }
+
+  if (m.charLvl > 0.03) {
+    const ch = m.charLvl;
+    // Deep blackened soot multiply + opaque charcoal crust
+    cCtx.globalCompositeOperation = 'multiply';
+    cCtx.fillStyle = `rgba(42, 28, 20, ${(0.35 + ch * 0.58).toFixed(3)})`;
+    cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+    cCtx.globalCompositeOperation = 'source-atop';
+    cCtx.fillStyle = `rgba(22, 18, 16, ${(ch * 0.68).toFixed(3)})`;
+    cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+    // Heavily blackened charred perimeter
+    buildColoredContour(4.2, 1.8, 0.68, 0.5, `rgba(14, 11, 10, ${(0.45 + ch * 0.5).toFixed(3)})`);
+    cCtx.globalCompositeOperation = 'source-atop';
+    cCtx.drawImage(edge, 0, 0);
+
+    // Irregular carbonized char blotches
+    cCtx.save();
+    cCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
+    cCtx.scale(pxScale, pxScale);
+    cCtx.globalCompositeOperation = 'source-atop';
+    const blotches = 6 + Math.floor(ch * 8);
+    for (let i = 0; i < blotches; i++) {
+      const bx = (pseudoRand(i * 4 + 41) - 0.5) * boundsRadius * 1.5;
+      const by = (pseudoRand(i * 4 + 42) - 0.5) * boundsRadius * 1.5;
+      const br = (0.9 + pseudoRand(i * 4 + 43) * 2.1) * (0.7 + ch * 0.4);
+      const ba = (0.28 + pseudoRand(i * 4 + 44) * 0.35) * ch;
+      const bg = cCtx.createRadialGradient(bx, by, br * 0.15, bx, by, br);
+      bg.addColorStop(0, `rgba(12, 10, 9, ${ba.toFixed(3)})`);
+      bg.addColorStop(1, 'rgba(28, 20, 16, 0)');
+      cCtx.fillStyle = bg;
+      cCtx.beginPath();
+      cCtx.arc(bx, by, br, 0, Math.PI * 2);
+      cCtx.fill();
+    }
+    cCtx.restore();
+  }
+
+  // =========================================================================
+  // LAYER B: WETNESS, WASHING MACHINE SOAPY FOAM & COLORED LIQUID SOAKING
+  // =========================================================================
+  if (m.wet >= 0.06 || m.soap >= 0.04 || m.hasPigmentedSoak) {
+    const wet = m.wet;
+    const isPorousFabric = m.material === 'fabric';
+    const isPorousPaper = m.material === 'paper_wood';
+    const isHardSurface = m.material === 'metal' || m.material === 'glass_plastic' || m.material === 'ceramic_stone';
+
+    // 1. Optical wet darkening for porous materials (fabric, paper, wood, food)
+    if (wet >= 0.06) {
+      if (isPorousFabric) {
+        // Real wet cloth turns significantly deeper & richer in tone
+        cCtx.globalCompositeOperation = 'multiply';
+        cCtx.fillStyle = `rgba(98, 114, 134, ${(0.22 + wet * 0.54).toFixed(3)})`;
+        cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+        // Damp darkened edge contour
+        buildColoredContour(3.0, 1.2, 0.78, 0.62, `rgba(38, 52, 72, ${(wet * 0.34).toFixed(3)})`);
+        cCtx.globalCompositeOperation = 'source-atop';
+        cCtx.drawImage(edge, 0, 0);
+      } else if (isPorousPaper) {
+        cCtx.globalCompositeOperation = 'multiply';
+        cCtx.fillStyle = `rgba(124, 116, 104, ${(0.18 + wet * 0.48).toFixed(3)})`;
+        cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+      } else if (m.isFood) {
+        const foodDark = m.material === 'food_bakery' ? 0.38 : 0.24;
+        cCtx.globalCompositeOperation = 'multiply';
+        cCtx.fillStyle = `rgba(148, 156, 168, ${(wet * foodDark).toFixed(3)})`;
+        cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+      }
+    }
+
+    // 2. Colored liquid soak / staining (broth, tea, coffee, wine, oil, detergent)
+    if (m.hasPigmentedSoak && m.soakRgb) {
+      const { r, g, b } = m.soakRgb;
+      const stainStrength = Math.max(wet, m.infusion, m.soap * 0.85);
+      const maxAlpha = isPorousFabric || isPorousPaper ? 0.38 : m.isFood ? 0.34 : 0.16;
+      cCtx.globalCompositeOperation = 'source-atop';
+      cCtx.fillStyle = `rgba(${r}, ${g}, ${b}, ${(stainStrength * maxAlpha).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    }
+
+    // 3. Glossy wet surface sheen & water droplets (crisp on hard surfaces & wet food)
+    if (wet >= 0.12 && (isHardSurface || m.isFood)) {
+      cCtx.save();
+      cCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
+      cCtx.scale(pxScale, pxScale);
+      cCtx.globalCompositeOperation = 'source-atop';
+
+      // Specular wet sheen sweep across upper-left curve
+      const sheenAlpha = isHardSurface ? 0.12 + wet * 0.2 : 0.08 + wet * 0.14;
+      const wGrad = cCtx.createLinearGradient(-boundsRadius, -boundsRadius, boundsRadius * 0.7, boundsRadius * 0.7);
+      wGrad.addColorStop(0.0, `rgba(224, 242, 254, ${sheenAlpha.toFixed(3)})`);
+      wGrad.addColorStop(0.45, `rgba(186, 230, 253, ${(sheenAlpha * 0.35).toFixed(3)})`);
+      wGrad.addColorStop(1.0, 'rgba(186, 230, 253, 0)');
+      cCtx.fillStyle = wGrad;
+      cCtx.fillRect(-halfSpan, -halfSpan, EFFECT_WORLD_SPAN, EFFECT_WORLD_SPAN);
+
+      // Gleaming water droplets
+      const dropCount = isHardSurface ? 5 + Math.floor(wet * 6) : 3 + Math.floor(wet * 4);
+      for (let i = 0; i < dropCount; i++) {
+        const dx = (pseudoRand(i * 3 + 71) - 0.5) * boundsRadius * 1.45;
+        const dy = (pseudoRand(i * 3 + 72) - 0.5) * boundsRadius * 1.45;
+        const dr = 0.34 + pseudoRand(i * 3 + 73) * 0.44;
+        cCtx.fillStyle = `rgba(15, 23, 42, ${(0.18 * wet).toFixed(3)})`;
+        cCtx.beginPath();
+        cCtx.arc(dx + 0.12, dy + 0.16, dr, 0, Math.PI * 2);
+        cCtx.fill();
+
+        const drRgb = m.hasPigmentedSoak && m.soakRgb ? `${m.soakRgb.r}, ${m.soakRgb.g}, ${m.soakRgb.b}` : '186, 230, 253';
+        cCtx.fillStyle = `rgba(${drRgb}, ${(0.45 + wet * 0.32).toFixed(3)})`;
+        cCtx.beginPath();
+        cCtx.arc(dx, dy, dr, 0, Math.PI * 2);
+        cCtx.fill();
+
+        cCtx.fillStyle = `rgba(255, 255, 255, ${(0.72 + wet * 0.25).toFixed(3)})`;
+        cCtx.beginPath();
+        cCtx.arc(dx - dr * 0.32, dy - dr * 0.32, dr * 0.34, 0, Math.PI * 2);
+        cCtx.fill();
+      }
+      cCtx.restore();
+    }
+
+    // 4. Soapy Detergent Foam & Suds Bubbles (washing machine / detergent soak)
+    if (m.soap >= 0.04) {
+      const sp = m.soap;
+      const rgb = m.soakRgb || { r: 210, g: 240, b: 255 };
+      // Mix detergent tint with crisp milky foam white
+      const fr = Math.round(rgb.r * 0.45 + 255 * 0.55);
+      const fg = Math.round(rgb.g * 0.45 + 255 * 0.55);
+      const fb = Math.round(rgb.b * 0.45 + 255 * 0.55);
+
+      // Soft foamy rim around silhouette
+      buildColoredContour(3.2, 1.3, 0.72, 0.55, `rgba(${fr}, ${fg}, ${fb}, ${(0.35 + sp * 0.48).toFixed(3)})`);
+      cCtx.globalCompositeOperation = 'source-atop';
+      cCtx.drawImage(edge, 0, 0);
+
+      // Clustered pearlescent soap bubbles
+      cCtx.save();
+      cCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
+      cCtx.scale(pxScale, pxScale);
+      cCtx.globalCompositeOperation = 'source-atop';
+      const bubbleCount = 6 + Math.floor(sp * 9);
+      for (let i = 0; i < bubbleCount; i++) {
+        const bx = (pseudoRand(i * 4 + 131) - 0.5) * boundsRadius * 1.5;
+        const by = (pseudoRand(i * 4 + 132) - 0.5) * boundsRadius * 1.5;
+        const br = (0.48 + pseudoRand(i * 4 + 133) * 0.88) * (0.7 + sp * 0.4);
+
+        cCtx.fillStyle = `rgba(${fr}, ${fg}, ${fb}, ${(0.28 + sp * 0.36).toFixed(3)})`;
+        cCtx.beginPath();
+        cCtx.arc(bx, by, br, 0, Math.PI * 2);
+        cCtx.fill();
+
+        cCtx.strokeStyle = `rgba(255, 255, 255, ${(0.52 + sp * 0.36).toFixed(3)})`;
+        cCtx.lineWidth = 0.24;
+        cCtx.stroke();
+
+        cCtx.fillStyle = `rgba(255, 255, 255, ${(0.75 + sp * 0.2).toFixed(3)})`;
+        cCtx.beginPath();
+        cCtx.arc(bx - br * 0.34, by - br * 0.34, Math.max(0.16, br * 0.26), 0, Math.PI * 2);
+        cCtx.fill();
+      }
+      cCtx.restore();
+    }
+  }
+
+  // =========================================================================
+  // LAYER C: HEATING / THERMAL RADIANCE (HOT METAL GLOW & WARM FOOD SHIFT)
+  // =========================================================================
+  if (m.heatLvl > 0.04) {
+    const hl = m.heatLvl;
+    if (m.material === 'metal') {
+      // Heated cookware/metal: warm brassy sheen at 75-130°C, amber-cherry thermal radiance at 130-215°C
+      const isGlowingHot = m.temp >= 120;
+      cCtx.globalCompositeOperation = 'source-atop';
+      cCtx.fillStyle = isGlowingHot
+        ? `rgba(255, 118, 36, ${(0.12 + hl * 0.34).toFixed(3)})`
+        : `rgba(251, 178, 84, ${(hl * 0.22).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+      if (isGlowingHot) {
+        const glowStr = Math.min(1, (m.temp - 115) / 95);
+        buildColoredContour(3.4, 1.3, 0.72, 0.55, `rgba(255, 134, 48, ${(0.35 + glowStr * 0.45).toFixed(3)})`);
+        cCtx.globalCompositeOperation = 'screen';
+        cCtx.drawImage(edge, 0, 0);
+      }
+    } else if (m.isFood) {
+      // Gentle warm golden radiance on freshly heated food
+      cCtx.globalCompositeOperation = 'source-atop';
+      cCtx.fillStyle = `rgba(255, 158, 72, ${(hl * 0.16).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    } else if (m.material === 'ceramic_stone' || m.material === 'glass_plastic') {
+      cCtx.globalCompositeOperation = 'source-atop';
+      cCtx.fillStyle = `rgba(255, 184, 120, ${(hl * 0.12).toFixed(3)})`;
+      cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    }
+  }
+
+  // =========================================================================
+  // LAYER D: CHILLED & FROZEN (COOL COLOR SHIFT + SHAPE-HUGGING HOARFROST)
+  // =========================================================================
+  if (m.frostLvl > 0) {
+    const frostSeverity = m.frostLvl;
+    const isFreezing = m.isFreezing;
+    const isDeepFreeze = m.isDeepFreeze;
+
+    // 1. Cool icy surface color shift so chilled/frozen items visibly look cold-shifted
+    cCtx.globalCompositeOperation = 'source-atop';
+    cCtx.fillStyle = isFreezing
+      ? `rgba(186, 228, 255, ${(0.16 + frostSeverity * 0.24).toFixed(3)})`
+      : `rgba(186, 230, 253, ${(frostSeverity * 0.14).toFixed(3)})`;
+    cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+    // 2. Shape-hugging frost contour rim
+    const rimGrad = edCtx.createLinearGradient(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    rimGrad.addColorStop(0.0, isFreezing ? 'rgba(255, 255, 255, 0.92)' : 'rgba(224, 242, 254, 0.45)');
+    rimGrad.addColorStop(0.5, isFreezing ? 'rgba(224, 242, 254, 0.80)' : 'rgba(186, 230, 253, 0.32)');
+    rimGrad.addColorStop(1.0, isFreezing ? 'rgba(240, 249, 255, 0.88)' : 'rgba(224, 242, 254, 0.38)');
+    buildColoredContour(3.6, 1.5, isFreezing ? 0.58 : 0.78, isFreezing ? 0.45 : 0.65, rimGrad);
+
+    // 3. Detailed frost crystals / condensation onto overlay buffer
+    oCtx.setTransform(1, 0, 0, 1, 0, 0);
+    oCtx.globalCompositeOperation = 'source-over';
+    oCtx.globalAlpha = isFreezing ? (0.48 + frostSeverity * 0.42) : 0.35;
+    oCtx.clearRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+    oCtx.drawImage(edge, 0, 0);
+    oCtx.globalAlpha = 1.0;
+
+    oCtx.save();
+    oCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
+    oCtx.scale(pxScale, pxScale);
+
+    if (isFreezing) {
+      const patchCount = 7 + Math.floor(frostSeverity * 7);
+      for (let i = 0; i < patchCount; i++) {
+        const px = (pseudoRand(i * 5 + 1) - 0.5) * boundsRadius * 1.65;
+        const py = (pseudoRand(i * 5 + 2) - 0.5) * boundsRadius * 1.65;
+        const pr = (1.6 + pseudoRand(i * 5 + 3) * 2.6) * (0.7 + frostSeverity * 0.4);
+        const pAlpha = (0.14 + pseudoRand(i * 5 + 4) * 0.18) * frostSeverity;
+
+        const pGrad = oCtx.createRadialGradient(px, py, pr * 0.1, px, py, pr);
+        pGrad.addColorStop(0.0, `rgba(255, 255, 255, ${pAlpha * 1.35})`);
+        pGrad.addColorStop(0.55, `rgba(224, 242, 254, ${pAlpha * 0.85})`);
+        pGrad.addColorStop(1.0, 'rgba(186, 230, 253, 0)');
+        oCtx.fillStyle = pGrad;
+        oCtx.beginPath();
+        oCtx.arc(px, py, pr, 0, Math.PI * 2);
+        oCtx.fill();
+      }
+
+      const branchCount = 10 + Math.floor(frostSeverity * 12);
+      for (let i = 0; i < branchCount; i++) {
+        const bx = (pseudoRand(i * 6 + 20) - 0.5) * boundsRadius * 1.75;
+        const by = (pseudoRand(i * 6 + 21) - 0.5) * boundsRadius * 1.75;
+        const bAngle = pseudoRand(i * 6 + 22) * Math.PI * 2;
+        const bLen = (1.1 + pseudoRand(i * 6 + 23) * 1.9) * (0.75 + frostSeverity * 0.45);
+        const barbs = 2 + Math.floor(pseudoRand(i * 6 + 24) * 3);
+        const bAlpha = Math.min(0.95, (0.45 + pseudoRand(i * 6 + 25) * 0.4) * (0.65 + frostSeverity * 0.45));
+        drawDendriticBranch(oCtx, bx, by, bAngle, bLen, barbs, bAlpha);
+      }
+
+      const hexCount = 5 + Math.floor(frostSeverity * 7);
+      for (let i = 0; i < hexCount; i++) {
+        const hx = (pseudoRand(i * 4 + 60) - 0.5) * boundsRadius * 1.5;
+        const hy = (pseudoRand(i * 4 + 61) - 0.5) * boundsRadius * 1.5;
+        const hRad = (0.65 + pseudoRand(i * 4 + 62) * 0.85) * (0.8 + frostSeverity * 0.35);
+        const hRot = pseudoRand(i * 4 + 63) * Math.PI;
+        drawHexIceCrystal(oCtx, hx, hy, hRad, hRot, 0.55 + frostSeverity * 0.38);
+      }
+
+      const grainCount = 28 + Math.floor(frostSeverity * 36);
+      for (let i = 0; i < grainCount; i++) {
+        const gx = (pseudoRand(i * 4 + 100) - 0.5) * boundsRadius * 1.85;
+        const gy = (pseudoRand(i * 4 + 101) - 0.5) * boundsRadius * 1.85;
+        const gSize = 0.16 + pseudoRand(i * 4 + 102) * 0.28;
+        const isBright = pseudoRand(i * 4 + 103) > 0.35;
+
+        oCtx.fillStyle = isBright
+          ? `rgba(255, 255, 255, ${0.65 + frostSeverity * 0.32})`
+          : `rgba(186, 230, 253, ${0.55 + frostSeverity * 0.3})`;
+        oCtx.beginPath();
+        oCtx.moveTo(gx, gy - gSize);
+        oCtx.lineTo(gx + gSize * 0.85, gy);
+        oCtx.lineTo(gx, gy + gSize);
+        oCtx.lineTo(gx - gSize * 0.85, gy);
+        oCtx.closePath();
+        oCtx.fill();
+      }
+
+      if (isDeepFreeze) {
+        oCtx.strokeStyle = 'rgba(255, 255, 255, 0.82)';
+        oCtx.lineWidth = 0.26;
+        for (let i = 0; i < 14; i++) {
+          const nx = (pseudoRand(i * 3 + 200) - 0.5) * boundsRadius * 1.6;
+          const ny = (pseudoRand(i * 3 + 201) - 0.5) * boundsRadius * 1.6;
+          const na = pseudoRand(i * 3 + 202) * Math.PI * 2;
+          const nl = 0.55 + pseudoRand(i * 3 + 203) * 0.75;
+          oCtx.beginPath();
+          oCtx.moveTo(nx - Math.cos(na) * nl, ny - Math.sin(na) * nl);
+          oCtx.lineTo(nx + Math.cos(na) * nl, ny + Math.sin(na) * nl);
+          oCtx.stroke();
+        }
+      }
+    } else {
+      // Chilled condensation micro-droplets (0°C < T <= 5°C)
+      const dropCount = Math.floor(6 + frostSeverity * 8);
+      for (let i = 0; i < dropCount; i++) {
+        const dx = (pseudoRand(i * 3 + 1) - 0.5) * boundsRadius * 1.5;
+        const dy = (pseudoRand(i * 3 + 2) - 0.5) * boundsRadius * 1.5;
+        const r = 0.38 + pseudoRand(i * 3 + 3) * 0.45;
+
+        oCtx.fillStyle = 'rgba(14, 116, 144, 0.22)';
+        oCtx.beginPath();
+        oCtx.arc(dx + 0.12, dy + 0.16, r, 0, Math.PI * 2);
+        oCtx.fill();
+
+        oCtx.fillStyle = 'rgba(186, 230, 253, 0.72)';
+        oCtx.beginPath();
+        oCtx.arc(dx, dy, r, 0, Math.PI * 2);
+        oCtx.fill();
+
+        oCtx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        oCtx.beginPath();
+        oCtx.arc(dx - r * 0.32, dy - r * 0.32, r * 0.35, 0, Math.PI * 2);
+        oCtx.fill();
+      }
+    }
+    oCtx.restore();
+
+    // Composite frost details onto composed buffer
+    cCtx.setTransform(1, 0, 0, 1, 0, 0);
+    cCtx.globalCompositeOperation = 'source-atop';
+    cCtx.globalAlpha = 1.0;
+    cCtx.drawImage(overlay, 0, 0);
+  }
+
+  // Final alpha lock to the exact anti-aliased item silhouette (zero bleed!)
+  cCtx.setTransform(1, 0, 0, 1, 0, 0);
+  cCtx.globalCompositeOperation = 'destination-in';
+  cCtx.globalAlpha = 1.0;
+  cCtx.drawImage(silhouette, 0, 0);
+
+  // Draw crisp contact drop shadow underneath (if not suppressed & not inner content)
+  if (!isInner && !suppressShadow) {
+    drawShadow(ctx, 6.8, 2.2, 7.3, 0.21);
+  }
+
+  // Blit final transformed item onto target canvas
+  ctx.save();
+  ctx.drawImage(composed, -halfSpan, -halfSpan, EFFECT_WORLD_SPAN, EFFECT_WORLD_SPAN);
+  ctx.restore();
+
+  // Rising steam wisps above hot items (outside silhouette mask)
+  if (m.hasSteam) {
+    drawHotSteamWisps(ctx, m.temp, boundsRadius);
+  }
+}
+
+/**
+ * Backwards-compatible alias for frost & thermal overlay callers.
  */
 export function drawFrostAndThermalOverlay(
   ctx: CanvasRenderingContext2D,
@@ -1003,253 +2036,7 @@ export function drawFrostAndThermalOverlay(
   boundsRadius: number = 8.5,
   renderModelSilhouette?: (targetCtx: CanvasRenderingContext2D) => void
 ) {
-  if (!item) return;
-
-  const temp = typeof item.surfaceTemperature === 'number'
-    ? item.surfaceTemperature
-    : (typeof item.temperature === 'number' ? item.temperature : 20.0);
-
-  // === COLD & FROST RENDERER (T <= 5°C) ===
-  if (temp <= 5.0) {
-    const frostSeverity = Math.min(1.0, Math.max(0.12, (5.0 - temp) / 15.0));
-    const isFreezing = temp <= 0.0;
-    const isDeepFreeze = temp <= -8.0;
-
-    // Deterministic seed from item identity
-    const seedStr = String(item.id || item.itemId || 'item_frost');
-    let hash = 0;
-    for (let i = 0; i < seedStr.length; i++) {
-      hash = (hash * 31 + seedStr.charCodeAt(i)) >>> 0;
-    }
-    const pseudoRand = (offset: number) => {
-      const x = Math.sin(hash + offset * 12.9898) * 43758.5453;
-      return x - Math.floor(x);
-    };
-
-    const buffers = renderModelSilhouette ? getFrostScratchBuffers() : null;
-    if (buffers && renderModelSilhouette) {
-      const { silhouette, eroded, edge, frost } = buffers;
-      const sCtx = silhouette.getContext('2d');
-      const erCtx = eroded.getContext('2d');
-      const edCtx = edge.getContext('2d');
-      const fCtx = frost.getContext('2d');
-
-      if (sCtx && erCtx && edCtx && fCtx) {
-        const pxScale = FROST_CANVAS_SIZE / FROST_WORLD_SPAN;
-        const halfSpan = FROST_WORLD_SPAN / 2;
-
-        // 1. Render pure item model silhouette (without ground drop shadow)
-        sCtx.setTransform(1, 0, 0, 1, 0, 0);
-        sCtx.clearRect(0, 0, FROST_CANVAS_SIZE, FROST_CANVAS_SIZE);
-        sCtx.save();
-        sCtx.translate(FROST_CANVAS_SIZE / 2, FROST_CANVAS_SIZE / 2);
-        sCtx.scale(pxScale, pxScale);
-        setSuppressItemShadow(true);
-        try {
-          renderModelSilhouette(sCtx);
-        } finally {
-          setSuppressItemShadow(false);
-          sCtx.restore();
-        }
-
-        // 2. Build morphological contour mask (edge) that hugs the exact perimeter of the model
-        const buildErodedMask = (radiusPx: number) => {
-          erCtx.setTransform(1, 0, 0, 1, 0, 0);
-          erCtx.globalCompositeOperation = 'source-over';
-          erCtx.globalAlpha = 1.0;
-          erCtx.clearRect(0, 0, FROST_CANVAS_SIZE, FROST_CANVAS_SIZE);
-          erCtx.drawImage(silhouette, 0, 0);
-
-          erCtx.globalCompositeOperation = 'destination-in';
-          const d = radiusPx * 0.7071;
-          const offsets: Array<[number, number]> = [
-            [-radiusPx, 0], [radiusPx, 0], [0, -radiusPx], [0, radiusPx],
-            [-d, -d], [d, -d], [-d, d], [d, d]
-          ];
-          for (const [ox, oy] of offsets) {
-            erCtx.drawImage(silhouette, ox, oy);
-          }
-        };
-
-        edCtx.setTransform(1, 0, 0, 1, 0, 0);
-        edCtx.globalCompositeOperation = 'source-over';
-        edCtx.globalAlpha = 1.0;
-        edCtx.clearRect(0, 0, FROST_CANVAS_SIZE, FROST_CANVAS_SIZE);
-        edCtx.drawImage(silhouette, 0, 0);
-
-        // Subtract deep interior first (leaving a 3.2px outer frost band)
-        buildErodedMask(3.2);
-        edCtx.globalCompositeOperation = 'destination-out';
-        edCtx.globalAlpha = isFreezing ? 0.58 : 0.78;
-        edCtx.drawImage(eroded, 0, 0);
-
-        // Subtract inner core further so the very outer 1.4px edge has the thickest rime crust
-        buildErodedMask(1.4);
-        edCtx.globalAlpha = isFreezing ? 0.45 : 0.65;
-        edCtx.drawImage(eroded, 0, 0);
-        edCtx.globalAlpha = 1.0;
-
-        // Tint the contour mask with crisp icy white & frost blue
-        edCtx.globalCompositeOperation = 'source-in';
-        const rimGrad = edCtx.createLinearGradient(0, 0, FROST_CANVAS_SIZE, FROST_CANVAS_SIZE);
-        rimGrad.addColorStop(0.0, isFreezing ? 'rgba(255, 255, 255, 0.92)' : 'rgba(224, 242, 254, 0.45)');
-        rimGrad.addColorStop(0.5, isFreezing ? 'rgba(224, 242, 254, 0.80)' : 'rgba(186, 230, 253, 0.32)');
-        rimGrad.addColorStop(1.0, isFreezing ? 'rgba(240, 249, 255, 0.88)' : 'rgba(224, 242, 254, 0.38)');
-        edCtx.fillStyle = rimGrad;
-        edCtx.fillRect(0, 0, FROST_CANVAS_SIZE, FROST_CANVAS_SIZE);
-
-        // 3. Assemble detailed frost patterns in model space on frost canvas
-        fCtx.setTransform(1, 0, 0, 1, 0, 0);
-        fCtx.globalCompositeOperation = 'source-over';
-        fCtx.globalAlpha = 1.0;
-        fCtx.clearRect(0, 0, FROST_CANVAS_SIZE, FROST_CANVAS_SIZE);
-
-        // Place the shape-following contour rime
-        fCtx.globalAlpha = isFreezing ? (0.48 + frostSeverity * 0.42) : 0.35;
-        fCtx.drawImage(edge, 0, 0);
-        fCtx.globalAlpha = 1.0;
-
-        fCtx.save();
-        fCtx.translate(FROST_CANVAS_SIZE / 2, FROST_CANVAS_SIZE / 2);
-        fCtx.scale(pxScale, pxScale);
-
-        if (isFreezing) {
-          // 3a. Organic mottled hoarfrost patches across the model surface
-          const patchCount = 7 + Math.floor(frostSeverity * 7);
-          for (let i = 0; i < patchCount; i++) {
-            const px = (pseudoRand(i * 5 + 1) - 0.5) * boundsRadius * 1.65;
-            const py = (pseudoRand(i * 5 + 2) - 0.5) * boundsRadius * 1.65;
-            const pr = (1.6 + pseudoRand(i * 5 + 3) * 2.6) * (0.7 + frostSeverity * 0.4);
-            const pAlpha = (0.14 + pseudoRand(i * 5 + 4) * 0.18) * frostSeverity;
-
-            const pGrad = fCtx.createRadialGradient(px, py, pr * 0.1, px, py, pr);
-            pGrad.addColorStop(0.0, `rgba(255, 255, 255, ${pAlpha * 1.35})`);
-            pGrad.addColorStop(0.55, `rgba(224, 242, 254, ${pAlpha * 0.85})`);
-            pGrad.addColorStop(1.0, 'rgba(186, 230, 253, 0)');
-            fCtx.fillStyle = pGrad;
-            fCtx.beginPath();
-            fCtx.arc(px, py, pr, 0, Math.PI * 2);
-            fCtx.fill();
-          }
-
-          // 3b. Feathery dendritic frost veins radiating across the surface and from edges
-          const branchCount = 12 + Math.floor(frostSeverity * 14);
-          for (let i = 0; i < branchCount; i++) {
-            const bx = (pseudoRand(i * 6 + 20) - 0.5) * boundsRadius * 1.75;
-            const by = (pseudoRand(i * 6 + 21) - 0.5) * boundsRadius * 1.75;
-            const bAngle = pseudoRand(i * 6 + 22) * Math.PI * 2;
-            const bLen = (1.1 + pseudoRand(i * 6 + 23) * 1.9) * (0.75 + frostSeverity * 0.45);
-            const barbs = 2 + Math.floor(pseudoRand(i * 6 + 24) * 3);
-            const bAlpha = Math.min(0.95, (0.45 + pseudoRand(i * 6 + 25) * 0.4) * (0.65 + frostSeverity * 0.45));
-            drawDendriticBranch(fCtx, bx, by, bAngle, bLen, barbs, bAlpha);
-          }
-
-          // 3c. 6-rayed hexagonal ice crystals on the surface
-          const hexCount = 5 + Math.floor(frostSeverity * 8);
-          for (let i = 0; i < hexCount; i++) {
-            const hx = (pseudoRand(i * 4 + 60) - 0.5) * boundsRadius * 1.5;
-            const hy = (pseudoRand(i * 4 + 61) - 0.5) * boundsRadius * 1.5;
-            const hRad = (0.65 + pseudoRand(i * 4 + 62) * 0.85) * (0.8 + frostSeverity * 0.35);
-            const hRot = pseudoRand(i * 4 + 63) * Math.PI;
-            drawHexIceCrystal(fCtx, hx, hy, hRad, hRot, 0.55 + frostSeverity * 0.38);
-          }
-
-          // 3d. Fine granular hoarfrost crystals (мелкая кристаллическая крупа инея)
-          const grainCount = 34 + Math.floor(frostSeverity * 42);
-          for (let i = 0; i < grainCount; i++) {
-            const gx = (pseudoRand(i * 4 + 100) - 0.5) * boundsRadius * 1.85;
-            const gy = (pseudoRand(i * 4 + 101) - 0.5) * boundsRadius * 1.85;
-            const gSize = 0.16 + pseudoRand(i * 4 + 102) * 0.28;
-            const isBright = pseudoRand(i * 4 + 103) > 0.35;
-
-            fCtx.fillStyle = isBright
-              ? `rgba(255, 255, 255, ${0.65 + frostSeverity * 0.32})`
-              : `rgba(186, 230, 253, ${0.55 + frostSeverity * 0.3})`;
-            fCtx.beginPath();
-            // Faceted diamond crystal grain
-            fCtx.moveTo(gx, gy - gSize);
-            fCtx.lineTo(gx + gSize * 0.85, gy);
-            fCtx.lineTo(gx, gy + gSize);
-            fCtx.lineTo(gx - gSize * 0.85, gy);
-            fCtx.closePath();
-            fCtx.fill();
-          }
-
-          if (isDeepFreeze) {
-            // Extra crisp frost needles for deep freeze (-8°C and colder)
-            fCtx.strokeStyle = 'rgba(255, 255, 255, 0.82)';
-            fCtx.lineWidth = 0.26;
-            for (let i = 0; i < 16; i++) {
-              const nx = (pseudoRand(i * 3 + 200) - 0.5) * boundsRadius * 1.6;
-              const ny = (pseudoRand(i * 3 + 201) - 0.5) * boundsRadius * 1.6;
-              const na = pseudoRand(i * 3 + 202) * Math.PI * 2;
-              const nl = 0.55 + pseudoRand(i * 3 + 203) * 0.75;
-              fCtx.beginPath();
-              fCtx.moveTo(nx - Math.cos(na) * nl, ny - Math.sin(na) * nl);
-              fCtx.lineTo(nx + Math.cos(na) * nl, ny + Math.sin(na) * nl);
-              fCtx.stroke();
-            }
-          }
-        } else {
-          // Chilled condensation micro-droplets (0°C < T <= 5°C) strictly inside model silhouette
-          const dropCount = Math.floor(6 + frostSeverity * 8);
-          for (let i = 0; i < dropCount; i++) {
-            const dx = (pseudoRand(i * 3 + 1) - 0.5) * boundsRadius * 1.5;
-            const dy = (pseudoRand(i * 3 + 2) - 0.5) * boundsRadius * 1.5;
-            const r = 0.38 + pseudoRand(i * 3 + 3) * 0.45;
-
-            fCtx.fillStyle = 'rgba(14, 116, 144, 0.22)';
-            fCtx.beginPath();
-            fCtx.arc(dx + 0.12, dy + 0.16, r, 0, Math.PI * 2);
-            fCtx.fill();
-
-            fCtx.fillStyle = 'rgba(186, 230, 253, 0.72)';
-            fCtx.beginPath();
-            fCtx.arc(dx, dy, r, 0, Math.PI * 2);
-            fCtx.fill();
-
-            fCtx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-            fCtx.beginPath();
-            fCtx.arc(dx - r * 0.32, dy - r * 0.32, r * 0.35, 0, Math.PI * 2);
-            fCtx.fill();
-          }
-        }
-        fCtx.restore();
-
-        // 4. Clip ALL frost veins, crystals, and glaze strictly to the exact item model silhouette!
-        fCtx.setTransform(1, 0, 0, 1, 0, 0);
-        fCtx.globalCompositeOperation = 'destination-in';
-        fCtx.drawImage(silhouette, 0, 0);
-
-        // 5. Composite the model-conforming frost layer onto the target canvas
-        ctx.save();
-        ctx.drawImage(frost, -halfSpan, -halfSpan, FROST_WORLD_SPAN, FROST_WORLD_SPAN);
-        ctx.restore();
-        return;
-      }
-    }
-  }
-
-  // === HOT STEAM RENDERER (T >= 60°C) ===
-  else if (temp >= 60.0) {
-    ctx.save();
-    const heatFactor = Math.min(1.0, (temp - 60.0) / 30.0);
-    const steamAlpha = 0.35 + heatFactor * 0.4;
-
-    ctx.strokeStyle = `rgba(248, 250, 252, ${steamAlpha})`;
-    ctx.lineWidth = 1.0;
-    ctx.lineCap = 'round';
-
-    // 2-3 rising curly steam wisps above the item
-    for (let s = -1; s <= 1; s++) {
-      const sx = s * 3.5;
-      const sy = -boundsRadius * 0.5;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.bezierCurveTo(sx + (s === 0 ? 1.5 : -1.5), sy - 3.5, sx - (s === 0 ? 1.5 : -1.5), sy - 7.0, sx + s * 0.8, sy - 10.5);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
+  if (!item || !renderModelSilhouette) return;
+  drawItemWithDynamicState(ctx, item, boundsRadius, renderModelSilhouette, false, 0);
 }
+

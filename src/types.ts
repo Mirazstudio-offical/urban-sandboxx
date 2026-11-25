@@ -2552,6 +2552,11 @@ export interface InventoryItem {
   soakedColor?: string;          // Visual tint of the soaking liquid
   submersionLevel?: number;      // 0.0..1.0 fraction submerged inside parent hybrid container liquid
   infusionProgress?: number;     // 0.0..1.0 steeping/infusion/boiling exchange progress in liquid
+  cookProgress?: number;         // 0.0..1.0 continuous thermal cooking progression (boil/fry/bake/microwave)
+  brownLevel?: number;           // 0.0..1.0 Maillard browning / caramelization / roasted crust progression
+  charLevel?: number;            // 0.0..1.0 scorching / pyrolysis / charring progression
+  cookMethod?: 'boiled' | 'fried' | 'baked' | 'microwaved' | 'steamed';
+  soapyLevel?: number;           // 0.0..1.0 detergent foam / soapy residue during washing
   heatLossRate?: number;         // Heat loss / cooling coefficient per second (0.001 to 0.50)
   heatRetention?: number;        // Heat retention / insulation factor (0.0 bare metal, 1.0 vacuum thermos)
   ambientTemperature?: number;   // Surrounding ambient medium temperature in °C
