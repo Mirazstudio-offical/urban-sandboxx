@@ -1440,6 +1440,9 @@ export interface ShopInnerItemSpec {
   pelmenAttributes?: any;
   chocolateAttributes?: any;
   kitchenwareAttributes?: Partial<KitchenwareAttributes>;
+  phoneAttributes?: Partial<PhoneAttributes>;
+  phonePresetId?: string;
+  hardwareAttributes?: Partial<HardwareComponentAttributes>;
   attributes?: UnifiedAttributes;
 }
 
@@ -1461,6 +1464,9 @@ export interface MapShopCatalogEntry {
   contents?: ShopInnerItemSpec[];
   fluidStorage?: ShopFluidStorageSpec;
   kitchenwareAttributes?: Partial<KitchenwareAttributes>;
+  phoneAttributes?: Partial<PhoneAttributes>;
+  phonePresetId?: string;
+  hardwareAttributes?: Partial<HardwareComponentAttributes>;
   isOpen?: boolean;
   labelColor?: string;
   containerTintColor?: string;
@@ -2339,6 +2345,124 @@ export interface KitchenwareAttributes {
   dimensionCm?: number;
 }
 
+export interface RgbColor {
+  r: number;
+  g: number;
+  b: number;
+}
+
+export type HardwareComponentKind =
+  | 'hw_display'
+  | 'hw_cpu'
+  | 'hw_ram'
+  | 'hw_ssd'
+  | 'hw_hdd'
+  | 'hw_battery'
+  | 'hw_motherboard'
+  | 'hw_camera'
+  | 'hw_modem'
+  | 'hw_speaker'
+  | 'hw_charging_port';
+
+export interface HardwareComponentAttributes {
+  /** Базовый ID предмета комплектующего в ITEM_CATALOG */
+  kind: HardwareComponentKind;
+  /** Имя / наименование комплектующего на русском */
+  nameRu: string;
+  /** Производитель / марка */
+  brand: string;
+  /** Модель / маркировка */
+  model: string;
+  /** Из чего сделано (материалы конструкции) */
+  materialRu: string;
+  /** Как подсоединяется (разъём, шлейф, интерфейс, способ монтажа) */
+  connectorRu: string;
+  /** Цвет в hex */
+  colorHex: string;
+  /** Точный RGB-цвет (0-255) */
+  colorRgb: RgbColor;
+  /** Название цвета на русском */
+  colorNameRu: string;
+  /** Акцентный цвет (шлейф, контакты, радиатор, наклейка) в hex */
+  accentHex?: string;
+  /** Размеры / габариты (мм и диагональ) */
+  dimensionsRu: string;
+  /** Форм-фактор / типоразмер */
+  formFactorRu: string;
+  /** Вес комплектующего в граммах */
+  weightGrams: number;
+  /** Объём комплектующего в литрах */
+  volumeL: number;
+  /** Краткое резюме характеристик */
+  specsSummaryRu: string;
+  /** Подробные технические характеристики */
+  specs: Record<string, string | number>;
+  /** Совместимость / область применения */
+  compatibilityRu?: string;
+}
+
+export interface InstalledHardwareComponent {
+  /** Системный слот внутри устройства */
+  slot: string;
+  /** Название узла / слота на русском */
+  slotNameRu: string;
+  /** ID отдельного предмета комплектующего в ITEM_CATALOG */
+  itemId: HardwareComponentKind;
+  /** Полные атрибуты установленного комплектующего */
+  attributes: HardwareComponentAttributes;
+}
+
+export type PhoneChassisStyle =
+  | 'aura'
+  | 'quantum'
+  | 'pixel'
+  | 'cyber'
+  | 'compact'
+  | 'retro'
+  | 'nord'
+  | 'nova'
+  | 'fold';
+
+export interface PhoneAttributes {
+  /** Марка / производитель телефона */
+  brand: string;
+  /** Серия / линейка */
+  seriesName: string;
+  /** Точная модель телефона */
+  modelName: string;
+  /** Код модельного шаблона */
+  modelId: string;
+  /** Стиль корпуса для процедурной 2D-отрисовки */
+  chassisStyle: PhoneChassisStyle;
+  /** Цвет корпуса в hex */
+  colorHex: string;
+  /** Точный RGB-цвет корпуса (0-255) */
+  colorRgb: RgbColor;
+  /** Название цвета на русском */
+  colorNameRu: string;
+  /** Акцентный цвет корпуса/рамки/кнопок */
+  accentHex: string;
+  /** Цвет площадки блока камер (опционально) */
+  cameraPlateColor?: string;
+  /** Из чего сделан корпус (материалы) */
+  materialRu: string;
+  /** Форм-фактор корпуса (моноблок, складной, кнопочный и т.д.) */
+  formFactorRu: string;
+  /** Габариты корпуса (мм) */
+  dimensionsRu: string;
+  /** Вес телефона в граммах */
+  weightGrams: number;
+  /** Объём телефона в литрах */
+  volumeL: number;
+  /** Класс защиты корпуса (напр. IP68) */
+  ingressProtectionRu?: string;
+  /** Операционная система */
+  osName: string;
+  osVersion: string;
+  /** Установленные комплектующие с их itemId и полными атрибутами */
+  components: InstalledHardwareComponent[];
+}
+
 export interface ContainerVisualAttributes {
   /** Визуальная форма корпуса банки или бутылки (не меняет объём, вес и характеристики) */
   shape: ContainerVisualShape;
@@ -2494,6 +2618,17 @@ export interface UnifiedAttributes {
   handleRu?: string;
   featureRu?: string;
   dimensionCm?: number;
+  /** Атрибуты электроники: телефонов и комплектующих */
+  brandRu?: string;
+  modelRu?: string;
+  colorRgb?: RgbColor;
+  connectorRu?: string;
+  dimensionsRu?: string;
+  formFactorRu?: string;
+  specsSummaryRu?: string;
+  hardwareSpecs?: Record<string, string | number>;
+  compatibilityRu?: string;
+  installedComponentsCount?: number;
 }
 
 export interface CulinaryItemData {
@@ -2671,6 +2806,10 @@ export interface InventoryItem {
   issuingAuthority?: string;
   // Smartphone specifications & hardware
   phoneSpecs?: PhoneSpecs;
+  /** Единые структурированные атрибуты телефона (марка, модель, RGB цвет, материал, вес/объём, комплектующие) */
+  phoneAttributes?: PhoneAttributes;
+  /** Единые структурированные атрибуты комплектующего (дисплей, RAM, SSD, HDD, АКБ, CPU и т.д.) */
+  hardwareAttributes?: HardwareComponentAttributes;
   cpu?: string;
   ram?: number;
   storage?: number;

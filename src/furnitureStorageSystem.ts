@@ -454,7 +454,7 @@ function seedApartmentFurnitureItems(
     pushValid('duct_tape');
     pushValid('bandage', 2);
   } else if (furnitureType === 'desk') {
-    pushValid('smartphone');
+    pushValid('phone');
     pushValid('cash_1000');
     pushValid('vitamins');
   } else if (furnitureType === 'tv_cabinet') {

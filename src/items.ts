@@ -1,6 +1,15 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, PhoneAttributes, HardwareComponentKind, HardwareComponentAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
 import { sound } from './audio';
-import { getPhoneSpecsForItemId } from './phoneData';
+import {
+  getPhoneSpecsForItemId,
+  LEGACY_PHONE_PRESETS,
+  HARDWARE_COMPONENT_KINDS,
+  DEFAULT_HARDWARE_COMPONENTS,
+  buildPhoneAttributes,
+  derivePhoneSpecsFromAttributes,
+  getDefaultHardwareAttributes,
+  hexToRgb
+} from './phoneData';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
 import {
   administerMedication,
@@ -131,6 +140,8 @@ export interface ItemDefinition {
   pelmenAttributes?: PelmenAttributes;
   chocolateAttributes?: ChocolateAttributes;
   kitchenwareAttributes?: KitchenwareAttributes;
+  phoneAttributes?: PhoneAttributes;
+  hardwareAttributes?: HardwareComponentAttributes;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -1266,277 +1277,186 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: false
   },
 
-  // === SMARTPHONES & MOBILE DEVICES (ТЕЛЕФОНЫ) ===
-  smartphone: {
-    itemId: 'smartphone',
-    name: 'Aura Pro 16 Titanium',
-    nameRu: 'Смартфон Aura Pro 16',
+  // === UNIFIED PHONE & HARDWARE COMPONENTS (ТЕЛЕФОН И КОМПЛЕКТУЮЩИЕ) ===
+  phone: {
+    itemId: 'phone',
+    name: 'Phone',
+    nameRu: 'Телефон',
     category: 'electronics',
     maxStack: 1,
     icon: '',
-    description: 'Flagship smartphone with 512GB storage, Bionic CPU, and high-res OLED display.',
-    descriptionRu: 'Флагманский титановый смартфон с накопителем 512 ГБ, процессором Bionic и OLED-экраном 120 Гц.',
+    description: 'Mobile phone with brand, model, RGB chassis color, materials, weight, volume, and installed hardware components stored in attributes.',
+    descriptionRu: 'Мобильный телефон. Марка, модель, RGB-цвет корпуса, материалы, вес, объём и состав комплектующих заданы в атрибутах предмета.',
     effects: {},
-    weight: 0.22,
+    weight: 0.221,
     volume: 0.18,
-    usable: true
+    usable: true,
+    phoneAttributes: buildPhoneAttributes('aura_pro')
   },
-  // 1. Aura Pro 16 Series
-  phone_aura_pro_black: {
-    itemId: 'phone_aura_pro_black',
-    name: 'Aura Pro 16 (Space Black)',
-    nameRu: 'Aura Pro 16 «Титановый Чёрный»',
+  hw_display: {
+    itemId: 'hw_display',
+    name: 'Display',
+    nameRu: 'Дисплей',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 4,
     icon: '',
-    description: 'Aura Pro 16 Titanium Space Black (512GB / 12GB RAM / Bionic A18 / 4685mAh).',
-    descriptionRu: 'Aura Pro 16 в черном титановом корпусе (512 ГБ ПЗУ / 12 ГБ ОЗУ / Bionic A18 / 4685 мА·ч).',
+    description: 'Electronic display module (OLED/AMOLED/IPS/LCD). Materials, connector, model, color, specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Дисплейный модуль. Материал, интерфейс подключения, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.22,
-    volume: 0.18,
-    usable: true
+    weight: 0.042,
+    volume: 0.02,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_display
   },
-  phone_aura_pro_gold: {
-    itemId: 'phone_aura_pro_gold',
-    name: 'Aura Pro 16 (Desert Titanium)',
-    nameRu: 'Aura Pro 16 «Пустынный Титан»',
+  hw_cpu: {
+    itemId: 'hw_cpu',
+    name: 'Processor (CPU / SoC)',
+    nameRu: 'Процессор',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 8,
     icon: '',
-    description: 'Aura Pro 16 Desert Titanium (512GB / 12GB RAM / Bionic A18 / 4685mAh).',
-    descriptionRu: 'Aura Pro 16 в золотисто-песочном титане (512 ГБ ПЗУ / 12 ГБ ОЗУ / Bionic A18 / 4685 мА·ч).',
+    description: 'Processor / SoC chip. Architecture, material, BGA/socket connection, brand, model, color, specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Центральный процессор (CPU / SoC). Материал, способ подключения, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.22,
-    volume: 0.18,
-    usable: true
+    weight: 0.004,
+    volume: 0.002,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_cpu
   },
-  phone_aura_pro_titanium: {
-    itemId: 'phone_aura_pro_titanium',
-    name: 'Aura Pro 16 (Natural Titanium)',
-    nameRu: 'Aura Pro 16 «Натуральный Титан»',
+  hw_ram: {
+    itemId: 'hw_ram',
+    name: 'RAM Module',
+    nameRu: 'Оперативная память (RAM)',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 8,
     icon: '',
-    description: 'Aura Pro 16 Natural Titanium (512GB / 12GB RAM / Bionic A18 / 4685mAh).',
-    descriptionRu: 'Aura Pro 16 в классическом сером титане (512 ГБ ПЗУ / 12 ГБ ОЗУ / Bionic A18 / 4685 мА·ч).',
+    description: 'Random Access Memory module (LPDDR / DDR). Material, interface, model, color, capacity/speed specs, and size are stored in attributes.',
+    descriptionRu: 'Модуль оперативной памяти (RAM). Материал, способ подключения, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.22,
-    volume: 0.18,
-    usable: true
+    weight: 0.002,
+    volume: 0.001,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_ram
   },
-  phone_aura_pro_blue: {
-    itemId: 'phone_aura_pro_blue',
-    name: 'Aura Pro 16 (Deep Marine Blue)',
-    nameRu: 'Aura Pro 16 «Глубокий Синий»',
+  hw_ssd: {
+    itemId: 'hw_ssd',
+    name: 'SSD Storage',
+    nameRu: 'SSD-накопитель',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 6,
     icon: '',
-    description: 'Aura Pro 16 Deep Marine Blue (512GB / 12GB RAM / Bionic A18 / 4685mAh).',
-    descriptionRu: 'Aura Pro 16 в глубоком синем сапфировом титане (512 ГБ ПЗУ / 12 ГБ ОЗУ / Bionic A18 / 4685 мА·ч).',
+    description: 'Solid-state storage drive (NVMe / UFS / SATA SSD). Material, connector, model, color, capacity/speed specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Твердотельный накопитель (SSD / Flash). Материал, интерфейс подключения, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.22,
-    volume: 0.18,
-    usable: true
+    weight: 0.003,
+    volume: 0.002,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_ssd
   },
-  // 2. Quantum Ultra S25 Series
-  phone_quantum_black: {
-    itemId: 'phone_quantum_black',
-    name: 'Quantum Ultra S25 (Phantom Black)',
-    nameRu: 'Quantum Ultra S25 «Фантомный Графит»',
+  hw_hdd: {
+    itemId: 'hw_hdd',
+    name: 'Hard Disk Drive (HDD)',
+    nameRu: 'Жёсткий диск (HDD)',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 4,
     icon: '',
-    description: 'Quantum Ultra S25 Phantom Black (512GB / 16GB RAM / Snapdragon 8 Elite / 5300mAh).',
-    descriptionRu: 'Quantum Ultra S25 в черном матовом стекле (512 ГБ ПЗУ / 16 ГБ ОЗУ / Snapdragon 8 Elite / 5300 мА·ч).',
+    description: 'Magnetic hard disk drive (2.5" / 3.5"). Material, SATA/SAS interface, model, color, capacity/RPM specs, and size are stored in attributes.',
+    descriptionRu: 'Жёсткий магнитный диск (HDD). Материал корпуса, интерфейс подключения, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.23,
-    volume: 0.19,
-    usable: true
+    weight: 0.095,
+    volume: 0.05,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_hdd
   },
-  phone_quantum_silver: {
-    itemId: 'phone_quantum_silver',
-    name: 'Quantum Ultra S25 (Titanium Silver)',
-    nameRu: 'Quantum Ultra S25 «Титановое Серебро»',
+  hw_battery: {
+    itemId: 'hw_battery',
+    name: 'Battery',
+    nameRu: 'Аккумулятор',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 4,
     icon: '',
-    description: 'Quantum Ultra S25 Titanium Silver (512GB / 16GB RAM / Snapdragon 8 Elite / 5300mAh).',
-    descriptionRu: 'Quantum Ultra S25 в полированном серебре (512 ГБ ПЗУ / 16 ГБ ОЗУ / Snapdragon 8 Elite / 5300 мА·ч).',
+    description: 'Rechargeable battery pack (Li-Pol / Li-Ion). Chemistry/materials, connector, model, color, mAh/Wh specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Аккумуляторная батарея. Материал, способ подключения, модель, RGB-цвет, ёмкость/напряжение и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.23,
-    volume: 0.19,
-    usable: true
+    weight: 0.064,
+    volume: 0.022,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_battery
   },
-  phone_quantum_emerald: {
-    itemId: 'phone_quantum_emerald',
-    name: 'Quantum Ultra S25 (Emerald Jade)',
-    nameRu: 'Quantum Ultra S25 «Изумрудный Нефрит»',
+  hw_motherboard: {
+    itemId: 'hw_motherboard',
+    name: 'Motherboard',
+    nameRu: 'Системная плата',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 4,
     icon: '',
-    description: 'Quantum Ultra S25 Emerald Jade (512GB / 16GB RAM / Snapdragon 8 Elite / 5300mAh).',
-    descriptionRu: 'Quantum Ultra S25 в благородном изумрудно-зеленом цвете (512 ГБ ПЗУ / 16 ГБ ОЗУ / 5300 мА·ч).',
+    description: 'Main logic board / motherboard. PCB material, connectors, model, color, layer/bus specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Системная (материнская) плата. Материал текстолита, разъёмы подключения, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.23,
-    volume: 0.19,
-    usable: true
+    weight: 0.024,
+    volume: 0.012,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_motherboard
   },
-  phone_quantum_violet: {
-    itemId: 'phone_quantum_violet',
-    name: 'Quantum Ultra S25 (Amethyst Violet)',
-    nameRu: 'Quantum Ultra S25 «Аметистовый Шёлк»',
+  hw_camera: {
+    itemId: 'hw_camera',
+    name: 'Camera Module',
+    nameRu: 'Модуль камеры',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 6,
     icon: '',
-    description: 'Quantum Ultra S25 Amethyst Violet (512GB / 16GB RAM / Snapdragon 8 Elite / 5300mAh).',
-    descriptionRu: 'Quantum Ultra S25 в переливающемся аметистовом шелке (512 ГБ ПЗУ / 16 ГБ ОЗУ / 5300 мА·ч).',
+    description: 'Optical camera sensor module. Materials, MIPI CSI flex connector, model, color, megapixel/OIS specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Оптический модуль камеры. Материал, интерфейс подключения, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.23,
-    volume: 0.19,
-    usable: true
+    weight: 0.018,
+    volume: 0.007,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_camera
   },
-  // 3. Pixel Nova 9 Series
-  phone_pixel_obsidian: {
-    itemId: 'phone_pixel_obsidian',
-    name: 'Pixel Nova 9 (Obsidian)',
-    nameRu: 'Pixel Nova 9 «Обсидиан»',
+  hw_modem: {
+    itemId: 'hw_modem',
+    name: 'Modem / Radio Module',
+    nameRu: 'Модем / Радиомодуль',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 8,
     icon: '',
-    description: 'Pixel Nova 9 Obsidian (256GB / 12GB RAM / Tensor G4 AI / 4850mAh).',
-    descriptionRu: 'Pixel Nova 9 в обсидиановом черном стекле с визором (256 ГБ ПЗУ / 12 ГБ ОЗУ / Tensor G4 / 4850 мА·ч).',
+    description: 'Wireless cellular/Wi-Fi/Bluetooth radio modem module. Material, BGA/RF connectors, model, color, specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Модем и радиомодуль связи (5G/LTE/Wi-Fi/BT). Материал, подключение, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.20,
-    volume: 0.17,
-    usable: true
+    weight: 0.005,
+    volume: 0.002,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_modem
   },
-  phone_pixel_porcelain: {
-    itemId: 'phone_pixel_porcelain',
-    name: 'Pixel Nova 9 (Porcelain White)',
-    nameRu: 'Pixel Nova 9 «Фарфор»',
+  hw_speaker: {
+    itemId: 'hw_speaker',
+    name: 'Speaker / Haptic Module',
+    nameRu: 'Динамик / Вибромодуль',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 6,
     icon: '',
-    description: 'Pixel Nova 9 Porcelain White (256GB / 12GB RAM / Tensor G4 AI / 4850mAh).',
-    descriptionRu: 'Pixel Nova 9 в белом фарфоровом исполнении (256 ГБ ПЗУ / 12 ГБ ОЗУ / Tensor G4 / 4850 мА·ч).',
+    description: 'Acoustic speaker and linear haptic actuator module. Material, connector, model, color, power specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Динамик и вибромотор. Материал, способ подключения, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.20,
-    volume: 0.17,
-    usable: true
+    weight: 0.009,
+    volume: 0.003,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_speaker
   },
-  phone_pixel_hazel: {
-    itemId: 'phone_pixel_hazel',
-    name: 'Pixel Nova 9 (Hazel Green)',
-    nameRu: 'Pixel Nova 9 «Ореховый Шалфей»',
+  hw_charging_port: {
+    itemId: 'hw_charging_port',
+    name: 'Charging Port',
+    nameRu: 'Разъём питания',
     category: 'electronics',
-    maxStack: 1,
+    maxStack: 6,
     icon: '',
-    description: 'Pixel Nova 9 Hazel Green (256GB / 12GB RAM / Tensor G4 AI / 4850mAh).',
-    descriptionRu: 'Pixel Nova 9 в оливково-шалфейном цвете (256 ГБ ПЗУ / 12 ГБ ОЗУ / Tensor G4 / 4850 мА·ч).',
+    description: 'Power/data charging port flex assembly (USB-C / Micro-USB). Material, connector, model, color, PD specs, and dimensions are stored in attributes.',
+    descriptionRu: 'Разъём питания и контроллер зарядки. Материал, подключение, модель, RGB-цвет, характеристики и размеры заданы в атрибутах.',
     effects: {},
-    weight: 0.20,
-    volume: 0.17,
-    usable: true
-  },
-  phone_pixel_rose: {
-    itemId: 'phone_pixel_rose',
-    name: 'Pixel Nova 9 (Rose Quartz)',
-    nameRu: 'Pixel Nova 9 «Розовый Кварц»',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Pixel Nova 9 Rose Quartz (256GB / 12GB RAM / Tensor G4 AI / 4850mAh).',
-    descriptionRu: 'Pixel Nova 9 в кварцево-розовом нежном оттенке (256 ГБ ПЗУ / 12 ГБ ОЗУ / Tensor G4 / 4850 мА·ч).',
-    effects: {},
-    weight: 0.20,
-    volume: 0.17,
-    usable: true
-  },
-  // 4. CyberPhone Mech-X Series
-  phone_cyber_dark: {
-    itemId: 'phone_cyber_dark',
-    name: 'CyberPhone Mech-X (Cyber Dark)',
-    nameRu: 'CyberPhone Mech-X «Кибер-Графит»',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'CyberPhone Mech-X Cyber Dark (1024GB / 24GB RAM / Dimensity 9400 / 6600mAh).',
-    descriptionRu: 'Игровой флагман CyberPhone Mech-X в кибер-графите с подсветкой (1 ТБ ПЗУ / 24 ГБ ОЗУ / 6600 мА·ч).',
-    effects: {},
-    weight: 0.25,
-    volume: 0.21,
-    usable: true
-  },
-  phone_cyber_white: {
-    itemId: 'phone_cyber_white',
-    name: 'CyberPhone Mech-X (Mecha White)',
-    nameRu: 'CyberPhone Mech-X «Меха-Белый»',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'CyberPhone Mech-X Mecha White (1024GB / 24GB RAM / Dimensity 9400 / 6600mAh).',
-    descriptionRu: 'CyberPhone Mech-X в стиле научно-фантастических роботов меха (1 ТБ ПЗУ / 24 ГБ ОЗУ / 6600 мА·ч).',
-    effects: {},
-    weight: 0.25,
-    volume: 0.21,
-    usable: true
-  },
-  phone_cyber_neon: {
-    itemId: 'phone_cyber_neon',
-    name: 'CyberPhone Mech-X (Neon Volt)',
-    nameRu: 'CyberPhone Mech-X «Неоновый Электрик»',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'CyberPhone Mech-X Neon Volt (1024GB / 24GB RAM / Dimensity 9400 / 6600mAh).',
-    descriptionRu: 'CyberPhone Mech-X в сине-желтом неоновом корпусе (1 ТБ ПЗУ / 24 ГБ ОЗУ / 6600 мА·ч).',
-    effects: {},
-    weight: 0.25,
-    volume: 0.21,
-    usable: true
-  },
-  // 5. Neo Compact Series
-  phone_compact_navy: {
-    itemId: 'phone_compact_navy',
-    name: 'Neo Compact 5G (Matte Navy)',
-    nameRu: 'Neo Compact «Морской Индиго»',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Neo Compact 5G Matte Navy (128GB / 8GB RAM / Helio G99 / 3800mAh).',
-    descriptionRu: 'Компактный смартфон Neo Compact в глубоком матовом синем цвете (128 ГБ ПЗУ / 8 ГБ ОЗУ / 3800 мА·ч).',
-    effects: {},
-    weight: 0.17,
-    volume: 0.15,
-    usable: true
-  },
-  phone_compact_gray: {
-    itemId: 'phone_compact_gray',
-    name: 'Neo Compact 5G (Storm Gray)',
-    nameRu: 'Neo Compact «Штормовой Базальт»',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Neo Compact 5G Storm Gray (128GB / 8GB RAM / Helio G99 / 3800mAh).',
-    descriptionRu: 'Neo Compact в ударопрочном корпусе цвета мокрого асфальта (128 ГБ ПЗУ / 8 ГБ ОЗУ / 3800 мА·ч).',
-    effects: {},
-    weight: 0.17,
-    volume: 0.15,
-    usable: true
-  },
-  phone_compact_coral: {
-    itemId: 'phone_compact_coral',
-    name: 'Neo Compact 5G (Bright Coral)',
-    nameRu: 'Neo Compact «Солнечный Коралл»',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Neo Compact 5G Bright Coral (128GB / 8GB RAM / Helio G99 / 3800mAh).',
-    descriptionRu: 'Neo Compact в ярком теплом коралловом цвете (128 ГБ ПЗУ / 8 ГБ ОЗУ / 3800 мА·ч).',
-    effects: {},
-    weight: 0.17,
-    volume: 0.15,
-    usable: true
+    weight: 0.006,
+    volume: 0.002,
+    usable: false,
+    hardwareAttributes: DEFAULT_HARDWARE_COMPONENTS.hw_charging_port
   },
 
   // === NEW CLOTHING & GEAR ===
@@ -1879,71 +1799,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: {},
     weight: 0.1,
     usable: false
-  },
-  phone_retro: {
-    itemId: 'phone_retro',
-    name: 'Matrix Classic Keypad Phone',
-    nameRu: 'Телефон Matrix Classic (Кнопочный)',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Indestructible monochrome keypad phone with flashlight and week-long battery.',
-    descriptionRu: 'Неубиваемый кнопочный телефон с монохромным экраном, фонариком и недельной батареей.',
-    effects: {},
-    weight: 0.12,
-    usable: true
-  },
-  phone_nord: {
-    itemId: 'phone_nord',
-    name: 'Nord Lite 5G Smartphone',
-    nameRu: 'Смартфон Nord Lite 5G',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Clean Nordic teal design with 90Hz AMOLED and triple AI camera.',
-    descriptionRu: 'Стильный скандинавский смартфон бирюзового оттенка с 90 Гц дисплеем и тройной камерой.',
-    effects: {},
-    weight: 0.18,
-    usable: true
-  },
-  phone_nova15: {
-    itemId: 'phone_nova15',
-    name: 'Nova 15 Ultra Flagship Smartphone',
-    nameRu: 'Смартфон Nova 15 Ultra (Флагман)',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Top luxury flagship with 200MP Star Orbit camera and gold accents.',
-    descriptionRu: 'Премиальный флагман с 6.8" 120Hz дисплеем, 200MP камерой в кольце Star Orbit и золотыми акцентами.',
-    effects: {},
-    weight: 0.22,
-    usable: true
-  },
-  phone_pixel: {
-    itemId: 'phone_pixel',
-    name: 'Pixel Horizon 9 Smartphone',
-    nameRu: 'Смартфон Pixel Horizon 9',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Modern Android smartphone with iconic horizontal camera visor.',
-    descriptionRu: 'Умный камерофон с фирменным горизонтальным козырьком камер и чистым интерфейсом.',
-    effects: {},
-    weight: 0.19,
-    usable: true
-  },
-  phone_fold: {
-    itemId: 'phone_fold',
-    name: 'CyberFold Neo Folding Smartphone',
-    nameRu: 'Гибкий смартфон CyberFold Neo',
-    category: 'electronics',
-    maxStack: 1,
-    icon: '',
-    description: 'Next-gen folding book phone with titanium hinge and dual AMOLED screens.',
-    descriptionRu: 'Футуристический раскладной гибкий смартфон с титановым шарниром и двойным дисплеем.',
-    effects: {},
-    weight: 0.25,
-    usable: true
   },
   jeans_classic: {
     itemId: 'jeans_classic',
@@ -5947,6 +5802,104 @@ export function createKitchenware(
   return normalizeItemAttributes(item);
 }
 
+export const HARDWARE_COMPONENT_KIND_SET: Set<string> = new Set(HARDWARE_COMPONENT_KINDS);
+
+export function isPhoneItemId(itemId: string): boolean {
+  return itemId === 'phone' || itemId === 'smartphone' || itemId.startsWith('phone_') || Boolean(LEGACY_PHONE_PRESETS[itemId]);
+}
+
+export function isHardwareComponentItemId(itemId: string): boolean {
+  return HARDWARE_COMPONENT_KIND_SET.has(itemId);
+}
+
+export function applyPhoneAttributesToItem(
+  item: InventoryItem,
+  overrides?: Partial<PhoneAttributes>,
+  presetOrModelId?: string
+): InventoryItem {
+  const baseSeed = presetOrModelId || overrides?.modelId || item.phoneAttributes?.modelId || 'aura_pro';
+  const merged = buildPhoneAttributes(baseSeed, {
+    ...(item.phoneAttributes || {}),
+    ...(overrides || {})
+  });
+  item.itemId = 'phone';
+  item.name = 'Phone';
+  item.nameRu = 'Телефон';
+  item.category = 'electronics';
+  item.usable = true;
+  item.maxStack = 1;
+  item.phoneAttributes = merged;
+  item.weight = Number((merged.weightGrams / 1000).toFixed(3));
+  item.volume = merged.volumeL;
+  item.descriptionRu = `${merged.brand} ${merged.modelName} (${merged.colorNameRu}). Корпус: ${merged.materialRu}. Комплектующих: ${merged.components.length} шт.`;
+  item.description = `${merged.brand} ${merged.modelName} (${merged.colorNameRu})`;
+  const syncedSpecs = derivePhoneSpecsFromAttributes(merged, item.phoneSpecs);
+  item.phoneSpecs = syncedSpecs;
+  item.cpu = syncedSpecs.cpuModel;
+  item.ram = syncedSpecs.ramGb;
+  item.storage = syncedSpecs.storageGb;
+  item.battery = syncedSpecs.batteryCapacityMah;
+  return item;
+}
+
+export function createPhone(
+  presetOrModelId: string = 'aura_pro',
+  overrides?: Partial<PhoneAttributes>
+): InventoryItem {
+  const item = createItem('phone', 1, undefined, true);
+  applyPhoneAttributesToItem(item, overrides, presetOrModelId);
+  return normalizeItemAttributes(item);
+}
+
+export function applyHardwareAttributesToItem(
+  item: InventoryItem,
+  overrides?: Partial<HardwareComponentAttributes>
+): InventoryItem {
+  const kind = (overrides?.kind || item.hardwareAttributes?.kind || (HARDWARE_COMPONENT_KIND_SET.has(item.itemId) ? item.itemId : 'hw_cpu')) as HardwareComponentKind;
+  const base = getDefaultHardwareAttributes(kind);
+  const colorHex = overrides?.colorHex || item.hardwareAttributes?.colorHex || base.colorHex;
+  const merged: HardwareComponentAttributes = {
+    ...base,
+    ...(item.hardwareAttributes || {}),
+    ...(overrides || {}),
+    kind,
+    colorHex,
+    colorRgb: overrides?.colorRgb
+      ? { ...overrides.colorRgb }
+      : overrides?.colorHex
+      ? hexToRgb(overrides.colorHex)
+      : item.hardwareAttributes?.colorRgb
+      ? { ...item.hardwareAttributes.colorRgb }
+      : hexToRgb(colorHex),
+    specs: {
+      ...base.specs,
+      ...(item.hardwareAttributes?.specs || {}),
+      ...(overrides?.specs || {})
+    }
+  };
+  item.itemId = kind;
+  const catDef = ITEM_CATALOG[kind];
+  if (catDef) {
+    item.name = catDef.name;
+    item.nameRu = catDef.nameRu;
+  }
+  item.hardwareAttributes = merged;
+  item.weight = Number((merged.weightGrams / 1000).toFixed(4));
+  item.volume = merged.volumeL;
+  item.descriptionRu = `${merged.nameRu} (${merged.brand} ${merged.model}). ${merged.specsSummaryRu}. Подключение: ${merged.connectorRu}.`;
+  item.description = `${merged.brand} ${merged.model} — ${merged.specsSummaryRu}`;
+  return item;
+}
+
+export function createHardwareComponent(
+  kind: HardwareComponentKind,
+  overrides?: Partial<HardwareComponentAttributes>
+): InventoryItem {
+  const item = createItem(kind, 1, undefined, true);
+  applyHardwareAttributesToItem(item, { ...(overrides || {}), kind });
+  return normalizeItemAttributes(item);
+}
+
 export function resolveCanonicalSubstanceId(itemId: string): string {
   return LEGACY_SUBSTANCE_ID_ALIASES[itemId] || itemId;
 }
@@ -5978,6 +5931,12 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
     });
     kwItem.count = Math.max(1, count);
     return kwItem;
+  }
+
+  if (LEGACY_PHONE_PRESETS[rawItemId]) {
+    const phItem = createPhone(rawItemId);
+    phItem.count = Math.max(1, count);
+    return phItem;
   }
 
   const itemId = resolveCanonicalSubstanceId(rawItemId);
@@ -6023,8 +5982,14 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
     }
   }
 
-  const isPhone = def.itemId.startsWith('phone_') || def.itemId === 'smartphone';
-  const phoneSpecs = isPhone ? getPhoneSpecsForItemId(def.itemId) : undefined;
+  const isPhone = def.itemId === 'phone' || def.itemId.startsWith('phone_') || def.itemId === 'smartphone';
+  const phoneAttributes = isPhone
+    ? (def.phoneAttributes ? buildPhoneAttributes(def.phoneAttributes.modelId, def.phoneAttributes) : buildPhoneAttributes(def.itemId))
+    : undefined;
+  const phoneSpecs = phoneAttributes ? derivePhoneSpecsFromAttributes(phoneAttributes) : (isPhone ? getPhoneSpecsForItemId(def.itemId) : undefined);
+  const hardwareAttributes = HARDWARE_COMPONENT_KIND_SET.has(def.itemId)
+    ? getDefaultHardwareAttributes(def.itemId as HardwareComponentKind)
+    : undefined;
 
   let fluidStorage: FluidContainerState | undefined;
   // If item is a physical item container (bag, sack, box, basket, medkit) and not a pre-filled fluid/bulk package, don't attach fluidStorage
@@ -6121,6 +6086,8 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
     maxFluidLiters: fluidStorage?.liquidId === 'antifreeze' ? 5.0 : fluidStorage?.liquidId === 'motor_oil' ? 4.0 : undefined,
     fluidType: fluidStorage?.liquidId === 'antifreeze' ? 'coolant' : fluidStorage?.liquidId === 'motor_oil' ? 'oil' : undefined,
     phoneSpecs: phoneSpecs ? { ...phoneSpecs } : undefined,
+    phoneAttributes,
+    hardwareAttributes,
     cpu: phoneSpecs?.cpuModel,
     ram: phoneSpecs?.ramGb,
     storage: phoneSpecs?.storageGb,
@@ -6271,6 +6238,25 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     }
   } else if (KITCHENWARE_KINDS.has(item.itemId) && !item.kitchenwareAttributes) {
     item.kitchenwareAttributes = getDefaultKitchenwareAttributes(item.itemId as KitchenwareKind);
+  }
+
+  // Seamless migration of legacy phone items from older saves into unified 'phone'
+  if (LEGACY_PHONE_PRESETS[item.itemId]) {
+    const legacyPhoneId = item.itemId;
+    item.itemId = 'phone';
+    item.name = 'Phone';
+    item.nameRu = 'Телефон';
+    if (!item.phoneAttributes) {
+      applyPhoneAttributesToItem(item, undefined, legacyPhoneId);
+    }
+  } else if (item.itemId === 'phone') {
+    if (!item.phoneAttributes) {
+      applyPhoneAttributesToItem(item, undefined, item.phoneSpecs?.modelId || 'aura_pro');
+    } else if (!item.phoneSpecs) {
+      item.phoneSpecs = derivePhoneSpecsFromAttributes(item.phoneAttributes);
+    }
+  } else if (HARDWARE_COMPONENT_KIND_SET.has(item.itemId) && !item.hardwareAttributes) {
+    item.hardwareAttributes = getDefaultHardwareAttributes(item.itemId as HardwareComponentKind);
   }
 
   if (item.originalCatalogId && LEGACY_SUBSTANCE_ID_ALIASES[item.originalCatalogId]) {
@@ -6551,6 +6537,66 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     }
   }
 
+  // 4.6. Unified Phone & Hardware Component Attributes (марка, модель, RGB цвет, материалы, подключение, характеристики, комплектующие)
+  let brandRu = prevAttrs.brandRu || defAttrs.brandRu;
+  let modelRu = prevAttrs.modelRu || defAttrs.modelRu;
+  let colorRgb = prevAttrs.colorRgb || defAttrs.colorRgb;
+  let connectorRu = prevAttrs.connectorRu || defAttrs.connectorRu;
+  let dimensionsRu = prevAttrs.dimensionsRu || defAttrs.dimensionsRu;
+  let formFactorRu = prevAttrs.formFactorRu || defAttrs.formFactorRu;
+  let specsSummaryRu = prevAttrs.specsSummaryRu || defAttrs.specsSummaryRu;
+  let hardwareSpecs = prevAttrs.hardwareSpecs || defAttrs.hardwareSpecs;
+  let compatibilityRu = prevAttrs.compatibilityRu || defAttrs.compatibilityRu;
+  let installedComponentsCount = prevAttrs.installedComponentsCount ?? defAttrs.installedComponentsCount;
+
+  if (item.phoneAttributes) {
+    const pa = item.phoneAttributes;
+    brandRu = pa.brand;
+    modelRu = pa.modelName;
+    varietyRu = `${pa.brand} ${pa.modelName}`;
+    colorRgb = pa.colorRgb ? { ...pa.colorRgb } : hexToRgb(pa.colorHex);
+    dimensionsRu = pa.dimensionsRu;
+    formFactorRu = pa.formFactorRu;
+    installedComponentsCount = pa.components?.length || 0;
+    visuals.materialNameRu = pa.materialRu;
+    visuals.color = pa.colorHex;
+    visuals.colorNameRu = pa.colorNameRu;
+    visuals.secondaryColor = pa.accentHex;
+    visuals.shapeNameRu = pa.formFactorRu;
+    if (!resolvedIngredients) {
+      resolvedIngredients = [pa.materialRu];
+    }
+    if (!purpose) {
+      purpose = `Мобильная связь, навигация, камера и приложения (${pa.osName} ${pa.osVersion})`;
+    }
+  } else if (item.hardwareAttributes) {
+    const hw = item.hardwareAttributes;
+    brandRu = hw.brand;
+    modelRu = hw.model;
+    varietyRu = hw.nameRu;
+    colorRgb = hw.colorRgb ? { ...hw.colorRgb } : hexToRgb(hw.colorHex);
+    connectorRu = hw.connectorRu;
+    dimensionsRu = hw.dimensionsRu;
+    formFactorRu = hw.formFactorRu;
+    specsSummaryRu = hw.specsSummaryRu;
+    hardwareSpecs = { ...hw.specs };
+    compatibilityRu = hw.compatibilityRu;
+    visuals.materialNameRu = hw.materialRu;
+    visuals.color = hw.colorHex;
+    visuals.colorNameRu = hw.colorNameRu;
+    if (hw.accentHex) visuals.secondaryColor = hw.accentHex;
+    visuals.shapeNameRu = hw.formFactorRu;
+    visuals.sizeNameRu = hw.dimensionsRu;
+    if (!resolvedIngredients) {
+      resolvedIngredients = [hw.materialRu];
+    }
+    if (!purpose) {
+      purpose = hw.compatibilityRu
+        ? `Электронное комплектующее (${hw.compatibilityRu})`
+        : 'Электронное комплектующее для сборки и ремонта техники';
+    }
+  }
+
   // 5. Fallback defaults for standard items so every InventoryItem has a coherent JSON schema
   if (!varietyRu) {
     varietyRu = catalogDef?.nameRu || item.nameRu;
@@ -6569,6 +6615,8 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
       ? 'Рабочий инструмент или снаряжение'
       : item.category === 'clothing'
       ? 'Одежда и экипировка (защита от холода и карманы)'
+      : item.category === 'electronics'
+      ? 'Электронное устройство или комплектующее'
       : 'Предмет инвентаря';
   }
 
@@ -6612,6 +6660,16 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     ...(handleRu ? { handleRu } : {}),
     ...(featureRu ? { featureRu } : {}),
     ...(dimensionCm !== undefined ? { dimensionCm } : {}),
+    ...(brandRu ? { brandRu } : {}),
+    ...(modelRu ? { modelRu } : {}),
+    ...(colorRgb ? { colorRgb } : {}),
+    ...(connectorRu ? { connectorRu } : {}),
+    ...(dimensionsRu ? { dimensionsRu } : {}),
+    ...(formFactorRu ? { formFactorRu } : {}),
+    ...(specsSummaryRu ? { specsSummaryRu } : {}),
+    ...(hardwareSpecs ? { hardwareSpecs } : {}),
+    ...(compatibilityRu ? { compatibilityRu } : {}),
+    ...(installedComponentsCount !== undefined ? { installedComponentsCount } : {}),
     ...(prevAttrs.physicalForm ? { physicalForm: prevAttrs.physicalForm } : {}),
     ...(prevAttrs.physicalFormRu ? { physicalFormRu: prevAttrs.physicalFormRu } : {}),
     ...(prevAttrs.substanceColorRu ? { substanceColorRu: prevAttrs.substanceColorRu } : {}),
@@ -6984,6 +7042,7 @@ export function getResolvedPackagingConfig(rawItemId: string): ItemPackagingConf
 export function isRegisteredItemId(rawItemId: string): boolean {
   if (!rawItemId) return false;
   if (LEGACY_KITCHENWARE_PRESETS[rawItemId]) return true;
+  if (LEGACY_PHONE_PRESETS[rawItemId]) return true;
   const itemId = resolveCanonicalSubstanceId(rawItemId);
   if (Boolean(ITEM_CATALOG[itemId] || ITEM_CATALOG[rawItemId])) return true;
   if (Boolean(LEGACY_DISCRETE_CONTAINER_ALIASES[itemId] || LEGACY_DISCRETE_CONTAINER_ALIASES[rawItemId])) return true;
@@ -7303,6 +7362,12 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
           if (spec.kitchenwareAttributes) {
             applyKitchenwareAttributesToItem(inner, spec.kitchenwareAttributes);
           }
+          if (spec.phonePresetId || spec.phoneAttributes) {
+            applyPhoneAttributesToItem(inner, spec.phoneAttributes, spec.phonePresetId);
+          }
+          if (spec.hardwareAttributes) {
+            applyHardwareAttributesToItem(inner, spec.hardwareAttributes);
+          }
           if (spec.attributes) {
             inner.attributes = { ...(inner.attributes || {}), ...spec.attributes };
             normalizeItemAttributes(inner);
@@ -7386,11 +7451,19 @@ export function createItemFromShopEntry(entry: MapShopCatalogEntry): InventoryIt
     return normalizeItemAttributes(container);
   }
 
-  // Standalone item in ITEM_CATALOG or legacy kitchenware preset -> spawn strictly raw (no surprise auto-packaging!)
-  if (ITEM_CATALOG[entry.itemId] || LEGACY_KITCHENWARE_PRESETS[entry.itemId]) {
+  // Standalone item in ITEM_CATALOG or legacy kitchenware/phone preset -> spawn strictly raw (no surprise auto-packaging!)
+  if (ITEM_CATALOG[entry.itemId] || LEGACY_KITCHENWARE_PRESETS[entry.itemId] || LEGACY_PHONE_PRESETS[entry.itemId]) {
     const raw = createItem(entry.itemId, 1, undefined, true);
     if (entry.kitchenwareAttributes) {
       applyKitchenwareAttributesToItem(raw, entry.kitchenwareAttributes);
+      normalizeItemAttributes(raw);
+    }
+    if (entry.phonePresetId || entry.phoneAttributes) {
+      applyPhoneAttributesToItem(raw, entry.phoneAttributes, entry.phonePresetId);
+      normalizeItemAttributes(raw);
+    }
+    if (entry.hardwareAttributes) {
+      applyHardwareAttributesToItem(raw, entry.hardwareAttributes);
       normalizeItemAttributes(raw);
     }
     if (entry.labelColor) raw.labelColor = entry.labelColor;
@@ -8906,7 +8979,7 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
   return [
     wallet,
     plasticBag,
-    createItem('phone_aura_pro_black', 1),
+    createPhone('phone_aura_pro_black'),
     createItem('paper_packaging_mini', 1),
     createItem('paper_packaging_small', 1),
     createItem('paper_packaging', 1),
@@ -10021,14 +10094,15 @@ export function useItemOnPlayer(
   const def = ITEM_CATALOG[item.itemId];
 
   // Smartphone activation (screen & interactive apps)
-  if (item.itemId.startsWith('phone_') || item.itemId === 'smartphone'|| item.phoneSpecs) {
+  if (item.itemId === 'phone' || item.itemId.startsWith('phone_') || item.itemId === 'smartphone' || item.phoneAttributes || item.phoneSpecs) {
     triggerPlayerActionAnim(player, 'using_phone', 1.8, item.itemId);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('open_phone_modal', { detail: { item } }));
     }
     sound.playPhoneChime();
-    addPlayerNotification(player, `Открыт экран: ${item.nameRu}`, 'heal');
-    return { success: true, message: `Открыт экран: ${item.nameRu}`};
+    const phoneTitle = item.phoneAttributes ? `${item.phoneAttributes.brand} ${item.phoneAttributes.modelName}` : item.nameRu;
+    addPlayerNotification(player, `Открыт экран: ${phoneTitle}`, 'heal');
+    return { success: true, message: `Открыт экран: ${phoneTitle}`};
   }
 
   // Watches & valuables inspection from inventory
@@ -11191,14 +11265,15 @@ export function useHandItemOnPlayer(
   const def = ITEM_CATALOG[item.itemId];
 
   // Smartphone activation (triggers when held in active hand and pressing E)
-  if (item.itemId.startsWith('phone_') || item.itemId === 'smartphone'|| item.phoneSpecs) {
+  if (item.itemId === 'phone' || item.itemId.startsWith('phone_') || item.itemId === 'smartphone' || item.phoneAttributes || item.phoneSpecs) {
     triggerPlayerActionAnim(player, 'using_phone', 1.8, item.itemId, hand);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('open_phone_modal', { detail: { item } }));
     }
     sound.playPhoneChime();
-    addPlayerNotification(player, `Открыт экран: ${item.nameRu}`, 'heal');
-    return { success: true, message: `Открыт экран: ${item.nameRu}`};
+    const phoneTitle = item.phoneAttributes ? `${item.phoneAttributes.brand} ${item.phoneAttributes.modelName}` : item.nameRu;
+    addPlayerNotification(player, `Открыт экран: ${phoneTitle}`, 'heal');
+    return { success: true, message: `Открыт экран: ${phoneTitle}`};
   }
 
   // Apartment key usage from hands (Lock/Unlock apartment door)

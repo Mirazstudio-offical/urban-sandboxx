@@ -36,11 +36,19 @@ import {
   Zap
 } from 'lucide-react';
 import { CAR_CONFIGS } from '../vehicleHelpers';
-import { ActivePlacement, CandyPackagingShape, ChocolatePackagingShape } from '../types';
+import {
+  ActivePlacement,
+  CandyPackagingShape,
+  ChocolatePackagingShape,
+  KitchenwareAttributes,
+  PhoneAttributes,
+  HardwareComponentAttributes
+} from '../types';
 import { GameCalendarState, formatGameDate, formatGameTime } from '../calendarSystem';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { VEHICLE_CATALOG, VehicleCatalogEntry, getVehicleCatalogItem } from '../vehicleCatalog';
 import { ITEM_CATALOG, getCandyPackagingShapeNameRu, getChocolatePackagingShapeNameRu } from '../items';
+import { formatRgbString } from '../phoneData';
 
 export interface CreativeMenuModalProps {
   isOpen: boolean;
@@ -194,6 +202,9 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
       packagingShape?: CandyPackagingShape | ChocolatePackagingShape;
       packagingShapeNameRu?: string;
       packagingSize?: string;
+      kitchenwareAttributes?: KitchenwareAttributes;
+      phoneAttributes?: PhoneAttributes;
+      hardwareAttributes?: HardwareComponentAttributes;
     }]>;
   }, []);
 
@@ -716,6 +727,43 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                                 {item.kitchenwareAttributes.patternNameRu}
                               </span>
                             )}
+                          </div>
+                        )}
+                        {item.phoneAttributes && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                              {item.phoneAttributes.brand} {item.phoneAttributes.modelName}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                              <span
+                                className="w-2 h-2 rounded-sm shrink-0 border border-white/30"
+                                style={{ backgroundColor: item.phoneAttributes.colorHex }}
+                              />
+                              {item.phoneAttributes.colorNameRu} · {formatRgbString(item.phoneAttributes.colorRgb)}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono tabular-nums">
+                              {item.phoneAttributes.components.length} компл.
+                            </span>
+                          </div>
+                        )}
+                        {item.hardwareAttributes && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#f0c264] text-[10px] font-mono">
+                              {item.hardwareAttributes.brand} {item.hardwareAttributes.model}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono">
+                              <span
+                                className="w-2 h-2 rounded-sm shrink-0 border border-white/30"
+                                style={{ backgroundColor: item.hardwareAttributes.colorHex }}
+                              />
+                              {item.hardwareAttributes.colorNameRu}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#cbd5e1] text-[10px] font-mono">
+                              {item.hardwareAttributes.connectorRu}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#94a3b8] text-[10px] font-mono tabular-nums">
+                              {item.hardwareAttributes.dimensionsRu}
+                            </span>
                           </div>
                         )}
                         {(item.packagingShape || item.packagingShapeNameRu || item.packagingSize) && (

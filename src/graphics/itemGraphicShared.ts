@@ -1076,8 +1076,10 @@ export function classifyItemVisualMaterial(item: any): ItemVisualMaterial {
 
   // 4. Electronics / glass / plastic non-food
   if (
+    id === 'phone' ||
     id.includes('phone') ||
     id.includes('smartphone') ||
+    id.startsWith('hw_') ||
     id.includes('radio') ||
     id.includes('flashlight') ||
     id.includes('charger') ||

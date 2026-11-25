@@ -10,7 +10,39 @@ export interface PhoneVisualTheme {
   variant: string;
 }
 
-export function getPhoneTheme(itemId: string): PhoneVisualTheme {
+export function getPhoneTheme(itemId: string, item?: any): PhoneVisualTheme {
+  const pa = item?.phoneAttributes;
+  if (pa && pa.chassisStyle) {
+    return {
+      series: pa.chassisStyle,
+      bodyColor: pa.colorHex || '#1e2022',
+      rimColor: pa.accentHex || '#64748b',
+      accentColor: pa.accentHex || '#38bdf8',
+      cameraPlateColor: pa.cameraPlateColor,
+      variant: pa.colorNameRu || pa.modelName || 'Phone'
+    };
+  }
+  const ps = item?.phoneSpecs;
+  if (ps && ps.colorHex && itemId === 'phone') {
+    const mid = String(ps.modelId || '');
+    const series: PhoneVisualTheme['series'] =
+      mid.includes('retro') ? 'retro' :
+      mid.includes('nord') ? 'nord' :
+      mid.includes('nova_ultra') ? 'nova' :
+      mid.includes('fold') ? 'fold' :
+      mid.includes('quantum') ? 'quantum' :
+      mid.includes('pixel') ? 'pixel' :
+      mid.includes('cyber') ? 'cyber' :
+      mid.includes('compact') ? 'compact' :
+      'aura';
+    return {
+      series,
+      bodyColor: ps.colorHex,
+      rimColor: ps.accentHex || '#64748b',
+      accentColor: ps.accentHex || '#38bdf8',
+      variant: ps.colorNameRu || ps.modelName || 'Phone'
+    };
+  }
   if (itemId.includes('retro')) {
     return {
       series: 'retro',
@@ -899,12 +931,12 @@ function drawFoldPhoneBack(ctx: CanvasRenderingContext2D, theme: PhoneVisualThem
 // -------------------------------------------------------------
 // Central Dispatcher for All Smartphone Item Textures
 // -------------------------------------------------------------
-export function drawSmartphoneItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
-  if (!itemId.startsWith('phone_') && itemId !== 'smartphone') {
+export function drawSmartphoneItem(ctx: CanvasRenderingContext2D, itemId: string, item?: any): boolean {
+  if (itemId !== 'phone' && !itemId.startsWith('phone_') && itemId !== 'smartphone') {
     return false;
   }
 
-  const theme = getPhoneTheme(itemId);
+  const theme = getPhoneTheme(itemId, item);
 
   // Ambient Drop Shadow
   if (theme.series === 'compact' || theme.series === 'retro') {

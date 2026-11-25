@@ -60,6 +60,7 @@ import { ItemIconCanvas } from './ItemIconCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
 import { useTopmostEscape } from './gameUi';
 import { sound } from '../audio';
+import { formatRgbString } from '../phoneData';
 import inventoryModalCss from './inventoryModal.css?inline';
 import {
   Package,
@@ -2357,8 +2358,118 @@ const InventoryModalContent: React.FC<{
                           </div>
                         )}
 
-                        {/* Smartphone Specs */}
-                        {selectedEntry.item.phoneSpecs && (
+                        {/* Unified Phone Attributes & Installed Hardware Components */}
+                        {selectedEntry.item.phoneAttributes ? (
+                          (() => {
+                            const pa = selectedEntry.item.phoneAttributes;
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <div className="inv-sec-row">
+                                    <span className="inv-grp-lbl">Телефон · {pa.brand} {pa.modelName}</span>
+                                    <span className="mut mono" style={{ fontSize: 11.5 }}>{pa.osName} {pa.osVersion}</span>
+                                  </div>
+                                  <div className="inv-kv-grid inv-kv-g3">
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Марка</span>
+                                      <span className="inv-kv-v">{pa.brand}</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Модель</span>
+                                      <span className="inv-kv-v">{pa.modelName}</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Серия</span>
+                                      <span className="inv-kv-v">{pa.seriesName}</span>
+                                    </div>
+                                    <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                      <span className="inv-kv-k">Цвет корпуса (RGB)</span>
+                                      <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <span className="inv-swatch" style={{ backgroundColor: pa.colorHex }} />
+                                        <span>{pa.colorNameRu}</span>
+                                        <span className="mut mono" style={{ fontSize: 11 }}>{formatRgbString(pa.colorRgb)}</span>
+                                      </span>
+                                    </div>
+                                    <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                      <span className="inv-kv-k">Из чего сделан</span>
+                                      <span className="inv-kv-v" style={{ fontWeight: 400, color: '#d8d4ca' }}>{pa.materialRu}</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Форм-фактор</span>
+                                      <span className="inv-kv-v">{pa.formFactorRu}</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Габариты</span>
+                                      <span className="inv-kv-v mono">{pa.dimensionsRu}</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Защита</span>
+                                      <span className="inv-kv-v">{pa.ingressProtectionRu || 'Базовая'}</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Вес</span>
+                                      <span className="inv-kv-v mono">{pa.weightGrams} г</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Объём</span>
+                                      <span className="inv-kv-v mono">{pa.volumeL} л</span>
+                                    </div>
+                                    <div className="inv-kv">
+                                      <span className="inv-kv-k">Комплектующих</span>
+                                      <span className="inv-kv-v mono">{pa.components.length} шт.</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {pa.components.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                    <div className="inv-sec-row">
+                                      <span className="inv-grp-lbl">Комплектующие ({pa.components.length})</span>
+                                      <span className="mut mono" style={{ fontSize: 10.5 }}>ID · атрибуты</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                      {pa.components.map((comp) => {
+                                        const ca = comp.attributes;
+                                        return (
+                                          <div
+                                            key={`${comp.slot}-${comp.itemId}`}
+                                            className="inv-kv"
+                                            style={{ gap: 3, padding: '6px 8px' }}
+                                          >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, minWidth: 0 }}>
+                                              <span style={{ fontSize: 11.5, fontWeight: 700, color: '#f5f2eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {comp.slotNameRu}: {ca.brand} {ca.model}
+                                              </span>
+                                              <span className="mono" style={{ fontSize: 10, color: '#e0ab45', flexShrink: 0 }}>
+                                                {comp.itemId}
+                                              </span>
+                                            </div>
+                                            <div className="mono" style={{ fontSize: 10.5, color: '#d5d1c7' }}>
+                                              {ca.specsSummaryRu}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 10, color: '#9c978d' }}>
+                                              <span>Подключение: {ca.connectorRu}</span>
+                                              <span>·</span>
+                                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                <span className="inv-swatch" style={{ width: 8, height: 8, backgroundColor: ca.colorHex }} />
+                                                <span>{ca.colorNameRu} ({formatRgbString(ca.colorRgb)})</span>
+                                              </span>
+                                              <span>·</span>
+                                              <span className="mono">{ca.dimensionsRu} · {ca.weightGrams} г</span>
+                                            </div>
+                                            <div style={{ fontSize: 10, color: '#8c877d' }}>
+                                              Из чего: {ca.materialRu}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : selectedEntry.item.phoneSpecs ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             <div className="inv-sec-row">
                               <span className="inv-grp-lbl">{selectedEntry.item.phoneSpecs.modelName}</span>
@@ -2367,15 +2478,15 @@ const InventoryModalContent: React.FC<{
                             <div className="inv-kv-grid inv-kv-g4">
                               <div className="inv-kv">
                                 <span className="inv-kv-k">Экран</span>
-                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.screenSize} ({selectedEntry.item.phoneSpecs.refreshRateHz}Hz)</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.screenSize || `${selectedEntry.item.phoneSpecs.screenSizeInches}"`}</span>
                               </div>
                               <div className="inv-kv">
-                                <span className="inv-kv-k">Камера</span>
-                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.cameraMegaPixels} MP</span>
+                                <span className="inv-kv-k">ОЗУ</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.ramGb} ГБ</span>
                               </div>
                               <div className="inv-kv">
                                 <span className="inv-kv-k">Память</span>
-                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.storageGb} GB</span>
+                                <span className="inv-kv-v mono">{selectedEntry.item.phoneSpecs.storageGb} ГБ</span>
                               </div>
                               <div className="inv-kv">
                                 <span className="inv-kv-k">Батарея</span>
@@ -2383,7 +2494,87 @@ const InventoryModalContent: React.FC<{
                               </div>
                             </div>
                           </div>
-                        )}
+                        ) : null}
+
+                        {/* Standalone Hardware Component Attributes */}
+                        {selectedEntry.item.hardwareAttributes && (() => {
+                          const ha = selectedEntry.item.hardwareAttributes;
+                          const specEntries = Object.entries(ha.specs || {});
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <div className="inv-sec-row">
+                                  <span className="inv-grp-lbl">Комплектующее · {ha.nameRu}</span>
+                                  <span className="mono" style={{ fontSize: 11, color: '#e0ab45' }}>{ha.kind}</span>
+                                </div>
+                                <div className="inv-kv-grid inv-kv-g3">
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Марка</span>
+                                    <span className="inv-kv-v">{ha.brand}</span>
+                                  </div>
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Модель</span>
+                                    <span className="inv-kv-v">{ha.model}</span>
+                                  </div>
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Форм-фактор</span>
+                                    <span className="inv-kv-v">{ha.formFactorRu}</span>
+                                  </div>
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Цвет (RGB)</span>
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                      <span className="inv-swatch" style={{ backgroundColor: ha.colorHex }} />
+                                      <span>{ha.colorNameRu}</span>
+                                      <span className="mut mono" style={{ fontSize: 11 }}>{formatRgbString(ha.colorRgb)}</span>
+                                    </span>
+                                  </div>
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Из чего сделан</span>
+                                    <span className="inv-kv-v" style={{ fontWeight: 400, color: '#d8d4ca' }}>{ha.materialRu}</span>
+                                  </div>
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Как подсоединяется</span>
+                                    <span className="inv-kv-v">{ha.connectorRu}</span>
+                                  </div>
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Размер</span>
+                                    <span className="inv-kv-v mono">{ha.dimensionsRu}</span>
+                                  </div>
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Вес</span>
+                                    <span className="inv-kv-v mono">{ha.weightGrams} г</span>
+                                  </div>
+                                  <div className="inv-kv">
+                                    <span className="inv-kv-k">Объём</span>
+                                    <span className="inv-kv-v mono">{ha.volumeL} л</span>
+                                  </div>
+                                  {ha.compatibilityRu && (
+                                    <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                      <span className="inv-kv-k">Совместимость</span>
+                                      <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>{ha.compatibilityRu}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {specEntries.length > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <div className="inv-sec-row">
+                                    <span className="inv-grp-lbl">Технические характеристики</span>
+                                  </div>
+                                  <div className="inv-kv-grid inv-kv-g3">
+                                    {specEntries.map(([specKey, specVal]) => (
+                                      <div className="inv-kv" key={specKey}>
+                                        <span className="inv-kv-k">{specKey}</span>
+                                        <span className="inv-kv-v mono">{String(specVal)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Pinned Action Footer */}
@@ -2474,6 +2665,24 @@ const InventoryModalContent: React.FC<{
                                   </button>
                                 )}
                               </>
+                            )}
+                            {(selectedEntry.item.phoneAttributes ||
+                              selectedEntry.item.phoneSpecs ||
+                              selectedEntry.item.itemId === 'phone' ||
+                              selectedEntry.item.itemId.startsWith('phone_') ||
+                              selectedEntry.item.itemId === 'smartphone') && (
+                              <button
+                                type="button"
+                                className="btn btn-p btn-sm btn-block"
+                                onClick={() => {
+                                  useHandItemOnPlayer(player, selectedEntry.hand!, world || undefined);
+                                  sound.resume();
+                                  forceRender(n => n + 1);
+                                }}
+                              >
+                                <Smartphone width={14} height={14} />
+                                <span>Включить экран телефона</span>
+                              </button>
                             )}
                             <div className="inv-btn-grid2">
                               <button
@@ -2634,7 +2843,9 @@ const InventoryModalContent: React.FC<{
                                   <span>Открыть ({selectedEntry.item.contents?.length || 0} предм.)</span>
                                 </button>
                               </div>
-                            ) : selectedEntry.item.phoneSpecs ||
+                            ) : selectedEntry.item.phoneAttributes ||
+                              selectedEntry.item.phoneSpecs ||
+                              selectedEntry.item.itemId === 'phone' ||
                               selectedEntry.item.itemId.startsWith('phone_') ||
                               selectedEntry.item.itemId === 'smartphone' ? (
                               <button

@@ -54,6 +54,7 @@ import {
 } from '../items';
 import { InventoryItem, GameWorld, MapShopCatalogEntry, ShopCatalogOverrideConfig } from '../types';
 import { SHAPE_NAMES_RU, LIQUID_REGISTRY, LiquidId, isFluidStorageDryForm } from '../liquidSystem';
+import { formatRgbString } from '../phoneData';
 import { ModalShell, Tabs, Seg, TabItem } from './gameUi';
 
 const shopPreviewCache: Record<string, InventoryItem> = {};
@@ -64,7 +65,13 @@ function getShopPreviewCacheKey(item: ShopItem): string {
   const kw = item.kitchenwareAttributes
     ? `${item.kitchenwareAttributes.material || ''}:${item.kitchenwareAttributes.color || ''}:${item.kitchenwareAttributes.pattern || ''}:${item.kitchenwareAttributes.capacityMl || ''}:${item.kitchenwareAttributes.shape || ''}`
     : '';
-  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
+  const ph = item.phonePresetId || item.phoneAttributes
+    ? `${item.phonePresetId || ''}:${item.phoneAttributes?.modelId || ''}:${item.phoneAttributes?.colorHex || ''}:${item.phoneAttributes?.chassisStyle || ''}`
+    : '';
+  const hw = item.hardwareAttributes
+    ? `${item.hardwareAttributes.kind || ''}:${item.hardwareAttributes.model || ''}:${item.hardwareAttributes.colorHex || ''}`
+    : '';
+  return `${item.id}|${item.itemId}|${firstInner}:${innerCount}|${fl}|${kw}|${ph}|${hw}|${item.labelColor || ''}|${item.containerTintColor || ''}`;
 }
 function getShopPreviewItem(item: ShopItem): InventoryItem {
   const cacheKey = getShopPreviewCacheKey(item);
@@ -763,11 +770,22 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'cin_choc_prism', itemId: 'choc_prism_honey_nougat', nameRu: 'Шоколад-призма «Альпийский пик с нугой» (180г)', price: 240, description: 'Треугольная призма швейцарского молочного шоколада с мёдом и миндалём.', category: 'food', effectText: '180г · +42% Сытость' }
   ],
   electronics: [
-    { id: 'elec_phone_nova15', itemId: 'phone_nova15', nameRu: 'Смартфон Nova 15 Ultra (Флагман)', price: 120000, description: 'Премиальный флагман с 6.8" 120Hz AMOLED, 200MP камерой и спутниковой связью.', category: 'auto', effectText: 'Топ-флагман & 200MP' },
-    { id: 'elec_phone_pixel', itemId: 'phone_pixel', nameRu: 'Смартфон Pixel Horizon 9', price: 89000, description: 'Умный камерофон с чистым Android и продвинутым ночным режимом.', category: 'auto', effectText: 'AI Камера & 120Hz' },
-    { id: 'elec_phone_fold', itemId: 'phone_fold', nameRu: 'Гибкий смартфон CyberFold Neo', price: 145000, description: 'Футуристический раскладной гибкий дисплей 7.6" и титановый шарнир.', category: 'auto', effectText: 'Гибкий Fold & 120Hz' },
-    { id: 'elec_phone_nord', itemId: 'phone_nord', nameRu: 'Смартфон Nord Lite 5G', price: 38000, description: 'Доступный смартфон с 90 Гц дисплеем и тройной камерой.', category: 'auto', effectText: 'Смартфон & GPS' },
-    { id: 'elec_phone_retro', itemId: 'phone_retro', nameRu: 'Телефон Matrix Classic (Кнопочный)', price: 3500, description: 'Неубиваемый кнопочный телефон с фонариком и недельной батареей.', category: 'auto', effectText: 'Связь & SMS' },
+    { id: 'elec_phone_nova15', itemId: 'phone', phonePresetId: 'phone_nova15', nameRu: 'Телефон Nova 15 Ultra (Флагман)', price: 120000, description: 'Флагманский смартфон с 6.8" 120Hz LTPO AMOLED, 200MP оптикой и титановым корпусом.', category: 'auto', effectText: 'Флагман · 200MP · 512 ГБ' },
+    { id: 'elec_phone_pixel', itemId: 'phone', phonePresetId: 'phone_pixel', nameRu: 'Телефон Pixel Horizon 9', price: 89000, description: 'Умный камерофон с чистой системой и продвинутым ночным режимом.', category: 'auto', effectText: 'Камерофон · 120Hz · 256 ГБ' },
+    { id: 'elec_phone_fold', itemId: 'phone', phonePresetId: 'phone_fold', nameRu: 'Телефон CyberFold Neo (Складной)', price: 145000, description: 'Складной смартфон с гибким дисплеем 7.6" и титановым шарниром.', category: 'auto', effectText: 'Складной 7.6" · 1 ТБ' },
+    { id: 'elec_phone_nord', itemId: 'phone', phonePresetId: 'phone_nord', nameRu: 'Телефон Nord Lite 5G', price: 38000, description: 'Доступный смартфон с 90 Гц дисплеем и тройной камерой.', category: 'auto', effectText: 'Смартфон · 5G · 128 ГБ' },
+    { id: 'elec_phone_retro', itemId: 'phone', phonePresetId: 'phone_retro', nameRu: 'Телефон Matrix Classic (Кнопочный)', price: 3500, description: 'Ударопрочный кнопочный телефон с фонариком и недельной батареей.', category: 'auto', effectText: 'Кнопочный · Связь и SMS' },
+    { id: 'elec_hw_display', itemId: 'hw_display', nameRu: 'Дисплей LTPO OLED 6.7"', price: 18500, description: 'Сменный безрамочный дисплейный модуль с закалённым стеклом и шлейфом MIPI DSI.', category: 'auto', effectText: 'Комплектующее · 120 Гц' },
+    { id: 'elec_hw_cpu', itemId: 'hw_cpu', nameRu: 'Процессор SoC Bionic A18 Pro', price: 24000, description: 'Мобильная однокристальная система (3 нм, 6 ядер) под пайку BGA.', category: 'auto', effectText: 'Комплектующее · 3.8 ГГц' },
+    { id: 'elec_hw_ram', itemId: 'hw_ram', nameRu: 'Оперативная память LPDDR5X 12 ГБ', price: 6200, description: 'Высокоскоростной чип оперативной памяти LPDDR5X 8533 МТ/с (PoP BGA).', category: 'auto', effectText: 'Комплектующее · 12 ГБ' },
+    { id: 'elec_hw_ssd', itemId: 'hw_ssd', nameRu: 'SSD-накопитель UFS 4.0 512 ГБ', price: 7800, description: 'Твердотельный флеш-накопитель 3D TLC NAND со скоростью чтения до 4200 МБ/с.', category: 'auto', effectText: 'Комплектующее · 512 ГБ' },
+    { id: 'elec_hw_hdd', itemId: 'hw_hdd', nameRu: 'Жёсткий диск HDD 2.5" 2 ТБ', price: 6900, description: 'Классический магнитный накопитель формата 2.5" с интерфейсом SATA III.', category: 'auto', effectText: 'Комплектующее · 2 ТБ SATA' },
+    { id: 'elec_hw_battery', itemId: 'hw_battery', nameRu: 'Аккумулятор Li-Ion 4680 мАч', price: 3400, description: 'Литий-ионная полимерная батарея с контроллером BMS и шлейфом FPC.', category: 'auto', effectText: 'Комплектующее · 4680 мАч' },
+    { id: 'elec_hw_motherboard', itemId: 'hw_motherboard', nameRu: 'Системная плата HDI (10 слоёв)', price: 14500, description: 'Многослойная печатная плата с экранированными коннекторами B2B.', category: 'auto', effectText: 'Комплектующее · Плата' },
+    { id: 'elec_hw_camera', itemId: 'hw_camera', nameRu: 'Модуль камеры 48 МП OIS', price: 9600, description: 'Оптический блок камер со стеклянной линзой, CMOS-матрицей и OIS.', category: 'auto', effectText: 'Комплектующее · 48 МП' },
+    { id: 'elec_hw_modem', itemId: 'hw_modem', nameRu: 'Модем 5G / Wi-Fi 7 / GNSS', price: 5400, description: 'Интегрированный радиомодуль сотовой связи, Wi-Fi и спутниковой навигации.', category: 'auto', effectText: 'Комплектующее · 5G' },
+    { id: 'elec_hw_speaker', itemId: 'hw_speaker', nameRu: 'Динамик и вибромотор Taptic', price: 2100, description: 'Акустический стереодинамик с линейным виброприводом X-Axis.', category: 'auto', effectText: 'Комплектующее · Аудио' },
+    { id: 'elec_hw_charging_port', itemId: 'hw_charging_port', nameRu: 'Разъём питания USB-C 3.2', price: 1400, description: 'Субплата с портом USB-C (PD 65 Вт), микрофоном и резиновым уплотнителем.', category: 'auto', effectText: 'Комплектующее · USB-C' },
     { id: 'elec_pbank', itemId: 'powerbank', nameRu: 'Повербанк 20 000 мАч', price: 3500, description: 'Фирменная коробка с тяжелым литий-полимерным аккумулятором.', category: 'auto', effectText: 'Зарядка гаджетов' },
     { id: 'elec_watch', itemId: 'smart_watch', nameRu: 'Тактические смарт-часы', price: 28000, description: 'Коробка с часами в титановом ударопрочном корпусе.', category: 'auto', effectText: 'Мониторинг здоровья' },
     { id: 'elec_radio', itemId: 'walkie_talkie', nameRu: 'Рация дальнего действия', price: 6800, description: 'Пылевлагозащитная радиостанция с длинной гибкой антенной.', category: 'auto', effectText: 'Связь в эфире' },
@@ -2756,6 +2774,116 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                               ? `${Number((capacityMlVal / 1000).toFixed(2))} л (${capacityMlVal} мл)`
                               : `${capacityMlVal} мл`)
                           : undefined;
+                      const pa = preview.phoneAttributes;
+                      const ha = preview.hardwareAttributes;
+                      if (pa) {
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
+                            <div className="gu-kv-grid gu-g2 gu-kv-compact">
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Марка</span>
+                                <span className="gu-kv-v">{pa.brand}</span>
+                              </div>
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Модель</span>
+                                <span className="gu-kv-v">{pa.modelName}</span>
+                              </div>
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Цвет (RGB)</span>
+                                <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', whiteSpace: 'normal' }}>
+                                  <span style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: pa.colorHex, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                  <span>{pa.colorNameRu}</span>
+                                  <span className="gu-num" style={{ fontSize: 10.5, color: 'var(--gu-mut)' }}>{formatRgbString(pa.colorRgb)}</span>
+                                </span>
+                              </div>
+                              <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                                <span className="gu-kv-k">Из чего</span>
+                                <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{pa.materialRu}</span>
+                              </div>
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Габариты</span>
+                                <span className="gu-kv-v gu-num">{pa.dimensionsRu}</span>
+                              </div>
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Вес / Объём</span>
+                                <span className="gu-kv-v gu-num">{pa.weightGrams} г · {pa.volumeL} л</span>
+                              </div>
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">ОС</span>
+                                <span className="gu-kv-v">{pa.osName} {pa.osVersion}</span>
+                              </div>
+                              <div className="gu-kv">
+                                <span className="gu-kv-k">Защита</span>
+                                <span className="gu-kv-v">{pa.ingressProtectionRu || 'Базовая'}</span>
+                              </div>
+                            </div>
+                            {pa.components.length > 0 && (
+                              <div className="gu-kv" style={{ gap: 3 }}>
+                                <span className="gu-kv-k">Комплектующие ({pa.components.length})</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2.5, marginTop: 2 }}>
+                                  {pa.components.slice(0, 6).map((c) => (
+                                    <div key={`${c.slot}-${c.itemId}`} style={{ fontSize: 10.5, lineHeight: 1.3, color: 'var(--gu-ink-soft)' }}>
+                                      <strong style={{ color: '#fff' }}>{c.slotNameRu}:</strong> {c.attributes.brand} {c.attributes.model}{' '}
+                                      <span className="gu-num" style={{ color: '#e0ab45', fontSize: 9.5 }}>[{c.itemId}]</span>
+                                    </div>
+                                  ))}
+                                  {pa.components.length > 6 && (
+                                    <div style={{ fontSize: 10, color: 'var(--gu-mut)' }}>
+                                      И ещё {pa.components.length - 6} модулей внутри
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      if (ha) {
+                        const specEntries = Object.entries(ha.specs || {}).slice(0, 4);
+                        return (
+                          <div className="gu-kv-grid gu-g2 gu-kv-compact" style={{ marginTop: 2 }}>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Марка</span>
+                              <span className="gu-kv-v">{ha.brand}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Модель</span>
+                              <span className="gu-kv-v">{ha.model}</span>
+                            </div>
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Цвет (RGB)</span>
+                              <span className="gu-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', whiteSpace: 'normal' }}>
+                                <span style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: ha.colorHex, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                <span>{ha.colorNameRu}</span>
+                                <span className="gu-num" style={{ fontSize: 10.5, color: 'var(--gu-mut)' }}>{formatRgbString(ha.colorRgb)}</span>
+                              </span>
+                            </div>
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Подключение</span>
+                              <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{ha.connectorRu}</span>
+                            </div>
+                            <div className="gu-kv" style={{ gridColumn: '1 / -1' }}>
+                              <span className="gu-kv-k">Из чего</span>
+                              <span className="gu-kv-v" style={{ whiteSpace: 'normal' }}>{ha.materialRu}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Размер</span>
+                              <span className="gu-kv-v gu-num">{ha.dimensionsRu}</span>
+                            </div>
+                            <div className="gu-kv">
+                              <span className="gu-kv-k">Вес / Объём</span>
+                              <span className="gu-kv-v gu-num">{ha.weightGrams} г · {ha.volumeL} л</span>
+                            </div>
+                            {specEntries.map(([k, v]) => (
+                              <div className="gu-kv" key={k}>
+                                <span className="gu-kv-k">{k}</span>
+                                <span className="gu-kv-v gu-num">{String(v)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
+
                       const hasSpecs = Boolean(
                         innerItems ||
                         liq ||

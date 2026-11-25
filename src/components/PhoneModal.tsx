@@ -49,7 +49,8 @@ import {
   PHONE_WALLPAPERS,
   PHONE_CONTACTS,
   PhoneContact,
-  getPhoneSpecsForItemId
+  getPhoneSpecsForItemId,
+  formatRgbString
 } from '../phoneData';
 import { addPlayerNotification } from '../items';
 import { PhoneTaxiApp } from './PhoneTaxiApp';
@@ -816,15 +817,22 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                             width: 42,
                             height: 42,
                             borderRadius: 10,
-                            backgroundColor: specs.colorHex,
-                            border: `2px solid ${specs.accentHex || '#c9922b'}`,
+                            backgroundColor: item.phoneAttributes?.colorHex || specs.colorHex,
+                            border: `2px solid ${item.phoneAttributes?.accentHex || specs.accentHex || '#c9922b'}`,
                             flex: 'none'
                           }}
                         />
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div className="ph-cn ph-mut" style={{ fontSize: 11 }}>{specs.brand} · {specs.seriesName}</div>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 1 }}>{specs.colorNameRu}</div>
-                          <div className="ph-mut" style={{ fontSize: 11, marginTop: 1 }}>{specs.osName} {specs.osVersion}</div>
+                          <div className="ph-cn ph-mut" style={{ fontSize: 11 }}>
+                            {item.phoneAttributes?.brand || specs.brand} · {item.phoneAttributes?.seriesName || specs.seriesName}
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginTop: 1 }}>
+                            {item.phoneAttributes?.colorNameRu || specs.colorNameRu}
+                          </div>
+                          <div className="ph-mut ph-num" style={{ fontSize: 10.5, marginTop: 1 }}>
+                            {item.phoneAttributes ? `${formatRgbString(item.phoneAttributes.colorRgb)} · ` : ''}
+                            {specs.osName} {specs.osVersion}
+                          </div>
                         </div>
                       </div>
 
@@ -893,16 +901,32 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                       </div>
 
                       {/* Spec Table */}
-                      <div className="ph-grp">Спецификация оборудования</div>
+                      <div className="ph-grp">Корпус и спецификация</div>
                       <div className="ph-list">
                         <div className="ph-row">
                           <span className="ph-mut" style={{ fontSize: 12 }}>Дисплей</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{specs.screenSizeInches || 6.7}" AMOLED 120 Гц</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{specs.screenSize || `${specs.screenSizeInches || 6.7}" AMOLED`}</span>
                         </div>
                         <div className="ph-row">
                           <span className="ph-mut" style={{ fontSize: 12 }}>Оптика</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', textAlign: 'right' }}>{(specs.cameraSpecs || '48 MP Fusion').split('+')[0].trim()}</span>
                         </div>
+                        {item.phoneAttributes && (
+                          <>
+                            <div className="ph-row">
+                              <span className="ph-mut" style={{ fontSize: 12 }}>Материал</span>
+                              <span style={{ fontSize: 11.5, fontWeight: 500, color: '#e2dfd7', textAlign: 'right', maxWidth: '62%' }}>{item.phoneAttributes.materialRu}</span>
+                            </div>
+                            <div className="ph-row">
+                              <span className="ph-mut" style={{ fontSize: 12 }}>Габариты</span>
+                              <span className="ph-num" style={{ fontSize: 11.5, fontWeight: 600, color: '#fff' }}>{item.phoneAttributes.dimensionsRu}</span>
+                            </div>
+                            <div className="ph-row">
+                              <span className="ph-mut" style={{ fontSize: 12 }}>Вес / Объём</span>
+                              <span className="ph-num" style={{ fontSize: 11.5, fontWeight: 600, color: '#fff' }}>{item.phoneAttributes.weightGrams} г · {item.phoneAttributes.volumeL} л</span>
+                            </div>
+                          </>
+                        )}
                         <div className="ph-row">
                           <span className="ph-mut" style={{ fontSize: 12 }}>Платформа</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#f0c264' }}>{specs.osName} {specs.osVersion}</span>
@@ -910,10 +934,36 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                         <div className="ph-row">
                           <span className="ph-mut" style={{ fontSize: 12 }}>Защита корпуса</span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#9ac985' }}>
-                            <ShieldCheck width={14} height={14} /> IP68 Титан
+                            <ShieldCheck width={14} height={14} /> {item.phoneAttributes?.ingressProtectionRu || 'IP68'}
                           </span>
                         </div>
                       </div>
+
+                      {item.phoneAttributes && item.phoneAttributes.components.length > 0 && (
+                        <>
+                          <div className="ph-grp">Комплектующие ({item.phoneAttributes.components.length})</div>
+                          <div className="ph-list">
+                            {item.phoneAttributes.components.map((comp) => (
+                              <div key={`${comp.slot}-${comp.itemId}`} className="ph-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 3 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#fff' }}>
+                                    {comp.slotNameRu} · {comp.attributes.brand} {comp.attributes.model}
+                                  </span>
+                                  <span className="ph-num" style={{ fontSize: 10, color: '#e0ab45', flexShrink: 0 }}>
+                                    {comp.itemId}
+                                  </span>
+                                </div>
+                                <div className="ph-num" style={{ fontSize: 10.5, color: '#d5d1c7' }}>
+                                  {comp.attributes.specsSummaryRu}
+                                </div>
+                                <div className="ph-mut" style={{ fontSize: 10 }}>
+                                  Подключение: {comp.attributes.connectorRu}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

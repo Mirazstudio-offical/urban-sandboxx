@@ -6,6 +6,7 @@ import { drawGearToolItem } from './graphics/gearToolGraphics';
 import { drawLeftoverItem } from './graphics/leftoverGraphics';
 import { drawClothingItem } from './graphics/clothingGraphics';
 import { drawSmartphoneItem } from './graphics/smartphoneGraphics';
+import { drawHardwareComponentItem } from './graphics/hardwareComponentGraphics';
 import { drawFurnitureItem } from './graphics/furnitureGraphics';
 import { drawKitchenAndValuableItem } from './graphics/kitchenAndValuablesGraphics';
 import { drawMeatAndPoultryItem } from './graphics/meatAndPoultryGraphics';
@@ -19,6 +20,7 @@ import { drawCulinaryDishItem } from './graphics/culinaryGraphics';
 import { drawShadow, drawItemWithDynamicState, hasActiveItemVisualState, drawMicroBarcode } from './graphics/itemGraphicShared';
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
 import { ITEM_CATALOG, LEGACY_KITCHENWARE_PRESETS, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
+import { LEGACY_PHONE_PRESETS, buildPhoneAttributes } from './phoneData';
 
 let currentRenderDepth = 0;
 
@@ -57,6 +59,14 @@ export function drawItemModel2D(
           ...legacyKitchenware,
           ...(effectiveItem?.kitchenwareAttributes || {})
         }
+      };
+    } else if (LEGACY_PHONE_PRESETS[effectiveId]) {
+      const legacyId = effectiveId;
+      effectiveId = 'phone';
+      effectiveItem = {
+        ...effectiveItem,
+        itemId: 'phone',
+        phoneAttributes: effectiveItem?.phoneAttributes || buildPhoneAttributes(legacyId)
       };
     }
     const legacyFluid = !isInner && !rawCatalogOnly ? getResolvedFluidContainerConfig(effectiveId) : null;
@@ -148,7 +158,8 @@ export function drawItemModel2D(
           drawChocolatePackagingItem(targetCtx, effectiveId, effectiveItem) ||
           drawCulinaryDishItem(targetCtx, effectiveId, effectiveItem) ||
           drawGearToolItem(targetCtx, effectiveId, effectiveItem) ||
-          drawSmartphoneItem(targetCtx, effectiveId) ||
+          drawSmartphoneItem(targetCtx, effectiveId, effectiveItem) ||
+          drawHardwareComponentItem(targetCtx, effectiveId, effectiveItem) ||
           drawFoodItem(targetCtx, effectiveId, effectiveItem) ||
           drawDrinkItem(targetCtx, effectiveId) ||
           drawMedicalItem(targetCtx, effectiveId) ||

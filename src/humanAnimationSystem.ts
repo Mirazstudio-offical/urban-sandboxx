@@ -409,7 +409,7 @@ export function computeHumanPose(
       const rItem: InventoryItem | null = entity.rightHandItem || null;
       const primaryItem = (entity.activeHand === 'left' ? lItem : rItem) || rItem || lItem;
 
-      if (entity.phoneFlashlightOn || (primaryItem && (primaryItem.itemId.startsWith('phone_') || primaryItem.itemId === 'smartphone' || primaryItem.phoneSpecs))) {
+      if (entity.phoneFlashlightOn || (primaryItem && (primaryItem.itemId === 'phone' || primaryItem.itemId.startsWith('phone_') || primaryItem.itemId === 'smartphone' || primaryItem.phoneAttributes || primaryItem.phoneSpecs))) {
         actionType = 'phone_use';
         activeHand = primaryItem === lItem && primaryItem !== rItem ? 'left' : 'right';
       } else if ( (lItem && lItem.itemId.startsWith('furn_')) || (rItem && rItem.itemId.startsWith('furn_')) ) {
