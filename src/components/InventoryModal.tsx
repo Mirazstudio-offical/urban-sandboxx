@@ -69,6 +69,18 @@ import { useTopmostEscape } from './gameUi';
 import { useCachedSlotDrag } from './useCachedSlotDrag';
 import { sound } from '../audio';
 import { formatRgbString } from '../phoneData';
+import {
+  countDisposableTrashInList,
+  countDisposableTrashOnPlayer,
+  getEffectiveSubjectItem,
+  getItemReadableTitleRu,
+  getPackagedInnerItem,
+  isDisposableTrashOrEmptyPackaging,
+  organizeContainerInPlace,
+  organizePlayerInventoryInPlace,
+  sweepTrashFromContainer,
+  sweepTrashFromPlayerToBin,
+} from '../storageOrganization';
 import inventoryModalCss from './inventoryModal.css?inline';
 import {
   Package,
@@ -109,6 +121,7 @@ import {
   FolderOpen,
   Plus,
   Minus,
+  ArrowUpDown,
   X
 } from 'lucide-react';
 
@@ -370,7 +383,7 @@ const InventoryModalContent: React.FC<{
   const matchesFilter = (item: InventoryItem | undefined) => {
     if (selectedCategory === 'all') return true;
     if (!item) return false;
-    return item.category === selectedCategory;
+    return item.category === selectedCategory || getEffectiveSubjectItem(item).category === selectedCategory;
   };
 
   const selectedHandItem =
@@ -1505,6 +1518,8 @@ const InventoryModalContent: React.FC<{
     const temp = handItem?.surfaceTemperature;
     const isHot = temp !== undefined && temp >= 40;
     const isCold = temp !== undefined && temp <= 4;
+    const pkgInner = getPackagedInnerItem(handItem);
+    const isTrash = isDisposableTrashOrEmptyPackaging(handItem);
 
     return (
       <div
@@ -1543,22 +1558,32 @@ const InventoryModalContent: React.FC<{
           (!handItem ? ' empty' : '') +
           (isDropTarget || isSelected ? ' on' : '') +
           (isHot ? ' hot' : '') +
-          (isCold ? ' cold' : '')
+          (isCold ? ' cold' : '') +
+          (isTrash ? ' is-trash' : '')
         }
         style={{
           cursor: handItem ? 'grab' : selectedWbSlot ? 'pointer' : 'default',
           opacity: isBeingDragged ? 0.35 : 1,
           borderColor: isDropTarget ? '#e0ab45' : undefined,
         }}
-        title={info ? `${label}: ${info.tooltip}` : `${label} (пусто — перетащите предмет)`}
+        title={
+          handItem
+            ? `${label}: ${pkgInner ? getItemReadableTitleRu(handItem) : ''}${pkgInner ? '\n' : ''}${info?.tooltip || handItem.nameRu}`
+            : `${label} (пусто — перетащите предмет)`
+        }
       >
         <span className="inv-hk">{shortBadge}</span>
         {handItem ? (
           <>
             <ItemIconCanvas itemId={handItem.itemId} item={handItem} size={42} />
+            {pkgInner && (
+              <span className="inv-pkg-sub" title={pkgInner.nameRu}>
+                <ItemIconCanvas itemId={pkgInner.itemId} item={pkgInner} size={18} />
+              </span>
+            )}
             {handItem.count > 1 ? (
               <span className="inv-cnt">{handItem.count}</span>
-            ) : handItem.isContainer ? (
+            ) : handItem.isContainer && !pkgInner ? (
               <span className="inv-cnt">{handItem.contents?.length || 0}</span>
             ) : null}
             {isHot && <span className="inv-temp">+{Math.round(temp!)}°</span>}
@@ -1673,6 +1698,8 @@ const InventoryModalContent: React.FC<{
                   const isHot = temp !== undefined && temp >= 40;
                   const isCold = temp !== undefined && temp <= 4;
                   const info = getSlotFillInfo(item);
+                  const pkgInner = getPackagedInnerItem(item);
+                  const isTrash = isDisposableTrashOrEmptyPackaging(item);
 
                   return (
                     <div
@@ -1723,20 +1750,26 @@ const InventoryModalContent: React.FC<{
                         (isSelected || isDropTarget ? ' on' : '') +
                         (matchesFilter(item) ? '' : ' dim') +
                         (isHot ? ' hot' : '') +
-                        (isCold ? ' cold' : '')
+                        (isCold ? ' cold' : '') +
+                        (isTrash ? ' is-trash' : '')
                       }
                       style={{
                         cursor: 'grab',
                         opacity: isBeingDragged ? 0.35 : 1,
                         borderColor: isDropTarget ? '#e0ab45' : undefined,
                       }}
-                      title={info?.tooltip}
+                      title={pkgInner ? `${getItemReadableTitleRu(item)}\n${info?.tooltip || ''}` : info?.tooltip}
                     >
                       {slotIdx < 6 && <span className="inv-hk">{slotIdx + 1}</span>}
                       <ItemIconCanvas itemId={item.itemId} item={item} size={42} />
+                      {pkgInner && (
+                        <span className="inv-pkg-sub" title={pkgInner.nameRu}>
+                          <ItemIconCanvas itemId={pkgInner.itemId} item={pkgInner} size={18} />
+                        </span>
+                      )}
                       {item.count > 1 ? (
                         <span className="inv-cnt">{item.count}</span>
-                      ) : item.isContainer ? (
+                      ) : item.isContainer && !pkgInner ? (
                         <span className="inv-cnt">{item.contents?.length || 0}</span>
                       ) : null}
                       {isHot && <span className="inv-temp">+{Math.round(temp!)}°</span>}
@@ -1875,31 +1908,81 @@ const InventoryModalContent: React.FC<{
               ))}
             </div>
 
-            {activeTab === 'inventory' && !openContainer && (
-              <div className="inv-pills">
-                {[
-                  { id: 'all', label: 'Все' },
-                  { id: 'food', label: 'Еда' },
-                  { id: 'drink', label: 'Напитки' },
-                  { id: 'med', label: 'Медицина' },
-                  { id: 'tool', label: 'Инструменты' },
-                  { id: 'valuable', label: 'Ценности' }
-                ].map(cat => {
-                  const on = selectedCategory === cat.id;
-                  return (
+            {activeTab === 'inventory' && !openContainer && (() => {
+              const playerTrashCount = countDisposableTrashOnPlayer(player);
+              const nearTrashBin = Boolean(world && isPlayerNearTrashBin(player, world));
+              return (
+                <div className="inv-pills">
+                  {[
+                    { id: 'all', label: 'Все' },
+                    { id: 'food', label: 'Еда' },
+                    { id: 'drink', label: 'Напитки' },
+                    { id: 'med', label: 'Медицина' },
+                    { id: 'tool', label: 'Инструменты' },
+                    { id: 'valuable', label: 'Ценности' }
+                  ].map(cat => {
+                    const on = selectedCategory === cat.id;
+                    return (
+                      <button
+                        type="button"
+                        key={cat.id}
+                        id={`filter-cat-${cat.id}`}
+                        onClick={() => setSelectedCategory(cat.id as any)}
+                        className={'inv-pill' + (on ? ' on' : '')}
+                      >
+                        {cat.label}
+                      </button>
+                    );
+                  })}
+
+                  <span className="inv-pill-sep" />
+
+                  <button
+                    type="button"
+                    id="btn-pockets-organize"
+                    className="inv-pill-act"
+                    title="Упорядочить предметы и объединить стопки внутри карманов и рюкзака"
+                    onClick={() => {
+                      const res = organizePlayerInventoryInPlace(player);
+                      sound.playPickup();
+                      addPlayerNotification(
+                        player,
+                        res.changed
+                          ? res.mergedCount > 0
+                            ? `Карманы упорядочены (объединено стопок: ${res.mergedCount})`
+                            : 'Карманы упорядочены'
+                          : 'В карманах уже порядок',
+                        'info'
+                      );
+                      forceRender(n => n + 1);
+                    }}
+                  >
+                    <ArrowUpDown width={13} height={13} color="#e0ab45" />
+                    <span>Порядок</span>
+                  </button>
+
+                  {nearTrashBin && playerTrashCount > 0 && world && (
                     <button
                       type="button"
-                      key={cat.id}
-                      id={`filter-cat-${cat.id}`}
-                      onClick={() => setSelectedCategory(cat.id as any)}
-                      className={'inv-pill' + (on ? ' on' : '')}
+                      id="btn-pockets-sweep-trash"
+                      className="inv-pill-act danger"
+                      title="Выбросить пустые упаковки, обёртки и уличный мусор в ближайшую урну"
+                      onClick={() => {
+                        const res = sweepTrashFromPlayerToBin(player, world);
+                        if (res.removedCount > 0) {
+                          sound.playUseItem();
+                          addPlayerNotification(player, res.messageRu, res.ecoReward > 0 ? 'heal' : 'info');
+                          forceRender(n => n + 1);
+                        }
+                      }}
                     >
-                      {cat.label}
+                      <Trash2 width={13} height={13} />
+                      <span>В урну ({playerTrashCount})</span>
                     </button>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Main Workspace */}
@@ -3741,7 +3824,51 @@ const InventoryModalContent: React.FC<{
 
                       <div className="inv-sec-row" style={{ flex: 'none' }}>
                         <span className="inv-grp-lbl">Предметы внутри ({contItems.length})</span>
-                        <span className="mut" style={{ fontSize: 12 }}>Перетащите или 2× клик</span>
+                        <div className="inv-sec-acts">
+                          {contItems.length > 1 && (
+                            <button
+                              type="button"
+                              className="btn btn-s btn-xs"
+                              title="Упорядочить и объединить стопки внутри контейнера"
+                              onClick={() => {
+                                const res = organizeContainerInPlace(openContainer);
+                                sound.playPickup();
+                                addPlayerNotification(
+                                  player,
+                                  res.changed ? 'Содержимое упорядочено' : 'Внутри уже порядок',
+                                  'info'
+                                );
+                                forceRender(n => n + 1);
+                              }}
+                            >
+                              <ArrowUpDown width={12} height={12} color="#e0ab45" />
+                              <span>Порядок</span>
+                            </button>
+                          )}
+                          {(() => {
+                            const contTrash = countDisposableTrashInList(contItems);
+                            if (contTrash <= 0) return null;
+                            return (
+                              <button
+                                type="button"
+                                className="btn btn-d btn-xs"
+                                title="Убрать пустые упаковки и мусор из этого контейнера"
+                                onClick={() => {
+                                  const res = sweepTrashFromContainer(openContainer);
+                                  if (res.removedCount > 0) {
+                                    sound.playUseItem();
+                                    addPlayerNotification(player, res.messageRu, 'info');
+                                    setSelectedContainerItemIdx(0);
+                                    forceRender(n => n + 1);
+                                  }
+                                }}
+                              >
+                                <Trash2 width={12} height={12} />
+                                <span>Мусор ({contTrash})</span>
+                              </button>
+                            );
+                          })()}
+                        </div>
                       </div>
 
                       <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
@@ -3769,6 +3896,8 @@ const InventoryModalContent: React.FC<{
                             }
 
                             const isSubmerged = Boolean(cItem.soakedLiquidId && (cItem.submersionLevel || 0) > 0);
+                            const pkgInner = getPackagedInnerItem(cItem);
+                            const isTrash = isDisposableTrashOrEmptyPackaging(cItem);
                             return (
                               <div
                                 key={slotKey}
@@ -3782,16 +3911,21 @@ const InventoryModalContent: React.FC<{
                                   })
                                 }
                                 onDoubleClick={() => handleExtractFromContainer(openContainer, idx, 'pockets')}
-                                className={'inv-slot' + (isSelected || isDropTarget ? ' on' : '')}
+                                className={'inv-slot' + (isSelected || isDropTarget ? ' on' : '') + (isTrash ? ' is-trash' : '')}
                                 style={{
                                   cursor: 'grab',
                                   opacity: isBeingDragged ? 0.35 : 1,
                                   borderColor: isDropTarget ? '#e0ab45' : (isSubmerged ? `${cItem.soakedColor || '#38bdf8'}99` : undefined),
                                   boxShadow: isSubmerged ? `inset 0 -10px 14px -8px ${cItem.soakedColor || '#38bdf8'}66` : undefined,
                                 }}
-                                title={info?.tooltip}
+                                title={pkgInner ? `${getItemReadableTitleRu(cItem)}\n${info?.tooltip || ''}` : info?.tooltip}
                               >
                                 <ItemIconCanvas itemId={cItem.itemId} item={cItem} size={42} />
+                                {pkgInner && (
+                                  <span className="inv-pkg-sub" title={pkgInner.nameRu}>
+                                    <ItemIconCanvas itemId={pkgInner.itemId} item={pkgInner} size={18} />
+                                  </span>
+                                )}
                                 {cItem.count > 1 && <span className="inv-cnt">{cItem.count}</span>}
                                 {isSubmerged && (
                                   <span className="inv-submerge">

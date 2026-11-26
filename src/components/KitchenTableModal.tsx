@@ -9,6 +9,7 @@ import {
   removeItemFromFurnitureStorage,
   canItemFitInFurniture,
   saveFurnitureStoragesToLocalStorage,
+  setFurnitureStorageUserLabel,
 } from '../furnitureStorageSystem';
 import {
   addItemToPlayer,
@@ -40,6 +41,22 @@ import { useCachedSlotDrag } from './useCachedSlotDrag';
 import { sound } from '../audio';
 import kitchenFurnitureCss from './kitchenFurniture.css?inline';
 import {
+  StorageFilterCategory,
+  countDisposableTrashInList,
+  countTransferCandidates,
+  findCarryBagsWithItems,
+  getItemLogicalGroup,
+  getItemReadableTitleRu,
+  getPackagedInnerItem,
+  getSuitableButtonLabelRu,
+  isDisposableTrashOrEmptyPackaging,
+  itemMatchesStorageFilter,
+  organizeFurnitureStorageInPlace,
+  organizePlayerInventoryInPlace,
+  quickTransferToStorage,
+  sweepTrashFromStorage,
+} from '../storageOrganization';
+import {
   Utensils,
   Layers,
   Package,
@@ -53,6 +70,15 @@ import {
   Check,
   Droplets,
   X,
+  ArrowUpDown,
+  CopyPlus,
+  FolderInput,
+  ShoppingBag,
+  Trash2,
+  Search,
+  LayoutGrid,
+  List,
+  Pencil,
 } from 'lucide-react';
 
 export interface KitchenTableModalProps {
@@ -118,6 +144,12 @@ const KitchenTableModalContent: React.FC<{
   const [activeTab, setActiveTab] = useState<'storage' | 'interaction'>('storage');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCat, setFilterCat] = useState<StorageFilterCategory>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isEditingLabel, setIsEditingLabel] = useState(false);
+  const [labelDraft, setLabelDraft] = useState(storage.userLabel || '');
+  const labelInputRef = useRef<HTMLInputElement | null>(null);
   const [, forceRender] = useState(0);
 
   // 4x4-in -> 4x4-out Interaction Workbench state
@@ -218,12 +250,90 @@ const KitchenTableModalContent: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (isEditingLabel) {
+      setTimeout(() => labelInputRef.current?.focus(), 0);
+    }
+  }, [isEditingLabel]);
+
   const handleClose = () => {
     returnAllWorkbenchItems();
     onClose();
   };
 
-  useTopmostEscape(handleClose);
+  useTopmostEscape(() => {
+    if (isEditingLabel) {
+      setIsEditingLabel(false);
+      setLabelDraft(storage.userLabel || '');
+      return;
+    }
+    handleClose();
+  });
+
+  const handleSaveLabel = () => {
+    const saved = setFurnitureStorageUserLabel(storage, labelDraft);
+    setLabelDraft(saved || '');
+    setIsEditingLabel(false);
+    sound.playButtonPress();
+    showToast(saved ? `Подпись сохранена: «${saved}»` : 'Подпись сброшена');
+    notifyChanged();
+  };
+
+  const handleOrganizeTable = () => {
+    syncFurnitureStorageThermodynamics(storage);
+    const res = organizeFurnitureStorageInPlace(storage);
+    setSelectedKey(null);
+    sound.playPickup();
+    showToast(
+      res.changed
+        ? res.mergedCount > 0
+          ? `Порядок наведён (объединено стопок: ${res.mergedCount})`
+          : 'Порядок наведён'
+        : 'На столе уже порядок'
+    );
+    notifyChanged();
+  };
+
+  const handleOrganizePlayerPockets = () => {
+    const res = organizePlayerInventoryInPlace(player);
+    setSelectedKey(null);
+    sound.playPickup();
+    showToast(
+      res.changed
+        ? res.mergedCount > 0
+          ? `Карманы упорядочены (объединено стопок: ${res.mergedCount})`
+          : 'Карманы упорядочены'
+        : 'В карманах уже порядок'
+    );
+    notifyChanged();
+  };
+
+  const handleQuickTransfer = (mode: 'matching' | 'suitable' | 'unload_bags') => {
+    syncFurnitureStorageThermodynamics(storage);
+    const res = quickTransferToStorage(player, storage, mode);
+    setSelectedKey(null);
+    if (res.movedCount > 0) {
+      sound.playPickup();
+      showToast(res.messageRu);
+      addPlayerNotification(player, res.messageRu, 'pickup');
+      notifyChanged();
+    } else {
+      showToast(res.messageRu);
+    }
+  };
+
+  const handleSweepTableTrash = () => {
+    const res = sweepTrashFromStorage(storage);
+    setSelectedKey(null);
+    if (res.removedCount > 0) {
+      sound.playUseItem();
+      showToast(res.messageRu);
+      if (filterCat === 'trash') setFilterCat('all');
+      notifyChanged();
+    } else {
+      showToast(res.messageRu);
+    }
+  };
 
   const cfg = FURNITURE_STORAGE_CONFIGS[storage.furnitureType] || FURNITURE_STORAGE_CONFIGS.kitchen_counter;
   const storageVol = getFurnitureStorageTotalVolume(storage);
@@ -673,6 +783,28 @@ const KitchenTableModalContent: React.FC<{
   const renderTableStorageColumn = (mode: 'transfer' | 'workbench') => {
     const slotCount = Math.max(24, storage.items.length + 6);
     const isDropZone = dragUi?.overKey === 'zone:table';
+    const tableTrashCount = countDisposableTrashInList(storage.items);
+    const matchingCount = mode === 'transfer' ? countTransferCandidates(player, storage, 'matching') : 0;
+    const suitableCount = mode === 'transfer' ? countTransferCandidates(player, storage, 'suitable') : 0;
+    const carryBags = mode === 'transfer' ? findCarryBagsWithItems(player) : [];
+    const carryBagsTotal = carryBags.reduce((s, b) => s + b.itemCount, 0);
+    const suitableLabel = getSuitableButtonLabelRu(storage.furnitureType);
+    const hasActiveFilter = filterCat !== 'all' || searchQuery.trim().length > 0;
+
+    const filteredListEntries = storage.items
+      .map((item, idx) => ({ item, idx }))
+      .filter((entry): entry is { item: InventoryItem; idx: number } =>
+        Boolean(entry.item) && itemMatchesStorageFilter(entry.item, filterCat, searchQuery)
+      );
+
+    const filterChips: { id: StorageFilterCategory; label: string; count?: number }[] = [
+      { id: 'all', label: 'Все' },
+      { id: 'food', label: 'Еда' },
+      { id: 'drink', label: 'Напитки' },
+      { id: 'kitchenware', label: 'Посуда' },
+      { id: 'gear', label: 'Вещи' },
+      { id: 'trash', label: 'Мусор', count: tableTrashCount > 0 ? tableTrashCount : undefined },
+    ];
 
     return (
       <section
@@ -685,7 +817,7 @@ const KitchenTableModalContent: React.FC<{
             <span>Хранилище стола</span>
           </span>
           <span className="kf-col-meta">
-            {storage.items.length} предм. · {storageVol.toFixed(1)}/{cfg.capacityL.toFixed(0)} л
+            {storage.items.filter(Boolean).length} предм. · {storageVol.toFixed(1)}/{cfg.capacityL.toFixed(0)} л
           </span>
         </div>
 
@@ -710,63 +842,279 @@ const KitchenTableModalContent: React.FC<{
           </div>
         </div>
 
-        <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
-          <div className="kf-slots">
-            {Array.from({ length: slotCount }, (_, idx) => {
-              const it = storage.items[idx];
-              const slotKey = it ? `table:${idx}` : `table:empty-${idx}`;
-              const fill = getSlotFillInfo(it);
-              const isDragging = dragUi?.sourceKey === slotKey;
-              const isOver = dragUi?.overKey === slotKey;
-              const isSel = selectedKey === slotKey;
-              const temp = it ? (it.surfaceTemperature ?? it.temperature ?? 20) : 20;
-
-              return (
-                <div
-                  key={slotKey}
-                  data-kf-slot={slotKey}
-                  draggable={false}
-                  onDragStart={e => e.preventDefault()}
-                  onPointerDown={e => startSlotPointer(e, slotKey, it)}
-                  onDoubleClick={() => {
-                    if (!it) return;
-                    if (mode === 'transfer') moveTableItemToPlayer(idx);
-                    else placeTableItemIntoWbInput(idx);
-                  }}
-                  className={
-                    'kf-slot' +
-                    (!it ? ' empty' : '') +
-                    (isSel ? ' on' : '') +
-                    (isOver ? ' drop' : '') +
-                    (it && temp >= 55 ? ' hot' : '')
+        {/* Single-row Search + Filters + Grid/List toggle */}
+        <div className="kf-org-bar">
+          <div className="kf-search">
+            <Search width={13} height={13} color="#8f8b81" style={{ flex: 'none' }} />
+            <input
+              type="text"
+              value={searchQuery}
+              placeholder="Поиск..."
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') {
+                  if (searchQuery) {
+                    e.stopPropagation();
+                    e.nativeEvent.stopPropagation();
+                    setSearchQuery('');
                   }
-                  style={{ opacity: isDragging ? 0.35 : 1, cursor: it ? 'grab' : 'default' }}
-                  title={it ? `${it.nameRu} (${formatWeightRu(getItemTotalWeight(it))})` : 'Свободное место на столе'}
-                >
-                  {it && (
-                    <>
-                      <ItemIconCanvas itemId={it.itemId} item={it} size={42} />
-                      {(temp >= 40 || temp <= 4) && (
-                        <span className="kf-temp" style={{ color: getTempColor(temp) }}>
-                          {temp > 0 ? '+' : ''}{Math.round(temp)}°
-                        </span>
-                      )}
-                      {it.count > 1 ? (
-                        <span className="kf-cnt">{it.count}</span>
-                      ) : it.isContainer ? (
-                        <span className="kf-cnt">{it.contents?.length || 0}</span>
-                      ) : null}
-                      {fill.pct !== null && (
-                        <div className="kf-fill">
-                          <i style={{ width: `${fill.pct}%`, background: fill.color }} />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
+                  return;
+                }
+                e.stopPropagation();
+                e.nativeEvent.stopPropagation();
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="kf-search-clr"
+                onClick={() => setSearchQuery('')}
+                aria-label="Очистить поиск"
+              >
+                <X width={12} height={12} />
+              </button>
+            )}
           </div>
+
+          <div className="kf-filters">
+            {filterChips.map(fc => (
+              <button
+                key={fc.id}
+                type="button"
+                className={
+                  'kf-fchip' +
+                  (filterCat === fc.id ? ' on' : '') +
+                  (fc.id === 'trash' && fc.count ? ' trash-on' : '')
+                }
+                onClick={() => setFilterCat(fc.id)}
+              >
+                <span>{fc.label}</span>
+                {fc.count !== undefined && <span className="mono">{fc.count}</span>}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'transfer' && (
+            <div className="kf-view-seg" role="group" aria-label="Вид списка">
+              <button
+                type="button"
+                className={'kf-view-btn' + (viewMode === 'grid' ? ' on' : '')}
+                onClick={() => setViewMode('grid')}
+                title="Сетка"
+                aria-label="Сетка"
+              >
+                <LayoutGrid width={14} height={14} />
+              </button>
+              <button
+                type="button"
+                className={'kf-view-btn' + (viewMode === 'list' ? ' on' : '')}
+                onClick={() => setViewMode('list')}
+                title="Список с названиями"
+                aria-label="Список"
+              >
+                <List width={14} height={14} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Single-row Organization Actions */}
+        <div className="kf-act-row">
+          <button
+            type="button"
+            className="kf-act-btn"
+            disabled={storage.items.filter(Boolean).length === 0}
+            onClick={handleOrganizeTable}
+            title="Разложить предметы по группам и объединить одинаковые стопки"
+          >
+            <ArrowUpDown width={13} height={13} color="#e0ab45" />
+            <span>Порядок</span>
+          </button>
+
+          {mode === 'transfer' && (
+            <>
+              <button
+                type="button"
+                className="kf-act-btn"
+                disabled={matchingCount === 0}
+                onClick={() => handleQuickTransfer('matching')}
+                title="Доложить из карманов похожие предметы"
+              >
+                <CopyPlus width={13} height={13} />
+                <span>Похожее</span>
+                {matchingCount > 0 && <span className="kf-act-n">{matchingCount}</span>}
+              </button>
+
+              <button
+                type="button"
+                className="kf-act-btn"
+                disabled={suitableCount === 0}
+                onClick={() => handleQuickTransfer('suitable')}
+                title="Сложить посуду, специи и бакалею на стол"
+              >
+                <FolderInput width={13} height={13} />
+                <span>{suitableLabel}</span>
+                {suitableCount > 0 && <span className="kf-act-n">{suitableCount}</span>}
+              </button>
+
+              {carryBagsTotal > 0 && (
+                <button
+                  type="button"
+                  className="kf-act-btn accent"
+                  onClick={() => handleQuickTransfer('unload_bags')}
+                  title={`Выгрузить содержимое из «${carryBags[0].bag.nameRu}»`}
+                >
+                  <ShoppingBag width={13} height={13} />
+                  <span>Выгрузить пакет</span>
+                  <span className="kf-act-n">{carryBagsTotal}</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {tableTrashCount > 0 && (
+            <button
+              type="button"
+              className="kf-act-btn danger"
+              onClick={handleSweepTableTrash}
+              title="Убрать пустые упаковки, обёртки и испорченные остатки"
+            >
+              <Trash2 width={13} height={13} />
+              <span>Убрать мусор</span>
+              <span className="kf-act-n">{tableTrashCount}</span>
+            </button>
+          )}
+        </div>
+
+        <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+          {mode === 'transfer' && viewMode === 'list' ? (
+            filteredListEntries.length > 0 ? (
+              <div className="kf-list">
+                {filteredListEntries.map(({ item: it, idx }) => {
+                  const slotKey = `table:${idx}`;
+                  const isSel = selectedKey === slotKey;
+                  const pkgInner = getPackagedInnerItem(it);
+                  const grp = getItemLogicalGroup(it);
+                  const isTrash = isDisposableTrashOrEmptyPackaging(it);
+                  const temp = it.surfaceTemperature ?? it.temperature;
+                  const tempText =
+                    temp !== undefined && (temp >= 38 || temp <= 6)
+                      ? ` · ${temp > 0 ? '+' : ''}${Math.round(temp)}°C`
+                      : '';
+                  return (
+                    <div
+                      key={slotKey}
+                      className={'kf-list-row' + (isSel ? ' on' : '') + (isTrash ? ' is-trash' : '')}
+                      onClick={() => setSelectedKey(slotKey)}
+                      onDoubleClick={() => moveTableItemToPlayer(idx)}
+                    >
+                      <div className="kf-list-ic">
+                        <ItemIconCanvas itemId={it.itemId} item={it} size={26} />
+                        {pkgInner && (
+                          <span className="kf-pkg-sub">
+                            <ItemIconCanvas itemId={pkgInner.itemId} item={pkgInner} size={13} />
+                          </span>
+                        )}
+                      </div>
+                      <div className="kf-list-info">
+                        <div className="kf-list-name">{getItemReadableTitleRu(it)}</div>
+                        <div className="kf-list-sub">
+                          {grp.labelRu}{tempText}
+                        </div>
+                      </div>
+                      <div className="kf-list-meta">
+                        {it.count > 1 && <span>×{it.count}</span>}
+                        <span>{formatWeightRu(getItemTotalWeight(it))}</span>
+                        <button
+                          type="button"
+                          className="btn btn-s btn-xs"
+                          onClick={e => {
+                            e.stopPropagation();
+                            moveTableItemToPlayer(idx);
+                          }}
+                        >
+                          Забрать
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="kf-list-empty">
+                {storage.items.filter(Boolean).length === 0
+                  ? 'На столе пока пусто'
+                  : 'По текущему фильтру предметы не найдены'}
+              </div>
+            )
+          ) : (
+            <div className="kf-slots">
+              {Array.from({ length: slotCount }, (_, idx) => {
+                const it = storage.items[idx];
+                const slotKey = it ? `table:${idx}` : `table:empty-${idx}`;
+                const fill = getSlotFillInfo(it);
+                const isDragging = dragUi?.sourceKey === slotKey;
+                const isOver = dragUi?.overKey === slotKey;
+                const isSel = selectedKey === slotKey;
+                const temp = it ? (it.surfaceTemperature ?? it.temperature ?? 20) : 20;
+                const pkgInner = getPackagedInnerItem(it);
+                const isTrash = isDisposableTrashOrEmptyPackaging(it);
+                const dimmed = Boolean(it && hasActiveFilter && !itemMatchesStorageFilter(it, filterCat, searchQuery));
+
+                return (
+                  <div
+                    key={slotKey}
+                    data-kf-slot={slotKey}
+                    draggable={false}
+                    onDragStart={e => e.preventDefault()}
+                    onPointerDown={e => startSlotPointer(e, slotKey, it)}
+                    onDoubleClick={() => {
+                      if (!it) return;
+                      if (mode === 'transfer') moveTableItemToPlayer(idx);
+                      else placeTableItemIntoWbInput(idx);
+                    }}
+                    className={
+                      'kf-slot' +
+                      (!it ? ' empty' : '') +
+                      (isSel ? ' on' : '') +
+                      (isOver ? ' drop' : '') +
+                      (it && temp >= 55 ? ' hot' : '') +
+                      (dimmed ? ' dim' : '') +
+                      (isTrash ? ' is-trash' : '')
+                    }
+                    style={{ opacity: isDragging ? 0.35 : undefined, cursor: it ? 'grab' : 'default' }}
+                    title={it ? `${getItemReadableTitleRu(it)} (${formatWeightRu(getItemTotalWeight(it))})` : 'Свободное место на столе'}
+                  >
+                    {it && (
+                      <>
+                        <ItemIconCanvas itemId={it.itemId} item={it} size={42} />
+                        {pkgInner && (
+                          <span className="kf-pkg-sub" title={pkgInner.nameRu}>
+                            <ItemIconCanvas itemId={pkgInner.itemId} item={pkgInner} size={18} />
+                          </span>
+                        )}
+                        {(temp >= 40 || temp <= 4) && (
+                          <span className="kf-temp" style={{ color: getTempColor(temp) }}>
+                            {temp > 0 ? '+' : ''}{Math.round(temp)}°
+                          </span>
+                        )}
+                        {it.count > 1 ? (
+                          <span className="kf-cnt">{it.count}</span>
+                        ) : it.isContainer && !pkgInner ? (
+                          <span className="kf-cnt">{it.contents?.length || 0}</span>
+                        ) : null}
+                        {fill.pct !== null && (
+                          <div className="kf-fill">
+                            <i style={{ width: `${fill.pct}%`, background: fill.color }} />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="kf-foot-bar">
@@ -842,9 +1190,20 @@ const KitchenTableModalContent: React.FC<{
             <User width={16} height={16} />
             <span>Инвентарь игрока</span>
           </span>
-          <span className="kf-col-meta">
-            {pocketCap.usedVolumeL.toFixed(1)}/{pocketCap.totalCapacityL.toFixed(1)} л · {playerWt.toFixed(1)} кг
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="kf-col-meta">
+              {pocketCap.usedVolumeL.toFixed(1)}/{pocketCap.totalCapacityL.toFixed(1)} л · {playerWt.toFixed(1)} кг
+            </span>
+            <button
+              type="button"
+              className="kf-act-btn"
+              onClick={handleOrganizePlayerPockets}
+              title="Упорядочить предметы внутри карманов и рюкзака"
+            >
+              <ArrowUpDown width={12} height={12} color="#e0ab45" />
+              <span>Порядок</span>
+            </button>
+          </div>
         </div>
 
         <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
@@ -922,6 +1281,9 @@ const KitchenTableModalContent: React.FC<{
                     const isSel = selectedKey === slotKey;
                     const temp = it ? (it.surfaceTemperature ?? it.temperature ?? 20) : 20;
 
+                    const pkgInner = getPackagedInnerItem(it);
+                    const isTrash = isDisposableTrashOrEmptyPackaging(it);
+
                     return (
                       <div
                         key={slotKey}
@@ -930,13 +1292,18 @@ const KitchenTableModalContent: React.FC<{
                         onDragStart={e => e.preventDefault()}
                         onPointerDown={e => startSlotPointer(e, slotKey, it)}
                         onDoubleClick={() => it && movePlayerInvToTable(slotIdx)}
-                        className={'kf-slot' + (!it ? ' empty' : '') + (isSel ? ' on' : '') + (isOver ? ' drop' : '')}
+                        className={'kf-slot' + (!it ? ' empty' : '') + (isSel ? ' on' : '') + (isOver ? ' drop' : '') + (isTrash ? ' is-trash' : '')}
                         style={{ opacity: isDragging ? 0.35 : 1, cursor: it ? 'grab' : 'default' }}
-                        title={it ? `${it.nameRu} (${formatWeightRu(getItemTotalWeight(it))})` : 'Свободный слот'}
+                        title={it ? `${getItemReadableTitleRu(it)} (${formatWeightRu(getItemTotalWeight(it))})` : 'Свободный слот'}
                       >
                         {it && (
                           <>
                             <ItemIconCanvas itemId={it.itemId} item={it} size={42} />
+                            {pkgInner && (
+                              <span className="kf-pkg-sub" title={pkgInner.nameRu}>
+                                <ItemIconCanvas itemId={pkgInner.itemId} item={pkgInner} size={18} />
+                              </span>
+                            )}
                             {(temp >= 40 || temp <= 4) && (
                               <span className="kf-temp" style={{ color: getTempColor(temp) }}>
                                 {temp > 0 ? '+' : ''}{Math.round(temp)}°
@@ -944,7 +1311,7 @@ const KitchenTableModalContent: React.FC<{
                             )}
                             {it.count > 1 ? (
                               <span className="kf-cnt">{it.count}</span>
-                            ) : it.isContainer ? (
+                            ) : it.isContainer && !pkgInner ? (
                               <span className="kf-cnt">{it.contents?.length || 0}</span>
                             ) : null}
                             {fill.pct !== null && (
@@ -1180,9 +1547,11 @@ const KitchenTableModalContent: React.FC<{
     );
   };
 
-  const modalTitle = storage.customTitle
+  const baseModalTitle = storage.customTitle
     ? storage.customTitle.split(' / ')[0]
     : cfg.nameRu.split(' / ')[0];
+  const savedLabel = storage.userLabel?.trim() || '';
+  const modalTitle = savedLabel || baseModalTitle;
 
   return (
     <ShadowHost css={kitchenFurnitureCss}>
@@ -1194,8 +1563,66 @@ const KitchenTableModalContent: React.FC<{
           <header className="top">
             <div className="top-l">
               <Utensils width={24} height={24} color="#c9922b" style={{ flex: 'none' }} />
-              <div className="cn ttl">{modalTitle}</div>
-              <span className="sub-top">Рабочая поверхность и шкафы</span>
+              {isEditingLabel ? (
+                <div className="kf-label-form" onClick={e => e.stopPropagation()}>
+                  <input
+                    ref={labelInputRef}
+                    type="text"
+                    className="kf-label-input"
+                    value={labelDraft}
+                    maxLength={36}
+                    placeholder="Подпись наклейки, напр. Крупы и специи"
+                    onChange={e => setLabelDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        e.nativeEvent.stopPropagation();
+                        setIsEditingLabel(false);
+                        setLabelDraft(storage.userLabel || '');
+                        return;
+                      }
+                      e.stopPropagation();
+                      e.nativeEvent.stopPropagation();
+                      if (e.key === 'Enter') {
+                        handleSaveLabel();
+                      }
+                    }}
+                  />
+                  <button type="button" className="btn btn-p btn-xs" onClick={handleSaveLabel} title="Сохранить">
+                    <Check width={14} height={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-s btn-xs"
+                    onClick={() => {
+                      setIsEditingLabel(false);
+                      setLabelDraft(storage.userLabel || '');
+                    }}
+                    title="Отмена"
+                  >
+                    <X width={14} height={14} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="cn ttl" title={modalTitle}>{modalTitle}</div>
+                  <button
+                    type="button"
+                    className="kf-label-btn"
+                    onClick={() => {
+                      setLabelDraft(storage.userLabel || '');
+                      setIsEditingLabel(true);
+                    }}
+                    title={savedLabel ? 'Изменить подпись наклейки' : 'Подписать стол наклейкой'}
+                    aria-label="Подписать стол"
+                  >
+                    <Pencil width={14} height={14} />
+                  </button>
+                  <span className="sub-top">
+                    {savedLabel ? baseModalTitle : 'Рабочая поверхность и шкафы'}
+                  </span>
+                </>
+              )}
             </div>
             <div className="top-r">
               <div className="chip">

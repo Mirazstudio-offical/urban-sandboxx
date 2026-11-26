@@ -680,3 +680,68 @@ button.chip:hover { border-color: rgba(201, 146, 43, .55); background: rgba(30, 
   .gm[data-mob] .inv-tab { padding: 0 9px; font-size: 15.5px; }
   .gm[data-mob] .inv-search { width: 155px; }
 }
+
+/* ---- Inventory Organization & Packaged Preview Badges ---- */
+.inv-slot.is-trash {
+  border-style: dashed;
+  border-color: rgba(217, 116, 90, .42);
+}
+.inv-pkg-sub {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(12, 13, 15, .94);
+  border: 1px solid rgba(224, 171, 69, .52);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .65);
+}
+.inv-pill-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, .12);
+  flex: none;
+  margin: 0 2px;
+}
+.inv-pill-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .13);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #e9e6df;
+  white-space: nowrap;
+  transition: background .14s, border-color .14s, color .14s;
+}
+.inv-pill-act:hover { background: rgba(255, 255, 255, .13); border-color: rgba(255, 255, 255, .26); color: #fff; }
+.inv-pill-act.danger {
+  background: rgba(217, 116, 90, .14);
+  border-color: rgba(217, 116, 90, .44);
+  color: #f2b4a0;
+}
+.inv-pill-act.danger:hover {
+  background: rgba(217, 116, 90, .26);
+  border-color: rgba(217, 116, 90, .74);
+  color: #ffd7cc;
+}
+.inv-sec-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.gm[data-mob] .inv-pill-act { height: 28px; padding: 0 9px; font-size: 12px; }
+.gm[data-mob] .inv-pkg-sub { width: 19px; height: 19px; left: 2px; bottom: 2px; }
+

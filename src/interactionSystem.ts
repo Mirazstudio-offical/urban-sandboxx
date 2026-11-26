@@ -12,7 +12,11 @@ import { getAllBuildingEntrances } from './physics';
 import { getBuildingLayout, getBuildingFloorsCount, getApartmentDoorSegment } from './buildingInteriors';
 import { isPlayerNearGasStationCashier, getNearbyGasPump, getNearbyVehicleForFueling, FUEL_GRADES } from './gasStationSystem';
 import { getCityApartments, getApartmentById, getApartmentForPlot, hasPlayerApartmentKey } from './propertySystem';
-import { FURNITURE_STORAGE_CONFIGS } from './furnitureStorageSystem';
+import {
+  FURNITURE_STORAGE_CONFIGS,
+  buildFurnitureStorageId,
+  getFurnitureStorageUserLabel,
+} from './furnitureStorageSystem';
 import { getBusSeatPositions, getBusDoors, getTrainCoachSeats } from './busInteriorSystem';
 import {
   isVehicleCraneTruck,
@@ -962,10 +966,20 @@ export function findPointedInteraction(
               );
             }
 
+            const storageLookupId = buildFurnitureStorageId(
+              bld.id,
+              currentFloor,
+              fIdx,
+              player.insideApartmentId
+            );
+            const savedUserLabel = getFurnitureStorageUserLabel(storageLookupId);
+            const baseShortName = storageCfg.nameRu.split(' / ')[0];
+            const promptTitle = savedUserLabel ? `${baseShortName} · «${savedUserLabel}»` : storageCfg.nameRu;
+
             tryAdd(
               {
                 type: 'furniture_storage',
-                actionTitle: storageCfg.nameRu,
+                actionTitle: promptTitle,
                 x: furnWorldX,
                 y: furnWorldY,
                 outline: furnOutline,

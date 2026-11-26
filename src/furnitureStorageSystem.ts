@@ -314,6 +314,8 @@ export interface FurnitureStorage {
   furnitureIndex: number;
   furnitureType: string;
   customTitle?: string;
+  /** Player-written marker sticker label (e.g. "Крупы и специи", "Зимняя одежда") */
+  userLabel?: string;
   apartmentId?: string;
   items: InventoryItem[];
   stoveState?: StoveState;
@@ -485,6 +487,19 @@ function seedApartmentFurnitureItems(
 
 export function getExistingFurnitureStorage(storageId: string): FurnitureStorage | undefined {
   return furnitureStorageDb.get(storageId);
+}
+
+export function getFurnitureStorageUserLabel(storageId: string): string | undefined {
+  const st = furnitureStorageDb.get(storageId);
+  const lbl = st?.userLabel?.trim();
+  return lbl ? lbl : undefined;
+}
+
+export function setFurnitureStorageUserLabel(storage: FurnitureStorage, rawLabel: string): string | undefined {
+  const cleaned = rawLabel.replace(/\s+/g, ' ').trim().slice(0, 36);
+  storage.userLabel = cleaned.length > 0 ? cleaned : undefined;
+  saveFurnitureStoragesToLocalStorage();
+  return storage.userLabel;
 }
 
 export function deleteFurnitureStorage(storageId: string): boolean {
@@ -1149,7 +1164,7 @@ export function removeItemFromStoveOven(storage: FurnitureStorage, itemIndex: nu
  */
 export function getFurnitureStorageTotalWeight(storage: FurnitureStorage): number {
   if (!storage.items || storage.items.length === 0) return 0;
-  return storage.items.reduce((sum, it) => sum + getItemTotalWeight(it), 0);
+  return storage.items.reduce((sum, it) => (it ? sum + getItemTotalWeight(it) : sum), 0);
 }
 
 /**
@@ -1157,7 +1172,7 @@ export function getFurnitureStorageTotalWeight(storage: FurnitureStorage): numbe
  */
 export function getFurnitureStorageTotalVolume(storage: FurnitureStorage): number {
   if (!storage.items || storage.items.length === 0) return 0;
-  return storage.items.reduce((sum, it) => sum + getItemTotalVolume(it), 0);
+  return storage.items.reduce((sum, it) => (it ? sum + getItemTotalVolume(it) : sum), 0);
 }
 
 /**
@@ -1169,12 +1184,25 @@ export function canItemFitInFurniture(
 ): { fits: boolean; reason?: string } {
   const cfg = FURNITURE_STORAGE_CONFIGS[storage.furnitureType] || FURNITURE_STORAGE_CONFIGS.wardrobe;
 
-  // 1. Category check
+  // 1. Category check (also allow wrapped food packages and cookware/containers carrying allowed items or potable liquids)
   if (cfg.allowedCategories && cfg.allowedCategories.length > 0) {
-    if (!cfg.allowedCategories.includes(itemToAdd.category)) {
+    let categoryAllowed = cfg.allowedCategories.includes(itemToAdd.category);
+    if (!categoryAllowed && itemToAdd.contents && itemToAdd.contents.length > 0) {
+      const filled = itemToAdd.contents.filter(Boolean);
+      if (filled.length > 0 && filled.some(c => cfg.allowedCategories!.includes(c.category))) {
+        categoryAllowed = true;
+      }
+    }
+    if (!categoryAllowed && itemToAdd.fluidStorage && itemToAdd.fluidStorage.currentMl > 0 && itemToAdd.fluidStorage.liquidId) {
+      const liqDef = LIQUID_REGISTRY[itemToAdd.fluidStorage.liquidId as keyof typeof LIQUID_REGISTRY];
+      if (liqDef && !liqDef.isToxic && !liqDef.isFlammable && (cfg.allowedCategories.includes('drink') || cfg.allowedCategories.includes('food'))) {
+        categoryAllowed = true;
+      }
+    }
+    if (!categoryAllowed) {
       return {
         fits: false,
-        reason: `${cfg.nameRu} не предназначен для хранения предметов категории "${itemToAdd.category}".`
+        reason: `${cfg.nameRu} не предназначен для хранения предмета «${itemToAdd.nameRu}»`
       };
     }
   }
@@ -1261,9 +1289,20 @@ export function removeItemFromFurnitureStorage(
   const target = storage.items[itemIndex];
   if (!target) return null;
 
+  const takeCount = Math.max(1, count);
+  if (target.count > takeCount) {
+    target.count -= takeCount;
+    saveFurnitureStoragesToLocalStorage();
+    return {
+      ...target,
+      id: `taken_${target.itemId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      count: takeCount,
+    };
+  }
+
   storage.items.splice(itemIndex, 1);
   saveFurnitureStoragesToLocalStorage();
-  return { ...target, count: 1, maxStack: 1 };
+  return { ...target };
 }
 
 export function takeBathWashPlayer(
