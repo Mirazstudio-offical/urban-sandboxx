@@ -614,6 +614,7 @@ export const DOUGH_SHAPE_NAMES_RU: Record<DoughShape, string> = {
   braid: 'Косичка / плетёнка',
   croissant_crescent: 'Рогалик / круассан',
   pocket_pirozhok: 'Пирожок',
+  samsa_triangle: 'Треугольная самса',
   dumpling_crescent: 'Вареник / пельмень',
   pouch_khinkali: 'Мешочек / хинкали',
   roll_strudel: 'Рулет / штрудель',
@@ -635,6 +636,7 @@ export const DOUGH_COOK_STATE_RU: Record<DoughCookState, string> = {
 export function isFoldedDoughShape(shape: DoughShape): boolean {
   return (
     shape === 'pocket_pirozhok' ||
+    shape === 'samsa_triangle' ||
     shape === 'dumpling_crescent' ||
     shape === 'pouch_khinkali' ||
     shape === 'roll_strudel' ||
@@ -700,6 +702,7 @@ export function computeDoughGeometry(
         thicknessMm = Math.max(18, Math.round(Math.cbrt(volCm3) * 4.8));
         break;
       case 'pocket_pirozhok':
+      case 'samsa_triangle':
       case 'pouch_khinkali':
         thicknessMm = Math.max(18, Math.round(Math.cbrt(volCm3) * 5.2));
         break;
@@ -1286,7 +1289,14 @@ export function describeDoughAppearanceQualitativeRu(attrs: DoughAttributes): {
   } else if (attrs.shape === 'open_pie') {
     shapeBriefRu = attrs.cookState === 'baked' ? (attrs.sweetness >= 35 ? 'Открытый пирог' : 'Пицца / открытый пирог') : 'Открытая лепёшка';
   } else if (attrs.shape === 'loaf') {
-    shapeBriefRu = attrs.cookState === 'baked' ? 'Буханка хлеба' : 'Батон / буханка';
+    shapeBriefRu =
+      attrs.cookState === 'baked'
+        ? attrs.weightGrams <= 95
+          ? 'Ломтик хлеба'
+          : 'Буханка хлеба'
+        : 'Батон / буханка';
+  } else if (attrs.shape === 'samsa_triangle') {
+    shapeBriefRu = attrs.cookState === 'baked' ? 'Печёная треугольная самса' : 'Треугольная самса';
   }
 
   const lowerShape = shapeBriefRu.toLowerCase();
@@ -1296,7 +1306,8 @@ export function describeDoughAppearanceQualitativeRu(attrs: DoughAttributes): {
     lowerShape.includes('косичка') ||
     lowerShape.includes('буханка') ||
     lowerShape.includes('лапша') ||
-    lowerShape.includes('пицца');
+    lowerShape.includes('пицца') ||
+    lowerShape.includes('самса');
   const isPluralShape =
     attrs.shape === 'strip' || attrs.shape === 'cubes_pieces';
 
@@ -1410,7 +1421,7 @@ export function buildDoughDisplayNameRu(
   switch (attrs.shape) {
     case 'loaf':
       return attrs.cookState === 'baked'
-        ? `Домашний хлеб${attrs.doughType === 'rye_bread' ? ' (ржаной)' : attrs.doughType === 'corn_dough' ? ' (кукурузный)' : ''}`
+        ? `${attrs.weightGrams <= 95 ? 'Ломтик домашнего хлеба' : 'Домашний хлеб'}${attrs.doughType === 'rye_bread' ? ' (ржаной)' : attrs.doughType === 'corn_dough' ? ' (кукурузный)' : ''}`
         : `${statePrefix} — батон`;
     case 'bun':
     case 'ball':
@@ -1431,6 +1442,8 @@ export function buildDoughDisplayNameRu(
       return `${attrs.cookState === 'baked' ? 'Домашний рогалик' : 'Рогалик'}${fillingShort}`;
     case 'pocket_pirozhok':
       return `${attrs.cookState === 'baked' ? 'Печёный пирожок' : attrs.cookState === 'deep_fried' ? 'Пирожок во фритюре' : attrs.cookState === 'fried' ? 'Жареный пирожок' : 'Отварной пирожок'}${fillingShort}`;
+    case 'samsa_triangle':
+      return `${attrs.cookState === 'baked' ? 'Домашняя самса' : attrs.cookState === 'fried' || attrs.cookState === 'deep_fried' ? 'Жареная самса' : 'Самса'}${fillingShort}`;
     case 'dumpling_crescent':
       return `${attrs.cookState === 'boiled' ? 'Варёный вареник' : attrs.cookState === 'fried' || attrs.cookState === 'deep_fried' ? 'Жареный чебурек' : 'Печёный вареник'}${fillingShort}`;
     case 'pouch_khinkali':
@@ -1799,7 +1812,10 @@ export function cutDoughWithKnife(
     }
     return {
       outputs,
-      title: `Нарезка теста на ${pieceCount} части`,
+      title:
+        da.cookState === 'raw'
+          ? `Нарезка теста на ${pieceCount} части`
+          : `Нарезка: ${doughItem.nameRu} → ×${pieceCount}`,
       subtitle: `${pieceCount} шт. по ~${Math.round((da.weightGrams + da.fillingGrams) / pieceCount)} г`,
       actionLabel: `Разрезать на ${pieceCount}`,
     };
@@ -1820,7 +1836,10 @@ export function cutDoughWithKnife(
   const pct = Math.round(frac * 100);
   return {
     outputs: [pieceA, pieceB],
-    title: `Отрезать ~${pct}% от теста`,
+    title:
+      da.cookState === 'raw'
+        ? `Отрезать ~${pct}% от теста`
+        : `Отрезать ~${pct}%: ${doughItem.nameRu}`,
     subtitle: `${Math.round(pieceA.doughAttributes!.weightGrams + pieceA.doughAttributes!.fillingGrams)} г + остаток ${Math.round(pieceB.doughAttributes!.weightGrams + pieceB.doughAttributes!.fillingGrams)} г`,
     actionLabel: `Отрезать ~${pct}%`,
   };
@@ -1866,11 +1885,29 @@ export function getDoughShapeSpecForSlot(
   gridSize: 4 | 16,
   currentAttrs: DoughAttributes
 ): SlotDoughShapeSpec {
-  if (gridSize === 16) {
-    return GRID_4X4_SLOT_SHAPES[Math.max(0, Math.min(15, slotIndex))];
-  }
-  // Compact 2x2 grid: 4 essential everyday shapes + smart folding in slot 3!
   const hasFillings = currentAttrs.fillings.length > 0;
+  if (gridSize === 16) {
+    const idx = Math.max(0, Math.min(15, slotIndex));
+    // Slot 3 (index 2: Квадратный пласт) or Slot 13 (index 12: Пирожок -> Самса) folds filled dough into triangular Samsa!
+    if (hasFillings && idx === 2) {
+      return {
+        shape: 'samsa_triangle',
+        labelRu: 'Самса (свернуть треугольником)',
+        hintRu: 'Сложить углы конвертом в треугольную самсу',
+        isFoldingAction: true,
+      };
+    }
+    if (idx === 12 && currentAttrs.shape === 'pocket_pirozhok') {
+      return {
+        shape: 'samsa_triangle',
+        labelRu: 'Самса (свернуть треугольником)',
+        hintRu: 'Переформовать пирожок в треугольную самсу',
+        isFoldingAction: true,
+      };
+    }
+    return GRID_4X4_SLOT_SHAPES[idx];
+  }
+  // Compact 2x2 grid: 4 essential everyday shapes + smart folding in slots 2 & 3!
   switch (slotIndex) {
     case 0:
       return currentAttrs.shape === 'ball'
@@ -1881,11 +1918,24 @@ export function getDoughShapeSpecForSlot(
         ? { shape: 'open_pie', labelRu: 'Открытый пирог / пицца', hintRu: 'Поднять бортики под открытую начинку' }
         : { shape: 'flatbread', labelRu: 'Лепёшка', hintRu: 'Размять в лепёшку — готова для начинки' };
     case 2:
+      if (hasFillings) {
+        return currentAttrs.shape === 'samsa_triangle'
+          ? { shape: 'roll_strudel', labelRu: 'Свернуть рулетом', hintRu: 'Свернуть тесто с начинкой рулетом', isFoldingAction: true }
+          : { shape: 'samsa_triangle', labelRu: 'Самса (свернуть треугольником)', hintRu: 'Сложить края конвертом в треугольную самсу', isFoldingAction: true };
+      }
       return currentAttrs.weightGrams >= 200
         ? { shape: 'loaf', labelRu: 'Буханка / батон', hintRu: 'Сформовать буханку для выпечки' }
         : { shape: 'rope', labelRu: 'Жгут / багет', hintRu: 'Скрутить в жгут' };
     default:
       if (hasFillings) {
+        if (currentAttrs.shape === 'pocket_pirozhok' || currentAttrs.shape === 'dumpling_crescent') {
+          return {
+            shape: 'samsa_triangle',
+            labelRu: 'Самса (свернуть треугольником)',
+            hintRu: 'Слепить треугольником в самсу',
+            isFoldingAction: true,
+          };
+        }
         return currentAttrs.weightGrams <= 95
           ? { shape: 'dumpling_crescent', labelRu: 'Свернуть в вареник / пельмень', hintRu: 'Запечатать начинку полумесяцем', isFoldingAction: true }
           : { shape: 'pocket_pirozhok', labelRu: 'Свернуть в пирожок', hintRu: 'Завернуть и защипать начинку внутри', isFoldingAction: true };

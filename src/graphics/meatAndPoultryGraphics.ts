@@ -3009,10 +3009,12 @@ export function drawMeatCutForm(ctx: CanvasRenderingContext2D, mt: MeatAttribute
   const deepColor = adjustHex(baseColor, -0.58);
   const lightColor = adjustHex(baseColor, 0.28);
   const fatColor = mt.fatColor || '#fef6db';
+  const fatShade = adjustHex(fatColor, -0.22);
   const seed = `${mt.baseItemId}_${mt.cutForm}_${mt.speciesId}`;
   const isSquidRings = mt.speciesId === 'squid' && mt.cutForm === 'medallion';
   const isFish = mt.meatCategory === 'fish';
-  const hasMarbling = mt.fatContent >= 12 && !isFish && mt.meatCategory !== 'seafood';
+  const isPoultry = mt.meatCategory === 'poultry';
+  const hasMarbling = mt.fatContent >= 10 && !isFish && mt.meatCategory !== 'seafood';
 
   const drawSlab = (
     cx: number,
@@ -3029,119 +3031,189 @@ export function drawMeatCutForm(ctx: CanvasRenderingContext2D, mt: MeatAttribute
     ctx.translate(cx, cy);
     ctx.rotate(rot);
 
-    // Side extruded thickness wall
+    // 1. Side extruded 3D thickness wall with vertical muscle bundle shading
     ctx.fillStyle = deepColor;
-    drawOrganicBlobPath(ctx, 0.3, thickness, rx, ry, localSeed, 0.11, 10);
+    drawOrganicBlobPath(ctx, 0.25, thickness, rx, ry, localSeed, 0.11, 12);
     ctx.fill();
 
-    // Optional outer skin / fat cap rim
-    if (showSkin || mt.fatContent >= 22) {
-      ctx.fillStyle = showSkin ? (isFish ? '#475569' : '#f2be8c') : fatColor;
-      drawOrganicBlobPath(ctx, 0, -0.2, rx * 1.04, ry * 1.04, localSeed, 0.1, 10);
+    // 2. Outer skin / fat cap rim along upper-left perimeter
+    if (showSkin || mt.fatContent >= 16) {
+      const rimCol = showSkin
+        ? isFish
+          ? '#475569'
+          : '#f2be8c'
+        : fatColor;
+      ctx.fillStyle = adjustHex(rimCol, -0.25);
+      drawOrganicBlobPath(ctx, 0, 0.15, rx * 1.05, ry * 1.05, localSeed, 0.1, 12);
       ctx.fill();
+
+      ctx.fillStyle = rimCol;
+      drawOrganicBlobPath(ctx, -0.1, -0.22, rx * 1.04, ry * 1.04, localSeed, 0.1, 12);
+      ctx.fill();
+
+      // Thin iridescent silver-skin / collagen membrane between fat cap and muscle
+      ctx.strokeStyle = 'rgba(226, 232, 240, 0.65)';
+      ctx.lineWidth = 0.28;
+      ctx.stroke();
     }
 
-    // Main meat top face
-    const g = ctx.createRadialGradient(-rx * 0.25, -ry * 0.25, 0.4, 0, 0, Math.max(rx, ry) * 1.1);
+    // 3. Main meat top cut face
+    const g = ctx.createRadialGradient(-rx * 0.28, -ry * 0.28, 0.35, 0, 0, Math.max(rx, ry) * 1.12);
     g.addColorStop(0, lightColor);
     g.addColorStop(0.55, baseColor);
     g.addColorStop(1, darkColor);
     ctx.fillStyle = g;
-    drawOrganicBlobPath(ctx, 0, 0, rx * (showSkin ? 0.92 : 0.98), ry * (showSkin ? 0.92 : 0.98), localSeed, 0.11, 10);
+    const faceScale = showSkin ? 0.91 : mt.fatContent >= 16 ? 0.94 : 0.98;
+    drawOrganicBlobPath(ctx, 0, 0, rx * faceScale, ry * faceScale, localSeed, 0.11, 12);
     ctx.fill();
 
     ctx.save();
     ctx.clip();
-    // Fish myomere stripes or meat marbling veins
+
+    // 4. Fine muscle fiber striations (myofibril grain) across cut face
+    ctx.strokeStyle = hexToRgba(deepColor, isPoultry ? 0.24 : 0.35);
+    ctx.lineWidth = 0.26;
+    ctx.lineCap = 'round';
+    const grainStep = Math.max(0.85, ry * 0.26);
+    for (let gy = -ry * 0.85; gy <= ry * 0.85; gy += grainStep) {
+      ctx.beginPath();
+      ctx.moveTo(-rx, gy - 0.3);
+      ctx.quadraticCurveTo(0, gy + 0.45, rx, gy - 0.2);
+      ctx.stroke();
+    }
+
+    // 5. Fish myosepta chevrons OR mammal branching intramuscular fat marbling
     if (isFish) {
-      ctx.strokeStyle = hexToRgba(fatColor, 0.65);
-      ctx.lineWidth = 0.45;
-      for (let x = -rx; x <= rx; x += Math.max(1.3, rx * 0.32)) {
+      ctx.strokeStyle = hexToRgba(fatColor, 0.72);
+      ctx.lineWidth = 0.44;
+      for (let x = -rx * 0.85; x <= rx * 0.85; x += Math.max(1.2, rx * 0.3)) {
         ctx.beginPath();
-        ctx.moveTo(x - 0.8, -ry);
-        ctx.quadraticCurveTo(x + 0.9, 0, x - 0.6, ry);
+        ctx.moveTo(x - 0.75, -ry);
+        ctx.quadraticCurveTo(x + 0.95, 0, x - 0.65, ry);
         ctx.stroke();
       }
     } else if (hasMarbling) {
-      ctx.strokeStyle = hexToRgba(fatColor, Math.min(0.82, 0.35 + mt.fatContent * 0.01));
-      ctx.lineWidth = 0.4;
-      for (let i = 0; i < 4; i++) {
-        const y0 = (hash01(localSeed, i * 3) - 0.5) * ry * 1.3;
+      const mAlpha = Math.min(0.86, 0.38 + mt.fatContent * 0.011);
+      ctx.strokeStyle = hexToRgba(fatColor, mAlpha);
+      ctx.lineWidth = 0.38;
+      for (let i = 0; i < 5; i++) {
+        const y0 = (hash01(localSeed, i * 3) - 0.5) * ry * 1.35;
+        const ym = y0 + (hash01(localSeed, i * 3 + 1) - 0.5) * 2.1;
+        const y1 = y0 + (hash01(localSeed, i * 3 + 2) - 0.5) * 1.6;
         ctx.beginPath();
-        ctx.moveTo(-rx * 0.75, y0);
-        ctx.quadraticCurveTo(0, y0 + (hash01(localSeed, i * 3 + 1) - 0.5) * 2.2, rx * 0.75, y0 + (hash01(localSeed, i * 3 + 2) - 0.5) * 1.5);
+        ctx.moveTo(-rx * 0.8, y0);
+        ctx.quadraticCurveTo(0, ym, rx * 0.8, y1);
         ctx.stroke();
+
+        // Secondary fine branching capillary fat vein
+        ctx.lineWidth = 0.22;
+        ctx.beginPath();
+        ctx.moveTo(0, ym);
+        ctx.lineTo(rx * 0.42, ym + (i % 2 === 0 ? 0.95 : -0.95));
+        ctx.stroke();
+        ctx.lineWidth = 0.38;
       }
     }
     ctx.restore();
 
+    // 6. Anatomical bone cross-section with porous trabecular marrow
     if (showBone) {
-      drawTrabecularBoneCut(ctx, rx * 0.26, 0.1, Math.max(0.85, rx * 0.24), Math.max(0.65, ry * 0.26), 0.2, false);
+      drawTrabecularBoneCut(
+        ctx,
+        rx * 0.26,
+        0.1,
+        Math.max(0.95, rx * 0.26),
+        Math.max(0.72, ry * 0.28),
+        0.2,
+        false
+      );
     }
 
-    // Wet specular highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    // 7. Wet studio butcher-block specular sheen
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
     ctx.beginPath();
-    ctx.ellipse(-rx * 0.22, -ry * 0.26, rx * 0.35, ry * 0.16, -0.25, 0, Math.PI * 2);
+    ctx.ellipse(-rx * 0.24, -ry * 0.28, rx * 0.34, ry * 0.14, -0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(rx * 0.2, ry * 0.22, rx * 0.18, ry * 0.08, 0.2, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
   };
 
   if (mt.cutForm === 'minced') {
-    // Hand-chopped meat / fish tartare mound with visible chunky knife-cut bits
-    drawShadow(ctx, 7.6, 2.5, 6.8, 0.25);
-    const moundGrad = ctx.createRadialGradient(-2.0, -2.2, 0.8, 0, 0.5, 8.0);
+    // Hand-chopped meat / fish tartare mound with visible chunky knife-cut bits & fat granules
+    drawShadow(ctx, 7.8, 2.6, 6.8, 0.26);
+    const moundGrad = ctx.createRadialGradient(-2.0, -2.2, 0.8, 0, 0.5, 8.2);
     moundGrad.addColorStop(0, lightColor);
     moundGrad.addColorStop(0.55, baseColor);
     moundGrad.addColorStop(1, deepColor);
     ctx.fillStyle = moundGrad;
-    drawOrganicBlobPath(ctx, 0, 0.8, 7.2, 5.2, 31, 0.12, 12);
+    drawOrganicBlobPath(ctx, 0, 0.8, 7.3, 5.3, 31, 0.12, 14);
     ctx.fill();
 
-    // Knife-chopped chunky cubes/strands on top
-    for (let i = 0; i < 26; i++) {
-      const a = hash01(seed, i * 4) * Math.PI * 2;
-      const dist = Math.sqrt(hash01(seed, i * 4 + 1)) * 5.4;
+    // Knife-chopped chunky 3D cubes & strands packed across mound
+    for (let i = 0; i < 32; i++) {
+      const a = i * 2.39996 + hash01(seed, i * 4) * 0.25;
+      const dist = Math.sqrt((i + 0.4) / 32) * 5.8;
       const px = Math.cos(a) * dist;
-      const py = Math.sin(a) * dist * 0.68 + 0.5;
-      const r = 0.65 + hash01(seed, i * 4 + 2) * 0.75;
-      const isFat = i % 6 === 0 && mt.fatContent >= 10;
-      ctx.fillStyle = isFat ? fatColor : i % 3 === 0 ? lightColor : i % 2 === 0 ? baseColor : darkColor;
+      const py = Math.sin(a) * dist * 0.68 + 0.55;
+      const r = 0.62 + hash01(seed, i * 4 + 2) * 0.72;
+      const rot = (hash01(seed, i * 4 + 3) - 0.5) * 1.6;
+      const isFat = i % 5 === 0 && mt.fatContent >= 8;
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(rot);
+      ctx.fillStyle = isFat ? fatShade : deepColor;
       ctx.beginPath();
-      ctx.roundRect(px - r * 0.6, py - r * 0.5, r * 1.25, r, 0.35);
+      ctx.roundRect(-r * 0.65, -r * 0.42 + 0.22, r * 1.3, r * 0.95, 0.32);
       ctx.fill();
+
+      ctx.fillStyle = isFat
+        ? fatColor
+        : i % 3 === 0
+        ? lightColor
+        : i % 2 === 0
+        ? baseColor
+        : darkColor;
+      ctx.beginPath();
+      ctx.roundRect(-r * 0.65, -r * 0.52, r * 1.3, r * 0.92, 0.32);
+      ctx.fill();
+      ctx.restore();
     }
     drawWetMeatGloss(ctx, [
-      { x: -1.8, y: -1.6, rx: 2.2, ry: 0.75, rot: -0.2, alpha: 0.28 }
+      { x: -1.9, y: -1.6, rx: 2.3, ry: 0.78, rot: -0.2, alpha: 0.3 },
+      { x: 1.8, y: 0.9, rx: 1.4, ry: 0.48, rot: 0.18, alpha: 0.22 },
     ]);
     return true;
   }
 
   if (isSquidRings) {
-    drawShadow(ctx, 7.2, 2.3, 6.4, 0.22);
+    drawShadow(ctx, 7.4, 2.4, 6.4, 0.23);
     const rings: Array<[number, number, number]> = [
-      [-3.2, 0.8, 3.0],
-      [2.6, 1.4, 2.8],
-      [-0.2, -1.6, 3.1],
+      [-3.2, 0.8, 3.05],
+      [2.6, 1.4, 2.85],
+      [-0.2, -1.6, 3.15],
     ];
     for (const [rx, ry, rad] of rings) {
       ctx.save();
       ctx.translate(rx, ry);
       ctx.strokeStyle = deepColor;
-      ctx.lineWidth = 1.9;
+      ctx.lineWidth = 1.95;
       ctx.beginPath();
-      ctx.ellipse(0, 0.5, rad, rad * 0.68, -0.15, 0, Math.PI * 2);
+      ctx.ellipse(0, 0.52, rad, rad * 0.68, -0.15, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 1.65;
+      ctx.lineWidth = 1.68;
       ctx.beginPath();
       ctx.ellipse(0, 0, rad, rad * 0.68, -0.15, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-      ctx.lineWidth = 0.45;
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 0.48;
       ctx.beginPath();
       ctx.ellipse(0, -0.25, rad * 0.92, rad * 0.6, -0.15, Math.PI * 1.1, Math.PI * 1.85);
       ctx.stroke();
@@ -3151,45 +3223,75 @@ export function drawMeatCutForm(ctx: CanvasRenderingContext2D, mt: MeatAttribute
   }
 
   if (mt.cutForm === 'cubes') {
-    drawShadow(ctx, 7.6, 2.5, 6.6, 0.24);
-    const cubes: Array<[number, number, number, number]> = [
-      [-4.2, -1.4, 2.6, 0.12],
-      [0.4, -2.5, 2.5, -0.18],
-      [4.2, -0.6, 2.4, 0.25],
-      [-2.2, 2.1, 2.7, -0.08],
-      [2.4, 2.4, 2.5, 0.14],
-      [0.0, 0.1, 2.6, -0.22],
+    // Butcher-cut goulash / shashlik 3D meat cubes with fat-cap layers, muscle grain & marbling
+    drawShadow(ctx, 7.8, 2.6, 6.6, 0.26);
+    const cubes: Array<[number, number, number, number, boolean]> = [
+      [-4.2, -1.4, 2.65, 0.12, true],
+      [0.4, -2.5, 2.55, -0.18, false],
+      [4.2, -0.6, 2.45, 0.25, true],
+      [-2.3, 2.1, 2.75, -0.08, false],
+      [2.5, 2.4, 2.55, 0.14, true],
+      [0.0, 0.1, 2.7, -0.22, false],
     ];
     for (let i = 0; i < cubes.length; i++) {
-      const [cx, cy, s, rot] = cubes[i];
+      const [cx, cy, s, rot, hasFatCap] = cubes[i];
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(rot);
-      // Extruded cube side
+
+      // Contact shadow beneath cube
+      ctx.fillStyle = 'rgba(15, 10, 8, 0.26)';
+      ctx.beginPath();
+      ctx.ellipse(0.15, s * 0.62, s * 0.72, s * 0.35, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3D extruded shaded side walls
       ctx.fillStyle = deepColor;
       ctx.beginPath();
-      ctx.roundRect(-s * 0.55, -s * 0.4 + 1.0, s * 1.1, s * 0.95, 0.55);
+      ctx.roundRect(-s * 0.58, -s * 0.38 + 1.05, s * 1.16, s * 0.98, 0.52);
       ctx.fill();
-      // Top cube face
+
+      // White/creamy fat-cap layer on top edge of outer cubes
+      if (hasFatCap && (mt.fatContent >= 10 || mt.hasSkin)) {
+        ctx.fillStyle = mt.hasSkin && isFish ? '#475569' : fatColor;
+        ctx.beginPath();
+        ctx.roundRect(-s * 0.58, -s * 0.58, s * 1.16, s * 0.38, 0.45);
+        ctx.fill();
+      }
+
+      // Top beveled muscle face
       const g = ctx.createLinearGradient(-s, -s, s, s);
       g.addColorStop(0, lightColor);
       g.addColorStop(0.55, baseColor);
       g.addColorStop(1, darkColor);
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.roundRect(-s * 0.55, -s * 0.5, s * 1.1, s * 0.92, 0.55);
+      ctx.roundRect(-s * 0.58, -s * 0.48, s * 1.16, s * 0.94, 0.5);
       ctx.fill();
-      if (hasMarbling && i % 2 === 0) {
-        ctx.strokeStyle = hexToRgba(fatColor, 0.65);
-        ctx.lineWidth = 0.35;
+
+      // Muscle fiber grain & intramuscular marbling on cube face
+      ctx.strokeStyle = hexToRgba(deepColor, 0.34);
+      ctx.lineWidth = 0.24;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.42, -s * 0.18);
+      ctx.lineTo(s * 0.42, -s * 0.08);
+      ctx.moveTo(-s * 0.42, s * 0.14);
+      ctx.lineTo(s * 0.42, s * 0.22);
+      ctx.stroke();
+
+      if ((hasMarbling || isFish) && i % 2 === 0) {
+        ctx.strokeStyle = hexToRgba(fatColor, 0.72);
+        ctx.lineWidth = 0.34;
         ctx.beginPath();
-        ctx.moveTo(-s * 0.35, -s * 0.15);
-        ctx.lineTo(s * 0.35, s * 0.2);
+        ctx.moveTo(-s * 0.38, -s * 0.22);
+        ctx.quadraticCurveTo(0, s * 0.05, s * 0.38, s * 0.24);
         ctx.stroke();
       }
-      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+
+      // Wet butcher specular glint
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
       ctx.beginPath();
-      ctx.ellipse(-s * 0.18, -s * 0.22, s * 0.24, s * 0.12, -0.2, 0, Math.PI * 2);
+      ctx.ellipse(-s * 0.2, -s * 0.24, s * 0.25, s * 0.11, -0.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -3197,23 +3299,28 @@ export function drawMeatCutForm(ctx: CanvasRenderingContext2D, mt: MeatAttribute
   }
 
   if (mt.cutForm === 'strips') {
-    drawShadow(ctx, 7.8, 2.4, 6.5, 0.24);
+    // Beef stroganoff / stir-fry / poultry / fish strips with 3D beveled muscle fibers & fat edge
+    drawShadow(ctx, 8.0, 2.5, 6.5, 0.25);
     const strips: Array<[number, number, number, number]> = [
-      [-1.0, -3.0, -0.22, 6.2],
-      [0.8, -1.3, 0.15, 6.4],
-      [-0.6, 0.5, -0.1, 6.6],
-      [1.2, 2.2, 0.2, 5.8],
-      [-2.0, 3.2, -0.16, 5.2],
+      [-1.1, -3.0, -0.24, 6.4],
+      [0.9, -1.3, 0.16, 6.6],
+      [-0.6, 0.5, -0.11, 6.8],
+      [1.2, 2.1, 0.22, 6.0],
+      [-2.0, 3.1, -0.17, 5.5],
     ];
     for (let i = 0; i < strips.length; i++) {
       const [sx, sy, rot, len] = strips[i];
       ctx.save();
       ctx.translate(sx, sy);
       ctx.rotate(rot);
+
+      // 3D strip lower thickness shadow wall
       ctx.fillStyle = deepColor;
       ctx.beginPath();
-      ctx.roundRect(-len * 0.5, -0.55, len, 1.85, 0.65);
+      ctx.roundRect(-len * 0.5, -0.52, len, 1.9, 0.65);
       ctx.fill();
+
+      // Main muscle strip body
       const g = ctx.createLinearGradient(-len * 0.5, -1, len * 0.5, 1);
       g.addColorStop(0, lightColor);
       g.addColorStop(0.55, baseColor);
@@ -3222,8 +3329,30 @@ export function drawMeatCutForm(ctx: CanvasRenderingContext2D, mt: MeatAttribute
       ctx.beginPath();
       ctx.roundRect(-len * 0.5, -0.95, len, 1.65, 0.6);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.24)';
-      ctx.fillRect(-len * 0.35, -0.65, len * 0.5, 0.32);
+
+      // Thin fat/silverskin edge ribbon on alternating strips
+      if ((hasMarbling || isFish) && i % 2 === 0) {
+        ctx.strokeStyle = hexToRgba(fatColor, 0.72);
+        ctx.lineWidth = 0.35;
+        ctx.beginPath();
+        ctx.moveTo(-len * 0.42, -0.72);
+        ctx.quadraticCurveTo(0, -0.55, len * 0.42, -0.72);
+        ctx.stroke();
+      }
+
+      // Longitudinal muscle fiber lines
+      ctx.strokeStyle = hexToRgba(deepColor, 0.32);
+      ctx.lineWidth = 0.22;
+      ctx.beginPath();
+      ctx.moveTo(-len * 0.42, -0.1);
+      ctx.lineTo(len * 0.42, -0.05);
+      ctx.stroke();
+
+      // Wet highlight streak
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      ctx.beginPath();
+      ctx.roundRect(-len * 0.36, -0.62, len * 0.52, 0.32, 0.16);
+      ctx.fill();
       ctx.restore();
     }
     return true;
@@ -3231,47 +3360,65 @@ export function drawMeatCutForm(ctx: CanvasRenderingContext2D, mt: MeatAttribute
 
   if (mt.cutForm === 'medallion') {
     drawShadow(ctx, 7.8, 2.4, 6.4, 0.24);
-    drawSlab(-3.4, 0.6, 3.5, 2.4, -0.28, 1.0, 41, false, mt.hasSkin);
-    drawSlab(0.2, -0.4, 3.6, 2.5, -0.18, 1.0, 42, false, mt.hasSkin);
-    drawSlab(3.6, 0.5, 3.4, 2.3, -0.08, 1.0, 43, false, mt.hasSkin);
+    drawSlab(-3.4, 0.6, 3.5, 2.4, -0.28, 1.05, 41, false, mt.hasSkin);
+    drawSlab(0.2, -0.4, 3.6, 2.5, -0.18, 1.05, 42, false, mt.hasSkin);
+    drawSlab(3.6, 0.5, 3.4, 2.3, -0.08, 1.05, 43, false, mt.hasSkin);
     return true;
   }
 
   if (mt.cutForm === 'steak') {
     drawShadow(ctx, 7.6, 2.5, 6.5, 0.25);
-    drawSlab(0, -0.2, 6.8, 4.6, -0.16, 1.65, 51, mt.hasBone, mt.hasSkin);
+    drawSlab(0, -0.2, 6.8, 4.6, -0.16, 1.68, 51, mt.hasBone, mt.hasSkin);
     return true;
   }
 
   if (mt.cutForm === 'separated') {
-    // Individual separated ribs
-    drawShadow(ctx, 7.5, 2.4, 6.5, 0.24);
+    // Individual separated ribs with exposed periosteum rib bone & marbled intercostal meat
+    drawShadow(ctx, 7.6, 2.5, 6.5, 0.25);
     for (let i = -1; i <= 1; i++) {
       ctx.save();
       ctx.translate(i * 3.6, Math.abs(i) * 0.4);
       ctx.rotate(-0.22 + i * 0.08);
-      // Exposed rib bone tip
-      ctx.fillStyle = '#f3f1e8';
+      // Exposed rib bone tip with marrow cap
+      ctx.fillStyle = '#cbd5e1';
       ctx.beginPath();
-      ctx.roundRect(-0.8, -6.2, 1.6, 3.4, 0.5);
+      ctx.roundRect(-0.82, -6.1, 1.64, 3.4, 0.5);
       ctx.fill();
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.roundRect(-0.78, -6.25, 1.56, 3.3, 0.48);
+      ctx.fill();
+      drawTrabecularBoneCut(ctx, 0, -5.9, 0.68, 0.36, 0, false);
       // Meaty rib shaft
-      drawSlab(0, 1.0, 1.75, 4.3, 0, 1.0, 61 + i, false, false);
+      drawSlab(0, 1.0, 1.82, 4.35, 0, 1.05, 61 + i, false, false);
       ctx.restore();
     }
     return true;
   }
 
   if (mt.cutForm === 'fillet') {
-    drawShadow(ctx, 7.4, 2.4, 6.4, 0.24);
-    drawSlab(0, 0, 7.0, 3.8, -0.24, 1.25, 71, false, mt.hasSkin);
+    drawShadow(ctx, 7.5, 2.4, 6.4, 0.25);
+    drawSlab(0, 0, 7.1, 3.85, -0.24, 1.28, 71, false, mt.hasSkin);
     return true;
   }
 
   // 'half' or 'chunk'
-  drawShadow(ctx, 7.2, 2.4, 6.4, 0.25);
-  const scaleMod = mt.cutForm === 'half' ? 0.92 : Math.max(0.68, Math.min(1.0, 0.65 + mt.remainingFraction * 0.35));
-  drawSlab(0, -0.1, 6.6 * scaleMod, 4.8 * scaleMod, -0.18, 1.8 * scaleMod, 81, mt.hasBone, mt.hasSkin);
+  drawShadow(ctx, 7.4, 2.5, 6.4, 0.25);
+  const scaleMod =
+    mt.cutForm === 'half'
+      ? 0.92
+      : Math.max(0.68, Math.min(1.0, 0.65 + mt.remainingFraction * 0.35));
+  drawSlab(
+    0,
+    -0.1,
+    6.6 * scaleMod,
+    4.8 * scaleMod,
+    -0.18,
+    1.82 * scaleMod,
+    81,
+    mt.hasBone,
+    mt.hasSkin
+  );
   return true;
 }
 

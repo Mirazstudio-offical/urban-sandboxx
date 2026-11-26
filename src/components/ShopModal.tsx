@@ -616,7 +616,28 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_flour_corn', itemId: 'flour_corn', nameRu: 'Мука кукурузная жёлтая (0.5 кг)', price: 65, description: 'Солнечная кукурузная мука для лепёшек, мамалыги и выпечки без глютена.', category: 'food', effectText: 'Без глютена' },
     { id: 'sup_flour_rice', itemId: 'flour_rice', nameRu: 'Мука рисовая белая (0.5 кг)', price: 75, description: 'Тонкая белоснежная рисовая мука для сырников, кляра темпура и моти.', category: 'food', effectText: 'Без глютена' },
     { id: 'sup_salt', itemId: 'salt_fine', nameRu: 'Соль поваренная в солонке (150г)', price: 30, description: 'Удобная кухонная солонка с мелкой солью.', category: 'food', effectText: 'Специя' },
-    { id: 'sup_bread', itemId: 'bread_loaf', nameRu: 'Батон нарезной "Утренний"', price: 35, description: 'Свежий пшеничный хлеб в нарезке.', category: 'food', effectText: '+35% Сытость' },
+    {
+      id: 'sup_bread',
+      itemId: 'dough',
+      nameRu: 'Домашний хлеб на закваске (буханка 400г)',
+      price: 45,
+      description: 'Свежевыпеченная пшеничная буханка хлеба на живой закваске с румяной корочкой.',
+      category: 'food',
+      effectText: '400 г · Выпечка из теста на закваске',
+      doughAttributes: {
+        shape: 'loaf',
+        cookState: 'baked',
+        riseFactor: 1.38,
+        ingredients: [
+          { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 245, role: 'flour', colorHex: '#f6eedb' },
+          { itemId: 'water', nameRu: 'Вода', grams: 120, role: 'liquid', colorHex: '#f8fafc' },
+          { itemId: 'sourdough', nameRu: 'Закваска', grams: 35, role: 'leavening', colorHex: '#efe6d0' },
+          { itemId: 'oil_sunflower', nameRu: 'Подсолнечное масло', grams: 10, role: 'fat', colorHex: '#fde047' },
+          { itemId: 'sugar', nameRu: 'Сахар', grams: 8, role: 'sugar', colorHex: '#ffffff' },
+          { itemId: 'salt', nameRu: 'Соль', grams: 5, role: 'salt', colorHex: '#f8fafc' }
+        ]
+      }
+    },
 
     // 6.05. КРУПЫ, ЗЕРНОВЫЕ КУЛЬТУРЫ И БОБОВЫЕ (В ПАЧКАХ С СЫПУЧИМ СОДЕРЖИМЫМ)
     { id: 'sup_grain_buckwheat', itemId: 'buckwheat_roasted', nameRu: 'Гречка ядрица обжаренная (пачка ~720г)', price: 95, description: 'Заводская пачка-пакет с окошком: цельные пропаренные и обжаренные ядра гречихи 1 сорта.', category: 'food', effectText: 'Крупа · Варка 15–18 мин' },

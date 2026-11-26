@@ -1205,25 +1205,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     fullnessPerBite: 2,
     tasteMessages: ['Сладкая банановая мякоть...', 'Мягкий питательный фрукт...']
   },
-  bread_loaf: {
-    itemId: 'bread_loaf',
-    name: 'Fresh Bakery Loaf',
-    nameRu: 'Батон нарезной',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'Crusty loaf of white bakery bread.',
-    descriptionRu: 'Свежий мягкий белый хлеб с хрустящей корочкой.',
-    effects: { hunger: 35, energy: 15 },
-    weight: 0.4,
-    usable: true,
-    biteCount: 10,
-    biteDuration: 0.7,
-    leftoverId: 'package_bag',
-    leftoverNameRu: 'Пакет от хлеба',
-    fullnessPerBite: 3,
-    tasteMessages: ['Хрустящая корочка свежего хлеба...', 'Мягкий теплый мякиш...']
-  },
 
   // === NEW PHARMACY ITEMS ===
   thermometer: {
@@ -6002,6 +5983,25 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
     const phItem = createPhone(rawItemId);
     phItem.count = Math.max(1, count);
     return phItem;
+  }
+
+  if (rawItemId === 'bread_loaf') {
+    const loafItem = createItem('dough', count, initialPortions, true);
+    const loafAttrs = buildDefaultDoughAttributes({
+      shape: 'loaf',
+      cookState: 'baked',
+      riseFactor: 1.38,
+      ingredients: [
+        { itemId: 'flour_wheat', nameRu: 'Мука пшеничная', grams: 245, role: 'flour', colorHex: '#f6eedb' },
+        { itemId: 'water', nameRu: 'Вода', grams: 120, role: 'liquid', colorHex: '#f8fafc' },
+        { itemId: 'sourdough', nameRu: 'Закваска', grams: 35, role: 'leavening', colorHex: '#efe6d0' },
+        { itemId: 'oil_sunflower', nameRu: 'Подсолнечное масло', grams: 10, role: 'fat', colorHex: '#fde047' },
+        { itemId: 'sugar', nameRu: 'Сахар', grams: 8, role: 'sugar', colorHex: '#ffffff' },
+        { itemId: 'salt', nameRu: 'Соль', grams: 5, role: 'salt', colorHex: '#f8fafc' },
+      ],
+    });
+    applyDoughAttributesToItem(loafItem, loafAttrs);
+    return normalizeItemAttributes(loafItem);
   }
 
   const itemId = resolveCanonicalSubstanceId(rawItemId);

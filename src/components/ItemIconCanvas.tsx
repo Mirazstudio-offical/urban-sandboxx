@@ -88,17 +88,22 @@ function buildItemVisualStateKey(item: any): string {
       const ch = item.contents[i];
       if (!ch) continue;
       const chDa = ch.doughAttributes
-        ? `:${ch.doughAttributes.shape}:${ch.doughAttributes.color}:${ch.doughAttributes.cookState}:${ch.doughAttributes.fillings?.length || 0}`
+        ? `:${ch.doughAttributes.shape}:${ch.doughAttributes.doughType || ''}:${ch.doughAttributes.consistency || ''}:${ch.doughAttributes.color}:${ch.doughAttributes.cookState}:${ch.doughAttributes.embossedPattern || ''}:${ch.doughAttributes.fillings?.map((f: any) => `${f.itemId || ''}:${f.colorHex || ''}:${Math.round(f.weightGrams || 0)}`).join(',') || ''}`
         : '';
+      const chPortions = typeof ch.portions === 'number' ? `:${ch.portions}/${ch.maxPortions || ''}` : '';
       parts.push(
-        `${ch.itemId}:${Math.round((ch.brownLevel || 0) * 10)}:${Math.round((ch.charLevel || 0) * 10)}:${Math.round((ch.cookProgress || 0) * 10)}:${Math.round((ch.wetness || 0) / 10)}:${ch.attributes?.state || ''}${chDa}`
+        `${ch.itemId}:${Math.round((ch.brownLevel || 0) * 10)}:${Math.round((ch.charLevel || 0) * 10)}:${Math.round((ch.cookProgress || 0) * 10)}:${Math.round((ch.wetness || 0) / 10)}:${ch.attributes?.state || ''}${chPortions}${chDa}`
       );
     }
     childKey = parts.join(';');
   }
+  const portionsKey = typeof item.portions === 'number' ? `${item.portions}/${item.maxPortions || ''}` : '';
   const da = item.doughAttributes;
+  const daFillKey = da?.fillings
+    ? da.fillings.map((f: any) => `${f.itemId || ''}:${f.colorHex || ''}:${Math.round(f.weightGrams || 0)}`).join(',')
+    : '';
   const daKey = da
-    ? `${da.shape}:${da.color}:${da.cookState}:${da.embossedPattern || ''}:${da.fillings?.length || 0}:${Math.round(da.thicknessMm || 0)}:${Math.round((da.riseFactor || 1) * 10)}`
+    ? `${da.shape}:${da.doughType || ''}:${da.consistency || ''}:${da.color}:${da.fleckColor || ''}:${da.cookState}:${da.embossedPattern || ''}:${daFillKey}:${Math.round(da.thicknessMm || 0)}:${Math.round((da.riseFactor || 1) * 10)}:${Math.round((da.totalWeightGrams || 0) / 5)}`
     : '';
   const rp = item.rollingPinAttributes;
   const rpKey = rp
@@ -106,11 +111,11 @@ function buildItemVisualStateKey(item: any): string {
     : '';
   const pa = item.produceAttributes;
   const paKey = pa
-    ? `${pa.speciesId || ''}:${pa.variantRu || ''}:${pa.cutForm || ''}:${pa.isPeeled ? 1 : 0}:${pa.isDried ? 1 : 0}:${pa.color || ''}`
+    ? `${pa.speciesId || ''}:${pa.variantRu || ''}:${pa.cutForm || ''}:${pa.isPeeled ? 1 : 0}:${pa.isDried ? 1 : 0}:${pa.color || ''}:${Math.round((pa.remainingFraction ?? 1) * 20)}`
     : '';
   const ma = item.meatAttributes;
   const maKey = ma
-    ? `${ma.speciesId || ''}:${ma.anatomicalPart || ''}:${ma.cutForm || ''}:${ma.color || ''}`
+    ? `${ma.speciesId || ''}:${ma.anatomicalPart || ''}:${ma.cutForm || ''}:${ma.color || ''}:${Math.round((ma.remainingFraction ?? 1) * 20)}`
     : '';
   const ba = item.branchAttributes;
   const baKey = ba
@@ -131,7 +136,7 @@ function buildItemVisualStateKey(item: any): string {
   const pel = item.pelmenAttributes;
   const pelKey = pel ? `${pel.shape || ''}:${pel.filling || ''}` : '';
   const lbl = item.labelColor || '';
-  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${origCat}|${cTint}|${cVis}|${cdKey}|${fsKey}|${childKey}|${daKey}|${rpKey}|${paKey}|${maKey}|${baKey}|${kwKey}|${phKey}|${chocoKey}|${gumKey}|${pelKey}|${lbl}`;
+  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${origCat}|${cTint}|${cVis}|${cdKey}|${fsKey}|${childKey}|${portionsKey}|${daKey}|${rpKey}|${paKey}|${maKey}|${baKey}|${kwKey}|${phKey}|${chocoKey}|${gumKey}|${pelKey}|${lbl}`;
 }
 
 const ItemIconCanvasInner: React.FC<ItemIconCanvasProps> = ({

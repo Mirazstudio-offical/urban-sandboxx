@@ -83,35 +83,61 @@ export function drawProceduralIngredient(
   switch (type) {
     case 'potato': {
       if (cutLevel >= 2) {
-        // Creamy whipped mash rosette with melted butter sheen & herb speck
-        drawOrganicBlobPath(ctx, 0, 0, 4.0, 3.3, 11, 0.12, 10);
-        const mGrad = ctx.createRadialGradient(-1.0, -1.0, 0.3, 0, 0, 4.2);
-        mGrad.addColorStop(0.0, '#ffffff');
-        mGrad.addColorStop(0.55, isBoiled ? '#fef9c3' : '#fef08a');
-        mGrad.addColorStop(1.0, '#ca8a04');
-        ctx.fillStyle = mGrad;
-        ctx.fill();
-        ctx.fillStyle = '#facc15';
-        ctx.beginPath();
-        ctx.ellipse(-0.3, -0.3, 1.3, 0.85, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#15803d';
-        ctx.fillRect(1.1, 0.8, 0.55, 0.55);
-      } else if (cutLevel === 1) {
-        // Roasted / pan-fried golden potato wedge
-        const pLight = isBurnt ? '#78350f' : (isFried || isBaked) ? '#fef08a' : '#fffbeb';
-        const pMid = isBurnt ? '#451a03' : (isFried || isBaked) ? '#f59e0b' : '#fef08a';
-        const pDark = isBurnt ? '#1c1917' : (isFried || isBaked) ? '#92400e' : '#b45309';
-        drawLitEllipse(ctx, 0, 0, 4.3, 2.5, 0.18, pLight, pMid, pDark, undefined, isFried ? 0.38 : 0.2);
-        if (isFried || isBaked) {
-          ctx.fillStyle = isBurnt ? 'rgba(9,9,11,0.55)' : 'rgba(180,83,9,0.42)';
+        // 3D diced potato cubes with starchy wet facets, skin corner & golden Maillard sear
+        const cubes: Array<[number, number, number]> = [[-2.1, -1.3, 0.12], [1.2, -1.5, -0.18], [-0.9, 1.3, -0.08], [1.9, 1.1, 0.22]];
+        const topC = isBurnt ? '#78350f' : (isFried || isBaked) ? '#fef08a' : (isBoiled ? '#fefce8' : '#fffbeb');
+        const sideL = isBurnt ? '#451a03' : (isFried || isBaked) ? '#f59e0b' : '#fde047';
+        const sideR = isBurnt ? '#1c1917' : (isFried || isBaked) ? '#b45309' : '#ca8a04';
+        for (const [cx, cy, rot] of cubes) {
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(rot);
+          // Side extrusion
+          ctx.fillStyle = sideR;
+          ctx.fillRect(-1.1, -0.4, 2.2, 1.55);
+          ctx.fillStyle = sideL;
+          ctx.fillRect(-1.1, -0.4, 1.1, 1.55);
+          // Top cut face
+          ctx.fillStyle = topC;
           ctx.beginPath();
-          ctx.ellipse(0.6, 0.4, 2.0, 0.8, 0.18, 0, Math.PI * 2);
+          ctx.roundRect(-1.15, -1.15, 2.3, 1.55, 0.28);
+          ctx.fill();
+          // Golden sear edge or starch sheen
+          ctx.fillStyle = (isFried || isBaked) ? 'rgba(180, 83, 9, 0.55)' : 'rgba(255, 255, 255, 0.55)';
+          ctx.beginPath();
+          ctx.ellipse(-0.3, -0.45, 0.55, 0.25, -0.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      } else if (cutLevel === 1) {
+        // 3D country potato wedge with outer russet skin arc, starchy inner bevel & blistered golden sear
+        const skinCol = isBurnt ? '#1c1917' : '#854d0e';
+        const pLight = isBurnt ? '#78350f' : (isFried || isBaked) ? '#fef08a' : '#fffbeb';
+        const pMid = isBurnt ? '#451a03' : (isFried || isBaked) ? '#f59e0b' : '#fde047';
+        const pDark = isBurnt ? '#1c1917' : (isFried || isBaked) ? '#92400e' : '#ca8a04';
+        // Outer skin back-wall
+        ctx.fillStyle = skinCol;
+        ctx.beginPath();
+        ctx.ellipse(0, 0.45, 4.4, 2.5, 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        // Wedge cut face
+        drawLitEllipse(ctx, 0, -0.15, 4.25, 2.35, 0.15, pLight, pMid, pDark, undefined, isFried ? 0.42 : 0.22);
+        // Ridge edge line between two wedge facets
+        ctx.strokeStyle = isBurnt ? 'rgba(255,255,255,0.12)' : 'rgba(255, 254, 240, 0.65)';
+        ctx.lineWidth = 0.42;
+        ctx.beginPath();
+        ctx.moveTo(-3.4, -0.35);
+        ctx.quadraticCurveTo(0, -0.95, 3.4, 0.15);
+        ctx.stroke();
+        if (isFried || isBaked) {
+          ctx.fillStyle = isBurnt ? 'rgba(9,9,11,0.6)' : 'rgba(146, 64, 14, 0.5)';
+          ctx.beginPath();
+          ctx.ellipse(0.5, 0.25, 2.1, 0.75, 0.15, 0, Math.PI * 2);
           ctx.fill();
         }
       } else {
-        // Whole unpeeled earthy potato
-        drawLitEllipse(ctx, 0, 0, 5.4, 3.8, -0.1, '#eab308', '#b45309', '#78350f', undefined, 0.14);
+        // Whole unpeeled earthy potato with lenticel pores & eye indentations
+        drawLitEllipse(ctx, 0, 0, 5.4, 3.8, -0.1, '#eab308', '#b45309', '#78350f', undefined, 0.16);
         ctx.fillStyle = '#451a03';
         ctx.beginPath();
         ctx.ellipse(-2.1, -0.9, 0.5, 0.26, 0.2, 0, Math.PI * 2);
@@ -123,27 +149,49 @@ export function drawProceduralIngredient(
 
     case 'carrot': {
       if (cutLevel >= 2) {
-        for (const [cx, cy] of [[-2.0, -1.4], [1.0, -1.6], [-0.8, 1.0], [1.8, 1.2]]) {
-          ctx.fillStyle = isBurnt ? '#451a03' : '#c2410c';
-          ctx.fillRect(cx - 0.8, cy - 0.5, 1.7, 1.6);
-          ctx.fillStyle = isBurnt ? '#78350f' : '#fb923c';
-          ctx.fillRect(cx - 0.85, cy - 0.85, 1.7, 1.35);
+        // Finely julienned / brunoise 3D carrot batons & cubes with vascular core dot
+        for (const [cx, cy, rot] of [[-2.1, -1.3, 0.25], [1.1, -1.5, -0.2], [-0.9, 1.1, -0.15], [1.8, 1.2, 0.3]]) {
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(rot);
+          ctx.fillStyle = isBurnt ? '#451a03' : '#9a3412';
+          ctx.fillRect(-1.05, -0.35, 2.1, 1.35);
+          ctx.fillStyle = isBurnt ? '#78350f' : (isFried ? '#f97316' : '#fb923c');
+          ctx.fillRect(-1.1, -0.9, 2.1, 1.25);
+          ctx.fillStyle = '#fed7aa';
+          ctx.fillRect(-0.45, -0.45, 0.85, 0.45);
+          ctx.restore();
         }
       } else if (cutLevel === 1) {
-        // Ribbed carrot coin with lighter xylem ring
+        // 3D beveled carrot coin with cambium ring & radiating vascular rays
+        ctx.fillStyle = isBurnt ? '#290f02' : '#9a3412';
+        ctx.beginPath();
+        ctx.arc(0, 0.55, 3.45, 0, Math.PI * 2);
+        ctx.fill();
         drawLitSphere(
           ctx, 0, 0, 3.4,
           isBurnt ? '#9a3412' : '#fdba74',
           isBurnt ? '#451a03' : (isBoiled ? '#c2410c' : '#ea580c'),
-          '#7c2d12', undefined, isFried ? 0.35 : 0.22
+          '#7c2d12', undefined, isFried ? 0.38 : 0.24
         );
-        ctx.fillStyle = isBurnt ? '#78350f' : '#fed7aa';
+        // Vascular xylem core & halo
+        ctx.fillStyle = isBurnt ? '#78350f' : '#ffedd5';
         ctx.beginPath();
-        ctx.arc(0, 0, 1.55, 0, Math.PI * 2);
+        ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(124, 45, 18, 0.45)';
+        ctx.strokeStyle = 'rgba(154, 52, 18, 0.55)';
         ctx.lineWidth = 0.35;
         ctx.stroke();
+        // Radial phloem rays
+        ctx.strokeStyle = 'rgba(255, 237, 213, 0.45)';
+        ctx.lineWidth = 0.24;
+        for (let a = 0; a < 6; a++) {
+          const ang = (a / 6) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(ang) * 1.55, Math.sin(ang) * 1.55);
+          ctx.lineTo(Math.cos(ang) * 2.95, Math.sin(ang) * 2.95);
+          ctx.stroke();
+        }
       } else {
         const cGrad = ctx.createLinearGradient(-5, -2, 5, 2);
         cGrad.addColorStop(0, '#fdba74');
@@ -162,25 +210,28 @@ export function drawProceduralIngredient(
     }
 
     case 'onion': {
-      // Translucent layered onion crescent rings
-      const rim = isBurnt ? '#292524' : isFried ? '#92400e' : '#ca8a04';
-      const inner = isBurnt ? '#57534e' : isFried ? '#f59e0b' : (isBoiled ? '#fef9c3' : '#ffffff');
-      ctx.strokeStyle = rim;
-      ctx.lineWidth = 1.25;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.6, 0.25, Math.PI * 1.65);
-      ctx.stroke();
-      ctx.strokeStyle = inner;
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.55, 0.28, Math.PI * 1.62);
-      ctx.stroke();
-      ctx.strokeStyle = rim;
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.arc(0, 0, 2.2, 0.45, Math.PI * 1.45);
-      ctx.stroke();
+      // Translucent multi-layered onion rings / half-moons with papery tunic edge & cell ribbing
+      const rim = isBurnt ? '#292524' : isFried ? '#92400e' : '#a16207';
+      const mid = isBurnt ? '#57534e' : isFried ? '#d97706' : '#eab308';
+      const inner = isBurnt ? '#78716c' : isFried ? '#fde68a' : (isBoiled ? '#fef9c3' : '#ffffff');
+      for (const [r, startA, endA, w] of [[3.7, 0.2, Math.PI * 1.68, 1.35], [2.45, 0.38, Math.PI * 1.52, 1.05], [1.3, 0.5, Math.PI * 1.4, 0.8]]) {
+        ctx.strokeStyle = rim;
+        ctx.lineWidth = w;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(0, 0, r, startA, endA);
+        ctx.stroke();
+        ctx.strokeStyle = mid;
+        ctx.lineWidth = w * 0.72;
+        ctx.beginPath();
+        ctx.arc(0, 0, r - 0.04, startA + 0.03, endA - 0.03);
+        ctx.stroke();
+        ctx.strokeStyle = inner;
+        ctx.lineWidth = w * 0.42;
+        ctx.beginPath();
+        ctx.arc(0, 0, r - 0.08, startA + 0.06, endA - 0.06);
+        ctx.stroke();
+      }
       break;
     }
 
@@ -191,40 +242,87 @@ export function drawProceduralIngredient(
         drawBotanicalLeaf(ctx, -3.2, 0.6, 4.2, 1.4, -0.35, isBoiled ? '#65a30d' : '#4ade80', '#14532d');
         drawBotanicalLeaf(ctx, -0.8, -0.6, 3.8, 1.3, 0.35, isBoiled ? '#4d7c0f' : '#22c55e', '#14532d');
       } else {
-        ctx.strokeStyle = isBoiled ? '#84cc16' : '#f0fdf4';
-        ctx.lineWidth = 1.5;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-3.6, -1.4);
-        ctx.quadraticCurveTo(0, 1.8, 3.6, -0.9);
-        ctx.stroke();
-        ctx.strokeStyle = isBoiled ? '#4d7c0f' : '#4ade80';
-        ctx.lineWidth = 0.95;
-        ctx.beginPath();
-        ctx.moveTo(-2.4, 1.4);
-        ctx.quadraticCurveTo(0.8, -1.6, 3.2, 1.1);
-        ctx.stroke();
+        // Shaved crinkly cabbage ribbons with crisp white midrib & ruffled leaf edge
+        const ribCol = isBoiled ? '#d9f99d' : (isFried ? '#fde68a' : '#f0fdf4');
+        const leafCol = isBoiled ? '#65a30d' : (isFried ? '#ca8a04' : '#4ade80');
+        const shadowCol = isBoiled ? '#3f6212' : '#15803d';
+        for (const [yOff, dir] of [[-1.1, 1], [0.2, -1], [1.3, 1]]) {
+          ctx.strokeStyle = shadowCol;
+          ctx.lineWidth = 1.65;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-3.7, yOff + 0.25);
+          ctx.bezierCurveTo(-1.2, yOff + dir * 1.9, 1.2, yOff - dir * 1.6, 3.7, yOff + 0.15);
+          ctx.stroke();
+
+          ctx.strokeStyle = leafCol;
+          ctx.lineWidth = 1.25;
+          ctx.stroke();
+
+          ctx.strokeStyle = ribCol;
+          ctx.lineWidth = 0.65;
+          ctx.stroke();
+        }
       }
       break;
     }
 
     case 'mushroom': {
-      // Detailed sliced mushroom profile with stem, gill darks & browned cap
-      const stemC = isFried ? '#fde68a' : '#f5f5f4';
-      const capHi = isBurnt ? '#292524' : isFried ? '#b45309' : '#a8a29e';
+      // Detailed T-section sliced mushroom with radial dark gill lamellae, cap cuticle & fibrous stem
+      const stemHi = isBurnt ? '#57534e' : isFried ? '#fef08a' : '#fafaf9';
+      const stemDk = isBurnt ? '#1c1917' : isFried ? '#b45309' : '#d6d3d1';
+      const capHi = isBurnt ? '#292524' : isFried ? '#d97706' : '#e7e5e4';
+      const capMid = isBurnt ? '#1c1917' : isFried ? '#92400e' : '#a8a29e';
       const capDk = isBurnt ? '#09090b' : isFried ? '#451a03' : '#57534e';
-      ctx.fillStyle = stemC;
+
+      // Drop thickness
+      ctx.fillStyle = capDk;
       ctx.beginPath();
-      ctx.roundRect(-1.2, -0.6, 2.4, 3.8, 0.7);
+      ctx.roundRect(-1.3, -0.3, 2.6, 3.8, 0.75);
+      ctx.arc(0, -0.55, 3.9, Math.PI, 0);
       ctx.fill();
-      ctx.fillStyle = '#451a03';
-      ctx.fillRect(-3.4, -0.9, 6.8, 0.9);
-      const cGrad = ctx.createRadialGradient(-1.2, -2.5, 0.3, 0, -1.0, 4.2);
+
+      // Stem slice
+      const stGrad = ctx.createLinearGradient(-1.3, 0, 1.3, 0);
+      stGrad.addColorStop(0, stemHi);
+      stGrad.addColorStop(0.55, stemHi);
+      stGrad.addColorStop(1, stemDk);
+      ctx.fillStyle = stGrad;
+      ctx.beginPath();
+      ctx.roundRect(-1.25, -0.6, 2.5, 3.8, 0.7);
+      ctx.fill();
+
+      // Gill chamber under cap
+      ctx.fillStyle = '#291509';
+      ctx.beginPath();
+      ctx.ellipse(0, -0.75, 3.55, 0.75, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Individual gill lamellae striations
+      ctx.strokeStyle = 'rgba(214, 195, 175, 0.42)';
+      ctx.lineWidth = 0.24;
+      for (let gx = -3.1; gx <= 3.1; gx += 0.52) {
+        if (Math.abs(gx) < 0.85) continue;
+        ctx.beginPath();
+        ctx.moveTo(gx, -1.1);
+        ctx.lineTo(gx * 0.88, -0.35);
+        ctx.stroke();
+      }
+
+      // Domed cap cross-section
+      const cGrad = ctx.createRadialGradient(-1.2, -2.6, 0.3, 0, -1.0, 4.3);
       cGrad.addColorStop(0, capHi);
+      cGrad.addColorStop(0.55, capMid);
       cGrad.addColorStop(1, capDk);
       ctx.fillStyle = cGrad;
       ctx.beginPath();
-      ctx.arc(0, -0.8, 3.8, Math.PI, 0);
+      ctx.arc(0, -0.8, 3.85, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner white cap flesh crescent inside cuticle
+      ctx.fillStyle = stemHi;
+      ctx.beginPath();
+      ctx.arc(0, -0.82, 3.15, Math.PI * 1.04, -0.04);
       ctx.closePath();
       ctx.fill();
       break;
@@ -271,32 +369,56 @@ export function drawProceduralIngredient(
     }
 
     case 'bread': {
-      // Crispy golden-toasted crouton / bread slice with crust
+      // 3D artisan bread slice / crouton with dark Maillard crust wall & alveolar porous crumb
+      ctx.fillStyle = isBurnt ? '#09090b' : '#451a03';
+      ctx.beginPath();
+      ctx.roundRect(-3.7, -2.9, 7.4, 6.7, 1.25);
+      ctx.fill();
+
       ctx.fillStyle = isBurnt ? '#18181b' : '#78350f';
       ctx.beginPath();
-      ctx.roundRect(-3.6, -3.4, 7.2, 6.8, 1.2);
+      ctx.roundRect(-3.6, -3.4, 7.2, 6.6, 1.2);
       ctx.fill();
+
       const bGrad = ctx.createRadialGradient(-1, -1, 0.4, 0, 0, 4.4);
-      bGrad.addColorStop(0.0, isBurnt ? '#451a03' : (isFried || isBaked ? '#fde68a' : '#fffbeb'));
-      bGrad.addColorStop(1.0, isBurnt ? '#1c1917' : (isFried || isBaked ? '#d97706' : '#fde68a'));
+      bGrad.addColorStop(0.0, isBurnt ? '#451a03' : (isFried || isBaked ? '#fef08a' : '#fffbeb'));
+      bGrad.addColorStop(0.65, isBurnt ? '#291509' : (isFried || isBaked ? '#f59e0b' : '#fef3c7'));
+      bGrad.addColorStop(1.0, isBurnt ? '#1c1917' : (isFried || isBaked ? '#b45309' : '#fde68a'));
       ctx.fillStyle = bGrad;
       ctx.beginPath();
-      ctx.roundRect(-3.0, -2.8, 6.0, 5.6, 0.8);
+      ctx.roundRect(-3.0, -2.8, 6.0, 5.4, 0.8);
       ctx.fill();
-      // Porous crumb alveoles
-      ctx.fillStyle = 'rgba(120, 53, 15, 0.25)';
-      ctx.beginPath();
-      ctx.arc(-1.0, -0.8, 0.42, 0, Math.PI * 2);
-      ctx.arc(1.2, 0.9, 0.36, 0, Math.PI * 2);
-      ctx.fill();
+
+      // Multi-scale alveolar fermentation pores with inner rim highlight
+      const pores: Array<[number, number, number]> = [[-1.3, -1.1, 0.48], [1.1, -0.8, 0.36], [-0.4, 0.4, 0.54], [1.3, 1.1, 0.42], [-1.5, 1.0, 0.32]];
+      for (const [px, py, pr] of pores) {
+        ctx.fillStyle = 'rgba(120, 53, 15, 0.32)';
+        ctx.beginPath();
+        ctx.arc(px, py, pr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 0.18;
+        ctx.beginPath();
+        ctx.arc(px, py, pr, 0.2, Math.PI * 0.9);
+        ctx.stroke();
+      }
       break;
     }
 
     case 'cheese': {
+      // 3D wedge / shredded curls of aged Swiss-style cheese with propionic eyes & wax rind
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath();
+      ctx.moveTo(-3.6, -2.3);
+      ctx.lineTo(4.2, 0.45);
+      ctx.lineTo(-3.6, 3.55);
+      ctx.closePath();
+      ctx.fill();
+
       const chGrad = ctx.createLinearGradient(-3.5, -3, 4, 3);
-      chGrad.addColorStop(0, '#fef08a');
-      chGrad.addColorStop(0.55, isFried ? '#f59e0b' : '#facc15');
-      chGrad.addColorStop(1, '#b45309');
+      chGrad.addColorStop(0, '#fef9c3');
+      chGrad.addColorStop(0.5, isFried ? '#f59e0b' : '#facc15');
+      chGrad.addColorStop(1, '#ca8a04');
       ctx.fillStyle = chGrad;
       ctx.beginPath();
       ctx.moveTo(-3.6, -3.0);
@@ -304,11 +426,18 @@ export function drawProceduralIngredient(
       ctx.lineTo(-3.6, 3.0);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = '#ca8a04';
-      ctx.beginPath();
-      ctx.arc(-1.2, -0.4, 0.68, 0, Math.PI * 2);
-      ctx.arc(1.1, 0.2, 0.48, 0, Math.PI * 2);
-      ctx.fill();
+
+      // Concave cheese eyes with inner shadow & bottom rim catchlight
+      for (const [ex, ey, er] of [[-1.4, -0.6, 0.72], [0.9, 0.1, 0.52], [-1.8, 1.1, 0.44]]) {
+        ctx.fillStyle = '#a16207';
+        ctx.beginPath();
+        ctx.arc(ex, ey, er, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(ex + 0.12, ey + 0.12, er * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+      }
       break;
     }
 
@@ -329,8 +458,13 @@ export function drawProceduralIngredient(
     }
 
     case 'fish': {
-      // Flaky salmon / whitefish fillet chunk with myosepta lines & sear crust
-      const fGrad = ctx.createLinearGradient(-4.5, -2.5, 4.5, 2.5);
+      // 3D flaky salmon / whitefish fillet portion with silver skin edge, chevron myosepta & glistening lipid sheen
+      ctx.fillStyle = isBurnt ? '#09090b' : '#475569';
+      ctx.beginPath();
+      ctx.roundRect(-4.6, -2.0, 9.2, 5.2, 1.3);
+      ctx.fill();
+
+      const fGrad = ctx.createLinearGradient(-4.5, -2.6, 4.5, 2.5);
       if (isBurnt) {
         fGrad.addColorStop(0, '#451a03'); fGrad.addColorStop(1, '#18181b');
       } else if (isBoiled || isFried) {
@@ -340,15 +474,18 @@ export function drawProceduralIngredient(
       }
       ctx.fillStyle = fGrad;
       ctx.beginPath();
-      ctx.roundRect(-4.6, -2.6, 9.2, 5.2, 1.3);
+      ctx.roundRect(-4.6, -2.6, 9.2, 5.0, 1.3);
       ctx.fill();
-      // Flake striation lines
-      ctx.strokeStyle = isBoiled || isFried ? 'rgba(255,255,255,0.48)' : 'rgba(255, 228, 230, 0.65)';
-      ctx.lineWidth = 0.45;
-      for (const sx of [-2.4, 0, 2.4]) {
+
+      // White chevron myosepta connective bands
+      ctx.strokeStyle = isBoiled || isFried ? 'rgba(255,255,255,0.62)' : 'rgba(255, 241, 242, 0.78)';
+      ctx.lineWidth = 0.48;
+      ctx.lineCap = 'round';
+      for (const sx of [-2.6, -0.8, 1.0, 2.8]) {
         ctx.beginPath();
         ctx.moveTo(sx - 0.6, -2.1);
-        ctx.quadraticCurveTo(sx + 0.5, 0, sx - 0.5, 2.1);
+        ctx.lineTo(sx + 0.55, -0.1);
+        ctx.lineTo(sx - 0.55, 1.9);
         ctx.stroke();
       }
       break;
@@ -497,11 +634,44 @@ export function drawProceduralIngredient(
     }
 
     case 'tomato': {
-      drawLitSphere(ctx, 0, 0, 3.7, '#f87171', '#dc2626', '#7f1d1d', undefined, 0.72);
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.ellipse(0, -3.1, 1.35, 0.6, 0, 0, Math.PI * 2);
-      ctx.fill();
+      if (cutLevel >= 1) {
+        // Sliced tomato wheel / wedge with outer pericarp wall, radial septa, gelatinous locules & golden pips
+        ctx.fillStyle = isBurnt ? '#290f02' : '#7f1d1d';
+        ctx.beginPath();
+        ctx.arc(0, 0.5, 3.85, 0, Math.PI * 2);
+        ctx.fill();
+
+        drawLitSphere(ctx, 0, 0, 3.8, '#fca5a5', isFried ? '#b91c1c' : '#dc2626', '#7f1d1d', undefined, 0.45);
+        // Lighter inner pericarp ring
+        ctx.fillStyle = '#fecaca';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.05, 0, Math.PI * 2);
+        ctx.fill();
+        // 3 gelatinous seed locule chambers
+        for (let c = 0; c < 3; c++) {
+          const a0 = (c / 3) * Math.PI * 2 + 0.2;
+          const a1 = a0 + 1.45;
+          ctx.fillStyle = '#991b1b';
+          ctx.beginPath();
+          ctx.moveTo(Math.cos((a0 + a1) * 0.5) * 0.65, Math.sin((a0 + a1) * 0.5) * 0.65);
+          ctx.arc(0, 0, 2.65, a0, a1);
+          ctx.closePath();
+          ctx.fill();
+          // Golden seeds suspended in gel
+          const sa = (a0 + a1) * 0.5;
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath();
+          ctx.ellipse(Math.cos(sa - 0.25) * 1.75, Math.sin(sa - 0.25) * 1.75, 0.42, 0.22, sa, 0, Math.PI * 2);
+          ctx.ellipse(Math.cos(sa + 0.25) * 1.75, Math.sin(sa + 0.25) * 1.75, 0.42, 0.22, sa, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else {
+        drawLitSphere(ctx, 0, 0, 3.7, '#f87171', '#dc2626', '#7f1d1d', undefined, 0.72);
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath();
+        ctx.ellipse(0, -3.1, 1.35, 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       break;
     }
 

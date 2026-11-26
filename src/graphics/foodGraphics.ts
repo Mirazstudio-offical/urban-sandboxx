@@ -407,63 +407,6 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string, item
       return true;
     }
 
-    case 'bread_loaf': {
-      drawShadow(ctx, 9.2, 3.2, 7.6, 0.25);
-
-      // Crusty artisanal baton loaf base & Maillard browned crust
-      const drawLoaf = () => {
-        ctx.beginPath();
-        ctx.moveTo(-9.2, 0.6);
-        ctx.bezierCurveTo(-9.0, -4.4, -3.5, -5.6, 0, -5.4);
-        ctx.bezierCurveTo(3.5, -5.6, 9.0, -4.4, 9.2, 0.6);
-        ctx.bezierCurveTo(9.0, 4.6, 4.0, 5.4, 0, 5.2);
-        ctx.bezierCurveTo(-4.0, 5.4, -9.0, 4.6, -9.2, 0.6);
-        ctx.closePath();
-      };
-
-      const crustGrad = ctx.createRadialGradient(-2.0, -2.2, 0.8, 0, 0.4, 9.6);
-      crustGrad.addColorStop(0.0, '#fbbf24');
-      crustGrad.addColorStop(0.45, '#d97706');
-      crustGrad.addColorStop(0.85, '#92400e');
-      crustGrad.addColorStop(1.0, '#451a03');
-      ctx.fillStyle = crustGrad;
-      drawLoaf();
-      ctx.fill();
-
-      ctx.save();
-      drawLoaf();
-      ctx.clip();
-
-      // Oven expansion score ears (golden toasted lip + pale airy crumb groove)
-      for (const sx of [-4.6, -0.4, 3.8]) {
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        ctx.ellipse(sx + 0.35, -1.6, 2.2, 0.9, 0.85, 0, Math.PI * 2);
-        ctx.fill();
-
-        const crumbGrad = ctx.createLinearGradient(sx - 1.5, -3, sx + 1.5, 0);
-        crumbGrad.addColorStop(0, '#fffbeb');
-        crumbGrad.addColorStop(0.6, '#fde68a');
-        crumbGrad.addColorStop(1, '#d97706');
-        ctx.fillStyle = crumbGrad;
-        ctx.beginPath();
-        ctx.ellipse(sx, -1.8, 1.95, 0.72, 0.85, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Subtle artisanal flour dusting along top dome
-      ctx.fillStyle = 'rgba(255, 251, 235, 0.32)';
-      for (let i = 0; i < 14; i++) {
-        const fx = -6.4 + hash01('bread', i * 2) * 12.8;
-        const fy = -3.8 + hash01('bread', i * 2 + 1) * 3.8;
-        ctx.beginPath();
-        ctx.arc(fx, fy, 0.42, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-      return true;
-    }
-
     case 'cookies':
     case 'cookie_pack': {
       drawShadow(ctx, 7.8, 2.9, 7.6, 0.25);

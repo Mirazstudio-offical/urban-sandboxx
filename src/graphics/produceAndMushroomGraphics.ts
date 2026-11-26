@@ -437,289 +437,687 @@ function drawPlantBranchModel(ctx: CanvasRenderingContext2D, br?: PlantBranchAtt
 
 function drawProceduralProduceCutForm(ctx: CanvasRenderingContext2D, attrs: ProduceAttributes) {
   const skin = attrs.color || '#22c55e';
-  const skinLight = adjustHex(skin, 0.24);
-  const skinDark = adjustHex(skin, -0.35);
+  const skinLight = adjustHex(skin, 0.28);
+  const skinDark = adjustHex(skin, -0.38);
   const flesh = attrs.fleshColor || '#fefce8';
-  const fleshLight = adjustHex(flesh, 0.22);
-  const fleshDark = adjustHex(flesh, -0.22);
-  const juicyAlpha = 0.22 + (attrs.juiciness / 100) * 0.35;
-  const scale = Math.max(0.84, Math.min(1.06, 0.84 + Math.cbrt(Math.max(0.05, attrs.remainingFraction)) * 0.22));
+  const fleshLight = adjustHex(flesh, 0.25);
+  const fleshDark = adjustHex(flesh, -0.25);
+  const fleshDeep = adjustHex(flesh, -0.42);
+  const juicyAlpha = 0.24 + (attrs.juiciness / 100) * 0.38;
+  const scale = Math.max(0.84, Math.min(1.08, 0.84 + Math.cbrt(Math.max(0.05, attrs.remainingFraction)) * 0.24));
+  const seed = `${attrs.speciesId}_${attrs.cutForm}`;
+  const isCitrus = attrs.produceCategory === 'citrus';
+  const isMushroom = attrs.produceCategory === 'mushroom';
+  const isTomatoOrCucumber =
+    attrs.speciesId.includes('tomato') ||
+    attrs.speciesId.includes('cucumber') ||
+    attrs.speciesId.includes('zucchini') ||
+    attrs.speciesId.includes('eggplant');
+  const isRootXylem =
+    attrs.speciesId.includes('carrot') ||
+    attrs.speciesId.includes('beet') ||
+    attrs.speciesId.includes('radish') ||
+    attrs.speciesId.includes('turnip');
 
   ctx.save();
   ctx.scale(scale, scale);
-  drawShadow(ctx, 7.0, 2.5, 6.2, 0.23);
+  drawShadow(ctx, 7.4, 2.6, 6.4, 0.25);
+
+  // Helper to draw internal anatomical details on a cut face of radius r
+  const drawInternalCutAnatomy = (cx: number, cy: number, rx: number, ry: number) => {
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (isCitrus) {
+      // White pith albedo ring + 8 radial citrus segments with juice vesicle speckles
+      ctx.strokeStyle = '#fffbeb';
+      ctx.lineWidth = Math.max(0.35, rx * 0.12);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx * 0.9, ry * 0.9, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const segs = 8;
+      for (let s = 0; s < segs; s++) {
+        const a0 = (s / segs) * Math.PI * 2 + 0.08;
+        const a1 = ((s + 1) / segs) * Math.PI * 2 - 0.08;
+        const aMid = (a0 + a1) * 0.5;
+        ctx.fillStyle = s % 2 === 0 ? flesh : fleshLight;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(aMid) * rx * 0.14, Math.sin(aMid) * ry * 0.14);
+        ctx.ellipse(0, 0, rx * 0.82, ry * 0.82, 0, a0, a1);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.fillStyle = '#fffbeb';
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.max(0.28, rx * 0.12), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (isTomatoOrCucumber) {
+      // Gelatinous seed chambers & tiny golden seeds
+      const chambers = 4;
+      for (let c = 0; c < chambers; c++) {
+        const a = (c / chambers) * Math.PI * 2 + 0.35;
+        const lx = Math.cos(a) * rx * 0.45;
+        const ly = Math.sin(a) * ry * 0.45;
+        ctx.fillStyle = fleshDark;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.ellipse(lx, ly, rx * 0.28, ry * 0.18, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(lx + Math.cos(a) * 0.18, ly + Math.sin(a) * 0.18, Math.max(0.14, rx * 0.055), 0, Math.PI * 2);
+        ctx.arc(lx - Math.sin(a) * 0.22, ly + Math.cos(a) * 0.22, Math.max(0.13, rx * 0.05), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (isRootXylem) {
+      // Concentric vascular xylem core ring & radial phloem rays
+      ctx.strokeStyle = fleshLight;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = Math.max(0.28, rx * 0.09);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx * 0.52, ry * 0.52, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx * 0.22, ry * 0.22, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (
+      attrs.produceCategory === 'fruit' ||
+      attrs.produceCategory === 'large_berry'
+    ) {
+      // Central endocarp core line & dark glossy pips/seeds
+      ctx.strokeStyle = fleshDark;
+      ctx.globalAlpha = 0.4;
+      ctx.lineWidth = 0.32;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.1, rx * 0.34, ry * 0.32, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#29150a';
+      for (const [sx, sy, srot] of [
+        [-rx * 0.16, 0.05, -0.35],
+        [rx * 0.16, 0.05, 0.35],
+        [0, ry * 0.18, 0],
+      ]) {
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, Math.max(0.22, rx * 0.08), Math.max(0.14, ry * 0.05), srot, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  };
 
   switch (attrs.cutForm) {
     case 'peeled': {
-      drawOrganicBlobPath(ctx, 0, 0.2, 6.2, 4.6, hash01(attrs.speciesId, 1) * 100, 0.05, 12);
-      const grad = ctx.createRadialGradient(-2.0, -1.6, 0.5, 0.4, 0.4, 7.0);
+      // 3D faceted knife-peeled whole produce with moist cellular planes & residual peel trace
+      ctx.fillStyle = fleshDeep;
+      drawOrganicBlobPath(ctx, 0.15, 0.65, 6.2, 4.6, hash01(attrs.speciesId, 1) * 100, 0.06, 12);
+      ctx.fill();
+
+      drawOrganicBlobPath(ctx, 0, 0.15, 6.2, 4.6, hash01(attrs.speciesId, 1) * 100, 0.06, 12);
+      const grad = ctx.createRadialGradient(-2.0, -1.6, 0.5, 0.4, 0.4, 7.2);
       grad.addColorStop(0.0, fleshLight);
       grad.addColorStop(0.55, flesh);
       grad.addColorStop(1.0, fleshDark);
       ctx.fillStyle = grad;
       ctx.fill();
+
+      // Subtle flat knife-peeling facet ridges across surface
+      ctx.save();
+      ctx.clip();
+      ctx.strokeStyle = fleshLight;
+      ctx.globalAlpha = 0.45;
+      ctx.lineWidth = 0.36;
+      ctx.beginPath();
+      ctx.moveTo(-4.8, -1.4);
+      ctx.quadraticCurveTo(-0.5, -0.4, 4.6, -1.6);
+      ctx.moveTo(-4.4, 1.4);
+      ctx.quadraticCurveTo(0.4, 2.2, 4.5, 0.9);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+
+      ctx.strokeStyle = fleshDeep;
+      ctx.lineWidth = 0.36;
+      ctx.stroke();
+
       ctx.fillStyle = `rgba(255, 255, 255, ${juicyAlpha.toFixed(2)})`;
       ctx.beginPath();
-      ctx.ellipse(-1.8, -1.4, 2.2, 0.85, -0.35, 0, Math.PI * 2);
+      ctx.ellipse(-1.8, -1.4, 2.3, 0.85, -0.32, 0, Math.PI * 2);
       ctx.fill();
       break;
     }
 
     case 'half':
     case 'chunk': {
-      // Curved outer skin shell
+      // 3D curved outer skin bowl + angled flat cut face showing full internal anatomy
       ctx.fillStyle = skinDark;
       ctx.beginPath();
-      ctx.arc(0, 1.0, 6.0, 0, Math.PI);
+      ctx.arc(0, 1.15, 6.1, 0, Math.PI);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = skin;
+
+      const skinGrad = ctx.createLinearGradient(-6, 0, 6, 5.5);
+      skinGrad.addColorStop(0, skinLight);
+      skinGrad.addColorStop(0.5, skin);
+      skinGrad.addColorStop(1, skinDark);
+      ctx.fillStyle = skinGrad;
       ctx.beginPath();
-      ctx.arc(0, 0.4, 6.0, 0, Math.PI);
+      ctx.arc(0, 0.45, 6.1, 0, Math.PI);
       ctx.closePath();
       ctx.fill();
+
+      // Outer peel rim around cut face
+      ctx.fillStyle = attrs.isPeeled ? fleshDark : skin;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.2, 6.05, 3.35, 0, 0, Math.PI * 2);
+      ctx.fill();
+
       // Exposed flat flesh face
-      const fGrad = ctx.createRadialGradient(-1.5, -0.4, 0.4, 0, 0.2, 5.8);
+      const fGrad = ctx.createRadialGradient(-1.6, -0.5, 0.4, 0, 0.2, 5.9);
       fGrad.addColorStop(0.0, fleshLight);
-      fGrad.addColorStop(0.75, flesh);
+      fGrad.addColorStop(0.72, flesh);
       fGrad.addColorStop(1.0, fleshDark);
       ctx.fillStyle = fGrad;
       ctx.beginPath();
       ctx.ellipse(0, 0.2, 5.6, 3.0, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = skin;
-      ctx.lineWidth = 0.7;
-      ctx.stroke();
-      // Juicy sheen & subtle seeds/core
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(0, 0.2, 5.6, 3.0, 0, 0, Math.PI * 2);
+      ctx.clip();
+      drawInternalCutAnatomy(0, 0.2, 5.4, 2.85);
+      ctx.restore();
+
+      // Juicy wet specular sheen across cut face
       ctx.fillStyle = `rgba(255, 255, 255, ${juicyAlpha.toFixed(2)})`;
       ctx.beginPath();
-      ctx.ellipse(-1.8, -0.6, 1.8, 0.65, -0.2, 0, Math.PI * 2);
+      ctx.ellipse(-1.9, -0.65, 2.0, 0.68, -0.2, 0, Math.PI * 2);
       ctx.fill();
-      if (attrs.produceCategory === 'fruit' || attrs.produceCategory === 'large_berry' || attrs.produceCategory === 'citrus') {
-        ctx.fillStyle = adjustHex(fleshDark, -0.35);
-        for (const [sx, sy] of [[-1.2, 0.5], [1.2, 0.5], [0, 1.1]]) {
-          ctx.beginPath();
-          ctx.ellipse(sx, sy, 0.42, 0.25, 0.3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
       break;
     }
 
     case 'quarter':
     case 'wedge': {
-      for (const [wx, wy, rot] of [[-1.8, -0.8, -0.35], [1.6, 1.2, 0.25]]) {
+      for (const [wx, wy, rot] of [
+        [-2.0, -0.9, -0.36],
+        [1.8, 1.25, 0.24],
+      ]) {
         ctx.save();
         ctx.translate(wx, wy);
         ctx.rotate(rot);
-        // Outer curved peel arc
-        ctx.fillStyle = skin;
+
+        // 3D wedge side thickness & outer skin rind
+        ctx.fillStyle = attrs.isPeeled ? fleshDeep : skinDark;
         ctx.beginPath();
-        ctx.arc(0, 0, 5.2, 0.15, Math.PI - 0.15);
+        ctx.arc(0, 0.45, 5.3, 0.12, Math.PI - 0.12);
         ctx.closePath();
         ctx.fill();
-        // Inner juicy flesh crescent
-        const wGrad = ctx.createLinearGradient(0, 0, 0, 4.6);
+
+        ctx.fillStyle = attrs.isPeeled ? fleshDark : skin;
+        ctx.beginPath();
+        ctx.arc(0, 0, 5.3, 0.12, Math.PI - 0.12);
+        ctx.closePath();
+        ctx.fill();
+
+        // Inner juicy flesh crescent wedge with two meeting cut planes
+        const wGrad = ctx.createLinearGradient(0, -0.4, 0, 4.7);
         wGrad.addColorStop(0.0, fleshLight);
-        wGrad.addColorStop(0.7, flesh);
+        wGrad.addColorStop(0.65, flesh);
         wGrad.addColorStop(1.0, fleshDark);
         ctx.fillStyle = wGrad;
         ctx.beginPath();
-        ctx.arc(0, 0, 4.3, 0.18, Math.PI - 0.18);
+        ctx.arc(0, -0.05, 4.45, 0.16, Math.PI - 0.16);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = `rgba(255, 255, 255, ${(juicyAlpha * 0.85).toFixed(2)})`;
-        ctx.fillRect(-2.4, 0.5, 4.2, 0.55);
+
+        // Central wedge ridge line separating the two flat knife cuts
+        ctx.strokeStyle = fleshLight;
+        ctx.lineWidth = 0.38;
+        ctx.beginPath();
+        ctx.moveTo(-3.8, 0.65);
+        ctx.quadraticCurveTo(0, 1.45, 3.8, 0.65);
+        ctx.stroke();
+
+        // Seed chamber or citrus vesicle detail inside wedge
+        if (isTomatoOrCucumber || isCitrus) {
+          ctx.fillStyle = isCitrus ? 'rgba(255,255,255,0.45)' : fleshDark;
+          ctx.beginPath();
+          ctx.ellipse(-1.1, 2.1, 0.75, 0.42, 0.3, 0, Math.PI * 2);
+          ctx.ellipse(1.1, 2.1, 0.75, 0.42, -0.3, 0, Math.PI * 2);
+          ctx.fill();
+          if (isTomatoOrCucumber) {
+            ctx.fillStyle = '#fde047';
+            ctx.beginPath();
+            ctx.arc(-1.1, 2.1, 0.18, 0, Math.PI * 2);
+            ctx.arc(1.1, 2.1, 0.18, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${(juicyAlpha * 0.9).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.ellipse(-0.4, 0.55, 2.2, 0.34, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
       break;
     }
 
     case 'ring': {
-      for (const [rx, ry] of [[-2.0, -0.8], [2.0, 1.0]]) {
-        ctx.strokeStyle = attrs.isPeeled ? flesh : skin;
-        ctx.lineWidth = 2.0;
+      // Translucent concentric rings (onion / bell pepper / squid / calamari / apple rings)
+      for (const [rx, ry, rad] of [
+        [-2.2, -0.8, 3.8],
+        [2.1, 1.05, 3.6],
+      ]) {
+        ctx.save();
+        ctx.translate(rx, ry);
+
+        // 3D ring lower shadow wall
+        ctx.strokeStyle = attrs.isPeeled ? fleshDeep : skinDark;
+        ctx.lineWidth = 2.15;
         ctx.beginPath();
-        ctx.arc(rx, ry, 3.6, 0, Math.PI * 2);
+        ctx.ellipse(0, 0.42, rad, rad * 0.82, -0.15, 0, Math.PI * 2);
         ctx.stroke();
+
+        // Outer skin rim
+        ctx.strokeStyle = attrs.isPeeled ? fleshDark : skin;
+        ctx.lineWidth = 2.05;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rad, rad * 0.82, -0.15, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner flesh ring & concentric layer membrane
+        ctx.strokeStyle = flesh;
+        ctx.lineWidth = 1.45;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rad * 0.96, rad * 0.78, -0.15, 0, Math.PI * 2);
+        ctx.stroke();
+
         ctx.strokeStyle = fleshLight;
-        ctx.lineWidth = 1.1;
+        ctx.lineWidth = 0.65;
         ctx.beginPath();
-        ctx.arc(rx, ry, 3.2, 0, Math.PI * 2);
+        ctx.ellipse(0, -0.08, rad * 0.94, rad * 0.76, -0.15, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.restore();
       }
       break;
     }
 
     case 'slice': {
-      for (const [sx, sy] of [[-2.2, -0.8], [2.1, 1.0]]) {
-        ctx.fillStyle = attrs.isPeeled ? fleshDark : skinDark;
+      if (isMushroom) {
+        // Overlapping T-shaped sliced mushrooms with cap, dark gills, and stem
+        for (const [mx, my, rot] of [
+          [-2.0, -0.8, -0.25],
+          [1.9, 1.1, 0.22],
+        ]) {
+          ctx.save();
+          ctx.translate(mx, my);
+          ctx.rotate(rot);
+          ctx.fillStyle = fleshDark;
+          ctx.beginPath();
+          ctx.roundRect(-1.1, -0.2, 2.2, 3.6, 0.6);
+          ctx.fill();
+          ctx.fillStyle = fleshLight;
+          ctx.beginPath();
+          ctx.roundRect(-1.0, -0.4, 2.0, 3.5, 0.55);
+          ctx.fill();
+          ctx.fillStyle = '#3b1d0d';
+          ctx.beginPath();
+          ctx.ellipse(0, -0.4, 3.4, 0.7, 0, 0, Math.PI * 2);
+          ctx.fill();
+          const cGrad = ctx.createRadialGradient(-0.8, -1.8, 0.2, 0, -0.5, 3.8);
+          cGrad.addColorStop(0, skinLight);
+          cGrad.addColorStop(0.6, skin);
+          cGrad.addColorStop(1, skinDark);
+          ctx.fillStyle = cGrad;
+          ctx.beginPath();
+          ctx.arc(0, -0.4, 3.6, Math.PI, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+        break;
+      }
+
+      // Shingled 3D round coins/medallions with internal vascular/seed anatomy
+      for (const [sx, sy, rad] of [
+        [-2.3, -0.85, 4.3],
+        [2.1, 1.0, 4.2],
+      ]) {
+        // 3D coin thickness wall
+        ctx.fillStyle = attrs.isPeeled ? fleshDeep : skinDark;
         ctx.beginPath();
-        ctx.arc(sx, sy + 0.45, 4.2, 0, Math.PI * 2);
+        ctx.ellipse(sx, sy + 0.55, rad, rad * 0.86, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = attrs.isPeeled ? flesh : skin;
+
+        // Outer peel ring
+        ctx.fillStyle = attrs.isPeeled ? fleshDark : skin;
         ctx.beginPath();
-        ctx.arc(sx, sy, 4.2, 0, Math.PI * 2);
+        ctx.ellipse(sx, sy, rad, rad * 0.86, 0, 0, Math.PI * 2);
         ctx.fill();
-        const sGrad = ctx.createRadialGradient(sx - 1.0, sy - 1.0, 0.3, sx, sy, 3.6);
+
+        // Inner flesh disc
+        const sGrad = ctx.createRadialGradient(sx - 1.1, sy - 1.0, 0.3, sx, sy, rad * 0.9);
         sGrad.addColorStop(0.0, fleshLight);
-        sGrad.addColorStop(0.75, flesh);
+        sGrad.addColorStop(0.72, flesh);
         sGrad.addColorStop(1.0, fleshDark);
         ctx.fillStyle = sGrad;
         ctx.beginPath();
-        ctx.arc(sx, sy, 3.55, 0, Math.PI * 2);
+        ctx.ellipse(sx, sy, rad * 0.86, rad * 0.74, 0, 0, Math.PI * 2);
         ctx.fill();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, rad * 0.86, rad * 0.74, 0, 0, Math.PI * 2);
+        ctx.clip();
+        drawInternalCutAnatomy(sx, sy, rad * 0.84, rad * 0.72);
+        ctx.restore();
+
+        // Wet specular crescent
         ctx.fillStyle = `rgba(255, 255, 255, ${juicyAlpha.toFixed(2)})`;
         ctx.beginPath();
-        ctx.ellipse(sx - 1.1, sy - 1.2, 1.0, 0.4, -0.5, 0, Math.PI * 2);
+        ctx.ellipse(sx - 1.2, sy - 1.1, 1.15, 0.42, -0.45, 0, Math.PI * 2);
         ctx.fill();
       }
       break;
     }
 
     case 'strips': {
-      for (let i = 0; i < 5; i++) {
-        const ang = -0.35 + i * 0.17;
-        const ox = (i - 2) * 1.4;
-        const oy = (i % 2) * 0.8 - 0.3;
+      // Overlapping 3D julienne / batonnet sticks with beveled square cross-section & peel edge
+      const sticks: [number, number, number, number][] = [
+        [-2.6, -0.5, -0.34, 9.2],
+        [-1.1, 0.4, -0.14, 9.5],
+        [0.4, -0.3, 0.05, 9.4],
+        [1.8, 0.5, 0.22, 9.1],
+        [3.1, -0.2, 0.38, 8.7],
+        [-0.3, -0.8, 0.65, 8.8],
+      ];
+      for (let i = 0; i < sticks.length; i++) {
+        const [ox, oy, ang, len] = sticks[i];
         ctx.save();
         ctx.translate(ox, oy);
         ctx.rotate(ang);
+
+        // 3D cast shadow onto underlying batonnets
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+        ctx.beginPath();
+        ctx.roundRect(-0.9, -len * 0.5 + 0.35, 2.1, len, 0.45);
+        ctx.fill();
+
+        // Shaded side facet of batonnet
         ctx.fillStyle = fleshDark;
         ctx.beginPath();
-        ctx.roundRect(-1.0, -4.6, 2.0, 9.2, 0.55);
+        ctx.roundRect(-1.0, -len * 0.5, 2.0, len, 0.42);
         ctx.fill();
-        ctx.fillStyle = flesh;
+
+        // Lit top facet of batonnet
+        ctx.fillStyle = i % 2 === 0 ? fleshLight : flesh;
         ctx.beginPath();
-        ctx.roundRect(-0.85, -4.5, 1.6, 8.8, 0.45);
+        ctx.roundRect(-0.95, -len * 0.5, 1.35, len - 0.15, 0.35);
         ctx.fill();
-        if (!attrs.isPeeled) {
+
+        // Skin ribbon along outer edge if unpeeled
+        if (!attrs.isPeeled && i % 2 === 0) {
           ctx.fillStyle = skin;
-          ctx.fillRect(-0.85, -4.5, 0.45, 8.8);
+          ctx.beginPath();
+          ctx.roundRect(-0.98, -len * 0.5, 0.42, len - 0.15, 0.2);
+          ctx.fill();
         }
+
+        // Crisp wet highlight streak along stick edge
+        ctx.fillStyle = `rgba(255, 255, 255, ${(juicyAlpha * 0.85).toFixed(2)})`;
+        ctx.fillRect(-0.35, -len * 0.38, 0.25, len * 0.72);
         ctx.restore();
       }
       break;
     }
 
     case 'diced': {
-      const cubes: [number, number][] = [
-        [-3.6, -1.6], [0.2, -2.4], [3.4, -1.2],
-        [-2.4, 1.4], [0.8, 0.6], [3.6, 2.0], [-0.4, 3.0],
+      // Multi-layered pile of 3D isometric knife-cut brunoise/Macédoine cubes with peel facets & moisture glints
+      const cubes: [number, number, number, boolean][] = [
+        [-3.8, -1.5, 0.92, true],
+        [-0.4, -2.5, 0.95, false],
+        [3.2, -1.3, 0.9, true],
+        [-4.2, 1.3, 0.88, false],
+        [-1.6, 0.4, 1.02, false],
+        [1.8, 0.3, 1.0, true],
+        [4.0, 1.7, 0.88, false],
+        [-2.0, 2.7, 0.94, true],
+        [1.2, 2.6, 0.96, false],
       ];
-      for (const [cx, cy] of cubes) {
-        // Top lit face
+      for (let i = 0; i < cubes.length; i++) {
+        const [cx, cy, cScale, showSkinFace] = cubes[i];
+        const w = 1.85 * cScale;
+        const h = 1.65 * cScale;
+
+        // Contact shadow beneath cube
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.24)';
+        ctx.beginPath();
+        ctx.ellipse(cx + 0.15, cy + h * 0.95, w * 0.95, h * 0.45, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Top lit diamond facet
         ctx.fillStyle = fleshLight;
         ctx.beginPath();
-        ctx.moveTo(cx, cy - 1.6);
-        ctx.lineTo(cx + 1.8, cy - 0.7);
-        ctx.lineTo(cx, cy + 0.2);
-        ctx.lineTo(cx - 1.8, cy - 0.7);
+        ctx.moveTo(cx, cy - h * 0.95);
+        ctx.lineTo(cx + w, cy - h * 0.38);
+        ctx.lineTo(cx, cy + h * 0.18);
+        ctx.lineTo(cx - w, cy - h * 0.38);
         ctx.closePath();
         ctx.fill();
-        // Left face
-        ctx.fillStyle = flesh;
+
+        // Left vertical facet (shows outer peel if unpeeled on outer cubes)
+        ctx.fillStyle = !attrs.isPeeled && showSkinFace ? skin : flesh;
         ctx.beginPath();
-        ctx.moveTo(cx - 1.8, cy - 0.7);
-        ctx.lineTo(cx, cy + 0.2);
-        ctx.lineTo(cx, cy + 1.9);
-        ctx.lineTo(cx - 1.8, cy + 1.0);
+        ctx.moveTo(cx - w, cy - h * 0.38);
+        ctx.lineTo(cx, cy + h * 0.18);
+        ctx.lineTo(cx, cy + h * 1.15);
+        ctx.lineTo(cx - w, cy + h * 0.58);
         ctx.closePath();
         ctx.fill();
-        // Right shaded face
+
+        // Right shaded vertical facet
         ctx.fillStyle = fleshDark;
         ctx.beginPath();
-        ctx.moveTo(cx + 1.8, cy - 0.7);
-        ctx.lineTo(cx, cy + 0.2);
-        ctx.lineTo(cx, cy + 1.9);
-        ctx.lineTo(cx + 1.8, cy + 1.0);
+        ctx.moveTo(cx + w, cy - h * 0.38);
+        ctx.lineTo(cx, cy + h * 0.18);
+        ctx.lineTo(cx, cy + h * 1.15);
+        ctx.lineTo(cx + w, cy + h * 0.58);
         ctx.closePath();
         ctx.fill();
+
+        // Crisp wet bevel edge highlight
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(juicyAlpha * 0.9).toFixed(2)})`;
+        ctx.lineWidth = 0.24;
+        ctx.beginPath();
+        ctx.moveTo(cx - w * 0.75, cy - h * 0.32);
+        ctx.lineTo(cx, cy + h * 0.12);
+        ctx.lineTo(cx + w * 0.75, cy - h * 0.32);
+        ctx.stroke();
       }
       break;
     }
 
     case 'shredded':
     case 'grated': {
-      const strands = attrs.cutForm === 'grated' ? 28 : 20;
+      // Juicy pooled moisture base + 3D mound of curved grater ribbons/curls
+      const isGrated = attrs.cutForm === 'grated';
+      ctx.fillStyle = fleshDark;
+      ctx.globalAlpha = 0.35;
+      drawOrganicBlobPath(ctx, 0, 0.5, 6.2, 4.1, 49, 0.12, 12);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      const strands = isGrated ? 36 : 24;
       for (let i = 0; i < strands; i++) {
-        const ang = (hash01(attrs.speciesId, i * 3 + 11) - 0.5) * 2.5;
-        const px = (hash01(attrs.speciesId, i * 3 + 12) - 0.5) * 9.2;
-        const py = (hash01(attrs.speciesId, i * 3 + 13) - 0.5) * 6.0;
+        const ang = (hash01(seed, i * 3 + 11) - 0.5) * 2.8;
+        const dist = Math.sqrt(hash01(seed, i * 3 + 12)) * 5.6;
+        const dirA = hash01(seed, i * 3 + 13) * Math.PI * 2;
+        const px = Math.cos(dirA) * dist;
+        const py = Math.sin(dirA) * dist * 0.68 + 0.2;
+        const sLen = isGrated ? 2.4 : 3.9;
+        const sW = isGrated ? 0.55 : 0.78;
+
         ctx.save();
         ctx.translate(px, py);
         ctx.rotate(ang);
-        ctx.fillStyle = i % 3 === 0 ? fleshLight : i % 3 === 1 ? flesh : fleshDark;
+
+        ctx.strokeStyle =
+          !attrs.isPeeled && i % 5 === 0
+            ? skin
+            : i % 3 === 0
+            ? fleshLight
+            : i % 3 === 1
+            ? flesh
+            : fleshDark;
+        ctx.lineWidth = sW;
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.roundRect(-2.1, -0.38, 4.2, 0.76, 0.3);
-        ctx.fill();
+        ctx.moveTo(-sLen * 0.5, 0);
+        ctx.quadraticCurveTo(0, (i % 2 === 0 ? 1 : -1) * 0.55, sLen * 0.5, 0);
+        ctx.stroke();
         ctx.restore();
+      }
+
+      // Glistening juice droplets on top of grated mound
+      ctx.fillStyle = `rgba(255, 255, 255, ${(juicyAlpha + 0.15).toFixed(2)})`;
+      for (const [gx, gy, gr] of [
+        [-1.6, -0.8, 0.45],
+        [1.4, 0.4, 0.38],
+        [-0.2, 1.1, 0.35],
+      ]) {
+        ctx.beginPath();
+        ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+        ctx.fill();
       }
       break;
     }
 
     case 'crushed': {
-      drawOrganicBlobPath(ctx, 0, 0.6, 5.8, 4.2, 33, 0.14, 14);
-      const pGrad = ctx.createRadialGradient(-1.8, -1.0, 0.4, 0, 0.6, 6.0);
+      // Glistening juice puddle + textured crushed pulp chunks, torn skins & seeds
+      ctx.fillStyle = fleshDark;
+      ctx.globalAlpha = 0.38;
+      drawOrganicBlobPath(ctx, 0.2, 0.8, 6.8, 4.7, 31, 0.16, 14);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      drawOrganicBlobPath(ctx, 0, 0.4, 5.9, 4.1, 33, 0.15, 14);
+      const pGrad = ctx.createRadialGradient(-1.8, -1.0, 0.4, 0, 0.5, 6.2);
       pGrad.addColorStop(0.0, fleshLight);
-      pGrad.addColorStop(0.65, flesh);
-      pGrad.addColorStop(1.0, fleshDark);
+      pGrad.addColorStop(0.6, flesh);
+      pGrad.addColorStop(1.0, fleshDeep);
       ctx.fillStyle = pGrad;
       ctx.fill();
-      ctx.fillStyle = `rgba(255, 255, 255, ${(juicyAlpha + 0.1).toFixed(2)})`;
+
+      // Crushed cellular pulp lumps & torn skin fragments
+      for (let i = 0; i < 14; i++) {
+        const a = hash01(seed + '_cr', i * 3) * Math.PI * 2;
+        const d = Math.sqrt(hash01(seed + '_cr', i * 3 + 1)) * 4.4;
+        const lx = Math.cos(a) * d;
+        const ly = Math.sin(a) * d * 0.68 + 0.3;
+        const lr = 0.45 + hash01(seed + '_cr', i * 3 + 2) * 0.65;
+        ctx.fillStyle = !attrs.isPeeled && i % 4 === 0 ? skin : i % 2 === 0 ? fleshLight : fleshDark;
+        ctx.beginPath();
+        ctx.ellipse(lx, ly, lr * 1.25, lr * 0.8, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Wet liquid sheen on crushed puree
+      ctx.fillStyle = `rgba(255, 255, 255, ${(juicyAlpha + 0.16).toFixed(2)})`;
       ctx.beginPath();
-      ctx.ellipse(-1.4, -0.6, 1.9, 0.7, -0.25, 0, Math.PI * 2);
+      ctx.ellipse(-1.5, -0.6, 2.1, 0.75, -0.25, 0, Math.PI * 2);
+      ctx.ellipse(1.6, 0.9, 1.1, 0.42, 0.2, 0, Math.PI * 2);
       ctx.fill();
       break;
     }
 
     case 'part': {
       if (attrs.part === 'seeds') {
-        for (let i = 0; i < 16; i++) {
-          const sx = (hash01(attrs.speciesId, i * 2 + 5) - 0.5) * 8.6;
-          const sy = (hash01(attrs.speciesId, i * 2 + 6) - 0.5) * 6.2;
-          drawLitSphere(ctx, sx, sy, 1.25, fleshLight, flesh, fleshDark, undefined, 0.55);
+        // Glossy pomegranate arils / corn kernels / peas / berry seeds with translucent core
+        for (let i = 0; i < 18; i++) {
+          const a = i * 2.39996;
+          const d = Math.sqrt((i + 0.5) / 18) * 5.2;
+          const sx = Math.cos(a) * d;
+          const sy = Math.sin(a) * d * 0.72 + 0.2;
+          drawLitSphere(ctx, sx, sy, 1.22, fleshLight, flesh, fleshDeep, undefined, 0.62);
         }
       } else if (attrs.part === 'segment') {
-        for (const [gx, gy, rot] of [[-2.2, -1.2, -0.4], [0.2, 0.2, 0.05], [2.4, 1.4, 0.45]]) {
+        // Plump citrus carpels / garlic cloves with translucent membrane & internal juice vesicles
+        for (const [gx, gy, rot] of [
+          [-2.3, -1.1, -0.42],
+          [0.2, 0.25, 0.05],
+          [2.5, 1.4, 0.45],
+        ]) {
           ctx.save();
           ctx.translate(gx, gy);
           ctx.rotate(rot);
-          ctx.fillStyle = flesh;
+          ctx.fillStyle = fleshDeep;
           ctx.beginPath();
-          ctx.arc(0, 0, 3.6, 0.2, Math.PI - 0.2);
+          ctx.arc(0, 0.35, 3.7, 0.18, Math.PI - 0.18);
           ctx.closePath();
           ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.65)';
-          ctx.lineWidth = 0.45;
+
+          const g = ctx.createRadialGradient(-0.8, 0.8, 0.2, 0, 1.4, 3.8);
+          g.addColorStop(0, fleshLight);
+          g.addColorStop(0.65, flesh);
+          g.addColorStop(1, fleshDark);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, 3.7, 0.18, Math.PI - 0.18);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = 'rgba(255,255,255,0.68)';
+          ctx.lineWidth = 0.42;
           ctx.stroke();
           ctx.restore();
         }
       } else {
-        drawLitEllipse(ctx, 0, 0.2, 4.8, 3.6, -0.15, skinLight, skin, skinDark, undefined, 0.3);
+        drawLitEllipse(ctx, 0, 0.2, 5.0, 3.7, -0.15, skinLight, skin, skinDark, undefined, 0.34);
       }
       break;
     }
 
     case 'peel': {
-      ctx.strokeStyle = skin;
-      ctx.lineWidth = 2.4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-5.0, 2.2);
-      ctx.bezierCurveTo(-2.4, -4.2, 2.4, -3.6, 5.2, 2.4);
-      ctx.stroke();
-      ctx.strokeStyle = fleshLight;
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.moveTo(-4.4, 2.5);
-      ctx.bezierCurveTo(-2.0, -3.2, 2.0, -2.6, 4.6, 2.6);
-      ctx.stroke();
+      // Curled spiral paring knife peel ribbon showing both colored outer skin and pale inner pith
+      for (const [px, py, rot] of [
+        [-1.2, -0.4, -0.15],
+        [1.4, 0.8, 0.28],
+      ]) {
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(rot);
+        ctx.strokeStyle = skinDark;
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-4.6, 1.8);
+        ctx.bezierCurveTo(-2.2, -3.8, 2.2, -3.2, 4.8, 2.0);
+        ctx.stroke();
+
+        ctx.strokeStyle = skin;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.moveTo(-4.6, 1.6);
+        ctx.bezierCurveTo(-2.2, -4.0, 2.2, -3.4, 4.8, 1.8);
+        ctx.stroke();
+
+        ctx.strokeStyle = fleshLight;
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(-4.1, 2.0);
+        ctx.bezierCurveTo(-1.8, -2.9, 1.8, -2.4, 4.2, 2.1);
+        ctx.stroke();
+        ctx.restore();
+      }
       break;
     }
 
     default: {
-      drawLitSphere(ctx, 0, 0.2, 4.6, fleshLight, flesh, fleshDark, undefined, 0.3);
+      drawLitSphere(ctx, 0, 0.2, 4.6, fleshLight, flesh, fleshDark, undefined, 0.32);
       break;
     }
   }

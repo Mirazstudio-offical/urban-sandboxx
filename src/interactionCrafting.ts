@@ -2332,7 +2332,7 @@ export const INTERACTION_CRAFT_RECIPES: InteractionCraftRecipe[] = [
     actionLabel: 'Настаивать в таре',
     ingredients: [
       { itemIds: ['jar_glass_large', 'jar_glass_medium', 'pot', 'bowl'], label: 'Банка / Кастрюля / Миска' },
-      { itemIds: ['drinking_water', 'salt', 'vinegar_table', 'bread_loaf'], label: 'Вода, соль, уксус, хлеб, молоко или овощи' },
+      { itemIds: ['drinking_water', 'salt', 'vinegar_table', 'dough'], label: 'Вода, соль, уксус, хлеб, молоко или овощи' },
     ],
     resultsSummary: ['Домашние заготовки и ферментированные напитки с натуральным составом'],
   },
@@ -2516,7 +2516,7 @@ function packOutputsIntoSlots(items: InventoryItem[], gridSize: 4 | 16): (Invent
   let list = items;
   if (list.length > gridSize) {
     // Merge identical cut pieces into grouped counts so nothing is lost when output count exceeds grid slots;
-    // addItemToPlayer automatically unstacks count > 1 into standalone items with cloned produceAttributes.
+    // addItemToPlayer automatically unstacks count > 1 into standalone items with cloned attributes.
     const compacted: InventoryItem[] = [];
     for (const it of list) {
       const existing = it.produceAttributes
@@ -2537,6 +2537,26 @@ function packOutputsIntoSlots(items: InventoryItem[], gridSize: 4 | 16): (Invent
               Math.abs((c.meatAttributes?.weightGrams || 0) - (it.meatAttributes?.weightGrams || 0)) <=
                 Math.max(25, Math.round((it.meatAttributes?.weightGrams || 0) * 0.2))
           )
+        : it.doughAttributes
+        ? compacted.find(
+            (c) =>
+              c.itemId === it.itemId &&
+              c.doughAttributes?.shape === it.doughAttributes?.shape &&
+              c.doughAttributes?.cookState === it.doughAttributes?.cookState &&
+              c.doughAttributes?.doughType === it.doughAttributes?.doughType &&
+              Math.abs((c.doughAttributes?.weightGrams || 0) - (it.doughAttributes?.weightGrams || 0)) <= 15
+          )
+        : !it.isContainer && !it.fluidStorage
+        ? compacted.find(
+            (c) =>
+              c.itemId === it.itemId &&
+              !c.produceAttributes &&
+              !c.meatAttributes &&
+              !c.doughAttributes &&
+              !c.isContainer &&
+              !c.fluidStorage &&
+              Math.abs((c.weight || 0) - (it.weight || 0)) <= 0.025
+          )
         : undefined;
       if (existing) {
         existing.count = (existing.count || 1) + (it.count || 1);
@@ -2555,6 +2575,276 @@ function packOutputsIntoSlots(items: InventoryItem[], gridSize: 4 | 16): (Invent
 
 function isCuttableDoughItem(item: InventoryItem | null): boolean {
   return Boolean(item && item.itemId === 'dough' && item.doughAttributes && item.doughAttributes.weightGrams >= 25);
+}
+
+/**
+ * Solid food blocks that can be sliced with a knife (butter bricks, cheese blocks/wheels/wedges/balls/braids,
+ * bread loaves, chocolate bars, boiled eggs, beeswax bars, and other solid non-container food items >= 15 g).
+ */
+function isCuttableSolidFoodItem(item: InventoryItem | null): boolean {
+  if (!item) return false;
+  if (
+    item.produceAttributes ||
+    item.meatAttributes ||
+    item.doughAttributes ||
+    item.itemId === 'dough' ||
+    item.itemId === 'plant_branch'
+  ) {
+    return false;
+  }
+  if (item.isContainer || item.fluidStorage) return false;
+  if (item.itemId === 'egg_raw') return false;
+  const isFoodOrWax = item.category === 'food' || item.itemId === 'beeswax_bar';
+  if (!isFoodOrWax) return false;
+  const weightGrams = Math.round((item.weight || 0) * 1000);
+  return weightGrams >= 15;
+}
+
+/**
+ * Single-item food packaging (e.g. paper_packaging_small with butter_brick_salted, paper_packaging with cheese,
+ * chocolate_pack, vacuum_pack, tray_sealed_food) that contains 1 cuttable food item inside.
+ */
+function isCuttablePackagedFoodItem(item: InventoryItem | null): boolean {
+  if (!item || !item.isContainer || item.fluidStorage) return false;
+  if (!item.contents || item.contents.length !== 1) return false;
+  const id = item.itemId;
+  const isFoodPackage =
+    Boolean(item.singleUseContainer) ||
+    id.startsWith('paper_packaging') ||
+    id.startsWith('chocolate_pack') ||
+    id.startsWith('vacuum_pack') ||
+    id.startsWith('tray_sealed_food');
+  if (!isFoodPackage) return false;
+  const inner = item.contents[0];
+  return (
+    isCuttableSolidFoodItem(inner) ||
+    isCuttableProduceItem(inner) ||
+    isCuttableMeatItem(inner) ||
+    isCuttableDoughItem(inner)
+  );
+}
+
+function getCleanSolidFoodBaseNameRu(item: InventoryItem): string {
+  let raw = (item.nameRu || '').trim();
+  // Remove trailing cut/weight parentheticals like "(ломтик, 40 г)", "(кусок, 150 г)", "(200 г)", "(брусок)", "(косичка)"
+  for (let i = 0; i < 3; i++) {
+    const next = raw
+      .replace(
+        /\s*\((?:(?:ломтик|кусок|кусочек|брусок|долька|плитка|половинка|часть|косичка|шарик|клин|блок|круг)(?:[,\s]+\d+\s*г)?|\d+\s*г)\)\s*$/i,
+        ''
+      )
+      .trim();
+    if (next === raw) break;
+    raw = next;
+  }
+  raw = raw.replace(/^(?:Круг|Клин|Шарик|Блок|Головка|Брусок)\s+сыра\s+/i, 'Сыр ');
+  return raw || (item.nameRu || '').trim();
+}
+
+function scaleSolidFoodPiece(
+  source: InventoryItem,
+  targetGrams: number,
+  mode: 'slice' | 'remainder'
+): InventoryItem {
+  const curGrams = Math.max(1, Math.round((source.weight || 0.1) * 1000));
+  const clampedGrams = Math.max(5, Math.round(targetGrams));
+  const ratio = Math.max(0.02, Math.min(1, clampedGrams / curGrams));
+
+  const piece = cloneInventoryItem(source);
+  piece.count = 1;
+  piece.weight = Number((clampedGrams / 1000).toFixed(3));
+  piece.volume = Number(Math.max(0.01, (source.volume || 0.1) * ratio).toFixed(3));
+
+  if (piece.effects) {
+    const nextEffects = { ...piece.effects };
+    if (typeof nextEffects.hunger === 'number') {
+      nextEffects.hunger = Math.max(1, Math.round(nextEffects.hunger * ratio));
+    }
+    if (typeof nextEffects.thirst === 'number') {
+      nextEffects.thirst = Math.round(nextEffects.thirst * ratio);
+    }
+    if (typeof nextEffects.health === 'number') {
+      nextEffects.health = Math.round(nextEffects.health * ratio);
+    }
+    if (typeof nextEffects.fatigue === 'number') {
+      nextEffects.fatigue = Math.round(nextEffects.fatigue * ratio);
+    }
+    if (typeof nextEffects.stress === 'number') {
+      nextEffects.stress = Math.round(nextEffects.stress * ratio);
+    }
+    piece.effects = nextEffects;
+  }
+
+  if (piece.nutrients) {
+    piece.nutrients = {
+      calories: Math.max(1, Math.round(piece.nutrients.calories * ratio)),
+      proteins: Number((piece.nutrients.proteins * ratio).toFixed(1)),
+      fats: Number((piece.nutrients.fats * ratio).toFixed(1)),
+      carbs: Number((piece.nutrients.carbs * ratio).toFixed(1)),
+      ...(typeof piece.nutrients.sugar === 'number'
+        ? { sugar: Number((piece.nutrients.sugar * ratio).toFixed(1)) }
+        : {}),
+      ...(typeof piece.nutrients.salt === 'number'
+        ? { salt: Number((piece.nutrients.salt * ratio).toFixed(1)) }
+        : {}),
+    };
+  }
+
+  if (typeof piece.portions === 'number') {
+    const nextPortions = clampedGrams <= 45 ? 1 : Math.max(1, Math.round(piece.portions * ratio));
+    piece.portions = nextPortions;
+    piece.maxPortions = Math.max(1, nextPortions);
+  }
+
+  if (piece.chocolateAttributes) {
+    const remP = Math.max(1, Math.round((piece.chocolateAttributes.remainingPieces || 1) * ratio));
+    piece.chocolateAttributes = {
+      ...piece.chocolateAttributes,
+      weightGrams: clampedGrams,
+      remainingPieces: remP,
+      totalPieces: Math.max(remP, piece.chocolateAttributes.totalPieces || remP),
+    };
+  }
+
+  const baseName = getCleanSolidFoodBaseNameRu(source);
+  const idLow = (source.originalCatalogId || source.itemId || '').toLowerCase();
+  const nameLow = baseName.toLowerCase();
+
+  let formWord = mode === 'slice' && clampedGrams <= 85 ? 'кусочек' : 'кусок';
+  if (idLow.includes('butter') || nameLow.includes('масло сливоч') || nameLow.includes('сливочное масло')) {
+    formWord = clampedGrams <= 75 ? 'ломтик' : 'брусок';
+  } else if (idLow.includes('cheese') || nameLow.includes('сыр')) {
+    formWord = clampedGrams <= 95 ? 'ломтик' : 'кусок';
+  } else if (idLow.includes('choc') || piece.chocolateAttributes || nameLow.includes('шоколад')) {
+    formWord = clampedGrams <= 55 ? 'долька' : 'плитка';
+  } else if (idLow === 'egg_boiled' || nameLow.includes('яйцо')) {
+    formWord = 'долька';
+  }
+
+  piece.nameRu = `${baseName} (${formWord}, ${clampedGrams} г)`;
+  piece.attributes = {
+    ...(piece.attributes || {}),
+    cutFormRu: formWord,
+    weightGrams: clampedGrams,
+  };
+
+  return piece;
+}
+
+function computeKnifeCutForSolidFood(
+  source: InventoryItem,
+  dosageFraction: number,
+  applyJitter: boolean
+): {
+  outputs: InventoryItem[];
+  title: string;
+  subtitle: string;
+  actionLabel: string;
+} | null {
+  if (!isCuttableSolidFoodItem(source)) return null;
+  const curW = Math.max(1, Math.round((source.weight || 0.1) * 1000));
+  if (curW < 15) return null;
+
+  const baseName = getCleanSolidFoodBaseNameRu(source);
+  const isFullCut = dosageFraction >= 0.999;
+
+  if (isFullCut) {
+    const pieceCount = curW >= 320 ? 4 : curW >= 90 ? 4 : curW >= 45 ? 3 : 2;
+    const basePieceG = Math.max(5, Math.floor(curW / pieceCount));
+    const outputs: InventoryItem[] = [];
+    let allocated = 0;
+    for (let i = 0; i < pieceCount; i++) {
+      const g = i === pieceCount - 1 ? Math.max(5, curW - allocated) : basePieceG;
+      allocated += g;
+      outputs.push(scaleSolidFoodPiece(source, g, 'slice'));
+    }
+    return {
+      outputs,
+      title: `Нарезка: ${baseName} → ×${pieceCount}`,
+      subtitle: `${pieceCount} шт. по ~${basePieceG} г`,
+      actionLabel: `Нарезать (×${pieceCount})`,
+    };
+  }
+
+  let effFrac = Math.max(0.08, Math.min(0.92, dosageFraction));
+  if (applyJitter) {
+    const jitter = 1 + (Math.random() * 0.1 - 0.05);
+    effFrac = Math.max(0.05, Math.min(0.95, effFrac * jitter));
+  }
+
+  const cutGrams = Math.max(5, Math.min(curW - 5, Math.round(curW * effFrac)));
+  const remGrams = Math.max(5, curW - cutGrams);
+
+  const slicePiece = scaleSolidFoodPiece(source, cutGrams, 'slice');
+  const remPiece = scaleSolidFoodPiece(source, remGrams, 'remainder');
+  const pctLabel = Math.round(dosageFraction * 100);
+
+  return {
+    outputs: [slicePiece, remPiece],
+    title: `Отрезать ~${pctLabel}%: ${baseName}`,
+    subtitle: `Отрезано: ${cutGrams} г · Остаток: ${remGrams} г`,
+    actionLabel: `Отрезать (${cutGrams} г)`,
+  };
+}
+
+function computeKnifeCutForPackagedFood(
+  wrapperItem: InventoryItem,
+  dosageFraction: number,
+  applyJitter: boolean
+): {
+  outputs: InventoryItem[];
+  title: string;
+  subtitle: string;
+  actionLabel: string;
+  isMeat: boolean;
+  isDough: boolean;
+} | null {
+  if (!isCuttablePackagedFoodItem(wrapperItem) || !wrapperItem.contents || wrapperItem.contents.length !== 1) {
+    return null;
+  }
+  const inner = wrapperItem.contents[0];
+  const isMeat = isCuttableMeatItem(inner);
+  const isDough = !isMeat && isCuttableDoughItem(inner);
+  const isProduce = !isMeat && !isDough && isCuttableProduceItem(inner);
+
+  const innerRes = isMeat
+    ? computeKnifeCutForMeat(inner, dosageFraction, applyJitter, (id) => createItem(id, 1, undefined, true))
+    : isDough
+    ? cutDoughWithKnife(inner, dosageFraction, applyJitter)
+    : isProduce
+    ? computeKnifeCutForProduce(inner, dosageFraction, applyJitter)
+    : computeKnifeCutForSolidFood(inner, dosageFraction, applyJitter);
+
+  if (!innerRes || innerRes.outputs.length === 0) return null;
+
+  const isFullCut = dosageFraction >= 0.999;
+  if (!isFullCut && innerRes.outputs.length === 2) {
+    // Partial cut from package: return the sliced piece out of the package + keep the remaining block inside the opened package
+    const [cutSlice, remBlock] = innerRes.outputs;
+    const openedWrapper = cloneInventoryItem(wrapperItem);
+    openedWrapper.isOpen = true;
+    openedWrapper.contents = [remBlock];
+    recalculateContainerWeight(openedWrapper);
+    syncItemContainerProperties(openedWrapper);
+    return {
+      outputs: [cutSlice, openedWrapper],
+      title: innerRes.title,
+      subtitle: `${innerRes.subtitle} (остаток в упаковке)`,
+      actionLabel: innerRes.actionLabel,
+      isMeat,
+      isDough,
+    };
+  }
+
+  // Full cut (Slot 0 "Всё"): unpack and slice all pieces
+  return {
+    outputs: innerRes.outputs,
+    title: innerRes.title,
+    subtitle: innerRes.subtitle,
+    actionLabel: innerRes.actionLabel,
+    isMeat,
+    isDough,
+  };
 }
 
 function tryEvaluateKnifeCuttingAndBranchPlucking(
@@ -2581,14 +2871,16 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
   const knives = entries.filter((e) => isKnifeTool(e.item));
   const others = entries.filter((e) => !isKnifeTool(e.item));
 
-  // Case 1: Knife + 1 or more produce items, meat/poultry/fish/seafood cuts, dough items, or pluckable plant_branches
+  // Case 1: Knife + 1 or more produce items, meat/poultry/fish/seafood cuts, dough items, solid food blocks (butter/cheese/bread/chocolate), packaged foods, or pluckable plant_branches
   if (knives.length === 1 && others.length >= 1) {
     const allTargetsValid = others.every(
       (e) =>
         isCuttableProduceItem(e.item) ||
         isPluckableBranchItem(e.item) ||
         isCuttableMeatItem(e.item) ||
-        isCuttableDoughItem(e.item)
+        isCuttableDoughItem(e.item) ||
+        isCuttableSolidFoodItem(e.item) ||
+        isCuttablePackagedFoodItem(e.item)
     );
     if (!allTargetsValid) return null;
 
@@ -2611,22 +2903,37 @@ function tryEvaluateKnifeCuttingAndBranchPlucking(
         activeDosageSlot !== null ? getSlotPourDosageFraction(activeDosageSlot, gridSize) : 0.5;
 
       const isBranch = isPluckableBranchItem(target.item);
-      const isMeat = !isBranch && isCuttableMeatItem(target.item);
-      const isDough = !isBranch && !isMeat && isCuttableDoughItem(target.item);
+      const isPackaged = !isBranch && isCuttablePackagedFoodItem(target.item);
+      const isMeat = !isBranch && !isPackaged && isCuttableMeatItem(target.item);
+      const isDough = !isBranch && !isPackaged && !isMeat && isCuttableDoughItem(target.item);
+      const isSolidFood =
+        !isBranch && !isPackaged && !isMeat && !isDough && isCuttableSolidFoodItem(target.item);
       if (isMeat) hasMeatTarget = true;
       if (isDough) hasDoughTarget = true;
 
-      const cutRes = isBranch
-        ? computeBranchPluck(target.item, dosageFraction, applyPourJitter, true, (spId, attrs) =>
-            createProduceItem(spId, attrs)
-          )
-        : isMeat
-        ? computeKnifeCutForMeat(target.item, dosageFraction, applyPourJitter, (id) =>
-            createItem(id, 1, undefined, true)
-          )
-        : isDough
-        ? cutDoughWithKnife(target.item, dosageFraction, applyPourJitter)
-        : computeKnifeCutForProduce(target.item, dosageFraction, applyPourJitter);
+      let cutRes: ReturnType<typeof computeKnifeCutForProduce> = null;
+      if (isBranch) {
+        cutRes = computeBranchPluck(target.item, dosageFraction, applyPourJitter, true, (spId, attrs) =>
+          createProduceItem(spId, attrs)
+        );
+      } else if (isPackaged) {
+        const pkgRes = computeKnifeCutForPackagedFood(target.item, dosageFraction, applyPourJitter);
+        if (pkgRes) {
+          if (pkgRes.isMeat) hasMeatTarget = true;
+          if (pkgRes.isDough) hasDoughTarget = true;
+          cutRes = pkgRes;
+        }
+      } else if (isMeat) {
+        cutRes = computeKnifeCutForMeat(target.item, dosageFraction, applyPourJitter, (id) =>
+          createItem(id, 1, undefined, true)
+        );
+      } else if (isDough) {
+        cutRes = cutDoughWithKnife(target.item, dosageFraction, applyPourJitter);
+      } else if (isSolidFood) {
+        cutRes = computeKnifeCutForSolidFood(target.item, dosageFraction, applyPourJitter);
+      } else {
+        cutRes = computeKnifeCutForProduce(target.item, dosageFraction, applyPourJitter);
+      }
 
       if (!cutRes) return null;
       singleRes = cutRes;
@@ -2909,7 +3216,43 @@ function extractDoughIngredientFromEntry(
     const inner = item.contents[0];
     const innerProf = getSolidDoughProfile(inner);
     if (innerProf) {
+      const dosageLimit = gridSize === 4 ? 2 : 12;
+      const isPartialDosageSlot = slot > 0 && slot < dosageLimit;
       const frac = getKneadingSlotFraction(slot, gridSize);
+
+      if (item.contents.length === 1 && isPartialDosageSlot && isCuttableSolidFoodItem(inner) && innerProf.role !== 'egg') {
+        const innerG = Math.max(10, Math.round((inner.weight || 0.1) * 1000));
+        if (innerG >= 25) {
+          let effFrac = frac;
+          if (applyPourJitter) {
+            effFrac = Math.max(0.05, Math.min(0.95, effFrac * (1 + (Math.random() * 0.1 - 0.05))));
+          }
+          const takeG = Math.max(10, Math.min(innerG - 10, Math.round(innerG * effFrac)));
+          const remG = innerG - takeG;
+          const remPiece = scaleSolidFoodPiece(inner, remG, 'remainder');
+          const copy = cloneInventoryItem(item);
+          copy.contents = [remPiece];
+          recalculateContainerWeight(copy);
+          syncItemContainerProperties(copy);
+          const cleanName = getCleanSolidFoodBaseNameRu(inner);
+          return {
+            entries: [
+              {
+                itemId: inner.originalCatalogId || inner.itemId,
+                nameRu: cleanName,
+                grams: takeG,
+                role: innerProf.role,
+                colorHex: innerProf.colorHex,
+              },
+            ],
+            leftoverItem: copy,
+            hasFlourBase: innerProf.flourPct >= 25,
+            hasWetBinder: innerProf.waterPct >= 15 || innerProf.fatPct >= 40 || innerProf.eggPct >= 50,
+            summaryLabel: `${cleanName} (~${takeG} г)`,
+          };
+        }
+      }
+
       const takeCount = Math.max(1, Math.min(item.contents.length, Math.round(item.contents.length * frac)));
       const copy = cloneInventoryItem(item);
       const taken = copy.contents!.splice(0, takeCount);
@@ -2923,7 +3266,7 @@ function extractDoughIngredientFromEntry(
           ),
         0
       );
-      const cleanName = inner.nameRu.replace(/\s*\([^)]*\)\s*$/g, '').trim() || inner.nameRu;
+      const cleanName = getCleanSolidFoodBaseNameRu(inner);
       return {
         entries: [
           {
@@ -2954,7 +3297,35 @@ function extractDoughIngredientFromEntry(
         (item.weight ? item.weight * 1000 : solidProf.role === 'egg' ? 55 : 100)
     )
   );
-  const cleanName = item.nameRu.replace(/\s*\([^)]*\)\s*$/g, '').trim() || item.nameRu;
+  const cleanName = getCleanSolidFoodBaseNameRu(item);
+  const dosageLimit = gridSize === 4 ? 2 : 12;
+  const isPartialDosageSlot = slot > 0 && slot < dosageLimit;
+
+  if (isPartialDosageSlot && isCuttableSolidFoodItem(item) && solidProf.role !== 'egg' && baseG >= 25) {
+    let effFrac = getSlotPourDosageFraction(slot, gridSize);
+    if (applyPourJitter) {
+      effFrac = Math.max(0.05, Math.min(0.95, effFrac * (1 + (Math.random() * 0.1 - 0.05))));
+    }
+    const takeG = Math.max(10, Math.min(baseG - 10, Math.round(baseG * effFrac)));
+    const remG = baseG - takeG;
+    const leftoverPiece = scaleSolidFoodPiece(item, remG, 'remainder');
+    return {
+      entries: [
+        {
+          itemId: item.originalCatalogId || item.itemId,
+          nameRu: cleanName,
+          grams: takeG,
+          role: solidProf.role,
+          colorHex: solidProf.colorHex,
+        },
+      ],
+      leftoverItem: leftoverPiece,
+      hasFlourBase: solidProf.flourPct >= 25,
+      hasWetBinder: solidProf.waterPct >= 15 || solidProf.fatPct >= 40 || solidProf.eggPct >= 50,
+      summaryLabel: `${cleanName} (~${takeG} г)`,
+    };
+  }
+
   return {
     entries: [
       {
@@ -3292,7 +3663,7 @@ function tryEvaluateDoughSystem(
       };
     }
 
-    // Check if kneading failed because a bottle, carton, jar, or pack is still sealed/closed
+    // Check if kneading or filling failed because a bottle, carton, jar, or food wrapper is still sealed/closed
     for (let i = 0; i < others.length; i++) {
       if (extractedAll[i] !== null) continue;
       const o = others[i];
@@ -3302,21 +3673,47 @@ function tryEvaluateDoughSystem(
           isValid: false,
           kind: 'none',
           title: `Тара закрыта: «${o.item.nameRu}»`,
-          subtitle: 'Сначала откройте крышку или упаковку в инвентаре («Открыть крышку / упаковку»), затем повторите замес.',
+          subtitle: 'Сначала откройте крышку или упаковку в инвентаре («Открыть крышку / упаковку»), затем повторите действие.',
           actionLabel: 'Тара закрыта',
+          previewOutputs: Array.from({ length: gridSize }, () => null),
+          transferDetails: [],
+        };
+      }
+      if (isCuttablePackagedFoodItem(o.item) && !o.item.isOpen) {
+        const innerName = o.item.contents?.[0]?.nameRu || o.item.nameRu;
+        return {
+          isValid: false,
+          kind: 'none',
+          title: `Упаковка закрыта: «${innerName}»`,
+          subtitle: 'Сначала вскройте упаковку в инвентаре или отрежьте нужный кусочек ножом (положите нож и упаковку в сетку).',
+          actionLabel: 'Упаковка закрыта',
           previewOutputs: Array.from({ length: gridSize }, () => null),
           transferDetails: [],
         };
       }
     }
 
-    // Otherwise: try placing edible items / spreads as FILLING inside the dough (with strict capacity check!)
-    const allFoodOrSpread = others.every(
-      (o) =>
+    // Otherwise: try placing edible items / spreads (including opened single-item food wrappers) as FILLING inside the dough
+    const allFoodOrSpread = others.every((o) => {
+      if (DOUGH_MIXING_VESSEL_IDS.has(o.item.itemId)) return false;
+      if (
         (o.item.category === 'food' || o.item.category === 'drink') &&
-        o.item.produceAttributes?.edible !== false &&
-        !DOUGH_MIXING_VESSEL_IDS.has(o.item.itemId)
-    );
+        o.item.produceAttributes?.edible !== false
+      ) {
+        return true;
+      }
+      if (
+        o.item.isContainer &&
+        o.item.isOpen &&
+        o.item.contents &&
+        o.item.contents.length === 1 &&
+        !o.item.fluidStorage
+      ) {
+        const inner = o.item.contents[0];
+        return inner.category === 'food' && inner.produceAttributes?.edible !== false;
+      }
+      return false;
+    });
 
     if (allFoodOrSpread) {
       if (da.consistency === 'batter') {
@@ -3408,28 +3805,68 @@ function tryEvaluateDoughSystem(
           continue;
         }
 
+        // Check if this is an opened single-item food wrapper (e.g. opened paper_packaging with cheese/butter)
+        const isOpenedSinglePack =
+          o.item.isContainer &&
+          o.item.isOpen &&
+          o.item.contents &&
+          o.item.contents.length === 1 &&
+          !o.item.fluidStorage;
+        const targetFood = isOpenedSinglePack ? o.item.contents![0] : o.item;
+
         // Discrete solid filling (meat cut, minced meat, cheese, sliced produce, mushrooms, berries, etc.)
-        const itemGrams = Math.max(
+        const fullGrams = Math.max(
           5,
-          Math.round(o.item.produceAttributes?.weightGrams ?? o.item.meatAttributes?.weightGrams ?? (o.item.weight ? o.item.weight * 1000 : 60))
+          Math.round(
+            targetFood.produceAttributes?.weightGrams ??
+              targetFood.meatAttributes?.weightGrams ??
+              (targetFood.weight ? targetFood.weight * 1000 : 60)
+          )
         );
+
+        const isPartialDosageSlot = o.slot > 0 && o.slot < dosageLimit;
+        let itemGrams = fullGrams;
+        let hasRemainderPiece = false;
+
+        if (isPartialDosageSlot && isCuttableSolidFoodItem(targetFood) && fullGrams >= 25) {
+          let effFrac = getSlotPourDosageFraction(o.slot, gridSize);
+          if (applyPourJitter) {
+            effFrac = Math.max(0.05, Math.min(0.95, effFrac * (1 + (Math.random() * 0.1 - 0.05))));
+          }
+          itemGrams = Math.max(10, Math.min(fullGrams - 10, Math.round(fullGrams * effFrac)));
+          hasRemainderPiece = true;
+        }
+
         if (itemGrams > remainingCap) {
           return {
             isValid: false,
             kind: 'none',
             title: `Начинка слишком велика (${itemGrams} г > ${remainingCap} г)`,
-            subtitle: `В «${da.shapeNameRu}» (Ø${da.diameterCm} см) помещается ещё ${remainingCap} г начинки. Нарежьте «${o.item.nameRu}» ножом помельче или раскатайте тесто шире скалкой.`,
+            subtitle: `В «${da.shapeNameRu}» (Ø${da.diameterCm} см) помещается ещё ${remainingCap} г начинки. Нарежьте «${getCleanSolidFoodBaseNameRu(targetFood)}» ножом (нож + продукт в сетку) или раскатайте тесто шире скалкой.`,
             actionLabel: 'Не вмещается',
             previewOutputs: Array.from({ length: gridSize }, () => null),
             transferDetails: [],
           };
         }
 
-        const fillEntry = buildFillingEntryFromItem(o.item, itemGrams);
+        const fillEntry = buildFillingEntryFromItem(targetFood, itemGrams);
         if (!fillEntry) return null;
         newFillings.push(fillEntry);
         addedNames.push(`${fillEntry.nameRu} (${itemGrams} г)`);
         remainingCap -= itemGrams;
+
+        if (hasRemainderPiece) {
+          const remPiece = scaleSolidFoodPiece(targetFood, fullGrams - itemGrams, 'remainder');
+          if (isOpenedSinglePack) {
+            const packCopy = cloneInventoryItem(o.item);
+            packCopy.contents = [remPiece];
+            recalculateContainerWeight(packCopy);
+            syncItemContainerProperties(packCopy);
+            leftovers.push(packCopy);
+          } else {
+            leftovers.push(remPiece);
+          }
+        }
       }
 
       const updated = cloneInventoryItem(baseDough);
@@ -3484,6 +3921,14 @@ function tryEvaluateDoughSystem(
       if (!ext) {
         const w = getEffectiveFluidWrapper(e.item);
         if (w && !w.isOpened && w.state.currentMl >= 3 && w.state.liquidId && !closedIngredient) {
+          closedIngredient = e.item;
+        } else if (
+          isCuttablePackagedFoodItem(e.item) &&
+          !e.item.isOpen &&
+          e.item.contents?.[0] &&
+          getSolidDoughProfile(e.item.contents[0]) &&
+          !closedIngredient
+        ) {
           closedIngredient = e.item;
         } else {
           invalidFound = true;

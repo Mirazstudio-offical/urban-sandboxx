@@ -267,8 +267,16 @@ function analyzeSolids(contents: InventoryItem[] | undefined): AnalyzedSolids {
       continue;
     }
 
-    // 2. Bread & baked goods
+    // 2. Bread & baked dough
+    const isBakedDoughBread =
+      it.itemId === 'dough' &&
+      Boolean(
+        it.doughAttributes &&
+          (it.doughAttributes.cookState === 'baked' || it.doughAttributes.cookState === 'burnt') &&
+          (!it.doughAttributes.fillings || it.doughAttributes.fillings.length === 0)
+      );
     if (
+      isBakedDoughBread ||
       id.includes('bread') ||
       id.includes('loaf') ||
       id.includes('bun') ||

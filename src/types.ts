@@ -2936,6 +2936,7 @@ export type DoughShape =
   | 'braid'
   | 'croissant_crescent'
   | 'pocket_pirozhok'
+  | 'samsa_triangle'
   | 'dumpling_crescent'
   | 'pouch_khinkali'
   | 'roll_strudel'
