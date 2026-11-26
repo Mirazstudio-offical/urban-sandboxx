@@ -1413,7 +1413,7 @@ export function pourDetergentIntoWashingMachine(
   }
 
   if (isFluidContainerClosed(item)) {
-    openFluidContainerIfNeeded(item);
+    openFluidContainerIfNeeded(null, item);
   }
 
   const doseMl = Math.min(curSrcMl, 100, freeCompMl);

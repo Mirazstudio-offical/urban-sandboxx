@@ -5634,9 +5634,18 @@ export function isFluidContainerClosed(item: InventoryItem | null | undefined): 
 }
 
 export function openFluidContainerIfNeeded(
-  player: Player,
-  container: InventoryItem
+  playerOrContainer: Player | InventoryItem | null | undefined,
+  maybeContainer?: InventoryItem | null
 ): { justOpened: boolean; message: string } {
+  const isFirstArgItem =
+    Boolean(playerOrContainer) &&
+    typeof (playerOrContainer as InventoryItem).itemId === 'string' &&
+    !maybeContainer;
+  const player = isFirstArgItem ? null : (playerOrContainer as Player | null | undefined);
+  const container = isFirstArgItem ? (playerOrContainer as InventoryItem) : maybeContainer;
+  if (!container) {
+    return { justOpened: false, message: '' };
+  }
   const storage = container.fluidStorage;
   const cfg = getContainerConfig(container.itemId);
   const alreadyOpen = Boolean(container.isOpen || storage?.attributes?.isOpened || container.itemId.endsWith('_open'));
@@ -5657,7 +5666,9 @@ export function openFluidContainerIfNeeded(
 
   sound.playUseItem();
   const msg = `Тара вскрыта: ${cfg.nameRu}. Теперь содержимое можно употреблять или переливать!`;
-  addPlayerNotification(player, msg, 'info');
+  if (player) {
+    addPlayerNotification(player, msg, 'info');
+  }
   return { justOpened: true, message: msg };
 }
 
