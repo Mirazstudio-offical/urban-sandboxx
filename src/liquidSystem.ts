@@ -5020,7 +5020,7 @@ export function shiftRgbTuple(rgb: [number, number, number], delta: number): [nu
 }
 
 export function isJarCanOrBottleContainer(containerId: string): boolean {
-  if (!containerId) return false;
+  if (typeof containerId !== 'string' || !containerId) return false;
   return (
     containerId.startsWith('jar_glass_') ||
     containerId.startsWith('jar_spice_') ||
@@ -5053,6 +5053,8 @@ export function resolveContainerVisualAttributes(
   originalCatalogId?: string,
   existingVisuals?: Partial<ContainerVisualAttributes>
 ): ContainerVisualAttributes {
+  const safeId = typeof containerId === 'string' ? containerId : '';
+  containerId = safeId;
   const seedKey = `${originalCatalogId || ''}_${attributes?.culinaryEquivalentId || ''}_${attributes?.varietyRu || ''}_${liquidId || ''}_${containerId}`;
   const hash = hashStringDeterministic(seedKey);
   const eqId = (originalCatalogId || attributes?.culinaryEquivalentId || '').toLowerCase();

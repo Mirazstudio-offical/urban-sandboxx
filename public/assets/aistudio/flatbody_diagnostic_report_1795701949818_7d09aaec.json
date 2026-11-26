@@ -1,0 +1,1281 @@
+{
+  "appVersion": "1.0.0",
+  "exportTimestamp": "2026-11-26T14:05:49.814Z",
+  "uptimeSeconds": 53,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+  "screen": {
+    "width": 800,
+    "height": 358,
+    "pixelRatio": 2
+  },
+  "lastSnapshot": {
+    "fps": 60,
+    "playerPos": {
+      "x": 4208,
+      "y": 2112,
+      "inVehicle": false,
+      "vehicleId": null,
+      "floor": 0
+    },
+    "entities": {
+      "vehicles": 23,
+      "pedestrians": 0,
+      "particles": 0,
+      "skidMarks": 0,
+      "stains": 1,
+      "groundItems": 197
+    },
+    "audioState": {
+      "state": "active",
+      "engineRunning": false
+    },
+    "timestamp": "19:05:48",
+    "timeMs": 1795701948044
+  },
+  "recentLogs": [
+    {
+      "id": 4,
+      "timestamp": "19:05:48.346",
+      "timeMs": 1795701948346,
+      "level": "error",
+      "category": "ReactErrorBoundary",
+      "message": "e.startsWith is not a function. (In 'e.startsWith(\"jar_glass_\")', 'e.startsWith' is undefined)",
+      "stack": "ym@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:50:1860478\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:30937\nOh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:49042\nEd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:72141\nYv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:119060\nXF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:118081\ng3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:117908\nOv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:114625\nsR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:126700\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:26:1568",
+      "metadata": {
+        "componentStack": "\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:29812\ndiv@unknown:0:0\nsection@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\nq8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:1299:367569\nEi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:82879\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:65:91350\nSuspense@unknown:0:0\ndiv@unknown:0:0\nOae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:3015:24940\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:3015:211699"
+      }
+    },
+    {
+      "id": 3,
+      "timestamp": "19:05:48.346",
+      "timeMs": 1795701948346,
+      "level": "error",
+      "category": "ConsoleError",
+      "message": "e.startsWith is not a function. (In 'e.startsWith(\"jar_glass_\")', 'e.startsWith' is undefined)\nym@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:50:1860478\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:30937\nOh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:49042\nEd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:72141\nYv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:119060\nXF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:118081\ng3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:117908\nOv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:114625\nsR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:126700\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:26:1568"
+    },
+    {
+      "id": 2,
+      "timestamp": "19:04:56.220",
+      "timeMs": 1795701896220,
+      "level": "lifecycle",
+      "category": "AppStart",
+      "message": "Application initialized"
+    },
+    {
+      "id": 1,
+      "timestamp": "19:04:56.220",
+      "timeMs": 1795701896220,
+      "level": "lifecycle",
+      "category": "AppStart",
+      "message": "Previous session restored cleanly (uptime: 18s)"
+    }
+  ],
+  "savedCrashReports": [
+    {
+      "id": "crash_1795701948347",
+      "crashTime": "2026-11-26T14:05:48.347Z",
+      "crashTimeMs": 1795701948347,
+      "reason": "REACT_RENDER_ERROR",
+      "errorDetails": {
+        "message": "e.startsWith is not a function. (In 'e.startsWith(\"jar_glass_\")', 'e.startsWith' is undefined)",
+        "stack": "ym@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:50:1860478\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:30937\nOh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:49042\nEd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:72141\nYv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:119060\nXF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:118081\ng3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:117908\nOv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:114625\nsR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:126700\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:26:1568"
+      },
+      "lastSnapshot": {
+        "fps": 60,
+        "playerPos": {
+          "x": 4208,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 23,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 197
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "19:05:48",
+        "timeMs": 1795701948044
+      },
+      "recentLogs": [
+        {
+          "id": 4,
+          "timestamp": "19:05:48.346",
+          "timeMs": 1795701948346,
+          "level": "error",
+          "category": "ReactErrorBoundary",
+          "message": "e.startsWith is not a function. (In 'e.startsWith(\"jar_glass_\")', 'e.startsWith' is undefined)",
+          "stack": "ym@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:50:1860478\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:30937\nOh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:49042\nEd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:72141\nYv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:119060\nXF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:118081\ng3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:117908\nOv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:114625\nsR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:126700\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:26:1568",
+          "metadata": {
+            "componentStack": "\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:29812\ndiv@unknown:0:0\nsection@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\nq8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:1299:367569\nEi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:82879\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:65:91350\nSuspense@unknown:0:0\ndiv@unknown:0:0\nOae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:3015:24940\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:3015:211699"
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "19:05:48.346",
+          "timeMs": 1795701948346,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "e.startsWith is not a function. (In 'e.startsWith(\"jar_glass_\")', 'e.startsWith' is undefined)\nym@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:50:1860478\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:30937\nOh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:49042\nEd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:72141\nYv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:119060\nXF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:118081\ng3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:117908\nOv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:114625\nsR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:126700\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:26:1568"
+        },
+        {
+          "id": 2,
+          "timestamp": "19:04:56.220",
+          "timeMs": 1795701896220,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "19:04:56.220",
+          "timeMs": 1795701896220,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 18s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 52
+    },
+    {
+      "id": "crash_1795701892935",
+      "crashTime": "2026-11-26T14:04:52.935Z",
+      "crashTimeMs": 1795701892935,
+      "reason": "REACT_RENDER_ERROR",
+      "errorDetails": {
+        "message": "e.startsWith is not a function. (In 'e.startsWith(\"jar_glass_\")', 'e.startsWith' is undefined)",
+        "stack": "ym@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:50:1860478\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:30937\nOh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:49042\nEd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:72141\nYv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:119060\nXF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:118081\ng3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:117908\nOv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:114625\nsR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:126700\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:26:1568"
+      },
+      "lastSnapshot": {
+        "fps": 60,
+        "playerPos": {
+          "x": 4208,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 23,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 197
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "19:04:52",
+        "timeMs": 1795701892714
+      },
+      "recentLogs": [
+        {
+          "id": 4,
+          "timestamp": "19:04:52.935",
+          "timeMs": 1795701892935,
+          "level": "error",
+          "category": "ReactErrorBoundary",
+          "message": "e.startsWith is not a function. (In 'e.startsWith(\"jar_glass_\")', 'e.startsWith' is undefined)",
+          "stack": "ym@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:50:1860478\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:30937\nOh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:49042\nEd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:72141\nYv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:119060\nXF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:118081\ng3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:117908\nOv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:114625\nsR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:126700\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:26:1568",
+          "metadata": {
+            "componentStack": "\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:29812\ndiv@unknown:0:0\nsection@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\ndiv@unknown:0:0\nq8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:1299:367569\nEi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:82879\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:65:91350\nSuspense@unknown:0:0\ndiv@unknown:0:0\nOae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:3015:24940\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:3015:211699"
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "19:04:52.935",
+          "timeMs": 1795701892935,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "e.startsWith is not a function. (In 'e.startsWith(\"jar_glass_\")', 'e.startsWith' is undefined)\nym@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:50:1860478\nqi@https://mirazstudio-offical.github.io/urban-sandboxx/assets/InventoryModal-Cxsfe9_u.js:61:30937\nOh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:49042\nEd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:72141\nYv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:119060\nXF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:118081\ng3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:117908\nOv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:114625\nsR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:49:126700\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Xpz0P1f3.js:26:1568"
+        },
+        {
+          "id": 2,
+          "timestamp": "19:04:36.043",
+          "timeMs": 1795701876043,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "19:04:36.032",
+          "timeMs": 1795701876032,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 6s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 16
+    },
+    {
+      "id": "crash_1795689236240",
+      "crashTime": "2026-11-26T10:33:56.240Z",
+      "crashTimeMs": 1795689236240,
+      "reason": "REACT_RENDER_ERROR",
+      "errorDetails": {
+        "message": "Can't find variable: it",
+        "stack": "PG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1665552\nLG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1676764\nOS@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1707065\nic@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1854909\nql@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1895121\nJG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1916106\nnz@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1923584\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:207141\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:209039\nHh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:49223\nGd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:72468\nKv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:119709\nYF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118728\np3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118554\nHv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:115246\nrR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:127391\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:26:1568"
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4208,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 23,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 197
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "15:33:56",
+        "timeMs": 1795689236200
+      },
+      "recentLogs": [
+        {
+          "id": 4,
+          "timestamp": "15:33:56.240",
+          "timeMs": 1795689236240,
+          "level": "error",
+          "category": "ReactErrorBoundary",
+          "message": "Can't find variable: it",
+          "stack": "PG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1665552\nLG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1676764\nOS@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1707065\nic@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1854909\nql@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1895121\nJG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1916106\nnz@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1923584\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:207141\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:209039\nHh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:49223\nGd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:72468\nKv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:119709\nYF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118728\np3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118554\nHv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:115246\nrR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:127391\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:26:1568",
+          "metadata": {
+            "componentStack": "\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:24912\nqae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:211669"
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "15:33:56.240",
+          "timeMs": 1795689236240,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "Can't find variable: it\nPG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1665552\nLG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1676764\nOS@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1707065\nic@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1854909\nql@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1895121\nJG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1916106\nnz@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1923584\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:207141\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:209039\nHh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:49223\nGd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:72468\nKv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:119709\nYF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118728\np3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118554\nHv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:115246\nrR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:127391\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:26:1568"
+        },
+        {
+          "id": 2,
+          "timestamp": "15:33:48.531",
+          "timeMs": 1795689228531,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "15:33:48.529",
+          "timeMs": 1795689228529,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 56s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 7
+    },
+    {
+      "id": "crash_1795689217799",
+      "crashTime": "2026-11-26T10:33:37.799Z",
+      "crashTimeMs": 1795689217799,
+      "reason": "REACT_RENDER_ERROR",
+      "errorDetails": {
+        "message": "Can't find variable: it",
+        "stack": "PG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1665552\nLG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1676764\nOS@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1707065\nic@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1854909\nql@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1895121\nJG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1916106\nnz@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1923584\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:207141\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:209039\nHh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:49223\nGd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:72468\nKv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:119709\nYF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118728\np3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118554\nHv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:115246\nrR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:127391\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:26:1568"
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4208,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 23,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 197
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "15:33:36",
+        "timeMs": 1795689216947
+      },
+      "recentLogs": [
+        {
+          "id": 4,
+          "timestamp": "15:33:37.798",
+          "timeMs": 1795689217799,
+          "level": "error",
+          "category": "ReactErrorBoundary",
+          "message": "Can't find variable: it",
+          "stack": "PG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1665552\nLG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1676764\nOS@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1707065\nic@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1854909\nql@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1895121\nJG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1916106\nnz@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1923584\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:207141\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:209039\nHh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:49223\nGd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:72468\nKv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:119709\nYF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118728\np3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118554\nHv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:115246\nrR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:127391\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:26:1568",
+          "metadata": {
+            "componentStack": "\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:24912\nqae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:211669"
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "15:33:37.798",
+          "timeMs": 1795689217798,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "Can't find variable: it\nPG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1665552\nLG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1676764\nOS@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1707065\nic@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1854909\nql@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1895121\nJG@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1916106\nnz@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:50:1923584\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:207141\nHae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:3015:209039\nHh@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:49223\nGd@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:72468\nKv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:119709\nYF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118728\np3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:118554\nHv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:115246\nrR@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:49:127391\nW@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-Ck9p8qWI.js:26:1568"
+        },
+        {
+          "id": 2,
+          "timestamp": "15:32:51.343",
+          "timeMs": 1795689171343,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "15:32:51.326",
+          "timeMs": 1795689171326,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 3s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 46
+    },
+    {
+      "id": "crash_1795617036089",
+      "crashTime": "2026-11-25T14:30:36.089Z",
+      "crashTimeMs": 1795617036089,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+        "stack": "np@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1775837\nSae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1839601\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:11648\nIv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:15222\nJ8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:131147\nf3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29201\nEF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29020",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js",
+        "lineno": 50,
+        "colno": 1775837
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4173,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 22,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 190
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "19:30:35",
+        "timeMs": 1795617035784
+      },
+      "recentLogs": [
+        {
+          "id": 4,
+          "timestamp": "19:30:36.089",
+          "timeMs": 1795617036089,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "np@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1775837\nSae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1839601\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:11648\nIv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:15222\nJ8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:131147\nf3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29201\nEF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js",
+            "lineno": 50,
+            "colno": 1775837
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "19:30:35.228",
+          "timeMs": 1795617035228,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "np@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1775837\nSae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1839601\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:11648\nIv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:15222\nJ8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:131147\nf3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29201\nEF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js",
+            "lineno": 50,
+            "colno": 1775837
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "19:29:56.525",
+          "timeMs": 1795616996525,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "19:29:56.525",
+          "timeMs": 1795616996525,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 11s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 39
+    },
+    {
+      "id": "crash_1795617035228",
+      "crashTime": "2026-11-25T14:30:35.228Z",
+      "crashTimeMs": 1795617035228,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+        "stack": "np@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1775837\nSae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1839601\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:11648\nIv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:15222\nJ8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:131147\nf3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29201\nEF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29020",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js",
+        "lineno": 50,
+        "colno": 1775837
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4173,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 22,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 190
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "19:30:34",
+        "timeMs": 1795617034295
+      },
+      "recentLogs": [
+        {
+          "id": 3,
+          "timestamp": "19:30:35.228",
+          "timeMs": 1795617035228,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "np@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1775837\nSae@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:1839601\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Oviaa2GC.js:1:11648\nIv@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:15222\nJ8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:49:131147\nf3@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29201\nEF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-rB-piTqh.js",
+            "lineno": 50,
+            "colno": 1775837
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "19:29:56.525",
+          "timeMs": 1795616996525,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "19:29:56.525",
+          "timeMs": 1795616996525,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 11s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 38
+    },
+    {
+      "id": "crash_1795606961332",
+      "crashTime": "2026-11-25T11:42:41.332Z",
+      "crashTimeMs": 1795606961332,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+        "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+        "lineno": 50,
+        "colno": 1690302
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4161,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 22,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 189
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "16:42:40",
+        "timeMs": 1795606960243
+      },
+      "recentLogs": [
+        {
+          "id": 12,
+          "timestamp": "16:42:41.332",
+          "timeMs": 1795606961332,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 11,
+          "timestamp": "16:42:40.805",
+          "timeMs": 1795606960805,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "16:42:40.221",
+          "timeMs": 1795606960221,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "16:42:39.253",
+          "timeMs": 1795606959253,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "16:42:39.072",
+          "timeMs": 1795606959072,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "16:42:38.555",
+          "timeMs": 1795606958555,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "16:42:32.589",
+          "timeMs": 1795606952589,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "16:42:31.241",
+          "timeMs": 1795606951241,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "16:42:29.387",
+          "timeMs": 1795606949387,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "16:42:28.009",
+          "timeMs": 1795606948009,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "16:33:19.518",
+          "timeMs": 1795606399518,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "16:33:19.517",
+          "timeMs": 1795606399517,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 10s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 561
+    },
+    {
+      "id": "crash_1795606960805",
+      "crashTime": "2026-11-25T11:42:40.805Z",
+      "crashTimeMs": 1795606960805,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+        "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+        "lineno": 50,
+        "colno": 1690302
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4161,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 22,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 189
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "16:42:40",
+        "timeMs": 1795606960243
+      },
+      "recentLogs": [
+        {
+          "id": 11,
+          "timestamp": "16:42:40.805",
+          "timeMs": 1795606960805,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "16:42:40.221",
+          "timeMs": 1795606960221,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "16:42:39.253",
+          "timeMs": 1795606959253,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "16:42:39.072",
+          "timeMs": 1795606959072,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "16:42:38.555",
+          "timeMs": 1795606958555,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "16:42:32.589",
+          "timeMs": 1795606952589,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "16:42:31.241",
+          "timeMs": 1795606951241,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "16:42:29.387",
+          "timeMs": 1795606949387,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "16:42:28.009",
+          "timeMs": 1795606948009,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "16:33:19.518",
+          "timeMs": 1795606399518,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "16:33:19.517",
+          "timeMs": 1795606399517,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 10s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 561
+    },
+    {
+      "id": "crash_1795606960221",
+      "crashTime": "2026-11-25T11:42:40.221Z",
+      "crashTimeMs": 1795606960221,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+        "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+        "lineno": 50,
+        "colno": 1690302
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4161,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 22,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 189
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "16:42:39",
+        "timeMs": 1795606959001
+      },
+      "recentLogs": [
+        {
+          "id": 10,
+          "timestamp": "16:42:40.221",
+          "timeMs": 1795606960221,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "16:42:39.253",
+          "timeMs": 1795606959253,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "16:42:39.072",
+          "timeMs": 1795606959072,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "16:42:38.555",
+          "timeMs": 1795606958555,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "16:42:32.589",
+          "timeMs": 1795606952589,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "16:42:31.241",
+          "timeMs": 1795606951241,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "16:42:29.387",
+          "timeMs": 1795606949387,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "16:42:28.009",
+          "timeMs": 1795606948009,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "16:33:19.518",
+          "timeMs": 1795606399518,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "16:33:19.517",
+          "timeMs": 1795606399517,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 10s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 560
+    },
+    {
+      "id": "crash_1795606959253",
+      "crashTime": "2026-11-25T11:42:39.253Z",
+      "crashTimeMs": 1795606959253,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+        "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+        "lineno": 50,
+        "colno": 1690302
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4161,
+          "y": 2112,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 22,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 189
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "16:42:39",
+        "timeMs": 1795606959001
+      },
+      "recentLogs": [
+        {
+          "id": 9,
+          "timestamp": "16:42:39.253",
+          "timeMs": 1795606959253,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "16:42:39.072",
+          "timeMs": 1795606959072,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "16:42:38.555",
+          "timeMs": 1795606958555,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "16:42:32.589",
+          "timeMs": 1795606952589,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "16:42:31.241",
+          "timeMs": 1795606951241,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\nonClick@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:11648\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "16:42:29.387",
+          "timeMs": 1795606949387,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "16:42:28.009",
+          "timeMs": 1795606948009,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "TypeError: undefined is not an object (evaluating 't.fluidStorage')",
+          "stack": "H5@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1690302\nTte@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:1754066\nZ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/WashingMachineModal-Clbnk5Y3.js:1:2939\ni_@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:129878\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:135226\nao@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:15222\nW8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:49:131147\nK8@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29201\noF@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js:50:29020",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BqXu6PcS.js",
+            "lineno": 50,
+            "colno": 1690302
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "16:33:19.518",
+          "timeMs": 1795606399518,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "16:33:19.517",
+          "timeMs": 1795606399517,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 10s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 559
+    }
+  ]
+}

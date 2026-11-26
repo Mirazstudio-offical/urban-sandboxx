@@ -447,9 +447,18 @@ export const CatalogAttributeEditor: React.FC<CatalogAttributeEditorProps> = ({ 
     onChange(normalizeItemAttributes(result));
   };
 
+  const resolveItemContainerVisuals = (target: InventoryItem): ContainerVisualAttributes =>
+    resolveContainerVisualAttributes(
+      typeof target.itemId === 'string' ? target.itemId : '',
+      target.fluidStorage?.liquidId ?? null,
+      target.fluidStorage?.attributes,
+      target.originalCatalogId,
+      target.containerVisuals || target.fluidStorage?.containerVisuals
+    );
+
   const updateContainerVisuals = (patch: Partial<ContainerVisualAttributes>) => {
     commit(draft => {
-      const current = resolveContainerVisualAttributes(draft);
+      const current = resolveItemContainerVisuals(draft);
       const nextVis: ContainerVisualAttributes = {
         ...current,
         ...patch,
@@ -465,7 +474,7 @@ export const CatalogAttributeEditor: React.FC<CatalogAttributeEditorProps> = ({ 
   };
 
   // ---- Fluid / Jar visual snapshot ----
-  const resolvedVis = hasFluid ? resolveContainerVisualAttributes(item) : null;
+  const resolvedVis = hasFluid ? resolveItemContainerVisuals(item) : null;
   const fs = item.fluidStorage;
   const activeLiquidDef = fs?.liquidId ? LIQUID_REGISTRY[fs.liquidId] : null;
   const activeLiquidColor = normalizeHex(
