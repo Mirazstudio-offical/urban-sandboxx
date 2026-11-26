@@ -69,8 +69,9 @@ function buildItemVisualStateKey(item: any): string {
   const open = item.isOpen ? 1 : 0;
   const origCat = item.originalCatalogId || '';
   const cTint = item.containerTintColor || '';
-  const cVis = item.containerVisuals
-    ? `${item.containerVisuals.shape || ''}:${item.containerVisuals.color || ''}:${item.containerVisuals.capColor || ''}:${item.containerVisuals.labelColor || ''}`
+  const cv = item.containerVisuals || item.fluidStorage?.containerVisuals;
+  const cVis = cv
+    ? `${cv.shape || ''}:${cv.materialRgb ? cv.materialRgb.join(',') : ''}:${cv.capRgb ? cv.capRgb.join(',') : ''}:${cv.labelRgb ? cv.labelRgb.join(',') : 'none'}:${cv.labelAccentRgb ? cv.labelAccentRgb.join(',') : ''}`
     : '';
   const cd = item.culinaryData;
   const cdKey = cd
@@ -78,7 +79,7 @@ function buildItemVisualStateKey(item: any): string {
     : '';
   const fs = item.fluidStorage;
   const fsKey = fs
-    ? `${fs.liquidId || ''}:${Math.round((fs.currentMl || 0) / 5)}:${fs.attributes?.customColor || ''}:${fs.isOpen ? 1 : 0}`
+    ? `${fs.liquidId || ''}:${Math.round((fs.currentMl || 0) / 5)}/${fs.maxMl || 0}:${fs.attributes?.customColor || ''}:${fs.attributes?.secondaryColor || ''}:${fs.attributes?.isOpened || fs.isOpen ? 1 : 0}`
     : '';
   let childKey = '';
   if (Array.isArray(item.contents) && item.contents.length > 0) {
@@ -103,40 +104,48 @@ function buildItemVisualStateKey(item: any): string {
     ? da.fillings.map((f: any) => `${f.itemId || ''}:${f.colorHex || ''}:${Math.round(f.weightGrams || 0)}`).join(',')
     : '';
   const daKey = da
-    ? `${da.shape}:${da.doughType || ''}:${da.consistency || ''}:${da.color}:${da.fleckColor || ''}:${da.cookState}:${da.embossedPattern || ''}:${daFillKey}:${Math.round(da.thicknessMm || 0)}:${Math.round((da.riseFactor || 1) * 10)}:${Math.round((da.totalWeightGrams || 0) / 5)}`
+    ? `${da.shape}:${da.doughType || ''}:${da.consistency || ''}:${da.color}:${da.fleckColor || ''}:${da.cookState}:${da.embossedPattern || ''}:${daFillKey}:${Math.round(da.thicknessMm || 0)}:${Math.round((da.riseFactor || 1) * 10)}:${Math.round((da.weightGrams || da.totalWeightGrams || 0) / 5)}`
     : '';
   const rp = item.rollingPinAttributes;
   const rpKey = rp
-    ? `${rp.modelId}:${rp.shape}:${rp.color}:${rp.pattern}`
+    ? `${rp.modelId}:${rp.shape}:${rp.material}:${rp.color}:${rp.accentColor || ''}:${rp.pattern}:${rp.patternColor || ''}`
     : '';
   const pa = item.produceAttributes;
   const paKey = pa
-    ? `${pa.speciesId || ''}:${pa.variantRu || ''}:${pa.cutForm || ''}:${pa.isPeeled ? 1 : 0}:${pa.isDried ? 1 : 0}:${pa.color || ''}:${Math.round((pa.remainingFraction ?? 1) * 20)}`
+    ? `${pa.speciesId || ''}:${pa.varietyRu || ''}:${pa.cutForm || ''}:${pa.size || ''}:${pa.part || ''}:${pa.modelKey || ''}:${pa.isPeeled ? 1 : 0}:${pa.isDried ? 1 : 0}:${pa.color || ''}:${pa.fleshColor || ''}:${Math.round((pa.remainingFraction ?? 1) * 20)}`
     : '';
   const ma = item.meatAttributes;
   const maKey = ma
-    ? `${ma.speciesId || ''}:${ma.anatomicalPart || ''}:${ma.cutForm || ''}:${ma.color || ''}:${Math.round((ma.remainingFraction ?? 1) * 20)}`
+    ? `${ma.speciesId || ''}:${ma.anatomicalPartRu || ''}:${ma.cutForm || ''}:${ma.size || ''}:${ma.color || ''}:${ma.fatColor || ''}:${ma.hasBone ? 1 : 0}:${ma.hasSkin ? 1 : 0}:${Math.round((ma.remainingFraction ?? 1) * 20)}`
     : '';
   const ba = item.branchAttributes;
   const baKey = ba
-    ? `${ba.speciesId || ''}:${ba.attachedFruit?.count || 0}`
+    ? `${ba.branchKind || ''}:${ba.color || ''}:${ba.attachedFruit?.itemId || ''}:${ba.attachedFruit?.count || 0}`
     : '';
   const kw = item.kitchenwareAttributes;
   const kwKey = kw
-    ? `${kw.kind || ''}:${kw.material || ''}:${kw.color || ''}:${kw.pattern || ''}`
+    ? `${kw.kind || ''}:${kw.material || ''}:${kw.shape || ''}:${kw.color || ''}:${kw.accentColor || ''}:${kw.pattern || ''}:${kw.patternColor || ''}:${kw.isElectric ? 1 : 0}:${kw.hasWhistle ? 1 : 0}:${kw.hasSaucer ? 1 : 0}`
     : '';
   const ph = item.phoneAttributes;
   const phKey = ph
-    ? `${ph.brand || ''}:${ph.modelName || ''}:${ph.colorHex || ''}`
+    ? `${ph.modelId || ''}:${ph.chassisStyle || ''}:${ph.colorHex || ''}:${ph.accentHex || ''}:${ph.cameraPlateColor || ''}`
     : '';
+  const hw = item.hardwareAttributes;
+  const hwKey = hw ? `${hw.kind || ''}:${hw.colorHex || ''}:${hw.accentHex || ''}` : '';
   const choco = item.chocolateAttributes;
-  const chocoKey = choco ? `${choco.kind || ''}:${choco.flavor || ''}:${choco.shape || ''}` : '';
+  const chocoKey = choco
+    ? `${choco.shape || ''}:${choco.size || ''}:${choco.outerColor || ''}:${choco.innerColor || ''}:${choco.hasFilling ? 1 : 0}:${choco.surfaceTexture || ''}`
+    : '';
   const gum = item.gummyAttributes;
-  const gumKey = gum ? `${gum.shape || ''}:${gum.color || ''}` : '';
+  const gumKey = gum ? `${gum.shape || ''}:${gum.color || ''}:${gum.sourDust ? 1 : 0}` : '';
   const pel = item.pelmenAttributes;
-  const pelKey = pel ? `${pel.shape || ''}:${pel.filling || ''}` : '';
+  const pelKey = pel
+    ? `${pel.shape || ''}:${pel.size || ''}:${pel.state || ''}:${pel.doughColor || ''}:${pel.fillingColor || ''}:${pel.flourDusting ? 1 : 0}:${pel.butterGlaze ? 1 : 0}`
+    : '';
+  const cl = item.clothingStats;
+  const clKey = cl ? `${cl.color || ''}:${cl.secondaryColor || ''}` : '';
   const lbl = item.labelColor || '';
-  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${origCat}|${cTint}|${cVis}|${cdKey}|${fsKey}|${childKey}|${portionsKey}|${daKey}|${rpKey}|${paKey}|${maKey}|${baKey}|${kwKey}|${phKey}|${chocoKey}|${gumKey}|${pelKey}|${lbl}`;
+  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${origCat}|${cTint}|${cVis}|${cdKey}|${fsKey}|${childKey}|${portionsKey}|${daKey}|${rpKey}|${paKey}|${maKey}|${baKey}|${kwKey}|${phKey}|${hwKey}|${chocoKey}|${gumKey}|${pelKey}|${clKey}|${lbl}`;
 }
 
 const ItemIconCanvasInner: React.FC<ItemIconCanvasProps> = ({

@@ -35,7 +35,8 @@ import {
   getUnifiedItemAttributes,
   createItem
 } from '../items';
-import { getAllFreeCatalogItems, FREE_CATALOG_CATEGORIES, getFreeCategoryLabelRu } from '../freeItemCatalog';
+import { getAllFreeCatalogItems, FREE_CATALOG_CATEGORIES, getFreeCategoryLabelRu, FreeCatalogEntry } from '../freeItemCatalog';
+import { CatalogAttributeEditor } from './CatalogAttributeEditor';
 import { getItemThermalDisplayInfo } from '../itemThermalSystem';
 import {
   isFluidContainerClosed,
@@ -106,6 +107,8 @@ import {
   RotateCcw,
   Check,
   FolderOpen,
+  Plus,
+  Minus,
   X
 } from 'lucide-react';
 
@@ -231,23 +234,43 @@ const InventoryModalContent: React.FC<{
   const isFreeroam = world?.gameMode === 'freeroam';
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<string>('all');
-  const [catalogSelectedKey, setCatalogSelectedKey] = useState<string | null>(null);
+  const [catalogSelectedId, setCatalogSelectedId] = useState<string | null>(null);
+  const [catalogDraft, setCatalogDraft] = useState<InventoryItem | null>(null);
+  const [catalogDraftDirty, setCatalogDraftDirty] = useState(false);
+  const [catalogGiveCount, setCatalogGiveCount] = useState(1);
   const [catalogLimit, setCatalogLimit] = useState(240);
   const catalogAllItems = React.useMemo(() => (isFreeroam ? getAllFreeCatalogItems() : []), [isFreeroam]);
   const catalogFiltered = React.useMemo(() => {
     const q = catalogSearch.trim().toLowerCase();
     const cat = FREE_CATALOG_CATEGORIES.find(c => c.id === catalogCategory) || FREE_CATALOG_CATEGORIES[0];
     return catalogAllItems.filter(it => {
-      if (!cat.match(it.category)) return false;
+      if (!cat.match(it)) return false;
       if (!q) return true;
-      return it.nameRu.toLowerCase().includes(q) || it.name.toLowerCase().includes(q) || it.key.toLowerCase().includes(q);
+      return (
+        it.nameRu.toLowerCase().includes(q) ||
+        it.name.toLowerCase().includes(q) ||
+        it.key.toLowerCase().includes(q) ||
+        (it.presetGroup ? it.presetGroup.toLowerCase().includes(q) : false) ||
+        (it.searchTags ? it.searchTags.toLowerCase().includes(q) : false)
+      );
     });
   }, [catalogAllItems, catalogSearch, catalogCategory]);
-  const catalogSelected = catalogFiltered.find(it => it.key === catalogSelectedKey) || null;
-  const catalogPreviewItem = React.useMemo(
-    () => (isFreeroam && catalogSelected ? createItem(catalogSelected.key, 1, undefined, true) : null),
-    [isFreeroam, catalogSelected?.key]
+  const catalogSelected = React.useMemo(
+    () => catalogAllItems.find(it => it.id === catalogSelectedId) || null,
+    [catalogAllItems, catalogSelectedId]
   );
+
+  useEffect(() => {
+    if (!isFreeroam || !catalogSelected) {
+      setCatalogDraft(null);
+      setCatalogDraftDirty(false);
+      setCatalogGiveCount(1);
+      return;
+    }
+    setCatalogDraft(catalogSelected.create(1));
+    setCatalogDraftDirty(false);
+    setCatalogGiveCount(1);
+  }, [isFreeroam, catalogSelected?.id]);
 
   const stopGameKeys = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Escape') {
@@ -256,16 +279,49 @@ const InventoryModalContent: React.FC<{
     }
   };
 
-  const handleGiveCatalogItem = (key: string, count: number) => {
-    const created = createItem(key, count, undefined, true);
-    const ok = addItemToPlayer(player, created);
+  const spawnItemInstance = (source: InventoryItem, count: number): InventoryItem => {
+    const cloned = JSON.parse(JSON.stringify(source)) as InventoryItem;
+    cloned.id = `${cloned.itemId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    cloned.count = Math.max(1, Math.min(cloned.maxStack || 1, Math.round(count)));
+    return cloned;
+  };
+
+  const giveCatalogItemInstance = (itemToGive: InventoryItem, target: 'pockets' | 'hand' = 'pockets') => {
+    if (target === 'hand') {
+      const preferredHand: 'left' | 'right' =
+        player.activeHand === 'left'
+          ? (!player.leftHandItem ? 'left' : !player.rightHandItem ? 'right' : 'left')
+          : (!player.rightHandItem ? 'right' : !player.leftHandItem ? 'left' : 'right');
+      const res = putItemInHand(player, preferredHand, itemToGive, world || undefined);
+      if (res.success) {
+        addPlayerNotification(player, `В руке: ${itemToGive.nameRu || itemToGive.name}`, 'pickup');
+        sound.playUseItem();
+      } else {
+        addPlayerNotification(player, res.message || 'Руки заняты', 'warning');
+      }
+      forceRender(n => n + 1);
+      return;
+    }
+    const ok = addItemToPlayer(player, itemToGive);
     if (ok) {
-      addPlayerNotification(player, `Получено: ${created.nameRu || created.name} x${count}`, 'pickup');
+      const qtyStr = itemToGive.count > 1 ? ` x${itemToGive.count}` : '';
+      addPlayerNotification(player, `Получено: ${itemToGive.nameRu || itemToGive.name}${qtyStr}`, 'pickup');
       sound.playUseItem();
     } else {
       addPlayerNotification(player, 'Инвентарь заполнен', 'warning');
     }
     forceRender(n => n + 1);
+  };
+
+  const handleGiveCatalogEntry = (entry: FreeCatalogEntry, count: number) => {
+    const created = entry.create(Math.max(1, Math.min(entry.maxStack || 1, count)));
+    giveCatalogItemInstance(created, 'pockets');
+  };
+
+  const handleGiveCatalogDraft = (count: number, target: 'pockets' | 'hand' = 'pockets') => {
+    if (!catalogDraft) return;
+    const instance = spawnItemInstance(catalogDraft, target === 'hand' ? 1 : count);
+    giveCatalogItemInstance(instance, target);
   };
 
   const inventory = player.inventory || [];
@@ -3952,26 +4008,39 @@ const InventoryModalContent: React.FC<{
                       <div className="inv-slots">
                         {catalogFiltered.slice(0, catalogLimit).map(it => (
                           <div
-                            key={it.key}
+                            key={it.id}
                             role="button"
                             tabIndex={0}
-                            data-catalog-slot={it.key}
-                            className={'inv-slot' + (catalogSelectedKey === it.key ? ' on' : '')}
+                            data-catalog-slot={it.id}
+                            className={'inv-slot' + (catalogSelectedId === it.id ? ' on' : '')}
                             style={{ cursor: 'pointer' }}
-                            title={it.nameRu}
-                            onClick={e => {
-                              setCatalogSelectedKey(it.key);
-                              handleGiveCatalogItem(it.key, e.shiftKey ? it.maxStack : 1);
+                            title={it.presetGroup ? `${it.nameRu} (${it.presetGroup})` : it.nameRu}
+                            onClick={() => {
+                              setCatalogSelectedId(it.id);
+                            }}
+                            onDoubleClick={() => {
+                              setCatalogSelectedId(it.id);
+                              handleGiveCatalogEntry(it, 1);
                             }}
                             onKeyDown={e => {
                               if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
-                                setCatalogSelectedKey(it.key);
-                                handleGiveCatalogItem(it.key, e.shiftKey ? it.maxStack : 1);
+                                setCatalogSelectedId(it.id);
                               }
                             }}
                           >
-                            <ItemIconCanvas itemId={it.key} size={42} rawBase />
+                            <ItemIconCanvas
+                              itemId={it.key}
+                              item={it.previewItem}
+                              size={42}
+                              rawBase={Boolean(it.isRawBase)}
+                            />
+                            {it.kind === 'preset' && <span className="cat-slot-dot" />}
+                            {it.kind === 'liquid_jar' && it.accentColor && (
+                              <div className="inv-fill">
+                                <i style={{ width: '100%', background: it.accentColor }} />
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -3980,58 +4049,124 @@ const InventoryModalContent: React.FC<{
                 </section>
 
                 <section className="panel inv-col">
-                  {catalogSelected ? (
+                  {catalogSelected && catalogDraft ? (
                     <>
                       <div className="inv-detail-head">
                         <div className="inv-detail-ic">
-                          <ItemIconCanvas itemId={catalogSelected.key} item={catalogPreviewItem || undefined} size={42} rawBase />
+                          <ItemIconCanvas
+                            itemId={catalogDraft.itemId}
+                            item={catalogDraft}
+                            size={44}
+                            rawBase={Boolean(catalogSelected.isRawBase && !catalogDraftDirty)}
+                          />
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div className="cn inv-detail-title" title={catalogSelected.nameRu}>
-                            {catalogSelected.nameRu}
+                          <div className="cn inv-detail-title" title={catalogDraft.nameRu}>
+                            {catalogDraft.nameRu}
                           </div>
                           <div className="inv-detail-meta mono">
-                            <span style={{ color: '#e0ab45', fontWeight: 600 }}>{getFreeCategoryLabelRu(catalogSelected.category)}</span>
+                            <span style={{ color: '#e0ab45', fontWeight: 600 }}>
+                              {catalogSelected.presetGroup || getFreeCategoryLabelRu(catalogSelected.category)}
+                            </span>
                             {' · '}
-                            {formatWeightRu(catalogSelected.weight)}
+                            {formatWeightRu(catalogDraft.weight)}
                             {' · '}
-                            стак до {catalogSelected.maxStack}
+                            стак до {catalogDraft.maxStack || 1}
                           </div>
                         </div>
+                        {catalogDraftDirty && (
+                          <button
+                            type="button"
+                            className="btn btn-s btn-xs cat-reset-btn"
+                            title="Сбросить изменения к пресету"
+                            onClick={() => {
+                              setCatalogDraft(catalogSelected.create(1));
+                              setCatalogDraftDirty(false);
+                            }}
+                          >
+                            <RotateCcw width={13} height={13} />
+                          </button>
+                        )}
                       </div>
 
                       <div className="inv-detail-scroll scroll">
-                        <div className="note" style={{ fontSize: 13 }}>
-                          {catalogSelected.descriptionRu || 'Описание отсутствует'}
-                        </div>
+                        {catalogDraft.descriptionRu && (
+                          <div className="note cat-ed-desc">
+                            {catalogDraft.descriptionRu}
+                          </div>
+                        )}
+                        <CatalogAttributeEditor
+                          item={catalogDraft}
+                          onChange={nextItem => {
+                            setCatalogDraft(nextItem);
+                            setCatalogDraftDirty(true);
+                          }}
+                        />
                       </div>
 
                       <div className="inv-detail-foot">
-                        <button
-                          type="button"
-                          id="catalog-give-one"
-                          className="btn btn-p btn-sm btn-block"
-                          onClick={() => handleGiveCatalogItem(catalogSelected.key, 1)}
-                        >
-                          Выдать 1 шт.
-                        </button>
-                        {catalogSelected.maxStack > 1 && (
+                        <div className="cat-foot-row">
+                          {(catalogDraft.maxStack || 1) > 1 && (
+                            <div className="cat-qty">
+                              <button
+                                type="button"
+                                className="cat-qty-btn"
+                                disabled={catalogGiveCount <= 1}
+                                onClick={() => setCatalogGiveCount(c => Math.max(1, c - 1))}
+                                title="Уменьшить количество"
+                              >
+                                <Minus width={13} height={13} />
+                              </button>
+                              <span className="cat-qty-val mono">{catalogGiveCount}</span>
+                              <button
+                                type="button"
+                                className="cat-qty-btn"
+                                disabled={catalogGiveCount >= (catalogDraft.maxStack || 1)}
+                                onClick={() => setCatalogGiveCount(c => Math.min(catalogDraft.maxStack || 1, c + 1))}
+                                title="Увеличить количество"
+                              >
+                                <Plus width={13} height={13} />
+                              </button>
+                            </div>
+                          )}
                           <button
                             type="button"
-                            id="catalog-give-stack"
-                            className="btn btn-s btn-sm btn-block"
-                            onClick={() => handleGiveCatalogItem(catalogSelected.key, catalogSelected.maxStack)}
+                            id="catalog-give-one"
+                            className="btn btn-p btn-sm"
+                            style={{ flex: 1, minWidth: 0 }}
+                            onClick={() => handleGiveCatalogDraft(catalogGiveCount, 'pockets')}
                           >
-                            Выдать стак ({catalogSelected.maxStack} шт.)
+                            Выдать{(catalogDraft.maxStack || 1) > 1 && catalogGiveCount > 1 ? ` (${catalogGiveCount})` : ''}
                           </button>
-                        )}
+                          <button
+                            type="button"
+                            id="catalog-give-hand"
+                            className="btn btn-s btn-sm"
+                            onClick={() => handleGiveCatalogDraft(1, 'hand')}
+                            title="Выдать 1 шт. сразу в руку"
+                          >
+                            <Hand width={14} height={14} />
+                            <span>В руку</span>
+                          </button>
+                          {(catalogDraft.maxStack || 1) > 1 && (
+                            <button
+                              type="button"
+                              id="catalog-give-stack"
+                              className="btn btn-s btn-sm"
+                              onClick={() => handleGiveCatalogDraft(catalogDraft.maxStack || 1, 'pockets')}
+                              title={`Выдать полный стак (${catalogDraft.maxStack} шт.)`}
+                            >
+                              ×{catalogDraft.maxStack}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </>
                   ) : (
                     <div className="inv-empty">
                       <Wand2 width={34} height={34} color="#8f8b81" />
-                      <div style={{ fontSize: 14, maxWidth: 250 }}>
-                        Нажмите на предмет слева, чтобы выдать его в карманы. Shift + клик выдаёт полный стак
+                      <div style={{ fontSize: 14, maxWidth: 260 }}>
+                        Выберите предмет слева, чтобы настроить цвет, материал и характеристики перед выдачей. Двойной клик сразу выдаёт 1 шт.
                       </div>
                     </div>
                   )}
