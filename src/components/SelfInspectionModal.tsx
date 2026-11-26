@@ -236,12 +236,31 @@ const SelfInspectionContent: React.FC<{
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
-    const timer = window.setInterval(() => setTick(t => t + 1), 800);
+    let prevSig = '';
+    const buildSig = () => {
+      const b = player.bodyState;
+      const n = player.needs;
+      if (!b) return '';
+      const injCount = BODY_ZONES.reduce((sum, k) => {
+        const raw = b.bodyParts[k];
+        const list: Injury[] = Array.isArray(raw) ? raw : ((raw as any)?.injuries || []);
+        return sum + list.length * 10 + list.filter(i => i.treated).length;
+      }, 0);
+      return `${Math.round(n?.health ?? 100)}:${Math.round(n?.hunger ?? 100)}:${Math.round(n?.thirst ?? 100)}:${Math.round(n?.energy ?? 100)}:${Math.round((b.coreTemperature ?? 36.6) * 10)}:${Math.round(b.painLevel ?? 0)}:${Math.round(b.wetness ?? 0)}:${injCount}:${(b.activeMedications || []).length}`;
+    };
+    prevSig = buildSig();
+    const timer = window.setInterval(() => {
+      const nextSig = buildSig();
+      if (nextSig !== prevSig) {
+        prevSig = nextSig;
+        setTick(t => t + 1);
+      }
+    }, 800);
     return () => {
       cancelAnimationFrame(raf);
       window.clearInterval(timer);
     };
-  }, []);
+  }, [player]);
 
   const bs = player.bodyState!;
   const detailed = getDetailedBodySensations(player);

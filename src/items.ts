@@ -29,6 +29,12 @@ import {
 import {
   buildDefaultDoughAttributes,
   applyDoughAttributesToItem,
+  buildDoughDisplayNameRu,
+  buildDoughInspectionDescriptionRu,
+  describeDoughAppearanceQualitativeRu,
+  isDoughFillingVisible,
+  summarizeDoughFillingsApproxRu,
+  summarizeDoughIngredientsRu,
   buildRollingPinAttributes,
   applyRollingPinAttributesToItem,
 } from './doughData';
@@ -6813,24 +6819,33 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
     }
   } else if (item.doughAttributes) {
     const da = item.doughAttributes;
-    varietyRu = `${da.doughTypeRu} · ${da.shapeNameRu}`;
+    const vis = describeDoughAppearanceQualitativeRu(da);
+    const cleanIngs = summarizeDoughIngredientsRu(da.ingredients, { maxItems: 8, capitalize: true });
+    const visibleFillings = isDoughFillingVisible(da, item)
+      ? summarizeDoughFillingsApproxRu(da.fillings, { maxItems: 8, capitalize: !cleanIngs, withApproxAmount: false })
+      : '';
+    varietyRu = da.cookState === 'raw' ? da.doughTypeRu : vis.shapeBriefRu;
     weightGrams = da.weightGrams + da.fillingGrams;
-    dimensionCm = da.diameterCm;
+    dimensionCm = undefined;
+    size = undefined;
+    sizeNameRu = undefined;
     visuals.color = da.color;
     visuals.colorNameRu = da.colorNameRu;
-    visuals.shapeNameRu = `${da.shapeNameRu} (${da.thicknessMm} мм)`;
+    visuals.shapeNameRu = vis.shapeBriefRu;
+    delete visuals.size;
+    delete visuals.sizeNameRu;
     if (da.embossedPatternRu) {
       visuals.patternNameRu = da.embossedPatternRu;
     }
     resolvedIngredients = [
-      ...da.ingredients.map((i) => `${i.nameRu} (${Math.round(i.grams)} г)`),
-      ...da.fillings.map((f) => `Начинка: ${f.nameRu} (${Math.round(f.weightGrams)} г)`),
+      ...(cleanIngs ? cleanIngs.split(', ') : []),
+      ...(visibleFillings ? visibleFillings.split(', ') : []),
     ];
     if (!purpose) {
       purpose =
         da.cookState === 'raw'
-          ? 'Сырое домашнее тесто: раскатывайте скалкой, режьте ножом, формуйте в слотах сетки, добавляйте начинку, варите, жарьте или пеките'
-          : `Готовая домашняя выпечка / блюдо (${da.cookStateRu.toLowerCase()})`;
+          ? 'Сырое домашнее тесто: раскатывайте скалкой, режьте ножом, формуйте, добавляйте начинку и готовьте'
+          : `Домашняя выпечка (${da.cookStateRu.toLowerCase()})`;
     }
   } else if (item.rollingPinAttributes) {
     const rp = item.rollingPinAttributes;
@@ -9516,14 +9531,38 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
 export function addItemToPlayer(
   player: Player, 
   itemToAdd: InventoryItem,
-  options?: { preferPockets?: boolean; skipHands?: boolean }
+  options?: { preferPockets?: boolean; preferHands?: boolean; skipHands?: boolean }
 ): boolean {
   if (!player.inventory) {
     player.inventory = [];
   }
 
-  // If item has count > 1, unstack and add individually as separate 1-count items
-  if (itemToAdd.count > 1) {
+  const isSimpleStackable = (it: InventoryItem): boolean => {
+    const catMax = ITEM_CATALOG[it.itemId]?.maxStack ?? 1;
+    const maxStack = Math.max(it.maxStack || 1, catMax);
+    if (maxStack <= 1) return false;
+    if (
+      it.isContainer ||
+      it.fluidStorage ||
+      it.maxPortions ||
+      it.produceAttributes ||
+      it.meatAttributes ||
+      it.branchAttributes ||
+      it.kitchenwareAttributes ||
+      it.phoneAttributes ||
+      it.chocolateAttributes ||
+      it.gummyAttributes ||
+      it.pelmenAttributes ||
+      it.wetness ||
+      (it.contents && it.contents.length > 0)
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  // If item has count > 1 and is NOT simple-stackable, unstack and add individually
+  if (itemToAdd.count > 1 && !isSimpleStackable(itemToAdd)) {
     const totalCount = itemToAdd.count;
     itemToAdd.count = 1;
     itemToAdd.maxStack = 1;
@@ -9555,8 +9594,13 @@ export function addItemToPlayer(
     return anySuccess;
   }
 
-  itemToAdd.count = 1;
-  itemToAdd.maxStack = 1;
+  if (isSimpleStackable(itemToAdd)) {
+    const catMax = ITEM_CATALOG[itemToAdd.itemId]?.maxStack ?? 1;
+    itemToAdd.maxStack = Math.max(itemToAdd.maxStack || 1, catMax);
+  } else {
+    itemToAdd.count = 1;
+    itemToAdd.maxStack = 1;
+  }
 
   // 1. Auto-store currency/coins into leather wallet if player has one with space
   const isCurrency = itemToAdd.category === 'valuable' && (itemToAdd.itemId.startsWith('cash') || itemToAdd.itemId.startsWith('coin'));
@@ -9568,6 +9612,34 @@ export function addItemToPlayer(
         addItemToContainer(w, itemToAdd);
         addPlayerNotification(player, `Убрано в кошелёк: ${itemToAdd.nameRu}`, 'pickup');
         return true;
+      }
+    }
+  }
+
+  // 2. Try stacking into an existing identical stack in pockets if simple stackable
+  if (isSimpleStackable(itemToAdd)) {
+    const maxSlots = getPlayerTotalSlots(player);
+    for (let i = 0; i < maxSlots; i++) {
+      const existing = player.inventory[i];
+      if (
+        existing &&
+        existing.itemId === itemToAdd.itemId &&
+        isSimpleStackable(existing) &&
+        existing.count < (existing.maxStack || 1)
+      ) {
+        const space = (existing.maxStack || 1) - existing.count;
+        const toMerge = Math.min(space, itemToAdd.count);
+        if (toMerge > 0) {
+          const testCandidate: InventoryItem = { ...existing, count: existing.count + toMerge };
+          if (canItemFitInCompartment(player, i, testCandidate, { ignoreSlotIdx: i }).fits) {
+            existing.count += toMerge;
+            itemToAdd.count -= toMerge;
+            if (itemToAdd.count <= 0) {
+              addPlayerNotification(player, `Добавлено в стопку: ${existing.nameRu} (×${existing.count})`, 'pickup');
+              return true;
+            }
+          }
+        }
       }
     }
   }
@@ -9608,28 +9680,25 @@ export function addItemToPlayer(
     return false;
   };
 
-  // If preferPockets (e.g. unpacking inside container or currency): try pockets -> hands
-  if (options?.preferPockets) {
-    if (tryPlaceInPockets()) return true;
-    if (!options.skipHands) {
-      if (tryPlaceInHand(activeHand)) return true;
-      if (tryPlaceInHand(otherHand)) return true;
-    }
-  } else {
-    // DEFAULT PHYSICAL REALISM: HANDS FIRST FOR WORLD PICKUPS / PURCHASES!
+  // Default to pockets first so picking up items doesn't clog both hands; fall back to hands when pockets can't fit it
+  if (options?.preferHands) {
     if (!options?.skipHands) {
       if (tryPlaceInHand(activeHand)) return true;
       if (tryPlaceInHand(otherHand)) return true;
     }
-
-    // Secondary fallback: if hands are full, try placing into a valid pocket compartment
     if (tryPlaceInPockets()) return true;
+  } else {
+    if (tryPlaceInPockets()) return true;
+    if (!options?.skipHands) {
+      if (tryPlaceInHand(activeHand)) return true;
+      if (tryPlaceInHand(otherHand)) return true;
+    }
   }
 
   // Failed
   const reason = (player.leftHandItem && player.rightHandItem)
-    ? 'Обе руки заняты! Освободите руку или положите предмет на землю.'
-    : 'Нет подходящих свободных карманов или места!';
+    ? 'Обе руки и карманы заняты. Освободите руку или место в рюкзаке'
+    : 'Нет подходящих свободных карманов или места';
   addPlayerNotification(player, reason, 'warning');
   return false;
 }
@@ -11480,6 +11549,10 @@ export function useItemOnPlayer(
     let taste = '';
     if (item.doughAttributes) {
       const da = item.doughAttributes;
+      if (remaining > 0) {
+        item.nameRu = buildDoughDisplayNameRu(da, item);
+        item.descriptionRu = buildDoughInspectionDescriptionRu(da, item);
+      }
       if (da.cookState === 'raw') {
         const hasRawMeat = da.fillings.some((f) => f.isRawMeat);
         player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + (hasRawMeat ? 14 : 4));
@@ -11489,11 +11562,12 @@ export function useItemOnPlayer(
       } else if (da.cookState === 'burnt') {
         taste = 'Горьковатая пригорелая корочка, но есть можно.';
       } else {
-        const fillTxt = da.fillings.length > 0
-          ? ` и сочная начинка (${da.fillings.slice(0, 2).map((f) => f.nameRu.toLowerCase()).join(', ')})`
+        const fillSummary = da.fillings.length > 0
+          ? summarizeDoughFillingsApproxRu(da.fillings, { maxItems: 3, withApproxAmount: false })
           : '';
+        const fillTxt = fillSummary ? ` и сочная начинка (${fillSummary})` : '';
         taste = da.cookState === 'baked'
-          ? `Ароматная румяная домашняя выпечка (${da.doughTypeRu.toLowerCase()})${fillTxt}.`
+          ? `Ароматная румяная домашняя выпечка${fillTxt}.`
           : da.cookState === 'boiled' || da.cookState === 'steamed'
           ? `Мягкое нежное отварное тесто${fillTxt}.`
           : `Хрустящая золотистая корочка с пышным мякишем${fillTxt}.`;
@@ -12746,6 +12820,10 @@ export function useHandItemOnPlayer(
     let taste = '';
     if (item.doughAttributes) {
       const da = item.doughAttributes;
+      if (remaining > 0) {
+        item.nameRu = buildDoughDisplayNameRu(da, item);
+        item.descriptionRu = buildDoughInspectionDescriptionRu(da, item);
+      }
       if (da.cookState === 'raw') {
         const hasRawMeat = da.fillings.some((f) => f.isRawMeat);
         player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + (hasRawMeat ? 14 : 4));
@@ -12755,11 +12833,12 @@ export function useHandItemOnPlayer(
       } else if (da.cookState === 'burnt') {
         taste = 'Горьковатая пригорелая корочка, но есть можно.';
       } else {
-        const fillTxt = da.fillings.length > 0
-          ? ` и сочная начинка (${da.fillings.slice(0, 2).map((f) => f.nameRu.toLowerCase()).join(', ')})`
+        const fillSummary = da.fillings.length > 0
+          ? summarizeDoughFillingsApproxRu(da.fillings, { maxItems: 3, withApproxAmount: false })
           : '';
+        const fillTxt = fillSummary ? ` и сочная начинка (${fillSummary})` : '';
         taste = da.cookState === 'baked'
-          ? `Ароматная румяная домашняя выпечка (${da.doughTypeRu.toLowerCase()})${fillTxt}.`
+          ? `Ароматная румяная домашняя выпечка${fillTxt}.`
           : da.cookState === 'boiled' || da.cookState === 'steamed'
           ? `Мягкое нежное отварное тесто${fillTxt}.`
           : `Хрустящая золотистая корочка с пышным мякишем${fillTxt}.`;

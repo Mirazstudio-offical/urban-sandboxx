@@ -43,6 +43,12 @@ export type KeybindAction =
   | 'swapHand'
   | 'handLeft'
   | 'handRight'
+  | 'hotbar1'
+  | 'hotbar2'
+  | 'hotbar3'
+  | 'hotbar4'
+  | 'hotbar5'
+  | 'hotbar6'
   // Interface
   | 'inventory'
   | 'bodyInspection'
@@ -120,8 +126,14 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
   // Player on foot
   { id: 'sprint', label: 'Бег пешком', group: 'player', context: 'foot', defaultCode: 'ShiftLeft' },
   { id: 'swapHand', label: 'Сменить активную руку', group: 'player', context: 'foot', defaultCode: 'KeyQ' },
-  { id: 'handLeft', label: 'Выбрать левую руку', group: 'player', context: 'foot', defaultCode: 'Digit1' },
-  { id: 'handRight', label: 'Выбрать правую руку', group: 'player', context: 'foot', defaultCode: 'Digit2' },
+  { id: 'handLeft', label: 'Выбрать левую руку', group: 'player', context: 'foot', defaultCode: 'KeyZ' },
+  { id: 'handRight', label: 'Выбрать правую руку', group: 'player', context: 'foot', defaultCode: 'KeyX' },
+  { id: 'hotbar1', label: 'Быстрый слот кармана 1', group: 'player', context: 'foot', defaultCode: 'Digit1' },
+  { id: 'hotbar2', label: 'Быстрый слот кармана 2', group: 'player', context: 'foot', defaultCode: 'Digit2' },
+  { id: 'hotbar3', label: 'Быстрый слот кармана 3', group: 'player', context: 'foot', defaultCode: 'Digit3' },
+  { id: 'hotbar4', label: 'Быстрый слот кармана 4', group: 'player', context: 'foot', defaultCode: 'Digit4' },
+  { id: 'hotbar5', label: 'Быстрый слот кармана 5', group: 'player', context: 'foot', defaultCode: 'Digit5' },
+  { id: 'hotbar6', label: 'Быстрый слот кармана 6', group: 'player', context: 'foot', defaultCode: 'Digit6' },
 
   // Interface & Online
   { id: 'inventory', label: 'Инвентарь', group: 'interface', context: 'global', defaultCode: 'Tab' },
@@ -165,6 +177,9 @@ function loadStoredKeybinds(): KeybindMap {
       for (const def of KEYBIND_DEFINITIONS) {
         const val = parsed[def.id];
         if (typeof val === 'string' && val.length > 0 && val !== 'Escape') {
+          // Migrate legacy Digit1/Digit2 on handLeft/handRight so Digit1..6 work for the 6-slot pocket hotbar
+          if (def.id === 'handLeft' && val === 'Digit1' && !parsed.hotbar1) continue;
+          if (def.id === 'handRight' && val === 'Digit2' && !parsed.hotbar2) continue;
           result[def.id] = val;
         }
       }

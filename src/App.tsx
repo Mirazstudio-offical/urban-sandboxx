@@ -729,6 +729,7 @@ export default function App() {
     }
   };
   const [treatmentModalItem, setTreatmentModalItem] = useState<{ index: number; item: InventoryItem } | null>(null);
+  const [inventoryOpenContainerHand, setInventoryOpenContainerHand] = useState<'left' | 'right' | null>(null);
   const [activePhoneItem, setActivePhoneItem] = useState<InventoryItem | null>(null);
   const activePhoneItemRef = useRef<InventoryItem | null>(null);
   activePhoneItemRef.current = activePhoneItem;
@@ -3958,6 +3959,27 @@ export default function App() {
           e.preventDefault();
           return;
         }
+        const hotbarActions = ['hotbar1', 'hotbar2', 'hotbar3', 'hotbar4', 'hotbar5', 'hotbar6'] as const;
+        for (let hi = 0; hi < hotbarActions.length; hi++) {
+          if (matchesKeybind(hotbarActions[hi], code)) {
+            const item = p.inventory?.[hi];
+            if (item) {
+              setSelectedHotbarIndex(hi);
+              selectedHotbarIndexRef.current = hi;
+              const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+              const hotbarMedId = item.fluidStorage?.attributes?.medicalEffectId || item.originalCatalogId || item.itemId;
+              if (item.category === 'med' && (TOPICAL_ITEMS.includes(hotbarMedId) || TOPICAL_ITEMS.includes(item.itemId))) {
+                setTreatmentModalItem({ index: hi, item });
+              } else {
+                useItemOnPlayer(p, hi, worldRef.current || undefined);
+              }
+              sound.resume();
+              setVitalsRefreshTick((t) => t + 1);
+            }
+            e.preventDefault();
+            return;
+          }
+        }
         if (matchesKeybind('gridMode', code)) {
           const cam = cameraRef.current;
           cam.gridMode = !cam.gridMode;
@@ -5156,9 +5178,18 @@ export default function App() {
 
         // 6. Throttled HUD State Updates (Run at ~12.5 Hz to prevent React re-render lag)
         // Use real frame time so HUD refresh rate does not drop in slow motion
+        const mHud = modalStateRef.current;
+        const isFullscreenModalBlockingHud =
+          mHud.isFullMapOpen ||
+          mHud.isInventoryOpen ||
+          mHud.isInspectionOpen ||
+          mHud.isFurnitureStorageOpen ||
+          mHud.isShopOpen ||
+          mHud.isDealershipOpen ||
+          mHud.isRealEstateModalOpen;
         hudUpdateTimerRef.current += rawDt;
         hudTickAccumRef.current += rawDt;
-        if (hudUpdateTimerRef.current >= 0.1) {
+        if (hudUpdateTimerRef.current >= 0.1 && !isFullscreenModalBlockingHud) {
           hudUpdateTimerRef.current = 0;
 
           if (playerCar) {
@@ -5795,9 +5826,18 @@ export default function App() {
           currentMouseWorldPos = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
         }
 
-        // 10. Render Scene with pre-culled viewport entities (skipped when FullScreenMap covers entire screen)
+        // 10. Render Scene with pre-culled viewport entities (skipped when opaque fullscreen modal covers entire screen)
         const tRenderStart = performance.now();
-        if (!isFullMapOpenRef.current) {
+        const mRender = modalStateRef.current;
+        const isOpaqueFullscreenModalOpen =
+          isFullMapOpenRef.current ||
+          mRender.isInventoryOpen ||
+          mRender.isInspectionOpen ||
+          mRender.isFurnitureStorageOpen ||
+          mRender.isShopOpen ||
+          mRender.isDealershipOpen ||
+          mRender.isRealEstateModalOpen;
+        if (!isOpaqueFullscreenModalOpen) {
           rendererRef.current.render(
             world,
             player,
@@ -5822,7 +5862,7 @@ export default function App() {
           const fx = syncGpuFxLifecycle();
           const gpuCanvas = gpuCanvasRef.current;
           if (fx && gpuCanvas) {
-            if (performanceConfig.enableGpuPostFx && !isFullMapOpenRef.current) {
+            if (performanceConfig.enableGpuPostFx && !isOpaqueFullscreenModalOpen) {
               const cal = calendarRef.current;
               const worldWind = worldRef.current.wind;
               const windGust = worldWind?.gust ?? 1.0;
@@ -7297,18 +7337,23 @@ export default function App() {
       }
 
       case 'eco_recycle': {
-        const activeHandItem = p.inventory?.[p.activeHand === 'left'? p.leftHandSlotIndex ?? -1 : p.rightHandSlotIndex ?? -1];
-        if (activeHandItem && (activeHandItem.category === 'drink'|| activeHandItem.id.includes('bottle') || activeHandItem.id.includes('can') || activeHandItem.id.includes('cup'))) {
-          const handSlot = p.activeHand === 'left'? p.leftHandSlotIndex : p.rightHandSlotIndex;
-          if (handSlot !== null && handSlot !== undefined && p.inventory[handSlot]) {
-            triggerPlayerActionAnim(p, 'throw_trash', 0.65);
-            p.inventory[handSlot] = null as any;
-            addPlayerCash(p, 5);
-            addPlayerNotification(p, `Эко-фандомат: тара сдана на переработку (+$5)`, 'info');
-            sound.playUseItem();
-            setVitalsRefreshTick(t => t + 1);
-            return;
-          }
+        const activeHand = p.activeHand || 'right';
+        const activeHandItem = activeHand === 'left' ? p.leftHandItem : p.rightHandItem;
+        if (
+          activeHandItem &&
+          (activeHandItem.category === 'drink' ||
+            activeHandItem.itemId.includes('bottle') ||
+            activeHandItem.itemId.includes('can') ||
+            activeHandItem.itemId.includes('cup'))
+        ) {
+          triggerPlayerActionAnim(p, 'throw_trash', 0.65);
+          if (activeHand === 'left') p.leftHandItem = null;
+          else p.rightHandItem = null;
+          addPlayerCash(p, 5);
+          addPlayerNotification(p, 'Эко-фандомат: тара сдана на переработку (+5 ₽)', 'info');
+          sound.playUseItem();
+          setVitalsRefreshTick(t => t + 1);
+          return;
         }
         setIsInventoryOpen(true);
         addPlayerNotification(p, 'Выберите пустую тару в инвентаре для сдачи в эко-фандомат', 'info');
@@ -7317,17 +7362,22 @@ export default function App() {
       }
 
       case 'trash_throw': {
-        const activeHandItem = p.inventory?.[p.activeHand === 'left'? p.leftHandSlotIndex ?? -1 : p.rightHandSlotIndex ?? -1];
-        if (activeHandItem && (activeHandItem.category === 'trash'|| activeHandItem.id.includes('trash') || activeHandItem.id.includes('wrapper') || activeHandItem.id.includes('empty'))) {
-          const handSlot = p.activeHand === 'left'? p.leftHandSlotIndex : p.rightHandSlotIndex;
-          if (handSlot !== null && handSlot !== undefined && p.inventory[handSlot]) {
-            triggerPlayerActionAnim(p, 'throw_trash', 0.65);
-            p.inventory[handSlot] = null as any;
-            addPlayerNotification(p, 'Мусор утилизирован в урну.', 'info');
-            sound.playUseItem();
-            setVitalsRefreshTick(t => t + 1);
-            return;
-          }
+        const activeHand = p.activeHand || 'right';
+        const activeHandItem = activeHand === 'left' ? p.leftHandItem : p.rightHandItem;
+        if (
+          activeHandItem &&
+          (activeHandItem.category === 'trash' ||
+            activeHandItem.itemId.includes('trash') ||
+            activeHandItem.itemId.includes('wrapper') ||
+            activeHandItem.itemId.includes('empty'))
+        ) {
+          triggerPlayerActionAnim(p, 'throw_trash', 0.65);
+          if (activeHand === 'left') p.leftHandItem = null;
+          else p.rightHandItem = null;
+          addPlayerNotification(p, 'Мусор утилизирован в урну', 'info');
+          sound.playUseItem();
+          setVitalsRefreshTick(t => t + 1);
+          return;
         }
         setIsInventoryOpen(true);
         addPlayerNotification(p, 'Откройте инвентарь и выбросьте ненужный мусор в урну', 'info');
@@ -7698,6 +7748,7 @@ export default function App() {
     if (!handItem) return;
 
     if ((handItem.isContainer && !handItem.fluidStorage) || handItem.itemId === 'wallet' || handItem.itemId === 'plastic_bag') {
+      setInventoryOpenContainerHand(activeHand);
       setIsInventoryOpen(true);
       sound.playUseItem();
       addPlayerNotification(p, `Открыт контейнер: ${handItem.nameRu}`, 'info');
@@ -8434,15 +8485,18 @@ export default function App() {
       {isInventoryOpen && (
         <InventoryModal
           isOpen={isInventoryOpen}
-          onClose={() => setIsInventoryOpen(false)}
+          onClose={() => {
+            setIsInventoryOpen(false);
+            setInventoryOpenContainerHand(null);
+          }}
           player={playerRef.current}
           world={worldRef.current}
+          initialOpenContainerHand={inventoryOpenContainerHand}
           onInspectDocument={(item) => {
             setSelectedPropertyDocItem(item);
             setIsPropertyDocumentModalOpen(true);
           }}
           onRequestLimbTreatment={(idx, item) => {
-            setIsInventoryOpen(false);
             setTreatmentModalItem({ index: idx, item });
           }}
           onSleepInBed={() => {
@@ -8452,7 +8506,7 @@ export default function App() {
               p.needs.sleepiness = 0;
               p.needs.energy = 100;
               p.needs.health = Math.min(100, p.needs.health + 20);
-              addPlayerNotification(p, 'Вы отдохнули и восстановили силы!', 'sleep');
+              addPlayerNotification(p, 'Вы отдохнули и восстановили силы', 'sleep');
             }
           }}
         />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { Player, InventoryItem, ItemCategory, GameWorld, GroundItem, CandyPackagingShape, ChocolatePackagingShape } from '../types';
 import {
   useItemOnPlayer,
@@ -56,9 +56,16 @@ import {
   getEffectiveFluidWrapper,
   getSlotPourDosageLabel,
 } from '../interactionCrafting';
+import {
+  describeDoughAppearanceQualitativeRu,
+  isDoughFillingVisible,
+  summarizeDoughFillingsApproxRu,
+  summarizeDoughIngredientsRu,
+} from '../doughData';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
 import { useTopmostEscape } from './gameUi';
+import { useCachedSlotDrag } from './useCachedSlotDrag';
 import { sound } from '../audio';
 import { formatRgbString } from '../phoneData';
 import inventoryModalCss from './inventoryModal.css?inline';
@@ -96,6 +103,9 @@ import {
   FlaskConical,
   Search,
   Wand2,
+  RotateCcw,
+  Check,
+  FolderOpen,
   X
 } from 'lucide-react';
 
@@ -118,6 +128,7 @@ interface InventoryModalProps {
   onSleepInBed?: () => void;
   onRequestLimbTreatment?: (itemIndex: number, item: InventoryItem) => void;
   onInspectDocument?: (item: InventoryItem) => void;
+  initialOpenContainerHand?: 'left' | 'right' | null;
 }
 
 const InventoryModalContent: React.FC<{
@@ -126,44 +137,41 @@ const InventoryModalContent: React.FC<{
   world: GameWorld | null;
   onRequestLimbTreatment?: (itemIndex: number, item: InventoryItem) => void;
   onInspectDocument?: (item: InventoryItem) => void;
+  initialOpenContainerHand?: 'left' | 'right' | null;
 }> = ({
   onClose,
   player,
   world,
   onRequestLimbTreatment,
-  onInspectDocument
+  onInspectDocument,
+  initialOpenContainerHand
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [selectedHand, setSelectedHand] = useState<'left' | 'right' | null>(null);
   const [activeTab, setActiveTab] = useState<'inventory' | 'interaction' | 'surroundings' | 'clothing' | 'catalog'>('inventory');
-  const [openContainer, setOpenContainer] = useState<InventoryItem | null>(null);
+  const [openContainer, setOpenContainer] = useState<InventoryItem | null>(() => {
+    if (initialOpenContainerHand === 'left' && player.leftHandItem?.isContainer) {
+      return player.leftHandItem;
+    }
+    if (initialOpenContainerHand === 'right' && player.rightHandItem?.isContainer) {
+      return player.rightHandItem;
+    }
+    return null;
+  });
   const [selectedContainerItemIdx, setSelectedContainerItemIdx] = useState<number>(0);
   const [entered, setEntered] = useState(false);
-  const [, forceRender] = useState(0);
+  const [renderVer, forceRender] = useState(0);
   const [selectedWbSlot, setSelectedWbSlot] = useState<string | null>(null);
-  const [wbDragUi, setWbDragUi] = useState<{
-    sourceKey: string;
-    item: InventoryItem;
+  const [ctxMenu, setCtxMenu] = useState<{
     x: number;
     y: number;
-    overKey: string | null;
+    slotKey: string;
+    item: InventoryItem;
   } | null>(null);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const gmRef = useRef<HTMLDivElement>(null);
-
-  const wbDragRef = useRef<{
-    pointerId: number;
-    sourceKey: string;
-    item: InventoryItem;
-    startX: number;
-    startY: number;
-    x: number;
-    y: number;
-    active: boolean;
-    overKey: string | null;
-  } | null>(null);
   const wbDropHandlerRef = useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
 
   useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
@@ -173,7 +181,23 @@ const InventoryModalContent: React.FC<{
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  useEffect(() => {
+    if (initialOpenContainerHand === 'left' && player.leftHandItem?.isContainer) {
+      setActiveTab('inventory');
+      setOpenContainer(player.leftHandItem);
+      setSelectedHand('left');
+    } else if (initialOpenContainerHand === 'right' && player.rightHandItem?.isContainer) {
+      setActiveTab('inventory');
+      setOpenContainer(player.rightHandItem);
+      setSelectedHand('right');
+    }
+  }, [initialOpenContainerHand, player]);
+
   useTopmostEscape(() => {
+    if (ctxMenu) {
+      setCtxMenu(null);
+      return;
+    }
     if (openContainer) {
       setOpenContainer(null);
       return;
@@ -195,6 +219,13 @@ const InventoryModalContent: React.FC<{
       forceRender(n => n + 1);
     }
   }, [player]);
+
+  // Upgrade legacy saved fluid vessels & cookware once per inventory version
+  useEffect(() => {
+    (player.inventory || []).forEach(it => { if (it) ensureHybridContainerProps(it); });
+    if (player.leftHandItem) ensureHybridContainerProps(player.leftHandItem);
+    if (player.rightHandItem) ensureHybridContainerProps(player.rightHandItem);
+  }, [player, renderVer]);
 
   // ---- Freeroam "free inventory" catalog tab ----
   const isFreeroam = world?.gameMode === 'freeroam';
@@ -238,10 +269,9 @@ const InventoryModalContent: React.FC<{
   };
 
   const inventory = player.inventory || [];
-  const compartments = getPlayerCompartments(player);
-
-  const pocketCap = getPlayerPocketCapacity(player);
-  const carriedWeight = getPlayerTotalCarriedWeight(player);
+  const compartments = React.useMemo(() => getPlayerCompartments(player), [player, renderVer]);
+  const pocketCap = React.useMemo(() => getPlayerPocketCapacity(player), [player, renderVer]);
+  const carriedWeight = React.useMemo(() => getPlayerTotalCarriedWeight(player), [player, renderVer]);
   const leftBulky = !!(player.leftHandItem && (player.leftHandItem.volume || 0) >= 10);
   const rightBulky = !!(player.rightHandItem && (player.rightHandItem.volume || 0) >= 10);
   const isBulkyHand = leftBulky || rightBulky;
@@ -254,6 +284,20 @@ const InventoryModalContent: React.FC<{
     inventory.some(i => i && i.itemId === 'plastic_bag') ||
     player.leftHandItem?.itemId === 'plastic_bag' ||
     player.rightHandItem?.itemId === 'plastic_bag';
+
+  const availableContainers = useMemo(() => {
+    const list: InventoryItem[] = [];
+    for (const it of inventory) {
+      if (it && it.isContainer && !it.singleUseContainer) list.push(it);
+    }
+    if (player.leftHandItem?.isContainer && !player.leftHandItem.singleUseContainer) {
+      list.push(player.leftHandItem);
+    }
+    if (player.rightHandItem?.isContainer && !player.rightHandItem.singleUseContainer) {
+      list.push(player.rightHandItem);
+    }
+    return list;
+  }, [inventory, player.leftHandItem, player.rightHandItem, renderVer]);
 
   let weightSpeedPct = 100;
   if (carriedWeight > 8) {
@@ -328,6 +372,39 @@ const InventoryModalContent: React.FC<{
       return;
     }
     useItemOnPlayer(player, idx, world || undefined);
+    sound.resume();
+    forceRender(n => n + 1);
+  };
+
+  const handleUseHandItem = (hand: 'left' | 'right', forceDirectUse: boolean = false) => {
+    const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+    if (!item) return;
+    ensureHybridContainerProps(item);
+    if (item.isContainer && !item.singleUseContainer && !item.fluidStorage && !forceDirectUse) {
+      setOpenContainer(item);
+      setSelectedContainerItemIdx(0);
+      return;
+    }
+    const TOPICAL_ITEMS = [
+      'bandage',
+      'splint',
+      'medical_patch',
+      'antiseptic',
+      'panthenol',
+      'panthenol_spray',
+      'spasatel_ointment',
+      'zelenka',
+      'iodine',
+      'diclofenac_gel',
+      'hydrogen_peroxide'
+    ];
+    const effectiveMedId = item.fluidStorage?.attributes?.medicalEffectId || item.originalCatalogId || item.itemId;
+    if (item.category === 'med' && (TOPICAL_ITEMS.includes(effectiveMedId) || TOPICAL_ITEMS.includes(item.itemId))) {
+      player.activeHand = hand;
+      onRequestLimbTreatment?.(-1, item);
+      return;
+    }
+    useHandItemOnPlayer(player, hand, world || undefined);
     sound.resume();
     forceRender(n => n + 1);
   };
@@ -592,10 +669,18 @@ const InventoryModalContent: React.FC<{
     }
   };
 
-  const nearbyGroundItems = (world?.groundItems || []).filter(gi => {
-    const dist = Math.hypot(player.x - gi.x, player.y - gi.y);
-    return dist < 80;
-  });
+  const nearbyGroundItems = useMemo(() => {
+    const raw = world?.groundItems;
+    if (!raw || raw.length === 0) return [];
+    const px = player.x;
+    const py = player.y;
+    const out: GroundItem[] = [];
+    for (let i = 0; i < raw.length; i++) {
+      const gi = raw[i];
+      if (Math.hypot(px - gi.x, py - gi.y) < 80) out.push(gi);
+    }
+    return out;
+  }, [world?.groundItems, world?.groundItems?.length, Math.round(player.x), Math.round(player.y), renderVer, activeTab]);
 
   const handlePickupGroundItem = (gi: GroundItem, targetKey?: string) => {
     if (!world) return;
@@ -636,18 +721,6 @@ const InventoryModalContent: React.FC<{
     }
   };
 
-  // Ensure legacy saved fluid vessels & cookware are upgraded to hybrid containers
-  (player.inventory || []).forEach(it => { if (it) ensureHybridContainerProps(it); });
-  if (player.leftHandItem) ensureHybridContainerProps(player.leftHandItem);
-  if (player.rightHandItem) ensureHybridContainerProps(player.rightHandItem);
-
-  const availableContainers = [
-    ...(player.inventory || []).filter(i => i && i.isContainer && !i.singleUseContainer && !i.tornItemId && !i.itemId.startsWith('paper_packaging')),
-    ...(player.leftHandItem && player.leftHandItem.isContainer && !player.leftHandItem.singleUseContainer && !player.leftHandItem.tornItemId && !player.leftHandItem.itemId.startsWith('paper_packaging') ? [player.leftHandItem] : []),
-    ...(player.rightHandItem && player.rightHandItem.isContainer && !player.rightHandItem.singleUseContainer && !player.rightHandItem.tornItemId && !player.rightHandItem.itemId.startsWith('paper_packaging') ? [player.rightHandItem] : []),
-    ...(player.equippedClothing?.back?.outerwear?.isContainer ? [player.equippedClothing.back.outerwear] : [])
-  ];
-
   // ==================== 10-SLOT INTERACTION WORKBENCH ====================
   const pAny = player as any;
   if (!pAny._interactionInputs) {
@@ -660,7 +733,34 @@ const InventoryModalContent: React.FC<{
   const interactionOutputs: InteractionSlotGrid4 = pAny._interactionOutputs;
 
   const hasCommittedOutputs = interactionOutputs.some(it => it !== null);
-  const evalResult = evaluateInteractionGrid(interactionInputs);
+  const evalResult = useMemo(() => {
+    if (activeTab !== 'interaction' && !interactionInputs.some(Boolean)) {
+      return {
+        isValid: false,
+        kind: 'none' as const,
+        title: 'Слоты пусты',
+        subtitle: '',
+        previewOutputs: [null, null, null, null] as InteractionSlotGrid4,
+        transferDetails: [],
+      };
+    }
+    return evaluateInteractionGrid(interactionInputs);
+  }, [
+    activeTab,
+    renderVer,
+    interactionInputs[0]?.id,
+    interactionInputs[1]?.id,
+    interactionInputs[2]?.id,
+    interactionInputs[3]?.id,
+    interactionInputs[0]?.count,
+    interactionInputs[1]?.count,
+    interactionInputs[2]?.count,
+    interactionInputs[3]?.count,
+    interactionInputs[0]?.fluidStorage?.currentMl,
+    interactionInputs[1]?.fluidStorage?.currentMl,
+    interactionInputs[2]?.fluidStorage?.currentMl,
+    interactionInputs[3]?.fluidStorage?.currentMl,
+  ]);
 
   const returnWorkbenchItemToPlayer = (item: InventoryItem, preferHand?: 'left' | 'right'): boolean => {
     if (preferHand === 'left' && !player.leftHandItem) {
@@ -671,6 +771,8 @@ const InventoryModalContent: React.FC<{
       const res = putItemInHand(player, 'right', item, world);
       if (res.success) return true;
     }
+    const addedToPockets = addItemToPlayer(player, item, { preferPockets: true, skipHands: false });
+    if (addedToPockets) return true;
     if (!player.leftHandItem) {
       const res = putItemInHand(player, 'left', item, world);
       if (res.success) return true;
@@ -679,8 +781,6 @@ const InventoryModalContent: React.FC<{
       const res = putItemInHand(player, 'right', item, world);
       if (res.success) return true;
     }
-    const addedToPockets = addItemToPlayer(player, item, { preferPockets: true, skipHands: false });
-    if (addedToPockets) return true;
     if (world) {
       if (!world.groundItems) world.groundItems = [];
       world.groundItems.push({
@@ -694,6 +794,58 @@ const InventoryModalContent: React.FC<{
       return true;
     }
     return false;
+  };
+
+  const handleClearWorkbench = () => {
+    let moved = 0;
+    for (let i = 0; i < 4; i++) {
+      if (interactionInputs[i]) {
+        returnWorkbenchItemToPlayer(interactionInputs[i]!);
+        interactionInputs[i] = null;
+        moved++;
+      }
+      if (interactionOutputs[i]) {
+        returnWorkbenchItemToPlayer(interactionOutputs[i]!);
+        interactionOutputs[i] = null;
+        moved++;
+      }
+    }
+    if (moved > 0) {
+      sound.playPickup();
+      forceRender(n => n + 1);
+    }
+  };
+
+  const handlePlacePocketIntoInput = (invIdx: number, exactSlot?: number) => {
+    const invItem = player.inventory?.[invIdx];
+    if (!invItem) return;
+    let targetSlot = exactSlot;
+    if (targetSlot === undefined) {
+      targetSlot = [0, 1, 2, 3].find(idx => interactionInputs[idx] === null);
+    }
+    if (targetSlot === undefined || targetSlot < 0 || targetSlot > 3) {
+      addPlayerNotification(player, 'Все 4 слота ввода уже заняты', 'warning');
+      return;
+    }
+    let taken: InventoryItem;
+    if (invItem.count > 1) {
+      taken = { ...invItem, id: `${invItem.itemId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, count: 1 };
+      invItem.count -= 1;
+    } else {
+      taken = invItem;
+      player.inventory[invIdx] = null as any;
+    }
+    const displaced = interactionInputs[targetSlot];
+    interactionInputs[targetSlot] = taken;
+    if (displaced) {
+      if (!player.inventory[invIdx] && canItemFitInCompartment(player, invIdx, displaced).fits) {
+        player.inventory[invIdx] = displaced;
+      } else {
+        returnWorkbenchItemToPlayer(displaced);
+      }
+    }
+    sound.playPickup();
+    forceRender(n => n + 1);
   };
 
   const handlePlaceHandIntoInput = (hand: 'left' | 'right', preferredRow: 'top' | 'bottom' | 'any' = 'any', exactSlot?: number) => {
@@ -787,7 +939,8 @@ const InventoryModalContent: React.FC<{
   // ==================== UNIFIED POINTER DRAG-AND-DROP ENGINE (SHADOW-DOM SAFE) ====================
   const ensureOutputsCommitted = (): boolean => {
     if (hasCommittedOutputs) return true;
-    if (!evalResult.isValid) return false;
+    const currentEval = evaluateInteractionGrid(interactionInputs);
+    if (!currentEval.isValid) return false;
     const finalResult = evaluateInteractionGrid(interactionInputs, { applyPourJitter: true });
     if (!finalResult.isValid) return false;
     for (let i = 0; i < 4; i++) {
@@ -806,7 +959,6 @@ const InventoryModalContent: React.FC<{
 
   const getSlotFillInfo = (item: InventoryItem | null | undefined) => {
     if (!item) return null;
-    ensureHybridContainerProps(item);
     const wrap = getEffectiveFluidWrapper(item);
     if (wrap) {
       const st = wrap.state;
@@ -877,6 +1029,16 @@ const InventoryModalContent: React.FC<{
         setSelectedHand(null);
         setSelectedIndex(toIdx);
         forceRender(n => n + 1);
+      }
+      return;
+    }
+
+    // 1b. Pocket slot -> Workbench input slot
+    if (sourceKey.startsWith('inv:') && targetKey.startsWith('input:')) {
+      const fromIdx = parseInt(sourceKey.replace('inv:', ''), 10);
+      const tgtIdx = parseInt(targetKey.replace('input:', ''), 10);
+      if (!isNaN(fromIdx) && !isNaN(tgtIdx)) {
+        handlePlacePocketIntoInput(fromIdx, tgtIdx);
       }
       return;
     }
@@ -1032,7 +1194,7 @@ const InventoryModalContent: React.FC<{
       }
     }
 
-    // 7. Interaction Workbench <-> Hands / Input
+    // 7. Interaction Workbench <-> Hands / Input / Pockets
     let draggedItem: InventoryItem | null = null;
     if (sourceKey.startsWith('output:')) {
       const outIdx = parseInt(sourceKey.replace('output:', ''), 10);
@@ -1052,6 +1214,29 @@ const InventoryModalContent: React.FC<{
       if (!draggedItem) return;
       interactionInputs[inIdx] = null;
     } else {
+      return;
+    }
+
+    if (targetKey.startsWith('inv:') || targetKey === 'zone:pockets') {
+      if (targetKey.startsWith('inv:')) {
+        const toIdx = parseInt(targetKey.replace('inv:', ''), 10);
+        if (!isNaN(toIdx) && toIdx >= 0) {
+          if (!player.inventory) player.inventory = [];
+          const existing = player.inventory[toIdx];
+          if (!existing && canItemFitInCompartment(player, toIdx, draggedItem).fits) {
+            player.inventory[toIdx] = draggedItem;
+            sound.playPickup();
+            forceRender(n => n + 1);
+            return;
+          }
+        }
+      }
+      const added = addItemToPlayer(player, draggedItem, { preferPockets: true, skipHands: true });
+      if (!added) {
+        returnWorkbenchItemToPlayer(draggedItem);
+      }
+      sound.playPickup();
+      forceRender(n => n + 1);
       return;
     }
 
@@ -1105,94 +1290,127 @@ const InventoryModalContent: React.FC<{
 
   wbDropHandlerRef.current = handleUnifiedSlotDrop;
 
-  const findTargetWbSlotAt = (x: number, y: number, sourceKey: string): string | null => {
-    const scope = gmRef.current;
-    if (!scope) return null;
-    const nodes = scope.querySelectorAll<HTMLElement>('[data-wb-slot]');
-    let bestKey: string | null = null;
-    let bestDist = Infinity;
-
-    nodes.forEach(node => {
-      const key = node.getAttribute('data-wb-slot');
-      if (!key || key === sourceKey || key.startsWith('output:')) return;
-      const rect = node.getBoundingClientRect();
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        bestKey = key;
-        bestDist = -1;
+  // Quick Shift+Click transfer without drag
+  const handleSlotShiftClick = (slotKey: string) => {
+    setCtxMenu(null);
+    if (slotKey.startsWith('inv:')) {
+      const idx = parseInt(slotKey.replace('inv:', ''), 10);
+      const item = player.inventory?.[idx];
+      if (!item) return;
+      if (openContainer && item.id !== openContainer.id) {
+        handlePutIntoContainer(openContainer, idx);
         return;
       }
-      if (bestDist >= 0) {
-        const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
-        const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
-        const d = Math.hypot(dx, dy);
-        if (d <= 18 && d < bestDist) {
-          bestDist = d;
-          bestKey = key;
-        }
+      if (activeTab === 'interaction') {
+        handlePlacePocketIntoInput(idx);
+        return;
       }
-    });
+      if (activeTab === 'clothing' && item.category === 'clothing') {
+        handleEquipItem(idx);
+        return;
+      }
+      if (activeTab === 'surroundings') {
+        handleDropItem(idx);
+        return;
+      }
+      const targetHand: 'left' | 'right' = !player.rightHandItem ? 'right' : !player.leftHandItem ? 'left' : 'right';
+      handleTakeToHand(targetHand, idx);
+      return;
+    }
 
-    if (!bestKey) {
+    if (slotKey === 'hand:left' || slotKey === 'hand:right') {
+      const hand = slotKey === 'hand:left' ? 'left' : 'right';
+      const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+      if (!handItem) return;
+      if (openContainer && handItem.id !== openContainer.id) {
+        handleUnifiedSlotDrop('zone:container', slotKey);
+        return;
+      }
+      if (activeTab === 'interaction') {
+        handlePlaceHandIntoInput(hand, 'any');
+        return;
+      }
+      handleStowHand(hand);
+      return;
+    }
+
+    if (slotKey.startsWith('cont:') && !slotKey.startsWith('cont:empty-') && openContainer) {
+      const cIdx = parseInt(slotKey.replace('cont:', ''), 10);
+      if (!isNaN(cIdx)) handleExtractFromContainer(openContainer, cIdx, 'pockets');
+      return;
+    }
+
+    if (slotKey.startsWith('ground:') && !slotKey.startsWith('ground:empty-')) {
+      const groundId = slotKey.replace('ground:', '');
+      const gi = nearbyGroundItems.find(g => g.id === groundId);
+      if (gi) handlePickupGroundItem(gi);
+      return;
+    }
+
+    if (slotKey.startsWith('cloth:')) {
+      const parts = slotKey.split(':');
+      if (parts[1] && parts[2]) handleUnequipItem(parts[1], parts[2]);
+      return;
+    }
+
+    if (slotKey.startsWith('input:')) {
+      const inIdx = parseInt(slotKey.replace('input:', ''), 10);
+      if (!isNaN(inIdx)) handleRemoveInputSlot(inIdx, 'pockets');
+      return;
+    }
+
+    if (slotKey.startsWith('output:')) {
+      const outIdx = parseInt(slotKey.replace('output:', ''), 10);
+      if (!isNaN(outIdx) && ensureOutputsCommitted()) {
+        handleClaimOutputSlot(outIdx, 'pockets');
+      }
+    }
+  };
+
+  const handleSlotContextMenu = (
+    e: React.MouseEvent<HTMLElement>,
+    slotKey: string,
+    item: InventoryItem | null | undefined
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!item) {
+      setCtxMenu(null);
+      return;
+    }
+    const maxX = typeof window !== 'undefined' ? window.innerWidth - 210 : e.clientX;
+    const maxY = typeof window !== 'undefined' ? window.innerHeight - 240 : e.clientY;
+    setCtxMenu({
+      x: Math.max(8, Math.min(e.clientX, maxX)),
+      y: Math.max(8, Math.min(e.clientY, maxY)),
+      slotKey,
+      item,
+    });
+  };
+
+  const { dragUi: wbDragUi, ghostRef, startSlotDrag } = useCachedSlotDrag<InventoryItem>({
+    rootRef: gmRef,
+    slotAttr: 'data-wb-slot',
+    zoneAttr: 'data-wb-drop-zone',
+    canTargetSlot: (targetKey, sourceKey) => targetKey !== sourceKey && !targetKey.startsWith('output:'),
+    resolvePriorityTarget: (x, y, sourceKey, scope) => {
       const inputGrid = scope.querySelector<HTMLElement>('[data-wb-input-grid]');
       if (inputGrid) {
         const gRect = inputGrid.getBoundingClientRect();
-        if (
-          x >= gRect.left - 16 &&
-          x <= gRect.right + 16 &&
-          y >= gRect.top - 16 &&
-          y <= gRect.bottom + 16
-        ) {
+        if (x >= gRect.left - 14 && x <= gRect.right + 14 && y >= gRect.top - 14 && y <= gRect.bottom + 14) {
           const emptyIdx = [0, 1, 2, 3].find(i => !interactionInputs[i]);
           const fallbackIdx = emptyIdx !== undefined ? emptyIdx : 0;
           const candidate = `input:${fallbackIdx}`;
           if (candidate !== sourceKey) return candidate;
         }
       }
-
-      const zones = scope.querySelectorAll<HTMLElement>('[data-wb-drop-zone]');
-      zones.forEach(zone => {
-        if (bestKey) return;
-        const zKey = zone.getAttribute('data-wb-drop-zone');
-        if (!zKey) return;
-        const rect = zone.getBoundingClientRect();
-        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-          bestKey = zKey;
-        }
-      });
-    }
-
-    return bestKey;
-  };
-
-  const findScrollableContainerAt = (x: number, y: number): HTMLElement | null => {
-    const scope = gmRef.current;
-    if (!scope) return null;
-    const rn = scope.getRootNode() as ShadowRoot | Document;
-    const hit = (typeof (rn as ShadowRoot).elementFromPoint === 'function'
-      ? (rn as ShadowRoot).elementFromPoint(x, y)
-      : document.elementFromPoint(x, y)) as HTMLElement | null;
-
-    let el: HTMLElement | null = hit;
-    while (el && el !== scope && el !== document.body) {
-      if (el.scrollHeight > el.clientHeight + 2) {
-        const style = window.getComputedStyle(el);
-        if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-          return el;
-        }
-      }
-      el = el.parentElement;
-    }
-
-    const scrollables = scope.querySelectorAll<HTMLElement>('.scroll');
-    for (let i = 0; i < scrollables.length; i++) {
-      const node = scrollables[i];
-      const r = node.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && node.scrollHeight > node.clientHeight + 2) {
-        return node;
-      }
-    }
-    return null;
-  };
+      return null;
+    },
+    onDrop: (targetKey, sourceKey) => {
+      wbDropHandlerRef.current?.(targetKey, sourceKey);
+      setSelectedWbSlot(null);
+    },
+  });
 
   const startSlotPointerDrag = (
     e: React.PointerEvent<HTMLElement>,
@@ -1200,155 +1418,25 @@ const InventoryModalContent: React.FC<{
     item: InventoryItem | null | undefined,
     onSelectClick?: () => void
   ) => {
-    if (e.button !== 0) return;
-    if (wbDragRef.current && wbDragRef.current.pointerId !== e.pointerId) return;
-    if ((e.target as HTMLElement)?.closest('button')) return;
-    e.stopPropagation();
-
-    if (!item) {
-      if (selectedWbSlot && selectedWbSlot !== slotKey && !slotKey.startsWith('output:')) {
-        wbDropHandlerRef.current?.(slotKey, selectedWbSlot);
-        setSelectedWbSlot(null);
-      } else {
-        onSelectClick?.();
-      }
+    setCtxMenu(null);
+    if (e.button === 0 && e.shiftKey) {
+      e.stopPropagation();
+      if (item) handleSlotShiftClick(slotKey);
       return;
     }
-
-    const dragPointerId = e.pointerId;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    wbDragRef.current = {
-      pointerId: dragPointerId,
-      sourceKey: slotKey,
-      item,
-      startX,
-      startY,
-      x: startX,
-      y: startY,
-      active: false,
-      overKey: null,
-    };
-
-    let secondScrollPointer: {
-      pointerId: number;
-      lastX: number;
-      lastY: number;
-      scrollEl: HTMLElement | null;
-    } | null = null;
-
-    const refreshHoverUnderDraggedItem = () => {
-      const st = wbDragRef.current;
-      if (!st || !st.active) return;
-      const over = findTargetWbSlotAt(st.x, st.y, st.sourceKey);
-      st.overKey = over;
-      setWbDragUi({
-        sourceKey: st.sourceKey,
-        item: st.item,
-        x: st.x,
-        y: st.y,
-        overKey: over,
-      });
-    };
-
-    const onExtraPointerDown = (ev: PointerEvent) => {
-      const st = wbDragRef.current;
-      if (!st || ev.pointerId === st.pointerId) return;
-      if (!st.active) {
-        st.active = true;
-        refreshHoverUnderDraggedItem();
-      }
-      secondScrollPointer = {
-        pointerId: ev.pointerId,
-        lastX: ev.clientX,
-        lastY: ev.clientY,
-        scrollEl: findScrollableContainerAt(ev.clientX, ev.clientY),
-      };
-    };
-
-    const onPointerMove = (ev: PointerEvent) => {
-      const st = wbDragRef.current;
-      if (!st) return;
-
-      if (ev.pointerId === st.pointerId) {
-        st.x = ev.clientX;
-        st.y = ev.clientY;
-        if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 4) {
-          st.active = true;
-        }
-        if (st.active) {
-          refreshHoverUnderDraggedItem();
-        }
-        return;
-      }
-
-      if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
-        const dy = ev.clientY - secondScrollPointer.lastY;
-        const dx = ev.clientX - secondScrollPointer.lastX;
-        secondScrollPointer.lastY = ev.clientY;
-        secondScrollPointer.lastX = ev.clientX;
-        if (!secondScrollPointer.scrollEl) {
-          secondScrollPointer.scrollEl = findScrollableContainerAt(ev.clientX, ev.clientY);
-        }
-        if (secondScrollPointer.scrollEl) {
-          secondScrollPointer.scrollEl.scrollTop -= dy;
-          secondScrollPointer.scrollEl.scrollLeft -= dx;
-          refreshHoverUnderDraggedItem();
-        }
-      }
-    };
-
-    const onWheelWhileDragging = () => {
-      refreshHoverUnderDraggedItem();
-    };
-
-    const finishDrag = (ev: PointerEvent, cancelled: boolean) => {
-      const st = wbDragRef.current;
-      if (!st) return;
-
-      if (ev.pointerId !== st.pointerId) {
-        if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
-          secondScrollPointer = null;
-        }
-        return;
-      }
-
-      window.removeEventListener('pointerdown', onExtraPointerDown, true);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerCancel);
-      window.removeEventListener('wheel', onWheelWhileDragging, true);
-
-      wbDragRef.current = null;
-      setWbDragUi(null);
-
-      if (cancelled) return;
-
-      if (st.active) {
-        const targetKey = findTargetWbSlotAt(ev.clientX, ev.clientY, st.sourceKey) || st.overKey;
-        if (targetKey && targetKey !== st.sourceKey) {
-          wbDropHandlerRef.current?.(targetKey, st.sourceKey);
-          setSelectedWbSlot(null);
-        }
-      } else {
-        onSelectClick?.();
+    startSlotDrag(e, slotKey, item, () => {
+      if (!item) {
         if (selectedWbSlot && selectedWbSlot !== slotKey && !slotKey.startsWith('output:')) {
           wbDropHandlerRef.current?.(slotKey, selectedWbSlot);
           setSelectedWbSlot(null);
         } else {
-          setSelectedWbSlot(prev => (prev === slotKey ? null : slotKey));
+          onSelectClick?.();
         }
+        return;
       }
-    };
-
-    const onPointerUp = (ev: PointerEvent) => finishDrag(ev, false);
-    const onPointerCancel = (ev: PointerEvent) => finishDrag(ev, true);
-
-    window.addEventListener('pointerdown', onExtraPointerDown, true);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerCancel);
-    window.addEventListener('wheel', onWheelWhileDragging, true);
+      onSelectClick?.();
+      setSelectedWbSlot(slotKey);
+    });
   };
 
   // Compact square Hand Slot
@@ -1369,6 +1457,7 @@ const InventoryModalContent: React.FC<{
         data-wb-slot={slotKey}
         draggable={false}
         onDragStart={e => e.preventDefault()}
+        onContextMenu={e => handleSlotContextMenu(e, slotKey, handItem)}
         onPointerDown={e =>
           startSlotPointerDrag(e, slotKey, handItem, () => {
             setSelectedHand(hand);
@@ -1376,9 +1465,19 @@ const InventoryModalContent: React.FC<{
         }
         onDoubleClick={() => {
           if (!handItem) return;
-          if (handItem.isContainer && !handItem.singleUseContainer) {
+          if (openContainer && handItem.id !== openContainer.id) {
+            handleUnifiedSlotDrop('zone:container', slotKey);
+            return;
+          }
+          if (activeTab === 'interaction') {
+            handlePlaceHandIntoInput(hand, 'any');
+            return;
+          }
+          if (handItem.isContainer && !handItem.singleUseContainer && !handItem.fluidStorage) {
             setOpenContainer(handItem);
             setSelectedContainerItemIdx(0);
+          } else if (handItem.usable) {
+            handleUseHandItem(hand);
           } else {
             handleStowHand(hand);
           }
@@ -1526,6 +1625,7 @@ const InventoryModalContent: React.FC<{
                       data-wb-slot={slotKey}
                       draggable={false}
                       onDragStart={e => e.preventDefault()}
+                      onContextMenu={e => handleSlotContextMenu(e, slotKey, item)}
                       onPointerDown={e =>
                         startSlotPointerDrag(e, slotKey, item, () => {
                           setSelectedHand(null);
@@ -1539,9 +1639,14 @@ const InventoryModalContent: React.FC<{
                           }
                           return;
                         }
+                        if (activeTab === 'interaction') {
+                          handlePlacePocketIntoInput(slotIdx);
+                          return;
+                        }
                         if (
                           item.isContainer &&
                           !item.singleUseContainer &&
+                          !item.fluidStorage &&
                           !(
                             (item.isOpen ||
                               item.itemId === 'pouch_sealed_snack_torn' ||
@@ -1947,6 +2052,7 @@ const InventoryModalContent: React.FC<{
                             (uAttrs.varietyRu && uAttrs.varietyRu !== it.nameRu)
                           );
 
+                          if (it.doughAttributes && !hasFluid && !hasHybridCapacity) return null;
                           if (!hasAnySpec) return null;
 
                           return (
@@ -2686,95 +2792,129 @@ const InventoryModalContent: React.FC<{
                         })()}
 
                         {selectedEntry.item.doughAttributes && (() => {
-                          const dg = selectedEntry.item.doughAttributes!;
-                          const totalMass = dg.weightGrams + dg.fillingGrams;
-                          const formatMass = (g: number) =>
-                            g >= 1000 ? `${Number((g / 1000).toFixed(2))} кг` : `${Math.round(g)} г`;
+                          const it = selectedEntry.item;
+                          const dg = it.doughAttributes!;
+                          const vis = describeDoughAppearanceQualitativeRu(dg);
+                          const fillingVisible = isDoughFillingVisible(dg, it);
+                          const visibleFillingsText = fillingVisible
+                            ? summarizeDoughFillingsApproxRu(dg.fillings, {
+                                maxItems: 6,
+                                capitalize: true,
+                                withApproxAmount: true,
+                              })
+                            : '';
+                          const baseIngredientsText = summarizeDoughIngredientsRu(dg.ingredients, {
+                            maxItems: 6,
+                            capitalize: true,
+                          });
+                          const hasSoakedCoating = Boolean(it.soakedLiquidId && (it.wetness || 0) >= 10);
                           return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               <div className="inv-sec-row">
-                                <span className="inv-grp-lbl">Свойства теста</span>
-                                <span className="inv-cnt-meta mono">{dg.shapeNameRu} · {formatMass(totalMass)}</span>
+                                <span className="inv-grp-lbl">
+                                  {dg.cookState === 'raw' ? 'Осмотр теста' : 'Осмотр выпечки'}
+                                </span>
+                                <span className="inv-cnt-meta">{vis.shapeBriefRu}</span>
                               </div>
                               <div className="inv-kv-grid inv-kv-g2">
+                                {hasSoakedCoating && (
+                                  <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="inv-kv-k">Пропитка</span>
+                                    <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                      <span className="inv-swatch" style={{ backgroundColor: it.soakedColor || '#38bdf8' }} />
+                                      <span>{it.soakedLiquidNameRu || it.soakedLiquidId}</span>
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="inv-kv">
-                                  <span className="inv-kv-k">Тип теста</span>
-                                  <span className="inv-kv-v" style={{ color: '#e6b85c' }}>{dg.doughTypeRu}</span>
+                                  <span className="inv-kv-k">Вид и размер</span>
+                                  <span className="inv-kv-v">{vis.sizeThicknessRu}</span>
                                 </div>
                                 <div className="inv-kv">
-                                  <span className="inv-kv-k">Консистенция</span>
-                                  <span className="inv-kv-v">{dg.consistencyRu}</span>
-                                </div>
-                                <div className="inv-kv">
-                                  <span className="inv-kv-k">Форма и габариты</span>
-                                  <span className="inv-kv-v mono">
-                                    {dg.shapeNameRu} · {dg.thicknessMm} мм · Ø{dg.diameterCm} см
+                                  <span className="inv-kv-k">Поверхность</span>
+                                  <span
+                                    className="inv-kv-v"
+                                    style={{
+                                      color:
+                                        dg.cookState === 'burnt'
+                                          ? '#ef4444'
+                                          : dg.cookState !== 'raw'
+                                          ? '#7fd19a'
+                                          : '#cfcbc1',
+                                    }}
+                                  >
+                                    {dg.cookState === 'raw' ? 'Сырое тесто' : vis.crustLookRu}
                                   </span>
                                 </div>
                                 <div className="inv-kv">
-                                  <span className="inv-kv-k">Вес (тесто / начинка)</span>
-                                  <span className="inv-kv-v mono">
-                                    {formatMass(dg.weightGrams)} / {formatMass(dg.fillingGrams)}
+                                  <span className="inv-kv-k">{dg.cookState === 'raw' ? 'Тесто' : 'Текстура'}</span>
+                                  <span className="inv-kv-v" style={{ color: '#e6b85c' }}>
+                                    {dg.cookState === 'raw'
+                                      ? `${dg.doughTypeRu} · ${dg.consistencyRu.toLowerCase()}`
+                                      : vis.textureLookRu}
                                   </span>
                                 </div>
                                 <div className="inv-kv">
-                                  <span className="inv-kv-k">Гидратация / жир / сахар</span>
-                                  <span className="inv-kv-v mono">
-                                    {dg.hydrationPct}% · {dg.fatPct}% · {dg.sugarPct}%
-                                  </span>
-                                </div>
-                                <div className="inv-kv">
-                                  <span className="inv-kv-k">Эластичность / подъём</span>
-                                  <span className="inv-kv-v mono">
-                                    {dg.elasticity}% · ×{dg.riseFactor.toFixed(2)}
-                                  </span>
-                                </div>
-                                <div className="inv-kv">
-                                  <span className="inv-kv-k">Разрыхление</span>
-                                  <span className="inv-kv-v">{dg.leaveningRu}</span>
-                                </div>
-                                <div className="inv-kv">
-                                  <span className="inv-kv-k">Готовность</span>
-                                  <span className="inv-kv-v" style={{ color: dg.cookState === 'burnt' ? '#ef4444' : dg.cookState !== 'raw' ? '#7fd19a' : '#cfcbc1' }}>
-                                    {dg.cookStateRu}
-                                  </span>
-                                </div>
-                                <div className="inv-kv">
-                                  <span className="inv-kv-k">Цвет теста</span>
+                                  <span className="inv-kv-k">Цвет</span>
                                   <span className="inv-kv-v" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                    <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: dg.color, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                    <span
+                                      style={{
+                                        width: 9,
+                                        height: 9,
+                                        borderRadius: 2,
+                                        backgroundColor: dg.color,
+                                        border: '1px solid rgba(255,255,255,0.28)',
+                                        flexShrink: 0,
+                                      }}
+                                    />
                                     {dg.fleckColor && (
-                                      <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: dg.fleckColor, border: '1px solid rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                                      <span
+                                        style={{
+                                          width: 9,
+                                          height: 9,
+                                          borderRadius: '50%',
+                                          backgroundColor: dg.fleckColor,
+                                          border: '1px solid rgba(255,255,255,0.28)',
+                                          flexShrink: 0,
+                                        }}
+                                      />
                                     )}
                                     <span>{dg.colorNameRu}</span>
                                   </span>
                                 </div>
-                                <div className="inv-kv">
-                                  <span className="inv-kv-k">Вместимость начинки</span>
-                                  <span className="inv-kv-v mono">
-                                    {Math.round(dg.fillingGrams)} / {Math.round(dg.maxFillingGrams)} г
-                                  </span>
-                                </div>
                                 {dg.embossedPatternRu && (
                                   <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
-                                    <span className="inv-kv-k">Оттиск скалки</span>
+                                    <span className="inv-kv-k">Оттиск на тесте</span>
                                     <span className="inv-kv-v" style={{ color: '#e6b85c' }}>{dg.embossedPatternRu}</span>
                                   </div>
                                 )}
                                 {dg.fillings.length > 0 && (
                                   <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
-                                    <span className="inv-kv-k">Начинка внутри</span>
-                                    <span className="inv-kv-v" style={{ fontWeight: 400, color: '#e6b85c' }}>
-                                      {dg.fillings.map(f => `${f.nameRu} (${Math.round(f.weightGrams)} г)`).join(', ')}
+                                    <span className="inv-kv-k">
+                                      {!fillingVisible
+                                        ? 'Начинка'
+                                        : dg.isFolded
+                                        ? 'Начинка на срезе'
+                                        : 'Видимая начинка'}
+                                    </span>
+                                    <span
+                                      className="inv-kv-v"
+                                      style={{
+                                        fontWeight: 400,
+                                        color: fillingVisible ? '#e6b85c' : '#9c978d',
+                                      }}
+                                    >
+                                      {fillingVisible
+                                        ? visibleFillingsText
+                                        : 'Скрыта внутри (края закрыты)'}
                                     </span>
                                   </div>
                                 )}
-                                {dg.ingredients.length > 0 && (
+                                {baseIngredientsText && (
                                   <div className="inv-kv" style={{ gridColumn: '1 / -1' }}>
-                                    <span className="inv-kv-k">Состав теста</span>
+                                    <span className="inv-kv-k">По виду в основе</span>
                                     <span className="inv-kv-v" style={{ fontWeight: 400, color: '#cfcbc1' }}>
-                                      {dg.ingredients.slice(0, 8).map(ing => `${ing.nameRu} (${Math.round(ing.grams)} г)`).join(', ')}
-                                      {dg.ingredients.length > 8 ? ` и ещё ${dg.ingredients.length - 8}` : ''}
+                                      {baseIngredientsText}
                                     </span>
                                   </div>
                                 )}
@@ -3579,6 +3719,7 @@ const InventoryModalContent: React.FC<{
                                 data-wb-slot={slotKey}
                                 draggable={false}
                                 onDragStart={e => e.preventDefault()}
+                                onContextMenu={e => handleSlotContextMenu(e, slotKey, cItem)}
                                 onPointerDown={e =>
                                   startSlotPointerDrag(e, slotKey, cItem, () => {
                                     setSelectedContainerItemIdx(idx);
@@ -3713,6 +3854,7 @@ const InventoryModalContent: React.FC<{
                               data-wb-slot={slotKey}
                               draggable={false}
                               onDragStart={e => e.preventDefault()}
+                              onContextMenu={e => handleSlotContextMenu(e, slotKey, gi.item)}
                               onPointerDown={e => startSlotPointerDrag(e, slotKey, gi.item)}
                               onDoubleClick={() => handlePickupGroundItem(gi)}
                               className={'inv-slot' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
@@ -4032,6 +4174,7 @@ const InventoryModalContent: React.FC<{
                                     data-wb-slot={slotKey}
                                     draggable={false}
                                     onDragStart={e => e.preventDefault()}
+                                    onContextMenu={e => handleSlotContextMenu(e, slotKey, item)}
                                     onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
                                     onDoubleClick={() => handleUnequipItem(row.slot, layer)}
                                     className={'inv-eq-item' + (isDropTarget || selectedWbSlot === slotKey ? ' on' : '')}
@@ -4099,6 +4242,7 @@ const InventoryModalContent: React.FC<{
                     data-wb-slot={slotKey}
                     draggable={false}
                     onDragStart={e => e.preventDefault()}
+                    onContextMenu={e => handleSlotContextMenu(e, slotKey, item)}
                     onPointerDown={e => startSlotPointerDrag(e, slotKey, item)}
                     onDoubleClick={options?.onDoubleClick}
                     className={
@@ -4157,7 +4301,7 @@ const InventoryModalContent: React.FC<{
               );
 
               return (
-                <div className="inv-wb-wrap">
+                <div className="inv-split-even">
                   <div className="panel inv-wb-board">
                     <div className="inv-wb-row">
                       {/* 2 HAND SLOTS */}
@@ -4196,7 +4340,7 @@ const InventoryModalContent: React.FC<{
                         className={'btn' + (evalResult.isValid ? ' btn-p' : ' btn-s')}
                         disabled={!evalResult.isValid}
                         onClick={handleExecuteInteraction}
-                        style={{ height: 48, padding: '0 18px', marginTop: 24 }}
+                        style={{ height: 48, padding: '0 16px', marginTop: 24 }}
                         title={evalResult.isValid ? evalResult.title : undefined}
                       >
                         <ArrowRight width={22} height={22} />
@@ -4224,11 +4368,28 @@ const InventoryModalContent: React.FC<{
                     </div>
 
                     <div className={'inv-wb-status' + (evalResult.isValid ? ' valid' : '')}>
-                      {evalResult.isValid
+                      {evalResult.isValid || interactionInputs.some(Boolean)
                         ? `${evalResult.title} — ${evalResult.subtitle}`
-                        : 'Перетащите предметы из рук в слоты ввода для переливания, смешивания или сборки'}
+                        : 'Перетащите предметы из карманов или рук в слоты ввода (или Shift+Клик)'}
                     </div>
+
+                    {workbenchActiveCount > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-s btn-xs"
+                        onClick={handleClearWorkbench}
+                      >
+                        <RotateCcw width={13} height={13} />
+                        <span>Очистить стол ({workbenchActiveCount})</span>
+                      </button>
+                    )}
                   </div>
+
+                  <section className="panel inv-col">
+                    <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                      {renderCompartmentsSlotGrid()}
+                    </div>
+                  </section>
                 </div>
               );
             })()}
@@ -4239,10 +4400,12 @@ const InventoryModalContent: React.FC<{
             <div className="hint-g">
               <span className="key">Esc / I</span>
               <span>Закрыть</span>
+              <span className="key">Shift+Клик</span>
+              <span>Быстрый перенос</span>
+              <span className="key">ПКМ</span>
+              <span>Меню действий</span>
               <span className="key">2× Клик</span>
               <span>Использовать</span>
-              <span className="key">Перетаскивание</span>
-              <span>В любой слот или руку</span>
             </div>
             <div className="hint-r">
               Лев: <strong style={{ color: '#e9e6df' }}>{player.leftHandItem ? player.leftHandItem.nameRu : 'Свободна'}</strong>
@@ -4253,15 +4416,315 @@ const InventoryModalContent: React.FC<{
         </div>
 
         {/* GLOBAL FLOATING DRAG PREVIEW (outside scaled .gm so clientX/Y match 1:1) */}
-        {wbDragUi && (
-          <div
-            className="inv-drag-ghost"
-            style={{
-              left: wbDragUi.x - 32,
-              top: wbDragUi.y - 32,
-            }}
-          >
+        <div ref={ghostRef} className="inv-drag-ghost">
+          {wbDragUi && (
             <ItemIconCanvas itemId={wbDragUi.item.itemId} item={wbDragUi.item} size={46} />
+          )}
+        </div>
+
+        {/* FLOATING RIGHT-CLICK CONTEXT MENU */}
+        {ctxMenu && (
+          <div
+            className="inv-ctx-menu"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="inv-ctx-head">{ctxMenu.item.nameRu}</div>
+            {ctxMenu.slotKey.startsWith('inv:') && (() => {
+              const idx = parseInt(ctxMenu.slotKey.replace('inv:', ''), 10);
+              const it = ctxMenu.item;
+              return (
+                <>
+                  {it.usable && (
+                    <button
+                      type="button"
+                      className="inv-ctx-item primary"
+                      onClick={() => {
+                        setCtxMenu(null);
+                        handleUseItem(idx);
+                      }}
+                    >
+                      <Check width={14} height={14} />
+                      <span>Использовать</span>
+                    </button>
+                  )}
+                  {it.isContainer && !it.singleUseContainer && (
+                    <button
+                      type="button"
+                      className="inv-ctx-item primary"
+                      onClick={() => {
+                        setCtxMenu(null);
+                        setOpenContainer(it);
+                        setSelectedContainerItemIdx(0);
+                      }}
+                    >
+                      <FolderOpen width={14} height={14} />
+                      <span>Открыть контейнер</span>
+                    </button>
+                  )}
+                  {openContainer && it.id !== openContainer.id && (
+                    <button
+                      type="button"
+                      className="inv-ctx-item"
+                      onClick={() => {
+                        setCtxMenu(null);
+                        handlePutIntoContainer(openContainer, idx);
+                      }}
+                    >
+                      <ArrowDownToLine width={14} height={14} />
+                      <span>В контейнер</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="inv-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleTakeToHand('right', idx);
+                    }}
+                  >
+                    <Hand width={14} height={14} />
+                    <span>В правую руку</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inv-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleTakeToHand('left', idx);
+                    }}
+                  >
+                    <Hand width={14} height={14} />
+                    <span>В левую руку</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inv-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handlePlacePocketIntoInput(idx);
+                      setActiveTab('interaction');
+                    }}
+                  >
+                    <Layers width={14} height={14} />
+                    <span>На стол взаимодействия</span>
+                  </button>
+                  {it.category === 'clothing' && (
+                    <button
+                      type="button"
+                      className="inv-ctx-item"
+                      onClick={() => {
+                        setCtxMenu(null);
+                        handleEquipItem(idx);
+                      }}
+                    >
+                      <Shirt width={14} height={14} />
+                      <span>Надеть</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="inv-ctx-item danger"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleDropItem(idx);
+                    }}
+                  >
+                    <Trash2 width={14} height={14} />
+                    <span>Выбросить</span>
+                  </button>
+                </>
+              );
+            })()}
+            {(ctxMenu.slotKey === 'hand:left' || ctxMenu.slotKey === 'hand:right') && (() => {
+              const hand = ctxMenu.slotKey === 'hand:left' ? 'left' : 'right';
+              const it = ctxMenu.item;
+              return (
+                <>
+                  {it.usable && (
+                    <button
+                      type="button"
+                      className="inv-ctx-item primary"
+                      onClick={() => {
+                        setCtxMenu(null);
+                        handleUseHandItem(hand);
+                      }}
+                    >
+                      <Check width={14} height={14} />
+                      <span>Использовать</span>
+                    </button>
+                  )}
+                  {it.isContainer && !it.singleUseContainer && (
+                    <button
+                      type="button"
+                      className="inv-ctx-item primary"
+                      onClick={() => {
+                        setCtxMenu(null);
+                        setOpenContainer(it);
+                        setSelectedContainerItemIdx(0);
+                      }}
+                    >
+                      <FolderOpen width={14} height={14} />
+                      <span>Открыть контейнер</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="inv-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleStowHand(hand);
+                    }}
+                  >
+                    <Package width={14} height={14} />
+                    <span>Убрать в карман</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inv-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handlePlaceHandIntoInput(hand, 'any');
+                      setActiveTab('interaction');
+                    }}
+                  >
+                    <Layers width={14} height={14} />
+                    <span>На стол взаимодействия</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inv-ctx-item danger"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleDropFromHand(hand);
+                    }}
+                  >
+                    <Trash2 width={14} height={14} />
+                    <span>Выбросить</span>
+                  </button>
+                </>
+              );
+            })()}
+            {ctxMenu.slotKey.startsWith('cont:') && openContainer && (() => {
+              const cIdx = parseInt(ctxMenu.slotKey.replace('cont:', ''), 10);
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="inv-ctx-item primary"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleExtractFromContainer(openContainer, cIdx, 'pockets');
+                    }}
+                  >
+                    <ArrowUpFromLine width={14} height={14} />
+                    <span>Достать в карман</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inv-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleExtractFromContainer(openContainer, cIdx, 'rightHand');
+                    }}
+                  >
+                    <Hand width={14} height={14} />
+                    <span>В правую руку</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inv-ctx-item danger"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleDropFromContainer(openContainer, cIdx);
+                    }}
+                  >
+                    <Trash2 width={14} height={14} />
+                    <span>Выбросить</span>
+                  </button>
+                </>
+              );
+            })()}
+            {ctxMenu.slotKey.startsWith('ground:') && (() => {
+              const groundId = ctxMenu.slotKey.replace('ground:', '');
+              const gi = nearbyGroundItems.find(g => g.id === groundId);
+              if (!gi) return null;
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="inv-ctx-item primary"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handlePickupGroundItem(gi);
+                    }}
+                  >
+                    <Package width={14} height={14} />
+                    <span>Подобрать в карман</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inv-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handlePickupGroundItem(gi, 'hand:right');
+                    }}
+                  >
+                    <Hand width={14} height={14} />
+                    <span>Взять в правую руку</span>
+                  </button>
+                </>
+              );
+            })()}
+            {ctxMenu.slotKey.startsWith('cloth:') && (() => {
+              const parts = ctxMenu.slotKey.split(':');
+              return (
+                <button
+                  type="button"
+                  className="inv-ctx-item primary"
+                  onClick={() => {
+                    setCtxMenu(null);
+                    if (parts[1] && parts[2]) handleUnequipItem(parts[1], parts[2]);
+                  }}
+                >
+                  <Package width={14} height={14} />
+                  <span>Снять в карман</span>
+                </button>
+              );
+            })()}
+            {ctxMenu.slotKey.startsWith('input:') && (() => {
+              const inIdx = parseInt(ctxMenu.slotKey.replace('input:', ''), 10);
+              return (
+                <button
+                  type="button"
+                  className="inv-ctx-item primary"
+                  onClick={() => {
+                    setCtxMenu(null);
+                    handleRemoveInputSlot(inIdx, 'pockets');
+                  }}
+                >
+                  <Package width={14} height={14} />
+                  <span>Вернуть в карман</span>
+                </button>
+              );
+            })()}
+            {ctxMenu.slotKey.startsWith('output:') && (() => {
+              const outIdx = parseInt(ctxMenu.slotKey.replace('output:', ''), 10);
+              return (
+                <button
+                  type="button"
+                  className="inv-ctx-item primary"
+                  onClick={() => {
+                    setCtxMenu(null);
+                    if (ensureOutputsCommitted()) handleClaimOutputSlot(outIdx, 'pockets');
+                  }}
+                >
+                  <Package width={14} height={14} />
+                  <span>Забрать в карман</span>
+                </button>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -4269,11 +4732,11 @@ const InventoryModalContent: React.FC<{
   );
 };
 
-export const InventoryModal: React.FC<InventoryModalProps> = ({
+export const InventoryModal: React.FC<InventoryModalProps> = React.memo(({
   isOpen,
   player,
   ...rest
 }) => {
   if (!isOpen || !player) return null;
   return <InventoryModalContent player={player} {...rest} />;
-};
+});

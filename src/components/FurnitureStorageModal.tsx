@@ -1,45 +1,48 @@
-import React, { useState, useEffect } from 'react';
-import { Player, InventoryItem, ItemCategory, GameWorld } from '../types';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { Player, GameWorld, InventoryItem } from '../types';
 import {
   FurnitureStorage,
   FURNITURE_STORAGE_CONFIGS,
-  getFurnitureStorage,
-  getFurnitureStorageTotalWeight,
-  getFurnitureStorageTotalVolume,
-  addItemToFurnitureStorage,
-  removeItemFromFurnitureStorage,
-  canItemFitInFurniture
+  saveFurnitureStoragesToLocalStorage,
 } from '../furnitureStorageSystem';
-import { syncFurnitureStorageThermodynamics } from '../itemThermalSystem';
 import {
-  addItemToPlayer,
-  removeItemFromPlayer,
-  moveInventoryItem,
-  canItemFitInCompartment,
-  canItemFitInContainer,
-  addItemToContainer,
-  stowItemFromHandToPockets,
-  getPlayerPocketCapacity,
-  getPlayerTotalCarriedWeight,
   getItemTotalWeight,
   getItemTotalVolume,
-  getPlayerCompartments,
+  addItemToPlayer,
   putItemInHand,
   takeItemFromHand,
-  addPlayerNotification
+  canItemFitInCompartment,
+  getPlayerCompartments,
+  addPlayerNotification,
 } from '../items';
-import { ItemIconCanvas } from './ItemIconCanvas';
-import { ModalShell } from './gameUi';
-import { sound } from '../audio';
 import {
-  Snowflake,
+  LIQUID_REGISTRY,
+  LiquidId,
+  isFluidStorageDryForm,
+  ensureHybridContainerProps,
+  getContainerCapacityBreakdown,
+} from '../liquidSystem';
+import { getEffectiveFluidWrapper } from '../interactionCrafting';
+import { syncFurnitureStorageThermodynamics, getItemThermalDisplayInfo } from '../itemThermalSystem';
+import { sound } from '../audio';
+import { ItemIconCanvas } from './ItemIconCanvas';
+import { ShadowHost, attachStageFit } from './ShadowHost';
+import { useTopmostEscape } from './gameUi';
+import { useCachedSlotDrag } from './useCachedSlotDrag';
+import kitchenFurnitureCss from './kitchenFurniture.css?inline';
+import {
+  X,
+  Package,
+  Archive,
   Hand,
-  Info,
-  Flame,
-  CloudRain,
-  User,
   Shirt,
-  Luggage
+  Luggage,
+  User,
+  Snowflake,
+  Trash2,
+  CloudRain,
+  ArrowRight,
+  ArrowLeft,
 } from 'lucide-react';
 
 function formatWeightRu(weightKg: number): string {
@@ -51,1081 +54,1105 @@ function formatWeightRu(weightKg: number): string {
   return `${Number(weightKg.toFixed(2))} кг`;
 }
 
-interface FurnitureStorageModalProps {
+export interface FurnitureStorageModalProps {
   isOpen: boolean;
   onClose: () => void;
   storage?: FurnitureStorage | null;
+  storageId?: string | null;
   player: Player | null;
   world?: GameWorld | null;
-  onVitalsChange?: () => void;
-  onInventoryUpdated?: () => void;
   buildingId?: string;
   floor?: number;
   furnitureIndex?: number;
   furnitureType?: string;
   aptId?: string;
   customTitle?: string;
+  onInventoryUpdated?: () => void;
+  onVitalsChange?: () => void;
+  onNotify?: (msg: string, type?: 'info' | 'warning' | 'danger' | 'pickup') => void;
 }
 
-export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (props) => {
-  const {
-    isOpen,
-    onClose,
-    player,
-    world,
-    onVitalsChange,
-    onInventoryUpdated
-  } = props;
-
-  const storage: FurnitureStorage | null =
-    props.storage ||
-    (props.buildingId && props.furnitureType
-      ? getFurnitureStorage(
-          props.buildingId,
-          props.floor ?? 0,
-          props.furnitureIndex ?? 0,
-          props.furnitureType,
-          props.aptId,
-          props.customTitle
-        )
-      : null);
-
-  const [selectedStorageIdx, setSelectedStorageIdx] = useState<number | null>(0);
-  const [selectedInventoryIdx, setSelectedInventoryIdx] = useState<number | null>(null);
-  const [selectedHand, setSelectedHand] = useState<'left' | 'right' | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+const FurnitureStorageContent: React.FC<{
+  player: Player;
+  world: GameWorld | null;
+  storage: FurnitureStorage;
+  customTitle?: string;
+  onClose: () => void;
+  onInventoryUpdated?: () => void;
+  onVitalsChange?: () => void;
+  onNotify?: (msg: string, type?: 'info' | 'warning' | 'danger' | 'pickup') => void;
+}> = ({ player, world, storage, customTitle, onClose, onInventoryUpdated, onVitalsChange, onNotify }) => {
   const [, forceRender] = useState(0);
-  const [selectedStSlot, setSelectedStSlot] = useState<string | null>(null);
-  const [stDragUi, setStDragUi] = useState<{
-    sourceKey: string;
-    item: InventoryItem;
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{
     x: number;
     y: number;
-    overKey: string | null;
-  } | null>(null);
-  const stDragRef = React.useRef<{
-    pointerId: number;
-    sourceKey: string;
+    slotKey: string;
     item: InventoryItem;
-    startX: number;
-    startY: number;
-    x: number;
-    y: number;
-    active: boolean;
-    overKey: string | null;
   } | null>(null);
-  const stDropHandlerRef = React.useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const gmRef = useRef<HTMLDivElement | null>(null);
+  const dropHandlerRef = useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
+
+  const cfg = FURNITURE_STORAGE_CONFIGS[storage.furnitureType];
+  const storageTitle = customTitle || cfg?.nameRu || storage.id;
+  const isFridge =
+    storage.furnitureType?.includes('fridge') ||
+    storageTitle.toLowerCase().includes('холодильник') ||
+    storage.id.includes('fridge');
+
+  useTopmostEscape(onClose);
+  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
 
   useEffect(() => {
-    if (!isOpen || !storage) return;
+    syncFurnitureStorageThermodynamics(storage, Date.now() / 1000);
     const interval = setInterval(() => {
-      syncFurnitureStorageThermodynamics(storage);
-      forceRender(n => n + 1);
-    }, 800);
-    return () => clearInterval(interval);
-  }, [isOpen, storage]);
+      const items = storage.items || [];
+      const prevSig = items
+        .map(it => (it ? `${Math.round(it.surfaceTemperature ?? it.temperature ?? 20)}:${Math.round(it.wetness ?? 0)}` : ''))
+        .join('|');
+      syncFurnitureStorageThermodynamics(storage, Date.now() / 1000);
+      const nextSig = (storage.items || [])
+        .map(it => (it ? `${Math.round(it.surfaceTemperature ?? it.temperature ?? 20)}:${Math.round(it.wetness ?? 0)}` : ''))
+        .join('|');
+      if (prevSig !== nextSig) {
+        forceRender(n => n + 1);
+      }
+    }, 1000);
+    return () => {
+      clearInterval(interval);
+      saveFurnitureStoragesToLocalStorage();
+    };
+  }, [storage]);
 
-  if (!isOpen || !storage || !player) return null;
+  const notify = (msg: string, type: 'info' | 'warning' | 'danger' | 'pickup' = 'info') => {
+    if (onNotify) onNotify(msg, type);
+    else addPlayerNotification(player, msg, type === 'danger' ? 'warning' : type);
+  };
 
-  const cfg = FURNITURE_STORAGE_CONFIGS[storage.furnitureType] || FURNITURE_STORAGE_CONFIGS.wardrobe;
-  const isRadiator = storage.furnitureType === 'radiator';
-  const isHotSurface = !!cfg.isHot || isRadiator;
-  const storageTotalVol = getFurnitureStorageTotalVolume(storage);
-  const storageTotalWt = getFurnitureStorageTotalWeight(storage);
-
-  const volPercent = Math.min(100, Math.round((storageTotalVol / cfg.capacityL) * 100));
-  const wtPercent = Math.min(100, Math.round((storageTotalWt / cfg.maxWeightKg) * 100));
-
-  const playerCarriedWt = getPlayerTotalCarriedWeight(player);
-  const playerPocketCap = getPlayerPocketCapacity(player);
-
-  const notifyChange = () => {
+  const notifyChanged = () => {
+    saveFurnitureStoragesToLocalStorage();
     forceRender(n => n + 1);
-    if (onVitalsChange) onVitalsChange();
-    if (onInventoryUpdated) onInventoryUpdated();
+    onInventoryUpdated?.();
+    onVitalsChange?.();
   };
 
-  // Transfer item from player inventory into furniture storage
-  const handleStoreItem = (itemIdx: number, countToTransfer?: number) => {
-    setErrorMessage(null);
-    if (!player.inventory || itemIdx < 0 || itemIdx >= player.inventory.length) return;
-    const invItem = player.inventory[itemIdx];
-    if (!invItem) return;
+  if (!storage.items) storage.items = [];
+  const totalStorageSlots = Math.max(24, storage.items.length + 6);
+  const maxWeightKg = cfg?.maxWeightKg || 60;
 
-    const count = countToTransfer ?? invItem.count;
-    const testItem = { ...invItem, count };
-    const check = canItemFitInFurniture(storage, testItem);
-    if (!check.fits) {
-      setErrorMessage(check.reason || 'Предмет не помещается в хранилище');
-      sound.playUseItem();
-      return;
+  const usedStorageSlots = storage.items.filter(Boolean).length;
+  const usedWeight = Number(
+    storage.items.reduce((acc, it) => acc + (it ? getItemTotalWeight(it) : 0), 0).toFixed(2)
+  );
+  const compartments = getPlayerCompartments(player);
+  const inventory = player.inventory || [];
+
+  const getSlotFillInfo = (item: InventoryItem | null | undefined) => {
+    if (!item) return null;
+    ensureHybridContainerProps(item);
+    const wrap = getEffectiveFluidWrapper(item);
+    if (wrap) {
+      const st = wrap.state;
+      const liq = st.liquidId ? LIQUID_REGISTRY[st.liquidId as LiquidId] : undefined;
+      const unit = isFluidStorageDryForm(st) || wrap.isGranularContainer ? 'г' : 'мл';
+      const bd = getContainerCapacityBreakdown(item);
+      const hasSolids = Boolean(item.contents && item.contents.length > 0);
+      const pct =
+        bd.totalCapacityMl > 0
+          ? Math.max(0, Math.min(100, Math.round(bd.totalPct)))
+          : st.maxMl > 0
+          ? Math.max(0, Math.min(100, Math.round((st.currentMl / st.maxMl) * 100)))
+          : 0;
+      const subName =
+        st.currentMl <= 0 || !st.liquidId
+          ? hasSolids
+            ? `Предметы (${item.contents!.length} шт.)`
+            : 'Пусто'
+          : st.attributes?.varietyRu || liq?.nameRu || st.liquidId;
+      const color =
+        st.currentMl > 0 && st.liquidId
+          ? st.attributes?.customColor || liq?.color || '#38bdf8'
+          : hasSolids
+          ? '#f59e0b'
+          : '#38bdf8';
+      return {
+        pct,
+        color,
+        tooltip: `${item.nameRu}\n${subName}: ${Math.round(st.currentMl)} / ${st.maxMl} ${unit}`,
+      };
     }
-
-    const removed = removeItemFromPlayer(player, itemIdx, count);
-    if (!removed) return;
-
-    addItemToFurnitureStorage(storage, removed, count);
-    if (!player.inventory[itemIdx]) {
-      setSelectedInventoryIdx(null);
-    }
-    sound.playPickup();
-    addPlayerNotification(player, `Помещено ${isRadiator ? 'на батарею' : `в ${cfg.nameRu}`}: ${removed.nameRu} (×${removed.count})`, 'pickup');
-    notifyChange();
+    const pct =
+      item.maxPortions && item.maxPortions > 1
+        ? Math.max(0, Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100))
+        : null;
+    const thermal = getItemThermalDisplayInfo(item);
+    const tempLine = thermal ? `\n${thermal.tempText} (${thermal.labelRu})` : '';
+    return {
+      pct,
+      color: undefined,
+      tooltip: `${item.nameRu}\n${formatWeightRu(getItemTotalWeight(item))} · ${getItemTotalVolume(item)} л${tempLine}`,
+    };
   };
 
-  // Store item directly from left or right hand
-  const handleStoreFromHand = (hand: 'left' | 'right') => {
-    setErrorMessage(null);
-    const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-    if (!handItem) return;
-
-    const check = canItemFitInFurniture(storage, handItem);
-    if (!check.fits) {
-      setErrorMessage(check.reason || 'Предмет не помещается в хранилище');
-      sound.playUseItem();
-      return;
+  const canAddWeightToStorage = (item: InventoryItem, replacingItem?: InventoryItem | null): boolean => {
+    const itemW = getItemTotalWeight(item);
+    const repW = replacingItem ? getItemTotalWeight(replacingItem) : 0;
+    if (usedWeight - repW + itemW > maxWeightKg + 0.001) {
+      notify(
+        `Превышен лимит веса (${storageTitle}: макс. ${formatWeightRu(maxWeightKg)})`,
+        'warning'
+      );
+      return false;
     }
-
-    const taken = takeItemFromHand(player, hand);
-    if (!taken) return;
-
-    addItemToFurnitureStorage(storage, taken, taken.count);
-    setSelectedHand(null);
-    sound.playPickup();
-    addPlayerNotification(player, `Помещено ${isRadiator ? 'на батарею' : `в ${cfg.nameRu}`}: ${taken.nameRu}`, 'pickup');
-    notifyChange();
+    return true;
   };
 
-  // Take item from furniture storage into player pockets (optionally targeting a specific slot)
-  const handleTakeItem = (storageIdx: number, countToTake?: number, exactPocketSlotIdx?: number) => {
-    setErrorMessage(null);
-    if (!storage.items || storageIdx < 0 || storageIdx >= storage.items.length) return;
-    const targetItem = storage.items[storageIdx];
-    if (!targetItem) return;
+  const storePlayerItemIntoSlot = (
+    source: { type: 'hand'; hand: 'left' | 'right' } | { type: 'inv'; idx: number },
+    targetStorageIdx?: number
+  ) => {
+    syncFurnitureStorageThermodynamics(storage, Date.now() / 1000);
 
-    const count = countToTake ?? targetItem.count;
+    const srcItem =
+      source.type === 'hand'
+        ? source.hand === 'left'
+          ? player.leftHandItem
+          : player.rightHandItem
+        : player.inventory[source.idx];
+    if (!srcItem) return;
 
-    // If user dropped onto a specific pocket slot
-    if (exactPocketSlotIdx !== undefined && exactPocketSlotIdx >= 0) {
-      if (!player.inventory) player.inventory = [];
-      const existing = player.inventory[exactPocketSlotIdx];
+    // 1. Exact slot target
+    if (targetStorageIdx !== undefined && targetStorageIdx >= 0 && targetStorageIdx < totalStorageSlots) {
+      const targetItem = storage.items[targetStorageIdx];
 
-      // If existing slot holds a container that can accept the storage item
       if (
-        existing &&
-        existing.isContainer &&
-        !existing.singleUseContainer &&
-        canItemFitInContainer(existing, { ...targetItem, count }).fits
+        targetItem &&
+        targetItem.itemId === srcItem.itemId &&
+        targetItem.count < targetItem.maxStack &&
+        !targetItem.isContainer &&
+        !targetItem.fluidStorage
       ) {
-        const removed = removeItemFromFurnitureStorage(storage, storageIdx, count);
-        if (removed) {
-          const cRes = addItemToContainer(existing, removed);
-          if (cRes.success) {
-            sound.playPickup();
-            addPlayerNotification(player, cRes.message, 'pickup');
-            notifyChange();
-            return;
-          } else {
-            storage.items.splice(Math.min(storageIdx, storage.items.length), 0, removed);
+        if (!canAddWeightToStorage(srcItem)) return;
+        const canAdd = Math.min(srcItem.count, targetItem.maxStack - targetItem.count);
+        if (canAdd > 0) {
+          targetItem.count += canAdd;
+          srcItem.count -= canAdd;
+          if (srcItem.count <= 0) {
+            if (source.type === 'hand') takeItemFromHand(player, source.hand);
+            else player.inventory[source.idx] = null as any;
           }
+          sound.playPickup();
+          notifyChanged();
+          return;
         }
       }
 
-      const fit = canItemFitInCompartment(player, exactPocketSlotIdx, { ...targetItem, count }, {
-        ignoreSlotIdx: existing ? exactPocketSlotIdx : undefined,
-      });
-      if (!fit.fits) {
-        setErrorMessage(fit.reason || 'Предмет не помещается в этот отсек карманов');
-        sound.playUseItem();
+      if (!targetItem) {
+        if (!canAddWeightToStorage(srcItem)) return;
+        const taken =
+          source.type === 'hand' ? takeItemFromHand(player, source.hand) : player.inventory[source.idx];
+        if (!taken) return;
+        if (source.type === 'inv') player.inventory[source.idx] = null as any;
+        storage.items[targetStorageIdx] = taken;
+        sound.playPickup();
+        notifyChanged();
         return;
       }
 
-      if (!existing) {
-        const removed = removeItemFromFurnitureStorage(storage, storageIdx, count);
-        if (removed) {
-          player.inventory[exactPocketSlotIdx] = removed;
-          sound.playPickup();
-          addPlayerNotification(player, `Взято ${isRadiator ? 'с батареи' : `из ${cfg.nameRu}`}: ${removed.nameRu}`, 'pickup');
-          notifyChange();
-          return;
-        }
-      } else if (canItemFitInFurniture(storage, existing).fits) {
-        // Swap storage item with existing pocket slot item
-        const removed = removeItemFromFurnitureStorage(storage, storageIdx, count);
-        if (removed) {
-          player.inventory[exactPocketSlotIdx] = removed;
-          addItemToFurnitureStorage(storage, existing, existing.count);
-          sound.playPickup();
-          notifyChange();
-          return;
-        }
-      }
-    }
-
-    const removed = removeItemFromFurnitureStorage(storage, storageIdx, count);
-    if (!removed) return;
-
-    const added = addItemToPlayer(player, removed, { preferPockets: true, skipHands: true });
-    if (!added) {
-      storage.items.splice(Math.min(storageIdx, storage.items.length), 0, removed);
-      setErrorMessage('В карманах недостаточно места — перетащите предмет в слот руки');
-      sound.playUseItem();
-      return;
-    }
-
-    if (storage.items.length === 0) {
-      setSelectedStorageIdx(null);
-    } else if (storageIdx >= storage.items.length) {
-      setSelectedStorageIdx(storage.items.length - 1);
-    }
-
-    sound.playPickup();
-    addPlayerNotification(player, `Взято ${isRadiator ? 'с батареи' : `из ${cfg.nameRu}`}: ${removed.nameRu} (×${removed.count})`, 'pickup');
-    notifyChange();
-  };
-
-  // Take item directly to hand (or swap with hand if occupied)
-  const handleTakeToHand = (storageIdx: number, hand: 'left' | 'right') => {
-    setErrorMessage(null);
-    if (!storage.items || storageIdx < 0 || storageIdx >= storage.items.length) return;
-    const targetItem = storage.items[storageIdx];
-    if (!targetItem) return;
-
-    const currentHandItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-    if (currentHandItem) {
-      if (canItemFitInFurniture(storage, currentHandItem).fits) {
-        const countToTake = targetItem.count > 1 ? 1 : targetItem.count;
-        const removed = removeItemFromFurnitureStorage(storage, storageIdx, countToTake);
-        if (!removed) return;
-        const displaced = takeItemFromHand(player, hand);
-        const res = putItemInHand(player, hand, removed, world || undefined);
-        if (res.success) {
-          if (displaced) addItemToFurnitureStorage(storage, displaced, displaced.count);
-          sound.playPickup();
-          notifyChange();
-          return;
-        } else {
-          if (displaced) putItemInHand(player, hand, displaced, world || undefined);
-          storage.items.splice(Math.min(storageIdx, storage.items.length), 0, removed);
-          setErrorMessage(res.message);
-          return;
-        }
-      }
-      setErrorMessage(`${hand === 'left' ? 'Левая' : 'Правая'} рука уже занята!`);
-      return;
-    }
-
-    const countToTake = targetItem.count > 1 ? 1 : targetItem.count;
-    const removed = removeItemFromFurnitureStorage(storage, storageIdx, countToTake);
-    if (!removed) return;
-
-    const res = putItemInHand(player, hand, removed, world || undefined);
-    if (!res.success) {
-      storage.items.splice(Math.min(storageIdx, storage.items.length), 0, removed);
-      setErrorMessage(res.message);
-      return;
-    }
-
-    if (storage.items.length === 0) {
-      setSelectedStorageIdx(null);
-    } else if (storageIdx >= storage.items.length) {
-      setSelectedStorageIdx(storage.items.length - 1);
-    }
-
-    sound.playPickup();
-    addPlayerNotification(player, `Взято в ${hand === 'left' ? 'левую' : 'правую'} руку: ${removed.nameRu}`, 'pickup');
-    notifyChange();
-  };
-
-  // ==================== CUSTOM POINTER DRAG-AND-DROP ENGINE ====================
-  const handleStorageSlotDrop = (targetKey: string, sourceKey: string) => {
-    if (!sourceKey || sourceKey === targetKey) return;
-
-    const isSourceStorage = sourceKey.startsWith('storage:') && !sourceKey.startsWith('storage:empty-');
-    const isTargetStorage = targetKey.startsWith('storage:') || targetKey === 'zone:storage';
-
-    // 1. Player Inventory Slot -> Storage
-    if (sourceKey.startsWith('inv:') && isTargetStorage) {
-      const fromIdx = parseInt(sourceKey.replace('inv:', ''), 10);
-      if (!isNaN(fromIdx)) {
-        handleStoreItem(fromIdx);
-      }
-      return;
-    }
-
-    // 2. Player Hand -> Storage
-    if ((sourceKey === 'hand:left' || sourceKey === 'hand:right') && isTargetStorage) {
-      const hand = sourceKey === 'hand:left' ? 'left' : 'right';
-      handleStoreFromHand(hand);
-      return;
-    }
-
-    // 3. Storage -> Player Hand
-    if (isSourceStorage && (targetKey === 'hand:left' || targetKey === 'hand:right')) {
-      const sIdx = parseInt(sourceKey.replace('storage:', ''), 10);
-      const hand = targetKey === 'hand:left' ? 'left' : 'right';
-      if (!isNaN(sIdx)) {
-        handleTakeToHand(sIdx, hand);
-      }
-      return;
-    }
-
-    // 4. Storage -> Player Inventory Slot or Pockets Zone
-    if (isSourceStorage && (targetKey.startsWith('inv:') || targetKey === 'zone:pockets')) {
-      const sIdx = parseInt(sourceKey.replace('storage:', ''), 10);
-      if (isNaN(sIdx)) return;
-      if (targetKey.startsWith('inv:')) {
-        const toSlotIdx = parseInt(targetKey.replace('inv:', ''), 10);
-        handleTakeItem(sIdx, undefined, isNaN(toSlotIdx) ? undefined : toSlotIdx);
+      if (!canAddWeightToStorage(srcItem, targetItem)) return;
+      if (source.type === 'hand') {
+        const taken = takeItemFromHand(player, source.hand);
+        if (!taken) return;
+        storage.items[targetStorageIdx] = taken;
+        putItemInHand(player, source.hand, targetItem, world);
+        sound.playPickup();
+        notifyChanged();
+        return;
       } else {
-        handleTakeItem(sIdx);
+        const prev = player.inventory[source.idx];
+        player.inventory[source.idx] = null as any;
+        const fit = canItemFitInCompartment(player, source.idx, targetItem);
+        if (!fit.fits) {
+          player.inventory[source.idx] = prev;
+          notify(fit.reason || 'Предмет из хранилища не помещается в этот карман', 'warning');
+          return;
+        }
+        storage.items[targetStorageIdx] = prev;
+        player.inventory[source.idx] = targetItem;
+        sound.playPickup();
+        notifyChanged();
+        return;
+      }
+    }
+
+    // 2. Auto-stack or first empty slot
+    if (!canAddWeightToStorage(srcItem)) return;
+    if (!srcItem.isContainer && !srcItem.fluidStorage && srcItem.maxStack > 1) {
+      for (let i = 0; i < totalStorageSlots; i++) {
+        const st = storage.items[i];
+        if (st && st.itemId === srcItem.itemId && st.count < st.maxStack) {
+          const canAdd = Math.min(srcItem.count, st.maxStack - st.count);
+          st.count += canAdd;
+          srcItem.count -= canAdd;
+          if (srcItem.count <= 0) {
+            if (source.type === 'hand') takeItemFromHand(player, source.hand);
+            else player.inventory[source.idx] = null as any;
+            sound.playPickup();
+            notifyChanged();
+            return;
+          }
+        }
+      }
+    }
+
+    let emptyIdx = -1;
+    for (let i = 0; i < totalStorageSlots; i++) {
+      if (!storage.items[i]) {
+        emptyIdx = i;
+        break;
+      }
+    }
+    if (emptyIdx === -1) {
+      notify(`В хранилище «${storageTitle}» нет свободных ячеек`, 'warning');
+      return;
+    }
+
+    const taken =
+      source.type === 'hand' ? takeItemFromHand(player, source.hand) : player.inventory[source.idx];
+    if (!taken) return;
+    if (source.type === 'inv') player.inventory[source.idx] = null as any;
+    storage.items[emptyIdx] = taken;
+    sound.playPickup();
+    notifyChanged();
+  };
+
+  const takeStorageItemToPlayer = (
+    storageIdx: number,
+    target?: { type: 'hand'; hand: 'left' | 'right' } | { type: 'inv'; idx: number } | { type: 'auto' }
+  ) => {
+    syncFurnitureStorageThermodynamics(storage, Date.now() / 1000);
+
+    const stItem = storage.items[storageIdx];
+    if (!stItem) return;
+
+    if (target?.type === 'hand') {
+      const displaced = takeItemFromHand(player, target.hand);
+      if (displaced && !canAddWeightToStorage(displaced, stItem)) {
+        putItemInHand(player, target.hand, displaced, world);
+        return;
+      }
+      const res = putItemInHand(player, target.hand, stItem, world);
+      if (!res.success) {
+        if (displaced) putItemInHand(player, target.hand, displaced, world);
+        notify(res.message || 'Не удалось взять в руку', 'warning');
+        return;
+      }
+      storage.items[storageIdx] = (displaced || null) as any;
+      sound.playPickup();
+      notifyChanged();
+      return;
+    }
+
+    if (target?.type === 'inv') {
+      const existing = player.inventory[target.idx];
+      if (!existing) {
+        const fit = canItemFitInCompartment(player, target.idx, stItem);
+        if (!fit.fits) {
+          notify(fit.reason || 'Не помещается в этот карман', 'warning');
+          return;
+        }
+        player.inventory[target.idx] = stItem;
+        storage.items[storageIdx] = null as any;
+        sound.playPickup();
+        notifyChanged();
+        return;
+      }
+
+      if (
+        existing.itemId === stItem.itemId &&
+        existing.count < existing.maxStack &&
+        !existing.isContainer &&
+        !existing.fluidStorage
+      ) {
+        const canAdd = Math.min(stItem.count, existing.maxStack - existing.count);
+        for (let c = 0; c < canAdd; c++) {
+          const single = { ...stItem, count: 1 };
+          if (!canItemFitInCompartment(player, target.idx, single).fits) break;
+          existing.count += 1;
+          stItem.count -= 1;
+        }
+        if (stItem.count <= 0) storage.items[storageIdx] = null as any;
+        sound.playPickup();
+        notifyChanged();
+        return;
+      }
+
+      if (!canAddWeightToStorage(existing, stItem)) return;
+      player.inventory[target.idx] = null as any;
+      const fit = canItemFitInCompartment(player, target.idx, stItem);
+      if (!fit.fits) {
+        player.inventory[target.idx] = existing;
+        notify(fit.reason || 'Не помещается в этот карман', 'warning');
+        return;
+      }
+      player.inventory[target.idx] = stItem;
+      storage.items[storageIdx] = existing;
+      sound.playPickup();
+      notifyChanged();
+      return;
+    }
+
+    const added = addItemToPlayer(player, stItem);
+    if (added) {
+      storage.items[storageIdx] = null as any;
+      sound.playPickup();
+      notifyChanged();
+    } else {
+      notify('Нет места в карманах или руках', 'warning');
+    }
+  };
+
+  const handleDropStorageItemToGround = (storageIdx: number) => {
+    const stItem = storage.items[storageIdx];
+    if (!stItem) return;
+    storage.items[storageIdx] = null as any;
+    if (world) {
+      if (!world.groundItems) world.groundItems = [];
+      world.groundItems.push({
+        id: `ground_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        x: player.x + (Math.random() * 16 - 8),
+        y: player.y + (Math.random() * 16 - 8),
+        item: stItem,
+        spawnTime: Date.now(),
+      });
+    }
+    sound.playPickup();
+    notify(`Выброшено на пол: ${stItem.nameRu}`, 'info');
+    notifyChanged();
+  };
+
+  const handleUnifiedDrop = (targetKey: string, sourceKey: string) => {
+    if (!sourceKey || !targetKey || sourceKey === targetKey) return;
+
+    // 1. Storage slot <-> Storage slot
+    if (sourceKey.startsWith('store:') && targetKey.startsWith('store:')) {
+      const fromIdx = parseInt(sourceKey.replace('store:', ''), 10);
+      const toIdx = parseInt(targetKey.replace('store:', ''), 10);
+      if (isNaN(fromIdx) || isNaN(toIdx) || fromIdx === toIdx) return;
+      const fromItem = storage.items[fromIdx];
+      const toItem = storage.items[toIdx];
+      if (!fromItem) return;
+
+      if (
+        toItem &&
+        toItem.itemId === fromItem.itemId &&
+        toItem.count < toItem.maxStack &&
+        !toItem.isContainer &&
+        !toItem.fluidStorage
+      ) {
+        const canAdd = Math.min(fromItem.count, toItem.maxStack - toItem.count);
+        toItem.count += canAdd;
+        fromItem.count -= canAdd;
+        if (fromItem.count <= 0) storage.items[fromIdx] = null as any;
+      } else {
+        storage.items[toIdx] = fromItem;
+        storage.items[fromIdx] = (toItem || null) as any;
+      }
+      sound.playPickup();
+      forceRender(n => n + 1);
+      return;
+    }
+
+    // 2. Player -> Storage
+    if (
+      (sourceKey === 'hand:left' || sourceKey === 'hand:right' || sourceKey.startsWith('inv:')) &&
+      (targetKey.startsWith('store:') || targetKey === 'zone:storage')
+    ) {
+      const targetIdx = targetKey.startsWith('store:')
+        ? parseInt(targetKey.replace('store:', ''), 10)
+        : undefined;
+      if (sourceKey === 'hand:left' || sourceKey === 'hand:right') {
+        storePlayerItemIntoSlot(
+          { type: 'hand', hand: sourceKey === 'hand:left' ? 'left' : 'right' },
+          targetIdx
+        );
+      } else {
+        const invIdx = parseInt(sourceKey.replace('inv:', ''), 10);
+        if (!isNaN(invIdx)) storePlayerItemIntoSlot({ type: 'inv', idx: invIdx }, targetIdx);
       }
       return;
     }
 
-    // 5. Player Inventory Slot <-> Player Inventory Slot
+    // 3. Storage -> Player
+    if (sourceKey.startsWith('store:')) {
+      const stIdx = parseInt(sourceKey.replace('store:', ''), 10);
+      if (isNaN(stIdx)) return;
+      if (targetKey === 'hand:left' || targetKey === 'hand:right') {
+        takeStorageItemToPlayer(stIdx, {
+          type: 'hand',
+          hand: targetKey === 'hand:left' ? 'left' : 'right',
+        });
+        return;
+      }
+      if (targetKey.startsWith('inv:')) {
+        const invIdx = parseInt(targetKey.replace('inv:', ''), 10);
+        if (!isNaN(invIdx)) takeStorageItemToPlayer(stIdx, { type: 'inv', idx: invIdx });
+        return;
+      }
+      if (targetKey === 'zone:player') {
+        takeStorageItemToPlayer(stIdx, { type: 'auto' });
+        return;
+      }
+    }
+
+    // 4. Player internal moves (Pocket <-> Pocket, Pocket <-> Hand, Hand <-> Hand)
     if (sourceKey.startsWith('inv:') && targetKey.startsWith('inv:')) {
       const fromIdx = parseInt(sourceKey.replace('inv:', ''), 10);
       const toIdx = parseInt(targetKey.replace('inv:', ''), 10);
-      if (!isNaN(fromIdx) && !isNaN(toIdx) && fromIdx !== toIdx) {
-        if (moveInventoryItem(player, fromIdx, toIdx)) {
+      if (isNaN(fromIdx) || isNaN(toIdx) || fromIdx === toIdx) return;
+      const fromItem = player.inventory[fromIdx];
+      const toItem = player.inventory[toIdx];
+      if (!fromItem) return;
+      if (!toItem) {
+        if (canItemFitInCompartment(player, toIdx, fromItem).fits) {
+          player.inventory[toIdx] = fromItem;
+          player.inventory[fromIdx] = null as any;
           sound.playPickup();
-          setSelectedInventoryIdx(toIdx);
-          setSelectedHand(null);
-          notifyChange();
+          forceRender(n => n + 1);
+        }
+      } else {
+        player.inventory[fromIdx] = null as any;
+        player.inventory[toIdx] = null as any;
+        if (
+          canItemFitInCompartment(player, toIdx, fromItem).fits &&
+          canItemFitInCompartment(player, fromIdx, toItem).fits
+        ) {
+          player.inventory[toIdx] = fromItem;
+          player.inventory[fromIdx] = toItem;
+          sound.playPickup();
+          forceRender(n => n + 1);
+        } else {
+          player.inventory[fromIdx] = fromItem;
+          player.inventory[toIdx] = toItem;
         }
       }
       return;
     }
 
-    // 6. Player Inventory Slot -> Player Hand
     if (sourceKey.startsWith('inv:') && (targetKey === 'hand:left' || targetKey === 'hand:right')) {
       const fromIdx = parseInt(sourceKey.replace('inv:', ''), 10);
       const hand = targetKey === 'hand:left' ? 'left' : 'right';
-      if (isNaN(fromIdx)) return;
-      const item = player.inventory?.[fromIdx];
+      const item = player.inventory[fromIdx];
       if (!item) return;
-      const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-      if (handItem) {
-        const fit = canItemFitInCompartment(player, fromIdx, handItem, { ignoreSlotIdx: fromIdx });
-        if (!fit.fits) {
-          setErrorMessage(fit.reason || 'Предмет из руки не помещается в этот отсек!');
-          return;
-        }
-        const displaced = takeItemFromHand(player, hand);
-        player.inventory[fromIdx] = null as any;
-        const res = putItemInHand(player, hand, item, world || undefined);
-        if (res.success) {
-          player.inventory[fromIdx] = displaced as any;
-          sound.playPickup();
-          notifyChange();
-        } else {
-          if (displaced) putItemInHand(player, hand, displaced, world || undefined);
-          player.inventory[fromIdx] = item;
-        }
-        return;
-      }
-      player.inventory[fromIdx] = null as any;
-      const res = putItemInHand(player, hand, item, world || undefined);
-      if (!res.success) {
-        player.inventory[fromIdx] = item;
-        setErrorMessage(res.message);
-        return;
-      }
-      sound.playPickup();
-      notifyChange();
-      return;
-    }
-
-    // 7. Player Hand -> Player Inventory Slot or Pockets Zone
-    if (
-      (sourceKey === 'hand:left' || sourceKey === 'hand:right') &&
-      (targetKey.startsWith('inv:') || targetKey === 'zone:pockets')
-    ) {
-      const hand = sourceKey === 'hand:left' ? 'left' : 'right';
-      const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-      if (!handItem) return;
-
-      if (targetKey.startsWith('inv:')) {
-        const toIdx = parseInt(targetKey.replace('inv:', ''), 10);
-        if (!isNaN(toIdx) && toIdx >= 0) {
-          if (!player.inventory) player.inventory = [];
-          const existing = player.inventory[toIdx];
-          const fit = canItemFitInCompartment(player, toIdx, handItem, {
-            ignoreSlotIdx: existing ? toIdx : undefined,
-          });
-          if (!fit.fits) {
-            setErrorMessage(fit.reason || 'Не помещается в этот отсек!');
-            return;
-          }
-          const taken = takeItemFromHand(player, hand);
-          if (!taken) return;
-          player.inventory[toIdx] = taken;
-          if (existing) {
-            putItemInHand(player, hand, existing, world || undefined);
-          }
-          sound.playPickup();
-          notifyChange();
-          return;
-        }
-      }
-
-      const res = stowItemFromHandToPockets(player, hand);
+      const displaced = takeItemFromHand(player, hand);
+      const res = putItemInHand(player, hand, item, world);
       if (res.success) {
+        player.inventory[fromIdx] = (displaced || null) as any;
         sound.playPickup();
-        notifyChange();
+        forceRender(n => n + 1);
+      } else if (displaced) {
+        putItemInHand(player, hand, displaced, world);
       }
       return;
     }
 
-    // 8. Hand <-> Hand
+    if ((sourceKey === 'hand:left' || sourceKey === 'hand:right') && targetKey.startsWith('inv:')) {
+      const hand = sourceKey === 'hand:left' ? 'left' : 'right';
+      const toIdx = parseInt(targetKey.replace('inv:', ''), 10);
+      const handItem = takeItemFromHand(player, hand);
+      if (!handItem) return;
+      const existing = player.inventory[toIdx];
+      player.inventory[toIdx] = null as any;
+      if (canItemFitInCompartment(player, toIdx, handItem).fits) {
+        player.inventory[toIdx] = handItem;
+        if (existing) putItemInHand(player, hand, existing, world);
+        sound.playPickup();
+        forceRender(n => n + 1);
+      } else {
+        player.inventory[toIdx] = existing;
+        putItemInHand(player, hand, handItem, world);
+      }
+      return;
+    }
+
     if (
       (sourceKey === 'hand:left' || sourceKey === 'hand:right') &&
       (targetKey === 'hand:left' || targetKey === 'hand:right')
     ) {
       const srcHand = sourceKey === 'hand:left' ? 'left' : 'right';
       const tgtHand = targetKey === 'hand:left' ? 'left' : 'right';
-      const srcItem = takeItemFromHand(player, srcHand);
-      if (!srcItem) return;
-      const displaced = takeItemFromHand(player, tgtHand);
-      putItemInHand(player, tgtHand, srcItem, world || undefined);
-      if (displaced) {
-        putItemInHand(player, srcHand, displaced, world || undefined);
-      }
+      const a = takeItemFromHand(player, srcHand);
+      if (!a) return;
+      const b = takeItemFromHand(player, tgtHand);
+      putItemInHand(player, tgtHand, a, world);
+      if (b) putItemInHand(player, srcHand, b, world);
       sound.playPickup();
-      notifyChange();
+      forceRender(n => n + 1);
     }
   };
 
-  stDropHandlerRef.current = handleStorageSlotDrop;
+  dropHandlerRef.current = handleUnifiedDrop;
 
-  const findTargetStSlotAt = (x: number, y: number, sourceKey: string): string | null => {
-    const nodes = document.querySelectorAll<HTMLElement>('[data-st-slot]');
-    let bestKey: string | null = null;
-    let bestDist = Infinity;
+  const handleSlotShiftClick = (slotKey: string) => {
+    setCtxMenu(null);
+    if (slotKey.startsWith('store:')) {
+      const stIdx = parseInt(slotKey.replace('store:', ''), 10);
+      if (!isNaN(stIdx) && storage.items[stIdx]) {
+        takeStorageItemToPlayer(stIdx, { type: 'auto' });
+      }
+      return;
+    }
+    if (slotKey === 'hand:left' || slotKey === 'hand:right') {
+      const hand = slotKey === 'hand:left' ? 'left' : 'right';
+      storePlayerItemIntoSlot({ type: 'hand', hand });
+      return;
+    }
+    if (slotKey.startsWith('inv:')) {
+      const invIdx = parseInt(slotKey.replace('inv:', ''), 10);
+      if (!isNaN(invIdx) && player.inventory[invIdx]) {
+        storePlayerItemIntoSlot({ type: 'inv', idx: invIdx });
+      }
+    }
+  };
 
-    nodes.forEach(node => {
-      const key = node.getAttribute('data-st-slot');
-      if (!key || key === sourceKey) return;
-      const rect = node.getBoundingClientRect();
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        bestKey = key;
-        bestDist = -1;
-        return;
-      }
-      if (bestDist >= 0) {
-        const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
-        const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
-        const d = Math.hypot(dx, dy);
-        if (d <= 16 && d < bestDist) {
-          bestDist = d;
-          bestKey = key;
-        }
-      }
+  const handleSlotContextMenu = (
+    e: React.MouseEvent<HTMLElement>,
+    slotKey: string,
+    item: InventoryItem | null | undefined
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!item) {
+      setCtxMenu(null);
+      return;
+    }
+    const maxX = typeof window !== 'undefined' ? window.innerWidth - 210 : e.clientX;
+    const maxY = typeof window !== 'undefined' ? window.innerHeight - 200 : e.clientY;
+    setCtxMenu({
+      x: Math.max(8, Math.min(e.clientX, maxX)),
+      y: Math.max(8, Math.min(e.clientY, maxY)),
+      slotKey,
+      item,
     });
-
-    if (!bestKey) {
-      const zones = document.querySelectorAll<HTMLElement>('[data-st-zone]');
-      zones.forEach(zone => {
-        if (bestKey) return;
-        const zKey = zone.getAttribute('data-st-zone');
-        if (!zKey) return;
-        const rect = zone.getBoundingClientRect();
-        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-          bestKey = zKey;
-        }
-      });
-    }
-
-    return bestKey;
   };
 
-  const findScrollableContainerAt = (x: number, y: number): HTMLElement | null => {
-    const hit = document.elementFromPoint(x, y) as HTMLElement | null;
-    let el: HTMLElement | null = hit;
-    while (el && el !== document.body) {
-      if (el.scrollHeight > el.clientHeight + 2) {
-        const style = window.getComputedStyle(el);
-        if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-          return el;
-        }
-      }
-      el = el.parentElement;
-    }
-    const scrollables = document.querySelectorAll<HTMLElement>(
-      '#furniture-storage-modal .gu-st-scroll, #furniture-storage-modal .gu-body'
-    );
-    for (let i = 0; i < scrollables.length; i++) {
-      const node = scrollables[i];
-      const r = node.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && node.scrollHeight > node.clientHeight + 2) {
-        return node;
-      }
-    }
-    return null;
-  };
+  const { dragUi, ghostRef, startSlotDrag } = useCachedSlotDrag<InventoryItem>({
+    rootRef: gmRef,
+    slotAttr: 'data-st-slot',
+    zoneAttr: 'data-st-zone',
+    onDrop: (targetKey, sourceKey) => {
+      dropHandlerRef.current?.(targetKey, sourceKey);
+      setSelectedKey(null);
+    },
+  });
 
-  const startSlotPointerDrag = (
+  const startPointerDrag = (
     e: React.PointerEvent<HTMLElement>,
     slotKey: string,
-    item: InventoryItem | null | undefined,
-    onSelectClick?: () => void
+    item: InventoryItem | null | undefined
   ) => {
-    if (e.button !== 0) return;
-    // If one finger is already holding/dragging an item, do not let a second finger hijack or cancel the drag
-    if (stDragRef.current && stDragRef.current.pointerId !== e.pointerId) {
+    setCtxMenu(null);
+    if (e.button === 0 && e.shiftKey) {
+      e.stopPropagation();
+      if (item) handleSlotShiftClick(slotKey);
       return;
     }
-    if ((e.target as HTMLElement)?.closest('button')) return;
-    e.stopPropagation();
-
-    if (!item) {
-      if (selectedStSlot && selectedStSlot !== slotKey) {
-        stDropHandlerRef.current?.(slotKey, selectedStSlot);
-        setSelectedStSlot(null);
-      } else {
-        onSelectClick?.();
-      }
-      return;
-    }
-
-    const dragPointerId = e.pointerId;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    stDragRef.current = {
-      pointerId: dragPointerId,
-      sourceKey: slotKey,
-      item,
-      startX,
-      startY,
-      x: startX,
-      y: startY,
-      active: false,
-      overKey: null,
-    };
-
-    let secondScrollPointer: {
-      pointerId: number;
-      lastX: number;
-      lastY: number;
-      scrollEl: HTMLElement | null;
-    } | null = null;
-
-    const refreshHoverUnderDraggedItem = () => {
-      const st = stDragRef.current;
-      if (!st || !st.active) return;
-      const over = findTargetStSlotAt(st.x, st.y, st.sourceKey);
-      st.overKey = over;
-      setStDragUi({
-        sourceKey: st.sourceKey,
-        item: st.item,
-        x: st.x,
-        y: st.y,
-        overKey: over,
-      });
-    };
-
-    const onExtraPointerDown = (ev: PointerEvent) => {
-      const st = stDragRef.current;
-      if (!st || ev.pointerId === st.pointerId) return;
-      if (!st.active) {
-        st.active = true;
-        refreshHoverUnderDraggedItem();
-      }
-      secondScrollPointer = {
-        pointerId: ev.pointerId,
-        lastX: ev.clientX,
-        lastY: ev.clientY,
-        scrollEl: findScrollableContainerAt(ev.clientX, ev.clientY),
-      };
-    };
-
-    const onPointerMove = (ev: PointerEvent) => {
-      const st = stDragRef.current;
-      if (!st) return;
-
-      if (ev.pointerId === st.pointerId) {
-        st.x = ev.clientX;
-        st.y = ev.clientY;
-        if (!st.active && Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) > 3) {
-          st.active = true;
-        }
-        if (st.active) {
-          refreshHoverUnderDraggedItem();
+    startSlotDrag(e, slotKey, item, () => {
+      if (!item) {
+        if (selectedKey && selectedKey !== slotKey) {
+          dropHandlerRef.current?.(slotKey, selectedKey);
+          setSelectedKey(null);
         }
         return;
       }
-
-      if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
-        const dy = ev.clientY - secondScrollPointer.lastY;
-        const dx = ev.clientX - secondScrollPointer.lastX;
-        secondScrollPointer.lastY = ev.clientY;
-        secondScrollPointer.lastX = ev.clientX;
-        if (!secondScrollPointer.scrollEl) {
-          secondScrollPointer.scrollEl = findScrollableContainerAt(ev.clientX, ev.clientY);
-        }
-        if (secondScrollPointer.scrollEl) {
-          secondScrollPointer.scrollEl.scrollTop -= dy;
-          secondScrollPointer.scrollEl.scrollLeft -= dx;
-          refreshHoverUnderDraggedItem();
-        }
-      }
-    };
-
-    const onWheelWhileDragging = () => {
-      refreshHoverUnderDraggedItem();
-    };
-
-    const finishDrag = (ev: PointerEvent, cancelled: boolean) => {
-      const st = stDragRef.current;
-      if (!st) return;
-
-      if (ev.pointerId !== st.pointerId) {
-        if (secondScrollPointer && ev.pointerId === secondScrollPointer.pointerId) {
-          secondScrollPointer = null;
-        }
-        return;
-      }
-
-      window.removeEventListener('pointerdown', onExtraPointerDown, true);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerCancel);
-      window.removeEventListener('wheel', onWheelWhileDragging, true);
-
-      stDragRef.current = null;
-      setStDragUi(null);
-
-      if (cancelled) return;
-
-      if (st.active) {
-        const targetKey = findTargetStSlotAt(ev.clientX, ev.clientY, st.sourceKey) || st.overKey;
-        if (targetKey && targetKey !== st.sourceKey) {
-          stDropHandlerRef.current?.(targetKey, st.sourceKey);
-          setSelectedStSlot(null);
-        }
-      } else {
-        onSelectClick?.();
-        if (selectedStSlot && selectedStSlot !== slotKey) {
-          stDropHandlerRef.current?.(slotKey, selectedStSlot);
-          setSelectedStSlot(null);
-        } else {
-          setSelectedStSlot(prev => (prev === slotKey ? null : slotKey));
-        }
-      }
-    };
-
-    const onPointerUp = (ev: PointerEvent) => finishDrag(ev, false);
-    const onPointerCancel = (ev: PointerEvent) => finishDrag(ev, true);
-
-    window.addEventListener('pointerdown', onExtraPointerDown, true);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerCancel);
-    window.addEventListener('wheel', onWheelWhileDragging, true);
+      setSelectedKey(slotKey);
+    });
   };
 
-  const compartments = getPlayerCompartments(player);
+  const renderSlotSquare = (
+    slotKey: string,
+    item: InventoryItem | null | undefined,
+    options?: {
+      badge?: string;
+      emptyIcon?: React.ReactNode;
+      onDoubleClick?: () => void;
+    }
+  ) => {
+    const isDragging = dragUi?.sourceKey === slotKey;
+    const isOver = dragUi?.overKey === slotKey;
+    const isSelected = selectedKey === slotKey;
+    const info = getSlotFillInfo(item);
+    const temp = item?.surfaceTemperature;
+    const isHot = temp !== undefined && temp >= 40;
+    const isCold = temp !== undefined && temp <= 4;
+
+    return (
+      <div
+        key={slotKey}
+        data-st-slot={slotKey}
+        draggable={false}
+        onDragStart={e => e.preventDefault()}
+        onContextMenu={e => handleSlotContextMenu(e, slotKey, item)}
+        onPointerDown={e => startPointerDrag(e, slotKey, item)}
+        onDoubleClick={options?.onDoubleClick}
+        className={
+          'kf-slot' +
+          (!item ? ' empty' : '') +
+          (isOver || isSelected ? ' on' : '') +
+          (isHot ? ' hot' : '') +
+          (isCold ? ' cold' : '')
+        }
+        style={{
+          cursor: item ? 'grab' : selectedKey ? 'pointer' : 'default',
+          opacity: isDragging ? 0.35 : 1,
+        }}
+        title={info?.tooltip}
+      >
+        {options?.badge && <span className="kf-hk">{options.badge}</span>}
+        {item ? (
+          <>
+            <ItemIconCanvas itemId={item.itemId} item={item} size={42} />
+            {item.count > 1 ? (
+              <span className="kf-cnt">{item.count}</span>
+            ) : item.isContainer ? (
+              <span className="kf-cnt">{item.contents?.length || 0}</span>
+            ) : null}
+            {isHot && <span className="kf-temp">+{Math.round(temp!)}°</span>}
+            {isCold && <span className="kf-temp cold">{Math.round(temp!)}°</span>}
+            {(item.wetness ?? 0) > 0 && (
+              <span className="kf-wet">
+                <CloudRain width={11} height={11} />
+              </span>
+            )}
+            {info && info.pct !== null && (
+              <div className="kf-fill">
+                <i style={{ width: `${info.pct}%`, background: info.color || undefined }} />
+              </div>
+            )}
+          </>
+        ) : (
+          options?.emptyIcon || null
+        )}
+      </div>
+    );
+  };
+
+  const getCompIcon = (type: string) => {
+    if (type === 'user') return <User width={14} height={14} />;
+    if (type === 'shirt') return <Shirt width={14} height={14} />;
+    if (type === 'pants')
+      return (
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6 3h12l1 18-5-1-2-9-2 9-5 1z" />
+        </svg>
+      );
+    return <Luggage width={14} height={14} />;
+  };
+
+  // Resolve currently selected item for quick footer action bar
+  const selectedItemInfo = (() => {
+    if (!selectedKey) return null;
+    if (selectedKey.startsWith('store:')) {
+      const idx = parseInt(selectedKey.replace('store:', ''), 10);
+      const it = storage.items[idx];
+      return it ? { side: 'storage' as const, idx, item: it } : null;
+    }
+    if (selectedKey === 'hand:left' || selectedKey === 'hand:right') {
+      const hand = selectedKey === 'hand:left' ? ('left' as const) : ('right' as const);
+      const it = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+      return it ? { side: 'hand' as const, hand, item: it } : null;
+    }
+    if (selectedKey.startsWith('inv:')) {
+      const idx = parseInt(selectedKey.replace('inv:', ''), 10);
+      const it = player.inventory[idx];
+      return it ? { side: 'inv' as const, idx, item: it } : null;
+    }
+    return null;
+  })();
+
+  const handsCount = (player.leftHandItem ? 1 : 0) + (player.rightHandItem ? 1 : 0);
 
   return (
-    <ModalShell
-      id="furniture-storage-modal"
-      title={storage.customTitle || cfg.nameRu}
-      subtitle={
-        isRadiator
-          ? `Поверхность радиатора · ${storage.items.length} предм. сушится`
-          : `Хранилище · ${storage.items.length} предм. внутри`
-      }
-      width={1060}
-      tall
-      onClose={onClose}
-      headRight={
-        <div className="gu-row" style={{ gap: 8 }}>
-          {cfg.isCold && (
-            <span className="gu-tag cold">
-              <Snowflake width={12} height={12} /> Охлаждение (+4°C)
-            </span>
-          )}
-          {isHotSurface && (
-            <span className="gu-tag amber">
-              <Flame width={12} height={12} /> Нагрев (+{cfg.heatingTemp || 65}°C)
-            </span>
-          )}
-        </div>
-      }
-      footerHints={[
-        ['Перетаскивание', 'Из карманов / рук в хранилище и обратно'],
-        ['2× Клик', 'Переместить 1 шт.'],
-        ['Esc', 'Закрыть']
-      ]}
-      footerRight={
-        <button type="button" onClick={onClose} className="gu-btn gu-btn-s gu-btn-sm">
-          Готово
-        </button>
-      }
-    >
-      {errorMessage && (
+    <ShadowHost zIndex={55} css={kitchenFurnitureCss}>
+      <div id="w" ref={wrapRef} onClick={() => setCtxMenu(null)}>
         <div
-          className="gu-note gu-err"
-          style={{ flex: 'none', padding: '6px 10px', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
-        >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Info width={14} height={14} />
-            <span>{errorMessage}</span>
-          </span>
-          <button type="button" onClick={() => setErrorMessage(null)} className="gu-btn gu-btn-ghost gu-btn-xs">
-            Скрыть
-          </button>
-        </div>
-      )}
-
-      <div className="gu-st-split">
-        {/* LEFT PANEL: what is inside the furniture */}
-        <div
-          className="gu-panel gu-st-col"
-          data-st-zone="zone:storage"
-          style={{
-            borderColor: stDragUi?.overKey === 'zone:storage' ? 'var(--gu-amber-hi)' : undefined,
+          className="gm"
+          ref={gmRef}
+          onClick={e => {
+            e.stopPropagation();
+            setCtxMenu(null);
           }}
         >
-          <div className="gu-st-head" style={{ marginBottom: 0 }}>
-            <span className="gu-st-title" style={{ fontSize: 16 }}>
-              {isRadiator ? 'Поверхность радиатора' : 'Слоты хранилища'}
-            </span>
-            <span className="gu-st-sub gu-mono" style={{ fontSize: 12 }}>
-              {storage.items.length} предм.
-            </span>
-          </div>
+          <div className="bg" />
 
-          <div className="gu-meters" style={{ flex: 'none', marginBottom: 0, gap: 12 }}>
-            <div className="gu-meter">
-              <div className="gu-meter-h" style={{ fontSize: 12, marginBottom: 4 }}>
-                <span>{isRadiator ? 'Площадь' : 'Объём'}</span>
-                <b>{storageTotalVol.toFixed(1)} / {cfg.capacityL.toFixed(1)} л</b>
+          {/* Top Bar */}
+          <div className="top">
+            <div className="brand">
+              <div className="brand-mark">
+                {isFridge ? <Snowflake width={17} height={17} /> : <Archive width={17} height={17} />}
               </div>
-              <div className={`gu-bar ${volPercent > 90 ? 'bad' : ''}`}>
-                <span style={{ width: volPercent > 0 ? `${Math.max(2, volPercent)}%` : '0%' }} />
-              </div>
+              <span className="cn brand-title">{storageTitle}</span>
+              <span className="brand-sep" />
+              <span className="mut mono" style={{ fontSize: 12.5 }}>
+                {isFridge ? 'Холодильная камера +4°C' : 'Мебельное отделение'}
+              </span>
             </div>
-            <div className="gu-meter">
-              <div className="gu-meter-h" style={{ fontSize: 12, marginBottom: 4 }}>
-                <span>Нагрузка</span>
-                <b>{storageTotalWt.toFixed(1)} / {cfg.maxWeightKg.toFixed(1)} кг</b>
-              </div>
-              <div className={`gu-bar ${wtPercent > 90 ? 'bad' : 'good'}`}>
-                <span style={{ width: wtPercent > 0 ? `${Math.max(2, wtPercent)}%` : '0%' }} />
-              </div>
-            </div>
-          </div>
 
-          <div className="gu-st-scroll">
-            <div className="gu-slots">
-              {Array.from({ length: Math.max(24, storage.items.length + 6) }, (_, idx) => {
-                const it = storage.items[idx];
-                const slotKey = it ? `storage:${idx}` : `storage:empty-${idx}`;
-                const isBeingDragged = stDragUi?.sourceKey === slotKey;
-                const isDropTarget = stDragUi?.overKey === slotKey;
-
-                if (!it) {
-                  return (
-                    <div
-                      key={slotKey}
-                      data-st-slot={slotKey}
-                      draggable={false}
-                      onDragStart={e => e.preventDefault()}
-                      onPointerDown={e => startSlotPointerDrag(e, slotKey, null)}
-                      className={'gu-slot empty' + (isDropTarget ? ' on' : '')}
-                      style={{
-                        touchAction: 'none',
-                        borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                      }}
-                    />
-                  );
-                }
-
-                const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
-                const isHot = itemTemp >= 40;
-                const isCold = itemTemp <= 4;
-                const isSelected = selectedStorageIdx === idx || selectedStSlot === slotKey;
-
-                return (
-                  <div
-                    key={it.id || idx}
-                    data-st-slot={slotKey}
-                    draggable={false}
-                    onDragStart={e => e.preventDefault()}
-                    onPointerDown={e =>
-                      startSlotPointerDrag(e, slotKey, it, () => {
-                        setSelectedStorageIdx(idx);
-                        setSelectedInventoryIdx(null);
-                        setSelectedHand(null);
-                      })
-                    }
-                    onDoubleClick={() => handleTakeItem(idx, 1)}
-                    className={
-                      'gu-slot' +
-                      (isSelected || isDropTarget ? ' on' : '') +
-                      (isHot ? ' hot' : '') +
-                      (isCold ? ' cold' : '')
-                    }
-                    style={{
-                      touchAction: 'none',
-                      cursor: 'grab',
-                      opacity: isBeingDragged ? 0.35 : 1,
-                      borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                    }}
-                    title={`${it.nameRu}\n${formatWeightRu(getItemTotalWeight(it))} · ${getItemTotalVolume(it)} л`}
-                  >
-                    <ItemIconCanvas itemId={it.itemId} item={it} size={40} />
-                    {it.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{it.count}</span>}
-                    {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(itemTemp)}°</span>}
-                    {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(itemTemp)}°</span>}
-                    {(it.wetness ?? 0) > 0 && (
-                      <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
-                        <CloudRain width={11} height={11} />
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-        </div>
-
-        {/* RIGHT PANEL: player's active hand slots & pocket slots */}
-        <div
-          className="gu-panel gu-st-col"
-          data-st-zone="zone:pockets"
-          style={{
-            borderColor: stDragUi?.overKey === 'zone:pockets' ? 'var(--gu-amber-hi)' : undefined,
-          }}
-        >
-          <div className="gu-st-head" style={{ marginBottom: 0 }}>
-            <span className="gu-st-title" style={{ fontSize: 16 }}>Слоты игрока (Руки и карманы)</span>
-            <span className="gu-st-sub gu-mono" style={{ fontSize: 12 }}>
-              {playerCarriedWt.toFixed(1)} кг · {playerPocketCap.usedVolumeL}/{playerPocketCap.totalCapacityL} л
-            </span>
-          </div>
-
-          <div className="gu-pills" style={{ flex: 'none', marginBottom: 0 }}>
-            {(['all', 'clothing', 'food', 'drink', 'tool', 'valuable', 'misc'] as const).map(cat => (
+            <div className="top-r">
+              <span className="chip mono">
+                Ячейки: <b>{usedStorageSlots}/{totalStorageSlots}</b>
+              </span>
+              <span className="chip mono">
+                Вес: <b>{usedWeight}/{maxWeightKg} кг</b>
+              </span>
               <button
-                key={cat}
                 type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`gu-pill ${selectedCategory === cat ? 'on' : ''}`}
-                style={{ height: 26, padding: '0 9px', fontSize: 12 }}
+                id="btn-close-furniture-storage"
+                className="btn btn-s btn-sm"
+                onClick={onClose}
               >
-                {cat === 'all'
-                  ? 'Все'
-                  : cat === 'clothing'
-                  ? 'Одежда'
-                  : cat === 'food'
-                  ? 'Еда'
-                  : cat === 'drink'
-                  ? 'Напитки'
-                  : cat === 'tool'
-                  ? 'Инструменты'
-                  : cat === 'valuable'
-                  ? 'Ценности'
-                  : 'Разное'}
+                <X width={15} height={15} />
+                <span>Закрыть</span>
               </button>
-            ))}
+            </div>
           </div>
 
-          <div className="gu-st-scroll gu-player-inv-scroll">
-            {/* Compact Hand Slots inside the scroll block */}
-            <div className="gu-group">
-              <div className="gu-group-h">
-                <span className="gu-group-t"><Hand width={15} height={15} />Активные руки</span>
-                <span className="gu-grp-meta">
-                  Лев: {player.leftHandItem ? player.leftHandItem.nameRu : 'пусто'} · Прав: {player.rightHandItem ? player.rightHandItem.nameRu : 'пусто'}
-                </span>
-              </div>
-              <div className="gu-slots">
-                {(['left', 'right'] as const).map(hand => {
-                  const hItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-                  const slotKey = `hand:${hand}`;
-                  const isBeingDragged = stDragUi?.sourceKey === slotKey;
-                  const isDropTarget = stDragUi?.overKey === slotKey;
-                  const isSelected = selectedHand === hand || selectedStSlot === slotKey;
-                  const itemTemp = hItem ? (hItem.surfaceTemperature ?? hItem.temperature ?? 20) : 20;
-                  const isHot = !!hItem && itemTemp >= 40;
-                  const isCold = !!hItem && itemTemp <= 4;
-
-                  return (
-                    <div
-                      key={hand}
-                      data-st-slot={slotKey}
-                      draggable={false}
-                      onDragStart={e => e.preventDefault()}
-                      onPointerDown={e =>
-                        startSlotPointerDrag(e, slotKey, hItem, () => {
-                          if (!hItem) return;
-                          setSelectedHand(hand);
-                          setSelectedInventoryIdx(null);
-                          setSelectedStorageIdx(null);
-                        })
-                      }
-                      onDoubleClick={() => {
-                        if (hItem) handleStoreFromHand(hand);
-                      }}
-                      className={
-                        'gu-slot' +
-                        (!hItem ? ' empty' : '') +
-                        (isSelected || isDropTarget ? ' on' : '') +
-                        (isHot ? ' hot' : '') +
-                        (isCold ? ' cold' : '')
-                      }
-                      style={{
-                        touchAction: 'none',
-                        cursor: hItem ? 'grab' : selectedStSlot ? 'pointer' : 'default',
-                        opacity: isBeingDragged ? 0.35 : 1,
-                        borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                      }}
-                      title={
-                        hItem
-                          ? `${hand === 'left' ? 'Левая рука' : 'Правая рука'}: ${hItem.nameRu}\n${formatWeightRu(getItemTotalWeight(hItem))} · ${getItemTotalVolume(hItem)} л`
-                          : `${hand === 'left' ? 'Левая рука' : 'Правая рука'} (перетащите сюда предмет)`
-                      }
-                    >
-                      <span className="gu-ic-hk" style={{ pointerEvents: 'none' }}>{hand === 'left' ? 'Л' : 'П'}</span>
-                      {hItem ? (
-                        <>
-                          <ItemIconCanvas itemId={hItem.itemId} item={hItem} size={40} />
-                          {hItem.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{hItem.count}</span>}
-                          {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(itemTemp)}°</span>}
-                          {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(itemTemp)}°</span>}
-                          {(hItem.wetness ?? 0) > 0 && (
-                            <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
-                              <CloudRain width={11} height={11} />
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <Hand width={18} height={18} color="#5e5b54" style={{ pointerEvents: 'none' }} />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {compartments.map(comp => {
-              const slots = Array.from({ length: comp.slotCount }, (_, l) => comp.startIndex + l);
-              const CompIcon = comp.iconType === 'user' ? User : comp.iconType === 'shirt' ? Shirt : Luggage;
-              return (
-                <div key={comp.id} className="gu-group">
-                  <div className="gu-group-h">
-                    <span className="gu-group-t"><CompIcon width={15} height={15} />{comp.nameRu}</span>
-                    <span className="gu-grp-meta">{comp.usedVolumeL}/{comp.capacityL} л · {comp.usedWeightKg}/{comp.maxWeightKg} кг</span>
+          {/* Main 2-column stage */}
+          <div className="kf-stage">
+            <div className="kf-split">
+              {/* LEFT: STORAGE */}
+              <section
+                className="panel kf-col"
+                data-st-zone="zone:storage"
+                style={{
+                  borderColor: dragUi?.overKey === 'zone:storage' ? '#e0ab45' : undefined,
+                }}
+              >
+                <div className="kf-col-h">
+                  <div className="kf-col-t">
+                    {isFridge ? (
+                      <Snowflake width={16} height={16} color="#7ec8e3" />
+                    ) : (
+                      <Archive width={16} height={16} color="#e0ab45" />
+                    )}
+                    <span className="cn">{storageTitle}</span>
                   </div>
-                  <div className="gu-slots">
-                    {slots.map(slotIdx => {
-                      const item = (player.inventory || [])[slotIdx];
-                      const slotKey = `inv:${slotIdx}`;
-                      const isBeingDragged = stDragUi?.sourceKey === slotKey;
-                      const isDropTarget = stDragUi?.overKey === slotKey;
+                  <span className="kf-col-sub mono">
+                    {usedStorageSlots}/{totalStorageSlots} слотов · {formatWeightRu(usedWeight)} / {formatWeightRu(maxWeightKg)}
+                  </span>
+                </div>
 
-                      if (!item) {
-                        return (
-                          <div
-                            key={slotIdx}
-                            data-st-slot={slotKey}
-                            draggable={false}
-                            onDragStart={e => e.preventDefault()}
-                            onPointerDown={e => startSlotPointerDrag(e, slotKey, null)}
-                            className={'gu-slot empty' + (isDropTarget ? ' on' : '')}
-                            style={{
-                              touchAction: 'none',
-                              borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                            }}
-                          />
-                        );
-                      }
-
-                      const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
-                      const isHot = itemTemp >= 40;
-                      const isCold = itemTemp <= 4;
-                      const matches = selectedCategory === 'all' || item.category === selectedCategory;
-                      const isSel = (selectedHand === null && selectedInventoryIdx === slotIdx) || selectedStSlot === slotKey;
-
-                      return (
-                        <div
-                          key={slotIdx}
-                          data-st-slot={slotKey}
-                          draggable={false}
-                          onDragStart={e => e.preventDefault()}
-                          onPointerDown={e =>
-                            startSlotPointerDrag(e, slotKey, item, () => {
-                              setSelectedInventoryIdx(slotIdx);
-                              setSelectedHand(null);
-                              setSelectedStorageIdx(null);
-                            })
-                          }
-                          onDoubleClick={() => handleStoreItem(slotIdx, 1)}
-                          className={
-                            'gu-slot' +
-                            (isSel || isDropTarget ? ' on' : '') +
-                            (matches ? '' : ' dim') +
-                            (isHot ? ' hot' : '') +
-                            (isCold ? ' cold' : '')
-                          }
-                          style={{
-                            touchAction: 'none',
-                            cursor: 'grab',
-                            opacity: isBeingDragged ? 0.35 : 1,
-                            borderColor: isDropTarget ? 'var(--gu-amber-hi)' : undefined,
-                          }}
-                          title={`${item.nameRu}\n${formatWeightRu(getItemTotalWeight(item))} · ${getItemTotalVolume(item)} л`}
-                        >
-                          <ItemIconCanvas itemId={item.itemId} item={item} size={40} />
-                          {item.count > 1 && <span className="gu-ic-n" style={{ pointerEvents: 'none' }}>{item.count}</span>}
-                          {isHot && <span className="gu-slot-t" style={{ pointerEvents: 'none' }}>+{Math.round(itemTemp)}°</span>}
-                          {isCold && <span className="gu-slot-t cold" style={{ pointerEvents: 'none' }}>{Math.round(itemTemp)}°</span>}
-                          {(item.wetness ?? 0) > 0 && (
-                            <span className="gu-slot-wet" style={{ pointerEvents: 'none' }}>
-                              <CloudRain width={11} height={11} />
-                            </span>
-                          )}
-                        </div>
-                      );
+                <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                  <div className="kf-slots">
+                    {Array.from({ length: totalStorageSlots }).map((_, idx) => {
+                      const stItem = storage.items[idx];
+                      return renderSlotSquare(`store:${idx}`, stItem, {
+                        onDoubleClick: stItem
+                          ? () => takeStorageItemToPlayer(idx, { type: 'auto' })
+                          : undefined,
+                      });
                     })}
                   </div>
                 </div>
-              );
-            })}
+
+                {selectedItemInfo && (
+                  <div className="kf-foot-bar">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      <ItemIconCanvas itemId={selectedItemInfo.item.itemId} item={selectedItemInfo.item} size={28} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#e9e6df', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {selectedItemInfo.item.nameRu}
+                        </div>
+                        <div className="mono mut" style={{ fontSize: 11.5 }}>
+                          {selectedItemInfo.item.count} шт. · {formatWeightRu(getItemTotalWeight(selectedItemInfo.item))}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+                      {selectedItemInfo.side === 'storage' ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-p btn-xs"
+                            onClick={() => {
+                              takeStorageItemToPlayer(selectedItemInfo.idx, { type: 'auto' });
+                              setSelectedKey(null);
+                            }}
+                          >
+                            <ArrowRight width={13} height={13} />
+                            <span>Забрать</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-d btn-xs"
+                            onClick={() => {
+                              handleDropStorageItemToGround(selectedItemInfo.idx);
+                              setSelectedKey(null);
+                            }}
+                            title="Выбросить на пол"
+                          >
+                            <Trash2 width={13} height={13} />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-p btn-xs"
+                          onClick={() => {
+                            if (selectedItemInfo.side === 'hand') {
+                              storePlayerItemIntoSlot({ type: 'hand', hand: selectedItemInfo.hand });
+                            } else {
+                              storePlayerItemIntoSlot({ type: 'inv', idx: selectedItemInfo.idx });
+                            }
+                            setSelectedKey(null);
+                          }}
+                        >
+                          <ArrowLeft width={13} height={13} />
+                          <span>Положить</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {/* RIGHT: PLAYER HANDS & POCKETS */}
+              <section
+                className="panel kf-col"
+                data-st-zone="zone:player"
+                style={{
+                  borderColor: dragUi?.overKey === 'zone:player' ? '#e0ab45' : undefined,
+                }}
+              >
+                <div className="kf-col-h">
+                  <div className="kf-col-t">
+                    <Package width={16} height={16} color="#9ac985" />
+                    <span className="cn">Снаряжение игрока</span>
+                  </div>
+                  <span className="kf-col-sub">Shift+Клик или 2× клик — быстрый перенос</span>
+                </div>
+
+                <div className="scroll" style={{ flex: 1, minHeight: 0, paddingRight: 4 }}>
+                  <div className="kf-group">
+                    <div className="kf-group-h">
+                      <span className="kf-group-t">
+                        <Hand width={14} height={14} />
+                        Активные руки
+                      </span>
+                      <span className="kf-group-meta mono">{handsCount}/2</span>
+                    </div>
+                    <div className="kf-slots">
+                      {renderSlotSquare('hand:left', player.leftHandItem, {
+                        badge: 'Л',
+                        emptyIcon: <Hand width={18} height={18} color="#5e5b54" />,
+                        onDoubleClick: player.leftHandItem
+                          ? () => storePlayerItemIntoSlot({ type: 'hand', hand: 'left' })
+                          : undefined,
+                      })}
+                      {renderSlotSquare('hand:right', player.rightHandItem, {
+                        badge: 'П',
+                        emptyIcon: <Hand width={18} height={18} color="#5e5b54" />,
+                        onDoubleClick: player.rightHandItem
+                          ? () => storePlayerItemIntoSlot({ type: 'hand', hand: 'right' })
+                          : undefined,
+                      })}
+                    </div>
+                  </div>
+
+                  {compartments.map(comp => {
+                    const slots = Array.from({ length: comp.slotCount }, (_, i) => comp.startIndex + i);
+                    return (
+                      <div key={comp.id} className="kf-group">
+                        <div className="kf-group-h">
+                          <span className="kf-group-t">
+                            {getCompIcon(comp.iconType)}
+                            {comp.nameRu}
+                          </span>
+                          <span className="kf-group-meta mono">
+                            {comp.usedVolumeL}/{comp.capacityL} л · {comp.usedWeightKg}/{comp.maxWeightKg} кг
+                          </span>
+                        </div>
+                        <div className="kf-slots">
+                          {slots.map(slotIdx => {
+                            const item = inventory[slotIdx];
+                            return renderSlotSquare(`inv:${slotIdx}`, item, {
+                              badge: slotIdx < 6 ? String(slotIdx + 1) : undefined,
+                              onDoubleClick: item
+                                ? () => storePlayerItemIntoSlot({ type: 'inv', idx: slotIdx })
+                                : undefined,
+                            });
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
           </div>
 
+          {/* Bottom hint bar */}
+          <div className="hint">
+            <div className="hint-g">
+              <span className="key">Esc</span>
+              <span>Закрыть</span>
+              <span className="key">Shift+Клик</span>
+              <span>Быстрый перенос</span>
+              <span className="key">ПКМ</span>
+              <span>Меню</span>
+              <span className="key">2× Клик</span>
+              <span>Положить / Забрать</span>
+            </div>
+            <div className="hint-r">
+              Лев: <strong style={{ color: '#e9e6df' }}>{player.leftHandItem ? player.leftHandItem.nameRu : 'Свободна'}</strong>
+              {' · '}
+              Прав: <strong style={{ color: '#e9e6df' }}>{player.rightHandItem ? player.rightHandItem.nameRu : 'Свободна'}</strong>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* FLOATING DRAG PREVIEW FOR STORAGE MODAL */}
-      {stDragUi && (
-        <div
-          style={{
-            position: 'fixed',
-            left: stDragUi.x - 32,
-            top: stDragUi.y - 32,
-            width: 64,
-            height: 64,
-            borderRadius: 9,
-            background: 'rgba(20, 20, 22, 0.92)',
-            border: '1px solid var(--gu-amber-hi)',
-            boxShadow: '0 10px 28px rgba(0, 0, 0, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            pointerEvents: 'none',
-            zIndex: 9999,
-          }}
-        >
-          <ItemIconCanvas itemId={stDragUi.item.itemId} item={stDragUi.item} size={44} />
+        {/* Floating drag ghost outside .gm */}
+        <div ref={ghostRef} className="kf-drag-ghost">
+          {dragUi && (
+            <ItemIconCanvas itemId={dragUi.item.itemId} item={dragUi.item} size={44} />
+          )}
         </div>
-      )}
-    </ModalShell>
+
+        {/* Right-click context menu */}
+        {ctxMenu && (
+          <div
+            className="kf-ctx-menu"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="kf-ctx-head">{ctxMenu.item.nameRu}</div>
+            {ctxMenu.slotKey.startsWith('store:') && (() => {
+              const stIdx = parseInt(ctxMenu.slotKey.replace('store:', ''), 10);
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="kf-ctx-item primary"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      takeStorageItemToPlayer(stIdx, { type: 'auto' });
+                    }}
+                  >
+                    <Package width={14} height={14} />
+                    <span>Забрать в карман</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="kf-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      takeStorageItemToPlayer(stIdx, { type: 'hand', hand: 'right' });
+                    }}
+                  >
+                    <Hand width={14} height={14} />
+                    <span>В правую руку</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="kf-ctx-item"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      takeStorageItemToPlayer(stIdx, { type: 'hand', hand: 'left' });
+                    }}
+                  >
+                    <Hand width={14} height={14} />
+                    <span>В левую руку</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="kf-ctx-item danger"
+                    onClick={() => {
+                      setCtxMenu(null);
+                      handleDropStorageItemToGround(stIdx);
+                    }}
+                  >
+                    <Trash2 width={14} height={14} />
+                    <span>Выбросить на пол</span>
+                  </button>
+                </>
+              );
+            })()}
+            {(ctxMenu.slotKey === 'hand:left' || ctxMenu.slotKey === 'hand:right') && (() => {
+              const hand = ctxMenu.slotKey === 'hand:left' ? 'left' : 'right';
+              return (
+                <button
+                  type="button"
+                  className="kf-ctx-item primary"
+                  onClick={() => {
+                    setCtxMenu(null);
+                    storePlayerItemIntoSlot({ type: 'hand', hand });
+                  }}
+                >
+                  <Archive width={14} height={14} />
+                  <span>Положить в {storageTitle}</span>
+                </button>
+              );
+            })()}
+            {ctxMenu.slotKey.startsWith('inv:') && (() => {
+              const invIdx = parseInt(ctxMenu.slotKey.replace('inv:', ''), 10);
+              return (
+                <button
+                  type="button"
+                  className="kf-ctx-item primary"
+                  onClick={() => {
+                    setCtxMenu(null);
+                    storePlayerItemIntoSlot({ type: 'inv', idx: invIdx });
+                  }}
+                >
+                  <Archive width={14} height={14} />
+                  <span>Положить в {storageTitle}</span>
+                </button>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+    </ShadowHost>
   );
 };
 
+export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = React.memo(({
+  isOpen,
+  onClose,
+  player,
+  world,
+  storage: propStorage,
+  storageId,
+  customTitle,
+  onInventoryUpdated,
+  onVitalsChange,
+  onNotify,
+}) => {
+  if (!isOpen || !player) return null;
+  const resolvedStorage =
+    propStorage || (storageId && (world as any)?.furnitureStorages?.[storageId]) || null;
+  if (!resolvedStorage) return null;
+  return (
+    <FurnitureStorageContent
+      player={player}
+      world={world || null}
+      storage={resolvedStorage}
+      customTitle={customTitle}
+      onClose={onClose}
+      onInventoryUpdated={onInventoryUpdated}
+      onVitalsChange={onVitalsChange}
+      onNotify={onNotify}
+    />
+  );
+});

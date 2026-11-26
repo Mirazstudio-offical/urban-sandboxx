@@ -36,6 +36,7 @@ import { syncFurnitureStorageThermodynamics } from '../itemThermalSystem';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
 import { useTopmostEscape } from './gameUi';
+import { useCachedSlotDrag } from './useCachedSlotDrag';
 import { sound } from '../audio';
 import kitchenFurnitureCss from './kitchenFurniture.css?inline';
 import {
@@ -127,24 +128,6 @@ const KitchenTableModalContent: React.FC<{
   wbInputsRef.current = wbInputs;
   wbOutputsRef.current = wbOutputs;
 
-  const [dragUi, setDragUi] = useState<{
-    sourceKey: string;
-    item: InventoryItem;
-    x: number;
-    y: number;
-    overKey: string | null;
-  } | null>(null);
-  const dragRef = useRef<{
-    pointerId: number;
-    sourceKey: string;
-    item: InventoryItem;
-    startX: number;
-    startY: number;
-    x: number;
-    y: number;
-    active: boolean;
-    overKey: string | null;
-  } | null>(null);
   const dropHandlerRef = useRef<((targetKey: string, sourceKey: string) => void) | null>(null);
 
   useLayoutEffect(() => attachStageFit(() => hostRef.current, () => gmRef.current), []);
@@ -159,11 +142,19 @@ const KitchenTableModalContent: React.FC<{
     return () => clearTimeout(t);
   }, [toastMsg]);
 
-  // Periodic thermodynamic sync while table is open
+  // Periodic thermodynamic sync while table is open (only re-render when rounded temps/wetness change)
   useEffect(() => {
     const id = setInterval(() => {
+      const prevSig = (storage.items || [])
+        .map(it => (it ? `${Math.round(it.surfaceTemperature ?? it.temperature ?? 20)}:${Math.round(it.wetness ?? 0)}` : ''))
+        .join('|');
       syncFurnitureStorageThermodynamics(storage);
-      forceRender(n => n + 1);
+      const nextSig = (storage.items || [])
+        .map(it => (it ? `${Math.round(it.surfaceTemperature ?? it.temperature ?? 20)}:${Math.round(it.wetness ?? 0)}` : ''))
+        .join('|');
+      if (prevSig !== nextSig) {
+        forceRender(n => n + 1);
+      }
     }, 2000);
     return () => clearInterval(id);
   }, [storage]);
@@ -585,143 +576,65 @@ const KitchenTableModalContent: React.FC<{
   };
   dropHandlerRef.current = handleDrop;
 
-  // ---- Shadow-DOM-safe Pointer Drag + 2nd-Finger Scroll ----
-  const findTargetKeyAt = (x: number, y: number): string | null => {
-    const root = gmRef.current;
-    if (!root) return null;
-    const slots = root.querySelectorAll<HTMLElement>('[data-kf-slot]');
-    for (let i = 0; i < slots.length; i++) {
-      const el = slots[i];
-      const r = el.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-        return el.dataset.kfSlot || null;
+  const handleSlotShiftClick = (slotKey: string) => {
+    if (slotKey.startsWith('table:') && !slotKey.startsWith('table:empty')) {
+      const idx = parseInt(slotKey.slice(6), 10);
+      if (!isNaN(idx) && storage.items[idx]) {
+        if (activeTab === 'storage') moveTableItemToPlayer(idx);
+        else placeTableItemIntoWbInput(idx);
       }
+      return;
     }
-    const zones = root.querySelectorAll<HTMLElement>('[data-kf-zone]');
-    for (let i = 0; i < zones.length; i++) {
-      const el = zones[i];
-      const r = el.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-        return el.dataset.kfZone || null;
-      }
+    if (slotKey.startsWith('inv:')) {
+      const idx = parseInt(slotKey.slice(4), 10);
+      if (!isNaN(idx) && player.inventory[idx]) movePlayerInvToTable(idx);
+      return;
     }
-    return null;
+    if (slotKey === 'hand:left' || slotKey === 'hand:right') {
+      movePlayerHandToTable(slotKey === 'hand:left' ? 'left' : 'right');
+      return;
+    }
+    if (slotKey.startsWith('input:')) {
+      const inIdx = parseInt(slotKey.slice(6), 10);
+      if (!isNaN(inIdx)) removeWbInputToTable(inIdx);
+      return;
+    }
+    if (slotKey.startsWith('output:')) {
+      const outIdx = parseInt(slotKey.slice(7), 10);
+      if (!isNaN(outIdx)) claimWbOutputToTable(outIdx);
+    }
   };
 
-  const findScrollableAt = (x: number, y: number): HTMLElement | null => {
-    const root = gmRef.current;
-    if (!root) return null;
-    const shadow = root.getRootNode() as ShadowRoot;
-    let el: HTMLElement | null =
-      shadow && typeof shadow.elementFromPoint === 'function'
-        ? (shadow.elementFromPoint(x, y) as HTMLElement | null)
-        : null;
-    while (el && el !== root) {
-      if (el.classList?.contains('scroll') && el.scrollHeight > el.clientHeight + 2) return el;
-      el = el.parentElement;
-    }
-    const list = root.querySelectorAll<HTMLElement>('.scroll');
-    for (let i = 0; i < list.length; i++) {
-      const c = list[i];
-      const r = c.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && c.scrollHeight > c.clientHeight + 2) {
-        return c;
-      }
-    }
-    return null;
-  };
+  const { dragUi, ghostRef, startSlotDrag } = useCachedSlotDrag<InventoryItem>({
+    rootRef: gmRef,
+    slotAttr: 'data-kf-slot',
+    zoneAttr: 'data-kf-zone',
+    onDrop: (targetKey, sourceKey) => {
+      dropHandlerRef.current?.(targetKey, sourceKey);
+      setSelectedKey(null);
+    },
+  });
 
   const startSlotPointer = (
-    e: React.PointerEvent,
+    e: React.PointerEvent<HTMLElement>,
     slotKey: string,
     item: InventoryItem | null | undefined
   ) => {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
-
-    // 2nd finger scrolls while 1st finger is dragging
-    if (dragRef.current && e.pointerId !== dragRef.current.pointerId) {
-      const scroller = findScrollableAt(e.clientX, e.clientY);
-      if (scroller) {
-        const scrollPtrId = e.pointerId;
-        let lastY = e.clientY;
-        const onMove = (ev: PointerEvent) => {
-          if (ev.pointerId !== scrollPtrId) return;
-          scroller.scrollTop += lastY - ev.clientY;
-          lastY = ev.clientY;
-        };
-        const onEnd = (ev: PointerEvent) => {
-          if (ev.pointerId !== scrollPtrId) return;
-          window.removeEventListener('pointermove', onMove);
-          window.removeEventListener('pointerup', onEnd);
-          window.removeEventListener('pointercancel', onEnd);
-        };
-        window.addEventListener('pointermove', onMove, { passive: true });
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-      }
+    if (e.button === 0 && e.shiftKey) {
+      e.stopPropagation();
+      if (item) handleSlotShiftClick(slotKey);
       return;
     }
-
-    // Tap empty target slot when an item is already selected -> move!
-    if (!item) {
-      if (selectedKey && selectedKey !== slotKey) {
-        dropHandlerRef.current?.(slotKey, selectedKey);
-        setSelectedKey(null);
-      }
-      return;
-    }
-
-    e.preventDefault();
-    const state = {
-      pointerId: e.pointerId,
-      sourceKey: slotKey,
-      item,
-      startX: e.clientX,
-      startY: e.clientY,
-      x: e.clientX,
-      y: e.clientY,
-      active: false,
-      overKey: null as string | null,
-    };
-    dragRef.current = state;
-
-    const onMove = (ev: PointerEvent) => {
-      const d = dragRef.current;
-      if (!d || ev.pointerId !== d.pointerId) return;
-      d.x = ev.clientX;
-      d.y = ev.clientY;
-      if (!d.active && Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) >= 6) {
-        d.active = true;
-      }
-      if (d.active) {
-        d.overKey = findTargetKeyAt(ev.clientX, ev.clientY);
-        setDragUi({ sourceKey: d.sourceKey, item: d.item, x: d.x, y: d.y, overKey: d.overKey });
-      }
-    };
-
-    const onUp = (ev: PointerEvent) => {
-      const d = dragRef.current;
-      if (!d || ev.pointerId !== d.pointerId) return;
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      dragRef.current = null;
-      setDragUi(null);
-
-      if (d.active) {
-        const target = findTargetKeyAt(ev.clientX, ev.clientY);
-        if (target && target !== d.sourceKey) {
-          dropHandlerRef.current?.(target, d.sourceKey);
+    startSlotDrag(e, slotKey, item, () => {
+      if (!item) {
+        if (selectedKey && selectedKey !== slotKey) {
+          dropHandlerRef.current?.(slotKey, selectedKey);
           setSelectedKey(null);
         }
-      } else {
-        setSelectedKey(prev => (prev === d.sourceKey ? null : d.sourceKey));
+        return;
       }
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
+      setSelectedKey(slotKey);
+    });
   };
 
   // Resolve currently selected item details for column footers
@@ -1226,7 +1139,7 @@ const KitchenTableModalContent: React.FC<{
           <div className={'kf-wb-status' + (evalResult.isValid || hasCommittedOutputs ? ' valid' : '')}>
             {hasCommittedOutputs
               ? 'Результат готов — перетащите предметы обратно на стол или нажмите «Забрать всё на стол»'
-              : evalResult.isValid
+              : evalResult.isValid || hasAnyInput
               ? `${evalResult.title} — ${evalResult.subtitle}`
               : 'Перетащите предметы из хранилища стола справа в слоты ввода (4×4)'}
           </div>
@@ -1387,11 +1300,11 @@ const KitchenTableModalContent: React.FC<{
           </div>
         </div>
 
-        {dragUi && (
-          <div className="kf-drag-ghost" style={{ left: dragUi.x - 32, top: dragUi.y - 32 }}>
+        <div ref={ghostRef} className="kf-drag-ghost">
+          {dragUi && (
             <ItemIconCanvas itemId={dragUi.item.itemId} item={dragUi.item} size={46} />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </ShadowHost>
   );

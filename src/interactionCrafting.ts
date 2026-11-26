@@ -23,6 +23,7 @@ import {
   applyDoughAttributesToItem,
   buildFillingEntryFromItem,
   cutDoughWithKnife,
+  getDoughShapeSpecForSlot,
   getFluidDoughProfile,
   getSolidDoughProfile,
   isOpenReceivableShape,
@@ -3063,6 +3064,18 @@ function tryEvaluateDoughSystem(
 
   // 2. SOLO RAW DOUGH -> SHAPE OR FOLD ACCORDING TO SLOT INDEX!
   if (entries.length === 1 && doughs.length === 1 && isRawDoughItem(doughs[0].item)) {
+    const da = doughs[0].item.doughAttributes!;
+    if (da.consistency === 'batter') {
+      return {
+        isValid: false,
+        kind: 'none',
+        title: 'Жидковатое тесто нельзя вылепить руками',
+        subtitle: `Сейчас гидратация ${da.hydrationPct}% (${da.doughTypeRu}) — вмешайте больше муки (тесто + мука в сетку), чтобы оно стало плотнее и держало форму пиццы или пирога, либо жарьте как оладьи/блины.`,
+        actionLabel: 'Нужно больше муки',
+        previewOutputs: Array.from({ length: gridSize }, () => null),
+        transferDetails: [],
+      };
+    }
     const shaped = shapeDoughBySlot(doughs[0].item, doughs[0].slot, gridSize);
     if (shaped) {
       return {
@@ -3074,6 +3087,21 @@ function tryEvaluateDoughSystem(
         previewOutputs: packOutputsIntoSlots([shaped.result], gridSize),
         transferDetails: [],
         matchedRecipeId: 'craft_shape_dough_slot',
+      };
+    }
+    const spec = getDoughShapeSpecForSlot(doughs[0].slot, gridSize, da);
+    if (da.shape === spec.shape) {
+      return {
+        isValid: false,
+        kind: 'none',
+        title: `Тесто уже в форме «${spec.labelRu}»`,
+        subtitle:
+          da.shape === 'open_pie' || da.shape === 'flatbread'
+            ? 'Можно раскатать скалкой, положить рядом начинку (томаты, сыр, грибы) или переложить в другой слот для другой формы.'
+            : 'Переложите тесто в другой слот сетки, чтобы придать иную форму.',
+        actionLabel: 'Форма уже задана',
+        previewOutputs: Array.from({ length: gridSize }, () => null),
+        transferDetails: [],
       };
     }
     return null;
@@ -3209,20 +3237,29 @@ function tryEvaluateDoughSystem(
     const da = baseDough.doughAttributes!;
 
     // Check if ALL other items are pure core kneading adjustments (flour, water, milk, oil, butter, salt, sugar, sourdough, cocoa, egg)
-    // AND either dough is still unrolled (`lump`/`ball`) OR an ingredient is flour/water/sourdough/salt!
+    // AND either dough is still unrolled/batter, has no fillings, or an ingredient is a core dough modifier!
     const extractedAll = others.map((o) => extractDoughIngredientFromEntry(o.item, o.slot, gridSize, applyPourJitter));
     const allExtractableForKnead = extractedAll.every((x) => x !== null);
     const hasCoreDoughModifier = extractedAll.some(
       (x) =>
         x &&
         x.entries.some(
-          (e) => e.role === 'flour' || e.role === 'starch' || e.role === 'liquid' || e.role === 'leavening' || e.role === 'salt'
+          (e) =>
+            e.role === 'flour' ||
+            e.role === 'starch' ||
+            e.role === 'liquid' ||
+            e.role === 'leavening' ||
+            e.role === 'salt' ||
+            (da.consistency === 'batter' &&
+              (e.role === 'fat' || e.role === 'egg' || e.role === 'sugar' || e.role === 'dairy' || e.role === 'flavor' || e.role === 'colorant'))
         )
     );
     const preferKneadIntoDough =
       allExtractableForKnead &&
-      da.fillings.length === 0 &&
-      (!isOpenReceivableShape(da.shape) || hasCoreDoughModifier);
+      !da.isFolded &&
+      (da.consistency === 'batter' ||
+        (da.fillings.length === 0 && !isOpenReceivableShape(da.shape)) ||
+        hasCoreDoughModifier);
 
     if (preferKneadIntoDough) {
       const nextIngs: DoughIngredientEntry[] = [...da.ingredients];
@@ -3255,6 +3292,24 @@ function tryEvaluateDoughSystem(
       };
     }
 
+    // Check if kneading failed because a bottle, carton, jar, or pack is still sealed/closed
+    for (let i = 0; i < others.length; i++) {
+      if (extractedAll[i] !== null) continue;
+      const o = others[i];
+      const w = getEffectiveFluidWrapper(o.item);
+      if (w && !w.isOpened && w.state.currentMl >= 3 && w.state.liquidId) {
+        return {
+          isValid: false,
+          kind: 'none',
+          title: `Тара закрыта: «${o.item.nameRu}»`,
+          subtitle: 'Сначала откройте крышку или упаковку в инвентаре («Открыть крышку / упаковку»), затем повторите замес.',
+          actionLabel: 'Тара закрыта',
+          previewOutputs: Array.from({ length: gridSize }, () => null),
+          transferDetails: [],
+        };
+      }
+    }
+
     // Otherwise: try placing edible items / spreads as FILLING inside the dough (with strict capacity check!)
     const allFoodOrSpread = others.every(
       (o) =>
@@ -3264,6 +3319,17 @@ function tryEvaluateDoughSystem(
     );
 
     if (allFoodOrSpread) {
+      if (da.consistency === 'batter') {
+        return {
+          isValid: false,
+          kind: 'none',
+          title: 'На жидкое тесто нельзя положить начинку',
+          subtitle: `Сейчас гидратация ${da.hydrationPct}% (${da.doughTypeRu}) — сначала вмешайте больше муки (тесто + мука в сетку), а затем сформуйте лепёшку или пиццу и добавьте начинку.`,
+          actionLabel: 'Нужно больше муки',
+          previewOutputs: Array.from({ length: gridSize }, () => null),
+          transferDetails: [],
+        };
+      }
       if (da.isFolded) {
         return {
           isValid: false,
@@ -3410,10 +3476,20 @@ function tryEvaluateDoughSystem(
     const labels: string[] = [];
     let hasFlourBase = false;
     let hasWetBinder = false;
+    let closedIngredient: InventoryItem | null = null;
+    let invalidFound = false;
 
     for (const e of entries) {
       const ext = extractDoughIngredientFromEntry(e.item, e.slot, gridSize, applyPourJitter);
-      if (!ext) return null;
+      if (!ext) {
+        const w = getEffectiveFluidWrapper(e.item);
+        if (w && !w.isOpened && w.state.currentMl >= 3 && w.state.liquidId && !closedIngredient) {
+          closedIngredient = e.item;
+        } else {
+          invalidFound = true;
+        }
+        continue;
+      }
       allIngs.push(...ext.entries);
       if (ext.leftoverItem) leftovers.push(ext.leftoverItem);
       labels.push(ext.summaryLabel);
@@ -3421,7 +3497,19 @@ function tryEvaluateDoughSystem(
       if (ext.hasWetBinder) hasWetBinder = true;
     }
 
-    if (hasFlourBase && hasWetBinder && allIngs.length >= 2) {
+    if (closedIngredient && !invalidFound && (hasFlourBase || hasWetBinder)) {
+      return {
+        isValid: false,
+        kind: 'none',
+        title: `Тара закрыта: «${closedIngredient.nameRu}»`,
+        subtitle: 'Сначала откройте крышку или упаковку в инвентаре («Открыть крышку / упаковку»), затем повторите замес.',
+        actionLabel: 'Тара закрыта',
+        previewOutputs: Array.from({ length: gridSize }, () => null),
+        transferDetails: [],
+      };
+    }
+
+    if (!closedIngredient && !invalidFound && hasFlourBase && hasWetBinder && allIngs.length >= 2) {
       const freshDough = createItem('dough', 1, undefined, true);
       const attrs = synthesizeDoughAttributes(allIngs);
       applyDoughAttributesToItem(freshDough, attrs);

@@ -1717,6 +1717,42 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     }
   }, [isOpen, shop?.id, shop?.type]);
 
+  const activeIntervalsRef = React.useRef<Set<ReturnType<typeof setInterval>>>(new Set());
+  const activeTimeoutsRef = React.useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  const registerInterval = (fn: () => void, ms: number) => {
+    const id = setInterval(fn, ms);
+    activeIntervalsRef.current.add(id);
+    return id;
+  };
+  const stopInterval = (id: ReturnType<typeof setInterval>) => {
+    clearInterval(id);
+    activeIntervalsRef.current.delete(id);
+  };
+  const registerTimeout = (fn: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      activeTimeoutsRef.current.delete(id);
+      fn();
+    }, ms);
+    activeTimeoutsRef.current.add(id);
+    return id;
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      activeIntervalsRef.current.forEach(clearInterval);
+      activeIntervalsRef.current.clear();
+      activeTimeoutsRef.current.forEach(clearTimeout);
+      activeTimeoutsRef.current.clear();
+    }
+    return () => {
+      activeIntervalsRef.current.forEach(clearInterval);
+      activeIntervalsRef.current.clear();
+      activeTimeoutsRef.current.forEach(clearTimeout);
+      activeTimeoutsRef.current.clear();
+    };
+  }, [isOpen]);
+
   if (!isOpen || !shop || !player) return null;
 
   const playerCash = getPlayerCash(player);
@@ -1833,7 +1869,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     }
 
     setPosSuccess(true);
-    setTimeout(() => {
+    registerTimeout(() => {
       setCart([]);
       setTrayDenoms({});
       setPosSuccess(false);
@@ -1846,7 +1882,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     if (!currentVehicle) return;
     sound.playUseItem();
     setIsScanningEcu(true);
-    setTimeout(() => {
+    registerTimeout(() => {
       setIsScanningEcu(false);
       setHasScannedEcu(true);
       sound.playPickup();
@@ -2075,14 +2111,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     const activeRepairs = getActiveRepairs();
     if (activeRepairs.length === 0) {
       setRepairActionMessage('Компьютерная диагностика не обнаружила дефектов. Все системы автомобиля в норме!');
-      setTimeout(() => setRepairActionMessage(null), 3500);
+      registerTimeout(() => setRepairActionMessage(null), 3500);
       return;
     }
 
     const totalCost = activeRepairs.reduce((sum, r) => sum + r.price, 0);
     if (playerCash < totalCost) {
       setRepairActionMessage(`Недостаточно средств! Требуется ${totalCost.toLocaleString()} ₽, у вас ${playerCash.toLocaleString()} ₽`);
-      setTimeout(() => setRepairActionMessage(null), 4000);
+      registerTimeout(() => setRepairActionMessage(null), 4000);
       return;
     }
 
@@ -2140,14 +2176,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     setTotalRepairStepsCount(logSteps.length);
 
     let step = 0;
-    const interval = setInterval(() => {
+    const interval = registerInterval(() => {
       setRepairLogs(prev => [...prev, logSteps[step]]);
       setCurrentRepairStep(step + 1);
       sound.playUseItem();
 
       step++;
       if (step >= logSteps.length) {
-        clearInterval(interval);
+        stopInterval(interval);
         
         // Execute physical logic for each repair item
         activeRepairs.forEach(r => r.apply(currentVehicle));
@@ -2158,7 +2194,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
         setIsRepairing(false);
         (currentVehicle as any).isUnderRepair = false;
         setRepairActionMessage('Техническое обслуживание и ремонт по наряд-заказу успешно завершены!');
-        setTimeout(() => setRepairActionMessage(null), 3000);
+        registerTimeout(() => setRepairActionMessage(null), 3000);
       }
     }, 600); // 600ms per step
   };
@@ -2178,10 +2214,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     setInstallingChiptuning(true);
     setChiptuningProgress(0);
 
-    const interval = setInterval(() => {
+    const interval = registerInterval(() => {
       setChiptuningProgress(prev => {
         if (prev >= 100) {
-          clearInterval(interval);
+          stopInterval(interval);
           deductPlayerCash(player, CHIPTUNING_PRICE);
           (currentVehicle as any).isChiptuned = true;
           (currentVehicle as any).hasChiptuning = true;
@@ -2212,10 +2248,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     setInstallingSuspension(true);
     setSuspensionProgress(0);
 
-    const interval = setInterval(() => {
+    const interval = registerInterval(() => {
       setSuspensionProgress(prev => {
         if (prev >= 100) {
-          clearInterval(interval);
+          stopInterval(interval);
           deductPlayerCash(player, SUSPENSION_PRICE);
           (currentVehicle as any).isHeavySuspended = true;
           (currentVehicle as any).hasHeavySuspension = true;
@@ -2244,10 +2280,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     setInstallingLpg(true);
     setLpgProgress(0);
 
-    const interval = setInterval(() => {
+    const interval = registerInterval(() => {
       setLpgProgress(prev => {
         if (prev >= 100) {
-          clearInterval(interval);
+          stopInterval(interval);
           deductPlayerCash(player, lpgConfig.price);
           const capacity = lpgConfig.capacity || 55;
           if (currentVehicle.fuelSystem) {
@@ -2299,10 +2335,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     setInstallingCamera(true);
     setCameraProgress(0);
 
-    const interval = setInterval(() => {
+    const interval = registerInterval(() => {
       setCameraProgress(prev => {
         if (prev >= 100) {
-          clearInterval(interval);
+          stopInterval(interval);
           deductPlayerCash(player, CAMERA_PRICE);
           currentVehicle.hasRearviewCamera = true;
           setInstallingCamera(false);
@@ -2348,10 +2384,10 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     setIsPainting(true);
     setPaintProgress(0);
 
-    const interval = setInterval(() => {
+    const interval = registerInterval(() => {
       setPaintProgress(prev => {
         if (prev >= 100) {
-          clearInterval(interval);
+          stopInterval(interval);
           deductPlayerCash(player, PAINT_PRICE);
           if (selectedPaintTarget === 'roof') {
             currentVehicle.roofColor = selectedColor;

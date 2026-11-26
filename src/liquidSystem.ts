@@ -6432,6 +6432,10 @@ export function tryFillOrUseFluidContainer(
   if (isFluidContainerClosed(container)) {
     const openResult = openFluidContainerIfNeeded(player, container);
     if (openResult.justOpened) {
+      // If it contains a drinkable beverage, auto-drink on the same action instead of requiring a second press
+      if (storage.currentMl > 0 && storage.liquidId && LIQUID_REGISTRY[storage.liquidId]?.isDrinkable) {
+        return handleConsumeFluid(player, container, world);
+      }
       return { success: true, message: openResult.message };
     }
   }

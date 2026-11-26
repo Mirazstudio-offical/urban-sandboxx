@@ -45,6 +45,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
   onToggleActiveHand,
   onSelectActiveHand,
   onUseActiveHandItem,
+  onUseHotbarItem,
   isMobileTouch = false
 }) => {
   if (!player || !player.needs) return null;
@@ -268,7 +269,64 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
 
       {/* 4. BOTTOM DUAL HANDS & POCKETS HUD */}
       {!player.isInVehicle && (
-        <div className={`fixed ${isMobileTouch ? 'bottom-1 sm:bottom-2' : 'bottom-4'} left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-1 sm:gap-2 pointer-events-auto`}>
+        <div className={`fixed ${isMobileTouch ? 'bottom-1 sm:bottom-2' : 'bottom-4'} left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-1.5 pointer-events-auto`}>
+          {/* 6-SLOT POCKET QUICK HOTBAR [1..6] */}
+          <div
+            id="player-pocket-quick-hotbar"
+            className={`flex items-center gap-1.5 transition-all ${
+              isMobileTouch ? 'scale-75 sm:scale-85 md:scale-100 origin-bottom' : ''
+            }`}
+          >
+            {[0, 1, 2, 3, 4, 5].map((idx) => {
+              const slotItem = player.inventory[idx];
+              const fluidPct =
+                slotItem?.fluidStorage && slotItem.fluidStorage.maxMl > 0
+                  ? Math.max(0, Math.min(100, Math.round((slotItem.fluidStorage.currentMl / slotItem.fluidStorage.maxMl) * 100)))
+                  : slotItem?.maxPortions && slotItem.maxPortions > 1
+                  ? Math.max(0, Math.min(100, Math.round(((slotItem.portions ?? slotItem.maxPortions) / slotItem.maxPortions) * 100)))
+                  : null;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => slotItem && onUseHotbarItem?.(idx)}
+                  title={
+                    slotItem
+                      ? `[${idx + 1}] ${slotItem.nameRu} — клик или клавиша ${idx + 1} (взять в руку / применить)`
+                      : `Слот кармана ${idx + 1} пуст`
+                  }
+                  className={`relative w-10 h-10 rounded-md border flex items-center justify-center transition-colors select-none ${
+                    slotItem
+                      ? 'border-white/15 bg-[#141416]/92 hover:bg-[#1e1e22]/95 hover:border-[#c9922b]/75 cursor-pointer'
+                      : 'border-white/8 bg-[#101012]/75 cursor-default'
+                  }`}
+                >
+                  <span className="absolute top-0.5 left-1 text-[8px] font-mono font-semibold text-white/45">
+                    {idx + 1}
+                  </span>
+                  {slotItem && (
+                    <>
+                      <ItemIconCanvas itemId={slotItem.itemId} item={slotItem} size={22} />
+                      {slotItem.count > 1 && (
+                        <span className="absolute bottom-0.5 right-1 text-[8px] font-mono font-bold text-white">
+                          x{slotItem.count}
+                        </span>
+                      )}
+                      {fluidPct !== null && (
+                        <div className="absolute bottom-0.5 left-1 right-1 h-[2px] bg-white/15 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#c9922b] rounded-full"
+                            style={{ width: `${fluidPct}%` }}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
           {/* MAIN INTERFACE ROW: LEFT HAND | SWAP | RIGHT HAND | INVENTORY BUTTON */}
           <div 
             id="player-dual-hands-hotbar"

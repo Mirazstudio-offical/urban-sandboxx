@@ -9,6 +9,46 @@ interface ItemIconCanvasProps {
   rawBase?: boolean;
 }
 
+const MAX_SPRITE_CACHE = 600;
+const spriteCache = new Map<string, HTMLCanvasElement>();
+
+function getCachedItemSprite(
+  itemId: string,
+  item: any,
+  size: number,
+  dpr: number,
+  rawBase: boolean,
+  visualStateKey: string
+): HTMLCanvasElement {
+  const key = `${itemId}|${size}|${dpr}|${rawBase ? 1 : 0}|${visualStateKey}`;
+  const existing = spriteCache.get(key);
+  if (existing) {
+    spriteCache.delete(key);
+    spriteCache.set(key, existing);
+    return existing;
+  }
+
+  const offscreen = document.createElement('canvas');
+  offscreen.width = Math.max(1, Math.round(size * dpr));
+  offscreen.height = Math.max(1, Math.round(size * dpr));
+  const octx = offscreen.getContext('2d');
+  if (octx) {
+    octx.save();
+    octx.scale(dpr, dpr);
+    drawItemModel2D(octx, itemId, size / 2, size / 2, size * 0.78, item, false, rawBase);
+    octx.restore();
+  }
+
+  if (spriteCache.size >= MAX_SPRITE_CACHE) {
+    const oldestKey = spriteCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      spriteCache.delete(oldestKey);
+    }
+  }
+  spriteCache.set(key, offscreen);
+  return offscreen;
+}
+
 function buildItemVisualStateKey(item: any): string {
   if (!item) return '';
   const t = typeof item.surfaceTemperature === 'number'
@@ -27,13 +67,18 @@ function buildItemVisualStateKey(item: any): string {
   const soakCol = item.soakedColor || '';
   const soakId = item.soakedLiquidId || '';
   const open = item.isOpen ? 1 : 0;
+  const origCat = item.originalCatalogId || '';
+  const cTint = item.containerTintColor || '';
+  const cVis = item.containerVisuals
+    ? `${item.containerVisuals.shape || ''}:${item.containerVisuals.color || ''}:${item.containerVisuals.capColor || ''}:${item.containerVisuals.labelColor || ''}`
+    : '';
   const cd = item.culinaryData;
   const cdKey = cd
     ? `${Math.round((cd.denaturation || 0) * 10)},${Math.round((cd.maillard || 0) * 10)},${Math.round((cd.charring || 0) * 10)}`
     : '';
   const fs = item.fluidStorage;
   const fsKey = fs
-    ? `${fs.liquidId || ''}:${Math.round((fs.currentMl || 0) / 5)}:${fs.attributes?.customColor || ''}`
+    ? `${fs.liquidId || ''}:${Math.round((fs.currentMl || 0) / 5)}:${fs.attributes?.customColor || ''}:${fs.isOpen ? 1 : 0}`
     : '';
   let childKey = '';
   if (Array.isArray(item.contents) && item.contents.length > 0) {
@@ -59,11 +104,37 @@ function buildItemVisualStateKey(item: any): string {
   const rpKey = rp
     ? `${rp.modelId}:${rp.shape}:${rp.color}:${rp.pattern}`
     : '';
+  const pa = item.produceAttributes;
+  const paKey = pa
+    ? `${pa.speciesId || ''}:${pa.variantRu || ''}:${pa.cutForm || ''}:${pa.isPeeled ? 1 : 0}:${pa.isDried ? 1 : 0}:${pa.color || ''}`
+    : '';
+  const ma = item.meatAttributes;
+  const maKey = ma
+    ? `${ma.speciesId || ''}:${ma.anatomicalPart || ''}:${ma.cutForm || ''}:${ma.color || ''}`
+    : '';
+  const ba = item.branchAttributes;
+  const baKey = ba
+    ? `${ba.speciesId || ''}:${ba.attachedFruit?.count || 0}`
+    : '';
+  const kw = item.kitchenwareAttributes;
+  const kwKey = kw
+    ? `${kw.kind || ''}:${kw.material || ''}:${kw.color || ''}:${kw.pattern || ''}`
+    : '';
+  const ph = item.phoneAttributes;
+  const phKey = ph
+    ? `${ph.brand || ''}:${ph.modelName || ''}:${ph.colorHex || ''}`
+    : '';
+  const choco = item.chocolateAttributes;
+  const chocoKey = choco ? `${choco.kind || ''}:${choco.flavor || ''}:${choco.shape || ''}` : '';
+  const gum = item.gummyAttributes;
+  const gumKey = gum ? `${gum.shape || ''}:${gum.color || ''}` : '';
+  const pel = item.pelmenAttributes;
+  const pelKey = pel ? `${pel.shape || ''}:${pel.filling || ''}` : '';
   const lbl = item.labelColor || '';
-  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${cdKey}|${fsKey}|${childKey}|${daKey}|${rpKey}|${lbl}`;
+  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${origCat}|${cTint}|${cVis}|${cdKey}|${fsKey}|${childKey}|${daKey}|${rpKey}|${paKey}|${maKey}|${baKey}|${kwKey}|${phKey}|${chocoKey}|${gumKey}|${pelKey}|${lbl}`;
 }
 
-export const ItemIconCanvas: React.FC<ItemIconCanvasProps> = ({
+const ItemIconCanvasInner: React.FC<ItemIconCanvasProps> = ({
   itemId,
   item,
   size = 32,
@@ -79,15 +150,16 @@ export const ItemIconCanvas: React.FC<ItemIconCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(size * dpr);
-    canvas.height = Math.round(size * dpr);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const targetW = Math.max(1, Math.round(size * dpr));
+    const targetH = Math.max(1, Math.round(size * dpr));
+    if (canvas.width !== targetW) canvas.width = targetW;
+    if (canvas.height !== targetH) canvas.height = targetH;
 
-    ctx.save();
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, size, size);
-    drawItemModel2D(ctx, itemId, size / 2, size / 2, size * 0.78, item, false, rawBase);
-    ctx.restore();
+    const sprite = getCachedItemSprite(itemId, item, size, dpr, rawBase, visualStateKey);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, targetW, targetH);
+    ctx.drawImage(sprite, 0, 0, targetW, targetH);
   }, [itemId, item, size, rawBase, visualStateKey]);
 
   return (
@@ -98,3 +170,13 @@ export const ItemIconCanvas: React.FC<ItemIconCanvasProps> = ({
     />
   );
 };
+
+export const ItemIconCanvas = React.memo(ItemIconCanvasInner, (prev, next) => {
+  if (prev.itemId !== next.itemId || prev.size !== next.size || prev.className !== next.className || prev.rawBase !== next.rawBase) {
+    return false;
+  }
+  if (prev.item === next.item) return true;
+  if (!prev.item || !next.item) return false;
+  if (prev.rawBase && next.rawBase) return true;
+  return buildItemVisualStateKey(prev.item) === buildItemVisualStateKey(next.item);
+});

@@ -1051,23 +1051,334 @@ export function buildDefaultDoughAttributes(
 }
 
 // ============================================================================
-// 6. DYNAMIC DISPLAY NAMING, NUTRITION & ITEM SYNC
+// 6. DYNAMIC DISPLAY NAMING, VISUAL INSPECTION, NUTRITION & ITEM SYNC
 // ============================================================================
 
-export function buildDoughDisplayNameRu(attrs: DoughAttributes): string {
-  const fillingShort =
-    attrs.fillings.length > 0
-      ? ` с начинкой (${attrs.fillings
-          .slice(0, 2)
-          .map((f) => f.nameRu.split('(')[0].trim().toLowerCase())
-          .join(', ')})`
-      : '';
+const CONTAINER_NOISE_RE =
+  /\s+(?:в|из)\s+(?:солонк[еи]|банк[еи]|бутылк[еи]|пакет[еа]|мешочк[еа]|коробк[еи]|упаковк[еи]|пачк[еи]|стакан[еа]|кружк[еи]|миск[еи])$/i;
+
+const CULINARY_PLURAL_MAP_RU: Record<string, string> = {
+  'томат': 'томаты',
+  'помидор': 'помидоры',
+  'шампиньон': 'шампиньоны',
+  'гриб': 'грибы',
+  'огурец': 'огурцы',
+  'яблоко': 'яблоки',
+  'груша': 'груши',
+  'ягода': 'ягоды',
+  'ягодка': 'ягоды',
+  'слива': 'сливы',
+  'персик': 'персики',
+  'абрикос': 'абрикосы',
+  'лисичка': 'лисички',
+  'опёнок': 'опята',
+  'боровик': 'боровики',
+  'подберёзовик': 'подберёзовики',
+  'подосиновик': 'подосиновики',
+  'маслина': 'маслины',
+  'оливка': 'оливки',
+  'яйцо': 'яйца',
+  'орех': 'орехи',
+  'изюм': 'изюм',
+};
+
+export function cleanCulinaryIngredientNameRu(rawName: string): string {
+  let s = (rawName || '')
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(CONTAINER_NOISE_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const lower = s.toLowerCase();
+  if (/^пресная питьевая(?:\s+вода)?$/.test(lower) || /^питьевая вода/.test(lower)) {
+    return 'вода';
+  }
+  if (/^соль поваренная/.test(lower) || /^соль пищевая/.test(lower)) {
+    return 'соль';
+  }
+  if (/^сахар(?:-песок)?\s+белый/.test(lower)) {
+    return 'сахар';
+  }
+  if (/^мука пшеничная/.test(lower)) {
+    return 'пшеничная мука';
+  }
+  if (/^мука ржаная/.test(lower)) {
+    return 'ржаная мука';
+  }
+  if (/^мука кукурузная/.test(lower)) {
+    return 'кукурузная мука';
+  }
+  if (/^мука рисовая/.test(lower)) {
+    return 'рисовая мука';
+  }
+  if (/^шарик сыра\s+/i.test(s)) {
+    s = `сыр ${s.replace(/^шарик сыра\s+/i, '').trim()}`;
+  }
+  return s.toLowerCase();
+}
+
+function pluralizeCulinaryNounRu(baseLower: string, count: number): string {
+  if (count < 2) return baseLower;
+  if (CULINARY_PLURAL_MAP_RU[baseLower]) return CULINARY_PLURAL_MAP_RU[baseLower];
+  // Handle common modifiers like "свежий томат", "кусочек шампиньона"
+  const parts = baseLower.split(' ');
+  const last = parts[parts.length - 1];
+  if (CULINARY_PLURAL_MAP_RU[last]) {
+    parts[parts.length - 1] = CULINARY_PLURAL_MAP_RU[last];
+    return parts.join(' ');
+  }
+  return baseLower;
+}
+
+function capitalizeFirstRu(text: string): string {
+  if (!text) return text;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * Determines whether the dough fillings/toppings are visually observable on the item:
+ * - True if open-topped (flatbread, rolled sheet, open pie) and not folded closed
+ * - True if cooked batter with visible toppings (blini/pancakes/syrniki)
+ * - True if the item was already bitten or cut open (portions < maxPortions)
+ * - False for intact sealed/folded items (pirozhok, dumpling, khinkali, strudel, croissant, wrapped bun/loaf)
+ */
+export function isDoughFillingVisible(
+  attrs: DoughAttributes,
+  item?: Pick<InventoryItem, 'portions' | 'maxPortions'>
+): boolean {
+  if (!attrs.fillings || attrs.fillings.length === 0) return false;
+  if (
+    item?.portions !== undefined &&
+    item?.maxPortions !== undefined &&
+    item.portions < item.maxPortions
+  ) {
+    return true;
+  }
+  if (
+    !attrs.isFolded &&
+    (attrs.isOpenTop ||
+      attrs.shape === 'open_pie' ||
+      attrs.shape === 'flatbread' ||
+      attrs.shape === 'sheet' ||
+      attrs.shape === 'square_sheet')
+  ) {
+    return true;
+  }
+  if (
+    attrs.cookState !== 'raw' &&
+    !attrs.isFolded &&
+    (attrs.doughType === 'liquid_batter' ||
+      attrs.doughType === 'pancake_batter' ||
+      attrs.doughType === 'cottage_cheese')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export interface GroupedDoughFilling {
+  key: string;
+  labelLower: string;
+  shortTitleLower: string;
+  count: number;
+  totalGrams: number;
+  colorHex: string;
+}
+
+export function groupDoughFillings(fillings: DoughFillingEntry[]): GroupedDoughFilling[] {
+  const map = new Map<string, { rawBase: string; count: number; totalGrams: number; colorHex: string }>();
+  for (const f of fillings) {
+    const cleaned = cleanCulinaryIngredientNameRu(f.nameRu);
+    const key = cleaned || f.nameRu.trim().toLowerCase();
+    const prev = map.get(key);
+    if (prev) {
+      prev.count += 1;
+      prev.totalGrams += f.weightGrams || 0;
+    } else {
+      map.set(key, {
+        rawBase: key,
+        count: 1,
+        totalGrams: f.weightGrams || 0,
+        colorHex: f.colorHex || '#d97706',
+      });
+    }
+  }
+  return Array.from(map.entries())
+    .map(([key, v]) => {
+      const labelLower = pluralizeCulinaryNounRu(v.rawBase, v.count);
+      const shortTitleLower = labelLower.replace(/^сыр\s+(моцарелла|чеддер|пармезан|сулугуни|брынза|фета|гауда)/, '$1');
+      return {
+        key,
+        labelLower,
+        shortTitleLower,
+        count: v.count,
+        totalGrams: Math.round(v.totalGrams),
+        colorHex: v.colorHex,
+      };
+    })
+    .sort((a, b) => b.totalGrams - a.totalGrams || b.count - a.count);
+}
+
+export function summarizeDoughFillingsApproxRu(
+  fillings: DoughFillingEntry[],
+  options?: { maxItems?: number; capitalize?: boolean; withApproxAmount?: boolean }
+): string {
+  const grouped = groupDoughFillings(fillings);
+  if (grouped.length === 0) return '';
+  const maxItems = options?.maxItems ?? 6;
+  const withApproxAmount = options?.withApproxAmount ?? true;
+  const shown = grouped.slice(0, maxItems).map((g) => {
+    let text = g.labelLower;
+    if (withApproxAmount) {
+      if (g.count >= 5 || g.totalGrams >= 85) {
+        text = `${text} (много)`;
+      } else if (g.count === 1 && g.totalGrams < 15 && grouped.length > 1) {
+        text = `${text} (немного)`;
+      }
+    }
+    return text;
+  });
+  let joined = shown.join(', ');
+  if (grouped.length > maxItems) {
+    joined += ' и др.';
+  }
+  return options?.capitalize ? capitalizeFirstRu(joined) : joined;
+}
+
+export function summarizeDoughIngredientsRu(
+  ingredients: DoughIngredientEntry[],
+  options?: { maxItems?: number; capitalize?: boolean }
+): string {
+  const map = new Map<string, number>();
+  for (const ing of ingredients) {
+    const cleaned = cleanCulinaryIngredientNameRu(ing.nameRu);
+    if (!cleaned) continue;
+    map.set(cleaned, (map.get(cleaned) || 0) + (ing.grams || 0));
+  }
+  const sorted = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  const maxItems = options?.maxItems ?? 6;
+  const shown = sorted.slice(0, maxItems).map(([name]) => name);
+  let joined = shown.join(', ');
+  if (sorted.length > maxItems) {
+    joined += ' и др.';
+  }
+  return options?.capitalize ? capitalizeFirstRu(joined) : joined;
+}
+
+export function describeDoughAppearanceQualitativeRu(attrs: DoughAttributes): {
+  shapeBriefRu: string;
+  sizeThicknessRu: string;
+  crustLookRu: string;
+  textureLookRu: string;
+} {
+  const isFlat =
+    attrs.shape === 'flatbread' ||
+    attrs.shape === 'sheet' ||
+    attrs.shape === 'square_sheet' ||
+    attrs.shape === 'open_pie';
+  const isLong = attrs.shape === 'rope' || attrs.shape === 'braid' || attrs.shape === 'loaf';
+
+  let shapeBriefRu = DOUGH_SHAPE_NAMES_RU[attrs.shape];
+  if ((attrs.shape === 'sheet' || attrs.shape === 'flatbread') && attrs.thicknessMm <= 2.5) {
+    shapeBriefRu = 'Тонко раскатанная лепёшка';
+  } else if (attrs.shape === 'sheet') {
+    shapeBriefRu = 'Раскатанный пласт';
+  } else if (attrs.shape === 'open_pie') {
+    shapeBriefRu = attrs.cookState === 'baked' ? (attrs.sweetness >= 35 ? 'Открытый пирог' : 'Пицца / открытый пирог') : 'Открытая лепёшка';
+  } else if (attrs.shape === 'loaf') {
+    shapeBriefRu = attrs.cookState === 'baked' ? 'Буханка хлеба' : 'Батон / буханка';
+  }
+
+  const lowerShape = shapeBriefRu.toLowerCase();
+  const isFemShape =
+    lowerShape.includes('лепёшка') ||
+    lowerShape.includes('булочка') ||
+    lowerShape.includes('косичка') ||
+    lowerShape.includes('буханка') ||
+    lowerShape.includes('лапша') ||
+    lowerShape.includes('пицца');
+  const isPluralShape =
+    attrs.shape === 'strip' || attrs.shape === 'cubes_pieces';
+
+  let sizeWord = 'среднего размера';
+  if (attrs.diameterCm >= 34) {
+    sizeWord = isPluralShape ? 'крупные' : isFemShape ? 'крупная' : 'крупный';
+  } else if (attrs.diameterCm >= 22) {
+    sizeWord = 'среднего размера';
+  } else if (attrs.diameterCm >= 11) {
+    sizeWord = isPluralShape ? 'небольшие' : isFemShape ? 'небольшая' : 'небольшой';
+  } else {
+    sizeWord = isPluralShape ? 'маленькие' : isFemShape ? 'маленькая' : 'маленький';
+  }
+
+  let thicknessWord = '';
+  if (isFlat) {
+    if (attrs.thicknessMm <= 2.2) thicknessWord = isFemShape ? 'очень тонкая' : 'очень тонкий';
+    else if (attrs.thicknessMm <= 4.5) thicknessWord = isFemShape ? 'тонкая' : 'тонкий';
+    else if (attrs.thicknessMm <= 8.5) thicknessWord = 'средней толщины';
+    else thicknessWord = isFemShape ? 'пышная' : 'толстый';
+  }
+
+  let sizeThicknessRu = '';
+  if (isFlat) {
+    sizeThicknessRu = `${thicknessWord}, ${sizeWord}`;
+  } else if (isLong) {
+    sizeThicknessRu =
+      attrs.diameterCm >= 28
+        ? (isFemShape ? 'удлинённая, крупная' : 'удлинённый, крупный')
+        : 'умеренной длины';
+  } else {
+    sizeThicknessRu = sizeWord;
+  }
+
+  let crustLookRu = 'Сырое тесто';
+  if (attrs.cookState === 'baked') {
+    crustLookRu = attrs.riseFactor >= 1.28 ? 'Пышная румяная корочка' : 'Ровная запечённая корочка';
+  } else if (attrs.cookState === 'fried' || attrs.cookState === 'deep_fried') {
+    crustLookRu = 'Поджаристая золотистая корочка';
+  } else if (attrs.cookState === 'boiled') {
+    crustLookRu = 'Мягкое отварное тесто';
+  } else if (attrs.cookState === 'steamed') {
+    crustLookRu = 'Нежное пропаренное тесто';
+  } else if (attrs.cookState === 'burnt') {
+    crustLookRu = 'Сильно подгоревшая тёмная корка';
+  }
+
+  let textureLookRu = attrs.consistencyRu;
+  if (attrs.cookState !== 'raw') {
+    if (attrs.doughType === 'shortcrust') textureLookRu = 'Рассыпчатое песочное';
+    else if (attrs.riseFactor >= 1.28 || attrs.leaveningLevel >= 25) textureLookRu = 'Пышное пористое';
+    else if (attrs.consistency === 'stiff') textureLookRu = 'Плотное пресное';
+    else if (attrs.consistency === 'soft' || attrs.richness >= 22) textureLookRu = 'Мягкое сдобное';
+    else textureLookRu = 'Однородное плотное';
+  }
+
+  return { shapeBriefRu, sizeThicknessRu, crustLookRu, textureLookRu };
+}
+
+export function buildDoughDisplayNameRu(
+  attrs: DoughAttributes,
+  item?: Pick<InventoryItem, 'portions' | 'maxPortions'>
+): string {
+  const showFillings = isDoughFillingVisible(attrs, item);
+  let fillingShort = '';
+  if (showFillings) {
+    const grouped = groupDoughFillings(attrs.fillings);
+    if (grouped.length > 0) {
+      const top = grouped.slice(0, 3).map((g) => g.shortTitleLower);
+      const list = grouped.length > 3 ? `${top.slice(0, 2).join(', ')} и др.` : top.join(', ');
+      fillingShort = ` (${list})`;
+    }
+  }
 
   if (attrs.cookState === 'raw') {
     const baseLabel = /(?:^|\s)тест[оауеы]?(?=\s|$)/i.test(attrs.doughTypeRu)
       ? attrs.doughTypeRu.trim()
       : `${attrs.doughTypeRu.trim()} тесто`;
-    const shapeLabel = DOUGH_SHAPE_NAMES_RU[attrs.shape].toLowerCase();
+    const shapeLabel =
+      attrs.shape === 'sheet' && attrs.thicknessMm <= 2.5
+        ? 'тонкий пласт'
+        : DOUGH_SHAPE_NAMES_RU[attrs.shape].toLowerCase();
     return `${baseLabel} (${shapeLabel})${fillingShort}`;
   }
 
@@ -1075,18 +1386,17 @@ export function buildDoughDisplayNameRu(attrs: DoughAttributes): string {
     attrs.cookState === 'burnt'
       ? 'Подгорелая выпечка'
       : attrs.cookState === 'baked'
-      ? 'Печён.'
+      ? 'Печёное изделие'
       : attrs.cookState === 'fried' || attrs.cookState === 'deep_fried'
-      ? 'Жарен.'
+      ? 'Жареное изделие'
       : attrs.cookState === 'boiled'
-      ? 'Варён.'
-      : 'Паров.';
+      ? 'Варёное изделие'
+      : 'Паровое изделие';
 
   if (attrs.cookState === 'burnt') {
     return `Подгорелое изделие (${DOUGH_SHAPE_NAMES_RU[attrs.shape].toLowerCase()})${fillingShort}`;
   }
 
-  // Culinary dish names when cooked!
   if (attrs.doughType === 'liquid_batter' && (attrs.cookState === 'fried' || attrs.cookState === 'deep_fried')) {
     return `Домашний блин${fillingShort}`;
   }
@@ -1094,45 +1404,108 @@ export function buildDoughDisplayNameRu(attrs: DoughAttributes): string {
     return `Домашние оладьи${fillingShort}`;
   }
   if (attrs.doughType === 'cottage_cheese' && (attrs.cookState === 'fried' || attrs.cookState === 'baked')) {
-    return `${attrs.cookState === 'baked' ? 'Творожная запеканка / сырник' : 'Домашние сырники'}${fillingShort}`;
+    return `${attrs.cookState === 'baked' ? 'Творожная запеканка' : 'Домашние сырники'}${fillingShort}`;
   }
 
   switch (attrs.shape) {
     case 'loaf':
       return attrs.cookState === 'baked'
-        ? `Домашний хлеб (${attrs.doughType === 'rye_bread' ? 'ржаной' : attrs.doughType === 'corn_dough' ? 'кукурузный' : 'свежий'})${fillingShort}`
-        : `${statePrefix} батон${fillingShort}`;
+        ? `Домашний хлеб${attrs.doughType === 'rye_bread' ? ' (ржаной)' : attrs.doughType === 'corn_dough' ? ' (кукурузный)' : ''}`
+        : `${statePrefix} — батон`;
     case 'bun':
     case 'ball':
-      return `${attrs.cookState === 'baked' ? 'Печёная булочка' : attrs.cookState === 'steamed' ? 'Паровая булочка' : `${statePrefix} колобок`}${fillingShort}`;
+      return attrs.cookState === 'baked'
+        ? 'Печёная булочка'
+        : attrs.cookState === 'steamed'
+        ? 'Паровая булочка'
+        : `${attrs.cookState === 'fried' || attrs.cookState === 'deep_fried' ? 'Жареный' : 'Варёный'} колобок`;
     case 'braid':
-      return `${attrs.cookState === 'baked' ? 'Сдобная плетёнка' : `${statePrefix} косичка`}${fillingShort}`;
+      return attrs.cookState === 'baked' ? 'Сдобная плетёнка' : 'Косичка из теста';
     case 'bagel_ring':
-      return `${attrs.cookState === 'baked' ? 'Печёный бублик' : attrs.cookState === 'boiled' ? 'Отварной бублик' : 'Пончик / бублик'}${fillingShort}`;
+      return attrs.cookState === 'baked'
+        ? 'Печёный бублик'
+        : attrs.cookState === 'boiled'
+        ? 'Отварной бублик'
+        : 'Пончик';
     case 'croissant_crescent':
-      return `${attrs.cookState === 'baked' ? 'Домашний рогалик' : `${statePrefix} рогалик`}${fillingShort}`;
+      return `${attrs.cookState === 'baked' ? 'Домашний рогалик' : 'Рогалик'}${fillingShort}`;
     case 'pocket_pirozhok':
       return `${attrs.cookState === 'baked' ? 'Печёный пирожок' : attrs.cookState === 'deep_fried' ? 'Пирожок во фритюре' : attrs.cookState === 'fried' ? 'Жареный пирожок' : 'Отварной пирожок'}${fillingShort}`;
     case 'dumpling_crescent':
-      return `${attrs.cookState === 'boiled' ? 'Варёные вареники / пельмени' : attrs.cookState === 'fried' || attrs.cookState === 'deep_fried' ? 'Жареные пельмени / чебурек' : 'Печёный вареник'}${fillingShort}`;
+      return `${attrs.cookState === 'boiled' ? 'Варёный вареник' : attrs.cookState === 'fried' || attrs.cookState === 'deep_fried' ? 'Жареный чебурек' : 'Печёный вареник'}${fillingShort}`;
     case 'pouch_khinkali':
       return `${attrs.cookState === 'boiled' ? 'Варёные хинкали' : attrs.cookState === 'fried' || attrs.cookState === 'deep_fried' ? 'Жареный беляш' : 'Печёный мешочек'}${fillingShort}`;
     case 'roll_strudel':
-      return `${attrs.cookState === 'baked' ? 'Печёный рулет / штрудель' : `${statePrefix} рулет`}${fillingShort}`;
+      return `${attrs.cookState === 'baked' ? 'Печёный рулет' : 'Рулет из теста'}${fillingShort}`;
     case 'open_pie':
-      return `${attrs.cookState === 'baked' ? (attrs.sweetness >= 35 ? 'Открытый сладкий пирог' : 'Домашняя пицца / открытый пирог') : `${statePrefix} открытая лепёшка`}${fillingShort}`;
+      return `${attrs.cookState === 'baked' ? (attrs.sweetness >= 35 ? 'Открытый сладкий пирог' : 'Домашняя пицца') : 'Открытая лепёшка'}${fillingShort}`;
     case 'noodles':
     case 'strip':
-      return `${attrs.cookState === 'boiled' ? 'Варёная домашняя лапша' : attrs.cookState === 'fried' ? 'Жареная лапша' : 'Печёные полоски теста'}${fillingShort}`;
+      return attrs.cookState === 'boiled'
+        ? 'Варёная домашняя лапша'
+        : attrs.cookState === 'fried'
+        ? 'Жареная лапша'
+        : 'Хрустящие полоски теста';
     case 'cubes_pieces':
-      return `${attrs.cookState === 'boiled' ? 'Варёные клёцки / галушки' : attrs.cookState === 'baked' ? 'Печенье / сухарики' : 'Жареные кусочки теста'}${fillingShort}`;
+      return attrs.cookState === 'boiled'
+        ? 'Варёные клёцки'
+        : attrs.cookState === 'baked'
+        ? 'Сухарики / печенье'
+        : 'Жареные кусочки теста';
     case 'flatbread':
     case 'sheet':
     case 'square_sheet':
-      return `${attrs.cookState === 'baked' ? (attrs.doughType === 'shortcrust' ? 'Песочный корж / печенье' : 'Печёная лепёшка') : attrs.cookState === 'fried' || attrs.cookState === 'deep_fried' ? 'Жареная лепёшка' : 'Отварной пласт теста'}${fillingShort}`;
+      return `${attrs.cookState === 'baked' ? (attrs.doughType === 'shortcrust' ? 'Песочный корж' : 'Печёная лепёшка') : attrs.cookState === 'fried' || attrs.cookState === 'deep_fried' ? 'Жареная лепёшка' : 'Отварной пласт теста'}${fillingShort}`;
     default:
-      return `${statePrefix} тесто (${DOUGH_SHAPE_NAMES_RU[attrs.shape].toLowerCase()})${fillingShort}`;
+      return `${statePrefix} (${DOUGH_SHAPE_NAMES_RU[attrs.shape].toLowerCase()})${fillingShort}`;
   }
+}
+
+export function buildDoughInspectionDescriptionRu(
+  attrs: DoughAttributes,
+  item?: Pick<InventoryItem, 'portions' | 'maxPortions'>
+): string {
+  const vis = describeDoughAppearanceQualitativeRu(attrs);
+  const parts: string[] = [];
+
+  if (attrs.cookState === 'raw') {
+    const colorPhrase = attrs.colorNameRu ? `${attrs.colorNameRu.toLowerCase()} тесто` : 'сырое тесто';
+    parts.push(`${attrs.doughTypeRu} (${vis.sizeThicknessRu}, ${colorPhrase}, консистенция — ${attrs.consistencyRu.toLowerCase()}).`);
+  } else {
+    const shapePhrase = vis.shapeBriefRu.toLowerCase();
+    parts.push(`${vis.crustLookRu}, ${shapePhrase} (${vis.sizeThicknessRu}), тесто ${attrs.colorNameRu.toLowerCase()}.`);
+  }
+
+  if (attrs.embossedPatternRu) {
+    parts.push(`На поверхности заметен оттиск узора «${attrs.embossedPatternRu.toLowerCase()}».`);
+  }
+  if (attrs.flavorNotesRu && attrs.flavorNotesRu.length > 0) {
+    parts.push(`Видны оттенки и вкрапления (${attrs.flavorNotesRu.join(', ')}).`);
+  }
+
+  const baseIngs = summarizeDoughIngredientsRu(attrs.ingredients, { maxItems: 6 });
+  if (baseIngs) {
+    parts.push(
+      attrs.cookState === 'raw'
+        ? `Замешано из: ${baseIngs}.`
+        : `По виду в основе теста: ${baseIngs}.`
+    );
+  }
+
+  if (attrs.fillings.length > 0) {
+    if (isDoughFillingVisible(attrs, item)) {
+      const fillText = summarizeDoughFillingsApproxRu(attrs.fillings, { maxItems: 6, withApproxAmount: true });
+      parts.push(
+        attrs.isFolded
+          ? `На разломе внутри видна начинка: ${fillText}.`
+          : `Сверху видна начинка: ${fillText}.`
+      );
+    } else {
+      parts.push('Края плотно закрыты — что внутри, снаружи не видно.');
+    }
+  }
+
+  return parts.join(' ');
 }
 
 export function applyDoughAttributesToItem(
@@ -1144,18 +1517,21 @@ export function applyDoughAttributesToItem(
   const totalWeightKg = Number((totalGrams / 1000).toFixed(3));
   item.weight = totalWeightKg;
   item.volume = Number(Math.max(0.05, (totalWeightKg * attrs.riseFactor) / 0.95).toFixed(2));
-  item.nameRu = buildDoughDisplayNameRu(attrs);
 
-  const ingList = attrs.ingredients
-    .slice(0, 5)
-    .map((i) => `${i.nameRu} (${Math.round(i.grams)} г)`)
-    .join(', ');
-  const fillingDesc =
-    attrs.fillings.length > 0
-      ? ` Начинка (${attrs.fillingGrams} г): ${attrs.fillings.map((f) => f.nameRu).join(', ')}.`
-      : '';
-  const embossDesc = attrs.embossedPatternRu ? ` Рельефный узор: ${attrs.embossedPatternRu}.` : '';
-  item.descriptionRu = `${attrs.doughTypeRu} (${attrs.cookStateRu.toLowerCase()}, ${attrs.shapeNameRu.toLowerCase()}, ${attrs.thicknessMm} мм, Ø${attrs.diameterCm} см). Вес: ${totalGrams} г (тесто ${attrs.weightGrams} г${attrs.fillingGrams > 0 ? ` + начинка ${attrs.fillingGrams} г` : ''}). Состав: ${ingList}.${fillingDesc}${embossDesc}`;
+  // Compute portions BEFORE naming/description so bitten/cut closed items expose their interior!
+  const portions = Math.max(1, Math.min(12, Math.round(totalGrams / 85)));
+  const wasPartiallyEaten =
+    item.portions !== undefined &&
+    item.maxPortions !== undefined &&
+    item.maxPortions > 0 &&
+    item.portions < item.maxPortions;
+  item.portions = wasPartiallyEaten
+    ? Math.max(1, Math.min(portions - 1, Math.round(portions * (item.portions! / item.maxPortions!))))
+    : portions;
+  item.maxPortions = portions;
+
+  item.nameRu = buildDoughDisplayNameRu(attrs, item);
+  item.descriptionRu = buildDoughInspectionDescriptionRu(attrs, item);
 
   // Nutrition & effects scaled strictly by mass, richness, sweetness, fillings, and cooking state
   const caloriesDough = Math.round(
@@ -1203,9 +1579,6 @@ export function applyDoughAttributesToItem(
         : -3
       : Math.min(18, Math.max(0, Math.round(fillingHealth + (attrs.cookState === 'boiled' ? 4 : 2))));
 
-  const portions = Math.max(1, Math.min(12, Math.round(totalGrams / 85)));
-  item.portions = item.portions && item.maxPortions ? Math.min(portions, item.portions) : portions;
-  item.maxPortions = portions;
   item.effects = {
     hunger: hungerTotal,
     ...(energyTotal > 0 ? { energy: energyTotal } : {}),
@@ -1222,13 +1595,24 @@ export function applyDoughAttributesToItem(
     water: Math.round(attrs.liquidGrams),
   };
 
-  item.attributes = {
+  const vis = describeDoughAppearanceQualitativeRu(attrs);
+  const cleanIngs = summarizeDoughIngredientsRu(attrs.ingredients, { maxItems: 8, capitalize: true });
+  const visibleFillings = isDoughFillingVisible(attrs, item)
+    ? summarizeDoughFillingsApproxRu(attrs.fillings, { maxItems: 8, capitalize: !cleanIngs, withApproxAmount: false })
+    : '';
+
+  const prevVisuals = item.attributes?.visuals ? { ...item.attributes.visuals } : {};
+  delete prevVisuals.size;
+  delete prevVisuals.sizeNameRu;
+
+  const nextAttrs = {
     ...(item.attributes || {}),
-    varietyRu: attrs.doughTypeRu,
+    varietyRu: attrs.cookState === 'raw' ? attrs.doughTypeRu : vis.shapeBriefRu,
     visuals: {
-      ...(item.attributes?.visuals || {}),
+      ...prevVisuals,
       color: attrs.color,
       colorNameRu: attrs.colorNameRu,
+      shapeNameRu: vis.shapeBriefRu,
       ...(attrs.embossedPatternRu ? { patternNameRu: attrs.embossedPatternRu } : {}),
     },
     isHomemade: true,
@@ -1236,13 +1620,17 @@ export function applyDoughAttributesToItem(
     stateNameRu: attrs.cookStateRu,
     preparationMethod:
       attrs.cookState === 'raw'
-        ? `Домашний замес (${attrs.shapeNameRu.toLowerCase()})`
-        : `${attrs.cookStateRu} (${attrs.shapeNameRu.toLowerCase()})`,
+        ? `Домашний замес (${vis.shapeBriefRu.toLowerCase()})`
+        : `${attrs.cookStateRu} (${vis.shapeBriefRu.toLowerCase()})`,
     ingredients: [
-      ...attrs.ingredients.map((i) => `${i.nameRu} (${Math.round(i.grams)} г)`),
-      ...attrs.fillings.map((f) => `Начинка: ${f.nameRu} (${Math.round(f.weightGrams)} г)`),
+      ...(cleanIngs ? cleanIngs.split(', ') : []),
+      ...(visibleFillings ? visibleFillings.split(', ') : []),
     ],
   };
+  delete nextAttrs.dimensionCm;
+  delete nextAttrs.sizeNameRu;
+  delete nextAttrs.size;
+  item.attributes = nextAttrs;
 
   return item;
 }

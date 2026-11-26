@@ -503,12 +503,37 @@
 
 /* ---- Floating Drag Ghost (sibling of .gm inside #w) ---- */
 .kf-drag-ghost {
-  position: fixed; width: 64px; height: 64px; border-radius: 10px;
+  position: fixed; left: 0; top: 0; width: 64px; height: 64px; border-radius: 10px;
   background: rgba(20, 20, 22, .94); border: 1.5px solid #e0ab45;
   box-shadow: 0 12px 30px rgba(0, 0, 0, .7);
-  display: flex; align-items: center; justify-content: center;
-  pointer-events: none; z-index: 9999;
+  display: none; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 9999; will-change: transform;
 }
+
+.kf-ctx-menu {
+  position: fixed; min-width: 196px; max-width: 248px; padding: 5px;
+  border-radius: 11px; background: rgba(16, 17, 20, .97);
+  border: 1px solid rgba(224, 171, 69, .45);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .78);
+  display: flex; flex-direction: column; gap: 2px;
+  font: 13px/1.35 'Barlow', system-ui, sans-serif; color: #f4f1ea;
+  z-index: 9998;
+}
+.kf-ctx-head {
+  padding: 5px 9px 6px; border-bottom: 1px solid rgba(255, 255, 255, .08);
+  margin-bottom: 2px; font-size: 12px; font-weight: 700; color: #e0ab45;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kf-ctx-item {
+  width: 100%; height: 31px; padding: 0 9px; border-radius: 7px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: #e9e6df;
+  background: none; border: 0; cursor: pointer; text-align: left;
+  white-space: nowrap; transition: background .12s, color .12s;
+}
+.kf-ctx-item:hover { background: rgba(201, 146, 43, .22); color: #fff; }
+.kf-ctx-item.primary { color: #f0c264; }
+.kf-ctx-item.danger { color: #f2b4a0; }
 
 /* ---- Compact Mode ([data-mob] — landscape phones & short windows, sh = 560px) ---- */
 /* Harmonized with menuCompact.css (.top: left/right 28px, top 12px, height 46px -> bottom 58px) */
