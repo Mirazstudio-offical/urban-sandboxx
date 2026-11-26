@@ -12,6 +12,9 @@ import {
   ensureHybridContainerProps,
   getContainerLiquidThermalProfile,
   tickContainerLiquidBoilOff,
+  isMeltableCheeseItem,
+  applyCheeseMeltingStep,
+  blendPanCheeseAndAromatics,
 } from './liquidSystem';
 import { syncDoughCookedState } from './doughData';
 
@@ -993,6 +996,9 @@ function applyDryCookingIfHot(item: InventoryItem, mode: 'burner' | 'oven', dt: 
         changed = true;
       }
     }
+    if (blendPanCheeseAndAromatics(item, mode === 'oven' ? 'oven' : 'dry')) {
+      changed = true;
+    }
   }
 
   const temp = item.surfaceTemperature ?? item.temperature ?? 20;
@@ -1016,6 +1022,15 @@ function applyDryCookingIfHot(item: InventoryItem, mode: 'burner' | 'oven', dt: 
 
   // Sealed jars/cans/bottles do not brown like unwrapped food
   if (isSealedContainerForCooking(item)) return changed;
+
+  // Meltable cheeses begin melting around 50-70°C on dry pans or in the oven
+  if (isMeltableCheeseItem(item)) {
+    if (applyCheeseMeltingStep(item, temp, dt, isOven ? 'oven' : isOilCoated ? 'oil' : 'dry')) {
+      changed = true;
+    }
+    return changed;
+  }
+
   if (temp < 65.0) return changed;
 
   // 1. Continuous cooking progress (65°C+)
@@ -1709,9 +1724,14 @@ export function tickMicrowaveThermodynamics(
           for (const ch of targetItem.contents) {
             if (ch) applyMicrowaveCook(ch);
           }
+          blendPanCheeseAndAromatics(targetItem, 'dry');
         }
         if (targetItem.category !== 'food' || isSealedContainerForCooking(targetItem)) return;
         const t = targetItem.temperature ?? 20;
+        if (isMeltableCheeseItem(targetItem)) {
+          applyCheeseMeltingStep(targetItem, t, step, 'microwave');
+          return;
+        }
         if (t < 58) return;
         const rate = ((t - 52) / 55) * (st.powerWatts / 600) * 0.055;
         targetItem.cookProgress = Math.min(1.0, Number(((targetItem.cookProgress || 0) + rate * step).toFixed(3)));

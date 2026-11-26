@@ -1188,6 +1188,10 @@ interface ComputedItemVisualMetrics {
   boilLvl: number;  // 0..1
   brownLvl: number; // 0..1
   charLvl: number;  // 0..1
+  meltLvl: number;  // 0..1
+  cheeseGlazed: boolean;
+  cheeseGlazeRgb: { r: number; g: number; b: number } | null;
+  isOilSoak: boolean;
   heatLvl: number;  // 0..1
   frostLvl: number; // 0..1
   isFreezing: boolean;
@@ -1290,14 +1294,36 @@ function computeItemVisualMetrics(item: any, isInner: boolean): ComputedItemVisu
   const isFreezing = temp <= 0.0;
   const isDeepFreeze = temp <= -8.0;
 
+  const meltLvl = isFood
+    ? Math.max(
+        0,
+        Math.min(
+          1,
+          item?.meltLevel ||
+            (state === 'melted' || stateRu.includes('расплавл')
+              ? 0.9
+              : stateRu.includes('плавящ')
+              ? 0.45
+              : 0)
+        )
+      )
+    : 0;
+  const cheeseGlazed = Boolean(isFood && item?.cheeseGlazed);
+  const cheeseGlazeRgb = cheeseGlazed ? parseHexColorRgb(item?.cheeseGlazeColor || '#fbbf24') : null;
+
   const soakRgb = parseHexColorRgb(item?.soakedColor);
   const isPlainWater = item?.soakedLiquidId === 'water' && !isSoapyByName && soap < 0.04;
-  const hasPigmentedSoak = Boolean(soakRgb && (!isPlainWater || soap >= 0.04) && (wet >= 0.06 || infusion >= 0.08));
+  const isOilSoak = item?.soakedLiquidId === 'oil_culinary' || item?.soakedLiquidId === 'rendered_fat';
+  const hasPigmentedSoak = Boolean(
+    soakRgb && !isOilSoak && (!isPlainWater || soap >= 0.04) && (wet >= 0.06 || infusion >= 0.08)
+  );
 
   const hasAnySurfaceEffect =
     boilLvl > 0.03 ||
     brownLvl > 0.03 ||
     charLvl > 0.03 ||
+    meltLvl > 0.05 ||
+    cheeseGlazed ||
     wet >= 0.06 ||
     soap >= 0.04 ||
     hasPigmentedSoak ||
@@ -1317,6 +1343,10 @@ function computeItemVisualMetrics(item: any, isInner: boolean): ComputedItemVisu
     boilLvl,
     brownLvl,
     charLvl,
+    meltLvl,
+    cheeseGlazed,
+    cheeseGlazeRgb,
+    isOilSoak,
     heatLvl,
     frostLvl,
     isFreezing,
@@ -1711,6 +1741,79 @@ export function drawItemWithDynamicState(
   }
 
   // =========================================================================
+  // LAYER A2: MELTED CHEESE GLOSS & MELTED CHEESE GLAZE ON PAN-FRIED FOOD
+  // =========================================================================
+  if (m.isFood && m.meltLvl > 0.05 && m.charLvl < 0.65) {
+    const ml = m.meltLvl;
+    // Softened, glossy, creamy-golden melted cheese wash
+    cCtx.globalCompositeOperation = 'source-atop';
+    cCtx.fillStyle = `rgba(254, 240, 178, ${(ml * 0.34).toFixed(3)})`;
+    cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
+
+    // Glossy creamy liquid highlight & melted bubble sheen
+    cCtx.save();
+    cCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
+    cCtx.scale(pxScale, pxScale);
+    cCtx.globalCompositeOperation = 'source-atop';
+    const glossGrad = cCtx.createRadialGradient(
+      -boundsRadius * 0.25,
+      -boundsRadius * 0.28,
+      0.3,
+      -boundsRadius * 0.1,
+      -boundsRadius * 0.1,
+      boundsRadius * 0.95
+    );
+    glossGrad.addColorStop(0, `rgba(255, 251, 235, ${(0.42 * ml).toFixed(3)})`);
+    glossGrad.addColorStop(0.5, `rgba(253, 224, 71, ${(0.18 * ml).toFixed(3)})`);
+    glossGrad.addColorStop(1, 'rgba(251, 191, 36, 0)');
+    cCtx.fillStyle = glossGrad;
+    cCtx.beginPath();
+    cCtx.arc(0, 0, boundsRadius * 1.25, 0, Math.PI * 2);
+    cCtx.fill();
+
+    // Subtle melted cheese sheen pools
+    const poolCount = 3 + Math.floor(ml * 4);
+    for (let i = 0; i < poolCount; i++) {
+      const px = (pseudoRand(i * 3 + 91) - 0.5) * boundsRadius * 1.25;
+      const py = (pseudoRand(i * 3 + 92) - 0.5) * boundsRadius * 1.25;
+      const pr = (0.7 + pseudoRand(i * 3 + 93) * 1.2) * (0.6 + ml * 0.5);
+      cCtx.fillStyle = `rgba(255, 248, 220, ${(0.24 * ml).toFixed(3)})`;
+      cCtx.beginPath();
+      cCtx.ellipse(px, py, pr * 1.35, pr * 0.72, (pseudoRand(i + 97) - 0.5) * 0.8, 0, Math.PI * 2);
+      cCtx.fill();
+    }
+    cCtx.restore();
+  }
+
+  if (m.isFood && m.cheeseGlazed && m.cheeseGlazeRgb && m.charLvl < 0.7) {
+    const { r, g, b } = m.cheeseGlazeRgb;
+    cCtx.save();
+    cCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
+    cCtx.scale(pxScale, pxScale);
+    cCtx.globalCompositeOperation = 'source-atop';
+
+    // Creamy melted cheese ribbons draped across the cooked item
+    cCtx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.78)`;
+    cCtx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const yOff = (i - 1) * boundsRadius * 0.38;
+      cCtx.lineWidth = Math.max(1.1, boundsRadius * 0.16);
+      cCtx.beginPath();
+      cCtx.moveTo(-boundsRadius * 0.75, yOff - 0.6);
+      cCtx.quadraticCurveTo(0, yOff + (i % 2 === 0 ? 1.5 : -1.3), boundsRadius * 0.75, yOff + 0.5);
+      cCtx.stroke();
+    }
+    // Bright specular highlight on top of the melted cheese glaze
+    cCtx.strokeStyle = 'rgba(255, 251, 235, 0.45)';
+    cCtx.lineWidth = Math.max(0.45, boundsRadius * 0.06);
+    cCtx.beginPath();
+    cCtx.moveTo(-boundsRadius * 0.55, -boundsRadius * 0.38 - 0.8);
+    cCtx.quadraticCurveTo(0, -boundsRadius * 0.38 + 0.9, boundsRadius * 0.55, -boundsRadius * 0.38 + 0.2);
+    cCtx.stroke();
+    cCtx.restore();
+  }
+
+  // =========================================================================
   // LAYER B: WETNESS, WASHING MACHINE SOAPY FOAM & COLORED LIQUID SOAKING
   // =========================================================================
   if (m.wet >= 0.06 || m.soap >= 0.04 || m.hasPigmentedSoak) {
@@ -1735,7 +1838,7 @@ export function drawItemWithDynamicState(
         cCtx.globalCompositeOperation = 'multiply';
         cCtx.fillStyle = `rgba(124, 116, 104, ${(0.18 + wet * 0.48).toFixed(3)})`;
         cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
-      } else if (m.isFood) {
+      } else if (m.isFood && !m.isOilSoak) {
         const foodDark = m.material === 'food_bakery' ? 0.38 : 0.24;
         cCtx.globalCompositeOperation = 'multiply';
         cCtx.fillStyle = `rgba(148, 156, 168, ${(wet * foodDark).toFixed(3)})`;
@@ -1743,7 +1846,7 @@ export function drawItemWithDynamicState(
       }
     }
 
-    // 2. Colored liquid soak / staining (broth, tea, coffee, wine, oil, detergent)
+    // 2. Colored liquid soak / staining (broth, tea, coffee, wine, detergent — excludes culinary oil)
     if (m.hasPigmentedSoak && m.soakRgb) {
       const { r, g, b } = m.soakRgb;
       const stainStrength = Math.max(wet, m.infusion, m.soap * 0.85);
@@ -1753,19 +1856,25 @@ export function drawItemWithDynamicState(
       cCtx.fillRect(0, 0, EFFECT_CANVAS_SIZE, EFFECT_CANVAS_SIZE);
     }
 
-    // 3. Glossy wet surface sheen & water droplets (crisp on hard surfaces & wet food)
+    // 3. Glossy wet surface sheen & water/oil droplets (crisp on hard surfaces & wet food)
     if (wet >= 0.12 && (isHardSurface || m.isFood)) {
       cCtx.save();
       cCtx.translate(EFFECT_CANVAS_SIZE / 2, EFFECT_CANVAS_SIZE / 2);
       cCtx.scale(pxScale, pxScale);
       cCtx.globalCompositeOperation = 'source-atop';
 
-      // Specular wet sheen sweep across upper-left curve
-      const sheenAlpha = isHardSurface ? 0.12 + wet * 0.2 : 0.08 + wet * 0.14;
+      // Specular wet sheen sweep across upper-left curve (warm golden gloss for oil, cool highlight for water)
+      const sheenAlpha = isHardSurface ? 0.12 + wet * 0.2 : m.isOilSoak ? 0.12 + wet * 0.16 : 0.08 + wet * 0.14;
       const wGrad = cCtx.createLinearGradient(-boundsRadius, -boundsRadius, boundsRadius * 0.7, boundsRadius * 0.7);
-      wGrad.addColorStop(0.0, `rgba(224, 242, 254, ${sheenAlpha.toFixed(3)})`);
-      wGrad.addColorStop(0.45, `rgba(186, 230, 253, ${(sheenAlpha * 0.35).toFixed(3)})`);
-      wGrad.addColorStop(1.0, 'rgba(186, 230, 253, 0)');
+      if (m.isOilSoak) {
+        wGrad.addColorStop(0.0, `rgba(255, 240, 178, ${sheenAlpha.toFixed(3)})`);
+        wGrad.addColorStop(0.45, `rgba(250, 214, 110, ${(sheenAlpha * 0.38).toFixed(3)})`);
+        wGrad.addColorStop(1.0, 'rgba(250, 214, 110, 0)');
+      } else {
+        wGrad.addColorStop(0.0, `rgba(224, 242, 254, ${sheenAlpha.toFixed(3)})`);
+        wGrad.addColorStop(0.45, `rgba(186, 230, 253, ${(sheenAlpha * 0.35).toFixed(3)})`);
+        wGrad.addColorStop(1.0, 'rgba(186, 230, 253, 0)');
+      }
       cCtx.fillStyle = wGrad;
       cCtx.fillRect(-halfSpan, -halfSpan, EFFECT_WORLD_SPAN, EFFECT_WORLD_SPAN);
 

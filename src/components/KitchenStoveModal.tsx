@@ -29,7 +29,11 @@ import {
   stowItemFromHandToPockets,
 } from '../items';
 import { getEffectiveFluidWrapper } from '../interactionCrafting';
-import { getContainerLiquidThermalProfile, getLiquidThermalPhaseLabelRu } from '../liquidSystem';
+import {
+  getContainerLiquidThermalProfile,
+  getLiquidThermalPhaseLabelRu,
+  stirCookwareContainer,
+} from '../liquidSystem';
 import { tickStoveStateThermodynamics } from '../itemThermalSystem';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
@@ -47,6 +51,7 @@ import {
   Thermometer,
   Package,
   ArrowUpFromLine,
+  RefreshCw,
   X,
 } from 'lucide-react';
 
@@ -123,10 +128,14 @@ function describeCookedItemSub(item: InventoryItem): string {
     parts.push(`${Math.round(wrapper.state.currentMl)} мл`);
   }
   if (item.isContainer && item.contents && item.contents.length > 0) {
-    const firstFood = item.contents.find(c => c && c.category === 'food');
+    const foodItems = item.contents.filter(c => c && c.category === 'food');
+    const firstFood = foodItems[0];
+    const hasGlaze = foodItems.some(c => c.cheeseGlazed);
+    const hasSeasonings = foodItems.some(c => (c.sauteSeasonings?.length || 0) > 0);
     const foodState = firstFood?.attributes?.stateNameRu;
     if (foodState) {
-      parts.push(`${foodState} (${item.contents.length})`);
+      const tag = hasGlaze ? `${foodState}, с сыром` : hasSeasonings ? `${foodState}, пряный` : foodState;
+      parts.push(`${tag} (${item.contents.length})`);
     } else {
       parts.push(`внутри ${item.contents.length}`);
     }
@@ -332,6 +341,17 @@ const KitchenStoveModalContent: React.FC<{
     sound.playUseItem();
     setSelectedBurner(toIdx);
     notifyChanged();
+  };
+
+  const handleStirBurnerItem = (burnerIdx: number) => {
+    const item = stove.burners[burnerIdx]?.item;
+    if (!item) return;
+    const res = stirCookwareContainer(item);
+    if (res.stirred) {
+      sound.playUseItem();
+      notifyChanged();
+    }
+    showToast(res.messageRu);
   };
 
   // ---- Oven Actions ----
@@ -863,17 +883,33 @@ const KitchenStoveModalContent: React.FC<{
                 </button>
 
                 {item ? (
-                  <button
-                    type="button"
-                    className="btn btn-s btn-xs"
-                    onClick={e => {
-                      e.stopPropagation();
-                      takeBurnerItemToPlayer(idx);
-                    }}
-                  >
-                    <ArrowUpFromLine width={12} height={12} />
-                    <span>Снять</span>
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+                    {item.isContainer && (item.contents?.length || 0) >= 2 && (
+                      <button
+                        type="button"
+                        className="btn btn-s btn-xs"
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleStirBurnerItem(idx);
+                        }}
+                        title="Перемешать продукты в посуде"
+                      >
+                        <RefreshCw width={12} height={12} />
+                        <span>Мешать</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-s btn-xs"
+                      onClick={e => {
+                        e.stopPropagation();
+                        takeBurnerItemToPlayer(idx);
+                      }}
+                    >
+                      <ArrowUpFromLine width={12} height={12} />
+                      <span>Снять</span>
+                    </button>
+                  </div>
                 ) : (
                   <span className="kf-burner-sub" style={{ fontSize: 11.5 }}>
                     {isSel ? 'Выбрана' : 'Пусто'}

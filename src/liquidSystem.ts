@@ -1048,16 +1048,16 @@ export const LIQUID_THERMAL_PROFILES: Partial<Record<LiquidId, LiquidThermalProf
   // Broths, sauces, preserves, acid
   broth:            { boilingPointC: 101.2, freezingPointC: -1.2,  specificHeatFactor: 0.96, evaporationRate: 0.94, microwaveFactor: 1.00, cookingMedium: 'water' },
   pickles:          { boilingPointC: 102.5, freezingPointC: -4.5,  specificHeatFactor: 0.93, evaporationRate: 0.90, microwaveFactor: 1.02, cookingMedium: 'water' },
-  sauce:            { boilingPointC: 103.0, freezingPointC: -3.0,  smokePointC: 135, specificHeatFactor: 0.84, evaporationRate: 0.68, microwaveFactor: 0.95, cookingMedium: 'water' },
-  puree:            { boilingPointC: 102.5, freezingPointC: -2.0,  smokePointC: 130, specificHeatFactor: 0.86, evaporationRate: 0.62, microwaveFactor: 0.94, cookingMedium: 'water' },
-  canned_preserve:  { boilingPointC: 102.0, freezingPointC: -2.2,  specificHeatFactor: 0.88, evaporationRate: 0.72, microwaveFactor: 0.95, cookingMedium: 'water' },
-  caviar:           { boilingPointC: 101.5, freezingPointC: -3.5,  specificHeatFactor: 0.84, evaporationRate: 0.55, microwaveFactor: 0.90, cookingMedium: 'water' },
+  sauce:            { boilingPointC: 103.0, freezingPointC: -3.0,  smokePointC: 135, specificHeatFactor: 0.84, evaporationRate: 0.26, microwaveFactor: 0.95, cookingMedium: 'water' },
+  puree:            { boilingPointC: 102.5, freezingPointC: -2.0,  smokePointC: 130, specificHeatFactor: 0.86, evaporationRate: 0.18, microwaveFactor: 0.94, cookingMedium: 'water' },
+  canned_preserve:  { boilingPointC: 103.5, freezingPointC: -2.2,  smokePointC: 145, specificHeatFactor: 0.88, evaporationRate: 0.10, microwaveFactor: 0.95, cookingMedium: 'water' },
+  caviar:           { boilingPointC: 102.0, freezingPointC: -3.5,  smokePointC: 135, specificHeatFactor: 0.84, evaporationRate: 0.14, microwaveFactor: 0.90, cookingMedium: 'water' },
   vinegar:          { boilingPointC: 100.8, freezingPointC: -2.0,  specificHeatFactor: 0.94, evaporationRate: 1.15, microwaveFactor: 0.98, cookingMedium: 'acid' },
 
   // Sugars, honey, syrups & jams (higher boil point, caramelize above ~105°C)
-  honey:            { boilingPointC: 108.0, freezingPointC: -12.0, smokePointC: 155, specificHeatFactor: 0.60, evaporationRate: 0.34, microwaveFactor: 0.88, cookingMedium: 'sugar' },
-  syrup_sweet:      { boilingPointC: 106.0, freezingPointC: -9.0,  smokePointC: 150, specificHeatFactor: 0.68, evaporationRate: 0.45, microwaveFactor: 0.90, cookingMedium: 'sugar' },
-  jam:              { boilingPointC: 105.0, freezingPointC: -7.0,  smokePointC: 148, specificHeatFactor: 0.72, evaporationRate: 0.48, microwaveFactor: 0.92, cookingMedium: 'sugar' },
+  honey:            { boilingPointC: 108.0, freezingPointC: -12.0, smokePointC: 155, specificHeatFactor: 0.60, evaporationRate: 0.14, microwaveFactor: 0.88, cookingMedium: 'sugar' },
+  syrup_sweet:      { boilingPointC: 106.0, freezingPointC: -9.0,  smokePointC: 150, specificHeatFactor: 0.68, evaporationRate: 0.28, microwaveFactor: 0.90, cookingMedium: 'sugar' },
+  jam:              { boilingPointC: 105.0, freezingPointC: -7.0,  smokePointC: 148, specificHeatFactor: 0.72, evaporationRate: 0.16, microwaveFactor: 0.92, cookingMedium: 'sugar' },
 
   // Extracts, acids, dyes, essential oil, medical
   food_acid:        { boilingPointC: 102.0, freezingPointC: -3.0,  specificHeatFactor: 0.90, evaporationRate: 0.95, microwaveFactor: 0.96, cookingMedium: 'acid' },
@@ -1221,6 +1221,15 @@ export function getLiquidThermalPhaseLabelRu(
  * Simulates gradual boil-off evaporation for an open heated container based on the
  * liquid's specific boiling point and evaporation rate.
  */
+const NON_VOLATILE_SOLIDS_FRACTION: Partial<Record<LiquidId, number>> = {
+  canned_preserve: 0.65,
+  caviar: 0.58,
+  jam: 0.55,
+  honey: 0.72,
+  puree: 0.45,
+  sauce: 0.32,
+};
+
 export function tickContainerLiquidBoilOff(
   container: InventoryItem | null | undefined,
   dtSeconds: number
@@ -1241,7 +1250,19 @@ export function tickContainerLiquidBoilOff(
 
   const st = container.fluidStorage;
   const prevMl = Math.max(0, st.currentMl || 0);
-  const nextMl = Math.max(0, Number((prevMl - boilOffMl).toFixed(1)));
+
+  // Thick solids-rich culinary substances (stew/preserves, caviar, jam, puree, sauce, honey)
+  // lose only excess moisture and NEVER evaporate completely into 0g of vapor.
+  const solidFrac = st.liquidId ? NON_VOLATILE_SOLIDS_FRACTION[st.liquidId as LiquidId] : undefined;
+  let floorMl = 0;
+  if (solidFrac && solidFrac > 0) {
+    if (typeof st.nonVolatileFloorMl !== 'number' || st.nonVolatileFloorMl <= 0 || st.nonVolatileFloorMl > prevMl) {
+      st.nonVolatileFloorMl = Math.max(20, Number((prevMl * solidFrac).toFixed(1)));
+    }
+    floorMl = Math.min(prevMl, st.nonVolatileFloorMl);
+  }
+
+  const nextMl = Math.max(floorMl, Number((prevMl - boilOffMl).toFixed(1)));
   if (nextMl === prevMl) return false;
 
   st.currentMl = nextMl;
@@ -1251,10 +1272,11 @@ export function tickContainerLiquidBoilOff(
       .map(c => ({ ...c, ml: Math.max(0, Number((c.ml * ratio).toFixed(1))) }))
       .filter(c => c.ml > 0.2);
   }
-  if (nextMl <= 0.5) {
+  if (nextMl <= 0.5 && floorMl <= 0) {
     st.currentMl = 0;
     st.liquidId = null;
     st.components = [];
+    st.nonVolatileFloorMl = undefined;
   }
   return true;
 }
@@ -4437,6 +4459,535 @@ function isSolubleSolidItem(item: InventoryItem): boolean {
  * inside a hybrid container: submersion, wetting/coating, heat exchange, steeping/infusion,
  * color/nutrition transfer into the liquid, and hot boiling/cooking.
  */
+export interface CheeseMeltingProfile {
+  meltStartC: number;
+  fullMeltC: number;
+  meltSpeed: number;
+  colorHex: string;
+  labelRu: string;
+}
+
+export function isMeltableCheeseItem(item: InventoryItem | null | undefined): boolean {
+  if (!item || item.category !== 'food') return false;
+  if (item.fluidStorage || (item.containerVisuals && !item.isOpen)) return false;
+  const id = (item.itemId || '').toLowerCase();
+  const name = (item.nameRu || '').toLowerCase();
+  if (
+    id.includes('cottage_cheese') ||
+    name.includes('творог') ||
+    name.includes('творож') ||
+    name.includes('сырник') ||
+    name.includes('сырок')
+  ) {
+    return false;
+  }
+  return id.startsWith('cheese_') || id.includes('cheese') || /\bсыр/.test(name) || name.includes('моцарелл') || name.includes('чеддер') || name.includes('гауда') || name.includes('пармезан') || name.includes('сулугуни') || name.includes('фета');
+}
+
+export function getCheeseMeltingProfile(item: InventoryItem): CheeseMeltingProfile {
+  const id = (item.itemId || '').toLowerCase();
+  const name = (item.nameRu || '').toLowerCase();
+  if (id.includes('mozzarella') || name.includes('моцарелл')) {
+    return { meltStartC: 50, fullMeltC: 70, meltSpeed: 1.35, colorHex: '#fef3c7', labelRu: 'моцареллой' };
+  }
+  if (id.includes('suluguni') || name.includes('сулугуни')) {
+    return { meltStartC: 54, fullMeltC: 74, meltSpeed: 1.25, colorHex: '#fde68a', labelRu: 'сулугуни' };
+  }
+  if (id.includes('cheddar') || name.includes('чеддер')) {
+    return { meltStartC: 56, fullMeltC: 78, meltSpeed: 1.15, colorHex: '#f59e0b', labelRu: 'чеддером' };
+  }
+  if (id.includes('gouda') || name.includes('гауд')) {
+    return { meltStartC: 56, fullMeltC: 78, meltSpeed: 1.15, colorHex: '#fbbf24', labelRu: 'гаудой' };
+  }
+  if (id.includes('feta') || name.includes('фет')) {
+    return { meltStartC: 65, fullMeltC: 88, meltSpeed: 0.78, colorHex: '#fef9c3', labelRu: 'фетой' };
+  }
+  if (id.includes('parmesan') || name.includes('пармезан')) {
+    return { meltStartC: 70, fullMeltC: 94, meltSpeed: 0.72, colorHex: '#fcd34d', labelRu: 'пармезаном' };
+  }
+  return { meltStartC: 55, fullMeltC: 76, meltSpeed: 1.1, colorHex: '#fbbf24', labelRu: 'сыром' };
+}
+
+function isFinelyCutFood(item: InventoryItem): boolean {
+  const cut = String(item.produceAttributes?.cutForm || '').toLowerCase();
+  if (
+    cut === 'diced' ||
+    cut === 'minced' ||
+    cut === 'sliced' ||
+    cut === 'strips' ||
+    cut === 'shredded' ||
+    cut === 'grated' ||
+    cut === 'crushed' ||
+    cut === 'chopped' ||
+    cut === 'rings' ||
+    cut === 'wedges' ||
+    cut === 'quartered' ||
+    cut === 'halved' ||
+    cut === 'clove'
+  ) {
+    return true;
+  }
+  const name = (item.nameRu || '').toLowerCase();
+  if (
+    name.includes('нарез') ||
+    name.includes('мелк') ||
+    name.includes('измельч') ||
+    name.includes('рублен') ||
+    name.includes('тёрт') ||
+    name.includes('терт') ||
+    name.includes('кубик') ||
+    name.includes('кольц') ||
+    name.includes('ломт') ||
+    name.includes('дольк') ||
+    name.includes('зубчик') ||
+    name.includes('стружк')
+  ) {
+    return true;
+  }
+  return typeof item.weight === 'number' && item.weight > 0 && item.weight <= 0.085;
+}
+
+export function applyCheeseMeltingStep(
+  item: InventoryItem,
+  effTemp: number,
+  dtSeconds: number,
+  medium: 'oil' | 'dry' | 'oven' | 'microwave' | 'water'
+): boolean {
+  if (!isMeltableCheeseItem(item) || dtSeconds <= 0) return false;
+  const prof = getCheeseMeltingProfile(item);
+  if (effTemp < prof.meltStartC) return false;
+
+  let changed = false;
+  const cutMult = isFinelyCutFood(item) ? 1.55 : 1.0;
+  const rate = Math.max(0.025, ((effTemp - (prof.meltStartC - 8)) / 34) * 0.095 * prof.meltSpeed * cutMult);
+  const prevMelt = item.meltLevel || 0;
+  const nextMelt = Math.min(1.0, Number((prevMelt + rate * dtSeconds).toFixed(3)));
+  if (nextMelt !== prevMelt) {
+    item.meltLevel = nextMelt;
+    item.cookProgress = Math.max(item.cookProgress || 0, nextMelt);
+    changed = true;
+  }
+
+  const curState = item.attributes?.state;
+  const isBurnt = curState === 'burnt' || (item.charLevel || 0) >= 0.55;
+  if (!isBurnt && nextMelt >= 0.28) {
+    const isFullyMelted = nextMelt >= 0.72;
+    const prevStateRu = item.attributes?.stateNameRu;
+    const nextStateRu = isFullyMelted ? 'Расплавленный' : 'Плавящийся';
+    if (curState !== 'melted' || prevStateRu !== nextStateRu) {
+      const wasCookedOrMelted =
+        curState === 'melted' || curState === 'fried' || curState === 'baked' || curState === 'boiled' || curState === 'cooked';
+      item.cookMethod = medium === 'oven' ? 'baked' : medium === 'microwave' ? 'microwaved' : 'fried';
+      item.attributes = {
+        ...(item.attributes || {}),
+        state: 'melted',
+        stateNameRu: nextStateRu,
+        preparationMethod:
+          medium === 'oven'
+            ? 'Расплавлено в духовке'
+            : medium === 'microwave'
+            ? 'Расплавлено в микроволновке'
+            : medium === 'oil'
+            ? 'Расплавлено на сковороде'
+            : 'Расплавлено при нагреве',
+      };
+      if (!wasCookedOrMelted && item.effects && typeof item.effects.hunger === 'number') {
+        item.effects.hunger = Math.round(item.effects.hunger * 1.14);
+      }
+      changed = true;
+    }
+  }
+
+  // Once fully melted, high dry/oil/oven heat (>= 142°C) forms a golden crispy melted cheese crust
+  if (nextMelt >= 0.88 && effTemp >= 142 && medium !== 'water' && medium !== 'microwave') {
+    const prevBrown = item.brownLevel || 0;
+    const brownRate = ((effTemp - 132) / 90) * 0.042;
+    const nextBrown = Math.min(0.85, Number((prevBrown + brownRate * dtSeconds).toFixed(3)));
+    if (nextBrown !== prevBrown) {
+      item.brownLevel = nextBrown;
+      changed = true;
+    }
+    if (nextBrown >= 0.45 && !isBurnt && item.attributes?.stateNameRu !== 'Запечённый расплавленный') {
+      item.attributes = {
+        ...(item.attributes || {}),
+        state: 'melted',
+        stateNameRu: 'Запечённый расплавленный',
+        preparationMethod: 'Расплавлено до румяной сырной корочки',
+      };
+      changed = true;
+    }
+    // Scorching only if left very hot (>= 192°C) after browning deeply
+    if (nextBrown >= 0.78 && effTemp >= 192) {
+      const prevChar = item.charLevel || 0;
+      const nextChar = Math.min(1.0, Number((prevChar + ((effTemp - 182) / 65) * 0.018 * dtSeconds).toFixed(3)));
+      if (nextChar !== prevChar) {
+        item.charLevel = nextChar;
+        changed = true;
+      }
+      if (nextChar >= 0.55 && item.attributes?.state !== 'burnt') {
+        item.attributes = {
+          ...(item.attributes || {}),
+          state: 'burnt',
+          stateNameRu: 'Подгорелый',
+          preparationMethod: 'Сыр подгорел при перегреве',
+        };
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
+export function isPanAromaticItem(item: InventoryItem | null | undefined): {
+  isAromatic: boolean;
+  isFinelyCut: boolean;
+  labelRu: string;
+} {
+  if (!item || item.category !== 'food') {
+    return { isAromatic: false, isFinelyCut: false, labelRu: '' };
+  }
+  if (item.fluidStorage || (item.containerVisuals && !item.isOpen)) {
+    return { isAromatic: false, isFinelyCut: false, labelRu: '' };
+  }
+  const id = (item.itemId || '').toLowerCase();
+  const name = (item.nameRu || '').toLowerCase();
+  const fine = isFinelyCutFood(item);
+
+  if (id.includes('garlic') || name.includes('чеснок')) {
+    return { isAromatic: true, isFinelyCut: fine, labelRu: 'чесноком' };
+  }
+  if (id.includes('onion') || id.includes('shallot') || id.includes('leek') || /\bлук/.test(name) || name.includes('луков')) {
+    return { isAromatic: true, isFinelyCut: fine, labelRu: 'луком' };
+  }
+  if (
+    id.includes('herb') ||
+    id.includes('dill') ||
+    id.includes('parsley') ||
+    id.includes('basil') ||
+    id.includes('cilantro') ||
+    id.includes('thyme') ||
+    id.includes('rosemary') ||
+    name.includes('укроп') ||
+    name.includes('петрушк') ||
+    name.includes('базилик') ||
+    name.includes('кинз') ||
+    name.includes('тимьян') ||
+    name.includes('розмарин') ||
+    name.includes('зелень')
+  ) {
+    return { isAromatic: true, isFinelyCut: true, labelRu: 'зеленью' };
+  }
+  if (id.includes('ginger') || name.includes('имбир')) {
+    return { isAromatic: true, isFinelyCut: fine, labelRu: 'имбирём' };
+  }
+  if (id.includes('chili') || name.includes('чили') || name.includes('острый перец')) {
+    return { isAromatic: true, isFinelyCut: fine, labelRu: 'перцем чили' };
+  }
+  return { isAromatic: false, isFinelyCut: false, labelRu: '' };
+}
+
+function formatPanPreparationMethod(
+  baseMethod: string,
+  seasonings: string[],
+  cheeseGlazed: boolean
+): string {
+  const cleanBase = baseMethod
+    .replace(/\s+с\s+[^()]+$/i, '')
+    .replace(/\s+под расплавленным сыром.*$/i, '')
+    .trim() || 'Обжарено в масле';
+  const extras: string[] = [];
+  if (seasonings.length > 0) {
+    const uniq = Array.from(new Set(seasonings));
+    const joined = uniq.length > 1
+      ? `${uniq.slice(0, -1).join(', ')} и ${uniq[uniq.length - 1]}`
+      : uniq[0];
+    extras.push(`с ${joined}`);
+  }
+  if (cheeseGlazed) {
+    extras.push('под расплавленным сыром');
+  }
+  return extras.length > 0 ? `${cleanBase} ${extras.join(' ')}` : cleanBase;
+}
+
+/**
+ * Automatically blends melted cheese glaze and sautéed aromatic seasonings (onion, garlic, herbs)
+ * onto neighboring hot solid foods cooking together in the same pan/pot/baking vessel.
+ */
+export function blendPanCheeseAndAromatics(
+  container: InventoryItem | null | undefined,
+  medium: 'oil' | 'dry' | 'oven' = 'oil'
+): boolean {
+  if (!container || !Array.isArray(container.contents) || container.contents.length < 2) return false;
+  const contents = container.contents;
+
+  let meltedCheeseColor: string | null = null;
+  let hasMeltedCheese = false;
+  const activeAromatics: string[] = [];
+
+  for (const ch of contents) {
+    if (!ch || ch.category !== 'food') continue;
+    const t = ch.surfaceTemperature ?? ch.temperature ?? container.temperature ?? 20;
+    if (isMeltableCheeseItem(ch) && (ch.meltLevel || 0) >= 0.45 && t >= 55) {
+      hasMeltedCheese = true;
+      if (!meltedCheeseColor) {
+        meltedCheeseColor = getCheeseMeltingProfile(ch).colorHex;
+      }
+    }
+    const arom = isPanAromaticItem(ch);
+    if (arom.isAromatic && t >= 75 && ((ch.cookProgress || 0) >= 0.18 || arom.isFinelyCut)) {
+      if (!activeAromatics.includes(arom.labelRu)) {
+        activeAromatics.push(arom.labelRu);
+      }
+    }
+  }
+
+  if (!hasMeltedCheese && activeAromatics.length === 0) return false;
+
+  let changed = false;
+  for (const target of contents) {
+    if (!target || target.category !== 'food') continue;
+    if (target.fluidStorage || (target.containerVisuals && !target.isOpen)) continue;
+    if (isMeltableCheeseItem(target)) continue;
+
+    const targetTemp = target.surfaceTemperature ?? target.temperature ?? container.temperature ?? 20;
+    if (targetTemp < 55) continue;
+
+    const targetArom = isPanAromaticItem(target);
+    let targetModified = false;
+
+    // 1. Melted cheese coats adjacent hot solid foods (steaks, mushrooms, veg, etc.)
+    if (hasMeltedCheese && !target.cheeseGlazed) {
+      target.cheeseGlazed = true;
+      target.cheeseGlazeColor = meltedCheeseColor || '#fbbf24';
+      if (target.effects && typeof target.effects.hunger === 'number') {
+        target.effects.hunger = Math.round(target.effects.hunger * 1.14);
+      }
+      targetModified = true;
+    }
+
+    // 2. Sautéed aromatics (onion, garlic, herbs) infuse & season neighboring foods
+    const relevantAromatics = activeAromatics.filter(lbl => !targetArom.isAromatic || lbl !== targetArom.labelRu);
+    if (relevantAromatics.length > 0) {
+      const existing = Array.isArray(target.sauteSeasonings) ? target.sauteSeasonings : [];
+      const merged = Array.from(new Set([...existing, ...relevantAromatics]));
+      if (merged.length > existing.length) {
+        const addedCount = merged.length - existing.length;
+        target.sauteSeasonings = merged;
+        if (target.effects && typeof target.effects.hunger === 'number') {
+          target.effects.hunger = Math.round(target.effects.hunger * (1 + Math.min(0.16, addedCount * 0.07)));
+        }
+        targetModified = true;
+      }
+    }
+
+    if (targetModified) {
+      const baseMethod =
+        target.attributes?.preparationMethod ||
+        (medium === 'oil'
+          ? 'Обжарено в горячем масле'
+          : medium === 'oven'
+          ? 'Запечено в духовке'
+          : 'Обжарено на сковороде');
+      target.attributes = {
+        ...(target.attributes || {}),
+        preparationMethod: formatPanPreparationMethod(
+          baseMethod,
+          target.sauteSeasonings || [],
+          Boolean(target.cheeseGlazed)
+        ),
+      };
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+/**
+ * Actively stirs/tosses the contents of a cooking vessel (skillet, pot, sauté pan):
+ * - Equalizes temperature across ingredients and prevents early bottom scorching
+ * - Evenly mixes melted cheese and finely chopped aromatics (onion, garlic, herbs) over main foods
+ * - Folds finely minced sautéed aromatics and modest melted cheese portions directly onto the main
+ *   foods (preserving 100% of mass & satiety), leaving whole pieces intact and glazed.
+ */
+export function stirCookwareContainer(
+  container: InventoryItem | null | undefined
+): { stirred: boolean; messageRu: string } {
+  if (!container || !Array.isArray(container.contents) || container.contents.length === 0) {
+    return { stirred: false, messageRu: 'В посуде нет продуктов для перемешивания' };
+  }
+
+  const contents = container.contents;
+  const containerTemp = container.temperature ?? 20;
+  const liqProf = getContainerLiquidThermalProfile(container);
+  const isOil = liqProf?.cookingMedium === 'oil';
+
+  // 1. Equalize temperature across contents & ease early scorching from bottom contact
+  let tempSum = containerTemp;
+  let tempCount = 1;
+  for (const ch of contents) {
+    if (!ch) continue;
+    tempSum += ch.temperature ?? containerTemp;
+    tempCount++;
+  }
+  const meanTemp = Math.round((tempSum / tempCount) * 10) / 10;
+  for (const ch of contents) {
+    if (!ch) continue;
+    const prevT = ch.temperature ?? containerTemp;
+    ch.temperature = Math.round((prevT * 0.4 + meanTemp * 0.6) * 10) / 10;
+    ch.surfaceTemperature = ch.temperature;
+    if ((ch.charLevel || 0) > 0 && (ch.charLevel || 0) < 0.4) {
+      ch.charLevel = Math.max(0, Number(((ch.charLevel || 0) - 0.08).toFixed(3)));
+    }
+  }
+
+  // 2. Identify main solid foods vs meltable cheese vs finely chopped aromatics
+  const mainFoods: InventoryItem[] = [];
+  const meltedCheeses: Array<{ idx: number; item: InventoryItem; prof: CheeseMeltingProfile }> = [];
+  const fineAromatics: Array<{ idx: number; item: InventoryItem; labelRu: string }> = [];
+  const allAromaticLabels: string[] = [];
+
+  for (let i = 0; i < contents.length; i++) {
+    const ch = contents[i];
+    if (!ch || ch.category !== 'food') continue;
+    if (ch.fluidStorage || (ch.containerVisuals && !ch.isOpen)) continue;
+
+    if (isMeltableCheeseItem(ch)) {
+      const t = ch.temperature ?? containerTemp;
+      // Stirring hot pan helps cheese soften/melt rapidly if pan is already hot
+      if (t >= 52 && (ch.meltLevel || 0) < 0.75) {
+        applyCheeseMeltingStep(ch, Math.max(t, containerTemp), 3.0, isOil ? 'oil' : 'dry');
+      }
+      if ((ch.meltLevel || 0) >= 0.4) {
+        meltedCheeses.push({ idx: i, item: ch, prof: getCheeseMeltingProfile(ch) });
+      }
+      continue;
+    }
+
+    const arom = isPanAromaticItem(ch);
+    if (arom.isAromatic) {
+      if (!allAromaticLabels.includes(arom.labelRu)) {
+        allAromaticLabels.push(arom.labelRu);
+      }
+      if (arom.isFinelyCut) {
+        fineAromatics.push({ idx: i, item: ch, labelRu: arom.labelRu });
+      } else {
+        mainFoods.push(ch);
+      }
+      continue;
+    }
+
+    mainFoods.push(ch);
+  }
+
+  // 3. Apply cheese glaze & aromatic seasonings across all main foods
+  const foldedIndices = new Set<number>();
+  const foldedLabels: string[] = [];
+
+  if (mainFoods.length > 0) {
+    const mainWeightKg = mainFoods.reduce((sum, it) => sum + Math.max(0.02, (it.weight || 0.1) * (it.count || 1)), 0);
+
+    // Fold finely chopped aromatics into the sauté coating on the main foods when warm/hot
+    for (const aromEntry of fineAromatics) {
+      const aromWeight = (aromEntry.item.weight || 0.03) * (aromEntry.item.count || 1);
+      const t = Math.max(aromEntry.item.temperature ?? 20, containerTemp);
+      if (t >= 60 && aromWeight <= Math.max(0.15, mainWeightKg * 0.55)) {
+        const extraHungerPerMain = Math.round(((aromEntry.item.effects?.hunger || 4) * (aromEntry.item.count || 1)) / mainFoods.length);
+        const extraWeightPerMain = aromWeight / mainFoods.length;
+        for (const mf of mainFoods) {
+          mf.weight = Number(((mf.weight || 0.1) + extraWeightPerMain).toFixed(3));
+          if (mf.effects && typeof mf.effects.hunger === 'number') {
+            mf.effects.hunger = Math.min(100, mf.effects.hunger + Math.max(2, extraHungerPerMain));
+          }
+          const existing = Array.isArray(mf.sauteSeasonings) ? mf.sauteSeasonings : [];
+          mf.sauteSeasonings = Array.from(new Set([...existing, aromEntry.labelRu]));
+        }
+        foldedIndices.add(aromEntry.idx);
+        if (!foldedLabels.includes(aromEntry.labelRu)) foldedLabels.push(aromEntry.labelRu);
+      }
+    }
+
+    // Coat main foods with melted cheese (and fold melted cheese if its mass is reasonable relative to main foods)
+    for (const cheeseEntry of meltedCheeses) {
+      const cheeseWeight = (cheeseEntry.item.weight || 0.08) * (cheeseEntry.item.count || 1);
+      const isFullyMelted = (cheeseEntry.item.meltLevel || 0) >= 0.65;
+      for (const mf of mainFoods) {
+        if (!mf.cheeseGlazed) {
+          mf.cheeseGlazed = true;
+          mf.cheeseGlazeColor = cheeseEntry.prof.colorHex;
+        }
+      }
+      if (isFullyMelted && cheeseWeight <= Math.max(0.22, mainWeightKg * 0.65)) {
+        const extraHungerPerMain = Math.round(((cheeseEntry.item.effects?.hunger || 14) * (cheeseEntry.item.count || 1)) / mainFoods.length);
+        const extraWeightPerMain = cheeseWeight / mainFoods.length;
+        for (const mf of mainFoods) {
+          mf.weight = Number(((mf.weight || 0.1) + extraWeightPerMain).toFixed(3));
+          if (mf.effects && typeof mf.effects.hunger === 'number') {
+            mf.effects.hunger = Math.min(100, mf.effects.hunger + Math.max(4, extraHungerPerMain));
+          }
+        }
+        foldedIndices.add(cheeseEntry.idx);
+        if (!foldedLabels.includes('расплавленным сыром')) foldedLabels.push('расплавленным сыром');
+      } else if (!foldedLabels.includes('сыром')) {
+        foldedLabels.push('сыром');
+      }
+    }
+
+    // Apply any remaining aromatic labels & refresh preparationMethod on every main food
+    for (const mf of mainFoods) {
+      if (allAromaticLabels.length > 0) {
+        const existing = Array.isArray(mf.sauteSeasonings) ? mf.sauteSeasonings : [];
+        mf.sauteSeasonings = Array.from(new Set([...existing, ...allAromaticLabels]));
+      }
+      const baseMethod =
+        mf.attributes?.preparationMethod ||
+        (isOil ? 'Обжарено в горячем масле' : 'Обжарено на сковороде');
+      mf.attributes = {
+        ...(mf.attributes || {}),
+        preparationMethod: formatPanPreparationMethod(
+          baseMethod,
+          mf.sauteSeasonings || [],
+          Boolean(mf.cheeseGlazed)
+        ),
+      };
+    }
+  } else {
+    // Still blend passive cheese/aromatics even if no separate main foods
+    blendPanCheeseAndAromatics(container, isOil ? 'oil' : 'dry');
+  }
+
+  // Remove folded finely-chopped aromatics / melted cheese (their weight & satiety are now on the main foods)
+  if (foldedIndices.size > 0) {
+    const sorted = Array.from(foldedIndices).sort((a, b) => b - a);
+    for (const idx of sorted) {
+      contents.splice(idx, 1);
+    }
+  }
+
+  // Rotate remaining order gently to represent tossing/stirring
+  if (contents.length > 1) {
+    const first = contents.shift();
+    if (first) contents.push(first);
+  }
+
+  syncItemContainerProperties(container);
+
+  if (foldedLabels.length > 0) {
+    const listStr = foldedLabels.length > 1
+      ? `${foldedLabels.slice(0, -1).join(', ')} и ${foldedLabels[foldedLabels.length - 1]}`
+      : foldedLabels[0];
+    return {
+      stirred: true,
+      messageRu: `Перемешано: блюда равномерно покрыты ${listStr}`,
+    };
+  }
+  return {
+    stirred: true,
+    messageRu: 'Содержимое посуды равномерно перемешано',
+  };
+}
+
 export function updateHybridContainerInteraction(
   container: InventoryItem | null | undefined,
   dtSeconds: number = 0
@@ -4483,6 +5034,16 @@ export function updateHybridContainerInteraction(
         }
         changed = true;
       }
+      // Dry-pan cheese melting & aromatic blending
+      if (dtSeconds > 0 && isMeltableCheeseItem(child)) {
+        const effTemp = Math.max(child.surfaceTemperature ?? child.temperature ?? 20, container.temperature ?? 20);
+        if (applyCheeseMeltingStep(child, effTemp, dtSeconds, 'dry')) {
+          changed = true;
+        }
+      }
+    }
+    if (dtSeconds > 0 && blendPanCheeseAndAromatics(container, 'dry')) {
+      changed = true;
     }
     // Still allow dry-vessel homemade transformations (butter -> ghee, tallow -> rendered_fat, cabbage+salt -> sauerkraut, fruit+sugar -> jam, tomato/zucchini stewing, etc.)
     if (dtSeconds > 0 && tickHomemadeLiquidTransformations(container, dtSeconds)) {
@@ -4525,7 +5086,8 @@ export function updateHybridContainerInteraction(
       child.wetness = nextWet;
       child.soakedLiquidId = storage.liquidId || undefined;
       child.soakedLiquidNameRu = liqDef?.nameRu || fluidDisplayName;
-      child.soakedColor = fluidBaseColor;
+      // Culinary oils coat food with a subtle golden sheen rather than dyeing food dark brown
+      child.soakedColor = isOilMedium ? '#f5d061' : fluidBaseColor;
       child.submersionLevel = Number(submersion.toFixed(2));
       if (isDetergentFluid) {
         child.soapyLevel = Math.min(1, Math.max(child.soapyLevel || 0, nextWet / 100));
@@ -4554,6 +5116,7 @@ export function updateHybridContainerInteraction(
     const isEdibleSolid = child.category === 'food' || child.category === 'drink' || isSolubleSolidItem(child);
     const isCulinaryLiquid = Boolean(liqDef?.isDrinkable) && isCulinaryMedium;
     const isSealedPack = Boolean(child.fluidStorage || (child.containerVisuals && !child.isOpen));
+    const isCheese = isMeltableCheeseItem(child);
 
     if (isEdibleSolid && isCulinaryLiquid) {
       const heatBoost = fluidTemp >= 120 ? 4.0 : fluidTemp >= 80 ? 3.5 : fluidTemp >= 55 ? 2.0 : fluidTemp >= 30 ? 1.0 : 0.45;
@@ -4582,8 +5145,15 @@ export function updateHybridContainerInteraction(
         changed = true;
       }
 
+      // 3-CHEESE: Meltable cheeses melt smoothly in hot oil, sauces, or warm broths instead of boiling/frying raw!
+      if (isCheese && !isSealedPack && dtSeconds > 0) {
+        const effTemp = Math.max(child.surfaceTemperature ?? child.temperature ?? 20, fluidTemp);
+        if (applyCheeseMeltingStep(child, effTemp, dtSeconds, isOilMedium ? 'oil' : 'water')) {
+          changed = true;
+        }
+      }
       // 3A. OIL & RENDERED FAT FRYING (Жарка в масле / жире — до ~205°C, золотистая корочка и защита от подгорания!)
-      if (isOilMedium && child.category === 'food' && !isSealedPack && dtSeconds > 0) {
+      else if (isOilMedium && child.category === 'food' && !isSealedPack && dtSeconds > 0) {
         const effTemp = Math.max(child.surfaceTemperature ?? child.temperature ?? 20, fluidTemp);
         if (effTemp >= 65) {
           const cookRate = Math.max(0.018, ((effTemp - 55) / 80) * 0.085);
@@ -4618,7 +5188,11 @@ export function updateHybridContainerInteraction(
               ...(child.attributes || {}),
               state: 'fried',
               stateNameRu: 'Жареный в масле',
-              preparationMethod: 'Обжарено в горячем масле',
+              preparationMethod: formatPanPreparationMethod(
+                'Обжарено в горячем масле',
+                child.sauteSeasonings || [],
+                Boolean(child.cheeseGlazed)
+              ),
             };
             if (!alreadyAnyCooked && child.effects && typeof child.effects.hunger === 'number') {
               child.effects.hunger = Math.round(child.effects.hunger * 1.24);
@@ -4694,11 +5268,12 @@ export function updateHybridContainerInteraction(
             changed = true;
           }
         }
-        if (fluidTemp >= boilDoneTemp && (nextInf >= 0.45 || (child.cookProgress || 0) >= 0.65)) {
+        if (fluidTemp >= boilDoneTemp && submersion >= 0.35 && (nextInf >= 0.45 || (child.cookProgress || 0) >= 0.65)) {
           const curState = child.attributes?.stateNameRu;
           if (
             storage.liquidId !== 'pickles' &&
             child.attributes?.state !== 'pickled' &&
+            child.attributes?.state !== 'melted' &&
             curState !== 'Варёный' &&
             child.attributes?.state !== 'boiled'
           ) {
@@ -4738,6 +5313,11 @@ export function updateHybridContainerInteraction(
     }
   }
 
+  // Automatically blend melted cheese & sautéed aromatics onto adjacent hot foods in the pan
+  if (dtSeconds > 0 && blendPanCheeseAndAromatics(container, isOilMedium ? 'oil' : 'dry')) {
+    changed = true;
+  }
+
   // Pull liquid temperature slightly toward average solid item temperature
   if (dtSeconds > 0 && avgChildTempCount > 0) {
     const avgSolidTemp = avgChildTempSum / avgChildTempCount;
@@ -4751,7 +5331,9 @@ export function updateHybridContainerInteraction(
 
   // Update liquid color, ingredients, and nutrition from active infusions
   if (storage.infusedItems.length > 0 && liqDef?.isDrinkable) {
-    let blendedColor = liqDef.color || '#38bdf8';
+    const existingAttrs = storage.attributes || {};
+    const baseOilColor = isOilMedium ? (existingAttrs.customColor || liqDef.color || '#eab308') : (liqDef.color || '#38bdf8');
+    let blendedColor = baseOilColor;
     const infusedNames: string[] = [];
     let bonusHunger = 0;
     let bonusHealth = 0;
@@ -4762,7 +5344,10 @@ export function updateHybridContainerInteraction(
       if (inf.intensity > maxIntensity) maxIntensity = inf.intensity;
       if (!infusedNames.includes(inf.nameRu)) infusedNames.push(inf.nameRu);
       if (inf.color && inf.intensity > 0.05) {
-        const tintWeight = Math.min(0.42, inf.intensity * 0.45);
+        // Oils absorb only a subtle warm golden aromatic tint rather than turning muddy brown
+        const tintWeight = isOilMedium
+          ? Math.min(0.14, inf.intensity * 0.16)
+          : Math.min(0.42, inf.intensity * 0.45);
         blendedColor = blendColorHex(blendedColor, 1.0 - tintWeight, inf.color, tintWeight);
       }
       bonusHunger += Math.round(6 * inf.intensity);
@@ -4771,7 +5356,6 @@ export function updateHybridContainerInteraction(
     }
 
     const baseEffects = liqDef.effects || {};
-    const existingAttrs = storage.attributes || {};
     const baseIngs = Array.isArray(existingAttrs.ingredients)
       ? existingAttrs.ingredients
       : existingAttrs.ingredients
@@ -4789,9 +5373,12 @@ export function updateHybridContainerInteraction(
     } else {
       const shortList = infusedNames.slice(0, 3).join(', ') + (infusedNames.length > 3 ? ` и ещё ${infusedNames.length - 3}` : '');
       const isBrothLike = (storage.liquidId === 'water' || storage.liquidId === 'broth') && fluidTemp >= 75 && maxIntensity >= 0.45;
+      const baseVariety = (existingAttrs.varietyRu || liqDef.nameRu).replace(/\s*\([^)]*\)\s*$/g, '').trim() || liqDef.nameRu;
       const infusionVariety = isBrothLike
         ? `Отвар / Бульон (${shortList})`
-        : `${liqDef.nameRu} (${shortList})`;
+        : isOilMedium
+        ? `${baseVariety} (аромат: ${shortList})`
+        : `${baseVariety} (${shortList})`;
 
       storage.attributes = {
         ...existingAttrs,
@@ -4802,7 +5389,9 @@ export function updateHybridContainerInteraction(
           ...(existingAttrs.visuals || {}),
           color: blendedColor
         },
-        purpose: `Жидкость с погружёнными продуктами (${shortList})`,
+        purpose: isOilMedium
+          ? `Ароматное масло для жарки (${shortList})`
+          : `Жидкость с погружёнными продуктами (${shortList})`,
         customEffects: {
           thirst: baseEffects.thirst ?? 25,
           hunger: Math.min(65, (baseEffects.hunger || 0) + bonusHunger),

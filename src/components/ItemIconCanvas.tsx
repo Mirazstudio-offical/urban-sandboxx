@@ -62,6 +62,8 @@ function buildItemVisualStateKey(item: any): string {
   const cook = Math.round((item.cookProgress || 0) * 20);
   const brown = Math.round((item.brownLevel || 0) * 20);
   const char = Math.round((item.charLevel || 0) * 20);
+  const melt = Math.round((item.meltLevel || 0) * 20);
+  const cheeseGlaze = item.cheeseGlazed ? (item.cheeseGlazeColor || '1') : '';
   const st = item.attributes?.state || '';
   const method = item.cookMethod || '';
   const soakCol = item.soakedColor || '';
@@ -93,7 +95,7 @@ function buildItemVisualStateKey(item: any): string {
         : '';
       const chPortions = typeof ch.portions === 'number' ? `:${ch.portions}/${ch.maxPortions || ''}` : '';
       parts.push(
-        `${ch.itemId}:${Math.round((ch.brownLevel || 0) * 10)}:${Math.round((ch.charLevel || 0) * 10)}:${Math.round((ch.cookProgress || 0) * 10)}:${Math.round((ch.wetness || 0) / 10)}:${ch.attributes?.state || ''}${chPortions}${chDa}`
+        `${ch.itemId}:${Math.round((ch.brownLevel || 0) * 10)}:${Math.round((ch.charLevel || 0) * 10)}:${Math.round((ch.cookProgress || 0) * 10)}:${Math.round((ch.meltLevel || 0) * 10)}:${ch.cheeseGlazed ? 1 : 0}:${Math.round((ch.wetness || 0) / 10)}:${ch.attributes?.state || ''}${chPortions}${chDa}`
       );
     }
     childKey = parts.join(';');
@@ -145,7 +147,7 @@ function buildItemVisualStateKey(item: any): string {
   const cl = item.clothingStats;
   const clKey = cl ? `${cl.color || ''}:${cl.secondaryColor || ''}` : '';
   const lbl = item.labelColor || '';
-  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${st}|${method}|${soakCol}|${soakId}|${open}|${origCat}|${cTint}|${cVis}|${cdKey}|${fsKey}|${childKey}|${portionsKey}|${daKey}|${rpKey}|${paKey}|${maKey}|${baKey}|${kwKey}|${phKey}|${hwKey}|${chocoKey}|${gumKey}|${pelKey}|${clKey}|${lbl}`;
+  return `${t}|${wet}|${soap}|${inf}|${cook}|${brown}|${char}|${melt}|${cheeseGlaze}|${st}|${method}|${soakCol}|${soakId}|${open}|${origCat}|${cTint}|${cVis}|${cdKey}|${fsKey}|${childKey}|${portionsKey}|${daKey}|${rpKey}|${paKey}|${maKey}|${baKey}|${kwKey}|${phKey}|${hwKey}|${chocoKey}|${gumKey}|${pelKey}|${clKey}|${lbl}`;
 }
 
 const ItemIconCanvasInner: React.FC<ItemIconCanvasProps> = ({

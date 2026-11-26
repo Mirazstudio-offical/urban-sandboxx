@@ -839,6 +839,30 @@ function pickFruitColor(solids: AnalyzedSolids, indices: number[], fallback: str
   return fallback;
 }
 
+function isFryingSkilletVessel(container: InventoryItem): boolean {
+  const id = (container.itemId || '').toLowerCase();
+  const kind = container.kitchenwareAttributes?.kind;
+  return (
+    id === 'frying_pan' ||
+    id === 'saute_pan' ||
+    id.includes('frying_pan') ||
+    id.includes('skillet') ||
+    kind === 'frying_pan' ||
+    kind === 'saute_pan'
+  );
+}
+
+function hasCheeseSolid(solids: AnalyzedSolids): boolean {
+  return solids.all.some((s) => {
+    const id = (s.item?.itemId || '').toLowerCase();
+    const name = (s.item?.nameRu || s.cleanName || '').toLowerCase();
+    if (id.includes('cottage_cheese') || name.includes('творог') || name.includes('творож') || name.includes('сырник')) {
+      return false;
+    }
+    return id.startsWith('cheese_') || id.includes('cheese') || /\bсыр/.test(name) || name.includes('моцарелл') || name.includes('чеддер') || name.includes('гауд') || name.includes('пармезан') || name.includes('сулугуни') || name.includes('фет');
+  });
+}
+
 /**
  * Evaluates whether a container (on a stove, in an oven/microwave, or resting at room temperature)
  * currently satisfies a logical homemade culinary liquid / preserve recipe WITHOUT factory equipment.
@@ -856,6 +880,8 @@ export function evaluateHomemadeLiquidRecipe(
   const isAlreadyHomemade = Boolean(storage.attributes?.isHomemade);
   const prevHomemadeId = isAlreadyHomemade ? (storage.homemadeRecipeId || '') : '';
   const isDry = fl.totalMl < 3 || storage.attributes?.physicalForm === 'dry';
+  const isSkillet = isFryingSkilletVessel(container);
+  const hasCheese = hasCheeseSolid(solids);
 
   const hasWater = fl.has('water', 15);
   const waterMl = fl.mlOf('water');
@@ -1186,14 +1212,25 @@ export function evaluateHomemadeLiquidRecipe(
 
   // =========================================================================
   // 8. HOMEMADE BRAISED STEW MEAT & OIL-CONFIT FISH (Домашняя тушёнка / рыба в масле)
+  // Strictly requires a pot/jar (NEVER a frying/sauté pan!), gentle braising heat (88..132°C),
+  // and genuine stewing medium (animal fat/tallow or braising water + seasoning — NOT pan-frying in oil!).
   // =========================================================================
   const meatPieces = [...solids.redMeat, ...solids.poultry];
+  const hasStewBraisingMedium =
+    hasRenderedFat ||
+    solids.tallow.length > 0 ||
+    (waterMl >= 25 && (fl.hasSalt || fl.hasSpices || solids.onion.length > 0 || solids.garlic.length > 0 || solids.freshHerbs.length > 0));
   if (
+    !isSkillet &&
+    !hasOil &&
+    !hasCheese &&
+    solids.mushrooms.length === 0 &&
     prevHomemadeId !== 'homemade_stew_meat' &&
     meatPieces.length > 0 &&
-    waterMl <= Math.max(80, solids.totalSolidMl * 0.45) &&
-    (hasRenderedFat || hasOil || solids.tallow.length > 0 || fl.hasSalt || fl.hasSpices || solids.onion.length > 0 || solids.garlic.length > 0 || solids.freshHerbs.length > 0) &&
-    tempC >= 88
+    waterMl <= Math.max(120, solids.totalSolidMl * 0.65) &&
+    hasStewBraisingMedium &&
+    tempC >= 88 &&
+    tempC <= 132
   ) {
     const meatWeightKg = meatPieces.reduce(
       (sum, idx) => sum + (solids.all.find((s) => s.idx === idx)?.weightKg || 0.25),
@@ -1213,12 +1250,12 @@ export function evaluateHomemadeLiquidRecipe(
       targetLiquidId: 'canned_preserve',
       culinaryEquivalentId: 'stew_meat',
       varietyRu,
-      preparationMethod: 'Домашнее длительное томление мяса в собственном соку с жиром и пряностями',
+      preparationMethod: 'Домашнее длительное томление мяса в собственном соку с жиром и пряностями в кастрюле',
       purpose: 'Сытное готовое мясное блюдо для каш, макарон и походных супов',
       reasonAndOrigin: 'Приготовлено дома длительным тушением без промышленного автоклава и нитритных добавок.',
       colorHex: '#7c2d12',
       ingredients: ings,
-      requiredSec: 24,
+      requiredSec: 45,
       effects: { hunger: 72, energy: 26, health: 14, soothePanic: 32 },
       tasteMessages: ['Мягкие волокна домашней тушёнки в наваристом мясном соке и жирке.'],
       generatedMl: stewMl,
@@ -1228,11 +1265,15 @@ export function evaluateHomemadeLiquidRecipe(
   }
 
   if (
+    !isSkillet &&
+    !hasCheese &&
+    solids.mushrooms.length === 0 &&
     prevHomemadeId !== 'homemade_fish_preserve' &&
     solids.fishSeafood.length > 0 &&
     hasOil &&
     waterMl < 30 &&
-    tempC >= 84
+    tempC >= 82 &&
+    tempC <= 118
   ) {
     const fishWeightKg = solids.fishSeafood.reduce(
       (sum, idx) => sum + (solids.all.find((s) => s.idx === idx)?.weightKg || 0.25),
@@ -1251,12 +1292,12 @@ export function evaluateHomemadeLiquidRecipe(
       targetLiquidId: 'canned_preserve',
       culinaryEquivalentId: 'fish_preserves',
       varietyRu,
-      preparationMethod: 'Домашнее бережное томление рыбы в растительном масле со специями',
+      preparationMethod: 'Домашнее бережное томление рыбы в растительном масле со специями в кастрюле',
       purpose: 'Нежная рыбная закуска, основа для салатов и быстрых бутербродов',
       reasonAndOrigin: 'Приготовлено дома без промышленной автоклавной стерилизации.',
       colorHex: '#b45309',
       ingredients: ings,
-      requiredSec: 20,
+      requiredSec: 36,
       effects: { hunger: 62, energy: 20, health: 14, soothePanic: 28 },
       tasteMessages: ['Нежные кусочки домашней рыбы, томлённой в ароматном масле.'],
       generatedMl: yieldMl,
@@ -1312,11 +1353,14 @@ export function evaluateHomemadeLiquidRecipe(
   // =========================================================================
   const hasCaviarBase = solids.zucchini.length > 0 || solids.eggplants.length > 0;
   if (
+    !(isSkillet && (hasOil || hasRenderedFat)) &&
+    !hasCheese &&
     prevHomemadeId !== 'homemade_caviar' &&
     hasCaviarBase &&
     !hasAnyMeat &&
     waterMl <= Math.max(120, solids.totalSolidMl * 1.2) &&
-    tempC >= 84
+    tempC >= 84 &&
+    tempC <= 135
   ) {
     const isEggplant = solids.eggplants.length >= solids.zucchini.length && solids.eggplants.length > 0;
     const varietyRu = isEggplant ? 'Домашняя баклажанная икра' : 'Домашняя кабачковая икра';
@@ -1383,6 +1427,8 @@ export function evaluateHomemadeLiquidRecipe(
   }
 
   if (
+    !(isSkillet && (hasOil || hasRenderedFat)) &&
+    !hasCheese &&
     prevHomemadeId !== 'homemade_tomato_sauce' &&
     prevHomemadeId !== 'homemade_tomato_paste' &&
     prevHomemadeId !== 'homemade_chili_sauce' &&
@@ -1390,7 +1436,8 @@ export function evaluateHomemadeLiquidRecipe(
     !hasAnyMeat &&
     !hasCaviarBase &&
     waterMl <= Math.max(100, solids.totalSolidMl * 1.2) &&
-    tempC >= 82
+    tempC >= 82 &&
+    tempC <= 135
   ) {
     const isChiliDominant = solids.chiliPeppers.length > 0 && solids.chiliPeppers.length >= solids.tomatoes.length;
     const hasSauceSeasoning =
@@ -1494,9 +1541,13 @@ export function evaluateHomemadeLiquidRecipe(
     (fl.totalMl <= Math.max(100, solids.totalSolidMl * 1.1) || hasMilk || hasRenderedFat);
 
   if (
+    !isSkillet &&
+    !hasOil &&
+    !hasCheese &&
     prevHomemadeId !== 'homemade_puree' &&
     (canFruitPuree || canVegPuree) &&
-    tempC >= 84
+    tempC >= 84 &&
+    tempC <= 130
   ) {
     const targetIndices = canFruitPuree ? pureeFruitIndices : pureeVegIndices;
     const leadNames = uniqueStrings(
@@ -1549,13 +1600,14 @@ export function evaluateHomemadeLiquidRecipe(
   const isBrineOrMarinade =
     hasWater && (fl.hasSalt || fl.hasAcidOrVinegar) && !hasAnyMeat && !hasMilk;
   const isOilMarinade =
-    hasOil && !hasWater && !hasAnyMeat && (solids.tomatoes.length > 0 || solids.mushrooms.length > 0 || solids.garlic.length > 0) && (solids.freshHerbs.length > 0 || fl.hasSpices || fl.hasSalt);
+    !isSkillet &&
+    hasOil && !hasWater && !hasAnyMeat && !hasCheese && (solids.tomatoes.length > 0 || solids.mushrooms.length > 0 || solids.garlic.length > 0) && (solids.freshHerbs.length > 0 || fl.hasSpices || fl.hasSalt);
 
   if (
     prevHomemadeId !== 'homemade_pickles' &&
     hasPicklableSolids &&
     ((isBrineOrMarinade && ((tempC >= 12 && tempC <= 48) || tempC >= 72)) ||
-      (isOilMarinade && tempC >= 15 && tempC <= 95))
+      (isOilMarinade && tempC >= 15 && tempC <= 65))
   ) {
     const isMushroom = solids.mushrooms.length > 0;
     const isVinegarMarinade = fl.hasAcidOrVinegar;

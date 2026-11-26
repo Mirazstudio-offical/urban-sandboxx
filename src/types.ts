@@ -3102,6 +3102,10 @@ export interface InventoryItem {
   brownLevel?: number;           // 0.0..1.0 Maillard browning / caramelization / roasted crust progression
   charLevel?: number;            // 0.0..1.0 scorching / pyrolysis / charring progression
   cookMethod?: 'boiled' | 'fried' | 'baked' | 'microwaved' | 'steamed';
+  meltLevel?: number;            // 0.0..1.0 melting progression (cheese, butter, chocolate)
+  cheeseGlazed?: boolean;        // Coated in melted cheese during pan/oven cooking
+  cheeseGlazeColor?: string;     // Color hex of melted cheese glaze coating
+  sauteSeasonings?: string[];    // Sautéed aromatics blended onto this food (e.g. 'лук', 'чеснок', 'зелень')
   soapyLevel?: number;           // 0.0..1.0 detergent foam / soapy residue during washing
   heatLossRate?: number;         // Heat loss / cooling coefficient per second (0.001 to 0.50)
   heatRetention?: number;        // Heat retention / insulation factor (0.0 bare metal, 1.0 vacuum thermos)
@@ -3145,6 +3149,8 @@ export interface InventoryItem {
     /** Progress (0..1) and active recipe ID for homemade liquid cooking / fermentation */
     homemadeProgress?: number;
     homemadeRecipeId?: string;
+    /** Minimum retained volume (ml) for thick solids-rich preserves/stews/purees that cannot boil away to vapor */
+    nonVolatileFloorMl?: number;
   };
   culinaryData?: CulinaryItemData;
   /** Атрибуты мармеладки (цвет, форма, состав, посыпка) */
