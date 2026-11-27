@@ -2,24 +2,29 @@ import type { VehicleRenderContext } from './vehicleArchetypes';
 import { isVehicleHoodExposed } from './engineBayVisuals';
 import {
   Pt,
+  DeformFn,
   shadePaint,
   getLiveOpticsState,
   fillPoly,
   strokePoly,
   drawRoundedBox,
   drawDeformedDot,
+  drawBoxShadow,
   createBodyMetallicGradient,
   createRoofGradient,
   createGlassGradient,
+  drawCabinInteriorHint,
+  drawGlassGlint,
+  drawIntegratedHeadlight,
+  drawIntegratedTaillight,
+  drawCorrugatedDeck,
+  drawTreadplateSurface,
   drawTreadedTire,
   drawRoadTrainMarkers,
   drawSideMirrorArm,
+  LiveOpticsState,
 } from './vehicleModelPrimitives';
 
-/**
- * All 8 redrawn vans, campers, stepvans, ambulances, minibuses & city buses.
- * Integrated top-down automotive drafting with zero generic programmatic overlays.
- */
 export const REDRAWN_VAN_BUS_TYPES: ReadonlySet<string> = new Set([
   'van',
   'van_camper',
@@ -35,1064 +40,2201 @@ export function isRedrawnVanBus(type: string | undefined | null): boolean {
   return !!type && REDRAWN_VAN_BUS_TYPES.has(type);
 }
 
-/**
- * Renders tucked commercial van / bus / ambulance tires cleanly on the lower wheel layer.
- */
+// ============================================================================
+// 1. WHEELS (BLUEPRINT AXLE POSITIONS & TIRE PROPORTIONS)
+// ============================================================================
+
 export function renderVanBusWheels(
   vCtx: VehicleRenderContext,
   steerAngle: number
 ): void {
   const { ctx, car, halfL, halfW, deform } = vCtx;
   const type = car.type;
-  const isBus = type === 'bus';
-  const isMinibus = type === 'bus_minibus';
-  const isStepvan = type === 'delivery_truck';
-  const isBukhanka = type === 'van_cargo_old';
+  const effSteer = steerAngle || 0;
 
-  const wheelL = isBus ? 10.6 : isMinibus || isStepvan ? 9.2 : isBukhanka ? 8.0 : 8.6;
-  const wheelW = isBus ? 3.8 : isMinibus || isStepvan ? 3.5 : 3.2;
-  const frontX = isBus
-    ? halfL * 0.64
-    : isBukhanka
-      ? halfL * 0.56
-      : isStepvan
-        ? halfL * 0.68
-        : halfL * 0.64;
-  const rearX = isBus
-    ? -halfL * 0.52
-    : isBukhanka
-      ? -halfL * 0.54
-      : isStepvan
-        ? -halfL * 0.58
-        : -halfL * 0.58;
-  const trackY = halfW - wheelW * 0.52;
-  const tireStyle = isBus || isStepvan ? 'heavy' : 'road';
+  let frontX = halfL * 0.56;
+  let rearX = -halfL * 0.54;
+  let wheelLen = 7.4;
+  let wheelW = 2.65;
+  let trackY = halfW - 1.1;
+  let rearDual = false;
 
-  // Rear axle (dual wheels on heavy city bus & stepvan)
-  const [rlx, rly] = deform(rearX, -trackY);
-  const [rrx, rry] = deform(rearX, trackY);
-  drawTreadedTire(ctx, rlx, rly, wheelL, wheelW, 0, tireStyle);
-  drawTreadedTire(ctx, rrx, rry, wheelL, wheelW, 0, tireStyle);
-
-  if (isBus || isStepvan) {
-    const innerTrackY = trackY - wheelW - 0.35;
-    const [ilx, ily] = deform(rearX, -innerTrackY);
-    const [irx, iry] = deform(rearX, innerTrackY);
-    drawTreadedTire(ctx, ilx, ily, wheelL, wheelW * 0.92, 0, tireStyle);
-    drawTreadedTire(ctx, irx, iry, wheelL, wheelW * 0.92, 0, tireStyle);
+  if (type === 'van_cargo_old') {
+    frontX = halfL * 0.58;
+    rearX = -halfL * 0.56;
+    wheelLen = 7.0;
+    wheelW = 2.6;
+    trackY = halfW - 1.0;
+  } else if (type === 'van_camper') {
+    frontX = halfL * 0.58;
+    rearX = -halfL * 0.44;
+    wheelLen = 7.5;
+    wheelW = 2.7;
+    trackY = halfW - 1.15;
+    rearDual = true;
+  } else if (type === 'delivery_truck') {
+    frontX = halfL * 0.54;
+    rearX = -halfL * 0.50;
+    wheelLen = 7.8;
+    wheelW = 2.85;
+    trackY = halfW - 1.15;
+    rearDual = true;
+  } else if (type === 'ambulance' || type === 'ambulance_van') {
+    frontX = halfL * 0.56;
+    rearX = -halfL * 0.48;
+    wheelLen = 7.6;
+    wheelW = 2.75;
+    trackY = halfW - 1.1;
+  } else if (type === 'bus_minibus') {
+    frontX = halfL * 0.58;
+    rearX = -halfL * 0.50;
+    wheelLen = 8.0;
+    wheelW = 2.9;
+    trackY = halfW - 1.15;
+    rearDual = true;
+  } else if (type === 'bus') {
+    frontX = halfL * 0.54;
+    rearX = -halfL * 0.48;
+    wheelLen = 9.4;
+    wheelW = 3.2;
+    trackY = halfW - 1.25;
+    rearDual = true;
   }
 
-  // Steered front axle
-  const [flx, fly] = deform(frontX, -trackY);
-  const [frx, fry] = deform(frontX, trackY);
-  drawTreadedTire(ctx, flx, fly, wheelL, wheelW, steerAngle, tireStyle);
-  drawTreadedTire(ctx, frx, fry, wheelL, wheelW, steerAngle, tireStyle);
+  for (const side of [-1, 1] as const) {
+    const [fx, fy] = deform(frontX, side * trackY);
+    drawTreadedTire(ctx, fx, fy, wheelLen, wheelW, effSteer, type === 'bus' ? 'heavy' : 'road');
+
+    const [rx, ry] = deform(rearX, side * trackY);
+    drawTreadedTire(ctx, rx, ry, wheelLen, wheelW, 0, rearDual ? 'heavy' : 'road');
+    if (rearDual) {
+      const [rxIn, ryIn] = deform(rearX, side * (trackY - wheelW * 0.85));
+      drawTreadedTire(ctx, rxIn, ryIn, wheelLen, wheelW * 0.88, 0, 'heavy');
+    }
+  }
 }
 
 // ============================================================================
-// INTEGRATED FRONT & REAR OPTICS HELPERS FOR VANS & BUSES
+// SHARED COMMERCIAL AUTOMOTIVE DETAIL HELPERS
 // ============================================================================
 
-function drawIntegratedVanHeadlight(
-  ctx: CanvasRenderingContext2D,
-  x1: number,
-  x2: number,
-  yInner: number,
-  yOuter: number,
-  side: -1 | 1,
-  broken: boolean,
-  headlightsOn: boolean,
-  highBeam: boolean,
-  positionOn: boolean,
-  turnIntensity: number,
-  style: 'modern' | 'retro_round' | 'bus_quad' | 'stepvan',
-  deform: (x: number, y: number) => [number, number]
-): void {
-  const yMin = Math.min(yInner, yOuter);
-  const yMax = Math.max(yInner, yOuter);
-  const yMid = (yMin + yMax) * 0.5;
+function drawHullContouredShape(
+  type: string,
+  halfL: number,
+  halfW: number,
+  fc: number,
+  rc: number
+): Pt[] {
+  const fX = halfL - fc;
+  const rX = -halfL + rc;
 
-  if (style === 'retro_round') {
-    const cx = (x1 + x2) * 0.5;
-    drawDeformedDot(ctx, cx, yMid, 1.85, '#334155', deform, '#0f172a', 0.45);
-    if (broken) {
-      drawDeformedDot(ctx, cx, yMid, 1.35, '#1e293b', deform);
-    } else {
-      const fill = highBeam ? '#fffef0' : headlightsOn ? '#fef3c7' : positionOn ? '#fde68a' : '#cbd5e1';
-      drawDeformedDot(ctx, cx, yMid, 1.38, fill, deform, '#94a3b8', 0.35);
-      if (headlightsOn || positionOn) {
-        drawDeformedDot(ctx, cx + 0.2, yMid, 0.65, '#ffffff', deform);
-      }
+  if (type === 'van_cargo_old') {
+    // UAZ-452 Bukhanka iconic rounded loaf hull
+    return [
+      [fX, -halfW * 0.56],
+      [fX - 0.55, -halfW * 0.84],
+      [fX - 2.0, -halfW * 0.98],
+      [halfL * 0.52, -halfW],
+      [-halfL * 0.58, -halfW],
+      [rX + 1.8, -halfW * 0.97],
+      [rX + 0.5, -halfW * 0.82],
+      [rX, -halfW * 0.56],
+      [rX, halfW * 0.56],
+      [rX + 0.5, halfW * 0.82],
+      [rX + 1.8, halfW * 0.97],
+      [-halfL * 0.58, halfW],
+      [halfL * 0.52, halfW],
+      [fX - 2.0, halfW * 0.98],
+      [fX - 0.55, halfW * 0.84],
+      [fX, halfW * 0.56],
+    ];
+  }
+
+  if (type === 'van_camper') {
+    // Tapered Ducato/Sprinter front cab stepping smoothly into wider RV living module
+    const cabW = halfW * 0.88;
+    const boxW = halfW * 1.03;
+    return [
+      [fX, -cabW * 0.68],
+      [fX - 0.7, -cabW * 0.90],
+      [fX - 2.4, -cabW],
+      [halfL * 0.33, -cabW],
+      [halfL * 0.25, -boxW],
+      [-halfL * 0.64, -boxW],
+      [rX + 1.1, -boxW * 0.97],
+      [rX, -boxW * 0.84],
+      [rX, boxW * 0.84],
+      [rX + 1.1, boxW * 0.97],
+      [-halfL * 0.64, boxW],
+      [halfL * 0.25, boxW],
+      [halfL * 0.33, cabW],
+      [fX - 2.4, cabW],
+      [fX - 0.7, cabW * 0.90],
+      [fX, cabW * 0.68],
+    ];
+  }
+
+  if (type === 'delivery_truck') {
+    // Grumman Olson / MT45 Stepvan: slightly inset walk-in nose + square cargo cube
+    const noseW = halfW * 0.88;
+    return [
+      [fX, -noseW * 0.82],
+      [fX - 0.8, -noseW],
+      [halfL * 0.66, -noseW],
+      [halfL * 0.56, -halfW],
+      [rX + 0.9, -halfW],
+      [rX, -halfW * 0.90],
+      [rX, halfW * 0.90],
+      [rX + 0.9, halfW],
+      [halfL * 0.56, halfW],
+      [halfL * 0.66, noseW],
+      [fX - 0.8, noseW],
+      [fX, noseW * 0.82],
+    ];
+  }
+
+  if (type === 'bus') {
+    // Sleek 12m CityBus: gentle panoramic front/rear corner chamfers
+    return [
+      [fX, -halfW * 0.78],
+      [fX - 0.65, -halfW * 0.94],
+      [fX - 2.2, -halfW],
+      [rX + 1.8, -halfW],
+      [rX + 0.5, -halfW * 0.94],
+      [rX, -halfW * 0.80],
+      [rX, halfW * 0.80],
+      [rX + 0.5, halfW * 0.94],
+      [rX + 1.8, halfW],
+      [fX - 2.2, halfW],
+      [fX - 0.65, halfW * 0.94],
+      [fX, halfW * 0.78],
+    ];
+  }
+
+  // Modern commercial van / ambulance / minibus: tapered aerodynamic semi-bonnet nose + straight flanks
+  return [
+    [fX, -halfW * 0.66],
+    [fX - 0.65, -halfW * 0.88],
+    [fX - 2.4, -halfW],
+    [halfL * 0.42, -halfW],
+    [rX + 1.2, -halfW],
+    [rX + 0.3, -halfW * 0.92],
+    [rX, -halfW * 0.78],
+    [rX, halfW * 0.78],
+    [rX + 0.3, halfW * 0.92],
+    [rX + 1.2, halfW],
+    [halfL * 0.42, halfW],
+    [fX - 2.4, halfW],
+    [fX - 0.65, halfW * 0.88],
+    [fX, halfW * 0.66],
+  ];
+}
+
+function drawWheelArchFlares(
+  ctx: CanvasRenderingContext2D,
+  frontX: number,
+  rearX: number,
+  halfW: number,
+  archLen: number,
+  archDepth: number,
+  claddingColor: string,
+  deform: DeformFn
+): void {
+  for (const side of [-1, 1] as const) {
+    const outerY = side * halfW;
+    const innerY = side * (halfW - archDepth);
+    for (const ax of [frontX, rearX]) {
+      const hl = archLen * 0.5;
+      fillPoly(
+        ctx,
+        [
+          [ax - hl, outerY],
+          [ax - hl * 0.72, innerY],
+          [ax + hl * 0.72, innerY],
+          [ax + hl, outerY],
+        ],
+        claddingColor,
+        deform,
+        'rgba(2,6,23,0.42)',
+        0.35
+      );
     }
-    // Small separate round amber turn blinker outboard
-    const blinkY = yMid + side * 2.15;
-    drawDeformedDot(
+  }
+}
+
+function drawSideRubStripsAndHandles(
+  ctx: CanvasRenderingContext2D,
+  xFront: number,
+  xRear: number,
+  halfW: number,
+  doorSplitsX: number[],
+  handleXs: number[],
+  deform: DeformFn,
+  stripColor = 'rgba(15,23,42,0.58)'
+): void {
+  for (const side of [-1, 1] as const) {
+    const yEdge = side * (halfW - 0.42);
+    // Protective body rub molding along lower flank
+    strokePoly(
       ctx,
-      cx - 0.45,
-      blinkY,
-      0.85,
-      turnIntensity > 0.1 ? `rgba(255,190,40,${(0.65 + 0.35 * turnIntensity).toFixed(2)})` : '#b45309',
+      [
+        [xRear, yEdge],
+        [xFront, yEdge],
+      ],
+      stripColor,
+      0.65,
+      deform
+    );
+    // Subtle shoulder highlight crease just inboard of flank edge
+    strokePoly(
+      ctx,
+      [
+        [xRear + 1.0, side * (halfW - 1.15)],
+        [xFront - 1.0, side * (halfW - 1.15)],
+      ],
+      'rgba(255,255,255,0.16)',
+      0.38,
+      deform
+    );
+    // Door shutline ticks visible along top shoulder
+    for (const dx of doorSplitsX) {
+      strokePoly(
+        ctx,
+        [
+          [dx, side * (halfW - 1.55)],
+          [dx, side * (halfW - 0.25)],
+        ],
+        'rgba(15,23,42,0.45)',
+        0.42,
+        deform
+      );
+    }
+    // Flush commercial door handles
+    for (const hx of handleXs) {
+      drawRoundedBox(
+        ctx,
+        hx - 0.75,
+        side * (halfW - 0.92) - 0.24,
+        hx + 0.75,
+        side * (halfW - 0.92) + 0.24,
+        0.16,
+        '#1e293b',
+        deform,
+        'rgba(255,255,255,0.18)',
+        0.22
+      );
+    }
+  }
+}
+
+function drawWiperPair(
+  ctx: CanvasRenderingContext2D,
+  cowlX: number,
+  spanY: number,
+  bladeLen: number,
+  deform: DeformFn,
+  pantograph = false
+): void {
+  for (const offset of [-spanY * 0.42, spanY * 0.22]) {
+    if (pantograph) {
+      strokePoly(
+        ctx,
+        [
+          [cowlX + 0.3, offset],
+          [cowlX - bladeLen * 0.55, offset + spanY * 0.22],
+          [cowlX - bladeLen * 0.48, offset + spanY * 0.28],
+        ],
+        '#090d16',
+        0.58,
+        deform
+      );
+    } else {
+      strokePoly(
+        ctx,
+        [
+          [cowlX + 0.35, offset],
+          [cowlX - bladeLen * 0.45, offset + spanY * 0.26],
+        ],
+        '#0f172a',
+        0.52,
+        deform
+      );
+    }
+  }
+}
+
+function drawModernVanFrontEnd(
+  ctx: CanvasRenderingContext2D,
+  halfL: number,
+  halfW: number,
+  fc: number,
+  bodyColor: string,
+  opt: LiveOpticsState,
+  deform: DeformFn,
+  options: {
+    cabHalfW?: number;
+    hoodEndX: number;
+    hoodExposed: boolean;
+    grilleChrome?: boolean;
+    badgeColor?: string;
+    hasFogs?: boolean;
+    headlightYFrac?: number;
+    fogYFrac?: number;
+  }
+): void {
+  const fX = halfL - fc;
+  const cw = options.cabHalfW ?? halfW;
+  const hY = (options.headlightYFrac ?? 0.355) * (halfW * 2);
+  const fY = (options.fogYFrac ?? 0.385) * (halfW * 2);
+
+  // Molded matte-black/anthracite front commercial bumper valence with step pocket
+  fillPoly(
+    ctx,
+    [
+      [fX + 0.15, -cw * 0.68],
+      [fX - 0.55, -cw * 0.90],
+      [fX - 1.9, -cw * 0.98],
+      [fX - 2.3, -cw * 0.86],
+      [fX - 1.3, -cw * 0.58],
+      [fX - 1.3, cw * 0.58],
+      [fX - 2.3, cw * 0.86],
+      [fX - 1.9, cw * 0.98],
+      [fX - 0.55, cw * 0.90],
+      [fX + 0.15, cw * 0.68],
+    ],
+    '#1e293b',
+    deform,
+    '#090d16',
+    0.55
+  );
+  // Central license plate / bumper step recess
+  drawRoundedBox(
+    ctx,
+    fX - 1.05,
+    -cw * 0.25,
+    fX - 0.05,
+    cw * 0.25,
+    0.25,
+    '#334155',
+    deform,
+    '#0f172a',
+    0.3
+  );
+  drawRoundedBox(
+    ctx,
+    fX - 0.65,
+    -cw * 0.17,
+    fX - 0.12,
+    cw * 0.17,
+    0.15,
+    '#f1f5f9',
+    deform
+  );
+
+  // Multi-slat radiator grille with emblem
+  drawRoundedBox(
+    ctx,
+    fX - 2.2,
+    -cw * 0.44,
+    fX - 0.95,
+    cw * 0.44,
+    0.45,
+    '#0f172a',
+    deform,
+    options.grilleChrome ? '#cbd5e1' : '#334155',
+    0.45
+  );
+  for (const sy of [-cw * 0.28, -cw * 0.14, 0, cw * 0.14, cw * 0.28]) {
+    strokePoly(
+      ctx,
+      [
+        [fX - 2.0, sy],
+        [fX - 1.15, sy],
+      ],
+      options.grilleChrome ? 'rgba(226,232,240,0.55)' : 'rgba(148,163,184,0.34)',
+      0.38,
+      deform
+    );
+  }
+  drawDeformedDot(
+    ctx,
+    fX - 1.55,
+    0,
+    0.72,
+    options.badgeColor || '#e2e8f0',
+    deform,
+    '#0f172a',
+    0.3
+  );
+
+  // Sculpted hood panel + power bulges + cowl intake grille (skipped if hood is open!)
+  if (!options.hoodExposed) {
+    const hStart = options.hoodEndX;
+    const hFront = fX - 2.15;
+    fillPoly(
+      ctx,
+      [
+        [hFront, -cw * 0.66],
+        [hStart, -cw * 0.78],
+        [hStart, cw * 0.78],
+        [hFront, cw * 0.66],
+      ],
+      createBodyMetallicGradient(ctx, cw, shadePaint(bodyColor, 0.04)),
+      deform,
+      'rgba(15,23,42,0.44)',
+      0.48
+    );
+    // Longitudinal sculpted hood character creases
+    for (const side of [-1, 1] as const) {
+      strokePoly(
+        ctx,
+        [
+          [hFront + 0.35, side * cw * 0.38],
+          [hStart + 0.5, side * cw * 0.50],
+        ],
+        'rgba(255,255,255,0.22)',
+        0.45,
+        deform
+      );
+      strokePoly(
+        ctx,
+        [
+          [hFront + 0.35, side * cw * 0.42],
+          [hStart + 0.5, side * cw * 0.54],
+        ],
+        'rgba(15,23,42,0.22)',
+        0.38,
+        deform
+      );
+    }
+    // Black plastic cowl vent screen + washer nozzles
+    drawRoundedBox(
+      ctx,
+      hStart - 0.25,
+      -cw * 0.68,
+      hStart + 1.25,
+      cw * 0.68,
+      0.35,
+      '#111827',
+      deform,
+      '#020617',
+      0.35
+    );
+    for (let vy = -cw * 0.54; vy <= cw * 0.54; vy += 1.4) {
+      strokePoly(
+        ctx,
+        [
+          [hStart + 0.05, vy],
+          [hStart + 0.95, vy],
+        ],
+        'rgba(148,163,184,0.25)',
+        0.32,
+        deform
+      );
+    }
+  }
+
+  // Integrated multi-layer headlights aligned directly with opticsMounts
+  for (const side of [-1, 1] as const) {
+    const broken = side < 0 ? opt.leftHeadBroken : opt.rightHeadBroken;
+    const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+    const cy = side * hY;
+    const ly1 = cy - 1.45;
+    const ly2 = cy + 1.45;
+    drawIntegratedHeadlight(
+      ctx,
+      fX - 2.65,
+      ly1,
+      fX - 0.55,
+      ly2,
+      side,
+      'modern_led',
+      opt.headlightsOn,
+      opt.highBeam,
+      opt.positionOn || opt.ignitionOn,
+      turnInt,
+      broken,
+      deform
+    );
+
+    // Corner bumper fog light pods
+    if (options.hasFogs !== false) {
+      const fy = side * fY;
+      drawRoundedBox(
+        ctx,
+        fX - 1.45,
+        fy - 0.65,
+        fX - 0.35,
+        fy + 0.65,
+        0.35,
+        '#090d16',
+        deform
+      );
+      drawDeformedDot(
+        ctx,
+        fX - 0.85,
+        fy,
+        0.46,
+        opt.frontFogOn && !broken ? '#fef08a' : '#64748b',
+        deform,
+        '#1e293b',
+        0.22
+      );
+    }
+  }
+}
+
+function drawCommercialRearEnd(
+  ctx: CanvasRenderingContext2D,
+  halfL: number,
+  halfW: number,
+  rc: number,
+  opt: LiveOpticsState,
+  deform: DeformFn,
+  options: {
+    rearHalfW?: number;
+    taillightYFrac?: number;
+    hasStepBumper?: boolean;
+    barnDoorSplit?: boolean;
+    hasChmsl?: boolean;
+    hasExhaust?: boolean;
+  }
+): void {
+  const rX = -halfL + rc;
+  const rw = options.rearHalfW ?? halfW;
+  const tY = (options.taillightYFrac ?? 0.405) * (halfW * 2);
+
+  // Integrated rear bumper / step deck
+  const bumpDepth = options.hasStepBumper ? 1.85 : 1.15;
+  drawRoundedBox(
+    ctx,
+    rX - 0.15,
+    -rw * 0.90,
+    rX + bumpDepth,
+    rw * 0.90,
+    0.45,
+    '#1e293b',
+    deform,
+    '#090d16',
+    0.5
+  );
+  if (options.hasStepBumper) {
+    drawTreadplateSurface(
+      ctx,
+      rX + 0.15,
+      -rw * 0.56,
+      rX + bumpDepth - 0.2,
+      rw * 0.56,
+      '#334155',
+      deform,
+      1.6
+    );
+  }
+  // Rear license plate pocket
+  drawRoundedBox(
+    ctx,
+    rX + 0.1,
+    -rw * 0.17,
+    rX + 0.72,
+    rw * 0.17,
+    0.15,
+    '#e2e8f0',
+    deform,
+    '#0f172a',
+    0.25
+  );
+
+  // Rear barn door center seam & stainless hinges
+  if (options.barnDoorSplit) {
+    strokePoly(ctx, [[rX + bumpDepth, 0], [rX + bumpDepth + 2.6, 0]], 'rgba(15,23,42,0.58)', 0.55, deform);
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(
+        ctx,
+        rX + bumpDepth - 0.25,
+        side * rw * 0.62 - 0.35,
+        rX + bumpDepth + 0.55,
+        side * rw * 0.62 + 0.35,
+        0.15,
+        '#475569',
+        deform
+      );
+    }
+  }
+
+  // Tailpipe tip on left rear underside
+  if (options.hasExhaust !== false) {
+    drawRoundedBox(
+      ctx,
+      rX - 0.55,
+      -rw * 0.58,
+      rX + 0.45,
+      -rw * 0.45,
+      0.2,
+      '#64748b',
       deform,
       '#0f172a',
       0.35
     );
-    return;
   }
 
-  // Flush sculpted housing
-  const housingPts: Pt[] = [
-    [x1, yInner],
-    [x2, yInner + side * 0.3],
-    [x2 - 0.5, yOuter],
-    [x1 - 0.6, yOuter],
-  ];
-  fillPoly(ctx, housingPts, broken ? '#111827' : '#1e293b', deform, '#0f172a', 0.45);
-
-  if (!broken) {
-    // Inner projector / reflector lens
-    const lensColor = highBeam
-      ? '#ffffff'
-      : headlightsOn
-        ? '#fef9c3'
-        : positionOn
-          ? '#e2e8f0'
-          : '#94a3b8';
-    const mainPts: Pt[] = [
-      [x1 + 0.25, yInner + side * 0.2],
-      [x2 - 0.2, yInner + side * 0.45],
-      [x2 - 0.55, yMid + side * 0.55],
-      [x1 + 0.1, yMid + side * 0.4],
-    ];
-    fillPoly(ctx, mainPts, lensColor, deform);
-
-    if (style === 'modern' || style === 'bus_quad') {
-      // Crisp DRL LED blade along outer rim
-      strokePoly(
-        ctx,
-        [
-          [x2 - 0.15, yInner + side * 0.25],
-          [x2 - 0.4, yOuter - side * 0.25],
-        ],
-        headlightsOn || positionOn ? '#f8fafc' : 'rgba(226,232,240,0.45)',
-        0.65,
-        deform
-      );
-    }
-
-    // Outer amber turn signal corner
-    const turnFill =
-      turnIntensity > 0.08
-        ? `rgba(255,186,36,${(0.55 + 0.45 * turnIntensity).toFixed(2)})`
-        : '#92400e';
-    const turnPts: Pt[] = [
-      [x1 - 0.35, yOuter - side * 0.2],
-      [x2 - 0.55, yOuter - side * 0.15],
-      [x2 - 0.45, yMid + side * 0.65],
-      [x1 - 0.1, yMid + side * 0.55],
-    ];
-    fillPoly(ctx, turnPts, turnFill, deform);
-  }
-}
-
-function drawIntegratedRearLampCluster(
-  ctx: CanvasRenderingContext2D,
-  xRear: number,
-  yInner: number,
-  yOuter: number,
-  side: -1 | 1,
-  broken: boolean,
-  optics: ReturnType<typeof getLiveOpticsState>,
-  turnIntensity: number,
-  deform: (x: number, y: number) => [number, number]
-): void {
-  const yMin = Math.min(yInner, yOuter);
-  const yMax = Math.max(yInner, yOuter);
-  const span = yMax - yMin;
-
-  // Recessed smoked bezel
-  drawRoundedBox(ctx, xRear, yMin, xRear + 1.85, yMax, 0.4, '#0f172a', deform, '#020617', 0.4);
-  if (broken) return;
-
-  // Tail / Brake / Rear Fog main ruby segment (outer 58%)
-  const redFill = optics.braking
-    ? '#ff2a2a'
-    : optics.rearFogOn
-      ? '#ff1e1e'
-      : optics.positionOn
-        ? '#dc2626'
-        : '#7f1d1d';
-  const redY1 = side < 0 ? yMin + 0.2 : yMin + span * 0.40;
-  const redY2 = side < 0 ? yMin + span * 0.60 : yMax - 0.2;
-  drawRoundedBox(ctx, xRear + 0.2, redY1, xRear + 1.55, redY2, 0.25, redFill, deform);
-  if (optics.braking || optics.rearFogOn) {
-    drawRoundedBox(
+  // Multi-chamber rear taillights aligned with opticsMounts
+  for (const side of [-1, 1] as const) {
+    const broken = side < 0 ? opt.leftTailBroken : opt.rightTailBroken;
+    const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+    const cy = side * tY;
+    drawIntegratedTaillight(
       ctx,
-      xRear + 0.45,
-      redY1 + 0.25,
-      xRear + 1.25,
-      redY2 - 0.25,
-      0.15,
-      '#fecaca',
+      rX + 0.25,
+      cy - 1.55,
+      rX + 1.85,
+      cy + 1.55,
+      side,
+      opt.positionOn,
+      opt.braking,
+      opt.reversing,
+      turnInt,
+      opt.rearFogOn,
+      broken,
       deform
     );
   }
 
-  // Reverse white lens (innermost 22%)
-  const revY1 = side < 0 ? yMax - span * 0.22 : yMin + 0.2;
-  const revY2 = side < 0 ? yMax - 0.2 : yMin + span * 0.22;
-  drawRoundedBox(
-    ctx,
-    xRear + 0.25,
-    revY1,
-    xRear + 1.45,
-    revY2,
-    0.15,
-    optics.reversing ? '#f8fafc' : '#64748b',
-    deform
-  );
-
-  // Amber turn lens (middle 18%)
-  const ambY1 = side < 0 ? yMin + span * 0.61 : yMin + span * 0.23;
-  const ambY2 = side < 0 ? yMax - span * 0.23 : yMin + span * 0.39;
-  drawRoundedBox(
-    ctx,
-    xRear + 0.25,
-    ambY1,
-    xRear + 1.45,
-    ambY2,
-    0.15,
-    turnIntensity > 0.08
-      ? `rgba(255,186,36,${(0.55 + 0.45 * turnIntensity).toFixed(2)})`
-      : '#78350f',
-    deform
-  );
+  // High-mount third brake light (CHMSL)
+  if (options.hasChmsl) {
+    drawRoundedBox(
+      ctx,
+      rX + 0.9,
+      -2.0,
+      rX + 1.75,
+      2.0,
+      0.28,
+      '#0f172a',
+      deform
+    );
+    drawRoundedBox(
+      ctx,
+      rX + 1.05,
+      -1.65,
+      rX + 1.58,
+      1.65,
+      0.18,
+      opt.braking ? '#ff3b3b' : '#7f1d1d',
+      deform
+    );
+  }
 }
 
 function drawEmergencyLightbar(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  halfBarW: number,
+  barX: number,
+  barHalfW: number,
   sirenOn: boolean,
   strobe: number,
-  colorMode: 'blue_blue' | 'red_blue',
-  deform: (x: number, y: number) => [number, number]
+  deform: DeformFn,
+  barLen = 2.6
 ): void {
-  // Aerodynamic aluminum mounting base
-  drawRoundedBox(ctx, x - 1.65, -halfBarW, x + 1.65, halfBarW, 0.75, '#0f172a', deform, '#334155', 0.45);
-  // Center white speaker / takedown pod
-  drawRoundedBox(ctx, x - 1.25, -halfBarW * 0.22, x + 1.25, halfBarW * 0.22, 0.35, '#e2e8f0', deform);
+  const hl = barLen * 0.5;
+  // Cast roof drop shadow under aerodynamic lightbar
+  drawBoxShadow(ctx, barX - hl, -barHalfW, barX + hl, barHalfW, 0.75, -0.8, 0.75, 0.34, deform);
 
-  const phaseA = sirenOn ? Math.sin(strobe * 2.2) > 0 : false;
-  const phaseB = sirenOn ? !phaseA : false;
-
-  const leftBase = colorMode === 'red_blue' ? '#dc2626' : '#2563eb';
-  const leftLit = colorMode === 'red_blue' ? '#ff5c5c' : '#60a5fa';
-  const rightBase = '#2563eb';
-  const rightLit = '#60a5fa';
-
-  // Left pod
-  drawRoundedBox(
-    ctx,
-    x - 1.25,
-    -halfBarW + 0.35,
-    x + 1.25,
-    -halfBarW * 0.26,
-    0.4,
-    phaseA ? leftLit : leftBase,
-    deform
-  );
-  if (phaseA) {
-    drawRoundedBox(ctx, x - 0.65, -halfBarW * 0.80, x + 0.65, -halfBarW * 0.42, 0.25, '#ffffff', deform);
+  // Outer clear polycarbonate shroud & aluminum mounting feet
+  for (const side of [-1, 1] as const) {
+    drawRoundedBox(
+      ctx,
+      barX - hl * 0.72,
+      side * (barHalfW - 0.8) - 0.5,
+      barX + hl * 0.72,
+      side * (barHalfW - 0.8) + 0.5,
+      0.2,
+      '#334155',
+      deform
+    );
   }
-
-  // Right pod
   drawRoundedBox(
     ctx,
-    x - 1.25,
-    halfBarW * 0.26,
-    x + 1.25,
-    halfBarW - 0.35,
-    0.4,
-    phaseB ? rightLit : rightBase,
+    barX - hl,
+    -barHalfW,
+    barX + hl,
+    barHalfW,
+    0.8,
+    '#0f172a',
+    deform,
+    '#475569',
+    0.45
+  );
+
+  // Left Red & Right Blue LED banks + central white/amber takedown speaker pod
+  const redPulse = sirenOn ? 0.5 + 0.5 * Math.sin(strobe) : 0;
+  const bluePulse = sirenOn ? 0.5 - 0.5 * Math.sin(strobe) : 0;
+
+  drawRoundedBox(
+    ctx,
+    barX - hl + 0.25,
+    -barHalfW + 0.35,
+    barX + hl - 0.25,
+    -barHalfW * 0.20,
+    0.45,
+    sirenOn ? (redPulse > 0.45 ? '#ff3333' : '#b91c1c') : '#991b1b',
     deform
   );
-  if (phaseB) {
-    drawRoundedBox(ctx, x - 0.65, halfBarW * 0.42, x + 0.65, halfBarW * 0.80, 0.25, '#ffffff', deform);
+  drawRoundedBox(
+    ctx,
+    barX - hl + 0.25,
+    barHalfW * 0.20,
+    barX + hl - 0.25,
+    barHalfW - 0.35,
+    0.45,
+    sirenOn ? (bluePulse > 0.45 ? '#38bdf8' : '#1d4ed8') : '#1e3a8a',
+    deform
+  );
+  // Central chrome/white LED alley-speaker pod
+  drawRoundedBox(
+    ctx,
+    barX - hl + 0.3,
+    -barHalfW * 0.20,
+    barX + hl - 0.3,
+    barHalfW * 0.20,
+    0.25,
+    '#cbd5e1',
+    deform,
+    '#334155',
+    0.25
+  );
+
+  if (sirenOn) {
+    if (redPulse > 0.45) {
+      drawDeformedDot(ctx, barX, -barHalfW * 0.58, 0.85, '#fecaca', deform);
+    }
+    if (bluePulse > 0.45) {
+      drawDeformedDot(ctx, barX, barHalfW * 0.58, 0.85, '#e0f2fe', deform);
+    }
   }
 }
 
+function drawRedCrossEmblem(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  deform: DeformFn,
+  armColor = '#dc2626',
+  bgCircle?: string
+): void {
+  if (bgCircle) {
+    drawDeformedDot(ctx, cx, cy, radius * 1.18, bgCircle, deform, 'rgba(15,23,42,0.22)', 0.35);
+  }
+  const t = radius * 0.34;
+  drawRoundedBox(ctx, cx - radius, cy - t, cx + radius, cy + t, 0.18, armColor, deform);
+  drawRoundedBox(ctx, cx - t, cy - radius, cx + t, cy + radius, 0.18, armColor, deform);
+}
+
 // ============================================================================
-// PASS 1: CHASSIS SHELL + INTEGRATED BUMPERS, GRILLES & FASCIA OPTICS
+// 2. CHASSIS LAYER (CONTOURED HULL, WHEEL ARCHES, BUMPERS, GRILLES, OPTICS)
 // ============================================================================
 
 export function renderVanBusChassisLayer(vCtx: VehicleRenderContext): void {
   const { ctx, car, halfL, halfW, fc, rc, deform } = vCtx;
   const type = car.type;
-  const optics = getLiveOpticsState(car);
+  const opt = getLiveOpticsState(car);
+  const hoodExposed = isVehicleHoodExposed(car);
+  const fX = halfL - fc;
+  const rX = -halfL + rc;
 
-  const frontX = halfL - fc;
-  const rearX = -halfL + rc;
-  const isAmbulance = type === 'ambulance' || type === 'ambulance_van';
-  const isCamper = type === 'van_camper';
-  const isBukhanka = type === 'van_cargo_old';
-  const isStepvan = type === 'delivery_truck';
-  const isBus = type === 'bus';
-  const isMinibus = type === 'bus_minibus';
+  const baseColor =
+    type === 'ambulance'
+      ? '#f8fafc'
+      : type === 'ambulance_van'
+      ? '#facc15'
+      : type === 'van_camper'
+      ? '#f1f5f9'
+      : car.color || '#cbd5e1';
 
-  const basePaint = isAmbulance
-    ? '#f8fafc'
-    : isCamper
-      ? (car.color || '#f5f0e1')
-      : (car.color || '#cbd5e1');
-  const bodyGrad = createBodyMetallicGradient(ctx, halfW, basePaint);
-  const cornerR = isBukhanka ? 2.8 : isBus ? 2.2 : isStepvan ? 1.5 : 2.1;
-
-  // 1. Main body shell contour
-  if (isCamper) {
-    // Wider rear living coachbox + tapered aerodynamic front van cab
-    const cabW = halfW * 0.89;
-    const boxW = halfW * 1.02;
-    const stepX = halfL * 0.30;
-    const camperPoly: Pt[] = [
-      [frontX, 0],
-      [frontX - 0.4, cabW * 0.78],
-      [frontX - 1.8, cabW],
-      [stepX + 1.2, cabW],
-      [stepX - 1.0, boxW],
-      [rearX + 1.6, boxW],
-      [rearX + 0.4, boxW * 0.90],
-      [rearX, boxW * 0.72],
-      [rearX, -boxW * 0.72],
-      [rearX + 0.4, -boxW * 0.90],
-      [rearX + 1.6, -boxW],
-      [stepX - 1.0, -boxW],
-      [stepX + 1.2, -cabW],
-      [frontX - 1.8, -cabW],
-      [frontX - 0.4, -cabW * 0.78],
-    ];
-    fillPoly(ctx, camperPoly, bodyGrad, deform, shadePaint(basePaint, -0.45), 0.95);
-  } else {
-    drawRoundedBox(ctx, rearX, -halfW, frontX, halfW, cornerR, bodyGrad, deform, shadePaint(basePaint, -0.46), 0.95);
-  }
-
-  // Subtle body shoulder specular crease lines along both flanks
-  const flankY = (isCamper ? halfW * 0.92 : halfW) - 1.1;
-  strokePoly(ctx, [[rearX + 2.5, -flankY], [frontX - 3.2, -flankY]], 'rgba(255,255,255,0.22)', 0.6, deform);
-  strokePoly(ctx, [[rearX + 2.5, flankY], [frontX - 3.2, flankY]], 'rgba(0,0,0,0.24)', 0.65, deform);
-
-  // 2. Integrated Front Bumper & Cooling Grille Fascia
-  const bumperW = isCamper ? halfW * 0.88 : halfW - 0.35;
-  const bumperColor = isBukhanka
-    ? '#1e293b'
-    : isStepvan
-      ? '#334155'
-      : isBus
-        ? shadePaint(basePaint, -0.22)
-        : '#1e293b';
-
-  // Sculpted front bumper shelf
-  drawRoundedBox(
+  // Contoured clearcoat body shell
+  const hullPts = drawHullContouredShape(type, halfL, halfW, fc, rc);
+  fillPoly(
     ctx,
-    frontX - 1.55,
-    -bumperW,
-    frontX + 0.25,
-    bumperW,
-    isBukhanka ? 0.8 : 1.0,
-    bumperColor,
+    hullPts,
+    createBodyMetallicGradient(ctx, halfW, baseColor),
     deform,
-    '#0f172a',
-    0.5
+    'rgba(10,14,22,0.82)',
+    1.1
   );
-  // Subtle chrome/matte lip highlight along bumper
+
+  // Subtle top bevel sheen inside outer hull
   strokePoly(
     ctx,
-    [[frontX - 0.25, -bumperW + 1.4], [frontX - 0.25, bumperW - 1.4]],
-    isBukhanka ? 'rgba(203,213,225,0.35)' : 'rgba(255,255,255,0.20)',
-    0.55,
-    deform
+    hullPts.map(([px, py]) => [px * 0.985, py * 0.96]),
+    'rgba(255,255,255,0.14)',
+    0.45,
+    deform,
+    true
   );
 
-  // Recessed front intake grille slats
-  const grilleHalfW = bumperW * (isBus ? 0.52 : isBukhanka ? 0.44 : 0.48);
-  drawRoundedBox(
-    ctx,
-    frontX - 2.35,
-    -grilleHalfW,
-    frontX - 0.9,
-    grilleHalfW,
-    0.4,
-    '#0b1120',
-    deform,
-    '#334155',
-    0.4
-  );
-  // Horizontal grille bar accent
-  strokePoly(
-    ctx,
-    [[frontX - 1.65, -grilleHalfW + 0.6], [frontX - 1.65, grilleHalfW - 0.6]],
-    isStepvan || isBukhanka ? '#94a3b8' : '#cbd5e1',
-    0.55,
-    deform
-  );
+  // --------------------------------------------------------------------------
+  // A. VAN (Bison Transporter Van — Modern Commercial Cargo Van)
+  // --------------------------------------------------------------------------
+  if (type === 'van') {
+    drawWheelArchFlares(ctx, halfL * 0.56, -halfL * 0.54, halfW, 7.8, 0.95, '#1e293b', deform);
+    drawSideRubStripsAndHandles(
+      ctx,
+      halfL * 0.66,
+      -halfL * 0.80,
+      halfW,
+      [halfL * 0.24, -halfL * 0.26],
+      [halfL * 0.34, halfL * 0.14],
+      deform
+    );
+    // Sliding side door recessed track rail on right flank
+    strokePoly(
+      ctx,
+      [
+        [-halfL * 0.58, halfW - 0.52],
+        [halfL * 0.20, halfW - 0.52],
+      ],
+      '#090d16',
+      0.62,
+      deform
+    );
+    // Fuel filler door on left B-pillar flank
+    drawRoundedBox(ctx, halfL * 0.16, -halfW + 0.35, halfL * 0.23, -halfW + 1.05, 0.18, shadePaint(baseColor, -0.14), deform, 'rgba(15,23,42,0.5)', 0.28);
 
-  // 3. Integrated Rear Bumper & Step Plate
-  const rearBumperW = isCamper ? halfW * 0.98 : halfW - 0.35;
-  drawRoundedBox(
-    ctx,
-    rearX - 0.2,
-    -rearBumperW,
-    rearX + 1.45,
-    rearBumperW,
-    0.8,
-    isBus ? shadePaint(basePaint, -0.22) : '#1e293b',
-    deform,
-    '#0f172a',
-    0.5
-  );
-  // Rear non-slip boarding step tread on vans/ambulances/stepvan
-  if (!isBus && !isCamper) {
-    drawRoundedBox(ctx, rearX - 0.3, -rearBumperW * 0.42, rearX + 0.8, rearBumperW * 0.42, 0.3, '#475569', deform);
+    drawModernVanFrontEnd(ctx, halfL, halfW, fc, baseColor, opt, deform, {
+      hoodEndX: halfL * 0.64,
+      hoodExposed,
+      grilleChrome: false,
+      badgeColor: '#cbd5e1',
+      hasFogs: true,
+      headlightYFrac: 0.35,
+      fogYFrac: 0.38,
+    });
+    drawCommercialRearEnd(ctx, halfL, halfW, rc, opt, deform, {
+      taillightYFrac: 0.40,
+      hasStepBumper: true,
+      barnDoorSplit: true,
+      hasChmsl: true,
+    });
+    return;
   }
 
-  // 4. Integrated Front Headlights, Fog Lamps & Turn Signals
-  const lampStyle = isBukhanka
-    ? 'retro_round'
-    : isBus
-      ? 'bus_quad'
-      : isStepvan
-        ? 'stepvan'
-        : 'modern';
-  const lampInnerY = grilleHalfW + 0.65;
-  const lampOuterY = bumperW - 0.65;
+  // --------------------------------------------------------------------------
+  // B. VAN CAMPER (Bison Nomad Camper — C-Class Coachbuilt RV)
+  // --------------------------------------------------------------------------
+  if (type === 'van_camper') {
+    const cabW = halfW * 0.88;
+    const boxW = halfW * 1.03;
 
-  drawIntegratedVanHeadlight(
-    ctx,
-    frontX - 2.8,
-    frontX - 0.65,
-    -lampInnerY,
-    -lampOuterY,
-    -1,
-    optics.leftHeadBroken,
-    optics.headlightsOn,
-    optics.highBeam,
-    optics.positionOn,
-    optics.leftTurn,
-    lampStyle,
-    deform
-  );
-  drawIntegratedVanHeadlight(
-    ctx,
-    frontX - 2.8,
-    frontX - 0.65,
-    lampInnerY,
-    lampOuterY,
-    1,
-    optics.rightHeadBroken,
-    optics.headlightsOn,
-    optics.highBeam,
-    optics.positionOn,
-    optics.rightTurn,
-    lampStyle,
-    deform
-  );
+    // Two-tone warm adventure livery stripes along lower flanks of living box
+    for (const side of [-1, 1] as const) {
+      strokePoly(
+        ctx,
+        [
+          [-halfL * 0.88, side * (boxW - 0.48)],
+          [halfL * 0.24, side * (boxW - 0.48)],
+        ],
+        '#0f766e',
+        0.9,
+        deform
+      );
+      strokePoly(
+        ctx,
+        [
+          [-halfL * 0.84, side * (boxW - 1.15)],
+          [halfL * 0.20, side * (boxW - 1.15)],
+        ],
+        '#d97706',
+        0.48,
+        deform
+      );
+    }
 
-  // Front fog lamps recessed in lower bumper corners
-  const fogY = bumperW * 0.62;
-  const fogFill = optics.frontFogOn ? '#fef08a' : '#334155';
-  drawDeformedDot(ctx, frontX - 0.9, -fogY, 0.72, optics.leftHeadBroken ? '#0f172a' : fogFill, deform, '#0f172a', 0.35);
-  drawDeformedDot(ctx, frontX - 0.9, fogY, 0.72, optics.rightHeadBroken ? '#0f172a' : fogFill, deform, '#0f172a', 0.35);
+    drawWheelArchFlares(ctx, halfL * 0.58, -halfL * 0.44, boxW, 7.6, 0.9, '#334155', deform);
+    // Exterior utility hatches on left flank (water fill / shore power)
+    drawRoundedBox(ctx, -halfL * 0.18, -boxW + 0.35, -halfL * 0.04, -boxW + 1.0, 0.18, '#cbd5e1', deform, '#475569', 0.28);
+    drawRoundedBox(ctx, -halfL * 0.66, -boxW + 0.35, -halfL * 0.56, -boxW + 0.95, 0.18, '#e2e8f0', deform, '#475569', 0.28);
 
-  // 5. Integrated Rear Taillights, Brake, Reverse, Rear Fog & Turn Signals
-  const tailInnerY = rearBumperW * 0.56;
-  const tailOuterY = rearBumperW - 0.55;
-  drawIntegratedRearLampCluster(
-    ctx,
-    rearX + 0.3,
-    -tailInnerY,
-    -tailOuterY,
-    -1,
-    optics.leftTailBroken,
-    optics,
-    optics.leftTurn,
-    deform
-  );
-  drawIntegratedRearLampCluster(
-    ctx,
-    rearX + 0.3,
-    tailInnerY,
-    tailOuterY,
-    1,
-    optics.rightTailBroken,
-    optics,
-    optics.rightTurn,
-    deform
-  );
+    drawModernVanFrontEnd(ctx, halfL, halfW, fc, car.color || '#f8fafc', opt, deform, {
+      cabHalfW: cabW,
+      hoodEndX: halfL * 0.66,
+      hoodExposed,
+      grilleChrome: true,
+      badgeColor: '#f59e0b',
+      hasFogs: true,
+      headlightYFrac: 0.32,
+      fogYFrac: 0.35,
+    });
+    drawCommercialRearEnd(ctx, halfL, halfW, rc, opt, deform, {
+      rearHalfW: boxW,
+      taillightYFrac: 0.41,
+      hasStepBumper: true,
+      barnDoorSplit: false,
+      hasChmsl: true,
+    });
+    return;
+  }
 
-  // 6. Side amber marker LEDs along bus / stepvan / minibus flanks
-  if (isBus || isMinibus || isStepvan) {
-    const markerXs = isBus ? [-halfL * 0.65, -halfL * 0.15, halfL * 0.35] : [-halfL * 0.45, halfL * 0.15];
-    const mCol = optics.positionOn ? '#fbbf24' : '#92400e';
-    for (const mx of markerXs) {
-      drawRoundedBox(ctx, mx - 0.7, -halfW + 0.15, mx + 0.7, -halfW + 0.65, 0.15, mCol, deform);
-      drawRoundedBox(ctx, mx - 0.7, halfW - 0.65, mx + 0.7, halfW - 0.15, 0.15, mCol, deform);
+  // --------------------------------------------------------------------------
+  // C. VAN CARGO OLD (Bison Pathfinder Van — UAZ-452 "Bukhanka")
+  // --------------------------------------------------------------------------
+  if (type === 'van_cargo_old') {
+    // Classic Bukhanka stamped beltline swage & wheel arch flares
+    drawWheelArchFlares(ctx, halfL * 0.58, -halfL * 0.56, halfW, 7.2, 0.85, shadePaint(baseColor, -0.22), deform);
+    drawSideRubStripsAndHandles(
+      ctx,
+      halfL * 0.78,
+      -halfL * 0.78,
+      halfW,
+      [halfL * 0.26, -halfL * 0.12],
+      [halfL * 0.36, -halfL * 0.02],
+      deform,
+      shadePaint(baseColor, -0.28)
+    );
+
+    // Classic stamped steel front channel bumper with dual tow shackles
+    drawRoundedBox(
+      ctx,
+      fX - 0.95,
+      -halfW * 0.82,
+      fX + 0.45,
+      halfW * 0.82,
+      0.45,
+      '#1e293b',
+      deform,
+      '#090d16',
+      0.55
+    );
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(
+        ctx,
+        fX - 0.1,
+        side * halfW * 0.44 - 0.38,
+        fX + 0.68,
+        side * halfW * 0.44 + 0.38,
+        0.16,
+        '#475569',
+        deform,
+        '#090d16',
+        0.3
+      );
+    }
+
+    // Iconic Bukhanka narrow radiator mouth & round headlights + outboard orange blinkers
+    drawRoundedBox(ctx, fX - 1.55, -halfW * 0.22, fX - 0.8, halfW * 0.22, 0.35, '#0f172a', deform, '#475569', 0.35);
+    for (const side of [-1, 1] as const) {
+      const broken = side < 0 ? opt.leftHeadBroken : opt.rightHeadBroken;
+      const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+      const hy = side * (halfW * 2) * 0.32;
+      drawIntegratedHeadlight(
+        ctx,
+        fX - 2.05,
+        hy - 1.15,
+        fX - 0.45,
+        hy + 1.15,
+        side,
+        'round_classic',
+        opt.headlightsOn,
+        opt.highBeam,
+        opt.positionOn,
+        turnInt,
+        broken,
+        deform
+      );
+      // Small outboard amber turn pod
+      drawDeformedDot(
+        ctx,
+        fX - 1.25,
+        side * halfW * 0.82,
+        0.52,
+        turnInt > 0.08 ? `rgba(251,191,36,${(0.55 + 0.45 * turnInt).toFixed(2)})` : '#b45309',
+        deform,
+        '#0f172a',
+        0.28
+      );
+    }
+
+    // Rear stamped steel bumperette corners + vintage twin oval lamps + barn doors
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(
+        ctx,
+        rX - 0.45,
+        side * halfW * 0.48 - 1.65,
+        rX + 0.55,
+        side * halfW * 0.48 + 1.65,
+        0.3,
+        '#1e293b',
+        deform,
+        '#090d16',
+        0.45
+      );
+      const broken = side < 0 ? opt.leftTailBroken : opt.rightTailBroken;
+      const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+      const ty = side * (halfW * 2) * 0.38;
+      drawIntegratedTaillight(
+        ctx,
+        rX + 0.35,
+        ty - 1.15,
+        rX + 1.65,
+        ty + 1.15,
+        side,
+        opt.positionOn,
+        opt.braking,
+        opt.reversing,
+        turnInt,
+        opt.rearFogOn,
+        broken,
+        deform
+      );
+    }
+    // Rear hitch pintle & barn door center seam
+    drawDeformedDot(ctx, rX - 0.3, 0, 0.55, '#334155', deform, '#090d16', 0.32);
+    strokePoly(ctx, [[rX + 0.4, 0], [rX + 2.4, 0]], 'rgba(15,23,42,0.55)', 0.5, deform);
+    return;
+  }
+
+  // --------------------------------------------------------------------------
+  // D. DELIVERY TRUCK (Bison Express Stepvan — Grumman / Freightliner MT45)
+  // --------------------------------------------------------------------------
+  if (type === 'delivery_truck') {
+    const noseW = halfW * 0.88;
+    drawWheelArchFlares(ctx, halfL * 0.54, -halfL * 0.50, halfW, 8.2, 0.9, '#1e293b', deform);
+    // Express courier horizontal livery stripe along flanks
+    for (const side of [-1, 1] as const) {
+      strokePoly(
+        ctx,
+        [
+          [-halfL * 0.88, side * (halfW - 0.52)],
+          [halfL * 0.54, side * (halfW - 0.52)],
+        ],
+        '#f59e0b',
+        0.78,
+        deform
+      );
+      // Pocket sliding cab door tracks
+      strokePoly(
+        ctx,
+        [
+          [halfL * 0.24, side * (halfW - 0.38)],
+          [halfL * 0.54, side * (halfW - 0.38)],
+        ],
+        '#090d16',
+        0.6,
+        deform
+      );
+    }
+
+    // Heavy flat galvanized steel front bumper with rubber overrides
+    drawRoundedBox(
+      ctx,
+      fX - 0.95,
+      -noseW * 0.96,
+      fX + 0.45,
+      noseW * 0.96,
+      0.35,
+      '#334155',
+      deform,
+      '#090d16',
+      0.55
+    );
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(ctx, fX - 0.15, side * noseW * 0.56 - 0.45, fX + 0.6, side * noseW * 0.56 + 0.45, 0.18, '#0f172a', deform);
+    }
+
+    // Recessed rectangular mesh radiator grille & flat aluminum stepvan hood
+    drawRoundedBox(ctx, fX - 2.2, -noseW * 0.42, fX - 0.85, noseW * 0.42, 0.3, '#0f172a', deform, '#64748b', 0.45);
+    if (!hoodExposed) {
+      drawRoundedBox(
+        ctx,
+        halfL * 0.68,
+        -noseW * 0.82,
+        fX - 2.1,
+        noseW * 0.82,
+        0.5,
+        createBodyMetallicGradient(ctx, noseW, shadePaint(baseColor, 0.04)),
+        deform,
+        'rgba(15,23,42,0.45)',
+        0.48
+      );
+      // Side hood latches
+      for (const side of [-1, 1] as const) {
+        drawRoundedBox(ctx, halfL * 0.78, side * noseW * 0.76 - 0.3, halfL * 0.83, side * noseW * 0.76 + 0.3, 0.12, '#1e293b', deform);
+      }
+    }
+
+    // Stepvan recessed front headlamps
+    for (const side of [-1, 1] as const) {
+      const broken = side < 0 ? opt.leftHeadBroken : opt.rightHeadBroken;
+      const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+      const hy = side * (halfW * 2) * 0.33;
+      drawIntegratedHeadlight(
+        ctx,
+        fX - 2.35,
+        hy - 1.35,
+        fX - 0.55,
+        hy + 1.35,
+        side,
+        'rect_commercial',
+        opt.headlightsOn,
+        opt.highBeam,
+        opt.positionOn,
+        turnInt,
+        broken,
+        deform
+      );
+    }
+
+    // Heavy rear dock step bumper + black rubber dock impact blocks + rear optics
+    drawCommercialRearEnd(ctx, halfL, halfW, rc, opt, deform, {
+      taillightYFrac: 0.40,
+      hasStepBumper: true,
+      barnDoorSplit: false,
+      hasChmsl: true,
+    });
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(ctx, rX - 0.45, side * halfW * 0.68 - 0.7, rX + 0.4, side * halfW * 0.68 + 0.7, 0.18, '#090d16', deform);
+    }
+    return;
+  }
+
+  // --------------------------------------------------------------------------
+  // E. AMBULANCE & AMBULANCE_VAN (Sentinel Medic & Critical Care ICU)
+  // --------------------------------------------------------------------------
+  if (type === 'ambulance' || type === 'ambulance_van') {
+    const isIcu = type === 'ambulance_van';
+    const stripeColor = '#dc2626';
+    const accentColor = isIcu ? '#0284c7' : '#f59e0b';
+
+    // High-visibility emergency flank livery bands
+    for (const side of [-1, 1] as const) {
+      strokePoly(
+        ctx,
+        [
+          [-halfL * 0.88, side * (halfW - 0.48)],
+          [halfL * 0.64, side * (halfW - 0.48)],
+        ],
+        stripeColor,
+        1.1,
+        deform
+      );
+      strokePoly(
+        ctx,
+        [
+          [-halfL * 0.84, side * (halfW - 1.25)],
+          [halfL * 0.48, side * (halfW - 1.25)],
+        ],
+        accentColor,
+        0.55,
+        deform
+      );
+    }
+
+    drawWheelArchFlares(ctx, halfL * 0.56, -halfL * 0.48, halfW, 7.8, 0.9, '#1e293b', deform);
+    drawSideRubStripsAndHandles(
+      ctx,
+      halfL * 0.64,
+      -halfL * 0.78,
+      halfW,
+      [halfL * 0.25, -halfL * 0.18],
+      [halfL * 0.34, halfL * 0.16],
+      deform,
+      'rgba(15,23,42,0.38)'
+    );
+
+    drawModernVanFrontEnd(ctx, halfL, halfW, fc, baseColor, opt, deform, {
+      hoodEndX: halfL * 0.64,
+      hoodExposed,
+      grilleChrome: true,
+      badgeColor: '#dc2626',
+      hasFogs: true,
+      headlightYFrac: isIcu ? 0.35 : 0.36,
+      fogYFrac: isIcu ? 0.38 : 0.39,
+    });
+
+    // Grille wig-wag red/blue LED flashers
+    for (const side of [-1, 1] as const) {
+      const flashOn = opt.sirenOn && (side < 0 ? Math.sin(opt.sirenStrobe) > 0 : Math.sin(opt.sirenStrobe) <= 0);
+      drawRoundedBox(
+        ctx,
+        fX - 1.75,
+        side * halfW * 0.24 - 0.55,
+        fX - 1.1,
+        side * halfW * 0.24 + 0.55,
+        0.18,
+        flashOn ? (side < 0 ? '#ff3b3b' : '#38bdf8') : side < 0 ? '#7f1d1d' : '#1e3a8a',
+        deform
+      );
+    }
+
+    // Hood medical red cross emblem (when hood closed)
+    if (!hoodExposed) {
+      drawRedCrossEmblem(ctx, halfL * 0.77, 0, 1.85, deform, '#dc2626');
+    }
+
+    drawCommercialRearEnd(ctx, halfL, halfW, rc, opt, deform, {
+      taillightYFrac: 0.41,
+      hasStepBumper: true,
+      barnDoorSplit: true,
+      hasChmsl: true,
+    });
+    return;
+  }
+
+  // --------------------------------------------------------------------------
+  // F. BUS MINIBUS (Metro Shuttle 18-Seater)
+  // --------------------------------------------------------------------------
+  if (type === 'bus_minibus') {
+    drawWheelArchFlares(ctx, halfL * 0.58, -halfL * 0.50, halfW, 8.2, 0.9, '#1e293b', deform);
+    // Transit stripe along shuttle flanks
+    for (const side of [-1, 1] as const) {
+      strokePoly(
+        ctx,
+        [
+          [-halfL * 0.88, side * (halfW - 0.5)],
+          [halfL * 0.66, side * (halfW - 0.5)],
+        ],
+        '#0284c7',
+        0.85,
+        deform
+      );
+    }
+    drawSideRubStripsAndHandles(
+      ctx,
+      halfL * 0.64,
+      -halfL * 0.82,
+      halfW,
+      [halfL * 0.36, halfL * 0.08],
+      [halfL * 0.42],
+      deform
+    );
+
+    drawModernVanFrontEnd(ctx, halfL, halfW, fc, baseColor, opt, deform, {
+      hoodEndX: halfL * 0.68,
+      hoodExposed,
+      grilleChrome: true,
+      badgeColor: '#38bdf8',
+      hasFogs: true,
+      headlightYFrac: 0.36,
+      fogYFrac: 0.39,
+    });
+    drawCommercialRearEnd(ctx, halfL, halfW, rc, opt, deform, {
+      taillightYFrac: 0.41,
+      hasStepBumper: true,
+      barnDoorSplit: true,
+      hasChmsl: true,
+    });
+    return;
+  }
+
+  // --------------------------------------------------------------------------
+  // G. BUS (Metro Linemaster 12m Low-Floor CityBus)
+  // --------------------------------------------------------------------------
+  if (type === 'bus') {
+    drawWheelArchFlares(ctx, halfL * 0.54, -halfL * 0.48, halfW, 9.6, 0.95, '#1e293b', deform);
+    // Metro transit body beltline stripe
+    for (const side of [-1, 1] as const) {
+      strokePoly(
+        ctx,
+        [
+          [-halfL * 0.90, side * (halfW - 0.55)],
+          [halfL * 0.86, side * (halfW - 0.55)],
+        ],
+        '#0284c7',
+        0.95,
+        deform
+      );
+    }
+
+    // 3 double-leaf boarding doors on right side (+Y)
+    for (const dx of [halfL * 0.74, halfL * 0.06, -halfL * 0.64]) {
+      drawRoundedBox(
+        ctx,
+        dx - 3.0,
+        halfW - 1.15,
+        dx + 3.0,
+        halfW - 0.15,
+        0.25,
+        '#0f172a',
+        deform,
+        'rgba(148,163,184,0.38)',
+        0.3
+      );
+      strokePoly(ctx, [[dx, halfW - 1.15], [dx, halfW - 0.15]], 'rgba(203,213,225,0.45)', 0.38, deform);
+    }
+
+    // Sleek full-width low-floor front bumper & projector headlights
+    fillPoly(
+      ctx,
+      [
+        [fX + 0.1, -halfW * 0.78],
+        [fX - 0.7, -halfW * 0.95],
+        [fX - 2.0, -halfW * 0.98],
+        [fX - 2.0, halfW * 0.98],
+        [fX - 0.7, halfW * 0.95],
+        [fX + 0.1, halfW * 0.78],
+      ],
+      '#1e293b',
+      deform,
+      '#090d16',
+      0.55
+    );
+    // Front black mask & central chrome transit badge
+    drawRoundedBox(ctx, fX - 1.85, -halfW * 0.48, fX - 0.55, halfW * 0.48, 0.35, '#090d16', deform, '#475569', 0.35);
+    drawRoundedBox(ctx, fX - 0.72, -halfW * 0.14, fX - 0.1, halfW * 0.14, 0.15, '#f8fafc', deform);
+    drawDeformedDot(ctx, fX - 1.2, 0, 0.85, '#e2e8f0', deform, '#334155', 0.25);
+
+    for (const side of [-1, 1] as const) {
+      const broken = side < 0 ? opt.leftHeadBroken : opt.rightHeadBroken;
+      const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+      const hy = side * (halfW * 2) * 0.39;
+      drawIntegratedHeadlight(
+        ctx,
+        fX - 2.35,
+        hy - 1.45,
+        fX - 0.45,
+        hy + 1.45,
+        side,
+        'projector_dual',
+        opt.headlightsOn,
+        opt.highBeam,
+        opt.positionOn || opt.ignitionOn,
+        turnInt,
+        broken,
+        deform
+      );
+      const fy = side * (halfW * 2) * 0.41;
+      drawDeformedDot(
+        ctx,
+        fX - 0.85,
+        fy,
+        0.5,
+        opt.frontFogOn && !broken ? '#fef08a' : '#475569',
+        deform,
+        '#090d16',
+        0.24
+      );
+    }
+
+    // Rear engine service louver deck + full rear LED light columns
+    drawCommercialRearEnd(ctx, halfL, halfW, rc, opt, deform, {
+      taillightYFrac: 0.42,
+      hasStepBumper: false,
+      barnDoorSplit: false,
+      hasChmsl: true,
+    });
+    // Rear cooling intake louvers (left engine side)
+    drawRoundedBox(ctx, rX + 2.2, -halfW + 0.4, rX + 10.2, -halfW + 1.35, 0.25, '#0f172a', deform);
+    for (let lx = rX + 3.0; lx <= rX + 9.4; lx += 1.25) {
+      strokePoly(ctx, [[lx, -halfW + 0.5], [lx, -halfW + 1.25]], '#475569', 0.35, deform);
     }
   }
 }
 
 // ============================================================================
-// PASS 2: UPPER GREENHOUSE, ROOF ARCHITECTURE, LIVERIES & EQUIPMENT
+// 3. UPPER LAYER (GREENHOUSE, INTERIOR HINTS, ROOF HARDWARE, MIRRORS, LIVERY)
 // ============================================================================
 
 export function renderVanBusUpperLayer(vCtx: VehicleRenderContext): void {
   const { ctx, car, halfL, halfW, fc, rc, deform } = vCtx;
   const type = car.type;
-  const optics = getLiveOpticsState(car);
-  const frontX = halfL - fc;
-  const rearX = -halfL + rc;
-  const hoodExposed = isVehicleHoodExposed(car);
+  const opt = getLiveOpticsState(car);
+  const fX = halfL - fc;
+  const rX = -halfL + rc;
 
-  const drawChmsl = (x: number, halfSpan = 2.0) => {
-    drawRoundedBox(
-      ctx,
-      x - 0.45,
-      -halfSpan,
-      x + 0.45,
-      halfSpan,
-      0.2,
-      optics.braking ? '#ff2a2a' : '#7f1d1d',
-      deform,
-      '#0f172a',
-      0.35
-    );
-    if (optics.braking) {
-      strokePoly(ctx, [[x, -halfSpan + 0.4], [x, halfSpan - 0.4]], '#fecaca', 0.55, deform);
-    }
-  };
+  const baseColor =
+    type === 'ambulance'
+      ? '#f8fafc'
+      : type === 'ambulance_van'
+      ? '#facc15'
+      : type === 'van_camper'
+      ? '#f8fafc'
+      : car.color || '#cbd5e1';
 
-  // ==========================================================================
-  // 1. CITY BUS (Metro Linemaster CityBus — 85x26)
-  // ==========================================================================
-  if (type === 'bus') {
-    const bodyPaint = car.color || '#eab308';
-    const roofPaint = car.roofColor || shadePaint(bodyPaint, 0.12);
-    const glassW = halfW - 0.9;
-    const roofW = halfW - 2.3;
+  // --------------------------------------------------------------------------
+  // A. VAN (Bison Transporter Van)
+  // --------------------------------------------------------------------------
+  if (type === 'van') {
+    const wsFront = halfL * 0.64;
+    const wsRear = halfL * 0.36;
+    const roofRear = rX + 1.9;
+    const gW = halfW * 0.87;
 
-    // Continuous dark tinted panoramic glass ribbon framing the perimeter
-    drawRoundedBox(ctx, rearX + 1.8, -glassW, frontX - 1.6, glassW, 1.5, '#0b1120', deform);
-
-    // Panoramic curved front windshield
-    const fWsX1 = frontX - 7.8;
-    const fWsX2 = frontX - 1.8;
-    drawRoundedBox(
-      ctx,
-      fWsX1,
-      -glassW + 0.5,
-      fWsX2,
-      glassW - 0.5,
-      1.0,
-      createGlassGradient(ctx, fWsX1, -glassW, fWsX2, glassW, 'blue'),
-      deform
-    );
-    // Specular sky reflection across bus windshield
-    strokePoly(ctx, [[fWsX1 + 1.2, -glassW + 2.2], [fWsX2 - 1.2, glassW - 2.4]], 'rgba(255,255,255,0.28)', 1.3, deform);
-    // Dual pantograph bus wipers
-    strokePoly(ctx, [[fWsX2 - 0.8, -glassW * 0.42], [fWsX1 + 1.4, -glassW * 0.14]], '#0f172a', 0.85, deform);
-    strokePoly(ctx, [[fWsX2 - 0.8, glassW * 0.42], [fWsX1 + 1.4, glassW * 0.14]], '#0f172a', 0.85, deform);
-
-    // Glowing amber LED destination matrix above windshield
-    const ledX = fWsX1 - 0.9;
-    drawRoundedBox(ctx, ledX - 1.0, -4.6, ledX + 0.9, 4.6, 0.35, '#090d16', deform, '#334155', 0.4);
-    const ledLit = optics.ignitionOn || optics.positionOn;
-    const ledCol = ledLit ? '#fbbf24' : '#78350f';
-    for (let dy = -3.4; dy <= 3.4; dy += 1.35) {
-      drawRoundedBox(ctx, ledX - 0.45, dy - 0.35, ledX + 0.45, dy + 0.35, 0.1, ledCol, deform);
-    }
-
-    // Side passenger windows along both flanks with crisp pillar dividers
-    const sideGlassX1 = rearX + 7.0;
-    const sideGlassX2 = fWsX1 - 1.0;
-    const sideWinH = glassW - roofW - 0.35;
-    drawRoundedBox(ctx, sideGlassX1, -glassW + 0.25, sideGlassX2, -roofW - 0.1, 0.4, '#1b3554', deform);
-    drawRoundedBox(ctx, sideGlassX1, roofW + 0.1, sideGlassX2, glassW - 0.25, 0.4, '#1b3554', deform);
-
-    // Window pillars & right-side double boarding door seams
-    const pillarStep = (sideGlassX2 - sideGlassX1) / 6;
-    for (let i = 1; i < 6; i++) {
-      const px = sideGlassX1 + pillarStep * i;
-      strokePoly(ctx, [[px, -glassW], [px, -roofW]], '#0f172a', 1.1, deform);
-      strokePoly(ctx, [[px, roofW], [px, glassW]], '#0f172a', 1.1, deform);
-    }
-    // Boarding door rubber doorframes on right side (+Y)
-    for (const doorX of [frontX - 12.5, -halfL * 0.04, -halfL * 0.56]) {
-      strokePoly(ctx, [[doorX - 3.0, halfW - 0.2], [doorX + 3.0, halfW - 0.2]], '#0f172a', 1.2, deform);
-      strokePoly(ctx, [[doorX, roofW], [doorX, halfW]], 'rgba(255,255,255,0.35)', 0.65, deform);
-    }
-
-    // Full-length metallic bus roof panel
-    const roofX1 = rearX + 4.4;
-    const roofX2 = fWsX1 - 0.3;
-    drawRoundedBox(ctx, roofX1, -roofW, roofX2, roofW, 1.3, createRoofGradient(ctx, roofW, roofPaint), deform, shadePaint(roofPaint, -0.35), 0.7);
-
-    // Transverse expansion joints
-    for (let rx = roofX1 + 10; rx < roofX2 - 8; rx += 13) {
-      strokePoly(ctx, [[rx, -roofW + 0.8], [rx, roofW - 0.8]], 'rgba(0,0,0,0.16)', 0.65, deform);
-    }
-
-    // Dual roof HVAC climate pods (white composite shells with twin condenser fan grilles)
-    const drawHvacPod = (px: number) => {
-      drawRoundedBox(ctx, px - 6.8, -roofW * 0.64, px + 6.8, roofW * 0.64, 1.8, '#e2e8f0', deform, '#64748b', 0.55);
-      drawRoundedBox(ctx, px - 5.6, -roofW * 0.52, px + 5.6, roofW * 0.52, 1.2, '#f8fafc', deform);
-      drawDeformedDot(ctx, px - 2.4, 0, 2.2, '#1e293b', deform, '#64748b', 0.45);
-      drawDeformedDot(ctx, px + 2.4, 0, 2.2, '#1e293b', deform, '#64748b', 0.45);
-      drawDeformedDot(ctx, px - 2.4, 0, 0.75, '#475569', deform);
-      drawDeformedDot(ctx, px + 2.4, 0, 0.75, '#475569', deform);
-    };
-    drawHvacPod(halfL * 0.16);
-    drawHvacPod(-halfL * 0.32);
-
-    // Emergency roof escape hatches (front & rear)
-    for (const hx of [halfL * 0.50, -halfL * 0.68]) {
-      drawRoundedBox(ctx, hx - 3.2, -3.6, hx + 3.2, 3.6, 0.6, '#cbd5e1', deform, '#475569', 0.55);
-      strokePoly(ctx, [[hx - 2.2, 0], [hx + 2.2, 0]], '#64748b', 0.55, deform);
-    }
-
-    // Rear engine ventilation louver deck & rear glass
-    drawRoundedBox(ctx, rearX + 1.9, -roofW * 0.78, rearX + 4.2, roofW * 0.78, 0.5, '#1e293b', deform);
-    for (let ly = -roofW * 0.64; ly <= roofW * 0.64; ly += 1.55) {
-      strokePoly(ctx, [[rearX + 2.3, ly], [rearX + 3.8, ly]], '#475569', 0.55, deform);
-    }
-
-    // 3 amber roof road-train / clearance markers + rear high-mount CHMSL
-    drawRoadTrainMarkers(ctx, roofX2 - 1.2, [-3.6, 0, 3.6], optics.roadTrainOn, deform);
-    drawChmsl(roofX1 - 0.3, 2.6);
-
-    // Extended dual bus coach mirrors (long forward-reaching arms)
-    drawSideMirrorArm(ctx, frontX - 2.4, -halfW + 0.3, -1, 2.9, 3.4, 1.35, '#1e293b', deform);
-    drawSideMirrorArm(ctx, frontX - 2.4, halfW - 0.3, 1, 2.9, 3.4, 1.35, '#1e293b', deform);
-    return;
-  }
-
-  // ==========================================================================
-  // 2. MINIBUS SHUTTLE (Metro Shuttle 18-Seater — 62x23)
-  // ==========================================================================
-  if (type === 'bus_minibus') {
-    const bodyPaint = car.color || '#f59e0b';
-    const roofPaint = car.roofColor || shadePaint(bodyPaint, 0.10);
-    const hoodX1 = frontX - 7.2;
-    const fWsX1 = hoodX1 - 5.4;
-    const glassW = halfW - 1.1;
-    const roofW = halfW - 2.4;
-
-    // Short sculpted semi-bonnet nose hood (skipped if open)
-    if (!hoodExposed) {
-      drawRoundedBox(
-        ctx,
-        hoodX1,
-        -halfW + 1.8,
-        frontX - 2.3,
-        halfW - 1.8,
-        1.0,
-        createBodyMetallicGradient(ctx, halfW - 1.8, bodyPaint),
-        deform,
-        shadePaint(bodyPaint, -0.35),
-        0.55
-      );
-      strokePoly(ctx, [[hoodX1 + 0.8, -halfW * 0.45], [frontX - 2.9, -halfW * 0.40]], 'rgba(255,255,255,0.22)', 0.65, deform);
-      strokePoly(ctx, [[hoodX1 + 0.8, halfW * 0.45], [frontX - 2.9, halfW * 0.40]], 'rgba(0,0,0,0.22)', 0.65, deform);
-    }
-
-    // Panoramic greenhouse shell
-    drawRoundedBox(ctx, rearX + 1.9, -glassW, hoodX1, glassW, 1.3, '#0b1120', deform);
-    // Front windshield
-    drawRoundedBox(
-      ctx,
-      fWsX1,
-      -glassW + 0.45,
-      hoodX1 - 0.35,
-      glassW - 0.45,
-      0.85,
-      createGlassGradient(ctx, fWsX1, -glassW, hoodX1, glassW, 'blue'),
-      deform
-    );
-    strokePoly(ctx, [[fWsX1 + 0.9, -glassW + 1.6], [hoodX1 - 1.0, glassW - 1.8]], 'rgba(255,255,255,0.28)', 1.05, deform);
-    // Dual wipers
-    strokePoly(ctx, [[hoodX1 - 0.8, -glassW * 0.36], [fWsX1 + 1.2, -glassW * 0.08]], '#0f172a', 0.75, deform);
-    strokePoly(ctx, [[hoodX1 - 0.8, glassW * 0.36], [fWsX1 + 1.2, glassW * 0.08]], '#0f172a', 0.75, deform);
-
-    // Side passenger panoramic windows with pillars
-    const sideX1 = rearX + 4.4;
-    const sideX2 = fWsX1 - 0.5;
-    drawRoundedBox(ctx, sideX1, -glassW + 0.2, sideX2, -roofW - 0.1, 0.35, '#1d395a', deform);
-    drawRoundedBox(ctx, sideX1, roofW + 0.1, sideX2, glassW - 0.2, 0.35, '#1d395a', deform);
-    for (let i = 1; i <= 4; i++) {
-      const px = sideX1 + ((sideX2 - sideX1) * i) / 5;
-      strokePoly(ctx, [[px, -glassW], [px, -roofW]], '#0f172a', 0.95, deform);
-      strokePoly(ctx, [[px, roofW], [px, glassW]], '#0f172a', 0.95, deform);
-    }
-
-    // Twin rear glass panes (50/50 cargo doors)
-    drawRoundedBox(ctx, rearX + 2.0, -glassW + 0.7, rearX + 4.1, -0.55, 0.35, '#1a324e', deform);
-    drawRoundedBox(ctx, rearX + 2.0, 0.55, rearX + 4.1, glassW - 0.7, 0.35, '#1a324e', deform);
-    strokePoly(ctx, [[rearX + 0.2, 0], [rearX + 4.4, 0]], '#0f172a', 1.0, deform);
-
-    // High-top ribbed minibus roof
-    drawRoundedBox(ctx, rearX + 4.1, -roofW, fWsX1 + 0.2, roofW, 1.2, createRoofGradient(ctx, roofW, roofPaint), deform, shadePaint(roofPaint, -0.35), 0.65);
-    for (let ry = -roofW * 0.58; ry <= roofW * 0.58; ry += roofW * 0.29) {
-      strokePoly(ctx, [[rearX + 6.5, ry], [fWsX1 - 2.4, ry]], 'rgba(0,0,0,0.16)', 0.65, deform);
-      strokePoly(ctx, [[rearX + 6.5, ry - 0.45], [fWsX1 - 2.4, ry - 0.45]], 'rgba(255,255,255,0.20)', 0.45, deform);
-    }
-
-    // Slim roof AC pod + rear glass escape hatch
-    drawRoundedBox(ctx, halfL * 0.08 - 4.4, -roofW * 0.52, halfL * 0.08 + 4.4, roofW * 0.52, 1.3, '#f1f5f9', deform, '#64748b', 0.5);
-    drawDeformedDot(ctx, halfL * 0.08, 0, 1.8, '#334155', deform, '#94a3b8', 0.4);
-    drawRoundedBox(ctx, -halfL * 0.44 - 2.6, -2.8, -halfL * 0.44 + 2.6, 2.8, 0.55, '#cbd5e1', deform, '#475569', 0.5);
-
-    // Amber route placard box on front roof brow + road-train markers + CHMSL
-    drawRoundedBox(ctx, fWsX1 - 1.5, -3.4, fWsX1 + 0.1, 3.4, 0.3, '#0f172a', deform);
-    drawRoundedBox(ctx, fWsX1 - 1.15, -2.9, fWsX1 - 0.2, 2.9, 0.15, optics.ignitionOn ? '#fde047' : '#ca8a04', deform);
-    drawRoadTrainMarkers(ctx, fWsX1 - 2.4, [-3.0, 0, 3.0], optics.roadTrainOn, deform);
-    drawChmsl(rearX + 3.9, 2.1);
-
-    drawSideMirrorArm(ctx, fWsX1 + 2.4, -halfW + 0.3, -1, 2.2, 2.6, 1.15, '#1e293b', deform);
-    drawSideMirrorArm(ctx, fWsX1 + 2.4, halfW - 0.3, 1, 2.2, 2.6, 1.15, '#1e293b', deform);
-    return;
-  }
-
-  // ==========================================================================
-  // 3. EXPRESS STEPVAN (Bison Express Stepvan — 56x23)
-  // ==========================================================================
-  if (type === 'delivery_truck') {
-    const bodyPaint = car.color || '#78350f';
-    const roofPaint = car.roofColor || '#e2e8f0';
-    const hoodX1 = frontX - 6.8;
-    const fWsX1 = hoodX1 - 4.4;
-    const cabEndX = fWsX1 - 7.8;
-    const glassW = halfW - 1.1;
-    const roofW = halfW - 1.5;
-
-    // Flat boxy service hood with corner latches
-    if (!hoodExposed) {
-      drawRoundedBox(
-        ctx,
-        hoodX1,
-        -halfW + 1.5,
-        frontX - 2.2,
-        halfW - 1.5,
-        0.7,
-        createBodyMetallicGradient(ctx, halfW - 1.5, bodyPaint),
-        deform,
-        shadePaint(bodyPaint, -0.4),
-        0.55
-      );
-      strokePoly(ctx, [[hoodX1 + 0.7, 0], [frontX - 2.7, 0]], 'rgba(255,255,255,0.22)', 0.6, deform);
-    }
-
-    // Flat two-piece walk-in stepvan windshield
-    drawRoundedBox(ctx, fWsX1, -glassW, hoodX1, glassW, 0.5, '#0f172a', deform);
-    drawRoundedBox(ctx, fWsX1 + 0.35, -glassW + 0.45, hoodX1 - 0.35, -0.45, 0.3, createGlassGradient(ctx, fWsX1, -glassW, hoodX1, 0, 'smoke'), deform);
-    drawRoundedBox(ctx, fWsX1 + 0.35, 0.45, hoodX1 - 0.35, glassW - 0.45, 0.3, createGlassGradient(ctx, fWsX1, 0, hoodX1, glassW, 'smoke'), deform);
-    strokePoly(ctx, [[hoodX1 - 0.7, -glassW * 0.48], [fWsX1 + 0.9, -glassW * 0.16]], '#0f172a', 0.75, deform);
-    strokePoly(ctx, [[hoodX1 - 0.7, glassW * 0.48], [fWsX1 + 0.9, glassW * 0.16]], '#0f172a', 0.75, deform);
-
-    // Cab roof + translucent fiberglass cargo skylight roof!
-    drawRoundedBox(ctx, rearX + 1.6, -roofW, fWsX1 + 0.2, roofW, 0.85, createRoofGradient(ctx, roofW, roofPaint), deform, '#475569', 0.7);
-    // Bulkhead seam between driver cab & cargo box
-    strokePoly(ctx, [[cabEndX, -halfW + 0.3], [cabEndX, halfW - 0.3]], '#0f172a', 1.2, deform);
-    // Translucent bright fiberglass cargo roof insert with aluminum cross-bows
-    drawRoundedBox(ctx, rearX + 3.2, -roofW * 0.74, cabEndX - 1.4, roofW * 0.74, 0.5, '#f1f5f9', deform, '#94a3b8', 0.5);
-    for (let bx = rearX + 7.0; bx < cabEndX - 3.5; bx += 6.2) {
-      strokePoly(ctx, [[bx, -roofW * 0.74], [bx, roofW * 0.74]], '#cbd5e1', 0.85, deform);
-    }
-
-    // Sliding cab door tracks along both front flanks
-    strokePoly(ctx, [[cabEndX - 3.0, -halfW + 0.55], [fWsX1 + 0.5, -halfW + 0.55]], '#0f172a', 1.1, deform);
-    strokePoly(ctx, [[cabEndX - 3.0, halfW - 0.55], [fWsX1 + 0.5, halfW - 0.55]], '#0f172a', 1.1, deform);
-
-    // Rear roll-up door seam & aluminum drip gutter
-    strokePoly(ctx, [[rearX + 1.8, -roofW + 0.5], [rearX + 1.8, roofW - 0.5]], '#334155', 0.95, deform);
-
-    drawRoadTrainMarkers(ctx, fWsX1 - 1.3, [-3.0, 0, 3.0], optics.roadTrainOn, deform);
-    drawChmsl(rearX + 1.8, 2.0);
-    drawSideMirrorArm(ctx, fWsX1 + 1.8, -halfW + 0.25, -1, 2.4, 2.8, 1.1, '#334155', deform);
-    drawSideMirrorArm(ctx, fWsX1 + 1.8, halfW - 0.25, 1, 2.4, 2.8, 1.1, '#334155', deform);
-    return;
-  }
-
-  // ==========================================================================
-  // 4. UAZ-452 «БУХАНКА» RETRO VAN (Bison Pathfinder Van — 42x20)
-  // ==========================================================================
-  if (type === 'van_cargo_old') {
-    const bodyPaint = car.color || '#64748b';
-    const roofPaint = car.roofColor || shadePaint(bodyPaint, 0.06);
-    const fWsX2 = frontX - 2.6;
-    const fWsX1 = fWsX2 - 4.0;
-    const glassW = halfW - 1.0;
-    const roofW = halfW - 2.0;
-
-    // Iconic rounded cab-over loaf shell with split 2-pane windshield
-    drawRoundedBox(ctx, rearX + 1.8, -glassW, fWsX2, glassW, 2.0, '#0f172a', deform);
-    drawRoundedBox(ctx, fWsX1, -glassW + 0.55, fWsX2 - 0.3, -0.55, 0.5, createGlassGradient(ctx, fWsX1, -glassW, fWsX2, 0, 'green'), deform);
-    drawRoundedBox(ctx, fWsX1, 0.55, fWsX2 - 0.3, glassW - 0.55, 0.5, createGlassGradient(ctx, fWsX1, 0, fWsX2, glassW, 'green'), deform);
-    // Body-colored center windshield divider bar
-    drawRoundedBox(ctx, fWsX1 - 0.2, -0.65, fWsX2 + 0.1, 0.65, 0.15, bodyPaint, deform);
-    // Small wipers
-    strokePoly(ctx, [[fWsX2 - 0.6, -glassW * 0.48], [fWsX1 + 0.9, -glassW * 0.22]], '#0f172a', 0.65, deform);
-    strokePoly(ctx, [[fWsX2 - 0.6, glassW * 0.48], [fWsX1 + 0.9, glassW * 0.22]], '#0f172a', 0.65, deform);
-
-    // Side cab & small cargo side windows
-    const cabWinX1 = fWsX1 - 7.5;
-    drawRoundedBox(ctx, cabWinX1, -glassW + 0.2, fWsX1 - 0.5, -roofW - 0.1, 0.3, '#1a383f', deform);
-    drawRoundedBox(ctx, cabWinX1, roofW + 0.1, fWsX1 - 0.5, glassW - 0.2, 0.3, '#1a383f', deform);
-    // Small rectangular mid-body side windows
-    drawRoundedBox(ctx, -5.5, -glassW + 0.2, 2.5, -roofW - 0.1, 0.3, '#1a383f', deform);
-    drawRoundedBox(ctx, -5.5, roofW + 0.1, 2.5, glassW - 0.2, 0.3, '#1a383f', deform);
-
-    // Twin small rear barn-door windows
-    drawRoundedBox(ctx, rearX + 1.9, -glassW + 1.2, rearX + 3.6, -0.8, 0.35, '#19353c', deform);
-    drawRoundedBox(ctx, rearX + 1.9, 0.8, rearX + 3.6, glassW - 1.2, 0.35, '#19353c', deform);
-    strokePoly(ctx, [[rearX + 0.2, 0], [rearX + 3.8, 0]], '#0f172a', 1.0, deform);
-
-    // Domed stamped steel roof with perimeter rain gutter & longitudinal ribs
-    drawRoundedBox(ctx, rearX + 3.5, -roofW, fWsX1 + 0.2, roofW, 1.8, createRoofGradient(ctx, roofW, roofPaint), deform, shadePaint(roofPaint, -0.38), 0.7);
-    for (let ry = -roofW * 0.52; ry <= roofW * 0.52; ry += roofW * 0.26) {
-      strokePoly(ctx, [[rearX + 5.8, ry], [fWsX1 - 2.0, ry]], 'rgba(0,0,0,0.18)', 0.65, deform);
-      strokePoly(ctx, [[rearX + 5.8, ry - 0.4], [fWsX1 - 2.0, ry - 0.4]], 'rgba(255,255,255,0.22)', 0.45, deform);
-    }
-    // Retro roof ventilation scoop hatch & expedition rear roof rack bars
-    drawRoundedBox(ctx, halfL * 0.18 - 1.8, -2.4, halfL * 0.18 + 1.8, 2.4, 0.45, shadePaint(roofPaint, -0.1), deform, '#334155', 0.45);
-    // Sturdy tubular expedition rack on rear half of roof
-    const rX1 = rearX + 5.2;
-    const rX2 = -1.5;
-    const rY = roofW * 0.74;
-    strokePoly(ctx, [[rX1, -rY], [rX2, -rY], [rX2, rY], [rX1, rY]], '#1e293b', 0.9, deform, true);
-    for (let rx = rX1 + 2.4; rx < rX2 - 1.2; rx += 3.0) {
-      strokePoly(ctx, [[rx, -rY], [rx, rY]], '#334155', 0.55, deform);
-    }
-
-    // Vintage tubular stalk mirrors
-    drawSideMirrorArm(ctx, fWsX1 + 1.5, -halfW + 0.35, -1, 1.9, 1.8, 0.95, '#334155', deform);
-    drawSideMirrorArm(ctx, fWsX1 + 1.5, halfW - 0.35, 1, 1.9, 1.8, 0.95, '#334155', deform);
-    return;
-  }
-
-  // ==========================================================================
-  // 5. NOMAD EXPEDITION CAMPER (Bison Nomad Camper — 50x22)
-  // ==========================================================================
-  if (type === 'van_camper') {
-    const bodyPaint = car.color || '#f5f0e1';
-    const cabW = halfW * 0.89;
-    const boxW = halfW * 1.02;
-    const hoodX1 = frontX - 6.6;
-    const fWsX1 = hoodX1 - 4.8;
-    const boxFrontX = halfL * 0.28;
-
-    // Front cab hood (skipped if open)
-    if (!hoodExposed) {
-      drawRoundedBox(
-        ctx,
-        hoodX1,
-        -cabW + 1.2,
-        frontX - 2.1,
-        cabW - 1.2,
-        0.9,
-        createBodyMetallicGradient(ctx, cabW - 1.2, bodyPaint),
-        deform,
-        shadePaint(bodyPaint, -0.35),
-        0.55
-      );
-    }
-
-    // Front cab windshield & side windows
-    drawRoundedBox(ctx, fWsX1, -cabW + 0.9, hoodX1, cabW - 0.9, 0.9, '#0f172a', deform);
-    drawRoundedBox(
-      ctx,
-      fWsX1 + 0.3,
-      -cabW + 1.3,
-      hoodX1 - 0.3,
-      cabW - 1.3,
-      0.65,
-      createGlassGradient(ctx, fWsX1, -cabW, hoodX1, cabW, 'blue'),
-      deform
-    );
-    strokePoly(ctx, [[fWsX1 + 0.8, -cabW + 2.2], [hoodX1 - 0.9, cabW - 2.4]], 'rgba(255,255,255,0.28)', 0.95, deform);
-
-    // Insulated white gelcoat coachbox roof + aerodynamic over-cab sleeper alcove
-    const roofW = boxW - 1.1;
-    drawRoundedBox(ctx, rearX + 1.5, -roofW, boxFrontX, roofW, 1.2, createRoofGradient(ctx, roofW, '#f8fafc'), deform, '#94a3b8', 0.65);
-    // Over-cab alcove nose overhang curving gracefully above windshield
-    const alcovePts: Pt[] = [
-      [boxFrontX - 0.5, -roofW],
-      [fWsX1 + 2.6, -cabW * 0.86],
-      [fWsX1 + 3.6, -cabW * 0.52],
-      [fWsX1 + 3.6, cabW * 0.52],
-      [fWsX1 + 2.6, cabW * 0.86],
-      [boxFrontX - 0.5, roofW],
+    // Tinted panoramic front windshield + front cab door windows
+    const wsPts: Pt[] = [
+      [wsFront, -gW * 0.88],
+      [wsFront, gW * 0.88],
+      [wsRear, gW * 0.96],
+      [wsRear, -gW * 0.96],
     ];
-    fillPoly(ctx, alcovePts, createRoofGradient(ctx, cabW, '#f1f5f9'), deform, '#94a3b8', 0.6);
-    // Decorative adventure stripes on roof flanks
-    strokePoly(ctx, [[rearX + 3.0, -roofW + 0.65], [boxFrontX - 0.5, -roofW + 0.65]], '#d97706', 0.85, deform);
-    strokePoly(ctx, [[rearX + 3.0, roofW - 0.65], [boxFrontX - 0.5, roofW - 0.65]], '#d97706', 0.85, deform);
+    fillPoly(ctx, wsPts, createGlassGradient(ctx, wsFront, -gW, wsRear, gW, 'blue'), deform, '#090d16', 0.65);
+    drawCabinInteriorHint(ctx, wsFront - 1.8, wsRear + 0.4, gW * 0.85, deform);
+    drawGlassGlint(ctx, wsRear + 0.6, -gW * 0.84, wsFront - 0.5, gW * 0.84, 0.16, deform);
+    drawWiperPair(ctx, wsFront, gW * 1.45, 3.8, deform);
 
-    // Panoramic tinted Heki roof skylight (forward living bay)
-    const skyX = boxFrontX - 6.2;
-    drawRoundedBox(ctx, skyX - 3.2, -3.4, skyX + 3.2, 3.4, 0.7, '#334155', deform, '#0f172a', 0.45);
-    drawRoundedBox(ctx, skyX - 2.5, -2.7, skyX + 2.5, 2.7, 0.5, '#38bdf8', deform);
-    strokePoly(ctx, [[skyX - 2.0, -1.8], [skyX + 2.0, 1.8]], 'rgba(255,255,255,0.45)', 0.75, deform);
-
-    // Low-profile RV roof air conditioner unit
-    const acX = -3.8;
-    drawRoundedBox(ctx, acX - 4.0, -3.1, acX + 4.0, 3.1, 1.1, '#e2e8f0', deform, '#64748b', 0.5);
-    drawRoundedBox(ctx, acX - 3.2, -2.3, acX + 3.2, 2.3, 0.7, '#ffffff', deform);
-    strokePoly(ctx, [[acX - 1.8, -1.6], [acX - 1.8, 1.6]], '#94a3b8', 0.65, deform);
-    strokePoly(ctx, [[acX + 1.8, -1.6], [acX + 1.8, 1.6]], '#94a3b8', 0.65, deform);
-
-    // Dual monocrystalline solar panels (rear roof)
-    const solX = rearX + 7.4;
-    drawRoundedBox(ctx, solX - 4.2, -roofW * 0.72, solX + 4.2, roofW * 0.72, 0.45, '#0f172a', deform, '#475569', 0.45);
-    drawRoundedBox(ctx, solX - 3.7, -roofW * 0.66, solX + 3.7, roofW * 0.66, 0.3, '#1e3a8a', deform);
-    for (let sy = -roofW * 0.52; sy <= roofW * 0.52; sy += 2.3) {
-      strokePoly(ctx, [[solX - 3.6, sy], [solX + 3.6, sy]], 'rgba(147,197,253,0.48)', 0.5, deform);
+    // Side cab windows (dark bonded glass)
+    for (const side of [-1, 1] as const) {
+      fillPoly(
+        ctx,
+        [
+          [wsFront - 1.1, side * gW * 0.90],
+          [halfL * 0.20, side * gW * 0.98],
+          [halfL * 0.20, side * (halfW - 0.85)],
+          [wsFront - 1.6, side * (halfW - 0.95)],
+        ],
+        createGlassGradient(ctx, wsFront, 0, halfL * 0.2, side * halfW, 'smoke'),
+        deform,
+        '#090d16',
+        0.45
+      );
+      // A-pillar
+      strokePoly(ctx, [[wsFront - 0.3, side * gW * 0.88], [wsRear, side * gW * 0.96]], shadePaint(baseColor, -0.18), 0.95, deform);
+      // Side mirror with amber repeater
+      drawSideMirrorArm(
+        ctx,
+        halfL * 0.50,
+        side * (halfW - 0.45),
+        side,
+        2.05,
+        2.2,
+        1.15,
+        '#1e293b',
+        deform,
+        side < 0 ? opt.leftTurn : opt.rightTurn
+      );
     }
-    strokePoly(ctx, [[solX, -roofW * 0.66], [solX, roofW * 0.66]], 'rgba(147,197,253,0.45)', 0.55, deform);
 
-    // Full-length anodized roll-out awning cassette along right (+Y) roof rail
-    drawRoundedBox(ctx, rearX + 2.8, roofW - 0.25, boxFrontX - 1.0, boxW + 0.15, 0.45, '#cbd5e1', deform, '#475569', 0.45);
-    strokePoly(ctx, [[rearX + 3.2, roofW + 0.45], [boxFrontX - 1.4, roofW + 0.45]], '#64748b', 0.55, deform);
-
-    // Rear bike rack rail + CHMSL
-    strokePoly(ctx, [[rearX - 0.5, -5.2], [rearX - 0.5, 5.2]], '#94a3b8', 0.8, deform);
-    drawChmsl(rearX + 1.6, 2.0);
-    drawSideMirrorArm(ctx, fWsX1 + 2.2, -cabW + 0.2, -1, 2.4, 2.4, 1.1, '#1e293b', deform);
-    drawSideMirrorArm(ctx, fWsX1 + 2.2, cabW - 0.2, 1, 2.4, 2.4, 1.1, '#1e293b', deform);
-    return;
-  }
-
-  // ==========================================================================
-  // 6. TRANSPORTER VAN + AMBULANCE MEDIC VAN + CRITICAL CARE ICU VAN
-  //    (van 48x21.5 | ambulance 51x22 | ambulance_van 51x22)
-  // ==========================================================================
-  const isAmb = type === 'ambulance';
-  const isIcu = type === 'ambulance_van';
-  const isMedical = isAmb || isIcu;
-  const bodyPaint = isMedical ? '#f8fafc' : (car.color || '#cbd5e1');
-  const roofPaint = isMedical ? '#f8fafc' : (car.roofColor || shadePaint(bodyPaint, 0.08));
-
-  const hoodX1 = frontX - 6.8;
-  const fWsX1 = hoodX1 - 5.2;
-  const glassW = halfW - 1.0;
-  const roofW = halfW - 2.1;
-
-  // Sculpted van nose hood (skipped if open)
-  if (!hoodExposed) {
+    // Stamped commercial roof deck with longitudinal strengthening ribs & rain channels
+    const roofW = halfW * 0.82;
     drawRoundedBox(
       ctx,
-      hoodX1,
-      -halfW + 1.6,
-      frontX - 2.1,
-      halfW - 1.6,
-      1.0,
-      createBodyMetallicGradient(ctx, halfW - 1.6, bodyPaint),
+      roofRear,
+      -roofW,
+      wsRear + 0.4,
+      roofW,
+      1.6,
+      createRoofGradient(ctx, roofW, shadePaint(baseColor, 0.06)),
       deform,
-      shadePaint(bodyPaint, -0.34),
+      'rgba(15,23,42,0.42)',
       0.55
     );
-    strokePoly(ctx, [[hoodX1 + 0.6, -halfW * 0.42], [frontX - 2.8, -halfW * 0.36]], 'rgba(255,255,255,0.25)', 0.65, deform);
-    strokePoly(ctx, [[hoodX1 + 0.6, halfW * 0.42], [frontX - 2.8, halfW * 0.36]], 'rgba(0,0,0,0.22)', 0.65, deform);
-    if (isMedical) {
-      // Medical red / high-vis lime hood accent stripe
-      const stripeCol = isIcu ? '#eab308' : '#dc2626';
-      drawRoundedBox(ctx, hoodX1 + 1.2, -3.2, frontX - 3.2, 3.2, 0.35, stripeCol, deform);
-      drawRoundedBox(ctx, hoodX1 + 2.0, -0.7, frontX - 4.0, 0.7, 0.15, '#ffffff', deform);
-      drawRoundedBox(ctx, (hoodX1 + frontX - 2.0) * 0.5 - 0.7, -2.0, (hoodX1 + frontX - 2.0) * 0.5 + 0.7, 2.0, 0.15, '#ffffff', deform);
+    // Longitudinal stamped roof corrugations
+    drawCorrugatedDeck(ctx, roofRear + 2.0, -roofW + 1.3, wsRear - 1.5, roofW - 1.3, 2.2, 'longitudinal', deform, 0.14, 0.18);
+    // Transverse roof panel joint seams
+    for (const jx of [-halfL * 0.34, halfL * 0.02]) {
+      strokePoly(ctx, [[jx, -roofW + 0.5], [jx, roofW - 0.5]], 'rgba(15,23,42,0.28)', 0.45, deform);
     }
+    // Roof radio antenna + rear magnetic loading work-lamp pod
+    drawDeformedDot(ctx, wsRear - 1.3, 0, 0.55, '#0f172a', deform);
+    strokePoly(ctx, [[wsRear - 1.3, 0], [wsRear - 4.4, 0]], '#1e293b', 0.35, deform);
+    return;
   }
 
-  // Greenhouse perimeter frame
-  drawRoundedBox(ctx, rearX + 1.8, -glassW, hoodX1, glassW, 1.3, '#0f172a', deform);
+  // --------------------------------------------------------------------------
+  // B. VAN CAMPER (Bison Nomad Camper — C-Class Coachbuilt RV)
+  // --------------------------------------------------------------------------
+  if (type === 'van_camper') {
+    const cabW = halfW * 0.88;
+    const boxW = halfW * 1.03;
+    const wsFront = halfL * 0.66;
+    const wsRear = halfL * 0.44;
+    const roofRear = rX + 1.4;
 
-  // Front windshield
-  drawRoundedBox(
-    ctx,
-    fWsX1,
-    -glassW + 0.45,
-    hoodX1 - 0.3,
-    glassW - 0.45,
-    0.8,
-    createGlassGradient(ctx, fWsX1, -glassW, hoodX1, glassW, 'blue'),
-    deform
-  );
-  strokePoly(ctx, [[fWsX1 + 0.8, -glassW + 1.8], [hoodX1 - 0.9, glassW - 2.0]], 'rgba(255,255,255,0.28)', 1.0, deform);
-  strokePoly(ctx, [[hoodX1 - 0.7, -glassW * 0.36], [fWsX1 + 1.1, -glassW * 0.08]], '#0f172a', 0.7, deform);
-  strokePoly(ctx, [[hoodX1 - 0.7, glassW * 0.36], [fWsX1 + 1.1, glassW * 0.08]], '#0f172a', 0.7, deform);
+    // Front Ducato/Sprinter cab windshield
+    fillPoly(
+      ctx,
+      [
+        [wsFront, -cabW * 0.84],
+        [wsFront, cabW * 0.84],
+        [wsRear, cabW * 0.90],
+        [wsRear, -cabW * 0.90],
+      ],
+      createGlassGradient(ctx, wsFront, -cabW, wsRear, cabW, 'blue'),
+      deform,
+      '#090d16',
+      0.6
+    );
+    drawCabinInteriorHint(ctx, wsFront - 1.5, wsRear + 0.2, cabW * 0.80, deform);
+    drawGlassGlint(ctx, wsRear + 0.4, -cabW * 0.78, wsFront - 0.4, cabW * 0.78, 0.16, deform);
+    drawWiperPair(ctx, wsFront, cabW * 1.35, 3.4, deform);
 
-  // Front driver/passenger door glass
-  const cabWinX1 = fWsX1 - 8.2;
-  drawRoundedBox(ctx, cabWinX1, -glassW + 0.25, fWsX1 - 0.45, -roofW - 0.1, 0.3, '#1a3554', deform);
-  drawRoundedBox(ctx, cabWinX1, roofW + 0.1, fWsX1 - 0.45, glassW - 0.25, 0.3, '#1a3554', deform);
-
-  // Twin rear cargo door windows + 50/50 vertical split seam
-  drawRoundedBox(ctx, rearX + 1.9, -glassW + 0.85, rearX + 3.8, -0.55, 0.35, '#19314d', deform);
-  drawRoundedBox(ctx, rearX + 1.9, 0.55, rearX + 3.8, glassW - 0.85, 0.35, '#19314d', deform);
-  strokePoly(ctx, [[rearX + 0.2, 0], [rearX + 4.1, 0]], '#0f172a', 1.0, deform);
-
-  // Full-length ribbed van roof panel
-  drawRoundedBox(ctx, rearX + 3.8, -roofW, fWsX1 + 0.25, roofW, 1.25, createRoofGradient(ctx, roofW, roofPaint), deform, shadePaint(roofPaint, -0.35), 0.65);
-
-  if (isMedical) {
-    // Bold medical livery stripes along roof edges
-    const edgeCol = isIcu ? '#ef4444' : '#dc2626';
-    const accentCol = isIcu ? '#facc15' : '#dc2626';
-    drawRoundedBox(ctx, rearX + 4.6, -roofW + 0.4, fWsX1 - 1.0, -roofW + 1.55, 0.2, accentCol, deform);
-    drawRoundedBox(ctx, rearX + 4.6, roofW - 1.55, fWsX1 - 1.0, roofW - 0.4, 0.2, accentCol, deform);
-
-    // Crisp red medical cross emblem centered on roof
-    const cx = -halfL * 0.14;
-    const armL = isIcu ? 4.4 : 4.0;
-    const armW = 1.45;
-    drawRoundedBox(ctx, cx - armL, -armW, cx + armL, armW, 0.2, edgeCol, deform);
-    drawRoundedBox(ctx, cx - armW, -armL, cx + armW, armL, 0.2, edgeCol, deform);
-    if (isIcu) {
-      // ICU High-roof HVAC pod + telemetry antenna behind cross
-      drawRoundedBox(ctx, rearX + 6.4, -4.0, rearX + 12.2, 4.0, 0.9, '#e2e8f0', deform, '#64748b', 0.45);
-      drawDeformedDot(ctx, rearX + 9.3, 0, 1.65, '#334155', deform, '#94a3b8', 0.35);
-      // Secondary rear flashing blue/red beacon bar
-      drawEmergencyLightbar(ctx, rearX + 4.9, roofW * 0.56, optics.sirenOn, optics.sirenStrobe + Math.PI, 'red_blue', deform);
-    } else {
-      // Ventilation mushroom dome on standard medic van roof
-      drawDeformedDot(ctx, rearX + 8.5, 0, 2.0, '#e2e8f0', deform, '#64748b', 0.45);
-      drawDeformedDot(ctx, rearX + 8.5, 0, 0.85, '#94a3b8', deform);
+    for (const side of [-1, 1] as const) {
+      drawSideMirrorArm(
+        ctx,
+        halfL * 0.54,
+        side * (cabW - 0.35),
+        side,
+        2.5,
+        2.3,
+        1.15,
+        '#1e293b',
+        deform,
+        side < 0 ? opt.leftTurn : opt.rightTurn
+      );
     }
 
-    // Main aerodynamic front roof emergency lightbar
-    drawEmergencyLightbar(
+    // Fiberglass insulated RV roof + aerodynamic over-cab luton sleeper alcove
+    const alcoveFront = halfL * 0.52;
+    const coachRoofPts: Pt[] = [
+      [alcoveFront, -cabW * 0.78],
+      [halfL * 0.30, -boxW * 0.94],
+      [roofRear + 1.0, -boxW * 0.94],
+      [roofRear, -boxW * 0.82],
+      [roofRear, boxW * 0.82],
+      [roofRear + 1.0, boxW * 0.94],
+      [halfL * 0.30, boxW * 0.94],
+      [alcoveFront, cabW * 0.78],
+    ];
+    fillPoly(
       ctx,
-      fWsX1 - 2.2,
-      roofW * 0.74,
-      optics.sirenOn,
-      optics.sirenStrobe,
-      isIcu ? 'red_blue' : 'blue_blue',
+      coachRoofPts,
+      createRoofGradient(ctx, boxW, '#f8fafc'),
+      deform,
+      'rgba(15,23,42,0.45)',
+      0.65
+    );
+    // Luton alcove contour seam & front outline clearance lights
+    strokePoly(ctx, [[halfL * 0.26, -boxW * 0.90], [halfL * 0.26, boxW * 0.90]], 'rgba(15,23,42,0.22)', 0.5, deform);
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(
+        ctx,
+        alcoveFront - 1.2,
+        side * cabW * 0.65 - 0.42,
+        alcoveFront - 0.3,
+        side * cabW * 0.65 + 0.42,
+        0.18,
+        opt.positionOn ? '#fef9c3' : '#cbd5e1',
+        deform,
+        '#334155',
+        0.22
+      );
+    }
+
+    // Right-side roll-out awning cassette (Thule Omnistor) with drop shadow
+    drawBoxShadow(ctx, -halfL * 0.72, boxW * 0.76, halfL * 0.20, boxW * 0.96, 0.4, -0.4, 0.5, 0.28, deform);
+    drawRoundedBox(ctx, -halfL * 0.72, boxW * 0.76, halfL * 0.20, boxW * 0.96, 0.4, '#cbd5e1', deform, '#334155', 0.45);
+    strokePoly(ctx, [[-halfL * 0.68, boxW * 0.86], [halfL * 0.16, boxW * 0.86]], '#64748b', 0.4, deform);
+
+    // Panoramic tinted Heki roof skylight over lounge
+    drawBoxShadow(ctx, halfL * 0.04, -boxW * 0.44, halfL * 0.24, boxW * 0.44, 0.6, -0.5, 0.5, 0.25, deform);
+    drawRoundedBox(ctx, halfL * 0.04, -boxW * 0.44, halfL * 0.24, boxW * 0.44, 0.6, '#334155', deform, '#0f172a', 0.45);
+    drawRoundedBox(
+      ctx,
+      halfL * 0.06,
+      -boxW * 0.38,
+      halfL * 0.22,
+      boxW * 0.38,
+      0.4,
+      createGlassGradient(ctx, halfL * 0.06, -boxW * 0.38, halfL * 0.22, boxW * 0.38, 'smoke'),
       deform
     );
+    drawGlassGlint(ctx, halfL * 0.06, -boxW * 0.36, halfL * 0.22, boxW * 0.36, 0.18, deform);
 
-    // Side emergency LED strobes along roof edges
-    const sLit = optics.sirenOn && Math.sin(optics.sirenStrobe * 3.1) > 0;
-    const sCol = sLit ? '#60a5fa' : '#1d4ed8';
-    drawRoundedBox(ctx, cx - 1.1, -halfW + 0.25, cx + 1.1, -halfW + 0.85, 0.15, sCol, deform);
-    drawRoundedBox(ctx, cx - 1.1, halfW - 0.85, cx + 1.1, halfW - 0.25, 0.15, sCol, deform);
-  } else {
-    // Commercial cargo van roof stamping ribs
-    for (let ry = -roofW * 0.56; ry <= roofW * 0.56; ry += roofW * 0.28) {
-      strokePoly(ctx, [[rearX + 6.0, ry], [fWsX1 - 2.2, ry]], 'rgba(0,0,0,0.16)', 0.65, deform);
-      strokePoly(ctx, [[rearX + 6.0, ry - 0.45], [fWsX1 - 2.2, ry - 0.45]], 'rgba(255,255,255,0.20)', 0.45, deform);
+    // Low-profile Dometic RV roof AC condenser pod with cast shadow
+    drawBoxShadow(ctx, -halfL * 0.34, -boxW * 0.36, -halfL * 0.05, boxW * 0.36, 0.9, -0.75, 0.65, 0.30, deform);
+    drawRoundedBox(ctx, -halfL * 0.34, -boxW * 0.36, -halfL * 0.05, boxW * 0.36, 0.9, '#e2e8f0', deform, '#475569', 0.5);
+    drawRoundedBox(ctx, -halfL * 0.29, -boxW * 0.24, -halfL * 0.11, boxW * 0.24, 0.45, '#1e293b', deform);
+    for (let gy = -boxW * 0.18; gy <= boxW * 0.18; gy += 1.05) {
+      strokePoly(ctx, [[-halfL * 0.27, gy], [-halfL * 0.13, gy]], '#64748b', 0.32, deform);
     }
-    // Right-side sliding cargo door track & handle
-    strokePoly(ctx, [[rearX + 5.0, halfW - 0.45], [cabWinX1 - 1.5, halfW - 0.45]], '#0f172a', 1.15, deform);
-    drawRoundedBox(ctx, cabWinX1 - 2.4, halfW - 1.1, cabWinX1 - 0.4, halfW - 0.4, 0.15, '#1e293b', deform);
+
+    // Twin monocrystalline solar panels on rear roof deck
+    for (const side of [-1, 1] as const) {
+      const py1 = side < 0 ? -boxW * 0.72 : boxW * 0.08;
+      const py2 = side < 0 ? -boxW * 0.08 : boxW * 0.72;
+      drawBoxShadow(ctx, -halfL * 0.82, py1, -halfL * 0.44, py2, 0.3, -0.45, 0.45, 0.22, deform);
+      drawRoundedBox(ctx, -halfL * 0.82, py1, -halfL * 0.44, py2, 0.3, '#0f172a', deform, '#cbd5e1', 0.48);
+      // Blue-indigo photovoltaic cell grid
+      drawRoundedBox(ctx, -halfL * 0.80, py1 + 0.35, -halfL * 0.46, py2 - 0.35, 0.18, '#172554', deform);
+      for (let gx = -halfL * 0.74; gx < -halfL * 0.48; gx += 2.2) {
+        strokePoly(ctx, [[gx, py1 + 0.35], [gx, py2 - 0.35]], 'rgba(148,163,184,0.34)', 0.25, deform);
+      }
+      strokePoly(ctx, [[-halfL * 0.80, (py1 + py2) * 0.5], [-halfL * 0.46, (py1 + py2) * 0.5]], 'rgba(148,163,184,0.42)', 0.28, deform);
+    }
+
+    // Rear folding aluminum roof access ladder / bike carrier bar
+    drawRoundedBox(ctx, rX - 0.5, -boxW * 0.58, rX + 0.55, -boxW * 0.22, 0.2, '#94a3b8', deform, '#1e293b', 0.32);
+    return;
   }
 
-  // Rear high-mount CHMSL & wing mirrors
-  drawChmsl(rearX + 3.8, 1.9);
-  drawSideMirrorArm(ctx, fWsX1 + 2.2, -halfW + 0.3, -1, 2.0, 2.3, 1.05, isMedical ? '#1e293b' : shadePaint(bodyPaint, -0.15), deform);
-  drawSideMirrorArm(ctx, fWsX1 + 2.2, halfW - 0.3, 1, 2.0, 2.3, 1.05, isMedical ? '#1e293b' : shadePaint(bodyPaint, -0.15), deform);
+  // --------------------------------------------------------------------------
+  // C. VAN CARGO OLD (Bison Pathfinder — UAZ-452 "Bukhanka")
+  // --------------------------------------------------------------------------
+  if (type === 'van_cargo_old') {
+    const wsFront = fX - 1.3;
+    const wsRear = halfL * 0.62;
+    const gW = halfW * 0.84;
+
+    // Iconic Bukhanka split 2-pane green-tinted windshield
+    fillPoly(
+      ctx,
+      [
+        [wsFront, -gW * 0.84],
+        [wsFront, gW * 0.84],
+        [wsRear, gW * 0.94],
+        [wsRear, -gW * 0.94],
+      ],
+      createGlassGradient(ctx, wsFront, -gW, wsRear, gW, 'green'),
+      deform,
+      '#090d16',
+      0.6
+    );
+    drawCabinInteriorHint(ctx, wsFront - 1.2, wsRear - 1.0, gW * 0.80, deform);
+    drawGlassGlint(ctx, wsRear + 0.3, -gW * 0.78, wsFront - 0.3, gW * 0.78, 0.14, deform);
+    // Central painted windshield mullion pillar
+    strokePoly(ctx, [[wsFront + 0.1, 0], [wsRear - 0.1, 0]], shadePaint(baseColor, -0.06), 1.0, deform);
+    drawWiperPair(ctx, wsFront, gW * 1.25, 2.8, deform);
+
+    // Classic stalk-mounted black steel side mirrors
+    for (const side of [-1, 1] as const) {
+      drawSideMirrorArm(ctx, halfL * 0.68, side * (halfW - 0.3), side, 1.9, 1.65, 0.95, '#1e293b', deform);
+    }
+
+    // Iconic smooth domed rain-gutter Bukhanka roof
+    const roofW = halfW * 0.85;
+    drawRoundedBox(
+      ctx,
+      rX + 1.8,
+      -roofW,
+      wsRear + 0.2,
+      roofW,
+      2.6,
+      createRoofGradient(ctx, roofW, shadePaint(baseColor, 0.08)),
+      deform,
+      'rgba(15,23,42,0.52)',
+      0.65
+    );
+    // Vintage front-center roof ventilation hatch scoop
+    drawBoxShadow(ctx, halfL * 0.36, -2.0, halfL * 0.52, 2.0, 0.5, -0.45, 0.45, 0.24, deform);
+    drawRoundedBox(ctx, halfL * 0.36, -2.0, halfL * 0.52, 2.0, 0.5, shadePaint(baseColor, 0.16), deform, '#1e293b', 0.45);
+
+    // Tubular black steel expedition roof rack with timber slats + spare tire & jerrycan
+    const rkX1 = -halfL * 0.78;
+    const rkX2 = halfL * 0.24;
+    const rkW = roofW * 0.84;
+    drawBoxShadow(ctx, rkX1, -rkW, rkX2, rkW, 0.6, -0.5, 0.5, 0.22, deform);
+    // Timber cross slats
+    for (let sx = rkX1 + 1.8; sx < rkX2 - 1.0; sx += 2.6) {
+      strokePoly(ctx, [[sx, -rkW + 0.4], [sx, rkW - 0.4]], '#78350f', 0.85, deform);
+      strokePoly(ctx, [[sx + 0.2, -rkW + 0.4], [sx + 0.2, rkW - 0.4]], 'rgba(254,243,199,0.2)', 0.25, deform);
+    }
+    // Outer tubular rack perimeter
+    strokePoly(
+      ctx,
+      [
+        [rkX1, -rkW],
+        [rkX2, -rkW],
+        [rkX2, rkW],
+        [rkX1, rkW],
+      ],
+      '#0f172a',
+      0.82,
+      deform,
+      true
+    );
+    // Roof-mounted spare off-road tire (rear right) + olive steel jerrycan (front left)
+    drawDeformedDot(ctx, -halfL * 0.48, rkW * 0.22, 3.2, '#0f172a', deform, '#334155', 0.5);
+    drawDeformedDot(ctx, -halfL * 0.48, rkW * 0.22, 1.5, '#64748b', deform, '#1e293b', 0.35);
+    drawRoundedBox(ctx, -halfL * 0.04, -rkW * 0.74, halfL * 0.14, -rkW * 0.18, 0.35, '#991b1b', deform, '#0f172a', 0.4);
+    strokePoly(ctx, [[-halfL * 0.01, -rkW * 0.64], [halfL * 0.11, -rkW * 0.28]], 'rgba(255,255,255,0.22)', 0.35, deform);
+    return;
+  }
+
+  // --------------------------------------------------------------------------
+  // D. DELIVERY TRUCK (Bison Express Stepvan)
+  // --------------------------------------------------------------------------
+  if (type === 'delivery_truck') {
+    const wsFront = halfL * 0.66;
+    const wsRear = halfL * 0.52;
+    const gW = halfW * 0.84;
+
+    // Flat 2-piece vertical stepvan windshield
+    fillPoly(
+      ctx,
+      [
+        [wsFront, -gW * 0.88],
+        [wsFront, gW * 0.88],
+        [wsRear, gW * 0.94],
+        [wsRear, -gW * 0.94],
+      ],
+      createGlassGradient(ctx, wsFront, -gW, wsRear, gW, 'smoke'),
+      deform,
+      '#090d16',
+      0.6
+    );
+    drawCabinInteriorHint(ctx, wsFront - 1.0, wsRear - 1.2, gW * 0.8, deform, { dualFrontSeats: false });
+    strokePoly(ctx, [[wsFront, 0], [wsRear, 0]], '#1e293b', 0.85, deform);
+    drawGlassGlint(ctx, wsRear + 0.2, -gW * 0.82, wsFront - 0.2, gW * 0.82, 0.14, deform);
+    drawWiperPair(ctx, wsFront, gW * 1.3, 3.0, deform);
+
+    // Tall aluminum West-Coast stepvan mirrors
+    for (const side of [-1, 1] as const) {
+      drawSideMirrorArm(ctx, halfL * 0.56, side * (halfW - 0.35), side, 2.3, 2.2, 1.1, '#cbd5e1', deform);
+    }
+
+    // Square brushed aluminum cargo roof with translucent fiberglass center panel + exposed transverse bows
+    const roofW = halfW * 0.92;
+    drawRoundedBox(
+      ctx,
+      rX + 1.4,
+      -roofW,
+      wsRear + 0.1,
+      roofW,
+      0.95,
+      createRoofGradient(ctx, roofW, '#e2e8f0'),
+      deform,
+      '#334155',
+      0.65
+    );
+    // Translucent daylighting center roof skin
+    drawRoundedBox(
+      ctx,
+      rX + 3.2,
+      -roofW * 0.62,
+      halfL * 0.32,
+      roofW * 0.62,
+      0.4,
+      '#f8fafc',
+      deform,
+      'rgba(100,116,139,0.45)',
+      0.4
+    );
+    // Transverse aluminum roof bows + corner extrusion rivets
+    drawCorrugatedDeck(ctx, rX + 2.4, -roofW + 0.6, wsRear - 1.0, roofW - 0.6, 4.4, 'transverse', deform, 0.22, 0.26);
+
+    // 3 amber front DOT roof clearance markers + 2 outer corner markers
+    drawRoadTrainMarkers(ctx, wsRear - 0.85, [-roofW * 0.62, -1.7, 0, 1.7, roofW * 0.62], opt.positionOn || opt.roadTrainOn, deform);
+    return;
+  }
+
+  // --------------------------------------------------------------------------
+  // E. AMBULANCE & AMBULANCE_VAN (Sentinel Medic & Critical Care ICU)
+  // --------------------------------------------------------------------------
+  if (type === 'ambulance' || type === 'ambulance_van') {
+    const isIcu = type === 'ambulance_van';
+    const wsFront = halfL * 0.64;
+    const wsRear = halfL * 0.38;
+    const roofRear = rX + 1.8;
+    const gW = halfW * 0.88;
+
+    // Tinted front cab windshield
+    fillPoly(
+      ctx,
+      [
+        [wsFront, -gW * 0.88],
+        [wsFront, gW * 0.88],
+        [wsRear, gW * 0.95],
+        [wsRear, -gW * 0.95],
+      ],
+      createGlassGradient(ctx, wsFront, -gW, wsRear, gW, 'blue'),
+      deform,
+      '#090d16',
+      0.65
+    );
+    drawCabinInteriorHint(ctx, wsFront - 1.7, wsRear + 0.4, gW * 0.84, deform);
+    drawGlassGlint(ctx, wsRear + 0.5, -gW * 0.82, wsFront - 0.4, gW * 0.82, 0.16, deform);
+    drawWiperPair(ctx, wsFront, gW * 1.4, 3.6, deform);
+
+    for (const side of [-1, 1] as const) {
+      strokePoly(ctx, [[wsFront - 0.3, side * gW * 0.88], [wsRear, side * gW * 0.95]], shadePaint(baseColor, -0.15), 0.95, deform);
+      drawSideMirrorArm(
+        ctx,
+        halfL * 0.50,
+        side * (halfW - 0.4),
+        side,
+        2.1,
+        2.25,
+        1.15,
+        '#1e293b',
+        deform,
+        side < 0 ? opt.leftTurn : opt.rightTurn
+      );
+    }
+
+    // High-roof medical module roof
+    const roofW = halfW * (isIcu ? 0.90 : 0.84);
+    drawRoundedBox(
+      ctx,
+      roofRear,
+      -roofW,
+      wsRear + 0.4,
+      roofW,
+      isIcu ? 1.15 : 1.75,
+      createRoofGradient(ctx, roofW, isIcu ? '#fef08a' : '#f8fafc'),
+      deform,
+      'rgba(15,23,42,0.45)',
+      0.6
+    );
+
+    if (isIcu) {
+      // Type-C Critical Care ICU Reanimobile: red roof perimeter frame, medical HVAC pod, dual lightbars, telemetry antennas
+      strokePoly(
+        ctx,
+        [
+          [roofRear + 0.8, -roofW + 0.7],
+          [wsRear - 0.5, -roofW + 0.7],
+          [wsRear - 0.5, roofW - 0.7],
+          [roofRear + 0.8, roofW - 0.7],
+        ],
+        '#dc2626',
+        0.75,
+        deform,
+        true
+      );
+      // Central medical Red Cross on bright white circle
+      drawRedCrossEmblem(ctx, -halfL * 0.04, 0, 3.2, deform, '#dc2626', '#ffffff');
+
+      // Roof HVAC medical climate condenser pod with drop shadow
+      drawBoxShadow(ctx, -halfL * 0.64, -roofW * 0.48, -halfL * 0.34, roofW * 0.48, 0.75, -0.65, 0.6, 0.28, deform);
+      drawRoundedBox(ctx, -halfL * 0.64, -roofW * 0.48, -halfL * 0.34, roofW * 0.48, 0.75, '#f1f5f9', deform, '#475569', 0.48);
+      drawRoundedBox(ctx, -halfL * 0.58, -roofW * 0.32, -halfL * 0.40, roofW * 0.32, 0.35, '#1e293b', deform);
+      // Dual ICU telemetry/GPS sharkfin & whip antennas
+      drawDeformedDot(ctx, -halfL * 0.24, -roofW * 0.62, 0.55, '#0f172a', deform);
+      drawDeformedDot(ctx, -halfL * 0.24, roofW * 0.62, 0.55, '#0f172a', deform);
+
+      // Front + Rear aerodynamic red/blue LED lightbars
+      drawEmergencyLightbar(ctx, halfL * 0.34, roofW * 0.78, opt.sirenOn, opt.sirenStrobe, deform, 2.8);
+      drawEmergencyLightbar(ctx, -halfL * 0.82, roofW * 0.74, opt.sirenOn, opt.sirenStrobe + Math.PI, deform, 2.2);
+
+      // Side white scene-flood LED strips on flanks
+      for (const side of [-1, 1] as const) {
+        drawRoundedBox(
+          ctx,
+          -halfL * 0.52,
+          side * (roofW - 0.15) - 0.3,
+          -halfL * 0.10,
+          side * (roofW - 0.15) + 0.3,
+          0.15,
+          opt.sirenOn ? '#e0f2fe' : '#cbd5e1',
+          deform,
+          '#1e293b',
+          0.22
+        );
+      }
+    } else {
+      // Type-B Medic Van: clean white roof with crisp red cross, exhaust mushroom vent, front lightbar, rear floodlights
+      drawRedCrossEmblem(ctx, -halfL * 0.14, 0, 3.4, deform, '#dc2626');
+      // Red livery roof shoulder trim stripes
+      for (const side of [-1, 1] as const) {
+        strokePoly(ctx, [[roofRear + 1.8, side * (roofW - 0.9)], [halfL * 0.18, side * (roofW - 0.9)]], '#dc2626', 0.75, deform);
+      }
+      // Circular stainless medical ventilation mushroom fan on rear roof
+      drawBoxShadow(ctx, -halfL * 0.66, -2.1, -halfL * 0.48, 2.1, 1.8, -0.45, 0.45, 0.22, deform);
+      drawDeformedDot(ctx, -halfL * 0.57, 0, 2.1, '#e2e8f0', deform, '#475569', 0.45);
+      drawDeformedDot(ctx, -halfL * 0.57, 0, 1.0, '#94a3b8', deform, '#334155', 0.3);
+
+      // Front aerodynamic LED lightbar
+      drawEmergencyLightbar(ctx, halfL * 0.34, roofW * 0.78, opt.sirenOn, opt.sirenStrobe, deform, 2.7);
+
+      // Rear high-mount scene floodlights & twin amber/blue rear strobes
+      for (const side of [-1, 1] as const) {
+        const flash = opt.sirenOn && (side < 0 ? Math.sin(opt.sirenStrobe) > 0 : Math.sin(opt.sirenStrobe) <= 0);
+        drawRoundedBox(
+          ctx,
+          roofRear + 0.2,
+          side * roofW * 0.62 - 0.85,
+          roofRear + 1.15,
+          side * roofW * 0.62 + 0.85,
+          0.25,
+          flash ? '#38bdf8' : '#1e3a8a',
+          deform,
+          '#0f172a',
+          0.3
+        );
+      }
+    }
+    return;
+  }
+
+  // --------------------------------------------------------------------------
+  // F. BUS MINIBUS (Metro Shuttle 18-Seater)
+  // --------------------------------------------------------------------------
+  if (type === 'bus_minibus') {
+    const wsFront = halfL * 0.68;
+    const wsRear = halfL * 0.46;
+    const roofRear = rX + 1.8;
+    const gW = halfW * 0.88;
+
+    // Wide flush-bonded side panoramic window strips visible along roof bevels
+    for (const side of [-1, 1] as const) {
+      fillPoly(
+        ctx,
+        [
+          [wsFront - 1.2, side * gW * 0.90],
+          [rX + 2.2, side * gW * 0.95],
+          [rX + 2.2, side * (halfW - 0.75)],
+          [wsFront - 1.8, side * (halfW - 0.85)],
+        ],
+        createGlassGradient(ctx, wsFront, 0, rX, side * halfW, 'smoke'),
+        deform,
+        '#090d16',
+        0.45
+      );
+    }
+
+    // Front panoramic windshield + backlit amber LED route display box
+    fillPoly(
+      ctx,
+      [
+        [wsFront, -gW * 0.88],
+        [wsFront, gW * 0.88],
+        [wsRear, gW * 0.95],
+        [wsRear, -gW * 0.95],
+      ],
+      createGlassGradient(ctx, wsFront, -gW, wsRear, gW, 'blue'),
+      deform,
+      '#090d16',
+      0.65
+    );
+    drawCabinInteriorHint(ctx, wsFront - 1.8, wsRear + 0.5, gW * 0.84, deform);
+    // Amber LED route board glow visible at top header of windshield
+    drawRoundedBox(
+      ctx,
+      wsRear + 0.35,
+      -gW * 0.42,
+      wsRear + 1.55,
+      gW * 0.42,
+      0.22,
+      '#090d16',
+      deform
+    );
+    strokePoly(
+      ctx,
+      [
+        [wsRear + 0.95, -gW * 0.34],
+        [wsRear + 0.95, gW * 0.34],
+      ],
+      opt.ignitionOn || opt.positionOn ? '#fbbf24' : '#78350f',
+      0.65,
+      deform
+    );
+    drawGlassGlint(ctx, wsRear + 0.6, -gW * 0.82, wsFront - 0.4, gW * 0.82, 0.16, deform);
+    drawWiperPair(ctx, wsFront, gW * 1.4, 3.8, deform);
+
+    for (const side of [-1, 1] as const) {
+      drawSideMirrorArm(
+        ctx,
+        halfL * 0.56,
+        side * (halfW - 0.35),
+        side,
+        2.35,
+        2.4,
+        1.2,
+        '#1e293b',
+        deform,
+        side < 0 ? opt.leftTurn : opt.rightTurn
+      );
+    }
+
+    // Elongated passenger roof + slim roof HVAC pod + tinted glass emergency escape hatch
+    const roofW = halfW * 0.82;
+    drawRoundedBox(
+      ctx,
+      roofRear,
+      -roofW,
+      wsRear + 0.3,
+      roofW,
+      1.6,
+      createRoofGradient(ctx, roofW, shadePaint(baseColor, 0.08)),
+      deform,
+      'rgba(15,23,42,0.45)',
+      0.58
+    );
+    // 3 amber shuttle clearance markers above windshield
+    drawRoadTrainMarkers(ctx, wsRear - 0.9, [-2.2, 0, 2.2], opt.positionOn || opt.roadTrainOn, deform);
+
+    // Mid-roof slim passenger HVAC condenser unit with twin cooling grilles
+    drawBoxShadow(ctx, -halfL * 0.14, -roofW * 0.56, halfL * 0.22, roofW * 0.56, 1.0, -0.7, 0.6, 0.28, deform);
+    drawRoundedBox(ctx, -halfL * 0.14, -roofW * 0.56, halfL * 0.22, roofW * 0.56, 1.0, '#f1f5f9', deform, '#475569', 0.5);
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(
+        ctx,
+        -halfL * 0.08,
+        side * roofW * 0.25 - 1.5,
+        halfL * 0.16,
+        side * roofW * 0.25 + 1.5,
+        0.4,
+        '#1e293b',
+        deform
+      );
+    }
+
+    // Rear glass emergency escape hatch
+    drawBoxShadow(ctx, -halfL * 0.66, -roofW * 0.42, -halfL * 0.38, roofW * 0.42, 0.6, -0.45, 0.45, 0.22, deform);
+    drawRoundedBox(ctx, -halfL * 0.66, -roofW * 0.42, -halfL * 0.38, roofW * 0.42, 0.6, '#334155', deform, '#0f172a', 0.45);
+    drawRoundedBox(
+      ctx,
+      -halfL * 0.63,
+      -roofW * 0.35,
+      -halfL * 0.41,
+      roofW * 0.35,
+      0.35,
+      createGlassGradient(ctx, -halfL * 0.63, -roofW * 0.35, -halfL * 0.41, roofW * 0.35, 'smoke'),
+      deform
+    );
+    drawGlassGlint(ctx, -halfL * 0.63, -roofW * 0.32, -halfL * 0.41, roofW * 0.32, 0.16, deform);
+    return;
+  }
+
+  // --------------------------------------------------------------------------
+  // G. BUS (Metro Linemaster 12m Low-Floor CityBus)
+  // --------------------------------------------------------------------------
+  if (type === 'bus') {
+    const wsFront = fX - 1.5;
+    const wsRear = halfL * 0.80;
+    const roofRear = rX + 2.2;
+    const gW = halfW * 0.90;
+
+    // Continuous dark bonded panoramic side window rails along both flanks
+    for (const side of [-1, 1] as const) {
+      fillPoly(
+        ctx,
+        [
+          [wsFront - 0.8, side * gW * 0.92],
+          [roofRear, side * gW * 0.94],
+          [roofRear, side * (halfW - 0.72)],
+          [wsFront - 1.2, side * (halfW - 0.78)],
+        ],
+        createGlassGradient(ctx, wsFront, 0, roofRear, side * halfW, 'smoke'),
+        deform,
+        '#090d16',
+        0.45
+      );
+      // Window pillar dividers along side glass band
+      for (let px = -halfL * 0.74; px <= halfL * 0.70; px += 9.5) {
+        strokePoly(ctx, [[px, side * gW * 0.93], [px, side * (halfW - 0.72)]], '#020617', 0.65, deform);
+      }
+    }
+
+    // Wide curved panoramic city bus windshield + dual pantograph wipers
+    fillPoly(
+      ctx,
+      [
+        [wsFront, -gW * 0.90],
+        [wsFront, gW * 0.90],
+        [wsRear, gW * 0.96],
+        [wsRear, -gW * 0.96],
+      ],
+      createGlassGradient(ctx, wsFront, -gW, wsRear, gW, 'blue'),
+      deform,
+      '#090d16',
+      0.7
+    );
+    drawCabinInteriorHint(ctx, wsFront - 2.0, wsRear + 0.6, gW * 0.84, deform, { driverY: -gW * 0.46, dualFrontSeats: false });
+    drawGlassGlint(ctx, wsRear + 0.4, -gW * 0.86, wsFront - 0.4, gW * 0.86, 0.16, deform);
+    drawWiperPair(ctx, wsFront, gW * 1.4, 4.4, deform, true);
+
+    // Long forward-swept coach side mirrors (distinctive bus silhouette!)
+    for (const side of [-1, 1] as const) {
+      const mBaseX = halfL * 0.84;
+      const mBaseY = side * (halfW - 0.4);
+      const mTipX = fX + 1.3;
+      const mTipY = side * (halfW + 2.2);
+      strokePoly(ctx, [[mBaseX, mBaseY], [mTipX - 1.0, mTipY], [mTipX, mTipY]], '#0f172a', 0.85, deform);
+      drawRoundedBox(ctx, mTipX - 1.4, mTipY - 0.7, mTipX + 1.4, mTipY + 0.7, 0.45, '#1e293b', deform, '#475569', 0.35);
+    }
+
+    // Main 12m city bus roof deck with molded side coving & panel seams
+    const roofW = halfW * 0.85;
+    drawRoundedBox(
+      ctx,
+      roofRear,
+      -roofW,
+      wsRear + 0.3,
+      roofW,
+      1.6,
+      createRoofGradient(ctx, roofW, '#f1f5f9'),
+      deform,
+      'rgba(15,23,42,0.48)',
+      0.65
+    );
+
+    // Glowing amber LED destination matrix housing above front brow
+    drawRoundedBox(ctx, wsRear - 1.6, -roofW * 0.56, wsRear + 0.1, roofW * 0.56, 0.35, '#090d16', deform, '#334155', 0.35);
+    strokePoly(
+      ctx,
+      [[wsRear - 0.75, -roofW * 0.44], [wsRear - 0.75, roofW * 0.44]],
+      opt.ignitionOn || opt.positionOn ? '#fbbf24' : '#78350f',
+      0.85,
+      deform
+    );
+    // Front roof outline marker horns
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(
+        ctx,
+        wsRear - 1.1,
+        side * (roofW - 0.9) - 0.5,
+        wsRear - 0.1,
+        side * (roofW - 0.9) + 0.5,
+        0.2,
+        opt.positionOn ? '#fef9c3' : '#94a3b8',
+        deform
+      );
+      drawRoundedBox(
+        ctx,
+        roofRear + 0.2,
+        side * (roofW - 0.9) - 0.5,
+        roofRear + 1.2,
+        side * (roofW - 0.9) + 0.5,
+        0.2,
+        opt.positionOn ? '#ef4444' : '#7f1d1d',
+        deform
+      );
+    }
+
+    // 2 Roof emergency escape hatches (front & rear)
+    for (const hx of [halfL * 0.54, -halfL * 0.66]) {
+      drawBoxShadow(ctx, hx - 3.6, -roofW * 0.36, hx + 3.6, roofW * 0.36, 0.6, -0.5, 0.5, 0.22, deform);
+      drawRoundedBox(ctx, hx - 3.6, -roofW * 0.36, hx + 3.6, roofW * 0.36, 0.6, '#e2e8f0', deform, '#475569', 0.48);
+      drawRoundedBox(
+        ctx,
+        hx - 2.8,
+        -roofW * 0.28,
+        hx + 2.8,
+        roofW * 0.28,
+        0.35,
+        createGlassGradient(ctx, hx - 2.8, -roofW * 0.28, hx + 2.8, roofW * 0.28, 'smoke'),
+        deform
+      );
+      drawGlassGlint(ctx, hx - 2.6, -roofW * 0.25, hx + 2.6, roofW * 0.25, 0.14, deform);
+    }
+
+    // Large low-profile dual-fan city bus roof HVAC pod (center deck) with cast shadow
+    drawBoxShadow(ctx, -halfL * 0.34, -roofW * 0.68, halfL * 0.26, roofW * 0.68, 1.4, -0.85, 0.75, 0.30, deform);
+    drawRoundedBox(
+      ctx,
+      -halfL * 0.34,
+      -roofW * 0.68,
+      halfL * 0.26,
+      roofW * 0.68,
+      1.4,
+      createRoofGradient(ctx, roofW * 0.68, shadePaint(baseColor, 0.16)),
+      deform,
+      '#334155',
+      0.55
+    );
+    // 4 recessed circular condenser fan shrouds inside HVAC pod
+    for (const fx of [-halfL * 0.20, -halfL * 0.04, halfL * 0.12]) {
+      for (const side of [-1, 1] as const) {
+        const fy = side * roofW * 0.32;
+        drawDeformedDot(ctx, fx, fy, 2.25, '#0f172a', deform, '#475569', 0.4);
+        drawDeformedDot(ctx, fx, fy, 1.65, '#1e293b', deform);
+        // Subtle radial fan blades
+        for (let b = 0; b < 4; b++) {
+          const ang = (b * Math.PI) / 2 + 0.4;
+          strokePoly(
+            ctx,
+            [
+              [fx, fy],
+              [fx + Math.cos(ang) * 1.45, fy + Math.sin(ang) * 1.45],
+            ],
+            '#475569',
+            0.42,
+            deform
+          );
+        }
+        drawDeformedDot(ctx, fx, fy, 0.5, '#64748b', deform);
+      }
+    }
+    // Roof panel expansion seams
+    for (const sx of [halfL * 0.36, -halfL * 0.46]) {
+      strokePoly(ctx, [[sx, -roofW + 0.6], [sx, roofW - 0.6]], 'rgba(15,23,42,0.24)', 0.45, deform);
+    }
+  }
 }

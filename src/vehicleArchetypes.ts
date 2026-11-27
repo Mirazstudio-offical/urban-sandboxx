@@ -263,53 +263,54 @@ function getVehicleBasePolygonRaw(
 
   // CAMPERVAN / MOTORHOME (RV) (Aerodynamic front cab, wide residential living box body, flat insulated rear)
   if (type === 'van_camper') {
-    const cabW = halfW * 0.90;
-    const bodyW = halfW * 1.04;
+    const cabW = halfW * 0.88;
+    const bodyW = halfW * 1.03;
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc - 0.5, y: cabW * 0.88 },
-      { x: halfL - frd - 2.0, y: cabW - frd * 0.35 },
-      { x: halfL * 0.32, y: cabW - rd * 0.35 },
-      { x: halfL * 0.26, y: bodyW - rd * 0.35 },
+      { x: halfL - fc - 0.6, y: cabW * 0.88 },
+      { x: halfL - frd - 2.2, y: cabW - frd * 0.35 },
+      { x: halfL * 0.33, y: cabW - rd * 0.35 },
+      { x: halfL * 0.25, y: bodyW - rd * 0.35 },
       { x: 0, y: bodyW - rd },
-      { x: -halfL * 0.60, y: bodyW - rd * 0.35 },
-      { x: -halfL + rrd + 1.2, y: bodyW * 0.95 - rrd * 0.35 },
-      { x: -halfL + rc + 0.3, y: bodyW * 0.80 },
+      { x: -halfL * 0.64, y: bodyW - rd * 0.35 },
+      { x: -halfL + rrd + 1.1, y: bodyW * 0.96 - rrd * 0.35 },
+      { x: -halfL + rc + 0.2, y: bodyW * 0.82 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.3, y: -bodyW * 0.80 },
-      { x: -halfL + rld + 1.2, y: -bodyW * 0.95 + rld * 0.35 },
-      { x: -halfL * 0.60, y: -bodyW + ld * 0.35 },
+      { x: -halfL + rc + 0.2, y: -bodyW * 0.82 },
+      { x: -halfL + rld + 1.1, y: -bodyW * 0.96 + rld * 0.35 },
+      { x: -halfL * 0.64, y: -bodyW + ld * 0.35 },
       { x: 0, y: -bodyW + ld },
-      { x: halfL * 0.26, y: -bodyW + ld * 0.35 },
-      { x: halfL * 0.32, y: -cabW + ld * 0.35 },
-      { x: halfL - fld - 2.0, y: -cabW + fld * 0.35 },
-      { x: halfL - fc - 0.5, y: -cabW * 0.88 }
+      { x: halfL * 0.25, y: -bodyW + ld * 0.35 },
+      { x: halfL * 0.33, y: -cabW + ld * 0.35 },
+      { x: halfL - fld - 2.2, y: -cabW + fld * 0.35 },
+      { x: halfL - fc - 0.6, y: -cabW * 0.88 }
     ];
   }
 
-  // 7. VANS, MINIBUSES, DELIVERY & ARMORED (Flat cab-over/blunt nose, slab vertical sides, flat rear with rounded corners)
-  const isVan = type === 'van' || type === 'bus_minibus' || 
-                type === 'van_cargo_old' || type === 'ambulance_van' || type === 'ambulance' || 
-                type === 'delivery_truck';
+  // 7. VANS, MINIBUSES, DELIVERY & AMBULANCES
+  const isVan = type === 'van' || type === 'bus_minibus' ||
+                type === 'van_cargo_old' || type === 'ambulance_van' || type === 'ambulance' ||
+                type === 'delivery_truck' || type === 'bus';
   if (isVan) {
     const sideW = halfW;
+    const frontNoseW = type === 'delivery_truck' ? halfW * 0.88 : (type === 'van_cargo_old' ? halfW * 0.82 : halfW * 0.90);
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc - 0.4, y: sideW * 0.92 },
-      { x: halfL - frd - 1.5, y: sideW - frd * 0.35 },
+      { x: halfL - fc - 0.5, y: frontNoseW },
+      { x: halfL - frd - 2.0, y: sideW - frd * 0.35 },
       { x: halfL * 0.50, y: sideW - rd * 0.35 },
       { x: 0, y: sideW - rd * 0.35 },
       { x: -halfL * 0.60, y: sideW - rd * 0.35 },
       { x: -halfL + rrd + 1.0, y: sideW * 0.98 - rrd * 0.35 },
-      { x: -halfL + rc + 0.2, y: sideW * 0.85 },
+      { x: -halfL + rc + 0.2, y: sideW * 0.82 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.2, y: -sideW * 0.85 },
+      { x: -halfL + rc + 0.2, y: -sideW * 0.82 },
       { x: -halfL + rld + 1.0, y: -sideW * 0.98 + rld * 0.35 },
       { x: -halfL * 0.60, y: -sideW + ld * 0.35 },
       { x: 0, y: -sideW + ld * 0.35 },
       { x: halfL * 0.50, y: -sideW + ld * 0.35 },
-      { x: halfL - fld - 1.5, y: -sideW + fld * 0.35 },
-      { x: halfL - fc - 0.4, y: -sideW * 0.92 }
+      { x: halfL - fld - 2.0, y: -sideW + fld * 0.35 },
+      { x: halfL - fc - 0.5, y: -frontNoseW }
     ];
   }
 
@@ -339,136 +340,183 @@ function getVehicleBasePolygonRaw(
     ];
   }
 
-  // 9. TRACTORS (Narrow long engine hood, wide rear cabin & massive rear fenders, open rear hitch area)
+  // 9. TRACTORS (Narrow long diesel hood, front ballast, UK/MK cab, wide rear fenders & 3-point hitch)
   const isTractor = type === 'tractor_mtz82' || type === 'tractor_mtz80' || type === 'tractor_mtz80_old';
   if (isTractor) {
-    const cabBackX = -halfL * 0.74; // Rear wall of cabin / transmission casing
+    const isOld = type === 'tractor_mtz80_old';
+    const hoodW = isOld ? halfW * 0.33 : halfW * 0.36;
+    const cabShoulderW = isOld ? halfW * 0.58 : halfW * 0.74;
+    const hitchRearX = -halfL + rc + 0.4;
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc - 0.5, y: halfW * 0.34 },
-      { x: halfL * 0.70, y: halfW * 0.35 - frd * 0.3 },
-      { x: halfL * 0.10, y: halfW * 0.36 - rd * 0.3 },
-      { x: 0, y: halfW * 0.74 - rd * 0.3 },
-      { x: -halfL * 0.30, y: halfW * 0.98 - rd * 0.3 },
-      { x: -halfL * 0.76, y: halfW * 0.98 - rrd * 0.3 },
-      { x: -halfL * 0.76, y: halfW * 0.50 },
-      { x: cabBackX, y: halfW * 0.44 },
-      { x: cabBackX, y: 0 },
-      { x: cabBackX, y: -halfW * 0.44 },
-      { x: -halfL * 0.76, y: -halfW * 0.50 },
-      { x: -halfL * 0.76, y: -halfW * 0.98 + rld * 0.3 },
-      { x: -halfL * 0.30, y: -halfW * 0.98 + ld * 0.3 },
-      { x: 0, y: -halfW * 0.74 + ld * 0.3 },
-      { x: halfL * 0.10, y: -halfW * 0.36 + ld * 0.3 },
-      { x: halfL * 0.70, y: -halfW * 0.35 + fld * 0.3 },
-      { x: halfL - fc - 0.5, y: -halfW * 0.34 }
+      { x: halfL - fc - 0.4, y: hoodW },
+      { x: halfL * 0.72, y: hoodW - frd * 0.25 },
+      { x: halfL * 0.08, y: hoodW - rd * 0.25 },
+      { x: -halfL * 0.04, y: cabShoulderW - rd * 0.3 },
+      { x: -halfL * 0.20, y: halfW * 0.97 - rd * 0.3 },
+      { x: -halfL * 0.82, y: halfW * 0.97 - rrd * 0.3 },
+      { x: -halfL * 0.85, y: halfW * 0.42 },
+      { x: hitchRearX, y: halfW * 0.32 },
+      { x: hitchRearX, y: 0 },
+      { x: hitchRearX, y: -halfW * 0.32 },
+      { x: -halfL * 0.85, y: -halfW * 0.42 },
+      { x: -halfL * 0.82, y: -halfW * 0.97 + rld * 0.3 },
+      { x: -halfL * 0.20, y: -halfW * 0.97 + ld * 0.3 },
+      { x: -halfL * 0.04, y: -cabShoulderW + ld * 0.3 },
+      { x: halfL * 0.08, y: -hoodW + ld * 0.25 },
+      { x: halfL * 0.72, y: -hoodW + fld * 0.25 },
+      { x: halfL - fc - 0.4, y: -hoodW }
     ];
   }
 
-  // 9b. TRACTOR BARREL TRAILER (Тракторная бочка-цистерна: A-frame drawbar, cylindrical tank on frame)
+  // 9b. TRACTOR BARREL & VACUUM TRAILERS (A-frame drawbar + cylindrical tank on single axle)
   if (type === 'trailer_barrel' || type === 'trailer_vacuum') {
-    const tankFront = halfL * 0.55;
-    const tankRear = -halfL * 0.80;
+    const tankFront = halfL * 0.54;
+    const tankRear = -halfL + rc;
+    const bodyW = halfW * 0.92;
     return [
-      { x: tankFront - fc, y: 0 },
-      { x: tankFront - fc, y: halfW * 0.70 },
-      { x: tankFront - frd - 0.8, y: halfW * 0.76 - frd * 0.25 },
-      { x: 0, y: halfW * 0.76 - rd * 0.3 },
-      { x: tankRear + rrd + 0.8, y: halfW * 0.76 - rrd * 0.3 },
-      { x: tankRear + rc, y: halfW * 0.70 },
-      { x: tankRear + rc, y: 0 },
-      { x: tankRear + rc, y: -halfW * 0.70 },
-      { x: tankRear + rld + 0.8, y: -halfW * 0.76 + rld * 0.3 },
-      { x: 0, y: -halfW * 0.76 + ld * 0.3 },
-      { x: tankFront - fld - 0.8, y: -halfW * 0.76 + fld * 0.25 },
-      { x: tankFront - fc, y: -halfW * 0.70 },
-      { x: tankFront - fc, y: 0 }
+      { x: halfL - fc, y: 0 },
+      { x: halfL * 0.74, y: halfW * 0.32 },
+      { x: tankFront, y: bodyW * 0.84 },
+      { x: halfL * 0.16, y: bodyW - rd * 0.25 },
+      { x: -halfL * 0.28, y: bodyW - rd * 0.25 },
+      { x: tankRear + 1.2, y: bodyW * 0.88 - rrd * 0.25 },
+      { x: tankRear, y: bodyW * 0.72 },
+      { x: tankRear, y: 0 },
+      { x: tankRear, y: -bodyW * 0.72 },
+      { x: tankRear + 1.2, y: -bodyW * 0.88 + rld * 0.25 },
+      { x: -halfL * 0.28, y: -bodyW + ld * 0.25 },
+      { x: halfL * 0.16, y: -bodyW + ld * 0.25 },
+      { x: tankFront, y: -bodyW * 0.84 },
+      { x: halfL * 0.74, y: -halfW * 0.32 }
     ];
   }
 
-  // 9c. 2-AXLE FLATBED FARM TRAILER 2-PTS-4 (Бортовой 2-осный тракторный прицеп 2-ПТС-4)
+  // 9c. 2-AXLE FLATBED FARM TRAILER 2-PTS-4 & HEAVY SEMI-TRAILERS
   if (type === 'trailer_flatbed_2axle' || type.startsWith('trailer_semi')) {
-    const boxFront = type.startsWith('trailer_semi') ? halfL * 0.95 : halfL * 0.72;
-    const boxRear = -halfL * 0.95;
+    const isSemi = type.startsWith('trailer_semi');
+    const boxFront = isSemi ? halfL * 0.96 : halfL * 0.68;
+    const boxRear = -halfL + rc;
     const sideW = halfW * 0.96;
+    if (!isSemi) {
+      // 2-PTS-4 has front drawbar tongue + rectangular dump box
+      return [
+        { x: halfL - fc, y: 0 },
+        { x: halfL * 0.82, y: sideW * 0.36 },
+        { x: boxFront, y: sideW },
+        { x: halfL * 0.20, y: sideW - rd * 0.3 },
+        { x: -halfL * 0.35, y: sideW - rd * 0.3 },
+        { x: boxRear + 1.0, y: sideW - rrd * 0.3 },
+        { x: boxRear, y: sideW * 0.86 },
+        { x: boxRear, y: 0 },
+        { x: boxRear, y: -sideW * 0.86 },
+        { x: boxRear + 1.0, y: -sideW + rld * 0.3 },
+        { x: -halfL * 0.35, y: -sideW + ld * 0.3 },
+        { x: halfL * 0.20, y: -sideW + ld * 0.3 },
+        { x: boxFront, y: -sideW },
+        { x: halfL * 0.82, y: -sideW * 0.36 }
+      ];
+    }
+    // Semi-trailers: full-width rectangular bulkhead & tri-axle rear
     return [
       { x: boxFront - fc, y: 0 },
-      { x: boxFront - fc, y: sideW },
-      { x: boxFront - frd - 1.0, y: sideW - frd * 0.3 },
-      { x: halfL * 0.20, y: sideW - rd * 0.3 },
+      { x: boxFront - fc, y: sideW * 0.94 },
+      { x: boxFront - frd - 1.2, y: sideW - frd * 0.3 },
+      { x: halfL * 0.24, y: sideW - rd * 0.3 },
       { x: 0, y: sideW - rd * 0.3 },
-      { x: -halfL * 0.40, y: sideW - rd * 0.3 },
+      { x: -halfL * 0.42, y: sideW - rd * 0.3 },
       { x: boxRear + rrd + 0.8, y: sideW - rrd * 0.3 },
-      { x: boxRear + rc, y: sideW },
-      { x: boxRear + rc, y: 0 },
-      { x: boxRear + rc, y: -sideW },
+      { x: boxRear, y: sideW * 0.92 },
+      { x: boxRear, y: 0 },
+      { x: boxRear, y: -sideW * 0.92 },
       { x: boxRear + rld + 0.8, y: -sideW + rld * 0.3 },
-      { x: -halfL * 0.40, y: -sideW + ld * 0.3 },
+      { x: -halfL * 0.42, y: -sideW + ld * 0.3 },
       { x: 0, y: -sideW + ld * 0.3 },
-      { x: halfL * 0.20, y: -sideW + ld * 0.3 },
-      { x: boxFront - fld - 1.0, y: -sideW + fld * 0.3 },
-      { x: boxFront - fc, y: -sideW }
+      { x: halfL * 0.24, y: -sideW + ld * 0.3 },
+      { x: boxFront - fld - 1.2, y: -sideW + fld * 0.3 },
+      { x: boxFront - fc, y: -sideW * 0.94 }
     ];
   }
 
-  // 9d. ROAD MACHINERY (ROAD ROLLERS & ASPHALT PAVERS)
+  // 9d. ROAD MACHINERY (ASPHALT PAVER, PNEUMATIC ROLLER, ARTICULATED TANDEM ROLLERS)
   if (type === 'paver_asphalt_wheeled') {
-    // Wheeled asphalt paver has a 100% RIGID monocoque frame (hopper, chassis, cabin and screed are fixed)
+    const screedW = halfW * 1.06;
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc, y: halfW * 0.45 },   // Push roller right bumper
-      { x: halfL * 0.90, y: halfW * 0.96 }, // Hopper right front corner
-      { x: halfL * 0.08, y: halfW * 0.96 }, // Hopper right rear corner
-      { x: 0, y: halfW * 0.82 },            // Tractor waist
-      { x: -halfL * 0.58, y: halfW * 1.00 }, // Operator deck outer step
-      { x: -halfL * 0.72, y: halfW * 0.90 }, // Screed tow arm pivot
-      { x: -halfL * 0.78, y: halfW * 1.10 }, // Screed end plate front
-      { x: -halfL + rc, y: halfW * 1.10 },   // Screed end plate rear
-      { x: -halfL + rc, y: 0 },             // Screed rear center
-      { x: -halfL + rc, y: -halfW * 1.10 },  // Screed left end plate rear
-      { x: -halfL * 0.78, y: -halfW * 1.10 }, // Screed left end plate front
-      { x: -halfL * 0.72, y: -halfW * 0.90 }, // Screed left tow arm pivot
-      { x: -halfL * 0.58, y: -halfW * 1.00 }, // Operator deck left step
-      { x: 0, y: -halfW * 0.82 },            // Tractor left waist
-      { x: halfL * 0.08, y: -halfW * 0.96 }, // Hopper left rear corner
-      { x: halfL * 0.90, y: -halfW * 0.96 }, // Hopper left front corner
-      { x: halfL - fc, y: -halfW * 0.45 },   // Push roller left bumper
+      { x: halfL - fc, y: halfW * 0.48 },
+      { x: halfL * 0.90, y: halfW * 0.96 },
+      { x: halfL * 0.12, y: halfW * 0.96 },
+      { x: 0, y: halfW * 0.82 },
+      { x: -halfL * 0.60, y: halfW * 0.94 },
+      { x: -halfL * 0.72, y: halfW * 0.88 },
+      { x: -halfL * 0.76, y: screedW },
+      { x: -halfL + rc, y: screedW },
+      { x: -halfL + rc, y: 0 },
+      { x: -halfL + rc, y: -screedW },
+      { x: -halfL * 0.76, y: -screedW },
+      { x: -halfL * 0.72, y: -halfW * 0.88 },
+      { x: -halfL * 0.60, y: -halfW * 0.94 },
+      { x: 0, y: -halfW * 0.82 },
+      { x: halfL * 0.12, y: -halfW * 0.96 },
+      { x: halfL * 0.90, y: -halfW * 0.96 },
+      { x: halfL - fc, y: -halfW * 0.48 },
     ];
   }
 
-  const isArticulatedRoller = type === 'roller_heavy_tandem' || type === 'roller_compact_sidewalk' || type === 'roller_pneumatic';
+  // Pneumatic tire roller has a full-width rectangular ballast steel hull (NOT hourglass waist!)
+  if (type === 'roller_pneumatic') {
+    const hullW = halfW * 0.95;
+    return [
+      { x: halfL - fc, y: 0 },
+      { x: halfL - fc, y: hullW * 0.82 },
+      { x: halfL - fc - 1.2, y: hullW },
+      { x: halfL * 0.45, y: hullW },
+      { x: 0, y: hullW },
+      { x: -halfL * 0.45, y: hullW },
+      { x: -halfL + rc + 1.2, y: hullW },
+      { x: -halfL + rc, y: hullW * 0.82 },
+      { x: -halfL + rc, y: 0 },
+      { x: -halfL + rc, y: -hullW * 0.82 },
+      { x: -halfL + rc + 1.2, y: -hullW },
+      { x: -halfL * 0.45, y: -hullW },
+      { x: 0, y: -hullW },
+      { x: halfL * 0.45, y: -hullW },
+      { x: halfL - fc - 1.2, y: -hullW },
+      { x: halfL - fc, y: -hullW * 0.82 },
+    ];
+  }
+
+  const isArticulatedRoller = type === 'roller_heavy_tandem' || type === 'roller_compact_sidewalk';
   if (isArticulatedRoller) {
     const gamma = car.steerAngle || 0;
     const cosF = Math.cos(gamma);
     const sinF = Math.sin(gamma);
 
-    const drumW = type === 'roller_compact_sidewalk' ? halfW * 0.94 : halfW * 0.97;
-    const waistW = halfW * 0.42;
+    const drumW = type === 'roller_compact_sidewalk' ? halfW * 0.95 : halfW * 0.98;
+    const waistW = halfW * 0.44;
 
-    // Front frame raw points (pivots by steer angle gamma around central hinge at 0, 0)
     const rawFront = [
       { x: halfL - fc, y: 0 },
       { x: halfL - fc, y: drumW },
-      { x: halfL * 0.35, y: drumW },
-      { x: halfL * 0.12, y: waistW * 1.3 },
+      { x: halfL * 0.34, y: drumW },
+      { x: halfL * 0.12, y: waistW * 1.25 },
       { x: 0, y: waistW }
     ];
 
-    // Rear frame (fixed baseline reference frame containing engine, ROPS cabin & rear drum)
     const rawRear = [
-      { x: -halfL * 0.12, y: waistW * 1.3 },
-      { x: -halfL * 0.35, y: drumW },
+      { x: -halfL * 0.12, y: waistW * 1.25 },
+      { x: -halfL * 0.34, y: drumW },
       { x: -halfL + rc, y: drumW },
       { x: -halfL + rc, y: 0 },
       { x: -halfL + rc, y: -drumW },
-      { x: -halfL * 0.35, y: -drumW },
-      { x: -halfL * 0.12, y: -waistW * 1.3 },
+      { x: -halfL * 0.34, y: -drumW },
+      { x: -halfL * 0.12, y: -waistW * 1.25 },
       { x: 0, y: -waistW }
     ];
 
     const rawFrontLeft = [
-      { x: halfL * 0.12, y: -waistW * 1.3 },
-      { x: halfL * 0.35, y: -drumW },
+      { x: halfL * 0.12, y: -waistW * 1.25 },
+      { x: halfL * 0.34, y: -drumW },
       { x: halfL - fc, y: -drumW }
     ];
 
@@ -501,25 +549,25 @@ function getVehicleBasePolygonRaw(
     ];
   }
 
-  // 10. MOTORCYCLE WITH SIDECAR (Ural M-67)
+  // 10. MOTORCYCLE WITH SIDECAR (Ural M-67 — Clean Clockwise Non-Self-Intersecting Outline)
   if (type === 'moto_ural_sidecar') {
     return [
-      { x: halfL - fc, y: -halfW * 0.45 },
-      { x: halfL * 0.40, y: -halfW * 0.85 },
-      { x: halfL * 0.35, y: halfW * 0.85 },
-      { x: 0, y: halfW * 0.98 },
-      { x: -halfL * 0.35, y: halfW * 0.98 },
-      { x: -halfL * 0.65, y: halfW * 0.75 },
-      { x: -halfL * 0.80, y: halfW * 0.40 },
-      { x: -halfL + rc + 0.2, y: -halfW * 0.25 },
-      { x: -halfL + rc, y: -halfW * 0.45 },
-      { x: -halfL + rc + 0.2, y: -halfW * 0.65 },
-      { x: -halfL * 0.40, y: -halfW * 0.65 },
-      { x: -halfL * 0.10, y: -halfW * 0.60 },
-      { x: 0, y: -halfW * 0.65 },
-      { x: halfL * 0.15, y: -halfW * 0.65 },
-      { x: halfL * 0.45, y: -halfW * 0.70 },
-      { x: halfL * 0.70, y: -halfW * 0.55 }
+      { x: halfL - fc, y: -halfW * 0.44 },
+      { x: halfL * 0.70, y: -halfW * 0.20 },
+      { x: halfL * 0.56, y: halfW * 0.32 },
+      { x: halfL * 0.48, y: halfW * 0.72 },
+      { x: halfL * 0.08, y: halfW * 0.96 },
+      { x: -halfL * 0.44, y: halfW * 0.96 },
+      { x: -halfL * 0.72, y: halfW * 0.76 },
+      { x: -halfL * 0.76, y: halfW * 0.24 },
+      { x: -halfL + rc + 0.2, y: -halfW * 0.24 },
+      { x: -halfL + rc, y: -halfW * 0.44 },
+      { x: -halfL + rc + 0.2, y: -halfW * 0.64 },
+      { x: -halfL * 0.44, y: -halfW * 0.68 },
+      { x: -halfL * 0.04, y: -halfW * 0.76 },
+      { x: halfL * 0.36, y: -halfW * 0.92 },
+      { x: halfL * 0.60, y: -halfW * 0.72 },
+      { x: halfL * 0.84, y: -halfW * 0.60 }
     ];
   }
 
@@ -528,21 +576,21 @@ function getVehicleBasePolygonRaw(
   if (isSoloMoto) {
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL * 0.75, y: halfW * 0.22 },
-      { x: halfL * 0.45, y: halfW * 0.95 },
-      { x: halfL * 0.20, y: halfW * 0.52 },
-      { x: 0, y: halfW * 0.38 },
-      { x: -halfL * 0.25, y: halfW * 0.34 },
-      { x: -halfL * 0.60, y: halfW * 0.28 },
-      { x: -halfL + rc + 0.5, y: halfW * 0.18 },
+      { x: halfL * 0.76, y: halfW * 0.28 },
+      { x: halfL * 0.44, y: halfW * 0.96 },
+      { x: halfL * 0.20, y: halfW * 0.56 },
+      { x: 0, y: halfW * 0.44 },
+      { x: -halfL * 0.28, y: halfW * 0.40 },
+      { x: -halfL * 0.64, y: halfW * 0.36 },
+      { x: -halfL + rc + 0.5, y: halfW * 0.24 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.5, y: -halfW * 0.18 },
-      { x: -halfL * 0.60, y: -halfW * 0.28 },
-      { x: -halfL * 0.25, y: -halfW * 0.34 },
-      { x: 0, y: -halfW * 0.38 },
-      { x: halfL * 0.20, y: -halfW * 0.52 },
-      { x: halfL * 0.45, y: -halfW * 0.95 },
-      { x: halfL * 0.75, y: -halfW * 0.22 }
+      { x: -halfL + rc + 0.5, y: -halfW * 0.24 },
+      { x: -halfL * 0.64, y: -halfW * 0.36 },
+      { x: -halfL * 0.28, y: -halfW * 0.40 },
+      { x: 0, y: -halfW * 0.44 },
+      { x: halfL * 0.20, y: -halfW * 0.56 },
+      { x: halfL * 0.44, y: -halfW * 0.96 },
+      { x: halfL * 0.76, y: -halfW * 0.28 }
     ];
   }
 

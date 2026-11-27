@@ -15226,7 +15226,7 @@ export class GameRenderer {
             ? 'low_beam_projector'
             : 'low_beam';
           const isHighQuality = (performanceConfig.headlightQuality ?? 2) >= 2;
-          const isArticulatedHead = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
+          const isArticulatedHead = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk';
           const headAngle = isArticulatedHead ? (car.angle + (car.steerAngle || 0)) : car.angle;
           const cosH = Math.cos(headAngle);
           const sinH = Math.sin(headAngle);
@@ -15732,18 +15732,20 @@ export class GameRenderer {
           drawOpticalBeamColor(cCtx, 'siren_lobe', originX, originY, lobeAngle, optReach, optHalfW, 0.62, rgb);
         };
 
-        // Left & right lightbar emitters on roof
-        const barRX = car.x - sinA * -4.0;
-        const barRY = car.y + cosA * -4.0;
-        const barBX = car.x - sinA * 4.0;
-        const barBY = car.y + cosA * 4.0;
+        // Left & right lightbar emitters on roof (shifted to front roof header for ambulances)
+        const barOffsetX = (car.type === 'ambulance' || car.type === 'ambulance_van') ? halfL * 0.34 : 0;
+        const barLat = (car.type === 'ambulance' || car.type === 'ambulance_van') ? halfW * 0.48 : 4.0;
+        const barRX = car.x + cosA * barOffsetX - sinA * -barLat;
+        const barRY = car.y + sinA * barOffsetX + cosA * -barLat;
+        const barBX = car.x + cosA * barOffsetX - sinA * barLat;
+        const barBY = car.y + sinA * barOffsetX + cosA * barLat;
         drawSirenLobe(barRX, barRY, redAngle, [255, 42, 48]);
         drawSirenLobe(barBX, barBY, blueAngle, [48, 128, 255]);
 
-        // Ambient roof halo around vehicle
+        // Ambient roof halo around lightbar
         const strobePhase = Math.sin(nowFireSec * 18 + car.x);
         const strobeRad = (48 + Math.abs(strobePhase) * 28) * fogFactor;
-        this.drawRadialCutout(lCtx, car.x, car.y, strobeRad, 0.85, 'soft');
+        this.drawRadialCutout(lCtx, car.x + cosA * barOffsetX, car.y + sinA * barOffsetX, strobeRad, 0.85, 'soft');
       }
 
       // Excavator EK-12 Cab-Roof Headlights & Work Floodlights (strictly turret & boom mounted)
@@ -16078,7 +16080,7 @@ export class GameRenderer {
       const isTractor = car.type.startsWith('tractor_');
       const { core: headCoreRgb, outer: headOuterRgb } = getVehicleHeadlightColors(car);
 
-      const isArticulated = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
+      const isArticulated = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk';
       const frontAngle = isArticulated ? (car.angle + (car.steerAngle || 0)) : car.angle;
       const cosFA = Math.cos(frontAngle);
       const sinFA = Math.sin(frontAngle);
@@ -16862,10 +16864,12 @@ export class GameRenderer {
         const strobe = (car.sirenStrobe || 0);
         const pulseRed = Math.max(0.25, 0.5 + 0.5 * Math.sin(strobe));
         const pulseBlue = Math.max(0.25, 0.5 - 0.5 * Math.sin(strobe));
-        const barRX = car.x - sinA * -4.0;
-        const barRY = car.y + cosA * -4.0;
-        const barBX = car.x - sinA * 4.0;
-        const barBY = car.y + cosA * 4.0;
+        const barOffsetX = (car.type === 'ambulance' || car.type === 'ambulance_van') ? (car.length * 0.5) * 0.34 : 0;
+        const barLat = (car.type === 'ambulance' || car.type === 'ambulance_van') ? (car.width * 0.5) * 0.48 : 4.0;
+        const barRX = car.x + cosA * barOffsetX - sinA * -barLat;
+        const barRY = car.y + sinA * barOffsetX + cosA * -barLat;
+        const barBX = car.x + cosA * barOffsetX - sinA * barLat;
+        const barBY = car.y + sinA * barOffsetX + cosA * barLat;
 
         // Crisp left/right roof lightbar optical lens flares
         const rPin = ctx.createRadialGradient(barRX, barRY, 0.4, barRX, barRY, 7.5);

@@ -1,20 +1,23 @@
-import type { CarType } from './types';
-import type { VehicleRenderContext } from './vehicleVisuals';
+import type { VehicleRenderContext } from './vehicleArchetypes';
 import {
-  type Pt,
-  type DeformFn,
-  type LiveOpticsState,
+  Pt,
+  DeformFn,
   shadePaint,
   getLiveOpticsState,
   fillPoly,
   strokePoly,
   drawRoundedBox,
   drawDeformedDot,
+  drawBoxShadow,
   createBodyMetallicGradient,
   createGlassGradient,
+  drawGlassGlint,
+  drawChromePipe,
+  drawTreadedTire,
+  LiveOpticsState,
 } from './vehicleModelPrimitives';
 
-export const REDRAWN_MOTORCYCLE_TYPES: ReadonlySet<string> = new Set<CarType>([
+export const REDRAWN_MOTORCYCLE_TYPES: ReadonlySet<string> = new Set([
   'moto_izh_jupiter',
   'moto_ural_sidecar',
   'moto_jawa350',
@@ -23,802 +26,1060 @@ export const REDRAWN_MOTORCYCLE_TYPES: ReadonlySet<string> = new Set<CarType>([
   'moped_soviet',
 ]);
 
-export function isRedrawnMotorcycle(type: string): boolean {
-  return REDRAWN_MOTORCYCLE_TYPES.has(type);
+export function isRedrawnMotorcycle(type: string | undefined | null): boolean {
+  return !!type && REDRAWN_MOTORCYCLE_TYPES.has(type);
 }
+
+// ============================================================================
+// SHARED MOTORCYCLE MECHANICAL SUB-ASSEMBLY HELPERS
+// ============================================================================
 
 function drawMotoWheel(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  len: number,
-  wid: number,
-  angle: number,
-  style: 'spoke' | 'sport_front' | 'sport_rear' | 'chopper_fat' | 'moped',
-  deform: DeformFn
-): void {
-  const [dx, dy] = deform(x, y);
-  ctx.save();
-  ctx.translate(dx, dy);
-  if (angle) ctx.rotate(angle);
-
-  const hl = len * 0.5;
-  const hw = wid * 0.5;
-  const r = Math.min(0.95, hw * 0.85);
-
-  // Soft tire contact shadow
-  ctx.fillStyle = 'rgba(2, 6, 23, 0.45)';
-  ctx.beginPath();
-  ctx.roundRect(-hl - 0.35, -hw - 0.3, len + 0.7, wid + 0.6, r + 0.25);
-  ctx.fill();
-
-  // Vulcanized tire carcass
-  ctx.fillStyle = '#0c1118';
-  ctx.beginPath();
-  ctx.roundRect(-hl, -hw, len, wid, r);
-  ctx.fill();
-
-  // Rounded tire crown specular highlight
-  const crown = ctx.createLinearGradient(0, -hw, 0, hw);
-  crown.addColorStop(0.0, 'rgba(15, 23, 42, 0.25)');
-  crown.addColorStop(0.35, 'rgba(148, 163, 184, 0.24)');
-  crown.addColorStop(0.55, 'rgba(100, 116, 139, 0.12)');
-  crown.addColorStop(1.0, 'rgba(0, 0, 0, 0.45)');
-  ctx.fillStyle = crown;
-  ctx.beginPath();
-  ctx.roundRect(-hl + 0.25, -hw + 0.2, len - 0.5, wid - 0.4, r * 0.7);
-  ctx.fill();
-
-  // Tread sipes
-  if (style === 'sport_front' || style === 'sport_rear') {
-    ctx.strokeStyle = 'rgba(203, 213, 225, 0.18)';
-    ctx.lineWidth = 0.35;
-    for (let tx = -hl + 1.1; tx <= hl - 1.1; tx += 1.6) {
-      ctx.beginPath();
-      ctx.moveTo(tx - 0.4, -hw * 0.75);
-      ctx.lineTo(tx + 0.4, 0);
-      ctx.lineTo(tx - 0.4, hw * 0.75);
-      ctx.stroke();
-    }
-    // Floating steel brake discs & gold Brembo calipers
-    ctx.fillStyle = '#cbd5e1';
-    if (style === 'sport_front') {
-      ctx.fillRect(-hl * 0.52, -hw - 0.35, hl * 1.04, 0.42);
-      ctx.fillRect(-hl * 0.52, hw - 0.07, hl * 1.04, 0.42);
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(-0.3, -hw - 0.52, 1.35, 0.65);
-      ctx.fillRect(-0.3, hw - 0.13, 1.35, 0.65);
-    } else {
-      // Rear right disc + left gold drive chain
-      ctx.fillRect(-hl * 0.48, hw - 0.08, hl * 0.96, 0.4);
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(-hl * 0.65, -hw - 0.42, hl * 1.3, 0.45);
-    }
-  } else {
-    // Classic circumferential tread groove + chrome/steel spoke hub peeking at axle
-    ctx.strokeStyle = 'rgba(2, 6, 23, 0.7)';
-    ctx.lineWidth = 0.38;
-    ctx.beginPath();
-    ctx.moveTo(-hl + 0.7, 0);
-    ctx.lineTo(hl - 0.7, 0);
-    ctx.stroke();
-
-    // Axle caps / spoke drum flange
-    const rimCol = style === 'chopper_fat' ? '#f8fafc' : '#cbd5e1';
-    ctx.fillStyle = rimCol;
-    ctx.fillRect(-0.9, -hw - 0.32, 1.8, 0.42);
-    ctx.fillRect(-0.9, hw - 0.1, 1.8, 0.42);
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(-0.45, -hw - 0.45, 0.9, wid + 0.9);
-  }
-
-  ctx.restore();
-}
-
-function drawRoundChromeHeadlight(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  opt: LiveOpticsState,
-  broken: boolean,
-  deform: DeformFn
-): void {
-  // Chrome bucket extending slightly behind the lens
-  drawRoundedBox(ctx, x - radius * 1.45, y - radius * 0.92, x + radius * 0.35, y + radius * 0.92, radius * 0.55, '#cbd5e1', deform, '#334155', 0.42);
-  // Chrome bezel ring
-  drawRoundedBox(ctx, x - radius * 0.1, y - radius * 0.95, x + radius * 0.52, y + radius * 0.95, radius * 0.35, '#f8fafc', deform, '#475569', 0.35);
-
-  if (broken) {
-    drawRoundedBox(ctx, x + radius * 0.1, y - radius * 0.78, x + radius * 0.62, y + radius * 0.78, radius * 0.25, '#090d16', deform);
-    return;
-  }
-
-  const lit = opt.headlightsOn || opt.positionOn;
-  const lensFill = opt.highBeam
-    ? '#ffffff'
-    : opt.headlightsOn
-    ? '#fef08a'
-    : opt.positionOn
-    ? '#fde68a'
-    : '#94a3b8';
-
-  drawRoundedBox(ctx, x + radius * 0.15, y - radius * 0.78, x + radius * 0.68, y + radius * 0.78, radius * 0.32, lensFill, deform, '#475569', 0.3);
-  if (lit) {
-    drawDeformedDot(ctx, x + radius * 0.42, y, radius * 0.35, '#ffffff', deform);
-  }
-}
-
-function drawMotoBlinkers(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  offsetY: number,
-  centerY: number,
-  opt: LiveOpticsState,
-  deform: DeformFn,
-  size = 0.72
-): void {
-  const drawPod = (side: -1 | 1, intensity: number) => {
-    const py = centerY + side * offsetY;
-    strokePoly(ctx, [[x, centerY + side * (offsetY * 0.38)], [x, py]], '#334155', 0.55, deform);
-    const lit = intensity > 0.06;
-    drawRoundedBox(
-      ctx,
-      x - size * 0.72,
-      py - size * 0.58,
-      x + size * 0.72,
-      py + size * 0.58,
-      0.32,
-      lit ? '#f59e0b' : '#92400e',
-      deform,
-      '#0f172a',
-      0.35
-    );
-    if (lit) {
-      drawDeformedDot(ctx, x, py, size * 0.28, '#fef08a', deform);
-    }
-  };
-  drawPod(-1, opt.leftTurn);
-  drawPod(1, opt.rightTurn);
-}
-
-function drawMotoTaillight(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  halfWidth: number,
-  opt: LiveOpticsState,
-  broken: boolean,
-  deform: DeformFn
-): void {
-  drawRoundedBox(ctx, x - 1.05, y - halfWidth - 0.25, x + 0.55, y + halfWidth + 0.25, 0.35, '#1e293b', deform, '#0f172a', 0.35);
-  if (broken) {
-    drawRoundedBox(ctx, x - 0.85, y - halfWidth, x + 0.25, y + halfWidth, 0.22, '#090d16', deform);
-    return;
-  }
-  const fill = opt.braking ? '#ef4444' : opt.positionOn ? '#dc2626' : '#7f1d1d';
-  drawRoundedBox(ctx, x - 0.92, y - halfWidth, x + 0.28, y + halfWidth, 0.25, fill, deform);
-  if (opt.braking) {
-    drawRoundedBox(ctx, x - 0.72, y - halfWidth * 0.52, x - 0.12, y + halfWidth * 0.52, 0.15, '#ffffff', deform);
-  } else if (opt.positionOn) {
-    drawRoundedBox(ctx, x - 0.72, y - halfWidth * 0.45, x - 0.18, y + halfWidth * 0.45, 0.15, '#fca5a5', deform);
-  }
-}
-
-function drawHandlebars(
-  ctx: CanvasRenderingContext2D,
-  pivotX: number,
-  pivotY: number,
-  steerAngle: number,
-  halfSpan: number,
-  sweepBack: number,
-  barColor: string,
-  gripColor: string,
-  mirrorStyle: 'round_chrome' | 'teardrop_chrome' | 'sport_black' | 'none',
-  deform: DeformFn
-): void {
-  const [px, py] = deform(pivotX, pivotY);
-  ctx.save();
-  ctx.translate(px, py);
-  ctx.rotate(steerAngle * 0.85);
-
-  // Triple tree clamp
-  ctx.fillStyle = '#475569';
-  ctx.beginPath();
-  ctx.roundRect(-0.95, -1.55, 1.9, 3.1, 0.45);
-  ctx.fill();
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 0.4;
-  ctx.stroke();
-
-  // Fork tube caps
-  ctx.fillStyle = '#e2e8f0';
-  ctx.beginPath();
-  ctx.arc(0, -1.05, 0.48, 0, Math.PI * 2);
-  ctx.arc(0, 1.05, 0.48, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Left & right handlebar tubes
-  ctx.strokeStyle = barColor;
-  ctx.lineWidth = 1.05;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(-sweepBack, -halfSpan);
-  ctx.quadraticCurveTo(0.2, -halfSpan * 0.35, 0.15, 0);
-  ctx.quadraticCurveTo(0.2, halfSpan * 0.35, -sweepBack, halfSpan);
-  ctx.stroke();
-
-  // Rubber grips
-  ctx.strokeStyle = gripColor;
-  ctx.lineWidth = 1.45;
-  ctx.beginPath();
-  ctx.moveTo(-sweepBack - 0.1, -halfSpan);
-  ctx.lineTo(-sweepBack * 0.65, -halfSpan * 0.68);
-  ctx.moveTo(-sweepBack - 0.1, halfSpan);
-  ctx.lineTo(-sweepBack * 0.65, halfSpan * 0.68);
-  ctx.stroke();
-
-  // Clutch & front brake levers
-  ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 0.45;
-  ctx.beginPath();
-  ctx.moveTo(-sweepBack * 0.62 + 0.55, -halfSpan * 0.68);
-  ctx.lineTo(-sweepBack + 0.55, -halfSpan * 0.94);
-  ctx.moveTo(-sweepBack * 0.62 + 0.55, halfSpan * 0.68);
-  ctx.lineTo(-sweepBack + 0.55, halfSpan * 0.94);
-  ctx.stroke();
-
-  // Mirrors
-  if (mirrorStyle !== 'none') {
-    for (const side of [-1, 1] as const) {
-      const mx = -sweepBack * 0.45 + 1.05;
-      const my = side * (halfSpan * 0.88 + 0.65);
-      ctx.strokeStyle = mirrorStyle === 'sport_black' ? '#1e293b' : '#cbd5e1';
-      ctx.lineWidth = 0.45;
-      ctx.beginPath();
-      ctx.moveTo(-sweepBack * 0.55, side * halfSpan * 0.64);
-      ctx.lineTo(mx, my);
-      ctx.stroke();
-
-      if (mirrorStyle === 'round_chrome') {
-        ctx.fillStyle = '#e2e8f0';
-        ctx.beginPath();
-        ctx.arc(mx, my, 0.72, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 0.35;
-        ctx.stroke();
-      } else if (mirrorStyle === 'teardrop_chrome') {
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.ellipse(mx, my, 0.55, 0.92, side * 0.25, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 0.35;
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.ellipse(mx, my, 0.5, 0.88, side * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }
-
-  ctx.restore();
-}
-
-function drawEngineCoolingFins(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
   len: number,
   wid: number,
-  deform: DeformFn
+  angle: number,
+  deform: DeformFn,
+  options?: {
+    hasBrakeDisc?: boolean;
+    dualDisc?: boolean;
+    rimColor?: string;
+    isSport?: boolean;
+  }
 ): void {
-  drawRoundedBox(ctx, cx - len * 0.5, cy - wid * 0.5, cx + len * 0.5, cy + wid * 0.5, 0.55, '#64748b', deform, '#1e293b', 0.45);
-  const steps = Math.max(3, Math.round(len / 0.85));
-  for (let i = 1; i < steps; i++) {
-    const fx = cx - len * 0.5 + (len * i) / steps;
-    strokePoly(ctx, [[fx, cy - wid * 0.46], [fx, cy + wid * 0.46]], '#1e293b', 0.42, deform);
-  }
-}
-
-export function renderMotorcycleChassisLayer(vCtx: VehicleRenderContext): void {
-  const { ctx, car, halfL, halfW, deform } = vCtx;
-  const steer = car.steerAngle || 0;
-
-  if (car.type === 'moto_ural_sidecar') {
-    const bikeY = -halfW * 0.44;
-    const scY = halfW * 0.44;
-
-    // 3 Spoke wheels (Rear, Front steered, Sidecar)
-    drawMotoWheel(ctx, -halfL * 0.64, bikeY, 6.8, 2.2, 0, 'spoke', deform);
-    drawMotoWheel(ctx, halfL * 0.68, bikeY, 6.8, 2.1, steer, 'spoke', deform);
-    drawMotoWheel(ctx, -halfL * 0.20, halfW * 0.78, 6.8, 2.2, 0, 'spoke', deform);
-
-    // Sidecar tubular mounting frame & cross-struts
-    strokePoly(ctx, [[-halfL * 0.45, bikeY + 0.6], [-halfL * 0.20, halfW * 0.72]], '#1e293b', 1.35, deform);
-    strokePoly(ctx, [[halfL * 0.22, bikeY + 0.6], [halfL * 0.16, scY]], '#1e293b', 1.15, deform);
-    strokePoly(ctx, [[-halfL * 0.25, bikeY + 0.8], [-halfL * 0.10, scY]], '#334155', 0.95, deform);
-
-    // Horizontally-opposed 650cc Boxer twin cylinder heads protruding left & right
-    drawEngineCoolingFins(ctx, halfL * 0.04, bikeY - 2.2, 2.9, 1.8, deform);
-    drawEngineCoolingFins(ctx, halfL * 0.04, bikeY + 2.2, 2.9, 1.8, deform);
-
-    // Twin chrome exhaust mufflers along both sides of the motorcycle
-    for (const side of [-1, 1] as const) {
-      const ey = bikeY + side * 2.15;
-      strokePoly(ctx, [[halfL * 0.08, ey], [-halfL * 0.82, ey + side * 0.15]], '#cbd5e1', 1.05, deform);
-      strokePoly(ctx, [[halfL * 0.05, ey - 0.15], [-halfL * 0.78, ey + side * 0.02]], '#f8fafc', 0.35, deform);
-    }
-
-    // Center tubular frame spine & swingarm
-    drawRoundedBox(ctx, -halfL * 0.62, bikeY - 0.95, halfL * 0.56, bikeY + 0.95, 0.55, '#1e293b', deform);
-    // Telescopic front fork tubes rotating subtly toward wheel
-    const [fx, fy] = deform(halfL * 0.55, bikeY);
-    ctx.save();
-    ctx.translate(fx, fy);
-    ctx.rotate(steer * 0.6);
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 0.9;
-    ctx.beginPath();
-    ctx.moveTo(-1.0, -1.15);
-    ctx.lineTo(2.4, -1.15);
-    ctx.moveTo(-1.0, 1.15);
-    ctx.lineTo(2.4, 1.15);
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  // --- Solo Motorcycles & Moped ---
-  if (car.type === 'moto_sport') {
-    drawMotoWheel(ctx, -halfL * 0.64, 0, 6.8, 3.1, 0, 'sport_rear', deform);
-    drawMotoWheel(ctx, halfL * 0.67, 0, 6.4, 2.35, steer, 'sport_front', deform);
-    // Cast aluminum dual-sided swingarm
-    drawRoundedBox(ctx, -halfL * 0.66, -2.0, -halfL * 0.08, 2.0, 0.55, '#475569', deform, '#0f172a', 0.4);
-    drawRoundedBox(ctx, -halfL * 0.56, -1.1, -halfL * 0.14, 1.1, 0.3, '#0f172a', deform);
-    // Titanium/carbon canister exhaust on right side
-    drawRoundedBox(ctx, -halfL * 0.72, 1.55, -halfL * 0.06, 2.65, 0.48, '#334155', deform, '#0f172a', 0.4);
-    drawRoundedBox(ctx, -halfL * 0.78, 1.72, -halfL * 0.62, 2.48, 0.25, '#cbd5e1', deform);
-    // Inverted gold USD front fork tubes
-    const [fx, fy] = deform(halfL * 0.55, 0);
-    ctx.save();
-    ctx.translate(fx, fy);
-    ctx.rotate(steer * 0.65);
-    ctx.strokeStyle = '#eab308';
-    ctx.lineWidth = 0.95;
-    ctx.beginPath();
-    ctx.moveTo(-1.2, -1.3);
-    ctx.lineTo(1.8, -1.3);
-    ctx.moveTo(-1.2, 1.3);
-    ctx.lineTo(1.8, 1.3);
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  if (car.type === 'moto_chopper') {
-    drawMotoWheel(ctx, -halfL * 0.66, 0, 6.9, 3.25, 0, 'chopper_fat', deform);
-    drawMotoWheel(ctx, halfL * 0.80, 0, 7.2, 1.85, steer, 'spoke', deform);
-
-    // Wide chrome V-twin engine block + side air-filter dome
-    drawEngineCoolingFins(ctx, halfL * 0.05, 0, 4.4, 3.9, deform);
-    drawDeformedDot(ctx, halfL * 0.08, 2.25, 1.15, '#e2e8f0', deform, '#334155', 0.4);
-    // Staggered twin chrome shotgun pipes on right side
-    strokePoly(ctx, [[halfL * 0.14, 2.35], [-halfL * 0.78, 2.45]], '#e2e8f0', 1.15, deform);
-    strokePoly(ctx, [[halfL * 0.02, 2.95], [-halfL * 0.68, 3.05]], '#cbd5e1', 1.05, deform);
-    // Foot pegs / highway forward controls
-    strokePoly(ctx, [[halfL * 0.34, -3.1], [halfL * 0.34, 3.1]], '#cbd5e1', 0.85, deform);
-
-    // Long raked chrome telescopic forks
-    const [fx, fy] = deform(halfL * 0.48, 0);
-    ctx.save();
-    ctx.translate(fx, fy);
-    ctx.rotate(steer * 0.55);
-    ctx.strokeStyle = '#f8fafc';
-    ctx.lineWidth = 0.95;
-    ctx.beginPath();
-    ctx.moveTo(-0.5, -1.25);
-    ctx.lineTo(4.8, -1.05);
-    ctx.moveTo(-0.5, 1.25);
-    ctx.lineTo(4.8, 1.05);
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  if (car.type === 'moped_soviet') {
-    drawMotoWheel(ctx, -halfL * 0.66, 0, 5.5, 1.45, 0, 'moped', deform);
-    drawMotoWheel(ctx, halfL * 0.69, 0, 5.5, 1.40, steer, 'moped', deform);
-
-    // Compact 50cc engine + bicycle pedals
-    drawEngineCoolingFins(ctx, halfL * 0.02, 0, 2.5, 2.3, deform);
-    strokePoly(ctx, [[-halfL * 0.06, -2.5], [-halfL * 0.06, 2.5]], '#94a3b8', 0.65, deform);
-    drawRoundedBox(ctx, -halfL * 0.14, -2.85, halfL * 0.02, -2.15, 0.2, '#0f172a', deform);
-    drawRoundedBox(ctx, -halfL * 0.14, 2.15, halfL * 0.02, 2.85, 0.2, '#0f172a', deform);
-    // Slim chrome muffler on right
-    strokePoly(ctx, [[halfL * 0.05, 1.42], [-halfL * 0.72, 1.48]], '#cbd5e1', 0.85, deform);
-    // Step-through tubular steel backbone
-    drawRoundedBox(ctx, -halfL * 0.64, -0.75, halfL * 0.58, 0.75, 0.4, '#1e293b', deform);
-    return;
-  }
-
-  // moto_izh_jupiter & moto_jawa350 (Classic twin-cylinder roadsters)
-  const isJawa = car.type === 'moto_jawa350';
-  drawMotoWheel(ctx, -halfL * 0.65, 0, 6.8, 2.15, 0, 'spoke', deform);
-  drawMotoWheel(ctx, halfL * 0.69, 0, 6.8, 1.9, steer, 'spoke', deform);
-
-  // Air-cooled parallel-twin cylinder block
-  drawEngineCoolingFins(ctx, halfL * 0.08, 0, 3.3, 3.6, deform);
-
-  // Twin symmetrical chrome megaphone exhausts
-  for (const side of [-1, 1] as const) {
-    const ey = side * (isJawa ? 2.18 : 2.25);
-    strokePoly(ctx, [[halfL * 0.14, ey * 0.88], [-halfL * 0.82, ey]], '#cbd5e1', 1.1, deform);
-    strokePoly(ctx, [[halfL * 0.08, ey * 0.88 - 0.12], [-halfL * 0.78, ey - 0.12]], '#f8fafc', 0.35, deform);
-  }
-
-  // Foot pegs & center frame spine
-  strokePoly(ctx, [[-halfL * 0.05, -2.85], [-halfL * 0.05, 2.85]], '#64748b', 0.75, deform);
-  drawRoundedBox(ctx, -halfL * 0.65, -0.95, halfL * 0.56, 0.95, 0.5, '#1e293b', deform);
-
-  // Telescopic forks
-  const [fx, fy] = deform(halfL * 0.54, 0);
+  const [dx, dy] = deform(cx, cy);
   ctx.save();
-  ctx.translate(fx, fy);
-  ctx.rotate(steer * 0.65);
-  ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 0.85;
+  ctx.translate(dx, dy);
+  if (angle) ctx.rotate(angle);
+
+  // Brake disc(s) peeking alongside hub
+  if (options?.hasBrakeDisc) {
+    const discLen = len * 0.46;
+    const discOff = wid * 0.56;
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(-discLen * 0.5, -discOff - 0.35, discLen, 0.38);
+    if (options.dualDisc) {
+      ctx.fillRect(-discLen * 0.5, discOff - 0.03, discLen, 0.38);
+    }
+    // Gold/red brake caliper
+    ctx.fillStyle = options.isSport ? '#d97706' : '#475569';
+    ctx.fillRect(-discLen * 0.35, -discOff - 0.55, discLen * 0.34, 0.55);
+  }
+
+  // Treaded motorcycle rubber tire
+  drawTreadedTire(ctx, 0, 0, len, wid, 0, options?.isSport ? 'slick' : 'road', options?.rimColor || '#cbd5e1');
+
+  // Center tread groove / directional chevron line
+  ctx.strokeStyle = options?.isSport ? 'rgba(226,232,240,0.18)' : 'rgba(2,6,23,0.65)';
+  ctx.lineWidth = 0.35;
   ctx.beginPath();
-  ctx.moveTo(-0.8, -1.05);
-  ctx.lineTo(2.4, -1.05);
-  ctx.moveTo(-0.8, 1.05);
-  ctx.lineTo(2.4, 1.05);
+  ctx.moveTo(-len * 0.42, 0);
+  ctx.lineTo(len * 0.42, 0);
   ctx.stroke();
+
+  // Axle bolt ends
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(-0.45, -wid * 0.62, 0.9, wid * 1.24);
   ctx.restore();
 }
 
-export function renderMotorcycleUpperLayer(vCtx: VehicleRenderContext): void {
-  const { ctx, car, halfL, halfW, deform } = vCtx;
+function drawSteeredHandlebars(
+  ctx: CanvasRenderingContext2D,
+  headX: number,
+  headY: number,
+  halfSpan: number,
+  sweepBack: number,
+  steerAngle: number,
+  deform: DeformFn,
+  options: {
+    barColor: string;
+    barWidth: number;
+    gripLen: number;
+    hasMirrors?: boolean;
+    mirrorStalk?: number;
+    isClipOn?: boolean;
+    forkCapColor?: string;
+  }
+): void {
+  const cos = Math.cos(steerAngle);
+  const sin = Math.sin(steerAngle);
+  const rot = (lx: number, ly: number): Pt => [
+    headX + lx * cos - ly * sin,
+    headY + lx * sin + ly * cos,
+  ];
+
+  // Triple-tree top clamp + fork tube caps
+  const clampPts: Pt[] = [
+    rot(0.95, -1.45),
+    rot(0.95, 1.45),
+    rot(-0.75, 1.25),
+    rot(-0.75, -1.25),
+  ];
+  fillPoly(ctx, clampPts, '#1e293b', deform, '#090d16', 0.35);
+  for (const side of [-1, 1] as const) {
+    const [fx, fy] = rot(0.15, side * 1.05);
+    drawDeformedDot(ctx, fx, fy, 0.42, options.forkCapColor || '#cbd5e1', deform, '#0f172a', 0.22);
+  }
+
+  // Handlebar tube(s)
+  const leftEnd = rot(-sweepBack, -halfSpan);
+  const leftMid = rot(-sweepBack * 0.25, -halfSpan * 0.36);
+  const rightMid = rot(-sweepBack * 0.25, halfSpan * 0.36);
+  const rightEnd = rot(-sweepBack, halfSpan);
+
+  if (options.isClipOn) {
+    drawChromePipe(ctx, [rot(0.1, -1.05), leftEnd], options.barWidth, deform, options.barColor);
+    drawChromePipe(ctx, [rot(0.1, 1.05), rightEnd], options.barWidth, deform, options.barColor);
+  } else {
+    drawChromePipe(ctx, [leftEnd, leftMid, rightMid, rightEnd], options.barWidth, deform, options.barColor);
+  }
+
+  // Rubber grips + brake/clutch levers
+  const gripStart = Math.max(0.4, 1 - options.gripLen / halfSpan);
+  for (const side of [-1, 1] as const) {
+    const g1 = rot(-sweepBack * gripStart, side * halfSpan * gripStart);
+    const g2 = rot(-sweepBack, side * halfSpan);
+    strokePoly(ctx, [g1, g2], '#090d16', options.barWidth + 0.55, deform);
+    // Front brake / clutch lever blade ahead of grip
+    const lv1 = rot(-sweepBack * gripStart + 0.45, side * (halfSpan * gripStart - 0.1));
+    const lv2 = rot(-sweepBack + 0.72, side * (halfSpan * 0.92));
+    strokePoly(ctx, [lv1, lv2], '#cbd5e1', 0.32, deform);
+
+    if (options.hasMirrors) {
+      const mBase = rot(-sweepBack * 0.52, side * halfSpan * 0.62);
+      const mTip = rot(-sweepBack * 0.52 + (options.mirrorStalk ?? 1.25), side * (halfSpan * 0.88 + 0.55));
+      strokePoly(ctx, [mBase, mTip], '#475569', 0.32, deform);
+      drawDeformedDot(ctx, mTip[0], mTip[1], 0.58, '#1e293b', deform, '#cbd5e1', 0.26);
+    }
+  }
+}
+
+function drawClassicRoundHeadlamp(
+  ctx: CanvasRenderingContext2D,
+  hx: number,
+  hy: number,
+  radius: number,
+  steerAngle: number,
+  opt: LiveOpticsState,
+  broken: boolean,
+  deform: DeformFn,
+  shellColor = '#cbd5e1',
+  withBlinkers = true
+): void {
+  const cos = Math.cos(steerAngle);
+  const sin = Math.sin(steerAngle);
+  const rot = (lx: number, ly: number): Pt => [hx + lx * cos - ly * sin, hy + lx * sin + ly * cos];
+
+  // Stalk turn indicators on fork sides
+  if (withBlinkers) {
+    for (const side of [-1, 1] as const) {
+      const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+      const b1 = rot(-0.2, side * (radius + 0.25));
+      const b2 = rot(0.1, side * (radius + 1.05));
+      strokePoly(ctx, [b1, b2], '#334155', 0.35, deform);
+      drawDeformedDot(
+        ctx,
+        b2[0],
+        b2[1],
+        0.44,
+        turnInt > 0.08 ? `rgba(251,191,36,${(0.55 + 0.45 * turnInt).toFixed(2)})` : '#b45309',
+        deform,
+        '#0f172a',
+        0.22
+      );
+    }
+  }
+
+  // Bullet headlamp shell (rear tapered dome) + front glass bezel
+  const backPt = rot(-radius * 0.72, 0);
+  const frontPt = rot(radius * 0.38, 0);
+  drawDeformedDot(ctx, backPt[0], backPt[1], radius * 0.92, shellColor, deform, '#0f172a', 0.36);
+  drawDeformedDot(ctx, frontPt[0], frontPt[1], radius * 0.86, '#e2e8f0', deform, '#1e293b', 0.32);
+
+  if (broken) {
+    drawDeformedDot(ctx, frontPt[0], frontPt[1], radius * 0.68, '#111827', deform);
+    return;
+  }
+
+  const lensFill = opt.headlightsOn
+    ? opt.highBeam
+      ? '#ffffff'
+      : '#fef3c7'
+    : opt.positionOn
+    ? '#fde68a'
+    : '#cbd5e1';
+  drawDeformedDot(ctx, frontPt[0] + cos * 0.15, frontPt[1] + sin * 0.15, radius * 0.66, lensFill, deform);
+  if (opt.headlightsOn) {
+    drawDeformedDot(ctx, frontPt[0] + cos * 0.25, frontPt[1] + sin * 0.25, radius * 0.34, '#ffffff', deform);
+  }
+}
+
+function drawMotoTailAssembly(
+  ctx: CanvasRenderingContext2D,
+  tx: number,
+  ty: number,
+  opt: LiveOpticsState,
+  broken: boolean,
+  deform: DeformFn,
+  width = 1.6,
+  withStalkBlinkers = true
+): void {
+  if (withStalkBlinkers) {
+    for (const side of [-1, 1] as const) {
+      const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+      strokePoly(ctx, [[tx + 0.3, ty + side * (width * 0.5)], [tx + 0.2, ty + side * (width * 0.5 + 0.95)]], '#334155', 0.32, deform);
+      drawDeformedDot(
+        ctx,
+        tx + 0.2,
+        ty + side * (width * 0.5 + 0.95),
+        0.4,
+        turnInt > 0.08 ? `rgba(251,191,36,${(0.55 + 0.45 * turnInt).toFixed(2)})` : '#b45309',
+        deform,
+        '#0f172a',
+        0.2
+      );
+    }
+  }
+  // License plate bracket behind tail lamp
+  drawRoundedBox(ctx, tx - 0.55, ty - width * 0.52, tx + 0.15, ty + width * 0.52, 0.15, '#e2e8f0', deform, '#0f172a', 0.25);
+
+  // Red tail/brake lens
+  const tailFill = broken
+    ? '#111827'
+    : opt.braking
+    ? '#ff3b3b'
+    : opt.positionOn
+    ? '#ef4444'
+    : '#7f1d1d';
+  drawRoundedBox(ctx, tx - 0.15, ty - width * 0.46, tx + 0.85, ty + width * 0.46, 0.28, tailFill, deform, '#0f172a', 0.3);
+  if (!broken && opt.braking) {
+    drawDeformedDot(ctx, tx + 0.35, ty, 0.36, '#fecaca', deform);
+  }
+}
+
+function drawRibbedSaddle(
+  ctx: CanvasRenderingContext2D,
+  x1: number,
+  x2: number,
+  cy: number,
+  halfWFront: number,
+  halfWRear: number,
+  leatherColor: string,
+  deform: DeformFn,
+  ribStep = 1.15
+): void {
+  const pts: Pt[] = [
+    [x2, cy - halfWFront * 0.72],
+    [x2 - 0.8, cy - halfWFront],
+    [x1 + 1.0, cy - halfWRear],
+    [x1, cy - halfWRear * 0.65],
+    [x1, cy + halfWRear * 0.65],
+    [x1 + 1.0, cy + halfWRear],
+    [x2 - 0.8, cy + halfWFront],
+    [x2, cy + halfWFront * 0.72],
+  ];
+  fillPoly(ctx, pts, leatherColor, deform, '#090d16', 0.52);
+  // Stitched upholstery transverse ribs
+  for (let sx = x1 + 1.2; sx < x2 - 0.9; sx += ribStep) {
+    const t = (sx - x1) / Math.max(1, x2 - x1);
+    const rw = (halfWRear * (1 - t) + halfWFront * t) * 0.78;
+    strokePoly(ctx, [[sx, cy - rw], [sx, cy + rw]], 'rgba(255,255,255,0.12)', 0.32, deform);
+    strokePoly(ctx, [[sx + 0.28, cy - rw], [sx + 0.28, cy + rw]], 'rgba(0,0,0,0.38)', 0.32, deform);
+  }
+}
+
+// ============================================================================
+// 1. CHASSIS LAYER (WHEELS, SWINGARMS, EXHAUSTS, CRADLE FRAMES, SIDECAR BOAT)
+// ============================================================================
+
+export function renderMotorcycleChassisLayer(vCtx: VehicleRenderContext): void {
+  const { ctx, car, halfL, halfW, fc, rc, deform } = vCtx;
+  const type = car.type;
   const opt = getLiveOpticsState(car);
-  const paint = car.color || '#dc2626';
-  const steer = car.steerAngle || 0;
+  const steer = (car.steerAngle || 0) * 1.05;
+  const fX = halfL - fc;
+  const rX = -halfL + rc;
 
-  if (car.type === 'moto_ural_sidecar') {
+  // --------------------------------------------------------------------------
+  // A. URAL SIDECAR (Stellar Outback Sidecar — M-67 / Gear Up 650cc)
+  // --------------------------------------------------------------------------
+  if (type === 'moto_ural_sidecar') {
     const bikeY = -halfW * 0.44;
-    const scY = halfW * 0.38;
-    const bodyGrad = createBodyMetallicGradient(ctx, halfW, paint);
+    const carY = halfW * 0.44;
+    const baseColor = car.color || '#365314';
 
-    // Front & rear painted steel mudguards on motorcycle
-    drawRoundedBox(ctx, halfL * 0.44, bikeY - 1.25, halfL * 0.90, bikeY + 1.25, 0.85, paint, deform, '#0f172a', 0.45);
-    drawRoundedBox(ctx, -halfL * 0.92, bikeY - 1.3, -halfL * 0.36, bikeY + 1.3, 0.8, paint, deform, '#0f172a', 0.45);
+    // 1. Wheels: motorcycle front & rear + sidecar right wheel
+    drawMotoWheel(ctx, fX - 3.3, bikeY, 6.2, 2.0, steer, deform, { hasBrakeDisc: false });
+    drawMotoWheel(ctx, rX + 3.2, bikeY, 6.2, 2.25, 0, deform, { hasBrakeDisc: false });
+    drawMotoWheel(ctx, -halfL * 0.28, halfW * 0.87, 6.0, 2.0, 0, deform, { hasBrakeDisc: false });
 
-    // Classic teardrop fuel tank on motorcycle
-    const tankPts: Pt[] = [
-      [halfL * 0.38, bikeY - 1.75],
-      [halfL * 0.46, bikeY - 0.95],
-      [halfL * 0.46, bikeY + 0.95],
-      [halfL * 0.38, bikeY + 1.75],
-      [-halfL * 0.02, bikeY + 1.45],
-      [-halfL * 0.08, bikeY + 0.8],
-      [-halfL * 0.08, bikeY - 0.8],
-      [-halfL * 0.02, bikeY - 1.45],
+    // 2. Tubular black steel sidecar connecting sub-frame & torsion axle
+    const framePts: [Pt, Pt][] = [
+      [[halfL * 0.28, bikeY + 0.4], [halfL * 0.14, carY - 1.5]],
+      [[-halfL * 0.08, bikeY + 0.4], [-halfL * 0.12, carY - 1.5]],
+      [[-halfL * 0.44, bikeY + 0.4], [-halfL * 0.36, carY - 1.5]],
+      [[-halfL * 0.28, bikeY + 0.6], [-halfL * 0.28, halfW * 0.84]],
     ];
-    fillPoly(ctx, tankPts, bodyGrad, deform, '#0f172a', 0.5);
-    // White pinstripe & chrome fuel cap
-    strokePoly(ctx, [[halfL * 0.34, bikeY - 1.25], [halfL * 0.02, bikeY - 1.05]], 'rgba(255,255,255,0.55)', 0.4, deform);
-    strokePoly(ctx, [[halfL * 0.34, bikeY + 1.25], [halfL * 0.02, bikeY + 1.05]], 'rgba(255,255,255,0.55)', 0.4, deform);
-    drawDeformedDot(ctx, halfL * 0.25, bikeY, 0.55, '#e2e8f0', deform, '#334155', 0.35);
+    for (const [p1, p2] of framePts) {
+      strokePoly(ctx, [p1, p2], '#0f172a', 1.1, deform);
+      strokePoly(ctx, [p1, p2], '#334155', 0.48, deform);
+    }
 
-    // Rider tractor-style solo saddle + passenger pad
-    drawRoundedBox(ctx, -halfL * 0.44, bikeY - 1.55, -halfL * 0.06, bikeY + 1.55, 0.95, '#1c1917', deform, '#09090b', 0.45);
-    drawRoundedBox(ctx, -halfL * 0.78, bikeY - 1.28, -halfL * 0.47, bikeY + 1.28, 0.65, '#1c1917', deform, '#09090b', 0.42);
+    // 3. Horizontally-opposed 650cc Boxer Twin cylinder heads protruding left & right
+    for (const side of [-1, 1] as const) {
+      const cy = bikeY + side * 1.95;
+      drawRoundedBox(ctx, -1.65, cy - 0.95, 1.45, cy + 0.95, 0.3, '#94a3b8', deform, '#0f172a', 0.42);
+      // Cooling fins
+      for (let fx = -1.25; fx <= 1.05; fx += 0.55) {
+        strokePoly(ctx, [[fx, cy - 0.85], [fx, cy + 0.85]], '#1e293b', 0.3, deform);
+      }
+      // Polished valve cover cap
+      drawRoundedBox(ctx, -0.8, cy + side * 0.65 - 0.25, 0.7, cy + side * 0.65 + 0.25, 0.2, '#cbd5e1', deform, '#334155', 0.25);
+    }
 
-    // Handlebars + chrome headlight + motorcycle tail lamp
-    drawHandlebars(ctx, halfL * 0.46, bikeY, steer, 3.6, 1.35, '#cbd5e1', '#0f172a', 'round_chrome', deform);
-    drawRoundChromeHeadlight(ctx, halfL * 0.68, bikeY, 1.12, opt, opt.leftHeadBroken, deform);
-    drawMotoTaillight(ctx, -halfL * 0.88, bikeY, 0.95, opt, opt.leftTailBroken, deform);
+    // 4. Twin chrome low exhaust pipes on motorcycle flanks
+    for (const side of [-1, 1] as const) {
+      drawChromePipe(
+        ctx,
+        [
+          [0.9, bikeY + side * 1.7],
+          [-2.2, bikeY + side * 1.9],
+          [rX + 2.4, bikeY + side * 1.65],
+        ],
+        0.72,
+        deform
+      );
+    }
 
-    // --- RIGHT-SIDE SIDECAR BOAT (Люлька Урал) ---
+    // 5. Motorcycle steel front & rear mudguards
+    drawRoundedBox(ctx, fX - 4.8, bikeY - 1.25, fX - 1.6, bikeY + 1.25, 0.6, shadePaint(baseColor, -0.05), deform, '#090d16', 0.42);
+    drawRoundedBox(ctx, rX + 1.2, bikeY - 1.35, rX + 5.8, bikeY + 1.35, 0.6, shadePaint(baseColor, -0.08), deform, '#090d16', 0.42);
+
+    // 6. Sidecar wheel fender + integrated front marker & rear tail/turn lamp
+    const scFendY = halfW * 0.86;
+    drawRoundedBox(ctx, -halfL * 0.58, scFendY - 1.25, halfL * 0.04, scFendY + 1.25, 0.65, shadePaint(baseColor, 0.04), deform, '#090d16', 0.48);
+    // Front white/amber sidecar fender marker lamp (xFrac ~ +0.16? Wait: front of fender is +0.02*L -> let's put lamp pod cleanly at +0.04*halfL and also bow lamp!)
+    drawDeformedDot(
+      ctx,
+      halfL * 0.02,
+      scFendY,
+      0.55,
+      opt.headlightsOn || opt.positionOn ? '#fef3c7' : '#cbd5e1',
+      deform,
+      '#0f172a',
+      0.28
+    );
+    // Rear red/amber sidecar fender lamp
+    drawRoundedBox(
+      ctx,
+      -halfL * 0.62,
+      scFendY - 0.6,
+      -halfL * 0.50,
+      scFendY + 0.6,
+      0.25,
+      opt.braking ? '#ff3b3b' : opt.positionOn ? '#ef4444' : '#7f1d1d',
+      deform,
+      '#0f172a',
+      0.25
+    );
+    if (opt.rightTurn > 0.08) {
+      drawDeformedDot(ctx, -halfL * 0.56, scFendY + 0.52, 0.35, '#fbbf24', deform);
+    }
+
+    // 7. Torpedo-nosed Ural Sidecar Boat Hull
     const boatPts: Pt[] = [
-      [halfL * 0.74, scY - 0.75],
-      [halfL * 0.78, scY],
-      [halfL * 0.74, scY + 0.75],
-      [halfL * 0.42, scY + 2.45],
-      [-halfL * 0.70, scY + 2.55],
-      [-halfL * 0.82, scY + 1.7],
-      [-halfL * 0.82, scY - 1.7],
-      [-halfL * 0.70, scY - 2.55],
-      [halfL * 0.42, scY - 2.45],
+      [halfL * 0.54, carY - 0.5],
+      [halfL * 0.50, carY + 0.8],
+      [halfL * 0.24, carY + 2.55],
+      [-halfL * 0.54, carY + 2.55],
+      [-halfL * 0.72, carY + 1.75],
+      [-halfL * 0.72, carY - 1.85],
+      [-halfL * 0.54, carY - 2.45],
+      [halfL * 0.24, carY - 2.35],
     ];
-    fillPoly(ctx, boatPts, bodyGrad, deform, '#0f172a', 0.58);
+    fillPoly(ctx, boatPts, createBodyMetallicGradient(ctx, halfW, baseColor), deform, '#090d16', 0.75);
+    // Sidecar nose spotlight/bumper guard
+    drawChromePipe(ctx, [[halfL * 0.42, carY - 1.5], [halfL * 0.58, carY], [halfL * 0.42, carY + 1.5]], 0.52, deform);
+    // Sidecar open cockpit recess + ribbed steel footwell + stitched leather seat
+    drawRoundedBox(ctx, -halfL * 0.42, carY - 1.85, halfL * 0.12, carY + 1.85, 0.65, '#111827', deform, '#334155', 0.4);
+    for (let fx = -halfL * 0.02; fx <= halfL * 0.10; fx += 0.65) {
+      strokePoly(ctx, [[fx, carY - 1.5], [fx, carY + 1.5]], 'rgba(148,163,184,0.22)', 0.3, deform);
+    }
+    drawRibbedSaddle(ctx, -halfL * 0.40, -halfL * 0.05, carY, 1.55, 1.65, '#292524', deform, 0.9);
 
-    // Boat nose specular ridge & chrome grab bumper
-    strokePoly(ctx, [[halfL * 0.72, scY], [halfL * 0.25, scY]], shadePaint(paint, 0.28), 0.75, deform);
-    strokePoly(ctx, [[halfL * 0.82, scY - 1.2], [halfL * 0.87, scY], [halfL * 0.82, scY + 1.2]], '#e2e8f0', 0.7, deform);
+    // Sidecar rear luggage rack + full-size spare spoke tire mounted on rear deck
+    drawDeformedDot(ctx, -halfL * 0.58, carY, 2.1, '#0f172a', deform, '#334155', 0.4);
+    drawDeformedDot(ctx, -halfL * 0.58, carY, 1.0, '#64748b', deform, '#1e293b', 0.3);
+    return;
+  }
 
-    // Sidecar open cockpit well & stitched leather bench seat
-    drawRoundedBox(ctx, -halfL * 0.42, scY - 1.95, halfL * 0.22, scY + 1.95, 0.85, '#0f172a', deform, '#334155', 0.4);
-    drawRoundedBox(ctx, -halfL * 0.39, scY - 1.7, -halfL * 0.04, scY + 1.7, 0.55, '#292524', deform, '#1c1917', 0.35);
-    strokePoly(ctx, [[-halfL * 0.28, scY - 1.5], [-halfL * 0.28, scY + 1.5]], '#44403c', 0.45, deform);
+  // --------------------------------------------------------------------------
+  // B. SOLO MOTORCYCLES & MOPED (Chassis, Wheels, Swingarm, Engine, Exhausts)
+  // --------------------------------------------------------------------------
+  const baseColor = car.color || (type === 'moto_jawa350' ? '#991b1b' : '#2563eb');
 
-    // Sidecar transparent curved windscreen with brushed alloy frame
-    const wsGrad = createGlassGradient(ctx, halfL * 0.14, scY - 1.9, halfL * 0.32, scY + 1.9, 'blue');
+  if (type === 'moto_sport') {
+    // Superbike 1000: wide sticky sport slicks, radial Brembo discs, cast aluminum swingarm, right-side titanium Akrapovic
+    drawMotoWheel(ctx, fX - 2.9, 0, 5.8, 2.05, steer, deform, { hasBrakeDisc: true, dualDisc: true, isSport: true });
+    drawMotoWheel(ctx, rX + 2.9, 0, 6.0, 2.85, 0, deform, { hasBrakeDisc: true, isSport: true });
+
+    // Brushed aluminum twin-spar rear swingarm
     fillPoly(
       ctx,
       [
-        [halfL * 0.16, scY - 1.95],
-        [halfL * 0.30, scY - 1.65],
-        [halfL * 0.34, scY],
-        [halfL * 0.30, scY + 1.65],
-        [halfL * 0.16, scY + 1.95],
-        [halfL * 0.21, scY],
+        [rX + 2.8, -1.75],
+        [-1.0, -1.55],
+        [-1.0, 1.55],
+        [rX + 2.8, 1.75],
+        [rX + 2.8, 1.25],
+        [-1.2, 1.05],
+        [-1.2, -1.05],
+        [rX + 2.8, -1.25],
       ],
-      wsGrad,
+      '#94a3b8',
+      deform,
+      '#1e293b',
+      0.38
+    );
+
+    // Right-side sculpted titanium + carbon Akrapovic muffler canister
+    drawChromePipe(ctx, [[0.8, 1.7], [-2.5, 2.15], [rX + 3.4, 2.0]], 0.95, deform, '#94a3b8');
+    drawRoundedBox(ctx, rX + 2.2, 1.55, rX + 3.6, 2.45, 0.25, '#0f172a', deform, '#475569', 0.25);
+
+    // Front carbon mudguard over tire
+    drawRoundedBox(ctx, fX - 4.4, -1.25, fX - 1.9, 1.25, 0.55, '#1e293b', deform, '#090d16', 0.35);
+
+    // Rearset billet rider footpegs
+    for (const side of [-1, 1] as const) {
+      strokePoly(ctx, [[-1.6, side * 1.4], [-1.8, side * 2.55]], '#cbd5e1', 0.55, deform);
+    }
+    return;
+  }
+
+  if (type === 'moto_chopper') {
+    // V-Twin Cruiser: raked skinny 21" front wheel, huge 240mm fat rear tire, long chrome forks, staggered shotgun pipes
+    drawMotoWheel(ctx, fX - 3.3, 0, 6.4, 1.65, steer, deform, { hasBrakeDisc: true, rimColor: '#e2e8f0' });
+    drawMotoWheel(ctx, rX + 3.4, 0, 6.6, 3.35, 0, deform, { hasBrakeDisc: true, rimColor: '#e2e8f0' });
+
+    // Long raked chrome front fork legs
+    const cos = Math.cos(steer);
+    const sin = Math.sin(steer);
+    for (const side of [-1, 1] as const) {
+      const fx1 = halfL * 0.42;
+      const fy1 = side * 1.05;
+      const fx2 = fX - 3.2 + 0.2 * cos - side * 1.15 * sin;
+      const fy2 = 0.2 * sin + side * 1.15 * cos;
+      drawChromePipe(ctx, [[fx1, fy1], [fx2, fy2]], 0.65, deform);
+    }
+
+    // Minimal bobbed front fender & wide curved bobbed rear fender
+    drawRoundedBox(ctx, fX - 4.6, -1.0, fX - 2.0, 1.0, 0.45, shadePaint(baseColor, 0.06), deform, '#090d16', 0.38);
+    drawRoundedBox(ctx, rX + 0.9, -1.95, rX + 6.6, 1.95, 1.1, createBodyMetallicGradient(ctx, 2.0, baseColor), deform, '#090d16', 0.52);
+
+    // Exposed V-twin air-cooled heads + round chrome air cleaner (right) + belt primary cover (left)
+    drawRoundedBox(ctx, -1.5, -2.05, 2.6, 2.05, 0.5, '#1e293b', deform, '#090d16', 0.45);
+    drawDeformedDot(ctx, 0.8, 2.15, 1.15, '#e2e8f0', deform, '#0f172a', 0.35);
+    drawRoundedBox(ctx, -2.0, -2.35, 1.5, -1.4, 0.45, '#cbd5e1', deform, '#0f172a', 0.35);
+
+    // Staggered twin chrome shotgun exhaust pipes down right side
+    drawChromePipe(ctx, [[2.0, 1.75], [-1.0, 2.45], [rX + 2.6, 2.35]], 0.82, deform);
+    drawChromePipe(ctx, [[-0.2, 1.85], [-2.5, 2.75], [rX + 4.4, 2.68]], 0.78, deform);
+
+    // Forward highway cruiser footpegs + brake/shifter pedals
+    for (const side of [-1, 1] as const) {
+      strokePoly(ctx, [[3.8, side * 1.2], [4.0, side * 2.95]], '#cbd5e1', 0.65, deform);
+      drawRoundedBox(ctx, 3.65, side * 2.75 - 0.3, 4.35, side * 2.75 + 0.3, 0.15, '#090d16', deform);
+    }
+    return;
+  }
+
+  if (type === 'moped_soviet') {
+    // Riga / Karpaty 50cc Moped: slender bicycle-like tires, tubular frame, tiny 50cc engine, bicycle crank pedals
+    drawMotoWheel(ctx, fX - 2.4, 0, 4.8, 1.15, steer, deform);
+    drawMotoWheel(ctx, rX + 2.4, 0, 4.8, 1.25, 0, deform);
+
+    // Thin tubular step-through frame & rear stays
+    strokePoly(ctx, [[rX + 2.4, -0.75], [0.5, -0.55], [halfL * 0.44, 0]], '#1e293b', 0.65, deform);
+    strokePoly(ctx, [[rX + 2.4, 0.75], [0.5, 0.55], [halfL * 0.44, 0]], '#1e293b', 0.65, deform);
+
+    // Tiny 50cc finned engine + single right chrome exhaust muffler
+    drawRoundedBox(ctx, -1.2, -1.05, 1.4, 1.05, 0.3, '#64748b', deform, '#0f172a', 0.35);
+    drawChromePipe(ctx, [[0.8, 0.95], [-1.8, 1.3], [rX + 1.8, 1.15]], 0.52, deform);
+
+    // Functional moped bicycle crank pedals!
+    strokePoly(ctx, [[-0.6, -1.1], [-0.6, -2.35]], '#94a3b8', 0.42, deform);
+    drawRoundedBox(ctx, -1.0, -2.65, -0.2, -1.95, 0.15, '#090d16', deform);
+    strokePoly(ctx, [[0.4, 1.1], [0.4, 2.35]], '#94a3b8', 0.42, deform);
+    drawRoundedBox(ctx, 0.0, 1.95, 0.8, 2.65, 0.15, '#090d16', deform);
+
+    // Narrow painted mudguards
+    drawRoundedBox(ctx, fX - 3.6, -0.82, fX - 1.2, 0.82, 0.38, shadePaint(baseColor, 0.05), deform, '#090d16', 0.32);
+    drawRoundedBox(ctx, rX + 0.8, -0.88, rX + 4.4, 0.88, 0.38, shadePaint(baseColor, 0.05), deform, '#090d16', 0.32);
+    return;
+  }
+
+  // Classic Standard Motorcycles: Izh Jupiter-5 & Jawa 350
+  const isJawa = type === 'moto_jawa350';
+  drawMotoWheel(ctx, fX - 3.0, 0, 6.0, 1.8, steer, deform, { hasBrakeDisc: isJawa, rimColor: '#e2e8f0' });
+  drawMotoWheel(ctx, rX + 3.0, 0, 6.0, 2.05, 0, deform, { rimColor: '#e2e8f0' });
+
+  // Front mudguard (chrome on Jawa 350, painted on Izh Jupiter) & painted rear mudguard
+  drawRoundedBox(
+    ctx,
+    fX - 4.6,
+    -1.15,
+    fX - 1.5,
+    1.15,
+    0.52,
+    isJawa ? '#e2e8f0' : shadePaint(baseColor, 0.04),
+    deform,
+    '#090d16',
+    0.38
+  );
+  drawRoundedBox(ctx, rX + 1.0, -1.25, rX + 5.6, 1.25, 0.55, shadePaint(baseColor, -0.05), deform, '#090d16', 0.42);
+
+  // Parallel-twin finned 350cc air-cooled cylinders protruding slightly beyond tank
+  drawRoundedBox(ctx, -1.2, -2.05, 2.2, 2.05, 0.45, '#64748b', deform, '#0f172a', 0.42);
+  for (let fx = -0.7; fx <= 1.7; fx += 0.55) {
+    strokePoly(ctx, [[fx, -1.95], [fx, 1.95]], '#1e293b', 0.28, deform);
+  }
+
+  // Symmetrical twin chrome exhaust cigars (swept outwards on Jawa 350)
+  for (const side of [-1, 1] as const) {
+    drawChromePipe(
+      ctx,
+      [
+        [1.9, side * 1.45],
+        [-1.4, side * (isJawa ? 2.15 : 1.95)],
+        [rX + 2.2, side * (isJawa ? 1.95 : 1.75)],
+      ],
+      0.74,
+      deform
+    );
+    // Rider footpegs
+    strokePoly(ctx, [[-0.8, side * 1.4], [-0.8, side * 2.55]], '#1e293b', 0.52, deform);
+  }
+}
+
+// ============================================================================
+// 2. UPPER LAYER (TANKS, FAIRINGS, SADDLES, HANDLEBARS, GAUGES, OPTICS)
+// ============================================================================
+
+export function renderMotorcycleUpperLayer(vCtx: VehicleRenderContext): void {
+  const { ctx, car, halfL, halfW, fc, rc, deform } = vCtx;
+  const type = car.type;
+  const opt = getLiveOpticsState(car);
+  const steer = (car.steerAngle || 0) * 1.05;
+  const fX = halfL - fc;
+  const rX = -halfL + rc;
+
+  // --------------------------------------------------------------------------
+  // A. URAL SIDECAR UPPER (Motorcycle Tank, Saddles, Bars, Sidecar Windscreen)
+  // --------------------------------------------------------------------------
+  if (type === 'moto_ural_sidecar') {
+    const bikeY = -halfW * 0.44;
+    const carY = halfW * 0.44;
+    const baseColor = car.color || '#365314';
+
+    // Teardrop Ural fuel tank with white military/classic pinstripe & chrome cap
+    const tankPts: Pt[] = [
+      [4.2, bikeY - 0.85],
+      [2.6, bikeY - 1.95],
+      [-0.8, bikeY - 1.6],
+      [-1.7, bikeY - 0.9],
+      [-1.7, bikeY + 0.9],
+      [-0.8, bikeY + 1.6],
+      [2.6, bikeY + 1.95],
+      [4.2, bikeY + 0.85],
+    ];
+    fillPoly(ctx, tankPts, createBodyMetallicGradient(ctx, 2.2, baseColor), deform, '#090d16', 0.52);
+    strokePoly(ctx, [[3.4, bikeY], [-1.3, bikeY]], 'rgba(255,255,255,0.22)', 0.4, deform);
+    drawDeformedDot(ctx, 2.0, bikeY, 0.55, '#cbd5e1', deform, '#0f172a', 0.25);
+
+    // Classic Ural sprung solo tractor saddle + rear pillion pad
+    drawRibbedSaddle(ctx, -4.8, -1.7, bikeY, 1.45, 1.75, '#1c1917', deform, 0.85);
+    drawRibbedSaddle(ctx, -8.8, -5.5, bikeY, 1.35, 1.35, '#292524', deform, 0.85);
+
+    // Steered handlebars + mirrors
+    drawSteeredHandlebars(ctx, halfL * 0.42, bikeY, 3.6, 1.25, steer, deform, {
+      barColor: '#cbd5e1',
+      barWidth: 0.55,
+      gripLen: 1.3,
+      hasMirrors: true,
+      mirrorStalk: 1.1,
+    });
+
+    // Motorcycle classic round chrome headlamp (xFrac ~ +0.35, yFrac = -0.22)
+    drawClassicRoundHeadlamp(
+      ctx,
+      halfL * 0.70,
+      bikeY,
+      1.12,
+      steer,
+      opt,
+      opt.leftHeadBroken,
+      deform,
+      shadePaint(baseColor, -0.1),
+      true
+    );
+
+    // Motorcycle rear taillight (xFrac ~ -0.45, yFrac = -0.22)
+    drawMotoTailAssembly(ctx, rX + 1.2, bikeY, opt, opt.leftTailBroken, deform, 1.4, true);
+
+    // Sidecar curved framed glass windscreen (above sidecar cockpit front)
+    drawBoxShadow(ctx, halfL * 0.08, carY - 2.1, halfL * 0.26, carY + 2.1, 0.6, -0.35, 0.4, 0.24, deform);
+    fillPoly(
+      ctx,
+      [
+        [halfL * 0.26, carY - 1.75],
+        [halfL * 0.26, carY + 1.75],
+        [halfL * 0.10, carY + 2.15],
+        [halfL * 0.10, carY - 2.15],
+      ],
+      createGlassGradient(ctx, halfL * 0.26, carY - 2.1, halfL * 0.10, carY + 2.1, 'blue'),
       deform,
       '#cbd5e1',
       0.55
     );
-
-    // Rear-mounted full-size spare wheel & chrome luggage rack on sidecar trunk
-    drawRoundedBox(ctx, -halfL * 0.76, scY - 1.75, -halfL * 0.46, scY + 1.75, 0.45, '#1e293b', deform, '#0f172a', 0.4);
-    drawDeformedDot(ctx, -halfL * 0.61, scY, 1.55, '#0c1118', deform, '#334155', 0.45);
-    drawDeformedDot(ctx, -halfL * 0.61, scY, 0.82, '#cbd5e1', deform, '#1e293b', 0.35);
-
-    // Sidecar outer wheel fender with integrated front marker/turn & rear red lamp
-    const scFenderY = halfW * 0.78;
-    drawRoundedBox(ctx, -halfL * 0.52, scFenderY - 1.35, halfL * 0.14, scFenderY + 1.35, 0.75, paint, deform, '#0f172a', 0.45);
-    // Front fender white position + right turn
-    const scFrontCol = opt.rightTurn > 0.06 ? '#f59e0b' : opt.positionOn ? '#fef9c3' : '#cbd5e1';
-    drawRoundedBox(ctx, halfL * 0.04, scFenderY - 0.58, halfL * 0.18, scFenderY + 0.58, 0.25, scFrontCol, deform, '#0f172a', 0.3);
-    // Rear fender red tail/brake + right turn
-    const scRearCol = opt.rightTurn > 0.06 ? '#f59e0b' : opt.braking ? '#ef4444' : opt.positionOn ? '#dc2626' : '#7f1d1d';
-    drawRoundedBox(ctx, -halfL * 0.56, scFenderY - 0.62, -halfL * 0.42, scFenderY + 0.62, 0.25, scRearCol, deform, '#0f172a', 0.3);
-    // Left bike blinkers
-    if (opt.leftTurn > 0.06) {
-      drawDeformedDot(ctx, halfL * 0.52, bikeY - 2.4, 0.55, '#f59e0b', deform);
-      drawDeformedDot(ctx, -halfL * 0.80, bikeY - 2.1, 0.55, '#f59e0b', deform);
-    }
+    drawGlassGlint(ctx, halfL * 0.11, carY - 1.7, halfL * 0.24, carY + 1.7, 0.2, deform);
     return;
   }
 
-  if (car.type === 'moto_sport') {
-    const bodyGrad = createBodyMetallicGradient(ctx, halfW * 0.7, paint);
-    const accent = car.roofColor && car.roofColor !== paint ? car.roofColor : shadePaint(paint, -0.35);
+  // --------------------------------------------------------------------------
+  // B. SUPERBIKE 1000 (Stellar Superbike — Aero Fairing, Winglets, Cat-Eye LEDs)
+  // --------------------------------------------------------------------------
+  if (type === 'moto_sport') {
+    const baseColor = car.color || '#dc2626';
 
-    // Carbon front fender over front tire
-    drawRoundedBox(ctx, halfL * 0.48, -1.45, halfL * 0.88, 1.45, 0.75, '#1e293b', deform, '#0f172a', 0.4);
-
-    // Aerodynamic full wind-tunnel fairing + nose cowl + sharp tail
-    const fairingPts: Pt[] = [
-      [halfL * 0.88, -0.65],
-      [halfL * 0.94, 0],
-      [halfL * 0.88, 0.65],
-      [halfL * 0.54, 2.75],
-      [halfL * 0.14, 2.95],
-      [-halfL * 0.22, 2.25],
-      [-halfL * 0.62, 1.65],
-      [-halfL * 0.92, 0.82],
-      [-halfL * 0.92, -0.82],
-      [-halfL * 0.62, -1.65],
-      [-halfL * 0.22, -2.25],
-      [halfL * 0.14, -2.95],
-      [halfL * 0.54, -2.75],
-    ];
-    fillPoly(ctx, fairingPts, bodyGrad, deform, '#0f172a', 0.55);
-
-    // Racing accent flank stripes & carbon winglets
-    fillPoly(ctx, [[halfL * 0.56, -2.6], [halfL * 0.42, -3.45], [halfL * 0.30, -2.85]], '#0f172a', deform);
-    fillPoly(ctx, [[halfL * 0.56, 2.6], [halfL * 0.42, 3.45], [halfL * 0.30, 2.85]], '#0f172a', deform);
-    strokePoly(ctx, [[halfL * 0.55, -2.1], [halfL * 0.05, -2.3]], accent, 0.7, deform);
-    strokePoly(ctx, [[halfL * 0.55, 2.1], [halfL * 0.05, 2.3]], accent, 0.7, deform);
-
-    // Double-bubble smoked aerodynamic windscreen
-    const wsGrad = createGlassGradient(ctx, halfL * 0.38, -1.9, halfL * 0.82, 1.9, 'smoke');
-    fillPoly(
-      ctx,
-      [
-        [halfL * 0.82, -0.72],
-        [halfL * 0.86, 0],
-        [halfL * 0.82, 0.72],
-        [halfL * 0.44, 1.92],
-        [halfL * 0.35, 0],
-        [halfL * 0.44, -1.92],
-      ],
-      wsGrad,
-      deform,
-      '#0f172a',
-      0.45
-    );
-
-    // Sculpted knee-recessed fuel tank + billet aluminum quick-fill cap
-    drawRoundedBox(ctx, -halfL * 0.06, -2.15, halfL * 0.38, 2.15, 1.05, shadePaint(paint, 0.12), deform, '#0f172a', 0.42);
-    drawDeformedDot(ctx, halfL * 0.19, 0, 0.62, '#cbd5e1', deform, '#334155', 0.32);
-
-    // Split alcantara rider seat + raised pillion tail cowl
-    drawRoundedBox(ctx, -halfL * 0.48, -1.55, -halfL * 0.06, 1.55, 0.65, '#18181b', deform, '#09090b', 0.4);
-    drawRoundedBox(ctx, -halfL * 0.84, -1.05, -halfL * 0.52, 1.05, 0.55, paint, deform, '#0f172a', 0.4);
-
-    // Clip-on sport handlebars + mirror stalks
-    drawHandlebars(ctx, halfL * 0.40, 0, steer, 3.25, 1.15, '#1e293b', '#09090b', 'sport_black', deform);
-
-    // Integrated dual LED cat-eye projector headlights + DRL eyebrows
+    // Carbon MotoGP aero downforce winglets flanking nose
     for (const side of [-1, 1] as const) {
-      const broken = side < 0 ? opt.leftHeadBroken : opt.rightHeadBroken;
-      const lensCol = broken
-        ? '#090d16'
-        : opt.highBeam
-        ? '#ffffff'
-        : opt.headlightsOn
-        ? '#e0f2fe'
-        : opt.ignitionOn || opt.positionOn
-        ? '#bae6fd'
-        : '#64748b';
       fillPoly(
         ctx,
         [
-          [halfL * 0.86, side * 0.45],
-          [halfL * 0.90, side * 1.15],
-          [halfL * 0.72, side * 1.95],
-          [halfL * 0.66, side * 1.22],
+          [halfL * 0.62, side * 1.75],
+          [halfL * 0.48, side * 3.45],
+          [halfL * 0.34, side * 3.20],
+          [halfL * 0.40, side * 1.75],
         ],
-        lensCol,
+        '#111827',
         deform,
-        '#0f172a',
+        '#475569',
         0.32
       );
+    }
+
+    // Wide sculpted race nose fairing & side belly cowls
+    const fairingPts: Pt[] = [
+      [fX - 0.6, -0.55],
+      [fX - 1.3, -1.85],
+      [halfL * 0.56, -2.55],
+      [halfL * 0.12, -2.35],
+      [-halfL * 0.12, -1.75],
+      [-halfL * 0.12, 1.75],
+      [halfL * 0.12, 2.35],
+      [halfL * 0.56, 2.55],
+      [fX - 1.3, 1.85],
+      [fX - 0.6, 0.55],
+    ];
+    fillPoly(ctx, fairingPts, createBodyMetallicGradient(ctx, 2.6, baseColor), deform, '#090d16', 0.62);
+
+    // Center ram-air intake scoop at nose tip
+    drawRoundedBox(ctx, fX - 1.55, -0.52, fX - 0.7, 0.52, 0.2, '#090d16', deform);
+
+    // Twin recessed cat-eye LED projector headlamps (xFrac ~ 0.44, yFrac = ±0.11)
+    for (const side of [-1, 1] as const) {
+      const broken = side < 0 ? opt.leftHeadBroken : opt.rightHeadBroken;
       const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
-      if (turnInt > 0.06) {
-        drawDeformedDot(ctx, halfL * 0.56, side * 2.55, 0.55, '#f59e0b', deform);
-        drawDeformedDot(ctx, -halfL * 0.78, side * 1.45, 0.5, '#f59e0b', deform);
+      const cy = side * 1.1;
+      fillPoly(
+        ctx,
+        [
+          [fX - 0.9, cy - side * 0.45],
+          [fX - 1.85, cy + side * 0.72],
+          [fX - 2.55, cy + side * 0.48],
+          [fX - 1.55, cy - side * 0.55],
+        ],
+        broken ? '#111827' : opt.headlightsOn ? (opt.highBeam ? '#ffffff' : '#e0f2fe') : '#94a3b8',
+        deform,
+        '#090d16',
+        0.32
+      );
+      if (!broken && (opt.positionOn || opt.ignitionOn || opt.headlightsOn)) {
+        strokePoly(
+          ctx,
+          [[fX - 1.0, cy - side * 0.35], [fX - 1.85, cy + side * 0.62]],
+          turnInt > 0.08 ? '#fbbf24' : '#ffffff',
+          0.45,
+          deform
+        );
       }
     }
 
-    // Sleek LED V-bar taillight / brake light
-    const tailBroken = opt.leftTailBroken && opt.rightTailBroken;
-    const tailCol = tailBroken ? '#090d16' : opt.braking ? '#ef4444' : opt.positionOn ? '#dc2626' : '#7f1d1d';
-    strokePoly(ctx, [[-halfL * 0.86, -1.05], [-halfL * 0.94, 0], [-halfL * 0.86, 1.05]], tailCol, 0.95, deform);
-    if (!tailBroken && opt.braking) {
-      strokePoly(ctx, [[-halfL * 0.87, -0.75], [-halfL * 0.93, 0], [-halfL * 0.87, 0.75]], '#ffffff', 0.4, deform);
+    // Smoked double-bubble racing windscreen + backlit cyan TFT instrument dash underneath
+    fillPoly(
+      ctx,
+      [
+        [halfL * 0.72, -1.1],
+        [halfL * 0.72, 1.1],
+        [halfL * 0.44, 1.55],
+        [halfL * 0.44, -1.55],
+      ],
+      createGlassGradient(ctx, halfL * 0.72, -1.5, halfL * 0.44, 1.5, 'smoke'),
+      deform,
+      '#090d16',
+      0.45
+    );
+    drawRoundedBox(
+      ctx,
+      halfL * 0.54,
+      -0.72,
+      halfL * 0.63,
+      0.72,
+      0.16,
+      opt.ignitionOn ? '#0ea5e9' : '#1e293b',
+      deform
+    );
+    drawGlassGlint(ctx, halfL * 0.46, -1.2, halfL * 0.70, 1.2, 0.22, deform);
+
+    // Clip-on sport bars + gold Ohlins USD fork caps + fairing mirrors
+    drawSteeredHandlebars(ctx, halfL * 0.44, 0, 3.65, 1.45, steer * 0.7, deform, {
+      barColor: '#475569',
+      barWidth: 0.48,
+      gripLen: 1.2,
+      isClipOn: true,
+      forkCapColor: '#f59e0b',
+    });
+    for (const side of [-1, 1] as const) {
+      const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+      strokePoly(ctx, [[halfL * 0.56, side * 1.9], [halfL * 0.68, side * 3.85]], '#0f172a', 0.42, deform);
+      drawRoundedBox(
+        ctx,
+        halfL * 0.62,
+        side * 3.9 - 0.45,
+        halfL * 0.76,
+        side * 3.9 + 0.45,
+        0.2,
+        turnInt > 0.08 ? '#fbbf24' : '#111827',
+        deform,
+        '#475569',
+        0.22
+      );
     }
+
+    // Sculpted knee-indented sport fuel tank + billet aluminum gas cap
+    fillPoly(
+      ctx,
+      [
+        [halfL * 0.34, -1.15],
+        [halfL * 0.16, -2.05],
+        [-halfL * 0.14, -1.45],
+        [-halfL * 0.14, 1.45],
+        [halfL * 0.16, 2.05],
+        [halfL * 0.34, 1.15],
+      ],
+      createBodyMetallicGradient(ctx, 2.1, shadePaint(baseColor, 0.08)),
+      deform,
+      '#090d16',
+      0.48
+    );
+    drawDeformedDot(ctx, halfL * 0.14, 0, 0.58, '#cbd5e1', deform, '#1e293b', 0.25);
+
+    // Split alcantara rider saddle + sharp sculpted pillion tail cowl
+    drawRibbedSaddle(ctx, -halfL * 0.54, -halfL * 0.14, 0, 1.45, 1.65, '#18181b', deform, 1.2);
+    fillPoly(
+      ctx,
+      [
+        [-halfL * 0.52, -1.65],
+        [-halfL * 0.90, -0.85],
+        [-halfL * 0.96, 0],
+        [-halfL * 0.90, 0.85],
+        [-halfL * 0.52, 1.65],
+      ],
+      createBodyMetallicGradient(ctx, 1.65, baseColor),
+      deform,
+      '#090d16',
+      0.52
+    );
+    // Razor V-blade LED taillight integrated into sharp tail cowl
+    const tailFill = opt.leftTailBroken && opt.rightTailBroken
+      ? '#111827'
+      : opt.braking
+      ? '#ff3b3b'
+      : opt.positionOn
+      ? '#ef4444'
+      : '#7f1d1d';
+    strokePoly(
+      ctx,
+      [
+        [-halfL * 0.82, -0.95],
+        [-halfL * 0.95, 0],
+        [-halfL * 0.82, 0.95],
+      ],
+      tailFill,
+      0.78,
+      deform
+    );
     return;
   }
 
-  if (car.type === 'moto_chopper') {
-    const bodyGrad = createBodyMetallicGradient(ctx, halfW * 0.65, paint);
+  // --------------------------------------------------------------------------
+  // C. V-TWIN CRUISER / CHOPPER (Stellar V-Twin Cruiser)
+  // --------------------------------------------------------------------------
+  if (type === 'moto_chopper') {
+    const baseColor = car.color || '#1e293b';
 
-    // Bobbed front fender & wide rear fender over fat tire
-    drawRoundedBox(ctx, halfL * 0.64, -1.15, halfL * 0.94, 1.15, 0.65, paint, deform, '#0f172a', 0.4);
-    drawRoundedBox(ctx, -halfL * 0.94, -1.9, -halfL * 0.42, 1.9, 1.1, bodyGrad, deform, '#0f172a', 0.5);
+    // Wide sculpted teardrop fuel tank with chrome center console dash & dual caps
+    fillPoly(
+      ctx,
+      [
+        [halfL * 0.34, -1.15],
+        [halfL * 0.18, -2.45],
+        [-halfL * 0.10, -2.05],
+        [-halfL * 0.20, -1.2],
+        [-halfL * 0.20, 1.2],
+        [-halfL * 0.10, 2.05],
+        [halfL * 0.18, 2.45],
+        [halfL * 0.34, 1.15],
+      ],
+      createBodyMetallicGradient(ctx, 2.45, baseColor),
+      deform,
+      '#090d16',
+      0.58
+    );
+    // Chrome tank dash console + round analog speedometer
+    drawRoundedBox(ctx, -halfL * 0.14, -0.78, halfL * 0.26, 0.78, 0.45, '#e2e8f0', deform, '#334155', 0.3);
+    drawDeformedDot(ctx, halfL * 0.08, 0, 0.56, '#0f172a', deform, '#cbd5e1', 0.25);
+    for (const side of [-1, 1] as const) {
+      drawDeformedDot(ctx, halfL * 0.10, side * 1.45, 0.42, '#cbd5e1', deform, '#1e293b', 0.22);
+    }
 
-    // Wide sculpted cruiser teardrop tank with chrome center dash console
-    const tankPts: Pt[] = [
-      [halfL * 0.34, -2.35],
-      [halfL * 0.44, -1.35],
-      [halfL * 0.44, 1.35],
-      [halfL * 0.34, 2.35],
-      [-halfL * 0.08, 1.85],
-      [-halfL * 0.16, 0.95],
-      [-halfL * 0.16, -0.95],
-      [-halfL * 0.08, -1.85],
-    ];
-    fillPoly(ctx, tankPts, bodyGrad, deform, '#0f172a', 0.52);
-    // Chrome center dash & speedometer
-    drawRoundedBox(ctx, -halfL * 0.06, -0.68, halfL * 0.34, 0.68, 0.45, '#e2e8f0', deform, '#334155', 0.35);
-    drawDeformedDot(ctx, halfL * 0.18, 0, 0.48, '#0f172a', deform, '#94a3b8', 0.25);
+    // Low sculpted studded cruiser saddle + passenger pillion + chrome sissy bar
+    drawRibbedSaddle(ctx, -halfL * 0.62, -halfL * 0.18, 0, 1.75, 2.15, '#1c1917', deform, 1.15);
+    drawChromePipe(
+      ctx,
+      [
+        [-halfL * 0.52, -1.65],
+        [-halfL * 0.72, -1.25],
+        [-halfL * 0.76, 0],
+        [-halfL * 0.72, 1.25],
+        [-halfL * 0.52, 1.65],
+      ],
+      0.52,
+      deform
+    );
+    drawRoundedBox(ctx, -halfL * 0.76, -1.0, -halfL * 0.62, 1.0, 0.35, '#292524', deform, '#090d16', 0.35);
 
-    // Low-slung stitched leather cruiser saddle + chrome sissy bar backrest
-    drawRoundedBox(ctx, -halfL * 0.56, -1.95, -halfL * 0.12, 1.95, 1.05, '#1c1917', deform, '#09090b', 0.48);
-    drawRoundedBox(ctx, -halfL * 0.80, -1.32, -halfL * 0.56, 1.32, 0.65, '#292524', deform, '#09090b', 0.4);
-    // Chrome sissy-bar hoop
-    strokePoly(ctx, [[-halfL * 0.72, -1.45], [-halfL * 0.86, -1.2], [-halfL * 0.86, 1.2], [-halfL * 0.72, 1.45]], '#f8fafc', 0.65, deform);
+    // Wide swept-back chrome beach/buckhorn handlebars + tear mirrors
+    drawSteeredHandlebars(ctx, halfL * 0.42, 0, 5.1, 2.35, steer, deform, {
+      barColor: '#f1f5f9',
+      barWidth: 0.62,
+      gripLen: 1.55,
+      hasMirrors: true,
+      mirrorStalk: 1.25,
+      forkCapColor: '#f8fafc',
+    });
 
-    // Wide swept-back chrome cruiser handlebars
-    drawHandlebars(ctx, halfL * 0.44, 0, steer, 4.65, 2.25, '#f8fafc', '#18181b', 'teardrop_chrome', deform);
+    // Chrome bullet main headlamp + twin passing spotlights (xFrac ~ 0.38, yFrac = 0)
+    drawClassicRoundHeadlamp(
+      ctx,
+      halfL * 0.72,
+      0,
+      1.28,
+      steer,
+      opt,
+      opt.leftHeadBroken && opt.rightHeadBroken,
+      deform,
+      '#e2e8f0',
+      false
+    );
+    const cos = Math.cos(steer);
+    const sin = Math.sin(steer);
+    for (const side of [-1, 1] as const) {
+      const turnInt = side < 0 ? opt.leftTurn : opt.rightTurn;
+      const px = halfL * 0.66 - side * 1.95 * sin;
+      const py = side * 1.95 * cos;
+      drawDeformedDot(
+        ctx,
+        px,
+        py,
+        0.62,
+        opt.headlightsOn || opt.frontFogOn ? '#fef3c7' : '#cbd5e1',
+        deform,
+        '#1e293b',
+        0.26
+      );
+      drawDeformedDot(
+        ctx,
+        px - 0.4 * cos,
+        py + side * 0.75 * cos,
+        0.38,
+        turnInt > 0.08 ? '#fbbf24' : '#b45309',
+        deform,
+        '#0f172a',
+        0.2
+      );
+    }
 
-    // Chrome bullet main headlight + twin passing lamps + bullet blinkers + rear bobber light
-    drawRoundChromeHeadlight(ctx, halfL * 0.62, 0, 1.18, opt, opt.leftHeadBroken && opt.rightHeadBroken, deform);
-    drawRoundChromeHeadlight(ctx, halfL * 0.54, -1.85, 0.62, opt, opt.leftHeadBroken, deform);
-    drawRoundChromeHeadlight(ctx, halfL * 0.54, 1.85, 0.62, opt, opt.rightHeadBroken, deform);
-    drawMotoBlinkers(ctx, halfL * 0.48, 2.95, 0, opt, deform, 0.68);
-    drawMotoBlinkers(ctx, -halfL * 0.84, 2.35, 0, opt, deform, 0.68);
-    drawMotoTaillight(ctx, -halfL * 0.92, 0, 1.05, opt, opt.leftTailBroken, deform);
+    // Bobbed rear fender chrome taillight
+    drawMotoTailAssembly(ctx, rX + 1.5, 0, opt, opt.leftTailBroken && opt.rightTailBroken, deform, 1.75, true);
     return;
   }
 
-  if (car.type === 'moped_soviet') {
-    const bodyGrad = createBodyMetallicGradient(ctx, halfW * 0.65, paint);
+  // --------------------------------------------------------------------------
+  // D. SOVIET MOPED 50cc (Stellar Cub Moped — Riga / Karpaty)
+  // --------------------------------------------------------------------------
+  if (type === 'moped_soviet') {
+    const baseColor = car.color || '#eab308';
 
-    // Slim painted front & rear fenders
-    drawRoundedBox(ctx, halfL * 0.48, -0.95, halfL * 0.90, 0.95, 0.55, paint, deform, '#0f172a', 0.4);
-    drawRoundedBox(ctx, -halfL * 0.92, -0.95, -halfL * 0.42, 0.95, 0.55, paint, deform, '#0f172a', 0.4);
+    // Compact boxy front fuel tank + chrome filler cap
+    drawRoundedBox(ctx, 0.2, -1.25, halfL * 0.44, 1.25, 0.55, createBodyMetallicGradient(ctx, 1.3, baseColor), deform, '#090d16', 0.45);
+    drawDeformedDot(ctx, halfL * 0.26, 0, 0.42, '#cbd5e1', deform, '#0f172a', 0.2);
 
-    // Compact boxy front fuel tank (Карпаты / Рига)
-    drawRoundedBox(ctx, halfL * 0.06, -1.42, halfL * 0.48, 1.42, 0.55, bodyGrad, deform, '#0f172a', 0.45);
-    drawDeformedDot(ctx, halfL * 0.34, 0, 0.42, '#e2e8f0', deform, '#334155', 0.28);
+    // Sprung single retro moped saddle
+    drawRibbedSaddle(ctx, -halfL * 0.44, -0.3, 0, 1.05, 1.45, '#292524', deform, 0.9);
 
-    // Sprung moped saddle
-    drawRoundedBox(ctx, -halfL * 0.44, -1.32, -halfL * 0.04, 1.32, 0.72, '#1c1917', deform, '#09090b', 0.42);
+    // Chrome wire rear luggage carrier rack
+    const rkX1 = rX + 1.4;
+    const rkX2 = -halfL * 0.45;
+    strokePoly(
+      ctx,
+      [
+        [rkX1, -1.25],
+        [rkX2, -1.25],
+        [rkX2, 1.25],
+        [rkX1, 1.25],
+      ],
+      '#cbd5e1',
+      0.52,
+      deform,
+      true
+    );
+    for (let sx = rkX1 + 0.8; sx < rkX2 - 0.3; sx += 0.95) {
+      strokePoly(ctx, [[sx, -1.2], [sx, 1.2]], '#94a3b8', 0.35, deform);
+    }
 
-    // Rear steel wire luggage rack
-    drawRoundedBox(ctx, -halfL * 0.86, -1.25, -halfL * 0.46, 1.25, 0.25, 'rgba(203,213,225,0.2)', deform, '#cbd5e1', 0.5);
-    strokePoly(ctx, [[-halfL * 0.84, -0.45], [-halfL * 0.48, -0.45]], '#cbd5e1', 0.4, deform);
-    strokePoly(ctx, [[-halfL * 0.84, 0.45], [-halfL * 0.48, 0.45]], '#cbd5e1', 0.4, deform);
+    // Narrow chrome moped handlebars
+    drawSteeredHandlebars(ctx, halfL * 0.50, 0, 3.1, 0.95, steer, deform, {
+      barColor: '#e2e8f0',
+      barWidth: 0.44,
+      gripLen: 1.0,
+      hasMirrors: true,
+      mirrorStalk: 0.9,
+    });
 
-    // Narrow chrome handlebars
-    drawHandlebars(ctx, halfL * 0.52, 0, steer, 2.85, 0.95, '#e2e8f0', '#0f172a', 'round_chrome', deform);
-
-    // Round chrome headlight, mini blinkers & rear lamp
-    drawRoundChromeHeadlight(ctx, halfL * 0.70, 0, 0.92, opt, opt.leftHeadBroken, deform);
-    drawMotoBlinkers(ctx, halfL * 0.56, 2.0, 0, opt, deform, 0.52);
-    drawMotoBlinkers(ctx, -halfL * 0.82, 1.75, 0, opt, deform, 0.52);
-    drawMotoTaillight(ctx, -halfL * 0.90, 0, 0.75, opt, opt.leftTailBroken, deform);
+    // Compact round moped headlamp & mini taillight
+    drawClassicRoundHeadlamp(ctx, halfL * 0.72, 0, 0.92, steer, opt, opt.leftHeadBroken && opt.rightHeadBroken, deform, '#cbd5e1', true);
+    drawMotoTailAssembly(ctx, rX + 0.9, 0, opt, opt.leftTailBroken && opt.rightTailBroken, deform, 1.15, true);
     return;
   }
 
-  // moto_izh_jupiter & moto_jawa350 (Classic Roadsters)
-  const isJawa = car.type === 'moto_jawa350';
-  const bodyGrad = createBodyMetallicGradient(ctx, halfW * 0.65, paint);
+  // --------------------------------------------------------------------------
+  // E. CLASSIC STANDARD MOTORCYCLES: IZH JUPITER-5 & JAWA 350
+  // --------------------------------------------------------------------------
+  const isJawa = type === 'moto_jawa350';
+  const baseColor = car.color || (isJawa ? '#991b1b' : '#2563eb');
 
-  // Front & rear fenders (chrome front on Jawa, painted on Izh)
-  drawRoundedBox(
-    ctx,
-    halfL * 0.46,
-    -1.15,
-    halfL * 0.91,
-    1.15,
-    0.72,
-    isJawa ? '#e2e8f0' : paint,
-    deform,
-    '#0f172a',
-    0.45
-  );
-  drawRoundedBox(ctx, -halfL * 0.92, -1.25, -halfL * 0.36, 1.25, 0.72, paint, deform, '#0f172a', 0.45);
-
-  // Sculpted teardrop metallic fuel tank with chrome knee-pad panels on Jawa
-  const tankPts: Pt[] = [
-    [halfL * 0.38, -1.85],
-    [halfL * 0.46, -1.0],
-    [halfL * 0.46, 1.0],
-    [halfL * 0.38, 1.85],
-    [-halfL * 0.04, 1.5],
-    [-halfL * 0.12, 0.82],
-    [-halfL * 0.12, -0.82],
-    [-halfL * 0.04, -1.5],
-  ];
-  fillPoly(ctx, tankPts, bodyGrad, deform, '#0f172a', 0.5);
+  // Sculpted fuel tank (Jawa teardrop with polished chrome knee panels + gold stripe; Izh squared-teardrop with black rubber knee pads)
+  const tankPts: Pt[] = isJawa
+    ? [
+        [halfL * 0.38, -0.9],
+        [halfL * 0.22, -2.15],
+        [-halfL * 0.08, -1.65],
+        [-halfL * 0.16, -0.95],
+        [-halfL * 0.16, 0.95],
+        [-halfL * 0.08, 1.65],
+        [halfL * 0.22, 2.15],
+        [halfL * 0.38, 0.9],
+      ]
+    : [
+        [halfL * 0.38, -1.15],
+        [halfL * 0.26, -2.05],
+        [-halfL * 0.12, -1.85],
+        [-halfL * 0.18, -1.1],
+        [-halfL * 0.18, 1.1],
+        [-halfL * 0.12, 1.85],
+        [halfL * 0.26, 2.05],
+        [halfL * 0.38, 1.15],
+      ];
+  fillPoly(ctx, tankPts, createBodyMetallicGradient(ctx, 2.1, baseColor), deform, '#090d16', 0.55);
 
   if (isJawa) {
-    // Iconic Jawa chrome flank panels & gold center pinstripe
-    drawRoundedBox(ctx, halfL * 0.04, -1.78, halfL * 0.34, -1.22, 0.3, '#f1f5f9', deform, '#475569', 0.3);
-    drawRoundedBox(ctx, halfL * 0.04, 1.22, halfL * 0.34, 1.78, 0.3, '#f1f5f9', deform, '#475569', 0.3);
-    strokePoly(ctx, [[halfL * 0.42, 0], [-halfL * 0.08, 0]], '#fbbf24', 0.45, deform);
+    // Signature Jawa chrome side teardrop panels + crisp gold center pinstripe
+    for (const side of [-1, 1] as const) {
+      fillPoly(
+        ctx,
+        [
+          [halfL * 0.26, side * 1.35],
+          [halfL * 0.18, side * 2.02],
+          [-halfL * 0.06, side * 1.58],
+          [-halfL * 0.04, side * 1.15],
+        ],
+        '#e2e8f0',
+        deform,
+        '#d97706',
+        0.32
+      );
+    }
+    strokePoly(ctx, [[halfL * 0.34, 0], [-halfL * 0.14, 0]], '#fbbf24', 0.35, deform);
   } else {
-    // Izh Jupiter sculpted shoulder ridges & rubber knee pads
-    drawRoundedBox(ctx, halfL * 0.02, -1.72, halfL * 0.30, -1.25, 0.25, '#1e293b', deform);
-    drawRoundedBox(ctx, halfL * 0.02, 1.25, halfL * 0.30, 1.72, 0.25, '#1e293b', deform);
+    // Izh Jupiter black rubber knee grip pads + center seam crease
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(ctx, -halfL * 0.08, side * 1.65 - 0.32, halfL * 0.18, side * 1.65 + 0.32, 0.2, '#111827', deform);
+    }
+    strokePoly(ctx, [[halfL * 0.34, 0], [-halfL * 0.14, 0]], 'rgba(255,255,255,0.22)', 0.38, deform);
   }
   // Chrome fuel filler cap
-  drawDeformedDot(ctx, halfL * 0.26, 0, 0.55, '#f8fafc', deform, '#334155', 0.35);
+  drawDeformedDot(ctx, halfL * 0.18, 0, 0.52, '#cbd5e1', deform, '#0f172a', 0.25);
 
-  // Long double ribbed leather saddle + passenger strap + chrome rear grab rail
-  drawRoundedBox(ctx, -halfL * 0.74, -1.52, -halfL * 0.10, 1.52, 0.75, '#1c1917', deform, '#09090b', 0.48);
-  for (let rx = -halfL * 0.64; rx <= -halfL * 0.20; rx += 1.35) {
-    strokePoly(ctx, [[rx, -1.28], [rx, 1.28]], '#292524', 0.45, deform);
+  // Long ribbed double leather saddle + rear chrome passenger grab rail
+  drawRibbedSaddle(ctx, -halfL * 0.72, -halfL * 0.16, 0, 1.45, 1.75, '#1c1917', deform, 1.05);
+  drawChromePipe(
+    ctx,
+    [
+      [-halfL * 0.52, -1.65],
+      [-halfL * 0.76, -1.55],
+      [-halfL * 0.80, 0],
+      [-halfL * 0.76, 1.55],
+      [-halfL * 0.52, 1.65],
+    ],
+    0.45,
+    deform
+  );
+
+  // Twin chrome analog speedometer & tachometer dials ahead of triple-tree
+  const cos = Math.cos(steer);
+  const sin = Math.sin(steer);
+  for (const side of [-1, 1] as const) {
+    const gx = halfL * 0.54 + 0.15 * cos - side * 0.68 * sin;
+    const gy = 0.15 * sin + side * 0.68 * cos;
+    drawDeformedDot(ctx, gx, gy, 0.52, '#0f172a', deform, '#e2e8f0', 0.28);
   }
-  strokePoly(ctx, [[-halfL * 0.42, -1.5], [-halfL * 0.42, 1.5]], '#09090b', 0.85, deform);
-  strokePoly(ctx, [[-halfL * 0.70, -1.45], [-halfL * 0.84, -1.15], [-halfL * 0.84, 1.15], [-halfL * 0.70, 1.45]], '#cbd5e1', 0.58, deform);
 
-  // Handlebars + twin dial gauge pod
-  drawHandlebars(ctx, halfL * 0.47, 0, steer, 3.65, 1.35, '#e2e8f0', '#0f172a', 'round_chrome', deform);
-  drawDeformedDot(ctx, halfL * 0.55, -0.58, 0.48, '#0f172a', deform, '#cbd5e1', 0.3);
-  drawDeformedDot(ctx, halfL * 0.55, 0.58, 0.48, '#0f172a', deform, '#cbd5e1', 0.3);
+  // Steered chrome handlebars + mirrors
+  drawSteeredHandlebars(ctx, halfL * 0.44, 0, 4.1, 1.25, steer, deform, {
+    barColor: '#e2e8f0',
+    barWidth: 0.54,
+    gripLen: 1.35,
+    hasMirrors: true,
+    mirrorStalk: 1.15,
+  });
 
-  // Round chrome headlight + stalk blinkers + rear taillight
-  drawRoundChromeHeadlight(ctx, halfL * 0.68, 0, 1.12, opt, opt.leftHeadBroken, deform);
-  drawMotoBlinkers(ctx, halfL * 0.56, 2.35, 0, opt, deform, 0.65);
-  drawMotoBlinkers(ctx, -halfL * 0.82, 2.15, 0, opt, deform, 0.65);
-  drawMotoTaillight(ctx, -halfL * 0.90, 0, 1.0, opt, opt.leftTailBroken, deform);
+  // Classic round chrome headlamp + stalk blinkers (xFrac ~ +0.36, yFrac = 0)
+  drawClassicRoundHeadlamp(
+    ctx,
+    halfL * 0.72,
+    0,
+    1.15,
+    steer,
+    opt,
+    opt.leftHeadBroken && opt.rightHeadBroken,
+    deform,
+    isJawa ? '#e2e8f0' : shadePaint(baseColor, -0.06),
+    true
+  );
+
+  // Rear taillight + stalk blinkers (xFrac ~ -0.45, yFrac = 0)
+  drawMotoTailAssembly(ctx, rX + 1.2, 0, opt, opt.leftTailBroken && opt.rightTailBroken, deform, 1.55, true);
 }

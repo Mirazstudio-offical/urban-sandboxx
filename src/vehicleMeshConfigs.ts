@@ -20,13 +20,15 @@ export {
 export {
   PRESET_MOTO_SIDECAR,
   PRESET_MOTORCYCLE,
-  PRESET_TRAILER
+  PRESET_TRAILER,
+  PRESET_SEMI_TRAILER
 } from './meshes/meshSpecial';
 
 import {
   PRESET_MOTO_SIDECAR,
   PRESET_MOTORCYCLE,
-  PRESET_TRAILER
+  PRESET_TRAILER,
+  PRESET_SEMI_TRAILER
 } from './meshes/meshSpecial';
 
 /**
@@ -59,6 +61,8 @@ export function getVehicleNodeBeamDefinition(
       baseDef = densifyClosedPerimeter(PRESET_MOTO_SIDECAR);
     } else if (anatomy?.specialPreset === 'motorcycle') {
       baseDef = densifyClosedPerimeter(PRESET_MOTORCYCLE);
+    } else if (anatomy?.specialPreset === 'semi_trailer') {
+      baseDef = densifyClosedPerimeter(PRESET_SEMI_TRAILER);
     } else if (anatomy?.specialPreset === 'trailer') {
       baseDef = densifyClosedPerimeter(PRESET_TRAILER);
     } else {

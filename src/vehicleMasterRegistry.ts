@@ -88,7 +88,7 @@ export interface VehicleChassisAnatomy {
   frameRatio?: number;
   railRatio?: number;
   frameMaxHalfWidth?: number;
-  specialPreset?: 'moto_sidecar' | 'motorcycle' | 'trailer';
+  specialPreset?: 'moto_sidecar' | 'motorcycle' | 'trailer' | 'semi_trailer';
 }
 
 export interface VehicleThirdBrakeLight {
@@ -1333,49 +1333,49 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.46,
-      "xA": 0.44,
-      "xB": 0.05,
-      "xC": -0.25,
-      "xRearHeader": -0.36,
+      "xCowl": 0.32,
+      "xA": 0.19,
+      "xB": 0.02,
+      "xC": -0.22,
+      "xRearHeader": -0.42,
       "xTail": -0.5,
-      "xFrontAxle": 0.36,
-      "xRearAxle": -0.22,
-      "xEngine": 0.3,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.24,
+      "xEngine": 0.36,
       "xCore": -0.05,
       "frameRatio": 0.86
     },
     "opticsMounts": {
       "headlightLeft": {
         "xFrac": 0.47,
-        "yFrac": -0.37
+        "yFrac": -0.36
       },
       "headlightRight": {
         "xFrac": 0.47,
-        "yFrac": 0.37
+        "yFrac": 0.36
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.48,
+        "yFrac": -0.41
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
+        "xFrac": -0.48,
+        "yFrac": 0.41
       },
       "fogLightLeft": {
         "xFrac": 0.48,
-        "yFrac": -0.31
+        "yFrac": -0.39
       },
       "fogLightRight": {
         "xFrac": 0.48,
-        "yFrac": 0.31
+        "yFrac": 0.39
       },
       "thirdBrakeLight": {
         "enabled": true,
-        "xFrac": -0.28,
+        "xFrac": -0.47,
         "yFrac": 0,
-        "width": 4,
-        "height": 1.2,
+        "width": 3.6,
+        "height": 0.85,
         "type": "led_strip"
       }
     }
@@ -1482,49 +1482,49 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "chassisAnatomy": {
       "xNose": 0.5,
       "xCowl": 0.46,
-      "xA": 0.42,
-      "xB": 0.1,
-      "xC": -0.35,
+      "xA": 0.4,
+      "xB": 0.14,
+      "xC": -0.18,
       "xRearHeader": -0.42,
       "xTail": -0.5,
-      "xFrontAxle": 0.42,
-      "xRearAxle": -0.3,
+      "xFrontAxle": 0.27,
+      "xRearAxle": -0.24,
       "xEngine": -0.38,
-      "xCore": -0.05,
-      "frameRatio": 0.9
+      "xCore": 0,
+      "frameRatio": 0.88
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.37
+        "xFrac": 0.48,
+        "yFrac": -0.39
       },
       "headlightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.37
+        "xFrac": 0.48,
+        "yFrac": 0.39
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.485,
+        "yFrac": -0.42
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
+        "xFrac": -0.485,
+        "yFrac": 0.42
       },
       "fogLightLeft": {
-        "xFrac": 0.48,
-        "yFrac": -0.31
+        "xFrac": 0.485,
+        "yFrac": -0.41
       },
       "fogLightRight": {
-        "xFrac": 0.48,
-        "yFrac": 0.31
+        "xFrac": 0.485,
+        "yFrac": 0.41
       },
       "thirdBrakeLight": {
-        "enabled": false,
-        "xFrac": 0,
+        "enabled": true,
+        "xFrac": -0.48,
         "yFrac": 0,
-        "width": 0,
-        "height": 0,
-        "type": "incandescent"
+        "width": 4,
+        "height": 0.9,
+        "type": "led_strip"
       }
     }
   },
@@ -4591,49 +4591,49 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.46,
-      "xA": 0.44,
-      "xB": 0.05,
-      "xC": -0.25,
-      "xRearHeader": -0.36,
+      "xCowl": 0.32,
+      "xA": 0.18,
+      "xB": 0.04,
+      "xC": -0.22,
+      "xRearHeader": -0.42,
       "xTail": -0.5,
-      "xFrontAxle": 0.36,
-      "xRearAxle": -0.22,
-      "xEngine": 0.3,
-      "xCore": -0.05,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.27,
+      "xEngine": 0.36,
+      "xCore": -0.04,
       "frameRatio": 0.86
     },
     "opticsMounts": {
       "headlightLeft": {
         "xFrac": 0.47,
-        "yFrac": -0.37
+        "yFrac": -0.35
       },
       "headlightRight": {
         "xFrac": 0.47,
-        "yFrac": 0.37
+        "yFrac": 0.35
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.48,
+        "yFrac": -0.4
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
+        "xFrac": -0.48,
+        "yFrac": 0.4
       },
       "fogLightLeft": {
         "xFrac": 0.48,
-        "yFrac": -0.31
+        "yFrac": -0.38
       },
       "fogLightRight": {
         "xFrac": 0.48,
-        "yFrac": 0.31
+        "yFrac": 0.38
       },
       "thirdBrakeLight": {
         "enabled": true,
-        "xFrac": -0.46,
+        "xFrac": -0.47,
         "yFrac": 0,
-        "width": 5.5,
-        "height": 1.4,
+        "width": 3.6,
+        "height": 0.85,
         "type": "led_strip"
       }
     }
@@ -4887,49 +4887,41 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.46,
-      "xA": 0.44,
-      "xB": 0.05,
-      "xC": -0.25,
-      "xRearHeader": -0.36,
+      "xCowl": 0.33,
+      "xA": 0.26,
+      "xB": 0.06,
+      "xC": -0.22,
+      "xRearHeader": -0.42,
       "xTail": -0.5,
-      "xFrontAxle": 0.36,
-      "xRearAxle": -0.22,
-      "xEngine": 0.3,
+      "xFrontAxle": 0.27,
+      "xRearAxle": -0.25,
+      "xEngine": 0.38,
       "xCore": -0.05,
       "frameRatio": 0.86
     },
     "opticsMounts": {
       "headlightLeft": {
         "xFrac": 0.47,
-        "yFrac": -0.37
+        "yFrac": -0.33
       },
       "headlightRight": {
         "xFrac": 0.47,
-        "yFrac": 0.37
+        "yFrac": 0.33
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.48,
+        "yFrac": -0.4
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0.48,
-        "yFrac": -0.31
-      },
-      "fogLightRight": {
-        "xFrac": 0.48,
-        "yFrac": 0.31
+        "xFrac": -0.48,
+        "yFrac": 0.4
       },
       "thirdBrakeLight": {
         "enabled": true,
-        "xFrac": -0.46,
+        "xFrac": -0.47,
         "yFrac": 0,
-        "width": 5.5,
-        "height": 1.4,
+        "width": 3.8,
+        "height": 0.9,
         "type": "led_strip"
       }
     }
@@ -5044,49 +5036,49 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.26,
-      "xA": 0.2,
-      "xB": -0.02,
-      "xC": -0.28,
-      "xRearHeader": -0.4,
+      "xCowl": 0.33,
+      "xA": 0.22,
+      "xB": 0.02,
+      "xC": -0.22,
+      "xRearHeader": -0.42,
       "xTail": -0.5,
-      "xFrontAxle": 0.3,
-      "xRearAxle": -0.26,
-      "xEngine": 0.21,
-      "xCore": -0.04,
-      "frameRatio": 0.85
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.22,
+      "xEngine": 0.36,
+      "xCore": -0.05,
+      "frameRatio": 0.86
     },
     "opticsMounts": {
       "headlightLeft": {
         "xFrac": 0.47,
-        "yFrac": -0.37
+        "yFrac": -0.32
       },
       "headlightRight": {
         "xFrac": 0.47,
-        "yFrac": 0.37
+        "yFrac": 0.32
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.48,
+        "yFrac": -0.41
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
+        "xFrac": -0.48,
+        "yFrac": 0.41
       },
       "fogLightLeft": {
         "xFrac": 0.48,
-        "yFrac": -0.31
+        "yFrac": -0.35
       },
       "fogLightRight": {
         "xFrac": 0.48,
-        "yFrac": 0.31
+        "yFrac": 0.35
       },
       "thirdBrakeLight": {
         "enabled": true,
-        "xFrac": -0.46,
+        "xFrac": -0.47,
         "yFrac": 0,
-        "width": 5.5,
-        "height": 1.4,
+        "width": 3.6,
+        "height": 0.85,
         "type": "led_strip"
       }
     }
@@ -5946,50 +5938,42 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "requiredKeyType": "iron",
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.46,
-      "xA": 0.44,
+      "xCowl": 0.42,
+      "xA": 0.31,
       "xB": 0.05,
-      "xC": -0.25,
-      "xRearHeader": -0.36,
+      "xC": -0.22,
+      "xRearHeader": -0.42,
       "xTail": -0.5,
-      "xFrontAxle": 0.36,
-      "xRearAxle": -0.22,
-      "xEngine": 0.3,
-      "xCore": -0.05,
-      "frameRatio": 0.86
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.22,
+      "xCore": -0.04,
+      "frameRatio": 0.84
     },
     "opticsMounts": {
       "headlightLeft": {
         "xFrac": 0.47,
-        "yFrac": -0.37
+        "yFrac": -0.32
       },
       "headlightRight": {
         "xFrac": 0.47,
-        "yFrac": 0.37
+        "yFrac": 0.32
       },
       "taillightLeft": {
-        "xFrac": -0.47,
+        "xFrac": -0.48,
         "yFrac": -0.38
       },
       "taillightRight": {
-        "xFrac": -0.47,
+        "xFrac": -0.48,
         "yFrac": 0.38
       },
-      "fogLightLeft": {
-        "xFrac": 0.48,
-        "yFrac": -0.31
-      },
-      "fogLightRight": {
-        "xFrac": 0.48,
-        "yFrac": 0.31
-      },
       "thirdBrakeLight": {
-        "enabled": true,
-        "xFrac": -0.46,
+        "enabled": false,
+        "xFrac": 0,
         "yFrac": 0,
-        "width": 5.5,
-        "height": 1.4,
-        "type": "led_strip"
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
       }
     }
   },
@@ -6416,32 +6400,24 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       }
     ],
     "chassisAnatomy": {
-      "specialPreset": "trailer"
+      "specialPreset": "semi_trailer"
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": -0.38
       },
       "headlightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": 0.38
       },
       "taillightLeft": {
-        "xFrac": -0.48,
+        "xFrac": -0.485,
         "yFrac": -0.38
       },
       "taillightRight": {
-        "xFrac": -0.48,
+        "xFrac": -0.485,
         "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0,
-        "yFrac": 0
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -6543,32 +6519,24 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       }
     ],
     "chassisAnatomy": {
-      "specialPreset": "trailer"
+      "specialPreset": "semi_trailer"
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": -0.38
       },
       "headlightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": 0.38
       },
       "taillightLeft": {
-        "xFrac": -0.48,
+        "xFrac": -0.485,
         "yFrac": -0.38
       },
       "taillightRight": {
-        "xFrac": -0.48,
+        "xFrac": -0.485,
         "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0,
-        "yFrac": 0
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -6670,32 +6638,24 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       }
     ],
     "chassisAnatomy": {
-      "specialPreset": "trailer"
+      "specialPreset": "semi_trailer"
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": -0.38
       },
       "headlightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": 0.38
       },
       "taillightLeft": {
-        "xFrac": -0.48,
+        "xFrac": -0.485,
         "yFrac": -0.38
       },
       "taillightRight": {
-        "xFrac": -0.48,
+        "xFrac": -0.485,
         "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0,
-        "yFrac": 0
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -6796,32 +6756,24 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       }
     ],
     "chassisAnatomy": {
-      "specialPreset": "trailer"
+      "specialPreset": "semi_trailer"
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": -0.38
       },
       "headlightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": 0.38
       },
       "taillightLeft": {
-        "xFrac": -0.48,
+        "xFrac": -0.485,
         "yFrac": -0.38
       },
       "taillightRight": {
-        "xFrac": -0.48,
+        "xFrac": -0.485,
         "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0,
-        "yFrac": 0
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -6922,32 +6874,24 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       }
     ],
     "chassisAnatomy": {
-      "specialPreset": "trailer"
+      "specialPreset": "semi_trailer"
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": -0.38
       },
       "headlightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.48,
+        "yFrac": 0.38
       },
       "taillightLeft": {
         "xFrac": -0.48,
-        "yFrac": -0.38
+        "yFrac": -0.39
       },
       "taillightRight": {
         "xFrac": -0.48,
-        "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "yFrac": 0.39
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -7381,43 +7325,34 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.02,
-      "xA": -0.02,
-      "xB": -0.14,
-      "xC": -0.22,
-      "xRearHeader": -0.3,
-      "xTail": -0.5,
-      "xFrontAxle": 0.3,
-      "xRearAxle": -0.34,
-      "xEngine": 0.35,
-      "xCore": -0.1,
-      "frameRatio": 0.75,
-      "railRatio": 0.36
+      "xCowl": 0.04,
+      "xA": 0.02,
+      "xB": -0.12,
+      "xC": -0.24,
+      "xRearHeader": -0.32,
+      "xTail": -0.49,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.25,
+      "xEngine": 0.24,
+      "xCore": -0.14,
+      "frameRatio": 0.6
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.12
+        "xFrac": 0.36,
+        "yFrac": -0.27
       },
       "headlightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.12
+        "xFrac": 0.36,
+        "yFrac": 0.27
       },
       "taillightLeft": {
-        "xFrac": -0.32,
-        "yFrac": -0.41
+        "xFrac": -0.39,
+        "yFrac": -0.38
       },
       "taillightRight": {
-        "xFrac": -0.32,
-        "yFrac": 0.41
-      },
-      "fogLightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.12
-      },
-      "fogLightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.12
+        "xFrac": -0.39,
+        "yFrac": 0.38
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -7533,43 +7468,34 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.02,
-      "xA": -0.02,
-      "xB": -0.14,
-      "xC": -0.22,
-      "xRearHeader": -0.3,
-      "xTail": -0.5,
-      "xFrontAxle": 0.3,
-      "xRearAxle": -0.34,
-      "xEngine": 0.35,
-      "xCore": -0.1,
-      "frameRatio": 0.75,
-      "railRatio": 0.36
+      "xCowl": 0.04,
+      "xA": 0.02,
+      "xB": -0.12,
+      "xC": -0.24,
+      "xRearHeader": -0.32,
+      "xTail": -0.49,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.25,
+      "xEngine": 0.24,
+      "xCore": -0.14,
+      "frameRatio": 0.6
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.12
+        "xFrac": 0.36,
+        "yFrac": -0.27
       },
       "headlightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.12
+        "xFrac": 0.36,
+        "yFrac": 0.27
       },
       "taillightLeft": {
-        "xFrac": -0.32,
-        "yFrac": -0.41
+        "xFrac": -0.39,
+        "yFrac": -0.38
       },
       "taillightRight": {
-        "xFrac": -0.32,
-        "yFrac": 0.41
-      },
-      "fogLightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.12
-      },
-      "fogLightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.12
+        "xFrac": -0.39,
+        "yFrac": 0.38
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -7671,43 +7597,34 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "requiredKeyType": "iron",
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.02,
-      "xA": -0.02,
-      "xB": -0.14,
-      "xC": -0.22,
-      "xRearHeader": -0.3,
-      "xTail": -0.5,
-      "xFrontAxle": 0.3,
-      "xRearAxle": -0.34,
-      "xEngine": 0.35,
-      "xCore": -0.1,
-      "frameRatio": 0.75,
-      "railRatio": 0.36
+      "xCowl": 0.04,
+      "xA": 0.02,
+      "xB": -0.12,
+      "xC": -0.24,
+      "xRearHeader": -0.32,
+      "xTail": -0.49,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.25,
+      "xEngine": 0.24,
+      "xCore": -0.14,
+      "frameRatio": 0.56
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.12
+        "xFrac": 0.36,
+        "yFrac": -0.26
       },
       "headlightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.12
+        "xFrac": 0.36,
+        "yFrac": 0.26
       },
       "taillightLeft": {
-        "xFrac": -0.32,
-        "yFrac": -0.41
+        "xFrac": -0.39,
+        "yFrac": -0.37
       },
       "taillightRight": {
-        "xFrac": -0.32,
-        "yFrac": 0.41
-      },
-      "fogLightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.12
-      },
-      "fogLightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.12
+        "xFrac": -0.39,
+        "yFrac": 0.37
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -7824,11 +7741,11 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.46,
+        "xFrac": 0.38,
         "yFrac": 0
       },
       "headlightRight": {
-        "xFrac": 0.46,
+        "xFrac": 0.38,
         "yFrac": 0
       },
       "taillightLeft": {
@@ -7837,14 +7754,6 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       },
       "taillightRight": {
         "xFrac": -0.45,
-        "yFrac": 0
-      },
-      "fogLightLeft": {
-        "xFrac": 0.46,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0.46,
         "yFrac": 0
       },
       "thirdBrakeLight": {
@@ -7958,28 +7867,20 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.44,
-        "yFrac": -0.225
+        "xFrac": 0.37,
+        "yFrac": -0.22
       },
       "headlightRight": {
-        "xFrac": 0.125,
-        "yFrac": 0.39
+        "xFrac": 0.02,
+        "yFrac": 0.43
       },
       "taillightLeft": {
         "xFrac": -0.45,
-        "yFrac": -0.225
+        "yFrac": -0.22
       },
       "taillightRight": {
-        "xFrac": -0.275,
-        "yFrac": 0.425
-      },
-      "fogLightLeft": {
-        "xFrac": 0.44,
-        "yFrac": -0.225
-      },
-      "fogLightRight": {
-        "xFrac": 0.125,
-        "yFrac": 0.39
+        "xFrac": -0.28,
+        "yFrac": 0.43
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -8088,11 +7989,11 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.46,
+        "xFrac": 0.38,
         "yFrac": 0
       },
       "headlightRight": {
-        "xFrac": 0.46,
+        "xFrac": 0.38,
         "yFrac": 0
       },
       "taillightLeft": {
@@ -8101,14 +8002,6 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       },
       "taillightRight": {
         "xFrac": -0.45,
-        "yFrac": 0
-      },
-      "fogLightLeft": {
-        "xFrac": 0.46,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0.46,
         "yFrac": 0
       },
       "thirdBrakeLight": {
@@ -8226,27 +8119,19 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.46,
-        "yFrac": 0
+        "xFrac": 0.43,
+        "yFrac": -0.11
       },
       "headlightRight": {
-        "xFrac": 0.46,
-        "yFrac": 0
+        "xFrac": 0.43,
+        "yFrac": 0.11
       },
       "taillightLeft": {
-        "xFrac": -0.45,
+        "xFrac": -0.46,
         "yFrac": 0
       },
       "taillightRight": {
-        "xFrac": -0.45,
-        "yFrac": 0
-      },
-      "fogLightLeft": {
-        "xFrac": 0.46,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0.46,
+        "xFrac": -0.46,
         "yFrac": 0
       },
       "thirdBrakeLight": {
@@ -8356,11 +8241,11 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.46,
+        "xFrac": 0.38,
         "yFrac": 0
       },
       "headlightRight": {
-        "xFrac": 0.46,
+        "xFrac": 0.38,
         "yFrac": 0
       },
       "taillightLeft": {
@@ -8369,14 +8254,6 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       },
       "taillightRight": {
         "xFrac": -0.45,
-        "yFrac": 0
-      },
-      "fogLightLeft": {
-        "xFrac": 0.46,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0.46,
         "yFrac": 0
       },
       "thirdBrakeLight": {
@@ -8488,11 +8365,11 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.46,
+        "xFrac": 0.38,
         "yFrac": 0
       },
       "headlightRight": {
-        "xFrac": 0.46,
+        "xFrac": 0.38,
         "yFrac": 0
       },
       "taillightLeft": {
@@ -8501,14 +8378,6 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       },
       "taillightRight": {
         "xFrac": -0.45,
-        "yFrac": 0
-      },
-      "fogLightLeft": {
-        "xFrac": 0.46,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0.46,
         "yFrac": 0
       },
       "thirdBrakeLight": {
@@ -8627,28 +8496,20 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.24,
+        "yFrac": -0.26
       },
       "headlightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.24,
+        "yFrac": 0.26
       },
       "taillightLeft": {
-        "xFrac": -0.48,
-        "yFrac": -0.38
+        "xFrac": -0.47,
+        "yFrac": -0.25
       },
       "taillightRight": {
-        "xFrac": -0.48,
-        "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": -0.47,
+        "yFrac": 0.25
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -8769,28 +8630,20 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.24,
+        "yFrac": -0.28
       },
       "headlightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.24,
+        "yFrac": 0.28
       },
       "taillightLeft": {
-        "xFrac": -0.37,
-        "yFrac": -0.49
+        "xFrac": -0.47,
+        "yFrac": -0.34
       },
       "taillightRight": {
-        "xFrac": -0.37,
-        "yFrac": 0.49
-      },
-      "fogLightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": -0.47,
+        "yFrac": 0.34
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -8899,28 +8752,20 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.29,
+        "yFrac": -0.37
       },
       "headlightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": 0.29,
+        "yFrac": 0.37
       },
       "taillightLeft": {
-        "xFrac": -0.48,
-        "yFrac": -0.38
+        "xFrac": -0.47,
+        "yFrac": -0.37
       },
       "taillightRight": {
-        "xFrac": -0.48,
-        "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0,
-        "yFrac": 0
-      },
-      "fogLightRight": {
-        "xFrac": 0,
-        "yFrac": 0
+        "xFrac": -0.47,
+        "yFrac": 0.37
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -9034,42 +8879,34 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.28,
-      "xA": 0.24,
-      "xB": 0.05,
-      "xC": -0.05,
-      "xRearHeader": -0.32,
+      "xCowl": 0.08,
+      "xA": -0.02,
+      "xB": -0.14,
+      "xC": -0.26,
+      "xRearHeader": -0.34,
       "xTail": -0.5,
-      "xFrontAxle": 0.33,
-      "xRearAxle": -0.36,
-      "xEngine": 0.2,
-      "xCore": 0,
-      "frameRatio": 0.75
+      "xFrontAxle": 0.24,
+      "xRearAxle": -0.18,
+      "xEngine": -0.04,
+      "xCore": -0.14,
+      "frameRatio": 0.76
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.37
+        "xFrac": 0.44,
+        "yFrac": -0.42
       },
       "headlightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.37
+        "xFrac": 0.44,
+        "yFrac": 0.42
       },
       "taillightLeft": {
         "xFrac": -0.47,
-        "yFrac": -0.38
+        "yFrac": -0.44
       },
       "taillightRight": {
         "xFrac": -0.47,
-        "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0.48,
-        "yFrac": -0.31
-      },
-      "fogLightRight": {
-        "xFrac": 0.48,
-        "yFrac": 0.31
+        "yFrac": 0.44
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -9183,42 +9020,34 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.32,
-      "xA": 0.26,
-      "xB": 0.18,
-      "xC": 0.1,
-      "xRearHeader": 0.04,
+      "xCowl": 0.16,
+      "xA": 0.1,
+      "xB": 0,
+      "xC": -0.14,
+      "xRearHeader": -0.22,
       "xTail": -0.5,
       "xFrontAxle": 0.32,
-      "xRearAxle": -0.34,
-      "xEngine": 0.22,
-      "xCore": -0.12,
-      "frameRatio": 0.65
+      "xRearAxle": -0.32,
+      "xEngine": -0.16,
+      "xCore": -0.04,
+      "frameRatio": 0.52
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.37
+        "xFrac": 0.46,
+        "yFrac": -0.35
       },
       "headlightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.37
+        "xFrac": 0.46,
+        "yFrac": 0.35
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.46,
+        "yFrac": -0.36
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0.48,
-        "yFrac": -0.31
-      },
-      "fogLightRight": {
-        "xFrac": 0.48,
-        "yFrac": 0.31
+        "xFrac": -0.46,
+        "yFrac": 0.36
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -9332,42 +9161,34 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.32,
-      "xA": 0.26,
-      "xB": 0.18,
-      "xC": 0.1,
-      "xRearHeader": 0.04,
+      "xCowl": 0.14,
+      "xA": 0.08,
+      "xB": -0.04,
+      "xC": -0.16,
+      "xRearHeader": -0.24,
       "xTail": -0.5,
-      "xFrontAxle": 0.32,
-      "xRearAxle": -0.34,
-      "xEngine": 0.22,
-      "xCore": -0.12,
-      "frameRatio": 0.65
+      "xFrontAxle": 0.31,
+      "xRearAxle": -0.31,
+      "xEngine": 0.16,
+      "xCore": -0.06,
+      "frameRatio": 0.52
     },
     "opticsMounts": {
       "headlightLeft": {
-        "xFrac": 0.47,
-        "yFrac": -0.37
+        "xFrac": 0.44,
+        "yFrac": -0.34
       },
       "headlightRight": {
-        "xFrac": 0.47,
-        "yFrac": 0.37
+        "xFrac": 0.44,
+        "yFrac": 0.34
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.45,
+        "yFrac": -0.36
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0.48,
-        "yFrac": -0.31
-      },
-      "fogLightRight": {
-        "xFrac": 0.48,
-        "yFrac": 0.31
+        "xFrac": -0.45,
+        "yFrac": 0.36
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -9481,26 +9302,26 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.32,
-      "xA": 0.26,
-      "xB": 0.18,
-      "xC": 0.1,
-      "xRearHeader": 0.04,
+      "xCowl": 0.1,
+      "xA": 0.05,
+      "xB": -0.08,
+      "xC": -0.18,
+      "xRearHeader": -0.26,
       "xTail": -0.5,
-      "xFrontAxle": 0.32,
-      "xRearAxle": -0.34,
-      "xEngine": 0.22,
-      "xCore": -0.12,
-      "frameRatio": 0.65
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.28,
+      "xEngine": 0.24,
+      "xCore": -0.1,
+      "frameRatio": 0.8
     },
     "opticsMounts": {
       "headlightLeft": {
         "xFrac": 0.47,
-        "yFrac": -0.37
+        "yFrac": -0.38
       },
       "headlightRight": {
         "xFrac": 0.47,
-        "yFrac": 0.37
+        "yFrac": 0.38
       },
       "taillightLeft": {
         "xFrac": -0.47,
@@ -9509,14 +9330,6 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "taillightRight": {
         "xFrac": -0.47,
         "yFrac": 0.38
-      },
-      "fogLightLeft": {
-        "xFrac": 0.48,
-        "yFrac": -0.31
-      },
-      "fogLightRight": {
-        "xFrac": 0.48,
-        "yFrac": 0.31
       },
       "thirdBrakeLight": {
         "enabled": false,
@@ -9950,49 +9763,49 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     ],
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.46,
-      "xA": 0.44,
-      "xB": 0.05,
-      "xC": -0.25,
-      "xRearHeader": -0.36,
+      "xCowl": 0.34,
+      "xA": 0.23,
+      "xB": 0.04,
+      "xC": -0.22,
+      "xRearHeader": -0.42,
       "xTail": -0.5,
-      "xFrontAxle": 0.36,
-      "xRearAxle": -0.22,
-      "xEngine": 0.3,
-      "xCore": -0.05,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.25,
+      "xEngine": 0.37,
+      "xCore": -0.04,
       "frameRatio": 0.86
     },
     "opticsMounts": {
       "headlightLeft": {
         "xFrac": 0.47,
-        "yFrac": -0.37
+        "yFrac": -0.36
       },
       "headlightRight": {
         "xFrac": 0.47,
-        "yFrac": 0.37
+        "yFrac": 0.36
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.48,
+        "yFrac": -0.41
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
+        "xFrac": -0.48,
+        "yFrac": 0.41
       },
       "fogLightLeft": {
         "xFrac": 0.48,
-        "yFrac": -0.31
+        "yFrac": -0.39
       },
       "fogLightRight": {
         "xFrac": 0.48,
-        "yFrac": 0.31
+        "yFrac": 0.39
       },
       "thirdBrakeLight": {
         "enabled": true,
-        "xFrac": -0.46,
+        "xFrac": -0.47,
         "yFrac": 0,
-        "width": 5.5,
-        "height": 1.4,
+        "width": 3.6,
+        "height": 0.85,
         "type": "led_strip"
       }
     }
@@ -10238,49 +10051,49 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "requiredKeyType": null,
     "chassisAnatomy": {
       "xNose": 0.5,
-      "xCowl": 0.46,
-      "xA": 0.44,
-      "xB": 0.05,
-      "xC": -0.25,
-      "xRearHeader": -0.36,
+      "xCowl": 0.32,
+      "xA": 0.19,
+      "xB": 0.02,
+      "xC": -0.22,
+      "xRearHeader": -0.42,
       "xTail": -0.5,
-      "xFrontAxle": 0.36,
-      "xRearAxle": -0.22,
-      "xEngine": 0.3,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.24,
+      "xEngine": 0.36,
       "xCore": -0.05,
-      "frameRatio": 0.86
+      "frameRatio": 0.88
     },
     "opticsMounts": {
       "headlightLeft": {
         "xFrac": 0.47,
-        "yFrac": -0.37
+        "yFrac": -0.35
       },
       "headlightRight": {
         "xFrac": 0.47,
-        "yFrac": 0.37
+        "yFrac": 0.35
       },
       "taillightLeft": {
-        "xFrac": -0.47,
-        "yFrac": -0.38
+        "xFrac": -0.48,
+        "yFrac": -0.41
       },
       "taillightRight": {
-        "xFrac": -0.47,
-        "yFrac": 0.38
+        "xFrac": -0.48,
+        "yFrac": 0.41
       },
       "fogLightLeft": {
         "xFrac": 0.48,
-        "yFrac": -0.31
+        "yFrac": -0.38
       },
       "fogLightRight": {
         "xFrac": 0.48,
-        "yFrac": 0.31
+        "yFrac": 0.38
       },
       "thirdBrakeLight": {
         "enabled": true,
-        "xFrac": -0.46,
+        "xFrac": -0.47,
         "yFrac": 0,
-        "width": 5.5,
-        "height": 1.4,
+        "width": 3.6,
+        "height": 0.85,
         "type": "led_strip"
       }
     }
