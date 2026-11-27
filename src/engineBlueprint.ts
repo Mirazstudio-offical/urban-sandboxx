@@ -1184,23 +1184,12 @@ function inferDefaultEngineId(carType?: string): string {
     case 'delivery_truck':
       return 'eng_24_td';
     case 'truck_flatbed':
-    case 'truck_covered':
       return 'eng_16_zil_v8';
     case 'truck_zil_dump':
-    case 'fire_engine':
-    case 'fire_rescue':
       return 'eng_16_zil_v8';
     case 'truck_water':
-    case 'truck_tanker':
-    case 'truck_armored':
-    case 'truck_tow':
       return 'eng_50_v8_td';
-    case 'truck_dump':
-    case 'truck_box':
     case 'truck_semi':
-    case 'cement_mixer':
-    case 'garbage_truck':
-    case 'fire_ladder':
       return 'eng_kamaz_740';
     case 'bus':
     case 'bus_minibus':
@@ -1257,20 +1246,9 @@ const LONGITUDINAL_TYPES = new Set<string>([
   'ambulance_van',
   'delivery_truck',
   'truck_flatbed',
-  'truck_covered',
   'truck_zil_dump',
   'truck_water',
-  'truck_tanker',
-  'truck_armored',
-  'truck_tow',
-  'truck_dump',
-  'truck_box',
   'truck_semi',
-  'cement_mixer',
-  'garbage_truck',
-  'fire_engine',
-  'fire_rescue',
-  'fire_ladder',
   'bus',
   'bus_minibus',
   'tractor_mtz82',
@@ -1505,9 +1483,9 @@ export function getEngineBayLayout(
   }
 
   // 4. Hooded trucks (GAZ-53, ZIL-130, ZIL-4331)
-  const isGaz = (type as string) === 'truck_gaz' || (type as string) === 'truck_cargo' || car.frameId?.startsWith('frm_gaz');
-  const isZil130 = type === 'truck_zil_dump' || type === 'fire_engine' || type === 'fire_rescue' || car.frameId?.startsWith('frm_zil130');
-  const isZil4331 = type === 'truck_water' || type === 'truck_tanker' || type === 'truck_armored' || type === 'truck_tow' || car.frameId?.startsWith('frm_zil4331');
+  const isGaz = type === 'truck_flatbed' || car.frameId?.startsWith('frm_gaz');
+  const isZil130 = type === 'truck_zil_dump' || car.frameId?.startsWith('frm_zil130');
+  const isZil4331 = type === 'truck_water' || car.frameId?.startsWith('frm_zil4331');
   if (isGaz || isZil130 || isZil4331) {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc - 0.5;
@@ -1530,12 +1508,7 @@ export function getEngineBayLayout(
 
   // 5. Cab-over trucks (KAMAZ)
   const isKamaz =
-    type === 'truck_dump' ||
-    type === 'truck_box' ||
     type === 'truck_semi' ||
-    type === 'cement_mixer' ||
-    type === 'garbage_truck' ||
-    type === 'fire_ladder' ||
     car.frameId?.startsWith('frm_kamaz');
   if (isKamaz) {
     const x1 = cabinX - cabinL * 0.36;

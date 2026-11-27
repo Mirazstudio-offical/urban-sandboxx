@@ -1657,9 +1657,6 @@ export function ensureDriverProfile(car: Vehicle): DriverProfile {
   const isHeavyCommercial =
     type.startsWith('truck_') ||
     type === 'bus' ||
-    type === 'cement_mixer' ||
-    type === 'garbage_truck' ||
-    type.startsWith('fire_') ||
     type.startsWith('ambulance');
   const isTractorOrMoped = type.startsWith('tractor_') || type === 'moped_soviet';
   const isSportyOrFast =
@@ -1854,12 +1851,12 @@ export function getVehicleCruiseSpeedPx(car: Vehicle, road: RoadSegment | null):
   else if (type === 'moped_soviet') {
     vehicleCruiseKmh = Math.min(41, roadLimitKmh * 0.66 * (0.92 + (profile.speedFactor - 0.85) * 0.4));
   }
-  // Heavy dump trucks, concrete mixers, garbage trucks, ZIL-130
-  else if (['truck_dump', 'truck_zil_dump', 'cement_mixer', 'garbage_truck', 'truck_water', 'truck_tanker'].includes(type)) {
+  // Heavy dump trucks, concrete mixers, garbage trucks, ZIL-130 / ZIL-4331
+  else if (['truck_zil_dump', 'truck_water'].includes(type) || (type === 'truck_semi' && (car.bodyId === 'body_dump_kamaz_5511' || car.bodyId === 'body_cement_mixer' || car.bodyId === 'body_garbage_compactor'))) {
     vehicleCruiseKmh = Math.min(72, roadLimitKmh * 0.84 * profile.speedFactor);
   }
   // Long-haul semi trucks, delivery trucks, city buses, old cargo vans
-  else if (['truck_semi', 'truck_box', 'truck_covered', 'truck_flatbed', 'bus', 'bus_minibus', 'delivery_truck', 'van_cargo_old'].includes(type)) {
+  else if (['truck_semi', 'truck_flatbed', 'bus', 'bus_minibus', 'delivery_truck', 'van_cargo_old'].includes(type)) {
     vehicleCruiseKmh = Math.min(84, roadLimitKmh * 0.90 * profile.speedFactor);
   }
   // Sports cars & supercars & sport motorcycles
@@ -1956,11 +1953,9 @@ export function getTerritoryVehicleArchetypes(road: RoadSegment | null, x: numbe
       { type: 'crossover_compact', weight: 8 },
       { type: 'suv', weight: 8 },
       { type: 'suv_luxury', weight: 4 },
-      { type: 'truck_semi', weight: 5 },
-      { type: 'truck_box', weight: 4 },
-      { type: 'truck_tanker', weight: 3 },
-      { type: 'truck_covered', weight: 3 },
-      { type: 'truck_flatbed', weight: 2 },
+      { type: 'truck_semi', weight: 9 },
+      { type: 'truck_water', weight: 3 },
+      { type: 'truck_flatbed', weight: 5 },
       { type: 'pickup_heavy', weight: 3 },
       { type: 'bus', weight: 5 },
       { type: 'bus_minibus', weight: 2 },
@@ -1977,13 +1972,9 @@ export function getTerritoryVehicleArchetypes(road: RoadSegment | null, x: numbe
   if (isIndustrialOrCargo) {
     return [
       { type: 'truck_zil_dump', weight: 14 },
-      { type: 'truck_dump', weight: 10 },
-      { type: 'truck_flatbed', weight: 9 },
-      { type: 'truck_covered', weight: 7 },
-      { type: 'truck_box', weight: 6 },
-      { type: 'cement_mixer', weight: 4 },
-      { type: 'truck_water', weight: 3 },
-      { type: 'truck_tow', weight: 2 },
+      { type: 'truck_semi', weight: 18 },
+      { type: 'truck_flatbed', weight: 14 },
+      { type: 'truck_water', weight: 6 },
       { type: 'van_cargo_old', weight: 10 },
       { type: 'delivery_truck', weight: 8 },
       { type: 'pickup_heavy', weight: 4 },
@@ -2038,7 +2029,7 @@ export function getTerritoryVehicleArchetypes(road: RoadSegment | null, x: numbe
     { type: 'delivery_truck', weight: 6 },
     { type: 'van', weight: 4 },
     { type: 'bus', weight: 3 },
-    { type: 'garbage_truck', weight: 2 },
+    { type: 'truck_semi', weight: 2 },
     { type: 'police', weight: 2 },
     { type: 'ambulance', weight: 1 }
   ];
@@ -3273,7 +3264,7 @@ export function updateAITraffic(
     car.angle = ((car.angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 
     // --- PASSING FIRE VEHICLE FIRE SPOTTING ---
-    const isAnyFireVehicle = car.type === 'fire_engine'|| car.type === 'fire_ladder'|| car.type === 'fire_rescue'|| car.type.startsWith('fire_');
+    const isAnyFireVehicle = car.bodyId === 'body_fire_pumper' || car.bodyId === 'body_fire_ladder' || car.bodyId === 'body_fire_rescue';
     if (hasAnyWorldFire && isAnyFireVehicle && !(car as any).isFireDispatch && !car.isParked && !car.isPlayerControlled && !(car as any).isRemoteControlled) {
       let nearestFirePos: Vector2D | null = null;
 
@@ -3495,11 +3486,13 @@ export function updateAITraffic(
           }
         }
       }
-      if (car.ghostingAlpha !== undefined && !(car as any).isFireDispatch && car.type !== 'fire_engine'&& car.type !== 'fire_ladder'&& car.type !== 'fire_rescue'&& !car.type.startsWith('fire_')) {
+      const isFireBody = car.bodyId === 'body_fire_pumper' || car.bodyId === 'body_fire_ladder' || car.bodyId === 'body_fire_rescue';
+      if (car.ghostingAlpha !== undefined && !(car as any).isFireDispatch && !isFireBody) {
         car.ghostingAlpha = Math.min(1.0, car.ghostingAlpha + dt * 1.5);
       }
     } else {
-      if (car.ghostingAlpha !== undefined && !(car as any).isFireDispatch && car.type !== 'fire_engine'&& car.type !== 'fire_ladder'&& car.type !== 'fire_rescue'&& !car.type.startsWith('fire_')) {
+      const isFireBody = car.bodyId === 'body_fire_pumper' || car.bodyId === 'body_fire_ladder' || car.bodyId === 'body_fire_rescue';
+      if (car.ghostingAlpha !== undefined && !(car as any).isFireDispatch && !isFireBody) {
         car.ghostingAlpha = Math.min(1.0, car.ghostingAlpha + dt * 1.5);
       }
     }
@@ -6676,7 +6669,7 @@ export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX:
   }
   if (candidates.length === 0) return false;
 
-  const cType = 'fire_engine';
+  const cType: CarType = 'truck_zil_dump';
   const cfg = CAR_CONFIGS[cType] || CAR_CONFIGS.sedan;
   const color = '#dc2626';
   const roofColor = '#f8fafc';
@@ -6686,7 +6679,7 @@ export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX:
 
     // Force spawn on later attempts to guarantee fire engine dispatch even under dense traffic conditions
     if (attempts >= 8 || isSpawnPositionClear(chosen.spawnX, chosen.spawnY, world)) {
-      const id = `fire_engine_dispatch_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const id = `fire_dispatch_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
       const speedVal = 100; // Fast but controllable for GPS pathfinding
 
       const startPoint = { x: chosen.spawnX, y: chosen.spawnY };
@@ -6696,6 +6689,8 @@ export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX:
       const spawnedFireEngine: Vehicle = {
         id,
         type: cType,
+        frameId: 'frm_zil130_std_3800',
+        bodyId: 'body_fire_pumper',
         x: chosen.spawnX,
         y: chosen.spawnY,
         vx: Math.cos(chosen.angle) * speedVal,
@@ -6710,8 +6705,8 @@ export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX:
         driftFactor: 0,
         mass: cfg.mass,
         width: cfg.width,
-        length: cfg.length,
-        wheelBase: cfg.wheelBase,
+        length: 70,
+        wheelBase: 45,
         color,
         roofColor,
         headlightsOn: true,
@@ -6792,25 +6787,54 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
       const cfg = CAR_CONFIGS[cType] || CAR_CONFIGS.sedan;
 
       let color = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
+      // Assign realistic modular frame + body for the 4 unified truck chassis
+      let frameId: string | undefined;
+      let bodyId: string | undefined;
+      if (cType === 'truck_flatbed') {
+        const opts = [
+          { frameId: 'frm_gaz53_std_3700', bodyId: 'body_flatbed_wood', color: '#0284c7' },
+          { frameId: 'frm_gaz53_std_3700', bodyId: 'body_covered_slate', color: '#3b82f6' },
+          { frameId: 'frm_gaz53_short_3300', bodyId: 'body_dump_gaz_saz', color: '#0284c7' },
+        ];
+        const pick = opts[Math.floor(Math.random() * opts.length)];
+        frameId = pick.frameId; bodyId = pick.bodyId; color = pick.color;
+      } else if (cType === 'truck_zil_dump') {
+        const opts = [
+          { frameId: 'frm_zil130_dump_3300', bodyId: 'body_dump_zil_mmz', color: '#0284c7' },
+          { frameId: 'frm_zil130_std_3800', bodyId: 'body_flatbed_wood', color: '#0369a1' },
+          { frameId: 'frm_zil130_std_3800', bodyId: 'body_covered_slate', color: '#0284c7' },
+        ];
+        const pick = opts[Math.floor(Math.random() * opts.length)];
+        frameId = pick.frameId; bodyId = pick.bodyId; color = pick.color;
+      } else if (cType === 'truck_water') {
+        const opts = [
+          { frameId: 'frm_zil4331_std_3800', bodyId: 'body_tanker_water', color: '#0284c7' },
+          { frameId: 'frm_zil4331_std_3800', bodyId: 'body_tanker_fuel', color: '#ea580c' },
+          { frameId: 'frm_zil4331_std_3800', bodyId: 'body_tow_platform', color: '#eab308' },
+          { frameId: 'frm_zil4331_std_3800', bodyId: 'body_box_insulated', color: '#cbd5e1' },
+        ];
+        const pick = opts[Math.floor(Math.random() * opts.length)];
+        frameId = pick.frameId; bodyId = pick.bodyId; color = pick.color;
+      } else if (cType === 'truck_semi') {
+        const opts = [
+          { frameId: 'frm_kamaz_5320_std', bodyId: 'body_box_insulated', color: '#ea580c' },
+          { frameId: 'frm_kamaz_5511_dump', bodyId: 'body_dump_kamaz_5511', color: '#d97706' },
+          { frameId: 'frm_kamaz_5511_dump', bodyId: 'body_cement_mixer', color: '#2563eb' },
+          { frameId: 'frm_kamaz_5320_std', bodyId: 'body_garbage_compactor', color: '#16a34a' },
+          { frameId: 'frm_kamaz_5410_tractor', bodyId: 'body_fifth_wheel', color: '#ea580c' },
+        ];
+        const pick = opts[Math.floor(Math.random() * opts.length)];
+        frameId = pick.frameId; bodyId = pick.bodyId; color = pick.color;
+      }
+
       if (cType === 'taxi') color = '#eab308';
       else if (cType === 'police') color = '#0f172a';
-      else if (cType === 'fire_engine'|| cType === 'fire_ladder'|| cType === 'fire_rescue') color = '#dc2626';
       else if (cType === 'bus') color = '#eab308';
       else if (cType === 'bus_minibus') color = '#f59e0b';
       else if (cType === 'ambulance'|| cType === 'ambulance_van'|| cType === 'ambulance_suv') color = '#f8fafc';
       else if (cType === 'van_camper') color = '#fef08a';
       else if (cType === 'van_cargo_old') color = '#94a3b8';
       else if (cType === 'muscle'|| cType === 'muscle_classic') color = '#991b1b';
-      else if (cType === 'garbage_truck') color = '#16a34a';
-      else if (cType === 'truck_dump') color = '#d97706';
-      else if (cType === 'truck_zil_dump') color = '#0284c7';
-      else if (cType === 'cement_mixer') color = '#2563eb';
-      else if (cType === 'truck_box') color = '#0284c7';
-      else if (cType === 'truck_water') color = '#0284c7';
-      else if (cType === 'truck_tanker') color = '#0369a1';
-      else if (cType === 'truck_flatbed' || cType === 'truck_covered') color = '#0284c7';
-      else if (cType === 'truck_tow') color = '#eab308';
-      else if (cType === 'truck_armored') color = '#334155';
       else if (cType === 'delivery_truck') color = '#78350f';
       else if (cType === 'supercar') color = '#ef4444';
       else if (cType === 'retro_bubble') color = '#38bdf8';
@@ -6828,8 +6852,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
       else if (cType === 'moped_soviet') color = '#f97316'; // Orange-Red Karpaty
 
       const isEmergency = cType === 'police'|| cType === 'ambulance'|| cType === 'ambulance_van'|| 
-                          cType === 'ambulance_suv'|| cType === 'fire_engine'|| cType === 'fire_ladder'|| 
-                          cType === 'fire_rescue';
+                          cType === 'ambulance_suv';
       let roofColor = isEmergency ? '#f8fafc': color;
       if (cType === 'truck_zil_dump') roofColor = '#f8fafc';
       if (cType === 'suv_classic_box') roofColor = '#ffffff';
@@ -6837,12 +6860,14 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
       if (cType === 'wagon_allroad') roofColor = '#0f172a';
 
       const id = `veh_dynamic_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-      const targetCruisePx = getVehicleCruiseSpeedPx({ type: cType, id } as any, road);
+      const targetCruisePx = getVehicleCruiseSpeedPx({ type: cType, id, bodyId } as any, road);
       const speedVal = targetCruisePx * (0.85 + Math.random() * 0.12);
 
       const dynamicCar: Vehicle = {
         id,
         type: cType,
+        frameId,
+        bodyId,
         x: chosen.spawnX,
         y: chosen.spawnY,
         vx: Math.cos(chosen.angle) * speedVal,

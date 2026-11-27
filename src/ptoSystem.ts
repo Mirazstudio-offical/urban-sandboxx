@@ -2,7 +2,7 @@ import { Player, Vehicle } from './types';
 import { sound } from './audio';
 import { addPlayerNotification } from './items';
 import { PX_S_TO_SPEED_KMH } from './vehicleHelpers';
-import { isVehicleCraneTruck, isVehicleVacuumTruck } from './truckChassisVariants';
+import { isVehicleCraneTruck, isVehicleVacuumTruck, resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
 
 /* Power take-off (КОМ, коробка отбора мощности).
    One place for the state, the rules and the only switch: the vehicle control menu calls togglePto().
@@ -13,10 +13,13 @@ export const PTO_MAX_ENGAGE_KMH = 5;
 
 export function vehicleHasPto(v: Vehicle | null | undefined): boolean {
   if (!v) return false;
+  const bodyId = resolveVehicleTruckFrameAndBody(v)?.body.id;
   return (
     v.type === 'excavator_ek12' ||
     v.type === 'truck_water' ||
-    v.type === 'fire_engine' ||
+    bodyId === 'body_fire_pumper' ||
+    bodyId === 'body_fire_ladder' ||
+    bodyId === 'body_tanker_water' ||
     v.type.startsWith('tractor_') ||
     !!v.fluidTank?.hasWaterHose ||
     isVehicleVacuumTruck(v) ||

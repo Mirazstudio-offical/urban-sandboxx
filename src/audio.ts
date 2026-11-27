@@ -382,7 +382,7 @@ class SoundEngine {
     try {
       const now = this.ctx.currentTime;
 
-      const isTruckHorn = carType ? (carType === 'truck' || carType.startsWith('truck') || carType.startsWith('tractor') || ['bus', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 'fire_engine'].includes(carType)) : false;
+      const isTruckHorn = carType ? (carType === 'truck' || carType.startsWith('truck') || carType.startsWith('tractor') || ['bus', 'pickup_heavy'].includes(carType)) : false;
 
       // Pitch definitions (High-low dual pneumatic horn + upper harmonic)
       const f1 = isTruckHorn ? 220 : 435;

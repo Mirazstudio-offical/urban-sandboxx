@@ -843,23 +843,12 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
 export function getTruckPlatform(carType: string): TruckPlatformId | null {
   switch (carType) {
     case 'truck_flatbed':
-    case 'truck_covered':
       return 'gaz53';
     case 'truck_zil_dump':
-    case 'fire_engine':
       return 'zil130';
     case 'truck_water':
-    case 'truck_tanker':
-    case 'truck_tow':
-    case 'truck_armored':
-    case 'fire_rescue':
       return 'zil4331';
     case 'truck_semi':
-    case 'truck_dump':
-    case 'truck_box':
-    case 'cement_mixer':
-    case 'garbage_truck':
-    case 'fire_ladder':
       return 'kamaz';
     default:
       return null;
@@ -920,7 +909,6 @@ export function getDefaultFrameAndBodyForCarType(
   carType: string
 ): { frameId: string; bodyId: string } | null {
   switch (carType) {
-    // 4 базовых грузовых шасси в каталоге — по умолчанию с голой рамой!
     case 'truck_flatbed':
       return { frameId: 'frm_gaz53_std_3700', bodyId: 'body_none' };
     case 'truck_zil_dump':
@@ -929,30 +917,6 @@ export function getDefaultFrameAndBodyForCarType(
       return { frameId: 'frm_zil4331_std_3800', bodyId: 'body_none' };
     case 'truck_semi':
       return { frameId: 'frm_kamaz_5320_std', bodyId: 'body_none' };
-
-    // Скрытые legacy-типы для обратной совместимости со старыми сохранениями/трафиком:
-    case 'truck_covered':
-      return { frameId: 'frm_gaz53_std_3700', bodyId: 'body_covered_slate' };
-    case 'truck_dump':
-      return { frameId: 'frm_kamaz_5511_dump', bodyId: 'body_dump_kamaz_5511' };
-    case 'truck_box':
-      return { frameId: 'frm_kamaz_5320_std', bodyId: 'body_box_insulated' };
-    case 'truck_tanker':
-      return { frameId: 'frm_zil4331_std_3800', bodyId: 'body_tanker_fuel' };
-    case 'cement_mixer':
-      return { frameId: 'frm_kamaz_5511_dump', bodyId: 'body_cement_mixer' };
-    case 'garbage_truck':
-      return { frameId: 'frm_kamaz_5320_std', bodyId: 'body_garbage_compactor' };
-    case 'truck_tow':
-      return { frameId: 'frm_zil4331_std_3800', bodyId: 'body_tow_platform' };
-    case 'truck_armored':
-      return { frameId: 'frm_zil4331_std_3800', bodyId: 'body_armored_vault' };
-    case 'fire_engine':
-      return { frameId: 'frm_zil130_std_3800', bodyId: 'body_fire_pumper' };
-    case 'fire_ladder':
-      return { frameId: 'frm_kamaz_53212_long', bodyId: 'body_fire_ladder' };
-    case 'fire_rescue':
-      return { frameId: 'frm_zil4331_std_3800', bodyId: 'body_fire_rescue' };
     default:
       return null;
   }

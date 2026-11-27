@@ -2751,7 +2751,7 @@ export function applyVehicleDamageAndDeformation(
 
   const isExtremeStriker = strikerMass >= 40000;
   const isHeavyRigidTrailer = car.type.startsWith('trailer_semi');
-  const isCommercialHeavy = car.type.startsWith('truck_') || car.type === 'cement_mixer' || car.type === 'garbage_truck' || car.type === 'fire_ladder' || car.type === 'fire_engine' || car.type === 'bus' || car.type === 'bus_minibus' || car.type === 'truck_tow' || car.type === 'truck_armored';
+  const isCommercialHeavy = car.type.startsWith('truck_') || car.type === 'bus' || car.type === 'bus_minibus';
   const isMachinery = isRoadMachinery(car.type);
 
   if ((isHeavyRigidTrailer || isMachinery || isCommercialHeavy) && impactKmh < 10 && scrapeKmh < 10) {
@@ -3107,7 +3107,7 @@ export function getVehicleAnchor(
   let f = 0; // localForward
   let r = 0; // localRight
   
-  const isTruck = carType.startsWith('truck_') || carType === 'cement_mixer'|| carType === 'garbage_truck'|| carType === 'pickup_heavy'|| carType === 'delivery_truck';
+  const isTruck = carType.startsWith('truck_') || carType === 'pickup_heavy'|| carType === 'delivery_truck';
   const isTractor = carType.startsWith('tractor_');
   const isBike = carType.startsWith('moto_') || carType.startsWith('moped_');
   const isRearEngineBus = carType === 'bus'|| carType === 'bus_minibus';
@@ -3311,13 +3311,11 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
   const isTractor = carType.startsWith('tractor_') || carType === 'tractor';
   const isExcavator = carType === 'excavator_ek12';
   const hasTopStack = isTractor || isExcavator;
-  const isTruck = carType.startsWith('truck_') || carType === 'cement_mixer'|| carType === 'garbage_truck'||
-    carType === 'pickup_heavy'|| carType === 'delivery_truck'|| carType === 'van_flatbed'|| carType.startsWith('fire_');
+  const isTruck = carType.startsWith('truck_') ||
+    carType === 'pickup_heavy'|| carType === 'delivery_truck';
 
-  const isOldHeavyTruck = carType === 'truck_dumper'|| carType === 'truck_dump'|| carType === 'truck_zil_dump'|| carType === 'truck_heavy'||
-    carType === 'truck_tractor'|| carType === 'truck_semi'|| carType === 'truck_flatbed'|| carType === 'truck_covered'|| carType === 'truck_tanker'||
-    carType === 'cement_mixer'|| carType === 'garbage_truck'|| carType === 'fire_engine'||
-    carType === 'fire_ladder'|| carType === 'fire_rescue'|| carType === 'van_flatbed';
+  const isOldHeavyTruck = carType === 'truck_zil_dump'||
+    carType === 'truck_semi'|| carType === 'truck_flatbed'|| carType === 'truck_water';
 
   const durability = (car as any).durability ?? 100;
   const engineHealth = eng.engineHealth ?? 100;
@@ -3585,9 +3583,9 @@ function updateVehicleFluidStorageSystem(
     car.type === 'trailer_barrel' ||
     car.type === 'trailer_vacuum' ||
     car.type === 'truck_water' ||
-    car.type === 'truck_tanker' ||
-    car.type === 'trailer_semi_tanker' ||
-    car.type.startsWith('truck_vacuum');
+    car.bodyId === 'body_tanker_fuel' ||
+    car.bodyId === 'body_tanker_water' ||
+    car.type === 'trailer_semi_tanker';
   if (!mightHaveTank) return;
 
   ensureVehicleFluidTank(car);
@@ -4232,7 +4230,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
 
   // --- DIESEL RUNAWAY MECHANIC (Разнос дизеля) ---
   const isTractorType = car.type.startsWith('tractor_');
-  const isTruckOrBusType = car.type.startsWith('truck_') || car.type === 'bus'|| car.type === 'bus_minibus'|| car.type === 'cement_mixer'|| car.type === 'garbage_truck'|| car.type === 'fire_engine'|| car.type === 'fire_ladder'|| car.type === 'fire_rescue';
+  const isTruckOrBusType = car.type.startsWith('truck_') || car.type === 'bus'|| car.type === 'bus_minibus';
   const isDiesel = fuel?.fuelType === 'diesel'|| isTractorType || isTruckOrBusType || car.type === 'pickup_heavy'|| car.type === 'delivery_truck'|| car.type === 'van_camper';
 
   // Check trigger: overfilled oil (>105%) OR low engine health (<25%) with oil present
@@ -4550,7 +4548,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   }
 
   // 4. FUEL SYSTEM & LEAKS
-  const isTankerHeavilyDamaged = car.type === 'truck_tanker'&& (
+  const isTankerHeavilyDamaged = car.bodyId === 'body_tanker_fuel' && (
     dmg.rearCrumple > 4.5 || 
     dmg.leftDent > 2.2 || 
     dmg.rightDent > 2.2 || 
@@ -4648,7 +4646,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     }
 
     if (fuel.tankLevel > 0) {
-      const isTanker = car.type === 'truck_tanker';
+      const isTanker = car.bodyId === 'body_tanker_fuel';
       const leakRate = isTanker ? 15.0 * dt : 2.5 * dt;
       fuel.tankLevel = Math.max(0, fuel.tankLevel - leakRate);
       
@@ -8712,7 +8710,7 @@ export function updateVehiclePhysics(
         idleRPM = 950;
         redlineRPM = 7200;
         maxRPM = 8800;
-      } else if (vehicle.type.startsWith('truck_') || vehicle.type === 'bus'|| vehicle.type === 'bus_minibus'|| vehicle.type === 'cement_mixer'|| vehicle.type === 'garbage_truck'|| vehicle.type === 'delivery_truck'|| vehicle.type === 'fire_engine'|| vehicle.type === 'fire_ladder'|| vehicle.type === 'fire_rescue'|| vehicle.type === 'pickup_heavy'|| vehicle.type === 'truck_armored') {
+      } else if (vehicle.type.startsWith('truck_') || vehicle.type === 'bus'|| vehicle.type === 'bus_minibus'|| vehicle.type === 'delivery_truck'|| vehicle.type === 'pickup_heavy') {
         idleRPM = 600;
         redlineRPM = 2800;
         maxRPM = 3600;
@@ -9161,7 +9159,7 @@ export function updateVehiclePhysics(
           let stallImpulse = 0;
           let stallReason = '';
           const isTractor = vehicle.type?.startsWith('tractor_');
-          const isHeavyTruckOrBus = vehicle.type?.startsWith('truck_') || vehicle.type === 'bus'|| vehicle.type === 'bus_minibus'|| vehicle.type === 'cement_mixer'|| vehicle.type === 'garbage_truck'|| vehicle.type === 'fire_engine'|| vehicle.type === 'fire_ladder'|| vehicle.type === 'fire_rescue';
+          const isHeavyTruckOrBus = vehicle.type?.startsWith('truck_') || vehicle.type === 'bus'|| vehicle.type === 'bus_minibus';
           const isDieselEngine = fuel?.fuelType === 'diesel'|| isTractor || isHeavyTruckOrBus || vehicle.type === 'pickup_heavy'|| vehicle.type === 'delivery_truck'|| vehicle.type === 'van_camper';
           const isTractorOrHeavy = isDieselEngine || isTractor;
           const luggingGearThreshold = isTractorOrHeavy ? 5 : 2;
@@ -9270,7 +9268,7 @@ export function updateVehiclePhysics(
         let rpmRiseRate = 13.0;
         let rpmDecayRate = 9.5;
         const isTractor = vehicle.type.startsWith('tractor_');
-        const isHeavyTruckOrBus = vehicle.type.startsWith('truck_') || vehicle.type === 'bus'|| vehicle.type === 'bus_minibus'|| vehicle.type === 'cement_mixer'|| vehicle.type === 'garbage_truck'|| vehicle.type === 'fire_engine'|| vehicle.type === 'fire_ladder'|| vehicle.type === 'fire_rescue';
+        const isHeavyTruckOrBus = vehicle.type.startsWith('truck_') || vehicle.type === 'bus'|| vehicle.type === 'bus_minibus';
         const isDieselEngine = fuel?.fuelType === 'diesel'|| isTractor || isHeavyTruckOrBus || vehicle.type === 'pickup_heavy'|| vehicle.type === 'delivery_truck'|| vehicle.type === 'van_camper';
 
         if (isTractor) {
@@ -9754,7 +9752,7 @@ export function updateVehiclePhysics(
     const isStormWeather = world.weather === 'storm' || world.weather === 'blizzard' || startWeatherWeights.soilMoisture > 0.78;
     const isSnowyOffroad = startWeatherWeights.snowCover > 0.18 || startWeatherWeights.snow > 0.15;
 
-    const isOffroaderVeh = ['offroad_hardcore', 'suv', 'suv_luxury', 'suv_classic_box', 'pickup', 'pickup_heavy', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old', 'truck_armored', 'truck_dump'].includes(cfg.type);
+    const isOffroaderVeh = ['offroad_hardcore', 'suv', 'suv_luxury', 'suv_classic_box', 'pickup', 'pickup_heavy', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old'].includes(cfg.type);
     const isLowClearanceVeh = ['supercar', 'sports', 'coupe_gt', 'hatch_hot', 'micro_car', 'retro_bubble', 'sedan_compact', 'moto_sport'].includes(cfg.type);
     const clearanceFactor = isOffroaderVeh ? 0.50 : (isLowClearanceVeh ? 1.85 : 1.0);
 
@@ -9945,7 +9943,7 @@ export function updateVehiclePhysics(
       }
       
       let aeroCoeff = 0.000045;
-      if (['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored'].includes(cfg.type)) {
+      if (['truck_zil_dump', 'truck_semi', 'truck_water', 'truck_flatbed', 'bus', 'delivery_truck', 'pickup_heavy'].includes(cfg.type)) {
         aeroCoeff = 0.000085;
       } else if (cfg.type.startsWith('tractor_') || ['suv', 'suv_luxury', 'offroad_hardcore', 'suv_classic_box', 'van', 'van_camper', 'van_cargo_old'].includes(cfg.type)) {
         aeroCoeff = 0.000065;
@@ -11793,10 +11791,7 @@ export function updateVehiclePhysics(
     intakeOffsetDist = (cfg.length || 45) * 0.25;
     groundClearance = 0.26;
   } else if ([
-    'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_box', 'truck_tanker', 'truck_water',
-    'truck_flatbed', 'truck_covered', 'truck_tow', 'truck_armored',
-    'cement_mixer', 'garbage_truck', 'delivery_truck', 'firetruck',
-    'fire_engine', 'fire_ladder', 'fire_rescue'
+    'truck_zil_dump', 'truck_semi', 'truck_water', 'truck_flatbed', 'delivery_truck'
   ].includes(vType)) {
     // Cabover and Heavy Trucks: High vertical air intake stack behind the cab near roof level!
     intakeHeight = 2.75;
@@ -15576,11 +15571,15 @@ export function updateTrailerTowingPhysics(world: GameWorld, dt: number) {
       trailer.isReversing = !!veh.isReversing;
       trailer.headlightsOn = veh.headlightsOn;
       trailer.headlightMode = veh.headlightMode;
+      trailer.positionLightsOn = veh.positionLightsOn;
+      trailer.rearFogLightsOn = veh.rearFogLightsOn;
     } else {
       trailer.turnSignal = 'none';
       trailer.brakeLightsOn = false;
       trailer.isReversing = false;
       trailer.headlightsOn = false;
+      trailer.positionLightsOn = false;
+      trailer.rearFogLightsOn = false;
     }
 
     // Tow hitch ball position on towing vehicle (rear)

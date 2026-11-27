@@ -358,7 +358,7 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
     const bId = resolvedTruck?.body.id;
     const isWaterTruck = resolvedTruck
       ? (bId === 'body_tanker_water' || bId === 'body_fire_pumper' || bId === 'body_vacuum_ko503' || bId === 'body_vacuum_twin_ko505' || bId === 'body_vacuum_sludge_ko505' || bId === 'body_vacuum_kombi_ko560')
-      : (car.type === 'truck_water' || car.type === 'fire_engine');
+      : (car.type === 'truck_water');
     if (isWaterTruck || car.type === 'trailer_barrel' || car.type === 'trailer_vacuum') {
       if (car.fluidTank.hasWaterHose === undefined) {
         car.fluidTank.hasWaterHose = true;
@@ -437,7 +437,7 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
     };
   }
 
-  if (bodyId === 'body_fire_pumper' || (!resolvedTruck && car.type === 'fire_engine')) {
+  if (bodyId === 'body_fire_pumper') {
     // Rear fire pump compartment outlet (ПН-40УВ)
     const localX = -halfL - 1.2;
     const localY = halfW * 0.45;
@@ -817,10 +817,10 @@ export function getVehicleAxleGeometry(car: { type: string; length?: number; fra
   }
 
   const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
-  const isThreeAxle = car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' || car.type === 'garbage_truck';
+  const isThreeAxle = car.type === 'truck_semi' || car.type === 'truck_flatbed';
   const isDually = car.type === 'pickup_heavy';
   const isMoto = car.type.startsWith('moto_') || car.type === 'moped_soviet';
-  const isHeavyTruck = isThreeAxle || car.type === 'truck_box' || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'truck_tow' || car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'bus';
+  const isHeavyTruck = isThreeAxle || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'delivery_truck' || car.type === 'bus';
 
   let rearAxleOffsetRatio = 0.65;
   let frontAxleOffsetRatio = 0.65;
@@ -959,8 +959,6 @@ export function canVehicleHaveHitch(car: Vehicle | { type: string }): boolean {
          t.startsWith('truck_') || 
          t === 'pickup' || 
          t === 'pickup_heavy' || 
-         t === 'cement_mixer' || 
-         t === 'garbage_truck' || 
          t === 'delivery_truck' ||
          t === 'trailer_flatbed_2axle';
 }

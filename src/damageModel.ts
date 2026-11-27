@@ -95,7 +95,7 @@ export function calculateStructureStiffness(car: {
   const isHeavyRigidTrailer = type.startsWith('trailer_semi');
   if (isHeavyRigidTrailer) return 3.5;
 
-  const isCommercialHeavy = type.startsWith('truck_') || type === 'cement_mixer' || type === 'garbage_truck' || type === 'fire_ladder' || type === 'fire_engine' || type === 'bus' || type === 'bus_minibus' || type === 'truck_tow' || type === 'truck_armored';
+  const isCommercialHeavy = type.startsWith('truck_') || type === 'bus' || type === 'bus_minibus';
 
   const mass = Math.max(350, car.mass ?? BASE_REFERENCE_MASS);
 

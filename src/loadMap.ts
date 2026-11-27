@@ -13,9 +13,29 @@ export interface LoadedMapResult {
   fileName: string;
 }
 
+const LEGACY_TRUCK_SAVE_MIGRATION: Record<string, { type: 'truck_flatbed' | 'truck_zil_dump' | 'truck_water' | 'truck_semi'; frameId: string; bodyId: string }> = {
+  truck_covered: { type: 'truck_flatbed', frameId: 'frm_gaz53_std_3700', bodyId: 'body_covered_slate' },
+  truck_dump: { type: 'truck_semi', frameId: 'frm_kamaz_5511_dump', bodyId: 'body_dump_kamaz_5511' },
+  truck_box: { type: 'truck_semi', frameId: 'frm_kamaz_5320_std', bodyId: 'body_box_insulated' },
+  truck_tanker: { type: 'truck_water', frameId: 'frm_zil4331_std_3800', bodyId: 'body_tanker_fuel' },
+  cement_mixer: { type: 'truck_semi', frameId: 'frm_kamaz_5511_dump', bodyId: 'body_cement_mixer' },
+  garbage_truck: { type: 'truck_semi', frameId: 'frm_kamaz_5320_std', bodyId: 'body_garbage_compactor' },
+  truck_tow: { type: 'truck_water', frameId: 'frm_zil4331_std_3800', bodyId: 'body_tow_platform' },
+  truck_armored: { type: 'truck_water', frameId: 'frm_zil4331_std_3800', bodyId: 'body_armored_vault' },
+  fire_engine: { type: 'truck_zil_dump', frameId: 'frm_zil130_std_3800', bodyId: 'body_fire_pumper' },
+  fire_ladder: { type: 'truck_semi', frameId: 'frm_kamaz_53212_long', bodyId: 'body_fire_ladder' },
+  fire_rescue: { type: 'truck_water', frameId: 'frm_zil4331_std_3800', bodyId: 'body_fire_rescue' },
+};
+
 export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
   if (world && Array.isArray(world.vehicles)) {
     world.vehicles.forEach(veh => {
+      const migrated = LEGACY_TRUCK_SAVE_MIGRATION[String((veh as any).type)];
+      if (migrated) {
+        veh.type = migrated.type;
+        if (!veh.frameId) veh.frameId = migrated.frameId;
+        if (!veh.bodyId) veh.bodyId = migrated.bodyId;
+      }
       if ((veh as any).type === 'bus_articulated' || !CAR_CONFIGS[veh.type]) {
         veh.type = 'bus';
       }
@@ -63,7 +83,6 @@ export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
         v.type.startsWith('tractor_') || 
         v.type.startsWith('trailer_') || 
         v.type.startsWith('truck_') ||
-        v.type === 'garbage_truck' ||
         Boolean(v.insertedKeyType) ||
         Boolean(v.insertedKeyId) ||
         Boolean(v.keyId) ||

@@ -308,9 +308,8 @@ export function getLPGConfigForVehicle(carType: string) {
   }
 
   const isHeavyTruck = [
-    'truck_dump', 'truck_box', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered',
-    'cement_mixer', 'garbage_truck', 'bus', 'fire_engine', 'fire_ladder', 'truck_semi'
-  ].includes(carType) || carType.includes('semi') || carType.startsWith('truck_') && !['truck_tow', 'truck_armored'].includes(carType);
+    'truck_water', 'truck_flatbed', 'truck_zil_dump', 'truck_semi', 'bus'
+  ].includes(carType) || carType.includes('semi') || carType.startsWith('truck_');
 
   if (isHeavyTruck) {
     return {
@@ -332,7 +331,7 @@ export function getLPGConfigForVehicle(carType: string) {
   }
 
   const isCommercialVan = [
-    'delivery_truck', 'van_cargo_old', 'van', 'bus_minibus', 'truck_armored', 'truck_tow'
+    'delivery_truck', 'van_cargo_old', 'van', 'bus_minibus'
   ].includes(carType);
 
   if (isCommercialVan) {

@@ -10,6 +10,9 @@ import {
 import { resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
 import { isVehicleHoodExposed } from './engineBayVisuals';
 import { isRedrawnPassengerCar, renderPassengerCarUpperLayer } from './passengerCarModels';
+import { isRedrawnVanBus, renderVanBusUpperLayer } from './vanBusModels';
+import { isRedrawnMotorcycle, renderMotorcycleUpperLayer } from './motorcycleModels';
+import { isRedrawnHeavyEquipment, renderHeavyEquipmentUpperLayer } from './heavyEquipmentModels';
 
 export interface VehicleRenderContext {
   ctx: CanvasRenderingContext2D;
@@ -236,10 +239,7 @@ function getVehicleBasePolygonRaw(
 
   // 6. BOXY 4X4 & HEAVY COMMERCIAL RIGS (Strictly sharp rectangular perimeter, flat square front & flat square rear)
   const isBoxyRig = type === 'suv_classic_box' || type === 'offroad_hardcore' || 
-                    type === 'truck_dump' || type === 'truck_box' || type === 'truck_water' || 
-                    type === 'truck_tanker' || type === 'cement_mixer' || 
-                    type === 'garbage_truck' || type === 'fire_ladder' || type === 'fire_engine' || 
-                    type === 'truck_tow';
+                    type === 'truck_water';
   if (isBoxyRig) {
     return [
       { x: halfL - fc, y: 0 },
@@ -290,7 +290,7 @@ function getVehicleBasePolygonRaw(
   // 7. VANS, MINIBUSES, DELIVERY & ARMORED (Flat cab-over/blunt nose, slab vertical sides, flat rear with rounded corners)
   const isVan = type === 'van' || type === 'bus_minibus' || 
                 type === 'van_cargo_old' || type === 'ambulance_van' || type === 'ambulance' || 
-                type === 'delivery_truck' || type === 'truck_armored';
+                type === 'delivery_truck';
   if (isVan) {
     const sideW = halfW;
     return [
@@ -608,24 +608,12 @@ export function getVehicleCabinDimensions(
     return { cabinL, cabinW, cabinX };
   }
 
-  const isCabOverTruck = type === 'truck_box' || type === 'truck_dump' || type === 'truck_semi' || 
-                         type === 'cement_mixer' || type === 'garbage_truck' ||
-                         type === 'fire_ladder';
-
   if (type === 'truck_semi') {
     // Sleeper cab with rear bunk compartment
     cabinL = car.length * 0.28;
     cabinW = car.width * 0.92;
     cabinX = halfL - cabinL / 2 - 2;
-  } else if (isCabOverTruck) {
-    cabinL = car.length * 0.18;
-    cabinW = car.width * 0.88;
-    cabinX = halfL - cabinL / 2 - 2;
-  } else if (type === 'fire_engine' || type === 'fire_rescue') {
-    cabinL = car.length * 0.28;
-    cabinW = car.width * 0.90;
-    cabinX = halfL - cabinL / 2 - 2;
-  } else if (type === 'truck_flatbed' || type === 'truck_covered' || type === 'truck_tanker' || type === 'truck_water' || type === 'truck_zil_dump') {
+  } else if (type === 'truck_flatbed' || type === 'truck_water' || type === 'truck_zil_dump') {
     cabinL = car.length * (type === 'truck_zil_dump' ? 0.22 : 0.20);
     cabinW = car.width * 0.86;
     cabinX = halfL - cabinL * 1.35;
@@ -745,14 +733,6 @@ export function getVehicleCabinDimensions(
     cabinL = car.length * 0.74;
     cabinW = car.width * 0.84;
     cabinX = 0;
-  } else if (type === 'truck_tow') {
-    cabinL = car.length * 0.28;
-    cabinW = car.width * 0.86;
-    cabinX = car.length * 0.20;
-  } else if (type === 'truck_armored') {
-    cabinL = car.length * 0.58;
-    cabinW = car.width * 0.86;
-    cabinX = -car.length * 0.02;
   } else if (type === 'delivery_truck') {
     cabinL = car.length * 0.28;
     cabinW = car.width * 0.86;
@@ -809,9 +789,21 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   const type = car.type;
   const dmg = car.damage;
 
-  // Redrawn passenger cars use bespoke integrated upper-layer models
+  // Redrawn vehicles use bespoke integrated upper-layer models
   if (isRedrawnPassengerCar(type)) {
     renderPassengerCarUpperLayer(vCtx);
+    return;
+  }
+  if (isRedrawnVanBus(type)) {
+    renderVanBusUpperLayer(vCtx);
+    return;
+  }
+  if (isRedrawnMotorcycle(type)) {
+    renderMotorcycleUpperLayer(vCtx);
+    return;
+  }
+  if (isRedrawnHeavyEquipment(type)) {
+    renderHeavyEquipmentUpperLayer(vCtx);
     return;
   }
 
@@ -1265,11 +1257,10 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   // 5D. VANS, DELIVERY, ARMORED & COMMERCIAL TRANSPORTERS
   // =========================================================================
   const resolvedTruckForCab = resolveVehicleTruckFrameAndBody(car);
-  const isVanType = !resolvedTruckForCab && (type === 'van' || type === 'bus_minibus' || type === 'delivery_truck' || type === 'van_cargo_old' || type === 'truck_armored');
+  const isVanType = !resolvedTruckForCab && (type === 'van' || type === 'bus_minibus' || type === 'delivery_truck' || type === 'van_cargo_old');
   if (isVanType) {
     const isRetro = type === 'van_cargo_old';
     const isDelivery = type === 'delivery_truck';
-    const isArmored = type === 'truck_armored';
 
     // 1. Base greenhouse glass & cabin pillars
     drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
@@ -1447,7 +1438,7 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   // =========================================================================
   // 5F-1. GAZ-53 HOODED TRUCK CABIN (ГАЗ-53 «Газон»)
   // =========================================================================
-  const isGaz53TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'gaz53' : (type === 'truck_flatbed' || type === 'truck_covered');
+  const isGaz53TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'gaz53' : (type === 'truck_flatbed');
   if (isGaz53TruckCab) {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc - 0.5;
@@ -1577,7 +1568,7 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   // =========================================================================
   // 5F-2. ZIL-4331 ANGULAR HOODED TRUCK CABIN (ЗИЛ-4331 / ЗИЛ-433360 / ЗИЛ-133ГЯ)
   // =========================================================================
-  const isZil4331TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'zil4331' : (type === 'truck_water' || type === 'truck_tanker' || type === 'truck_armored' || type === 'truck_tow');
+  const isZil4331TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'zil4331' : (type === 'truck_water');
   if (isZil4331TruckCab) {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc - 0.5;
@@ -1585,7 +1576,7 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     const fenderW = halfW * 2 - 1.0;
     const bodyId = resolvedTruckForCab?.body.id;
     const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue';
-    const isArmored = bodyId === 'body_armored_vault' || (!resolvedTruckForCab && type === 'truck_armored');
+    const isArmored = bodyId === 'body_armored_vault';
     const cabColor = isEmergency ? '#dc2626' : (isArmored ? '#cbd5e1' : (car.color || '#0284c7'));
 
     // Angular ZIL-4331 Front Fender Wings
@@ -1700,14 +1691,14 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   // =========================================================================
   // 5F-3. ZIL-130 HOODED TRUCK CABIN (ЗИЛ-130 / ЗИЛ-131 / ЗИЛ-133Г2)
   // =========================================================================
-  const isZil130TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'zil130' : (type === 'truck_zil_dump' || type === 'fire_engine' || type === 'fire_rescue');
+  const isZil130TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'zil130' : (type === 'truck_zil_dump');
   if (isZil130TruckCab) {
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc - 0.4;
     const hoodW = halfW * 1.34;
     const fenderW = halfW * 2 - 1.2;
     const bodyId = resolvedTruckForCab?.body.id;
-    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue' || (!resolvedTruckForCab && (type === 'fire_engine' || type === 'fire_rescue'));
+    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue';
     const cabColor = isEmergency ? '#dc2626' : (car.color || '#0284c7');
     const roofColor = isEmergency ? '#dc2626' : (car.roofColor || '#f8fafc');
 
@@ -1872,10 +1863,10 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   // =========================================================================
   // 5G. KAMAZ CAB-OVER TRUCK CABIN (КАМАЗ-5320 / 5511 / 5410 / 4310 / 6520)
   // =========================================================================
-  const isKamazCabOver = resolvedTruckForCab ? resolvedTruckForCab.platform === 'kamaz' : (type === 'truck_dump' || type === 'truck_box' || type === 'truck_semi' || type === 'cement_mixer' || type === 'garbage_truck' || type === 'fire_ladder');
+  const isKamazCabOver = resolvedTruckForCab ? resolvedTruckForCab.platform === 'kamaz' : (type === 'truck_semi');
   if (isKamazCabOver) {
     const bodyId = resolvedTruckForCab?.body.id;
-    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue' || (!resolvedTruckForCab && type === 'fire_ladder');
+    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue';
     const isDullSlate = !car.color || car.color === '#334155' || car.color === '#0f172a';
     const cabColor = isEmergency ? '#dc2626' : (isDullSlate ? '#d94e16' : car.color);
     const hasSleeper = resolvedTruckForCab

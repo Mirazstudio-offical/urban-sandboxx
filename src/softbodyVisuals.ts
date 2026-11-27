@@ -171,7 +171,7 @@ export function renderHollowChassisAndCavities(
 
   const isTrailer = isTrailerVehicle(car);
   const isTractor = isTractorVehicle(car.type);
-  const isTruckOrBus = car.type.startsWith('truck_') || car.type === 'bus' || car.type === 'garbage_truck';
+  const isTruckOrBus = car.type.startsWith('truck_') || car.type === 'bus';
   const dmg = car.damage;
 
   ctx.save();

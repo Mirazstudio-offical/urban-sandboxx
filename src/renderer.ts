@@ -67,6 +67,23 @@ import {
   renderPassengerCarWheel
 } from './passengerCarModels';
 import {
+  isRedrawnVanBus,
+  renderVanBusWheels,
+  renderVanBusChassisLayer,
+  renderVanBusUpperLayer
+} from './vanBusModels';
+import {
+  isRedrawnMotorcycle,
+  renderMotorcycleChassisLayer,
+  renderMotorcycleUpperLayer
+} from './motorcycleModels';
+import {
+  isRedrawnHeavyEquipment,
+  renderHeavyEquipmentWheels,
+  renderHeavyEquipmentChassisLayer,
+  renderHeavyEquipmentUpperLayer
+} from './heavyEquipmentModels';
+import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
   renderBuckledHoodOverlay,
@@ -10651,14 +10668,8 @@ export class GameRenderer {
       const isUralSidecar = car.type === 'moto_ural_sidecar';
       const isTrailer = car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle';
 
-      const isThreeAxle = car.type === 'truck_box' || car.type === 'truck_tanker' || 
-                          car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' ||
-                          car.type === 'truck_dump' || car.type === 'garbage_truck' ||
-                          car.type === 'fire_ladder' || car.type === 'truck_water' ||
-                          car.type === 'truck_semi';
-      const isHeavyTruck = isThreeAxle || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'fire_engine' || 
-                           car.type === 'fire_rescue' || car.type === 'bus' || car.type === 'truck_tow' || 
-                           car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'pickup_heavy';
+      const isThreeAxle = car.type === 'truck_flatbed' || car.type === 'truck_water' || car.type === 'truck_semi';
+      const isHeavyTruck = isThreeAxle || car.type === 'truck_zil_dump' || car.type === 'bus' || car.type === 'delivery_truck' || car.type === 'pickup_heavy';
 
       const isDually = car.type === 'pickup_heavy';
       const isSport = car.type === 'sports' || car.type === 'supercar' || car.type === 'coupe_gt' || car.type === 'hatch_hot' || car.type === 'muscle' || car.type === 'muscle_classic';
@@ -10682,7 +10693,34 @@ export class GameRenderer {
         ctx.fillRect(dwx - wheelL / 2 + 1.5, dwy - wheelW / 2 + 0.5, wheelL - 3.0, wheelW - 1.0);
       };
 
-      if (isTractor) {
+      if (isRedrawnVanBus(car.type) || isRedrawnHeavyEquipment(car.type) || isRedrawnMotorcycle(car.type)) {
+        if (isRedrawnVanBus(car.type) || isRedrawnHeavyEquipment(car.type)) {
+          const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+          const wheelVCtx = {
+            ctx,
+            car,
+            halfL,
+            halfW,
+            fc: effFc,
+            rc: effRc,
+            cabinX: cX,
+            cabinL: cL,
+            cabinW: cW,
+            deform,
+            drawDeformedRect,
+            drawDeformedLine,
+            drawDeformedCircle,
+            nightAlpha,
+            renderLayer: 'chassis' as const,
+            cameraAngle: this.currentParticleCamera.angle,
+          };
+          if (isRedrawnVanBus(car.type)) {
+            renderVanBusWheels(wheelVCtx, car.steerAngle);
+          } else {
+            renderHeavyEquipmentWheels(wheelVCtx);
+          }
+        }
+      } else if (isTractor) {
         // TRACTOR AGRICULTURAL WHEELS (PREMIUM DETAILED TIRES & HUBS)
         // Calibrated Rear Agricultural Wheels (15.5R38: ~1.45m diameter, ~0.48m width)
         const rearAxleX = -halfL * 0.48;
@@ -11210,7 +11248,34 @@ export class GameRenderer {
 
       // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
       const resolvedTruckBody = resolveVehicleTruckFrameAndBody(car);
-      const isRedrawnCar = !resolvedTruckBody && isRedrawnPassengerCar(car.type);
+      const isRedrawnPassenger = !resolvedTruckBody && isRedrawnPassengerCar(car.type);
+      const isRedrawnVan = !resolvedTruckBody && isRedrawnVanBus(car.type);
+      const isRedrawnMoto = !resolvedTruckBody && isRedrawnMotorcycle(car.type);
+      const isRedrawnHeavy = !resolvedTruckBody && isRedrawnHeavyEquipment(car.type);
+      const isRedrawnCar = isRedrawnPassenger || isRedrawnVan || isRedrawnMoto || isRedrawnHeavy;
+
+      const buildLowerVCtx = () => {
+        const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+        return {
+          ctx,
+          car,
+          halfL,
+          halfW,
+          fc: effFc,
+          rc: effRc,
+          cabinX: cX,
+          cabinL: cL,
+          cabinW: cW,
+          deform,
+          drawDeformedRect,
+          drawDeformedLine,
+          drawDeformedCircle,
+          nightAlpha,
+          renderLayer: 'chassis' as const,
+          cameraAngle: this.currentParticleCamera.angle,
+        };
+      };
+
       if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
         if (resolvedTruckBody) {
           const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
@@ -11257,30 +11322,12 @@ export class GameRenderer {
           ctx.lineWidth = 1.1;
           ctx.strokeRect(cabRearX, -halfW + 0.4, (halfL - cabRearX) - fc, halfW * 2 - 0.8);
           ctx.restore();
-        } else if (isRedrawnCar) {
-          const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
-          renderPassengerCarChassisLayer(
-            {
-              ctx,
-              car,
-              halfL,
-              halfW,
-              fc: effFc,
-              rc: effRc,
-              cabinX: cX,
-              cabinL: cL,
-              cabinW: cW,
-              deform,
-              drawDeformedRect,
-              drawDeformedLine,
-              drawDeformedCircle,
-              nightAlpha,
-              renderLayer: 'chassis',
-              cameraAngle: this.currentParticleCamera.angle,
-            },
-            bodyPoly,
-            polyDvs
-          );
+        } else if (isRedrawnPassenger) {
+          renderPassengerCarChassisLayer(buildLowerVCtx(), bodyPoly, polyDvs);
+        } else if (isRedrawnVan) {
+          renderVanBusChassisLayer(buildLowerVCtx());
+        } else if (isRedrawnHeavy) {
+          renderHeavyEquipmentChassisLayer(buildLowerVCtx());
         } else {
           ctx.fillStyle = car.color;
           ctx.beginPath();
@@ -11352,8 +11399,12 @@ export class GameRenderer {
         }
       }
 
-      // Render specialized trailer attachments and road machinery on chassis layer
-      if (isTrailer || isRoadMachinery(car.type)) {
+      // Render redrawn motorcycles and road machinery on chassis layer; legacy specialized trailer/excavator attachments only for non-redrawn models (EK-12)
+      if (isRedrawnMoto) {
+        renderMotorcycleChassisLayer(buildLowerVCtx());
+      } else if (isRedrawnHeavy && isRoadMachinery(car.type)) {
+        renderHeavyEquipmentChassisLayer(buildLowerVCtx());
+      } else if ((isTrailer || isRoadMachinery(car.type)) && !isRedrawnHeavy) {
         const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
         renderSpecializedVehicleAttachments({
           ctx,
@@ -12838,8 +12889,12 @@ export class GameRenderer {
       const isMachinery = isRoadMachinery(car.type);
 
       if (isTrailer || isMachinery) {
-        // Render specialized trailer attachments and machinery superstructure
-        renderSpecializedVehicleAttachments(vCtx);
+        if (isRedrawnHeavyEquipment(car.type)) {
+          renderHeavyEquipmentUpperLayer(vCtx);
+        } else {
+          // Render specialized attachments and excavator superstructure (EK-12)
+          renderSpecializedVehicleAttachments(vCtx);
+        }
         ctx.restore();
 
         // Ground digging / dumping reticle for player-controlled EK-12 excavator
@@ -12871,10 +12926,20 @@ export class GameRenderer {
         continue;
       }
 
-      // Accurate greenhouse (bespoke integrated upper layer for redrawn passenger cars; legacy archetypes for trucks/vans/buses/moto)
-      const isRedrawnUpper = isRedrawnPassengerCar(car.type);
-      if (isRedrawnUpper) {
+      // Accurate greenhouse (bespoke integrated upper layers for all redrawn models; legacy archetypes for unified configurable trucks)
+      const isRedrawnUpper =
+        isRedrawnPassengerCar(car.type) ||
+        isRedrawnVanBus(car.type) ||
+        isRedrawnMotorcycle(car.type) ||
+        isRedrawnHeavyEquipment(car.type);
+      if (isRedrawnPassengerCar(car.type)) {
         renderPassengerCarUpperLayer(vCtx);
+      } else if (isRedrawnVanBus(car.type)) {
+        renderVanBusUpperLayer(vCtx);
+      } else if (isRedrawnMotorcycle(car.type)) {
+        renderMotorcycleUpperLayer(vCtx);
+      } else if (isRedrawnHeavyEquipment(car.type)) {
+        renderHeavyEquipmentUpperLayer(vCtx);
       } else {
         renderVehicleGreenhouseAndBodyPanels(vCtx);
       }
@@ -14733,7 +14798,7 @@ export class GameRenderer {
         t === 'hatch_samara' || t === 'liftback_tavria' || t === 'classic_compact' ||
         t === 'retro_bubble' || t === 'micro_car' || t === 'muscle_classic' ||
         t === 'suv_classic_box' || t === 'van_cargo_old' || t === 'truck_zil_dump' ||
-        t === 'truck_water' || t === 'truck_flatbed' || t === 'truck_covered' ||
+        t === 'truck_water' || t === 'truck_flatbed' ||
         t === 'tractor_mtz82' || t === 'tractor_mtz80' || t === 'tractor_mtz80_old' ||
         t === 'moto_izh_jupiter' || t === 'moto_ural_sidecar' || t === 'moto_jawa350' ||
         t === 'moped_soviet' || t === 'moto_chopper'
@@ -15441,9 +15506,9 @@ export class GameRenderer {
         let mRoofX = halfL * 0.35;
         if (isTractor) {
           mRoofX = -halfL * 0.08 + (halfL * 0.52 * 0.68) / 2 - 1.0;
-        } else if (car.type === 'truck_dump' || car.type === 'truck_box' || car.type === 'truck_semi' || car.type === 'cement_mixer' || car.type === 'garbage_truck' || car.type === 'fire_ladder') {
+        } else if (car.type === 'truck_semi') {
           mRoofX = halfL * 0.52 + (halfL * 0.48 * 0.70) / 2 - 1.2;
-        } else if (car.type.startsWith('truck_') || car.type.startsWith('fire_')) {
+        } else if (car.type.startsWith('truck_')) {
           mRoofX = halfL * 0.08 + (halfL * 0.42 * 0.65) / 2 - 1.2;
         } else if (car.type === 'bus' || car.type === 'bus_minibus' || car.type === 'delivery_truck') {
           mRoofX = halfL * 0.05 + (halfL * 0.85 * 0.82) / 2 - 1.2;
@@ -15718,7 +15783,8 @@ export class GameRenderer {
       const isArticulated = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
       const isTractorMach = car.type.startsWith('tractor_');
       const isVehicleLit = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || getVehicleHeadlightOn(car));
-      if (isVehicleLit && (isArticulated || car.type === 'paver_asphalt_wheeled' || car.type === 'excavator_ek12' || isTractorMach || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
+      const hasUtilityBeaconBody = car.bodyId === 'body_dump_kamaz_5511' || car.bodyId === 'body_garbage_compactor' || car.bodyId === 'body_tow_platform' || car.bodyId === 'body_crane_ks35715' || car.bodyId === 'body_vacuum_ko503' || car.bodyId === 'body_vacuum_twin_ko505' || car.bodyId === 'body_vacuum_sludge_ko505' || car.bodyId === 'body_vacuum_kombi_ko560';
+      if (isVehicleLit && (isArticulated || car.type === 'paver_asphalt_wheeled' || car.type === 'excavator_ek12' || isTractorMach || hasUtilityBeaconBody)) {
         const beaconPeriod = 0.35;
         const beaconPulse = Math.sin(nowFireSec / beaconPeriod * Math.PI * 2);
         if (beaconPulse > 0.1) {
@@ -16424,7 +16490,8 @@ export class GameRenderer {
       }
 
       // Amber Strobe Beacons on Roof / ROPS Bar (Compact dome flare; ground amber spill is masked in Pass 1 cCtx)
-      if (isIgnitionOn && (isArticulated || car.type === 'paver_asphalt_wheeled' || car.type === 'excavator_ek12' || isTractor || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
+      const hasUtilityBeaconBody2 = car.bodyId === 'body_dump_kamaz_5511' || car.bodyId === 'body_garbage_compactor' || car.bodyId === 'body_tow_platform' || car.bodyId === 'body_crane_ks35715' || car.bodyId === 'body_vacuum_ko503' || car.bodyId === 'body_vacuum_twin_ko505' || car.bodyId === 'body_vacuum_sludge_ko505' || car.bodyId === 'body_vacuum_kombi_ko560';
+      if (isIgnitionOn && (isArticulated || car.type === 'paver_asphalt_wheeled' || car.type === 'excavator_ek12' || isTractor || hasUtilityBeaconBody2)) {
         const beaconPeriod = 0.35;
         const beaconPulse = Math.sin((Date.now() / 1000) / beaconPeriod * Math.PI * 2);
         if (beaconPulse > 0.1) {
@@ -16738,10 +16805,10 @@ export class GameRenderer {
         if (isTractor) {
           mRoofX = -halfL * 0.08 + (halfL * 0.52 * 0.68) / 2 - 1.0;
           mOffsetsY = [-2.5, 0, 2.5];
-        } else if (car.type === 'truck_dump' || car.type === 'truck_box' || car.type === 'truck_semi' || car.type === 'cement_mixer' || car.type === 'garbage_truck' || car.type === 'fire_ladder') {
+        } else if (car.type === 'truck_semi') {
           mRoofX = halfL * 0.52 + (halfL * 0.48 * 0.70) / 2 - 1.2;
           mOffsetsY = [-3.0, 0, 3.0];
-        } else if (car.type.startsWith('truck_') || car.type.startsWith('fire_')) {
+        } else if (car.type.startsWith('truck_')) {
           mRoofX = halfL * 0.08 + (halfL * 0.42 * 0.65) / 2 - 1.2;
           mOffsetsY = [-2.8, 0, 2.8];
         } else if (car.type === 'bus' || car.type === 'bus_minibus' || car.type === 'delivery_truck') {

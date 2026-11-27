@@ -10992,7 +10992,7 @@ export function useItemOnPlayer(
             }
             const addLiters = Math.min(5, veh.fluidTank.capacity - veh.fluidTank.currentVolume);
             veh.fluidTank.currentVolume += addLiters;
-            const tankName = veh.type === 'truck_tanker'? 'бензовоз': (veh.type === 'truck_water'? 'водовоз': (veh.type === 'trailer_barrel'? 'бочку': (veh.type === 'trailer_vacuum'? 'вакуумную бочку': 'цистерну')));
+            const tankName = veh.bodyId === 'body_tanker_fuel' ? 'бензовоз' : (veh.type === 'truck_water' || veh.bodyId === 'body_tanker_water' ? 'водовоз' : (veh.type === 'trailer_barrel' ? 'бочку' : (veh.type === 'trailer_vacuum' ? 'вакуумную бочку' : 'цистерну')));
             refueledVehicleName = `${tankName} (залито 5л АИ-95)`;
             break;
           }
@@ -12273,7 +12273,7 @@ export function useHandItemOnPlayer(
             }
             const addLiters = Math.min(5, veh.fluidTank.capacity - veh.fluidTank.currentVolume);
             veh.fluidTank.currentVolume += addLiters;
-            const tankName = veh.type === 'truck_tanker'? 'бензовоз': (veh.type === 'truck_water'? 'водовоз': (veh.type === 'trailer_barrel'? 'бочку': (veh.type === 'trailer_vacuum'? 'вакуумную бочку': 'цистерну')));
+            const tankName = veh.bodyId === 'body_tanker_fuel' ? 'бензовоз' : (veh.type === 'truck_water' || veh.bodyId === 'body_tanker_water' ? 'водовоз' : (veh.type === 'trailer_barrel' ? 'бочку' : (veh.type === 'trailer_vacuum' ? 'вакуумную бочку' : 'цистерну')));
             refueledVehicleName = `${tankName} (залито 5л АИ-95)`;
             break;
           }

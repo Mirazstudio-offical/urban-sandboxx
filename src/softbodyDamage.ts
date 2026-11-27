@@ -242,8 +242,6 @@ function getFuelTankLocalPoints(car: Vehicle): { x: number; y: number }[] {
   const carType = car.type || 'sedan';
   const isTruck =
     carType.startsWith('truck_') ||
-    carType === 'cement_mixer' ||
-    carType === 'garbage_truck' ||
     carType === 'pickup_heavy' ||
     carType === 'delivery_truck';
   const isTractor = isTractorVehicle(carType);

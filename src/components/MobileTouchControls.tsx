@@ -354,9 +354,8 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
   // (6 / 8-step MT, 5-step MT, etc.). Legacy cars without stored ratios fall
   // back to the historical per-car-type list.
   const legacy6SpeedTypes = [
-    'truck_semi', 'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered',
-    'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow',
-    'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored',
+    'truck_semi', 'truck_zil_dump', 'truck_water', 'truck_flatbed',
+    'bus', 'delivery_truck', 'pickup_heavy',
     'supercar', 'sports', 'hatch_hot', 'coupe_gt', 'moto_sport'
   ];
   const is6Speed = !isAuto && !isMachinery && !isTractor && (

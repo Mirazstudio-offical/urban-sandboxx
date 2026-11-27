@@ -246,17 +246,10 @@ function getVehicleZones(veh: Vehicle): {
     };
   }
 
-  // Commercial trucks / fire engines / crane / vacuum / tow / dump / tanker
+  // Commercial trucks (unified platforms + stepvan)
   const isTruck =
     t.startsWith('truck') ||
-    t === 'fire_engine' ||
-    t === 'fire_truck' ||
-    t === 'fire_ladder' ||
-    t === 'fire_rescue' ||
-    t === 'garbage_truck' ||
-    t === 'cement_mixer' ||
-    t === 'delivery_truck' ||
-    t === 'tow_truck';
+    t === 'delivery_truck';
   if (isTruck) {
     return {
       roof: makeVehicleLocalRect(veh, halfL * 0.18, halfL * 0.68, -halfW * 0.92, halfW * 0.92, 2.5),

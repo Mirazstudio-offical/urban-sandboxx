@@ -106,7 +106,8 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
 
   const family = THEME_FAMILY[theme] ?? 'rocker';
   const press = () => sound.playButtonPress();
-  const hasSiren = ['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(veh.type);
+  const isFireBody = veh.bodyId === 'body_fire_pumper' || veh.bodyId === 'body_fire_ladder' || veh.bodyId === 'body_fire_rescue';
+  const hasSiren = isFireBody || ['police', 'ambulance', 'ambulance_van', 'ambulance_suv'].includes(veh.type);
   const roadTrainOn = veh.roadTrainLightsOn !== false;
   const gboOn = veh.fuelSystem?.gboActive !== false;
   const tank = veh.fluidTank;

@@ -24,6 +24,9 @@ import {
   renderPneumaticRoller
 } from './roadMachineryVisuals';
 import { isRedrawnPassengerCar } from './passengerCarModels';
+import { isRedrawnVanBus } from './vanBusModels';
+import { isRedrawnMotorcycle } from './motorcycleModels';
+import { isRedrawnHeavyEquipment } from './heavyEquipmentModels';
 import { renderExcavatorEK12 } from './excavatorVisuals';
 import {
   renderMotoIzhJupiter,
@@ -900,8 +903,15 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     ? (resolvedTruck.body.attachmentCarType || car.type)
     : car.type;
 
-  // All 35 redrawn passenger cars include bumpers, grilles, optics, roof details & CHMSL natively inside passengerCarModels.ts
-  if (!resolvedTruck && isRedrawnPassengerCar(effectiveType)) {
+  // All 64 redrawn vehicles (passenger cars, vans/buses/ambulances, motorcycles, tractors, road machinery, trailers)
+  // include bumpers, grilles, optics, roof details & superstructures natively inside their dedicated model files.
+  if (
+    !resolvedTruck &&
+    (isRedrawnPassengerCar(effectiveType) ||
+      isRedrawnVanBus(effectiveType) ||
+      isRedrawnMotorcycle(effectiveType) ||
+      isRedrawnHeavyEquipment(effectiveType))
+  ) {
     return;
   }
 

@@ -35,8 +35,6 @@ export function getVehicleControlTheme(carType?: string): VehicleControlTheme {
   // 2. Heavy Commercial Trucks, Buses, Utilities
   if (
     carType.startsWith('truck_') ||
-    carType === 'cement_mixer' ||
-    carType === 'garbage_truck' ||
     carType === 'delivery_truck' ||
     carType === 'bus' ||
     carType === 'bus_minibus'
@@ -98,9 +96,6 @@ export function getVehicleControlTheme(carType?: string): VehicleControlTheme {
     carType === 'ambulance' ||
     carType === 'ambulance_van' ||
     carType === 'ambulance_suv' ||
-    carType === 'fire_engine' ||
-    carType === 'fire_ladder' ||
-    carType === 'fire_rescue' ||
     carType === 'taxi'
   ) {
     return 'emergency';

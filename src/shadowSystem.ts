@@ -1637,15 +1637,7 @@ function renderVehicleShadow(
     hasCabin = false;
   } else if (
     vType === 'bus' ||
-    vType === 'truck_semi' ||
-    vType === 'truck_box' ||
-    vType === 'truck_dump' ||
-    vType === 'truck_water' ||
-    vType === 'truck_fuel' ||
-    vType === 'fire_engine' ||
-    vType === 'fire_ladder' ||
-    vType === 'garbage_truck' ||
-    vType === 'cement_mixer'
+    vType.startsWith('truck_')
   ) {
     chassisH = 18.0;
     cabinH = 34.0;

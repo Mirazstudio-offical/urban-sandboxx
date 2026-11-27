@@ -57,18 +57,10 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
     case 'moto_sport':
       return 'sport';
 
-    case 'truck_box':
-    case 'truck_dump':
     case 'truck_zil_dump':
     case 'truck_semi':
-    case 'truck_tanker':
     case 'truck_water':
     case 'truck_flatbed':
-    case 'truck_covered':
-    case 'truck_tow':
-    case 'truck_armored':
-    case 'cement_mixer':
-    case 'garbage_truck':
     case 'delivery_truck':
     case 'bus':
     case 'bus_minibus':
@@ -100,9 +92,6 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
     case 'ambulance':
     case 'ambulance_van':
     case 'ambulance_suv':
-    case 'fire_engine':
-    case 'fire_ladder':
-    case 'fire_rescue':
     case 'taxi':
       return 'emergency';
 
@@ -360,7 +349,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
     maxSpeed = 45;
     maxRPM = 3000;
     redlineRPM = 2200;
-  } else if (carType.startsWith('truck_') || carType === 'bus' || carType === 'bus_minibus' || carType === 'cement_mixer' || carType === 'garbage_truck' || carType === 'fire_engine' || carType === 'fire_ladder' || carType === 'fire_rescue') {
+  } else if (carType.startsWith('truck_') || carType === 'bus' || carType === 'bus_minibus') {
     maxSpeed = 130;
     maxRPM = 3600;
     redlineRPM = 2600;
@@ -1723,8 +1712,6 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 t.startsWith('tractor_') || 
                 t.startsWith('truck_') ||
                 t === 'van_cargo_old' ||
-                t === 'cement_mixer' ||
-                t === 'garbage_truck' ||
                 t === 'delivery_truck';
 
               if (!requiresMechKey) return null;

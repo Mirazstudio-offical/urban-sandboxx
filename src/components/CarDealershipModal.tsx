@@ -21,6 +21,23 @@ import {
   renderPassengerCarUpperLayer,
   renderPassengerCarWheel
 } from '../passengerCarModels';
+import {
+  isRedrawnVanBus,
+  renderVanBusWheels,
+  renderVanBusChassisLayer,
+  renderVanBusUpperLayer
+} from '../vanBusModels';
+import {
+  isRedrawnMotorcycle,
+  renderMotorcycleChassisLayer,
+  renderMotorcycleUpperLayer
+} from '../motorcycleModels';
+import {
+  isRedrawnHeavyEquipment,
+  renderHeavyEquipmentWheels,
+  renderHeavyEquipmentChassisLayer,
+  renderHeavyEquipmentUpperLayer
+} from '../heavyEquipmentModels';
 import { getPlayerCash, deductPlayerCash, createItem, addItemToPlayer, getCarKeyTier, getCarKeyFeatures, getVehicleRequiredKeyType, addPlayerNotification } from '../items';
 import { sound } from '../audio';
 import { Car, Sparkles, Clock, Coins, CheckCircle2, X, Search, RefreshCw, Palette, Settings2, ShieldCheck, AlertTriangle } from 'lucide-react';
@@ -1038,10 +1055,10 @@ export function generateUsedCars(count: number = 15): UsedCarModel[] {
     { type: 'suv_classic_box', name: 'Aegis Defender 4x4', basePrice: 220000 },
     { type: 'tractor_mtz80_old', name: 'Agritech Fieldmaster 80', basePrice: 140000 },
     { type: 'tractor_mtz82', name: 'Agritech Fieldmaster 82.1', basePrice: 380000 },
-    { type: 'truck_flatbed', name: 'Atlas Flatbed 53', basePrice: 150000 },
-    { type: 'truck_covered', name: 'Atlas Covered Cargo 53', basePrice: 165000 },
-    { type: 'truck_zil_dump', name: 'Atlas Dump Truck 130', basePrice: 195000 },
-    { type: 'truck_dump', name: 'Titan Heavy Dump 5511', basePrice: 420000 },
+    { type: 'truck_flatbed', name: 'ГАЗ-53 Шасси', basePrice: 150000 },
+    { type: 'truck_zil_dump', name: 'ЗИЛ-130 Шасси', basePrice: 195000 },
+    { type: 'truck_water', name: 'ЗИЛ-4331 Шасси', basePrice: 235000 },
+    { type: 'truck_semi', name: 'КАМАЗ-5320 Шасси', basePrice: 420000 },
     { type: 'sports', name: 'Velocity GT Sport (Wrecked)', basePrice: 950000 },
     { type: 'sedan_luxury', name: 'Sovereign Executive Sedan (Project)', basePrice: 1200000 }
   ];
@@ -1391,12 +1408,23 @@ export const CarDealershipModal: React.FC<Props> = ({
       nightAlpha: 0.1
     };
 
-    const isRedrawnCar = !resolvedTruck && isRedrawnPassengerCar(dummyCar.type);
+    const isRedrawnPassenger = !resolvedTruck && isRedrawnPassengerCar(dummyCar.type);
+    const isRedrawnVan = !resolvedTruck && isRedrawnVanBus(dummyCar.type);
+    const isRedrawnMoto = !resolvedTruck && isRedrawnMotorcycle(dummyCar.type);
+    const isRedrawnHeavy = !resolvedTruck && isRedrawnHeavyEquipment(dummyCar.type);
+    const isRedrawnCar = isRedrawnPassenger || isRedrawnVan || isRedrawnMoto || isRedrawnHeavy;
 
-    if (!isMachinery) {
+    if (isRedrawnMoto) {
+      renderMotorcycleChassisLayer(vCtx);
+    } else if (isRedrawnHeavy) {
+      renderHeavyEquipmentWheels(vCtx);
+      renderHeavyEquipmentChassisLayer(vCtx);
+    } else if (!isMachinery) {
       if (resolvedTruck) {
         renderConfigurableTruckWheels(vCtx, resolvedTruck);
-      } else if (isRedrawnCar) {
+      } else if (isRedrawnVan) {
+        renderVanBusWheels(vCtx, 0);
+      } else if (isRedrawnPassenger) {
         const isOffroadTire =
           dummyCar.type === 'offroad_hardcore' ||
           dummyCar.type === 'suv_classic_box' ||
@@ -1452,8 +1480,10 @@ export const CarDealershipModal: React.FC<Props> = ({
         ctx.lineWidth = 1.1;
         ctx.strokeRect(cabRearX, -halfW + 0.4, halfL - cabRearX, halfW * 2 - 0.8);
         ctx.restore();
-      } else if (isRedrawnCar) {
+      } else if (isRedrawnPassenger) {
         renderPassengerCarChassisLayer(vCtx, basePoly);
+      } else if (isRedrawnVan) {
+        renderVanBusChassisLayer(vCtx);
       } else {
         ctx.fillStyle = dummyCar.color;
         ctx.beginPath();
@@ -1470,15 +1500,7 @@ export const CarDealershipModal: React.FC<Props> = ({
       }
 
       if (!isRedrawnCar) {
-        // Front bumper grille (only for standard production models without bespoke fascias)
-        const hasCustomGrille = dummyCar.type === 'sedan_classic'|| dummyCar.type === 'sedan_luxury'|| 
-                                dummyCar.type === 'classic_compact'|| dummyCar.type === 'retro_bubble'|| 
-                                dummyCar.type === 'suv_classic_box'|| dummyCar.type === 'van'|| 
-                                dummyCar.type === 'van_cargo_old'|| dummyCar.type === 'delivery_truck'||
-                                dummyCar.type === 'van_camper'|| dummyCar.type === 'hatch_hot'||
-                                dummyCar.type === 'police'|| dummyCar.type === 'sports'|| dummyCar.type === 'supercar'||
-                                dummyCar.type === 'bus_minibus'|| dummyCar.type === 'wagon_allroad'|| dummyCar.type === 'wagon_classic' ||
-                                !!resolvedTruck;
+        const hasCustomGrille = !!resolvedTruck;
         if (!hasCustomGrille) {
           const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
           ctx.fillStyle = '#0f172a';
@@ -1505,7 +1527,6 @@ export const CarDealershipModal: React.FC<Props> = ({
         drawHeadlight(rightLampX, rightLampY);
 
         if (!resolvedTruck) {
-          // 5. In-Game Taillights (Rectangular lenses matching in-game renderer)
           const rearLeftX = -halfL + 2.5;
           const rearLeftY = -halfW + 3.2;
           const rearRightX = -halfL + 2.5;
@@ -1528,9 +1549,21 @@ export const CarDealershipModal: React.FC<Props> = ({
     (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).bareFrameAlreadyDrawn = true;
     (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).fifthWheelAlreadyDrawn = true;
 
-    if (!isMachinery) {
-      if (isRedrawnCar) {
+    if (isRedrawnMoto) {
+      renderMotorcycleUpperLayer(vCtx);
+    } else if (isRedrawnHeavy) {
+      renderHeavyEquipmentUpperLayer(vCtx);
+      if (!isMachinery) {
+        renderUnderHoodEngineBay(vCtx);
+        renderArticulatedHoodAndBlower(vCtx);
+      }
+    } else if (!isMachinery) {
+      if (isRedrawnPassenger) {
         renderPassengerCarUpperLayer(vCtx);
+        renderUnderHoodEngineBay(vCtx);
+        renderArticulatedHoodAndBlower(vCtx);
+      } else if (isRedrawnVan) {
+        renderVanBusUpperLayer(vCtx);
         renderUnderHoodEngineBay(vCtx);
         renderArticulatedHoodAndBlower(vCtx);
       } else {
