@@ -16,7 +16,8 @@ import {
   isMotorcycle,
   isTractorVehicle
 } from './vehicleArchetypes';
-import { registerNodeBeamBuilder } from './nodeBeamRegistry';
+import { registerNodeBeamBuilder, registerNodeBeamPowertrainUpdater } from './nodeBeamRegistry';
+import { resolveEngineBlueprint } from './engineBlueprint';
 import {
   CrushProfile,
   advanceCrushStroke,
@@ -140,11 +141,17 @@ export function createVehicleNodeBeamSystem(
     width?: number;
     mass?: number;
     customMeshConfig?: Partial<VehicleNodeBeamDefinition>;
+    engineState?: Vehicle['engineState'];
+    hasGBO?: boolean;
+    fuelSystem?: Vehicle['fuelSystem'];
+    hasChiptuning?: boolean;
   }
 ): NodeBeamStructure {
   const length = car.length || 42;
   const width = car.width || 20;
   const totalMass = car.mass || 1400;
+  const isTrailer = isTrailerVehicle(car as Vehicle);
+  const resolvedPowertrain = !isTrailer ? resolveEngineBlueprint(car) : null;
 
   // Resolve custom or archetype definition from mesh preset registry
   const def = getVehicleNodeBeamDefinition(car.type, car.customMeshConfig);
@@ -236,15 +243,44 @@ export function createVehicleNodeBeamSystem(
   }
   fixedCount += wheelLayout.length;
 
-  // Нормируем массы узлов на реальную массу автомобиля. Раньше сумма
-  // massFrac давала 1.1–1.2 массы, и инерция сетки не соответствовала
-  // настройкам машины. Теперь сумма узлов = totalMass, а инерция считается
-  // относительно центра масс — её и использует rigid-body интегратор.
-  let rawMassSum = 0;
-  for (const n of nodes) rawMassSum += n.mass;
-  const massScale = rawMassSum > 0 ? totalMass / rawMassSum : 1;
-  for (const n of nodes) {
-    n.mass = Math.max(8, n.mass * massScale);
+  // Реальная масса двигателя и КПП из выбранного модификатора двигателя:
+  // лёгкий R3 (~68 кг) против тяжёлого V8/YaMZ (~450–880 кг) меняет инерцию носа,
+  // центр масс и нагрузку на опоры двигателя при лобовом и косом ударе.
+  if (resolvedPowertrain) {
+    const enginePlusTurboKg = resolvedPowertrain.spec.massKg + resolvedPowertrain.turboMassKg;
+    const targetEngMass = Math.max(
+      totalMass * 0.06,
+      Math.min(totalMass * 0.36, enginePlusTurboKg)
+    );
+    const targetCoreMass = Math.max(
+      totalMass * 0.05,
+      Math.min(totalMass * 0.22, resolvedPowertrain.transmissionMassKg + totalMass * 0.06)
+    );
+    const engNode = nodes.find(n => n.group === 'engine');
+    const coreNode = nodes.find(n => n.group === 'chassis_core');
+    if (engNode) engNode.mass = targetEngMass;
+    if (coreNode) coreNode.mass = targetCoreMass;
+
+    // Нормируем остальные узлы так, чтобы суммарная масса сетки точно равнялась totalMass
+    let fixedSpecialMass = (engNode ? engNode.mass : 0) + (coreNode ? coreNode.mass : 0);
+    let otherRawSum = 0;
+    for (const n of nodes) {
+      if (n !== engNode && n !== coreNode) otherRawSum += n.mass;
+    }
+    const remainingMass = Math.max(totalMass * 0.40, totalMass - fixedSpecialMass);
+    const otherScale = otherRawSum > 0 ? remainingMass / otherRawSum : 1;
+    for (const n of nodes) {
+      if (n !== engNode && n !== coreNode) {
+        n.mass = Math.max(8, n.mass * otherScale);
+      }
+    }
+  } else {
+    let rawMassSum = 0;
+    for (const n of nodes) rawMassSum += n.mass;
+    const massScale = rawMassSum > 0 ? totalMass / rawMassSum : 1;
+    for (const n of nodes) {
+      n.mass = Math.max(8, n.mass * massScale);
+    }
   }
 
   let totalNodeMass = 0;
@@ -306,10 +342,15 @@ export function createVehicleNodeBeamSystem(
       baseBreak = 6.5;
     }
 
-    const springK = (bt.spring !== undefined ? bt.spring : baseK) * springScale * BEAM_FORCE_SCALE / YIELD_RANGE_SCALE;
-    const dampC = (bt.damp !== undefined ? bt.damp : baseC) * dampScale * BEAM_DAMP_SCALE;
-    const yieldDistance = (bt.yieldDist !== undefined ? bt.yieldDist : baseYield) * yieldScale * YIELD_RANGE_SCALE;
-    const breakDistance = (bt.breakDist !== undefined ? bt.breakDist : baseBreak) * breakScale;
+    const isEngMount = bt.partTag === 'engine_mount';
+    const engMountKMult = isEngMount && resolvedPowertrain ? resolvedPowertrain.effectiveMountStiffness : 1.0;
+    const engMountBreakMult = isEngMount && resolvedPowertrain ? resolvedPowertrain.effectiveMountBreak : 1.0;
+    const engMountDampMult = isEngMount && resolvedPowertrain ? Math.sqrt(resolvedPowertrain.effectiveMountStiffness) : 1.0;
+
+    const springK = (bt.spring !== undefined ? bt.spring : baseK) * springScale * engMountKMult * BEAM_FORCE_SCALE / YIELD_RANGE_SCALE;
+    const dampC = (bt.damp !== undefined ? bt.damp : baseC) * dampScale * engMountDampMult * BEAM_DAMP_SCALE;
+    const yieldDistance = (bt.yieldDist !== undefined ? bt.yieldDist : baseYield) * yieldScale * (isEngMount ? Math.min(1.3, 0.9 + engMountBreakMult * 0.25) : 1.0) * YIELD_RANGE_SCALE;
+    const breakDistance = (bt.breakDist !== undefined ? bt.breakDist : baseBreak) * breakScale * engMountBreakMult;
 
     return {
       id: bt.id !== undefined ? bt.id : beamIdCounter++,
@@ -363,6 +404,8 @@ export function createVehicleNodeBeamSystem(
     }
   }
 
+  const engineMountCount = beams.filter(b => b.partTag === 'engine_mount').length;
+
   return {
     nodes,
     beams,
@@ -376,6 +419,12 @@ export function createVehicleNodeBeamSystem(
     presetName: def.name,
     perimeterCount: def.perimeterCount,
     definition: def,
+    engineModifierId: resolvedPowertrain?.spec.id,
+    turboModifierId: resolvedPowertrain?.turboKitId,
+    engineMassKg: resolvedPowertrain ? (resolvedPowertrain.spec.massKg + resolvedPowertrain.turboMassKg) : undefined,
+    engineMountCount,
+    engineMountBrokenCount: 0,
+    engineMountHealth: 1.0,
     forceScaleVersion: FORCE_SCALE_VERSION,
     stableDt: computeStableDt(nodes, beams),
     coreMass,
@@ -386,6 +435,110 @@ export function createVehicleNodeBeamSystem(
     fixedNodeCount: fixedCount,
     needsSync: true
   };
+}
+
+/**
+ * Re-binds an existing vehicle's Node-Beam structure to the newly selected
+ * engine, turbo kit, and transmission modifier (called by `applyPowertrain`).
+ * Preserves any active plastic deformation while updating engine node mass,
+ * center of mass, rotational inertia, engine mount beam stiffness/break limits,
+ * and `stableDt`.
+ */
+export function applyEngineModifierToNodeBeam(car: Vehicle): void {
+  if (!car || isTrailerVehicle(car)) return;
+  const nb = car.damage?.nodeBeam;
+  if (!nb || !nb.nodes || nb.nodes.length === 0 || !nb.beams) return;
+
+  const resolved = resolveEngineBlueprint(car);
+  const totalMass = Math.max(250, car.mass || nb.totalNodeMass || 1400);
+  const def = nb.definition || getVehicleNodeBeamDefinition(car.type, car.customMeshConfig);
+  const springScale = def.springScale ?? 1.0;
+  const dampScale = def.dampScale ?? 1.0;
+  const yieldScale = def.yieldScale ?? 1.0;
+  const breakScale = def.breakScale ?? 1.0;
+
+  // 1. Update engine & core/transmission node masses and re-normalize shell mass
+  const engNode = nb.nodes.find(n => n.group === 'engine');
+  const coreNode = nb.nodes.find(n => n.group === 'chassis_core');
+  const enginePlusTurboKg = resolved.spec.massKg + resolved.turboMassKg;
+  if (engNode) {
+    engNode.mass = Math.max(totalMass * 0.06, Math.min(totalMass * 0.36, enginePlusTurboKg));
+  }
+  if (coreNode) {
+    coreNode.mass = Math.max(totalMass * 0.05, Math.min(totalMass * 0.22, resolved.transmissionMassKg + totalMass * 0.06));
+  }
+  const specialMass = (engNode ? engNode.mass : 0) + (coreNode ? coreNode.mass : 0);
+  let otherSum = 0;
+  for (const n of nb.nodes) {
+    if (n !== engNode && n !== coreNode) otherSum += n.mass;
+  }
+  const remaining = Math.max(totalMass * 0.40, totalMass - specialMass);
+  const scale = otherSum > 0 ? remaining / otherSum : 1;
+  for (const n of nb.nodes) {
+    if (n !== engNode && n !== coreNode) {
+      n.mass = Math.max(8, n.mass * scale);
+    }
+  }
+
+  // 2. Recompute CoM, coreMass, totalNodeMass, nodeInertia
+  let totalNodeMass = 0;
+  let coreMass = 0;
+  let comX = 0;
+  let comY = 0;
+  for (const n of nb.nodes) {
+    totalNodeMass += n.mass;
+    comX += n.mass * n.origX;
+    comY += n.mass * n.origY;
+    if (n.isFixed) coreMass += n.mass;
+  }
+  if (totalNodeMass > 0) {
+    comX /= totalNodeMass;
+    comY /= totalNodeMass;
+  }
+  let nodeInertia = 0;
+  for (const n of nb.nodes) {
+    const rx = n.origX - comX;
+    const ry = n.origY - comY;
+    nodeInertia += n.mass * (rx * rx + ry * ry);
+  }
+
+  // 3. Re-tune engine mount beams to match the selected engine's mount stiffness & break limits
+  const engId = engNode ? engNode.id : -1;
+  let mountTotal = 0;
+  let mountBroken = 0;
+  for (let i = 0; i < nb.beams.length; i++) {
+    const b = nb.beams[i];
+    const isMount = b.partTag === 'engine_mount' || (engId >= 0 && (b.nodeA === engId || b.nodeB === engId) && b.type !== 'latch');
+    if (!isMount) continue;
+    if (!b.partTag) b.partTag = 'engine_mount';
+    mountTotal++;
+    if (b.broken) mountBroken++;
+
+    const bt = def.beams[i];
+    const baseK = bt?.spring !== undefined ? bt.spring : (b.type === 'chassis_rail' ? DEFAULT_K_CHASSIS * (def.chassisStiffness ?? 1.0) : DEFAULT_K_STRUCTURAL);
+    const baseC = bt?.damp !== undefined ? bt.damp : (b.type === 'chassis_rail' ? DEFAULT_C_CHASSIS : DEFAULT_C_STRUCTURAL);
+    const baseYield = bt?.yieldDist !== undefined ? bt.yieldDist : (b.type === 'chassis_rail' ? 0.70 : 0.50);
+    const baseBreak = bt?.breakDist !== undefined ? bt.breakDist : (b.type === 'chassis_rail' ? 26.0 : 18.0);
+
+    b.spring = baseK * springScale * resolved.effectiveMountStiffness * BEAM_FORCE_SCALE / YIELD_RANGE_SCALE;
+    b.damp = baseC * dampScale * Math.sqrt(resolved.effectiveMountStiffness) * BEAM_DAMP_SCALE;
+    b.yieldDist = baseYield * yieldScale * Math.min(1.3, 0.9 + resolved.effectiveMountBreak * 0.25) * YIELD_RANGE_SCALE;
+    b.breakDist = baseBreak * breakScale * resolved.effectiveMountBreak;
+  }
+
+  nb.engineModifierId = resolved.spec.id;
+  nb.turboModifierId = resolved.turboKitId;
+  nb.engineMassKg = enginePlusTurboKg;
+  nb.engineMountCount = mountTotal;
+  nb.engineMountBrokenCount = mountBroken;
+  nb.engineMountHealth = mountTotal > 0 ? Math.max(0, 1 - mountBroken / mountTotal) : 1.0;
+  nb.totalNodeMass = totalNodeMass;
+  nb.coreMass = coreMass;
+  nb.comX = comX;
+  nb.comY = comY;
+  nb.nodeInertia = nodeInertia;
+  nb.stableDt = computeStableDt(nb.nodes, nb.beams);
+  nb.needsSync = true;
 }
 
 /**
@@ -1003,21 +1156,70 @@ function projectShellRigidModes(system: NodeBeamStructure): void {
   // Unconstrained physics: rigid mode projection removed for pure unconstrained dynamics.
 }
 
-/** Последствия разрыва балки для навесных деталей (бампер, капот, двери, багажник). */
+/** Последствия разрыва балки для навесных деталей (бампер, капот, опоры двигателя, двери, багажник). */
 function breakBeamPart(car: Vehicle, beam: BeamLink): void {
   const dmg = car.damage;
   if (!dmg) return;
+  const nb = dmg.nodeBeam;
+  const nodes = nb?.nodes;
+  const nA = nodes ? nodes[beam.nodeA] : undefined;
+  const nB = nodes ? nodes[beam.nodeB] : undefined;
+
   if (beam.partTag === 'front_bumper') {
-    if (beam.nodeA === 15 || beam.nodeB === 15) dmg.bumperSagLeft = 1.0;
-    if (beam.nodeA === 1 || beam.nodeB === 1) dmg.bumperSagRight = 1.0;
+    const minY = Math.min(nA?.origY ?? 0, nB?.origY ?? 0);
+    const maxY = Math.max(nA?.origY ?? 0, nB?.origY ?? 0);
+    if (minY < -1.0) dmg.bumperSagLeft = 1.0;
+    if (maxY > 1.0) dmg.bumperSagRight = 1.0;
+    // Center bumper latch breaking sags both sides partially
+    if (minY >= -1.0 && maxY <= 1.0) {
+      dmg.bumperSagLeft = Math.max(dmg.bumperSagLeft || 0, 0.55);
+      dmg.bumperSagRight = Math.max(dmg.bumperSagRight || 0, 0.55);
+    }
     if ((dmg.bumperSagLeft || 0) > 0.8 && (dmg.bumperSagRight || 0) > 0.8) {
       dmg.frontBumperDetached = true;
     }
-  } else if (beam.partTag === 'hood') {
+  } else if (beam.partTag === 'hood' || beam.partTag === 'hood_hinge') {
     dmg.hoodBuckled = true;
-    dmg.hoodRaisedAmount = Math.max(0.6, (dmg.hoodRaisedAmount || 0) + 0.35);
-    if (beam.nodeA === 16 && beam.nodeB === 17) {
-      dmg.hoodDetached = true;
+    const liftStep = beam.partTag === 'hood_hinge' ? 0.42 : 0.35;
+    dmg.hoodRaisedAmount = Math.min(1.0, Math.max(0.55, (dmg.hoodRaisedAmount || 0) + liftStep));
+    // Topology-agnostic hood detachment: breaking both cowl hinges, or breaking front latch + any hinge
+    if (nb && nb.beams) {
+      let brokenLatch = 0;
+      let brokenHinges = 0;
+      for (const b of nb.beams) {
+        if (!b.broken) continue;
+        if (b.partTag === 'hood') brokenLatch++;
+        else if (b.partTag === 'hood_hinge') brokenHinges++;
+      }
+      if (brokenHinges >= 2 || (brokenLatch >= 1 && brokenHinges >= 1)) {
+        dmg.hoodDetached = true;
+      }
+    }
+  } else if (beam.partTag === 'engine_mount') {
+    if (nb && nb.beams) {
+      let totalMounts = 0;
+      let brokenMounts = 0;
+      for (const b of nb.beams) {
+        if (b.partTag === 'engine_mount') {
+          totalMounts++;
+          if (b.broken) brokenMounts++;
+        }
+      }
+      nb.engineMountCount = totalMounts;
+      nb.engineMountBrokenCount = brokenMounts;
+      nb.engineMountHealth = totalMounts > 0 ? Math.max(0, 1 - brokenMounts / totalMounts) : 0;
+
+      // Shearing engine mounts transmits heavy mechanical shock to block, hoses & radiator
+      const eng = car.engineState;
+      if (eng) {
+        eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - (brokenMounts >= 2 ? 14 : 7));
+        if (brokenMounts >= 2) {
+          eng.engineRunning = false;
+          eng.engineRPM = 0;
+          eng.radiatorPunctured = true;
+          eng.oilPunctured = true;
+        }
+      }
     }
   } else if (beam.partTag === 'door_fl') {
     dmg.doorFLAjar = 0.85;
@@ -1560,3 +1762,4 @@ export function stepNodeBeamContinuousContact(
 }
 
 registerNodeBeamBuilder(createVehicleNodeBeamSystem);
+registerNodeBeamPowertrainUpdater(applyEngineModifierToNodeBeam);

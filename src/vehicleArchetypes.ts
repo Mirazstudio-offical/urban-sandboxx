@@ -8,6 +8,7 @@ import {
   renderMopedSoviet
 } from './motorcycleVisuals';
 import { resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
+import { isVehicleHoodExposed } from './engineBayVisuals';
 
 export interface VehicleRenderContext {
   ctx: CanvasRenderingContext2D;
@@ -1054,20 +1055,8 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedRect(fWsX1, -cabinW / 2 + 0.8, fWsX2 - fWsX1, cabinW - 1.6, 'rgba(56, 189, 248, 0.20)');
     drawDeformedLine(fWsX1 + 1, -cabinW / 2 + 1.5, fWsX2 - 1, cabinW / 2 - 1.5, 'rgba(255, 255, 255, 0.35)', 1.4);
 
-    // --- REAR TRANSPARENT GLASS MID-ENGINE COVER ---
-    const engX = cabinX - cabinL * 0.65;
-    const engL = halfL * 0.52;
-    const engW = halfW * 1.35;
-    drawDeformedRect(engX - engL / 2, -engW / 2, engL, engW, '#020617');
-
-    // Engine block with red cylinder heads and silver intake runners
-    drawDeformedRect(engX - engL * 0.35, -engW * 0.25, engL * 0.70, engW * 0.50, '#1e293b');
-    drawDeformedRect(engX - engL * 0.30, -engW * 0.22, engL * 0.60, 2.4, '#dc2626');
-    drawDeformedRect(engX - engL * 0.30, engW * 0.22 - 2.4, engL * 0.60, 2.4, '#dc2626');
-    // Carbon X-brace
-    drawDeformedLine(engX - engL * 0.35, -engW * 0.25, engX + engL * 0.35, engW * 0.25, '#94a3b8', 1.4);
-    drawDeformedLine(engX - engL * 0.35, engW * 0.25, engX + engL * 0.35, -engW * 0.25, '#94a3b8', 1.4);
-
+    // Rear transparent glass mid-engine bay is rendered dynamically from the real selected
+    // engine modifier in `engineBayVisuals.ts` (`renderUnderHoodEngineBay` + `renderArticulatedHoodAndBlower`).
     return;
   }
 
@@ -1104,11 +1093,12 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     const trunkX2 = cabinX - cabinL / 2;
     drawDeformedRect(trunkX1 + 1, -halfW * 0.85, trunkX2 - trunkX1 - 1, halfW * 1.70, car.color);
 
-    // Dual Racing Stripes
+    // Dual Racing Stripes (stop at windshield cowl when hood is open or detached so stripes don't paint over the engine)
     const stripeW = 2.4;
     const stripeDist = 2.6;
-    drawDeformedLine(-halfL + rc + 1, -stripeDist, halfL - fc - 1, -stripeDist, '#ffffff', stripeW);
-    drawDeformedLine(-halfL + rc + 1, stripeDist, halfL - fc - 1, stripeDist, '#ffffff', stripeW);
+    const stripeEndX = isVehicleHoodExposed(car) ? hoodX1 : (hoodX2 - 1);
+    drawDeformedLine(-halfL + rc + 1, -stripeDist, stripeEndX, -stripeDist, '#ffffff', stripeW);
+    drawDeformedLine(-halfL + rc + 1, stripeDist, stripeEndX, stripeDist, '#ffffff', stripeW);
 
     return;
   }
@@ -1124,14 +1114,16 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     const hoodX2 = halfL - fc - 0.5;
     const hoodW = halfW * 0.70;
 
-    // --- 1. ENGINE HOOD TOP SHEET METAL (STRICT TOP-DOWN VIEW) ---
-    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, car.color);
-    // Center longitudinal hood crease
-    drawDeformedLine(hoodX1, 0, hoodX2 - 1.5, 0, 'rgba(0,0,0,0.3)', 1.0);
+    // --- 1. ENGINE HOOD TOP SHEET METAL (STRICT TOP-DOWN VIEW; skipped when hood open/detached) ---
+    if (!isVehicleHoodExposed(car)) {
+      drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, car.color);
+      // Center longitudinal hood crease
+      drawDeformedLine(hoodX1, 0, hoodX2 - 1.5, 0, 'rgba(0,0,0,0.3)', 1.0);
 
-    // Radiator filler neck / cap
-    drawDeformedCircle(hoodX2 - 2.8, 0, 1.1, '#1e293b');
-    drawDeformedCircle(hoodX2 - 2.8, 0, 0.5, '#cbd5e1');
+      // Radiator filler neck / cap
+      drawDeformedCircle(hoodX2 - 2.8, 0, 1.1, '#1e293b');
+      drawDeformedCircle(hoodX2 - 2.8, 0, 0.5, '#cbd5e1');
+    }
 
     // Engine cowl rubber seal strip at windshield base
     drawDeformedLine(hoodX1, -hoodW / 2, hoodX1, hoodW / 2, '#0f172a', 1.2);
@@ -1466,21 +1458,23 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.8, -hoodW / 2, 'rgba(0,0,0,0.4)', 0.9);
     drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.8, hoodW / 2, 'rgba(0,0,0,0.4)', 0.9);
 
-    // Central Raised Hood Stamping (Капот ГАЗ-53 со скруглением к передней кромке)
-    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
-    // Central hood longitudinal crease ridge
-    drawDeformedLine(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.34)', 1.2);
-    drawDeformedLine(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.28)', 0.8);
-    // Cowl shutline at base of windshield
-    drawDeformedLine(hoodX1, -hoodW / 2 + 0.5, hoodX1, hoodW / 2 - 0.5, 'rgba(0,0,0,0.55)', 1.0);
+    // Central Raised Hood Stamping (Капот ГАЗ-53; skipped when open/detached so the ZMZ V8 engine shows clearly)
+    if (!isVehicleHoodExposed(car)) {
+      drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
+      // Central hood longitudinal crease ridge
+      drawDeformedLine(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.34)', 1.2);
+      drawDeformedLine(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.28)', 0.8);
+      // Cowl shutline at base of windshield
+      drawDeformedLine(hoodX1, -hoodW / 2 + 0.5, hoodX1, hoodW / 2 - 0.5, 'rgba(0,0,0,0.55)', 1.0);
 
-    // Side Hood Air Vents / Louvers (Боковые продольные жалюзи капота ГАЗ-53)
-    const louverX1 = hoodX1 + 2.4;
-    const louverX2 = hoodX2 - 3.2;
-    [-hoodW / 2 + 1.2, hoodW / 2 - 1.2].forEach(ly => {
-      drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
-      drawDeformedLine(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.2)', 0.6);
-    });
+      // Side Hood Air Vents / Louvers (Боковые продольные жалюзи капота ГАЗ-53)
+      const louverX1 = hoodX1 + 2.4;
+      const louverX2 = hoodX2 - 3.2;
+      [-hoodW / 2 + 1.2, hoodW / 2 - 1.2].forEach(ly => {
+        drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
+        drawDeformedLine(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.2)', 0.6);
+      });
+    }
 
     // Top-of-fender turn signal pods (Указатели поворота УП-101 на крыльях ГАЗ-53)
     const pfX = (hoodX1 + hoodX2) * 0.54;
@@ -1595,14 +1589,16 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.5, -hoodW / 2, 'rgba(0,0,0,0.45)', 1.0);
     drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.5, hoodW / 2, 'rgba(0,0,0,0.45)', 1.0);
 
-    // Angular Boxy Hood Body (ЗИЛ-4331)
-    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
-    // Central cowl shutline & asymmetric air intake louver grille on right hood side
-    drawDeformedLine(hoodX1, 0, hoodX2 - 1.2, 0, 'rgba(0,0,0,0.35)', 1.0);
-    drawDeformedLine(hoodX1, 0.5, hoodX2 - 1.2, 0.5, 'rgba(255,255,255,0.22)', 0.7);
-    drawDeformedRect(hoodX1 + 2.0, hoodW * 0.16, 3.4, 2.2, '#1e293b');
-    // Cowl shutline at windshield base
-    drawDeformedLine(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.1);
+    // Angular Boxy Hood Body (ЗИЛ-4331; skipped when open/detached)
+    if (!isVehicleHoodExposed(car)) {
+      drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
+      // Central cowl shutline & asymmetric air intake louver grille on right hood side
+      drawDeformedLine(hoodX1, 0, hoodX2 - 1.2, 0, 'rgba(0,0,0,0.35)', 1.0);
+      drawDeformedLine(hoodX1, 0.5, hoodX2 - 1.2, 0.5, 'rgba(255,255,255,0.22)', 0.7);
+      drawDeformedRect(hoodX1 + 2.0, hoodW * 0.16, 3.4, 2.2, '#1e293b');
+      // Cowl shutline at windshield base
+      drawDeformedLine(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.1);
+    }
 
     //Collector green stripe on hood & doors if armored vault body is mounted
     if (isArmored) {
@@ -1716,19 +1712,21 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.8, -hoodW / 2, 'rgba(0,0,0,0.42)', 0.9);
     drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.8, hoodW / 2, 'rgba(0,0,0,0.42)', 0.9);
 
-    // Central Raised Hood Stamping (Капот со скругленным носом и ребрами выштамповки)
-    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
-    drawDeformedLine(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.4)', 1.2);
-    drawDeformedLine(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.25)', 0.8);
-    drawDeformedLine(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.0);
+    // Central Raised Hood Stamping (Капот ЗИЛ-130; skipped when open/detached)
+    if (!isVehicleHoodExposed(car)) {
+      drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
+      drawDeformedLine(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.4)', 1.2);
+      drawDeformedLine(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.25)', 0.8);
+      drawDeformedLine(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.0);
 
-    // Lateral side hood air louver slots / embossings (боковые выштамповки жалюзи капота ЗИЛ-130)
-    const louverX1 = hoodX1 + 2.2;
-    const louverX2 = hoodX2 - 2.8;
-    [-hoodW / 2 + 1.1, hoodW / 2 - 1.1].forEach(ly => {
-      drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
-      drawDeformedLine(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.22)', 0.7);
-    });
+      // Lateral side hood air louver slots / embossings (боковые выштамповки жалюзи капота ЗИЛ-130)
+      const louverX1 = hoodX1 + 2.2;
+      const louverX2 = hoodX2 - 2.8;
+      [-hoodW / 2 + 1.1, hoodW / 2 - 1.1].forEach(ly => {
+        drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
+        drawDeformedLine(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.22)', 0.7);
+      });
+    }
 
     // Vintage amber teardrop/round clearance/indicator lamps (ПФ-101) mounted ON TOP of the front fenders
     const pfX = (hoodX1 + hoodX2) * 0.52;

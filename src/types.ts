@@ -216,7 +216,7 @@ export interface BeamTemplate {
   damp?: number;       // Viscous damping coefficient, if omitted uses default
   yieldDist?: number;  // Yield distance (px) before plastic metal flow occurs
   breakDist?: number;  // Break distance (px) where beam fractures/snaps
-  partTag?: 'hood' | 'front_bumper' | 'rear_bumper' | 'door_fl' | 'door_fr' | 'door_rl' | 'door_rr' | 'trunk';
+  partTag?: 'hood' | 'hood_hinge' | 'engine_mount' | 'radiator' | 'front_bumper' | 'rear_bumper' | 'door_fl' | 'door_fr' | 'door_rl' | 'door_rr' | 'trunk';
 }
 
 export interface VehicleNodeBeamDefinition {
@@ -241,6 +241,10 @@ export interface VehicleNodeBeamDefinition {
     subframeRightRR?: number;
     engineNodeId?: number;
     chassisCoreNodeId?: number;
+    cowlNodeId?: number;
+    hoodLatchBeamIds?: number[];
+    hoodHingeBeamIds?: number[];
+    engineMountBeamIds?: number[];
   };
 }
 
@@ -281,7 +285,7 @@ export interface BeamLink {
   breakDist: number;
   broken: boolean;
   type: BeamLinkType;
-  partTag?: 'hood' | 'front_bumper' | 'rear_bumper' | 'door_fl' | 'door_fr' | 'door_rl' | 'door_rr' | 'trunk';
+  partTag?: 'hood' | 'hood_hinge' | 'engine_mount' | 'radiator' | 'front_bumper' | 'rear_bumper' | 'door_fl' | 'door_fr' | 'door_rl' | 'door_rr' | 'trunk';
   currentStress?: number;
   plasticDeform?: number;
 }
@@ -299,6 +303,13 @@ export interface NodeBeamStructure {
   presetName?: string;
   perimeterCount?: number;
   definition?: VehicleNodeBeamDefinition;
+  /** Реальные параметры установленного модификатора двигателя, зашитые в soft-body привязки. */
+  engineModifierId?: string;
+  turboModifierId?: string;
+  engineMassKg?: number;
+  engineMountCount?: number;
+  engineMountBrokenCount?: number;
+  engineMountHealth?: number;
   crushLimit?: {
     dirX: number;
     dirY: number;

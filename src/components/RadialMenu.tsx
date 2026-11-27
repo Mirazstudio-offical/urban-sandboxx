@@ -596,6 +596,25 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
               <Sl k="O">Окно двери</Sl>
               <Tile Icon={Wind} cls="row" label={isWindowOpen ? 'Опущено' : 'Поднято'} on={isWindowOpen} onClick={() => { sound.playUseItem(); if (onToggleWindow) onToggleWindow(); else veh.windowOpen = !veh.windowOpen; setTick((t) => t + 1); }} />
 
+              {veh.engineState && !veh.type.startsWith('moto_') && veh.type !== 'ural_sidecar' && !(veh.type as string).startsWith('trailer_') && (
+                <>
+                  <Sl>Капот</Sl>
+                  <Tile
+                    Icon={Wrench}
+                    cls="row"
+                    label={veh.damage?.hoodDetached ? 'Сорван' : (veh.engineState.hoodOpen ? 'Открыт' : 'Закрыт')}
+                    on={!!veh.engineState.hoodOpen && !veh.damage?.hoodDetached}
+                    disabled={!!veh.damage?.hoodDetached}
+                    onClick={() => {
+                      if (!veh.engineState || veh.damage?.hoodDetached) return;
+                      sound.playUseItem();
+                      veh.engineState.hoodOpen = !veh.engineState.hoodOpen;
+                      setTick((t) => t + 1);
+                    }}
+                  />
+                </>
+              )}
+
               {diffCaps.supported && (
                 <>
                   <Sl k="V">Дифференциал</Sl>
@@ -802,6 +821,7 @@ const Configurator: React.FC<{
   const [tboId, setTboId] = useState<string>(es?.turboKitId ?? 'trb_none');
   const [frameId, setFrameId] = useState<string>(veh.frameId || es?.frameId || '');
   const [bodyId, setBodyId] = useState<string>(veh.bodyId || es?.bodyId || 'body_none');
+  const [previewHoodOpen, setPreviewHoodOpen] = useState<boolean>(!!es?.hoodOpen);
 
   const framePool = useMemo(() => getCompatibleFramesForTruck(veh.type), [veh.type]);
   const pickedFrame = useMemo(
@@ -889,13 +909,16 @@ const Configurator: React.FC<{
       ) : (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, padding: 6, borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', flex: 'none' }}>
-            <div className="cth" style={{ width: 124, height: 58, borderRadius: 7, flex: 'none' }}>
+            <div className="cth" style={{ width: 124, height: 58, borderRadius: 7, flex: 'none', position: 'relative' }}>
               <VehiclePreviewCanvas
                 carType={veh.type}
                 color={previewColor}
                 roofColor={selColor?.roofHex || undefined}
                 frameId={pickedFrame?.id}
                 bodyId={pickedBody?.id}
+                engineId={pickedEng?.id || es?.engineId}
+                turboKitId={factoryTurbo ? factoryTurbo.id : tboId}
+                hoodOpen={previewHoodOpen}
                 width={124}
                 height={58}
                 showPedestal={false}
@@ -904,9 +927,29 @@ const Configurator: React.FC<{
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: previewColor, border: '1px solid rgba(255,255,255,0.35)', flex: 'none' }} />
-                <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
                   {selColor ? selColor.name : 'Текущая окраска'}
                 </span>
+                {!veh.type.startsWith('moto_') && veh.type !== 'ural_sidecar' && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewHoodOpen((v) => !v)}
+                    style={{
+                      flex: 'none',
+                      padding: '2px 7px',
+                      borderRadius: 6,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: `1px solid ${previewHoodOpen ? '#c9922b' : 'rgba(255,255,255,0.16)'}`,
+                      background: previewHoodOpen ? 'rgba(201,146,43,0.22)' : 'rgba(255,255,255,0.05)',
+                      color: previewHoodOpen ? '#f0c264' : '#cfcbc1',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {previewHoodOpen ? 'Закр. капот' : 'Откр. капот'}
+                  </button>
+                )}
               </div>
               <div className="mut" style={{ fontSize: 12, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {entry ? `${entry.powerHp} л.с.` : ''}

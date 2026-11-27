@@ -71,8 +71,8 @@ const chev = (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a29e93" strokeWidth="2.6"><path d="M9 5l7 7-7 7" /></svg>
 );
 
-const Car: React.FC<{ c: VehicleCatalogEntry; color: string; roof?: string; frameId?: string; bodyId?: string; w: number; h: number }> = ({ c, color, roof, frameId, bodyId, w, h }) => (
-  <VehiclePreviewCanvas carType={c.type} color={color} roofColor={roof || color} frameId={frameId} bodyId={bodyId} width={w} height={h} showPedestal={false} />
+const Car: React.FC<{ c: VehicleCatalogEntry; color: string; roof?: string; frameId?: string; bodyId?: string; engineId?: string; turboKitId?: string; hoodOpen?: boolean; w: number; h: number }> = ({ c, color, roof, frameId, bodyId, engineId, turboKitId, hoodOpen, w, h }) => (
+  <VehiclePreviewCanvas carType={c.type} color={color} roofColor={roof || color} frameId={frameId} bodyId={bodyId} engineId={engineId} turboKitId={turboKitId} hoodOpen={hoodOpen} width={w} height={h} showPedestal={false} />
 );
 
 /* tree pieces live at module level so their DOM survives re-renders (keeps the expand animation) */
@@ -98,6 +98,7 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
   const [filt, setFilt] = useState<'all' | VehicleCategory>('all');
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'cars' | 'cfgs'>('cars');
+  const [pvHoodOpen, setPvHoodOpen] = useState(false);
   const [ci, setCi] = useState(0);        // index in VEHICLE_CATALOG
   const [color, setColor] = useState(0);  // index in the vehicle's colours
   const [customHex, setCustomHex] = useState<string | null>(null);
@@ -361,8 +362,29 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
           </div>
 
           <aside className="panel a mc-side" style={{ left: 976, top: 112, width: 400, height: 716, padding: 14, display: 'flex', flexDirection: 'column' }}>
-            <div className={'cth g' + (ci % 8)} id="pvbox" style={{ height: 98, borderRadius: 9, flex: 'none' }}>
-              <div id="pv" style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={colHex} roof={colRoof} frameId={pickedFrame?.id} bodyId={pickedBody?.id} w={240} h={108} /></div>
+            <div className={'cth g' + (ci % 8)} id="pvbox" style={{ height: 98, borderRadius: 9, flex: 'none', position: 'relative' }}>
+              <div id="pv" style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={colHex} roof={colRoof} frameId={pickedFrame?.id} bodyId={pickedBody?.id} engineId={pickedEng?.id} turboKitId={factoryTurbo ? factoryTurbo.id : pickedTurbo?.id} hoodOpen={pvHoodOpen} w={240} h={108} /></div>
+              {!car.type.startsWith('moto_') && car.type !== 'ural_sidecar' && (
+                <button
+                  type="button"
+                  onClick={() => setPvHoodOpen(v => !v)}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    bottom: 6,
+                    padding: '2px 7px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    border: `1px solid ${pvHoodOpen ? '#c9922b' : 'rgba(255,255,255,0.18)'}`,
+                    background: pvHoodOpen ? 'rgba(201,146,43,0.24)' : 'rgba(15,15,18,0.72)',
+                    color: pvHoodOpen ? '#f0c264' : '#cfcbc1',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {pvHoodOpen ? 'Закр. капот' : 'Откр. капот'}
+                </button>
+              )}
             </div>
             <div style={{ padding: '10px 8px 0' }}>
               <div className="cn mut" style={{ fontSize: 11 }}>Выбранный автомобиль</div>

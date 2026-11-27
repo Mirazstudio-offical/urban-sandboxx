@@ -376,7 +376,36 @@ export function generateBodyMesh(input: BodyFamilySpec): { def: VehicleNodeBeamD
   }
 
   const hoodIds = skinIds.filter(i => g.nodes[i].group === 'hood');
-  if (hoodIds.length) g.add(argExtreme(hoodIds, xOf, true), frame.center, 'latch', { partTag: 'hood', cap: spec.length * 0.6 });
+  const bonnetSideIds = hoodIds.length > 0
+    ? hoodIds
+    : skinIds.filter(i => g.nodes[i].group === 'fender' && xOf(i) >= spec.xCowl * spec.length - spec.length * 0.04);
+  if (bonnetSideIds.length) {
+    // Primary front hood striker / latch
+    const hoodFront = argExtreme(bonnetSideIds, xOf, true);
+    if (hoodFront >= 0) {
+      if (!g.add(hoodFront, frame.center, 'latch', { partTag: 'hood', cap: spec.length * 0.6 })) {
+        g.add(hoodFront, yOf(hoodFront) >= 0 ? chassis.FR : chassis.FL, 'latch', { partTag: 'hood', cap: spec.length * 0.6 });
+      }
+    }
+    // Dual left/right hood cowl hinges (connecting rear-most hood/bonnet nodes to A-pillars / cowl)
+    for (const s of [1, -1] as const) {
+      const sideHood = bonnetSideIds.filter(i => Math.sign(yOf(i)) === s);
+      if (sideHood.length) {
+        const rearCorner = argExtreme(sideHood, xOf, false);
+        const hingeAnchor = frame.A[s > 0 ? 0 : 1];
+        if (!g.add(rearCorner, hingeAnchor, 'latch', { partTag: 'hood_hinge', cap: spec.length * 0.48 })) {
+          g.add(rearCorner, frame.center, 'latch', { partTag: 'hood_hinge', cap: spec.length * 0.48 });
+        }
+        // Front hood corner striker to subframe when perimeter lacks center-line hood nodes
+        if (hoodIds.length === 0) {
+          const frontCorner = argExtreme(sideHood, xOf, true);
+          if (frontCorner !== rearCorner) {
+            g.add(frontCorner, s > 0 ? chassis.FR : chassis.FL, 'latch', { partTag: 'hood', cap: spec.length * 0.48 });
+          }
+        }
+      }
+    }
+  }
 
   for (const s of [1, -1] as const) {
     const doorTarget = frame.A[s > 0 ? 0 : 1];
@@ -390,18 +419,30 @@ export function generateBodyMesh(input: BodyFamilySpec): { def: VehicleNodeBeamD
   const trunkIds = skinIds.filter(i => g.nodes[i].group === 'trunk');
   if (trunkIds.length) g.add(argExtreme(trunkIds, xOf, false), frame.rearHeader, 'latch', { partTag: 'trunk', cap: spec.length * 0.6 });
 
-  // --- 3. Шасси: лонжероны, затем связи шасси с каркасом (до кожи, чтобы не перекрыть их) ---
-  const railPairs: [number, number][] = [
+  // --- 3. Шасси: лонжероны, опоры двигателя (engine_mount), затем связи шасси с каркасом ---
+  const isRearOrMidEngine = spec.xEngine < 0;
+  const railPairs: [number, number, BeamTemplate['partTag']?][] = [
     [chassis.FL, chassis.mL], [chassis.mL, chassis.RL],
     [chassis.FR, chassis.mR], [chassis.mR, chassis.RR],
-    [chassis.eng, chassis.core], [chassis.core, chassis.mL], [chassis.core, chassis.mR],
-    [chassis.eng, chassis.FL], [chassis.eng, chassis.FR], [chassis.FL, chassis.FR], [chassis.RL, chassis.RR]
+    [chassis.eng, chassis.core, 'engine_mount'],
+    [chassis.core, chassis.mL], [chassis.core, chassis.mR],
+    [chassis.eng, chassis.FL, isRearOrMidEngine ? undefined : 'engine_mount'],
+    [chassis.eng, chassis.FR, isRearOrMidEngine ? undefined : 'engine_mount'],
+    [chassis.eng, chassis.RL, isRearOrMidEngine ? 'engine_mount' : undefined],
+    [chassis.eng, chassis.RR, isRearOrMidEngine ? 'engine_mount' : undefined],
+    [chassis.FL, chassis.FR], [chassis.RL, chassis.RR]
   ];
   // Лонжероны и поперечины не длиннее 30% кузова: длинная связь проходит «через весь кузов».
   const chassisCap = spec.length * 0.3;
-  for (const [a, b] of railPairs) g.add(a, b, 'rail', { cap: chassisCap });
-  for (const [a, b] of pairsSortedByLength(g, [2], [1], false)) g.add(a, b, 'frameChassis', { cap: chassisCap });
-  for (const [a, b] of pairsSortedByLength(g, [2], [2], true)) g.add(a, b, 'chassis', { cap: chassisCap });
+  for (const [a, b, tag] of railPairs) g.add(a, b, 'rail', { cap: chassisCap, partTag: tag });
+  for (const [a, b] of pairsSortedByLength(g, [2], [1], false)) {
+    const touchesEngine = a === chassis.eng || b === chassis.eng;
+    g.add(a, b, 'frameChassis', { cap: chassisCap, partTag: touchesEngine ? 'engine_mount' : undefined });
+  }
+  for (const [a, b] of pairsSortedByLength(g, [2], [2], true)) {
+    const touchesEngine = a === chassis.eng || b === chassis.eng;
+    g.add(a, b, 'chassis', { cap: chassisCap, partTag: touchesEngine ? 'engine_mount' : undefined });
+  }
 
   // --- 4. Кожа↔каркас: кольцо между панелью и каркасом заполняется последним ---
   for (const [a, b] of pairsSortedByLength(g, [0], [1], false)) g.add(a, b, 'rib', { cap: spec.length * 0.5 });
@@ -415,16 +456,27 @@ export function generateBodyMesh(input: BodyFamilySpec): { def: VehicleNodeBeamD
       massFrac: n.weight / totalW, isFixed: n.isFixed || undefined, name: n.name
     };
   });
-  const beams: BeamTemplate[] = g.edges.map(e => {
+  const hoodLatchBeamIds: number[] = [];
+  const hoodHingeBeamIds: number[] = [];
+  const engineMountBeamIds: number[] = [];
+  const beams: BeamTemplate[] = g.edges.map((e, idx) => {
     const p = EDGE_PARAMS[e.kind];
     let yieldDist = p.yieldDist;
+    let breakDist = p.breakDist;
     if (e.kind === 'ring') {
       const isBumper = g.nodes[e.a].group === 'bumper' || g.nodes[e.b].group === 'bumper';
       yieldDist = isBumper ? 0.175 : 0.25;
+    } else if (e.partTag === 'hood_hinge') {
+      // Cowl hood hinges are stronger than the front striker latch so the hood pops & buckles before tearing off
+      yieldDist = p.yieldDist * 1.25;
+      breakDist = p.breakDist * 1.45;
     }
+    if (e.partTag === 'hood') hoodLatchBeamIds.push(idx);
+    else if (e.partTag === 'hood_hinge') hoodHingeBeamIds.push(idx);
+    else if (e.partTag === 'engine_mount') engineMountBeamIds.push(idx);
     return {
       nodeA: e.a, nodeB: e.b, type: p.type, spring: p.spring, damp: p.damp,
-      yieldDist, breakDist: p.breakDist, partTag: e.partTag
+      yieldDist, breakDist, partTag: e.partTag
     };
   });
 
@@ -461,7 +513,11 @@ export function generateBodyMesh(input: BodyFamilySpec): { def: VehicleNodeBeamD
       subframeLeftRL: chassis.RL,
       subframeRightRR: chassis.RR,
       engineNodeId: chassis.eng,
-      chassisCoreNodeId: chassis.core
+      chassisCoreNodeId: chassis.core,
+      cowlNodeId: frame.center,
+      hoodLatchBeamIds,
+      hoodHingeBeamIds,
+      engineMountBeamIds
     }
   };
 

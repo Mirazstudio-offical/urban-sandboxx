@@ -13,6 +13,7 @@ import {
 } from '../vehicleVisuals';
 import { resolveVehicleTruckFrameAndBody } from '../truckChassisVariants';
 import { traceSoftbodyPath, renderSoftbodyStressLines } from '../softbodyVisuals';
+import { renderUnderHoodEngineBay, renderArticulatedHoodAndBlower } from '../engineBayVisuals';
 
 export interface VehiclePreviewCanvasProps {
   carType: CarType | string;
@@ -20,6 +21,9 @@ export interface VehiclePreviewCanvasProps {
   roofColor?: string;
   frameId?: string;
   bodyId?: string;
+  engineId?: string;
+  turboKitId?: string;
+  hoodOpen?: boolean;
   width?: number;
   height?: number;
   className?: string;
@@ -33,6 +37,9 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
   roofColor,
   frameId,
   bodyId,
+  engineId,
+  turboKitId,
+  hoodOpen,
   width = 220,
   height = 140,
   className = '',
@@ -133,6 +140,19 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       isLocked: true,
       ownerId: 'player',
       isParked: true,
+      engineState: (engineId || turboKitId || hoodOpen) ? {
+        engineId,
+        turboKitId,
+        hoodOpen: !!hoodOpen,
+        batteryInstalled: true,
+        batteryPosConnected: true,
+        batteryNegConnected: true,
+        radiatorWater: 100,
+        oilLevel: 100,
+        temperature: 82,
+        engineRunning: false,
+        rpm: 0,
+      } as any : undefined,
       isPlayerControlled: false,
       targetSpeed: 0,
       currentLaneId: null,
@@ -332,11 +352,13 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
 
     if (!isMachinery) {
       renderVehicleGreenhouseAndBodyPanels(vCtx);
+      renderUnderHoodEngineBay(vCtx);
+      renderArticulatedHoodAndBlower(vCtx);
     }
     renderSpecializedVehicleAttachments(vCtx);
 
     ctx.restore();
-  }, [carType, color, roofColor, frameId, bodyId, width, height, showPedestal, angle]);
+  }, [carType, color, roofColor, frameId, bodyId, engineId, turboKitId, hoodOpen, width, height, showPedestal, angle]);
 
   return (
     <canvas

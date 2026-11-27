@@ -10,6 +10,7 @@ import {
   Vehicle
 } from './types';
 import { isMotorcycle, isTractorVehicle, isTrailerVehicle } from './vehicleArchetypes';
+import { resolveEngineBlueprint } from './engineBlueprint';
 import { PX_S_TO_SPEED_KMH } from './vehicleHelpers';
 import { applySoftBodyOccupantTrauma } from './bodySystem';
 import { addPlayerNotification } from './items';
@@ -524,9 +525,15 @@ export function evaluateSoftBodyComponentDamage(
         hoodCrush = Math.max(hoodCrush, pairClearanceCollapse(hn, wsNode) * 1.15);
       }
     }
+    let brokenHoodLatch = 0;
+    let brokenHoodHinge = 0;
     for (const b of beams) {
-      if (b.partTag === 'hood') {
-        hoodCrush = Math.max(hoodCrush, beamDeformation(b, nodes) * 1.25);
+      if (b.partTag === 'hood' || b.partTag === 'hood_hinge') {
+        hoodCrush = Math.max(hoodCrush, beamDeformation(b, nodes) * (b.partTag === 'hood_hinge' ? 1.35 : 1.25));
+        if (b.broken) {
+          if (b.partTag === 'hood') brokenHoodLatch++;
+          else brokenHoodHinge++;
+        }
       }
     }
     if (hoodCrush > base.hoodCrush) {
@@ -535,6 +542,10 @@ export function evaluateSoftBodyComponentDamage(
         dmg.hoodBuckled = true;
         dmg.hoodRaisedAmount = Math.max(finite(dmg.hoodRaisedAmount), clamp((hoodCrush - 0.22) * 1.4, 0.25, 1.0));
       }
+    }
+    if (brokenHoodHinge >= 2 || (brokenHoodLatch >= 1 && brokenHoodHinge >= 1) || hoodCrush >= 0.92) {
+      dmg.hoodDetached = true;
+      dmg.hoodBuckled = true;
     }
   }
 
@@ -668,25 +679,46 @@ export function evaluateSoftBodyComponentDamage(
     radiatorCrush = Math.max(radiatorCrush * 0.6, pairClearanceCollapse(nodes[0], engNode) * 0.9 * bikeFrontGate);
   }
 
-  // --- F. ENGINE BLOCK (directly from engine node, its beams, strain & encroachment) ---
+  // Resolve real selected engine & forced-induction modifier for authentic damage scaling
+  const resolvedPowertrain = resolveEngineBlueprint(car);
+  if (resolvedPowertrain.turboKind === 'single' || resolvedPowertrain.turboKind === 'twin') {
+    // Front-mount intercooler sits directly ahead of radiator core — increases frontal cooling exposure
+    radiatorCrush *= 1.08;
+  }
+
+  // --- F. ENGINE BLOCK (directly from engine node, its engine_mount beams, strain & encroachment) ---
   let engineCrush = 0;
   if (engNode && engId >= 0) {
     let maxEngBeamComp = 0;
     let avgEngBeamComp = 0;
     let engBeamCount = 0;
+    let mountCount = 0;
+    let mountBroken = 0;
+    let mountStrainSum = 0;
     for (let i = 0; i < beams.length; i++) {
       const b = beams[i];
       if (b.nodeA === engId || b.nodeB === engId) {
         const c = beamCompression(b, nodes);
         // Cosmetic bumper latch snapping shouldn't by itself destroy the engine block
-        const weight = b.type === 'latch' ? 0.45 : 1.0;
+        const weight = b.type === 'latch' ? 0.45 : (b.partTag === 'engine_mount' ? 1.08 : 1.0);
         const wc = c * weight;
         if (wc > maxEngBeamComp) maxEngBeamComp = wc;
         avgEngBeamComp += wc;
         engBeamCount++;
+        if (b.partTag === 'engine_mount') {
+          mountCount++;
+          if (b.broken) mountBroken++;
+          mountStrainSum += clamp(b.yieldDist > 0 ? (b.plasticDeform || 0) / b.yieldDist : 0, 0, 1);
+        }
       }
     }
     if (engBeamCount > 0) avgEngBeamComp /= engBeamCount;
+    if (mountCount > 0) {
+      system.engineMountCount = mountCount;
+      system.engineMountBrokenCount = mountBroken;
+      const mountWear = (mountBroken + mountStrainSum * 0.45) / mountCount;
+      system.engineMountHealth = clamp(1 - mountWear, 0, 1);
+    }
 
     const engStrainNorm = finite(engNode.plasticStrain) / 2.15;
     const engCorePlastic = clamp(
@@ -713,15 +745,18 @@ export function evaluateSoftBodyComponentDamage(
       }
     }
 
+    const mountShearPenalty = mountCount > 0 ? (mountBroken / mountCount) * 0.24 : 0;
     const rawEngineCrush = Math.max(
       maxEngBeamComp * 1.15,
       avgEngBeamComp * 1.35,
       engStrainNorm * 0.88,
       engCoreCol * 1.25,
       maxEncroach
-    );
+    ) + mountShearPenalty;
+    // Scale final engine block crush by the real engine block material toughness (cast-iron diesel vs alloy R3)
+    const toughnessDiv = clamp(resolvedPowertrain.effectiveBlockToughness, 0.82, 1.65);
     // Elastic deadzone so hard normal braking or light 10-15 km/h taps do not wear engineHealth
-    engineCrush = Math.max(0, rawEngineCrush - 0.05) * 1.08;
+    engineCrush = (Math.max(0, rawEngineCrush - 0.05) * 1.08) / Math.pow(toughnessDiv, 0.55);
   }
 
   // --- G. OIL PAN (bottom of engine block + front/engine subframe rails) ---

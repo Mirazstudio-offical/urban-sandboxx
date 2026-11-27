@@ -14,6 +14,7 @@
 
 import { CarType, EngineState, FuelType, Vehicle } from './types';
 import { MASTER_VEHICLE_CONFIGS } from './vehicleMasterRegistry';
+import { syncNodeBeamPowertrain } from './nodeBeamRegistry';
 import {
   TruckFrameVariant,
   TruckBodyVariant,
@@ -709,10 +710,13 @@ export function applyPowertrain(veh: Vehicle, forcedPick?: PowertrainPick): void
 
   // Reference pick description for UI
   veh.powertrainLabel = describePowertrain(veh, pick);
+
+  // Sync real engine/turbo/transmission mass & mount bindings into the soft-body mesh
+  syncNodeBeamPowertrain(veh);
 }
 
 function isTrailerLikeEngine(eng: EngineState): boolean {
-  return !eng || (eng.gearRatios.length === 1 && eng.gearRatios[0] === 0 && !eng.hasTransferCase && !eng.engineRunning && eng.currentGear === 0);
+  return !eng || (Array.isArray(eng.gearRatios) && eng.gearRatios.length === 1 && eng.gearRatios[0] === 0 && !eng.hasTransferCase && !eng.engineRunning && eng.currentGear === 0);
 }
 
 export function describePowertrain(veh: Vehicle, pick?: PowertrainPick): string {
