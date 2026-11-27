@@ -23,6 +23,7 @@ import {
   renderCompactSidewalkRoller,
   renderPneumaticRoller
 } from './roadMachineryVisuals';
+import { isRedrawnPassengerCar } from './passengerCarModels';
 import { renderExcavatorEK12 } from './excavatorVisuals';
 import {
   renderMotoIzhJupiter,
@@ -898,6 +899,11 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
   const effectiveType: string = resolvedTruck
     ? (resolvedTruck.body.attachmentCarType || car.type)
     : car.type;
+
+  // All 35 redrawn passenger cars include bumpers, grilles, optics, roof details & CHMSL natively inside passengerCarModels.ts
+  if (!resolvedTruck && isRedrawnPassengerCar(effectiveType)) {
+    return;
+  }
 
   // --- FIRE ENGINE (ПОЖАРНАЯ АВТОЦИСТЕРНА АЦ-40 (130) 63Б / АЦ-5.0 КАМАЗ) ---
   if (effectiveType === 'fire_engine') {

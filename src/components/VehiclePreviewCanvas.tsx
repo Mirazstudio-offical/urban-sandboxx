@@ -14,6 +14,12 @@ import {
 import { resolveVehicleTruckFrameAndBody } from '../truckChassisVariants';
 import { traceSoftbodyPath, renderSoftbodyStressLines } from '../softbodyVisuals';
 import { renderUnderHoodEngineBay, renderArticulatedHoodAndBlower } from '../engineBayVisuals';
+import {
+  isRedrawnPassengerCar,
+  renderPassengerCarChassisLayer,
+  renderPassengerCarUpperLayer,
+  renderPassengerCarWheel
+} from '../passengerCarModels';
 
 export interface VehiclePreviewCanvasProps {
   carType: CarType | string;
@@ -245,9 +251,30 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       nightAlpha: 0.1
     };
 
+    const isRedrawnCar = !resolvedTruck && isRedrawnPassengerCar(dummyCar.type);
+
     if (!isMachinery) {
       if (resolvedTruck) {
         renderConfigurableTruckWheels(vCtx, resolvedTruck);
+      } else if (isRedrawnCar) {
+        const isOffroadTire =
+          dummyCar.type === 'offroad_hardcore' ||
+          dummyCar.type === 'suv_classic_box' ||
+          dummyCar.type === 'pickup' ||
+          dummyCar.type === 'pickup_heavy' ||
+          dummyCar.type === 'suv' ||
+          dummyCar.type === 'suv_luxury' ||
+          dummyCar.type === 'ambulance_suv' ||
+          dummyCar.type === 'wagon_allroad';
+        const tuckedTrackY = halfW - wheelW * 0.55;
+        renderPassengerCarWheel(ctx, rearAxleX, -tuckedTrackY, wheelL, wheelW, 0, isOffroadTire);
+        renderPassengerCarWheel(ctx, rearAxleX, tuckedTrackY, wheelL, wheelW, 0, isOffroadTire);
+        if (dummyCar.type === 'pickup_heavy') {
+          renderPassengerCarWheel(ctx, rearAxleX, -(halfW + 1.4 - wheelW * 0.45), wheelL, wheelW * 0.92, 0, true);
+          renderPassengerCarWheel(ctx, rearAxleX, halfW + 1.4 - wheelW * 0.45, wheelL, wheelW * 0.92, 0, true);
+        }
+        renderPassengerCarWheel(ctx, frontAxleX, -tuckedTrackY, wheelL, wheelW, 0, isOffroadTire);
+        renderPassengerCarWheel(ctx, frontAxleX, tuckedTrackY, wheelL, wheelW, 0, isOffroadTire);
       } else {
         renderFixedWheel(rearAxleX, -trackY);
         renderFixedWheel(rearAxleX, trackY - wheelW);
@@ -280,6 +307,8 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
         ctx.lineWidth = 1.1;
         ctx.strokeRect(cabRearX, -halfW + 0.4, halfL - cabRearX, halfW * 2 - 0.8);
         ctx.restore();
+      } else if (isRedrawnCar) {
+        renderPassengerCarChassisLayer(vCtx, basePoly);
       } else {
         ctx.fillStyle = dummyCar.color;
         ctx.beginPath();
@@ -294,56 +323,58 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
         renderSoftbodyStressLines(ctx, basePoly);
       }
 
-      const hasCustomGrille = dummyCar.type === 'sedan_classic' || dummyCar.type === 'sedan_luxury' || 
-                              dummyCar.type === 'classic_compact' || dummyCar.type === 'retro_bubble' || 
-                              dummyCar.type === 'suv_classic_box' || dummyCar.type === 'van' || 
-                              dummyCar.type === 'van_cargo_old' || dummyCar.type === 'delivery_truck' ||
-                              dummyCar.type === 'van_camper' || dummyCar.type === 'hatch_hot' ||
-                              dummyCar.type === 'police' || dummyCar.type === 'sports' || dummyCar.type === 'supercar' ||
-                              dummyCar.type === 'bus_minibus' || dummyCar.type === 'wagon_allroad' || dummyCar.type === 'wagon_classic' ||
-                              !!resolvedTruck;
-      if (!hasCustomGrille) {
-        const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL - 2, -grilleW / 2, 1.5, grilleW);
-      }
+      if (!isRedrawnCar) {
+        const hasCustomGrille = dummyCar.type === 'sedan_classic' || dummyCar.type === 'sedan_luxury' || 
+                                dummyCar.type === 'classic_compact' || dummyCar.type === 'retro_bubble' || 
+                                dummyCar.type === 'suv_classic_box' || dummyCar.type === 'van' || 
+                                dummyCar.type === 'van_cargo_old' || dummyCar.type === 'delivery_truck' ||
+                                dummyCar.type === 'van_camper' || dummyCar.type === 'hatch_hot' ||
+                                dummyCar.type === 'police' || dummyCar.type === 'sports' || dummyCar.type === 'supercar' ||
+                                dummyCar.type === 'bus_minibus' || dummyCar.type === 'wagon_allroad' || dummyCar.type === 'wagon_classic' ||
+                                !!resolvedTruck;
+        if (!hasCustomGrille) {
+          const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(halfL - 2, -grilleW / 2, 1.5, grilleW);
+        }
 
-      // Headlights
-      const leftLampX = halfL - 3.2;
-      const leftLampY = -halfW + 3.2;
-      const rightLampX = halfL - 3.2;
-      const rightLampY = halfW - 3.2;
+        // Headlights
+        const leftLampX = halfL - 3.2;
+        const leftLampY = -halfW + 3.2;
+        const rightLampX = halfL - 3.2;
+        const rightLampY = halfW - 3.2;
 
-      const drawHeadlight = (lx: number, ly: number) => {
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(lx, ly, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      };
-
-      drawHeadlight(leftLampX, leftLampY);
-      drawHeadlight(rightLampX, rightLampY);
-
-      if (!resolvedTruck) {
-        // Taillights (for configurable trucks, taillights are rendered on the rear frame crossmember)
-        const rearLeftX = -halfL + 2.5;
-        const rearLeftY = -halfW + 3.2;
-        const rearRightX = -halfL + 2.5;
-        const rearRightY = halfW - 3.2;
-
-        const drawTaillight = (rx: number, ry: number) => {
-          ctx.fillStyle = '#dc2626';
-          ctx.fillRect(rx - 1, ry - 1, 2, 2);
+        const drawHeadlight = (lx: number, ly: number) => {
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.arc(lx, ly, 1.8, 0, Math.PI * 2);
+          ctx.fill();
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
           ctx.lineWidth = 0.5;
-          ctx.strokeRect(rx - 1, ry - 1, 2, 2);
+          ctx.stroke();
         };
 
-        drawTaillight(rearLeftX, rearLeftY);
-        drawTaillight(rearRightX, rearRightY);
+        drawHeadlight(leftLampX, leftLampY);
+        drawHeadlight(rightLampX, rightLampY);
+
+        if (!resolvedTruck) {
+          // Taillights (for configurable trucks, taillights are rendered on the rear frame crossmember)
+          const rearLeftX = -halfL + 2.5;
+          const rearLeftY = -halfW + 3.2;
+          const rearRightX = -halfL + 2.5;
+          const rearRightY = halfW - 3.2;
+
+          const drawTaillight = (rx: number, ry: number) => {
+            ctx.fillStyle = '#dc2626';
+            ctx.fillRect(rx - 1, ry - 1, 2, 2);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(rx - 1, ry - 1, 2, 2);
+          };
+
+          drawTaillight(rearLeftX, rearLeftY);
+          drawTaillight(rearRightX, rearRightY);
+        }
       }
     }
 
@@ -351,11 +382,17 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
     (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).fifthWheelAlreadyDrawn = true;
 
     if (!isMachinery) {
-      renderVehicleGreenhouseAndBodyPanels(vCtx);
+      if (isRedrawnCar) {
+        renderPassengerCarUpperLayer(vCtx);
+      } else {
+        renderVehicleGreenhouseAndBodyPanels(vCtx);
+      }
       renderUnderHoodEngineBay(vCtx);
       renderArticulatedHoodAndBlower(vCtx);
     }
-    renderSpecializedVehicleAttachments(vCtx);
+    if (!isRedrawnCar) {
+      renderSpecializedVehicleAttachments(vCtx);
+    }
 
     ctx.restore();
   }, [carType, color, roofColor, frameId, bodyId, engineId, turboKitId, hoodOpen, width, height, showPedestal, angle]);

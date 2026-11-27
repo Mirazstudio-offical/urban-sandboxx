@@ -61,6 +61,12 @@ import {
   shouldRenderUnderHoodEngine
 } from './engineBayVisuals';
 import {
+  isRedrawnPassengerCar,
+  renderPassengerCarChassisLayer,
+  renderPassengerCarUpperLayer,
+  renderPassengerCarWheel
+} from './passengerCarModels';
+import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
   renderBuckledHoodOverlay,
@@ -11153,6 +11159,33 @@ export class GameRenderer {
       } else if (isRoadMachinery(car.type)) {
         // Road machinery (tandem rollers, sidewalk roller, pneumatic roller, asphalt paver)
         // Steel drums and pneumatic roller tires are rendered dynamically in their articulated sections!
+      } else if (isRedrawnPassengerCar(car.type)) {
+        // High-craft tucked vulcanized tires for redrawn passenger cars
+        const rearAxleX = -halfL * 0.65;
+        const isOffroadTire =
+          car.type === 'offroad_hardcore' ||
+          car.type === 'suv_classic_box' ||
+          car.type === 'pickup' ||
+          car.type === 'pickup_heavy' ||
+          car.type === 'suv' ||
+          car.type === 'suv_luxury' ||
+          car.type === 'ambulance_suv' ||
+          car.type === 'wagon_allroad';
+        const tuckedTrackY = halfW - wheelW * 0.55;
+        const [rlx, rly] = deform(rearAxleX, -tuckedTrackY);
+        const [rrx, rry] = deform(rearAxleX, tuckedTrackY);
+        renderPassengerCarWheel(ctx, rlx, rly, wheelL, wheelW, 0, isOffroadTire);
+        renderPassengerCarWheel(ctx, rrx, rry, wheelL, wheelW, 0, isOffroadTire);
+        if (car.type === 'pickup_heavy') {
+          const [dlx, dly] = deform(rearAxleX, -(halfW + 1.4 - wheelW * 0.45));
+          const [drx, dry] = deform(rearAxleX, halfW + 1.4 - wheelW * 0.45);
+          renderPassengerCarWheel(ctx, dlx, dly, wheelL, wheelW * 0.92, 0, true);
+          renderPassengerCarWheel(ctx, drx, dry, wheelL, wheelW * 0.92, 0, true);
+        }
+        const [flx, fly] = deform(frontAxleX, -tuckedTrackY);
+        const [frx, fry] = deform(frontAxleX, tuckedTrackY);
+        renderPassengerCarWheel(ctx, flx, fly, wheelL, wheelW, car.steerAngle, isOffroadTire);
+        renderPassengerCarWheel(ctx, frx, fry, wheelL, wheelW, car.steerAngle, isOffroadTire);
       } else {
         // Standard 4-wheel passenger car
         const rearAxleX = -halfL * 0.65;
@@ -11177,6 +11210,7 @@ export class GameRenderer {
 
       // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
       const resolvedTruckBody = resolveVehicleTruckFrameAndBody(car);
+      const isRedrawnCar = !resolvedTruckBody && isRedrawnPassengerCar(car.type);
       if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
         if (resolvedTruckBody) {
           const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
@@ -11223,6 +11257,30 @@ export class GameRenderer {
           ctx.lineWidth = 1.1;
           ctx.strokeRect(cabRearX, -halfW + 0.4, (halfL - cabRearX) - fc, halfW * 2 - 0.8);
           ctx.restore();
+        } else if (isRedrawnCar) {
+          const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+          renderPassengerCarChassisLayer(
+            {
+              ctx,
+              car,
+              halfL,
+              halfW,
+              fc: effFc,
+              rc: effRc,
+              cabinX: cX,
+              cabinL: cL,
+              cabinW: cW,
+              deform,
+              drawDeformedRect,
+              drawDeformedLine,
+              drawDeformedCircle,
+              nightAlpha,
+              renderLayer: 'chassis',
+              cameraAngle: this.currentParticleCamera.angle,
+            },
+            bodyPoly,
+            polyDvs
+          );
         } else {
           ctx.fillStyle = car.color;
           ctx.beginPath();
@@ -11283,9 +11341,11 @@ export class GameRenderer {
         }
 
         if (!resolvedTruckBody) {
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
-          ctx.lineWidth = 1.2;
-          ctx.stroke();
+          if (!isRedrawnCar) {
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+          }
 
           // Softbody metallic stress highlights and ambient crease shadow lines
           renderSoftbodyStressLines(ctx, bodyPoly, polyDvs);
@@ -11317,11 +11377,13 @@ export class GameRenderer {
 
 
 
-      // 2.5D buckled hood and sagging bumper attachments (skip legacy hood crease when detailed articulated hood renders)
+      // 2.5D buckled hood and sagging bumper attachments (skip legacy hood crease when detailed articulated hood renders; skip programmatic bumpers on redrawn passenger cars)
       if (!shouldRenderUnderHoodEngine(car)) {
         renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW, deform);
       }
-      renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW, deform);
+      if (!isRedrawnCar) {
+        renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW, deform);
+      }
       renderTornBodyLining(ctx, car, bodyPoly, polyDvs);
 
       // 4. Crease Lines & Scratches (now tightly aligned with mesh deformation)
@@ -11374,7 +11436,8 @@ export class GameRenderer {
 
       // (Cabin, roof attachments and heavy utility compartments relocated to renderVehicleCabins)
 
-      // 7. Authentic Forward-Facing Automotive Headlights (Directional optical blocks flush with bodywork)
+      // 7. Authentic Forward-Facing Automotive Headlights (Skipped for redrawn passenger cars whose optics are integrated directly into each car model)
+      if (!isRedrawnCar) {
       const isPlayer = car.isPlayerControlled;
       const hasHeadlightsOn = isPlayer 
         ? car.headlightsOn 
@@ -12088,6 +12151,7 @@ export class GameRenderer {
           }
         }
       }
+      } // end if (!isRedrawnCar)
 
       // 10. Heavy-Duty Realistic Tow Hitch (Фаркоп - только для тракторов, грузовиков и тяжелых пикапов)
       if (canVehicleHaveHitch(car)) {
@@ -12807,8 +12871,13 @@ export class GameRenderer {
         continue;
       }
 
-      // Accurate greenhouse (windshield, roof, side glass, pillars, sedan trunk deck, wagon roof, pickup bed, supercar mid-engine, etc.)
-      renderVehicleGreenhouseAndBodyPanels(vCtx);
+      // Accurate greenhouse (bespoke integrated upper layer for redrawn passenger cars; legacy archetypes for trucks/vans/buses/moto)
+      const isRedrawnUpper = isRedrawnPassengerCar(car.type);
+      if (isRedrawnUpper) {
+        renderPassengerCarUpperLayer(vCtx);
+      } else {
+        renderVehicleGreenhouseAndBodyPanels(vCtx);
+      }
 
       // Hand-crafted under-hood engine bay (driven by real selected engine modifier & soft-body bindings) + articulated/buckled/open hood
       renderUnderHoodEngineBay(vCtx);
@@ -12949,7 +13018,7 @@ export class GameRenderer {
           ctx.restore();
         }
 
-        if (car.wiperAngle !== undefined) {
+        if (!isRedrawnUpper && car.wiperAngle !== undefined) {
           const wx2 = fWsX1 + cabinL * 0.12 * Math.cos(car.wiperAngle);
           const wy2 = cabinL * 0.12 * Math.sin(car.wiperAngle);
           drawDeformedLine(fWsX1, 0, wx2, wy2, '#0f172a', 0.8);
@@ -12960,7 +13029,7 @@ export class GameRenderer {
       // (bare frame & fifth-wheel saddle were already drawn on the lower chassis layer under trailers & cab)
       (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).bareFrameAlreadyDrawn = true;
       (vCtx as unknown as { bareFrameAlreadyDrawn?: boolean; fifthWheelAlreadyDrawn?: boolean }).fifthWheelAlreadyDrawn = true;
-      if (!car.type.startsWith('trailer_') && !car.isTrailer) {
+      if (!isRedrawnUpper && !car.type.startsWith('trailer_') && !car.isTrailer) {
         renderSpecializedVehicleAttachments(vCtx);
       }
 

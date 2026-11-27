@@ -9,6 +9,7 @@ import {
 } from './motorcycleVisuals';
 import { resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
 import { isVehicleHoodExposed } from './engineBayVisuals';
+import { isRedrawnPassengerCar, renderPassengerCarUpperLayer } from './passengerCarModels';
 
 export interface VehicleRenderContext {
   ctx: CanvasRenderingContext2D;
@@ -807,6 +808,12 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
 
   const type = car.type;
   const dmg = car.damage;
+
+  // Redrawn passenger cars use bespoke integrated upper-layer models
+  if (isRedrawnPassengerCar(type)) {
+    renderPassengerCarUpperLayer(vCtx);
+    return;
+  }
 
   // If bus, ambulance box, or trailer, handled separately (trailers have no cabin/greenhouse)
   if (type === 'bus' || type === 'ambulance' || type === 'ambulance_van' || type.startsWith('trailer_') || type === 'trailer_barrel' || type === 'trailer_flatbed_2axle' || type === 'trailer_semi' || car.isTrailer) {
