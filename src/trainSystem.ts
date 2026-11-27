@@ -1,7 +1,8 @@
 import { GameWorld, RollingStockCar, RailwaySignal, TrainSchedule, Vehicle, Player, FluidStain } from './types';
 import { sound } from './audio';
 import { applyVehicleDamageAndDeformation, getAtmosphereState } from './physics';
-import { applyDriverVehicleCrashTrauma, distributeImpactDamage } from './bodySystem';
+import { distributeImpactDamage } from './bodySystem';
+import { registerSoftBodyImpactContext } from './softbodyDamage';
 
 export interface TrainConsist {
   id: string;
@@ -1482,27 +1483,18 @@ export class TrainSystem {
                 veh.speed = Math.hypot(veh.vx, veh.vy);
               }
 
-              // Apply severe deformation & wreck state only if normal impact speed >= 60 px/s (~20 km/h)
+              // Apply severe wreck flags for AI traffic if normal impact speed >= 60 px/s (~20 km/h);
+              // mechanical failures (engine, radiator, oil, fuel tank) and occupant trauma are resolved
+              // directly from the Node-Beam soft-body crush caused by the 250,000 kg train impact below.
               if (normalImpactSpeed >= 60) {
                 veh.aiState = 'wrecked' as any;
                 veh.turnSignal = 'hazard';
                 veh.brakeLightsOn = true;
-                (veh as any).brokenTires = [true, true, true, true];
                 (veh as any).isDerelict = true;
-
-                if (veh.engineState) {
-                  veh.engineState.engineRunning = false;
-                  veh.engineState.isStalled = true;
-                  veh.engineState.radiatorPunctured = true;
-                  veh.engineState.oilPunctured = true;
-                  veh.engineState.engineHealth = 0;
-                  veh.engineState.isSeized = true;
-                  veh.engineState.overheatingSteam = true;
-                }
-                if (veh.fuelSystem) {
-                  veh.fuelSystem.tankPunctured = true;
-                }
               }
+
+              // Register obstacle context before soft-body impact so occupant trauma attributes the train strike
+              registerSoftBodyImpactContext(veh, 'поезд на железнодорожном переезде');
 
               // Deformation proportional to relative impact speed
               const contactX = veh.x - col.normalX * carHalfLen;
@@ -1533,10 +1525,7 @@ export class TrainSystem {
                 }
               }
 
-              // Trauma to player if inside vehicle
-              if (player && (player.isInVehicle && player.currentVehicleId === veh.id || veh.isPlayerControlled)) {
-                applyDriverVehicleCrashTrauma(player, normalImpactSpeed * 1.5, 'сбит поездом на железнодорожном переезде', 1.0, veh);
-              }
+              // Occupant trauma is computed directly from soft-body G-load & cabin intrusion during the impact above.
             }
           }
         }

@@ -1,6 +1,6 @@
 import { GameWorld, GuardrailSegment, Vehicle, Player, Particle } from './types';
 import { applyVehicleDamageAndDeformation } from './physics';
-import { applyDriverVehicleCrashTrauma } from './bodySystem';
+import { registerSoftBodyImpactContext } from './softbodyDamage';
 import { isVehicleDisabledOrCrashed } from './aiTraffic';
 import { sound } from './audio';
 import { normalAndTangential } from './damageModel';
@@ -235,15 +235,13 @@ export class GuardrailPhysics {
         };
       }
 
+      // Register obstacle context for soft-body occupant trauma evaluation
+      registerSoftBodyImpactContext(veh, 'песчаный буфер отбойника');
+
       // Vehicle crumple & damage with HIGH trauma mitigation for occupants.
       // Масса 12000 — «объект жёстко стоит на грунте»: вся мягкость буфера
       // задаётся явным множителем скорости (×0.35), а не фиктивной массой.
       applyVehicleDamageAndDeformation(veh, closestX, closestY, approachParts.normalApproach * 0.35, Math.abs(approachParts.tangential), world, 12000, true);
-
-      // Driver trauma is drastically reduced compared to concrete walls (only 0.10x trauma multiplier)
-      if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-        applyDriverVehicleCrashTrauma(player, approachParts.normalApproach * 0.25, 'песчаный буфер отбойника', 0.10, veh);
-      }
 
       // Play plastic barrel & sand impact sound
       if (rawSpeed > 8) {

@@ -38,6 +38,7 @@ import {
   Search
 } from 'lucide-react';
 import { sound } from '../audio';
+import { createVehicleNodeBeamSystem, syncNodeBeamToVehicle } from '../nodeBeamPhysics';
 import { 
   ITEM_CATALOG,
   isRegisteredItemId,
@@ -2105,6 +2106,12 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
             v.damage.rightHeadlightBroken = false;
             v.damage.leftTaillightBroken = false;
             v.damage.rightTaillightBroken = false;
+            v.damage.hoodDetached = false;
+            v.damage.hoodRaisedAmount = 0;
+            v.damage.wheelRubResistance = 0;
+            v.damage.frameBentAngle = 0;
+            v.damage.nodeBeam = createVehicleNodeBeamSystem(v);
+            syncNodeBeamToVehicle(v.damage.nodeBeam, v);
           }
         }
       },

@@ -3605,7 +3605,7 @@ export function updateAITraffic(
 
     // --- OPTIMIZATION: DESPAWN DISTANT AI TRAFFIC CARS ---
     if (!car.isParked && !isPlayerOrSpecial && !isOwnedOrKeyed && !car.isTrailer) {
-      if (distToPlayer > 1450 || (totalActiveCount > performanceConfig.maxVehicles && distToPlayer > 800)) {
+      if (distSqToPlayer > 1450 * 1450 || (totalActiveCount > performanceConfig.maxVehicles && distSqToPlayer > 800 * 800)) {
         intersectionArbiter.releaseReservation(car.id);
         car.intersectionReservationId = null;
         vehiclesToDespawn.push(car.id);
@@ -4046,7 +4046,7 @@ export function updateAITraffic(
         pedGrid,
         propGrid
       );
-      geminiBatchCandidates.push({ distToPlayer, perception });
+      geminiBatchCandidates.push({ distToPlayer: Math.sqrt(distSqToPlayer), perception });
 
       const decision = geminiTrafficController.getDecision(car.id);
       if (!decision) {
@@ -5168,7 +5168,7 @@ export function updateAITraffic(
       }
 
       // Hard deadlock dissolution ONLY for distant off-screen cars (> 1300 px away from all active observers)
-      if (car.stuckTimer > 8.0 && distToPlayer > 1300 && !(car as any).isFireDispatch && !car.isParked && !isOwnedOrKeyed) {
+      if (car.stuckTimer > 8.0 && distSqToPlayer > 1300 * 1300 && !(car as any).isFireDispatch && !car.isParked && !isOwnedOrKeyed) {
         intersectionArbiter.releaseReservation(car.id);
         car.intersectionReservationId = null;
         vehiclesToDespawn.push(car.id);

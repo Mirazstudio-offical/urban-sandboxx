@@ -39,6 +39,10 @@ import {
   DEFAULT_K_LATCH,
   DEFAULT_C_LATCH
 } from './vehicleMeshConfigs';
+import {
+  evaluateSoftBodyComponentDamage,
+  updateSoftBodyOccupantTrauma
+} from './softbodyDamage';
 
 /**
  * ============================================================================
@@ -1033,7 +1037,8 @@ function breakBeamPart(car: Vehicle, beam: BeamLink): void {
 export function stepNodeBeamSimulation(
   system: NodeBeamStructure,
   dt: number,
-  car: Vehicle
+  car: Vehicle,
+  world?: GameWorld
 ): void {
   const nodes = system.nodes;
   const beams = system.beams;
@@ -1047,7 +1052,12 @@ export function stepNodeBeamSimulation(
   }
 
   const hasContact = !!system.contact;
-  if (system.isSleeping && !hasContact && !system.needsSync) return;
+  if (system.isSleeping && !hasContact && !system.needsSync) {
+    system.lastFrameAx = 0;
+    system.lastFrameAy = 0;
+    updateSoftBodyOccupantTrauma(system, car, dt, world);
+    return;
+  }
 
   system.bodyOmega = Number.isFinite(car.angularVelocity) ? car.angularVelocity : 0;
 
@@ -1055,8 +1065,12 @@ export function stepNodeBeamSimulation(
     const heldPen = system.contact ? system.contact.pen : 0;
     const pen0 = system.contactPen0 ?? heldPen;
     const pen1 = system.contactPen1 ?? heldPen;
+    const curFrameAx = system.frameAx || 0;
+    const curFrameAy = system.frameAy || 0;
+    system.lastFrameAx = curFrameAx;
+    system.lastFrameAy = curFrameAy;
     const maxSpeed = integrateStructure(
-      system, car, dt, pen0, pen1, system.frameAx || 0, system.frameAy || 0
+      system, car, dt, pen0, pen1, curFrameAx, curFrameAy
     );
     system.contactPen0 = undefined;
     system.contactPen1 = undefined;
@@ -1100,16 +1114,21 @@ export function stepNodeBeamSimulation(
         nodes[i].vy = 0;
       }
     }
+  } else {
+    system.lastFrameAx = 0;
+    system.lastFrameAy = 0;
   }
 
-  syncNodeBeamToVehicle(system, car);
+  syncNodeBeamToVehicle(system, car, world);
+  updateSoftBodyOccupantTrauma(system, car, dt, world);
   system.needsSync = !system.isSleeping;
 }
 
 /**
- * Синхронизирует узлы с deformedVertices и агрегатами урона (frontCrumple, leftDent, ...).
+ * Синхронизирует узлы с deformedVertices, агрегатами урона (frontCrumple, leftDent, ...)
+ * и повреждениями всех механических узлов автомобиля (ДВС, КПП, радиатор, подвеска и т.д.).
  */
-function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle): void {
+export function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle, world?: GameWorld): void {
   const nodes = system.nodes;
   // -------------------------------------------------------------------------
   // 4. SYNCHRONIZE BACK TO VEHICLE DAMAGE & DEFORMED VERTICES
@@ -1243,34 +1262,20 @@ function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle): void {
     dmg.leftDent = Math.max(finiteOrZero(dmg.leftDent), 0, ...tracking.leftNodeIds.map(id => nodes[id] ? finiteOrZero(nodes[id].offsetY) : 0));
   } else {
     const leftNode = nodes.reduce((prev, curr) => (curr.origY < prev.origY ? curr : prev), nodes[0]);
-    dmg.leftDent = Math.max(finiteOrZero(dmg.leftDent), 0, -finiteOrZero(leftNode.offsetY));
+    dmg.leftDent = Math.max(finiteOrZero(dmg.leftDent), 0, finiteOrZero(leftNode.offsetY));
   }
 
   if (tracking?.rightNodeIds && tracking.rightNodeIds.length > 0) {
     dmg.rightDent = Math.max(finiteOrZero(dmg.rightDent), 0, ...tracking.rightNodeIds.map(id => nodes[id] ? -finiteOrZero(nodes[id].offsetY) : 0));
   } else {
     const rightNode = nodes.reduce((prev, curr) => (curr.origY > prev.origY ? curr : prev), nodes[0]);
-    dmg.rightDent = Math.max(finiteOrZero(dmg.rightDent), 0, finiteOrZero(rightNode.offsetY));
+    dmg.rightDent = Math.max(finiteOrZero(dmg.rightDent), 0, -finiteOrZero(rightNode.offsetY));
   }
 
-  // Steering drift & frame twist:
-  const flId = tracking?.subframeLeftFL;
-  const frId = tracking?.subframeRightFR;
-  if (flId !== undefined && frId !== undefined && nodes[flId] && nodes[frId]) {
-    const subframeAsym = (finiteOrZero(nodes[flId].offsetX) - finiteOrZero(nodes[frId].offsetX)) * 0.12;
-    dmg.steeringDrift = Number.isFinite(subframeAsym) ? Math.max(-1.0, Math.min(1.0, subframeAsym)) : 0;
-    dmg.frameBentAngle = Number.isFinite(subframeAsym) ? subframeAsym * 0.08 : 0;
-  }
-
-  // Wheel rub resistance: check fender / wheel well nodes
-  const fenderNodes = nodes.filter(n => n.group === 'fender' || n.group === 'quarter');
-  if (fenderNodes.length > 0) {
-    const rubSum = fenderNodes.reduce(
-      (acc, fn) => acc + Math.max(0, Math.hypot(finiteOrZero(fn.offsetX), finiteOrZero(fn.offsetY)) - 3.0),
-      0
-    );
-    dmg.wheelRubResistance = Number.isFinite(rubSum) ? rubSum * 3.5 : 0;
-  }
+  // Derive ALL mechanical & structural component damage (engine, transmission, radiator,
+  // oil pan, fuel tank, suspension, steering drift, wheel rub, lights, glass, hood, fire)
+  // strictly from the live soft-body Node-Beam structure.
+  evaluateSoftBodyComponentDamage(system, car, world);
 }
 
 /**
@@ -1386,43 +1391,9 @@ export function applyNodeBeamImpact(
     }
     system.isSleeping = false;
     system.activeTimer = Math.max(system.activeTimer || 0, 0.3);
-    syncNodeBeamToVehicle(system, car);
+    syncNodeBeamToVehicle(system, car, world);
+    updateSoftBodyOccupantTrauma(system, car, 0.085, world, true);
     system.needsSync = true;
-  }
-
-  // Powertrain and component mechanical damage consequences
-  const eng = car.engineState;
-  const fuel = car.fuelSystem;
-  const dmg = car.damage;
-
-  if (eng && dmg) {
-    // Frontal subframe / engine node compression
-    const frontCrushDepth = dmg.frontCrumple;
-    const energy = strikeEnergy(car.mass || 1400, strikerMass, normalSpeed);
-
-    if (localContactX > halfL * 0.15 && frontCrushDepth > 2.5) {
-      // Radiator puncture
-      if (frontCrushDepth > 3.8 || energy > 18_000_000) {
-        eng.radiatorPunctured = true;
-      }
-      // Engine mechanical shock & health degradation
-      const shockDmg = (frontCrushDepth / (halfL * 0.4)) * 35 + (energy / 60_000_000) * 45;
-      eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - shockDmg);
-      eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - shockDmg * 0.8);
-
-      // Engine stall on heavy crash
-      if (normalSpeed > 55 || energy > 12_000_000) {
-        eng.engineRunning = false;
-        eng.engineRPM = 0;
-      }
-    }
-
-    // Rear / undercarriage fuel tank hit
-    if (localContactX < -halfL * 0.35 && fuel) {
-      if (dmg.rearCrumple > 4.5 || energy > 22_000_000) {
-        fuel.tankPunctured = true;
-      }
-    }
   }
 }
 
@@ -1583,7 +1554,7 @@ export function stepNodeBeamContinuousContact(
   ct.pen = pen1;
   system.isSleeping = false;
 
-  stepNodeBeamSimulation(system, dt, car);
+  stepNodeBeamSimulation(system, dt, car, world);
   // Сообщаем updateVehicleSystems, что за этот кадр шаг уже сделан (иначе dt обрабатывался дважды)
   system.steppedThisTick = true;
 }

@@ -1,5 +1,6 @@
 import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope, ContainerVisualAttributes, CandyPackagingShape, ChocolatePackagingShape, ChocolateShape, ChocolateSize, ChocolateAttributes, GummyCandyShape, GummyCandyAttributes, PelmenShape, PelmenSize, PelmenState, PelmenAttributes, KitchenwareKind, KitchenwareMaterial, KitchenwarePattern, KitchenwareAttributes, PhoneAttributes, HardwareComponentKind, HardwareComponentAttributes, ProduceAttributes, PlantBranchAttributes, MeatAttributes, DoughAttributes, RollingPinAttributes, UnifiedAttributes, UnifiedVisualAttributes, MapShopCatalogEntry } from './types';
 import { sound } from './audio';
+import { createVehicleNodeBeamSystem, syncNodeBeamToVehicle } from './nodeBeamPhysics';
 import {
   getPhoneSpecsForItemId,
   LEGACY_PHONE_PRESETS,
@@ -10850,7 +10851,16 @@ export function useItemOnPlayer(
           veh.damage.windshieldCracked = false;
           veh.damage.rearGlassCracked = false;
           veh.damage.hoodBuckled = false;
+          veh.damage.hoodDetached = false;
+          veh.damage.hoodRaisedAmount = 0;
+          veh.damage.frameBentAngle = 0;
+          veh.damage.leftHeadlightBroken = false;
+          veh.damage.rightHeadlightBroken = false;
+          veh.damage.leftTaillightBroken = false;
+          veh.damage.rightTaillightBroken = false;
           veh.damage.scratches = [];
+          veh.damage.nodeBeam = createVehicleNodeBeamSystem(veh);
+          syncNodeBeamToVehicle(veh.damage.nodeBeam, veh);
           if (!isTrailerVehicle(veh)) {
             veh.damage.engineSmoking = false;
             veh.damage.underHoodSmolder = false;
@@ -12052,7 +12062,16 @@ export function useHandItemOnPlayer(
           veh.damage.windshieldCracked = false;
           veh.damage.rearGlassCracked = false;
           veh.damage.hoodBuckled = false;
+          veh.damage.hoodDetached = false;
+          veh.damage.hoodRaisedAmount = 0;
+          veh.damage.frameBentAngle = 0;
+          veh.damage.leftHeadlightBroken = false;
+          veh.damage.rightHeadlightBroken = false;
+          veh.damage.leftTaillightBroken = false;
+          veh.damage.rightTaillightBroken = false;
           veh.damage.scratches = [];
+          veh.damage.nodeBeam = createVehicleNodeBeamSystem(veh);
+          syncNodeBeamToVehicle(veh.damage.nodeBeam, veh);
           if (!isTrailerVehicle(veh)) {
             veh.damage.engineSmoking = false;
             veh.damage.underHoodSmolder = false;

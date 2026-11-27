@@ -247,109 +247,270 @@ export function distributeImpactDamage(
 }
 
 /**
- * Calculates and applies trauma/injuries to the driver (player) during a vehicle crash
- * based on modern automotive safety standards (Euro NCAP / NHTSA), vehicle class passive protection,
- * cabin structural integrity and accumulated crumple deformation.
+ * Applies anatomically-accurate occupant crash trauma purely from the vehicle's
+ * soft-body Node-Beam telemetry:
+ *  - Real chassis/cabin deceleration G-load (avgG from Δv pulse + peakG from frame/shell reaction)
+ *  - Directional physical intrusion of soft-body nodes into the driver's survival cell
+ *    (front firewall/pedals, driver-side door/B-pillar, passenger-side cross-intrusion, rear header)
+ *  - Live safety-cage structural integrity (beam compression/fracture around the cabin)
+ *  - Open cockpit exposure (motorcycles / cabless vehicles without a safety cage)
  */
-export function applyDriverVehicleCrashTrauma(
+export function applySoftBodyOccupantTrauma(
   player: Player,
-  impactSpeedPx: number,
-  obstacleType: string = 'препятствие',
-  resistanceFactor: number = 1.0,
-  vehicle?: Vehicle
+  vehicle: Vehicle,
+  telemetry: import('./types').SoftBodyOccupantTelemetry
 ) {
   if (!player || !player.needs || player.isInvincible || player.isCleanMode) return;
 
-  const now = Date.now() / 1000;
-  if (player.lastHurtTime && now - player.lastHurtTime < 0.45) {
+  const now = performance.now() / 1000;
+  if (player.lastHurtTime && now - player.lastHurtTime < 0.35) {
     return;
   }
 
-  // Effective impact speed scaled by frangibility/resistance of the obstacle
-  const effectiveSpeedPx = impactSpeedPx * resistanceFactor;
-  const speedKmh = Math.round(effectiveSpeedPx * PX_S_TO_SPEED_KMH);
+  const {
+    peakG,
+    avgG,
+    deltaVKmh,
+    dirLocalX,
+    frontIntrusionDelta,
+    driverSideIntrusionDelta,
+    passengerSideIntrusionDelta,
+    rearIntrusionDelta,
+    totalFrontIntrusion,
+    totalDriverSideIntrusion,
+    cageIntegrity,
+    windshieldJustCracked,
+    isOpenCockpit,
+    obstacleLabel
+  } = telemetry;
 
-  // 1. Determine vehicle class passive safety absorption (Euro NCAP / NHTSA standards)
-  let baseSafetyAbsorption = 0.65; // Default modern sedan (65% absorption)
-  let safetyTag = '[Euro NCAP 5]';
+  // Effective G-load combines sustained crash-pulse deceleration (65%) with peak sharpness (35%).
+  // When a crumple zone is already spent, the same Δv stops faster -> higher peakG -> heavier trauma.
+  const effectiveG = avgG * 0.65 + peakG * 0.35;
 
-  if (vehicle) {
-    const vType = vehicle.type;
-    const isSuvOrPolice = ['suv', 'ambulance_suv', 'police', 'fire_rescue'].includes(vType);
-    const isHeavyTruck = ['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'fire_engine', 'fire_ladder', 'garbage_truck'].includes(vType);
-    const isSports = ['sports', 'muscle'].includes(vType);
-    const isBus = vType === 'bus'|| vType === 'bus_minibus';
+  // Passive restraint threshold (seatbelt + pretensioner + airbag inside an intact safety cage).
+  // Open cockpit vehicles (motorcycles) have no safety cage or belts.
+  const clampedCage = Math.max(0.25, Math.min(1.0, cageIntegrity));
+  const safeG = isOpenCockpit ? 3.5 : (7.2 * (0.45 + 0.55 * clampedCage));
 
-    if (isSuvOrPolice) {
-      baseSafetyAbsorption = 0.75; // Heavy chassis, high seating, multiple airbags & pretensioners
-      safetyTag = '[Рамный кузов/SUV]';
-    } else if (isHeavyTruck) {
-      baseSafetyAbsorption = obstacleType === 'здание'? 0.45 : 0.72; // High mass against cars, stiff cab against walls
-      safetyTag = '[Силовой каркас тягача]';
-    } else if (isSports) {
-      baseSafetyAbsorption = 0.50; // Carbon/steel monocoque, stiffer G-forces
-      safetyTag = '[Спорткар / Жесткий кузов]';
-    } else if (isBus) {
-      baseSafetyAbsorption = 0.60;
-      safetyTag = '[Автобус]';
-    }
+  const excessG = Math.max(0, effectiveG - safeG);
+  const gTrauma = excessG * (isOpenCockpit ? 3.1 : (1.55 / Math.max(0.38, clampedCage)));
+
+  // Direct mechanical intrusion trauma from soft-body nodes crushing into driver survival cell
+  const frontCrushTrauma = Math.max(0, frontIntrusionDelta) * 95;
+  const driverSideCrushTrauma = Math.max(0, driverSideIntrusionDelta) * 115;
+  const passengerSideCrushTrauma = Math.max(0, passengerSideIntrusionDelta - 0.30) * 65;
+  const rearCrushTrauma = Math.max(0, rearIntrusionDelta) * 75;
+
+  const totalForce =
+    gTrauma +
+    frontCrushTrauma * 0.85 +
+    driverSideCrushTrauma * 0.95 +
+    passengerSideCrushTrauma * 0.60 +
+    rearCrushTrauma * 0.70 +
+    (windshieldJustCracked && effectiveG > safeG ? 6 : 0);
+
+  // Below threshold: crumple zone + seatbelt absorbed the bump cleanly
+  if (totalForce < 3.5) {
+    return;
   }
-
-  // 2. Cabin structural integrity & accumulated crumple damage
-  let damagePenalty = 1.0;
-  let isCabinCompromised = false;
-  let isSideImpact = false;
-
-  if (vehicle && vehicle.damage) {
-    const dmg = vehicle.damage;
-    // Front crumple spent or windshield cracked -> airbags deployed, engine pushed back
-    if ((dmg.frontCrumple && dmg.frontCrumple > 7) || dmg.windshieldCracked) {
-      damagePenalty += 0.65;
-      isCabinCompromised = true;
-    }
-    // Driver side door crushed -> direct mechanical force to driver body
-    if ((dmg.leftDent && dmg.leftDent > 2.5) || (dmg.frontLeftDent && dmg.frontLeftDent > 3.5)) {
-      damagePenalty += 0.50;
-      isSideImpact = true;
-    }
-  }
-
-  // Net safety protection ratio
-  const netProtection = Math.max(0.12, baseSafetyAbsorption / damagePenalty);
-
-  // Minimum safe threshold: modern pretensioners & crumple zone absorb taps up to safe limit
-  const safeThresholdKmh = Math.round(15 * (baseSafetyAbsorption / 0.65));
-  if (speedKmh < safeThresholdKmh) return;
 
   player.lastHurtTime = now;
+  if (!player.bodyState) {
+    player.bodyState = createDefaultBodyState();
+  }
+  const bs = player.bodyState;
 
-  // Kinetic force transferred to driver cabin after passive safety absorption & structural penalty
-  const netEnergyTransferred = (1.0 - netProtection);
-  const driverImpactForce = Math.max(0, (speedKmh - safeThresholdKmh) * 1.3 * netEnergyTransferred * damagePenalty);
+  // Visual / audio trauma feedback
+  if (totalForce > 16) {
+    bs.impactFlashTimer = Math.min(1.6, 0.35 + totalForce * 0.015);
+    if (totalForce > 34) {
+      bs.tinnitusTimer = Math.min(6.0, 1.4 + totalForce * 0.05);
+      sound.playAlert();
+    }
+  }
 
-  // Apply body state trauma to driver
-  distributeImpactDamage(player, driverImpactForce, 0, true);
+  // Health, traumatic shock, panic
+  const directHpLoss = Math.min(95, Math.round(totalForce * 0.75));
+  player.needs.health = Math.max(1, player.needs.health - directHpLoss);
+  bs.shockLevel = Math.min(100, (bs.shockLevel || 0) + totalForce * 1.15);
+  bs.panicLevel = Math.min(100, (bs.panicLevel || 0) + totalForce * 1.65);
+
+  const shouldFaint =
+    (totalForce > 48 && Math.random() < 0.22) ||
+    totalForce > 72 ||
+    (bs.shockLevel > 88 && Math.random() < 0.4);
+  if (shouldFaint) {
+    player.isFainting = true;
+    player.faintTimer = Math.min(10, Math.max(3, Math.round(totalForce * 0.08)));
+    bs.impactFlashTimer = 2.0;
+    bs.tinnitusTimer = 3.5;
+    sound.playTinnitus(3.5);
+    addPlayerNotification(
+      player,
+      `Потеря сознания от перегрузки (${Math.round(effectiveG)}G, ${Math.round(player.faintTimer)} с)`,
+      'warning'
+    );
+  }
+
+  // --- ANATOMICAL LIMB INJURY DISTRIBUTION FROM SOFT-BODY INTRUSION & G-VECTOR ---
+  const isRearEnd = dirLocalX > 0.45 && frontCrushTrauma < 5;
+
+  // 1. LEGS: Driven primarily by frontal firewall/pedal-box intrusion, driver-side sill crush, or open cockpit impact
+  const leftLegLoad =
+    frontCrushTrauma * 1.05 +
+    driverSideCrushTrauma * 0.85 +
+    (isOpenCockpit ? gTrauma * 0.75 : gTrauma * 0.12);
+  const rightLegLoad =
+    frontCrushTrauma * 0.95 +
+    passengerSideCrushTrauma * 0.65 +
+    (isOpenCockpit ? gTrauma * 0.65 : gTrauma * 0.10);
+
+  if (leftLegLoad >= 34) {
+    addInjuryToPart(bs, 'leftLeg', 'fracture', Math.min(100, leftLegLoad));
+    if (leftLegLoad >= 48) {
+      addInjuryToPart(bs, 'leftLeg', 'bleeding', Math.min(85, leftLegLoad * 0.65));
+    }
+  } else if (leftLegLoad >= 18) {
+    addInjuryToPart(bs, 'leftLeg', 'sprain', leftLegLoad);
+  } else if (leftLegLoad >= 8) {
+    addInjuryToPart(bs, 'leftLeg', 'bruise', leftLegLoad);
+  }
+
+  if (rightLegLoad >= 38) {
+    addInjuryToPart(bs, 'rightLeg', 'fracture', Math.min(100, rightLegLoad));
+    if (rightLegLoad >= 54) {
+      addInjuryToPart(bs, 'rightLeg', 'bleeding', Math.min(85, rightLegLoad * 0.6));
+    }
+  } else if (rightLegLoad >= 20) {
+    addInjuryToPart(bs, 'rightLeg', 'sprain', rightLegLoad);
+  } else if (rightLegLoad >= 9) {
+    addInjuryToPart(bs, 'rightLeg', 'bruise', rightLegLoad);
+  }
+
+  // 2. TORSO: Seatbelt/steering wheel deceleration + direct driver-side door/B-pillar rib crush
+  const torsoLoad =
+    gTrauma * 0.72 +
+    driverSideCrushTrauma * 1.0 +
+    frontCrushTrauma * 0.65 +
+    passengerSideCrushTrauma * 0.45 +
+    rearCrushTrauma * 0.45;
+  if (torsoLoad >= 10) {
+    addInjuryToPart(bs, 'torso', 'bruise', Math.min(100, torsoLoad));
+  }
+  if (torsoLoad >= 36) {
+    addInjuryToPart(bs, 'torso', 'fracture', Math.min(100, torsoLoad * 0.85)); // Broken ribs
+    if (torsoLoad >= 50) {
+      addInjuryToPart(bs, 'torso', 'bleeding', Math.min(85, torsoLoad * 0.55));
+    }
+  } else if (torsoLoad >= 20) {
+    addInjuryToPart(bs, 'torso', 'abrasion', torsoLoad * 0.8);
+  }
+
+  // 3. ARMS: Driver-side intrusion directly crushes left arm; steering wheel recoil loads both arms
+  const leftArmLoad =
+    driverSideCrushTrauma * 1.05 +
+    frontCrushTrauma * 0.35 +
+    gTrauma * (isOpenCockpit ? 0.65 : 0.32);
+  const rightArmLoad =
+    passengerSideCrushTrauma * 0.90 +
+    frontCrushTrauma * 0.30 +
+    gTrauma * (isOpenCockpit ? 0.60 : 0.28);
+
+  if (leftArmLoad >= 30) {
+    addInjuryToPart(bs, 'leftArm', 'fracture', Math.min(100, leftArmLoad));
+  } else if (leftArmLoad >= 14) {
+    addInjuryToPart(bs, 'leftArm', 'bruise', leftArmLoad);
+  }
+  if (rightArmLoad >= 34) {
+    addInjuryToPart(bs, 'rightArm', 'fracture', Math.min(100, rightArmLoad));
+  } else if (rightArmLoad >= 16) {
+    addInjuryToPart(bs, 'rightArm', 'abrasion', rightArmLoad);
+  }
+
+  // 4. HEAD: Concussion / whiplash (amplified on rear-end) + B-pillar / windshield strike
+  const whiplashMult = isRearEnd ? 1.25 : 1.0;
+  const headLoad =
+    gTrauma * 0.52 * whiplashMult +
+    driverSideCrushTrauma * 0.78 +
+    frontCrushTrauma * 0.48 +
+    rearCrushTrauma * 0.65 +
+    (windshieldJustCracked ? 10 : 0);
+
+  if (headLoad >= 15) {
+    addInjuryToPart(bs, 'head', 'bruise', Math.min(100, headLoad));
+    if (headLoad >= 32 || (windshieldJustCracked && headLoad >= 22)) {
+      addInjuryToPart(bs, 'head', 'bleeding', Math.min(90, headLoad * 0.72));
+    }
+  }
+
   sound.playHurt();
+  sound.playGroan();
 
-  // Speed & Safety calibrated notifications
-  if (speedKmh < 35) {
-    addPlayerNotification(player, `${safetyTag} Удар о ${obstacleType} (${speedKmh} км/ч). Ремень и подушка уберегли от травм.`, 'warning');
-  } else if (speedKmh < 65) {
-    if (isCabinCompromised) {
-      addPlayerNotification(player, `[Деформация салона] ДТП на ${speedKmh} км/ч! Повторный удар по исчерпанной зоне деформации!`, 'warning');
-    } else if (isSideImpact) {
-      addPlayerNotification(player, `[Боковой удар] Удар в стойку двери на ${speedKmh} км/ч! Ушиб грудной клетки!`, 'warning');
-    } else {
-      addPlayerNotification(player, `${safetyTag} Столкновение (${speedKmh} км/ч)! Сработали подушки безопасности и преднатяжители ремней!`, 'warning');
-    }
-  } else if (speedKmh < 95) {
-    if (isCabinCompromised) {
-      addPlayerNotification(player, `[Деформация салона] Тяжелая авария на ${speedKmh} км/ч! Смещение педального узла и рулевой колонки!`, 'warning');
-    } else {
-      addPlayerNotification(player, `Тяжелое ДТП (${speedKmh} км/ч)! Перегрузка >15G, травматический шок и переломы!`, 'warning');
-    }
+  // Soft-body-accurate HUD diagnostics message
+  const gText = `${Math.round(effectiveG)}G`;
+  const dvText = `${Math.round(deltaVKmh)} км/ч`;
+  const obsSuffix = obstacleLabel ? ` (${obstacleLabel})` : '';
+
+  if (isOpenCockpit) {
+    addPlayerNotification(
+      player,
+      `Удар на открытой технике${obsSuffix}: перегрузка ${gText}, потеря скорости ${dvText}`,
+      'warning'
+    );
+  } else if (driverSideIntrusionDelta >= 0.14 || totalDriverSideIntrusion >= 0.35) {
+    addPlayerNotification(
+      player,
+      `Боковое смятие двери водителя${obsSuffix}: перегрузка ${gText}, травма левого бока`,
+      'warning'
+    );
+  } else if (frontIntrusionDelta >= 0.15 || totalFrontIntrusion >= 0.35) {
+    addPlayerNotification(
+      player,
+      `Смещение моторного щита и педального узла${obsSuffix}: перегрузка ${gText}, зажатие ног`,
+      'warning'
+    );
+  } else if (isRearEnd) {
+    addPlayerNotification(
+      player,
+      `Удар сзади${obsSuffix}: хлыстовая нагрузка ${gText} (Δv ${dvText})`,
+      'warning'
+    );
+  } else if (clampedCage < 0.75) {
+    addPlayerNotification(
+      player,
+      `Нарушение силового каркаса салона${obsSuffix}: перегрузка ${gText} (Δv ${dvText})`,
+      'warning'
+    );
+  } else if (totalForce < 16) {
+    addPlayerNotification(
+      player,
+      `Зона деформации и ремень погасили удар${obsSuffix} (${gText}, Δv ${dvText})`,
+      'warning'
+    );
   } else {
-    addPlayerNotification(player, `[Перегрузка >25G] Катастрофический таран на ${speedKmh} км/ч! Разрушение силового каркаса и потеря сознания!`, 'warning');
+    addPlayerNotification(
+      player,
+      `Сильная перегрузка в салоне${obsSuffix}: ${gText} (Δv ${dvText})`,
+      'warning'
+    );
+  }
+}
+
+/**
+ * Legacy entry point retained for backwards compatibility:
+ * records obstacle context on the vehicle's soft-body structure so occupant trauma
+ * is computed strictly from soft-body deceleration and cabin intrusion.
+ */
+export function applyDriverVehicleCrashTrauma(
+  _player: Player,
+  _impactSpeedPx: number,
+  obstacleType: string = 'препятствие',
+  _resistanceFactor: number = 1.0,
+  vehicle?: Vehicle
+) {
+  if (vehicle?.damage?.nodeBeam) {
+    vehicle.damage.nodeBeam.lastImpactObstacle = obstacleType;
   }
 }
 

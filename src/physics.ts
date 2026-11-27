@@ -11,7 +11,7 @@ import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
 import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight } from './items';
 import { defaultBodyState } from './sensations';
-import { updateBodySystem, distributeImpactDamage, applyDriverVehicleCrashTrauma, addInjuryToPart } from './bodySystem';
+import { updateBodySystem, distributeImpactDamage, addInjuryToPart } from './bodySystem';
 import { updateMedicineSystem } from './medicineSystem';
 import { updateWorldItemsThermodynamics } from './itemThermalSystem';
 import { tickActiveStovesInBackground, tickActiveAppliancesInBackground } from './furnitureStorageSystem';
@@ -47,6 +47,7 @@ import {
   stepNodeBeamContinuousContact,
   advanceCrashStroke
 } from './nodeBeamPhysics';
+import { registerSoftBodyImpactContext } from './softbodyDamage';
 
 export { isWorldFreezing };
 
@@ -2859,360 +2860,11 @@ export function applyVehicleDamageAndDeformation(
 
   const isTrailer = isTrailerVehicle(car);
 
-  // 2. Structural crumple & component damage logic (Radiator, Oil pan, Fuel tank, Suspension, Engine & Transmission)
-  // Глубина деформации направления: energy / F_zone, ограничена зоной + кабиной
-  // (см. crushFromEnergy). Масса ударителя уже учтена в энергии, поэтому
-  // отдельные множители sqrt(reducedMassRatio) здесь больше не нужны.
-
-  if (normX > 0.20 && impactKmh > 8.0) {
-    // --- FRONTAL COLLISION ---
-    // maxFrontCrush = полный ход (зона деформации + вмятина кабины)
-    const maxFrontCrush = crush.totalCapPx;
-    const zoneFront = Math.max(0.001, crush.zoneLengthPx);
-    dmg.frontCrumple = Math.min(maxFrontCrush, dmg.frontCrumple + crush.depthPx);
-
-    if (!isTrailer) {
-      // Mechanical engine and transmission shock / crushing
-      // (fill = доля исчерпанной зоны деформации, > 1 = деформация пошла в кабину)
-      const frontFill = dmg.frontCrumple / zoneFront;
-      const engShock = severity * (isExtremeStriker ? 80 : 35) + frontFill * 25;
-      eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - engShock);
-
-      const transShock = severity * (isExtremeStriker ? 70 : 28) + frontFill * 20;
-      eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - transShock);
-
-      // --- IMMEDIATE ENGINE STALL ON IMPACT ---
-      // Transmission jerk / rotational flywheel shock / inertia fuel safety cutoff
-      if (impactKmh > 16.0 || severity > 0.12 || isExtremeStriker) {
-        eng.engineRunning = false;
-        eng.engineRPM = 0;
-      }
-
-      // Radiator puncture (starts rapid coolant loss & overheating)
-      if (severity > 0.25 || dmg.frontCrumple > 2.0 || isExtremeStriker) {
-        eng.radiatorPunctured = true;
-      }
-
-      // Oil pan puncture (starts oil loss, knocking, then seizure)
-      if (severity > 0.40 || dmg.frontCrumple > 3.8 || isExtremeStriker) {
-        eng.oilPunctured = true;
-      }
-
-      // Engine knock from internal mechanical damage
-      if (eng.engineHealth <= 50 || severity > 0.42 || isExtremeStriker) {
-        eng.engineKnocking = true;
-      }
-
-      // Battery disconnect / dead starter / severe engine bay smash
-      if (eng.engineHealth <= 30 || severity > 0.45 || dmg.frontCrumple > 4.2 || isExtremeStriker) {
-        eng.starterWorking = false;
-        eng.engineRunning = false;
-        eng.engineRPM = 0;
-      }
-
-      // Complete engine block seizure
-      if (eng.engineHealth <= 15 || severity > 0.55 || dmg.frontCrumple > 5.5 || isExtremeStriker) {
-        eng.starterWorking = false;
-        eng.engineRunning = false;
-        eng.isSeized = true;
-        eng.engineRPM = 0;
-      }
-
-      // Transmission jamming / locking up
-      if (eng.transmissionHealth <= 20 || (severity > 0.50 && Math.random() < 0.75) || isExtremeStriker) {
-        eng.transmissionJammed = true;
-      }
-    }
-
-    if (normY < -0.22) {
-      dmg.frontLeftDent = Math.min(zoneFront * 0.85, dmg.frontLeftDent + crush.depthPx * 0.85);
-      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.85);
-      dmg.steeringDrift = Math.max(-1.0, dmg.steeringDrift - severity * 0.7);
-      dmg.wheelRubResistance += severity * 18;
-      if (severity > 0.30 || isExtremeStriker) dmg.leftHeadlightBroken = true;
-    } else if (normY > 0.22) {
-      dmg.frontRightDent = Math.min(zoneFront * 0.85, dmg.frontRightDent + crush.depthPx * 0.85);
-      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.85);
-      dmg.steeringDrift = Math.min(1.0, dmg.steeringDrift + severity * 0.7);
-      dmg.wheelRubResistance += severity * 18;
-      if (severity > 0.30 || isExtremeStriker) dmg.rightHeadlightBroken = true;
-    } else {
-      dmg.frontLeftDent = Math.min(zoneFront * 0.65, dmg.frontLeftDent + crush.depthPx * 0.6);
-      dmg.frontRightDent = Math.min(zoneFront * 0.65, dmg.frontRightDent + crush.depthPx * 0.6);
-      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.6);
-      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.6);
-      dmg.wheelRubResistance += severity * 14;
-      if (severity > 0.38 || isExtremeStriker) {
-        dmg.leftHeadlightBroken = true;
-        dmg.rightHeadlightBroken = true;
-      }
-    }
-
-    if (!isTrailer) {
-      if (severity > 0.45 || dmg.frontCrumple > 5.0 || isExtremeStriker) {
-        dmg.hoodBuckled = true;
-      }
-    }
-    if (severity > 0.50 || dmg.frontCrumple > 6.0 || isExtremeStriker) {
-      dmg.windshieldCracked = true;
-    }
-  } else if (normX < -0.25 && impactKmh > 8.0) {
-    // --- REAR IMPACT ---
-    const maxRearCrush = crush.totalCapPx;
-    const zoneRear = Math.max(0.001, crush.zoneLengthPx);
-    dmg.rearCrumple = Math.min(maxRearCrush, dmg.rearCrumple + crush.depthPx);
-
-    if (!isTrailer) {
-      // Rear fuel tank puncture threshold
-      const isPlayerInvolved = car.isPlayerControlled || ((world as any).player && (world as any).player.inVehicleId === car.id);
-      if (isPlayerInvolved || isExtremeStriker) {
-        if (severity > 0.55 || dmg.rearCrumple > 4.5 || isExtremeStriker) {
-          fuel.tankPunctured = true;
-        }
-      } else {
-        if (severity > 0.85 || dmg.rearCrumple > 9.0) {
-          fuel.tankPunctured = true;
-        }
-      }
-
-      // Rear impacts can shock transmission driveshaft and differential
-      const rearTransShock = severity * 22 + (dmg.rearCrumple / zoneRear) * 15;
-      eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - rearTransShock);
-      if (eng.transmissionHealth <= 15 || (severity > 0.80 && Math.random() < 0.45) || isExtremeStriker) {
-        eng.transmissionJammed = true;
-      }
-    }
-
-    if (car.fluidTank && (severity > 0.40 || dmg.rearCrumple > 3.8 || isExtremeStriker)) {
-      car.fluidTank.isPunctured = true;
-    }
-
-    if (normY < -0.22) {
-      dmg.rearLeftDent = Math.min(zoneRear * 0.85, dmg.rearLeftDent + crush.depthPx * 0.85);
-      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.85);
-      if (severity > 0.38 || isExtremeStriker) dmg.leftTaillightBroken = true;
-    } else if (normY > 0.22) {
-      dmg.rearRightDent = Math.min(zoneRear * 0.85, dmg.rearRightDent + crush.depthPx * 0.85);
-      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.85);
-      if (severity > 0.38 || isExtremeStriker) dmg.rightTaillightBroken = true;
-    } else {
-      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.6);
-      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.6);
-      if (severity > 0.48 || isExtremeStriker) {
-        dmg.leftTaillightBroken = true;
-        dmg.rightTaillightBroken = true;
-      }
-    }
-
-    if (severity > 0.65 || isExtremeStriker) {
-      dmg.rearGlassCracked = true;
-    }
-  } else if (impactKmh > 8.0) {
-    // --- SIDE IMPACT / T-BONE ---
-    // Глубина бока считается той же моделью E/F, но с силой дверной структуры
-    // (MEAN_FORCE.side в damageModel.ts) — направление различается только
-    // физикой зоны, а не эмпирическими коэффициентами.
-    const maxSideDent = crush.totalCapPx;
-    const sideDent = crush.depthPx;
-
-    if (normY < 0) {
-      dmg.leftDent = Math.min(maxSideDent, dmg.leftDent + sideDent);
-      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.75);
-      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.75);
-      dmg.steeringDrift = Math.max(-1.0, dmg.steeringDrift - severity * 0.55);
-    } else {
-      dmg.rightDent = Math.min(maxSideDent, dmg.rightDent + sideDent);
-      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.75);
-      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.75);
-      dmg.steeringDrift = Math.min(1.0, dmg.steeringDrift + severity * 0.55);
-    }
-    dmg.wheelRubResistance += severity * 16;
-
-    if (car.fluidTank && (severity > 0.42 || dmg.leftDent > 2.5 || dmg.rightDent > 2.5 || isExtremeStriker)) {
-      car.fluidTank.isPunctured = true;
-    }
-
-    if (!isTrailer) {
-      if (impactKmh > 20.0 || severity > 0.16 || isExtremeStriker) {
-        eng.engineRunning = false;
-        eng.engineRPM = 0;
-      }
-
-      if (severity > 0.35 || isExtremeStriker) {
-        eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - severity * (isExtremeStriker ? 48 : 22));
-        eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - severity * (isExtremeStriker ? 44 : 18));
-        if (eng.transmissionHealth <= 20 || (severity > 0.55 && Math.random() < 0.55) || isExtremeStriker) {
-          eng.transmissionJammed = true;
-        }
-        if (eng.engineHealth <= 20 || (severity > 0.60 && Math.random() < 0.50) || isExtremeStriker) {
-          eng.isSeized = true;
-          eng.engineRunning = false;
-          eng.starterWorking = false;
-          eng.engineRPM = 0;
-        }
-      }
-    }
-    if (severity > 0.48 || isExtremeStriker) {
-      dmg.windshieldCracked = true;
-      dmg.rearGlassCracked = true;
-    }
-    if (!isTrailer) {
-      if (severity > 0.52 || isExtremeStriker) {
-        fuel.tankPunctured = true;
-      }
-    }
-  }
-
-  // 3. Engine smoke & differentiated fire ignition conditions (Frontal Engine Fire vs. Rear Fuel Tank Fire)
-  if (!isTrailer) {
-    if (eng.radiatorPunctured || eng.oilPunctured || eng.overheatingSteam) {
-      dmg.engineSmoking = true;
-      if (eng.radiatorPunctured || eng.overheatingSteam) {
-        if (!dmg.underHoodSteam || dmg.underHoodSteam === 'none') {
-          dmg.underHoodSteam = 'thin';
-        }
-      }
-      if (eng.oilPunctured) {
-        if (!dmg.underHoodSmoke || dmg.underHoodSmoke === 'none') {
-          dmg.underHoodSmoke = 'oil_blue';
-        }
-      }
-    }
-    const isEngineHot = (eng.temperature ?? 20) > 85;
-
-    if (normX > 0.15 && impactSpeed > 10) {
-      const isFrontFuelRailBroken = (dmg.frontCrumple ?? 0) > 4.5 || severity > 0.55;
-      if (isFrontFuelRailBroken) {
-        fuel.fuelRailBroken = true;
-      }
-
-      // Detailed collision probability calculation (Kmh based)
-      // FIX: corrected multiplier to convert impactSpeed (px/s) to actual km/h
-      const impactKmh = impactSpeed * PX_S_TO_SPEED_KMH;
-      if (!dmg.underHoodSteam) dmg.underHoodSteam = 'none';
-      if (!dmg.underHoodSmoke) dmg.underHoodSmoke = 'none';
-
-      if (impactKmh >= 25 && impactKmh <= 55) {
-        // Легкий удар (25–55 км/ч):
-        // Шанс пара: 15% (если радиатор поврежден или горячий).
-        if ((eng.radiatorPunctured || isEngineHot) && Math.random() < 0.15) {
-          dmg.underHoodSteam = 'thin';
-          dmg.engineSmoking = true;
-        }
-      } else if (impactKmh > 55 && impactKmh <= 95) {
-        // Средний удар (55–95 км/ч):
-        // Шанс пара: 45%.
-        // Шанс сизого масляного дыма: 10%.
-        if (Math.random() < 0.45) {
-          dmg.underHoodSteam = Math.random() < 0.35 ? 'dense': 'thin';
-          dmg.engineSmoking = true;
-        }
-        if (Math.random() < 0.10) {
-          dmg.underHoodSmoke = 'oil_blue';
-          dmg.engineSmoking = true;
-        }
-      } else if (impactKmh > 95 && impactKmh <= 160) {
-        // Тяжелый удар (95–160 км/ч):
-        // Шанс пара: 70%.
-        // Шанс дыма: 35%.
-        // Шанс возгорания: 5%.
-        if (Math.random() < 0.30) {
-          dmg.underHoodSteam = 'geyser';
-          dmg.engineSmoking = true;
-        } else if (Math.random() < 0.70) {
-          dmg.underHoodSteam = 'dense';
-          dmg.engineSmoking = true;
-        }
-        
-        if (Math.random() < 0.35) {
-          dmg.underHoodSmoke = 'oil_gray_wiring_black';
-          dmg.engineSmoking = true;
-        }
-        const isPlayerCarInvolved = car.isPlayerControlled || ((world as any).player && (world as any).player.inVehicleId === car.id);
-        if (isPlayerCarInvolved && Math.random() < 0.05 && !dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
-          dmg.fireOrigin = 'front';
-          dmg.underHoodSmolder = true;
-          dmg.fireTimer = 0;
-          dmg.engineSmoking = true;
-          dmg.engineFire = false;
-          dmg.fuelTankFire = false;
-          dmg.cabinFire = false;
-          dmg.fireProgress = 0;
-          dmg.fireIntensity = 0;
-          dmg.underHoodSmoke = 'oil_gray_wiring_black';
-          if (car.isPlayerControlled && (world as any).player) {
-            addPlayerNotification((world as any).player, 'Из-под капота повалил едкий серый дым! Повреждена топливная рампа, тление в моторном отсеке!', 'warning');
-          }
-        }
-      } else if (impactKmh > 160) {
-        // Катастрофический / Эпический удар (160+ км/ч):
-        // Огромная кинетическая энергия. Почти гарантированный сильный огонь и мощный пар!
-        dmg.underHoodSteam = 'geyser';
-        dmg.underHoodSmoke = 'oil_gray_wiring_black';
-        dmg.engineSmoking = true;
-
-        if (!dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
-          if (Math.random() < 0.75) {
-            dmg.fireOrigin = 'front';
-            dmg.engineFire = true; // Сразу открытый сильный огонь под капотом!
-            dmg.fireTimer = 5.0; // Сразу запущен процесс сильного горения
-            dmg.fireProgress = 0.20;
-            dmg.fireIntensity = 0.45;
-            if (car.isPlayerControlled && (world as any).player) {
-              addPlayerNotification((world as any).player, 'КАТАСТРОФИЧЕСКОЕ СТОЛКНОВЕНИЕ! Моторный отсек мгновенно вспыхнул от колоссального удара!', 'warning');
-            }
-          }
-        }
-      }
-    }
-
-    if (!dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
-      // Check REAR or TANK AREA collision ignition (Fuel Tank / Puddle fire)
-      // Occurs when the rear or side near the fuel tank is crushed:
-      // Tank / filler neck punctures, gasoline leaks and flashes from metal friction sparks or hot exhaust
-      if (normX <= 0.15 && fuel.tankPunctured) {
-        const isPlayerInvolved = car.isPlayerControlled || ((world as any).player && (world as any).player.inVehicleId === car.id);
-        const minIgnitionImpactSpeed = isPlayerInvolved ? 35 : 75;
-        const minIgnitionSeverity = isPlayerInvolved ? 0.45 : 0.85;
-        const hasIgnitionSource = (scrapeSpeed > 24 || impactSpeed > minIgnitionImpactSpeed || severity > minIgnitionSeverity || (isEngineHot && severity > 0.65));
-        if (hasIgnitionSource) {
-          // AI background traffic collisions do not erupt into catastrophic explosions from minor bumps
-          const ignitionChance = isPlayerInvolved ? (severity < 0.35 ? 0.005 : (0.01 + (severity - 0.35) * 0.65)) : (severity > 0.88 ? 0.08 : 0);
-          if (Math.random() < ignitionChance) {
-          dmg.fireOrigin = 'rear';
-          dmg.fuelTankFire = true;
-          dmg.fireTimer = 0;
-          dmg.engineSmoking = false; // Engine at the front is fine!
-          dmg.underHoodSmolder = false;
-          dmg.engineFire = false;
-          dmg.cabinFire = false;
-          dmg.fireProgress = 0.15;
-          dmg.fireIntensity = 0.6;
-          dmg.groundPuddleIgnited = true;
-
-          // Immediately spill & ignite fuel under the rear of the car
-          const fAnchor = getVehicleAnchor(car, 'fuel');
-          addOrGrowFluidStain(world, fAnchor.x, fAnchor.y, 'fuel');
-          if (world.stains && world.stains.length > 0) {
-            for (const st of world.stains) {
-              if (st.type === 'fuel') {
-                const dist = Math.hypot(st.x - fAnchor.x, st.y - fAnchor.y);
-                if (dist < 28) {
-                  st.onFire = true;
-                  st.fireIntensity = 0.85;
-                  st.maxRadius = Math.max(st.maxRadius, 26);
-                }
-              }
-            }
-          }
-          if (car.isPlayerControlled && (world as any).player) {
-            addPlayerNotification((world as any).player, 'ВСПЫХНУЛ БЕНЗОБАК И РАЗЛИВШЕЕСЯ ТОПЛИВО СЗАДИ! Огонь охватил заднюю часть и днище машины!', 'warning');
-          }
-        }
-      }
-    }
-  }
-  } else {
+  // 2. Mechanical & structural component damage (engine, transmission, radiator,
+  // oil pan, fuel tank, suspension, steering drift, wheel rub, lights, glass, hood, fire)
+  // is evaluated directly from the live Node-Beam soft-body mesh in syncNodeBeamToVehicle
+  // via evaluateSoftBodyComponentDamage (src/softbodyDamage.ts).
+  if (isTrailer) {
     // Force clean trailer engine / fuel states
     if (eng) {
       eng.radiatorPunctured = false;
@@ -3266,10 +2918,10 @@ export function applyVehicleDamageAndDeformation(
   const colNormX = (contactX - car.x) / normDist;
   const colNormY = (contactY - car.y) / normDist;
 
-  const hasWindshieldCrack = (severity > 0.35 || dmg.windshieldCracked);
-  const hasHeadlightBreak = (normX > 0.12 && (dmg.leftHeadlightBroken || dmg.rightHeadlightBroken || severity > 0.30));
-  const hasTaillightBreak = (normX < -0.15 && ((dmg.rearCrumple ?? 0) > 2.5 || severity > 0.35));
-  const hasRadiatorPuncture = (eng.radiatorPunctured || ((dmg.frontCrumple ?? 0) > 3.5 && normX > 0.20));
+  const hasWindshieldCrack = !!dmg.windshieldCracked;
+  const hasHeadlightBreak = !!(dmg.leftHeadlightBroken || dmg.rightHeadlightBroken);
+  const hasTaillightBreak = !!(dmg.leftTaillightBroken || dmg.rightTaillightBroken);
+  const hasRadiatorPuncture = !!eng.radiatorPunctured;
 
   emitBeamNGCrashParticles(world, {
     contactX,
@@ -3290,10 +2942,10 @@ export function applyVehicleDamageAndDeformation(
     isConcrete: effContactWidth < Math.min(25, car.width * 0.40)
   });
 
-  // Physical Detachable Body Parts (Hood, Front Bumper, Rear Bumper, Left/Right Doors)
+  // Physical Detachable Body Parts (driven strictly by soft-body crumple/latch failure)
   if (impactSpeed > 32 || severity > 0.50) {
     // Hood detachment
-    if ((dmg.frontCrumple > 7.5 || (severity > 0.60 && normX > 0.20)) && !dmg.hoodDetached) {
+    if (dmg.frontCrumple > 7.5 && !dmg.hoodDetached) {
       dmg.hoodDetached = true;
       dmg.hoodBuckled = true;
       world.detachedParts.push({
@@ -3316,7 +2968,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Front Bumper detachment
-    if ((dmg.frontCrumple > 6.0 || (severity > 0.48 && normX > 0.25)) && !dmg.frontBumperDetached) {
+    if (dmg.frontCrumple > 6.5 && !dmg.frontBumperDetached) {
       dmg.frontBumperDetached = true;
       world.detachedParts.push({
         id: 'bumper_f_' + car.id + '_' + Date.now(),
@@ -3338,7 +2990,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Rear Bumper detachment
-    if ((dmg.rearCrumple > 5.0 || (severity > 0.48 && normX < -0.25)) && !dmg.rearBumperDetached) {
+    if (dmg.rearCrumple > 5.5 && !dmg.rearBumperDetached) {
       dmg.rearBumperDetached = true;
       world.detachedParts.push({
         id: 'bumper_r_' + car.id + '_' + Date.now(),
@@ -3360,7 +3012,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Left Door detachment (порог ≈ 0.58 м вмятины двери — дверь срывает с петель)
-    if ((dmg.leftDent > 5.5 || (severity > 0.52 && normY < -0.35)) && !dmg.leftDoorDetached) {
+    if (dmg.leftDent > 5.5 && !dmg.leftDoorDetached) {
       dmg.leftDoorDetached = true;
       world.detachedParts.push({
         id: 'door_l_' + car.id + '_' + Date.now(),
@@ -3382,7 +3034,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Right Door detachment (порог ≈ 0.58 м вмятины двери — дверь срывает с петель)
-    if ((dmg.rightDent > 5.5 || (severity > 0.52 && normY > 0.35)) && !dmg.rightDoorDetached) {
+    if (dmg.rightDent > 5.5 && !dmg.rightDoorDetached) {
       dmg.rightDoorDetached = true;
       world.detachedParts.push({
         id: 'door_r_' + car.id + '_' + Date.now(),
@@ -4366,7 +4018,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     if (dmg.nodeBeam.steppedThisTick) {
       dmg.nodeBeam.steppedThisTick = false;
     } else {
-      stepNodeBeamSimulation(dmg.nodeBeam, dt, car);
+      stepNodeBeamSimulation(dmg.nodeBeam, dt, car, world);
     }
   }
 
@@ -12643,12 +12295,12 @@ export function updateVehiclePhysics(
           sound.playCollision(impactIntensity);
         }
 
-        // Driver vehicle trauma
+        // Driver vehicle trauma is driven purely by the soft-body simulation; record obstacle context
         if (player) {
           if (vehicle.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === vehicle.id)) {
-            applyDriverVehicleCrashTrauma(player, impactSpeed, 'автомобиль', 0.85, vehicle);
+            registerSoftBodyImpactContext(vehicle, 'автомобиль');
           } else if (other.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === other.id)) {
-            applyDriverVehicleCrashTrauma(player, impactSpeed, 'автомобиль', 0.85, other);
+            registerSoftBodyImpactContext(other, 'автомобиль');
           }
         }
       } else {
@@ -12833,7 +12485,7 @@ export function updateVehiclePhysics(
           if (vehicle.isPlayerControlled || (player && player.isInVehicle && player.currentVehicleId === vehicle.id)) {
             sound.playCollision(Math.min(1.0, impactSpeed / 120));
             if (player) {
-              applyDriverVehicleCrashTrauma(player, normalImpactSpeed, 'здание', 1.0, vehicle);
+              registerSoftBodyImpactContext(vehicle, 'здание');
             }
           } else {
             // For AI cars: Trigger hazard stop if disabled/crashed, otherwise trigger smart reverse recovery
@@ -14534,7 +14186,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             sound.playCollision(Math.min(1.0, poleNormalSpeed / 80));
 
             if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-              applyDriverVehicleCrashTrauma(player, poleNormalSpeed, hitbox.displayNameRu, 1.2, veh);
+              registerSoftBodyImpactContext(veh, hitbox.displayNameRu);
             } else {
               if (isVehicleDisabledOrCrashed(veh)) {
                 veh.turnSignal = 'hazard';
@@ -14648,7 +14300,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             );
             sound.playCollision(Math.min(0.85, velIntoNormal / 110));
             if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-              applyDriverVehicleCrashTrauma(player, effDamageSpeed, hitbox.displayNameRu, hitbox.resistance, veh);
+              registerSoftBodyImpactContext(veh, hitbox.displayNameRu);
             }
           }
         }
@@ -14721,7 +14373,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             );
             sound.playCollision(Math.min(1.0, effectiveImpactSpeed / 95));
             if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-              applyDriverVehicleCrashTrauma(player, effectiveImpactSpeed, hitbox.displayNameRu, hitbox.resistance, veh);
+              registerSoftBodyImpactContext(veh, hitbox.displayNameRu);
             }
           } else if (velIntoNormal > 14 && (!prop.lastImpactTime || Date.now() - prop.lastImpactTime > 220)) {
             prop.lastImpactTime = Date.now();
@@ -14840,7 +14492,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
         sound.playCollision(Math.min(1.0, velIntoNormal / 85));
         if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-          applyDriverVehicleCrashTrauma(player, velIntoNormal * Math.max(0.45, hitbox.resistance), hitbox.displayNameRu, hitbox.resistance, veh);
+          registerSoftBodyImpactContext(veh, hitbox.displayNameRu);
         } else if (!veh.isPlayerControlled) {
           veh.aiState = isVehicleDisabledOrCrashed(veh) ? 'stopping_obstacle' : 'reversing';
         }
@@ -14899,7 +14551,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       );
 
       if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-        applyDriverVehicleCrashTrauma(player, damageSpeed, hitbox.displayNameRu, hitbox.resistance, veh);
+        registerSoftBodyImpactContext(veh, hitbox.displayNameRu);
       }
 
       if (prop.type === 'hydrant') {

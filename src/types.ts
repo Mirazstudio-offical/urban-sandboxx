@@ -357,6 +357,84 @@ export interface NodeBeamStructure {
   reactionTorque?: number;
   /** Диагностика: суммарная сила реакции контакта за последний шаг, mass·px/s². */
   lastContactForce?: number;
+  /** Пиковое ускорение системы отсчёта кузова за последний шаг (px/s²), для оценки перегрузки. */
+  lastFrameAx?: number;
+  lastFrameAy?: number;
+  /** High-water-mark базовые значения смятия агрегатов в softbody-сетке (чтобы ремонт без правки кузова не сбрасывался). */
+  componentBaselines?: SoftBodyComponentBaselines;
+  /** Состояние датчиков салона и перегрузки водителя, снимаемых напрямую с softbody-сетки. */
+  occupantState?: SoftBodyOccupantState;
+  /** Наименование последнего препятствия (только для текста уведомления HUD, не влияет на расчёт урона). */
+  lastImpactObstacle?: string;
+}
+
+export interface SoftBodyComponentBaselines {
+  radiatorCrush: number;
+  engineCrush: number;
+  oilPanCrush: number;
+  transmissionCrush: number;
+  fuelTankCrush: number;
+  fuelRailCrush: number;
+  fluidTankCrush: number;
+  suspFL: number;
+  suspFR: number;
+  suspRL: number;
+  suspRR: number;
+  headlightL: number;
+  headlightR: number;
+  taillightL: number;
+  taillightR: number;
+  hoodCrush: number;
+  windshieldCrush: number;
+  rearGlassCrush: number;
+}
+
+export interface SoftBodyOccupantTelemetry {
+  peakG: number;
+  avgG: number;
+  deltaVKmh: number;
+  dirLocalX: number;
+  dirLocalY: number;
+  frontIntrusionDelta: number;
+  driverSideIntrusionDelta: number;
+  passengerSideIntrusionDelta: number;
+  rearIntrusionDelta: number;
+  totalFrontIntrusion: number;
+  totalDriverSideIntrusion: number;
+  cageIntegrity: number;
+  crumpleRemaining: number;
+  windshieldJustCracked: boolean;
+  isOpenCockpit: boolean;
+  obstacleLabel: string;
+}
+
+export interface SoftBodyOccupantState {
+  initialized: boolean;
+  prevX: number;
+  prevY: number;
+  prevVx: number;
+  prevVy: number;
+  // High-water-mark cabin intrusions so each crash episode applies only new intrusion
+  baseFrontIntrusion: number;
+  baseDriverSideIntrusion: number;
+  basePassengerSideIntrusion: number;
+  baseRearIntrusion: number;
+  wasWindshieldCracked: boolean;
+  // Active crash-pulse accumulator
+  pulseActive: boolean;
+  pulseElapsed: number;
+  pulseDvLocalX: number;
+  pulseDvLocalY: number;
+  pulsePeakDvMag: number;
+  pulsePrimaryDirX: number;
+  pulsePrimaryDirY: number;
+  pulsePeakG: number;
+  pulseFrontIntrusion: number;
+  pulseDriverSideIntrusion: number;
+  pulsePassengerSideIntrusion: number;
+  pulseRearIntrusion: number;
+  pulseWindshieldCracked: boolean;
+  lastTraumaTime: number;
 }
 
 export interface ScratchMark {
