@@ -10930,7 +10930,17 @@ export function useItemOnPlayer(
             veh.engineState.oilPunctured = false;
             veh.engineState.oilPressure = 100;
             veh.engineState.batteryCharge = 100;
+            veh.engineState.batteryPosConnected = true;
+            veh.engineState.batteryNegConnected = true;
             veh.engineState.starterWorking = true;
+            veh.engineState.alternatorWorking = true;
+            veh.engineState.coolingFanBroken = false;
+            veh.engineState.turboHealth = 100;
+            veh.engineState.intercoolerHealth = 100;
+            veh.engineState.airIntakeDamaged = false;
+            veh.engineState.ecuDamaged = false;
+            veh.engineState.fuelInjectorPumpDamaged = false;
+            veh.engineState.gboReducerDamaged = false;
             veh.engineState.temperature = 88;
             veh.engineState.engineKnocking = false;
             veh.engineState.engineStalled = false;
@@ -10939,9 +10949,12 @@ export function useItemOnPlayer(
             veh.engineState.waterInCylinders = 0;
             veh.engineState.isSeized = false;
             veh.engineState.engineHealth = 100;
+            veh.engineState.transmissionHealth = 100;
+            veh.engineState.transmissionJammed = false;
           }
           if (veh.fuelSystem) {
             veh.fuelSystem.tankPunctured = false;
+            veh.fuelSystem.fuelRailBroken = false;
           }
         }
         removeItemFromPlayer(player, itemIndex, 1);
@@ -12161,7 +12174,17 @@ export function useHandItemOnPlayer(
             veh.engineState.oilPunctured = false;
             veh.engineState.oilPressure = 100;
             veh.engineState.batteryCharge = 100;
+            veh.engineState.batteryPosConnected = true;
+            veh.engineState.batteryNegConnected = true;
             veh.engineState.starterWorking = true;
+            veh.engineState.alternatorWorking = true;
+            veh.engineState.coolingFanBroken = false;
+            veh.engineState.turboHealth = 100;
+            veh.engineState.intercoolerHealth = 100;
+            veh.engineState.airIntakeDamaged = false;
+            veh.engineState.ecuDamaged = false;
+            veh.engineState.fuelInjectorPumpDamaged = false;
+            veh.engineState.gboReducerDamaged = false;
             veh.engineState.temperature = 88;
             veh.engineState.engineKnocking = false;
             veh.engineState.engineStalled = false;
@@ -12170,9 +12193,12 @@ export function useHandItemOnPlayer(
             veh.engineState.waterInCylinders = 0;
             veh.engineState.isSeized = false;
             veh.engineState.engineHealth = 100;
+            veh.engineState.transmissionHealth = 100;
+            veh.engineState.transmissionJammed = false;
           }
           if (veh.fuelSystem) {
             veh.fuelSystem.tankPunctured = false;
+            veh.fuelSystem.fuelRailBroken = false;
           }
         }
         if (item.count > 1) {

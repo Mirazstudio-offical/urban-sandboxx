@@ -3341,11 +3341,12 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'jar_glass_small_open':
     case 'jar_spice_small':
     case 'jar_spice_small_open': {
-      const is3L = itemId.startsWith('jar_glass_3l');
-      const isLg = itemId.startsWith('jar_glass_large');
-      const isSm = itemId.startsWith('jar_glass_small');
-      const isSpice = itemId.startsWith('jar_spice_small');
-      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId.endsWith('_open'));
+      const safeId = typeof itemId === 'string' ? itemId : '';
+      const is3L = safeId.startsWith('jar_glass_3l');
+      const isLg = safeId.startsWith('jar_glass_large');
+      const isSm = safeId.startsWith('jar_glass_small');
+      const isSpice = safeId.startsWith('jar_spice_small');
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || safeId.endsWith('_open'));
 
       const vis = resolveContainerVisualAttributes(
         itemId,
@@ -3572,13 +3573,14 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'tin_round_mini_open':
     case 'can_alu_330':
     case 'can_alu_330_open': {
-      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId.endsWith('_open'));
-      const isMini = itemId.startsWith('tin_round_mini');
-      const isAlu = itemId.startsWith('can_alu_330');
-      const isOvalBase = itemId.startsWith('can_metal_oval');
-      const isFlat = itemId.startsWith('can_metal_flat');
-      const isLg = itemId.startsWith('can_metal_large');
-      const isSm = itemId.startsWith('can_metal_small');
+      const safeId = typeof itemId === 'string' ? itemId : '';
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || safeId.endsWith('_open'));
+      const isMini = safeId.startsWith('tin_round_mini');
+      const isAlu = safeId.startsWith('can_alu_330');
+      const isOvalBase = safeId.startsWith('can_metal_oval');
+      const isFlat = safeId.startsWith('can_metal_flat');
+      const isLg = safeId.startsWith('can_metal_large');
+      const isSm = safeId.startsWith('can_metal_small');
 
       const vis = resolveContainerVisualAttributes(
         itemId,

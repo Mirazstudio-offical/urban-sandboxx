@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Vehicle, Player, GroundItem, InventoryItem, CarType } from '../types';
 import { CAR_CONFIGS } from '../vehicleHelpers';
+import { resolveEngineBlueprint } from '../engineBlueprint';
 import { createItem, ITEM_CATALOG } from '../items';
 import { syncItemContainerProperties } from '../liquidSystem';
 import { Wrench, Droplets, Battery, Zap, AlertTriangle, Lightbulb, Gauge, Activity, Lock, Unlock, X, Check, Shield, Flame, Disc, Radio } from 'lucide-react';
@@ -34,6 +35,7 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
 
   const eng = vehicle.engineState;
   const cfg = CAR_CONFIGS[vehicle.type] || CAR_CONFIGS.sedan;
+  const engineBlueprint = resolveEngineBlueprint(vehicle);
 
   // Determine engine bay category
   const getEngineCategory = (type: CarType): 'classic'| 'modern'| 'heavy'| 'sports'=> {
@@ -50,6 +52,20 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
   };
 
   const category = getEngineCategory(vehicle.type);
+  const brokenBayModules: string[] = [];
+  if (eng.coolingFanBroken) brokenBayModules.push('Вентилятор');
+  if (eng.alternatorWorking === false) brokenBayModules.push('Генератор / Ремень');
+  if (eng.starterWorking === false) brokenBayModules.push('Стартер');
+  if (engineBlueprint.turboKind !== 'none' && (eng.turboHealth ?? 100) < 75) {
+    brokenBayModules.push(`Турбина (${Math.round(eng.turboHealth ?? 100)}%)`);
+  }
+  if ((engineBlueprint.turboKind === 'single' || engineBlueprint.turboKind === 'twin') && (eng.intercoolerHealth ?? 100) < 75) {
+    brokenBayModules.push(`Интеркулер (${Math.round(eng.intercoolerHealth ?? 100)}%)`);
+  }
+  if (eng.airIntakeDamaged) brokenBayModules.push('Впуск / Фильтр');
+  if (eng.ecuDamaged) brokenBayModules.push('ЭБУ');
+  if (eng.fuelInjectorPumpDamaged) brokenBayModules.push('ТНВД / Рампа');
+  if (eng.gboReducerDamaged) brokenBayModules.push('Редуктор ГБО');
 
   // Default missing engine fields if undefined
   const batteryInstalled = eng.batteryInstalled ?? true;
@@ -374,8 +390,8 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <h2 className="text-sm sm:text-lg font-bold tracking-tight text-zinc-100 truncate">{cfg.name}</h2>
-                <span className="hidden xs:inline-block px-2 py-0.5 text-[10px] sm:text-[11px] font-bold rounded-full bg-zinc-800 text-amber-400 border border-zinc-700 uppercase tracking-wider shrink-0">
-                  ({category === 'sports'? 'Twin-Turbo': category === 'heavy'? 'Diesel': category === 'modern'? 'DOHC': 'Carb'})
+                <span className="hidden xs:inline-block px-2 py-0.5 text-[10px] sm:text-[11px] font-bold rounded-full bg-zinc-800 text-amber-400 border border-zinc-700 tracking-wider shrink-0">
+                  {engineBlueprint.spec.label}
                 </span>
               </div>
               <p className="hidden md:block text-xs text-zinc-400 truncate">
@@ -1059,6 +1075,24 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
 
                 {/* Upgrades & Tech Info */}
                 <div className="pt-2 border-t border-zinc-800 space-y-1.5">
+                   <div className="flex justify-between text-xs">
+                     <span className="text-zinc-400">Модель ДВС:</span>
+                     <span className="font-mono text-zinc-200 text-right truncate max-w-[170px]">{engineBlueprint.spec.label}</span>
+                   </div>
+                   {brokenBayModules.length > 0 && (
+                     <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/40 space-y-1">
+                       <div className="text-[11px] font-bold text-rose-400 flex items-center gap-1">
+                         <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Поврежденные узлы:
+                       </div>
+                       <div className="flex flex-wrap gap-1">
+                         {brokenBayModules.map((label) => (
+                           <span key={label} className="px-1.5 py-0.5 rounded bg-rose-900/50 border border-rose-500/30 text-[10px] text-rose-200 font-medium">
+                             {label}
+                           </span>
+                         ))}
+                       </div>
+                     </div>
+                   )}
                    {eng.mileageKm !== undefined && (
                      <div className="flex justify-between text-xs">
                        <span className="text-zinc-400">Пробег:</span>

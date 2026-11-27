@@ -398,6 +398,14 @@ export interface SoftBodyComponentBaselines {
   hoodCrush: number;
   windshieldCrush: number;
   rearGlassCrush: number;
+  coolingFanCrush?: number;
+  intercoolerCrush?: number;
+  turboCrush?: number;
+  alternatorCrush?: number;
+  batteryCrush?: number;
+  airIntakeCrush?: number;
+  ecuCrush?: number;
+  gboReducerCrush?: number;
 }
 
 export interface SoftBodyOccupantTelemetry {
@@ -547,6 +555,16 @@ export interface EngineState {
   tireTopSpeedMult?: number;         // tire speed rating effect on top speed
   tireStudded?: boolean;
   tireOffroad?: boolean;
+
+  // Engine Bay Sub-Module Integrity (Model-driven soft-body damage)
+  alternatorWorking?: boolean;       // serpentine belt / alternator integrity (default true)
+  coolingFanBroken?: boolean;        // cooling fan blades / shroud jammed (default false)
+  turboHealth?: number;              // 0 to 100 (%) turbocharger / supercharger health (default 100)
+  intercoolerHealth?: number;        // 0 to 100 (%) FMIC / TMIC intercooler & piping health (default 100)
+  airIntakeDamaged?: boolean;        // air filter housing / cold-air intake crushed (default false)
+  ecuDamaged?: boolean;              // ECU / engine relay box damaged (default false)
+  fuelInjectorPumpDamaged?: boolean; // diesel ТНВД / common rail / distributor damaged (default false)
+  gboReducerDamaged?: boolean;       // LPG/GBO reducer or gas rail damaged (default false)
 
   // Offroad Physics & Terrain Interaction
   offroadSinkDepth?: number;   // 0.0 to 1.5 (current depth sunken into mud/soil)

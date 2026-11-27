@@ -246,7 +246,7 @@ const SelfInspectionContent: React.FC<{
         const list: Injury[] = Array.isArray(raw) ? raw : ((raw as any)?.injuries || []);
         return sum + list.length * 10 + list.filter(i => i.treated).length;
       }, 0);
-      return `${Math.round(n?.health ?? 100)}:${Math.round(n?.hunger ?? 100)}:${Math.round(n?.thirst ?? 100)}:${Math.round(n?.energy ?? 100)}:${Math.round((b.coreTemperature ?? 36.6) * 10)}:${Math.round(b.painLevel ?? 0)}:${Math.round(b.wetness ?? 0)}:${injCount}:${(b.activeMedications || []).length}`;
+      return `${Math.round(n?.health ?? 100)}:${Math.round(n?.hunger ?? 100)}:${Math.round(n?.thirst ?? 100)}:${Math.round(n?.energy ?? 100)}:${Math.round((b.temperature ?? 36.6) * 10)}:${Math.round(b.painLevel ?? 0)}:${Math.round(b.wetness ?? 0)}:${injCount}:${(b.activeMedications || []).length}`;
     };
     prevSig = buildSig();
     const timer = window.setInterval(() => {

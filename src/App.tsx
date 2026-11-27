@@ -8683,7 +8683,17 @@ export default function App() {
               if (targetCar.engineState.batteryCharge < 20) {
                 targetCar.engineState.batteryCharge = 100;
               }
+              targetCar.engineState.batteryPosConnected = true;
+              targetCar.engineState.batteryNegConnected = true;
               targetCar.engineState.starterWorking = true;
+              targetCar.engineState.alternatorWorking = true;
+              targetCar.engineState.coolingFanBroken = false;
+              targetCar.engineState.turboHealth = 100;
+              targetCar.engineState.intercoolerHealth = 100;
+              targetCar.engineState.airIntakeDamaged = false;
+              targetCar.engineState.ecuDamaged = false;
+              targetCar.engineState.fuelInjectorPumpDamaged = false;
+              targetCar.engineState.gboReducerDamaged = false;
             }
             
             // 3. Fully repair fuel system (leaks and pressure rail)

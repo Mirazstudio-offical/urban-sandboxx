@@ -1979,6 +1979,54 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
         severity: 'warning'
       });
     }
+    if (currentVehicle.engineState?.alternatorWorking === false) {
+      dtcErrors.push({
+        code: 'P0560',
+        title: 'Отказ генератора / обрыв приводного ремня',
+        desc: 'Нет зарядки бортовой сети при работающем ДВС. Возможно падение напряжения до нуля.',
+        severity: 'warning'
+      });
+    }
+    if (currentVehicle.engineState?.coolingFanBroken) {
+      dtcErrors.push({
+        code: 'P0480',
+        title: 'Неисправность вентилятора охлаждения',
+        desc: 'Крыльчатка или диффузор вентилятора разрушены. Высокий риск перегрева в пробках и на холостых.',
+        severity: 'warning'
+      });
+    }
+    if ((currentVehicle.engineState?.turboHealth ?? 100) < 65 || (currentVehicle.engineState?.intercoolerHealth ?? 100) < 65) {
+      dtcErrors.push({
+        code: 'P0299',
+        title: 'Недодув турбонаддува / разгерметизация интеркулера',
+        desc: `Узел турбокомпрессора (${Math.round(currentVehicle.engineState?.turboHealth ?? 100)}%) или интеркулер (${Math.round(currentVehicle.engineState?.intercoolerHealth ?? 100)}%) повреждены при ударе.`,
+        severity: 'warning'
+      });
+    }
+    if (currentVehicle.engineState?.airIntakeDamaged) {
+      dtcErrors.push({
+        code: 'P0101',
+        title: 'Повреждение воздушного фильтра / тракта впуска',
+        desc: 'Снижена пропускная способность впускного тракта, потеря мощности двигателя.',
+        severity: 'warning'
+      });
+    }
+    if (currentVehicle.engineState?.ecuDamaged) {
+      dtcErrors.push({
+        code: 'P0606',
+        title: 'Повреждение блока управления двигателем (ЭБУ)',
+        desc: 'Двигатель переведен в аварийный режим ограничения крутящего момента.',
+        severity: 'critical'
+      });
+    }
+    if (currentVehicle.engineState?.fuelInjectorPumpDamaged || currentVehicle.engineState?.gboReducerDamaged) {
+      dtcErrors.push({
+        code: 'P0190',
+        title: 'Повреждение ТНВД / топливного узла / редуктора ГБО',
+        desc: 'Нарушена подача топлива под капотом, нестабильная работа и перебои впрыска.',
+        severity: 'critical'
+      });
+    }
   }
 
   // --- DYNAMIC WORK-ORDER (НАРЯД-ЗАКАЗ) SYSTEM ---
@@ -1995,13 +2043,30 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     }[] = [
       {
         id: 'engine_health',
-        title: 'Капитальный ремонт цилиндро-поршневой группы (ЦПГ)',
-        desc: 'Проточка блока цилиндров, хонингование гильз, замена поршневых колец, шатунных вкладышей и прокладки ГБЦ. Устраняет критический износ и восстанавливает компрессию до 100%.',
-        price: Math.round((100 - (currentVehicle.engineState?.engineHealth ?? 100)) * 320) + 2500,
-        needsRepair: (currentVehicle.engineState?.engineHealth ?? 100) < 95,
+        title: 'Капитальный ремонт ДВС, наддува и КПП',
+        desc: 'Восстановление блока цилиндров, трансмиссии, турбокомпрессора, интеркулера и впускного тракта с заменой поврежденных деталей.',
+        price:
+          Math.round((100 - (currentVehicle.engineState?.engineHealth ?? 100)) * 320) +
+          Math.round((100 - (currentVehicle.engineState?.transmissionHealth ?? 100)) * 180) +
+          Math.round((100 - (currentVehicle.engineState?.turboHealth ?? 100)) * 160) +
+          Math.round((100 - (currentVehicle.engineState?.intercoolerHealth ?? 100)) * 95) +
+          (currentVehicle.engineState?.airIntakeDamaged ? 2200 : 0) +
+          2500,
+        needsRepair:
+          (currentVehicle.engineState?.engineHealth ?? 100) < 95 ||
+          (currentVehicle.engineState?.transmissionHealth ?? 100) < 95 ||
+          !!currentVehicle.engineState?.transmissionJammed ||
+          (currentVehicle.engineState?.turboHealth ?? 100) < 95 ||
+          (currentVehicle.engineState?.intercoolerHealth ?? 100) < 95 ||
+          !!currentVehicle.engineState?.airIntakeDamaged,
         apply: (v) => {
           if (v.engineState) {
             v.engineState.engineHealth = 100;
+            v.engineState.transmissionHealth = 100;
+            v.engineState.transmissionJammed = false;
+            v.engineState.turboHealth = 100;
+            v.engineState.intercoolerHealth = 100;
+            v.engineState.airIntakeDamaged = false;
             v.engineState.engineKnocking = false;
             v.engineState.engineStalled = false;
             v.engineState.isSeized = false;
@@ -2010,14 +2075,25 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       },
       {
         id: 'leaks_and_fluids',
-        title: 'Аргонная сварка картера и замена техжидкостей ДВС',
-        desc: 'Аргонно-дуговая сварка трещин поддона картера, пайка поврежденных сот радиатора охлаждения. Полная замена моторного масла 5W-40 и антифриза G12+.',
-        price: (currentVehicle.engineState?.radiatorPunctured ? 4500 : 0) + (currentVehicle.engineState?.oilPunctured ? 3800 : 0) + 1200,
-        needsRepair: !!(currentVehicle.engineState?.radiatorPunctured || currentVehicle.engineState?.oilPunctured || (currentVehicle.engineState?.oilLevel ?? 100) < 90 || (currentVehicle.engineState?.radiatorWater ?? 100) < 90),
+        title: 'Ремонт системы охлаждения, поддона и замена жидкостей',
+        desc: 'Сварка трещин поддона картера, пайка радиатора, замена разрушенного вентилятора охлаждения, заправка масла и антифриза.',
+        price:
+          (currentVehicle.engineState?.radiatorPunctured ? 4500 : 0) +
+          (currentVehicle.engineState?.oilPunctured ? 3800 : 0) +
+          (currentVehicle.engineState?.coolingFanBroken ? 2800 : 0) +
+          1200,
+        needsRepair: !!(
+          currentVehicle.engineState?.radiatorPunctured ||
+          currentVehicle.engineState?.oilPunctured ||
+          currentVehicle.engineState?.coolingFanBroken ||
+          (currentVehicle.engineState?.oilLevel ?? 100) < 90 ||
+          (currentVehicle.engineState?.radiatorWater ?? 100) < 90
+        ),
         apply: (v) => {
           if (v.engineState) {
             v.engineState.radiatorPunctured = false;
             v.engineState.oilPunctured = false;
+            v.engineState.coolingFanBroken = false;
             v.engineState.oilLevel = 100;
             v.engineState.radiatorWater = 100;
             v.engineState.overheatingSteam = false;
@@ -2052,14 +2128,29 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       },
       {
         id: 'starter_battery',
-        title: 'Зарядка АКБ, десульфатация и переборка стартера',
-        desc: 'Глубокий десульфатирующий заряд батареи, очистка клемм от окислов. Замена изношенного втягивающего реле, бендикса и щеточного узла стартера.',
-        price: (!currentVehicle.engineState?.starterWorking ? 1800 : 0) + Math.round((100 - (currentVehicle.engineState?.batteryCharge ?? 100)) * 25) + 500,
-        needsRepair: (currentVehicle.engineState?.batteryCharge ?? 100) < 95 || !currentVehicle.engineState?.starterWorking,
+        title: 'Ремонт АКБ, стартера, генератора и ЭБУ',
+        desc: 'Заряд и восстановление клемм батареи, замена ремня и генератора, переборка стартера и восстановление блока управления двигателем.',
+        price:
+          (!currentVehicle.engineState?.starterWorking ? 1800 : 0) +
+          (currentVehicle.engineState?.alternatorWorking === false ? 3200 : 0) +
+          (currentVehicle.engineState?.ecuDamaged ? 5500 : 0) +
+          Math.round((100 - (currentVehicle.engineState?.batteryCharge ?? 100)) * 25) +
+          500,
+        needsRepair:
+          (currentVehicle.engineState?.batteryCharge ?? 100) < 95 ||
+          currentVehicle.engineState?.batteryPosConnected === false ||
+          currentVehicle.engineState?.batteryNegConnected === false ||
+          currentVehicle.engineState?.starterWorking === false ||
+          currentVehicle.engineState?.alternatorWorking === false ||
+          !!currentVehicle.engineState?.ecuDamaged,
         apply: (v) => {
           if (v.engineState) {
             v.engineState.batteryCharge = 100;
+            v.engineState.batteryPosConnected = true;
+            v.engineState.batteryNegConnected = true;
             v.engineState.starterWorking = true;
+            v.engineState.alternatorWorking = true;
+            v.engineState.ecuDamaged = false;
           }
         }
       },
@@ -2117,14 +2208,28 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       },
       {
         id: 'fuel_system',
-        title: 'Устранение разгерметизации топливной рампы и бака',
-        desc: 'Выявление утечек бензобака, заварка пробоин бензостойким шовным герметиком, замена топливных магистралей высокого давления и топливной рампы впрыска.',
-        price: (currentVehicle.fuelSystem?.tankPunctured ? 4800 : 0) + (currentVehicle.fuelSystem?.fuelRailBroken ? 3500 : 0) + 800,
-        needsRepair: !!(currentVehicle.fuelSystem?.tankPunctured || currentVehicle.fuelSystem?.fuelRailBroken),
+        title: 'Устранение разгерметизации топливной рампы, ТНВД и ГБО',
+        desc: 'Устранение утечек бака, ремонт рампы впрыска, ТНВД и редуктора ГБО, замена поврежденных топливных магистралей высокого давления.',
+        price:
+          (currentVehicle.fuelSystem?.tankPunctured ? 4800 : 0) +
+          (currentVehicle.fuelSystem?.fuelRailBroken ? 3500 : 0) +
+          (currentVehicle.engineState?.fuelInjectorPumpDamaged ? 4200 : 0) +
+          (currentVehicle.engineState?.gboReducerDamaged ? 2900 : 0) +
+          800,
+        needsRepair: !!(
+          currentVehicle.fuelSystem?.tankPunctured ||
+          currentVehicle.fuelSystem?.fuelRailBroken ||
+          currentVehicle.engineState?.fuelInjectorPumpDamaged ||
+          currentVehicle.engineState?.gboReducerDamaged
+        ),
         apply: (v) => {
           if (v.fuelSystem) {
             v.fuelSystem.tankPunctured = false;
             v.fuelSystem.fuelRailBroken = false;
+          }
+          if (v.engineState) {
+            v.engineState.fuelInjectorPumpDamaged = false;
+            v.engineState.gboReducerDamaged = false;
           }
         }
       }
@@ -3767,21 +3872,35 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       <span className="gu-kv-v">{Math.round(currentVehicle.engineState?.batteryCharge ?? 100)}%</span>
                     </div>
                     <div className="gu-kv">
-                      <span className="gu-kv-k">Стартер</span>
+                      <span className="gu-kv-k">Стартер / Генератор</span>
                       <span className="gu-kv-v">
-                        {currentVehicle.engineState?.starterWorking === false ? 'Неисправен' : 'Штатный'}
+                        {currentVehicle.engineState?.starterWorking === false
+                          ? 'Отказ стартера'
+                          : currentVehicle.engineState?.alternatorWorking === false
+                            ? 'Отказ генератора'
+                            : 'Штатно'}
                       </span>
                     </div>
                     <div className="gu-kv">
-                      <span className="gu-kv-k">Питание</span>
+                      <span className="gu-kv-k">Питание / Наддув</span>
                       <span className="gu-kv-v">
-                        {currentVehicle.fuelSystem?.hasLPG ? 'Бензин + ГБО 4' : 'Штатная (Бензин/ДТ)'}
+                        {currentVehicle.engineState?.fuelInjectorPumpDamaged
+                          ? 'Поврежден ТНВД/Рампа'
+                          : (currentVehicle.engineState?.turboHealth ?? 100) < 75
+                            ? `Турбо ${Math.round(currentVehicle.engineState?.turboHealth ?? 100)}%`
+                            : currentVehicle.fuelSystem?.hasLPG
+                              ? (currentVehicle.engineState?.gboReducerDamaged ? 'Редуктор ГБО поврежден' : 'Бензин + ГБО 4')
+                              : 'Штатная'}
                       </span>
                     </div>
                     <div className="gu-kv">
-                      <span className="gu-kv-k">Прошивка ЭБУ</span>
-                      <span className="gu-kv-v" style={{ color: 'var(--gu-amber-soft)' }}>
-                        {isChiptuned ? 'Stage 1 (+15% л.с.)' : 'Заводской сток'}
+                      <span className="gu-kv-k">ЭБУ / Впуск</span>
+                      <span className="gu-kv-v" style={{ color: (currentVehicle.engineState?.ecuDamaged || currentVehicle.engineState?.airIntakeDamaged) ? 'var(--gu-bad)' : 'var(--gu-amber-soft)' }}>
+                        {currentVehicle.engineState?.ecuDamaged
+                          ? 'Сбой ЭБУ'
+                          : currentVehicle.engineState?.airIntakeDamaged
+                            ? 'Замят впуск'
+                            : isChiptuned ? 'Stage 1 (+15% л.с.)' : 'Заводской сток'}
                       </span>
                     </div>
                   </div>

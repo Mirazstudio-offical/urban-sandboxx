@@ -414,7 +414,8 @@ const InventoryModalContent: React.FC<{
   };
 
   const shouldOpenContainerOnActivate = (item: InventoryItem): boolean => {
-    if (item.itemId === 'wallet') return true;
+    const id = typeof item?.itemId === 'string' ? item.itemId : '';
+    if (id === 'wallet') return true;
     const isClosed = isFluidContainerClosed(item) || Boolean(item.singleUseContainer && !item.isOpen);
     if (isClosed) return false;
     const hasLiquid = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 0);
@@ -422,19 +423,19 @@ const InventoryModalContent: React.FC<{
     const hasContents = Boolean(item.contents && item.contents.length > 0);
     const isExtractableBagOrPkg =
       isPackageContainerItem(item) ||
-      item.itemId === 'lukoshko' ||
-      item.itemId === 'package_bag' ||
-      item.itemId === 'plastic_bag' ||
-      item.itemId.startsWith('box_cardboard_') ||
-      item.itemId.startsWith('sack_cloth_') ||
-      item.itemId === 'sack_empty';
+      id === 'lukoshko' ||
+      id === 'package_bag' ||
+      id === 'plastic_bag' ||
+      id.startsWith('box_cardboard_') ||
+      id.startsWith('sack_cloth_') ||
+      id === 'sack_empty';
     if (hasContents && isExtractableBagOrPkg) return false;
     return (
-      item.itemId === 'package_bag' ||
-      item.itemId === 'plastic_bag' ||
-      item.itemId.startsWith('box_cardboard_') ||
-      item.itemId.startsWith('sack_cloth_') ||
-      item.itemId === 'sack_empty' ||
+      id === 'package_bag' ||
+      id === 'plastic_bag' ||
+      id.startsWith('box_cardboard_') ||
+      id.startsWith('sack_cloth_') ||
+      id === 'sack_empty' ||
       Boolean(item.isContainer && !item.fluidStorage && !item.singleUseContainer)
     );
   };

@@ -674,9 +674,9 @@ const WashingMachineModalContent: React.FC<{
                     {wash.detergentColorNameRu ? ` · ${wash.detergentColorNameRu}` : ''}
                   </span>
                 </>
-              ) : selectedIsDetergent ? (
+              ) : selectedIsDetergent && selectedPlayerItem?.fluidStorage ? (
                 <span style={{ color: '#e0ab45' }}>
-                  Нажмите на отсек, чтобы {isFluidStorageDryForm(selectedPlayerItem!.fluidStorage!) ? 'насыпать порошок' : 'залить гель'}
+                  Нажмите на отсек, чтобы {isFluidStorageDryForm(selectedPlayerItem.fluidStorage) ? 'насыпать порошок' : 'залить гель'}
                 </span>
               ) : (
                 <span>Перетащите порошок или гель из инвентаря в этот слот</span>

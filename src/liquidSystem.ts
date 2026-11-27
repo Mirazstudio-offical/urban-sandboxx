@@ -4671,7 +4671,7 @@ export function isSoftOrDiscretePackagingId(itemId: string | undefined | null): 
  * inside one shared volume meter (all packages, bags, boxes, jars, bottles, cans, cookware).
  */
 export function canContainerHoldHybridContents(itemId: string | undefined | null): boolean {
-  if (!itemId) return false;
+  if (typeof itemId !== 'string' || !itemId) return false;
   const cleanId = itemId.replace(/_open$/, '');
   const cfg = getContainerConfig(cleanId);
   if (!cfg) return false;
@@ -4684,7 +4684,8 @@ export function canContainerHoldHybridContents(itemId: string | undefined | null
  */
 export function getHybridMaxItemVolumeL(itemId: string | undefined | null, maxMl: number): number {
   const capL = Math.max(0.01, maxMl / 1000);
-  const cleanId = (itemId || '').replace(/_open$/, '');
+  const safeId = typeof itemId === 'string' ? itemId : '';
+  const cleanId = safeId.replace(/_open$/, '');
   const cfg = getContainerConfig(cleanId);
   if (cfg?.maxItemVolumeL !== undefined) return cfg.maxItemVolumeL;
 

@@ -258,7 +258,8 @@ function drawTurboSnail(
   cy: number,
   r: number,
   hotGlow: number,
-  mirrorY = 1
+  mirrorY = 1,
+  damaged = false
 ): void {
   ctx.save();
   ctx.translate(cx, cy);
@@ -267,13 +268,13 @@ function drawTurboSnail(
   // Hot exhaust turbine housing (oxidized cast iron, glows cherry-orange when hot)
   ctx.beginPath();
   ctx.arc(-r * 0.48, 0, r * 0.82, 0, Math.PI * 2);
-  ctx.fillStyle = hotGlow > 0.15 ? '#7c2d12' : '#451a03';
+  ctx.fillStyle = damaged ? '#1c1917' : (hotGlow > 0.15 ? '#7c2d12' : '#451a03');
   ctx.fill();
   ctx.lineWidth = Math.max(0.28, r * 0.16);
-  ctx.strokeStyle = hotGlow > 0.15 ? `rgba(251, 146, 60, ${clamp(hotGlow, 0.25, 0.95)})` : '#292524';
+  ctx.strokeStyle = !damaged && hotGlow > 0.15 ? `rgba(251, 146, 60, ${clamp(hotGlow, 0.25, 0.95)})` : '#292524';
   ctx.stroke();
 
-  if (hotGlow > 0.2) {
+  if (!damaged && hotGlow > 0.2) {
     ctx.beginPath();
     ctx.arc(-r * 0.48, 0, r * 0.52, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(249, 115, 22, ${clamp(hotGlow * 0.72, 0, 0.75)})`;
@@ -284,7 +285,7 @@ function drawTurboSnail(
   ctx.fillStyle = '#334155';
   ctx.fillRect(-r * 0.35, -r * 0.44, r * 0.70, r * 0.88);
   // Braided steel oil feed line fitting
-  ctx.fillStyle = '#f59e0b';
+  ctx.fillStyle = damaged ? '#475569' : '#f59e0b';
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
   ctx.fill();
@@ -292,10 +293,10 @@ function drawTurboSnail(
   // Cold brushed aluminum compressor snail volute
   ctx.beginPath();
   ctx.arc(r * 0.50, 0, r * 0.92, 0, Math.PI * 2);
-  ctx.fillStyle = '#cbd5e1';
+  ctx.fillStyle = damaged ? '#57534e' : '#cbd5e1';
   ctx.fill();
   ctx.lineWidth = Math.max(0.25, r * 0.14);
-  ctx.strokeStyle = '#475569';
+  ctx.strokeStyle = damaged ? '#0f172a' : '#475569';
   ctx.stroke();
 
   // Compressor intake inlet eye & impeller hub
@@ -305,18 +306,29 @@ function drawTurboSnail(
   ctx.fill();
   ctx.beginPath();
   ctx.arc(r * 0.54, 0, r * 0.18, 0, Math.PI * 2);
-  ctx.fillStyle = '#e2e8f0';
+  ctx.fillStyle = damaged ? '#7f1d1d' : '#e2e8f0';
   ctx.fill();
 
-  // Spiral volute highlight arc
-  ctx.beginPath();
-  ctx.arc(r * 0.50, 0, r * 0.70, -Math.PI * 0.7, Math.PI * 0.35);
-  ctx.strokeStyle = 'rgba(255,255,255,0.65)';
-  ctx.lineWidth = Math.max(0.2, r * 0.12);
-  ctx.stroke();
+  if (damaged) {
+    // Crack / soot scar across damaged turbo snail
+    ctx.strokeStyle = '#090d14';
+    ctx.lineWidth = Math.max(0.28, r * 0.16);
+    ctx.beginPath();
+    ctx.moveTo(r * 0.15, -r * 0.68);
+    ctx.lineTo(r * 0.55, 0.05);
+    ctx.lineTo(r * 0.88, r * 0.58);
+    ctx.stroke();
+  } else {
+    // Spiral volute highlight arc
+    ctx.beginPath();
+    ctx.arc(r * 0.50, 0, r * 0.70, -Math.PI * 0.7, Math.PI * 0.35);
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.lineWidth = Math.max(0.2, r * 0.12);
+    ctx.stroke();
+  }
 
   // Wastegate gold canister & actuator rod
-  ctx.fillStyle = '#d97706';
+  ctx.fillStyle = damaged ? '#475569' : '#d97706';
   ctx.beginPath();
   ctx.arc(r * 0.15, r * 0.96, r * 0.32, 0, Math.PI * 2);
   ctx.fill();
@@ -567,6 +579,7 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
     : bay.bayX2 - radThick * 1.15 - (hasFmic ? radThick * 0.72 : 0);
 
   // Front-Mount Intercooler (FMIC) ahead of radiator when turbo kit is fitted
+  const icBroken = (eng?.intercoolerHealth ?? 100) < 60;
   if (hasFmic && !isRearBay) {
     const icX = bay.bayX2 - radThick * 0.65;
     const icW = radW * 0.92;
@@ -574,14 +587,22 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
     const ic2 = deform(icX + radThick * 0.34, -icW * 0.5);
     const ic3 = deform(icX + radThick * 0.34, icW * 0.5);
     const ic4 = deform(icX - radThick * 0.34, icW * 0.5);
-    drawQuad(ctx, ic1, ic2, ic3, ic4, '#cbd5e1', '#475569', 0.4);
+    drawQuad(ctx, ic1, ic2, ic3, ic4, icBroken ? '#52525b' : '#cbd5e1', icBroken ? '#18181b' : '#475569', 0.4);
     // Cast end-tanks on left & right of FMIC
     for (const s of [-1, 1] as const) {
       const [tx, ty] = deform(icX, s * icW * 0.48);
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillStyle = icBroken ? '#3f3f46' : '#94a3b8';
       ctx.beginPath();
       ctx.arc(tx, ty, Math.max(0.45, radThick * 0.36), 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (icBroken) {
+      ctx.strokeStyle = '#090d14';
+      ctx.lineWidth = 0.42;
+      ctx.beginPath();
+      ctx.moveTo(ic1[0], ic1[1]);
+      ctx.lineTo(ic3[0], ic3[1]);
+      ctx.stroke();
     }
   }
 
@@ -652,27 +673,29 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
     ctx.lineWidth = 0.4;
     ctx.stroke();
 
-    const fanSpin = eng?.engineRunning && !eng.isSeized
+    const fanBroken = !!eng?.coolingFanBroken;
+    const fanSpin = !fanBroken && eng?.engineRunning && !eng.isSeized
       ? nowSec * (12 + (eng.engineRPM || 800) * 0.008)
       : 0.4;
     const blades = spec.isHeavyTruck ? 6 : 5;
     ctx.rotate(fanSpin);
-    if (eng?.engineRunning && !eng.isSeized) {
+    if (!fanBroken && eng?.engineRunning && !eng.isSeized) {
       ctx.fillStyle = 'rgba(148, 163, 184, 0.18)';
       ctx.beginPath();
       ctx.arc(0, 0, fanR * 0.84, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.strokeStyle = spec.isHeavyTruck ? '#eab308' : '#64748b';
+    ctx.strokeStyle = fanBroken ? '#475569' : (spec.isHeavyTruck ? '#eab308' : '#64748b');
     ctx.lineWidth = Math.max(0.35, fanR * 0.24);
     for (let bi = 0; bi < blades; bi++) {
+      if (fanBroken && bi % 2 === 1) continue; // Missing/sheared blades
       const a = (bi / blades) * Math.PI * 2;
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(a) * fanR * 0.82, Math.sin(a) * fanR * 0.82);
+      ctx.lineTo(Math.cos(a) * fanR * (fanBroken ? 0.52 : 0.82), Math.sin(a) * fanR * (fanBroken ? 0.52 : 0.82));
       ctx.stroke();
     }
-    ctx.fillStyle = '#cbd5e1';
+    ctx.fillStyle = fanBroken ? '#991b1b' : '#cbd5e1';
     ctx.beginPath();
     ctx.arc(0, 0, fanR * 0.26, 0, Math.PI * 2);
     ctx.fill();
@@ -712,10 +735,19 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
       ctx.fill();
     } else {
       // Installed 12V Battery
-      drawRoundedBox(ctx, -batL * 0.5, -batW * 0.5, batL, batW, 0.35, '#111827', '#475569', 0.45);
+      const batCracked = (eng?.batteryCharge ?? 100) <= 5 && (eng?.batteryPosConnected === false || eng?.batteryNegConnected === false);
+      drawRoundedBox(ctx, -batL * 0.5, -batW * 0.5, batL, batW, 0.35, batCracked ? '#1c1917' : '#111827', batCracked ? '#7f1d1d' : '#475569', 0.45);
       // Top cell cap strip
       ctx.fillStyle = '#1f2937';
       ctx.fillRect(-batL * 0.34, -batW * 0.18, batL * 0.68, batW * 0.36);
+      if (batCracked) {
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 0.32;
+        ctx.beginPath();
+        ctx.moveTo(-batL * 0.36, -batW * 0.35);
+        ctx.lineTo(batL * 0.32, batW * 0.32);
+        ctx.stroke();
+      }
       // Red + terminal & black - terminal
       const posConnected = eng?.batteryPosConnected !== false;
       const negConnected = eng?.batteryNegConnected !== false;
@@ -799,7 +831,16 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
       isRearBay ? bay.bayX2 - bayLen * 0.22 : bay.bayX1 + bayLen * 0.18,
       -bay.bayHalfW * 0.22
     );
-    drawRoundedBox(ctx, ecux - 1.0, ecuy - 0.8, 2.0, 1.6, 0.25, '#1e293b', '#64748b', 0.32);
+    const ecuDamaged = !!eng?.ecuDamaged;
+    drawRoundedBox(ctx, ecux - 1.0, ecuy - 0.8, 2.0, 1.6, 0.25, ecuDamaged ? '#450a0a' : '#1e293b', ecuDamaged ? '#ef4444' : '#64748b', 0.32);
+    if (ecuDamaged) {
+      ctx.strokeStyle = '#090d14';
+      ctx.lineWidth = 0.32;
+      ctx.beginPath();
+      ctx.moveTo(ecux - 0.7, ecuy - 0.5);
+      ctx.lineTo(ecux + 0.7, ecuy + 0.5);
+      ctx.stroke();
+    }
   }
 
   // =========================================================================
@@ -842,6 +883,7 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
     // Aluminum FMIC Intercooler Charge Pipes + Colored Silicone Couplers (if turbo kit!)
     if (hasFmic && !isRearBay) {
       const couplerCol = mod.isAftermarketTurbo || mod.tuneChipLevel >= 2 ? '#ef4444' : '#2563eb';
+      const pipeBroken = (eng?.intercoolerHealth ?? 100) < 55;
       const icL = deform(bay.bayX2 - radThick * 0.65, -radW * 0.44);
       const icR = deform(bay.bayX2 - radThick * 0.65, radW * 0.44);
       const tbL = engPt(dir * blkLen * 0.22, -blkW * 0.44);
@@ -851,12 +893,14 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
         [icL, tbL, -1.0],
         [icR, tbR, 1.0],
       ] as [[number, number], [number, number], number][]) {
-        ctx.strokeStyle = '#cbd5e1';
+        ctx.strokeStyle = pipeBroken ? '#52525b' : '#cbd5e1';
         ctx.lineWidth = Math.max(0.65, Math.min(bayLen, bayW) * 0.055);
+        if (pipeBroken) ctx.setLineDash([0.8, 0.65]);
         ctx.beginPath();
         ctx.moveTo(pA[0], pA[1]);
         ctx.quadraticCurveTo((pA[0] + pB[0]) * 0.5, (pA[1] + pB[1]) * 0.5 + bend * 0.9, pB[0], pB[1]);
         ctx.stroke();
+        ctx.setLineDash([]);
 
         // Silicone coupler sleeves near each end
         ctx.strokeStyle = couplerCol;
@@ -884,20 +928,23 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
     const [ax, ay] = deform(airX, airY);
     const [inX, inY] = engPt(0, blkW * 0.36);
 
+    const airBroken = !!eng?.airIntakeDamaged;
     // Corrugated intake duct to engine
-    ctx.strokeStyle = mod.hasSportIntake ? '#cbd5e1' : '#1e293b';
+    ctx.strokeStyle = airBroken ? '#3f3f46' : (mod.hasSportIntake ? '#cbd5e1' : '#1e293b');
     ctx.lineWidth = Math.max(0.75, Math.min(bayLen, bayW) * 0.07);
+    if (airBroken) ctx.setLineDash([0.7, 0.55]);
     ctx.beginPath();
     ctx.moveTo(ax, ay);
     ctx.lineTo(inX, inY);
     ctx.stroke();
+    ctx.setLineDash([]);
 
     if (mod.hasSportIntake) {
       // Conical pleated sport cold-air intake filter (crimson/red)
       ctx.save();
       ctx.translate(ax, ay);
       ctx.rotate(isRearBay ? Math.PI : 0);
-      ctx.fillStyle = '#dc2626';
+      ctx.fillStyle = airBroken ? '#450a0a' : '#dc2626';
       ctx.beginPath();
       ctx.moveTo(-1.1, -0.75);
       ctx.lineTo(1.2, -0.5);
@@ -909,15 +956,15 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
       ctx.lineWidth = 0.3;
       ctx.stroke();
       // Chrome cone endcap
-      ctx.fillStyle = '#e2e8f0';
+      ctx.fillStyle = airBroken ? '#52525b' : '#e2e8f0';
       ctx.fillRect(1.05, -0.46, 0.32, 0.92);
       ctx.restore();
     } else {
       // OEM rectangular ribbed air filter box
       const abL = clamp(bayLen * 0.22, 1.6, 3.6);
       const abW = clamp(bayW * 0.18, 1.3, 2.8);
-      drawRoundedBox(ctx, ax - abL * 0.5, ay - abW * 0.5, abL, abW, 0.35, '#18181b', '#475569', 0.4);
-      ctx.strokeStyle = '#334155';
+      drawRoundedBox(ctx, ax - abL * 0.5, ay - abW * 0.5, abL, abW, 0.35, airBroken ? '#27272a' : '#18181b', airBroken ? '#7f1d1d' : '#475569', 0.4);
+      ctx.strokeStyle = airBroken ? '#090d14' : '#334155';
       ctx.lineWidth = 0.3;
       ctx.beginPath();
       ctx.moveTo(ax - abL * 0.32, ay - abW * 0.32);
@@ -995,54 +1042,63 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
     const beltX = isTransverse ? 0 : blkLen * 0.53;
     const beltY = isTransverse ? blkW * 0.52 : 0;
     const pulleyR = clamp(Math.min(blkLen, blkW) * 0.13, 0.42, 0.95);
-    const beltPhase = eng?.engineRunning && !eng.isSeized ? (nowSec * 18) % 2 : 0;
+    const altBroken = eng?.alternatorWorking === false;
+    const beltPhase = !altBroken && eng?.engineRunning && !eng.isSeized ? (nowSec * 18) % 2 : 0;
 
     if (isTransverse) {
       // Belt running on right (+Y) end of transverse block
-      ctx.strokeStyle = '#090d14';
+      ctx.strokeStyle = altBroken ? '#334155' : '#090d14';
       ctx.lineWidth = Math.max(0.55, pulleyR * 0.75);
-      ctx.beginPath();
-      ctx.moveTo(-blkLen * 0.34, beltY);
-      ctx.lineTo(blkLen * 0.34, beltY);
-      ctx.stroke();
-      // Animated belt ribs
-      ctx.strokeStyle = 'rgba(148,163,184,0.45)';
-      ctx.lineWidth = 0.3;
-      ctx.setLineDash([0.5, 0.7]);
-      ctx.lineDashOffset = -beltPhase;
+      if (altBroken) ctx.setLineDash([0.6, 0.65]);
       ctx.beginPath();
       ctx.moveTo(-blkLen * 0.34, beltY);
       ctx.lineTo(blkLen * 0.34, beltY);
       ctx.stroke();
       ctx.setLineDash([]);
+      if (!altBroken) {
+        // Animated belt ribs
+        ctx.strokeStyle = 'rgba(148,163,184,0.45)';
+        ctx.lineWidth = 0.3;
+        ctx.setLineDash([0.5, 0.7]);
+        ctx.lineDashOffset = -beltPhase;
+        ctx.beginPath();
+        ctx.moveTo(-blkLen * 0.34, beltY);
+        ctx.lineTo(blkLen * 0.34, beltY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       // Alternator housing (vented aluminum + copper stator hint)
-      drawRoundedBox(ctx, blkLen * 0.16, beltY - pulleyR * 1.25, pulleyR * 2.1, pulleyR * 1.9, 0.3, '#cbd5e1', '#334155', 0.35);
-      ctx.fillStyle = '#b45309';
+      drawRoundedBox(ctx, blkLen * 0.16, beltY - pulleyR * 1.25, pulleyR * 2.1, pulleyR * 1.9, 0.3, altBroken ? '#475569' : '#cbd5e1', altBroken ? '#7f1d1d' : '#334155', 0.35);
+      ctx.fillStyle = altBroken ? '#292524' : '#b45309';
       ctx.fillRect(blkLen * 0.24, beltY - pulleyR * 0.75, pulleyR * 0.75, pulleyR * 0.85);
     } else {
       // Belt running across front (+X) nose of longitudinal block
-      ctx.strokeStyle = '#090d14';
+      ctx.strokeStyle = altBroken ? '#334155' : '#090d14';
       ctx.lineWidth = Math.max(0.55, pulleyR * 0.8);
-      ctx.beginPath();
-      ctx.moveTo(beltX, -blkW * 0.42);
-      ctx.lineTo(beltX, blkW * 0.42);
-      ctx.stroke();
-      // Animated belt ribs
-      ctx.strokeStyle = 'rgba(148,163,184,0.45)';
-      ctx.lineWidth = 0.3;
-      ctx.setLineDash([0.5, 0.7]);
-      ctx.lineDashOffset = -beltPhase;
+      if (altBroken) ctx.setLineDash([0.6, 0.65]);
       ctx.beginPath();
       ctx.moveTo(beltX, -blkW * 0.42);
       ctx.lineTo(beltX, blkW * 0.42);
       ctx.stroke();
       ctx.setLineDash([]);
+      if (!altBroken) {
+        // Animated belt ribs
+        ctx.strokeStyle = 'rgba(148,163,184,0.45)';
+        ctx.lineWidth = 0.3;
+        ctx.setLineDash([0.5, 0.7]);
+        ctx.lineDashOffset = -beltPhase;
+        ctx.beginPath();
+        ctx.moveTo(beltX, -blkW * 0.42);
+        ctx.lineTo(beltX, blkW * 0.42);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       // Crank & water-pump pulleys
       ctx.fillStyle = '#334155';
       ctx.fillRect(beltX - pulleyR * 0.4, -pulleyR * 0.8, pulleyR * 0.8, pulleyR * 1.6);
       // Alternator on front-right (+Y)
-      drawRoundedBox(ctx, beltX - pulleyR * 1.7, blkW * 0.22, pulleyR * 1.9, pulleyR * 1.75, 0.3, '#cbd5e1', '#334155', 0.35);
-      ctx.fillStyle = '#b45309';
+      drawRoundedBox(ctx, beltX - pulleyR * 1.7, blkW * 0.22, pulleyR * 1.9, pulleyR * 1.75, 0.3, altBroken ? '#475569' : '#cbd5e1', altBroken ? '#7f1d1d' : '#334155', 0.35);
+      ctx.fillStyle = altBroken ? '#292524' : '#b45309';
       ctx.fillRect(beltX - pulleyR * 1.2, blkW * 0.30, pulleyR * 0.8, pulleyR * 0.85);
     }
   }
@@ -1273,9 +1329,10 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
     if (spec.hasTopMountIntercooler) {
       const tmL = blkLen * 0.46;
       const tmW = blkW * 0.72;
-      drawRoundedBox(ctx, -blkLen * 0.48, -tmW * 0.5, tmL, tmW, 0.35, '#cbd5e1', '#334155', 0.45);
+      const tmicBroken = (eng?.intercoolerHealth ?? 100) < 60;
+      drawRoundedBox(ctx, -blkLen * 0.48, -tmW * 0.5, tmL, tmW, 0.35, tmicBroken ? '#52525b' : '#cbd5e1', tmicBroken ? '#7f1d1d' : '#334155', 0.45);
       // Intercooler bar-and-plate fins
-      ctx.strokeStyle = '#64748b';
+      ctx.strokeStyle = tmicBroken ? '#18181b' : '#64748b';
       ctx.lineWidth = 0.25;
       for (let fy = -tmW * 0.38; fy <= tmW * 0.38; fy += tmW * 0.16) {
         ctx.beginPath();
@@ -1284,7 +1341,7 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
         ctx.stroke();
       }
       // Red silicone Y-pipe coupler
-      ctx.fillStyle = '#dc2626';
+      ctx.fillStyle = tmicBroken ? '#3f3f46' : '#dc2626';
       ctx.fillRect(-blkLen * 0.04, -tmW * 0.14, blkLen * 0.12, tmW * 0.28);
     }
   } else {
@@ -1503,15 +1560,16 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
   }
 
   // --- 8E. TURBOCHARGER SNAIL(S) (Single T25/T28/T4/VNT or Biturbo Twin Snails) ---
+  const turboBroken = (eng?.turboHealth ?? 100) < 55;
   if (mod.turboKind === 'single') {
     const turboR = clamp(Math.min(blkLen, blkW) * 0.18 * mod.turboScale, 0.65, 1.75);
     const tx = isTransverse ? blkLen * 0.46 : blkLen * 0.08;
     const ty = isTransverse ? 0 : blkW * 0.64;
-    drawTurboSnail(ctx, tx, ty, turboR, hotGlow, 1);
+    drawTurboSnail(ctx, tx, ty, turboR, hotGlow, 1, turboBroken);
   } else if (mod.turboKind === 'twin') {
     const turboR = clamp(Math.min(blkLen, blkW) * 0.16 * mod.turboScale, 0.58, 1.45);
-    drawTurboSnail(ctx, blkLen * 0.12, -blkW * 0.62, turboR, hotGlow, -1);
-    drawTurboSnail(ctx, blkLen * 0.12, blkW * 0.62, turboR, hotGlow, 1);
+    drawTurboSnail(ctx, blkLen * 0.12, -blkW * 0.62, turboR, hotGlow, -1, turboBroken);
+    drawTurboSnail(ctx, blkLen * 0.12, blkW * 0.62, turboR, hotGlow, 1, turboBroken);
   }
 
   // --- 8F. OIL FILLER CAP (Interactive oilCapOpen) & YELLOW DIPSTICK (Interactive dipstickPulled) ---

@@ -583,7 +583,7 @@ function drawStudioAluminumCan(
   drawMetalCanLid(ctx, 0, topY + 0.1, lidRx, 1.55, true, '#cbd5e1');
 }
 
-export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
+export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string, item?: any): boolean {
   switch (itemId) {
     // Standard 0.5L PET Plastic Water Bottle
     case 'drinking_water':

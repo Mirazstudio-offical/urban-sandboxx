@@ -4114,13 +4114,14 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
       if (isMachinery) {
         // Heavy road construction equipment has high-flow viscous cooling fans and oversized radiators
         // designed to run continuously at 100% engine load at slow speeds (thermostatically stable at 80-84°C)
-        const fanFactor = 3.6;
+        const fanFactor = eng.coolingFanBroken ? 1.15 : 3.6;
         const coolingFactor = (eng.radiatorWater / 100) * fanFactor;
         cooling = Math.max(0, (eng.temperature - 79) * 2.8 * coolingFactor);
       } else {
-        // Radiator cooling: base fan flow + ram-air effect through grille at speed
+        // Radiator cooling: base fan flow (lost when coolingFanBroken) + ram-air effect through grille at speed
         const airFlowKmh = Math.abs(car.speed) * PX_S_TO_SPEED_KMH;
-        const ramAirFactor = 1.0 + (airFlowKmh / 55.0) * 1.5;
+        const fanBase = eng.coolingFanBroken ? 0.18 : 1.0;
+        const ramAirFactor = fanBase + (airFlowKmh / 50.0) * 1.55;
         const coolingFactor = (eng.radiatorWater / 100) * ramAirFactor;
         cooling = (eng.temperature - 84) * 0.85 * coolingFactor;
       }
@@ -4481,7 +4482,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
       consumptionRate *= 0.85; // legacy chiptuning vehicles
     }
 
-    const isLpgRunning = car.hasGBO && fuel.gboActive !== false && (fuel.gboLevel ?? 0) > 0 && (eng.temperature ?? 20) >= 40;
+    const isLpgRunning = car.hasGBO && !eng.gboReducerDamaged && fuel.gboActive !== false && (fuel.gboLevel ?? 0) > 0 && (eng.temperature ?? 20) >= 40;
 
     if (isLpgRunning) {
       // LPG consumption is 18% higher by volume
@@ -4515,23 +4516,36 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   }
   
   // --- MODULE 3: ELECTRICAL CIRCUIT, BATTERY & ALTERNATOR ---
-  if (eng.engineRunning && eng.engineRPM > 900) {
+  const hasElectricalCircuit = eng.batteryInstalled !== false && eng.batteryPosConnected !== false && eng.batteryNegConnected !== false;
+  if (eng.engineRunning && eng.engineRPM > 900 && eng.alternatorWorking !== false && hasElectricalCircuit) {
     // Recharge (Alternator)
     const chargeRate = 1.2 * Math.min(1.5, eng.engineRPM / 2000) * dt;
     eng.batteryCharge = Math.min(100, eng.batteryCharge + chargeRate);
   } else {
-    // Discharge
-    if (car.headlightsOn) {
-      eng.batteryCharge = Math.max(0, eng.batteryCharge - 0.08 * dt);
+    // Discharge (consumers or running with dead alternator)
+    let drainRate = 0;
+    if (eng.engineRunning && eng.alternatorWorking === false && hasElectricalCircuit) {
+      drainRate += 0.14;
     }
-    if (car.heaterMode && car.heaterMode !== 'off') {
-      eng.batteryCharge = Math.max(0, eng.batteryCharge - 0.05 * dt);
+    if (car.headlightsOn && hasElectricalCircuit) {
+      drainRate += 0.08;
     }
-    if (car.acOn) {
-      eng.batteryCharge = Math.max(0, eng.batteryCharge - 0.08 * dt); // A/C blower & electronics discharge
+    if (car.heaterMode && car.heaterMode !== 'off' && hasElectricalCircuit) {
+      drainRate += 0.05;
     }
-    if (car.recircOn) {
-      eng.batteryCharge = Math.max(0, eng.batteryCharge - 0.02 * dt); // Recirculation flap & fan discharge
+    if (car.acOn && hasElectricalCircuit) {
+      drainRate += 0.08; // A/C blower & electronics discharge
+    }
+    if (car.recircOn && hasElectricalCircuit) {
+      drainRate += 0.02; // Recirculation flap & fan discharge
+    }
+    if (drainRate > 0) {
+      eng.batteryCharge = Math.max(0, eng.batteryCharge - drainRate * dt);
+    }
+    if (eng.engineRunning && eng.alternatorWorking === false && eng.batteryCharge <= 0 && !isRoadMachinery(car.type)) {
+      eng.engineRunning = false;
+      eng.engineStalled = true;
+      eng.engineRPM = 0;
     }
   }
 
@@ -9361,18 +9375,38 @@ export function updateVehiclePhysics(
           T_factor *= eng.powerMult;
         }
 
-        // --- Turbocharger / supercharger boost dynamics (spool-up & lag) ---
+        // --- Turbocharger / supercharger boost dynamics (spool-up & lag, scaled by turbo & intercooler health) ---
         if (eng.turboSpec && eng.turboSpec.boostMax > 0) {
           const spec = eng.turboSpec;
+          const turboHp = Math.max(0, Math.min(1, (eng.turboHealth ?? 100) / 100));
+          const icHp = Math.max(0, Math.min(1, (eng.intercoolerHealth ?? 100) / 100));
           const loadThrottle = eng.isDieselRunaway ? 1.0 : effectiveThrottle;
           const rpmReady = Math.min(1.0, Math.max(0, (eng.engineRPM - spec.spoolRPM) / Math.max(500, spec.spoolRPM * 0.55)));
-          const boostTarget = loadThrottle > 0.05 ? spec.boostMax * rpmReady : 0;
+          const boostCap = spec.boostMax * turboHp * (0.28 + 0.72 * icHp);
+          const boostTarget = loadThrottle > 0.05 && turboHp > 0.12 ? boostCap * rpmReady : 0;
           const prevBoost = eng.turboBoost ?? 0;
           eng.turboBoost = Math.max(0, prevBoost + (boostTarget - prevBoost) * Math.min(1.0, spec.lagRate * dt));
           // Forced induction multiplies available torque (+ extra heat load)
           T_factor *= 1 + eng.turboBoost;
+          if (turboHp < 0.25) {
+            T_factor *= 0.80; // Shattered/seized turbine chokes intake flow
+          }
+          if (icHp < 0.45 && loadThrottle > 0.4) {
+            eng.temperature = Math.min(145, (eng.temperature ?? 85) + 1.4 * dt);
+          }
           if (eng.turboBoost > 0.02) {
             eng.temperature = Math.min(145, (eng.temperature ?? 85) + eng.turboBoost * (spec.isSupercharged ? 1.5 : 3.0) * dt);
+          }
+        }
+
+        // --- Soft-body engine-bay auxiliary module penalties ---
+        if (eng.airIntakeDamaged) {
+          T_factor *= 0.84;
+        }
+        if (eng.ecuDamaged) {
+          T_factor *= 0.76;
+          if (effectiveThrottle > 0.5 && Math.random() < 0.12 * dt) {
+            eng.engineKnocking = true;
           }
         }
 
@@ -9517,7 +9551,10 @@ export function updateVehiclePhysics(
         gearAccelMult *= fdAccel;
 
         // Fuel System Consequences
-        let fuelFactor = 1.0;
+        let fuelFactor = eng.fuelInjectorPumpDamaged ? 0.72 : 1.0;
+        if (eng.fuelInjectorPumpDamaged && Math.random() < 0.08 * dt) {
+          eng.engineKnocking = true;
+        }
         if (fuel && vehicle.requiredFuel) {
           // 1. Wrong fuel
           if (vehicle.requiredFuel !== 'diesel'&& fuel.fuelType === 'diesel') {

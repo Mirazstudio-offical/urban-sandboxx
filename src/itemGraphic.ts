@@ -225,7 +225,7 @@ export function drawItemModel2D(
             drawSmartphoneItem(targetCtx, effectiveId, effectiveItem) ||
             drawHardwareComponentItem(targetCtx, effectiveId, effectiveItem) ||
             drawFoodItem(targetCtx, effectiveId, effectiveItem) ||
-            drawDrinkItem(targetCtx, effectiveId) ||
+            drawDrinkItem(targetCtx, effectiveId, effectiveItem) ||
             drawMedicalItem(targetCtx, effectiveId) ||
             drawFurnitureItem(targetCtx, effectiveId) ||
             drawKitchenAndValuableItem(targetCtx, effectiveId, effectiveItem) ||
