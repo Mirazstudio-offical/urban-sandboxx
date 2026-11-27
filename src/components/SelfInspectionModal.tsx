@@ -386,8 +386,7 @@ const SelfInspectionContent: React.FC<{
 
   const getEffectiveMedId = (item: InventoryItem | null | undefined): string | null => {
     if (!item) return null;
-    if (item.fluidStorage) {
-      if ((item.fluidStorage.currentMl ?? 0) <= 0) return null;
+    if (item.fluidStorage && (item.fluidStorage.currentMl ?? 0) > 0) {
       return item.fluidStorage.attributes?.medicalEffectId || item.originalCatalogId || item.itemId;
     }
     if (item.isContainer && item.contents) {

@@ -918,7 +918,16 @@ export function drawDrinkItem(ctx: CanvasRenderingContext2D, itemId: string): bo
       drawMicroBarcode(ctx, 3.25, 1.8, 1.5, 2.8, '#0f172a', 'rgba(255,255,255,0.8)');
 
       // White threaded reclosable TetraCap spout (open/closed visual)
-      drawScrewCap(ctx, 0.6, -6.9, 2.1, 1.35, '#f8fafc', false);
+      const isOpenTetra = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'tetra_pack_1000_open');
+      if (isOpenTetra) {
+        drawScrewCap(ctx, 0.6, -6.4, 2.1, 0.75, '#f8fafc', false);
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.ellipse(0.6, -6.4, 0.72, 0.34, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        drawScrewCap(ctx, 0.6, -6.9, 2.1, 1.35, '#f8fafc', false);
+      }
       return true;
     }
 

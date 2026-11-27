@@ -6095,17 +6095,18 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
   // Keep sandbag itemId as 'sandbag' so sand pouring mechanics work directly
   const resolvedItemId = itemId === 'sandbag' ? 'sandbag' : (ITEM_CATALOG[effectiveContainerId] ? effectiveContainerId : (ITEM_CATALOG[itemId] ? def.itemId : itemId));
 
-  // Also attach unified hybrid fluidStorage to cookware / jars / mugs / pots registered directly in CONTAINER_CONFIGS
-  if (!fluidStorage && !isContainer) {
+  // Also attach unified hybrid fluidStorage to all containers / cookware / packages registered in CONTAINER_CONFIGS
+  if (!fluidStorage && resolvedItemId !== 'fork') {
     const directCfg = getContainerConfig(resolvedItemId);
-    if (directCfg && !directCfg.isGranularOnly) {
+    if (directCfg) {
       fluidStorage = {
         liquidId: directCfg.defaultLiquidId ?? null,
         currentMl: directCfg.defaultAmountMl ?? 0,
         maxMl: directCfg.maxMl,
         emptyWeightKg: directCfg.emptyWeightKg,
         baseItemNameRu: directCfg.nameRu || def.nameRu,
-        baseItemNameEn: directCfg.name || def.name
+        baseItemNameEn: directCfg.name || def.name,
+        attributes: (discreteAlias?.isOpen || legacyMap?.isOpen) ? { isOpened: true } : undefined
       };
     }
   }
@@ -6138,7 +6139,7 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
     weight: def.weight,
     volume: baseVolume,
     clothingStats: stats,
-    usable: def.singleUseContainer ? true : (finalIsContainer && !fluidStorage ? false : (fluidStorage ? true : def.usable)),
+    usable: def.singleUseContainer ? true : (fluidStorage ? true : (finalIsContainer ? false : def.usable)),
     portions: fluidStorage ? undefined : portions,
     maxPortions: fluidStorage ? undefined : maxPortions,
     isContainer: finalIsContainer,
@@ -6559,7 +6560,7 @@ export function normalizeItemAttributes(item: InventoryItem, def?: ItemDefinitio
 
   // 4. Container visuals / packaging properties mapping
   const isPkg = isPackageContainerItem(item) || Boolean(item.containerVisuals || item.packagingShape || item.packagingSize);
-  if (isPkg && !item.fluidStorage) {
+  if (isPkg && (!item.fluidStorage || !item.fluidStorage.liquidId || (item.fluidStorage.currentMl || 0) <= 0)) {
     const pkgShapeRu = inferPackageShapeLabelRu(item);
     const pkgMatRu = inferPackageMaterialRu(item);
     const pkgSize = item.packagingSize || catalogDef?.packagingSize;
@@ -7490,7 +7491,7 @@ export function syncPackageContainerState(
   if (container.isOpen) {
     container.singleUseContainer = false;
     container.tornItemId = undefined;
-    container.usable = numInside > 0;
+    container.usable = numInside > 0 || Boolean(container.fluidStorage);
     const openedBaseTitle = getOpenedPackageBaseNameRu(container);
     if (numInside > 0) {
       const shortInnerLabel =
@@ -7505,7 +7506,7 @@ export function syncPackageContainerState(
       container.descriptionRu = `Вскрытая упаковка (${baseDef?.nameRu || openedBaseTitle}). Внутри: ${shortInnerLabel} (${numInside} шт.). Активируйте в активной руке (ПКМ / удержание) или откройте контейнер в инвентаре, чтобы достать содержимое.`;
     } else {
       container.nameRu = openedBaseTitle;
-      container.descriptionRu = `Вскрытая пустая упаковка (${baseDef?.nameRu || openedBaseTitle}). Сохранила все атрибуты упаковки; можно положить предметы внутрь или утилизировать.`;
+      container.descriptionRu = `Вскрытая пустая упаковка (${baseDef?.nameRu || openedBaseTitle}). Сохранила все атрибуты упаковки; можно положить предметы или налить жидкость.`;
     }
   } else {
     container.isOpen = false;
@@ -7561,6 +7562,17 @@ export function syncPackageContainerState(
     } else {
       container.nameRu = customSealedNameRu || baseTitle;
       container.descriptionRu = customSealedDescRu || baseDef?.descriptionRu || container.descriptionRu;
+    }
+  }
+
+  if (container.fluidStorage) {
+    if (!container.fluidStorage.attributes) container.fluidStorage.attributes = {};
+    container.fluidStorage.attributes.isOpened = Boolean(container.isOpen);
+    if (container.fluidStorage.currentMl > 0 && container.fluidStorage.liquidId) {
+      syncItemContainerProperties(container);
+    } else {
+      container.weight = getFluidContainerWeight(container);
+      container.volume = getFluidContainerVolume(container);
     }
   }
 
@@ -8118,13 +8130,17 @@ export function unpackSingleUseContainer(
         );
 
       if (isExtractablePiece || isDirectPiece) {
-        // STEP 1: If the multi-piece package is still sealed, tearing it open converts it to the opened state in-place without changing itemId!
+        // STEP 1: If the multi-piece package is still sealed, tearing it open converts it to the opened state in-place without changing itemId.
         if (isCurrentlySealed) {
           container.isOpen = true;
+          if (container.fluidStorage) {
+            if (!container.fluidStorage.attributes) container.fluidStorage.attributes = {};
+            container.fluidStorage.attributes.isOpened = true;
+          }
           syncPackageContainerState(container);
           triggerPlayerActionAnim(player, 'unpacking', 0.95, container.itemId);
           sound.playUseItem();
-          const openMsg = `Упаковка вскрыта: ${container.nameRu}. Теперь содержимое можно доставать или употреблять!`;
+          const openMsg = `Упаковка вскрыта: ${container.nameRu}. Теперь содержимое можно доставать или употреблять.`;
           addPlayerNotification(player, openMsg, 'pickup');
           return { success: true, message: openMsg };
         }
@@ -8155,7 +8171,7 @@ export function unpackSingleUseContainer(
 
         if (isDirectPiece) {
           if (sample.category === 'food' && (player.needs.fullness || 0) >= 98) {
-            addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
+            addPlayerNotification(player, 'Вы слишком сыты. Подождите, пока переварится.', 'warning');
             return { success: false, message: 'Слишком сытно' };
           }
           if (sample.category === 'med' && player.bodyState) {
@@ -8274,11 +8290,18 @@ function handleReusableFilledContainerAction(
   if (!container.isContainer || !container.contents || container.contents.length === 0) {
     return null;
   }
-  const isDryBag =
-    (container.itemId === 'package_bag' || container.itemId === 'plastic_bag') &&
-    (!container.fluidStorage?.liquidId || (container.fluidStorage.currentMl || 0) <= 0);
+  const hasLiquid = Boolean(container.fluidStorage?.liquidId && (container.fluidStorage.currentMl || 0) > 0);
+  if (hasLiquid || isFluidContainerClosed(container)) {
+    return null;
+  }
+  const isDryBagOrStorage =
+    container.itemId === 'package_bag' ||
+    container.itemId === 'plastic_bag' ||
+    container.itemId.startsWith('box_cardboard_') ||
+    container.itemId.startsWith('sack_cloth_') ||
+    container.itemId === 'sack_empty';
   if (
-    !isDryBag &&
+    !isDryBagOrStorage &&
     container.itemId !== 'lukoshko' &&
     container.itemId !== 'egg_carton_10' &&
     container.itemId !== 'egg_carton_10_open' &&
@@ -8287,7 +8310,7 @@ function handleReusableFilledContainerAction(
     return null;
   }
 
-  if (isDryBag) {
+  if (isDryBagOrStorage) {
     const extracted = removeItemFromContainer(container, container.contents.length - 1, 1);
     if (!extracted) return null;
     triggerPlayerActionAnim(player, 'unpacking', 0.65, extracted.itemId, hand);
@@ -8307,8 +8330,8 @@ function handleReusableFilledContainerAction(
     const rem = container.contents ? container.contents.length : 0;
     const msg =
       rem > 0
-        ? `Достали из пакета: ${extracted.nameRu} (осталось ${rem} шт.)`
-        : `Достали последнее из пакета: ${extracted.nameRu}`;
+        ? `Достали из контейнера: ${extracted.nameRu} (осталось ${rem} шт.)`
+        : `Достали последнее из контейнера: ${extracted.nameRu}`;
     addPlayerNotification(player, msg, 'pickup');
     return { success: true, message: msg };
   }
@@ -8319,7 +8342,7 @@ function handleReusableFilledContainerAction(
   // If berry inside lukoshko: eat 1 handful of berries directly from the basket
   if (inner.itemId.startsWith('berry_')) {
     if ((player.needs.fullness || 0) >= 98) {
-      addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
+      addPlayerNotification(player, 'Вы слишком сыты. Подождите, пока переварится.', 'warning');
       return { success: false, message: 'Слишком сытно' };
     }
     const popped = container.contents.pop()!;
@@ -10627,49 +10650,68 @@ export function useItemOnPlayer(
     return { success: true, message: `Съедено с ветки: ${f.nameRu}` };
   }
 
-  // Single-use vacuum bags, kraft paper packaging, candy pouches, chocolate wrappers & disposable packaging unpack / tear open or consume piece
+  // 1. Sealed discrete packages (unseal first, including single-use or hybrid packages with solid contents)
   const isUnopenedPackage =
     !item.isOpen &&
+    isPackageContainerItem(item) &&
     Boolean(
       item.singleUseContainer ??
       ITEM_CATALOG[item.itemId]?.singleUseContainer ??
       ((item.itemId.startsWith('paper_packaging') || item.itemId.startsWith('candy_pouch') || item.itemId.startsWith('chocolate_pack')) && !item.itemId.includes('_open'))
     );
-  const isOpenedPackageWithContents =
-    Boolean(item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
-    Boolean(item.contents && item.contents.length > 0);
-
-  if (isUnopenedPackage || isOpenedPackageWithContents) {
+  if (isUnopenedPackage) {
     return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
-  // Open empty paper packaging container safety check
-  if (item.itemId.startsWith('paper_packaging') && (item.isOpen || item.itemId.includes('_open'))) {
-    addPlayerNotification(player, 'Это открытая бумажная упаковка: перетаскивайте в неё предметы для хранения.', 'info');
-    return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
+  // 2. Closed bottles, cans, jars, canisters, boxes, cloth sacks, medical tubes, ampoules, aerosols, tetra paks
+  if (isFluidContainerClosed(item)) {
+    const medId = item.fluidStorage?.attributes?.medicalEffectId;
+    const res = tryFillOrUseFluidContainer(player, item, world);
+    if (res.success) {
+      if (item.itemId.includes('canister')) {
+        triggerPlayerActionAnim(player, 'pouring_canister', 1.25, item.itemId);
+      } else if (!medId && (item.fluidStorage?.currentMl || 0) > 0) {
+        triggerPlayerActionAnim(player, 'drinking', 1.25, item.itemId);
+      } else {
+        triggerPlayerActionAnim(player, 'unpacking', 0.85, item.itemId);
+      }
+    }
+    return res;
   }
 
-  // Open empty plastic candy packaging container safety check
-  if (item.itemId.startsWith('candy_pouch') && (item.isOpen || item.itemId.includes('_open'))) {
-    addPlayerNotification(player, 'Это вскрытая пластиковая упаковка от сладостей: перетаскивайте в неё мелкие предметы для хранения.', 'info');
-    return { success: false, message: 'Вскрытая упаковка: используйте инвентарь для перемещения предметов' };
+  // 3. Liquid-filled hybrid containers (drink/pour/spray/extinguish first when containing fluid)
+  if (item.fluidStorage && item.fluidStorage.currentMl > 0) {
+    const medId = item.fluidStorage.attributes?.medicalEffectId;
+    if (medId && player.bodyState) {
+      const medRes = applyMedicalEffectById(player, medId, targetInjuryId);
+      if (!medRes.applied && medRes.errorMsg) {
+        return { success: false, message: medRes.errorMsg };
+      }
+    }
+    const res = tryFillOrUseFluidContainer(player, item, world);
+    if (res.success) {
+      if (item.itemId.includes('canister')) {
+        triggerPlayerActionAnim(player, 'pouring_canister', 1.25, item.itemId);
+      } else if (!medId) {
+        triggerPlayerActionAnim(player, 'drinking', 1.25, item.itemId);
+      }
+    }
+    return res;
   }
 
-  // Open empty chocolate packaging container safety check
-  if (item.itemId.startsWith('chocolate_pack') && (item.isOpen || item.itemId.includes('_open'))) {
-    addPlayerNotification(player, 'Это развёрнутая упаковка от шоколада: перетаскивайте в неё шоколадки и сладости для хранения.', 'info');
-    return { success: false, message: 'Развёрнутая упаковка: используйте инвентарь для перемещения предметов' };
+  // 4. Opened packages with solid items (extract piece or consume 1 pill/candy/snack)
+  const isOpenedPackageWithContents =
+    Boolean(item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
+    isPackageContainerItem(item) &&
+    Boolean(item.contents && item.contents.length > 0);
+  if (isOpenedPackageWithContents) {
+    return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
-  // Reusable filled containers (e.g. lukoshko with berries/mushrooms, open egg carton with eggs)
+  // 5. Open dry reusable filled containers (lukoshko, dry bags, open cardboard boxes, open cloth sacks)
   const reusableRes = handleReusableFilledContainerAction(player, item, world);
   if (reusableRes) {
     return reusableRes;
-  }
-
-  // Safety: Containers must NEVER be consumed or deleted on use
-  if (item.isContainer) {
-    return { success: false, message: 'Это контейнер: откройте его, чтобы положить или достать вещи'};
   }
 
   // Check if item is butcherable (carcasses, sides, quarters, whole birds/fish)
@@ -10803,7 +10845,7 @@ export function useItemOnPlayer(
     return handleCarKeyActivation(player, item, world);
   }
 
-  // Unified Fluid / Beverage / Fuel / Sand / Medical Solution Container usage
+  // Unified Fluid / Beverage / Fuel / Sand / Medical Solution Container usage (including empty open hybrid containers scooping water/fuel)
   if (item.fluidStorage) {
     const medId = item.fluidStorage.attributes?.medicalEffectId;
     if (medId && item.fluidStorage.currentMl > 0 && player.bodyState) {
@@ -10821,6 +10863,11 @@ export function useItemOnPlayer(
       }
     }
     return res;
+  }
+
+  // Safety: Pure non-fluid containers must NEVER be consumed or deleted on use
+  if (item.isContainer) {
+    return { success: false, message: 'Это контейнер: откройте его, чтобы положить или достать вещи' };
   }
 
   // Special repair tool usage
@@ -11805,48 +11852,68 @@ export function useHandItemOnPlayer(
     return { success: true, message: `Съедено с ветки: ${f.nameRu}` };
   }
 
-  // Single-use vacuum bags, kraft paper packaging, candy pouches, chocolate wrappers & disposable packaging unpack / tear open from hand
+  // 1. Sealed discrete packages in active hand
   const isUnopenedHandPackage =
     !item.isOpen &&
+    isPackageContainerItem(item) &&
     Boolean(
       item.singleUseContainer ??
       ITEM_CATALOG[item.itemId]?.singleUseContainer ??
       ((item.itemId.startsWith('paper_packaging') || item.itemId.startsWith('candy_pouch') || item.itemId.startsWith('chocolate_pack')) && !item.itemId.includes('_open'))
     );
-  const isOpenedHandPackageWithContents =
-    Boolean(item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
-    Boolean(item.contents && item.contents.length > 0);
-
-  if (isUnopenedHandPackage || isOpenedHandPackageWithContents) {
+  if (isUnopenedHandPackage) {
     return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
-  // Open empty paper packaging container in hand
-  if (item.itemId.startsWith('paper_packaging') && (item.isOpen || item.itemId.includes('_open'))) {
-    addPlayerNotification(player, 'Это открытая бумажная упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
-    return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
+  // 2. Closed bottles, cans, jars, canisters, boxes, cloth sacks, medical tubes, ampoules, aerosols, tetra paks
+  if (isFluidContainerClosed(item)) {
+    const medId = item.fluidStorage?.attributes?.medicalEffectId;
+    const res = tryFillOrUseFluidContainer(player, item, world);
+    if (res.success) {
+      if (item.itemId.includes('canister')) {
+        triggerPlayerActionAnim(player, 'pouring_canister', 1.25, item.itemId, hand);
+      } else if (!medId && (item.fluidStorage?.currentMl || 0) > 0) {
+        triggerPlayerActionAnim(player, 'drinking', 1.25, item.itemId, hand);
+      } else {
+        triggerPlayerActionAnim(player, 'unpacking', 0.85, item.itemId, hand);
+      }
+    }
+    return res;
   }
 
-  // Open empty plastic candy packaging container in hand
-  if (item.itemId.startsWith('candy_pouch') && (item.isOpen || item.itemId.includes('_open'))) {
-    addPlayerNotification(player, 'Это вскрытая пластиковая упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
-    return { success: false, message: 'Вскрытая упаковка: используйте инвентарь для перемещения предметов' };
+  // 3. Liquid-filled hybrid containers in active hand
+  if (item.fluidStorage && item.fluidStorage.currentMl > 0) {
+    const medId = item.fluidStorage.attributes?.medicalEffectId;
+    if (medId && player.bodyState) {
+      const medRes = applyMedicalEffectById(player, medId, targetInjuryId);
+      if (!medRes.applied && medRes.errorMsg) {
+        return { success: false, message: medRes.errorMsg };
+      }
+    }
+    const res = tryFillOrUseFluidContainer(player, item, world);
+    if (res.success) {
+      if (item.itemId.includes('canister')) {
+        triggerPlayerActionAnim(player, 'pouring_canister', 1.25, item.itemId, hand);
+      } else if (!medId) {
+        triggerPlayerActionAnim(player, 'drinking', 1.25, item.itemId, hand);
+      }
+    }
+    return res;
   }
 
-  // Open empty chocolate packaging container in hand
-  if (item.itemId.startsWith('chocolate_pack') && (item.isOpen || item.itemId.includes('_open'))) {
-    addPlayerNotification(player, 'Это развёрнутая упаковка от шоколада в руке: используйте инвентарь, чтобы сложить или достать сладости.', 'info');
-    return { success: false, message: 'Развёрнутая упаковка: используйте инвентарь для перемещения предметов' };
+  // 4. Opened packages with solid items in hand
+  const isOpenedHandPackageWithContents =
+    Boolean(item.isOpen || item.itemId === 'pouch_sealed_snack_torn' || item.itemId === 'egg_carton_10_open') &&
+    isPackageContainerItem(item) &&
+    Boolean(item.contents && item.contents.length > 0);
+  if (isOpenedHandPackageWithContents) {
+    return unpackSingleUseContainer(player, item, world, undefined, targetInjuryId);
   }
 
-  // Reusable filled containers held in hand (e.g. lukoshko, open egg carton, or dry package_bag/plastic_bag with goods)
+  // 5. Open dry reusable filled containers held in hand (lukoshko, dry bags, open boxes, open sacks)
   const reusableHandRes = handleReusableFilledContainerAction(player, item, world, hand);
   if (reusableHandRes) {
     return reusableHandRes;
-  }
-
-  if (item.isContainer) {
-    return { success: false, message: 'Это контейнер: откройте его, чтобы достать или положить вещи'};
   }
 
   // Check if item is butcherable (carcasses, sides, quarters, whole birds/fish)
@@ -12133,7 +12200,7 @@ export function useHandItemOnPlayer(
     return { success: true, message: 'Фонарик переключен'};
   }
 
-  // Unified Fluid / Beverage / Fuel / Sand / Medical Solution Container usage
+  // Unified Fluid / Beverage / Fuel / Sand / Medical Solution Container usage (including empty open hybrid containers scooping water/fuel)
   if (item.fluidStorage) {
     const medId = item.fluidStorage.attributes?.medicalEffectId;
     if (medId && item.fluidStorage.currentMl > 0 && player.bodyState) {
@@ -12151,6 +12218,11 @@ export function useHandItemOnPlayer(
       }
     }
     return res;
+  }
+
+  // Safety: Pure non-fluid containers in hand must NEVER fall through to generic food consumption
+  if (item.isContainer) {
+    return { success: false, message: 'Это контейнер: откройте его, чтобы достать или положить вещи' };
   }
 
   // Gasoline Canister usage (spills fuel puddles on ground or refuels nearby vehicle)

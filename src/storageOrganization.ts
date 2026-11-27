@@ -295,7 +295,8 @@ export function isPaperPackagingItem(item: InventoryItem | null | undefined): bo
   for (let i = 0; i < FOOD_PACKAGING_PREFIXES.length; i++) {
     if (id.startsWith(FOOD_PACKAGING_PREFIXES[i])) return true;
   }
-  if (item.singleUseContainer && !item.fluidStorage && !isReusableVesselOrContainer(item)) {
+  const hasLiquid = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 0);
+  if (item.singleUseContainer && !hasLiquid && !isReusableVesselOrContainer(item)) {
     return true;
   }
   return false;
@@ -378,7 +379,6 @@ export function isCookwareOrTablewareItem(item: InventoryItem | null | undefined
 
 export function isReusableVesselOrContainer(item: InventoryItem): boolean {
   const id = item.itemId.toLowerCase();
-  if (item.fluidStorage) return true;
   if (isCookwareOrTablewareItem(item)) return true;
   if (
     id.includes('bottle') ||
@@ -394,9 +394,20 @@ export function isReusableVesselOrContainer(item: InventoryItem): boolean {
     id.includes('suitcase') ||
     id.includes('shopping_bag') ||
     id.includes('plastic_bag') ||
+    id.includes('package_bag') ||
     id.includes('tote') ||
     id.includes('crate') ||
-    id.includes('lukoshko')
+    id.includes('lukoshko') ||
+    id.startsWith('box_cardboard') ||
+    id.startsWith('sack_') ||
+    id === 'sandbag' ||
+    id.startsWith('detergent_') ||
+    id === 'tube_ointment_small' ||
+    id === 'aerosol_can_small' ||
+    id === 'can_alu_330' ||
+    id === 'tetra_pack_1000' ||
+    id.startsWith('cup_plastic_dairy') ||
+    id === 'paper_cup'
   ) {
     return true;
   }
@@ -423,7 +434,8 @@ export function isDisposableTrashOrEmptyPackaging(item: InventoryItem | null | u
   }
 
   // Empty single-use wrapper / torn snack pouch / empty egg carton / disposable tray
-  if (item.singleUseContainer && !item.fluidStorage && !isReusableVesselOrContainer(item)) {
+  const hasLiquid = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 0);
+  if (item.singleUseContainer && !hasLiquid && !isReusableVesselOrContainer(item)) {
     const filled = (item.contents || []).filter(Boolean);
     if (filled.length === 0) return true;
   }
@@ -436,7 +448,7 @@ export function isDisposableTrashOrEmptyPackaging(item: InventoryItem | null | u
       id.includes('eggshell') ||
       id.includes('fish_bone') ||
       id.includes('scrap_burnt')) &&
-    !item.fluidStorage &&
+    !hasLiquid &&
     (!item.contents || item.contents.filter(Boolean).length === 0)
   ) {
     return true;
@@ -446,7 +458,7 @@ export function isDisposableTrashOrEmptyPackaging(item: InventoryItem | null | u
   const subject = getEffectiveSubjectItem(item);
   if (
     subject.category === 'food' &&
-    !item.fluidStorage &&
+    !hasLiquid &&
     (!item.isContainer || isPaperPackagingItem(item))
   ) {
     const st = String(subject.attributes?.state || '').toLowerCase();
@@ -465,7 +477,8 @@ export function isDisposableTrashOrEmptyPackaging(item: InventoryItem | null | u
  */
 export function isCarryBagWithItems(item: InventoryItem | null | undefined): boolean {
   if (!item) return false;
-  if (!item.isContainer || item.fluidStorage) return false;
+  const hasLiquid = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 0);
+  if (!item.isContainer || hasLiquid) return false;
   if (isPaperPackagingItem(item)) return false;
   if (isCookwareOrTablewareItem(item)) return false;
 

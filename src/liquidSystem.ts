@@ -3251,7 +3251,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Bottle',
     descriptionRu: 'Универсальная пластиковая ПЭТ-бутылка объемом 0.5 литра. Можно наполнять любой жидкостью или сыпучим веществом.',
-    descriptionEn: 'Universal 0.5L PET plastic bottle. Can hold any liquid or sand.'
+    descriptionEn: 'Universal 0.5L PET plastic bottle. Can hold any liquid or sand.',
+    requiresOpening: true
   },
   bottle_plastic_1500: {
     itemId: 'bottle_plastic_1500',
@@ -3263,7 +3264,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Bottle',
     descriptionRu: 'Большая пластиковая ПЭТ-бутылка на 1.5 литра. Подходит для воды, кваса, молока, топлива и сыпучих продуктов.',
-    descriptionEn: 'Large 1.5L PET bottle for fluids and granular materials.'
+    descriptionEn: 'Large 1.5L PET bottle for fluids and granular materials.',
+    requiresOpening: true
   },
   bottle_sauce_squeeze: {
     itemId: 'bottle_sauce_squeeze',
@@ -3275,7 +3277,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'food',
     icon: 'Bottle',
     descriptionRu: 'Мягкая полимерная бутылочка с узким носиком-дозатором для соусов, горчицы, кетчупа и топпингов (0.35л).',
-    descriptionEn: 'Squeeze plastic dispenser bottle for sauces and condiments (0.35L).'
+    descriptionEn: 'Squeeze plastic dispenser bottle for sauces and condiments (0.35L).',
+    requiresOpening: true
   },
   canister_metal_20l: {
     itemId: 'canister_metal_20l',
@@ -3287,7 +3290,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Fuel',
     descriptionRu: 'Прочная стальная 20-литровая канистра с герметичной крышкой. Подходит для бензина, дизеля, воды или песка.',
-    descriptionEn: 'Durable 20-liter steel canister with airtight latch. Can store fuel, water, or sand.'
+    descriptionEn: 'Durable 20-liter steel canister with airtight latch. Can store fuel, water, or sand.',
+    requiresOpening: true
   },
   canister_plastic_10l: {
     itemId: 'canister_plastic_10l',
@@ -3299,7 +3303,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Fuel',
     descriptionRu: 'Ударопрочная пластиковая канистра на 10 литров с удобной ручкой.',
-    descriptionEn: 'Impact-resistant 10L plastic canister with ergonomic handle.'
+    descriptionEn: 'Impact-resistant 10L plastic canister with ergonomic handle.',
+    requiresOpening: true
   },
   canister_plastic_5l: {
     itemId: 'canister_plastic_5l',
@@ -3311,7 +3316,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Fuel',
     descriptionRu: 'Компактная пластиковая канистра на 5 литров для технических жидкостей, антифриза, масла или топлива.',
-    descriptionEn: 'Compact 5L plastic canister for fluids, oil, coolant, or fuel.'
+    descriptionEn: 'Compact 5L plastic canister for fluids, oil, coolant, or fuel.',
+    requiresOpening: true
   },
   camp_flask: {
     itemId: 'camp_flask',
@@ -3323,7 +3329,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'FlaskConical',
     descriptionRu: 'Армейская стальная походная фляжка в матерчатом чехле. Вмещает 800 мл жидкости.',
-    descriptionEn: 'Field camp canteen flask in fabric case (800 ml).'
+    descriptionEn: 'Field camp canteen flask in fabric case (800 ml).',
+    requiresOpening: true
   },
   thermos: {
     itemId: 'thermos',
@@ -3335,7 +3342,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Coffee',
     descriptionRu: 'Вакуумный стальной термос на 1 литр. Сохраняет напитки горячими или холодными.',
-    descriptionEn: 'Vacuum insulated stainless steel thermos (1.0L).'
+    descriptionEn: 'Vacuum insulated stainless steel thermos (1.0L).',
+    requiresOpening: true
   },
   paper_cup: {
     itemId: 'paper_cup',
@@ -3360,7 +3368,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     icon: 'CupSoda',
     descriptionRu: 'Алюминиевая банка с ключом-кольцом (0.33 л).',
     descriptionEn: 'Aluminum beverage can (330 ml).',
-    requiresOpening: true
+    requiresOpening: true,
+    isSealedByDefault: true
   },
   glass_bottle_500: {
     itemId: 'glass_bottle_500',
@@ -3372,7 +3381,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Wine',
     descriptionRu: 'Стеклянная бутылка на 0.5 литра с винтовой крышкой.',
-    descriptionEn: 'Glass bottle (0.5L) with screw cap.'
+    descriptionEn: 'Glass bottle (0.5L) with screw cap.',
+    requiresOpening: true
   },
   tetra_pack_1000: {
     itemId: 'tetra_pack_1000',
@@ -3618,7 +3628,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'FlaskConical',
     descriptionRu: 'Мягкая алюминиевая туба с винтовым колпачком для мазей, гелей, бальзамов или густых паст (50 мл).',
-    descriptionEn: 'Collapsible aluminum tube with screw cap (50 ml).'
+    descriptionEn: 'Collapsible aluminum tube with screw cap (50 ml).',
+    requiresOpening: true
   },
   ampoule_glass_small: {
     itemId: 'ampoule_glass_small',
@@ -3630,7 +3641,9 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'FlaskConical',
     descriptionRu: 'Герметичная тонкостенная стеклянная ампула для инъекционных и стерильных растворов (10 мл).',
-    descriptionEn: 'Hermetic glass medical ampoule (10 ml).'
+    descriptionEn: 'Hermetic glass medical ampoule (10 ml).',
+    requiresOpening: true,
+    isSealedByDefault: true
   },
   aerosol_can_small: {
     itemId: 'aerosol_can_small',
@@ -3641,8 +3654,9 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.18,
     category: 'gear',
     icon: 'FlaskConical',
-    descriptionRu: 'Металлический аэрозольный баллончик под давлением с клапаном-распылителем (150 мл).',
-    descriptionEn: 'Pressurized metal aerosol spray can (150 ml).'
+    descriptionRu: 'Металлический аэрозольный баллончик под давлением с защитным колпачком и клапаном-распылителем (150 мл).',
+    descriptionEn: 'Pressurized metal aerosol spray can (150 ml).',
+    requiresOpening: true
   },
   bottle_glass_large: {
     itemId: 'bottle_glass_large',
@@ -3654,7 +3668,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Wine',
     descriptionRu: 'Унифицированная стеклянная бутылка объемом 1 литр.',
-    descriptionEn: 'Unified 1.0L glass bottle.'
+    descriptionEn: 'Unified 1.0L glass bottle.',
+    requiresOpening: true
   },
   bottle_glass_750: {
     itemId: 'bottle_glass_750',
@@ -3666,7 +3681,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Wine',
     descriptionRu: 'Стандартная винная стеклянная бутылка объемом 0.75 литра.',
-    descriptionEn: 'Standard 0.75L wine glass bottle.'
+    descriptionEn: 'Standard 0.75L wine glass bottle.',
+    requiresOpening: true
   },
   bottle_glass_medium: {
     itemId: 'bottle_glass_medium',
@@ -3678,7 +3694,21 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Wine',
     descriptionRu: 'Унифицированная стеклянная бутылка объемом 0.5 литра.',
-    descriptionEn: 'Unified 0.5L glass bottle.'
+    descriptionEn: 'Unified 0.5L glass bottle.',
+    requiresOpening: true
+  },
+  bottle_med_glass_brown: {
+    itemId: 'bottle_med_glass_brown',
+    name: 'Amber Glass Medicine Bottle (100ml)',
+    nameRu: 'Тёмный аптечный флакон 100мл',
+    maxMl: 100,
+    emptyWeightKg: 0.08,
+    emptyVolumeL: 0.14,
+    category: 'med',
+    icon: 'FlaskConical',
+    descriptionRu: 'Пузырёк из тёмного аптечного стекла с винтовой крышкой для настоек и растворов (100 мл).',
+    descriptionEn: 'Amber glass apothecary bottle with screw cap (100 ml).',
+    requiresOpening: true
   },
   sack_cloth_large: {
     itemId: 'sack_cloth_large',
@@ -3690,7 +3720,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Box',
     descriptionRu: 'Унифицированный тканевый мешок объемом 10 литров.',
-    descriptionEn: 'Unified 10L cloth sack.'
+    descriptionEn: 'Unified 10L cloth sack.',
+    requiresOpening: true
   },
   sack_cloth_medium: {
     itemId: 'sack_cloth_medium',
@@ -3702,7 +3733,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Box',
     descriptionRu: 'Унифицированный тканевый мешок объемом 5 литров.',
-    descriptionEn: 'Unified 5L cloth sack.'
+    descriptionEn: 'Unified 5L cloth sack.',
+    requiresOpening: true
   },
   sack_cloth_small: {
     itemId: 'sack_cloth_small',
@@ -3714,7 +3746,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Box',
     descriptionRu: 'Унифицированный тканевый мешок объемом 1 литр.',
-    descriptionEn: 'Unified 1L cloth sack.'
+    descriptionEn: 'Unified 1L cloth sack.',
+    requiresOpening: true
   },
   sandbag: {
     itemId: 'sandbag',
@@ -3739,8 +3772,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 1.0,
     category: 'gear',
     icon: 'Box',
-    descriptionRu: 'Прочный пустой мешок из грубой мешковины. Можно наполнять песком или использовать как ветошь.',
-    descriptionEn: 'Empty durable burlap canvas sack. Can store granular materials or be used as cloth.',
+    descriptionRu: 'Прочный пустой мешок из грубой мешковины. Можно наполнять песком, жидкостями, предметами или использовать как ветошь.',
+    descriptionEn: 'Empty durable burlap canvas sack. Can store granular materials, items, or be used as cloth.',
     defaultLiquidId: null,
     defaultAmountMl: 0
   },
@@ -3767,8 +3800,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     emptyVolumeL: 0.03,
     category: 'gear',
     icon: 'ShoppingBag',
-    descriptionRu: 'Прозрачный тонкий полиэтиленовый фасовочный пакет для овощей, фруктов, ягод, грибов и сыпучих продуктов.',
-    descriptionEn: 'Transparent thin polyethylene bag for produce, berries, mushrooms, and granular products.',
+    descriptionRu: 'Прозрачный тонкий полиэтиленовый фасовочный пакет для овощей, фруктов, ягод, грибов, жидкостей и сыпучих продуктов.',
+    descriptionEn: 'Transparent thin polyethylene bag for produce, berries, mushrooms, liquids, and granular products.',
     defaultLiquidId: null,
     defaultAmountMl: 0,
     supportsHybridContents: true,
@@ -3800,7 +3833,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'drink',
     icon: 'Wine',
     descriptionRu: 'Компактная стеклянная бутылочка объемом 250 мл для соусов, масел и сиропов.',
-    descriptionEn: 'Small 250ml glass bottle for sauces, oils, and syrups.'
+    descriptionEn: 'Small 250ml glass bottle for sauces, oils, and syrups.',
+    requiresOpening: true
   },
   bottle_plastic_100: {
     itemId: 'bottle_plastic_100',
@@ -3812,7 +3846,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'FlaskConical',
     descriptionRu: 'Малый медицинский пластиковый флакон с дозатором объемом 100 мл.',
-    descriptionEn: 'Small 100ml medical plastic dropper bottle.'
+    descriptionEn: 'Small 100ml medical plastic dropper bottle.',
+    requiresOpening: true
   },
   tetra_pack_250: {
     itemId: 'tetra_pack_250',
@@ -3852,7 +3887,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Box',
     descriptionRu: 'Большая прочная картонная коробка для хранения и транспортировки предметов.',
-    descriptionEn: 'Large heavy-duty cardboard storage box (15L).'
+    descriptionEn: 'Large heavy-duty cardboard storage box (15L).',
+    requiresOpening: true
   },
   box_cardboard_medium: {
     itemId: 'box_cardboard_medium',
@@ -3864,7 +3900,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Box',
     descriptionRu: 'Универсальная картонная коробка на 5 литров для припасов и продуктов.',
-    descriptionEn: 'Medium cardboard box for provisions and gear (5L).'
+    descriptionEn: 'Medium cardboard box for provisions and gear (5L).',
+    requiresOpening: true
   },
   box_cardboard_small: {
     itemId: 'box_cardboard_small',
@@ -3876,7 +3913,8 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     category: 'gear',
     icon: 'Box',
     descriptionRu: 'Компактная картонная коробочка на 1 литр для мелких предметов, чая или выпечки.',
-    descriptionEn: 'Small 1L cardboard box for small items, tea, or meals.'
+    descriptionEn: 'Small 1L cardboard box for small items, tea, or meals.',
+    requiresOpening: true
   },
   grain_pack_pouch: {
     itemId: 'grain_pack_pouch',
@@ -3893,7 +3931,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     defaultAmountMl: 0,
     requiresOpening: true,
     isSealedByDefault: true,
-    isGranularOnly: true
+    supportsHybridContents: true
   },
   grain_pack_box: {
     itemId: 'grain_pack_box',
@@ -3910,7 +3948,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     defaultAmountMl: 0,
     requiresOpening: true,
     isSealedByDefault: true,
-    isGranularOnly: true
+    supportsHybridContents: true
   },
   pasta_pack_bag: {
     itemId: 'pasta_pack_bag',
@@ -3927,7 +3965,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     defaultAmountMl: 0,
     requiresOpening: true,
     isSealedByDefault: true,
-    isGranularOnly: true
+    supportsHybridContents: true
   },
   pasta_pack_long: {
     itemId: 'pasta_pack_long',
@@ -3944,7 +3982,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     defaultAmountMl: 0,
     requiresOpening: true,
     isSealedByDefault: true,
-    isGranularOnly: true
+    supportsHybridContents: true
   },
   detergent_box: {
     itemId: 'detergent_box',
@@ -3961,7 +3999,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     defaultAmountMl: 0,
     requiresOpening: true,
     isSealedByDefault: true,
-    isGranularOnly: true
+    supportsHybridContents: true
   },
   detergent_bag_3l: {
     itemId: 'detergent_bag_3l',
@@ -3978,7 +4016,7 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     defaultAmountMl: 0,
     requiresOpening: true,
     isSealedByDefault: true,
-    isGranularOnly: true
+    supportsHybridContents: true
   },
   detergent_jug_1500: {
     itemId: 'detergent_jug_1500',
@@ -4011,6 +4049,471 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     defaultAmountMl: 0,
     requiresOpening: true,
     isSealedByDefault: true
+  },
+  // === UNIFIED DISCRETE PACKAGING CONTAINERS (HYBRID FLUID + SOLID) ===
+  vacuum_pack_small: {
+    itemId: 'vacuum_pack_small',
+    name: 'Vacuum Sealed Pouch (0.5L)',
+    nameRu: 'Вакуумный пакет (0.5L)',
+    maxMl: 600,
+    emptyWeightKg: 0.005,
+    emptyVolumeL: 0.05,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Герметичный вакуумный пакет из плотной барьерной пленки.',
+    descriptionEn: 'Airtight sealed vacuum pouch.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.5
+  },
+  vacuum_pack_medium: {
+    itemId: 'vacuum_pack_medium',
+    name: 'Vacuum Sealed Pouch (1.2L)',
+    nameRu: 'Вакуумный пакет (1.2L)',
+    maxMl: 1500,
+    emptyWeightKg: 0.01,
+    emptyVolumeL: 0.1,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Плотный прозрачный вакуумный пакет для продуктов и жидкостей.',
+    descriptionEn: 'Durable airtight vacuum packaging.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 1.2
+  },
+  vacuum_pack_large: {
+    itemId: 'vacuum_pack_large',
+    name: 'Large Vacuum Bag (2.5L)',
+    nameRu: 'Большой вакуум-пакет (2.5L)',
+    maxMl: 3000,
+    emptyWeightKg: 0.02,
+    emptyVolumeL: 0.2,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Крупногабаритный барьерный вакуумный пакет.',
+    descriptionEn: 'Heavy duty vacuum packaging.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 2.5
+  },
+  tray_sealed_food: {
+    itemId: 'tray_sealed_food',
+    name: 'Sealed Food Tray (1.0L)',
+    nameRu: 'Пищевой лоток под пленкой',
+    maxMl: 1200,
+    emptyWeightKg: 0.02,
+    emptyVolumeL: 0.2,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Пластиковый подложка-лоток с герметичной прозрачной запайкой пленкой.',
+    descriptionEn: 'Rigid plastic food tray with heat-sealed film.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 1.0
+  },
+  pouch_sealed_snack: {
+    itemId: 'pouch_sealed_snack',
+    name: 'Sealed Snack Doypack (0.8L)',
+    nameRu: 'Герметичный дой-пак',
+    maxMl: 800,
+    emptyWeightKg: 0.015,
+    emptyVolumeL: 0.1,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Герметичный пакет-дойпак с прозрачным окном для снеков и жидкостей.',
+    descriptionEn: 'Airtight stand-up pouch.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.7
+  },
+  paper_packaging_mini: {
+    itemId: 'paper_packaging_mini',
+    name: 'Mini Paper Packaging (0.4L)',
+    nameRu: 'Бумажная упаковка (Мини 0.4L)',
+    maxMl: 450,
+    emptyWeightKg: 0.01,
+    emptyVolumeL: 0.08,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Заводская пергаментная упаковка (мини-брикет 0.4L).',
+    descriptionEn: 'Mini parchment paper block wrapper.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.4
+  },
+  paper_packaging_small: {
+    itemId: 'paper_packaging_small',
+    name: 'Small Paper Packaging (0.8L)',
+    nameRu: 'Бумажная упаковка (Малая 0.8L)',
+    maxMl: 850,
+    emptyWeightKg: 0.015,
+    emptyVolumeL: 0.14,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Заводская бумажная упаковка (брикет 0.8L).',
+    descriptionEn: 'Small greaseproof paper wrapper.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.75
+  },
+  paper_packaging: {
+    itemId: 'paper_packaging',
+    name: 'Paper Packaging',
+    nameRu: 'Бумажная упаковка',
+    maxMl: 1200,
+    emptyWeightKg: 0.02,
+    emptyVolumeL: 0.2,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Заводская бумажная упаковка со сложенными конвертом краями.',
+    descriptionEn: 'Factory-wrapped paper packaging.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 1.0
+  },
+  paper_packaging_large: {
+    itemId: 'paper_packaging_large',
+    name: 'Large Paper Packaging (2.4L)',
+    nameRu: 'Бумажная упаковка (Большая 2.4L)',
+    maxMl: 2600,
+    emptyWeightKg: 0.035,
+    emptyVolumeL: 0.42,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Большая заводская бумажная упаковка (2.4L).',
+    descriptionEn: 'Large parchment paper block wrapper.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 2.3
+  },
+  candy_pouch_mini: {
+    itemId: 'candy_pouch_mini',
+    name: 'Mini Plastic Candy Sachet (0.08L)',
+    nameRu: 'Мини-саше от мармеладок (0.08L)',
+    maxMl: 80,
+    emptyWeightKg: 0.003,
+    emptyVolumeL: 0.02,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Компактный запаянный пластиковый мини-пакет саше.',
+    descriptionEn: 'Mini plastic candy sachet.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.05
+  },
+  candy_pouch_small: {
+    itemId: 'candy_pouch_small',
+    name: 'Small Candy Flow-Pack Pouch (0.18L)',
+    nameRu: 'Малый флоу-пак от конфет (0.18L)',
+    maxMl: 180,
+    emptyWeightKg: 0.005,
+    emptyVolumeL: 0.04,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Запаянный пластиковый пакет флоу-пак.',
+    descriptionEn: 'Small candy flow-pack wrapper.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.12
+  },
+  candy_pouch_euro: {
+    itemId: 'candy_pouch_euro',
+    name: 'Euro-Slot Candy Hanging Pouch (0.28L)',
+    nameRu: 'Евро-пакет от мармеладок (0.28L)',
+    maxMl: 280,
+    emptyWeightKg: 0.008,
+    emptyVolumeL: 0.06,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Прозрачный витринный евро-пакет.',
+    descriptionEn: 'Euro-slot candy hanging pouch.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.18
+  },
+  candy_pouch: {
+    itemId: 'candy_pouch',
+    name: 'Doypack Gummy Pouch (0.45L)',
+    nameRu: 'Пакет-дойпак от мармелада (0.45L)',
+    maxMl: 450,
+    emptyWeightKg: 0.012,
+    emptyVolumeL: 0.08,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Плотный глянцевый пакет-дойпак с зип-локом.',
+    descriptionEn: 'Stand-up doypack candy pouch with zip-lock.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.25
+  },
+  candy_pouch_large: {
+    itemId: 'candy_pouch_large',
+    name: 'Large Gusset Candy Bag (0.90L)',
+    nameRu: 'Большой пакет от мармеладок (0.90L)',
+    maxMl: 900,
+    emptyWeightKg: 0.022,
+    emptyVolumeL: 0.14,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Большой объёмный пакет с боковыми фальцами.',
+    descriptionEn: 'Large gusset candy bag.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.5
+  },
+  chocolate_pack_mini: {
+    itemId: 'chocolate_pack_mini',
+    name: 'Mini Foil Chocolate Wrap (0.05L)',
+    nameRu: 'Мини-обёртка для шоколадки (0.05L)',
+    maxMl: 50,
+    emptyWeightKg: 0.002,
+    emptyVolumeL: 0.015,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Компактная фольгированная мини-обёртка.',
+    descriptionEn: 'Mini foil chocolate wrap.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.035
+  },
+  chocolate_pack_bar: {
+    itemId: 'chocolate_pack_bar',
+    name: 'Chocolate Bar Flow-Pack (0.14L)',
+    nameRu: 'Флоу-пак для батончика (0.14L)',
+    maxMl: 140,
+    emptyWeightKg: 0.004,
+    emptyVolumeL: 0.035,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Узкий герметичный флоу-пак для батончиков.',
+    descriptionEn: 'Chocolate bar flow-pack.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.1
+  },
+  chocolate_pack_foil: {
+    itemId: 'chocolate_pack_foil',
+    name: 'Classic Foil & Paper Chocolate Sleeve (0.24L)',
+    nameRu: 'Классическая обёртка от шоколадки (0.24L)',
+    maxMl: 240,
+    emptyWeightKg: 0.007,
+    emptyVolumeL: 0.05,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Двухслойная обёртка плитки шоколада из фольги и бумаги.',
+    descriptionEn: 'Classic foil & paper chocolate sleeve.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.18
+  },
+  chocolate_pack_square: {
+    itemId: 'chocolate_pack_square',
+    name: 'Square Chocolate Knick-Pack (0.25L)',
+    nameRu: 'Квадратная упаковка от шоколада (0.25L)',
+    maxMl: 250,
+    emptyWeightKg: 0.006,
+    emptyVolumeL: 0.05,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Квадратный герметичный кник-пак.',
+    descriptionEn: 'Square chocolate knick-pack.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.18
+  },
+  chocolate_pack_prism: {
+    itemId: 'chocolate_pack_prism',
+    name: 'Triangular Prism Chocolate Box (0.30L)',
+    nameRu: 'Треугольная туба-призма от шоколада (0.30L)',
+    maxMl: 300,
+    emptyWeightKg: 0.015,
+    emptyVolumeL: 0.075,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Трёхгранная картонная коробочка-призма.',
+    descriptionEn: 'Triangular prism chocolate box.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.22
+  },
+  chocolate_pack_king: {
+    itemId: 'chocolate_pack_king',
+    name: 'King-Size XXL Craft Chocolate Envelope (0.50L)',
+    nameRu: 'Большая крафт-упаковка XXL для шоколада (0.50L)',
+    maxMl: 500,
+    emptyWeightKg: 0.018,
+    emptyVolumeL: 0.11,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Крупный крафт-конверт XXL с фольгой.',
+    descriptionEn: 'King-size XXL craft chocolate envelope.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.35
+  },
+  chocolate_pack_box: {
+    itemId: 'chocolate_pack_box',
+    name: 'Luxury Assorted Chocolate Gift Box (0.65L)',
+    nameRu: 'Подарочная коробка от шоколадного ассорти (0.65L)',
+    maxMl: 650,
+    emptyWeightKg: 0.042,
+    emptyVolumeL: 0.18,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Картонная коробка ассорти с коррексом.',
+    descriptionEn: 'Assorted chocolate gift box.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.35
+  },
+  pelmeni_pack_small: {
+    itemId: 'pelmeni_pack_small',
+    name: 'Small Pelmeni Clip-Bag (0.55L)',
+    nameRu: 'Малая пачка под пельмени с клипсой (0.55L)',
+    maxMl: 550,
+    emptyWeightKg: 0.008,
+    emptyVolumeL: 0.06,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Малый плотный полиэтиленовый пакет со скрепкой-клипсой.',
+    descriptionEn: 'Small pelmeni clip-bag.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.35
+  },
+  pelmeni_pack: {
+    itemId: 'pelmeni_pack',
+    name: 'Pelmeni Clip-Top Bag (0.9L)',
+    nameRu: 'Пачка под пельмени с клипсой (0.9L)',
+    maxMl: 900,
+    emptyWeightKg: 0.012,
+    emptyVolumeL: 0.09,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Классический плотный пакет со скрепкой-клипсой.',
+    descriptionEn: 'Standard pelmeni clip-top bag.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.5
+  },
+  pelmeni_pack_large: {
+    itemId: 'pelmeni_pack_large',
+    name: 'Large Family Pelmeni Bag (1.4L)',
+    nameRu: 'Большой мешок под пельмени с клипсой (1.4L)',
+    maxMl: 1400,
+    emptyWeightKg: 0.018,
+    emptyVolumeL: 0.14,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Крупный семейный пакет из морозостойкой плёнки с клипсой.',
+    descriptionEn: 'Large family pelmeni bag.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.8
+  },
+  pelmeni_pack_box: {
+    itemId: 'pelmeni_pack_box',
+    name: 'Cardboard Pelmeni Box (0.65L)',
+    nameRu: 'Картонная пачка под пельмени с окошком (0.65L)',
+    maxMl: 650,
+    emptyWeightKg: 0.025,
+    emptyVolumeL: 0.12,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Картонная пачка для пельменей с отрывным клапаном.',
+    descriptionEn: 'Cardboard pelmeni box.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.45
+  },
+  blister_pack_10: {
+    itemId: 'blister_pack_10',
+    name: 'Foil Pill Blister Pack',
+    nameRu: 'Фольгированный блистер для таблеток',
+    maxMl: 150,
+    emptyWeightKg: 0.01,
+    emptyVolumeL: 0.05,
+    category: 'med',
+    icon: 'Package',
+    descriptionRu: 'Пластиково-фольгированный блистер с ячейками для таблеток, пластырей или жидкостей.',
+    descriptionEn: 'PVC/aluminum foil blister pack.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.05
+  },
+  egg_carton_10: {
+    itemId: 'egg_carton_10',
+    name: 'Molded Pulp Egg Carton (10 cells)',
+    nameRu: 'Картонная кассета для яиц (10 ячеек)',
+    maxMl: 1000,
+    emptyWeightKg: 0.06,
+    emptyVolumeL: 0.85,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Формованная картонная ячейковая кассета на 10 яиц с откидной крышкой.',
+    descriptionEn: 'Molded pulp egg carton.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.15
+  },
+  egg_carton_quail_18: {
+    itemId: 'egg_carton_quail_18',
+    name: 'Quail Egg Plastic Clamshell (18 cells)',
+    nameRu: 'Пластиковый коррекс для перепелиных яиц',
+    maxMl: 500,
+    emptyWeightKg: 0.03,
+    emptyVolumeL: 0.45,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Прозрачный ячеистый пластиковый блистер-коррекс с крышкой на защёлках.',
+    descriptionEn: 'Clear thermoformed plastic quail egg clamshell.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.08
+  },
+  takeout_box_wok: {
+    itemId: 'takeout_box_wok',
+    name: 'Folded Cardboard Wok Box',
+    nameRu: 'Картонная коробочка WOK',
+    maxMl: 600,
+    emptyWeightKg: 0.03,
+    emptyVolumeL: 0.5,
+    category: 'misc',
+    icon: 'Package',
+    descriptionRu: 'Высокая картонная коробочка с клапанами для лапши, гарниров, попкорна или соусов.',
+    descriptionEn: 'Folded cardboard takeout box.',
+    requiresOpening: true,
+    isSealedByDefault: true,
+    supportsHybridContents: true,
+    maxItemVolumeL: 0.5
   },
   // === UNIFIED KITCHENWARE & TABLEWARE (HYBRID LIQUID + SOLID CONTAINERS) ===
   pot: {
@@ -4145,30 +4648,27 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
 // HYBRID CONTAINER UNIFIED CAPACITY & FLUID-SOLID MIXING ENGINE
 // ============================================================================
 
-const NON_HYBRID_FLUID_CONTAINER_IDS = new Set([
-  'tube_ointment_small',
-  'ampoule_glass_small',
-  'aerosol_can_small',
-  'package_sachet',
-  'bottle_sauce_squeeze',
-  'bottle_plastic_100',
-  'tetra_pack_250',
-  'tetra_pack_1000',
-  'can_alu_330',
-  'sandbag',
-  'grain_pack_pouch',
-  'grain_pack_box',
-  'pasta_pack_bag',
-  'pasta_pack_long',
-  'detergent_box',
-  'detergent_bag_3l',
-  'detergent_jug_1500',
-  'detergent_bottle_1000'
-]);
+export function isSoftOrDiscretePackagingId(itemId: string | undefined | null): boolean {
+  if (!itemId) return false;
+  const cleanId = itemId.replace(/_(open|torn)$/, '');
+  return (
+    cleanId.startsWith('vacuum_pack_') ||
+    cleanId === 'tray_sealed_food' ||
+    cleanId === 'pouch_sealed_snack' ||
+    cleanId.startsWith('paper_packaging') ||
+    cleanId.startsWith('candy_pouch') ||
+    cleanId.startsWith('chocolate_pack') ||
+    cleanId.startsWith('pelmeni_pack') ||
+    cleanId === 'blister_pack_10' ||
+    cleanId === 'egg_carton_10' ||
+    cleanId === 'egg_carton_quail_18' ||
+    cleanId === 'takeout_box_wok'
+  );
+}
 
 /**
- * Determines whether a fluid container itemId supports holding BOTH liquids and solid items
- * inside one shared volume meter (jars, pots, bowls, mugs, cups, bottles, cans, canisters, kettles).
+ * Determines whether a container itemId supports holding BOTH liquids and solid items
+ * inside one shared volume meter (all packages, bags, boxes, jars, bottles, cans, cookware).
  */
 export function canContainerHoldHybridContents(itemId: string | undefined | null): boolean {
   if (!itemId) return false;
@@ -4176,8 +4676,6 @@ export function canContainerHoldHybridContents(itemId: string | undefined | null
   const cfg = getContainerConfig(cleanId);
   if (!cfg) return false;
   if (cfg.supportsHybridContents !== undefined) return cfg.supportsHybridContents;
-  if (cfg.isGranularOnly) return false;
-  if (NON_HYBRID_FLUID_CONTAINER_IDS.has(cleanId)) return false;
   return true;
 }
 
@@ -4273,6 +4771,7 @@ export function ensureHybridContainerProps(item: InventoryItem | null | undefine
         emptyWeightKg: directCfg.emptyWeightKg,
         baseItemNameRu: directCfg.nameRu,
         baseItemNameEn: directCfg.name,
+        attributes: directCfg.requiresOpening ? { isOpened: Boolean(item.isOpen) } : undefined,
       };
       item.usable = true;
     } else {
@@ -5471,13 +5970,35 @@ export function getFluidContainerWeight(item: InventoryItem): number {
 }
 
 export function getFluidContainerVolume(item: InventoryItem): number {
-  if (item.itemId === 'plastic_bag' || item.itemId === 'package_bag') {
-    const baseShell = item.itemId === 'plastic_bag' ? 0.08 : 0.03;
+  const cfg = getContainerConfig(item.itemId);
+  const isRigidDiscretePkg =
+    item.itemId === 'tray_sealed_food' ||
+    item.itemId === 'egg_carton_10' ||
+    item.itemId === 'egg_carton_quail_18' ||
+    item.itemId === 'takeout_box_wok' ||
+    item.itemId === 'chocolate_pack_box' ||
+    item.itemId === 'chocolate_pack_prism';
+  const isFlexiblePouchOrBag =
+    !isRigidDiscretePkg &&
+    (item.itemId === 'plastic_bag' ||
+      item.itemId === 'package_bag' ||
+      isSoftOrDiscretePackagingId(item.itemId) ||
+      item.itemId === 'grain_pack_pouch' ||
+      item.itemId === 'pasta_pack_bag' ||
+      item.itemId === 'pasta_pack_long' ||
+      item.itemId === 'detergent_bag_3l' ||
+      item.itemId === 'package_sachet');
+  if (isFlexiblePouchOrBag) {
+    const baseShell =
+      item.itemId === 'plastic_bag'
+        ? 0.08
+        : item.itemId === 'package_bag'
+        ? 0.03
+        : Math.min(0.18, cfg?.emptyVolumeL || 0.04);
     const liquidVolL = Math.max(0, (item.fluidStorage?.currentMl || 0) / 1000);
     const solidVolL = getContainerSolidVolumeMl(item) / 1000;
     return Number((baseShell + liquidVolL + solidVolL).toFixed(4));
   }
-  const cfg = getContainerConfig(item.itemId);
   if (cfg?.emptyVolumeL) return cfg.emptyVolumeL;
   if (item.volume !== undefined) return item.volume;
   if (!item.fluidStorage) return 0.5;
@@ -6092,9 +6613,14 @@ export function syncItemContainerProperties(item: InventoryItem): void {
     if (storage.attributes) storage.attributes.isOpened = true;
   }
 
+  const isDiscretePkg = isSoftOrDiscretePackagingId(item.itemId);
+  const preserveDryPackageMeta = isDiscretePkg && (!storage.liquidId || storage.currentMl <= 0);
+
   item.weight = getFluidContainerWeight(item);
   item.volume = getFluidContainerVolume(item);
-  item.nameRu = getFluidContainerDisplayName(item);
+  if (!preserveDryPackageMeta) {
+    item.nameRu = getFluidContainerDisplayName(item);
+  }
 
   const breakdown = getContainerCapacityBreakdown(item);
   const solidItems = item.contents || [];
@@ -6112,6 +6638,8 @@ export function syncItemContainerProperties(item: InventoryItem): void {
     item.usable = true;
   } else if ((item.itemId === 'package_bag' || item.itemId === 'plastic_bag') && (!storage.liquidId || storage.currentMl <= 0)) {
     item.usable = hasSolids;
+  } else if (isDiscretePkg && (!storage.liquidId || storage.currentMl <= 0)) {
+    item.usable = hasSolids || !isOpened;
   }
 
   if (storage.currentMl > 0 && storage.liquidId) {
@@ -6179,41 +6707,43 @@ export function syncItemContainerProperties(item: InventoryItem): void {
       const baseDesc = cfg?.descriptionRu || 'Унифицированная ёмкость.';
       item.descriptionRu = `${baseDesc}${visBadge}${solidInfoPart}`;
     }
-  } else if (hasSolids) {
-    const baseDesc = cfg?.descriptionRu || 'Унифицированная ёмкость.';
-    item.descriptionRu =
-      `${baseDesc}${visBadge} Внутри предметы (${solidItems.length} шт., ${(breakdown.solidMl / 1000).toFixed(2)} л): ${solidNamesStr}. ` +
-      `Жидкости нет — свободно ${(breakdown.freeMl / 1000).toFixed(2)} из ${(breakdown.totalCapacityMl / 1000).toFixed(2)} л.`;
-    item.attributes = {
-      ...(item.attributes || {}),
-      varietyRu: `${cfg?.nameRu || storage.baseItemNameRu}: ${solidNamesStr}`,
-      ingredients: solidItems.map(c => c.nameRu),
-      state: 'filled_solids',
-      stateNameRu: `${solidItems.length} предм. (без жидкости)`
-    };
-  } else {
-    const baseDesc = cfg?.descriptionRu || 'Пустая унифицированная ёмкость.';
-    item.descriptionRu = `${baseDesc}${visBadge} Сейчас пуста (0 мл).`;
-    item.attributes = {
-      ...(item.attributes || {}),
-      varietyRu: cfg?.nameRu || storage.baseItemNameRu || item.nameRu,
-      preparationMethod: vis?.materialNameRu ? `Тара (${vis.materialNameRu})` : 'Унифицированная тара',
-      purpose: cfg?.descriptionRu || 'Хранение жидкостей и предметов в общем объёме',
-      state: cfg?.requiresOpening ? (isOpened ? 'opened' : 'sealed') : 'empty',
-      stateNameRu: 'Пусто',
-      visuals: {
-        ...(item.attributes?.visuals || {}),
-        ...(vis ? {
-          shape: vis.shape,
-          shapeNameRu: vis.shapeNameRu,
-          materialRgb: vis.materialRgb,
-          materialNameRu: vis.materialNameRu,
-          labelRgb: vis.labelRgb,
-          labelAccentRgb: vis.labelAccentRgb,
-          capRgb: vis.capRgb
-        } : {})
-      }
-    };
+  } else if (!preserveDryPackageMeta) {
+    if (hasSolids) {
+      const baseDesc = cfg?.descriptionRu || 'Унифицированная ёмкость.';
+      item.descriptionRu =
+        `${baseDesc}${visBadge} Внутри предметы (${solidItems.length} шт., ${(breakdown.solidMl / 1000).toFixed(2)} л): ${solidNamesStr}. ` +
+        `Жидкости нет — свободно ${(breakdown.freeMl / 1000).toFixed(2)} из ${(breakdown.totalCapacityMl / 1000).toFixed(2)} л.`;
+      item.attributes = {
+        ...(item.attributes || {}),
+        varietyRu: `${cfg?.nameRu || storage.baseItemNameRu}: ${solidNamesStr}`,
+        ingredients: solidItems.map(c => c.nameRu),
+        state: cfg?.requiresOpening ? (isOpened ? 'opened' : 'sealed') : 'filled_solids',
+        stateNameRu: `${solidItems.length} предм. (без жидкости)`
+      };
+    } else {
+      const baseDesc = cfg?.descriptionRu || 'Пустая унифицированная ёмкость.';
+      item.descriptionRu = `${baseDesc}${visBadge} Сейчас пуста (0 мл).`;
+      item.attributes = {
+        ...(item.attributes || {}),
+        varietyRu: cfg?.nameRu || storage.baseItemNameRu || item.nameRu,
+        preparationMethod: vis?.materialNameRu ? `Тара (${vis.materialNameRu})` : 'Унифицированная тара',
+        purpose: cfg?.descriptionRu || 'Хранение жидкостей и предметов в общем объёме',
+        state: cfg?.requiresOpening ? (isOpened ? 'opened' : 'sealed') : 'empty',
+        stateNameRu: 'Пусто',
+        visuals: {
+          ...(item.attributes?.visuals || {}),
+          ...(vis ? {
+            shape: vis.shape,
+            shapeNameRu: vis.shapeNameRu,
+            materialRgb: vis.materialRgb,
+            materialNameRu: vis.materialNameRu,
+            labelRgb: vis.labelRgb,
+            labelAccentRgb: vis.labelAccentRgb,
+            capRgb: vis.capRgb
+          } : {})
+        }
+      };
+    }
   }
 }
 
@@ -6222,6 +6752,53 @@ export function isFluidContainerClosed(item: InventoryItem | null | undefined): 
   const cfg = getContainerConfig(item.itemId);
   const isOpened = Boolean(item.isOpen || item.fluidStorage.attributes?.isOpened || item.itemId.endsWith('_open'));
   return Boolean(cfg?.requiresOpening && !isOpened);
+}
+
+export function canCloseFluidContainer(item: InventoryItem | null | undefined): boolean {
+  if (!item) return false;
+  const id = item.itemId;
+  const cfg = getContainerConfig(id);
+  if (!cfg?.requiresOpening) return false;
+  if (cfg.isSealedByDefault) {
+    // Only reclosable factory packages (flaps, clips, zip-locks, hinged lids, screw caps) can be re-closed
+    return (
+      id === 'tetra_pack_1000' ||
+      id === 'detergent_jug_1500' ||
+      id === 'detergent_bottle_1000' ||
+      id === 'egg_carton_10' ||
+      id === 'egg_carton_quail_18' ||
+      id === 'takeout_box_wok' ||
+      id === 'candy_pouch' ||
+      id.startsWith('pelmeni_pack')
+    );
+  }
+  return true;
+}
+
+export function closeFluidContainer(
+  player: Player | null | undefined,
+  container: InventoryItem | null | undefined
+): { closed: boolean; message: string } {
+  if (!container || !canCloseFluidContainer(container)) {
+    return { closed: false, message: '' };
+  }
+  if (isFluidContainerClosed(container) || !container.isOpen) {
+    return { closed: false, message: '' };
+  }
+  container.isOpen = false;
+  if (container.fluidStorage?.attributes) {
+    container.fluidStorage.attributes.isOpened = false;
+  }
+  if (container.fluidStorage) {
+    syncItemContainerProperties(container);
+  }
+  sound.playUseItem();
+  const cfg = getContainerConfig(container.itemId);
+  const msg = `Тара закрыта: ${cfg?.nameRu || container.nameRu}`;
+  if (player) {
+    addPlayerNotification(player, msg, 'info');
+  }
+  return { closed: true, message: msg };
 }
 
 export function openFluidContainerIfNeeded(
@@ -6256,7 +6833,7 @@ export function openFluidContainerIfNeeded(
   syncItemContainerProperties(container);
 
   sound.playUseItem();
-  const msg = `Тара вскрыта: ${cfg.nameRu}. Теперь содержимое можно употреблять или переливать!`;
+  const msg = `Открыто: ${cfg.nameRu}`;
   if (player) {
     addPlayerNotification(player, msg, 'info');
   }

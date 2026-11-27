@@ -419,12 +419,12 @@ export function getActiveHandUsableItem(player: Player | null | undefined): { ha
   if (!handItem) return null;
 
   const isOpenableContainer =
-    (handItem.isContainer && !handItem.fluidStorage) ||
     handItem.itemId === 'wallet' ||
-    handItem.itemId === 'plastic_bag';
+    (handItem.isContainer && !handItem.singleUseContainer);
 
   if (
     handItem.usable ||
+    handItem.fluidStorage ||
     isOpenableContainer ||
     handItem.category === 'food' ||
     handItem.category === 'drink' ||

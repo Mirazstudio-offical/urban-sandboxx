@@ -3880,6 +3880,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'sack_cloth_small': {
       const isLg = itemId === 'sack_cloth_large';
       const isSm = itemId === 'sack_cloth_small';
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened);
 
       const hw = isLg ? 8.0 : (isSm ? 5.2 : 6.8);
       const topY = isLg ? -8.0 : (isSm ? -6.0 : -7.0);
@@ -3895,14 +3896,24 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
 
       ctx.fillStyle = sackGrad;
       ctx.beginPath();
-      ctx.moveTo(-hw * 0.4, topY);
-      ctx.quadraticCurveTo(-hw * 0.9, topY + 2.0, -hw, topY + 6.0);
-      ctx.quadraticCurveTo(-hw * 1.05, botY - 1.5, -hw * 0.8, botY);
-      ctx.quadraticCurveTo(0, botY + 1.5, hw * 0.8, botY);
-      ctx.quadraticCurveTo(hw * 1.05, botY - 1.5, hw, topY + 6.0);
-      ctx.quadraticCurveTo(hw * 0.9, topY + 2.0, hw * 0.4, topY);
-      ctx.quadraticCurveTo(0, topY - 0.6, -hw * 0.4, topY);
-      ctx.closePath();
+      if (isOpen) {
+        ctx.moveTo(-hw * 0.72, topY + 0.8);
+        ctx.quadraticCurveTo(-hw * 0.96, topY + 2.8, -hw, topY + 6.0);
+        ctx.quadraticCurveTo(-hw * 1.05, botY - 1.5, -hw * 0.8, botY);
+        ctx.quadraticCurveTo(0, botY + 1.5, hw * 0.8, botY);
+        ctx.quadraticCurveTo(hw * 1.05, botY - 1.5, hw, topY + 6.0);
+        ctx.quadraticCurveTo(hw * 0.96, topY + 2.8, hw * 0.72, topY + 0.8);
+        ctx.closePath();
+      } else {
+        ctx.moveTo(-hw * 0.4, topY);
+        ctx.quadraticCurveTo(-hw * 0.9, topY + 2.0, -hw, topY + 6.0);
+        ctx.quadraticCurveTo(-hw * 1.05, botY - 1.5, -hw * 0.8, botY);
+        ctx.quadraticCurveTo(0, botY + 1.5, hw * 0.8, botY);
+        ctx.quadraticCurveTo(hw * 1.05, botY - 1.5, hw, topY + 6.0);
+        ctx.quadraticCurveTo(hw * 0.9, topY + 2.0, hw * 0.4, topY);
+        ctx.quadraticCurveTo(0, topY - 0.6, -hw * 0.4, topY);
+        ctx.closePath();
+      }
       ctx.fill();
 
       // Burlap cross-weave lines
@@ -3919,22 +3930,38 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       }
       ctx.stroke();
 
-      ctx.fillStyle = '#dec79f';
-      ctx.beginPath();
-      ctx.moveTo(-hw * 0.4, topY);
-      ctx.quadraticCurveTo(-hw * 0.6, topY - 2.5, -hw * 0.4, topY - 3.5);
-      ctx.quadraticCurveTo(0, topY - 2.0, hw * 0.4, topY - 3.5);
-      ctx.quadraticCurveTo(hw * 0.6, topY - 2.5, hw * 0.4, topY);
-      ctx.closePath();
-      ctx.fill();
+      if (isOpen) {
+        // Rolled-down open burlap collar & dark interior cavity
+        ctx.fillStyle = '#dec79f';
+        ctx.beginPath();
+        ctx.ellipse(0, topY + 0.8, hw * 0.74, 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#9a7b4f';
+        ctx.lineWidth = 0.4;
+        ctx.stroke();
 
-      ctx.fillStyle = '#fef08a';
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.roundRect(-hw * 0.45, topY - 0.6, hw * 0.9, 1.8, 0.6);
-      ctx.fill();
-      ctx.stroke();
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath();
+        ctx.ellipse(0, topY + 0.8, hw * 0.56, 1.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#dec79f';
+        ctx.beginPath();
+        ctx.moveTo(-hw * 0.4, topY);
+        ctx.quadraticCurveTo(-hw * 0.6, topY - 2.5, -hw * 0.4, topY - 3.5);
+        ctx.quadraticCurveTo(0, topY - 2.0, hw * 0.4, topY - 3.5);
+        ctx.quadraticCurveTo(hw * 0.6, topY - 2.5, hw * 0.4, topY);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#fef08a';
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.roundRect(-hw * 0.45, topY - 0.6, hw * 0.9, 1.8, 0.6);
+        ctx.fill();
+        ctx.stroke();
+      }
 
       // Stitched parchment farm tag + barcode (no big sans-serif text)
       drawStudioLabelPanel(ctx, -hw * 0.56, topY + (botY - topY) * 0.36, hw * 1.12, 4.2, {
@@ -3959,6 +3986,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'box_cardboard_small': {
       const isLg = itemId === 'box_cardboard_large';
       const isSm = itemId === 'box_cardboard_small';
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened);
 
       const w = isLg ? 16 : (isSm ? 10 : 13);
       const h = isLg ? 13 : (isSm ? 8.5 : 11);
@@ -3981,32 +4009,66 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.lineWidth = 0.35;
       ctx.stroke();
 
-      // Top lid bevel with center flap seam + clear packing tape strip
-      const topGrad = ctx.createLinearGradient(-hw, topY, hw, topY + 2.5);
-      topGrad.addColorStop(0.0, '#e5c59e');
-      topGrad.addColorStop(1.0, '#c6996b');
-      ctx.fillStyle = topGrad;
-      ctx.beginPath();
-      ctx.moveTo(-hw, topY + 2.5);
-      ctx.lineTo(-hw + 2.0, topY);
-      ctx.lineTo(hw - 2.0, topY);
-      ctx.lineTo(hw, topY + 2.5);
-      ctx.closePath();
-      ctx.fill();
+      if (isOpen) {
+        // Splayed open cardboard flaps and dark box interior
+        ctx.fillStyle = '#291c12';
+        ctx.beginPath();
+        ctx.moveTo(-hw + 0.6, topY + 2.5);
+        ctx.lineTo(-hw + 2.1, topY + 0.3);
+        ctx.lineTo(hw - 2.1, topY + 0.3);
+        ctx.lineTo(hw - 0.6, topY + 2.5);
+        ctx.closePath();
+        ctx.fill();
 
-      ctx.strokeStyle = 'rgba(69, 26, 3, 0.45)';
-      ctx.lineWidth = 0.35;
-      ctx.beginPath();
-      ctx.moveTo(-hw + 1.0, topY + 1.25);
-      ctx.lineTo(hw - 1.0, topY + 1.25);
-      ctx.stroke();
+        // Left & right folded open flaps
+        ctx.fillStyle = '#dfbd95';
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 0.3;
+        ctx.beginPath();
+        ctx.moveTo(-hw, topY + 2.5);
+        ctx.lineTo(-hw - 1.5, topY + 0.4);
+        ctx.lineTo(-hw + 1.8, topY - 0.4);
+        ctx.lineTo(-hw + 2.1, topY + 1.8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
 
-      // Translucent acrylic packing tape wrapping down front seam
-      ctx.fillStyle = 'rgba(254, 240, 138, 0.36)';
-      ctx.fillRect(-1.4, topY, 2.8, 5.2);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = 0.22;
-      ctx.strokeRect(-1.4, topY, 2.8, 5.2);
+        ctx.beginPath();
+        ctx.moveTo(hw, topY + 2.5);
+        ctx.lineTo(hw + 1.5, topY + 0.4);
+        ctx.lineTo(hw - 1.8, topY - 0.4);
+        ctx.lineTo(hw - 2.1, topY + 1.8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Top lid bevel with center flap seam + clear packing tape strip
+        const topGrad = ctx.createLinearGradient(-hw, topY, hw, topY + 2.5);
+        topGrad.addColorStop(0.0, '#e5c59e');
+        topGrad.addColorStop(1.0, '#c6996b');
+        ctx.fillStyle = topGrad;
+        ctx.beginPath();
+        ctx.moveTo(-hw, topY + 2.5);
+        ctx.lineTo(-hw + 2.0, topY);
+        ctx.lineTo(hw - 2.0, topY);
+        ctx.lineTo(hw, topY + 2.5);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(69, 26, 3, 0.45)';
+        ctx.lineWidth = 0.35;
+        ctx.beginPath();
+        ctx.moveTo(-hw + 1.0, topY + 1.25);
+        ctx.lineTo(hw - 1.0, topY + 1.25);
+        ctx.stroke();
+
+        // Translucent acrylic packing tape wrapping down front seam
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.36)';
+        ctx.fillRect(-1.4, topY, 2.8, 5.2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 0.22;
+        ctx.strokeRect(-1.4, topY, 2.8, 5.2);
+      }
 
       if (item?.fluidStorage?.attributes?.customColor) {
         ctx.fillStyle = item.fluidStorage.attributes.customColor;
@@ -4242,9 +4304,26 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       // Fresnel glass/PET specular reflections
       drawGlossBand(ctx, -hw + 1.2, bodyTopY, 1.1, botY - bodyTopY - 0.8, 0.42);
 
-      // Cap or Squeeze Dispenser Nozzle
+      // Cap or Open Rim / Squeeze Dispenser Nozzle
+      const isOpenBottle = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened);
       const finalCapRgb: [number, number, number] = capRgb || (isPlastic ? [2, 132, 199] : [148, 163, 184]);
-      if (isSqueeze) {
+      if (isOpenBottle) {
+        // Open uncapped bottle mouth + threaded neck rim
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.ellipse(0, neckTopY, hnw * 0.85, 0.72, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = rgbTupleToCss(shiftRgbTuple(materialRgb, 40), 0.9);
+        ctx.lineWidth = 0.55;
+        ctx.beginPath();
+        ctx.ellipse(0, neckTopY, hnw + 0.2, 0.85, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        if (isSqueeze) {
+          // Squeeze open tip collar without protective overcap
+          ctx.fillStyle = rgbTupleToCss(finalCapRgb);
+          ctx.fillRect(-hnw - 0.1, neckTopY - 0.2, neckW + 0.2, 1.0);
+        }
+      } else if (isSqueeze) {
         ctx.fillStyle = rgbTupleToCss(finalCapRgb);
         ctx.beginPath();
         ctx.moveTo(-1.8, neckTopY + 2.8);
@@ -4276,6 +4355,7 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'aerosol_can_small': {
       drawShadow(ctx, 4.2, 1.8, 7.6, 0.22);
       const customC = item?.fluidStorage?.attributes?.customColor;
+      const isOpenMed = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened);
 
       if (itemId === 'tube_ointment_small') {
         const tGrad = ctx.createLinearGradient(-4.3, -4.5, 4.3, 6.5);
@@ -4316,7 +4396,20 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.restore();
 
         drawCrimpedSeal(ctx, -4.3, 5.4, 8.6, 1.35, '#94a3b8', true, 0.68);
-        drawScrewCap(ctx, 0, -7.1, 3.2, 2.7, '#e2e8f0', false);
+        if (isOpenMed) {
+          // Exposed open threaded metallic tube nozzle
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(-1.1, -6.1, 2.2, 1.7);
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 0.3;
+          ctx.strokeRect(-1.1, -6.1, 2.2, 1.7);
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.ellipse(0, -6.1, 0.8, 0.35, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          drawScrewCap(ctx, 0, -7.1, 3.2, 2.7, '#e2e8f0', false);
+        }
         return true;
       }
 
@@ -4329,16 +4422,35 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         ctx.beginPath();
         ctx.roundRect(-2.5, -1.6, 5.0, 8.2, 1.4);
         ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(-1.3, -1.6);
-        ctx.lineTo(-0.5, -5.2);
-        ctx.lineTo(-0.9, -6.2);
-        ctx.lineTo(0, -7.8);
-        ctx.lineTo(0.9, -6.2);
-        ctx.lineTo(0.5, -5.2);
-        ctx.lineTo(1.3, -1.6);
-        ctx.closePath();
-        ctx.fill();
+        if (isOpenMed) {
+          // Snapped open ampoule neck (top spire broken off cleanly at ceramic break-ring)
+          ctx.beginPath();
+          ctx.moveTo(-1.3, -1.6);
+          ctx.lineTo(-1.05, -2.9);
+          ctx.lineTo(1.05, -2.9);
+          ctx.lineTo(1.3, -1.6);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.ellipse(0, -2.9, 0.9, 0.36, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(224, 242, 254, 0.9)';
+          ctx.lineWidth = 0.35;
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(-1.3, -1.6);
+          ctx.lineTo(-0.5, -5.2);
+          ctx.lineTo(-0.9, -6.2);
+          ctx.lineTo(0, -7.8);
+          ctx.lineTo(0.9, -6.2);
+          ctx.lineTo(0.5, -5.2);
+          ctx.lineTo(1.3, -1.6);
+          ctx.closePath();
+          ctx.fill();
+        }
 
         if (item?.fluidStorage && item.fluidStorage.currentMl > 0) {
           ctx.fillStyle = customC || '#38bdf8';
@@ -4352,10 +4464,12 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         // Ceramic break-point neck ring
         ctx.fillStyle = '#f8fafc';
         ctx.fillRect(-1.1, -2.5, 2.2, 0.55);
-        ctx.fillStyle = '#0284c7';
-        ctx.beginPath();
-        ctx.arc(0, -3.4, 0.45, 0, Math.PI * 2);
-        ctx.fill();
+        if (!isOpenMed) {
+          ctx.fillStyle = '#0284c7';
+          ctx.beginPath();
+          ctx.arc(0, -3.4, 0.45, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.lineWidth = 0.4;
@@ -4397,12 +4511,23 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       });
       applyCylinderLightingOverlay(ctx, -4.0, -3.8, 8.0, 10.8, 0.28, 0.3);
 
-      // Spray actuator nozzle cap
-      drawScrewCap(ctx, 0, -6.9, 4.4, 2.8, '#f8fafc', false);
-      ctx.fillStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.arc(0.9, -5.8, 0.45, 0, Math.PI * 2);
-      ctx.fill();
+      if (isOpenMed) {
+        // Exposed spray actuator button nozzle (overcap removed)
+        drawScrewCap(ctx, 0, -6.2, 2.8, 1.9, '#f8fafc', false);
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.arc(0.75, -5.5, 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Sealed protective translucent-white dome overcap covering the actuator
+        ctx.fillStyle = 'rgba(248, 250, 252, 0.92)';
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 0.4;
+        ctx.beginPath();
+        ctx.roundRect(-3.6, -7.8, 7.2, 4.2, [1.8, 1.8, 0.3, 0.3]);
+        ctx.fill();
+        ctx.stroke();
+      }
       return true;
     }
 
@@ -4830,6 +4955,20 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
           idx++;
         }
       }
+      const isBlisterOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || (!isEmpty && remCount < 10));
+      if (isBlisterOpen && itemId !== 'blister_pack_empty') {
+        // Folded peeled foil corner indicating unsealed blister
+        ctx.fillStyle = '#e2e8f0';
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.35;
+        ctx.beginPath();
+        ctx.moveTo(2.9, -7.6);
+        ctx.lineTo(5.6, -4.9);
+        ctx.lineTo(2.9, -4.9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
       return true;
     }
 
@@ -4839,12 +4978,12 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     case 'egg_carton_quail_18': {
       drawShadow(ctx, 9.6, 4.0, 7.6, 0.26);
       const isQuail = itemId === 'egg_carton_quail_18';
-      const isOpen = Boolean(item?.isOpen) || itemId === 'egg_carton_10_open' || isQuail;
+      const isOpen = Boolean(item?.isOpen || item?.fluidStorage?.attributes?.isOpened || itemId === 'egg_carton_10_open');
 
       const pulpGrad = ctx.createLinearGradient(-8.6, -5.2, 8.6, 5.2);
-      pulpGrad.addColorStop(0.0, item?.containerTintColor || (isQuail ? 'rgba(241, 245, 249, 0.82)' : '#e7e5e4'));
-      pulpGrad.addColorStop(0.55, isQuail ? 'rgba(203, 213, 225, 0.72)' : '#d6d3d1');
-      pulpGrad.addColorStop(1.0, isQuail ? 'rgba(148, 163, 184, 0.72)' : '#a8a29e');
+      pulpGrad.addColorStop(0.0, item?.containerTintColor || (isQuail ? 'rgba(241, 245, 249, 0.86)' : '#e7e5e4'));
+      pulpGrad.addColorStop(0.55, isQuail ? 'rgba(203, 213, 225, 0.78)' : '#d6d3d1');
+      pulpGrad.addColorStop(1.0, isQuail ? 'rgba(148, 163, 184, 0.78)' : '#a8a29e');
       ctx.fillStyle = pulpGrad;
       ctx.strokeStyle = '#78716c';
       ctx.lineWidth = 0.55;
@@ -4854,14 +4993,30 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.stroke();
 
       if (!isOpen) {
+        if (isQuail) {
+          // Subtle visible eggs beneath closed clear clamshell lid
+          const validEggs = (Array.isArray(item?.contents) ? item.contents : []).filter(
+            (inner: any) => inner && inner.itemId && !inner.itemId.startsWith('egg_carton')
+          );
+          const count = Math.min(18, validEggs.length);
+          ctx.save();
+          ctx.globalAlpha = 0.38;
+          for (let i = 0; i < count; i++) {
+            const ex = -6.4 + (i % 6) * 2.56;
+            const ey = -2.85 + Math.floor(i / 6) * 2.85;
+            drawLitEllipse(ctx, ex, ey, 0.9, 1.1, 0, '#ffffff', '#e7e5e4', '#a8a29e', undefined, 0.2);
+          }
+          ctx.restore();
+          drawGlossBand(ctx, -7.2, -4.5, 2.4, 9.0, 0.32);
+        }
         // Molded carton clasp lugs along front edge
-        ctx.fillStyle = '#a8a29e';
+        ctx.fillStyle = isQuail ? '#94a3b8' : '#a8a29e';
         ctx.fillRect(-5.0, 4.2, 2.2, 0.9);
         ctx.fillRect(2.8, 4.2, 2.2, 0.9);
 
         drawStudioLabelPanel(ctx, -6.2, -3.2, 12.4, 6.4, {
           paperColor: '#fffbeb',
-          bandColor: item?.labelColor || '#b45309',
+          bandColor: item?.labelColor || (isQuail ? '#0284c7' : '#b45309'),
           accentColor: '#ca8a04',
           inkColor: '#1c1917',
           goldFoil: false,

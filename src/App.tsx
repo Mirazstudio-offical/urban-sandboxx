@@ -7747,7 +7747,7 @@ export default function App() {
     const handItem = activeHand === 'left' ? p.leftHandItem : p.rightHandItem;
     if (!handItem) return;
 
-    if ((handItem.isContainer && !handItem.fluidStorage) || handItem.itemId === 'wallet' || handItem.itemId === 'plastic_bag') {
+    if (handItem.itemId === 'wallet') {
       setInventoryOpenContainerHand(activeHand);
       setIsInventoryOpen(true);
       sound.playUseItem();
@@ -7763,7 +7763,7 @@ export default function App() {
       return;
     }
 
-    if (handItem.usable) {
+    if (handItem.usable || handItem.fluidStorage || handItem.isContainer) {
       useHandItemOnPlayer(p, activeHand, world || undefined);
       sound.resume();
       setVitalsRefreshTick(t => t + 1);

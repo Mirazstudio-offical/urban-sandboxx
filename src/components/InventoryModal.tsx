@@ -33,7 +33,8 @@ import {
   getCandyPackagingShapeNameRu,
   getChocolatePackagingShapeNameRu,
   getUnifiedItemAttributes,
-  createItem
+  createItem,
+  isPackageContainerItem
 } from '../items';
 import { getAllFreeCatalogItems, FREE_CATALOG_CATEGORIES, getFreeCategoryLabelRu, FreeCatalogEntry } from '../freeItemCatalog';
 import { CatalogAttributeEditor } from './CatalogAttributeEditor';
@@ -41,6 +42,8 @@ import { getItemThermalDisplayInfo } from '../itemThermalSystem';
 import {
   isFluidContainerClosed,
   openFluidContainerIfNeeded,
+  canCloseFluidContainer,
+  closeFluidContainer,
   LIQUID_REGISTRY,
   LiquidId,
   ensureHybridContainerProps,
@@ -410,13 +413,39 @@ const InventoryModalContent: React.FC<{
     forceRender(n => n + 1);
   };
 
+  const shouldOpenContainerOnActivate = (item: InventoryItem): boolean => {
+    if (item.itemId === 'wallet') return true;
+    const isClosed = isFluidContainerClosed(item) || Boolean(item.singleUseContainer && !item.isOpen);
+    if (isClosed) return false;
+    const hasLiquid = Boolean(item.fluidStorage && (item.fluidStorage.currentMl || 0) > 0);
+    if (hasLiquid) return false;
+    const hasContents = Boolean(item.contents && item.contents.length > 0);
+    const isExtractableBagOrPkg =
+      isPackageContainerItem(item) ||
+      item.itemId === 'lukoshko' ||
+      item.itemId === 'package_bag' ||
+      item.itemId === 'plastic_bag' ||
+      item.itemId.startsWith('box_cardboard_') ||
+      item.itemId.startsWith('sack_cloth_') ||
+      item.itemId === 'sack_empty';
+    if (hasContents && isExtractableBagOrPkg) return false;
+    return (
+      item.itemId === 'package_bag' ||
+      item.itemId === 'plastic_bag' ||
+      item.itemId.startsWith('box_cardboard_') ||
+      item.itemId.startsWith('sack_cloth_') ||
+      item.itemId === 'sack_empty' ||
+      Boolean(item.isContainer && !item.fluidStorage && !item.singleUseContainer)
+    );
+  };
+
   const handleUseItem = (idx: number, forceDirectUse: boolean = false) => {
     const item = player.inventory?.[idx];
     if (!item) return;
 
     ensureHybridContainerProps(item);
 
-    if (item.isContainer && !item.singleUseContainer && !item.fluidStorage && !forceDirectUse) {
+    if (shouldOpenContainerOnActivate(item) && !forceDirectUse) {
       setOpenContainer(item);
       setSelectedContainerItemIdx(0);
       return;
@@ -449,7 +478,7 @@ const InventoryModalContent: React.FC<{
     const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
     if (!item) return;
     ensureHybridContainerProps(item);
-    if (item.isContainer && !item.singleUseContainer && !item.fluidStorage && !forceDirectUse) {
+    if (shouldOpenContainerOnActivate(item) && !forceDirectUse) {
       setOpenContainer(item);
       setSelectedContainerItemIdx(0);
       return;
@@ -1544,11 +1573,11 @@ const InventoryModalContent: React.FC<{
             handlePlaceHandIntoInput(hand, 'any');
             return;
           }
-          if (handItem.isContainer && !handItem.singleUseContainer && !handItem.fluidStorage) {
+          if (shouldOpenContainerOnActivate(handItem)) {
             setOpenContainer(handItem);
             setSelectedContainerItemIdx(0);
-          } else if (handItem.usable) {
-            handleUseHandItem(hand);
+          } else if (handItem.usable || handItem.fluidStorage || handItem.isContainer) {
+            handleUseHandItem(hand, true);
           } else {
             handleStowHand(hand);
           }
@@ -1726,19 +1755,7 @@ const InventoryModalContent: React.FC<{
                           handlePlacePocketIntoInput(slotIdx);
                           return;
                         }
-                        if (
-                          item.isContainer &&
-                          !item.singleUseContainer &&
-                          !item.fluidStorage &&
-                          !(
-                            (item.isOpen ||
-                              item.itemId === 'pouch_sealed_snack_torn' ||
-                              item.itemId === 'egg_carton_10_open' ||
-                              item.itemId === 'lukoshko') &&
-                            item.contents &&
-                            item.contents.length > 0
-                          )
-                        ) {
+                        if (shouldOpenContainerOnActivate(item)) {
                           setOpenContainer(item);
                           setSelectedContainerItemIdx(0);
                         } else {
@@ -3174,19 +3191,33 @@ const InventoryModalContent: React.FC<{
                             )}
                             {selectedEntry.item.isContainer && selectedEntry.item.fluidStorage ? (
                               <div className="inv-btn-grid2">
-                                {isFluidContainerClosed(selectedEntry.item) ? (
+                                {isFluidContainerClosed(selectedEntry.item) ||
+                                (selectedEntry.item.singleUseContainer && !selectedEntry.item.isOpen) ? (
                                   <button
                                     type="button"
                                     className="btn btn-p btn-sm"
                                     style={{ gridColumn: '1 / -1' }}
                                     onClick={() => {
-                                      openFluidContainerIfNeeded(player, selectedEntry.item);
+                                      const it = selectedEntry.item;
+                                      if (
+                                        isPackageContainerItem(it) &&
+                                        (!it.fluidStorage?.liquidId || (it.fluidStorage.currentMl || 0) <= 0)
+                                      ) {
+                                        unpackSingleUseContainer(player, it, world || undefined);
+                                      } else {
+                                        openFluidContainerIfNeeded(player, it);
+                                      }
                                       sound.resume();
                                       forceRender(n => n + 1);
                                     }}
                                   >
                                     <Scissors width={14} height={14} />
-                                    <span>Открыть крышку / упаковку</span>
+                                    <span>
+                                      Вскрыть / Открыть
+                                      {selectedEntry.item.contents && selectedEntry.item.contents.length > 0
+                                        ? ` (${selectedEntry.item.contents.reduce((acc, c) => acc + (c.count || 1), 0)})`
+                                        : ''}
+                                    </span>
                                   </button>
                                 ) : (
                                   <>
@@ -3205,21 +3236,40 @@ const InventoryModalContent: React.FC<{
                                       type="button"
                                       className="btn btn-s btn-sm"
                                       onClick={() => {
-                                        useHandItemOnPlayer(player, selectedEntry.hand!, world || undefined);
-                                        sound.resume();
-                                        forceRender(n => n + 1);
+                                        handleUseHandItem(selectedEntry.hand!, true);
                                       }}
                                     >
                                       <Droplets width={14} height={14} />
                                       <span>
                                         {selectedEntry.item.fluidStorage.currentMl > 0
                                           ? 'Выпить / Исп.'
-                                          : (selectedEntry.item.itemId === 'package_bag' || selectedEntry.item.itemId === 'plastic_bag') &&
-                                            (selectedEntry.item.contents?.length || 0) > 0
-                                          ? 'Достать 1 шт.'
+                                          : (selectedEntry.item.contents?.length || 0) > 0 &&
+                                            (isPackageContainerItem(selectedEntry.item) ||
+                                              selectedEntry.item.itemId === 'lukoshko' ||
+                                              selectedEntry.item.itemId === 'package_bag' ||
+                                              selectedEntry.item.itemId === 'plastic_bag' ||
+                                              selectedEntry.item.itemId.startsWith('box_cardboard_') ||
+                                              selectedEntry.item.itemId.startsWith('sack_cloth_') ||
+                                              selectedEntry.item.itemId === 'sack_empty')
+                                          ? 'Взять / Исп. 1 шт.'
                                           : 'Набрать'}
                                       </span>
                                     </button>
+                                    {canCloseFluidContainer(selectedEntry.item) && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-s btn-xs"
+                                        style={{ gridColumn: '1 / -1' }}
+                                        onClick={() => {
+                                          closeFluidContainer(player, selectedEntry.item);
+                                          sound.resume();
+                                          forceRender(n => n + 1);
+                                        }}
+                                      >
+                                        <Package width={13} height={13} />
+                                        <span>Закрыть крышку / клапан</span>
+                                      </button>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -3249,7 +3299,7 @@ const InventoryModalContent: React.FC<{
                                     }}
                                   >
                                     <Scissors width={14} height={14} />
-                                    <span>Открыть крышку / упаковку</span>
+                                    <span>Вскрыть / Открыть</span>
                                   </button>
                                 )}
                               </>
@@ -3305,20 +3355,34 @@ const InventoryModalContent: React.FC<{
                               </button>
                             ) : selectedEntry.item.isContainer && selectedEntry.item.fluidStorage ? (
                               <div className="inv-btn-grid2">
-                                {isFluidContainerClosed(selectedEntry.item) ? (
+                                {isFluidContainerClosed(selectedEntry.item) ||
+                                (selectedEntry.item.singleUseContainer && !selectedEntry.item.isOpen) ? (
                                   <button
                                     type="button"
                                     id="btn-open-fluid-container"
                                     className="btn btn-p btn-sm"
                                     style={{ gridColumn: '1 / -1' }}
                                     onClick={() => {
-                                      openFluidContainerIfNeeded(player, selectedEntry.item);
+                                      const it = selectedEntry.item;
+                                      if (
+                                        isPackageContainerItem(it) &&
+                                        (!it.fluidStorage?.liquidId || (it.fluidStorage.currentMl || 0) <= 0)
+                                      ) {
+                                        unpackSingleUseContainer(player, it, world || undefined);
+                                      } else {
+                                        openFluidContainerIfNeeded(player, it);
+                                      }
                                       sound.resume();
                                       forceRender(n => n + 1);
                                     }}
                                   >
                                     <Scissors width={14} height={14} />
-                                    <span>Открыть крышку / упаковку</span>
+                                    <span>
+                                      Вскрыть / Открыть
+                                      {selectedEntry.item.contents && selectedEntry.item.contents.length > 0
+                                        ? ` (${selectedEntry.item.contents.reduce((acc, c) => acc + (c.count || 1), 0)})`
+                                        : ''}
+                                    </span>
                                   </button>
                                 ) : (
                                   <>
@@ -3344,12 +3408,33 @@ const InventoryModalContent: React.FC<{
                                       <span>
                                         {selectedEntry.item.fluidStorage.currentMl > 0
                                           ? 'Выпить / Исп.'
-                                          : (selectedEntry.item.itemId === 'package_bag' || selectedEntry.item.itemId === 'plastic_bag') &&
-                                            (selectedEntry.item.contents?.length || 0) > 0
-                                          ? 'Достать 1 шт.'
+                                          : (selectedEntry.item.contents?.length || 0) > 0 &&
+                                            (isPackageContainerItem(selectedEntry.item) ||
+                                              selectedEntry.item.itemId === 'lukoshko' ||
+                                              selectedEntry.item.itemId === 'package_bag' ||
+                                              selectedEntry.item.itemId === 'plastic_bag' ||
+                                              selectedEntry.item.itemId.startsWith('box_cardboard_') ||
+                                              selectedEntry.item.itemId.startsWith('sack_cloth_') ||
+                                              selectedEntry.item.itemId === 'sack_empty')
+                                          ? 'Взять / Исп. 1 шт.'
                                           : 'Набрать'}
                                       </span>
                                     </button>
+                                    {canCloseFluidContainer(selectedEntry.item) && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-s btn-xs"
+                                        style={{ gridColumn: '1 / -1' }}
+                                        onClick={() => {
+                                          closeFluidContainer(player, selectedEntry.item);
+                                          sound.resume();
+                                          forceRender(n => n + 1);
+                                        }}
+                                      >
+                                        <Package width={13} height={13} />
+                                        <span>Закрыть крышку / клапан</span>
+                                      </button>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -4718,7 +4803,7 @@ const InventoryModalContent: React.FC<{
                       <span>Использовать</span>
                     </button>
                   )}
-                  {it.isContainer && !it.singleUseContainer && (
+                  {it.isContainer && !isFluidContainerClosed(it) && !(it.singleUseContainer && !it.isOpen) && (
                     <button
                       type="button"
                       className="inv-ctx-item primary"
@@ -4824,7 +4909,7 @@ const InventoryModalContent: React.FC<{
                       <span>Использовать</span>
                     </button>
                   )}
-                  {it.isContainer && !it.singleUseContainer && (
+                  {it.isContainer && !isFluidContainerClosed(it) && !(it.singleUseContainer && !it.isOpen) && (
                     <button
                       type="button"
                       className="inv-ctx-item primary"
