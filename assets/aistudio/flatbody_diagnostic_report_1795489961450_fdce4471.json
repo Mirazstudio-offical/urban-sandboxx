@@ -1,0 +1,1777 @@
+{
+  "appVersion": "1.0.0",
+  "exportTimestamp": "2026-11-24T03:12:41.446Z",
+  "uptimeSeconds": 40,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+  "screen": {
+    "width": 414,
+    "height": 720,
+    "pixelRatio": 2
+  },
+  "lastSnapshot": {
+    "fps": 20,
+    "playerPos": {
+      "x": 4151,
+      "y": 2065,
+      "inVehicle": false,
+      "vehicleId": null,
+      "floor": 0
+    },
+    "entities": {
+      "vehicles": 21,
+      "pedestrians": 0,
+      "particles": 0,
+      "skidMarks": 0,
+      "stains": 4,
+      "groundItems": 160
+    },
+    "audioState": {
+      "state": "active",
+      "engineRunning": false
+    },
+    "timestamp": "08:12:35",
+    "timeMs": 1795489955605
+  },
+  "recentLogs": [
+    {
+      "id": 4,
+      "timestamp": "08:12:36.122",
+      "timeMs": 1795489956122,
+      "level": "error",
+      "category": "ReactErrorBoundary",
+      "message": "undefined is not an object (evaluating 'jt.usedL.toFixed')",
+      "stack": "Vt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:13849\nbs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:22209\nQn@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:49042\nl4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:72141\nOk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:119060\nlL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:118081\nL4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:117908\nDk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:114625\nev@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:126700\nL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:26:1568",
+      "metadata": {
+        "componentStack": "\nbs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:1440\nFs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:23005\nSuspense@unknown:0:0\ndiv@unknown:0:0\nQQ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:3028:21846\nxQ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:3028:210241"
+      }
+    },
+    {
+      "id": 3,
+      "timestamp": "08:12:36.122",
+      "timeMs": 1795489956122,
+      "level": "error",
+      "category": "ConsoleError",
+      "message": "undefined is not an object (evaluating 'jt.usedL.toFixed')\nVt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:13849\nbs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:22209\nQn@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:49042\nl4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:72141\nOk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:119060\nlL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:118081\nL4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:117908\nDk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:114625\nev@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:126700\nL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:26:1568"
+    },
+    {
+      "id": 2,
+      "timestamp": "08:12:01.165",
+      "timeMs": 1795489921165,
+      "level": "lifecycle",
+      "category": "AppStart",
+      "message": "Application initialized"
+    },
+    {
+      "id": 1,
+      "timestamp": "08:12:01.164",
+      "timeMs": 1795489921164,
+      "level": "lifecycle",
+      "category": "AppStart",
+      "message": "Previous session restored cleanly (uptime: 112s)"
+    }
+  ],
+  "savedCrashReports": [
+    {
+      "id": "crash_1795489956122",
+      "crashTime": "2026-11-24T03:12:36.122Z",
+      "crashTimeMs": 1795489956122,
+      "reason": "REACT_RENDER_ERROR",
+      "errorDetails": {
+        "message": "undefined is not an object (evaluating 'jt.usedL.toFixed')",
+        "stack": "Vt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:13849\nbs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:22209\nQn@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:49042\nl4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:72141\nOk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:119060\nlL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:118081\nL4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:117908\nDk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:114625\nev@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:126700\nL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:26:1568"
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4151,
+          "y": 2065,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 21,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 4,
+          "groundItems": 160
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "08:12:35",
+        "timeMs": 1795489955605
+      },
+      "recentLogs": [
+        {
+          "id": 4,
+          "timestamp": "08:12:36.122",
+          "timeMs": 1795489956122,
+          "level": "error",
+          "category": "ReactErrorBoundary",
+          "message": "undefined is not an object (evaluating 'jt.usedL.toFixed')",
+          "stack": "Vt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:13849\nbs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:22209\nQn@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:49042\nl4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:72141\nOk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:119060\nlL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:118081\nL4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:117908\nDk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:114625\nev@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:126700\nL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:26:1568",
+          "metadata": {
+            "componentStack": "\nbs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:1440\nFs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:23005\nSuspense@unknown:0:0\ndiv@unknown:0:0\nQQ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:3028:21846\nxQ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:3028:210241"
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "08:12:36.122",
+          "timeMs": 1795489956122,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "undefined is not an object (evaluating 'jt.usedL.toFixed')\nVt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:13849\nbs@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenTableModal-D5egaPES.js:1:22209\nQn@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:49042\nl4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:72141\nOk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:119060\nlL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:118081\nL4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:117908\nDk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:114625\nev@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:126700\nL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:26:1568"
+        },
+        {
+          "id": 2,
+          "timestamp": "08:12:01.165",
+          "timeMs": 1795489921165,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "08:12:01.164",
+          "timeMs": 1795489921164,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 112s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 34
+    },
+    {
+      "id": "crash_1795489913946",
+      "crashTime": "2026-11-24T03:11:53.946Z",
+      "crashTimeMs": 1795489913947,
+      "reason": "REACT_RENDER_ERROR",
+      "errorDetails": {
+        "message": "undefined is not an object (evaluating 'de.usedL.toFixed')",
+        "stack": "Me@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenStoveModal-gcw5goBm.js:1:10389\nit@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenStoveModal-gcw5goBm.js:1:22010\nQn@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:49042\nl4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:72141\nOk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:119060\nlL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:118081\nL4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:117908\nDk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:114625\nev@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:126700\nL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:26:1568"
+      },
+      "lastSnapshot": {
+        "fps": 20,
+        "playerPos": {
+          "x": 4169,
+          "y": 2061,
+          "inVehicle": false,
+          "vehicleId": null,
+          "floor": 0
+        },
+        "entities": {
+          "vehicles": 21,
+          "pedestrians": 0,
+          "particles": 0,
+          "skidMarks": 0,
+          "stains": 1,
+          "groundItems": 160
+        },
+        "audioState": {
+          "state": "active",
+          "engineRunning": false
+        },
+        "timestamp": "08:11:53",
+        "timeMs": 1795489913269
+      },
+      "recentLogs": [
+        {
+          "id": 4,
+          "timestamp": "08:11:53.946",
+          "timeMs": 1795489913946,
+          "level": "error",
+          "category": "ReactErrorBoundary",
+          "message": "undefined is not an object (evaluating 'de.usedL.toFixed')",
+          "stack": "Me@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenStoveModal-gcw5goBm.js:1:10389\nit@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenStoveModal-gcw5goBm.js:1:22010\nQn@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:49042\nl4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:72141\nOk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:119060\nlL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:118081\nL4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:117908\nDk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:114625\nev@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:126700\nL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:26:1568",
+          "metadata": {
+            "componentStack": "\nit@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenStoveModal-gcw5goBm.js:1:2776\nmt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenStoveModal-gcw5goBm.js:1:22718\nSuspense@unknown:0:0\ndiv@unknown:0:0\nQQ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:3028:21846\nxQ@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:3028:210241"
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "08:11:53.946",
+          "timeMs": 1795489913946,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "undefined is not an object (evaluating 'de.usedL.toFixed')\nMe@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenStoveModal-gcw5goBm.js:1:10389\nit@https://mirazstudio-offical.github.io/urban-sandboxx/assets/KitchenStoveModal-gcw5goBm.js:1:22010\nQn@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:49042\nl4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:72141\nOk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:119060\nlL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:118081\nL4@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:117908\nDk@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:114625\nev@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:49:126700\nL@https://mirazstudio-offical.github.io/urban-sandboxx/assets/index-BotqbIuz.js:26:1568"
+        },
+        {
+          "id": 2,
+          "timestamp": "08:10:07.295",
+          "timeMs": 1795489807295,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        },
+        {
+          "id": 1,
+          "timestamp": "08:10:07.285",
+          "timeMs": 1795489807285,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Previous session restored cleanly (uptime: 2s)"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 106
+    },
+    {
+      "id": "crash_1795266423376",
+      "crashTime": "2026-11-21T13:07:03.376Z",
+      "crashTimeMs": 1795266423376,
+      "reason": "UNHANDLED_PROMISE_REJECTION",
+      "errorDetails": {
+        "message": "INTERNAL ASSERTION FAILED: Pending promise was never set",
+        "stack": "jt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:421:889\nYt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:421:915\nreject@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:1276:1147\nonAuthEvent@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:1276:753"
+      },
+      "recentLogs": [
+        {
+          "id": 5,
+          "timestamp": "18:07:03.376",
+          "timeMs": 1795266423376,
+          "level": "error",
+          "category": "PromiseRejection",
+          "message": "INTERNAL ASSERTION FAILED: Pending promise was never set",
+          "stack": "jt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:421:889\nYt@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:421:915\nreject@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:1276:1147\nonAuthEvent@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:1276:753"
+        },
+        {
+          "id": 4,
+          "timestamp": "18:07:03.370",
+          "timeMs": 1795266423370,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "[2026-11-21T13:07:03.370Z]  @firebase/auth: Auth (12.19.0): INTERNAL ASSERTION FAILED: Pending promise was never set"
+        },
+        {
+          "id": 3,
+          "timestamp": "18:07:03.370",
+          "timeMs": 1795266423370,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "[2026-11-21T13:07:03.370Z]  @firebase/auth: Auth (12.19.0): INTERNAL ASSERTION FAILED: Pending promise was never set"
+        },
+        {
+          "id": 2,
+          "timestamp": "18:07:03.338",
+          "timeMs": 1795266423338,
+          "level": "error",
+          "category": "ConsoleError",
+          "message": "Google Auth error: Firebase: Error (auth/popup-closed-by-user).\n@https://mirazstudio-offical.github.io/urban-sandboxx/assets/vendor-firebase-DEFjLIcf.js:1291:1447"
+        },
+        {
+          "id": 1,
+          "timestamp": "18:06:39.512",
+          "timeMs": 1795266399512,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/158 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 800,
+        "height": 358,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 23
+    },
+    {
+      "id": "crash_1795190843038",
+      "crashTime": "2026-11-20T16:07:23.038Z",
+      "crashTimeMs": 1795190843038,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "ResizeObserver loop completed with undelivered notifications.",
+        "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+        "lineno": 0,
+        "colno": 0
+      },
+      "recentLogs": [
+        {
+          "id": 17,
+          "timestamp": "21:07:23.038",
+          "timeMs": 1795190843038,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 16,
+          "timestamp": "21:07:23.021",
+          "timeMs": 1795190843021,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 15,
+          "timestamp": "21:07:23.005",
+          "timeMs": 1795190843005,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 14,
+          "timestamp": "21:07:22.990",
+          "timeMs": 1795190842990,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 13,
+          "timestamp": "21:07:22.986",
+          "timeMs": 1795190842986,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 12,
+          "timestamp": "21:07:22.922",
+          "timeMs": 1795190842922,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 11,
+          "timestamp": "21:07:22.905",
+          "timeMs": 1795190842905,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "21:07:22.888",
+          "timeMs": 1795190842888,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "21:07:22.872",
+          "timeMs": 1795190842872,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "21:07:22.855",
+          "timeMs": 1795190842855,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "21:07:22.838",
+          "timeMs": 1795190842838,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "21:07:22.822",
+          "timeMs": 1795190842822,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "21:07:22.816",
+          "timeMs": 1795190842816,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "21:07:22.792",
+          "timeMs": 1795190842792,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "21:07:22.755",
+          "timeMs": 1795190842755,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "21:07:22.710",
+          "timeMs": 1795190842710,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 1,
+          "timestamp": "21:07:22.632",
+          "timeMs": 1795190842632,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/157 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 0
+    },
+    {
+      "id": "crash_1795190843021",
+      "crashTime": "2026-11-20T16:07:23.021Z",
+      "crashTimeMs": 1795190843021,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "ResizeObserver loop completed with undelivered notifications.",
+        "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+        "lineno": 0,
+        "colno": 0
+      },
+      "recentLogs": [
+        {
+          "id": 16,
+          "timestamp": "21:07:23.021",
+          "timeMs": 1795190843021,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 15,
+          "timestamp": "21:07:23.005",
+          "timeMs": 1795190843005,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 14,
+          "timestamp": "21:07:22.990",
+          "timeMs": 1795190842990,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 13,
+          "timestamp": "21:07:22.986",
+          "timeMs": 1795190842986,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 12,
+          "timestamp": "21:07:22.922",
+          "timeMs": 1795190842922,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 11,
+          "timestamp": "21:07:22.905",
+          "timeMs": 1795190842905,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "21:07:22.888",
+          "timeMs": 1795190842888,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "21:07:22.872",
+          "timeMs": 1795190842872,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "21:07:22.855",
+          "timeMs": 1795190842855,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "21:07:22.838",
+          "timeMs": 1795190842838,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "21:07:22.822",
+          "timeMs": 1795190842822,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "21:07:22.816",
+          "timeMs": 1795190842816,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "21:07:22.792",
+          "timeMs": 1795190842792,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "21:07:22.755",
+          "timeMs": 1795190842755,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "21:07:22.710",
+          "timeMs": 1795190842710,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 1,
+          "timestamp": "21:07:22.632",
+          "timeMs": 1795190842632,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/157 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 0
+    },
+    {
+      "id": "crash_1795190843005",
+      "crashTime": "2026-11-20T16:07:23.005Z",
+      "crashTimeMs": 1795190843005,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "ResizeObserver loop completed with undelivered notifications.",
+        "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+        "lineno": 0,
+        "colno": 0
+      },
+      "recentLogs": [
+        {
+          "id": 15,
+          "timestamp": "21:07:23.005",
+          "timeMs": 1795190843005,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 14,
+          "timestamp": "21:07:22.990",
+          "timeMs": 1795190842990,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 13,
+          "timestamp": "21:07:22.986",
+          "timeMs": 1795190842986,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 12,
+          "timestamp": "21:07:22.922",
+          "timeMs": 1795190842922,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 11,
+          "timestamp": "21:07:22.905",
+          "timeMs": 1795190842905,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "21:07:22.888",
+          "timeMs": 1795190842888,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "21:07:22.872",
+          "timeMs": 1795190842872,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "21:07:22.855",
+          "timeMs": 1795190842855,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "21:07:22.838",
+          "timeMs": 1795190842838,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "21:07:22.822",
+          "timeMs": 1795190842822,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "21:07:22.816",
+          "timeMs": 1795190842816,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "21:07:22.792",
+          "timeMs": 1795190842792,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "21:07:22.755",
+          "timeMs": 1795190842755,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "21:07:22.710",
+          "timeMs": 1795190842710,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 1,
+          "timestamp": "21:07:22.632",
+          "timeMs": 1795190842632,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/157 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 0
+    },
+    {
+      "id": "crash_1795190842990",
+      "crashTime": "2026-11-20T16:07:22.990Z",
+      "crashTimeMs": 1795190842990,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "ResizeObserver loop completed with undelivered notifications.",
+        "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+        "lineno": 0,
+        "colno": 0
+      },
+      "recentLogs": [
+        {
+          "id": 14,
+          "timestamp": "21:07:22.990",
+          "timeMs": 1795190842990,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 13,
+          "timestamp": "21:07:22.986",
+          "timeMs": 1795190842986,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 12,
+          "timestamp": "21:07:22.922",
+          "timeMs": 1795190842922,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 11,
+          "timestamp": "21:07:22.905",
+          "timeMs": 1795190842905,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "21:07:22.888",
+          "timeMs": 1795190842888,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "21:07:22.872",
+          "timeMs": 1795190842872,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "21:07:22.855",
+          "timeMs": 1795190842855,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "21:07:22.838",
+          "timeMs": 1795190842838,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "21:07:22.822",
+          "timeMs": 1795190842822,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "21:07:22.816",
+          "timeMs": 1795190842816,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "21:07:22.792",
+          "timeMs": 1795190842792,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "21:07:22.755",
+          "timeMs": 1795190842755,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "21:07:22.710",
+          "timeMs": 1795190842710,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 1,
+          "timestamp": "21:07:22.632",
+          "timeMs": 1795190842632,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/157 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 0
+    },
+    {
+      "id": "crash_1795190842987",
+      "crashTime": "2026-11-20T16:07:22.987Z",
+      "crashTimeMs": 1795190842987,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "ResizeObserver loop completed with undelivered notifications.",
+        "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+        "lineno": 0,
+        "colno": 0
+      },
+      "recentLogs": [
+        {
+          "id": 13,
+          "timestamp": "21:07:22.986",
+          "timeMs": 1795190842986,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 12,
+          "timestamp": "21:07:22.922",
+          "timeMs": 1795190842922,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 11,
+          "timestamp": "21:07:22.905",
+          "timeMs": 1795190842905,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "21:07:22.888",
+          "timeMs": 1795190842888,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "21:07:22.872",
+          "timeMs": 1795190842872,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "21:07:22.855",
+          "timeMs": 1795190842855,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "21:07:22.838",
+          "timeMs": 1795190842838,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "21:07:22.822",
+          "timeMs": 1795190842822,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "21:07:22.816",
+          "timeMs": 1795190842816,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "21:07:22.792",
+          "timeMs": 1795190842792,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "21:07:22.755",
+          "timeMs": 1795190842755,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "21:07:22.710",
+          "timeMs": 1795190842710,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 1,
+          "timestamp": "21:07:22.632",
+          "timeMs": 1795190842632,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/157 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 0
+    },
+    {
+      "id": "crash_1795190842922",
+      "crashTime": "2026-11-20T16:07:22.922Z",
+      "crashTimeMs": 1795190842922,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "ResizeObserver loop completed with undelivered notifications.",
+        "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+        "lineno": 0,
+        "colno": 0
+      },
+      "recentLogs": [
+        {
+          "id": 12,
+          "timestamp": "21:07:22.922",
+          "timeMs": 1795190842922,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 11,
+          "timestamp": "21:07:22.905",
+          "timeMs": 1795190842905,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "21:07:22.888",
+          "timeMs": 1795190842888,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "21:07:22.872",
+          "timeMs": 1795190842872,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "21:07:22.855",
+          "timeMs": 1795190842855,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "21:07:22.838",
+          "timeMs": 1795190842838,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "21:07:22.822",
+          "timeMs": 1795190842822,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "21:07:22.816",
+          "timeMs": 1795190842816,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "21:07:22.792",
+          "timeMs": 1795190842792,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "21:07:22.755",
+          "timeMs": 1795190842755,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "21:07:22.710",
+          "timeMs": 1795190842710,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 1,
+          "timestamp": "21:07:22.632",
+          "timeMs": 1795190842632,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/157 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 0
+    },
+    {
+      "id": "crash_1795190842905",
+      "crashTime": "2026-11-20T16:07:22.905Z",
+      "crashTimeMs": 1795190842905,
+      "reason": "UNHANDLED_WINDOW_ERROR",
+      "errorDetails": {
+        "message": "ResizeObserver loop completed with undelivered notifications.",
+        "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+        "source": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+        "lineno": 0,
+        "colno": 0
+      },
+      "recentLogs": [
+        {
+          "id": 11,
+          "timestamp": "21:07:22.905",
+          "timeMs": 1795190842905,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 10,
+          "timestamp": "21:07:22.888",
+          "timeMs": 1795190842888,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 9,
+          "timestamp": "21:07:22.872",
+          "timeMs": 1795190842872,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 8,
+          "timestamp": "21:07:22.855",
+          "timeMs": 1795190842855,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 7,
+          "timestamp": "21:07:22.838",
+          "timeMs": 1795190842838,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 6,
+          "timestamp": "21:07:22.822",
+          "timeMs": 1795190842822,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 5,
+          "timestamp": "21:07:22.816",
+          "timeMs": 1795190842816,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 4,
+          "timestamp": "21:07:22.792",
+          "timeMs": 1795190842792,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 3,
+          "timestamp": "21:07:22.755",
+          "timeMs": 1795190842755,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 2,
+          "timestamp": "21:07:22.710",
+          "timeMs": 1795190842710,
+          "level": "error",
+          "category": "UnhandledError",
+          "message": "ResizeObserver loop completed with undelivered notifications.",
+          "stack": "at https://mirazstudio-offical.github.io/urban-sandboxx/:0:0",
+          "metadata": {
+            "filename": "https://mirazstudio-offical.github.io/urban-sandboxx/",
+            "lineno": 0,
+            "colno": 0
+          }
+        },
+        {
+          "id": 1,
+          "timestamp": "21:07:22.632",
+          "timeMs": 1795190842632,
+          "level": "lifecycle",
+          "category": "AppStart",
+          "message": "Application initialized"
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/157 Version/11.1.1 Safari/605.1.15",
+      "screenSize": {
+        "width": 414,
+        "height": 720,
+        "devicePixelRatio": 2
+      },
+      "uptimeSeconds": 0
+    }
+  ]
+}
